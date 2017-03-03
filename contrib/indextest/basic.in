@@ -4,7 +4,7 @@
    directed_by {
     director.film {
      _uid_
-     name.en
+     name@en
     }
    }
   }

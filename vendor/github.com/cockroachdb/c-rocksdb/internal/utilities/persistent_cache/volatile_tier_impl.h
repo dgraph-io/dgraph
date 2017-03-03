@@ -62,11 +62,12 @@ class VolatileCacheTier : public PersistentCacheTier {
   // erase key from cache
   bool Erase(const Slice& key) override;
 
-  // Expose stats as map
-  std::vector<TierStats> Stats() override;
+  std::string GetPrintableOptions() const override {
+    return "VolatileCacheTier";
+  }
 
-  // Print stats to string
-  std::string PrintStats() override;
+  // Expose stats as map
+  PersistentCache::StatsType Stats() override;
 
  private:
   //

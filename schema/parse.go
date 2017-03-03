@@ -119,11 +119,6 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 	return &types.Schema{ValueType: uint32(t)}, nil
 }
 
-func parseScalarBlock(s string) {
-	lex.NewLexer(s).Run(lexText)
-
-}
-
 // processScalarBlock starts work on the inside of a scalar block.
 func processScalarBlock(it *lex.ItemIterator) error {
 	for it.Next() {
@@ -162,37 +157,43 @@ func processScalarPair(it *lex.ItemIterator, predicate string, allowIndex bool) 
 	return nil
 }
 
-// processIndexDirective works on "@index" or "@index(customtokenizer)".
+// parseIndexDirective works on "@index" or "@index(customtokenizer)".
 func parseIndexDirective(it *lex.ItemIterator, predicate string,
-	typ types.TypeID) (string, error) {
+	typ types.TypeID) ([]string, error) {
+	var tokenizers []string
+	var seen = make(map[string]bool)
+
 	if typ == types.UidID {
-		return "", x.Errorf("Indexing not allowed on predicate %s of type uid", predicate)
+		return tokenizers, x.Errorf("Indexing not allowed on predicate %s of type uid", predicate)
 	}
 	if !it.Next() {
 		// Nothing to read.
-		return tok.Default(typ).Name(), nil
+		return []string{tok.Default(typ).Name()}, nil
 	}
 	next := it.Item()
 	if next.Typ != itemLeftRound {
 		it.Prev() // Backup.
-		return tok.Default(typ).Name(), nil
+		return []string{tok.Default(typ).Name()}, nil
 	}
 
-	// Look for tokenizer.
-
-	it.Next()
-	next = it.Item()
-	if next.Typ != itemText {
-		return "", x.Errorf("Expected directive arg but got: %v", next)
+	// Look for tokenizers.
+	for {
+		it.Next()
+		next = it.Item()
+		if next.Typ == itemRightRound {
+			break
+		}
+		if next.Typ != itemText {
+			return tokenizers, x.Errorf("Expected directive arg but got: %v", next)
+		}
+		// Look for custom tokenizer.
+		tokenizer := tok.GetTokenizer(next.Val).Name()
+		if _, ok := seen[tokenizer]; !ok {
+			tokenizers = append(tokenizers, tokenizer)
+			seen[tokenizer] = true
+		}
 	}
-	tokenizer := tok.GetTokenizer(next.Val).Name()
-	it.Next()
-	next = it.Item()
-	if next.Typ != itemRightRound {
-		return "", x.Errorf("Expected rightRound but got: %v", next)
-	}
-
-	return tokenizer, nil
+	return tokenizers, nil
 }
 
 // processScalar works on either a single scalar pair or a scalar block.

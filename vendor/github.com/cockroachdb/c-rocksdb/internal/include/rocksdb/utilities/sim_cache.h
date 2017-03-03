@@ -10,6 +10,7 @@
 #include <string>
 #include "rocksdb/cache.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
 
 namespace rocksdb {
@@ -22,6 +23,14 @@ class SimCache;
 // to predict block cache hit rate without actually allocating the memory. It
 // can help users tune their current block cache size, and determine how
 // efficient they are using the memory.
+//
+// Since GetSimCapacity() returns the capacity for simulutation, it differs from
+// actual memory usage, which can be estimated as:
+// sim_capacity * entry_size / (entry_size + block_size),
+// where 76 <= entry_size <= 104,
+// BlockBasedTableOptions.block_size = 4096 by default but is configurable,
+// Therefore, generally the actual memory overhead of SimCache is Less than
+// sim_capacity * 2%
 extern std::shared_ptr<SimCache> NewSimCache(std::shared_ptr<Cache> cache,
                                              size_t sim_capacity,
                                              int num_shard_bits);
@@ -31,6 +40,8 @@ class SimCache : public Cache {
   SimCache() {}
 
   virtual ~SimCache() {}
+
+  virtual const char* Name() const override { return "SimCache"; }
 
   // returns the maximum configured capacity of the simcache for simulation
   virtual size_t GetSimCapacity() const = 0;
@@ -48,11 +59,9 @@ class SimCache : public Cache {
   virtual void SetSimCapacity(size_t capacity) = 0;
 
   // returns the lookup times of simcache
-  virtual uint64_t get_lookup_counter() const = 0;
+  virtual uint64_t get_miss_counter() const = 0;
   // returns the hit times of simcache
   virtual uint64_t get_hit_counter() const = 0;
-  // returns the hit rate of simcache
-  virtual double get_hit_rate() const = 0;
   // reset the lookup and hit counters
   virtual void reset_counter() = 0;
   // String representation of the statistics of the simcache

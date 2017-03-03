@@ -9,7 +9,6 @@
 #include <algorithm>
 
 #include "rocksdb/env.h"
-#include "rocksdb/options.h"
 #include "util/sst_file_manager_impl.h"
 #include "util/file_reader_writer.h"
 
@@ -17,7 +16,7 @@ namespace rocksdb {
 
 // Utility function to copy a file up to a specified length
 Status CopyFile(Env* env, const std::string& source,
-                const std::string& destination, uint64_t size) {
+                const std::string& destination, uint64_t size, bool use_fsync) {
   const EnvOptions soptions;
   Status s;
   unique_ptr<SequentialFileReader> src_reader;
@@ -63,6 +62,7 @@ Status CopyFile(Env* env, const std::string& source,
     }
     size -= slice.size();
   }
+  dest_writer->Sync(use_fsync);
   return Status::OK();
 }
 
@@ -82,9 +82,10 @@ Status CreateFile(Env* env, const std::string& destination,
   return dest_writer->Append(Slice(contents));
 }
 
-Status DeleteSSTFile(const DBOptions* db_options, const std::string& fname,
-                     uint32_t path_id) {
+Status DeleteSSTFile(const ImmutableDBOptions* db_options,
+                     const std::string& fname, uint32_t path_id) {
   // TODO(tec): support sst_file_manager for multiple path_ids
+#ifndef ROCKSDB_LITE
   auto sfm =
       static_cast<SstFileManagerImpl*>(db_options->sst_file_manager.get());
   if (sfm && path_id == 0) {
@@ -92,6 +93,10 @@ Status DeleteSSTFile(const DBOptions* db_options, const std::string& fname,
   } else {
     return db_options->env->DeleteFile(fname);
   }
+#else
+  // SstFileManager is not supported in ROCKSDB_LITE
+  return db_options->env->DeleteFile(fname);
+#endif
 }
 
 }  // namespace rocksdb

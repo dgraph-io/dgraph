@@ -19,11 +19,14 @@ package client
 import (
 	"context"
 	"fmt"
+	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 
 	"github.com/dgraph-io/dgraph/query/graph"
 )
@@ -171,7 +174,12 @@ func (batch *BatchMutation) request(req *Req) {
 RETRY:
 	_, err := batch.dc.Run(context.Background(), &req.gr)
 	if err != nil {
-		fmt.Printf("Retrying req: %d. Error: %v\n", counter, err)
+		errString := err.Error()
+		// Irrecoverable
+		if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
+			log.Fatal(errString)
+		}
+		fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
 		time.Sleep(5 * time.Millisecond)
 		goto RETRY
 	}

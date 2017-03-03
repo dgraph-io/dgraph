@@ -8,7 +8,7 @@ if [ -z "$1" ]; then
   BUILD=$SRC/build
 fi
 
-ROCKSDBDIR=$BUILD/rocksdb-4.11.2
+ROCKSDBDIR=$BUILD/rocksdb-5.1.4
 ICUDIR=$BUILD/icu/build
 
 set -e
@@ -33,7 +33,7 @@ export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 # schema file
 echo -e "
 scalar (
-	name.en: string @index
+	name: string @index
 	initial_release_date: date @index
 )" > $BUILD/schema.txt
 
@@ -72,7 +72,7 @@ run_index_test releasedate release_date 137858
 run_index_test releasedate_sort release_date 137858
 run_index_test releasedate_sort_first_offset release_date 2315
 run_index_test releasedate_geq release_date 60991
-run_index_test gen_anyof_good_bad name 1103
+run_index_test gen_anyof_good_bad name 1104
 
 popd &> /dev/null
 

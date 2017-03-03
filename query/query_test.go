@@ -77,14 +77,15 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "follow", 1001, 1003, nil)
 	addEdgeToUID(t, "follow", 1003, 1002, nil)
 
-	addEdgeToUID(t, "path", 1, 31, nil)
-	addEdgeToUID(t, "path", 1, 24, nil)
-	addEdgeToUID(t, "path", 31, 1000, nil)
-	addEdgeToUID(t, "path", 1000, 1001, nil)
-	addEdgeToUID(t, "path", 1000, 1002, nil)
-	addEdgeToUID(t, "path", 1001, 1002, nil)
-	addEdgeToUID(t, "path", 1002, 1003, nil)
-	addEdgeToUID(t, "path", 1003, 1001, nil)
+	addEdgeToUID(t, "path", 1, 31, map[string]string{"weight": "0.1", "weight1": "0.2"})
+	addEdgeToUID(t, "path", 1, 24, map[string]string{"weight": "0.2"})
+	addEdgeToUID(t, "path", 31, 1000, map[string]string{"weight": "0.1"})
+	addEdgeToUID(t, "path", 1000, 1001, map[string]string{"weight": "0.1"})
+	addEdgeToUID(t, "path", 1000, 1002, map[string]string{"weight": "0.7"})
+	addEdgeToUID(t, "path", 1001, 1002, map[string]string{"weight": "0.1"})
+	addEdgeToUID(t, "path", 1002, 1003, map[string]string{"weight": "0.6"})
+	addEdgeToUID(t, "path", 1003, 1001, map[string]string{})
+
 	addEdgeToValue(t, "name", 1000, "Alice", nil)
 	addEdgeToValue(t, "name", 1001, "Bob", nil)
 	addEdgeToValue(t, "name", 1002, "Matt", nil)
@@ -216,6 +217,15 @@ func populateGraph(t *testing.T) {
 		addEdgeToTypedValue(t, "shadow_deep", 24, types.Int32ID, data.Value.([]byte), nil)
 	}
 
+	// language stuff
+	// 0x1001 is uid of interest for language tests
+	addEdgeToLangValue(t, "name", 0x1001, "Badger", "", nil)
+	addEdgeToLangValue(t, "name", 0x1001, "European badger", "en", nil)
+	addEdgeToLangValue(t, "name", 0x1001, "Borsuk europejski", "pl", nil)
+	addEdgeToLangValue(t, "name", 0x1001, "Europäischer Dachs", "de", nil)
+	addEdgeToLangValue(t, "name", 0x1001, "Барсук", "ru", nil)
+	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
+
 	time.Sleep(5 * time.Millisecond)
 }
 
@@ -240,6 +250,7 @@ func TestGetUID(t *testing.T) {
 		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
+
 func TestReturnUids(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -271,7 +282,7 @@ func TestReturnUids(t *testing.T) {
 	require.NoError(t, ToJson(&l, sgl, &buf, mp))
 	js := buf.String()
 	require.JSONEq(t,
-		`{"uids":{"a":123},"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
+		`{"uids":{"a":"123"},"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -310,6 +321,28 @@ func TestMultiEmptyBlocks(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{}`,
+		js)
+}
+
+func TestUseVarsMultiCascade1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			him(id:0x01) {
+				L AS friend {
+				 B AS friend
+					name	
+			 }
+			}
+
+			me(var:[L, B]) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"him": [{"friend":[{"name":"Rick Grimes"}, {"name":"Andrea"}]}], "me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}, {"name":"Andrea"}]}`,
 		js)
 }
 
@@ -465,6 +498,63 @@ func TestShortestPath(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"name":"Michonne"},{"name":"Andrea"}]}`,
+		js)
+}
+
+func TestShortestPathRev(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:23, to:1) {
+				friend 
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Rick Grimes"},{"name":"Michonne"}]}`,
+		js)
+}
+
+func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:1, to:1002) {
+				path @facets(weight, weight1)
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
+func TestShortestPathWeights(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:1, to:1002) {
+				path @facets(weight)
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"}]}`,
 		js)
 }
 
@@ -1356,6 +1446,60 @@ func TestToFastJSONFilterAllOf(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
+func TestFilterRegex1(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+      me(id:0x01) {
+        name
+        friend @filter(regexp(name, "^[a-z A-Z]+$")) {
+          name
+        }
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}, {"name":"Andrea"}]}]}`, js)
+}
+
+func TestFilterRegex2(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+      me(id:0x01) {
+        name
+        friend @filter(regexp(name, "^[^ao]+$")) {
+          name
+        }
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}`, js)
+}
+
+func TestFilterRegex3(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+      me(id:0x01) {
+        name
+        friend @filter(regexp(name, "^(Ri)")) {
+          name
+        }
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"}]}]}`, js)
+}
+
 func TestToFastJSONFilterUID(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1898,8 +2042,6 @@ func TestToProto(t *testing.T) {
 				alive
 				friend {
 					name
-				}
-				friend {
 				}
 			}
 		}
@@ -2775,6 +2917,17 @@ func TestRootList1(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Alice"}]}`, js)
 }
 
+func TestRootList2(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	me(id:[0x01, 23, a.bc, 24]) {
+		name
+	}
+}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Alice"},{"name":"Glenn Rhee"}]}`, js)
+}
+
 func TestGeneratorMultiRootFilter1(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -3283,8 +3436,6 @@ func TestSchema(t *testing.T) {
 					dob
 					name
 				}
-				friend {
-				}
 			}
 		}
   `
@@ -3312,9 +3463,9 @@ func TestSchema(t *testing.T) {
 	require.Len(t, child.Properties, 2)
 	require.EqualValues(t, "Rick Grimes",
 		getProperty(child.Properties, "name").GetStrVal())
-	dob := getProperty(child.Properties, "dob").GetDateVal()
-	var date time.Time
-	date.UnmarshalBinary(dob)
+	dob := getProperty(child.Properties, "dob").GetStrVal()
+	date, err := time.Parse(time.RFC3339, dob)
+	require.NoError(t, err)
 	require.EqualValues(t, "1910-01-02 00:00:00 +0000 UTC", date.String())
 	require.Empty(t, child.Children)
 
@@ -3449,11 +3600,136 @@ func TestIntersectsPolygon2(t *testing.T) {
 	require.JSONEq(t, expected, mp)
 }
 
+func TestNotExistObject(t *testing.T) {
+	populateGraph(t)
+	// we haven't set genre(type:uid) for 0x01, should just be ignored
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                genre
+                        }
+                }
+        `
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestLangDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Badger"}]}`,
+		js)
+}
+
+func TestLangSingle(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@pl
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Borsuk europejski"}]}`,
+		js)
+}
+
+func TestLangSingleFallback(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@cn
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Badger"}]}`,
+		js)
+}
+
+func TestLangMany1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@ru:en:fr
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Барсук"}]}`,
+		js)
+}
+
+func TestLangMany2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@hu:fi:fr
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Blaireau européen"}]}`,
+		js)
+}
+
+func TestLangMany3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@hu:fr:fi
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Blaireau européen"}]}`,
+		js)
+}
+
+func TestLangManyFallback(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@hu:fi:cn
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Badger"}]}`,
+		js)
+}
+
 const schemaStr = `
-scalar name:string @index
+scalar name:string @index(term, exact)
 scalar dob:date @index
 scalar film.film.initial_release_date:date @index
 scalar loc:geo @index
+scalar genre:uid @reverse
 scalar (
 	survival_rate : float
 	alive         : bool
@@ -3490,4 +3766,78 @@ func TestMain(m *testing.M) {
 	defer os.RemoveAll(dir2)
 
 	os.Exit(m.Run())
+}
+
+func TestFilterNonIndexedPredicateFail(t *testing.T) {
+	populateGraph(t)
+	// filtering on non indexing predicate fails
+	query := `
+		{
+			me(id:0x01) {
+				friend @filter(leq(age, 30)) {
+					_uid_
+					name
+					age
+				}
+			}
+		}
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
+
+func TestMultipleSamePredicateInBlockFail(t *testing.T) {
+	populateGraph(t)
+	// name is asked for two times..
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend {
+					age
+				}
+				name
+			}
+		}
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
+
+func TestMultipleSamePredicateInBlockFail2(t *testing.T) {
+	populateGraph(t)
+	// age is asked for two times..
+	query := `
+		{
+			me(id:0x01) {
+				friend {
+					age
+					age
+				}
+				name
+			}
+		}
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
+
+func TestMultipleSamePredicateInBlockFail3(t *testing.T) {
+	populateGraph(t)
+	// friend is asked for two times..
+	query := `
+		{
+			me(id:0x01) {
+				friend {
+					age
+				}
+				friend {
+					name
+				}
+				name
+			}
+		}
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
 }

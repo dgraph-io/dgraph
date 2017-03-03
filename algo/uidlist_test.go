@@ -27,6 +27,30 @@ func newList(data []uint64) *task.List {
 	return SortedListToBlock(data)
 }
 
+func TestSort1(t *testing.T) {
+	input := newList([]uint64{55})
+	Sort(input)
+	require.Equal(t, BlockToList(input), []uint64{55})
+}
+
+func TestSort2(t *testing.T) {
+	input := newList([]uint64{})
+	Sort(input)
+	require.Equal(t, BlockToList(input), []uint64{})
+}
+
+func TestSort3(t *testing.T) {
+	input := newList([]uint64{55, 392, 1, 123})
+	Sort(input)
+	require.Equal(t, BlockToList(input), []uint64{1, 55, 123, 392})
+}
+
+func TestSort4(t *testing.T) {
+	input := newList([]uint64{55, 1, 100000})
+	Sort(input)
+	require.Equal(t, BlockToList(input), []uint64{1, 55, 100000})
+}
+
 func TestMergeSorted1(t *testing.T) {
 	input := []*task.List{
 		newList([]uint64{55}),
@@ -259,28 +283,6 @@ func TestApplyFilterUint(t *testing.T) {
 	require.Equal(t, []uint64{1, 3, 5}, BlockToList(u))
 }
 
-func TestWriteAppend1(t *testing.T) {
-	l := []uint64{1, 2, 3}
-	u := newList(l)
-	w := NewWriteIterator(u, 1)
-	w.Append(4)
-	w.Append(5)
-	w.Append(6)
-	w.End()
-	require.Equal(t, []uint64{1, 2, 3, 4, 5, 6}, BlockToList(u))
-}
-
-func TestWriteAppend2(t *testing.T) {
-	l := []uint64{1, 2, 3}
-	u := newList(l)
-	w := NewWriteIterator(u, 0)
-	w.Append(4)
-	w.Append(5)
-	w.Append(6)
-	w.End()
-	require.Equal(t, []uint64{4, 5, 6}, BlockToList(u))
-}
-
 // sort interface for []uint64
 type uint64Slice []uint64
 
@@ -292,6 +294,18 @@ func (xs uint64Slice) Less(i, j int) bool {
 }
 func (xs uint64Slice) Swap(i, j int) {
 	xs[i], xs[j] = xs[j], xs[i]
+}
+
+func TestWriteListLen(t *testing.T) {
+	var u task.List
+	w := NewWriteIterator(&u)
+	n := blockSize*5 + 10
+	for i := 0; i < n; i++ {
+		w.Append(uint64(i))
+		require.EqualValues(t, i+1, w.ListLen())
+	}
+	w.End()
+	require.EqualValues(t, n, ListLen(&u))
 }
 
 /*

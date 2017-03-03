@@ -149,6 +149,7 @@ TEST_F(OptionsSettableTest, BlockBasedTableOptionsAllFieldsSettable) {
   ASSERT_OK(GetBlockBasedTableOptionsFromString(
       *bbto,
       "cache_index_and_filter_blocks=1;"
+      "cache_index_and_filter_blocks_with_high_priority=true;"
       "pin_l0_filter_and_index_blocks_in_cache=1;"
       "index_type=kHashSearch;"
       "checksum=kxxHash;hash_index_allow_collision=1;no_block_cache=1;"
@@ -158,7 +159,7 @@ TEST_F(OptionsSettableTest, BlockBasedTableOptionsAllFieldsSettable) {
       "filter_policy=bloomfilter:4:true;whole_key_filtering=1;"
       "skip_table_builder_flush=1;format_version=1;"
       "hash_index_allow_collision=false;"
-      "verify_compression=true;",
+      "verify_compression=true;read_amp_bytes_per_bit=0",
       new_bbto));
 
   ASSERT_EQ(unset_bytes_base,
@@ -266,13 +267,14 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "max_background_flushes=35;"
                              "create_if_missing=false;"
                              "error_if_exists=true;"
-                             "allow_os_buffer=false;"
                              "delayed_write_rate=4294976214;"
                              "manifest_preallocation_size=1222;"
                              "allow_mmap_writes=false;"
                              "stats_dump_period_sec=70127;"
                              "allow_fallocate=true;"
                              "allow_mmap_reads=false;"
+                             "use_direct_reads=false;"
+                             "use_direct_writes=false;"
                              "max_log_file_size=4607;"
                              "random_access_max_buffer_size=1048576;"
                              "advise_random_on_open=true;"
@@ -286,7 +288,8 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "info_log_level=DEBUG_LEVEL;"
                              "dump_malloc_stats=false;"
                              "allow_2pc=false;"
-                             "avoid_flush_during_recovery=false;",
+                             "avoid_flush_during_recovery=false;"
+                             "avoid_flush_during_shutdown=false;",
                              new_options));
 
   ASSERT_EQ(unset_bytes_base, NumUnsetBytes(new_options_ptr, sizeof(DBOptions),
@@ -309,6 +312,8 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
 // kColumnFamilyOptionsBlacklist, and maybe add customized verification
 // for it.
 TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
+  // options in the blacklist need to appear in the same order as in
+  // ColumnFamilyOptions.
   const OffsetGap kColumnFamilyOptionsBlacklist = {
       {offsetof(struct ColumnFamilyOptions, comparator), sizeof(Comparator*)},
       {offsetof(struct ColumnFamilyOptions, merge_operator),
@@ -333,6 +338,9 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
        sizeof(ColumnFamilyOptions::TablePropertiesCollectorFactories)},
       {offsetof(struct ColumnFamilyOptions, inplace_callback),
        sizeof(UpdateStatus(*)(char*, uint32_t*, Slice, std::string*))},
+      {offsetof(struct ColumnFamilyOptions,
+                memtable_insert_with_hint_prefix_extractor),
+       sizeof(std::shared_ptr<const SliceTransform>)},
   };
 
   char* options_ptr = new char[sizeof(ColumnFamilyOptions)];
@@ -396,11 +404,10 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "max_sequential_skip_in_iterations=4294971408;"
       "arena_block_size=1893;"
       "target_file_size_multiplier=35;"
-      "source_compaction_factor=54;"
       "min_write_buffer_number_to_merge=9;"
       "max_write_buffer_number=84;"
       "write_buffer_size=1653;"
-      "max_grandparent_overlap_factor=64;"
+      "max_compaction_bytes=64;"
       "max_bytes_for_level_multiplier=60;"
       "memtable_factory=SkipListFactory;"
       "compression=kNoCompression;"
@@ -410,7 +417,6 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "num_levels=99;"
       "level0_slowdown_writes_trigger=22;"
       "level0_file_num_compaction_trigger=14;"
-      "expanded_compaction_factor=34;"
       "compaction_filter=urxcqstuwnCompactionFilter;"
       "soft_rate_limit=530.615385;"
       "soft_pending_compaction_bytes_limit=0;"
@@ -418,7 +424,9 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "verify_checksums_in_compaction=false;"
       "merge_operator=aabcxehazrMergeOperator;"
       "memtable_prefix_bloom_size_ratio=0.4642;"
+      "memtable_insert_with_hint_prefix_extractor=rocksdb.CappedPrefix.13;"
       "paranoid_file_checks=true;"
+      "force_consistency_checks=true;"
       "inplace_update_num_locks=7429;"
       "optimize_filters_for_hits=false;"
       "level_compaction_dynamic_level_bytes=false;"

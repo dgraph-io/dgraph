@@ -5,11 +5,11 @@ dependencies:
   override:
     - go get -t -d -v ./...
     - cp -R /home/ubuntu/c-rocksdb $GOPATH/src/github.com/cockroachdb/
-    - go build -v github.com/cockroachdb/c-rocksdb
 
 test:
   override:
-    - go test -v -race github.com/cockroachdb/c-rocksdb/...
+    - go test -x -v       github.com/cockroachdb/c-rocksdb/...
+    - go test -x -v -race github.com/cockroachdb/c-rocksdb/...
 
 machine:
   environment:

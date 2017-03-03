@@ -18,8 +18,11 @@ package posting
 
 import (
 	"context"
+	"math"
 
 	"golang.org/x/net/trace"
+
+	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/schema"
@@ -46,13 +49,26 @@ func IndexTokens(attr string, src types.Val) ([]string, error) {
 	if err != nil || !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
+
+	if !schema.State().IsIndexed(attr) {
+		return nil, x.Errorf("Attribute %s is not indexed.", attr)
+	}
 	s := schemaType
 	sv, err := types.Convert(src, s)
 	if err != nil {
 		return nil, err
 	}
 	// Schema will know the mapping from attr to tokenizer.
-	return schema.State().Tokenizer(attr).Tokens(sv)
+	var tokens []string
+	tokenizers := schema.State().Tokenizer(attr)
+	for _, it := range tokenizers {
+		toks, err := it.Tokens(sv)
+		if err != nil {
+			return tokens, err
+		}
+		tokens = append(tokens, toks...)
+	}
+	return tokens, nil
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
@@ -136,7 +152,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
 
 	var val types.Val
-	var verr error
+	var found bool
 
 	l.index.Lock()
 	defer l.index.Unlock()
@@ -145,8 +161,12 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	{
 		l.Lock()
 		if doUpdateIndex {
-			// Check last posting for original value BEFORE any mutation actually happens.
-			val, verr = l.value()
+			// Check original value BEFORE any mutation actually happens.
+			if len(t.Lang) > 0 {
+				found, val = l.findValue(farm.Fingerprint64([]byte(t.Lang)))
+			} else {
+				found, val = l.findValue(math.MaxUint64)
+			}
 		}
 		hasMutated, err := l.addMutation(ctx, t)
 		l.Unlock()
@@ -160,7 +180,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	}
 	if doUpdateIndex {
 		// Exact matches.
-		if verr == nil && val.Value != nil {
+		if found && val.Value != nil {
 			addIndexMutations(ctx, t, val, task.DirectedEdge_DEL)
 		}
 		if t.Op == task.DirectedEdge_SET {
@@ -216,29 +236,32 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	prefix = pk.DataPrefix()
 	it := pstore.NewIterator()
 	defer it.Close()
-	var pl types.PostingList
+
+	// Helper function - Add index entries for values in posting list
+	addPostingsToIndex := func(pl *types.PostingList) {
+		postingsLen := len(pl.Postings)
+		for idx := 0; idx < postingsLen; idx++ {
+			p := pl.Postings[idx]
+			// Add index entries based on p.
+			val := types.Val{
+				Value: p.Value,
+				Tid:   types.TypeID(p.ValType),
+			}
+			edge.Lang = p.Lang
+			addIndexMutations(ctx, &edge, val, task.DirectedEdge_SET)
+		}
+	}
+
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		pki := x.Parse(it.Key().Data())
 		edge.Entity = pki.Uid
+		var pl types.PostingList
 		x.Check(pl.Unmarshal(it.Value().Data()))
 
-		// Check last entry for value.
-		if len(pl.Postings) == 0 {
-			continue
+		// Posting list contains only values or only UIDs.
+		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) != x.ValueUid {
+			addPostingsToIndex(&pl)
 		}
-		// TODO(tzdybal) - what about the values with Lang?
-		p := pl.Postings[len(pl.Postings)-1]
-		pt := postingType(p)
-		if pt != valueTagged && pt != valueUntagged {
-			continue
-		}
-
-		// Add index entries based on p.
-		val := types.Val{
-			Value: p.Value,
-			Tid:   types.TypeID(p.ValType),
-		}
-		addIndexMutations(ctx, &edge, val, task.DirectedEdge_SET)
 	}
 	return nil
 }

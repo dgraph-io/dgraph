@@ -145,6 +145,22 @@ TEST_F(DBTest2, CacheIndexAndFilterWithDBRestart) {
   value = Get(1, "a");
 }
 
+TEST_F(DBTest2, MaxSuccessiveMergesChangeWithDBRecovery) {
+  Options options = CurrentOptions();
+  options.create_if_missing = true;
+  options.statistics = rocksdb::CreateDBStatistics();
+  options.max_successive_merges = 3;
+  options.merge_operator = MergeOperators::CreatePutOperator();
+  options.disable_auto_compactions = true;
+  DestroyAndReopen(options);
+  Put("poi", "Finch");
+  db_->Merge(WriteOptions(), "poi", "Reese");
+  db_->Merge(WriteOptions(), "poi", "Shaw");
+  db_->Merge(WriteOptions(), "poi", "Root");
+  options.max_successive_merges = 2;
+  Reopen(options);
+}
+
 #ifndef ROCKSDB_LITE
 class DBTestSharedWriteBufferAcrossCFs
     : public DBTestBase,
@@ -940,6 +956,7 @@ TEST_F(DBTest2, PresetCompressionDict) {
   const int kNumL0Files = 5;
 
   Options options;
+  options.allow_concurrent_memtable_write = false;
   options.arena_block_size = kBlockSizeBytes;
   options.compaction_style = kCompactionStyleUniversal;
   options.create_if_missing = true;
@@ -961,9 +978,9 @@ TEST_F(DBTest2, PresetCompressionDict) {
   compression_types.push_back(kLZ4Compression);
   compression_types.push_back(kLZ4HCCompression);
 #endif                          // LZ4_VERSION_NUMBER >= 10400
-#if ZSTD_VERSION_NUMBER >= 500  // v0.5.0+
-  compression_types.push_back(kZSTDNotFinalCompression);
-#endif  // ZSTD_VERSION_NUMBER >= 500
+  if (ZSTD_Supported()) {
+    compression_types.push_back(kZSTD);
+  }
 
   for (auto compression_type : compression_types) {
     options.compression = compression_type;
@@ -1384,7 +1401,53 @@ TEST_P(PinL0IndexAndFilterBlocksTest, DisablePrefetchingNonL0IndexAndFilter) {
 
 INSTANTIATE_TEST_CASE_P(PinL0IndexAndFilterBlocksTest,
                         PinL0IndexAndFilterBlocksTest, ::testing::Bool());
+
 #ifndef ROCKSDB_LITE
+TEST_F(DBTest2, MaxCompactionBytesTest) {
+  Options options = CurrentOptions();
+  options.memtable_factory.reset(
+      new SpecialSkipListFactory(DBTestBase::kNumKeysByGenerateNewRandomFile));
+  options.compaction_style = kCompactionStyleLevel;
+  options.write_buffer_size = 200 << 10;
+  options.arena_block_size = 4 << 10;
+  options.level0_file_num_compaction_trigger = 4;
+  options.num_levels = 4;
+  options.compression = kNoCompression;
+  options.max_bytes_for_level_base = 450 << 10;
+  options.target_file_size_base = 100 << 10;
+  // Infinite for full compaction.
+  options.max_compaction_bytes = options.target_file_size_base * 100;
+
+  Reopen(options);
+
+  Random rnd(301);
+
+  for (int num = 0; num < 8; num++) {
+    GenerateNewRandomFile(&rnd);
+  }
+  CompactRangeOptions cro;
+  cro.bottommost_level_compaction = BottommostLevelCompaction::kForce;
+  ASSERT_OK(db_->CompactRange(cro, nullptr, nullptr));
+  ASSERT_EQ("0,0,8", FilesPerLevel(0));
+
+  // When compact from Ln -> Ln+1, cut a file if the file overlaps with
+  // more than three files in Ln+1.
+  options.max_compaction_bytes = options.target_file_size_base * 3;
+  Reopen(options);
+
+  GenerateNewRandomFile(&rnd);
+  // Add three more small files that overlap with the previous file
+  for (int i = 0; i < 3; i++) {
+    Put("a", "z");
+    ASSERT_OK(Flush());
+  }
+  dbfull()->TEST_WaitForCompact();
+
+  // Output files to L1 are cut to three pieces, according to
+  // options.max_compaction_bytes
+  ASSERT_EQ("0,3,8", FilesPerLevel(0));
+}
+
 static void UniqueIdCallback(void* arg) {
   int* result = reinterpret_cast<int*>(arg);
   if (*result == -1) {
@@ -1406,6 +1469,10 @@ class MockPersistentCache : public PersistentCache {
   }
 
   virtual ~MockPersistentCache() {}
+
+  PersistentCache::StatsType Stats() override {
+    return PersistentCache::StatsType();
+  }
 
   Status Insert(const Slice& page_key, const char* data,
                 const size_t size) override {
@@ -1437,6 +1504,10 @@ class MockPersistentCache : public PersistentCache {
   }
 
   bool IsCompressed() override { return is_compressed_; }
+
+  std::string GetPrintableOptions() const override {
+    return "MockPersistentCache";
+  }
 
   port::Mutex lock_;
   std::map<std::string, std::string> data_;
@@ -1628,37 +1699,7 @@ TEST_P(MergeOperatorPinningTest, OperandsMultiBlocks) {
   // 3 L4 Files
   ASSERT_EQ(FilesPerLevel(), "3,1,3,1,3");
 
-  // Verify Get()
-  for (auto kv : true_data) {
-    ASSERT_EQ(Get(kv.first), kv.second);
-  }
-
-  Iterator* iter = db_->NewIterator(ReadOptions());
-
-  // Verify Iterator::Next()
-  auto data_iter = true_data.begin();
-  for (iter->SeekToFirst(); iter->Valid(); iter->Next(), data_iter++) {
-    ASSERT_EQ(iter->key().ToString(), data_iter->first);
-    ASSERT_EQ(iter->value().ToString(), data_iter->second);
-  }
-  ASSERT_EQ(data_iter, true_data.end());
-
-  // Verify Iterator::Prev()
-  auto data_rev = true_data.rbegin();
-  for (iter->SeekToLast(); iter->Valid(); iter->Prev(), data_rev++) {
-    ASSERT_EQ(iter->key().ToString(), data_rev->first);
-    ASSERT_EQ(iter->value().ToString(), data_rev->second);
-  }
-  ASSERT_EQ(data_rev, true_data.rend());
-
-  // Verify Iterator::Seek()
-  for (auto kv : true_data) {
-    iter->Seek(kv.first);
-    ASSERT_EQ(kv.first, iter->key().ToString());
-    ASSERT_EQ(kv.second, iter->value().ToString());
-  }
-
-  delete iter;
+  VerifyDBFromMap(true_data);
 }
 
 TEST_P(MergeOperatorPinningTest, Randomized) {
@@ -1807,29 +1848,406 @@ TEST_P(MergeOperatorPinningTest, EvictCacheBeforeMerge) {
     }
   };
 
-  VerifyDBFromMap(true_data);
-  ASSERT_EQ(merge_cnt, kNumKeys * 4 /* get + next + prev + seek */);
+  size_t total_reads;
+  VerifyDBFromMap(true_data, &total_reads);
+  ASSERT_EQ(merge_cnt, total_reads);
 
   db_->CompactRange(CompactRangeOptions(), nullptr, nullptr);
 
-  VerifyDBFromMap(true_data);
+  VerifyDBFromMap(true_data, &total_reads);
+}
+
+TEST_P(MergeOperatorPinningTest, TailingIterator) {
+  Options options = CurrentOptions();
+  options.merge_operator = MergeOperators::CreateMaxOperator();
+  BlockBasedTableOptions bbto;
+  bbto.no_block_cache = disable_block_cache_;
+  options.table_factory.reset(NewBlockBasedTableFactory(bbto));
+  DestroyAndReopen(options);
+
+  const int kNumOperands = 100;
+  const int kNumWrites = 100000;
+
+  std::function<void()> writer_func = [&]() {
+    int k = 0;
+    for (int i = 0; i < kNumWrites; i++) {
+      db_->Merge(WriteOptions(), Key(k), Key(k));
+
+      if (i && i % kNumOperands == 0) {
+        k++;
+      }
+      if (i && i % 127 == 0) {
+        ASSERT_OK(Flush());
+      }
+      if (i && i % 317 == 0) {
+        ASSERT_OK(db_->CompactRange(CompactRangeOptions(), nullptr, nullptr));
+      }
+    }
+  };
+
+  std::function<void()> reader_func = [&]() {
+    ReadOptions ro;
+    ro.tailing = true;
+    Iterator* iter = db_->NewIterator(ro);
+
+    iter->SeekToFirst();
+    for (int i = 0; i < (kNumWrites / kNumOperands); i++) {
+      while (!iter->Valid()) {
+        // wait for the key to be written
+        env_->SleepForMicroseconds(100);
+        iter->Seek(Key(i));
+      }
+      ASSERT_EQ(iter->key(), Key(i));
+      ASSERT_EQ(iter->value(), Key(i));
+
+      iter->Next();
+    }
+
+    delete iter;
+  };
+
+  std::thread writer_thread(writer_func);
+  std::thread reader_thread(reader_func);
+
+  writer_thread.join();
+  reader_thread.join();
 }
 #endif  // ROCKSDB_LITE
 
-TEST_F(DBTest2, MaxSuccessiveMergesInRecovery) {
-  Options options;
-  options = CurrentOptions(options);
-  options.merge_operator = MergeOperators::CreatePutOperator();
+size_t GetEncodedEntrySize(size_t key_size, size_t value_size) {
+  std::string buffer;
+
+  PutVarint32(&buffer, static_cast<uint32_t>(0));
+  PutVarint32(&buffer, static_cast<uint32_t>(key_size));
+  PutVarint32(&buffer, static_cast<uint32_t>(value_size));
+
+  return buffer.size() + key_size + value_size;
+}
+
+TEST_F(DBTest2, ReadAmpBitmap) {
+  Options options = CurrentOptions();
+  BlockBasedTableOptions bbto;
+  // Disable delta encoding to make it easier to calculate read amplification
+  bbto.use_delta_encoding = false;
+  // Huge block cache to make it easier to calculate read amplification
+  bbto.block_cache = NewLRUCache(1024 * 1024 * 1024);
+  bbto.read_amp_bytes_per_bit = 16;
+  options.table_factory.reset(NewBlockBasedTableFactory(bbto));
+  options.statistics = rocksdb::CreateDBStatistics();
   DestroyAndReopen(options);
 
-  db_->Put(WriteOptions(), "foo", "bar");
-  ASSERT_OK(db_->Merge(WriteOptions(), "foo", "bar"));
-  ASSERT_OK(db_->Merge(WriteOptions(), "foo", "bar"));
-  ASSERT_OK(db_->Merge(WriteOptions(), "foo", "bar"));
-  ASSERT_OK(db_->Merge(WriteOptions(), "foo", "bar"));
-  ASSERT_OK(db_->Merge(WriteOptions(), "foo", "bar"));
+  const size_t kNumEntries = 10000;
 
-  options.max_successive_merges = 3;
+  Random rnd(301);
+  for (size_t i = 0; i < kNumEntries; i++) {
+    ASSERT_OK(Put(Key(static_cast<int>(i)), RandomString(&rnd, 100)));
+  }
+  ASSERT_OK(Flush());
+
+  Close();
+  Reopen(options);
+
+  // Read keys/values randomly and verify that reported read amp error
+  // is less than 2%
+  uint64_t total_useful_bytes = 0;
+  std::set<int> read_keys;
+  std::string value;
+  for (size_t i = 0; i < kNumEntries * 5; i++) {
+    int key_idx = rnd.Next() % kNumEntries;
+    std::string k = Key(key_idx);
+    ASSERT_OK(db_->Get(ReadOptions(), k, &value));
+
+    if (read_keys.find(key_idx) == read_keys.end()) {
+      auto ik = InternalKey(k, 0, ValueType::kTypeValue);
+      total_useful_bytes += GetEncodedEntrySize(ik.size(), value.size());
+      read_keys.insert(key_idx);
+    }
+
+    double expected_read_amp =
+        static_cast<double>(total_useful_bytes) /
+        options.statistics->getTickerCount(READ_AMP_TOTAL_READ_BYTES);
+
+    double read_amp =
+        static_cast<double>(options.statistics->getTickerCount(
+            READ_AMP_ESTIMATE_USEFUL_BYTES)) /
+        options.statistics->getTickerCount(READ_AMP_TOTAL_READ_BYTES);
+
+    double error_pct = fabs(expected_read_amp - read_amp) * 100;
+    // Error between reported read amp and real read amp should be less than 2%
+    EXPECT_LE(error_pct, 2);
+  }
+
+  // Make sure we read every thing in the DB (which is smaller than our cache)
+  Iterator* iter = db_->NewIterator(ReadOptions());
+  for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
+    ASSERT_EQ(iter->value().ToString(), Get(iter->key().ToString()));
+  }
+  delete iter;
+
+  // Read amp is 100% since we read all what we loaded in memory
+  ASSERT_EQ(options.statistics->getTickerCount(READ_AMP_ESTIMATE_USEFUL_BYTES),
+            options.statistics->getTickerCount(READ_AMP_TOTAL_READ_BYTES));
+}
+
+TEST_F(DBTest2, ReadAmpBitmapLiveInCacheAfterDBClose) {
+  if (dbname_.find("dev/shm") != std::string::npos) {
+    // /dev/shm dont support getting a unique file id, this mean that
+    // running this test on /dev/shm will fail because lru_cache will load
+    // the blocks again regardless of them being already in the cache
+    return;
+  }
+
+  std::shared_ptr<Cache> lru_cache = NewLRUCache(1024 * 1024 * 1024);
+  std::shared_ptr<Statistics> stats = rocksdb::CreateDBStatistics();
+
+  Options options = CurrentOptions();
+  BlockBasedTableOptions bbto;
+  // Disable delta encoding to make it easier to calculate read amplification
+  bbto.use_delta_encoding = false;
+  // Huge block cache to make it easier to calculate read amplification
+  bbto.block_cache = lru_cache;
+  bbto.read_amp_bytes_per_bit = 16;
+  options.table_factory.reset(NewBlockBasedTableFactory(bbto));
+  options.statistics = stats;
+  DestroyAndReopen(options);
+
+  const int kNumEntries = 10000;
+
+  Random rnd(301);
+  for (int i = 0; i < kNumEntries; i++) {
+    ASSERT_OK(Put(Key(i), RandomString(&rnd, 100)));
+  }
+  ASSERT_OK(Flush());
+
+  Close();
+  Reopen(options);
+
+  uint64_t total_useful_bytes = 0;
+  std::set<int> read_keys;
+  std::string value;
+  // Iter1: Read half the DB, Read even keys
+  // Key(0), Key(2), Key(4), Key(6), Key(8), ...
+  for (int i = 0; i < kNumEntries; i += 2) {
+    std::string k = Key(i);
+    ASSERT_OK(db_->Get(ReadOptions(), k, &value));
+
+    if (read_keys.find(i) == read_keys.end()) {
+      auto ik = InternalKey(k, 0, ValueType::kTypeValue);
+      total_useful_bytes += GetEncodedEntrySize(ik.size(), value.size());
+      read_keys.insert(i);
+    }
+  }
+
+  size_t total_useful_bytes_iter1 =
+      options.statistics->getTickerCount(READ_AMP_ESTIMATE_USEFUL_BYTES);
+  size_t total_loaded_bytes_iter1 =
+      options.statistics->getTickerCount(READ_AMP_TOTAL_READ_BYTES);
+
+  Close();
+  std::shared_ptr<Statistics> new_statistics = rocksdb::CreateDBStatistics();
+  // Destroy old statistics obj that the blocks in lru_cache are pointing to
+  options.statistics.reset();
+  // Use the statistics object that we just created
+  options.statistics = new_statistics;
+  Reopen(options);
+
+  // Iter2: Read half the DB, Read odd keys
+  // Key(1), Key(3), Key(5), Key(7), Key(9), ...
+  for (int i = 1; i < kNumEntries; i += 2) {
+    std::string k = Key(i);
+    ASSERT_OK(db_->Get(ReadOptions(), k, &value));
+
+    if (read_keys.find(i) == read_keys.end()) {
+      auto ik = InternalKey(k, 0, ValueType::kTypeValue);
+      total_useful_bytes += GetEncodedEntrySize(ik.size(), value.size());
+      read_keys.insert(i);
+    }
+  }
+
+  size_t total_useful_bytes_iter2 =
+      options.statistics->getTickerCount(READ_AMP_ESTIMATE_USEFUL_BYTES);
+  size_t total_loaded_bytes_iter2 =
+      options.statistics->getTickerCount(READ_AMP_TOTAL_READ_BYTES);
+
+  // We reached read_amp of 100% because we read all the keys in the DB
+  ASSERT_EQ(total_useful_bytes_iter1 + total_useful_bytes_iter2,
+            total_loaded_bytes_iter1 + total_loaded_bytes_iter2);
+}
+
+#ifndef ROCKSDB_LITE
+TEST_F(DBTest2, AutomaticCompactionOverlapManualCompaction) {
+  Options options = CurrentOptions();
+  options.num_levels = 3;
+  options.IncreaseParallelism(20);
+  DestroyAndReopen(options);
+
+  ASSERT_OK(Put(Key(0), "a"));
+  ASSERT_OK(Put(Key(5), "a"));
+  ASSERT_OK(Flush());
+
+  ASSERT_OK(Put(Key(10), "a"));
+  ASSERT_OK(Put(Key(15), "a"));
+  ASSERT_OK(Flush());
+
+  CompactRangeOptions cro;
+  cro.change_level = true;
+  cro.target_level = 2;
+  ASSERT_OK(db_->CompactRange(cro, nullptr, nullptr));
+
+  auto get_stat = [](std::string level_str, LevelStatType type,
+                     std::map<std::string, double> props) {
+    auto prop_str =
+        level_str + "." +
+        InternalStats::compaction_level_stats.at(type).property_name.c_str();
+    auto prop_item = props.find(prop_str);
+    return prop_item == props.end() ? 0 : prop_item->second;
+  };
+
+  // Trivial move 2 files to L2
+  ASSERT_EQ("0,0,2", FilesPerLevel());
+  // Also test that the stats GetMapProperty API reporting the same result
+  {
+    std::map<std::string, double> prop;
+    ASSERT_TRUE(dbfull()->GetMapProperty("rocksdb.cfstats", &prop));
+    ASSERT_EQ(0, get_stat("L0", LevelStatType::NUM_FILES, prop));
+    ASSERT_EQ(0, get_stat("L1", LevelStatType::NUM_FILES, prop));
+    ASSERT_EQ(2, get_stat("L2", LevelStatType::NUM_FILES, prop));
+    ASSERT_EQ(2, get_stat("Sum", LevelStatType::NUM_FILES, prop));
+  }
+
+  // While the compaction is running, we will create 2 new files that
+  // can fit in L2, these 2 files will be moved to L2 and overlap with
+  // the running compaction and break the LSM consistency.
+  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+      "CompactionJob::Run():Start", [&](void* arg) {
+        ASSERT_OK(
+            dbfull()->SetOptions({{"level0_file_num_compaction_trigger", "2"},
+                                  {"max_bytes_for_level_base", "1"}}));
+        ASSERT_OK(Put(Key(6), "a"));
+        ASSERT_OK(Put(Key(7), "a"));
+        ASSERT_OK(Flush());
+
+        ASSERT_OK(Put(Key(8), "a"));
+        ASSERT_OK(Put(Key(9), "a"));
+        ASSERT_OK(Flush());
+      });
+  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+
+  // Run a manual compaction that will compact the 2 files in L2
+  // into 1 file in L2
+  cro.exclusive_manual_compaction = false;
+  cro.bottommost_level_compaction = BottommostLevelCompaction::kForce;
+  ASSERT_OK(db_->CompactRange(cro, nullptr, nullptr));
+
+  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+
+  // Test that the stats GetMapProperty API reporting 1 file in L2
+  {
+    std::map<std::string, double> prop;
+    ASSERT_TRUE(dbfull()->GetMapProperty("rocksdb.cfstats", &prop));
+    ASSERT_EQ(1, get_stat("L2", LevelStatType::NUM_FILES, prop));
+  }
+}
+
+TEST_F(DBTest2, ManualCompactionOverlapManualCompaction) {
+  Options options = CurrentOptions();
+  options.num_levels = 2;
+  options.IncreaseParallelism(20);
+  options.disable_auto_compactions = true;
+  DestroyAndReopen(options);
+
+  ASSERT_OK(Put(Key(0), "a"));
+  ASSERT_OK(Put(Key(5), "a"));
+  ASSERT_OK(Flush());
+
+  ASSERT_OK(Put(Key(10), "a"));
+  ASSERT_OK(Put(Key(15), "a"));
+  ASSERT_OK(Flush());
+
+  ASSERT_OK(db_->CompactRange(CompactRangeOptions(), nullptr, nullptr));
+
+  // Trivial move 2 files to L1
+  ASSERT_EQ("0,2", FilesPerLevel());
+
+  std::function<void()> bg_manual_compact = [&]() {
+    std::string k1 = Key(6);
+    std::string k2 = Key(9);
+    Slice k1s(k1);
+    Slice k2s(k2);
+    CompactRangeOptions cro;
+    cro.exclusive_manual_compaction = false;
+    ASSERT_OK(db_->CompactRange(cro, &k1s, &k2s));
+  };
+  std::thread bg_thread;
+
+  // While the compaction is running, we will create 2 new files that
+  // can fit in L1, these 2 files will be moved to L1 and overlap with
+  // the running compaction and break the LSM consistency.
+  std::atomic<bool> flag(false);
+  rocksdb::SyncPoint::GetInstance()->SetCallBack(
+      "CompactionJob::Run():Start", [&](void* arg) {
+        if (flag.exchange(true)) {
+          // We want to make sure to call this callback only once
+          return;
+        }
+        ASSERT_OK(Put(Key(6), "a"));
+        ASSERT_OK(Put(Key(7), "a"));
+        ASSERT_OK(Flush());
+
+        ASSERT_OK(Put(Key(8), "a"));
+        ASSERT_OK(Put(Key(9), "a"));
+        ASSERT_OK(Flush());
+
+        // Start a non-exclusive manual compaction in a bg thread
+        bg_thread = std::thread(bg_manual_compact);
+        // This manual compaction conflict with the other manual compaction
+        // so it should wait until the first compaction finish
+        env_->SleepForMicroseconds(1000000);
+      });
+  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+
+  // Run a manual compaction that will compact the 2 files in L1
+  // into 1 file in L1
+  CompactRangeOptions cro;
+  cro.exclusive_manual_compaction = false;
+  cro.bottommost_level_compaction = BottommostLevelCompaction::kForce;
+  ASSERT_OK(db_->CompactRange(cro, nullptr, nullptr));
+  bg_thread.join();
+
+  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+}
+
+TEST_F(DBTest2, OptimizeForPointLookup) {
+  Options options = CurrentOptions();
+  Close();
+  options.OptimizeForPointLookup(2);
+  ASSERT_OK(DB::Open(options, dbname_, &db_));
+
+  ASSERT_OK(Put("foo", "v1"));
+  ASSERT_EQ("v1", Get("foo"));
+  Flush();
+  ASSERT_EQ("v1", Get("foo"));
+}
+#endif  // ROCKSDB_LITE
+
+TEST_F(DBTest2, DirectIO) {
+  if (!IsDirectIOSupported()) {
+    return;
+  }
+  Options options = CurrentOptions();
+  options.use_direct_reads = options.use_direct_writes = true;
+  options.allow_mmap_reads = options.allow_mmap_writes = false;
+  DestroyAndReopen(options);
+
+  ASSERT_OK(Put(Key(0), "a"));
+  ASSERT_OK(Put(Key(5), "a"));
+  ASSERT_OK(Flush());
+
+  ASSERT_OK(Put(Key(10), "a"));
+  ASSERT_OK(Put(Key(15), "a"));
+  ASSERT_OK(Flush());
+
+  ASSERT_OK(db_->CompactRange(CompactRangeOptions(), nullptr, nullptr));
   Reopen(options);
 }
 }  // namespace rocksdb

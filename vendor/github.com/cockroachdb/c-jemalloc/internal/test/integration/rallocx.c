@@ -7,7 +7,7 @@ get_nsizes_impl(const char *cmd)
 	size_t z;
 
 	z = sizeof(unsigned);
-	assert_d_eq(mallctl(cmd, &ret, &z, NULL, 0), 0,
+	assert_d_eq(mallctl(cmd, (void *)&ret, &z, NULL, 0), 0,
 	    "Unexpected mallctl(\"%s\", ...) failure", cmd);
 
 	return (ret);
@@ -33,7 +33,7 @@ get_size_impl(const char *cmd, size_t ind)
 	    0, "Unexpected mallctlnametomib(\"%s\", ...) failure", cmd);
 	mib[2] = ind;
 	z = sizeof(size_t);
-	assert_d_eq(mallctlbymib(mib, miblen, &ret, &z, NULL, 0),
+	assert_d_eq(mallctlbymib(mib, miblen, (void *)&ret, &z, NULL, 0),
 	    0, "Unexpected mallctlbymib([\"%s\", %zu], ...) failure", cmd, ind);
 
 	return (ret);

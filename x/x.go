@@ -147,9 +147,9 @@ func ReadLine(r *bufio.Reader, buf *bytes.Buffer) error {
 func Round(d time.Duration) time.Duration {
 	var denominator time.Duration
 	if d > time.Minute {
-		denominator = time.Second
+		denominator = 0.1e12 // So that it has one digit after the decimal.
 	} else if d > time.Second {
-		denominator = time.Millisecond
+		denominator = 0.1e9 // 0.1 * time.Second
 	} else if d > time.Millisecond {
 		denominator = time.Millisecond
 	} else {

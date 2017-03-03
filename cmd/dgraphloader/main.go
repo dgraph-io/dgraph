@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/rdf"
@@ -30,6 +31,17 @@ var (
 	dgraph     = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
+	// TLS configuration
+	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
+	tlsInsecure      = flag.Bool("tls.insecure", false, "Skip certificate validation (insecure)")
+	tlsServerName    = flag.String("tls.server_name", "", "Server name.")
+	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
+	tlsKey           = flag.String("tls.cert_key", "", "Certificate key file path.")
+	tlsKeyPass       = flag.String("tls.cert_key_passphrase", "", "Certificate key passphrase.")
+	tlsRootCACerts   = flag.String("tls.ca_certs", "", "CA Certs file path.")
+	tlsSystemCACerts = flag.Bool("tls.use_system_ca", false, "Include System CA into CA Certs.")
+	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min version.")
+	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max version.")
 )
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -63,17 +75,19 @@ func processFile(file string, batch *client.BatchMutation) {
 
 	var buf bytes.Buffer
 	bufReader := bufio.NewReader(gr)
+	var line int
 	for {
 		err = readLine(bufReader, &buf)
 		if err != nil {
 			break
 		}
+		line++
 		nq, err := rdf.Parse(buf.String())
 		if err == rdf.ErrEmpty { // special case: comment/empty line
 			buf.Reset()
 			continue
 		} else if err != nil {
-			log.Fatal("While parsing RDF: ", err)
+			log.Fatalf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
 		}
 		buf.Reset()
 		if err = batch.AddMutation(nq, client.SET); err != nil {
@@ -93,11 +107,33 @@ func printCounters(batch *client.BatchMutation, ticker *time.Ticker) {
 	}
 }
 
+func setupConnection() (*grpc.ClientConn, error) {
+	if !*tlsEnabled {
+		return grpc.Dial(*dgraph, grpc.WithInsecure())
+	}
+
+	tlsCfg, err := x.GenerateTLSConfig(x.TLSHelperConfig{
+		Insecure:             *tlsInsecure,
+		ServerName:           *tlsServerName,
+		Cert:                 *tlsCert,
+		Key:                  *tlsKey,
+		KeyPassphrase:        *tlsKeyPass,
+		RootCACerts:          *tlsRootCACerts,
+		UseSystemRootCACerts: *tlsSystemCACerts,
+		MinVersion:           *tlsMinVersion,
+		MaxVersion:           *tlsMaxVersion,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return grpc.Dial(*dgraph, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+}
+
 func main() {
 	x.Init()
 
-	var err error
-	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
+	conn, err := setupConnection()
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 

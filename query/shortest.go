@@ -6,6 +6,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -18,6 +19,7 @@ type Item struct {
 
 var ErrStop = x.Errorf("STOP")
 var ErrTooBig = x.Errorf("Query exceeded memory limit")
+var ErrFacet = x.Errorf("Skip the edge")
 
 type priorityQueue []*Item
 
@@ -52,6 +54,33 @@ type nodeInfo struct {
 	node *Item
 }
 
+func (sg *SubGraph) getCost(matrix, list int) (float64, error) {
+	cost := 1.0
+	if sg.Params.Facet == nil {
+		return cost, nil
+	}
+	fcsList := sg.facetsMatrix[matrix].FacetsList
+	if len(fcsList) <= list {
+		return cost, ErrFacet
+	}
+	fcs := fcsList[list]
+	if len(fcs.Facets) == 0 {
+		return cost, ErrFacet
+	}
+	if len(fcs.Facets) > 1 {
+		return cost, x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
+	}
+	tv := types.ValFor(fcs.Facets[0])
+	if tv.Tid == types.Int32ID {
+		cost = float64(tv.Value.(int32))
+	} else if tv.Tid == types.FloatID {
+		cost = float64(tv.Value.(float64))
+	} else {
+		return cost, ErrFacet
+	}
+	return cost, nil
+}
+
 func (start *SubGraph) expandOut(ctx context.Context,
 	adjacencyMap map[uint64]map[uint64]float64, next chan bool, rch chan error) {
 
@@ -59,7 +88,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 	var exec []*SubGraph
 	var err error
 	var in task.List
-	it := algo.NewWriteIterator(&in, 0)
+	it := algo.NewWriteIterator(&in)
 	it.Append(start.Params.From)
 	it.End()
 	start.SrcUIDs = &in
@@ -99,18 +128,28 @@ func (start *SubGraph) expandOut(ctx context.Context,
 		for _, sg := range exec {
 			// Send the destuids in res chan.
 			it := algo.NewListIterator(sg.SrcUIDs)
-			idx := -1
+			mIdx := -1
 			for ; it.Valid(); it.Next() { // idx, fromUID := range sg.SrcUIDs.Uids {
-				idx++
+				mIdx++
 				fromUID := it.Val()
-				it1 := algo.NewListIterator(sg.uidMatrix[idx])
-				// ul := sg.uidMatrix[idx].Uids
-				for ; it1.Valid(); it1.Next() { // _, toUid := range ul {
-					toUid := it1.Val()
+				destIt := algo.NewListIterator(sg.uidMatrix[mIdx])
+				lIdx := -1
+				for ; destIt.Valid(); destIt.Next() {
+					lIdx++
+					toUid := destIt.Val()
 					if adjacencyMap[fromUID] == nil {
 						adjacencyMap[fromUID] = make(map[uint64]float64)
 					}
-					adjacencyMap[fromUID][toUid] = 1.0 // cost is 1 for now.
+					// The default cost we'd use is 1.
+					cost, err := sg.getCost(mIdx, lIdx)
+					if err == ErrFacet {
+						// Ignore the edge and continue.
+						continue
+					} else if err != nil {
+						rch <- err
+						return
+					}
+					adjacencyMap[fromUID][toUid] = cost
 					numEdges++
 				}
 			}
@@ -214,7 +253,6 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 	}
 
 	var stopExpansion bool
-	// For now, lets allow a maximum of 10 hops.
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*Item)
 		if item.uid == sg.Params.To {
@@ -253,7 +291,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 				}
 				if !ok {
 					// This is the first time we're seeing this node. So
-					// create a new node and add it to the heap nad map.
+					// create a new node and add it to the heap and map.
 					node := &Item{
 						uid:  toUid,
 						cost: item.cost + cost,
@@ -267,11 +305,17 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 					}
 				} else {
 					// We've already seen this node. So, just update the cost
-					// and fix the priority in the queue.
+					// and fix the priority in the heap and map.
 					node := dist[toUid].node
 					node.cost = item.cost + cost
 					node.hop = item.hop + 1
 					heap.Fix(&pq, node.index)
+					// Update the map with new values.
+					dist[toUid] = nodeInfo{
+						cost:   item.cost + cost,
+						parent: item.uid,
+						node:   node,
+					}
 				}
 
 			}
@@ -294,7 +338,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 			result[i], result[l-i-1] = result[l-i-1], result[i]
 		}
 		var r task.List
-		out := algo.NewWriteIterator(&r, 0)
+		out := algo.NewWriteIterator(&r)
 		for i := 0; i < len(result); i++ {
 			out.Append(result[i])
 		}

@@ -12,14 +12,14 @@
 #include "db/table_properties_collector.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/env.h"
-#include "rocksdb/immutable_options.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table_properties.h"
 #include "rocksdb/types.h"
+#include "table/scoped_arena_iterator.h"
+#include "util/cf_options.h"
 #include "util/event_logger.h"
-#include "util/mutable_cf_options.h"
 
 namespace rocksdb {
 
@@ -49,6 +49,7 @@ TableBuilder* NewTableBuilder(
     uint32_t column_family_id, const std::string& column_family_name,
     WritableFileWriter* file, const CompressionType compression_type,
     const CompressionOptions& compression_opts,
+    int level,
     const std::string* compression_dict = nullptr,
     const bool skip_filters = false);
 
@@ -63,7 +64,8 @@ TableBuilder* NewTableBuilder(
 extern Status BuildTable(
     const std::string& dbname, Env* env, const ImmutableCFOptions& options,
     const MutableCFOptions& mutable_cf_options, const EnvOptions& env_options,
-    TableCache* table_cache, InternalIterator* iter, FileMetaData* meta,
+    TableCache* table_cache, InternalIterator* iter,
+    std::unique_ptr<InternalIterator> range_del_iter, FileMetaData* meta,
     const InternalKeyComparator& internal_comparator,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories,

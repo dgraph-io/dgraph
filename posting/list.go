@@ -128,6 +128,9 @@ func samePosting(oldp *types.Posting, newp *types.Posting) bool {
 	if !bytes.Equal(oldp.Value, newp.Value) {
 		return false
 	}
+	if oldp.Lang != newp.Lang {
+		return false
+	}
 	// Checking source might not be necessary.
 	if oldp.Label != newp.Label {
 		return false
@@ -139,7 +142,7 @@ func samePosting(oldp *types.Posting, newp *types.Posting) bool {
 }
 
 func newPosting(t *task.DirectedEdge) *types.Posting {
-	x.AssertTruef(edgeType(t) != valueEmpty,
+	x.AssertTruef(edgeType(t) != x.ValueEmpty,
 		"This should have been set by the caller.")
 
 	var op uint32
@@ -314,30 +317,26 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	return l.addMutation(ctx, t)
 }
 
-// TODO(tzdybal) - this is almost the same as in rdf/parse.go - maybe some refactoring?
-type valueTypeInfo int32
-
-// Type of a data inside DirectedEdge or Posting
-const (
-	valueEmpty    valueTypeInfo = iota // no UID and no value
-	valueUid                           // UID
-	valueUntagged                      // value without defined language tag
-	valueTagged                        // value with defined language tag
-)
-
-func edgeType(t *task.DirectedEdge) valueTypeInfo {
+func edgeType(t *task.DirectedEdge) x.ValueTypeInfo {
 	hasVal := !bytes.Equal(t.Value, nil)
 	hasId := t.ValueId != 0
 	switch {
 	case hasVal && hasId:
-		return valueTagged
+		return x.ValueTagged
 	case hasVal && !hasId:
-		return valueUntagged
+		return x.ValueUntagged
 	case !hasVal && hasId:
-		return valueUid
+		return x.ValueUid
 	default:
-		return valueEmpty
+		return x.ValueEmpty
 	}
+}
+
+func postingType(p *types.Posting) x.ValueTypeInfo {
+	hasValue := !bytes.Equal(p.Value, nil)
+	hasLang := len(p.Lang) > 0
+	hasSpecialId := p.Uid == math.MaxUint64
+	return x.ValueType(hasValue, hasLang, hasSpecialId)
 }
 
 // TypeID returns the typeid of destiantion vertex
@@ -346,24 +345,6 @@ func TypeID(edge *task.DirectedEdge) types.TypeID {
 		return types.UidID
 	}
 	return types.TypeID(edge.ValueType)
-}
-
-// TODO(tzdybal) - refactor
-func postingType(p *types.Posting) valueTypeInfo {
-	if !bytes.Equal(p.Value, nil) {
-		if len(p.Lang) == 0 {
-			return valueUntagged // value without lang tag
-		} else {
-			return valueTagged // value with lang tag
-		}
-	} else {
-		if p.Uid == math.MaxUint64 {
-			return valueEmpty // empty - no Uid and no Value
-		} else {
-			return valueUid // Uid
-		}
-
-	}
 }
 
 func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, error) {
@@ -376,15 +357,11 @@ func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	// All edges with a value without LANGTAG, have the same uid. In other words,
 	// an (entity, attribute) can only have one untagged value.
 	if !bytes.Equal(t.Value, nil) {
-		t.ValueId = math.MaxUint64
-		// TODO(tzdybal) - uncomment when entire code is ready for the change
-		/*
-			if len(t.Lang) > 0 {
-				t.ValueId = farm.Fingerprint64([]byte(t.Lang))
-			} else {
-				t.ValueId = math.MaxUint64
-			}
-		*/
+		if len(t.Lang) > 0 {
+			t.ValueId = farm.Fingerprint64([]byte(t.Lang))
+		} else {
+			t.ValueId = math.MaxUint64
+		}
 	}
 	if t.ValueId == 0 {
 		err := x.Errorf("ValueId cannot be zero")
@@ -577,33 +554,25 @@ func (l *List) LastCompactionTs() time.Time {
 // We have to apply the filtering before applying (offset, count).
 func (l *List) Uids(opt ListOptions) *task.List {
 	res := new(task.List)
-	writeIt := algo.NewWriteIterator(res, 0)
-	l.intersectingPostings(opt, func(p *types.Posting) {
+	writeIt := algo.NewWriteIterator(res)
+	l.Postings(opt, func(p *types.Posting) bool {
 		writeIt.Append(p.Uid)
+		return true
 	})
 	writeIt.End()
 	return res
 }
 
-// FacetsForUids gives Facets for postings common with uids in opt listOptions.
-func (l *List) FacetsForUids(opt ListOptions, param *facets.Param) []*facets.Facets {
-	result := make([]*facets.Facets, 0, 10)
-	l.intersectingPostings(opt, func(p *types.Posting) {
-		result = append(result, &facets.Facets{Facets: copyFacets(p, param)})
-	})
-	return result
-}
-
-// intersectingPostings calls postFn with the postings that are common with
+// Postings calls postFn with the postings that are common with
 // uids in the opt ListOptions.
-func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)) {
+func (l *List) Postings(opt ListOptions, postFn func(*types.Posting) bool) {
 	l.RLock()
 	defer l.RUnlock()
 
 	it := algo.NewListIterator(opt.Intersect)
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
-		if postingType(p) != valueUid {
-			return false
+		if postingType(p) != x.ValueUid {
+			return true
 		}
 		uid := p.Uid
 		if opt.ExcludeSet != nil {
@@ -617,31 +586,95 @@ func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)
 				return true
 			}
 		}
-		postFn(p)
-		return true
+		return postFn(p)
 	})
 }
 
+// Returns Value from posting list.
+// This function looks only for "default" value (one without language).
 func (l *List) Value() (rval types.Val, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
 	return l.value()
 }
 
+// Returns Value from posting list, according to preferred language list (langs).
+// If list is empty, value without language is returned; if such value is not available, value with
+// smallest Uid is returned.
+// If list consists of one or more languages, first available value is returned; if no language
+// from list match the values, processing is the same as for empty list.
+func (l *List) ValueFor(langs []string) (rval types.Val, rerr error) {
+	l.RLock()
+	defer l.RUnlock()
+	return l.valueFor(langs)
+}
+
 func (l *List) value() (rval types.Val, rerr error) {
 	l.AssertRLock()
-	p, err := l.valuePosting()
-	if err != nil {
-		return rval, err
+	var found bool
+
+	found, rval = l.findValue(math.MaxUint64)
+
+	if !found {
+		return rval, ErrNoValue
 	}
-	val := make([]byte, len(p.Value))
-	copy(val, p.Value)
-	rval.Value = val
-	rval.Tid = types.TypeID(p.ValType)
+
 	return rval, nil
 }
 
-// TODO(tzdybal) function for value in given language
+func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
+	l.AssertRLock()
+	var found bool
+
+	// look for language in preffered order
+	for _, lang := range langs {
+		langUid := farm.Fingerprint64([]byte(lang))
+		found, rval = l.findValue(langUid)
+		if found {
+			break
+		}
+	}
+
+	// look for value without language
+	if !found {
+		found, rval = l.findValue(math.MaxUint64)
+	}
+
+	// last resort - return value with smallest lang Uid
+	if !found {
+		l.iterate(0, func(p *types.Posting) bool {
+			if postingType(p) == x.ValueTagged {
+				val := make([]byte, len(p.Value))
+				copy(val, p.Value)
+				rval.Value = val
+				rval.Tid = types.TypeID(p.ValType)
+				found = true
+			}
+			return false
+		})
+	}
+
+	if !found {
+		return rval, ErrNoValue
+	}
+
+	return rval, nil
+}
+
+func (l *List) findValue(uid uint64) (found bool, rval types.Val) {
+	l.iterate(uid-1, func(p *types.Posting) bool {
+		if p.Uid == uid {
+			val := make([]byte, len(p.Value))
+			copy(val, p.Value)
+			rval.Value = val
+			rval.Tid = types.TypeID(p.ValType)
+			found = true
+		}
+		return false
+	})
+
+	return found, rval
+}
 
 // Facets gives facets for the posting representing value.
 func (l *List) Facets(param *facets.Param) (fs []*facets.Facet, ferr error) {
@@ -651,33 +684,7 @@ func (l *List) Facets(param *facets.Param) (fs []*facets.Facet, ferr error) {
 	if err != nil {
 		return nil, err
 	}
-	return copyFacets(p, param), nil
-}
-
-// copyFacets makes a copy of facets of the posting which are requested in param.Keys.
-func copyFacets(p *types.Posting, param *facets.Param) (fs []*facets.Facet) {
-	// since facets and param.keys are both sorted,
-	// we can break when either param.Keys OR p.Facets.Key(s) go ahead of each other.
-	// However, we need all keys if param.AllKeys is true.
-	numCopied := 0
-	numKeys := len(param.Keys)
-	for _, f := range p.Facets {
-		if param.AllKeys || param.Keys[numCopied] == f.Key {
-			fcopy := &facets.Facet{Key: f.Key, Value: nil, ValType: f.ValType}
-			fcopy.Value = make([]byte, len(f.Value))
-			copy(fcopy.Value, f.Value)
-			fs = append(fs, fcopy)
-			numCopied++
-			if !param.AllKeys && (numCopied >= numKeys) {
-				// break if we don't want all keys and
-				// we have taken all param.Keys.
-				break
-			}
-		} else if f.Key > param.Keys[numCopied] {
-			break
-		}
-	}
-	return fs
+	return facets.CopyFacets(p.Facets, param), nil
 }
 
 // valuePosting gives the posting representing value.

@@ -176,6 +176,13 @@ TEST_BEGIN(test_nstime_divide)
 }
 TEST_END
 
+TEST_BEGIN(test_nstime_monotonic)
+{
+
+	nstime_monotonic();
+}
+TEST_END
+
 TEST_BEGIN(test_nstime_update)
 {
 	nstime_t nst;
@@ -198,7 +205,6 @@ TEST_BEGIN(test_nstime_update)
 		assert_d_eq(nstime_compare(&nst, &nst0), 0,
 		    "Time should not have been modified");
 	}
-
 }
 TEST_END
 
@@ -216,5 +222,6 @@ main(void)
 	    test_nstime_imultiply,
 	    test_nstime_idivide,
 	    test_nstime_divide,
+	    test_nstime_monotonic,
 	    test_nstime_update));
 }

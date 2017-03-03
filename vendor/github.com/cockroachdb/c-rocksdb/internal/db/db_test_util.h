@@ -193,6 +193,10 @@ class SpecialSkipListFactory : public MemTableRepFactory {
   }
   virtual const char* Name() const override { return "SkipListFactory"; }
 
+  bool IsInsertConcurrentlySupported() const override {
+    return factory_.IsInsertConcurrentlySupported();
+  }
+
  private:
   SkipListFactory factory_;
   int num_entries_flush_;
@@ -221,10 +225,24 @@ class SpecialEnv : public EnvWrapper {
           // Drop writes on the floor
           return Status::OK();
         } else if (env_->no_space_.load(std::memory_order_acquire)) {
-          return Status::IOError("No space left on device");
+          return Status::NoSpace("No space left on device");
         } else {
           env_->bytes_written_ += data.size();
           return base_->Append(data);
+        }
+      }
+      Status PositionedAppend(const Slice& data, uint64_t offset) override {
+        if (env_->table_write_callback_) {
+          (*env_->table_write_callback_)();
+        }
+        if (env_->drop_writes_.load(std::memory_order_acquire)) {
+          // Drop writes on the floor
+          return Status::OK();
+        } else if (env_->no_space_.load(std::memory_order_acquire)) {
+          return Status::NoSpace("No space left on device");
+        } else {
+          env_->bytes_written_ += data.size();
+          return base_->PositionedAppend(data, offset);
         }
       }
       Status Truncate(uint64_t size) override { return base_->Truncate(size); }
@@ -252,6 +270,9 @@ class SpecialEnv : public EnvWrapper {
       }
       Env::IOPriority GetIOPriority() override {
         return base_->GetIOPriority();
+      }
+      bool use_direct_io() const override {
+        return base_->use_direct_io();
       }
     };
     class ManifestFile : public WritableFile {
@@ -310,7 +331,18 @@ class SpecialEnv : public EnvWrapper {
         return s;
       }
       Status Truncate(uint64_t size) override { return base_->Truncate(size); }
-      Status Close() override { return base_->Close(); }
+      Status Close() override {
+// SyncPoint is not supported in Released Windows Mode.
+#if !(defined NDEBUG) || !defined(OS_WIN)
+        // Check preallocation size
+        // preallocation size is never passed to base file.
+        size_t preallocation_size = preallocation_block_size();
+        TEST_SYNC_POINT_CALLBACK("DBTestWalFile.GetPreallocationStatus",
+                                 &preallocation_size);
+#endif  // !(defined NDEBUG) || !defined(OS_WIN)
+
+        return base_->Close();
+      }
       Status Flush() override { return base_->Flush(); }
       Status Sync() override {
         ++env_->sync_counter_;
@@ -343,7 +375,14 @@ class SpecialEnv : public EnvWrapper {
       return Status::IOError("simulated write error");
     }
 
-    Status s = target()->NewWritableFile(f, r, soptions);
+    EnvOptions optimized = soptions;
+    if (strstr(f.c_str(), "MANIFEST") != nullptr ||
+        strstr(f.c_str(), "log") != nullptr) {
+      optimized.use_mmap_writes = false;
+      optimized.use_direct_writes = false;
+    }
+
+    Status s = target()->NewWritableFile(f, r, optimized);
     if (s.ok()) {
       if (strstr(f.c_str(), ".sst") != nullptr) {
         r->reset(new SSTableFile(this, std::move(*r)));
@@ -417,10 +456,10 @@ class SpecialEnv : public EnvWrapper {
 
   virtual void SleepForMicroseconds(int micros) override {
     sleep_counter_.Increment();
-    if (no_sleep_ || time_elapse_only_sleep_) {
+    if (no_slowdown_ || time_elapse_only_sleep_) {
       addon_time_.fetch_add(micros);
     }
-    if (!no_sleep_) {
+    if (!no_slowdown_) {
       target()->SleepForMicroseconds(micros);
     }
   }
@@ -509,7 +548,7 @@ class SpecialEnv : public EnvWrapper {
 
   bool time_elapse_only_sleep_;
 
-  bool no_sleep_;
+  bool no_slowdown_;
 
   std::atomic<bool> is_wal_sync_thread_safe_{true};
 };
@@ -677,12 +716,20 @@ class DBTestBase : public testing::Test {
 
   Status TryReopen(const Options& options);
 
+  bool IsDirectIOSupported();
+
   Status Flush(int cf = 0);
 
   Status Put(const Slice& k, const Slice& v, WriteOptions wo = WriteOptions());
 
   Status Put(int cf, const Slice& k, const Slice& v,
              WriteOptions wo = WriteOptions());
+
+  Status Merge(const Slice& k, const Slice& v,
+               WriteOptions wo = WriteOptions());
+
+  Status Merge(int cf, const Slice& k, const Slice& v,
+               WriteOptions wo = WriteOptions());
 
   Status Delete(const std::string& k);
 
@@ -810,12 +857,15 @@ class DBTestBase : public testing::Test {
 
   std::vector<std::uint64_t> ListTableFiles(Env* env, const std::string& path);
 
-  void VerifyDBFromMap(std::map<std::string, std::string> true_data);
+  void VerifyDBFromMap(
+      std::map<std::string, std::string> true_data,
+      size_t* total_reads_res = nullptr, bool tailing_iter = false,
+      std::map<std::string, Status> status = std::map<std::string, Status>());
+
+  void VerifyDBInternal(
+      std::vector<std::pair<std::string, std::string>> true_data);
 
 #ifndef ROCKSDB_LITE
-  Status GenerateAndAddExternalFile(const Options options,
-                                    std::vector<int> keys, size_t file_id);
-
   uint64_t GetNumberOfSstFilesForColumnFamily(DB* db,
                                               std::string column_family_name);
 #endif  // ROCKSDB_LITE

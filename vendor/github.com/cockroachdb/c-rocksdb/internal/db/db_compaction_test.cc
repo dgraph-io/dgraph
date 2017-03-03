@@ -305,7 +305,8 @@ TEST_F(DBCompactionTest, TestTableReaderForCompaction) {
   dbfull()->TEST_WaitForCompact();
   // Preloading iterator issues one table cache lookup and creates
   // a new table reader. One file is created for flush and one for compaction.
-  // Compaction inputs make no table cache look-up.
+  // Compaction inputs make no table cache look-up for data/range deletion
+  // iterators
   ASSERT_EQ(num_table_cache_lookup, 2);
   // Create new iterator for:
   // (1) 1 for verifying flush results
@@ -326,7 +327,8 @@ TEST_F(DBCompactionTest, TestTableReaderForCompaction) {
   cro.target_level = 2;
   cro.bottommost_level_compaction = BottommostLevelCompaction::kForce;
   db_->CompactRange(cro, nullptr, nullptr);
-  // Only verifying compaction outputs issues one table cache lookup.
+  // Only verifying compaction outputs issues one table cache lookup
+  // for both data block and range deletion block).
   ASSERT_EQ(num_table_cache_lookup, 1);
   // One for compaction input, one for verifying compaction results.
   ASSERT_EQ(num_new_table_reader, 2);
@@ -1258,7 +1260,8 @@ TEST_F(DBCompactionTest, ManualPartialFill) {
   uint64_t target_size = 4 * options.max_bytes_for_level_base;
   for (int32_t i = 1; i < options.num_levels; i++) {
     ASSERT_LE(SizeAtLevel(i), target_size);
-    target_size *= options.max_bytes_for_level_multiplier;
+    target_size = static_cast<uint64_t>(target_size *
+                                        options.max_bytes_for_level_multiplier);
   }
 
   TEST_SYNC_POINT("DBCompaction::PartialFill:2");
@@ -1335,7 +1338,8 @@ TEST_F(DBCompactionTest, DeleteFileRange) {
   uint64_t target_size = 4 * options.max_bytes_for_level_base;
   for (int32_t i = 1; i < options.num_levels; i++) {
     ASSERT_LE(SizeAtLevel(i), target_size);
-    target_size *= options.max_bytes_for_level_multiplier;
+    target_size = static_cast<uint64_t>(target_size *
+                                        options.max_bytes_for_level_multiplier);
   }
 
   size_t old_num_files = CountFiles();

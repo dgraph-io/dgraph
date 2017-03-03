@@ -29,7 +29,6 @@ func toRDF(buf *bytes.Buffer, item kv) {
 	pl := item.list
 	for _, p := range pl.Postings {
 		x.Check2(buf.WriteString(item.prefix))
-
 		if !bytes.Equal(p.Value, nil) {
 			// Value posting
 			// Convert to appropriate type
@@ -41,19 +40,32 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			x.Check2(buf.WriteString(fmt.Sprintf("\"%s\"", str.Value)))
 			if types.TypeID(p.ValType) == types.GeoID {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<geo:geojson> ")))
-				// TODO(tzdybal) - uncomment
-				/* } else if len(p.Lang) > 0 {
-				x.Check2(buf.WriteString(fmt.Sprintf("@%s", p.Lang))) */
 			} else if types.TypeID(p.ValType) == types.PasswordID {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<pwd:%s>", vID.Name())))
 			} else if types.TypeID(p.ValType) != types.BinaryID &&
 				types.TypeID(p.ValType) != types.DefaultID {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<xs:%s>", vID.Name())))
+			} else if len(p.Lang) > 0 {
+				x.Check2(buf.WriteString(fmt.Sprintf("@%s", p.Lang)))
 			}
-			x.Check2(buf.WriteString(" .\n"))
-			return
+		} else {
+			x.Check2(buf.WriteString(fmt.Sprintf("<%#x>", p.Uid)))
 		}
-		x.Check2(buf.WriteString(fmt.Sprintf("<%#x> .\n", p.Uid)))
+
+		facets := p.Facets
+		if len(facets) != 0 {
+			x.Check2(buf.WriteString(" ("))
+		}
+		for i, f := range facets {
+			x.Check2(buf.WriteString(fmt.Sprintf("%s=%s", f.Key, string(f.Value))))
+			if i != len(facets)-1 {
+				x.Check2(buf.WriteRune(','))
+			}
+		}
+		if len(facets) != 0 {
+			x.Check2(buf.WriteRune(')'))
+		}
+		x.Check2(buf.WriteString(" .\n"))
 	}
 }
 

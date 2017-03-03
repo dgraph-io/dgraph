@@ -38,6 +38,9 @@ type Tokenizer interface {
 
 	// Tokens return tokens for a given value.
 	Tokens(sv types.Val) ([]string, error)
+
+	// Identifier returns the prefix byte for this token type.
+	Identifier() byte
 }
 
 var (
@@ -59,6 +62,15 @@ func init() {
 	SetDefault(types.DateID, "date")
 	SetDefault(types.DateTimeID, "datetime")
 	SetDefault(types.StringID, "term")
+
+	// Check for duplicate prexif bytes.
+	usedIds := make(map[byte]struct{})
+	for _, tok := range tokenizers {
+		tokID := tok.Identifier()
+		_, ok := usedIds[tokID]
+		x.AssertTruef(!ok, "Same ID used by multiple tokenizers")
+		usedIds[tokID] = struct{}{}
+	}
 }
 
 // GetTokenizer returns tokenizer given unique name.
@@ -101,40 +113,47 @@ type GeoTokenizer struct{}
 func (t GeoTokenizer) Name() string       { return "geo" }
 func (t GeoTokenizer) Type() types.TypeID { return types.GeoID }
 func (t GeoTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return types.IndexGeoTokens(sv.Value.(geom.T))
+	tokens, err := types.IndexGeoTokens(sv.Value.(geom.T))
+	EncodeGeoTokens(tokens)
+	return tokens, err
 }
+func (t GeoTokenizer) Identifier() byte { return 0x5 }
 
 type Int32Tokenizer struct{}
 
 func (t Int32Tokenizer) Name() string       { return "int" }
 func (t Int32Tokenizer) Type() types.TypeID { return types.Int32ID }
 func (t Int32Tokenizer) Tokens(sv types.Val) ([]string, error) {
-	return encodeInt(sv.Value.(int32))
+	return []string{encodeToken(encodeInt(sv.Value.(int32)), t.Identifier())}, nil
 }
+func (t Int32Tokenizer) Identifier() byte { return 0x6 }
 
 type FloatTokenizer struct{}
 
 func (t FloatTokenizer) Name() string       { return "float" }
 func (t FloatTokenizer) Type() types.TypeID { return types.FloatID }
 func (t FloatTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return encodeInt(int32(sv.Value.(float64)))
+	return []string{encodeToken(encodeInt(int32(sv.Value.(float64))), t.Identifier())}, nil
 }
+func (t FloatTokenizer) Identifier() byte { return 0x7 }
 
 type DateTokenizer struct{}
 
 func (t DateTokenizer) Name() string       { return "date" }
 func (t DateTokenizer) Type() types.TypeID { return types.DateID }
 func (t DateTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return encodeInt(int32(sv.Value.(time.Time).Year()))
+	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), t.Identifier())}, nil
 }
+func (t DateTokenizer) Identifier() byte { return 0x3 }
 
 type DateTimeTokenizer struct{}
 
 func (t DateTimeTokenizer) Name() string       { return "datetime" }
 func (t DateTimeTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return encodeInt(int32(sv.Value.(time.Time).Year()))
+	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), t.Identifier())}, nil
 }
+func (t DateTimeTokenizer) Identifier() byte { return 0x4 }
 
 type TermTokenizer struct{}
 
@@ -159,23 +178,28 @@ func (t TermTokenizer) Tokens(sv types.Val) ([]string, error) {
 			if s == nil {
 				break
 			}
-			tokens = append(tokens, string(s))
+			tokens = append(tokens, encodeToken(string(s), t.Identifier()))
 		}
 		tokenizer.Destroy()
 	}
 	return tokens, nil
 }
+func (t TermTokenizer) Identifier() byte { return 0x1 }
 
 type ExactTokenizer struct{}
 
 func (t ExactTokenizer) Name() string       { return "exact" }
 func (t ExactTokenizer) Type() types.TypeID { return types.StringID }
 func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
-	words := strings.Fields(sv.Value.(string))
-	return []string{strings.Join(words, " ")}, nil
+	term, ok := sv.Value.(string)
+	if !ok {
+		return nil, x.Errorf("Exact indices only supported for string types")
+	}
+	return []string{encodeToken(term, t.Identifier())}, nil
 }
+func (t ExactTokenizer) Identifier() byte { return 0x2 }
 
-func encodeInt(val int32) ([]string, error) {
+func encodeInt(val int32) string {
 	buf := make([]byte, 5)
 	binary.BigEndian.PutUint32(buf[1:], uint32(val))
 	if val < 0 {
@@ -183,5 +207,15 @@ func encodeInt(val int32) ([]string, error) {
 	} else {
 		buf[0] = 1
 	}
-	return []string{string(buf)}, nil
+	return string(buf)
+}
+
+func encodeToken(tok string, typ byte) string {
+	return string(typ) + tok
+}
+
+func EncodeGeoTokens(tokens []string) {
+	for i := 0; i < len(tokens); i++ {
+		tokens[i] = encodeToken(tokens[i], 0x4)
+	}
 }

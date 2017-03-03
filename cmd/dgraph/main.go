@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/gob"
 	"encoding/json"
 	"flag"
@@ -71,10 +72,20 @@ var (
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
 	dumpSubgraph   = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
-	uiDir          = flag.String("ui", os.Getenv("GOPATH")+"/src/github.com/dgraph-io/dgraph/dashboard/build", "Directory which contains assets for the user interface")
+	uiDir          = flag.String("ui", "/usr/local/share/dgraph/assets", "Directory which contains assets for the user interface")
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
+	// TLS configurations
+	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections with clients.")
+	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
+	tlsKey           = flag.String("tls.cert_key", "", "Certificate key file path.")
+	tlsKeyPass       = flag.String("tls.cert_key_passphrase", "", "Certificate key passphrase.")
+	tlsClientAuth    = flag.String("tls.client_auth", "", "Enable TLS client authentication")
+	tlsClientCACerts = flag.String("tls.ca_certs", "", "CA Certs file path.")
+	tlsSystemCACerts = flag.Bool("tls.use_system_ca", false, "Include System CA into CA Certs.")
+	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min version.")
+	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max version.")
 )
 
 type mutationResult struct {
@@ -610,6 +621,47 @@ func (s *grpcServer) Run(ctx context.Context,
 	return resp, err
 }
 
+type keyword struct {
+	// Type could be a predicate, function etc.
+	Type string `json:"type"`
+	Name string `json:"name"`
+}
+
+type keywords struct {
+	Keywords []keyword `json:"keywords"`
+}
+
+// Used to return a list of keywords, so that UI can show them for autocompletion.
+func keywordHandler(w http.ResponseWriter, r *http.Request) {
+	addCorsHeaders(w)
+	preds := schema.State().Predicates()
+	kw := make([]keyword, 0, len(preds))
+	for _, p := range preds {
+		kw = append(kw, keyword{
+			Type: "predicate",
+			Name: p,
+		})
+	}
+	kws := keywords{Keywords: kw}
+
+	predefined := []string{"id", "_uid_", "after", "first", "offset", "count",
+		"@filter", "func", "anyof", "allof", "leq", "geq", "or", "and",
+		"orderasc", "orderdesc", "near", "within", "contains", "intersects"}
+
+	for _, w := range predefined {
+		kws.Keywords = append(kws.Keywords, keyword{
+			Name: w,
+		})
+	}
+	js, err := json.Marshal(kws)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Write(js)
+}
+
 func checkFlagsAndInitDirs() {
 	if len(*cpuprofile) > 0 {
 		f, err := os.Create(*cpuprofile)
@@ -619,6 +671,30 @@ func checkFlagsAndInitDirs() {
 
 	// Create parent directories for postings, uids and mutations
 	x.Check(os.MkdirAll(*postingDir, 0700))
+}
+
+func setupListener(addr string, port int) (net.Listener, error) {
+	laddr := fmt.Sprintf("%s:%d", addr, port)
+	if !*tlsEnabled {
+		return net.Listen("tcp", laddr)
+	}
+
+	tlsCfg, err := x.GenerateTLSConfig(x.TLSHelperConfig{
+		CertRequired:           *tlsEnabled,
+		Cert:                   *tlsCert,
+		Key:                    *tlsKey,
+		KeyPassphrase:          *tlsKeyPass,
+		ClientAuth:             *tlsClientAuth,
+		ClientCACerts:          *tlsClientCACerts,
+		UseSystemClientCACerts: *tlsSystemCACerts,
+		MinVersion:             *tlsMinVersion,
+		MaxVersion:             *tlsMaxVersion,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return tls.Listen("tcp", laddr, tlsCfg)
 }
 
 func serveGRPC(l net.Listener) {
@@ -651,7 +727,7 @@ func setupServer(che chan error) {
 		laddr = "0.0.0.0"
 	}
 
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, *port))
+	l, err := setupListener(laddr, *port)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -668,7 +744,10 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/index", indexHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
+
+	// UI related API's.
 	http.Handle("/", http.FileServer(http.Dir(*uiDir)))
+	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initilize the servers.
 	go serveGRPC(grpcl)

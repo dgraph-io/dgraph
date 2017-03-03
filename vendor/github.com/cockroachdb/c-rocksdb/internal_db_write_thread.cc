@@ -185,8 +185,8 @@ void WriteThread::SetState(Writer* w, uint8_t new_state) {
 void WriteThread::LinkOne(Writer* w, bool* linked_as_leader) {
   assert(w->state == STATE_INIT);
 
-  Writer* writers = newest_writer_.load(std::memory_order_relaxed);
   while (true) {
+    Writer* writers = newest_writer_.load(std::memory_order_relaxed);
     w->link_older = writers;
     if (newest_writer_.compare_exchange_strong(writers, w)) {
       if (writers == nullptr) {
@@ -268,6 +268,12 @@ size_t WriteThread::EnterAsBatchGroupLeader(
       break;
     }
 
+    if (w->no_slowdown != leader->no_slowdown) {
+      // Do not mix writes that are ok with delays with the ones that
+      // request fail on delays.
+      break;
+    }
+
     if (!w->disableWAL && leader->disableWAL) {
       // Do not include a write that needs WAL into a batch that has
       // WAL disabled.
@@ -311,7 +317,7 @@ void WriteThread::LaunchParallelFollowers(ParallelGroup* pg,
 
   while (w != pg->last_writer) {
     // Writers that won't write don't get sequence allotment
-    if (!w->CallbackFailed()) {
+    if (!w->CallbackFailed() && w->ShouldWriteToMemtable()) {
       sequence += WriteBatchInternal::Count(w->batch);
     }
     w = w->link_newer;
@@ -327,7 +333,7 @@ bool WriteThread::CompleteParallelWorker(Writer* w) {
 
   auto* pg = w->parallel_group;
   if (!w->status.ok()) {
-    std::lock_guard<std::mutex> guard(w->StateMutex());
+    std::lock_guard<std::mutex> guard(pg->leader->StateMutex());
     pg->status = w->status;
   }
 
