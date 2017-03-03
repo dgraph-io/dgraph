@@ -1,7 +1,6 @@
 package types
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -23,8 +22,8 @@ func TestConvertToGeoJson_Poly(t *testing.T) {
 	require.Equal(t,
 		[][]geom.Coord{[]geom.Coord{geom.Coord{1.123, 2.543}, geom.Coord{-3.23, 4.123}, geom.Coord{4.43, -6.123}, geom.Coord{1.123, 2.543}}},
 		b.(*geom.Polygon).Coords())
-	x, err := geojson.Marshal(b)
-	fmt.Println(string(x))
+	_, err = geojson.Marshal(b)
+	require.NoError(t, err)
 }
 
 func TestConvertToGeoJson_PolyError1(t *testing.T) {

@@ -115,15 +115,16 @@ func TestSchemaIndex_Error2(t *testing.T) {
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ReloadData("testfiles/test_schema_index4"))
 	checkSchema(t, State().predicate, []nameType{
-		{"name", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: "exact"}},
-		{"address", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: "term"}},
-		{"age", &types.Schema{ValueType: uint32(types.Int32ID), Tokenizer: "int"}},
+		{"name", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}},
+		{"address", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"term"}}},
+		{"age", &types.Schema{ValueType: uint32(types.Int32ID), Tokenizer: []string{"int"}}},
 		{"Person", &types.Schema{ValueType: uint32(types.UidID)}},
+		{"id", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact", "term"}}},
 	})
 	require.True(t, State().IsIndexed("name"))
 	require.False(t, State().IsReversed("name"))
-	require.Equal(t, "int", State().Tokenizer("age").Name())
-	require.Equal(t, 3, len(State().IndexedFields()))
+	require.Equal(t, "int", State().Tokenizer("age")[0].Name())
+	require.Equal(t, 4, len(State().IndexedFields()))
 }
 
 var ps *store.Store

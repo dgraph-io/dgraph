@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -36,6 +38,7 @@ import (
 var (
 	emptyUIDList task.List
 	emptyResult  task.Result
+	exactTok     tok.ExactTokenizer
 )
 
 // ProcessTaskOverNetwork is used to process the query and get the result from
@@ -97,6 +100,7 @@ const (
 	CompareScalarFn
 	GeoFn
 	PasswordFn
+	RegexFn
 	StandardFn = 100
 )
 
@@ -119,6 +123,8 @@ func parseFuncType(arr []string) (FuncType, string) {
 		return AggregatorFn, f
 	case "checkpwd":
 		return PasswordFn, f
+	case "regexp":
+		return RegexFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
@@ -139,6 +145,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var ineqValueToken string
 	var n int
 	var threshold int64
+	var regex *regexp.Regexp
 
 	fnType, f := parseFuncType(q.SrcFunc)
 	switch fnType {
@@ -202,6 +209,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	case GeoFn:
 		// For geo functions, we get extra information used for filtering.
 		tokens, geoQuery, err = types.GetGeoTokens(q.SrcFunc)
+		tok.EncodeGeoTokens(tokens)
 		if err != nil {
 			return nil, err
 		}
@@ -224,6 +232,12 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
 		n = len(tokens)
+
+	case RegexFn:
+		regex, err = regexp.Compile(q.SrcFunc[1])
+		if err != nil {
+			return nil, err
+		}
 
 	case NotFn:
 		n = algo.ListLen(q.Uids)
@@ -364,6 +378,25 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		uidw.End()
 		out.UidMatrix = append(out.UidMatrix, uidList)
+	}
+
+	if fnType == RegexFn {
+		// Go through the indexkeys for the predicate and match them with
+		// the regex matcher.
+		it := pstore.NewIterator()
+		defer it.Close()
+		prefixKey := x.IndexKey(q.Attr, string(exactTok.Identifier()))
+		for it.Seek(prefixKey); it.ValidForPrefix(prefixKey); it.Next() {
+			key := it.Key().Data()
+			pk := x.Parse(key)
+			x.AssertTrue(pk.Attr == q.Attr)
+			term := pk.Term[1:] // skip the first byte which is tokenizer prefix.
+			if regex.MatchString(term) {
+				pl, decr := posting.GetOrCreate(key, gid)
+				out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
+				decr()
+			}
+		}
 	}
 
 	// aggregate on the collection out.Values[]

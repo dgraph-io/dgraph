@@ -150,19 +150,19 @@ func processScalarPair(it *lex.ItemIterator, predicate string, allowIndex bool) 
 
 // processIndexDirective works on "@index" or "@index(customtokenizer)".
 func processIndexDirective(it *lex.ItemIterator, predicate string, typ types.TypeID) error {
-	State().SetIndex(predicate, tok.Default(typ).Name())
 	if !it.Next() {
 		// Nothing to read.
+		State().AddIndex(predicate, tok.Default(typ).Name())
 		return nil
 	}
 	next := it.Item()
 	if next.Typ != itemLeftRound {
 		it.Prev() // Backup.
+		State().AddIndex(predicate, tok.Default(typ).Name())
 		return nil
 	}
 
-	// Look for tokenizer.
-	var hasArg bool
+	// Look for tokenizers.
 	for {
 		it.Next()
 		next = it.Item()
@@ -172,12 +172,8 @@ func processIndexDirective(it *lex.ItemIterator, predicate string, typ types.Typ
 		if next.Typ != itemText {
 			return x.Errorf("Expected directive arg but got: %v", next)
 		}
-		// We have the argument.
-		if hasArg {
-			return x.Errorf("Found more than one arguments for index directive")
-		}
 		// Look for custom tokenizer.
-		State().SetIndex(predicate, tok.GetTokenizer(next.Val).Name())
+		State().AddIndex(predicate, tok.GetTokenizer(next.Val).Name())
 	}
 	return nil
 }

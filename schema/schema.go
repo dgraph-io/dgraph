@@ -88,13 +88,19 @@ func (s *state) SetReverse(pred string, rev bool) {
 	}
 }
 
-// SetIndex sets the tokenizer for given predicate
-func (s *state) SetIndex(pred string, tokenizer string) {
+// AddIndex adds the tokenizer for given predicate
+func (s *state) AddIndex(pred string, tokenizer string) {
 	s.Lock()
 	defer s.Unlock()
 	schema, ok := s.predicate[pred]
 	x.AssertTruef(ok, "schema state not found for %s", pred)
-	schema.Tokenizer = tokenizer
+	// Check for duplicates.
+	for _, tok := range schema.Tokenizer {
+		if tok == tokenizer {
+			return
+		}
+	}
+	schema.Tokenizer = append(schema.Tokenizer, tokenizer)
 }
 
 // Set sets the schema for given predicate
@@ -147,12 +153,16 @@ func (s *state) Predicates() []string {
 }
 
 // Tokenizer returns the tokenizer for given predicate
-func (s *state) Tokenizer(pred string) tok.Tokenizer {
+func (s *state) Tokenizer(pred string) []tok.Tokenizer {
 	s.RLock()
 	defer s.RUnlock()
 	schema, ok := s.predicate[pred]
 	x.AssertTruef(ok, "schema state not found for %s", pred)
-	return tok.GetTokenizer(schema.Tokenizer)
+	var tokenizers []tok.Tokenizer
+	for _, it := range schema.Tokenizer {
+		tokenizers = append(tokenizers, tok.GetTokenizer(it))
+	}
+	return tokenizers
 }
 
 // IsReversed returns whether the predicate has reverse edge or not
