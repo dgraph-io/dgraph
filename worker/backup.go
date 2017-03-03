@@ -39,24 +39,23 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			src.Value = p.Value
 			str, err := types.Convert(src, types.StringID)
 			x.Check(err)
-			stringValue := str.Value.(string)
 			buf.WriteByte('"')
-			buf.WriteString(stringValue)
+			buf.WriteString(str.Value.(string))
 			buf.WriteByte('"')
-			if types.TypeID(p.ValType) == types.GeoID {
+			if vID == types.GeoID {
 				buf.WriteString("^^<geo:geojson> ")
-			} else if types.TypeID(p.ValType) == types.PasswordID {
+			} else if vID == types.PasswordID {
 				buf.WriteString("^^<pwd:")
 				buf.WriteString(vID.Name())
 				buf.WriteByte('>')
-			} else if types.TypeID(p.ValType) != types.BinaryID &&
-				types.TypeID(p.ValType) != types.DefaultID {
+			} else if vID == types.StringID && len(p.Lang) > 0 {
+				buf.WriteByte('@')
+				buf.WriteString(p.Lang)
+			} else if vID != types.BinaryID &&
+				vID != types.DefaultID {
 				buf.WriteString("^^<xs:")
 				buf.WriteString(vID.Name())
 				buf.WriteByte('>')
-			} else if len(p.Lang) > 0 {
-				buf.WriteByte('@')
-				buf.WriteString(p.Lang)
 			}
 		} else {
 			buf.WriteString("<0x")
