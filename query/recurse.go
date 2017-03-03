@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"fmt"
 	"math"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -11,7 +12,8 @@ import (
 func (start *SubGraph) expandRecurse(ctx context.Context,
 	next chan bool, rch chan error) {
 
-	reachMap := make(map[string]map[uint64]map[uint64]struct{})
+	// Note: Key format is - "attr|fromUID|toUID"
+	reachMap := make(map[string]struct{})
 	var numEdges int
 	var exec []*SubGraph
 	var err error
@@ -36,8 +38,6 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		return
 	}
 
-	// Mark the start node as visited using all the predicates.
-	// Prepare the children for execution.
 	for _, child := range startChildren {
 		temp := new(SubGraph)
 		*temp = *child
@@ -45,19 +45,12 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		temp.Children = []*SubGraph{}
 		exec = append(exec, temp)
 		start.Children = append(start.Children, temp)
-		/*
-			it := algo.NewListIterator(start.DestUIDs)
-			reachMap[child.Attr] = make(map[uint64]struct{})
-			for ; it.Valid(); it.Next() {
-				reachMap[child.Attr][it.Val()] = struct{}{}
-			}
-		*/
 	}
 
 	dummy := &SubGraph{}
 	for {
-		over := <-next
-		if over {
+		isNext := <-next
+		if !isNext {
 			return
 		}
 
@@ -91,7 +84,8 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 					algo.IntersectWith(sg.uidMatrix[mIdx], sg.DestUIDs)
 				}
 				algo.ApplyFilter(sg.uidMatrix[mIdx], func(uid uint64, i int) bool {
-					_, ok := reachMap[sg.Attr][fromUID][uid] // Combine fromUID here.
+					key := fmt.Sprintf("%s|%d|%d", sg.Attr, fromUID, uid)
+					_, ok := reachMap[key] // Combine fromUID here.
 					return !ok
 				})
 				sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
@@ -101,6 +95,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		if numEdges > 1000000 {
 			// If we've seen too many nodes, stop the query.
 			rch <- ErrTooBig
+			return
 		}
 
 		// modify the exec and attach child nodes.
@@ -114,14 +109,6 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 				*temp = *child
 				temp.Children = []*SubGraph{}
 				temp.SrcUIDs = sg.DestUIDs
-				// Remove those nodes which we have already traversed. As this cannot be
-				// in the path again.
-				/*
-					algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
-						_, ok := reachMap[child.Attr][uid]
-						return !ok
-					})
-				*/
 				// If no UIDs are left after filtering, Ignore the node.
 				if algo.ListLen(temp.SrcUIDs) == 0 {
 					continue
@@ -130,21 +117,16 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 				out = append(out, temp)
 			}
 			// Mark the reached nodes
-			attr := sg.Attr
 			it := algo.NewListIterator(sg.SrcUIDs)
 			for mIdx := -1; it.Valid(); it.Next() {
 				mIdx++
 				fromUID := it.Val()
-				if _, ok := reachMap[attr]; !ok {
-					reachMap[attr] = make(map[uint64]map[uint64]struct{})
-				}
-				if _, ok := reachMap[attr][fromUID]; !ok {
-					reachMap[attr][fromUID] = make(map[uint64]struct{})
-				}
 				toIt := algo.NewListIterator(sg.uidMatrix[mIdx])
 				for ; toIt.Valid(); toIt.Next() {
 					toUID := toIt.Val()
-					reachMap[attr][fromUID][toUID] = struct{}{}
+					key := fmt.Sprintf("%s|%d|%d", sg.Attr, fromUID, toUID)
+					// Mark this edge as taken. We'd disallow this edge later.
+					reachMap[key] = struct{}{}
 					numEdges++
 				}
 			}
@@ -153,9 +135,9 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 
 		if len(out) == 0 {
 			rch <- ErrStop
-		} else {
-			rch <- nil
+			return
 		}
+		rch <- nil
 		exec = out
 	}
 }
@@ -178,18 +160,18 @@ func Recurse(ctx context.Context, sg *SubGraph) error {
 L:
 	// Recurse number of times specified by the user.
 	for i := uint64(0); i < depth; i++ {
-		next <- false
+		next <- true
 		select {
 		case err = <-expandErr:
 			if err != nil {
 				if err == ErrTooBig {
 					return err
-				} else if err == ErrStop {
-					break L
-				} else {
-					x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
-					return err
 				}
+				if err == ErrStop {
+					break L
+				}
+				x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
+				return err
 			}
 		case <-ctx.Done():
 			x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
@@ -197,6 +179,6 @@ L:
 		}
 	}
 	// Done expanding.
-	next <- true
+	next <- false
 	return nil
 }
