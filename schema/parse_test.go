@@ -47,16 +47,8 @@ func TestSchema(t *testing.T) {
 	checkSchema(t, State().predicate, []nameType{
 		{"name", &types.Schema{ValueType: uint32(types.StringID)}},
 		{"address", &types.Schema{ValueType: uint32(types.StringID)}},
-		{"http://film.com/name", &types.Schema{ValueType: uint32(types.StringID)}},
 		{"http://scalar.com/helloworld/", &types.Schema{ValueType: uint32(types.StringID)}},
 		{"age", &types.Schema{ValueType: uint32(types.Int32ID)}},
-		{"budget", &types.Schema{ValueType: uint32(types.Int32ID)}},
-		{"http://film.com/budget", &types.Schema{ValueType: uint32(types.Int32ID)}},
-		{"NumFollower", &types.Schema{ValueType: uint32(types.Int32ID)}},
-		{"Person", &types.Schema{ValueType: uint32(types.UidID)}},
-		{"Actor", &types.Schema{ValueType: uint32(types.UidID)}},
-		{"Film", &types.Schema{ValueType: uint32(types.UidID)}},
-		{"http://film.com/", &types.Schema{ValueType: uint32(types.UidID)}},
 	})
 
 	typ, err := State().TypeOf("age")
@@ -77,10 +69,6 @@ func TestSchema2_Error(t *testing.T) {
 
 func TestSchema3_Error(t *testing.T) {
 	require.Error(t, ReloadData("testfiles/test_schema3"))
-}
-
-func TestSchema4_Error(t *testing.T) {
-	require.Error(t, ReloadData("testfiles/test_schema4"))
 }
 
 /*
@@ -118,7 +106,6 @@ func TestSchemaIndexCustom(t *testing.T) {
 		{"name", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}},
 		{"address", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"term"}}},
 		{"age", &types.Schema{ValueType: uint32(types.Int32ID), Tokenizer: []string{"int"}}},
-		{"Person", &types.Schema{ValueType: uint32(types.UidID)}},
 		{"id", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact", "term"}}},
 	})
 	require.True(t, State().IsIndexed("name"))

@@ -6,27 +6,3 @@ scalar (
   <http://scalar.com/helloworld/> : string
   )
 
-type  Person {
-name: string
-age: int
-address: string
-friend: Person
-}
-
-type Actor{
-name  : string
-NumFollower: int
- age : int
-  address :  string 
-films: Film 
-}
-
-type Film {
-name: string
-budget: int
-}
-
-type <http://film.com/> {
-     <http://film.com/name>: string
-     <http://film.com/budget>: int
-}

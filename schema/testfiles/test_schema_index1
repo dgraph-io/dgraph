@@ -4,10 +4,3 @@ scalar (
   name: string 
   address: string @index
 )
-
-type  Person {
-  name: string
-  age: int
-  address: string
-  friend: Person
-}
