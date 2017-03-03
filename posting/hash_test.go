@@ -37,6 +37,11 @@ func TestHashBasic(t *testing.T) {
 	require.True(t, found)
 	require.Equal(t, l, l1)
 
+	a.Each(func(k uint64, l *List) {
+		require.EqualValues(t, k, 123)
+		require.Equal(t, l, l1)
+	})
+
 	a.EachWithDelete(func(k uint64, l *List) {
 		require.EqualValues(t, k, 123)
 		require.Equal(t, l, l1)
