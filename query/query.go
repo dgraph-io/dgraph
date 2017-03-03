@@ -117,23 +117,24 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	Alias      string
-	Count      int
-	Offset     int
-	AfterUID   uint64
-	DoCount    bool
-	GetUID     bool
-	Order      string
-	OrderDesc  bool
-	isDebug    bool
-	Var        string
-	NeedsVar   []string
-	ParentVars map[string]*task.List
-	Langs      []string
-	Normalize  bool
-	From       uint64
-	To         uint64
-	Facet      *facets.Param
+	Alias        string
+	Count        int
+	Offset       int
+	AfterUID     uint64
+	DoCount      bool
+	GetUID       bool
+	Order        string
+	OrderDesc    bool
+	isDebug      bool
+	Var          string
+	NeedsVar     []string
+	ParentVars   map[string]*task.List
+	Langs        []string
+	Normalize    bool
+	From         uint64
+	To           uint64
+	Facet        *facets.Param
+	RecurseDepth uint64
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -228,6 +229,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	facetsNode := dst.New("@facets")
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
+
+		if pc.uidMatrix == nil {
+			// Can happen in recurse query.
+			continue
+		}
 		idxi, idxj := algo.IndexOf(pc.SrcUIDs, uid)
 		if idxi < 0 {
 			continue
@@ -550,7 +556,14 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.AfterUID = uint64(after)
 	}
-	if v, ok := gq.Args["from"]; ok {
+	if v, ok := gq.Args["depth"]; ok && args.Alias == "recurse" {
+		from, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return err
+		}
+		args.RecurseDepth = from
+	}
+	if v, ok := gq.Args["from"]; ok && args.Alias == "shortest" {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
@@ -558,7 +571,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.From = uint64(from)
 	}
-	if v, ok := gq.Args["to"]; ok {
+	if v, ok := gq.Args["to"]; ok && args.Alias == "shortest" {
 		to, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
@@ -817,6 +830,11 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 				if err != nil {
 					return nil, err
 				}
+			} else if sg.Params.Alias == "recurse" {
+				err := Recurse(ctx, sg)
+				if err != nil {
+					return nil, err
+				}
 			} else {
 				go ProcessGraph(ctx, sg, nil, errChan)
 			}
@@ -825,7 +843,8 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 		// Wait for the execution that was started in this iteration.
 		for i := 0; i < len(idxList); i++ {
-			if sgl[idxList[i]].Params.Alias == "shortest" {
+			if sgl[idxList[i]].Params.Alias == "shortest" ||
+				sgl[idxList[i]].Params.Alias == "recurse" {
 				continue
 			}
 			select {
@@ -972,14 +991,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		wit.End()
 		algo.Sort(&o)
 		sg.DestUIDs = &o
+	} else if parent == nil && len(sg.SrcFunc) == 0 {
+		// I am root. I don't have any function to execute, and my
+		// result has been prepared for me already.
+		sg.DestUIDs = sg.SrcUIDs
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.
-		sg.DestUIDs = sg.SrcUIDs
-	} else if parent == nil && len(sg.SrcFunc) == 0 {
-		// I am root. I don't have any function to execute, and my
-		// result has been prepared for me already.
 		sg.DestUIDs = sg.SrcUIDs
 	} else {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
@@ -1236,7 +1255,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "from", "to", "orderasc", "orderdesc", "first", "offset", "after":
+	case "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth":
 		return true
 	}
 	return false

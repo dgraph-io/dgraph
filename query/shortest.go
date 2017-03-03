@@ -18,7 +18,7 @@ type Item struct {
 }
 
 var ErrStop = x.Errorf("STOP")
-var ErrTooBig = x.Errorf("Query exceeded memory limit")
+var ErrTooBig = x.Errorf("Query exceeded memory limit. Please modify the query")
 var ErrFacet = x.Errorf("Skip the edge")
 
 type priorityQueue []*Item
@@ -188,8 +188,9 @@ func (start *SubGraph) expandOut(ctx context.Context,
 
 		if len(out) == 0 {
 			rch <- ErrStop
+		} else {
+			rch <- nil
 		}
-		rch <- nil
 		exec = out
 	}
 }
