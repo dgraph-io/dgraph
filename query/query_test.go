@@ -475,7 +475,7 @@ func TestRecurseQuery(t *testing.T) {
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+		`{"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes", "friend":[{"name":"Michonne"}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea", "friend":[{"name":"Glenn Rhee"}]}]}]}`, js)
 }
 
 func TestRecurseQueryLimitDepth(t *testing.T) {
