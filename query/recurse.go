@@ -11,7 +11,7 @@ import (
 func (start *SubGraph) expandRecurse(ctx context.Context,
 	next chan bool, rch chan error) {
 
-	reachMap := make(map[uint64]struct{})
+	reachMap := make(map[string]map[uint64]struct{})
 	var numEdges int
 	var exec []*SubGraph
 	var err error
@@ -36,6 +36,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		return
 	}
 
+	// Mark the start node as visited using all the predicates.
 	// Prepare the children for execution.
 	for _, child := range startChildren {
 		temp := new(SubGraph)
@@ -44,6 +45,12 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		temp.Children = []*SubGraph{}
 		exec = append(exec, temp)
 		start.Children = append(start.Children, temp)
+
+		it := algo.NewListIterator(start.DestUIDs)
+		reachMap[child.Attr] = make(map[uint64]struct{})
+		for ; it.Valid(); it.Next() {
+			reachMap[child.Attr][it.Val()] = struct{}{}
+		}
 	}
 
 	dummy := &SubGraph{}
@@ -72,19 +79,20 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 				return
 			}
 		}
-		for _, sg := range exec {
-			it := algo.NewListIterator(sg.SrcUIDs)
-			for mIdx := -1; it.Valid(); it.Next() {
-				mIdx++
-				fromUID := it.Val()
-				if l := algo.ListLen(sg.uidMatrix[mIdx]); l > 0 {
-					// Mark as set only if its not a value edge.
-					reachMap[fromUID] = struct{}{}
-					numEdges += l
+		/*
+			for _, sg := range exec {
+				it := algo.NewListIterator(sg.SrcUIDs)
+				for mIdx := -1; it.Valid(); it.Next() {
+					mIdx++
+					fromUID := it.Val()
+					if l := algo.ListLen(sg.uidMatrix[mIdx]); l > 0 {
+						// Mark as set only if its not a value edge.
+						reachMap[fromUID] = struct{}{}
+						numEdges += l
+					}
 				}
 			}
-		}
-
+		*/
 		if numEdges > 1000000 {
 			// If we've seen too many nodes, stop the query.
 			rch <- ErrTooBig
@@ -104,7 +112,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 				// Remove those nodes which we have already traversed. As this cannot be
 				// in the path again.
 				algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
-					_, ok := reachMap[uid]
+					_, ok := reachMap[child.Attr][uid]
 					return !ok
 				})
 				// If no UIDs are left after filtering, Ignore the node.
@@ -114,6 +122,20 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 				sg.Children = append(sg.Children, temp)
 				out = append(out, temp)
 			}
+			// Mark the reached nodes
+			attr := sg.Attr
+			it := algo.NewListIterator(sg.SrcUIDs)
+			for mIdx := -1; it.Valid(); it.Next() {
+				mIdx++
+				//fromUID := it.Val()
+				toIt := algo.NewListIterator(sg.uidMatrix[mIdx])
+				for ; toIt.Valid(); toIt.Next() {
+					toUID := toIt.Val()
+					reachMap[attr][toUID] = struct{}{}
+					numEdges++
+				}
+			}
+
 		}
 
 		if len(out) == 0 {
