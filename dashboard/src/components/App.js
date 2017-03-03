@@ -638,11 +638,6 @@ class App extends React.Component {
                   renderGraph={this.renderGraph}
                 />
               </div>
-              <Stats
-                rendering={this.state.rendering}
-                latency={this.state.latency}
-                class="visible-xs"
-              />
             </div>
           </div>
           <div className="row">

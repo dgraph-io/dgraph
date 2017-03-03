@@ -12,13 +12,13 @@
 .Properties-val {
     display: table-cell;
     color: #BA2121;
-    word-break: break-word;
 }
 
 .Properties tbody {
     width: 100%;
     display: block;
     padding: 0px 5px 0px 0px;
+    min-height: 20px;
 }
 
 .Properties tr {

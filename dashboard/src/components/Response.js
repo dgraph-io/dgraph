@@ -79,14 +79,13 @@ class Response extends Component {
                     fullyExpanded={this.state.fullyExpanded}
                     treeView={this.props.treeView}
                 />
-                <div style={{ fontSize: "12px", flex: "0 auto" }}>
+                <div style={{ fontSize: "13px", flex: "0 auto" }}>
                     <Properties currentNode={this.state.currentNode} />
                     <div style={{ display: "flex" }}>
-                        <div style={{ flex: "0 0 50%" }}>
+                        <div style={{ flex: "0 0 60%" }}>
                             <Stats
                                 rendering={this.props.rendering}
                                 latency={this.props.latency}
-                                class="hidden-xs"
                             />
                             <div>
                                 Nodes:{" "}
@@ -95,7 +94,7 @@ class Response extends Component {
                                 {this.props.allEdges.length}
                             </div>
                         </div>
-                        <div style={{ flex: "0 0 50%" }}>
+                        <div style={{ flex: "0 0 40%" }}>
                             <Button
                                 className="Response-button"
                                 bsStyle="primary"
