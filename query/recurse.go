@@ -86,7 +86,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 			for mIdx := -1; it.Valid(); it.Next() {
 				mIdx++
 				fromUID := it.Val()
-				if len(sg.Filters) > 0 || sg.Params.Order || sg.Params.Offset != 0 {
+				if len(sg.Filters) > 0 {
 					// We need to do this in case we had some filters.
 					algo.IntersectWith(sg.uidMatrix[mIdx], sg.DestUIDs)
 				}
