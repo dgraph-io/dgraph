@@ -1264,7 +1264,7 @@ func isValidArg(a string) bool {
 // isValidFuncName checks if fn passed is valid keyword.
 func isValidFuncName(f string) bool {
 	switch f {
-	case "anyof", "allof", "id", "regexp", "fts_anyof", "fts_allof":
+	case "anyofterms", "allofterms", "id", "regexp", "anyoftext", "alloftext":
 		return true
 	}
 	return isCompareFn(f) || types.IsGeoFunc(f)

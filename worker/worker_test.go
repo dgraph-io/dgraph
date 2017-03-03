@@ -148,7 +148,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
-	query := newQuery("friend", nil, []string{"anyof", "hey photon"})
+	query := newQuery("friend", nil, []string{"anyofterms", "hey photon"})
 	r, err := processTask(query, 0)
 	require.NoError(t, err)
 
@@ -171,7 +171,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyof", "hey photon notphoton notphotonExtra"})
+	query = newQuery("friend", nil, []string{"anyofterms", "hey photon notphoton notphotonExtra"})
 	r, err = processTask(query, 0)
 	require.NoError(t, err)
 
@@ -202,7 +202,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyof", "photon notphoton ignored"})
+	query = newQuery("friend", nil, []string{"anyofterms", "photon notphoton ignored"})
 	r, err = processTask(query, 0)
 	require.NoError(t, err)
 
@@ -216,7 +216,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	posting.CommitLists(10)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
-	query = newQuery("friend", nil, []string{"anyof", "photon notphoton ignored"})
+	query = newQuery("friend", nil, []string{"anyofterms", "photon notphoton ignored"})
 	r, err = processTask(query, 0)
 	require.NoError(t, err)
 
@@ -234,7 +234,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
-	query := newQuery("friend", nil, []string{"anyof", "hey photon"})
+	query := newQuery("friend", nil, []string{"anyofterms", "hey photon"})
 	r, err := processTask(query, 0)
 	require.NoError(t, err)
 
@@ -260,7 +260,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyof", "hey photon notphoton notphotonExtra"})
+	query = newQuery("friend", nil, []string{"anyofterms", "hey photon notphoton notphotonExtra"})
 	r, err = processTask(query, 0)
 	require.NoError(t, err)
 
@@ -294,7 +294,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let indexing finish.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyof", "photon notphoton ignored"})
+	query = newQuery("friend", nil, []string{"anyofterms", "photon notphoton ignored"})
 	r, err = processTask(query, 0)
 	require.NoError(t, err)
 

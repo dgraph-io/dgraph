@@ -126,7 +126,7 @@ func parseFuncType(arr []string) (FuncType, string) {
 		return PasswordFn, f
 	case "regexp":
 		return RegexFn, f
-	case "fts_allof", "fts_anyof":
+	case "alloftext", "anyoftext":
 		return FullTextSearchFn, f
 	default:
 		if types.IsGeoFunc(f) {
@@ -234,7 +234,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			return nil, err
 		}
 		fnName := strings.ToLower(q.SrcFunc[0])
-		intersectDest = strings.HasSuffix(fnName, "allof") // allof and fts_allof
+		intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		n = len(tokens)
 
 	case RegexFn:
@@ -526,7 +526,7 @@ func applyFacetFilter(postingFacets []*facets.Facet, ftree *facets.FilterTree) (
 			argtv := types.ValFor(argf)
 			return compareTypeVals(fname, fctv, argtv), nil
 
-		case StandardFn: // allof, anyof
+		case StandardFn: // allofterms, anyofterms
 			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
 				return false, nil
 			}
@@ -611,8 +611,8 @@ func compareTypeVals(op string, arg1, arg2 types.Val) bool {
 // fcTokens and argTokens should be sorted.
 func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bool, error) {
 	switch fname {
-	case "allof":
-		// allof argTokens should be in fcTokens
+	case "allofterms":
+		// allofterms argTokens should be in fcTokens
 		if len(argTokens) > len(fcTokens) {
 			return false, nil
 		}
@@ -630,7 +630,7 @@ func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bo
 			}
 		}
 		return aidx == len(argTokens), nil
-	case "anyof":
+	case "anyofterms":
 		for aidx, fidx := 0, 0; aidx < len(argTokens) && fidx < len(fcTokens); {
 			if fcTokens[fidx] < argTokens[aidx] {
 				fidx++
