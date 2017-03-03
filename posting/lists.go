@@ -218,8 +218,8 @@ func periodicCommit() {
 	pending := make(chan struct{}, 15)
 	dsize := 0 // needed for better reporting.
 
-	// dirtyLoop makes sure that all entries are on syncCh.
-	dirtyLoop := func() {
+	// evictAll makes sure that all entries are on syncCh.
+	evictAll := func() {
 		// Do aggressive commit, which would delete all the PLs from memory.
 		// Acquire lock, so no new posting lists are given out.
 		stopTheWorld.Lock()
@@ -247,13 +247,13 @@ func periodicCommit() {
 		select {
 		case key, ok := <-dirtyChan:
 			if !ok {
-				dirtyLoop()
+				evictAll()
 				close(syncCh)
 				return
 			}
 			dirtyMap[key] = struct{}{}
 		case <-stop:
-			dirtyLoop()
+			evictAll()
 			close(syncCh)
 			return
 		case <-ticker.C:
@@ -267,7 +267,7 @@ func periodicCommit() {
 				gentleCommit(dirtyMap, pending)
 				break
 			}
-			dirtyLoop()
+			evictAll()
 		}
 	}
 }
