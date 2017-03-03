@@ -59,7 +59,6 @@ class Properties extends Component {
                         {Object.keys(facets).length > 0 &&
                             <tr
                                 style={{
-                                    fontStyle: "italic",
                                     textAlign: "left",
                                 }}
                             >

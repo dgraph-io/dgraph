@@ -6,6 +6,9 @@
     border: 1px solid gray;
     border-bottom: 0px;
     position: relative;
+    flex: auto;
+    display: flex;
+    flex-direction: column;
 }
 
 .Graph-s {
@@ -47,14 +50,27 @@
 .Graph-label {
     margin-right: 10px;
     margin-left: auto;
+    flex: 0 auto;
 }
 
 
 .Graph-full-height {
-    height: calc(100vh - 175px);
     border-bottom: 0px;
+    flex: auto;
+    display: flex;
+    flex-direction: column;
 }
 
 .Graph-fixed-height {
     height: 500px;
+}
+
+.vis-network {
+    flex: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.vis-network > canvas {
+    flex: auto;
 }

@@ -341,7 +341,13 @@ class Graph extends Component {
             { "Graph-hourglass": this.props.resType === "hourglass" },
         );
         return (
-            <div>
+            <div
+                style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    flex: "auto",
+                }}
+            >
                 <div className={this.props.graphHeight}>
                     <div id="graph" className={graphClass}>
                         {this.props.response}

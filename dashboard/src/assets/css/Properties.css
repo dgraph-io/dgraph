@@ -1,13 +1,6 @@
 .Properties {
     width: 100%;
     margin-top: 5px;
-    margin-bottom: 10px;
-    border: 1px solid gray;
-    text-align: center;
-}
-
-.Properties-key-val {
-    padding: 0px 5px;
 }
 
 .Properties-key {
@@ -23,21 +16,19 @@
 }
 
 .Properties tbody {
-  width: 100%;
-  height: 50px;
-  display: block;
-  padding: 0px 5px 5px 5px;
-  overflow-y: scroll;
+    width: 100%;
+    display: block;
+    padding: 0px 5px 5px 0px;
 }
 
-.Properties tr  {
-  display: table;
-  width: 100%;
-  vertical-align: top;
+.Properties tr {
+    display: table;
+    width: 100%;
+    vertical-align: top;
 }
 
 .Properties td {
-  width: 33%;
-  text-align: left;
-  padding: 2px 5px;
+    width: 33%;
+    text-align: left;
+    padding: 2px 5px 2px 0px;
 }
