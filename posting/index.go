@@ -247,7 +247,6 @@ func RebuildIndex(ctx context.Context, attr string) error {
 				Value: p.Value,
 				Tid:   types.TypeID(p.ValType),
 			}
-			edge.Lang = p.Lang
 			addIndexMutations(ctx, &edge, val, task.DirectedEdge_SET)
 		}
 	}

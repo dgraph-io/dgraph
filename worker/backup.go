@@ -53,9 +53,9 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				buf.WriteString("^^<xs:")
 				buf.WriteString(vID.Name())
 				buf.WriteByte('>')
-			} else if len(p.Lang) > 0 {
+			} else if p.PostingType == types.Posting_VALUE_LANG {
 				buf.WriteByte('@')
-				buf.WriteString(p.Lang)
+				buf.WriteString(string(p.Metadata))
 			}
 		} else {
 			buf.WriteString("<0x")

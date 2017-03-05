@@ -128,7 +128,10 @@ func samePosting(oldp *types.Posting, newp *types.Posting) bool {
 	if !bytes.Equal(oldp.Value, newp.Value) {
 		return false
 	}
-	if oldp.Lang != newp.Lang {
+	if oldp.PostingType != newp.PostingType {
+		return false
+	}
+	if bytes.Compare(oldp.Metadata, newp.Metadata) != 0 {
 		return false
 	}
 	// Checking source might not be necessary.
@@ -154,14 +157,26 @@ func newPosting(t *task.DirectedEdge) *types.Posting {
 		x.Fatalf("Unhandled operation: %+v", t)
 	}
 
+	var postingType types.Posting_PostingType
+	var metadata []byte
+	if len(t.Lang) > 0 {
+		postingType = types.Posting_VALUE_LANG
+		metadata = []byte(t.Lang)
+	} else if len(t.Value) == 0 {
+		postingType = types.Posting_REF
+	} else if len(t.Value) > 0 {
+		postingType = types.Posting_VALUE
+	}
+
 	return &types.Posting{
-		Uid:     t.ValueId,
-		Value:   t.Value,
-		ValType: types.Posting_ValType(t.ValueType),
-		Label:   t.Label,
-		Lang:    t.Lang,
-		Op:      op,
-		Facets:  t.Facets,
+		Uid:         t.ValueId,
+		Value:       t.Value,
+		ValType:     types.Posting_ValType(t.ValueType),
+		PostingType: postingType,
+		Metadata:    metadata,
+		Label:       t.Label,
+		Op:          op,
+		Facets:      t.Facets,
 	}
 }
 
@@ -322,9 +337,9 @@ func edgeType(t *task.DirectedEdge) x.ValueTypeInfo {
 	hasId := t.ValueId != 0
 	switch {
 	case hasVal && hasId:
-		return x.ValueTagged
+		return x.ValueLang
 	case hasVal && !hasId:
-		return x.ValueUntagged
+		return x.ValuePlain
 	case !hasVal && hasId:
 		return x.ValueUid
 	default:
@@ -333,10 +348,16 @@ func edgeType(t *task.DirectedEdge) x.ValueTypeInfo {
 }
 
 func postingType(p *types.Posting) x.ValueTypeInfo {
-	hasValue := !bytes.Equal(p.Value, nil)
-	hasLang := len(p.Lang) > 0
-	hasSpecialId := p.Uid == math.MaxUint64
-	return x.ValueType(hasValue, hasLang, hasSpecialId)
+	switch p.PostingType {
+	case types.Posting_REF:
+		return x.ValueUid
+	case types.Posting_VALUE:
+		return x.ValuePlain
+	case types.Posting_VALUE_LANG:
+		return x.ValueLang
+	default:
+		return x.ValueEmpty
+	}
 }
 
 // TypeID returns the typeid of destiantion vertex
@@ -643,7 +664,7 @@ func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
 	// last resort - return value with smallest lang Uid
 	if !found {
 		l.iterate(0, func(p *types.Posting) bool {
-			if postingType(p) == x.ValueTagged {
+			if postingType(p) == x.ValueLang {
 				val := make([]byte, len(p.Value))
 				copy(val, p.Value)
 				rval.Value = val
