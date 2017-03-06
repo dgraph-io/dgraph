@@ -182,9 +182,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	}
 
 	n := seedNode.New("_root_")
-	lenList := len(sg.uidMatrix[0].Uids)
-	for i := 0; i < lenList; i++ {
-		uid := sg.uidMatrix[0].Uids[i]
+	for _, uid := range sg.uidMatrix[0].Uids {
 		// For the root, the name is stored in Alias, not Attr.
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
