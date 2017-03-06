@@ -715,8 +715,14 @@ func serveHTTP(l net.Listener) {
 	}
 
 	err := srv.Serve(l)
-	log.Printf("http server stopped : %s", err.Error())
-	// TODO(ashish): Use srv.Shutdown go 1.8
+	log.Printf("Stopped taking more http(s) requests. Err: %s", err.Error())
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	err = srv.Shutdown(ctx)
+	log.Printf("All http(s) requests finished.")
+	if err != nil {
+		log.Printf("Http(s) shutdown err: ", err.Error())
+	}
 }
 
 func setupServer(che chan error) {
