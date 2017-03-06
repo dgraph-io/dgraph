@@ -24,38 +24,14 @@ import (
 )
 
 func newList(data []uint64) *task.List {
-	return SortedListToBlock(data)
-}
-
-func TestSort1(t *testing.T) {
-	input := newList([]uint64{55})
-	Sort(input)
-	require.Equal(t, BlockToList(input), []uint64{55})
-}
-
-func TestSort2(t *testing.T) {
-	input := newList([]uint64{})
-	Sort(input)
-	require.Equal(t, BlockToList(input), []uint64{})
-}
-
-func TestSort3(t *testing.T) {
-	input := newList([]uint64{55, 392, 1, 123})
-	Sort(input)
-	require.Equal(t, BlockToList(input), []uint64{1, 55, 123, 392})
-}
-
-func TestSort4(t *testing.T) {
-	input := newList([]uint64{55, 1, 100000})
-	Sort(input)
-	require.Equal(t, BlockToList(input), []uint64{1, 55, 100000})
+	return &task.List{data}
 }
 
 func TestMergeSorted1(t *testing.T) {
 	input := []*task.List{
 		newList([]uint64{55}),
 	}
-	require.Equal(t, BlockToList(MergeSorted(input)), []uint64{55})
+	require.Equal(t, MergeSorted(input).Uids, []uint64{55})
 }
 
 func TestMergeSorted2(t *testing.T) {
@@ -63,7 +39,7 @@ func TestMergeSorted2(t *testing.T) {
 		newList([]uint64{1, 3, 6, 8, 10}),
 		newList([]uint64{2, 4, 5, 7, 15}),
 	}
-	require.Equal(t, BlockToList(MergeSorted(input)),
+	require.Equal(t, MergeSorted(input).Uids,
 		[]uint64{1, 2, 3, 4, 5, 6, 7, 8, 10, 15})
 }
 
@@ -72,7 +48,7 @@ func TestMergeSorted3(t *testing.T) {
 		newList([]uint64{1, 3, 6, 8, 10}),
 		newList([]uint64{}),
 	}
-	require.Equal(t, BlockToList(MergeSorted(input)), []uint64{1, 3, 6, 8, 10})
+	require.Equal(t, MergeSorted(input).Uids, []uint64{1, 3, 6, 8, 10})
 }
 
 func TestMergeSorted4(t *testing.T) {
@@ -80,7 +56,7 @@ func TestMergeSorted4(t *testing.T) {
 		newList([]uint64{}),
 		newList([]uint64{1, 3, 6, 8, 10}),
 	}
-	require.Equal(t, BlockToList(MergeSorted(input)), []uint64{1, 3, 6, 8, 10})
+	require.Equal(t, MergeSorted(input).Uids, []uint64{1, 3, 6, 8, 10})
 }
 
 func TestMergeSorted5(t *testing.T) {
@@ -88,7 +64,7 @@ func TestMergeSorted5(t *testing.T) {
 		newList([]uint64{}),
 		newList([]uint64{}),
 	}
-	require.Empty(t, BlockToList(MergeSorted(input)))
+	require.Empty(t, MergeSorted(input).Uids)
 }
 
 func TestMergeSorted6(t *testing.T) {
@@ -97,7 +73,7 @@ func TestMergeSorted6(t *testing.T) {
 		newList([]uint64{12, 14, 15, 15, 16, 16, 17, 25}),
 		newList([]uint64{1, 2}),
 	}
-	require.Equal(t, BlockToList(MergeSorted(input)),
+	require.Equal(t, MergeSorted(input).Uids,
 		[]uint64{1, 2, 11, 12, 13, 14, 15, 16, 17, 18, 20, 25})
 }
 
@@ -108,19 +84,19 @@ func TestMergeSorted7(t *testing.T) {
 		newList([]uint64{1, 2}),
 		newList([]uint64{}),
 	}
-	require.Equal(t, BlockToList(MergeSorted(input)), []uint64{1, 2, 3, 4, 5, 6, 7})
+	require.Equal(t, MergeSorted(input).Uids, []uint64{1, 2, 3, 4, 5, 6, 7})
 }
 
 func TestMergeSorted8(t *testing.T) {
 	input := []*task.List{}
-	require.Empty(t, BlockToList(MergeSorted(input)))
+	require.Empty(t, MergeSorted(input).Uids)
 }
 
 func TestMergeSorted9(t *testing.T) {
 	input := []*task.List{
 		newList([]uint64{1, 1, 1}),
 	}
-	require.Equal(t, BlockToList(MergeSorted(input)), []uint64{1})
+	require.Equal(t, MergeSorted(input).Uids, []uint64{1})
 }
 
 func TestMergeSorted10(t *testing.T) {
@@ -128,7 +104,7 @@ func TestMergeSorted10(t *testing.T) {
 		newList([]uint64{1, 2, 3, 3, 6}),
 		newList([]uint64{4, 8, 9}),
 	}
-	require.Equal(t, BlockToList(MergeSorted(input)), []uint64{1, 2, 3, 4, 6, 8, 9})
+	require.Equal(t, MergeSorted(input).Uids, []uint64{1, 2, 3, 4, 6, 8, 9})
 }
 
 func TestIntersectSorted1(t *testing.T) {
@@ -136,26 +112,26 @@ func TestIntersectSorted1(t *testing.T) {
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{2, 3, 4, 5}),
 	}
-	require.Equal(t, BlockToList(IntersectSorted(input)), []uint64{2, 3})
+	require.Equal(t, IntersectSorted(input).Uids, []uint64{2, 3})
 }
 
 func TestIntersectSorted2(t *testing.T) {
 	input := []*task.List{
 		newList([]uint64{1, 2, 3}),
 	}
-	require.Equal(t, BlockToList(IntersectSorted(input)), []uint64{1, 2, 3})
+	require.Equal(t, IntersectSorted(input).Uids, []uint64{1, 2, 3})
 }
 
 func TestIntersectSorted3(t *testing.T) {
 	input := []*task.List{}
-	require.Empty(t, BlockToList(IntersectSorted(input)))
+	require.Empty(t, IntersectSorted(input).Uids)
 }
 
 func TestIntersectSorted4(t *testing.T) {
 	input := []*task.List{
 		newList([]uint64{100, 101}),
 	}
-	require.Equal(t, BlockToList(IntersectSorted(input)), []uint64{100, 101})
+	require.Equal(t, IntersectSorted(input).Uids, []uint64{100, 101})
 }
 
 func TestIntersectSorted5(t *testing.T) {
@@ -164,7 +140,7 @@ func TestIntersectSorted5(t *testing.T) {
 		newList([]uint64{2, 3, 4, 5}),
 		newList([]uint64{4, 5, 6}),
 	}
-	require.Empty(t, BlockToList(IntersectSorted(input)))
+	require.Empty(t, IntersectSorted(input).Uids)
 }
 
 func TestIntersectSorted6(t *testing.T) {
@@ -173,7 +149,7 @@ func TestIntersectSorted6(t *testing.T) {
 		newList([]uint64{2, 3, 4, 13}),
 		newList([]uint64{4, 5, 6}),
 	}
-	require.Empty(t, BlockToList(IntersectSorted(input)))
+	require.Empty(t, IntersectSorted(input).Uids)
 }
 
 func TestSubSorted1(t *testing.T) {
@@ -182,7 +158,7 @@ func TestSubSorted1(t *testing.T) {
 		newList([]uint64{2, 3, 4, 5}),
 	}
 	Difference(input[0], input[1])
-	require.Equal(t, []uint64{1}, BlockToList(input[0]))
+	require.Equal(t, []uint64{1}, input[0].Uids)
 }
 
 func TestSubSorted6(t *testing.T) {
@@ -191,32 +167,7 @@ func TestSubSorted6(t *testing.T) {
 		newList([]uint64{2, 3, 4, 13}),
 	}
 	Difference(input[0], input[1])
-	require.Equal(t, []uint64{10, 12}, BlockToList(input[0]))
-}
-
-func TestIterator1(t *testing.T) {
-	u := newList([]uint64{1, 2, 3, 4, 43, 234, 2344})
-
-	it := NewListIterator(u)
-	var res []uint64
-	for ; it.Valid(); it.Next() {
-		res = append(res, it.Val())
-	}
-
-	require.Equal(t, []uint64{1, 2, 3, 4, 43, 234, 2344}, res)
-}
-
-func TestIterator2(t *testing.T) {
-	var ls, res []uint64
-	for i := 0; i < 1000; i++ {
-		ls = append(ls, uint64(i*2))
-	}
-	u := newList(ls)
-	it := NewListIterator(u)
-	for ; it.Valid(); it.Next() {
-		res = append(res, it.Val())
-	}
-	require.Equal(t, ls, res)
+	require.Equal(t, []uint64{10, 12}, input[0].Uids)
 }
 
 func TestUIDListIntersect1(t *testing.T) {
@@ -224,63 +175,63 @@ func TestUIDListIntersect1(t *testing.T) {
 	v := newList([]uint64{})
 	IntersectWith(u, v)
 
-	require.Empty(t, BlockToList(u))
+	require.Empty(t, u.Uids)
 }
 
 func TestUIDListIntersect2(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{1, 2, 3, 4, 5})
 	IntersectWith(u, v)
-	require.Equal(t, []uint64{1, 2, 3}, BlockToList(u))
+	require.Equal(t, []uint64{1, 2, 3}, u.Uids)
 }
 
 func TestUIDListIntersect3(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{2})
 	IntersectWith(u, v)
-	require.Equal(t, []uint64{2}, BlockToList(u))
+	require.Equal(t, []uint64{2}, u.Uids)
 }
 
 func TestUIDListIntersect4(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{0, 5})
 	IntersectWith(u, v)
-	require.Empty(t, BlockToList(u))
+	require.Empty(t, u.Uids)
 }
 
 func TestUIDListIntersect5(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{3, 5})
 	IntersectWith(u, v)
-	require.Equal(t, []uint64{3}, BlockToList(u))
+	require.Equal(t, []uint64{3}, u.Uids)
 }
 
 func TestUIDListIntersectDupFirst(t *testing.T) {
 	u := newList([]uint64{1, 1, 2, 3})
 	v := newList([]uint64{1, 2})
 	IntersectWith(u, v)
-	require.Equal(t, []uint64{1, 2}, BlockToList(u))
+	require.Equal(t, []uint64{1, 2}, u.Uids)
 }
 
 func TestUIDListIntersectDupBoth(t *testing.T) {
 	u := newList([]uint64{1, 1, 2, 3, 5})
 	v := newList([]uint64{1, 1, 2, 4})
 	IntersectWith(u, v)
-	require.Equal(t, []uint64{1, 1, 2}, BlockToList(u))
+	require.Equal(t, []uint64{1, 1, 2}, u.Uids)
 }
 
 func TestUIDListIntersectDupSecond(t *testing.T) {
 	u := newList([]uint64{1, 2, 3, 5})
 	v := newList([]uint64{1, 1, 2, 4})
 	IntersectWith(u, v)
-	require.Equal(t, []uint64{1, 2}, BlockToList(u))
+	require.Equal(t, []uint64{1, 2}, u.Uids)
 }
 
 func TestApplyFilterUint(t *testing.T) {
 	l := []uint64{1, 2, 3, 4, 5}
 	u := newList(l)
 	ApplyFilter(u, func(a uint64, idx int) bool { return (l[idx] % 2) == 1 })
-	require.Equal(t, []uint64{1, 3, 5}, BlockToList(u))
+	require.Equal(t, []uint64{1, 3, 5}, u.Uids)
 }
 
 // sort interface for []uint64
@@ -294,18 +245,6 @@ func (xs uint64Slice) Less(i, j int) bool {
 }
 func (xs uint64Slice) Swap(i, j int) {
 	xs[i], xs[j] = xs[j], xs[i]
-}
-
-func TestWriteListLen(t *testing.T) {
-	var u task.List
-	w := NewWriteIterator(&u)
-	n := blockSize*5 + 10
-	for i := 0; i < n; i++ {
-		w.Append(uint64(i))
-		require.EqualValues(t, i+1, w.ListLen())
-	}
-	w.End()
-	require.EqualValues(t, n, ListLen(&u))
 }
 
 /*
