@@ -87,12 +87,9 @@ func (start *SubGraph) expandOut(ctx context.Context,
 	var numEdges uint64
 	var exec []*SubGraph
 	var err error
-	var in task.List
-	it := algo.NewWriteIterator(&in)
-	it.Append(start.Params.From)
-	it.End()
-	start.SrcUIDs = &in
-	start.uidMatrix = []*task.List{&in}
+	in := []uint64{start.Params.From}
+	start.SrcUIDs = &task.List{in}
+	start.uidMatrix = []*task.List{&task.List{in}}
 	start.DestUIDs = start.SrcUIDs
 
 	for _, child := range start.Children {
@@ -127,16 +124,8 @@ func (start *SubGraph) expandOut(ctx context.Context,
 
 		for _, sg := range exec {
 			// Send the destuids in res chan.
-			it := algo.NewListIterator(sg.SrcUIDs)
-			mIdx := -1
-			for ; it.Valid(); it.Next() { // idx, fromUID := range sg.SrcUIDs.Uids {
-				mIdx++
-				fromUID := it.Val()
-				destIt := algo.NewListIterator(sg.uidMatrix[mIdx])
-				lIdx := -1
-				for ; destIt.Valid(); destIt.Next() {
-					lIdx++
-					toUid := destIt.Val()
+			for mIdx, fromUID := range sg.SrcUIDs.Uids {
+				for lIdx, toUID := range sg.uidMatrix[mIdx].Uids {
 					if adjacencyMap[fromUID] == nil {
 						adjacencyMap[fromUID] = make(map[uint64]float64)
 					}
@@ -149,7 +138,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 						rch <- err
 						return
 					}
-					adjacencyMap[fromUID][toUid] = cost
+					adjacencyMap[fromUID][toUID] = cost
 					numEdges++
 				}
 			}
@@ -164,7 +153,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 		// modify the exec and attach child nodes.
 		var out []*SubGraph
 		for _, sg := range exec {
-			if algo.ListLen(sg.DestUIDs) == 0 {
+			if len(sg.DestUIDs.Uids) == 0 {
 				continue
 			}
 			for _, child := range start.Children {
@@ -179,7 +168,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 					_, ok := adjacencyMap[uid]
 					return !ok
 				})
-				if algo.ListLen(temp.SrcUIDs) == 0 {
+				if len(temp.SrcUIDs.Uids) == 0 {
 					continue
 				}
 				sg.Children = append(sg.Children, temp)
@@ -339,13 +328,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 		for i := 0; i < l/2; i++ {
 			result[i], result[l-i-1] = result[l-i-1], result[i]
 		}
-		var r task.List
-		out := algo.NewWriteIterator(&r)
-		for i := 0; i < len(result); i++ {
-			out.Append(result[i])
-		}
-		out.End()
-		sg.DestUIDs = &r
+		sg.DestUIDs.Uids = result
 	} else {
 		sg.DestUIDs = &task.List{}
 	}

@@ -3,7 +3,6 @@ package worker
 import (
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
@@ -112,7 +111,6 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		var emptyList task.List
 		out[i].ulist = &emptyList
 		out[i].excludeSet = make(map[uint64]struct{})
-		out[i].wit = algo.NewWriteIterator(&emptyList)
 	}
 
 	// Iterate over every bucket / token.
@@ -161,7 +159,6 @@ BUCKETS:
 
 	r := new(task.SortResult)
 	for _, il := range out {
-		il.wit.End()
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
 	}
 	return r, nil
@@ -170,7 +167,6 @@ BUCKETS:
 type intersectedList struct {
 	offset int
 	ulist  *task.List
-	wit    algo.WriteIterator
 
 	// For term index, a UID might appear in multiple buckets. We want to dedup.
 	// We cannot do this at the end of the sort because we do need to track offsets and counts.
@@ -194,9 +190,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 	// For each UID list, we need to intersect with the index bucket.
 	for i, ul := range ts.UidMatrix {
 		il := &out[i]
-		// Caution: Use ListLen from WriteIterator. Potential cleanup: get rid of indices in
-		// WriteIterator. Let the slices in the list itself do the counting.
-		if count > 0 && il.wit.ListLen() >= count {
+		if count > 0 && len(il.ulist.Uids) >= count {
 			continue
 		}
 
@@ -206,7 +200,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 			ExcludeSet: il.excludeSet,
 		}
 		result := pl.Uids(listOpt) // The actual intersection work is done here.
-		n := algo.ListLen(result)
+		n := len(result.Uids)
 
 		// Check offsets[i].
 		if il.offset >= n {
@@ -222,36 +216,33 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 
 		if il.offset > 0 {
 			// Apply the offset.
-			algo.Slice(result, il.offset, n)
+			result.Uids = result.Uids[il.offset:n]
 			il.offset = 0
-			n = algo.ListLen(result)
+			n = len(result.Uids)
 		}
 
 		// n is number of elements to copy from result to out.
 		if count > 0 {
-			slack := count - il.wit.ListLen()
+			slack := count - len(il.ulist.Uids)
 			if slack < n {
 				n = slack
 			}
 		}
 
-		i := 0
-		in2 := algo.NewListIterator(result)
-		for ; in2.Valid() && i < n; in2.Next() {
-			uid := in2.Val()
-			il.wit.Append(uid)
+		for j := 0; j < n; j++ {
+			uid := result.Uids[j]
+			il.ulist.Uids = append(il.ulist.Uids, uid)
 			il.excludeSet[uid] = struct{}{}
-			i++
 		}
 	} // end for loop over UID lists in UID matrix.
 
 	// Check out[i] sizes for all i.
 	for i := 0; i < len(ts.UidMatrix); i++ { // Iterate over UID lists.
-		if out[i].wit.ListLen() < count {
+		if len(out[i].ulist.Uids) < count {
 			return errContinue
 		}
 
-		x.AssertTruef(out[i].wit.ListLen() == count, "%d %d", out[i].wit.ListLen(), count)
+		x.AssertTruef(len(out[i].ulist.Uids) == count, "%d %d", len(out[i].ulist.Uids), count)
 	}
 	// All UID lists have enough items (according to pagination). Let's notify
 	// the outermost loop.
@@ -260,10 +251,10 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 
 // sortByValue fetches values and sort UIDList.
 func sortByValue(attr string, langs []string, ul *task.List, typ types.TypeID, desc bool) error {
-	values := make([]types.Val, 0, algo.ListLen(ul))
-	it := algo.NewListIterator(ul)
-	for ; it.Valid(); it.Next() {
-		uid := it.Val()
+	lenList := len(ul.Uids)
+	values := make([]types.Val, 0, lenList)
+	for i := 0; i < lenList; i++ {
+		uid := ul.Uids[i]
 		val, err := fetchValue(uid, attr, langs, typ)
 		if err != nil {
 			return err

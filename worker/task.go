@@ -159,7 +159,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			return nil, x.Errorf("Aggregator %q could not apply on %v",
 				f, attr)
 		}
-		n = algo.ListLen(q.Uids)
+		n = len(q.Uids.Uids)
 
 	case CompareAttrFn:
 		if len(q.SrcFunc) != 2 {
@@ -204,7 +204,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 				q.SrcFunc[0], q.SrcFunc[1])
 		}
-		n = algo.ListLen(q.Uids)
+		n = len(q.Uids.Uids)
 
 	case GeoFn:
 		// For geo functions, we get extra information used for filtering.
@@ -221,7 +221,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
 				len(q.SrcFunc), q.SrcFunc)
 		}
-		n = algo.ListLen(q.Uids)
+		n = len(q.Uids.Uids)
 
 	case StandardFn:
 		// srcfunc 0th val is func name and and [1:] are args.
@@ -240,36 +240,28 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 
 	case NotFn:
-		n = algo.ListLen(q.Uids)
+		n = len(q.Uids.Uids)
 	}
 
 	var out task.Result
-	it := algo.NewListIterator(q.Uids)
 	opts := posting.ListOptions{
 		AfterUID: uint64(q.AfterUid),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
-	if fnType != NotFn && algo.ListLen(q.Uids) > 0 {
+	if fnType != NotFn && q.Uids != nil && len(q.Uids.Uids) > 0 {
 		opts.Intersect = q.Uids
 	}
 
 	for i := 0; i < n; i++ {
 		var key []byte
-		var uid uint64
-		if it.Valid() {
-			uid = it.Val()
-		}
 		if fnType == AggregatorFn || fnType == CompareScalarFn || fnType == PasswordFn {
-			key = x.DataKey(attr, it.Val())
-			it.Next()
+			key = x.DataKey(attr, q.Uids.Uids[i])
 		} else if fnType != NotFn {
 			key = x.IndexKey(attr, tokens[i])
 		} else if q.Reverse {
-			key = x.ReverseKey(attr, it.Val())
-			it.Next()
+			key = x.ReverseKey(attr, q.Uids.Uids[i])
 		} else {
-			key = x.DataKey(attr, it.Val())
-			it.Next()
+			key = x.DataKey(attr, q.Uids.Uids[i])
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, gid)
@@ -364,7 +356,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		if fnType == CompareScalarFn {
 			count := int64(pl.Length(0))
 			if EvalCompare(f, count, threshold) {
-				tlist := algo.SortedListToBlock([]uint64{uid})
+				tlist := &task.List{[]uint64{q.Uids.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 			continue
@@ -372,11 +364,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 		// The more usual case: Getting the UIDs.
 		uidList := new(task.List)
-		uidw := algo.NewWriteIterator(uidList)
 		for _, fres := range filteredRes {
-			uidw.Append(fres.uid)
+			uidList.Uids = append(uidList.Uids, fres.uid)
 		}
-		uidw.End()
 		out.UidMatrix = append(out.UidMatrix, uidList)
 	}
 
@@ -433,11 +423,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var values []*task.Value
 	if geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
-		it := algo.NewListIterator(uids)
-		for ; it.Valid(); it.Next() {
-			uid := it.Val()
+		for _, uid := range uids.Uids {
 			key := x.DataKey(attr, uid)
 			pl, decr := posting.GetOrCreate(key, gid)
+
 			val, err := pl.Value()
 			newValue := &task.Value{ValType: int32(val.Tid)}
 			if err == nil {
@@ -465,7 +454,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 	}
 
 	gid := group.BelongsTo(q.Attr)
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, algo.ListLen(q.Uids), gid)
+	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, len(q.Uids.Uids), gid)
 
 	var reply *task.Result
 	x.AssertTruef(groups().ServesGroup(gid),

@@ -75,10 +75,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		}
 
 		for _, sg := range exec {
-			it := algo.NewListIterator(sg.SrcUIDs)
-			for mIdx := -1; it.Valid(); it.Next() {
-				mIdx++
-				fromUID := it.Val()
+			for mIdx, fromUID := range sg.SrcUIDs.Uids {
 				if len(sg.Filters) > 0 {
 					// We need to do this in case we had some filters.
 					algo.IntersectWith(sg.uidMatrix[mIdx], sg.DestUIDs)
@@ -101,7 +98,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		// modify the exec and attach child nodes.
 		var out []*SubGraph
 		for _, sg := range exec {
-			if algo.ListLen(sg.DestUIDs) == 0 {
+			if len(sg.DestUIDs.Uids) == 0 {
 				continue
 			}
 			for _, child := range startChildren {
@@ -113,13 +110,8 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 				out = append(out, temp)
 			}
 			// Mark the reached nodes
-			it := algo.NewListIterator(sg.SrcUIDs)
-			for mIdx := -1; it.Valid(); it.Next() {
-				mIdx++
-				fromUID := it.Val()
-				toIt := algo.NewListIterator(sg.uidMatrix[mIdx])
-				for ; toIt.Valid(); toIt.Next() {
-					toUID := toIt.Val()
+			for mIdx, fromUID := range sg.SrcUIDs.Uids {
+				for _, toUID := range sg.uidMatrix[mIdx].Uids {
 					key := fmt.Sprintf("%s|%d|%d", sg.Attr, fromUID, toUID)
 					// Mark this edge as taken. We'd disallow this edge later.
 					reachMap[key] = struct{}{}
