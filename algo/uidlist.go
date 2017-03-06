@@ -29,10 +29,11 @@ func IntersectWith(u, v *task.List) {
 		n, m = m, n
 	}
 
+	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n+1)
 	if ratio <= 10 && n >= 10000 {
 		IntersectWithLin(u, v, wasSwitched)
-	} else if n <= 1000 {
+	} else if n <= 1000 || ratio >= 1000 {
 		IntersectWithBin(u, v, wasSwitched)
 	} else {
 		IntersectWithExp(u, v, wasSwitched)
@@ -121,13 +122,17 @@ func IntersectWithBin(u, v *task.List, sw bool) {
 	if sw {
 		u, v = v, u
 	}
-	m := len(v.Uids)
+	// This is reduce the search space after every match.
+	searchList := v.Uids
 	for _, uid := range u.Uids {
-		idx := sort.Search(m, func(i int) bool {
-			return v.Uids[i] >= uid
+		idx := sort.Search(len(searchList), func(i int) bool {
+			return searchList[i] >= uid
 		})
-		if idx < m && v.Uids[idx] == uid {
+		if idx < len(searchList) && searchList[idx] == uid {
 			out = append(out, uid)
+			// The next UID would never be at less than this idx
+			// as the list is sorted.
+			searchList = searchList[idx:]
 		}
 	}
 	if sw {
