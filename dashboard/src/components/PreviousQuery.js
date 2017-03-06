@@ -1,7 +1,7 @@
 // @flow
 
 import React, { Component } from "react";
-import { Popover, OverlayTrigger } from "react-bootstrap";
+import { Popover, OverlayTrigger, Button, Glyphicon } from "react-bootstrap";
 
 function prettifyQuery(q: string) {
   var parsedQuery;
@@ -120,6 +120,14 @@ class PreviousQuery extends Component {
               {getQueryStructure(prettifyQuery(this.props.text))}
             </pre>
           </OverlayTrigger>
+        </td>
+        <td>
+          <Button
+            bsSize="xsmall"
+            onClick={() => this.props.delete(this.props.idx)}
+          >
+            <Glyphicon glyph="remove" />
+          </Button>
         </td>
       </tr>
     );
