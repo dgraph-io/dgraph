@@ -20,20 +20,20 @@ type ValueTypeInfo int32
 
 // Type of a data inside DirectedEdge, Posting or NQuad
 const (
-	ValueUnknown  ValueTypeInfo = iota // unknown type of value
-	ValueEmpty                         // no UID and no value
-	ValueUid                           // UID
-	ValueUntagged                      // value without defined language tag
-	ValueTagged                        // value with defined language tag
+	ValueUnknown ValueTypeInfo = iota // unknown type of value
+	ValueEmpty                        // no UID and no value
+	ValueUid                          // UID
+	ValuePlain                        // plain old value without defined language tag
+	ValueLang                         // value with defined language tag
 )
 
 // Helper function, to decide value type of DirectedEdge/Posting/NQuad
 func ValueType(hasValue, hasLang, hasSpecialId bool) ValueTypeInfo {
 	switch {
 	case hasValue && hasLang:
-		return ValueTagged
+		return ValueLang
 	case hasValue && !hasLang:
-		return ValueUntagged
+		return ValuePlain
 	case !hasValue && hasSpecialId:
 		return ValueEmpty
 	case !hasValue && !hasSpecialId:

@@ -114,7 +114,7 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 	case x.ValueUid:
 		oid := GetUid(nq.ObjectId)
 		out.ValueId = oid
-	case x.ValueUntagged, x.ValueTagged:
+	case x.ValuePlain, x.ValueLang:
 		if err = copyValue(out, nq); err != nil {
 			return &emptyEdge, err
 		}
@@ -146,7 +146,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 	case x.ValueUid:
 		uid = toUid(nq.ObjectId, newToUid)
 		out.ValueId = uid
-	case x.ValueUntagged, x.ValueTagged:
+	case x.ValuePlain, x.ValueLang:
 		if err = copyValue(out, nq); err != nil {
 			return &emptyEdge, err
 		}
