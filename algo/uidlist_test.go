@@ -17,6 +17,9 @@
 package algo
 
 import (
+	"fmt"
+	"math/rand"
+	"sort"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/task"
@@ -248,7 +251,6 @@ func (xs uint64Slice) Swap(i, j int) {
 	xs[i], xs[j] = xs[j], xs[i]
 }
 
-/*
 // Benchmarks for IntersectWith
 // random data : u and v having data within range [0, limit)
 // where limit = N * sizeof-list ; for different N
@@ -293,4 +295,3 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 	randomTests(10000, 0.01)
 	randomTests(1000000, 0.01)
 }
-*/
