@@ -53,7 +53,7 @@ class Properties extends Component {
         return (
             <div id="properties" style={{ marginTop: "5px" }}>
                 {isEdge ? "Edge" : "Node"} Attributes:
-                <table className="Properties" title={this.props.currentNode}>
+                <table className="Properties">
                     <tbody>
                         {createRows(attrPieceArrays, attrs)}
                         {Object.keys(facets).length > 0 &&
