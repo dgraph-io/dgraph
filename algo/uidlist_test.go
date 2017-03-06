@@ -174,7 +174,6 @@ func TestUIDListIntersect1(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{})
 	IntersectWith(u, v)
-
 	require.Empty(t, u.Uids)
 }
 
@@ -190,6 +189,7 @@ func TestUIDListIntersect3(t *testing.T) {
 	v := newList([]uint64{2})
 	IntersectWith(u, v)
 	require.Equal(t, []uint64{2}, u.Uids)
+	require.Equal(t, []uint64{2}, v.Uids)
 }
 
 func TestUIDListIntersect4(t *testing.T) {
@@ -197,6 +197,7 @@ func TestUIDListIntersect4(t *testing.T) {
 	v := newList([]uint64{0, 5})
 	IntersectWith(u, v)
 	require.Empty(t, u.Uids)
+	require.Equal(t, []uint64{0, 5}, v.Uids)
 }
 
 func TestUIDListIntersect5(t *testing.T) {
