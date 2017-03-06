@@ -21,6 +21,9 @@ addons:
     - zlib1g-dev
     - jq
     - graphviz
+  hosts:
+    - server1.dgraph.io
+    - server2.dgraph.io
 env:
 - CC=clang-3.8 CXX=clang++-3.8
 cache:
