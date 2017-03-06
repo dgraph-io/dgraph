@@ -553,7 +553,7 @@ func (l *List) LastCompactionTs() time.Time {
 // We have to apply the filtering before applying (offset, count).
 func (l *List) Uids(opt ListOptions) *task.List {
 	// Pre-assign length to make it faster.
-	res := make([]uint64, l.Length(opt.AfterUID))
+	res := make([]uint64, 0, l.Length(opt.AfterUID))
 
 	l.Postings(opt, func(p *types.Posting) bool {
 		res = append(res, p.Uid)

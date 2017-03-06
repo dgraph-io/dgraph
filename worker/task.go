@@ -248,7 +248,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		AfterUID: uint64(q.AfterUid),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
-	if fnType != NotFn && len(q.Uids.Uids) > 0 {
+	if fnType != NotFn && q.Uids != nil && len(q.Uids.Uids) > 0 {
 		opts.Intersect = q.Uids
 	}
 
