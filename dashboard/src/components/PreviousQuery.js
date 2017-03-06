@@ -123,6 +123,7 @@ class PreviousQuery extends Component {
         </td>
         <td>
           <Button
+            style={{ marginRight: "5px" }}
             bsSize="xsmall"
             onClick={() => this.props.delete(this.props.idx)}
           >
