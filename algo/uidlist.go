@@ -26,9 +26,11 @@ func IntersectWith(u, v *task.List) {
 	if n > m {
 		n, m = m, n
 	}
-
+	if n == 0 {
+		n += 1
+	}
 	// Select appropriate function based on heuristics.
-	ratio := float64(m) / float64(n+1)
+	ratio := float64(m) / float64(n)
 	if ratio < 500 {
 		IntersectWithLin(u, v)
 	} else {
