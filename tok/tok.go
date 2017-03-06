@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/blevesearch/bleve/analysis"
 	"github.com/blevesearch/bleve/analysis/analyzer/custom"
 	"github.com/blevesearch/bleve/analysis/token/lowercase"
 	"github.com/blevesearch/bleve/analysis/token/porter"
@@ -89,22 +88,34 @@ func initBleve() {
 
 	// Create normalizer using Normalization Form KC (NFKC) - Compatibility Decomposition, followed
 	// by Canonical Composition. See: http://unicode.org/reports/tr15/#Norm_Forms
-	bleveCache.DefineTokenFilter(normalizerName, map[string]interface{}{
+	_, err := bleveCache.DefineTokenFilter(normalizerName, map[string]interface{}{
 		"type": unicodenorm.Name,
-		"norm": "nfkc",
+		"form": "nfkc",
 	})
+	if err != nil {
+		panic(err)
+	}
 
-	bleveCache.DefineAnalyzer("term", map[string]interface{}{
+	// basic analyzer - splits on word boundaries, lowercase and normalize tokens
+	_, err = bleveCache.DefineAnalyzer("term", map[string]interface{}{
 		"type":          custom.Name,
 		"tokenizer":     unicode.Name,
 		"token_filters": []string{lowercase.Name, normalizerName},
 	})
+	if err != nil {
+		panic(err)
+	}
 
-	bleveCache.DefineAnalyzer("fulltext", map[string]interface{}{
+	// full text search analyzer - does stemming using Porter stemmer - this works only for English.
+	// Per-language stemming will be added soon.
+	_, err = bleveCache.DefineAnalyzer("fulltext", map[string]interface{}{
 		"type":          custom.Name,
 		"tokenizer":     unicode.Name,
 		"token_filters": []string{lowercase.Name, normalizerName, porter.Name},
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 // GetTokenizer returns tokenizer given unique name.
@@ -211,6 +222,7 @@ func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
 }
 func (t ExactTokenizer) Identifier() byte { return 0x2 }
 
+// Full text tokenizer. Currenlty works only for English language.
 type FullTextTokenizer struct{}
 
 func (t FullTextTokenizer) Name() string       { return "fulltext" }
@@ -227,16 +239,11 @@ func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error
 	}
 	tokenStream := analyzer.Analyze([]byte(sv.Value.(string)))
 
-	return extractTerms(tokenStream, identifier), nil
-}
-
-func extractTerms(tokenStream analysis.TokenStream, prefix byte) []string {
 	terms := make([]string, len(tokenStream))
 	for i, token := range tokenStream {
-		terms[i] = encodeToken(string(token.Term), prefix)
+		terms[i] = encodeToken(string(token.Term), identifier)
 	}
-
-	return terms
+	return terms, nil
 }
 
 func encodeInt(val int32) string {

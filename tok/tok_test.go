@@ -21,6 +21,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -58,4 +59,30 @@ func TestIntEncoding(t *testing.T) {
 		require.True(t, enc.tokens[i-1] < enc.tokens[i], "%d %v vs %d %v",
 			enc.ints[i-1], []byte(enc.tokens[i-1]), enc.ints[i], []byte(enc.tokens[i]))
 	}
+}
+
+func TestFullTextTokenizer(t *testing.T) {
+	tokenizer := GetTokenizer("fulltext")
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.StringID)
+	val.Value = "Stemming works!"
+
+	tokens, err := tokenizer.Tokens(val)
+	require.Nil(t, err)
+	require.Equal(t, 2, len(tokens))
+	id := tokenizer.Identifier()
+	require.Equal(t, []string{encodeToken("stem", id), encodeToken("work", id)}, tokens)
+}
+
+func TestTermTokenizer(t *testing.T) {
+	tokenizer := GetTokenizer("term")
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.StringID)
+	val.Value = "Tokenizer works!"
+
+	tokens, err := tokenizer.Tokens(val)
+	require.Nil(t, err)
+	require.Equal(t, 2, len(tokens))
+	id := tokenizer.Identifier()
+	require.Equal(t, []string{encodeToken("tokenizer", id), encodeToken("works", id)}, tokens)
 }
