@@ -31,60 +31,11 @@ func IntersectWith(u, v *task.List) {
 
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n+1)
-	if ratio <= 10 && n >= 10000 {
+	if ratio < 500 {
 		IntersectWithLin(u, v, wasSwitched)
-	} else if n <= 100 || ratio >= 1000 {
-		IntersectWithBin(u, v, wasSwitched)
 	} else {
-		IntersectWithExp(u, v, wasSwitched)
+		IntersectWithBin(u, v, wasSwitched)
 	}
-}
-
-func idealJump(u []uint64, id uint64, i int) int {
-	step := 1
-	lenL := len(u)
-	for i+step < lenL && u[i+step] < id {
-		i += step
-		step *= 10
-	}
-	if step > 1 {
-		step /= 10
-	}
-	for i+step < lenL && u[i+step] < id {
-		i += step
-		step += step
-	}
-	return i
-}
-
-func IntersectWithExp(u, v *task.List, sw bool) {
-	out := u.Uids[:0]
-	if sw {
-		u, v = v, u
-	}
-	n := len(u.Uids)
-	m := len(v.Uids)
-	for i, k := 0, 0; i < n && k < m; {
-		uid := u.Uids[i]
-		vid := v.Uids[k]
-		if uid > vid {
-			k = idealJump(v.Uids, uid, k)
-			for ; k < m && v.Uids[k] < uid; k++ {
-			}
-		} else if uid == vid {
-			out = append(out, uid)
-			k++
-			i++
-		} else {
-			i = idealJump(u.Uids, vid, i)
-			for ; i < n && u.Uids[i] < vid; i++ {
-			}
-		}
-	}
-	if sw {
-		u, v = v, u
-	}
-	u.Uids = out
 }
 
 // IntersectWith intersects u with v. The update is made to u.
