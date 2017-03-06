@@ -32,7 +32,6 @@ import (
 
 	"github.com/dgryski/go-farm"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -553,14 +552,14 @@ func (l *List) LastCompactionTs() time.Time {
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 func (l *List) Uids(opt ListOptions) *task.List {
-	res := new(task.List)
-	writeIt := algo.NewWriteIterator(res)
+	// Pre-assign length to make it faster.
+	res := make([]uint64, l.Length(opt.AfterUID))
+
 	l.Postings(opt, func(p *types.Posting) bool {
-		writeIt.Append(p.Uid)
+		res = append(res, p.Uid)
 		return true
 	})
-	writeIt.End()
-	return res
+	return &task.List{res}
 }
 
 // Postings calls postFn with the postings that are common with
@@ -569,7 +568,7 @@ func (l *List) Postings(opt ListOptions, postFn func(*types.Posting) bool) {
 	l.RLock()
 	defer l.RUnlock()
 
-	it := algo.NewListIterator(opt.Intersect)
+	var intersectIdx int // Indexes into opt.Intersect if it exists.
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if postingType(p) != x.ValueUid {
 			return true
@@ -581,8 +580,10 @@ func (l *List) Postings(opt ListOptions, postFn func(*types.Posting) bool) {
 			}
 		}
 		if opt.Intersect != nil {
-			it.Seek(uid, 1)
-			if !it.Valid() || it.Val() > uid {
+			intersectUidsLen := len(opt.Intersect.Uids)
+			for ; intersectIdx < intersectUidsLen && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
+			}
+			if intersectIdx >= intersectUidsLen || opt.Intersect.Uids[intersectIdx] > uid {
 				return true
 			}
 		}
