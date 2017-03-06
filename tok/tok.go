@@ -21,10 +21,12 @@ import (
 	"time"
 
 	"github.com/blevesearch/bleve/analysis"
+	"github.com/blevesearch/bleve/analysis/analyzer/custom"
 	"github.com/blevesearch/bleve/analysis/token/lowercase"
 	"github.com/blevesearch/bleve/analysis/token/porter"
 	"github.com/blevesearch/bleve/analysis/token/unicodenorm"
 	"github.com/blevesearch/bleve/analysis/tokenizer/unicode"
+	"github.com/blevesearch/bleve/registry"
 	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/types"
@@ -46,9 +48,12 @@ type Tokenizer interface {
 	Identifier() byte
 }
 
+const normalizerName = "nfkc_normalizer"
+
 var (
 	tokenizers map[string]Tokenizer
 	defaults   map[types.TypeID]Tokenizer
+	bleveCache *registry.Cache
 )
 
 func init() {
@@ -75,6 +80,31 @@ func init() {
 		x.AssertTruef(!ok, "Same ID used by multiple tokenizers")
 		usedIds[tokID] = struct{}{}
 	}
+	// Prepare Bleve cache
+	initBleve()
+}
+
+func initBleve() {
+	bleveCache = registry.NewCache()
+
+	// Create normalizer using Normalization Form KC (NFKC) - Compatibility Decomposition, followed
+	// by Canonical Composition. See: http://unicode.org/reports/tr15/#Norm_Forms
+	bleveCache.DefineTokenFilter(normalizerName, map[string]interface{}{
+		"type": unicodenorm.Name,
+		"norm": "nfkc",
+	})
+
+	bleveCache.DefineAnalyzer("term", map[string]interface{}{
+		"type":          custom.Name,
+		"tokenizer":     unicode.Name,
+		"token_filters": []string{lowercase.Name, normalizerName},
+	})
+
+	bleveCache.DefineAnalyzer("fulltext", map[string]interface{}{
+		"type":          custom.Name,
+		"tokenizer":     unicode.Name,
+		"token_filters": []string{lowercase.Name, normalizerName, porter.Name},
+	})
 }
 
 // GetTokenizer returns tokenizer given unique name.
@@ -164,24 +194,7 @@ type TermTokenizer struct{}
 func (t TermTokenizer) Name() string       { return "term" }
 func (t TermTokenizer) Type() types.TypeID { return types.StringID }
 func (t TermTokenizer) Tokens(sv types.Val) ([]string, error) {
-	tokenizer := unicode.NewUnicodeTokenizer()
-	toLowerFilter := lowercase.NewLowerCaseFilter()
-	normalizeFilter, err := unicodenorm.NewUnicodeNormalizeFilter("nfkc")
-	if err != nil {
-		return nil, err
-	}
-
-	analyzer := analysis.Analyzer{
-		Tokenizer: tokenizer,
-		TokenFilters: []analysis.TokenFilter{
-			toLowerFilter,
-			normalizeFilter,
-		},
-	}
-
-	tokenStream := analyzer.Analyze([]byte(sv.Value.(string)))
-
-	return extractTerms(tokenStream, t.Identifier()), nil
+	return getBleveTokens(t.Name(), t.Identifier(), sv)
 }
 func (t TermTokenizer) Identifier() byte { return 0x1 }
 
@@ -203,28 +216,19 @@ type FullTextTokenizer struct{}
 func (t FullTextTokenizer) Name() string       { return "fulltext" }
 func (t FullTextTokenizer) Type() types.TypeID { return types.StringID }
 func (t FullTextTokenizer) Tokens(sv types.Val) ([]string, error) {
-	tokenizer := unicode.NewUnicodeTokenizer()
-	toLowerFilter := lowercase.NewLowerCaseFilter()
-	normalizeFilter, err := unicodenorm.NewUnicodeNormalizeFilter("nfkc")
+	return getBleveTokens(t.Name(), t.Identifier(), sv)
+}
+func (t FullTextTokenizer) Identifier() byte { return 0x8 }
+
+func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error) {
+	analyzer, err := bleveCache.AnalyzerNamed(name)
 	if err != nil {
 		return nil, err
 	}
-	porterFilter := porter.NewPorterStemmer()
-
-	analyzer := analysis.Analyzer{
-		Tokenizer: tokenizer,
-		TokenFilters: []analysis.TokenFilter{
-			toLowerFilter,
-			normalizeFilter,
-			porterFilter,
-		},
-	}
-
 	tokenStream := analyzer.Analyze([]byte(sv.Value.(string)))
 
-	return extractTerms(tokenStream, t.Identifier()), nil
+	return extractTerms(tokenStream, identifier), nil
 }
-func (t FullTextTokenizer) Identifier() byte { return 0x8 }
 
 func extractTerms(tokenStream analysis.TokenStream, prefix byte) []string {
 	terms := make([]string, len(tokenStream))

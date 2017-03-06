@@ -15,6 +15,12 @@
 			"revisionTime": "2017-02-24T21:36:31Z"
 		},
 		{
+			"checksumSHA1": "9fbWSIn+xbJ14D2nMF3byvSsXXk=",
+			"path": "github.com/blevesearch/bleve/analysis/analyzer/custom",
+			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
+			"revisionTime": "2017-02-24T21:36:31Z"
+		},
+		{
 			"checksumSHA1": "3VIPkl12t1ko4y6DkbPcz+MtQjY=",
 			"path": "github.com/blevesearch/bleve/analysis/token/lowercase",
 			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
