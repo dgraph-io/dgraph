@@ -711,12 +711,12 @@ func serveHTTP(l net.Listener) {
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
-		// TODO(Ashwin): Add idle timeout while switching to Go 1.8.
+		IdleTimeout:  2 * time.Minute,
 	}
 
 	err := srv.Serve(l)
 	log.Printf("Stopped taking more http(s) requests. Err: %s", err.Error())
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 630*time.Second)
 	defer cancel()
 	err = srv.Shutdown(ctx)
 	log.Printf("All http(s) requests finished.")
