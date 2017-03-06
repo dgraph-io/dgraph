@@ -238,19 +238,6 @@ func TestApplyFilterUint(t *testing.T) {
 	require.Equal(t, []uint64{1, 3, 5}, u.Uids)
 }
 
-// sort interface for []uint64
-type uint64Slice []uint64
-
-func (xs uint64Slice) Len() int {
-	return len(xs)
-}
-func (xs uint64Slice) Less(i, j int) bool {
-	return xs[i] < xs[j]
-}
-func (xs uint64Slice) Swap(i, j int) {
-	xs[i], xs[j] = xs[j], xs[i]
-}
-
 // Benchmarks for IntersectWith
 // random data : u and v having data within range [0, limit)
 // where limit = N * sizeof-list ; for different N
@@ -260,8 +247,8 @@ func runIntersectRandom(arrSz int, limit int64, b *testing.B) {
 		u1[i] = uint64(rand.Int63n(limit))
 		v1[i] = uint64(rand.Int63n(limit))
 	}
-	sort.Sort(uint64Slice(u1))
-	sort.Sort(uint64Slice(v1))
+	sort.Slice(u1, func(i, j int) bool { return u1[i] < u1[j] })
+	sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
 
 	u := newList(u1)
 	v := newList(v1)
@@ -316,8 +303,8 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			for i := 0; i < sz2; i++ {
 				v1[i] = uint64(rand.Int63n(limit))
 			}
-			sort.Sort(uint64Slice(u1))
-			sort.Sort(uint64Slice(v1))
+			sort.Slice(u1, func(i, j int) bool { return u1[i] < u1[j] })
+			sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
 
 			u := &task.List{u1}
 			v := &task.List{v1}

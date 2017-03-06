@@ -18,16 +18,10 @@ package facets
 
 import "sort"
 
-func (a Facets) Len() int { return len(a.Facets) }
-func (a Facets) Swap(i, j int) {
-	a.Facets[i], a.Facets[j] = a.Facets[j], a.Facets[i]
-}
-func (a Facets) Less(i, j int) bool {
-	return a.Facets[i].Key < a.Facets[j].Key
-}
-
 func SortFacets(fs []*Facet) {
-	sort.Sort(Facets{fs})
+	sort.Slice(fs, func(i, j int) bool {
+		return fs[i].Key < fs[j].Key
+	})
 }
 
 // CopyFacets makes a copy of facets of the posting which are requested in param.Keys.
