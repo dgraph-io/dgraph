@@ -126,6 +126,7 @@ type params struct {
 	GetUID       bool
 	Order        string
 	OrderDesc    bool
+	needUid      bool
 	isDebug      bool
 	Var          string
 	NeedsVar     []string
@@ -752,6 +753,7 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 
 func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
 	var sgl []*SubGraph
+	var err error
 
 	// doneVars will store the UID list of the corresponding variables.
 	doneVars := make(map[string]*task.List)
@@ -796,6 +798,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		return true
 	}
 
+	var shortestSg *SubGraph
 	for numQueriesDone < len(sgl) {
 		errChan := make(chan error, len(sgl))
 		var idxList []int
@@ -816,7 +819,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			numQueriesDone++
 			idxList = append(idxList, idx)
 			if sg.Params.Alias == "shortest" {
-				err := ShortestPath(ctx, sg)
+				shortestSg, err = ShortestPath(ctx, sg)
 				if err != nil {
 					return nil, err
 				}
@@ -869,6 +872,10 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	}
 	l.Processing += time.Since(execStart)
 
+	// If we had a shortestPath SG, append it to the result.
+	if shortestSg != nil {
+		sgl = append(sgl, shortestSg)
+	}
 	return sgl, nil
 }
 
