@@ -126,7 +126,6 @@ type params struct {
 	GetUID       bool
 	Order        string
 	OrderDesc    bool
-	needUid      bool
 	isDebug      bool
 	Var          string
 	NeedsVar     []string
