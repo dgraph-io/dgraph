@@ -33,7 +33,7 @@ func IntersectWith(u, v *task.List) {
 	ratio := float64(m) / float64(n+1)
 	if ratio <= 10 && n >= 10000 {
 		IntersectWithLin(u, v, wasSwitched)
-	} else if n <= 1000 || ratio >= 1000 {
+	} else if n <= 100 || ratio >= 1000 {
 		IntersectWithBin(u, v, wasSwitched)
 	} else {
 		IntersectWithExp(u, v, wasSwitched)
@@ -247,18 +247,23 @@ func MergeSorted(lists []*task.List) *task.List {
 
 	h := &uint64Heap{}
 	heap.Init(h)
+	maxSz := 0
 
 	for i, l := range lists {
-		if len(l.Uids) > 0 {
+		lenList := len(l.Uids)
+		if lenList > 0 {
 			heap.Push(h, elem{
 				val:     l.Uids[0],
 				listIdx: i,
 			})
+			if lenList > maxSz {
+				maxSz = lenList
+			}
 		}
 	}
 
-	// Our final output. Give it some capacity.
-	output := make([]uint64, 0, 100)
+	// Our final output. Give it an approximate capacity as copies are expensive.
+	output := make([]uint64, 0, maxSz)
 	// idx[i] is the element we are looking at for lists[i].
 	idx := make([]int, len(lists))
 	var last uint64   // Last element added to sorted / final output.
