@@ -20,31 +20,26 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 }
 
 func IntersectWith(u, v *task.List) {
-	var wasSwitched bool
 	n := len(u.Uids)
 	m := len(v.Uids)
 
 	if n > m {
-		wasSwitched = true
 		n, m = m, n
 	}
 
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n+1)
 	if ratio < 500 {
-		IntersectWithLin(u, v, wasSwitched)
+		IntersectWithLin(u, v)
 	} else {
-		IntersectWithBin(u, v, wasSwitched)
+		IntersectWithBin(u, v)
 	}
 }
 
 // IntersectWith intersects u with v. The update is made to u.
 // u, v should be sorted.
-func IntersectWithLin(u, v *task.List, sw bool) {
+func IntersectWithLin(u, v *task.List) {
 	out := u.Uids[:0]
-	if sw {
-		u, v = v, u
-	}
 	n := len(u.Uids)
 	m := len(v.Uids)
 	for i, k := 0, 0; i < n && k < m; {
@@ -62,20 +57,21 @@ func IntersectWithLin(u, v *task.List, sw bool) {
 			}
 		}
 	}
-	if sw {
-		u, v = v, u
-	}
 	u.Uids = out
 }
 
-func IntersectWithBin(u, v *task.List, sw bool) {
+func IntersectWithBin(u, v *task.List) {
 	out := u.Uids[:0]
-	if sw {
-		u, v = v, u
+	m := len(u.Uids)
+	n := len(v.Uids)
+	// We want to do binary search on bigger list.
+	smallList, bigList := u, v
+	if m > n {
+		smallList, bigList = bigList, smallList
 	}
 	// This is reduce the search space after every match.
-	searchList := v.Uids
-	for _, uid := range u.Uids {
+	searchList := bigList.Uids
+	for _, uid := range smallList.Uids {
 		idx := sort.Search(len(searchList), func(i int) bool {
 			return searchList[i] >= uid
 		})
@@ -85,9 +81,6 @@ func IntersectWithBin(u, v *task.List, sw bool) {
 			// as the list is sorted.
 			searchList = searchList[idx:]
 		}
-	}
-	if sw {
-		u, v = v, u
 	}
 	u.Uids = out
 }
