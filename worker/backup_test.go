@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sort"
 	"testing"
 	"time"
 
@@ -22,81 +21,36 @@ import (
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 func populateGraphBackup(t *testing.T) {
-	friendFacets := map[string]string{
-		"since": "2005-05-02T15:04:05", "close": "true", "age": "33"}
-	edge := &task.DirectedEdge{
-		ValueId: 5,
-		Label:   "author0",
-		Attr:    "friend",
+	rdfEdges := []string{
+		"<1> <friend> <5> <author0> .",
+		"<2> <friend> <5> <author0> .",
+		"<3> <friend> <5> .",
+		"<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,age=33) .",
+		"<1> <name> \"pho\\ton\" <author0> .",
+		"<2> <name> \"pho\\ton\"@en <author0> .",
 	}
-	edge.Entity = 1
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 1)))
-
-	edge.Entity = 2
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 2)))
-
-	edge.Entity = 3
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 3)))
-
-	//Add an edge with facet.
-	addEdgeToUID(t, "friend", 4, 5, friendFacets)
-
-	edge.Entity = 1
-	edge.ValueId = 0
-	edge.Value = []byte("pho\\ton")
-	edge.Attr = "name"
-	addEdge(t, edge, getOrCreate(x.DataKey("name", 1)))
-
-	edge.Entity = 2
-	edge.Lang = "en"
-	addEdge(t, edge, getOrCreate(x.DataKey("name", 2)))
-}
-
-func makeFacets(facetKVs map[string]string) (fs []*facets.Facet, err error) {
-	if len(facetKVs) == 0 {
-		return nil, nil
+	idMap := map[string]uint64{
+		"1": 1,
+		"2": 2,
+		"3": 3,
+		"4": 4,
+		"5": 5,
 	}
-	allKeys := make([]string, 0, len(facetKVs))
-	for k := range facetKVs {
-		allKeys = append(allKeys, k)
-	}
-	sort.Strings(allKeys)
 
-	for _, k := range allKeys {
-		v := facetKVs[k]
-		typ, err := facets.ValType(v)
-		if err != nil {
-			return nil, err
-		}
-		fs = append(fs, &facets.Facet{
-			k,
-			[]byte(v),
-			typ,
-		})
+	for _, edge := range rdfEdges {
+		nq, err := rdf.Parse(edge)
+		require.NoError(t, err)
+		rnq := rdf.NQuad{&nq}
+		e, err := rnq.ToEdgeUsing(idMap)
+		require.NoError(t, err)
+		addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
 	}
-	return fs, nil
-}
-
-func addEdgeToUID(t *testing.T, attr string, src uint64,
-	dst uint64, facetKVs map[string]string) {
-	fs, err := makeFacets(facetKVs)
-	require.NoError(t, err)
-	edge := &task.DirectedEdge{
-		ValueId: dst,
-		Label:   "testing",
-		Attr:    attr,
-		Entity:  src,
-		Op:      task.DirectedEdge_SET,
-		Facets:  fs,
-	}
-	addEdge(t, edge, getOrCreate(x.DataKey(attr, src)))
 }
 
 func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
@@ -167,16 +121,24 @@ func TestBackup(t *testing.T) {
 			if nq.ObjectValue != nil {
 				require.Equal(t, &graph.Value{&graph.Value_DefaultVal{"pho\\ton"}},
 					nq.ObjectValue)
+				// Test objecttype
+				if nq.Subject == "0x1" {
+					require.Equal(t, int32(0), nq.ObjectType)
+				} else if nq.Subject == "0x2" {
+					// string type because of lang @en
+					require.Equal(t, int32(10), nq.ObjectType)
+				}
 			}
+
 			// The only objectId we set was uid 5.
 			if nq.ObjectId != "" {
 				require.Equal(t, "0x5", nq.ObjectId)
 			}
-
+			// Test lang.
 			if nq.Subject == "0x2" && nq.Predicate == "name" {
 				require.Equal(t, "en", nq.Lang)
 			}
-
+			// Test facets.
 			if nq.Subject == "0x4" {
 				require.Equal(t, "age", nq.Facets[0].Key)
 				require.Equal(t, "close", nq.Facets[1].Key)
@@ -187,6 +149,12 @@ func TestBackup(t *testing.T) {
 				require.Equal(t, 1, int(nq.Facets[0].ValType))
 				require.Equal(t, 3, int(nq.Facets[1].ValType))
 				require.Equal(t, 4, int(nq.Facets[2].ValType))
+			}
+			// Test label
+			if nq.Subject != "0x3" {
+				require.Equal(t, "author0", nq.Label)
+			} else {
+				require.Equal(t, "", nq.Label)
 			}
 			count++
 		}

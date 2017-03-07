@@ -48,21 +48,27 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				buf.WriteString("^^<pwd:")
 				buf.WriteString(vID.Name())
 				buf.WriteByte('>')
+			} else if p.PostingType == types.Posting_VALUE_LANG {
+				buf.WriteByte('@')
+				buf.WriteString(string(p.Metadata))
 			} else if vID != types.BinaryID &&
 				vID != types.DefaultID {
 				buf.WriteString("^^<xs:")
 				buf.WriteString(vID.Name())
 				buf.WriteByte('>')
-			} else if p.PostingType == types.Posting_VALUE_LANG {
-				buf.WriteByte('@')
-				buf.WriteString(string(p.Metadata))
 			}
 		} else {
 			buf.WriteString("<0x")
 			buf.WriteString(strconv.FormatUint(p.Uid, 16))
 			buf.WriteByte('>')
 		}
-
+		// Label
+		if len(p.Label) > 0 {
+			buf.WriteString(" <")
+			buf.WriteString(p.Label)
+			buf.WriteByte('>')
+		}
+		// Facets.
 		facets := p.Facets
 		if len(facets) != 0 {
 			buf.WriteString(" (")
@@ -78,6 +84,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 
 			buf.WriteByte(')')
 		}
+		// End dot.
 		buf.WriteString(" .\n")
 	}
 }
