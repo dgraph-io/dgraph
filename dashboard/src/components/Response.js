@@ -82,7 +82,7 @@ class Response extends Component {
                 <div style={{ fontSize: "13px", flex: "0 auto" }}>
                     <Properties currentNode={this.state.currentNode} />
                     <div style={{ display: "flex" }}>
-                        <div style={{ flex: "0 0 60%" }}>
+                        <div style={{ flex: "0 0 50%" }}>
                             <Stats
                                 rendering={this.props.rendering}
                                 latency={this.props.latency}
@@ -94,7 +94,7 @@ class Response extends Component {
                                 {this.props.allEdges.length}
                             </div>
                         </div>
-                        <div style={{ flex: "0 0 40%" }}>
+                        <div style={{ flex: "0 0 50%" }}>
                             <Button
                                 className="Response-button"
                                 bsStyle="primary"

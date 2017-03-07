@@ -1,7 +1,9 @@
 // @flow
 
 import React, { Component } from "react";
-import { Popover, OverlayTrigger } from "react-bootstrap";
+import { Popover, OverlayTrigger, Button, Glyphicon } from "react-bootstrap";
+
+import "../assets/css/PreviousQuery.css";
 
 function prettifyQuery(q: string) {
   var parsedQuery;
@@ -88,7 +90,7 @@ class PreviousQuery extends Component {
   render() {
     const popover = (
       <Popover id={this.props.unique}>
-        <pre style={{ fontSize: "10px", whiteSpace: "pre-wrap" }}>
+        <pre className="Previous-query-popover-pre">
           {this.props.text}
         </pre>
       </Popover>
@@ -96,11 +98,11 @@ class PreviousQuery extends Component {
 
     const timeDiff = since(this.props.lastRun);
     return (
-      <tr className="query" style={{ padding: "5px" }}>
-        <td style={{ padding: "0px 5px 0px 10px", width: "20%" }}>
+      <tr className="Previous-query">
+        <td className="Previous-query-since">
           {timeDiff}
         </td>
-        <td style={{ padding: "0px 10px 0px 5px" }}>
+        <td className="Previous-query-text">
           <OverlayTrigger
             delayShow={1500}
             delayHide={0}
@@ -108,18 +110,22 @@ class PreviousQuery extends Component {
             placement="top"
           >
             <pre
-              style={{
-                whiteSpace: "pre-wrap",
-                backgroundColor: "#f0ece9",
-                margin: "5px 0px",
-                wordBreak: "break-word",
-              }}
+              className="Previous-query-pre"
               onClick={this.props.update}
               data-query={this.props.text}
             >
               {getQueryStructure(prettifyQuery(this.props.text))}
             </pre>
           </OverlayTrigger>
+        </td>
+        <td>
+          <Button
+            className="Previous-query-del"
+            bsSize="xsmall"
+            onClick={() => this.props.delete(this.props.idx)}
+          >
+            <Glyphicon glyph="remove" />
+          </Button>
         </td>
       </tr>
     );

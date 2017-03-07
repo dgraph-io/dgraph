@@ -27,6 +27,9 @@ export function timeout(ms, promise) {
 export function aggregationPrefix(properties) {
   let aggTerms = ["count", "max(", "min(", "sum("];
   for (let k in properties) {
+    if (!properties.hasOwnProperty(k)) {
+      continue;
+    }
     for (let term of aggTerms) {
       if (k.startsWith(term)) {
         if (term === "count") {
@@ -41,6 +44,9 @@ export function aggregationPrefix(properties) {
 
 function getNameKey(properties) {
   for (let i in properties) {
+    if (!properties.hasOwnProperty(i)) {
+      continue;
+    }
     let toLower = i.toLowerCase();
     if (toLower === "name" || toLower === "name.en") {
       return i;
