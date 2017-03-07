@@ -926,10 +926,8 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	x.AssertTrue(t != nil)
 	if t.Func != nil && len(t.Func.Name) > 0 {
 		// Leaf node.
-		_, err := buf.WriteRune('(')
-		x.Check(err)
-		_, err = buf.WriteString(t.Func.Name)
-		x.Check(err)
+		buf.WriteRune('(')
+		buf.WriteString(t.Func.Name)
 
 		if len(t.Func.Attr) > 0 {
 			args := make([]string, len(t.Func.Args)+1)
@@ -937,21 +935,16 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 			copy(args[1:], t.Func.Args)
 
 			for _, arg := range args {
-				_, err = buf.WriteString(" \"")
-				x.Check(err)
-				_, err = buf.WriteString(arg)
-				x.Check(err)
-				_, err := buf.WriteRune('"')
-				x.Check(err)
+				buf.WriteString(" \"")
+				buf.WriteString(arg)
+				buf.WriteRune('"')
 			}
 		}
-		_, err = buf.WriteRune(')')
-		x.Check(err)
+		buf.WriteRune(')')
 		return
 	}
 	// Non-leaf node.
-	_, err := buf.WriteRune('(')
-	x.Check(err)
+	buf.WriteRune('(')
 	switch t.Op {
 	case "and":
 		buf.WriteString("AND")
@@ -960,17 +953,14 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	case "not":
 		buf.WriteString("NOT")
 	default:
-		err = x.Errorf("Unknown operator: %q", t.Op)
+		x.Errorf("Unknown operator: %q", t.Op)
 	}
-	x.Check(err)
 
 	for _, c := range t.Child {
-		_, err = buf.WriteRune(' ')
-		x.Check(err)
+		buf.WriteRune(' ')
 		c.stringHelper(buf)
 	}
-	_, err = buf.WriteRune(')')
-	x.Check(err)
+	buf.WriteRune(')')
 }
 
 type filterTreeStack struct{ a []*FilterTree }
@@ -1021,7 +1011,11 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
+<<<<<<< HEAD
 	var expectArg bool
+=======
+	var seenFuncArg bool
+>>>>>>> 9ed76c0... Cleanup parse filter. Allow parsing nested funcion at root
 L:
 	for it.Next() {
 		item := it.Item()
@@ -1036,8 +1030,25 @@ L:
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					break L
+<<<<<<< HEAD
 				} else if itemInFunc.Typ == itemComma {
 					expectArg = true
+=======
+				} else if itemInFunc.Typ == itemLeftRound {
+					// Function inside a function.
+					if seenFuncArg {
+						return nil, x.Errorf("Multiple functions as arguments not allowed")
+					}
+					it.Prev()
+					it.Prev()
+					f, err := parseFunction(it)
+					if err != nil {
+						return nil, err
+					}
+					seenFuncArg = true
+					g.Attr = f.Attr
+					g.Args = append(g.Args, f.Name)
+>>>>>>> 9ed76c0... Cleanup parse filter. Allow parsing nested funcion at root
 					continue
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
@@ -1052,7 +1063,13 @@ L:
 				} else {
 					g.Args = append(g.Args, val)
 				}
+<<<<<<< HEAD
 				expectArg = false
+=======
+				if g.Name == "id" {
+					g.NeedsVar = append(g.NeedsVar, val)
+				}
+>>>>>>> 9ed76c0... Cleanup parse filter. Allow parsing nested funcion at root
 			}
 		} else {
 			return nil, x.Errorf("Expected a function but got %q", item.Val)
@@ -1146,56 +1163,64 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			}
 			opStack.push(&FilterTree{Op: op}) // Push current operator.
 		} else if item.Typ == itemName { // Value.
-			f := &Function{}
+			it.Prev()
+			f, err := parseFunction(it)
+			if err != nil {
+				return nil, err
+			}
 			leaf := &FilterTree{Func: f}
-			f.Name = lval
-			it.Next()
-			itemInFunc := it.Item()
-			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
-			}
-			var terminated, seenFuncAsArgument bool
-			for it.Next() {
-				itemInFunc := it.Item()
-				if itemInFunc.Typ == itemRightRound {
-					terminated = true
-					break
-				} else if itemInFunc.Typ == itemLeftRound {
-					if seenFuncAsArgument {
-						return nil, x.Errorf("Expected only one function as argument")
+			/*
+					f := &Function{}
+					leaf := &FilterTree{Func: f}
+					f.Name = lval
+					it.Next()
+					itemInFunc := it.Item()
+					if itemInFunc.Typ != itemLeftRound {
+						return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
 					}
-					seenFuncAsArgument = true
-					// embed func, like gt(count(films), 0)
-					// => f: {Name: gt, Attr:films, Args:[count, 0]}
-					it.Prev()
-					it.Prev()
-					fn, err := parseFunction(it)
-					if err != nil {
-						return nil, err
+					var terminated, seenFuncAsArgument bool
+					for it.Next() {
+						itemInFunc := it.Item()
+						if itemInFunc.Typ == itemRightRound {
+							terminated = true
+							break
+						} else if itemInFunc.Typ == itemLeftRound {
+							if seenFuncAsArgument {
+								return nil, x.Errorf("Expected only one function as argument")
+							}
+							seenFuncAsArgument = true
+							// embed func, like gt(count(films), 0)
+							// => f: {Name: gt, Attr:films, Args:[count, 0]}
+							it.Prev()
+							it.Prev()
+							fn, err := parseFunction(it)
+							if err != nil {
+								return nil, err
+							}
+							f.Attr = fn.Attr
+							f.Args = append(f.Args, fn.Name)
+							continue
+						} else if itemInFunc.Typ != itemName {
+							return nil, x.Errorf("Expected arg after func [%s], but got item %v",
+								leaf.Func.Name, itemInFunc)
+						}
+						val := strings.Trim(itemInFunc.Val, "\" \t")
+						if val == "" {
+							return nil, x.Errorf("Empty argument received")
+						}
+						if len(f.Attr) == 0 {
+							f.Attr = val
+						} else {
+							f.Args = append(f.Args, val)
+						}
+						if f.Name == "id" {
+							f.NeedsVar = append(f.NeedsVar, val)
+						}
 					}
-					f.Attr = fn.Attr
-					f.Args = append(f.Args, fn.Name)
-					continue
-				} else if itemInFunc.Typ != itemName {
-					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
-						leaf.Func.Name, itemInFunc)
+				if !terminated {
+					return nil, x.Errorf("Expected ) to terminate func definition")
 				}
-				val := strings.Trim(itemInFunc.Val, "\" \t")
-				if val == "" {
-					return nil, x.Errorf("Empty argument received")
-				}
-				if len(f.Attr) == 0 {
-					f.Attr = val
-				} else {
-					f.Args = append(f.Args, val)
-				}
-				if f.Name == "id" {
-					f.NeedsVar = append(f.NeedsVar, val)
-				}
-			}
-			if !terminated {
-				return nil, x.Errorf("Expected ) to terminate func definition")
-			}
+			*/
 			valueStack.push(leaf)
 		} else if item.Typ == itemLeftRound { // Just push to op stack.
 			opStack.push(&FilterTree{Op: "("})
