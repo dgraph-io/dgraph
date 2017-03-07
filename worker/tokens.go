@@ -22,7 +22,12 @@ func getTokens(funcArgs []string) ([]string, error) {
 func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error) {
 	it := pstore.NewIterator()
 	defer it.Close()
-	it.Seek(x.IndexKey(attr, ineqValueToken))
+	isGeqOrGt := f == "geq" || f == "gt"
+	if isGeqOrGt {
+		it.Seek(x.IndexKey(attr, ineqValueToken))
+	} else {
+		it.SeekForPrev(x.IndexKey(attr, ineqValueToken))
+	}
 
 	isPresent := it.Valid() && it.Value() != nil && it.Value().Size() > 0
 	idxKey := x.Parse(it.Key().Data())
@@ -35,11 +40,6 @@ func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error
 
 	var out []string
 	indexPrefix := x.ParsedKey{Attr: attr}.IndexPrefix()
-	isGeqOrGt := f == "geq" || f == "gt"
-
-	if !isGeqOrGt && idxKey.Term != ineqValueToken {
-		it.Prev()
-	}
 	for it.Valid() && it.ValidForPrefix(indexPrefix) {
 		k := x.Parse(it.Key().Data())
 		x.AssertTrue(k != nil)
