@@ -1,0 +1,37 @@
+.Previous-query {
+    padding: 5px;
+}
+
+.Previous-query-pre {
+    white-space: pre-wrap;
+    background-color: #f0ece9;
+    margin: 5px 0px;
+    word-break: break-word
+}
+
+.Previous-query pre:hover {
+    border: 1px solid gray;
+    cursor: pointer;
+}
+
+.Previous-query button {
+    visibility: hidden;
+}
+
+.Previous-query:hover button {
+    visibility: visible;
+}
+
+.Previous-query-popover-pre {
+    font-size: 10px;
+    white-space: pre-wrap;
+}
+
+.Previous-query-since {
+    padding: 0px 5px 0px 10px;
+    width: 20%;
+}
+
+.Previous-query-text {
+    padding: 0px 10px 0px 5px;
+}

@@ -7,8 +7,7 @@ import randomColor from "randomcolor";
 import uuid from "uuid";
 
 import NavBar from "./Navbar";
-import Stats from "./Stats";
-import PreviousQuery from "./PreviousQuery";
+import PreviousQueryList from "./PreviousQueryList";
 import Editor from "./Editor";
 import Response from "./Response";
 import { getNodeLabel, isShortestPath, aggregationPrefix } from "./Helpers";
@@ -430,6 +429,23 @@ class App extends React.Component {
     window.scrollTo(0, 0);
   };
 
+  deleteQuery = idx => {
+    if (idx < 0) {
+      return;
+    }
+
+    // TODO - Abstract out, get, put delete so that state is updated both for react
+    // and localStorage. Maybe Redux can help with this?
+    let q = this.state.queries;
+    q.splice(idx, 1);
+    this.setState({
+      queries: q,
+    });
+    let queries = JSON.parse(localStorage.getItem("queries"));
+    queries.splice(idx, 1);
+    localStorage.setItem("queries", JSON.stringify(queries));
+  };
+
   // Handler which is used to update lastQuery by Editor component..
   queryChange = query => {
     this.setState({ lastQuery: query });
@@ -586,27 +602,12 @@ class App extends React.Component {
                   renderResText={this.renderResText}
                 />
 
-                <div className="App-prev-queries">
-                  <span><b>Previous Queries</b></span>
-                  <table className="App-prev-queries-table">
-                    <tbody className="App-prev-queries-tbody">
-                      {this.state.queries.map(
-                        function(query, i) {
-                          return (
-                            <PreviousQuery
-                              text={query.text}
-                              update={this.updateQuery}
-                              key={i}
-                              lastRun={query.lastRun}
-                              unique={i}
-                            />
-                          );
-                        },
-                        this,
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                <PreviousQueryList
+                  queries={this.state.queries}
+                  update={this.updateQuery}
+                  delete={this.deleteQuery}
+                  xs="hidden-xs"
+                />
               </div>
               <div className="col-sm-7">
                 <label style={{ marginLeft: "5px" }}> Response </label>
@@ -636,13 +637,16 @@ class App extends React.Component {
                   treeView={this.state.treeView}
                   renderGraph={this.renderGraph}
                 />
+                <PreviousQueryList
+                  queries={this.state.queries}
+                  update={this.updateQuery}
+                  delete={this.deleteQuery}
+                  xs="visible-xs-block"
+                />
               </div>
             </div>
           </div>
-          <div className="row">
-            <div className="col-sm-12" />
-          </div>
-        </div>{" "}
+        </div>
       </div>
     );
   };

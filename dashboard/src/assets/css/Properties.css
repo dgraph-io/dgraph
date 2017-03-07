@@ -1,6 +1,19 @@
 .Properties {
     width: 100%;
     margin-top: 5px;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: space-between;
+}
+
+.Properties:after {
+    content: "";
+    flex: 1 0 250px;
+}
+
+.Properties-key-val {
+    flex: 1 0 250px;
+    padding-right: 5px;
 }
 
 .Properties-key {
@@ -18,6 +31,7 @@
     width: 100%;
     display: block;
     padding: 0px 5px 0px 0px;
+    margin-top: 5px;
     min-height: 20px;
 }
 
@@ -28,7 +42,22 @@
 }
 
 .Properties td {
-    width: 33%;
     text-align: left;
     padding: 2px 5px 2px 0px;
+}
+
+.Properties-facets {
+    display: inline-block;
+    margin-top: 5px;
+}
+
+@media(max-width: 850px) {
+    .Properties-key-val {
+        flex: 1 0 200px;
+        max-width: 200px;
+    }
+    .Properties:after {
+        flex: 1 0 200px;
+        max-width: 200px;
+    }
 }
