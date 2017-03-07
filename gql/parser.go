@@ -1011,11 +1011,8 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
-<<<<<<< HEAD
 	var expectArg bool
-=======
 	var seenFuncArg bool
->>>>>>> 9ed76c0... Cleanup parse filter. Allow parsing nested funcion at root
 L:
 	for it.Next() {
 		item := it.Item()
@@ -1030,10 +1027,8 @@ L:
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					break L
-<<<<<<< HEAD
 				} else if itemInFunc.Typ == itemComma {
 					expectArg = true
-=======
 				} else if itemInFunc.Typ == itemLeftRound {
 					// Function inside a function.
 					if seenFuncArg {
@@ -1048,7 +1043,6 @@ L:
 					seenFuncArg = true
 					g.Attr = f.Attr
 					g.Args = append(g.Args, f.Name)
->>>>>>> 9ed76c0... Cleanup parse filter. Allow parsing nested funcion at root
 					continue
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
@@ -1063,13 +1057,10 @@ L:
 				} else {
 					g.Args = append(g.Args, val)
 				}
-<<<<<<< HEAD
-				expectArg = false
-=======
 				if g.Name == "id" {
 					g.NeedsVar = append(g.NeedsVar, val)
 				}
->>>>>>> 9ed76c0... Cleanup parse filter. Allow parsing nested funcion at root
+				expectArg = false
 			}
 		} else {
 			return nil, x.Errorf("Expected a function but got %q", item.Val)
