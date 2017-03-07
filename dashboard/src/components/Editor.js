@@ -13,6 +13,10 @@ function showTreeView(query) {
 
 function isNotEmpty(response) {
   let keys = Object.keys(response);
+  if (keys.length === 0) {
+    return false;
+  }
+
   for (let i = 0; i < keys.length; i++) {
     if (keys[i] !== "server_latency" && keys[i] !== "uids") {
       return keys[i].length > 0;
