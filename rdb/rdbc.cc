@@ -283,8 +283,8 @@ void rdb_iter_seek(rdb_iterator_t* iter, const char* k, size_t klen) {
   iter->rep->Seek(Slice(k, klen));
 }
 
-void rdb_iter_seek_to_prev(rdb_iterator_t* iter, const char* k, size_t klen) {
-  iter->rep->SeekToPrev(Slice(k, klen));
+void rdb_iter_seek_for_prev(rdb_iterator_t* iter, const char* k, size_t klen) {
+  iter->rep->SeekForPrev(Slice(k, klen));
 }
 
 void rdb_iter_next(rdb_iterator_t* iter) {

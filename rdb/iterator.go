@@ -93,10 +93,10 @@ func (iter *Iterator) Seek(key []byte) {
 	C.rdb_iter_seek(iter.c, cKey, C.size_t(len(key)))
 }
 
-// SeekToPrev moves the iterator to the position less than or equal to the key.
-func (iter *Iterator) SeekToPrev(key []byte) {
+// SeekForPrev moves the iterator to the position less than or equal to the key.
+func (iter *Iterator) SeekForPrev(key []byte) {
 	cKey := byteToChar(key)
-	C.rdb_iter_seek_to_prev(iter.c, cKey, C.size_t(len(key)))
+	C.rdb_iter_seek_for_prev(iter.c, cKey, C.size_t(len(key)))
 }
 
 // Err returns nil if no errors happened during iteration, or the actual

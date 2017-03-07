@@ -103,7 +103,7 @@ unsigned char rdb_iter_valid(const rdb_iterator_t* iter);
 void rdb_iter_seek_to_first(rdb_iterator_t* iter);
 void rdb_iter_seek_to_last(rdb_iterator_t* iter);
 void rdb_iter_seek(rdb_iterator_t* iter, const char* k, size_t klen);
-void rdb_iter_seek_to_prev(rdb_iterator_t* iter, const char* k, size_t klen);
+void rdb_iter_seek_for_prev(rdb_iterator_t* iter, const char* k, size_t klen);
 void rdb_iter_next(rdb_iterator_t* iter);
 void rdb_iter_prev(rdb_iterator_t* iter);
 const char* rdb_iter_key(const rdb_iterator_t* iter, size_t* klen);
