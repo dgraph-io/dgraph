@@ -226,7 +226,8 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 0x1001, "Барсук", "ru", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
 
-	time.Sleep(5 * time.Millisecond)
+	posting.CommitLists(10)
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestGetUID(t *testing.T) {
@@ -2993,6 +2994,32 @@ func TestGeneratorMultiRootFilter3(t *testing.T) {
   `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestNestedFuncRoot(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func: gt(count(friend), 2)) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, js)
+}
+
+func TestNestedFuncRoot2(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func: geq(count(friend), 1)) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Andrea"}]}`, js)
 }
 
 func TestGeneratorRootFilterOnCountGt(t *testing.T) {

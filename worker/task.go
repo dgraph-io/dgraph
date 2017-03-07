@@ -140,7 +140,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var tokens []string
 	var geoQuery *types.GeoQueryData
 	var err error
-	var intersectDest bool
+	var intersectDest, isCompareAtRoot bool
 	var ineqValue types.Val
 	var ineqValueToken string
 	var n int
@@ -204,8 +204,14 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 				q.SrcFunc[0], q.SrcFunc[1])
 		}
-		n = len(q.Uids.Uids)
-
+		// TODO(Ashwin): If root, fetch Uids from the store. Else, we've been supplied with UIDs.
+		if q.Uids == nil {
+			// Fetch Uids from Store and populate in q.Uids.
+			n = 0
+			isCompareAtRoot = true
+		} else {
+			n = len(q.Uids.Uids)
+		}
 	case GeoFn:
 		// For geo functions, we get extra information used for filtering.
 		tokens, geoQuery, err = types.GetGeoTokens(q.SrcFunc)
@@ -368,6 +374,27 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			uidList.Uids = append(uidList.Uids, fres.uid)
 		}
 		out.UidMatrix = append(out.UidMatrix, uidList)
+	}
+
+	if fnType == CompareScalarFn && isCompareAtRoot {
+		it := pstore.NewIterator()
+		defer it.Close()
+		pk := x.Parse(x.DataKey(q.Attr, 0))
+		dataPrefix := pk.DataPrefix()
+
+		for it.Seek(dataPrefix); it.ValidForPrefix(dataPrefix); it.Next() {
+			key := it.Key().Data()
+			pl, decr := posting.GetOrCreate(key, gid)
+			count := int64(pl.Length(0))
+			decr()
+			if EvalCompare(f, count, threshold) {
+				pk := x.Parse(key)
+				x.AssertTruef(pk.IsData() && pk.Attr == q.Attr,
+					"Invalid key obtained for comparison")
+				tlist := &task.List{[]uint64{pk.Uid}}
+				out.UidMatrix = append(out.UidMatrix, tlist)
+			}
+		}
 	}
 
 	if fnType == RegexFn {
