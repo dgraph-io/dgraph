@@ -6,7 +6,3 @@ scalar (
 	loc: geo @index
 )
 
-type person {
-	name: string
-	age: int 
-} 

@@ -1115,6 +1115,26 @@ func TestParseFilter_root(t *testing.T) {
 	require.Equal(t, `(namefilter "a")`, res.Query[0].Children[0].Children[0].Filter.debugString())
 }
 
+func TestParseFuncNested(t *testing.T) {
+	schema.ParseBytes([]byte("scalar friend: string @index"))
+	query := `
+	query {
+		me(func: gt(count(friend), 10)) {
+			friends @filter() {
+				name
+			}
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Func)
+	require.Equal(t, []string{"friends", "hometown"}, childAttrs(res.Query[0]))
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+}
+
 func TestParseFilter_root2(t *testing.T) {
 	schema.ParseBytes([]byte("scalar abc: string @index"))
 	query := `
