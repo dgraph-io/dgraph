@@ -601,6 +601,17 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	err = treeCopy(ctx, gq, sg)
 	return sg, err
 }
+func isDebug(ctx context.Context) bool {
+	var debug bool
+	// gRPC client passes information about debug as metadata.
+	if md, ok := metadata.FromContext(ctx); ok {
+		// md is a map[string][]string
+		debug = len(md["debug"]) > 0 && md["debug"][0] == "true"
+	}
+	// HTTP passes information about debug as query parameter which is attached to context.
+	return debug || ctx.Value("debug") == "true"
+
+}
 
 // newGraph returns the SubGraph and its task query.
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
@@ -612,19 +623,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		return nil, err
 	}
 
-	var debug bool
-	// gRPC client passes information about debug as metadata.
-	if md, ok := metadata.FromContext(ctx); ok {
-		// md is a map[string][]string
-		debug = len(md["debug"]) > 0 && md["debug"][0] == "true"
-	}
-	// HTTP passes information about debug as query parameter which is attached to context.
-	debug = debug || ctx.Value("debug") == "true"
-
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		isDebug:    debug,
+		isDebug:    isDebug(ctx),
 		Alias:      gq.Alias,
 		Langs:      gq.Langs,
 		Var:        gq.Var,
@@ -752,6 +754,7 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 
 func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
 	var sgl []*SubGraph
+	var err error
 
 	// doneVars will store the UID list of the corresponding variables.
 	doneVars := make(map[string]*task.List)
@@ -796,6 +799,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		return true
 	}
 
+	var shortestSg *SubGraph
 	for numQueriesDone < len(sgl) {
 		errChan := make(chan error, len(sgl))
 		var idxList []int
@@ -816,7 +820,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			numQueriesDone++
 			idxList = append(idxList, idx)
 			if sg.Params.Alias == "shortest" {
-				err := ShortestPath(ctx, sg)
+				shortestSg, err = ShortestPath(ctx, sg)
 				if err != nil {
 					return nil, err
 				}
@@ -869,6 +873,10 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	}
 	l.Processing += time.Since(execStart)
 
+	// If we had a shortestPath SG, append it to the result.
+	if shortestSg != nil {
+		sgl = append(sgl, shortestSg)
+	}
 	return sgl, nil
 }
 
