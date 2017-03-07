@@ -601,6 +601,17 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	err = treeCopy(ctx, gq, sg)
 	return sg, err
 }
+func isDebug(ctx context.Context) bool {
+	var debug bool
+	// gRPC client passes information about debug as metadata.
+	if md, ok := metadata.FromContext(ctx); ok {
+		// md is a map[string][]string
+		debug = len(md["debug"]) > 0 && md["debug"][0] == "true"
+	}
+	// HTTP passes information about debug as query parameter which is attached to context.
+	return debug || ctx.Value("debug") == "true"
+
+}
 
 // newGraph returns the SubGraph and its task query.
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
@@ -612,19 +623,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		return nil, err
 	}
 
-	var debug bool
-	// gRPC client passes information about debug as metadata.
-	if md, ok := metadata.FromContext(ctx); ok {
-		// md is a map[string][]string
-		debug = len(md["debug"]) > 0 && md["debug"][0] == "true"
-	}
-	// HTTP passes information about debug as query parameter which is attached to context.
-	debug = debug || ctx.Value("debug") == "true"
-
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		isDebug:    debug,
+		isDebug:    isDebug(ctx),
 		Alias:      gq.Alias,
 		Langs:      gq.Langs,
 		Var:        gq.Var,
