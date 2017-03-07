@@ -1,2 +1,2 @@
-scalar test test: int
+test test: int
 

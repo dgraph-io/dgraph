@@ -1,6 +1,6 @@
- scalar age:int
+age:int
 
-scalar (
-  name: string
-  address: string
-}
+name: string
+address: string
+
+)

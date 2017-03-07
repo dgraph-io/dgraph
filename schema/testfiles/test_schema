@@ -1,8 +1,7 @@
-scalar age:int
+age:int
 
-scalar (
-  name: string
-  address: string
-  <http://scalar.com/helloworld/> : string
-  )
+
+name: string
+ address: string
+<http://scalar.com/helloworld/> : string
 
