@@ -63,21 +63,26 @@ type mapItem struct {
 	facet *facets.Facets
 }
 
-func (sg *SubGraph) getCost(matrix, list int) (float64, *facets.Facets, error) {
-	cost := 1.0
+func (sg *SubGraph) getCost(matrix, list int) (cost float64,
+	fcs *facets.Facets, rerr error) {
+
+	cost = 1.0
 	if sg.Params.Facet == nil {
-		return cost, nil, nil
+		return cost, fcs, rerr
 	}
 	fcsList := sg.facetsMatrix[matrix].FacetsList
 	if len(fcsList) <= list {
-		return cost, nil, ErrFacet
+		rerr = ErrFacet
+		return cost, fcs, rerr
 	}
-	fcs := fcsList[list]
+	fcs = fcsList[list]
 	if len(fcs.Facets) == 0 {
-		return cost, nil, ErrFacet
+		rerr = ErrFacet
+		return cost, fcs, rerr
 	}
 	if len(fcs.Facets) > 1 {
-		return cost, nil, x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
+		rerr = x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
+		return cost, fcs, rerr
 	}
 	tv := types.ValFor(fcs.Facets[0])
 	if tv.Tid == types.Int32ID {
@@ -85,9 +90,9 @@ func (sg *SubGraph) getCost(matrix, list int) (float64, *facets.Facets, error) {
 	} else if tv.Tid == types.FloatID {
 		cost = float64(tv.Value.(float64))
 	} else {
-		return cost, nil, ErrFacet
+		rerr = ErrFacet
 	}
-	return cost, fcs, nil
+	return cost, fcs, rerr
 }
 
 func (start *SubGraph) expandOut(ctx context.Context,
@@ -353,23 +358,23 @@ func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 	}
 	sg.DestUIDs.Uids = result
 
-	shortestSG := createPathSubgraph(ctx, dist, result)
-	return shortestSG, nil
+	shortestSg := createPathSubgraph(ctx, dist, result)
+	return shortestSg, nil
 }
 
 func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []uint64) *SubGraph {
-	shortestSG := new(SubGraph)
-	shortestSG.Params = params{
+	shortestSg := new(SubGraph)
+	shortestSg.Params = params{
 		Alias:   "_path_",
 		GetUID:  true,
 		isDebug: isDebug(ctx),
 	}
 	curUid := result[0]
-	shortestSG.SrcUIDs = &task.List{[]uint64{curUid}}
-	shortestSG.DestUIDs = &task.List{[]uint64{curUid}}
-	shortestSG.uidMatrix = []*task.List{&task.List{[]uint64{curUid}}}
+	shortestSg.SrcUIDs = &task.List{[]uint64{curUid}}
+	shortestSg.DestUIDs = &task.List{[]uint64{curUid}}
+	shortestSg.uidMatrix = []*task.List{&task.List{[]uint64{curUid}}}
 
-	curNode := shortestSG
+	curNode := shortestSg
 	for i := 0; i < len(result)-1; i++ {
 		curUid := result[i]
 		childUid := result[i+1]
@@ -401,5 +406,5 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 	node.uidMatrix = []*task.List{&task.List{[]uint64{uid}}}
 	curNode.Children = append(curNode.Children, node)
 
-	return shortestSG
+	return shortestSg
 }
