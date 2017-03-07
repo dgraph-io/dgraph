@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
+	"github.com/dgraph-io/dgraph/types/facets/utils"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -140,7 +141,7 @@ func samePosting(oldp *types.Posting, newp *types.Posting) bool {
 	if newp.Op == Del {
 		return true
 	}
-	return facets.SameFacets(oldp.Facets, newp.Facets)
+	return utils.SameFacets(oldp.Facets, newp.Facets)
 }
 
 func newPosting(t *task.DirectedEdge) *types.Posting {
@@ -706,7 +707,7 @@ func (l *List) Facets(param *facets.Param) (fs []*facets.Facet, ferr error) {
 	if err != nil {
 		return nil, err
 	}
-	return facets.CopyFacets(p.Facets, param), nil
+	return utils.CopyFacets(p.Facets, param), nil
 }
 
 // valuePosting gives the posting representing value.

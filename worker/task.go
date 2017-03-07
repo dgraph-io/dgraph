@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
+	"github.com/dgraph-io/dgraph/types/facets/utils"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -136,111 +137,9 @@ func parseFuncType(arr []string) (FuncType, string) {
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
-
-	var tokens []string
-	var geoQuery *types.GeoQueryData
-	var err error
-	var intersectDest bool
-	var ineqValue types.Val
-	var ineqValueToken string
-	var n int
-	var threshold int64
-	var regex *regexp.Regexp
-
-	fnType, f := parseFuncType(q.SrcFunc)
-	switch fnType {
-	case AggregatorFn:
-		// confirm agrregator could apply on the attributes
-		typ, err := schema.State().TypeOf(attr)
-		if err != nil {
-			return nil, x.Errorf("Attribute %q is not scalar-type", attr)
-		}
-		if !CouldApplyAggregatorOn(f, typ) {
-			return nil, x.Errorf("Aggregator %q could not apply on %v",
-				f, attr)
-		}
-		n = len(q.Uids.Uids)
-
-	case CompareAttrFn:
-		if len(q.SrcFunc) != 2 {
-			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
-		}
-		ineqValue, err = convertValue(attr, q.SrcFunc[1])
-		if err != nil {
-			return nil, err
-		}
-		// Tokenizing RHS value of inequality.
-		// TODO(kg): more comments about why we convert to types.BinaryID, and
-		// then convert it back to attr type in IndexTokens.
-		// the point is IndexTokens need BinaryID type to be passed in
-		v := types.ValueForType(types.BinaryID)
-		err = types.Marshal(ineqValue, &v)
-		if err != nil {
-			return nil, err
-		}
-		ineqTokens, err := posting.IndexTokens(attr, types.Val{ineqValue.Tid, v.Value.([]byte)})
-		if err != nil {
-			return nil, err
-		}
-		if len(ineqTokens) != 1 {
-			return nil, x.Errorf("Expected only 1 token but got: %v", ineqTokens)
-		}
-		ineqValueToken = ineqTokens[0]
-		// Get tokens geq / leq ineqValueToken.
-		tokens, err = getInequalityTokens(attr, ineqValueToken, f)
-		if err != nil {
-			return nil, err
-		}
-		n = len(tokens)
-
-	case CompareScalarFn:
-		if len(q.SrcFunc) != 3 {
-			return nil, x.Errorf("Function requires 3 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
-		}
-		threshold, err = strconv.ParseInt(q.SrcFunc[2], 10, 64)
-		if err != nil {
-			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
-				q.SrcFunc[0], q.SrcFunc[1])
-		}
-		n = len(q.Uids.Uids)
-
-	case GeoFn:
-		// For geo functions, we get extra information used for filtering.
-		tokens, geoQuery, err = types.GetGeoTokens(q.SrcFunc)
-		tok.EncodeGeoTokens(tokens)
-		if err != nil {
-			return nil, err
-		}
-		n = len(tokens)
-
-	case PasswordFn:
-		// confirm agrregator could apply on the attributes
-		if len(q.SrcFunc) != 2 {
-			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
-		}
-		n = len(q.Uids.Uids)
-
-	case StandardFn:
-		// srcfunc 0th val is func name and and [1:] are args.
-		// we tokenize the arguments of the query.
-		tokens, err = getTokens(q.SrcFunc[1:])
-		if err != nil {
-			return nil, err
-		}
-		intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
-		n = len(tokens)
-
-	case RegexFn:
-		regex, err = regexp.Compile(q.SrcFunc[1])
-		if err != nil {
-			return nil, err
-		}
-
-	case NotFn:
-		n = len(q.Uids.Uids)
+	srcFn, err := parseSrcFn(q)
+	if err != nil {
+		return nil, err
 	}
 
 	var out task.Result
@@ -248,16 +147,21 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		AfterUID: uint64(q.AfterUid),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
-	if fnType != NotFn && q.Uids != nil && len(q.Uids.Uids) > 0 {
+	if srcFn.fnType != NotFn && q.Uids != nil && len(q.Uids.Uids) > 0 {
 		opts.Intersect = q.Uids
 	}
+	facetsTree, err := preprocessFilter(q.FacetsFilter)
+	if err != nil {
+		return nil, err
+	}
 
-	for i := 0; i < n; i++ {
+	for i := 0; i < srcFn.n; i++ {
 		var key []byte
-		if fnType == AggregatorFn || fnType == CompareScalarFn || fnType == PasswordFn {
+		if srcFn.fnType == AggregatorFn || srcFn.fnType == CompareScalarFn ||
+			srcFn.fnType == PasswordFn {
 			key = x.DataKey(attr, q.Uids.Uids[i])
-		} else if fnType != NotFn {
-			key = x.IndexKey(attr, tokens[i])
+		} else if srcFn.fnType != NotFn {
+			key = x.IndexKey(attr, srcFn.tokens[i])
 		} else if q.Reverse {
 			key = x.ReverseKey(attr, q.Uids.Uids[i])
 		} else {
@@ -286,17 +190,16 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		var filteredRes []*result
 		if !isValueEdge { // for uid edge.. get postings
 			var perr error
-			// Get postings and filter based on facetFilterTree.
 			pl.Postings(opts, func(p *types.Posting) bool {
 				res := true
-				res, perr = applyFacetFilter(p.Facets, q.FacetsFilter)
+				res, perr = applyFacetsTree(p.Facets, facetsTree)
 				if perr != nil {
 					return false // break loop.
 				}
 				if res {
 					filteredRes = append(filteredRes, &result{
 						uid:    p.Uid,
-						facets: facets.CopyFacets(p.Facets, q.FacetParam)})
+						facets: utils.CopyFacets(p.Facets, q.FacetParam)})
 				}
 				return true // continue iteration.
 			})
@@ -327,7 +230,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 
 		// add uids to uidmatrix..
-		if q.DoCount || fnType == AggregatorFn {
+		if q.DoCount || srcFn.fnType == AggregatorFn {
 			if q.DoCount {
 				out.Counts = append(out.Counts, uint32(pl.Length(0)))
 			}
@@ -336,7 +239,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			continue
 		}
 
-		if fnType == PasswordFn {
+		if srcFn.fnType == PasswordFn {
 			lastPos := len(out.Values) - 1
 			if len(newValue.Val) == 0 {
 				out.Values[lastPos] = task.FalseVal
@@ -353,9 +256,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			continue
 		}
 
-		if fnType == CompareScalarFn {
+		if srcFn.fnType == CompareScalarFn {
 			count := int64(pl.Length(0))
-			if EvalCompare(f, count, threshold) {
+			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
 				tlist := &task.List{[]uint64{q.Uids.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
@@ -370,7 +273,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		out.UidMatrix = append(out.UidMatrix, uidList)
 	}
 
-	if fnType == RegexFn {
+	if srcFn.fnType == RegexFn {
 		// Go through the indexkeys for the predicate and match them with
 		// the regex matcher.
 		it := pstore.NewIterator()
@@ -381,7 +284,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			pk := x.Parse(key)
 			x.AssertTrue(pk.Attr == q.Attr)
 			term := pk.Term[1:] // skip the first byte which is tokenizer prefix.
-			if regex.MatchString(term) {
+			if srcFn.regex.MatchString(term) {
 				pl, decr := posting.GetOrCreate(key, gid)
 				out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 				decr()
@@ -390,17 +293,18 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	}
 
 	// aggregate on the collection out.Values[]
-	if fnType == AggregatorFn && len(out.Values) > 0 {
+	if srcFn.fnType == AggregatorFn && len(out.Values) > 0 {
 		var err error
 		typ, _ := schema.State().TypeOf(attr)
-		out.Values[0], err = Aggregate(f, out.Values, typ)
+		out.Values[0], err = Aggregate(srcFn.fname, out.Values, typ)
 		if err != nil {
 			return nil, err
 		}
 		out.Values = out.Values[:1] // trim length to 1
 	}
 
-	if fnType == CompareAttrFn && len(tokens) > 0 && ineqValueToken == tokens[0] {
+	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 &&
+		srcFn.ineqValueToken == srcFn.tokens[0] {
 		// Need to evaluate inequality for entries in the first bucket.
 		typ, err := schema.State().TypeOf(attr)
 		if err != nil || !typ.IsScalar() {
@@ -415,13 +319,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			if sv.Value == nil || err != nil {
 				return false
 			}
-			return compareTypeVals(q.SrcFunc[0], sv, ineqValue)
+			return compareTypeVals(q.SrcFunc[0], sv, srcFn.ineqValue)
 		})
 	}
 
 	// If geo filter, do value check for correctness.
 	var values []*task.Value
-	if geoQuery != nil {
+	if srcFn.geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
 		for _, uid := range uids.Uids {
 			key := x.DataKey(attr, uid)
@@ -438,13 +342,126 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			decr() // Decrement the reference count of the pl.
 		}
 
-		filtered := types.FilterGeoUids(uids, values, geoQuery)
+		filtered := types.FilterGeoUids(uids, values, srcFn.geoQuery)
 		for i := 0; i < len(out.UidMatrix); i++ {
 			algo.IntersectWith(out.UidMatrix[i], filtered)
 		}
 	}
-	out.IntersectDest = intersectDest
+	out.IntersectDest = srcFn.intersectDest
 	return &out, nil
+}
+
+type functionContext struct {
+	tokens         []string
+	geoQuery       *types.GeoQueryData
+	intersectDest  bool
+	ineqValue      types.Val
+	ineqValueToken string
+	n              int
+	threshold      int64
+	fname          string
+	fnType         FuncType
+	regex          *regexp.Regexp
+}
+
+func parseSrcFn(q *task.Query) (*functionContext, error) {
+	fnType, f := parseFuncType(q.SrcFunc)
+	attr := q.Attr
+	fc := &functionContext{fnType: fnType, fname: f}
+	var err error
+
+	switch fnType {
+	case AggregatorFn:
+		// confirm agrregator could apply on the attributes
+		typ, err := schema.State().TypeOf(attr)
+		if err != nil {
+			return nil, x.Errorf("Attribute %q is not scalar-type", attr)
+		}
+		if !CouldApplyAggregatorOn(f, typ) {
+			return nil, x.Errorf("Aggregator %q could not apply on %v",
+				f, attr)
+		}
+		fc.n = len(q.Uids.Uids)
+	case CompareAttrFn:
+		if len(q.SrcFunc) != 2 {
+			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
+				len(q.SrcFunc), q.SrcFunc)
+		}
+		fc.ineqValue, err = convertValue(attr, q.SrcFunc[1])
+		if err != nil {
+			return nil, err
+		}
+		// Tokenizing RHS value of inequality.
+		// TODO(kg): more comments about why we convert to types.BinaryID, and
+		// then convert it back to attr type in IndexTokens.
+		// the point is IndexTokens need BinaryID type to be passed in
+		v := types.ValueForType(types.BinaryID)
+		err = types.Marshal(fc.ineqValue, &v)
+		if err != nil {
+			return nil, err
+		}
+		ineqTokens, err := posting.IndexTokens(attr,
+			types.Val{fc.ineqValue.Tid, v.Value.([]byte)})
+		if err != nil {
+			return nil, err
+		}
+		if len(ineqTokens) != 1 {
+			return nil, x.Errorf("Expected only 1 token but got: %v", ineqTokens)
+		}
+		fc.ineqValueToken = ineqTokens[0]
+		// Get tokens geq / leq ineqValueToken.
+		fc.tokens, err = getInequalityTokens(attr, fc.ineqValueToken, f)
+		if err != nil {
+			return nil, err
+		}
+		fc.n = len(fc.tokens)
+	case CompareScalarFn:
+		if len(q.SrcFunc) != 3 {
+			return nil, x.Errorf("Function requires 3 arguments, but got %d %v",
+				len(q.SrcFunc), q.SrcFunc)
+		}
+		fc.threshold, err = strconv.ParseInt(q.SrcFunc[2], 10, 64)
+		if err != nil {
+			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
+				q.SrcFunc[0], q.SrcFunc[1])
+		}
+		fc.n = len(q.Uids.Uids)
+	case GeoFn:
+		// For geo functions, we get extra information used for filtering.
+		fc.tokens, fc.geoQuery, err = types.GetGeoTokens(q.SrcFunc)
+		tok.EncodeGeoTokens(fc.tokens)
+		if err != nil {
+			return nil, err
+		}
+		fc.n = len(fc.tokens)
+	case PasswordFn:
+		// confirm agrregator could apply on the attributes
+		if len(q.SrcFunc) != 2 {
+			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
+				len(q.SrcFunc), q.SrcFunc)
+		}
+		fc.n = len(q.Uids.Uids)
+	case StandardFn:
+		// srcfunc 0th val is func name and and [1:] are args.
+		// we tokenize the arguments of the query.
+		fc.tokens, err = tok.GetTokens(q.SrcFunc[1:])
+		if err != nil {
+			return nil, err
+		}
+		fc.intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
+		fc.n = len(fc.tokens)
+	case RegexFn:
+		fc.regex, err = regexp.Compile(q.SrcFunc[1])
+		if err != nil {
+			return nil, err
+		}
+	case NotFn:
+		fc.n = len(q.Uids.Uids)
+
+	default:
+		return nil, x.Errorf("FnType %d not handled in numFnAttrs.", fnType)
+	}
+	return fc, nil
 }
 
 // ServeTask is used to respond to a query.
@@ -475,18 +492,18 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 	}
 }
 
-// applyFacetFilter : we return error only when query has some problems.
+// applyFacetsTree : we return error only when query has some problems.
 // like Or has 3 arguments, argument facet val overflows integer.
 // returns true if postingFacets can be included.
-func applyFacetFilter(postingFacets []*facets.Facet, ftree *facets.FilterTree) (bool, error) {
+func applyFacetsTree(postingFacets []*facets.Facet, ftree *facetsTree) (bool, error) {
 	if ftree == nil {
 		return true, nil
 	}
-	if ftree.Func != nil {
-		fname := strings.ToLower(ftree.Func.Name)
+	if ftree.function != nil {
+		fname := strings.ToLower(ftree.function.name)
 		var fc *facets.Facet
 		for _, fci := range postingFacets {
-			if fci.Key == ftree.Func.Key {
+			if fci.Key == ftree.function.key {
 				fc = fci
 				break
 			}
@@ -495,74 +512,38 @@ func applyFacetFilter(postingFacets []*facets.Facet, ftree *facets.FilterTree) (
 			return false, nil
 		}
 		fnType, fname := parseFuncType([]string{fname})
-		if len(ftree.Func.Args) != 1 {
-			return false, x.Errorf("Only one argument expected in %s, but got %d.",
-				fname, len(ftree.Func.Args))
-		}
-
 		switch fnType {
 		case CompareAttrFn: // lt, gt, le, ge, eq
-			fctv := types.ValFor(fc)
-			// TODO(ashish): Should move this to outside of applyFacetFilter
-			argf, err := facets.FacetFor(fc.Key, ftree.Func.Args[0])
-			if err != nil {
-				return false, err // stop processing as this is query error
-			}
-			argtv := types.ValFor(argf)
-			return compareTypeVals(fname, fctv, argtv), nil
+			return compareTypeVals(fname, types.ValFor(fc), ftree.function.val), nil
 
 		case StandardFn: // allof, anyof
 			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
 				return false, nil
 			}
-			// TODO: Tokenize facet with string values and store them,
-			// instead of creating them on the fly.
-			fcTokens, ferr := getTokens([]string{string(fc.Value)})
-			if ferr != nil {
-				return false, nil
-			}
-			sort.Strings(fcTokens)
-
-			// TODO: Also tokenize the query once and use it.
-			argTokens, aerr := getTokens(ftree.Func.Args)
-			if aerr != nil { // query error ; stop processing.
-				return false, aerr
-			}
-			sort.Strings(argTokens)
-			return filterOnStandardFn(fname, fcTokens, argTokens)
+			return filterOnStandardFn(fname, fc.Tokens, ftree.function.tokens)
 		}
 		return false, x.Errorf("Fn %s not supported in facets filtering.", fname)
 	}
 
 	var res []bool
-	for _, c := range ftree.Children {
-		if r, err := applyFacetFilter(postingFacets, c); err != nil {
+	for _, c := range ftree.children {
+		if r, err := applyFacetsTree(postingFacets, c); err != nil {
 			return false, err
 		} else {
 			res = append(res, r)
 		}
 	}
 
-	switch strings.ToLower(ftree.Op) {
+	// we have already checked for number of children in preprocessFilter
+	switch strings.ToLower(ftree.op) {
 	case "not":
-		if len(res) != 1 {
-			return false, x.Errorf("Expected 1 child for not but got %d.", len(res))
-		}
 		return !res[0], nil
 	case "and":
-		if len(res) != 2 {
-			return false, x.Errorf("Expected 2 child for not but got %d.", len(res))
-		}
 		return res[0] && res[1], nil
 	case "or":
-		if len(res) != 2 {
-			return false, x.Errorf("Expected 2 child for not but got %d.", len(res))
-		}
 		return res[0] || res[1], nil
-	default:
-		return false, x.Errorf("Unsupported operation in facet filtering: %s.", ftree.Op)
 	}
-	return false, x.Errorf("Unexpected behavior in applyFacetFilter.")
+	return false, x.Errorf("Unexpected behavior in applyFacetsTree.")
 }
 
 // Should be used only in filtering arg1 by comparing with arg2.
@@ -628,4 +609,83 @@ func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bo
 		return false, nil
 	}
 	return false, x.Errorf("Fn %s not supported in facets filtering.", fname)
+}
+
+type facetsFunc struct {
+	name   string
+	key    string
+	args   []string
+	tokens []string
+	val    types.Val
+}
+type facetsTree struct {
+	op       string
+	children []*facetsTree
+	function *facetsFunc
+}
+
+func preprocessFilter(tree *facets.FilterTree) (*facetsTree, error) {
+	if tree == nil {
+		return nil, nil
+	}
+	ftree := &facetsTree{}
+	ftree.op = tree.Op
+	if tree.Func != nil {
+		ftree.function = &facetsFunc{}
+		ftree.function.name = tree.Func.Name
+		ftree.function.key = tree.Func.Key
+		ftree.function.args = tree.Func.Args
+
+		fnType, fname := parseFuncType([]string{ftree.function.name})
+		if len(tree.Func.Args) != 1 {
+			return nil, x.Errorf("One argument expected in %s, but got %d.",
+				fname, len(tree.Func.Args))
+		}
+
+		switch fnType {
+		case CompareAttrFn:
+			argf, err := utils.FacetFor(tree.Func.Key, tree.Func.Args[0])
+			if err != nil {
+				return nil, err // stop processing as this is query error
+			}
+			ftree.function.val = types.ValFor(argf)
+		case StandardFn:
+			argTokens, aerr := tok.GetTokens(tree.Func.Args)
+			if aerr != nil { // query error ; stop processing.
+				return nil, aerr
+			}
+			sort.Strings(argTokens)
+			ftree.function.tokens = argTokens
+		default:
+			return nil, x.Errorf("Fn %s not supported in preprocessFilter.", fname)
+		}
+		return ftree, nil
+	}
+
+	for _, c := range tree.Children {
+		ftreec, err := preprocessFilter(c)
+		if err != nil {
+			return nil, err
+		}
+		ftree.children = append(ftree.children, ftreec)
+	}
+
+	numChild := len(tree.Children)
+	switch strings.ToLower(tree.Op) {
+	case "not":
+		if numChild != 1 {
+			return nil, x.Errorf("Expected 1 child for not but got %d.", numChild)
+		}
+	case "and":
+		if numChild != 2 {
+			return nil, x.Errorf("Expected 2 child for not but got %d.", numChild)
+		}
+	case "or":
+		if numChild != 2 {
+			return nil, x.Errorf("Expected 2 child for not but got %d.", numChild)
+		}
+	default:
+		return nil, x.Errorf("Unsupported operation in facet filtering: %s.", tree.Op)
+	}
+	return ftree, nil
 }

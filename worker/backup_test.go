@@ -143,9 +143,12 @@ func TestBackup(t *testing.T) {
 				require.Equal(t, "age", nq.Facets[0].Key)
 				require.Equal(t, "close", nq.Facets[1].Key)
 				require.Equal(t, "since", nq.Facets[2].Key)
-				require.Equal(t, "33", string(nq.Facets[0].Value))
-				require.Equal(t, "true", string(nq.Facets[1].Value))
-				require.Equal(t, "2005-05-02T15:04:05", string(nq.Facets[2].Value))
+				// byte representation for facets.
+				require.Equal(t, []byte{0x21, 0x0, 0x0, 0x0}, nq.Facets[0].Value)
+				require.Equal(t, []byte{0x1}, nq.Facets[1].Value)
+				require.Equal(t, "\x01\x00\x00\x00\x0e\xba\b8e\x00\x00\x00\x00\xff\xff",
+					string(nq.Facets[2].Value))
+				// valtype for facets.
 				require.Equal(t, 1, int(nq.Facets[0].ValType))
 				require.Equal(t, 3, int(nq.Facets[1].ValType))
 				require.Equal(t, 4, int(nq.Facets[2].ValType))
