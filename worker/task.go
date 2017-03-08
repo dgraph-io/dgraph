@@ -102,6 +102,7 @@ const (
 	GeoFn
 	PasswordFn
 	RegexFn
+	FullTextSearchFn
 	StandardFn = 100
 )
 
@@ -126,6 +127,8 @@ func parseFuncType(arr []string) (FuncType, string) {
 		return PasswordFn, f
 	case "regexp":
 		return RegexFn, f
+	case "alloftext", "anyoftext":
+		return FullTextSearchFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
@@ -441,14 +444,15 @@ func parseSrcFn(q *task.Query) (*functionContext, error) {
 				len(q.SrcFunc), q.SrcFunc)
 		}
 		fc.n = len(q.Uids.Uids)
-	case StandardFn:
+	case StandardFn, FullTextSearchFn:
 		// srcfunc 0th val is func name and and [1:] are args.
 		// we tokenize the arguments of the query.
-		fc.tokens, err = tok.GetTokens(q.SrcFunc[1:])
+		fc.tokens, err = getStringTokens(q.SrcFunc[1:], fnType)
 		if err != nil {
 			return nil, err
 		}
-		fc.intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
+		fnName := strings.ToLower(q.SrcFunc[0])
+		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case RegexFn:
 		fc.regex, err = regexp.Compile(q.SrcFunc[1])
@@ -516,7 +520,7 @@ func applyFacetsTree(postingFacets []*facets.Facet, ftree *facetsTree) (bool, er
 		case CompareAttrFn: // lt, gt, le, ge, eq
 			return compareTypeVals(fname, types.ValFor(fc), ftree.function.val), nil
 
-		case StandardFn: // allof, anyof
+		case StandardFn: // allofterms, anyofterms
 			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
 				return false, nil
 			}
@@ -577,8 +581,8 @@ func compareTypeVals(op string, arg1, arg2 types.Val) bool {
 // fcTokens and argTokens should be sorted.
 func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bool, error) {
 	switch fname {
-	case "allof":
-		// allof argTokens should be in fcTokens
+	case "allofterms":
+		// allofterms argTokens should be in fcTokens
 		if len(argTokens) > len(fcTokens) {
 			return false, nil
 		}
@@ -596,7 +600,7 @@ func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bo
 			}
 		}
 		return aidx == len(argTokens), nil
-	case "anyof":
+	case "anyofterms":
 		for aidx, fidx := 0, 0; aidx < len(argTokens) && fidx < len(fcTokens); {
 			if fcTokens[fidx] < argTokens[aidx] {
 				fidx++

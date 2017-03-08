@@ -1093,7 +1093,7 @@ func TestParseFilter_root(t *testing.T) {
 	schema.ParseBytes([]byte("scalar abc: string @index"))
 	query := `
 	query {
-		me(func:abc(abc)) @filter(allof(name, "alice")) {
+		me(func:abc(abc)) @filter(allofterms(name, "alice")) {
 			friends @filter() {
 				name @filter(namefilter("a"))
 			}
@@ -1106,7 +1106,7 @@ func TestParseFilter_root(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
 	require.NotNil(t, res.Query[0].Filter)
-	require.Equal(t, `(allof "name" "alice")`, res.Query[0].Filter.debugString())
+	require.Equal(t, `(allofterms "name" "alice")`, res.Query[0].Filter.debugString())
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.Nil(t, res.Query[0].Children[0].Filter)
@@ -1140,7 +1140,7 @@ func TestParseFilter_root2(t *testing.T) {
 func TestParseFilter_root_Error(t *testing.T) {
 	query := `
 	query {
-		me(id:0x0a) @filter(allof(name, "alice") {
+		me(id:0x0a) @filter(allofterms(name, "alice") {
 			friends @filter() {
 				name @filter(namefilter("a"))
 			}
@@ -1403,7 +1403,7 @@ func TestParseFilter_emptyargument(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(allof(name,,)) {
+			friends @filter(allofterms(name,,)) {
 				name
 			}
 			gender,age
@@ -1430,7 +1430,7 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 
 func TestParseGeneratorError(t *testing.T) {
 	query := `{
-		me(allof("name", "barack")) {
+		me(allofterms("name", "barack")) {
 			friends {
 				name
 			}
@@ -1547,7 +1547,7 @@ func TestParseComments(t *testing.T) {
 	query := `
 	# Something
 	{
-		me(func:allof("name", "barack")) {
+		me(func:allofterms("name", "barack")) {
 			friends {
 				name
 			} # Something
@@ -1564,7 +1564,7 @@ func TestParseComments1(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"))
 	query := `{
 		#Something 
-		me(func:allof("name", "barack")) {
+		me(func:allofterms("name", "barack")) {
 			friends {
 				name  # Name of my friend
 			}
@@ -1580,7 +1580,7 @@ func TestParseComments1(t *testing.T) {
 func TestParseGenerator(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"))
 	query := `{
-		me(func:allof("name", "barack")) {
+		me(func:allofterms("name", "barack")) {
 			friends {
 				name
 			}
@@ -1597,7 +1597,7 @@ func TestParseIRIRef(t *testing.T) {
 	query := `{
 		me(id: <http://helloworld.com/how/are/you>) {
 			<http://verygood.com/what/about/you>
-			friends @filter(allof(<http://verygood.com/what/about/you>,
+			friends @filter(allofterms(<http://verygood.com/what/about/you>,
 				"good better bad")){
 				name
 			}
@@ -1610,7 +1610,7 @@ func TestParseIRIRef(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5, len(gq.Query[0].Children))
 	require.Equal(t, "http://verygood.com/what/about/you", gq.Query[0].Children[0].Attr)
-	require.Equal(t, `(allof "http://verygood.com/what/about/you" "good better bad")`,
+	require.Equal(t, `(allofterms "http://verygood.com/what/about/you" "good better bad")`,
 		gq.Query[0].Children[1].Filter.debugString())
 }
 
@@ -1618,9 +1618,9 @@ func TestParseIRIRef2(t *testing.T) {
 	require.NoError(t, schema.ParseBytes(
 		[]byte("scalar <http://helloworld.com/how/are/you>:string @index")))
 	query := `{
-		me(func:anyof(<http://helloworld.com/how/are/you>, "good better bad")) {
+		me(func:anyofterms(<http://helloworld.com/how/are/you>, "good better bad")) {
 			<http://verygood.com/what/about/you>
-			friends @filter(allof(<http://verygood.com/what/about/you>,
+			friends @filter(allofterms(<http://verygood.com/what/about/you>,
 				"good better bad")){
 				name
 			}
@@ -1631,7 +1631,7 @@ func TestParseIRIRef2(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, len(gq.Query[0].Children))
 	require.Equal(t, "http://verygood.com/what/about/you", gq.Query[0].Children[0].Attr)
-	require.Equal(t, `(allof "http://verygood.com/what/about/you" "good better bad")`,
+	require.Equal(t, `(allofterms "http://verygood.com/what/about/you" "good better bad")`,
 		gq.Query[0].Children[1].Filter.debugString())
 	require.Equal(t, "http://helloworld.com/how/are/you", gq.Query[0].Func.Attr)
 }

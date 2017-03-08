@@ -1,6 +1,20 @@
 package worker
 
-import "github.com/dgraph-io/dgraph/x"
+import (
+	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/x"
+)
+
+// Return string tokens from function arguments. It maps funcion type to correct tokenizer.
+// Note: regexp functions require regexp compilation of argument, not tokenization.
+func getStringTokens(funcArgs []string, funcType FuncType) ([]string, error) {
+	switch funcType {
+	case FullTextSearchFn:
+		return tok.GetTextTokens(funcArgs)
+	default:
+		return tok.GetTokens(funcArgs)
+	}
+}
 
 // getInequalityTokens gets tokens geq / leq compared to given token.
 func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error) {
