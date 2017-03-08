@@ -1,7 +1,7 @@
 package worker
 
 import (
-	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )

@@ -100,7 +100,7 @@ func TestTokensTable(t *testing.T) {
 	slice, err := ps.Get(key)
 	require.NoError(t, err)
 
-	var pl types.PostingList
+	var pl typesp.PostingList
 	x.Check(pl.Unmarshal(slice.Data()))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
@@ -197,10 +197,10 @@ func TestRebuildIndex(t *testing.T) {
 	pk := x.ParsedKey{Attr: "name"}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
-	var idxVals []*types.PostingList
+	var idxVals []*typesp.PostingList
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		idxKeys = append(idxKeys, string(it.Key().Data()))
-		pl := new(types.PostingList)
+		pl := new(typesp.PostingList)
 		require.NoError(t, pl.Unmarshal(it.Value().Data()))
 		idxVals = append(idxVals, pl)
 	}

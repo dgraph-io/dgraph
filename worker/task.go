@@ -36,7 +36,7 @@ import (
 )
 
 var (
-	emptyUIDList task.List
+	emptyUIDList taskp.List
 	emptyResult  task.Result
 	exactTok     tok.ExactTokenizer
 )
@@ -258,14 +258,14 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		if srcFn.fnType == CompareScalarFn {
 			count := int64(pl.Length(0))
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				tlist := &task.List{[]uint64{q.Uids.Uids[i]}}
+				tlist := &taskp.List{[]uint64{q.Uids.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 			continue
 		}
 
 		// The more usual case: Getting the UIDs.
-		uidList := new(task.List)
+		uidList := new(taskp.List)
 		for _, fres := range filteredRes {
 			uidList.Uids = append(uidList.Uids, fres.uid)
 		}

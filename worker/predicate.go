@@ -23,8 +23,8 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -97,7 +97,7 @@ func streamKeys(stream Worker_PredicateAndSchemaDataClient, groupId uint32) erro
 			continue
 		}
 
-		var pl types.PostingList
+		var pl typesp.PostingList
 		x.Check(pl.Unmarshal(v.Data()))
 
 		kdup := make([]byte, len(k.Data()))
@@ -240,7 +240,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream Worker_PredicateAndSchemaData
 
 		// No checksum check for schema keys
 		if !pk.IsSchema() {
-			var pl types.PostingList
+			var pl typesp.PostingList
 			x.Check(pl.Unmarshal(v.Data()))
 
 			idx := sort.Search(len(gkeys.Keys), func(i int) bool {

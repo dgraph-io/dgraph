@@ -134,7 +134,7 @@ func TestProcessTask(t *testing.T) {
 func newQuery(attr string, uids []uint64, srcFunc []string) *task.Query {
 	x.AssertTrue(uids == nil || srcFunc == nil)
 	return &task.Query{
-		Uids:    &task.List{uids},
+		Uids:    &taskp.List{uids},
 		SrcFunc: srcFunc,
 		Attr:    attr,
 	}
@@ -340,9 +340,9 @@ func populateGraphForSort(t *testing.T, ps *store.Store) {
 // newSort creates a task.Sort for sorting.
 func newSort(uids [][]uint64, offset, count int) *task.Sort {
 	x.AssertTrue(uids != nil)
-	uidMatrix := make([]*task.List, len(uids))
+	uidMatrix := make([]*taskp.List, len(uids))
 	for i, l := range uids {
-		uidMatrix[i] = &task.List{Uids: l}
+		uidMatrix[i] = &taskp.List{Uids: l}
 	}
 	return &task.Sort{
 		Attr:      "dob",

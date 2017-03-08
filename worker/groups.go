@@ -282,7 +282,7 @@ func (g *groupi) syncMemberships() {
 				continue
 			}
 
-			go func(rc *task.RaftContext, amleader bool) {
+			go func(rc *taskp.RaftContext, amleader bool) {
 				mm := &task.Membership{
 					Leader:  amleader,
 					Id:      rc.Id,

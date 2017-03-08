@@ -2434,7 +2434,7 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 }
 
 // Mocking Subgraph and Testing fast-json with it.
-func ageSg(uidMatrix []*task.List, srcUids *task.List, ages []uint32) *SubGraph {
+func ageSg(uidMatrix []*taskp.List, srcUids *taskp.List, ages []uint32) *SubGraph {
 	var as []*taskp.Value
 	for _, a := range ages {
 		bs := make([]byte, 4)
@@ -2450,7 +2450,7 @@ func ageSg(uidMatrix []*task.List, srcUids *task.List, ages []uint32) *SubGraph 
 		Params:    params{isDebug: false, GetUID: true},
 	}
 }
-func nameSg(uidMatrix []*task.List, srcUids *task.List, names []string) *SubGraph {
+func nameSg(uidMatrix []*taskp.List, srcUids *taskp.List, names []string) *SubGraph {
 	var ns []*taskp.Value
 	for _, n := range names {
 		ns = append(ns, &taskp.Value{[]byte(n), 0})
@@ -2464,7 +2464,7 @@ func nameSg(uidMatrix []*task.List, srcUids *task.List, names []string) *SubGrap
 	}
 
 }
-func friendsSg(uidMatrix []*task.List, srcUids *task.List, friends []*SubGraph) *SubGraph {
+func friendsSg(uidMatrix []*taskp.List, srcUids *taskp.List, friends []*SubGraph) *SubGraph {
 	return &SubGraph{
 		Attr:      "friend",
 		uidMatrix: uidMatrix,
@@ -2473,7 +2473,7 @@ func friendsSg(uidMatrix []*task.List, srcUids *task.List, friends []*SubGraph) 
 		Children:  friends,
 	}
 }
-func rootSg(uidMatrix []*task.List, srcUids *task.List, names []string, ages []uint32) *SubGraph {
+func rootSg(uidMatrix []*taskp.List, srcUids *taskp.List, names []string, ages []uint32) *SubGraph {
 	nameSg := nameSg(uidMatrix, srcUids, names)
 	ageSg := ageSg(uidMatrix, srcUids, ages)
 

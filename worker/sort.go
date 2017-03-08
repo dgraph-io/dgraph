@@ -108,7 +108,7 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset)
-		var emptyList task.List
+		var emptyList taskp.List
 		out[i].ulist = &emptyList
 		out[i].excludeSet = make(map[uint64]struct{})
 	}
@@ -166,7 +166,7 @@ BUCKETS:
 
 type intersectedList struct {
 	offset int
-	ulist  *task.List
+	ulist  *taskp.List
 
 	// For term index, a UID might appear in multiple buckets. We want to dedup.
 	// We cannot do this at the end of the sort because we do need to track offsets and counts.
@@ -250,7 +250,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 }
 
 // sortByValue fetches values and sort UIDList.
-func sortByValue(attr string, langs []string, ul *task.List, typ types.TypeID, desc bool) error {
+func sortByValue(attr string, langs []string, ul *taskp.List, typ types.TypeID, desc bool) error {
 	lenList := len(ul.Uids)
 	values := make([]types.Val, 0, lenList)
 	for i := 0; i < lenList; i++ {

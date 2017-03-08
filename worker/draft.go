@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
@@ -95,7 +96,7 @@ type node struct {
 	messages    chan sendmsg
 	peers       peerPool
 	props       proposals
-	raftContext *task.RaftContext
+	raftContext *taskp.RaftContext
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
 
@@ -147,7 +148,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 
 	store := raft.NewMemoryStorage()
-	rc := &task.RaftContext{
+	rc := &taskp.RaftContext{
 		Addr:  myAddr,
 		Group: gid,
 		Id:    id,
@@ -198,7 +199,7 @@ func (n *node) Connect(pid uint64, addr string) {
 func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
 	addr := n.peers.Get(pid)
 	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
-	rc := &task.RaftContext{
+	rc := &taskp.RaftContext{
 		Addr:  addr,
 		Group: n.raftContext.Group,
 		Id:    pid,
@@ -445,7 +446,7 @@ func (n *node) processApplyCh() {
 			cc.Unmarshal(e.Data)
 
 			if len(cc.Context) > 0 {
-				var rc task.RaftContext
+				var rc taskp.RaftContext
 				x.Check(rc.Unmarshal(cc.Context))
 				n.Connect(rc.Id, rc.Addr)
 			}
@@ -509,7 +510,7 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 	n.store.Append(es)
 }
 
-func (n *node) retrieveSnapshot(rc task.RaftContext) {
+func (n *node) retrieveSnapshot(rc taskp.RaftContext) {
 	addr := n.peers.Get(rc.Id)
 	x.AssertTruef(addr != "", "Should have the address for %d", rc.Id)
 	pool := pools().get(addr)
@@ -547,7 +548,7 @@ func (n *node) Run() {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
 				// snapshot that I created. Only the former case should be handled.
-				var rc task.RaftContext
+				var rc taskp.RaftContext
 				x.Check(rc.Unmarshal(rd.Snapshot.Data))
 				if rc.Id != n.id {
 					fmt.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
@@ -766,7 +767,7 @@ func (n *node) AmLeader() bool {
 }
 
 func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error {
-	var rc task.RaftContext
+	var rc taskp.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
 	node := groups().Node(rc.Group)
 	// TODO: Handle the case where node isn't present for this group.
@@ -814,7 +815,7 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 	return &Payload{}, nil
 }
 
-func (w *grpcWorker) JoinCluster(ctx context.Context, rc *task.RaftContext) (*Payload, error) {
+func (w *grpcWorker) JoinCluster(ctx context.Context, rc *taskp.RaftContext) (*Payload, error) {
 	if ctx.Err() != nil {
 		return &Payload{}, ctx.Err()
 	}

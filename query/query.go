@@ -129,7 +129,7 @@ type params struct {
 	isDebug      bool
 	Var          string
 	NeedsVar     []string
-	ParentVars   map[string]*task.List
+	ParentVars   map[string]*taskp.List
 	Langs        []string
 	Normalize    bool
 	From         uint64
@@ -146,12 +146,12 @@ type SubGraph struct {
 	Params       params
 	counts       []uint32
 	values       []*taskp.Value
-	uidMatrix    []*task.List
+	uidMatrix    []*taskp.List
 	facetsMatrix []*facets.List
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
-	SrcUIDs *task.List
+	SrcUIDs *taskp.List
 	SrcFunc []string
 
 	FilterOp     string
@@ -160,7 +160,7 @@ type SubGraph struct {
 	Children     []*SubGraph
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
-	DestUIDs *task.List
+	DestUIDs *taskp.List
 }
 
 // DebugPrint prints out the SubGraph tree in a nice format for debugging purposes.
@@ -630,7 +630,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Alias:      gq.Alias,
 		Langs:      gq.Langs,
 		Var:        gq.Var,
-		ParentVars: make(map[string]*task.List),
+		ParentVars: make(map[string]*taskp.List),
 		Normalize:  gq.Normalize,
 	}
 	if gq.Facets != nil {
@@ -665,10 +665,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if len(gq.UID) > 0 {
 		o := make([]uint64, len(gq.UID))
 		copy(o, gq.UID)
-		sg.uidMatrix = []*task.List{&task.List{gq.UID}}
+		sg.uidMatrix = []*taskp.List{&taskp.List{gq.UID}}
 		// User specified list may not be sorted.
 		sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
-		sg.SrcUIDs = &task.List{o}
+		sg.SrcUIDs = &taskp.List{o}
 	}
 	sg.values = createNilValuesList(1)
 	// Copy roots filter.
@@ -757,7 +757,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	var err error
 
 	// doneVars will store the UID list of the corresponding variables.
-	doneVars := make(map[string]*task.List)
+	doneVars := make(map[string]*taskp.List)
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
@@ -898,7 +898,7 @@ func shouldCascade(res gql.Result, idx int) bool {
 }
 
 // TODO(Ashwin): Benchmark this function.
-func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool) {
+func populateVarMap(sg *SubGraph, doneVars map[string]*taskp.List, isCascade bool) {
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
 		goto AssignStep
@@ -937,7 +937,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 	}
 	// Note the we can't overwrite DestUids, as it'd also modify the SrcUids of
 	// next level and the mapping from SrcUids to uidMatrix would be lost.
-	sg.DestUIDs = &task.List{out}
+	sg.DestUIDs = &taskp.List{out}
 
 AssignStep:
 	if sg.Params.Var != "" {
@@ -945,7 +945,7 @@ AssignStep:
 	}
 }
 
-func (sg *SubGraph) recursiveFillVars(doneVars map[string]*task.List) {
+func (sg *SubGraph) recursiveFillVars(doneVars map[string]*taskp.List) {
 	sg.fillVars(doneVars)
 	for _, child := range sg.Children {
 		child.recursiveFillVars(doneVars)
@@ -955,8 +955,8 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]*task.List) {
 	}
 }
 
-func (sg *SubGraph) fillVars(mp map[string]*task.List) {
-	lists := make([]*task.List, 0, 3)
+func (sg *SubGraph) fillVars(mp map[string]*taskp.List) {
+	lists := make([]*taskp.List, 0, 3)
 	if sg.DestUIDs != nil {
 		lists = append(lists, sg.DestUIDs)
 	}
@@ -976,7 +976,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// Retain the actual order in uidMatrix. But sort the destUids.
 		o := make([]uint64, len(sg.DestUIDs.Uids))
 		copy(o, sg.DestUIDs.Uids)
-		sg.uidMatrix = []*task.List{&task.List{o}}
+		sg.uidMatrix = []*taskp.List{&taskp.List{o}}
 		sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool { return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j] })
 	} else if parent == nil && len(sg.SrcFunc) == 0 {
 		// I am root. I don't have any function to execute, and my
@@ -1029,7 +1029,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		if parent == nil {
 			// I'm root. We reach here if root had a function.
-			sg.uidMatrix = []*task.List{sg.DestUIDs}
+			sg.uidMatrix = []*taskp.List{sg.DestUIDs}
 		}
 	}
 
@@ -1067,7 +1067,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		// Now apply the results from filter.
-		var lists []*task.List
+		var lists []*taskp.List
 		for _, filter := range sg.Filters {
 			lists = append(lists, filter.DestUIDs)
 		}

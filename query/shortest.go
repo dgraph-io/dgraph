@@ -102,8 +102,8 @@ func (start *SubGraph) expandOut(ctx context.Context,
 	var exec []*SubGraph
 	var err error
 	in := []uint64{start.Params.From}
-	start.SrcUIDs = &task.List{in}
-	start.uidMatrix = []*task.List{&task.List{in}}
+	start.SrcUIDs = &taskp.List{in}
+	start.uidMatrix = []*taskp.List{&taskp.List{in}}
 	start.DestUIDs = start.SrcUIDs
 
 	for _, child := range start.Children {
@@ -346,7 +346,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 	}
 	// Put the path in DestUIDs of the root.
 	if cur != sg.Params.From {
-		sg.DestUIDs = &task.List{}
+		sg.DestUIDs = &taskp.List{}
 		return nil, nil
 	}
 
@@ -370,9 +370,9 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		isDebug: isDebug(ctx),
 	}
 	curUid := result[0]
-	shortestSg.SrcUIDs = &task.List{[]uint64{curUid}}
-	shortestSg.DestUIDs = &task.List{[]uint64{curUid}}
-	shortestSg.uidMatrix = []*task.List{&task.List{[]uint64{curUid}}}
+	shortestSg.SrcUIDs = &taskp.List{[]uint64{curUid}}
+	shortestSg.DestUIDs = &taskp.List{[]uint64{curUid}}
+	shortestSg.uidMatrix = []*taskp.List{&taskp.List{[]uint64{curUid}}}
 
 	curNode := shortestSg
 	for i := 0; i < len(result)-1; i++ {
@@ -389,9 +389,9 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		}
 		node.Attr = nodeInfo.attr
 		node.facetsMatrix = []*facets.List{&facets.List{[]*facets.Facets{nodeInfo.facet}}}
-		node.SrcUIDs = &task.List{[]uint64{curUid}}
-		node.DestUIDs = &task.List{[]uint64{childUid}}
-		node.uidMatrix = []*task.List{&task.List{[]uint64{childUid}}}
+		node.SrcUIDs = &taskp.List{[]uint64{curUid}}
+		node.DestUIDs = &taskp.List{[]uint64{childUid}}
+		node.uidMatrix = []*taskp.List{&taskp.List{[]uint64{childUid}}}
 
 		curNode.Children = append(curNode.Children, node)
 		curNode = node
@@ -402,8 +402,8 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		GetUID: true,
 	}
 	uid := result[len(result)-1]
-	node.SrcUIDs = &task.List{[]uint64{uid}}
-	node.uidMatrix = []*task.List{&task.List{[]uint64{uid}}}
+	node.SrcUIDs = &taskp.List{[]uint64{uid}}
+	node.uidMatrix = []*taskp.List{&taskp.List{[]uint64{uid}}}
 	curNode.Children = append(curNode.Children, node)
 
 	return shortestSg

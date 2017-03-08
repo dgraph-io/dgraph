@@ -193,7 +193,7 @@ func generateBenchValues() []kv {
 	benchItems := []kv{
 		kv{
 			prefix: "testString",
-			list: &types.PostingList{
+			list: &typesp.PostingList{
 				Postings: []*types.Posting{&types.Posting{
 					ValType: types.Posting_STRING,
 					Value:   []byte("手機裡的眼淚"),
@@ -203,7 +203,7 @@ func generateBenchValues() []kv {
 			},
 		},
 		kv{prefix: "testGeo",
-			list: &types.PostingList{
+			list: &typesp.PostingList{
 				Postings: []*types.Posting{&types.Posting{
 					ValType: types.Posting_GEO,
 					Value:   geoData,
@@ -212,7 +212,7 @@ func generateBenchValues() []kv {
 				}},
 			}},
 		kv{prefix: "testPassword",
-			list: &types.PostingList{
+			list: &typesp.PostingList{
 				Postings: []*types.Posting{&types.Posting{
 					ValType: types.Posting_PASSWORD,
 					Value:   []byte("test"),
@@ -221,7 +221,7 @@ func generateBenchValues() []kv {
 				}},
 			}},
 		kv{prefix: "testInt",
-			list: &types.PostingList{
+			list: &typesp.PostingList{
 				Postings: []*types.Posting{&types.Posting{
 					ValType: types.Posting_INT32,
 					Value:   byteInt,
@@ -230,7 +230,7 @@ func generateBenchValues() []kv {
 				}},
 			}},
 		kv{prefix: "testUid",
-			list: &types.PostingList{
+			list: &typesp.PostingList{
 				Postings: []*types.Posting{&types.Posting{
 					ValType: types.Posting_INT32,
 					Uid:     uint64(65454),
