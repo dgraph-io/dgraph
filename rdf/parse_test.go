@@ -19,20 +19,22 @@ package rdf
 import (
 	"testing"
 
-	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/protos/facetsp"
+	"github.com/dgraph-io/dgraph/protos/graphp"
+
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/stretchr/testify/assert"
 )
 
 var testNQuads = []struct {
 	input        string
-	nq           graph.NQuad
+	nq           graphp.NQuad
 	expectedErr  bool
 	shouldIgnore bool
 }{
 	{
 		input: `<some_subject_id> <predicate> <object_id> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
@@ -41,7 +43,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: "<some_subject_id>\t<predicate>\t<object_id>\t.",
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
@@ -50,7 +52,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <predicate> <object_id> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
@@ -59,7 +61,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `<0x01> <predicate> <object_id> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "0x01",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
@@ -68,7 +70,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `<some_subject_id> <predicate> <0x01> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
 			ObjectId:    "0x01",
@@ -77,7 +79,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `<0x01> <predicate> <0x02> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "0x01",
 			Predicate:   "predicate",
 			ObjectId:    "0x02",
@@ -86,7 +88,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <follows> _:bob0 .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "follows",
 			ObjectId:    "_:bob0",
@@ -95,59 +97,59 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <name> "Alice In Wonderland" .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "name",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"Alice In Wonderland"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"Alice In Wonderland"}},
 			ObjectType:  0,
 		},
 	},
 	{
 		input: `_:alice <name> "Alice In Wonderland"@en-0 .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "name",
 			ObjectId:    "",
 			Lang:        "en-0",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"Alice In Wonderland"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"Alice In Wonderland"}},
 			ObjectType:  10,
 		},
 	},
 	{
 		input: `_:alice <name> "Alice In Wonderland"^^<xs:string> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "name",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_StrVal{"Alice In Wonderland"}},
+			ObjectValue: &graphp.Value{&graphp.Value_StrVal{"Alice In Wonderland"}},
 			ObjectType:  10,
 		},
 	},
 	{
 		input: `_:alice <age> "013"^^<xs:int> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "age",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_IntVal{13}},
+			ObjectValue: &graphp.Value{&graphp.Value_IntVal{13}},
 			ObjectType:  2,
 		},
 	},
 	{
 		input: `<http://www.w3.org/2001/sw/RDFCore/nedges/> <http://purl.org/dc/terms/title> "N-Edges"@en-US .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "http://www.w3.org/2001/sw/RDFCore/nedges/",
 			Predicate:   "http://purl.org/dc/terms/title",
 			ObjectId:    "",
 			Lang:        "en-US",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"N-Edges"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"N-Edges"}},
 			ObjectType:  10,
 		},
 	},
 	{
 		input: `_:art <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:art",
 			Predicate:   "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
 			ObjectId:    "http://xmlns.com/foaf/0.1/Person",
@@ -164,7 +166,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: "<_:alice> <knows> <something> .",
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:   "_:alice",
 			Predicate: "knows",
 			ObjectId:  "something",
@@ -173,7 +175,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: "_:alice <knows> <_:something> .",
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:   "_:alice",
 			Predicate: "knows",
 			ObjectId:  "_:something",
@@ -263,22 +265,22 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <knows> "" .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"_nil_"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"_nil_"}},
 			ObjectType:  0,
 		},
 		expectedErr: false,
 	},
 	{
 		input: `_:alice <knows> ""^^<xs:string> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_StrVal{"_nil_"}},
+			ObjectValue: &graphp.Value{&graphp.Value_StrVal{"_nil_"}},
 			ObjectType:  10,
 		},
 		expectedErr: false,
@@ -289,22 +291,22 @@ var testNQuads = []struct {
 	},
 	{
 		input: `<alice> <knows> "*" .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"*"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"*"}},
 			ObjectType:  0,
 		},
 		expectedErr: false,
 	},
 	{
 		input: `_:alice <knows> "stuff"^^<xs:string> <label> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectValue: &graphp.Value{&graphp.Value_StrVal{"stuff"}},
 			Label:       "label",
 			ObjectType:  10,
 		},
@@ -312,11 +314,11 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <knows> "stuff"^^<xs:string> _:label .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectValue: &graphp.Value{&graphp.Value_StrVal{"stuff"}},
 			Label:       "_:label",
 			ObjectType:  10,
 		},
@@ -324,11 +326,11 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <knows> "stuff"^^<xs:string> _:label . # comment`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectValue: &graphp.Value{&graphp.Value_StrVal{"stuff"}},
 			Label:       "_:label",
 			ObjectType:  10,
 		},
@@ -356,7 +358,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <knows> <bob> . <bob>`, // ignores the <bob> after dot.
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:   "_:alice",
 			Predicate: "knows",
 			ObjectId:  "bob",
@@ -364,16 +366,16 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <likes> "mov\"enpick" .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "likes",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{`mov\"enpick`}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{`mov\"enpick`}},
 			ObjectType:  0,
 		},
 	},
 	{
 		input: `<\u0021> <\U123abcdE> <\u0024> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:   `\u0021`,
 			Predicate: `\U123abcdE`,
 			ObjectId:  `\u0024`,
@@ -437,7 +439,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:0 <name> <good> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:   "_:0",
 			Predicate: "name",
 			ObjectId:  "good",
@@ -445,7 +447,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:0a.b <name> <good> .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:   "_:0a.b",
 			Predicate: "name",
 			ObjectId:  "good",
@@ -461,11 +463,11 @@ var testNQuads = []struct {
 	},
 	{
 		input: `<alice> <lives> "\u0045 wonderland" .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "alice",
 			Predicate:   "lives",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{`\u0045 wonderland`}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{`\u0045 wonderland`}},
 			ObjectType:  0,
 		},
 		expectedErr: false,
@@ -480,11 +482,11 @@ var testNQuads = []struct {
 	},
 	{
 		input: `<alice> <lives> "\t\b\n\r\f\"\'\\"@a-b .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "alice",
 			Predicate:   "lives",
 			Lang:        "a-b",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{`\t\b\n\r\f\"\'\\`}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{`\t\b\n\r\f\"\'\\`}},
 			ObjectType:  10,
 		},
 	},
@@ -518,20 +520,20 @@ var testNQuads = []struct {
 	// Edge Facets test.
 	{
 		input: `_:alice <knows> "stuff" _:label (key1=val1,key2=13) .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"stuff"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
 			Label:       "_:label",
 			ObjectType:  0,
-			Facets: []*facets.Facet{
-				&facets.Facet{"key1",
+			Facets: []*facetsp.Facet{
+				&facetsp.Facet{"key1",
 					[]byte("val1"),
 					facets.ValTypeForTypeID(facets.StringID),
 					[]string{"\001val1"},
 				},
-				&facets.Facet{"key2",
+				&facetsp.Facet{"key2",
 					[]byte("\r\000\000\000"),
 					facets.ValTypeForTypeID(facets.Int32ID),
 					nil,
@@ -541,20 +543,20 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <knows> "stuff" _:label (key1=,key2=13) .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"stuff"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
 			Label:       "_:label",
 			ObjectType:  0,
-			Facets: []*facets.Facet{
-				&facets.Facet{"key1",
+			Facets: []*facetsp.Facet{
+				&facetsp.Facet{"key1",
 					[]byte(""),
 					facets.ValTypeForTypeID(facets.StringID),
 					[]string{},
 				},
-				&facets.Facet{"key2",
+				&facetsp.Facet{"key2",
 					[]byte("\r\000\000\000"),
 					facets.ValTypeForTypeID(facets.Int32ID),
 					nil,
@@ -565,19 +567,19 @@ var testNQuads = []struct {
 	// Should parse facets even if there is no label
 	{
 		input: `_:alice <knows> "stuff" (key1=,key2=13) .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"stuff"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
 			ObjectType:  0,
-			Facets: []*facets.Facet{
-				&facets.Facet{"key1",
+			Facets: []*facetsp.Facet{
+				&facetsp.Facet{"key1",
 					[]byte(""),
 					facets.ValTypeForTypeID(facets.StringID),
 					[]string{},
 				},
-				&facets.Facet{"key2",
+				&facetsp.Facet{"key2",
 					[]byte("\r\000\000\000"),
 					facets.ValTypeForTypeID(facets.Int32ID),
 					nil,
@@ -588,26 +590,26 @@ var testNQuads = []struct {
 	// Should not fail parsing with unnecessary spaces
 	{
 		input: `_:alice <knows> "stuff" ( key1 = 12 , key2=value2, key3=, key4 =val4 ) .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"stuff"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
 			ObjectType:  0,
-			Facets: []*facets.Facet{
-				&facets.Facet{"key1",
+			Facets: []*facetsp.Facet{
+				&facetsp.Facet{"key1",
 					[]byte("\014\000\000\000"),
 					facets.ValTypeForTypeID(facets.Int32ID),
 					nil},
-				&facets.Facet{"key2",
+				&facetsp.Facet{"key2",
 					[]byte("value2"),
 					facets.ValTypeForTypeID(facets.StringID),
 					[]string{"\001value2"}},
-				&facets.Facet{"key3",
+				&facetsp.Facet{"key3",
 					[]byte(""),
 					facets.ValTypeForTypeID(facets.StringID),
 					[]string{}},
-				&facets.Facet{"key4", []byte("val4"),
+				&facetsp.Facet{"key4", []byte("val4"),
 					facets.ValTypeForTypeID(facets.StringID),
 					[]string{"\001val4"}},
 			},
@@ -617,29 +619,29 @@ var testNQuads = []struct {
 	// Should parse all types
 	{
 		input: `_:alice <knows> "stuff" (key1=12,key2=value2,key3=1.2,key4=2006-01-02T15:04:05,key5=true,key6=false) .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"stuff"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
 			ObjectType:  0,
-			Facets: []*facets.Facet{
-				&facets.Facet{"key1", []byte("\014\000\000\000"),
+			Facets: []*facetsp.Facet{
+				&facetsp.Facet{"key1", []byte("\014\000\000\000"),
 					facets.ValTypeForTypeID(facets.Int32ID),
 					nil},
-				&facets.Facet{"key2", []byte("value2"),
+				&facetsp.Facet{"key2", []byte("value2"),
 					facets.ValTypeForTypeID(facets.StringID),
 					[]string{"\001value2"}},
-				&facets.Facet{"key3", []byte("333333\363?"),
+				&facetsp.Facet{"key3", []byte("333333\363?"),
 					facets.ValTypeForTypeID(facets.FloatID),
 					nil},
-				&facets.Facet{"key4", []byte("\001\000\000\000\016\273K7\345\000\000\000\000\377\377"),
+				&facetsp.Facet{"key4", []byte("\001\000\000\000\016\273K7\345\000\000\000\000\377\377"),
 					facets.ValTypeForTypeID(facets.DateTimeID),
 					nil},
-				&facets.Facet{"key5", []byte("\001"),
+				&facetsp.Facet{"key5", []byte("\001"),
 					facets.ValTypeForTypeID(facets.BoolID),
 					nil},
-				&facets.Facet{"key6", []byte("\000"),
+				&facetsp.Facet{"key6", []byte("\000"),
 					facets.ValTypeForTypeID(facets.BoolID),
 					nil},
 			},
@@ -650,29 +652,29 @@ var testNQuads = []struct {
 	{
 		// True, 1 , t are some valid true values in go strconv.ParseBool
 		input: `_:alice <knows> "stuff" (key1=true,key2=false,key3=True,key4=False,key5=1, key6=t) .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"stuff"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
 			ObjectType:  0,
-			Facets: []*facets.Facet{
-				&facets.Facet{"key1", []byte("\001"),
+			Facets: []*facetsp.Facet{
+				&facetsp.Facet{"key1", []byte("\001"),
 					facets.ValTypeForTypeID(facets.BoolID),
 					nil},
-				&facets.Facet{"key2", []byte("\000"),
+				&facetsp.Facet{"key2", []byte("\000"),
 					facets.ValTypeForTypeID(facets.BoolID),
 					nil},
-				&facets.Facet{"key3", []byte("True"),
+				&facetsp.Facet{"key3", []byte("True"),
 					facets.ValTypeForTypeID(facets.StringID),
 					[]string{"\001true"}},
-				&facets.Facet{"key4", []byte("False"),
+				&facetsp.Facet{"key4", []byte("False"),
 					facets.ValTypeForTypeID(facets.StringID),
 					[]string{"\001false"}},
-				&facets.Facet{"key5", []byte("\001\000\000\000"),
+				&facetsp.Facet{"key5", []byte("\001\000\000\000"),
 					facets.ValTypeForTypeID(facets.Int32ID),
 					nil},
-				&facets.Facet{"key6", []byte("t"),
+				&facetsp.Facet{"key6", []byte("t"),
 					facets.ValTypeForTypeID(facets.StringID),
 					[]string{"\001t"}},
 			},
@@ -683,17 +685,17 @@ var testNQuads = []struct {
 	// Only support decimal format for ints.
 	{
 		input: `_:alice <knows> "stuff" (key1=11adsf234,key2=11111111111111111111132333uasfk333) .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"stuff"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
 			ObjectType:  0,
-			Facets: []*facets.Facet{
-				&facets.Facet{"key1", []byte("11adsf234"),
+			Facets: []*facetsp.Facet{
+				&facetsp.Facet{"key1", []byte("11adsf234"),
 					facets.ValTypeForTypeID(facets.StringID),
 					[]string{"\00111adsf234"}},
-				&facets.Facet{"key2", []byte("11111111111111111111132333uasfk333"),
+				&facetsp.Facet{"key2", []byte("11111111111111111111132333uasfk333"),
 					facets.ValTypeForTypeID(facets.StringID),
 					[]string{"\00111111111111111111111132333uasfk333"}},
 			},
@@ -703,20 +705,20 @@ var testNQuads = []struct {
 	// Should parse dates
 	{
 		input: `_:alice <knows> "stuff" (key1=2002-10-02T15:00:00.05Z, key2=2006-01-02T15:04:05, key3=2006-01-02) .`,
-		nq: graph.NQuad{
+		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"stuff"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
 			ObjectType:  0,
-			Facets: []*facets.Facet{
-				&facets.Facet{"key1", []byte("\001\000\000\000\016\265-\000\360\002\372\360\200\377\377"),
+			Facets: []*facetsp.Facet{
+				&facetsp.Facet{"key1", []byte("\001\000\000\000\016\265-\000\360\002\372\360\200\377\377"),
 					facets.ValTypeForTypeID(facets.DateTimeID),
 					nil},
-				&facets.Facet{"key2", []byte("\001\000\000\000\016\273K7\345\000\000\000\000\377\377"),
+				&facetsp.Facet{"key2", []byte("\001\000\000\000\016\273K7\345\000\000\000\000\377\377"),
 					facets.ValTypeForTypeID(facets.DateTimeID),
 					nil},
-				&facets.Facet{"key3", []byte("\001\000\000\000\016\273Jd\000\000\000\000\000\377\377"),
+				&facetsp.Facet{"key3", []byte("\001\000\000\000\016\273Jd\000\000\000\000\000\377\377"),
 					facets.ValTypeForTypeID(facets.DateTimeID),
 					nil},
 			},

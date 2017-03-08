@@ -23,8 +23,9 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -34,7 +35,7 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
-func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
+func writeBatch(ctx context.Context, kv chan *taskp.KV, che chan error) {
 	wb := pstore.NewWriteBatch()
 	defer wb.Destroy()
 
@@ -69,11 +70,11 @@ func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 	che <- nil
 }
 
-func streamKeys(stream Worker_PredicateAndSchemaDataClient, groupId uint32) error {
+func streamKeys(stream workerp.Worker_PredicateAndSchemaDataClient, groupId uint32) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 
-	g := &task.GroupKeys{
+	g := &taskp.GroupKeys{
 		GroupId: groupId,
 	}
 
@@ -97,12 +98,12 @@ func streamKeys(stream Worker_PredicateAndSchemaDataClient, groupId uint32) erro
 			continue
 		}
 
-		var pl types.PostingList
+		var pl typesp.PostingList
 		x.Check(pl.Unmarshal(v.Data()))
 
 		kdup := make([]byte, len(k.Data()))
 		copy(kdup, k.Data())
-		key := &task.KC{
+		key := &taskp.KC{
 			Key:      kdup,
 			Checksum: pl.Checksum,
 		}
@@ -128,7 +129,7 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 		return 0, err
 	}
 	defer pl.Put(conn)
-	c := NewWorkerClient(conn)
+	c := workerp.NewWorkerClient(conn)
 
 	stream, err := c.PredicateAndSchemaData(context.Background())
 	if err != nil {
@@ -142,7 +143,7 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 		return 0, x.Wrapf(err, "While streaming keys group")
 	}
 
-	kvs := make(chan *task.KV, 1000)
+	kvs := make(chan *taskp.KV, 1000)
 	che := make(chan error)
 	go writeBatch(ctx, kvs, che)
 
@@ -186,8 +187,8 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 
 // PredicateAndSchemaData can be used to return data corresponding to a predicate over
 // a stream.
-func (w *grpcWorker) PredicateAndSchemaData(stream Worker_PredicateAndSchemaDataServer) error {
-	gkeys := &task.GroupKeys{}
+func (w *grpcWorker) PredicateAndSchemaData(stream workerp.Worker_PredicateAndSchemaDataServer) error {
+	gkeys := &taskp.GroupKeys{}
 
 	// Receive all keys from client first.
 	for {
@@ -240,7 +241,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream Worker_PredicateAndSchemaData
 
 		// No checksum check for schema keys
 		if !pk.IsSchema() {
-			var pl types.PostingList
+			var pl typesp.PostingList
 			x.Check(pl.Unmarshal(v.Data()))
 
 			idx := sort.Search(len(gkeys.Keys), func(i int) bool {
@@ -262,7 +263,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream Worker_PredicateAndSchemaData
 
 		// We just need to stream this kv. So, we can directly use the key
 		// and val without any copying.
-		kv := &task.KV{
+		kv := &taskp.KV{
 			Key: k.Data(),
 			Val: v.Data(),
 		}

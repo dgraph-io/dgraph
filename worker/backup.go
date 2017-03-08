@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -23,7 +26,7 @@ const numBackupRoutines = 10
 
 type kv struct {
 	prefix string
-	list   *types.PostingList
+	list   *typesp.PostingList
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {
@@ -48,7 +51,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				buf.WriteString("^^<pwd:")
 				buf.WriteString(vID.Name())
 				buf.WriteByte('>')
-			} else if p.PostingType == types.Posting_VALUE_LANG {
+			} else if p.PostingType == typesp.Posting_VALUE_LANG {
 				buf.WriteByte('@')
 				buf.WriteString(string(p.Metadata))
 			} else if vID != types.BinaryID &&
@@ -69,17 +72,17 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			buf.WriteByte('>')
 		}
 		// Facets.
-		facets := p.Facets
-		if len(facets) != 0 {
+		fcs := p.Facets
+		if len(fcs) != 0 {
 			buf.WriteString(" (")
-			for i, f := range facets {
+			for i, f := range fcs {
 				if i != 0 {
 					buf.WriteByte(',')
 				}
 				buf.WriteString(f.Key)
 				buf.WriteByte('=')
 				fVal := &types.Val{Tid: types.StringID}
-				x.Check(types.Marshal(types.ValFor(f), fVal))
+				x.Check(types.Marshal(facets.ValFor(f), fVal))
 				buf.WriteString(fVal.Value.(string))
 			}
 			buf.WriteByte(')')
@@ -202,7 +205,7 @@ func backup(gid uint32, bdir string) error {
 		prefix.WriteString("> <")
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
-		pl := &types.PostingList{}
+		pl := &typesp.PostingList{}
 		x.Check(pl.Unmarshal(it.Value().Data()))
 		chkv <- kv{
 			prefix: prefix.String(),
@@ -221,21 +224,21 @@ func backup(gid uint32, bdir string) error {
 	return err
 }
 
-func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *BackupPayload {
+func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *workerp.BackupPayload {
 	n := groups().Node(gid)
 	if n.AmLeader() {
 		x.Trace(ctx, "Leader of group: %d. Running backup.", gid)
 		if err := backup(gid, *backupPath); err != nil {
 			x.TraceError(ctx, err)
-			return &BackupPayload{
+			return &workerp.BackupPayload{
 				ReqId:  reqId,
-				Status: BackupPayload_FAILED,
+				Status: workerp.BackupPayload_FAILED,
 			}
 		}
 		x.Trace(ctx, "Backup done for group: %d.", gid)
-		return &BackupPayload{
+		return &workerp.BackupPayload{
 			ReqId:   reqId,
-			Status:  BackupPayload_SUCCESS,
+			Status:  workerp.BackupPayload_SUCCESS,
 			GroupId: gid,
 		}
 	}
@@ -268,24 +271,24 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *Backup
 	// But probably not worthy of crashing the server. We can just skip the backup.
 	if conn == nil {
 		x.Trace(ctx, fmt.Sprintf("Unable to find a server to backup group: %d", gid))
-		return &BackupPayload{
+		return &workerp.BackupPayload{
 			ReqId:   reqId,
-			Status:  BackupPayload_FAILED,
+			Status:  workerp.BackupPayload_FAILED,
 			GroupId: gid,
 		}
 	}
 
-	c := NewWorkerClient(conn)
-	nr := &BackupPayload{
+	c := workerp.NewWorkerClient(conn)
+	nr := &workerp.BackupPayload{
 		ReqId:   reqId,
 		GroupId: gid,
 	}
 	nrep, err := c.Backup(ctx, nr)
 	if err != nil {
 		x.TraceError(ctx, err)
-		return &BackupPayload{
+		return &workerp.BackupPayload{
 			ReqId:   reqId,
-			Status:  BackupPayload_FAILED,
+			Status:  workerp.BackupPayload_FAILED,
 			GroupId: gid,
 		}
 	}
@@ -295,19 +298,19 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *Backup
 // Backup request is used to trigger backups for the request list of groups.
 // If a server receives request to backup a group that it doesn't handle, it would
 // automatically relay that request to the server that it thinks should handle the request.
-func (w *grpcWorker) Backup(ctx context.Context, req *BackupPayload) (*BackupPayload, error) {
-	reply := &BackupPayload{ReqId: req.ReqId}
-	reply.Status = BackupPayload_FAILED // Set by default.
+func (w *grpcWorker) Backup(ctx context.Context, req *workerp.BackupPayload) (*workerp.BackupPayload, error) {
+	reply := &workerp.BackupPayload{ReqId: req.ReqId}
+	reply.Status = workerp.BackupPayload_FAILED // Set by default.
 
 	if ctx.Err() != nil {
 		return reply, ctx.Err()
 	}
 	if !w.addIfNotPresent(req.ReqId) {
-		reply.Status = BackupPayload_DUPLICATE
+		reply.Status = workerp.BackupPayload_DUPLICATE
 		return reply, nil
 	}
 
-	chb := make(chan *BackupPayload, 1)
+	chb := make(chan *workerp.BackupPayload, 1)
 	go func() {
 		chb <- handleBackupForGroup(ctx, req.ReqId, req.GroupId)
 	}()
@@ -329,7 +332,7 @@ func BackupOverNetwork(ctx context.Context) error {
 	// Let's first collect all groups.
 	gids := groups().KnownGroups()
 
-	ch := make(chan *BackupPayload, len(gids))
+	ch := make(chan *workerp.BackupPayload, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
 			reqId := uint64(rand.Int63())
@@ -339,7 +342,7 @@ func BackupOverNetwork(ctx context.Context) error {
 
 	for i := 0; i < len(gids); i++ {
 		bp := <-ch
-		if bp.Status != BackupPayload_SUCCESS {
+		if bp.Status != workerp.BackupPayload_SUCCESS {
 			x.Trace(ctx, "Backup status: %v for group id: %d", bp.Status, bp.GroupId)
 			return fmt.Errorf("Backup status: %v for group id: %d", bp.Status, bp.GroupId)
 		} else {

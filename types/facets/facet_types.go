@@ -16,45 +16,47 @@
 
 package facets
 
+import "github.com/dgraph-io/dgraph/protos/facetsp"
+
 const (
-	Int32ID    = TypeID(Facet_INT32)
-	FloatID    = TypeID(Facet_FLOAT)
-	BoolID     = TypeID(Facet_BOOL)
-	DateTimeID = TypeID(Facet_DATETIME)
-	StringID   = TypeID(Facet_STRING)
+	Int32ID    = TypeID(facetsp.Facet_INT32)
+	FloatID    = TypeID(facetsp.Facet_FLOAT)
+	BoolID     = TypeID(facetsp.Facet_BOOL)
+	DateTimeID = TypeID(facetsp.Facet_DATETIME)
+	StringID   = TypeID(facetsp.Facet_STRING)
 )
 
-type TypeID Facet_ValType
+type TypeID facetsp.Facet_ValType
 
-// ValTypeForTypeID gives Facet_ValType for given TypeID
-func ValTypeForTypeID(typId TypeID) Facet_ValType {
+// ValTypeForTypeID gives facetsp.Facet_ValType for given TypeID
+func ValTypeForTypeID(typId TypeID) facetsp.Facet_ValType {
 	switch typId {
 	case Int32ID:
-		return Facet_INT32
+		return facetsp.Facet_INT32
 	case FloatID:
-		return Facet_FLOAT
+		return facetsp.Facet_FLOAT
 	case BoolID:
-		return Facet_BOOL
+		return facetsp.Facet_BOOL
 	case DateTimeID:
-		return Facet_DATETIME
+		return facetsp.Facet_DATETIME
 	case StringID:
-		return Facet_STRING
+		return facetsp.Facet_STRING
 	}
 	panic("Unhandled case in ValTypeForTypeID.")
 }
 
-// TypeIDForValType gives TypeID for Facet_ValType
-func TypeIDForValType(valType Facet_ValType) TypeID {
+// TypeIDForValType gives TypeID for facetsp.Facet_ValType
+func TypeIDForValType(valType facetsp.Facet_ValType) TypeID {
 	switch valType {
-	case Facet_INT32:
+	case facetsp.Facet_INT32:
 		return Int32ID
-	case Facet_FLOAT:
+	case facetsp.Facet_FLOAT:
 		return FloatID
-	case Facet_BOOL:
+	case facetsp.Facet_BOOL:
 		return BoolID
-	case Facet_DATETIME:
+	case facetsp.Facet_DATETIME:
 		return DateTimeID
-	case Facet_STRING:
+	case facetsp.Facet_STRING:
 		return StringID
 	}
 	panic("Unhandled case in TypeIDForValType.")

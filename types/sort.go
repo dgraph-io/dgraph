@@ -20,13 +20,13 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type sortBase struct {
 	values []Val
-	ul     *task.List
+	ul     *taskp.List
 }
 
 // Len returns size of vector.
@@ -60,7 +60,7 @@ func (s byValue) Less(i, j int) bool {
 }
 
 // Sort sorts the given array in-place.
-func Sort(sID TypeID, v []Val, ul *task.List, desc bool) error {
+func Sort(sID TypeID, v []Val, ul *taskp.List, desc bool) error {
 	var toBeSorted sort.Interface
 	b := sortBase{v, ul}
 	toBeSorted = byValue{b}

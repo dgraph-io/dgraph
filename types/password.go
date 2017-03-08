@@ -1,4 +1,3 @@
-
 package types
 
 import (
@@ -42,10 +41,9 @@ func VerifyPassword(plain, encrypted string) error {
 	arr := strings.Split(strings.Trim(encrypted, "$"), "$")
 	x.AssertTruef(len(arr) == 3, "Password is corrupted")
 	target := arr[2]
-	
+
 	byt, err := base64.StdEncoding.DecodeString(target)
 	x.AssertTruef(err == nil, "Password is corrupted")
-	
+
 	return bcrypt.CompareHashAndPassword(byt, []byte(plain))
 }
-

@@ -8,6 +8,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/x"
 
 	"google.golang.org/grpc"
@@ -68,14 +69,14 @@ func (p *poolsi) connect(addr string) {
 	}
 
 	pool := newPool(addr, 5)
-	query := new(Payload)
+	query := new(workerp.Payload)
 	query.Data = make([]byte, 10)
 	x.Check2(rand.Read(query.Data))
 
 	conn, err := pool.Get()
 	x.Checkf(err, "Unable to connect")
 
-	c := NewWorkerClient(conn)
+	c := workerp.NewWorkerClient(conn)
 	resp, err := c.Echo(context.Background(), query)
 	if err != nil {
 		log.Printf("While trying to connect to %q, got error: %v\n", addr, err)
