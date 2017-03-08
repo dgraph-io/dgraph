@@ -31,8 +31,10 @@ func IntersectWith(u, v *task.List) {
 	}
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
-	if ratio < 500 {
+	if ratio < 100 {
 		IntersectWithLin(u, v)
+	} else if ratio < 500 {
+		IntersectWithJump(u, v)
 	} else {
 		IntersectWithBin(u, v)
 	}
@@ -62,29 +64,98 @@ func IntersectWithLin(u, v *task.List) {
 	u.Uids = out
 }
 
-func IntersectWithBin(u, v *task.List) {
+func IntersectWithJump(u, v *task.List) {
 	out := u.Uids[:0]
-	m := len(u.Uids)
-	n := len(v.Uids)
-	// We want to do binary search on bigger list.
-	smallList, bigList := u, v
-	if m > n {
-		smallList, bigList = bigList, smallList
-	}
-	// This is reduce the search space after every match.
-	searchList := bigList.Uids
-	for _, uid := range smallList.Uids {
-		idx := sort.Search(len(searchList), func(i int) bool {
-			return searchList[i] >= uid
-		})
-		if idx < len(searchList) && searchList[idx] == uid {
+	n := len(u.Uids)
+	m := len(v.Uids)
+	jump := 30
+	for i, k := 0, 0; i < n && k < m; {
+		uid := u.Uids[i]
+		vid := v.Uids[k]
+		if uid == vid {
 			out = append(out, uid)
-			// The next UID would never be at less than this idx
-			// as the list is sorted.
-			searchList = searchList[idx:]
+			k++
+			i++
+		} else if k+jump < m && uid > v.Uids[k+jump] {
+			k = k + jump
+		} else if i+jump < n && vid > u.Uids[i+jump] {
+			i = i + jump
+		} else if uid > vid {
+			for k = k + 1; k < m && v.Uids[k] < uid; k++ {
+			}
+		} else {
+			for i = i + 1; i < n && u.Uids[i] < vid; i++ {
+			}
 		}
 	}
 	u.Uids = out
+}
+
+func IntersectWithBin(u, v *task.List) {
+	d := u.Uids
+	q := v.Uids
+	ld := len(d)
+	lq := len(q)
+
+	if ld < lq {
+		ld, lq = lq, ld
+		d, q = q, d
+	}
+	final := make([]uint64, 0, lq)
+	if ld == 0 || lq == 0 || d[ld-1] < q[0] || q[lq-1] < d[0] {
+		u.Uids = final
+		return
+	}
+	x.AssertTrue(ld >= lq)
+
+	val := d[0]
+	minq := sort.Search(len(q), func(i int) bool {
+		return q[i] >= val
+	})
+
+	val = d[len(d)-1]
+	maxq := sort.Search(len(q), func(i int) bool {
+		return q[i] > val
+	})
+
+	binIntersect(d, q[minq:maxq], &final)
+	u.Uids = final
+}
+
+func binIntersect(d, q []uint64, final *[]uint64) {
+	if len(d) == 0 || len(q) == 0 {
+		return
+	}
+	midq := len(q) / 2
+	qval := q[midq]
+	midd := sort.Search(len(d), func(i int) bool {
+		return d[i] >= qval
+	})
+
+	dd := d[0:midd]
+	qq := q[0:midq]
+	if len(dd) > len(qq) { // D > Q
+		binIntersect(dd, qq, final)
+	} else {
+		binIntersect(qq, dd, final)
+	}
+
+	if midd >= len(d) {
+		return
+	}
+	if d[midd] == qval {
+		*final = append(*final, qval)
+	} else {
+		midd -= 1
+	}
+
+	dd = d[midd+1:]
+	qq = q[midq+1:]
+	if len(dd) > len(qq) { // D > Q
+		binIntersect(dd, qq, final)
+	} else {
+		binIntersect(qq, dd, final)
+	}
 }
 
 // IntersectSorted intersect a list of UIDLists. An alternative is to do
