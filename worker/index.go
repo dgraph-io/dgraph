@@ -10,7 +10,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -76,7 +75,7 @@ func (n *node) syncAllMarks(ctx context.Context) error {
 
 // RebuildIndex request is used to trigger rebuilding of index for the requested
 // attribute. Payload is not really used.
-func (w *grpcWorker) RebuildIndex(ctx context.Context, req *taskp.RebuildIndex) (*Payload, error) {
+func (w *grpcWorker) RebuildIndex(ctx context.Context, req *taskp.RebuildIndex) (*workerp.Payload, error) {
 	if ctx.Err() != nil {
 		return &workerp.Payload{}, ctx.Err()
 	}
@@ -86,7 +85,7 @@ func (w *grpcWorker) RebuildIndex(ctx context.Context, req *taskp.RebuildIndex) 
 	return &workerp.Payload{}, nil
 }
 
-func proposeRebuildIndex(ctx context.Context, ri *task.RebuildIndex) error {
+func proposeRebuildIndex(ctx context.Context, ri *taskp.RebuildIndex) error {
 	gid := ri.GroupId
 	n := groups().Node(gid)
 	proposal := &taskp.Proposal{RebuildIndex: ri}
@@ -109,7 +108,7 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
-		return proposeRebuildIndex(ctx, &task.RebuildIndex{GroupId: gid, Attr: attr})
+		return proposeRebuildIndex(ctx, &taskp.RebuildIndex{GroupId: gid, Attr: attr})
 	}
 
 	// Send this over the network.
@@ -124,7 +123,7 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 	x.Trace(ctx, "Sending request to %v", addr)
 
 	c := NewWorkerClient(conn)
-	_, err = c.RebuildIndex(ctx, &task.RebuildIndex{Attr: attr, GroupId: gid})
+	_, err = c.RebuildIndex(ctx, &taskp.RebuildIndex{Attr: attr, GroupId: gid})
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.RebuildIndex"))
 		return err

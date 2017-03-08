@@ -784,7 +784,7 @@ func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error
 	}
 }
 
-func (w *grpcWorker) RaftMessage(ctx context.Context, query *workerp.Payload) (*Payload, error) {
+func (w *grpcWorker) RaftMessage(ctx context.Context, query *workerp.Payload) (*workerp.Payload, error) {
 	if ctx.Err() != nil {
 		return &workerp.Payload{}, ctx.Err()
 	}
@@ -815,7 +815,7 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *workerp.Payload) (*
 	return &workerp.Payload{}, nil
 }
 
-func (w *grpcWorker) JoinCluster(ctx context.Context, rc *taskp.RaftContext) (*Payload, error) {
+func (w *grpcWorker) JoinCluster(ctx context.Context, rc *taskp.RaftContext) (*workerp.Payload, error) {
 	if ctx.Err() != nil {
 		return &workerp.Payload{}, ctx.Err()
 	}

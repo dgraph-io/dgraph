@@ -184,7 +184,7 @@ func MutateOverNetwork(ctx context.Context, m *taskp.Mutations) error {
 }
 
 // Mutate is used to apply mutations over the network on other instances.
-func (w *grpcWorker) Mutate(ctx context.Context, m *taskp.Mutations) (*Payload, error) {
+func (w *grpcWorker) Mutate(ctx context.Context, m *taskp.Mutations) (*workerp.Payload, error) {
 	if ctx.Err() != nil {
 		return &workerp.Payload{}, ctx.Err()
 	}

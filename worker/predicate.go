@@ -23,7 +23,9 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -34,7 +36,7 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
-func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
+func writeBatch(ctx context.Context, kv chan *taskp.KV, che chan error) {
 	wb := pstore.NewWriteBatch()
 	defer wb.Destroy()
 
@@ -69,7 +71,7 @@ func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 	che <- nil
 }
 
-func streamKeys(stream Worker_PredicateAndSchemaDataClient, groupId uint32) error {
+func streamKeys(stream workerp.Worker_PredicateAndSchemaDataClient, groupId uint32) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 
@@ -142,7 +144,7 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 		return 0, x.Wrapf(err, "While streaming keys group")
 	}
 
-	kvs := make(chan *task.KV, 1000)
+	kvs := make(chan *taskp.KV, 1000)
 	che := make(chan error)
 	go writeBatch(ctx, kvs, che)
 
@@ -186,7 +188,7 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 
 // PredicateAndSchemaData can be used to return data corresponding to a predicate over
 // a stream.
-func (w *grpcWorker) PredicateAndSchemaData(stream Worker_PredicateAndSchemaDataServer) error {
+func (w *grpcWorker) PredicateAndSchemaData(stream workerp.Worker_PredicateAndSchemaDataServer) error {
 	gkeys := &task.GroupKeys{}
 
 	// Receive all keys from client first.
@@ -262,7 +264,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream Worker_PredicateAndSchemaData
 
 		// We just need to stream this kv. So, we can directly use the key
 		// and val without any copying.
-		kv := &task.KV{
+		kv := &taskp.KV{
 			Key: k.Data(),
 			Val: v.Data(),
 		}

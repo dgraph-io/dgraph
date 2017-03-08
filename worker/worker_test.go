@@ -338,14 +338,14 @@ func populateGraphForSort(t *testing.T, ps *store.Store) {
 	time.Sleep(200 * time.Millisecond) // Let indexing finish.
 }
 
-// newSort creates a task.Sort for sorting.
-func newSort(uids [][]uint64, offset, count int) *task.Sort {
+// newSort creates a taskp.Sort for sorting.
+func newSort(uids [][]uint64, offset, count int) *taskp.Sort {
 	x.AssertTrue(uids != nil)
 	uidMatrix := make([]*taskp.List, len(uids))
 	for i, l := range uids {
 		uidMatrix[i] = &taskp.List{Uids: l}
 	}
-	return &task.Sort{
+	return &taskp.Sort{
 		Attr:      "dob",
 		Offset:    int32(offset),
 		Count:     int32(count),
