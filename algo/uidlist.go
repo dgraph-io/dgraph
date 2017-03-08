@@ -8,6 +8,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const jump = 32 // Jump size in InsersectWithJump.
+
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	out := u.Uids[:0]
@@ -68,7 +70,6 @@ func IntersectWithJump(u, v *task.List) {
 	out := u.Uids[:0]
 	n := len(u.Uids)
 	m := len(v.Uids)
-	jump := 30
 	for i, k := 0, 0; i < n && k < m; {
 		uid := u.Uids[i]
 		vid := v.Uids[k]
@@ -91,6 +92,9 @@ func IntersectWithJump(u, v *task.List) {
 	u.Uids = out
 }
 
+// IntersectWithBin is based on the paper
+// "Fast Intersection Algorithms for Sorted Sequences"
+// https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
 func IntersectWithBin(u, v *task.List) {
 	d := u.Uids
 	q := v.Uids
@@ -106,7 +110,6 @@ func IntersectWithBin(u, v *task.List) {
 		u.Uids = final
 		return
 	}
-	x.AssertTrue(ld >= lq)
 
 	val := d[0]
 	minq := sort.Search(len(q), func(i int) bool {
@@ -122,6 +125,8 @@ func IntersectWithBin(u, v *task.List) {
 	u.Uids = final
 }
 
+// binIntersect is the recursive function used.
+// NOTE: len(d) >= len(q) (Must hold)
 func binIntersect(d, q []uint64, final *[]uint64) {
 	if len(d) == 0 || len(q) == 0 {
 		return
