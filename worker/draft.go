@@ -525,7 +525,9 @@ func (n *node) retrieveSnapshot(rc task.RaftContext) {
 	// Should invalidate/remove pl's to this group only ideally
 	posting.EvictAll(10)
 	x.Check2(populateShard(n.ctx, pool, n.gid))
-	x.Checkf(schema.LoadFromDb(), "Error while initilizating schema")
+	// Populate shard stores the streamed data directly into db, so we need to refresh
+	// schema for current group id
+	x.Checkf(schema.Refresh(n.gid), "Error while initilizating schema")
 }
 
 func (n *node) Run() {
