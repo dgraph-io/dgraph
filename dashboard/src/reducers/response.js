@@ -3,6 +3,11 @@ const response = (
         text: "",
         data: {},
         success: false,
+        plotAxis: [],
+        nodes: [],
+        edges: [],
+        allNodes: [],
+        allEdges: [],
     },
     action,
 ) => {
@@ -15,9 +20,15 @@ const response = (
         case "SUCCESS_RESPONSE":
             // TODO - There has to be a cleaner way to assign these default values.
             return {
-                text: JSON.stringify(action.data) || "",
-                data: action.data || {},
+                ...state,
+                data: action.data,
                 success: true,
+            };
+        case "RESPONSE_PROPERTIES":
+            // TODO - Exclude type from action.
+            return {
+                ...state,
+                ...action,
             };
         default:
             return state;

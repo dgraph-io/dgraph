@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 
 import GraphContainer from "./GraphContainer";
+import ResponseInfoContainer from "./ResponseInfoContainer";
 
 import "../assets/css/Response.css";
 
@@ -58,9 +59,13 @@ class Response extends Component {
 
     render() {
         return (
-            <div className="Response" id="response">
-                <GraphContainer />
-            </div>
+            // TODO - Check why does this have id?
+            (
+                <div className="Response" id="response">
+                    <GraphContainer />
+                    <ResponseInfoContainer />
+                </div>
+            )
         );
     }
 }

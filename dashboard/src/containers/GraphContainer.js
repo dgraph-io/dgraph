@@ -4,7 +4,6 @@ import classNames from "classnames";
 import vis from "vis";
 
 import Graph from "../components/Graph";
-import Label from "../components/Label";
 import { outgoingEdges } from "./Helpers";
 
 import "../assets/css/Graph.css";
@@ -25,17 +24,21 @@ function doOnClick(params, allNodeSet, edgeSet) {
         this.setState({
             selectedNode: true,
         });
-        this.props.setCurrentNode(currentNode.title);
+        // TODO - Dispatch an event.
+        // this.props.setCurrentNode(currentNode.title);
     } else if (params.edges.length > 0) {
         var edgeUid = params.edges[0], currentEdge = edgeSet.get(edgeUid);
         this.setState({
             selectedNode: true,
         });
-        this.props.setCurrentNode(currentEdge.title);
+        // TODO - Dispatch an event.
+        // this.props.setCurrentNode(currentEdge.title);
     } else {
         this.setState({
             selectedNode: false,
         });
+        // TODO - Dispatch an event.
+
         this.props.setCurrentNode("{}");
     }
 }
@@ -325,46 +328,48 @@ function renderNetwork(props) {
     this.setState({ expand: expand, fit: fit });
 }
 
-// class GraphContainer extends Component {
-//     constructor(props: Props) {
-//         super(props);
+class GraphContainer extends Component {
+    constructor(props: Props) {
+        super(props);
 
-//         this.state = {
-//             selectedNode: false,
-//             expand: function() {},
-//             fit: function() {},
-//         };
-//     }
+        this.state = {
+            selectedNode: false,
+            expand: function() {},
+            fit: function() {},
+        };
+    }
 
-//     expandAll = () => {
-//         this.state.expand.bind(this)();
-//     };
+    render() {
+        const { plotAxis, text, success } = this.props;
+        return <Graph plotAxis={plotAxis} text={text} success={success} />;
+    }
 
-//     componentWillReceiveProps = nextProps => {
-//         if (nextProps.graphHeight !== this.props.graphHeight) {
-//             this.state.fit();
-//         }
-//         if (
-//             // TODO - Check how to do a shallow check?
-//             nextProps.nodes.length === this.props.nodes.length &&
-//             nextProps.edges.length === this.props.edges.length &&
-//             nextProps.allNodes.length === this.props.allNodes.length &&
-//             nextProps.allEdges.length === this.props.allEdges.length &&
-//             nextProps.response === this.props.response &&
-//             nextProps.treeView === this.props.treeView
-//         ) {
-//             return;
-//         }
+    expandAll = () => {
+        this.state.expand.bind(this)();
+    };
 
-//         renderNetwork.bind(this, nextProps)();
-//     };
-// }
+    componentWillReceiveProps = nextProps => {
+        if (nextProps.graphHeight !== this.props.graphHeight) {
+            this.state.fit();
+        }
+        if (
+            // TODO - Check how to do a shallow check?
+            nextProps.nodes.length === this.props.nodes.length &&
+            nextProps.edges.length === this.props.edges.length &&
+            nextProps.allNodes.length === this.props.allNodes.length &&
+            nextProps.allEdges.length === this.props.allEdges.length &&
+            nextProps.response === this.props.response &&
+            nextProps.treeView === this.props.treeView
+        ) {
+            return;
+        }
+
+        renderNetwork.bind(this, nextProps)();
+    };
+}
 
 const mapStateToProps = state => ({
-    text: state.response.text,
-    success: state.response.success,
+    ...state.response,
 });
 
-const GraphContainer = connect(mapStateToProps, null)(Graph);
-
-export default GraphContainer;
+export default connect(mapStateToProps, null)(GraphContainer);
