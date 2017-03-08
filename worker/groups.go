@@ -405,8 +405,7 @@ func (g *groupi) periodicSyncMemberships() {
 // - Otherwise, it would iterate over the memberships and marks the server deleted
 func (g *groupi) removeNode(groupId uint32, nodeId uint64, addr string) {
 	if g.ServesGroup(0) {
-		// This server serves group zero.
-		// prevents duplicate proposals
+		// This server serves group zero. prevents duplicate proposals
 		if g.isRemoved(groupId, nodeId) {
 			return
 		}
@@ -503,10 +502,6 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 		g.all[mm.GroupId] = sl
 	}
 
-	if g.removed == nil {
-		g.removed = make(map[uint32]*servers)
-	}
-
 	for {
 		// Remove all instances of the provided node. There should only be one.
 		found := false
@@ -521,26 +516,34 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 			break
 		}
 	}
+
+	if g.removed == nil {
+		g.removed = make(map[uint32]*servers)
+	}
+	rsl := g.removed[mm.GroupId]
+	if rsl == nil {
+		rsl = new(servers)
+		g.removed[mm.GroupId] = rsl
+	}
+
+	// Remove it when adding to avoid issues in group zero when memberhsip update
+	// logs are replayed
+	for {
+		// Remove all instances of the provided node. There should only be one.
+		found := false
+		for i, s := range rsl.list {
+			if s.NodeId == update.NodeId {
+				found = true
+				rsl.list[i] = rsl.list[len(rsl.list)-1]
+				rsl.list = rsl.list[:len(rsl.list)-1]
+			}
+		}
+		if !found {
+			break
+		}
+	}
+
 	if mm.AmDead {
-		rsl := g.removed[mm.GroupId]
-		if rsl == nil {
-			rsl = new(servers)
-			g.removed[mm.GroupId] = rsl
-		}
-		for {
-			// Remove all instances of the provided node. There should only be one.
-			found := false
-			for i, s := range rsl.list {
-				if s.NodeId == update.NodeId {
-					found = true
-					rsl.list[i] = rsl.list[len(rsl.list)-1]
-					rsl.list = rsl.list[:len(rsl.list)-1]
-				}
-			}
-			if !found {
-				break
-			}
-		}
 		rsl.list = append(rsl.list, update)
 		// Print out the entire list.
 		for gid, sl := range g.all {
