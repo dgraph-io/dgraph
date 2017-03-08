@@ -119,7 +119,7 @@ func TestBackup(t *testing.T) {
 			require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4"}, nq.Subject)
 			// The only value we set was "photon".
 			if nq.ObjectValue != nil {
-				require.Equal(t, &graph.Value{&graph.Value_DefaultVal{"pho\\ton"}},
+				require.Equal(t, &graphp.Value{&graphp.Value_DefaultVal{"pho\\ton"}},
 					nq.ObjectValue)
 				// Test objecttype
 				if nq.Subject == "0x1" {

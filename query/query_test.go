@@ -2051,7 +2051,7 @@ func TestToFastJSONReverseDelSetCount(t *testing.T) {
 		js)
 }
 
-func getProperty(properties []*graph.Property, prop string) *graph.Value {
+func getProperty(properties []*graph.Property, prop string) *graphp.Value {
 	for _, p := range properties {
 		if p.Prop == prop {
 			return p.Value
