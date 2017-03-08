@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 
 	"github.com/dgraph-io/dgraph/schema"
@@ -2051,7 +2052,7 @@ func TestToFastJSONReverseDelSetCount(t *testing.T) {
 		js)
 }
 
-func getProperty(properties []*graph.Property, prop string) *graphp.Value {
+func getProperty(properties []*graphp.Property, prop string) *graphp.Value {
 	for _, p := range properties {
 		if p.Prop == prop {
 			return p.Value

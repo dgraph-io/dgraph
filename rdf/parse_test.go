@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/protos/facetsp"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/stretchr/testify/assert"
