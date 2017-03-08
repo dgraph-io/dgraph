@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -37,7 +38,7 @@ type state struct {
 	// Can have fine grained locking later if necessary, per group or predicate
 	x.SafeMutex
 	// Map containing predicate to type information.
-	predicate map[string]*types.Schema
+	predicate map[string]*typesp.Schema
 	elog      trace.EventLog
 }
 
@@ -70,7 +71,7 @@ func (s *state) SetType(pred string, valueType types.TypeID) {
 	if schema, ok := s.predicate[pred]; ok {
 		schema.ValueType = uint32(valueType)
 	} else {
-		s.predicate[pred] = &types.Schema{ValueType: uint32(valueType)}
+		s.predicate[pred] = &typesp.Schema{ValueType: uint32(valueType)}
 	}
 }
 
@@ -80,7 +81,7 @@ func (s *state) SetReverse(pred string, rev bool) {
 	s.Lock()
 	defer s.Unlock()
 	if schema, ok := s.predicate[pred]; !ok {
-		s.predicate[pred] = &types.Schema{ValueType: uint32(types.UidID), Reverse: rev}
+		s.predicate[pred] = &typesp.Schema{ValueType: uint32(types.UidID), Reverse: rev}
 	} else {
 		x.AssertTruef(schema.ValueType == uint32(types.UidID),
 			"predicate %s is not of type uid", pred)
@@ -104,7 +105,7 @@ func (s *state) AddIndex(pred string, tokenizer string) {
 }
 
 // Set sets the schema for given predicate
-func (s *state) Set(pred string, schema *types.Schema) {
+func (s *state) Set(pred string, schema *typesp.Schema) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = schema
@@ -209,7 +210,7 @@ func LoadFromDb() error {
 		key := itr.Key().Data()
 		attr := x.Parse(key).Attr
 		data := itr.Value().Data()
-		var s types.Schema
+		var s typesp.Schema
 		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
 		State().Set(attr, &s)
 	}
@@ -219,14 +220,14 @@ func LoadFromDb() error {
 
 func reset() {
 	pstate = new(state)
-	State().predicate = make(map[string]*types.Schema)
+	State().predicate = make(map[string]*typesp.Schema)
 	State().elog = trace.NewEventLog("Dynamic Schema", "state")
 }
 
 // SyncEntry stores the schema mutation information
 type SyncEntry struct {
 	Attr   string
-	Schema types.Schema
+	Schema typesp.Schema
 	Water  *x.WaterMark
 	Index  uint64
 }

@@ -1,9 +1,9 @@
 // To compile this file, in dgraph directory :
-// protoc --gofast_out=plugins=grpc:. --proto_path=${GOPATH}/src:. protos/types.proto
+// protoc --gofast_out=plugins=grpc:. --proto_path=${GOPATH}/src:. protos/typesp/types.proto
 
 syntax = "proto3";
 
-import "github.com/dgraph-io/dgraph/protos/facets.proto";
+import "github.com/dgraph-io/dgraph/protos/facetsp/facets.proto";
 
 package typesp;
 

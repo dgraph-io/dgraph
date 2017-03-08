@@ -32,7 +32,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -193,11 +193,11 @@ func getValue(tv *task.Value) (types.Val, error) {
 
 var nodePool = sync.Pool{
 	New: func() interface{} {
-		return &graph.Node{}
+		return &graphp.Node{}
 	},
 }
 
-var nodeCh chan *graph.Node
+var nodeCh chan *graphp.Node
 
 func release() {
 	for n := range nodeCh {
@@ -208,13 +208,13 @@ func release() {
 		for i := 0; i < len(n.Children); i++ {
 			nodeCh <- n.Children[i]
 		}
-		*n = graph.Node{}
+		*n = graphp.Node{}
 		nodePool.Put(n)
 	}
 }
 
 func init() {
-	nodeCh = make(chan *graph.Node, 1000)
+	nodeCh = make(chan *graphp.Node, 1000)
 	go release()
 }
 
@@ -222,13 +222,13 @@ var (
 	ErrEmptyVal = errors.New("query: harmless error, e.g. task.Val is nil")
 )
 
-// This method gets the values and children for a subgraph.
+// This method gets the values and children for a subgraphp.
 func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 	uidAlreadySet := false
 
 	facetsNode := dst.New("@facets")
-	// We go through all predicate children of the subgraph.
+	// We go through all predicate children of the subgraphp.
 	for _, pc := range sg.Children {
 
 		if pc.uidMatrix == nil {
@@ -401,9 +401,9 @@ func convertWithBestEffort(tv *task.Value, attr string) (types.Val, error) {
 	return sv, nil
 }
 
-func createProperty(prop string, v types.Val) *graph.Property {
+func createProperty(prop string, v types.Val) *graphp.Property {
 	pval := toProtoValue(v)
-	return &graph.Property{Prop: prop, Value: pval}
+	return &graphp.Property{Prop: prop, Value: pval}
 }
 
 func isPresent(list []string, str string) bool {

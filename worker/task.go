@@ -32,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
-	"github.com/dgraph-io/dgraph/types/facets/utils"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -199,7 +198,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				if res {
 					filteredRes = append(filteredRes, &result{
 						uid:    p.Uid,
-						facets: utils.CopyFacets(p.Facets, q.FacetParam)})
+						facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 				}
 				return true // continue iteration.
 			})
@@ -644,7 +643,7 @@ func preprocessFilter(tree *facets.FilterTree) (*facetsTree, error) {
 
 		switch fnType {
 		case CompareAttrFn:
-			argf, err := utils.FacetFor(tree.Func.Key, tree.Func.Args[0])
+			argf, err := facets.FacetFor(tree.Func.Key, tree.Func.Args[0])
 			if err != nil {
 				return nil, err // stop processing as this is query error
 			}

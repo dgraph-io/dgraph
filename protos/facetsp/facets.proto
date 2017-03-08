@@ -1,5 +1,5 @@
 // To compile this file, in dgraph directory :
-// protoc --gofast_out=. -I. protos/facets.proto
+// protoc --gofast_out=. -I. protos/facetsp/facets.proto
 syntax = "proto3";
 
 package facetsp;
