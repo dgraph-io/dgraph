@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const jump = 32 // Jump size in InsersectWithJump.
@@ -172,6 +171,7 @@ func binIntersect(d, q []uint64, final *[]uint64) {
 // is the answer (or close to the answer). The following method requires nq
 // reads (each element is read only once) whereas pairwise intersections can
 // require np + nq - p reads, which can be up to ~twice as many.
+/*
 func IntersectSorted(lists []*task.List) *task.List {
 	if len(lists) == 0 {
 		return new(task.List)
@@ -233,6 +233,36 @@ func IntersectSorted(lists []*task.List) *task.List {
 		}
 	}
 	return &task.List{Uids: output}
+}
+*/
+type listInfo struct {
+	l      *task.List
+	length int
+}
+
+func IntersectSorted(lists []*task.List) *task.List {
+	if len(lists) == 0 {
+		return &task.List{}
+	}
+	ls := make([]listInfo, 0, len(lists))
+	for _, list := range lists {
+		ls = append(ls, listInfo{
+			l:      list,
+			length: len(list.Uids),
+		})
+	}
+	sort.Slice(ls, func(i, j int) bool {
+		return ls[i].length < ls[j].length
+	})
+	out := &task.List{Uids: make([]uint64, ls[0].length)}
+	copy(out.Uids, ls[0].l.Uids)
+	for i := 1; i < len(ls); i++ {
+		IntersectWith(out, ls[i].l)
+		if len(out.Uids) == 0 {
+			break
+		}
+	}
+	return out
 }
 
 func Difference(u, v *task.List) {
