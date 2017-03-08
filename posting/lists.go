@@ -453,6 +453,18 @@ func CommitLists(numRoutines int) {
 	wg.Wait()
 }
 
+// EvictAll removes all pl's stored in memory
+func EvictAll(numRoutines int) {
+	stopTheWorld.Lock()
+	defer stopTheWorld.Unlock()
+
+	CommitLists(numRoutines)
+	lhmap.EachWithDelete(func(k uint64, l *List) {
+		l.SetForDeletion()
+		l.decr()
+	})
+}
+
 // The following logic is used to batch up all the writes to RocksDB.
 type syncEntry struct {
 	key     []byte

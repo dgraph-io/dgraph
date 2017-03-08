@@ -516,6 +516,14 @@ func (n *node) retrieveSnapshot(rc task.RaftContext) {
 	x.AssertTruef(pool != nil, "Pool shouldn't be nil for address: %v for id: %v", addr, rc.Id)
 
 	x.AssertTrue(rc.Group == n.gid)
+	// Wait for watermarks to sync since populateShard writes directly to db, otherwise
+	// the values might get overwritten
+	// Safe to keep this line
+	n.syncAllMarks(n.ctx)
+	// Need to clear pl's stored in memory for the case when retrieving snapshot with
+	// index greater than this node's last index
+	// Should invalidate/remove pl's to this group only ideally
+	posting.EvictAll(10)
 	x.Check2(populateShard(n.ctx, pool, n.gid))
 	x.Checkf(schema.LoadFromDb(), "Error while initilizating schema")
 }
@@ -668,8 +676,10 @@ func (n *node) joinPeers() {
 	x.AssertTruef(pool != nil, "Unable to get pool for addr: %q for peer: %d", paddr, pid)
 
 	// Bring the instance up to speed first.
-	_, err := populateShard(n.ctx, pool, n.gid)
-	x.Checkf(err, "Error while populating shard")
+	// Raft would decide whether snapshot needs to fetched or not
+	// so populateShard is not needed
+	// _, err := populateShard(n.ctx, pool, n.gid)
+	// x.Checkf(err, "Error while populating shard")
 
 	conn, err := pool.Get()
 	x.Check(err)
