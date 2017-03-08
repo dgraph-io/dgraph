@@ -9,9 +9,9 @@ ICUDIR=$HOME/build/icu/build
 export CGO_LDFLAGS="-L${ROCKSDBDIR}"
 export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
-$SERVER & #> /dev/null 2>&1 &
+$SERVER > /dev/null 2>&1 &
 P=$!
-timeout 30s $CLIENT #> /dev/null 2>&1
+timeout 30s $CLIENT > /dev/null 2>&1
 RESULT=$?
 pkill dgraph > /dev/null 2>&1
 rm -rf p w
