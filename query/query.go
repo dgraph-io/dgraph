@@ -149,7 +149,7 @@ type SubGraph struct {
 	counts       []uint32
 	values       []*taskp.Value
 	uidMatrix    []*taskp.List
-	facetsMatrix []*facets.List
+	facetsMatrix []*facetsp.List
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.

@@ -89,7 +89,7 @@ func RunServer(bindall bool) {
 	log.Printf("Worker listening at address: %v", ln.Addr())
 
 	workerServer = grpc.NewServer()
-	RegisterWorkerServer(workerServer, &grpcWorker{})
+	workerp.RegisterWorkerServer(workerServer, &grpcWorker{})
 	workerServer.Serve(ln)
 }
 

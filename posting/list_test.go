@@ -29,14 +29,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 func listToArray(t *testing.T, afterUid uint64, l *List) []uint64 {
 	out := make([]uint64, 0, 10)
-	l.Iterate(afterUid, func(p *types.Posting) bool {
+	l.Iterate(afterUid, func(p *typesp.Posting) bool {
 		out = append(out, p.Uid)
 		return true
 	})
@@ -130,8 +130,8 @@ func TestAddMutation(t *testing.T) {
 	checkUids(t, dl, uids)
 }
 
-func getFirst(l *List) (res types.Posting) {
-	l.Iterate(0, func(p *types.Posting) bool {
+func getFirst(l *List) (res typesp.Posting) {
+	l.Iterate(0, func(p *typesp.Posting) bool {
 		res = *p
 		return false
 	})

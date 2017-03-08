@@ -74,7 +74,7 @@ func newServer(port string) (*grpc.Server, net.Listener, error) {
 }
 
 func serve(s *grpc.Server, ln net.Listener) {
-	RegisterWorkerServer(s, &grpcWorker{})
+	workerp.RegisterWorkerServer(s, &grpcWorker{})
 	s.Serve(ln)
 }
 
@@ -143,7 +143,7 @@ func TestPopulateShard(t *testing.T) {
 		t.Error("Unable to find added elements in posting list")
 	}
 	var found bool
-	l.Iterate(0, func(p *types.Posting) bool {
+	l.Iterate(0, func(p *typesp.Posting) bool {
 		if p.Uid() != 2 {
 			t.Errorf("Expected 2. Got: %v", p.Uid())
 		}

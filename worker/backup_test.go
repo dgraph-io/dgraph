@@ -23,7 +23,6 @@ import (
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -195,8 +194,8 @@ func generateBenchValues() []kv {
 		kv{
 			prefix: "testString",
 			list: &typesp.PostingList{
-				Postings: []*types.Posting{&types.Posting{
-					ValType: types.Posting_STRING,
+				Postings: []*typesp.Posting{&typesp.Posting{
+					ValType: typesp.Posting_STRING,
 					Value:   []byte("手機裡的眼淚"),
 					Uid:     uint64(65454),
 					Facets:  fac,
@@ -205,8 +204,8 @@ func generateBenchValues() []kv {
 		},
 		kv{prefix: "testGeo",
 			list: &typesp.PostingList{
-				Postings: []*types.Posting{&types.Posting{
-					ValType: types.Posting_GEO,
+				Postings: []*typesp.Posting{&typesp.Posting{
+					ValType: typesp.Posting_GEO,
 					Value:   geoData,
 					Uid:     uint64(65454),
 					Facets:  fac,
@@ -214,8 +213,8 @@ func generateBenchValues() []kv {
 			}},
 		kv{prefix: "testPassword",
 			list: &typesp.PostingList{
-				Postings: []*types.Posting{&types.Posting{
-					ValType: types.Posting_PASSWORD,
+				Postings: []*typesp.Posting{&typesp.Posting{
+					ValType: typesp.Posting_PASSWORD,
 					Value:   []byte("test"),
 					Uid:     uint64(65454),
 					Facets:  fac,
@@ -223,8 +222,8 @@ func generateBenchValues() []kv {
 			}},
 		kv{prefix: "testInt",
 			list: &typesp.PostingList{
-				Postings: []*types.Posting{&types.Posting{
-					ValType: types.Posting_INT32,
+				Postings: []*typesp.Posting{&typesp.Posting{
+					ValType: typesp.Posting_INT32,
 					Value:   byteInt,
 					Uid:     uint64(65454),
 					Facets:  fac,
@@ -232,8 +231,8 @@ func generateBenchValues() []kv {
 			}},
 		kv{prefix: "testUid",
 			list: &typesp.PostingList{
-				Postings: []*types.Posting{&types.Posting{
-					ValType: types.Posting_INT32,
+				Postings: []*typesp.Posting{&typesp.Posting{
+					ValType: typesp.Posting_INT32,
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},

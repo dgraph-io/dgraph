@@ -389,7 +389,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 			node.Params.Facet = &facets.Param{}
 		}
 		node.Attr = nodeInfo.attr
-		node.facetsMatrix = []*facets.List{&facets.List{[]*facetsp.Facets{nodeInfo.facet}}}
+		node.facetsMatrix = []*facetsp.List{&facetsp.List{[]*facetsp.Facets{nodeInfo.facet}}}
 		node.SrcUIDs = &taskp.List{[]uint64{curUid}}
 		node.DestUIDs = &taskp.List{[]uint64{childUid}}
 		node.uidMatrix = []*taskp.List{&taskp.List{[]uint64{childUid}}}

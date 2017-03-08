@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
@@ -192,7 +193,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		var filteredRes []*result
 		if !isValueEdge { // for uid edge.. get postings
 			var perr error
-			pl.Postings(opts, func(p *types.Posting) bool {
+			pl.Postings(opts, func(p *typesp.Posting) bool {
 				res := true
 				res, perr = applyFacetsTree(p.Facets, facetsTree)
 				if perr != nil {
@@ -221,13 +222,13 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 					fs = []*facetsp.Facet{}
 				}
 				out.FacetMatrix = append(out.FacetMatrix,
-					&facets.List{[]*facetsp.Facets{&facetsp.Facets{fs}}})
+					&facetsp.List{[]*facetsp.Facets{&facetsp.Facets{fs}}})
 			} else {
 				var fcsList []*facetsp.Facets
 				for _, fres := range filteredRes {
 					fcsList = append(fcsList, &facetsp.Facets{fres.facets})
 				}
-				out.FacetMatrix = append(out.FacetMatrix, &facets.List{fcsList})
+				out.FacetMatrix = append(out.FacetMatrix, &facetsp.List{fcsList})
 			}
 		}
 
@@ -516,7 +517,7 @@ func applyFacetsTree(postingFacets []*facetsp.Facet, ftree *facetsTree) (bool, e
 		fnType, fname := parseFuncType([]string{fname})
 		switch fnType {
 		case CompareAttrFn: // lt, gt, le, ge, eq
-			return compareTypeVals(fname, typesp.ValFor(fc), ftree.function.val), nil
+			return compareTypeVals(fname, facets.ValFor(fc), ftree.function.val), nil
 
 		case StandardFn: // allof, anyof
 			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
@@ -650,7 +651,7 @@ func preprocessFilter(tree *facetsp.FilterTree) (*facetsTree, error) {
 			if err != nil {
 				return nil, err // stop processing as this is query error
 			}
-			ftree.function.val = typesp.ValFor(argf)
+			ftree.function.val = facets.ValFor(argf)
 		case StandardFn:
 			argTokens, aerr := tok.GetTokens(tree.Func.Args)
 			if aerr != nil { // query error ; stop processing.
