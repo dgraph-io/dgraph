@@ -601,6 +601,7 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	err = treeCopy(ctx, gq, sg)
 	return sg, err
 }
+
 func isDebug(ctx context.Context) bool {
 	var debug bool
 	// gRPC client passes information about debug as metadata.
@@ -610,7 +611,6 @@ func isDebug(ctx context.Context) bool {
 	}
 	// HTTP passes information about debug as query parameter which is attached to context.
 	return debug || ctx.Value("debug") == "true"
-
 }
 
 // newGraph returns the SubGraph and its task query.
