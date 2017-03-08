@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const jump = 32 // Jump size in InsersectWithJump.
@@ -163,76 +162,38 @@ func binIntersect(d, q []uint64, final *[]uint64) {
 	}
 }
 
-// IntersectSorted intersect a list of UIDLists. An alternative is to do
-// pairwise intersections n-1 times where n=number of lists. This is less
-// efficient:
-// Let p be length of shortest list. Let q be average length of lists. So
-// nq = total number of elements.
-// There are many possible cases. Consider the case where the shortest list
-// is the answer (or close to the answer). The following method requires nq
-// reads (each element is read only once) whereas pairwise intersections can
-// require np + nq - p reads, which can be up to ~twice as many.
+type listInfo struct {
+	l      *task.List
+	length int
+}
+
 func IntersectSorted(lists []*task.List) *task.List {
 	if len(lists) == 0 {
-		return new(task.List)
+		return &task.List{}
 	}
-
-	// Scan through the smallest list. Denote as A.
-	// For each x in A,
-	//   For each other list B,
-	//     Keep popping elements until we get a y >= x.
-	//     If y > x, mark x as "skipped". Break out of loop.
-	//   If x is not marked as "skipped", append x to result.
-	var minLenIdx int
-	minLen := len(lists[0].Uids)
-	for i := 1; i < len(lists); i++ { // Start from 1.
-		l := lists[i]
-		n := len(l.Uids)
-		if n < minLen {
-			minLen = n
-			minLenIdx = i
-		}
+	ls := make([]listInfo, 0, len(lists))
+	for _, list := range lists {
+		ls = append(ls, listInfo{
+			l:      list,
+			length: len(list.Uids),
+		})
 	}
-
-	// Our final output. Give it some capacity.
-	output := make([]uint64, 0, minLen)
-	// lptrs[j] is the element we are looking at for lists[j].
-	lptrs := make([]int, len(lists))
-	shortList := lists[minLenIdx]
-	elemsLeft := true // If some list has no elems left, we can't intersect more.
-
-	for i := 0; i < len(shortList.Uids) && elemsLeft; i++ {
-		val := shortList.Uids[i]
-		if i > 0 && val == shortList.Uids[i-1] {
-			x.AssertTruef(false, "We shouldn't have duplicates in UIDLists")
-		}
-
-		var skip bool                     // Should we skip val in output?
-		for j := 0; j < len(lists); j++ { // For each other list in lists.
-			if j == minLenIdx {
-				// No point checking yourself.
-				continue
-			}
-
-			lj := lists[j]
-			ljp := lptrs[j]
-			lsz := len(lj.Uids)
-			for ; ljp < lsz && lj.Uids[ljp] < val; ljp++ {
-			}
-
-			lptrs[j] = ljp
-			if ljp >= lsz || lj.Uids[ljp] > val {
-				elemsLeft = ljp < lsz
-				skip = true
-				break
-			}
-			// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
-		}
-		if !skip {
-			output = append(output, val)
+	// Sort the lists based on length.
+	sort.Slice(ls, func(i, j int) bool {
+		return ls[i].length < ls[j].length
+	})
+	out := &task.List{Uids: make([]uint64, ls[0].length)}
+	copy(out.Uids, ls[0].l.Uids)
+	// Intersect from smallest to largest.
+	for i := 1; i < len(ls); i++ {
+		IntersectWith(out, ls[i].l)
+		// Break if we reach size 0 as we can no longer
+		// add any element.
+		if len(out.Uids) == 0 {
+			break
 		}
 	}
-	return &task.List{Uids: output}
+	return out
 }
 
 func Difference(u, v *task.List) {
