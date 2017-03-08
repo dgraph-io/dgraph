@@ -38,7 +38,6 @@ function doOnClick(params, allNodeSet, edgeSet) {
             selectedNode: false,
         });
         // TODO - Dispatch an event.
-
         this.props.setCurrentNode("{}");
     }
 }
