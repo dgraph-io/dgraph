@@ -33,14 +33,14 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func addEdge(t *testing.T, edge *task.DirectedEdge, l *posting.List) {
-	edge.Op = task.DirectedEdge_SET
+func addEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
+	edge.Op = taskp.DirectedEdge_SET
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))
 }
 
-func delEdge(t *testing.T, edge *task.DirectedEdge, l *posting.List) {
-	edge.Op = task.DirectedEdge_DEL
+func delEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
+	edge.Op = taskp.DirectedEdge_DEL
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))
 }
@@ -52,7 +52,7 @@ func getOrCreate(key []byte) *posting.List {
 
 func populateGraph(t *testing.T) {
 	// Add uid edges : predicate neightbour.
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		ValueId: 23,
 		Label:   "author0",
 		Attr:    "neighbour",
@@ -90,7 +90,7 @@ func populateGraph(t *testing.T) {
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
 }
 
-func taskValues(t *testing.T, v []*task.Value) []string {
+func taskValues(t *testing.T, v []*taskp.Value) []string {
 	out := make([]string, len(v))
 	for i, tv := range v {
 		out[i] = string(tv.Val)
@@ -159,7 +159,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value:  []byte("notphotonExtra"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -183,7 +183,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Try deleting.
-	edge = &task.DirectedEdge{
+	edge = &taskp.DirectedEdge{
 		Value:  []byte("photon"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -248,7 +248,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value:  []byte("notphotonExtra"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -275,7 +275,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Try deleting.
-	edge = &task.DirectedEdge{
+	edge = &taskp.DirectedEdge{
 		Value:  []byte("photon"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -307,7 +307,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 /*
 func populateGraphForSort(t *testing.T, ps *store.Store) {
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Label: "author1",
 		Attr:  "dob",
 	}

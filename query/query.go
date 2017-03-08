@@ -145,7 +145,7 @@ type SubGraph struct {
 	Attr         string
 	Params       params
 	counts       []uint32
-	values       []*task.Value
+	values       []*taskp.Value
 	uidMatrix    []*task.List
 	facetsMatrix []*facets.List
 
@@ -184,7 +184,7 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 }
 
 // getValue gets the value from the task.
-func getValue(tv *task.Value) (types.Val, error) {
+func getValue(tv *taskp.Value) (types.Val, error) {
 	vID := types.TypeID(tv.ValType)
 	val := types.ValueForType(vID)
 	val.Value = tv.Val
@@ -377,7 +377,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 
 // convert from task.Val to types.Value which is determined by attr
 // if convert failed, try convert to types.StringID
-func convertWithBestEffort(tv *task.Value, attr string) (types.Val, error) {
+func convertWithBestEffort(tv *taskp.Value, attr string) (types.Val, error) {
 	v, _ := getValue(tv)
 	typ, err := schema.State().TypeOf(attr)
 	sv := types.ValueForType(types.StringID)
@@ -689,10 +689,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	return sg, nil
 }
 
-func createNilValuesList(count int) []*task.Value {
-	out := make([]*task.Value, count)
+func createNilValuesList(count int) []*taskp.Value {
+	out := make([]*taskp.Value, count)
 	for i := 0; i < count; i++ {
-		out[i] = &task.Value{
+		out[i] = &taskp.Value{
 			Val: x.Nilbyte,
 		}
 	}

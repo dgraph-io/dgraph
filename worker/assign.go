@@ -58,12 +58,12 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 	mutations := uid.AssignNew(val, num.Group)
 
 	for _, uid := range num.Uids {
-		mutations.Edges = append(mutations.Edges, &task.DirectedEdge{
+		mutations.Edges = append(mutations.Edges, &taskp.DirectedEdge{
 			Entity: uid,
 			Attr:   "_uid_",
 			Value:  []byte("_"), // not txid
 			Label:  "A",
-			Op:     task.DirectedEdge_SET,
+			Op:     taskp.DirectedEdge_SET,
 		})
 	}
 

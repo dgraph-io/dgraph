@@ -31,20 +31,20 @@ import (
 
 func TestConvertEdgeType(t *testing.T) {
 	var testEdges = []struct {
-		input     *task.DirectedEdge
+		input     *taskp.DirectedEdge
 		to        types.TypeID
 		expectErr bool
-		output    *task.DirectedEdge
+		output    *taskp.DirectedEdge
 	}{
 		{
-			input: &task.DirectedEdge{
+			input: &taskp.DirectedEdge{
 				Value: []byte("set edge"),
 				Label: "test-mutation",
 				Attr:  "name",
 			},
 			to:        types.StringID,
 			expectErr: false,
-			output: &task.DirectedEdge{
+			output: &taskp.DirectedEdge{
 				Value:     []byte("set edge"),
 				Label:     "test-mutation",
 				Attr:      "name",
@@ -52,7 +52,7 @@ func TestConvertEdgeType(t *testing.T) {
 			},
 		},
 		{
-			input: &task.DirectedEdge{
+			input: &taskp.DirectedEdge{
 				ValueId: 123,
 				Label:   "test-mutation",
 				Attr:    "name",
@@ -61,7 +61,7 @@ func TestConvertEdgeType(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			input: &task.DirectedEdge{
+			input: &taskp.DirectedEdge{
 				Value: []byte("set edge"),
 				Label: "test-mutation",
 				Attr:  "name",
@@ -84,7 +84,7 @@ func TestConvertEdgeType(t *testing.T) {
 }
 
 func TestValidateEdgeTypeError(t *testing.T) {
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value: []byte("set edge"),
 		Label: "test-mutation",
 		Attr:  "name",
@@ -101,9 +101,9 @@ func TestAddToMutationArray(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	mutationsMap := make(map[uint32]*task.Mutations)
-	edges := []*task.DirectedEdge{}
+	edges := []*taskp.DirectedEdge{}
 
-	edges = append(edges, &task.DirectedEdge{
+	edges = append(edges, &taskp.DirectedEdge{
 		Value: []byte("set edge"),
 		Label: "test-mutation",
 	})

@@ -2435,11 +2435,11 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 
 // Mocking Subgraph and Testing fast-json with it.
 func ageSg(uidMatrix []*task.List, srcUids *task.List, ages []uint32) *SubGraph {
-	var as []*task.Value
+	var as []*taskp.Value
 	for _, a := range ages {
 		bs := make([]byte, 4)
 		binary.LittleEndian.PutUint32(bs, a)
-		as = append(as, &task.Value{[]byte(bs), 2})
+		as = append(as, &taskp.Value{[]byte(bs), 2})
 	}
 
 	return &SubGraph{
@@ -2451,9 +2451,9 @@ func ageSg(uidMatrix []*task.List, srcUids *task.List, ages []uint32) *SubGraph 
 	}
 }
 func nameSg(uidMatrix []*task.List, srcUids *task.List, names []string) *SubGraph {
-	var ns []*task.Value
+	var ns []*taskp.Value
 	for _, n := range names {
-		ns = append(ns, &task.Value{[]byte(n), 0})
+		ns = append(ns, &taskp.Value{[]byte(n), 0})
 	}
 	return &SubGraph{
 		Attr:      "name",

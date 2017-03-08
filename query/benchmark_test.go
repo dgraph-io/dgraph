@@ -43,25 +43,25 @@ func prepareTest(b *testing.B) (*store.Store, string, string) {
 	return ps, dir, dir2
 }
 
-func buildValueList(data []string) *task.ValueList {
+func buildValueList(data []string) *taskp.ValueList {
 	b := flatbuffers.NewBuilder(0)
 	offsets := make([]flatbuffers.UOffsetT, 0, len(data))
 	for _, s := range data {
 		bvo := b.CreateString(s)
-		task.ValueStart(b)
-		task.ValueAddVal(b, bvo)
-		offsets = append(offsets, task.ValueEnd(b))
+		taskp.ValueStart(b)
+		taskp.ValueAddVal(b, bvo)
+		offsets = append(offsets, taskp.ValueEnd(b))
 	}
 
-	task.ValueListStartValuesVector(b, len(data))
+	taskp.ValueListStartValuesVector(b, len(data))
 	for i := 0; i < len(data); i++ {
 		b.PrependUOffsetT(offsets[i])
 	}
 	voffset := b.EndVector(len(data))
 
-	task.ValueListStart(b)
-	task.ValueListAddValues(b, voffset)
-	b.Finish(task.ValueListEnd(b))
+	taskp.ValueListStart(b)
+	taskp.ValueListAddValues(b, voffset)
+	b.Finish(taskp.ValueListEnd(b))
 	buf := b.FinishedBytes()
 
 	out := new(x.ValueList)

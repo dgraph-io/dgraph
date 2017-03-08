@@ -27,23 +27,23 @@ func CouldApplyAggregatorOn(agrtr string, typ types.TypeID) bool {
 }
 
 // getValue gets the value from the task.
-func getValue(tv *task.Value) (types.Val, error) {
+func getValue(tv *taskp.Value) (types.Val, error) {
 	vID := types.TypeID(tv.ValType)
 	val := types.ValueForType(vID)
 	val.Value = tv.Val
 	return val, nil
 }
 
-func convertTo(from *task.Value, typ types.TypeID) (types.Val, error) {
+func convertTo(from *taskp.Value, typ types.TypeID) (types.Val, error) {
 	vh, _ := getValue(from)
 	va, err := types.Convert(vh, typ)
 	if err != nil {
-		return vh, x.Errorf("Fail to convert from task.Value to types.Val")
+		return vh, x.Errorf("Fail to convert from taskp.Value to types.Val")
 	}
 	return va, err
 }
 
-func Aggregate(agrtr string, values []*task.Value, typ types.TypeID) (*task.Value, error) {
+func Aggregate(agrtr string, values []*taskp.Value, typ types.TypeID) (*taskp.Value, error) {
 	if !CouldApplyAggregatorOn(agrtr, typ) {
 		return nil, x.Errorf("Cant apply aggregator %v on type %d\n", agrtr, typ)
 	}
@@ -79,7 +79,7 @@ func Aggregate(agrtr string, values []*task.Value, typ types.TypeID) (*task.Valu
 
 	var lva, rva types.Val
 	var err error
-	result := &task.Value{ValType: int32(typ), Val: x.Nilbyte}
+	result := &taskp.Value{ValType: int32(typ), Val: x.Nilbyte}
 	for _, iter := range values {
 		if len(iter.Val) == 0 {
 			continue

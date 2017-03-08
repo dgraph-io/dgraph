@@ -62,11 +62,11 @@ func TestIndexing(t *testing.T) {
 	require.EqualValues(t, "\x01abc", string(a[0]))
 }
 
-func addMutationWithIndex(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
+func addMutationWithIndex(t *testing.T, l *List, edge *taskp.DirectedEdge, op uint32) {
 	if op == Del {
-		edge.Op = task.DirectedEdge_DEL
+		edge.Op = taskp.DirectedEdge_DEL
 	} else if op == Set {
-		edge.Op = task.DirectedEdge_SET
+		edge.Op = taskp.DirectedEdge_SET
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
@@ -88,7 +88,7 @@ func TestTokensTable(t *testing.T) {
 	key := x.DataKey("name", 1)
 	l := getNew(key, ps)
 
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value:  []byte("david"),
 		Label:  "testing",
 		Attr:   "name",
@@ -139,12 +139,12 @@ func tokensForTest(attr string) []string {
 // addEdgeToValue adds edge without indexing.
 func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 	value string) {
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value:  []byte(value),
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
-		Op:     task.DirectedEdge_SET,
+		Op:     taskp.DirectedEdge_SET,
 	}
 	l, _ := GetOrCreate(x.DataKey(attr, src), 0)
 	// No index entries added here as we do not call AddMutationWithIndex.

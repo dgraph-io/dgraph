@@ -45,10 +45,10 @@ func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store)
 		k := x.DataKey(pred, uint64(i))
 		list, _ := posting.GetOrCreate(k, 0)
 
-		de := &task.DirectedEdge{
+		de := &taskp.DirectedEdge{
 			ValueId: vid,
 			Label:   "test",
-			Op:      task.DirectedEdge_SET,
+			Op:      taskp.DirectedEdge_SET,
 		}
 		list.AddMutation(context.TODO(), de)
 		if merged, err := list.SyncIfDirty(context.TODO()); err != nil {

@@ -173,7 +173,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
-		newValue := &task.Value{ValType: int32(val.Tid)}
+		newValue := &taskp.Value{ValType: int32(val.Tid)}
 		if err == nil {
 			newValue.Val = val.Value.([]byte)
 		} else {
@@ -323,7 +323,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	}
 
 	// If geo filter, do value check for correctness.
-	var values []*task.Value
+	var values []*taskp.Value
 	if srcFn.geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
 		for _, uid := range uids.Uids {
@@ -331,7 +331,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			pl, decr := posting.GetOrCreate(key, gid)
 
 			val, err := pl.Value()
-			newValue := &task.Value{ValType: int32(val.Tid)}
+			newValue := &taskp.Value{ValType: int32(val.Tid)}
 			if err == nil {
 				newValue.Val = val.Value.([]byte)
 			} else {

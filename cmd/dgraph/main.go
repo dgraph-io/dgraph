@@ -89,7 +89,7 @@ var (
 )
 
 type mutationResult struct {
-	edges   []*task.DirectedEdge
+	edges   []*taskp.DirectedEdge
 	newUids map[string]uint64
 }
 
@@ -153,7 +153,7 @@ func convertToNQuad(ctx context.Context, mutation string) ([]*graphp.NQuad, erro
 }
 
 func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult, error) {
-	var edges []*task.DirectedEdge
+	var edges []*taskp.DirectedEdge
 	var mr mutationResult
 
 	newUids := make(map[string]uint64)
@@ -236,7 +236,7 @@ func convertAndApply(ctx context.Context, set []*graphp.NQuad, del []*graphp.NQu
 	}
 	m.Edges, allocIds = mr.edges, mr.newUids
 	for i := range m.Edges {
-		m.Edges[i].Op = task.DirectedEdge_SET
+		m.Edges[i].Op = taskp.DirectedEdge_SET
 	}
 
 	if mr, err = convertToEdges(ctx, del); err != nil {
@@ -244,7 +244,7 @@ func convertAndApply(ctx context.Context, set []*graphp.NQuad, del []*graphp.NQu
 	}
 	for i := range mr.edges {
 		edge := mr.edges[i]
-		edge.Op = task.DirectedEdge_DEL
+		edge.Op = taskp.DirectedEdge_DEL
 		m.Edges = append(m.Edges, edge)
 	}
 

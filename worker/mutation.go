@@ -34,7 +34,7 @@ const (
 
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
-func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
+func runMutations(ctx context.Context, edges []*taskp.DirectedEdge) error {
 	for _, edge := range edges {
 		if !groups().ServesGroup(group.BelongsTo(edge.Attr)) {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
@@ -75,7 +75,7 @@ func updateSchema(attr string, typ types.TypeID, raftIndex uint64, group uint32)
 
 // If storage type is specified, then check compatability or convert to schema type
 // if no storage type is specified then convert to schema type
-func validateAndConvert(edge *task.DirectedEdge, schemaType types.TypeID) error {
+func validateAndConvert(edge *taskp.DirectedEdge, schemaType types.TypeID) error {
 	storageType := posting.TypeID(edge)
 
 	if !schemaType.IsScalar() && !storageType.IsScalar() {
@@ -141,7 +141,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *task.Mutations, che chan 
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationMap(mutationMap map[uint32]*task.Mutations, edges []*task.DirectedEdge) {
+func addToMutationMap(mutationMap map[uint32]*task.Mutations, edges []*taskp.DirectedEdge) {
 	for _, edge := range edges {
 		gid := group.BelongsTo(edge.Attr)
 		mu := mutationMap[gid]
