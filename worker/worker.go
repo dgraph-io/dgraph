@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -68,8 +69,8 @@ func (w *grpcWorker) addIfNotPresent(reqid uint64) bool {
 
 // Hello rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
-func (w *grpcWorker) Echo(ctx context.Context, in *Payload) (*Payload, error) {
-	return &Payload{Data: in.Data}, nil
+func (w *grpcWorker) Echo(ctx context.Context, in *workerp.Payload) (*Payload, error) {
+	return &workerp.Payload{Data: in.Data}, nil
 }
 
 // RunServer initializes a tcp server on port which listens to requests from

@@ -22,6 +22,7 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -185,11 +186,11 @@ func MutateOverNetwork(ctx context.Context, m *taskp.Mutations) error {
 // Mutate is used to apply mutations over the network on other instances.
 func (w *grpcWorker) Mutate(ctx context.Context, m *taskp.Mutations) (*Payload, error) {
 	if ctx.Err() != nil {
-		return &Payload{}, ctx.Err()
+		return &workerp.Payload{}, ctx.Err()
 	}
 
 	if !groups().ServesGroup(m.GroupId) {
-		return &Payload{}, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
+		return &workerp.Payload{}, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
 	c := make(chan error, 1)
 	node := groups().Node(m.GroupId)
@@ -197,8 +198,8 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *taskp.Mutations) (*Payload, 
 
 	select {
 	case <-ctx.Done():
-		return &Payload{}, ctx.Err()
+		return &workerp.Payload{}, ctx.Err()
 	case err := <-c:
-		return &Payload{}, err
+		return &workerp.Payload{}, err
 	}
 }

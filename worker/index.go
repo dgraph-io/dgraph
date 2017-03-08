@@ -8,6 +8,7 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -75,14 +76,14 @@ func (n *node) syncAllMarks(ctx context.Context) error {
 
 // RebuildIndex request is used to trigger rebuilding of index for the requested
 // attribute. Payload is not really used.
-func (w *grpcWorker) RebuildIndex(ctx context.Context, req *task.RebuildIndex) (*Payload, error) {
+func (w *grpcWorker) RebuildIndex(ctx context.Context, req *taskp.RebuildIndex) (*Payload, error) {
 	if ctx.Err() != nil {
-		return &Payload{}, ctx.Err()
+		return &workerp.Payload{}, ctx.Err()
 	}
 	if err := proposeRebuildIndex(ctx, req); err != nil {
-		return &Payload{}, err
+		return &workerp.Payload{}, err
 	}
-	return &Payload{}, nil
+	return &workerp.Payload{}, nil
 }
 
 func proposeRebuildIndex(ctx context.Context, ri *task.RebuildIndex) error {

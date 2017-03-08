@@ -15,6 +15,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -783,9 +784,9 @@ func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error
 	}
 }
 
-func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
+func (w *grpcWorker) RaftMessage(ctx context.Context, query *workerp.Payload) (*Payload, error) {
 	if ctx.Err() != nil {
-		return &Payload{}, ctx.Err()
+		return &workerp.Payload{}, ctx.Err()
 	}
 
 	for idx := 0; idx < len(query.Data); {
@@ -796,7 +797,7 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 		idx += 4
 		msg := raftpb.Message{}
 		if idx+sz-1 > len(query.Data) {
-			return &Payload{}, x.Errorf(
+			return &workerp.Payload{}, x.Errorf(
 				"Invalid query. Size specified: %v. Size of array: %v\n", sz, len(query.Data))
 		}
 		if err := msg.Unmarshal(query.Data[idx : idx+sz]); err != nil {
@@ -806,22 +807,22 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 			fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
 		if err := w.applyMessage(ctx, msg); err != nil {
-			return &Payload{}, err
+			return &workerp.Payload{}, err
 		}
 		idx += sz
 	}
 	// fmt.Printf("Got %d messages\n", count)
-	return &Payload{}, nil
+	return &workerp.Payload{}, nil
 }
 
 func (w *grpcWorker) JoinCluster(ctx context.Context, rc *taskp.RaftContext) (*Payload, error) {
 	if ctx.Err() != nil {
-		return &Payload{}, ctx.Err()
+		return &workerp.Payload{}, ctx.Err()
 	}
 
 	node := groups().Node(rc.Group)
 	if node == nil {
-		return &Payload{}, nil
+		return &workerp.Payload{}, nil
 	}
 	node.Connect(rc.Id, rc.Addr)
 
@@ -830,8 +831,8 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *taskp.RaftContext) (*P
 
 	select {
 	case <-ctx.Done():
-		return &Payload{}, ctx.Err()
+		return &workerp.Payload{}, ctx.Err()
 	case err := <-c:
-		return &Payload{}, err
+		return &workerp.Payload{}, err
 	}
 }
