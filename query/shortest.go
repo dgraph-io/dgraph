@@ -7,6 +7,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -50,25 +51,38 @@ func (h *priorityQueue) Pop() interface{} {
 type nodeInfo struct {
 	cost   float64
 	parent uint64
+	attr   string
+	facet  *facets.Facets
 	// Pointer to the item in heap. Used to update priority
 	node *Item
 }
 
-func (sg *SubGraph) getCost(matrix, list int) (float64, error) {
-	cost := 1.0
+type mapItem struct {
+	attr  string
+	cost  float64
+	facet *facets.Facets
+}
+
+func (sg *SubGraph) getCost(matrix, list int) (cost float64,
+	fcs *facets.Facets, rerr error) {
+
+	cost = 1.0
 	if sg.Params.Facet == nil {
-		return cost, nil
+		return cost, fcs, rerr
 	}
 	fcsList := sg.facetsMatrix[matrix].FacetsList
 	if len(fcsList) <= list {
-		return cost, ErrFacet
+		rerr = ErrFacet
+		return cost, fcs, rerr
 	}
-	fcs := fcsList[list]
+	fcs = fcsList[list]
 	if len(fcs.Facets) == 0 {
-		return cost, ErrFacet
+		rerr = ErrFacet
+		return cost, fcs, rerr
 	}
 	if len(fcs.Facets) > 1 {
-		return cost, x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
+		rerr = x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
+		return cost, fcs, rerr
 	}
 	tv := types.ValFor(fcs.Facets[0])
 	if tv.Tid == types.Int32ID {
@@ -76,23 +90,20 @@ func (sg *SubGraph) getCost(matrix, list int) (float64, error) {
 	} else if tv.Tid == types.FloatID {
 		cost = float64(tv.Value.(float64))
 	} else {
-		return cost, ErrFacet
+		rerr = ErrFacet
 	}
-	return cost, nil
+	return cost, fcs, rerr
 }
 
 func (start *SubGraph) expandOut(ctx context.Context,
-	adjacencyMap map[uint64]map[uint64]float64, next chan bool, rch chan error) {
+	adjacencyMap map[uint64]map[uint64]mapItem, next chan bool, rch chan error) {
 
 	var numEdges uint64
 	var exec []*SubGraph
 	var err error
-	var in task.List
-	it := algo.NewWriteIterator(&in)
-	it.Append(start.Params.From)
-	it.End()
-	start.SrcUIDs = &in
-	start.uidMatrix = []*task.List{&in}
+	in := []uint64{start.Params.From}
+	start.SrcUIDs = &task.List{in}
+	start.uidMatrix = []*task.List{&task.List{in}}
 	start.DestUIDs = start.SrcUIDs
 
 	for _, child := range start.Children {
@@ -127,21 +138,13 @@ func (start *SubGraph) expandOut(ctx context.Context,
 
 		for _, sg := range exec {
 			// Send the destuids in res chan.
-			it := algo.NewListIterator(sg.SrcUIDs)
-			mIdx := -1
-			for ; it.Valid(); it.Next() { // idx, fromUID := range sg.SrcUIDs.Uids {
-				mIdx++
-				fromUID := it.Val()
-				destIt := algo.NewListIterator(sg.uidMatrix[mIdx])
-				lIdx := -1
-				for ; destIt.Valid(); destIt.Next() {
-					lIdx++
-					toUid := destIt.Val()
+			for mIdx, fromUID := range sg.SrcUIDs.Uids {
+				for lIdx, toUID := range sg.uidMatrix[mIdx].Uids {
 					if adjacencyMap[fromUID] == nil {
-						adjacencyMap[fromUID] = make(map[uint64]float64)
+						adjacencyMap[fromUID] = make(map[uint64]mapItem)
 					}
 					// The default cost we'd use is 1.
-					cost, err := sg.getCost(mIdx, lIdx)
+					cost, facet, err := sg.getCost(mIdx, lIdx)
 					if err == ErrFacet {
 						// Ignore the edge and continue.
 						continue
@@ -149,7 +152,11 @@ func (start *SubGraph) expandOut(ctx context.Context,
 						rch <- err
 						return
 					}
-					adjacencyMap[fromUID][toUid] = cost
+					adjacencyMap[fromUID][toUID] = mapItem{
+						cost:  cost,
+						facet: facet,
+						attr:  sg.Attr,
+					}
 					numEdges++
 				}
 			}
@@ -164,7 +171,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 		// modify the exec and attach child nodes.
 		var out []*SubGraph
 		for _, sg := range exec {
-			if algo.ListLen(sg.DestUIDs) == 0 {
+			if len(sg.DestUIDs.Uids) == 0 {
 				continue
 			}
 			for _, child := range start.Children {
@@ -179,7 +186,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 					_, ok := adjacencyMap[uid]
 					return !ok
 				})
-				if algo.ListLen(temp.SrcUIDs) == 0 {
+				if len(temp.SrcUIDs.Uids) == 0 {
 					continue
 				}
 				sg.Children = append(sg.Children, temp)
@@ -223,10 +230,10 @@ func (start *SubGraph) expandOut(ctx context.Context,
 // 22
 // 23     return dist[], prev[]
 
-func ShortestPath(ctx context.Context, sg *SubGraph) error {
+func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 	var err error
 	if sg.Params.Alias != "shortest" {
-		return x.Errorf("Invalid shortest path query")
+		return nil, x.Errorf("Invalid shortest path query")
 	}
 
 	pq := make(priorityQueue, 0)
@@ -243,7 +250,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 	numHops := -1
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
-	adjacencyMap := make(map[uint64]map[uint64]float64)
+	adjacencyMap := make(map[uint64]map[uint64]mapItem)
 	go sg.expandOut(ctx, adjacencyMap, next, expandErr)
 
 	// map to store the min cost and parent of nodes.
@@ -270,23 +277,24 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 			case err = <-expandErr:
 				if err != nil {
 					if err == ErrTooBig {
-						return err
+						return nil, err
 					} else if err == ErrStop {
 						stopExpansion = true
 					} else {
 						x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
-						return err
+						return nil, err
 					}
 				}
 			case <-ctx.Done():
 				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
-				return ctx.Err()
+				return nil, ctx.Err()
 			}
 			numHops++
 		}
 		if !stopExpansion {
 			neighbours := adjacencyMap[item.uid]
-			for toUid, cost := range neighbours {
+			for toUid, info := range neighbours {
+				cost := info.cost
 				d, ok := dist[toUid]
 				if ok && d.cost <= item.cost+cost {
 					continue
@@ -304,6 +312,8 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 						cost:   item.cost + cost,
 						parent: item.uid,
 						node:   node,
+						attr:   info.attr,
+						facet:  info.facet,
 					}
 				} else {
 					// We've already seen this node. So, just update the cost
@@ -317,6 +327,8 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 						cost:   item.cost + cost,
 						parent: item.uid,
 						node:   node,
+						attr:   info.attr,
+						facet:  info.facet,
 					}
 				}
 
@@ -324,6 +336,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 		}
 	}
 
+	next <- false
 	// Go through the distance map to find the path.
 	var result []uint64
 	cur := sg.Params.To
@@ -332,23 +345,66 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 		cur = dist[cur].parent
 	}
 	// Put the path in DestUIDs of the root.
-	if cur == sg.Params.From {
-		result = append(result, cur)
-		l := len(result)
-		// Reverse the list.
-		for i := 0; i < l/2; i++ {
-			result[i], result[l-i-1] = result[l-i-1], result[i]
-		}
-		var r task.List
-		out := algo.NewWriteIterator(&r)
-		for i := 0; i < len(result); i++ {
-			out.Append(result[i])
-		}
-		out.End()
-		sg.DestUIDs = &r
-	} else {
+	if cur != sg.Params.From {
 		sg.DestUIDs = &task.List{}
+		return nil, nil
 	}
-	next <- false
-	return nil
+
+	result = append(result, cur)
+	l := len(result)
+	// Reverse the list.
+	for i := 0; i < l/2; i++ {
+		result[i], result[l-i-1] = result[l-i-1], result[i]
+	}
+	sg.DestUIDs.Uids = result
+
+	shortestSg := createPathSubgraph(ctx, dist, result)
+	return shortestSg, nil
+}
+
+func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []uint64) *SubGraph {
+	shortestSg := new(SubGraph)
+	shortestSg.Params = params{
+		Alias:   "_path_",
+		GetUID:  true,
+		isDebug: isDebug(ctx),
+	}
+	curUid := result[0]
+	shortestSg.SrcUIDs = &task.List{[]uint64{curUid}}
+	shortestSg.DestUIDs = &task.List{[]uint64{curUid}}
+	shortestSg.uidMatrix = []*task.List{&task.List{[]uint64{curUid}}}
+
+	curNode := shortestSg
+	for i := 0; i < len(result)-1; i++ {
+		curUid := result[i]
+		childUid := result[i+1]
+		node := new(SubGraph)
+		nodeInfo := dist[childUid]
+		node.Params = params{
+			GetUID: true,
+		}
+		if nodeInfo.facet != nil {
+			// For consistent later processing.
+			node.Params.Facet = &facets.Param{}
+		}
+		node.Attr = nodeInfo.attr
+		node.facetsMatrix = []*facets.List{&facets.List{[]*facets.Facets{nodeInfo.facet}}}
+		node.SrcUIDs = &task.List{[]uint64{curUid}}
+		node.DestUIDs = &task.List{[]uint64{childUid}}
+		node.uidMatrix = []*task.List{&task.List{[]uint64{childUid}}}
+
+		curNode.Children = append(curNode.Children, node)
+		curNode = node
+	}
+
+	node := new(SubGraph)
+	node.Params = params{
+		GetUID: true,
+	}
+	uid := result[len(result)-1]
+	node.SrcUIDs = &task.List{[]uint64{uid}}
+	node.uidMatrix = []*task.List{&task.List{[]uint64{uid}}}
+	curNode.Children = append(curNode.Children, node)
+
+	return shortestSg
 }

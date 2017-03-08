@@ -16,6 +16,7 @@ message Facet {
 	string key = 1;
 	bytes value = 2;
 	ValType val_type = 3;
+	repeated string tokens = 4; // tokens of value.
 }
 
 message Param {

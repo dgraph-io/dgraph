@@ -134,7 +134,7 @@ func TestProcessTask(t *testing.T) {
 func newQuery(attr string, uids []uint64, srcFunc []string) *task.Query {
 	x.AssertTrue(uids == nil || srcFunc == nil)
 	return &task.Query{
-		Uids:    algo.SortedListToBlock(uids),
+		Uids:    &task.List{uids},
 		SrcFunc: srcFunc,
 		Attr:    attr,
 	}
@@ -153,7 +153,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		[]uint64{},
+		nil,
 		[]uint64{10, 12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -176,10 +176,10 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		[]uint64{},
+		nil,
 		[]uint64{10},
 		[]uint64{12},
-		[]uint64{},
+		nil,
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Try deleting.
@@ -207,8 +207,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		[]uint64{},
-		[]uint64{},
+		nil,
+		nil,
 		[]uint64{12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -221,8 +221,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		[]uint64{},
-		[]uint64{},
+		nil,
+		nil,
 		[]uint64{12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 }
@@ -239,7 +239,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		[]uint64{},
+		nil,
 		[]uint64{10, 12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -265,10 +265,10 @@ func TestProcessTaskIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		[]uint64{},
+		nil,
 		[]uint64{10},
 		[]uint64{12},
-		[]uint64{},
+		nil,
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	posting.CommitLists(10)
@@ -299,8 +299,8 @@ func TestProcessTaskIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		[]uint64{},
-		[]uint64{},
+		nil,
+		nil,
 		[]uint64{12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 }

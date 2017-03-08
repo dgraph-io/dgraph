@@ -32,11 +32,11 @@ import (
 
 	"github.com/dgryski/go-farm"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
+	"github.com/dgraph-io/dgraph/types/facets/utils"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -128,7 +128,10 @@ func samePosting(oldp *types.Posting, newp *types.Posting) bool {
 	if !bytes.Equal(oldp.Value, newp.Value) {
 		return false
 	}
-	if oldp.Lang != newp.Lang {
+	if oldp.PostingType != newp.PostingType {
+		return false
+	}
+	if bytes.Compare(oldp.Metadata, newp.Metadata) != 0 {
 		return false
 	}
 	// Checking source might not be necessary.
@@ -138,7 +141,7 @@ func samePosting(oldp *types.Posting, newp *types.Posting) bool {
 	if newp.Op == Del {
 		return true
 	}
-	return facets.SameFacets(oldp.Facets, newp.Facets)
+	return utils.SameFacets(oldp.Facets, newp.Facets)
 }
 
 func newPosting(t *task.DirectedEdge) *types.Posting {
@@ -154,14 +157,26 @@ func newPosting(t *task.DirectedEdge) *types.Posting {
 		x.Fatalf("Unhandled operation: %+v", t)
 	}
 
+	var postingType types.Posting_PostingType
+	var metadata []byte
+	if len(t.Lang) > 0 {
+		postingType = types.Posting_VALUE_LANG
+		metadata = []byte(t.Lang)
+	} else if len(t.Value) == 0 {
+		postingType = types.Posting_REF
+	} else if len(t.Value) > 0 {
+		postingType = types.Posting_VALUE
+	}
+
 	return &types.Posting{
-		Uid:     t.ValueId,
-		Value:   t.Value,
-		ValType: types.Posting_ValType(t.ValueType),
-		Label:   t.Label,
-		Lang:    t.Lang,
-		Op:      op,
-		Facets:  t.Facets,
+		Uid:         t.ValueId,
+		Value:       t.Value,
+		ValType:     types.Posting_ValType(t.ValueType),
+		PostingType: postingType,
+		Metadata:    metadata,
+		Label:       t.Label,
+		Op:          op,
+		Facets:      t.Facets,
 	}
 }
 
@@ -322,9 +337,9 @@ func edgeType(t *task.DirectedEdge) x.ValueTypeInfo {
 	hasId := t.ValueId != 0
 	switch {
 	case hasVal && hasId:
-		return x.ValueTagged
+		return x.ValueLang
 	case hasVal && !hasId:
-		return x.ValueUntagged
+		return x.ValuePlain
 	case !hasVal && hasId:
 		return x.ValueUid
 	default:
@@ -333,10 +348,16 @@ func edgeType(t *task.DirectedEdge) x.ValueTypeInfo {
 }
 
 func postingType(p *types.Posting) x.ValueTypeInfo {
-	hasValue := !bytes.Equal(p.Value, nil)
-	hasLang := len(p.Lang) > 0
-	hasSpecialId := p.Uid == math.MaxUint64
-	return x.ValueType(hasValue, hasLang, hasSpecialId)
+	switch p.PostingType {
+	case types.Posting_REF:
+		return x.ValueUid
+	case types.Posting_VALUE:
+		return x.ValuePlain
+	case types.Posting_VALUE_LANG:
+		return x.ValueLang
+	default:
+		return x.ValueEmpty
+	}
 }
 
 // TypeID returns the typeid of destiantion vertex
@@ -553,14 +574,14 @@ func (l *List) LastCompactionTs() time.Time {
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 func (l *List) Uids(opt ListOptions) *task.List {
-	res := new(task.List)
-	writeIt := algo.NewWriteIterator(res)
+	// Pre-assign length to make it faster.
+	res := make([]uint64, 0, l.Length(opt.AfterUID))
+
 	l.Postings(opt, func(p *types.Posting) bool {
-		writeIt.Append(p.Uid)
+		res = append(res, p.Uid)
 		return true
 	})
-	writeIt.End()
-	return res
+	return &task.List{res}
 }
 
 // Postings calls postFn with the postings that are common with
@@ -569,7 +590,7 @@ func (l *List) Postings(opt ListOptions, postFn func(*types.Posting) bool) {
 	l.RLock()
 	defer l.RUnlock()
 
-	it := algo.NewListIterator(opt.Intersect)
+	var intersectIdx int // Indexes into opt.Intersect if it exists.
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if postingType(p) != x.ValueUid {
 			return true
@@ -581,8 +602,10 @@ func (l *List) Postings(opt ListOptions, postFn func(*types.Posting) bool) {
 			}
 		}
 		if opt.Intersect != nil {
-			it.Seek(uid, 1)
-			if !it.Valid() || it.Val() > uid {
+			intersectUidsLen := len(opt.Intersect.Uids)
+			for ; intersectIdx < intersectUidsLen && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
+			}
+			if intersectIdx >= intersectUidsLen || opt.Intersect.Uids[intersectIdx] > uid {
 				return true
 			}
 		}
@@ -643,7 +666,7 @@ func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
 	// last resort - return value with smallest lang Uid
 	if !found {
 		l.iterate(0, func(p *types.Posting) bool {
-			if postingType(p) == x.ValueTagged {
+			if postingType(p) == x.ValueLang {
 				val := make([]byte, len(p.Value))
 				copy(val, p.Value)
 				rval.Value = val
@@ -684,7 +707,7 @@ func (l *List) Facets(param *facets.Param) (fs []*facets.Facet, ferr error) {
 	if err != nil {
 		return nil, err
 	}
-	return facets.CopyFacets(p.Facets, param), nil
+	return utils.CopyFacets(p.Facets, param), nil
 }
 
 // valuePosting gives the posting representing value.

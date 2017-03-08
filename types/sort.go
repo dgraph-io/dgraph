@@ -20,7 +20,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -36,8 +35,8 @@ func (s sortBase) Len() int { return len(s.values) }
 // Swap swaps two elements.
 func (s sortBase) Swap(i, j int) {
 	s.values[i], s.values[j] = s.values[j], s.values[i]
-	data := s.ul
-	algo.Swap(data, i, j)
+	data := s.ul.Uids
+	data[i], data[j] = data[j], data[i]
 }
 
 type byValue struct{ sortBase }

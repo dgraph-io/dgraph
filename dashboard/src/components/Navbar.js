@@ -13,10 +13,13 @@ class NavBar extends Component {
                             <img src={logo} width="100" height="30" alt="" />
                         </a>
                     </Navbar.Brand>
+                    <Navbar.Toggle />
                 </Navbar.Header>
-                <Nav>
-                    <NavItem eventKey={1} href="#">Visualization</NavItem>
-                </Nav>
+                <Navbar.Collapse>
+                    <Nav>
+                        <NavItem eventKey={1} href="#">Visualization</NavItem>
+                    </Nav>
+                </Navbar.Collapse>
             </Navbar>
         );
     }

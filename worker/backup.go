@@ -48,36 +48,43 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				buf.WriteString("^^<pwd:")
 				buf.WriteString(vID.Name())
 				buf.WriteByte('>')
+			} else if p.PostingType == types.Posting_VALUE_LANG {
+				buf.WriteByte('@')
+				buf.WriteString(string(p.Metadata))
 			} else if vID != types.BinaryID &&
 				vID != types.DefaultID {
 				buf.WriteString("^^<xs:")
 				buf.WriteString(vID.Name())
 				buf.WriteByte('>')
-			} else if len(p.Lang) > 0 {
-				buf.WriteByte('@')
-				buf.WriteString(p.Lang)
 			}
 		} else {
 			buf.WriteString("<0x")
 			buf.WriteString(strconv.FormatUint(p.Uid, 16))
 			buf.WriteByte('>')
 		}
-
+		// Label
+		if len(p.Label) > 0 {
+			buf.WriteString(" <")
+			buf.WriteString(p.Label)
+			buf.WriteByte('>')
+		}
+		// Facets.
 		facets := p.Facets
 		if len(facets) != 0 {
 			buf.WriteString(" (")
-
 			for i, f := range facets {
 				if i != 0 {
 					buf.WriteByte(',')
 				}
 				buf.WriteString(f.Key)
 				buf.WriteByte('=')
-				buf.WriteString(string(f.Value))
+				fVal := &types.Val{Tid: types.StringID}
+				x.Check(types.Marshal(types.ValFor(f), fVal))
+				buf.WriteString(fVal.Value.(string))
 			}
-
 			buf.WriteByte(')')
 		}
+		// End dot.
 		buf.WriteString(" .\n")
 	}
 }

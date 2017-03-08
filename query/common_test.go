@@ -34,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
+	"github.com/dgraph-io/dgraph/types/facets/utils"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -70,16 +71,11 @@ func makeFacets(facetKVs map[string]string) (fs []*facets.Facet, err error) {
 	sort.Strings(allKeys)
 
 	for _, k := range allKeys {
-		v := facetKVs[k]
-		typ, err := facets.ValType(v)
+		f, err := utils.FacetFor(k, facetKVs[k])
 		if err != nil {
 			return nil, err
 		}
-		fs = append(fs, &facets.Facet{
-			k,
-			[]byte(v),
-			typ,
-		})
+		fs = append(fs, f)
 	}
 	return fs, nil
 }

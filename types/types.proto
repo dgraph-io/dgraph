@@ -25,10 +25,17 @@ message Posting {
 
 	}
 	ValType val_type = 3;
-	string lang = 4;
-	string label = 5;
-	uint64 commit = 6;  // More inclination towards smaller values.
-	repeated facets.Facet facets = 7;
+	enum PostingType {
+		REF=0;          // UID 
+		VALUE=1;        // simple, plain value
+		VALUE_LANG=2;   // value with specified language
+        // VALUE_TIMESERIES=3; // value from timeseries, with specified timestamp
+	}
+	PostingType posting_type = 4;
+	bytes metadata = 5; // for VALUE_LANG: Language, for VALUE_TIMESERIES: timestamp, etc..
+	string label = 6;
+	uint64 commit = 7;  // More inclination towards smaller values.
+	repeated facets.Facet facets = 8;
 
 	// TODO: op is only used temporarily. See if we can remove it from here.
 	uint32 op = 12;
