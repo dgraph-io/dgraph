@@ -112,3 +112,23 @@ export function isShortestPath(query) {
     query.indexOf("to") !== -1 &&
     query.indexOf("from") !== -1;
 }
+
+export function showTreeView(query) {
+  return query.indexOf("orderasc") !== -1 ||
+    query.indexOf("orderdesc") !== -1 ||
+    isShortestPath(query);
+}
+
+export function isNotEmpty(response) {
+  let keys = Object.keys(response);
+  if (keys.length === 0) {
+    return false;
+  }
+
+  for (let i = 0; i < keys.length; i++) {
+    if (keys[i] !== "server_latency" && keys[i] !== "uids") {
+      return keys[i].length > 0;
+    }
+  }
+  return false;
+}

@@ -1,3 +1,9 @@
+.Graph-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: auto;
+}
+
 .Graph {
     font-size: 12px;
     word-break: break-all;
@@ -52,7 +58,6 @@
     margin-left: auto;
     flex: 0 auto;
 }
-
 
 .Graph-full-height {
     border-bottom: 0px;

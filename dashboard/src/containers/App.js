@@ -5,12 +5,14 @@ import React from "react";
 import screenfull from "screenfull";
 import randomColor from "randomcolor";
 import uuid from "uuid";
+import { connect } from "react-redux";
 
-import NavBar from "./Navbar";
+import NavBar from "../components/Navbar";
 import PreviousQueryList from "./PreviousQueryList";
 import Editor from "./Editor";
 import Response from "./Response";
-import { getNodeLabel, isShortestPath, aggregationPrefix } from "./Helpers";
+// TODO - See if we should move helper somewhere else.
+import { getNodeLabel, aggregationPrefix } from "./Helpers";
 
 import "../assets/css/App.css";
 
@@ -305,7 +307,7 @@ function processGraph(response: Object, treeView: boolean, query: string) {
     };
 
     if (!uidMap[id]) {
-      // For tree view, we can't push duplicates because two blocks might have the
+      // For tree view, we can't push duplicates because two query blocks might have the
       // same root node and child elements won't really have the same uids as their uid is a
       // combination of all their ancestor uids.
       uidMap[id] = true;
@@ -415,24 +417,25 @@ class App extends React.Component {
     window.scrollTo(0, 0);
   };
 
-  deleteQuery = idx => {
-    if (idx < 0) {
-      return;
-    }
+  // TODO - Verify that it works with Redux store.
+  // deleteQuery = idx => {
+  //   if (idx < 0) {
+  //     return;
+  //   }
 
-    // TODO - Abstract out, get, put delete so that state is updated both for react
-    // and localStorage. Maybe Redux can help with this?
-    let q = this.state.queries;
-    q.splice(idx, 1);
-    this.setState({
-      queries: q,
-    });
-    let queries = JSON.parse(localStorage.getItem("queries"));
-    queries.splice(idx, 1);
-    localStorage.setItem("queries", JSON.stringify(queries));
-  };
+  //   // TODO - Abstract out, get, put delete so that state is updated both for react
+  //   // and localStorage. Maybe Redux can help with this?
+  //   let q = this.state.queries;
+  //   q.splice(idx, 1);
+  //   this.setState({
+  //     queries: q,
+  //   });
+  //   let queries = JSON.parse(localStorage.getItem("queries"));
+  //   queries.splice(idx, 1);
+  //   localStorage.setItem("queries", JSON.stringify(queries));
+  // };
 
-  // Handler which is used to update lastQuery by Editor component..
+  // Handler which is used to update lastQuery by Editor component.
   queryChange = query => {
     this.setState({ lastQuery: query });
   };
@@ -454,26 +457,27 @@ class App extends React.Component {
     };
   };
 
-  storeQuery = () => {
-    let queries: Array<QueryTs> = JSON.parse(
-      localStorage.getItem("queries") || "[]",
-    );
+  // TODO - Shifted to redux store and redux-persist
+  // storeQuery = () => {
+  //   let queries: Array<QueryTs> = JSON.parse(
+  //     localStorage.getItem("queries") || "[]",
+  //   );
 
-    let query = this.state.lastQuery.trim();
-    queries.forEach(function(q, idx) {
-      if (q.text === query) {
-        queries.splice(idx, 1);
-      }
-    });
+  //   let query = this.state.lastQuery.trim();
+  //   queries.forEach(function(q, idx) {
+  //     if (q.text === query) {
+  //       queries.splice(idx, 1);
+  //     }
+  //   });
 
-    let qu: QueryTs = { text: query, lastRun: Date.now() };
-    queries.unshift(qu);
+  //   let qu: QueryTs = { text: query, lastRun: Date.now() };
+  //   queries.unshift(qu);
 
-    this.setState({
-      queries: queries,
-    });
-    localStorage.setItem("queries", JSON.stringify(queries));
-  };
+  //   this.setState({
+  //     queries: queries,
+  //   });
+  //   localStorage.setItem("queries", JSON.stringify(queries));
+  // };
 
   lastQuery = () => {
     let queries: Array<QueryTs> = JSON.parse(
@@ -579,21 +583,22 @@ class App extends React.Component {
           <div className="row justify-content-md-center">
             <div className="col-sm-12">
               <div className="col-sm-5">
-                <Editor
-                  query={this.state.lastQuery}
+                <Editor query={this.state.lastQuery} />
+                {/*
                   updateQuery={this.queryChange}
-                  storeLastQuery={this.storeQuery}
                   resetState={this.resetStateOnQuery}
                   renderGraph={this.renderGraph}
-                  renderResText={this.renderResText}
-                />
+*/
+                }
 
-                <PreviousQueryList
+                {/*
+                <PreviousQueryList />
                   queries={this.state.queries}
                   update={this.updateQuery}
                   delete={this.deleteQuery}
                   xs="hidden-xs"
-                />
+                  */
+                }
               </div>
               <div className="col-sm-7">
                 <label style={{ marginLeft: "5px" }}> Response </label>
@@ -606,8 +611,8 @@ class App extends React.Component {
                       className="App-fs-icon glyphicon glyphicon-glyphicon glyphicon-resize-full"
                     />
                   </div>}
-                <Response
-                  graph={this.state.graph}
+                <Response />
+                {/*graph={this.state.graph}
                   resType={this.state.resType}
                   graphHeight={this.state.graphHeight}
                   response={this.state.response}
@@ -622,13 +627,15 @@ class App extends React.Component {
                   allEdges={this.state.allEdges}
                   treeView={this.state.treeView}
                   renderGraph={this.renderGraph}
-                />
-                <PreviousQueryList
-                  queries={this.state.queries}
+                /> 
+                }
+                {/*<PreviousQueryList />
+                 queries={this.state.queries}
                   update={this.updateQuery}
                   delete={this.deleteQuery}
                   xs="visible-xs-block"
-                />
+                */
+                }
               </div>
             </div>
           </div>
