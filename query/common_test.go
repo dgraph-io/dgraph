@@ -31,10 +31,10 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/query/graph"
+
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets/utils"
+	
 	"github.com/dgraph-io/dgraph/x"
 )
 

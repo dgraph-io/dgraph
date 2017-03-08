@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 
-	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 )
 
 type Op int
@@ -38,15 +38,15 @@ const (
 	DEL
 )
 
-// Req wraps the graph.Request so that we can define helper methods for the
+// Req wraps the graphp.Request so that we can define helper methods for the
 // client around it.
 type Req struct {
-	gr graph.Request
+	gr graphp.Request
 }
 
 // Request returns the graph request object which is sent to the server to perform
 // a query/mutation.
-func (req *Req) Request() *graph.Request {
+func (req *Req) Request() *graphp.Request {
 	return &req.gr
 }
 

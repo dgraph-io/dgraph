@@ -85,7 +85,7 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 		rerr = x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
 		return cost, fcs, rerr
 	}
-	tv := typesp.ValFor(fcs.Facets[0])
+	tv := facets.ValFor(fcs.Facets[0])
 	if tv.Tid == types.Int32ID {
 		cost = float64(tv.Value.(int32))
 	} else if tv.Tid == types.FloatID {
@@ -386,7 +386,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		}
 		if nodeInfo.facet != nil {
 			// For consistent later processing.
-			node.Params.Facet = &facets.Param{}
+			node.Params.Facet = &facetsp.Param{}
 		}
 		node.Attr = nodeInfo.attr
 		node.facetsMatrix = []*facetsp.List{&facetsp.List{[]*facetsp.Facets{nodeInfo.facet}}}

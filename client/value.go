@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/types"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"

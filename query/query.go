@@ -136,7 +136,7 @@ type params struct {
 	Normalize    bool
 	From         uint64
 	To           uint64
-	Facet        *facets.Param
+	Facet        *facetsp.Param
 	RecurseDepth uint64
 }
 
@@ -302,7 +302,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					fs := fcsList[childIdx]
 					fc := dst.New(fieldName)
 					for _, f := range fs.Facets {
-						fc.AddValue(f.Key, typesp.ValFor(f))
+						fc.AddValue(f.Key, facets.ValFor(f))
 					}
 					if !fc.IsEmpty() {
 						fcParent := dst.New("_")
@@ -328,7 +328,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					fc.AddValue(f.Key, typesp.ValFor(f))
+					fc.AddValue(f.Key, facets.ValFor(f))
 				}
 				if !fc.IsEmpty() {
 					facetsNode.AddMapChild(fieldName, fc, false)
@@ -470,7 +470,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Normalize: sg.Params.Normalize,
 		}
 		if gchild.Facets != nil {
-			args.Facet = &facets.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
+			args.Facet = &facetsp.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
 		}
 
 		args.NeedsVar = append(args.NeedsVar, gchild.NeedsVar...)
@@ -636,7 +636,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Normalize:  gq.Normalize,
 	}
 	if gq.Facets != nil {
-		args.Facet = &facets.Param{gq.Facets.AllKeys, gq.Facets.Keys}
+		args.Facet = &facetsp.Param{gq.Facets.AllKeys, gq.Facets.Keys}
 	}
 
 	for _, it := range gq.NeedsVar {
@@ -718,7 +718,7 @@ func toFacetsFilter(gft *gql.FilterTree) (*facetsp.FilterTree, error) {
 		}
 	}
 	if gft.Func != nil {
-		ftree.Func = &facets.Function{
+		ftree.Func = &facetsp.Function{
 			Key:  gft.Func.Attr,
 			Name: gft.Func.Name,
 			Args: []string{},
