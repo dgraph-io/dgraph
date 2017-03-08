@@ -12,6 +12,7 @@ import (
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -22,8 +23,9 @@ import (
 )
 
 const (
-	proposalMutation = 0
-	proposalReindex  = 1
+	proposalMutation     = 0
+	proposalReindex      = 1
+	ErrorInvalidToNodeId = "Error Invalid Recipient Node ID"
 )
 
 // peerPool stores the peers per node and the addresses corresponding to them.
@@ -43,6 +45,12 @@ func (p *peerPool) Set(id uint64, addr string) {
 	p.Lock()
 	defer p.Unlock()
 	p.peers[id] = addr
+}
+
+func (p *peerPool) Del(id uint64) {
+	p.Lock()
+	defer p.Unlock()
+	delete(p.peers, id)
 }
 
 type proposals struct {
@@ -374,8 +382,21 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	select {
 	case <-ctx.Done():
 		return
-	case <-ch:
-		// We don't need to do anything if we receive any error while sending message.
+	case err := <-ch:
+		if grpc.ErrorDesc(err) == ErrorInvalidToNodeId {
+			// Leader detects that some other node has started on same port
+			fmt.Printf("Sending Message to Remove Node %v from cluster\n", to)
+			// ProposeConfChange is not returning error when there is no quorum to
+			// process conf change. Hence Not calling groups().removeNode here
+			err := n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
+				Type:   raftpb.ConfChangeRemoveNode,
+				NodeID: to,
+			})
+			if err != nil {
+				x.TraceError(ctx, err)
+			}
+		}
+		// We don't need to do anything if we receive any other error while sending message.
 		// RAFT would automatically retry.
 		return
 	}
@@ -444,12 +465,15 @@ func (n *node) processApplyCh() {
 			var cc raftpb.ConfChange
 			cc.Unmarshal(e.Data)
 
-			if len(cc.Context) > 0 {
+			if cc.Type != raftpb.ConfChangeRemoveNode && len(cc.Context) > 0 {
 				var rc task.RaftContext
 				x.Check(rc.Unmarshal(cc.Context))
 				n.Connect(rc.Id, rc.Addr)
+			} else if cc.Type == raftpb.ConfChangeRemoveNode {
+				addr := n.peers.Get(cc.NodeID)
+				n.peers.Del(cc.NodeID)
+				groups().removeNode(n.gid, cc.NodeID, addr)
 			}
-
 			cs := n.Raft().ApplyConfChange(cc)
 			n.SetConfState(cs)
 			n.applied.Ch <- mark
@@ -801,6 +825,9 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 		}
 		if err := msg.Unmarshal(query.Data[idx : idx+sz]); err != nil {
 			x.Check(err)
+		}
+		if msg.To != *raftId {
+			return &Payload{}, x.Errorf(ErrorInvalidToNodeId)
 		}
 		if msg.Type != raftpb.MsgHeartbeat && msg.Type != raftpb.MsgHeartbeatResp {
 			fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
