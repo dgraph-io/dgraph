@@ -211,6 +211,27 @@ func TestUIDListIntersect5(t *testing.T) {
 	require.Equal(t, []uint64{3}, u.Uids)
 }
 
+func TestUIDListIntersectDupFirst(t *testing.T) {
+	u := newList([]uint64{1, 1, 2, 3})
+	v := newList([]uint64{1, 2})
+	IntersectWith(u, v)
+	require.Equal(t, []uint64{1, 2}, u.Uids)
+}
+
+func TestUIDListIntersectDupBoth(t *testing.T) {
+	u := newList([]uint64{1, 1, 2, 3, 5})
+	v := newList([]uint64{1, 1, 2, 4})
+	IntersectWith(u, v)
+	require.Equal(t, []uint64{1, 1, 2}, u.Uids)
+}
+
+func TestUIDListIntersectDupSecond(t *testing.T) {
+	u := newList([]uint64{1, 2, 3, 5})
+	v := newList([]uint64{1, 1, 2, 4})
+	IntersectWith(u, v)
+	require.Equal(t, []uint64{1, 2}, u.Uids)
+}
+
 func TestApplyFilterUint(t *testing.T) {
 	l := []uint64{1, 2, 3, 4, 5}
 	u := newList(l)
