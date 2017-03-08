@@ -17,7 +17,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -241,7 +240,7 @@ var slicePool = sync.Pool{
 	},
 }
 
-func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) error {
+func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
 	}
@@ -382,7 +381,7 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
-func (n *node) processMutation(e raftpb.Entry, m *task.Mutations) error {
+func (n *node) processMutation(e raftpb.Entry, m *taskp.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
@@ -393,7 +392,7 @@ func (n *node) processMutation(e raftpb.Entry, m *task.Mutations) error {
 	return nil
 }
 
-func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
+func (n *node) processMembership(e raftpb.Entry, mm *taskp.Membership) error {
 	x.AssertTrue(n.gid == 0)
 
 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
@@ -413,7 +412,7 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	}
 
 	pending <- struct{}{} // This will block until we can write to it.
-	var proposal task.Proposal
+	var proposal taskp.Proposal
 	x.AssertTrue(len(e.Data) > 0)
 	x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
 
@@ -461,7 +460,7 @@ func (n *node) processApplyCh() {
 		// We derive the schema here if it's not present
 		// Since raft committed logs are serialized, we can derive
 		// schema here without any locking
-		var proposal task.Proposal
+		var proposal taskp.Proposal
 		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
 
 		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {

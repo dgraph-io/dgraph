@@ -21,8 +21,8 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -117,10 +117,10 @@ func validateAndConvert(edge *taskp.DirectedEdge, schemaType types.TypeID) error
 }
 
 // runMutate is used to run the mutations on an instance.
-func proposeOrSend(ctx context.Context, gid uint32, m *task.Mutations, che chan error) {
+func proposeOrSend(ctx context.Context, gid uint32, m *taskp.Mutations, che chan error) {
 	if groups().ServesGroup(gid) {
 		node := groups().Node(gid)
-		che <- node.ProposeAndWait(ctx, &task.Proposal{Mutations: m})
+		che <- node.ProposeAndWait(ctx, &taskp.Proposal{Mutations: m})
 		return
 	}
 
@@ -141,12 +141,12 @@ func proposeOrSend(ctx context.Context, gid uint32, m *task.Mutations, che chan 
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationMap(mutationMap map[uint32]*task.Mutations, edges []*taskp.DirectedEdge) {
+func addToMutationMap(mutationMap map[uint32]*taskp.Mutations, edges []*taskp.DirectedEdge) {
 	for _, edge := range edges {
 		gid := group.BelongsTo(edge.Attr)
 		mu := mutationMap[gid]
 		if mu == nil {
-			mu = &task.Mutations{GroupId: gid}
+			mu = &taskp.Mutations{GroupId: gid}
 			mutationMap[gid] = mu
 		}
 		mu.Edges = append(mu.Edges, edge)
@@ -155,8 +155,8 @@ func addToMutationMap(mutationMap map[uint32]*task.Mutations, edges []*taskp.Dir
 
 // MutateOverNetwork checks which group should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
-func MutateOverNetwork(ctx context.Context, m *task.Mutations) error {
-	mutationMap := make(map[uint32]*task.Mutations)
+func MutateOverNetwork(ctx context.Context, m *taskp.Mutations) error {
+	mutationMap := make(map[uint32]*taskp.Mutations)
 	addToMutationMap(mutationMap, m.Edges)
 
 	errors := make(chan error, len(mutationMap))
@@ -183,7 +183,7 @@ func MutateOverNetwork(ctx context.Context, m *task.Mutations) error {
 }
 
 // Mutate is used to apply mutations over the network on other instances.
-func (w *grpcWorker) Mutate(ctx context.Context, m *task.Mutations) (*Payload, error) {
+func (w *grpcWorker) Mutate(ctx context.Context, m *taskp.Mutations) (*Payload, error) {
 	if ctx.Err() != nil {
 		return &Payload{}, ctx.Err()
 	}
@@ -193,7 +193,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *task.Mutations) (*Payload, e
 	}
 	c := make(chan error, 1)
 	node := groups().Node(m.GroupId)
-	go func() { c <- node.ProposeAndWait(ctx, &task.Proposal{Mutations: m}) }()
+	go func() { c <- node.ProposeAndWait(ctx, &taskp.Proposal{Mutations: m}) }()
 
 	select {
 	case <-ctx.Done():

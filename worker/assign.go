@@ -21,7 +21,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -68,7 +67,7 @@ func assignUids(ctx context.Context, num *taskp.Num) (*taskp.List, error) {
 		})
 	}
 
-	proposal := &task.Proposal{Mutations: mutations}
+	proposal := &taskp.Proposal{Mutations: mutations}
 	if err := node.ProposeAndWait(ctx, proposal); err != nil {
 		return &emptyUIDList, err
 	}

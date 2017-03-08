@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types"
 )
 
@@ -100,7 +100,7 @@ func TestAddToMutationArray(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	mutationsMap := make(map[uint32]*task.Mutations)
+	mutationsMap := make(map[uint32]*taskp.Mutations)
 	edges := []*taskp.DirectedEdge{}
 
 	edges = append(edges, &taskp.DirectedEdge{

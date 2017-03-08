@@ -49,11 +49,11 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/soheilhy/cmux"
@@ -212,7 +212,7 @@ func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult
 	return mr, nil
 }
 
-func applyMutations(ctx context.Context, m *task.Mutations) error {
+func applyMutations(ctx context.Context, m *taskp.Mutations) error {
 	err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
@@ -223,7 +223,7 @@ func applyMutations(ctx context.Context, m *task.Mutations) error {
 
 func convertAndApply(ctx context.Context, set []*graphp.NQuad, del []*graphp.NQuad) (map[string]uint64, error) {
 	var allocIds map[string]uint64
-	var m task.Mutations
+	var m taskp.Mutations
 	var err error
 	var mr mutationResult
 

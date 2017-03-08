@@ -7,6 +7,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -15,7 +16,7 @@ import (
 // rebuildIndex is called by node.Run to rebuild index.
 func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	x.AssertTrue(proposalData[0] == proposalReindex)
-	var proposal task.Proposal
+	var proposal taskp.Proposal
 	x.Check(proposal.Unmarshal(proposalData[1:]))
 	x.AssertTrue(proposal.RebuildIndex != nil)
 
@@ -87,7 +88,7 @@ func (w *grpcWorker) RebuildIndex(ctx context.Context, req *task.RebuildIndex) (
 func proposeRebuildIndex(ctx context.Context, ri *task.RebuildIndex) error {
 	gid := ri.GroupId
 	n := groups().Node(gid)
-	proposal := &task.Proposal{RebuildIndex: ri}
+	proposal := &taskp.Proposal{RebuildIndex: ri}
 	if err := n.ProposeAndWait(ctx, proposal); err != nil {
 		return err
 	}
