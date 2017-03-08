@@ -363,8 +363,8 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	x.Check(err)
 	defer pool.Put(conn)
 
-	c := NewWorkerClient(conn)
-	p := &Payload{Data: data}
+	c := workerp.NewWorkerClient(conn)
+	p := &workerp.Payload{Data: data}
 
 	ch := make(chan error, 1)
 	go func() {
@@ -676,7 +676,7 @@ func (n *node) joinPeers() {
 	x.Check(err)
 	defer pool.Put(conn)
 
-	c := NewWorkerClient(conn)
+	c := workerp.NewWorkerClient(conn)
 	x.Printf("Calling JoinCluster")
 	_, err = c.JoinCluster(n.ctx, n.raftContext)
 	x.Checkf(err, "Error while joining cluster")

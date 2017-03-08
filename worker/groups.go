@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
@@ -336,7 +337,7 @@ UPDATEMEMBERSHIP:
 	x.Check(err)
 	defer pl.Put(conn)
 
-	c := NewWorkerClient(conn)
+	c := workerp.NewWorkerClient(conn)
 	update, err := c.UpdateMembership(g.ctx, &mu)
 	if err != nil {
 		x.TraceError(g.ctx, err)

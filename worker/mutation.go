@@ -22,6 +22,7 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -67,7 +68,7 @@ func runMutations(ctx context.Context, edges []*taskp.DirectedEdge) error {
 func updateSchema(attr string, typ types.TypeID, raftIndex uint64, group uint32) {
 	ce := schema.SyncEntry{
 		Attr:   attr,
-		Schema: types.Schema{ValueType: uint32(typ)},
+		Schema: typesp.Schema{ValueType: uint32(typ)},
 		Index:  raftIndex,
 		Water:  posting.SyncMarkFor(group),
 	}
@@ -135,7 +136,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *taskp.Mutations, che chan
 	}
 	defer pl.Put(conn)
 
-	c := NewWorkerClient(conn)
+	c := workerp.NewWorkerClient(conn)
 	_, err = c.Mutate(ctx, m)
 	che <- err
 }

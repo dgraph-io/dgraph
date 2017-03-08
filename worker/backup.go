@@ -16,6 +16,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -50,7 +51,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				buf.WriteString("^^<pwd:")
 				buf.WriteString(vID.Name())
 				buf.WriteByte('>')
-			} else if p.PostingType == types.Posting_VALUE_LANG {
+			} else if p.PostingType == typesp.Posting_VALUE_LANG {
 				buf.WriteByte('@')
 				buf.WriteString(string(p.Metadata))
 			} else if vID != types.BinaryID &&
@@ -71,17 +72,17 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			buf.WriteByte('>')
 		}
 		// Facets.
-		facets := p.Facets
-		if len(facets) != 0 {
+		fcs := p.Facets
+		if len(fcs) != 0 {
 			buf.WriteString(" (")
-			for i, f := range facets {
+			for i, f := range fcs {
 				if i != 0 {
 					buf.WriteByte(',')
 				}
 				buf.WriteString(f.Key)
 				buf.WriteByte('=')
 				fVal := &types.Val{Tid: types.StringID}
-				x.Check(types.Marshal(types.ValFor(f), fVal))
+				x.Check(types.Marshal(facets.ValFor(f), fVal))
 				buf.WriteString(fVal.Value.(string))
 			}
 			buf.WriteByte(')')
@@ -277,7 +278,7 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *worker
 		}
 	}
 
-	c := NewWorkerClient(conn)
+	c := workerp.NewWorkerClient(conn)
 	nr := &workerp.BackupPayload{
 		ReqId:   reqId,
 		GroupId: gid,

@@ -122,7 +122,7 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 	defer pl.Put(conn)
 	x.Trace(ctx, "Sending request to %v", addr)
 
-	c := NewWorkerClient(conn)
+	c := workerp.NewWorkerClient(conn)
 	_, err = c.RebuildIndex(ctx, &taskp.RebuildIndex{Attr: attr, GroupId: gid})
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.RebuildIndex"))

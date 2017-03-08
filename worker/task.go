@@ -27,7 +27,9 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/tok"
@@ -38,14 +40,14 @@ import (
 
 var (
 	emptyUIDList taskp.List
-	emptyResult  task.Result
+	emptyResult  taskp.Result
 	exactTok     tok.ExactTokenizer
 )
 
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
-func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, error) {
+func ProcessTaskOverNetwork(ctx context.Context, q *taskp.Query) (*taskp.Result, error) {
 	attr := q.Attr
 	gid := group.BelongsTo(attr)
 	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
@@ -67,7 +69,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, e
 	defer pl.Put(conn)
 	x.Trace(ctx, "Sending request to %v", addr)
 
-	c := NewWorkerClient(conn)
+	c := workerp.NewWorkerClient(conn)
 	reply, err := c.ServeTask(ctx, q)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.ServeTask"))
@@ -135,14 +137,14 @@ func parseFuncType(arr []string) (FuncType, string) {
 }
 
 // processTask processes the query, accumulates and returns the result.
-func processTask(q *task.Query, gid uint32) (*task.Result, error) {
+func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 	attr := q.Attr
 	srcFn, err := parseSrcFn(q)
 	if err != nil {
 		return nil, err
 	}
 
-	var out task.Result
+	var out taskp.Result
 	opts := posting.ListOptions{
 		AfterUID: uint64(q.AfterUid),
 	}
@@ -185,7 +187,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// get filtered uids and facets.
 		type result struct {
 			uid    uint64
-			facets []*facets.Facet
+			facets []*facetsp.Facet
 		}
 		var filteredRes []*result
 		if !isValueEdge { // for uid edge.. get postings
@@ -216,14 +218,14 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			if isValueEdge {
 				fs, err := pl.Facets(q.FacetParam)
 				if err != nil {
-					fs = []*facets.Facet{}
+					fs = []*facetsp.Facet{}
 				}
 				out.FacetMatrix = append(out.FacetMatrix,
-					&facets.List{[]*facets.Facets{&facets.Facets{fs}}})
+					&facets.List{[]*facetsp.Facets{&facetsp.Facets{fs}}})
 			} else {
-				var fcsList []*facets.Facets
+				var fcsList []*facetsp.Facets
 				for _, fres := range filteredRes {
-					fcsList = append(fcsList, &facets.Facets{fres.facets})
+					fcsList = append(fcsList, &facetsp.Facets{fres.facets})
 				}
 				out.FacetMatrix = append(out.FacetMatrix, &facets.List{fcsList})
 			}
@@ -364,7 +366,7 @@ type functionContext struct {
 	regex          *regexp.Regexp
 }
 
-func parseSrcFn(q *task.Query) (*functionContext, error) {
+func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 	fnType, f := parseFuncType(q.SrcFunc)
 	attr := q.Attr
 	fc := &functionContext{fnType: fnType, fname: f}
@@ -465,7 +467,7 @@ func parseSrcFn(q *task.Query) (*functionContext, error) {
 }
 
 // ServeTask is used to respond to a query.
-func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result, error) {
+func (w *grpcWorker) ServeTask(ctx context.Context, q *taskp.Query) (*taskp.Result, error) {
 	if ctx.Err() != nil {
 		return &emptyResult, ctx.Err()
 	}
@@ -473,7 +475,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 	gid := group.BelongsTo(q.Attr)
 	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, len(q.Uids.Uids), gid)
 
-	var reply *task.Result
+	var reply *taskp.Result
 	x.AssertTruef(groups().ServesGroup(gid),
 		"attr: %q groupId: %v Request sent to wrong server.", q.Attr, gid)
 
@@ -495,13 +497,13 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 // applyFacetsTree : we return error only when query has some problems.
 // like Or has 3 arguments, argument facet val overflows integer.
 // returns true if postingFacets can be included.
-func applyFacetsTree(postingFacets []*facets.Facet, ftree *facetsTree) (bool, error) {
+func applyFacetsTree(postingFacets []*facetsp.Facet, ftree *facetsTree) (bool, error) {
 	if ftree == nil {
 		return true, nil
 	}
 	if ftree.function != nil {
 		fname := strings.ToLower(ftree.function.name)
-		var fc *facets.Facet
+		var fc *facetsp.Facet
 		for _, fci := range postingFacets {
 			if fci.Key == ftree.function.key {
 				fc = fci
@@ -514,7 +516,7 @@ func applyFacetsTree(postingFacets []*facets.Facet, ftree *facetsTree) (bool, er
 		fnType, fname := parseFuncType([]string{fname})
 		switch fnType {
 		case CompareAttrFn: // lt, gt, le, ge, eq
-			return compareTypeVals(fname, types.ValFor(fc), ftree.function.val), nil
+			return compareTypeVals(fname, typesp.ValFor(fc), ftree.function.val), nil
 
 		case StandardFn: // allof, anyof
 			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
@@ -624,7 +626,7 @@ type facetsTree struct {
 	function *facetsFunc
 }
 
-func preprocessFilter(tree *facets.FilterTree) (*facetsTree, error) {
+func preprocessFilter(tree *facetsp.FilterTree) (*facetsTree, error) {
 	if tree == nil {
 		return nil, nil
 	}
@@ -648,7 +650,7 @@ func preprocessFilter(tree *facets.FilterTree) (*facetsTree, error) {
 			if err != nil {
 				return nil, err // stop processing as this is query error
 			}
-			ftree.function.val = types.ValFor(argf)
+			ftree.function.val = typesp.ValFor(argf)
 		case StandardFn:
 			argTokens, aerr := tok.GetTokens(tree.Func.Args)
 			if aerr != nil { // query error ; stop processing.

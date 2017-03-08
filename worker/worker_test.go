@@ -30,7 +30,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -132,9 +131,9 @@ func TestProcessTask(t *testing.T) {
 }
 
 // newQuery creates a Query task and returns it.
-func newQuery(attr string, uids []uint64, srcFunc []string) *task.Query {
+func newQuery(attr string, uids []uint64, srcFunc []string) *taskp.Query {
 	x.AssertTrue(uids == nil || srcFunc == nil)
-	return &task.Query{
+	return &taskp.Query{
 		Uids:    &taskp.List{uids},
 		SrcFunc: srcFunc,
 		Attr:    attr,

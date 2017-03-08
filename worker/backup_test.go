@@ -17,13 +17,13 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -173,8 +173,8 @@ func generateBenchValues() []kv {
 	byteInt := make([]byte, 4)
 	binary.LittleEndian.PutUint32(byteInt, 123)
 
-	fac := []*facets.Facet{
-		&facets.Facet{
+	fac := []*facetsp.Facet{
+		&facetsp.Facet{
 			Key:   "facetTest",
 			Value: []byte("testVal"),
 		},

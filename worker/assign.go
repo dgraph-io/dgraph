@@ -21,6 +21,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -115,7 +116,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 		defer p.Put(conn)
 		x.Trace(ctx, "Calling AssignUids for group: %d, addr: %s", gid, addr)
 
-		c := NewWorkerClient(conn)
+		c := workerp.NewWorkerClient(conn)
 		ul, err = c.AssignUids(ctx, num)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while getting uids"))

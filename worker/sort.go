@@ -6,6 +6,7 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -35,7 +36,7 @@ func SortOverNetwork(ctx context.Context, q *taskp.Sort) (*taskp.SortResult, err
 	defer pl.Put(conn)
 	x.Trace(ctx, "Sending request to %v", addr)
 
-	c := NewWorkerClient(conn)
+	c := workerp.NewWorkerClient(conn)
 	var reply *taskp.SortResult
 	cerr := make(chan error, 1)
 	go func() {

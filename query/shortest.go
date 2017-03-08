@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -52,7 +53,7 @@ type nodeInfo struct {
 	cost   float64
 	parent uint64
 	attr   string
-	facet  *facets.Facets
+	facet  *facetsp.Facets
 	// Pointer to the item in heap. Used to update priority
 	node *Item
 }
@@ -60,11 +61,11 @@ type nodeInfo struct {
 type mapItem struct {
 	attr  string
 	cost  float64
-	facet *facets.Facets
+	facet *facetsp.Facets
 }
 
 func (sg *SubGraph) getCost(matrix, list int) (cost float64,
-	fcs *facets.Facets, rerr error) {
+	fcs *facetsp.Facets, rerr error) {
 
 	cost = 1.0
 	if sg.Params.Facet == nil {
@@ -84,7 +85,7 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 		rerr = x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
 		return cost, fcs, rerr
 	}
-	tv := types.ValFor(fcs.Facets[0])
+	tv := typesp.ValFor(fcs.Facets[0])
 	if tv.Tid == types.Int32ID {
 		cost = float64(tv.Value.(int32))
 	} else if tv.Tid == types.FloatID {
@@ -388,7 +389,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 			node.Params.Facet = &facets.Param{}
 		}
 		node.Attr = nodeInfo.attr
-		node.facetsMatrix = []*facets.List{&facets.List{[]*facets.Facets{nodeInfo.facet}}}
+		node.facetsMatrix = []*facets.List{&facets.List{[]*facetsp.Facets{nodeInfo.facet}}}
 		node.SrcUIDs = &taskp.List{[]uint64{curUid}}
 		node.DestUIDs = &taskp.List{[]uint64{childUid}}
 		node.uidMatrix = []*taskp.List{&taskp.List{[]uint64{childUid}}}

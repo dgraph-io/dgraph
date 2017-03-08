@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/schema"
@@ -157,7 +158,7 @@ type SubGraph struct {
 
 	FilterOp     string
 	Filters      []*SubGraph
-	facetsFilter *facets.FilterTree
+	facetsFilter *facetsp.FilterTree
 	Children     []*SubGraph
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
@@ -279,7 +280,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
-			var fcsList []*facets.Facets
+			var fcsList []*facetsp.Facets
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
@@ -301,7 +302,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					fs := fcsList[childIdx]
 					fc := dst.New(fieldName)
 					for _, f := range fs.Facets {
-						fc.AddValue(f.Key, types.ValFor(f))
+						fc.AddValue(f.Key, typesp.ValFor(f))
 					}
 					if !fc.IsEmpty() {
 						fcParent := dst.New("_")
@@ -327,7 +328,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					fc.AddValue(f.Key, types.ValFor(f))
+					fc.AddValue(f.Key, typesp.ValFor(f))
 				}
 				if !fc.IsEmpty() {
 					facetsNode.AddMapChild(fieldName, fc, false)
@@ -700,14 +701,14 @@ func createNilValuesList(count int) []*taskp.Value {
 	return out
 }
 
-func toFacetsFilter(gft *gql.FilterTree) (*facets.FilterTree, error) {
+func toFacetsFilter(gft *gql.FilterTree) (*facetsp.FilterTree, error) {
 	if gft == nil {
 		return nil, nil
 	}
 	if gft.Func != nil && len(gft.Func.NeedsVar) != 0 {
-		return nil, x.Errorf("Variables not supported in facets.FilterTree")
+		return nil, x.Errorf("Variables not supported in facetsp.FilterTree")
 	}
-	ftree := new(facets.FilterTree)
+	ftree := new(facetsp.FilterTree)
 	ftree.Op = gft.Op
 	for _, gftc := range gft.Child {
 		if ftc, err := toFacetsFilter(gftc); err != nil {
@@ -728,14 +729,14 @@ func toFacetsFilter(gft *gql.FilterTree) (*facets.FilterTree, error) {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph) *task.Query {
+func createTaskQuery(sg *SubGraph) *taskp.Query {
 	attr := sg.Attr
 	// Might be safer than just checking first byte due to i18n
 	reverse := strings.HasPrefix(attr, "~")
 	if reverse {
 		attr = strings.TrimPrefix(attr, "~")
 	}
-	out := &task.Query{
+	out := &taskp.Query{
 		Attr:         attr,
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
