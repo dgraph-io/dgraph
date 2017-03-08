@@ -1,8 +1,8 @@
 // To compile this file, in dgraph directory :
-// protoc --gofast_out=. -I. types/facets/facets.proto
+// protoc --gofast_out=. -I. protos/facets.proto
 syntax = "proto3";
 
-package facets;
+package facetsp;
 
 message Facet {
 	enum ValType {

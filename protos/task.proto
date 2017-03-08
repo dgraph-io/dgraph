@@ -1,10 +1,10 @@
 // To compile this file, in dgraph directory :
-// protoc --gofast_out=plugins=grpc,Mtypes/facets/facets.proto=github.com/dgraph-io/dgraph/types/facets:.  task/task.proto
+// protoc --gofast_out=plugins=grpc:. --proto_path=${GOPATH}/src:. protos/task.proto
 
 syntax = "proto3";
-import "types/facets/facets.proto";
+import "github.com/dgraph-io/dgraph/protos/facets.proto";
 
-package task;
+package taskp;
 
 message List {
 	repeated fixed64 uids = 1;
@@ -31,8 +31,8 @@ message Query {
 	
 	bool reverse = 9;  // Whether this is a reverse edge.
 
-	facets.Param facet_param = 10; // which facets to fetch
-	facets.FilterTree facets_filter = 11; // filtering on facets : has Op (and/or/not) tree
+	facetsp.Param facet_param = 10; // which facets to fetch
+	facetsp.FilterTree facets_filter = 11; // filtering on facets : has Op (and/or/not) tree
 }
 
 message Result {
@@ -40,7 +40,7 @@ message Result {
 	repeated Value values = 2;
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
-	repeated facets.List facet_matrix = 5;
+	repeated facetsp.List facet_matrix = 5;
 }
 
 message Sort {
@@ -104,7 +104,7 @@ message DirectedEdge {
 		DEL = 1;
 	}
 	Op op = 8;
-	repeated facets.Facet facets = 9;
+	repeated facetsp.Facet facets = 9;
 }
 
 message Mutations {

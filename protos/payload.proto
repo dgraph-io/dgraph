@@ -1,10 +1,10 @@
-// protoc --gofast_out=plugins=grpc:.  --proto_path=${GOPATH}/src:. worker/payload.proto
+// protoc --gofast_out=plugins=grpc:.  --proto_path=${GOPATH}/src:. protos/payload.proto
 
 syntax = "proto3";
 
-import "github.com/dgraph-io/dgraph/task/task.proto";
+import "github.com/dgraph-io/dgraph/protos/task.proto";
 
-package worker;
+package workerp;
 
 message Payload {
 	bytes Data = 1;
@@ -30,16 +30,16 @@ service Worker {
 	rpc Echo (Payload)             returns (Payload) {}
 
 	// Data serving RPCs.
-	rpc AssignUids (task.Num)                 returns (task.List) {}
-	rpc Mutate (task.Mutations)               returns (Payload) {}
-	rpc ServeTask (task.Query)                returns (task.Result) {}
-	rpc PredicateAndSchemaData (stream task.GroupKeys) returns (stream task.KV) {}
-	rpc Sort (task.Sort)                      returns (task.SortResult) {}
-	rpc RebuildIndex (task.RebuildIndex)      returns (Payload) {}
+	rpc AssignUids (taskp.Num)                 returns (taskp.List) {}
+	rpc Mutate (taskp.Mutations)               returns (Payload) {}
+	rpc ServeTask (taskp.Query)                returns (taskp.Result) {}
+	rpc PredicateAndSchemaData (stream taskp.GroupKeys) returns (stream taskp.KV) {}
+	rpc Sort (taskp.Sort)                      returns (taskp.SortResult) {}
+	rpc RebuildIndex (taskp.RebuildIndex)      returns (Payload) {}
 
 	// RAFT serving RPCs.
 	rpc RaftMessage (Payload)                     returns (Payload) {}
-	rpc JoinCluster (task.RaftContext)            returns (Payload) {}
-	rpc UpdateMembership (task.MembershipUpdate)  returns (task.MembershipUpdate) {}
+	rpc JoinCluster (taskp.RaftContext)            returns (Payload) {}
+	rpc UpdateMembership (taskp.MembershipUpdate)  returns (taskp.MembershipUpdate) {}
 	rpc Backup (BackupPayload)                    returns (BackupPayload) {}
 }
