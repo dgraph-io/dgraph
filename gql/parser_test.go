@@ -1842,6 +1842,124 @@ func TestLangsInvalid5(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestLangsFilter1(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a) {
+			friends @filter(alloftext("descr@en", "something")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Children[0])
+	require.NotNil(t, res.Query[0].Children[0].Filter)
+	require.NotNil(t, res.Query[0].Children[0].Filter.Func)
+	require.Equal(t, "descr", res.Query[0].Children[0].Filter.Func.Attr)
+	require.Equal(t, "en", res.Query[0].Children[0].Filter.Func.Lang)
+}
+
+func TestLangsFilter2(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a) {
+			friends @filter(alloftext(descr@en, "something")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Children[0])
+	require.NotNil(t, res.Query[0].Children[0].Filter)
+	require.NotNil(t, res.Query[0].Children[0].Filter.Func)
+	require.Equal(t, "descr", res.Query[0].Children[0].Filter.Func.Attr)
+	require.Equal(t, "en", res.Query[0].Children[0].Filter.Func.Lang)
+}
+
+func TestLangsFilter1_error1(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a) {
+			friends @filter(alloftext("descr@en@de", "something")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestLangsFilter2_error1(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a) {
+			friends @filter(alloftext(descr@en@de, "something")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestLangsFunction1(t *testing.T) {
+	schema.ParseBytes([]byte("scalar descr: string @index(fulltext)"))
+	query := `
+	query {
+		me(func:alloftext("descr@en", "something")) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Func)
+	require.Equal(t, "descr", res.Query[0].Func.Attr)
+	require.Equal(t, "en", res.Query[0].Func.Lang)
+}
+
+func TestLangsFunction2(t *testing.T) {
+	schema.ParseBytes([]byte("scalar descr: string @index(fulltext)"))
+	query := `
+	query {
+		me(func:alloftext(descr@en, "something")) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Func)
+	require.Equal(t, "descr", res.Query[0].Func.Attr)
+	require.Equal(t, "en", res.Query[0].Func.Lang)
+}
+
 func TestParseNormalize(t *testing.T) {
 	query := `
 	query {

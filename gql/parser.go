@@ -104,6 +104,7 @@ type FilterTree struct {
 // Function holds the information about gql functions.
 type Function struct {
 	Attr     string
+	Lang     string   // language of the attribute value
 	Name     string   // Specifies the name of the function.
 	Args     []string // Contains the arguments of the function.
 	NeedsVar []string // If the function requires some variable
@@ -1021,6 +1022,7 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
+	var isLang bool
 L:
 	for it.Next() {
 		item := it.Item()
@@ -1035,6 +1037,13 @@ L:
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					break L
+				} else if itemInFunc.Typ == itemAt {
+					if len(g.Attr) > 0 && len(g.Lang) == 0 {
+						isLang = true
+						continue
+					} else {
+						return nil, x.Errorf("Invalid usage of '@' in function argument")
+					}
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -1044,7 +1053,14 @@ L:
 					return nil, x.Errorf("Empty argument received")
 				}
 				if len(g.Attr) == 0 {
-					g.Attr = val
+					var err error
+					g.Attr, g.Lang, err = parseAttributeLang(val)
+					if err != nil {
+						return nil, err
+					}
+				} else if isLang {
+					g.Lang = val
+					isLang = false
 				} else {
 					g.Args = append(g.Args, val)
 				}
@@ -1148,7 +1164,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			if itemInFunc.Typ != itemLeftRound {
 				return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
 			}
-			var terminated, seenFuncAsArgument bool
+			var terminated, seenFuncAsArgument, isLang bool
 			for it.Next() {
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
@@ -1170,6 +1186,13 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 					f.Attr = fn.Attr
 					f.Args = append(f.Args, fn.Name)
 					continue
+				} else if itemInFunc.Typ == itemAt {
+					if len(f.Attr) > 0 && len(f.Lang) == 0 {
+						isLang = true
+						continue
+					} else {
+						return nil, x.Errorf("Invalid usage of '@' in function argument")
+					}
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						leaf.Func.Name, itemInFunc)
@@ -1179,7 +1202,14 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 					return nil, x.Errorf("Empty argument received")
 				}
 				if len(f.Attr) == 0 {
-					f.Attr = val
+					var err error
+					f.Attr, f.Lang, err = parseAttributeLang(val)
+					if err != nil {
+						return nil, err
+					}
+				} else if isLang {
+					f.Lang = val
+					isLang = false
 				} else {
 					f.Args = append(f.Args, val)
 				}
@@ -1236,6 +1266,18 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			valueStack.size())
 	}
 	return valueStack.pop()
+}
+
+func parseAttributeLang(val string) (attr, name string, err error) {
+	s := strings.Split(val, "@")
+	switch len(s) {
+	case 1:
+		return s[0], "", nil
+	case 2:
+		return s[0], s[1], nil
+	default:
+		return "", "", x.Errorf("Invalid attribute name/language: %s", val)
+	}
 }
 
 func parseID(gq *GraphQuery, val string) error {
