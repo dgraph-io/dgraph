@@ -7,6 +7,8 @@ import {
     processGraph,
 } from "../containers/Helpers";
 
+// TODO - Check if its better to break this file down into multiple files.
+
 export const updatePartial = partial => ({
     type: "UPDATE_PARTIAL",
     partial,
@@ -106,8 +108,6 @@ export const runQuery = query => {
     return dispatch => {
         dispatch(isFetching());
         dispatch(resetResponseState);
-        // TODO - Add timeout back
-
         timeout(
             60000,
             fetch(process.env.REACT_APP_DGRAPH + "/query?debug=true", {
