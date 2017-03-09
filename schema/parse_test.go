@@ -118,7 +118,6 @@ func TestSchemaIndexCustom(t *testing.T) {
 var ps *store.Store
 
 func TestMain(m *testing.M) {
-	x.SetTestRun()
 	x.Init()
 
 	dir, err := ioutil.TempDir("", "storetest_")

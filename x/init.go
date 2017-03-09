@@ -34,16 +34,7 @@ var (
 	version  = flag.Bool("version", false, "Prints the version of Dgraph")
 	initFunc []func()
 	logger   *log.Logger
-	isTest   bool
 )
-
-func SetTestRun() {
-	isTest = true
-}
-
-func IsTestRun() bool {
-	return isTest
-}
 
 // AddInit adds a function to be run in x.Init, which should be called at the
 // beginning of all mains.

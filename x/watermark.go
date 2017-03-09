@@ -135,11 +135,6 @@ func (w *WaterMark) process() {
 	}
 
 	for mark := range w.Ch {
-		// if IsTestRun() {
-		// 	// Don't run this during testing.
-		// 	continue
-		// }
-
 		if mark.Index > 0 {
 			processOne(mark.Index, mark.Done)
 		}
