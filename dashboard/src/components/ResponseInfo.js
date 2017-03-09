@@ -7,6 +7,8 @@ import { Button } from "react-bootstrap";
 
 import "../assets/css/ResponseInfo.css";
 
+// TODO - Have a foolproof logic for expand/collapse based on initial number of
+// nodes rendered, total nodes and current number of nodes in the Graph.
 const ResponseInfo = (
     {
         query,

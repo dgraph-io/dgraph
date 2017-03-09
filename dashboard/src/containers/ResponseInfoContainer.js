@@ -3,6 +3,9 @@ import { connect } from "react-redux";
 import ResponseInfo from "../components/ResponseInfo";
 import { renderGraph } from "../actions";
 
+// TODO - Ideally have separate container components for
+// Properties, Buttons as they change within a query.
+
 const mapStateToProps = (state, ownProps) => ({
     query: state.query.text,
     result: state.response.data,

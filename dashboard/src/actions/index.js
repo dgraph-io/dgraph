@@ -106,8 +106,8 @@ export const resetResponseState = () => ({
 
 export const runQuery = query => {
     return dispatch => {
+        dispatch(resetResponseState());
         dispatch(isFetching());
-        dispatch(resetResponseState);
         timeout(
             60000,
             fetch(process.env.REACT_APP_DGRAPH + "/query?debug=true", {

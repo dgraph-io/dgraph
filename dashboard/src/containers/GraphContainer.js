@@ -150,8 +150,8 @@ function renderNetwork(props, dispatch) {
             });
 
             let outgoing = outgoingEdges(clickedNodeUid, data.edges),
-                expanded = outgoing.length > 0,
-                allOutgoingEdges = outgoingEdges(clickedNodeUid, allEdgeSet);
+                allOutgoingEdges = outgoingEdges(clickedNodeUid, allEdgeSet),
+                expanded = outgoing.length > 0 || allOutgoingEdges.length === 0;
 
             let adjacentNodeIds: Array<string> = allOutgoingEdges.map(function(
                 edge,
@@ -189,6 +189,9 @@ function renderNetwork(props, dispatch) {
                 dispatch(updatePartial(true));
             } else {
                 multiLevelExpand(clickedNodeUid);
+                if (data.nodes.length === allNodeSet.length) {
+                    dispatch(updatePartial(false));
+                }
             }
         }
     });
