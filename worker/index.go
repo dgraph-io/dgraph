@@ -55,11 +55,11 @@ func (n *node) syncAllMarks(ctx context.Context) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	syncMarksToIndex(ctx, n.gid, lastIndex)
+	waitForSyncMark(ctx, n.gid, lastIndex)
 	return nil
 }
 
-func syncMarksToIndex(ctx context.Context, gid uint32, lastIndex uint64) {
+func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) {
 	// Force an aggressive evict.
 	posting.CommitLists(10)
 
