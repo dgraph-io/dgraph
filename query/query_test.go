@@ -91,6 +91,12 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "name", 1002, "Matt", nil)
 	addEdgeToValue(t, "name", 1003, "John", nil)
 
+	addEdgeToValue(t, "alias", 23, "Zambo Alice", nil)
+	addEdgeToValue(t, "alias", 24, "John Alice", nil)
+	addEdgeToValue(t, "alias", 25, "Bob Joe", nil)
+	addEdgeToValue(t, "alias", 31, "Allan Matt", nil)
+	addEdgeToValue(t, "alias", 101, "John Oliver", nil)
+
 	// Now let's add a few properties for the main user.
 	addEdgeToValue(t, "name", 1, "Michonne", nil)
 	addEdgeToValue(t, "gender", 1, "female", nil)
@@ -1749,6 +1755,89 @@ func TestToFastJSONFilterEqual(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"}], "gender":"female","name":"Michonne"}]}`,
 		js)
+}
+
+func TestToFastJSONOrderName(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend(orderasc: alias) {
+					alias
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"alias":"Allan Matt"},{"alias":"Bob Joe"},{"alias":"John Alice"},{"alias":"John Oliver"},{"alias":"Zambo Alice"}],"name":"Michonne"}]}`,
+		js)
+}
+
+func TestToFastJSONOrderNameDesc(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend(orderdesc: alias) {
+					alias
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"alias":"Zambo Alice"},{"alias":"John Oliver"},{"alias":"John Alice"},{"alias":"Bob Joe"},{"alias":"Allan Matt"}],"name":"Michonne"}]}`,
+		js)
+}
+
+func TestToFastJSONOrderName1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend(orderasc: name ) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Andrea"},{"name":"Daryl Dixon"},{"name":"Glenn Rhee"},{"name":"Rick Grimes"}],"name":"Michonne"}]}`,
+		js)
+}
+
+func TestToFastJSONOrderNameError(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend(orderasc: nonexistent) {
+					name
+				}
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, res.Query[0])
+	require.NoError(t, err)
+	sg.DebugPrint("")
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.Error(t, err)
 }
 
 func TestToFastJSONFilterLeqOrder(t *testing.T) {
@@ -3755,6 +3844,7 @@ func TestLangManyFallback(t *testing.T) {
 
 const schemaStr = `
 scalar name:string @index(term, exact)
+scalar alias:string @index(exact, term)
 scalar dob:date @index
 scalar film.film.initial_release_date:date @index
 scalar loc:geo @index
