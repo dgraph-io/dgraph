@@ -137,4 +137,7 @@ export const runQuery = query => {
     };
 };
 
-// export const
+export const updateFullscreen = fs => ({
+    type: "UPDATE_FULLSCREEN",
+    fs,
+});

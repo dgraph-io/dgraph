@@ -350,8 +350,10 @@ class GraphContainer extends Component {
     };
 
     render() {
-        const { plotAxis, text, success } = this.props;
-        return <Graph plotAxis={plotAxis} text={text} success={success} />;
+        const { plotAxis, text, success, fs } = this.props;
+        return (
+            <Graph plotAxis={plotAxis} text={text} success={success} fs={fs} />
+        );
     }
 
     componentWillReceiveProps = nextProps => {
@@ -363,7 +365,8 @@ class GraphContainer extends Component {
             nextProps.edges.length === this.props.edges.length &&
             nextProps.allNodes.length === this.props.allNodes.length &&
             nextProps.allEdges.length === this.props.allEdges.length &&
-            nextProps.partial !== this.props.partial
+            (nextProps.fs !== this.props.fs ||
+                nextProps.partial !== this.props.partial)
         ) {
             return;
         }
@@ -375,6 +378,7 @@ class GraphContainer extends Component {
 const mapStateToProps = state => ({
     ...state.response,
     partial: state.interaction.partial,
+    fs: state.interaction.fullscreen,
 });
 
 export default connect(mapStateToProps, null, null, { withRef: true })(

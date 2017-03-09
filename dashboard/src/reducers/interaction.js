@@ -2,6 +2,7 @@ const interaction = (
     state = {
         node: "{}",
         partial: false,
+        fullscreen: false,
     },
     action,
 ) => {
@@ -20,6 +21,11 @@ const interaction = (
             return {
                 node: "{}",
                 partial: false,
+            };
+        case "UPDATE_FULLSCREEN":
+            return {
+                ...state,
+                fullscreen: action.fs,
             };
         default:
             return state;
