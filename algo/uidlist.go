@@ -20,12 +20,15 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
-func IntersectWith(u, v *task.List) {
+func IntersectWith(u, v, o *task.List) {
 	n := len(u.Uids)
 	m := len(v.Uids)
 
 	if n > m {
 		n, m = m, n
+	}
+	if o.Uids == nil {
+		o.Uids = make([]uint64, n)
 	}
 	if n == 0 {
 		n += 1
@@ -33,18 +36,18 @@ func IntersectWith(u, v *task.List) {
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
 	if ratio < 100 {
-		IntersectWithLin(u, v)
+		IntersectWithLin(u, v, o)
 	} else if ratio < 500 {
-		IntersectWithJump(u, v)
+		IntersectWithJump(u, v, o)
 	} else {
-		IntersectWithBin(u, v)
+		IntersectWithBin(u, v, o)
 	}
 }
 
 // IntersectWith intersects u with v. The update is made to u.
 // u, v should be sorted.
-func IntersectWithLin(u, v *task.List) {
-	out := u.Uids[:0]
+func IntersectWithLin(u, v, o *task.List) {
+	out := o.Uids[:0]
 	n := len(u.Uids)
 	m := len(v.Uids)
 	for i, k := 0, 0; i < n && k < m; {
@@ -62,11 +65,11 @@ func IntersectWithLin(u, v *task.List) {
 			}
 		}
 	}
-	u.Uids = out
+	o.Uids = out
 }
 
-func IntersectWithJump(u, v *task.List) {
-	out := u.Uids[:0]
+func IntersectWithJump(u, v, o *task.List) {
+	out := o.Uids[:0]
 	n := len(u.Uids)
 	m := len(v.Uids)
 	for i, k := 0, 0; i < n && k < m; {
@@ -88,13 +91,13 @@ func IntersectWithJump(u, v *task.List) {
 			}
 		}
 	}
-	u.Uids = out
+	o.Uids = out
 }
 
 // IntersectWithBin is based on the paper
 // "Fast Intersection Algorithms for Sorted Sequences"
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
-func IntersectWithBin(u, v *task.List) {
+func IntersectWithBin(u, v, o *task.List) {
 	d := u.Uids
 	q := v.Uids
 	ld := len(d)
@@ -104,9 +107,9 @@ func IntersectWithBin(u, v *task.List) {
 		ld, lq = lq, ld
 		d, q = q, d
 	}
-	final := make([]uint64, 0, lq)
+	out := o.Uids[:0]
 	if ld == 0 || lq == 0 || d[ld-1] < q[0] || q[lq-1] < d[0] {
-		u.Uids = final
+		o.Uids = out
 		return
 	}
 
@@ -120,8 +123,8 @@ func IntersectWithBin(u, v *task.List) {
 		return q[i] > val
 	})
 
-	binIntersect(d, q[minq:maxq], &final)
-	u.Uids = final
+	binIntersect(d, q[minq:maxq], &out)
+	o.Uids = out
 }
 
 // binIntersect is the recursive function used.
@@ -183,10 +186,14 @@ func IntersectSorted(lists []*task.List) *task.List {
 		return ls[i].length < ls[j].length
 	})
 	out := &task.List{Uids: make([]uint64, ls[0].length)}
-	copy(out.Uids, ls[0].l.Uids)
+	if len(ls) == 1 {
+		copy(out.Uids, ls[0].l.Uids)
+	} else {
+		IntersectWith(ls[0].l, ls[1].l, out)
+	}
 	// Intersect from smallest to largest.
-	for i := 1; i < len(ls); i++ {
-		IntersectWith(out, ls[i].l)
+	for i := 2; i < len(ls); i++ {
+		IntersectWith(out, ls[i].l, out)
 		// Break if we reach size 0 as we can no longer
 		// add any element.
 		if len(out.Uids) == 0 {

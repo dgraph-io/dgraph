@@ -912,7 +912,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 		// Intersect the UidMatrix with the DestUids as some UIDs might have been removed
 		// by other operations. So we need to apply it on the UidMatrix.
 		for _, l := range child.uidMatrix {
-			algo.IntersectWith(l, child.DestUIDs)
+			algo.IntersectWith(l, child.DestUIDs, l)
 		}
 	}
 
@@ -992,7 +992,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
 			sg.fillVars(sg.Params.ParentVars)
-			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs)
+			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
 			rch <- nil
 			return
 		}
@@ -1117,7 +1117,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for i, ul := range sg.uidMatrix {
 			// A possible optimization is to return the size of the intersection
 			// without forming the intersection.
-			algo.IntersectWith(ul, sg.DestUIDs)
+			algo.IntersectWith(ul, sg.DestUIDs, ul)
 			sg.counts[i] = uint32(len(ul.Uids))
 		}
 		rch <- nil
@@ -1182,7 +1182,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 		return nil
 	}
 	for i := 0; i < len(sg.uidMatrix); i++ { //_, l := range sg.uidMatrix {
-		algo.IntersectWith(sg.uidMatrix[i], sg.DestUIDs)
+		algo.IntersectWith(sg.uidMatrix[i], sg.DestUIDs, sg.uidMatrix[i])
 		start, end := pageRange(&sg.Params, len(sg.uidMatrix[i].Uids))
 		sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
 	}

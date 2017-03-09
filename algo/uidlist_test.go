@@ -115,7 +115,7 @@ func TestIntersectSorted1(t *testing.T) {
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{2, 3, 4, 5}),
 	}
-	require.Equal(t, IntersectSorted(input).Uids, []uint64{2, 3})
+	require.Equal(t, []uint64{2, 3}, IntersectSorted(input).Uids)
 }
 
 func TestIntersectSorted2(t *testing.T) {
@@ -176,14 +176,14 @@ func TestSubSorted6(t *testing.T) {
 func TestUIDListIntersect1(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{})
-	IntersectWith(u, v)
+	IntersectWith(u, v, u)
 	require.Empty(t, u.Uids)
 }
 
 func TestUIDListIntersect2(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{1, 2, 3, 4, 5})
-	IntersectWith(u, v)
+	IntersectWith(u, v, u)
 	require.Equal(t, []uint64{1, 2, 3}, u.Uids)
 	require.Equal(t, []uint64{1, 2, 3, 4, 5}, v.Uids)
 }
@@ -191,7 +191,7 @@ func TestUIDListIntersect2(t *testing.T) {
 func TestUIDListIntersect3(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{2})
-	IntersectWith(u, v)
+	IntersectWith(u, v, u)
 	require.Equal(t, []uint64{2}, u.Uids)
 	require.Equal(t, []uint64{2}, v.Uids)
 }
@@ -199,7 +199,7 @@ func TestUIDListIntersect3(t *testing.T) {
 func TestUIDListIntersect4(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{0, 5})
-	IntersectWith(u, v)
+	IntersectWith(u, v, u)
 	require.Empty(t, u.Uids)
 	require.Equal(t, []uint64{0, 5}, v.Uids)
 }
@@ -207,28 +207,28 @@ func TestUIDListIntersect4(t *testing.T) {
 func TestUIDListIntersect5(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{3, 5})
-	IntersectWith(u, v)
+	IntersectWith(u, v, u)
 	require.Equal(t, []uint64{3}, u.Uids)
 }
 
 func TestUIDListIntersectDupFirst(t *testing.T) {
 	u := newList([]uint64{1, 1, 2, 3})
 	v := newList([]uint64{1, 2})
-	IntersectWith(u, v)
+	IntersectWith(u, v, u)
 	require.Equal(t, []uint64{1, 2}, u.Uids)
 }
 
 func TestUIDListIntersectDupBoth(t *testing.T) {
 	u := newList([]uint64{1, 1, 2, 3, 5})
 	v := newList([]uint64{1, 1, 2, 4})
-	IntersectWith(u, v)
+	IntersectWith(u, v, u)
 	require.Equal(t, []uint64{1, 1, 2}, u.Uids)
 }
 
 func TestUIDListIntersectDupSecond(t *testing.T) {
 	u := newList([]uint64{1, 2, 3, 5})
 	v := newList([]uint64{1, 1, 2, 4})
-	IntersectWith(u, v)
+	IntersectWith(u, v, u)
 	require.Equal(t, []uint64{1, 2}, u.Uids)
 }
 
@@ -258,7 +258,7 @@ func runIntersectRandom(arrSz int, limit int64, b *testing.B) {
 
 	b.ResetTimer()
 	for k := 0; k < b.N; k++ {
-		IntersectWith(u, v)
+		IntersectWith(u, v, u)
 		u.Uids = u.Uids[:arrSz]
 		copy(u.Uids, ucopy)
 	}
@@ -317,7 +317,7 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 					for k := 0; k < b.N; k++ {
 						u.Uids = u.Uids[:sz1]
 						copy(u.Uids, ucopy)
-						IntersectWith(u, v)
+						IntersectWith(u, v, u)
 					}
 				})
 		}
