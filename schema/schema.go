@@ -216,7 +216,6 @@ func LoadFromDb() error {
 		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
 		State().Set(attr, &s)
 	}
-
 	return nil
 }
 
