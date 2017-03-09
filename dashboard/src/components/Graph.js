@@ -51,4 +51,3 @@ function Graph(props) {
 }
 
 export default Graph;
-// var graphClass = classNames( //     { Graph: true, "Graph-fs": this.props.graph === "fullscreen" }, //     { "Graph-s": this.props.graph !== "fullscreen" }, //     { "Graph-error": this.props.resType === "error-res" }, //     { "Graph-success": this.props.resType === "success-res" }, //     { "Graph-hourglass": this.props.resType === "hourglass" }, // );

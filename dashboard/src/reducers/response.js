@@ -1,22 +1,21 @@
-const response = (
-    state = {
-        text: "",
-        data: {},
-        success: false,
-        plotAxis: [],
-        nodes: [],
-        edges: [],
-        allNodes: [],
-        allEdges: [],
-        numNodes: 0,
-        numEdges: 0,
-        treeView: false,
-        latency: "",
-        rendering: "",
-        isFetching: false,
-    },
-    action,
-) => {
+const emptyState = {
+    text: "",
+    data: {},
+    success: false,
+    plotAxis: [],
+    nodes: [],
+    edges: [],
+    allNodes: [],
+    allEdges: [],
+    numNodes: 0,
+    numEdges: 0,
+    treeView: false,
+    latency: "",
+    rendering: "",
+    isFetching: false,
+};
+
+const response = (state = emptyState, action) => {
     switch (action.type) {
         case "ERROR_RESPONSE":
             return {
@@ -40,22 +39,7 @@ const response = (
                 numEdges: action.allEdges.length,
             };
         case "RESET_RESPONSE":
-            return {
-                text: "",
-                data: {},
-                success: false,
-                plotAxis: [],
-                nodes: [],
-                edges: [],
-                allNodes: [],
-                allEdges: [],
-                numNodes: 0,
-                numEdges: 0,
-                treeView: false,
-                latency: "",
-                rendering: "",
-                isFetching: false,
-            };
+            return emptyState;
         case "IS_FETCHING": {
             return {
                 ...state,
