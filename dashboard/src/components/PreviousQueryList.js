@@ -8,7 +8,7 @@ class PreviousQueryList extends Component {
     constructor(props: Props) {
         super(props);
 
-        // TODO - See if we can get rid of this state and make this a dump component.
+        // TODO - See if we can get rid of this state and make this a dumb component.
         this.state = {
             filterText: "",
         };

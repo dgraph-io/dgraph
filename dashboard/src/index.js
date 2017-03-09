@@ -16,10 +16,12 @@ if (process.env.NODE_ENV !== "production") {
     middleware.push(createLogger());
 }
 
+const composeEnhancers = window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose;
+
 const store = createStore(
     reducer,
     undefined,
-    compose(applyMiddleware(...middleware), autoRehydrate()),
+    composeEnhancers(applyMiddleware(...middleware), autoRehydrate()),
 );
 
 // begin periodically persisting the store

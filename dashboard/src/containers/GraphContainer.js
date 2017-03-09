@@ -1,6 +1,5 @@
 import React, { Component } from "react";
 import { connect } from "react-redux";
-import classNames from "classnames";
 import vis from "vis";
 
 import Graph from "../components/Graph";
@@ -350,9 +349,15 @@ class GraphContainer extends Component {
     };
 
     render() {
-        const { plotAxis, text, success, fs } = this.props;
+        const { plotAxis, text, success, fs, isFetching } = this.props;
         return (
-            <Graph plotAxis={plotAxis} text={text} success={success} fs={fs} />
+            <Graph
+                plotAxis={plotAxis}
+                text={text}
+                success={success}
+                fs={fs}
+                isFetching={isFetching}
+            />
         );
     }
 

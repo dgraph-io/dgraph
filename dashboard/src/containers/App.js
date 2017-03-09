@@ -11,36 +11,6 @@ import { updateFullscreen } from "../actions";
 import "../assets/css/App.css";
 
 class App extends React.Component {
-  // Verify this should still work.
-  updateQuery = (e: Event) => {
-    e.preventDefault();
-    if (e.target instanceof HTMLElement) {
-      this.setState({
-        partial: false,
-      });
-    }
-    window.scrollTo(0, 0);
-  };
-
-  resetState = () => {
-    return {
-      // TODO - Get hourglass back.
-      resType: "hourglass",
-    };
-  };
-
-  resetStateOnQuery = () => {
-    this.setState(this.resetState());
-  };
-
-  // TODO - Verify that mutations and error messages show up fine.
-  // renderResText = (type, text) => {
-  //   this.setState({
-  //     resType: type,
-  //     response: text,
-  //   });
-  // };
-  // TODO - Fix this. Get states from redux store.
   enterFullScreen = updateFullscreen => {
     if (!screenfull.enabled) {
       return;
@@ -76,13 +46,6 @@ class App extends React.Component {
                   </div>}
                 <Response />
                 <PreviousQueryListContainer xs="visible-xs-block" />
-
-                {/*graph={this.state.graph}
-                  resType={this.state.resType}
-                  graphHeight={this.state.graphHeight}}
-                /> 
-                */
-                }
               </div>
             </div>
           </div>

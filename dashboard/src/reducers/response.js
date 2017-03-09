@@ -11,6 +11,9 @@ const response = (
         numNodes: 0,
         numEdges: 0,
         treeView: false,
+        latency: "",
+        rendering: "",
+        isFetching: false,
     },
     action,
 ) => {
@@ -19,11 +22,13 @@ const response = (
             return {
                 ...state,
                 text: action.text,
+                success: false,
             };
         case "SUCCESS_RESPONSE":
             return {
                 ...state,
                 data: action.data,
+                text: action.text || "",
                 success: true,
             };
         case "RESPONSE_PROPERTIES":
@@ -47,7 +52,16 @@ const response = (
                 numNodes: 0,
                 numEdges: 0,
                 treeView: false,
+                latency: "",
+                rendering: "",
+                isFetching: false,
             };
+        case "IS_FETCHING": {
+            return {
+                ...state,
+                isFetching: action.fetching,
+            };
+        }
         default:
             return state;
     }

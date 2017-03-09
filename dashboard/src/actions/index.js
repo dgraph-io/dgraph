@@ -4,7 +4,7 @@ import {
     parseJSON,
     isNotEmpty,
     showTreeView,
-    processGraph, // isShortestPath,
+    processGraph,
 } from "../containers/Helpers";
 
 export const updatePartial = partial => ({
@@ -30,6 +30,16 @@ export const setCurrentNode = node => ({
 const addQuery = text => ({
     type: "ADD_QUERY",
     text,
+});
+
+const isFetching = () => ({
+    type: "IS_FETCHING",
+    fetching: true,
+});
+
+const fetchedResponse = () => ({
+    type: "IS_FETCHING",
+    fetching: false,
 });
 
 const saveSuccessResponse = (text, data) => ({
@@ -94,6 +104,7 @@ export const resetResponseState = () => ({
 
 export const runQuery = query => {
     return dispatch => {
+        dispatch(isFetching());
         // TODO - Add timeout back
         fetch(process.env.REACT_APP_DGRAPH + "/query?debug=true", {
             method: "POST",
@@ -106,6 +117,7 @@ export const runQuery = query => {
             .then(checkStatus)
             .then(parseJSON)
             .then(function handleResponse(result) {
+                dispatch(fetchedResponse());
                 // This is the case in which user sends a mutation. We display the response from server.
                 if (result.code !== undefined && result.message !== undefined) {
                     dispatch(addQuery(query));
@@ -131,6 +143,7 @@ export const runQuery = query => {
             })
             .then(function(errorMsg) {
                 if (errorMsg !== undefined) {
+                    dispatch(fetchedResponse());
                     dispatch(saveErrorResponse(errorMsg));
                 }
             });
