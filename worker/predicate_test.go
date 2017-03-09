@@ -24,8 +24,9 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -45,10 +46,10 @@ func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store)
 		k := x.DataKey(pred, uint64(i))
 		list, _ := posting.GetOrCreate(k, 0)
 
-		de := &task.DirectedEdge{
+		de := &taskp.DirectedEdge{
 			ValueId: vid,
 			Label:   "test",
-			Op:      task.DirectedEdge_SET,
+			Op:      taskp.DirectedEdge_SET,
 		}
 		list.AddMutation(context.TODO(), de)
 		if merged, err := list.SyncIfDirty(context.TODO()); err != nil {
@@ -74,7 +75,7 @@ func newServer(port string) (*grpc.Server, net.Listener, error) {
 }
 
 func serve(s *grpc.Server, ln net.Listener) {
-	RegisterWorkerServer(s, &grpcWorker{})
+	workerp.RegisterWorkerServer(s, &grpcWorker{})
 	s.Serve(ln)
 }
 
@@ -143,7 +144,7 @@ func TestPopulateShard(t *testing.T) {
 		t.Error("Unable to find added elements in posting list")
 	}
 	var found bool
-	l.Iterate(0, func(p *types.Posting) bool {
+	l.Iterate(0, func(p *typesp.Posting) bool {
 		if p.Uid() != 2 {
 			t.Errorf("Expected 2. Got: %v", p.Uid())
 		}

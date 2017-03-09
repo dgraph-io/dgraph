@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 
-	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 )
 
 type Op int
@@ -38,19 +38,19 @@ const (
 	DEL
 )
 
-// Req wraps the graph.Request so that we can define helper methods for the
+// Req wraps the graphp.Request so that we can define helper methods for the
 // client around it.
 type Req struct {
-	gr graph.Request
+	gr graphp.Request
 }
 
 // Request returns the graph request object which is sent to the server to perform
 // a query/mutation.
-func (req *Req) Request() *graph.Request {
+func (req *Req) Request() *graphp.Request {
 	return &req.gr
 }
 
-func checkNQuad(nq graph.NQuad) error {
+func checkNQuad(nq graphp.NQuad) error {
 	if len(nq.Subject) == 0 {
 		return fmt.Errorf("Subject can't be empty")
 	}
@@ -78,9 +78,9 @@ func (req *Req) SetQuery(q string) {
 	req.gr.Query = q
 }
 
-func (req *Req) addMutation(nq graph.NQuad, op Op) {
+func (req *Req) addMutation(nq graphp.NQuad, op Op) {
 	if req.gr.Mutation == nil {
-		req.gr.Mutation = new(graph.Mutation)
+		req.gr.Mutation = new(graphp.Mutation)
 	}
 
 	if op == SET {
@@ -95,7 +95,7 @@ func (req *Req) addMutation(nq graph.NQuad, op Op) {
 // Example usage
 // req := client.Req{}
 // To set a string value
-// if err := req.AddMutation(graph.NQuad{
+// if err := req.AddMutation(graphp.NQuad{
 // 	Sub:   "alice",
 // 	Pred:  "name",
 // 	Value: client.Str("Alice"),
@@ -106,7 +106,7 @@ func (req *Req) addMutation(nq graph.NQuad, op Op) {
 // }
 
 // To set an integer value
-// if err := req.AddMutation(graph.NQuad{
+// if err := req.AddMutation(graphp.NQuad{
 // 	Sub:   "alice",
 // 	Pred:  "age",
 // 	Value: client.Int(13),
@@ -117,7 +117,7 @@ func (req *Req) addMutation(nq graph.NQuad, op Op) {
 // }
 
 // To add a mutation with a DELETE operation
-// if err := req.AddMutation(graph.NQuad{
+// if err := req.AddMutation(graphp.NQuad{
 // 	Sub:   "alice",
 // 	Pred:  "name",
 // 	Value: client.Str("Alice"),
@@ -126,7 +126,7 @@ func (req *Req) addMutation(nq graph.NQuad, op Op) {
 // handle error
 // ....
 // }
-func (req *Req) AddMutation(nq graph.NQuad, op Op) error {
+func (req *Req) AddMutation(nq graphp.NQuad, op Op) error {
 	if err := checkNQuad(nq); err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (req *Req) reset() {
 }
 
 type nquadOp struct {
-	nq graph.NQuad
+	nq graphp.NQuad
 	op Op
 }
 
@@ -157,7 +157,7 @@ type BatchMutation struct {
 	pending int
 
 	nquads chan nquadOp
-	dc     graph.DgraphClient
+	dc     graphp.DgraphClient
 	wg     sync.WaitGroup
 
 	// Miscellaneous information to print counters.
@@ -207,7 +207,7 @@ func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
 		pending: pending,
 		nquads:  make(chan nquadOp, 2*size),
 		start:   time.Now(),
-		dc:      graph.NewDgraphClient(conn),
+		dc:      graphp.NewDgraphClient(conn),
 	}
 
 	for i := 0; i < pending; i++ {
@@ -217,7 +217,7 @@ func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
 	return &bm
 }
 
-func (batch *BatchMutation) AddMutation(nq graph.NQuad, op Op) error {
+func (batch *BatchMutation) AddMutation(nq graphp.NQuad, op Op) error {
 	if err := checkNQuad(nq); err != nil {
 		return err
 	}

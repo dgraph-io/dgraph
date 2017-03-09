@@ -9,9 +9,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -62,11 +63,11 @@ func TestIndexing(t *testing.T) {
 	require.EqualValues(t, "\x01abc", string(a[0]))
 }
 
-func addMutationWithIndex(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
+func addMutationWithIndex(t *testing.T, l *List, edge *taskp.DirectedEdge, op uint32) {
 	if op == Del {
-		edge.Op = task.DirectedEdge_DEL
+		edge.Op = taskp.DirectedEdge_DEL
 	} else if op == Set {
-		edge.Op = task.DirectedEdge_SET
+		edge.Op = taskp.DirectedEdge_SET
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
@@ -88,7 +89,7 @@ func TestTokensTable(t *testing.T) {
 	key := x.DataKey("name", 1)
 	l := getNew(key, ps)
 
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value:  []byte("david"),
 		Label:  "testing",
 		Attr:   "name",
@@ -100,7 +101,7 @@ func TestTokensTable(t *testing.T) {
 	slice, err := ps.Get(key)
 	require.NoError(t, err)
 
-	var pl types.PostingList
+	var pl typesp.PostingList
 	x.Check(pl.Unmarshal(slice.Data()))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
@@ -139,12 +140,12 @@ func tokensForTest(attr string) []string {
 // addEdgeToValue adds edge without indexing.
 func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 	value string) {
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value:  []byte(value),
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
-		Op:     task.DirectedEdge_SET,
+		Op:     taskp.DirectedEdge_SET,
 	}
 	l, _ := GetOrCreate(x.DataKey(attr, src), 0)
 	// No index entries added here as we do not call AddMutationWithIndex.
@@ -197,10 +198,10 @@ func TestRebuildIndex(t *testing.T) {
 	pk := x.ParsedKey{Attr: "name"}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
-	var idxVals []*types.PostingList
+	var idxVals []*typesp.PostingList
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		idxKeys = append(idxKeys, string(it.Key().Data()))
-		pl := new(types.PostingList)
+		pl := new(typesp.PostingList)
 		require.NoError(t, pl.Unmarshal(it.Value().Data()))
 		idxVals = append(idxVals, pl)
 	}

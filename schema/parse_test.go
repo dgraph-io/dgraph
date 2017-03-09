@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -30,10 +31,10 @@ import (
 
 type nameType struct {
 	name string
-	typ  *types.Schema
+	typ  *typesp.Schema
 }
 
-func checkSchema(t *testing.T, h map[string]*types.Schema, expected []nameType) {
+func checkSchema(t *testing.T, h map[string]*typesp.Schema, expected []nameType) {
 	require.Len(t, h, len(expected))
 	for _, nt := range expected {
 		typ, found := h[nt.name]
@@ -45,10 +46,10 @@ func checkSchema(t *testing.T, h map[string]*types.Schema, expected []nameType) 
 func TestSchema(t *testing.T) {
 	require.NoError(t, ReloadData("testfiles/test_schema"))
 	checkSchema(t, State().predicate, []nameType{
-		{"name", &types.Schema{ValueType: uint32(types.StringID)}},
-		{"address", &types.Schema{ValueType: uint32(types.StringID)}},
-		{"http://scalar.com/helloworld/", &types.Schema{ValueType: uint32(types.StringID)}},
-		{"age", &types.Schema{ValueType: uint32(types.Int32ID)}},
+		{"name", &typesp.Schema{ValueType: uint32(types.StringID)}},
+		{"address", &typesp.Schema{ValueType: uint32(types.StringID)}},
+		{"http://scalar.com/helloworld/", &typesp.Schema{ValueType: uint32(types.StringID)}},
+		{"age", &typesp.Schema{ValueType: uint32(types.Int32ID)}},
 	})
 
 	typ, err := State().TypeOf("age")
@@ -103,10 +104,10 @@ func TestSchemaIndex_Error2(t *testing.T) {
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ReloadData("testfiles/test_schema_index4"))
 	checkSchema(t, State().predicate, []nameType{
-		{"name", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}},
-		{"address", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"term"}}},
-		{"age", &types.Schema{ValueType: uint32(types.Int32ID), Tokenizer: []string{"int"}}},
-		{"id", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact", "term"}}},
+		{"name", &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}},
+		{"address", &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"term"}}},
+		{"age", &typesp.Schema{ValueType: uint32(types.Int32ID), Tokenizer: []string{"int"}}},
+		{"id", &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact", "term"}}},
 	})
 	require.True(t, State().IsIndexed("name"))
 	require.False(t, State().IsReversed("name"))

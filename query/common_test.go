@@ -29,12 +29,14 @@ import (
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/query/graph"
-	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/protos/facetsp"
+	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types/facets"
-	"github.com/dgraph-io/dgraph/types/facets/utils"
+
+	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/types"
+
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -46,7 +48,7 @@ func childAttrs(sg *SubGraph) []string {
 	return out
 }
 
-func taskValues(t *testing.T, v []*task.Value) []string {
+func taskValues(t *testing.T, v []*taskp.Value) []string {
 	out := make([]string, len(v))
 	for i, tv := range v {
 		out[i] = string(tv.Val)
@@ -54,13 +56,13 @@ func taskValues(t *testing.T, v []*task.Value) []string {
 	return out
 }
 
-func addEdge(t *testing.T, attr string, src uint64, edge *task.DirectedEdge) {
+func addEdge(t *testing.T, attr string, src uint64, edge *taskp.DirectedEdge) {
 	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))
 }
 
-func makeFacets(facetKVs map[string]string) (fs []*facets.Facet, err error) {
+func makeFacets(facetKVs map[string]string) (fs []*facetsp.Facet, err error) {
 	if len(facetKVs) == 0 {
 		return nil, nil
 	}
@@ -71,7 +73,7 @@ func makeFacets(facetKVs map[string]string) (fs []*facets.Facet, err error) {
 	sort.Strings(allKeys)
 
 	for _, k := range allKeys {
-		f, err := utils.FacetFor(k, facetKVs[k])
+		f, err := facets.FacetFor(k, facetKVs[k])
 		if err != nil {
 			return nil, err
 		}
@@ -89,13 +91,13 @@ func addEdgeToLangValue(t *testing.T, attr string, src uint64,
 	value, lang string, facetKVs map[string]string) {
 	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value:  []byte(value),
 		Lang:   lang,
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
-		Op:     task.DirectedEdge_SET,
+		Op:     taskp.DirectedEdge_SET,
 		Facets: fs,
 	}
 	addEdge(t, attr, src, edge)
@@ -105,13 +107,13 @@ func addEdgeToTypedValue(t *testing.T, attr string, src uint64,
 	typ types.TypeID, value []byte, facetKVs map[string]string) {
 	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value:     value,
 		ValueType: uint32(typ),
 		Label:     "testing",
 		Attr:      attr,
 		Entity:    src,
-		Op:        task.DirectedEdge_SET,
+		Op:        taskp.DirectedEdge_SET,
 		Facets:    fs,
 	}
 	addEdge(t, attr, src, edge)
@@ -121,24 +123,24 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 	dst uint64, facetKVs map[string]string) {
 	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
 		Attr:    attr,
 		Entity:  src,
-		Op:      task.DirectedEdge_SET,
+		Op:      taskp.DirectedEdge_SET,
 		Facets:  fs,
 	}
 	addEdge(t, attr, src, edge)
 }
 
 func delEdgeToUID(t *testing.T, attr string, src uint64, dst uint64) {
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
 		Attr:    attr,
 		Entity:  src,
-		Op:      task.DirectedEdge_DEL,
+		Op:      taskp.DirectedEdge_DEL,
 	}
 	addEdge(t, attr, src, edge)
 }
@@ -175,7 +177,7 @@ func processToFastJSON(t *testing.T, query string) string {
 	return res
 }
 
-func processToPB(t *testing.T, query string, debug bool) *graph.Node {
+func processToPB(t *testing.T, query string, debug bool) *graphp.Node {
 	res, err := gql.Parse(query)
 	require.NoError(t, err)
 	var ctx context.Context

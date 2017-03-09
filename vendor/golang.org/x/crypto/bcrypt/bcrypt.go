@@ -12,9 +12,10 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/blowfish"
 	"io"
 	"strconv"
+
+	"golang.org/x/crypto/blowfish"
 )
 
 const (
