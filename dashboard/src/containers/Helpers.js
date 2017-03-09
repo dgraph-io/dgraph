@@ -136,10 +136,6 @@ export function isNotEmpty(response) {
   return false;
 }
 
-// Stores the map of a label to boolean (only true values are stored).
-// This helps quickly find if a label has already been assigned.
-var groups: GroupMap = {};
-
 function hasChildren(node: Object): boolean {
   for (var prop in node) {
     if (Array.isArray(node[prop])) {
@@ -259,7 +255,10 @@ export function processGraph(
       "#7d87b9",
       "#e07b91",
       "#4a6fe3",
-    ];
+    ],
+    // Stores the map of a label to boolean (only true values are stored).
+    // This helps quickly find if a label has already been assigned.
+    groups = {};
 
   for (var root in response) {
     if (!response.hasOwnProperty(root)) {

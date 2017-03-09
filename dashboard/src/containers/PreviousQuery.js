@@ -83,13 +83,9 @@ function since(lastRun) {
 }
 
 class PreviousQuery extends Component {
-  shouldComponentUpdate(nextProps, nextState) {
-    return true;
-  }
-
   render() {
     const popover = (
-      <Popover id={this.props.unique}>
+      <Popover id={this.props.idx}>
         <pre className="Previous-query-popover-pre">
           {this.props.text}
         </pre>
@@ -111,7 +107,10 @@ class PreviousQuery extends Component {
           >
             <pre
               className="Previous-query-pre"
-              onClick={this.props.update}
+              onClick={() => {
+                this.props.select(this.props.text);
+                this.props.resetResponse();
+              }}
               data-query={this.props.text}
             >
               {getQueryStructure(prettifyQuery(this.props.text))}

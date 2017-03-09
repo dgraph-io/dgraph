@@ -4,6 +4,7 @@ import classNames from "classnames";
 import vis from "vis";
 
 import Graph from "../components/Graph";
+import { setCurrentNode, updatePartial } from "../actions";
 import { outgoingEdges } from "./Helpers";
 
 import "../assets/css/Graph.css";
@@ -17,33 +18,30 @@ function childNodes(edges) {
 var doubleClickTime = 0;
 var threshold = 200;
 
-function doOnClick(params, allNodeSet, edgeSet) {
+function doOnClick(params, allNodeSet, edgeSet, dispatch) {
     if (params.nodes.length > 0) {
         var nodeUid = params.nodes[0], currentNode = allNodeSet.get(nodeUid);
 
         this.setState({
             selectedNode: true,
         });
-        // TODO - Dispatch an event.
-        // this.props.setCurrentNode(currentNode.title);
+        dispatch(setCurrentNode(currentNode.title));
     } else if (params.edges.length > 0) {
         var edgeUid = params.edges[0], currentEdge = edgeSet.get(edgeUid);
         this.setState({
             selectedNode: true,
         });
-        // TODO - Dispatch an event.
-        // this.props.setCurrentNode(currentEdge.title);
+        dispatch(setCurrentNode(currentEdge.title));
     } else {
         this.setState({
             selectedNode: false,
         });
-        // TODO - Dispatch an event.
-        this.props.setCurrentNode("{}");
+        dispatch(setCurrentNode("{}"));
     }
 }
 
 // create a network
-function renderNetwork(props) {
+function renderNetwork(props, dispatch) {
     var container = document.getElementById("graph");
     var data = {
         nodes: new vis.DataSet(props.nodes),
@@ -147,7 +145,7 @@ function renderNetwork(props) {
                 clickedNode = data.nodes.get(clickedNodeUid);
 
             network.unselectAll();
-            that.props.setCurrentNode(clickedNode.title);
+            dispatch(setCurrentNode(clickedNode.title));
             that.setState({
                 selectedNode: false,
             });
@@ -189,7 +187,7 @@ function renderNetwork(props) {
 
                 data.nodes.remove(allNodes);
                 data.edges.remove(allEdges);
-                that.props.updateExpanded(false);
+                dispatch(updatePartial(true));
             } else {
                 multiLevelExpand(clickedNodeUid);
             }
@@ -202,7 +200,12 @@ function renderNetwork(props) {
             setTimeout(
                 function() {
                     if (t0 - doubleClickTime > threshold) {
-                        doOnClick.bind(that)(params, data.nodes, data.edges);
+                        doOnClick.bind(that)(
+                            params,
+                            data.nodes,
+                            data.edges,
+                            dispatch,
+                        );
                     }
                 },
                 threshold,
@@ -223,7 +226,7 @@ function renderNetwork(props) {
             let nodeUid: string = params.node,
                 currentNode = data.nodes.get(nodeUid);
 
-            that.props.setCurrentNode(currentNode.title);
+            dispatch(setCurrentNode(currentNode.title));
         }
     });
 
@@ -234,7 +237,7 @@ function renderNetwork(props) {
         }
         if (params.edge.length > 0) {
             let edgeUid = params.edge, currentEdge = data.edges.get(edgeUid);
-            that.props.setCurrentNode(currentEdge.title);
+            dispatch(setCurrentNode(currentEdge.title));
         }
     });
 
@@ -262,12 +265,16 @@ function renderNetwork(props) {
             return;
         }
 
-        if (this.props.fullyExpanded) {
+        // This would be triggered when Collapse is pressed.
+        if (!this.props.partial) {
             data.nodes.remove(data.nodes.getIds());
             data.edges.remove(data.edges.getIds());
+            // Since we don't mutate the nodes and edges passed as props initially,
+            // this still holds the initial state that was rendered and we can collapse
+            // back the graph to that state.
             data.nodes.update(this.props.nodes);
             data.edges.update(this.props.edges);
-            this.props.updateExpanded(false);
+            dispatch(updatePartial(true));
             network.fit();
             return;
         }
@@ -309,7 +316,7 @@ function renderNetwork(props) {
         }
 
         if (nodeIds.length === 0) {
-            that.props.updateExpanded(true);
+            dispatch(updatePartial(false));
         }
 
         if (nodesBatch.size > 0 || edgesBatch.length > 0) {
@@ -338,37 +345,38 @@ class GraphContainer extends Component {
         };
     }
 
+    expand = () => {
+        this.state.expand.bind(this)();
+    };
+
     render() {
         const { plotAxis, text, success } = this.props;
         return <Graph plotAxis={plotAxis} text={text} success={success} />;
     }
-
-    expandAll = () => {
-        this.state.expand.bind(this)();
-    };
 
     componentWillReceiveProps = nextProps => {
         if (nextProps.graphHeight !== this.props.graphHeight) {
             this.state.fit();
         }
         if (
-            // TODO - Check how to do a shallow check?
             nextProps.nodes.length === this.props.nodes.length &&
             nextProps.edges.length === this.props.edges.length &&
             nextProps.allNodes.length === this.props.allNodes.length &&
             nextProps.allEdges.length === this.props.allEdges.length &&
-            nextProps.response === this.props.response &&
-            nextProps.treeView === this.props.treeView
+            nextProps.partial !== this.props.partial
         ) {
             return;
         }
 
-        renderNetwork.bind(this, nextProps)();
+        renderNetwork.bind(this, nextProps, this.props.dispatch)();
     };
 }
 
 const mapStateToProps = state => ({
     ...state.response,
+    partial: state.interaction.partial,
 });
 
-export default connect(mapStateToProps, null)(GraphContainer);
+export default connect(mapStateToProps, null, null, { withRef: true })(
+    GraphContainer,
+);

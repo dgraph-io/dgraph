@@ -1,4 +1,4 @@
-import React, { PropTypes } from "react";
+import React from "react";
 
 import Label from "../components/Label";
 
@@ -32,7 +32,5 @@ const Graph = (
         </div>
     </div>
 );
-
-Response.propTypes = {};
 
 export default Graph;

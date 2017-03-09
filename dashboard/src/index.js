@@ -23,7 +23,7 @@ const store = createStore(
 );
 
 // begin periodically persisting the store
-persistStore(store, { whitelist: "queries" });
+persistStore(store, { whitelist: "previousQueries, query" });
 
 ReactDOM.render(
     <Provider store={store}>
@@ -32,9 +32,9 @@ ReactDOM.render(
     document.getElementById("root"),
 );
 
-// if (module.hot) {
-//     module.hot.accept("./containers/App", () => {
-//         const NextApp = require("./containers/App").default;
-//         ReactDOM.render(<NextApp />, document.getElementById("root"));
-//     });
-// }
+if (module.hot) {
+    module.hot.accept("./containers/App", () => {
+        const NextApp = require("./containers/App").default;
+        ReactDOM.render(<NextApp />, document.getElementById("root"));
+    });
+}

@@ -8,6 +8,9 @@ const response = (
         edges: [],
         allNodes: [],
         allEdges: [],
+        numNodes: 0,
+        numEdges: 0,
+        treeView: false,
     },
     action,
 ) => {
@@ -18,7 +21,6 @@ const response = (
                 text: action.text,
             };
         case "SUCCESS_RESPONSE":
-            // TODO - There has to be a cleaner way to assign these default values.
             return {
                 ...state,
                 data: action.data,
@@ -29,6 +31,22 @@ const response = (
             return {
                 ...state,
                 ...action,
+                numNodes: action.allNodes.length,
+                numEdges: action.allEdges.length,
+            };
+        case "RESET_RESPONSE":
+            return {
+                text: "",
+                data: {},
+                success: false,
+                plotAxis: [],
+                nodes: [],
+                edges: [],
+                allNodes: [],
+                allEdges: [],
+                numNodes: 0,
+                numEdges: 0,
+                treeView: false,
             };
         default:
             return state;

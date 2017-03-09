@@ -117,10 +117,10 @@ class Editor extends Component {
           CodeMirror.commands.autocomplete(cm);
         },
         "Cmd-Enter": () => {
-          this.runQuery(new Event(""));
+          this.props.onRunQuery(this.getValue());
         },
         "Ctrl-Enter": () => {
-          this.runQuery(new Event(""));
+          this.props.onRunQuery(this.getValue());
         },
       },
       autofocus: true,
@@ -206,8 +206,12 @@ class Editor extends Component {
   };
 }
 
+const mapStateToProps = state => ({
+  query: state.query.text,
+});
+
 const mapDispatchToProps = {
   onRunQuery: runQuery,
 };
 
-export default connect(null, mapDispatchToProps)(Editor);
+export default connect(mapStateToProps, mapDispatchToProps)(Editor);

@@ -1,10 +1,14 @@
 import { combineReducers } from "redux";
-import queries from "./queries";
+import previousQueries from "./previousQueries";
+import query from "./query";
 import response from "./response";
+import interaction from "./interaction";
 
 const rootReducer = combineReducers({
-    queries,
+    query,
+    previousQueries,
     response,
+    interaction,
 });
 
 export default rootReducer;

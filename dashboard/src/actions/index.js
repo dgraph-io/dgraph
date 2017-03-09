@@ -7,6 +7,26 @@ import {
     processGraph, // isShortestPath,
 } from "../containers/Helpers";
 
+export const updatePartial = partial => ({
+    type: "UPDATE_PARTIAL",
+    partial,
+});
+
+export const selectQuery = text => ({
+    type: "SELECT_QUERY",
+    text,
+});
+
+export const deleteQuery = idx => ({
+    type: "DELETE_QUERY",
+    idx,
+});
+
+export const setCurrentNode = node => ({
+    type: "SELECT_NODE",
+    node,
+});
+
 const addQuery = text => ({
     type: "ADD_QUERY",
     text,
@@ -28,41 +48,49 @@ const saveResponseProperties = obj => ({
     ...obj,
 });
 
-const renderGraph = (query, result, treeView, dispatch) => {
-    let startTime = new Date();
+export const renderGraph = (query, result, treeView) => {
+    return dispatch => {
+        let startTime = new Date();
 
-    let [nodes, edges, labels, nodesIdx, edgesIdx] = processGraph(
-        result,
-        treeView,
-        query,
-    );
+        let [nodes, edges, labels, nodesIdx, edgesIdx] = processGraph(
+            result,
+            treeView,
+            query,
+        );
 
-    let endTime = new Date(),
-        timeTaken = (endTime.getTime() - startTime.getTime()) / 1000,
-        render = "";
+        let endTime = new Date(),
+            timeTaken = (endTime.getTime() - startTime.getTime()) / 1000,
+            render = "";
 
-    if (timeTaken > 1) {
-        render = timeTaken.toFixed(1) + "s";
-    } else {
-        render = (timeTaken - Math.floor(timeTaken)) * 1000 + "ms";
-    }
+        if (timeTaken > 1) {
+            render = timeTaken.toFixed(1) + "s";
+        } else {
+            render = (timeTaken - Math.floor(timeTaken)) * 1000 + "ms";
+        }
 
-    dispatch(
-        saveResponseProperties({
-            plotAxis: labels,
-            allNodes: nodes,
-            allEdges: edges,
-            numNodes: nodes.length,
-            numEdges: edges.length,
-            nodes: nodes.slice(0, nodesIdx),
-            edges: edges.slice(0, edgesIdx),
-            treeView: treeView,
-            latency: result.server_latency.total,
-            data: result,
-            rendering: render,
-        }),
-    );
+        dispatch(updatePartial(nodesIdx < nodes.length));
+
+        dispatch(
+            saveResponseProperties({
+                plotAxis: labels,
+                allNodes: nodes,
+                allEdges: edges,
+                numNodes: nodes.length,
+                numEdges: edges.length,
+                nodes: nodes.slice(0, nodesIdx),
+                edges: edges.slice(0, edgesIdx),
+                treeView: treeView,
+                latency: result.server_latency.total,
+                data: result,
+                rendering: render,
+            }),
+        );
+    };
 };
+
+export const resetResponseState = () => ({
+    type: "RESET_RESPONSE",
+});
 
 export const runQuery = query => {
     return dispatch => {
@@ -78,7 +106,6 @@ export const runQuery = query => {
             .then(checkStatus)
             .then(parseJSON)
             .then(function handleResponse(result) {
-                console.log(result);
                 // This is the case in which user sends a mutation. We display the response from server.
                 if (result.code !== undefined && result.message !== undefined) {
                     dispatch(addQuery(query));
@@ -87,7 +114,7 @@ export const runQuery = query => {
                     dispatch(addQuery(query));
                     let mantainSortOrder = showTreeView(query);
                     dispatch(saveSuccessResponse(null, result));
-                    renderGraph(query, result, mantainSortOrder, dispatch);
+                    renderGraph(query, result, mantainSortOrder)(dispatch);
                 } else {
                     dispatch(
                         saveErrorResponse(
