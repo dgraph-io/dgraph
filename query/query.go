@@ -601,6 +601,17 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	err = treeCopy(ctx, gq, sg)
 	return sg, err
 }
+func isDebug(ctx context.Context) bool {
+	var debug bool
+	// gRPC client passes information about debug as metadata.
+	if md, ok := metadata.FromContext(ctx); ok {
+		// md is a map[string][]string
+		debug = len(md["debug"]) > 0 && md["debug"][0] == "true"
+	}
+	// HTTP passes information about debug as query parameter which is attached to context.
+	return debug || ctx.Value("debug") == "true"
+
+}
 
 func isDebug(ctx context.Context) bool {
 	var debug bool
