@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "bootstrap": "^3.3.7",
-    "classnames": "^2.2.5",
     "codemirror": "^5.23.0",
     "codemirror-graphql": "^0.6.3",
     "graphql": "^0.9.1",

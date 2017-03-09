@@ -1,5 +1,5 @@
 import {
-    // timeout,
+    timeout,
     checkStatus,
     parseJSON,
     isNotEmpty,
@@ -105,40 +105,48 @@ export const resetResponseState = () => ({
 export const runQuery = query => {
     return dispatch => {
         dispatch(isFetching());
+        dispatch(resetResponseState);
         // TODO - Add timeout back
-        fetch(process.env.REACT_APP_DGRAPH + "/query?debug=true", {
-            method: "POST",
-            mode: "cors",
-            headers: {
-                "Content-Type": "text/plain",
-            },
-            body: query,
-        })
-            .then(checkStatus)
-            .then(parseJSON)
-            .then(function handleResponse(result) {
-                dispatch(fetchedResponse());
-                // This is the case in which user sends a mutation. We display the response from server.
-                if (result.code !== undefined && result.message !== undefined) {
-                    dispatch(addQuery(query));
-                    dispatch(saveSuccessResponse(JSON.stringify(result)));
-                } else if (isNotEmpty(result)) {
-                    dispatch(addQuery(query));
-                    let mantainSortOrder = showTreeView(query);
-                    dispatch(saveSuccessResponse(null, result));
-                    renderGraph(query, result, mantainSortOrder)(dispatch);
-                } else {
-                    dispatch(
-                        saveErrorResponse(
-                            "Your query did not return any results.",
-                        ),
-                    );
-                }
+
+        timeout(
+            60000,
+            fetch(process.env.REACT_APP_DGRAPH + "/query?debug=true", {
+                method: "POST",
+                mode: "cors",
+                headers: {
+                    "Content-Type": "text/plain",
+                },
+                body: query,
             })
+                .then(checkStatus)
+                .then(parseJSON)
+                .then(function handleResponse(result) {
+                    dispatch(fetchedResponse());
+                    // This is the case in which user sends a mutation. We display the response from server.
+                    if (
+                        result.code !== undefined &&
+                        result.message !== undefined
+                    ) {
+                        dispatch(addQuery(query));
+                        dispatch(saveSuccessResponse(JSON.stringify(result)));
+                    } else if (isNotEmpty(result)) {
+                        dispatch(addQuery(query));
+                        let mantainSortOrder = showTreeView(query);
+                        dispatch(saveSuccessResponse(null, result));
+                        renderGraph(query, result, mantainSortOrder)(dispatch);
+                    } else {
+                        dispatch(
+                            saveErrorResponse(
+                                "Your query did not return any results.",
+                            ),
+                        );
+                    }
+                }),
+        )
             .catch(function(error) {
                 console.log(error.stack);
-                var err = error.response &&
-                    (error.response.text() || error.message);
+                var err = error.response && error.response.text() ||
+                    error.message;
                 return err;
             })
             .then(function(errorMsg) {

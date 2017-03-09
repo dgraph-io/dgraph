@@ -16,6 +16,7 @@ if (process.env.NODE_ENV !== "production") {
     middleware.push(createLogger());
 }
 
+// TODO = Verify this shouldn't run in production.
 const composeEnhancers = window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose;
 
 const store = createStore(
@@ -27,16 +28,20 @@ const store = createStore(
 // begin periodically persisting the store
 persistStore(store, { whitelist: "previousQueries, query" });
 
-ReactDOM.render(
-    <Provider store={store}>
-        <App />
-    </Provider>,
-    document.getElementById("root"),
-);
+const render = Component => {
+    return ReactDOM.render(
+        <Provider store={store}>
+            <Component />
+        </Provider>,
+        document.getElementById("root"),
+    );
+};
+
+render(App);
 
 if (module.hot) {
     module.hot.accept("./containers/App", () => {
         const NextApp = require("./containers/App").default;
-        ReactDOM.render(<NextApp />, document.getElementById("root"));
+        render(NextApp);
     });
 }
