@@ -20,6 +20,8 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
+// IntersectWith intersects u with v. The update is made to o.
+// u, v should be sorted.
 func IntersectWith(u, v, o *task.List) {
 	n := len(u.Uids)
 	m := len(v.Uids)
@@ -44,8 +46,6 @@ func IntersectWith(u, v, o *task.List) {
 	}
 }
 
-// IntersectWith intersects u with v. The update is made to u.
-// u, v should be sorted.
 func IntersectWithLin(u, v, o *task.List) {
 	out := o.Uids[:0]
 	n := len(u.Uids)
