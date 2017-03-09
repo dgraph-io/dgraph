@@ -258,6 +258,7 @@ func BenchmarkQuery(b *testing.B) {
 }
 
 func TestMain(m *testing.M) {
+	x.SetTestRun()
 	x.Init()
 	dir1, dir2, _, _ := prepare()
 	defer closeAll(dir1, dir2)
