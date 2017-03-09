@@ -226,8 +226,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 0x1001, "Барсук", "ru", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
 
-	posting.CommitLists(10)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 }
 
 func TestGetUID(t *testing.T) {

@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
@@ -391,6 +392,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				pk := x.Parse(key)
 				x.AssertTruef(pk.IsData() && pk.Attr == q.Attr,
 					"Invalid key obtained for comparison")
+				fmt.Println(pk.Uid, pk.Attr)
 				tlist := &task.List{[]uint64{pk.Uid}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
