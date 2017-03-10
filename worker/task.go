@@ -432,7 +432,7 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 	case StandardFn, FullTextSearchFn:
 		// srcfunc 0th val is func name and and [1:] are args.
 		// we tokenize the arguments of the query.
-		fc.tokens, err = getStringTokens(q.SrcFunc[1:], fnType)
+		fc.tokens, err = getStringTokens(q.SrcFunc[1:], "", fnType) // TODO(tzdybal) - get language
 		if err != nil {
 			return nil, err
 		}

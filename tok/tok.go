@@ -25,6 +25,9 @@ import (
 	"github.com/blevesearch/bleve/analysis/token/porter"
 	"github.com/blevesearch/bleve/analysis/token/unicodenorm"
 	"github.com/blevesearch/bleve/analysis/tokenizer/unicode"
+	"github.com/blevesearch/blevex/stemmer"
+	"github.com/tebeka/snowball"
+
 	"github.com/blevesearch/bleve/registry"
 	geom "github.com/twpayne/go-geom"
 
@@ -66,7 +69,6 @@ func init() {
 	RegisterTokenizer(DateTimeTokenizer{})
 	RegisterTokenizer(TermTokenizer{})
 	RegisterTokenizer(ExactTokenizer{})
-	RegisterTokenizer(FullTextTokenizer{})
 	SetDefault(types.GeoID, "geo")
 	SetDefault(types.Int32ID, "int")
 	SetDefault(types.FloatID, "float")
@@ -109,8 +111,35 @@ func initBleve() {
 		panic(err)
 	}
 
-	// full text search analyzer - does stemming using Porter stemmer - this works only for English.
-	// Per-language stemming will be added soon.
+	// List of supported languages (as defined in https://github.com/tebeka/snowball):
+	// danish, dutch, english, finnish, french, german, hungarian, italian, norwegian, porter,
+	// portuguese, romanian, russian, spanish, swedish, turkish
+	for _, lang := range snowball.LangList() {
+		stemmerName := stemmer.Name + lang
+		tokenizer := NewFullTextTokenizer(lang)
+		analyzerName := tokenizer.Name()
+		_, err = bleveCache.DefineTokenFilter(stemmerName, map[string]interface{}{
+			"type": stemmer.Name,
+			"lang": lang,
+		})
+		if err != nil {
+			panic(err)
+		}
+
+		// full text search analyzer - does language-specific stemming.
+		_, err = bleveCache.DefineAnalyzer(analyzerName, map[string]interface{}{
+			"type":          custom.Name,
+			"tokenizer":     unicode.Name,
+			"token_filters": []string{lowercase.Name, normalizerName, stemmerName},
+		})
+		if err != nil {
+			panic(err)
+		}
+
+		RegisterTokenizer(*tokenizer)
+	}
+
+	// Default full text tokenizer, with Porter stemmer (it works with English only).
 	_, err = bleveCache.DefineAnalyzer("fulltext", map[string]interface{}{
 		"type":          custom.Name,
 		"tokenizer":     unicode.Name,
@@ -119,6 +148,8 @@ func initBleve() {
 	if err != nil {
 		panic(err)
 	}
+
+	RegisterTokenizer(FullTextTokenizer{})
 }
 
 // GetTokenizer returns tokenizer given unique name.
@@ -232,11 +263,14 @@ func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
 func (t ExactTokenizer) Identifier() byte { return 0x2 }
 func (t ExactTokenizer) IsSortable() bool { return true }
 
-// Full text tokenizer. Currenlty works only for English language.
-type FullTextTokenizer struct{}
+// Full text tokenizer, with language support
+type FullTextTokenizer struct {
+	Lang string
+}
 
-func (t FullTextTokenizer) Name() string       { return "fulltext" }
-func (t FullTextTokenizer) Type() types.TypeID { return types.StringID }
+func NewFullTextTokenizer(lang string) *FullTextTokenizer { return &FullTextTokenizer{Lang: lang} }
+func (t FullTextTokenizer) Name() string                  { return "fulltext" + t.Lang }
+func (t FullTextTokenizer) Type() types.TypeID            { return types.StringID }
 func (t FullTextTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return getBleveTokens(t.Name(), t.Identifier(), sv)
 }
@@ -276,4 +310,8 @@ func EncodeGeoTokens(tokens []string) {
 	for i := 0; i < len(tokens); i++ {
 		tokens[i] = encodeToken(tokens[i], 0x4)
 	}
+}
+
+func ftsTokenizerName(lang string) string {
+	return "fulltext" + lang
 }

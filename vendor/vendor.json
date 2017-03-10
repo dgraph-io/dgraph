@@ -87,6 +87,12 @@
 			"revisionTime": "2017-02-24T21:36:31Z"
 		},
 		{
+			"checksumSHA1": "4EX5n9QhXfRGfF/DHJud8y64G3U=",
+			"path": "github.com/blevesearch/blevex/stemmer",
+			"revision": "507dcd576550f9f3260f11495ba2de4e96773a3e",
+			"revisionTime": "2017-03-01T19:48:45Z"
+		},
+		{
 			"checksumSHA1": "F6iBQThfd04TIlxT49zaPRGvlqE=",
 			"path": "github.com/blevesearch/go-porterstemmer",
 			"revision": "23a2c8e5cf1f380f27722c6d2ae8896431dc7d0e",
