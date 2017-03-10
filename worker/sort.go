@@ -144,7 +144,7 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		it.Seek(seekKey)
 	} else {
 		// We need to reach the last key of this index type.
-		seekKey := x.IndexKey(attr, string(tok.Identifier()+'~'))
+		seekKey := x.IndexKey(attr, string(tok.Identifier()+1))
 		it.SeekForPrev(seekKey)
 	}
 
