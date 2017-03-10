@@ -1027,7 +1027,7 @@ func TestMaxError1(t *testing.T) {
                 }
         `
 	_, err := gql.Parse(query)
-	require.NotNil(t, err)
+	require.Error(t, err)
 }
 
 func TestSum(t *testing.T) {

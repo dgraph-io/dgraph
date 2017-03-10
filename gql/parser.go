@@ -1044,6 +1044,10 @@ L:
 					continue
 				} else if itemInFunc.Typ == itemAt {
 					if len(g.Attr) > 0 && len(g.Lang) == 0 {
+						itNext, err := it.Peek(1)
+						if err == nil && itNext[0].Val == "filter" {
+							return nil, x.Errorf("Filter cannot be used inside a function.")
+						}
 						isLang = true
 						continue
 					} else {
