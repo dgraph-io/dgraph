@@ -32,13 +32,13 @@ export function aggregationPrefix(properties) {
     for (let term of aggTerms) {
       if (k.startsWith(term)) {
         if (term === "count") {
-          return term;
+          return [term, k];
         }
-        return term.substr(0, term.length - 1);
+        return [term.substr(0, term.length - 1), k];
       }
     }
   }
-  return "";
+  return ["", ""];
 }
 
 function getNameKey(properties) {
@@ -209,6 +209,12 @@ function hasProperties(props: Object): boolean {
   return Object.keys(props).length !== 1;
 }
 
+function isUseless(obj) {
+  let keys = Object.keys(obj);
+  return keys.length === 1 && keys[0] === "_uid_" ||
+    keys.length === 2 && keys.indexOf("_uid_") != -1 && keys.indexOf("x") != -1;
+}
+
 export function processGraph(
   response: Object,
   treeView: boolean,
@@ -266,6 +272,10 @@ export function processGraph(
     if (root !== "server_latency" && root !== "uids") {
       let block = response[root];
       for (let i = 0; i < block.length; i++) {
+        if (isUseless(block[i])) {
+          continue;
+        }
+
         let rn: ResponseNode = {
           node: block[i],
           src: {
@@ -329,6 +339,10 @@ export function processGraph(
         [obj.src.id, uid].filter(val => val).join("-")
       : uid;
 
+    if (isUseless(obj.node)) {
+      continue;
+    }
+
     for (let prop in obj.node) {
       if (!obj.node.hasOwnProperty(prop)) {
         continue;
@@ -383,7 +397,7 @@ export function processGraph(
     }
 
     let nodeAttrs = properties["attrs"];
-    let aggrTerm = aggregationPrefix(nodeAttrs);
+    let [aggrTerm, aggrPred] = aggregationPrefix(nodeAttrs);
     let name = aggrTerm !== "" ? aggrTerm : obj.src.pred;
 
     let props = getGroupProperties(name, predLabel, groups, randomColorList);
@@ -393,7 +407,7 @@ export function processGraph(
     let n: Node = {
       id: id,
       x: x,
-      label: getNodeLabel(nodeAttrs),
+      label: aggrTerm !== "" ? nodeAttrs[aggrPred] : getNodeLabel(nodeAttrs),
       title: JSON.stringify(properties),
       color: props.color,
       group: obj.src.pred,
