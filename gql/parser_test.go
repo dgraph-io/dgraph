@@ -1842,6 +1842,7 @@ func TestLangsInvalid5(t *testing.T) {
 	require.Error(t, err)
 }
 
+// query with quoted attribute/language specification
 func TestLangsFilter1(t *testing.T) {
 	query := `
 	query {
@@ -1864,6 +1865,7 @@ func TestLangsFilter1(t *testing.T) {
 	require.Equal(t, "en", res.Query[0].Children[0].Filter.Func.Lang)
 }
 
+// query with un-quoted attribute/language specification
 func TestLangsFilter2(t *testing.T) {
 	query := `
 	query {
@@ -1886,7 +1888,9 @@ func TestLangsFilter2(t *testing.T) {
 	require.Equal(t, "en", res.Query[0].Children[0].Filter.Func.Lang)
 }
 
+// query with quoted attribute/language specification
 func TestLangsFilter1_error1(t *testing.T) {
+	// this query should fail, because '@lang' is used twice (and only one appearance is allowed)
 	query := `
 	query {
 		me(id:0x0a) {
@@ -1902,7 +1906,9 @@ func TestLangsFilter1_error1(t *testing.T) {
 	require.Error(t, err)
 }
 
+// query with un-quoted attribute/language specification
 func TestLangsFilter2_error1(t *testing.T) {
+	// this query should fail, because '@lang' is used twice (and only one appearance is allowed)
 	query := `
 	query {
 		me(id:0x0a) {
