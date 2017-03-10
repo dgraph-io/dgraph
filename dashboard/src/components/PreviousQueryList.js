@@ -15,9 +15,9 @@ class PreviousQueryList extends Component {
     }
 
     filterQueries = function(filterText) {
+        let filter = filterText.toLowerCase();
         return this.props.queries.filter(
-            item =>
-                item.text.toLowerCase().search(this.state.filterText) !== -1,
+            item => item.text.toLowerCase().search(filter) !== -1,
         );
     };
     render() {
@@ -39,22 +39,22 @@ class PreviousQueryList extends Component {
                 </form>
                 <table className="App-prev-queries-table">
                     <tbody className="App-prev-queries-tbody">
-                        {this.filterQueries("").map(
-                            function(query, i) {
-                                return (
-                                    <PreviousQuery
-                                        text={query.text}
-                                        lastRun={query.lastRun}
-                                        key={i}
-                                        idx={i}
-                                        select={this.props.selectQuery}
-                                        delete={this.props.deleteQuery}
-                                        resetResponse={this.props.resetResponse}
-                                    />
-                                );
-                            },
-                            this,
-                        )}
+                        {this.filterQueries(this.state.filterText).map((
+                            query,
+                            i,
+                        ) => {
+                            return (
+                                <PreviousQuery
+                                    text={query.text}
+                                    lastRun={query.lastRun}
+                                    key={i}
+                                    idx={i}
+                                    select={this.props.selectQuery}
+                                    delete={this.props.deleteQuery}
+                                    resetResponse={this.props.resetResponse}
+                                />
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

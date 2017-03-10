@@ -72,7 +72,7 @@ class Editor extends Component {
         mode: "cors",
       })
         .then(checkStatus)
-        .then(parseJSON)
+        .then(response => response.json())
         .then(function(result) {
           keywords = result.keywords.map(function(kw) {
             return kw.name;

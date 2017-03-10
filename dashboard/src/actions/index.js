@@ -119,7 +119,7 @@ export const runQuery = query => {
                 body: query,
             })
                 .then(checkStatus)
-                .then(parseJSON)
+                .then(response => response.json())
                 .then(function handleResponse(result) {
                     dispatch(fetchedResponse());
                     // This is the case in which user sends a mutation. We display the response from server.
@@ -133,7 +133,7 @@ export const runQuery = query => {
                         dispatch(addQuery(query));
                         let mantainSortOrder = showTreeView(query);
                         dispatch(saveSuccessResponse(null, result));
-                        renderGraph(query, result, mantainSortOrder)(dispatch);
+                        dispatch(renderGraph(query, result, mantainSortOrder));
                     } else {
                         dispatch(
                             saveErrorResponse(
