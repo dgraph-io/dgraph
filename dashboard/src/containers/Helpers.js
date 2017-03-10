@@ -59,7 +59,7 @@ export function getNodeLabel(properties: Object): string {
 
   let keys = Object.keys(properties);
   if (keys.length === 1) {
-    label = aggregationPrefix(properties);
+    label = aggregationPrefix(properties)[0];
     if (label !== "") {
       return label;
     }
