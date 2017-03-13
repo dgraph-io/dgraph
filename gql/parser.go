@@ -1154,58 +1154,6 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				return nil, err
 			}
 			leaf := &FilterTree{Func: f}
-			/*
-					f := &Function{}
-					leaf := &FilterTree{Func: f}
-					f.Name = lval
-					it.Next()
-					itemInFunc := it.Item()
-					if itemInFunc.Typ != itemLeftRound {
-						return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
-					}
-					var terminated, seenFuncAsArgument bool
-					for it.Next() {
-						itemInFunc := it.Item()
-						if itemInFunc.Typ == itemRightRound {
-							terminated = true
-							break
-						} else if itemInFunc.Typ == itemLeftRound {
-							if seenFuncAsArgument {
-								return nil, x.Errorf("Expected only one function as argument")
-							}
-							seenFuncAsArgument = true
-							// embed func, like gt(count(films), 0)
-							// => f: {Name: gt, Attr:films, Args:[count, 0]}
-							it.Prev()
-							it.Prev()
-							fn, err := parseFunction(it)
-							if err != nil {
-								return nil, err
-							}
-							f.Attr = fn.Attr
-							f.Args = append(f.Args, fn.Name)
-							continue
-						} else if itemInFunc.Typ != itemName {
-							return nil, x.Errorf("Expected arg after func [%s], but got item %v",
-								leaf.Func.Name, itemInFunc)
-						}
-						val := strings.Trim(itemInFunc.Val, "\" \t")
-						if val == "" {
-							return nil, x.Errorf("Empty argument received")
-						}
-						if len(f.Attr) == 0 {
-							f.Attr = val
-						} else {
-							f.Args = append(f.Args, val)
-						}
-						if f.Name == "id" {
-							f.NeedsVar = append(f.NeedsVar, val)
-						}
-					}
-				if !terminated {
-					return nil, x.Errorf("Expected ) to terminate func definition")
-				}
-			*/
 			valueStack.push(leaf)
 		} else if item.Typ == itemLeftRound { // Just push to op stack.
 			opStack.push(&FilterTree{Op: "("})
