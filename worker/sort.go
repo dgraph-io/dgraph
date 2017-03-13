@@ -8,6 +8,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -117,18 +118,35 @@ func processSort(ts *taskp.Sort) (*taskp.SortResult, error) {
 	// Iterate over every bucket / token.
 	it := pstore.NewIterator()
 	defer it.Close()
-	pk := x.Parse(x.IndexKey(attr, ""))
-	indexPrefix := pk.IndexPrefix()
 
-	if !ts.Desc {
-		it.Seek(indexPrefix)
-	} else {
-		it.Seek(pk.SkipRangeOfSameType())
-		if it.Valid() {
-			it.Prev()
-		} else {
-			it.SeekToLast()
+	// Get the tokenizers and choose the corresponding one.
+	if !schema.State().IsIndexed(attr) {
+		return nil, x.Errorf("Attribute %s is not indexed.", attr)
+	}
+
+	tokenizers := schema.State().Tokenizer(attr)
+	var tok tok.Tokenizer
+	for _, t := range tokenizers {
+		// Get the first sortable index.
+		if t.IsSortable() {
+			tok = t
+			break
 		}
+	}
+	if tok == nil {
+		return nil, x.Errorf("Attribute:%s does not have proper index",
+			attr)
+	}
+
+	indexPrefix := x.IndexKey(attr, string(tok.Identifier()))
+	if !ts.Desc {
+		// We need to seek to the first key of this index type.
+		seekKey := indexPrefix
+		it.Seek(seekKey)
+	} else {
+		// We need to reach the last key of this index type.
+		seekKey := x.IndexKey(attr, string(tok.Identifier()+1))
+		it.SeekForPrev(seekKey)
 	}
 
 BUCKETS:
