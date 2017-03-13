@@ -68,7 +68,6 @@ var (
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	nomutations    = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	tracing        = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
-	schemaFile     = flag.String("schema", "", "Path to schema file")
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
 	dumpSubgraph   = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
@@ -634,7 +633,8 @@ type keywords struct {
 // Used to return a list of keywords, so that UI can show them for autocompletion.
 func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
-	preds := schema.State().Predicates()
+	// TODO: Remove this code and replace this
+	preds := schema.State().Predicates(1)
 	kw := make([]keyword, 0, len(preds))
 	for _, p := range preds {
 		kw = append(kw, keyword{
@@ -786,8 +786,7 @@ func main() {
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
-	err = schema.Init(ps, *schemaFile)
-	x.Checkf(err, "Error while loading schema")
+	schema.Init(ps)
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

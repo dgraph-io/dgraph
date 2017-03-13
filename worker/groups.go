@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/raftwal"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -22,8 +23,9 @@ var (
 	groupIds = flag.String("groups", "0,1", "RAFT groups handled by this server.")
 	myAddr   = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
-	peerAddr = flag.String("peer", "", "IP_ADDRESS:PORT of any healthy peer.")
-	raftId   = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
+	peerAddr   = flag.String("peer", "", "IP_ADDRESS:PORT of any healthy peer.")
+	raftId     = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
+	schemaFile = flag.String("schema", "", "Path to schema file")
 
 	emptyMembershipUpdate task.MembershipUpdate
 )
@@ -100,6 +102,7 @@ func StartRaftNodes(walDir string) {
 		gid, err := strconv.ParseUint(id, 0, 32)
 		x.Checkf(err, "Unable to parse group id: %v", id)
 		node := gr.newNode(uint32(gid), *raftId, *myAddr)
+		schema.ReloadData(*schemaFile, uint32(gid))
 		go node.InitAndStartNode(gr.wal)
 	}
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
