@@ -350,7 +350,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 
 		filtered := types.FilterGeoUids(uids, values, srcFn.geoQuery)
 		for i := 0; i < len(out.UidMatrix); i++ {
-			algo.IntersectWith(out.UidMatrix[i], filtered)
+			algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
 		}
 	}
 	out.IntersectDest = srcFn.intersectDest
