@@ -257,6 +257,30 @@ func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error
 	return terms, nil
 }
 
+// Full text tokenizer. Currenlty works only for English language.
+type FullTextTokenizer struct{}
+
+func (t FullTextTokenizer) Name() string       { return "fulltext" }
+func (t FullTextTokenizer) Type() types.TypeID { return types.StringID }
+func (t FullTextTokenizer) Tokens(sv types.Val) ([]string, error) {
+	return getBleveTokens(t.Name(), t.Identifier(), sv)
+}
+func (t FullTextTokenizer) Identifier() byte { return 0x8 }
+
+func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error) {
+	analyzer, err := bleveCache.AnalyzerNamed(name)
+	if err != nil {
+		return nil, err
+	}
+	tokenStream := analyzer.Analyze([]byte(sv.Value.(string)))
+
+	terms := make([]string, len(tokenStream))
+	for i, token := range tokenStream {
+		terms[i] = encodeToken(string(token.Term), identifier)
+	}
+	return terms, nil
+}
+
 func encodeInt(val int32) string {
 	buf := make([]byte, 5)
 	binary.BigEndian.PutUint32(buf[1:], uint32(val))
