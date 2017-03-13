@@ -115,8 +115,12 @@ func initBleve() {
 	// danish, dutch, english, finnish, french, german, hungarian, italian, norwegian, porter,
 	// portuguese, romanian, russian, spanish, swedish, turkish
 	for _, lang := range snowball.LangList() {
-		stemmerName := stemmer.Name + lang
-		tokenizer := NewFullTextTokenizer(lang)
+		if lang == "porter" {
+			continue
+		}
+		ln := getLangCode(lang)
+		stemmerName := stemmer.Name + ln
+		tokenizer := NewFullTextTokenizer(ln)
 		analyzerName := tokenizer.Name()
 		_, err = bleveCache.DefineTokenFilter(stemmerName, map[string]interface{}{
 			"type": stemmer.Name,
@@ -125,6 +129,8 @@ func initBleve() {
 		if err != nil {
 			panic(err)
 		}
+
+		// TODO(tzdybal) - stop-words filter
 
 		// full text search analyzer - does language-specific stemming.
 		_, err = bleveCache.DefineAnalyzer(analyzerName, map[string]interface{}{
@@ -314,4 +320,97 @@ func EncodeGeoTokens(tokens []string) {
 
 func ftsTokenizerName(lang string) string {
 	return "fulltext" + lang
+}
+
+func getLangCode(lang string) string {
+	// List based on https://godoc.org/golang.org/x/text/language#Tag
+	// It contains more languages than supported by Bleve, to enable seamless addition of new langs.
+	mapping := map[string]string{
+		"afrikaans":            "af",
+		"amharic":              "am",
+		"arabic":               "ar",
+		"modernstandardarabic": "ar-001",
+		"azerbaijani":          "az",
+		"bulgarian":            "bg",
+		"bengali":              "bn",
+		"catalan":              "ca",
+		"czech":                "cs",
+		"danish":               "da",
+		"german":               "de",
+		"greek":                "el",
+		"english":              "en",
+		"americanenglish":      "en-us",
+		"britishenglish":       "en-gb",
+		"spanish":              "es",
+		"europeanspanish":      "es-es",
+		"latinamericanspanish": "es-419",
+		"estonian":             "et",
+		"persian":              "fa",
+		"finnish":              "fi",
+		"filipino":             "fil",
+		"french":               "fr",
+		"canadianfrench":       "fr-ca",
+		"gujarati":             "gu",
+		"hebrew":               "he",
+		"hindi":                "hi",
+		"croatian":             "hr",
+		"hungarian":            "hu",
+		"armenian":             "hy",
+		"indonesian":           "id",
+		"icelandic":            "is",
+		"italian":              "it",
+		"japanese":             "ja",
+		"georgian":             "ka",
+		"kazakh":               "kk",
+		"khmer":                "km",
+		"kannada":              "kn",
+		"korean":               "ko",
+		"kirghiz":              "ky",
+		"lao":                  "lo",
+		"lithuanian":           "lt",
+		"latvian":              "lv",
+		"macedonian":           "mk",
+		"malayalam":            "ml",
+		"mongolian":            "mn",
+		"marathi":              "mr",
+		"malay":                "ms",
+		"burmese":              "my",
+		"nepali":               "ne",
+		"dutch":                "nl",
+		"norwegian":            "no",
+		"punjabi":              "pa",
+		"polish":               "pl",
+		"portuguese":           "pt",
+		"brazilianportuguese":  "pt-br",
+		"europeanportuguese":   "pt-pt",
+		"romanian":             "ro",
+		"russian":              "ru",
+		"sinhala":              "si",
+		"slovak":               "sk",
+		"slovenian":            "sl",
+		"albanian":             "sq",
+		"serbian":              "sr",
+		"serbianlatin":         "sr-latn",
+		"swedish":              "sv",
+		"swahili":              "sw",
+		"tamil":                "ta",
+		"telugu":               "te",
+		"thai":                 "th",
+		"turkish":              "tr",
+		"ukrainian":            "uk",
+		"urdu":                 "ur",
+		"uzbek":                "uz",
+		"vietnamese":           "vi",
+		"chinese":              "zh",
+		"simplifiedchinese":    "zh-hans",
+		"traditionalchinese":   "zh-hant",
+		"zulu":                 "zu",
+	}
+
+	code, ok := mapping[lang]
+	if ok {
+		return code
+	} else {
+		panic("Unsupported language: " + lang)
+	}
 }
