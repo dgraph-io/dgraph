@@ -204,15 +204,50 @@ function getGroupProperties(
   return groups[pred];
 }
 
-function hasProperties(props: Object): boolean {
-  // Each node will have a _uid_. We check if it has other properties.
-  return Object.keys(props).length !== 1;
-}
-
 function isUseless(obj) {
   let keys = Object.keys(obj);
-  return keys.length === 1 && keys[0] === "_uid_" ||
-    keys.length === 2 && keys.indexOf("_uid_") != -1 && keys.indexOf("x") != -1;
+  return keys.length === 1 && keys[0] === "_uid_";
+}
+
+function createAxisPlot(groups) {
+  let axisPlot = [];
+  for (let pred in groups) {
+    if (!groups.hasOwnProperty(pred)) {
+      continue;
+    }
+
+    axisPlot.push({
+      label: groups[pred]["label"],
+      pred: pred,
+      color: groups[pred]["color"],
+    });
+  }
+
+  return axisPlot;
+}
+
+function extractFacets(val, edgeAttributes, properties) {
+  // lets handle @facets between uids here.
+  for (let pred in val) {
+    if (!val.hasOwnProperty(pred)) {
+      continue;
+    }
+
+    // pred could either be _ or other predicates. If its a predicate it could have
+    // multiple k-v pairs.
+    if (pred === "_") {
+      edgeAttributes["facets"] = val["_"];
+    } else {
+      let predFacets = val[pred];
+      for (let f in predFacets) {
+        if (!predFacets.hasOwnProperty(f)) {
+          continue;
+        }
+
+        properties["facets"][`${pred}[${f}]`] = predFacets[f];
+      }
+    }
+  }
 }
 
 export function processGraph(
@@ -220,7 +255,7 @@ export function processGraph(
   treeView: boolean,
   query: string,
 ) {
-  let nodesStack: Array<ResponseNode> = [],
+  let nodesQueue: Array<ResponseNode> = [],
     // Contains map of a lable to its shortform thats displayed.
     predLabel: MapOfStrings = {},
     // Map of whether a Node with an Uid has already been created. This helps
@@ -269,6 +304,7 @@ export function processGraph(
 
     someNodeHasChildren = false;
     ignoredChildren = [];
+
     if (root !== "server_latency" && root !== "uids") {
       let block = response[root];
       for (let i = 0; i < block.length; i++) {
@@ -283,40 +319,45 @@ export function processGraph(
             pred: root,
           },
         };
+
         if (hasChildren(block[i])) {
           someNodeHasChildren = true;
-          nodesStack.push(rn);
+          nodesQueue.push(rn);
         } else {
           ignoredChildren.push(rn);
         }
       }
 
-      // If no node has children or its a shortest path query, then we add root
-      // level nodes to the view.
+      // If no root node has children , then we add all root level nodes to the view.
       if (!someNodeHasChildren) {
-        nodesStack.push.apply(nodesStack, ignoredChildren);
+        nodesQueue.push.apply(nodesQueue, ignoredChildren);
       }
     }
   }
 
   // We push an empty node after all the children. This would help us know when
   // we have traversed all nodes at a level.
-  nodesStack.push(emptyNode);
+  nodesQueue.push(emptyNode);
 
-  while (nodesStack.length > 0) {
-    let obj = nodesStack.shift();
+  while (nodesQueue.length > 0) {
+    let obj = nodesQueue.shift();
+
     // Check if this is an empty node.
     if (Object.keys(obj.node).length === 0 && obj.src.pred === "empty") {
+      // Only nodes and edges upto nodesIndex, edgesIndex are rendered on first load.
       if (level === 0 || level === 1 && nodes.length < 100) {
+        // Nodes upto level 1 are rendered only if the total number is less than 100. Else only
+        // nodes at level 0 are rendered.
         nodesIndex = nodes.length;
         edgesIndex = edges.length;
       }
 
-      if (nodesStack.length === 0) {
+      // If no more nodes left, then we can break.
+      if (nodesQueue.length === 0) {
         break;
       }
 
-      nodesStack.push(emptyNode);
+      nodesQueue.push(emptyNode);
       level++;
       continue;
     }
@@ -325,23 +366,20 @@ export function processGraph(
       attrs: {},
       facets: {},
     },
-      hasChildNodes: boolean = false,
       id: string,
       edgeAttributes = {
         facets: {},
       },
       uid: string;
 
+    // Some nodes like results of aggregation queries, max , min, count etc don't have a
+    // _uid_, so we need to assign thme one.
     uid = obj.node["_uid_"] === undefined ? uuid() : obj.node["_uid_"];
     id = treeView
       ? // For tree view, the id is the join of ids of this node
         // with all its ancestors. That would make it unique.
         [obj.src.id, uid].filter(val => val).join("-")
       : uid;
-
-    if (isUseless(obj.node)) {
-      continue;
-    }
 
     for (let prop in obj.node) {
       if (!obj.node.hasOwnProperty(prop)) {
@@ -351,11 +389,16 @@ export function processGraph(
       // We can have a key-val pair, another array or an object here (in case of facets)
       let val = obj.node[prop];
       if (Array.isArray(val)) {
-        hasChildNodes = true;
+        // These are child nodes, lets add them to the queue.
         let arr = val, xposition = 1;
         for (let j = 0; j < arr.length; j++) {
+          if (isUseless(arr[j])) {
+            continue;
+          }
+          // X position makes sure that nodes are rendered in the order they are received
+          // in the response.
           arr[j]["x"] = xposition++;
-          nodesStack.push({
+          nodesQueue.push({
             node: arr[j],
             src: {
               pred: prop,
@@ -365,48 +408,27 @@ export function processGraph(
         }
       } else if (typeof val === "object") {
         if (prop === "@facets") {
-          // lets handle @facets between uids here.
-          for (let pred in val) {
-            if (!val.hasOwnProperty(pred)) {
-              continue;
-            }
-
-            // pred could either be _ or other predicates. If its a predicate it could have
-            // multiple k-v pairs.
-            if (pred === "_") {
-              edgeAttributes["facets"] = val["_"];
-            } else {
-              let predFacets = val[pred];
-              for (let f in predFacets) {
-                if (!predFacets.hasOwnProperty(f)) {
-                  continue;
-                }
-
-                properties["facets"][`${pred}[${f}]`] = predFacets[f];
-              }
-            }
-          }
+          extractFacets(val, edgeAttributes, properties);
         }
       } else {
         properties["attrs"][prop] = val;
       }
     }
 
-    if (!hasProperties(obj) && !hasChildNodes) {
-      continue;
-    }
+    let nodeAttrs = properties["attrs"],
+      // aggrTerm can be count, min or max. aggrPred is the actual predicate returned.
+      [aggrTerm, aggrPred] = aggregationPrefix(nodeAttrs),
+      name = aggrTerm !== "" ? aggrTerm : obj.src.pred,
+      props = getGroupProperties(name, predLabel, groups, randomColorList),
+      x = nodeAttrs["x"];
 
-    let nodeAttrs = properties["attrs"];
-    let [aggrTerm, aggrPred] = aggregationPrefix(nodeAttrs);
-    let name = aggrTerm !== "" ? aggrTerm : obj.src.pred;
-
-    let props = getGroupProperties(name, predLabel, groups, randomColorList);
-    let x = nodeAttrs["x"];
     delete nodeAttrs["x"];
 
     let n: Node = {
       id: id,
       x: x,
+      // For aggregation nodes, label is the actual value, for other nodes its
+      // the value of name or name.en.
       label: aggrTerm !== "" ? nodeAttrs[aggrPred] : getNodeLabel(nodeAttrs),
       title: JSON.stringify(properties),
       color: props.color,
@@ -421,6 +443,7 @@ export function processGraph(
       nodes.push(n);
     }
 
+    // Root nodes don't have a source node, so we don't want to create any edge for them.
     if (obj.src.id === "") {
       continue;
     }
@@ -436,18 +459,5 @@ export function processGraph(
     edges.push(e);
   }
 
-  var plotAxis = [];
-  for (let pred in groups) {
-    if (!groups.hasOwnProperty(pred)) {
-      continue;
-    }
-
-    plotAxis.push({
-      label: groups[pred]["label"],
-      pred: pred,
-      color: groups[pred]["color"],
-    });
-  }
-
-  return [nodes, edges, plotAxis, nodesIndex, edgesIndex];
+  return [nodes, edges, createAxisPlot(groups), nodesIndex, edgesIndex];
 }
