@@ -19,35 +19,35 @@ package client
 import (
 	"testing"
 
-	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/stretchr/testify/assert"
 )
 
-func graphValue(x string) *graph.Value {
-	return &graph.Value{&graph.Value_StrVal{x}}
+func graphValue(x string) *graphp.Value {
+	return &graphp.Value{&graphp.Value_StrVal{x}}
 }
 
 func TestCheckNQuad(t *testing.T) {
 	s := graphValue("Alice")
-	if err := checkNQuad(graph.NQuad{
+	if err := checkNQuad(graphp.NQuad{
 		Predicate:   "name",
 		ObjectValue: s,
 	}); err == nil {
 		t.Fatal(err)
 	}
-	if err := checkNQuad(graph.NQuad{
+	if err := checkNQuad(graphp.NQuad{
 		Subject:     "alice",
 		ObjectValue: s,
 	}); err == nil {
 		t.Fatal(err)
 	}
-	if err := checkNQuad(graph.NQuad{
+	if err := checkNQuad(graphp.NQuad{
 		Subject:   "alice",
 		Predicate: "name",
 	}); err == nil {
 		t.Fatal(err)
 	}
-	if err := checkNQuad(graph.NQuad{
+	if err := checkNQuad(graphp.NQuad{
 		Subject:     "alice",
 		Predicate:   "name",
 		ObjectValue: s,
@@ -61,7 +61,7 @@ func TestSetMutation(t *testing.T) {
 	req := Req{}
 
 	s := graphValue("Alice")
-	if err := req.AddMutation(graph.NQuad{
+	if err := req.AddMutation(graphp.NQuad{
 		Subject:     "alice",
 		Predicate:   "name",
 		ObjectValue: s,
@@ -70,7 +70,7 @@ func TestSetMutation(t *testing.T) {
 	}
 
 	s = graphValue("rabbithole")
-	if err := req.AddMutation(graph.NQuad{
+	if err := req.AddMutation(graphp.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
 		ObjectValue: s,
@@ -78,7 +78,7 @@ func TestSetMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := req.AddMutation(graph.NQuad{
+	if err := req.AddMutation(graphp.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
 		ObjectValue: s,

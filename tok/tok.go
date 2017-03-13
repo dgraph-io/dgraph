@@ -45,6 +45,9 @@ type Tokenizer interface {
 
 	// Identifier returns the prefix byte for this token type.
 	Identifier() byte
+
+	// IsSortable returns if the index can be used for sorting.
+	IsSortable() bool
 }
 
 const normalizerName = "nfkc_normalizer"
@@ -163,6 +166,7 @@ func (t GeoTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return tokens, err
 }
 func (t GeoTokenizer) Identifier() byte { return 0x5 }
+func (t GeoTokenizer) IsSortable() bool { return false }
 
 type Int32Tokenizer struct{}
 
@@ -172,6 +176,7 @@ func (t Int32Tokenizer) Tokens(sv types.Val) ([]string, error) {
 	return []string{encodeToken(encodeInt(sv.Value.(int32)), t.Identifier())}, nil
 }
 func (t Int32Tokenizer) Identifier() byte { return 0x6 }
+func (t Int32Tokenizer) IsSortable() bool { return true }
 
 type FloatTokenizer struct{}
 
@@ -181,6 +186,7 @@ func (t FloatTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return []string{encodeToken(encodeInt(int32(sv.Value.(float64))), t.Identifier())}, nil
 }
 func (t FloatTokenizer) Identifier() byte { return 0x7 }
+func (t FloatTokenizer) IsSortable() bool { return true }
 
 type DateTokenizer struct{}
 
@@ -190,6 +196,7 @@ func (t DateTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), t.Identifier())}, nil
 }
 func (t DateTokenizer) Identifier() byte { return 0x3 }
+func (t DateTokenizer) IsSortable() bool { return true }
 
 type DateTimeTokenizer struct{}
 
@@ -199,6 +206,7 @@ func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), t.Identifier())}, nil
 }
 func (t DateTimeTokenizer) Identifier() byte { return 0x4 }
+func (t DateTimeTokenizer) IsSortable() bool { return true }
 
 type TermTokenizer struct{}
 
@@ -208,6 +216,7 @@ func (t TermTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return getBleveTokens(t.Name(), t.Identifier(), sv)
 }
 func (t TermTokenizer) Identifier() byte { return 0x1 }
+func (t TermTokenizer) IsSortable() bool { return false }
 
 type ExactTokenizer struct{}
 
@@ -221,6 +230,7 @@ func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return []string{encodeToken(term, t.Identifier())}, nil
 }
 func (t ExactTokenizer) Identifier() byte { return 0x2 }
+func (t ExactTokenizer) IsSortable() bool { return true }
 
 // Full text tokenizer. Currenlty works only for English language.
 type FullTextTokenizer struct{}
@@ -231,6 +241,7 @@ func (t FullTextTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return getBleveTokens(t.Name(), t.Identifier(), sv)
 }
 func (t FullTextTokenizer) Identifier() byte { return 0x8 }
+func (t FullTextTokenizer) IsSortable() bool { return false }
 
 func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error) {
 	analyzer, err := bleveCache.AnalyzerNamed(name)

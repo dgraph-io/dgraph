@@ -17,12 +17,13 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/protos/facetsp"
+	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos/typesp"
+
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -119,7 +120,7 @@ func TestBackup(t *testing.T) {
 			require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4"}, nq.Subject)
 			// The only value we set was "photon".
 			if nq.ObjectValue != nil {
-				require.Equal(t, &graph.Value{&graph.Value_DefaultVal{"pho\\ton"}},
+				require.Equal(t, &graphp.Value{&graphp.Value_DefaultVal{"pho\\ton"}},
 					nq.ObjectValue)
 				// Test objecttype
 				if nq.Subject == "0x1" {
@@ -172,8 +173,8 @@ func generateBenchValues() []kv {
 	byteInt := make([]byte, 4)
 	binary.LittleEndian.PutUint32(byteInt, 123)
 
-	fac := []*facets.Facet{
-		&facets.Facet{
+	fac := []*facetsp.Facet{
+		&facetsp.Facet{
 			Key:   "facetTest",
 			Value: []byte("testVal"),
 		},
@@ -193,9 +194,9 @@ func generateBenchValues() []kv {
 	benchItems := []kv{
 		kv{
 			prefix: "testString",
-			list: &types.PostingList{
-				Postings: []*types.Posting{&types.Posting{
-					ValType: types.Posting_STRING,
+			list: &typesp.PostingList{
+				Postings: []*typesp.Posting{&typesp.Posting{
+					ValType: typesp.Posting_STRING,
 					Value:   []byte("手機裡的眼淚"),
 					Uid:     uint64(65454),
 					Facets:  fac,
@@ -203,36 +204,36 @@ func generateBenchValues() []kv {
 			},
 		},
 		kv{prefix: "testGeo",
-			list: &types.PostingList{
-				Postings: []*types.Posting{&types.Posting{
-					ValType: types.Posting_GEO,
+			list: &typesp.PostingList{
+				Postings: []*typesp.Posting{&typesp.Posting{
+					ValType: typesp.Posting_GEO,
 					Value:   geoData,
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},
 			}},
 		kv{prefix: "testPassword",
-			list: &types.PostingList{
-				Postings: []*types.Posting{&types.Posting{
-					ValType: types.Posting_PASSWORD,
+			list: &typesp.PostingList{
+				Postings: []*typesp.Posting{&typesp.Posting{
+					ValType: typesp.Posting_PASSWORD,
 					Value:   []byte("test"),
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},
 			}},
 		kv{prefix: "testInt",
-			list: &types.PostingList{
-				Postings: []*types.Posting{&types.Posting{
-					ValType: types.Posting_INT32,
+			list: &typesp.PostingList{
+				Postings: []*typesp.Posting{&typesp.Posting{
+					ValType: typesp.Posting_INT32,
 					Value:   byteInt,
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},
 			}},
 		kv{prefix: "testUid",
-			list: &types.PostingList{
-				Postings: []*types.Posting{&types.Posting{
-					ValType: types.Posting_INT32,
+			list: &typesp.PostingList{
+				Postings: []*typesp.Posting{&typesp.Posting{
+					ValType: typesp.Posting_INT32,
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},

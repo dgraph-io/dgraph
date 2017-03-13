@@ -19,7 +19,7 @@ package query
 import (
 	"time"
 
-	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	geom "github.com/twpayne/go-geom"
@@ -28,40 +28,40 @@ import (
 // This file contains helper functions for converting scalar types to
 // protobuf values.
 
-func toProtoValue(v types.Val) *graph.Value {
+func toProtoValue(v types.Val) *graphp.Value {
 	switch v.Tid {
 	case types.StringID:
-		return &graph.Value{&graph.Value_StrVal{v.Value.(string)}}
+		return &graphp.Value{&graphp.Value_StrVal{v.Value.(string)}}
 
 	case types.Int32ID:
-		return &graph.Value{&graph.Value_IntVal{v.Value.(int32)}}
+		return &graphp.Value{&graphp.Value_IntVal{v.Value.(int32)}}
 
 	case types.FloatID:
-		return &graph.Value{&graph.Value_DoubleVal{v.Value.(float64)}}
+		return &graphp.Value{&graphp.Value_DoubleVal{v.Value.(float64)}}
 
 	case types.BoolID:
-		return &graph.Value{&graph.Value_BoolVal{v.Value.(bool)}}
+		return &graphp.Value{&graphp.Value_BoolVal{v.Value.(bool)}}
 
 	case types.DateID:
 		val := v.Value.(time.Time)
-		return &graph.Value{&graph.Value_StrVal{val.Format(time.RFC3339)}}
+		return &graphp.Value{&graphp.Value_StrVal{val.Format(time.RFC3339)}}
 
 	case types.DateTimeID:
 		val := v.Value.(time.Time)
-		return &graph.Value{&graph.Value_StrVal{val.Format(time.RFC3339)}}
+		return &graphp.Value{&graphp.Value_StrVal{val.Format(time.RFC3339)}}
 
 	case types.GeoID:
 		b := types.ValueForType(types.BinaryID)
 		src := types.ValueForType(types.GeoID)
 		src.Value = v.Value.(geom.T)
 		x.Check(types.Marshal(src, &b))
-		return &graph.Value{&graph.Value_GeoVal{b.Value.([]byte)}}
+		return &graphp.Value{&graphp.Value_GeoVal{b.Value.([]byte)}}
 
 	case types.PasswordID:
-		return &graph.Value{&graph.Value_PasswordVal{v.Value.(string)}}
+		return &graphp.Value{&graphp.Value_PasswordVal{v.Value.(string)}}
 
 	case types.DefaultID:
-		return &graph.Value{&graph.Value_DefaultVal{v.Value.(string)}}
+		return &graphp.Value{&graphp.Value_DefaultVal{v.Value.(string)}}
 
 	default:
 		// A type that isn't supported in the proto

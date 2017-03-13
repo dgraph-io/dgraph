@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -51,7 +52,7 @@ func ParseBytes(schema []byte) (rerr error) {
 }
 
 func parseScalarPair(it *lex.ItemIterator, predicate string,
-	allowIndex bool) (*types.Schema, error) {
+	allowIndex bool) (*typesp.Schema, error) {
 	it.Next()
 	if next := it.Item(); next.Typ != itemColon {
 		return nil, x.Errorf("Missing colon")
@@ -85,7 +86,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 				if t != types.UidID {
 					return nil, x.Errorf("Cannot reverse for non-UID type")
 				}
-				return &types.Schema{ValueType: uint32(t), Reverse: true}, nil
+				return &typesp.Schema{ValueType: uint32(t), Reverse: true}, nil
 			case "index":
 				if !allowIndex {
 					return nil, x.Errorf("@index not allowed")
@@ -93,7 +94,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 				if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
 					return nil, err
 				} else {
-					return &types.Schema{ValueType: uint32(t), Tokenizer: tokenizer}, nil
+					return &typesp.Schema{ValueType: uint32(t), Tokenizer: tokenizer}, nil
 				}
 			default:
 				return nil, x.Errorf("Invalid index specification")
@@ -102,7 +103,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 		it.Prev()
 		break
 	}
-	return &types.Schema{ValueType: uint32(t)}, nil
+	return &typesp.Schema{ValueType: uint32(t)}, nil
 }
 
 // processScalars parses schema definitions line by line

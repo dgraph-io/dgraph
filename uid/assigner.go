@@ -26,7 +26,7 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -99,17 +99,17 @@ func allocateUniqueUid(group uint32) uint64 {
 }
 
 // AssignNew assigns N unique uids.
-func AssignNew(N int, group uint32) *task.Mutations {
-	set := make([]*task.DirectedEdge, N)
+func AssignNew(N int, group uint32) *taskp.Mutations {
+	set := make([]*taskp.DirectedEdge, N)
 	for i := 0; i < N; i++ {
 		uid := allocateUniqueUid(group)
-		set[i] = &task.DirectedEdge{
+		set[i] = &taskp.DirectedEdge{
 			Entity: uid,
 			Attr:   "_uid_",
 			Value:  []byte("_"), // not txid
 			Label:  "_assigner_",
-			Op:     task.DirectedEdge_SET,
+			Op:     taskp.DirectedEdge_SET,
 		}
 	}
-	return &task.Mutations{Edges: set}
+	return &taskp.Mutations{Edges: set}
 }
