@@ -1,5 +1,6 @@
 import randomColor from "randomcolor";
 import uuid from "uuid";
+import _ from "lodash/object";
 
 export function checkStatus(response) {
   if (response.status >= 200 && response.status < 300) {
@@ -113,9 +114,7 @@ export function isShortestPath(query) {
 }
 
 export function showTreeView(query) {
-  return query.indexOf("orderasc") !== -1 ||
-    query.indexOf("orderdesc") !== -1 ||
-    isShortestPath(query);
+  return query.indexOf("orderasc") !== -1 || query.indexOf("orderdesc") !== -1;
 }
 
 export function isNotEmpty(response) {
@@ -250,6 +249,27 @@ function extractFacets(val, edgeAttributes, properties) {
   }
 }
 
+function findAndMerge(nodes, properties) {
+  let uid = properties["attrs"]["_uid_"],
+    idx = nodes.findIndex(function(node) {
+      return node.id === uid;
+    });
+
+  if (idx === -1) {
+    console.warn("Expected to find node with uid: ", uid);
+    return;
+  }
+
+  let node = nodes[idx], props = JSON.parse(node.title);
+  _.merge(props, properties);
+  node.title = JSON.stringify(props);
+
+  if (node.label === "") {
+    node.label = getNodeLabel(properties["attrs"]);
+  }
+  nodes[idx] = node;
+}
+
 export function processGraph(
   response: Object,
   treeView: boolean,
@@ -277,7 +297,7 @@ export function processGraph(
     // That we can only do one traversal.
     nodesIndex,
     edgesIndex,
-    level = 0,
+    // level = 0,
     // Picked up from http://graphicdesign.stackexchange.com/questions/3682/where-can-i-find-a-large-palette-set-of-contrasting-colors-for-coloring-many-d
     randomColorList = [
       "#47c0ee",
@@ -308,9 +328,9 @@ export function processGraph(
     if (root !== "server_latency" && root !== "uids") {
       let block = response[root];
       for (let i = 0; i < block.length; i++) {
-        if (isUseless(block[i])) {
-          continue;
-        }
+        // if (isUseless(block[i])) {
+        //   continue;
+        // }
 
         let rn: ResponseNode = {
           node: block[i],
@@ -345,7 +365,7 @@ export function processGraph(
     // Check if this is an empty node.
     if (Object.keys(obj.node).length === 0 && obj.src.pred === "empty") {
       // Only nodes and edges upto nodesIndex, edgesIndex are rendered on first load.
-      if (level === 0 || (level === 1 && nodes.length < 100)) {
+      if (nodesIndex === undefined && nodes.length > 100) {
         // Nodes upto level 1 are rendered only if the total number is less than 100. Else only
         // nodes at level 0 are rendered.
         nodesIndex = nodes.length;
@@ -358,7 +378,7 @@ export function processGraph(
       }
 
       nodesQueue.push(emptyNode);
-      level++;
+      // level++;
       continue;
     }
 
@@ -392,9 +412,10 @@ export function processGraph(
         // These are child nodes, lets add them to the queue.
         let arr = val, xposition = 1;
         for (let j = 0; j < arr.length; j++) {
-          if (isUseless(arr[j])) {
-            continue;
-          }
+          // if (isUseless(arr[j])) {
+          //   continue;
+          // }
+
           // X position makes sure that nodes are rendered in the order they are received
           // in the response.
           arr[j]["x"] = xposition++;
@@ -428,19 +449,23 @@ export function processGraph(
       id: id,
       x: x,
       // For aggregation nodes, label is the actual value, for other nodes its
-      // the value of name or name.en.
+      // the value of name.
       label: aggrTerm !== "" ? nodeAttrs[aggrPred] : getNodeLabel(nodeAttrs),
       title: JSON.stringify(properties),
       color: props.color,
       group: obj.src.pred
     };
 
-    if (!uidMap[id]) {
+    if (uidMap[id] === undefined) {
       // For tree view, we can't push duplicates because two query blocks might have the
       // same root node and child elements won't really have the same uids as their uid is a
       // combination of all their ancestor uids.
       uidMap[id] = true;
       nodes.push(n);
+    } else {
+      // We have already put this node. So we need to find the node in nodes,
+      // merge new properties and put it back.
+      findAndMerge(nodes, properties);
     }
 
     // Root nodes don't have a source node, so we don't want to create any edge for them.

@@ -19,11 +19,12 @@ const ResponseInfo = (
         numNodes,
         numEdges,
         numNodesRendered,
+        numEdgesRendered,
         treeView,
         currentNode,
         renderGraph,
-        expand,
-    },
+        expand
+    }
 ) => (
     <div className="ResponseInfo">
         <Properties currentNode={currentNode} />
@@ -41,7 +42,11 @@ const ResponseInfo = (
                 <Button
                     className="ResponseInfo-button"
                     bsStyle="primary"
-                    disabled={numNodes === 0 || numNodesRendered === numNodes}
+                    disabled={
+                        numNodes === 0 ||
+                            (numNodesRendered === numNodes &&
+                                numEdgesRendered === numEdges)
+                    }
                     onClick={() => expand()}
                 >
                     {partial ? "Expand" : "Collapse"}
