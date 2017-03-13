@@ -66,9 +66,18 @@ func runMutations(ctx context.Context, edges []*taskp.DirectedEdge) error {
 }
 
 func updateSchema(attr string, typ types.TypeID, raftIndex uint64, group uint32) {
+	// Don't overwrite schema blindly, acl's might have been set even though
+	// type is not present
+	s, ok := schema.State().Get(attr)
+	if ok {
+		s.ValueType = uint32(typ)
+	} else {
+		s = &typesp.Schema{ValueType: uint32(typ)}
+	}
+
 	ce := schema.SyncEntry{
 		Attr:   attr,
-		Schema: typesp.Schema{ValueType: uint32(typ)},
+		Schema: s,
 		Index:  raftIndex,
 		Water:  posting.SyncMarkFor(group),
 	}

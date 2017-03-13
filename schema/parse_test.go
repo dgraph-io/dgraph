@@ -116,6 +116,28 @@ func TestSchemaIndexCustom(t *testing.T) {
 	require.Equal(t, 4, len(State().IndexedFields(1)))
 }
 
+func TestParse(t *testing.T) {
+	reset()
+	schemas, err := Parse("age:int @index name:string")
+	require.NoError(t, err)
+	require.Equal(t, "int", schemas[0].Tokenizer[0])
+	require.Equal(t, 2, len(schemas))
+}
+
+func TestParse2(t *testing.T) {
+	reset()
+	schemas, err := Parse("")
+	require.NoError(t, err)
+	require.Nil(t, schemas)
+}
+
+func TestParse3_Error(t *testing.T) {
+	reset()
+	schemas, err := Parse("age:uid @index")
+	require.Error(t, err)
+	require.Nil(t, schemas)
+}
+
 var ps *store.Store
 
 func TestMain(m *testing.M) {

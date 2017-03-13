@@ -28,7 +28,7 @@ import (
 )
 
 // Parse parses the schema file.
-func parse(file string, gid uint32) (rerr error) {
+func parseFile(file string, gid uint32) (rerr error) {
 	b, err := ioutil.ReadFile(file)
 	if err != nil {
 		return x.Errorf("Error reading file: %v", err)
@@ -184,4 +184,29 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		}
 	}
 	return tokenizers, nil
+}
+
+// Parse parses a schema string and returns the schema representation for it.
+func Parse(s string) ([]*typesp.Schema, error) {
+	var schemas []*typesp.Schema
+	l := lex.NewLexer(s).Run(lexText)
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case lex.ItemEOF:
+			return schemas, nil
+		case itemText:
+			if schema, err := parseScalarPair(it, item.Val, true); err != nil {
+				return nil, err
+			} else {
+				schemas = append(schemas, schema)
+			}
+		case lex.ItemError:
+			return nil, x.Errorf(item.Val)
+		default:
+			return nil, x.Errorf("Unexpected token: %v", item)
+		}
+	}
+	return nil, x.Errorf("Shouldn't reach here")
 }

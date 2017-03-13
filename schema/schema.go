@@ -100,7 +100,7 @@ func (s *stateShard) update(se *SyncEntry) {
 	x.AssertTruef(!ok, "Schema doesn't exist for attribute %s", se.Attr)
 
 	// Creating a copy to avoid race condition during marshalling
-	schema := se.Schema
+	schema := *se.Schema
 	s.predicate[se.Attr] = &schema
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- se
@@ -169,6 +169,23 @@ func (s *stateShard) set(pred string, schema *typesp.Schema) {
 	defer s.Unlock()
 	s.predicate[pred] = schema
 	s.elog.Printf("Setting schema for attr %s: %v\n", pred, schema.ValueType)
+}
+
+// Get gets the schema for given predicate
+func (s *state) Get(pred string) (*typesp.Schema, bool) {
+	return s.get(group.BelongsTo(pred)).get(pred)
+}
+
+func (s *stateShard) get(pred string) (*typesp.Schema, bool) {
+	s.Lock()
+	defer s.Unlock()
+	schema, has := s.predicate[pred]
+	if !has {
+		return nil, false
+	}
+	// create a copy
+	sc := *schema
+	return &sc, true
 }
 
 // TypeOf returns the schema type of predicate
@@ -272,7 +289,7 @@ func Init(ps *store.Store) {
 func ReloadData(file string, group uint32) error {
 	reset()
 	if len(file) > 0 {
-		if err := parse(file, group); err != nil {
+		if err := parseFile(file, group); err != nil {
 			return err
 		}
 	}
@@ -332,7 +349,7 @@ func reset() {
 // SyncEntry stores the schema mutation information
 type SyncEntry struct {
 	Attr   string
-	Schema typesp.Schema
+	Schema *typesp.Schema
 	Water  *x.WaterMark
 	Index  uint64
 }

@@ -44,6 +44,14 @@ message Schema {
 message Mutation {
     repeated NQuad set = 1;
     repeated NQuad del = 2;
+    repeated UpdateSchema schema = 3;
+}
+
+message UpdateSchema {
+    uint32 value_type = 1;
+    bool index = 2;
+    repeated string tokenizer = 3; 
+    bool reverse = 4;
 }
 
 message Request {
