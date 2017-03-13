@@ -1,6 +1,4 @@
-scalar age:int @index
+age:int @index
 
-scalar (
-  name: string 
-  address: string @index
-)
+name: string 
+address: string @index

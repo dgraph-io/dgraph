@@ -1,12 +1,6 @@
-scalar (
-	date:date @index
-	age: int @index
-	health: float @index
-	name: string @index
-	loc: geo @index
-)
+date:date @index
+age: int @index
+health: float @index
+name: string @index
+loc: geo @index
 
-type person {
-	name: string
-	age: int 
-} 

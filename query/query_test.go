@@ -3844,22 +3844,18 @@ func TestLangManyFallback(t *testing.T) {
 }
 
 const schemaStr = `
-scalar name:string @index(term, exact)
-scalar alias:string @index(exact, term)
-scalar dob:date @index
-scalar film.film.initial_release_date:date @index
-scalar loc:geo @index
-scalar genre:uid @reverse
-scalar (
-	survival_rate : float
-	alive         : bool
-	age           : int
-        shadow_deep   : int
-)
-scalar (
-  friend:uid @reverse
-)
-scalar geometry:geo @index
+name:string @index(term, exact)
+alias:string @index(exact, term)
+dob:date @index
+film.film.initial_release_date:date @index
+loc:geo @index
+genre:uid @reverse
+survival_rate : float
+alive         : bool
+age           : int
+shadow_deep   : int
+friend:uid @reverse
+geometry:geo @index
 `
 
 func TestMain(m *testing.M) {

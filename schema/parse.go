@@ -45,22 +45,8 @@ func ParseBytes(schema []byte) (rerr error) {
 	l := lex.NewLexer(s).Run(lexText)
 
 	it := l.NewIterator()
-	for it.Next() {
-		item := it.Item()
-		if item.Typ == lex.ItemEOF {
-			break
-		}
-		if item.Typ != itemText {
-			return x.Errorf("Expected text here but got: [%v] %v %v", item.Val, item.Typ, lex.EOF)
-		}
-		switch item.Val {
-		case "scalar":
-			if rerr = processScalar(it); rerr != nil {
-				return rerr
-			}
-		default:
-			return x.Errorf("Expected either 'scalar' or 'type' but got: %v", item)
-		}
+	if rerr = processScalars(it); rerr != nil {
+		return rerr
 	}
 	return nil
 }
@@ -120,12 +106,12 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 	return &typesp.Schema{ValueType: uint32(t)}, nil
 }
 
-// processScalarBlock starts work on the inside of a scalar block.
-func processScalarBlock(it *lex.ItemIterator) error {
+// processScalars parses schema definitions line by line
+func processScalars(it *lex.ItemIterator) error {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
-		case itemRightRound:
+		case lex.ItemEOF:
 			return nil
 		case itemText:
 			if err := processScalarPair(it, item.Val, true); err != nil {
@@ -195,23 +181,4 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		}
 	}
 	return tokenizers, nil
-}
-
-// processScalar works on either a single scalar pair or a scalar block.
-// A scalar block looks like "scalar ( .... )".
-func processScalar(it *lex.ItemIterator) error {
-	for it.Next() {
-		item := it.Item()
-		switch item.Typ {
-		case itemLeftRound:
-			return processScalarBlock(it)
-		case itemText:
-			return processScalarPair(it, item.Val, true)
-		case lex.ItemError:
-			return x.Errorf(item.Val)
-		default:
-			return x.Errorf("Unexpected item: %v", item)
-		}
-	}
-	return nil
 }
