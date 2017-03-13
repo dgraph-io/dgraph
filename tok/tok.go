@@ -20,15 +20,6 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/blevesearch/bleve/analysis/analyzer/custom"
-	"github.com/blevesearch/bleve/analysis/token/lowercase"
-	"github.com/blevesearch/bleve/analysis/token/porter"
-	"github.com/blevesearch/bleve/analysis/token/unicodenorm"
-	"github.com/blevesearch/bleve/analysis/tokenizer/unicode"
-	"github.com/blevesearch/blevex/stemmer"
-	"github.com/tebeka/snowball"
-
-	"github.com/blevesearch/bleve/registry"
 	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/types"
@@ -53,12 +44,9 @@ type Tokenizer interface {
 	IsSortable() bool
 }
 
-const normalizerName = "nfkc_normalizer"
-
 var (
 	tokenizers map[string]Tokenizer
 	defaults   map[types.TypeID]Tokenizer
-	bleveCache *registry.Cache
 )
 
 func init() {
@@ -81,81 +69,12 @@ func init() {
 	for _, tok := range tokenizers {
 		tokID := tok.Identifier()
 		_, ok := usedIds[tokID]
-		x.AssertTruef(!ok, "Same ID used by multiple tokenizers")
+		x.AssertTruef(!ok, "Same ID used by multiple tokenizers: %#x", tokID)
 		usedIds[tokID] = struct{}{}
 	}
-	// Prepare Bleve cache
-	initBleve()
-}
 
-func initBleve() {
-	bleveCache = registry.NewCache()
-
-	// Create normalizer using Normalization Form KC (NFKC) - Compatibility Decomposition, followed
-	// by Canonical Composition. See: http://unicode.org/reports/tr15/#Norm_Forms
-	_, err := bleveCache.DefineTokenFilter(normalizerName, map[string]interface{}{
-		"type": unicodenorm.Name,
-		"form": "nfkc",
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	// basic analyzer - splits on word boundaries, lowercase and normalize tokens
-	_, err = bleveCache.DefineAnalyzer("term", map[string]interface{}{
-		"type":          custom.Name,
-		"tokenizer":     unicode.Name,
-		"token_filters": []string{lowercase.Name, normalizerName},
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	// List of supported languages (as defined in https://github.com/tebeka/snowball):
-	// danish, dutch, english, finnish, french, german, hungarian, italian, norwegian, porter,
-	// portuguese, romanian, russian, spanish, swedish, turkish
-	for _, lang := range snowball.LangList() {
-		if lang == "porter" {
-			continue
-		}
-		ln := getLangCode(lang)
-		stemmerName := stemmer.Name + ln
-		tokenizer := NewFullTextTokenizer(ln)
-		analyzerName := tokenizer.Name()
-		_, err = bleveCache.DefineTokenFilter(stemmerName, map[string]interface{}{
-			"type": stemmer.Name,
-			"lang": lang,
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		// TODO(tzdybal) - stop-words filter
-
-		// full text search analyzer - does language-specific stemming.
-		_, err = bleveCache.DefineAnalyzer(analyzerName, map[string]interface{}{
-			"type":          custom.Name,
-			"tokenizer":     unicode.Name,
-			"token_filters": []string{lowercase.Name, normalizerName, stemmerName},
-		})
-		if err != nil {
-			panic(err)
-		}
-
-		RegisterTokenizer(*tokenizer)
-	}
-
-	// Default full text tokenizer, with Porter stemmer (it works with English only).
-	_, err = bleveCache.DefineAnalyzer("fulltext", map[string]interface{}{
-		"type":          custom.Name,
-		"tokenizer":     unicode.Name,
-		"token_filters": []string{lowercase.Name, normalizerName, porter.Name},
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	RegisterTokenizer(FullTextTokenizer{})
+	// all full-text tokenizers share the same Identifier, so we skip the test
+	initFullTextTokenizers()
 }
 
 // GetTokenizer returns tokenizer given unique name.
@@ -275,7 +194,7 @@ type FullTextTokenizer struct {
 }
 
 func NewFullTextTokenizer(lang string) *FullTextTokenizer { return &FullTextTokenizer{Lang: lang} }
-func (t FullTextTokenizer) Name() string                  { return "fulltext" + t.Lang }
+func (t FullTextTokenizer) Name() string                  { return ftsTokenizerName(t.Lang) }
 func (t FullTextTokenizer) Type() types.TypeID            { return types.StringID }
 func (t FullTextTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return getBleveTokens(t.Name(), t.Identifier(), sv)
@@ -315,102 +234,5 @@ func encodeToken(tok string, typ byte) string {
 func EncodeGeoTokens(tokens []string) {
 	for i := 0; i < len(tokens); i++ {
 		tokens[i] = encodeToken(tokens[i], 0x4)
-	}
-}
-
-func ftsTokenizerName(lang string) string {
-	return "fulltext" + lang
-}
-
-func getLangCode(lang string) string {
-	// List based on https://godoc.org/golang.org/x/text/language#Tag
-	// It contains more languages than supported by Bleve, to enable seamless addition of new langs.
-	mapping := map[string]string{
-		"afrikaans":            "af",
-		"amharic":              "am",
-		"arabic":               "ar",
-		"modernstandardarabic": "ar-001",
-		"azerbaijani":          "az",
-		"bulgarian":            "bg",
-		"bengali":              "bn",
-		"catalan":              "ca",
-		"czech":                "cs",
-		"danish":               "da",
-		"german":               "de",
-		"greek":                "el",
-		"english":              "en",
-		"americanenglish":      "en-us",
-		"britishenglish":       "en-gb",
-		"spanish":              "es",
-		"europeanspanish":      "es-es",
-		"latinamericanspanish": "es-419",
-		"estonian":             "et",
-		"persian":              "fa",
-		"finnish":              "fi",
-		"filipino":             "fil",
-		"french":               "fr",
-		"canadianfrench":       "fr-ca",
-		"gujarati":             "gu",
-		"hebrew":               "he",
-		"hindi":                "hi",
-		"croatian":             "hr",
-		"hungarian":            "hu",
-		"armenian":             "hy",
-		"indonesian":           "id",
-		"icelandic":            "is",
-		"italian":              "it",
-		"japanese":             "ja",
-		"georgian":             "ka",
-		"kazakh":               "kk",
-		"khmer":                "km",
-		"kannada":              "kn",
-		"korean":               "ko",
-		"kirghiz":              "ky",
-		"lao":                  "lo",
-		"lithuanian":           "lt",
-		"latvian":              "lv",
-		"macedonian":           "mk",
-		"malayalam":            "ml",
-		"mongolian":            "mn",
-		"marathi":              "mr",
-		"malay":                "ms",
-		"burmese":              "my",
-		"nepali":               "ne",
-		"dutch":                "nl",
-		"norwegian":            "no",
-		"punjabi":              "pa",
-		"polish":               "pl",
-		"portuguese":           "pt",
-		"brazilianportuguese":  "pt-br",
-		"europeanportuguese":   "pt-pt",
-		"romanian":             "ro",
-		"russian":              "ru",
-		"sinhala":              "si",
-		"slovak":               "sk",
-		"slovenian":            "sl",
-		"albanian":             "sq",
-		"serbian":              "sr",
-		"serbianlatin":         "sr-latn",
-		"swedish":              "sv",
-		"swahili":              "sw",
-		"tamil":                "ta",
-		"telugu":               "te",
-		"thai":                 "th",
-		"turkish":              "tr",
-		"ukrainian":            "uk",
-		"urdu":                 "ur",
-		"uzbek":                "uz",
-		"vietnamese":           "vi",
-		"chinese":              "zh",
-		"simplifiedchinese":    "zh-hans",
-		"traditionalchinese":   "zh-hant",
-		"zulu":                 "zu",
-	}
-
-	code, ok := mapping[lang]
-	if ok {
-		return code
-	} else {
-		panic("Unsupported language: " + lang)
 	}
 }
