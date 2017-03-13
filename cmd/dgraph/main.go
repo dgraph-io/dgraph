@@ -426,11 +426,24 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var schemaNode []*graphp.SchemaNode
+	if res.Schema != nil {
+		if schemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
+			x.SetStatus(w, x.Error, err.Error())
+			return
+		}
+	}
+
 	if len(res.Query) == 0 {
 		mp := map[string]interface{}{
 			"code":    x.Success,
 			"message": "Done",
 			"uids":    allocIdsStr,
+		}
+		// Either Schema or query can be specified
+		if res.Schema != nil {
+			mp["schema"] = schemaNode
 		}
 		if js, err := json.Marshal(mp); err == nil {
 			w.Write(js)
@@ -600,6 +613,15 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.AssignedUids = allocIds
 
+	if res.Schema != nil {
+		if schemaNodes, err := worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
+			return resp, err
+		} else {
+			resp.Schema = schemaNodes
+		}
+	}
+
 	sgl, err := query.ProcessQuery(ctx, res, &l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
@@ -630,11 +652,26 @@ type keywords struct {
 	Keywords []keyword `json:"keywords"`
 }
 
+func predicates(w http.ResponseWriter) []string {
+	var preds []string
+	ctx := context.Background()
+	schema, err := worker.GetSchemaOverNetwork(ctx, &graphp.Schema{})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return preds
+	}
+	for _, s := range schema {
+		preds = append(preds, s.Predicate)
+	}
+	return preds
+}
+
 // Used to return a list of keywords, so that UI can show them for autocompletion.
 func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
 	// TODO: Remove this code and replace this
-	preds := schema.State().Predicates(1)
+	preds := predicates(w)
 	kw := make([]keyword, 0, len(preds))
 	for _, p := range preds {
 		kw = append(kw, keyword{

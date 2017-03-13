@@ -248,6 +248,23 @@ func (s *stateShard) tokenizer(pred string) []tok.Tokenizer {
 	return tokenizers
 }
 
+// Tokenizer returns the tokenizer names for given predicate
+func (s *state) TokenizerNames(pred string) []string {
+	return s.get(group.BelongsTo(pred)).tokenizerNames(pred)
+}
+
+func (s *stateShard) tokenizerNames(pred string) []string {
+	s.RLock()
+	defer s.RUnlock()
+	schema, ok := s.predicate[pred]
+	x.AssertTruef(ok, "schema state not found for %s", pred)
+	var tokenizers []string
+	for _, it := range schema.Tokenizer {
+		tokenizers = append(tokenizers, tok.GetTokenizer(it).Name())
+	}
+	return tokenizers
+}
+
 // IsReversed returns whether the predicate has reverse edge or not
 func (s *state) IsReversed(pred string) bool {
 	return s.get(group.BelongsTo(pred)).isReversed(pred)
