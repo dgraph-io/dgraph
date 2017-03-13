@@ -21,42 +21,42 @@ scalar name:string @index
 `
 
 func TestIndexingInt(t *testing.T) {
-	schema.ParseBytes([]byte("scalar age:int @index"))
+	schema.ParseBytes([]byte("scalar age:int @index"), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingIntNegative(t *testing.T) {
-	schema.ParseBytes([]byte("scalar age:int @index"))
+	schema.ParseBytes([]byte("scalar age:int @index"), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("-10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x0, 0xff, 0xff, 0xff, 0xf6}, []byte(a[0]))
 }
 
 func TestIndexingFloat(t *testing.T) {
-	schema.ParseBytes([]byte("scalar age:float @index"))
+	schema.ParseBytes([]byte("scalar age:float @index"), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("10.43")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x7, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingDate(t *testing.T) {
-	schema.ParseBytes([]byte("scalar age:date @index"))
+	schema.ParseBytes([]byte("scalar age:date @index"), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("0010-01-01")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x3, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingTime(t *testing.T) {
-	schema.ParseBytes([]byte("scalar age:datetime @index"))
+	schema.ParseBytes([]byte("scalar age:datetime @index"), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("0010-01-01T01:01:01.000000001")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x4, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexing(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index"))
+	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	a, err := IndexTokens("name", types.Val{types.StringID, []byte("abc")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x01abc", string(a[0]))
@@ -78,7 +78,7 @@ func TestTokensTable(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	schema.ParseBytes([]byte(schemaStr))
+	schema.ParseBytes([]byte(schemaStr), 1)
 
 	ps, err := store.NewStore(dir)
 	defer ps.Close()
@@ -160,7 +160,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 
-	schema.ParseBytes([]byte(schemaStrAlt))
+	schema.ParseBytes([]byte(schemaStrAlt), 1)
 	Init(ps)
 
 	addEdgeToValue(t, ps, "name", 1, "Michonne")

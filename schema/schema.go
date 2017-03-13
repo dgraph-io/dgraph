@@ -271,7 +271,7 @@ func Init(ps *store.Store) {
 func ReloadData(file string, group uint32) error {
 	reset()
 	if len(file) > 0 {
-		if err := parse(file); err != nil {
+		if err := parse(file, group); err != nil {
 			return err
 		}
 	}

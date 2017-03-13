@@ -3783,15 +3783,17 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	defer ps.Close()
 
-	schema.ParseBytes([]byte(schemaStr))
+	group.ParseGroupConfig("")
+	schema.Init(ps)
 	posting.Init(ps)
 	worker.Init(ps)
 
-	group.ParseGroupConfig("")
 	dir2, err := ioutil.TempDir("", "wal_")
 	x.Check(err)
 
 	worker.StartRaftNodes(dir2)
+	// Load schema after nodes have started
+	schema.ParseBytes([]byte(schemaStr), 1)
 	defer os.RemoveAll(dir2)
 
 	os.Exit(m.Run())

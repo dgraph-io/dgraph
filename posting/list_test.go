@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -790,6 +791,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	x.Init()
+	group.ParseGroupConfig("")
 	os.Exit(m.Run())
 }
 

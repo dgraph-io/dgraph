@@ -54,8 +54,8 @@ func populateGraphBackup(t *testing.T) {
 }
 
 func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
-	schema.ParseBytes([]byte(schemaStr))
 	group.ParseGroupConfig("groups.conf")
+	schema.ParseBytes([]byte(schemaStr), 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)

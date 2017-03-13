@@ -786,13 +786,13 @@ func main() {
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
+	x.Check(group.ParseGroupConfig(*gconf))
 	schema.Init(ps)
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
 	posting.Init(ps)
 	worker.Init(ps)
-	x.Check(group.ParseGroupConfig(*gconf))
 
 	// setup shutdown os signal handler
 	sdCh := make(chan os.Signal, 1)

@@ -73,6 +73,7 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 
 	posting.Init(ps)
 	group.ParseGroupConfig("groups.conf")
+	schema.Init(ps)
 	worker.StartRaftNodes(dir2)
 
 	return dir1, dir2, ps, nil
@@ -265,14 +266,6 @@ func TestMain(m *testing.M) {
 	defer closeAll(dir1, dir2)
 	time.Sleep(5 * time.Second) // Wait for ME to become leader.
 
-	dir, err := ioutil.TempDir("", "storetest_")
-	x.Check(err)
-	ps, err := store.NewStore(dir)
-	x.Check(err)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-
-	schema.Init(ps, "")
 	// Parse GQL into internal query representation.
 	os.Exit(m.Run())
 }
