@@ -133,7 +133,7 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		}
 	}
 	if tok == nil {
-		return nil, x.Errorf("Attribute:%s doesnot have proper index",
+		return nil, x.Errorf("Attribute:%s does not have proper index",
 			attr)
 	}
 
