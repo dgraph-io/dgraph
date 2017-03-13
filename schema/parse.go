@@ -105,7 +105,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 	return &types.Schema{ValueType: uint32(t)}, nil
 }
 
-// processScalars parses a list of schemapairs
+// processScalars parses schema definitions line by line
 func processScalars(it *lex.ItemIterator) error {
 	for it.Next() {
 		item := it.Item()
