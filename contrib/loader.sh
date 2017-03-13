@@ -31,10 +31,9 @@ export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 # schema file
 echo -e "
-scalar (
 	name: string @index
 	initial_release_date: date @index
-)" > $BUILD/schema.txt
+" > $BUILD/schema.txt
 
 pushd cmd/dgraph &> /dev/null
 go build .

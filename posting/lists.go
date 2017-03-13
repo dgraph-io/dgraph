@@ -35,8 +35,8 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -69,7 +69,7 @@ type syncMarks struct {
 func init() {
 	x.AddInit(func() {
 		h := md5.New()
-		pl := types.PostingList{
+		pl := typesp.PostingList{
 			Checksum: h.Sum(nil),
 		}
 		var err error

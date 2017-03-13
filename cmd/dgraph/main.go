@@ -48,12 +48,12 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/soheilhy/cmux"
@@ -88,7 +88,7 @@ var (
 )
 
 type mutationResult struct {
-	edges   []*task.DirectedEdge
+	edges   []*taskp.DirectedEdge
 	newUids map[string]uint64
 }
 
@@ -119,8 +119,8 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func convertToNQuad(ctx context.Context, mutation string) ([]*graph.NQuad, error) {
-	var nquads []*graph.NQuad
+func convertToNQuad(ctx context.Context, mutation string) ([]*graphp.NQuad, error) {
+	var nquads []*graphp.NQuad
 	r := strings.NewReader(mutation)
 	reader := bufio.NewReader(r)
 	x.Trace(ctx, "Converting to NQuad")
@@ -151,8 +151,8 @@ func convertToNQuad(ctx context.Context, mutation string) ([]*graph.NQuad, error
 	return nquads, nil
 }
 
-func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult, error) {
-	var edges []*task.DirectedEdge
+func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult, error) {
+	var edges []*taskp.DirectedEdge
 	var mr mutationResult
 
 	newUids := make(map[string]uint64)
@@ -183,7 +183,7 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult,
 		}
 	}
 
-	// Wrapper for a pointer to graph.Nquad
+	// Wrapper for a pointer to graphp.Nquad
 	var wnq rdf.NQuad
 	for _, nq := range nquads {
 		// Get edges from nquad using newUids.
@@ -211,7 +211,7 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult,
 	return mr, nil
 }
 
-func applyMutations(ctx context.Context, m *task.Mutations) error {
+func applyMutations(ctx context.Context, m *taskp.Mutations) error {
 	err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
@@ -220,9 +220,9 @@ func applyMutations(ctx context.Context, m *task.Mutations) error {
 	return nil
 }
 
-func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad) (map[string]uint64, error) {
+func convertAndApply(ctx context.Context, set []*graphp.NQuad, del []*graphp.NQuad) (map[string]uint64, error) {
 	var allocIds map[string]uint64
-	var m task.Mutations
+	var m taskp.Mutations
 	var err error
 	var mr mutationResult
 
@@ -235,7 +235,7 @@ func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad
 	}
 	m.Edges, allocIds = mr.edges, mr.newUids
 	for i := range m.Edges {
-		m.Edges[i].Op = task.DirectedEdge_SET
+		m.Edges[i].Op = taskp.DirectedEdge_SET
 	}
 
 	if mr, err = convertToEdges(ctx, del); err != nil {
@@ -243,7 +243,7 @@ func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad
 	}
 	for i := range mr.edges {
 		edge := mr.edges[i]
-		edge.Op = task.DirectedEdge_DEL
+		edge.Op = taskp.DirectedEdge_DEL
 		m.Edges = append(m.Edges, edge)
 	}
 
@@ -255,7 +255,7 @@ func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad
 
 // This function is used to run mutations for the requests from different
 // language clients.
-func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, error) {
+func runMutations(ctx context.Context, mu *graphp.Mutation) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var err error
 
@@ -268,8 +268,8 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 // This function is used to run mutations for the requests received from the
 // http client.
 func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
-	var set []*graph.NQuad
-	var del []*graph.NQuad
+	var set []*graphp.NQuad
+	var del []*graphp.NQuad
 	var allocIds map[string]uint64
 	var err error
 
@@ -554,13 +554,13 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// server is used to implement graph.DgraphServer
+// server is used to implement graphp.DgraphServer
 type grpcServer struct{}
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *grpcServer) Run(ctx context.Context,
-	req *graph.Request) (resp *graph.Response, err error) {
+	req *graphp.Request) (resp *graphp.Response, err error) {
 	var allocIds map[string]uint64
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
@@ -568,7 +568,7 @@ func (s *grpcServer) Run(ctx context.Context,
 		ctx = trace.NewContext(ctx, tr)
 	}
 
-	resp = new(graph.Response)
+	resp = new(graphp.Response)
 	if len(req.Query) == 0 && req.Mutation == nil {
 		x.TraceError(ctx, x.Errorf("Empty query and mutation."))
 		return resp, fmt.Errorf("Empty query and mutation.")
@@ -613,7 +613,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.N = nodes
 
-	gl := new(graph.Latency)
+	gl := new(graphp.Latency)
 	gl.Parsing, gl.Processing, gl.Pb = l.Parsing.String(), l.Processing.String(),
 		l.ProtocolBuffer.String()
 	resp.L = gl
@@ -700,7 +700,7 @@ func setupListener(addr string, port int) (net.Listener, error) {
 func serveGRPC(l net.Listener) {
 	defer func() { finishCh <- struct{}{} }()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
-	graph.RegisterDgraphServer(s, &grpcServer{})
+	graphp.RegisterDgraphServer(s, &grpcServer{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
 	s.GracefulStop()

@@ -1,7 +1,5 @@
-scalar age:int @index(int)
+age:int @index(int)
 
-scalar (
-  name: string @index(exact, exact)
-  address: string @index(term)
-  id: id @index(exact, term, exact)
-)
+name: string @index(exact, exact)
+address: string @index(term)
+id: id @index(exact, term, exact)

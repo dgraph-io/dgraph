@@ -9,64 +9,65 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 const schemaStr = `
-scalar name:string @index
+name:string @index
 `
 
 func TestIndexingInt(t *testing.T) {
-	schema.ParseBytes([]byte("scalar age:int @index"), 1)
+	schema.ParseBytes([]byte("age:int @index"), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingIntNegative(t *testing.T) {
-	schema.ParseBytes([]byte("scalar age:int @index"), 1)
+	schema.ParseBytes([]byte("age:int @index"), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("-10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x0, 0xff, 0xff, 0xff, 0xf6}, []byte(a[0]))
 }
 
 func TestIndexingFloat(t *testing.T) {
-	schema.ParseBytes([]byte("scalar age:float @index"), 1)
+	schema.ParseBytes([]byte("age:float @index"), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("10.43")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x7, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingDate(t *testing.T) {
-	schema.ParseBytes([]byte("scalar age:date @index"), 1)
+	schema.ParseBytes([]byte("age:date @index"), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("0010-01-01")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x3, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingTime(t *testing.T) {
-	schema.ParseBytes([]byte("scalar age:datetime @index"), 1)
+	schema.ParseBytes([]byte("age:datetime @index"), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("0010-01-01T01:01:01.000000001")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x4, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexing(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index"), 1)
+	schema.ParseBytes([]byte("name:string @index"), 1)
 	a, err := IndexTokens("name", types.Val{types.StringID, []byte("abc")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x01abc", string(a[0]))
 }
 
-func addMutationWithIndex(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
+func addMutationWithIndex(t *testing.T, l *List, edge *taskp.DirectedEdge, op uint32) {
 	if op == Del {
-		edge.Op = task.DirectedEdge_DEL
+		edge.Op = taskp.DirectedEdge_DEL
 	} else if op == Set {
-		edge.Op = task.DirectedEdge_SET
+		edge.Op = taskp.DirectedEdge_SET
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
@@ -88,7 +89,7 @@ func TestTokensTable(t *testing.T) {
 	key := x.DataKey("name", 1)
 	l := getNew(key, ps)
 
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value:  []byte("david"),
 		Label:  "testing",
 		Attr:   "name",
@@ -100,7 +101,7 @@ func TestTokensTable(t *testing.T) {
 	slice, err := ps.Get(key)
 	require.NoError(t, err)
 
-	var pl types.PostingList
+	var pl typesp.PostingList
 	x.Check(pl.Unmarshal(slice.Data()))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
@@ -116,8 +117,8 @@ func TestTokensTable(t *testing.T) {
 }
 
 const schemaStrAlt = `
-scalar name:string @index
-scalar dob:date @index
+name:string @index
+dob:date @index
 `
 
 // tokensForTest returns keys for a table. This is just for testing / debugging.
@@ -139,12 +140,12 @@ func tokensForTest(attr string) []string {
 // addEdgeToValue adds edge without indexing.
 func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 	value string) {
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value:  []byte(value),
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
-		Op:     task.DirectedEdge_SET,
+		Op:     taskp.DirectedEdge_SET,
 	}
 	l, _ := GetOrCreate(x.DataKey(attr, src), 0)
 	// No index entries added here as we do not call AddMutationWithIndex.
@@ -197,10 +198,10 @@ func TestRebuildIndex(t *testing.T) {
 	pk := x.ParsedKey{Attr: "name"}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
-	var idxVals []*types.PostingList
+	var idxVals []*typesp.PostingList
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		idxKeys = append(idxKeys, string(it.Key().Data()))
-		pl := new(types.PostingList)
+		pl := new(typesp.PostingList)
 		require.NoError(t, pl.Unmarshal(it.Value().Data()))
 		idxVals = append(idxVals, pl)
 	}

@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -39,12 +40,12 @@ type stateShard struct {
 	// Can have fine grained locking later if necessary, per group or predicate
 	x.SafeMutex
 	// Map containing predicate to type information.
-	predicate map[string]*types.Schema
+	predicate map[string]*typesp.Schema
 	elog      trace.EventLog
 }
 
 func (s *stateShard) init(group uint32) {
-	s.predicate = make(map[string]*types.Schema)
+	s.predicate = make(map[string]*typesp.Schema)
 	s.elog = trace.NewEventLog("Dynamic Schema", fmt.Sprintf("%d", group))
 }
 
@@ -117,7 +118,7 @@ func (s *stateShard) setType(pred string, valueType types.TypeID) {
 	if schema, ok := s.predicate[pred]; ok {
 		schema.ValueType = uint32(valueType)
 	} else {
-		s.predicate[pred] = &types.Schema{ValueType: uint32(valueType)}
+		s.predicate[pred] = &typesp.Schema{ValueType: uint32(valueType)}
 	}
 }
 
@@ -131,7 +132,7 @@ func (s *stateShard) setReverse(pred string, rev bool) {
 	s.Lock()
 	defer s.Unlock()
 	if schema, ok := s.predicate[pred]; !ok {
-		s.predicate[pred] = &types.Schema{ValueType: uint32(types.UidID), Reverse: rev}
+		s.predicate[pred] = &typesp.Schema{ValueType: uint32(types.UidID), Reverse: rev}
 	} else {
 		x.AssertTruef(schema.ValueType == uint32(types.UidID),
 			"predicate %s is not of type uid", pred)
@@ -159,11 +160,11 @@ func (s *stateShard) addIndex(pred string, tokenizer string) {
 }
 
 // Set sets the schema for given predicate
-func (s *state) Set(pred string, schema *types.Schema) {
+func (s *state) Set(pred string, schema *typesp.Schema) {
 	s.get(group.BelongsTo(pred)).set(pred, schema)
 }
 
-func (s *stateShard) set(pred string, schema *types.Schema) {
+func (s *stateShard) set(pred string, schema *typesp.Schema) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = schema
@@ -293,7 +294,7 @@ func LoadFromDb(gid uint32) error {
 		key := itr.Key().Data()
 		attr := x.Parse(key).Attr
 		data := itr.Value().Data()
-		var s types.Schema
+		var s typesp.Schema
 		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
 		if group.BelongsTo(attr) != gid {
 			continue
@@ -315,7 +316,7 @@ func Refresh(groupId uint32) error {
 			continue
 		}
 		data := itr.Value().Data()
-		var s types.Schema
+		var s typesp.Schema
 		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
 		State().Set(attr, &s)
 	}
@@ -331,7 +332,7 @@ func reset() {
 // SyncEntry stores the schema mutation information
 type SyncEntry struct {
 	Attr   string
-	Schema types.Schema
+	Schema typesp.Schema
 	Water  *x.WaterMark
 	Index  uint64
 }

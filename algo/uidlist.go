@@ -4,14 +4,13 @@ import (
 	"container/heap"
 	"sort"
 
-	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 )
 
 const jump = 32 // Jump size in InsersectWithJump.
 
 // ApplyFilter applies a filter to our UIDList.
-func ApplyFilter(u *task.List, f func(uint64, int) bool) {
+func ApplyFilter(u *taskp.List, f func(uint64, int) bool) {
 	out := u.Uids[:0]
 	for i, uid := range u.Uids {
 		if f(uid, i) {
@@ -21,83 +20,82 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
-func IntersectWith(u, v *task.List) {
+// IntersectWith intersects u with v. The update is made to o.
+// u, v should be sorted.
+func IntersectWith(u, v, o *taskp.List) {
 	n := len(u.Uids)
 	m := len(v.Uids)
 
 	if n > m {
 		n, m = m, n
 	}
+	if o.Uids == nil {
+		o.Uids = make([]uint64, 0, n)
+	}
+	dst := o.Uids[:0]
 	if n == 0 {
 		n += 1
 	}
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
 	if ratio < 100 {
-		IntersectWithLin(u, v)
+		IntersectWithLin(u.Uids, v.Uids, &dst)
 	} else if ratio < 500 {
-		IntersectWithJump(u, v)
+		IntersectWithJump(u.Uids, v.Uids, &dst)
 	} else {
-		IntersectWithBin(u, v)
+		IntersectWithBin(u.Uids, v.Uids, &dst)
 	}
+	o.Uids = dst
 }
 
-// IntersectWith intersects u with v. The update is made to u.
-// u, v should be sorted.
-func IntersectWithLin(u, v *task.List) {
-	out := u.Uids[:0]
-	n := len(u.Uids)
-	m := len(v.Uids)
+func IntersectWithLin(u, v []uint64, o *[]uint64) {
+	n := len(u)
+	m := len(v)
 	for i, k := 0, 0; i < n && k < m; {
-		uid := u.Uids[i]
-		vid := v.Uids[k]
+		uid := u[i]
+		vid := v[k]
 		if uid > vid {
-			for k = k + 1; k < m && v.Uids[k] < uid; k++ {
+			for k = k + 1; k < m && v[k] < uid; k++ {
 			}
 		} else if uid == vid {
-			out = append(out, uid)
+			*o = append(*o, uid)
 			k++
 			i++
 		} else {
-			for i = i + 1; i < n && u.Uids[i] < vid; i++ {
+			for i = i + 1; i < n && u[i] < vid; i++ {
 			}
 		}
 	}
-	u.Uids = out
 }
 
-func IntersectWithJump(u, v *task.List) {
-	out := u.Uids[:0]
-	n := len(u.Uids)
-	m := len(v.Uids)
+func IntersectWithJump(u, v []uint64, o *[]uint64) {
+	n := len(u)
+	m := len(v)
 	for i, k := 0, 0; i < n && k < m; {
-		uid := u.Uids[i]
-		vid := v.Uids[k]
+		uid := u[i]
+		vid := v[k]
 		if uid == vid {
-			out = append(out, uid)
+			*o = append(*o, uid)
 			k++
 			i++
-		} else if k+jump < m && uid > v.Uids[k+jump] {
+		} else if k+jump < m && uid > v[k+jump] {
 			k = k + jump
-		} else if i+jump < n && vid > u.Uids[i+jump] {
+		} else if i+jump < n && vid > u[i+jump] {
 			i = i + jump
 		} else if uid > vid {
-			for k = k + 1; k < m && v.Uids[k] < uid; k++ {
+			for k = k + 1; k < m && v[k] < uid; k++ {
 			}
 		} else {
-			for i = i + 1; i < n && u.Uids[i] < vid; i++ {
+			for i = i + 1; i < n && u[i] < vid; i++ {
 			}
 		}
 	}
-	u.Uids = out
 }
 
 // IntersectWithBin is based on the paper
 // "Fast Intersection Algorithms for Sorted Sequences"
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
-func IntersectWithBin(u, v *task.List) {
-	d := u.Uids
-	q := v.Uids
+func IntersectWithBin(d, q []uint64, o *[]uint64) {
 	ld := len(d)
 	lq := len(q)
 
@@ -105,9 +103,7 @@ func IntersectWithBin(u, v *task.List) {
 		ld, lq = lq, ld
 		d, q = q, d
 	}
-	final := make([]uint64, 0, lq)
 	if ld == 0 || lq == 0 || d[ld-1] < q[0] || q[lq-1] < d[0] {
-		u.Uids = final
 		return
 	}
 
@@ -121,8 +117,7 @@ func IntersectWithBin(u, v *task.List) {
 		return q[i] > val
 	})
 
-	binIntersect(d, q[minq:maxq], &final)
-	u.Uids = final
+	binIntersect(d, q[minq:maxq], o)
 }
 
 // binIntersect is the recursive function used.
@@ -163,79 +158,46 @@ func binIntersect(d, q []uint64, final *[]uint64) {
 	}
 }
 
-// IntersectSorted intersect a list of UIDLists. An alternative is to do
-// pairwise intersections n-1 times where n=number of lists. This is less
-// efficient:
-// Let p be length of shortest list. Let q be average length of lists. So
-// nq = total number of elements.
-// There are many possible cases. Consider the case where the shortest list
-// is the answer (or close to the answer). The following method requires nq
-// reads (each element is read only once) whereas pairwise intersections can
-// require np + nq - p reads, which can be up to ~twice as many.
-func IntersectSorted(lists []*task.List) *task.List {
-	if len(lists) == 0 {
-		return new(task.List)
-	}
-
-	// Scan through the smallest list. Denote as A.
-	// For each x in A,
-	//   For each other list B,
-	//     Keep popping elements until we get a y >= x.
-	//     If y > x, mark x as "skipped". Break out of loop.
-	//   If x is not marked as "skipped", append x to result.
-	var minLenIdx int
-	minLen := len(lists[0].Uids)
-	for i := 1; i < len(lists); i++ { // Start from 1.
-		l := lists[i]
-		n := len(l.Uids)
-		if n < minLen {
-			minLen = n
-			minLenIdx = i
-		}
-	}
-
-	// Our final output. Give it some capacity.
-	output := make([]uint64, 0, minLen)
-	// lptrs[j] is the element we are looking at for lists[j].
-	lptrs := make([]int, len(lists))
-	shortList := lists[minLenIdx]
-	elemsLeft := true // If some list has no elems left, we can't intersect more.
-
-	for i := 0; i < len(shortList.Uids) && elemsLeft; i++ {
-		val := shortList.Uids[i]
-		if i > 0 && val == shortList.Uids[i-1] {
-			x.AssertTruef(false, "We shouldn't have duplicates in UIDLists")
-		}
-
-		var skip bool                     // Should we skip val in output?
-		for j := 0; j < len(lists); j++ { // For each other list in lists.
-			if j == minLenIdx {
-				// No point checking yourself.
-				continue
-			}
-
-			lj := lists[j]
-			ljp := lptrs[j]
-			lsz := len(lj.Uids)
-			for ; ljp < lsz && lj.Uids[ljp] < val; ljp++ {
-			}
-
-			lptrs[j] = ljp
-			if ljp >= lsz || lj.Uids[ljp] > val {
-				elemsLeft = ljp < lsz
-				skip = true
-				break
-			}
-			// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
-		}
-		if !skip {
-			output = append(output, val)
-		}
-	}
-	return &task.List{Uids: output}
+type listInfo struct {
+	l      *taskp.List
+	length int
 }
 
-func Difference(u, v *task.List) {
+func IntersectSorted(lists []*taskp.List) *taskp.List {
+	if len(lists) == 0 {
+		return &taskp.List{}
+	}
+	ls := make([]listInfo, 0, len(lists))
+	for _, list := range lists {
+		ls = append(ls, listInfo{
+			l:      list,
+			length: len(list.Uids),
+		})
+	}
+	// Sort the lists based on length.
+	sort.Slice(ls, func(i, j int) bool {
+		return ls[i].length < ls[j].length
+	})
+	out := &taskp.List{Uids: make([]uint64, ls[0].length)}
+	if len(ls) == 1 {
+		copy(out.Uids, ls[0].l.Uids)
+		return out
+	}
+
+	IntersectWith(ls[0].l, ls[1].l, out)
+	// Intersect from smallest to largest.
+	for i := 2; i < len(ls); i++ {
+		IntersectWith(out, ls[i].l, out)
+		// Break if we reach size 0 as we can no longer
+		// add any element.
+		if len(out.Uids) == 0 {
+			break
+		}
+	}
+	return out
+}
+
+func Difference(u, v *taskp.List) {
 	if u == nil || v == nil {
 		return
 	}
@@ -262,9 +224,9 @@ func Difference(u, v *task.List) {
 }
 
 // MergeSorted merges sorted lists.
-func MergeSorted(lists []*task.List) *task.List {
+func MergeSorted(lists []*taskp.List) *taskp.List {
 	if len(lists) == 0 {
-		return new(task.List)
+		return new(taskp.List)
 	}
 
 	h := &uint64Heap{}
@@ -305,12 +267,12 @@ func MergeSorted(lists []*task.List) *task.List {
 			heap.Fix(h, 0) // Faster than Pop() followed by Push().
 		}
 	}
-	return &task.List{Uids: output}
+	return &taskp.List{Uids: output}
 }
 
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
-func IndexOf(u *task.List, uid uint64) int {
+func IndexOf(u *taskp.List, uid uint64) int {
 	i := sort.Search(len(u.Uids), func(i int) bool { return u.Uids[i] >= uid })
 	if i < len(u.Uids) && u.Uids[i] == uid {
 		return i
@@ -319,7 +281,7 @@ func IndexOf(u *task.List, uid uint64) int {
 }
 
 // ToUintsListForTest converts to list of uints for testing purpose only.
-func ToUintsListForTest(ul []*task.List) [][]uint64 {
+func ToUintsListForTest(ul []*taskp.List) [][]uint64 {
 	out := make([][]uint64, 0, len(ul))
 	for _, u := range ul {
 		out = append(out, u.Uids)

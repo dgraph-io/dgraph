@@ -35,10 +35,11 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos/taskp"
+
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -90,6 +91,12 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "name", 1001, "Bob", nil)
 	addEdgeToValue(t, "name", 1002, "Matt", nil)
 	addEdgeToValue(t, "name", 1003, "John", nil)
+
+	addEdgeToValue(t, "alias", 23, "Zambo Alice", nil)
+	addEdgeToValue(t, "alias", 24, "John Alice", nil)
+	addEdgeToValue(t, "alias", 25, "Bob Joe", nil)
+	addEdgeToValue(t, "alias", 31, "Allan Matt", nil)
+	addEdgeToValue(t, "alias", 101, "John Oliver", nil)
 
 	// Now let's add a few properties for the main user.
 	addEdgeToValue(t, "name", 1, "Michonne", nil)
@@ -1751,6 +1758,89 @@ func TestToFastJSONFilterEqual(t *testing.T) {
 		js)
 }
 
+func TestToFastJSONOrderName(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend(orderasc: alias) {
+					alias
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"alias":"Allan Matt"},{"alias":"Bob Joe"},{"alias":"John Alice"},{"alias":"John Oliver"},{"alias":"Zambo Alice"}],"name":"Michonne"}]}`,
+		js)
+}
+
+func TestToFastJSONOrderNameDesc(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend(orderdesc: alias) {
+					alias
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"alias":"Zambo Alice"},{"alias":"John Oliver"},{"alias":"John Alice"},{"alias":"Bob Joe"},{"alias":"Allan Matt"}],"name":"Michonne"}]}`,
+		js)
+}
+
+func TestToFastJSONOrderName1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend(orderasc: name ) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Andrea"},{"name":"Daryl Dixon"},{"name":"Glenn Rhee"},{"name":"Rick Grimes"}],"name":"Michonne"}]}`,
+		js)
+}
+
+func TestToFastJSONOrderNameError(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend(orderasc: nonexistent) {
+					name
+				}
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, res.Query[0])
+	require.NoError(t, err)
+	sg.DebugPrint("")
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.Error(t, err)
+}
+
 func TestToFastJSONFilterLeqOrder(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -2051,7 +2141,7 @@ func TestToFastJSONReverseDelSetCount(t *testing.T) {
 		js)
 }
 
-func getProperty(properties []*graph.Property, prop string) *graph.Value {
+func getProperty(properties []*graphp.Property, prop string) *graphp.Value {
 	for _, p := range properties {
 		if p.Prop == prop {
 			return p.Value
@@ -2434,12 +2524,12 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 }
 
 // Mocking Subgraph and Testing fast-json with it.
-func ageSg(uidMatrix []*task.List, srcUids *task.List, ages []uint32) *SubGraph {
-	var as []*task.Value
+func ageSg(uidMatrix []*taskp.List, srcUids *taskp.List, ages []uint32) *SubGraph {
+	var as []*taskp.Value
 	for _, a := range ages {
 		bs := make([]byte, 4)
 		binary.LittleEndian.PutUint32(bs, a)
-		as = append(as, &task.Value{[]byte(bs), 2})
+		as = append(as, &taskp.Value{[]byte(bs), 2})
 	}
 
 	return &SubGraph{
@@ -2450,10 +2540,10 @@ func ageSg(uidMatrix []*task.List, srcUids *task.List, ages []uint32) *SubGraph 
 		Params:    params{isDebug: false, GetUID: true},
 	}
 }
-func nameSg(uidMatrix []*task.List, srcUids *task.List, names []string) *SubGraph {
-	var ns []*task.Value
+func nameSg(uidMatrix []*taskp.List, srcUids *taskp.List, names []string) *SubGraph {
+	var ns []*taskp.Value
 	for _, n := range names {
-		ns = append(ns, &task.Value{[]byte(n), 0})
+		ns = append(ns, &taskp.Value{[]byte(n), 0})
 	}
 	return &SubGraph{
 		Attr:      "name",
@@ -2464,7 +2554,7 @@ func nameSg(uidMatrix []*task.List, srcUids *task.List, names []string) *SubGrap
 	}
 
 }
-func friendsSg(uidMatrix []*task.List, srcUids *task.List, friends []*SubGraph) *SubGraph {
+func friendsSg(uidMatrix []*taskp.List, srcUids *taskp.List, friends []*SubGraph) *SubGraph {
 	return &SubGraph{
 		Attr:      "friend",
 		uidMatrix: uidMatrix,
@@ -2473,7 +2563,7 @@ func friendsSg(uidMatrix []*task.List, srcUids *task.List, friends []*SubGraph) 
 		Children:  friends,
 	}
 }
-func rootSg(uidMatrix []*task.List, srcUids *task.List, names []string, ages []uint32) *SubGraph {
+func rootSg(uidMatrix []*taskp.List, srcUids *taskp.List, names []string, ages []uint32) *SubGraph {
 	nameSg := nameSg(uidMatrix, srcUids, names)
 	ageSg := ageSg(uidMatrix, srcUids, ages)
 
@@ -3754,21 +3844,18 @@ func TestLangManyFallback(t *testing.T) {
 }
 
 const schemaStr = `
-scalar name:string @index(term, exact)
-scalar dob:date @index
-scalar film.film.initial_release_date:date @index
-scalar loc:geo @index
-scalar genre:uid @reverse
-scalar (
-	survival_rate : float
-	alive         : bool
-	age           : int
-        shadow_deep   : int
-)
-scalar (
-  friend:uid @reverse
-)
-scalar geometry:geo @index
+name:string @index(term, exact)
+alias:string @index(exact, term)
+dob:date @index
+film.film.initial_release_date:date @index
+loc:geo @index
+genre:uid @reverse
+survival_rate : float
+alive         : bool
+age           : int
+shadow_deep   : int
+friend:uid @reverse
+geometry:geo @index
 `
 
 func TestMain(m *testing.M) {

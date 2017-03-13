@@ -1,10 +1,10 @@
 // To compile this file, in dgraph directory :
-// protoc --gofast_out=plugins=grpc,Mtypes/facets/facets.proto=github.com/dgraph-io/dgraph/types/facets:. query/graph/graphresponse.proto
+// protoc --gofast_out=plugins=grpc:. --proto_path=${GOPATH}/src:. protos/graphp/graphresponse.proto
 
 syntax="proto3";
-import "types/facets/facets.proto";
+import "github.com/dgraph-io/dgraph/protos/facetsp/facets.proto";
 
-package graph;
+package graphp;
 
 service Dgraph {
     rpc Run (Request) returns (Response) {};
@@ -18,7 +18,7 @@ message NQuad {
     string label = 5;
     string lang = 7;
     sint32 objectType = 6;
-    repeated facets.Facet facets = 8;
+    repeated facetsp.Facet facets = 8;
 }
 
 message Value {
