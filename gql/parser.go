@@ -931,11 +931,14 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 		buf.WriteString(t.Func.Name)
 
 		if len(t.Func.Attr) > 0 {
-			args := make([]string, len(t.Func.Args)+1)
-			args[0] = t.Func.Attr
-			copy(args[1:], t.Func.Args)
+			buf.WriteRune(' ')
+			buf.WriteString(t.Func.Attr)
+			if len(t.Func.Lang) > 0 {
+				buf.WriteRune('@')
+				buf.WriteString(t.Func.Lang)
+			}
 
-			for _, arg := range args {
+			for _, arg := range t.Func.Args {
 				buf.WriteString(" \"")
 				buf.WriteString(arg)
 				buf.WriteRune('"')
@@ -1062,11 +1065,10 @@ L:
 					return nil, x.Errorf("Empty argument received")
 				}
 				if len(g.Attr) == 0 {
-					var err error
-					g.Attr, g.Lang, err = parseAttributeLang(val)
-					if err != nil {
-						return nil, err
+					if strings.ContainsRune(itemInFunc.Val, '"') {
+						return nil, x.Errorf("Attribute in function must not be quoted using \": %s", itemInFunc.Val)
 					}
+					g.Attr = val
 				} else if isLang {
 					g.Lang = val
 					isLang = false
@@ -1220,18 +1222,6 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			valueStack.size())
 	}
 	return valueStack.pop()
-}
-
-func parseAttributeLang(val string) (attr, name string, err error) {
-	s := strings.Split(val, "@")
-	switch len(s) {
-	case 1:
-		return s[0], "", nil
-	case 2:
-		return s[0], s[1], nil
-	default:
-		return "", "", x.Errorf("Invalid attribute name/language: %s", val)
-	}
 }
 
 func parseID(gq *GraphQuery, val string) error {
