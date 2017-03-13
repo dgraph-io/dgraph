@@ -1,3 +1,9 @@
+.Graph-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: auto;
+}
+
 .Graph {
     font-size: 12px;
     word-break: break-all;
@@ -53,7 +59,6 @@
     flex: 0 auto;
 }
 
-
 .Graph-full-height {
     border-bottom: 0px;
     flex: auto;
@@ -74,3 +79,4 @@
 .vis-network > canvas {
     flex: auto;
 }
+

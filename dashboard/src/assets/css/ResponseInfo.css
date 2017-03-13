@@ -1,0 +1,21 @@
+.ResponseInfo {
+	font-size: 13px;
+	flex: 0 auto;
+}
+
+.ResponseInfo-partial {
+	height: auto
+}
+
+
+.ResponseInfo-button {
+	float: right;
+	margin-right: 10px;
+	margin-left: 5px;
+}
+
+.ResponseInfo-stats{ display: flex; }
+
+.ResponseInfo-flex {
+	flex: 0 0 50%;
+}
