@@ -17,10 +17,12 @@
 package schema
 
 import (
+	"fmt"
 	"time"
 
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
@@ -34,7 +36,7 @@ var (
 	syncCh chan *SyncEntry
 )
 
-type state struct {
+type stateShard struct {
 	// Can have fine grained locking later if necessary, per group or predicate
 	x.SafeMutex
 	// Map containing predicate to type information.
@@ -42,7 +44,44 @@ type state struct {
 	elog      trace.EventLog
 }
 
-// State returns the schema state
+func (s *stateShard) init(group uint32) {
+	s.predicate = make(map[string]*typesp.Schema)
+	s.elog = trace.NewEventLog("Dynamic Schema", fmt.Sprintf("%d", group))
+}
+
+type state struct {
+	x.SafeMutex
+	m    map[uint32]*stateShard
+	elog trace.EventLog
+}
+
+func (s *state) create(group uint32) *stateShard {
+	s.Lock()
+	defer s.Unlock()
+	if s.m == nil {
+		s.m = make(map[uint32]*stateShard)
+	}
+
+	if prev, present := s.m[group]; present {
+		return prev
+	}
+	shard := &stateShard{}
+	shard.init(group)
+	s.m[group] = shard
+	return shard
+}
+
+func (s *state) get(group uint32) *stateShard {
+	s.RLock()
+	if shard, present := s.m[group]; present {
+		s.RUnlock()
+		return shard
+	}
+	s.RUnlock()
+	return s.create(group)
+}
+
+// SateFor returns the schema for given group
 func State() *state {
 	return pstate
 }
@@ -50,6 +89,10 @@ func State() *state {
 // Update updates the schema in memory and sends an entry to syncCh so that it can be
 // comitted later
 func (s *state) Update(se *SyncEntry) {
+	s.get(group.BelongsTo(se.Attr)).update(se)
+}
+
+func (s *stateShard) update(se *SyncEntry) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -66,6 +109,10 @@ func (s *state) Update(se *SyncEntry) {
 
 // SetType sets the schema type for given predicate
 func (s *state) SetType(pred string, valueType types.TypeID) {
+	s.get(group.BelongsTo(pred)).setType(pred, valueType)
+}
+
+func (s *stateShard) setType(pred string, valueType types.TypeID) {
 	s.Lock()
 	defer s.Unlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -78,6 +125,10 @@ func (s *state) SetType(pred string, valueType types.TypeID) {
 // SetReverse sets whether the reverse edge is enabled or
 // not for given predicate, if schema is not already defined, it's set to uid type
 func (s *state) SetReverse(pred string, rev bool) {
+	s.get(group.BelongsTo(pred)).setReverse(pred, rev)
+}
+
+func (s *stateShard) setReverse(pred string, rev bool) {
 	s.Lock()
 	defer s.Unlock()
 	if schema, ok := s.predicate[pred]; !ok {
@@ -91,6 +142,10 @@ func (s *state) SetReverse(pred string, rev bool) {
 
 // AddIndex adds the tokenizer for given predicate
 func (s *state) AddIndex(pred string, tokenizer string) {
+	s.get(group.BelongsTo(pred)).addIndex(pred, tokenizer)
+}
+
+func (s *stateShard) addIndex(pred string, tokenizer string) {
 	s.Lock()
 	defer s.Unlock()
 	schema, ok := s.predicate[pred]
@@ -106,6 +161,10 @@ func (s *state) AddIndex(pred string, tokenizer string) {
 
 // Set sets the schema for given predicate
 func (s *state) Set(pred string, schema *typesp.Schema) {
+	s.get(group.BelongsTo(pred)).set(pred, schema)
+}
+
+func (s *stateShard) set(pred string, schema *typesp.Schema) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = schema
@@ -114,6 +173,10 @@ func (s *state) Set(pred string, schema *typesp.Schema) {
 
 // TypeOf returns the schema type of predicate
 func (s *state) TypeOf(pred string) (types.TypeID, error) {
+	return s.get(group.BelongsTo(pred)).typeOf(pred)
+}
+
+func (s *stateShard) typeOf(pred string) (types.TypeID, error) {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -124,6 +187,10 @@ func (s *state) TypeOf(pred string) (types.TypeID, error) {
 
 // IsIndexed returns whether the predicate is indexed or not
 func (s *state) IsIndexed(pred string) bool {
+	return s.get(group.BelongsTo(pred)).isIndexed(pred)
+}
+
+func (s *stateShard) isIndexed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -133,7 +200,11 @@ func (s *state) IsIndexed(pred string) bool {
 }
 
 // IndexedFields returns the list of indexed fields
-func (s *state) IndexedFields() []string {
+func (s *state) IndexedFields(gid uint32) []string {
+	return s.get(gid).indexedFields()
+}
+
+func (s *stateShard) indexedFields() []string {
 	s.RLock()
 	defer s.RUnlock()
 	var out []string
@@ -145,7 +216,14 @@ func (s *state) IndexedFields() []string {
 	return out
 }
 
-func (s *state) Predicates() []string {
+// Predicates returns the list of predicates for given group
+func (s *state) Predicates(group uint32) []string {
+	return s.get(group).predicates()
+}
+
+func (s *stateShard) predicates() []string {
+	s.RLock()
+	defer s.RUnlock()
 	out := make([]string, 0, len(s.predicate))
 	for k := range s.predicate {
 		out = append(out, k)
@@ -155,6 +233,10 @@ func (s *state) Predicates() []string {
 
 // Tokenizer returns the tokenizer for given predicate
 func (s *state) Tokenizer(pred string) []tok.Tokenizer {
+	return s.get(group.BelongsTo(pred)).tokenizer(pred)
+}
+
+func (s *stateShard) tokenizer(pred string) []tok.Tokenizer {
 	s.RLock()
 	defer s.RUnlock()
 	schema, ok := s.predicate[pred]
@@ -168,6 +250,10 @@ func (s *state) Tokenizer(pred string) []tok.Tokenizer {
 
 // IsReversed returns whether the predicate has reverse edge or not
 func (s *state) IsReversed(pred string) bool {
+	return s.get(group.BelongsTo(pred)).isReversed(pred)
+}
+
+func (s *stateShard) isReversed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -176,32 +262,30 @@ func (s *state) IsReversed(pred string) bool {
 	return false
 }
 
-func Init(ps *store.Store, file string) error {
+func Init(ps *store.Store) {
 	pstore = ps
 	syncCh = make(chan *SyncEntry, 10000)
-	if err := ReloadData(file); err != nil {
-		return err
-	}
 	go batchSync()
-	return nil
 }
 
 // ReloadData loads schema from file and then later from db
-func ReloadData(file string) error {
+func ReloadData(file string, group uint32) error {
 	reset()
 	if len(file) > 0 {
-		if err := parse(file); err != nil {
+		if err := parse(file, group); err != nil {
 			return err
 		}
 	}
-	if err := LoadFromDb(); err != nil {
+	if err := LoadFromDb(group); err != nil {
 		return err
 	}
 	return nil
 }
 
 // LoadFromDb reads schema information from db and stores it in memory
-func LoadFromDb() error {
+// This is used on server start to load schema for all groups, avoid repeated
+// query to disk if we have large number of groups
+func LoadFromDb(gid uint32) error {
 	prefix := x.SchemaPrefix()
 	itr := pstore.NewIterator()
 	defer itr.Close()
@@ -209,6 +293,28 @@ func LoadFromDb() error {
 	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
 		key := itr.Key().Data()
 		attr := x.Parse(key).Attr
+		data := itr.Value().Data()
+		var s typesp.Schema
+		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
+		if group.BelongsTo(attr) != gid {
+			continue
+		}
+		State().Set(attr, &s)
+	}
+	return nil
+}
+
+func Refresh(groupId uint32) error {
+	prefix := x.SchemaPrefix()
+	itr := pstore.NewIterator()
+	defer itr.Close()
+
+	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
+		key := itr.Key().Data()
+		attr := x.Parse(key).Attr
+		if group.BelongsTo(attr) != groupId {
+			continue
+		}
 		data := itr.Value().Data()
 		var s typesp.Schema
 		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
@@ -220,8 +326,7 @@ func LoadFromDb() error {
 
 func reset() {
 	pstate = new(state)
-	State().predicate = make(map[string]*typesp.Schema)
-	State().elog = trace.NewEventLog("Dynamic Schema", "state")
+	pstate.elog = trace.NewEventLog("Dynamic Schema", "schema")
 }
 
 // SyncEntry stores the schema mutation information

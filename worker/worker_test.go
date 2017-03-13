@@ -106,7 +106,7 @@ func taskValues(t *testing.T, v []*taskp.Value) []string {
 }
 
 func initTest(t *testing.T, schemaStr string) (string, *store.Store) {
-	schema.ParseBytes([]byte(schemaStr))
+	schema.ParseBytes([]byte(schemaStr), 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)

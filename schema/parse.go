@@ -19,6 +19,7 @@ package schema
 import (
 	"io/ioutil"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/tok"
@@ -27,25 +28,25 @@ import (
 )
 
 // Parse parses the schema file.
-func parse(file string) (rerr error) {
+func parse(file string, gid uint32) (rerr error) {
 	b, err := ioutil.ReadFile(file)
 	if err != nil {
 		return x.Errorf("Error reading file: %v", err)
 	}
-	return ParseBytes(b)
+	return ParseBytes(b, gid)
 }
 
 // ParseBytes parses the byte array which holds the schema. We will reset
 // all the globals.
 // Overwrites schema blindly - called only during initilization in testing
-func ParseBytes(schema []byte) (rerr error) {
+func ParseBytes(schema []byte, gid uint32) (rerr error) {
 	reset()
 	s := string(schema)
 
 	l := lex.NewLexer(s).Run(lexText)
 
 	it := l.NewIterator()
-	if rerr = processScalars(it); rerr != nil {
+	if rerr = processScalars(it, gid); rerr != nil {
 		return rerr
 	}
 	return nil
@@ -107,14 +108,14 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 }
 
 // processScalars parses schema definitions line by line
-func processScalars(it *lex.ItemIterator) error {
+func processScalars(it *lex.ItemIterator, gid uint32) error {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemEOF:
 			return nil
 		case itemText:
-			if err := processScalarPair(it, item.Val, true); err != nil {
+			if err := processScalarPair(it, item.Val, true, gid); err != nil {
 				return err
 			}
 		case lex.ItemError:
@@ -129,7 +130,7 @@ func processScalars(it *lex.ItemIterator) error {
 
 // processScalarPair processes "name: type (directive)" where name is already
 // consumed and is provided as input in file during loading
-func processScalarPair(it *lex.ItemIterator, predicate string, allowIndex bool) error {
+func processScalarPair(it *lex.ItemIterator, predicate string, allowIndex bool, gid uint32) error {
 	if schema, err := parseScalarPair(it, predicate, allowIndex); err != nil {
 		return err
 	} else {
@@ -138,7 +139,9 @@ func processScalarPair(it *lex.ItemIterator, predicate string, allowIndex bool) 
 		if err == nil {
 			return x.Errorf("Multiple schema declarations for same predicate %s", predicate)
 		}
-		State().Set(predicate, schema)
+		if group.BelongsTo(predicate) == gid {
+			State().Set(predicate, schema)
+		}
 	}
 
 	return nil
