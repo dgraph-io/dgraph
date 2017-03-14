@@ -26,7 +26,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos/graphp"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 )
@@ -1428,14 +1427,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		} else if key == "func" {
 			// Store the generator function.
 			gen, err := parseFunction(it)
-			if err != nil {
-				return gq, err
-			}
-			if !schema.State().IsIndexed(gen.Attr) {
-				return nil, x.Errorf(
-					"Field %s is not indexed and cannot be used in functions",
-					gen.Attr)
-			}
 			if err != nil {
 				return nil, err
 			}

@@ -140,12 +140,25 @@ func parseFuncType(arr []string) (FuncType, string) {
 	}
 }
 
+func needsIndex(fnType FuncType) bool {
+	switch fnType {
+	case CompareAttrFn, GeoFn, RegexFn, FullTextSearchFn, StandardFn:
+		return true
+	default:
+		return false
+	}
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 	attr := q.Attr
 	srcFn, err := parseSrcFn(q)
 	if err != nil {
 		return nil, err
+	}
+
+	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
+		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
 	}
 
 	var out taskp.Result

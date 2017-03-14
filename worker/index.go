@@ -102,14 +102,12 @@ func proposeRebuildIndex(ctx context.Context, ri *taskp.RebuildIndex) error {
 // it will rebuild index. Otherwise, it will send a request to a server that
 // serves the attr.
 func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
-	if !schema.State().IsIndexed(attr) {
-		return x.Errorf("Attribute %s is indexed", attr)
-	}
-
 	gid := group.BelongsTo(attr)
 	x.Trace(ctx, "RebuildIndex attr: %v groupId: %v", attr, gid)
 
-	if groups().ServesGroup(gid) {
+	if groups().ServesGroup(gid) && !schema.State().IsIndexed(attr) {
+		return x.Errorf("Attribute %s is not indexed", attr)
+	} else if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
 		return proposeRebuildIndex(ctx, &taskp.RebuildIndex{GroupId: gid, Attr: attr})
 	}
