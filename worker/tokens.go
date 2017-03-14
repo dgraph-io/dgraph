@@ -1,8 +1,6 @@
 package worker
 
 import (
-	"fmt"
-
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -20,7 +18,8 @@ func getStringTokens(funcArgs []string, funcType FuncType) ([]string, error) {
 	}
 }
 
-// getInequalityTokens gets tokens geq / leq compared to given token.
+// getInequalityTokens gets tokens geq / leq compared to given token using the first sortable
+// index that is found for the predicate.
 func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string, error) {
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(attr) {
@@ -63,7 +62,6 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	isPresent := it.Valid() && it.Value() != nil && it.Value().Size() > 0
 	idxKey := x.Parse(it.Key().Data())
 	if f == "eq" {
-		fmt.Println(ineqToken, idxKey.Term)
 		if isPresent && idxKey.Term == ineqToken {
 			return []string{ineqToken}, ineqToken, nil
 		}
