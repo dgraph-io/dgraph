@@ -575,6 +575,7 @@ type grpcServer struct{}
 func (s *grpcServer) Run(ctx context.Context,
 	req *graphp.Request) (resp *graphp.Response, err error) {
 	var allocIds map[string]uint64
+	var schemaNodes []*graphp.SchemaNode
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		defer tr.Finish()
@@ -613,14 +614,22 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.AssignedUids = allocIds
 
-	if res.Schema != nil {
-		if schemaNodes, err := worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
+	if req.Schema != nil && res.Schema != nil {
+		return resp, x.Errorf("Multiple schema blocks found")
+	}
+	// Schema Block can be part of query string
+	schema := res.Schema
+	if schema == nil {
+		schema = req.Schema
+	}
+
+	if schema != nil {
+		if schemaNodes, err = worker.GetSchemaOverNetwork(ctx, schema); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
 			return resp, err
-		} else {
-			resp.Schema = schemaNodes
 		}
 	}
+	resp.Schema = schemaNodes
 
 	sgl, err := query.ProcessQuery(ctx, res, &l)
 	if err != nil {

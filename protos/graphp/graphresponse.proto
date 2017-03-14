@@ -49,6 +49,7 @@ message Mutation {
 message Request {
     string query = 1;
     Mutation mutation = 2;
+    Schema schema = 3;
 }
 
 message Latency {
