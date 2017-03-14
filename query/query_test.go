@@ -1638,6 +1638,42 @@ func TestToFastJSONFilterOrOffset(t *testing.T) {
 		js)
 }
 
+func TestToFastJSONFilterGeqName(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				friend @filter(geq(name, "Rick")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Rick Grimes"}]}]}`,
+		js)
+}
+
+func TestToFastJSONFilteLtAlias(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				friend(orderasc: alias) @filter(lt(alias, "Pat")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Andrea"},{"name":"Daryl Dixon"},{"name":"Glenn Rhee"}]}]}`,
+		js)
+}
+
 func TestToFastJSONFilterGeq(t *testing.T) {
 	populateGraph(t)
 	query := `
