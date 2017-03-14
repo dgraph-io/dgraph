@@ -1021,6 +1021,7 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
+	var expectArg bool
 L:
 	for it.Next() {
 		item := it.Item()
@@ -1035,6 +1036,9 @@ L:
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					break L
+				} else if itemInFunc.Typ == itemComma {
+					expectArg = true
+					continue
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -1048,11 +1052,13 @@ L:
 				} else {
 					g.Args = append(g.Args, val)
 				}
+				expectArg = false
 			}
 		} else {
 			return nil, x.Errorf("Expected a function but got %q", item.Val)
 		}
 	}
+	_ = expectArg
 	return g, nil
 }
 
