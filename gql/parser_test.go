@@ -1117,7 +1117,7 @@ func TestParseFilter_root(t *testing.T) {
 }
 
 func TestParseFuncNested(t *testing.T) {
-	schema.ParseBytes([]byte("scalar friend: string @index"))
+	schema.ParseBytes([]byte("scalar friend: string @index"), 0)
 	query := `
 	query {
 		me(func: gt(count(friend), 10)) {

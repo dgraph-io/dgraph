@@ -873,16 +873,22 @@ func parseVariables(it *lex.ItemIterator, vmap varMap) error {
 
 // parseArguments parses the arguments part of the GraphQL query root.
 func parseArguments(it *lex.ItemIterator) (result []pair, rerr error) {
+	expectArg := true
 	for it.Next() {
 		var p pair
 		// Get key.
 		item := it.Item()
 		if item.Typ == itemName {
+			if !expectArg {
+				return nil, x.Errorf("Expecting a comma. But got: %v", item.Val)
+			}
 			p.Key = item.Val
-
+			expectArg = false
 		} else if item.Typ == itemRightRound {
 			break
-
+		} else if item.Typ == itemComma {
+			expectArg = true
+			continue
 		} else {
 			return result, x.Errorf("Expecting argument name. Got: %v", item)
 		}
@@ -1021,7 +1027,7 @@ L:
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s]", g.Name)
+				return nil, x.Errorf("Expected ( after func name [%s] but got %v", g.Name, itemInFunc.Val)
 			}
 			for it.Next() {
 				itemInFunc := it.Item()
@@ -1029,6 +1035,7 @@ L:
 					break L
 				} else if itemInFunc.Typ == itemComma {
 					expectArg = true
+					continue
 				} else if itemInFunc.Typ == itemLeftRound {
 					// Function inside a function.
 					if seenFuncArg {
@@ -1073,6 +1080,7 @@ L:
 func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 	facets := new(Facets)
 	peeks, err := it.Peek(1)
+	expectArg := true
 	if err == nil && peeks[0].Typ == itemLeftRound {
 		it.Next() // ignore '('
 		// parse comma separated strings (a1,b1,c1)
@@ -1085,7 +1093,14 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 				done = true
 				break
 			} else if item.Typ == itemName {
+				if !expectArg {
+					return nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
+				}
 				facets.Keys = append(facets.Keys, item.Val)
+				expectArg = false
+			} else if item.Typ == itemComma {
+				expectArg = true
+				continue
 			} else {
 				break
 			}
@@ -1160,58 +1175,6 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				return nil, err
 			}
 			leaf := &FilterTree{Func: f}
-			/*
-					f := &Function{}
-					leaf := &FilterTree{Func: f}
-					f.Name = lval
-					it.Next()
-					itemInFunc := it.Item()
-					if itemInFunc.Typ != itemLeftRound {
-						return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
-					}
-					var terminated, seenFuncAsArgument bool
-					for it.Next() {
-						itemInFunc := it.Item()
-						if itemInFunc.Typ == itemRightRound {
-							terminated = true
-							break
-						} else if itemInFunc.Typ == itemLeftRound {
-							if seenFuncAsArgument {
-								return nil, x.Errorf("Expected only one function as argument")
-							}
-							seenFuncAsArgument = true
-							// embed func, like gt(count(films), 0)
-							// => f: {Name: gt, Attr:films, Args:[count, 0]}
-							it.Prev()
-							it.Prev()
-							fn, err := parseFunction(it)
-							if err != nil {
-								return nil, err
-							}
-							f.Attr = fn.Attr
-							f.Args = append(f.Args, fn.Name)
-							continue
-						} else if itemInFunc.Typ != itemName {
-							return nil, x.Errorf("Expected arg after func [%s], but got item %v",
-								leaf.Func.Name, itemInFunc)
-						}
-						val := strings.Trim(itemInFunc.Val, "\" \t")
-						if val == "" {
-							return nil, x.Errorf("Empty argument received")
-						}
-						if len(f.Attr) == 0 {
-							f.Attr = val
-						} else {
-							f.Args = append(f.Args, val)
-						}
-						if f.Name == "id" {
-							f.NeedsVar = append(f.NeedsVar, val)
-						}
-					}
-				if !terminated {
-					return nil, x.Errorf("Expected ) to terminate func definition")
-				}
-			*/
 			valueStack.push(leaf)
 		} else if item.Typ == itemLeftRound { // Just push to op stack.
 			opStack.push(&FilterTree{Op: "("})
@@ -1421,15 +1384,23 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
 	}
 
+	expectArg := true
 	// Parse in KV fashion. Depending on the value of key, decide the path.
 	for it.Next() {
 		var key string
 		// Get key.
 		item := it.Item()
 		if item.Typ == itemName {
+			if !expectArg {
+				return nil, x.Errorf("Expecting a comma. Got: %v", item)
+			}
 			key = item.Val
+			expectArg = false
 		} else if item.Typ == itemRightRound {
 			break
+		} else if item.Typ == itemComma {
+			expectArg = true
+			continue
 		} else {
 			return nil, x.Errorf("Expecting argument name. Got: %v", item)
 		}
