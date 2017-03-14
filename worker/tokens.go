@@ -41,14 +41,8 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 			attr)
 	}
 
-	/*
-		v := types.ValueForType(types.BinaryID)
-		err = types.Marshal(fc.ineqValue, &v)
-		if err != nil {
-			return nil, "", err
-		}
-	*/
-	ineqTokens, err := tok.Tokens(ineqValue) //types.Val{fc.ineqValue.Tid, v.Value.([]byte)})
+	// Get the token for the value passed in function.
+	ineqTokens, err := tok.Tokens(ineqValue)
 	if err != nil {
 		return nil, "", err
 	}
