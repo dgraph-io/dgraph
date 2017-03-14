@@ -180,6 +180,16 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "dob", 25, "1909-01-10", nil)
 	addEdgeToValue(t, "dob", 31, "1901-01-15", nil)
 
+	f1 := types.Val{Tid: types.FloatID, Value: 1.6}
+	fData := types.ValueForType(types.BinaryID)
+	err = types.Marshal(f1, &fData)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, "survival_rate", 1, types.FloatID, fData.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "survival_rate", 23, types.FloatID, fData.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "survival_rate", 24, types.FloatID, fData.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "survival_rate", 25, types.FloatID, fData.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "survival_rate", 31, types.FloatID, fData.Value.([]byte), nil)
+
 	// GEO stuff
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	addGeoData(t, ps, 5101, p, "Googleplex")
@@ -997,6 +1007,33 @@ func TestMinError2(t *testing.T) {
 	var l Latency
 	_, queryErr := ProcessQuery(context.Background(), res, &l)
 	require.NotNil(t, queryErr)
+}
+
+func TestMinSchema(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                friend {
+                                    min(survival_rate)
+                                }
+                        }
+                }
+        `
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1.600000}],"gender":"female","name":"Michonne"}]}`,
+		js)
+
+	schema.State().SetType("survival_rate", types.Int32ID)
+	js = processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1}],"gender":"female","name":"Michonne"}]}`,
+		js)
 }
 
 func TestMax(t *testing.T) {

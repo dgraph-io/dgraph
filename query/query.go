@@ -265,7 +265,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			uc := parent.New(sg.Attr)
 			name := fmt.Sprintf("%s(%s)", pc.SrcFunc[0], pc.Attr)
 			sv, err := convertWithBestEffort(pc.values[0], pc.Attr)
-			if err != nil && err != ErrEmptyVal {
+			if err == ErrEmptyVal {
+				continue
+			} else if err != nil {
 				return err
 			}
 			uc.AddValue(name, sv)
@@ -382,7 +384,6 @@ func convertWithBestEffort(tv *taskp.Value, attr string) (types.Val, error) {
 	}
 	// creates appropriate type from binary format
 	sv, err := types.Convert(v, v.Tid)
-	x.Checkf(err, "Error while reading type from binary")
 	if bytes.Equal(tv.Val, nil) || err != nil {
 		return sv, ErrEmptyVal
 	}

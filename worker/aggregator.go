@@ -98,8 +98,8 @@ func Aggregate(agrtr string, values []*taskp.Value, typ types.TypeID) (*taskp.Va
 			lva = va
 		}
 	}
-
-	if agrtr == "sum" && len(result.Val) > 0 {
+	// convert to schema type
+	if len(result.Val) > 0 {
 		data := types.ValueForType(types.BinaryID)
 		err = types.Marshal(lva, &data)
 		if err != nil {
