@@ -21,11 +21,10 @@ func getStringTokens(funcArgs []string, funcType FuncType) ([]string, error) {
 }
 
 // getInequalityTokens gets tokens geq / leq compared to given token.
-func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, error) {
-
+func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string, error) {
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(attr) {
-		return nil, x.Errorf("Attribute %s is not indexed.", attr)
+		return nil, "", x.Errorf("Attribute %s is not indexed.", attr)
 	}
 
 	tokenizers := schema.State().Tokenizer(attr)
@@ -38,7 +37,7 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, error) 
 		}
 	}
 	if tok == nil {
-		return nil, x.Errorf("Attribute:%s does not have proper index for comparison",
+		return nil, "", x.Errorf("Attribute:%s does not have proper index for comparison",
 			attr)
 	}
 
@@ -51,10 +50,10 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, error) 
 	*/
 	ineqTokens, err := tok.Tokens(ineqValue) //types.Val{fc.ineqValue.Tid, v.Value.([]byte)})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if len(ineqTokens) != 1 {
-		return nil, x.Errorf("Attribute %s doest not have a valid tokenizer.", attr)
+		return nil, "", x.Errorf("Attribute %s doest not have a valid tokenizer.", attr)
 	}
 	ineqToken := ineqTokens[0]
 
@@ -72,9 +71,9 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, error) 
 	if f == "eq" {
 		fmt.Println(ineqToken, idxKey.Term)
 		if isPresent && idxKey.Term == ineqToken {
-			return []string{ineqToken}, nil
+			return []string{ineqToken}, ineqToken, nil
 		}
-		return []string{}, nil
+		return []string{}, "", nil
 	}
 
 	var out []string
@@ -89,5 +88,5 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, error) 
 			it.Prev()
 		}
 	}
-	return out, nil
+	return out, ineqToken, nil
 }

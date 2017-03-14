@@ -397,28 +397,8 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		if err != nil {
 			return nil, err
 		}
-		// Tokenizing RHS value of inequality.
-		// TODO(kg): more comments about why we convert to types.BinaryID, and
-		// then convert it back to attr type in IndexTokens.
-		// the point is IndexTokens need BinaryID type to be passed in
-		/*
-			v := types.ValueForType(types.BinaryID)
-			err = types.Marshal(fc.ineqValue, &v)
-			if err != nil {
-				return nil, err
-			}
-			ineqTokens, err := posting.IndexTokens(attr,
-				types.Val{fc.ineqValue.Tid, v.Value.([]byte)})
-			if err != nil {
-				return nil, err
-			}
-					if len(ineqTokens) != 1 {
-						return nil, x.Errorf("Expected only 1 token but got: %v", ineqTokens)
-					}
-				fc.ineqValueToken = ineqTokens[0]
-		*/
 		// Get tokens geq / leq ineqValueToken.
-		fc.tokens, err = getInequalityTokens(attr, f, fc.ineqValue)
+		fc.tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f, fc.ineqValue)
 		if err != nil {
 			return nil, err
 		}
