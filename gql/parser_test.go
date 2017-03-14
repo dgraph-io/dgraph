@@ -105,6 +105,30 @@ func TestParseQueryWithVarError2(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseQueryFilterError1(t *testing.T) {
+	query := `
+	{
+		me(id: abc) @filter(anyof(name"alice")) {
+		 name	
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryFilterError2(t *testing.T) {
+	query := `
+	{
+		me(id: abc) @filter(anyof(name "alice")) {
+		 name	
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseQueryWithVarAtRootFilterID(t *testing.T) {
 	query := `
 	{
