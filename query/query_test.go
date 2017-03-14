@@ -1638,6 +1638,43 @@ func TestToFastJSONFilterOrOffset(t *testing.T) {
 		js)
 }
 
+func TestToFastJSONFilterGeqName(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				friend @filter(geq(name, "Rick")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Rick Grimes"}]}]}`,
+		js)
+}
+
+func TestToFastJSONFilteLtAlias(t *testing.T) {
+	populateGraph(t)
+	// We shouldn't get Zambo Alice.
+	query := `
+		{
+			me(id:0x01) {
+				friend(orderasc: alias) @filter(lt(alias, "Pat")) {
+					alias
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"alias":"Allan Matt"},{"alias":"Bob Joe"},{"alias":"John Alice"},{"alias":"John Oliver"}]}]}`,
+		js)
+}
+
 func TestToFastJSONFilterGeq(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1726,6 +1763,45 @@ func TestToFastJSONFilterEqualNoHit(t *testing.T) {
 				name
 				gender
 				friend @filter(eq("dob", "1909-03-20")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+func TestToFastJSONFilterEqualName(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend @filter(eq(name, "Daryl Dixon")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Daryl Dixon"}], "gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestToFastJSONFilterEqualNameNoHit(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend @filter(eq(name, "Daryl")) {
 					name
 				}
 			}
