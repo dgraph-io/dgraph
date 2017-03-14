@@ -35,7 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -315,10 +314,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				}
 			}
 		} else {
-			// attribute is non-scalar, just let it go
-			if typ, terr := schema.State().TypeOf(pc.Attr); terr == nil && !typ.IsScalar() {
-				continue
-			}
 			tv := pc.values[idx]
 			v, err := getValue(tv)
 			if err != nil {
@@ -377,27 +372,18 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	return nil
 }
 
-// convert from task.Val to types.Value which is determined by attr
-// if convert failed, try convert to types.StringID
+// convert from task.Val to types.Value, based on schema appropriate type
+// is already set in taskp.Value
 func convertWithBestEffort(tv *taskp.Value, attr string) (types.Val, error) {
+	// value would be in binary format with appropriate type
 	v, _ := getValue(tv)
-	typ, err := schema.State().TypeOf(attr)
-	sv := types.ValueForType(types.StringID)
-	if err == nil {
-		// Try to coerce types if this is an optional scalar outside an
-		// object definition.
-		if !typ.IsScalar() {
-			return sv, x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
-		}
-		sv, err = types.Convert(v, typ)
-		if bytes.Equal(tv.Val, nil) || err != nil {
-			return sv, ErrEmptyVal
-		}
-	} else {
-		sv, err = types.Convert(v, types.StringID)
-		x.Check(err)
+	if !v.Tid.IsScalar() {
+		return v, x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
 	}
-	if bytes.Equal(tv.Val, nil) {
+	// creates appropriate type from binary format
+	sv, err := types.Convert(v, v.Tid)
+	x.Checkf(err, "Error while reading type from binary")
+	if bytes.Equal(tv.Val, nil) || err != nil {
 		return sv, ErrEmptyVal
 	}
 	return sv, nil

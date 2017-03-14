@@ -95,6 +95,29 @@ func convertValue(attr, data string) (types.Val, error) {
 	return dst, err
 }
 
+// Returns nil byte on error
+func convertToType(v types.Val, typ types.TypeID) (*taskp.Value, error) {
+	result := &taskp.Value{ValType: int32(typ), Val: x.Nilbyte}
+	if v.Tid == typ {
+		result.Val = v.Value.([]byte)
+		return result, nil
+	}
+
+	// conver data from binary to appropriate format
+	val, err := types.Convert(v, typ)
+	if err != nil {
+		return result, err
+	}
+	// Marshal
+	data := types.ValueForType(types.BinaryID)
+	err = types.Marshal(val, &data)
+	if err != nil {
+		return result, x.Errorf("Failed convertToType during Marshal")
+	}
+	result.Val = data.Value.([]byte)
+	return result, nil
+}
+
 type FuncType int
 
 const (
@@ -193,11 +216,15 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
-		newValue := &taskp.Value{ValType: int32(val.Tid)}
-		if err == nil {
-			newValue.Val = val.Value.([]byte)
-		} else {
-			newValue.Val = x.Nilbyte
+
+		newValue := &taskp.Value{ValType: int32(val.Tid), Val: x.Nilbyte}
+		if typ, err := schema.State().TypeOf(attr); isValueEdge && err == nil {
+			newValue, err = convertToType(val, typ)
+		} else if isValueEdge && err != nil {
+			// Ideally Schema should be present for already inserted mutation
+			// x.Checkf(err, "Schema not defined for attribute %s", attr)
+			// Converting to stored type for backward compatiblity of old inserted data
+			newValue, err = convertToType(val, val.Tid)
 		}
 		out.Values = append(out.Values, newValue)
 
