@@ -21,8 +21,11 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -3919,6 +3922,80 @@ func TestLangManyFallback(t *testing.T) {
 		js)
 }
 
+func checkSchemaNodes(t *testing.T, expected []*graphp.SchemaNode, actual []*graphp.SchemaNode) {
+	sort.Slice(expected, func(i, j int) bool {
+		return expected[i].Predicate >= expected[j].Predicate
+	})
+	sort.Slice(actual, func(i, j int) bool {
+		return actual[i].Predicate >= actual[j].Predicate
+	})
+	eq := reflect.DeepEqual(expected, actual)
+	if !eq {
+		fmt.Printf("Expected: %+v, Received: %+v \n", expected, actual)
+	}
+	require.True(t, eq)
+}
+
+func TestSchemaBlock1(t *testing.T) {
+	query := `
+		schema {
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{{Predicate: "genre"},
+		{Predicate: "age"}, {Predicate: "name"},
+		{Predicate: "film.film.initial_release_date"}, {Predicate: "loc"},
+		{Predicate: "alive"}, {Predicate: "shadow_deep"},
+		{Predicate: "friend"}, {Predicate: "geometry"},
+		{Predicate: "alias"}, {Predicate: "dob"}, {Predicate: "survival_rate"}}
+	checkSchemaNodes(t, expected, actual)
+}
+
+func TestSchemaBlock2(t *testing.T) {
+	query := `
+		schema(pred: name) {
+			index
+			reverse
+			type
+			tokenizer
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{
+		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact"}}}
+	checkSchemaNodes(t, expected, actual)
+}
+
+func TestSchemaBlock3(t *testing.T) {
+	query := `
+		schema(pred: age) {
+			index
+			reverse
+			type
+			tokenizer
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{
+		{Predicate: "age", Type: "int"}}
+	checkSchemaNodes(t, expected, actual)
+}
+
+func TestSchemaBlock4(t *testing.T) {
+	query := `
+		schema(pred: [age, genre, random]) {
+			index
+			reverse
+			type
+			tokenizer
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{
+		{Predicate: "genre", Type: "uid", Reverse: true}, {Predicate: "age", Type: "int"}}
+	checkSchemaNodes(t, expected, actual)
+}
+
 const schemaStr = `
 name:string @index(term, exact)
 alias:string @index(exact, term)
@@ -3957,6 +4034,8 @@ func TestMain(m *testing.M) {
 	worker.StartRaftNodes(dir2)
 	// Load schema after nodes have started
 	schema.ParseBytes([]byte(schemaStr), 1)
+	// wait for group membership sync
+	time.Sleep(15 * time.Second)
 	defer os.RemoveAll(dir2)
 
 	os.Exit(m.Run())
