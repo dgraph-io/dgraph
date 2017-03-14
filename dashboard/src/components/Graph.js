@@ -15,7 +15,7 @@ function Graph(props) {
         } else {
             bgColor = "";
         }
-    } else {
+    } else if (text !== "") {
         bgColor = "Graph-error";
     }
     let hourglass = isFetching ? "Graph-hourglass" : "";

@@ -1,6 +1,6 @@
 import React from "react";
 
-import Stats from "../components/Stats";
+import StatsContainer from "../containers/StatsContainer";
 import Properties from "../components/Properties";
 
 import { Button } from "react-bootstrap";
@@ -30,7 +30,7 @@ const ResponseInfo = (
         <Properties currentNode={currentNode} />
         <div className="ResponseInfo-stats">
             <div className="ResponseInfo-flex">
-                <Stats rendering={rendering} latency={latency} />
+                <StatsContainer />
                 <div>
                     Nodes:{" "}
                     {numNodes}

@@ -59,25 +59,27 @@ const saveResponseProperties = obj => ({
     ...obj
 });
 
+export const updateLatency = obj => ({
+    type: "UPDATE_LATENCY",
+    ...obj
+});
+
 export const renderGraph = (query, result, treeView) => {
     return dispatch => {
-        let startTime = new Date();
-
         let [nodes, edges, labels, nodesIdx, edgesIdx] = processGraph(
             result,
             treeView,
             query
         );
 
-        let endTime = new Date(),
-            timeTaken = (endTime.getTime() - startTime.getTime()) / 1000,
-            render = "";
-
-        if (timeTaken > 1) {
-            render = timeTaken.toFixed(1) + "s";
-        } else {
-            render = (timeTaken - Math.floor(timeTaken)) * 1000 + "ms";
-        }
+        dispatch(
+            updateLatency({
+                server: result.server_latency.total,
+                rendering: {
+                    start: new Date()
+                }
+            })
+        );
 
         dispatch(updatePartial(nodesIdx < nodes.length));
 
@@ -91,9 +93,7 @@ export const renderGraph = (query, result, treeView) => {
                 nodes: nodes.slice(0, nodesIdx),
                 edges: edges.slice(0, edgesIdx),
                 treeView: treeView,
-                latency: result.server_latency.total,
-                data: result,
-                rendering: render
+                data: result
             })
         );
     };

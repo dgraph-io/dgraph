@@ -7,12 +7,15 @@ import {
     setCurrentNode,
     updatePartial,
     updateProgress,
-    hideProgressBar
+    hideProgressBar,
+    updateLatency
 } from "../actions";
 import { outgoingEdges } from "./Helpers";
 import _ from "lodash/object";
 
 import "../assets/css/Graph.css";
+
+import "vis/dist/vis.min.css";
 
 function childNodes(edges) {
     return edges.map(function(edge) {
@@ -79,6 +82,7 @@ function renderNetwork(props, dispatch) {
                 enabled: true,
                 bindToWindow: false
             },
+            navigationButtons: true,
             tooltipDelay: 1000000,
             hideEdgesOnDrag: true
         },
@@ -154,6 +158,13 @@ function renderNetwork(props, dispatch) {
 
     network.once("stabilizationIterationsDone", function() {
         dispatch(hideProgressBar());
+        dispatch(
+            updateLatency({
+                rendering: {
+                    end: new Date()
+                }
+            })
+        );
     });
 
     function multiLevelExpand(nodeId) {
@@ -405,7 +416,11 @@ class GraphContainer extends Component {
     }
 
     componentWillReceiveProps = nextProps => {
-        if (nextProps.nodes.length === 0 && this.props.nodes.length === 0) {
+        let network = this.state.network;
+
+        if (nextProps.nodes.length === 0) {
+            network && network.destroy();
+            this.setState({ network: undefined });
             return;
         }
 
@@ -423,7 +438,6 @@ class GraphContainer extends Component {
             return;
         }
 
-        let network = this.state.network;
         if (network !== undefined) {
             network.destroy();
             this.setState({ network: undefined });

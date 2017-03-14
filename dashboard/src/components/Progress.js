@@ -1,11 +1,13 @@
 import React from "react";
 import { ProgressBar } from "react-bootstrap";
 
+import "../assets/css/Graph.css";
+
 function Progress(props) {
     let { display, perc } = props;
     return display &&
         <ProgressBar
-            style={{ top: "50%", margin: "auto 10%", position: "relative" }}
+            className="Graph-progress"
             active={true}
             now={perc}
             min={0}
