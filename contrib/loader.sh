@@ -29,18 +29,20 @@ export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
 export CGO_LDFLAGS="-L${ROCKSDBDIR}"
 export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
-# schema file
-echo -e "
-	name: string @index
-	initial_release_date: date @index
-" > $BUILD/schema.txt
-
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph -gentlecommit 1.0 -schema $BUILD/schema.txt &
+./dgraph -gentlecommit 1.0 &
 popd &> /dev/null
 
-sleep 5
+sleep 15
+
+#Set Schema
+curl -X POST  -d 'mutation {
+  schema {
+	  name: string @index
+	  initial_release_date: date @index
+	}
+}' "http://localhost:8080/query"
 
 pushd cmd/dgraphloader &> /dev/null
 go build .

@@ -17,8 +17,6 @@
 package schema
 
 import (
-	"io/ioutil"
-
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
@@ -26,15 +24,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
-
-// Parse parses the schema file.
-func parseFile(file string, gid uint32) (rerr error) {
-	b, err := ioutil.ReadFile(file)
-	if err != nil {
-		return x.Errorf("Error reading file: %v", err)
-	}
-	return ParseBytes(b, gid)
-}
 
 func From(s *graphp.SchemaUpdate) typesp.Schema {
 	if s.Directive == graphp.SchemaUpdate_REVERSE {
