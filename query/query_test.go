@@ -2058,6 +2058,7 @@ func TestToFastJSONReverseDelSet(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"name":"Glenn Rhee","~friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`,
 		js)
+	delEdgeToUID(t, "friend", 25, 24)
 }
 
 func TestToFastJSONReverseDelSetCount(t *testing.T) {
@@ -2078,6 +2079,7 @@ func TestToFastJSONReverseDelSetCount(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
 		js)
+	delEdgeToUID(t, "friend", 25, 24)
 }
 
 func getProperty(properties []*graph.Property, prop string) *graph.Value {
