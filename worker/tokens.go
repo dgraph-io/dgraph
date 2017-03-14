@@ -69,7 +69,7 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	}
 
 	var out []string
-	indexPrefix := x.IndexKey(attr, string(tok.Identifier())) //x.ParsedKey{Attr: attr}.IndexPrefix()
+	indexPrefix := x.IndexKey(attr, string(tok.Identifier()))
 	for it.Valid() && it.ValidForPrefix(indexPrefix) {
 		k := x.Parse(it.Key().Data())
 		x.AssertTrue(k != nil)
