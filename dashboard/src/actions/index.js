@@ -161,3 +161,14 @@ export const updateFullscreen = fs => ({
     type: "UPDATE_FULLSCREEN",
     fs
 });
+
+export const updateProgress = perc => ({
+    type: "UPDATE_PROGRESS",
+    perc,
+    display: true
+});
+
+export const hideProgressBar = () => ({
+    type: "HIDE_PROGRESS",
+    dispatch: false
+});

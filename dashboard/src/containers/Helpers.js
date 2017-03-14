@@ -249,8 +249,9 @@ function extractFacets(val, edgeAttributes, properties) {
   }
 }
 
-function findAndMerge(nodes, properties) {
-  let uid = properties["attrs"]["_uid_"],
+function findAndMerge(nodes, n) {
+  let properties = JSON.parse(n.title),
+    uid = properties["attrs"]["_uid_"],
     idx = nodes.findIndex(function(node) {
       return node.id === uid;
     });
@@ -263,9 +264,12 @@ function findAndMerge(nodes, properties) {
   let node = nodes[idx], props = JSON.parse(node.title);
   _.merge(props, properties);
   node.title = JSON.stringify(props);
+  // For shortest path, this would overwrite the color and this is fine
+  // because actual shortes path is traversed later.
+  node.color = n.color;
 
   if (node.label === "") {
-    node.label = getNodeLabel(properties["attrs"]);
+    node.label = n.label;
   }
   nodes[idx] = node;
 }
@@ -317,16 +321,16 @@ export function processGraph(
     // This helps quickly find if a label has already been assigned.
     groups = {};
 
-  for (var root in response) {
-    if (!response.hasOwnProperty(root)) {
-      continue;
+  for (var k in response) {
+    if (!response.hasOwnProperty(k)) {
+      return;
     }
 
     someNodeHasChildren = false;
     ignoredChildren = [];
 
-    if (root !== "server_latency" && root !== "uids") {
-      let block = response[root];
+    if (k !== "server_latency" && k !== "uids") {
+      let block = response[k];
       for (let i = 0; i < block.length; i++) {
         // if (isUseless(block[i])) {
         //   continue;
@@ -336,7 +340,7 @@ export function processGraph(
           node: block[i],
           src: {
             id: "",
-            pred: root
+            pred: k
           }
         };
 
@@ -365,7 +369,7 @@ export function processGraph(
     // Check if this is an empty node.
     if (Object.keys(obj.node).length === 0 && obj.src.pred === "empty") {
       // Only nodes and edges upto nodesIndex, edgesIndex are rendered on first load.
-      if (nodesIndex === undefined && nodes.length > 100) {
+      if (nodesIndex === undefined && nodes.length > 50) {
         // Nodes upto level 1 are rendered only if the total number is less than 100. Else only
         // nodes at level 0 are rendered.
         nodesIndex = nodes.length;
@@ -465,7 +469,7 @@ export function processGraph(
     } else {
       // We have already put this node. So we need to find the node in nodes,
       // merge new properties and put it back.
-      findAndMerge(nodes, properties);
+      findAndMerge(nodes, n);
     }
 
     // Root nodes don't have a source node, so we don't want to create any edge for them.

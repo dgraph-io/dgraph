@@ -1,6 +1,7 @@
 import React from "react";
 
 import Label from "../components/Label";
+import ProgressBarContainer from "../containers/ProgressBarContainer";
 
 import "../assets/css/Graph.css";
 
@@ -22,6 +23,7 @@ function Graph(props) {
     return (
         <div className="Graph-wrapper">
             <div className={fs ? "Graph-full-height" : "Graph-fixed-height"}>
+                <ProgressBarContainer />
                 <div
                     id="graph"
                     className={`Graph ${graphClass} ${bgColor} ${hourglass}`}
@@ -42,7 +44,7 @@ function Graph(props) {
                                 />
                             );
                         },
-                        this,
+                        this
                     )}
                 </div>
             </div>

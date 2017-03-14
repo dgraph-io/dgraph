@@ -3,7 +3,12 @@ import { connect } from "react-redux";
 import vis from "vis";
 
 import Graph from "../components/Graph";
-import { setCurrentNode, updatePartial } from "../actions";
+import {
+    setCurrentNode,
+    updatePartial,
+    updateProgress,
+    hideProgressBar
+} from "../actions";
 import { outgoingEdges } from "./Helpers";
 import _ from "lodash/object";
 
@@ -84,7 +89,8 @@ function renderNetwork(props, dispatch) {
         physics: {
             stabilization: {
                 fit: true,
-                iterations: 1000
+                updateInterval: 5,
+                iterations: 20
             },
             // timestep: 0.4,
             barnesHut: {
@@ -98,25 +104,16 @@ function renderNetwork(props, dispatch) {
         }
     };
 
-    // We want to complete the iterations  quickly, so that we can render and stabilize
-    // in the background.
-    // if (data.nodes.length > 1000) {
-    //     Object.assign(options, {
-    //         physics: {
-    //             stabilization: {
-    //                 iterations: 10
-    //             }
-    //         }
-    //     });
-    // } else if (data.nodes.length > 100) {
-    //     Object.assign(options, {
-    //         physics: {
-    //             stabilization: {
-    //                 iterations: 100
-    //             }
-    //         }
-    //     });
-    // }
+    if (data.nodes.length < 100) {
+        _.merge(options, {
+            physics: {
+                stabilization: {
+                    iterations: 200,
+                    updateInterval: 50
+                }
+            }
+        });
+    }
 
     if (props.treeView) {
         Object.assign(options, {
@@ -151,29 +148,12 @@ function renderNetwork(props, dispatch) {
     }
 
     network.on("stabilizationProgress", function(params) {
-        var maxWidth = 496;
-        var minWidth = 20;
         var widthFactor = params.iterations / params.total;
-        console.log(widthFactor);
-        var width = Math.max(minWidth, maxWidth * widthFactor);
-        // console
-        // document.getElementById("bar").style.width = width + "px";
-        // document.getElementById("text").innerHTML = Math.round(
-        //     widthFactor * 100
-        // ) + "%";
+        dispatch(updateProgress(widthFactor * 100));
     });
 
-    network.on("stabilized", function(params) {
-        // network.setOptions(
-        //     _.merge(options, {
-        //         physics: {
-        //             stabilization: {
-        //                 iterations: 1000
-        //             }
-        //         }
-        //     })
-        // );
-        console.log(network);
+    network.once("stabilizationIterationsDone", function() {
+        dispatch(hideProgressBar());
     });
 
     function multiLevelExpand(nodeId) {
@@ -446,6 +426,7 @@ class GraphContainer extends Component {
         let network = this.state.network;
         if (network !== undefined) {
             network.destroy();
+            this.setState({ network: undefined });
         }
         renderNetwork.bind(this, nextProps, this.props.dispatch)();
     };
