@@ -23,6 +23,10 @@ export const deleteQuery = idx => ({
     idx
 });
 
+export const deleteAllQueries = () => ({
+    type: "DELETE_ALL_QUERIES"
+});
+
 export const setCurrentNode = node => ({
     type: "SELECT_NODE",
     node

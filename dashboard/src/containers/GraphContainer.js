@@ -144,6 +144,17 @@ function renderNetwork(props, dispatch) {
         network: network
     });
 
+    if (props.treeView) {
+        // In tree view, physics is disabled and stabilizationIterationDone is not fired.
+        dispatch(
+            updateLatency({
+                rendering: {
+                    end: new Date()
+                }
+            })
+        );
+    }
+
     if (
         allNodeSet.length !== data.nodes.length ||
         allEdgeSet.length !== data.edges.length

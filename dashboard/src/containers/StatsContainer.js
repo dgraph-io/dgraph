@@ -6,13 +6,17 @@ function renderTime(rendering) {
     if (rendering.end === undefined || rendering.start === undefined) {
         return "";
     }
+
+    if (rendering.end.getTime() < rendering.start.getTime()) {
+        return;
+    }
     let timeTaken = (rendering.end.getTime() - rendering.start.getTime()) /
         1000;
 
     if (timeTaken > 1) {
         return timeTaken.toFixed(1) + "s";
     }
-    return (timeTaken - Math.floor(timeTaken)) * 1000 + "ms";
+    return ((timeTaken - Math.floor(timeTaken)) * 1000).toFixed(0) + "ms";
 }
 
 const mapStateToProps = (state, ownProps) => ({
