@@ -218,13 +218,15 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		isValueEdge := err == nil
 
 		newValue := &taskp.Value{ValType: int32(val.Tid), Val: x.Nilbyte}
-		if typ, err := schema.State().TypeOf(attr); isValueEdge && err == nil {
-			newValue, err = convertToType(val, typ)
-		} else if isValueEdge && err != nil {
-			// Ideally Schema should be present for already inserted mutation
-			// x.Checkf(err, "Schema not defined for attribute %s", attr)
-			// Converting to stored type for backward compatiblity of old inserted data
-			newValue, err = convertToType(val, val.Tid)
+		if isValueEdge {
+			if typ, err := schema.State().TypeOf(attr); err == nil {
+				newValue, err = convertToType(val, typ)
+			} else if err != nil {
+				// Ideally Schema should be present for already inserted mutation
+				// x.Checkf(err, "Schema not defined for attribute %s", attr)
+				// Converting to stored type for backward compatiblity of old inserted data
+				newValue, err = convertToType(val, val.Tid)
+			}
 		}
 		out.Values = append(out.Values, newValue)
 

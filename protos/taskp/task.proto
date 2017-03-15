@@ -116,6 +116,7 @@ message Mutations {
 message Schema {
 	uint32 group_id = 1;
 	repeated string predicates = 2;
+	// fields can be on of type, index, reverse or tokenizer
 	repeated string fields = 3; 
 }
 

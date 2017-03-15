@@ -32,6 +32,11 @@ var (
 	emptySchemaResult taskp.SchemaResult
 )
 
+type resultErr struct {
+	result *taskp.SchemaResult
+	err    error
+}
+
 // getSchema iterates over all predicates and populates the asked fields, if list of
 // predicates is not specified, then all the predicates belonging to the group
 // are returned
@@ -122,27 +127,25 @@ func addToSchemaMap(schemaMap map[uint32]*taskp.Schema, schema *graphp.Schema) {
 // to relevant node
 // TODO: Janardhan - if read fails try other servers serving same group
 func getSchemaOverNetwork(ctx context.Context, gid uint32, s *taskp.Schema,
-	results []*taskp.SchemaResult, idx int, che chan error) {
+	ch chan *resultErr) {
 	if groups().ServesGroup(gid) {
-		schema, err := getSchema(ctx, s)
-		results[idx] = schema
-		che <- err
+		schema, e := getSchema(ctx, s)
+		ch <- &resultErr{result: schema, err: e}
 		return
 	}
 
 	_, addr := groups().Leader(gid)
 	pl := pools().get(addr)
-	conn, err := pl.Get()
-	if err != nil {
-		che <- err
+	conn, e := pl.Get()
+	if e != nil {
+		ch <- &resultErr{err: e}
 		return
 	}
 	defer pl.Put(conn)
 
 	c := workerp.NewWorkerClient(conn)
-	schema, err := c.Schema(ctx, s)
-	results[idx] = schema
-	che <- err
+	schema, e := c.Schema(ctx, s)
+	ch <- &resultErr{result: schema, err: e}
 }
 
 // GetSchemaOverNetwork checks which group should be serving the schema
@@ -151,32 +154,28 @@ func GetSchemaOverNetwork(ctx context.Context, schema *graphp.Schema) ([]*graphp
 	schemaMap := make(map[uint32]*taskp.Schema)
 	addToSchemaMap(schemaMap, schema)
 
-	errors := make(chan error, len(schemaMap))
-	results := make([]*taskp.SchemaResult, len(schemaMap))
-	i := 0
+	results := make(chan *resultErr, len(schemaMap))
+	var schemaNodes []*graphp.SchemaNode
+
 	for gid, s := range schemaMap {
-		go getSchemaOverNetwork(ctx, gid, s, results, i, errors)
-		i = i + 1
+		go getSchemaOverNetwork(ctx, gid, s, results)
 	}
 
 	// wait for all the goroutines to reply back.
 	// we return if an error was returned or the parent called ctx.Done()
 	for i := 0; i < len(schemaMap); i++ {
 		select {
-		case err := <-errors:
-			if err != nil {
-				return nil, err
+		case r := <-results:
+			if r.err != nil {
+				return nil, r.err
 			}
+			schemaNodes = append(schemaNodes, r.result.Schema...)
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
 	}
-	close(errors)
+	close(results)
 
-	var schemaNodes []*graphp.SchemaNode
-	for _, result := range results {
-		schemaNodes = append(schemaNodes, result.Schema...)
-	}
 	return schemaNodes, nil
 }
 

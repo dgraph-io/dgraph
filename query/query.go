@@ -382,11 +382,12 @@ func convertWithBestEffort(tv *taskp.Value, attr string) (types.Val, error) {
 	if !v.Tid.IsScalar() {
 		return v, x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
 	}
+	if bytes.Equal(tv.Val, nil) {
+		return v, ErrEmptyVal
+	}
 	// creates appropriate type from binary format
 	sv, err := types.Convert(v, v.Tid)
-	if bytes.Equal(tv.Val, nil) || err != nil {
-		return sv, ErrEmptyVal
-	}
+	x.Checkf(err, "Error while interpreting appropriate type from binary")
 	return sv, nil
 }
 

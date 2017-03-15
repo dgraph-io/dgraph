@@ -184,7 +184,6 @@ func populateGraph(t *testing.T) {
 	fData := types.ValueForType(types.BinaryID)
 	err = types.Marshal(f1, &fData)
 	require.NoError(t, err)
-	//addEdgeToTypedValue(t, "survival_rate", 1, types.FloatID, fData.Value.([]byte), nil)
 	addEdgeToTypedValue(t, "survival_rate", 23, types.FloatID, fData.Value.([]byte), nil)
 	addEdgeToTypedValue(t, "survival_rate", 24, types.FloatID, fData.Value.([]byte), nil)
 	addEdgeToTypedValue(t, "survival_rate", 25, types.FloatID, fData.Value.([]byte), nil)
@@ -1031,10 +1030,10 @@ func TestMinSchema(t *testing.T) {
 
 	schema.State().SetType("survival_rate", types.Int32ID)
 	js = processToFastJSON(t, query)
-	schema.State().SetType("survival_rate", types.FloatID)
 	require.EqualValues(t,
 		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1}],"gender":"female","name":"Michonne"}]}`,
 		js)
+	schema.State().SetType("survival_rate", types.FloatID)
 }
 
 func TestMax(t *testing.T) {

@@ -82,6 +82,9 @@ func (w *grpcWorker) RebuildIndex(ctx context.Context, req *taskp.RebuildIndex) 
 	if ctx.Err() != nil {
 		return &workerp.Payload{}, ctx.Err()
 	}
+	if !schema.State().IsIndexed(req.Attr) {
+		return &workerp.Payload{}, x.Errorf("Attribute %s is not indexed", req.Attr)
+	}
 	if err := proposeRebuildIndex(ctx, req); err != nil {
 		return &workerp.Payload{}, err
 	}

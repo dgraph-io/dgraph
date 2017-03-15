@@ -661,26 +661,11 @@ type keywords struct {
 	Keywords []keyword `json:"keywords"`
 }
 
-func predicates(w http.ResponseWriter) []string {
-	var preds []string
-	ctx := context.Background()
-	schema, err := worker.GetSchemaOverNetwork(ctx, &graphp.Schema{})
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return preds
-	}
-	for _, s := range schema {
-		preds = append(preds, s.Predicate)
-	}
-	return preds
-}
-
 // Used to return a list of keywords, so that UI can show them for autocompletion.
 func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
-	// TODO: Remove this code and replace this
-	preds := predicates(w)
+	// TODO: Remove this code and replace with query from ui
+	preds := schema.State().Predicates(1)
 	kw := make([]keyword, 0, len(preds))
 	for _, p := range preds {
 		kw = append(kw, keyword{
