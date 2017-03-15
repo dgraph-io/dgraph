@@ -45,13 +45,13 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func addPassword(t *testing.T, uid uint64, password string) {
+func addPassword(t *testing.T, uid uint64, attr, password string) {
 	value := types.ValueForType(types.BinaryID)
 	src := types.ValueForType(types.PasswordID)
 	src.Value, _ = types.Encrypt(password)
 	err := types.Marshal(src, &value)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "password", uid, types.PasswordID, value.Value.([]byte), nil)
+	addEdgeToTypedValue(t, attr, uid, types.PasswordID, value.Value.([]byte), nil)
 }
 
 var ps *store.Store
@@ -136,11 +136,12 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "sword_present", 1, "true", nil)
 	addEdgeToValue(t, "_xid_", 1, "mich", nil)
 
-	addPassword(t, 1, "123456")
+	addPassword(t, 1, "password", "123456")
 
 	// Now let's add a name for each of the friends, except 101.
 	addEdgeToTypedValue(t, "name", 23, types.StringID, []byte("Rick Grimes"), nil)
 	addEdgeToValue(t, "age", 23, "15", nil)
+	addPassword(t, 23, "pass", "654321")
 
 	src.Value = []byte(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]}`)
 	coord, err = types.Convert(src, types.GeoID)
@@ -1131,6 +1132,22 @@ func TestCheckPasswordIncorrect(t *testing.T) {
 		`{"me":[{"name":"Michonne","password":[{"checkpwd":false}]}]}`,
 		js)
 
+}
+
+func TechCheckPasswordDifferentAttr(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                checkpwd(pass, "654123")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"name":"Rick Grimes","password":[{"checkpwd":true}]}]}`,
+		js)
 }
 
 func TestToSubgraphInvalidFnName(t *testing.T) {
