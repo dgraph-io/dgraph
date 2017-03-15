@@ -29,6 +29,7 @@ const (
 	itemLeftRound                          // left round bracket
 	itemRightRound                         // right round bracket
 	itemAt
+	itemComma
 )
 
 func lexText(l *lex.Lexer) lex.StateFn {
@@ -40,8 +41,10 @@ Loop:
 		case isNameBegin(r):
 			l.Backup()
 			return lexWord
-		case isSpace(r) || isEndOfLine(r) || r == ',':
+		case isSpace(r) || isEndOfLine(r):
 			l.Ignore()
+		case r == ',':
+			l.Emit(itemComma)
 		case r == '<':
 			if err := lex.LexIRIRef(l, itemText); err != nil {
 				return l.Errorf("Invalid schema: %v", err)
