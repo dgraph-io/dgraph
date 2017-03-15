@@ -885,6 +885,9 @@ func parseArguments(it *lex.ItemIterator) (result []pair, rerr error) {
 			p.Key = item.Val
 			expectArg = false
 		} else if item.Typ == itemRightRound {
+			if expectArg {
+				return nil, x.Errorf("Unexpected comma before ).")
+			}
 			break
 		} else if item.Typ == itemComma {
 			expectArg = true
@@ -1017,8 +1020,7 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
-	var expectArg bool
-	var seenFuncArg bool
+	var expectArg, seenFuncArg bool
 L:
 	for it.Next() {
 		item := it.Item()
@@ -1029,6 +1031,7 @@ L:
 			if itemInFunc.Typ != itemLeftRound {
 				return nil, x.Errorf("Expected ( after func name [%s] but got %v", g.Name, itemInFunc.Val)
 			}
+			expectArg = true
 			for it.Next() {
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
@@ -1055,6 +1058,9 @@ L:
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
 				}
+				if !expectArg {
+					return nil, x.Errorf("Expected comma but got: %s", itemInFunc.Val)
+				}
 				val := strings.Trim(itemInFunc.Val, "\" \t")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
@@ -1073,7 +1079,6 @@ L:
 			return nil, x.Errorf("Expected a function but got %q", item.Val)
 		}
 	}
-	_ = expectArg
 	return g, nil
 }
 

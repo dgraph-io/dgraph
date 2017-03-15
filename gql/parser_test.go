@@ -43,7 +43,7 @@ func TestParseQueryWithVarMultiRoot(t *testing.T) {
 	}
 `
 	res, err := Parse(query)
-	require.NoError(t, err)
+	require.Error(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 4, len(res.Query))
 	require.Equal(t, "L", res.Query[0].NeedsVar[0])
