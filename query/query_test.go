@@ -478,9 +478,9 @@ func TestNestedFuncRoot(t *testing.T) {
 	query := `
     {
 			me(func: gt(count(friend), 2)) {
-        name
-      }
-    }
+				name
+			}
+		}
   `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, js)
@@ -491,11 +491,11 @@ func TestNestedFuncRoot2(t *testing.T) {
 	posting.CommitLists(10)
 	time.Sleep(100 * time.Millisecond)
 	query := `
-    {
+		{
 			me(func: geq(count(friend), 1)) {
-        name
-      }
-    }
+				name
+			}
+		}
   `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Andrea"}]}`, js)

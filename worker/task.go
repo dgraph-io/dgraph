@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
@@ -287,15 +286,14 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		dataPrefix := pk.DataPrefix()
 
 		for it.Seek(dataPrefix); it.ValidForPrefix(dataPrefix); it.Next() {
+			x.AssertTruef(pk.IsData() && pk.Attr == q.Attr,
+				"Invalid key obtained for comparison")
 			key := it.Key().Data()
 			pl, decr := posting.GetOrCreate(key, gid)
 			count := int64(pl.Length(0))
 			decr()
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
 				pk := x.Parse(key)
-				x.AssertTruef(pk.IsData() && pk.Attr == q.Attr,
-					"Invalid key obtained for comparison")
-				fmt.Println(pk.Uid, pk.Attr, pl.Uids(opts))
 				tlist := &taskp.List{[]uint64{pk.Uid}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
