@@ -4013,8 +4013,7 @@ func TestSchemaBlock3(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*graphp.SchemaNode{
-		{Predicate: "age", Type: "int"}}
+	expected := []*graphp.SchemaNode{{Predicate: "age", Type: "int"}}
 	checkSchemaNodes(t, expected, actual)
 }
 
