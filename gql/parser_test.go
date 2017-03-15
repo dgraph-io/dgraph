@@ -1906,6 +1906,22 @@ func TestParseNormalize(t *testing.T) {
 	require.True(t, res.Query[0].Normalize)
 }
 
+func TestParseFacetsError(t *testing.T) {
+	query := `
+	query {
+		me(id:0x1) {
+			friends @facets {
+				name @facets(facet1 facet2)
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseFacets(t *testing.T) {
 	query := `
 	query {
@@ -1929,6 +1945,7 @@ func TestParseFacets(t *testing.T) {
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
 	require.Equal(t, []string{"facet1"}, res.Query[0].Children[0].Children[0].Facets.Keys)
 }
+
 func TestParseFacetsMultiple(t *testing.T) {
 	query := `
 	query {
