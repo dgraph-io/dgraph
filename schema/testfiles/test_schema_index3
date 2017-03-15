@@ -1,0 +1,1 @@
+name:string @index(exact term)
