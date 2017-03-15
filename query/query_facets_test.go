@@ -23,6 +23,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -209,6 +210,25 @@ func TestFetchingFewFacets(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Rick Grimes"},{"@facets":{"_":{"close":true}},"name":"Glenn Rhee"},{"@facets":{"_":{"close":false}},"name":"Daryl Dixon"},{"name":"Andrea"},{"@facets":{"_":{"close":true}}}],"name":"Michonne"}]}`,
 		js)
+}
+
+func TestFacetsError(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+	// order of facets in gql query should not matter.
+	query := `
+		{
+			me(id:0x1) {
+				name
+				friend @facets(family close) {
+					name
+				}
+			}
+		}
+	`
+
+	_, err := gql.Parse(query)
+	require.Error(t, err)
 }
 
 func TestFacetsSortOrder(t *testing.T) {

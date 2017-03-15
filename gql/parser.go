@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 )
@@ -656,7 +655,7 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 			return items, nil
 		case itemName:
 			items = append(items, item.Val)
-		case comma:
+		case itemComma:
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
@@ -789,11 +788,15 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 }
 
 func parseVariables(it *lex.ItemIterator, vmap varMap) error {
+	expectArg := true
 	for it.Next() {
 		var varName string
 		// Get variable name.
 		item := it.Item()
 		if item.Typ == itemDollar {
+			if !expectArg {
+				return x.Errorf("Missing comma in var declaration")
+			}
 			it.Next()
 			item = it.Item()
 			if item.Typ == itemName {
@@ -802,7 +805,16 @@ func parseVariables(it *lex.ItemIterator, vmap varMap) error {
 				return x.Errorf("Expecting a variable name. Got: %v", item)
 			}
 		} else if item.Typ == itemRightRound {
+			if expectArg {
+				return x.Errorf("Invalid comma in var block")
+			}
 			break
+		} else if item.Typ == itemComma {
+			if expectArg {
+				return x.Errorf("Invalid comma in var block")
+			}
+			expectArg = true
+			continue
 		} else {
 			return x.Errorf("Unexpected item in place of variable. Got: %v %v", item, item.Typ == itemDollar)
 		}
@@ -867,6 +879,7 @@ func parseVariables(it *lex.ItemIterator, vmap varMap) error {
 			// We consumed an extra item to see if it was an '=' sign, so move back.
 			it.Prev()
 		}
+		expectArg = false
 	}
 	return nil
 }
@@ -1433,11 +1446,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			gen, err := parseFunction(it)
 			if err != nil {
 				return gq, err
-			}
-			if !schema.State().IsIndexed(gen.Attr) {
-				return nil, x.Errorf(
-					"Field %s is not indexed and cannot be used in functions",
-					gen.Attr)
 			}
 			if err != nil {
 				return nil, err

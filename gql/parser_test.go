@@ -17,6 +17,7 @@
 package gql
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -43,7 +44,7 @@ func TestParseQueryWithVarMultiRoot(t *testing.T) {
 	}
 `
 	res, err := Parse(query)
-	require.Error(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 4, len(res.Query))
 	require.Equal(t, "L", res.Query[0].NeedsVar[0])
@@ -1512,7 +1513,7 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 }
 
 func TestParseCountAsFuncMultipleError(t *testing.T) {
-	require.NoError(t, schema.ParseBytes([]byte("scalar name:string @index"), 1))
+	require.NoError(t, schema.ParseBytes([]byte("name:string @index"), 1))
 	query := `{
 		me(id:1) {
 			count(friends, relatives
@@ -1661,7 +1662,7 @@ func TestParseIRIRef(t *testing.T) {
 
 func TestParseIRIRef2(t *testing.T) {
 	require.NoError(t, schema.ParseBytes(
-		[]byte("scalar <http://helloworld.com/how/are/you>:string @index"), 1))
+		[]byte("<http://helloworld.com/how/are/you>:string @index"), 1))
 	query := `{
 		me(func:anyofterms(<http://helloworld.com/how/are/you>, "good better bad")) {
 			<http://verygood.com/what/about/you>
@@ -2165,4 +2166,5 @@ func TestFacetsFilterAtValue(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	group.ParseGroupConfig("")
+	os.Exit(m.Run())
 }
