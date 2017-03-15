@@ -69,11 +69,12 @@ export const updateLatency = obj => ({
 });
 
 export const renderGraph = (query, result, treeView) => {
-    return dispatch => {
+    return (dispatch, getState) => {
         let [nodes, edges, labels, nodesIdx, edgesIdx] = processGraph(
             result,
             treeView,
-            query
+            query,
+            getState().query.propertyRegex
         );
 
         dispatch(
@@ -125,13 +126,20 @@ export const runQuery = query => {
                 .then(response => response.json())
                 .then(function handleResponse(result) {
                     dispatch(fetchedResponse());
-                    // This is the case in which user sends a mutation. We display the response from server.
                     if (
                         result.code !== undefined &&
                         result.message !== undefined
                     ) {
-                        dispatch(addQuery(query));
-                        dispatch(saveSuccessResponse(JSON.stringify(result)));
+                        if (result.code.startsWith("Error")) {
+                            dispatch(saveErrorResponse(result.message));
+                            // This is the case in which user sends a mutation.
+                            // We display the response from server.
+                        } else {
+                            dispatch(addQuery(query));
+                            dispatch(
+                                saveSuccessResponse(JSON.stringify(result))
+                            );
+                        }
                     } else if (isNotEmpty(result)) {
                         dispatch(addQuery(query));
                         let mantainSortOrder = showTreeView(query);
@@ -175,4 +183,9 @@ export const updateProgress = perc => ({
 export const hideProgressBar = () => ({
     type: "HIDE_PROGRESS",
     dispatch: false
+});
+
+export const updateRegex = regex => ({
+    type: "UPDATE_PROPERTY_REGEX",
+    regex
 });

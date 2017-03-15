@@ -25,16 +25,16 @@ export function timeout(ms, promise) {
 }
 
 export function aggregationPrefix(properties) {
-  let aggTerms = ["count", "max(", "min(", "sum("];
+  let aggTerms = ["max(", "min(", "sum("];
   for (let k in properties) {
     if (!properties.hasOwnProperty(k)) {
       continue;
     }
     for (let term of aggTerms) {
+      if (term === "count" && k === "count") {
+        return [term, k];
+      }
       if (k.startsWith(term)) {
-        if (term === "count") {
-          return [term, k];
-        }
         return [term.substr(0, term.length - 1), k];
       }
     }
@@ -42,20 +42,23 @@ export function aggregationPrefix(properties) {
   return ["", ""];
 }
 
-function getNameKey(properties) {
+function getNameKey(properties, regex) {
   for (let i in properties) {
     if (!properties.hasOwnProperty(i)) {
       continue;
     }
-    let toLower = i.toLowerCase();
-    if (toLower === "name") {
+    if (regex.test(i)) {
       return i;
     }
   }
   return "";
 }
 
-export function getNodeLabel(properties: Object): string {
+export function getNodeLabel(properties: Object, regex: string): string {
+  if (regex === "") {
+    return "";
+  }
+
   var label = "";
 
   let keys = Object.keys(properties);
@@ -66,7 +69,7 @@ export function getNodeLabel(properties: Object): string {
     }
   }
 
-  let nameKey = getNameKey(properties);
+  let nameKey = getNameKey(properties, regex);
   if (nameKey === "") {
     return "";
   }
@@ -277,7 +280,8 @@ function findAndMerge(nodes, n) {
 export function processGraph(
   response: Object,
   treeView: boolean,
-  query: string
+  query: string,
+  regex: string
 ) {
   let nodesQueue: Array<ResponseNode> = [],
     // Contains map of a lable to its shortform thats displayed.
@@ -320,6 +324,8 @@ export function processGraph(
     // Stores the map of a label to boolean (only true values are stored).
     // This helps quickly find if a label has already been assigned.
     groups = {};
+
+  regex = new RegExp(regex);
 
   for (var k in response) {
     if (!response.hasOwnProperty(k)) {
@@ -454,7 +460,9 @@ export function processGraph(
       x: x,
       // For aggregation nodes, label is the actual value, for other nodes its
       // the value of name.
-      label: aggrTerm !== "" ? nodeAttrs[aggrPred] : getNodeLabel(nodeAttrs),
+      label: aggrTerm !== ""
+        ? nodeAttrs[aggrPred]
+        : getNodeLabel(nodeAttrs, regex),
       title: JSON.stringify(properties),
       color: props.color,
       group: obj.src.pred
@@ -489,4 +497,14 @@ export function processGraph(
   }
 
   return [nodes, edges, createAxisPlot(groups), nodesIndex, edgesIndex];
+}
+
+export function sortStrings(a, b) {
+  var nameA = a.toLowerCase(), nameB = b.toLowerCase();
+  if (
+    nameA < nameB //sort string ascending
+  )
+    return -1;
+  if (nameA > nameB) return 1;
+  return 0; //default return value (no sorting)
 }
