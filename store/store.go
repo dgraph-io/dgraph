@@ -69,7 +69,7 @@ func NewSyncStore(filepath string) (*Store, error) {
 	s.wopt.SetSync(true) // Do synchronous writes.
 	var err error
 	s.db, err = rdb.OpenDb(s.opt, filepath)
-	return s, x.Wrap(err)
+	return s, x.Wrapf(err, "Directory: %v", filepath)
 }
 
 // NewReadOnlyStore constructs a readonly Store object at filepath, given options.
