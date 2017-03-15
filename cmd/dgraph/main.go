@@ -54,6 +54,8 @@ import (
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/soheilhy/cmux"
@@ -220,7 +222,7 @@ func applyMutations(ctx context.Context, m *taskp.Mutations) error {
 	return nil
 }
 
-func convertAndApply(ctx context.Context, set []*graphp.NQuad, del []*graphp.NQuad) (map[string]uint64, error) {
+func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var m taskp.Mutations
 	var err error
@@ -230,7 +232,7 @@ func convertAndApply(ctx context.Context, set []*graphp.NQuad, del []*graphp.NQu
 		return nil, fmt.Errorf("Mutations are forbidden on this server.")
 	}
 
-	if mr, err = convertToEdges(ctx, set); err != nil {
+	if mr, err = convertToEdges(ctx, mutation.Set); err != nil {
 		return nil, err
 	}
 	m.Edges, allocIds = mr.edges, mr.newUids
@@ -238,7 +240,7 @@ func convertAndApply(ctx context.Context, set []*graphp.NQuad, del []*graphp.NQu
 		m.Edges[i].Op = taskp.DirectedEdge_SET
 	}
 
-	if mr, err = convertToEdges(ctx, del); err != nil {
+	if mr, err = convertToEdges(ctx, mutation.Del); err != nil {
 		return nil, err
 	}
 	for i := range mr.edges {
@@ -247,10 +249,47 @@ func convertAndApply(ctx context.Context, set []*graphp.NQuad, del []*graphp.NQu
 		m.Edges = append(m.Edges, edge)
 	}
 
+	m.Schema = mutation.Schema
 	if err := applyMutations(ctx, &m); err != nil {
 		return nil, x.Wrap(err)
 	}
 	return allocIds, nil
+}
+
+func validateAndEnrich(updates []*graphp.SchemaUpdate) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	for _, schema := range updates {
+		typ := types.TypeID(schema.ValueType)
+		if typ == types.UidID && schema.Index {
+			// index on uid type
+			return x.Errorf("Index not allowed on predicate of type uid on predicate %s", schema.Predicate)
+		} else if typ != types.UidID && schema.Reverse {
+			// reverse on non-uid type
+			return x.Errorf("Cannot reverse for non-uid type on predicate %s", schema.Predicate)
+		} else if typ != types.UidID && schema.Index {
+			if len(schema.Tokenizer) == 0 {
+				schema.Tokenizer = []string{tok.Default(typ).Name()}
+			}
+			// check for valid tokeniser types and duplicates
+			var seen = make(map[string]bool)
+			var tokenizers []string
+			for _, t := range schema.Tokenizer {
+				tokenizer, has := tok.GetTokenizer(t)
+				if !has {
+					return x.Errorf("Invalid tokenizer %s", t)
+				}
+				if _, ok := seen[tokenizer.Name()]; !ok {
+					tokenizers = append(tokenizers, tokenizer.Name())
+					seen[tokenizer.Name()] = true
+				}
+			}
+			schema.Tokenizer = tokenizers
+		}
+	}
+	return nil
 }
 
 // This function is used to run mutations for the requests from different
@@ -259,7 +298,12 @@ func runMutations(ctx context.Context, mu *graphp.Mutation) (map[string]uint64, 
 	var allocIds map[string]uint64
 	var err error
 
-	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del); err != nil {
+	if err = validateAndEnrich(mu.Schema); err != nil {
+		return nil, err
+	}
+
+	mutation := &graphp.Mutation{Set: mu.Set, Del: mu.Del, Schema: mu.Schema}
+	if allocIds, err = convertAndApply(ctx, mutation); err != nil {
 		return nil, err
 	}
 	return allocIds, nil
@@ -270,6 +314,7 @@ func runMutations(ctx context.Context, mu *graphp.Mutation) (map[string]uint64, 
 func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
 	var set []*graphp.NQuad
 	var del []*graphp.NQuad
+	var s []*graphp.SchemaUpdate
 	var allocIds map[string]uint64
 	var err error
 
@@ -285,7 +330,14 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 		}
 	}
 
-	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
+	if len(mu.Schema) > 0 {
+		if s, err = schema.Parse(mu.Schema); err != nil {
+			return nil, x.Wrap(err)
+		}
+	}
+
+	mutation := &graphp.Mutation{Set: set, Del: del, Schema: s}
+	if allocIds, err = convertAndApply(ctx, mutation); err != nil {
 		return nil, err
 	}
 	return allocIds, nil

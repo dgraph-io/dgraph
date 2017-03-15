@@ -122,10 +122,9 @@ func initBleve() {
 }
 
 // GetTokenizer returns tokenizer given unique name.
-func GetTokenizer(name string) Tokenizer {
+func GetTokenizer(name string) (Tokenizer, bool) {
 	t, found := tokenizers[name]
-	x.AssertTruef(found, "Tokenizer not found %s", name)
-	return t
+	return t, found
 }
 
 // Default returns the default tokenizer for a given type.
@@ -140,8 +139,8 @@ func SetDefault(typ types.TypeID, name string) {
 	if defaults == nil {
 		defaults = make(map[types.TypeID]Tokenizer)
 	}
-	t := GetTokenizer(name)
-	x.AssertTruef(t.Type() == typ, "Type mismatch %v vs %v", t.Type(), typ)
+	t, has := GetTokenizer(name)
+	x.AssertTruef(has && t.Type() == typ, "Type mismatch %v vs %v", t.Type(), typ)
 	defaults[typ] = t
 }
 

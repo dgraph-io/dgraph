@@ -148,6 +148,10 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		return nil, err
 	}
 
+	if q.Reverse && !schema.State().IsReversed(attr) {
+		return nil, x.Errorf("Predicate %s doesn't have reverse edge", attr)
+	}
+
 	var out taskp.Result
 	opts := posting.ListOptions{
 		AfterUID: uint64(q.AfterUid),

@@ -3,7 +3,7 @@
 
 syntax = "proto3";
 import "github.com/dgraph-io/dgraph/protos/facetsp/facets.proto";
-import "github.com/dgraph-io/dgraph/protos/typesp/types.proto";
+import "github.com/dgraph-io/dgraph/protos/graphp/graphresponse.proto";
 
 package taskp;
 
@@ -111,7 +111,7 @@ message DirectedEdge {
 message Mutations {
 	uint32 group_id = 1;
 	repeated DirectedEdge edges = 2;
-	repeated typesp.Schema schema = 3;
+	repeated graphp.SchemaUpdate schema = 3;
 }
 
 message RebuildIndex {

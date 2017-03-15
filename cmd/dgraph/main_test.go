@@ -184,7 +184,10 @@ func TestSchemaConversion(t *testing.T) {
 	output := processToFastJSON(strings.Replace(q6, "<id>", "shyam2", -1))
 	require.JSONEq(t, `{"user":[{"name2":1}]}`, output)
 
-	schema.State().SetType("name2", types.FloatID)
+	s, ok := schema.State().Get("name2")
+	require.True(t, ok)
+	s.ValueType = uint32(types.FloatID)
+	schema.State().Set("name2", s)
 	output = processToFastJSON(strings.Replace(q6, "<id>", "shyam2", -1))
 	require.JSONEq(t, `{"user":[{"name2":1.5}]}`, output)
 }

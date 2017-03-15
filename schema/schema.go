@@ -96,70 +96,18 @@ func (s *stateShard) update(se *SyncEntry) {
 	s.Lock()
 	defer s.Unlock()
 
-	_, ok := s.predicate[se.Attr]
-	x.AssertTruef(!ok, "Schema doesn't exist for attribute %s", se.Attr)
-
 	// Creating a copy to avoid race condition during marshalling
 	schema := *se.Schema
 	s.predicate[se.Attr] = &schema
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- se
 	s.elog.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema.ValueType)
+	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema.ValueType)
 }
 
-// SetType sets the schema type for given predicate
-func (s *state) SetType(pred string, valueType types.TypeID) {
-	s.get(group.BelongsTo(pred)).setType(pred, valueType)
-}
-
-func (s *stateShard) setType(pred string, valueType types.TypeID) {
-	s.Lock()
-	defer s.Unlock()
-	if schema, ok := s.predicate[pred]; ok {
-		schema.ValueType = uint32(valueType)
-	} else {
-		s.predicate[pred] = &typesp.Schema{ValueType: uint32(valueType)}
-	}
-}
-
-// SetReverse sets whether the reverse edge is enabled or
-// not for given predicate, if schema is not already defined, it's set to uid type
-func (s *state) SetReverse(pred string, rev bool) {
-	s.get(group.BelongsTo(pred)).setReverse(pred, rev)
-}
-
-func (s *stateShard) setReverse(pred string, rev bool) {
-	s.Lock()
-	defer s.Unlock()
-	if schema, ok := s.predicate[pred]; !ok {
-		s.predicate[pred] = &typesp.Schema{ValueType: uint32(types.UidID), Reverse: rev}
-	} else {
-		x.AssertTruef(schema.ValueType == uint32(types.UidID),
-			"predicate %s is not of type uid", pred)
-		schema.Reverse = rev
-	}
-}
-
-// AddIndex adds the tokenizer for given predicate
-func (s *state) AddIndex(pred string, tokenizer string) {
-	s.get(group.BelongsTo(pred)).addIndex(pred, tokenizer)
-}
-
-func (s *stateShard) addIndex(pred string, tokenizer string) {
-	s.Lock()
-	defer s.Unlock()
-	schema, ok := s.predicate[pred]
-	x.AssertTruef(ok, "schema state not found for %s", pred)
-	// Check for duplicates.
-	for _, tok := range schema.Tokenizer {
-		if tok == tokenizer {
-			return
-		}
-	}
-	schema.Tokenizer = append(schema.Tokenizer, tokenizer)
-}
-
-// Set sets the schema for given predicate
+// Set sets the schema for given predicate in memory
+// schema mutations must flow through update function, which are
+// synced to db
 func (s *state) Set(pred string, schema *typesp.Schema) {
 	s.get(group.BelongsTo(pred)).set(pred, schema)
 }
@@ -260,7 +208,9 @@ func (s *stateShard) tokenizer(pred string) []tok.Tokenizer {
 	x.AssertTruef(ok, "schema state not found for %s", pred)
 	var tokenizers []tok.Tokenizer
 	for _, it := range schema.Tokenizer {
-		tokenizers = append(tokenizers, tok.GetTokenizer(it))
+		t, has := tok.GetTokenizer(it)
+		x.AssertTruef(has, "Invalid tokenizer %s", it)
+		tokenizers = append(tokenizers, t)
 	}
 	return tokenizers
 }

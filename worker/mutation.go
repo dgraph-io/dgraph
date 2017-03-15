@@ -47,11 +47,10 @@ func runMutations(ctx context.Context, edges []*taskp.DirectedEdge) error {
 		typ, err := schema.State().TypeOf(edge.Attr)
 		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
-		// Is schema is not applied, type check might not be done in propose and wait
-		// so doing type check here also
-		if err = validateAndConvert(edge, typ); err != nil {
-			return err
-		}
+		// Once mutation comes via raft we do best effor conversion
+		// Type check is done before proposing mutation, in case schema is not
+		// present, some invalid entries might be written initially
+		err = validateAndConvert(edge, typ)
 
 		key := x.DataKey(edge.Attr, edge.Entity)
 		plist, decr := posting.GetOrCreate(key, rv.Group)

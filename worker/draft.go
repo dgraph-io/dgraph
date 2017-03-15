@@ -247,6 +247,8 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) err
 	}
 
 	// Do a type check here if schema is present
+	// In very rare cases invalid entries might pass through raft, which would
+	// be persisted, we do best effort schema check while writing
 	if proposal.Mutations != nil {
 		for _, edge := range proposal.Mutations.Edges {
 			if typ, err := schema.State().TypeOf(edge.Attr); err != nil {

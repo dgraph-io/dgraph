@@ -62,7 +62,8 @@ func TestIntEncoding(t *testing.T) {
 }
 
 func TestFullTextTokenizer(t *testing.T) {
-	tokenizer := GetTokenizer("fulltext")
+	tokenizer, has := GetTokenizer("fulltext")
+	require.True(t, has)
 	require.NotNil(t, tokenizer)
 	val := types.ValueForType(types.StringID)
 	val.Value = "Stemming works!"
@@ -75,7 +76,8 @@ func TestFullTextTokenizer(t *testing.T) {
 }
 
 func TestTermTokenizer(t *testing.T) {
-	tokenizer := GetTokenizer("term")
+	tokenizer, has := GetTokenizer("term")
+	require.True(t, has)
 	require.NotNil(t, tokenizer)
 	val := types.ValueForType(types.StringID)
 	val.Value = "Tokenizer works!"
