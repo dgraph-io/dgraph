@@ -441,10 +441,9 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(fc.tokens)
 	case PasswordFn:
-		// confirm agrregator could apply on the attributes
-		if len(q.SrcFunc) != 2 {
+		if len(q.SrcFunc) != 3 {
 			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
+				len(q.SrcFunc)-1, q.SrcFunc[1:])
 		}
 		fc.n = len(q.Uids.Uids)
 	case StandardFn, FullTextSearchFn:

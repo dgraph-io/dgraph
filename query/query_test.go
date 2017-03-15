@@ -1105,7 +1105,7 @@ func TestCheckPassword(t *testing.T) {
                 {
                         me(id:0x01) {
                                 name
-                                checkpwd("123456")
+                                checkpwd(password, "123456")
                         }
                 }
 	`
@@ -1122,7 +1122,7 @@ func TestCheckPasswordIncorrect(t *testing.T) {
                 {
                         me(id:0x01) {
                                 name
-                                checkpwd("654123")
+                                checkpwd(password, "654123")
                         }
                 }
 	`
