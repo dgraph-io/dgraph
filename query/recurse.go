@@ -78,7 +78,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 			for mIdx, fromUID := range sg.SrcUIDs.Uids {
 				if len(sg.Filters) > 0 {
 					// We need to do this in case we had some filters.
-					algo.IntersectWith(sg.uidMatrix[mIdx], sg.DestUIDs)
+					algo.IntersectWith(sg.uidMatrix[mIdx], sg.DestUIDs, sg.uidMatrix[mIdx])
 				}
 				algo.ApplyFilter(sg.uidMatrix[mIdx], func(uid uint64, i int) bool {
 					key := fmt.Sprintf("%s|%d|%d", sg.Attr, fromUID, uid)

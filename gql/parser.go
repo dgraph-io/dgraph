@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 )
@@ -657,7 +656,7 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 			return items, nil
 		case itemName:
 			items = append(items, item.Val)
-		case comma:
+		case itemComma:
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
@@ -790,11 +789,15 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 }
 
 func parseVariables(it *lex.ItemIterator, vmap varMap) error {
+	expectArg := true
 	for it.Next() {
 		var varName string
 		// Get variable name.
 		item := it.Item()
 		if item.Typ == itemDollar {
+			if !expectArg {
+				return x.Errorf("Missing comma in var declaration")
+			}
 			it.Next()
 			item = it.Item()
 			if item.Typ == itemName {
@@ -803,7 +806,16 @@ func parseVariables(it *lex.ItemIterator, vmap varMap) error {
 				return x.Errorf("Expecting a variable name. Got: %v", item)
 			}
 		} else if item.Typ == itemRightRound {
+			if expectArg {
+				return x.Errorf("Invalid comma in var block")
+			}
 			break
+		} else if item.Typ == itemComma {
+			if expectArg {
+				return x.Errorf("Invalid comma in var block")
+			}
+			expectArg = true
+			continue
 		} else {
 			return x.Errorf("Unexpected item in place of variable. Got: %v %v", item, item.Typ == itemDollar)
 		}
@@ -868,22 +880,35 @@ func parseVariables(it *lex.ItemIterator, vmap varMap) error {
 			// We consumed an extra item to see if it was an '=' sign, so move back.
 			it.Prev()
 		}
+		expectArg = false
 	}
 	return nil
 }
 
 // parseArguments parses the arguments part of the GraphQL query root.
 func parseArguments(it *lex.ItemIterator) (result []pair, rerr error) {
+	expectArg := true
 	for it.Next() {
 		var p pair
 		// Get key.
 		item := it.Item()
 		if item.Typ == itemName {
+			if !expectArg {
+				return nil, x.Errorf("Expecting a comma. But got: %v", item.Val)
+			}
 			p.Key = item.Val
-
+			expectArg = false
 		} else if item.Typ == itemRightRound {
+			if expectArg {
+				return nil, x.Errorf("Unexpected comma before ).")
+			}
 			break
-
+		} else if item.Typ == itemComma {
+			if expectArg {
+				return nil, x.Errorf("Expected Argument but got comma.")
+			}
+			expectArg = true
+			continue
 		} else {
 			return result, x.Errorf("Expecting argument name. Got: %v", item)
 		}
@@ -1015,7 +1040,7 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
-	var seenFuncArg, isLang bool
+	var expectArg, seenFuncArg, isLang bool
 L:
 	for it.Next() {
 		item := it.Item()
@@ -1024,12 +1049,17 @@ L:
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s]", g.Name)
+				return nil, x.Errorf("Expected ( after func name [%s] but got %v",
+					g.Name, itemInFunc.Val)
 			}
+			expectArg = true
 			for it.Next() {
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					break L
+				} else if itemInFunc.Typ == itemComma {
+					expectArg = true
+					continue
 				} else if itemInFunc.Typ == itemLeftRound {
 					// Function inside a function.
 					if seenFuncArg {
@@ -1060,13 +1090,17 @@ L:
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
 				}
+				if !expectArg {
+					return nil, x.Errorf("Expected comma but got: %s", itemInFunc.Val)
+				}
 				val := strings.Trim(itemInFunc.Val, "\" \t")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
 				if len(g.Attr) == 0 {
 					if strings.ContainsRune(itemInFunc.Val, '"') {
-						return nil, x.Errorf("Attribute in function must not be quoted using \": %s", itemInFunc.Val)
+						return nil, x.Errorf("Attribute in function must not be quoted with \": %s",
+							itemInFunc.Val)
 					}
 					g.Attr = val
 				} else if isLang {
@@ -1078,6 +1112,7 @@ L:
 				if g.Name == "id" {
 					g.NeedsVar = append(g.NeedsVar, val)
 				}
+				expectArg = false
 			}
 		} else {
 			return nil, x.Errorf("Expected a function but got %q", item.Val)
@@ -1089,6 +1124,7 @@ L:
 func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 	facets := new(Facets)
 	peeks, err := it.Peek(1)
+	expectArg := true
 	if err == nil && peeks[0].Typ == itemLeftRound {
 		it.Next() // ignore '('
 		// parse comma separated strings (a1,b1,c1)
@@ -1101,7 +1137,17 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 				done = true
 				break
 			} else if item.Typ == itemName {
+				if !expectArg {
+					return nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
+				}
 				facets.Keys = append(facets.Keys, item.Val)
+				expectArg = false
+			} else if item.Typ == itemComma {
+				if expectArg {
+					return nil, nil, x.Errorf("Expected Argument but got comma.")
+				}
+				expectArg = true
+				continue
 			} else {
 				break
 			}
@@ -1385,15 +1431,26 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
 	}
 
+	expectArg := true
 	// Parse in KV fashion. Depending on the value of key, decide the path.
 	for it.Next() {
 		var key string
 		// Get key.
 		item := it.Item()
 		if item.Typ == itemName {
+			if !expectArg {
+				return nil, x.Errorf("Expecting a comma. Got: %v", item)
+			}
 			key = item.Val
+			expectArg = false
 		} else if item.Typ == itemRightRound {
 			break
+		} else if item.Typ == itemComma {
+			if expectArg {
+				return nil, x.Errorf("Expected Argument but got comma.")
+			}
+			expectArg = true
+			continue
 		} else {
 			return nil, x.Errorf("Expecting argument name. Got: %v", item)
 		}
@@ -1421,11 +1478,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			gen, err := parseFunction(it)
 			if err != nil {
 				return gq, err
-			}
-			if !schema.State().IsIndexed(gen.Attr) {
-				return nil, x.Errorf(
-					"Field %s is not indexed and cannot be used in functions",
-					gen.Attr)
 			}
 			if err != nil {
 				return nil, err

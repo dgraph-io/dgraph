@@ -1,84 +1,15 @@
 import React, { Component } from "react";
+import { connect } from "react-redux";
+import { runQuery } from "../actions";
 
-import { timeout, checkStatus, parseJSON, isShortestPath } from "./Helpers";
+import { timeout, checkStatus } from "./Helpers";
 import "../assets/css/Editor.css";
 
 require("codemirror/addon/hint/show-hint.css");
 
-function showTreeView(query) {
-  return query.indexOf("orderasc") !== -1 ||
-    query.indexOf("orderdesc") !== -1 ||
-    isShortestPath(query);
-}
-
-function isNotEmpty(response) {
-  let keys = Object.keys(response);
-  if (keys.length === 0) {
-    return false;
-  }
-
-  for (let i = 0; i < keys.length; i++) {
-    if (keys[i] !== "server_latency" && keys[i] !== "uids") {
-      return keys[i].length > 0;
-    }
-  }
-  return false;
-}
-
-function handleResponse(result) {
-  // This is the case in which user sends a mutation. We display the response from server.
-  if (result.code !== undefined && result.message !== undefined) {
-    this.props.storeLastQuery();
-    this.props.renderResText("success-res", JSON.stringify(result, null, 2));
-  } else if (isNotEmpty(result)) {
-    this.props.storeLastQuery();
-    let query = this.getValue(), mantainSortOrder = showTreeView(query);
-    this.props.renderGraph(result, mantainSortOrder);
-  } else {
-    // We probably didn't get any results.
-    this.props.renderResText(
-      "error-res",
-      "Your query did not return any results.",
-    );
-  }
-}
-
 class Editor extends Component {
   getValue = () => {
     return this.editor.getValue();
-  };
-
-  runQuery = (e: Event) => {
-    e.preventDefault();
-    this.props.updateQuery(this.getValue());
-    // Resetting state of parent related to a query.
-    this.props.resetState();
-
-    var that = this;
-    timeout(
-      60000,
-      fetch(process.env.REACT_APP_DGRAPH + "/query?debug=true", {
-        method: "POST",
-        mode: "cors",
-        headers: {
-          "Content-Type": "text/plain",
-        },
-        body: that.getValue(),
-      })
-        .then(checkStatus)
-        .then(parseJSON)
-        .then(handleResponse.bind(that)),
-    )
-      .catch(function(error) {
-        console.log(error.stack);
-        var err = error.response && (error.response.text() || error.message);
-        return err;
-      })
-      .then(function(errorMsg) {
-        if (errorMsg !== undefined) {
-          that.props.renderResText("error-res", errorMsg);
-        }
-      });
   };
 
   render() {
@@ -90,7 +21,10 @@ class Editor extends Component {
             <button
               type="submit"
               className="btn btn-primary pull-right"
-              onClick={this.runQuery}
+              onClick={e => {
+                e.preventDefault();
+                this.props.onRunQuery(this.getValue());
+              }}
             >
               Run
             </button>
@@ -138,7 +72,7 @@ class Editor extends Component {
         mode: "cors",
       })
         .then(checkStatus)
-        .then(parseJSON)
+        .then(response => response.json())
         .then(function(result) {
           keywords = result.keywords.map(function(kw) {
             return kw.name;
@@ -183,10 +117,10 @@ class Editor extends Component {
           CodeMirror.commands.autocomplete(cm);
         },
         "Cmd-Enter": () => {
-          this.runQuery(new Event(""));
+          this.props.onRunQuery(this.getValue());
         },
         "Ctrl-Enter": () => {
-          this.runQuery(new Event(""));
+          this.props.onRunQuery(this.getValue());
         },
       },
       autofocus: true,
@@ -272,4 +206,12 @@ class Editor extends Component {
   };
 }
 
-export default Editor;
+const mapStateToProps = state => ({
+  query: state.query.text,
+});
+
+const mapDispatchToProps = {
+  onRunQuery: runQuery,
+};
+
+export default connect(mapStateToProps, mapDispatchToProps)(Editor);

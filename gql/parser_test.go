@@ -17,9 +17,11 @@
 package gql
 
 import (
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/stretchr/testify/require"
 )
@@ -98,6 +100,30 @@ func TestParseQueryWithVarError2(t *testing.T) {
 		you(var:K) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {K AS friends}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryFilterError1(t *testing.T) {
+	query := `
+	{
+		me(id: abc) @filter(anyof(name"alice")) {
+		 name	
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryFilterError2(t *testing.T) {
+	query := `
+	{
+		me(id: abc) @filter(anyof(name "alice")) {
+		 name	
+		}
 	}
 `
 	_, err := Parse(query)
@@ -1090,7 +1116,7 @@ func TestParseVariablesiError8(t *testing.T) {
 }
 
 func TestParseFilter_root(t *testing.T) {
-	schema.ParseBytes([]byte("scalar abc: string @index"))
+	schema.ParseBytes([]byte("scalar abc: string @index"), 1)
 	query := `
 	query {
 		me(func:abc(abc)) @filter(allofterms(name, "alice")) {
@@ -1135,8 +1161,28 @@ func TestParseFuncNested(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 }
 
+func TestParseFuncNested(t *testing.T) {
+	schema.ParseBytes([]byte("scalar friend: string @index"), 0)
+	query := `
+	query {
+		me(func: gt(count(friend), 10)) {
+			friends @filter() {
+				name
+			}
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Func)
+	require.Equal(t, []string{"friends", "hometown"}, childAttrs(res.Query[0]))
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+}
+
 func TestParseFilter_root2(t *testing.T) {
-	schema.ParseBytes([]byte("scalar abc: string @index"))
+	schema.ParseBytes([]byte("scalar abc: string @index"), 1)
 	query := `
 	query {
 		me(func:abc(abc)) @filter(gt(count(friends), 10)) {
@@ -1174,7 +1220,7 @@ func TestParseFilter_root_Error(t *testing.T) {
 }
 
 func TestParseFilter_root_Error2(t *testing.T) {
-	schema.ParseBytes([]byte("scalar abc: string @index"))
+	schema.ParseBytes([]byte("scalar abc: string @index"), 1)
 	// filter-by-count only support first argument as function
 	query := `
 	query {
@@ -1465,7 +1511,7 @@ func TestParseGeneratorError(t *testing.T) {
 }
 
 func TestParseCountAsFuncMultiple(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index"))
+	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `{
 		me(id:1) {
 			count(friends), count(relatives)
@@ -1487,7 +1533,7 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 }
 
 func TestParseCountAsFuncMultipleError(t *testing.T) {
-	require.NoError(t, schema.ParseBytes([]byte("scalar name:string @index")))
+	require.NoError(t, schema.ParseBytes([]byte("name:string @index"), 1))
 	query := `{
 		me(id:1) {
 			count(friends, relatives
@@ -1502,7 +1548,7 @@ func TestParseCountAsFuncMultipleError(t *testing.T) {
 }
 
 func TestParseCountAsFunc(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index"))
+	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `{
 		me(id:1) {
 			count(friends)
@@ -1519,7 +1565,7 @@ func TestParseCountAsFunc(t *testing.T) {
 }
 
 func TestParseCountError1(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index"))
+	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `{
 		me(id:1) {
 			count(friends
@@ -1533,7 +1579,7 @@ func TestParseCountError1(t *testing.T) {
 }
 
 func TestParseCountError2(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index"))
+	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `{
 		me(id:1) {
 			count((friends)
@@ -1547,7 +1593,7 @@ func TestParseCountError2(t *testing.T) {
 }
 
 func TestParseCheckPwd(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index"))
+	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `{
 		me(id:1) {
 			checkpwd("123456")
@@ -1563,7 +1609,7 @@ func TestParseCheckPwd(t *testing.T) {
 }
 
 func TestParseComments(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index"))
+	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `
 	# Something
 	{
@@ -1581,7 +1627,7 @@ func TestParseComments(t *testing.T) {
 }
 
 func TestParseComments1(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index"))
+	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `{
 		#Something 
 		me(func:allofterms(name, "barack")) {
@@ -1598,7 +1644,7 @@ func TestParseComments1(t *testing.T) {
 }
 
 func TestParseGenerator(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index"))
+	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `{
 		me(func:allofterms(name, "barack")) {
 			friends {
@@ -1636,7 +1682,7 @@ func TestParseIRIRef(t *testing.T) {
 
 func TestParseIRIRef2(t *testing.T) {
 	require.NoError(t, schema.ParseBytes(
-		[]byte("scalar <http://helloworld.com/how/are/you>:string @index")))
+		[]byte("<http://helloworld.com/how/are/you>:string @index"), 1))
 	query := `{
 		me(func:anyofterms(<http://helloworld.com/how/are/you>, "good better bad")) {
 			<http://verygood.com/what/about/you>
@@ -1940,6 +1986,38 @@ func TestParseNormalize(t *testing.T) {
 	require.True(t, res.Query[0].Normalize)
 }
 
+func TestParseFacetsError1(t *testing.T) {
+	query := `
+	query {
+		me(id:0x1) {
+			friends @facets {
+				name @facets(facet1,, facet2)
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseFacetsError2(t *testing.T) {
+	query := `
+	query {
+		me(id:0x1) {
+			friends @facets {
+				name @facets(facet1 facet2)
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseFacets(t *testing.T) {
 	query := `
 	query {
@@ -1963,6 +2041,7 @@ func TestParseFacets(t *testing.T) {
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
 	require.Equal(t, []string{"facet1"}, res.Query[0].Children[0].Children[0].Facets.Keys)
 }
+
 func TestParseFacetsMultiple(t *testing.T) {
 	query := `
 	query {
@@ -2196,4 +2275,9 @@ func TestFacetsFilterAtValue(t *testing.T) {
 	require.NotNil(t, nameChild)
 	require.NotNil(t, nameChild.FacetsFilter)
 	require.Equal(t, `(eq some-facet "true")`, nameChild.FacetsFilter.debugString())
+}
+
+func TestMain(m *testing.M) {
+	group.ParseGroupConfig("")
+	os.Exit(m.Run())
 }

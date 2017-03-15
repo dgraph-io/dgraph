@@ -144,11 +144,7 @@ func newCounters() *counters {
 }
 
 func aggressivelyEvict() {
-	// Okay, we exceed the max memory threshold.
-	// Stop the world, and deal with this first.
-	megs := getMemUsage()
-	log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", megs)
-
+	stopTheWorld.AssertLock()
 	log.Println("Aggressive evict, committing to RocksDB")
 	CommitLists(1)
 	lhmap.EachWithDelete(func(k uint64, l *List) {
@@ -161,7 +157,7 @@ func aggressivelyEvict() {
 	// as possible.
 	debug.FreeOSMemory()
 
-	megs = getMemUsage()
+	megs := getMemUsage()
 	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
@@ -253,6 +249,9 @@ func periodicCommit() {
 					break DIRTYLOOP
 				}
 			}
+			// Okay, we exceed the max memory threshold.
+			// Stop the world, and deal with this first.
+			log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
 			aggressivelyEvict()
 			for k := range dirtyMap {
 				delete(dirtyMap, k)
@@ -319,7 +318,7 @@ func getMemUsage() int {
 }
 
 var (
-	stopTheWorld sync.RWMutex
+	stopTheWorld x.SafeMutex
 	lhmap        *listMap
 	pstore       *store.Store
 	syncCh       chan syncEntry
@@ -451,6 +450,14 @@ func CommitLists(numRoutines int) {
 	})
 	close(workChan)
 	wg.Wait()
+}
+
+// EvictAll removes all pl's stored in memory
+func EvictAll() {
+	stopTheWorld.Lock()
+	defer stopTheWorld.Unlock()
+
+	aggressivelyEvict()
 }
 
 // The following logic is used to batch up all the writes to RocksDB.

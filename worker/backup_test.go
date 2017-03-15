@@ -55,8 +55,8 @@ func populateGraphBackup(t *testing.T) {
 }
 
 func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
-	schema.ParseBytes([]byte(schemaStr))
 	group.ParseGroupConfig("groups.conf")
+	schema.ParseBytes([]byte(schemaStr), 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -74,7 +74,7 @@ func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
 
 func TestBackup(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on backup.
-	dir, ps := initTestBackup(t, "scalar name:string @index")
+	dir, ps := initTestBackup(t, "name:string @index")
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	// Remove already existing backup folders is any.

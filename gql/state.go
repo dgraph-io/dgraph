@@ -63,6 +63,7 @@ const (
 	itemThreeDots                               // three dots (...)
 	itemLeftSquare
 	itemRightSquare
+	itemComma
 )
 
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
@@ -126,7 +127,7 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 		case r == colon:
 			l.Emit(itemColon)
 		case r == comma:
-			l.Emit(comma)
+			l.Emit(itemComma)
 		case r == lex.EOF:
 			return l.Errorf("Unclosed schema action")
 		default:
@@ -167,7 +168,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 				return l.Errorf("Consecutive commas not allowed.")
 			}
 			empty = true
-			l.Ignore()
+			l.Emit(itemComma)
 		case isDollar(r):
 			l.Emit(itemDollar)
 		case isNameBegin(r) || isNumber(r):
@@ -288,8 +289,10 @@ func lexText(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemLeftCurl)
 		case r == lex.EOF:
 			return l.Errorf("Unclosed action")
-		case isSpace(r) || isEndOfLine(r) || r == comma:
+		case isSpace(r) || isEndOfLine(r):
 			l.Ignore()
+		case r == comma:
+			l.Emit(itemComma)
 		case isNameBegin(r):
 			return lexName
 		case r == '#':

@@ -19,6 +19,7 @@ package worker
 import (
 	"context"
 	"io/ioutil"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -33,16 +34,22 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var raftIndex uint64
+
 func addEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
 	edge.Op = taskp.DirectedEdge_SET
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
+	raftIndex++
+	rv := x.RaftValue{Group: 0, Index: raftIndex}
+	ctx := context.WithValue(context.Background(), "raft", rv)
+	require.NoError(t, l.AddMutationWithIndex(ctx, edge))
 }
 
 func delEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
 	edge.Op = taskp.DirectedEdge_DEL
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
+	raftIndex++
+	rv := x.RaftValue{Group: 0, Index: raftIndex}
+	ctx := context.WithValue(context.Background(), "raft", rv)
+	require.NoError(t, l.AddMutationWithIndex(ctx, edge))
 }
 
 func getOrCreate(key []byte) *posting.List {
@@ -99,7 +106,7 @@ func taskValues(t *testing.T, v []*taskp.Value) []string {
 }
 
 func initTest(t *testing.T, schemaStr string) (string, *store.Store) {
-	schema.ParseBytes([]byte(schemaStr))
+	schema.ParseBytes([]byte(schemaStr), 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -115,9 +122,10 @@ func initTest(t *testing.T, schemaStr string) (string, *store.Store) {
 }
 
 func TestProcessTask(t *testing.T) {
-	dir, ps := initTest(t, `scalar friend:string @index`)
+	dir, ps := initTest(t, `friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer waitForSyncMark(context.Background(), 0, math.MaxUint64)
 
 	query := newQuery("neighbour", []uint64{10, 11, 12}, nil)
 	r, err := processTask(query, 0)
@@ -144,9 +152,10 @@ func newQuery(attr string, uids []uint64, srcFunc []string) *taskp.Query {
 // at the end. In other words, everything is happening only in mutation layers,
 // and not committed to RocksDB until near the end.
 func TestProcessTaskIndexMLayer(t *testing.T) {
-	dir, ps := initTest(t, `scalar friend:string @index`)
+	dir, ps := initTest(t, `friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer waitForSyncMark(context.Background(), 0, math.MaxUint64)
 
 	query := newQuery("friend", nil, []string{"anyofterms", "hey photon"})
 	r, err := processTask(query, 0)
@@ -230,9 +239,10 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 // Index-related test. Similar to TestProcessTaskIndeMLayer except we call
 // MergeLists in between a lot of updates.
 func TestProcessTaskIndex(t *testing.T) {
-	dir, ps := initTest(t, `scalar friend:string @index`)
+	dir, ps := initTest(t, `friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer waitForSyncMark(context.Background(), 0, math.MaxUint64)
 
 	query := newQuery("friend", nil, []string{"anyofterms", "hey photon"})
 	r, err := processTask(query, 0)
@@ -353,7 +363,7 @@ func newSort(uids [][]uint64, offset, count int) *taskp.Sort {
 }
 
 func TestProcessSort(t *testing.T) {
-	dir, ps := initTest(t, `scalar dob:date @index`)
+	dir, ps := initTest(t, `dob:date @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
@@ -375,7 +385,7 @@ func TestProcessSort(t *testing.T) {
 }
 
 func TestProcessSortOffset(t *testing.T) {
-	dir, ps := initTest(t, `scalar dob:date @index`)
+	dir, ps := initTest(t, `dob:date @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
@@ -437,7 +447,7 @@ func TestProcessSortOffset(t *testing.T) {
 }
 
 func TestProcessSortCount(t *testing.T) {
-	dir, ps := initTest(t, `scalar dob:date @index`)
+	dir, ps := initTest(t, `dob:date @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
@@ -507,7 +517,7 @@ func TestProcessSortCount(t *testing.T) {
 }
 
 func TestProcessSortOffsetCount(t *testing.T) {
-	dir, ps := initTest(t, `scalar dob:date @index`)
+	dir, ps := initTest(t, `dob:date @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
@@ -608,5 +618,6 @@ func TestProcessSortOffsetCount(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	x.Init()
+	x.AssertTruef(!x.IsTestRun(), "We use watermarks for syncing.")
 	os.Exit(m.Run())
 }

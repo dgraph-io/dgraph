@@ -13,7 +13,7 @@ class Properties extends Component {
             facets = props["facets"] || {};
 
         return (
-            <div id="properties" style={{ marginTop: "5px" }}>
+            <div id="properties">
                 {isEdge ? "Edge" : "Node"} Attributes:
                 {!isEdge &&
                     <div className="Properties">
