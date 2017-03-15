@@ -153,8 +153,8 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		AfterUID: uint64(q.AfterUid),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
-	if srcFn.fnType != NotFn && q.Uids != nil && len(q.Uids.Uids) > 0 {
-		opts.Intersect = q.Uids
+	if srcFn.fnType != NotFn && q.UidList != nil && len(q.UidList.Uids) > 0 {
+		opts.Intersect = q.UidList
 	}
 	facetsTree, err := preprocessFilter(q.FacetsFilter)
 	if err != nil {
@@ -165,13 +165,13 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		var key []byte
 		if srcFn.fnType == AggregatorFn || srcFn.fnType == CompareScalarFn ||
 			srcFn.fnType == PasswordFn {
-			key = x.DataKey(attr, q.Uids.Uids[i])
+			key = x.DataKey(attr, q.UidList.Uids[i])
 		} else if srcFn.fnType != NotFn {
 			key = x.IndexKey(attr, srcFn.tokens[i])
 		} else if q.Reverse {
-			key = x.ReverseKey(attr, q.Uids.Uids[i])
+			key = x.ReverseKey(attr, q.UidList.Uids[i])
 		} else {
-			key = x.DataKey(attr, q.Uids.Uids[i])
+			key = x.DataKey(attr, q.UidList.Uids[i])
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, gid)
@@ -265,7 +265,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		if srcFn.fnType == CompareScalarFn {
 			count := int64(pl.Length(0))
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				tlist := &taskp.List{[]uint64{q.Uids.Uids[i]}}
+				tlist := &taskp.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 			continue
@@ -409,7 +409,7 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 			return nil, x.Errorf("Aggregator %q could not apply on %v",
 				f, attr)
 		}
-		fc.n = len(q.Uids.Uids)
+		fc.n = len(q.UidList.Uids)
 	case CompareAttrFn:
 		if len(q.SrcFunc) != 2 {
 			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
@@ -435,12 +435,12 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 				q.SrcFunc[0], q.SrcFunc[1])
 		}
-		if q.Uids == nil {
-			// Fetch Uids from Store and populate in q.Uids.
+		if q.UidList == nil {
+			// Fetch Uids from Store and populate in q.UidList.
 			fc.n = 0
 			fc.isCompareAtRoot = true
 		} else {
-			fc.n = len(q.Uids.Uids)
+			fc.n = len(q.UidList.Uids)
 		}
 	case GeoFn:
 		// For geo functions, we get extra information used for filtering.
@@ -456,7 +456,7 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
 				len(q.SrcFunc), q.SrcFunc)
 		}
-		fc.n = len(q.Uids.Uids)
+		fc.n = len(q.UidList.Uids)
 	case StandardFn, FullTextSearchFn:
 		// srcfunc 0th val is func name and and [1:] are args.
 		// we tokenize the arguments of the query.
@@ -473,7 +473,7 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 			return nil, err
 		}
 	case NotFn:
-		fc.n = len(q.Uids.Uids)
+		fc.n = len(q.UidList.Uids)
 
 	default:
 		return nil, x.Errorf("FnType %d not handled in numFnAttrs.", fnType)
@@ -488,7 +488,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *taskp.Query) (*taskp.Resu
 	}
 
 	gid := group.BelongsTo(q.Attr)
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, len(q.Uids.Uids), gid)
+	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, len(q.UidList.Uids), gid)
 
 	var reply *taskp.Result
 	x.AssertTruef(groups().ServesGroup(gid),
