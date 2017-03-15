@@ -1400,16 +1400,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			if err != nil {
 				return gq, err
 			}
-			/*
-				if !schema.State().IsIndexed(gen.Attr) {
-					return nil, x.Errorf(
-						"Field %s is not indexed and cannot be used in functions",
-						gen.Attr)
-				}
-			*/
-			if err != nil {
-				return nil, err
-			}
 			gq.Func = gen
 		} else if key == "var" {
 			if !it.Next() {
