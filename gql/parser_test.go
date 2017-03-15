@@ -17,6 +17,7 @@
 package gql
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -99,6 +100,30 @@ func TestParseQueryWithVarError2(t *testing.T) {
 		you(var:K) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {K AS friends}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryFilterError1(t *testing.T) {
+	query := `
+	{
+		me(id: abc) @filter(anyof(name"alice")) {
+		 name	
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryFilterError2(t *testing.T) {
+	query := `
+	{
+		me(id: abc) @filter(anyof(name "alice")) {
+		 name	
+		}
 	}
 `
 	_, err := Parse(query)
@@ -1116,6 +1141,26 @@ func TestParseFilter_root(t *testing.T) {
 	require.Equal(t, `(namefilter "a")`, res.Query[0].Children[0].Children[0].Filter.debugString())
 }
 
+func TestParseFuncNested(t *testing.T) {
+	schema.ParseBytes([]byte("scalar friend: string @index"), 0)
+	query := `
+	query {
+		me(func: gt(count(friend), 10)) {
+			friends @filter() {
+				name
+			}
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Func)
+	require.Equal(t, []string{"friends", "hometown"}, childAttrs(res.Query[0]))
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+}
+
 func TestParseFilter_root2(t *testing.T) {
 	schema.ParseBytes([]byte("scalar abc: string @index"), 1)
 	query := `
@@ -1468,7 +1513,7 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 }
 
 func TestParseCountAsFuncMultipleError(t *testing.T) {
-	require.NoError(t, schema.ParseBytes([]byte("scalar name:string @index"), 1))
+	require.NoError(t, schema.ParseBytes([]byte("name:string @index"), 1))
 	query := `{
 		me(id:1) {
 			count(friends, relatives
@@ -1617,7 +1662,7 @@ func TestParseIRIRef(t *testing.T) {
 
 func TestParseIRIRef2(t *testing.T) {
 	require.NoError(t, schema.ParseBytes(
-		[]byte("scalar <http://helloworld.com/how/are/you>:string @index"), 1))
+		[]byte("<http://helloworld.com/how/are/you>:string @index"), 1))
 	query := `{
 		me(func:anyofterms(<http://helloworld.com/how/are/you>, "good better bad")) {
 			<http://verygood.com/what/about/you>
@@ -1861,6 +1906,38 @@ func TestParseNormalize(t *testing.T) {
 	require.True(t, res.Query[0].Normalize)
 }
 
+func TestParseFacetsError1(t *testing.T) {
+	query := `
+	query {
+		me(id:0x1) {
+			friends @facets {
+				name @facets(facet1,, facet2)
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseFacetsError2(t *testing.T) {
+	query := `
+	query {
+		me(id:0x1) {
+			friends @facets {
+				name @facets(facet1 facet2)
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseFacets(t *testing.T) {
 	query := `
 	query {
@@ -1884,6 +1961,7 @@ func TestParseFacets(t *testing.T) {
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
 	require.Equal(t, []string{"facet1"}, res.Query[0].Children[0].Children[0].Facets.Keys)
 }
+
 func TestParseFacetsMultiple(t *testing.T) {
 	query := `
 	query {
@@ -2121,4 +2199,5 @@ func TestFacetsFilterAtValue(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	group.ParseGroupConfig("")
+	os.Exit(m.Run())
 }
