@@ -75,11 +75,6 @@ echo -e "\n\033[1;33mMoving tarfile to original directory\033[0m"
 mv $tar_file.tar.gz $cur_dir
 rm -rf $tmp_dir
 
-echo -e "\nCalculating and storing checksum for ICU data file."
-checksum=$($digest_cmd $GOPATH/src/github.com/dgraph-io/goicu/icudt58l.dat | awk '{print $1}')
-
-echo "$checksum /usr/local/share/icudt58l.dat" >> $checksum_file
-
 echo -e "Calculating and storing checksum for tar gzipped assets."
 cd $cur_dir
 tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashboard/build .

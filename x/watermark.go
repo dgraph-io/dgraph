@@ -139,7 +139,6 @@ func (w *WaterMark) process() {
 			// Don't run this during testing.
 			continue
 		}
-
 		if mark.Index > 0 {
 			processOne(mark.Index, mark.Done)
 		}

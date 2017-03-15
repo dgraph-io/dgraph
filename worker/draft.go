@@ -14,9 +14,10 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -95,7 +96,7 @@ type node struct {
 	messages    chan sendmsg
 	peers       peerPool
 	props       proposals
-	raftContext *task.RaftContext
+	raftContext *taskp.RaftContext
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
 
@@ -147,7 +148,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 
 	store := raft.NewMemoryStorage()
-	rc := &task.RaftContext{
+	rc := &taskp.RaftContext{
 		Addr:  myAddr,
 		Group: gid,
 		Id:    id,
@@ -198,7 +199,7 @@ func (n *node) Connect(pid uint64, addr string) {
 func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
 	addr := n.peers.Get(pid)
 	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
-	rc := &task.RaftContext{
+	rc := &taskp.RaftContext{
 		Addr:  addr,
 		Group: n.raftContext.Group,
 		Id:    pid,
@@ -240,7 +241,7 @@ var slicePool = sync.Pool{
 	},
 }
 
-func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) error {
+func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
 	}
@@ -362,8 +363,8 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	x.Check(err)
 	defer pool.Put(conn)
 
-	c := NewWorkerClient(conn)
-	p := &Payload{Data: data}
+	c := workerp.NewWorkerClient(conn)
+	p := &workerp.Payload{Data: data}
 
 	ch := make(chan error, 1)
 	go func() {
@@ -381,7 +382,7 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
-func (n *node) processMutation(e raftpb.Entry, m *task.Mutations) error {
+func (n *node) processMutation(e raftpb.Entry, m *taskp.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
@@ -392,7 +393,7 @@ func (n *node) processMutation(e raftpb.Entry, m *task.Mutations) error {
 	return nil
 }
 
-func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
+func (n *node) processMembership(e raftpb.Entry, mm *taskp.Membership) error {
 	x.AssertTrue(n.gid == 0)
 
 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
@@ -412,7 +413,7 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	}
 
 	pending <- struct{}{} // This will block until we can write to it.
-	var proposal task.Proposal
+	var proposal taskp.Proposal
 	x.AssertTrue(len(e.Data) > 0)
 	x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
 
@@ -445,7 +446,7 @@ func (n *node) processApplyCh() {
 			cc.Unmarshal(e.Data)
 
 			if len(cc.Context) > 0 {
-				var rc task.RaftContext
+				var rc taskp.RaftContext
 				x.Check(rc.Unmarshal(cc.Context))
 				n.Connect(rc.Id, rc.Addr)
 			}
@@ -460,7 +461,7 @@ func (n *node) processApplyCh() {
 		// We derive the schema here if it's not present
 		// Since raft committed logs are serialized, we can derive
 		// schema here without any locking
-		var proposal task.Proposal
+		var proposal taskp.Proposal
 		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
 
 		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {
@@ -509,15 +510,25 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 	n.store.Append(es)
 }
 
-func (n *node) retrieveSnapshot(rc task.RaftContext) {
+func (n *node) retrieveSnapshot(rc taskp.RaftContext) {
 	addr := n.peers.Get(rc.Id)
 	x.AssertTruef(addr != "", "Should have the address for %d", rc.Id)
 	pool := pools().get(addr)
 	x.AssertTruef(pool != nil, "Pool shouldn't be nil for address: %v for id: %v", addr, rc.Id)
 
 	x.AssertTrue(rc.Group == n.gid)
+	// Wait for watermarks to sync since populateShard writes directly to db, otherwise
+	// the values might get overwritten
+	// Safe to keep this line
+	n.syncAllMarks(n.ctx)
+	// Need to clear pl's stored in memory for the case when retrieving snapshot with
+	// index greater than this node's last index
+	// Should invalidate/remove pl's to this group only ideally
+	posting.EvictAll()
 	x.Check2(populateShard(n.ctx, pool, n.gid))
-	x.Checkf(schema.LoadFromDb(), "Error while initilizating schema")
+	// Populate shard stores the streamed data directly into db, so we need to refresh
+	// schema for current group id
+	x.Checkf(schema.Refresh(n.gid), "Error while initilizating schema")
 }
 
 func (n *node) Run() {
@@ -547,7 +558,7 @@ func (n *node) Run() {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
 				// snapshot that I created. Only the former case should be handled.
-				var rc task.RaftContext
+				var rc taskp.RaftContext
 				x.Check(rc.Unmarshal(rd.Snapshot.Data))
 				if rc.Id != n.id {
 					fmt.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
@@ -668,14 +679,16 @@ func (n *node) joinPeers() {
 	x.AssertTruef(pool != nil, "Unable to get pool for addr: %q for peer: %d", paddr, pid)
 
 	// Bring the instance up to speed first.
-	_, err := populateShard(n.ctx, pool, n.gid)
-	x.Checkf(err, "Error while populating shard")
+	// Raft would decide whether snapshot needs to fetched or not
+	// so populateShard is not needed
+	// _, err := populateShard(n.ctx, pool, n.gid)
+	// x.Checkf(err, "Error while populating shard")
 
 	conn, err := pool.Get()
 	x.Check(err)
 	defer pool.Put(conn)
 
-	c := NewWorkerClient(conn)
+	c := workerp.NewWorkerClient(conn)
 	x.Printf("Calling JoinCluster")
 	_, err = c.JoinCluster(n.ctx, n.raftContext)
 	x.Checkf(err, "Error while joining cluster")
@@ -766,7 +779,7 @@ func (n *node) AmLeader() bool {
 }
 
 func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error {
-	var rc task.RaftContext
+	var rc taskp.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
 	node := groups().Node(rc.Group)
 	// TODO: Handle the case where node isn't present for this group.
@@ -783,9 +796,9 @@ func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error
 	}
 }
 
-func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
+func (w *grpcWorker) RaftMessage(ctx context.Context, query *workerp.Payload) (*workerp.Payload, error) {
 	if ctx.Err() != nil {
-		return &Payload{}, ctx.Err()
+		return &workerp.Payload{}, ctx.Err()
 	}
 
 	for idx := 0; idx < len(query.Data); {
@@ -796,7 +809,7 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 		idx += 4
 		msg := raftpb.Message{}
 		if idx+sz-1 > len(query.Data) {
-			return &Payload{}, x.Errorf(
+			return &workerp.Payload{}, x.Errorf(
 				"Invalid query. Size specified: %v. Size of array: %v\n", sz, len(query.Data))
 		}
 		if err := msg.Unmarshal(query.Data[idx : idx+sz]); err != nil {
@@ -806,22 +819,22 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 			fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
 		if err := w.applyMessage(ctx, msg); err != nil {
-			return &Payload{}, err
+			return &workerp.Payload{}, err
 		}
 		idx += sz
 	}
 	// fmt.Printf("Got %d messages\n", count)
-	return &Payload{}, nil
+	return &workerp.Payload{}, nil
 }
 
-func (w *grpcWorker) JoinCluster(ctx context.Context, rc *task.RaftContext) (*Payload, error) {
+func (w *grpcWorker) JoinCluster(ctx context.Context, rc *taskp.RaftContext) (*workerp.Payload, error) {
 	if ctx.Err() != nil {
-		return &Payload{}, ctx.Err()
+		return &workerp.Payload{}, ctx.Err()
 	}
 
 	node := groups().Node(rc.Group)
 	if node == nil {
-		return &Payload{}, nil
+		return &workerp.Payload{}, nil
 	}
 	node.Connect(rc.Id, rc.Addr)
 
@@ -830,8 +843,8 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *task.RaftContext) (*Pa
 
 	select {
 	case <-ctx.Done():
-		return &Payload{}, ctx.Err()
+		return &workerp.Payload{}, ctx.Err()
 	case err := <-c:
-		return &Payload{}, err
+		return &workerp.Payload{}, err
 	}
 }

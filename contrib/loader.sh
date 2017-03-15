@@ -9,7 +9,6 @@ if [ -z "$1" ]; then
 fi
 
 ROCKSDBDIR=$BUILD/rocksdb-5.1.4
-ICUDIR=$BUILD/icu/build
 
 set -e
 
@@ -26,16 +25,15 @@ benchmark=$(pwd)
 popd &> /dev/null
 
 # build flags needed for rocksdb
-export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include -I${ICUDIR}/include"
-export CGO_LDFLAGS="-L${ROCKSDBDIR} -L${ICUDIR}/lib"
-export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
+export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
+export CGO_LDFLAGS="-L${ROCKSDBDIR}"
+export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 # schema file
 echo -e "
-scalar (
 	name: string @index
 	initial_release_date: date @index
-)" > $BUILD/schema.txt
+" > $BUILD/schema.txt
 
 pushd cmd/dgraph &> /dev/null
 go build .

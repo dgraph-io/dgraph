@@ -16,132 +16,48 @@
 
 package facets
 
-import (
-	"bytes"
-	"strconv"
-	"time"
-	"unicode"
-)
+import "github.com/dgraph-io/dgraph/protos/facetsp"
 
 const (
-	Int32ID    = TypeID(Facet_INT32)
-	FloatID    = TypeID(Facet_FLOAT)
-	BoolID     = TypeID(Facet_BOOL)
-	DateTimeID = TypeID(Facet_DATETIME)
-	StringID   = TypeID(Facet_STRING)
+	Int32ID    = TypeID(facetsp.Facet_INT32)
+	FloatID    = TypeID(facetsp.Facet_FLOAT)
+	BoolID     = TypeID(facetsp.Facet_BOOL)
+	DateTimeID = TypeID(facetsp.Facet_DATETIME)
+	StringID   = TypeID(facetsp.Facet_STRING)
 )
 
-type TypeID Facet_ValType
+type TypeID facetsp.Facet_ValType
 
-// ValTypeForTypeID gives Facet_ValType for given TypeID
-func ValTypeForTypeID(typId TypeID) Facet_ValType {
+// ValTypeForTypeID gives facetsp.Facet_ValType for given TypeID
+func ValTypeForTypeID(typId TypeID) facetsp.Facet_ValType {
 	switch typId {
 	case Int32ID:
-		return Facet_INT32
+		return facetsp.Facet_INT32
 	case FloatID:
-		return Facet_FLOAT
+		return facetsp.Facet_FLOAT
 	case BoolID:
-		return Facet_BOOL
+		return facetsp.Facet_BOOL
 	case DateTimeID:
-		return Facet_DATETIME
+		return facetsp.Facet_DATETIME
 	case StringID:
-		return Facet_STRING
+		return facetsp.Facet_STRING
 	}
 	panic("Unhandled case in ValTypeForTypeID.")
 }
 
-// TypeIDForValType gives TypeID for Facet_ValType
-func TypeIDForValType(valType Facet_ValType) TypeID {
+// TypeIDForValType gives TypeID for facetsp.Facet_ValType
+func TypeIDForValType(valType facetsp.Facet_ValType) TypeID {
 	switch valType {
-	case Facet_INT32:
+	case facetsp.Facet_INT32:
 		return Int32ID
-	case Facet_FLOAT:
+	case facetsp.Facet_FLOAT:
 		return FloatID
-	case Facet_BOOL:
+	case facetsp.Facet_BOOL:
 		return BoolID
-	case Facet_DATETIME:
+	case facetsp.Facet_DATETIME:
 		return DateTimeID
-	case Facet_STRING:
+	case facetsp.Facet_STRING:
 		return StringID
 	}
 	panic("Unhandled case in TypeIDForValType.")
-}
-
-// ValType gives Facet's TypeID for given facet value str.
-func ValType(val string) (Facet_ValType, error) {
-	if _, err := strconv.ParseInt(val, 10, 32); err == nil {
-		return Facet_INT32, nil
-	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
-		// check if whole string is only of nums or not.
-		// comes here for : 11111111111111111111132333uasfk333 ; see test.
-		nonNumChar := false
-		for _, v := range val {
-			if !unicode.IsDigit(v) {
-				nonNumChar = true
-				break
-			}
-		}
-		if !nonNumChar {
-			return Facet_INT32, err
-		}
-	}
-	if _, err := strconv.ParseFloat(val, 64); err == nil {
-		return Facet_FLOAT, nil
-	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
-		return Facet_FLOAT, err
-	}
-	if val == "true" || val == "false" {
-		return Facet_BOOL, nil
-	}
-	if _, err := parseTime(val); err == nil {
-		return Facet_DATETIME, nil
-	}
-	return Facet_STRING, nil
-}
-
-// FacetFor returns Facet for given key and val.
-func FacetFor(key, val string) (*Facet, error) {
-	vt, err := ValType(val)
-	if err != nil {
-		return nil, err
-	}
-	return &Facet{Key: key, Value: []byte(val), ValType: vt}, nil
-}
-
-// Move to types/parse namespace.
-func parseTime(val string) (time.Time, error) {
-	var t time.Time
-	if err := t.UnmarshalText([]byte(val)); err == nil {
-		return t, err
-	}
-	if t, err := time.Parse(dateTimeFormat, val); err == nil {
-		return t, err
-	}
-	return time.Parse(dateFormatYMD, val)
-}
-
-// OnlyDate returns whether val has format of only Year-Month-Day
-func OnlyDate(val string) bool {
-	_, err := time.Parse(dateFormatYMD, val)
-	return err == nil
-}
-
-const dateFormatYMD = "2006-01-02"
-const dateTimeFormat = "2006-01-02T15:04:05"
-
-// SameFacets returns whether two facets are same or not.
-// both should be sorted by key.
-func SameFacets(a []*Facet, b []*Facet) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	la := len(a)
-	for i := 0; i < la; i++ {
-		if (a[i].Key != b[i].Key) ||
-			!bytes.Equal(a[i].Value, b[i].Value) ||
-			(a[i].ValType != b[i].ValType) {
-			return false
-		}
-	}
-	return true
 }

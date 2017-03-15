@@ -19,53 +19,41 @@ package schema
 import (
 	"io/ioutil"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 // Parse parses the schema file.
-func parse(file string) (rerr error) {
+func parse(file string, gid uint32) (rerr error) {
 	b, err := ioutil.ReadFile(file)
 	if err != nil {
 		return x.Errorf("Error reading file: %v", err)
 	}
-	return ParseBytes(b)
+	return ParseBytes(b, gid)
 }
 
 // ParseBytes parses the byte array which holds the schema. We will reset
 // all the globals.
 // Overwrites schema blindly - called only during initilization in testing
-func ParseBytes(schema []byte) (rerr error) {
+func ParseBytes(schema []byte, gid uint32) (rerr error) {
 	reset()
 	s := string(schema)
 
 	l := lex.NewLexer(s).Run(lexText)
 
 	it := l.NewIterator()
-	for it.Next() {
-		item := it.Item()
-		if item.Typ == lex.ItemEOF {
-			break
-		}
-		if item.Typ != itemText {
-			return x.Errorf("Expected text here but got: [%v] %v %v", item.Val, item.Typ, lex.EOF)
-		}
-		switch item.Val {
-		case "scalar":
-			if rerr = processScalar(it); rerr != nil {
-				return rerr
-			}
-		default:
-			return x.Errorf("Expected either 'scalar' or 'type' but got: %v", item)
-		}
+	if rerr = processScalars(it, gid); rerr != nil {
+		return rerr
 	}
 	return nil
 }
 
 func parseScalarPair(it *lex.ItemIterator, predicate string,
-	allowIndex bool) (*types.Schema, error) {
+	allowIndex bool) (*typesp.Schema, error) {
 	it.Next()
 	if next := it.Item(); next.Typ != itemColon {
 		return nil, x.Errorf("Missing colon")
@@ -99,7 +87,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 				if t != types.UidID {
 					return nil, x.Errorf("Cannot reverse for non-UID type")
 				}
-				return &types.Schema{ValueType: uint32(t), Reverse: true}, nil
+				return &typesp.Schema{ValueType: uint32(t), Reverse: true}, nil
 			case "index":
 				if !allowIndex {
 					return nil, x.Errorf("@index not allowed")
@@ -107,7 +95,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 				if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
 					return nil, err
 				} else {
-					return &types.Schema{ValueType: uint32(t), Tokenizer: tokenizer}, nil
+					return &typesp.Schema{ValueType: uint32(t), Tokenizer: tokenizer}, nil
 				}
 			default:
 				return nil, x.Errorf("Invalid index specification")
@@ -116,18 +104,18 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 		it.Prev()
 		break
 	}
-	return &types.Schema{ValueType: uint32(t)}, nil
+	return &typesp.Schema{ValueType: uint32(t)}, nil
 }
 
-// processScalarBlock starts work on the inside of a scalar block.
-func processScalarBlock(it *lex.ItemIterator) error {
+// processScalars parses schema definitions line by line
+func processScalars(it *lex.ItemIterator, gid uint32) error {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
-		case itemRightRound:
+		case lex.ItemEOF:
 			return nil
 		case itemText:
-			if err := processScalarPair(it, item.Val, true); err != nil {
+			if err := processScalarPair(it, item.Val, true, gid); err != nil {
 				return err
 			}
 		case lex.ItemError:
@@ -142,7 +130,7 @@ func processScalarBlock(it *lex.ItemIterator) error {
 
 // processScalarPair processes "name: type (directive)" where name is already
 // consumed and is provided as input in file during loading
-func processScalarPair(it *lex.ItemIterator, predicate string, allowIndex bool) error {
+func processScalarPair(it *lex.ItemIterator, predicate string, allowIndex bool, gid uint32) error {
 	if schema, err := parseScalarPair(it, predicate, allowIndex); err != nil {
 		return err
 	} else {
@@ -151,7 +139,9 @@ func processScalarPair(it *lex.ItemIterator, predicate string, allowIndex bool) 
 		if err == nil {
 			return x.Errorf("Multiple schema declarations for same predicate %s", predicate)
 		}
-		State().Set(predicate, schema)
+		if group.BelongsTo(predicate) == gid {
+			State().Set(predicate, schema)
+		}
 	}
 
 	return nil
@@ -194,23 +184,4 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		}
 	}
 	return tokenizers, nil
-}
-
-// processScalar works on either a single scalar pair or a scalar block.
-// A scalar block looks like "scalar ( .... )".
-func processScalar(it *lex.ItemIterator) error {
-	for it.Next() {
-		item := it.Item()
-		switch item.Typ {
-		case itemLeftRound:
-			return processScalarBlock(it)
-		case itemText:
-			return processScalarPair(it, item.Val, true)
-		case lex.ItemError:
-			return x.Errorf(item.Val)
-		default:
-			return x.Errorf("Unexpected item: %v", item)
-		}
-	}
-	return nil
 }

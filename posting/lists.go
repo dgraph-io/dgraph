@@ -35,8 +35,8 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -69,7 +69,7 @@ type syncMarks struct {
 func init() {
 	x.AddInit(func() {
 		h := md5.New()
-		pl := types.PostingList{
+		pl := typesp.PostingList{
 			Checksum: h.Sum(nil),
 		}
 		var err error
@@ -144,20 +144,20 @@ func newCounters() *counters {
 }
 
 func aggressivelyEvict() {
-	// Okay, we exceed the max memory threshold.
-	// Stop the world, and deal with this first.
-	megs := getMemUsage()
-	log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", megs)
-
+	stopTheWorld.AssertLock()
 	log.Println("Aggressive evict, committing to RocksDB")
 	CommitLists(1)
+	lhmap.EachWithDelete(func(k uint64, l *List) {
+		l.SetForDeletion()
+		l.decr()
+	})
 
 	log.Println("Trying to free OS memory")
 	// Forces garbage collection followed by returning as much memory to the OS
 	// as possible.
 	debug.FreeOSMemory()
 
-	megs = getMemUsage()
+	megs := getMemUsage()
 	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
@@ -249,6 +249,9 @@ func periodicCommit() {
 					break DIRTYLOOP
 				}
 			}
+			// Okay, we exceed the max memory threshold.
+			// Stop the world, and deal with this first.
+			log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
 			aggressivelyEvict()
 			for k := range dirtyMap {
 				delete(dirtyMap, k)
@@ -315,7 +318,7 @@ func getMemUsage() int {
 }
 
 var (
-	stopTheWorld sync.RWMutex
+	stopTheWorld x.SafeMutex
 	lhmap        *listMap
 	pstore       *store.Store
 	syncCh       chan syncEntry
@@ -432,14 +435,12 @@ func CommitLists(numRoutines int) {
 		go func() {
 			defer wg.Done()
 			for l := range workChan {
-				l.SetForDeletion() // No more AddMutation.
 				commitOne(l, c)
-				l.decr()
 			}
 		}()
 	}
 
-	lhmap.EachWithDelete(func(k uint64, l *List) {
+	lhmap.Each(func(k uint64, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
@@ -449,6 +450,14 @@ func CommitLists(numRoutines int) {
 	})
 	close(workChan)
 	wg.Wait()
+}
+
+// EvictAll removes all pl's stored in memory
+func EvictAll() {
+	stopTheWorld.Lock()
+	defer stopTheWorld.Unlock()
+
+	aggressivelyEvict()
 }
 
 // The following logic is used to batch up all the writes to RocksDB.

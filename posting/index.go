@@ -25,8 +25,9 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -73,7 +74,7 @@ func IndexTokens(attr string, src types.Val) ([]string, error) {
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 // t represents the original uid -> value edge.
-func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, op task.DirectedEdge_Op) {
+func addIndexMutations(ctx context.Context, t *taskp.DirectedEdge, p types.Val, op taskp.DirectedEdge_Op) {
 	attr := t.Attr
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
@@ -84,7 +85,7 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 	}
 
 	// Create a value token -> uid edge.
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		ValueId: uid,
 		Attr:    attr,
 		Label:   "idx",
@@ -96,7 +97,7 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 	}
 }
 
-func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string) {
+func addIndexMutation(ctx context.Context, edge *taskp.DirectedEdge, token string) {
 	key := x.IndexKey(edge.Attr, token)
 
 	var groupId uint32
@@ -119,7 +120,7 @@ func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string
 		edge.Op, edge.Attr, edge.Entity, token)
 }
 
-func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
+func addReverseMutation(ctx context.Context, t *taskp.DirectedEdge) {
 	key := x.ReverseKey(t.Attr, t.ValueId)
 	groupId := group.BelongsTo(t.Attr)
 
@@ -128,12 +129,13 @@ func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d %d",
 		t.Attr, t.Entity, t.ValueId)
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Entity:  t.ValueId,
 		ValueId: t.Entity,
 		Attr:    t.Attr,
 		Label:   "rev",
 		Op:      t.Op,
+		Facets:  t.Facets,
 	}
 
 	_, err := plist.AddMutation(ctx, edge)
@@ -147,7 +149,7 @@ func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
 
 // AddMutationWithIndex is AddMutation with support for indexing. It also
 // supports reverse edges.
-func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) error {
+func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) error {
 	x.AssertTruef(len(t.Attr) > 0,
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
 
@@ -181,14 +183,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {
-			addIndexMutations(ctx, t, val, task.DirectedEdge_DEL)
+			addIndexMutations(ctx, t, val, taskp.DirectedEdge_DEL)
 		}
-		if t.Op == task.DirectedEdge_SET {
+		if t.Op == taskp.DirectedEdge_SET {
 			p := types.Val{
 				Tid:   types.TypeID(t.ValueType),
 				Value: t.Value,
 			}
-			addIndexMutations(ctx, t, p, task.DirectedEdge_SET)
+			addIndexMutations(ctx, t, p, taskp.DirectedEdge_SET)
 		}
 	}
 
@@ -232,13 +234,13 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	}
 
 	// Add index entries to data store.
-	edge := task.DirectedEdge{Attr: attr}
+	edge := taskp.DirectedEdge{Attr: attr}
 	prefix = pk.DataPrefix()
 	it := pstore.NewIterator()
 	defer it.Close()
 
 	// Helper function - Add index entries for values in posting list
-	addPostingsToIndex := func(pl *types.PostingList) {
+	addPostingsToIndex := func(pl *typesp.PostingList) {
 		postingsLen := len(pl.Postings)
 		for idx := 0; idx < postingsLen; idx++ {
 			p := pl.Postings[idx]
@@ -247,14 +249,14 @@ func RebuildIndex(ctx context.Context, attr string) error {
 				Value: p.Value,
 				Tid:   types.TypeID(p.ValType),
 			}
-			addIndexMutations(ctx, &edge, val, task.DirectedEdge_SET)
+			addIndexMutations(ctx, &edge, val, taskp.DirectedEdge_SET)
 		}
 	}
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		pki := x.Parse(it.Key().Data())
 		edge.Entity = pki.Uid
-		var pl types.PostingList
+		var pl typesp.PostingList
 		x.Check(pl.Unmarshal(it.Value().Data()))
 
 		// Posting list contains only values or only UIDs.

@@ -19,6 +19,7 @@ package worker
 import (
 	"context"
 	"io/ioutil"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -27,22 +28,28 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func addEdge(t *testing.T, edge *task.DirectedEdge, l *posting.List) {
-	edge.Op = task.DirectedEdge_SET
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
+var raftIndex uint64
+
+func addEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
+	edge.Op = taskp.DirectedEdge_SET
+	raftIndex++
+	rv := x.RaftValue{Group: 0, Index: raftIndex}
+	ctx := context.WithValue(context.Background(), "raft", rv)
+	require.NoError(t, l.AddMutationWithIndex(ctx, edge))
 }
 
-func delEdge(t *testing.T, edge *task.DirectedEdge, l *posting.List) {
-	edge.Op = task.DirectedEdge_DEL
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
+func delEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
+	edge.Op = taskp.DirectedEdge_DEL
+	raftIndex++
+	rv := x.RaftValue{Group: 0, Index: raftIndex}
+	ctx := context.WithValue(context.Background(), "raft", rv)
+	require.NoError(t, l.AddMutationWithIndex(ctx, edge))
 }
 
 func getOrCreate(key []byte) *posting.List {
@@ -52,7 +59,7 @@ func getOrCreate(key []byte) *posting.List {
 
 func populateGraph(t *testing.T) {
 	// Add uid edges : predicate neightbour.
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		ValueId: 23,
 		Label:   "author0",
 		Attr:    "neighbour",
@@ -90,7 +97,7 @@ func populateGraph(t *testing.T) {
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
 }
 
-func taskValues(t *testing.T, v []*task.Value) []string {
+func taskValues(t *testing.T, v []*taskp.Value) []string {
 	out := make([]string, len(v))
 	for i, tv := range v {
 		out[i] = string(tv.Val)
@@ -99,7 +106,7 @@ func taskValues(t *testing.T, v []*task.Value) []string {
 }
 
 func initTest(t *testing.T, schemaStr string) (string, *store.Store) {
-	schema.ParseBytes([]byte(schemaStr))
+	schema.ParseBytes([]byte(schemaStr), 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -115,9 +122,10 @@ func initTest(t *testing.T, schemaStr string) (string, *store.Store) {
 }
 
 func TestProcessTask(t *testing.T) {
-	dir, ps := initTest(t, `scalar friend:string @index`)
+	dir, ps := initTest(t, `friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer waitForSyncMark(context.Background(), 0, math.MaxUint64)
 
 	query := newQuery("neighbour", []uint64{10, 11, 12}, nil)
 	r, err := processTask(query, 0)
@@ -131,10 +139,10 @@ func TestProcessTask(t *testing.T) {
 }
 
 // newQuery creates a Query task and returns it.
-func newQuery(attr string, uids []uint64, srcFunc []string) *task.Query {
+func newQuery(attr string, uids []uint64, srcFunc []string) *taskp.Query {
 	x.AssertTrue(uids == nil || srcFunc == nil)
-	return &task.Query{
-		Uids:    &task.List{uids},
+	return &taskp.Query{
+		Uids:    &taskp.List{uids},
 		SrcFunc: srcFunc,
 		Attr:    attr,
 	}
@@ -144,11 +152,12 @@ func newQuery(attr string, uids []uint64, srcFunc []string) *task.Query {
 // at the end. In other words, everything is happening only in mutation layers,
 // and not committed to RocksDB until near the end.
 func TestProcessTaskIndexMLayer(t *testing.T) {
-	dir, ps := initTest(t, `scalar friend:string @index`)
+	dir, ps := initTest(t, `friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer waitForSyncMark(context.Background(), 0, math.MaxUint64)
 
-	query := newQuery("friend", nil, []string{"anyof", "hey photon"})
+	query := newQuery("friend", nil, []string{"anyofterms", "hey photon"})
 	r, err := processTask(query, 0)
 	require.NoError(t, err)
 
@@ -159,7 +168,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value:  []byte("notphotonExtra"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -171,7 +180,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyof", "hey photon notphoton notphotonExtra"})
+	query = newQuery("friend", nil, []string{"anyofterms", "hey photon notphoton notphotonExtra"})
 	r, err = processTask(query, 0)
 	require.NoError(t, err)
 
@@ -183,7 +192,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Try deleting.
-	edge = &task.DirectedEdge{
+	edge = &taskp.DirectedEdge{
 		Value:  []byte("photon"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -202,7 +211,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyof", "photon notphoton ignored"})
+	query = newQuery("friend", nil, []string{"anyofterms", "photon notphoton ignored"})
 	r, err = processTask(query, 0)
 	require.NoError(t, err)
 
@@ -216,7 +225,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	posting.CommitLists(10)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
-	query = newQuery("friend", nil, []string{"anyof", "photon notphoton ignored"})
+	query = newQuery("friend", nil, []string{"anyofterms", "photon notphoton ignored"})
 	r, err = processTask(query, 0)
 	require.NoError(t, err)
 
@@ -230,11 +239,12 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 // Index-related test. Similar to TestProcessTaskIndeMLayer except we call
 // MergeLists in between a lot of updates.
 func TestProcessTaskIndex(t *testing.T) {
-	dir, ps := initTest(t, `scalar friend:string @index`)
+	dir, ps := initTest(t, `friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer waitForSyncMark(context.Background(), 0, math.MaxUint64)
 
-	query := newQuery("friend", nil, []string{"anyof", "hey photon"})
+	query := newQuery("friend", nil, []string{"anyofterms", "hey photon"})
 	r, err := processTask(query, 0)
 	require.NoError(t, err)
 
@@ -248,7 +258,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Value:  []byte("notphotonExtra"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -260,7 +270,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyof", "hey photon notphoton notphotonExtra"})
+	query = newQuery("friend", nil, []string{"anyofterms", "hey photon notphoton notphotonExtra"})
 	r, err = processTask(query, 0)
 	require.NoError(t, err)
 
@@ -275,7 +285,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Try deleting.
-	edge = &task.DirectedEdge{
+	edge = &taskp.DirectedEdge{
 		Value:  []byte("photon"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -294,7 +304,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let indexing finish.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyof", "photon notphoton ignored"})
+	query = newQuery("friend", nil, []string{"anyofterms", "photon notphoton ignored"})
 	r, err = processTask(query, 0)
 	require.NoError(t, err)
 
@@ -307,7 +317,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 /*
 func populateGraphForSort(t *testing.T, ps *store.Store) {
-	edge := &task.DirectedEdge{
+	edge := &taskp.DirectedEdge{
 		Label: "author1",
 		Attr:  "dob",
 	}
@@ -337,14 +347,14 @@ func populateGraphForSort(t *testing.T, ps *store.Store) {
 	time.Sleep(200 * time.Millisecond) // Let indexing finish.
 }
 
-// newSort creates a task.Sort for sorting.
-func newSort(uids [][]uint64, offset, count int) *task.Sort {
+// newSort creates a taskp.Sort for sorting.
+func newSort(uids [][]uint64, offset, count int) *taskp.Sort {
 	x.AssertTrue(uids != nil)
-	uidMatrix := make([]*task.List, len(uids))
+	uidMatrix := make([]*taskp.List, len(uids))
 	for i, l := range uids {
-		uidMatrix[i] = &task.List{Uids: l}
+		uidMatrix[i] = &taskp.List{Uids: l}
 	}
-	return &task.Sort{
+	return &taskp.Sort{
 		Attr:      "dob",
 		Offset:    int32(offset),
 		Count:     int32(count),
@@ -353,7 +363,7 @@ func newSort(uids [][]uint64, offset, count int) *task.Sort {
 }
 
 func TestProcessSort(t *testing.T) {
-	dir, ps := initTest(t, `scalar dob:date @index`)
+	dir, ps := initTest(t, `dob:date @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
@@ -375,7 +385,7 @@ func TestProcessSort(t *testing.T) {
 }
 
 func TestProcessSortOffset(t *testing.T) {
-	dir, ps := initTest(t, `scalar dob:date @index`)
+	dir, ps := initTest(t, `dob:date @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
@@ -437,7 +447,7 @@ func TestProcessSortOffset(t *testing.T) {
 }
 
 func TestProcessSortCount(t *testing.T) {
-	dir, ps := initTest(t, `scalar dob:date @index`)
+	dir, ps := initTest(t, `dob:date @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
@@ -507,7 +517,7 @@ func TestProcessSortCount(t *testing.T) {
 }
 
 func TestProcessSortOffsetCount(t *testing.T) {
-	dir, ps := initTest(t, `scalar dob:date @index`)
+	dir, ps := initTest(t, `dob:date @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
@@ -608,5 +618,6 @@ func TestProcessSortOffsetCount(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	x.Init()
+	x.AssertTruef(!x.IsTestRun(), "We use watermarks for syncing.")
 	os.Exit(m.Run())
 }

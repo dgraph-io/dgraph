@@ -19,6 +19,7 @@ package types
 import (
 	"time"
 
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	geom "github.com/twpayne/go-geom"
 )
 
@@ -31,17 +32,17 @@ const (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	BinaryID   = TypeID(Posting_BINARY)
-	Int32ID    = TypeID(Posting_INT32)
-	FloatID    = TypeID(Posting_FLOAT)
-	BoolID     = TypeID(Posting_BOOL)
-	DateTimeID = TypeID(Posting_DATETIME)
-	StringID   = TypeID(Posting_STRING)
-	DateID     = TypeID(Posting_DATE)
-	GeoID      = TypeID(Posting_GEO)
-	UidID      = TypeID(Posting_UID)
-	PasswordID = TypeID(Posting_PASSWORD)
-	DefaultID  = TypeID(Posting_DEFAULT)
+	BinaryID   = TypeID(typesp.Posting_BINARY)
+	Int32ID    = TypeID(typesp.Posting_INT32)
+	FloatID    = TypeID(typesp.Posting_FLOAT)
+	BoolID     = TypeID(typesp.Posting_BOOL)
+	DateTimeID = TypeID(typesp.Posting_DATETIME)
+	StringID   = TypeID(typesp.Posting_STRING)
+	DateID     = TypeID(typesp.Posting_DATE)
+	GeoID      = TypeID(typesp.Posting_GEO)
+	UidID      = TypeID(typesp.Posting_UID)
+	PasswordID = TypeID(typesp.Posting_PASSWORD)
+	DefaultID  = TypeID(typesp.Posting_DEFAULT)
 )
 
 var typeNameMap = map[string]TypeID{
@@ -58,7 +59,7 @@ var typeNameMap = map[string]TypeID{
 	"default":  DefaultID,
 }
 
-type TypeID Posting_ValType
+type TypeID typesp.Posting_ValType
 
 func (t TypeID) Name() string {
 	switch t {

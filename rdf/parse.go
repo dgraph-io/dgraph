@@ -26,14 +26,14 @@ import (
 	farm "github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/query/graph"
-	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var emptyEdge task.DirectedEdge
+var emptyEdge taskp.DirectedEdge
 var (
 	ErrEmpty = errors.New("rdf: harmless error, e.g. comment line")
 )
@@ -50,30 +50,30 @@ func GetUid(xid string) uint64 {
 }
 
 type NQuad struct {
-	*graph.NQuad
+	*graphp.NQuad
 }
 
-func typeValFrom(val *graph.Value) types.Val {
+func typeValFrom(val *graphp.Value) types.Val {
 	switch val.Val.(type) {
-	case *graph.Value_BytesVal:
+	case *graphp.Value_BytesVal:
 		return types.Val{types.BinaryID, val.GetBytesVal()}
-	case *graph.Value_IntVal:
+	case *graphp.Value_IntVal:
 		return types.Val{types.Int32ID, val.GetIntVal()}
-	case *graph.Value_StrVal:
+	case *graphp.Value_StrVal:
 		return types.Val{types.StringID, val.GetStrVal()}
-	case *graph.Value_BoolVal:
+	case *graphp.Value_BoolVal:
 		return types.Val{types.BoolID, val.GetBoolVal()}
-	case *graph.Value_DoubleVal:
+	case *graphp.Value_DoubleVal:
 		return types.Val{types.FloatID, val.GetDoubleVal()}
-	case *graph.Value_GeoVal:
+	case *graphp.Value_GeoVal:
 		return types.Val{types.GeoID, val.GetGeoVal()}
-	case *graph.Value_DateVal:
+	case *graphp.Value_DateVal:
 		return types.Val{types.DateID, val.GetDateVal()}
-	case *graph.Value_DatetimeVal:
+	case *graphp.Value_DatetimeVal:
 		return types.Val{types.DateTimeID, val.GetDatetimeVal()}
-	case *graph.Value_PasswordVal:
+	case *graphp.Value_PasswordVal:
 		return types.Val{types.PasswordID, val.GetPasswordVal()}
-	case *graph.Value_DefaultVal:
+	case *graphp.Value_DefaultVal:
 		return types.Val{types.DefaultID, val.GetDefaultVal()}
 	}
 	return types.Val{types.StringID, ""}
@@ -98,11 +98,11 @@ func byteVal(nq NQuad) ([]byte, error) {
 
 // ToEdge is useful when you want to find the UID corresponding to XID for
 // just one edge. The method doesn't automatically generate a UID for an XID.
-func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
+func (nq NQuad) ToEdge() (*taskp.DirectedEdge, error) {
 	var err error
 	sid := GetUid(nq.Subject)
 
-	out := &task.DirectedEdge{
+	out := &taskp.DirectedEdge{
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
 		Lang:   nq.Lang,
@@ -131,10 +131,10 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64) {
 
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
-func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, error) {
+func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*taskp.DirectedEdge, error) {
 	var err error
 	uid := toUid(nq.Subject, newToUid)
-	out := &task.DirectedEdge{
+	out := &taskp.DirectedEdge{
 		Entity: uid,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
@@ -154,7 +154,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 	return out, nil
 }
 
-func copyValue(out *task.DirectedEdge, nq NQuad) error {
+func copyValue(out *taskp.DirectedEdge, nq NQuad) error {
 	var err error
 	if out.Value, err = byteVal(nq); err != nil {
 		return err
@@ -187,7 +187,7 @@ func sane(s string) bool {
 }
 
 // Parse parses a mutation string and returns the NQuad representation for it.
-func Parse(line string) (rnq graph.NQuad, rerr error) {
+func Parse(line string) (rnq graphp.NQuad, rerr error) {
 	l := lex.NewLexer(line).Run(lexText)
 	it := l.NewIterator()
 	var oval string
@@ -217,7 +217,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			// if lang tag is specified then type is set to string
 			// grammar allows either ^^ iriref or lang tag
 			if len(oval) > 0 {
-				rnq.ObjectValue = &graph.Value{&graph.Value_DefaultVal{oval}}
+				rnq.ObjectValue = &graphp.Value{&graphp.Value_DefaultVal{oval}}
 				// If no type is specified, we default to string.
 				rnq.ObjectType = int32(types.StringID)
 				oval = ""
@@ -282,7 +282,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 		return rnq, ErrEmpty
 	}
 	if len(oval) > 0 {
-		rnq.ObjectValue = &graph.Value{&graph.Value_DefaultVal{oval}}
+		rnq.ObjectValue = &graphp.Value{&graphp.Value_DefaultVal{oval}}
 		// If no type is specified, we default to string.
 		rnq.ObjectType = int32(types.DefaultID)
 	}
@@ -300,7 +300,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 	return rnq, nil
 }
 
-func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
+func parseFacets(it *lex.ItemIterator, rnq *graphp.NQuad) error {
 	if !it.Next() {
 		return x.Errorf("Unexpected end of facets.")
 	}
@@ -336,12 +336,11 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 		if item.Typ == itemText {
 			facetVal = item.Val
 		}
-		valTyp, err := facets.ValType(facetVal)
+		facet, err := facets.FacetFor(facetKey, facetVal)
 		if err != nil {
 			return err
 		}
-		rnq.Facets = append(rnq.Facets,
-			&facets.Facet{Key: facetKey, Value: []byte(facetVal), ValType: valTyp})
+		rnq.Facets = append(rnq.Facets, facet)
 
 		// empty value case..
 		if item.Typ == itemRightRound {

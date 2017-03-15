@@ -1,0 +1,86 @@
+// To compile this file, in dgraph directory :
+// protoc --gofast_out=plugins=grpc:. --proto_path=${GOPATH}/src:. protos/graphp/graphresponse.proto
+
+syntax="proto3";
+import "github.com/dgraph-io/dgraph/protos/facetsp/facets.proto";
+
+package graphp;
+
+service Dgraph {
+    rpc Run (Request) returns (Response) {};
+}
+
+message NQuad {
+    string subject = 1;
+    string predicate = 2;
+    string objectId = 3;
+    Value objectValue = 4;
+    string label = 5;
+    string lang = 7;
+    sint32 objectType = 6;
+    repeated facetsp.Facet facets = 8;
+}
+
+message Value {
+    oneof val {
+        string default_val = 1;
+        bytes bytes_val = 2;
+        int32 int_val = 3;
+        bool bool_val = 4;
+        string str_val = 5;
+        double double_val = 6;
+        bytes geo_val = 7;  // Geo data in WKB format
+        bytes date_val = 8;
+        bytes datetime_val = 9;
+        string password_val = 10;
+    }
+}
+
+message Schema {
+    repeated string predicates = 1;
+    repeated string fields = 2;
+}
+
+message Mutation {
+    repeated NQuad set = 1;
+    repeated NQuad del = 2;
+}
+
+message Request {
+    string query = 1;
+    Mutation mutation = 2;
+}
+
+message Latency {
+    string parsing = 1;
+    string processing = 2;
+    string pb = 3;
+}
+
+message Property {
+    string prop = 1;
+    Value value = 2;
+}
+
+message Node {
+    uint64 uid = 1;
+    string xid = 2;
+    string attribute = 3;
+    repeated Property properties = 4;
+    repeated Node children = 5; // Each node can have multiple children
+}
+
+message SchemaNode {
+    string predicate = 1;
+    string type = 2;
+    bool indexed = 3;
+    repeated string tokenizer = 4;
+    bool reversed = 5;
+}
+
+message Response {
+    repeated Node n = 1;
+    Latency l = 2;
+    map<string, uint64> AssignedUids = 3;
+    repeated SchemaNode schema = 4;
+}

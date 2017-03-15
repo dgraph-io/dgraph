@@ -952,7 +952,7 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	case "not":
 		buf.WriteString("NOT")
 	default:
-		x.Errorf("Unknown operator: %q", t.Op)
+		x.Fatalf("Unknown operator: %q", t.Op)
 	}
 
 	for _, c := range t.Child {

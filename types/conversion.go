@@ -28,8 +28,7 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
 
-	"github.com/dgraph-io/dgraph/query/graph"
-	"github.com/dgraph-io/dgraph/types/facets"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -539,9 +538,9 @@ func Marshal(from Val, to *Val) error {
 	return nil
 }
 
-// ObjectValue converts into graph.Value.
-func ObjectValue(id TypeID, value interface{}) (*graph.Value, error) {
-	def := &graph.Value{&graph.Value_StrVal{""}}
+// ObjectValue converts into graphp.Value.
+func ObjectValue(id TypeID, value interface{}) (*graphp.Value, error) {
+	def := &graphp.Value{&graphp.Value_StrVal{""}}
 	var ok bool
 	// Lets set the object value according to the storage type.
 	switch id {
@@ -550,37 +549,37 @@ func ObjectValue(id TypeID, value interface{}) (*graph.Value, error) {
 		if v, ok = value.(string); !ok {
 			return def, x.Errorf("Expected value of type string. Got : %v", value)
 		}
-		return &graph.Value{&graph.Value_StrVal{v}}, nil
+		return &graphp.Value{&graphp.Value_StrVal{v}}, nil
 	case DefaultID:
 		var v string
 		if v, ok = value.(string); !ok {
 			return def, x.Errorf("Expected value of type string. Got : %v", value)
 		}
-		return &graph.Value{&graph.Value_DefaultVal{v}}, nil
+		return &graphp.Value{&graphp.Value_DefaultVal{v}}, nil
 	case Int32ID:
 		var v int32
 		if v, ok = value.(int32); !ok {
 			return def, x.Errorf("Expected value of type int32. Got : %v", value)
 		}
-		return &graph.Value{&graph.Value_IntVal{v}}, nil
+		return &graphp.Value{&graphp.Value_IntVal{v}}, nil
 	case FloatID:
 		var v float64
 		if v, ok = value.(float64); !ok {
 			return def, x.Errorf("Expected value of type float64. Got : %v", value)
 		}
-		return &graph.Value{&graph.Value_DoubleVal{v}}, nil
+		return &graphp.Value{&graphp.Value_DoubleVal{v}}, nil
 	case BoolID:
 		var v bool
 		if v, ok = value.(bool); !ok {
 			return def, x.Errorf("Expected value of type bool. Got : %v", value)
 		}
-		return &graph.Value{&graph.Value_BoolVal{v}}, nil
+		return &graphp.Value{&graphp.Value_BoolVal{v}}, nil
 	case BinaryID:
 		var v []byte
 		if v, ok = value.([]byte); !ok {
 			return def, x.Errorf("Expected value of type []byte. Got : %v", value)
 		}
-		return &graph.Value{&graph.Value_BytesVal{v}}, nil
+		return &graphp.Value{&graphp.Value_BytesVal{v}}, nil
 	// Geo, date and datetime are stored in binary format in the NQuad, so lets
 	// convert them here.
 	case GeoID:
@@ -588,25 +587,25 @@ func ObjectValue(id TypeID, value interface{}) (*graph.Value, error) {
 		if err != nil {
 			return def, err
 		}
-		return &graph.Value{&graph.Value_GeoVal{b}}, nil
+		return &graphp.Value{&graphp.Value_GeoVal{b}}, nil
 	case DateID:
 		b, err := toBinary(id, value)
 		if err != nil {
 			return def, err
 		}
-		return &graph.Value{&graph.Value_DateVal{b}}, nil
+		return &graphp.Value{&graphp.Value_DateVal{b}}, nil
 	case DateTimeID:
 		b, err := toBinary(id, value)
 		if err != nil {
 			return def, err
 		}
-		return &graph.Value{&graph.Value_DatetimeVal{b}}, nil
+		return &graphp.Value{&graphp.Value_DatetimeVal{b}}, nil
 	case PasswordID:
 		var v string
 		if v, ok = value.(string); !ok {
 			return def, x.Errorf("Expected value of type password. Got : %v", value)
 		}
-		return &graph.Value{&graph.Value_PasswordVal{v}}, nil
+		return &graphp.Value{&graphp.Value_PasswordVal{v}}, nil
 	default:
 		return def, x.Errorf("ObjectValue not available for: %v", id)
 	}
@@ -646,34 +645,4 @@ func (v Val) MarshalJSON() ([]byte, error) {
 		return json.Marshal(v.Value.(string))
 	}
 	return nil, x.Errorf("Invalid type for MarshalJSON: %v", v.Tid)
-}
-
-func typeIDForFacet(f *facets.Facet) TypeID {
-	switch facets.TypeIDForValType(f.ValType) {
-	case facets.Int32ID:
-		return Int32ID
-	case facets.StringID:
-		return StringID
-	case facets.BoolID:
-		return BoolID
-	case facets.DateTimeID:
-		if facets.OnlyDate(string(f.Value)) {
-			return DateID
-		}
-		return DateTimeID
-	case facets.FloatID:
-		return FloatID
-	default:
-		panic("unhandled case in facetValToTypeVal")
-	}
-}
-
-// ValFor converts Facet into types.Val.
-func ValFor(f *facets.Facet) Val {
-	val := Val{Tid: StringID, Value: f.Value}
-	typId := typeIDForFacet(f)
-	v, err := Convert(val, typId)
-	x.AssertTruef(err == nil,
-		"We should always be able to covert facet into val. %v %v", f.Value, typId)
-	return v
 }

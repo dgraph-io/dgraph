@@ -32,8 +32,10 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/protos/facetsp"
+	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -45,7 +47,7 @@ var (
 	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
 	// ErrNoValue would be returned if no value was found in the posting list.
 	ErrNoValue   = fmt.Errorf("No value found")
-	emptyPosting = &types.Posting{}
+	emptyPosting = &typesp.Posting{}
 )
 
 const (
@@ -63,8 +65,8 @@ type List struct {
 	key         []byte
 	ghash       uint64
 	pbuffer     unsafe.Pointer
-	mlayer      []*types.Posting // mutations
-	pstore      *store.Store     // postinglist store
+	mlayer      []*typesp.Posting // mutations
+	pstore      *store.Store      // postinglist store
 	lastCompact time.Time
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount    int32
@@ -104,11 +106,11 @@ func getNew(key []byte, pstore *store.Store) *List {
 // UIDs, for each posting list. It should be internal to this package.
 type ListOptions struct {
 	AfterUID   uint64              // Any UID returned must be after this value.
-	Intersect  *task.List          // Intersect results with this list of UIDs.
+	Intersect  *taskp.List         // Intersect results with this list of UIDs.
 	ExcludeSet map[uint64]struct{} // Exclude UIDs in this set.
 }
 
-type ByUid []*types.Posting
+type ByUid []*typesp.Posting
 
 func (pa ByUid) Len() int           { return len(pa) }
 func (pa ByUid) Swap(i, j int)      { pa[i], pa[j] = pa[j], pa[i] }
@@ -117,7 +119,7 @@ func (pa ByUid) Less(i, j int) bool { return pa[i].Uid < pa[j].Uid }
 // samePosting tells whether this is same posting depending upon operation of new posting.
 // if operation is Del, we ignore facets and only care about uid and value.
 // otherwise we match everything.
-func samePosting(oldp *types.Posting, newp *types.Posting) bool {
+func samePosting(oldp *typesp.Posting, newp *typesp.Posting) bool {
 	if oldp.Uid != newp.Uid {
 		return false
 	}
@@ -143,34 +145,34 @@ func samePosting(oldp *types.Posting, newp *types.Posting) bool {
 	return facets.SameFacets(oldp.Facets, newp.Facets)
 }
 
-func newPosting(t *task.DirectedEdge) *types.Posting {
+func newPosting(t *taskp.DirectedEdge) *typesp.Posting {
 	x.AssertTruef(edgeType(t) != x.ValueEmpty,
 		"This should have been set by the caller.")
 
 	var op uint32
-	if t.Op == task.DirectedEdge_SET {
+	if t.Op == taskp.DirectedEdge_SET {
 		op = Set
-	} else if t.Op == task.DirectedEdge_DEL {
+	} else if t.Op == taskp.DirectedEdge_DEL {
 		op = Del
 	} else {
 		x.Fatalf("Unhandled operation: %+v", t)
 	}
 
-	var postingType types.Posting_PostingType
+	var postingType typesp.Posting_PostingType
 	var metadata []byte
 	if len(t.Lang) > 0 {
-		postingType = types.Posting_VALUE_LANG
+		postingType = typesp.Posting_VALUE_LANG
 		metadata = []byte(t.Lang)
 	} else if len(t.Value) == 0 {
-		postingType = types.Posting_REF
+		postingType = typesp.Posting_REF
 	} else if len(t.Value) > 0 {
-		postingType = types.Posting_VALUE
+		postingType = typesp.Posting_VALUE
 	}
 
-	return &types.Posting{
+	return &typesp.Posting{
 		Uid:         t.ValueId,
 		Value:       t.Value,
-		ValType:     types.Posting_ValType(t.ValueType),
+		ValType:     typesp.Posting_ValType(t.ValueType),
 		PostingType: postingType,
 		Metadata:    metadata,
 		Label:       t.Label,
@@ -185,7 +187,7 @@ func (l *List) WaitForCommit() {
 	l.Wait()
 }
 
-func (l *List) PostingList() *types.PostingList {
+func (l *List) PostingList() *typesp.PostingList {
 	l.RLock()
 	defer l.RUnlock()
 	return l.getPostingList(0)
@@ -193,7 +195,7 @@ func (l *List) PostingList() *types.PostingList {
 
 // getPostingList tries to get posting list from l.pbuffer. If it is nil, then
 // we query RocksDB. There is no need for lock acquisition here.
-func (l *List) getPostingList(loop int) *types.PostingList {
+func (l *List) getPostingList(loop int) *typesp.PostingList {
 	if loop >= 10 {
 		x.Fatalf("This is over the 10th loop: %v", loop)
 	}
@@ -202,11 +204,11 @@ func (l *List) getPostingList(loop int) *types.PostingList {
 	l.Wait()
 
 	pb := atomic.LoadPointer(&l.pbuffer)
-	plist := (*types.PostingList)(pb)
+	plist := (*typesp.PostingList)(pb)
 
 	if plist == nil {
 		x.AssertTrue(l.pstore != nil)
-		plist = new(types.PostingList)
+		plist = new(typesp.PostingList)
 
 		if slice, err := l.pstore.Get(l.key); err == nil && slice != nil {
 			x.Checkf(plist.Unmarshal(slice.Data()), "Unable to Unmarshal PostingList from store")
@@ -226,7 +228,7 @@ func (l *List) SetForDeletion() {
 	atomic.StoreInt32(&l.deleteMe, 1)
 }
 
-func (l *List) updateMutationLayer(mpost *types.Posting) bool {
+func (l *List) updateMutationLayer(mpost *typesp.Posting) bool {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 
@@ -325,13 +327,13 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
-func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, error) {
+func (l *List) AddMutation(ctx context.Context, t *taskp.DirectedEdge) (bool, error) {
 	l.Lock()
 	defer l.Unlock()
 	return l.addMutation(ctx, t)
 }
 
-func edgeType(t *task.DirectedEdge) x.ValueTypeInfo {
+func edgeType(t *taskp.DirectedEdge) x.ValueTypeInfo {
 	hasVal := !bytes.Equal(t.Value, nil)
 	hasId := t.ValueId != 0
 	switch {
@@ -346,13 +348,13 @@ func edgeType(t *task.DirectedEdge) x.ValueTypeInfo {
 	}
 }
 
-func postingType(p *types.Posting) x.ValueTypeInfo {
+func postingType(p *typesp.Posting) x.ValueTypeInfo {
 	switch p.PostingType {
-	case types.Posting_REF:
+	case typesp.Posting_REF:
 		return x.ValueUid
-	case types.Posting_VALUE:
+	case typesp.Posting_VALUE:
 		return x.ValuePlain
-	case types.Posting_VALUE_LANG:
+	case typesp.Posting_VALUE_LANG:
 		return x.ValueLang
 	default:
 		return x.ValueEmpty
@@ -360,14 +362,14 @@ func postingType(p *types.Posting) x.ValueTypeInfo {
 }
 
 // TypeID returns the typeid of destiantion vertex
-func TypeID(edge *task.DirectedEdge) types.TypeID {
+func TypeID(edge *taskp.DirectedEdge) types.TypeID {
 	if edge.ValueId != 0 {
 		return types.UidID
 	}
 	return types.TypeID(edge.ValueType)
 }
 
-func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, error) {
+func (l *List) addMutation(ctx context.Context, t *taskp.DirectedEdge) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
 		return false, ErrRetry
@@ -416,18 +418,18 @@ func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 // The function will loop until either the Posting List is fully iterated, or you return a false
 // in the provided function, which will indicate to the function to break out of the iteration.
 //
-// 	pl.Iterate(func(p *types.Posting) bool {
+// 	pl.Iterate(func(p *typesp.Posting) bool {
 //    // Use posting p
 //    return true  // to continue iteration.
 //    return false // to break iteration.
 //  })
-func (l *List) Iterate(afterUid uint64, f func(obj *types.Posting) bool) {
+func (l *List) Iterate(afterUid uint64, f func(obj *typesp.Posting) bool) {
 	l.RLock()
 	defer l.RUnlock()
 	l.iterate(afterUid, f)
 }
 
-func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
+func (l *List) iterate(afterUid uint64, f func(obj *typesp.Posting) bool) {
 	l.AssertRLock()
 	pidx, midx := 0, 0
 	pl := l.getPostingList(0)
@@ -445,7 +447,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 		})
 	}
 
-	var mp, pp *types.Posting
+	var mp, pp *typesp.Posting
 	cont := true
 	for cont {
 		if pidx < postingLen {
@@ -522,11 +524,11 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		return false, nil
 	}
 
-	var final types.PostingList
+	var final typesp.PostingList
 	ubuf := make([]byte, 16)
 	h := md5.New()
 	count := 0
-	l.iterate(0, func(p *types.Posting) bool {
+	l.iterate(0, func(p *typesp.Posting) bool {
 		// Checksum code.
 		n := binary.PutVarint(ubuf, int64(count))
 		h.Write(ubuf[0:n])
@@ -572,25 +574,25 @@ func (l *List) LastCompactionTs() time.Time {
 
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
-func (l *List) Uids(opt ListOptions) *task.List {
+func (l *List) Uids(opt ListOptions) *taskp.List {
 	// Pre-assign length to make it faster.
 	res := make([]uint64, 0, l.Length(opt.AfterUID))
 
-	l.Postings(opt, func(p *types.Posting) bool {
+	l.Postings(opt, func(p *typesp.Posting) bool {
 		res = append(res, p.Uid)
 		return true
 	})
-	return &task.List{res}
+	return &taskp.List{res}
 }
 
 // Postings calls postFn with the postings that are common with
 // uids in the opt ListOptions.
-func (l *List) Postings(opt ListOptions, postFn func(*types.Posting) bool) {
+func (l *List) Postings(opt ListOptions, postFn func(*typesp.Posting) bool) {
 	l.RLock()
 	defer l.RUnlock()
 
 	var intersectIdx int // Indexes into opt.Intersect if it exists.
-	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
+	l.iterate(opt.AfterUID, func(p *typesp.Posting) bool {
 		if postingType(p) != x.ValueUid {
 			return true
 		}
@@ -664,7 +666,7 @@ func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
 
 	// last resort - return value with smallest lang Uid
 	if !found {
-		l.iterate(0, func(p *types.Posting) bool {
+		l.iterate(0, func(p *typesp.Posting) bool {
 			if postingType(p) == x.ValueLang {
 				val := make([]byte, len(p.Value))
 				copy(val, p.Value)
@@ -684,7 +686,7 @@ func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
 }
 
 func (l *List) findValue(uid uint64) (found bool, rval types.Val) {
-	l.iterate(uid-1, func(p *types.Posting) bool {
+	l.iterate(uid-1, func(p *typesp.Posting) bool {
 		if p.Uid == uid {
 			val := make([]byte, len(p.Value))
 			copy(val, p.Value)
@@ -699,7 +701,7 @@ func (l *List) findValue(uid uint64) (found bool, rval types.Val) {
 }
 
 // Facets gives facets for the posting representing value.
-func (l *List) Facets(param *facets.Param) (fs []*facets.Facet, ferr error) {
+func (l *List) Facets(param *facetsp.Param) (fs []*facetsp.Facet, ferr error) {
 	l.RLock()
 	defer l.RUnlock()
 	p, err := l.valuePosting()
@@ -711,10 +713,10 @@ func (l *List) Facets(param *facets.Param) (fs []*facets.Facet, ferr error) {
 
 // valuePosting gives the posting representing value.
 // This fn expects to be called from inside a read lock.
-func (l *List) valuePosting() (p *types.Posting, err error) {
+func (l *List) valuePosting() (p *typesp.Posting, err error) {
 	l.AssertRLock()
 	var found bool
-	l.iterate(math.MaxUint64-1, func(pi *types.Posting) bool {
+	l.iterate(math.MaxUint64-1, func(pi *typesp.Posting) bool {
 		if pi.Uid == math.MaxUint64 {
 			p = pi
 			found = true

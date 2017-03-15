@@ -5,9 +5,3 @@
 	display: flex;
 	flex-direction: column;
 }
-
-.Response-button {
-	float: right;
-	margin-right: 10px;
-	margin-left: 5px;
-}

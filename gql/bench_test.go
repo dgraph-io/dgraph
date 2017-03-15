@@ -7,11 +7,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var sc = `scalar type.object.name.en: string @index
-scalar film.film.initial_release_date: date @index`
+var sc = `type.object.name.en: string @index
+film.film.initial_release_date: date @index`
 
 func benchmarkParsingHelper(b *testing.B, q string) {
-	schema.ParseBytes([]byte(sc))
+	schema.ParseBytes([]byte(sc), 1)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := Parse(q)
@@ -20,7 +20,7 @@ func benchmarkParsingHelper(b *testing.B, q string) {
 }
 
 func benchmarkParsingParallelHelper(b *testing.B, q string) {
-	schema.ParseBytes([]byte(sc))
+	schema.ParseBytes([]byte(sc), 1)
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -46,7 +46,7 @@ func Benchmark_Mutation_parallel(b *testing.B)     { benchmarkParsingParallelHel
 func Benchmark_Mutation1000_parallel(b *testing.B) { benchmarkParsingParallelHelper(b, m1000) }
 
 var q1 = `{
-  debug(allof("type.object.name.en", "steven spielberg")) {
+  debug(allofterms("type.object.name.en", "steven spielberg")) {
     type.object.name.en
     film.director.film {
       type.object.name.en
@@ -68,7 +68,7 @@ var q1 = `{
 }`
 
 var q2 = `{
-  debug(anyof("type.object.name.en","big lebowski")) {
+  debug(anyofterms("type.object.name.en","big lebowski")) {
     type.object.name.en
     film.film.initial_release_date
     film.film.country
@@ -89,7 +89,7 @@ var q2 = `{
 var q3 = `{
   debug(id: m.06pj8) {
     type.object.name.en
-    film.director.film @filter(allof("type.object.name.en", "jones indiana") or allof("type.object.name.en", "jurassic park"))  {
+    film.director.film @filter(allofterms("type.object.name.en", "jones indiana") or allofterms("type.object.name.en", "jurassic park"))  {
 	      _uid_
 	      type.object.name.en
      }
@@ -107,7 +107,7 @@ var q4 = `{
 }`
 
 var q5 = `{
-   debug(allof("type.object.name.en", "steven spielberg")) {
+   debug(allofterms("type.object.name.en", "steven spielberg")) {
      type.object.name.en
      film.director.film(order: film.film.initial_release_date) {
        type.object.name.en

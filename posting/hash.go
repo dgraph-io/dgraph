@@ -91,3 +91,19 @@ func (s *listMap) EachWithDelete(f func(key uint64, val *List)) {
 		shard.eachWithDelete(f)
 	}
 }
+
+func (s *listMapShard) each(f func(key uint64, val *List)) {
+	s.Lock()
+	defer s.Unlock()
+	for k, v := range s.m {
+		f(k, v)
+	}
+}
+
+// Each iterates over listMap and for each key, value pair, and calls the
+// given function.
+func (s *listMap) Each(f func(key uint64, val *List)) {
+	for _, shard := range s.shard {
+		shard.each(f)
+	}
+}

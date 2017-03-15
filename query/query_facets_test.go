@@ -663,7 +663,7 @@ func TestFacetsFilterNotAndOrGeqMutuallyExclusive(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @facets(not eq(close, false) OR eq(family, true) AND geq(since, "2007-01-10")) {
+				friend @facets(not (eq(close, false) OR eq(family, true) AND geq(since, "2007-01-10"))) {
 					name
 					_uid_
 				}
@@ -741,14 +741,14 @@ func TestFacetsFilterFail1(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestFacetsFilterAllof(t *testing.T) {
+func TestFacetsFilterallofterms(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
 			me(id:31) {
 				name
-				friend @facets(allof(games, "football chess tennis")) {
+				friend @facets(allofterms(games, "football chess tennis")) {
 					name
 					_uid_
 				}
@@ -769,7 +769,7 @@ func TestFacetsFilterAllofMultiple(t *testing.T) {
 		{
 			me(id:31) {
 				name
-				friend @facets(allof(games, "football basketball")) {
+				friend @facets(allofterms(games, "football basketball")) {
 					name
 					_uid_
 				}
@@ -786,12 +786,12 @@ func TestFacetsFilterAllofMultiple(t *testing.T) {
 func TestFacetsFilterAllofNone(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
-	// nothing matches in allof
+	// nothing matches in allofterms
 	query := `
 		{
 			me(id:31) {
 				name
-				friend @facets(allof(games, "football chess tennis cricket")) {
+				friend @facets(allofterms(games, "football chess tennis cricket")) {
 					name
 					_uid_
 				}
@@ -805,14 +805,14 @@ func TestFacetsFilterAllofNone(t *testing.T) {
 		js)
 }
 
-func TestFacetsFilterAnyof(t *testing.T) {
+func TestFacetsFilteranyofterms(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
 			me(id:31) {
 				name
-				friend @facets(anyof(games, "tennis cricket")) {
+				friend @facets(anyofterms(games, "tennis cricket")) {
 					name
 					_uid_
 				}
@@ -833,7 +833,7 @@ func TestFacetsFilterAnyofNone(t *testing.T) {
 		{
 			me(id:31) {
 				name
-				friend @facets(anyof(games, "cricket")) {
+				friend @facets(anyofterms(games, "cricket")) {
 					name
 					_uid_
 				}
@@ -847,14 +847,14 @@ func TestFacetsFilterAnyofNone(t *testing.T) {
 		js)
 }
 
-func TestFacetsFilterAllofAnyof(t *testing.T) {
+func TestFacetsFilterAllofanyofterms(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
 			me(id:31) {
 				name
-				friend @facets(allof(games, "basketball hockey") OR anyof(games, "chess")) {
+				friend @facets(allofterms(games, "basketball hockey") OR anyofterms(games, "chess")) {
 					name
 					_uid_
 				}
@@ -868,14 +868,14 @@ func TestFacetsFilterAllofAnyof(t *testing.T) {
 		js)
 }
 
-func TestFacetsFilterAllofAndAnyof(t *testing.T) {
+func TestFacetsFilterAllofAndanyofterms(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
 			me(id:31) {
 				name
-				friend @facets(allof(games, "hockey") AND anyof(games, "football basketball")) {
+				friend @facets(allofterms(games, "hockey") AND anyofterms(games, "football basketball")) {
 					name
 					_uid_
 				}

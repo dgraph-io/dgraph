@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -30,10 +32,10 @@ import (
 
 type nameType struct {
 	name string
-	typ  *types.Schema
+	typ  *typesp.Schema
 }
 
-func checkSchema(t *testing.T, h map[string]*types.Schema, expected []nameType) {
+func checkSchema(t *testing.T, h map[string]*typesp.Schema, expected []nameType) {
 	require.Len(t, h, len(expected))
 	for _, nt := range expected {
 		typ, found := h[nt.name]
@@ -43,12 +45,12 @@ func checkSchema(t *testing.T, h map[string]*types.Schema, expected []nameType) 
 }
 
 func TestSchema(t *testing.T) {
-	require.NoError(t, ReloadData("testfiles/test_schema"))
-	checkSchema(t, State().predicate, []nameType{
-		{"name", &types.Schema{ValueType: uint32(types.StringID)}},
-		{"address", &types.Schema{ValueType: uint32(types.StringID)}},
-		{"http://scalar.com/helloworld/", &types.Schema{ValueType: uint32(types.StringID)}},
-		{"age", &types.Schema{ValueType: uint32(types.Int32ID)}},
+	require.NoError(t, ReloadData("testfiles/test_schema", 1))
+	checkSchema(t, State().get(1).predicate, []nameType{
+		{"name", &typesp.Schema{ValueType: uint32(types.StringID)}},
+		{"address", &typesp.Schema{ValueType: uint32(types.StringID)}},
+		{"http://scalar.com/helloworld/", &typesp.Schema{ValueType: uint32(types.StringID)}},
+		{"age", &typesp.Schema{ValueType: uint32(types.Int32ID)}},
 	})
 
 	typ, err := State().TypeOf("age")
@@ -60,15 +62,15 @@ func TestSchema(t *testing.T) {
 }
 
 func TestSchema1_Error(t *testing.T) {
-	require.Error(t, ReloadData("testfiles/test_schema1"))
+	require.Error(t, ReloadData("testfiles/test_schema1", 1))
 }
 
 func TestSchema2_Error(t *testing.T) {
-	require.Error(t, ReloadData("testfiles/test_schema2"))
+	require.Error(t, ReloadData("testfiles/test_schema2", 1))
 }
 
 func TestSchema3_Error(t *testing.T) {
-	require.Error(t, ReloadData("testfiles/test_schema3"))
+	require.Error(t, ReloadData("testfiles/test_schema3", 1))
 }
 
 /*
@@ -86,32 +88,32 @@ func TestSchema6_Error(t *testing.T) {
 */
 // Correct specification of indexing
 func TestSchemaIndex(t *testing.T) {
-	require.NoError(t, ReloadData("testfiles/test_schema_index1"))
-	require.Equal(t, 2, len(State().IndexedFields()))
+	require.NoError(t, ReloadData("testfiles/test_schema_index1", 1))
+	require.Equal(t, 2, len(State().IndexedFields(1)))
 }
 
 // Indexing can't be specified inside object types.
 func TestSchemaIndex_Error1(t *testing.T) {
-	require.Error(t, ReloadData("testfiles/test_schema_index2"))
+	require.Error(t, ReloadData("testfiles/test_schema_index2", 1))
 }
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
-	require.Error(t, ReloadData("testfiles/test_schema_index3"))
+	require.Error(t, ReloadData("testfiles/test_schema_index3", 1))
 }
 
 func TestSchemaIndexCustom(t *testing.T) {
-	require.NoError(t, ReloadData("testfiles/test_schema_index4"))
-	checkSchema(t, State().predicate, []nameType{
-		{"name", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}},
-		{"address", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"term"}}},
-		{"age", &types.Schema{ValueType: uint32(types.Int32ID), Tokenizer: []string{"int"}}},
-		{"id", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact", "term"}}},
+	require.NoError(t, ReloadData("testfiles/test_schema_index4", 1))
+	checkSchema(t, State().get(1).predicate, []nameType{
+		{"name", &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}},
+		{"address", &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"term"}}},
+		{"age", &typesp.Schema{ValueType: uint32(types.Int32ID), Tokenizer: []string{"int"}}},
+		{"id", &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact", "term"}}},
 	})
 	require.True(t, State().IsIndexed("name"))
 	require.False(t, State().IsReversed("name"))
 	require.Equal(t, "int", State().Tokenizer("age")[0].Name())
-	require.Equal(t, 4, len(State().IndexedFields()))
+	require.Equal(t, 4, len(State().IndexedFields(1)))
 }
 
 var ps *store.Store
@@ -124,7 +126,8 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	ps, err = store.NewStore(dir)
 	x.Check(err)
-	x.Check(Init(ps, ""))
+	x.Check(group.ParseGroupConfig("groups.conf"))
+	Init(ps)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
