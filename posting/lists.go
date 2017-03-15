@@ -408,6 +408,28 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	return lp, lp.decr
 }
 
+// This just get the key from the memory or the store. If we get the value from
+// the store, we just return it without adding it to lhmap.
+func Get(key []byte, group uint32) (rlist *List, decr func()) {
+	fp := farm.Fingerprint64(key)
+
+	stopTheWorld.RLock()
+	defer stopTheWorld.RUnlock()
+
+	lp, _ := lhmap.Get(fp)
+	if lp != nil {
+		lp.incr()
+		return lp, lp.decr
+	}
+
+	// Any initialization for l must be done before PutIfMissing. Once it's added
+	// to the map, any other goroutine can retrieve it.
+	lp = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
+	lp.water = marks.Get(group)
+
+	return lp, lp.decr
+}
+
 func commitOne(l *List, c *counters) {
 	if l == nil {
 		return

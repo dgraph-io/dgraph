@@ -103,7 +103,7 @@ func proposeRebuildIndex(ctx context.Context, ri *taskp.RebuildIndex) error {
 // serves the attr.
 func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 	if !schema.State().IsIndexed(attr) {
-		return x.Errorf("Attribute %s is indexed", attr)
+		return x.Errorf("Attribute %s is not indexed", attr)
 	}
 
 	gid := group.BelongsTo(attr)

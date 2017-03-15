@@ -749,7 +749,7 @@ func createTaskQuery(sg *SubGraph) *taskp.Query {
 		FacetsFilter: sg.facetsFilter,
 	}
 	if sg.SrcUIDs != nil {
-		out.Uids = sg.SrcUIDs
+		out.UidList = sg.SrcUIDs
 	}
 	return out
 }
