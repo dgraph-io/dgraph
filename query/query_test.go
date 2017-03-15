@@ -1114,7 +1114,6 @@ func TestCheckPassword(t *testing.T) {
 	require.EqualValues(t,
 		`{"me":[{"name":"Michonne","password":[{"checkpwd":true}]}]}`,
 		js)
-
 }
 
 func TestCheckPasswordIncorrect(t *testing.T) {
@@ -1131,7 +1130,21 @@ func TestCheckPasswordIncorrect(t *testing.T) {
 	require.EqualValues(t,
 		`{"me":[{"name":"Michonne","password":[{"checkpwd":false}]}]}`,
 		js)
+}
 
+// ensure, that old and deprecated form is not allowed
+func TestCheckPasswordParseError(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                checkpwd("654123")
+                        }
+                }
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
 }
 
 func TechCheckPasswordDifferentAttr(t *testing.T) {
