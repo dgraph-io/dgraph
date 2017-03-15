@@ -289,7 +289,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			x.AssertTruef(pk.IsData() && pk.Attr == q.Attr,
 				"Invalid key obtained for comparison")
 			key := it.Key().Data()
-			pl, decr := posting.GetOrCreate(key, gid)
+			pl, decr := posting.Get(key, gid)
 			count := int64(pl.Length(0))
 			decr()
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
@@ -312,7 +312,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			x.AssertTrue(pk.Attr == q.Attr)
 			term := pk.Term[1:] // skip the first byte which is tokenizer prefix.
 			if srcFn.regex.MatchString(term) {
-				pl, decr := posting.GetOrCreate(key, gid)
+				pl, decr := posting.Get(key, gid)
 				out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 				decr()
 			}
