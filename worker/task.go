@@ -180,6 +180,9 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
+		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
+			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+		}
 		newValue := &taskp.Value{ValType: int32(val.Tid)}
 		if err == nil {
 			newValue.Val = val.Value.([]byte)

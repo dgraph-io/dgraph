@@ -1147,20 +1147,79 @@ func TestCheckPasswordParseError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TechCheckPasswordDifferentAttr(t *testing.T) {
+func TestCheckPasswordDifferentAttr1(t *testing.T) {
 	populateGraph(t)
 	query := `
                 {
-                        me(id:0x01) {
+                        me(id:23) {
                                 name
-                                checkpwd(pass, "654123")
+                                checkpwd(pass, "654321")
                         }
                 }
 	`
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
-		`{"me":[{"name":"Rick Grimes","password":[{"checkpwd":true}]}]}`,
-		js)
+	require.EqualValues(t, `{"me":[{"name":"Rick Grimes","pass":[{"checkpwd":true}]}]}`, js)
+}
+
+func TestCheckPasswordDifferentAttr2(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:23) {
+                                name
+                                checkpwd(pass, "invalid")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	require.EqualValues(t, `{"me":[{"name":"Rick Grimes","pass":[{"checkpwd":false}]}]}`, js)
+}
+
+func TestCheckPasswordInvalidAttr(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x1) {
+                                name
+                                checkpwd(pass, "123456")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	// for id:0x1 there is no pass attribute defined (there's only password attribute)
+	require.EqualValues(t, `{"me":[{"name":"Michonne","pass":[{"checkpwd":false}]}]}`, js)
+}
+
+// test for old version of checkpwd with hardcoded attribute name
+func TestCheckPasswordQuery1(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x1) {
+                                name
+                                password
+                        }
+                }
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+	require.EqualValues(t, "Attribute `password` of type password cannot be fetched", err.Error())
+}
+
+// test for improved version of checkpwd with custom attribute name
+func TestCheckPasswordQuery2(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:23) {
+                                name
+                                pass
+                        }
+                }
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+	require.EqualValues(t, "Attribute `pass` of type password cannot be fetched", err.Error())
 }
 
 func TestToSubgraphInvalidFnName(t *testing.T) {
