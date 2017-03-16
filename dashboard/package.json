@@ -17,6 +17,7 @@
     "codemirror": "^5.23.0",
     "codemirror-graphql": "^0.6.3",
     "graphql": "^0.9.1",
+    "lodash": "^4.17.4",
     "randomcolor": "^0.4.4",
     "react": "^15.4.2",
     "react-bootstrap": "^0.30.7",

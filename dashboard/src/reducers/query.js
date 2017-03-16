@@ -1,13 +1,21 @@
 const query = (
     state = {
         text: "",
+        // Regex to match property name to display in Graph for nodes.
+        propertyRegex: ""
     },
-    action,
+    action
 ) => {
     switch (action.type) {
         case "SELECT_QUERY":
             return {
-                text: action.text,
+                ...state,
+                text: action.text
+            };
+        case "UPDATE_PROPERTY_REGEX":
+            return {
+                ...state,
+                propertyRegex: action.regex
             };
         default:
             return state;

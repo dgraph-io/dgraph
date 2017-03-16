@@ -1,31 +1,46 @@
-const interaction = (
-    state = {
-        node: "{}",
-        partial: false,
-        fullscreen: false,
-    },
-    action,
-) => {
+const emptyState = {
+    node: "{}",
+    partial: false,
+    fullscreen: false,
+    progress: {
+        perc: 0,
+        display: false
+    }
+};
+
+const interaction = (state = emptyState, action) => {
     switch (action.type) {
         case "SELECT_NODE":
             return {
                 ...state,
-                node: action.node,
+                node: action.node
             };
         case "UPDATE_PARTIAL":
             return {
                 ...state,
-                partial: action.partial,
+                partial: action.partial
             };
         case "RESET_RESPONSE":
-            return {
-                node: "{}",
-                partial: false,
-            };
+            return emptyState;
         case "UPDATE_FULLSCREEN":
             return {
                 ...state,
-                fullscreen: action.fs,
+                fullscreen: action.fs
+            };
+        case "UPDATE_PROGRESS":
+            return {
+                ...state,
+                progress: {
+                    perc: action.perc,
+                    display: true
+                }
+            };
+        case "HIDE_PROGRESS":
+            return {
+                ...state,
+                progress: {
+                    display: false
+                }
             };
         default:
             return state;

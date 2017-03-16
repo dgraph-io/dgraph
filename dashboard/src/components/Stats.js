@@ -8,7 +8,7 @@ class Stats extends Component {
     const display = (
       <span>
         Server Latency:{" "}
-        <b>{this.props.latency}</b>
+        <b>{this.props.server}</b>
         , Rendering:{" "}
         <b>{this.props.rendering}</b>
       </span>
@@ -16,7 +16,7 @@ class Stats extends Component {
     return (
       <div style={{ marginTop: "5px" }} className="App-stats">
         <span>
-          {this.props.latency !== "" && this.props.rendering !== ""
+          {this.props.server !== "" && this.props.rendering !== ""
             ? display
             : ""}
         </span>
