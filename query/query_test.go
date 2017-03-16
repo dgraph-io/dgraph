@@ -472,6 +472,36 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 		js)
 }
 
+func TestNestedFuncRoot(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+    {
+			me(func: gt(count(friend), 2)) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, js)
+}
+
+func TestNestedFuncRoot2(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+		{
+			me(func: geq(count(friend), 1)) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Andrea"}]}`, js)
+}
+
 func TestRecurseQuery(t *testing.T) {
 	populateGraph(t)
 	query := `
