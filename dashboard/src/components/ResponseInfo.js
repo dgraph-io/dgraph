@@ -1,7 +1,7 @@
 import React from "react";
 
 import StatsContainer from "../containers/StatsContainer";
-import Properties from "../components/Properties";
+import PropertiesContainer from "../containers/PropertiesContainer";
 
 import { Button } from "react-bootstrap";
 
@@ -21,13 +21,12 @@ const ResponseInfo = (
         numNodesRendered,
         numEdgesRendered,
         treeView,
-        currentNode,
         renderGraph,
         expand
     }
 ) => (
     <div className="ResponseInfo">
-        <Properties currentNode={currentNode} />
+        <PropertiesContainer />
         <div className="ResponseInfo-stats">
             <div className="ResponseInfo-flex">
                 <StatsContainer />

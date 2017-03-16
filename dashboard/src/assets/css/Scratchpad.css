@@ -1,0 +1,53 @@
+.Scratchpad {
+    height: auto;
+    min-height: 100px;
+    width: 100%;
+    background-color: #FFFAEF;
+    margin-top: 10px;
+    margin-left: 5px;
+
+}
+
+.Scratchpad-header {
+    margin:0px 5px;
+    border-bottom: 1px solid black;
+    padding-bottom: 5px;
+}
+
+.Scratchpad-heading {
+    display: inline;
+	padding-top: 5px;
+}
+
+.Scratchpad-clear {
+    display: inline;
+}
+
+.Scratchpad-entries {
+    width: 100%;
+    margin-top: 5px;
+    margin-left: 5px;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: space-between;
+}
+
+.Scratchpad-entries:after {
+    content: "";
+    flex: 1 0 250px;
+}
+
+.Scratchpad-key-val {
+    flex: 1 0 250px;
+    padding-right: 15px;
+}
+
+.Scratchpad-key {
+    display: inline-block;
+    font-weight: bold
+}
+
+.Scratchpad-val {
+    display: inline-block;
+    float: right;
+}
