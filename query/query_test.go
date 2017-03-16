@@ -336,6 +336,28 @@ func TestQueryVarValOrderAsc(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValOrderDob(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				f As friend {
+					n As dob
+				}
+			}
+
+			me(id: var(f), orderasc: var(n)) {
+				name
+				dob
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea", "dob":"1901-01-15"},{"name":"Daryl Dixon", "dob":"1909-01-10"},{"name":"Glenn Rhee", "dob":"1909-05-05"},{"name":"Rick Grimes", "dob":"1910-01-02"}]}`,
+		js)
+}
+
 func TestQueryVarValOrderDesc(t *testing.T) {
 	populateGraph(t)
 	query := `
