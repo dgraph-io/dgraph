@@ -23,8 +23,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var log = x.Log("store")
-
 // Store contains some handles to RocksDB.
 type Store struct {
 	db       *rdb.DB
