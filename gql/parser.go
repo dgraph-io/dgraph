@@ -1556,10 +1556,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				if item.Val == "checkpwd" {
 					child.Func.Args = append(child.Func.Args, child.Func.Attr)
-					child.Attr = "password"
-				} else {
-					child.Attr = child.Func.Attr
 				}
+				child.Attr = child.Func.Attr
 				gq.Children = append(gq.Children, child)
 				curp = child
 				continue
