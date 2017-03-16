@@ -314,6 +314,27 @@ func TestGetUIDNotInChild(t *testing.T) {
 		js)
 }
 
+func TestQueryVarVal(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				f As friend {
+					n As alias
+				}
+			}
+
+			you(var: [f, n]) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`,
+		js)
+}
+
 func TestMultiEmptyBlocks(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -409,7 +430,7 @@ func TestUseVarsFilterVarReuse1(t *testing.T) {
 				friend {
 					L as friend {
 						name
-						friend @filter(id(L)) {
+						friend @filter(var(L)) {
 							name
 						}
 					}
@@ -431,7 +452,7 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 				friend {
 				 L as friend {
 					 name
-					 friend @filter(id(L)) {
+					 friend @filter(var(L)) {
 						name
 					}
 				}
@@ -457,7 +478,7 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 				L as friend {
 					friend {
 						name
-						friend @filter(id(L) and id(fr)) {
+						friend @filter(var(L) and var(fr)) {
 							name
 						}
 					}
@@ -701,7 +722,7 @@ func TestUseVarsFilterMultiId(t *testing.T) {
 				G AS friend
 			}
 
-			friend(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(id(G, L)) {
+			friend(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(var(G, L)) {
 				name
 			}
 		}
@@ -724,7 +745,7 @@ func TestUseVarsMultiFilterId(t *testing.T) {
 				G AS friend
 			}
 
-			friend(var:L) @filter(id(G)) {
+			friend(var:L) @filter(var(G)) {
 				name
 			}
 		}
@@ -1197,7 +1218,7 @@ func TestToSubgraphInvalidFnName4(t *testing.T) {
                                 name
                         }
                         you(func:anyofterms(name, "Michonne")) {
-                                friend @filter(id(f)) {
+                                friend @filter(var(f)) {
                                         name
                                 }
                         }
@@ -2949,7 +2970,7 @@ func TestGeneratorMultiRootMultiQueryVarFilter(t *testing.T) {
 			}
 
 			you(func:anyofterms(name, "Michonne")) {
-				friend @filter(id(f)) {
+				friend @filter(var(f)) {
 					name
 				}
 			}
@@ -2966,7 +2987,7 @@ func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
 			friend AS var(func:anyofterms("name", "Michonne Rick Glenn")) {
 			}
 
-			you(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(id(friend)) {
+			you(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(var(friend)) {
 				name
 			}
     }

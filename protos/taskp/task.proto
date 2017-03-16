@@ -50,6 +50,7 @@ message Sort {
 	int32 count = 4;   // Return this many elements.
 	int32 offset = 5;  // Skip this many elements.
 	bool desc = 6;
+	map<uint64, Value> varValMap = 7;
 }
 
 message SortResult {

@@ -1183,7 +1183,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				} else {
 					f.Args = append(f.Args, val)
 				}
-				if f.Name == "id" {
+				if f.Name == "var" {
 					f.NeedsVar = append(f.NeedsVar, val)
 				}
 			}

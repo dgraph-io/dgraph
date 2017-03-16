@@ -132,6 +132,7 @@ type params struct {
 	Var          string
 	NeedsVar     []string
 	ParentVars   map[string]*taskp.List
+	varValMap    map[uint64]taskp.Value
 	Langs        []string
 	Normalize    bool
 	From         uint64
@@ -760,6 +761,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 	// doneVars will store the UID list of the corresponding variables.
 	doneVars := make(map[string]*taskp.List)
+	varValMap := make(map[string]map[uint64]taskp.Value)
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
@@ -794,7 +796,9 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			}
 			// The variable should be defined in this block or should have already been
 			// populated by some other block, otherwise we are not ready to execute yet.
-			if _, ok := doneVars[v]; !ok && !selfDep {
+			_, ok1 := doneVars[v]
+			_, ok2 := varValMap[v]
+			if !ok1 && !ok2 && !selfDep {
 				return false
 			}
 		}
@@ -863,7 +867,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			}
 
 			isCascade := shouldCascade(res, idx)
-			populateVarMap(sg, doneVars, isCascade)
+			populateVarMap(sg, doneVars, varValMap, isCascade)
 		}
 	}
 
@@ -900,13 +904,14 @@ func shouldCascade(res gql.Result, idx int) bool {
 }
 
 // TODO(Ashwin): Benchmark this function.
-func populateVarMap(sg *SubGraph, doneVars map[string]*taskp.List, isCascade bool) {
+func populateVarMap(sg *SubGraph, doneVars map[string]*taskp.List,
+	varValMap map[string]map[uint64]taskp.Value, isCascade bool) {
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
 		goto AssignStep
 	}
 	for _, child := range sg.Children {
-		populateVarMap(child, doneVars, isCascade)
+		populateVarMap(child, doneVars, varValMap, isCascade)
 		if !isCascade {
 			continue
 		}
@@ -943,7 +948,17 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*taskp.List, isCascade boo
 
 AssignStep:
 	if sg.Params.Var != "" {
-		doneVars[sg.Params.Var] = sg.DestUIDs
+		if len(sg.DestUIDs.Uids) != 0 {
+			// This implies it is a entity variable.
+			doneVars[sg.Params.Var] = sg.DestUIDs
+		} else if len(sg.values) != 0 {
+			// This implies it is a value variable.
+			varValMap[sg.Params.Var] = make(map[uint64]taskp.Value)
+			for idx, uid := range sg.SrcUIDs.Uids {
+				varValMap[sg.Params.Var][uid] = *sg.values[idx]
+			}
+			fmt.Println(varValMap)
+		}
 	}
 }
 
@@ -990,7 +1005,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// This is to allow providing SrcUIDs to the filter children.
 		sg.DestUIDs = sg.SrcUIDs
 	} else {
-		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
+		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "var" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
 			sg.fillVars(sg.Params.ParentVars)
@@ -1211,6 +1226,8 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
 		Desc:      sg.Params.OrderDesc,
+		// TODO(Ashwin): Pass this to worker for sorting.
+		// varValMap: sg.varValMap,
 	}
 	result, err := worker.SortOverNetwork(ctx, sort)
 	if err != nil {
@@ -1250,7 +1267,7 @@ func isValidArg(a string) bool {
 // isValidFuncName checks if fn passed is valid keyword.
 func isValidFuncName(f string) bool {
 	switch f {
-	case "anyofterms", "allofterms", "id", "regexp", "anyoftext", "alloftext":
+	case "anyofterms", "allofterms", "var", "regexp", "anyoftext", "alloftext":
 		return true
 	}
 	return isCompareFn(f) || types.IsGeoFunc(f)
