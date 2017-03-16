@@ -132,7 +132,7 @@ type params struct {
 	Var          string
 	NeedsVar     []string
 	ParentVars   map[string]*taskp.List
-	varValMap    map[uint64]taskp.Value
+	varValMap    map[uint64]types.Val
 	Langs        []string
 	Normalize    bool
 	From         uint64
@@ -757,7 +757,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 	// doneVars will store the UID list of the corresponding variables.
 	doneVars := make(map[string]*taskp.List)
-	varValMap := make(map[string]map[uint64]taskp.Value)
+	varValMap := make(map[string]map[uint64]types.Val)
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
@@ -817,7 +817,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 				continue
 			}
 
-			sg.recursiveFillVars(doneVars)
+			sg.recursiveFillVars(doneVars, varValMap)
 			hasExecuted[idx] = true
 			numQueriesDone++
 			idxList = append(idxList, idx)
@@ -901,7 +901,7 @@ func shouldCascade(res gql.Result, idx int) bool {
 
 // TODO(Ashwin): Benchmark this function.
 func populateVarMap(sg *SubGraph, doneVars map[string]*taskp.List,
-	varValMap map[string]map[uint64]taskp.Value, isCascade bool) {
+	varValMap map[string]map[uint64]types.Val, isCascade bool) {
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
 		goto AssignStep
@@ -949,22 +949,38 @@ AssignStep:
 			doneVars[sg.Params.Var] = sg.DestUIDs
 		} else if len(sg.values) != 0 {
 			// This implies it is a value variable.
-			varValMap[sg.Params.Var] = make(map[uint64]taskp.Value)
+			varValMap[sg.Params.Var] = make(map[uint64]types.Val)
 			for idx, uid := range sg.SrcUIDs.Uids {
-				varValMap[sg.Params.Var][uid] = *sg.values[idx]
+				//val, _ := getValue(sg.values[idx])
+				val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
+				if err != nil {
+					continue
+				}
+				varValMap[sg.Params.Var][uid] = val
 			}
-			fmt.Println(varValMap)
 		}
 	}
 }
 
-func (sg *SubGraph) recursiveFillVars(doneVars map[string]*taskp.List) {
+func (sg *SubGraph) recursiveFillVars(doneVars map[string]*taskp.List,
+	varValMap map[string]map[uint64]types.Val) {
+
 	sg.fillVars(doneVars)
+	sg.fillValueVars(varValMap)
 	for _, child := range sg.Children {
-		child.recursiveFillVars(doneVars)
+		child.recursiveFillVars(doneVars, varValMap)
 	}
 	for _, fchild := range sg.Filters {
-		fchild.recursiveFillVars(doneVars)
+		fchild.recursiveFillVars(doneVars, varValMap)
+	}
+}
+
+func (sg *SubGraph) fillValueVars(mp map[string]map[uint64]types.Val) {
+	for _, v := range sg.Params.NeedsVar {
+		if l, ok := mp[v]; ok {
+			sg.Params.varValMap = l
+			return
+		}
 	}
 }
 
@@ -1194,7 +1210,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-	for i := 0; i < len(sg.uidMatrix); i++ { //_, l := range sg.uidMatrix {
+	for i := 0; i < len(sg.uidMatrix); i++ {
 		algo.IntersectWith(sg.uidMatrix[i], sg.DestUIDs, sg.uidMatrix[i])
 		start, end := pageRange(&sg.Params, len(sg.uidMatrix[i].Uids))
 		sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
@@ -1215,6 +1231,12 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		sg.Params.Count = 1000
 	}
 
+	for _, it := range sg.Params.NeedsVar {
+		if it == sg.Params.Order {
+			return sg.sortAndPaginateUsingVar(ctx)
+		}
+	}
+
 	sort := &taskp.Sort{
 		Attr:      sg.Params.Order,
 		Langs:     sg.Params.Langs,
@@ -1222,8 +1244,6 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
 		Desc:      sg.Params.OrderDesc,
-		// TODO(Ashwin): Pass this to worker for sorting.
-		// varValMap: sg.varValMap,
 	}
 	result, err := worker.SortOverNetwork(ctx, sort)
 	if err != nil {
@@ -1233,6 +1253,11 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))
 	sg.uidMatrix = result.GetUidMatrix()
 
+	sg.updateDestUids(ctx)
+	return nil
+}
+
+func (sg *SubGraph) updateDestUids(ctx context.Context) {
 	// Update sg.destUID. Iterate over the UID matrix (which is not sorted by
 	// UID). For each element in UID matrix, we do a binary search in the
 	// current destUID and mark it. Then we scan over this bool array and
@@ -1248,6 +1273,37 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	}
 	algo.ApplyFilter(sg.DestUIDs,
 		func(uid uint64, idx int) bool { return included[idx] })
+}
+
+func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
+	if sg.Params.varValMap == nil {
+		return nil
+	}
+	for i := 0; i < len(sg.uidMatrix); i++ {
+		ul := sg.uidMatrix[i]
+		values := make([]types.Val, 0, len(ul.Uids))
+		for _, uid := range ul.Uids {
+			v := sg.Params.varValMap[uid]
+			values = append(values, v)
+		}
+		if len(values) == 0 {
+			continue
+		}
+		typ := values[0].Tid
+		types.Sort(typ, values, ul, sg.Params.OrderDesc)
+		fmt.Println(values, ul)
+		sg.uidMatrix[i] = ul
+	}
+	fmt.Println(sg.uidMatrix)
+
+	if sg.Params.Count != 0 || sg.Params.Offset != 0 { // No pagination.
+		for i := 0; i < len(sg.uidMatrix); i++ {
+			start, end := pageRange(&sg.Params, len(sg.uidMatrix[i].Uids))
+			sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+		}
+	}
+	fmt.Println(sg.uidMatrix)
+	sg.updateDestUids(ctx)
 	return nil
 }
 

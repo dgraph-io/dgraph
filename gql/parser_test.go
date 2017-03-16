@@ -56,6 +56,8 @@ func TestParseQueryWithVarVal(t *testing.T) {
 	require.Equal(t, "n", res.Query[0].NeedsVar[1])
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
 	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
+	require.Equal(t, "n", res.Query[0].Args["orderasc"])
+	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 }
 
 func TestParseQueryWithVarMultiRoot(t *testing.T) {

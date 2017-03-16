@@ -937,13 +937,18 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 				return nil, x.Errorf("Expected a variable name but got %v", item.Val)
 			}
 			gq.NeedsVar = append(gq.NeedsVar, item.Val)
+			p.Val = item.Val
+			result = append(result, p)
+			fmt.Println(result)
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemRightRound {
 				return nil, x.Errorf("Expected a right round after var")
 			}
+			continue
+		}
 
-		} else if item.Typ == itemDollar {
+		if item.Typ == itemDollar {
 			val = "$"
 			it.Next()
 			item = it.Item()
@@ -1520,6 +1525,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			gq.Func = gen
 		} else {
 			// TODO(Ashwin): Handle var() here.
+			var val string
 			if !it.Next() {
 				return nil, x.Errorf("Invalid query")
 			}
@@ -1536,13 +1542,16 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, x.Errorf("Expected a variable name but got %v", item.Val)
 				}
 				gq.NeedsVar = append(gq.NeedsVar, item.Val)
+				val = item.Val
 				it.Next()
 				item = it.Item()
 				if item.Typ != itemRightRound {
 					return nil, x.Errorf("Expected a right round after var")
 				}
+			} else {
+				val = item.Val
 			}
-			gq.Args[key] = item.Val
+			gq.Args[key] = val
 		}
 	}
 

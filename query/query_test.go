@@ -315,24 +315,45 @@ func TestGetUIDNotInChild(t *testing.T) {
 		js)
 }
 
-func TestQueryVarVal(t *testing.T) {
+func TestQueryVarValOrderAsc(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
 			var(id: 1) {
 				f As friend {
-					n As alias
+					n As name
 				}
 			}
 
-			you(id: var( [f, n])) {
+			me(id: var(f), orderasc: var(n)) {
 				name
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`,
+		`{"me":[{"name":"Andrea"},{"name":"Daryl Dixon"},{"name":"Glenn Rhee"},{"name":"Rick Grimes"}]}`,
+		js)
+}
+
+func TestQueryVarValOrderDesc(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				f As friend {
+					n As name
+				}
+			}
+
+			me(id: var(f), orderdesc: var(n)) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`,
 		js)
 }
 
