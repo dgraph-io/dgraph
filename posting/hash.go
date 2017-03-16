@@ -44,15 +44,15 @@ func (s *listMap) Size() int {
 }
 
 // Get returns value for given key. Returns true if found.
-func (s *listMapShard) get(key uint64) (*List, bool) {
+func (s *listMapShard) get(key uint64) *List {
 	s.RLock()
 	defer s.RUnlock()
-	val, found := s.m[key]
-	return val, found
+	val := s.m[key]
+	return val
 }
 
 // Get returns value for given key. Returns true if found.
-func (s *listMap) Get(key uint64) (*List, bool) {
+func (s *listMap) Get(key uint64) *List {
 	return s.shard[getShard(s.numShards, key)].get(key)
 }
 
