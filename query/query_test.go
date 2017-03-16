@@ -325,7 +325,7 @@ func TestQueryVarVal(t *testing.T) {
 				}
 			}
 
-			you(var: [f, n]) {
+			you(id: var( [f, n])) {
 				name
 			}
 		}
@@ -364,7 +364,7 @@ func TestUseVarsMultiCascade1(t *testing.T) {
 			 }
 			}
 
-			me(var:[L, B]) {
+			me(id: var([L, B])) {
 				name
 			}
 		}
@@ -385,7 +385,7 @@ func TestUseVarsMultiCascade(t *testing.T) {
 				}
 			}
 
-			me(var:[L, B]) {
+			me(id: var([L, B])) {
 				name
 			}
 		}
@@ -408,11 +408,11 @@ func TestUseVarsMultiOrder(t *testing.T) {
 				G AS friend(first:2, offset:2, orderasc: dob)
 			}
 
-			friend1(var:L) {
+			friend1(id: var(L)) {
 				name
 			}
 
-			friend2(var:G) {
+			friend2(id: var(G)) {
 				name
 			}
 		}
@@ -530,7 +530,7 @@ func TestShortestPath_NoPath(t *testing.T) {
 				follow
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -548,7 +548,7 @@ func TestShortestPath(t *testing.T) {
 				friend 
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -566,7 +566,7 @@ func TestShortestPathRev(t *testing.T) {
 				friend 
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -584,7 +584,7 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 				path @facets(weight, weight1)
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -605,7 +605,7 @@ func TestShortestPathWeights(t *testing.T) {
 				path @facets(weight)
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -623,7 +623,7 @@ func TestShortestPath2(t *testing.T) {
 				path 
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -642,7 +642,7 @@ func TestShortestPath3(t *testing.T) {
 				path 
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -661,7 +661,7 @@ func TestShortestPath4(t *testing.T) {
 				follow
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -680,7 +680,7 @@ func TestShortestPath_filter(t *testing.T) {
 				follow
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -699,7 +699,7 @@ func TestShortestPath_filter2(t *testing.T) {
 				follow @filter(not anyofterms(name, "bob"))
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -746,7 +746,7 @@ func TestUseVarsMultiFilterId(t *testing.T) {
 				G AS friend
 			}
 
-			friend(var:L) @filter(var(G)) {
+			friend(id: var(L)) @filter(var(G)) {
 				name
 			}
 		}
@@ -767,7 +767,7 @@ func TestUseVarsCascade(t *testing.T) {
 				}
 			}
 
-			me(var:L) {
+			me(id: var(L)) {
 				name
 			}
 		}
@@ -786,7 +786,7 @@ func TestUseVars(t *testing.T) {
 				L AS friend
 			}
 
-			me(var : L) {
+			me(id: var(L)) {
 				name
 			}
 		}
@@ -3041,7 +3041,7 @@ func TestGeneratorMultiRootMultiQueryRootVar(t *testing.T) {
       	name
 			}
 
-			you(var:friend) {
+			you(id: var(friend)) {
 				name
 			}
     }
@@ -3110,7 +3110,7 @@ func TestGeneratorMultiRootVarOrderOffset(t *testing.T) {
         name
       }
 
-			me(var:L) {
+			me(id: var(L)) {
 			 name
 			}
     }
@@ -3139,7 +3139,7 @@ func TestGeneratorMultiRootOrderOffset(t *testing.T) {
 			L as var(func:anyofterms(name, "Michonne Rick Glenn")) {
         name
       }
-			me(var: L, orderasc: dob, offset:2) {
+			me(id: var(L), orderasc: dob, offset:2) {
         name
       }
     }
