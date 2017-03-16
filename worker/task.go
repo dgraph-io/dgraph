@@ -180,6 +180,9 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
+		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
+			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+		}
 		newValue := &taskp.Value{ValType: int32(val.Tid)}
 		if err == nil {
 			newValue.Val = val.Value.([]byte)
@@ -423,10 +426,9 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(fc.tokens)
 	case PasswordFn:
-		// confirm agrregator could apply on the attributes
-		if len(q.SrcFunc) != 2 {
+		if len(q.SrcFunc) != 3 {
 			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
+				len(q.SrcFunc)-1, q.SrcFunc[1:])
 		}
 		fc.n = len(q.Uids.Uids)
 	case StandardFn, FullTextSearchFn:

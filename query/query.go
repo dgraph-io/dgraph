@@ -457,10 +457,6 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
-		} else if gchild.Attr == "password" { // query password is forbidden
-			if gchild.Func == nil || !gchild.Func.IsPasswordVerifier() {
-				return errors.New("Password is not fetchable")
-			}
 		}
 
 		args := params{
