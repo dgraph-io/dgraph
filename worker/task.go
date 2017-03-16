@@ -289,11 +289,13 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			x.AssertTruef(pk.IsData() && pk.Attr == q.Attr,
 				"Invalid key obtained for comparison")
 			key := it.Key().Data()
-			pl, decr := posting.GetOrCreate(key, gid)
+			pl, decr := posting.GetOrUnmarshal(key, it.Value().Data(), gid)
 			count := int64(pl.Length(0))
 			decr()
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
 				pk := x.Parse(key)
+				// TODO: Look if we want to put these UIDs in one list before
+				// passing it back to query package.
 				tlist := &taskp.List{[]uint64{pk.Uid}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
@@ -312,7 +314,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			x.AssertTrue(pk.Attr == q.Attr)
 			term := pk.Term[1:] // skip the first byte which is tokenizer prefix.
 			if srcFn.regex.MatchString(term) {
-				pl, decr := posting.GetOrCreate(key, gid)
+				pl, decr := posting.GetOrUnmarshal(key, it.Value().Data(), gid)
 				out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 				decr()
 			}
