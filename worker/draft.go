@@ -573,11 +573,11 @@ func (n *node) Run() {
 			if len(rd.CommittedEntries) > 0 {
 				x.Trace(n.ctx, "Found %d committed entries", len(rd.CommittedEntries))
 			}
-			var indexEntry *raftpb.Entry
+
 			for _, entry := range rd.CommittedEntries {
+				// TODO: Remove after eventual index consistency sync PR
 				if len(entry.Data) > 0 && entry.Data[0] == proposalReindex {
-					x.AssertTruef(indexEntry == nil, "Multiple index proposals found")
-					indexEntry = &entry
+					x.Check(n.rebuildIndex(n.ctx, entry.Data))
 					// This is an index-related proposal. Do not break.
 					continue
 				}
@@ -588,10 +588,6 @@ func (n *node) Run() {
 
 				// Just queue up to be processed. Don't wait on them.
 				n.applyCh <- entry
-			}
-
-			if indexEntry != nil {
-				x.Check(n.rebuildIndex(n.ctx, indexEntry.Data))
 			}
 
 			n.Raft().Advance()

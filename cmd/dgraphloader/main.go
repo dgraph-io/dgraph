@@ -22,12 +22,15 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/rdf"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
 	files      = flag.String("r", "", "Location of rdf files to load")
+	schemaFile = flag.String("s", "", "Location of schema file")
 	dgraph     = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
@@ -62,6 +65,47 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 		}
 	}
 	return err
+}
+
+// processSchemaFile process schema for a given gz file.
+func processSchemaFile(file string, batch *client.BatchMutation) {
+	fmt.Printf("\nProcessing %s\n", file)
+	f, err := os.Open(file)
+	x.Check(err)
+	defer f.Close()
+	gr, err := gzip.NewReader(f)
+	x.Check(err)
+
+	var buf bytes.Buffer
+	var updates []*graphp.SchemaUpdate
+	bufReader := bufio.NewReader(gr)
+	var line int
+	for {
+		err = readLine(bufReader, &buf)
+		if err != nil {
+			break
+		}
+		line++
+		update, err := schema.Parse(buf.String())
+		if err != nil {
+			log.Fatalf("Error while parsing schema: %v, on line:%v %v", err, line, buf.String())
+		}
+		buf.Reset()
+		updates = append(updates, update...)
+		if line == *numRdf {
+			if err = batch.AddSchema(updates); err != nil {
+				log.Fatal("While adding schema to batch ", err)
+			}
+			updates = updates[:0]
+			line = 0
+		}
+	}
+	if err = batch.AddSchema(updates); err != nil {
+		log.Fatal("While adding schema to batch ", err)
+	}
+	if err != io.EOF {
+		x.Checkf(err, "Error while reading file")
+	}
 }
 
 // processFile sends mutations for a given gz file.
@@ -143,6 +187,9 @@ func main() {
 	go printCounters(batch, ticker)
 	filesList := strings.Split(*files, ",")
 	x.AssertTrue(len(filesList) > 0)
+	if len(*schemaFile) > 0 {
+		processSchemaFile(*schemaFile, batch)
+	}
 	for _, file := range filesList {
 		processFile(file, batch)
 	}

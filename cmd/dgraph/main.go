@@ -256,20 +256,14 @@ func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string
 	return allocIds, nil
 }
 
-func validateAndEnrich(updates []*graphp.SchemaUpdate) error {
+func enrichSchema(updates []*graphp.SchemaUpdate) error {
 	if len(updates) == 0 {
 		return nil
 	}
 
 	for _, schema := range updates {
 		typ := types.TypeID(schema.ValueType)
-		if typ == types.UidID && schema.Index {
-			// index on uid type
-			return x.Errorf("Index not allowed on predicate of type uid on predicate %s", schema.Predicate)
-		} else if typ != types.UidID && schema.Reverse {
-			// reverse on non-uid type
-			return x.Errorf("Cannot reverse for non-uid type on predicate %s", schema.Predicate)
-		} else if typ != types.UidID && schema.Index {
+		if typ != types.UidID && schema.Index {
 			if len(schema.Tokenizer) == 0 {
 				schema.Tokenizer = []string{tok.Default(typ).Name()}
 			}
@@ -298,7 +292,7 @@ func runMutations(ctx context.Context, mu *graphp.Mutation) (map[string]uint64, 
 	var allocIds map[string]uint64
 	var err error
 
-	if err = validateAndEnrich(mu.Schema); err != nil {
+	if err = enrichSchema(mu.Schema); err != nil {
 		return nil, err
 	}
 

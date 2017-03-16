@@ -29,6 +29,8 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type Op int
@@ -134,6 +136,27 @@ func (req *Req) AddMutation(nq graphp.NQuad, op Op) error {
 	return nil
 }
 
+func checkSchema(schema *graphp.SchemaUpdate) error {
+	typ := types.TypeID(schema.ValueType)
+	if typ == types.UidID && schema.Index {
+		// index on uid type
+		return x.Errorf("Index not allowed on predicate of type uid on predicate %s", schema.Predicate)
+	} else if typ != types.UidID && schema.Reverse {
+		// reverse on non-uid type
+		return x.Errorf("Cannot reverse for non-uid type on predicate %s", schema.Predicate)
+	}
+	return nil
+}
+
+// AddSchema sets the schema mutations
+func (req *Req) addSchema(s *graphp.SchemaUpdate) error {
+	if req.gr.Mutation == nil {
+		req.gr.Mutation = new(graphp.Mutation)
+	}
+	req.gr.Mutation.Schema = append(req.gr.Mutation.Schema)
+	return nil
+}
+
 func (req *Req) size() int {
 	if req.gr.Mutation == nil {
 		return 0
@@ -157,6 +180,7 @@ type BatchMutation struct {
 	pending int
 
 	nquads chan nquadOp
+	schema chan []*graphp.SchemaUpdate
 	dc     graphp.DgraphClient
 	wg     sync.WaitGroup
 
@@ -188,12 +212,21 @@ RETRY:
 
 func (batch *BatchMutation) makeRequests() {
 	req := new(Req)
-	for n := range batch.nquads {
+
+	select {
+	case updates := <-batch.schema:
+		// Send schema mutations immediately
+		for _, s := range updates {
+			req.addSchema(s)
+		}
+		batch.request(req)
+	case n := <-batch.nquads:
 		req.addMutation(n.nq, n.op)
 		if req.size() == batch.size {
 			batch.request(req)
 		}
 	}
+
 	if req.size() > 0 {
 		batch.request(req)
 	}
@@ -226,6 +259,16 @@ func (batch *BatchMutation) AddMutation(nq graphp.NQuad, op Op) error {
 	return nil
 }
 
+func (batch *BatchMutation) AddSchema(updates []*graphp.SchemaUpdate) error {
+	for _, s := range updates {
+		if err := checkSchema(s); err != nil {
+			return err
+		}
+	}
+	batch.schema <- updates
+	return nil
+}
+
 type Counter struct {
 	Rdfs      uint64
 	Mutations uint64
@@ -242,5 +285,6 @@ func (batch *BatchMutation) Counter() Counter {
 
 func (batch *BatchMutation) Flush() {
 	close(batch.nquads)
+	close(batch.schema)
 	batch.wg.Wait()
 }
