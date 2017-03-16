@@ -290,6 +290,7 @@ export function processGraph(
     // us avoid creating duplicating nodes while parsing the JSON structure
     // which is a tree.
     uidMap: MapOfBooleans = {},
+    edgeMap: MapOfBooleans = {},
     nodes: Array<Node> = [],
     edges: Array<Edge> = [],
     emptyNode: ResponseNode = {
@@ -485,15 +486,33 @@ export function processGraph(
       continue;
     }
 
-    var e: Edge = {
-      from: obj.src.id,
-      to: id,
-      title: JSON.stringify(edgeAttributes),
-      label: props.label,
-      color: props.color,
-      arrows: "to"
-    };
-    edges.push(e);
+    let fromTo = [obj.src.id, id].filter(val => val).join("-");
+
+    if (edgeMap[fromTo]) {
+      let edgeIdx = edges.findIndex(function(edge) {
+        return edge.from === obj.src.id && edge.to === id;
+      });
+      if (edgeIdx === -1) {
+        continue;
+      }
+
+      let oldEdge = edges[edgeIdx], edgeTitle = JSON.parse(oldEdge.title);
+      _.merge(edgeAttributes, edgeTitle);
+      oldEdge.title = JSON.stringify(edgeAttributes);
+      edges[edgeIdx] = oldEdge;
+    } else {
+      edgeMap[fromTo] = true;
+
+      var e: Edge = {
+        from: obj.src.id,
+        to: id,
+        title: JSON.stringify(edgeAttributes),
+        label: props.label,
+        color: props.color,
+        arrows: "to"
+      };
+      edges.push(e);
+    }
   }
 
   return [nodes, edges, createAxisPlot(groups), nodesIndex, edgesIndex];
