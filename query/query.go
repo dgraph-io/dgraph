@@ -1291,10 +1291,8 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		}
 		typ := values[0].Tid
 		types.Sort(typ, values, ul, sg.Params.OrderDesc)
-		fmt.Println(values, ul)
 		sg.uidMatrix[i] = ul
 	}
-	fmt.Println(sg.uidMatrix)
 
 	if sg.Params.Count != 0 || sg.Params.Offset != 0 { // No pagination.
 		for i := 0; i < len(sg.uidMatrix); i++ {
@@ -1302,7 +1300,6 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 			sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
 		}
 	}
-	fmt.Println(sg.uidMatrix)
 	sg.updateDestUids(ctx)
 	return nil
 }

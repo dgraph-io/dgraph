@@ -939,7 +939,6 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			gq.NeedsVar = append(gq.NeedsVar, item.Val)
 			p.Val = item.Val
 			result = append(result, p)
-			fmt.Println(result)
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemRightRound {
