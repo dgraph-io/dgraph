@@ -25,6 +25,7 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	x.Trace(ctx, "Processing proposal to rebuild index: %v", proposal.RebuildIndex)
 
 	if err := n.syncAllMarks(ctx); err != nil {
+		n.props.Done(proposal.Id, err)
 		return err
 	}
 
@@ -32,8 +33,10 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	attr := proposal.RebuildIndex.Attr
 	x.AssertTrue(group.BelongsTo(attr) == gid)
 	if err := posting.RebuildIndex(ctx, attr); err != nil {
+		n.props.Done(proposal.Id, err)
 		return err
 	}
+	n.props.Done(proposal.Id, nil)
 	return nil
 }
 
