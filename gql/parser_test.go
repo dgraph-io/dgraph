@@ -1142,26 +1142,6 @@ func TestParseFilter_root(t *testing.T) {
 }
 
 func TestParseFuncNested(t *testing.T) {
-	schema.ParseBytes([]byte("scalar friend: string @index"))
-	query := `
-	query {
-		me(func: gt(count(friend), 10)) {
-			friends @filter() {
-				name
-			}
-			hometown
-		}
-	}
-`
-	res, err := Parse(query)
-	require.NoError(t, err)
-	require.NotNil(t, res.Query[0])
-	require.NotNil(t, res.Query[0].Func)
-	require.Equal(t, []string{"friends", "hometown"}, childAttrs(res.Query[0]))
-	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-}
-
-func TestParseFuncNested(t *testing.T) {
 	schema.ParseBytes([]byte("scalar friend: string @index"), 0)
 	query := `
 	query {
@@ -1302,7 +1282,7 @@ func TestParseFilter_opNot1(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(not a(a "a")) {
+			friends @filter(not a(a, "a")) {
 				name
 			}
 			gender,age
@@ -1322,7 +1302,7 @@ func TestParseFilter_opNot2(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(not(a(a "a") or (b(b "a"))) and c(c "a")) {
+			friends @filter(not(a(a, "a") or (b(b, "a"))) and c(c, "a")) {
 				name
 			}
 			gender,age
@@ -1344,7 +1324,7 @@ func TestParseFilter_op2(t *testing.T) {
 	query {
 		me(id:0x0a) {
 			friends @filter((a(a, "a") Or b(b, "a"))
-			 and c(c "a")) {
+			 and c(c, "a")) {
 				name
 			}
 			gender,age
@@ -1365,7 +1345,7 @@ func TestParseFilter_brac(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(  a(name, "hello") or b(name, "world", "is") and (c(a "a") or (d(d "haha") or e(e "a"))) and f(f "a")){
+			friends @filter(  a(name, "hello") or b(name, "world", "is") and (c(a, "a") or (d(d, "haha") or e(e, "a"))) and f(f, "a")){
 				name
 			}
 			gender,age
@@ -1947,8 +1927,25 @@ func TestLangsFilter_error1(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestLangsFilter_error2(t *testing.T) {
+	// this query should fail, because there is no lang after '@'
+	query := `
+	query {
+		me(id:0x0a) {
+			friends @filter(alloftext(descr@, "something")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestLangsFunction(t *testing.T) {
-	schema.ParseBytes([]byte("scalar descr: string @index(fulltext)"))
+	schema.ParseBytes([]byte("scalar descr: string @index(fulltext)"), 0)
 	query := `
 	query {
 		me(func:alloftext(descr@en, "something")) {

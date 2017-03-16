@@ -1040,7 +1040,7 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
-	var expectArg, seenFuncArg, isLang bool
+	var expectArg, seenFuncArg, expectLang bool
 L:
 	for it.Next() {
 		item := it.Item()
@@ -1081,7 +1081,7 @@ L:
 						if err == nil && itNext[0].Val == "filter" {
 							return nil, x.Errorf("Filter cannot be used inside a function.")
 						}
-						isLang = true
+						expectLang = true
 						continue
 					} else {
 						return nil, x.Errorf("Invalid usage of '@' in function argument")
@@ -1090,8 +1090,8 @@ L:
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
 				}
-				if !expectArg {
-					return nil, x.Errorf("Expected comma but got: %s", itemInFunc.Val)
+				if !expectArg && !expectLang {
+					return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
 				}
 				val := strings.Trim(itemInFunc.Val, "\" \t")
 				if val == "" {
@@ -1103,9 +1103,9 @@ L:
 							itemInFunc.Val)
 					}
 					g.Attr = val
-				} else if isLang {
+				} else if expectLang {
 					g.Lang = val
-					isLang = false
+					expectLang = false
 				} else {
 					g.Args = append(g.Args, val)
 				}
