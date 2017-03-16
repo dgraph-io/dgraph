@@ -408,6 +408,9 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	return lp, lp.decr
 }
 
+// GetOrUnmarshal takes a key, value and a groupID. It checks if the in-memory map has an
+// updated value and returns it if it exists or it unmarshals the value passed and returns
+// the list.
 func GetOrUnmarshal(key []byte, itVal []byte, group uint32) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
 
