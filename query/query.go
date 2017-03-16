@@ -1233,6 +1233,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	for _, it := range sg.Params.NeedsVar {
 		if it == sg.Params.Order {
+			// If the Order name is same as var name, we sort using that variable.
 			return sg.sortAndPaginateUsingVar(ctx)
 		}
 	}
@@ -1253,6 +1254,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))
 	sg.uidMatrix = result.GetUidMatrix()
 
+	// Update the destUids as we might have removed some UIDs.
 	sg.updateDestUids(ctx)
 	return nil
 }
@@ -1294,12 +1296,15 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		sg.uidMatrix[i] = ul
 	}
 
-	if sg.Params.Count != 0 || sg.Params.Offset != 0 { // No pagination.
+	if sg.Params.Count != 0 || sg.Params.Offset != 0 {
+		// Apply the pagination.
 		for i := 0; i < len(sg.uidMatrix); i++ {
 			start, end := pageRange(&sg.Params, len(sg.uidMatrix[i].Uids))
 			sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
 		}
 	}
+
+	// Update the destUids as we might have removed some UIDs.
 	sg.updateDestUids(ctx)
 	return nil
 }
