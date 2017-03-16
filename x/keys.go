@@ -150,6 +150,17 @@ func (p ParsedKey) IndexPrefix() []byte {
 	return buf
 }
 
+// ReversePrefix returns the prefix for index keys.
+func (p ParsedKey) ReversePrefix() []byte {
+	buf := make([]byte, 2+len(p.Attr)+2)
+	buf[0] = p.bytePrefix
+	rest := buf[1:]
+	k := writeAttr(rest, p.Attr)
+	AssertTrue(len(k) == 1)
+	k[0] = byteReverse
+	return buf
+}
+
 // SchemaPrefix returns the prefix for Schema keys.
 func SchemaPrefix() []byte {
 	buf := make([]byte, 1)

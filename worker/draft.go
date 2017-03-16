@@ -486,9 +486,14 @@ func (n *node) processApplyCh() {
 			// process schema mutations before
 			if proposal.Mutations.Schema != nil {
 				// Wait for applied watermark to reach till previous index
-				// All mutations before this should use old schema
+				// All mutations before this should use old schema and after this
+				// should use new schema
 				n.applyAllMarks(n.ctx, e.Index-1)
-				n.processSchemaMutations(e, proposal.Mutations)
+				if err := n.processSchemaMutations(e, proposal.Mutations); err != nil {
+					n.applied.Ch <- mark
+					posting.SyncMarkFor(n.gid).Ch <- mark
+					n.props.Done(proposal.Id, err)
+				}
 			}
 
 			// stores a map of predicate and type of first mutation for each predicate
@@ -654,6 +659,9 @@ func (n *node) snapshotPeriodically() {
 	}
 
 	var prev string
+	// TODO: What should be ideal value for snapshotting ? If a node is lost due to network
+	// partition or some other issue for more than log compaction tick interval, then that
+	// node needs to fetch snapshot since logs would be truncated
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 

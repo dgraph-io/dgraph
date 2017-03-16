@@ -65,6 +65,8 @@ func runMutations(ctx context.Context, edges []*taskp.DirectedEdge) error {
 	return nil
 }
 
+// This is serialized with mutations, called after applied watermarks catch up
+// and further mutations are blocked until this is done.
 func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	for _, update := range updates {
@@ -78,35 +80,59 @@ func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) err
 		old, ok := schema.State().Get(update.Predicate)
 
 		// Once we remove index or reverse edges from schema, even though the values
-		// are present in db, they won't be used due to check in work/task.go
+		// are present in db, they won't be used due to validation in work/task.go
 		// Removal can be done in background if we write a scheduler later which ensures
-		// that schema mutations are serialized, so that there won't be race conditions
-		// between deletion of edges and addition of edges. If schema mutations are not
-		// serialized then we would have to delete or rebuild index everytime.
+		// that schema mutations(rebuild index) are serialized, so that there won't be
+		// race conditions between deletion of edges and addition of edges. If schema
+		// mutations are not serialized then we need to take care of race conditions
+		// and replay of logs could produce different results, since we depend on already
+		// existing schema
+
 		// We don't want to use watermarks for background removal, because it would block
-		// linearizable read requests. - We might handle it similar to eventual index
-		// consistency
-		// TODO: Check race condition with lhmap on removal
+		// linearizable read requests. Only downside would be on system crash, stale edges
+		// might remain, which is ok.
+
+		// TODO: Can we detect when we need to run eventual index consistency or goroutine
+		// to remove stale reverse edges? This logic could be used for eventual index
+		// consistency also. Running it periodically(which would affect block cache)
+		// lhmap etc. On restart if there are not raft entries to be replayed from raft wal
+		// then we have a clean start. We could probably run eventual consistency only when
+		// we get snapshot or have raft entries in raft wal(We can further check for index
+		// mutations may be)
+
+		// Indexing can't be done in background as it can cause race conditons with new
+		// index mutations (old set and new del)
 		// We need watermark for index/reverse edge addition for linearizable reads.
-		// Can index be done in background ??
-		// TODO: Check whether we could do addition in background/later so that we don't
-		// block the server in production, may be we just update the schema then all new
-		// mutations would add index since predicate would be indexed in schema. We could
-		// potentially backfill the indices - Need to think of race conditions
-		//n := groups().Node(rv.Group)
+		// (both applied and synced watermarks). Since it's blocking call we needn't emit
+		// applied watermark, sync watermarks would be emitted on pl mutations automatically
+
+		// TODO: Using scheduler try running schema mutations in separate goroutine and
+		// don't do raft.Advance() until it is done, but ensure raft.Tick() doesn't get
+		// blocked, so that logs can atleast be queued up in raft in applied state
+		n := groups().Node(rv.Group)
 		if !ok {
 			if update.Index {
-
+				if err := n.rebuildOrDelIndex(ctx, update.Predicate, true); err != nil {
+					return err
+				}
 			} else if update.Reverse {
-
+				if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true); err != nil {
+					return err
+				}
 			}
 			continue
 		}
 		// schema was present already
 		if needReindexing(old, update) {
 			// Reindex if update.Index is true or remove index
+			if err := n.rebuildOrDelIndex(ctx, update.Predicate, update.Index); err != nil {
+				return err
+			}
 		} else if update.Reverse != old.Reverse {
 			// Add or remove reverse edge based on update.Reverse
+			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, update.Reverse); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
