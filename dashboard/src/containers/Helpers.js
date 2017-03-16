@@ -497,6 +497,8 @@ export function processGraph(
       }
 
       let oldEdge = edges[edgeIdx], edgeTitle = JSON.parse(oldEdge.title);
+      // This is helpful in case of shortest path results so that we can get
+      // the edge weights.
       _.merge(edgeAttributes, edgeTitle);
       oldEdge.title = JSON.stringify(edgeAttributes);
       edges[edgeIdx] = oldEdge;
