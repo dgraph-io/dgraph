@@ -103,6 +103,7 @@ type FilterTree struct {
 // Function holds the information about gql functions.
 type Function struct {
 	Attr     string
+	Lang     string   // language of the attribute value
 	Name     string   // Specifies the name of the function.
 	Args     []string // Contains the arguments of the function.
 	NeedsVar []string // If the function requires some variable
@@ -955,11 +956,14 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 		buf.WriteString(t.Func.Name)
 
 		if len(t.Func.Attr) > 0 {
-			args := make([]string, len(t.Func.Args)+1)
-			args[0] = t.Func.Attr
-			copy(args[1:], t.Func.Args)
+			buf.WriteRune(' ')
+			buf.WriteString(t.Func.Attr)
+			if len(t.Func.Lang) > 0 {
+				buf.WriteRune('@')
+				buf.WriteString(t.Func.Lang)
+			}
 
-			for _, arg := range args {
+			for _, arg := range t.Func.Args {
 				buf.WriteString(" \"")
 				buf.WriteString(arg)
 				buf.WriteRune('"')
@@ -1036,7 +1040,7 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
-	var expectArg, seenFuncArg bool
+	var expectArg, seenFuncArg, expectLang bool
 L:
 	for it.Next() {
 		item := it.Item()
@@ -1045,7 +1049,8 @@ L:
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s] but got %v", g.Name, itemInFunc.Val)
+				return nil, x.Errorf("Expected ( after func name [%s] but got %v",
+					g.Name, itemInFunc.Val)
 			}
 			expectArg = true
 			for it.Next() {
@@ -1070,19 +1075,37 @@ L:
 					g.Attr = f.Attr
 					g.Args = append(g.Args, f.Name)
 					continue
+				} else if itemInFunc.Typ == itemAt {
+					if len(g.Attr) > 0 && len(g.Lang) == 0 {
+						itNext, err := it.Peek(1)
+						if err == nil && itNext[0].Val == "filter" {
+							return nil, x.Errorf("Filter cannot be used inside a function.")
+						}
+						expectLang = true
+						continue
+					} else {
+						return nil, x.Errorf("Invalid usage of '@' in function argument")
+					}
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
 				}
-				if !expectArg {
-					return nil, x.Errorf("Expected comma but got: %s", itemInFunc.Val)
+				if !expectArg && !expectLang {
+					return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
 				}
 				val := strings.Trim(itemInFunc.Val, "\" \t")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
 				if len(g.Attr) == 0 {
+					if strings.ContainsRune(itemInFunc.Val, '"') {
+						return nil, x.Errorf("Attribute in function must not be quoted with \": %s",
+							itemInFunc.Val)
+					}
 					g.Attr = val
+				} else if expectLang {
+					g.Lang = val
+					expectLang = false
 				} else {
 					g.Args = append(g.Args, val)
 				}

@@ -181,11 +181,9 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		case isEndLiteral(r):
 			{
 				empty = false
-				l.Ignore()
 				l.AcceptUntil(isEndLiteral) // This call will backup the ending ".
+				l.Next()                    // Consume the " .
 				l.Emit(itemName)
-				l.Next() // Consume the " and ignore it.
-				l.Ignore()
 			}
 		case r == lsThan:
 			return lexIRIRef

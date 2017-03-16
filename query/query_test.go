@@ -1027,13 +1027,13 @@ func TestMaxError1(t *testing.T) {
                                 gender
                                 alive
                                 friend {
-                                    max(dob @filter(gt("dob", "1910-01-02")))
+                                    max(dob @filter(gt(dob, "1910-01-02")))
                                 }
                         }
                 }
         `
 	_, err := gql.Parse(query)
-	require.NotNil(t, err)
+	require.Error(t, err)
 }
 
 func TestSum(t *testing.T) {
@@ -1193,7 +1193,7 @@ func TestToSubgraphInvalidFnName3(t *testing.T) {
 func TestToSubgraphInvalidFnName4(t *testing.T) {
 	query := `
                 {
-                        f AS var(func:invalidfn4("name", "Michonne Rick Glenn")) {
+                        f AS var(func:invalidfn4(name, "Michonne Rick Glenn")) {
                                 name
                         }
                         you(func:anyofterms(name, "Michonne")) {
@@ -1217,7 +1217,7 @@ func TestToSubgraphInvalidArgs1(t *testing.T) {
                         me(id:0x01) {
                                 name
                                 gender
-                                friend(disorderasc: dob) @filter(leq("dob", "1909-03-20")) {
+                                friend(disorderasc: dob) @filter(leq(dob, "1909-03-20")) {
                                         name
                                 }
                         }
@@ -1237,7 +1237,7 @@ func TestToSubgraphInvalidArgs2(t *testing.T) {
                         me(id:0x01) {
                                 name
                                 gender
-                                friend(offset:1, invalidorderasc:1) @filter(anyofterms("name", "Andrea")) {
+                                friend(offset:1, invalidorderasc:1) @filter(anyofterms(name, "Andrea")) {
                                         name
                                 }
                         }
@@ -1470,7 +1470,7 @@ func TestToFastJSONFilterallofterms(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(allofterms("name", "Andrea SomethingElse")) {
+				friend @filter(allofterms(name, "Andrea SomethingElse")) {
 					name
 				}
 			}
@@ -1625,7 +1625,7 @@ func TestToFastJSONFilterOrOffset(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(offset:1) @filter(anyofterms(name, "Andrea") or anyofterms("name", "Glenn Rhee") or anyofterms("name", "Daryl Dixon")) {
+				friend(offset:1) @filter(anyofterms(name, "Andrea") or anyofterms(name, "Glenn Rhee") or anyofterms(name, "Daryl Dixon")) {
 					name
 				}
 			}
@@ -1682,7 +1682,7 @@ func TestToFastJSONFilterGeq(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(geq("dob", "1909-05-05")) {
+				friend @filter(geq(dob, "1909-05-05")) {
 					name
 				}
 			}
@@ -1702,7 +1702,7 @@ func TestToFastJSONFilterGt(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(gt("dob", "1909-05-05")) {
+				friend @filter(gt(dob, "1909-05-05")) {
 					name
 				}
 			}
@@ -1722,7 +1722,7 @@ func TestToFastJSONFilterLeq(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(leq("dob", "1909-01-10")) {
+				friend @filter(leq(dob, "1909-01-10")) {
 					name
 				}
 			}
@@ -1742,7 +1742,7 @@ func TestToFastJSONFilterLt(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(lt("dob", "1909-01-10")) {
+				friend @filter(lt(dob, "1909-01-10")) {
 					name
 				}
 			}
@@ -1762,7 +1762,7 @@ func TestToFastJSONFilterEqualNoHit(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(eq("dob", "1909-03-20")) {
+				friend @filter(eq(dob, "1909-03-20")) {
 					name
 				}
 			}
@@ -1821,7 +1821,7 @@ func TestToFastJSONFilterEqual(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(eq("dob", "1909-01-10")) {
+				friend @filter(eq(dob, "1909-01-10")) {
 					name
 				}
 			}
@@ -1924,7 +1924,7 @@ func TestToFastJSONFilterLeqOrder(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(orderasc: dob) @filter(leq("dob", "1909-03-20")) {
+				friend(orderasc: dob) @filter(leq(dob, "1909-03-20")) {
 					name
 				}
 			}
@@ -1944,7 +1944,7 @@ func TestToFastJSONFilterGeqNoResult(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(geq("dob", "1999-03-20")) {
+				friend @filter(geq(dob, "1999-03-20")) {
 					name
 				}
 			}
@@ -1984,7 +1984,7 @@ func TestToFastJSONFilterOrFirstOffset(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(offset:1, first:1) @filter(anyofterms("name", "Andrea") or anyofterms("name", "SomethingElse Rhee") or anyofterms("name", "Daryl Dixon")) {
+				friend(offset:1, first:1) @filter(anyofterms(name, "Andrea") or anyofterms(name, "SomethingElse Rhee") or anyofterms(name, "Daryl Dixon")) {
 					name
 				}
 			}
@@ -2004,7 +2004,7 @@ func TestToFastJSONFilterLeqFirstOffset(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(offset:1, first:1) @filter(leq("dob", "1909-03-20")) {
+				friend(offset:1, first:1) @filter(leq(dob, "1909-03-20")) {
 					name
 				}
 			}
@@ -2024,7 +2024,7 @@ func TestToFastJSONFilterOrFirstOffsetCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				count(friend(offset:1, first:1) @filter(anyofterms("name", "Andrea") or anyofterms("name", "SomethingElse Rhee") or anyofterms("name", "Daryl Dixon"))) 
+				count(friend(offset:1, first:1) @filter(anyofterms(name, "Andrea") or anyofterms(name, "SomethingElse Rhee") or anyofterms(name, "Daryl Dixon"))) 
 			}
 		}
 	`
@@ -2044,7 +2044,7 @@ func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(first:-1, offset:0) @filter(anyofterms("name", "Andrea") or anyofterms("name", "Glenn Rhee") or anyofterms("name", "Daryl Dixon")) {
+				friend(first:-1, offset:0) @filter(anyofterms(name, "Andrea") or anyofterms(name, "Glenn Rhee") or anyofterms(name, "Daryl Dixon")) {
 					name
 				}
 			}
@@ -2064,7 +2064,7 @@ func TestToFastJSONFilterNot1(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(not anyofterms("name", "Andrea rick")) {
+				friend @filter(not anyofterms(name, "Andrea rick")) {
 					name
 				}
 			}
@@ -2083,7 +2083,7 @@ func TestToFastJSONFilterNot2(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(not anyofterms("name", "Andrea") and anyofterms(name, "Glenn Andrea")) {
+				friend @filter(not anyofterms(name, "Andrea") and anyofterms(name, "Glenn Andrea")) {
 					name
 				}
 			}
@@ -2102,7 +2102,7 @@ func TestToFastJSONFilterNot3(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(not (anyofterms("name", "Andrea") or anyofterms(name, "Glenn Rick Andrea"))) {
+				friend @filter(not (anyofterms(name, "Andrea") or anyofterms(name, "Glenn Rick Andrea"))) {
 					name
 				}
 			}
@@ -2121,7 +2121,7 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyofterms("name", "Andrea") and anyofterms("name", "SomethingElse Rhee")) {
+				friend @filter(anyofterms(name, "Andrea") and anyofterms(name, "SomethingElse Rhee")) {
 					name
 				}
 			}
@@ -2159,7 +2159,7 @@ func TestToFastJSONReverseFilter(t *testing.T) {
 		{
 			me(id:0x18) {
 				name
-				~friend @filter(allofterms("name", "Andrea")) {
+				~friend @filter(allofterms(name, "Andrea")) {
 					name
 					gender
 			  	alive
@@ -2323,7 +2323,7 @@ func TestToProtoFilter(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyofterms("name", "Andrea")) {
+				friend @filter(anyofterms(name, "Andrea")) {
 					name
 				}
 			}
@@ -2368,7 +2368,7 @@ func TestToProtoFilterOr(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyofterms("name", "Andrea") or anyofterms("name", "Glenn Rhee")) {
+				friend @filter(anyofterms(name, "Andrea") or anyofterms(name, "Glenn Rhee")) {
 					name
 				}
 			}
@@ -2422,7 +2422,7 @@ func TestToProtoFilterAnd(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyofterms("name", "Andrea") and anyofterms("name", "Glenn Rhee")) {
+				friend @filter(anyofterms(name, "Andrea") and anyofterms(name, "Glenn Rhee")) {
 					name
 				}
 			}
@@ -2546,7 +2546,7 @@ func TestToFastJSONOrderDescCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				count(friend @filter(anyofterms("name", "Rick")) (orderasc: dob)) 
+				count(friend @filter(anyofterms(name, "Rick")) (orderasc: dob)) 
 			}
 		}
 	`
@@ -2859,12 +2859,12 @@ func TestMultiQuery(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func:anyofterms("name", "Michonne")) {
+			me(func:anyofterms(name, "Michonne")) {
 				name
 				gender
 			}
 
-			you(func:anyofterms("name", "Andrea")) {
+			you(func:anyofterms(name, "Andrea")) {
 				name
 			}
 		}
@@ -2877,11 +2877,11 @@ func TestMultiQueryError1(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne")) {
+			me(func:anyofterms(name, "Michonne")) {
         name
         gender
 
-			you(func:anyofterms("name", "Andrea")) {
+			you(func:anyofterms(name, "Andrea")) {
         name
       }
     }
@@ -2894,13 +2894,13 @@ func TestMultiQueryError2(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-      me(anyofterms("name", "Michonne")) {
+      me(anyofterms(name, "Michonne")) {
         name
         gender
 			}
 		}
 
-      you(anyofterms("name", "Andrea")) {
+      you(anyofterms(name, "Andrea")) {
         name
       }
     }
@@ -2913,7 +2913,7 @@ func TestGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne")) {
+			me(func:anyofterms(name, "Michonne")) {
         name
         gender
       }
@@ -2927,7 +2927,7 @@ func TestGeneratorMultiRootMultiQueryRootVar(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			friend AS var(func:anyofterms("name", "Michonne Rick Glenn")) {
+			friend AS var(func:anyofterms(name, "Michonne Rick Glenn")) {
       	name
 			}
 
@@ -2944,7 +2944,7 @@ func TestGeneratorMultiRootMultiQueryVarFilter(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			f AS var(func:anyofterms("name", "Michonne Rick Glenn")) {
+			f AS var(func:anyofterms(name, "Michonne Rick Glenn")) {
       	name
 			}
 
@@ -2963,7 +2963,7 @@ func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			friend AS var(func:anyofterms("name", "Michonne Rick Glenn")) {
+			friend AS var(func:anyofterms(name, "Michonne Rick Glenn")) {
 			}
 
 			you(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(id(friend)) {
@@ -2979,7 +2979,7 @@ func TestGeneratorMultiRootMultiQuery(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn")) {
+			me(func:anyofterms(name, "Michonne Rick Glenn")) {
         name
       }
 
@@ -2996,7 +2996,7 @@ func TestGeneratorMultiRootVarOrderOffset(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			L as var(func:anyofterms("name", "Michonne Rick Glenn"), orderasc: dob, offset:2) {
+			L as var(func:anyofterms(name, "Michonne Rick Glenn"), orderasc: dob, offset:2) {
         name
       }
 
@@ -3013,7 +3013,7 @@ func TestGeneratorMultiRootVarOrderOffset1(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn"), orderasc: dob, offset:2) {
+			me(func:anyofterms(name, "Michonne Rick Glenn"), orderasc: dob, offset:2) {
         name
       }
     }
@@ -3026,7 +3026,7 @@ func TestGeneratorMultiRootOrderOffset(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			L as var(func:anyofterms("name", "Michonne Rick Glenn")) {
+			L as var(func:anyofterms(name, "Michonne Rick Glenn")) {
         name
       }
 			me(var: L, orderasc: dob, offset:2) {
@@ -3042,7 +3042,7 @@ func TestGeneratorMultiRootOrderdesc(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn"), orderdesc: dob) {
+			me(func:anyofterms(name, "Michonne Rick Glenn"), orderdesc: dob) {
         name
       }
     }
@@ -3055,7 +3055,7 @@ func TestGeneratorMultiRootOrder(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn"), orderasc: dob) {
+			me(func:anyofterms(name, "Michonne Rick Glenn"), orderasc: dob) {
         name
       }
     }
@@ -3068,7 +3068,7 @@ func TestGeneratorMultiRootOffset(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn"), offset: 1) {
+			me(func:anyofterms(name, "Michonne Rick Glenn"), offset: 1) {
         name
       }
     }
@@ -3081,7 +3081,7 @@ func TestGeneratorMultiRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn")) {
+			me(func:anyofterms(name, "Michonne Rick Glenn")) {
         name
       }
     }
@@ -3127,7 +3127,7 @@ func TestGeneratorMultiRootFilter1(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Daryl Rick Glenn")) @filter(leq(dob, 1909-01-10)) {
+			me(func:anyofterms(name, "Daryl Rick Glenn")) @filter(leq(dob, 1909-01-10)) {
         name
       }
     }
@@ -3140,7 +3140,7 @@ func TestGeneratorMultiRootFilter2(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn")) @filter(geq(dob, 1909-01-10)) {
+			me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(geq(dob, 1909-01-10)) {
         name
       }
     }
@@ -3153,7 +3153,7 @@ func TestGeneratorMultiRootFilter3(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn")) @filter(anyofterms(name, "Glenn") and geq(dob, 1909-01-10)) {
+			me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(anyofterms(name, "Glenn") and geq(dob, 1909-01-10)) {
         name
       }
     }
@@ -3166,7 +3166,7 @@ func TestGeneratorRootFilterOnCountGt(t *testing.T) {
 	populateGraph(t)
 	query := `
                 {
-                        me(func:anyofterms("name", "Michonne Rick")) @filter(gt(count(friend), 2)) {
+                        me(func:anyofterms(name, "Michonne Rick")) @filter(gt(count(friend), 2)) {
                                 name
                         }
                 }
@@ -3182,7 +3182,7 @@ func TestGeneratorRootFilterOnCountLeq(t *testing.T) {
 	populateGraph(t)
 	query := `
                 {
-                        me(func:anyofterms("name", "Michonne Rick")) @filter(leq(count(friend), 2)) {
+                        me(func:anyofterms(name, "Michonne Rick")) @filter(leq(count(friend), 2)) {
                                 name
                         }
                 }
@@ -3237,7 +3237,7 @@ func TestGeneratorRootFilterOnCountError1(t *testing.T) {
 	// only cmp(count(attr), int) is valid, 'max'/'min'/'sum' not supported
 	query := `
                 {
-                        me(func:anyofterms("name", "Michonne Rick")) @filter(gt(count(friend), "invalid")) {
+                        me(func:anyofterms(name, "Michonne Rick")) @filter(gt(count(friend), "invalid")) {
                                 name
                         }
                 }
@@ -3255,7 +3255,7 @@ func TestGeneratorRootFilterOnCountError2(t *testing.T) {
 	// missing digits
 	query := `
                 {
-                        me(func:anyofterms("name", "Michonne Rick")) @filter(gt(count(friend))) {
+                        me(func:anyofterms(name, "Michonne Rick")) @filter(gt(count(friend))) {
                                 name
                         }
                 }
@@ -3273,7 +3273,7 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
 	// to much args
 	query := `
                 {
-                        me(func:anyofterms("name", "Michonne Rick")) @filter(gt(count(friend), 2, 4)) {
+                        me(func:anyofterms(name, "Michonne Rick")) @filter(gt(count(friend), 2, 4)) {
                                 name
                         }
                 }
@@ -3290,7 +3290,7 @@ func TestToProtoMultiRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn")) {
+			me(func:anyofterms(name, "Michonne Rick Glenn")) {
         name
       }
     }
