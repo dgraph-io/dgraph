@@ -1576,7 +1576,7 @@ func TestParseCheckPwd(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `{
 		me(id:1) {
-			checkpwd("123456")
+			checkpwd(password, "123456")
 			hometown
 		}
 	}
