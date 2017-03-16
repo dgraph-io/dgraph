@@ -21,6 +21,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/protos/workerp"
@@ -64,7 +65,84 @@ func runMutations(ctx context.Context, edges []*taskp.DirectedEdge) error {
 	return nil
 }
 
-func updateSchema(attr string, typ types.TypeID, raftIndex uint64, group uint32) {
+func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) error {
+	rv := ctx.Value("raft").(x.RaftValue)
+	for _, update := range updates {
+		if !groups().ServesGroup(group.BelongsTo(update.Predicate)) {
+			return x.Errorf("Predicate fingerprint doesn't match this instance")
+		}
+		if err := checkSchema(update); err != nil {
+			return err
+		}
+		updateSchema(update.Predicate, schema.From(update), rv.Index, rv.Group)
+		old, ok := schema.State().Get(update.Predicate)
+
+		// Once we remove index or reverse edges from schema, even though the values
+		// are present in db, they won't be used due to check in work/task.go
+		// Removal can be done in background if we write a scheduler later which ensures
+		// that schema mutations are serialized, so that there won't be race conditions
+		// between deletion of edges and addition of edges. If schema mutations are not
+		// serialized then we would have to delete or rebuild index everytime.
+		// We don't want to use watermarks for background removal, because it would block
+		// linearizable read requests. - We might handle it similar to eventual index
+		// consistency
+		// TODO: Check race condition with lhmap on removal
+		// We need watermark for index/reverse edge addition for linearizable reads.
+		// Can index be done in background ??
+		// TODO: Check whether we could do addition in background/later so that we don't
+		// block the server in production, may be we just update the schema then all new
+		// mutations would add index since predicate would be indexed in schema. We could
+		// potentially backfill the indices - Need to think of race conditions
+		//n := groups().Node(rv.Group)
+		if !ok {
+			if update.Index {
+
+			} else if update.Reverse {
+
+			}
+			continue
+		}
+		// schema was present already
+		if needReindexing(old, update) {
+			// Reindex if update.Index is true or remove index
+		} else if update.Reverse != old.Reverse {
+			// Add or remove reverse edge based on update.Reverse
+		}
+	}
+	return nil
+}
+
+func needReindexing(old *typesp.Schema, update *graphp.SchemaUpdate) bool {
+	if update.Index != (len(old.Tokenizer) > 0) {
+		return true
+	}
+	// if tokenizer has changed
+	if update.Index && update.ValueType != old.ValueType {
+		return true
+	}
+	// if tokenizer has changed - if same tokenizer works differently
+	// on different types
+	if len(update.Tokenizer) != len(old.Tokenizer) {
+		return false
+	}
+	for i, t := range old.Tokenizer {
+		return update.Tokenizer[i] == t
+	}
+
+	return true
+}
+
+func updateSchema(attr string, s *typesp.Schema, raftIndex uint64, group uint32) {
+	ce := schema.SyncEntry{
+		Attr:   attr,
+		Schema: s,
+		Index:  raftIndex,
+		Water:  posting.SyncMarkFor(group),
+	}
+	schema.State().Update(&ce)
+}
+
+func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uint32) {
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
 	s, ok := schema.State().Get(attr)
@@ -73,14 +151,25 @@ func updateSchema(attr string, typ types.TypeID, raftIndex uint64, group uint32)
 	} else {
 		s = &typesp.Schema{ValueType: uint32(typ)}
 	}
+	updateSchema(attr, s, raftIndex, group)
+}
 
-	ce := schema.SyncEntry{
-		Attr:   attr,
-		Schema: s,
-		Index:  raftIndex,
-		Water:  posting.SyncMarkFor(group),
+func checkSchema(s *graphp.SchemaUpdate) error {
+	typ := types.TypeID(s.ValueType)
+	if typ == types.UidID && s.Index {
+		// index on uid type
+		return x.Errorf("Index not allowed on predicate of type uid on predicate %s", s.Predicate)
+	} else if typ != types.UidID && s.Reverse {
+		// reverse on non-uid type
+		return x.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
 	}
-	schema.State().Update(&ce)
+	if t, err := schema.State().TypeOf(s.Predicate); err == nil {
+		// schema was defined already
+		if typ.IsScalar() != t.IsScalar() {
+			return x.Errorf("Schema change not allowed from predicate to uid or vice versa")
+		}
+	}
+	return nil
 }
 
 // If storage type is specified, then check compatability or convert to schema type

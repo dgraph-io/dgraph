@@ -36,6 +36,10 @@ func parseFile(file string, gid uint32) (rerr error) {
 	return ParseBytes(b, gid)
 }
 
+func From(s *graphp.SchemaUpdate) *typesp.Schema {
+	return &typesp.Schema{ValueType: s.ValueType, Reverse: s.Reverse, Tokenizer: s.Tokenizer}
+}
+
 // ParseBytes parses the byte array which holds the schema. We will reset
 // all the globals.
 // Overwrites schema blindly - called only during initilization in testing
@@ -47,7 +51,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	}
 
 	for _, update := range updates {
-		State().Set(update.Predicate, &typesp.Schema{ValueType: update.ValueType, Reverse: update.Reverse, Tokenizer: update.Tokenizer})
+		State().Set(update.Predicate, From(update))
 	}
 	return nil
 }

@@ -257,6 +257,11 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) err
 				return err
 			}
 		}
+		for _, schema := range proposal.Mutations.Schema {
+			if err := checkSchema(schema); err != nil {
+				return err
+			}
+		}
 	}
 
 	proposal.Id = rand.Uint32()
@@ -395,6 +400,17 @@ func (n *node) processMutation(e raftpb.Entry, m *taskp.Mutations) error {
 	return nil
 }
 
+func (n *node) processSchemaMutations(e raftpb.Entry, m *taskp.Mutations) error {
+	// TODO: Need to pass node and entry index.
+	rv := x.RaftValue{Group: n.gid, Index: e.Index}
+	ctx := context.WithValue(n.ctx, "raft", rv)
+	if err := runSchemaMutations(ctx, m.Schema); err != nil {
+		x.TraceError(n.ctx, err)
+		return err
+	}
+	return nil
+}
+
 func (n *node) processMembership(e raftpb.Entry, mm *taskp.Membership) error {
 	x.AssertTrue(n.gid == 0)
 
@@ -467,6 +483,14 @@ func (n *node) processApplyCh() {
 		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
 
 		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {
+			// process schema mutations before
+			if proposal.Mutations.Schema != nil {
+				// Wait for applied watermark to reach till previous index
+				// All mutations before this should use old schema
+				n.applyAllMarks(n.ctx, e.Index-1)
+				n.processSchemaMutations(e, proposal.Mutations)
+			}
+
 			// stores a map of predicate and type of first mutation for each predicate
 			schemaMap := make(map[string]types.TypeID)
 			for _, edge := range proposal.Mutations.Edges {
@@ -481,7 +505,7 @@ func (n *node) processApplyCh() {
 					// Since comitted entries are serialized, updateSchemaIfMissing is not
 					// needed, In future if schema needs to be changed, it would flow through
 					// raft so there won't be race conditions between read and update schema
-					updateSchema(attr, storageType, e.Index, n.raftContext.Group)
+					updateSchemaType(attr, storageType, e.Index, n.raftContext.Group)
 				}
 			}
 		}
@@ -519,10 +543,13 @@ func (n *node) retrieveSnapshot(rc taskp.RaftContext) {
 	x.AssertTruef(pool != nil, "Pool shouldn't be nil for address: %v for id: %v", addr, rc.Id)
 
 	x.AssertTrue(rc.Group == n.gid)
+	// Get index of last committed.
+	lastIndex, err := n.store.LastIndex()
+	x.Checkf(err, "Error while getting last index")
 	// Wait for watermarks to sync since populateShard writes directly to db, otherwise
 	// the values might get overwritten
 	// Safe to keep this line
-	n.syncAllMarks(n.ctx)
+	n.syncAllMarks(n.ctx, lastIndex)
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
@@ -582,6 +609,7 @@ func (n *node) Run() {
 					continue
 				}
 
+				// Need applied watermarks for schema mutation also for read linearazibility
 				status := x.Mark{Index: entry.Index, Done: false}
 				n.applied.Ch <- status
 				posting.SyncMarkFor(n.gid).Ch <- status

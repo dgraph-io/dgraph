@@ -257,31 +257,29 @@ func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string
 }
 
 func enrichSchema(updates []*graphp.SchemaUpdate) error {
-	if len(updates) == 0 {
-		return nil
-	}
-
 	for _, schema := range updates {
 		typ := types.TypeID(schema.ValueType)
-		if typ != types.UidID && schema.Index {
-			if len(schema.Tokenizer) == 0 {
-				schema.Tokenizer = []string{tok.Default(typ).Name()}
-			}
-			// check for valid tokeniser types and duplicates
-			var seen = make(map[string]bool)
-			var tokenizers []string
-			for _, t := range schema.Tokenizer {
-				tokenizer, has := tok.GetTokenizer(t)
-				if !has {
-					return x.Errorf("Invalid tokenizer %s", t)
-				}
-				if _, ok := seen[tokenizer.Name()]; !ok {
-					tokenizers = append(tokenizers, tokenizer.Name())
-					seen[tokenizer.Name()] = true
-				}
-			}
-			schema.Tokenizer = tokenizers
+		if typ == types.UidID || !schema.Index {
+			continue
 		}
+		if len(schema.Tokenizer) == 0 {
+			schema.Tokenizer = []string{tok.Default(typ).Name()}
+		}
+		// check for valid tokeniser types and duplicates
+		var seen = make(map[string]bool)
+		var tokenizers []string
+		for _, t := range schema.Tokenizer {
+			tokenizer, has := tok.GetTokenizer(t)
+			if !has {
+				return x.Errorf("Invalid tokenizer %s", t)
+			}
+			if _, ok := seen[tokenizer.Name()]; !ok {
+				tokenizers = append(tokenizers, tokenizer.Name())
+				seen[tokenizer.Name()] = true
+			}
+		}
+		schema.Tokenizer = tokenizers
+
 	}
 	return nil
 }
