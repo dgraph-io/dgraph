@@ -51,7 +51,7 @@ func (s *listMapShard) get(key uint64) *List {
 	return val
 }
 
-// Get returns value for given key. Returns true if found.
+// Get returns value for given key.
 func (s *listMap) Get(key uint64) *List {
 	return s.shard[getShard(s.numShards, key)].get(key)
 }

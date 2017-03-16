@@ -427,7 +427,6 @@ func GetOrUnmarshal(key, val []byte) (rlist *List, decr func()) {
 	pl.Unmarshal(val)
 	lp = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	lp.mlayer = pl.Postings
-	lp.incr()
 
 	return lp, lp.decr
 }
