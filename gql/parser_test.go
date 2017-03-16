@@ -340,7 +340,6 @@ func TestParseError(t *testing.T) {
 }
 
 func TestParseXid(t *testing.T) {
-	// logrus.SetLevel(logrus.DebugLevel)
 	// TODO: Why does the query not have _xid_ attribute?
 	query := `
 	query {
