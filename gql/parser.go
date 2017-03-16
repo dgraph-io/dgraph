@@ -1468,6 +1468,21 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return nil, x.Errorf("Invalid query")
 			}
 			item = it.Item()
+			if item.Val == "var" {
+				it.Next()
+				item = it.Item()
+				if item.Typ != itemLeftRound {
+					return nil, x.Errorf("Expected a left round after var")
+				}
+				it.Next()
+				item = it.Item()
+				parseVarList(gq, item.Val)
+				it.Next()
+				item = it.Item()
+				if item.Typ != itemRightRound {
+					return nil, x.Errorf("Expected a right round after var")
+				}
+			}
 			// Check and parse if its a list.
 			err := parseID(gq, item.Val)
 			if err != nil {
@@ -1483,12 +1498,13 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return nil, err
 			}
 			gq.Func = gen
-		} else if key == "var" {
+			/*} else if key == "var" {
 			if !it.Next() {
 				return nil, x.Errorf("Invalid query")
 			}
 			item := it.Item()
 			parseVarList(gq, item.Val)
+			*/
 		} else {
 			if !it.Next() {
 				return nil, x.Errorf("Invalid query")
