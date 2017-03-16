@@ -10,9 +10,7 @@ const emptyState = {
     numNodes: 0,
     numEdges: 0,
     treeView: false,
-    latency: "",
-    rendering: "",
-    isFetching: false,
+    isFetching: false
 };
 
 const response = (state = emptyState, action) => {
@@ -21,29 +19,28 @@ const response = (state = emptyState, action) => {
             return {
                 ...state,
                 text: action.text,
-                success: false,
+                success: false
             };
         case "SUCCESS_RESPONSE":
             return {
                 ...state,
                 data: action.data,
                 text: action.text || "",
-                success: true,
+                success: true
             };
         case "RESPONSE_PROPERTIES":
-            // TODO - Exclude type from action.
             return {
                 ...state,
                 ...action,
-                numNodes: action.allNodes.length,
-                numEdges: action.allEdges.length,
+                numNodes: action.allNodes && action.allNodes.length,
+                numEdges: action.allEdges && action.allEdges.length
             };
         case "RESET_RESPONSE":
             return emptyState;
         case "IS_FETCHING": {
             return {
                 ...state,
-                isFetching: action.fetching,
+                isFetching: action.fetching
             };
         }
         default:
