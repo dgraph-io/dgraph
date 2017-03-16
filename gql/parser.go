@@ -886,7 +886,7 @@ func parseVariables(it *lex.ItemIterator, vmap varMap) error {
 }
 
 // parseArguments parses the arguments part of the GraphQL query root.
-func parseArguments(it *lex.ItemIterator) (result []pair, rerr error) {
+func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr error) {
 	expectArg := true
 	for it.Next() {
 		var p pair
@@ -923,7 +923,27 @@ func parseArguments(it *lex.ItemIterator) (result []pair, rerr error) {
 		it.Next()
 		item = it.Item()
 		var val string
-		if item.Typ == itemDollar {
+		if item.Val == "var" {
+			// this is of the form var(...)
+			it.Next()
+			item = it.Item()
+			if item.Typ != itemLeftRound {
+				return nil, x.Errorf("Expected a left round after var")
+			}
+			it.Next()
+			item = it.Item()
+			//parseVarList(gq, item.Val)
+			if item.Typ != itemName {
+				return nil, x.Errorf("Expected a variable name but got %v", item.Val)
+			}
+			gq.NeedsVar = append(gq.NeedsVar, item.Val)
+			it.Next()
+			item = it.Item()
+			if item.Typ != itemRightRound {
+				return nil, x.Errorf("Expected a right round after var")
+			}
+
+		} else if item.Typ == itemDollar {
 			val = "$"
 			it.Next()
 			item = it.Item()
@@ -1498,18 +1518,30 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return nil, err
 			}
 			gq.Func = gen
-			/*} else if key == "var" {
-			if !it.Next() {
-				return nil, x.Errorf("Invalid query")
-			}
-			item := it.Item()
-			parseVarList(gq, item.Val)
-			*/
 		} else {
+			// TODO(Ashwin): Handle var() here.
 			if !it.Next() {
 				return nil, x.Errorf("Invalid query")
 			}
 			item := it.Item()
+			if item.Val == "var" {
+				it.Next()
+				item = it.Item()
+				if item.Typ != itemLeftRound {
+					return nil, x.Errorf("Expected a left round after var")
+				}
+				it.Next()
+				item = it.Item()
+				if item.Typ != itemName {
+					return nil, x.Errorf("Expected a variable name but got %v", item.Val)
+				}
+				gq.NeedsVar = append(gq.NeedsVar, item.Val)
+				it.Next()
+				item = it.Item()
+				if item.Typ != itemRightRound {
+					return nil, x.Errorf("Expected a right round after var")
+				}
+			}
 			gq.Args[key] = item.Val
 		}
 	}
@@ -1620,7 +1652,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			if curp.Attr == "" {
 				return x.Errorf("Predicate name cannot be empty.")
 			}
-			args, err := parseArguments(it)
+			args, err := parseArguments(it, curp)
 			if err != nil {
 				return err
 			}
