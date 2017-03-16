@@ -89,3 +89,44 @@ func TestSetMutation(t *testing.T) {
 	assert.Equal(t, len(req.gr.Mutation.Set), 2, "Set should have 2 entries")
 	assert.Equal(t, len(req.gr.Mutation.Del), 1, "Del should have 1 entry")
 }
+
+func BenchmarkChannelRange(b *testing.B) {
+	// run the Fib function b.N times
+	for n := 0; n < b.N; n++ {
+		numbers := make([]int, 10000)
+		ch := make(chan int, 110000)
+
+		for i := 1; i <= 3; i++ {
+			go func() {
+				for number := range ch {
+					_ = number
+				}
+			}()
+		}
+		for _, num := range numbers {
+			ch <- num
+		}
+		close(ch)
+	}
+}
+
+func BenchmarkChannelSelect(b *testing.B) {
+	// run the Fib function b.N times
+	for n := 0; n < b.N; n++ {
+		numbers := make([]int, 10000)
+		ch := make(chan int, 110000)
+
+		for i := 1; i <= 3; i++ {
+			go func() {
+				select {
+				case number := <-ch:
+					_ = number
+				}
+			}()
+		}
+		for _, num := range numbers {
+			ch <- num
+		}
+		close(ch)
+	}
+}

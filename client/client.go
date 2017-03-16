@@ -149,11 +149,11 @@ func checkSchema(schema *graphp.SchemaUpdate) error {
 }
 
 // AddSchema sets the schema mutations
-func (req *Req) addSchema(s *graphp.SchemaUpdate) error {
+func (req *Req) addSchema(s []*graphp.SchemaUpdate) error {
 	if req.gr.Mutation == nil {
 		req.gr.Mutation = new(graphp.Mutation)
 	}
-	req.gr.Mutation.Schema = append(req.gr.Mutation.Schema)
+	req.gr.Mutation.Schema = append(req.gr.Mutation.Schema, s...)
 	return nil
 }
 
@@ -183,6 +183,7 @@ type BatchMutation struct {
 	schema chan []*graphp.SchemaUpdate
 	dc     graphp.DgraphClient
 	wg     sync.WaitGroup
+	swg    sync.WaitGroup
 
 	// Miscellaneous information to print counters.
 	// Num of RDF's sent
@@ -213,14 +214,7 @@ RETRY:
 func (batch *BatchMutation) makeRequests() {
 	req := new(Req)
 
-	select {
-	case updates := <-batch.schema:
-		// Send schema mutations immediately
-		for _, s := range updates {
-			req.addSchema(s)
-		}
-		batch.request(req)
-	case n := <-batch.nquads:
+	for n := range batch.nquads {
 		req.addMutation(n.nq, n.op)
 		if req.size() == batch.size {
 			batch.request(req)
@@ -231,6 +225,22 @@ func (batch *BatchMutation) makeRequests() {
 		batch.request(req)
 	}
 	batch.wg.Done()
+}
+
+func (batch *BatchMutation) makeSchemaRequests() {
+	req := new(Req)
+
+	for s := range batch.schema {
+		req.addSchema(s)
+		if req.size() == batch.size {
+			batch.request(req)
+		}
+	}
+
+	if req.size() > 0 {
+		batch.request(req)
+	}
+	batch.swg.Done()
 }
 
 func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
@@ -247,6 +257,8 @@ func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
 		bm.wg.Add(1)
 		go bm.makeRequests()
 	}
+	bm.swg.Add(1)
+	go bm.makeSchemaRequests()
 	return &bm
 }
 
@@ -285,6 +297,10 @@ func (batch *BatchMutation) Counter() Counter {
 
 func (batch *BatchMutation) Flush() {
 	close(batch.nquads)
-	close(batch.schema)
 	batch.wg.Wait()
+}
+
+func (batch *BatchMutation) FlushSchema() {
+	close(batch.schema)
+	batch.swg.Wait()
 }

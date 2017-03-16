@@ -22,7 +22,6 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -77,7 +76,6 @@ func processSchemaFile(file string, batch *client.BatchMutation) {
 	x.Check(err)
 
 	var buf bytes.Buffer
-	var updates []*graphp.SchemaUpdate
 	bufReader := bufio.NewReader(gr)
 	var line int
 	for {
@@ -91,18 +89,12 @@ func processSchemaFile(file string, batch *client.BatchMutation) {
 			log.Fatalf("Error while parsing schema: %v, on line:%v %v", err, line, buf.String())
 		}
 		buf.Reset()
-		updates = append(updates, update...)
-		if line == *numRdf {
-			if err = batch.AddSchema(updates); err != nil {
-				log.Fatal("While adding schema to batch ", err)
-			}
-			updates = updates[:0]
-			line = 0
+		if err = batch.AddSchema(update); err != nil {
+			log.Fatal("While adding schema to batch ", err)
 		}
+
 	}
-	if err = batch.AddSchema(updates); err != nil {
-		log.Fatal("While adding schema to batch ", err)
-	}
+	batch.FlushSchema()
 	if err != io.EOF {
 		x.Checkf(err, "Error while reading file")
 	}

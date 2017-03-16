@@ -110,6 +110,7 @@ func toSchema(buf *bytes.Buffer, s *skv) {
 		buf.WriteString(strings.Join(s.schema.Tokenizer, ","))
 		buf.WriteByte(')')
 	}
+	buf.WriteString("\n")
 }
 
 func writeToFile(fpath string, ch chan []byte) error {
