@@ -821,7 +821,10 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 				continue
 			}
 
-			sg.recursiveFillVars(doneVars)
+			err = sg.recursiveFillVars(doneVars)
+			if err != nil {
+				return nil, err
+			}
 			hasExecuted[idx] = true
 			numQueriesDone++
 			idxList = append(idxList, idx)
@@ -969,16 +972,24 @@ AssignStep:
 	}
 }
 
-func (sg *SubGraph) recursiveFillVars(doneVars map[string]values) {
-
-	sg.fillVars(doneVars)
-	//sg.fillValueVars(varValMap)
+func (sg *SubGraph) recursiveFillVars(doneVars map[string]values) error {
+	err := sg.fillVars(doneVars)
+	if err != nil {
+		return err
+	}
 	for _, child := range sg.Children {
-		child.recursiveFillVars(doneVars)
+		err = child.recursiveFillVars(doneVars)
+		if err != nil {
+			return err
+		}
 	}
 	for _, fchild := range sg.Filters {
 		fchild.recursiveFillVars(doneVars)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (sg *SubGraph) fillUidVars(mp map[string]*taskp.List) {
@@ -994,9 +1005,8 @@ func (sg *SubGraph) fillUidVars(mp map[string]*taskp.List) {
 	sg.DestUIDs = algo.MergeSorted(lists)
 }
 
-func (sg *SubGraph) fillVars(mp map[string]values) {
+func (sg *SubGraph) fillVars(mp map[string]values) error {
 	var isVar bool
-	valCount := 0
 	lists := make([]*taskp.List, 0, 3)
 	for _, v := range sg.Params.NeedsVar {
 		if l, ok := mp[v]; ok {
@@ -1006,17 +1016,14 @@ func (sg *SubGraph) fillVars(mp map[string]values) {
 			} else if l.vals != nil {
 				// This should happend only once.
 				sg.Params.uidToVal = l.vals
-				valCount++
 			}
 		}
-	}
-	if valCount > 1 || (valCount > 0 && isVar) {
-		// This is an invalid case. Return error.
 	}
 	if isVar && sg.DestUIDs != nil {
 		lists = append(lists, sg.DestUIDs)
 	}
 	sg.DestUIDs = algo.MergeSorted(lists)
+	return nil
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
