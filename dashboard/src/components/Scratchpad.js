@@ -6,6 +6,10 @@ import { Button } from "react-bootstrap";
 import "../assets/css/Scratchpad.css";
 
 function truncateName(name) {
+    if (name === "") {
+        return "_uid_";
+    }
+
     if (name.length <= 10) {
         return name;
     }
