@@ -3,12 +3,6 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "2d0APy09NIaNsHXstcbkgFUYhHQ=",
-			"path": "github.com/Sirupsen/logrus",
-			"revision": "23521f1364a267387df2b99234134003e0a4486d",
-			"revisionTime": "2015-10-07T14:14:16Z"
-		},
-		{
 			"checksumSHA1": "ywqbUZb6r4Mxq2MBAbv/vaYcmdw=",
 			"path": "github.com/blevesearch/bleve/analysis",
 			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
@@ -117,13 +111,6 @@
 			"revisionTime": "2016-09-15T18:50:41Z"
 		},
 		{
-			"checksumSHA1": "tJAP/Glrwyzlyn873qPhQ/em2Vo=",
-			"path": "github.com/cockroachdb/c-jemalloc",
-			"revision": "7eb7980d8a9f68b771568a7eb15196a63a818595",
-			"revisionTime": "2017-02-03T23:06:53Z",
-			"tree": true
-		},
-		{
 			"checksumSHA1": "Uz9RlVv0yacm5FHXuffE+4YQSWQ=",
 			"path": "github.com/cockroachdb/c-lz4",
 			"revision": "834d3303c9e84b1045bc57c3eb3723ee8cb4d33b",
@@ -139,13 +126,6 @@
 			"path": "github.com/cockroachdb/c-rocksdb",
 			"revision": "97c232fc39550ac0f6287a49421615cc633eec42",
 			"revisionTime": "2017-02-27T22:18:07Z",
-			"tree": true
-		},
-		{
-			"checksumSHA1": "pjTmyGU6EOYq7lrj3z+d7AkWkfE=",
-			"path": "github.com/cockroachdb/c-snappy",
-			"revision": "c0cd3c9ce92f195001595e1fbbe66f045daad34f",
-			"revisionTime": "2016-11-24T05:17:49Z",
 			"tree": true
 		},
 		{
@@ -275,18 +255,6 @@
 			"revisionTime": "2016-09-20T10:00:50Z"
 		},
 		{
-			"checksumSHA1": "7LaLud3qlAQZ+xftxLTbYg3cGpo=",
-			"path": "github.com/willf/bitset",
-			"revision": "28a4168144bb8ac95454e1f51c84da1933681ad4",
-			"revisionTime": "2015-08-12T13:10:42Z"
-		},
-		{
-			"checksumSHA1": "AfNEZNbH3Dcpiz5PuNQKoCDuS7g=",
-			"path": "github.com/willf/bloom",
-			"revision": "73320a6e73f3e139842058d7e4886e09ca83ac9b",
-			"revisionTime": "2015-11-24T22:32:07Z"
-		},
-		{
 			"checksumSHA1": "vE43s37+4CJ2CDU6TlOUOYE0K9c=",
 			"path": "golang.org/x/crypto/bcrypt",
 			"revision": "22ddb68eccda408bbf17759ac18d3120ce0d4f3f",
@@ -309,18 +277,6 @@
 			"path": "golang.org/x/net/http2/hpack",
 			"revision": "ef00b378c73f107bf44d5c9b69875255ce89b79a",
 			"revisionTime": "2016-05-15T03:16:23Z"
-		},
-		{
-			"checksumSHA1": "/k7k6eJDkxXx6K9Zpo/OwNm58XM=",
-			"path": "golang.org/x/net/internal/timeseries",
-			"revision": "ef00b378c73f107bf44d5c9b69875255ce89b79a",
-			"revisionTime": "2016-05-15T03:16:23Z"
-		},
-		{
-			"checksumSHA1": "yhndhWXMs/VSEDLks4dNyFMQStA=",
-			"path": "golang.org/x/net/lex/httplex",
-			"revision": "9313baa13d9262e49d07b20ed57dceafcd7240cc",
-			"revisionTime": "2016-09-07T15:25:26Z"
 		},
 		{
 			"checksumSHA1": "TZDHZj3zWDc5LKqpoLamOKt6Nmo=",

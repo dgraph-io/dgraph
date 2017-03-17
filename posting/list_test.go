@@ -796,7 +796,6 @@ func TestMain(m *testing.M) {
 }
 
 func BenchmarkAddMutations(b *testing.B) {
-	// logrus.SetLevel(logrus.DebugLevel)
 	key := x.DataKey("name", 1)
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {

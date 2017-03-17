@@ -23,6 +23,10 @@ export const deleteQuery = idx => ({
     idx
 });
 
+export const deleteAllQueries = () => ({
+    type: "DELETE_ALL_QUERIES"
+});
+
 export const setCurrentNode = node => ({
     type: "SELECT_NODE",
     node
@@ -59,25 +63,28 @@ const saveResponseProperties = obj => ({
     ...obj
 });
 
-export const renderGraph = (query, result, treeView) => {
-    return dispatch => {
-        let startTime = new Date();
+export const updateLatency = obj => ({
+    type: "UPDATE_LATENCY",
+    ...obj
+});
 
+export const renderGraph = (query, result, treeView) => {
+    return (dispatch, getState) => {
         let [nodes, edges, labels, nodesIdx, edgesIdx] = processGraph(
             result,
             treeView,
-            query
+            query,
+            getState().query.propertyRegex
         );
 
-        let endTime = new Date(),
-            timeTaken = (endTime.getTime() - startTime.getTime()) / 1000,
-            render = "";
-
-        if (timeTaken > 1) {
-            render = timeTaken.toFixed(1) + "s";
-        } else {
-            render = (timeTaken - Math.floor(timeTaken)) * 1000 + "ms";
-        }
+        dispatch(
+            updateLatency({
+                server: result.server_latency.total,
+                rendering: {
+                    start: new Date()
+                }
+            })
+        );
 
         dispatch(updatePartial(nodesIdx < nodes.length));
 
@@ -91,9 +98,7 @@ export const renderGraph = (query, result, treeView) => {
                 nodes: nodes.slice(0, nodesIdx),
                 edges: edges.slice(0, edgesIdx),
                 treeView: treeView,
-                latency: result.server_latency.total,
-                data: result,
-                rendering: render
+                data: result
             })
         );
     };
@@ -121,13 +126,20 @@ export const runQuery = query => {
                 .then(response => response.json())
                 .then(function handleResponse(result) {
                     dispatch(fetchedResponse());
-                    // This is the case in which user sends a mutation. We display the response from server.
                     if (
                         result.code !== undefined &&
                         result.message !== undefined
                     ) {
-                        dispatch(addQuery(query));
-                        dispatch(saveSuccessResponse(JSON.stringify(result)));
+                        if (result.code.startsWith("Error")) {
+                            dispatch(saveErrorResponse(result.message));
+                            // This is the case in which user sends a mutation.
+                            // We display the response from server.
+                        } else {
+                            dispatch(addQuery(query));
+                            dispatch(
+                                saveSuccessResponse(JSON.stringify(result))
+                            );
+                        }
                     } else if (isNotEmpty(result)) {
                         dispatch(addQuery(query));
                         let mantainSortOrder = showTreeView(query);
@@ -160,4 +172,20 @@ export const runQuery = query => {
 export const updateFullscreen = fs => ({
     type: "UPDATE_FULLSCREEN",
     fs
+});
+
+export const updateProgress = perc => ({
+    type: "UPDATE_PROGRESS",
+    perc,
+    display: true
+});
+
+export const hideProgressBar = () => ({
+    type: "HIDE_PROGRESS",
+    dispatch: false
+});
+
+export const updateRegex = regex => ({
+    type: "UPDATE_PROPERTY_REGEX",
+    regex
 });

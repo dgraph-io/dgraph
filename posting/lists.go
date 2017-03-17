@@ -196,8 +196,8 @@ func gentleCommit(dirtyMap map[uint64]struct{}, pending chan struct{}) {
 		defer ctr.ticker.Stop()
 
 		for _, key := range keys {
-			l, ok := lhmap.Get(key)
-			if !ok || l == nil {
+			l := lhmap.Get(key)
+			if l == nil {
 				continue
 			}
 			// Not removing the postings list from the map, to avoid a race condition,
@@ -340,7 +340,7 @@ func Init(ps *store.Store) {
 }
 
 func getFromMap(key uint64) *List {
-	lp, _ := lhmap.Get(key)
+	lp := lhmap.Get(key)
 	if lp == nil {
 		return nil
 	}
@@ -365,7 +365,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
 
-	lp, _ := lhmap.Get(fp)
+	lp := lhmap.Get(fp)
 	if lp != nil {
 		lp.incr()
 		return lp, lp.decr
@@ -405,6 +405,29 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 			}
 		}(key)
 	}
+	return lp, lp.decr
+}
+
+// GetOrUnmarshal takes a key, value and a groupID. It checks if the in-memory map has an
+// updated value and returns it if it exists or it unmarshals the value passed and returns
+// the list.
+func GetOrUnmarshal(key, val []byte) (rlist *List, decr func()) {
+	fp := farm.Fingerprint64(key)
+
+	stopTheWorld.RLock()
+	lp := lhmap.Get(fp)
+	stopTheWorld.RUnlock()
+
+	if lp != nil {
+		lp.incr()
+		return lp, lp.decr
+	}
+
+	var pl typesp.PostingList
+	pl.Unmarshal(val)
+	lp = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
+	lp.mlayer = pl.Postings
+
 	return lp, lp.decr
 }
 

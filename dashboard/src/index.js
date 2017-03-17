@@ -17,18 +17,18 @@ const composeEnhancers = window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose;
 const store = createStore(
     reducer,
     undefined,
-    composeEnhancers(applyMiddleware(...middleware), autoRehydrate()),
+    composeEnhancers(applyMiddleware(...middleware), autoRehydrate())
 );
 
 // begin periodically persisting the store
-persistStore(store, { whitelist: "previousQueries, query" });
+persistStore(store, { whitelist: ["previousQueries", "query"] });
 
 const render = Component => {
     return ReactDOM.render(
         <Provider store={store}>
             <Component />
         </Provider>,
-        document.getElementById("root"),
+        document.getElementById("root")
     );
 };
 

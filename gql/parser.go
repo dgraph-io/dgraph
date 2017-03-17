@@ -982,7 +982,7 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	case "not":
 		buf.WriteString("NOT")
 	default:
-		x.Errorf("Unknown operator: %q", t.Op)
+		x.Fatalf("Unknown operator: %q", t.Op)
 	}
 
 	for _, c := range t.Child {
@@ -1479,9 +1479,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			if err != nil {
 				return gq, err
 			}
-			if err != nil {
-				return nil, err
-			}
 			gq.Func = gen
 		} else if key == "var" {
 			if !it.Next() {
@@ -1556,10 +1553,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				if item.Val == "checkpwd" {
 					child.Func.Args = append(child.Func.Args, child.Func.Attr)
-					child.Attr = "password"
-				} else {
-					child.Attr = child.Func.Attr
 				}
+				child.Attr = child.Func.Attr
 				gq.Children = append(gq.Children, child)
 				curp = child
 				continue

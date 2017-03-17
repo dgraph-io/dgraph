@@ -11,19 +11,18 @@ const mapStateToProps = (state, ownProps) => ({
     result: state.response.data,
     partial: state.interaction.partial,
     numNodesRendered: state.response.nodes.length,
+    numEdgesRendered: state.response.edges.length,
     numNodes: state.response.numNodes,
     numEdges: state.response.numEdges,
-    latency: state.response.latency,
-    rendering: state.response.rendering,
     treeView: state.response.treeView,
     currentNode: state.interaction.node,
-    expand: ownProps.expand,
+    expand: ownProps.expand
 });
 
 const mapDispatchToProps = dispatch => ({
     renderGraph: (query, result, treeView) => {
         dispatch(renderGraph(query, result, treeView));
-    },
+    }
 });
 
 export default connect(mapStateToProps, mapDispatchToProps)(ResponseInfo);

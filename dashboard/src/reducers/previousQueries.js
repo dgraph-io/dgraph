@@ -3,7 +3,7 @@ const query = (state, action) => {
         case "ADD_QUERY":
             return {
                 text: action.text,
-                lastRun: Date.now(),
+                lastRun: Date.now()
             };
         default:
             return state;
@@ -16,13 +16,15 @@ const queries = (state = [], action) => {
             let trimmedQuery = action.text.trim();
             return [
                 query(undefined, action),
-                ...state.filter(q => q.text.trim() !== trimmedQuery),
+                ...state.filter(q => q.text.trim() !== trimmedQuery)
             ];
         case "DELETE_QUERY":
             return [
                 ...state.slice(0, action.idx),
-                ...state.slice(action.idx + 1),
+                ...state.slice(action.idx + 1)
             ];
+        case "DELETE_ALL_QUERIES":
+            return [];
         default:
             return state;
     }
