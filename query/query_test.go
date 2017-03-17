@@ -407,7 +407,7 @@ func TestUseVarsMultiCascade1(t *testing.T) {
 			 }
 			}
 
-			me(id: var([L, B])) {
+			me(id: var(L, B)) {
 				name
 			}
 		}
@@ -428,7 +428,7 @@ func TestUseVarsMultiCascade(t *testing.T) {
 				}
 			}
 
-			me(id: var([L, B])) {
+			me(id: var(L, B)) {
 				name
 			}
 		}
