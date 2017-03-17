@@ -1244,8 +1244,8 @@ func TestParseFilter_op(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(a(a, "a") or b(b, "a")
-			and c(c, "a")) {
+			friends @filter(a(aa, "aaa") or b(bb, "bbb")
+			and c(cc, "ccc")) {
 				name
 			}
 			gender,age
@@ -1258,14 +1258,14 @@ func TestParseFilter_op(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t, `(OR (a a "a") (AND (b b "a") (c c "a")))`, res.Query[0].Children[0].Filter.debugString())
+	require.Equal(t, `(OR (a aa "aaa") (AND (b bb "bbb") (c cc "ccc")))`, res.Query[0].Children[0].Filter.debugString())
 }
 
 func TestParseFilter_opError(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(a(a "a") or b(b "a")
+			friends @filter(a(aa "aaa") or b(b "bbb")
 			and ) {
 				name
 			}
@@ -1282,7 +1282,7 @@ func TestParseFilter_opNot1(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(not a(a, "a")) {
+			friends @filter(not a(aa, "aaa")) {
 				name
 			}
 			gender,age
@@ -1295,14 +1295,14 @@ func TestParseFilter_opNot1(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t, `(NOT (a a "a"))`, res.Query[0].Children[0].Filter.debugString())
+	require.Equal(t, `(NOT (a aa "aaa"))`, res.Query[0].Children[0].Filter.debugString())
 }
 
 func TestParseFilter_opNot2(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(not(a(a, "a") or (b(b, "a"))) and c(c, "a")) {
+			friends @filter(not(a(aa, "aaa") or (b(bb, "bbb"))) and c(cc, "ccc")) {
 				name
 			}
 			gender,age
@@ -1315,7 +1315,7 @@ func TestParseFilter_opNot2(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t, `(AND (NOT (OR (a a "a") (b b "a"))) (c c "a"))`, res.Query[0].Children[0].Filter.debugString())
+	require.Equal(t, `(AND (NOT (OR (a aa "aaa") (b bb "bbb"))) (c cc "ccc"))`, res.Query[0].Children[0].Filter.debugString())
 }
 
 // Test operator precedence. Let brackets make or evaluates before and.
@@ -1323,8 +1323,8 @@ func TestParseFilter_op2(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter((a(a, "a") Or b(b, "a"))
-			 and c(c, "a")) {
+			friends @filter((a(aa, "aaa") Or b(bb, "bbb"))
+			 and c(cc, "ccc")) {
 				name
 			}
 			gender,age
@@ -1337,7 +1337,7 @@ func TestParseFilter_op2(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t, `(AND (OR (a a "a") (b b "a")) (c c "a"))`, res.Query[0].Children[0].Filter.debugString())
+	require.Equal(t, `(AND (OR (a aa "aaa") (b bb "bbb")) (c cc "ccc"))`, res.Query[0].Children[0].Filter.debugString())
 }
 
 // Test operator precedence. More elaborate brackets.
@@ -1345,7 +1345,7 @@ func TestParseFilter_brac(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(  a(name, "hello") or b(name, "world", "is") and (c(a, "a") or (d(d, "haha") or e(e, "a"))) and f(f, "a")){
+			friends @filter(  a(name, "hello") or b(name, "world", "is") and (c(aa, "aaa") or (d(dd, "haha") or e(ee, "aaa"))) and f(ff, "aaa")){
 				name
 			}
 			gender,age
@@ -1359,7 +1359,7 @@ func TestParseFilter_brac(t *testing.T) {
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.Equal(t,
-		`(OR (a name "hello") (AND (AND (b name "world" "is") (OR (c a "a") (OR (d d "haha") (e e "a")))) (f f "a")))`,
+		`(OR (a name "hello") (AND (AND (b name "world" "is") (OR (c aa "aaa") (OR (d dd "haha") (e ee "aaa")))) (f ff "aaa")))`,
 		res.Query[0].Children[0].Filter.debugString())
 }
 
@@ -1573,6 +1573,7 @@ func TestParseCountError2(t *testing.T) {
 }
 
 func TestParseCheckPwd(t *testing.T) {
+
 	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `{
 		me(id:1) {

@@ -193,9 +193,8 @@ type FullTextTokenizer struct {
 	Lang string
 }
 
-func NewFullTextTokenizer(lang string) *FullTextTokenizer { return &FullTextTokenizer{Lang: lang} }
-func (t FullTextTokenizer) Name() string                  { return ftsTokenizerName(t.Lang) }
-func (t FullTextTokenizer) Type() types.TypeID            { return types.StringID }
+func (t FullTextTokenizer) Name() string       { return ftsTokenizerName(t.Lang) }
+func (t FullTextTokenizer) Type() types.TypeID { return types.StringID }
 func (t FullTextTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return getBleveTokens(t.Name(), t.Identifier(), sv)
 }

@@ -17,6 +17,8 @@
 package tok
 
 import (
+	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/blevesearch/bleve/analysis/analyzer/custom"
 	"github.com/blevesearch/bleve/analysis/token/lowercase"
 	"github.com/blevesearch/bleve/analysis/token/porter"
@@ -29,7 +31,10 @@ import (
 	"github.com/tebeka/snowball"
 )
 
-var bleveCache *registry.Cache
+var (
+	bleveCache *registry.Cache
+	langToCode map[string]string // maps language name to country code
+)
 
 const (
 	normalizerFormNFKC = "nfkc"
@@ -53,7 +58,7 @@ func initFullTextTokenizers() {
 		defineStemmer(lang)
 		defineStopWordsList(lang)
 		defineAnalyzer(lang)
-		RegisterTokenizer(NewFullTextTokenizer(countryCode(lang)))
+		RegisterTokenizer(&FullTextTokenizer{Lang: countryCode(lang)})
 	}
 
 	// Default full text tokenizer, with Porter stemmer (it works with English only).
@@ -68,9 +73,7 @@ func defineNormalizer() {
 		"type": unicodenorm.Name,
 		"form": normalizerFormNFKC,
 	})
-	if err != nil {
-		panic(err)
-	}
+	x.Check(err)
 }
 
 func defineStemmer(lang string) {
@@ -78,9 +81,7 @@ func defineStemmer(lang string) {
 		"type": stemmer.Name,
 		"lang": lang,
 	})
-	if err != nil {
-		panic(err)
-	}
+	x.Check(err)
 }
 
 func defineStopWordsList(lang string) {
@@ -89,17 +90,13 @@ func defineStopWordsList(lang string) {
 		"type":   tokenmap.Name,
 		"tokens": stopwords[lang],
 	})
-	if err != nil {
-		panic(err)
-	}
+	x.Check(err)
 
 	_, err = bleveCache.DefineTokenFilter(name, map[string]interface{}{
 		"type":           stop.Name,
 		"stop_token_map": name,
 	})
-	if err != nil {
-		panic(err)
-	}
+	x.Check(err)
 }
 
 // basic analyzer - splits on word boundaries, lowercase and normalize tokens
@@ -109,9 +106,7 @@ func defineTermAnalyzer() {
 		"tokenizer":     unicode.Name,
 		"token_filters": []string{lowercase.Name, normalizerName},
 	})
-	if err != nil {
-		panic(err)
-	}
+	x.Check(err)
 }
 
 // default full text search analyzer - does english stop-words removal and Porter stemming
@@ -125,9 +120,7 @@ func defineDefaultFullTextAnalyzer() {
 			stopWordsListName("en"),
 			porter.Name},
 	})
-	if err != nil {
-		panic(err)
-	}
+	x.Check(err)
 }
 
 // full text search analyzer - does language-specific stop-words removal and stemming
@@ -143,9 +136,7 @@ func defineAnalyzer(lang string) {
 			stemmerName(ln),
 		},
 	})
-	if err != nil {
-		panic(err)
-	}
+	x.Check(err)
 }
 
 func ftsTokenizerName(lang string) string {
@@ -161,9 +152,15 @@ func stopWordsListName(lang string) string {
 }
 
 func countryCode(lang string) string {
+	code, ok := langToCode[lang]
+	x.AssertTruef(ok, "Unsupported language: %s", lang)
+	return code
+}
+
+func init() {
 	// List based on https://godoc.org/golang.org/x/text/language#Tag
 	// It contains more languages than supported by Bleve, to enable seamless addition of new langs.
-	mapping := map[string]string{
+	langToCode = map[string]string{
 		"afrikaans":            "af",
 		"amharic":              "am",
 		"arabic":               "ar",
@@ -243,12 +240,5 @@ func countryCode(lang string) string {
 		"simplifiedchinese":    "zh-hans",
 		"traditionalchinese":   "zh-hant",
 		"zulu":                 "zu",
-	}
-
-	code, ok := mapping[lang]
-	if ok {
-		return code
-	} else {
-		panic("Unsupported language: " + lang)
 	}
 }

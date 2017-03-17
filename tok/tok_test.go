@@ -81,7 +81,7 @@ func TestFullTextTokenizerLang(t *testing.T) {
 	val.Value = "Katzen und Auffassung"
 
 	tokens, err := tokenizer.Tokens(val)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
 	require.Equal(t, []string{encodeToken("katz", id), encodeToken("auffass", id)}, tokens)
