@@ -5,7 +5,7 @@ all: build committed
 
 build:
 	go test -v ./...
-	if [ "${goversion}" = "go1.7.1" ]; then \
+	if [ "${goversion}" = "go1.8" ]; then \
 		go vet ./... ; \
 		go get github.com/golang/lint/golint ; \
 		golint ./... ; \

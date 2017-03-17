@@ -12,6 +12,7 @@ Encoding and decoding:
  * [KML](https://godoc.org/github.com/twpayne/go-geom/encoding/kml)
  * [WKB](https://godoc.org/github.com/twpayne/go-geom/encoding/wkb)
  * [EWKB](https://godoc.org/github.com/twpayne/go-geom/encoding/ewkb)
+ * [WKT](https://godoc.org/github.com/twpayne/go-geom/encoding/wkt) (encoding only)
  * [WKB Hex](https://godoc.org/github.com/twpayne/go-geom/encoding/wkbhex)
  * [EWKB Hex](https://godoc.org/github.com/twpayne/go-geom/encoding/ewkbhex)
 

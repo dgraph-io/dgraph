@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "XU5C0RvW/71AFqNVdmkzg4ByWB0=",
+			"path": "github.com/MakeNowJust/heredoc",
+			"revision": "1d91351acdc1cb2f2c995864674b754134b86ca7",
+			"revisionTime": "2014-07-04T15:26:43Z"
+		},
+		{
 			"checksumSHA1": "ywqbUZb6r4Mxq2MBAbv/vaYcmdw=",
 			"path": "github.com/blevesearch/bleve/analysis",
 			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
@@ -111,6 +117,12 @@
 			"revisionTime": "2016-09-15T18:50:41Z"
 		},
 		{
+			"checksumSHA1": "KNCQ13HZhy1vnc9i4lBiKy120XM=",
+			"path": "github.com/cockroachdb/c-jemalloc",
+			"revision": "7eb7980d8a9f68b771568a7eb15196a63a818595",
+			"revisionTime": "2017-02-03T23:06:53Z"
+		},
+		{
 			"checksumSHA1": "Uz9RlVv0yacm5FHXuffE+4YQSWQ=",
 			"path": "github.com/cockroachdb/c-lz4",
 			"revision": "834d3303c9e84b1045bc57c3eb3723ee8cb4d33b",
@@ -118,15 +130,17 @@
 			"tree": true
 		},
 		{
-			"path": "github.com/cockroachdb/c-lze4",
-			"revision": ""
-		},
-		{
 			"checksumSHA1": "+uhPIrBtVQiZam8M3XKMd1f3+oI=",
 			"path": "github.com/cockroachdb/c-rocksdb",
 			"revision": "97c232fc39550ac0f6287a49421615cc633eec42",
 			"revisionTime": "2017-02-27T22:18:07Z",
 			"tree": true
+		},
+		{
+			"checksumSHA1": "oOsXjUrrJWETLIMVp6fsyKzFvXE=",
+			"path": "github.com/cockroachdb/c-snappy",
+			"revision": "c0cd3c9ce92f195001595e1fbbe66f045daad34f",
+			"revisionTime": "2016-11-24T05:17:49Z"
 		},
 		{
 			"checksumSHA1": "jw+XDfPJgogfSPCsuebqFZj/GJc=",
@@ -231,28 +245,28 @@
 			"revisionTime": "2017-01-01T15:08:07Z"
 		},
 		{
-			"checksumSHA1": "nPzv1N4lRBr2UAvJure4uLjlYf8=",
+			"checksumSHA1": "y1kH4pl3IjGHaWcNbk5bZe3nITY=",
 			"path": "github.com/twpayne/go-geom",
-			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
-			"revisionTime": "2016-09-20T10:00:50Z"
+			"revision": "6753ad11e46b04e21b3f286b342e73a8c4be8216",
+			"revisionTime": "2017-03-17T09:06:30Z"
 		},
 		{
 			"checksumSHA1": "7nqAxLYlyEi9e5DUsc+WNo++6PY=",
 			"path": "github.com/twpayne/go-geom/encoding/geojson",
-			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
-			"revisionTime": "2016-09-20T10:00:50Z"
+			"revision": "6753ad11e46b04e21b3f286b342e73a8c4be8216",
+			"revisionTime": "2017-03-17T09:06:30Z"
 		},
 		{
-			"checksumSHA1": "vSHXkm1nl0Y+xP0E420yRQDCnCA=",
+			"checksumSHA1": "5V3g7dys2PJyNp9NeyBsASNgplI=",
 			"path": "github.com/twpayne/go-geom/encoding/wkb",
-			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
-			"revisionTime": "2016-09-20T10:00:50Z"
+			"revision": "6753ad11e46b04e21b3f286b342e73a8c4be8216",
+			"revisionTime": "2017-03-17T09:06:30Z"
 		},
 		{
 			"checksumSHA1": "KDedv+IgB08fN9r3oSsHJ5/1Xyc=",
 			"path": "github.com/twpayne/go-geom/encoding/wkbcommon",
-			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
-			"revisionTime": "2016-09-20T10:00:50Z"
+			"revision": "6753ad11e46b04e21b3f286b342e73a8c4be8216",
+			"revisionTime": "2017-03-17T09:06:30Z"
 		},
 		{
 			"checksumSHA1": "vE43s37+4CJ2CDU6TlOUOYE0K9c=",
