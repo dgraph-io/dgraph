@@ -30,10 +30,10 @@ export function aggregationPrefix(properties) {
     if (!properties.hasOwnProperty(k)) {
       continue;
     }
+    if (k === "count") {
+      return ["count", "count"];
+    }
     for (let term of aggTerms) {
-      if (term === "count" && k === "count") {
-        return [term, k];
-      }
       if (k.startsWith(term)) {
         return [term.substr(0, term.length - 1), k];
       }
