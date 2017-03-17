@@ -90,6 +90,18 @@ func TestSetMutation(t *testing.T) {
 	assert.Equal(t, len(req.gr.Mutation.Del), 1, "Del should have 1 entry")
 }
 
+func TestAddSchema(t *testing.T) {
+	req := Req{}
+
+	if err := req.addSchema([]*graphp.SchemaUpdate{{
+		Predicate: "name",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, len(req.gr.Mutation.Schema), 1)
+}
+
 func BenchmarkChannelRange(b *testing.B) {
 	// run the Fib function b.N times
 	for n := 0; n < b.N; n++ {

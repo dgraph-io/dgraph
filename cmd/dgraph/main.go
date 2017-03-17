@@ -265,6 +265,9 @@ func enrichSchema(updates []*graphp.SchemaUpdate) error {
 		if len(schema.Tokenizer) == 0 {
 			schema.Tokenizer = []string{tok.Default(typ).Name()}
 		}
+		if !schema.Index {
+			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
+		}
 		// check for valid tokeniser types and duplicates
 		var seen = make(map[string]bool)
 		var tokenizers []string

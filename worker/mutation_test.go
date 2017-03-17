@@ -25,7 +25,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 )
 
@@ -102,15 +105,75 @@ func TestAddToMutationArray(t *testing.T) {
 
 	mutationsMap := make(map[uint32]*taskp.Mutations)
 	edges := []*taskp.DirectedEdge{}
+	schema := []*graphp.SchemaUpdate{}
 
 	edges = append(edges, &taskp.DirectedEdge{
 		Value: []byte("set edge"),
 		Label: "test-mutation",
 	})
-	m := &taskp.Mutations{Edges: edges}
+	schema = append(schema, &graphp.SchemaUpdate{
+		Predicate: "name",
+	})
+	m := &taskp.Mutations{Edges: edges, Schema: schema}
 
 	addToMutationMap(mutationsMap, m)
 	mu := mutationsMap[1]
 	require.NotNil(t, mu)
 	require.NotNil(t, mu.Edges)
+}
+
+func TestCheckSchema(t *testing.T) {
+	// non uid to uid
+	err := schema.ParseBytes([]byte("name:string @index"), 1)
+	require.NoError(t, err)
+	s1 := &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.UidID)}
+	require.Error(t, checkSchema(s1))
+
+	// uid to non uid
+	err = schema.ParseBytes([]byte("name:uid"), 1)
+	require.NoError(t, err)
+	s1 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.StringID)}
+	require.Error(t, checkSchema(s1))
+
+	// string to int
+	err = schema.ParseBytes([]byte("name:string"), 1)
+	require.NoError(t, err)
+	s1 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.FloatID)}
+	require.NoError(t, checkSchema(s1))
+
+	// index on uid type
+	s1 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.UidID), Index: true}
+	require.Error(t, checkSchema(s1))
+
+	// reverse on non-uid type
+	s1 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.StringID), Reverse: true}
+	require.Error(t, checkSchema(s1))
+
+	s1 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.FloatID), Index: true}
+	require.NoError(t, checkSchema(s1))
+
+	s1 = &graphp.SchemaUpdate{Predicate: "friend", ValueType: uint32(types.UidID), Reverse: true}
+	require.NoError(t, checkSchema(s1))
+}
+
+func TestNeedReindexing(t *testing.T) {
+	s1 := &typesp.Schema{ValueType: uint32(types.UidID)}
+	s2 := &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.UidID)}
+	require.False(t, needReindexing(s1, s2))
+
+	s1 = &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}
+	s2 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.StringID), Index: true, Tokenizer: []string{"exact"}}
+	require.False(t, needReindexing(s1, s2))
+
+	s1 = &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"term"}}
+	s2 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.StringID), Index: true}
+	require.True(t, needReindexing(s1, s2))
+
+	s1 = &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}
+	s2 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.FloatID), Index: true, Tokenizer: []string{"exact"}}
+	require.True(t, needReindexing(s1, s2))
+
+	s1 = &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}
+	s2 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.FloatID), Index: false}
+	require.True(t, needReindexing(s1, s2))
 }

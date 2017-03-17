@@ -149,11 +149,11 @@ func needReindexing(old *typesp.Schema, update *graphp.SchemaUpdate) bool {
 	// if tokenizer has changed - if same tokenizer works differently
 	// on different types
 	if len(update.Tokenizer) != len(old.Tokenizer) {
-		return false
+		return true
 	}
 	for i, t := range old.Tokenizer {
 		if update.Tokenizer[i] != t {
-			return false
+			return true
 		}
 	}
 
