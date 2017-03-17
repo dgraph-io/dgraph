@@ -57,7 +57,6 @@ func getSchema(ctx context.Context, s *taskp.Schema) (*taskp.SchemaResult, error
 		if schemaNode := populateSchema(attr, s.Fields); schemaNode != nil {
 			result.Schema = append(result.Schema, schemaNode)
 		}
-
 	}
 	return &result, nil
 }

@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -3966,11 +3965,7 @@ func checkSchemaNodes(t *testing.T, expected []*graphp.SchemaNode, actual []*gra
 	sort.Slice(actual, func(i, j int) bool {
 		return actual[i].Predicate >= actual[j].Predicate
 	})
-	eq := reflect.DeepEqual(expected, actual)
-	if !eq {
-		fmt.Printf("Expected: %+v, Received: %+v \n", expected, actual)
-	}
-	require.True(t, eq)
+	require.True(t, reflect.DeepEqual(expected, actual))
 }
 
 func TestSchemaBlock1(t *testing.T) {
