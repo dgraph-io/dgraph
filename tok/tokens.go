@@ -13,8 +13,8 @@ func GetTokens(funcArgs []string) ([]string, error) {
 	return tokenize(funcArgs, termTokenizer)
 }
 
-func GetTextTokens(funcArgs []string) ([]string, error) {
-	return tokenize(funcArgs, fullTextTokenizer)
+func GetTextTokens(funcArgs []string, lang string) ([]string, error) {
+	return tokenize(funcArgs, GetTokenizer("fulltext"+lang))
 }
 
 func tokenize(funcArgs []string, tokenizer Tokenizer) ([]string, error) {

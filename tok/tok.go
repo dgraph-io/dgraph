@@ -20,12 +20,6 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/blevesearch/bleve/analysis/analyzer/custom"
-	"github.com/blevesearch/bleve/analysis/token/lowercase"
-	"github.com/blevesearch/bleve/analysis/token/porter"
-	"github.com/blevesearch/bleve/analysis/token/unicodenorm"
-	"github.com/blevesearch/bleve/analysis/tokenizer/unicode"
-	"github.com/blevesearch/bleve/registry"
 	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/types"
@@ -50,12 +44,9 @@ type Tokenizer interface {
 	IsSortable() bool
 }
 
-const normalizerName = "nfkc_normalizer"
-
 var (
 	tokenizers map[string]Tokenizer
 	defaults   map[types.TypeID]Tokenizer
-	bleveCache *registry.Cache
 )
 
 func init() {
@@ -66,7 +57,6 @@ func init() {
 	RegisterTokenizer(DateTimeTokenizer{})
 	RegisterTokenizer(TermTokenizer{})
 	RegisterTokenizer(ExactTokenizer{})
-	RegisterTokenizer(FullTextTokenizer{})
 	SetDefault(types.GeoID, "geo")
 	SetDefault(types.Int32ID, "int")
 	SetDefault(types.FloatID, "float")
@@ -79,46 +69,12 @@ func init() {
 	for _, tok := range tokenizers {
 		tokID := tok.Identifier()
 		_, ok := usedIds[tokID]
-		x.AssertTruef(!ok, "Same ID used by multiple tokenizers")
+		x.AssertTruef(!ok, "Same ID used by multiple tokenizers: %#x", tokID)
 		usedIds[tokID] = struct{}{}
 	}
-	// Prepare Bleve cache
-	initBleve()
-}
 
-func initBleve() {
-	bleveCache = registry.NewCache()
-
-	// Create normalizer using Normalization Form KC (NFKC) - Compatibility Decomposition, followed
-	// by Canonical Composition. See: http://unicode.org/reports/tr15/#Norm_Forms
-	_, err := bleveCache.DefineTokenFilter(normalizerName, map[string]interface{}{
-		"type": unicodenorm.Name,
-		"form": "nfkc",
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	// basic analyzer - splits on word boundaries, lowercase and normalize tokens
-	_, err = bleveCache.DefineAnalyzer("term", map[string]interface{}{
-		"type":          custom.Name,
-		"tokenizer":     unicode.Name,
-		"token_filters": []string{lowercase.Name, normalizerName},
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	// full text search analyzer - does stemming using Porter stemmer - this works only for English.
-	// Per-language stemming will be added soon.
-	_, err = bleveCache.DefineAnalyzer("fulltext", map[string]interface{}{
-		"type":          custom.Name,
-		"tokenizer":     unicode.Name,
-		"token_filters": []string{lowercase.Name, normalizerName, porter.Name},
-	})
-	if err != nil {
-		panic(err)
-	}
+	// all full-text tokenizers share the same Identifier, so we skip the test
+	initFullTextTokenizers()
 }
 
 // GetTokenizer returns tokenizer given unique name.
@@ -232,10 +188,12 @@ func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
 func (t ExactTokenizer) Identifier() byte { return 0x2 }
 func (t ExactTokenizer) IsSortable() bool { return true }
 
-// Full text tokenizer. Currenlty works only for English language.
-type FullTextTokenizer struct{}
+// Full text tokenizer, with language support
+type FullTextTokenizer struct {
+	Lang string
+}
 
-func (t FullTextTokenizer) Name() string       { return "fulltext" }
+func (t FullTextTokenizer) Name() string       { return ftsTokenizerName(t.Lang) }
 func (t FullTextTokenizer) Type() types.TypeID { return types.StringID }
 func (t FullTextTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return getBleveTokens(t.Name(), t.Identifier(), sv)

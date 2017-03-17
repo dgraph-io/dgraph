@@ -74,6 +74,19 @@ func TestFullTextTokenizer(t *testing.T) {
 	require.Equal(t, []string{encodeToken("stem", id), encodeToken("work", id)}, tokens)
 }
 
+func TestFullTextTokenizerLang(t *testing.T) {
+	tokenizer := GetTokenizer(ftsTokenizerName("de"))
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.StringID)
+	val.Value = "Katzen und Auffassung"
+
+	tokens, err := tokenizer.Tokens(val)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(tokens))
+	id := tokenizer.Identifier()
+	require.Equal(t, []string{encodeToken("katz", id), encodeToken("auffass", id)}, tokens)
+}
+
 func TestTermTokenizer(t *testing.T) {
 	tokenizer := GetTokenizer("term")
 	require.NotNil(t, tokenizer)
