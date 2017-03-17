@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -112,6 +113,347 @@ func processToFastJSON(q string) string {
 		log.Fatal(err)
 	}
 	return string(buf.Bytes())
+}
+
+func runQuery(q string) (string, error) {
+	res, err := gql.Parse(q)
+	if err != nil {
+		return "", err
+	}
+
+	var l query.Latency
+	ctx := context.Background()
+	sgl, err := query.ProcessQuery(ctx, res, &l)
+
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	err = query.ToJson(&l, sgl, &buf, nil)
+	if err != nil {
+		return "", err
+	}
+	return string(buf.Bytes()), nil
+}
+
+func runMutation(m string) error {
+	res, err := gql.Parse(m)
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	_, err = mutationHandler(ctx, res.Mutation)
+	return err
+}
+
+func TestSchemaMutation(t *testing.T) {
+	var m = `
+	mutation {
+		schema {
+            name:string @index(term, exact)
+			alias:string @index(exact, term)
+			dob:date @index
+			film.film.initial_release_date:date @index
+			loc:geo @index
+			genre:uid @reverse
+			survival_rate : float
+			alive         : bool
+			age           : int
+			shadow_deep   : int
+			friend:uid @reverse
+			geometry:geo @index
+		}
+	}
+
+` // reset schema
+	schema.ParseBytes([]byte(""), 1)
+	expected := map[string]*typesp.Schema{
+		"name": {Tokenizer: []string{"term", "exact"}, ValueType: uint32(types.StringID)},
+	}
+
+	err := runMutation(m)
+	require.NoError(t, err)
+	for k, v := range expected {
+		s, ok := schema.State().Get(k)
+		require.True(t, ok)
+		require.Equal(t, v, s)
+	}
+}
+
+// reverse on scalar type
+func TestSchemaMutation2Error(t *testing.T) {
+	var m = `
+	mutation {
+		schema {
+            age:string @reverse
+		}
+	}
+	`
+
+	err := runMutation(m)
+	require.Error(t, err)
+}
+
+// index on uid type
+func TestSchemaMutation3Error(t *testing.T) {
+	var m = `
+	mutation {
+		schema {
+            age:uid @index
+		}
+	}
+	`
+	err := runMutation(m)
+	require.Error(t, err)
+}
+
+// change from uid to scalar or vice versa
+func TestSchemaMutation4Error(t *testing.T) {
+	var m = `
+	mutation {
+		schema {
+            age:uid
+		}
+	}
+	`
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	m = `
+	mutation {
+		schema {
+            age:string
+		}
+	}
+	`
+	err = runMutation(m)
+	require.Error(t, err)
+}
+
+// change from uid to scalar or vice versa
+func TestSchemaMutation5Error(t *testing.T) {
+	var m = `
+	mutation {
+		schema {
+            age:string
+		}
+	}
+	`
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	m = `
+	mutation {
+		schema {
+            age:uid
+		}
+	}
+	`
+	err = runMutation(m)
+	require.Error(t, err)
+}
+
+// add index
+func TestSchemaMutationIndexAdd(t *testing.T) {
+	var q1 = `
+	{
+		user(func:anyofterms("name", "Alice")) {
+			name
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+                        # comment line should be ignored
+			<alice> <name> "Alice" .
+		}
+	}
+	`
+
+	var s = `
+	mutation {
+		schema {
+            name:string @index
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	// add index to name
+	err = runMutation(s)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"name":"Alice"}]}`, output)
+
+}
+
+// Remove index
+func TestSchemaMutationIndexRemove(t *testing.T) {
+	var q1 = `
+	{
+		user(func:anyofterms("name", "Alice")) {
+			name
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+                        # comment line should be ignored
+			<alice> <name> "Alice" .
+		}
+	}
+	`
+
+	var s1 = `
+	mutation {
+		schema {
+            name:string @index
+		}
+	}
+	`
+	var s2 = `
+	mutation {
+		schema {
+            name:string
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	// add index to name
+	err := runMutation(s1)
+	require.NoError(t, err)
+
+	err = runMutation(m)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"name":"Alice"}]}`, output)
+
+	// remove index
+	err = runMutation(s2)
+	require.NoError(t, err)
+
+	output, err = runQuery(q1)
+	require.Error(t, err)
+}
+
+// add reverse edge
+func TestSchemaMutationReverseAdd(t *testing.T) {
+	var q1 = `
+	{
+		user(id:alice2) {
+			~friend {
+				name
+			}
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+                        # comment line should be ignored
+			<alice> <friend> <alice2> .
+			<alice> <name> "Alice" .
+		}
+	}
+	`
+
+	var s = `
+	mutation {
+		schema {
+            friend:uid @reverse
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	// add index to name
+	err = runMutation(s)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"~friend" : [{"name":"Alice"}]}]}`, output)
+
+}
+
+// Remove reverse edge
+func TestSchemaMutationReverseRemove(t *testing.T) {
+	var q1 = `
+	{
+		user(id:alice2) {
+			~friend {
+				name
+			}
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+                        # comment line should be ignored
+			<alice> <friend> <alice2> .
+			<alice> <name> "Alice" .
+		}
+	}
+	`
+
+	var s1 = `
+	mutation {
+		schema {
+            friend:uid @reverse
+		}
+	}
+	`
+
+	var s2 = `
+	mutation {
+		schema {
+            friend:uid
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	// add reverse edge to name
+	err = runMutation(s1)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"~friend" : [{"name":"Alice"}]}]}`, output)
+
+	// remove reverse edge
+	err = runMutation(s2)
+	require.NoError(t, err)
+
+	output, err = runQuery(q1)
+	require.Error(t, err)
 }
 
 func TestQuery(t *testing.T) {
@@ -262,12 +604,13 @@ func BenchmarkQuery(b *testing.B) {
 }
 
 func TestMain(m *testing.M) {
-	x.SetTestRun()
 	x.Init()
 	dir1, dir2, _, _ := prepare()
 	defer closeAll(dir1, dir2)
 	time.Sleep(5 * time.Second) // Wait for ME to become leader.
 
+	// we need watermarks for reindexing
+	x.AssertTrue(!x.IsTestRun())
 	// Parse GQL into internal query representation.
 	os.Exit(m.Run())
 }

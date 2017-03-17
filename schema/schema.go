@@ -101,8 +101,8 @@ func (s *stateShard) update(se *SyncEntry) {
 	s.predicate[se.Attr] = &schema
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- se
-	s.elog.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema.ValueType)
-	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema.ValueType)
+	s.elog.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema)
+	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema)
 }
 
 // Set sets the schema for given predicate in memory
