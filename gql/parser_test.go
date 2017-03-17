@@ -34,10 +34,73 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
+func TestParseQueryWithNoVarValError(t *testing.T) {
+	query := `
+	{	
+		me(id: var(), orderasc: var(n) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			friends {
+				n AS name
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryWithMultiVarValError(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(n, d) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends {
+				n AS name
+				d as age
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryWithVarVal(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(n) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends {
+				n AS name
+			}
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "L", res.Query[0].NeedsVar[0])
+	require.Equal(t, "n", res.Query[0].NeedsVar[1])
+	require.Equal(t, "L", res.Query[1].Children[0].Var)
+	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
+	require.Equal(t, "n", res.Query[0].Args["orderasc"])
+	require.Equal(t, "name", res.Query[0].Children[0].Attr)
+}
+
 func TestParseQueryWithVarMultiRoot(t *testing.T) {
 	query := `
 	{	
-		me(var:[L, J, K]) {name}
+		me(id: var(L, J, K)) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
@@ -58,9 +121,9 @@ func TestParseQueryWithVarMultiRoot(t *testing.T) {
 func TestParseQueryWithVar(t *testing.T) {
 	query := `
 	{	
-		me(var:L) {name}
-		him(var:J) {name}
-		you(var:K) {name}
+		me(id: var(L)) {name}
+		him(id: var(J)) {name}
+		you(id: var(K)) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
@@ -81,8 +144,8 @@ func TestParseQueryWithVar(t *testing.T) {
 func TestParseQueryWithVarError1(t *testing.T) {
 	query := `
 	{	
-		him(var:J) {name}
-		you(var:K) {name}
+		him(id: var(J)) {name}
+		you(id: var(K)) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
@@ -95,9 +158,9 @@ func TestParseQueryWithVarError1(t *testing.T) {
 func TestParseQueryWithVarError2(t *testing.T) {
 	query := `
 	{	
-		me(var:L) {name}
-		him(var:J) {name}	
-		you(var:K) {name}
+		me(id: var(L)) {name}
+		him(id: var(J)) {name}	
+		you(id: var(K)) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {K AS friends}
 	}
@@ -136,7 +199,7 @@ func TestParseQueryWithVarAtRootFilterID(t *testing.T) {
 		K as var(id:0x0a) {
 			L AS friends
 		}
-		me(var:K) @filter(id(L)) {
+		me(id: var(K)) @filter(var(L)) {
 		 name	
 		}
 	}
@@ -157,8 +220,8 @@ func TestParseQueryWithVarAtRoot(t *testing.T) {
 		K AS var(id:0x0a) {
 			fr as friends
 		}
-		me(var:fr) @filter(id(K)) {
-		 name	@filter(id(fr))
+		me(id: var(fr)) @filter(var(K)) {
+		 name	@filter(var(fr))
 		}
 	}
 `
@@ -179,7 +242,7 @@ func TestParseQueryWithVar1(t *testing.T) {
 			L AS friends
 		}
 	
-		me(var:L) {
+		me(id: var(L)) {
 		 name	
 		}
 	}
@@ -201,11 +264,11 @@ func TestParseQueryWithMultipleVar(t *testing.T) {
 			}
 		}
 	
-		me(var:L) {
+		me(id:var(L)) {
 		 name	
 		}
 
-		relatives(var:B) {
+		relatives(id:var(B)) {
 			name
 		}
 	}
@@ -2224,7 +2287,7 @@ func TestFacetsFilterFail3(t *testing.T) {
 		K as var(id:0x0a) {
 			L AS friends
 		}
-		me(var:K) {
+		me(id: var(K)) {
 			friend @facets(id(L)) {
 				name
 			}

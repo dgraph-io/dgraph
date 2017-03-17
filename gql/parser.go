@@ -886,7 +886,7 @@ func parseVariables(it *lex.ItemIterator, vmap varMap) error {
 }
 
 // parseArguments parses the arguments part of the GraphQL query root.
-func parseArguments(it *lex.ItemIterator) (result []pair, rerr error) {
+func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr error) {
 	expectArg := true
 	for it.Next() {
 		var p pair
@@ -894,18 +894,18 @@ func parseArguments(it *lex.ItemIterator) (result []pair, rerr error) {
 		item := it.Item()
 		if item.Typ == itemName {
 			if !expectArg {
-				return nil, x.Errorf("Expecting a comma. But got: %v", item.Val)
+				return result, x.Errorf("Expecting a comma. But got: %v", item.Val)
 			}
 			p.Key = item.Val
 			expectArg = false
 		} else if item.Typ == itemRightRound {
 			if expectArg {
-				return nil, x.Errorf("Unexpected comma before ).")
+				return result, x.Errorf("Unexpected comma before ).")
 			}
 			break
 		} else if item.Typ == itemComma {
 			if expectArg {
-				return nil, x.Errorf("Expected Argument but got comma.")
+				return result, x.Errorf("Expected Argument but got comma.")
 			}
 			expectArg = true
 			continue
@@ -923,6 +923,19 @@ func parseArguments(it *lex.ItemIterator) (result []pair, rerr error) {
 		it.Next()
 		item = it.Item()
 		var val string
+		if item.Val == "var" {
+			count, err := parseVarList(it, gq)
+			if err != nil {
+				return result, err
+			}
+			if count != 1 {
+				return result, x.Errorf("Only one variable expected. Got %d", count)
+			}
+			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1]
+			result = append(result, p)
+			continue
+		}
+
 		if item.Typ == itemDollar {
 			val = "$"
 			it.Next()
@@ -1109,7 +1122,7 @@ L:
 				} else {
 					g.Args = append(g.Args, val)
 				}
-				if g.Name == "id" {
+				if g.Name == "var" {
 					g.NeedsVar = append(g.NeedsVar, val)
 				}
 				expectArg = false
@@ -1306,32 +1319,37 @@ func parseID(gq *GraphQuery, val string) error {
 	return nil
 }
 
-func parseVarList(gq *GraphQuery, val string) error {
-	val = x.WhiteSpace.Replace(val)
-	if val[0] != '[' {
-		gq.NeedsVar = append(gq.NeedsVar, val)
-		return nil
+func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
+	count := 0
+	expectArg := true
+	it.Next()
+	item := it.Item()
+	if item.Typ != itemLeftRound {
+		return count, x.Errorf("Expected a left round after var")
 	}
-
-	if val[len(val)-1] != ']' {
-		return x.Errorf("Invalid var list at root. Got: %+v", val)
-	}
-	var buf bytes.Buffer
-	for _, c := range val[1:] {
-		if c == ',' || c == ']' {
-			if buf.Len() == 0 {
-				continue
+	for it.Next() {
+		item := it.Item()
+		if item.Typ == itemRightRound {
+			break
+		}
+		if item.Typ == itemComma {
+			if expectArg {
+				return count, x.Errorf("Expected a variable but got comma")
 			}
-			gq.NeedsVar = append(gq.NeedsVar, buf.String())
-			buf.Reset()
-			continue
+			expectArg = true
+		} else if item.Typ == itemName {
+			if !expectArg {
+				return count, x.Errorf("Expected a variable but got comma")
+			}
+			count++
+			gq.NeedsVar = append(gq.NeedsVar, item.Val)
+			expectArg = false
 		}
-		if c == '[' || c == ')' {
-			return x.Errorf("Invalid id list at root. Got: %+v", val)
-		}
-		buf.WriteRune(c)
 	}
-	return nil
+	if expectArg {
+		return count, x.Errorf("Unnecessary comma in var()")
+	}
+	return count, nil
 }
 
 func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
@@ -1468,6 +1486,14 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return nil, x.Errorf("Invalid query")
 			}
 			item = it.Item()
+			if item.Val == "var" {
+				// Any number of variables allowed here.
+				_, err := parseVarList(it, gq)
+				if err != nil {
+					return nil, err
+				}
+				continue
+			}
 			// Check and parse if its a list.
 			err := parseID(gq, item.Val)
 			if err != nil {
@@ -1480,18 +1506,27 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return gq, err
 			}
 			gq.Func = gen
-		} else if key == "var" {
-			if !it.Next() {
-				return nil, x.Errorf("Invalid query")
-			}
-			item := it.Item()
-			parseVarList(gq, item.Val)
 		} else {
+			var val string
 			if !it.Next() {
 				return nil, x.Errorf("Invalid query")
 			}
 			item := it.Item()
-			gq.Args[key] = item.Val
+			if item.Val == "var" {
+				count, err := parseVarList(it, gq)
+				if err != nil {
+					return nil, err
+				}
+				if count != 1 {
+					return nil, x.Errorf("Expected only one variable but got: %d", count)
+				}
+			} else {
+				val = item.Val
+			}
+			if val == "" {
+				val = gq.NeedsVar[len(gq.NeedsVar)-1]
+			}
+			gq.Args[key] = val
 		}
 	}
 
@@ -1601,7 +1636,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			if curp.Attr == "" {
 				return x.Errorf("Predicate name cannot be empty.")
 			}
-			args, err := parseArguments(it)
+			args, err := parseArguments(it, curp)
 			if err != nil {
 				return err
 			}

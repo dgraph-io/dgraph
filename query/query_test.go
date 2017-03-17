@@ -314,6 +314,70 @@ func TestGetUIDNotInChild(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValOrderAsc(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				f As friend {
+					n As name
+				}
+			}
+
+			me(id: var(f), orderasc: var(n)) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea"},{"name":"Daryl Dixon"},{"name":"Glenn Rhee"},{"name":"Rick Grimes"}]}`,
+		js)
+}
+
+func TestQueryVarValOrderDob(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				f As friend {
+					n As dob
+				}
+			}
+
+			me(id: var(f), orderasc: var(n)) {
+				name
+				dob
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea", "dob":"1901-01-15"},{"name":"Daryl Dixon", "dob":"1909-01-10"},{"name":"Glenn Rhee", "dob":"1909-05-05"},{"name":"Rick Grimes", "dob":"1910-01-02"}]}`,
+		js)
+}
+
+func TestQueryVarValOrderDesc(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				f As friend {
+					n As name
+				}
+			}
+
+			me(id: var(f), orderdesc: var(n)) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`,
+		js)
+}
+
 func TestMultiEmptyBlocks(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -342,7 +406,7 @@ func TestUseVarsMultiCascade1(t *testing.T) {
 			 }
 			}
 
-			me(var:[L, B]) {
+			me(id: var(L, B)) {
 				name
 			}
 		}
@@ -363,7 +427,7 @@ func TestUseVarsMultiCascade(t *testing.T) {
 				}
 			}
 
-			me(var:[L, B]) {
+			me(id: var(L, B)) {
 				name
 			}
 		}
@@ -386,11 +450,11 @@ func TestUseVarsMultiOrder(t *testing.T) {
 				G AS friend(first:2, offset:2, orderasc: dob)
 			}
 
-			friend1(var:L) {
+			friend1(id: var(L)) {
 				name
 			}
 
-			friend2(var:G) {
+			friend2(id: var(G)) {
 				name
 			}
 		}
@@ -409,7 +473,7 @@ func TestUseVarsFilterVarReuse1(t *testing.T) {
 				friend {
 					L as friend {
 						name
-						friend @filter(id(L)) {
+						friend @filter(var(L)) {
 							name
 						}
 					}
@@ -431,7 +495,7 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 				friend {
 				 L as friend {
 					 name
-					 friend @filter(id(L)) {
+					 friend @filter(var(L)) {
 						name
 					}
 				}
@@ -457,7 +521,7 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 				L as friend {
 					friend {
 						name
-						friend @filter(id(L) and id(fr)) {
+						friend @filter(var(L) and var(fr)) {
 							name
 						}
 					}
@@ -538,7 +602,7 @@ func TestShortestPath_NoPath(t *testing.T) {
 				follow
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -556,7 +620,7 @@ func TestShortestPath(t *testing.T) {
 				friend 
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -574,7 +638,7 @@ func TestShortestPathRev(t *testing.T) {
 				friend 
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -592,7 +656,7 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 				path @facets(weight, weight1)
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -613,7 +677,7 @@ func TestShortestPathWeights(t *testing.T) {
 				path @facets(weight)
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -631,7 +695,7 @@ func TestShortestPath2(t *testing.T) {
 				path 
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -650,7 +714,7 @@ func TestShortestPath3(t *testing.T) {
 				path 
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -669,7 +733,7 @@ func TestShortestPath4(t *testing.T) {
 				follow
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -688,7 +752,7 @@ func TestShortestPath_filter(t *testing.T) {
 				follow
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -707,7 +771,7 @@ func TestShortestPath_filter2(t *testing.T) {
 				follow @filter(not anyofterms(name, "bob"))
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -731,7 +795,7 @@ func TestUseVarsFilterMultiId(t *testing.T) {
 				G AS friend
 			}
 
-			friend(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(id(G, L)) {
+			friend(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(var(G, L)) {
 				name
 			}
 		}
@@ -754,7 +818,7 @@ func TestUseVarsMultiFilterId(t *testing.T) {
 				G AS friend
 			}
 
-			friend(var:L) @filter(id(G)) {
+			friend(id: var(L)) @filter(var(G)) {
 				name
 			}
 		}
@@ -775,7 +839,7 @@ func TestUseVarsCascade(t *testing.T) {
 				}
 			}
 
-			me(var:L) {
+			me(id: var(L)) {
 				name
 			}
 		}
@@ -794,7 +858,7 @@ func TestUseVars(t *testing.T) {
 				L AS friend
 			}
 
-			me(var : L) {
+			me(id: var(L)) {
 				name
 			}
 		}
@@ -1315,7 +1379,7 @@ func TestToSubgraphInvalidFnName4(t *testing.T) {
                                 name
                         }
                         you(func:anyofterms(name, "Michonne")) {
-                                friend @filter(id(f)) {
+                                friend @filter(var(f)) {
                                         name
                                 }
                         }
@@ -3049,7 +3113,7 @@ func TestGeneratorMultiRootMultiQueryRootVar(t *testing.T) {
       	name
 			}
 
-			you(var:friend) {
+			you(id: var(friend)) {
 				name
 			}
     }
@@ -3067,7 +3131,7 @@ func TestGeneratorMultiRootMultiQueryVarFilter(t *testing.T) {
 			}
 
 			you(func:anyofterms(name, "Michonne")) {
-				friend @filter(id(f)) {
+				friend @filter(var(f)) {
 					name
 				}
 			}
@@ -3084,7 +3148,7 @@ func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
 			friend AS var(func:anyofterms(name, "Michonne Rick Glenn")) {
 			}
 
-			you(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(id(friend)) {
+			you(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(var(friend)) {
 				name
 			}
     }
@@ -3118,7 +3182,7 @@ func TestGeneratorMultiRootVarOrderOffset(t *testing.T) {
         name
       }
 
-			me(var:L) {
+			me(id: var(L)) {
 			 name
 			}
     }
@@ -3147,7 +3211,7 @@ func TestGeneratorMultiRootOrderOffset(t *testing.T) {
 			L as var(func:anyofterms(name, "Michonne Rick Glenn")) {
         name
       }
-			me(var: L, orderasc: dob, offset:2) {
+			me(id: var(L), orderasc: dob, offset:2) {
         name
       }
     }
