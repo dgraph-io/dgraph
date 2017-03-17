@@ -84,3 +84,11 @@
 #properties pre {
     height: 100%;
 }
+
+input.form-control {
+    font-size: 16px !important;
+}
+
+.form-group {
+    margin-bottom: 5px;
+}

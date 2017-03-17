@@ -23,12 +23,12 @@ class Editor extends Component {
   render() {
     return (
       <div>
-        <Form horizontal style={{ marginBottom: "10px" }}>
-          <FormGroup>
-            <Col sm={2}>
+        <Form horizontal bsSize="sm" style={{ marginBottom: "10px" }}>
+          <FormGroup bsSize="sm">
+            <Col xs={2}>
               <ControlLabel>Query</ControlLabel>
             </Col>
-            <Col sm={8}>
+            <Col xs={8}>
               <FormControl
                 type="text"
                 placeholder="Regex to choose property for display"
@@ -39,7 +39,7 @@ class Editor extends Component {
                 }}
               />
             </Col>
-            <Col sm={2}>
+            <Col xs={2}>
               <Button
                 type="submit"
                 className="btn btn-primary pull-right"
