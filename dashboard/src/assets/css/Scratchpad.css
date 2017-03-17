@@ -29,7 +29,7 @@
     margin-left: 5px;
     display: flex;
     flex-wrap: wrap;
-    align-content: space-between;
+    justify-content: space-between;
 }
 
 .Scratchpad-entries:after {
@@ -38,7 +38,7 @@
 }
 
 .Scratchpad-key-val {
-    flex: 1 0 250px;
+    flex: 0 0 250px;
     padding-right: 15px;
 }
 
