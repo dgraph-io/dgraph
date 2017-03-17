@@ -34,6 +34,25 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
+func TestParseQueryWithMultiVarValError(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(n, d) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends {
+				n AS name
+				d as age
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseQueryWithVarVal(t *testing.T) {
 	query := `
 	{	

@@ -894,18 +894,18 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		item := it.Item()
 		if item.Typ == itemName {
 			if !expectArg {
-				return nil, x.Errorf("Expecting a comma. But got: %v", item.Val)
+				return result, x.Errorf("Expecting a comma. But got: %v", item.Val)
 			}
 			p.Key = item.Val
 			expectArg = false
 		} else if item.Typ == itemRightRound {
 			if expectArg {
-				return nil, x.Errorf("Unexpected comma before ).")
+				return result, x.Errorf("Unexpected comma before ).")
 			}
 			break
 		} else if item.Typ == itemComma {
 			if expectArg {
-				return nil, x.Errorf("Expected Argument but got comma.")
+				return result, x.Errorf("Expected Argument but got comma.")
 			}
 			expectArg = true
 			continue
@@ -924,13 +924,14 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		item = it.Item()
 		var val string
 		if item.Val == "var" {
-			it.Next()
-			item = it.Item()
-			if item.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected a left round after var")
+			count, err := parseVarList(it, gq)
+			if err != nil {
+				return result, err
 			}
-			parseVarList(it, gq)
-			p.Val = gq.NeedsVar[0]
+			if count != 1 {
+				return result, x.Errorf("Only one variable expected. Got %d", count)
+			}
+			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1]
 			result = append(result, p)
 			continue
 		}
@@ -1318,8 +1319,14 @@ func parseID(gq *GraphQuery, val string) error {
 	return nil
 }
 
-func parseVarList(it *lex.ItemIterator, gq *GraphQuery) error {
+func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
+	count := 0
 	expectArg := true
+	it.Next()
+	item := it.Item()
+	if item.Typ != itemLeftRound {
+		return count, x.Errorf("Expected a left round after var")
+	}
 	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemRightRound {
@@ -1327,21 +1334,22 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) error {
 		}
 		if item.Typ == itemComma {
 			if expectArg {
-				return x.Errorf("Expected a variable but got comma")
+				return count, x.Errorf("Expected a variable but got comma")
 			}
 			expectArg = true
 		} else if item.Typ == itemName {
 			if !expectArg {
-				return x.Errorf("Expected a variable but got comma")
+				return count, x.Errorf("Expected a variable but got comma")
 			}
+			count++
 			gq.NeedsVar = append(gq.NeedsVar, item.Val)
 			expectArg = false
 		}
 	}
 	if expectArg {
-		return x.Errorf("Unnecessary comma in var()")
+		return count, x.Errorf("Unnecessary comma in var()")
 	}
-	return nil
+	return count, nil
 }
 
 func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
@@ -1479,12 +1487,11 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			}
 			item = it.Item()
 			if item.Val == "var" {
-				it.Next()
-				item = it.Item()
-				if item.Typ != itemLeftRound {
-					return nil, x.Errorf("Expected a left round after var")
+				// Any number of variables allowed here.
+				_, err := parseVarList(it, gq)
+				if err != nil {
+					return nil, err
 				}
-				parseVarList(it, gq)
 				continue
 			}
 			// Check and parse if its a list.
@@ -1509,12 +1516,13 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			}
 			item := it.Item()
 			if item.Val == "var" {
-				it.Next()
-				item = it.Item()
-				if item.Typ != itemLeftRound {
-					return nil, x.Errorf("Expected a left round after var")
+				count, err := parseVarList(it, gq)
+				if err != nil {
+					return nil, err
 				}
-				parseVarList(it, gq)
+				if count != 1 {
+					return nil, x.Errorf("Expected only one variable but got: %d", count)
+				}
 			} else {
 				val = item.Val
 			}
