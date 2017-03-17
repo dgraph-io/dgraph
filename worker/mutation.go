@@ -76,8 +76,8 @@ func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) err
 		if err := checkSchema(update); err != nil {
 			return err
 		}
-		updateSchema(update.Predicate, schema.From(update), rv.Index, rv.Group)
 		old, ok := schema.State().Get(update.Predicate)
+		updateSchema(update.Predicate, schema.From(update), rv.Index, rv.Group)
 
 		// Once we remove index or reverse edges from schema, even though the values
 		// are present in db, they won't be used due to validation in work/task.go
@@ -152,10 +152,12 @@ func needReindexing(old *typesp.Schema, update *graphp.SchemaUpdate) bool {
 		return false
 	}
 	for i, t := range old.Tokenizer {
-		return update.Tokenizer[i] == t
+		if update.Tokenizer[i] != t {
+			return false
+		}
 	}
 
-	return true
+	return false
 }
 
 func updateSchema(attr string, s *typesp.Schema, raftIndex uint64, group uint32) {
@@ -266,8 +268,8 @@ func proposeOrSend(ctx context.Context, gid uint32, m *taskp.Mutations, che chan
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationMap(mutationMap map[uint32]*taskp.Mutations, edges []*taskp.DirectedEdge) {
-	for _, edge := range edges {
+func addToMutationMap(mutationMap map[uint32]*taskp.Mutations, m *taskp.Mutations) {
+	for _, edge := range m.Edges {
 		gid := group.BelongsTo(edge.Attr)
 		mu := mutationMap[gid]
 		if mu == nil {
@@ -276,13 +278,22 @@ func addToMutationMap(mutationMap map[uint32]*taskp.Mutations, edges []*taskp.Di
 		}
 		mu.Edges = append(mu.Edges, edge)
 	}
+	for _, schema := range m.Schema {
+		gid := group.BelongsTo(schema.Predicate)
+		mu := mutationMap[gid]
+		if mu == nil {
+			mu = &taskp.Mutations{GroupId: gid}
+			mutationMap[gid] = mu
+		}
+		mu.Schema = append(mu.Schema, schema)
+	}
 }
 
 // MutateOverNetwork checks which group should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *taskp.Mutations) error {
 	mutationMap := make(map[uint32]*taskp.Mutations)
-	addToMutationMap(mutationMap, m.Edges)
+	addToMutationMap(mutationMap, m)
 
 	errors := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {

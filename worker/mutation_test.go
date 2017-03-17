@@ -107,8 +107,9 @@ func TestAddToMutationArray(t *testing.T) {
 		Value: []byte("set edge"),
 		Label: "test-mutation",
 	})
+	m := &taskp.Mutations{Edges: edges}
 
-	addToMutationMap(mutationsMap, edges)
+	addToMutationMap(mutationsMap, m)
 	mu := mutationsMap[1]
 	require.NotNil(t, mu)
 	require.NotNil(t, mu.Edges)

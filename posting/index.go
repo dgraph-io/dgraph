@@ -246,8 +246,6 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 
-	EvictAll()
-
 	// Helper function - Add reverse entries for values in posting list
 	addReversePostings := func(pl *typesp.PostingList) {
 		postingsLen := len(pl.Postings)
@@ -322,14 +320,15 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 
-	// TODO: There could be issues with index mutations pl are present in lhmap
-	// Ideally we don't want stop the world lock, as it would affect other groups also
+	// There might be stale index entries if entries are there in lhmap, should be
+	// taken care by eventual index consistency
+	// TODO: Ideally we don't want stop the world lock, as it would affect other groups also
 	// For present group it's not issue since rebuild index is blocking.
 	// Can we have lhmap per group to avoid stop the word as much as possible ?
 	// Instead of deleting from lhmap, how about iterating over lhmap and clearing
 	// the immutable layer of all pl's ? We would have read lock over lhmap and normal
 	// lock per pl
-	EvictAll()
+	//EvictAll()
 
 	// Helper function - Add index entries for values in posting list
 	addPostingsToIndex := func(pl *typesp.PostingList) {

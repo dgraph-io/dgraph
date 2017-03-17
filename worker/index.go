@@ -17,18 +17,21 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, indexed bool)
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
 	x.AssertTruef(schema.State().IsIndexed(attr) == indexed, "Attr %s index mismatch", attr)
-	if !indexed {
-		// Remove index edges
-		go posting.DeleteIndex(ctx, attr)
-		return nil
-	}
+
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
 	if err := n.syncAllMarks(ctx, rv.Index-1); err != nil {
 		return err
 	}
-	// Ideally older indexes won't be present, but prefix scan should return quickly
-	// if index entries are not present
+
+	if !indexed {
+		// Remove index edges
+		// For delete we since mutations would have been applied, we needn't
+		// wait for synced watermarks if we delete through mutations, but
+		// it would use by lhmap
+		go posting.DeleteIndex(ctx, attr)
+		return nil
+	}
 	if err := posting.RebuildIndex(ctx, attr); err != nil {
 		return err
 	}
@@ -39,15 +42,17 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, reversed bo
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
 	x.AssertTruef(schema.State().IsReversed(attr) == reversed, "Attr %s reverse mismatch", attr)
-	if !reversed {
-		// Remove reverse edges
-		go posting.DeleteReverseEdges(ctx, attr)
-		return nil
-	}
+
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
 	if err := n.syncAllMarks(ctx, rv.Index-1); err != nil {
 		return err
+	}
+
+	if !reversed {
+		// Remove reverse edges
+		go posting.DeleteReverseEdges(ctx, attr)
+		return nil
 	}
 	if err := posting.RebuildReverseEdges(ctx, attr); err != nil {
 		return err
