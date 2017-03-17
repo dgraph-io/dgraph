@@ -63,7 +63,7 @@ func TestParseQueryWithVarVal(t *testing.T) {
 func TestParseQueryWithVarMultiRoot(t *testing.T) {
 	query := `
 	{	
-		me(id: var([L, J, K])) {name}
+		me(id: var(L, J, K)) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
