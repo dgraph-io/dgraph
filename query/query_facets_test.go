@@ -29,7 +29,6 @@ import (
 
 func populateGraphWithFacets(t *testing.T) {
 	x.AssertTrue(ps != nil)
-	// logrus.SetLevel(logrus.DebugLevel)
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
 	friendFacets1 := map[string]string{"since": "2006-01-02T15:04:05"}

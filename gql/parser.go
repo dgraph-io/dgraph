@@ -995,7 +995,7 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	case "not":
 		buf.WriteString("NOT")
 	default:
-		x.Errorf("Unknown operator: %q", t.Op)
+		x.Fatalf("Unknown operator: %q", t.Op)
 	}
 
 	for _, c := range t.Child {
@@ -1504,9 +1504,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			gen, err := parseFunction(it)
 			if err != nil {
 				return gq, err
-			}
-			if err != nil {
-				return nil, err
 			}
 			gq.Func = gen
 		} else {

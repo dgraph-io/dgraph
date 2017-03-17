@@ -403,7 +403,6 @@ func TestParseError(t *testing.T) {
 }
 
 func TestParseXid(t *testing.T) {
-	// logrus.SetLevel(logrus.DebugLevel)
 	// TODO: Why does the query not have _xid_ attribute?
 	query := `
 	query {
@@ -1220,8 +1219,8 @@ func TestParseFuncNested(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
 	require.NotNil(t, res.Query[0].Func)
-	require.Equal(t, []string{"friends", "hometown"}, childAttrs(res.Query[0]))
-	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, res.Query[0].Func.Name, "gt")
+	require.Equal(t, res.Query[0].Func.Args, []string{"count", "10"})
 }
 
 func TestParseFilter_root2(t *testing.T) {

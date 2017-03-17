@@ -58,7 +58,6 @@ var ps *store.Store
 
 func populateGraph(t *testing.T) {
 	x.AssertTrue(ps != nil)
-	// logrus.SetLevel(logrus.DebugLevel)
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
 	addEdgeToUID(t, "friend", 1, 23, nil)
@@ -534,6 +533,36 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 	require.JSONEq(t,
 		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
 		js)
+}
+
+func TestNestedFuncRoot(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+    {
+			me(func: gt(count(friend), 2)) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, js)
+}
+
+func TestNestedFuncRoot2(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+		{
+			me(func: geq(count(friend), 1)) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Andrea"}]}`, js)
 }
 
 func TestRecurseQuery(t *testing.T) {
