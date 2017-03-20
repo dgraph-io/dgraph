@@ -107,3 +107,13 @@ func (s *listMap) Each(f func(key uint64, val *List)) {
 		shard.each(f)
 	}
 }
+
+func (s *listMapShard) delete(key uint64) {
+	s.RLock()
+	defer s.RUnlock()
+	delete(s.m, key)
+}
+
+func (s *listMap) Delete(key uint64) {
+	s.shard[getShard(s.numShards, key)].delete(key)
+}

@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"testing"
 
+	farm "github.com/dgryski/go-farm"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/group"
@@ -135,14 +136,13 @@ func checkValue(t *testing.T, ol *List, val string) {
 
 // This function marks the posting list for deletion.
 // Then when SyncIfDirty is called it would be deleted from RocksDB.
-// It also clears the lhmap so that calls to GetOrCreate return a new list.
+// It also deletes the key from lhmap so that calls to GetOrCreate return a new list.
 func delPosting(t *testing.T, ol *List) {
 	ol.SetForDeletion()
 	merged, err := ol.SyncIfDirty(context.Background())
 	require.NoError(t, err)
 	require.True(t, merged)
-	lhmap.EachWithDelete(func(k uint64, l *List) {
-	})
+	lhmap.Delete(farm.Fingerprint64(ol.key))
 }
 
 func TestAddMutation_Value(t *testing.T) {
