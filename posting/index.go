@@ -324,10 +324,6 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	// taken care by eventual index consistency
 	// TODO: Ideally we don't want stop the world lock, as it would affect other groups also
 	// For present group it's not issue since rebuild index is blocking.
-	// Can we have lhmap per group to avoid stop the word as much as possible ?
-	// Instead of deleting from lhmap, how about iterating over lhmap and clearing
-	// the immutable layer of all pl's ? We would have read lock over lhmap and normal
-	// lock per pl
 	//EvictAll()
 
 	// Helper function - Add index entries for values in posting list

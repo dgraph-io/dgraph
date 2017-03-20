@@ -607,13 +607,6 @@ func (n *node) Run() {
 			}
 
 			for _, entry := range rd.CommittedEntries {
-				// TODO: Remove after eventual index consistency sync PR
-				if len(entry.Data) > 0 && entry.Data[0] == proposalReindex {
-					x.Check(n.rebuildIndex(n.ctx, entry.Data))
-					// This is an index-related proposal. Do not break.
-					continue
-				}
-
 				// Need applied watermarks for schema mutation also for read linearazibility
 				status := x.Mark{Index: entry.Index, Done: false}
 				n.applied.Ch <- status

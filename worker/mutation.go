@@ -69,6 +69,7 @@ func runMutations(ctx context.Context, edges []*taskp.DirectedEdge) error {
 // and further mutations are blocked until this is done.
 func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) error {
 	rv := ctx.Value("raft").(x.RaftValue)
+	n := groups().Node(rv.Group)
 	for _, update := range updates {
 		if !groups().ServesGroup(group.BelongsTo(update.Predicate)) {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
@@ -82,15 +83,21 @@ func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) err
 		// Once we remove index or reverse edges from schema, even though the values
 		// are present in db, they won't be used due to validation in work/task.go
 		// Removal can be done in background if we write a scheduler later which ensures
-		// that schema mutations(rebuild index) are serialized, so that there won't be
-		// race conditions between deletion of edges and addition of edges. If schema
-		// mutations are not serialized then we need to take care of race conditions
-		// and replay of logs could produce different results, since we depend on already
-		// existing schema
+		// that schema mutations are serialized, so that there won't be
+		// race conditions between deletion of edges and addition of edges.
 
-		// We don't want to use watermarks for background removal, because it would block
+		// We don't want to use sync watermarks for background removal, because it would block
 		// linearizable read requests. Only downside would be on system crash, stale edges
 		// might remain, which is ok.
+
+		// Indexing can't be done in background as it can cause race conditons with new
+		// index mutations (old set and new del)
+		// We need watermark for index/reverse edge addition for linearizable reads.
+		// (both applied and synced watermarks).
+
+		// TODO: Using scheduler try running schema mutations in separate goroutine and
+		// don't do raft.Advance() until it is done, but ensure raft.Tick() doesn't get
+		// blocked, so that logs can atleast be queued up in raft in applied state
 
 		// TODO: Can we detect when we need to run eventual index consistency or goroutine
 		// to remove stale reverse edges? This logic could be used for eventual index
@@ -99,17 +106,6 @@ func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) err
 		// then we have a clean start. We could probably run eventual consistency only when
 		// we get snapshot or have raft entries in raft wal(We can further check for index
 		// mutations may be)
-
-		// Indexing can't be done in background as it can cause race conditons with new
-		// index mutations (old set and new del)
-		// We need watermark for index/reverse edge addition for linearizable reads.
-		// (both applied and synced watermarks). Since it's blocking call we needn't emit
-		// applied watermark, sync watermarks would be emitted on pl mutations automatically
-
-		// TODO: Using scheduler try running schema mutations in separate goroutine and
-		// don't do raft.Advance() until it is done, but ensure raft.Tick() doesn't get
-		// blocked, so that logs can atleast be queued up in raft in applied state
-		n := groups().Node(rv.Group)
 		if !ok {
 			if update.Index {
 				if err := n.rebuildOrDelIndex(ctx, update.Predicate, true); err != nil {

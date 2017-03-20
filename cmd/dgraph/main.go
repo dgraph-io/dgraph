@@ -585,23 +585,6 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	x.SetStatus(w, x.Success, "Backup completed.")
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
-		return
-	}
-	ctx := context.Background()
-	attr := r.URL.Query().Get("attr")
-	if len(attr) == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No attr defined.")
-		return
-	}
-	if err := worker.RebuildIndexOverNetwork(ctx, attr); err != nil {
-		x.SetStatus(w, err.Error(), "RebuildIndex failed.")
-	} else {
-		x.SetStatus(w, x.Success, "RebuildIndex completed.")
-	}
-}
-
 // server is used to implement graphp.DgraphServer
 type grpcServer struct{}
 
@@ -797,7 +780,6 @@ func setupServer(che chan error) {
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/query", queryHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
-	http.HandleFunc("/admin/index", indexHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
 
