@@ -760,12 +760,18 @@ type values struct {
 func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 	var err error
 	for _, child := range sg.Children {
-		child.populateAggregation(sg)
+		err = child.populateAggregation(sg)
+		if err != nil {
+			return err
+		}
 		if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
 			temp := new(SubGraph)
 			*temp = *child
 			temp.Children = []*SubGraph{}
 			temp.SrcUIDs = sg.SrcUIDs // Point the new Subgraphs srcUids
+			if parent == nil {
+				return nil
+			}
 			parent.Children = append(parent.Children, temp)
 			temp.values = make([]*taskp.Value, 0, 1)
 			temp.Params.Alias = sg.Attr
