@@ -1,5 +1,5 @@
 +++
-title = "Functions"
+title = "Query Language Functions"
 date = "2017-03-20T18:58:23+11:00"
 icon = "<b>X. </b>"
 chapter = true

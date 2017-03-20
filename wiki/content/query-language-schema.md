@@ -1,7 +1,7 @@
 +++
 date = "2017-03-20T19:19:14+11:00"
 draft = true
-title = "Query Language Schema"
+title = "query language schema"
 
 +++
 
@@ -89,7 +89,6 @@ type Film {
 }
 ```
 A schema file is passed to the server during invocation trough `--schema` flag. Some points to remember about the schema system are:
-
 * A given field can have only one type throughout the schema (Both inside and outside object types). Example: `age` declared as `int` both using scalar and inside Person object can have only one type throughout the schema.
 * Scalar fields inside the object types are also considered global scalars and need not be explicitly declared globally. In the above example, `name` is automatically inferred as `string` type.
 * Mutations only check the scalar types (inside objects and global explicit definition). For example, in the given schema, any mutation that sets age would be checked for being a valid integer, any mutation that sets name would be checked for being a valid string (though `name` is not globally declared as a `string` scalar, it would be inferred from the object types).
@@ -129,7 +128,7 @@ The available tokenizers are currently `term, exact, int, float, geo, date, date
 
 At times, you may want to rebuild the index for a predicate. You can achieve that by a simple GET request to the dgraph server: `admin/index?attr=yourpredicate`.
 
-## Reverse Edges
+##Reverse Edges
 Each graph edge is unidirectional. It points from one node to another. A lot of times,  you wish to access data in both directions, forward and backward. Instead of having to send edges in both directions, you can use the `@reverse` keyword at the end of a uid (entity) field declaration in the schema file. This specifies that the reverse edge should be automatically generated. For example, if we want to add a reverse edge for `directed_by` predicate, we should have a schema file as follows.
 
 ```
