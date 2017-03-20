@@ -268,7 +268,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			uc := dst.New(pc.Params.Alias)
 			name := fmt.Sprintf("%s(%s)", pc.SrcFunc[0], pc.Attr)
 			sv, err := convertWithBestEffort(pc.values[idx], pc.Attr)
-			if err != nil && err != ErrEmptyVal {
+			if err != nil {
 				return err
 			}
 			uc.AddValue(name, sv)
@@ -780,10 +780,10 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 					if idx < len(child.SrcUIDs.Uids) && child.SrcUIDs.Uids[idx] == uid {
 						values = append(values, child.values[idx])
 					}
-					val, err = Aggregate(child.SrcFunc[0], values, typ)
-					if err != nil {
-						return err
-					}
+				}
+				val, err = Aggregate(child.SrcFunc[0], values, typ)
+				if err != nil {
+					return err
 				}
 				temp.values = append(temp.values, val)
 			}
