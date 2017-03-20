@@ -4217,3 +4217,107 @@ func TestMultipleSamePredicateInBlockFail3(t *testing.T) {
 	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
 }
+
+func TestXidInvalidJSON(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_xid_
+				gender
+				alive
+				friend {
+					_xid_
+					random
+					name
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"_xid_":"mich","alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestXidInvalidProto(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_xid_
+				gender
+				alive
+				friend {
+					_xid_
+					random
+					name
+				}
+			}
+		}
+	`
+	pb := processToPB(t, query, false)
+	expectedPb := `attribute: "_root_"
+children: <
+  xid: "mich"
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "gender"
+    value: <
+      str_val: "female"
+    >
+  >
+  properties: <
+    prop: "alive"
+    value: <
+      bool_val: true
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
+    >
+  >
+>
+`
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+}
