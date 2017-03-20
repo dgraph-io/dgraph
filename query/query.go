@@ -761,6 +761,10 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 	var err error
 	for _, child := range sg.Children {
 		child.populateAggregation(sg)
+		if parent == nil {
+			// We cant have aggregation at this level.
+			return nil
+		}
 		if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
 			temp := new(SubGraph)
 			*temp = *child
@@ -782,6 +786,7 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 					}
 				}
 				val, err = Aggregate(child.SrcFunc[0], values, typ)
+				fmt.Println(val, values)
 				if err != nil {
 					return err
 				}

@@ -1,6 +1,8 @@
 package query
 
 import (
+	"fmt"
+
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -21,14 +23,16 @@ func Aggregate(agrtr string, values []*taskp.Value, typ types.TypeID) (res *task
 		switch agrtr {
 		case "min":
 			r, err := types.Less(va, vb)
-			if err != nil && r {
+			fmt.Println(r, err)
+			if err == nil && r {
+				fmt.Println(r, err)
 				return va
 			} else {
 				return vb
 			}
 		case "max":
 			r, err := types.Less(va, vb)
-			if err != nil && r {
+			if err == nil && r {
 				return vb
 			} else {
 				return va
@@ -63,7 +67,9 @@ func Aggregate(agrtr string, values []*taskp.Value, typ types.TypeID) (res *task
 		if err != nil {
 			continue
 		}
+		fmt.Println(result, rval)
 		result = accumulate(result, rval)
+		fmt.Println(result, "\n--------\n")
 	}
 
 	data := types.ValueForType(types.BinaryID)
