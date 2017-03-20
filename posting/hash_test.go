@@ -33,8 +33,7 @@ func TestHashBasic(t *testing.T) {
 	l2 := new(List)
 	require.Equal(t, a.PutIfMissing(123, l2), l1)
 
-	l, found := a.Get(123)
-	require.True(t, found)
+	l := a.Get(123)
 	require.Equal(t, l, l1)
 
 	a.Each(func(k uint64, l *List) {
@@ -72,7 +71,7 @@ func TestHashConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			l, _ := a.Get(uint64(i))
+			l := a.Get(uint64(i))
 			require.Equal(t, l, lists[i])
 		}(i)
 	}

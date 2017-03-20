@@ -119,7 +119,7 @@ type Query struct {
 	AfterUid uint64   `protobuf:"fixed64,5,opt,name=after_uid,json=afterUid,proto3" json:"after_uid,omitempty"`
 	DoCount  bool     `protobuf:"varint,6,opt,name=do_count,json=doCount,proto3" json:"do_count,omitempty"`
 	// Exactly one of uids and terms is populated.
-	Uids *List `protobuf:"bytes,7,opt,name=uids" json:"uids,omitempty"`
+	UidList *List `protobuf:"bytes,7,opt,name=uid_list,json=uidList" json:"uid_list,omitempty"`
 	// Function to generate or filter UIDs.
 	SrcFunc      []string            `protobuf:"bytes,8,rep,name=src_func,json=srcFunc" json:"src_func,omitempty"`
 	Reverse      bool                `protobuf:"varint,9,opt,name=reverse,proto3" json:"reverse,omitempty"`
@@ -174,9 +174,9 @@ func (m *Query) GetDoCount() bool {
 	return false
 }
 
-func (m *Query) GetUids() *List {
+func (m *Query) GetUidList() *List {
 	if m != nil {
-		return m.Uids
+		return m.UidList
 	}
 	return nil
 }
@@ -936,11 +936,11 @@ func (m *Query) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.Uids != nil {
+	if m.UidList != nil {
 		dAtA[i] = 0x3a
 		i++
-		i = encodeVarintTask(dAtA, i, uint64(m.Uids.Size()))
-		n1, err := m.Uids.MarshalTo(dAtA[i:])
+		i = encodeVarintTask(dAtA, i, uint64(m.UidList.Size()))
+		n1, err := m.UidList.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -1808,8 +1808,8 @@ func (m *Query) Size() (n int) {
 	if m.DoCount {
 		n += 2
 	}
-	if m.Uids != nil {
-		l = m.Uids.Size()
+	if m.UidList != nil {
+		l = m.UidList.Size()
 		n += 1 + l + sovTask(uint64(l))
 	}
 	if len(m.SrcFunc) > 0 {
@@ -2199,22 +2199,7 @@ func (m *List) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType == 1 {
-				var v uint64
-				if (iNdEx + 8) > l {
-					return io.ErrUnexpectedEOF
-				}
-				iNdEx += 8
-				v = uint64(dAtA[iNdEx-8])
-				v |= uint64(dAtA[iNdEx-7]) << 8
-				v |= uint64(dAtA[iNdEx-6]) << 16
-				v |= uint64(dAtA[iNdEx-5]) << 24
-				v |= uint64(dAtA[iNdEx-4]) << 32
-				v |= uint64(dAtA[iNdEx-3]) << 40
-				v |= uint64(dAtA[iNdEx-2]) << 48
-				v |= uint64(dAtA[iNdEx-1]) << 56
-				m.Uids = append(m.Uids, v)
-			} else if wireType == 2 {
+			if wireType == 2 {
 				var packedLen int
 				for shift := uint(0); ; shift += 7 {
 					if shift >= 64 {
@@ -2253,6 +2238,21 @@ func (m *List) Unmarshal(dAtA []byte) error {
 					v |= uint64(dAtA[iNdEx-1]) << 56
 					m.Uids = append(m.Uids, v)
 				}
+			} else if wireType == 1 {
+				var v uint64
+				if (iNdEx + 8) > l {
+					return io.ErrUnexpectedEOF
+				}
+				iNdEx += 8
+				v = uint64(dAtA[iNdEx-8])
+				v |= uint64(dAtA[iNdEx-7]) << 8
+				v |= uint64(dAtA[iNdEx-6]) << 16
+				v |= uint64(dAtA[iNdEx-5]) << 24
+				v |= uint64(dAtA[iNdEx-4]) << 32
+				v |= uint64(dAtA[iNdEx-3]) << 40
+				v |= uint64(dAtA[iNdEx-2]) << 48
+				v |= uint64(dAtA[iNdEx-1]) << 56
+				m.Uids = append(m.Uids, v)
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field Uids", wireType)
 			}
@@ -2541,7 +2541,7 @@ func (m *Query) Unmarshal(dAtA []byte) error {
 			m.DoCount = bool(v != 0)
 		case 7:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Uids", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field UidList", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -2565,10 +2565,10 @@ func (m *Query) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Uids == nil {
-				m.Uids = &List{}
+			if m.UidList == nil {
+				m.UidList = &List{}
 			}
-			if err := m.Uids.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.UidList.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -2800,24 +2800,7 @@ func (m *Result) Unmarshal(dAtA []byte) error {
 			}
 			iNdEx = postIndex
 		case 3:
-			if wireType == 0 {
-				var v uint32
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowTask
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					v |= (uint32(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.Counts = append(m.Counts, v)
-			} else if wireType == 2 {
+			if wireType == 2 {
 				var packedLen int
 				for shift := uint(0); ; shift += 7 {
 					if shift >= 64 {
@@ -2858,6 +2841,23 @@ func (m *Result) Unmarshal(dAtA []byte) error {
 					}
 					m.Counts = append(m.Counts, v)
 				}
+			} else if wireType == 0 {
+				var v uint32
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowTask
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= (uint32(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.Counts = append(m.Counts, v)
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field Counts", wireType)
 			}
@@ -3279,24 +3279,7 @@ func (m *Num) Unmarshal(dAtA []byte) error {
 				}
 			}
 		case 3:
-			if wireType == 0 {
-				var v uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowTask
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					v |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.Uids = append(m.Uids, v)
-			} else if wireType == 2 {
+			if wireType == 2 {
 				var packedLen int
 				for shift := uint(0); ; shift += 7 {
 					if shift >= 64 {
@@ -3337,6 +3320,23 @@ func (m *Num) Unmarshal(dAtA []byte) error {
 					}
 					m.Uids = append(m.Uids, v)
 				}
+			} else if wireType == 0 {
+				var v uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowTask
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= (uint64(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.Uids = append(m.Uids, v)
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field Uids", wireType)
 			}

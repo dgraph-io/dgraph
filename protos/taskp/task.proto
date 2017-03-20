@@ -25,7 +25,7 @@ message Query {
 	bool do_count = 6;      // Are we just getting lengths?
 
 	// Exactly one of uids and terms is populated.
-	List uids = 7;
+	List uid_list = 7;
 
 	// Function to generate or filter UIDs.
 	repeated string src_func = 8;

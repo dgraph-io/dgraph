@@ -21,6 +21,9 @@ addons:
     - zlib1g-dev
     - jq
     - graphviz
+  hosts:
+    - server1.dgraph.io
+    - server2.dgraph.io
 env:
 - CC=clang-3.8 CXX=clang++-3.8
 cache:
@@ -35,3 +38,4 @@ script:
 - bash contrib/cover.sh $HOME/build coverage.out
 - bash contrib/load-test.sh $HOME/build
 - goveralls -service=travis-ci -coverprofile=coverage.out
+- contrib/tlstest/run.sh

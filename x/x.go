@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"golang.org/x/net/trace"
 )
 
@@ -63,17 +62,6 @@ func SetError(prev *error, n error) {
 	if prev == nil {
 		prev = &n
 	}
-}
-
-func Log(p string) *logrus.Entry {
-	l := logrus.WithFields(logrus.Fields{
-		"package": p,
-	})
-	return l
-}
-
-func Err(entry *logrus.Entry, err error) *logrus.Entry {
-	return entry.WithField("error", err)
 }
 
 // SetStatus sets the error code, message and the newly assigned uids

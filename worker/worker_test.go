@@ -142,7 +142,7 @@ func TestProcessTask(t *testing.T) {
 func newQuery(attr string, uids []uint64, srcFunc []string) *taskp.Query {
 	x.AssertTrue(uids == nil || srcFunc == nil)
 	return &taskp.Query{
-		Uids:    &taskp.List{uids},
+		UidList: &taskp.List{uids},
 		SrcFunc: srcFunc,
 		Attr:    attr,
 	}

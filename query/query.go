@@ -131,6 +131,7 @@ type params struct {
 	Var          string
 	NeedsVar     []string
 	ParentVars   map[string]*taskp.List
+	uidToVal     map[uint64]types.Val
 	Langs        []string
 	Normalize    bool
 	From         uint64
@@ -444,10 +445,6 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
-		} else if gchild.Attr == "password" { // query password is forbidden
-			if gchild.Func == nil || !gchild.Func.IsPasswordVerifier() {
-				return errors.New("Password is not fetchable")
-			}
 		}
 
 		args := params{
@@ -737,9 +734,14 @@ func createTaskQuery(sg *SubGraph) *taskp.Query {
 		FacetsFilter: sg.facetsFilter,
 	}
 	if sg.SrcUIDs != nil {
-		out.Uids = sg.SrcUIDs
+		out.UidList = sg.SrcUIDs
 	}
 	return out
+}
+
+type values struct {
+	uids *taskp.List
+	vals map[uint64]types.Val
 }
 
 func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
@@ -747,7 +749,8 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	var err error
 
 	// doneVars will store the UID list of the corresponding variables.
-	doneVars := make(map[string]*taskp.List)
+	doneVars := make(map[string]values)
+	//varValMap := make(map[string]map[uint64]types.Val)
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
@@ -782,7 +785,8 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			}
 			// The variable should be defined in this block or should have already been
 			// populated by some other block, otherwise we are not ready to execute yet.
-			if _, ok := doneVars[v]; !ok && !selfDep {
+			_, ok := doneVars[v]
+			if !ok && !selfDep {
 				return false
 			}
 		}
@@ -805,7 +809,10 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 				continue
 			}
 
-			sg.recursiveFillVars(doneVars)
+			err = sg.recursiveFillVars(doneVars)
+			if err != nil {
+				return nil, err
+			}
 			hasExecuted[idx] = true
 			numQueriesDone++
 			idxList = append(idxList, idx)
@@ -888,7 +895,7 @@ func shouldCascade(res gql.Result, idx int) bool {
 }
 
 // TODO(Ashwin): Benchmark this function.
-func populateVarMap(sg *SubGraph, doneVars map[string]*taskp.List, isCascade bool) {
+func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
 		goto AssignStep
@@ -931,21 +938,49 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*taskp.List, isCascade boo
 
 AssignStep:
 	if sg.Params.Var != "" {
-		doneVars[sg.Params.Var] = sg.DestUIDs
+		if len(sg.DestUIDs.Uids) != 0 {
+			// This implies it is a entity variable.
+			doneVars[sg.Params.Var] = values{
+				uids: sg.DestUIDs,
+			}
+		} else if len(sg.values) != 0 {
+			// This implies it is a value variable.
+			doneVars[sg.Params.Var] = values{
+				vals: make(map[uint64]types.Val),
+			}
+			for idx, uid := range sg.SrcUIDs.Uids {
+				//val, _ := getValue(sg.values[idx])
+				val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
+				if err != nil {
+					continue
+				}
+				doneVars[sg.Params.Var].vals[uid] = val
+			}
+		}
 	}
 }
 
-func (sg *SubGraph) recursiveFillVars(doneVars map[string]*taskp.List) {
-	sg.fillVars(doneVars)
+func (sg *SubGraph) recursiveFillVars(doneVars map[string]values) error {
+	err := sg.fillVars(doneVars)
+	if err != nil {
+		return err
+	}
 	for _, child := range sg.Children {
-		child.recursiveFillVars(doneVars)
+		err = child.recursiveFillVars(doneVars)
+		if err != nil {
+			return err
+		}
 	}
 	for _, fchild := range sg.Filters {
 		fchild.recursiveFillVars(doneVars)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func (sg *SubGraph) fillVars(mp map[string]*taskp.List) {
+func (sg *SubGraph) fillUidVars(mp map[string]*taskp.List) {
 	lists := make([]*taskp.List, 0, 3)
 	if sg.DestUIDs != nil {
 		lists = append(lists, sg.DestUIDs)
@@ -956,6 +991,27 @@ func (sg *SubGraph) fillVars(mp map[string]*taskp.List) {
 		}
 	}
 	sg.DestUIDs = algo.MergeSorted(lists)
+}
+
+func (sg *SubGraph) fillVars(mp map[string]values) error {
+	var isVar bool
+	lists := make([]*taskp.List, 0, 3)
+	for _, v := range sg.Params.NeedsVar {
+		if l, ok := mp[v]; ok {
+			if l.uids != nil {
+				isVar = true
+				lists = append(lists, l.uids)
+			} else if l.vals != nil {
+				// This should happend only once.
+				sg.Params.uidToVal = l.vals
+			}
+		}
+	}
+	if isVar && sg.DestUIDs != nil {
+		lists = append(lists, sg.DestUIDs)
+	}
+	sg.DestUIDs = algo.MergeSorted(lists)
+	return nil
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
@@ -978,10 +1034,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// This is to allow providing SrcUIDs to the filter children.
 		sg.DestUIDs = sg.SrcUIDs
 	} else {
-		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
+		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "var" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
-			sg.fillVars(sg.Params.ParentVars)
+			sg.fillUidVars(sg.Params.ParentVars)
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
 			rch <- nil
 			return
@@ -1171,7 +1227,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-	for i := 0; i < len(sg.uidMatrix); i++ { //_, l := range sg.uidMatrix {
+	for i := 0; i < len(sg.uidMatrix); i++ {
 		algo.IntersectWith(sg.uidMatrix[i], sg.DestUIDs, sg.uidMatrix[i])
 		start, end := pageRange(&sg.Params, len(sg.uidMatrix[i].Uids))
 		sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
@@ -1192,6 +1248,13 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		sg.Params.Count = 1000
 	}
 
+	for _, it := range sg.Params.NeedsVar {
+		if it == sg.Params.Order {
+			// If the Order name is same as var name, we sort using that variable.
+			return sg.sortAndPaginateUsingVar(ctx)
+		}
+	}
+
 	sort := &taskp.Sort{
 		Attr:      sg.Params.Order,
 		Langs:     sg.Params.Langs,
@@ -1208,6 +1271,12 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))
 	sg.uidMatrix = result.GetUidMatrix()
 
+	// Update the destUids as we might have removed some UIDs.
+	sg.updateDestUids(ctx)
+	return nil
+}
+
+func (sg *SubGraph) updateDestUids(ctx context.Context) {
 	// Update sg.destUID. Iterate over the UID matrix (which is not sorted by
 	// UID). For each element in UID matrix, we do a binary search in the
 	// current destUID and mark it. Then we scan over this bool array and
@@ -1223,6 +1292,37 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	}
 	algo.ApplyFilter(sg.DestUIDs,
 		func(uid uint64, idx int) bool { return included[idx] })
+}
+
+func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
+	if sg.Params.uidToVal == nil {
+		return nil
+	}
+	for i := 0; i < len(sg.uidMatrix); i++ {
+		ul := sg.uidMatrix[i]
+		values := make([]types.Val, 0, len(ul.Uids))
+		for _, uid := range ul.Uids {
+			v := sg.Params.uidToVal[uid]
+			values = append(values, v)
+		}
+		if len(values) == 0 {
+			continue
+		}
+		typ := values[0].Tid
+		types.Sort(typ, values, ul, sg.Params.OrderDesc)
+		sg.uidMatrix[i] = ul
+	}
+
+	if sg.Params.Count != 0 || sg.Params.Offset != 0 {
+		// Apply the pagination.
+		for i := 0; i < len(sg.uidMatrix); i++ {
+			start, end := pageRange(&sg.Params, len(sg.uidMatrix[i].Uids))
+			sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+		}
+	}
+
+	// Update the destUids as we might have removed some UIDs.
+	sg.updateDestUids(ctx)
 	return nil
 }
 
@@ -1238,7 +1338,7 @@ func isValidArg(a string) bool {
 // isValidFuncName checks if fn passed is valid keyword.
 func isValidFuncName(f string) bool {
 	switch f {
-	case "anyofterms", "allofterms", "id", "regexp", "anyoftext", "alloftext":
+	case "anyofterms", "allofterms", "var", "regexp", "anyoftext", "alloftext":
 		return true
 	}
 	return isCompareFn(f) || types.IsGeoFunc(f)

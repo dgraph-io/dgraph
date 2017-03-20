@@ -135,6 +135,7 @@ func addReverseMutation(ctx context.Context, t *taskp.DirectedEdge) {
 		Attr:    t.Attr,
 		Label:   "rev",
 		Op:      t.Op,
+		Facets:  t.Facets,
 	}
 
 	_, err := plist.AddMutation(ctx, edge)
