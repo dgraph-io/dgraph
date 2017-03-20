@@ -120,25 +120,26 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	Alias        string
-	Count        int
-	Offset       int
-	AfterUID     uint64
-	DoCount      bool
-	GetUID       bool
-	Order        string
-	OrderDesc    bool
-	isDebug      bool
-	Var          string
-	NeedsVar     []string
-	ParentVars   map[string]*taskp.List
-	uidToVal     map[uint64]types.Val
-	Langs        []string
-	Normalize    bool
-	From         uint64
-	To           uint64
-	Facet        *facetsp.Param
-	RecurseDepth uint64
+	Alias          string
+	Count          int
+	Offset         int
+	AfterUID       uint64
+	DoCount        bool
+	GetUID         bool
+	Order          string
+	OrderDesc      bool
+	isDebug        bool
+	Var            string
+	NeedsVar       []string
+	ParentVars     map[string]*taskp.List
+	uidToVal       map[uint64]types.Val
+	Langs          []string
+	Normalize      bool
+	From           uint64
+	To             uint64
+	Facet          *facetsp.Param
+	RecurseDepth   uint64
+	isPartOfresult bool
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -259,8 +260,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			uc.AddValue("count", c)
 			dst.AddListChild(pc.Attr, uc)
 		} else if len(pc.SrcFunc) > 0 && isAggregatorFn(pc.SrcFunc[0]) {
-			if pc.Params.Alias == "" {
-				// This would be true for actual node, but we want to consider
+			if !pc.Params.isPartOfresult {
 				continue
 			}
 			// add sg.Attr as child on 'parent' instead of 'dst', otherwise
@@ -775,6 +775,8 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 			parent.Children = append(parent.Children, temp)
 			temp.values = make([]*taskp.Value, 0, 1)
 			temp.Params.Alias = sg.Attr
+			temp.Params.isPartOfresult = true
+			child.Params.isPartOfresult = false
 			typ, _ := schema.State().TypeOf(child.Attr)
 			for _, list := range sg.uidMatrix {
 				var values []*taskp.Value
