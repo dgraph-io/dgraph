@@ -74,7 +74,7 @@ func addMutationWithIndex(t *testing.T, l *List, edge *taskp.DirectedEdge, op ui
 const schemaStrAlt = `
 name:string @index
 dob:date @index
-`
+	`
 
 func TestTokensTable(t *testing.T) {
 	schema.ParseBytes([]byte(schemaStrAlt), 1)
@@ -107,8 +107,7 @@ func TestTokensTable(t *testing.T) {
 	x.Check(pl.Unmarshal(slice.Data()))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
-
-	delPosting(t, l)
+	require.NoError(t, l.Delete())
 }
 
 // tokensForTest returns keys for a table. This is just for testing / debugging.
@@ -190,7 +189,7 @@ func TestRebuildIndex(t *testing.T) {
 	require.EqualValues(t, idxVals[1].Postings[0].Uid, 1)
 
 	l1, _ := GetOrCreate(x.DataKey("name", 1), 0)
-	delPosting(t, l1)
+	require.NoError(t, l1.Delete())
 	l2, _ := GetOrCreate(x.DataKey("name", 20), 0)
-	delPosting(t, l2)
+	require.NoError(t, l2.Delete())
 }

@@ -518,14 +518,6 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
 
-	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		err := l.pstore.Delete(l.key)
-		if err == nil {
-			return true, nil
-		}
-		return false, err
-	}
-
 	if len(l.mlayer) == 0 {
 		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
 		l.pending = make([]uint64, 0, 3)
@@ -736,4 +728,9 @@ func (l *List) valuePosting() (p *typesp.Posting, err error) {
 		return p, ErrNoValue
 	}
 	return p, nil
+}
+
+func (l *List) Delete() error {
+	lhmap.Delete(farm.Fingerprint64(l.key))
+	return l.pstore.Delete(l.key)
 }
