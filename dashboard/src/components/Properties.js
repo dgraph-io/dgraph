@@ -7,14 +7,13 @@ import "../assets/css/Properties.css";
 
 class Properties extends Component {
     render() {
-        let props = this.props.currentNode !== "{}" &&
+        let nodeProperties = this.props.currentNode !== "{}" &&
             JSON.parse(this.props.currentNode.title),
-            name = this.props.currentNode.name,
-            uid = this.props.currentNode.uid,
+            { name, uid } = this.props.currentNode,
             // Nodes have facets and attrs keys.
-            isEdge = Object.keys(props).length === 1,
-            attrs = props["attrs"] || {},
-            facets = props["facets"] || {};
+            isEdge = Object.keys(nodeProperties).length === 1,
+            attrs = nodeProperties["attrs"] || {},
+            facets = nodeProperties["facets"] || {};
 
         return (
             <div id="properties">

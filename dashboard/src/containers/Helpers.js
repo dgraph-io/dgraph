@@ -93,13 +93,7 @@ function getNodeLabel(properties: Object, regex: string): string {
   }
 
   let nameKey = getNameKey(properties, regex);
-  if (nameKey === "") {
-    return "";
-  }
-
-  label = properties[nameKey];
-
-  return label;
+  return properties[nameKey] || "";
 }
 
 export function outgoingEdges(nodeId, edgeSet) {
