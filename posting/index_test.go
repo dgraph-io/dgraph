@@ -71,9 +71,13 @@ func addMutationWithIndex(t *testing.T, l *List, edge *taskp.DirectedEdge, op ui
 	require.NoError(t, l.AddMutationWithIndex(context.Background(), edge))
 }
 
+const schemaStrAlt = `
+name:string @index
+dob:date @index
+`
+
 func TestTokensTable(t *testing.T) {
-	// TODO - Check where is schemaStr defined?
-	schema.ParseBytes([]byte(schemaStr), 1)
+	schema.ParseBytes([]byte(schemaStrAlt), 1)
 
 	key := x.DataKey("name", 1)
 	l := getNew(key, ps)
@@ -103,6 +107,8 @@ func TestTokensTable(t *testing.T) {
 	x.Check(pl.Unmarshal(slice.Data()))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
+
+	delPosting(t, l)
 }
 
 // tokensForTest returns keys for a table. This is just for testing / debugging.
@@ -138,19 +144,10 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 	require.True(t, ok)
 }
 
-const schemaStrAlt = `
-name:string @index
-dob:date @index
-`
-
-func populateGraph(t *testing.T) {
+func TestRebuildIndex(t *testing.T) {
 	schema.ParseBytes([]byte(schemaStrAlt), 1)
 	addEdgeToValue(t, "name", 1, "Michonne")
 	addEdgeToValue(t, "name", 20, "David")
-}
-
-func TestRebuildIndex(t *testing.T) {
-	populateGraph(t)
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10)
@@ -191,5 +188,9 @@ func TestRebuildIndex(t *testing.T) {
 	require.Len(t, idxVals[1].Postings, 1)
 	require.EqualValues(t, idxVals[0].Postings[0].Uid, 20)
 	require.EqualValues(t, idxVals[1].Postings[0].Uid, 1)
-	fmt.Println("at end of rebuild index")
+
+	l1, _ := GetOrCreate(x.DataKey("name", 1), 0)
+	delPosting(t, l1)
+	l2, _ := GetOrCreate(x.DataKey("name", 20), 0)
+	delPosting(t, l2)
 }
