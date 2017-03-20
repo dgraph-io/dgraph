@@ -29,7 +29,7 @@ class PreviousQueryList extends Component {
                 <div style={{ marginBottom: "5px" }}>
                     <span><b>Previous Queries</b></span>
                 </div>
-                <InputGroup>
+                <InputGroup bsSize="sm">
                     <FormControl
                         type="text"
                         placeholder="Search"

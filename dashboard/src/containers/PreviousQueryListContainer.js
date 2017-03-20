@@ -8,8 +8,6 @@ import {
     deleteAllQueries
 } from "../actions";
 
-import "../assets/css/App.css";
-
 const mapStateToProps = state => ({
     queries: state.previousQueries
 });
