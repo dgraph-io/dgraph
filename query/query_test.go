@@ -152,6 +152,7 @@ func populateGraph(t *testing.T) {
 
 	addEdgeToValue(t, "address", 23, "21, mark street, Mars", nil)
 	addEdgeToValue(t, "name", 24, "Glenn Rhee", nil)
+	addEdgeToValue(t, "_xid_", 24, "g\"lenn", nil)
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[1.10001,2.000001]}`)
 	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
@@ -4237,7 +4238,7 @@ func TestXidInvalidJSON(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"_xid_":"mich","alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"_xid_":"mich","alive":true,"friend":[{"name":"Rick Grimes"},{"_xid_":"g\"lenn","name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 	m := make(map[string]interface{})
 	err := json.Unmarshal([]byte(js), &m)
@@ -4294,6 +4295,7 @@ children: <
     >
   >
   children: <
+    xid: "g\"lenn"
     attribute: "friend"
     properties: <
       prop: "name"
