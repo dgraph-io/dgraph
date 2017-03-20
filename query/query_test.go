@@ -1025,15 +1025,13 @@ func TestCountError3(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestMin(t *testing.T) {
+func TestMinMulti(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 	{
-		me(id:0x01) {
+		me(func: anyofterms(name, "michonne rick andrea")) {
 			name
-			gender
-			alive
 			friend {
 				min(dob)
 			}
@@ -1042,7 +1040,26 @@ func TestMin(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":true,"friend":[{"min(dob)":"1901-01-15"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"min(dob)":"1901-01-15"}],"name":"Michonne"},{"friend":[{"min(dob)":"1910-01-01"}],"name":"Rick Grimes"},{"friend":[{"min(dob)":"1909-05-05"}],"name":"Andrea"}]}`,
+		js)
+}
+
+func TestMin(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+	{
+		me(id:0x01) {
+			name
+			friend {
+				min(dob)
+			}
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"min(dob)":"1901-01-15"}],"name":"Michonne"}]}`,
 		js)
 }
 

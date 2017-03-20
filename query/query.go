@@ -761,15 +761,11 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 	var err error
 	for _, child := range sg.Children {
 		child.populateAggregation(sg)
-		if parent == nil {
-			// We cant have aggregation at this level.
-			return nil
-		}
 		if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
 			temp := new(SubGraph)
 			*temp = *child
 			temp.Children = []*SubGraph{}
-			temp.SrcUIDs = parent.DestUIDs // Point the new Subgraphs srcUids
+			temp.SrcUIDs = sg.SrcUIDs // Point the new Subgraphs srcUids
 			parent.Children = append(parent.Children, temp)
 			temp.values = make([]*taskp.Value, 0, 1)
 			temp.Params.Alias = sg.Attr
@@ -786,7 +782,6 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 					}
 				}
 				val, err = Aggregate(child.SrcFunc[0], values, typ)
-				fmt.Println(val, values)
 				if err != nil {
 					return err
 				}
