@@ -125,11 +125,10 @@ func addToSchemaMap(schemaMap map[uint32]*taskp.Schema, schema *graphp.Schema) {
 // If the current node serves the group serve the schema or forward
 // to relevant node
 // TODO: Janardhan - if read fails try other servers serving same group
-func getSchemaOverNetwork(ctx context.Context, gid uint32, s *taskp.Schema,
-	ch chan *resultErr) {
+func getSchemaOverNetwork(ctx context.Context, gid uint32, s *taskp.Schema, ch chan resultErr) {
 	if groups().ServesGroup(gid) {
 		schema, e := getSchema(ctx, s)
-		ch <- &resultErr{result: schema, err: e}
+		ch <- resultErr{result: schema, err: e}
 		return
 	}
 
@@ -137,14 +136,14 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *taskp.Schema,
 	pl := pools().get(addr)
 	conn, e := pl.Get()
 	if e != nil {
-		ch <- &resultErr{err: e}
+		ch <- resultErr{err: e}
 		return
 	}
 	defer pl.Put(conn)
 
 	c := workerp.NewWorkerClient(conn)
 	schema, e := c.Schema(ctx, s)
-	ch <- &resultErr{result: schema, err: e}
+	ch <- resultErr{result: schema, err: e}
 }
 
 // GetSchemaOverNetwork checks which group should be serving the schema
@@ -153,7 +152,7 @@ func GetSchemaOverNetwork(ctx context.Context, schema *graphp.Schema) ([]*graphp
 	schemaMap := make(map[uint32]*taskp.Schema)
 	addToSchemaMap(schemaMap, schema)
 
-	results := make(chan *resultErr, len(schemaMap))
+	results := make(chan resultErr, len(schemaMap))
 	var schemaNodes []*graphp.SchemaNode
 
 	for gid, s := range schemaMap {
