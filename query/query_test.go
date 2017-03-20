@@ -4239,6 +4239,9 @@ func TestXidInvalidJSON(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"_xid_":"mich","alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
+	m := make(map[string]interface{})
+	err := json.Unmarshal([]byte(js), &m)
+	require.NoError(t, err)
 }
 
 func TestXidInvalidProto(t *testing.T) {
