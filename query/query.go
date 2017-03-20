@@ -758,43 +758,46 @@ type values struct {
 }
 
 func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
-	var err error
 	for _, child := range sg.Children {
-		err = child.populateAggregation(sg)
+		err := child.populateAggregation(sg)
 		if err != nil {
 			return err
 		}
-		if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
-			temp := new(SubGraph)
-			*temp = *child
-			temp.Children = []*SubGraph{}
-			temp.SrcUIDs = sg.SrcUIDs // Point the new Subgraphs srcUids
-			if parent == nil {
-				return nil
+		if parent == nil || len(child.SrcFunc) == 0 || !isAggregatorFn(child.SrcFunc[0]) {
+			continue
+		}
+
+		sibling := new(SubGraph)
+		*sibling = *child // Sibling of sg.
+		sibling.Children = []*SubGraph{}
+		sibling.SrcUIDs = sg.SrcUIDs // Point the new Subgraphs srcUids
+		parent.Children = append(parent.Children, sibling)
+		sibling.values = make([]*taskp.Value, 0, 1)
+		sibling.Params.Alias = sg.Attr
+		sibling.Params.isPartOfresult = true
+		child.Params.isPartOfresult = false
+		typ, _ := schema.State().TypeOf(child.Attr)
+		for _, list := range sg.uidMatrix {
+			ag := aggregator{
+				name: child.SrcFunc[0],
+				typ:  typ,
 			}
-			parent.Children = append(parent.Children, temp)
-			temp.values = make([]*taskp.Value, 0, 1)
-			temp.Params.Alias = sg.Attr
-			temp.Params.isPartOfresult = true
-			child.Params.isPartOfresult = false
-			typ, _ := schema.State().TypeOf(child.Attr)
-			for _, list := range sg.uidMatrix {
-				var values []*taskp.Value
-				var val *taskp.Value
-				for _, uid := range list.Uids {
-					idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
-						return child.SrcUIDs.Uids[i] >= uid
-					})
-					if idx < len(child.SrcUIDs.Uids) && child.SrcUIDs.Uids[idx] == uid {
-						values = append(values, child.values[idx])
+			for _, uid := range list.Uids {
+				idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
+					return child.SrcUIDs.Uids[i] >= uid
+				})
+				if idx < len(child.SrcUIDs.Uids) && child.SrcUIDs.Uids[idx] == uid {
+					ag.Apply(child.values[idx])
+					if err != nil {
+						return err
 					}
 				}
-				val, err = Aggregate(child.SrcFunc[0], values, typ)
-				if err != nil {
-					return err
-				}
-				temp.values = append(temp.values, val)
 			}
+			v, err := ag.Value()
+			if err != nil {
+				return err
+			}
+			sibling.values = append(sibling.values, v)
 		}
 	}
 	return nil
@@ -909,7 +912,10 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
-			sg.populateAggregation(nil)
+			err := sg.populateAggregation(nil)
+			if err != nil {
+				return nil, err
+			}
 			if len(res.QueryVars[idx].Defines) == 0 {
 				continue
 			}
