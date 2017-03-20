@@ -7,9 +7,9 @@ title = "getting started"
 
 **New to Dgraph? Here's a 5 step tutorial to get you up and running.**
 
-## Step 1: Installation 
+## Step 1: Installation
 
-### System Installation 
+### System Installation
 
 You could simply install the binaries with
 ```
@@ -25,14 +25,14 @@ $ vim /tmp/get.sh  # Inspect the script
 $ sh /tmp/get.sh   # Execute the script
 ```
 
-### Docker Image Installation 
+### Docker Image Installation
 
 You may pull our Docker images [from here](https://hub.docker.com/r/dgraph/dgraph/). From terminal, just type:
 ```
 docker pull dgraph/dgraph
 ```
 
-## Step 2: Run Dgraph 
+## Step 2: Run Dgraph
 
 We will be running Dgraph using the following schema for demonstration. You can always run Dgraph even without a schema.
 ```
@@ -49,13 +49,13 @@ To download the schema file run
 $ wget "https://raw.githubusercontent.com/dgraph-io/benchmarks/master/data/starwars.schema?raw#true" -O starwars.schema -q
 ```
 
-### Using System Installation 
+### Using System Installation
 Follow this command to run Dgraph:
 ```
 $ dgraph --schema starwars.schema
 ```
 
-### Using Docker 
+### Using Docker
 
 If you wan't to persist the data while you play around with Dgraph then you should mount the `dgraph` volume.
 
@@ -70,7 +70,7 @@ $ docker run -it -p 9090:8080 -v $(pwd)/dgraph:/dgraph dgraph/dgraph dgraph --bi
 
 {{Tip|The dgraph server listens on port 8080 (unless you have mapped to another port above) with log output to the terminal.}}
 
-## Step 3: Run some queries 
+## Step 3: Run some queries
 {{ Tip | From v0.7.3,  a user interface is available at `http://localhost:8080` from the browser to run mutations and visualise  results from the queries.}}
 
 Lets do a mutation which stores information about the first three releases of the the ''Star Wars'' series and one of the ''Star Trek'' movies.
@@ -189,10 +189,10 @@ curl localhost:8080/query -XPOST -d $'{
 }
 ```
 
-## Step 4: Advanced Queries on a larger dataset 
+## Step 4: Advanced Queries on a larger dataset
 {{ Note | Step 4 and 5 are optional. If you'd like to experiment with a larger dataset and explore more functionality, this section is for you.}}
 
-### Download dataset 
+### Download dataset
 First, download the goldendata.rdf.gz dataset from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz) ([download](https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz)). Also, download the corresponding schema from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.schema) ([download](https://raw.githubusercontent.com/dgraph-io/benchmarks/master/data/goldendata.schema)). Put both files in `~/dgraph` directory, creating it if necessary using `mkdir ~/dgraph`.
 ```
 $ mkdir -p ~/dgraph
@@ -201,7 +201,7 @@ $ wget "https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.
 $ wget "https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.schema?raw#true" -O goldendata.schema -q
 ```
 
-### Load dataset 
+### Load dataset
 Start schema with the schema file.
 ```
 $ cd ~/dgraph # The directory where you downloaded the rdf.gz and schema files.
@@ -226,13 +226,13 @@ $
 ```
 {{Tip|Your counts should be the same, but your statistics will vary.}}
 
-## Step 5: Run some queries 
+## Step 5: Run some queries
 
 {{ Tip | From v0.7.3 ,  a user interface is available at `http://localhost:8080` from the browser to run mutations and visualise  results from the queries.}}
 
 {{ Warning | In versions up to v0.7.3 , special convention is used for string values with specified language. RDF N-Quad `@lang` results in appending `.lang` to predicate name, e.g. `<0x01> <name> "Алисия"@ru .` is equivalent to `<0x01> <name.ru> "Алисия" .`. See [query language documentation](https://wiki.dgraph.io) for more details.}}
 
-### Movies by Steven Spielberg 
+### Movies by Steven Spielberg
 
 Let's now find all the entities named "Steven Spielberg," and the movies directed by them.
 
@@ -271,7 +271,7 @@ curl localhost:8080/query -XPOST -d '{
 This query will return all the movies by the popular director Steven Spielberg, sorted by release date in descending order. The query  also return two other entities which have "Steven Spielberg" in their names.
 {{Tip|You may use python or python3 equally well.}}
 
-### Released after August 1984 
+### Released after August 1984
 Now, let's do some filtering. This time we'll only retrieve the movies which were released after August 1984. We'll sort in increasing order this time by using `orderasc`, instead of `orderdesc`.
 
 {| class#"wikitable"
@@ -308,7 +308,7 @@ curl localhost:8080/query -XPOST -d '{
 
 
 
-### Released in 1990s 
+### Released in 1990s
 We'll now add an AND filter using `AND` and find only the movies released in the 90s.
 {| class#"wikitable"
 |-
@@ -343,7 +343,7 @@ curl localhost:8080/query -XPOST -d '{
 |}
 
 
-### Released since 2016 
+### Released since 2016
 So far, we've been retrieving film titles using the name of the director. Now, we'll start with films released since 2016, and their directors. To make things interesting, we'll only retrieve the director name, if it matches any of ''travis'' or ''knight''. In addition, we'll also alias `initial_release_date` to `release`. This will make the result look better.
 
 {| class#"wikitable"
@@ -381,14 +381,14 @@ curl localhost:8080/query -XPOST -d '{
 
 This should give you an idea of some of the queries Dgraph is capable of. A wider range of queries can been found in the [[Query Language]] section.
 
-# Need Help 
+## Need Help
 * Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
 * Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues) if you encounter bugs or have feature requests.
 * You can also join our [Slack channel](http://slack.dgraph.io).
 
-# Troubleshooting Docker 
+## Troubleshooting
 
-## Error initialising postings store 
+### 1. Docker: Error initialising postings store
 
 One of the things to try would be to open bash in the container and try to run Dgraph from within it.
 
