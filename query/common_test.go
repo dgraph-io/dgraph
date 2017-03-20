@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types/facets"
+	"github.com/dgraph-io/dgraph/worker"
 
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
@@ -175,6 +176,16 @@ func processToFastJSON(t *testing.T, query string) string {
 	res, err := processToFastJsonReq(t, query)
 	require.NoError(t, err)
 	return res
+}
+
+func processSchemaQuery(t *testing.T, q string) []*graphp.SchemaNode {
+	res, err := gql.Parse(q)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	schema, err := worker.GetSchemaOverNetwork(ctx, res.Schema)
+	require.NoError(t, err)
+	return schema
 }
 
 func processToPB(t *testing.T, query string, debug bool) *graphp.Node {

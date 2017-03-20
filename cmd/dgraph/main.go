@@ -426,11 +426,24 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var schemaNode []*graphp.SchemaNode
+	if res.Schema != nil {
+		if schemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
+			x.SetStatus(w, x.Error, err.Error())
+			return
+		}
+	}
+
 	if len(res.Query) == 0 {
 		mp := map[string]interface{}{
 			"code":    x.Success,
 			"message": "Done",
 			"uids":    allocIdsStr,
+		}
+		// Either Schema or query can be specified
+		if res.Schema != nil {
+			mp["schema"] = schemaNode
 		}
 		if js, err := json.Marshal(mp); err == nil {
 			w.Write(js)
@@ -562,6 +575,7 @@ type grpcServer struct{}
 func (s *grpcServer) Run(ctx context.Context,
 	req *graphp.Request) (resp *graphp.Response, err error) {
 	var allocIds map[string]uint64
+	var schemaNodes []*graphp.SchemaNode
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		defer tr.Finish()
@@ -600,6 +614,23 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.AssignedUids = allocIds
 
+	if req.Schema != nil && res.Schema != nil {
+		return resp, x.Errorf("Multiple schema blocks found")
+	}
+	// Schema Block can be part of query string
+	schema := res.Schema
+	if schema == nil {
+		schema = req.Schema
+	}
+
+	if schema != nil {
+		if schemaNodes, err = worker.GetSchemaOverNetwork(ctx, schema); err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
+			return resp, err
+		}
+	}
+	resp.Schema = schemaNodes
+
 	sgl, err := query.ProcessQuery(ctx, res, &l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
@@ -633,7 +664,7 @@ type keywords struct {
 // Used to return a list of keywords, so that UI can show them for autocompletion.
 func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
-	// TODO: Remove this code and replace this
+	// TODO: Remove this code and replace with query from ui
 	preds := schema.State().Predicates(1)
 	kw := make([]keyword, 0, len(preds))
 	for _, p := range preds {

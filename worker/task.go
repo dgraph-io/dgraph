@@ -95,6 +95,29 @@ func convertValue(attr, data string) (types.Val, error) {
 	return dst, err
 }
 
+// Returns nil byte on error
+func convertToType(v types.Val, typ types.TypeID) (*taskp.Value, error) {
+	result := &taskp.Value{ValType: int32(typ), Val: x.Nilbyte}
+	if v.Tid == typ {
+		result.Val = v.Value.([]byte)
+		return result, nil
+	}
+
+	// conver data from binary to appropriate format
+	val, err := types.Convert(v, typ)
+	if err != nil {
+		return result, err
+	}
+	// Marshal
+	data := types.ValueForType(types.BinaryID)
+	err = types.Marshal(val, &data)
+	if err != nil {
+		return result, x.Errorf("Failed convertToType during Marshal")
+	}
+	result.Val = data.Value.([]byte)
+	return result, nil
+}
+
 type FuncType int
 
 const (
@@ -140,12 +163,25 @@ func parseFuncType(arr []string) (FuncType, string) {
 	}
 }
 
+func needsIndex(fnType FuncType) bool {
+	switch fnType {
+	case CompareAttrFn, GeoFn, RegexFn, FullTextSearchFn, StandardFn:
+		return true
+	default:
+		return false
+	}
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 	attr := q.Attr
 	srcFn, err := parseSrcFn(q)
 	if err != nil {
 		return nil, err
+	}
+
+	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
+		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
 	}
 
 	var out taskp.Result
@@ -183,11 +219,16 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
 			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
 		}
-		newValue := &taskp.Value{ValType: int32(val.Tid)}
-		if err == nil {
-			newValue.Val = val.Value.([]byte)
-		} else {
-			newValue.Val = x.Nilbyte
+		newValue := &taskp.Value{ValType: int32(val.Tid), Val: x.Nilbyte}
+		if isValueEdge {
+			if typ, err := schema.State().TypeOf(attr); err == nil {
+				newValue, err = convertToType(val, typ)
+			} else if err != nil {
+				// Ideally Schema should be present for already inserted mutation
+				// x.Checkf(err, "Schema not defined for attribute %s", attr)
+				// Converting to stored type for backward compatiblity of old inserted data
+				newValue, err = convertToType(val, val.Tid)
+			}
 		}
 		out.Values = append(out.Values, newValue)
 
