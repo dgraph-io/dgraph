@@ -2,8 +2,6 @@ package posting
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
 	"testing"
 	"time"
 
@@ -12,7 +10,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -75,16 +72,8 @@ func addMutationWithIndex(t *testing.T, l *List, edge *taskp.DirectedEdge, op ui
 }
 
 func TestTokensTable(t *testing.T) {
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+	// TODO - Check where is schemaStr defined?
 	schema.ParseBytes([]byte(schemaStr), 1)
-
-	ps, err := store.NewStore(dir)
-	defer ps.Close()
-	require.NoError(t, err)
-	Init(ps)
 
 	key := x.DataKey("name", 1)
 	l := getNew(key, ps)
@@ -116,11 +105,6 @@ func TestTokensTable(t *testing.T) {
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 }
 
-const schemaStrAlt = `
-name:string @index
-dob:date @index
-`
-
 // tokensForTest returns keys for a table. This is just for testing / debugging.
 func tokensForTest(attr string) []string {
 	pk := x.ParsedKey{Attr: attr}
@@ -138,7 +122,7 @@ func tokensForTest(attr string) []string {
 }
 
 // addEdgeToValue adds edge without indexing.
-func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
+func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string) {
 	edge := &taskp.DirectedEdge{
 		Value:  []byte(value),
@@ -154,25 +138,19 @@ func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 	require.True(t, ok)
 }
 
-func populateGraph(t *testing.T) (string, *store.Store) {
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
+const schemaStrAlt = `
+name:string @index
+dob:date @index
+`
 
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-
+func populateGraph(t *testing.T) {
 	schema.ParseBytes([]byte(schemaStrAlt), 1)
-	Init(ps)
-
-	addEdgeToValue(t, ps, "name", 1, "Michonne")
-	addEdgeToValue(t, ps, "name", 20, "David")
-	return dir, ps
+	addEdgeToValue(t, "name", 1, "Michonne")
+	addEdgeToValue(t, "name", 20, "David")
 }
 
 func TestRebuildIndex(t *testing.T) {
-	dir, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
+	populateGraph(t)
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10)
@@ -213,4 +191,5 @@ func TestRebuildIndex(t *testing.T) {
 	require.Len(t, idxVals[1].Postings, 1)
 	require.EqualValues(t, idxVals[0].Postings[0].Uid, 20)
 	require.EqualValues(t, idxVals[1].Postings[0].Uid, 1)
+	fmt.Println("at end of rebuild index")
 }
