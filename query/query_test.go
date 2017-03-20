@@ -1029,19 +1029,19 @@ func TestMin(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
-                {
-                        me(id:0x01) {
-                                name
-                                gender
-                                alive
-                                friend {
-                                    min(dob)
-                                }
-                        }
-                }
-        `
+	{
+		me(id:0x01) {
+			name
+			gender
+			alive
+			friend {
+				min(dob)
+			}
+		}
+	}
+`
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"alive":true,"friend":[{"min(dob)":"1901-01-15"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1146,7 +1146,7 @@ func TestSum(t *testing.T) {
                 }
         `
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"alive":true,"friend":[{"sum(shadow_deep)":18}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
