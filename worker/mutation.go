@@ -110,12 +110,14 @@ func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) err
 		// schema was present already
 		if needReindexing(old, current) {
 			// Reindex if update.Index is true or remove index
-			if err := n.rebuildOrDelIndex(ctx, update.Predicate, current.Directive == typesp.Schema_INDEX); err != nil {
+			if err := n.rebuildOrDelIndex(ctx, update.Predicate,
+				current.Directive == typesp.Schema_INDEX); err != nil {
 				return err
 			}
 		} else if (current.Directive == typesp.Schema_REVERSE) != (old.Directive == typesp.Schema_REVERSE) {
 			// Add or remove reverse edge based on update.Reverse
-			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, current.Directive == typesp.Schema_REVERSE); err != nil {
+			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
+				current.Directive == typesp.Schema_REVERSE); err != nil {
 				return err
 			}
 		}
@@ -152,7 +154,7 @@ func updateSchema(attr string, s typesp.Schema, raftIndex uint64, group uint32) 
 		Index:  raftIndex,
 		Water:  posting.SyncMarkFor(group),
 	}
-	schema.State().Update(&ce)
+	schema.State().Update(ce)
 }
 
 func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uint32) {
@@ -171,7 +173,8 @@ func checkSchema(s *graphp.SchemaUpdate) error {
 	typ := types.TypeID(s.ValueType)
 	if typ == types.UidID && s.Directive == graphp.SchemaUpdate_INDEX {
 		// index on uid type
-		return x.Errorf("Index not allowed on predicate of type uid on predicate %s", s.Predicate)
+		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
+			s.Predicate)
 	} else if typ != types.UidID && s.Directive == graphp.SchemaUpdate_REVERSE {
 		// reverse on non-uid type
 		return x.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)

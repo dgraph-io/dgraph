@@ -93,12 +93,12 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 }
 
 func (n *node) syncAllMarks(ctx context.Context, lastIndex uint64) error {
-	n.applyAllMarks(ctx, lastIndex)
+	n.waitForAppliedMark(ctx, lastIndex)
 	waitForSyncMark(ctx, n.gid, lastIndex)
 	return nil
 }
 
-func (n *node) applyAllMarks(ctx context.Context, lastIndex uint64) error {
+func (n *node) waitForAppliedMark(ctx context.Context, lastIndex uint64) error {
 	// Wait for applied to reach till lastIndex
 	for n.applied.WaitingFor() {
 		doneUntil := n.applied.DoneUntil() // applied until.

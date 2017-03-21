@@ -33,7 +33,7 @@ import (
 var (
 	pstate *state
 	pstore *store.Store
-	syncCh chan *SyncEntry
+	syncCh chan SyncEntry
 )
 
 type stateShard struct {
@@ -88,11 +88,11 @@ func State() *state {
 
 // Update updates the schema in memory and sends an entry to syncCh so that it can be
 // comitted later
-func (s *state) Update(se *SyncEntry) {
+func (s *state) Update(se SyncEntry) {
 	s.get(group.BelongsTo(se.Attr)).update(se)
 }
 
-func (s *stateShard) update(se *SyncEntry) {
+func (s *stateShard) update(se SyncEntry) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -227,7 +227,7 @@ func (s *stateShard) isReversed(pred string) bool {
 
 func Init(ps *store.Store) {
 	pstore = ps
-	syncCh = make(chan *SyncEntry, 10000)
+	syncCh = make(chan SyncEntry, 10000)
 	go batchSync()
 }
 
@@ -300,7 +300,7 @@ type SyncEntry struct {
 	Index  uint64
 }
 
-func addToEntriesMap(entriesMap map[chan x.Mark][]uint64, entries []*SyncEntry) {
+func addToEntriesMap(entriesMap map[chan x.Mark][]uint64, entries []SyncEntry) {
 	for _, entry := range entries {
 		if entry.Water != nil {
 			entriesMap[entry.Water.Ch] = append(entriesMap[entry.Water.Ch], entry.Index)
@@ -309,7 +309,7 @@ func addToEntriesMap(entriesMap map[chan x.Mark][]uint64, entries []*SyncEntry) 
 }
 
 func batchSync() {
-	var entries []*SyncEntry
+	var entries []SyncEntry
 	var loop uint64
 
 	b := pstore.NewWriteBatch()

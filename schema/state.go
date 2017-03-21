@@ -29,6 +29,7 @@ const (
 	itemLeftRound                          // left round bracket
 	itemRightRound                         // right round bracket
 	itemAt
+	itemDot
 )
 
 func lexText(l *lex.Lexer) lex.StateFn {
@@ -58,6 +59,8 @@ Loop:
 			l.Emit(itemColon)
 		case r == '@':
 			l.Emit(itemAt)
+		case r == '.':
+			l.Emit(itemDot)
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}

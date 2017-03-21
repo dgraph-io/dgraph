@@ -72,11 +72,9 @@ func processSchemaFile(file string, batch *client.BatchMutation) {
 	f, err := os.Open(file)
 	x.Check(err)
 	defer f.Close()
-	gr, err := gzip.NewReader(f)
-	x.Check(err)
 
 	var buf bytes.Buffer
-	bufReader := bufio.NewReader(gr)
+	bufReader := bufio.NewReader(f)
 	var line int
 	for {
 		err = readLine(bufReader, &buf)

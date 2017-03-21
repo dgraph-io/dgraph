@@ -488,7 +488,7 @@ func (n *node) processApplyCh() {
 				// Wait for applied watermark to reach till previous index
 				// All mutations before this should use old schema and after this
 				// should use new schema
-				n.applyAllMarks(n.ctx, e.Index-1)
+				n.waitForAppliedMark(n.ctx, e.Index-1)
 				if err := n.processSchemaMutations(e, proposal.Mutations); err != nil {
 					n.applied.Ch <- mark
 					posting.SyncMarkFor(n.gid).Ch <- mark
