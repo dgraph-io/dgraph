@@ -746,13 +746,14 @@ type values struct {
 }
 
 func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
-	var removeChild []int
-	for childIdx, child := range sg.Children {
+	finalChild := sg.Children[:0]
+	for _, child := range sg.Children {
 		err := child.populateAggregation(sg)
 		if err != nil {
 			return err
 		}
 		if parent == nil || len(child.SrcFunc) == 0 || !isAggregatorFn(child.SrcFunc[0]) {
+			finalChild = append(finalChild, child)
 			continue
 		}
 
@@ -781,13 +782,8 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 			}
 			sibling.values = append(sibling.values, v)
 		}
-		removeChild = append(removeChild, childIdx)
 	}
-	for _, idx := range removeChild {
-		l := len(sg.Children)
-		sg.Children[idx] = sg.Children[l-1]
-		sg.Children = sg.Children[:l-1]
-	}
+	sg.Children = finalChild
 	return nil
 }
 
