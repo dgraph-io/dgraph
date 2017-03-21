@@ -201,7 +201,11 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		var key []byte
 		if srcFn.fnType == AggregatorFn || srcFn.fnType == CompareScalarFn ||
 			srcFn.fnType == PasswordFn {
-			key = x.DataKey(attr, q.UidList.Uids[i])
+			if q.Reverse {
+				key = x.ReverseKey(attr, q.UidList.Uids[i])
+			} else {
+				key = x.DataKey(attr, q.UidList.Uids[i])
+			}
 		} else if srcFn.fnType != NotFn {
 			key = x.IndexKey(attr, srcFn.tokens[i])
 		} else if q.Reverse {
