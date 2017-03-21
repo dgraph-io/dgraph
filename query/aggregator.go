@@ -48,9 +48,9 @@ func (ag *aggregator) Apply(val *taskp.Value) {
 			res = va
 		}
 	case "sum":
-		if va.Tid == types.Int32ID {
+		if va.Tid == types.Int32ID && vb.Tid == types.Int32ID {
 			va.Value = va.Value.(int32) + vb.Value.(int32)
-		} else if va.Tid == types.FloatID {
+		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
 			va.Value = va.Value.(float64) + vb.Value.(float64)
 		}
 		res = va
