@@ -102,10 +102,9 @@ func toSchema(buf *bytes.Buffer, s *skv) {
 	buf.WriteString(s.attr)
 	buf.WriteByte(':')
 	buf.WriteString(types.TypeID(s.schema.ValueType).Name())
-	if s.schema.Reverse {
+	if s.schema.Directive == typesp.Schema_REVERSE {
 		buf.WriteString(" @reverse")
-	}
-	if len(s.schema.Tokenizer) > 0 {
+	} else if s.schema.Directive == typesp.Schema_INDEX && len(s.schema.Tokenizer) > 0 {
 		buf.WriteString(" @index(")
 		buf.WriteString(strings.Join(s.schema.Tokenizer, ","))
 		buf.WriteByte(')')

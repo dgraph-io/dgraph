@@ -259,29 +259,27 @@ func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string
 func enrichSchema(updates []*graphp.SchemaUpdate) error {
 	for _, schema := range updates {
 		typ := types.TypeID(schema.ValueType)
-		if typ == types.UidID || !schema.Index {
+		if typ == types.UidID {
 			continue
 		}
-		if len(schema.Tokenizer) == 0 {
+		if len(schema.Tokenizer) == 0 && schema.Directive == graphp.SchemaUpdate_INDEX {
 			schema.Tokenizer = []string{tok.Default(typ).Name()}
-		}
-		if !schema.Index {
+		} else if len(schema.Tokenizer) > 0 && schema.Directive != graphp.SchemaUpdate_INDEX {
 			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
 		}
 		// check for valid tokeniser types and duplicates
 		var seen = make(map[string]bool)
-		var tokenizers []string
 		for _, t := range schema.Tokenizer {
 			tokenizer, has := tok.GetTokenizer(t)
 			if !has {
 				return x.Errorf("Invalid tokenizer %s", t)
 			}
 			if _, ok := seen[tokenizer.Name()]; !ok {
-				tokenizers = append(tokenizers, tokenizer.Name())
 				seen[tokenizer.Name()] = true
+			} else {
+				return x.Errorf("Duplicate tokenizers present for attr %s", schema.Predicate)
 			}
 		}
-		schema.Tokenizer = tokenizers
 
 	}
 	return nil
@@ -415,6 +413,10 @@ func processRequest(ctx context.Context, gq *gql.GraphQuery,
 	return sg, wrappedErr{nil, ""}
 }
 
+func isEmptyGQLMutation(mu *gql.Mutation) bool {
+	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
+}
+
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// Add a limit on how many pending queries can be run in the system.
 	pendingQueries <- struct{}{}
@@ -460,8 +462,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	var allocIds map[string]uint64
 	var allocIdsStr map[string]string
 	// If we have mutations, run them first.
-	if res.Mutation != nil && (len(res.Mutation.Set) > 0 ||
-		len(res.Mutation.Del) > 0 || len(res.Mutation.Schema) > 0) {
+	if res.Mutation != nil && !isEmptyGQLMutation(res.Mutation) {
+		if len(res.Mutation.Schema) > 0 {
+			// setting a higher value to ensure schema mutations are completed
+			ctx, _ = context.WithTimeout(ctx, 100*time.Hour)
+		}
 		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			x.SetStatus(w, x.Error, err.Error())
@@ -585,6 +590,10 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	x.SetStatus(w, x.Success, "Backup completed.")
 }
 
+func isEmptyGraphMutation(mu *graphp.Mutation) bool {
+	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
+}
+
 // server is used to implement graphp.DgraphServer
 type grpcServer struct{}
 
@@ -615,8 +624,7 @@ func (s *grpcServer) Run(ctx context.Context,
 
 	// If mutations are part of the query, we run them through the mutation handler
 	// same as the http client.
-	if res.Mutation != nil && (len(res.Mutation.Set) > 0 ||
-		len(res.Mutation.Del) > 0 || len(res.Mutation.Schema) > 0) {
+	if res.Mutation != nil && !isEmptyGQLMutation(res.Mutation) {
 		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
@@ -624,8 +632,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 
 	// Mutations are sent as part of the mutation object
-	if req.Mutation != nil && (len(req.Mutation.Set) > 0 ||
-		len(req.Mutation.Del) > 0 || len(res.Mutation.Schema) > 0) {
+	if req.Mutation != nil && !isEmptyGraphMutation(req.Mutation) {
 		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err

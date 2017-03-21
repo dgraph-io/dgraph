@@ -136,12 +136,13 @@ func (req *Req) AddMutation(nq graphp.NQuad, op Op) error {
 	return nil
 }
 
-func checkSchema(schema *graphp.SchemaUpdate) error {
+func checkSchema(schema graphp.SchemaUpdate) error {
 	typ := types.TypeID(schema.ValueType)
-	if typ == types.UidID && schema.Index {
+	if typ == types.UidID && schema.Directive == graphp.SchemaUpdate_INDEX {
 		// index on uid type
-		return x.Errorf("Index not allowed on predicate of type uid on predicate %s", schema.Predicate)
-	} else if typ != types.UidID && schema.Reverse {
+		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
+			schema.Predicate)
+	} else if typ != types.UidID && schema.Directive == graphp.SchemaUpdate_REVERSE {
 		// reverse on non-uid type
 		return x.Errorf("Cannot reverse for non-uid type on predicate %s", schema.Predicate)
 	}
@@ -149,11 +150,11 @@ func checkSchema(schema *graphp.SchemaUpdate) error {
 }
 
 // AddSchema sets the schema mutations
-func (req *Req) addSchema(s []*graphp.SchemaUpdate) error {
+func (req *Req) addSchema(s graphp.SchemaUpdate) error {
 	if req.gr.Mutation == nil {
 		req.gr.Mutation = new(graphp.Mutation)
 	}
-	req.gr.Mutation.Schema = append(req.gr.Mutation.Schema, s...)
+	req.gr.Mutation.Schema = append(req.gr.Mutation.Schema, &s)
 	return nil
 }
 
@@ -161,13 +162,14 @@ func (req *Req) size() int {
 	if req.gr.Mutation == nil {
 		return 0
 	}
-	return len(req.gr.Mutation.Set) + len(req.gr.Mutation.Del)
+	return len(req.gr.Mutation.Set) + len(req.gr.Mutation.Del) + len(req.gr.Mutation.Schema)
 }
 
 func (req *Req) reset() {
 	req.gr.Query = ""
 	req.gr.Mutation.Set = req.gr.Mutation.Set[:0]
 	req.gr.Mutation.Del = req.gr.Mutation.Del[:0]
+	req.gr.Mutation.Schema = req.gr.Mutation.Schema[:0]
 }
 
 type nquadOp struct {
@@ -180,10 +182,9 @@ type BatchMutation struct {
 	pending int
 
 	nquads chan nquadOp
-	schema chan []*graphp.SchemaUpdate
+	schema chan graphp.SchemaUpdate
 	dc     graphp.DgraphClient
 	wg     sync.WaitGroup
-	swg    sync.WaitGroup
 
 	// Miscellaneous information to print counters.
 	// Num of RDF's sent
@@ -229,18 +230,23 @@ func (batch *BatchMutation) makeRequests() {
 
 func (batch *BatchMutation) makeSchemaRequests() {
 	req := new(Req)
-
-	for s := range batch.schema {
-		req.addSchema(s)
-		if req.size() == batch.size {
-			batch.request(req)
+LOOP:
+	for {
+		select {
+		case s, ok := <-batch.schema:
+			if !ok {
+				break LOOP
+			}
+			req.addSchema(s)
+		default:
+			if req.size() > 0 {
+				batch.request(req)
+			}
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 
-	if req.size() > 0 {
-		batch.request(req)
-	}
-	batch.swg.Done()
+	batch.wg.Done()
 }
 
 func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
@@ -249,6 +255,7 @@ func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
 		size:    size,
 		pending: pending,
 		nquads:  make(chan nquadOp, 2*size),
+		schema:  make(chan graphp.SchemaUpdate, 2*size),
 		start:   time.Now(),
 		dc:      graphp.NewDgraphClient(conn),
 	}
@@ -257,7 +264,7 @@ func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
 		bm.wg.Add(1)
 		go bm.makeRequests()
 	}
-	bm.swg.Add(1)
+	bm.wg.Add(1)
 	go bm.makeSchemaRequests()
 	return &bm
 }
@@ -271,13 +278,11 @@ func (batch *BatchMutation) AddMutation(nq graphp.NQuad, op Op) error {
 	return nil
 }
 
-func (batch *BatchMutation) AddSchema(updates []*graphp.SchemaUpdate) error {
-	for _, s := range updates {
-		if err := checkSchema(s); err != nil {
-			return err
-		}
+func (batch *BatchMutation) AddSchema(s graphp.SchemaUpdate) error {
+	if err := checkSchema(s); err != nil {
+		return err
 	}
-	batch.schema <- updates
+	batch.schema <- s
 	return nil
 }
 
@@ -298,9 +303,4 @@ func (batch *BatchMutation) Counter() Counter {
 func (batch *BatchMutation) Flush() {
 	close(batch.nquads)
 	batch.wg.Wait()
-}
-
-func (batch *BatchMutation) FlushSchema() {
-	close(batch.schema)
-	batch.swg.Wait()
 }

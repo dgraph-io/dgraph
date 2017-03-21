@@ -96,9 +96,7 @@ func (s *stateShard) update(se *SyncEntry) {
 	s.Lock()
 	defer s.Unlock()
 
-	// Creating a copy to avoid race condition during marshalling
-	schema := *se.Schema
-	s.predicate[se.Attr] = &schema
+	s.predicate[se.Attr] = &se.Schema
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- se
 	s.elog.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema)
@@ -108,32 +106,30 @@ func (s *stateShard) update(se *SyncEntry) {
 // Set sets the schema for given predicate in memory
 // schema mutations must flow through update function, which are
 // synced to db
-func (s *state) Set(pred string, schema *typesp.Schema) {
+func (s *state) Set(pred string, schema typesp.Schema) {
 	s.get(group.BelongsTo(pred)).set(pred, schema)
 }
 
-func (s *stateShard) set(pred string, schema *typesp.Schema) {
+func (s *stateShard) set(pred string, schema typesp.Schema) {
 	s.Lock()
 	defer s.Unlock()
-	s.predicate[pred] = schema
+	s.predicate[pred] = &schema
 	s.elog.Printf("Setting schema for attr %s: %v\n", pred, schema.ValueType)
 }
 
 // Get gets the schema for given predicate
-func (s *state) Get(pred string) (*typesp.Schema, bool) {
+func (s *state) Get(pred string) (typesp.Schema, bool) {
 	return s.get(group.BelongsTo(pred)).get(pred)
 }
 
-func (s *stateShard) get(pred string) (*typesp.Schema, bool) {
+func (s *stateShard) get(pred string) (typesp.Schema, bool) {
 	s.Lock()
 	defer s.Unlock()
 	schema, has := s.predicate[pred]
 	if !has {
-		return nil, false
+		return typesp.Schema{}, false
 	}
-	// create a copy
-	sc := *schema
-	return &sc, true
+	return *schema, true
 }
 
 // TypeOf returns the schema type of predicate
@@ -224,7 +220,7 @@ func (s *stateShard) isReversed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
-		return schema.Reverse
+		return schema.Directive == typesp.Schema_REVERSE
 	}
 	return false
 }
@@ -266,7 +262,7 @@ func LoadFromDb(gid uint32) error {
 		if group.BelongsTo(attr) != gid {
 			continue
 		}
-		State().Set(attr, &s)
+		State().Set(attr, s)
 	}
 	return nil
 }
@@ -285,7 +281,7 @@ func Refresh(groupId uint32) error {
 		data := itr.Value().Data()
 		var s typesp.Schema
 		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
-		State().Set(attr, &s)
+		State().Set(attr, s)
 	}
 
 	return nil
@@ -299,7 +295,7 @@ func reset() {
 // SyncEntry stores the schema mutation information
 type SyncEntry struct {
 	Attr   string
-	Schema *typesp.Schema
+	Schema typesp.Schema
 	Water  *x.WaterMark
 	Index  uint64
 }

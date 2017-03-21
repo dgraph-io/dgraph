@@ -170,7 +170,7 @@ func TestSchemaMutation(t *testing.T) {
 ` // reset schema
 	schema.ParseBytes([]byte(""), 1)
 	expected := map[string]*typesp.Schema{
-		"name": {Tokenizer: []string{"term", "exact"}, ValueType: uint32(types.StringID)},
+		"name": {Tokenizer: []string{"term", "exact"}, ValueType: uint32(types.StringID), Directive: typesp.Schema_INDEX},
 	}
 
 	err := runMutation(m)
@@ -178,7 +178,7 @@ func TestSchemaMutation(t *testing.T) {
 	for k, v := range expected {
 		s, ok := schema.State().Get(k)
 		require.True(t, ok)
-		require.Equal(t, v, s)
+		require.Equal(t, *v, s)
 	}
 }
 

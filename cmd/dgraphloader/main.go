@@ -84,17 +84,16 @@ func processSchemaFile(file string, batch *client.BatchMutation) {
 			break
 		}
 		line++
-		update, err := schema.Parse(buf.String())
+		schema, err := schema.Parse(buf.String())
 		if err != nil {
 			log.Fatalf("Error while parsing schema: %v, on line:%v %v", err, line, buf.String())
 		}
 		buf.Reset()
-		if err = batch.AddSchema(update); err != nil {
+		if err = batch.AddSchema(*schema[0]); err != nil {
 			log.Fatal("While adding schema to batch ", err)
 		}
 
 	}
-	batch.FlushSchema()
 	if err != io.EOF {
 		x.Checkf(err, "Error while reading file")
 	}
@@ -182,6 +181,8 @@ func main() {
 	if len(*schemaFile) > 0 {
 		processSchemaFile(*schemaFile, batch)
 	}
+	// wait for schema changes to be done before starting mutations
+	time.Sleep(1)
 	for _, file := range filesList {
 		processFile(file, batch)
 	}

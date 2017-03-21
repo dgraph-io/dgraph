@@ -246,6 +246,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 
+	EvictAll()
 	// Helper function - Add reverse entries for values in posting list
 	addReversePostings := func(pl *typesp.PostingList) {
 		postingsLen := len(pl.Postings)
@@ -320,12 +321,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 
-	// There might be stale index entries if entries are there in lhmap, should be
-	// taken care by eventual index consistency
-	// TODO: Ideally we don't want stop the world lock, as it would affect other groups also
-	// For present group it's not issue since rebuild index is blocking.
-	//EvictAll()
-
+	EvictAll()
 	// Helper function - Add index entries for values in posting list
 	addPostingsToIndex := func(pl *typesp.PostingList) {
 		postingsLen := len(pl.Postings)

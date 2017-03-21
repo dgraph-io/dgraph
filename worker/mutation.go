@@ -78,7 +78,8 @@ func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) err
 			return err
 		}
 		old, ok := schema.State().Get(update.Predicate)
-		updateSchema(update.Predicate, schema.From(update), rv.Index, rv.Group)
+		current := schema.From(update)
+		updateSchema(update.Predicate, current, rv.Index, rv.Group)
 
 		// Once we remove index or reverse edges from schema, even though the values
 		// are present in db, they won't be used due to validation in work/task.go
@@ -94,24 +95,12 @@ func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) err
 		// index mutations (old set and new del)
 		// We need watermark for index/reverse edge addition for linearizable reads.
 		// (both applied and synced watermarks).
-
-		// TODO: Using scheduler try running schema mutations in separate goroutine and
-		// don't do raft.Advance() until it is done, but ensure raft.Tick() doesn't get
-		// blocked, so that logs can atleast be queued up in raft in applied state
-
-		// TODO: Can we detect when we need to run eventual index consistency or goroutine
-		// to remove stale reverse edges? This logic could be used for eventual index
-		// consistency also. Running it periodically(which would affect block cache)
-		// lhmap etc. On restart if there are not raft entries to be replayed from raft wal
-		// then we have a clean start. We could probably run eventual consistency only when
-		// we get snapshot or have raft entries in raft wal(We can further check for index
-		// mutations may be)
 		if !ok {
-			if update.Index {
+			if current.Directive == typesp.Schema_INDEX {
 				if err := n.rebuildOrDelIndex(ctx, update.Predicate, true); err != nil {
 					return err
 				}
-			} else if update.Reverse {
+			} else if current.Directive == typesp.Schema_REVERSE {
 				if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true); err != nil {
 					return err
 				}
@@ -119,14 +108,14 @@ func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) err
 			continue
 		}
 		// schema was present already
-		if needReindexing(old, update) {
+		if needReindexing(old, current) {
 			// Reindex if update.Index is true or remove index
-			if err := n.rebuildOrDelIndex(ctx, update.Predicate, update.Index); err != nil {
+			if err := n.rebuildOrDelIndex(ctx, update.Predicate, current.Directive == typesp.Schema_INDEX); err != nil {
 				return err
 			}
-		} else if update.Reverse != old.Reverse {
+		} else if (current.Directive == typesp.Schema_REVERSE) != (old.Directive == typesp.Schema_REVERSE) {
 			// Add or remove reverse edge based on update.Reverse
-			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, update.Reverse); err != nil {
+			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, current.Directive == typesp.Schema_REVERSE); err != nil {
 				return err
 			}
 		}
@@ -134,21 +123,21 @@ func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) err
 	return nil
 }
 
-func needReindexing(old *typesp.Schema, update *graphp.SchemaUpdate) bool {
-	if update.Index != (len(old.Tokenizer) > 0) {
+func needReindexing(old typesp.Schema, current typesp.Schema) bool {
+	if (current.Directive == typesp.Schema_INDEX) != (old.Directive == typesp.Schema_INDEX) {
 		return true
 	}
-	// if tokenizer has changed
-	if update.Index && update.ValueType != old.ValueType {
+	// if value types has changed
+	if current.Directive == typesp.Schema_INDEX && current.ValueType != old.ValueType {
 		return true
 	}
 	// if tokenizer has changed - if same tokenizer works differently
 	// on different types
-	if len(update.Tokenizer) != len(old.Tokenizer) {
+	if len(current.Tokenizer) != len(old.Tokenizer) {
 		return true
 	}
 	for i, t := range old.Tokenizer {
-		if update.Tokenizer[i] != t {
+		if current.Tokenizer[i] != t {
 			return true
 		}
 	}
@@ -156,7 +145,7 @@ func needReindexing(old *typesp.Schema, update *graphp.SchemaUpdate) bool {
 	return false
 }
 
-func updateSchema(attr string, s *typesp.Schema, raftIndex uint64, group uint32) {
+func updateSchema(attr string, s typesp.Schema, raftIndex uint64, group uint32) {
 	ce := schema.SyncEntry{
 		Attr:   attr,
 		Schema: s,
@@ -173,17 +162,17 @@ func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uin
 	if ok {
 		s.ValueType = uint32(typ)
 	} else {
-		s = &typesp.Schema{ValueType: uint32(typ)}
+		s = typesp.Schema{ValueType: uint32(typ)}
 	}
 	updateSchema(attr, s, raftIndex, group)
 }
 
 func checkSchema(s *graphp.SchemaUpdate) error {
 	typ := types.TypeID(s.ValueType)
-	if typ == types.UidID && s.Index {
+	if typ == types.UidID && s.Directive == graphp.SchemaUpdate_INDEX {
 		// index on uid type
 		return x.Errorf("Index not allowed on predicate of type uid on predicate %s", s.Predicate)
-	} else if typ != types.UidID && s.Reverse {
+	} else if typ != types.UidID && s.Directive == graphp.SchemaUpdate_REVERSE {
 		// reverse on non-uid type
 		return x.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
 	}

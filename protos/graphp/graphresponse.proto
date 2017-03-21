@@ -50,9 +50,13 @@ message Mutation {
 message SchemaUpdate {
     string predicate = 1;
     uint32 value_type = 2;
-    bool index = 3;
+    enum Directive {
+        NONE = 0;
+        INDEX = 1;
+        REVERSE = 2;
+    }
+    Directive directive = 3;
     repeated string tokenizer = 4; 
-    bool reverse = 5;
 }
 
 message Request {

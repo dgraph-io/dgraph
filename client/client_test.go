@@ -93,52 +93,9 @@ func TestSetMutation(t *testing.T) {
 func TestAddSchema(t *testing.T) {
 	req := Req{}
 
-	if err := req.addSchema([]*graphp.SchemaUpdate{{
-		Predicate: "name",
-	}}); err != nil {
+	if err := req.addSchema(graphp.SchemaUpdate{Predicate: "name"}); err != nil {
 		t.Fatal(err)
 	}
 
 	assert.Equal(t, len(req.gr.Mutation.Schema), 1)
-}
-
-func BenchmarkChannelRange(b *testing.B) {
-	// run the Fib function b.N times
-	for n := 0; n < b.N; n++ {
-		numbers := make([]int, 10000)
-		ch := make(chan int, 110000)
-
-		for i := 1; i <= 3; i++ {
-			go func() {
-				for number := range ch {
-					_ = number
-				}
-			}()
-		}
-		for _, num := range numbers {
-			ch <- num
-		}
-		close(ch)
-	}
-}
-
-func BenchmarkChannelSelect(b *testing.B) {
-	// run the Fib function b.N times
-	for n := 0; n < b.N; n++ {
-		numbers := make([]int, 10000)
-		ch := make(chan int, 110000)
-
-		for i := 1; i <= 3; i++ {
-			go func() {
-				select {
-				case number := <-ch:
-					_ = number
-				}
-			}()
-		}
-		for _, num := range numbers {
-			ch <- num
-		}
-		close(ch)
-	}
 }

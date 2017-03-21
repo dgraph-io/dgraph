@@ -142,38 +142,38 @@ func TestCheckSchema(t *testing.T) {
 	require.NoError(t, checkSchema(s1))
 
 	// index on uid type
-	s1 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.UidID), Index: true}
+	s1 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.UidID), Directive: graphp.SchemaUpdate_INDEX}
 	require.Error(t, checkSchema(s1))
 
 	// reverse on non-uid type
-	s1 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.StringID), Reverse: true}
+	s1 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.StringID), Directive: graphp.SchemaUpdate_REVERSE}
 	require.Error(t, checkSchema(s1))
 
-	s1 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.FloatID), Index: true}
+	s1 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.FloatID), Directive: graphp.SchemaUpdate_INDEX}
 	require.NoError(t, checkSchema(s1))
 
-	s1 = &graphp.SchemaUpdate{Predicate: "friend", ValueType: uint32(types.UidID), Reverse: true}
+	s1 = &graphp.SchemaUpdate{Predicate: "friend", ValueType: uint32(types.UidID), Directive: graphp.SchemaUpdate_REVERSE}
 	require.NoError(t, checkSchema(s1))
 }
 
 func TestNeedReindexing(t *testing.T) {
-	s1 := &typesp.Schema{ValueType: uint32(types.UidID)}
-	s2 := &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.UidID)}
+	s1 := typesp.Schema{ValueType: uint32(types.UidID)}
+	s2 := typesp.Schema{ValueType: uint32(types.UidID)}
 	require.False(t, needReindexing(s1, s2))
 
-	s1 = &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}
-	s2 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.StringID), Index: true, Tokenizer: []string{"exact"}}
+	s1 = typesp.Schema{ValueType: uint32(types.StringID), Directive: typesp.Schema_INDEX, Tokenizer: []string{"exact"}}
+	s2 = typesp.Schema{ValueType: uint32(types.StringID), Directive: typesp.Schema_INDEX, Tokenizer: []string{"exact"}}
 	require.False(t, needReindexing(s1, s2))
 
-	s1 = &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"term"}}
-	s2 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.StringID), Index: true}
+	s1 = typesp.Schema{ValueType: uint32(types.StringID), Directive: typesp.Schema_INDEX, Tokenizer: []string{"term"}}
+	s2 = typesp.Schema{ValueType: uint32(types.StringID), Directive: typesp.Schema_INDEX}
 	require.True(t, needReindexing(s1, s2))
 
-	s1 = &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}
-	s2 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.FloatID), Index: true, Tokenizer: []string{"exact"}}
+	s1 = typesp.Schema{ValueType: uint32(types.StringID), Directive: typesp.Schema_INDEX, Tokenizer: []string{"exact"}}
+	s2 = typesp.Schema{ValueType: uint32(types.FloatID), Directive: typesp.Schema_INDEX, Tokenizer: []string{"exact"}}
 	require.True(t, needReindexing(s1, s2))
 
-	s1 = &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}
-	s2 = &graphp.SchemaUpdate{Predicate: "name", ValueType: uint32(types.FloatID), Index: false}
+	s1 = typesp.Schema{ValueType: uint32(types.StringID), Directive: typesp.Schema_INDEX, Tokenizer: []string{"exact"}}
+	s2 = typesp.Schema{ValueType: uint32(types.FloatID), Directive: typesp.Schema_NONE}
 	require.True(t, needReindexing(s1, s2))
 }

@@ -29,7 +29,7 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, indexed bool)
 		// For delete we since mutations would have been applied, we needn't
 		// wait for synced watermarks if we delete through mutations, but
 		// it would use by lhmap
-		go posting.DeleteIndex(ctx, attr)
+		posting.DeleteIndex(ctx, attr)
 		return nil
 	}
 	if err := posting.RebuildIndex(ctx, attr); err != nil {
@@ -51,7 +51,7 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, reversed bo
 
 	if !reversed {
 		// Remove reverse edges
-		go posting.DeleteReverseEdges(ctx, attr)
+		posting.DeleteReverseEdges(ctx, attr)
 		return nil
 	}
 	if err := posting.RebuildReverseEdges(ctx, attr); err != nil {

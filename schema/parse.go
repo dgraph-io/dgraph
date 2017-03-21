@@ -36,8 +36,13 @@ func parseFile(file string, gid uint32) (rerr error) {
 	return ParseBytes(b, gid)
 }
 
-func From(s *graphp.SchemaUpdate) *typesp.Schema {
-	return &typesp.Schema{ValueType: s.ValueType, Reverse: s.Reverse, Tokenizer: s.Tokenizer}
+func From(s *graphp.SchemaUpdate) typesp.Schema {
+	if s.Directive == graphp.SchemaUpdate_REVERSE {
+		return typesp.Schema{ValueType: s.ValueType, Directive: typesp.Schema_REVERSE}
+	} else if s.Directive == graphp.SchemaUpdate_INDEX {
+		return typesp.Schema{ValueType: s.ValueType, Directive: typesp.Schema_INDEX, Tokenizer: s.Tokenizer}
+	}
+	return typesp.Schema{ValueType: s.ValueType}
 }
 
 // ParseBytes parses the byte array which holds the schema. We will reset
@@ -91,7 +96,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 				if t != types.UidID {
 					return nil, x.Errorf("Cannot reverse for non-UID type")
 				}
-				return &graphp.SchemaUpdate{Predicate: predicate, ValueType: uint32(t), Reverse: true}, nil
+				return &graphp.SchemaUpdate{Predicate: predicate, ValueType: uint32(t), Directive: graphp.SchemaUpdate_REVERSE}, nil
 			case "index":
 				if !allowIndex {
 					return nil, x.Errorf("@index not allowed")
@@ -99,7 +104,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 				if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
 					return nil, err
 				} else {
-					return &graphp.SchemaUpdate{Predicate: predicate, ValueType: uint32(t), Index: true, Tokenizer: tokenizer}, nil
+					return &graphp.SchemaUpdate{Predicate: predicate, ValueType: uint32(t), Directive: graphp.SchemaUpdate_INDEX, Tokenizer: tokenizer}, nil
 				}
 			default:
 				return nil, x.Errorf("Invalid index specification")
