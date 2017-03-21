@@ -26,8 +26,6 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-var dgraphVersion string
-
 var (
 	configFile = flag.String("config", "",
 		"YAML configuration file containing dgraph settings.")
@@ -35,6 +33,12 @@ var (
 	initFunc []func()
 	logger   *log.Logger
 	isTest   bool
+
+	// These variables are set using -ldflags
+	dgraphVersion  string
+	gitBranch      string
+	lastCommitSHA  string
+	lastCommitTime string
 )
 
 func SetTestRun() {
@@ -59,6 +63,11 @@ func Init() {
 		log.Fatal("Unable to parse flags")
 	}
 
+	printVersionOnly()
+
+	// Lets print the details of the current build on startup.
+	printBuildDetails()
+
 	if *configFile != "" {
 		log.Println("Loading configuration from file:", *configFile)
 		loadConfigFromYAML()
@@ -66,7 +75,7 @@ func Init() {
 
 	logger = log.New(os.Stderr, "", log.Lshortfile|log.Flags())
 	AssertTrue(logger != nil)
-	printVersionOnly()
+
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
 		f()
@@ -87,11 +96,24 @@ func loadConfigFromYAML() {
 	}
 }
 
+func printBuildDetails() {
+	if dgraphVersion == "" {
+		return
+	}
+
+	fmt.Printf(fmt.Sprintf(`
+Dgraph version   : %v
+Commit SHA-1     : %v
+Commit timestamp : %v
+Branch           : %v`,
+		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch) + "\n\n")
+}
+
 // printVersionOnly prints version and other helpful information if --version.
 func printVersionOnly() {
 	if *version {
-		fmt.Printf("Dgraph %s\n", dgraphVersion)
-		fmt.Println("\nCopyright 2016 Dgraph Labs, Inc.")
+		printBuildDetails()
+		fmt.Println("Copyright 2016 Dgraph Labs, Inc.")
 		fmt.Println(`
 Licensed under the Apache License, version 2.0.
 For Dgraph official documentation, visit https://wiki.dgraph.io.
