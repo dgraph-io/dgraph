@@ -450,11 +450,15 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	attrsSeen := make(map[string]struct{})
 	for _, gchild := range gq.Children {
 		if !gchild.IsCount { // ignore count subgraphs..
+			key := gchild.Attr
+			if gchild.Func != nil && gchild.Func.IsAggregator() {
+				key += gchild.Func.Name
+			}
 			if _, ok := attrsSeen[gchild.Attr]; ok {
 				return x.Errorf("%s not allowed multiple times in same sub-query.",
 					gchild.Attr)
 			}
-			attrsSeen[gchild.Attr] = struct{}{}
+			attrsSeen[key] = struct{}{}
 		}
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true

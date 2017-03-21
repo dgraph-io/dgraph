@@ -1034,13 +1034,15 @@ func TestMinMulti(t *testing.T) {
 			name
 			friend {
 				min(dob)
+				max(dob)
+				dob
 			}
 		}
 	}
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"min(dob)":"1901-01-15"}],"name":"Michonne"},{"friend":[{"min(dob)":"1910-01-01"}],"name":"Rick Grimes"},{"friend":[{"min(dob)":"1909-05-05"}],"name":"Andrea"}]}`,
+		`{"me":[{"friend":[{"dob":"1910-01-02"},{"dob":"1909-05-05"},{"dob":"1909-01-10"},{"dob":"1901-01-15"},{"min(dob)":"1901-01-15"},{"max(dob)":"1910-01-02"}],"name":"Michonne"},{"friend":[{"dob":"1910-01-01"},{"min(dob)":"1910-01-01"},{"max(dob)":"1910-01-01"}],"name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05"},{"min(dob)":"1909-05-05"},{"max(dob)":"1909-05-05"}],"name":"Andrea"}]}`,
 		js)
 }
 
