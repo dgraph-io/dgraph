@@ -1,8 +1,6 @@
 +++
 title = "Get Started"
 date = "2017-03-20T18:58:23+11:00"
-icon = "<b>X. </b>"
-chapter = true
 next = "/next/path"
 prev = "/prev/path"
 weight = 0
@@ -72,10 +70,15 @@ $ docker run -it -p 8080:8080 -v $(pwd)/dgraph:/dgraph dgraph/dgraph dgraph --bi
 $ docker run -it -p 9090:8080 -v $(pwd)/dgraph:/dgraph dgraph/dgraph dgraph --bindall#true --schema#starwars.schema
 ```
 
-{{Tip|The dgraph server listens on port 8080 (unless you have mapped to another port above) with log output to the terminal.}}
+{{% notice tip %}}
+The dgraph server listens on port 8080 (unless you have mapped to another port above) with log output to the terminal.
+{{% /notice %}}
 
 ## Step 3: Run some queries
-{{ Tip | From v0.7.3,  a user interface is available at `http://localhost:8080` from the browser to run mutations and visualise  results from the queries.}}
+
+{{% notice tip %}}
+From v0.7.3,  a user interface is available at `http://localhost:8080` from the browser to run mutations and visualise  results from the queries.
+{{% /notice %}}
 
 Lets do a mutation which stores information about the first three releases of the the ''Star Wars'' series and one of the ''Star Trek'' movies.
 ```
@@ -194,9 +197,9 @@ curl localhost:8080/query -XPOST -d $'{
 ```
 
 ## Step 4: Advanced Queries on a larger dataset
-{{% note content="Step 4 and 5 are optional. If you'd like to experiment with a larger dataset and explore more functionality, this section is for you." }}
-
-{{ Note | }}
+{{< notice note >}}
+Step 4 and 5 are optional. If you'd like to experiment with a larger dataset and explore more functionality, this section is for you.
+{{< /notice >}}
 
 ### Download dataset
 First, download the goldendata.rdf.gz dataset from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz) ([download](https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz)). Also, download the corresponding schema from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.schema) ([download](https://raw.githubusercontent.com/dgraph-io/benchmarks/master/data/goldendata.schema)). Put both files in `~/dgraph` directory, creating it if necessary using `mkdir ~/dgraph`.
@@ -236,7 +239,9 @@ $
 
 {{ Tip | From v0.7.3 ,  a user interface is available at `http://localhost:8080` from the browser to run mutations and visualise  results from the queries.}}
 
-{{ Warning | In versions up to v0.7.3 , special convention is used for string values with specified language. RDF N-Quad `@lang` results in appending `.lang` to predicate name, e.g. `<0x01> <name> "Алисия"@ru .` is equivalent to `<0x01> <name.ru> "Алисия" .`. See [query language documentation](https://wiki.dgraph.io) for more details.}}
+{{% notice warning %}}
+In versions up to v0.7.3 , special convention is used for string values with specified language. RDF N-Quad `@lang` results in appending `.lang` to predicate name, e.g. `<0x01> <name> "Алисия"@ru .` is equivalent to `<0x01> <name.ru> "Алисия" .`. See [query language documentation](https://wiki.dgraph.io) for more details.
+{{% /notice %}}
 
 ### Movies by Steven Spielberg
 

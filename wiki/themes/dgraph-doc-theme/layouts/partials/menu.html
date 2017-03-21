@@ -5,36 +5,34 @@
     </a>
   </div>
 
-  <div class="highlightable">
-    <ul class="topics">
-      {{ $page := . }}
-      {{ $toc := .TableOfContents }}
+  <ul class="topics">
+    {{ $page := . }}
+    {{ $toc := .TableOfContents }}
 
-      {{ range $i, $key := .Site.Sections }}
-        {{ if ne $key "" }}
+    {{ range $i, $key := .Site.Sections }}
+      {{ if ne $key "" }}
 
-          {{ if not $.Site.Params.menu }}
-            {{ $.Scratch.Set "currentItem" (index $page.Site.Sections $i) }}
-          {{ else }}
-            {{ $.Scratch.Set "currentItem" (index $page.Site.Sections $key) }}
-          {{ end }}
-
-          {{ $value := $.Scratch.Get "currentItem" }}
-          {{ $first := (index $value 0).Page }}
-
-          <li class="doc-toc {{ if eq $page.RelPermalink $first.RelPermalink }}active{{ end }}" data-nav-id="{{ $first.RelPermalink }}">
-            <a href="{{ $first.RelPermalink }}">
-              <span>
-                {{ $first.Title }}
-               </span>
-            </a>
-
-            {{ if eq $page.RelPermalink $first.RelPermalink }}
-              {{ $toc }}
-            {{ end }}
-          </li>
+        {{ if not $.Site.Params.menu }}
+          {{ $.Scratch.Set "currentItem" (index $page.Site.Sections $i) }}
+        {{ else }}
+          {{ $.Scratch.Set "currentItem" (index $page.Site.Sections $key) }}
         {{ end }}
+
+        {{ $value := $.Scratch.Get "currentItem" }}
+        {{ $first := (index $value 0).Page }}
+
+        <li class="doc-toc {{ if eq $page.RelPermalink $first.RelPermalink }}active{{ end }}" data-nav-id="{{ $first.RelPermalink }}">
+          <a href="{{ $first.RelPermalink }}">
+            <span>
+              {{ $first.Title }}
+             </span>
+          </a>
+
+          <!-- {{ if eq $page.RelPermalink $first.RelPermalink }}
+            {{ $toc }}
+          {{ end }} -->
+        </li>
       {{ end }}
-    </ul>
-  </div>
+    {{ end }}
+  </ul>
 </nav>

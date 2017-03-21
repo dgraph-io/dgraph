@@ -1,1 +1,5 @@
-<div class="notices {{ .Get 0 }}" {{ if len .Params | eq 2 }} id="{{ .Get 1 }}" {{ end }}>{{ .Inner }}</div>
+{{ $type := .Get 0}}
+
+<div class="notices {{ $type }}" {{ if len .Params | eq 2 }} id="{{ .Get 1 }}" {{ end }}>
+  <span class="type">{{ humanize $type }}</span> {{ .Inner }}
+</div>
