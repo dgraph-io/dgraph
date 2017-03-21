@@ -19,7 +19,6 @@ package posting
 import (
 	"context"
 	"io/ioutil"
-	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -65,15 +64,14 @@ func addMutation(t *testing.T, l *List, edge *taskp.DirectedEdge, op uint32) {
 	require.NoError(t, err)
 }
 
+func deletePl(t *testing.T, l *List) {
+	lhmap.EachWithDelete(func(k uint64, l *List) {
+	})
+	require.NoError(t, l.pstore.Delete(l.key))
+}
+
 func TestAddMutation(t *testing.T) {
 	key := x.DataKey("name", 1)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-	Init(ps)
 
 	l := getNew(key, ps)
 
@@ -124,11 +122,7 @@ func TestAddMutation(t *testing.T) {
 	// Try reading the same data in another PostingList.
 	dl := getNew(key, ps)
 	checkUids(t, dl, uids)
-	return
-
-	_, err = dl.SyncIfDirty(context.Background())
-	require.NoError(t, err)
-	checkUids(t, dl, uids)
+	deletePl(t, l)
 }
 
 func getFirst(l *List) (res typesp.Posting) {
@@ -147,20 +141,7 @@ func checkValue(t *testing.T, ol *List, val string) {
 
 func TestAddMutation_Value(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-	Init(ps)
-
 	ol := getNew(key, ps)
-	log.Println("Init successful.")
-
 	edge := &taskp.DirectedEdge{
 		Value: []byte("oh hey there"),
 		Label: "new-testing",
@@ -169,7 +150,7 @@ func TestAddMutation_Value(t *testing.T) {
 	checkValue(t, ol, "oh hey there")
 
 	// Run the same check after committing.
-	_, err = ol.SyncIfDirty(context.Background())
+	_, err := ol.SyncIfDirty(context.Background())
 	require.NoError(t, err)
 	checkValue(t, ol, "oh hey there")
 
@@ -177,18 +158,13 @@ func TestAddMutation_Value(t *testing.T) {
 	edge.Value = []byte(strconv.Itoa(119))
 	addMutation(t, ol, edge, Set)
 	checkValue(t, ol, "119")
+
+	deletePl(t, ol)
 }
 
 func TestAddMutation_jchiu1(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-	Init(ps)
-	ol := getNew(key, ps)
+	ol, _ := GetOrCreate(key, 0)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &taskp.DirectedEdge{
@@ -230,18 +206,13 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	addMutation(t, ol, edge, Set)
 	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "cars")
+
+	deletePl(t, ol)
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-	Init(ps)
-	ol := getNew(key, ps)
+	ol, _ := GetOrCreate(key, 0)
 
 	// Del a value cars and but don't merge.
 	edge := &taskp.DirectedEdge{
@@ -257,7 +228,6 @@ func TestAddMutation_jchiu2(t *testing.T) {
 		Label: "jchiu",
 	}
 	addMutation(t, ol, edge, Set)
-	require.NoError(t, err)
 	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "newcars")
 
@@ -273,14 +243,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 
 func TestAddMutation_jchiu3(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-	Init(ps)
-	ol := getNew(key, ps)
+	ol, _ := GetOrCreate(key, 0)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &taskp.DirectedEdge{
@@ -328,18 +291,13 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	}
 	addMutation(t, ol, edge, Del)
 	require.Equal(t, 0, ol.Length(0))
+
+	deletePl(t, ol)
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-	Init(ps)
-	ol := getNew(key, ps)
+	ol, _ := GetOrCreate(key, 0)
 
 	// Set a value cars and merge.
 	edge := &taskp.DirectedEdge{
@@ -392,22 +350,16 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	}
 	addMutation(t, ol, edge, Del)
 	require.Equal(t, 0, ol.Length(0))
+
+	deletePl(t, ol)
 }
 
 func TestAddMutation_checksum(t *testing.T) {
 	var c1, c2, c3 []byte
 
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-	Init(ps)
-
 	{
 		key := x.DataKey("value", 10)
-		ol := getNew(key, ps)
+		ol, _ := GetOrCreate(key, 0)
 
 		edge := &taskp.DirectedEdge{
 			ValueId: 1,
@@ -427,11 +379,12 @@ func TestAddMutation_checksum(t *testing.T) {
 
 		pl := ol.PostingList()
 		c1 = pl.Checksum
+		deletePl(t, ol)
 	}
 
 	{
 		key := x.DataKey("value2", 10)
-		ol := getNew(key, ps)
+		ol, _ := GetOrCreate(key, 0)
 
 		// Add in reverse.
 		edge := &taskp.DirectedEdge{
@@ -452,12 +405,13 @@ func TestAddMutation_checksum(t *testing.T) {
 
 		pl := ol.PostingList()
 		c2 = pl.Checksum
+		deletePl(t, ol)
 	}
 	require.Equal(t, c1, c2)
 
 	{
 		key := x.DataKey("value3", 10)
-		ol := getNew(key, ps)
+		ol, _ := GetOrCreate(key, 0)
 
 		// Add in reverse.
 		edge := &taskp.DirectedEdge{
@@ -484,19 +438,13 @@ func TestAddMutation_checksum(t *testing.T) {
 
 		pl := ol.PostingList()
 		c3 = pl.Checksum
+		deletePl(t, ol)
 	}
 	require.NotEqual(t, c3, c1)
 }
 
 func TestAddMutation_gru(t *testing.T) {
 	key := x.DataKey("question.tag", 0x01)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-	Init(ps)
 	ol := getNew(key, ps)
 
 	{
@@ -531,17 +479,12 @@ func TestAddMutation_gru(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, merged)
 	}
+
+	deletePl(t, ol)
 }
 
 func TestAddMutation_gru2(t *testing.T) {
 	key := x.DataKey("question.tag", 0x01)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-	Init(ps)
 	ol := getNew(key, ps)
 
 	{
@@ -588,16 +531,11 @@ func TestAddMutation_gru2(t *testing.T) {
 	// Posting list should just have the new tag.
 	uids := []uint64{0x04}
 	require.Equal(t, uids, listToArray(t, 0, ol))
+	deletePl(t, ol)
 }
 
 func TestAfterUIDCount(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
 	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
@@ -667,16 +605,11 @@ func TestAfterUIDCount(t *testing.T) {
 	require.EqualValues(t, 100, ol.Length(0))
 	require.EqualValues(t, 50, ol.Length(199))
 	require.EqualValues(t, 0, ol.Length(300))
+	deletePl(t, ol)
 }
 
 func TestAfterUIDCount2(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
 	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
@@ -701,17 +634,11 @@ func TestAfterUIDCount2(t *testing.T) {
 	require.EqualValues(t, 200, ol.Length(0))
 	require.EqualValues(t, 100, ol.Length(199))
 	require.EqualValues(t, 0, ol.Length(300))
+	deletePl(t, ol)
 }
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-	Init(ps)
 	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
@@ -787,33 +714,34 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 100, ol.Length(0))
 	require.EqualValues(t, 50, ol.Length(199))
 	require.EqualValues(t, 0, ol.Length(300))
+	deletePl(t, ol)
 }
 
+var ps *store.Store
+
 func TestMain(m *testing.M) {
+	x.SetTestRun()
 	x.Init()
+
+	dir, err := ioutil.TempDir("", "storetest_")
+	x.Check(err)
+
+	ps, err = store.NewStore(dir)
+	x.Check(err)
+
+	Init(ps)
+
 	group.ParseGroupConfig("")
 	os.Exit(m.Run())
 }
 
 func BenchmarkAddMutations(b *testing.B) {
 	key := x.DataKey("name", 1)
-	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		b.Error(err)
-		return
-	}
-
-	defer os.RemoveAll(dir)
-	ps, err := store.NewStore(dir)
-	if err != nil {
-		b.Error(err)
-		return
-	}
-
 	l := getNew(key, ps)
 	b.ResetTimer()
 
 	ctx := context.Background()
+	var err error
 	for i := 0; i < b.N; i++ {
 		if err != nil {
 			b.Error(err)
@@ -824,7 +752,7 @@ func BenchmarkAddMutations(b *testing.B) {
 			Label:   "testing",
 			Op:      taskp.DirectedEdge_SET,
 		}
-		if _, err := l.AddMutation(ctx, edge); err != nil {
+		if _, err = l.AddMutation(ctx, edge); err != nil {
 			b.Error(err)
 		}
 	}

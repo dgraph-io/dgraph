@@ -36,6 +36,7 @@ service Worker {
 	rpc PredicateAndSchemaData (stream taskp.GroupKeys) returns (stream taskp.KV) {}
 	rpc Sort (taskp.Sort)                      returns (taskp.SortResult) {}
 	rpc RebuildIndex (taskp.RebuildIndex)      returns (Payload) {}
+	rpc Schema (taskp.Schema)                  returns (taskp.SchemaResult) {}
 
 	// RAFT serving RPCs.
 	rpc RaftMessage (Payload)                     returns (Payload) {}

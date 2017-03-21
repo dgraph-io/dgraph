@@ -189,3 +189,12 @@ export const updateRegex = regex => ({
     type: "UPDATE_PROPERTY_REGEX",
     regex
 });
+
+export const addScratchpadEntry = entry => ({
+    type: "ADD_SCRATCHPAD_ENTRY",
+    ...entry
+});
+
+export const deleteScratchpadEntries = () => ({
+    type: "DELETE_SCRATCHPAD_ENTRIES"
+});

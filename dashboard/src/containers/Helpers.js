@@ -30,10 +30,10 @@ export function aggregationPrefix(properties) {
     if (!properties.hasOwnProperty(k)) {
       continue;
     }
+    if (k === "count") {
+      return ["count", "count"];
+    }
     for (let term of aggTerms) {
-      if (term === "count" && k === "count") {
-        return [term, k];
-      }
       if (k.startsWith(term)) {
         return [term.substr(0, term.length - 1), k];
       }
@@ -54,25 +54,8 @@ function getNameKey(properties, regex) {
   return "";
 }
 
-export function getNodeLabel(properties: Object, regex: string): string {
-  var label = "";
-
-  let keys = Object.keys(properties);
-  if (keys.length === 1) {
-    label = aggregationPrefix(properties)[0];
-    if (label !== "") {
-      return label;
-    }
-  }
-
-  let nameKey = getNameKey(properties, regex);
-  if (nameKey === "") {
-    return "";
-  }
-
-  label = properties[nameKey];
-
-  var words = label.split(" "), firstWord = words[0];
+function shortenName(label) {
+  let words = label.split(" "), firstWord = words[0];
   if (firstWord.length > 20) {
     label = [firstWord.substr(0, 9), firstWord.substr(9, 17) + "..."].join(
       "-\n"
@@ -96,6 +79,21 @@ export function getNodeLabel(properties: Object, regex: string): string {
   }
 
   return label;
+}
+
+function getNodeLabel(properties: Object, regex: string): string {
+  var label = "";
+
+  let keys = Object.keys(properties);
+  if (keys.length === 1) {
+    label = aggregationPrefix(properties)[0];
+    if (label !== "") {
+      return label;
+    }
+  }
+
+  let nameKey = getNameKey(properties, regex);
+  return properties[nameKey] || "";
 }
 
 export function outgoingEdges(nodeId, edgeSet) {
@@ -265,6 +263,9 @@ function findAndMerge(nodes, n) {
   if (node.label === "") {
     node.label = n.label;
   }
+  if (node.name === "" && n.name !== "") {
+    node.name = n.name;
+  }
   nodes[idx] = node;
 }
 
@@ -316,7 +317,8 @@ export function processGraph(
     // Stores the map of a label to boolean (only true values are stored).
     // This helps quickly find if a label has already been assigned.
     groups = {},
-    label,
+    displayLabel,
+    fullName,
     regexEx = new RegExp(regex);
 
   for (var k in response) {
@@ -440,20 +442,23 @@ export function processGraph(
     delete nodeAttrs["x"];
 
     if (aggrTerm !== "") {
-      label = nodeAttrs[aggrPred];
+      displayLabel = nodeAttrs[aggrPred];
     } else {
-      label = regex === "" ? "" : getNodeLabel(nodeAttrs, regexEx);
+      fullName = regex === "" ? "" : getNodeLabel(nodeAttrs, regexEx);
+      displayLabel = shortenName(fullName);
     }
 
     let n: Node = {
       id: id,
+      uid: obj.node["_uid_"],
       x: x,
       // For aggregation nodes, label is the actual value, for other nodes its
       // the value of name.
-      label: label,
+      label: displayLabel,
       title: JSON.stringify(properties),
       color: props.color,
-      group: obj.src.pred
+      group: obj.src.pred,
+      name: fullName
     };
 
     if (uidMap[id] === undefined) {

@@ -21,8 +21,11 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -176,6 +179,15 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "dob", 24, "1909-05-05", nil)
 	addEdgeToValue(t, "dob", 25, "1909-01-10", nil)
 	addEdgeToValue(t, "dob", 31, "1901-01-15", nil)
+
+	f1 := types.Val{Tid: types.FloatID, Value: 1.6}
+	fData := types.ValueForType(types.BinaryID)
+	err = types.Marshal(f1, &fData)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, "survival_rate", 23, types.FloatID, fData.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "survival_rate", 24, types.FloatID, fData.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "survival_rate", 25, types.FloatID, fData.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "survival_rate", 31, types.FloatID, fData.Value.([]byte), nil)
 
 	// GEO stuff
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
@@ -950,6 +962,42 @@ func TestDebug2(t *testing.T) {
 	require.False(t, ok, "No uid expected but got one %s", uid)
 }
 
+func TestDebug3(t *testing.T) {
+	populateGraph(t)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(id: [1, 24]) @filter(geq(dob, "1910-01-01")) {
+				name
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "debug", "true")
+	sgl, err := ProcessQuery(ctx, res, &l)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	require.NoError(t, ToJson(&l, sgl, &buf, nil))
+
+	var mp map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
+
+	resp := mp["me"]
+	require.EqualValues(t, 1, len(mp["me"].([]interface{})))
+	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
+	require.EqualValues(t, "0x1", uid)
+
+	latency := mp["server_latency"]
+	require.NotNil(t, latency)
+	_, ok := latency.(map[string]interface{})
+	require.True(t, ok)
+}
 func TestCount(t *testing.T) {
 	populateGraph(t)
 
@@ -1107,6 +1155,34 @@ func TestMinError2(t *testing.T) {
 	var l Latency
 	_, queryErr := ProcessQuery(context.Background(), res, &l)
 	require.NotNil(t, queryErr)
+}
+
+func TestMinSchema(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                friend {
+                                    min(survival_rate)
+                                }
+                        }
+                }
+        `
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1.600000}],"gender":"female","name":"Michonne"}]}`,
+		js)
+
+	schema.State().SetType("survival_rate", types.Int32ID)
+	js = processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1}],"gender":"female","name":"Michonne"}]}`,
+		js)
+	schema.State().SetType("survival_rate", types.FloatID)
 }
 
 func TestMax(t *testing.T) {
@@ -1575,7 +1651,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   properties: <
@@ -2458,7 +2534,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   properties: <
@@ -2544,7 +2620,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   children: <
@@ -2589,7 +2665,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   children: <
@@ -2643,7 +2719,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
 >
@@ -2880,7 +2956,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   children: <
@@ -2952,7 +3028,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   children: <
@@ -3006,7 +3082,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   children: <
@@ -4120,6 +4196,76 @@ func TestLangManyFallback(t *testing.T) {
 		js)
 }
 
+func checkSchemaNodes(t *testing.T, expected []*graphp.SchemaNode, actual []*graphp.SchemaNode) {
+	sort.Slice(expected, func(i, j int) bool {
+		return expected[i].Predicate >= expected[j].Predicate
+	})
+	sort.Slice(actual, func(i, j int) bool {
+		return actual[i].Predicate >= actual[j].Predicate
+	})
+	require.True(t, reflect.DeepEqual(expected, actual),
+		fmt.Sprintf("Expected: %+v, Received: %+v \n", expected, actual))
+}
+
+func TestSchemaBlock1(t *testing.T) {
+	query := `
+		schema {
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{{Predicate: "genre"},
+		{Predicate: "age"}, {Predicate: "name"},
+		{Predicate: "film.film.initial_release_date"}, {Predicate: "loc"},
+		{Predicate: "alive"}, {Predicate: "shadow_deep"},
+		{Predicate: "friend"}, {Predicate: "geometry"},
+		{Predicate: "alias"}, {Predicate: "dob"}, {Predicate: "survival_rate"}}
+	checkSchemaNodes(t, expected, actual)
+}
+
+func TestSchemaBlock2(t *testing.T) {
+	query := `
+		schema(pred: name) {
+			index
+			reverse
+			type
+			tokenizer
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{
+		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact"}}}
+	checkSchemaNodes(t, expected, actual)
+}
+
+func TestSchemaBlock3(t *testing.T) {
+	query := `
+		schema(pred: age) {
+			index
+			reverse
+			type
+			tokenizer
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{{Predicate: "age", Type: "int"}}
+	checkSchemaNodes(t, expected, actual)
+}
+
+func TestSchemaBlock4(t *testing.T) {
+	query := `
+		schema(pred: [age, genre, random]) {
+			index
+			reverse
+			type
+			tokenizer
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{
+		{Predicate: "genre", Type: "uid", Reverse: true}, {Predicate: "age", Type: "int"}}
+	checkSchemaNodes(t, expected, actual)
+}
+
 const schemaStr = `
 name:string @index(term, exact)
 alias:string @index(exact, term)
@@ -4158,6 +4304,8 @@ func TestMain(m *testing.M) {
 	worker.StartRaftNodes(dir2)
 	// Load schema after nodes have started
 	schema.ParseBytes([]byte(schemaStr), 1)
+	// wait for group membership sync
+	time.Sleep(15 * time.Second)
 	defer os.RemoveAll(dir2)
 
 	os.Exit(m.Run())

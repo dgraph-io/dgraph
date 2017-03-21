@@ -32,25 +32,6 @@
     color: #BA2121;
 }
 
-.Properties tbody {
-    width: 100%;
-    display: block;
-    padding: 0px 5px 0px 0px;
-    margin-top: 5px;
-    min-height: 20px;
-}
-
-.Properties tr {
-    display: table;
-    width: 100%;
-    vertical-align: top;
-}
-
-.Properties td {
-    text-align: left;
-    padding: 2px 5px 2px 0px;
-}
-
 .Properties-facets {
     display: inline-block;
     margin-top: 5px;
