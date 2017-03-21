@@ -120,26 +120,25 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	Alias          string
-	Count          int
-	Offset         int
-	AfterUID       uint64
-	DoCount        bool
-	GetUID         bool
-	Order          string
-	OrderDesc      bool
-	isDebug        bool
-	Var            string
-	NeedsVar       []string
-	ParentVars     map[string]*taskp.List
-	uidToVal       map[uint64]types.Val
-	Langs          []string
-	Normalize      bool
-	From           uint64
-	To             uint64
-	Facet          *facetsp.Param
-	RecurseDepth   uint64
-	isPartOfresult bool
+	Alias        string
+	Count        int
+	Offset       int
+	AfterUID     uint64
+	DoCount      bool
+	GetUID       bool
+	Order        string
+	OrderDesc    bool
+	isDebug      bool
+	Var          string
+	NeedsVar     []string
+	ParentVars   map[string]*taskp.List
+	uidToVal     map[uint64]types.Val
+	Langs        []string
+	Normalize    bool
+	From         uint64
+	To           uint64
+	Facet        *facetsp.Param
+	RecurseDepth uint64
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -260,9 +259,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			uc.AddValue("count", c)
 			dst.AddListChild(pc.Attr, uc)
 		} else if len(pc.SrcFunc) > 0 && isAggregatorFn(pc.SrcFunc[0]) {
-			if !pc.Params.isPartOfresult {
-				continue
-			}
 			// add sg.Attr as child on 'parent' instead of 'dst', otherwise
 			// within output, aggregator will messed with other attrs
 			uc := dst.New(pc.Params.Alias)
@@ -762,7 +758,8 @@ type values struct {
 }
 
 func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
-	for _, child := range sg.Children {
+	var removeChild []int
+	for childIdx, child := range sg.Children {
 		err := child.populateAggregation(sg)
 		if err != nil {
 			return err
@@ -778,8 +775,6 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 		parent.Children = append(parent.Children, sibling)
 		sibling.values = make([]*taskp.Value, 0, 1)
 		sibling.Params.Alias = sg.Attr
-		sibling.Params.isPartOfresult = true
-		child.Params.isPartOfresult = false
 		typ, _ := schema.State().TypeOf(child.Attr)
 		for _, list := range sg.uidMatrix {
 			ag := aggregator{
@@ -803,6 +798,12 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 			}
 			sibling.values = append(sibling.values, v)
 		}
+		removeChild = append(removeChild, childIdx)
+	}
+	for _, idx := range removeChild {
+		l := len(sg.Children)
+		sg.Children[idx] = sg.Children[l-1]
+		sg.Children = sg.Children[:l-1]
 	}
 	return nil
 }
