@@ -365,17 +365,6 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		}
 	}
 
-	// aggregate on the collection out.Values[]
-	if srcFn.fnType == AggregatorFn && len(out.Values) > 0 {
-		var err error
-		typ, _ := schema.State().TypeOf(attr)
-		out.Values[0], err = Aggregate(srcFn.fname, out.Values, typ)
-		if err != nil {
-			return nil, err
-		}
-		out.Values = out.Values[:1] // trim length to 1
-	}
-
 	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 &&
 		srcFn.ineqValueToken == srcFn.tokens[0] {
 		// Need to evaluate inequality for entries in the first bucket.

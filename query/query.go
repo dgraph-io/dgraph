@@ -258,21 +258,18 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			uc.AddValue("count", c)
 			dst.AddListChild(pc.Attr, uc)
 		} else if len(pc.SrcFunc) > 0 && isAggregatorFn(pc.SrcFunc[0]) {
-			if idx > 0 { // aggregator will put value at index 0; place once
-				continue
-			}
 			// add sg.Attr as child on 'parent' instead of 'dst', otherwise
 			// within output, aggregator will messed with other attrs
-			uc := parent.New(sg.Attr)
+			uc := dst.New(pc.Params.Alias)
 			name := fmt.Sprintf("%s(%s)", pc.SrcFunc[0], pc.Attr)
-			sv, err := convertWithBestEffort(pc.values[0], pc.Attr)
+			sv, err := convertWithBestEffort(pc.values[idx], pc.Attr)
 			if err == ErrEmptyVal {
 				continue
 			} else if err != nil {
 				return err
 			}
 			uc.AddValue(name, sv)
-			parent.AddListChild(sg.Attr, uc)
+			dst.AddListChild(pc.Params.Alias, uc)
 		} else if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
 			c := types.ValueForType(types.BoolID)
 			c.Value = task.ToBool(pc.values[idx])
@@ -437,11 +434,15 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	attrsSeen := make(map[string]struct{})
 	for _, gchild := range gq.Children {
 		if !gchild.IsCount { // ignore count subgraphs..
+			key := gchild.Attr
+			if gchild.Func != nil && gchild.Func.IsAggregator() {
+				key += gchild.Func.Name
+			}
 			if _, ok := attrsSeen[gchild.Attr]; ok {
 				return x.Errorf("%s not allowed multiple times in same sub-query.",
 					gchild.Attr)
 			}
-			attrsSeen[gchild.Attr] = struct{}{}
+			attrsSeen[key] = struct{}{}
 		}
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
@@ -744,6 +745,50 @@ type values struct {
 	vals map[uint64]types.Val
 }
 
+func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
+	finalChild := sg.Children[:0]
+	for idx := 0; idx < len(sg.Children); idx++ {
+		child := sg.Children[idx]
+		err := child.populateAggregation(sg)
+		if err != nil {
+			return err
+		}
+		if parent == nil || len(child.SrcFunc) == 0 || !isAggregatorFn(child.SrcFunc[0]) ||
+			child.Params.Alias == sg.Attr {
+			finalChild = append(finalChild, child)
+			continue
+		}
+
+		sibling := new(SubGraph)
+		*sibling = *child // Sibling of sg.
+		sibling.Children = []*SubGraph{}
+		sibling.SrcUIDs = sg.SrcUIDs // Point the new Subgraphs srcUids
+		parent.Children = append(parent.Children, sibling)
+		sibling.values = make([]*taskp.Value, 0, 1)
+		sibling.Params.Alias = sg.Attr
+		for _, list := range sg.uidMatrix {
+			ag := aggregator{
+				name: child.SrcFunc[0],
+			}
+			for _, uid := range list.Uids {
+				idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
+					return child.SrcUIDs.Uids[i] >= uid
+				})
+				if idx < len(child.SrcUIDs.Uids) && child.SrcUIDs.Uids[idx] == uid {
+					ag.Apply(child.values[idx])
+				}
+			}
+			v, err := ag.Value()
+			if err != nil {
+				return err
+			}
+			sibling.values = append(sibling.values, v)
+		}
+	}
+	sg.Children = finalChild
+	return nil
+}
+
 func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
 	var sgl []*SubGraph
 	var err error
@@ -853,6 +898,10 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
+			err := sg.populateAggregation(nil)
+			if err != nil {
+				return nil, err
+			}
 			if len(res.QueryVars[idx].Defines) == 0 {
 				continue
 			}
