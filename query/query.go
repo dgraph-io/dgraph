@@ -35,7 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -764,11 +763,9 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 		parent.Children = append(parent.Children, sibling)
 		sibling.values = make([]*taskp.Value, 0, 1)
 		sibling.Params.Alias = sg.Attr
-		typ, _ := schema.State().TypeOf(child.Attr)
 		for _, list := range sg.uidMatrix {
 			ag := aggregator{
 				name: child.SrcFunc[0],
-				typ:  typ,
 			}
 			for _, uid := range list.Uids {
 				idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {

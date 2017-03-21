@@ -8,13 +8,12 @@ import (
 
 type aggregator struct {
 	name   string
-	typ    types.TypeID
 	result types.Val
 }
 
-func convertTo(from *taskp.Value, typ types.TypeID) (types.Val, error) {
+func convertTo(from *taskp.Value) (types.Val, error) {
 	vh, _ := getValue(from)
-	va, err := types.Convert(vh, typ)
+	va, err := types.Convert(vh, vh.Tid)
 	if err != nil {
 		return vh, x.Wrapf(err, "Fail to convert from taskp.Value to types.Val")
 	}
@@ -23,12 +22,12 @@ func convertTo(from *taskp.Value, typ types.TypeID) (types.Val, error) {
 
 func (ag *aggregator) Apply(val *taskp.Value) {
 	if ag.result.Value == nil {
-		ag.result, _ = convertTo(val, ag.typ)
+		ag.result, _ = convertTo(val)
 		return
 	}
 
 	va := ag.result
-	vb, err := convertTo(val, ag.typ)
+	vb, err := convertTo(val)
 	if err != nil {
 		return
 	}
@@ -36,10 +35,10 @@ func (ag *aggregator) Apply(val *taskp.Value) {
 	switch ag.name {
 	case "min":
 		r, err := types.Less(va, vb)
-		if err == nil && r {
-			res = va
-		} else {
+		if err == nil && !r {
 			res = vb
+		} else {
+			res = va
 		}
 	case "max":
 		r, err := types.Less(va, vb)
@@ -49,9 +48,9 @@ func (ag *aggregator) Apply(val *taskp.Value) {
 			res = va
 		}
 	case "sum":
-		if ag.typ == types.Int32ID {
+		if va.Tid == types.Int32ID {
 			va.Value = va.Value.(int32) + vb.Value.(int32)
-		} else if ag.typ == types.FloatID {
+		} else if va.Tid == types.FloatID {
 			va.Value = va.Value.(float64) + vb.Value.(float64)
 		}
 		res = va
@@ -70,6 +69,6 @@ func (ag *aggregator) Value() (*taskp.Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	res := &taskp.Value{ValType: int32(ag.typ), Val: data.Value.([]byte)}
+	res := &taskp.Value{ValType: int32(ag.result.Tid), Val: data.Value.([]byte)}
 	return res, nil
 }
