@@ -1,6 +1,7 @@
 package query
 
 import (
+	"bytes"
 	"log"
 
 	"github.com/dgraph-io/dgraph/protos/taskp"
@@ -15,6 +16,9 @@ type aggregator struct {
 
 func convertTo(from *taskp.Value) (types.Val, error) {
 	vh, _ := getValue(from)
+	if bytes.Equal(from.Val, x.Nilbyte) {
+		return vh, ErrEmptyVal
+	}
 	va, err := types.Convert(vh, vh.Tid)
 	if err != nil {
 		return vh, x.Wrapf(err, "Fail to convert from taskp.Value to types.Val")
@@ -26,6 +30,7 @@ func (ag *aggregator) Apply(val *taskp.Value) {
 	if ag.result.Value == nil {
 		v, err := convertTo(val)
 		if err != nil {
+			x.AssertTruef(err == ErrEmptyVal, "Expected Empty Val error. But got: %v", err)
 			return
 		}
 		ag.result = v
@@ -35,6 +40,7 @@ func (ag *aggregator) Apply(val *taskp.Value) {
 	va := ag.result
 	vb, err := convertTo(val)
 	if err != nil {
+		x.AssertTruef(err == ErrEmptyVal, "Expected Empty Val error. But got: %v", err)
 		return
 	}
 	var res types.Val
@@ -60,6 +66,7 @@ func (ag *aggregator) Apply(val *taskp.Value) {
 			va.Value = va.Value.(float64) + vb.Value.(float64)
 		} else {
 			// This pair cannot be summed. So pass.
+			log.Fatalf("Wrong arguments for Sum aggregator.")
 		}
 		res = va
 	default:
