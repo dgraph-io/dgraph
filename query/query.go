@@ -972,7 +972,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 		for _, child := range sg.Children {
 			// If the length of child UID list is zero and it has no valid value, then the
 			// current UID should be removed from this level.
-			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
+			if len(child.values[i].Val) == 0 && (len(child.counts) < i) && len(child.uidMatrix[i].Uids) == 0 {
 				exclude = true
 				break
 			}
@@ -992,11 +992,26 @@ AssignStep:
 			doneVars[sg.Params.Var] = values{
 				uids: sg.DestUIDs,
 			}
+		} else if len(sg.counts) != 0 {
+			fmt.Println(sg.Attr, sg.Params.Var, "***")
+			// This implies it is a value variable.
+			doneVars[sg.Params.Var] = values{
+				vals: make(map[uint64]types.Val),
+			}
+			for idx, uid := range sg.SrcUIDs.Uids {
+				//val, _ := getValue(sg.values[idx])
+				val := types.Val{
+					Tid:   types.Int32ID,
+					Value: int32(sg.counts[idx]),
+				}
+				doneVars[sg.Params.Var].vals[uid] = val
+			}
 		} else if len(sg.values) != 0 {
 			// This implies it is a value variable.
 			doneVars[sg.Params.Var] = values{
 				vals: make(map[uint64]types.Val),
 			}
+			fmt.Println(sg.Attr, sg.Params.Var, "***")
 			for idx, uid := range sg.SrcUIDs.Uids {
 				//val, _ := getValue(sg.values[idx])
 				val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
