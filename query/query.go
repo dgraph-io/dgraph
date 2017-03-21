@@ -335,7 +335,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				if err != nil {
 					return err
 				}
-				dst.SetXID(txt.Value.(string))
+				xidVal := txt.Value.(string)
+				// If xid is empty, then we don't wan't to set it.
+				if xidVal == "" {
+					continue
+				}
+				dst.SetXID(xidVal)
 			} else if pc.Attr == "_uid_" {
 				if !uidAlreadySet {
 					uidAlreadySet = true
@@ -438,7 +443,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			if gchild.Func != nil && gchild.Func.IsAggregator() {
 				key += gchild.Func.Name
 			}
-			if _, ok := attrsSeen[gchild.Attr]; ok {
+			if _, ok := attrsSeen[key]; ok {
 				return x.Errorf("%s not allowed multiple times in same sub-query.",
 					gchild.Attr)
 			}
