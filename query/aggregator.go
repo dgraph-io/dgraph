@@ -63,7 +63,7 @@ func (ag *aggregator) Apply(val *taskp.Value) {
 		}
 		res = va
 	default:
-		log.Fatalf("Unhandled aggregator function")
+		log.Fatalf("Unhandled aggregator function %v", ag.name)
 	}
 	ag.result = res
 }
