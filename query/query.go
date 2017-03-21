@@ -438,7 +438,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			if gchild.Func != nil && gchild.Func.IsAggregator() {
 				key += gchild.Func.Name
 			}
-			if _, ok := attrsSeen[gchild.Attr]; ok {
+			if _, ok := attrsSeen[key]; ok {
 				return x.Errorf("%s not allowed multiple times in same sub-query.",
 					gchild.Attr)
 			}
