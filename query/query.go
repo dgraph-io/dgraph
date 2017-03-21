@@ -747,12 +747,14 @@ type values struct {
 
 func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 	finalChild := sg.Children[:0]
-	for _, child := range sg.Children {
+	for idx := 0; idx < len(sg.Children); idx++ {
+		child := sg.Children[idx]
 		err := child.populateAggregation(sg)
 		if err != nil {
 			return err
 		}
-		if parent == nil || len(child.SrcFunc) == 0 || !isAggregatorFn(child.SrcFunc[0]) {
+		if parent == nil || len(child.SrcFunc) == 0 || !isAggregatorFn(child.SrcFunc[0]) ||
+			child.Params.Alias == sg.Attr {
 			finalChild = append(finalChild, child)
 			continue
 		}
