@@ -773,9 +773,6 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 				})
 				if idx < len(child.SrcUIDs.Uids) && child.SrcUIDs.Uids[idx] == uid {
 					ag.Apply(child.values[idx])
-					if err != nil {
-						return err
-					}
 				}
 			}
 			v, err := ag.Value()
