@@ -729,3 +729,8 @@ func (l *List) valuePosting() (p *typesp.Posting, err error) {
 	}
 	return p, nil
 }
+
+func (l *List) Delete() error {
+	lhmap.Delete(farm.Fingerprint64(l.key))
+	return l.pstore.Delete(l.key)
+}
