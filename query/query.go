@@ -993,7 +993,6 @@ AssignStep:
 				uids: sg.DestUIDs,
 			}
 		} else if len(sg.counts) != 0 {
-			fmt.Println(sg.Attr, sg.Params.Var, "***")
 			// This implies it is a value variable.
 			doneVars[sg.Params.Var] = values{
 				vals: make(map[uint64]types.Val),
@@ -1011,7 +1010,6 @@ AssignStep:
 			doneVars[sg.Params.Var] = values{
 				vals: make(map[uint64]types.Val),
 			}
-			fmt.Println(sg.Attr, sg.Params.Var, "***")
 			for idx, uid := range sg.SrcUIDs.Uids {
 				//val, _ := getValue(sg.values[idx])
 				val, err := convertWithBestEffort(sg.values[idx], sg.Attr)

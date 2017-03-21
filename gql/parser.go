@@ -1560,17 +1560,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
 				varName = item.Val
 				it.Next() // "As" was checked before.
-				/*
-					it.Next()
-						pred := it.Item()
-						child := &GraphQuery{
-							Args: make(map[string]string),
-							Attr: pred.Val,
-							Var:  varName,
-						}
-						gq.Children = append(gq.Children, child)
-						curp = child
-				*/
 				continue
 			}
 
