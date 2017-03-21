@@ -33,13 +33,14 @@ function doOnClick(params, allNodeSet, edgeSet, dispatch) {
         this.setState({
             selectedNode: true
         });
-        dispatch(setCurrentNode(currentNode.title));
+
+        dispatch(setCurrentNode(currentNode));
     } else if (params.edges.length > 0) {
         var edgeUid = params.edges[0], currentEdge = edgeSet.get(edgeUid);
         this.setState({
             selectedNode: true
         });
-        dispatch(setCurrentNode(currentEdge.title));
+        dispatch(setCurrentNode(currentEdge));
     } else {
         this.setState({
             selectedNode: false
@@ -206,7 +207,7 @@ function renderNetwork(props, dispatch) {
                 clickedNode = data.nodes.get(clickedNodeUid);
 
             network.unselectAll();
-            dispatch(setCurrentNode(clickedNode.title));
+            dispatch(setCurrentNode(clickedNode));
             that.setState({
                 selectedNode: false
             });
@@ -289,7 +290,7 @@ function renderNetwork(props, dispatch) {
             let nodeUid: string = params.node,
                 currentNode = data.nodes.get(nodeUid);
 
-            dispatch(setCurrentNode(currentNode.title));
+            dispatch(setCurrentNode(currentNode));
         }
     });
 
@@ -300,7 +301,7 @@ function renderNetwork(props, dispatch) {
         }
         if (params.edge.length > 0) {
             let edgeUid = params.edge, currentEdge = data.edges.get(edgeUid);
-            dispatch(setCurrentNode(currentEdge.title));
+            dispatch(setCurrentNode(currentEdge));
         }
     });
 
