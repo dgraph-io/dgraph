@@ -962,6 +962,42 @@ func TestDebug2(t *testing.T) {
 	require.False(t, ok, "No uid expected but got one %s", uid)
 }
 
+func TestDebug3(t *testing.T) {
+	populateGraph(t)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(id: [1, 24]) @filter(geq(dob, "1910-01-01")) {
+				name
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "debug", "true")
+	sgl, err := ProcessQuery(ctx, res, &l)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	require.NoError(t, ToJson(&l, sgl, &buf, nil))
+
+	var mp map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
+
+	resp := mp["me"]
+	require.EqualValues(t, 1, len(mp["me"].([]interface{})))
+	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
+	require.EqualValues(t, "0x1", uid)
+
+	latency := mp["server_latency"]
+	require.NotNil(t, latency)
+	_, ok := latency.(map[string]interface{})
+	require.True(t, ok)
+}
 func TestCount(t *testing.T) {
 	populateGraph(t)
 

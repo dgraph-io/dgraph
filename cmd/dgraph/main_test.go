@@ -189,6 +189,24 @@ func TestSchemaConversion(t *testing.T) {
 	require.JSONEq(t, `{"user":[{"name2":1.5}]}`, output)
 }
 
+var qErr = `
+	mutation {
+		set {
+			<0x0> <name> "Alice" .
+		}
+	}
+`
+
+func TestMutationError(t *testing.T) {
+	res, err := gql.Parse(qErr)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = mutationHandler(ctx, res.Mutation)
+	require.Error(t, err)
+
+}
+
 var qm = `
 	mutation {
 		set {
