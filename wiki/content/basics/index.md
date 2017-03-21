@@ -194,7 +194,9 @@ curl localhost:8080/query -XPOST -d $'{
 ```
 
 ## Step 4: Advanced Queries on a larger dataset
-{{ Note | Step 4 and 5 are optional. If you'd like to experiment with a larger dataset and explore more functionality, this section is for you.}}
+{{% note content="Step 4 and 5 are optional. If you'd like to experiment with a larger dataset and explore more functionality, this section is for you." }}
+
+{{ Note | }}
 
 ### Download dataset
 First, download the goldendata.rdf.gz dataset from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz) ([download](https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz)). Also, download the corresponding schema from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.schema) ([download](https://raw.githubusercontent.com/dgraph-io/benchmarks/master/data/goldendata.schema)). Put both files in `~/dgraph` directory, creating it if necessary using `mkdir ~/dgraph`.
