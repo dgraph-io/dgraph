@@ -101,10 +101,11 @@ func printBuildDetails() {
 		return
 	}
 
-	fmt.Printf(fmt.Sprintf(`Dgraph version   : %v
+	fmt.Printf(fmt.Sprintf(`
+Dgraph version   : %v
 Commit SHA-1     : %v
 Commit timestamp : %v
-Branch       	 : %v`,
+Branch           : %v`,
 		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch) + "\n\n")
 }
 
