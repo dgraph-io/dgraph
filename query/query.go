@@ -335,7 +335,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				if err != nil {
 					return err
 				}
-				dst.SetXID(txt.Value.(string))
+				xidVal := txt.Value.(string)
+				// If xid is empty, then we don't wan't to set it.
+				if xidVal == "" {
+					continue
+				}
+				dst.SetXID(xidVal)
 			} else if pc.Attr == "_uid_" {
 				if !uidAlreadySet {
 					uidAlreadySet = true

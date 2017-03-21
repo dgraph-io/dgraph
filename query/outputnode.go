@@ -291,7 +291,7 @@ func (fj *fastJsonNode) SetUID(uid uint64) {
 }
 
 func (fj *fastJsonNode) SetXID(xid string) {
-	fj.attrs["_xid_"] = makeScalarAttr([]byte(xid))
+	fj.attrs["_xid_"] = makeScalarAttr([]byte(strconv.Quote(xid)))
 }
 
 func (fj *fastJsonNode) IsEmpty() bool {
