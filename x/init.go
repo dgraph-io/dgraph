@@ -22,8 +22,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
-	"strings"
 
 	yaml "gopkg.in/yaml.v2"
 )
@@ -35,7 +33,12 @@ var (
 	initFunc []func()
 	logger   *log.Logger
 	isTest   bool
-	bd       buildDetails
+
+	// These variables are set using -ldflags
+	dgraphVersion  string
+	gitBranch      string
+	lastCommitSHA  string
+	lastCommitTime string
 )
 
 func SetTestRun() {
@@ -60,7 +63,6 @@ func Init() {
 		log.Fatal("Unable to parse flags")
 	}
 
-	extractBuildDetails()
 	printVersionOnly()
 
 	// Lets print the details of the current build on startup.
@@ -95,11 +97,15 @@ func loadConfigFromYAML() {
 }
 
 func printBuildDetails() {
+	if dgraphVersion == "" {
+		return
+	}
+
 	fmt.Printf(fmt.Sprintf(`Dgraph version   : %v
 Commit SHA-1     : %v
 Commit timestamp : %v
 Branch       	 : %v`,
-		bd.dgraphVersion, bd.lastCommitSHA, bd.lastCommitTime, bd.gitBranch) + "\n\n")
+		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch) + "\n\n")
 }
 
 // printVersionOnly prints version and other helpful information if --version.
@@ -115,31 +121,6 @@ To say hi to the community       , visit https://dgraph.slack.com.
 `)
 		os.Exit(0)
 	}
-}
-
-type buildDetails struct {
-	dgraphVersion  string
-	gitBranch      string
-	lastCommitSHA  string
-	lastCommitTime string
-}
-
-func runCommand(args []string) string {
-	output, err := exec.Command(args[0], args[1:]...).Output()
-	Check(err)
-	return strings.TrimSpace(string(output))
-}
-
-func extractBuildDetails() {
-	// `git describe --abbrev=0` returns the latest release tag.
-	bd.dgraphVersion = runCommand([]string{"git", "describe", "--abbrev=0"})
-	// `git rev-parse --short HEAD` is used to get the short form of the SHA1 of
-	// the latest commit.
-	bd.lastCommitSHA = runCommand([]string{"git", "rev-parse", "--short", "HEAD"})
-	bd.gitBranch = runCommand([]string{"git", "rev-parse", "--abbrev-ref", "HEAD"})
-	// `git log -1` is the latest comitt. $ci is a format option. Other options
-	// can be found here. https://git-scm.com/docs/pretty-formats
-	bd.lastCommitTime = runCommand([]string{"git", "log", "-1", `--format=%ci`})
 }
 
 // Printf does a log.Printf. We often do printf for debugging but has to keep
