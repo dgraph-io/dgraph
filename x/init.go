@@ -22,11 +22,11 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
+	"strings"
 
 	yaml "gopkg.in/yaml.v2"
 )
-
-var dgraphVersion string
 
 var (
 	configFile = flag.String("config", "",
@@ -35,6 +35,7 @@ var (
 	initFunc []func()
 	logger   *log.Logger
 	isTest   bool
+	bd       buildDetails
 )
 
 func SetTestRun() {
@@ -59,6 +60,12 @@ func Init() {
 		log.Fatal("Unable to parse flags")
 	}
 
+	extractBuildDetails()
+	printVersionOnly()
+
+	// Lets print the details of the current build on startup.
+	printBuildDetails()
+
 	if *configFile != "" {
 		log.Println("Loading configuration from file:", *configFile)
 		loadConfigFromYAML()
@@ -66,7 +73,7 @@ func Init() {
 
 	logger = log.New(os.Stderr, "", log.Lshortfile|log.Flags())
 	AssertTrue(logger != nil)
-	printVersionOnly()
+
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
 		f()
@@ -87,11 +94,19 @@ func loadConfigFromYAML() {
 	}
 }
 
+func printBuildDetails() {
+	fmt.Printf(fmt.Sprintf(`Dgraph version   : %v
+Commit SHA-1     : %v
+Commit timestamp : %v
+Branch       	 : %v`,
+		bd.dgraphVersion, bd.lastCommitSHA, bd.lastCommitTime, bd.gitBranch) + "\n\n")
+}
+
 // printVersionOnly prints version and other helpful information if --version.
 func printVersionOnly() {
 	if *version {
-		fmt.Printf("Dgraph %s\n", dgraphVersion)
-		fmt.Println("\nCopyright 2016 Dgraph Labs, Inc.")
+		printBuildDetails()
+		fmt.Println("Copyright 2016 Dgraph Labs, Inc.")
 		fmt.Println(`
 Licensed under the Apache License, version 2.0.
 For Dgraph official documentation, visit https://wiki.dgraph.io.
@@ -100,6 +115,31 @@ To say hi to the community       , visit https://dgraph.slack.com.
 `)
 		os.Exit(0)
 	}
+}
+
+type buildDetails struct {
+	dgraphVersion  string
+	gitBranch      string
+	lastCommitSHA  string
+	lastCommitTime string
+}
+
+func runCommand(args []string) string {
+	output, err := exec.Command(args[0], args[1:]...).Output()
+	Check(err)
+	return strings.TrimSpace(string(output))
+}
+
+func extractBuildDetails() {
+	// `git describe --abbrev=0` returns the latest release tag.
+	bd.dgraphVersion = runCommand([]string{"git", "describe", "--abbrev=0"})
+	// `git rev-parse --short HEAD` is used to get the short form of the SHA1 of
+	// the latest commit.
+	bd.lastCommitSHA = runCommand([]string{"git", "rev-parse", "--short", "HEAD"})
+	bd.gitBranch = runCommand([]string{"git", "rev-parse", "--abbrev-ref", "HEAD"})
+	// `git log -1` is the latest comitt. $ci is a format option. Other options
+	// can be found here. https://git-scm.com/docs/pretty-formats
+	bd.lastCommitTime = runCommand([]string{"git", "log", "-1", `--format=%ci`})
 }
 
 // Printf does a log.Printf. We often do printf for debugging but has to keep

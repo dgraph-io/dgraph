@@ -34,9 +34,9 @@ build_flags='-v -tags=embed'
 
 echo -e "\033[1;33mBuilding binaries\033[0m"
 echo "dgraph"
-cd $dgraph_cmd/dgraph && go build $build_flags -ldflags="-X github.com/dgraph-io/dgraph/x.dgraphVersion=$release_version" .;
+cd $dgraph_cmd/dgraph && go build $build_flags .;
 echo "dgraphloader"
-cd $dgraph_cmd/dgraphloader && go build $build_flags -ldflags="-X github.com/dgraph-io/dgraph/x.dgraphVersion=$release_version" .;
+cd $dgraph_cmd/dgraphloader && go build $build_flags .;
 
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
 cd $tmp_dir;
