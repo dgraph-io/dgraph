@@ -246,6 +246,9 @@ LOOP:
 		}
 	}
 
+	if req.size() > 0 {
+		batch.request(req)
+	}
 	batch.wg.Done()
 }
 
@@ -302,5 +305,6 @@ func (batch *BatchMutation) Counter() Counter {
 
 func (batch *BatchMutation) Flush() {
 	close(batch.nquads)
+	close(batch.schema)
 	batch.wg.Wait()
 }
