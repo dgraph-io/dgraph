@@ -1,0 +1,92 @@
+// TODO: use vanilajs
+$(document).ready(function() {
+  // clipboard
+  var clipInit = false;
+  $('pre code').each(function() {
+      var code = $(this),
+          text = code.text();
+
+      if (text.length > 5) {
+          if (!clipInit) {
+              var text, clip = new Clipboard('.copy-to-clipboard', {
+                  text: function(trigger) {
+                      text = $(trigger).prev('code').text();
+                      return text.replace(/^\$\s/gm, '');
+                  }
+              });
+
+              var inPre;
+              clip.on('success', function(e) {
+                  e.clearSelection();
+                  inPre = $(e.trigger).parent().prop('tagName') == 'PRE';
+                  $(e.trigger).attr('aria-label', 'Copied to clipboard!').addClass('tooltipped tooltipped-' + (inPre ? 'w' : 's'));
+              });
+
+              clip.on('error', function(e) {
+                  inPre = $(e.trigger).parent().prop('tagName') == 'PRE';
+                  $(e.trigger).attr('aria-label', fallbackMessage(e.action)).addClass('tooltipped tooltipped-' + (inPre ? 'w' : 's'));
+                  $(document).one('copy', function(){
+                      $(e.trigger).attr('aria-label', 'Copied to clipboard!').addClass('tooltipped tooltipped-' + (inPre ? 'w' : 's'));
+                  });
+              });
+
+              clipInit = true;
+          }
+
+          code.after('<span class="copy-to-clipboard">Copy</span>');
+          code.next('.copy-to-clipboard').on('mouseleave', function() {
+              $(this).attr('aria-label', null).removeClass('tooltipped tooltipped-s tooltipped-w');
+          });
+      }
+  });
+
+  // Sidebar
+  var h2s = document.querySelectorAll('h2');
+  var h3s = document.querySelectorAll('h3');
+  var isAfter = function(e1, e2) {
+    return e1.compareDocumentPosition(e2) & Node.DOCUMENT_POSITION_FOLLOWING;
+  }
+  var activeLink = document.querySelector('.doc-toc.active')
+
+  // TODO: h2sWithH3s
+  var h2sWithH3s = [];
+  var j = 0;
+  for (var i = 0; i < h2s.length; i++) {
+    var h2 = h2s[i];
+    var nextH2 = h2s[i+1];
+    var ourH3s = [];
+    while (h3s[j] && isAfter(h2, h3s[j]) && (!nextH2 || !isAfter(nextH2, h3s[j]))) {
+      ourH3s.push({ header: h3s[j] });
+      j++;
+    }
+
+    h2sWithH3s.push({
+      header: h2,
+      subHeaders: ourH3s
+    });
+  }
+
+  console.log('h2sWithH3s', h2sWithH3s);
+
+  if (h2sWithH3s.length > 0) {
+    createSubtopic(activeLink, h2sWithH3s);
+  }
+
+  function createSubtopic(container, headers) {
+    subMenu = document.createElement('ul');
+    subMenu.className = 'sub-topic';
+    container.appendChild(subMenu);
+
+    Array.prototype.forEach.call(headers, function(h) {
+      var li = createSubtopicItem(h.header);
+      subMenu.appendChild(li);
+    });
+  }
+
+  function createSubtopicItem(h) {
+    var li = document.createElement('li');
+    li.innerHTML =
+      '<a href="#' + h.id + '" data-scroll class="' + h.tagName + '"><span>' + (h.title || h.textContent) + '</span></a>';
+    return li;
+  }
+});
