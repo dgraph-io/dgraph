@@ -52,7 +52,7 @@ func (s byValue) Less(i, j int) bool {
 		return (s.values[i].Value.(int32)) < (s.values[j].Value.(int32))
 	case FloatID:
 		return (s.values[i].Value.(float64)) < (s.values[j].Value.(float64))
-	case StringID:
+	case StringID, DefaultID:
 		return (s.values[i].Value.(string)) < (s.values[j].Value.(string))
 	}
 	x.Fatalf("Unexpected scalar: %v", s.values[i].Tid)
@@ -85,7 +85,7 @@ func Less(a, b Val) (bool, error) {
 		return (a.Value.(int32)) < (b.Value.(int32)), nil
 	case FloatID:
 		return (a.Value.(float64)) < (b.Value.(float64)), nil
-	case StringID:
+	case StringID, DefaultID:
 		return (a.Value.(string)) < (b.Value.(string)), nil
 	}
 	return false, x.Errorf("Compare not supported for type: %v", a.Tid)
@@ -105,7 +105,7 @@ func Equal(a, b Val) (bool, error) {
 		return (a.Value.(int32)) == (b.Value.(int32)), nil
 	case FloatID:
 		return (a.Value.(float64)) == (b.Value.(float64)), nil
-	case StringID:
+	case StringID, DefaultID:
 		return (a.Value.(string)) == (b.Value.(string)), nil
 	case BoolID:
 		return a.Value.(bool) == (b.Value.(bool)), nil
