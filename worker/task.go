@@ -329,9 +329,13 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		defer it.Close()
 		pk := x.Parse(x.DataKey(q.Attr, 0))
 		dataPrefix := pk.DataPrefix()
+		if q.Reverse {
+			pk = x.Parse(x.ReverseKey(q.Attr, 0))
+			dataPrefix = pk.ReversePrefix()
+		}
 
 		for it.Seek(dataPrefix); it.ValidForPrefix(dataPrefix); it.Next() {
-			x.AssertTruef(pk.IsData() && pk.Attr == q.Attr,
+			x.AssertTruef(pk.Attr == q.Attr,
 				"Invalid key obtained for comparison")
 			key := it.Key().Data()
 			pl, decr := posting.GetOrUnmarshal(key, it.Value().Data())
