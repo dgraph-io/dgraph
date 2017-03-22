@@ -104,7 +104,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 	var err error
 	in := []uint64{start.Params.From}
 	start.SrcUIDs = &taskp.List{in}
-	start.uidMatrix = []*taskp.List{&taskp.List{in}}
+	start.uidMatrix = []*taskp.List{{in}}
 	start.DestUIDs = start.SrcUIDs
 
 	for _, child := range start.Children {
@@ -122,7 +122,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 			go ProcessGraph(ctx, sg, dummy, rrch)
 		}
 
-		for _ = range exec {
+		for range exec {
 			select {
 			case err = <-rrch:
 				if err != nil {
@@ -372,7 +372,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 	curUid := result[0]
 	shortestSg.SrcUIDs = &taskp.List{[]uint64{curUid}}
 	shortestSg.DestUIDs = &taskp.List{[]uint64{curUid}}
-	shortestSg.uidMatrix = []*taskp.List{&taskp.List{[]uint64{curUid}}}
+	shortestSg.uidMatrix = []*taskp.List{{[]uint64{curUid}}}
 
 	curNode := shortestSg
 	for i := 0; i < len(result)-1; i++ {
@@ -388,10 +388,10 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 			node.Params.Facet = &facetsp.Param{}
 		}
 		node.Attr = nodeInfo.attr
-		node.facetsMatrix = []*facetsp.List{&facetsp.List{[]*facetsp.Facets{nodeInfo.facet}}}
+		node.facetsMatrix = []*facetsp.List{{[]*facetsp.Facets{nodeInfo.facet}}}
 		node.SrcUIDs = &taskp.List{[]uint64{curUid}}
 		node.DestUIDs = &taskp.List{[]uint64{childUid}}
-		node.uidMatrix = []*taskp.List{&taskp.List{[]uint64{childUid}}}
+		node.uidMatrix = []*taskp.List{{[]uint64{childUid}}}
 
 		curNode.Children = append(curNode.Children, node)
 		curNode = node
@@ -403,7 +403,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 	}
 	uid := result[len(result)-1]
 	node.SrcUIDs = &taskp.List{[]uint64{uid}}
-	node.uidMatrix = []*taskp.List{&taskp.List{[]uint64{uid}}}
+	node.uidMatrix = []*taskp.List{{[]uint64{uid}}}
 	curNode.Children = append(curNode.Children, node)
 
 	return shortestSg

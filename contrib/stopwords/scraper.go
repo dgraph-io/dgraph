@@ -190,7 +190,6 @@ func getLangCode(lang string) string {
 	code, ok := mapping[lang]
 	if ok {
 		return code
-	} else {
-		panic("Unsupported language: " + lang)
 	}
+	panic("Unsupported language: " + lang)
 }

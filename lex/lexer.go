@@ -92,7 +92,7 @@ func (p *ItemIterator) Peek(num int) ([]item, error) {
 	if (p.idx + num + 1) > len(p.l.items) {
 		return nil, x.Errorf("Out of range for peek")
 	}
-	return (p.l.items)[p.idx+1 : p.idx+num+1], nil
+	return p.l.items[p.idx+1 : p.idx+num+1], nil
 }
 
 type Lexer struct {

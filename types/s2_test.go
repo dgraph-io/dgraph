@@ -20,7 +20,7 @@ func TestConvertToGeoJson_Poly(t *testing.T) {
 	b, err := convertToGeom(s)
 	require.NoError(t, err)
 	require.Equal(t,
-		[][]geom.Coord{[]geom.Coord{geom.Coord{1.123, 2.543}, geom.Coord{-3.23, 4.123}, geom.Coord{4.43, -6.123}, geom.Coord{1.123, 2.543}}},
+		[][]geom.Coord{{{1.123, 2.543}, {-3.23, 4.123}, {4.43, -6.123}, {1.123, 2.543}}},
 		b.(*geom.Polygon).Coords())
 	_, err = geojson.Marshal(b)
 	require.NoError(t, err)

@@ -132,9 +132,9 @@ func TestProcessTask(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t,
 		[][]uint64{
-			[]uint64{23, 31},
-			[]uint64{23},
-			[]uint64{23, 25, 26, 31},
+			{23, 31},
+			{23},
+			{23, 25, 26, 31},
 		}, algo.ToUintsListForTest(r.UidMatrix))
 }
 
@@ -163,7 +163,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	require.EqualValues(t, [][]uint64{
 		nil,
-		[]uint64{10, 12},
+		{10, 12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
@@ -186,8 +186,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	require.EqualValues(t, [][]uint64{
 		nil,
-		[]uint64{10},
-		[]uint64{12},
+		{10},
+		{12},
 		nil,
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -218,7 +218,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.EqualValues(t, [][]uint64{
 		nil,
 		nil,
-		[]uint64{12},
+		{12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Final touch: Merge everything to RocksDB.
@@ -232,7 +232,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.EqualValues(t, [][]uint64{
 		nil,
 		nil,
-		[]uint64{12},
+		{12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 }
 
@@ -250,7 +250,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	require.EqualValues(t, [][]uint64{
 		nil,
-		[]uint64{10, 12},
+		{10, 12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	posting.CommitLists(10)
@@ -276,8 +276,8 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	require.EqualValues(t, [][]uint64{
 		nil,
-		[]uint64{10},
-		[]uint64{12},
+		{10},
+		{12},
 		nil,
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
@@ -311,7 +311,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	require.EqualValues(t, [][]uint64{
 		nil,
 		nil,
-		[]uint64{12},
+		{12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 }
 

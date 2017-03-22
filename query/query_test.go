@@ -1562,7 +1562,7 @@ func TestProcessGraph(t *testing.T) {
 	child := sg.Children[0]
 	require.EqualValues(t,
 		[][]uint64{
-			[]uint64{23, 24, 25, 31, 101},
+			{23, 24, 25, 31, 101},
 		}, algo.ToUintsListForTest(child.uidMatrix))
 
 	require.EqualValues(t, []string{"name"}, childAttrs(child))
@@ -3975,7 +3975,7 @@ func TestWithinPoint(t *testing.T) {
 			Name: "near",
 			Args: []string{`[-122.082506, 37.4249518]`, "1"},
 		},
-		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+		Children: []*gql.GraphQuery{{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
@@ -3990,7 +3990,7 @@ func TestWithinPolygon(t *testing.T) {
 		Func: &gql.Function{Attr: "geometry", Name: "within", Args: []string{
 			`[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]`},
 		},
-		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+		Children: []*gql.GraphQuery{{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
@@ -4005,7 +4005,7 @@ func TestContainsPoint(t *testing.T) {
 		Func: &gql.Function{Attr: "geometry", Name: "contains", Args: []string{
 			`[-122.082506, 37.4249518]`},
 		},
-		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+		Children: []*gql.GraphQuery{{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
@@ -4022,7 +4022,7 @@ func TestNearPoint(t *testing.T) {
 			Name: "near",
 			Args: []string{`[-122.082506, 37.4249518]`, "1000"},
 		},
-		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+		Children: []*gql.GraphQuery{{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
@@ -4042,7 +4042,7 @@ func TestIntersectsPolygon1(t *testing.T) {
 					[-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]`,
 			},
 		},
-		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+		Children: []*gql.GraphQuery{{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
@@ -4063,7 +4063,7 @@ func TestIntersectsPolygon2(t *testing.T) {
 					[-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]`,
 			},
 		},
-		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+		Children: []*gql.GraphQuery{{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)

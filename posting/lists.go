@@ -118,7 +118,7 @@ type counters struct {
 }
 
 func (c *counters) periodicLog() {
-	for _ = range c.ticker.C {
+	for range c.ticker.C {
 		c.log()
 	}
 }
@@ -436,7 +436,7 @@ func commitOne(l *List, c *counters) {
 		return
 	}
 	if merged, err := l.SyncIfDirty(context.Background()); err != nil {
-		log.Printf("Error while commiting dirty list: %v\n", err)
+		log.Printf("Error while committing dirty list: %v\n", err)
 	} else if merged {
 		atomic.AddUint64(&c.done, 1)
 	} else {

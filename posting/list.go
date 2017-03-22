@@ -361,7 +361,7 @@ func postingType(p *typesp.Posting) x.ValueTypeInfo {
 	}
 }
 
-// TypeID returns the typeid of destiantion vertex
+// TypeID returns the typeid of destination vertex
 func TypeID(edge *taskp.DirectedEdge) types.TypeID {
 	if edge.ValueId != 0 {
 		return types.UidID
