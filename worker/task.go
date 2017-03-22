@@ -121,7 +121,7 @@ func convertToType(v types.Val, typ types.TypeID) (*taskp.Value, error) {
 type FuncType int
 
 const (
-	NotFn FuncType = iota
+	NotAFunction FuncType = iota
 	AggregatorFn
 	CompareAttrFn
 	CompareScalarFn
@@ -134,7 +134,7 @@ const (
 
 func parseFuncType(arr []string) (FuncType, string) {
 	if len(arr) == 0 {
-		return NotFn, ""
+		return NotAFunction, ""
 	}
 	f := strings.ToLower(arr[0])
 	switch f {
@@ -189,7 +189,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		AfterUID: uint64(q.AfterUid),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
-	if srcFn.fnType != NotFn && q.UidList != nil && len(q.UidList.Uids) > 0 {
+	if srcFn.fnType != NotAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
 		opts.Intersect = q.UidList
 	}
 	facetsTree, err := preprocessFilter(q.FacetsFilter)
@@ -199,7 +199,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 
 	for i := 0; i < srcFn.n; i++ {
 		var key []byte
-		if srcFn.fnType == CompareScalarFn {
+		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn {
 			if q.Reverse {
 				key = x.ReverseKey(attr, q.UidList.Uids[i])
 			} else {
@@ -207,12 +207,8 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			}
 		} else if srcFn.fnType == AggregatorFn || srcFn.fnType == PasswordFn {
 			key = x.DataKey(attr, q.UidList.Uids[i])
-		} else if srcFn.fnType != NotFn {
-			key = x.IndexKey(attr, srcFn.tokens[i])
-		} else if q.Reverse {
-			key = x.ReverseKey(attr, q.UidList.Uids[i])
 		} else {
-			key = x.DataKey(attr, q.UidList.Uids[i])
+			key = x.IndexKey(attr, srcFn.tokens[i])
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, gid)
@@ -439,6 +435,8 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 	var err error
 
 	switch fnType {
+	case NotAFunction:
+		fc.n = len(q.UidList.Uids)
 	case AggregatorFn:
 		// confirm agrregator could apply on the attributes
 		typ, err := schema.State().TypeOf(attr)
@@ -511,9 +509,6 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		if err != nil {
 			return nil, err
 		}
-	case NotFn:
-		fc.n = len(q.UidList.Uids)
-
 	default:
 		return nil, x.Errorf("FnType %d not handled in numFnAttrs.", fnType)
 	}
