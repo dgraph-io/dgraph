@@ -91,11 +91,11 @@ func TestParseQueryWithVarValAgg(t *testing.T) {
 	require.Equal(t, 2, len(res.Query))
 	require.Equal(t, "L", res.Query[0].NeedsVar[0])
 	require.Equal(t, "n", res.Query[0].NeedsVar[1])
+	require.Equal(t, "n", res.Query[0].Args["orderasc"])
+	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
 	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
 	require.Equal(t, "min", res.Query[1].Children[0].Children[0].Func.Name)
-	require.Equal(t, "n", res.Query[0].Args["orderasc"])
-	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 }
 
 func TestParseQueryWithVarValCount(t *testing.T) {
@@ -118,10 +118,10 @@ func TestParseQueryWithVarValCount(t *testing.T) {
 	require.Equal(t, 2, len(res.Query))
 	require.Equal(t, "L", res.Query[0].NeedsVar[0])
 	require.Equal(t, "n", res.Query[0].NeedsVar[1])
-	require.Equal(t, "L", res.Query[1].Children[0].Var)
-	require.True(t, res.Query[1].Children[0].Children[0].IsCount)
 	require.Equal(t, "n", res.Query[0].Args["orderasc"])
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
+	require.Equal(t, "L", res.Query[1].Children[0].Var)
+	require.True(t, res.Query[1].Children[0].Children[0].IsCount)
 }
 
 func TestParseQueryWithVarVal(t *testing.T) {
@@ -144,10 +144,10 @@ func TestParseQueryWithVarVal(t *testing.T) {
 	require.Equal(t, 2, len(res.Query))
 	require.Equal(t, "L", res.Query[0].NeedsVar[0])
 	require.Equal(t, "n", res.Query[0].NeedsVar[1])
-	require.Equal(t, "L", res.Query[1].Children[0].Var)
-	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
 	require.Equal(t, "n", res.Query[0].Args["orderasc"])
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
+	require.Equal(t, "L", res.Query[1].Children[0].Var)
+	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
 }
 
 func TestParseQueryWithVarMultiRoot(t *testing.T) {

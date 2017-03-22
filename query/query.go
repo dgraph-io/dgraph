@@ -943,7 +943,6 @@ func shouldCascade(res gql.Result, idx int) bool {
 	return true
 }
 
-// TODO(Ashwin): Benchmark this function.
 func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
@@ -972,7 +971,8 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 		for _, child := range sg.Children {
 			// If the length of child UID list is zero and it has no valid value, then the
 			// current UID should be removed from this level.
-			if len(child.values[i].Val) == 0 && (len(child.counts) <= i) && len(child.uidMatrix[i].Uids) == 0 {
+			if len(child.values[i].Val) == 0 && (len(child.counts) <= i) &&
+				len(child.uidMatrix[i].Uids) == 0 {
 				exclude = true
 				break
 			}
