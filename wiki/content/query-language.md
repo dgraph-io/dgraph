@@ -1,11 +1,12 @@
 +++
 date = "2017-03-20T18:52:36+11:00"
 draft = true
-title = "query language"
+title = "Query Language"
 
 +++
 
 ## GraphQL+- 
+
 Dgraph uses a variation of [GraphQL](https://facebook.github.io/graphql/) as the primary language of communication.
 GraphQL is a query language created by Facebook for describing the capabilities and requirements of data models for client‐server applications.
 While GraphQL isn't aimed at Graph databases, it's graph-like query syntax, schema validation and subgraph shaped response make it a great language choice.

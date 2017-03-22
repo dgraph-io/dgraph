@@ -14,7 +14,8 @@ weight = 0
 ### System Installation
 
 You could simply install the binaries with
-```
+
+``` bash
 $ curl https://get.dgraph.io -sSf | bash
 ```
 
