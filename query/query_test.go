@@ -2411,6 +2411,56 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
+func TestCountReverseFunc(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+		{
+			me(func: geq(count(~friend), 2)) {
+				name
+				count(~friend) 
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
+		js)
+}
+
+func TestCountReverseFilter(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: anyofterms(name, "Glenn Michonne Rick")) @filter(geq(count(~friend), 2)) {
+				name
+				count(~friend) 
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
+		js)
+}
+
+func TestCountReverse(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x18) {
+				name
+				count(~friend) 
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
+		js)
+}
+
 func TestToFastJSONReverse(t *testing.T) {
 	populateGraph(t)
 	query := `
