@@ -33,14 +33,15 @@ import (
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
-	UID      []uint64
-	Attr     string
-	Langs    []string
-	Alias    string
-	IsCount  bool
-	Var      string
-	NeedsVar []string
-	Func     *Function
+	UID        []uint64
+	Attr       string
+	Langs      []string
+	Alias      string
+	IsCount    bool
+	IsInternal bool
+	Var        string
+	NeedsVar   []string
+	Func       *Function
 
 	Args         map[string]string
 	Children     []*GraphQuery
@@ -122,9 +123,7 @@ func init() {
 }
 
 func (f *Function) IsAggregator() bool {
-	return f.Name == "min" ||
-		f.Name == "max" ||
-		f.Name == "sum"
+	return isAggregator(f.Name)
 }
 
 func (f *Function) IsPasswordVerifier() bool {
@@ -1530,6 +1529,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
+	if gq == nil {
+		return x.Errorf("Bad nesting of predicates or functions")
+	}
 	var isCount uint16
 	varName := ""
 	curp := gq // Used to track current node, for nesting.
@@ -1580,11 +1582,25 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				child.Attr = child.Func.Attr
 				gq.Children = append(gq.Children, child)
-				curp = child
+				curp = nil
 				continue
-			}
+			} else if isValVarFunc(val) {
+				item.Val = val
+				child := &GraphQuery{
+					Attr:       item.Val,
+					Args:       make(map[string]string),
+					Var:        varName,
+					IsInternal: true,
+				}
+				varName = ""
+				if _, err = parseVarList(it, child); err != nil {
+					return err
+				}
+				gq.Children = append(gq.Children, child)
+				curp = nil
+				continue
 
-			if item.Val == "count" {
+			} else if val == "count" {
 				if isCount != 0 {
 					return x.Errorf("Invalid mention of function count")
 				}
@@ -1610,6 +1626,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			curp = child
 			if isCount == 1 {
 				isCount = 2
+				curp = nil
 			}
 		case itemColon:
 			it.Next()
@@ -1655,4 +1672,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 func isAggregator(fname string) bool {
 	return fname == "min" || fname == "max" || fname == "sum"
+}
+
+func isValVarFunc(name string) bool {
+	return name == "sumvar"
 }

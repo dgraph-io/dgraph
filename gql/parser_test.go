@@ -52,6 +52,20 @@ func TestParseQueryWithNoVarValError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseQueryAggChild(t *testing.T) {
+	query := `
+	{	
+		var(id:0x0a) {
+			count(friends) {
+				name
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseQueryWithMultiVarValError(t *testing.T) {
 	query := `
 	{	
@@ -69,6 +83,38 @@ func TestParseQueryWithMultiVarValError(t *testing.T) {
 `
 	_, err := Parse(query)
 	require.Error(t, err)
+}
+
+func TestParseQueryWithVarValAggCombination(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(c) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L as friends {
+				a as min(age)
+				b as max(age)
+				c as sumvar(a, b)
+			}
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "L", res.Query[0].NeedsVar[0])
+	require.Equal(t, "c", res.Query[0].NeedsVar[1])
+	require.Equal(t, "c", res.Query[0].Args["orderasc"])
+	require.Equal(t, "name", res.Query[0].Children[0].Attr)
+	require.Equal(t, "L", res.Query[1].Children[0].Var)
+	require.Equal(t, "a", res.Query[1].Children[0].Children[0].Var)
+	require.Equal(t, "b", res.Query[1].Children[0].Children[1].Var)
+	require.Equal(t, "c", res.Query[1].Children[0].Children[2].Var)
+	require.True(t, res.Query[1].Children[0].Children[2].IsInternal)
+	require.Equal(t, "sumvar", res.Query[1].Children[0].Children[2].Attr)
 }
 
 func TestParseQueryWithVarValAgg(t *testing.T) {
