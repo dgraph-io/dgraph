@@ -1601,7 +1601,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 				if count == 0 {
-					return x.Errof("Should have atleast one variable inside %v", val)
+					return x.Errorf("Should have atleast one variable inside %v", val)
 				}
 				gq.Children = append(gq.Children, child)
 				curp = nil

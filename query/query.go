@@ -167,7 +167,7 @@ type SubGraph struct {
 }
 
 func (sg *SubGraph) IsInternal() bool {
-	return sg.IsInternal
+	return sg.isInternal
 }
 
 // DebugPrint prints out the SubGraph tree in a nice format for debugging purposes.
@@ -799,31 +799,37 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 	return nil
 }
 
-func (sg *SubGraph) sumAggregation(doneVars map[string]values) error {
-	dest := sg.Params.Defines
+func (sg *SubGraph) sumAggregation(doneVars map[string]values) (rerr error) {
+	dest := sg.Params.Var
 	destMap := make(map[uint64]types.Val)
-	x.AssertTruef(len(sg.NeedsVar) > 0,
+	x.AssertTruef(len(sg.Params.NeedsVar) > 0,
 		"Received empty variable list in %v. Expected atleast one.", sg.Attr)
-	srcVar := sg.NeedsVar[0]
+	srcVar := sg.Params.NeedsVar[0]
 	srcMap := doneVars[srcVar]
-	for k, v := range srcMap {
+	if srcMap.vals == nil {
+		return x.Errorf("Expected a value variable but missing")
+	}
+	for k, v := range srcMap.vals {
 		// TODO(Ashwin): Create new aggregation class for variables
 		// (Which can do automatic casting).
 		ag := aggregator{
 			name: "sum",
 		}
-		for _, va := range sg.NeedsVar {
+		for _, va := range sg.Params.NeedsVar {
 			curMap := doneVars[va]
 			if curMap.vals == nil {
 				return x.Errorf("Expected a value variable but missing")
 			}
 		}
-		destMap[k] = ag.Value()
+		destMap[k], rerr = ag.Value()
+		if rerr != nil {
+			return rerr
+		}
 	}
 	return nil
 }
 
-func (sg *SubGraph) populatePostAggregation(doneVars map[string]values) error {
+func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 	if !sg.IsInternal() {
 		return nil
 	}
@@ -955,7 +961,10 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		for _, idx := range idxList {
 			sg := sgl[idx]
 			err := sg.populateAggregation(nil)
-			err := sg.populatePostAggregation(doneVars)
+			if err != nil {
+				return nil, err
+			}
+			err = sg.populatePostAggregation(doneVars)
 			if err != nil {
 				return nil, err
 			}
