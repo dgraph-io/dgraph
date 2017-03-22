@@ -972,7 +972,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 		for _, child := range sg.Children {
 			// If the length of child UID list is zero and it has no valid value, then the
 			// current UID should be removed from this level.
-			if len(child.values[i].Val) == 0 && (len(child.counts) < i) && len(child.uidMatrix[i].Uids) == 0 {
+			if len(child.values[i].Val) == 0 && (len(child.counts) <= i) && len(child.uidMatrix[i].Uids) == 0 {
 				exclude = true
 				break
 			}
@@ -1011,7 +1011,6 @@ AssignStep:
 				vals: make(map[uint64]types.Val),
 			}
 			for idx, uid := range sg.SrcUIDs.Uids {
-				//val, _ := getValue(sg.values[idx])
 				val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
 				if err != nil {
 					continue
@@ -1362,17 +1361,23 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 	}
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
+		uids := make([]uint64, 0, len(ul.Uids))
 		values := make([]types.Val, 0, len(ul.Uids))
 		for _, uid := range ul.Uids {
-			v := sg.Params.uidToVal[uid]
+			v, ok := sg.Params.uidToVal[uid]
+			if !ok {
+				// We skip the UIDs which don't have a value.
+				continue
+			}
 			values = append(values, v)
+			uids = append(uids, uid)
 		}
 		if len(values) == 0 {
 			continue
 		}
 		typ := values[0].Tid
-		types.Sort(typ, values, ul, sg.Params.OrderDesc)
-		sg.uidMatrix[i] = ul
+		types.Sort(typ, values, &taskp.List{uids}, sg.Params.OrderDesc)
+		sg.uidMatrix[i].Uids = uids
 	}
 
 	if sg.Params.Count != 0 || sg.Params.Offset != 0 {
