@@ -1586,6 +1586,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if isValVarFunc(val) {
 				item.Val = val
+				if varName == "" {
+					return x.Errorf("Function %v should be used with a variable", val)
+				}
 				child := &GraphQuery{
 					Attr:       item.Val,
 					Args:       make(map[string]string),
@@ -1593,8 +1596,12 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					IsInternal: true,
 				}
 				varName = ""
-				if _, err = parseVarList(it, child); err != nil {
+				count, err := parseVarList(it, child)
+				if err != nil {
 					return err
+				}
+				if count == 0 {
+					return x.Errof("Should have atleast one variable inside %v", val)
 				}
 				gq.Children = append(gq.Children, child)
 				curp = nil

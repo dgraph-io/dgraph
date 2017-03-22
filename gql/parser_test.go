@@ -56,7 +56,7 @@ func TestParseQueryAggChild(t *testing.T) {
 	query := `
 	{	
 		var(id:0x0a) {
-			count(friends) {
+			min(friends) {
 				name
 			}
 		}
