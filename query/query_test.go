@@ -2411,6 +2411,22 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
+func TestCountReverse(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x18) {
+				name
+				count(~friend) 
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
+		js)
+}
+
 func TestToFastJSONReverse(t *testing.T) {
 	populateGraph(t)
 	query := `
