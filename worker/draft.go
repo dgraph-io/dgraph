@@ -524,7 +524,7 @@ func (n *node) retrieveSnapshot(rc taskp.RaftContext) {
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
-	posting.EvictAll()
+	posting.EvictGroup(n.gid)
 	x.Check2(populateShard(n.ctx, pool, n.gid))
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id

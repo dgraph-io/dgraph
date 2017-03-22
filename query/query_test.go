@@ -550,7 +550,7 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 
 func TestNestedFuncRoot(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10)
+	posting.CommitLists(10, 1)
 	time.Sleep(100 * time.Millisecond)
 	query := `
     {
@@ -565,7 +565,7 @@ func TestNestedFuncRoot(t *testing.T) {
 
 func TestNestedFuncRoot2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10)
+	posting.CommitLists(10, 1)
 	time.Sleep(100 * time.Millisecond)
 	query := `
 		{

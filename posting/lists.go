@@ -118,7 +118,7 @@ type counters struct {
 }
 
 func (c *counters) periodicLog() {
-	for _ = range c.ticker.C {
+	for range c.ticker.C {
 		c.log()
 	}
 }
@@ -143,14 +143,67 @@ func newCounters() *counters {
 	return c
 }
 
+type listMaps struct {
+	x.SafeMutex
+	m map[uint32]*listMap
+}
+
+func (l *listMaps) create(group uint32) *listMap {
+	l.Lock()
+	defer l.Unlock()
+	if l.m == nil {
+		l.m = make(map[uint32]*listMap)
+	}
+
+	if prev, present := l.m[group]; present {
+		return prev
+	}
+	lhmap := newShardedListMap(*lhmapNumShards)
+	l.m[group] = lhmap
+	return lhmap
+}
+
+func (l *listMaps) get(group uint32) *listMap {
+	// Don't store anything in group zero since we never compact
+	// group 0 logs
+	x.AssertTruef(group != 0, "group id is 0 for lhmap")
+	l.RLock()
+	if lhmap, present := l.m[group]; present {
+		l.RUnlock()
+		return lhmap
+	}
+	l.RUnlock()
+	return l.create(group)
+}
+
+func (l *listMaps) groups() []uint32 {
+	l.RLock()
+	defer l.RUnlock()
+	var groups []uint32
+	for k := range l.m {
+		groups = append(groups, k)
+	}
+	return groups
+}
+
+func lhMapFor(group uint32) *listMap {
+	return lhmaps.get(group)
+}
+
 func aggressivelyEvict() {
 	stopTheWorld.AssertLock()
 	log.Println("Aggressive evict, committing to RocksDB")
-	CommitLists(1)
-	lhmap.EachWithDelete(func(k uint64, l *List) {
-		l.SetForDeletion()
-		l.decr()
-	})
+
+	// To evict entries belonging to a group no longer served by the server
+	// CommitLists shouldn't have any affect as the entries should have been synced before
+	// we stopped serving the group
+	for _, gid := range lhmaps.groups() {
+		CommitLists(1, gid)
+		lhMapFor(gid).EachWithDelete(func(k uint64, l *List) {
+			l.SetForDeletion()
+			l.decr()
+		})
+	}
 
 	log.Println("Trying to free OS memory")
 	// Forces garbage collection followed by returning as much memory to the OS
@@ -161,7 +214,7 @@ func aggressivelyEvict() {
 	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
-func gentleCommit(dirtyMap map[uint64]struct{}, pending chan struct{}) {
+func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
 	select {
 	case pending <- struct{}{}:
 	default:
@@ -176,7 +229,7 @@ func gentleCommit(dirtyMap map[uint64]struct{}, pending chan struct{}) {
 		// Have a min value of n, so we can merge small number of dirty PLs fast.
 		n = 1000
 	}
-	keysBuffer := make([]uint64, 0, n)
+	keysBuffer := make([]fingerPrint, 0, n)
 
 	for key := range dirtyMap {
 		delete(dirtyMap, key)
@@ -187,7 +240,7 @@ func gentleCommit(dirtyMap map[uint64]struct{}, pending chan struct{}) {
 		}
 	}
 
-	go func(keys []uint64) {
+	go func(keys []fingerPrint) {
 		defer func() { <-pending }()
 		if len(keys) == 0 {
 			return
@@ -196,7 +249,7 @@ func gentleCommit(dirtyMap map[uint64]struct{}, pending chan struct{}) {
 		defer ctr.ticker.Stop()
 
 		for _, key := range keys {
-			l := lhmap.Get(key)
+			l := lhMapFor(key.gid).Get(key.fp)
 			if l == nil {
 				continue
 			}
@@ -213,7 +266,7 @@ func gentleCommit(dirtyMap map[uint64]struct{}, pending chan struct{}) {
 // merge and evict all posting lists from memory.
 func periodicCommit() {
 	ticker := time.NewTicker(5 * time.Second)
-	dirtyMap := make(map[uint64]struct{}, 1000)
+	dirtyMap := make(map[fingerPrint]struct{}, 1000)
 	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
 	pending := make(chan struct{}, 15)
 	dsize := 0 // needed for better reporting.
@@ -317,35 +370,31 @@ func getMemUsage() int {
 	return rss * os.Getpagesize() / (1 << 20)
 }
 
+type fingerPrint struct {
+	fp  uint64
+	gid uint32
+}
+
 var (
 	stopTheWorld x.SafeMutex
-	lhmap        *listMap
 	pstore       *store.Store
 	syncCh       chan syncEntry
-	dirtyChan    chan uint64 // All dirty posting list keys are pushed here.
+	dirtyChan    chan fingerPrint // All dirty posting list keys are pushed here.
 	marks        *syncMarks
+	lhmaps       *listMaps
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *store.Store) {
 	marks = new(syncMarks)
 	pstore = ps
-	lhmap = newShardedListMap(*lhmapNumShards)
-	dirtyChan = make(chan uint64, 10000)
+	lhmaps = new(listMaps)
+	dirtyChan = make(chan fingerPrint, 10000)
 	fmt.Println("Starting commit routine.")
 	syncCh = make(chan syncEntry, 10000)
 
 	go periodicCommit()
 	go batchSync()
-}
-
-func getFromMap(key uint64) *List {
-	lp := lhmap.Get(key)
-	if lp == nil {
-		return nil
-	}
-	lp.incr()
-	return lp
 }
 
 // GetOrCreate stores the List corresponding to key, if it's not there already.
@@ -365,7 +414,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
 
-	lp := lhmap.Get(fp)
+	lp := lhMapFor(group).Get(fp)
 	if lp != nil {
 		lp.incr()
 		return lp, lp.decr
@@ -376,7 +425,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	l.water = marks.Get(group)
 
-	lp = lhmap.PutIfMissing(fp, l)
+	lp = lhMapFor(group).PutIfMissing(fp, l)
 	// We are always going to return lp to caller, whether it is l or not. So, let's
 	// increment its reference counter.
 	lp.incr()
@@ -411,11 +460,11 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 // GetOrUnmarshal takes a key, value and a groupID. It checks if the in-memory map has an
 // updated value and returns it if it exists or it unmarshals the value passed and returns
 // the list.
-func GetOrUnmarshal(key, val []byte) (rlist *List, decr func()) {
+func GetOrUnmarshal(key, val []byte, gid uint32) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
 
 	stopTheWorld.RLock()
-	lp := lhmap.Get(fp)
+	lp := lhMapFor(gid).Get(fp)
 	stopTheWorld.RUnlock()
 
 	if lp != nil {
@@ -444,7 +493,7 @@ func commitOne(l *List, c *counters) {
 	}
 }
 
-func CommitLists(numRoutines int) {
+func CommitLists(numRoutines int, group uint32) {
 	c := newCounters()
 	defer c.ticker.Stop()
 
@@ -463,7 +512,7 @@ func CommitLists(numRoutines int) {
 		}()
 	}
 
-	lhmap.Each(func(k uint64, l *List) {
+	lhMapFor(group).Each(func(k uint64, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
@@ -475,12 +524,15 @@ func CommitLists(numRoutines int) {
 	wg.Wait()
 }
 
-// EvictAll removes all pl's stored in memory
-func EvictAll() {
-	stopTheWorld.Lock()
-	defer stopTheWorld.Unlock()
-
-	aggressivelyEvict()
+// EvictAll removes all pl's stored in memory for given group
+func EvictGroup(group uint32) {
+	// This is serialized by raft so no need to worry about race condition from getOrCreate
+	// request from same group
+	CommitLists(1, group)
+	lhMapFor(group).EachWithDelete(func(k uint64, l *List) {
+		l.SetForDeletion()
+		l.decr()
+	})
 }
 
 // The following logic is used to batch up all the writes to RocksDB.

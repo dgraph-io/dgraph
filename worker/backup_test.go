@@ -82,7 +82,7 @@ func TestBackup(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
-	posting.CommitLists(10)
+	posting.CommitLists(10, 1)
 	time.Sleep(time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.

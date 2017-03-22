@@ -39,7 +39,7 @@ var raftIndex uint64
 func addEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
 	edge.Op = taskp.DirectedEdge_SET
 	raftIndex++
-	rv := x.RaftValue{Group: 0, Index: raftIndex}
+	rv := x.RaftValue{Group: 1, Index: raftIndex}
 	ctx := context.WithValue(context.Background(), "raft", rv)
 	require.NoError(t, l.AddMutationWithIndex(ctx, edge))
 }
@@ -47,13 +47,13 @@ func addEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
 func delEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
 	edge.Op = taskp.DirectedEdge_DEL
 	raftIndex++
-	rv := x.RaftValue{Group: 0, Index: raftIndex}
+	rv := x.RaftValue{Group: 1, Index: raftIndex}
 	ctx := context.WithValue(context.Background(), "raft", rv)
 	require.NoError(t, l.AddMutationWithIndex(ctx, edge))
 }
 
 func getOrCreate(key []byte) *posting.List {
-	l, _ := posting.GetOrCreate(key, 0)
+	l, _ := posting.GetOrCreate(key, 1)
 	return l
 }
 
@@ -125,10 +125,10 @@ func TestProcessTask(t *testing.T) {
 	dir, ps := initTest(t, `friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
-	defer waitForSyncMark(context.Background(), 0, math.MaxUint64)
+	defer waitForSyncMark(context.Background(), 1, math.MaxUint64)
 
 	query := newQuery("neighbour", []uint64{10, 11, 12}, nil)
-	r, err := processTask(query, 0)
+	r, err := processTask(query, 1)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		[][]uint64{
@@ -155,10 +155,10 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	dir, ps := initTest(t, `friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
-	defer waitForSyncMark(context.Background(), 0, math.MaxUint64)
+	defer waitForSyncMark(context.Background(), 1, math.MaxUint64)
 
 	query := newQuery("friend", nil, []string{"anyofterms", "hey photon"})
-	r, err := processTask(query, 0)
+	r, err := processTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -181,7 +181,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "hey photon notphoton notphotonExtra"})
-	r, err = processTask(query, 0)
+	r, err = processTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -212,7 +212,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "photon notphoton ignored"})
-	r, err = processTask(query, 0)
+	r, err = processTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -222,11 +222,11 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Final touch: Merge everything to RocksDB.
-	posting.CommitLists(10)
+	posting.CommitLists(10, 1)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	query = newQuery("friend", nil, []string{"anyofterms", "photon notphoton ignored"})
-	r, err = processTask(query, 0)
+	r, err = processTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -242,10 +242,10 @@ func TestProcessTaskIndex(t *testing.T) {
 	dir, ps := initTest(t, `friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
-	defer waitForSyncMark(context.Background(), 0, math.MaxUint64)
+	defer waitForSyncMark(context.Background(), 1, math.MaxUint64)
 
 	query := newQuery("friend", nil, []string{"anyofterms", "hey photon"})
-	r, err := processTask(query, 0)
+	r, err := processTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -253,7 +253,7 @@ func TestProcessTaskIndex(t *testing.T) {
 		[]uint64{10, 12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
-	posting.CommitLists(10)
+	posting.CommitLists(10, 1)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
@@ -271,7 +271,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "hey photon notphoton notphotonExtra"})
-	r, err = processTask(query, 0)
+	r, err = processTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -281,7 +281,7 @@ func TestProcessTaskIndex(t *testing.T) {
 		nil,
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
-	posting.CommitLists(10)
+	posting.CommitLists(10, 1)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Try deleting.
@@ -305,7 +305,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "photon notphoton ignored"})
-	r, err = processTask(query, 0)
+	r, err = processTask(query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{

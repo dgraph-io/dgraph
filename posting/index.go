@@ -104,6 +104,9 @@ func addIndexMutation(ctx context.Context, edge *taskp.DirectedEdge, token strin
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 		groupId = rv.Group
 	}
+	if groupId == 0 {
+		groupId = group.BelongsTo(edge.Attr)
+	}
 
 	plist, decr := GetOrCreate(key, groupId)
 	defer decr()

@@ -65,7 +65,7 @@ func addMutation(t *testing.T, l *List, edge *taskp.DirectedEdge, op uint32) {
 }
 
 func deletePl(t *testing.T, l *List) {
-	lhmap.EachWithDelete(func(k uint64, l *List) {
+	lhMapFor(1).EachWithDelete(func(k uint64, l *List) {
 	})
 	require.NoError(t, l.pstore.Delete(l.key))
 }
@@ -164,7 +164,7 @@ func TestAddMutation_Value(t *testing.T) {
 
 func TestAddMutation_jchiu1(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol, _ := GetOrCreate(key, 0)
+	ol, _ := GetOrCreate(key, 1)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &taskp.DirectedEdge{
@@ -212,7 +212,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 
 func TestAddMutation_jchiu2(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol, _ := GetOrCreate(key, 0)
+	ol, _ := GetOrCreate(key, 1)
 
 	// Del a value cars and but don't merge.
 	edge := &taskp.DirectedEdge{
@@ -243,7 +243,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 
 func TestAddMutation_jchiu3(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol, _ := GetOrCreate(key, 0)
+	ol, _ := GetOrCreate(key, 1)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &taskp.DirectedEdge{
@@ -297,7 +297,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 
 func TestAddMutation_mrjn1(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol, _ := GetOrCreate(key, 0)
+	ol, _ := GetOrCreate(key, 1)
 
 	// Set a value cars and merge.
 	edge := &taskp.DirectedEdge{
@@ -359,7 +359,7 @@ func TestAddMutation_checksum(t *testing.T) {
 
 	{
 		key := x.DataKey("value", 10)
-		ol, _ := GetOrCreate(key, 0)
+		ol, _ := GetOrCreate(key, 1)
 
 		edge := &taskp.DirectedEdge{
 			ValueId: 1,
@@ -384,7 +384,7 @@ func TestAddMutation_checksum(t *testing.T) {
 
 	{
 		key := x.DataKey("value2", 10)
-		ol, _ := GetOrCreate(key, 0)
+		ol, _ := GetOrCreate(key, 1)
 
 		// Add in reverse.
 		edge := &taskp.DirectedEdge{
@@ -411,7 +411,7 @@ func TestAddMutation_checksum(t *testing.T) {
 
 	{
 		key := x.DataKey("value3", 10)
-		ol, _ := GetOrCreate(key, 0)
+		ol, _ := GetOrCreate(key, 1)
 
 		// Add in reverse.
 		edge := &taskp.DirectedEdge{
