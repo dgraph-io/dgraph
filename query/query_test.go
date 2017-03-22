@@ -391,6 +391,25 @@ func TestQueryVarValOrderDesc(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValOrderDescMissing(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1034) {
+				f As friend {
+					n As name
+				}
+			}
+
+			me(id: var(f), orderdesc: var(n)) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{}`, js)
+}
+
 func TestMultiEmptyBlocks(t *testing.T) {
 	populateGraph(t)
 	query := `

@@ -913,6 +913,13 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 			isCascade := shouldCascade(res, idx)
 			populateVarMap(sg, doneVars, isCascade)
+			// populate emptyvalues for all vars defined in this query block if corresponding
+			// subgraph was not expanded
+			for _, v := range res.QueryVars[idx].Defines {
+				if _, ok := doneVars[v]; !ok {
+					doneVars[v] = values{}
+				}
+			}
 		}
 	}
 
