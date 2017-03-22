@@ -1206,12 +1206,8 @@ func TestMinError2(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	var l Latency
-	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.NotNil(t, queryErr)
+	_, err := gql.Parse(query)
+	require.Error(t, err)
 }
 
 func TestMinSchema(t *testing.T) {

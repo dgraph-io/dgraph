@@ -1626,7 +1626,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			curp = child
 			if isCount == 1 {
 				isCount = 2
-				curp = nil
 			}
 		case itemColon:
 			it.Next()
