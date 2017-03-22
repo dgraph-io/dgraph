@@ -788,7 +788,7 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 					ag.Apply(child.values[idx])
 				}
 			}
-			v, err := ag.Value()
+			v, err := ag.ValueMarshalled()
 			if err != nil {
 				return err
 			}
@@ -800,7 +800,6 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 }
 
 func (sg *SubGraph) sumAggregation(doneVars map[string]values) (rerr error) {
-	dest := sg.Params.Var
 	destMap := make(map[uint64]types.Val)
 	x.AssertTruef(len(sg.Params.NeedsVar) > 0,
 		"Received empty variable list in %v. Expected atleast one.", sg.Attr)
@@ -809,23 +808,22 @@ func (sg *SubGraph) sumAggregation(doneVars map[string]values) (rerr error) {
 	if srcMap.vals == nil {
 		return x.Errorf("Expected a value variable but missing")
 	}
-	for k, v := range srcMap.vals {
+	for k := range srcMap.vals {
 		// TODO(Ashwin): Create new aggregation class for variables
 		// (Which can do automatic casting).
 		ag := aggregator{
-			name: "sum",
+			name: "sumvars",
 		}
 		for _, va := range sg.Params.NeedsVar {
 			curMap := doneVars[va]
 			if curMap.vals == nil {
 				return x.Errorf("Expected a value variable but missing")
 			}
+			ag.ApplyVal(curMap.vals[k])
 		}
-		destMap[k], rerr = ag.Value()
-		if rerr != nil {
-			return rerr
-		}
+		destMap[k] = ag.Value()
 	}
+	doneVars[sg.Params.Var] = values{vals: destMap}
 	return nil
 }
 
@@ -836,7 +834,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 
 	switch sg.Attr {
 	case "sumvars":
-		sg.sumAggregation(doneVars)
+		return sg.sumAggregation(doneVars)
 	default:
 		return x.Errorf("Invalid variable aggregation function: %v", sg.Attr)
 	}
@@ -845,10 +843,11 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 
 func (sg *SubGraph) populatePostAggregation(doneVars map[string]values) error {
 	for idx := 0; idx < len(sg.Children); idx++ {
-		sg.populatePostAggregation(doneVars)
+		child := sg.Children[idx]
+		child.populatePostAggregation(doneVars)
 		// We'd also need to do aggregation over levels here.
-		sg.valueVarAggregation(doneVars)
 	}
+	sg.valueVarAggregation(doneVars)
 	return nil
 }
 

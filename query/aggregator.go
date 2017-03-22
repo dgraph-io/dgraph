@@ -26,6 +26,40 @@ func convertTo(from *taskp.Value) (types.Val, error) {
 	return va, err
 }
 
+func (ag *aggregator) ApplyVal(v types.Val) {
+	if ag.result.Value == nil {
+		if v.Value == nil {
+			return
+		}
+		ag.result = v
+		return
+	}
+
+	va := ag.result
+	vb := v
+	var res types.Val
+	switch ag.name {
+	case "sumvars":
+		if va.Tid == types.Int32ID && vb.Tid == types.Int32ID {
+			va.Value = va.Value.(int32) + vb.Value.(int32)
+		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
+			va.Value = va.Value.(float64) + vb.Value.(float64)
+		} else if va.Tid == types.Int32ID && vb.Tid == types.FloatID {
+			va.Value = float64(va.Value.(int32)) + vb.Value.(float64)
+			va.Tid = types.FloatID
+		} else if va.Tid == types.FloatID && vb.Tid == types.Int32ID {
+			va.Value = va.Value.(float64) + float64(vb.Value.(int32))
+		} else {
+			// This pair cannot be summed. So pass.
+			log.Fatalf("Wrong arguments for Sum aggregator.")
+		}
+		res = va
+	default:
+		log.Fatalf("Unhandled aggregator function %v", ag.name)
+	}
+	ag.result = res
+}
+
 func (ag *aggregator) Apply(val *taskp.Value) {
 	if ag.result.Value == nil {
 		v, err := convertTo(val)
@@ -75,7 +109,7 @@ func (ag *aggregator) Apply(val *taskp.Value) {
 	ag.result = res
 }
 
-func (ag *aggregator) Value() (*taskp.Value, error) {
+func (ag *aggregator) ValueMarshalled() (*taskp.Value, error) {
 	data := types.ValueForType(types.BinaryID)
 	res := &taskp.Value{ValType: int32(ag.result.Tid), Val: x.Nilbyte}
 	if ag.result.Value == nil {
@@ -87,4 +121,8 @@ func (ag *aggregator) Value() (*taskp.Value, error) {
 	}
 	res.Val = data.Value.([]byte)
 	return res, nil
+}
+
+func (ag *aggregator) Value() types.Val {
+	return ag.result
 }
