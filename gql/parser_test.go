@@ -71,6 +71,59 @@ func TestParseQueryWithMultiVarValError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseQueryWithVarValAgg(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(n) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends {
+				n AS min(name)
+			}
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "L", res.Query[0].NeedsVar[0])
+	require.Equal(t, "n", res.Query[0].NeedsVar[1])
+	require.Equal(t, "n", res.Query[0].Args["orderasc"])
+	require.Equal(t, "name", res.Query[0].Children[0].Attr)
+	require.Equal(t, "L", res.Query[1].Children[0].Var)
+	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
+	require.Equal(t, "min", res.Query[1].Children[0].Children[0].Func.Name)
+}
+
+func TestParseQueryWithVarValCount(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(n) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends {
+				n AS count(friend)
+			}
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "L", res.Query[0].NeedsVar[0])
+	require.Equal(t, "n", res.Query[0].NeedsVar[1])
+	require.Equal(t, "n", res.Query[0].Args["orderasc"])
+	require.Equal(t, "name", res.Query[0].Children[0].Attr)
+	require.Equal(t, "L", res.Query[1].Children[0].Var)
+	require.True(t, res.Query[1].Children[0].Children[0].IsCount)
+}
+
 func TestParseQueryWithVarVal(t *testing.T) {
 	query := `
 	{	
@@ -91,10 +144,10 @@ func TestParseQueryWithVarVal(t *testing.T) {
 	require.Equal(t, 2, len(res.Query))
 	require.Equal(t, "L", res.Query[0].NeedsVar[0])
 	require.Equal(t, "n", res.Query[0].NeedsVar[1])
-	require.Equal(t, "L", res.Query[1].Children[0].Var)
-	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
 	require.Equal(t, "n", res.Query[0].Args["orderasc"])
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
+	require.Equal(t, "L", res.Query[1].Children[0].Var)
+	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
 }
 
 func TestParseQueryWithVarMultiRoot(t *testing.T) {

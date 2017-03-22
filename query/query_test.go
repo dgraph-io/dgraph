@@ -1074,6 +1074,62 @@ func TestCountError3(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestMultiCountSort(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+	{
+		f as var(func: anyofterms(name, "michonne rick andrea")) {
+		 	n as count(friend) 
+		}
+	
+		countorder(id: var(f), orderasc: var(n)) {
+			name
+			count(friend)
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"countorder":[{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Andrea"},{"friend":[{"count":5}],"name":"Michonne"}]}`,
+		js)
+}
+
+func TestMultiAggSort(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+	{
+		f as var(func: anyofterms(name, "michonne rick andrea")) {
+			name
+			friend {
+				mindob as min(dob)
+				maxdob as max(dob)
+				dob
+			}
+		}
+	
+		maxorder(id: var(f), orderasc: var(maxdob)) {
+			name
+			friend {
+				max(dob)
+			}
+		}
+
+		minorder(id: var(f), orderasc: var(mindob)) {
+			name
+			friend {
+				min(dob)
+			}
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"maxorder":[{"friend":[{"max(dob)":"1909-05-05"}],"name":"Andrea"},{"friend":[{"max(dob)":"1910-01-01"}],"name":"Rick Grimes"},{"friend":[{"max(dob)":"1910-01-02"}],"name":"Michonne"}],"minorder":[{"friend":[{"min(dob)":"1901-01-15"}],"name":"Michonne"},{"friend":[{"min(dob)":"1909-05-05"}],"name":"Andrea"},{"friend":[{"min(dob)":"1910-01-01"}],"name":"Rick Grimes"}]}`,
+		js)
+}
+
 func TestMinMulti(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.

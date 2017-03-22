@@ -1531,6 +1531,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	var isCount uint16
+	varName := ""
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {
 		item := it.Item()
@@ -1557,17 +1558,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 
 			if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
-				varName := item.Val
+				varName = item.Val
 				it.Next() // "As" was checked before.
-				it.Next()
-				pred := it.Item()
-				child := &GraphQuery{
-					Args: make(map[string]string),
-					Attr: pred.Val,
-					Var:  varName,
-				}
-				gq.Children = append(gq.Children, child)
-				curp = child
 				continue
 			}
 
@@ -1576,7 +1568,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				item.Val = val
 				child := &GraphQuery{
 					Args: make(map[string]string),
+					Var:  varName,
 				}
+				varName = ""
 				it.Prev()
 				if child.Func, err = parseFunction(it); err != nil {
 					return err
@@ -1609,7 +1603,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				Args:    make(map[string]string),
 				Attr:    item.Val,
 				IsCount: isCount == 1,
+				Var:     varName,
 			}
+			varName = ""
 			gq.Children = append(gq.Children, child)
 			curp = child
 			if isCount == 1 {
