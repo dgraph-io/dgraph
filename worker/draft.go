@@ -85,6 +85,7 @@ type node struct {
 	// SafeMutex is for fields which can be changed after init.
 	_confState *raftpb.ConfState
 	_raft      raft.Node
+	leader     bool
 
 	// Fields which are never changed after init.
 	cfg         *raft.Config
@@ -275,9 +276,9 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) err
 	// proposal this is.
 	if proposal.RebuildIndex != nil {
 		proposalData[0] = proposalReindex
-	} else proposal.Mutations != nil {
+	} else if proposal.Mutations != nil {
 		proposalData[0] = proposalMutation
-	} else proposal.Membership != nil {
+	} else if proposal.Membership != nil {
 		proposalData[0] = proposalMembership
 	}
 	copy(proposalData[1:], slice)
@@ -546,6 +547,13 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			if rd.RaftState == raft.StateFollower && n.leader {
+				// stepped down as leader do a sync membership immediately
+				groups().syncMemberships()
+			} else if rd.RaftState == raft.StateLeader && !n.leader {
+				groups().syncMemberships()
+			}
+			n.leader = rd.RaftState == raft.StateLeader
 			x.Check(n.wal.StoreSnapshot(n.gid, rd.Snapshot))
 			x.Check(n.wal.Store(n.gid, rd.HardState, rd.Entries))
 
