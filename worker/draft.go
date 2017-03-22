@@ -547,13 +547,15 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			if rd.RaftState == raft.StateFollower && n.leader {
-				// stepped down as leader do a sync membership immediately
-				groups().syncMemberships()
-			} else if rd.RaftState == raft.StateLeader && !n.leader {
-				groups().syncMemberships()
+			if rd.SoftState != nil {
+				if rd.RaftState == raft.StateFollower && n.leader {
+					// stepped down as leader do a sync membership immediately
+					groups().syncMemberships()
+				} else if rd.RaftState == raft.StateLeader && !n.leader {
+					groups().syncMemberships()
+				}
+				n.leader = rd.RaftState == raft.StateLeader
 			}
-			n.leader = rd.RaftState == raft.StateLeader
 			x.Check(n.wal.StoreSnapshot(n.gid, rd.Snapshot))
 			x.Check(n.wal.Store(n.gid, rd.HardState, rd.Entries))
 
