@@ -181,6 +181,10 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "dob", 25, "1909-01-10", nil)
 	addEdgeToValue(t, "dob", 31, "1901-01-15", nil)
 
+	addEdgeToValue(t, "age", 24, "15", nil)
+	addEdgeToValue(t, "age", 25, "17", nil)
+	addEdgeToValue(t, "age", 31, "19", nil)
+
 	f1 := types.Val{Tid: types.FloatID, Value: 1.6}
 	fData := types.ValueForType(types.BinaryID)
 	err = types.Marshal(f1, &fData)
@@ -324,6 +328,31 @@ func TestGetUIDNotInChild(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"_uid_":"0x1","alive":true,"gender":"female","name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`,
+		js)
+}
+
+func TestQueryVarValAggOrderAsc(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				f As friend {
+					n As age
+					s as survival_rate
+					sum as sumvar(n, s)
+				}
+			}
+
+			me(id: var(f), orderasc: var(sum)) {
+				name 
+				age
+				survival_rate
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"age":15,"name":"Rick Grimes","survival_rate":1.600000},{"age":15,"name":"Glenn Rhee","survival_rate":1.600000},{"age":17,"name":"Daryl Dixon","survival_rate":1.600000},{"age":19,"name":"Andrea","survival_rate":1.600000}]}`,
 		js)
 }
 

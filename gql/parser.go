@@ -428,7 +428,8 @@ func checkDependency(vl []*Vars) error {
 	sort.Strings(defines)
 	i, j := 0, 0
 	if len(defines) > len(needs) {
-		return x.Errorf("Some variables are defined and not used")
+		return x.Errorf("Some variables are defined and not used\nDefined:%v\nUsed:%v\n",
+			defines, needs)
 	}
 
 	for i < len(needs) && j < len(defines) {
@@ -445,7 +446,8 @@ func checkDependency(vl []*Vars) error {
 		}
 	}
 	if i != len(needs) || j != len(defines) {
-		return x.Errorf("Some variables are used but not defined")
+		return x.Errorf("Some variables are used but not defined.\nDefined:%v\nUsed:%v\n",
+			defines, needs)
 	}
 	return nil
 }
@@ -910,7 +912,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		it.Next()
 		item = it.Item()
 		if item.Typ != itemColon {
-			return result, x.Errorf("Expecting a collon. Got: %v", item)
+			return result, x.Errorf("Expecting a collon. Got: %v in %v", item, gq.Attr)
 		}
 
 		// Get value.

@@ -138,6 +138,7 @@ type params struct {
 	To           uint64
 	Facet        *facetsp.Param
 	RecurseDepth uint64
+	isInternal   bool
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -162,12 +163,11 @@ type SubGraph struct {
 	Children     []*SubGraph
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
-	DestUIDs   *taskp.List
-	isInternal bool
+	DestUIDs *taskp.List
 }
 
 func (sg *SubGraph) IsInternal() bool {
-	return sg.isInternal
+	return sg.Params.isInternal
 }
 
 // DebugPrint prints out the SubGraph tree in a nice format for debugging purposes.
@@ -459,11 +459,12 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		args := params{
-			Alias:     gchild.Alias,
-			Langs:     gchild.Langs,
-			isDebug:   sg.Params.isDebug,
-			Var:       gchild.Var,
-			Normalize: sg.Params.Normalize,
+			Alias:      gchild.Alias,
+			Langs:      gchild.Langs,
+			isDebug:    sg.Params.isDebug,
+			Var:        gchild.Var,
+			Normalize:  sg.Params.Normalize,
+			isInternal: gchild.IsInternal,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &facetsp.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -812,7 +813,7 @@ func (sg *SubGraph) sumAggregation(doneVars map[string]values) (rerr error) {
 		// TODO(Ashwin): Create new aggregation class for variables
 		// (Which can do automatic casting).
 		ag := aggregator{
-			name: "sumvars",
+			name: "sumvar",
 		}
 		for _, va := range sg.Params.NeedsVar {
 			curMap := doneVars[va]
@@ -833,7 +834,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 	}
 
 	switch sg.Attr {
-	case "sumvars":
+	case "sumvar":
 		return sg.sumAggregation(doneVars)
 	default:
 		return x.Errorf("Invalid variable aggregation function: %v", sg.Attr)
@@ -844,11 +845,13 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 func (sg *SubGraph) populatePostAggregation(doneVars map[string]values) error {
 	for idx := 0; idx < len(sg.Children); idx++ {
 		child := sg.Children[idx]
-		child.populatePostAggregation(doneVars)
+		err := child.populatePostAggregation(doneVars)
+		if err != nil {
+			return err
+		}
 		// We'd also need to do aggregation over levels here.
 	}
-	sg.valueVarAggregation(doneVars)
-	return nil
+	return sg.valueVarAggregation(doneVars)
 }
 
 func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
@@ -963,16 +966,16 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			if err != nil {
 				return nil, err
 			}
-			err = sg.populatePostAggregation(doneVars)
-			if err != nil {
-				return nil, err
-			}
 			if len(res.QueryVars[idx].Defines) == 0 {
 				continue
 			}
 
 			isCascade := shouldCascade(res, idx)
 			populateVarMap(sg, doneVars, isCascade)
+			err = sg.populatePostAggregation(doneVars)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

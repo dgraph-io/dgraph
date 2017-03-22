@@ -39,7 +39,7 @@ func (ag *aggregator) ApplyVal(v types.Val) {
 	vb := v
 	var res types.Val
 	switch ag.name {
-	case "sumvars":
+	case "sumvar":
 		if va.Tid == types.Int32ID && vb.Tid == types.Int32ID {
 			va.Value = va.Value.(int32) + vb.Value.(int32)
 		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
