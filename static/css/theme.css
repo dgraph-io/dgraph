@@ -827,10 +827,13 @@ td {
 
 .notices .type {
   font-weight: 600;
+  margin-right: 8px;
+  font-size: 105%;
 }
 
 .notices p {
   margin: 0;
+  display: inline-block;
 }
 
 .notices.note {
@@ -895,39 +898,39 @@ pre {
   line-height: 1.45;
 }
 pre code {
-    color: #237794;
-    background: inherit;
-    white-space: inherit;
-    border: 0;
-    padding: 0;
-    margin: 0;
-    font-size: 15px;
-    white-space: pre-wrap;
-    white-space: -moz-pre-wrap;
-    white-space: -pre-wrap;
-    white-space: -o-pre-wrap;
-    word-wrap: break-word;
+  color: #237794;
+  background: inherit;
+  white-space: inherit;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  white-space: pre-wrap;
+  white-space: -moz-pre-wrap;
+  white-space: -pre-wrap;
+  white-space: -o-pre-wrap;
+  word-wrap: break-word;
+  font-size: 90%;
 }
-/*pre .copy-to-clipboard {
-    position: absolute;
-    right: 0;
-    top: 0;
-    background-color: #4d5257;
-    color: #ccc;
-    border-radius: 2px;
+pre.collapsed {
+  max-height: 500px;
+  overflow: hidden;
 }
-pre .copy-to-clipboard:hover {
-    background-color: #656c72;
-    color: #fff;
-}*/
-/*code + .copy-to-clipboard {
-    margin-left: -1px;
-    border-left: 0 !important;
-    font-size: inherit !important;
-    vertical-align: middle;
-    height: 21px;
-    top: 0;
-}*/
+pre.collapsed .showmore {
+  text-align: center;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding-bottom: 5px;
+  padding-top: 26px;
+  cursor: pointer;
+  background: linear-gradient(180deg, hsla(0, 0%, 100%, 0), #e6e6e6);
+  background-repeat: repeat-x;
+  text-transform: uppercase;
+}
+pre.collapsed .showmore:hover {
+  background: linear-gradient(180deg, hsla(0, 0%, 100%, 0), #dadada);
+}
 .copy-to-clipboard {
   position: absolute;
   right: 0;
@@ -980,7 +983,6 @@ pre .copy-to-clipboard:hover {
 .topics .doc-toc.active > a {
   color: #fb5812;
 }
-
 .sub-topic {
   list-style: none;
   padding-left: 0;

@@ -66,14 +66,12 @@ $(document).ready(function() {
     });
   }
 
-  console.log('h2sWithH3s', h2sWithH3s);
-
   if (h2sWithH3s.length > 0) {
     createSubtopic(activeLink, h2sWithH3s);
   }
 
   function createSubtopic(container, headers) {
-    subMenu = document.createElement('ul');
+    var subMenu = document.createElement('ul');
     subMenu.className = 'sub-topic';
     container.appendChild(subMenu);
 
@@ -89,4 +87,22 @@ $(document).ready(function() {
       '<a href="#' + h.id + '" data-scroll class="' + h.tagName + '"><span>' + (h.title || h.textContent) + '</span></a>';
     return li;
   }
+
+  // code collapse
+  var pres = document.getElementsByTagName('pre');
+  Array.prototype.forEach.call(pres, function (pre) {
+    if (pre.clientHeight > 500) {
+      pre.className += ' collapsed';
+
+      var showMore = document.createElement('div');
+      showMore.className = 'showmore'
+      showMore.innerHTML = 'Show full code';
+      showMore.addEventListener('click', function () {
+        pre.className = '';
+        showMore.parentNode.removeChild(showMore);
+      });
+
+      pre.appendChild(showMore);
+    }
+  });
 });

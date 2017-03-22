@@ -4,7 +4,12 @@
     <meta charset="utf-8">
     {{ partial "meta.html" . }}
     {{ partial "favicon.html" . }}
-{{ .Scratch.Add "title" "" }}{{ if isset .Site.Data.titles .Title }}{{ .Scratch.Set "title" (index .Site.Data.titles .Title).title }}{{ else }}{{ .Scratch.Set "title" .Title}}{{end}}
+    {{ .Scratch.Add "title" "" }}
+    {{ if isset .Site.Data.titles .Title }}
+      {{ .Scratch.Set "title" (index .Site.Data.titles .Title).title }} {{ .Site.Title }}
+    {{ else }}
+      {{ .Scratch.Set "title" .Title}}
+    {{end}}
     <title>{{ .Scratch.Get "title" }}</title>
     {{ partial "style.html" . }}
     <link href="{{ .Site.BaseURL }}/css/nucleus.css" rel="stylesheet">
@@ -19,6 +24,7 @@
   <body>
     <body class="" data-url="/">
       <section id="body" style="margin-left:0px;">
+        {{ .Site.Title }}
       <div id="overlay"></div>
 
       <div class="padding highlightable">
