@@ -359,6 +359,7 @@ func TestQueryVarValAggMinMaxSelf(t *testing.T) {
 		`{"me":[{"age":19,"friend":[{"min(age)":15},{"max(age)":15}],"name":"Andrea"},{"age":38,"friend":[{"min(age)":15},{"max(age)":19}],"name":"Michonne"},{"age":15,"friend":[{"min(age)":38},{"max(age)":38}],"name":"Rick Grimes"}]}`,
 		js)
 }
+
 func TestQueryVarValAggMinMax(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -390,7 +391,7 @@ func TestQueryVarValAggOrderDesc(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			var(id: 1) {
+			info(id: 1) {
 				f as friend {
 					n as age
 					s as count(friend)
@@ -407,7 +408,7 @@ func TestQueryVarValAggOrderDesc(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"age":19,"friend":[{"count":1}],"name":"Andrea"},{"age":17,"friend":[{"count":0}],"name":"Daryl Dixon"},{"age":15,"friend":[{"count":1}],"name":"Rick Grimes"},{"age":15,"friend":[{"count":0}],"name":"Glenn Rhee"}]}`,
+		`{"info":[{"friend":[{"age":15,"friend":[{"count":1}],"sumvar[n s]":16},{"age":15,"friend":[{"count":0}],"sumvar[n s]":15},{"age":17,"friend":[{"count":0}],"sumvar[n s]":17},{"age":19,"friend":[{"count":1}],"sumvar[n s]":20},{"friend":[{"count":0}]}]}],"me":[{"age":19,"friend":[{"count":1}],"name":"Andrea"},{"age":17,"friend":[{"count":0}],"name":"Daryl Dixon"},{"age":15,"friend":[{"count":1}],"name":"Rick Grimes"},{"age":15,"friend":[{"count":0}],"name":"Glenn Rhee"}]}`,
 		js)
 }
 

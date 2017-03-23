@@ -238,6 +238,20 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	// We go through all predicate children of the subgraphp.
 	for _, pc := range sg.Children {
 
+		if pc.IsInternal() {
+			x.AssertTruef(pc.Params.uidToVal != nil, "Empty variable encountered.")
+			fieldName := fmt.Sprintf("%s%v", pc.Attr, pc.Params.NeedsVar)
+			sv, ok := pc.Params.uidToVal[uid]
+			if !ok {
+				continue
+			}
+			if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
+				sv.Value = ""
+			}
+			dst.AddValue(fieldName, sv)
+			continue
+		}
+
 		if pc.uidMatrix == nil {
 			// Can happen in recurse query.
 			continue
@@ -256,6 +270,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			uidAlreadySet = true
 			dst.SetUID(uid)
 		}
+
 		if len(pc.counts) > 0 {
 			c := types.ValueForType(types.Int32ID)
 			c.Value = int32(pc.counts[idx])
@@ -862,6 +877,8 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 		destMap[k] = ag.Value()
 	}
 	doneVars[sg.Params.Var] = values{vals: destMap}
+	// Put it in this node.
+	sg.Params.uidToVal = destMap
 	return nil
 }
 
