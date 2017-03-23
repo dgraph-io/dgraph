@@ -39,11 +39,13 @@ const (
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []*taskp.DirectedEdge) error {
 	for _, edge := range edges {
-		if !groups().ServesGroup(group.BelongsTo(edge.Attr)) {
+		gid := group.BelongsTo(edge.Attr)
+		if !groups().ServesGroup(gid) {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
 		rv := ctx.Value("raft").(x.RaftValue)
+		x.AssertTruef(rv.Group == gid, "fingerprint mismatch between raft and group conf")
 
 		typ, err := schema.State().TypeOf(edge.Attr)
 		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
@@ -54,7 +56,7 @@ func runMutations(ctx context.Context, edges []*taskp.DirectedEdge) error {
 		err = validateAndConvert(edge, typ)
 
 		key := x.DataKey(edge.Attr, edge.Entity)
-		plist, decr := posting.GetOrCreate(key, rv.Group)
+		plist, decr := posting.GetOrCreate(key, gid)
 		defer decr()
 
 		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {

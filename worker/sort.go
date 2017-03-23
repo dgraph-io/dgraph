@@ -203,7 +203,7 @@ func intersectBucket(ts *taskp.Sort, attr, token string, out []intersectedList) 
 	scalar := sType
 
 	key := x.IndexKey(attr, token)
-	pl, decr := posting.GetOrCreate(key, 0)
+	pl, decr := posting.GetOrCreate(key, 1)
 	defer decr()
 
 	// For each UID list, we need to intersect with the index bucket.

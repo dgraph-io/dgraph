@@ -100,7 +100,7 @@ func TestTokensTable(t *testing.T) {
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 
-	CommitLists(10)
+	CommitLists(10, 1)
 	time.Sleep(time.Second)
 
 	slice, err = ps.Get(key)
@@ -137,7 +137,7 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 		Entity: src,
 		Op:     taskp.DirectedEdge_SET,
 	}
-	l, _ := GetOrCreate(x.DataKey(attr, src), 0)
+	l, _ := GetOrCreate(x.DataKey(attr, src), 1)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	ok, err := l.AddMutation(context.Background(), edge)
 	require.NoError(t, err)
@@ -180,7 +180,7 @@ func TestRebuildIndex(t *testing.T) {
 	addEdgeToValue(t, "name", 20, "David")
 
 	// RebuildIndex requires the data to be committed to data store.
-	CommitLists(10)
+	CommitLists(10, 1)
 	for len(syncCh) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -192,7 +192,7 @@ func TestRebuildIndex(t *testing.T) {
 	require.NoError(t, RebuildIndex(context.Background(), "name"))
 
 	// Let's force a commit.
-	CommitLists(10)
+	CommitLists(10, 1)
 	for len(syncCh) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -219,9 +219,9 @@ func TestRebuildIndex(t *testing.T) {
 	require.EqualValues(t, idxVals[0].Postings[0].Uid, 20)
 	require.EqualValues(t, idxVals[1].Postings[0].Uid, 1)
 
-	l1, _ := GetOrCreate(x.DataKey("name", 1), 0)
+	l1, _ := GetOrCreate(x.DataKey("name", 1), 1)
 	deletePl(t, l1)
-	l2, _ := GetOrCreate(x.DataKey("name", 20), 0)
+	l2, _ := GetOrCreate(x.DataKey("name", 20), 1)
 	deletePl(t, l2)
 }
 
