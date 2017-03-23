@@ -926,15 +926,15 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			numQueriesDone++
 			idxList = append(idxList, idx)
 			if sg.Params.Alias == "shortest" {
-				shortestSg, err = ShortestPath(ctx, sg)
-				if err != nil {
-					return nil, err
-				}
+				// We allow only one shortest path block per query.
+				go func() {
+					shortestSg, err = ShortestPath(ctx, sg)
+					errChan <- err
+				}()
 			} else if sg.Params.Alias == "recurse" {
-				err := Recurse(ctx, sg)
-				if err != nil {
-					return nil, err
-				}
+				go func() {
+					errChan <- Recurse(ctx, sg)
+				}()
 			} else {
 				go ProcessGraph(ctx, sg, nil, errChan)
 			}
@@ -943,10 +943,6 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 		// Wait for the execution that was started in this iteration.
 		for i := 0; i < len(idxList); i++ {
-			if sgl[idxList[i]].Params.Alias == "shortest" ||
-				sgl[idxList[i]].Params.Alias == "recurse" {
-				continue
-			}
 			select {
 			case err := <-errChan:
 				if err != nil {
