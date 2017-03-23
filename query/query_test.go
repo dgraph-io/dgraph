@@ -331,6 +331,31 @@ func TestGetUIDNotInChild(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValAggOrderDesc(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				f As friend {
+					n As age
+					s as count(friend)
+					sum as sumvar(n, s)
+				}
+			}
+
+			me(id: var(f), orderdesc: var(sum)) {
+				name 
+				age
+				count(friend)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"age":19,"friend":[{"count":1}],"name":"Andrea"},{"age":17,"friend":[{"count":0}],"name":"Daryl Dixon"},{"age":15,"friend":[{"count":1}],"name":"Rick Grimes"},{"age":15,"friend":[{"count":0}],"name":"Glenn Rhee"}]}`,
+		js)
+}
+
 func TestQueryVarValAggOrderAsc(t *testing.T) {
 	populateGraph(t)
 	query := `

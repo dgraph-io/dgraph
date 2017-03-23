@@ -26,13 +26,13 @@ func convertTo(from *taskp.Value) (types.Val, error) {
 	return va, err
 }
 
-func (ag *aggregator) ApplyVal(v types.Val) {
+func (ag *aggregator) ApplyVal(v types.Val) error {
 	if ag.result.Value == nil {
 		if v.Value == nil {
-			return
+			return nil
 		}
 		ag.result = v
-		return
+		return nil
 	}
 
 	va := ag.result
@@ -55,9 +55,10 @@ func (ag *aggregator) ApplyVal(v types.Val) {
 		}
 		res = va
 	default:
-		log.Fatalf("Unhandled aggregator function %v", ag.name)
+		return x.Errorf("Unhandled aggregator function %v", ag.name)
 	}
 	ag.result = res
+	return nil
 }
 
 func (ag *aggregator) Apply(val *taskp.Value) {
