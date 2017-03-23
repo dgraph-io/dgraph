@@ -1620,6 +1620,26 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return x.Errorf("Invalid mention of count.")
 				}
 				continue
+			} else if val == "var" {
+				if varName != "" {
+					return x.Errorf("Cannot assign a variable to var()")
+				}
+				child := &GraphQuery{
+					Attr:       val,
+					Args:       make(map[string]string),
+					IsInternal: true,
+				}
+				count, err := parseVarList(it, child)
+				fmt.Println(count, child.NeedsVar)
+				if err != nil {
+					return err
+				}
+				if count != 1 {
+					return x.Errorf("Invalid use of var(). Exactly one variable expected.")
+				}
+				gq.Children = append(gq.Children, child)
+				curp = nil
+				continue
 			}
 			if isCount == 2 {
 				return x.Errorf("Multiple predicates not allowed in single count.")

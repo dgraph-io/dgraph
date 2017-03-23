@@ -109,6 +109,7 @@ func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	{	
 		me(id: var(L), orderasc: var(c) ) {
 			name
+			var(c)
 		}
 
 		var(id:0x0a) {
@@ -128,6 +129,9 @@ func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	require.Equal(t, "c", res.Query[0].NeedsVar[1])
 	require.Equal(t, "c", res.Query[0].Args["orderasc"])
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
+	require.Equal(t, "var", res.Query[0].Children[1].Attr)
+	require.Equal(t, 1, len(res.Query[0].Children[1].NeedsVar))
+	require.Equal(t, "c", res.Query[0].Children[1].NeedsVar[0])
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
 	require.Equal(t, "a", res.Query[1].Children[0].Children[0].Var)
 	require.Equal(t, "b", res.Query[1].Children[0].Children[1].Var)
