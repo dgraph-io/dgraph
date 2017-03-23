@@ -1278,6 +1278,9 @@ func pageRange(p *params, n int) (int, int) {
 	if start < 0 {
 		start = 0
 	}
+	if start > n {
+		start = n
+	}
 	if p.Count == 0 { // No count specified. Just take the offset parameter.
 		return start, n
 	}

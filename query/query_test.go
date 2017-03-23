@@ -2309,6 +2309,26 @@ func TestToFastJSONFilterGeqNoResult(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
+func TestToFastJSONFirstOffsetOutOfBound(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend(offset:100, first:1) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
 // No filter. Just to test first and offset.
 func TestToFastJSONFirstOffset(t *testing.T) {
 	populateGraph(t)
