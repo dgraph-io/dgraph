@@ -810,8 +810,6 @@ func (sg *SubGraph) sumAggregation(doneVars map[string]values) (rerr error) {
 		return x.Errorf("Expected a value variable but missing")
 	}
 	for k := range srcMap.vals {
-		// TODO(Ashwin): Create new aggregation class for variables
-		// (Which can do automatic casting).
 		ag := aggregator{
 			name: "sumvar",
 		}
@@ -833,12 +831,29 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 		return nil
 	}
 
-	switch sg.Attr {
-	case "sumvar":
-		return sg.sumAggregation(doneVars)
-	default:
-		return x.Errorf("Invalid variable aggregation function: %v", sg.Attr)
+	destMap := make(map[uint64]types.Val)
+	x.AssertTruef(len(sg.Params.NeedsVar) > 0,
+		"Received empty variable list in %v. Expected atleast one.", sg.Attr)
+	srcVar := sg.Params.NeedsVar[0]
+	srcMap := doneVars[srcVar]
+	if srcMap.vals == nil {
+		return x.Errorf("Expected a value variable but missing")
 	}
+	for k := range srcMap.vals {
+		ag := aggregator{
+			name: sg.Attr,
+		}
+		// Only the UIDs that have all the values will be considered.
+		for _, va := range sg.Params.NeedsVar {
+			curMap := doneVars[va]
+			if curMap.vals == nil {
+				return x.Errorf("Expected a value variable but missing")
+			}
+			ag.ApplyVal(curMap.vals[k])
+		}
+		destMap[k] = ag.Value()
+	}
+	doneVars[sg.Params.Var] = values{vals: destMap}
 	return nil
 }
 
