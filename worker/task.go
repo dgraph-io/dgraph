@@ -147,7 +147,7 @@ func parseFuncType(arr []string) (FuncType, string) {
 			return CompareScalarFn, f
 		}
 		return CompareAttrFn, f
-	case "min", "max", "sum":
+	case "min", "max", "sum", "avg":
 		return AggregatorFn, f
 	case "checkpwd":
 		return PasswordFn, f

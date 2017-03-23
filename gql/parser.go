@@ -124,7 +124,8 @@ func init() {
 func (f *Function) IsAggregator() bool {
 	return f.Name == "min" ||
 		f.Name == "max" ||
-		f.Name == "sum"
+		f.Name == "sum" ||
+		f.Name == "avg"
 }
 
 func (f *Function) IsPasswordVerifier() bool {
@@ -1654,5 +1655,5 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 }
 
 func isAggregator(fname string) bool {
-	return fname == "min" || fname == "max" || fname == "sum"
+	return fname == "min" || fname == "max" || fname == "sum" || fname == "avg"
 }

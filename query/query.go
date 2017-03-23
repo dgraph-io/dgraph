@@ -1428,7 +1428,7 @@ func isCompareFn(f string) bool {
 
 func isAggregatorFn(f string) bool {
 	switch f {
-	case "min", "max", "sum":
+	case "min", "max", "sum", "avg":
 		return true
 	}
 	return false

@@ -1301,9 +1301,28 @@ func TestMaxError1(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestAvg(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                friend {
+                                    avg(shadow_deep)
+                                }
+                        }
+                }
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"alive":true,"friend":[{"avg(shadow_deep)":9}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
 func TestSum(t *testing.T) {
 	populateGraph(t)
-	// Alright. Now we have everything set up. Let's create the query.
 	query := `
                 {
                         me(id:0x01) {
