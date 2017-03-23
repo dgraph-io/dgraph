@@ -108,5 +108,5 @@ func TestReplacePortNoDir(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler := replacePort(http.FileServer(http.Dir(*uiDir)), indexHtml)
 	handler.ServeHTTP(rr, req)
-	require.Equal(t, "", rr.Body.String())
+	require.Equal(t, "Page not found", rr.Body.String())
 }

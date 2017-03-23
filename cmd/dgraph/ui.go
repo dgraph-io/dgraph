@@ -75,6 +75,12 @@ func replacePort(h http.Handler, indexHtml string) http.Handler {
 		// after replacing the PORT.
 		if r.URL.Path == "/" {
 			w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+			if indexHtml == "" {
+				w.WriteHeader(404)
+				fmt.Fprint(w, "Page not found")
+				return
+			}
+
 			fmt.Fprint(w, indexHtml)
 			return
 		}
