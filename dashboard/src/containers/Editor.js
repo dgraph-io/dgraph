@@ -10,7 +10,7 @@ import {
 } from "react-bootstrap";
 
 import { runQuery, updateRegex, selectQuery } from "../actions";
-import { timeout, checkStatus, sortStrings } from "./Helpers";
+import { timeout, checkStatus, sortStrings, dgraphAddress } from "./Helpers";
 import "../assets/css/Editor.css";
 
 require("codemirror/addon/hint/show-hint.css");
@@ -90,7 +90,7 @@ class Editor extends Component {
     let keywords = [];
     timeout(
       1000,
-      fetch(process.env.REACT_APP_DGRAPH + "/ui/keywords", {
+      fetch(dgraphAddress() + "/ui/keywords", {
         method: "GET",
         mode: "cors"
       })
@@ -116,6 +116,34 @@ class Editor extends Component {
             "Error while trying to fetch list of keywords",
             errorMsg
           );
+        }
+      });
+
+    timeout(
+      1000,
+      fetch(dgraphAddress() + "/query", {
+        method: "POST",
+        mode: "cors",
+        body: "schema {}"
+      })
+        .then(checkStatus)
+        .then(response => response.json())
+        .then(function(result) {
+          keywords = keywords.concat(
+            result.schema.map(kw => {
+              return kw.predicate;
+            })
+          );
+        })
+    )
+      .catch(function(error) {
+        console.log(error.stack);
+        console.warn("In catch: Error while trying to fetch schema", error);
+        return error;
+      })
+      .then(function(errorMsg) {
+        if (errorMsg !== undefined) {
+          console.warn("Error while trying to fetch schema", errorMsg);
         }
       });
 

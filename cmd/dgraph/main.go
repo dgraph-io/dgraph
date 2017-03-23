@@ -790,7 +790,8 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/backup", backupHandler)
 
 	// UI related API's.
-	http.Handle("/", http.FileServer(http.Dir(*uiDir)))
+	indexHtml := substitutePort()
+	http.Handle("/", replacePort(http.FileServer(http.Dir(*uiDir)), indexHtml))
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initilize the servers.

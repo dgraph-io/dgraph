@@ -521,3 +521,7 @@ export function sortStrings(a, b) {
   if (nameA > nameB) return 1;
   return 0; //default return value (no sorting)
 }
+
+export function dgraphAddress() {
+  return "http://localhost:" + window.SERVER_PORT;
+}
