@@ -110,15 +110,53 @@ func TestSchemaIndex_Error3(t *testing.T) {
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ReloadData("testfiles/test_schema_index4", 1))
 	checkSchema(t, State().get(1).predicate, []nameType{
-		{"name", &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}},
-		{"address", &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"term"}}},
-		{"age", &typesp.Schema{ValueType: uint32(types.Int32ID), Tokenizer: []string{"int"}}},
-		{"id", &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact", "term"}}},
+		{"name", &typesp.Schema{
+			ValueType: uint32(types.StringID),
+			Tokenizer: []string{"exact"},
+			Directive: typesp.Schema_INDEX,
+		}},
+		{"address", &typesp.Schema{
+			ValueType: uint32(types.StringID),
+			Tokenizer: []string{"term"},
+			Directive: typesp.Schema_INDEX,
+		}},
+		{"age", &typesp.Schema{
+			ValueType: uint32(types.Int32ID),
+			Tokenizer: []string{"int"},
+			Directive: typesp.Schema_INDEX,
+		}},
+		{"id", &typesp.Schema{
+			ValueType: uint32(types.StringID),
+			Tokenizer: []string{"exact", "term"},
+			Directive: typesp.Schema_INDEX,
+		}},
 	})
 	require.True(t, State().IsIndexed("name"))
 	require.False(t, State().IsReversed("name"))
 	require.Equal(t, "int", State().Tokenizer("age")[0].Name())
 	require.Equal(t, 4, len(State().IndexedFields(1)))
+}
+
+func TestParse(t *testing.T) {
+	reset()
+	schemas, err := Parse("age:int @index name:string")
+	require.NoError(t, err)
+	require.Equal(t, "int", schemas[0].Tokenizer[0])
+	require.Equal(t, 2, len(schemas))
+}
+
+func TestParse2(t *testing.T) {
+	reset()
+	schemas, err := Parse("")
+	require.NoError(t, err)
+	require.Nil(t, schemas)
+}
+
+func TestParse3_Error(t *testing.T) {
+	reset()
+	schemas, err := Parse("age:uid @index")
+	require.Error(t, err)
+	require.Nil(t, schemas)
 }
 
 var ps *store.Store

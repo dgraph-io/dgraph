@@ -13,6 +13,53 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, indexed bool) error {
+	rv := ctx.Value("raft").(x.RaftValue)
+	x.AssertTrue(rv.Group == n.gid)
+	x.AssertTruef(schema.State().IsIndexed(attr) == indexed, "Attr %s index mismatch", attr)
+
+	// Current raft index has pending applied watermark
+	// Raft index starts from 1
+	if err := n.syncAllMarks(ctx, rv.Index-1); err != nil {
+		return err
+	}
+
+	if !indexed {
+		// Remove index edges
+		// For delete we since mutations would have been applied, we needn't
+		// wait for synced watermarks if we delete through mutations, but
+		// it would use by lhmap
+		posting.DeleteIndex(ctx, attr)
+		return nil
+	}
+	if err := posting.RebuildIndex(ctx, attr); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, reversed bool) error {
+	rv := ctx.Value("raft").(x.RaftValue)
+	x.AssertTrue(rv.Group == n.gid)
+	x.AssertTruef(schema.State().IsReversed(attr) == reversed, "Attr %s reverse mismatch", attr)
+
+	// Current raft index has pending applied watermark
+	// Raft index starts from 1
+	if err := n.syncAllMarks(ctx, rv.Index-1); err != nil {
+		return err
+	}
+
+	if !reversed {
+		// Remove reverse edges
+		posting.DeleteReverseEdges(ctx, attr)
+		return nil
+	}
+	if err := posting.RebuildReverseEdges(ctx, attr); err != nil {
+		return err
+	}
+	return nil
+}
+
 // rebuildIndex is called by node.Run to rebuild index.
 func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	x.AssertTrue(proposalData[0] == proposalReindex)
@@ -24,7 +71,13 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	x.AssertTrue(gid == proposal.RebuildIndex.GroupId)
 	x.Trace(ctx, "Processing proposal to rebuild index: %v", proposal.RebuildIndex)
 
-	if err := n.syncAllMarks(ctx); err != nil {
+	// Get index of last committed.
+	lastIndex, err := n.store.LastIndex()
+	if err != nil {
+		return err
+	}
+	if err := n.syncAllMarks(ctx, lastIndex); err != nil {
+		n.props.Done(proposal.Id, err)
 		return err
 	}
 
@@ -32,19 +85,21 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	attr := proposal.RebuildIndex.Attr
 	x.AssertTrue(group.BelongsTo(attr) == gid)
 	if err := posting.RebuildIndex(ctx, attr); err != nil {
+		n.props.Done(proposal.Id, err)
 		return err
 	}
+	n.props.Done(proposal.Id, nil)
 	return nil
 }
 
-func (n *node) syncAllMarks(ctx context.Context) error {
-	// Get index of last committed.
-	lastIndex, err := n.store.LastIndex()
-	if err != nil {
-		return err
-	}
+func (n *node) syncAllMarks(ctx context.Context, lastIndex uint64) error {
+	n.waitForAppliedMark(ctx, lastIndex)
+	waitForSyncMark(ctx, n.gid, lastIndex)
+	return nil
+}
 
-	// Wait for syncing to data store.
+func (n *node) waitForAppliedMark(ctx context.Context, lastIndex uint64) error {
+	// Wait for applied to reach till lastIndex
 	for n.applied.WaitingFor() {
 		doneUntil := n.applied.DoneUntil() // applied until.
 		x.Trace(ctx, "syncAllMarks waiting, appliedUntil:%d lastIndex: %d",
@@ -55,7 +110,6 @@ func (n *node) syncAllMarks(ctx context.Context) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	waitForSyncMark(ctx, n.gid, lastIndex)
 	return nil
 }
 

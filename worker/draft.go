@@ -247,11 +247,18 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) err
 	}
 
 	// Do a type check here if schema is present
+	// In very rare cases invalid entries might pass through raft, which would
+	// be persisted, we do best effort schema check while writing
 	if proposal.Mutations != nil {
 		for _, edge := range proposal.Mutations.Edges {
 			if typ, err := schema.State().TypeOf(edge.Attr); err != nil {
 				continue
 			} else if err := validateAndConvert(edge, typ); err != nil {
+				return err
+			}
+		}
+		for _, schema := range proposal.Mutations.Schema {
+			if err := checkSchema(schema); err != nil {
 				return err
 			}
 		}
@@ -393,6 +400,17 @@ func (n *node) processMutation(e raftpb.Entry, m *taskp.Mutations) error {
 	return nil
 }
 
+func (n *node) processSchemaMutations(e raftpb.Entry, m *taskp.Mutations) error {
+	// TODO: Need to pass node and entry index.
+	rv := x.RaftValue{Group: n.gid, Index: e.Index}
+	ctx := context.WithValue(n.ctx, "raft", rv)
+	if err := runSchemaMutations(ctx, m.Schema); err != nil {
+		x.TraceError(n.ctx, err)
+		return err
+	}
+	return nil
+}
+
 func (n *node) processMembership(e raftpb.Entry, mm *taskp.Membership) error {
 	x.AssertTrue(n.gid == 0)
 
@@ -465,6 +483,19 @@ func (n *node) processApplyCh() {
 		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
 
 		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {
+			// process schema mutations before
+			if proposal.Mutations.Schema != nil {
+				// Wait for applied watermark to reach till previous index
+				// All mutations before this should use old schema and after this
+				// should use new schema
+				n.waitForAppliedMark(n.ctx, e.Index-1)
+				if err := n.processSchemaMutations(e, proposal.Mutations); err != nil {
+					n.applied.Ch <- mark
+					posting.SyncMarkFor(n.gid).Ch <- mark
+					n.props.Done(proposal.Id, err)
+				}
+			}
+
 			// stores a map of predicate and type of first mutation for each predicate
 			schemaMap := make(map[string]types.TypeID)
 			for _, edge := range proposal.Mutations.Edges {
@@ -479,7 +510,7 @@ func (n *node) processApplyCh() {
 					// Since comitted entries are serialized, updateSchemaIfMissing is not
 					// needed, In future if schema needs to be changed, it would flow through
 					// raft so there won't be race conditions between read and update schema
-					updateSchema(attr, storageType, e.Index, n.raftContext.Group)
+					updateSchemaType(attr, storageType, e.Index, n.raftContext.Group)
 				}
 			}
 		}
@@ -517,10 +548,13 @@ func (n *node) retrieveSnapshot(rc taskp.RaftContext) {
 	x.AssertTruef(pool != nil, "Pool shouldn't be nil for address: %v for id: %v", addr, rc.Id)
 
 	x.AssertTrue(rc.Group == n.gid)
+	// Get index of last committed.
+	lastIndex, err := n.store.LastIndex()
+	x.Checkf(err, "Error while getting last index")
 	// Wait for watermarks to sync since populateShard writes directly to db, otherwise
 	// the values might get overwritten
 	// Safe to keep this line
-	n.syncAllMarks(n.ctx)
+	n.syncAllMarks(n.ctx, lastIndex)
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
@@ -571,25 +605,15 @@ func (n *node) Run() {
 			if len(rd.CommittedEntries) > 0 {
 				x.Trace(n.ctx, "Found %d committed entries", len(rd.CommittedEntries))
 			}
-			var indexEntry *raftpb.Entry
-			for _, entry := range rd.CommittedEntries {
-				if len(entry.Data) > 0 && entry.Data[0] == proposalReindex {
-					x.AssertTruef(indexEntry == nil, "Multiple index proposals found")
-					indexEntry = &entry
-					// This is an index-related proposal. Do not break.
-					continue
-				}
 
+			for _, entry := range rd.CommittedEntries {
+				// Need applied watermarks for schema mutation also for read linearazibility
 				status := x.Mark{Index: entry.Index, Done: false}
 				n.applied.Ch <- status
 				posting.SyncMarkFor(n.gid).Ch <- status
 
 				// Just queue up to be processed. Don't wait on them.
 				n.applyCh <- entry
-			}
-
-			if indexEntry != nil {
-				x.Check(n.rebuildIndex(n.ctx, indexEntry.Data))
 			}
 
 			n.Raft().Advance()
@@ -628,6 +652,9 @@ func (n *node) snapshotPeriodically() {
 	}
 
 	var prev string
+	// TODO: What should be ideal value for snapshotting ? If a node is lost due to network
+	// partition or some other issue for more than log compaction tick interval, then that
+	// node needs to fetch snapshot since logs would be truncated
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 

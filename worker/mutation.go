@@ -21,6 +21,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/protos/workerp"
@@ -47,11 +48,10 @@ func runMutations(ctx context.Context, edges []*taskp.DirectedEdge) error {
 		typ, err := schema.State().TypeOf(edge.Attr)
 		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
-		// Is schema is not applied, type check might not be done in propose and wait
-		// so doing type check here also
-		if err = validateAndConvert(edge, typ); err != nil {
-			return err
-		}
+		// Once mutation comes via raft we do best effor conversion
+		// Type check is done before proposing mutation, in case schema is not
+		// present, some invalid entries might be written initially
+		err = validateAndConvert(edge, typ)
 
 		key := x.DataKey(edge.Attr, edge.Entity)
 		plist, decr := posting.GetOrCreate(key, rv.Group)
@@ -65,14 +65,128 @@ func runMutations(ctx context.Context, edges []*taskp.DirectedEdge) error {
 	return nil
 }
 
-func updateSchema(attr string, typ types.TypeID, raftIndex uint64, group uint32) {
+// This is serialized with mutations, called after applied watermarks catch up
+// and further mutations are blocked until this is done.
+func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) error {
+	rv := ctx.Value("raft").(x.RaftValue)
+	n := groups().Node(rv.Group)
+	for _, update := range updates {
+		if !groups().ServesGroup(group.BelongsTo(update.Predicate)) {
+			return x.Errorf("Predicate fingerprint doesn't match this instance")
+		}
+		if err := checkSchema(update); err != nil {
+			return err
+		}
+		old, ok := schema.State().Get(update.Predicate)
+		current := schema.From(update)
+		updateSchema(update.Predicate, current, rv.Index, rv.Group)
+
+		// Once we remove index or reverse edges from schema, even though the values
+		// are present in db, they won't be used due to validation in work/task.go
+		// Removal can be done in background if we write a scheduler later which ensures
+		// that schema mutations are serialized, so that there won't be
+		// race conditions between deletion of edges and addition of edges.
+
+		// We don't want to use sync watermarks for background removal, because it would block
+		// linearizable read requests. Only downside would be on system crash, stale edges
+		// might remain, which is ok.
+
+		// Indexing can't be done in background as it can cause race conditons with new
+		// index mutations (old set and new del)
+		// We need watermark for index/reverse edge addition for linearizable reads.
+		// (both applied and synced watermarks).
+		if !ok {
+			if current.Directive == typesp.Schema_INDEX {
+				if err := n.rebuildOrDelIndex(ctx, update.Predicate, true); err != nil {
+					return err
+				}
+			} else if current.Directive == typesp.Schema_REVERSE {
+				if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		// schema was present already
+		if needReindexing(old, current) {
+			// Reindex if update.Index is true or remove index
+			if err := n.rebuildOrDelIndex(ctx, update.Predicate,
+				current.Directive == typesp.Schema_INDEX); err != nil {
+				return err
+			}
+		} else if (current.Directive == typesp.Schema_REVERSE) !=
+			(old.Directive == typesp.Schema_REVERSE) {
+			// Add or remove reverse edge based on update.Reverse
+			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
+				current.Directive == typesp.Schema_REVERSE); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func needReindexing(old typesp.Schema, current typesp.Schema) bool {
+	if (current.Directive == typesp.Schema_INDEX) != (old.Directive == typesp.Schema_INDEX) {
+		return true
+	}
+	// if value types has changed
+	if current.Directive == typesp.Schema_INDEX && current.ValueType != old.ValueType {
+		return true
+	}
+	// if tokenizer has changed - if same tokenizer works differently
+	// on different types
+	if len(current.Tokenizer) != len(old.Tokenizer) {
+		return true
+	}
+	for i, t := range old.Tokenizer {
+		if current.Tokenizer[i] != t {
+			return true
+		}
+	}
+
+	return false
+}
+
+func updateSchema(attr string, s typesp.Schema, raftIndex uint64, group uint32) {
 	ce := schema.SyncEntry{
 		Attr:   attr,
-		Schema: typesp.Schema{ValueType: uint32(typ)},
+		Schema: s,
 		Index:  raftIndex,
 		Water:  posting.SyncMarkFor(group),
 	}
-	schema.State().Update(&ce)
+	schema.State().Update(ce)
+}
+
+func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uint32) {
+	// Don't overwrite schema blindly, acl's might have been set even though
+	// type is not present
+	s, ok := schema.State().Get(attr)
+	if ok {
+		s.ValueType = uint32(typ)
+	} else {
+		s = typesp.Schema{ValueType: uint32(typ)}
+	}
+	updateSchema(attr, s, raftIndex, group)
+}
+
+func checkSchema(s *graphp.SchemaUpdate) error {
+	typ := types.TypeID(s.ValueType)
+	if typ == types.UidID && s.Directive == graphp.SchemaUpdate_INDEX {
+		// index on uid type
+		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
+			s.Predicate)
+	} else if typ != types.UidID && s.Directive == graphp.SchemaUpdate_REVERSE {
+		// reverse on non-uid type
+		return x.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
+	}
+	if t, err := schema.State().TypeOf(s.Predicate); err == nil {
+		// schema was defined already
+		if typ.IsScalar() != t.IsScalar() {
+			return x.Errorf("Schema change not allowed from predicate to uid or vice versa")
+		}
+	}
+	return nil
 }
 
 // If storage type is specified, then check compatability or convert to schema type
@@ -143,8 +257,8 @@ func proposeOrSend(ctx context.Context, gid uint32, m *taskp.Mutations, che chan
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationMap(mutationMap map[uint32]*taskp.Mutations, edges []*taskp.DirectedEdge) {
-	for _, edge := range edges {
+func addToMutationMap(mutationMap map[uint32]*taskp.Mutations, m *taskp.Mutations) {
+	for _, edge := range m.Edges {
 		gid := group.BelongsTo(edge.Attr)
 		mu := mutationMap[gid]
 		if mu == nil {
@@ -153,13 +267,22 @@ func addToMutationMap(mutationMap map[uint32]*taskp.Mutations, edges []*taskp.Di
 		}
 		mu.Edges = append(mu.Edges, edge)
 	}
+	for _, schema := range m.Schema {
+		gid := group.BelongsTo(schema.Predicate)
+		mu := mutationMap[gid]
+		if mu == nil {
+			mu = &taskp.Mutations{GroupId: gid}
+			mutationMap[gid] = mu
+		}
+		mu.Schema = append(mu.Schema, schema)
+	}
 }
 
 // MutateOverNetwork checks which group should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *taskp.Mutations) error {
 	mutationMap := make(map[uint32]*taskp.Mutations)
-	addToMutationMap(mutationMap, m.Edges)
+	addToMutationMap(mutationMap, m)
 
 	errors := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {

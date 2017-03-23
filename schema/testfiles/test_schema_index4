@@ -1,5 +1,5 @@
 age:int @index(int)
 
-name: string @index(exact, exact)
+name: string @index(exact)
 address: string @index(term)
-id: id @index(exact, term, exact)
+id: id @index(exact, term)

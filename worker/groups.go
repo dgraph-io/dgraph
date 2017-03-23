@@ -535,7 +535,10 @@ func syncAllMarks(ctx context.Context) error {
 		wg.Add(1)
 		go func(n *node) {
 			defer wg.Done()
-			if e := n.syncAllMarks(ctx); e != nil && err == nil {
+			// Get index of last committed.
+			var lastIndex uint64
+			lastIndex, err = n.store.LastIndex()
+			if e := n.syncAllMarks(ctx, lastIndex); e != nil && err == nil {
 				err = e
 			}
 		}(n)

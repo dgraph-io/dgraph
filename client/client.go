@@ -29,6 +29,8 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type Op int
@@ -134,17 +136,40 @@ func (req *Req) AddMutation(nq graphp.NQuad, op Op) error {
 	return nil
 }
 
+func checkSchema(schema graphp.SchemaUpdate) error {
+	typ := types.TypeID(schema.ValueType)
+	if typ == types.UidID && schema.Directive == graphp.SchemaUpdate_INDEX {
+		// index on uid type
+		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
+			schema.Predicate)
+	} else if typ != types.UidID && schema.Directive == graphp.SchemaUpdate_REVERSE {
+		// reverse on non-uid type
+		return x.Errorf("Cannot reverse for non-uid type on predicate %s", schema.Predicate)
+	}
+	return nil
+}
+
+// AddSchema sets the schema mutations
+func (req *Req) addSchema(s graphp.SchemaUpdate) error {
+	if req.gr.Mutation == nil {
+		req.gr.Mutation = new(graphp.Mutation)
+	}
+	req.gr.Mutation.Schema = append(req.gr.Mutation.Schema, &s)
+	return nil
+}
+
 func (req *Req) size() int {
 	if req.gr.Mutation == nil {
 		return 0
 	}
-	return len(req.gr.Mutation.Set) + len(req.gr.Mutation.Del)
+	return len(req.gr.Mutation.Set) + len(req.gr.Mutation.Del) + len(req.gr.Mutation.Schema)
 }
 
 func (req *Req) reset() {
 	req.gr.Query = ""
 	req.gr.Mutation.Set = req.gr.Mutation.Set[:0]
 	req.gr.Mutation.Del = req.gr.Mutation.Del[:0]
+	req.gr.Mutation.Schema = req.gr.Mutation.Schema[:0]
 }
 
 type nquadOp struct {
@@ -157,6 +182,7 @@ type BatchMutation struct {
 	pending int
 
 	nquads chan nquadOp
+	schema chan graphp.SchemaUpdate
 	dc     graphp.DgraphClient
 	wg     sync.WaitGroup
 
@@ -188,12 +214,42 @@ RETRY:
 
 func (batch *BatchMutation) makeRequests() {
 	req := new(Req)
+
 	for n := range batch.nquads {
 		req.addMutation(n.nq, n.op)
 		if req.size() == batch.size {
 			batch.request(req)
 		}
 	}
+
+	if req.size() > 0 {
+		batch.request(req)
+	}
+	batch.wg.Done()
+}
+
+func (batch *BatchMutation) makeSchemaRequests() {
+	req := new(Req)
+LOOP:
+	for {
+		select {
+		case s, ok := <-batch.schema:
+			if !ok {
+				break LOOP
+			}
+			req.addSchema(s)
+		default:
+			start := time.Now()
+			if req.size() > 0 {
+				batch.request(req)
+			}
+			elapsedMillis := time.Since(start).Seconds() * 1e3
+			if elapsedMillis < 10 {
+				time.Sleep(time.Duration(int64(10-elapsedMillis)) * time.Millisecond)
+			}
+		}
+	}
+
 	if req.size() > 0 {
 		batch.request(req)
 	}
@@ -206,6 +262,7 @@ func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
 		size:    size,
 		pending: pending,
 		nquads:  make(chan nquadOp, 2*size),
+		schema:  make(chan graphp.SchemaUpdate, 2*size),
 		start:   time.Now(),
 		dc:      graphp.NewDgraphClient(conn),
 	}
@@ -214,6 +271,8 @@ func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
 		bm.wg.Add(1)
 		go bm.makeRequests()
 	}
+	bm.wg.Add(1)
+	go bm.makeSchemaRequests()
 	return &bm
 }
 
@@ -223,6 +282,14 @@ func (batch *BatchMutation) AddMutation(nq graphp.NQuad, op Op) error {
 	}
 	batch.nquads <- nquadOp{nq: nq, op: op}
 	atomic.AddUint64(&batch.rdfs, 1)
+	return nil
+}
+
+func (batch *BatchMutation) AddSchema(s graphp.SchemaUpdate) error {
+	if err := checkSchema(s); err != nil {
+		return err
+	}
+	batch.schema <- s
 	return nil
 }
 
@@ -242,5 +309,6 @@ func (batch *BatchMutation) Counter() Counter {
 
 func (batch *BatchMutation) Flush() {
 	close(batch.nquads)
+	close(batch.schema)
 	batch.wg.Wait()
 }

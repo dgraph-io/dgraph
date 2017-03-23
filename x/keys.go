@@ -139,17 +139,6 @@ func (p ParsedKey) DataPrefix() []byte {
 	return buf
 }
 
-// ReversePrefix returns the prefix for reverse keys.
-func (p ParsedKey) ReversePrefix() []byte {
-	buf := make([]byte, 2+len(p.Attr)+2)
-	buf[0] = p.bytePrefix
-	rest := buf[1:]
-	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 1)
-	k[0] = byteReverse
-	return buf
-}
-
 // IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
 	buf := make([]byte, 2+len(p.Attr)+2)
@@ -158,6 +147,17 @@ func (p ParsedKey) IndexPrefix() []byte {
 	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
 	k[0] = byteIndex
+	return buf
+}
+
+// ReversePrefix returns the prefix for index keys.
+func (p ParsedKey) ReversePrefix() []byte {
+	buf := make([]byte, 2+len(p.Attr)+2)
+	buf[0] = p.bytePrefix
+	rest := buf[1:]
+	k := writeAttr(rest, p.Attr)
+	AssertTrue(len(k) == 1)
+	k[0] = byteReverse
 	return buf
 }
 

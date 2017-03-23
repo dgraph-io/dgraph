@@ -49,6 +49,11 @@ message PostingList {
 
 message Schema {
 	uint32 value_type = 1;
-	bool reverse = 2;
+	enum Directive {
+        NONE = 0;
+        INDEX = 1;
+        REVERSE = 2;
+    }
+    Directive directive = 2;
 	repeated string tokenizer = 3;
 }

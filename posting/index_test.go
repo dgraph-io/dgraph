@@ -74,6 +74,7 @@ func addMutationWithIndex(t *testing.T, l *List, edge *taskp.DirectedEdge, op ui
 const schemaVal = `
 name:string @index
 dob:date @index
+friend:uid @reverse
 	`
 
 func TestTokensTable(t *testing.T) {
@@ -143,6 +144,36 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 	require.True(t, ok)
 }
 
+// addEdgeToUID adds uid edge with reverse edge
+func addEdgeToUID(t *testing.T, attr string, src uint64,
+	dst uint64) {
+	edge := &taskp.DirectedEdge{
+		ValueId: dst,
+		Label:   "testing",
+		Attr:    attr,
+		Entity:  src,
+		Op:      taskp.DirectedEdge_SET,
+	}
+	l, _ := GetOrCreate(x.DataKey(attr, src), 0)
+	// No index entries added here as we do not call AddMutationWithIndex.
+	ok, err := l.AddMutation(context.Background(), edge)
+	require.NoError(t, err)
+	require.True(t, ok)
+}
+
+// addEdgeToUID adds uid edge with reverse edge
+func addReverseEdge(t *testing.T, attr string, src uint64,
+	dst uint64) {
+	edge := &taskp.DirectedEdge{
+		ValueId: dst,
+		Label:   "testing",
+		Attr:    attr,
+		Entity:  src,
+		Op:      taskp.DirectedEdge_SET,
+	}
+	addReverseMutation(context.Background(), edge)
+}
+
 func TestRebuildIndex(t *testing.T) {
 	schema.ParseBytes([]byte(schemaVal), 1)
 	addEdgeToValue(t, "name", 1, "Michonne")
@@ -192,4 +223,48 @@ func TestRebuildIndex(t *testing.T) {
 	deletePl(t, l1)
 	l2, _ := GetOrCreate(x.DataKey("name", 20), 0)
 	deletePl(t, l2)
+}
+
+func TestRebuildReverseEdges(t *testing.T) {
+	addEdgeToUID(t, "friend", 1, 23)
+	addEdgeToUID(t, "friend", 1, 24)
+	addEdgeToUID(t, "friend", 2, 23)
+
+	// RebuildIndex requires the data to be committed to data store.
+	CommitLists(10)
+	for len(syncCh) > 0 {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Create some fake wrong entries for data store.
+	addEdgeToUID(t, "friend", 1, 100)
+
+	require.NoError(t, RebuildReverseEdges(context.Background(), "friend"))
+
+	// Let's force a commit.
+	CommitLists(10)
+	for len(syncCh) > 0 {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Check index entries in data store.
+	it := ps.NewIterator()
+	defer it.Close()
+	pk := x.ParsedKey{Attr: "friend"}
+	prefix := pk.ReversePrefix()
+	var revKeys []string
+	var revVals []*typesp.PostingList
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		revKeys = append(revKeys, string(it.Key().Data()))
+		pl := new(typesp.PostingList)
+		require.NoError(t, pl.Unmarshal(it.Value().Data()))
+		revVals = append(revVals, pl)
+	}
+	require.Len(t, revKeys, 2)
+	require.Len(t, revVals, 2)
+	require.Len(t, revVals[0].Postings, 2)
+	require.Len(t, revVals[1].Postings, 1)
+	require.EqualValues(t, revVals[0].Postings[0].Uid, 1)
+	require.EqualValues(t, revVals[0].Postings[1].Uid, 2)
+	require.EqualValues(t, revVals[1].Postings[0].Uid, 1)
 }

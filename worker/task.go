@@ -180,6 +180,9 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		return nil, err
 	}
 
+	if q.Reverse && !schema.State().IsReversed(attr) {
+		return nil, x.Errorf("Predicate %s doesn't have reverse edge", attr)
+	}
 	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
 		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
 	}
@@ -270,7 +273,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 					fs = []*facetsp.Facet{}
 				}
 				out.FacetMatrix = append(out.FacetMatrix,
-					&facetsp.List{[]*facetsp.Facets{&facetsp.Facets{fs}}})
+					&facetsp.List{[]*facetsp.Facets{{fs}}})
 			} else {
 				var fcsList []*facetsp.Facets
 				for _, fres := range filteredRes {

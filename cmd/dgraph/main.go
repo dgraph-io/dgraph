@@ -54,6 +54,8 @@ import (
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/tok"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/soheilhy/cmux"
@@ -227,7 +229,7 @@ func applyMutations(ctx context.Context, m *taskp.Mutations) error {
 	return nil
 }
 
-func convertAndApply(ctx context.Context, set []*graphp.NQuad, del []*graphp.NQuad) (map[string]uint64, error) {
+func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var m taskp.Mutations
 	var err error
@@ -237,7 +239,7 @@ func convertAndApply(ctx context.Context, set []*graphp.NQuad, del []*graphp.NQu
 		return nil, fmt.Errorf("Mutations are forbidden on this server.")
 	}
 
-	if mr, err = convertToEdges(ctx, set); err != nil {
+	if mr, err = convertToEdges(ctx, mutation.Set); err != nil {
 		return nil, err
 	}
 	m.Edges, allocIds = mr.edges, mr.newUids
@@ -245,7 +247,7 @@ func convertAndApply(ctx context.Context, set []*graphp.NQuad, del []*graphp.NQu
 		m.Edges[i].Op = taskp.DirectedEdge_SET
 	}
 
-	if mr, err = convertToEdges(ctx, del); err != nil {
+	if mr, err = convertToEdges(ctx, mutation.Del); err != nil {
 		return nil, err
 	}
 	for i := range mr.edges {
@@ -254,10 +256,40 @@ func convertAndApply(ctx context.Context, set []*graphp.NQuad, del []*graphp.NQu
 		m.Edges = append(m.Edges, edge)
 	}
 
+	m.Schema = mutation.Schema
 	if err := applyMutations(ctx, &m); err != nil {
 		return nil, x.Wrap(err)
 	}
 	return allocIds, nil
+}
+
+func enrichSchema(updates []*graphp.SchemaUpdate) error {
+	for _, schema := range updates {
+		typ := types.TypeID(schema.ValueType)
+		if typ == types.UidID {
+			continue
+		}
+		if len(schema.Tokenizer) == 0 && schema.Directive == graphp.SchemaUpdate_INDEX {
+			schema.Tokenizer = []string{tok.Default(typ).Name()}
+		} else if len(schema.Tokenizer) > 0 && schema.Directive != graphp.SchemaUpdate_INDEX {
+			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
+		}
+		// check for valid tokeniser types and duplicates
+		var seen = make(map[string]bool)
+		for _, t := range schema.Tokenizer {
+			tokenizer, has := tok.GetTokenizer(t)
+			if !has {
+				return x.Errorf("Invalid tokenizer %s", t)
+			}
+			if _, ok := seen[tokenizer.Name()]; !ok {
+				seen[tokenizer.Name()] = true
+			} else {
+				return x.Errorf("Duplicate tokenizers present for attr %s", schema.Predicate)
+			}
+		}
+
+	}
+	return nil
 }
 
 // This function is used to run mutations for the requests from different
@@ -266,7 +298,12 @@ func runMutations(ctx context.Context, mu *graphp.Mutation) (map[string]uint64, 
 	var allocIds map[string]uint64
 	var err error
 
-	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del); err != nil {
+	if err = enrichSchema(mu.Schema); err != nil {
+		return nil, err
+	}
+
+	mutation := &graphp.Mutation{Set: mu.Set, Del: mu.Del, Schema: mu.Schema}
+	if allocIds, err = convertAndApply(ctx, mutation); err != nil {
 		return nil, err
 	}
 	return allocIds, nil
@@ -277,6 +314,7 @@ func runMutations(ctx context.Context, mu *graphp.Mutation) (map[string]uint64, 
 func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
 	var set []*graphp.NQuad
 	var del []*graphp.NQuad
+	var s []*graphp.SchemaUpdate
 	var allocIds map[string]uint64
 	var err error
 
@@ -292,7 +330,14 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 		}
 	}
 
-	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
+	if len(mu.Schema) > 0 {
+		if s, err = schema.Parse(mu.Schema); err != nil {
+			return nil, x.Wrap(err)
+		}
+	}
+
+	mutation := &graphp.Mutation{Set: set, Del: del, Schema: s}
+	if allocIds, err = convertAndApply(ctx, mutation); err != nil {
 		return nil, err
 	}
 	return allocIds, nil
@@ -375,6 +420,10 @@ func processRequest(ctx context.Context, gq *gql.GraphQuery,
 	return sg, wrappedErr{nil, ""}
 }
 
+func hasGQLOps(mu *gql.Mutation) bool {
+	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
+}
+
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// Add a limit on how many pending queries can be run in the system.
 	pendingQueries <- struct{}{}
@@ -390,9 +439,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Lets add the value of the debug query parameter to the context.
-	c := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
-	ctx, cancel := context.WithTimeout(c, time.Minute)
-	defer cancel()
+	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
 
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "Query")
@@ -417,10 +464,18 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// set timeout if schema mutation not present
+	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
+		// If schema mutation is not present
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+	}
+
 	var allocIds map[string]uint64
 	var allocIdsStr map[string]string
 	// If we have mutations, run them first.
-	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
+	if res.Mutation != nil && hasGQLOps(res.Mutation) {
 		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			x.SetStatus(w, x.Error, err.Error())
@@ -443,10 +498,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(res.Query) == 0 {
-		mp := map[string]interface{}{
-			"code":    x.Success,
-			"message": "Done",
-			"uids":    allocIdsStr,
+		mp := map[string]interface{}{}
+		if res.Mutation != nil {
+			mp["code"] = x.Success
+			mp["message"] = "Done"
+			mp["uids"] = allocIdsStr
 		}
 		// Either Schema or query can be specified
 		if res.Schema != nil {
@@ -557,21 +613,8 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	x.SetStatus(w, x.Success, "Backup completed.")
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
-		return
-	}
-	ctx := context.Background()
-	attr := r.URL.Query().Get("attr")
-	if len(attr) == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No attr defined.")
-		return
-	}
-	if err := worker.RebuildIndexOverNetwork(ctx, attr); err != nil {
-		x.SetStatus(w, err.Error(), "RebuildIndex failed.")
-	} else {
-		x.SetStatus(w, x.Success, "RebuildIndex completed.")
-	}
+func hasGraphOps(mu *graphp.Mutation) bool {
+	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
 }
 
 // server is used to implement graphp.DgraphServer
@@ -605,7 +648,7 @@ func (s *grpcServer) Run(ctx context.Context,
 
 	// If mutations are part of the query, we run them through the mutation handler
 	// same as the http client.
-	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
+	if res.Mutation != nil && hasGQLOps(res.Mutation) {
 		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
@@ -613,7 +656,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 
 	// Mutations are sent as part of the mutation object
-	if req.Mutation != nil && (len(req.Mutation.Set) > 0 || len(req.Mutation.Del) > 0) {
+	if req.Mutation != nil && hasGraphOps(req.Mutation) {
 		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
@@ -785,7 +828,6 @@ func setupServer(che chan error) {
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/query", queryHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
-	http.HandleFunc("/admin/index", indexHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
 

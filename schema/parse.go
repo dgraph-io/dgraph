@@ -19,8 +19,8 @@ package schema
 import (
 	"io/ioutil"
 
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -28,7 +28,7 @@ import (
 )
 
 // Parse parses the schema file.
-func parse(file string, gid uint32) (rerr error) {
+func parseFile(file string, gid uint32) (rerr error) {
 	b, err := ioutil.ReadFile(file)
 	if err != nil {
 		return x.Errorf("Error reading file: %v", err)
@@ -36,24 +36,38 @@ func parse(file string, gid uint32) (rerr error) {
 	return ParseBytes(b, gid)
 }
 
+func From(s *graphp.SchemaUpdate) typesp.Schema {
+	if s.Directive == graphp.SchemaUpdate_REVERSE {
+		return typesp.Schema{
+			ValueType: s.ValueType,
+			Directive: typesp.Schema_REVERSE}
+	} else if s.Directive == graphp.SchemaUpdate_INDEX {
+		return typesp.Schema{
+			ValueType: s.ValueType,
+			Directive: typesp.Schema_INDEX,
+			Tokenizer: s.Tokenizer}
+	}
+	return typesp.Schema{ValueType: s.ValueType}
+}
+
 // ParseBytes parses the byte array which holds the schema. We will reset
 // all the globals.
 // Overwrites schema blindly - called only during initilization in testing
-func ParseBytes(schema []byte, gid uint32) (rerr error) {
+func ParseBytes(s []byte, gid uint32) (rerr error) {
 	reset()
-	s := string(schema)
+	updates, err := Parse(string(s))
+	if err != nil {
+		return err
+	}
 
-	l := lex.NewLexer(s).Run(lexText)
-
-	it := l.NewIterator()
-	if rerr = processScalars(it, gid); rerr != nil {
-		return rerr
+	for _, update := range updates {
+		State().Set(update.Predicate, From(update))
 	}
 	return nil
 }
 
 func parseScalarPair(it *lex.ItemIterator, predicate string,
-	allowIndex bool) (*typesp.Schema, error) {
+	allowIndex bool) (*graphp.SchemaUpdate, error) {
 	it.Next()
 	if next := it.Item(); next.Typ != itemColon {
 		return nil, x.Errorf("Missing colon")
@@ -87,7 +101,11 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 				if t != types.UidID {
 					return nil, x.Errorf("Cannot reverse for non-UID type")
 				}
-				return &typesp.Schema{ValueType: uint32(t), Reverse: true}, nil
+				return &graphp.SchemaUpdate{
+					Predicate: predicate,
+					ValueType: uint32(t),
+					Directive: graphp.SchemaUpdate_REVERSE,
+				}, nil
 			case "index":
 				if !allowIndex {
 					return nil, x.Errorf("@index not allowed")
@@ -95,7 +113,11 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 				if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
 					return nil, err
 				} else {
-					return &typesp.Schema{ValueType: uint32(t), Tokenizer: tokenizer}, nil
+					return &graphp.SchemaUpdate{
+						Predicate: predicate, ValueType: uint32(t),
+						Directive: graphp.SchemaUpdate_INDEX,
+						Tokenizer: tokenizer,
+					}, nil
 				}
 			default:
 				return nil, x.Errorf("Invalid index specification")
@@ -104,47 +126,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 		it.Prev()
 		break
 	}
-	return &typesp.Schema{ValueType: uint32(t)}, nil
-}
-
-// processScalars parses schema definitions line by line
-func processScalars(it *lex.ItemIterator, gid uint32) error {
-	for it.Next() {
-		item := it.Item()
-		switch item.Typ {
-		case lex.ItemEOF:
-			return nil
-		case itemText:
-			if err := processScalarPair(it, item.Val, true, gid); err != nil {
-				return err
-			}
-		case lex.ItemError:
-			return x.Errorf(item.Val)
-		default:
-			return x.Errorf("Unexpected token: %v", item)
-		}
-	}
-
-	return nil
-}
-
-// processScalarPair processes "name: type (directive)" where name is already
-// consumed and is provided as input in file during loading
-func processScalarPair(it *lex.ItemIterator, predicate string, allowIndex bool, gid uint32) error {
-	if schema, err := parseScalarPair(it, predicate, allowIndex); err != nil {
-		return err
-	} else {
-		// Schema is already present for this predicate
-		_, err := State().TypeOf(predicate)
-		if err == nil {
-			return x.Errorf("Multiple schema declarations for same predicate %s", predicate)
-		}
-		if group.BelongsTo(predicate) == gid {
-			State().Set(predicate, schema)
-		}
-	}
-
-	return nil
+	return &graphp.SchemaUpdate{Predicate: predicate, ValueType: uint32(t)}, nil
 }
 
 // parseIndexDirective works on "@index" or "@index(customtokenizer)".
@@ -188,12 +170,42 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 			return tokenizers, x.Errorf("Expected a comma but got: %v", next)
 		}
 		// Look for custom tokenizer.
-		tokenizer := tok.GetTokenizer(next.Val).Name()
-		if _, ok := seen[tokenizer]; !ok {
-			tokenizers = append(tokenizers, tokenizer)
-			seen[tokenizer] = true
+		tokenizer, has := tok.GetTokenizer(next.Val)
+		if !has {
+			return tokenizers, x.Errorf("Invalid tokenizer %s", next.Val)
+		}
+		if _, found := seen[tokenizer.Name()]; found {
+			return tokenizers, x.Errorf("Duplicate tokenizers defined for pred %v", predicate)
+		} else {
+			tokenizers = append(tokenizers, tokenizer.Name())
+			seen[tokenizer.Name()] = true
 		}
 		expectArg = false
 	}
 	return tokenizers, nil
+}
+
+// Parse parses a schema string and returns the schema representation for it.
+func Parse(s string) ([]*graphp.SchemaUpdate, error) {
+	var schemas []*graphp.SchemaUpdate
+	l := lex.NewLexer(s).Run(lexText)
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case lex.ItemEOF:
+			return schemas, nil
+		case itemText:
+			if schema, err := parseScalarPair(it, item.Val, true); err != nil {
+				return nil, err
+			} else {
+				schemas = append(schemas, schema)
+			}
+		case lex.ItemError:
+			return nil, x.Errorf(item.Val)
+		default:
+			return nil, x.Errorf("Unexpected token: %v", item)
+		}
+	}
+	return nil, x.Errorf("Shouldn't reach here")
 }
