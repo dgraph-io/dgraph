@@ -1,10 +1,13 @@
-baseurl = "https://wiki.dgraph.io"
+# baseurl = "https://wiki.dgraph.io"
+baseurl = "http://localhost:8080/0.7"
 languageCode = "en-us"
-title = "Official Dgraph Documentation"
 theme = "hugo-docs"
 
+# title is set by the build script using the appropriate version number
+title = "Dgraph Doc"
+
 [params]
-versions = [
+  versions = [
     "latest",
-    "master",
+    "pre-0.7.3"
 ]
