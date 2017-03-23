@@ -12,6 +12,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -24,9 +25,14 @@ var (
 	groupIds = flag.String("groups", "0,1", "RAFT groups handled by this server.")
 	myAddr   = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
-	peerAddr   = flag.String("peer", "", "IP_ADDRESS:PORT of any healthy peer.")
-	raftId     = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
-	schemaFile = flag.String("schema", "", "Path to schema file")
+	peerAddr = flag.String("peer", "", "IP_ADDRESS:PORT of any healthy peer.")
+	raftId   = flag.Uint64("idx", 1000, "RAFT ID that this server will use to join RAFT groups.")
+	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
+	// so that the nodes which have lagged behind leader can just replay entries instead of
+	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
+	// are taken
+	maxPendingCount = flag.Uint64("sc", 0, "Max number of pending entries in wal after which snapshot is taken")
+	schemaFile      = flag.String("schema", "", "Path to schema file")
 
 	emptyMembershipUpdate taskp.MembershipUpdate
 )
@@ -545,6 +551,21 @@ func syncAllMarks(ctx context.Context) error {
 	}
 	wg.Wait()
 	return err
+}
+
+// snapshotAll takes snapshot of all nodes of the worker group
+func snapshotAll(ctx context.Context) {
+	var wg sync.WaitGroup
+	for _, n := range groups().nodes() {
+		wg.Add(1)
+		go func(n *node) {
+			defer wg.Done()
+			water := posting.SyncMarkFor(n.gid)
+			idx := water.DoneUntil()
+			n.snapshot(idx)
+		}(n)
+	}
+	wg.Wait()
 }
 
 // StopAllNodes stops all the nodes of the worker group.

@@ -108,4 +108,5 @@ func BlockingStop() {
 	if err := syncAllMarks(ctx); err != nil {
 		x.Printf("Error in sync watermarks : %s", err.Error())
 	}
+	snapshotAll(ctx)
 }

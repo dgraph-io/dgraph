@@ -668,32 +668,38 @@ func (n *node) snapshotPeriodically() {
 			x.Checkf(err, "Unable to get existing snapshot")
 
 			si := existing.Metadata.Index
-			if le <= si {
-				msg := fmt.Sprintf("Current watermark %d <= previous snapshot %d. Skipping.", le, si)
+			if le <= si+*maxPendingCount {
+				msg := fmt.Sprintf("Current watermark %d <= previous snapshot %d + %d. Skipping.",
+					le, si, *maxPendingCount)
 				if msg != prev {
 					prev = msg
 					fmt.Println(msg)
 				}
 				continue
 			}
-			msg := fmt.Sprintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, le)
+			snapshotIdx := le - *maxPendingCount
+			msg := fmt.Sprintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
 			if msg != prev {
 				prev = msg
 				fmt.Println(msg)
 			}
 
-			rc, err := n.raftContext.Marshal()
-			x.Check(err)
-
-			s, err := n.store.CreateSnapshot(le, n.ConfState(), rc)
-			x.Checkf(err, "While creating snapshot")
-			x.Checkf(n.store.Compact(le), "While compacting snapshot")
-			x.Check(n.wal.StoreSnapshot(n.gid, s))
+			n.snapshot(le)
 
 		case <-n.done:
 			return
 		}
 	}
+}
+
+func (n *node) snapshot(idx uint64) {
+	rc, err := n.raftContext.Marshal()
+	x.Check(err)
+
+	s, err := n.store.CreateSnapshot(idx, n.ConfState(), rc)
+	x.Checkf(err, "While creating snapshot")
+	x.Checkf(n.store.Compact(idx), "While compacting snapshot")
+	x.Check(n.wal.StoreSnapshot(n.gid, s))
 }
 
 func (n *node) joinPeers() {
