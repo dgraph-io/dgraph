@@ -65,7 +65,7 @@ func addMutation(t *testing.T, l *List, edge *taskp.DirectedEdge, op uint32) {
 }
 
 func deletePl(t *testing.T, l *List) {
-	lhMapFor(1).EachWithDelete(func(k uint64, l *List) {
+	lhmapFor(1).EachWithDelete(func(k uint64, l *List) {
 	})
 	require.NoError(t, l.pstore.Delete(l.key))
 }

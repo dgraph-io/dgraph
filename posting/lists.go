@@ -186,7 +186,7 @@ func (l *listMaps) groups() []uint32 {
 	return groups
 }
 
-func lhMapFor(group uint32) *listMap {
+func lhmapFor(group uint32) *listMap {
 	return lhmaps.get(group)
 }
 
@@ -197,13 +197,15 @@ func aggressivelyEvict() {
 	// To evict entries belonging to a group no longer served by the server
 	// CommitLists shouldn't have any affect as the entries should have been synced before
 	// we stopped serving the group
+	var wg sync.WaitGroup
 	for _, gid := range lhmaps.groups() {
-		CommitLists(1, gid)
-		lhMapFor(gid).EachWithDelete(func(k uint64, l *List) {
-			l.SetForDeletion()
-			l.decr()
-		})
+		wg.Add(1)
+		go func(gid uint32, wg *sync.WaitGroup) {
+			EvictGroup(gid)
+			wg.Done()
+		}(gid, &wg)
 	}
+	wg.Wait()
 
 	log.Println("Trying to free OS memory")
 	// Forces garbage collection followed by returning as much memory to the OS
@@ -249,7 +251,7 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
 		defer ctr.ticker.Stop()
 
 		for _, key := range keys {
-			l := lhMapFor(key.gid).Get(key.fp)
+			l := lhmapFor(key.gid).Get(key.fp)
 			if l == nil {
 				continue
 			}
@@ -414,7 +416,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
 
-	lp := lhMapFor(group).Get(fp)
+	lp := lhmapFor(group).Get(fp)
 	if lp != nil {
 		lp.incr()
 		return lp, lp.decr
@@ -425,7 +427,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	l.water = marks.Get(group)
 
-	lp = lhMapFor(group).PutIfMissing(fp, l)
+	lp = lhmapFor(group).PutIfMissing(fp, l)
 	// We are always going to return lp to caller, whether it is l or not. So, let's
 	// increment its reference counter.
 	lp.incr()
@@ -464,7 +466,7 @@ func GetOrUnmarshal(key, val []byte, gid uint32) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
 
 	stopTheWorld.RLock()
-	lp := lhMapFor(gid).Get(fp)
+	lp := lhmapFor(gid).Get(fp)
 	stopTheWorld.RUnlock()
 
 	if lp != nil {
@@ -512,7 +514,7 @@ func CommitLists(numRoutines int, group uint32) {
 		}()
 	}
 
-	lhMapFor(group).Each(func(k uint64, l *List) {
+	lhmapFor(group).Each(func(k uint64, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
@@ -529,7 +531,7 @@ func EvictGroup(group uint32) {
 	// This is serialized by raft so no need to worry about race condition from getOrCreate
 	// request from same group
 	CommitLists(1, group)
-	lhMapFor(group).EachWithDelete(func(k uint64, l *List) {
+	lhmapFor(group).EachWithDelete(func(k uint64, l *List) {
 		l.SetForDeletion()
 		l.decr()
 	})
