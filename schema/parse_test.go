@@ -99,6 +99,11 @@ func TestSchemaIndex_Error1(t *testing.T) {
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
+	require.Error(t, ReloadData("testfiles/test_schema_index5", 1))
+}
+
+// Missing comma.
+func TestSchemaIndex_Error3(t *testing.T) {
 	require.Error(t, ReloadData("testfiles/test_schema_index3", 1))
 }
 

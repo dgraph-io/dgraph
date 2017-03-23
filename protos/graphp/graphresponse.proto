@@ -62,6 +62,7 @@ message SchemaUpdate {
 message Request {
     string query = 1;
     Mutation mutation = 2;
+    Schema schema = 3;
 }
 
 message Latency {
@@ -86,9 +87,9 @@ message Node {
 message SchemaNode {
     string predicate = 1;
     string type = 2;
-    bool indexed = 3;
+    bool index = 3;
     repeated string tokenizer = 4;
-    bool reversed = 5;
+    bool reverse = 5;
 }
 
 message Response {

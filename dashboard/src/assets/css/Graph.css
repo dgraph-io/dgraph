@@ -60,6 +60,7 @@
 }
 
 .Graph-full-height {
+    position: relative;
     border-bottom: 0px;
     flex: auto;
     display: flex;
@@ -68,6 +69,7 @@
 
 .Graph-fixed-height {
     height: 500px;
+    position: relative;
 }
 
 .vis-network {
@@ -80,3 +82,52 @@
     flex: auto;
 }
 
+.progress .progress-bar {
+    -webkit-transition: none;
+    -o-transition: none;
+    transition: none;
+}
+
+.Graph-progress {
+    top: 50%;
+    margin: auto 10%;
+    position: absolute;
+    width: 80%;
+}
+
+
+/*.Graph-zoom {
+    display: none;
+    text-align: right;
+    position: absolute;
+    top: 15px;
+    right: 10px;
+    z-index: 10;
+}
+
+.Graph-zoom-plus {
+    font-size: 20px;
+    padding: 5px;
+    margin-bottom: 5px;
+    display: block !important;
+}
+
+.Graph-zoom-minus {
+    font-size: 20px;
+    padding: 5px;
+    display: block !important;
+}*/
+
+.vis-zoomExtends,
+.vis-right,
+.vis-left,
+.vis-up,
+.vis-down {
+    display: none !important;
+}
+
+.vis-navigation {
+    position: absolute;
+    top: 60px;
+    right: 5px;
+}

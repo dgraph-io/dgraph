@@ -95,10 +95,33 @@ func convertValue(attr, data string) (types.Val, error) {
 	return dst, err
 }
 
+// Returns nil byte on error
+func convertToType(v types.Val, typ types.TypeID) (*taskp.Value, error) {
+	result := &taskp.Value{ValType: int32(typ), Val: x.Nilbyte}
+	if v.Tid == typ {
+		result.Val = v.Value.([]byte)
+		return result, nil
+	}
+
+	// conver data from binary to appropriate format
+	val, err := types.Convert(v, typ)
+	if err != nil {
+		return result, err
+	}
+	// Marshal
+	data := types.ValueForType(types.BinaryID)
+	err = types.Marshal(val, &data)
+	if err != nil {
+		return result, x.Errorf("Failed convertToType during Marshal")
+	}
+	result.Val = data.Value.([]byte)
+	return result, nil
+}
+
 type FuncType int
 
 const (
-	NotFn FuncType = iota
+	NotAFunction FuncType = iota
 	AggregatorFn
 	CompareAttrFn
 	CompareScalarFn
@@ -111,7 +134,7 @@ const (
 
 func parseFuncType(arr []string) (FuncType, string) {
 	if len(arr) == 0 {
-		return NotFn, ""
+		return NotAFunction, ""
 	}
 	f := strings.ToLower(arr[0])
 	switch f {
@@ -140,6 +163,15 @@ func parseFuncType(arr []string) (FuncType, string) {
 	}
 }
 
+func needsIndex(fnType FuncType) bool {
+	switch fnType {
+	case CompareAttrFn, GeoFn, RegexFn, FullTextSearchFn, StandardFn:
+		return true
+	default:
+		return false
+	}
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 	attr := q.Attr
@@ -151,14 +183,17 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 	if q.Reverse && !schema.State().IsReversed(attr) {
 		return nil, x.Errorf("Predicate %s doesn't have reverse edge", attr)
 	}
+	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
+		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
+	}
 
 	var out taskp.Result
 	opts := posting.ListOptions{
 		AfterUID: uint64(q.AfterUid),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
-	if srcFn.fnType != NotFn && q.Uids != nil && len(q.Uids.Uids) > 0 {
-		opts.Intersect = q.Uids
+	if srcFn.fnType != NotAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
+		opts.Intersect = q.UidList
 	}
 	facetsTree, err := preprocessFilter(q.FacetsFilter)
 	if err != nil {
@@ -167,15 +202,16 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 
 	for i := 0; i < srcFn.n; i++ {
 		var key []byte
-		if srcFn.fnType == AggregatorFn || srcFn.fnType == CompareScalarFn ||
-			srcFn.fnType == PasswordFn {
-			key = x.DataKey(attr, q.Uids.Uids[i])
-		} else if srcFn.fnType != NotFn {
-			key = x.IndexKey(attr, srcFn.tokens[i])
-		} else if q.Reverse {
-			key = x.ReverseKey(attr, q.Uids.Uids[i])
+		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn {
+			if q.Reverse {
+				key = x.ReverseKey(attr, q.UidList.Uids[i])
+			} else {
+				key = x.DataKey(attr, q.UidList.Uids[i])
+			}
+		} else if srcFn.fnType == AggregatorFn || srcFn.fnType == PasswordFn {
+			key = x.DataKey(attr, q.UidList.Uids[i])
 		} else {
-			key = x.DataKey(attr, q.Uids.Uids[i])
+			key = x.IndexKey(attr, srcFn.tokens[i])
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, gid)
@@ -184,11 +220,19 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
-		newValue := &taskp.Value{ValType: int32(val.Tid)}
-		if err == nil {
-			newValue.Val = val.Value.([]byte)
-		} else {
-			newValue.Val = x.Nilbyte
+		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
+			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+		}
+		newValue := &taskp.Value{ValType: int32(val.Tid), Val: x.Nilbyte}
+		if isValueEdge {
+			if typ, err := schema.State().TypeOf(attr); err == nil {
+				newValue, err = convertToType(val, typ)
+			} else if err != nil {
+				// Ideally Schema should be present for already inserted mutation
+				// x.Checkf(err, "Schema not defined for attribute %s", attr)
+				// Converting to stored type for backward compatiblity of old inserted data
+				newValue, err = convertToType(val, val.Tid)
+			}
 		}
 		out.Values = append(out.Values, newValue)
 
@@ -229,7 +273,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 					fs = []*facetsp.Facet{}
 				}
 				out.FacetMatrix = append(out.FacetMatrix,
-					&facetsp.List{[]*facetsp.Facets{&facetsp.Facets{fs}}})
+					&facetsp.List{[]*facetsp.Facets{{fs}}})
 			} else {
 				var fcsList []*facetsp.Facets
 				for _, fres := range filteredRes {
@@ -269,7 +313,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		if srcFn.fnType == CompareScalarFn {
 			count := int64(pl.Length(0))
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				tlist := &taskp.List{[]uint64{q.Uids.Uids[i]}}
+				tlist := &taskp.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 			continue
@@ -281,6 +325,33 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			uidList.Uids = append(uidList.Uids, fres.uid)
 		}
 		out.UidMatrix = append(out.UidMatrix, uidList)
+	}
+
+	if srcFn.fnType == CompareScalarFn && srcFn.isCompareAtRoot {
+		it := pstore.NewIterator()
+		defer it.Close()
+		pk := x.Parse(x.DataKey(q.Attr, 0))
+		dataPrefix := pk.DataPrefix()
+		if q.Reverse {
+			pk = x.Parse(x.ReverseKey(q.Attr, 0))
+			dataPrefix = pk.ReversePrefix()
+		}
+
+		for it.Seek(dataPrefix); it.ValidForPrefix(dataPrefix); it.Next() {
+			x.AssertTruef(pk.Attr == q.Attr,
+				"Invalid key obtained for comparison")
+			key := it.Key().Data()
+			pl, decr := posting.GetOrUnmarshal(key, it.Value().Data())
+			count := int64(pl.Length(0))
+			decr()
+			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
+				pk := x.Parse(key)
+				// TODO: Look if we want to put these UIDs in one list before
+				// passing it back to query package.
+				tlist := &taskp.List{[]uint64{pk.Uid}}
+				out.UidMatrix = append(out.UidMatrix, tlist)
+			}
+		}
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -295,22 +366,11 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			x.AssertTrue(pk.Attr == q.Attr)
 			term := pk.Term[1:] // skip the first byte which is tokenizer prefix.
 			if srcFn.regex.MatchString(term) {
-				pl, decr := posting.GetOrCreate(key, gid)
+				pl, decr := posting.GetOrUnmarshal(key, it.Value().Data())
 				out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 				decr()
 			}
 		}
-	}
-
-	// aggregate on the collection out.Values[]
-	if srcFn.fnType == AggregatorFn && len(out.Values) > 0 {
-		var err error
-		typ, _ := schema.State().TypeOf(attr)
-		out.Values[0], err = Aggregate(srcFn.fname, out.Values, typ)
-		if err != nil {
-			return nil, err
-		}
-		out.Values = out.Values[:1] // trim length to 1
 	}
 
 	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 &&
@@ -362,16 +422,17 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 }
 
 type functionContext struct {
-	tokens         []string
-	geoQuery       *types.GeoQueryData
-	intersectDest  bool
-	ineqValue      types.Val
-	ineqValueToken string
-	n              int
-	threshold      int64
-	fname          string
-	fnType         FuncType
-	regex          *regexp.Regexp
+	tokens          []string
+	geoQuery        *types.GeoQueryData
+	intersectDest   bool
+	ineqValue       types.Val
+	ineqValueToken  string
+	n               int
+	threshold       int64
+	fname           string
+	fnType          FuncType
+	regex           *regexp.Regexp
+	isCompareAtRoot bool
 }
 
 func parseSrcFn(q *taskp.Query) (*functionContext, error) {
@@ -381,6 +442,8 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 	var err error
 
 	switch fnType {
+	case NotAFunction:
+		fc.n = len(q.UidList.Uids)
 	case AggregatorFn:
 		// confirm agrregator could apply on the attributes
 		typ, err := schema.State().TypeOf(attr)
@@ -391,7 +454,7 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 			return nil, x.Errorf("Aggregator %q could not apply on %v",
 				f, attr)
 		}
-		fc.n = len(q.Uids.Uids)
+		fc.n = len(q.UidList.Uids)
 	case CompareAttrFn:
 		if len(q.SrcFunc) != 2 {
 			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
@@ -417,7 +480,13 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 				q.SrcFunc[0], q.SrcFunc[1])
 		}
-		fc.n = len(q.Uids.Uids)
+		if q.UidList == nil {
+			// Fetch Uids from Store and populate in q.UidList.
+			fc.n = 0
+			fc.isCompareAtRoot = true
+		} else {
+			fc.n = len(q.UidList.Uids)
+		}
 	case GeoFn:
 		// For geo functions, we get extra information used for filtering.
 		fc.tokens, fc.geoQuery, err = types.GetGeoTokens(q.SrcFunc)
@@ -427,16 +496,15 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(fc.tokens)
 	case PasswordFn:
-		// confirm agrregator could apply on the attributes
-		if len(q.SrcFunc) != 2 {
+		if len(q.SrcFunc) != 3 {
 			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
+				len(q.SrcFunc)-1, q.SrcFunc[1:])
 		}
-		fc.n = len(q.Uids.Uids)
+		fc.n = len(q.UidList.Uids)
 	case StandardFn, FullTextSearchFn:
 		// srcfunc 0th val is func name and and [1:] are args.
 		// we tokenize the arguments of the query.
-		fc.tokens, err = getStringTokens(q.SrcFunc[1:], fnType)
+		fc.tokens, err = getStringTokens(q.SrcFunc[1:], "", fnType) // TODO(tzdybal) - get language
 		if err != nil {
 			return nil, err
 		}
@@ -448,9 +516,6 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		if err != nil {
 			return nil, err
 		}
-	case NotFn:
-		fc.n = len(q.Uids.Uids)
-
 	default:
 		return nil, x.Errorf("FnType %d not handled in numFnAttrs.", fnType)
 	}
@@ -464,7 +529,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *taskp.Query) (*taskp.Resu
 	}
 
 	gid := group.BelongsTo(q.Attr)
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, len(q.Uids.Uids), gid)
+	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, len(q.UidList.Uids), gid)
 
 	var reply *taskp.Result
 	x.AssertTruef(groups().ServesGroup(gid),

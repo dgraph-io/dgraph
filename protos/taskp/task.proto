@@ -25,7 +25,7 @@ message Query {
 	bool do_count = 6;      // Are we just getting lengths?
 
 	// Exactly one of uids and terms is populated.
-	List uids = 7;
+	List uid_list = 7;
 
 	// Function to generate or filter UIDs.
 	repeated string src_func = 8;
@@ -112,6 +112,17 @@ message Mutations {
 	uint32 group_id = 1;
 	repeated DirectedEdge edges = 2;
 	repeated graphp.SchemaUpdate schema = 3;
+}
+
+message Schema {
+	uint32 group_id = 1;
+	repeated string predicates = 2;
+	// fields can be on of type, index, reverse or tokenizer
+	repeated string fields = 3; 
+}
+
+message SchemaResult {
+	repeated graphp.SchemaNode schema = 1;
 }
 
 message RebuildIndex {

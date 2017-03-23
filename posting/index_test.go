@@ -2,8 +2,6 @@ package posting
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
 	"testing"
 	"time"
 
@@ -12,7 +10,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -74,17 +71,14 @@ func addMutationWithIndex(t *testing.T, l *List, edge *taskp.DirectedEdge, op ui
 	require.NoError(t, l.AddMutationWithIndex(context.Background(), edge))
 }
 
+const schemaVal = `
+name:string @index
+dob:date @index
+friend:uid @reverse
+	`
+
 func TestTokensTable(t *testing.T) {
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	schema.ParseBytes([]byte(schemaStr), 1)
-
-	ps, err := store.NewStore(dir)
-	defer ps.Close()
-	require.NoError(t, err)
-	Init(ps)
+	schema.ParseBytes([]byte(schemaVal), 1)
 
 	key := x.DataKey("name", 1)
 	l := getNew(key, ps)
@@ -114,13 +108,8 @@ func TestTokensTable(t *testing.T) {
 	x.Check(pl.Unmarshal(slice.Data()))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
+	deletePl(t, l)
 }
-
-const schemaStrAlt = `
-name:string @index
-dob:date @index
-friend:uid @reverse
-`
 
 // tokensForTest returns keys for a table. This is just for testing / debugging.
 func tokensForTest(attr string) []string {
@@ -139,7 +128,7 @@ func tokensForTest(attr string) []string {
 }
 
 // addEdgeToValue adds edge without indexing.
-func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
+func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string) {
 	edge := &taskp.DirectedEdge{
 		Value:  []byte(value),
@@ -185,41 +174,10 @@ func addReverseEdge(t *testing.T, attr string, src uint64,
 	addReverseMutation(context.Background(), edge)
 }
 
-func populateGraph(t *testing.T) (string, *store.Store) {
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-
-	schema.ParseBytes([]byte(schemaStrAlt), 1)
-	Init(ps)
-
-	addEdgeToValue(t, ps, "name", 1, "Michonne")
-	addEdgeToValue(t, ps, "name", 20, "David")
-	return dir, ps
-}
-
-func populateGraph2(t *testing.T) (string, *store.Store) {
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-
-	schema.ParseBytes([]byte(schemaStrAlt), 1)
-	Init(ps)
-
-	addEdgeToUID(t, "friend", 1, 23)
-	addEdgeToUID(t, "friend", 1, 24)
-	addEdgeToUID(t, "friend", 2, 23)
-	return dir, ps
-}
-
 func TestRebuildIndex(t *testing.T) {
-	dir, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
+	schema.ParseBytes([]byte(schemaVal), 1)
+	addEdgeToValue(t, "name", 1, "Michonne")
+	addEdgeToValue(t, "name", 20, "David")
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10)
@@ -260,12 +218,17 @@ func TestRebuildIndex(t *testing.T) {
 	require.Len(t, idxVals[1].Postings, 1)
 	require.EqualValues(t, idxVals[0].Postings[0].Uid, 20)
 	require.EqualValues(t, idxVals[1].Postings[0].Uid, 1)
+
+	l1, _ := GetOrCreate(x.DataKey("name", 1), 0)
+	deletePl(t, l1)
+	l2, _ := GetOrCreate(x.DataKey("name", 20), 0)
+	deletePl(t, l2)
 }
 
 func TestRebuildReverseEdges(t *testing.T) {
-	dir, ps := populateGraph2(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
+	addEdgeToUID(t, "friend", 1, 23)
+	addEdgeToUID(t, "friend", 1, 24)
+	addEdgeToUID(t, "friend", 2, 23)
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10)

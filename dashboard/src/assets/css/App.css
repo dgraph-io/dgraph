@@ -34,17 +34,26 @@
     margin-bottom: 100px;
 }
 
-.App-prev-queries-table {
+.App-prev-queries {
     width: 100%;
-    border: 1px solid black;
     margin: 10px 0px 15px 0px;
     padding: 0px 5px 5px 5px;
+}
+
+.App-prev-queries-table {
+    width: 100%;
+    margin-top: 10px;
+    border: 1px solid black;
 }
 
 .App-prev-queries-tbody {
     height: 500px;
     overflow-y: scroll;
     display: block;
+}
+
+.App-prev-queries .input-group-btn {
+    padding-left: 5px;
 }
 
 .App-label {
@@ -74,4 +83,12 @@
 
 #properties pre {
     height: 100%;
+}
+
+input.form-control {
+    font-size: 16px !important;
+}
+
+.form-group {
+    margin-bottom: 5px;
 }

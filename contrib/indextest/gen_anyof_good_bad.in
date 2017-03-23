@@ -1,5 +1,5 @@
 {
- me(func:anyofterms("name", "good bad")) {
+ me(func:anyofterms(name, "good bad")) {
   _uid_
   name@en
  }

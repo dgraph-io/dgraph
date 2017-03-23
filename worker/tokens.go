@@ -7,12 +7,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// Return string tokens from function arguments. It maps funcion type to correct tokenizer.
+// Return string tokens from function arguments. It maps function type to correct tokenizer.
 // Note: regexp functions require regexp compilation of argument, not tokenization.
-func getStringTokens(funcArgs []string, funcType FuncType) ([]string, error) {
+func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]string, error) {
 	switch funcType {
 	case FullTextSearchFn:
-		return tok.GetTextTokens(funcArgs)
+		return tok.GetTextTokens(funcArgs, lang)
 	default:
 		return tok.GetTokens(funcArgs)
 	}

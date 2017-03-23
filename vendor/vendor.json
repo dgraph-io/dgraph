@@ -3,10 +3,10 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "2d0APy09NIaNsHXstcbkgFUYhHQ=",
-			"path": "github.com/Sirupsen/logrus",
-			"revision": "23521f1364a267387df2b99234134003e0a4486d",
-			"revisionTime": "2015-10-07T14:14:16Z"
+			"checksumSHA1": "XU5C0RvW/71AFqNVdmkzg4ByWB0=",
+			"path": "github.com/MakeNowJust/heredoc",
+			"revision": "1d91351acdc1cb2f2c995864674b754134b86ca7",
+			"revisionTime": "2014-07-04T15:26:43Z"
 		},
 		{
 			"checksumSHA1": "ywqbUZb6r4Mxq2MBAbv/vaYcmdw=",
@@ -33,6 +33,12 @@
 			"revisionTime": "2017-02-24T21:36:31Z"
 		},
 		{
+			"checksumSHA1": "8wCAW8E4SO7gGxt0tsr4NZ4APIg=",
+			"path": "github.com/blevesearch/bleve/analysis/token/stop",
+			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
+			"revisionTime": "2017-02-24T21:36:31Z"
+		},
+		{
 			"checksumSHA1": "rHPnW85/nLMuW8PICbcMX4O8Xg8=",
 			"path": "github.com/blevesearch/bleve/analysis/token/unicodenorm",
 			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
@@ -41,6 +47,12 @@
 		{
 			"checksumSHA1": "q7C04nlJLxKmemXLop0oyJhfi5M=",
 			"path": "github.com/blevesearch/bleve/analysis/tokenizer/unicode",
+			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
+			"revisionTime": "2017-02-24T21:36:31Z"
+		},
+		{
+			"checksumSHA1": "R7kbZ1QPL+KsK0sPKgMS0X7J7rw=",
+			"path": "github.com/blevesearch/bleve/analysis/tokenmap",
 			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
 			"revisionTime": "2017-02-24T21:36:31Z"
 		},
@@ -87,6 +99,12 @@
 			"revisionTime": "2017-02-24T21:36:31Z"
 		},
 		{
+			"checksumSHA1": "4EX5n9QhXfRGfF/DHJud8y64G3U=",
+			"path": "github.com/blevesearch/blevex/stemmer",
+			"revision": "507dcd576550f9f3260f11495ba2de4e96773a3e",
+			"revisionTime": "2017-03-01T19:48:45Z"
+		},
+		{
 			"checksumSHA1": "F6iBQThfd04TIlxT49zaPRGvlqE=",
 			"path": "github.com/blevesearch/go-porterstemmer",
 			"revision": "23a2c8e5cf1f380f27722c6d2ae8896431dc7d0e",
@@ -99,11 +117,10 @@
 			"revisionTime": "2016-09-15T18:50:41Z"
 		},
 		{
-			"checksumSHA1": "tJAP/Glrwyzlyn873qPhQ/em2Vo=",
+			"checksumSHA1": "KNCQ13HZhy1vnc9i4lBiKy120XM=",
 			"path": "github.com/cockroachdb/c-jemalloc",
 			"revision": "7eb7980d8a9f68b771568a7eb15196a63a818595",
-			"revisionTime": "2017-02-03T23:06:53Z",
-			"tree": true
+			"revisionTime": "2017-02-03T23:06:53Z"
 		},
 		{
 			"checksumSHA1": "Uz9RlVv0yacm5FHXuffE+4YQSWQ=",
@@ -113,10 +130,6 @@
 			"tree": true
 		},
 		{
-			"path": "github.com/cockroachdb/c-lze4",
-			"revision": ""
-		},
-		{
 			"checksumSHA1": "+uhPIrBtVQiZam8M3XKMd1f3+oI=",
 			"path": "github.com/cockroachdb/c-rocksdb",
 			"revision": "97c232fc39550ac0f6287a49421615cc633eec42",
@@ -124,11 +137,10 @@
 			"tree": true
 		},
 		{
-			"checksumSHA1": "pjTmyGU6EOYq7lrj3z+d7AkWkfE=",
+			"checksumSHA1": "oOsXjUrrJWETLIMVp6fsyKzFvXE=",
 			"path": "github.com/cockroachdb/c-snappy",
 			"revision": "c0cd3c9ce92f195001595e1fbbe66f045daad34f",
-			"revisionTime": "2016-11-24T05:17:49Z",
-			"tree": true
+			"revisionTime": "2016-11-24T05:17:49Z"
 		},
 		{
 			"checksumSHA1": "jw+XDfPJgogfSPCsuebqFZj/GJc=",
@@ -227,40 +239,34 @@
 			"revisionTime": "2016-09-25T22:06:09Z"
 		},
 		{
-			"checksumSHA1": "nPzv1N4lRBr2UAvJure4uLjlYf8=",
+			"checksumSHA1": "2mmNgnBp2sLk5x11spiohqzmMkE=",
+			"path": "github.com/tebeka/snowball",
+			"revision": "6b06bd306c4e4442a63e546752278920ae487934",
+			"revisionTime": "2017-01-01T15:08:07Z"
+		},
+		{
+			"checksumSHA1": "y1kH4pl3IjGHaWcNbk5bZe3nITY=",
 			"path": "github.com/twpayne/go-geom",
-			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
-			"revisionTime": "2016-09-20T10:00:50Z"
+			"revision": "6753ad11e46b04e21b3f286b342e73a8c4be8216",
+			"revisionTime": "2017-03-17T09:06:30Z"
 		},
 		{
 			"checksumSHA1": "7nqAxLYlyEi9e5DUsc+WNo++6PY=",
 			"path": "github.com/twpayne/go-geom/encoding/geojson",
-			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
-			"revisionTime": "2016-09-20T10:00:50Z"
+			"revision": "6753ad11e46b04e21b3f286b342e73a8c4be8216",
+			"revisionTime": "2017-03-17T09:06:30Z"
 		},
 		{
-			"checksumSHA1": "vSHXkm1nl0Y+xP0E420yRQDCnCA=",
+			"checksumSHA1": "5V3g7dys2PJyNp9NeyBsASNgplI=",
 			"path": "github.com/twpayne/go-geom/encoding/wkb",
-			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
-			"revisionTime": "2016-09-20T10:00:50Z"
+			"revision": "6753ad11e46b04e21b3f286b342e73a8c4be8216",
+			"revisionTime": "2017-03-17T09:06:30Z"
 		},
 		{
 			"checksumSHA1": "KDedv+IgB08fN9r3oSsHJ5/1Xyc=",
 			"path": "github.com/twpayne/go-geom/encoding/wkbcommon",
-			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
-			"revisionTime": "2016-09-20T10:00:50Z"
-		},
-		{
-			"checksumSHA1": "7LaLud3qlAQZ+xftxLTbYg3cGpo=",
-			"path": "github.com/willf/bitset",
-			"revision": "28a4168144bb8ac95454e1f51c84da1933681ad4",
-			"revisionTime": "2015-08-12T13:10:42Z"
-		},
-		{
-			"checksumSHA1": "AfNEZNbH3Dcpiz5PuNQKoCDuS7g=",
-			"path": "github.com/willf/bloom",
-			"revision": "73320a6e73f3e139842058d7e4886e09ca83ac9b",
-			"revisionTime": "2015-11-24T22:32:07Z"
+			"revision": "6753ad11e46b04e21b3f286b342e73a8c4be8216",
+			"revisionTime": "2017-03-17T09:06:30Z"
 		},
 		{
 			"checksumSHA1": "vE43s37+4CJ2CDU6TlOUOYE0K9c=",
@@ -285,18 +291,6 @@
 			"path": "golang.org/x/net/http2/hpack",
 			"revision": "ef00b378c73f107bf44d5c9b69875255ce89b79a",
 			"revisionTime": "2016-05-15T03:16:23Z"
-		},
-		{
-			"checksumSHA1": "/k7k6eJDkxXx6K9Zpo/OwNm58XM=",
-			"path": "golang.org/x/net/internal/timeseries",
-			"revision": "ef00b378c73f107bf44d5c9b69875255ce89b79a",
-			"revisionTime": "2016-05-15T03:16:23Z"
-		},
-		{
-			"checksumSHA1": "yhndhWXMs/VSEDLks4dNyFMQStA=",
-			"path": "golang.org/x/net/lex/httplex",
-			"revision": "9313baa13d9262e49d07b20ed57dceafcd7240cc",
-			"revisionTime": "2016-09-07T15:25:26Z"
 		},
 		{
 			"checksumSHA1": "TZDHZj3zWDc5LKqpoLamOKt6Nmo=",

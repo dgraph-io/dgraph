@@ -1,8 +1,16 @@
 import React, { Component } from "react";
 import { connect } from "react-redux";
-import { runQuery } from "../actions";
+import {
+  Button,
+  Form,
+  FormControl,
+  FormGroup,
+  ControlLabel,
+  Col
+} from "react-bootstrap";
 
-import { timeout, checkStatus } from "./Helpers";
+import { runQuery, updateRegex, selectQuery } from "../actions";
+import { timeout, checkStatus, sortStrings } from "./Helpers";
 import "../assets/css/Editor.css";
 
 require("codemirror/addon/hint/show-hint.css");
@@ -15,21 +23,36 @@ class Editor extends Component {
   render() {
     return (
       <div>
-        <form id="query-form">
-          <div className="form-group">
-            <label htmlFor="query">Query</label>
-            <button
-              type="submit"
-              className="btn btn-primary pull-right"
-              onClick={e => {
-                e.preventDefault();
-                this.props.onRunQuery(this.getValue());
-              }}
-            >
-              Run
-            </button>
-          </div>
-        </form>
+        <Form horizontal bsSize="sm" style={{ marginBottom: "10px" }}>
+          <FormGroup bsSize="sm">
+            <Col xs={2}>
+              <ControlLabel>Query</ControlLabel>
+            </Col>
+            <Col xs={8}>
+              <FormControl
+                type="text"
+                placeholder="Regex to choose property for display"
+                value={this.props.regex}
+                onChange={e => {
+                  e.preventDefault();
+                  this.props.updateRegex(e.target.value);
+                }}
+              />
+            </Col>
+            <Col xs={2}>
+              <Button
+                type="submit"
+                className="btn btn-primary pull-right"
+                onClick={e => {
+                  e.preventDefault();
+                  this.props.onRunQuery(this.getValue());
+                }}
+              >
+                Run
+              </Button>
+            </Col>
+          </FormGroup>
+        </Form>
 
         <div
           className="Editor-basic"
@@ -69,7 +92,7 @@ class Editor extends Component {
       1000,
       fetch(process.env.REACT_APP_DGRAPH + "/ui/keywords", {
         method: "GET",
-        mode: "cors",
+        mode: "cors"
       })
         .then(checkStatus)
         .then(response => response.json())
@@ -77,13 +100,13 @@ class Editor extends Component {
           keywords = result.keywords.map(function(kw) {
             return kw.name;
           });
-        }),
+        })
     )
       .catch(function(error) {
         console.log(error.stack);
         console.warn(
           "In catch: Error while trying to fetch list of keywords",
-          error,
+          error
         );
         return error;
       })
@@ -91,7 +114,7 @@ class Editor extends Component {
         if (errorMsg !== undefined) {
           console.warn(
             "Error while trying to fetch list of keywords",
-            errorMsg,
+            errorMsg
           );
         }
       });
@@ -121,9 +144,9 @@ class Editor extends Component {
         },
         "Ctrl-Enter": () => {
           this.props.onRunQuery(this.getValue());
-        },
+        }
       },
-      autofocus: true,
+      autofocus: true
     });
 
     this.editor.setCursor(this.editor.lineCount(), 0);
@@ -186,15 +209,25 @@ class Editor extends Component {
         }
       }
 
-      if (found.length) return { list: found, from: from, to: to };
+      if (found.length) {
+        return {
+          list: found.sort(sortStrings),
+          from: from,
+          to: to
+        };
+      }
     });
 
     CodeMirror.commands.autocomplete = function(cm) {
       CodeMirror.showHint(cm, CodeMirror.hint.fromList, {
         completeSingle: false,
-        words: keywords,
+        words: keywords
       });
     };
+
+    this.editor.on("change", cm => {
+      this.props.updateQuery(this.editor.getValue());
+    });
 
     this.editor.on("keydown", function(cm, event) {
       const code = event.keyCode;
@@ -208,10 +241,13 @@ class Editor extends Component {
 
 const mapStateToProps = state => ({
   query: state.query.text,
+  regex: state.query.propertyRegex
 });
 
 const mapDispatchToProps = {
   onRunQuery: runQuery,
+  updateQuery: selectQuery,
+  updateRegex
 };
 
 export default connect(mapStateToProps, mapDispatchToProps)(Editor);

@@ -36,7 +36,7 @@ var (
 	syncCh chan SyncEntry
 )
 
-type stateShard struct {
+type stateGroup struct {
 	// Can have fine grained locking later if necessary, per group or predicate
 	x.SafeMutex
 	// Map containing predicate to type information.
@@ -44,34 +44,34 @@ type stateShard struct {
 	elog      trace.EventLog
 }
 
-func (s *stateShard) init(group uint32) {
+func (s *stateGroup) init(group uint32) {
 	s.predicate = make(map[string]*typesp.Schema)
 	s.elog = trace.NewEventLog("Dynamic Schema", fmt.Sprintf("%d", group))
 }
 
 type state struct {
 	x.SafeMutex
-	m    map[uint32]*stateShard
+	m    map[uint32]*stateGroup
 	elog trace.EventLog
 }
 
-func (s *state) create(group uint32) *stateShard {
+func (s *state) create(group uint32) *stateGroup {
 	s.Lock()
 	defer s.Unlock()
 	if s.m == nil {
-		s.m = make(map[uint32]*stateShard)
+		s.m = make(map[uint32]*stateGroup)
 	}
 
 	if prev, present := s.m[group]; present {
 		return prev
 	}
-	shard := &stateShard{}
+	shard := &stateGroup{}
 	shard.init(group)
 	s.m[group] = shard
 	return shard
 }
 
-func (s *state) get(group uint32) *stateShard {
+func (s *state) get(group uint32) *stateGroup {
 	s.RLock()
 	if shard, present := s.m[group]; present {
 		s.RUnlock()
@@ -92,7 +92,7 @@ func (s *state) Update(se SyncEntry) {
 	s.get(group.BelongsTo(se.Attr)).update(se)
 }
 
-func (s *stateShard) update(se SyncEntry) {
+func (s *stateGroup) update(se SyncEntry) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -110,7 +110,7 @@ func (s *state) Set(pred string, schema typesp.Schema) {
 	s.get(group.BelongsTo(pred)).set(pred, schema)
 }
 
-func (s *stateShard) set(pred string, schema typesp.Schema) {
+func (s *stateGroup) set(pred string, schema typesp.Schema) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = &schema
@@ -122,7 +122,7 @@ func (s *state) Get(pred string) (typesp.Schema, bool) {
 	return s.get(group.BelongsTo(pred)).get(pred)
 }
 
-func (s *stateShard) get(pred string) (typesp.Schema, bool) {
+func (s *stateGroup) get(pred string) (typesp.Schema, bool) {
 	s.Lock()
 	defer s.Unlock()
 	schema, has := s.predicate[pred]
@@ -137,7 +137,7 @@ func (s *state) TypeOf(pred string) (types.TypeID, error) {
 	return s.get(group.BelongsTo(pred)).typeOf(pred)
 }
 
-func (s *stateShard) typeOf(pred string) (types.TypeID, error) {
+func (s *stateGroup) typeOf(pred string) (types.TypeID, error) {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -151,7 +151,7 @@ func (s *state) IsIndexed(pred string) bool {
 	return s.get(group.BelongsTo(pred)).isIndexed(pred)
 }
 
-func (s *stateShard) isIndexed(pred string) bool {
+func (s *stateGroup) isIndexed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
@@ -165,7 +165,7 @@ func (s *state) IndexedFields(gid uint32) []string {
 	return s.get(gid).indexedFields()
 }
 
-func (s *stateShard) indexedFields() []string {
+func (s *stateGroup) indexedFields() []string {
 	s.RLock()
 	defer s.RUnlock()
 	var out []string
@@ -182,7 +182,7 @@ func (s *state) Predicates(group uint32) []string {
 	return s.get(group).predicates()
 }
 
-func (s *stateShard) predicates() []string {
+func (s *stateGroup) predicates() []string {
 	s.RLock()
 	defer s.RUnlock()
 	out := make([]string, 0, len(s.predicate))
@@ -197,7 +197,7 @@ func (s *state) Tokenizer(pred string) []tok.Tokenizer {
 	return s.get(group.BelongsTo(pred)).tokenizer(pred)
 }
 
-func (s *stateShard) tokenizer(pred string) []tok.Tokenizer {
+func (s *stateGroup) tokenizer(pred string) []tok.Tokenizer {
 	s.RLock()
 	defer s.RUnlock()
 	schema, ok := s.predicate[pred]
@@ -211,12 +211,31 @@ func (s *stateShard) tokenizer(pred string) []tok.Tokenizer {
 	return tokenizers
 }
 
+// Tokenizer returns the tokenizer names for given predicate
+func (s *state) TokenizerNames(pred string) []string {
+	return s.get(group.BelongsTo(pred)).tokenizerNames(pred)
+}
+
+func (s *stateGroup) tokenizerNames(pred string) []string {
+	s.RLock()
+	defer s.RUnlock()
+	schema, ok := s.predicate[pred]
+	x.AssertTruef(ok, "schema state not found for %s", pred)
+	var tokenizers []string
+	for _, it := range schema.Tokenizer {
+		t, found := tok.GetTokenizer(it)
+		x.AssertTruef(found, "Tokenizer not found for %s", it)
+		tokenizers = append(tokenizers, t.Name())
+	}
+	return tokenizers
+}
+
 // IsReversed returns whether the predicate has reverse edge or not
 func (s *state) IsReversed(pred string) bool {
 	return s.get(group.BelongsTo(pred)).isReversed(pred)
 }
 
-func (s *stateShard) isReversed(pred string) bool {
+func (s *stateGroup) isReversed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {

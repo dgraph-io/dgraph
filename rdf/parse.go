@@ -40,13 +40,16 @@ var (
 
 // Gets the uid corresponding to an xid from the posting list which stores the
 // mapping.
-func GetUid(xid string) uint64 {
+func GetUid(xid string) (uint64, error) {
 	// If string represents a UID, convert to uint64 and return.
 	uid, err := strconv.ParseUint(xid, 0, 64)
 	if err != nil {
-		return farm.Fingerprint64([]byte(xid))
+		return farm.Fingerprint64([]byte(xid)), nil
 	}
-	return uid
+	if uid == 0 {
+		return 0, x.Errorf("UID has to be greater than zero.")
+	}
+	return uid, nil
 }
 
 type NQuad struct {
@@ -100,8 +103,10 @@ func byteVal(nq NQuad) ([]byte, error) {
 // just one edge. The method doesn't automatically generate a UID for an XID.
 func (nq NQuad) ToEdge() (*taskp.DirectedEdge, error) {
 	var err error
-	sid := GetUid(nq.Subject)
-
+	sid, err := GetUid(nq.Subject)
+	if err != nil {
+		return nil, err
+	}
 	out := &taskp.DirectedEdge{
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
@@ -112,7 +117,10 @@ func (nq NQuad) ToEdge() (*taskp.DirectedEdge, error) {
 
 	switch nq.valueType() {
 	case x.ValueUid:
-		oid := GetUid(nq.ObjectId)
+		oid, err := GetUid(nq.ObjectId)
+		if err != nil {
+			return nil, err
+		}
 		out.ValueId = oid
 	case x.ValuePlain, x.ValueLang:
 		if err = copyValue(out, nq); err != nil {
@@ -122,9 +130,9 @@ func (nq NQuad) ToEdge() (*taskp.DirectedEdge, error) {
 	return out, nil
 }
 
-func toUid(xid string, newToUid map[string]uint64) (uid uint64) {
+func toUid(xid string, newToUid map[string]uint64) (uid uint64, err error) {
 	if id, present := newToUid[xid]; present {
-		return id
+		return id, err
 	}
 	return GetUid(xid)
 }
@@ -133,7 +141,10 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64) {
 // xidToUid map.
 func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*taskp.DirectedEdge, error) {
 	var err error
-	uid := toUid(nq.Subject, newToUid)
+	uid, err := toUid(nq.Subject, newToUid)
+	if err != nil {
+		return nil, err
+	}
 	out := &taskp.DirectedEdge{
 		Entity: uid,
 		Attr:   nq.Predicate,
@@ -144,7 +155,10 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*taskp.DirectedEdge, er
 
 	switch nq.valueType() {
 	case x.ValueUid:
-		uid = toUid(nq.ObjectId, newToUid)
+		uid, err := toUid(nq.ObjectId, newToUid)
+		if err != nil {
+			return nil, err
+		}
 		out.ValueId = uid
 	case x.ValuePlain, x.ValueLang:
 		if err = copyValue(out, nq); err != nil {

@@ -3,10 +3,19 @@ import { connect } from "react-redux";
 import vis from "vis";
 
 import Graph from "../components/Graph";
-import { setCurrentNode, updatePartial } from "../actions";
+import {
+    setCurrentNode,
+    updatePartial,
+    updateProgress,
+    hideProgressBar,
+    updateLatency
+} from "../actions";
 import { outgoingEdges } from "./Helpers";
+import _ from "lodash/object";
 
 import "../assets/css/Graph.css";
+
+import "vis/dist/vis.min.css";
 
 function childNodes(edges) {
     return edges.map(function(edge) {
@@ -22,18 +31,19 @@ function doOnClick(params, allNodeSet, edgeSet, dispatch) {
         var nodeUid = params.nodes[0], currentNode = allNodeSet.get(nodeUid);
 
         this.setState({
-            selectedNode: true,
+            selectedNode: true
         });
-        dispatch(setCurrentNode(currentNode.title));
+
+        dispatch(setCurrentNode(currentNode));
     } else if (params.edges.length > 0) {
         var edgeUid = params.edges[0], currentEdge = edgeSet.get(edgeUid);
         this.setState({
-            selectedNode: true,
+            selectedNode: true
         });
-        dispatch(setCurrentNode(currentEdge.title));
+        dispatch(setCurrentNode(currentEdge));
     } else {
         this.setState({
-            selectedNode: false,
+            selectedNode: false
         });
         dispatch(setCurrentNode("{}"));
     }
@@ -44,7 +54,7 @@ function renderNetwork(props, dispatch) {
     var container = document.getElementById("graph");
     var data = {
         nodes: new vis.DataSet(props.nodes),
-        edges: new vis.DataSet(props.edges),
+        edges: new vis.DataSet(props.edges)
     };
     var options = {
         nodes: {
@@ -55,15 +65,15 @@ function renderNetwork(props, dispatch) {
                 label: {
                     enabled: true,
                     min: 14,
-                    max: 14,
-                },
+                    max: 14
+                }
             },
             font: {
-                size: 16,
+                size: 16
             },
             margin: {
-                top: 25,
-            },
+                top: 25
+            }
         },
         height: "100%",
         width: "100%",
@@ -71,18 +81,21 @@ function renderNetwork(props, dispatch) {
             hover: true,
             keyboard: {
                 enabled: true,
-                bindToWindow: false,
+                bindToWindow: false
             },
+            navigationButtons: true,
             tooltipDelay: 1000000,
-            hideEdgesOnDrag: true,
+            hideEdgesOnDrag: true
         },
         layout: {
             randomSeed: 42,
-            improvedLayout: false,
+            improvedLayout: false
         },
         physics: {
             stabilization: {
                 fit: true,
+                updateInterval: 5,
+                iterations: 20
             },
             // timestep: 0.4,
             barnesHut: {
@@ -91,30 +104,80 @@ function renderNetwork(props, dispatch) {
                 // springLength: 10,
                 // avoidOverlap: 0.8,
                 // springConstant: 0.1,
-                damping: 0.7,
-            },
-        },
+                damping: 0.7
+            }
+        }
     };
+
+    if (data.nodes.length < 100) {
+        _.merge(options, {
+            physics: {
+                stabilization: {
+                    iterations: 200,
+                    updateInterval: 50
+                }
+            }
+        });
+    }
 
     if (props.treeView) {
         Object.assign(options, {
             layout: {
                 hierarchical: {
-                    sortMethod: "directed",
-                },
+                    sortMethod: "directed"
+                }
             },
             physics: {
                 // Otherwise there is jittery movement (existing nodes move
                 // horizontally which doesn't look good) when you expand some nodes.
                 enabled: false,
-                barnesHut: {},
-            },
+                barnesHut: {}
+            }
         });
     }
 
-    let network = new vis.Network(container, data, options);
-    let allNodeSet = new vis.DataSet(props.allNodes);
-    let allEdgeSet = new vis.DataSet(props.allEdges), that = this;
+    let network = new vis.Network(container, data, options),
+        allNodeSet = new vis.DataSet(props.allNodes),
+        allEdgeSet = new vis.DataSet(props.allEdges),
+        that = this;
+
+    this.setState({
+        network: network
+    });
+
+    if (props.treeView) {
+        // In tree view, physics is disabled and stabilizationIterationDone is not fired.
+        dispatch(
+            updateLatency({
+                rendering: {
+                    end: new Date()
+                }
+            })
+        );
+    }
+
+    if (
+        allNodeSet.length !== data.nodes.length ||
+        allEdgeSet.length !== data.edges.length
+    ) {
+        dispatch(updatePartial(true));
+    }
+
+    network.on("stabilizationProgress", function(params) {
+        var widthFactor = params.iterations / params.total;
+        dispatch(updateProgress(widthFactor * 100));
+    });
+
+    network.once("stabilizationIterationsDone", function() {
+        dispatch(hideProgressBar());
+        dispatch(
+            updateLatency({
+                rendering: {
+                    end: new Date()
+                }
+            })
+        );
+    });
 
     function multiLevelExpand(nodeId) {
         let nodes = [nodeId], nodeStack = [nodeId], adjEdges = [];
@@ -144,20 +207,20 @@ function renderNetwork(props, dispatch) {
                 clickedNode = data.nodes.get(clickedNodeUid);
 
             network.unselectAll();
-            dispatch(setCurrentNode(clickedNode.title));
+            dispatch(setCurrentNode(clickedNode));
             that.setState({
-                selectedNode: false,
+                selectedNode: false
             });
 
             let outgoing = outgoingEdges(clickedNodeUid, data.edges),
                 allOutgoingEdges = outgoingEdges(clickedNodeUid, allEdgeSet),
                 expanded = outgoing.length > 0 || allOutgoingEdges.length === 0;
 
-            let adjacentNodeIds: Array<string> = allOutgoingEdges.map(function(
-                edge,
-            ) {
-                return edge.to;
-            });
+            let adjacentNodeIds: Array<string> = allOutgoingEdges.map(
+                function(edge) {
+                    return edge.to;
+                }
+            );
 
             let adjacentNodes = allNodeSet.get(adjacentNodeIds);
 
@@ -186,7 +249,6 @@ function renderNetwork(props, dispatch) {
 
                 data.nodes.remove(allNodes);
                 data.edges.remove(allEdges);
-                dispatch(updatePartial(true));
             } else {
                 multiLevelExpand(clickedNodeUid);
                 if (data.nodes.length === allNodeSet.length) {
@@ -206,11 +268,11 @@ function renderNetwork(props, dispatch) {
                             params,
                             data.nodes,
                             data.edges,
-                            dispatch,
+                            dispatch
                         );
                     }
                 },
-                threshold,
+                threshold
             );
         }
     });
@@ -228,7 +290,7 @@ function renderNetwork(props, dispatch) {
             let nodeUid: string = params.node,
                 currentNode = data.nodes.get(nodeUid);
 
-            dispatch(setCurrentNode(currentNode.title));
+            dispatch(setCurrentNode(currentNode));
         }
     });
 
@@ -239,7 +301,7 @@ function renderNetwork(props, dispatch) {
         }
         if (params.edge.length > 0) {
             let edgeUid = params.edge, currentEdge = data.edges.get(edgeUid);
-            dispatch(setCurrentNode(currentEdge.title));
+            dispatch(setCurrentNode(currentEdge));
         }
     });
 
@@ -342,8 +404,9 @@ class GraphContainer extends Component {
 
         this.state = {
             selectedNode: false,
+            network: undefined,
             expand: function() {},
-            fit: function() {},
+            fit: function() {}
         };
     }
 
@@ -365,6 +428,14 @@ class GraphContainer extends Component {
     }
 
     componentWillReceiveProps = nextProps => {
+        let network = this.state.network;
+
+        if (nextProps.nodes.length === 0) {
+            network && network.destroy();
+            this.setState({ network: undefined });
+            return;
+        }
+
         if (nextProps.graphHeight !== this.props.graphHeight) {
             this.state.fit();
         }
@@ -379,6 +450,10 @@ class GraphContainer extends Component {
             return;
         }
 
+        if (network !== undefined) {
+            network.destroy();
+            this.setState({ network: undefined });
+        }
         renderNetwork.bind(this, nextProps, this.props.dispatch)();
     };
 }
@@ -386,9 +461,9 @@ class GraphContainer extends Component {
 const mapStateToProps = state => ({
     ...state.response,
     partial: state.interaction.partial,
-    fs: state.interaction.fullscreen,
+    fs: state.interaction.fullscreen
 });
 
 export default connect(mapStateToProps, null, null, { withRef: true })(
-    GraphContainer,
+    GraphContainer
 );

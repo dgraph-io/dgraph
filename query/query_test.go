@@ -21,8 +21,11 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -37,6 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos/typesp"
 
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -45,20 +49,19 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func addPassword(t *testing.T, uid uint64, password string) {
+func addPassword(t *testing.T, uid uint64, attr, password string) {
 	value := types.ValueForType(types.BinaryID)
 	src := types.ValueForType(types.PasswordID)
 	src.Value, _ = types.Encrypt(password)
 	err := types.Marshal(src, &value)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "password", uid, types.PasswordID, value.Value.([]byte), nil)
+	addEdgeToTypedValue(t, attr, uid, types.PasswordID, value.Value.([]byte), nil)
 }
 
 var ps *store.Store
 
 func populateGraph(t *testing.T) {
 	x.AssertTrue(ps != nil)
-	// logrus.SetLevel(logrus.DebugLevel)
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
 	addEdgeToUID(t, "friend", 1, 23, nil)
@@ -136,11 +139,12 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "sword_present", 1, "true", nil)
 	addEdgeToValue(t, "_xid_", 1, "mich", nil)
 
-	addPassword(t, 1, "123456")
+	addPassword(t, 1, "password", "123456")
 
 	// Now let's add a name for each of the friends, except 101.
 	addEdgeToTypedValue(t, "name", 23, types.StringID, []byte("Rick Grimes"), nil)
 	addEdgeToValue(t, "age", 23, "15", nil)
+	addPassword(t, 23, "pass", "654321")
 
 	src.Value = []byte(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]}`)
 	coord, err = types.Convert(src, types.GeoID)
@@ -152,6 +156,7 @@ func populateGraph(t *testing.T) {
 
 	addEdgeToValue(t, "address", 23, "21, mark street, Mars", nil)
 	addEdgeToValue(t, "name", 24, "Glenn Rhee", nil)
+	addEdgeToValue(t, "_xid_", 24, "g\"lenn", nil)
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[1.10001,2.000001]}`)
 	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
@@ -176,6 +181,15 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "dob", 24, "1909-05-05", nil)
 	addEdgeToValue(t, "dob", 25, "1909-01-10", nil)
 	addEdgeToValue(t, "dob", 31, "1901-01-15", nil)
+
+	f1 := types.Val{Tid: types.FloatID, Value: 1.6}
+	fData := types.ValueForType(types.BinaryID)
+	err = types.Marshal(f1, &fData)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, "survival_rate", 23, types.FloatID, fData.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "survival_rate", 24, types.FloatID, fData.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "survival_rate", 25, types.FloatID, fData.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "survival_rate", 31, types.FloatID, fData.Value.([]byte), nil)
 
 	// GEO stuff
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
@@ -314,6 +328,89 @@ func TestGetUIDNotInChild(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValOrderAsc(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				f As friend {
+					n As name
+				}
+			}
+
+			me(id: var(f), orderasc: var(n)) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea"},{"name":"Daryl Dixon"},{"name":"Glenn Rhee"},{"name":"Rick Grimes"}]}`,
+		js)
+}
+
+func TestQueryVarValOrderDob(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				f As friend {
+					n As dob
+				}
+			}
+
+			me(id: var(f), orderasc: var(n)) {
+				name
+				dob
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea", "dob":"1901-01-15"},{"name":"Daryl Dixon", "dob":"1909-01-10"},{"name":"Glenn Rhee", "dob":"1909-05-05"},{"name":"Rick Grimes", "dob":"1910-01-02"}]}`,
+		js)
+}
+
+func TestQueryVarValOrderDesc(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				f As friend {
+					n As name
+				}
+			}
+
+			me(id: var(f), orderdesc: var(n)) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`,
+		js)
+}
+
+func TestQueryVarValOrderDescMissing(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1034) {
+				f As friend {
+					n As name
+				}
+			}
+
+			me(id: var(f), orderdesc: var(n)) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{}`, js)
+}
+
 func TestMultiEmptyBlocks(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -342,7 +439,7 @@ func TestUseVarsMultiCascade1(t *testing.T) {
 			 }
 			}
 
-			me(var:[L, B]) {
+			me(id: var(L, B)) {
 				name
 			}
 		}
@@ -363,7 +460,7 @@ func TestUseVarsMultiCascade(t *testing.T) {
 				}
 			}
 
-			me(var:[L, B]) {
+			me(id: var(L, B)) {
 				name
 			}
 		}
@@ -386,11 +483,11 @@ func TestUseVarsMultiOrder(t *testing.T) {
 				G AS friend(first:2, offset:2, orderasc: dob)
 			}
 
-			friend1(var:L) {
+			friend1(id: var(L)) {
 				name
 			}
 
-			friend2(var:G) {
+			friend2(id: var(G)) {
 				name
 			}
 		}
@@ -409,7 +506,7 @@ func TestUseVarsFilterVarReuse1(t *testing.T) {
 				friend {
 					L as friend {
 						name
-						friend @filter(id(L)) {
+						friend @filter(var(L)) {
 							name
 						}
 					}
@@ -431,7 +528,7 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 				friend {
 				 L as friend {
 					 name
-					 friend @filter(id(L)) {
+					 friend @filter(var(L)) {
 						name
 					}
 				}
@@ -457,7 +554,7 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 				L as friend {
 					friend {
 						name
-						friend @filter(id(L) and id(fr)) {
+						friend @filter(var(L) and var(fr)) {
 							name
 						}
 					}
@@ -469,6 +566,36 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 	require.JSONEq(t,
 		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
 		js)
+}
+
+func TestNestedFuncRoot(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+    {
+			me(func: gt(count(friend), 2)) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, js)
+}
+
+func TestNestedFuncRoot2(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+		{
+			me(func: geq(count(friend), 1)) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Andrea"}]}`, js)
 }
 
 func TestRecurseQuery(t *testing.T) {
@@ -508,7 +635,7 @@ func TestShortestPath_NoPath(t *testing.T) {
 				follow
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -526,7 +653,7 @@ func TestShortestPath(t *testing.T) {
 				friend 
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -544,7 +671,7 @@ func TestShortestPathRev(t *testing.T) {
 				friend 
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -562,7 +689,7 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 				path @facets(weight, weight1)
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -583,7 +710,7 @@ func TestShortestPathWeights(t *testing.T) {
 				path @facets(weight)
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -601,7 +728,7 @@ func TestShortestPath2(t *testing.T) {
 				path 
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -620,7 +747,7 @@ func TestShortestPath3(t *testing.T) {
 				path 
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -639,7 +766,7 @@ func TestShortestPath4(t *testing.T) {
 				follow
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -658,7 +785,7 @@ func TestShortestPath_filter(t *testing.T) {
 				follow
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -677,7 +804,7 @@ func TestShortestPath_filter2(t *testing.T) {
 				follow @filter(not anyofterms(name, "bob"))
 			}
 
-			me(var: A) {
+			me(id: var( A)) {
 				name
 			}
 		}`
@@ -701,7 +828,7 @@ func TestUseVarsFilterMultiId(t *testing.T) {
 				G AS friend
 			}
 
-			friend(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(id(G, L)) {
+			friend(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(var(G, L)) {
 				name
 			}
 		}
@@ -724,7 +851,7 @@ func TestUseVarsMultiFilterId(t *testing.T) {
 				G AS friend
 			}
 
-			friend(var:L) @filter(id(G)) {
+			friend(id: var(L)) @filter(var(G)) {
 				name
 			}
 		}
@@ -745,7 +872,7 @@ func TestUseVarsCascade(t *testing.T) {
 				}
 			}
 
-			me(var:L) {
+			me(id: var(L)) {
 				name
 			}
 		}
@@ -764,7 +891,7 @@ func TestUseVars(t *testing.T) {
 				L AS friend
 			}
 
-			me(var : L) {
+			me(id: var(L)) {
 				name
 			}
 		}
@@ -856,6 +983,42 @@ func TestDebug2(t *testing.T) {
 	require.False(t, ok, "No uid expected but got one %s", uid)
 }
 
+func TestDebug3(t *testing.T) {
+	populateGraph(t)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(id: [1, 24]) @filter(geq(dob, "1910-01-01")) {
+				name
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "debug", "true")
+	sgl, err := ProcessQuery(ctx, res, &l)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	require.NoError(t, ToJson(&l, sgl, &buf, nil))
+
+	var mp map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
+
+	resp := mp["me"]
+	require.EqualValues(t, 1, len(mp["me"].([]interface{})))
+	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
+	require.EqualValues(t, "0x1", uid)
+
+	latency := mp["server_latency"]
+	require.NotNil(t, latency)
+	_, ok := latency.(map[string]interface{})
+	require.True(t, ok)
+}
 func TestCount(t *testing.T) {
 	populateGraph(t)
 
@@ -931,24 +1094,99 @@ func TestCountError3(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestMultiCountSort(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+	{
+		f as var(func: anyofterms(name, "michonne rick andrea")) {
+		 	n as count(friend) 
+		}
+	
+		countorder(id: var(f), orderasc: var(n)) {
+			name
+			count(friend)
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"countorder":[{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Andrea"},{"friend":[{"count":5}],"name":"Michonne"}]}`,
+		js)
+}
+
+func TestMultiAggSort(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+	{
+		f as var(func: anyofterms(name, "michonne rick andrea")) {
+			name
+			friend {
+				mindob as min(dob)
+				maxdob as max(dob)
+				dob
+			}
+		}
+	
+		maxorder(id: var(f), orderasc: var(maxdob)) {
+			name
+			friend {
+				max(dob)
+			}
+		}
+
+		minorder(id: var(f), orderasc: var(mindob)) {
+			name
+			friend {
+				min(dob)
+			}
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"maxorder":[{"friend":[{"max(dob)":"1909-05-05"}],"name":"Andrea"},{"friend":[{"max(dob)":"1910-01-01"}],"name":"Rick Grimes"},{"friend":[{"max(dob)":"1910-01-02"}],"name":"Michonne"}],"minorder":[{"friend":[{"min(dob)":"1901-01-15"}],"name":"Michonne"},{"friend":[{"min(dob)":"1909-05-05"}],"name":"Andrea"},{"friend":[{"min(dob)":"1910-01-01"}],"name":"Rick Grimes"}]}`,
+		js)
+}
+
+func TestMinMulti(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+	{
+		me(func: anyofterms(name, "michonne rick andrea")) {
+			name
+			friend {
+				min(dob)
+				max(dob)
+				dob
+			}
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"dob":"1910-01-02"},{"dob":"1909-05-05"},{"dob":"1909-01-10"},{"dob":"1901-01-15"},{"min(dob)":"1901-01-15"},{"max(dob)":"1910-01-02"}],"name":"Michonne"},{"friend":[{"dob":"1910-01-01"},{"min(dob)":"1910-01-01"},{"max(dob)":"1910-01-01"}],"name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05"},{"min(dob)":"1909-05-05"},{"max(dob)":"1909-05-05"}],"name":"Andrea"}]}`,
+		js)
+}
+
 func TestMin(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
-                {
-                        me(id:0x01) {
-                                name
-                                gender
-                                alive
-                                friend {
-                                    min(dob)
-                                }
-                        }
-                }
-        `
+	{
+		me(id:0x01) {
+			name
+			friend {
+				min(dob)
+			}
+		}
+	}
+`
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"min(dob)":"1901-01-15"}],"gender":"female","name":"Michonne"}]}`,
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"min(dob)":"1901-01-15"}],"name":"Michonne"}]}`,
 		js)
 }
 
@@ -996,6 +1234,34 @@ func TestMinError2(t *testing.T) {
 	require.NotNil(t, queryErr)
 }
 
+func TestMinSchema(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                friend {
+                                    min(survival_rate)
+                                }
+                        }
+                }
+        `
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1.600000}],"gender":"female","name":"Michonne"}]}`,
+		js)
+
+	schema.State().Set("survival_rate", typesp.Schema{ValueType: uint32(types.Int32ID)})
+	js = processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1}],"gender":"female","name":"Michonne"}]}`,
+		js)
+	schema.State().Set("survival_rate", typesp.Schema{ValueType: uint32(types.FloatID)})
+}
+
 func TestMax(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
@@ -1027,13 +1293,13 @@ func TestMaxError1(t *testing.T) {
                                 gender
                                 alive
                                 friend {
-                                    max(dob @filter(gt("dob", "1910-01-02")))
+                                    max(dob @filter(gt(dob, "1910-01-02")))
                                 }
                         }
                 }
         `
 	_, err := gql.Parse(query)
-	require.NotNil(t, err)
+	require.Error(t, err)
 }
 
 func TestSum(t *testing.T) {
@@ -1052,7 +1318,7 @@ func TestSum(t *testing.T) {
                 }
         `
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"alive":true,"friend":[{"sum(shadow_deep)":18}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1105,7 +1371,7 @@ func TestCheckPassword(t *testing.T) {
                 {
                         me(id:0x01) {
                                 name
-                                checkpwd("123456")
+                                checkpwd(password, "123456")
                         }
                 }
 	`
@@ -1113,10 +1379,26 @@ func TestCheckPassword(t *testing.T) {
 	require.EqualValues(t,
 		`{"me":[{"name":"Michonne","password":[{"checkpwd":true}]}]}`,
 		js)
-
 }
 
 func TestCheckPasswordIncorrect(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                checkpwd(password, "654123")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"name":"Michonne","password":[{"checkpwd":false}]}]}`,
+		js)
+}
+
+// ensure, that old and deprecated form is not allowed
+func TestCheckPasswordParseError(t *testing.T) {
 	populateGraph(t)
 	query := `
                 {
@@ -1126,11 +1408,83 @@ func TestCheckPasswordIncorrect(t *testing.T) {
                         }
                 }
 	`
-	js := processToFastJSON(t, query)
-	require.EqualValues(t,
-		`{"me":[{"name":"Michonne","password":[{"checkpwd":false}]}]}`,
-		js)
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
 
+func TestCheckPasswordDifferentAttr1(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:23) {
+                                name
+                                checkpwd(pass, "654321")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	require.EqualValues(t, `{"me":[{"name":"Rick Grimes","pass":[{"checkpwd":true}]}]}`, js)
+}
+
+func TestCheckPasswordDifferentAttr2(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:23) {
+                                name
+                                checkpwd(pass, "invalid")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	require.EqualValues(t, `{"me":[{"name":"Rick Grimes","pass":[{"checkpwd":false}]}]}`, js)
+}
+
+func TestCheckPasswordInvalidAttr(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x1) {
+                                name
+                                checkpwd(pass, "123456")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	// for id:0x1 there is no pass attribute defined (there's only password attribute)
+	require.EqualValues(t, `{"me":[{"name":"Michonne","pass":[{"checkpwd":false}]}]}`, js)
+}
+
+// test for old version of checkpwd with hardcoded attribute name
+func TestCheckPasswordQuery1(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x1) {
+                                name
+                                password
+                        }
+                }
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+	require.EqualValues(t, "Attribute `password` of type password cannot be fetched", err.Error())
+}
+
+// test for improved version of checkpwd with custom attribute name
+func TestCheckPasswordQuery2(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:23) {
+                                name
+                                pass
+                        }
+                }
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+	require.EqualValues(t, "Attribute `pass` of type password cannot be fetched", err.Error())
 }
 
 func TestToSubgraphInvalidFnName(t *testing.T) {
@@ -1193,11 +1547,11 @@ func TestToSubgraphInvalidFnName3(t *testing.T) {
 func TestToSubgraphInvalidFnName4(t *testing.T) {
 	query := `
                 {
-                        f AS var(func:invalidfn4("name", "Michonne Rick Glenn")) {
+                        f AS var(func:invalidfn4(name, "Michonne Rick Glenn")) {
                                 name
                         }
                         you(func:anyofterms(name, "Michonne")) {
-                                friend @filter(id(f)) {
+                                friend @filter(var(f)) {
                                         name
                                 }
                         }
@@ -1217,7 +1571,7 @@ func TestToSubgraphInvalidArgs1(t *testing.T) {
                         me(id:0x01) {
                                 name
                                 gender
-                                friend(disorderasc: dob) @filter(leq("dob", "1909-03-20")) {
+                                friend(disorderasc: dob) @filter(leq(dob, "1909-03-20")) {
                                         name
                                 }
                         }
@@ -1237,7 +1591,7 @@ func TestToSubgraphInvalidArgs2(t *testing.T) {
                         me(id:0x01) {
                                 name
                                 gender
-                                friend(offset:1, invalidorderasc:1) @filter(anyofterms("name", "Andrea")) {
+                                friend(offset:1, invalidorderasc:1) @filter(anyofterms(name, "Andrea")) {
                                         name
                                 }
                         }
@@ -1284,7 +1638,7 @@ func TestProcessGraph(t *testing.T) {
 	child := sg.Children[0]
 	require.EqualValues(t,
 		[][]uint64{
-			[]uint64{23, 24, 25, 31, 101},
+			{23, 24, 25, 31, 101},
 		}, algo.ToUintsListForTest(child.uidMatrix))
 
 	require.EqualValues(t, []string{"name"}, childAttrs(child))
@@ -1374,7 +1728,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   properties: <
@@ -1470,7 +1824,7 @@ func TestToFastJSONFilterallofterms(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(allofterms("name", "Andrea SomethingElse")) {
+				friend @filter(allofterms(name, "Andrea SomethingElse")) {
 					name
 				}
 			}
@@ -1625,7 +1979,7 @@ func TestToFastJSONFilterOrOffset(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(offset:1) @filter(anyofterms(name, "Andrea") or anyofterms("name", "Glenn Rhee") or anyofterms("name", "Daryl Dixon")) {
+				friend(offset:1) @filter(anyofterms(name, "Andrea") or anyofterms(name, "Glenn Rhee") or anyofterms(name, "Daryl Dixon")) {
 					name
 				}
 			}
@@ -1682,7 +2036,7 @@ func TestToFastJSONFilterGeq(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(geq("dob", "1909-05-05")) {
+				friend @filter(geq(dob, "1909-05-05")) {
 					name
 				}
 			}
@@ -1702,7 +2056,7 @@ func TestToFastJSONFilterGt(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(gt("dob", "1909-05-05")) {
+				friend @filter(gt(dob, "1909-05-05")) {
 					name
 				}
 			}
@@ -1722,7 +2076,7 @@ func TestToFastJSONFilterLeq(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(leq("dob", "1909-01-10")) {
+				friend @filter(leq(dob, "1909-01-10")) {
 					name
 				}
 			}
@@ -1742,7 +2096,7 @@ func TestToFastJSONFilterLt(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(lt("dob", "1909-01-10")) {
+				friend @filter(lt(dob, "1909-01-10")) {
 					name
 				}
 			}
@@ -1762,7 +2116,7 @@ func TestToFastJSONFilterEqualNoHit(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(eq("dob", "1909-03-20")) {
+				friend @filter(eq(dob, "1909-03-20")) {
 					name
 				}
 			}
@@ -1821,7 +2175,7 @@ func TestToFastJSONFilterEqual(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(eq("dob", "1909-01-10")) {
+				friend @filter(eq(dob, "1909-01-10")) {
 					name
 				}
 			}
@@ -1924,7 +2278,7 @@ func TestToFastJSONFilterLeqOrder(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(orderasc: dob) @filter(leq("dob", "1909-03-20")) {
+				friend(orderasc: dob) @filter(leq(dob, "1909-03-20")) {
 					name
 				}
 			}
@@ -1944,7 +2298,7 @@ func TestToFastJSONFilterGeqNoResult(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(geq("dob", "1999-03-20")) {
+				friend @filter(geq(dob, "1999-03-20")) {
 					name
 				}
 			}
@@ -1984,7 +2338,7 @@ func TestToFastJSONFilterOrFirstOffset(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(offset:1, first:1) @filter(anyofterms("name", "Andrea") or anyofterms("name", "SomethingElse Rhee") or anyofterms("name", "Daryl Dixon")) {
+				friend(offset:1, first:1) @filter(anyofterms(name, "Andrea") or anyofterms(name, "SomethingElse Rhee") or anyofterms(name, "Daryl Dixon")) {
 					name
 				}
 			}
@@ -2004,7 +2358,7 @@ func TestToFastJSONFilterLeqFirstOffset(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(offset:1, first:1) @filter(leq("dob", "1909-03-20")) {
+				friend(offset:1, first:1) @filter(leq(dob, "1909-03-20")) {
 					name
 				}
 			}
@@ -2024,7 +2378,7 @@ func TestToFastJSONFilterOrFirstOffsetCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				count(friend(offset:1, first:1) @filter(anyofterms("name", "Andrea") or anyofterms("name", "SomethingElse Rhee") or anyofterms("name", "Daryl Dixon"))) 
+				count(friend(offset:1, first:1) @filter(anyofterms(name, "Andrea") or anyofterms(name, "SomethingElse Rhee") or anyofterms(name, "Daryl Dixon"))) 
 			}
 		}
 	`
@@ -2044,7 +2398,7 @@ func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(first:-1, offset:0) @filter(anyofterms("name", "Andrea") or anyofterms("name", "Glenn Rhee") or anyofterms("name", "Daryl Dixon")) {
+				friend(first:-1, offset:0) @filter(anyofterms(name, "Andrea") or anyofterms(name, "Glenn Rhee") or anyofterms(name, "Daryl Dixon")) {
 					name
 				}
 			}
@@ -2064,7 +2418,7 @@ func TestToFastJSONFilterNot1(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(not anyofterms("name", "Andrea rick")) {
+				friend @filter(not anyofterms(name, "Andrea rick")) {
 					name
 				}
 			}
@@ -2083,7 +2437,7 @@ func TestToFastJSONFilterNot2(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(not anyofterms("name", "Andrea") and anyofterms(name, "Glenn Andrea")) {
+				friend @filter(not anyofterms(name, "Andrea") and anyofterms(name, "Glenn Andrea")) {
 					name
 				}
 			}
@@ -2102,7 +2456,7 @@ func TestToFastJSONFilterNot3(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(not (anyofterms("name", "Andrea") or anyofterms(name, "Glenn Rick Andrea"))) {
+				friend @filter(not (anyofterms(name, "Andrea") or anyofterms(name, "Glenn Rick Andrea"))) {
 					name
 				}
 			}
@@ -2121,7 +2475,7 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyofterms("name", "Andrea") and anyofterms("name", "SomethingElse Rhee")) {
+				friend @filter(anyofterms(name, "Andrea") and anyofterms(name, "SomethingElse Rhee")) {
 					name
 				}
 			}
@@ -2131,6 +2485,56 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
+}
+
+func TestCountReverseFunc(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+		{
+			me(func: geq(count(~friend), 2)) {
+				name
+				count(~friend) 
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
+		js)
+}
+
+func TestCountReverseFilter(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: anyofterms(name, "Glenn Michonne Rick")) @filter(geq(count(~friend), 2)) {
+				name
+				count(~friend) 
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
+		js)
+}
+
+func TestCountReverse(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x18) {
+				name
+				count(~friend) 
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
+		js)
 }
 
 func TestToFastJSONReverse(t *testing.T) {
@@ -2159,7 +2563,7 @@ func TestToFastJSONReverseFilter(t *testing.T) {
 		{
 			me(id:0x18) {
 				name
-				~friend @filter(allofterms("name", "Andrea")) {
+				~friend @filter(allofterms(name, "Andrea")) {
 					name
 					gender
 			  	alive
@@ -2257,7 +2661,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   properties: <
@@ -2323,7 +2727,7 @@ func TestToProtoFilter(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyofterms("name", "Andrea")) {
+				friend @filter(anyofterms(name, "Andrea")) {
 					name
 				}
 			}
@@ -2343,7 +2747,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   children: <
@@ -2368,7 +2772,7 @@ func TestToProtoFilterOr(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyofterms("name", "Andrea") or anyofterms("name", "Glenn Rhee")) {
+				friend @filter(anyofterms(name, "Andrea") or anyofterms(name, "Glenn Rhee")) {
 					name
 				}
 			}
@@ -2388,7 +2792,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   children: <
@@ -2422,7 +2826,7 @@ func TestToProtoFilterAnd(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyofterms("name", "Andrea") and anyofterms("name", "Glenn Rhee")) {
+				friend @filter(anyofterms(name, "Andrea") and anyofterms(name, "Glenn Rhee")) {
 					name
 				}
 			}
@@ -2442,7 +2846,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
 >
@@ -2546,7 +2950,7 @@ func TestToFastJSONOrderDescCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				count(friend @filter(anyofterms("name", "Rick")) (orderasc: dob)) 
+				count(friend @filter(anyofterms(name, "Rick")) (orderasc: dob)) 
 			}
 		}
 	`
@@ -2679,7 +3083,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   children: <
@@ -2751,7 +3155,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   children: <
@@ -2805,7 +3209,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      str_val: "female"
+      default_val: "female"
     >
   >
   children: <
@@ -2859,12 +3263,12 @@ func TestMultiQuery(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func:anyofterms("name", "Michonne")) {
+			me(func:anyofterms(name, "Michonne")) {
 				name
 				gender
 			}
 
-			you(func:anyofterms("name", "Andrea")) {
+			you(func:anyofterms(name, "Andrea")) {
 				name
 			}
 		}
@@ -2877,11 +3281,11 @@ func TestMultiQueryError1(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne")) {
+			me(func:anyofterms(name, "Michonne")) {
         name
         gender
 
-			you(func:anyofterms("name", "Andrea")) {
+			you(func:anyofterms(name, "Andrea")) {
         name
       }
     }
@@ -2894,13 +3298,13 @@ func TestMultiQueryError2(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-      me(anyofterms("name", "Michonne")) {
+      me(anyofterms(name, "Michonne")) {
         name
         gender
 			}
 		}
 
-      you(anyofterms("name", "Andrea")) {
+      you(anyofterms(name, "Andrea")) {
         name
       }
     }
@@ -2913,7 +3317,7 @@ func TestGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne")) {
+			me(func:anyofterms(name, "Michonne")) {
         name
         gender
       }
@@ -2927,11 +3331,11 @@ func TestGeneratorMultiRootMultiQueryRootVar(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			friend AS var(func:anyofterms("name", "Michonne Rick Glenn")) {
+			friend AS var(func:anyofterms(name, "Michonne Rick Glenn")) {
       	name
 			}
 
-			you(var:friend) {
+			you(id: var(friend)) {
 				name
 			}
     }
@@ -2944,12 +3348,12 @@ func TestGeneratorMultiRootMultiQueryVarFilter(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			f AS var(func:anyofterms("name", "Michonne Rick Glenn")) {
+			f AS var(func:anyofterms(name, "Michonne Rick Glenn")) {
       	name
 			}
 
 			you(func:anyofterms(name, "Michonne")) {
-				friend @filter(id(f)) {
+				friend @filter(var(f)) {
 					name
 				}
 			}
@@ -2963,10 +3367,10 @@ func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			friend AS var(func:anyofterms("name", "Michonne Rick Glenn")) {
+			friend AS var(func:anyofterms(name, "Michonne Rick Glenn")) {
 			}
 
-			you(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(id(friend)) {
+			you(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(var(friend)) {
 				name
 			}
     }
@@ -2979,7 +3383,7 @@ func TestGeneratorMultiRootMultiQuery(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn")) {
+			me(func:anyofterms(name, "Michonne Rick Glenn")) {
         name
       }
 
@@ -2996,11 +3400,11 @@ func TestGeneratorMultiRootVarOrderOffset(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			L as var(func:anyofterms("name", "Michonne Rick Glenn"), orderasc: dob, offset:2) {
+			L as var(func:anyofterms(name, "Michonne Rick Glenn"), orderasc: dob, offset:2) {
         name
       }
 
-			me(var:L) {
+			me(id: var(L)) {
 			 name
 			}
     }
@@ -3013,7 +3417,7 @@ func TestGeneratorMultiRootVarOrderOffset1(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn"), orderasc: dob, offset:2) {
+			me(func:anyofterms(name, "Michonne Rick Glenn"), orderasc: dob, offset:2) {
         name
       }
     }
@@ -3026,10 +3430,10 @@ func TestGeneratorMultiRootOrderOffset(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			L as var(func:anyofterms("name", "Michonne Rick Glenn")) {
+			L as var(func:anyofterms(name, "Michonne Rick Glenn")) {
         name
       }
-			me(var: L, orderasc: dob, offset:2) {
+			me(id: var(L), orderasc: dob, offset:2) {
         name
       }
     }
@@ -3042,7 +3446,7 @@ func TestGeneratorMultiRootOrderdesc(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn"), orderdesc: dob) {
+			me(func:anyofterms(name, "Michonne Rick Glenn"), orderdesc: dob) {
         name
       }
     }
@@ -3055,7 +3459,7 @@ func TestGeneratorMultiRootOrder(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn"), orderasc: dob) {
+			me(func:anyofterms(name, "Michonne Rick Glenn"), orderasc: dob) {
         name
       }
     }
@@ -3068,7 +3472,7 @@ func TestGeneratorMultiRootOffset(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn"), offset: 1) {
+			me(func:anyofterms(name, "Michonne Rick Glenn"), offset: 1) {
         name
       }
     }
@@ -3081,7 +3485,7 @@ func TestGeneratorMultiRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn")) {
+			me(func:anyofterms(name, "Michonne Rick Glenn")) {
         name
       }
     }
@@ -3127,7 +3531,7 @@ func TestGeneratorMultiRootFilter1(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Daryl Rick Glenn")) @filter(leq(dob, 1909-01-10)) {
+			me(func:anyofterms(name, "Daryl Rick Glenn")) @filter(leq(dob, 1909-01-10)) {
         name
       }
     }
@@ -3140,7 +3544,7 @@ func TestGeneratorMultiRootFilter2(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn")) @filter(geq(dob, 1909-01-10)) {
+			me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(geq(dob, 1909-01-10)) {
         name
       }
     }
@@ -3153,7 +3557,7 @@ func TestGeneratorMultiRootFilter3(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn")) @filter(anyofterms(name, "Glenn") and geq(dob, 1909-01-10)) {
+			me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(anyofterms(name, "Glenn") and geq(dob, 1909-01-10)) {
         name
       }
     }
@@ -3166,7 +3570,7 @@ func TestGeneratorRootFilterOnCountGt(t *testing.T) {
 	populateGraph(t)
 	query := `
                 {
-                        me(func:anyofterms("name", "Michonne Rick")) @filter(gt(count(friend), 2)) {
+                        me(func:anyofterms(name, "Michonne Rick")) @filter(gt(count(friend), 2)) {
                                 name
                         }
                 }
@@ -3182,7 +3586,7 @@ func TestGeneratorRootFilterOnCountLeq(t *testing.T) {
 	populateGraph(t)
 	query := `
                 {
-                        me(func:anyofterms("name", "Michonne Rick")) @filter(leq(count(friend), 2)) {
+                        me(func:anyofterms(name, "Michonne Rick")) @filter(leq(count(friend), 2)) {
                                 name
                         }
                 }
@@ -3237,7 +3641,7 @@ func TestGeneratorRootFilterOnCountError1(t *testing.T) {
 	// only cmp(count(attr), int) is valid, 'max'/'min'/'sum' not supported
 	query := `
                 {
-                        me(func:anyofterms("name", "Michonne Rick")) @filter(gt(count(friend), "invalid")) {
+                        me(func:anyofterms(name, "Michonne Rick")) @filter(gt(count(friend), "invalid")) {
                                 name
                         }
                 }
@@ -3255,7 +3659,7 @@ func TestGeneratorRootFilterOnCountError2(t *testing.T) {
 	// missing digits
 	query := `
                 {
-                        me(func:anyofterms("name", "Michonne Rick")) @filter(gt(count(friend))) {
+                        me(func:anyofterms(name, "Michonne Rick")) @filter(gt(count(friend))) {
                                 name
                         }
                 }
@@ -3273,7 +3677,7 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
 	// to much args
 	query := `
                 {
-                        me(func:anyofterms("name", "Michonne Rick")) @filter(gt(count(friend), 2, 4)) {
+                        me(func:anyofterms(name, "Michonne Rick")) @filter(gt(count(friend), 2, 4)) {
                                 name
                         }
                 }
@@ -3290,7 +3694,7 @@ func TestToProtoMultiRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms("name", "Michonne Rick Glenn")) {
+			me(func:anyofterms(name, "Michonne Rick Glenn")) {
         name
       }
     }
@@ -3697,7 +4101,7 @@ func TestWithinPoint(t *testing.T) {
 			Name: "near",
 			Args: []string{`[-122.082506, 37.4249518]`, "1"},
 		},
-		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+		Children: []*gql.GraphQuery{{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
@@ -3712,7 +4116,7 @@ func TestWithinPolygon(t *testing.T) {
 		Func: &gql.Function{Attr: "geometry", Name: "within", Args: []string{
 			`[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]`},
 		},
-		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+		Children: []*gql.GraphQuery{{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
@@ -3727,7 +4131,7 @@ func TestContainsPoint(t *testing.T) {
 		Func: &gql.Function{Attr: "geometry", Name: "contains", Args: []string{
 			`[-122.082506, 37.4249518]`},
 		},
-		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+		Children: []*gql.GraphQuery{{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
@@ -3744,7 +4148,7 @@ func TestNearPoint(t *testing.T) {
 			Name: "near",
 			Args: []string{`[-122.082506, 37.4249518]`, "1000"},
 		},
-		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+		Children: []*gql.GraphQuery{{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
@@ -3764,7 +4168,7 @@ func TestIntersectsPolygon1(t *testing.T) {
 					[-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]`,
 			},
 		},
-		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+		Children: []*gql.GraphQuery{{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
@@ -3785,7 +4189,7 @@ func TestIntersectsPolygon2(t *testing.T) {
 					[-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]`,
 			},
 		},
-		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+		Children: []*gql.GraphQuery{{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
@@ -3919,6 +4323,76 @@ func TestLangManyFallback(t *testing.T) {
 		js)
 }
 
+func checkSchemaNodes(t *testing.T, expected []*graphp.SchemaNode, actual []*graphp.SchemaNode) {
+	sort.Slice(expected, func(i, j int) bool {
+		return expected[i].Predicate >= expected[j].Predicate
+	})
+	sort.Slice(actual, func(i, j int) bool {
+		return actual[i].Predicate >= actual[j].Predicate
+	})
+	require.True(t, reflect.DeepEqual(expected, actual),
+		fmt.Sprintf("Expected: %+v, Received: %+v \n", expected, actual))
+}
+
+func TestSchemaBlock1(t *testing.T) {
+	query := `
+		schema {
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{{Predicate: "genre"},
+		{Predicate: "age"}, {Predicate: "name"},
+		{Predicate: "film.film.initial_release_date"}, {Predicate: "loc"},
+		{Predicate: "alive"}, {Predicate: "shadow_deep"},
+		{Predicate: "friend"}, {Predicate: "geometry"},
+		{Predicate: "alias"}, {Predicate: "dob"}, {Predicate: "survival_rate"}}
+	checkSchemaNodes(t, expected, actual)
+}
+
+func TestSchemaBlock2(t *testing.T) {
+	query := `
+		schema(pred: name) {
+			index
+			reverse
+			type
+			tokenizer
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{
+		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact"}}}
+	checkSchemaNodes(t, expected, actual)
+}
+
+func TestSchemaBlock3(t *testing.T) {
+	query := `
+		schema(pred: age) {
+			index
+			reverse
+			type
+			tokenizer
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{{Predicate: "age", Type: "int"}}
+	checkSchemaNodes(t, expected, actual)
+}
+
+func TestSchemaBlock4(t *testing.T) {
+	query := `
+		schema(pred: [age, genre, random]) {
+			index
+			reverse
+			type
+			tokenizer
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{
+		{Predicate: "genre", Type: "uid", Reverse: true}, {Predicate: "age", Type: "int"}}
+	checkSchemaNodes(t, expected, actual)
+}
+
 const schemaStr = `
 name:string @index(term, exact)
 alias:string @index(exact, term)
@@ -3957,6 +4431,8 @@ func TestMain(m *testing.M) {
 	worker.StartRaftNodes(dir2)
 	// Load schema after nodes have started
 	schema.ParseBytes([]byte(schemaStr), 1)
+	// wait for group membership sync
+	time.Sleep(15 * time.Second)
 	defer os.RemoveAll(dir2)
 
 	os.Exit(m.Run())
@@ -4034,4 +4510,112 @@ func TestMultipleSamePredicateInBlockFail3(t *testing.T) {
 	`
 	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
+}
+
+func TestXidInvalidJSON(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_xid_
+				gender
+				alive
+				friend {
+					_xid_
+					random
+					name
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"_xid_":"mich","alive":true,"friend":[{"name":"Rick Grimes"},{"_xid_":"g\"lenn","name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+	m := make(map[string]interface{})
+	err := json.Unmarshal([]byte(js), &m)
+	require.NoError(t, err)
+}
+
+func TestXidInvalidProto(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_xid_
+				gender
+				alive
+				friend {
+					_xid_
+					random
+					name
+				}
+			}
+		}
+	`
+	pb := processToPB(t, query, false)
+	expectedPb := `attribute: "_root_"
+children: <
+  xid: "mich"
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "gender"
+    value: <
+      default_val: "female"
+    >
+  >
+  properties: <
+    prop: "alive"
+    value: <
+      bool_val: true
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
+    >
+  >
+  children: <
+    xid: "g\"lenn"
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
+    >
+  >
+>
+`
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }

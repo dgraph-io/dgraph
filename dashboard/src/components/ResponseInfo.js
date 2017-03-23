@@ -1,7 +1,7 @@
 import React from "react";
 
-import Stats from "../components/Stats";
-import Properties from "../components/Properties";
+import StatsContainer from "../containers/StatsContainer";
+import PropertiesContainer from "../containers/PropertiesContainer";
 
 import { Button } from "react-bootstrap";
 
@@ -19,17 +19,17 @@ const ResponseInfo = (
         numNodes,
         numEdges,
         numNodesRendered,
+        numEdgesRendered,
         treeView,
-        currentNode,
         renderGraph,
-        expand,
-    },
+        expand
+    }
 ) => (
     <div className="ResponseInfo">
-        <Properties currentNode={currentNode} />
+        <PropertiesContainer />
         <div className="ResponseInfo-stats">
             <div className="ResponseInfo-flex">
-                <Stats rendering={rendering} latency={latency} />
+                <StatsContainer />
                 <div>
                     Nodes:{" "}
                     {numNodes}
@@ -41,7 +41,11 @@ const ResponseInfo = (
                 <Button
                     className="ResponseInfo-button"
                     bsStyle="primary"
-                    disabled={numNodes === 0 || numNodesRendered === numNodes}
+                    disabled={
+                        numNodes === 0 ||
+                            (numNodesRendered === numNodes &&
+                                numEdgesRendered === numEdges)
+                    }
                     onClick={() => expand()}
                 >
                     {partial ? "Expand" : "Collapse"}

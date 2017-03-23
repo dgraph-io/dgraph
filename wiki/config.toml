@@ -1,0 +1,4 @@
+baseurl = "https://wiki.dgraph.io"
+languageCode = "en-us"
+title = "Official Dgraph Documentation"
+theme = "hugo-docs"

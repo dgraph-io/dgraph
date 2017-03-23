@@ -17,6 +17,7 @@
 package gql
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -33,10 +34,126 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
+func TestParseQueryWithNoVarValError(t *testing.T) {
+	query := `
+	{	
+		me(id: var(), orderasc: var(n) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			friends {
+				n AS name
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryWithMultiVarValError(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(n, d) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends {
+				n AS name
+				d as age
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryWithVarValAgg(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(n) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends {
+				n AS min(name)
+			}
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "L", res.Query[0].NeedsVar[0])
+	require.Equal(t, "n", res.Query[0].NeedsVar[1])
+	require.Equal(t, "n", res.Query[0].Args["orderasc"])
+	require.Equal(t, "name", res.Query[0].Children[0].Attr)
+	require.Equal(t, "L", res.Query[1].Children[0].Var)
+	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
+	require.Equal(t, "min", res.Query[1].Children[0].Children[0].Func.Name)
+}
+
+func TestParseQueryWithVarValCount(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(n) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends {
+				n AS count(friend)
+			}
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "L", res.Query[0].NeedsVar[0])
+	require.Equal(t, "n", res.Query[0].NeedsVar[1])
+	require.Equal(t, "n", res.Query[0].Args["orderasc"])
+	require.Equal(t, "name", res.Query[0].Children[0].Attr)
+	require.Equal(t, "L", res.Query[1].Children[0].Var)
+	require.True(t, res.Query[1].Children[0].Children[0].IsCount)
+}
+
+func TestParseQueryWithVarVal(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(n) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends {
+				n AS name
+			}
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "L", res.Query[0].NeedsVar[0])
+	require.Equal(t, "n", res.Query[0].NeedsVar[1])
+	require.Equal(t, "n", res.Query[0].Args["orderasc"])
+	require.Equal(t, "name", res.Query[0].Children[0].Attr)
+	require.Equal(t, "L", res.Query[1].Children[0].Var)
+	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
+}
+
 func TestParseQueryWithVarMultiRoot(t *testing.T) {
 	query := `
 	{	
-		me(var:[L, J, K]) {name}
+		me(id: var(L, J, K)) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
@@ -57,9 +174,9 @@ func TestParseQueryWithVarMultiRoot(t *testing.T) {
 func TestParseQueryWithVar(t *testing.T) {
 	query := `
 	{	
-		me(var:L) {name}
-		him(var:J) {name}
-		you(var:K) {name}
+		me(id: var(L)) {name}
+		him(id: var(J)) {name}
+		you(id: var(K)) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
@@ -80,8 +197,8 @@ func TestParseQueryWithVar(t *testing.T) {
 func TestParseQueryWithVarError1(t *testing.T) {
 	query := `
 	{	
-		him(var:J) {name}
-		you(var:K) {name}
+		him(id: var(J)) {name}
+		you(id: var(K)) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
@@ -94,11 +211,35 @@ func TestParseQueryWithVarError1(t *testing.T) {
 func TestParseQueryWithVarError2(t *testing.T) {
 	query := `
 	{	
-		me(var:L) {name}
-		him(var:J) {name}	
-		you(var:K) {name}
+		me(id: var(L)) {name}
+		him(id: var(J)) {name}	
+		you(id: var(K)) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {K AS friends}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryFilterError1(t *testing.T) {
+	query := `
+	{
+		me(id: abc) @filter(anyof(name"alice")) {
+		 name	
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryFilterError2(t *testing.T) {
+	query := `
+	{
+		me(id: abc) @filter(anyof(name "alice")) {
+		 name	
+		}
 	}
 `
 	_, err := Parse(query)
@@ -111,7 +252,7 @@ func TestParseQueryWithVarAtRootFilterID(t *testing.T) {
 		K as var(id:0x0a) {
 			L AS friends
 		}
-		me(var:K) @filter(id(L)) {
+		me(id: var(K)) @filter(var(L)) {
 		 name	
 		}
 	}
@@ -132,8 +273,8 @@ func TestParseQueryWithVarAtRoot(t *testing.T) {
 		K AS var(id:0x0a) {
 			fr as friends
 		}
-		me(var:fr) @filter(id(K)) {
-		 name	@filter(id(fr))
+		me(id: var(fr)) @filter(var(K)) {
+		 name	@filter(var(fr))
 		}
 	}
 `
@@ -154,7 +295,7 @@ func TestParseQueryWithVar1(t *testing.T) {
 			L AS friends
 		}
 	
-		me(var:L) {
+		me(id: var(L)) {
 		 name	
 		}
 	}
@@ -176,11 +317,11 @@ func TestParseQueryWithMultipleVar(t *testing.T) {
 			}
 		}
 	
-		me(var:L) {
+		me(id:var(L)) {
 		 name	
 		}
 
-		relatives(var:B) {
+		relatives(id:var(B)) {
 			name
 		}
 	}
@@ -315,7 +456,6 @@ func TestParseError(t *testing.T) {
 }
 
 func TestParseXid(t *testing.T) {
-	// logrus.SetLevel(logrus.DebugLevel)
 	// TODO: Why does the query not have _xid_ attribute?
 	query := `
 	query {
@@ -1096,9 +1236,9 @@ func TestParseFilter_root(t *testing.T) {
 	query {
 		me(func:abc(abc)) @filter(allofterms(name, "alice")) {
 			friends @filter() {
-				name @filter(namefilter("a"))
+				name @filter(namefilter(name, "a"))
 			}
-			gender @filter(eq("a")),age @filter(neq("a", "b"))
+			gender @filter(eq(g, "a")),age @filter(neq(a, "b"))
 			hometown
 		}
 	}
@@ -1107,13 +1247,33 @@ func TestParseFilter_root(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
 	require.NotNil(t, res.Query[0].Filter)
-	require.Equal(t, `(allofterms "name" "alice")`, res.Query[0].Filter.debugString())
+	require.Equal(t, `(allofterms name "alice")`, res.Query[0].Filter.debugString())
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.Nil(t, res.Query[0].Children[0].Filter)
-	require.Equal(t, `(eq "a")`, res.Query[0].Children[1].Filter.debugString())
-	require.Equal(t, `(neq "a" "b")`, res.Query[0].Children[2].Filter.debugString())
-	require.Equal(t, `(namefilter "a")`, res.Query[0].Children[0].Children[0].Filter.debugString())
+	require.Equal(t, `(eq g "a")`, res.Query[0].Children[1].Filter.debugString())
+	require.Equal(t, `(neq a "b")`, res.Query[0].Children[2].Filter.debugString())
+	require.Equal(t, `(namefilter name "a")`, res.Query[0].Children[0].Children[0].Filter.debugString())
+}
+
+func TestParseFuncNested(t *testing.T) {
+	schema.ParseBytes([]byte("scalar friend: string @index"), 0)
+	query := `
+	query {
+		me(func: gt(count(friend), 10)) {
+			friends @filter() {
+				name
+			}
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Func)
+	require.Equal(t, res.Query[0].Func.Name, "gt")
+	require.Equal(t, res.Query[0].Func.Args, []string{"count", "10"})
 }
 
 func TestParseFilter_root2(t *testing.T) {
@@ -1132,7 +1292,7 @@ func TestParseFilter_root2(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
 	require.NotNil(t, res.Query[0].Filter)
-	require.Equal(t, `(gt "friends" "count" "10")`, res.Query[0].Filter.debugString())
+	require.Equal(t, `(gt friends "count" "10")`, res.Query[0].Filter.debugString())
 	require.Equal(t, []string{"friends", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.Nil(t, res.Query[0].Children[0].Filter)
@@ -1143,9 +1303,9 @@ func TestParseFilter_root_Error(t *testing.T) {
 	query {
 		me(id:0x0a) @filter(allofterms(name, "alice") {
 			friends @filter() {
-				name @filter(namefilter("a"))
+				name @filter(namefilter(name, "a"))
 			}
-			gender @filter(eq("a")),age @filter(neq("a", "b"))
+			gender @filter(eq(g, "a")),age @filter(neq(a, "b"))
 			hometown
 		}
 	}
@@ -1176,9 +1336,9 @@ func TestParseFilter_simplest(t *testing.T) {
 	query {
 		me(id:0x0a) {
 			friends @filter() {
-				name @filter(namefilter("a"))
+				name @filter(namefilter(name, "a"))
 			}
-			gender @filter(eq("a")),age @filter(neq("a", "b"))
+			gender @filter(eq(g, "a")),age @filter(neq(a, "b"))
 			hometown
 		}
 	}
@@ -1189,9 +1349,9 @@ func TestParseFilter_simplest(t *testing.T) {
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.Nil(t, res.Query[0].Children[0].Filter)
-	require.Equal(t, `(eq "a")`, res.Query[0].Children[1].Filter.debugString())
-	require.Equal(t, `(neq "a" "b")`, res.Query[0].Children[2].Filter.debugString())
-	require.Equal(t, `(namefilter "a")`, res.Query[0].Children[0].Children[0].Filter.debugString())
+	require.Equal(t, `(eq g "a")`, res.Query[0].Children[1].Filter.debugString())
+	require.Equal(t, `(neq a "b")`, res.Query[0].Children[2].Filter.debugString())
+	require.Equal(t, `(namefilter name "a")`, res.Query[0].Children[0].Children[0].Filter.debugString())
 }
 
 // Test operator precedence. and should be evaluated before or.
@@ -1199,8 +1359,8 @@ func TestParseFilter_op(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(a("a") or b("a")
-			and c("a")) {
+			friends @filter(a(aa, "aaa") or b(bb, "bbb")
+			and c(cc, "ccc")) {
 				name
 			}
 			gender,age
@@ -1213,14 +1373,14 @@ func TestParseFilter_op(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t, `(OR (a "a") (AND (b "a") (c "a")))`, res.Query[0].Children[0].Filter.debugString())
+	require.Equal(t, `(OR (a aa "aaa") (AND (b bb "bbb") (c cc "ccc")))`, res.Query[0].Children[0].Filter.debugString())
 }
 
 func TestParseFilter_opError(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(a("a") or b("a")
+			friends @filter(a(aa "aaa") or b(b "bbb")
 			and ) {
 				name
 			}
@@ -1237,7 +1397,7 @@ func TestParseFilter_opNot1(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(not a("a")) {
+			friends @filter(not a(aa, "aaa")) {
 				name
 			}
 			gender,age
@@ -1250,14 +1410,14 @@ func TestParseFilter_opNot1(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t, `(NOT (a "a"))`, res.Query[0].Children[0].Filter.debugString())
+	require.Equal(t, `(NOT (a aa "aaa"))`, res.Query[0].Children[0].Filter.debugString())
 }
 
 func TestParseFilter_opNot2(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(not(a("a") or (b("a"))) and c("a")) {
+			friends @filter(not(a(aa, "aaa") or (b(bb, "bbb"))) and c(cc, "ccc")) {
 				name
 			}
 			gender,age
@@ -1270,7 +1430,7 @@ func TestParseFilter_opNot2(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t, `(AND (NOT (OR (a "a") (b "a"))) (c "a"))`, res.Query[0].Children[0].Filter.debugString())
+	require.Equal(t, `(AND (NOT (OR (a aa "aaa") (b bb "bbb"))) (c cc "ccc"))`, res.Query[0].Children[0].Filter.debugString())
 }
 
 // Test operator precedence. Let brackets make or evaluates before and.
@@ -1278,8 +1438,8 @@ func TestParseFilter_op2(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter((a("a") Or b("a"))
-			 and c("a")) {
+			friends @filter((a(aa, "aaa") Or b(bb, "bbb"))
+			 and c(cc, "ccc")) {
 				name
 			}
 			gender,age
@@ -1292,7 +1452,7 @@ func TestParseFilter_op2(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t, `(AND (OR (a "a") (b "a")) (c "a"))`, res.Query[0].Children[0].Filter.debugString())
+	require.Equal(t, `(AND (OR (a aa "aaa") (b bb "bbb")) (c cc "ccc"))`, res.Query[0].Children[0].Filter.debugString())
 }
 
 // Test operator precedence. More elaborate brackets.
@@ -1300,7 +1460,7 @@ func TestParseFilter_brac(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(  a("hello") or b("world", "is") and (c("a") or (d("haha") or e("a"))) and f("a")){
+			friends @filter(  a(name, "hello") or b(name, "world", "is") and (c(aa, "aaa") or (d(dd, "haha") or e(ee, "aaa"))) and f(ff, "aaa")){
 				name
 			}
 			gender,age
@@ -1314,7 +1474,7 @@ func TestParseFilter_brac(t *testing.T) {
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.Equal(t,
-		`(OR (a "hello") (AND (AND (b "world" "is") (OR (c "a") (OR (d "haha") (e "a")))) (f "a")))`,
+		`(OR (a name "hello") (AND (AND (b name "world" "is") (OR (c aa "aaa") (OR (d dd "haha") (e ee "aaa")))) (f ff "aaa")))`,
 		res.Query[0].Children[0].Filter.debugString())
 }
 
@@ -1468,7 +1628,7 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 }
 
 func TestParseCountAsFuncMultipleError(t *testing.T) {
-	require.NoError(t, schema.ParseBytes([]byte("scalar name:string @index"), 1))
+	require.NoError(t, schema.ParseBytes([]byte("name:string @index"), 1))
 	query := `{
 		me(id:1) {
 			count(friends, relatives
@@ -1528,10 +1688,11 @@ func TestParseCountError2(t *testing.T) {
 }
 
 func TestParseCheckPwd(t *testing.T) {
+
 	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `{
 		me(id:1) {
-			checkpwd("123456")
+			checkpwd(password, "123456")
 			hometown
 		}
 	}
@@ -1548,7 +1709,7 @@ func TestParseComments(t *testing.T) {
 	query := `
 	# Something
 	{
-		me(func:allofterms("name", "barack")) {
+		me(func:allofterms(name, "barack")) {
 			friends {
 				name
 			} # Something
@@ -1565,7 +1726,7 @@ func TestParseComments1(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `{
 		#Something 
-		me(func:allofterms("name", "barack")) {
+		me(func:allofterms(name, "barack")) {
 			friends {
 				name  # Name of my friend
 			}
@@ -1581,7 +1742,7 @@ func TestParseComments1(t *testing.T) {
 func TestParseGenerator(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"), 1)
 	query := `{
-		me(func:allofterms("name", "barack")) {
+		me(func:allofterms(name, "barack")) {
 			friends {
 				name
 			}
@@ -1611,13 +1772,13 @@ func TestParseIRIRef(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5, len(gq.Query[0].Children))
 	require.Equal(t, "http://verygood.com/what/about/you", gq.Query[0].Children[0].Attr)
-	require.Equal(t, `(allofterms "http://verygood.com/what/about/you" "good better bad")`,
+	require.Equal(t, `(allofterms http://verygood.com/what/about/you "good better bad")`,
 		gq.Query[0].Children[1].Filter.debugString())
 }
 
 func TestParseIRIRef2(t *testing.T) {
 	require.NoError(t, schema.ParseBytes(
-		[]byte("scalar <http://helloworld.com/how/are/you>:string @index"), 1))
+		[]byte("<http://helloworld.com/how/are/you>:string @index"), 1))
 	query := `{
 		me(func:anyofterms(<http://helloworld.com/how/are/you>, "good better bad")) {
 			<http://verygood.com/what/about/you>
@@ -1632,7 +1793,7 @@ func TestParseIRIRef2(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, len(gq.Query[0].Children))
 	require.Equal(t, "http://verygood.com/what/about/you", gq.Query[0].Children[0].Attr)
-	require.Equal(t, `(allofterms "http://verygood.com/what/about/you" "good better bad")`,
+	require.Equal(t, `(allofterms http://verygood.com/what/about/you "good better bad")`,
 		gq.Query[0].Children[1].Filter.debugString())
 	require.Equal(t, "http://helloworld.com/how/are/you", gq.Query[0].Func.Attr)
 }
@@ -1843,6 +2004,83 @@ func TestLangsInvalid5(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestLangsFilter(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a) {
+			friends @filter(alloftext(descr@en, "something")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Children[0])
+	require.NotNil(t, res.Query[0].Children[0].Filter)
+	require.NotNil(t, res.Query[0].Children[0].Filter.Func)
+	require.Equal(t, "descr", res.Query[0].Children[0].Filter.Func.Attr)
+	require.Equal(t, "en", res.Query[0].Children[0].Filter.Func.Lang)
+}
+
+func TestLangsFilter_error1(t *testing.T) {
+	// this query should fail, because '@lang' is used twice (and only one appearance is allowed)
+	query := `
+	query {
+		me(id:0x0a) {
+			friends @filter(alloftext(descr@en@de, "something")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestLangsFilter_error2(t *testing.T) {
+	// this query should fail, because there is no lang after '@'
+	query := `
+	query {
+		me(id:0x0a) {
+			friends @filter(alloftext(descr@, "something")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestLangsFunction(t *testing.T) {
+	schema.ParseBytes([]byte("scalar descr: string @index(fulltext)"), 0)
+	query := `
+	query {
+		me(func:alloftext(descr@en, "something")) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Func)
+	require.Equal(t, "descr", res.Query[0].Func.Attr)
+	require.Equal(t, "en", res.Query[0].Func.Lang)
+}
+
 func TestParseNormalize(t *testing.T) {
 	query := `
 	query {
@@ -1859,6 +2097,38 @@ func TestParseNormalize(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
 	require.True(t, res.Query[0].Normalize)
+}
+
+func TestParseFacetsError1(t *testing.T) {
+	query := `
+	query {
+		me(id:0x1) {
+			friends @facets {
+				name @facets(facet1,, facet2)
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseFacetsError2(t *testing.T) {
+	query := `
+	query {
+		me(id:0x1) {
+			friends @facets {
+				name @facets(facet1 facet2)
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
 }
 
 func TestParseFacets(t *testing.T) {
@@ -1884,6 +2154,7 @@ func TestParseFacets(t *testing.T) {
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
 	require.Equal(t, []string{"facet1"}, res.Query[0].Children[0].Children[0].Facets.Keys)
 }
+
 func TestParseFacetsMultiple(t *testing.T) {
 	query := `
 	query {
@@ -1988,7 +2259,7 @@ func TestFacetsFilterSimple(t *testing.T) {
 	require.Equal(t, []string{"name", "friend"}, childAttrs(res.Query[0]))
 	require.Nil(t, res.Query[0].Children[1].Facets)
 	require.NotNil(t, res.Query[0].Children[1].FacetsFilter)
-	require.Equal(t, `(eq "close" "true")`,
+	require.Equal(t, `(eq close "true")`,
 		res.Query[0].Children[1].FacetsFilter.debugString())
 }
 
@@ -2013,7 +2284,7 @@ func TestFacetsFilterAll(t *testing.T) {
 	require.NotNil(t, res.Query[0].Children[1].Facets)
 	require.Equal(t, []string{"close", "family", "since"}, res.Query[0].Children[1].Facets.Keys)
 	require.NotNil(t, res.Query[0].Children[1].FacetsFilter)
-	require.Equal(t, `(OR (eq "close" "true") (eq "family" "true"))`,
+	require.Equal(t, `(OR (eq close "true") (eq family "true"))`,
 		res.Query[0].Children[1].FacetsFilter.debugString())
 
 	require.Equal(t, []string{"name", "gender"}, childAttrs(res.Query[0].Children[1]))
@@ -2070,7 +2341,7 @@ func TestFacetsFilterFail3(t *testing.T) {
 		K as var(id:0x0a) {
 			L AS friends
 		}
-		me(var:K) {
+		me(id: var(K)) {
 			friend @facets(id(L)) {
 				name
 			}
@@ -2116,9 +2387,10 @@ func TestFacetsFilterAtValue(t *testing.T) {
 	nameChild := res.Query[0].Children[0].Children[0]
 	require.NotNil(t, nameChild)
 	require.NotNil(t, nameChild.FacetsFilter)
-	require.Equal(t, `(eq "some-facet" "true")`, nameChild.FacetsFilter.debugString())
+	require.Equal(t, `(eq some-facet "true")`, nameChild.FacetsFilter.debugString())
 }
 
 func TestMain(m *testing.M) {
 	group.ParseGroupConfig("")
+	os.Exit(m.Run())
 }

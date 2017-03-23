@@ -25,7 +25,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 )
@@ -59,12 +59,6 @@ type Mutation struct {
 	Set    string
 	Del    string
 	Schema string
-}
-
-// Schema stores list of predicates and attributes
-type Schema struct {
-	Predicates []string
-	Fields     []string
 }
 
 // pair denotes the key value pair that is part of the GraphQL query root in parenthesis.
@@ -104,6 +98,7 @@ type FilterTree struct {
 // Function holds the information about gql functions.
 type Function struct {
 	Attr     string
+	Lang     string   // language of the attribute value
 	Name     string   // Specifies the name of the function.
 	Args     []string // Contains the arguments of the function.
 	NeedsVar []string // If the function requires some variable
@@ -329,7 +324,7 @@ type Result struct {
 	Query     []*GraphQuery
 	QueryVars []*Vars
 	Mutation  *Mutation
-	Schema    *Schema
+	Schema    *graphp.Schema
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -656,7 +651,7 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 			return items, nil
 		case itemName:
 			items = append(items, item.Val)
-		case comma:
+		case itemComma:
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
@@ -672,7 +667,7 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 }
 
 // parses till rightround is found
-func parseSchemaPredicates(it *lex.ItemIterator, s *Schema) error {
+func parseSchemaPredicates(it *lex.ItemIterator, s *graphp.Schema) error {
 	// pred should be followed by colon
 	it.Next()
 	item := it.Item()
@@ -708,7 +703,7 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *Schema) error {
 }
 
 // parses till rightcurl is found
-func parseSchemaFields(it *lex.ItemIterator, s *Schema) error {
+func parseSchemaFields(it *lex.ItemIterator, s *graphp.Schema) error {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
@@ -723,8 +718,8 @@ func parseSchemaFields(it *lex.ItemIterator, s *Schema) error {
 	return x.Errorf("Invalid schema block.")
 }
 
-func getSchema(it *lex.ItemIterator) (*Schema, error) {
-	var s Schema
+func getSchema(it *lex.ItemIterator) (*graphp.Schema, error) {
+	var s graphp.Schema
 	leftRoundSeen := false
 	for it.Next() {
 		item := it.Item()
@@ -789,11 +784,15 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 }
 
 func parseVariables(it *lex.ItemIterator, vmap varMap) error {
+	expectArg := true
 	for it.Next() {
 		var varName string
 		// Get variable name.
 		item := it.Item()
 		if item.Typ == itemDollar {
+			if !expectArg {
+				return x.Errorf("Missing comma in var declaration")
+			}
 			it.Next()
 			item = it.Item()
 			if item.Typ == itemName {
@@ -802,7 +801,16 @@ func parseVariables(it *lex.ItemIterator, vmap varMap) error {
 				return x.Errorf("Expecting a variable name. Got: %v", item)
 			}
 		} else if item.Typ == itemRightRound {
+			if expectArg {
+				return x.Errorf("Invalid comma in var block")
+			}
 			break
+		} else if item.Typ == itemComma {
+			if expectArg {
+				return x.Errorf("Invalid comma in var block")
+			}
+			expectArg = true
+			continue
 		} else {
 			return x.Errorf("Unexpected item in place of variable. Got: %v %v", item, item.Typ == itemDollar)
 		}
@@ -867,22 +875,35 @@ func parseVariables(it *lex.ItemIterator, vmap varMap) error {
 			// We consumed an extra item to see if it was an '=' sign, so move back.
 			it.Prev()
 		}
+		expectArg = false
 	}
 	return nil
 }
 
 // parseArguments parses the arguments part of the GraphQL query root.
-func parseArguments(it *lex.ItemIterator) (result []pair, rerr error) {
+func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr error) {
+	expectArg := true
 	for it.Next() {
 		var p pair
 		// Get key.
 		item := it.Item()
 		if item.Typ == itemName {
+			if !expectArg {
+				return result, x.Errorf("Expecting a comma. But got: %v", item.Val)
+			}
 			p.Key = item.Val
-
+			expectArg = false
 		} else if item.Typ == itemRightRound {
+			if expectArg {
+				return result, x.Errorf("Unexpected comma before ).")
+			}
 			break
-
+		} else if item.Typ == itemComma {
+			if expectArg {
+				return result, x.Errorf("Expected Argument but got comma.")
+			}
+			expectArg = true
+			continue
 		} else {
 			return result, x.Errorf("Expecting argument name. Got: %v", item)
 		}
@@ -897,6 +918,19 @@ func parseArguments(it *lex.ItemIterator) (result []pair, rerr error) {
 		it.Next()
 		item = it.Item()
 		var val string
+		if item.Val == "var" {
+			count, err := parseVarList(it, gq)
+			if err != nil {
+				return result, err
+			}
+			if count != 1 {
+				return result, x.Errorf("Only one variable expected. Got %d", count)
+			}
+			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1]
+			result = append(result, p)
+			continue
+		}
+
 		if item.Typ == itemDollar {
 			val = "$"
 			it.Next()
@@ -926,32 +960,28 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	x.AssertTrue(t != nil)
 	if t.Func != nil && len(t.Func.Name) > 0 {
 		// Leaf node.
-		_, err := buf.WriteRune('(')
-		x.Check(err)
-		_, err = buf.WriteString(t.Func.Name)
-		x.Check(err)
+		buf.WriteRune('(')
+		buf.WriteString(t.Func.Name)
 
 		if len(t.Func.Attr) > 0 {
-			args := make([]string, len(t.Func.Args)+1)
-			args[0] = t.Func.Attr
-			copy(args[1:], t.Func.Args)
+			buf.WriteRune(' ')
+			buf.WriteString(t.Func.Attr)
+			if len(t.Func.Lang) > 0 {
+				buf.WriteRune('@')
+				buf.WriteString(t.Func.Lang)
+			}
 
-			for _, arg := range args {
-				_, err = buf.WriteString(" \"")
-				x.Check(err)
-				_, err = buf.WriteString(arg)
-				x.Check(err)
-				_, err := buf.WriteRune('"')
-				x.Check(err)
+			for _, arg := range t.Func.Args {
+				buf.WriteString(" \"")
+				buf.WriteString(arg)
+				buf.WriteRune('"')
 			}
 		}
-		_, err = buf.WriteRune(')')
-		x.Check(err)
+		buf.WriteRune(')')
 		return
 	}
 	// Non-leaf node.
-	_, err := buf.WriteRune('(')
-	x.Check(err)
+	buf.WriteRune('(')
 	switch t.Op {
 	case "and":
 		buf.WriteString("AND")
@@ -960,17 +990,14 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	case "not":
 		buf.WriteString("NOT")
 	default:
-		err = x.Errorf("Unknown operator: %q", t.Op)
+		x.Fatalf("Unknown operator: %q", t.Op)
 	}
-	x.Check(err)
 
 	for _, c := range t.Child {
-		_, err = buf.WriteRune(' ')
-		x.Check(err)
+		buf.WriteRune(' ')
 		c.stringHelper(buf)
 	}
-	_, err = buf.WriteRune(')')
-	x.Check(err)
+	buf.WriteRune(')')
 }
 
 type filterTreeStack struct{ a []*FilterTree }
@@ -1021,6 +1048,7 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
+	var expectArg, seenFuncArg, expectLang bool
 L:
 	for it.Next() {
 		item := it.Item()
@@ -1029,25 +1057,70 @@ L:
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s]", g.Name)
+				return nil, x.Errorf("Expected ( after func name [%s] but got %v",
+					g.Name, itemInFunc.Val)
 			}
+			expectArg = true
 			for it.Next() {
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					break L
+				} else if itemInFunc.Typ == itemComma {
+					expectArg = true
+					continue
+				} else if itemInFunc.Typ == itemLeftRound {
+					// Function inside a function.
+					if seenFuncArg {
+						return nil, x.Errorf("Multiple functions as arguments not allowed")
+					}
+					it.Prev()
+					it.Prev()
+					f, err := parseFunction(it)
+					if err != nil {
+						return nil, err
+					}
+					seenFuncArg = true
+					g.Attr = f.Attr
+					g.Args = append(g.Args, f.Name)
+					continue
+				} else if itemInFunc.Typ == itemAt {
+					if len(g.Attr) > 0 && len(g.Lang) == 0 {
+						itNext, err := it.Peek(1)
+						if err == nil && itNext[0].Val == "filter" {
+							return nil, x.Errorf("Filter cannot be used inside a function.")
+						}
+						expectLang = true
+						continue
+					} else {
+						return nil, x.Errorf("Invalid usage of '@' in function argument")
+					}
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
+				}
+				if !expectArg && !expectLang {
+					return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
 				}
 				val := strings.Trim(itemInFunc.Val, "\" \t")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
 				if len(g.Attr) == 0 {
+					if strings.ContainsRune(itemInFunc.Val, '"') {
+						return nil, x.Errorf("Attribute in function must not be quoted with \": %s",
+							itemInFunc.Val)
+					}
 					g.Attr = val
+				} else if expectLang {
+					g.Lang = val
+					expectLang = false
 				} else {
 					g.Args = append(g.Args, val)
 				}
+				if g.Name == "var" {
+					g.NeedsVar = append(g.NeedsVar, val)
+				}
+				expectArg = false
 			}
 		} else {
 			return nil, x.Errorf("Expected a function but got %q", item.Val)
@@ -1059,6 +1132,7 @@ L:
 func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 	facets := new(Facets)
 	peeks, err := it.Peek(1)
+	expectArg := true
 	if err == nil && peeks[0].Typ == itemLeftRound {
 		it.Next() // ignore '('
 		// parse comma separated strings (a1,b1,c1)
@@ -1071,7 +1145,17 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 				done = true
 				break
 			} else if item.Typ == itemName {
+				if !expectArg {
+					return nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
+				}
 				facets.Keys = append(facets.Keys, item.Val)
+				expectArg = false
+			} else if item.Typ == itemComma {
+				if expectArg {
+					return nil, nil, x.Errorf("Expected Argument but got comma.")
+				}
+				expectArg = true
+				continue
 			} else {
 				break
 			}
@@ -1140,56 +1224,12 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			}
 			opStack.push(&FilterTree{Op: op}) // Push current operator.
 		} else if item.Typ == itemName { // Value.
-			f := &Function{}
+			it.Prev()
+			f, err := parseFunction(it)
+			if err != nil {
+				return nil, err
+			}
 			leaf := &FilterTree{Func: f}
-			f.Name = lval
-			it.Next()
-			itemInFunc := it.Item()
-			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
-			}
-			var terminated, seenFuncAsArgument bool
-			for it.Next() {
-				itemInFunc := it.Item()
-				if itemInFunc.Typ == itemRightRound {
-					terminated = true
-					break
-				} else if itemInFunc.Typ == itemLeftRound {
-					if seenFuncAsArgument {
-						return nil, x.Errorf("Expected only one function as argument")
-					}
-					seenFuncAsArgument = true
-					// embed func, like gt(count(films), 0)
-					// => f: {Name: gt, Attr:films, Args:[count, 0]}
-					it.Prev()
-					it.Prev()
-					fn, err := parseFunction(it)
-					if err != nil {
-						return nil, err
-					}
-					f.Attr = fn.Attr
-					f.Args = append(f.Args, fn.Name)
-					continue
-				} else if itemInFunc.Typ != itemName {
-					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
-						leaf.Func.Name, itemInFunc)
-				}
-				val := strings.Trim(itemInFunc.Val, "\" \t")
-				if val == "" {
-					return nil, x.Errorf("Empty argument received")
-				}
-				if len(f.Attr) == 0 {
-					f.Attr = val
-				} else {
-					f.Args = append(f.Args, val)
-				}
-				if f.Name == "id" {
-					f.NeedsVar = append(f.NeedsVar, val)
-				}
-			}
-			if !terminated {
-				return nil, x.Errorf("Expected ) to terminate func definition")
-			}
 			valueStack.push(leaf)
 		} else if item.Typ == itemLeftRound { // Just push to op stack.
 			opStack.push(&FilterTree{Op: "("})
@@ -1274,32 +1314,37 @@ func parseID(gq *GraphQuery, val string) error {
 	return nil
 }
 
-func parseVarList(gq *GraphQuery, val string) error {
-	val = x.WhiteSpace.Replace(val)
-	if val[0] != '[' {
-		gq.NeedsVar = append(gq.NeedsVar, val)
-		return nil
+func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
+	count := 0
+	expectArg := true
+	it.Next()
+	item := it.Item()
+	if item.Typ != itemLeftRound {
+		return count, x.Errorf("Expected a left round after var")
 	}
-
-	if val[len(val)-1] != ']' {
-		return x.Errorf("Invalid var list at root. Got: %+v", val)
-	}
-	var buf bytes.Buffer
-	for _, c := range val[1:] {
-		if c == ',' || c == ']' {
-			if buf.Len() == 0 {
-				continue
+	for it.Next() {
+		item := it.Item()
+		if item.Typ == itemRightRound {
+			break
+		}
+		if item.Typ == itemComma {
+			if expectArg {
+				return count, x.Errorf("Expected a variable but got comma")
 			}
-			gq.NeedsVar = append(gq.NeedsVar, buf.String())
-			buf.Reset()
-			continue
+			expectArg = true
+		} else if item.Typ == itemName {
+			if !expectArg {
+				return count, x.Errorf("Expected a variable but got comma")
+			}
+			count++
+			gq.NeedsVar = append(gq.NeedsVar, item.Val)
+			expectArg = false
 		}
-		if c == '[' || c == ')' {
-			return x.Errorf("Invalid id list at root. Got: %+v", val)
-		}
-		buf.WriteRune(c)
 	}
-	return nil
+	if expectArg {
+		return count, x.Errorf("Unnecessary comma in var()")
+	}
+	return count, nil
 }
 
 func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
@@ -1399,15 +1444,26 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
 	}
 
+	expectArg := true
 	// Parse in KV fashion. Depending on the value of key, decide the path.
 	for it.Next() {
 		var key string
 		// Get key.
 		item := it.Item()
 		if item.Typ == itemName {
+			if !expectArg {
+				return nil, x.Errorf("Expecting a comma. Got: %v", item)
+			}
 			key = item.Val
+			expectArg = false
 		} else if item.Typ == itemRightRound {
 			break
+		} else if item.Typ == itemComma {
+			if expectArg {
+				return nil, x.Errorf("Expected Argument but got comma.")
+			}
+			expectArg = true
+			continue
 		} else {
 			return nil, x.Errorf("Expecting argument name. Got: %v", item)
 		}
@@ -1425,6 +1481,14 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return nil, x.Errorf("Invalid query")
 			}
 			item = it.Item()
+			if item.Val == "var" {
+				// Any number of variables allowed here.
+				_, err := parseVarList(it, gq)
+				if err != nil {
+					return nil, err
+				}
+				continue
+			}
 			// Check and parse if its a list.
 			err := parseID(gq, item.Val)
 			if err != nil {
@@ -1436,27 +1500,28 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			if err != nil {
 				return gq, err
 			}
-			if !schema.State().IsIndexed(gen.Attr) {
-				return nil, x.Errorf(
-					"Field %s is not indexed and cannot be used in functions",
-					gen.Attr)
-			}
-			if err != nil {
-				return nil, err
-			}
 			gq.Func = gen
-		} else if key == "var" {
-			if !it.Next() {
-				return nil, x.Errorf("Invalid query")
-			}
-			item := it.Item()
-			parseVarList(gq, item.Val)
 		} else {
+			var val string
 			if !it.Next() {
 				return nil, x.Errorf("Invalid query")
 			}
 			item := it.Item()
-			gq.Args[key] = item.Val
+			if item.Val == "var" {
+				count, err := parseVarList(it, gq)
+				if err != nil {
+					return nil, err
+				}
+				if count != 1 {
+					return nil, x.Errorf("Expected only one variable but got: %d", count)
+				}
+			} else {
+				val = item.Val
+			}
+			if val == "" {
+				val = gq.NeedsVar[len(gq.NeedsVar)-1]
+			}
+			gq.Args[key] = val
 		}
 	}
 
@@ -1466,6 +1531,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	var isCount uint16
+	varName := ""
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {
 		item := it.Item()
@@ -1492,17 +1558,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 
 			if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
-				varName := item.Val
+				varName = item.Val
 				it.Next() // "As" was checked before.
-				it.Next()
-				pred := it.Item()
-				child := &GraphQuery{
-					Args: make(map[string]string),
-					Attr: pred.Val,
-					Var:  varName,
-				}
-				gq.Children = append(gq.Children, child)
-				curp = child
 				continue
 			}
 
@@ -1511,17 +1568,17 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				item.Val = val
 				child := &GraphQuery{
 					Args: make(map[string]string),
+					Var:  varName,
 				}
+				varName = ""
 				it.Prev()
 				if child.Func, err = parseFunction(it); err != nil {
 					return err
 				}
 				if item.Val == "checkpwd" {
 					child.Func.Args = append(child.Func.Args, child.Func.Attr)
-					child.Attr = "password"
-				} else {
-					child.Attr = child.Func.Attr
 				}
+				child.Attr = child.Func.Attr
 				gq.Children = append(gq.Children, child)
 				curp = child
 				continue
@@ -1546,7 +1603,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				Args:    make(map[string]string),
 				Attr:    item.Val,
 				IsCount: isCount == 1,
+				Var:     varName,
 			}
+			varName = ""
 			gq.Children = append(gq.Children, child)
 			curp = child
 			if isCount == 1 {
@@ -1568,7 +1627,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			if curp.Attr == "" {
 				return x.Errorf("Predicate name cannot be empty.")
 			}
-			args, err := parseArguments(it)
+			args, err := parseArguments(it, curp)
 			if err != nil {
 				return err
 			}

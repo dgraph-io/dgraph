@@ -266,7 +266,7 @@ func TestSchemaMutation5Error(t *testing.T) {
 func TestSchemaMutationIndexAdd(t *testing.T) {
 	var q1 = `
 	{
-		user(func:anyofterms("name", "Alice")) {
+		user(func:anyofterms(name, "Alice")) {
 			name
 		}
 	}
@@ -307,7 +307,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 func TestSchemaMutationIndexRemove(t *testing.T) {
 	var q1 = `
 	{
-		user(func:anyofterms("name", "Alice")) {
+		user(func:anyofterms(name, "Alice")) {
 			name
 		}
 	}
@@ -535,6 +535,24 @@ func TestSchemaConversion(t *testing.T) {
 	schema.State().Set("name2", s)
 	output = processToFastJSON(strings.Replace(q6, "<id>", "shyam2", -1))
 	require.JSONEq(t, `{"user":[{"name2":1.5}]}`, output)
+}
+
+var qErr = `
+	mutation {
+		set {
+			<0x0> <name> "Alice" .
+		}
+	}
+`
+
+func TestMutationError(t *testing.T) {
+	res, err := gql.Parse(qErr)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = mutationHandler(ctx, res.Mutation)
+	require.Error(t, err)
+
 }
 
 var qm = `

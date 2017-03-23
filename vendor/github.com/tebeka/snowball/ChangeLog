@@ -1,0 +1,12 @@
+2013-04-05 version 0.2.0
+    * Fix possible memory leak
+    * List -> LangList (and done once in init)
+
+2012-12-06 version 0.1.2
+    * Free memory
+
+2012-12-03 version 0.1.1
+    * Minor improvements
+
+2012-12-03 version 0.1.0
+    * Initial release

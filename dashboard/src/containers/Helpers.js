@@ -1,5 +1,6 @@
 import randomColor from "randomcolor";
 import uuid from "uuid";
+import _ from "lodash/object";
 
 export function checkStatus(response) {
   if (response.status >= 200 && response.status < 300) {
@@ -24,16 +25,16 @@ export function timeout(ms, promise) {
 }
 
 export function aggregationPrefix(properties) {
-  let aggTerms = ["count", "max(", "min(", "sum("];
+  let aggTerms = ["max(", "min(", "sum("];
   for (let k in properties) {
     if (!properties.hasOwnProperty(k)) {
       continue;
     }
+    if (k === "count") {
+      return ["count", "count"];
+    }
     for (let term of aggTerms) {
       if (k.startsWith(term)) {
-        if (term === "count") {
-          return [term, k];
-        }
         return [term.substr(0, term.length - 1), k];
       }
     }
@@ -41,38 +42,20 @@ export function aggregationPrefix(properties) {
   return ["", ""];
 }
 
-function getNameKey(properties) {
+function getNameKey(properties, regex) {
   for (let i in properties) {
     if (!properties.hasOwnProperty(i)) {
       continue;
     }
-    let toLower = i.toLowerCase();
-    if (toLower === "name") {
+    if (regex.test(i)) {
       return i;
     }
   }
   return "";
 }
 
-export function getNodeLabel(properties: Object): string {
-  var label = "";
-
-  let keys = Object.keys(properties);
-  if (keys.length === 1) {
-    label = aggregationPrefix(properties)[0];
-    if (label !== "") {
-      return label;
-    }
-  }
-
-  let nameKey = getNameKey(properties);
-  if (nameKey === "") {
-    return "";
-  }
-
-  label = properties[nameKey];
-
-  var words = label.split(" "), firstWord = words[0];
+function shortenName(label) {
+  let words = label.split(" "), firstWord = words[0];
   if (firstWord.length > 20) {
     label = [firstWord.substr(0, 9), firstWord.substr(9, 17) + "..."].join(
       "-\n"
@@ -98,6 +81,21 @@ export function getNodeLabel(properties: Object): string {
   return label;
 }
 
+function getNodeLabel(properties: Object, regex: string): string {
+  var label = "";
+
+  let keys = Object.keys(properties);
+  if (keys.length === 1) {
+    label = aggregationPrefix(properties)[0];
+    if (label !== "") {
+      return label;
+    }
+  }
+
+  let nameKey = getNameKey(properties, regex);
+  return properties[nameKey] || "";
+}
+
 export function outgoingEdges(nodeId, edgeSet) {
   return edgeSet.get({
     filter: function(edge) {
@@ -113,9 +111,7 @@ export function isShortestPath(query) {
 }
 
 export function showTreeView(query) {
-  return query.indexOf("orderasc") !== -1 ||
-    query.indexOf("orderdesc") !== -1 ||
-    isShortestPath(query);
+  return query.indexOf("orderasc") !== -1 || query.indexOf("orderdesc") !== -1;
 }
 
 export function isNotEmpty(response) {
@@ -204,11 +200,6 @@ function getGroupProperties(
   return groups[pred];
 }
 
-function isUseless(obj) {
-  let keys = Object.keys(obj);
-  return keys.length === 1 && keys[0] === "_uid_";
-}
-
 function createAxisPlot(groups) {
   let axisPlot = [];
   for (let pred in groups) {
@@ -250,10 +241,39 @@ function extractFacets(val, edgeAttributes, properties) {
   }
 }
 
+function findAndMerge(nodes, n) {
+  let properties = JSON.parse(n.title),
+    uid = properties["attrs"]["_uid_"],
+    idx = nodes.findIndex(function(node) {
+      return node.id === uid;
+    });
+
+  if (idx === -1) {
+    console.warn("Expected to find node with uid: ", uid);
+    return;
+  }
+
+  let node = nodes[idx], props = JSON.parse(node.title);
+  _.merge(props, properties);
+  node.title = JSON.stringify(props);
+  // For shortest path, this would overwrite the color and this is fine
+  // because actual shortes path is traversed later.
+  node.color = n.color;
+
+  if (node.label === "") {
+    node.label = n.label;
+  }
+  if (node.name === "" && n.name !== "") {
+    node.name = n.name;
+  }
+  nodes[idx] = node;
+}
+
 export function processGraph(
   response: Object,
   treeView: boolean,
-  query: string
+  query: string,
+  regex: string
 ) {
   let nodesQueue: Array<ResponseNode> = [],
     // Contains map of a lable to its shortform thats displayed.
@@ -262,6 +282,7 @@ export function processGraph(
     // us avoid creating duplicating nodes while parsing the JSON structure
     // which is a tree.
     uidMap: MapOfBooleans = {},
+    edgeMap: MapOfBooleans = {},
     nodes: Array<Node> = [],
     edges: Array<Edge> = [],
     emptyNode: ResponseNode = {
@@ -277,7 +298,7 @@ export function processGraph(
     // That we can only do one traversal.
     nodesIndex,
     edgesIndex,
-    level = 0,
+    // level = 0,
     // Picked up from http://graphicdesign.stackexchange.com/questions/3682/where-can-i-find-a-large-palette-set-of-contrasting-colors-for-coloring-many-d
     randomColorList = [
       "#47c0ee",
@@ -295,28 +316,27 @@ export function processGraph(
     ],
     // Stores the map of a label to boolean (only true values are stored).
     // This helps quickly find if a label has already been assigned.
-    groups = {};
+    groups = {},
+    displayLabel,
+    fullName,
+    regexEx = new RegExp(regex);
 
-  for (var root in response) {
-    if (!response.hasOwnProperty(root)) {
-      continue;
+  for (var k in response) {
+    if (!response.hasOwnProperty(k)) {
+      return;
     }
 
     someNodeHasChildren = false;
     ignoredChildren = [];
 
-    if (root !== "server_latency" && root !== "uids") {
-      let block = response[root];
+    if (k !== "server_latency" && k !== "uids") {
+      let block = response[k];
       for (let i = 0; i < block.length; i++) {
-        if (isUseless(block[i])) {
-          continue;
-        }
-
         let rn: ResponseNode = {
           node: block[i],
           src: {
             id: "",
-            pred: root
+            pred: k
           }
         };
 
@@ -345,7 +365,7 @@ export function processGraph(
     // Check if this is an empty node.
     if (Object.keys(obj.node).length === 0 && obj.src.pred === "empty") {
       // Only nodes and edges upto nodesIndex, edgesIndex are rendered on first load.
-      if (level === 0 || (level === 1 && nodes.length < 100)) {
+      if (nodesIndex === undefined && nodes.length > 50) {
         // Nodes upto level 1 are rendered only if the total number is less than 100. Else only
         // nodes at level 0 are rendered.
         nodesIndex = nodes.length;
@@ -358,7 +378,7 @@ export function processGraph(
       }
 
       nodesQueue.push(emptyNode);
-      level++;
+      // level++;
       continue;
     }
 
@@ -392,9 +412,6 @@ export function processGraph(
         // These are child nodes, lets add them to the queue.
         let arr = val, xposition = 1;
         for (let j = 0; j < arr.length; j++) {
-          if (isUseless(arr[j])) {
-            continue;
-          }
           // X position makes sure that nodes are rendered in the order they are received
           // in the response.
           arr[j]["x"] = xposition++;
@@ -424,23 +441,36 @@ export function processGraph(
 
     delete nodeAttrs["x"];
 
+    if (aggrTerm !== "") {
+      displayLabel = nodeAttrs[aggrPred];
+    } else {
+      fullName = regex === "" ? "" : getNodeLabel(nodeAttrs, regexEx);
+      displayLabel = shortenName(fullName);
+    }
+
     let n: Node = {
       id: id,
+      uid: obj.node["_uid_"],
       x: x,
       // For aggregation nodes, label is the actual value, for other nodes its
-      // the value of name or name.en.
-      label: aggrTerm !== "" ? nodeAttrs[aggrPred] : getNodeLabel(nodeAttrs),
+      // the value of name.
+      label: displayLabel,
       title: JSON.stringify(properties),
       color: props.color,
-      group: obj.src.pred
+      group: obj.src.pred,
+      name: fullName
     };
 
-    if (!uidMap[id]) {
+    if (uidMap[id] === undefined) {
       // For tree view, we can't push duplicates because two query blocks might have the
       // same root node and child elements won't really have the same uids as their uid is a
       // combination of all their ancestor uids.
       uidMap[id] = true;
       nodes.push(n);
+    } else {
+      // We have already put this node. So we need to find the node in nodes,
+      // merge new properties and put it back.
+      findAndMerge(nodes, n);
     }
 
     // Root nodes don't have a source node, so we don't want to create any edge for them.
@@ -448,16 +478,46 @@ export function processGraph(
       continue;
     }
 
-    var e: Edge = {
-      from: obj.src.id,
-      to: id,
-      title: JSON.stringify(edgeAttributes),
-      label: props.label,
-      color: props.color,
-      arrows: "to"
-    };
-    edges.push(e);
+    let fromTo = [obj.src.id, id].filter(val => val).join("-");
+
+    if (edgeMap[fromTo]) {
+      let edgeIdx = edges.findIndex(function(edge) {
+        return edge.from === obj.src.id && edge.to === id;
+      });
+      if (edgeIdx === -1) {
+        continue;
+      }
+
+      let oldEdge = edges[edgeIdx], edgeTitle = JSON.parse(oldEdge.title);
+      // This is helpful in case of shortest path results so that we can get
+      // the edge weights.
+      _.merge(edgeAttributes, edgeTitle);
+      oldEdge.title = JSON.stringify(edgeAttributes);
+      edges[edgeIdx] = oldEdge;
+    } else {
+      edgeMap[fromTo] = true;
+
+      var e: Edge = {
+        from: obj.src.id,
+        to: id,
+        title: JSON.stringify(edgeAttributes),
+        label: props.label,
+        color: props.color,
+        arrows: "to"
+      };
+      edges.push(e);
+    }
   }
 
   return [nodes, edges, createAxisPlot(groups), nodesIndex, edgesIndex];
+}
+
+export function sortStrings(a, b) {
+  var nameA = a.toLowerCase(), nameB = b.toLowerCase();
+  if (
+    nameA < nameB //sort string ascending
+  )
+    return -1;
+  if (nameA > nameB) return 1;
+  return 0; //default return value (no sorting)
 }

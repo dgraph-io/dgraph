@@ -178,7 +178,6 @@ func (start *SubGraph) expandOut(ctx context.Context,
 			for _, child := range start.Children {
 				temp := new(SubGraph)
 				*temp = *child
-				// Filter out the uids that we have already seen
 				temp.Children = []*SubGraph{}
 				temp.SrcUIDs = sg.DestUIDs
 				// Remove those nodes which we have already traversed. As this cannot be

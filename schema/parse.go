@@ -148,6 +148,7 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		return []string{tok.Default(typ).Name()}, nil
 	}
 
+	expectArg := true
 	// Look for tokenizers.
 	for {
 		it.Next()
@@ -155,8 +156,18 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		if next.Typ == itemRightRound {
 			break
 		}
+		if next.Typ == itemComma {
+			if expectArg {
+				return nil, x.Errorf("Expected a tokenizer but got comma")
+			}
+			expectArg = true
+			continue
+		}
 		if next.Typ != itemText {
-			return tokenizers, x.Errorf("Expected directive arg but got: %v", next)
+			return tokenizers, x.Errorf("Expected directive arg but got: %v", next.Val)
+		}
+		if !expectArg {
+			return tokenizers, x.Errorf("Expected a comma but got: %v", next)
 		}
 		// Look for custom tokenizer.
 		tokenizer, has := tok.GetTokenizer(next.Val)
@@ -169,6 +180,7 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 			tokenizers = append(tokenizers, tokenizer.Name())
 			seen[tokenizer.Name()] = true
 		}
+		expectArg = false
 	}
 	return tokenizers, nil
 }

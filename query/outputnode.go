@@ -29,6 +29,7 @@ import (
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -184,6 +185,10 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graphp.Node, error) {
 	n := seedNode.New("_root_")
 	for _, uid := range sg.uidMatrix[0].Uids {
 		// For the root, the name is stored in Alias, not Attr.
+		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
+			// This UID was filtered. So Ignore it.
+			continue
+		}
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
 			n1.SetUID(uid)
@@ -286,7 +291,7 @@ func (fj *fastJsonNode) SetUID(uid uint64) {
 }
 
 func (fj *fastJsonNode) SetXID(xid string) {
-	fj.attrs["_xid_"] = makeScalarAttr([]byte(xid))
+	fj.attrs["_xid_"] = makeScalarAttr([]byte(strconv.Quote(xid)))
 }
 
 func (fj *fastJsonNode) IsEmpty() bool {
@@ -415,6 +420,11 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	lenList := len(sg.uidMatrix[0].Uids)
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
+		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
+			// This UID was filtered. So Ignore it.
+			continue
+		}
+
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
 			n1.SetUID(uid)
