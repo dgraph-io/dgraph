@@ -249,7 +249,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 
-	EvictAll()
+	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add reverse entries for values in posting list
 	addReversePostings := func(pl *typesp.PostingList) {
 		postingsLen := len(pl.Postings)
@@ -324,7 +324,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 
-	EvictAll()
+	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add index entries for values in posting list
 	addPostingsToIndex := func(pl *typesp.PostingList) {
 		postingsLen := len(pl.Postings)

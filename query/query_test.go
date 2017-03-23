@@ -2489,7 +2489,7 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 
 func TestCountReverseFunc(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10)
+	posting.CommitLists(10, 1)
 	time.Sleep(100 * time.Millisecond)
 	query := `
 		{

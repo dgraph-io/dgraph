@@ -154,7 +154,7 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 		Entity:  src,
 		Op:      taskp.DirectedEdge_SET,
 	}
-	l, _ := GetOrCreate(x.DataKey(attr, src), 0)
+	l, _ := GetOrCreate(x.DataKey(attr, src), 1)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	ok, err := l.AddMutation(context.Background(), edge)
 	require.NoError(t, err)
@@ -231,7 +231,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 	addEdgeToUID(t, "friend", 2, 23)
 
 	// RebuildIndex requires the data to be committed to data store.
-	CommitLists(10)
+	CommitLists(10, 1)
 	for len(syncCh) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -242,7 +242,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 	require.NoError(t, RebuildReverseEdges(context.Background(), "friend"))
 
 	// Let's force a commit.
-	CommitLists(10)
+	CommitLists(10, 1)
 	for len(syncCh) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
