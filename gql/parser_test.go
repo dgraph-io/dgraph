@@ -85,6 +85,25 @@ func TestParseQueryWithMultiVarValError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseQueryWithVarValAggErr(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(c) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L as friends {
+				a as age
+				c as sumvar()
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	query := `
 	{	
