@@ -87,7 +87,7 @@ func State() *state {
 }
 
 // Update updates the schema in memory and sends an entry to syncCh so that it can be
-// comitted later
+// committed later
 func (s *state) Update(se *SyncEntry) {
 	s.get(group.BelongsTo(se.Attr)).update(se)
 }

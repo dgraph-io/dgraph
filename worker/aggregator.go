@@ -20,5 +20,4 @@ func CouldApplyAggregatorOn(agrtr string, typ types.TypeID) bool {
 	default:
 		return false
 	}
-	return false
 }

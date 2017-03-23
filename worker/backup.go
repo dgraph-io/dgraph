@@ -345,9 +345,8 @@ func BackupOverNetwork(ctx context.Context) error {
 		if bp.Status != workerp.BackupPayload_SUCCESS {
 			x.Trace(ctx, "Backup status: %v for group id: %d", bp.Status, bp.GroupId)
 			return fmt.Errorf("Backup status: %v for group id: %d", bp.Status, bp.GroupId)
-		} else {
-			x.Trace(ctx, "Backup successful for group: %v", bp.GroupId)
 		}
+		x.Trace(ctx, "Backup successful for group: %v", bp.GroupId)
 	}
 	x.Trace(ctx, "DONE backup")
 	return nil

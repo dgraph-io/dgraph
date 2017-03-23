@@ -270,7 +270,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 					fs = []*facetsp.Facet{}
 				}
 				out.FacetMatrix = append(out.FacetMatrix,
-					&facetsp.List{[]*facetsp.Facets{&facetsp.Facets{fs}}})
+					&facetsp.List{[]*facetsp.Facets{{fs}}})
 			} else {
 				var fcsList []*facetsp.Facets
 				for _, fres := range filteredRes {
@@ -582,11 +582,11 @@ func applyFacetsTree(postingFacets []*facetsp.Facet, ftree *facetsTree) (bool, e
 
 	var res []bool
 	for _, c := range ftree.children {
-		if r, err := applyFacetsTree(postingFacets, c); err != nil {
+		r, err := applyFacetsTree(postingFacets, c)
+		if err != nil {
 			return false, err
-		} else {
-			res = append(res, r)
 		}
+		res = append(res, r)
 	}
 
 	// we have already checked for number of children in preprocessFilter

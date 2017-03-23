@@ -131,19 +131,18 @@ func processScalars(it *lex.ItemIterator, gid uint32) error {
 // processScalarPair processes "name: type (directive)" where name is already
 // consumed and is provided as input in file during loading
 func processScalarPair(it *lex.ItemIterator, predicate string, allowIndex bool, gid uint32) error {
-	if schema, err := parseScalarPair(it, predicate, allowIndex); err != nil {
+	schema, err := parseScalarPair(it, predicate, allowIndex)
+	if err != nil {
 		return err
-	} else {
-		// Schema is already present for this predicate
-		_, err := State().TypeOf(predicate)
-		if err == nil {
-			return x.Errorf("Multiple schema declarations for same predicate %s", predicate)
-		}
-		if group.BelongsTo(predicate) == gid {
-			State().Set(predicate, schema)
-		}
 	}
-
+	// Schema is already present for this predicate
+	_, err = State().TypeOf(predicate)
+	if err == nil {
+		return x.Errorf("Multiple schema declarations for same predicate %s", predicate)
+	}
+	if group.BelongsTo(predicate) == gid {
+		State().Set(predicate, schema)
+	}
 	return nil
 }
 
