@@ -331,6 +331,61 @@ func TestGetUIDNotInChild(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValAggMinMaxSelf(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as age
+				friend {
+					n As min(age)
+					s as max(age)
+					sum as sumvar(n, a, s)
+				}
+			}
+
+			me(id: var(f), orderasc: var(sum)) {
+				name
+				age
+				friend {
+					min(age)
+					max(age)
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"age":19,"friend":[{"min(age)":15},{"max(age)":15}],"name":"Andrea"},{"age":38,"friend":[{"min(age)":15},{"max(age)":19}],"name":"Michonne"},{"age":15,"friend":[{"min(age)":38},{"max(age)":38}],"name":"Rick Grimes"}]}`,
+		js)
+}
+func TestQueryVarValAggMinMax(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				friend {
+					n As min(age)
+					s as max(age)
+					sum as sumvar(n, s)
+				}
+			}
+
+			me(id: var(f), orderdesc: var(sum)) {
+				name 
+				friend {
+					min(age)
+					max(age)
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"min(age)":38},{"max(age)":38}],"name":"Rick Grimes"},{"friend":[{"min(age)":15},{"max(age)":19}],"name":"Michonne"},{"friend":[{"min(age)":15},{"max(age)":15}],"name":"Andrea"}]}`,
+		js)
+}
+
 func TestQueryVarValAggOrderDesc(t *testing.T) {
 	populateGraph(t)
 	query := `
