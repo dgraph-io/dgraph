@@ -180,7 +180,7 @@ func main() {
 		processSchemaFile(*schemaFile, batch)
 	}
 	// wait for schema changes to be done before starting mutations
-	time.Sleep(1)
+	time.Sleep(1 * time.Second)
 	for _, file := range filesList {
 		processFile(file, batch)
 	}

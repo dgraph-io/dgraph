@@ -413,7 +413,7 @@ func processRequest(ctx context.Context, gq *gql.GraphQuery,
 	return sg, wrappedErr{nil, ""}
 }
 
-func isNonEmptyGQLMutation(mu *gql.Mutation) bool {
+func hasGQLOps(mu *gql.Mutation) bool {
 	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
 }
 
@@ -432,9 +432,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Lets add the value of the debug query parameter to the context.
-	c := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
-	ctx, cancel := context.WithTimeout(c, time.Minute)
-	defer cancel()
+	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
 
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "Query")
@@ -459,14 +457,18 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// set timeout if schema mutation not present
+	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
+		// If schema mutation is not present
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+	}
+
 	var allocIds map[string]uint64
 	var allocIdsStr map[string]string
 	// If we have mutations, run them first.
-	if res.Mutation != nil && isNonEmptyGQLMutation(res.Mutation) {
-		if len(res.Mutation.Schema) > 0 {
-			// setting a higher value to ensure schema mutations are completed
-			ctx, _ = context.WithTimeout(ctx, 100*time.Hour)
-		}
+	if res.Mutation != nil && hasGQLOps(res.Mutation) {
 		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			x.SetStatus(w, x.Error, err.Error())
@@ -480,10 +482,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(res.Query) == 0 {
-		mp := map[string]interface{}{
-			"code":    x.Success,
-			"message": "Done",
-			"uids":    allocIdsStr,
+		mp := map[string]interface{}{}
+		if res.Mutation != nil {
+			mp["code"] = x.Success
+			mp["message"] = "Done"
+			mp["uids"] = allocIdsStr
 		}
 		if js, err := json.Marshal(mp); err == nil {
 			w.Write(js)
@@ -590,7 +593,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	x.SetStatus(w, x.Success, "Backup completed.")
 }
 
-func isNonEmptyGraphMutation(mu *graphp.Mutation) bool {
+func hasGraphOps(mu *graphp.Mutation) bool {
 	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
 }
 
@@ -624,7 +627,7 @@ func (s *grpcServer) Run(ctx context.Context,
 
 	// If mutations are part of the query, we run them through the mutation handler
 	// same as the http client.
-	if res.Mutation != nil && isNonEmptyGQLMutation(res.Mutation) {
+	if res.Mutation != nil && hasGQLOps(res.Mutation) {
 		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
@@ -632,7 +635,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 
 	// Mutations are sent as part of the mutation object
-	if req.Mutation != nil && isNonEmptyGraphMutation(req.Mutation) {
+	if req.Mutation != nil && hasGraphOps(req.Mutation) {
 		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err

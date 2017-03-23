@@ -239,10 +239,14 @@ LOOP:
 			}
 			req.addSchema(s)
 		default:
+			start := time.Now()
 			if req.size() > 0 {
 				batch.request(req)
 			}
-			time.Sleep(10 * time.Millisecond)
+			elapsedMillis := time.Since(start).Seconds() * 1e3
+			if elapsedMillis < 10 {
+				time.Sleep(time.Duration(int64(10-elapsedMillis)) * time.Millisecond)
+			}
 		}
 	}
 

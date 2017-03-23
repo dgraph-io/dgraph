@@ -38,9 +38,13 @@ func parseFile(file string, gid uint32) (rerr error) {
 
 func From(s *graphp.SchemaUpdate) typesp.Schema {
 	if s.Directive == graphp.SchemaUpdate_REVERSE {
-		return typesp.Schema{ValueType: s.ValueType, Directive: typesp.Schema_REVERSE}
+		return typesp.Schema{
+			ValueType: s.ValueType,
+			Directive: typesp.Schema_REVERSE}
 	} else if s.Directive == graphp.SchemaUpdate_INDEX {
-		return typesp.Schema{ValueType: s.ValueType, Directive: typesp.Schema_INDEX,
+		return typesp.Schema{
+			ValueType: s.ValueType,
+			Directive: typesp.Schema_INDEX,
 			Tokenizer: s.Tokenizer}
 	}
 	return typesp.Schema{ValueType: s.ValueType}
@@ -97,8 +101,11 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 				if t != types.UidID {
 					return nil, x.Errorf("Cannot reverse for non-UID type")
 				}
-				return &graphp.SchemaUpdate{Predicate: predicate, ValueType: uint32(t),
-					Directive: graphp.SchemaUpdate_REVERSE}, nil
+				return &graphp.SchemaUpdate{
+					Predicate: predicate,
+					ValueType: uint32(t),
+					Directive: graphp.SchemaUpdate_REVERSE,
+				}, nil
 			case "index":
 				if !allowIndex {
 					return nil, x.Errorf("@index not allowed")
@@ -106,8 +113,11 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 				if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
 					return nil, err
 				} else {
-					return &graphp.SchemaUpdate{Predicate: predicate, ValueType: uint32(t),
-						Directive: graphp.SchemaUpdate_INDEX, Tokenizer: tokenizer}, nil
+					return &graphp.SchemaUpdate{
+						Predicate: predicate, ValueType: uint32(t),
+						Directive: graphp.SchemaUpdate_INDEX,
+						Tokenizer: tokenizer,
+					}, nil
 				}
 			default:
 				return nil, x.Errorf("Invalid index specification")
@@ -153,11 +163,11 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		if !has {
 			return tokenizers, x.Errorf("Invalid tokenizer %s", next.Val)
 		}
-		if _, ok := seen[tokenizer.Name()]; !ok {
+		if _, found := seen[tokenizer.Name()]; found {
+			return tokenizers, x.Errorf("Duplicate tokenizers defined for pred %v", predicate)
+		} else {
 			tokenizers = append(tokenizers, tokenizer.Name())
 			seen[tokenizer.Name()] = true
-		} else {
-			return tokenizers, x.Errorf("Duplicate tokenizers defined for pred %v", predicate)
 		}
 	}
 	return tokenizers, nil

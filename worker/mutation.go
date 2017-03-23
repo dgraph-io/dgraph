@@ -114,7 +114,8 @@ func runSchemaMutations(ctx context.Context, updates []*graphp.SchemaUpdate) err
 				current.Directive == typesp.Schema_INDEX); err != nil {
 				return err
 			}
-		} else if (current.Directive == typesp.Schema_REVERSE) != (old.Directive == typesp.Schema_REVERSE) {
+		} else if (current.Directive == typesp.Schema_REVERSE) !=
+			(old.Directive == typesp.Schema_REVERSE) {
 			// Add or remove reverse edge based on update.Reverse
 			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
 				current.Directive == typesp.Schema_REVERSE); err != nil {
