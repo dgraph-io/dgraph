@@ -33,14 +33,15 @@ import (
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
-	UID      []uint64
-	Attr     string
-	Langs    []string
-	Alias    string
-	IsCount  bool
-	Var      string
-	NeedsVar []string
-	Func     *Function
+	UID        []uint64
+	Attr       string
+	Langs      []string
+	Alias      string
+	IsCount    bool
+	IsInternal bool
+	Var        string
+	NeedsVar   []string
+	Func       *Function
 
 	Args         map[string]string
 	Children     []*GraphQuery
@@ -122,9 +123,7 @@ func init() {
 }
 
 func (f *Function) IsAggregator() bool {
-	return f.Name == "min" ||
-		f.Name == "max" ||
-		f.Name == "sum"
+	return isAggregator(f.Name)
 }
 
 func (f *Function) IsPasswordVerifier() bool {
@@ -429,7 +428,8 @@ func checkDependency(vl []*Vars) error {
 	sort.Strings(defines)
 	i, j := 0, 0
 	if len(defines) > len(needs) {
-		return x.Errorf("Some variables are defined and not used")
+		return x.Errorf("Some variables are defined and not used\nDefined:%v\nUsed:%v\n",
+			defines, needs)
 	}
 
 	for i < len(needs) && j < len(defines) {
@@ -446,7 +446,8 @@ func checkDependency(vl []*Vars) error {
 		}
 	}
 	if i != len(needs) || j != len(defines) {
-		return x.Errorf("Some variables are used but not defined")
+		return x.Errorf("Some variables are used but not defined.\nDefined:%v\nUsed:%v\n",
+			defines, needs)
 	}
 	return nil
 }
@@ -911,7 +912,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		it.Next()
 		item = it.Item()
 		if item.Typ != itemColon {
-			return result, x.Errorf("Expecting a collon. Got: %v", item)
+			return result, x.Errorf("Expecting a collon. Got: %v in %v", item, gq.Attr)
 		}
 
 		// Get value.
@@ -1530,6 +1531,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
+	if gq == nil {
+		return x.Errorf("Bad nesting of predicates or functions")
+	}
 	var isCount uint16
 	varName := ""
 	curp := gq // Used to track current node, for nesting.
@@ -1580,11 +1584,32 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				child.Attr = child.Func.Attr
 				gq.Children = append(gq.Children, child)
-				curp = child
+				curp = nil
 				continue
-			}
+			} else if isValVarFunc(val) {
+				item.Val = val
+				if varName == "" {
+					return x.Errorf("Function %v should be used with a variable", val)
+				}
+				child := &GraphQuery{
+					Attr:       item.Val,
+					Args:       make(map[string]string),
+					Var:        varName,
+					IsInternal: true,
+				}
+				varName = ""
+				count, err := parseVarList(it, child)
+				if err != nil {
+					return err
+				}
+				if count == 0 {
+					return x.Errorf("Should have atleast one variable inside %v", val)
+				}
+				gq.Children = append(gq.Children, child)
+				curp = nil
+				continue
 
-			if item.Val == "count" {
+			} else if val == "count" {
 				if isCount != 0 {
 					return x.Errorf("Invalid mention of function count")
 				}
@@ -1594,6 +1619,25 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if item.Typ != itemLeftRound {
 					return x.Errorf("Invalid mention of count.")
 				}
+				continue
+			} else if val == "var" {
+				if varName != "" {
+					return x.Errorf("Cannot assign a variable to var()")
+				}
+				child := &GraphQuery{
+					Attr:       val,
+					Args:       make(map[string]string),
+					IsInternal: true,
+				}
+				count, err := parseVarList(it, child)
+				if err != nil {
+					return err
+				}
+				if count != 1 {
+					return x.Errorf("Invalid use of var(). Exactly one variable expected.")
+				}
+				gq.Children = append(gq.Children, child)
+				curp = nil
 				continue
 			}
 			if isCount == 2 {
@@ -1655,4 +1699,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 func isAggregator(fname string) bool {
 	return fname == "min" || fname == "max" || fname == "sum"
+}
+
+func isValVarFunc(name string) bool {
+	return name == "sumvar"
 }
