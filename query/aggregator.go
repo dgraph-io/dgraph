@@ -27,10 +27,10 @@ func convertTo(from *taskp.Value) (types.Val, error) {
 }
 
 func (ag *aggregator) ApplyVal(v types.Val) error {
+	if v.Value == nil {
+		return ErrEmptyVal
+	}
 	if ag.result.Value == nil {
-		if v.Value == nil {
-			return nil
-		}
 		ag.result = v
 		return nil
 	}

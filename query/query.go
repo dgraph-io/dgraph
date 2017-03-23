@@ -819,10 +819,16 @@ func (sg *SubGraph) sumAggregation(doneVars map[string]values) (rerr error) {
 				return x.Errorf("Expected a value variable but missing")
 			}
 			if rerr = ag.ApplyVal(curMap.vals[k]); rerr != nil {
+				if rerr == ErrEmptyVal {
+					break
+				}
 				return rerr
 			}
 		}
-		destMap[k] = ag.Value()
+		if rerr != ErrEmptyVal {
+			// We want to skip even if one of the value is missing.
+			destMap[k] = ag.Value()
+		}
 	}
 	doneVars[sg.Params.Var] = values{vals: destMap}
 	return nil
