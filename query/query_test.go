@@ -338,7 +338,7 @@ func TestQueryVarValAggMinMaxSelf(t *testing.T) {
 			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
 				a as age
 				friend {
-					n As min(age)
+					n as min(age)
 					s as max(age)
 					sum as sumvar(n, a, s)
 				}
@@ -365,7 +365,7 @@ func TestQueryVarValAggMinMax(t *testing.T) {
 		{
 			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
 				friend {
-					n As min(age)
+					n as min(age)
 					s as max(age)
 					sum as sumvar(n, s)
 				}
@@ -391,8 +391,8 @@ func TestQueryVarValAggOrderDesc(t *testing.T) {
 	query := `
 		{
 			var(id: 1) {
-				f As friend {
-					n As age
+				f as friend {
+					n as age
 					s as count(friend)
 					sum as sumvar(n, s)
 				}
@@ -416,8 +416,8 @@ func TestQueryVarValAggOrderAsc(t *testing.T) {
 	query := `
 		{
 			var(id: 1) {
-				f As friend {
-					n As age
+				f as friend {
+					n as age
 					s as survival_rate
 					sum as sumvar(n, s)
 				}
@@ -441,8 +441,8 @@ func TestQueryVarValOrderAsc(t *testing.T) {
 	query := `
 		{
 			var(id: 1) {
-				f As friend {
-					n As name
+				f as friend {
+					n as name
 				}
 			}
 
@@ -462,8 +462,8 @@ func TestQueryVarValOrderDob(t *testing.T) {
 	query := `
 		{
 			var(id: 1) {
-				f As friend {
-					n As dob
+				f as friend {
+					n as dob
 				}
 			}
 
@@ -484,8 +484,8 @@ func TestQueryVarValOrderDesc(t *testing.T) {
 	query := `
 		{
 			var(id: 1) {
-				f As friend {
-					n As name
+				f as friend {
+					n as name
 				}
 			}
 
@@ -522,8 +522,8 @@ func TestUseVarsMultiCascade1(t *testing.T) {
 	query := `
 		{
 			him(id:0x01) {
-				L AS friend {
-				 B AS friend
+				L as friend {
+				 B as friend
 					name	
 			 }
 			}
@@ -544,8 +544,8 @@ func TestUseVarsMultiCascade(t *testing.T) {
 	query := `
 		{
 			var(id:0x01) {
-				L AS friend {
-				 B AS friend
+				L as friend {
+				 B as friend
 				}
 			}
 
@@ -565,11 +565,11 @@ func TestUseVarsMultiOrder(t *testing.T) {
 	query := `
 		{
 			var(id:0x01) {
-				L AS friend(first:2, orderasc: dob)
+				L as friend(first:2, orderasc: dob)
 			}
 
 			var(id:0x01) {
-				G AS friend(first:2, offset:2, orderasc: dob)
+				G as friend(first:2, offset:2, orderasc: dob)
 			}
 
 			friend1(id: var(L)) {
@@ -636,7 +636,7 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 	query := `
 		{
 			var(id:0x01) {
-				fr AS friend(first:2, offset:2, orderasc: dob)
+				fr as friend(first:2, offset:2, orderasc: dob)
 			}
 
 			friend(id:0x01) {
@@ -908,13 +908,13 @@ func TestUseVarsFilterMultiId(t *testing.T) {
 	query := `
 		{
 			var(id:0x01) {
-				L AS friend {
+				L as friend {
 					friend
 				}
 			}
 
 			var(id:31) {
-				G AS friend
+				G as friend
 			}
 
 			friend(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(var(G, L)) {
@@ -933,11 +933,11 @@ func TestUseVarsMultiFilterId(t *testing.T) {
 	query := `
 		{
 			var(id:0x01) {
-				L AS friend
+				L as friend
 			}
 
 			var(id:31) {
-				G AS friend
+				G as friend
 			}
 
 			friend(id: var(L)) @filter(var(G)) {
@@ -956,7 +956,7 @@ func TestUseVarsCascade(t *testing.T) {
 	query := `
 		{
 			var(id:0x01) {
-				L AS friend {
+				L as friend {
 				  friend
 				}
 			}
@@ -977,7 +977,7 @@ func TestUseVars(t *testing.T) {
 	query := `
 		{
 			var(id:0x01) {
-				L AS friend
+				L as friend
 			}
 
 			me(id: var(L)) {
@@ -1632,7 +1632,7 @@ func TestToSubgraphInvalidFnName3(t *testing.T) {
 func TestToSubgraphInvalidFnName4(t *testing.T) {
 	query := `
                 {
-                        f AS var(func:invalidfn4(name, "Michonne Rick Glenn")) {
+                        f as var(func:invalidfn4(name, "Michonne Rick Glenn")) {
                                 name
                         }
                         you(func:anyofterms(name, "Michonne")) {
@@ -3416,7 +3416,7 @@ func TestGeneratorMultiRootMultiQueryRootVar(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			friend AS var(func:anyofterms(name, "Michonne Rick Glenn")) {
+			friend as var(func:anyofterms(name, "Michonne Rick Glenn")) {
       	name
 			}
 
@@ -3433,7 +3433,7 @@ func TestGeneratorMultiRootMultiQueryVarFilter(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			f AS var(func:anyofterms(name, "Michonne Rick Glenn")) {
+			f as var(func:anyofterms(name, "Michonne Rick Glenn")) {
       	name
 			}
 
@@ -3452,7 +3452,7 @@ func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			friend AS var(func:anyofterms(name, "Michonne Rick Glenn")) {
+			friend as var(func:anyofterms(name, "Michonne Rick Glenn")) {
 			}
 
 			you(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(var(friend)) {
