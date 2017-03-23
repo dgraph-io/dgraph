@@ -119,34 +119,6 @@ class Editor extends Component {
         }
       });
 
-    timeout(
-      1000,
-      fetch(dgraphAddress() + "/query", {
-        method: "POST",
-        mode: "cors",
-        body: "schema {}"
-      })
-        .then(checkStatus)
-        .then(response => response.json())
-        .then(function(result) {
-          keywords = keywords.concat(
-            result.schema.map(kw => {
-              return kw.predicate;
-            })
-          );
-        })
-    )
-      .catch(function(error) {
-        console.log(error.stack);
-        console.warn("In catch: Error while trying to fetch schema", error);
-        return error;
-      })
-      .then(function(errorMsg) {
-        if (errorMsg !== undefined) {
-          console.warn("Error while trying to fetch schema", errorMsg);
-        }
-      });
-
     this.editor = CodeMirror(this._editor, {
       value: this.props.query,
       lineNumbers: true,
