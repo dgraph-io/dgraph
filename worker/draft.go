@@ -507,7 +507,7 @@ func (n *node) processApplyCh() {
 			for attr, storageType := range schemaMap {
 				if _, err := schema.State().TypeOf(attr); err != nil {
 					// Schema doesn't exist
-					// Since comitted entries are serialized, updateSchemaIfMissing is not
+					// Since committed entries are serialized, updateSchemaIfMissing is not
 					// needed, In future if schema needs to be changed, it would flow through
 					// raft so there won't be race conditions between read and update schema
 					updateSchemaType(attr, storageType, e.Index, n.raftContext.Group)

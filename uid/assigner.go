@@ -17,7 +17,6 @@
 package uid
 
 import (
-	"log"
 	"math"
 	"math/rand"
 	"sync"
@@ -52,7 +51,7 @@ func (lm *lockManager) isNew(uid uint64) bool {
 
 func (lm *lockManager) clean() {
 	ticker := time.NewTicker(time.Minute)
-	for _ = range ticker.C {
+	for range ticker.C {
 		now := time.Now()
 		lm.Lock()
 		for uid, ts := range lm.uids {
@@ -94,8 +93,6 @@ func allocateUniqueUid(group uint32) uint64 {
 			return uid
 		}
 	}
-	log.Fatalf("This shouldn't be reached.")
-	return 0
 }
 
 // AssignNew assigns N unique uids.

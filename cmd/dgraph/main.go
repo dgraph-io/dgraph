@@ -802,7 +802,7 @@ func serveHTTP(l net.Listener) {
 	err = srv.Shutdown(ctx)
 	log.Printf("All http(s) requests finished.")
 	if err != nil {
-		log.Printf("Http(s) shutdown err: ", err.Error())
+		log.Printf("Http(s) shutdown err: %v", err.Error())
 	}
 }
 

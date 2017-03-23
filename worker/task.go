@@ -585,11 +585,11 @@ func applyFacetsTree(postingFacets []*facetsp.Facet, ftree *facetsTree) (bool, e
 
 	var res []bool
 	for _, c := range ftree.children {
-		if r, err := applyFacetsTree(postingFacets, c); err != nil {
+		r, err := applyFacetsTree(postingFacets, c)
+		if err != nil {
 			return false, err
-		} else {
-			res = append(res, r)
 		}
+		res = append(res, r)
 	}
 
 	// we have already checked for number of children in preprocessFilter

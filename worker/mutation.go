@@ -191,7 +191,7 @@ func checkSchema(s *graphp.SchemaUpdate) error {
 	return nil
 }
 
-// If storage type is specified, then check compatability or convert to schema type
+// If storage type is specified, then check compatibility or convert to schema type
 // if no storage type is specified then convert to schema type
 func validateAndConvert(edge *taskp.DirectedEdge, schemaType types.TypeID) error {
 	storageType := posting.TypeID(edge)
@@ -205,6 +205,7 @@ func validateAndConvert(edge *taskp.DirectedEdge, schemaType types.TypeID) error
 	} else {
 		// Both are scalars. Continue.
 	}
+
 	if storageType == schemaType {
 		return nil
 	}
@@ -214,7 +215,7 @@ func validateAndConvert(edge *taskp.DirectedEdge, schemaType types.TypeID) error
 	var err error
 
 	src = types.Val{types.TypeID(edge.ValueType), edge.Value}
-	// check comptability of schema type and storage type
+	// check compatibility of schema type and storage type
 	if dst, err = types.Convert(src, schemaType); err != nil {
 		return err
 	}

@@ -493,7 +493,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			args.DoCount = true
 		}
 
-		for argk, _ := range gchild.Args {
+		for argk := range gchild.Args {
 			if !isValidArg(argk) {
 				return x.Errorf("Invalid argument : %s", argk)
 			}
@@ -655,7 +655,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
-	for argk, _ := range gq.Args {
+	for argk := range gq.Args {
 		if !isValidArg(argk) {
 			return nil, x.Errorf("Invalid argument : %s", argk)
 		}
@@ -679,7 +679,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if len(gq.UID) > 0 {
 		o := make([]uint64, len(gq.UID))
 		copy(o, gq.UID)
-		sg.uidMatrix = []*taskp.List{&taskp.List{gq.UID}}
+		sg.uidMatrix = []*taskp.List{{gq.UID}}
 		// User specified list may not be sorted.
 		sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
 		sg.SrcUIDs = &taskp.List{o}
@@ -723,11 +723,11 @@ func toFacetsFilter(gft *gql.FilterTree) (*facetsp.FilterTree, error) {
 	ftree := new(facetsp.FilterTree)
 	ftree.Op = gft.Op
 	for _, gftc := range gft.Child {
-		if ftc, err := toFacetsFilter(gftc); err != nil {
+		ftc, err := toFacetsFilter(gftc)
+		if err != nil {
 			return nil, err
-		} else {
-			ftree.Children = append(ftree.Children, ftc)
 		}
+		ftree.Children = append(ftree.Children, ftc)
 	}
 	if gft.Func != nil {
 		ftree.Func = &facetsp.Function{
@@ -1169,7 +1169,7 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 				isVar = true
 				lists = append(lists, l.uids)
 			} else if l.vals != nil {
-				// This should happend only once.
+				// This should happened only once.
 				sg.Params.uidToVal = l.vals
 			}
 		}
@@ -1195,7 +1195,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// Retain the actual order in uidMatrix. But sort the destUids.
 		o := make([]uint64, len(sg.DestUIDs.Uids))
 		copy(o, sg.DestUIDs.Uids)
-		sg.uidMatrix = []*taskp.List{&taskp.List{o}}
+		sg.uidMatrix = []*taskp.List{{o}}
 		sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool { return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j] })
 	} else if parent == nil && len(sg.SrcFunc) == 0 {
 		// I am root. I don't have any function to execute, and my
@@ -1269,7 +1269,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
-		for _ = range sg.Filters {
+		for range sg.Filters {
 			select {
 			case err = <-filterChan:
 				if err != nil {
@@ -1352,7 +1352,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	// Now get all the results back.
-	for _ = range sg.Children {
+	for range sg.Children {
 		select {
 		case err = <-childChan:
 			if err != nil {
@@ -1376,7 +1376,7 @@ func pageRange(p *params, n int) (int, int) {
 		return 0, n
 	}
 	if p.Count < 0 {
-		// Items from the back of the array, like Python arrays. Do a postive mod n.
+		// Items from the back of the array, like Python arrays. Do a positive mod n.
 		return (((n + p.Count) % n) + n) % n, n
 	}
 	start := p.Offset

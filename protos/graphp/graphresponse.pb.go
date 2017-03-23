@@ -1500,7 +1500,7 @@ func (m *Response) MarshalTo(dAtA []byte) (int, error) {
 		i += n6
 	}
 	if len(m.AssignedUids) > 0 {
-		for k, _ := range m.AssignedUids {
+		for k := range m.AssignedUids {
 			dAtA[i] = 0x1a
 			i++
 			v := m.AssignedUids[k]

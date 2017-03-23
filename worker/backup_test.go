@@ -210,7 +210,7 @@ func generateBenchValues() []kv {
 	binary.LittleEndian.PutUint32(byteInt, 123)
 
 	fac := []*facetsp.Facet{
-		&facetsp.Facet{
+		{
 			Key:   "facetTest",
 			Value: []byte("testVal"),
 		},
@@ -228,10 +228,10 @@ func generateBenchValues() []kv {
 	// Posting_GEO      Posting_ValType = 7
 	// Posting_UID      Posting_ValType = 8
 	benchItems := []kv{
-		kv{
+		{
 			prefix: "testString",
 			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{&typesp.Posting{
+				Postings: []*typesp.Posting{{
 					ValType: typesp.Posting_STRING,
 					Value:   []byte("手機裡的眼淚"),
 					Uid:     uint64(65454),
@@ -239,36 +239,36 @@ func generateBenchValues() []kv {
 				}},
 			},
 		},
-		kv{prefix: "testGeo",
+		{prefix: "testGeo",
 			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{&typesp.Posting{
+				Postings: []*typesp.Posting{{
 					ValType: typesp.Posting_GEO,
 					Value:   geoData,
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},
 			}},
-		kv{prefix: "testPassword",
+		{prefix: "testPassword",
 			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{&typesp.Posting{
+				Postings: []*typesp.Posting{{
 					ValType: typesp.Posting_PASSWORD,
 					Value:   []byte("test"),
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},
 			}},
-		kv{prefix: "testInt",
+		{prefix: "testInt",
 			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{&typesp.Posting{
+				Postings: []*typesp.Posting{{
 					ValType: typesp.Posting_INT32,
 					Value:   byteInt,
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},
 			}},
-		kv{prefix: "testUid",
+		{prefix: "testUid",
 			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{&typesp.Posting{
+				Postings: []*typesp.Posting{{
 					ValType: typesp.Posting_INT32,
 					Uid:     uint64(65454),
 					Facets:  fac,

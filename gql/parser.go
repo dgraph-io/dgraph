@@ -132,7 +132,7 @@ func (f *Function) IsPasswordVerifier() bool {
 
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
-	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
+	x.Printf("%s[%x %q %q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
 	for _, c := range gq.Children {
 		c.DebugPrint(prefix + "|->")
 	}
@@ -657,9 +657,8 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 			item = it.Item()
 			if item.Typ != itemName {
 				return items, x.Errorf("Invalid scheam block")
-			} else {
-				items = append(items, item.Val)
 			}
+			items = append(items, item.Val)
 		default:
 			return items, x.Errorf("Invalid schema block")
 		}
