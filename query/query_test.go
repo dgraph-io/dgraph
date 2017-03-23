@@ -346,17 +346,14 @@ func TestQueryVarValAggMinMaxSelf(t *testing.T) {
 
 			me(id: var(f), orderasc: var(sum)) {
 				name
-				age
-				friend {
-					min(age)
-					max(age)
-				}
+				var(sum)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
+	fmt.Println(string(js))
 	require.JSONEq(t,
-		`{"me":[{"age":19,"friend":[{"min(age)":15},{"max(age)":15}],"name":"Andrea"},{"age":38,"friend":[{"min(age)":15},{"max(age)":19}],"name":"Michonne"},{"age":15,"friend":[{"min(age)":38},{"max(age)":38}],"name":"Rick Grimes"}]}`,
+		`{"me":[{"name":"Andrea","var[sum]":49},{"name":"Michonne","var[sum]":72},{"name":"Rick Grimes","var[sum]":91}]}`,
 		js)
 }
 

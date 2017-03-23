@@ -1630,7 +1630,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					IsInternal: true,
 				}
 				count, err := parseVarList(it, child)
-				fmt.Println(count, child.NeedsVar)
 				if err != nil {
 					return err
 				}
