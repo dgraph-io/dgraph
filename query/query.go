@@ -844,7 +844,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	}
 
 	var shortestSg *SubGraph
-	for numQueriesDone < len(sgl) {
+	for i := 0; i < len(sgl) && numQueriesDone < len(sgl); i++ {
 		errChan := make(chan error, len(sgl))
 		var idxList []int
 		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
@@ -1022,6 +1022,8 @@ AssignStep:
 				}
 				doneVars[sg.Params.Var].vals[uid] = val
 			}
+		} else {
+			doneVars[sg.Params.Var] = values{}
 		}
 	}
 }
