@@ -612,6 +612,7 @@ func (n *node) Run() {
 			}
 
 		case <-n.stop:
+			// TODO(Janardhan): Transfer leadership if current node is leader
 			close(n.done)
 			return
 		}
