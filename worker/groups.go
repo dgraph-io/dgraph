@@ -24,9 +24,10 @@ var (
 	groupIds = flag.String("groups", "0,1", "RAFT groups handled by this server.")
 	myAddr   = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
-	peerAddr   = flag.String("peer", "", "IP_ADDRESS:PORT of any healthy peer.")
-	raftId     = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
-	schemaFile = flag.String("schema", "", "Path to schema file")
+	peerAddr    = flag.String("peer", "", "IP_ADDRESS:PORT of any healthy peer.")
+	raftId      = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
+	schemaFile  = flag.String("schema", "", "Path to schema file")
+	healthCheck bool
 
 	emptyMembershipUpdate taskp.MembershipUpdate
 )
@@ -99,14 +100,40 @@ func StartRaftNodes(walDir string) {
 		*myAddr = fmt.Sprintf("localhost:%d", *workerPort)
 	}
 
+	var wg sync.WaitGroup
 	for _, id := range strings.Split(*groupIds, ",") {
 		gid, err := strconv.ParseUint(id, 0, 32)
 		x.Checkf(err, "Unable to parse group id: %v", id)
 		node := gr.newNode(uint32(gid), *raftId, *myAddr)
 		schema.ReloadData(*schemaFile, uint32(gid))
-		go node.InitAndStartNode(gr.wal)
+		wg.Add(1)
+		go node.InitAndStartNode(gr.wal, &wg)
 	}
+	wg.Wait()
+	// Do one round of syncMemberships so that membership information is
+	// populated, necessary for even single node cluster to fill all map
+
+	// This server won't be added under load balancer until all groups are
+	// initialized. But might receive requests if local groups information is
+	// sent to group zero and some other node fetches the information about
+	// the groups current server is serving before we get a reply from group
+	// zero. This is very rare scenario, but we should be able to serve that
+	// request as long as it doesn't need information about groups served by
+	// other servers
+
+	// TODO: Should we block the node from starting if syncMemberships fails ??
+	// If we start a node when quorum for group zero is not present, we might
+	// create split brain for same group id
+	gr.syncMemberships()
+	healthCheck = true
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
+}
+
+// HealthCheck returns whether the server is ready to accept requests or not
+// Load balancer would add the node to the endpoint once health check starts
+// returning true
+func HealthCheck() bool {
+	return healthCheck
 }
 
 func (g *groupi) Node(groupId uint32) *node {

@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	proposalMutation = 0
-	proposalReindex  = 1
+	proposalMutation   = 0
+	proposalReindex    = 1
+	proposalMembership = 2
 )
 
 // peerPool stores the peers per node and the addresses corresponding to them.
@@ -84,6 +85,7 @@ type node struct {
 	// SafeMutex is for fields which can be changed after init.
 	_confState *raftpb.ConfState
 	_raft      raft.Node
+	leader     bool
 
 	// Fields which are never changed after init.
 	cfg         *raft.Config
@@ -279,10 +281,12 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) err
 	proposalData := make([]byte, upto+1)
 	// Examining first byte of proposalData will quickly tell us what kind of
 	// proposal this is.
-	if proposal.RebuildIndex == nil {
-		proposalData[0] = proposalMutation
-	} else {
+	if proposal.RebuildIndex != nil {
 		proposalData[0] = proposalReindex
+	} else if proposal.Mutations != nil {
+		proposalData[0] = proposalMutation
+	} else if proposal.Membership != nil {
+		proposalData[0] = proposalMembership
 	}
 	copy(proposalData[1:], slice)
 
@@ -577,6 +581,15 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			if rd.SoftState != nil {
+				if rd.RaftState == raft.StateFollower && n.leader {
+					// stepped down as leader do a sync membership immediately
+					groups().syncMemberships()
+				} else if rd.RaftState == raft.StateLeader && !n.leader {
+					groups().syncMemberships()
+				}
+				n.leader = rd.RaftState == raft.StateLeader
+			}
 			x.Check(n.wal.StoreSnapshot(n.gid, rd.Snapshot))
 			x.Check(n.wal.Store(n.gid, rd.HardState, rd.Entries))
 
@@ -623,6 +636,7 @@ func (n *node) Run() {
 			}
 
 		case <-n.stop:
+			// TODO(Janardhan): Transfer leadership if current node is leader
 			close(n.done)
 			return
 		}
@@ -768,7 +782,8 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 }
 
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
-func (n *node) InitAndStartNode(wal *raftwal.Wal) {
+func (n *node) InitAndStartNode(wal *raftwal.Wal, wg *sync.WaitGroup) {
+	defer wg.Done()
 	restart, err := n.initFromWal(wal)
 	x.Check(err)
 
