@@ -247,21 +247,8 @@ func (s *stateGroup) isReversed(pred string) bool {
 func Init(ps *store.Store) {
 	pstore = ps
 	syncCh = make(chan SyncEntry, 10000)
-	go batchSync()
-}
-
-// ReloadData loads schema from file and then later from db
-func ReloadData(file string, group uint32) error {
 	reset()
-	if len(file) > 0 {
-		if err := parseFile(file, group); err != nil {
-			return err
-		}
-	}
-	if err := LoadFromDb(group); err != nil {
-		return err
-	}
-	return nil
+	go batchSync()
 }
 
 // LoadFromDb reads schema information from db and stores it in memory

@@ -1,4 +1,0 @@
-age:int @index
-
-name: string 
-address: string @index

@@ -1,7 +1,0 @@
-age:int
-
-
-name: string
- address: string
-<http://scalar.com/helloworld/> : string
-

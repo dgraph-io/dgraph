@@ -496,6 +496,9 @@ func commitOne(l *List, c *counters) {
 }
 
 func CommitLists(numRoutines int, group uint32) {
+	if group == 0 {
+		return
+	}
 	c := newCounters()
 	defer c.ticker.Stop()
 
