@@ -12,7 +12,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -31,7 +30,7 @@ var (
 	// so that the nodes which have lagged behind leader can just replay entries instead of
 	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
 	// are taken
-	maxPendingCount = flag.Uint64("sc", 0, "Max number of pending entries in wal after which snapshot is taken")
+	maxPendingCount = flag.Uint64("sc", 1000, "Max number of pending entries in wal after which snapshot is taken")
 	schemaFile      = flag.String("schema", "", "Path to schema file")
 
 	emptyMembershipUpdate taskp.MembershipUpdate
@@ -516,7 +515,7 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 		}(mmNew)
 	}
 
-	for _ = range update.Members {
+	for range update.Members {
 		select {
 		case <-ctx.Done():
 			return &emptyMembershipUpdate, ctx.Err()
@@ -557,9 +556,7 @@ func snapshotAll(ctx context.Context) {
 		wg.Add(1)
 		go func(n *node) {
 			defer wg.Done()
-			water := posting.SyncMarkFor(n.gid)
-			idx := water.DoneUntil()
-			n.snapshot(idx)
+			n.snapshot(0)
 		}(n)
 	}
 	wg.Wait()

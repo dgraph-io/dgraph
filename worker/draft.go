@@ -627,37 +627,13 @@ func (n *node) snapshotPeriodically() {
 		return
 	}
 
-	var prev string
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			water := posting.SyncMarkFor(n.gid)
-			le := water.DoneUntil()
-
-			existing, err := n.store.Snapshot()
-			x.Checkf(err, "Unable to get existing snapshot")
-
-			si := existing.Metadata.Index
-			if le <= si+*maxPendingCount {
-				msg := fmt.Sprintf("Current watermark %d <= previous snapshot %d + %d. Skipping.",
-					le, si, *maxPendingCount)
-				if msg != prev {
-					prev = msg
-					fmt.Println(msg)
-				}
-				continue
-			}
-			snapshotIdx := le - *maxPendingCount
-			msg := fmt.Sprintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
-			if msg != prev {
-				prev = msg
-				fmt.Println(msg)
-			}
-
-			n.snapshot(le)
+			n.snapshot(*maxPendingCount)
 
 		case <-n.done:
 			return
@@ -665,13 +641,25 @@ func (n *node) snapshotPeriodically() {
 	}
 }
 
-func (n *node) snapshot(idx uint64) {
+func (n *node) snapshot(skip uint64) {
+	water := posting.SyncMarkFor(n.gid)
+	le := water.DoneUntil()
+
+	existing, err := n.store.Snapshot()
+	x.Checkf(err, "Unable to get existing snapshot")
+
+	si := existing.Metadata.Index
+	if le <= si+skip {
+		return
+	}
+	snapshotIdx := le - skip
+	x.Trace(n.ctx, "Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
 	rc, err := n.raftContext.Marshal()
 	x.Check(err)
 
-	s, err := n.store.CreateSnapshot(idx, n.ConfState(), rc)
+	s, err := n.store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
 	x.Checkf(err, "While creating snapshot")
-	x.Checkf(n.store.Compact(idx), "While compacting snapshot")
+	x.Checkf(n.store.Compact(snapshotIdx), "While compacting snapshot")
 	x.Check(n.wal.StoreSnapshot(n.gid, s))
 }
 
