@@ -7,16 +7,18 @@ class Stats extends Component {
   render() {
     const display = (
       <span>
-        Server Latency:{" "}
-        <b>{this.props.server}</b>
-        , Rendering:{" "}
-        <b>{this.props.rendering}</b>
+        {this.props.server !== "" &&
+          <span>
+            <span>Server Latency: </span><b>{this.props.server}</b>,{" "}
+          </span>}
+        {this.props.rendering !== "" &&
+          <span><span>Rendering: </span><b>{this.props.rendering}</b></span>}
       </span>
     );
     return (
       <div style={{ marginTop: "5px" }} className="App-stats">
         <span>
-          {this.props.server !== "" && this.props.rendering !== ""
+          {this.props.server !== "" || this.props.rendering !== ""
             ? display
             : ""}
         </span>

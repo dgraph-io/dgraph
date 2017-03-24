@@ -57,14 +57,11 @@ function getNameKey(properties, regex) {
 function shortenName(label) {
   let words = label.split(" "), firstWord = words[0];
   if (firstWord.length > 20) {
-    label = [firstWord.substr(0, 9), firstWord.substr(9, 17) + "..."].join(
+    label = [firstWord.substr(0, 9), firstWord.substr(9, 7) + "..."].join(
       "-\n"
     );
   } else if (firstWord.length > 10) {
-    label = [
-      firstWord.substr(0, 9),
-      firstWord.substr(9, firstWord.length)
-    ].join("-\n");
+    label = [firstWord.substr(0, 9), firstWord.substr(9)].join("-\n");
   } else {
     // First word is less than 10 chars so we can display it in full.
     if (words.length > 1) {

@@ -37,5 +37,5 @@ before_script:
 script:
 - bash contrib/cover.sh $HOME/build coverage.out
 - bash contrib/load-test.sh $HOME/build
-- goveralls -service=travis-ci -coverprofile=coverage.out
+- goveralls -service=travis-ci -coverprofile=coverage.out || true
 - contrib/tlstest/run.sh

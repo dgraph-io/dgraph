@@ -39,6 +39,10 @@ function getQueryStructure(query: string) {
     }
     structure = structure + delim + lines[i].substr(0, openCurly).trim();
   }
+
+  if (structure === "") {
+    return lines[0];
+  }
   return structure;
 }
 

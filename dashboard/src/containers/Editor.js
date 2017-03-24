@@ -97,9 +97,11 @@ class Editor extends Component {
         .then(checkStatus)
         .then(response => response.json())
         .then(function(result) {
-          keywords = result.keywords.map(function(kw) {
-            return kw.name;
-          });
+          keywords = keywords.concat(
+            result.keywords.map(kw => {
+              return kw.name;
+            })
+          );
         })
     )
       .catch(function(error) {
@@ -116,6 +118,34 @@ class Editor extends Component {
             "Error while trying to fetch list of keywords",
             errorMsg
           );
+        }
+      });
+
+    timeout(
+      1000,
+      fetch(dgraphAddress() + "/query", {
+        method: "POST",
+        mode: "cors",
+        body: "schema {}"
+      })
+        .then(checkStatus)
+        .then(response => response.json())
+        .then(function(result) {
+          keywords = keywords.concat(
+            result.schema.map(kw => {
+              return kw.predicate;
+            })
+          );
+        })
+    )
+      .catch(function(error) {
+        console.log(error.stack);
+        console.warn("In catch: Error while trying to fetch schema", error);
+        return error;
+      })
+      .then(function(errorMsg) {
+        if (errorMsg !== undefined) {
+          console.warn("Error while trying to fetch schema", errorMsg);
         }
       });
 
