@@ -1,8 +1,5 @@
 +++
-date = "2017-03-20T19:19:14+11:00"
-draft = true
 title = "Query Language Schema"
-
 +++
 
 Schema is used to specify the scalar types of the predicates and what fields constitute an object type. This schema would be used for type checking, result validation, type coercion.
