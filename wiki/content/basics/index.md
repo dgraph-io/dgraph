@@ -17,16 +17,16 @@ weight = 0
 
 You could simply install the binaries with
 ```
-$ curl https://get.dgraph.io -sSf | bash
+curl https://get.dgraph.io -sSf | bash
 ```
 
 That script would automatically install Dgraph for you. Once done, you can jump straight to step 2.
 
 **Alternative:** To mitigate potential security risks, you could instead do this:
 ```
-$ curl https://get.dgraph.io > /tmp/get.sh
-$ vim /tmp/get.sh  # Inspect the script
-$ sh /tmp/get.sh   # Execute the script
+curl https://get.dgraph.io > /tmp/get.sh
+vim /tmp/get.sh  # Inspect the script
+sh /tmp/get.sh   # Execute the script
 ```
 
 ### Docker Image Installation
@@ -38,44 +38,34 @@ docker pull dgraph/dgraph
 
 ## Step 2: Run Dgraph
 
-We will be running Dgraph using the following schema for demonstration. You can always run Dgraph even without a schema.
-```
-scalar (
-  name: string @index
-  release_date: date @index
-  revenue: float
-  running_time: int
-)
-```
-
-To download the schema file run
-```
-$ wget "https://raw.githubusercontent.com/dgraph-io/benchmarks/master/data/starwars.schema?raw#true" -O starwars.schema -q
-```
-
 ### Using System Installation
 Follow this command to run Dgraph:
 ```
-$ dgraph --schema starwars.schema
+dgraph
 ```
 
 ### Using Docker
 
 If you wan't to persist the data while you play around with Dgraph then you should mount the `dgraph` volume.
 
+#### Map to default port (8080)
 ```
-# Assuming you have a dgraph directory which contains starwars.schema file.
-$ docker run -it -p 8080:8080 -v $(pwd)/dgraph:/dgraph dgraph/dgraph dgraph --bindall#true --schema#starwars.schema
+mkdir -p ~/dgraph
+docker run -it -p 8080:8080 -v ~/dgraph/dgraph:/dgraph dgraph/dgraph dgraph --bindall=true
+```
 
-# Or to map to custom port
+
+#### Map to custom port
+```
+mkdir -p ~/dgraph
 # Mapping port 8080 from within the container to 9090  of the instance
-$ docker run -it -p 9090:8080 -v $(pwd)/dgraph:/dgraph dgraph/dgraph dgraph --bindall#true --schema#starwars.schema
+docker run -it -p 9090:8080 -v ~/dgraph/dgraph:/dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
-{{Tip|The dgraph server listens on port 8080 (unless you have mapped to another port above) with log output to the terminal.}}
+{{% notice "note" %}}The dgraph server listens on port 8080 (unless you have mapped to another port above) with log output to the terminal.{{% /notice %}}
 
 ## Step 3: Run some queries
-{{ Tip | From v0.7.3,  a user interface is available at `http://localhost:8080` from the browser to run mutations and visualise  results from the queries.}}
+{{% notice "tip" %}}From v0.7.3,  a user interface is available at `http://localhost:8080` from the browser to run mutations and visualise  results from the queries.{{% /notice %}}
 
 Lets do a mutation which stores information about the first three releases of the the ''Star Wars'' series and one of the ''Star Trek'' movies.
 ```
@@ -121,13 +111,27 @@ mutation {
    _:st1 <revenue> "139000000" .
    _:st1 <running_time> "132" .
   }
-}'
+}' | python -m json.tool | less
+```
+
+Lets add a schema so that we can perform some interesting queries with term matching, filtering and sorting.
+
+```
+curl localhost:8080/query -XPOST -d $'
+mutation {
+  schema {
+    name: string @index
+    release_date: date @index
+    revenue: float
+    running_time: int
+  }
+}' | python -m json.tool | less
 ```
 
 Now lets get the movies (and their associated information) starting with "Star Wars" and which were released after "1980".
 ```
 curl localhost:8080/query -XPOST -d $'{
-  me(func:allof("name", "Star Wars")) @filter(geq("release_date", "1980")) {
+  me(func:allofterms(name, "Star Wars")) @filter(geq(release_date, "1980")) {
     name
     release_date
     revenue
@@ -194,75 +198,59 @@ curl localhost:8080/query -XPOST -d $'{
 ```
 
 ## Step 4: Advanced Queries on a larger dataset
-{{% note content="Step 4 and 5 are optional. If you'd like to experiment with a larger dataset and explore more functionality, this section is for you." }}
-
-{{ Note | }}
+{{% notice "note" %}}Step 4 and 5 are optional. If you'd like to experiment with a larger dataset and explore more functionality, this section is for you.{{% /notice %}}
 
 ### Download dataset
-First, download the goldendata.rdf.gz dataset from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz) ([download](https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz)). Also, download the corresponding schema from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.schema) ([download](https://raw.githubusercontent.com/dgraph-io/benchmarks/master/data/goldendata.schema)). Put both files in `~/dgraph` directory, creating it if necessary using `mkdir ~/dgraph`.
+First, download the goldendata.rdf.gz dataset from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz) ([download](https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz)). Put it in `~/dgraph` directory, creating it if necessary using `mkdir ~/dgraph`.
+
 ```
-$ mkdir -p ~/dgraph
-$ cd ~/dgraph
-$ wget "https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz?raw#true" -O goldendata.rdf.gz -q
-$ wget "https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.schema?raw#true" -O goldendata.schema -q
+mkdir -p ~/dgraph
+cd ~/dgraph
+wget "https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz?raw=true" -O goldendata.rdf.gz -q
 ```
 
 ### Load dataset
-Start schema with the schema file.
-```
-$ cd ~/dgraph # The directory where you downloaded the rdf.gz and schema files.
-$ dgraph --schema goldendata.schema
 
-# Or to run it using Docker.
-# Assuming you have a dgraph directory which contains goldendata.schema in your present working directory.
-$ docker run -it -p 8080:8080 -v $(pwd)/dgraph:/dgraph dgraph/dgraph dgraph --bindall#true --schema#goldendata.schema
+Assuming that Dgraph is running as mentioned in Step 2.
+
+Lets add a type for `initial_release_date` which is a new predicate that we will be loading. Note the name is already indexed from the previous step.
+```
+curl localhost:8080/query -XPOST -d '
+mutation {
+  schema {
+    initial_release_date: date @index
+  }
+}'
 ```
 
-Load the golden dataset that you previously downloaded by running the following in another terminal:
+Now lets load the golden dataset that you previously downloaded by running the following in another terminal:
 ```
-$ cd ~/dgraph # The directory where you downloaded the rdf.gz and schema files.
-$ dgraphloader -r goldendata.rdf.gz
+cd ~/dgraph # The directory where you downloaded the rdf.gz file.
+dgraphloader -r goldendata.rdf.gz
+```
+
+```
+Output
 ...
 Processing goldendata.rdf.gz
 Number of mutations run   : 1121
 Number of RDFs processed  : 1120879
 Time spent                : MMmSS.FFFFFFFFs
 RDFs processed per second : XXXXX
-$
+
 ```
-{{Tip|Your counts should be the same, but your statistics will vary.}}
+{{% notice "tip" %}}Your counts should be the same, but your statistics will vary.{{% /notice %}}
 
 ## Step 5: Run some queries
 
-{{ Tip | From v0.7.3 ,  a user interface is available at `http://localhost:8080` from the browser to run mutations and visualise  results from the queries.}}
-
-{{ Warning | In versions up to v0.7.3 , special convention is used for string values with specified language. RDF N-Quad `@lang` results in appending `.lang` to predicate name, e.g. `<0x01> <name> "Алисия"@ru .` is equivalent to `<0x01> <name.ru> "Алисия" .`. See [query language documentation](https://wiki.dgraph.io) for more details.}}
+{{% notice "tip" %}} From v0.7.3 ,a user interface is available at `http://localhost:8080` from the browser to run mutations and visualise  results from the queries.{{% /notice %}}
 
 ### Movies by Steven Spielberg
 
 Let's now find all the entities named "Steven Spielberg," and the movies directed by them.
-
-{| class#"wikitable"
-|-
-! Versions up to v0.7.3 !! Versions after v0.7.3 (currently only source builds)
-|-
-|
 ```
 curl localhost:8080/query -XPOST -d '{
-  director(func:allof("name.en", "steven spielberg")) {
-    name.en
-    director.film (orderdesc: initial_release_date) {
-      name.en
-      initial_release_date
-    }
-  }
-}
-' | python -m json.tool | less
-```
-||
-```
-curl localhost:8080/query -XPOST -d '{
-  director(func:allof("name", "steven spielberg")) {
+  director(func:allofterms(name, "steven spielberg")) {
     name@en
     director.film (orderdesc: initial_release_date) {
       name@en
@@ -272,37 +260,18 @@ curl localhost:8080/query -XPOST -d '{
 }
 ' | python -m json.tool | less
 ```
-|}
 
 This query will return all the movies by the popular director Steven Spielberg, sorted by release date in descending order. The query  also return two other entities which have "Steven Spielberg" in their names.
-{{Tip|You may use python or python3 equally well.}}
+
+{{% notice "tip" %}}You may use python or python3 equally well.{{% /notice %}}
 
 ### Released after August 1984
 Now, let's do some filtering. This time we'll only retrieve the movies which were released after August 1984. We'll sort in increasing order this time by using `orderasc`, instead of `orderdesc`.
-
-{| class#"wikitable"
-|-
-! Versions up to v0.7.3 !! Versions after v0.7.3 (currently only source builds)
-|-
-|
 ```
 curl localhost:8080/query -XPOST -d '{
-  director(func:allof("name.en", "steven spielberg")) {
-    name.en
-    director.film (orderasc: initial_release_date) @filter(geq("initial_release_date", "1984-08")) {
-      name.en
-      initial_release_date
-    }
-  }
-}
-' | python -m json.tool | less
-```
-||
-```
-curl localhost:8080/query -XPOST -d '{
-  director(func:allof("name", "steven spielberg")) {
+  director(func:allofterms(name, "steven spielberg")) {
     name@en
-    director.film (orderasc: initial_release_date) @filter(geq("initial_release_date", "1984-08")) {
+    director.film (orderasc: initial_release_date) @filter(geq(initial_release_date, "1984-08")) {
       name@en
       initial_release_date
     }
@@ -310,35 +279,14 @@ curl localhost:8080/query -XPOST -d '{
 }
 ' | python -m json.tool | less
 ```
-|}
-
-
 
 ### Released in 1990s
 We'll now add an AND filter using `AND` and find only the movies released in the 90s.
-{| class#"wikitable"
-|-
-! Versions up to v0.7.3 !! Versions after v0.7.3 (currently only source builds)
-|-
-|
 ```
 curl localhost:8080/query -XPOST -d '{
-  director(func:allof("name.en", "steven spielberg")) {
-    name.en
-    director.film (orderasc: initial_release_date) @filter(geq("initial_release_date", "1990") AND leq("initial_release_date", "2000")) {
-      name.en
-      initial_release_date
-    }
-  }
-}
-' | python -m json.tool | less
-```
-||
-```
-curl localhost:8080/query -XPOST -d '{
-  director(func:allof("name", "steven spielberg")) {
+  director(func:allofterms(name, "steven spielberg")) {
     name@en
-    director.film (orderasc: initial_release_date) @filter(geq("initial_release_date", "1990") AND leq("initial_release_date", "2000")) {
+    director.film (orderasc: initial_release_date) @filter(geq(initial_release_date, "1990") AND leq(initial_release_date, "2000")) {
       name@en
       initial_release_date
     }
@@ -346,46 +294,26 @@ curl localhost:8080/query -XPOST -d '{
 }
 ' | python -m json.tool | less
 ```
-|}
 
 
 ### Released since 2016
 So far, we've been retrieving film titles using the name of the director. Now, we'll start with films released since 2016, and their directors. To make things interesting, we'll only retrieve the director name, if it matches any of ''travis'' or ''knight''. In addition, we'll also alias `initial_release_date` to `release`. This will make the result look better.
 
-{| class#"wikitable"
-|-
-! Versions up to v0.7.3 !! Versions after v0.7.3 (currently only source builds)
-|-
-|
 ```
 curl localhost:8080/query -XPOST -d '{
-  films(func:geq("initial_release_date", "2016")) {
-    name: name.en
-    release: initial_release_date
-    directed_by @filter(anyof("name.en", "travis knight")) {
-      name: name.en
-    }
-  }
-}
-' | python -m json.tool | less
-```
-||
-```
-curl localhost:8080/query -XPOST -d '{
-  films(func:geq("initial_release_date", "2016")) {
+  films(func:geq(initial_release_date, "2016")) {
     name@en
     release: initial_release_date
-    directed_by @filter(anyof("name", "travis knight")) {
+    directed_by @filter(anyofterms(name, "travis knight")) {
       name@en
     }
   }
 }
 ' | python -m json.tool | less
 ```
-|}
 
-
-This should give you an idea of some of the queries Dgraph is capable of. A wider range of queries can been found in the [[Query Language]] section.
+### TODO - Fix this cross link.
+This should give you an idea of some of the queries Dgraph is capable of. A wider range of queries can been found in the {{< relref "query-language.md" >}} section.
 
 ## Need Help
 * Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
@@ -399,9 +327,9 @@ This should give you an idea of some of the queries Dgraph is capable of. A wide
 One of the things to try would be to open bash in the container and try to run Dgraph from within it.
 
 ```
-$ docker run -it dgraph/dgraph bash
-# Now that you are within the container
-$ dgraph
+docker run -it dgraph/dgraph bash
+# Now that you are within the container, run Dgraph.r
+dgraph
 ```
 
 If Dgraph runs for you that indicates there could be something wrong with mounting volumes.

@@ -5,7 +5,7 @@ title = "query language"
 
 +++
 
-## GraphQL+- 
+## GraphQL+-
 Dgraph uses a variation of [GraphQL](https://facebook.github.io/graphql/) as the primary language of communication.
 GraphQL is a query language created by Facebook for describing the capabilities and requirements of data models for client‐server applications.
 While GraphQL isn't aimed at Graph databases, it's graph-like query syntax, schema validation and subgraph shaped response make it a great language choice.
@@ -14,7 +14,7 @@ We're calling this simplified, feature rich language, ''GraphQL+-''.
 
 {{Note|This language is a work in progress. We're adding more features and we might further simplify some of the existing ones.}}
 
-## Mutations 
+## Mutations
 
 {{Note| All mutations queries shown here can be run using `curl localhost:8080/query -XPOST -d $'mutation { ... }'`}}
 
@@ -29,7 +29,7 @@ Here, `0x01` is the internal unique id assigned to an entity.
 And finally, we have `"Alice"`, which is a string value representing her name.
 RDF N-Quad ends with a `dot (.)`, to represent the end of a single fact.
 
-### Language 
+### Language
 
 RDF N-Quad allows specifying the language for string values, using `@lang`. Using that syntax, we can set `0x01`'s name in other languages.
 ```
@@ -47,13 +47,13 @@ Note that Dgraph converts these to `predicate.lang`. So, the above would be equi
 <0x01> <name.ru> "Алисия" .
 <0x01> <name.fr> "Adélaïde" .
 ```
-|| 
+||
 To specify the language of the value to be returned from query `@lang1:lang2:lang3` notation is used. It is extension over RDF N-Quad syntax, and allows specifying multiple languages in order of preference. If value in given language is not found, next language from list is considered. If there are no values in any of specified languages, the value without specified language is returned. At last, if there is no value without language, value in ''some'' language is returned (this is implementation specific).
 
 {{ Note | Languages preference list cannot be used in functions.}}
 |}
 
-### Batch mutations 
+### Batch mutations
 
 You can put multiple RDF lines into a single query to Dgraph. This is highly recommended.
 Dgraph loader by default batches a 1000 RDF lines into one query, while running 100 such queries in parallel.
@@ -69,7 +69,7 @@ mutation {
 ```
 {{Tip|Using a `$` in front of the curl payload maintains newline characters, which are essential for RDF N-Quads.}}
 
-### Assigning UID 
+### Assigning UID
 
 Blank nodes (`_:<identifier>`) in mutations let you create a new entity in the database by assigning it a UID.
 Dgraph can assign multiple UIDs in a single query while preserving relationships between these entities.
@@ -126,7 +126,7 @@ Now we can query as follows using the `_uid_` of `class`.
 }
 ```
 
-### External IDs (_xid_) 
+### External IDs (_xid_)
 
 While not recommended, Dgraph supports directly using external ids in queries.
 These could be useful if you are exporting existing data to Dgraph.
@@ -150,7 +150,7 @@ mutation{
 $ curl localhost:8080/query -XPOST -d '{me(id:alice) {name}}'
 ```
 
-### Delete 
+### Delete
 
 `delete` keyword lets you delete a specified `S P O` triple through a mutation. For example, if you want to delete the record `<lewis-carrol> <died> "1998" .`, you would do the following.
 
@@ -172,7 +172,7 @@ mutation {
 }
 ```
 
-## Queries 
+## Queries
 {{Note|
 Most of the examples here are based on the 21million.rdf.gz file [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz). The geo-location queries are based on sf.tourism.gz file [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz). The corresponding 21million.schema for both is [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema).
 
