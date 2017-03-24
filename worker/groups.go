@@ -113,7 +113,7 @@ func StartRaftNodes(walDir string) {
 	}
 	wg.Wait()
 	// Do one round of syncMemberships so that membership information of
-	// current node is populated, this is required for
+	// current node is populated, this is required for single node cluster also.
 	// Single node cluster cannot be started without group zero
 	gr.syncMemberships()
 	for gr.LastUpdate() == 0 {
