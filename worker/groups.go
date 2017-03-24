@@ -84,6 +84,7 @@ func StartRaftNodes(walDir string) {
 		// after starting the leader of group zero, that leader might not have updated
 		// itself in the memberships; and hence this node would think that no one is handling
 		// group zero. Therefore, we MUST wait to get pass a last update raft index of zero.
+		gr.syncMemberships()
 		for gr.LastUpdate() == 0 {
 			time.Sleep(time.Second)
 			fmt.Println("Last update raft index for membership information is zero. Syncing...")
@@ -111,11 +112,12 @@ func StartRaftNodes(walDir string) {
 		go node.InitAndStartNode(gr.wal, &wg)
 	}
 	wg.Wait()
-	// Do one round of syncMemberships so that membership information is
-	// populated, necessary for even single node cluster to fill all map
+	// Do one round of syncMemberships so that membership information of
+	// current node is populated, this is required for
+	// Single node cluster cannot be started without group zero
 	gr.syncMemberships()
 	for gr.LastUpdate() == 0 {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(time.Second)
 		gr.syncMemberships()
 	}
 	atomic.StoreUint32(&healthCheck, 1)
@@ -292,8 +294,7 @@ func (g *groupi) LastUpdate() uint64 {
 }
 
 func (g *groupi) TouchLastUpdate(u uint64) {
-	g.Lock()
-	defer g.Unlock()
+	g.AssertLock()
 	if g.lastUpdate < u {
 		g.lastUpdate = u
 	}
@@ -394,14 +395,9 @@ UPDATEMEMBERSHIP:
 		goto UPDATEMEMBERSHIP
 	}
 
-	var lu uint64
 	for _, mm := range update.Members {
 		g.applyMembershipUpdate(update.LastUpdate, mm)
-		if lu < update.LastUpdate {
-			lu = update.LastUpdate
-		}
 	}
-	g.TouchLastUpdate(lu)
 }
 
 func (g *groupi) periodicSyncMemberships() {
@@ -476,6 +472,7 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
 	for gid, sl := range g.all {
 		fmt.Printf("Group: %v. List: %+v\n", gid, sl.list)
 	}
+	g.TouchLastUpdate(raftIdx)
 }
 
 // MembershipUpdateAfter generates the Flatbuffer response containing all the
