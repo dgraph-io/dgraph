@@ -23,8 +23,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
-
-	"github.com/dgraph-io/dgraph/schema"
 )
 
 type keyword struct {
@@ -40,18 +38,9 @@ type keywords struct {
 // Used to return a list of keywords, so that UI can show them for autocompletion.
 func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
-	// TODO: Remove this code and replace with query from ui
-	preds := schema.State().Predicates(1)
-	kw := make([]keyword, 0, len(preds))
-	for _, p := range preds {
-		kw = append(kw, keyword{
-			Type: "predicate",
-			Name: p,
-		})
-	}
-	kws := keywords{Keywords: kw}
-
-	predefined := []string{"@facets",
+	var kws keywords
+	predefined := []string{
+		"@facets",
 		"@filter",
 		"_uid_",
 		"after",
@@ -73,6 +62,7 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 		"or",
 		"orderasc",
 		"orderdesc",
+		"schema",
 		"within",
 	}
 

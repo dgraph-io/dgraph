@@ -80,7 +80,7 @@ export const renderGraph = (query, result, treeView) => {
 
         dispatch(
             updateLatency({
-                server: result.server_latency.total,
+                server: result.server_latency && result.server_latency.total,
                 rendering: {
                     start: new Date()
                 }
