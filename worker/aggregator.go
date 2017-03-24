@@ -14,7 +14,7 @@ func CouldApplyAggregatorOn(agrtr string, typ types.TypeID) bool {
 			typ == types.StringID ||
 			typ == types.DefaultID ||
 			typ == types.DateID)
-	case "sum":
+	case "sum", "avg":
 		return (typ == types.Int32ID ||
 			typ == types.FloatID)
 	default:

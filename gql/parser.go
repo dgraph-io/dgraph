@@ -1697,7 +1697,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 }
 
 func isAggregator(fname string) bool {
-	return fname == "min" || fname == "max" || fname == "sum"
+	return fname == "min" || fname == "max" || fname == "sum" || fname == "avg"
 }
 
 func isValVarFunc(name string) bool {

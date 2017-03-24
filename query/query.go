@@ -462,6 +462,8 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			key := gchild.Attr
 			if gchild.Func != nil && gchild.Func.IsAggregator() {
 				key += gchild.Func.Name
+			} else if gchild.Attr == "var" {
+				key += fmt.Sprintf("%v", gchild.NeedsVar)
 			}
 			if _, ok := attrsSeen[key]; ok {
 				return x.Errorf("%s not allowed multiple times in same sub-query.",
@@ -1536,7 +1538,7 @@ func isCompareFn(f string) bool {
 
 func isAggregatorFn(f string) bool {
 	switch f {
-	case "min", "max", "sum":
+	case "min", "max", "sum", "avg":
 		return true
 	}
 	return false
