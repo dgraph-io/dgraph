@@ -112,7 +112,6 @@ func processSort(ts *taskp.Sort) (*taskp.SortResult, error) {
 		out[i].offset = int(ts.Offset)
 		var emptyList taskp.List
 		out[i].ulist = &emptyList
-		out[i].excludeSet = make(map[uint64]struct{})
 	}
 
 	// Iterate over every bucket / token.
@@ -186,10 +185,6 @@ BUCKETS:
 type intersectedList struct {
 	offset int
 	ulist  *taskp.List
-
-	// For term index, a UID might appear in multiple buckets. We want to dedup.
-	// We cannot do this at the end of the sort because we do need to track offsets and counts.
-	excludeSet map[uint64]struct{}
 }
 
 // intersectBucket intersects every UID list in the UID matrix with the
@@ -215,8 +210,7 @@ func intersectBucket(ts *taskp.Sort, attr, token string, out []intersectedList) 
 
 		// Intersect index with i-th input UID list.
 		listOpt := posting.ListOptions{
-			Intersect:  ul,
-			ExcludeSet: il.excludeSet,
+			Intersect: ul,
 		}
 		result := pl.Uids(listOpt) // The actual intersection work is done here.
 		n := len(result.Uids)
@@ -251,7 +245,6 @@ func intersectBucket(ts *taskp.Sort, attr, token string, out []intersectedList) 
 		for j := 0; j < n; j++ {
 			uid := result.Uids[j]
 			il.ulist.Uids = append(il.ulist.Uids, uid)
-			il.excludeSet[uid] = struct{}{}
 		}
 	} // end for loop over UID lists in UID matrix.
 

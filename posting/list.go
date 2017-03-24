@@ -107,9 +107,8 @@ func getNew(key []byte, pstore *store.Store) *List {
 // ListOptions is used in List.Uids (in posting) to customize our output list of
 // UIDs, for each posting list. It should be internal to this package.
 type ListOptions struct {
-	AfterUID   uint64              // Any UID returned must be after this value.
-	Intersect  *taskp.List         // Intersect results with this list of UIDs.
-	ExcludeSet map[uint64]struct{} // Exclude UIDs in this set.
+	AfterUID  uint64      // Any UID returned must be after this value.
+	Intersect *taskp.List // Intersect results with this list of UIDs.
 }
 
 type ByUid []*typesp.Posting
@@ -607,12 +606,6 @@ func (l *List) Postings(opt ListOptions, postFn func(*typesp.Posting) bool) {
 	l.iterate(opt.AfterUID, func(p *typesp.Posting) bool {
 		if postingType(p) != x.ValueUid {
 			return true
-		}
-		uid := p.Uid
-		if opt.ExcludeSet != nil {
-			if _, found := opt.ExcludeSet[uid]; found {
-				return true
-			}
 		}
 		return postFn(p)
 	})
