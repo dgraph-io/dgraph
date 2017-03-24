@@ -105,4 +105,17 @@ $(document).ready(function() {
       pre.appendChild(showMore);
     }
   });
+
+  // version selector
+  var currentVersion = location.pathname.match(/^\/(\w*)\//)[1];
+  document.getElementsByClassName('version-selector')[0]
+    .addEventListener('change', function (e) {
+      var targetVersion = e.target.value;
+
+      if (currentVersion !== targetVersion) {
+        var targetPath = '/' + targetVersion;
+        location.assign(targetPath);
+      }
+    });
+
 });

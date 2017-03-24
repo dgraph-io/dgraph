@@ -5,6 +5,12 @@
     </a>
   </div>
 
+  <select class="version-selector">
+    {{ range $i, $version := .Site.Params.Versions }}
+      <option value="{{$version}}">{{ $version }}</option>
+    {{ end }}
+  </select>
+
   <ul class="topics">
     {{ $page := . }}
     {{ $toc := .TableOfContents }}
