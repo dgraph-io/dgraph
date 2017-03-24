@@ -138,6 +138,7 @@ type params struct {
 	To           uint64
 	Facet        *facetsp.Param
 	RecurseDepth uint64
+	isInternal   bool
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -163,6 +164,10 @@ type SubGraph struct {
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *taskp.List
+}
+
+func (sg *SubGraph) IsInternal() bool {
+	return sg.Params.isInternal
 }
 
 // DebugPrint prints out the SubGraph tree in a nice format for debugging purposes.
@@ -233,6 +238,20 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	// We go through all predicate children of the subgraphp.
 	for _, pc := range sg.Children {
 
+		if pc.IsInternal() {
+			x.AssertTruef(pc.Params.uidToVal != nil, "Empty variable encountered.")
+			fieldName := fmt.Sprintf("%s%v", pc.Attr, pc.Params.NeedsVar)
+			sv, ok := pc.Params.uidToVal[uid]
+			if !ok {
+				continue
+			}
+			if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
+				sv.Value = ""
+			}
+			dst.AddValue(fieldName, sv)
+			continue
+		}
+
 		if pc.uidMatrix == nil {
 			// Can happen in recurse query.
 			continue
@@ -251,6 +270,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			uidAlreadySet = true
 			dst.SetUID(uid)
 		}
+
 		if len(pc.counts) > 0 {
 			c := types.ValueForType(types.Int32ID)
 			c.Value = int32(pc.counts[idx])
@@ -454,11 +474,12 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		args := params{
-			Alias:     gchild.Alias,
-			Langs:     gchild.Langs,
-			isDebug:   sg.Params.isDebug,
-			Var:       gchild.Var,
-			Normalize: sg.Params.Normalize,
+			Alias:      gchild.Alias,
+			Langs:      gchild.Langs,
+			isDebug:    sg.Params.isDebug,
+			Var:        gchild.Var,
+			Normalize:  sg.Params.Normalize,
+			isInternal: gchild.IsInternal,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &facetsp.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -472,7 +493,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			args.DoCount = true
 		}
 
-		for argk, _ := range gchild.Args {
+		for argk := range gchild.Args {
 			if !isValidArg(argk) {
 				return x.Errorf("Invalid argument : %s", argk)
 			}
@@ -634,7 +655,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
-	for argk, _ := range gq.Args {
+	for argk := range gq.Args {
 		if !isValidArg(argk) {
 			return nil, x.Errorf("Invalid argument : %s", argk)
 		}
@@ -658,7 +679,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if len(gq.UID) > 0 {
 		o := make([]uint64, len(gq.UID))
 		copy(o, gq.UID)
-		sg.uidMatrix = []*taskp.List{&taskp.List{gq.UID}}
+		sg.uidMatrix = []*taskp.List{{gq.UID}}
 		// User specified list may not be sorted.
 		sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
 		sg.SrcUIDs = &taskp.List{o}
@@ -702,11 +723,11 @@ func toFacetsFilter(gft *gql.FilterTree) (*facetsp.FilterTree, error) {
 	ftree := new(facetsp.FilterTree)
 	ftree.Op = gft.Op
 	for _, gftc := range gft.Child {
-		if ftc, err := toFacetsFilter(gftc); err != nil {
+		ftc, err := toFacetsFilter(gftc)
+		if err != nil {
 			return nil, err
-		} else {
-			ftree.Children = append(ftree.Children, ftc)
 		}
+		ftree.Children = append(ftree.Children, ftc)
 	}
 	if gft.Func != nil {
 		ftree.Func = &facetsp.Function{
@@ -783,7 +804,7 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 					ag.Apply(child.values[idx])
 				}
 			}
-			v, err := ag.Value()
+			v, err := ag.ValueMarshalled()
 			if err != nil {
 				return err
 			}
@@ -794,13 +815,91 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 	return nil
 }
 
+func (sg *SubGraph) sumAggregation(doneVars map[string]values) (rerr error) {
+	destMap := make(map[uint64]types.Val)
+	x.AssertTruef(len(sg.Params.NeedsVar) > 0,
+		"Received empty variable list in %v. Expected atleast one.", sg.Attr)
+	srcVar := sg.Params.NeedsVar[0]
+	srcMap := doneVars[srcVar]
+	if srcMap.vals == nil {
+		return x.Errorf("Expected a value variable but missing")
+	}
+	for k := range srcMap.vals {
+		ag := aggregator{
+			name: "sumvar",
+		}
+		for _, va := range sg.Params.NeedsVar {
+			curMap := doneVars[va]
+			if curMap.vals == nil {
+				return x.Errorf("Expected a value variable but missing")
+			}
+			if rerr = ag.ApplyVal(curMap.vals[k]); rerr != nil {
+				if rerr == ErrEmptyVal {
+					break
+				}
+				return rerr
+			}
+		}
+		if rerr != ErrEmptyVal {
+			// We want to skip even if one of the value is missing.
+			destMap[k] = ag.Value()
+		}
+	}
+	doneVars[sg.Params.Var] = values{vals: destMap}
+	return nil
+}
+
+func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
+	if !sg.IsInternal() {
+		return nil
+	}
+
+	destMap := make(map[uint64]types.Val)
+	x.AssertTruef(len(sg.Params.NeedsVar) > 0,
+		"Received empty variable list in %v. Expected atleast one.", sg.Attr)
+	srcVar := sg.Params.NeedsVar[0]
+	srcMap := doneVars[srcVar]
+	if srcMap.vals == nil {
+		return x.Errorf("Expected a value variable but missing")
+	}
+	for k := range srcMap.vals {
+		ag := aggregator{
+			name: sg.Attr,
+		}
+		// Only the UIDs that have all the values will be considered.
+		for _, va := range sg.Params.NeedsVar {
+			curMap := doneVars[va]
+			if curMap.vals == nil {
+				return x.Errorf("Expected a value variable but missing")
+			}
+			ag.ApplyVal(curMap.vals[k])
+		}
+		destMap[k] = ag.Value()
+	}
+	doneVars[sg.Params.Var] = values{vals: destMap}
+	// Put it in this node.
+	sg.Params.uidToVal = destMap
+	return nil
+}
+
+func (sg *SubGraph) populatePostAggregation(doneVars map[string]values) error {
+	for idx := 0; idx < len(sg.Children); idx++ {
+		child := sg.Children[idx]
+		err := child.populatePostAggregation(doneVars)
+		if err != nil {
+			return err
+		}
+		// We'd also need to do aggregation over levels here.
+	}
+	return sg.valueVarAggregation(doneVars)
+}
+
 func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
 	var sgl []*SubGraph
 	var err error
 
 	// doneVars will store the UID list of the corresponding variables.
 	doneVars := make(map[string]values)
-	//varValMap := make(map[string]map[uint64]types.Val)
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
@@ -867,15 +966,15 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			numQueriesDone++
 			idxList = append(idxList, idx)
 			if sg.Params.Alias == "shortest" {
-				shortestSg, err = ShortestPath(ctx, sg)
-				if err != nil {
-					return nil, err
-				}
+				// We allow only one shortest path block per query.
+				go func() {
+					shortestSg, err = ShortestPath(ctx, sg)
+					errChan <- err
+				}()
 			} else if sg.Params.Alias == "recurse" {
-				err := Recurse(ctx, sg)
-				if err != nil {
-					return nil, err
-				}
+				go func() {
+					errChan <- Recurse(ctx, sg)
+				}()
 			} else {
 				go ProcessGraph(ctx, sg, nil, errChan)
 			}
@@ -884,10 +983,6 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 		// Wait for the execution that was started in this iteration.
 		for i := 0; i < len(idxList); i++ {
-			if sgl[idxList[i]].Params.Alias == "shortest" ||
-				sgl[idxList[i]].Params.Alias == "recurse" {
-				continue
-			}
 			select {
 			case err := <-errChan:
 				if err != nil {
@@ -913,6 +1008,10 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 			isCascade := shouldCascade(res, idx)
 			populateVarMap(sg, doneVars, isCascade)
+			err = sg.populatePostAggregation(doneVars)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -1070,7 +1169,7 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 				isVar = true
 				lists = append(lists, l.uids)
 			} else if l.vals != nil {
-				// This should happend only once.
+				// This should happened only once.
 				sg.Params.uidToVal = l.vals
 			}
 		}
@@ -1086,11 +1185,17 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
+	if sg.IsInternal() {
+		// We dont have to execute these nodes.
+		rch <- nil
+		return
+	}
+
 	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
 		// Retain the actual order in uidMatrix. But sort the destUids.
 		o := make([]uint64, len(sg.DestUIDs.Uids))
 		copy(o, sg.DestUIDs.Uids)
-		sg.uidMatrix = []*taskp.List{&taskp.List{o}}
+		sg.uidMatrix = []*taskp.List{{o}}
 		sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool { return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j] })
 	} else if parent == nil && len(sg.SrcFunc) == 0 {
 		// I am root. I don't have any function to execute, and my
@@ -1164,7 +1269,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
-		for _ = range sg.Filters {
+		for range sg.Filters {
 			select {
 			case err = <-filterChan:
 				if err != nil {
@@ -1247,7 +1352,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	// Now get all the results back.
-	for _ = range sg.Children {
+	for range sg.Children {
 		select {
 		case err = <-childChan:
 			if err != nil {
@@ -1271,12 +1376,15 @@ func pageRange(p *params, n int) (int, int) {
 		return 0, n
 	}
 	if p.Count < 0 {
-		// Items from the back of the array, like Python arrays. Do a postive mod n.
+		// Items from the back of the array, like Python arrays. Do a positive mod n.
 		return (((n + p.Count) % n) + n) % n, n
 	}
 	start := p.Offset
 	if start < 0 {
 		start = 0
+	}
+	if start > n {
+		return n, n
 	}
 	if p.Count == 0 { // No count specified. Just take the offset parameter.
 		return start, n

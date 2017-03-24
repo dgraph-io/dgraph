@@ -44,8 +44,16 @@ func checkSchema(t *testing.T, h map[string]*typesp.Schema, expected []nameType)
 	}
 }
 
+var schemaVal = `
+age:int
+
+name: string
+ address: string
+<http://scalar.com/helloworld/> : string
+`
+
 func TestSchema(t *testing.T) {
-	require.NoError(t, ReloadData("testfiles/test_schema", 1))
+	require.NoError(t, ParseBytes([]byte(schemaVal), 1))
 	checkSchema(t, State().get(1).predicate, []nameType{
 		{"name", &typesp.Schema{ValueType: uint32(types.StringID)}},
 		{"address", &typesp.Schema{ValueType: uint32(types.StringID)}},
@@ -61,64 +69,136 @@ func TestSchema(t *testing.T) {
 	require.Error(t, err)
 }
 
+var schemaVal1 = `
+age:int
+
+name: string
+address: string
+
+)
+`
+
 func TestSchema1_Error(t *testing.T) {
-	require.Error(t, ReloadData("testfiles/test_schema1", 1))
+	require.Error(t, ParseBytes([]byte(schemaVal1), 1))
 }
+
+var schemaVal2 = `
+name: ( string
+`
 
 func TestSchema2_Error(t *testing.T) {
-	require.Error(t, ReloadData("testfiles/test_schema2", 1))
+	require.Error(t, ParseBytes([]byte(schemaVal2), 1))
 }
+
+var schemaVal3 = `
+test test: int
+`
 
 func TestSchema3_Error(t *testing.T) {
-	require.Error(t, ReloadData("testfiles/test_schema3", 1))
+	require.Error(t, ParseBytes([]byte(schemaVal3), 1))
 }
 
-/*
-func TestSchema5_Error(t *testing.T) {
-	str = make(map[string]types.TypeID)
-	err := Parse("testfiles/test_schema5")
-	require.Error(t, err)
-}
+var schemaIndexVal1 = `
+age:int @index
 
-func TestSchema6_Error(t *testing.T) {
-	str = make(map[string]types.TypeID)
-	err := Parse("testfiles/test_schema6")
-	require.Error(t, err)
-}
-*/
-// Correct specification of indexing
+name: string 
+address: string @index
+`
+
 func TestSchemaIndex(t *testing.T) {
-	require.NoError(t, ReloadData("testfiles/test_schema_index1", 1))
+	require.NoError(t, ParseBytes([]byte(schemaIndexVal1), 1))
 	require.Equal(t, 2, len(State().IndexedFields(1)))
 }
 
-// Indexing can't be specified inside object types.
+var schemaIndexVal2 = `
+age:uid @index(int)
+
+name: string @index(exact, exact)
+address: string @index(term)
+id: id @index(exact, term, exact)
+`
+
+// Duplicate tokenizers
 func TestSchemaIndex_Error1(t *testing.T) {
-	require.Error(t, ReloadData("testfiles/test_schema_index2", 1))
+	require.Error(t, ParseBytes([]byte(schemaIndexVal2), 1))
 }
+
+var schemaIndexVal3 = `
+person:uid @index
+`
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
-	require.Error(t, ReloadData("testfiles/test_schema_index5", 1))
+	require.Error(t, ParseBytes([]byte(schemaIndexVal3), 1))
 }
+
+var schemaIndexVal4 = `
+name:string @index(exact term)
+`
 
 // Missing comma.
 func TestSchemaIndex_Error3(t *testing.T) {
-	require.Error(t, ReloadData("testfiles/test_schema_index3", 1))
+	require.Error(t, ParseBytes([]byte(schemaIndexVal4), 1))
 }
 
+var schemaIndexVal5 = `
+age:int @index(int)
+
+name: string @index(exact)
+address: string @index(term)
+id: id @index(exact, term)
+`
+
 func TestSchemaIndexCustom(t *testing.T) {
-	require.NoError(t, ReloadData("testfiles/test_schema_index4", 1))
+	require.NoError(t, ParseBytes([]byte(schemaIndexVal5), 1))
 	checkSchema(t, State().get(1).predicate, []nameType{
-		{"name", &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact"}}},
-		{"address", &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"term"}}},
-		{"age", &typesp.Schema{ValueType: uint32(types.Int32ID), Tokenizer: []string{"int"}}},
-		{"id", &typesp.Schema{ValueType: uint32(types.StringID), Tokenizer: []string{"exact", "term"}}},
+		{"name", &typesp.Schema{
+			ValueType: uint32(types.StringID),
+			Tokenizer: []string{"exact"},
+			Directive: typesp.Schema_INDEX,
+		}},
+		{"address", &typesp.Schema{
+			ValueType: uint32(types.StringID),
+			Tokenizer: []string{"term"},
+			Directive: typesp.Schema_INDEX,
+		}},
+		{"age", &typesp.Schema{
+			ValueType: uint32(types.Int32ID),
+			Tokenizer: []string{"int"},
+			Directive: typesp.Schema_INDEX,
+		}},
+		{"id", &typesp.Schema{
+			ValueType: uint32(types.StringID),
+			Tokenizer: []string{"exact", "term"},
+			Directive: typesp.Schema_INDEX,
+		}},
 	})
 	require.True(t, State().IsIndexed("name"))
 	require.False(t, State().IsReversed("name"))
 	require.Equal(t, "int", State().Tokenizer("age")[0].Name())
 	require.Equal(t, 4, len(State().IndexedFields(1)))
+}
+
+func TestParse(t *testing.T) {
+	reset()
+	schemas, err := Parse("age:int @index name:string")
+	require.NoError(t, err)
+	require.Equal(t, "int", schemas[0].Tokenizer[0])
+	require.Equal(t, 2, len(schemas))
+}
+
+func TestParse2(t *testing.T) {
+	reset()
+	schemas, err := Parse("")
+	require.NoError(t, err)
+	require.Nil(t, schemas)
+}
+
+func TestParse3_Error(t *testing.T) {
+	reset()
+	schemas, err := Parse("age:uid @index")
+	require.Error(t, err)
+	require.Nil(t, schemas)
 }
 
 var ps *store.Store

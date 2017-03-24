@@ -44,6 +44,19 @@ message Schema {
 message Mutation {
     repeated NQuad set = 1;
     repeated NQuad del = 2;
+    repeated SchemaUpdate schema = 3;
+}
+
+message SchemaUpdate {
+    string predicate = 1;
+    uint32 value_type = 2;
+    enum Directive {
+        NONE = 0;
+        INDEX = 1;
+        REVERSE = 2;
+    }
+    Directive directive = 3;
+    repeated string tokenizer = 4; 
 }
 
 message Request {

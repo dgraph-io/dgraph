@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
@@ -361,7 +362,7 @@ func postingType(p *typesp.Posting) x.ValueTypeInfo {
 	}
 }
 
-// TypeID returns the typeid of destiantion vertex
+// TypeID returns the typeid of destination vertex
 func TypeID(edge *taskp.DirectedEdge) types.TypeID {
 	if edge.ValueId != 0 {
 		return types.UidID
@@ -401,12 +402,18 @@ func (l *List) addMutation(ctx context.Context, t *taskp.DirectedEdge) (bool, er
 
 	hasMutated := l.updateMutationLayer(mpost)
 	if hasMutated {
+		var gid uint32
 		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 			l.water.Ch <- x.Mark{Index: rv.Index}
 			l.pending = append(l.pending, rv.Index)
+			gid = rv.Group
+		}
+		// if mutation doesn't come via raft
+		if gid == 0 {
+			gid = group.BelongsTo(t.Attr)
 		}
 		if dirtyChan != nil {
-			dirtyChan <- l.ghash
+			dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
 		}
 	}
 	return hasMutated, nil

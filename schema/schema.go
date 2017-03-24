@@ -33,7 +33,7 @@ import (
 var (
 	pstate *state
 	pstore *store.Store
-	syncCh chan *SyncEntry
+	syncCh chan SyncEntry
 )
 
 type stateGroup struct {
@@ -87,88 +87,49 @@ func State() *state {
 }
 
 // Update updates the schema in memory and sends an entry to syncCh so that it can be
-// comitted later
-func (s *state) Update(se *SyncEntry) {
+// committed later
+func (s *state) Update(se SyncEntry) {
 	s.get(group.BelongsTo(se.Attr)).update(se)
 }
 
-func (s *stateGroup) update(se *SyncEntry) {
+func (s *stateGroup) update(se SyncEntry) {
 	s.Lock()
 	defer s.Unlock()
 
-	_, ok := s.predicate[se.Attr]
-	x.AssertTruef(!ok, "Schema doesn't exist for attribute %s", se.Attr)
-
-	// Creating a copy to avoid race condition during marshalling
-	schema := se.Schema
-	s.predicate[se.Attr] = &schema
+	s.predicate[se.Attr] = &se.Schema
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- se
-	s.elog.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema.ValueType)
+	s.elog.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema)
+	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema)
 }
 
-// SetType sets the schema type for given predicate
-func (s *state) SetType(pred string, valueType types.TypeID) {
-	s.get(group.BelongsTo(pred)).setType(pred, valueType)
-}
-
-func (s *stateGroup) setType(pred string, valueType types.TypeID) {
-	s.Lock()
-	defer s.Unlock()
-	if schema, ok := s.predicate[pred]; ok {
-		schema.ValueType = uint32(valueType)
-	} else {
-		s.predicate[pred] = &typesp.Schema{ValueType: uint32(valueType)}
-	}
-}
-
-// SetReverse sets whether the reverse edge is enabled or
-// not for given predicate, if schema is not already defined, it's set to uid type
-func (s *state) SetReverse(pred string, rev bool) {
-	s.get(group.BelongsTo(pred)).setReverse(pred, rev)
-}
-
-func (s *stateGroup) setReverse(pred string, rev bool) {
-	s.Lock()
-	defer s.Unlock()
-	if schema, ok := s.predicate[pred]; !ok {
-		s.predicate[pred] = &typesp.Schema{ValueType: uint32(types.UidID), Reverse: rev}
-	} else {
-		x.AssertTruef(schema.ValueType == uint32(types.UidID),
-			"predicate %s is not of type uid", pred)
-		schema.Reverse = rev
-	}
-}
-
-// AddIndex adds the tokenizer for given predicate
-func (s *state) AddIndex(pred string, tokenizer string) {
-	s.get(group.BelongsTo(pred)).addIndex(pred, tokenizer)
-}
-
-func (s *stateGroup) addIndex(pred string, tokenizer string) {
-	s.Lock()
-	defer s.Unlock()
-	schema, ok := s.predicate[pred]
-	x.AssertTruef(ok, "schema state not found for %s", pred)
-	// Check for duplicates.
-	for _, tok := range schema.Tokenizer {
-		if tok == tokenizer {
-			return
-		}
-	}
-	schema.Tokenizer = append(schema.Tokenizer, tokenizer)
-}
-
-// Set sets the schema for given predicate
-func (s *state) Set(pred string, schema *typesp.Schema) {
+// Set sets the schema for given predicate in memory
+// schema mutations must flow through update function, which are
+// synced to db
+func (s *state) Set(pred string, schema typesp.Schema) {
 	s.get(group.BelongsTo(pred)).set(pred, schema)
 }
 
-func (s *stateGroup) set(pred string, schema *typesp.Schema) {
+func (s *stateGroup) set(pred string, schema typesp.Schema) {
 	s.Lock()
 	defer s.Unlock()
-	s.predicate[pred] = schema
+	s.predicate[pred] = &schema
 	s.elog.Printf("Setting schema for attr %s: %v\n", pred, schema.ValueType)
+}
+
+// Get gets the schema for given predicate
+func (s *state) Get(pred string) (typesp.Schema, bool) {
+	return s.get(group.BelongsTo(pred)).get(pred)
+}
+
+func (s *stateGroup) get(pred string) (typesp.Schema, bool) {
+	s.Lock()
+	defer s.Unlock()
+	schema, has := s.predicate[pred]
+	if !has {
+		return typesp.Schema{}, false
+	}
+	return *schema, true
 }
 
 // TypeOf returns the schema type of predicate
@@ -243,7 +204,9 @@ func (s *stateGroup) tokenizer(pred string) []tok.Tokenizer {
 	x.AssertTruef(ok, "schema state not found for %s", pred)
 	var tokenizers []tok.Tokenizer
 	for _, it := range schema.Tokenizer {
-		tokenizers = append(tokenizers, tok.GetTokenizer(it))
+		t, has := tok.GetTokenizer(it)
+		x.AssertTruef(has, "Invalid tokenizer %s", it)
+		tokenizers = append(tokenizers, t)
 	}
 	return tokenizers
 }
@@ -260,7 +223,9 @@ func (s *stateGroup) tokenizerNames(pred string) []string {
 	x.AssertTruef(ok, "schema state not found for %s", pred)
 	var tokenizers []string
 	for _, it := range schema.Tokenizer {
-		tokenizers = append(tokenizers, tok.GetTokenizer(it).Name())
+		t, found := tok.GetTokenizer(it)
+		x.AssertTruef(found, "Tokenizer not found for %s", it)
+		tokenizers = append(tokenizers, t.Name())
 	}
 	return tokenizers
 }
@@ -274,29 +239,16 @@ func (s *stateGroup) isReversed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
-		return schema.Reverse
+		return schema.Directive == typesp.Schema_REVERSE
 	}
 	return false
 }
 
 func Init(ps *store.Store) {
 	pstore = ps
-	syncCh = make(chan *SyncEntry, 10000)
-	go batchSync()
-}
-
-// ReloadData loads schema from file and then later from db
-func ReloadData(file string, group uint32) error {
+	syncCh = make(chan SyncEntry, 10000)
 	reset()
-	if len(file) > 0 {
-		if err := parse(file, group); err != nil {
-			return err
-		}
-	}
-	if err := LoadFromDb(group); err != nil {
-		return err
-	}
-	return nil
+	go batchSync()
 }
 
 // LoadFromDb reads schema information from db and stores it in memory
@@ -316,7 +268,7 @@ func LoadFromDb(gid uint32) error {
 		if group.BelongsTo(attr) != gid {
 			continue
 		}
-		State().Set(attr, &s)
+		State().Set(attr, s)
 	}
 	return nil
 }
@@ -335,7 +287,7 @@ func Refresh(groupId uint32) error {
 		data := itr.Value().Data()
 		var s typesp.Schema
 		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
-		State().Set(attr, &s)
+		State().Set(attr, s)
 	}
 
 	return nil
@@ -354,7 +306,7 @@ type SyncEntry struct {
 	Index  uint64
 }
 
-func addToEntriesMap(entriesMap map[chan x.Mark][]uint64, entries []*SyncEntry) {
+func addToEntriesMap(entriesMap map[chan x.Mark][]uint64, entries []SyncEntry) {
 	for _, entry := range entries {
 		if entry.Water != nil {
 			entriesMap[entry.Water.Ch] = append(entriesMap[entry.Water.Ch], entry.Index)
@@ -363,7 +315,7 @@ func addToEntriesMap(entriesMap map[chan x.Mark][]uint64, entries []*SyncEntry) 
 }
 
 func batchSync() {
-	var entries []*SyncEntry
+	var entries []SyncEntry
 	var loop uint64
 
 	b := pstore.NewWriteBatch()

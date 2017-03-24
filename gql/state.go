@@ -94,7 +94,6 @@ func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 			return l.Errorf("Unrecognized character inside mutation: %#U", r)
 		}
 	}
-	return nil
 }
 
 func lexInsideSchema(l *lex.Lexer) lex.StateFn {
@@ -219,7 +218,6 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			return l.Errorf("Unrecognized character in inside a func: %#U", r)
 		}
 	}
-	return nil
 }
 
 func lexTopLevel(l *lex.Lexer) lex.StateFn {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +28,11 @@ const numBackupRoutines = 10
 type kv struct {
 	prefix string
 	list   *typesp.PostingList
+}
+
+type skv struct {
+	attr   string
+	schema *typesp.Schema
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {
@@ -92,6 +98,20 @@ func toRDF(buf *bytes.Buffer, item kv) {
 	}
 }
 
+func toSchema(buf *bytes.Buffer, s *skv) {
+	buf.WriteString(s.attr)
+	buf.WriteByte(':')
+	buf.WriteString(types.TypeID(s.schema.ValueType).Name())
+	if s.schema.Directive == typesp.Schema_REVERSE {
+		buf.WriteString(" @reverse")
+	} else if s.schema.Directive == typesp.Schema_INDEX && len(s.schema.Tokenizer) > 0 {
+		buf.WriteString(" @index(")
+		buf.WriteString(strings.Join(s.schema.Tokenizer, ","))
+		buf.WriteByte(')')
+	}
+	buf.WriteString("\n")
+}
+
 func writeToFile(fpath string, ch chan []byte) error {
 	f, err := os.Create(fpath)
 	if err != nil {
@@ -129,11 +149,17 @@ func backup(gid uint32, bdir string) error {
 	}
 	fpath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.rdf.gz", gid,
 		time.Now().Format("2006-01-02-15-04")))
-	fmt.Printf("Backing up at: %v\n", fpath)
+	fspath := path.Join(bdir, fmt.Sprintf("dgraph-schema-%d-%s.rdf.gz", gid,
+		time.Now().Format("2006-01-02-15-04")))
+	fmt.Printf("Backing up at: %v, schema at %v\n", fpath, fspath)
 	chb := make(chan []byte, 1000)
-	errChan := make(chan error, 1)
+	errChan := make(chan error, 2)
 	go func() {
 		errChan <- writeToFile(fpath, chb)
+	}()
+	chsb := make(chan []byte, 1000)
+	go func() {
+		errChan <- writeToFile(fspath, chsb)
 	}()
 
 	// Use a bunch of goroutines to convert to RDF format.
@@ -162,6 +188,29 @@ func backup(gid uint32, bdir string) error {
 		}()
 	}
 
+	// Use a goroutine to convert typesp.Schema to string
+	chs := make(chan *skv, 1000)
+	wg.Add(1)
+	go func() {
+		buf := new(bytes.Buffer)
+		buf.Grow(50000)
+		for item := range chs {
+			toSchema(buf, item)
+			if buf.Len() >= 40000 {
+				tmp := make([]byte, buf.Len())
+				copy(tmp, buf.Bytes())
+				chsb <- tmp
+				buf.Reset()
+			}
+		}
+		if buf.Len() > 0 {
+			tmp := make([]byte, buf.Len())
+			copy(tmp, buf.Bytes())
+			chsb <- tmp
+		}
+		wg.Done()
+	}()
+
 	// Iterate over rocksdb.
 	it := pstore.NewIterator()
 	defer it.Close()
@@ -188,8 +237,16 @@ func backup(gid uint32, bdir string) error {
 			continue
 		}
 		if pk.IsSchema() {
-			// index values are the last keys currently
-			it.Seek(pk.SkipSchema())
+			if group.BelongsTo(pk.Attr) == gid {
+				s := &typesp.Schema{}
+				x.Check(s.Unmarshal(it.Value().Data()))
+				chs <- &skv{
+					attr:   pk.Attr,
+					schema: s,
+				}
+			}
+			// skip predicate
+			it.Next()
 			continue
 		}
 
@@ -217,9 +274,12 @@ func backup(gid uint32, bdir string) error {
 	}
 
 	close(chkv) // We have stopped output to chkv.
+	close(chs)  // we have stopped output to chs (schema)
 	wg.Wait()   // Wait for numBackupRoutines to finish.
 	close(chb)  // We have stopped output to chb.
+	close(chsb) // we have stopped output to chs (schema)
 
+	err = <-errChan
 	err = <-errChan
 	return err
 }
@@ -345,9 +405,8 @@ func BackupOverNetwork(ctx context.Context) error {
 		if bp.Status != workerp.BackupPayload_SUCCESS {
 			x.Trace(ctx, "Backup status: %v for group id: %d", bp.Status, bp.GroupId)
 			return fmt.Errorf("Backup status: %v for group id: %d", bp.Status, bp.GroupId)
-		} else {
-			x.Trace(ctx, "Backup successful for group: %v", bp.GroupId)
 		}
+		x.Trace(ctx, "Backup successful for group: %v", bp.GroupId)
 	}
 	x.Trace(ctx, "DONE backup")
 	return nil

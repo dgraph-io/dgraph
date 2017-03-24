@@ -3,7 +3,8 @@ import {
     checkStatus,
     isNotEmpty,
     showTreeView,
-    processGraph
+    processGraph,
+    dgraphAddress
 } from "../containers/Helpers";
 
 // TODO - Check if its better to break this file down into multiple files.
@@ -114,7 +115,7 @@ export const runQuery = query => {
         dispatch(isFetching());
         timeout(
             60000,
-            fetch(process.env.REACT_APP_DGRAPH + "/query?debug=true", {
+            fetch(dgraphAddress() + "/query?debug=true", {
                 method: "POST",
                 mode: "cors",
                 headers: {

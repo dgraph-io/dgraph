@@ -609,7 +609,6 @@ func ObjectValue(id TypeID, value interface{}) (*graphp.Value, error) {
 	default:
 		return def, x.Errorf("ObjectValue not available for: %v", id)
 	}
-	return def, nil
 }
 
 func toBinary(id TypeID, b interface{}) ([]byte, error) {

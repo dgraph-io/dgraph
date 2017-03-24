@@ -111,6 +111,7 @@ message DirectedEdge {
 message Mutations {
 	uint32 group_id = 1;
 	repeated DirectedEdge edges = 2;
+	repeated graphp.SchemaUpdate schema = 3;
 }
 
 message Schema {

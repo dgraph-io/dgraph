@@ -104,6 +104,9 @@ func addIndexMutation(ctx context.Context, edge *taskp.DirectedEdge, token strin
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 		groupId = rv.Group
 	}
+	if groupId == 0 {
+		groupId = group.BelongsTo(edge.Attr)
+	}
 
 	plist, decr := GetOrCreate(key, groupId)
 	defer decr()
@@ -170,16 +173,15 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 				found, val = l.findValue(math.MaxUint64)
 			}
 		}
-		hasMutated, err := l.addMutation(ctx, t)
+		_, err := l.addMutation(ctx, t)
 		l.Unlock()
 
 		if err != nil {
 			return err
 		}
-		if !hasMutated {
-			return nil
-		}
 	}
+	// We should always set index set and we can take care of stale indexes in
+	// eventual index consistency
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {
@@ -193,17 +195,90 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 			addIndexMutations(ctx, t, p, taskp.DirectedEdge_SET)
 		}
 	}
-
+	// Add reverse mutation irrespective of hashMutated, server crash can happen after
+	// mutation is synced and before reverse edge is synced
 	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
 		addReverseMutation(ctx, t)
 	}
 	return nil
 }
 
-// RebuildIndex rebuilds index for a given attribute.
-func RebuildIndex(ctx context.Context, attr string) error {
-	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
+func DeleteReverseEdges(ctx context.Context, attr string) error {
+	// Delete index entries from data store.
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.ReversePrefix()
+	idxIt := pstore.NewIterator()
+	defer idxIt.Close()
 
+	wb := pstore.NewWriteBatch()
+	defer wb.Destroy()
+	var batchSize int
+	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
+		key := idxIt.Key().Data()
+		batchSize += len(key)
+		wb.Delete(key)
+
+		if batchSize >= maxBatchSize {
+			if err := pstore.WriteBatch(wb); err != nil {
+				return err
+			}
+			wb.Clear()
+			batchSize = 0
+		}
+	}
+	if wb.Count() > 0 {
+		if err := pstore.WriteBatch(wb); err != nil {
+			return err
+		}
+		wb.Clear()
+	}
+	return nil
+}
+
+// RebuildIndex rebuilds index for a given attribute.
+func RebuildReverseEdges(ctx context.Context, attr string) error {
+	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
+	if err := DeleteReverseEdges(ctx, attr); err != nil {
+		return err
+	}
+
+	// Add index entries to data store.
+	pk := x.ParsedKey{Attr: attr}
+	edge := taskp.DirectedEdge{Attr: attr}
+	prefix := pk.DataPrefix()
+	it := pstore.NewIterator()
+	defer it.Close()
+
+	EvictGroup(group.BelongsTo(attr))
+	// Helper function - Add reverse entries for values in posting list
+	addReversePostings := func(pl *typesp.PostingList) {
+		postingsLen := len(pl.Postings)
+		for idx := 0; idx < postingsLen; idx++ {
+			p := pl.Postings[idx]
+			// Add reverse entries based on p.
+			edge.ValueId = p.Uid
+			edge.Op = taskp.DirectedEdge_SET
+			edge.Facets = p.Facets
+			edge.Label = p.Label
+			addReverseMutation(ctx, &edge)
+		}
+	}
+
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		pki := x.Parse(it.Key().Data())
+		edge.Entity = pki.Uid
+		var pl typesp.PostingList
+		x.Check(pl.Unmarshal(it.Value().Data()))
+
+		// Posting list contains only values or only UIDs.
+		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) == x.ValueUid {
+			addReversePostings(&pl)
+		}
+	}
+	return nil
+}
+
+func DeleteIndex(ctx context.Context, attr string) error {
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
@@ -232,13 +307,24 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		}
 		wb.Clear()
 	}
+	return nil
+}
+
+// RebuildIndex rebuilds index for a given attribute.
+func RebuildIndex(ctx context.Context, attr string) error {
+	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
+	if err := DeleteIndex(ctx, attr); err != nil {
+		return err
+	}
 
 	// Add index entries to data store.
+	pk := x.ParsedKey{Attr: attr}
 	edge := taskp.DirectedEdge{Attr: attr}
-	prefix = pk.DataPrefix()
+	prefix := pk.DataPrefix()
 	it := pstore.NewIterator()
 	defer it.Close()
 
+	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add index entries for values in posting list
 	addPostingsToIndex := func(pl *typesp.PostingList) {
 		postingsLen := len(pl.Postings)

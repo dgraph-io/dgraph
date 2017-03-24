@@ -2,6 +2,7 @@ package query
 
 import (
 	"bytes"
+	"log"
 
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types"
@@ -24,6 +25,41 @@ func convertTo(from *taskp.Value) (types.Val, error) {
 		return vh, x.Wrapf(err, "Fail to convert from taskp.Value to types.Val")
 	}
 	return va, err
+}
+
+func (ag *aggregator) ApplyVal(v types.Val) error {
+	if v.Value == nil {
+		return ErrEmptyVal
+	}
+	if ag.result.Value == nil {
+		ag.result = v
+		return nil
+	}
+
+	va := ag.result
+	vb := v
+	var res types.Val
+	switch ag.name {
+	case "sumvar":
+		if va.Tid == types.Int32ID && vb.Tid == types.Int32ID {
+			va.Value = va.Value.(int32) + vb.Value.(int32)
+		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
+			va.Value = va.Value.(float64) + vb.Value.(float64)
+		} else if va.Tid == types.Int32ID && vb.Tid == types.FloatID {
+			va.Value = float64(va.Value.(int32)) + vb.Value.(float64)
+			va.Tid = types.FloatID
+		} else if va.Tid == types.FloatID && vb.Tid == types.Int32ID {
+			va.Value = va.Value.(float64) + float64(vb.Value.(int32))
+		} else {
+			// This pair cannot be summed. So pass.
+			log.Fatalf("Wrong arguments for Sum aggregator.")
+		}
+		res = va
+	default:
+		return x.Errorf("Unhandled aggregator function %v", ag.name)
+	}
+	ag.result = res
+	return nil
 }
 
 func (ag *aggregator) Apply(val *taskp.Value) {
@@ -76,7 +112,7 @@ func (ag *aggregator) Apply(val *taskp.Value) {
 	ag.result = res
 }
 
-func (ag *aggregator) Value() (*taskp.Value, error) {
+func (ag *aggregator) ValueMarshalled() (*taskp.Value, error) {
 	data := types.ValueForType(types.BinaryID)
 	ag.divideByCount()
 	res := &taskp.Value{ValType: int32(ag.result.Tid), Val: x.Nilbyte}
@@ -105,4 +141,9 @@ func (ag *aggregator) divideByCount() {
 
 	ag.result.Tid = types.FloatID
 	ag.result.Value = v / float64(ag.count)
+}
+
+func (ag *aggregator) Value() types.Val {
+	ag.divideByCount()
+	return ag.result
 }

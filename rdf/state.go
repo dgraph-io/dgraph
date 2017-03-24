@@ -272,10 +272,10 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 				continue // This would skip over the escaped rune.
 			}
 			return l.Errorf("Invalid escape character : %v in literal", r)
-		} else {
-			if r == 0x5c || r == 0xa || r == 0xd { // 0x22 ('"') is endLiteral
-				return l.Errorf("Invalid character %v in literal.", r)
-			}
+		}
+
+		if r == 0x5c || r == 0xa || r == 0xd { // 0x22 ('"') is endLiteral
+			return l.Errorf("Invalid character %v in literal.", r)
 		}
 
 		if r == lex.EOF || isEndLiteral(r) {

@@ -59,7 +59,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 			go ProcessGraph(ctx, sg, dummy, rrch)
 		}
 
-		for _ = range exec {
+		for range exec {
 			select {
 			case err = <-rrch:
 				if err != nil {

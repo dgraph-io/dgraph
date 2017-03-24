@@ -180,6 +180,9 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 		return nil, err
 	}
 
+	if q.Reverse && !schema.State().IsReversed(attr) {
+		return nil, x.Errorf("Predicate %s doesn't have reverse edge", attr)
+	}
 	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
 		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
 	}
@@ -270,7 +273,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 					fs = []*facetsp.Facet{}
 				}
 				out.FacetMatrix = append(out.FacetMatrix,
-					&facetsp.List{[]*facetsp.Facets{&facetsp.Facets{fs}}})
+					&facetsp.List{[]*facetsp.Facets{{fs}}})
 			} else {
 				var fcsList []*facetsp.Facets
 				for _, fres := range filteredRes {
@@ -338,7 +341,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			x.AssertTruef(pk.Attr == q.Attr,
 				"Invalid key obtained for comparison")
 			key := it.Key().Data()
-			pl, decr := posting.GetOrUnmarshal(key, it.Value().Data())
+			pl, decr := posting.GetOrUnmarshal(key, it.Value().Data(), gid)
 			count := int64(pl.Length(0))
 			decr()
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
@@ -363,7 +366,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			x.AssertTrue(pk.Attr == q.Attr)
 			term := pk.Term[1:] // skip the first byte which is tokenizer prefix.
 			if srcFn.regex.MatchString(term) {
-				pl, decr := posting.GetOrUnmarshal(key, it.Value().Data())
+				pl, decr := posting.GetOrUnmarshal(key, it.Value().Data(), gid)
 				out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 				decr()
 			}
@@ -582,11 +585,11 @@ func applyFacetsTree(postingFacets []*facetsp.Facet, ftree *facetsTree) (bool, e
 
 	var res []bool
 	for _, c := range ftree.children {
-		if r, err := applyFacetsTree(postingFacets, c); err != nil {
+		r, err := applyFacetsTree(postingFacets, c)
+		if err != nil {
 			return false, err
-		} else {
-			res = append(res, r)
 		}
+		res = append(res, r)
 	}
 
 	// we have already checked for number of children in preprocessFilter

@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/types"
 
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
@@ -66,6 +68,9 @@ func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
 
 	posting.Init(ps)
 	Init(ps)
+	val, err := (&typesp.Schema{ValueType: uint32(typesp.Posting_UID)}).Marshal()
+	require.NoError(t, err)
+	ps.SetOne(x.SchemaKey("friend"), val)
 	populateGraphBackup(t)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
@@ -82,7 +87,7 @@ func TestBackup(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
-	posting.CommitLists(10)
+	posting.CommitLists(10, 1)
 	time.Sleep(time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
@@ -95,9 +100,14 @@ func TestBackup(t *testing.T) {
 
 	searchDir := bdir
 	fileList := []string{}
+	schemaFileList := []string{}
 	err = filepath.Walk(searchDir, func(path string, f os.FileInfo, err error) error {
 		if path != bdir {
-			fileList = append(fileList, path)
+			if strings.Contains(path, "schema") {
+				schemaFileList = append(schemaFileList, path)
+			} else {
+				fileList = append(fileList, path)
+			}
 		}
 		return nil
 	})
@@ -167,6 +177,32 @@ func TestBackup(t *testing.T) {
 	}
 	// This order will bw presereved due to file naming.
 	require.Equal(t, []int{4, 2}, counts)
+
+	var schemaCounts []int
+	for _, file := range schemaFileList {
+		f, err := os.Open(file)
+		require.NoError(t, err)
+
+		r, err := gzip.NewReader(f)
+		require.NoError(t, err)
+
+		scanner := bufio.NewScanner(r)
+		count := 0
+		for scanner.Scan() {
+			schemas, err := schema.Parse(scanner.Text())
+			require.NoError(t, err)
+			for _, s := range schemas {
+				// only schema we wrote is for friend
+				require.Equal(t, "friend", s.Predicate)
+				require.Equal(t, "uid", types.TypeID(s.ValueType).Name())
+			}
+			count = len(schemas)
+		}
+		schemaCounts = append(schemaCounts, count)
+		require.NoError(t, scanner.Err())
+	}
+	// This order will be preserved due to file naming
+	require.Equal(t, []int{1, 0}, schemaCounts)
 }
 
 func generateBenchValues() []kv {
@@ -174,7 +210,7 @@ func generateBenchValues() []kv {
 	binary.LittleEndian.PutUint32(byteInt, 123)
 
 	fac := []*facetsp.Facet{
-		&facetsp.Facet{
+		{
 			Key:   "facetTest",
 			Value: []byte("testVal"),
 		},
@@ -192,10 +228,10 @@ func generateBenchValues() []kv {
 	// Posting_GEO      Posting_ValType = 7
 	// Posting_UID      Posting_ValType = 8
 	benchItems := []kv{
-		kv{
+		{
 			prefix: "testString",
 			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{&typesp.Posting{
+				Postings: []*typesp.Posting{{
 					ValType: typesp.Posting_STRING,
 					Value:   []byte("手機裡的眼淚"),
 					Uid:     uint64(65454),
@@ -203,36 +239,36 @@ func generateBenchValues() []kv {
 				}},
 			},
 		},
-		kv{prefix: "testGeo",
+		{prefix: "testGeo",
 			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{&typesp.Posting{
+				Postings: []*typesp.Posting{{
 					ValType: typesp.Posting_GEO,
 					Value:   geoData,
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},
 			}},
-		kv{prefix: "testPassword",
+		{prefix: "testPassword",
 			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{&typesp.Posting{
+				Postings: []*typesp.Posting{{
 					ValType: typesp.Posting_PASSWORD,
 					Value:   []byte("test"),
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},
 			}},
-		kv{prefix: "testInt",
+		{prefix: "testInt",
 			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{&typesp.Posting{
+				Postings: []*typesp.Posting{{
 					ValType: typesp.Posting_INT32,
 					Value:   byteInt,
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},
 			}},
-		kv{prefix: "testUid",
+		{prefix: "testUid",
 			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{&typesp.Posting{
+				Postings: []*typesp.Posting{{
 					ValType: typesp.Posting_INT32,
 					Uid:     uint64(65454),
 					Facets:  fac,
