@@ -2,7 +2,6 @@ package query
 
 import (
 	"bytes"
-	"log"
 
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types"
@@ -68,11 +67,10 @@ func (ag *aggregator) Apply(val *taskp.Value) {
 			va.Value = va.Value.(float64) + vb.Value.(float64)
 		} else {
 			// This pair cannot be summed. So pass.
-			log.Fatalf("Wrong arguments for Sum aggregator.")
 		}
 		res = va
 	default:
-		log.Fatalf("Unhandled aggregator function %v", ag.name)
+		x.Fatalf("Unhandled aggregator function %v", ag.name)
 	}
 	ag.count++
 	ag.result = res

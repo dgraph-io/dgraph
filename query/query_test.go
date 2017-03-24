@@ -1304,21 +1304,40 @@ func TestMaxError1(t *testing.T) {
 func TestAvg(t *testing.T) {
 	populateGraph(t)
 	query := `
-                {
-                        me(id:0x01) {
-                                name
-                                gender
-                                alive
-                                friend {
-                                    avg(shadow_deep)
-                                }
-                        }
-                }
-        `
+	{
+		me(id:0x01) {
+			name
+			gender
+			alive
+			friend {
+				avg(shadow_deep)
+			}
+		}
+	}
+`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"alive":true,"friend":[{"avg(shadow_deep)":9}],"gender":"female","name":"Michonne"}]}`,
 		js)
+}
+
+func TestAvgError(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id:0x01) {
+			name
+			gender
+			alive
+			friend {
+				avg(name)
+			}
+		}
+	}
+`
+
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
 }
 
 func TestSum(t *testing.T) {
