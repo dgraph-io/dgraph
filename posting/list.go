@@ -611,7 +611,13 @@ func (l *List) Postings(opt ListOptions, postFn func(*typesp.Posting) bool) {
 		}
 		if opt.Intersect != nil {
 			intersectUidsLen := len(opt.Intersect.Uids)
-			for ; intersectIdx < intersectUidsLen && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
+			for intersectIdx < intersectUidsLen && opt.Intersect.Uids[intersectIdx] < uid {
+				if intersectIdx+100 < intersectUidsLen &&
+					opt.Intersect.Uids[intersectIdx+100] < uid {
+					intersectIdx += 100
+				} else {
+					intersectIdx++
+				}
 			}
 			if intersectIdx >= intersectUidsLen || opt.Intersect.Uids[intersectIdx] > uid {
 				return true
