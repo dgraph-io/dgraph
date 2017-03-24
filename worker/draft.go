@@ -85,7 +85,6 @@ type node struct {
 	// SafeMutex is for fields which can be changed after init.
 	_confState *raftpb.ConfState
 	_raft      raft.Node
-	leader     bool
 
 	// Fields which are never changed after init.
 	cfg         *raft.Config
@@ -280,6 +279,8 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) err
 		proposalData[0] = proposalMutation
 	} else if proposal.Membership != nil {
 		proposalData[0] = proposalMembership
+	} else {
+		x.Fatalf("Unkonw proposal")
 	}
 	copy(proposalData[1:], slice)
 
@@ -293,8 +294,12 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) err
 	// Wait for the proposal to be committed.
 	if proposal.Mutations != nil {
 		x.Trace(ctx, "Waiting for the proposal: mutations.")
-	} else {
+	} else if proposal.Membership != nil {
 		x.Trace(ctx, "Waiting for the proposal: membership update.")
+	} else if proposal.RebuildIndex != nil {
+		x.Trace(ctx, "Waiting for the proposal: RebuildIndex")
+	} else {
+		x.Fatalf("Unknown proposal")
 	}
 
 	select {
@@ -537,6 +542,7 @@ func (n *node) retrieveSnapshot(rc taskp.RaftContext) {
 
 func (n *node) Run() {
 	firstRun := true
+	var leader bool
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	rcBytes, err := n.raftContext.Marshal()
@@ -548,13 +554,13 @@ func (n *node) Run() {
 
 		case rd := <-n.Raft().Ready():
 			if rd.SoftState != nil {
-				if rd.RaftState == raft.StateFollower && n.leader {
+				if rd.RaftState == raft.StateFollower && leader {
 					// stepped down as leader do a sync membership immediately
 					groups().syncMemberships()
-				} else if rd.RaftState == raft.StateLeader && !n.leader {
+				} else if rd.RaftState == raft.StateLeader && !leader {
 					groups().syncMemberships()
 				}
-				n.leader = rd.RaftState == raft.StateLeader
+				leader = rd.RaftState == raft.StateLeader
 			}
 			x.Check(n.wal.StoreSnapshot(n.gid, rd.Snapshot))
 			x.Check(n.wal.Store(n.gid, rd.HardState, rd.Entries))
@@ -612,7 +618,23 @@ func (n *node) Run() {
 			}
 
 		case <-n.stop:
-			close(n.done)
+			if peerId, has := groups().Peer(n.gid, *raftId); has && n.AmLeader() {
+				n.Raft().TransferLeadership(n.ctx, *raftId, peerId)
+				go func() {
+					select {
+					case <-n.ctx.Done(): // time out
+						x.Trace(n.ctx, "context timed out while transfering leadership")
+					case <-time.After(1 * time.Second):
+						x.Trace(n.ctx, "Timed out transfering leadership")
+					}
+					n.Raft().Stop()
+					close(n.done)
+				}()
+			} else {
+				n.Raft().Stop()
+				close(n.done)
+			}
+		case <-n.done:
 			return
 		}
 	}

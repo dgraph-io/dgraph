@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -27,7 +28,7 @@ var (
 	peerAddr    = flag.String("peer", "", "IP_ADDRESS:PORT of any healthy peer.")
 	raftId      = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
 	schemaFile  = flag.String("schema", "", "Path to schema file")
-	healthCheck bool
+	healthCheck uint32
 
 	emptyMembershipUpdate taskp.MembershipUpdate
 )
@@ -112,20 +113,12 @@ func StartRaftNodes(walDir string) {
 	wg.Wait()
 	// Do one round of syncMemberships so that membership information is
 	// populated, necessary for even single node cluster to fill all map
-
-	// This server won't be added under load balancer until all groups are
-	// initialized. But might receive requests if local groups information is
-	// sent to group zero and some other node fetches the information about
-	// the groups current server is serving before we get a reply from group
-	// zero. This is very rare scenario, but we should be able to serve that
-	// request as long as it doesn't need information about groups served by
-	// other servers
-
-	// TODO: Should we block the node from starting if syncMemberships fails ??
-	// If we start a node when quorum for group zero is not present, we might
-	// create split brain for same group id
 	gr.syncMemberships()
-	healthCheck = true
+	for gr.LastUpdate() == 0 {
+		time.Sleep(100 * time.Millisecond)
+		gr.syncMemberships()
+	}
+	atomic.StoreUint32(&healthCheck, 1)
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
 }
 
@@ -133,7 +126,7 @@ func StartRaftNodes(walDir string) {
 // Load balancer would add the node to the endpoint once health check starts
 // returning true
 func HealthCheck() bool {
-	return healthCheck
+	return atomic.LoadUint32(&healthCheck) != 0
 }
 
 func (g *groupi) Node(groupId uint32) *node {
@@ -210,6 +203,22 @@ func (g *groupi) Servers(group uint32) []string {
 		out = append(out, s.Addr)
 	}
 	return out
+}
+
+// Servers return addresses of all servers in group.
+func (g *groupi) Peer(group uint32, nodeId uint64) (uint64, bool) {
+	g.RLock()
+	defer g.RUnlock()
+	all := g.all[group]
+	if all == nil {
+		return 0, false
+	}
+	for _, s := range all.list {
+		if s.NodeId != nodeId {
+			return s.NodeId, true
+		}
+	}
+	return 0, false
 }
 
 func (g *groupi) HasPeer(group uint32) bool {
@@ -351,7 +360,7 @@ func (g *groupi) syncMemberships() {
 
 	// Send an update to peer.
 	var pl *pool
-	addr := g.AnyServer(0)
+	_, addr := g.Leader(0)
 
 UPDATEMEMBERSHIP:
 	if len(addr) > 0 {
@@ -508,7 +517,7 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 		return &emptyMembershipUpdate, ctx.Err()
 	}
 	if !groups().ServesGroup(0) {
-		addr := groups().AnyServer(0)
+		_, addr := groups().Leader(0)
 		// fmt.Printf("I don't serve group zero. But, here's who does: %v\n", addr)
 
 		return &taskp.MembershipUpdate{

@@ -380,6 +380,10 @@ func processRequest(ctx context.Context, gq *gql.GraphQuery,
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
+	if !worker.HealthCheck() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	// Add a limit on how many pending queries can be run in the system.
 	pendingQueries <- struct{}{}
 	defer func() { <-pendingQueries }()
