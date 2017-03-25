@@ -520,5 +520,5 @@ export function sortStrings(a, b) {
 }
 
 export function dgraphAddress() {
-  return "http://localhost:" + window.SERVER_PORT;
+  return window.SERVER_ADDRESS;
 }
