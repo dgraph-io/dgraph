@@ -112,14 +112,6 @@ func StartRaftNodes(walDir string) {
 		go node.InitAndStartNode(gr.wal, &wg)
 	}
 	wg.Wait()
-	// Do one round of syncMemberships so that membership information of
-	// current node is populated, this is required for single node cluster also.
-	// Single node cluster cannot be started without group zero
-	gr.syncMemberships()
-	for gr.LastUpdate() == 0 {
-		time.Sleep(time.Second)
-		gr.syncMemberships()
-	}
 	atomic.StoreUint32(&healthCheck, 1)
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
 }
@@ -252,6 +244,12 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 	for gid := range g.all {
 		gids = append(gids, gid)
 	}
+	// If we start a single node cluster without group zero
+	if len(gids) == 0 {
+		for gid := range g.local {
+			gids = append(gids, gid)
+		}
+	}
 	return
 }
 
@@ -294,7 +292,8 @@ func (g *groupi) LastUpdate() uint64 {
 }
 
 func (g *groupi) TouchLastUpdate(u uint64) {
-	g.AssertLock()
+	g.Lock()
+	defer g.Unlock()
 	if g.lastUpdate < u {
 		g.lastUpdate = u
 	}
@@ -395,9 +394,14 @@ UPDATEMEMBERSHIP:
 		goto UPDATEMEMBERSHIP
 	}
 
+	var lu uint64
 	for _, mm := range update.Members {
 		g.applyMembershipUpdate(update.LastUpdate, mm)
+		if lu < update.LastUpdate {
+			lu = update.LastUpdate
+		}
 	}
+	g.TouchLastUpdate(lu)
 }
 
 func (g *groupi) periodicSyncMemberships() {
@@ -472,7 +476,6 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
 	for gid, sl := range g.all {
 		fmt.Printf("Group: %v. List: %+v\n", gid, sl.list)
 	}
-	g.TouchLastUpdate(raftIdx)
 }
 
 // MembershipUpdateAfter generates the Flatbuffer response containing all the

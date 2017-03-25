@@ -91,9 +91,8 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 	var err error
 	n := groups().Node(gid)
 
-	// This is useful for testing, when the membership information doesn't have chance
-	// to propagate. Probably this is not needed since we block mutations until we do
-	// at least one attempt of sync membership. It would fail in rare cases.
+	// This is useful for testing, when the membership information doesn't
+	// have chance to propagate
 	if n != nil && n.AmLeader() {
 		x.Trace(ctx, "Calling assignUids as I'm leader of group: %d", gid)
 		ul, err = assignUids(ctx, num)
