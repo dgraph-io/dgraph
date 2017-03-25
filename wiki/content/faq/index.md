@@ -63,7 +63,7 @@ Yes. We have 2 versions of Dgraph: Community, which is under open source license
 Yes. We're VC funded and plan to use the funds for development. We have a dedicated team of really smart engineers working on this as their full-time job. And of course, we're always open to contributions from the wider community.
 
 ### How does Dgraph plan to make money as a company?
-It's currently too early to say. It's very likely that we will offer commercially licensed plugins and paid support to interested customers. This model would enable us to continue advancing Dgraph while standing by our commitment to keeping the core project free, open, and available under the Apache 2.0 license.
+It's currently too early to say. It's very likely that we will offer commercially licensed plugins and paid support to interested customers. This model would enable us to continue advancing Dgraph while standing by our commitment to keeping the core project free and open.
 
 ### How can I contribute to Dgraph?
 We accept both code and documentation contributions. Please see [link](https://wiki.dgraph.io) for more information about how to contribute.
