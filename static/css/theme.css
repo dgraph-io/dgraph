@@ -994,3 +994,13 @@ pre.collapsed .showmore:hover {
   font-size: 0.95em;
   padding: 5px 10px;
 }
+.menu-header {
+  padding: 9px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.menu-header .heading {
+  display: inline-block;
+
+}

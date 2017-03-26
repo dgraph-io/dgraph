@@ -5,11 +5,16 @@
     </a>
   </div>
 
-  <select class="version-selector">
-    {{ range $i, $version := .Site.Params.Versions }}
-      <option value="{{$version}}">{{ $version }}</option>
-    {{ end }}
-  </select>
+  <div class="menu-header">
+    <div class="heading">
+      Dgraph manual
+    </div>
+    <select class="version-selector">
+      {{ range $i, $version := .Site.Params.Versions }}
+        <option value="{{$version}}">{{ $version }}</option>
+      {{ end }}
+    </select>
+  </div>
 
   <ul class="topics">
     {{ $page := . }}

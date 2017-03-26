@@ -1,5 +1,4 @@
-// TODO: use vanilajs
-$(document).ready(function() {
+(function() {
   // clipboard
   var clipInit = false;
   $('pre code').each(function() {
@@ -118,4 +117,4 @@ $(document).ready(function() {
       }
     });
 
-});
+})();
