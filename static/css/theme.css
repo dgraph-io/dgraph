@@ -836,6 +836,12 @@ td {
   display: inline-block;
 }
 
+.notices.incomplete {
+  border-color: #f3d98c;
+  background-color: #f7f7f1;
+  border: 1px solid #e2e2e2;
+}
+
 .notices.note {
   border-color: #f3d98c;
   background-color: #fffad5;
@@ -845,6 +851,12 @@ td {
 .notices.tip {
   border-color: #87cb74;
   background-color: #e3f9e3;
+  border: 1px solid #e2e2e2;
+}
+
+.notices.warning {
+  border-color: #c16560;
+  background-color: #ffefe3;
   border: 1px solid #e2e2e2;
 }
 
