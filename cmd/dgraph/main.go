@@ -837,7 +837,8 @@ func main() {
 	// setup shutdown os signal handler
 	sdCh := make(chan os.Signal, 1)
 	defer close(sdCh)
-	signal.Notify(sdCh, os.Interrupt, syscall.SIGTERM)
+	// sigint : Ctrl-C, sigquit : Ctrl-\ (backslash), sigterm : kill command.
+	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
 		_, ok := <-sdCh
 		if ok {
