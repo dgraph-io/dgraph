@@ -2307,6 +2307,45 @@ func TestToFastJSONFilterEqualNameNoHit(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne"}]}`,
 		js)
 }
+func TestToFastJSONFilterEqualName(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend @filter(eq(name, "Daryl Dixon")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Daryl Dixon"}], "gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestToFastJSONFilterEqualNameNoHit(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend @filter(eq(name, "Daryl")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne"}]}`,
+		js)
+}
 
 func TestToFastJSONFilterEqual(t *testing.T) {
 	populateGraph(t)
