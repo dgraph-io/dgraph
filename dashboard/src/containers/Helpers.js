@@ -470,6 +470,12 @@ export function processGraph(
       findAndMerge(nodes, n);
     }
 
+    // Render only first 1000 nodes on first load otherwise graph can get stuck.
+    if (nodes.length > 1000 && nodesIndex === undefined) {
+      nodesIndex = nodes.length;
+      edgesIndex = edges.length;
+    }
+
     // Root nodes don't have a source node, so we don't want to create any edge for them.
     if (obj.src.id === "") {
       continue;
@@ -520,5 +526,11 @@ export function sortStrings(a, b) {
 }
 
 export function dgraphAddress() {
-  return "http://localhost:" + window.SERVER_PORT;
+  if (process.env.NODE_ENV === "production") {
+    // This is defined in index.html and we get it from the url.
+    return window.SERVER_URL;
+  }
+
+  // For development, we just connect to the Dgraph server at http://localhost:8080.
+  return "http://localhost:8080";
 }
