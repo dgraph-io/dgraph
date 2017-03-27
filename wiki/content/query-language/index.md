@@ -1762,7 +1762,128 @@ Since, `bob` has a `car` and it has a facet `since`, it is part of same object a
 Also, `close` relationship between `bob` and `alice` is part of `bob`'s output object.
 For `charlie` who does not have `car` edge and no facets other than that of friend's `close`.
 
-We are working on supporting filtering, sorting and pagination based on facets in the query.
+### Filtering on facets
+
+For the next query examples of facets, we use following data set :
+```
+curl localhost:8080/query -XPOST -d $'
+  mutation {
+    set {
+      <alice> <name> "alice" .
+      <bob> <name> "bob" .
+      <charlie> <name> "charlie" .
+      <dave> <name> "dave" .
+      <alice> <friend> <bob> (close=true, relative=false) .
+      <alice> <friend> <charlie> (close=false, relative=true) .
+      <alice> <friend> <dave> (close=true, relative=true) .
+    }
+  }
+' | python -m json.tool | less
+```
+On previous dataset, this adds `dave` as friend of `alice` and `relative` facet on all friend edges.
+
+We support filtering edges based on facets. You can use all kinds of filtering functions like
+`allofterms, geq, eq etc.` with facets.
+
+Have a look at below example:
+```
+curl localhost:8080/query -XPOST -d $'{
+  data(id:<alice>) {
+    friend @facets(eq(close, true)) {
+      name
+    }
+  }
+}' | python -m json.tool | less
+```
+
+You can guess that above query give name of all friends which have `close` facet set to true.
+
+Output : We should not get `charlie` as he is not alice's close friend.
+```
+{
+  "data": [
+    {
+      "friend": [
+        {
+          "name": "bob"
+        },
+        {
+          "name": "dave"
+        }
+      ]
+    }
+  ]
+}
+```
+
+You can ask for facets while filtering on them by adding another `@facets(<facetname>)` to query.
+
+```
+curl localhost:8080/query -XPOST -d $'{
+  data(id:<alice>) {
+    friend @facets(eq(close, true)) @facets(relative) { # filter close friends and give relative status
+      name
+    }
+  }
+}' | python -m json.tool | less
+```
+Output : We should get `relative` in our `@facets`.
+```
+{
+  "data": [
+    {
+      "friend": [
+        {
+          "@facets": {
+            "_": {
+              "relative": false
+            }
+          },
+          "name": "bob"
+        },
+        {
+          "@facets": {
+            "_": {
+              "relative": true
+            }
+          },
+          "name": "dave"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Of course, You can use composition of filtering functions together like:
+```
+curl localhost:8080/query -XPOST -d $'{
+  data(id:<alice>) {
+    friend @facets(eq(close, true) AND eq(relative, true)) @facets(relative) { # filter close friends in my relation
+      name
+    }
+  }
+}' | python -m json.tool | less
+```
+Output : `dave` is only close friend who is also my relative.
+```
+{
+  "data": [
+    {
+      "friend": [
+        {
+          "@facets": {
+            "_": {
+              "relative": true
+            }
+          },
+          "name": "dave"
+        }
+      ]
+    }
+  ]
+}
+```
 
 ## Aggregation
 Aggregation is process in which information is gathered and expressed in a summary form. A common aggregation purpose is to get more information about particular groups based on specific variables such as age, profession, or income.
