@@ -348,7 +348,7 @@ timeafterbirth:  dateTime @index
 All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`. For example, for a string, you currently have a choice between two tokenizers `term` which is the default and `exact`. The `exact` tokenizer is useful when you want to do exact matching. Here is an example schema that explicitly specify all the tokenizers being used.
 
 ```
-name: string @index(exact)
+name: string @index(exact, term)
 age: int @index(int)
 address: string @index(term)
 dateofbirth: date @index(date)
@@ -357,9 +357,16 @@ location: geo @index(geo)
 timeafterbirth:  dateTime @index(datetime)
 ```
 
-The available tokenizers are currently `term, exact, int, float, geo, date, datetime`. All of them except `exact` are the default tokenizers for their respective data types.
+The available tokenizers are currently `term, exact, int, float, geo, date, datetime`. All of them except `exact` are the default tokenizers for their respective data types. You can specify multiple indexes per predicate as shown for `name` in the above example.
 
 {{% notice "note" %}}To be able to do sorting and filtering on a predicate, you must index it.{{% /notice %}}
+
+#### Sortable Indices
+
+Not all the indices establish a total order among the values that they index. So, in order to order based on the values or do inequality operations, the corresponding predicates must have a sortable index. The non-sortable indices that are curently present are `term`. All other indices are sortable. For example to sort by names or do any inequality operations on it, this line **must** be specified in schema.
+```
+name: string @index(exact)
+```
 
 ### Reverse Edges
 Each graph edge is unidirectional. It points from one node to another. A lot of times,  you wish to access data in both directions, forward and backward. Instead of having to send edges in both directions, you can use the `@reverse` keyword at the end of a uid (entity) field declaration in the schema. This specifies that the reverse edge should be automatically generated. For example, if we want to add a reverse edge for `directed_by` predicate, we should have a schema as follows.
@@ -1120,7 +1127,7 @@ the predicate (on which the index is based), geo-location point and a distance (
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  tourist( near(loc, [-122.469829, 37.771935], 1000) ) {
+  tourist(func: near(loc, [-122.469829, 37.771935], 1000) ) {
     name
   }
 }' | python -m json.tool | less
@@ -1166,7 +1173,7 @@ This query returns all the entities located within 1000 metres from the [specifi
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  tourist(within(loc, [[-122.47266769409178, 37.769018558337926 ], [ -122.47266769409178, 37.773699921075135 ], [ -122.4651575088501, 37.773699921075135 ], [ -122.4651575088501, 37.769018558337926 ], [ -122.47266769409178, 37.769018558337926]] )) {
+  tourist(func: within(loc, [[-122.47266769409178, 37.769018558337926 ], [ -122.47266769409178, 37.773699921075135 ], [ -122.4651575088501, 37.773699921075135 ], [ -122.4651575088501, 37.769018558337926 ], [ -122.47266769409178, 37.769018558337926]] )) {
     name
   }
 }' | python -m json.tool | less
@@ -1213,7 +1220,7 @@ This query returns all the entities (points/polygons) located completely within 
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  tourist(contains(loc, [ -122.50326097011566, 37.73353615592843 ] )) {
+  tourist(func: contains(loc, [ -122.50326097011566, 37.73353615592843 ] )) {
     name
   }
 }
@@ -1238,7 +1245,7 @@ This query returns all the entities that completely enclose the [http://bl.ocks.
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  tourist(intersects(loc, [[-122.503325343132, 37.73345766902749 ], [ -122.503325343132, 37.733903134117966 ], [ -122.50271648168564, 37.733903134117966 ], [ -122.50271648168564, 37.73345766902749 ], [ -122.503325343132, 37.73345766902749]] )) {
+  tourist(func: intersects(loc, [[-122.503325343132, 37.73345766902749 ], [ -122.503325343132, 37.733903134117966 ], [ -122.50271648168564, 37.733903134117966 ], [ -122.50271648168564, 37.73345766902749 ], [ -122.503325343132, 37.73345766902749]] )) {
     name
   }
 }
@@ -1353,6 +1360,59 @@ Output:
   ]
 }
 ```
+
+These compare functions can also be used at root. To obtain one movie per genre which have atleast 30000 movies, we'd do as follows:
+
+```
+curl localhost:8080/query -XPOST -d $'{
+	genre(func: gt(count(~genre), 30000)){
+		name@en
+		~genre (first:1) {
+			name@en
+		}
+	}
+}'
+```
+Output: 
+```
+{
+  "genre": [
+    {
+      "name": "Short Film",
+      "~genre": [
+        {
+          "name": "Eine Rolle Duschen"
+        }
+      ]
+    },
+    {
+      "name": "Drama",
+      "~genre": [
+        {
+          "name": "Prisoners"
+        }
+      ]
+    },
+    {
+      "name": "Comedy",
+      "~genre": [
+        {
+          "name": "A tu per tu"
+        }
+      ]
+    },
+    {
+      "name": "Documentary film",
+      "~genre": [
+        {
+          "name": "Short Cut to Nirvana: Kumbh Mela"
+        }
+      ]
+    }
+  ]
+}
+```
+These functions can help is starting from nodes which have some conditions based on count and might help in determining the type of a node if modelled accordingly. For example, to start with all the directors, we can do `gt(count(director.film), 0)` which means all the nodes that have alteast one outgoing `director.film` edge.
 
 ## Sorting
 
@@ -1886,7 +1946,7 @@ Output : `dave` is only close friend who is also my relative.
 ```
 
 ## Aggregation
-Aggregation is process in which information is gathered and expressed in a summary form. A common aggregation purpose is to get more information about particular groups based on specific variables such as age, profession, or income.
+Aggregation functions that are supported are `min, max, sum, avg`. While min and max operate on all scalar-values, sum and avg can operate only on `int and float` types. Aggregation does not depend on the index. All the aggregation results are attached one level above in the result.
 
 {{% notice "note" %}}We support aggregation on scalar type only.{{% /notice %}}
 
@@ -1900,7 +1960,6 @@ curl localhost:8080/query -XPOST -d $'{
   }
 }' | python -m json.tool | less
 ```
-
 Output:
 
 ```
@@ -1944,7 +2003,7 @@ Output:
 }
 ```
 
-### Sum
+### Sum, Avg
 ```
 curl localhost:8080/query -XPOST -d $'
 mutation {
@@ -1969,6 +2028,7 @@ query {
 			name
 			age
 			sum(age)
+			avg(age)			
 		}
 	}
 }' | python -m json.tool | less
@@ -1978,27 +2038,30 @@ Output:
 
 ```
 {
-  "me": [
-    {
-      "friend": [
+    "me": [
         {
-          "sum(age)": 300
-        },
-        {
-          "age": 99,
-          "name": "Tom"
-        },
-        {
-          "age": 100,
-          "name": "Jerry"
-        },
-        {
-          "age": 101,
-          "name": "Teddy"
+            "friend": [
+                {
+                    "age": 99,
+                    "name": "Tom"
+                },
+                {
+                    "age": 100,
+                    "name": "Jerry"
+                },
+                {
+                    "age": 101,
+                    "name": "Teddy"
+                },
+                {
+                    "sum(age)": 300
+                },
+                {
+                    "avg(age)": 100.0
+                }
+            ]
         }
-      ]
-    }
-  ]
+    ]
 }
 ```
 
@@ -2122,8 +2185,8 @@ curl localhost:8080/query -XPOST -d $'{
    }
   }
 
- films(var:B) {
-   ~genre @filter(id(A)) {
+ films(id: var(B)) {
+   ~genre @filter(var(A)) {
      name@en
    }
  }
@@ -2214,9 +2277,9 @@ curl localhost:8080/query -XPOST -d $'{
    }
   }
 
- films(var:D) @filter(id(B)) {   # movies done by both Angelina and Brad
+ films(id: var(D)) @filter(var(B)) {   # movies done by both Angelina and Brad
   name@en
-   ~genre @filter(id(A) OR id(C)) {  # Genres of movies done by Angelina or Brad
+   ~genre @filter(var(A) OR var(C)) {  # Genres of movies done by Angelina or Brad
      name@en
    }
  }
@@ -2293,6 +2356,146 @@ curl localhost:8080/query -XPOST -d $'{
 }
 
 ```
+
+## Value Variables
+
+Value variables are those which store the scalar values (unlike the UID lists which we saw above). These are a map from the UID to the corresponding value. They can store scalar predicates, aggregate functions, can be used for sorting resutls and retrieving. For example:
+
+```
+curl localhost:8080/query -XPOST -d $'{
+	var(func:allofterms(name, "angelina jolie")) {
+ 		name@en
+		actor.film {
+			performance.film {
+				B AS genre {
+					A as name@en
+				}
+			}
+		}
+	}
+
+	genre(id: var(B), orderasc: var(A)) @filter(gt(count(~genre), 30000)){
+		var(A)
+		~genre {
+			min(name)
+			max(name)
+			min(initial_release_date)
+			max(initial_release_date)
+		}
+	}
+}' | jq
+```
+Output:
+```
+{
+  "genre": [
+    {
+      "var[A]": "Comedy",
+      "~genre": [
+        {
+          "min(name)": "#1 Cheerleader Camp"
+        },
+        {
+          "max(name)": "후라이보이 박사소동"
+        },
+        {
+          "min(initial_release_date)": "0214-02-28"
+        },
+        {
+          "max(initial_release_date)": "2103-01-01"
+        }
+      ]
+    },
+    {
+      "var[A]": "Drama",
+      "~genre": [
+        {
+          "min(name)": "#Stuck"
+        },
+        {
+          "max(name)": "李朝 春花圖"
+        },
+        {
+          "min(initial_release_date)": "0214-02-28"
+        },
+        {
+          "max(initial_release_date)": "2017-12-01"
+        }
+      ]
+    },
+    {
+      "var[A]": "Short Film",
+      "~genre": [
+        {
+          "min(name)": "#11, MareyMoiré"
+        },
+        {
+          "max(name)": "휴가"
+        },
+        {
+          "min(initial_release_date)": "0214-02-28"
+        },
+        {
+          "max(initial_release_date)": "2103-05-22"
+        }
+      ]
+    }
+  ]
+}
+```
+This query shows a mix of how things can be used.
+
+### Aggregating value variables
+
+Currently we allow adding value variabels and assigning it to a new variable. This can be very useful if you want a simple recommendation system based on a formula. For example:
+
+```
+curl localhost:8080/query -XPOST -d $'{
+	var(func:allofterms(name, "steven spielberg")) {
+		name@en
+		films as director.film {
+			p as count(starring)
+			q as count(genre)
+			r as count(country)
+			score as sumvar(p, q, r)
+		}
+	}
+
+	TopMovies(id: var(films), orderdesc: var(score), first: 5){
+		name@en
+		var(score)
+	}
+}' | jq
+```
+Output:
+```
+{
+  "TopMovies": [
+    {
+      "name": "Lincoln",
+      "var[score]": 179
+    },
+    {
+      "name": "Minority Report",
+      "var[score]": 156
+    },
+    {
+      "name": "Schindler's List",
+      "var[score]": 145
+    },
+    {
+      "name": "The Terminal",
+      "var[score]": 118
+    },
+    {
+      "name": "Saving Private Ryan",
+      "var[score]": 99
+    }
+  ]
+}
+```
+In the above query we retrieve the top movies (by sum of number of actors, genres, countries) of the entity named steven spielberg.
+
 
 ## Shortest Path Queries
 
@@ -2436,6 +2639,290 @@ curl localhost:8080/query -XPOST -d $'{
 ```
 
 This query would again retrieve the shortest path but using some different parameters for the edge weights which are specified using facets (weight and liking). Also, we'd not like to have any person whose name contains `alice` in the path which is specified by the filter.
+
+## Recruse Query
+
+`Recurse` queries let you traverse a set of predicates (with filter, facets, etc.) until we reach all leaf nodes or we reach the maximum depth which is specified by the `depth` parameter.
+
+To get 10 movies from a genre that has more than 30000 films and then get two actors for those movies we'd do something as follows: 
+```
+curl localhost:8080/query -XPOST -d $'{
+	recurse(func: gt(count(~genre), 30000), first: 1){
+		name@en
+		~genre (first:10) @filter(gt(count(starring), 2))
+		starring (first: 2)
+		performance.actor
+	}
+}'
+```
+Output:
+```
+{
+  "recurse": [
+    {
+      "name": "Short Film",
+      "~genre": [
+        {
+          "name": "Life Begins for Andy Panda",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name": "Bernice Hansen"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name": "Mel Blanc"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Liviu's Dream",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name": "Catalina Harabagiu"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name": "Adrian Vancică"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Payload",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name": "Roshan Johal"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name": "Dylan Russell"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Green Eyes",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name": "Ignas Miskinis"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name": "Ieva Matulionytė"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Dogonauts: Enemy Line",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name": "Don Chatfield"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name": "Justin Rasch"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Morning Prayers",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name": "Ismir Gagula"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name": "Serafedin Redzepov"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "A Letter to Uncle Boonmee",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name": "Nuttapon  Kemthong"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name": "Kumgieng Jittamaat"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Lot in Sodom",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name": "Dorthea House"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name": "Hildegarde Watson"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Rush Hour",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name": "Christelle Seyvecon"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name": "Nicolas Guillot"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Sound Collector",
+          "starring": [
+            {
+              "performance.actor": [
+                {
+                  "name": "Steve Alexander"
+                }
+              ]
+            },
+            {
+              "performance.actor": [
+                {
+                  "name": "Joann McIntyre"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+Some points to keep in mind while using recurse queries are:
+- Each edge would be traversed only once. Hence, cycles would be avoided.
+- You can specify only one level of predicates after root. These would be traversed recursively. Both scalar and entity-nodes are treated similarly.
+- Only one recurse block is advised per query.
+- Be careful as the result size could explode quickly and an error would be returned if the result set gets too large. In such cases use more filter, limit resutls using pagination, or provide a depth parameter at root as follows:
+```
+curl localhost:8080/query -XPOST -d $'{
+	recurse(func: gt(count(~genre), 30000), depth: 2){
+		name@en
+		~genre (first:2) @filter(gt(count(starring), 2))
+		starring (first: 2)
+		performance.actor
+	}
+}'
+```
+Output: 
+```
+{
+  "recurse": [
+    {
+      "name": "Short Film",
+      "~genre": [
+        {
+          "name": "Life Begins for Andy Panda"
+        },
+        {
+          "name": "Liviu's Dream"
+        }
+      ]
+    },
+    {
+      "name": "Drama",
+      "~genre": [
+        {
+          "name": "Prisoners"
+        },
+        {
+          "name": "Stoker"
+        }
+      ]
+    },
+    {
+      "name": "Comedy",
+      "~genre": [
+        {
+          "name": "A tu per tu"
+        },
+        {
+          "name": "Gastone"
+        }
+      ]
+    },
+    {
+      "name": "Documentary film",
+      "~genre": [
+        {
+          "name": "Dream Theater: Chaos in Motion"
+        },
+        {
+          "name": "Filming Othello"
+        }
+      ]
+    }
+  ]
+}
+```
 
 ## Normalize directive
 
