@@ -357,7 +357,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 
 		// Posting list contains only values or only UIDs.
 		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) != x.ValueUid {
-			ch <- pl //addPostingsToIndex(&pl)
+			ch <- &pl //addPostingsToIndex(&pl)
 		}
 	}
 	close(ch)
