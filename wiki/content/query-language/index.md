@@ -346,7 +346,7 @@ location: geo @index
 timeafterbirth:  dateTime @index
 ```
 
-All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`. For example, for a string, you currently have a choice between two tokenizers `term` which is the default and `exact`. The `exact` tokenizer is useful when you want to do exact matching. Here is an example schema that explicitly specify all the tokenizers being used.
+All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`. 
 
 ```
 name: string @index(exact, term)
