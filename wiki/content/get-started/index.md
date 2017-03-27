@@ -1,11 +1,6 @@
 +++
 title = "Get Started"
-date = "2017-03-20T18:58:23+11:00"
-icon = "<b>X. </b>"
-chapter = true
-next = "/next/path"
-prev = "/prev/path"
-categories_weight = 0
+weight = 0
 +++
 
 **New to Dgraph? Here's a 5 step tutorial to get you up and running.**

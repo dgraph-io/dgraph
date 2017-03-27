@@ -1,8 +1,6 @@
 +++
-date = "2017-03-20T18:52:36+11:00"
 title = "Query Language"
 weight = 0
-chapter = true
 +++
 
 ## GraphQL+-
@@ -1373,7 +1371,7 @@ curl localhost:8080/query -XPOST -d $'{
 	}
 }'
 ```
-Output: 
+Output:
 ```
 {
   "genre": [
@@ -3064,4 +3062,3 @@ If the variable is initialized in the variable map, the default value will be ov
 The variable types that are supported as of now are: `int`, `float`, `bool` and `string`.
 
 {{% notice "note" %}}In GraphiQL interface, the query and the variables have to be separately entered in their respective boxes.{{% /notice %}}
-

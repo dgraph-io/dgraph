@@ -8,17 +8,32 @@ title = "Dgraph Doc"
 
 [params]
   versions = [
-    "latest",
-    "pre-0.7.3"
-]
+    "v0.7.4 (lastest)",
+    # "pre-0.7.3"
+  ]
 
 [[menu.main]]
-  name = "Basics"
-  url = "/basics/"
-  identifier = "basics"
+  name = "Get Started"
+  url = "/get-started/"
+  identifier = "get-started"
   weight = -100
 [[menu.main]]
   name = "Query Language"
   url = "/query-language/"
   identifier = "query-language"
   weight = -80
+[[menu.main]]
+  name = "Clients"
+  url = "/clients/"
+  identifier = "clients"
+  weight = -60
+[[menu.main]]
+  name = "Deploy"
+  url = "/deploy/"
+  identifier = "deploy"
+  weight = -40
+[[menu.main]]
+  name = "FAQ"
+  url = "/faq/"
+  identifier = "faq"
+  weight = -20
