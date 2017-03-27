@@ -218,4 +218,3 @@ On EC2/GCE instances, the recommended minimum is 8GB. If you still continue to h
 # See Also
 
 * [Product Roadmap to v1.0](https://github.com/dgraph-io/dgraph/issues/1)
-

@@ -1,4 +1,24 @@
-baseurl = "https://wiki.dgraph.io"
+# baseurl = "https://wiki.dgraph.io"
+baseurl = "http://localhost:1313/latest"
 languageCode = "en-us"
-title = "Official Dgraph Documentation"
 theme = "hugo-docs"
+
+# set by build script: title, baseurl
+title = "Dgraph Doc"
+
+[params]
+  versions = [
+    "latest",
+    "pre-0.7.3"
+]
+
+[[menu.main]]
+  name = "Basics"
+  url = "/basics/"
+  identifier = "basics"
+  weight = -100
+[[menu.main]]
+  name = "Query Language"
+  url = "/query-language/"
+  identifier = "query-language"
+  weight = -80
