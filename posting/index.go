@@ -236,7 +236,7 @@ func DeleteReverseEdges(ctx context.Context, attr string) error {
 	return nil
 }
 
-// RebuildIndex rebuilds index for a given attribute.
+// RebuildReverseEdges rebuilds the reverse edges for a given attribute.
 func RebuildReverseEdges(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
 	if err := DeleteReverseEdges(ctx, attr); err != nil {
@@ -340,6 +340,15 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		}
 	}
 
+	ch := make(chan *typesp.PostingList, 10000)
+	for i := 0; i < 1000; i++ {
+		go func() {
+			for pl := range ch {
+				addPostingsToIndex(pl)
+			}
+		}()
+	}
+
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		pki := x.Parse(it.Key().Data())
 		edge.Entity = pki.Uid
@@ -348,8 +357,9 @@ func RebuildIndex(ctx context.Context, attr string) error {
 
 		// Posting list contains only values or only UIDs.
 		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) != x.ValueUid {
-			addPostingsToIndex(&pl)
+			ch <- pl //addPostingsToIndex(&pl)
 		}
 	}
+	close(ch)
 	return nil
 }
