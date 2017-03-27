@@ -252,6 +252,8 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 0x1001, "Барсук", "ru", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
 
+	addEdgeToValue(t, "name", 240, "Andrea With no friends", nil)
+
 	time.Sleep(5 * time.Millisecond)
 }
 
@@ -1208,7 +1210,7 @@ func TestMultiCountSort(t *testing.T) {
 		f as var(func: anyofterms(name, "michonne rick andrea")) {
 		 	n as count(friend) 
 		}
-	
+
 		countorder(id: var(f), orderasc: var(n)) {
 			name
 			count(friend)
@@ -1217,7 +1219,7 @@ func TestMultiCountSort(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"countorder":[{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Andrea"},{"friend":[{"count":5}],"name":"Michonne"}]}`,
+		`{"countorder":[{"friend":[{"count":0}],"name":"Andrea With no friends"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Andrea"},{"friend":[{"count":5}],"name":"Michonne"}]}`,
 		js)
 }
 
@@ -1234,7 +1236,7 @@ func TestMultiAggSort(t *testing.T) {
 				dob
 			}
 		}
-	
+
 		maxorder(id: var(f), orderasc: var(maxdob)) {
 			name
 			friend {
@@ -1273,7 +1275,7 @@ func TestMinMulti(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"dob":"1910-01-02"},{"dob":"1909-05-05"},{"dob":"1909-01-10"},{"dob":"1901-01-15"},{"min(dob)":"1901-01-15"},{"max(dob)":"1910-01-02"}],"name":"Michonne"},{"friend":[{"dob":"1910-01-01"},{"min(dob)":"1910-01-01"},{"max(dob)":"1910-01-01"}],"name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05"},{"min(dob)":"1909-05-05"},{"max(dob)":"1909-05-05"}],"name":"Andrea"}]}`,
+		`{"me":[{"friend":[{"dob":"1910-01-02"},{"dob":"1909-05-05"},{"dob":"1909-01-10"},{"dob":"1901-01-15"},{"min(dob)":"1901-01-15"},{"max(dob)":"1910-01-02"}],"name":"Michonne"},{"friend":[{"dob":"1910-01-01"},{"min(dob)":"1910-01-01"},{"max(dob)":"1910-01-01"}],"name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05"},{"min(dob)":"1909-05-05"},{"max(dob)":"1909-05-05"}],"name":"Andrea"},{"name":"Andrea With no friends"}]}`,
 		js)
 }
 
@@ -2655,7 +2657,7 @@ func TestCountReverseFunc(t *testing.T) {
 		{
 			me(func: geq(count(~friend), 2)) {
 				name
-				count(~friend) 
+				count(~friend)
 			}
 		}
 	`
@@ -2671,7 +2673,7 @@ func TestCountReverseFilter(t *testing.T) {
 		{
 			me(func: anyofterms(name, "Glenn Michonne Rick")) @filter(geq(count(~friend), 2)) {
 				name
-				count(~friend) 
+				count(~friend)
 			}
 		}
 	`
@@ -2687,7 +2689,7 @@ func TestCountReverse(t *testing.T) {
 		{
 			me(id:0x18) {
 				name
-				count(~friend) 
+				count(~friend)
 			}
 		}
 	`
@@ -3434,7 +3436,7 @@ func TestMultiQuery(t *testing.T) {
 		}
   `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}], "you":[{"name":"Andrea"}]}`, js)
+	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}],"you":[{"name":"Andrea"},{"name":"Andrea With no friends"}]}`, js)
 }
 
 func TestMultiQueryError1(t *testing.T) {
@@ -4778,4 +4780,23 @@ children: <
 >
 `
 	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+}
+
+func TestToJSONReverseNegativeFirst(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: allofterms(name, "Andrea")) {
+				name
+				~friend (first: -1) {
+					name
+					gender
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea","~friend":[{"gender":"female","name":"Michonne"}]},{"name":"Andrea With no friends"}]}`,
+		js)
 }

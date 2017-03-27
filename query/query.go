@@ -1379,6 +1379,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 // pageRange returns start and end indices given pagination params. Note that n
 // is the size of the input list.
 func pageRange(p *params, n int) (int, int) {
+	if n == 0 {
+		return 0, 0
+	}
+
 	if p.Count == 0 && p.Offset == 0 {
 		return 0, n
 	}
