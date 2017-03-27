@@ -415,12 +415,15 @@ func BackupOverNetwork(ctx context.Context) error {
 	// Let's first collect all groups.
 	gids := groups().KnownGroups()
 
+	for i, gid := range gids {
+		if gid == 0 {
+			gids[i] = gids[len(gids)-1]
+			gids = gids[:len(gids)-1]
+		}
+	}
+
 	ch := make(chan *workerp.BackupPayload, len(gids))
 	for _, gid := range gids {
-		// Nothing is stored in group zero
-		if gid == 0 {
-			continue
-		}
 		go func(group uint32) {
 			reqId := uint64(rand.Int63())
 			ch <- handleBackupForGroup(ctx, reqId, group)
