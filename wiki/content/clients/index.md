@@ -413,7 +413,7 @@ This example, from [Get Started]({{< relref "get-started/index.md" >}}), [Movies
 
 ```
 curl localhost:8080/query -sS -XPOST -d $'{
-  director(allof("name", "steven spielberg")) {
+  director(allofterms("name", "steven spielberg")) {
     name@en
     director.film (orderdesc: initial_release_date) {
       name@en
@@ -426,7 +426,7 @@ And here using all alternatives.
 
 ```
 wget localhost:8080/query -q -O- --post-data=$'{
-  director(allof("name", "steven spielberg")) {
+  director(allofterms("name", "steven spielberg")) {
     name@en
     director.film (orderdesc: initial_release_date) {
       name@en

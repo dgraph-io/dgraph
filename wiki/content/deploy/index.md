@@ -105,16 +105,16 @@ Example of a valid groups.conf is:
 ```
 // If * is specified prefix matching would be done, otherwise equality matching would be done.
 
-1: _uid_, type.object.name.en
+1: _uid_, type.object.name
 2: type.object.name*, film.performance.*
 
 // Default formula for getting group where fp is the fingerprint of a predicate.
 default: fp % 10 + 2
 ```
 
-In the above spec, `_uid_`, and `type.object.name.en` predicates are going to be assigned to group 1.
+In the above spec, `_uid_`, and `type.object.name` predicates are going to be assigned to group 1.
 Any predicate with prefix `type.object.name` and `film.performance.` will be assigned to group 2.
-Note that `type.object.name.en` will belong to group 1 and not 2 despite matching both, because 1 is lower than 2.
+Note that `type.object.name` will belong to group 1 and not 2 despite matching both, because 1 is lower than 2.
 
 Finally, all the rest of the predicates would be assigned by this formula: `fingerprint(predicate) % 10 + 2`.
 They will occupy groups `[2, 3, 4, 5, 6, 7, 8, 9, 10, 11]`. ''Note that group 2 is overlapping between two rules.''

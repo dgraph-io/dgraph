@@ -34,6 +34,9 @@ RDF N-Quad allows specifying the language for string values, using `@lang`. Usin
 <0x01> <name> "Алисия"@ru .
 <0x01> <name> "Adélaïde"@fr .
 ```
+To specify the language of the value to be returned from query `@lang1:lang2:lang3` notation is used. It is extension over RDF N-Quad syntax, and allows specifying multiple languages in order of preference. If value in given language is not found, next language from list is considered. If there are no values in any of specified languages, the value without specified language is returned. At last, if there is no value without language, value in ''some'' language is returned (this is implementation specific).
+
+{{ Note | Languages preference list cannot be used in functions.}}
 
 ### Batch mutations
 
@@ -355,9 +358,18 @@ location: geo @index(geo)
 timeafterbirth:  dateTime @index(datetime)
 ```
 
-The available tokenizers are currently `term, exact, int, float, geo, date, datetime`. All of them except `exact` are the default tokenizers for their respective data types. You can specify multiple indexes per predicate as shown for `name` in the above example.
+The available tokenizers are currently `term, fulltext, exact, int, float, geo, date, datetime`. All of them except `exact` and `fulltext` are the default tokenizers for their respective data types. You can specify multiple indexes per predicate as shown for `name` in the above example.
 
 {{% notice "note" %}}To be able to do sorting and filtering on a predicate, you must index it.{{% /notice %}}
+
+#### String Indices
+There are three types of string indices: `exact`, `term` and `fulltext`. Following table summarize usage of each index type.
+
+| Index type |                          Usage                         |
+|:----------:|:------------------------------------------------------:|
+|   `exact`  | matching of entire value, regular expressions          |
+|   `term`   | matching of terms/words                                |
+| `fulltext` | matching with language specific stemming and stopwords |
 
 #### Sortable Indices
 
@@ -370,7 +382,7 @@ name: string @index(exact)
 Each graph edge is unidirectional. It points from one node to another. A lot of times,  you wish to access data in both directions, forward and backward. Instead of having to send edges in both directions, you can use the `@reverse` keyword at the end of a uid (entity) field declaration in the schema. This specifies that the reverse edge should be automatically generated. For example, if we want to add a reverse edge for `directed_by` predicate, we should have a schema as follows.
 
 ```
-name.en: string @index
+name: string @index
 directed_by: uid @reverse
 ```
 
@@ -826,7 +838,7 @@ curl localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
-`allofterms` tells Dgraph that the matching films' `name.en` have to contain both the words "indiana" and "jones". Here is the response.
+`allofterms` tells Dgraph that the matching films' `name` have to contain both the words "indiana" and "jones". Here is the response.
 
 ```
 {
@@ -1013,6 +1025,41 @@ curl localhost:8080/query -XPOST -d $'{
 }
 ```
 Note that the first result with the name "Unexpected Passion" is either not a film entity, or it is a film entity with no genre.
+
+
+### Full Text Search
+There are two functions for full text search - `alloftext` and `anyoftext`.
+Both can be used similar to their pattern matching counterparts (`allofterms`, `anyofterms`).
+Following steps are executed to process full text search function arguments:
+
+1. Tokenization (according to Unicode word boundaries).
+1. Conversion to lowercase.
+1. Unicode-normalization (to [Normalization Form KC](http://unicode.org/reports/tr15/#Norm_Forms)).
+1. Stemming using language-specific stemmer.
+1. Stop words removal (language-specific).
+
+The same steps are invoked during `fulltext` indexing of values.
+
+Following table contains all supported languages and corresponding country-codes: 
+
+| Language    | Country Code |
+|:-----------:|:------------:| 
+| Danish      | da           |
+| Dutch       | nl           |
+| English     | en           |
+| Finnish     | fi           |
+| French      | fr           |
+| German      | de           |
+| Hungarian   | hu           |
+| Italian     | it           |
+| Norwegian   | no           |
+| Portuguese  | pt           |
+| Romanian    | ro           |
+| Russian     | ru           |
+| Spanish     | es           |
+| Swedish     | sv           |
+| Turkish     | tr           |
+
 
 ### Inequality
 #### Type Values
