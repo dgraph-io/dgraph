@@ -755,8 +755,6 @@ func createTaskQuery(sg *SubGraph) *taskp.Query {
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
 		SrcFunc:      sg.SrcFunc,
-		Count:        int32(sg.Params.Count),
-		Offset:       int32(sg.Params.Offset),
 		AfterUid:     sg.Params.AfterUID,
 		DoCount:      len(sg.Filters) == 0 && sg.Params.DoCount,
 		FacetParam:   sg.Params.Facet,
