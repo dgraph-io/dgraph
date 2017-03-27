@@ -88,6 +88,9 @@ func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
 	val, err := (&typesp.Schema{ValueType: uint32(typesp.Posting_UID)}).Marshal()
 	require.NoError(t, err)
 	ps.SetOne(x.SchemaKey("friend"), val)
+	val, err = (&typesp.Schema{ValueType: uint32(typesp.Posting_UID)}).Marshal()
+	require.NoError(t, err)
+	ps.SetOne(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
 	populateGraphBackup(t)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
@@ -208,10 +211,13 @@ func TestBackup(t *testing.T) {
 		for scanner.Scan() {
 			schemas, err := schema.Parse(scanner.Text())
 			require.NoError(t, err)
-			for _, s := range schemas {
-				// only schema we wrote is for friend
-				require.Equal(t, "friend", s.Predicate)
-				require.Equal(t, "uid", types.TypeID(s.ValueType).Name())
+			require.Equal(t, 1, len(schemas))
+			// We wrote schema for only two predicates
+			if schemas[0].Predicate == "friend" {
+				require.Equal(t, "uid", types.TypeID(schemas[0].ValueType).Name())
+			} else {
+				require.Equal(t, "http://www.w3.org/2000/01/rdf-schema#range", schemas[0].Predicate)
+				require.Equal(t, "uid", types.TypeID(schemas[0].ValueType).Name())
 			}
 			count = len(schemas)
 		}
