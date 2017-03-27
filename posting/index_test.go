@@ -229,12 +229,12 @@ func TestRebuildIndex(t *testing.T) {
 	}
 	require.Len(t, idxKeys, 2)
 	require.Len(t, idxVals, 2)
-	require.EqualValues(t, x.IndexKey("name", "\x01david"), idxKeys[0])
-	require.EqualValues(t, x.IndexKey("name", "\x01michonne"), idxKeys[1])
+	require.EqualValues(t, idxKeys[0], x.IndexKey("name", "\x01david"))
+	require.EqualValues(t, idxKeys[1], x.IndexKey("name", "\x01michonne"))
 	require.Len(t, idxVals[0].Postings, 1)
 	require.Len(t, idxVals[1].Postings, 1)
-	require.EqualValues(t, idxVals[0].Postings[0].Uid, 20)
-	require.EqualValues(t, idxVals[1].Postings[0].Uid, 1)
+	require.EqualValues(t, 20, idxVals[0].Postings[0].Uid)
+	require.EqualValues(t, 1, idxVals[1].Postings[0].Uid)
 
 	l1, _ := GetOrCreate(x.DataKey("name", 1), 1)
 	deletePl(t, l1)
