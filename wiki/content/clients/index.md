@@ -406,7 +406,7 @@ The `json.tool` module is part of the standard release package for python and py
 
 #### Example ####
 
-This example, from [Get Started]({{< relref ="get-started/index.md" >}}), [Movies by Steven Spielberg]({{< relref "get-started/index.md#movies-by-steven-spielberg" >}}), uses commands commonly available on a Dgraph server to query the local Dgraph server.
+This example, from [Get Started]({{< relref "get-started/index.md" >}}), [Movies by Steven Spielberg]({{< relref "get-started/index.md#movies-by-steven-spielberg" >}}), uses commands commonly available on a Dgraph server to query the local Dgraph server.
 
 ```
 curl localhost:8080/query -sS -XPOST -d $'{

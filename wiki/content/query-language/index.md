@@ -2640,11 +2640,11 @@ curl localhost:8080/query -XPOST -d $'{
 
 This query would again retrieve the shortest path but using some different parameters for the edge weights which are specified using facets (weight and liking). Also, we'd not like to have any person whose name contains `alice` in the path which is specified by the filter.
 
-## Recruse Query
+## Recurse Query
 
 `Recurse` queries let you traverse a set of predicates (with filter, facets, etc.) until we reach all leaf nodes or we reach the maximum depth which is specified by the `depth` parameter.
 
-To get 10 movies from a genre that has more than 30000 films and then get two actors for those movies we'd do something as follows: 
+To get 10 movies from a genre that has more than 30000 films and then get two actors for those movies we'd do something as follows:
 ```
 curl localhost:8080/query -XPOST -d $'{
 	recurse(func: gt(count(~genre), 30000), first: 1){
@@ -2858,10 +2858,12 @@ Output:
 }
 ```
 Some points to keep in mind while using recurse queries are:
+
 - Each edge would be traversed only once. Hence, cycles would be avoided.
 - You can specify only one level of predicates after root. These would be traversed recursively. Both scalar and entity-nodes are treated similarly.
 - Only one recurse block is advised per query.
 - Be careful as the result size could explode quickly and an error would be returned if the result set gets too large. In such cases use more filter, limit resutls using pagination, or provide a depth parameter at root as follows:
+
 ```
 curl localhost:8080/query -XPOST -d $'{
 	recurse(func: gt(count(~genre), 30000), depth: 2){
@@ -2872,7 +2874,8 @@ curl localhost:8080/query -XPOST -d $'{
 	}
 }'
 ```
-Output: 
+
+Output:
 ```
 {
   "recurse": [
