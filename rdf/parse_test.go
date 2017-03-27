@@ -520,7 +520,7 @@ var testNQuads = []struct {
 
 	// Edge Facets test.
 	{
-		input: `_:alice <knows> "stuff" _:label (key1=val1,key2=13) .`,
+		input: `_:alice <knows> "stuff" _:label (key1="val1",key2=13) .`,
 		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -590,7 +590,7 @@ var testNQuads = []struct {
 	},
 	// Should not fail parsing with unnecessary spaces
 	{
-		input: `_:alice <knows> "stuff" ( key1 = 12 , key2=value2, key3=, key4 =val4 ) .`,
+		input: `_:alice <knows> "stuff" ( key1 = 12 , key2="value2", key3=, key4 ="val4" ) .`,
 		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -619,7 +619,7 @@ var testNQuads = []struct {
 	},
 	// Should parse all types
 	{
-		input: `_:alice <knows> "stuff" (key1=12,key2=value2,key3=1.2,key4=2006-01-02T15:04:05,key5=true,key6=false) .`,
+		input: `_:alice <knows> "stuff" (key1=12,key2="value2",key3=1.2,key4=2006-01-02T15:04:05,key5=true,key6=false) .`,
 		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -649,60 +649,6 @@ var testNQuads = []struct {
 		},
 		expectedErr: false,
 	},
-	// Should parse bools for only "true" and "false"
-	{
-		// True, 1 , t are some valid true values in go strconv.ParseBool
-		input: `_:alice <knows> "stuff" (key1=true,key2=false,key3=True,key4=False,key5=1, key6=t) .`,
-		nq: graphp.NQuad{
-			Subject:     "_:alice",
-			Predicate:   "knows",
-			ObjectId:    "",
-			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
-			ObjectType:  0,
-			Facets: []*facetsp.Facet{
-				{"key1", []byte("\001"),
-					facets.ValTypeForTypeID(facets.BoolID),
-					nil},
-				{"key2", []byte("\000"),
-					facets.ValTypeForTypeID(facets.BoolID),
-					nil},
-				{"key3", []byte("True"),
-					facets.ValTypeForTypeID(facets.StringID),
-					[]string{"\001true"}},
-				{"key4", []byte("False"),
-					facets.ValTypeForTypeID(facets.StringID),
-					[]string{"\001false"}},
-				{"key5", []byte("\001\000\000\000"),
-					facets.ValTypeForTypeID(facets.Int32ID),
-					nil},
-				{"key6", []byte("t"),
-					facets.ValTypeForTypeID(facets.StringID),
-					[]string{"\001t"}},
-			},
-		},
-		expectedErr: false,
-	},
-	// Should parse to string even if value start with ints if it has alphabets.
-	// Only support decimal format for ints.
-	{
-		input: `_:alice <knows> "stuff" (key1=11adsf234,key2=11111111111111111111132333uasfk333) .`,
-		nq: graphp.NQuad{
-			Subject:     "_:alice",
-			Predicate:   "knows",
-			ObjectId:    "",
-			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
-			ObjectType:  0,
-			Facets: []*facetsp.Facet{
-				{"key1", []byte("11adsf234"),
-					facets.ValTypeForTypeID(facets.StringID),
-					[]string{"\00111adsf234"}},
-				{"key2", []byte("11111111111111111111132333uasfk333"),
-					facets.ValTypeForTypeID(facets.StringID),
-					[]string{"\00111111111111111111111132333uasfk333"}},
-			},
-		},
-	},
-
 	// Should parse dates
 	{
 		input: `_:alice <knows> "stuff" (key1=2002-10-02T15:00:00.05Z, key2=2006-01-02T15:04:05, key3=2006-01-02) .`,
@@ -727,31 +673,31 @@ var testNQuads = []struct {
 	},
 	// failing tests for facets
 	{
-		input:       `_:alice <knows> "stuff" (key1=val1,key2) .`,
+		input:       `_:alice <knows> "stuff" (key1="val1",key2) .`,
 		expectedErr: true, // should fail because of no '=' after key2
 	},
 	{
-		input:       `_:alice <knows> "stuff" (key1=val1,=) .`,
+		input:       `_:alice <knows> "stuff" (key1="val1",=) .`,
 		expectedErr: true, // key can not be empty
 	},
 	{
-		input:       `_:alice <knows> "stuff" (key1=val1,=val1) .`,
+		input:       `_:alice <knows> "stuff" (key1="val1",="val1") .`,
 		expectedErr: true, // key can not be empty
 	},
 	{
-		input:       `_:alice <knows> "stuff" (key1=val1,key1 val1) .`,
+		input:       `_:alice <knows> "stuff" (key1="val1",key1 "val1") .`,
 		expectedErr: true, // '=' should separate key and val
 	},
 	{
-		input:       `_:alice <knows> "stuff" (key1=val1,key1= val1 .`,
+		input:       `_:alice <knows> "stuff" (key1="val1",key1= "val1" .`,
 		expectedErr: true, // facets should end by ')'
 	},
 	{
-		input:       `_:alice <knows> "stuff" (key1=val1,key1= .`,
+		input:       `_:alice <knows> "stuff" (key1="val1",key1= .`,
 		expectedErr: true, // facets should end by ')'
 	},
 	{
-		input:       `_:alice <knows> "stuff" (key1=val1,key1=`,
+		input:       `_:alice <knows> "stuff" (key1="val1",key1=`,
 		expectedErr: true, // facets should end by ')'
 	},
 	{
@@ -777,6 +723,22 @@ var testNQuads = []struct {
 	{
 		input:       `_:alice <knows> "stuff" (k=111111111111111111888888) .`,
 		expectedErr: true, // integer can not fit in int32.
+	},
+	{
+		// That what can not fit in integer fits in float.
+		input: `_:alice <knows> "stuff" (k=111111111111111111888888.23) .`,
+		nq: graphp.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facetsp.Facet{
+				{"k", []byte("\240\250OlX\207\267D"),
+					facets.ValTypeForTypeID(facets.FloatID),
+					nil},
+			},
+		},
 	},
 	// Facet tests end
 	{
