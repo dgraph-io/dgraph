@@ -348,7 +348,7 @@ cd dgraph4j
 cp dgraph4j/build/libs/dgraph4j-all-0.0.1.jar $CLASSPATH
 ```
 
-#### Example ###
+#### Example ####
 You just need to include the `fatJar` into the `classpath`, the following is a simple
 example of how to use it:
 
@@ -404,7 +404,7 @@ This is not strictly necessary for queries, but is required by the RDF format us
 
 The `json.tool` module is part of the standard release package for python and python3.
 
-#### Example ###
+#### Example ####
 
 This example, from [Get Started]({{< relref ="get-started/index.md" >}}), [Movies by Steven Spielberg]({{< relref "get-started/index.md#movies-by-steven-spielberg" >}}), uses commands commonly available on a Dgraph server to query the local Dgraph server.
 
