@@ -5,8 +5,7 @@ icon = "<b>X. </b>"
 chapter = true
 next = "/next/path"
 prev = "/prev/path"
-weight = 0
-
+categories_weight = 0
 +++
 
 **New to Dgraph? Here's a 5 step tutorial to get you up and running.**
@@ -20,7 +19,7 @@ You could simply install the binaries with
 curl https://get.dgraph.io -sSf | bash
 ```
 
-That script would automatically install Dgraph for you. Once done, you can jump straight to step 2.
+That script would automatically install Dgraph for you. Once done, you can jump straight to [step 2]({{< relref "#step-2" >}}).
 
 **Alternative:** To mitigate potential security risks, you could instead do this:
 ```
@@ -36,7 +35,7 @@ You may pull our Docker images [from here](https://hub.docker.com/r/dgraph/dgrap
 docker pull dgraph/dgraph
 ```
 
-## Step 2: Run Dgraph
+## Step 2: Run Dgraph {#step-2}
 
 ### Using System Installation
 Follow this command to run Dgraph:
@@ -65,7 +64,7 @@ docker run -it -p 9090:8080 -v ~/dgraph/dgraph:/dgraph dgraph/dgraph dgraph --bi
 {{% notice "note" %}}The dgraph server listens on port 8080 (unless you have mapped to another port above) with log output to the terminal.{{% /notice %}}
 
 ## Step 3: Run some queries
-{{% notice "tip" %}}From v0.7.3,  a user interface is available at `http://localhost:8080` from the browser to run mutations and visualise  results from the queries.{{% /notice %}}
+{{% notice "tip" %}}From v0.7.3,  a user interface is available at [`http://localhost:8080`](http://localhost:8080) from the browser to run mutations and visualise  results from the queries.{{% /notice %}}
 
 Lets do a mutation which stores information about the first three releases of the the ''Star Wars'' series and one of the ''Star Trek'' movies.
 ```
@@ -146,6 +145,8 @@ curl localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
+Output
+
 ```
 {
     "me": [
@@ -213,7 +214,7 @@ wget "https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz
 
 Assuming that Dgraph is running as mentioned in Step 2.
 
-Lets add a type for `initial_release_date` which is a new predicate that we will be loading. Note the name is already indexed from the previous step.
+Lets add a type for `initial_release_date` which is a new predicate that we will be loading. Note the `name` predicate is already indexed from the previous step.
 ```
 curl localhost:8080/query -XPOST -d '
 mutation {
@@ -229,9 +230,8 @@ cd ~/dgraph # The directory where you downloaded the rdf.gz file.
 dgraphloader -r goldendata.rdf.gz
 ```
 
-```
 Output
-...
+```
 Processing goldendata.rdf.gz
 Number of mutations run   : 1121
 Number of RDFs processed  : 1120879
@@ -243,7 +243,7 @@ RDFs processed per second : XXXXX
 
 ## Step 5: Run some queries
 
-{{% notice "tip" %}} From v0.7.3 ,a user interface is available at `http://localhost:8080` from the browser to run mutations and visualise  results from the queries.{{% /notice %}}
+{{% notice "tip" %}} From v0.7.3 ,a user interface is available at [`http://localhost:8080`](Output) from the browser to run mutations and visualise  results from the queries.{{% /notice %}}
 
 ### Movies by Steven Spielberg
 
@@ -257,11 +257,10 @@ curl localhost:8080/query -XPOST -d '{
       initial_release_date
     }
   }
-}
-' | python -m json.tool | less
+}' | python -m json.tool | less
 ```
 
-This query will return all the movies by the popular director Steven Spielberg, sorted by release date in descending order. The query  also return two other entities which have "Steven Spielberg" in their names.
+This query will return all the movies by the popular director Steven Spielberg, sorted by release date in descending order. The query  also returns two other entities which have "Steven Spielberg" in their names.
 
 {{% notice "tip" %}}You may use python or python3 equally well.{{% /notice %}}
 
@@ -276,8 +275,7 @@ curl localhost:8080/query -XPOST -d '{
       initial_release_date
     }
   }
-}
-' | python -m json.tool | less
+}' | python -m json.tool | less
 ```
 
 ### Released in 1990s
@@ -291,8 +289,7 @@ curl localhost:8080/query -XPOST -d '{
       initial_release_date
     }
   }
-}
-' | python -m json.tool | less
+}' | python -m json.tool | less
 ```
 
 
@@ -312,8 +309,7 @@ curl localhost:8080/query -XPOST -d '{
 ' | python -m json.tool | less
 ```
 
-### TODO - Fix this cross link.
-This should give you an idea of some of the queries Dgraph is capable of. A wider range of queries can been found in the {{< relref "query-language.md" >}} section.
+This should give you an idea of some of the queries Dgraph is capable of. A wider range of queries can been found in the [Query Language]({{< relref "query-language/index.md" >}}) section.
 
 ## Need Help
 * Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
@@ -328,7 +324,7 @@ One of the things to try would be to open bash in the container and try to run D
 
 ```
 docker run -it dgraph/dgraph bash
-# Now that you are within the container, run Dgraph.r
+# Now that you are within the container, run Dgraph.
 dgraph
 ```
 

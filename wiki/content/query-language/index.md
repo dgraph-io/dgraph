@@ -37,10 +37,6 @@ RDF N-Quad allows specifying the language for string values, using `@lang`. Usin
 <0x01> <name> "Adélaïde"@fr .
 ```
 
-To specify the language of the value to be returned from query `@lang1:lang2:lang3` notation is used. It is extension over RDF N-Quad syntax, and allows specifying multiple languages in order of preference. If value in given language is not found, next language from list is considered. If there are no values in any of specified languages, the value without specified language is returned. At last, if there is no value without language, value in ''some'' language is returned (this is implementation specific).
-
-{{% notice "note" %}}Languages preference list cannot be used in functions.{{% /notice %}}
-
 ### Batch mutations
 
 You can put multiple RDF lines into a single query to Dgraph. This is highly recommended.
@@ -298,7 +294,13 @@ curl localhost:8080/query -XPOST -d $'{
 
 The list can contain XIDs or UIDs or a combination of both.
 
+To specify the language of the value to be returned from query `@lang1:lang2:lang3` notation is used. It is extension over RDF N-Quad syntax, and allows specifying multiple languages in order of preference. If value in given language is not found, next language from list is considered. If there are no values in any of specified languages, the value without specified language is returned. At last, if there is no value without language, value in ''some'' language is returned (this is implementation specific).
+
+{{% notice "note" %}}Languages preference list cannot be used in functions.{{% /notice %}}
+
 ## Schema
+
+{{% notice "note" %}}Schema file is not supported from v0.7.4 onwards. You can use the `/query` endpoint to add/modify or retrieve the schema.{{% /notice %}}
 
 Schema is used to specify the types of the predicates. This schema would be used for type checking, result validation, type coercion.
 
@@ -319,15 +321,20 @@ The following types are supported by Dgraph.
 
 {{% notice "note" %}}uid type is used to denote objects though it internally uses uint64.{{% /notice %}}
 
-To declare a field `age` as `int`, this line has to be included in the schema file `scalar age: int`.
+
+```
+# Sample schema
+name: string
+age: int
+```
 
 * Mutations only check the scalar types. For example, in the given schema, any mutation that sets age would be checked for being a valid integer, any mutation that sets name would be checked for being a valid string.
 * The returned fields are of types specified in the schema (given they were specified, or else derived from first mutation).
-* If schema was not specified, the schema would be derived based on the first mutation for that predicate.  The rdf type present in the first mutation would be considered as the schema for the field. If no storage type is specified in rdf, then it would be treated as default type(Dgraph Type) and it is stored internally as string(Go Type).
+* **If schema was not specified, the schema would be derived based on the first mutation for that predicate.**  The [rdf type]({{< relref "#rdf-type" >}}) present in the first mutation would be considered as the schema for the field. If no storage type is specified in rdf, then it would be treated as default type(Dgraph Type) and it is stored internally as string(Go Type).
 
 ### Indexing
 
-`@index` keyword at the end of a scalar field declaration in the schema file specifies that the predicate should be indexed. For example, if we want to index some fields, we should have a schema file similar to the one below.
+`@index` keyword at the end of a scalar field declaration in the schema specifies that the predicate should be indexed. For example, if we want to index some fields, we should have a schema similar to the one below.
 ```
 name: string @index
 age: int @index
@@ -338,7 +345,7 @@ location: geo @index
 timeafterbirth:  dateTime @index
 ```
 
-All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`. For example, for a string, you currently have a choice between two tokenizers `term` which is the default and `exact`. The `exact` tokenizer is useful when you want to do exact matching. Here is an example schema file that explicitly specify all the tokenizers being used.
+All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`. For example, for a string, you currently have a choice between two tokenizers `term` which is the default and `exact`. The `exact` tokenizer is useful when you want to do exact matching. Here is an example schema that explicitly specify all the tokenizers being used.
 
 ```
 name: string @index(exact)
@@ -353,8 +360,10 @@ timeafterbirth:  dateTime @index(datetime)
 
 The available tokenizers are currently `term, exact, int, float, geo, date, datetime`. All of them except `exact` are the default tokenizers for their respective data types.
 
+{{% notice "note" %}}To be able to do sorting and filtering on a predicate, you must index it.{{% /notice %}}
+
 ### Reverse Edges
-Each graph edge is unidirectional. It points from one node to another. A lot of times,  you wish to access data in both directions, forward and backward. Instead of having to send edges in both directions, you can use the `@reverse` keyword at the end of a uid (entity) field declaration in the schema file. This specifies that the reverse edge should be automatically generated. For example, if we want to add a reverse edge for `directed_by` predicate, we should have a schema file as follows.
+Each graph edge is unidirectional. It points from one node to another. A lot of times,  you wish to access data in both directions, forward and backward. Instead of having to send edges in both directions, you can use the `@reverse` keyword at the end of a uid (entity) field declaration in the schema. This specifies that the reverse edge should be automatically generated. For example, if we want to add a reverse edge for `directed_by` predicate, we should have a schema as follows.
 
 ```
 name.en: string @index
@@ -402,6 +411,21 @@ The results are:
   ]
 }
 ```
+### Adding or Modifying Schema
+
+We can add or modify the schema by specfiying the schema inside mutation block.
+
+```
+curl localhost:8080/query -XPOST -d $'
+mutation {
+  schema {
+    genre: uid @reverse
+  }
+}' | python -m json.tool | less
+
+```
+
+Based on the given schema mutation, the query blocks until the index/reverse edges are rebuilt.
 
 ### Fetching Schema
 
@@ -417,7 +441,7 @@ schema {
 }' | python -m json.tool | less
 ```
 
-We can specify the list of predicates for which we need the schema.
+We can also specify the list of predicates for which we need the schema.
 
 ```
 curl localhost:8080/query -XPOST -d $'
@@ -429,24 +453,7 @@ schema(pred: [name, friend]) {
 }' | python -m json.tool | less
 ```
 
-### Adding or Modifying Schema
-
-We can add or modify the schema by specfiying the schema inside mutation block.
-
-```
-#Adding a schema
-curl localhost:8080/query -XPOST -d $'
-mutation {
-  schema {
-	  genre: uid @reverse
-	}
-}' | python -m json.tool | less
-
-```
-
-Based on the given schema mutation, the query blocks until the index/reverse edges are rebuilt.
-
-## RDF Types
+## RDF Types {#rdf-type}
 RDF types can also be used to specify the type of values. They can be attached to the values using the `^^` separator.
 
 ```
@@ -461,7 +468,7 @@ mutation {
 ```
 This implies that name be stored as string(default), age as int and health as float.
 
-{{% notice "note" %}}RDF type overwrites [schema type](TODO) in case both are present. If both the RDF type and the schema type is missing, value is assumed to be of default type which is stored as string internally.{{% /notice %}}
+{{% notice "note" %}}RDF type overwrites [schema type]({{< relref "#scalar-types" >}}) in case both are present. If both the RDF type and the schema type is missing, value is assumed to be of default type which is stored as string internally.{{% /notice %}}
 
 ### Supported
 
@@ -793,13 +800,13 @@ curl localhost:8080/query -XPOST -d $'{
 
 ## Functions
 
-{{% notice "note" %}}Functions can only be applied to [indexed attributes](TODO).{{% /notice %}}
+{{% notice "note" %}}Functions can only be applied to [indexed attributes]({{< relref "#indexing">}}).{{% /notice %}}
 
 ### Term matching
 
-#### AllOf
+#### AllOfTerms
 
-AllOf function will search for entities which have all of one or more terms specified. In essence, this is an intersection of entities containing the specified terms; the ordering does not matter. It follows this syntax: `allofterms(predicate, "space-separated terms")`
+`allofterms` function will search for entities which have all of one or more terms specified. In essence, this is an intersection of entities containing the specified terms; the ordering does not matter. It follows this syntax: `allofterms(predicate, "space-separated terms")`
 
 ##### Usage as Filter
 
@@ -900,9 +907,9 @@ Here is a part of the response.
 }
 ```
 
-#### AnyOf
+#### AnyOfTerms
 
-AnyOf function will search for entities which have any of two or more terms specified. In essence, this is a union of entities containing the specified terms. Again, the ordering does not matter. It follows this syntax: `anyofterms(predicate, "space-separated terms")`
+`anyofterms` function will search for entities which have any of two or more terms specified. In essence, this is a union of entities containing the specified terms. Again, the ordering does not matter. It follows this syntax: `anyofterms(predicate, "space-separated terms")`
 
 ##### Usage as filter
 
@@ -1005,7 +1012,7 @@ Note that the first result with the name "Unexpected Passion" is either not a fi
 
 ### Inequality
 #### Type Values
-The following [Scalar_Types](TODO) can be used in inequality functions.
+The following [Scalar_Types]({{<relref "#scalar-types">}}) can be used in inequality functions.
 
 * int
 * float
@@ -1106,7 +1113,7 @@ Above, we have seen the usage of `geq` and `leq`. You can also use `gt` for "str
 ### Geolocation
 {{% notice "note" %}}Geolocation functions support only polygons and points as of now. Also, polygons with holes are replaced with the outer loop ignoring any holes.  {{% /notice %}}
 
-The data used for testing the geo functions can be found in [benchmarks repository](https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz). You will need to [Index](TODO) `loc` predicate with type `geo` before loading the data for these queries to work.
+The data used for testing the geo functions can be found in [benchmarks repository](https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz). You will need to [Index]({{< relref "#indexing" >}}) `loc` predicate with type `geo` before loading the data for these queries to work.
 #### Near
 
 `Near` returns all entities which lie within a specified distance from a given point. It takes in three arguments namely
@@ -1253,7 +1260,7 @@ This query returns all the entities that intersect with the [http://bl.ocks.org/
 
 ## Filters
 
-[Functions](TODO) can be applied to results as Filters.
+[Functions]({{< relref "#functions" >}}) can be applied to results as Filters.
 
 #### AND, OR and NOT
 
@@ -1313,8 +1320,7 @@ curl localhost:8080/query -XPOST -d $'{
 
 Dgraph also supports compare filter, which takes form as @filter(compare(count(attribute), N)), only entities fulfill such predication will be returned.
 
-Note: "Compare" here includes "eq", "gt", "geq", "lt", "leg".  And "count" should be applied on non-scalar types.
-
+{{% notice "note" %}}"Compare" here includes "eq", "gt", "geq", "lt", "leg".  And "count" should be applied on non-scalar types.{{% /notice %}}
 ```
 curl localhost:8080/query -XPOST -d $'{
   director(func:anyofterms(name, "Steven Spielberg")) @filter(gt(count(director.film), 36)) {
@@ -1762,7 +1768,7 @@ We are working on supporting filtering, sorting and pagination based on facets i
 ## Aggregation
 Aggregation is process in which information is gathered and expressed in a summary form. A common aggregation purpose is to get more information about particular groups based on specific variables such as age, profession, or income.
 
-Note: we support aggregation on scalar type only.
+{{% notice "note" %}}We support aggregation on scalar type only.{{% /notice %}}
 
 ### Min
 ```
@@ -2171,7 +2177,6 @@ curl localhost:8080/query -XPOST -d $'{
 ## Shortest Path Queries
 
 Shortest path between a `src` node and `dst` node can be found using the keyword `shortest` for the query block name. It requires the source node id, destination node id and the predicates (atleast one) that have to be considered for traversing. This query block by itself will not return any results back but the path has to be stored in a variable and used in other query blocks as required.
-
 
 {{% notice "note" %}}If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.{{% /notice %}}
 
