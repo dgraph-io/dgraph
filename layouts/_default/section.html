@@ -1,0 +1,7 @@
+{{ partial "header.html" . }}
+
+{{ range .Data.Pages.ByDate  }}
+  {{ .Render "article"}}
+{{ end }}
+
+{{ partial "footer.html" . }}

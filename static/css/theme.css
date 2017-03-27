@@ -156,6 +156,7 @@ textarea:focus, input[type="email"]:focus, input[type="number"]:focus, input[typ
     bottom: 0;
     left: 0;
     font-weight: 400;
+    overflow: scroll;
     font-size: 15px;
 }
 /*#sidebar a {
@@ -1003,4 +1004,10 @@ pre.collapsed .showmore:hover {
 .menu-header .heading {
   display: inline-block;
 
+}
+.anchor {
+  display: none;
+}
+.anchor:hover {
+  display: inline-block;
 }
