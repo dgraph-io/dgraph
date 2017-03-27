@@ -897,7 +897,7 @@ func TestFacetsFilterAtValueFail(t *testing.T) {
 	{
 		me(id:1) {
 			friend {
-				name @facets(eq(origin, french))
+				name @facets(eq(origin, "french"))
 			}
 		}
 	}
