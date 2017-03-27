@@ -20,6 +20,7 @@ package posting
 import (
 	"context"
 	"math"
+	"sync"
 
 	"golang.org/x/net/trace"
 
@@ -341,11 +342,14 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	}
 
 	ch := make(chan *typesp.PostingList, 10000)
+	var wg *sync.WaitGroup
 	for i := 0; i < 1000; i++ {
+		wg.Add(1)
 		go func() {
 			for pl := range ch {
 				addPostingsToIndex(pl)
 			}
+			wg.Done()
 		}()
 	}
 
@@ -361,5 +365,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		}
 	}
 	close(ch)
+	wg.Wait()
 	return nil
+
 }
