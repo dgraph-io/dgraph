@@ -355,7 +355,6 @@ dateofbirth: date @index(date)
 health: float @index(float)
 location: geo @index(geo)
 timeafterbirth:  dateTime @index(datetime)
-)
 ```
 
 The available tokenizers are currently `term, exact, int, float, geo, date, datetime`. All of them except `exact` are the default tokenizers for their respective data types.

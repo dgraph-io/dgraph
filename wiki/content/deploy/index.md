@@ -3,10 +3,10 @@ date = "2017-03-20T22:25:17+11:00"
 title = "Deploy"
 +++
 
-This article should be followed only after having gone through [Get Started]({{< relref "get_started/index.md" >}}). If you haven't, please go through that first.
+This article should be followed only after having gone through [Get Started]({{< relref "get-started/index.md" >}}). If you haven't, please go through that first.
 
 # Installation
-If you followed one of the [recommended installation]({{< relref "get_started/index.md#step-1-installation" >}}) methods, then things should already be set correctly for you.
+If you followed one of the [recommended installation]({{< relref "get-started/index.md#step-1-installation" >}}) methods, then things should already be set correctly for you.
 
 ## Manual download (Optional)
 
