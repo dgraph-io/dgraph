@@ -1,13 +1,11 @@
-+++
-date = "2017-03-20T19:19:14+11:00"
-draft = true
+<!-- +++
 title = "Query Language Schema"
-
+weight=1
 +++
-
+<!--
 Schema is used to specify the scalar types of the predicates and what fields constitute an object type. This schema would be used for type checking, result validation, type coercion.
 
-## Scalar Types 
+## Scalar Types
 
 Scalar types are specified with `scalar` keyword.
 
@@ -41,13 +39,13 @@ Scalar types are specified with `scalar` keyword.
 |  [go-geom](https://github.com/twpayne/go-geom)
 |-
 | `uid`
-|  uint64 
+|  uint64
 |}
 {{Note|uid type is used to denote objects though it internally uses uint64.}}
 
 To declare a field `age` as `int`, this line has to be included in the schema file `scalar age: int`.
 
-## Object Types 
+## Object Types
 Object types in the schema are defined using the `type` keyword. For example, to declare an object  `Person` we add the following snippet in the schema file. All objects are of `uid` type which denotes a `uint64`.
 
 ```
@@ -58,14 +56,14 @@ type person {
   profession: string
   friends: uid
   relatives: uid
-} 
+}
 ```
 
 The object can have scalar fields which contain values and object fields which link to other nodes in the graph. In the above declaration name, age, strength, profession are scalar fields which would have values of specified types and friends and relatives are of person object type which would link to other nodes in the graph.
 
 The node could have zero or more entities linked to the object fields (In this example, `friends` and `relatives`).
 
-## Schema File 
+## Schema File
 A sample schema file would look as follows:
 
 ```
@@ -81,7 +79,7 @@ type  Person {
 }
 type Actor {
   name  : string
-  films: uid 
+  films: uid
 }
 type Film {
   name: string
@@ -96,7 +94,7 @@ A schema file is passed to the server during invocation trough `--schema` flag. 
 * The returned fields are of types specified in the schema (given they were specified).
 * If schema was not specified, the schema would be derived based on the first mutation for that field.  The rdf type present in the first mutation would be considered as the schema for the field.
 
-## Indexing 
+## Indexing
 
 `@index` keyword at the end of a scalar field declaration in the schema file specifies that the predicate should be indexed. For example, if we want to index some fields, we should have a schema file similar to the one below.
 ```
@@ -197,5 +195,4 @@ The results are:
     }
   ]
 }
-```
-
+``` --> -->

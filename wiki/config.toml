@@ -11,3 +11,14 @@ title = "Dgraph Doc"
     "latest",
     "pre-0.7.3"
 ]
+
+[[menu.main]]
+  name = "Basics"
+  url = "/basics/"
+  identifier = "basics"
+  weight = -100
+[[menu.main]]
+  name = "Query Language"
+  url = "/query-language/"
+  identifier = "query-language"
+  weight = -80
