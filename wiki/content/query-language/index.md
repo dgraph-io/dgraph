@@ -2627,8 +2627,8 @@ curl localhost:8080/query -XPOST -d $'{
 Another query which shows how to retrieve paths with some constraints on the intermediate nodes.
 ```
 curl localhost:8080/query -XPOST -d $'{
-  path as shortest(from: 1000, to: 100) {
-    friend @filter(not anyofterms(name, "alice")) @facets(weight)
+  path as shortest(from: a, to: d) {
+    friend @filter(not anyofterms(name, "bob")) @facets(weight)
     relative @facets(liking)
   }
 
