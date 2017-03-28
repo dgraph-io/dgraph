@@ -9,7 +9,7 @@ title = "Dgraph Documentation"
 [params]
   versions = [
     "v0.7.4 (latest)",
-    # "pre-0.7.3"
+    "master"
   ]
 
 [[menu.main]]
