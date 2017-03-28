@@ -210,7 +210,7 @@ func main() {
 }
 ```
 
-An appropriate schema for the above example would be
+An appropriate schema for the above example would be 
 ```
 curl localhost:8080/query -XPOST -d $'
 mutation {
