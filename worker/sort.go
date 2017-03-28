@@ -302,33 +302,8 @@ func intersectBucket(ts *taskp.Sort, attr, token string, out []intersectedList) 
 	return errDone
 }
 
-func pageRange(count, offset, n int) (int, int) {
-	if count == 0 && offset == 0 {
-		return 0, n
-	}
-	if count < 0 {
-		// Items from the back of the array, like Python arrays. Do a positive mod n.
-		return (((n + count) % n) + n) % n, n
-	}
-	start := offset
-	if start < 0 {
-		start = 0
-	}
-	if start > n {
-		return n, n
-	}
-	if count == 0 { // No count specified. Just take the offset parameter.
-		return start, n
-	}
-	end := start + count
-	if end > n {
-		end = n
-	}
-	return start, end
-}
-
 func paginate(offset, count int, dest *taskp.List) {
-	start, end := pageRange(count, offset, len(dest.Uids))
+	start, end := x.PageRange(count, offset, len(dest.Uids))
 	dest.Uids = dest.Uids[start:end]
 }
 

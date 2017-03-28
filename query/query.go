@@ -1376,40 +1376,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	rch <- nil
 }
 
-// pageRange returns start and end indices given pagination params. Note that n
-// is the size of the input list.
-func pageRange(p *params, n int) (int, int) {
-	if n == 0 {
-		return 0, 0
-	}
-
-	if p.Count == 0 && p.Offset == 0 {
-		return 0, n
-	}
-	if p.Count < 0 {
-		// Items from the back of the array, like Python arrays. Do a positive mod n.
-		if p.Count*-1 > n {
-			p.Count = -n
-		}
-		return (((n + p.Count) % n) + n) % n, n
-	}
-	start := p.Offset
-	if start < 0 {
-		start = 0
-	}
-	if start > n {
-		return n, n
-	}
-	if p.Count == 0 { // No count specified. Just take the offset parameter.
-		return start, n
-	}
-	end := start + p.Count
-	if end > n {
-		end = n
-	}
-	return start, end
-}
-
 // applyWindow applies windowing to sg.sorted.
 func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	params := sg.Params
@@ -1419,7 +1385,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	}
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		algo.IntersectWith(sg.uidMatrix[i], sg.DestUIDs, sg.uidMatrix[i])
-		start, end := pageRange(&sg.Params, len(sg.uidMatrix[i].Uids))
+		start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
 		sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
 	}
 	// Re-merge the UID matrix.
@@ -1512,7 +1478,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 	if sg.Params.Count != 0 || sg.Params.Offset != 0 {
 		// Apply the pagination.
 		for i := 0; i < len(sg.uidMatrix); i++ {
-			start, end := pageRange(&sg.Params, len(sg.uidMatrix[i].Uids))
+			start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
 			sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
 		}
 	}
