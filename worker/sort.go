@@ -107,43 +107,33 @@ var (
 	errDone     = x.Errorf("Done processing buckets")
 )
 
-func sortWithoutIndex(cancelCtx context.Context, ts *taskp.Sort, resCh chan result) {
+func sortWithoutIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error) {
 	n := len(ts.UidMatrix)
 	r := new(taskp.SortResult)
 	// Sort and paginate directly as it'd be expensive to iterate over the index which
 	// might have millions of keys just for retrieving some values.
 	sType, err := schema.State().TypeOf(ts.Attr)
 	if err != nil || !sType.IsScalar() {
-		resCh <- result{
-			res: r,
-			err: x.Errorf("Cannot sort attribute %s of type object.", ts.Attr),
-		}
+		return r, x.Errorf("Cannot sort attribute %s of type object.", ts.Attr)
 	}
 	for i := 0; i < n; i++ {
 		select {
-		case <-cancelCtx.Done():
-			return
+		case <-ctx.Done():
+			return nil, nil
 		default:
 			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
 			tempList := &taskp.List{ts.UidMatrix[i].Uids}
-			err := sortByValue(ts.Attr, ts.Langs, tempList, sType, ts.Desc)
-			if err != nil {
-				resCh <- result{
-					res: r,
-					err: err,
-				}
+			if err := sortByValue(ts.Attr, ts.Langs, tempList, sType, ts.Desc); err != nil {
+				return r, err
 			}
 			paginate(int(ts.Offset), int(ts.Count), tempList)
 			r.UidMatrix = append(r.UidMatrix, tempList)
 		}
 	}
-	resCh <- result{
-		res: r,
-		err: nil,
-	}
+	return r, nil
 }
 
-func sortWithIndex(cancelCtx context.Context, ts *taskp.Sort, resCh chan result) {
+func sortWithIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error) {
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	for i := 0; i < n; i++ {
@@ -160,11 +150,7 @@ func sortWithIndex(cancelCtx context.Context, ts *taskp.Sort, resCh chan result)
 
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(ts.Attr) {
-		resCh <- result{
-			res: &emptySortResult,
-			err: x.Errorf("Attribute %s is not indexed.", ts.Attr),
-		}
-		return
+		return &emptySortResult, x.Errorf("Attribute %s is not indexed.", ts.Attr)
 	}
 
 	tokenizers := schema.State().Tokenizer(ts.Attr)
@@ -177,12 +163,10 @@ func sortWithIndex(cancelCtx context.Context, ts *taskp.Sort, resCh chan result)
 		}
 	}
 	if tok == nil {
-		resCh <- result{
-			res: &emptySortResult,
-			err: x.Errorf("Attribute:%s does not have proper index",
-				ts.Attr),
-		}
-		return
+		return &emptySortResult,
+			x.Errorf("Attribute:%s does not have proper index",
+				ts.Attr)
+
 	}
 
 	indexPrefix := x.IndexKey(ts.Attr, string(tok.Identifier()))
@@ -201,14 +185,14 @@ BUCKETS:
 	// Outermost loop is over index buckets.
 	for it.ValidForPrefix(indexPrefix) {
 		select {
-		case <-cancelCtx.Done():
-			return
+		case <-ctx.Done():
+			return nil, nil
 		default:
 			k := x.Parse(it.Key().Data())
 			x.AssertTrue(k != nil)
 			x.AssertTrue(k.IsIndex())
 			token := k.Term
-			x.Trace(cancelCtx, "processSort: Token: %s", token)
+			x.Trace(ctx, "processSort: Token: %s", token)
 			// Intersect every UID list with the index bucket, and update their
 			// results (in out).
 			err := intersectBucket(ts, ts.Attr, token, out)
@@ -218,11 +202,7 @@ BUCKETS:
 			case errContinue:
 				// Continue iterating over tokens / index buckets.
 			default:
-				resCh <- result{
-					res: &emptySortResult,
-					err: err,
-				}
-				return
+				return &emptySortResult, err
 			}
 			if ts.Desc {
 				it.Prev()
@@ -236,19 +216,11 @@ BUCKETS:
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
 	}
 	select {
-	case <-cancelCtx.Done():
-		return
+	case <-ctx.Done():
+		return nil, nil
 	default:
-		resCh <- result{
-			res: r,
-			err: nil,
-		}
+		return r, nil
 	}
-}
-
-type result struct {
-	err error
-	res *taskp.SortResult
 }
 
 // processSort does sorting with pagination. It works by iterating over index
@@ -263,10 +235,28 @@ func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error)
 		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
 			"Try flipping order and return first few elements instead.", ts.Attr, ts.Count)
 	}
-	cancelCtx, cancel := context.WithCancel(ctx)
+
+	type result struct {
+		err error
+		res *taskp.SortResult
+	}
+	cctx, cancel := context.WithCancel(ctx)
 	resCh := make(chan result, 2)
-	go sortWithoutIndex(cancelCtx, ts, resCh)
-	go sortWithIndex(cancelCtx, ts, resCh)
+	go func() {
+		r, err := sortWithoutIndex(cctx, ts)
+		resCh <- result{
+			res: r,
+			err: err,
+		}
+	}()
+
+	go func() {
+		r, err := sortWithIndex(cctx, ts)
+		resCh <- result{
+			res: r,
+			err: err,
+		}
+	}()
 
 	r := <-resCh
 	if r.err == nil {

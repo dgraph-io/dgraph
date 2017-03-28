@@ -154,7 +154,7 @@ func Round(d time.Duration) time.Duration {
 	return d
 }
 
-// pageRange returns start and end indices given pagination params. Note that n
+// PageRange returns start and end indices given pagination params. Note that n
 // is the size of the input list.
 func PageRange(count, offset, n int) (int, int) {
 	if n == 0 {
