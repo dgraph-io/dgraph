@@ -1,5 +1,4 @@
-// TODO: use vanilajs
-$(document).ready(function() {
+(function() {
   // clipboard
   var clipInit = false;
   $('pre code').each(function() {
@@ -106,6 +105,19 @@ $(document).ready(function() {
     }
   });
 
+
+  // version selector
+  var currentVersion = location.pathname.match(/^\/(\w*)\//)[1];
+  document.getElementsByClassName('version-selector')[0]
+    .addEventListener('change', function (e) {
+      var targetVersion = e.target.value;
+
+      if (currentVersion !== targetVersion) {
+        var targetPath = '/' + targetVersion;
+        location.assign(targetPath);
+      }
+    });
+
   // Add target = _blank to all external links.
   var links = document.links;
 
@@ -114,5 +126,4 @@ $(document).ready(function() {
          links[i].target = '_blank';
      }
   }
-
-});
+})();

@@ -1,38 +1,35 @@
 <nav id="sidebar">
   <div id="header">
-    <a href="/">
-      <img src="/images/dgraph.svg" alt="dgraph" />
+    <a href="{{ .Site.BaseURL }}">
+      <img src="{{ .Site.BaseURL }}/images/dgraph.svg" alt="dgraph" />
     </a>
   </div>
 
-  <ul class="topics">
-    {{ $page := . }}
-    {{ $toc := .TableOfContents }}
-
-    {{ range $i, $key := .Site.Sections }}
-      {{ if ne $key "" }}
-
-        {{ if not $.Site.Params.menu }}
-          {{ $.Scratch.Set "currentItem" (index $page.Site.Sections $i) }}
-        {{ else }}
-          {{ $.Scratch.Set "currentItem" (index $page.Site.Sections $key) }}
-        {{ end }}
-
-        {{ $value := $.Scratch.Get "currentItem" }}
-        {{ $first := (index $value 0).Page }}
-
-        <li class="doc-toc {{ if eq $page.RelPermalink $first.RelPermalink }}active{{ end }}" data-nav-id="{{ $first.RelPermalink }}">
-          <a href="{{ $first.RelPermalink }}">
-            <span>
-              {{ $first.Title }}
-             </span>
-          </a>
-
-          <!-- {{ if eq $page.RelPermalink $first.RelPermalink }}
-            {{ $toc }}
-          {{ end }} -->
-        </li>
+  <div class="menu-header">
+    <div class="heading">
+      Dgraph manual
+    </div>
+    <select class="version-selector">
+      {{ range $i, $version := .Site.Params.Versions }}
+        <option value="{{$version}}">{{ $version }}</option>
       {{ end }}
+    </select>
+  </div>
+
+  <ul class="topics">
+    {{ range .Site.Menus.main }}
+      <li class="doc-toc{{if or ($.IsMenuCurrent "main" .) ($.HasMenuCurrent "main" .) }} active{{end}}">
+        <a href="{{.URL}}">
+          {{ .Name }}
+        </a>
+        {{ if and (.HasChildren) ($.IsMenuCurrent "main" .) }}
+        <ul class="sub-topic">
+          {{ range .Children.ByWeight }}
+            <li{{if $.IsMenuCurrent "main" . }} class="active"{{end}}><a href="#{{.URL}}">{{ .Name }}</a></li>
+          {{ end }}
+        </ul>
+        {{end}}
+      </li>
     {{ end }}
   </ul>
 </nav>

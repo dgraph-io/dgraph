@@ -5,24 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     {{ .Hugo.Generator }}
     {{ partial "meta.html" . }}
-    {{ partial "favicon.html" . }}
-    {{ .Scratch.Add "title" "" }}{{ if isset .Site.Data.titles .Title }}{{ .Scratch.Set "title" (index .Site.Data.titles .Title).title }}{{ else }}{{ .Scratch.Set "title" .Title}}{{end}}
-    <title>{{ .Scratch.Get "title" }}</title>
-    <!-- <link href="{{ .Site.BaseURL }}/css/nucleus.css" rel="stylesheet"> -->
-    <link href="{{ .Site.BaseURL }}/css/font-awesome.min.css" rel="stylesheet">
-    <!-- <link href="{{ .Site.BaseURL }}/css/hybrid.css" rel="stylesheet"> -->
-    <!-- <link href="{{ .Site.BaseURL }}/css/featherlight.min.css" rel="stylesheet"> -->
-    <!-- <link href="{{ .Site.BaseURL }}/css/perfect-scrollbar.min.css" rel="stylesheet"> -->
-    <!-- <link href="{{ .Site.BaseURL }}/css/horsey.css" rel="stylesheet"> -->
-    <link href="{{ .Site.BaseURL }}/css/theme.css" rel="stylesheet">
-    <!-- <link href="{{ .Site.BaseURL }}/css/hugo-theme.css" rel="stylesheet"> -->
-    <script src="{{ .Site.BaseURL }}/js/jquery-2.x.min.js"></script>
+    <!-- <link rel="shortcut icon" href="/images/favicons/favicon.ico" type="image/x-icon" /> -->
+
+    <link rel="apple-touch-icon" sizes="57x57" href="{{ .Site.BaseURL }}/images/favicons/apple-touch-icon-57x57.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="{{ .Site.BaseURL }}/images/favicons/apple-touch-icon-60x60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="{{ .Site.BaseURL }}/images/favicons/apple-touch-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="{{ .Site.BaseURL }}/images/favicons/apple-touch-icon-76x76.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="{{ .Site.BaseURL }}/images/favicons/apple-touch-icon-114x114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="{{ .Site.BaseURL }}/images/favicons/apple-touch-icon-120x120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="{{ .Site.BaseURL }}/images/favicons/apple-touch-icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="{{ .Site.BaseURL }}/images/favicons/apple-touch-icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ .Site.BaseURL }}/images/favicons/apple-touch-icon-180x180.png">
+    <link rel="icon" type="image/png" href="{{ .Site.BaseURL }}/images/favicons/favicon-32x32.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="{{ .Site.BaseURL }}/images/favicons/android-chrome-192x192.png" sizes="192x192">
+    <link rel="icon" type="image/png" href="{{ .Site.BaseURL }}/images/favicons/favicon-194x194.png" sizes="194x194">
+    <link rel="icon" type="image/png" href="{{ .Site.BaseURL }}/images/favicons/favicon-96x96.png" sizes="96x96">
+    <link rel="icon" type="image/png" href="{{ .Site.BaseURL }}/images/favicons/favicon-16x16.png" sizes="16x16">
+    <link rel="manifest" href="{{ .Site.BaseURL }}/images/favicons/manifest.json">
+    <link rel="mask-icon" href="{{ .Site.BaseURL }}/images/favicons/safari-pinned-tab.svg" color="#fe2c06">
+    <link rel="shortcut icon" href="{{ .Site.BaseURL }}/images/favicons/favicon.ico">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="msapplication-TileImage" content="{{ .Site.BaseURL }}/images/favicons/mstile-144x144.png">
+    <meta name="msapplication-config" content="{{ .Site.BaseURL }}/images/favicons/browserconfig.xml">
+
+    {{ .Scratch.Add "title" "" }}
+    {{ if isset .Site.Data.titles .Title }}
+      {{ .Scratch.Set "title" (index .Site.Data.titles .Title).title }}
+    {{ else }}
+      {{ .Scratch.Set "title" .Title}}
+    {{end}}
+
+    <title>
+      {{ .Scratch.Get "title" }} — {{ .Site.Title }}
+    </title>
+
+    <link href="{{ .Site.BaseURL }}/css/theme.css?{{ .Now.Unix }}" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css?family=Lato:400,700" rel="stylesheet">
-    {{ partial "style.html" . }}
   </head>
   <body class="" data-url="{{ .RelPermalink }}">
     <main>
       {{ partial "menu.html" . }}
 
       <section class="content">
-        <h1>{{.Title}}</h1>
