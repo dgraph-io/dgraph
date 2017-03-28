@@ -19,6 +19,7 @@ package worker
 
 import (
 	"golang.org/x/net/context"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -234,6 +235,11 @@ func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error)
 	if ts.Count < 0 {
 		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
 			"Try flipping order and return first few elements instead.", ts.Attr, ts.Count)
+	}
+	attrData := strings.Split(ts.Attr, "@")
+	ts.Attr = attrData[0]
+	if len(attrData) == 2 {
+		ts.Langs = strings.Split(attrData[1], ":")
 	}
 
 	type result struct {
