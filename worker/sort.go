@@ -310,8 +310,7 @@ func intersectBucket(ts *taskp.Sort, attr, token string, out []intersectedList) 
 
 		// We are within the page. We need to apply sorting.
 		// Sort results by value before applying offset.
-		err := sortByValue(attr, ts.Langs, result, scalar, ts.Desc)
-		if err != nil {
+		if err := sortByValue(attr, ts.Langs, result, scalar, ts.Desc); err != nil {
 			return err
 		}
 
