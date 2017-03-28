@@ -82,6 +82,10 @@ func (w *WaterMark) DoneUntil() uint64 {
 	return atomic.LoadUint64(&w.doneUntil)
 }
 
+func (w *WaterMark) SetDoneUntil(val uint64) {
+	atomic.StoreUint64(&w.doneUntil, val)
+}
+
 // WaitingFor returns whether we are waiting for a task to be done.
 func (w *WaterMark) WaitingFor() bool {
 	return atomic.LoadUint32(&w.waitingFor) != 0
