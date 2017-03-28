@@ -136,10 +136,15 @@ func processFile(file string, batch *client.BatchMutation) {
 }
 
 func printCounters(batch *client.BatchMutation, ticker *time.Ticker) {
+	start := time.Now()
+
 	for range ticker.C {
 		c := batch.Counter()
 		rate := float64(c.Rdfs) / c.Elapsed.Seconds()
-		fmt.Printf("[Request: %6d] Total RDFs done: %8d RDFs per second: %7.0f \r", c.Mutations, c.Rdfs, rate)
+		elapsed := ((time.Since(start) / time.Second) * time.Second).String()
+		fmt.Printf("[Request: %6d] Total RDFs done: %8d RDFs per second: %7.0f Time Elapsed: %v \r",
+			c.Mutations, c.Rdfs, rate, elapsed)
+
 	}
 }
 
