@@ -107,62 +107,67 @@ var (
 	errDone     = x.Errorf("Done processing buckets")
 )
 
-// processSort does sorting with pagination. It works by iterating over index
-// buckets. As it iterates, it intersects with each UID list of the UID
-// matrix. To optimize for pagination, we maintain the "offsets and sizes" or
-// pagination window for each UID list. For each UID list, we ignore the
-// bucket if we haven't hit the offset. We stop getting results when we got
-// enough for our pagination params. When all the UID lists are done, we stop
-// iterating over the index.
-func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error) {
-	attr := ts.Attr
+func sortWithoutIndex(cancelCtx context.Context, ts *taskp.Sort, resCh chan result) {
+	n := len(ts.UidMatrix)
 	r := new(taskp.SortResult)
-	x.AssertTruef(ts.Count > 0,
-		("We do not yet support negative or infinite count with sorting: %s %d. " +
-			"Try flipping order and return first few elements instead."),
-		attr, ts.Count)
+	// Sort and paginate directly as it'd be expensive to iterate over the index which
+	// might have millions of keys just for retrieving some values.
+	sType, err := schema.State().TypeOf(ts.Attr)
+	if err != nil || !sType.IsScalar() {
+		resCh <- result{
+			res: r,
+			err: x.Errorf("Cannot sort attribute %s of type object.", ts.Attr),
+		}
+	}
+	for i := 0; i < n; i++ {
+		select {
+		case <-cancelCtx.Done():
+			return
+		default:
+			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
+			ts.UidMatrix[i] = &taskp.List{ts.UidMatrix[i].Uids}
+			err := sortByValue(ts.Attr, ts.Langs, ts.UidMatrix[i], sType, ts.Desc)
+			if err != nil {
+				resCh <- result{
+					res: r,
+					err: err,
+				}
+			}
+			paginate(int(ts.Offset), int(ts.Count), ts.UidMatrix[i])
+			r.UidMatrix = append(r.UidMatrix, ts.UidMatrix[i])
+		}
+	}
+	resCh <- result{
+		res: r,
+		err: nil,
+	}
+}
 
+func sortWithIndex(cancelCtx context.Context, ts *taskp.Sort, resCh chan result) {
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
-	uidsLen := 0
 	for i := 0; i < n; i++ {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset)
 		var emptyList taskp.List
 		out[i].ulist = &emptyList
-		uidsLen += len(ts.UidMatrix[i].Uids)
 	}
-
-	if uidsLen < 10000 {
-		// Sort and paginate directly as it'd be expensive to iterate over the index which
-		// might have millions of keys just for retrieving some values.
-		sType, err := schema.State().TypeOf(ts.Attr)
-		if err != nil || !sType.IsScalar() {
-			return nil, x.Errorf("Cannot sort attribute %s of type object.", ts.Attr)
-		}
-		for i := 0; i < n; i++ {
-			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
-			ts.UidMatrix[i] = &taskp.List{ts.UidMatrix[i].Uids}
-			err := sortByValue(ts.Attr, ts.Langs, ts.UidMatrix[i], sType, ts.Desc)
-			if err != nil {
-				return r, err
-			}
-			paginate(int(ts.Offset), int(ts.Count), ts.UidMatrix[i])
-			r.UidMatrix = append(r.UidMatrix, ts.UidMatrix[i])
-		}
-		return r, nil
-	}
+	r := new(taskp.SortResult)
 	// Iterate over every bucket / token.
 	it := pstore.NewIterator()
 	defer it.Close()
 
 	// Get the tokenizers and choose the corresponding one.
-	if !schema.State().IsIndexed(attr) {
-		return nil, x.Errorf("Attribute %s is not indexed.", attr)
+	if !schema.State().IsIndexed(ts.Attr) {
+		resCh <- result{
+			res: &emptySortResult,
+			err: x.Errorf("Attribute %s is not indexed.", ts.Attr),
+		}
+		return
 	}
 
-	tokenizers := schema.State().Tokenizer(attr)
+	tokenizers := schema.State().Tokenizer(ts.Attr)
 	var tok tok.Tokenizer
 	for _, t := range tokenizers {
 		// Get the first sortable index.
@@ -172,18 +177,22 @@ func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error)
 		}
 	}
 	if tok == nil {
-		return nil, x.Errorf("Attribute:%s does not have proper index",
-			attr)
+		resCh <- result{
+			res: &emptySortResult,
+			err: x.Errorf("Attribute:%s does not have proper index",
+				ts.Attr),
+		}
+		return
 	}
 
-	indexPrefix := x.IndexKey(attr, string(tok.Identifier()))
+	indexPrefix := x.IndexKey(ts.Attr, string(tok.Identifier()))
 	if !ts.Desc {
 		// We need to seek to the first key of this index type.
 		seekKey := indexPrefix
 		it.Seek(seekKey)
 	} else {
 		// We need to reach the last key of this index type.
-		seekKey := x.IndexKey(attr, string(tok.Identifier()+1))
+		seekKey := x.IndexKey(ts.Attr, string(tok.Identifier()+1))
 		it.SeekForPrev(seekKey)
 	}
 
@@ -191,33 +200,82 @@ BUCKETS:
 
 	// Outermost loop is over index buckets.
 	for it.ValidForPrefix(indexPrefix) {
-		k := x.Parse(it.Key().Data())
-		x.AssertTrue(k != nil)
-		x.AssertTrue(k.IsIndex())
-		token := k.Term
-		x.Trace(ctx, "processSort: Token: %s", token)
-		// Intersect every UID list with the index bucket, and update their
-		// results (in out).
-		err := intersectBucket(ts, attr, token, out)
-		switch err {
-		case errDone:
-			break BUCKETS
-		case errContinue:
-			// Continue iterating over tokens / index buckets.
+		select {
+		case <-cancelCtx.Done():
+			return
 		default:
-			return &emptySortResult, err
-		}
-		if ts.Desc {
-			it.Prev()
-		} else {
-			it.Next()
+			k := x.Parse(it.Key().Data())
+			x.AssertTrue(k != nil)
+			x.AssertTrue(k.IsIndex())
+			token := k.Term
+			x.Trace(cancelCtx, "processSort: Token: %s", token)
+			// Intersect every UID list with the index bucket, and update their
+			// results (in out).
+			err := intersectBucket(ts, ts.Attr, token, out)
+			switch err {
+			case errDone:
+				break BUCKETS
+			case errContinue:
+				// Continue iterating over tokens / index buckets.
+			default:
+				resCh <- result{
+					res: &emptySortResult,
+					err: err,
+				}
+				return
+			}
+			if ts.Desc {
+				it.Prev()
+			} else {
+				it.Next()
+			}
 		}
 	}
 
 	for _, il := range out {
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
 	}
-	return r, nil
+	select {
+	case <-cancelCtx.Done():
+		return
+	default:
+		resCh <- result{
+			res: r,
+			err: nil,
+		}
+	}
+}
+
+type result struct {
+	err error
+	res *taskp.SortResult
+}
+
+// processSort does sorting with pagination. It works by iterating over index
+// buckets. As it iterates, it intersects with each UID list of the UID
+// matrix. To optimize for pagination, we maintain the "offsets and sizes" or
+// pagination window for each UID list. For each UID list, we ignore the
+// bucket if we haven't hit the offset. We stop getting results when we got
+// enough for our pagination params. When all the UID lists are done, we stop
+// iterating over the index.
+func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error) {
+	x.AssertTruef(ts.Count > 0,
+		("We do not yet support negative or infinite count with sorting: %s %d. " +
+			"Try flipping order and return first few elements instead."),
+		ts.Attr, ts.Count)
+
+	cancelCtx, cancel := context.WithCancel(ctx)
+	resCh := make(chan result, 2)
+	go sortWithoutIndex(cancelCtx, ts, resCh)
+	go sortWithIndex(cancelCtx, ts, resCh)
+
+	r := <-resCh
+	if r.err == nil {
+		cancel()
+	} else {
+		r = <-resCh
+	}
+	return r.res, r.err
 }
 
 type intersectedList struct {
