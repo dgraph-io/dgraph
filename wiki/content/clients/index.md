@@ -13,19 +13,19 @@ The proto file used by Dgraph is located at [graphresponse.proto](https://github
 
 ## Languages
 
-### Go ###
+### Go
 After you have the followed [Get started]({{< relref "get-started/index.md">}}) and got the server running on `127.0.0.1:8080`, you can use the Go client to run queries and mutations as shown in the example below.
 
 {{% notice "note" %}}The example below would store values with the correct types only if Dgraph is run with a [schema]({{< relref "query-language/index.md#schema" >}}) defining the appropriate types, otherwise everything would be stored as a string.{{% /notice %}}
 
-#### Installation ####
+#### Installation
 
 To get the Go client, you can run
 ```
 go get -u -v github.com/dgraph-io/dgraph/client github.com/dgraph-io/dgraph/protos/graphp
 ```
 
-#### Example ####
+#### Example
 
 ```
 package main
@@ -260,18 +260,18 @@ if err != nil {
 fmt.Printf("%+v\n", resp)
 ```
 
-### Python ###
+### Python
 {{% notice "incomplete" %}}A lot of development has gone into the Go client and the Python client is not up to date with it. We are looking for help from contributors to bring it up to date.{{% /notice %}}
 
-#### Installation ####
+#### Installation
 
-##### Via pip #####
+##### Via pip
 
 ```
 pip install -U pydgraph
 ```
 
-##### By Source #####
+##### By Source
 * Clone the git repository for python client from github.
 
 ```
@@ -285,7 +285,7 @@ python setup.py test
 python setup.py install
 ```
 
-#### Example ####
+#### Example
 ```
 In [1]: from pydgraph.client import DgraphClient
 In [2]: dg_client = DgraphClient('localhost', 8080)
@@ -332,10 +332,10 @@ l {
 }
 ```
 
-### Java ###
+### Java
 {{% notice "incomplete" %}}A lot of development has gone into the Go client and the Java client is not up to date with it. We are looking for help from contributors to bring it up to date.{{% /notice %}}
 
-#### Installation ####
+#### Installation
 
 Currently, given that this is the first version, the distribution is done via a `fatJar`
 built locally. The procedure to build it is:
@@ -352,7 +352,7 @@ cd dgraph4j
 cp dgraph4j/build/libs/dgraph4j-all-0.0.1.jar $CLASSPATH
 ```
 
-#### Example ####
+#### Example
 You just need to include the `fatJar` into the `classpath`, the following is a simple
 example of how to use it:
 
@@ -385,7 +385,7 @@ INFO: [ManagedChannelImpl@5d3411d] Created with target localhost:8080
 {"_root_":[{"_uid_":"0x8c84811dffd0a905","_xid_":"alice","name":"Alice","follows":[{"_uid_":"0xdd77c65008e3c71","_xid_":"bob","name":"Bob"},{"_uid_":"0x5991e7d8205041b3","_xid_":"greg","name":"Greg"}]}],"server_latency":{"pb":"11.487µs","parsing":"85.504µs","processing":"270.597µs"}}
 ```
 
-### Shell ###
+### Shell
 
 This client requires commands which are often already installed on a Dgraph server or a client machine.
 
@@ -408,7 +408,7 @@ This is not strictly necessary for queries, but is required by the RDF format us
 
 The `json.tool` module is part of the standard release package for python and python3.
 
-#### Example ####
+#### Example
 
 This example, from [Get Started]({{< relref "get-started/index.md" >}}), [Movies by Steven Spielberg]({{< relref "get-started/index.md#movies-by-steven-spielberg" >}}), uses commands commonly available on a Dgraph server to query the local Dgraph server.
 

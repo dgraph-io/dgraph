@@ -238,11 +238,11 @@ RDFs processed per second : XXXXX
 
 ## Step 5: Run some queries
 
-{{% notice "tip" %}} From v0.7.3 ,a user interface is available at [`http://localhost:8080`](http://localhost:8080) from the browser to run mutations and visualise  results from the queries.{{% /notice %}}
+{{% notice "tip" %}} From v0.7.3, a user interface is available at [`http://localhost:8080`](http://localhost:8080) from the browser to run mutations and visualise  results from the queries.{{% /notice %}}
 
 ### Movies by Steven Spielberg
 
-Let's now find all the entities named "Steven Spielberg," and the movies directed by them.
+Let's now find all the entities named "Steven Spielberg" and the movies directed by them.
 ```
 curl localhost:8080/query -XPOST -d '{
   director(func:allofterms(name, "steven spielberg")) {

@@ -1040,10 +1040,10 @@ Following steps are executed to process full text search function arguments:
 
 The same steps are invoked during `fulltext` indexing of values.
 
-Following table contains all supported languages and corresponding country-codes: 
+Following table contains all supported languages and corresponding country-codes:
 
 | Language    | Country Code |
-|:-----------:|:------------:| 
+|:-----------:|:------------:|
 | Danish      | da           |
 | Dutch       | nl           |
 | English     | en           |
@@ -2428,7 +2428,7 @@ curl localhost:8080/query -XPOST -d $'{
 			max(initial_release_date)
 		}
 	}
-}' | jq
+}' | python -m json.tool | less
 ```
 Output:
 ```
@@ -2510,7 +2510,7 @@ curl localhost:8080/query -XPOST -d $'{
 		name@en
 		var(score)
 	}
-}' | jq
+}' | python -m json.tool | less
 ```
 Output:
 ```
