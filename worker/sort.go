@@ -259,11 +259,10 @@ type result struct {
 // enough for our pagination params. When all the UID lists are done, we stop
 // iterating over the index.
 func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error) {
-	x.AssertTruef(ts.Count > 0,
-		("We do not yet support negative or infinite count with sorting: %s %d. " +
-			"Try flipping order and return first few elements instead."),
-		ts.Attr, ts.Count)
-
+	if ts.Count < 0 {
+		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
+			"Try flipping order and return first few elements instead.", ts.Attr, ts.Count)
+	}
 	cancelCtx, cancel := context.WithCancel(ctx)
 	resCh := make(chan result, 2)
 	go sortWithoutIndex(cancelCtx, ts, resCh)
