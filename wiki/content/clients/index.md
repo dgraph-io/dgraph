@@ -1,4 +1,5 @@
 +++
+date = "2017-03-20T19:35:35+11:00"
 title = "Clients"
 weight = 0
 
@@ -10,7 +11,7 @@ Clients communicate with the server using [Protocol Buffers](https://developers.
 
 The proto file used by Dgraph is located at [graphresponse.proto](https://github.com/dgraph-io/dgraph/blob/master/protos/graphp/graphresponse.proto).
 
-## Languages ##
+## Languages
 
 ### Go ###
 After you have the followed [Get started]({{< relref "get-started/index.md">}}) and got the server running on `127.0.0.1:8080`, you can use the Go client to run queries and mutations as shown in the example below.
