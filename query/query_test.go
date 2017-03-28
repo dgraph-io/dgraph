@@ -4499,15 +4499,17 @@ func checkSchemaNodes(t *testing.T, expected []*graphp.SchemaNode, actual []*gra
 func TestSchemaBlock1(t *testing.T) {
 	query := `
 		schema {
+			type
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*graphp.SchemaNode{{Predicate: "genre"},
-		{Predicate: "age"}, {Predicate: "name"},
-		{Predicate: "film.film.initial_release_date"}, {Predicate: "loc"},
-		{Predicate: "alive"}, {Predicate: "shadow_deep"},
-		{Predicate: "friend"}, {Predicate: "geometry"},
-		{Predicate: "alias"}, {Predicate: "dob"}, {Predicate: "survival_rate"}}
+	expected := []*graphp.SchemaNode{{Predicate: "genre", Type: "uid"},
+		{Predicate: "age", Type: "int"}, {Predicate: "name", Type: "string"},
+		{Predicate: "film.film.initial_release_date", Type: "date"},
+		{Predicate: "loc", Type: "geo"}, {Predicate: "alive", Type: "bool"},
+		{Predicate: "shadow_deep", Type: "int"}, {Predicate: "friend", Type: "uid"},
+		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
+		{Predicate: "dob", Type: "date"}, {Predicate: "survival_rate", Type: "float"}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -4552,6 +4554,17 @@ func TestSchemaBlock4(t *testing.T) {
 	actual := processSchemaQuery(t, query)
 	expected := []*graphp.SchemaNode{
 		{Predicate: "genre", Type: "uid", Reverse: true}, {Predicate: "age", Type: "int"}}
+	checkSchemaNodes(t, expected, actual)
+}
+
+func TestSchemaBlock5(t *testing.T) {
+	query := `
+		schema(pred: name) {
+		}
+	`
+	actual := processSchemaQuery(t, query)
+	expected := []*graphp.SchemaNode{
+		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact"}}}
 	checkSchemaNodes(t, expected, actual)
 }
 
