@@ -1,6 +1,6 @@
 #!/bin/bash
 
-HOST=http://docs.dgraph.io
+HOST=https://docs.dgraph.io
 
 rebuild() {
 	echo "$(date) Updating docs for branch: $1"
