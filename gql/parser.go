@@ -946,14 +946,12 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		p.Val = val + item.Val
 
 		// Get language list, if present
-		it.Next()
-		item = it.Item()
-		if item.Typ == itemAt {
-			it.Next()
+		items, err := it.Peek(1)
+		if err == nil && items[0].Typ == itemAt {
+			it.Next() // consume '@'
+			it.Next() // move forward
 			langs := parseLanguageList(it)
 			p.Val = p.Val + "@" + strings.Join(langs, ":")
-		} else {
-			it.Prev()
 		}
 
 		result = append(result, p)
