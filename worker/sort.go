@@ -39,7 +39,7 @@ func SortOverNetwork(ctx context.Context, q *taskp.Sort) (*taskp.SortResult, err
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
-		return processSort(q)
+		return processSort(ctx, q)
 	}
 
 	// Send this over the network.
@@ -81,7 +81,7 @@ func (w *grpcWorker) Sort(ctx context.Context, s *taskp.Sort) (*taskp.SortResult
 	}
 
 	gid := group.BelongsTo(s.Attr)
-	//x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v Sort", q.Attr(), q.UidsLength(), gid)
+	x.Trace(ctx, "Sorting: Attribute: %q groupId: %v Sort", s.Attr, gid)
 
 	var reply *taskp.SortResult
 	x.AssertTruef(groups().ServesGroup(gid),
@@ -90,7 +90,7 @@ func (w *grpcWorker) Sort(ctx context.Context, s *taskp.Sort) (*taskp.SortResult
 	c := make(chan error, 1)
 	go func() {
 		var err error
-		reply, err = processSort(s)
+		reply, err = processSort(ctx, s)
 		c <- err
 	}()
 
@@ -107,20 +107,33 @@ var (
 	errDone     = x.Errorf("Done processing buckets")
 )
 
-// processSort does sorting with pagination. It works by iterating over index
-// buckets. As it iterates, it intersects with each UID list of the UID
-// matrix. To optimize for pagination, we maintain the "offsets and sizes" or
-// pagination window for each UID list. For each UID list, we ignore the
-// bucket if we haven't hit the offset. We stop getting results when we got
-// enough for our pagination params. When all the UID lists are done, we stop
-// iterating over the index.
-func processSort(ts *taskp.Sort) (*taskp.SortResult, error) {
-	attr := ts.Attr
-	x.AssertTruef(ts.Count > 0,
-		("We do not yet support negative or infinite count with sorting: %s %d. " +
-			"Try flipping order and return first few elements instead."),
-		attr, ts.Count)
+func sortWithoutIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error) {
+	n := len(ts.UidMatrix)
+	r := new(taskp.SortResult)
+	// Sort and paginate directly as it'd be expensive to iterate over the index which
+	// might have millions of keys just for retrieving some values.
+	sType, err := schema.State().TypeOf(ts.Attr)
+	if err != nil || !sType.IsScalar() {
+		return r, x.Errorf("Cannot sort attribute %s of type object.", ts.Attr)
+	}
+	for i := 0; i < n; i++ {
+		select {
+		case <-ctx.Done():
+			return nil, nil
+		default:
+			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
+			tempList := &taskp.List{ts.UidMatrix[i].Uids}
+			if err := sortByValue(ts.Attr, ts.Langs, tempList, sType, ts.Desc); err != nil {
+				return r, err
+			}
+			paginate(int(ts.Offset), int(ts.Count), tempList)
+			r.UidMatrix = append(r.UidMatrix, tempList)
+		}
+	}
+	return r, nil
+}
 
+func sortWithIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error) {
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	for i := 0; i < n; i++ {
@@ -130,17 +143,17 @@ func processSort(ts *taskp.Sort) (*taskp.SortResult, error) {
 		var emptyList taskp.List
 		out[i].ulist = &emptyList
 	}
-
+	r := new(taskp.SortResult)
 	// Iterate over every bucket / token.
 	it := pstore.NewIterator()
 	defer it.Close()
 
 	// Get the tokenizers and choose the corresponding one.
-	if !schema.State().IsIndexed(attr) {
-		return nil, x.Errorf("Attribute %s is not indexed.", attr)
+	if !schema.State().IsIndexed(ts.Attr) {
+		return &emptySortResult, x.Errorf("Attribute %s is not indexed.", ts.Attr)
 	}
 
-	tokenizers := schema.State().Tokenizer(attr)
+	tokenizers := schema.State().Tokenizer(ts.Attr)
 	var tok tok.Tokenizer
 	for _, t := range tokenizers {
 		// Get the first sortable index.
@@ -150,18 +163,20 @@ func processSort(ts *taskp.Sort) (*taskp.SortResult, error) {
 		}
 	}
 	if tok == nil {
-		return nil, x.Errorf("Attribute:%s does not have proper index",
-			attr)
+		return &emptySortResult,
+			x.Errorf("Attribute:%s does not have proper index",
+				ts.Attr)
+
 	}
 
-	indexPrefix := x.IndexKey(attr, string(tok.Identifier()))
+	indexPrefix := x.IndexKey(ts.Attr, string(tok.Identifier()))
 	if !ts.Desc {
 		// We need to seek to the first key of this index type.
 		seekKey := indexPrefix
 		it.Seek(seekKey)
 	} else {
 		// We need to reach the last key of this index type.
-		seekKey := x.IndexKey(attr, string(tok.Identifier()+1))
+		seekKey := x.IndexKey(ts.Attr, string(tok.Identifier()+1))
 		it.SeekForPrev(seekKey)
 	}
 
@@ -169,34 +184,87 @@ BUCKETS:
 
 	// Outermost loop is over index buckets.
 	for it.ValidForPrefix(indexPrefix) {
-		k := x.Parse(it.Key().Data())
-		x.AssertTrue(k != nil)
-		x.AssertTrue(k.IsIndex())
-		token := k.Term
-
-		// Intersect every UID list with the index bucket, and update their
-		// results (in out).
-		err := intersectBucket(ts, attr, token, out)
-		switch err {
-		case errDone:
-			break BUCKETS
-		case errContinue:
-			// Continue iterating over tokens / index buckets.
+		select {
+		case <-ctx.Done():
+			return nil, nil
 		default:
-			return &emptySortResult, err
-		}
-		if ts.Desc {
-			it.Prev()
-		} else {
-			it.Next()
+			k := x.Parse(it.Key().Data())
+			x.AssertTrue(k != nil)
+			x.AssertTrue(k.IsIndex())
+			token := k.Term
+			x.Trace(ctx, "processSort: Token: %s", token)
+			// Intersect every UID list with the index bucket, and update their
+			// results (in out).
+			err := intersectBucket(ts, ts.Attr, token, out)
+			switch err {
+			case errDone:
+				break BUCKETS
+			case errContinue:
+				// Continue iterating over tokens / index buckets.
+			default:
+				return &emptySortResult, err
+			}
+			if ts.Desc {
+				it.Prev()
+			} else {
+				it.Next()
+			}
 		}
 	}
 
-	r := new(taskp.SortResult)
 	for _, il := range out {
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
 	}
-	return r, nil
+	select {
+	case <-ctx.Done():
+		return nil, nil
+	default:
+		return r, nil
+	}
+}
+
+// processSort does sorting with pagination. It works by iterating over index
+// buckets. As it iterates, it intersects with each UID list of the UID
+// matrix. To optimize for pagination, we maintain the "offsets and sizes" or
+// pagination window for each UID list. For each UID list, we ignore the
+// bucket if we haven't hit the offset. We stop getting results when we got
+// enough for our pagination params. When all the UID lists are done, we stop
+// iterating over the index.
+func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error) {
+	if ts.Count < 0 {
+		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
+			"Try flipping order and return first few elements instead.", ts.Attr, ts.Count)
+	}
+
+	type result struct {
+		err error
+		res *taskp.SortResult
+	}
+	cctx, cancel := context.WithCancel(ctx)
+	resCh := make(chan result, 2)
+	go func() {
+		r, err := sortWithoutIndex(cctx, ts)
+		resCh <- result{
+			res: r,
+			err: err,
+		}
+	}()
+
+	go func() {
+		r, err := sortWithIndex(cctx, ts)
+		resCh <- result{
+			res: r,
+			err: err,
+		}
+	}()
+
+	r := <-resCh
+	if r.err == nil {
+		cancel()
+	} else {
+		r = <-resCh
+	}
+	return r.res, r.err
 }
 
 type intersectedList struct {
@@ -242,7 +310,9 @@ func intersectBucket(ts *taskp.Sort, attr, token string, out []intersectedList) 
 
 		// We are within the page. We need to apply sorting.
 		// Sort results by value before applying offset.
-		sortByValue(attr, ts.Langs, result, scalar, ts.Desc)
+		if err := sortByValue(attr, ts.Langs, result, scalar, ts.Desc); err != nil {
+			return err
+		}
 
 		if il.offset > 0 {
 			// Apply the offset.
@@ -278,19 +348,29 @@ func intersectBucket(ts *taskp.Sort, attr, token string, out []intersectedList) 
 	return errDone
 }
 
+func paginate(offset, count int, dest *taskp.List) {
+	start, end := x.PageRange(count, offset, len(dest.Uids))
+	dest.Uids = dest.Uids[start:end]
+}
+
 // sortByValue fetches values and sort UIDList.
 func sortByValue(attr string, langs []string, ul *taskp.List, typ types.TypeID, desc bool) error {
 	lenList := len(ul.Uids)
+	var uids []uint64
 	values := make([]types.Val, 0, lenList)
 	for i := 0; i < lenList; i++ {
 		uid := ul.Uids[i]
 		val, err := fetchValue(uid, attr, langs, typ)
 		if err != nil {
-			return err
+			// If a value is missing, skip that UID in the result.
+			continue
 		}
+		uids = append(uids, uid)
 		values = append(values, val)
 	}
-	return types.Sort(typ, values, ul, desc)
+	err := types.Sort(typ, values, &taskp.List{uids}, desc)
+	ul.Uids = uids
+	return err
 }
 
 // fetchValue gets the value for a given UID.

@@ -912,7 +912,7 @@ func TestShortestPath_filter2(t *testing.T) {
 				follow @filter(not anyofterms(name, "bob"))
 			}
 
-			me(id: var( A)) {
+			me(id: var(A)) {
 				name
 			}
 		}`
