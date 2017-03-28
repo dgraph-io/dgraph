@@ -19,21 +19,19 @@ message Value {
 message Query {
 	string attr = 1;
 	repeated string langs = 2; // language list for attribute
-	int32 count = 3;        // Get this many elements.
-	int32 offset = 4;       // Skip this many elements.
-	fixed64 after_uid = 5;  // Only return UIDs greater than this.
-	bool do_count = 6;      // Are we just getting lengths?
+	fixed64 after_uid = 3;  // Only return UIDs greater than this.
+	bool do_count = 4;      // Are we just getting lengths?
 
 	// Exactly one of uids and terms is populated.
-	List uid_list = 7;
+	List uid_list = 5;
 
 	// Function to generate or filter UIDs.
-	repeated string src_func = 8;
+	repeated string src_func = 6;
 	
-	bool reverse = 9;  // Whether this is a reverse edge.
+	bool reverse = 7;  // Whether this is a reverse edge.
 
-	facetsp.Param facet_param = 10; // which facets to fetch
-	facetsp.FilterTree facets_filter = 11; // filtering on facets : has Op (and/or/not) tree
+	facetsp.Param facet_param = 8; // which facets to fetch
+	facetsp.FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
 }
 
 message Result {

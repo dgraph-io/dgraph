@@ -82,12 +82,15 @@ func processSchemaFile(file string, batch *client.BatchMutation) {
 			break
 		}
 		line++
-		schema, err := schema.Parse(buf.String())
+		schemaUpdate, err := schema.Parse(buf.String())
 		if err != nil {
 			log.Fatalf("Error while parsing schema: %v, on line:%v %v", err, line, buf.String())
 		}
 		buf.Reset()
-		if err = batch.AddSchema(*schema[0]); err != nil {
+		if len(schemaUpdate) == 0 {
+			continue
+		}
+		if err = batch.AddSchema(*schemaUpdate[0]); err != nil {
 			log.Fatal("While adding schema to batch ", err)
 		}
 

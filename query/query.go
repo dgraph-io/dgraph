@@ -238,9 +238,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	facetsNode := dst.New("@facets")
 	// We go through all predicate children of the subgraphp.
 	for _, pc := range sg.Children {
-
 		if pc.IsInternal() {
-			x.AssertTruef(pc.Params.uidToVal != nil, "Empty variable encountered.")
+			if pc.Params.uidToVal == nil {
+				return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
+			}
 			fieldName := fmt.Sprintf("%s%v", pc.Attr, pc.Params.NeedsVar)
 			sv, ok := pc.Params.uidToVal[uid]
 			if !ok {
@@ -468,7 +469,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			}
 			if _, ok := attrsSeen[key]; ok {
 				return x.Errorf("%s not allowed multiple times in same sub-query.",
-					gchild.Attr)
+					key)
 			}
 			attrsSeen[key] = struct{}{}
 		}
@@ -756,8 +757,6 @@ func createTaskQuery(sg *SubGraph) *taskp.Query {
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
 		SrcFunc:      sg.SrcFunc,
-		Count:        int32(sg.Params.Count),
-		Offset:       int32(sg.Params.Offset),
 		AfterUid:     sg.Params.AfterUID,
 		DoCount:      len(sg.Filters) == 0 && sg.Params.DoCount,
 		FacetParam:   sg.Params.Facet,
@@ -1194,16 +1193,21 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		return
 	}
 
-	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
+	if parent == nil && len(sg.SrcFunc) == 0 {
+		// I'm root and I'm using some varaible that has been populated.
 		// Retain the actual order in uidMatrix. But sort the destUids.
-		o := make([]uint64, len(sg.DestUIDs.Uids))
-		copy(o, sg.DestUIDs.Uids)
-		sg.uidMatrix = []*taskp.List{{o}}
-		sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool { return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j] })
-	} else if parent == nil && len(sg.SrcFunc) == 0 {
-		// I am root. I don't have any function to execute, and my
-		// result has been prepared for me already.
-		sg.DestUIDs = sg.SrcUIDs
+		if sg.SrcUIDs != nil && len(sg.SrcUIDs.Uids) != 0 {
+			// I am root. I don't have any function to execute, and my
+			// result has been prepared for me already by list passed by the user.
+			// uidmatrix retains the order. SrcUids are sorted (in newGraph).
+			sg.DestUIDs = sg.SrcUIDs
+		} else {
+			// Populated variable.
+			o := make([]uint64, len(sg.DestUIDs.Uids))
+			copy(o, sg.DestUIDs.Uids)
+			sg.uidMatrix = []*taskp.List{{o}}
+			sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool { return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j] })
+		}
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
@@ -1375,11 +1379,18 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 // pageRange returns start and end indices given pagination params. Note that n
 // is the size of the input list.
 func pageRange(p *params, n int) (int, int) {
+	if n == 0 {
+		return 0, 0
+	}
+
 	if p.Count == 0 && p.Offset == 0 {
 		return 0, n
 	}
 	if p.Count < 0 {
 		// Items from the back of the array, like Python arrays. Do a positive mod n.
+		if p.Count*-1 > n {
+			p.Count = -n
+		}
 		return (((n + p.Count) % n) + n) % n, n
 	}
 	start := p.Offset

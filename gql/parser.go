@@ -427,29 +427,45 @@ func checkDependency(vl []*Vars) error {
 
 	sort.Strings(needs)
 	sort.Strings(defines)
-	i, j := 0, 0
+
+	out := defines[:0]
+	dlen := len(defines)
+	if dlen > 0 {
+		for i := 1; i < dlen; i++ {
+			if defines[i-1] == defines[i] {
+				continue
+			}
+			out = append(out, defines[i-1])
+		}
+		out = append(out, defines[dlen-1])
+		defines = out
+		if len(defines) != dlen {
+			return x.Errorf("Some variables are declared multiple times.")
+		}
+	}
+
+	out = needs[:0]
+	nlen := len(needs)
+	if nlen > 0 {
+		for i := 1; i < nlen; i++ {
+			if needs[i-1] == needs[i] {
+				continue
+			}
+			out = append(out, needs[i-1])
+		}
+		out = append(out, needs[nlen-1])
+		needs = out
+	}
 	if len(defines) > len(needs) {
-		return x.Errorf("Some variables are defined and not used\nDefined:%v\nUsed:%v\n",
+		return x.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
 			defines, needs)
 	}
 
-	for i < len(needs) && j < len(defines) {
-		if needs[i] != defines[j] {
-			return x.Errorf("Variable %s defined but not used", defines[j])
-		}
-		i++
-		for i < len(needs) && needs[i-1] == needs[i] {
-			i++
-		}
-		j++
-		if j < len(defines) && defines[j] == defines[j-1] {
-			return x.Errorf("Variable %s defined multiple times", defines[j])
-		}
-	}
-	if i != len(needs) || j != len(defines) {
-		return x.Errorf("Some variables are used but not defined.\nDefined:%v\nUsed:%v\n",
+	if len(defines) < len(needs) {
+		return x.Errorf("Some variables are used but not defined\nDefined:%v\nUsed:%v\n",
 			defines, needs)
 	}
+
 	return nil
 }
 

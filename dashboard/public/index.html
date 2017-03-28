@@ -15,8 +15,7 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <script>
-      //window.SERVER_PORT = __SERVER_PORT__;
-      window.SERVER_ADDRESS = window.location.href.substr(0,-1);
+      window.SERVER_URL = location.protocol+'//'+location.hostname+(location.port ? ':'+location.port: '');
     </script>
     <title>Dgraph UI</title>
 </head>

@@ -116,7 +116,13 @@ func toRDF(buf *bytes.Buffer, item kv) {
 }
 
 func toSchema(buf *bytes.Buffer, s *skv) {
-	buf.WriteString(s.attr)
+	if strings.ContainsRune(s.attr, ':') {
+		buf.WriteRune('<')
+		buf.WriteString(s.attr)
+		buf.WriteRune('>')
+	} else {
+		buf.WriteString(s.attr)
+	}
 	buf.WriteByte(':')
 	buf.WriteString(types.TypeID(s.schema.ValueType).Name())
 	if s.schema.Directive == typesp.Schema_REVERSE {
@@ -408,6 +414,13 @@ func BackupOverNetwork(ctx context.Context) error {
 	}
 	// Let's first collect all groups.
 	gids := groups().KnownGroups()
+
+	for i, gid := range gids {
+		if gid == 0 {
+			gids[i] = gids[len(gids)-1]
+			gids = gids[:len(gids)-1]
+		}
+	}
 
 	ch := make(chan *workerp.BackupPayload, len(gids))
 	for _, gid := range gids {

@@ -33,6 +33,7 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
@@ -107,9 +108,8 @@ func getNew(key []byte, pstore *store.Store) *List {
 // ListOptions is used in List.Uids (in posting) to customize our output list of
 // UIDs, for each posting list. It should be internal to this package.
 type ListOptions struct {
-	AfterUID   uint64              // Any UID returned must be after this value.
-	Intersect  *taskp.List         // Intersect results with this list of UIDs.
-	ExcludeSet map[uint64]struct{} // Exclude UIDs in this set.
+	AfterUID  uint64      // Any UID returned must be after this value.
+	Intersect *taskp.List // Intersect results with this list of UIDs.
 }
 
 type ByUid []*typesp.Posting
@@ -590,7 +590,12 @@ func (l *List) Uids(opt ListOptions) *taskp.List {
 		res = append(res, p.Uid)
 		return true
 	})
-	return &taskp.List{res}
+	// Do The intersection here as it's optimized.
+	out := &taskp.List{res}
+	if opt.Intersect != nil {
+		algo.IntersectWith(out, opt.Intersect, out)
+	}
+	return out
 }
 
 // Postings calls postFn with the postings that are common with
@@ -599,24 +604,9 @@ func (l *List) Postings(opt ListOptions, postFn func(*typesp.Posting) bool) {
 	l.RLock()
 	defer l.RUnlock()
 
-	var intersectIdx int // Indexes into opt.Intersect if it exists.
 	l.iterate(opt.AfterUID, func(p *typesp.Posting) bool {
 		if postingType(p) != x.ValueUid {
 			return true
-		}
-		uid := p.Uid
-		if opt.ExcludeSet != nil {
-			if _, found := opt.ExcludeSet[uid]; found {
-				return true
-			}
-		}
-		if opt.Intersect != nil {
-			intersectUidsLen := len(opt.Intersect.Uids)
-			for ; intersectIdx < intersectUidsLen && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
-			}
-			if intersectIdx >= intersectUidsLen || opt.Intersect.Uids[intersectIdx] > uid {
-				return true
-			}
 		}
 		return postFn(p)
 	})

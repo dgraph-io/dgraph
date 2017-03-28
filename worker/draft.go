@@ -40,8 +40,9 @@ import (
 )
 
 const (
-	proposalMutation = 0
-	proposalReindex  = 1
+	proposalMutation  = 0
+	proposalReindex   = 1
+	ErrorNodeIDExists = "Error Node ID already exists in the cluster"
 )
 
 // peerPool stores the peers per node and the addresses corresponding to them.
@@ -874,6 +875,11 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *workerp.Payload) (*
 func (w *grpcWorker) JoinCluster(ctx context.Context, rc *taskp.RaftContext) (*workerp.Payload, error) {
 	if ctx.Err() != nil {
 		return &workerp.Payload{}, ctx.Err()
+	}
+
+	// Best effor reject
+	if _, found := groups().Server(rc.Id, rc.Group); found || rc.Id == *raftId {
+		return &workerp.Payload{}, x.Errorf(ErrorNodeIDExists)
 	}
 
 	node := groups().Node(rc.Group)

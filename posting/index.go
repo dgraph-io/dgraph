@@ -20,6 +20,7 @@ package posting
 import (
 	"context"
 	"math"
+	"sync"
 
 	"golang.org/x/net/trace"
 
@@ -236,7 +237,7 @@ func DeleteReverseEdges(ctx context.Context, attr string) error {
 	return nil
 }
 
-// RebuildIndex rebuilds index for a given attribute.
+// RebuildReverseEdges rebuilds the reverse edges for a given attribute.
 func RebuildReverseEdges(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
 	if err := DeleteReverseEdges(ctx, attr); err != nil {
@@ -245,15 +246,15 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
-	edge := taskp.DirectedEdge{Attr: attr}
 	prefix := pk.DataPrefix()
 	it := pstore.NewIterator()
 	defer it.Close()
 
 	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add reverse entries for values in posting list
-	addReversePostings := func(pl *typesp.PostingList) {
+	addReversePostings := func(uid uint64, pl *typesp.PostingList) {
 		postingsLen := len(pl.Postings)
+		edge := taskp.DirectedEdge{Attr: attr, Entity: uid}
 		for idx := 0; idx < postingsLen; idx++ {
 			p := pl.Postings[idx]
 			// Add reverse entries based on p.
@@ -265,17 +266,37 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		}
 	}
 
+	type item struct {
+		uid  uint64
+		list *typesp.PostingList
+	}
+	ch := make(chan item, 10000)
+	var wg sync.WaitGroup
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go func() {
+			for it := range ch {
+				addReversePostings(it.uid, it.list)
+			}
+			wg.Done()
+		}()
+	}
+
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		pki := x.Parse(it.Key().Data())
-		edge.Entity = pki.Uid
 		var pl typesp.PostingList
 		x.Check(pl.Unmarshal(it.Value().Data()))
 
 		// Posting list contains only values or only UIDs.
 		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) == x.ValueUid {
-			addReversePostings(&pl)
+			ch <- item{
+				uid:  pki.Uid,
+				list: &pl,
+			}
 		}
 	}
+	close(ch)
+	wg.Wait()
 	return nil
 }
 
@@ -320,15 +341,15 @@ func RebuildIndex(ctx context.Context, attr string) error {
 
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
-	edge := taskp.DirectedEdge{Attr: attr}
 	prefix := pk.DataPrefix()
 	it := pstore.NewIterator()
 	defer it.Close()
 
 	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add index entries for values in posting list
-	addPostingsToIndex := func(pl *typesp.PostingList) {
+	addPostingsToIndex := func(uid uint64, pl *typesp.PostingList) {
 		postingsLen := len(pl.Postings)
+		edge := taskp.DirectedEdge{Attr: attr, Entity: uid}
 		for idx := 0; idx < postingsLen; idx++ {
 			p := pl.Postings[idx]
 			// Add index entries based on p.
@@ -340,16 +361,36 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		}
 	}
 
+	type item struct {
+		uid  uint64
+		list *typesp.PostingList
+	}
+	ch := make(chan item, 10000)
+	var wg sync.WaitGroup
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go func() {
+			for it := range ch {
+				addPostingsToIndex(it.uid, it.list)
+			}
+			wg.Done()
+		}()
+	}
+
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		pki := x.Parse(it.Key().Data())
-		edge.Entity = pki.Uid
 		var pl typesp.PostingList
 		x.Check(pl.Unmarshal(it.Value().Data()))
 
 		// Posting list contains only values or only UIDs.
 		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) != x.ValueUid {
-			addPostingsToIndex(&pl)
+			ch <- item{
+				uid:  pki.Uid,
+				list: &pl,
+			}
 		}
 	}
+	close(ch)
+	wg.Wait()
 	return nil
 }
