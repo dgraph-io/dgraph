@@ -19,6 +19,7 @@ package worker
 
 import (
 	"golang.org/x/net/context"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -115,7 +116,11 @@ var (
 // enough for our pagination params. When all the UID lists are done, we stop
 // iterating over the index.
 func processSort(ts *taskp.Sort) (*taskp.SortResult, error) {
-	attr := ts.Attr
+	attrData := strings.Split(ts.Attr, "@")
+	attr := attrData[0]
+	if len(attrData) == 2 {
+		ts.Langs = strings.Split(attrData[1], ":")
+	}
 	x.AssertTruef(ts.Count > 0,
 		("We do not yet support negative or infinite count with sorting: %s %d. " +
 			"Try flipping order and return first few elements instead."),
