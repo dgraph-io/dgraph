@@ -4800,3 +4800,21 @@ func TestToJSONReverseNegativeFirst(t *testing.T) {
 		`{"me":[{"name":"Andrea","~friend":[{"gender":"female","name":"Michonne"}]},{"name":"Andrea With no friends"}]}`,
 		js)
 }
+
+func TestToFastJSONOrderLang(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				friend(first:2, orderdesc: alias@en:de) {
+					alias
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"alias":"Zambo Alice"},{"alias":"John Oliver"}]}]}`,
+		js)
+}

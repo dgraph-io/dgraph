@@ -944,6 +944,18 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		}
 
 		p.Val = val + item.Val
+
+		// Get language list, if present
+		it.Next()
+		item = it.Item()
+		if item.Typ == itemAt {
+			it.Next()
+			langs := parseLanguageList(it)
+			p.Val = p.Val + "@" + strings.Join(langs, ":")
+		} else {
+			it.Prev()
+		}
+
 		result = append(result, p)
 	}
 	return result, nil
@@ -1390,16 +1402,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			}
 		} else if len(curp.Attr) > 0 && len(curp.Langs) == 0 {
 			// this is language list
-			for ; item.Typ == itemName; item = it.Item() {
-				curp.Langs = append(curp.Langs, item.Val)
-				it.Next()
-				if it.Item().Typ == itemColon {
-					it.Next()
-				} else {
-					break
-				}
-			}
-			it.Prev()
+			curp.Langs = parseLanguageList(it)
 			if len(curp.Langs) == 0 {
 				return x.Errorf("Expected at least 1 language in list for %s", curp.Attr)
 			}
@@ -1410,6 +1413,23 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		return x.Errorf("Expected directive or language list")
 	}
 	return nil
+}
+
+func parseLanguageList(it *lex.ItemIterator) []string {
+	item := it.Item()
+	var langs []string
+	for ; item.Typ == itemName; item = it.Item() {
+		langs = append(langs, item.Val)
+		it.Next()
+		if it.Item().Typ == itemColon {
+			it.Next()
+		} else {
+			break
+		}
+	}
+	it.Prev()
+
+	return langs
 }
 
 // getRoot gets the root graph query object after parsing the args.

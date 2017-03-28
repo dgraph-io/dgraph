@@ -2460,6 +2460,24 @@ func TestFacetsFilterAtValue(t *testing.T) {
 	require.Equal(t, `(eq some-facet "true")`, nameChild.FacetsFilter.debugString())
 }
 
+func TestParseQueryWithAttrLang(t *testing.T) {
+	query := `
+	{	
+		me(id:0x1) {
+			name
+			friend(first:5, orderasc: name@en:fr) {
+				name@en
+			}
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, "name@en:fr", res.Query[0].Children[1].Args["orderasc"])
+}
+
 func TestMain(m *testing.M) {
 	group.ParseGroupConfig("")
 	os.Exit(m.Run())
