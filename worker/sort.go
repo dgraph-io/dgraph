@@ -125,16 +125,16 @@ func sortWithoutIndex(cancelCtx context.Context, ts *taskp.Sort, resCh chan resu
 			return
 		default:
 			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
-			ts.UidMatrix[i] = &taskp.List{ts.UidMatrix[i].Uids}
-			err := sortByValue(ts.Attr, ts.Langs, ts.UidMatrix[i], sType, ts.Desc)
+			tempList := &taskp.List{ts.UidMatrix[i].Uids}
+			err := sortByValue(ts.Attr, ts.Langs, tempList, sType, ts.Desc)
 			if err != nil {
 				resCh <- result{
 					res: r,
 					err: err,
 				}
 			}
-			paginate(int(ts.Offset), int(ts.Count), ts.UidMatrix[i])
-			r.UidMatrix = append(r.UidMatrix, ts.UidMatrix[i])
+			paginate(int(ts.Offset), int(ts.Count), tempList)
+			r.UidMatrix = append(r.UidMatrix, tempList)
 		}
 	}
 	resCh <- result{
