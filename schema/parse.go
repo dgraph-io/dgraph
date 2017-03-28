@@ -75,48 +75,57 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 	}
 
 	// Check for index / reverse.
-	for it.Next() {
+	schema := &graphp.SchemaUpdate{Predicate: predicate, ValueType: uint32(t)}
+	it.Next()
+	next = it.Item()
+	if next.Typ == itemAt {
+		it.Next()
 		next = it.Item()
-		if next.Typ == lex.ItemError {
-			return nil, x.Errorf(next.Val)
+		if next.Typ != itemText {
+			return nil, x.Errorf("Missing directive name")
 		}
-		if next.Typ == itemAt {
-			it.Next()
-			next = it.Item()
-			if next.Typ != itemText {
-				return nil, x.Errorf("Missing directive name")
+		switch next.Val {
+		case "reverse":
+			if t != types.UidID {
+				return nil, x.Errorf("Cannot reverse for non-UID type")
 			}
-			switch next.Val {
-			case "reverse":
-				if t != types.UidID {
-					return nil, x.Errorf("Cannot reverse for non-UID type")
-				}
-				return &graphp.SchemaUpdate{
-					Predicate: predicate,
-					ValueType: uint32(t),
-					Directive: graphp.SchemaUpdate_REVERSE,
-				}, nil
-			case "index":
-				if !allowIndex {
-					return nil, x.Errorf("@index not allowed")
-				}
-				if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
-					return nil, err
-				} else {
-					return &graphp.SchemaUpdate{
-						Predicate: predicate, ValueType: uint32(t),
-						Directive: graphp.SchemaUpdate_INDEX,
-						Tokenizer: tokenizer,
-					}, nil
-				}
-			default:
-				return nil, x.Errorf("Invalid index specification")
+			schema = &graphp.SchemaUpdate{
+				Predicate: predicate,
+				ValueType: uint32(t),
+				Directive: graphp.SchemaUpdate_REVERSE,
 			}
+		case "index":
+			if !allowIndex {
+				return nil, x.Errorf("@index not allowed")
+			}
+			if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
+				return nil, err
+			} else {
+				schema = &graphp.SchemaUpdate{
+					Predicate: predicate, ValueType: uint32(t),
+					Directive: graphp.SchemaUpdate_INDEX,
+					Tokenizer: tokenizer,
+				}
+			}
+		default:
+			return nil, x.Errorf("Invalid index specification")
 		}
-		it.Prev()
-		break
+		it.Next()
+		next = it.Item()
 	}
-	return &graphp.SchemaUpdate{Predicate: predicate, ValueType: uint32(t)}, nil
+	if next.Typ != itemDot {
+		return nil, x.Errorf("Invalid ending")
+	}
+	it.Next()
+	next = it.Item()
+	if next.Typ == lex.ItemEOF {
+		it.Prev()
+		return schema, nil
+	}
+	if next.Typ != itemNewLine {
+		return nil, x.Errorf("Invalid ending")
+	}
+	return schema, nil
 }
 
 // parseIndexDirective works on "@index" or "@index(customtokenizer)".
@@ -193,6 +202,8 @@ func Parse(s string) ([]*graphp.SchemaUpdate, error) {
 			}
 		case lex.ItemError:
 			return nil, x.Errorf(item.Val)
+		case itemNewLine:
+			// pass empty line
 		default:
 			return nil, x.Errorf("Unexpected token: %v", item)
 		}
