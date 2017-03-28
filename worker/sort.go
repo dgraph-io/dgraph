@@ -135,12 +135,14 @@ func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error)
 	}
 
 	if uidsLen < 10000 {
-		// Sort and paginate directly.
+		// Sort and paginate directly as it'd be expensive to iterate over the index which
+		// might have millions of keys just for retrieving some values.
 		sType, err := schema.State().TypeOf(ts.Attr)
 		if err != nil || !sType.IsScalar() {
 			return nil, x.Errorf("Cannot sort attribute %s of type object.", ts.Attr)
 		}
 		for i := 0; i < n; i++ {
+			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
 			ts.UidMatrix[i] = &taskp.List{ts.UidMatrix[i].Uids}
 			err := sortByValue(ts.Attr, ts.Langs, ts.UidMatrix[i], sType, ts.Desc)
 			if err != nil {
