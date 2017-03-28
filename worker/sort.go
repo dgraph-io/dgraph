@@ -39,7 +39,7 @@ func SortOverNetwork(ctx context.Context, q *taskp.Sort) (*taskp.SortResult, err
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
-		return processSort(q)
+		return processSort(ctx, q)
 	}
 
 	// Send this over the network.
@@ -81,7 +81,7 @@ func (w *grpcWorker) Sort(ctx context.Context, s *taskp.Sort) (*taskp.SortResult
 	}
 
 	gid := group.BelongsTo(s.Attr)
-	//x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v Sort", q.Attr(), q.UidsLength(), gid)
+	x.Trace(ctx, "Sorting: Attribute: %q groupId: %v Sort", s.Attr, gid)
 
 	var reply *taskp.SortResult
 	x.AssertTruef(groups().ServesGroup(gid),
@@ -90,7 +90,7 @@ func (w *grpcWorker) Sort(ctx context.Context, s *taskp.Sort) (*taskp.SortResult
 	c := make(chan error, 1)
 	go func() {
 		var err error
-		reply, err = processSort(s)
+		reply, err = processSort(ctx, s)
 		c <- err
 	}()
 
@@ -114,8 +114,9 @@ var (
 // bucket if we haven't hit the offset. We stop getting results when we got
 // enough for our pagination params. When all the UID lists are done, we stop
 // iterating over the index.
-func processSort(ts *taskp.Sort) (*taskp.SortResult, error) {
+func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error) {
 	attr := ts.Attr
+	r := new(taskp.SortResult)
 	x.AssertTruef(ts.Count > 0,
 		("We do not yet support negative or infinite count with sorting: %s %d. " +
 			"Try flipping order and return first few elements instead."),
@@ -123,14 +124,33 @@ func processSort(ts *taskp.Sort) (*taskp.SortResult, error) {
 
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
+	uidsLen := 0
 	for i := 0; i < n; i++ {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset)
 		var emptyList taskp.List
 		out[i].ulist = &emptyList
+		uidsLen += len(ts.UidMatrix[i].Uids)
 	}
 
+	if uidsLen < 10000 {
+		// Sort and paginate directly.
+		sType, err := schema.State().TypeOf(ts.Attr)
+		if err != nil || !sType.IsScalar() {
+			return nil, x.Errorf("Cannot sort attribute %s of type object.", ts.Attr)
+		}
+		for i := 0; i < n; i++ {
+			ts.UidMatrix[i] = &taskp.List{ts.UidMatrix[i].Uids}
+			err := sortByValue(ts.Attr, ts.Langs, ts.UidMatrix[i], sType, ts.Desc)
+			if err != nil {
+				return r, err
+			}
+			paginate(int(ts.Offset), int(ts.Count), ts.UidMatrix[i])
+			r.UidMatrix = append(r.UidMatrix, ts.UidMatrix[i])
+		}
+		return r, nil
+	}
 	// Iterate over every bucket / token.
 	it := pstore.NewIterator()
 	defer it.Close()
@@ -173,7 +193,7 @@ BUCKETS:
 		x.AssertTrue(k != nil)
 		x.AssertTrue(k.IsIndex())
 		token := k.Term
-
+		x.Trace(ctx, "processSort: Token: %s", token)
 		// Intersect every UID list with the index bucket, and update their
 		// results (in out).
 		err := intersectBucket(ts, attr, token, out)
@@ -192,7 +212,6 @@ BUCKETS:
 		}
 	}
 
-	r := new(taskp.SortResult)
 	for _, il := range out {
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
 	}
@@ -242,7 +261,10 @@ func intersectBucket(ts *taskp.Sort, attr, token string, out []intersectedList) 
 
 		// We are within the page. We need to apply sorting.
 		// Sort results by value before applying offset.
-		sortByValue(attr, ts.Langs, result, scalar, ts.Desc)
+		err := sortByValue(attr, ts.Langs, result, scalar, ts.Desc)
+		if err != nil {
+			return err
+		}
 
 		if il.offset > 0 {
 			// Apply the offset.
@@ -278,19 +300,54 @@ func intersectBucket(ts *taskp.Sort, attr, token string, out []intersectedList) 
 	return errDone
 }
 
+func pageRange(count, offset, n int) (int, int) {
+	if count == 0 && offset == 0 {
+		return 0, n
+	}
+	if count < 0 {
+		// Items from the back of the array, like Python arrays. Do a positive mod n.
+		return (((n + count) % n) + n) % n, n
+	}
+	start := offset
+	if start < 0 {
+		start = 0
+	}
+	if start > n {
+		return n, n
+	}
+	if count == 0 { // No count specified. Just take the offset parameter.
+		return start, n
+	}
+	end := start + count
+	if end > n {
+		end = n
+	}
+	return start, end
+}
+
+func paginate(offset, count int, dest *taskp.List) {
+	start, end := pageRange(count, offset, len(dest.Uids))
+	dest.Uids = dest.Uids[start:end]
+}
+
 // sortByValue fetches values and sort UIDList.
 func sortByValue(attr string, langs []string, ul *taskp.List, typ types.TypeID, desc bool) error {
 	lenList := len(ul.Uids)
+	var uids []uint64
 	values := make([]types.Val, 0, lenList)
 	for i := 0; i < lenList; i++ {
 		uid := ul.Uids[i]
 		val, err := fetchValue(uid, attr, langs, typ)
 		if err != nil {
-			return err
+			// If a value is missing, skip that UID in the result.
+			continue
 		}
+		uids = append(uids, uid)
 		values = append(values, val)
 	}
-	return types.Sort(typ, values, ul, desc)
+	err := types.Sort(typ, values, &taskp.List{uids}, desc)
+	ul.Uids = uids
+	return err
 }
 
 // fetchValue gets the value for a given UID.
