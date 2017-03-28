@@ -469,7 +469,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			}
 			if _, ok := attrsSeen[key]; ok {
 				return x.Errorf("%s not allowed multiple times in same sub-query.",
-					gchild.Attr)
+					key)
 			}
 			attrsSeen[key] = struct{}{}
 		}
