@@ -28,15 +28,15 @@
     <meta name="msapplication-TileImage" content="{{ .Site.BaseURL }}/images/favicons/mstile-144x144.png">
     <meta name="msapplication-config" content="{{ .Site.BaseURL }}/images/favicons/browserconfig.xml">
 
-    {{ .Scratch.Add "title" "" }}
+    <!-- {{ .Scratch.Add "title" "" }}
     {{ if isset .Site.Data.titles .Title }}
       {{ .Scratch.Set "title" (index .Site.Data.titles .Title).title }}
     {{ else }}
       {{ .Scratch.Set "title" .Title}}
-    {{end}}
+    {{end}} -->
 
     <title>
-      {{ .Scratch.Get "title" }} — {{ .Site.Title }}
+      {{.Section | humanize}} — {{ .Site.Title }}
     </title>
 
     <link href="{{ .Site.BaseURL }}/css/theme.css?{{ .Now.Unix }}" rel="stylesheet">
