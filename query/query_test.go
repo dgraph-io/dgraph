@@ -335,6 +335,30 @@ func TestGetUIDNotInChild(t *testing.T) {
 		js)
 }
 
+func TestCascadeDirective(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) @cascade {
+				name
+				gender
+				friend {
+					name
+					friend{
+						name
+						dob
+						age
+					}
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"friend":[{"age":38,"dob":"1910-01-01","name":"Michonne"}],"name":"Rick Grimes"},{"friend":[{"age":15,"dob":"1909-05-05","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
 func TestQueryVarValAggMinMaxSelf(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -4157,30 +4181,6 @@ children: <
 	require.EqualValues(t,
 		expectedPb,
 		proto.MarshalTextString(pb))
-}
-
-func TestCascadeDirective(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(id:0x01) @cascade {
-				name
-				gender
-				friend {
-					name
-					friend{
-						name
-						dob
-						age
-					}
-				}
-			}
-		}
-	`
-
-	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"friend":[{"friend":[{"age":38,"dob":"1910-01-01","name":"Michonne"}],"name":"Rick Grimes"},{"friend":[{"age":15,"dob":"1909-05-05","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
-		js)
 }
 
 func TestNormalizeDirective(t *testing.T) {
