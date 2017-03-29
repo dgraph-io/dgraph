@@ -407,7 +407,7 @@ func TestQueryVarValAggOrderDesc(t *testing.T) {
 			}
 
 			me(id: var(f), orderdesc: var(sum)) {
-				name 
+				name
 				age
 				count(friend)
 			}
@@ -432,7 +432,7 @@ func TestQueryVarValAggOrderAsc(t *testing.T) {
 			}
 
 			me(id: var(f), orderasc: var(sum)) {
-				name 
+				name
 				age
 				survival_rate
 			}
@@ -4814,13 +4814,12 @@ func TestBoolIndexEqRoot1(t *testing.T) {
 			me(func: eq(alive, true)) {
 				name
 				alive
-				count(friend)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":true,"friend":[{"count":5}],"name":"Michonne"},{"alive":true,"friend":[{"count":1}],"name":"Rick Grimes"}]}`,
+		`{"me":[{"alive":true,"name":"Michonne"},{"alive":true,"name":"Rick Grimes"}]}`,
 		js)
 }
 
@@ -4831,13 +4830,12 @@ func TestBoolIndexEqRoot2(t *testing.T) {
 			me(func: eq(alive, false)) {
 				name
 				alive
-				count(friend)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":false,"friend":[{"count":1}],"name":"Daryl Dixon"},{"alive":false,"friend":[{"count":1}],"name":"Andrea"}]}`,
+		`{"me":[{"alive":false,"name":"Daryl Dixon"},{"alive":false,"name":"Andrea"}]}`,
 		js)
 }
 
@@ -4890,7 +4888,6 @@ func TestBoolSort(t *testing.T) {
 			me(func: anyofterms(name, "Michonne Andrea Rick"), orderasc: alive) {
 				name
 				alive
-				count(friend)
 			}
 		}
 	`
