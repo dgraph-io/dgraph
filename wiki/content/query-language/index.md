@@ -1038,7 +1038,7 @@ curl localhost:8080/query -XPOST -d $'{
     }
   }
 }
-' | jq
+' 
 ```
 Output:
 ```
@@ -3038,6 +3038,194 @@ Output:
   ]
 }
 ```
+## Cascade Directive 
+
+`@cascade` directive forces a removal of those entites that don't have all the fields specified in the query. This can be useful, if a filter was applied because without cascade. For example
+
+```
+curl localhost:8080/query -XPOST -d $'{
+  HP(func: allofterms(name, "Harry Potter")) @cascade {
+    name@en
+    starring{
+        performance.character {
+          name@en
+        }
+        performance.actor @filter(allofterms(name, "Warwick")){
+            name@en
+         }
+    }
+  }
+}'
+```
+Output:
+```
+{
+  "HP": [
+    {
+      "name@en": "Harry Potter and the Order of the Phoenix",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Philosopher's Stone",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Goblin Bank Teller"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Prisoner of Azkaban",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Half-Blood Prince",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Chamber of Secrets",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Deathly Hallows – Part 2",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Griphook"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Deathly Hallows - Part I",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Griphook"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Goblet of Fire",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Here we also remove all the nodes that don't have a corresponding valid sibling node for `Warwick Davis`.
 
 ## Normalize directive
 
