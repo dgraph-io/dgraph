@@ -100,8 +100,10 @@ func (s *stateGroup) update(se SyncEntry) {
 	s.predicate[se.Attr] = &se.Schema
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- se
-	s.elog.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema)
-	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema)
+	s.elog.Printf("Setting schema type for attr %s: %v\n", se.Attr,
+		types.TypeID(se.Schema.ValueType).Name())
+	fmt.Printf("Setting schema type for attr %s: %v\n", se.Attr,
+		types.TypeID(se.Schema.ValueType).Name())
 }
 
 // Set sets the schema for given predicate in memory
@@ -115,7 +117,8 @@ func (s *stateGroup) set(pred string, schema typesp.Schema) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = &schema
-	s.elog.Printf("Setting schema for attr %s: %v\n", pred, schema.ValueType)
+	s.elog.Printf("Setting schema type for attr %s: %v\n", pred,
+		types.TypeID(schema.ValueType).Name())
 }
 
 // Get gets the schema for given predicate

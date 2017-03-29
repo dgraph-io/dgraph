@@ -19,6 +19,7 @@ package tok
 
 import (
 	"encoding/binary"
+	"fmt"
 	"time"
 
 	geom "github.com/twpayne/go-geom"
@@ -85,10 +86,12 @@ func GetTokenizer(name string) (Tokenizer, bool) {
 }
 
 // Default returns the default tokenizer for a given type.
-func Default(typ types.TypeID) Tokenizer {
+func Default(typ types.TypeID) (Tokenizer, error) {
 	t, found := defaults[typ]
-	x.AssertTruef(found, "No default tokenizer set for type %v", typ)
-	return t
+	if !found {
+		return nil, fmt.Errorf("Can't tokenize values of type: %v", typ.Name())
+	}
+	return t, nil
 }
 
 // SetDefault sets the default tokenizer for given typeID.
