@@ -1978,6 +1978,25 @@ func TestToFastJSONFilterallofterms(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
+func TestInvalidStringFilter(t *testing.T) {
+	// no FTS index defined for name
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend @filter(alloftext(name, "Andrea SomethingElse")) {
+					name
+				}
+			}
+		}
+	`
+
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
+
 func TestFilterRegex1(t *testing.T) {
 	populateGraph(t)
 	query := `
