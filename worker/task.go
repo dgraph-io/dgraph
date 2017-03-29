@@ -144,7 +144,7 @@ func parseFuncType(arr []string) (FuncType, string) {
 		//    takes advantage of indexed-attr
 		// gt(count(films), 0) is 'CompareScalar', we first do
 		//    counting on attr, then compare the result as scalar with int
-		if len(arr) > 2 && arr[1] == "count" {
+		if len(arr) > 3 && arr[2] == "count" {
 			return CompareScalarFn, f
 		}
 		return CompareAttrFn, f
@@ -299,7 +299,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			if len(newValue.Val) == 0 {
 				out.Values[lastPos] = task.FalseVal
 			}
-			pwd := q.SrcFunc[1]
+			pwd := q.SrcFunc[2]
 			err = types.VerifyPassword(pwd, string(newValue.Val))
 			if err != nil {
 				out.Values[lastPos] = task.FalseVal
@@ -457,11 +457,11 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case CompareAttrFn:
-		if len(q.SrcFunc) != 2 {
-			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
+		if len(q.SrcFunc) != 3 {
+			return nil, x.Errorf("Function requires 3 arguments, but got %d %v",
 				len(q.SrcFunc), q.SrcFunc)
 		}
-		fc.ineqValue, err = convertValue(attr, q.SrcFunc[1])
+		fc.ineqValue, err = convertValue(attr, q.SrcFunc[2])
 		if err != nil {
 			return nil, err
 		}
@@ -472,14 +472,14 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(fc.tokens)
 	case CompareScalarFn:
-		if len(q.SrcFunc) != 3 {
-			return nil, x.Errorf("Function requires 3 arguments, but got %d %v",
+		if len(q.SrcFunc) != 4 {
+			return nil, x.Errorf("Function requires 4 arguments, but got %d %v",
 				len(q.SrcFunc), q.SrcFunc)
 		}
-		fc.threshold, err = strconv.ParseInt(q.SrcFunc[2], 10, 64)
+		fc.threshold, err = strconv.ParseInt(q.SrcFunc[3], 10, 64)
 		if err != nil {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
-				q.SrcFunc[0], q.SrcFunc[1])
+				q.SrcFunc[0], q.SrcFunc[2])
 		}
 		if q.UidList == nil {
 			// Fetch Uids from Store and populate in q.UidList.
@@ -497,15 +497,15 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(fc.tokens)
 	case PasswordFn:
-		if len(q.SrcFunc) != 3 {
+		if len(q.SrcFunc) != 4 {
 			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
-				len(q.SrcFunc)-1, q.SrcFunc[1:])
+				len(q.SrcFunc)-2, q.SrcFunc[2:])
 		}
 		fc.n = len(q.UidList.Uids)
 	case StandardFn, FullTextSearchFn:
 		// srcfunc 0th val is func name and and [1:] are args.
 		// we tokenize the arguments of the query.
-		fc.tokens, err = getStringTokens(q.SrcFunc[1:], "", fnType) // TODO(tzdybal) - get language
+		fc.tokens, err = getStringTokens(q.SrcFunc[2:], q.SrcFunc[1], fnType)
 		if err != nil {
 			return nil, err
 		}
@@ -513,7 +513,7 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case RegexFn:
-		fc.regex, err = regexp.Compile(q.SrcFunc[1])
+		fc.regex, err = regexp.Compile(q.SrcFunc[2])
 		if err != nil {
 			return nil, err
 		}

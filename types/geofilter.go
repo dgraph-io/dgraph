@@ -74,48 +74,48 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 	funcName := strings.ToLower(funcArgs[0])
 	switch funcName {
 	case "near":
-		if len(funcArgs) != 3 {
-			return nil, nil, x.Errorf("near function requires 3 arguments, but got %d",
+		if len(funcArgs) != 4 {
+			return nil, nil, x.Errorf("near function requires 4 arguments, but got %d",
 				len(funcArgs))
 		}
-		maxDist, err := strconv.ParseFloat(funcArgs[2], 64)
+		maxDist, err := strconv.ParseFloat(funcArgs[3], 64)
 		if err != nil {
 			return nil, nil, x.Wrapf(err, "Error while converting distance to float")
 		}
 		if maxDist < 0 {
 			return nil, nil, x.Errorf("Distance cannot be negative")
 		}
-		g, err := convertToGeom(funcArgs[1])
+		g, err := convertToGeom(funcArgs[2])
 		if err != nil {
 			return nil, nil, err
 		}
 		return queryTokensGeo(QueryTypeNear, g, maxDist)
 	case "within":
-		if len(funcArgs) != 2 {
-			return nil, nil, x.Errorf("within function requires 2 arguments, but got %d",
+		if len(funcArgs) != 3 {
+			return nil, nil, x.Errorf("within function requires 3 arguments, but got %d",
 				len(funcArgs))
 		}
-		g, err := convertToGeom(funcArgs[1])
+		g, err := convertToGeom(funcArgs[2])
 		if err != nil {
 			return nil, nil, err
 		}
 		return queryTokensGeo(QueryTypeWithin, g, 0.0)
 	case "contains":
-		if len(funcArgs) != 2 {
-			return nil, nil, x.Errorf("contains function requires 2 arguments, but got %d",
+		if len(funcArgs) != 3 {
+			return nil, nil, x.Errorf("contains function requires 3 arguments, but got %d",
 				len(funcArgs))
 		}
-		g, err := convertToGeom(funcArgs[1])
+		g, err := convertToGeom(funcArgs[2])
 		if err != nil {
 			return nil, nil, err
 		}
 		return queryTokensGeo(QueryTypeContains, g, 0.0)
 	case "intersects":
-		if len(funcArgs) != 2 {
-			return nil, nil, x.Errorf("intersects function requires 2 arguments, but got %d",
+		if len(funcArgs) != 3 {
+			return nil, nil, x.Errorf("intersects function requires 3 arguments, but got %d",
 				len(funcArgs))
 		}
-		g, err := convertToGeom(funcArgs[1])
+		g, err := convertToGeom(funcArgs[2])
 		if err != nil {
 			return nil, nil, err
 		}
