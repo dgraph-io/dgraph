@@ -3040,7 +3040,7 @@ Output:
 ```
 ## Cascade Directive 
 
-`@cascade` directive forces a removal of those entites that don't have all the fields specified in the query. This can be useful, if a filter was applied because without cascade. For example
+`@cascade` directive forces a removal of those entites that don't have all the fields specified in the query. This can be useful in cases where some filter was applied. For example, consider this query:
 
 ```
 curl localhost:8080/query -XPOST -d $'{
