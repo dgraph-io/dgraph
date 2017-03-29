@@ -1438,7 +1438,7 @@ curl localhost:8080/query -XPOST -d $'{
 
 Dgraph also supports compare filter, which takes form as @filter(compare(count(attribute), N)), only entities fulfill such predication will be returned.
 
-{{% notice "note" %}}"Compare" here includes "eq", "gt", "geq", "lt", "leg".  And "count" should be applied on non-scalar types.{{% /notice %}}
+{{% notice "note" %}}"Compare" here includes "eq", "gt", "geq", "lt", "leq".  And "count" should be applied on non-scalar types.{{% /notice %}}
 ```
 curl localhost:8080/query -XPOST -d $'{
   director(func:anyofterms(name, "Steven Spielberg")) @filter(gt(count(director.film), 36)) {

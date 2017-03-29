@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Button } from "react-bootstrap";
+import _ from "lodash/string";
 
 import "../assets/css/Scratchpad.css";
 
@@ -9,11 +10,10 @@ function truncateName(name) {
     if (name === "") {
         return "_uid_";
     }
-
     if (name.length <= 10) {
         return name;
     }
-    return name.substr(0, 5) + "..." + name.substr(name.length - 5);
+    return _.truncate(name, { length: 10 });
 }
 
 function Scratchpad(props) {
@@ -38,6 +38,7 @@ function Scratchpad(props) {
                         <div className="Scratchpad-key" title={e.name}>
                             {truncateName(e.name)}
                         </div>
+                        {" "}
                         :
                         {" "}
                         <div className="Scratchpad-val">{e.uid}</div>

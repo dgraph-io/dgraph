@@ -58,14 +58,16 @@ func init() {
 	RegisterTokenizer(DateTimeTokenizer{})
 	RegisterTokenizer(TermTokenizer{})
 	RegisterTokenizer(ExactTokenizer{})
+	RegisterTokenizer(BoolTokenizer{})
 	SetDefault(types.GeoID, "geo")
 	SetDefault(types.IntID, "int")
 	SetDefault(types.FloatID, "float")
 	SetDefault(types.DateID, "date")
 	SetDefault(types.DateTimeID, "datetime")
 	SetDefault(types.StringID, "term")
+	SetDefault(types.BoolID, "bool")
 
-	// Check for duplicate prexif bytes.
+	// Check for duplicate prefix bytes.
 	usedIds := make(map[byte]struct{})
 	for _, tok := range tokenizers {
 		tokID := tok.Identifier()
@@ -235,3 +237,17 @@ func EncodeGeoTokens(tokens []string) {
 		tokens[i] = encodeToken(tokens[i], GeoTokenizer{}.Identifier())
 	}
 }
+
+type BoolTokenizer struct{}
+
+func (t BoolTokenizer) Name() string       { return "bool" }
+func (t BoolTokenizer) Type() types.TypeID { return types.BoolID }
+func (t BoolTokenizer) Tokens(v types.Val) ([]string, error) {
+	var b int64
+	if v.Value.(bool) {
+		b = 1
+	}
+	return []string{encodeToken(encodeInt(b), t.Identifier())}, nil
+}
+func (t BoolTokenizer) Identifier() byte { return 0x9 }
+func (t BoolTokenizer) IsSortable() bool { return false }
