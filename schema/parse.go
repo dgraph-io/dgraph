@@ -124,7 +124,6 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 	typ types.TypeID) ([]string, error) {
 	var tokenizers []string
 	var seen = make(map[string]bool)
-	var err error
 
 	if typ == types.UidID {
 		return tokenizers, x.Errorf("Indexing not allowed on predicate %s of type uid", predicate)
@@ -134,20 +133,12 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 	}
 	if !it.Next() {
 		// Nothing to read.
-		var t tok.Tokenizer
-		if t, err = tok.Default(typ); err != nil {
-			return []string{}, err
-		}
-		return []string{t.Name()}, nil
+		return []string{tok.Default(typ).Name()}, nil
 	}
 	next := it.Item()
 	if next.Typ != itemLeftRound {
 		it.Prev() // Backup.
-		var t tok.Tokenizer
-		if t, err = tok.Default(typ); err != nil {
-			return []string{}, err
-		}
-		return []string{t.Name()}, nil
+		return []string{tok.Default(typ).Name()}, nil
 	}
 
 	expectArg := true

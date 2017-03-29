@@ -271,11 +271,7 @@ func enrichSchema(updates []*graphp.SchemaUpdate) error {
 			continue
 		}
 		if len(schema.Tokenizer) == 0 && schema.Directive == graphp.SchemaUpdate_INDEX {
-			t, err := tok.Default(typ)
-			if err != nil {
-				return err
-			}
-			schema.Tokenizer = []string{t.Name()}
+			schema.Tokenizer = []string{tok.Default(typ).Name()}
 		} else if len(schema.Tokenizer) > 0 && schema.Directive != graphp.SchemaUpdate_INDEX {
 			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
 		}
