@@ -136,9 +136,7 @@ func processSort(ts *taskp.Sort) (*taskp.SortResult, error) {
 	defer it.Close()
 
 	typ, err := schema.State().TypeOf(attr)
-	if err != nil {
-		return nil, x.Errorf("Attribute %s not defined in schema", attr)
-	}
+	x.AssertTruef(err == nil, "Attribute %s not defined in schema", attr)
 
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(attr) {
@@ -158,7 +156,7 @@ func processSort(ts *taskp.Sort) (*taskp.SortResult, error) {
 		// String type can have multiple tokenizers, only one of which is
 		// sortable.
 		if typ == types.StringID {
-			return nil, x.Errorf("Attribute:%s does not exact index for sorting.",
+			return nil, x.Errorf("Attribute:%s does not have exact index for sorting.",
 				attr)
 		}
 		// Other types just have one tokenizer, so if we didn't find a
