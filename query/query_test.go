@@ -2716,14 +2716,14 @@ func TestToFastJSONReverse(t *testing.T) {
 				~friend {
 					name
 					gender
-			  	alive
+					alive
 				}
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Glenn Rhee","~friend":[{"alive":true,"gender":"female","name":"Michonne"},{"name":"Andrea"}]}]}`,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"alive":true,"gender":"female","name":"Michonne"},{"alive": false, "name":"Andrea"}]}]}`,
 		js)
 }
 
@@ -2736,7 +2736,6 @@ func TestToFastJSONReverseFilter(t *testing.T) {
 				~friend @filter(allofterms(name, "Andrea")) {
 					name
 					gender
-			  	alive
 				}
 			}
 		}
@@ -2760,7 +2759,6 @@ func TestToFastJSONReverseDelSet(t *testing.T) {
 				~friend {
 					name
 					gender
-			  	alive
 				}
 			}
 		}
@@ -4839,7 +4837,7 @@ func TestBoolIndexEqRoot2(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":false,"friend":[{"count":0}],"name":"Daryl Dixon"},{"alive":false,"friend":[{"count":1}],"name":"Andrea"}]}`,
+		`{"me":[{"alive":false,"friend":[{"count":1}],"name":"Daryl Dixon"},{"alive":false,"friend":[{"count":1}],"name":"Andrea"}]}`,
 		js)
 }
 
@@ -4900,5 +4898,5 @@ func TestBoolSort(t *testing.T) {
 	var l Latency
 	ctx := context.Background()
 	_, err := ProcessQuery(ctx, res, &l)
-	require.Equal(t, "Attribute:alive is not sortable", err.Error())
+	require.Equal(t, "Attribute:alive is not sortable.", err.Error())
 }
