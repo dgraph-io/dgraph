@@ -128,9 +128,6 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 	if typ == types.UidID {
 		return tokenizers, x.Errorf("Indexing not allowed on predicate %s of type uid", predicate)
 	}
-	if typ == types.BoolID {
-		return tokenizers, x.Errorf("Indexing not allowed on predicate %s of type bool", predicate)
-	}
 	if !it.Next() {
 		// Nothing to read.
 		return []string{tok.Default(typ).Name()}, nil

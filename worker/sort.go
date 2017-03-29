@@ -135,6 +135,11 @@ func processSort(ts *taskp.Sort) (*taskp.SortResult, error) {
 	it := pstore.NewIterator()
 	defer it.Close()
 
+	typ, err := schema.State().TypeOf(attr)
+	if err != nil {
+		return nil, x.Errorf("Attribute %s not defined in schema", attr)
+	}
+
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(attr) {
 		return nil, x.Errorf("Attribute %s is not indexed.", attr)
@@ -150,8 +155,15 @@ func processSort(ts *taskp.Sort) (*taskp.SortResult, error) {
 		}
 	}
 	if tok == nil {
-		return nil, x.Errorf("Attribute:%s does not have proper index",
-			attr)
+		// String type can have multiple tokenizers, only one of which is
+		// sortable.
+		if typ == types.StringID {
+			return nil, x.Errorf("Attribute:%s does not exact index for sorting.",
+				attr)
+		}
+		// Other types just have one tokenizer, so if we didn't find a
+		// sortable tokenizer, then attribute isn't sortable.
+		return nil, x.Errorf("Attribute:%s is not sortable.", attr)
 	}
 
 	indexPrefix := x.IndexKey(attr, string(tok.Identifier()))

@@ -135,6 +135,14 @@ func populateGraph(t *testing.T) {
 	err = types.Marshal(boolD, &data)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "alive", 1, types.BoolID, data.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "alive", 23, types.BoolID, data.Value.([]byte), nil)
+
+	boolD = types.Val{types.BoolID, false}
+	err = types.Marshal(boolD, &data)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, "alive", 25, types.BoolID, data.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "alive", 31, types.BoolID, data.Value.([]byte), nil)
+
 	addEdgeToValue(t, "age", 1, "38", nil)
 	addEdgeToValue(t, "survival_rate", 1, "98.99", nil)
 	addEdgeToValue(t, "sword_present", 1, "true", nil)
@@ -4563,7 +4571,7 @@ film.film.initial_release_date:date @index
 loc:geo @index
 genre:uid @reverse
 survival_rate : float
-alive         : bool
+alive         : bool @index
 age           : int
 shadow_deep   : int
 friend:uid @reverse
@@ -4799,4 +4807,98 @@ func TestToJSONReverseNegativeFirst(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"name":"Andrea","~friend":[{"gender":"female","name":"Michonne"}]},{"name":"Andrea With no friends"}]}`,
 		js)
+}
+
+func TestBoolIndexEqRoot1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: eq(alive, true)) {
+				name
+				alive
+				count(friend)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"alive":true,"friend":[{"count":5}],"name":"Michonne"},{"alive":true,"friend":[{"count":1}],"name":"Rick Grimes"}]}`,
+		js)
+}
+
+func TestBoolIndexEqRoot2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: eq(alive, false)) {
+				name
+				alive
+				count(friend)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"alive":false,"friend":[{"count":0}],"name":"Daryl Dixon"},{"alive":false,"friend":[{"count":1}],"name":"Andrea"}]}`,
+		js)
+}
+
+func TestBoolIndexGeqRoot(t *testing.T) {
+	populateGraph(t)
+	q := `
+		{
+			me(func: geq(alive, true)) {
+				name
+				alive
+				friend {
+					name
+					alive
+				}
+			}
+		}
+	`
+
+	res, _ := gql.Parse(q)
+	var l Latency
+	ctx := context.Background()
+	_, err := ProcessQuery(ctx, res, &l)
+	require.Equal(t, "Only eq operator defined for type bool. Got: geq", err.Error())
+}
+
+func TestBoolIndexEqChild(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: eq(alive, true)) {
+				name
+				alive
+				friend @filter(eq(alive, false)) {
+					name
+					alive
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"alive":true,"friend":[{"alive":false,"name":"Daryl Dixon"},{"alive":false,"name":"Andrea"}],"name":"Michonne"},{"alive":true,"name":"Rick Grimes"}]}`,
+		js)
+}
+
+func TestBoolSort(t *testing.T) {
+	populateGraph(t)
+	q := `
+		{
+			me(func: anyofterms(name, "Michonne Andrea Rick"), orderasc: alive) {
+				name
+				alive
+				count(friend)
+			}
+		}
+	`
+	res, _ := gql.Parse(q)
+	var l Latency
+	ctx := context.Background()
+	_, err := ProcessQuery(ctx, res, &l)
+	require.Equal(t, "Attribute:alive is not sortable", err.Error())
 }

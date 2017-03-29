@@ -396,7 +396,6 @@ func Convert(from Val, toID TypeID) (Val, error) {
 }
 
 func Marshal(from Val, to *Val) error {
-	// toID TypeID, val interface{}, res *interface{}) error {
 	fromID := from.Tid
 	toID := to.Tid
 	val := from.Value
