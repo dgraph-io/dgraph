@@ -25,7 +25,7 @@ message Value {
     oneof val {
         string default_val = 1;
         bytes bytes_val = 2;
-        int32 int_val = 3;
+        int64 int_val = 3;
         bool bool_val = 4;
         string str_val = 5;
         double double_val = 6;

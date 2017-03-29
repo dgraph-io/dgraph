@@ -38,10 +38,10 @@ func TestConvertDateToBool(t *testing.T) {
 	}
 }
 
-func TestConvertDateToInt32(t *testing.T) {
+func TestConvertDateToInt(t *testing.T) {
 	data := []struct {
 		in  time.Time
-		out int32
+		out int64
 	}{
 		{createDate(2009, time.November, 10), 1257811200},
 		{createDate(1969, time.November, 10), -4492800},
@@ -52,9 +52,9 @@ func TestConvertDateToInt32(t *testing.T) {
 		bs := make([]byte, 8)
 		binary.LittleEndian.PutUint64(bs, uint64(tc.in.Unix()))
 		src := Val{DateID, bs}
-		if dst, err = Convert(src, Int32ID); err != nil {
+		if dst, err = Convert(src, IntID); err != nil {
 			t.Errorf("Unexpected error converting date to int: %v", err)
-		} else if dst.Value.(int32) != tc.out {
+		} else if dst.Value.(int64) != tc.out {
 			t.Errorf("Converting time to int: Expected %v, got %v", tc.out, dst.Value)
 		}
 	}
@@ -108,9 +108,9 @@ func TestConvertDateToTime(t *testing.T) {
 	}
 }
 
-func TestConvertInt32ToDate(t *testing.T) {
+func TestConvertint64ToDate(t *testing.T) {
 	data := []struct {
-		in  int32
+		in  int64
 		out time.Time
 	}{
 		{1257811200, createDate(2009, time.November, 10)},
@@ -119,9 +119,9 @@ func TestConvertInt32ToDate(t *testing.T) {
 		{0, createDate(1970, time.January, 1)},
 	}
 	for _, tc := range data {
-		bs := make([]byte, 4)
-		binary.LittleEndian.PutUint32(bs[:], uint32(tc.in))
-		src := Val{Int32ID, bs[:]}
+		bs := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bs[:], uint64(tc.in))
+		src := Val{IntID, bs[:]}
 		if dst, err := Convert(src, DateID); err != nil {
 			t.Errorf("Unexpected error converting int to date: %v", err)
 		} else if dst.Value.(time.Time) != tc.out {

@@ -27,7 +27,7 @@ import (
 )
 
 type encL struct {
-	ints   []int32
+	ints   []int64
 	tokens []string
 }
 
@@ -43,15 +43,15 @@ func (o byEnc) Swap(i, j int) {
 }
 
 func TestIntEncoding(t *testing.T) {
-	a := int32(1<<24 + 10)
-	b := int32(-1<<24 - 1)
-	c := int32(math.MaxInt32)
-	d := int32(math.MinInt32)
+	a := int64(1<<24 + 10)
+	b := int64(-1<<24 - 1)
+	c := int64(math.MaxInt64)
+	d := int64(math.MinInt64)
 	enc := encL{}
-	arr := []int32{a, b, c, d, 1, 2, 3, 4, -1, -2, -3, 0, 234, 10000, 123, -1543}
+	arr := []int64{a, b, c, d, 1, 2, 3, 4, -1, -2, -3, 0, 234, 10000, 123, -1543}
 	enc.ints = arr
 	for _, it := range arr {
-		encoded := encodeInt(int32(it))
+		encoded := encodeInt(int64(it))
 		enc.tokens = append(enc.tokens, encoded)
 	}
 	sort.Sort(byEnc{enc})

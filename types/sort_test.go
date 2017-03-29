@@ -63,12 +63,12 @@ func TestSortStrings(t *testing.T) {
 }
 
 func TestSortInts(t *testing.T) {
-	list := getInput(t, Int32ID, []string{"22", "111", "11", "212"})
+	list := getInput(t, IntID, []string{"22", "111", "11", "212"})
 	ul := getUIDList(4)
-	require.NoError(t, Sort(Int32ID, list, ul, false))
+	require.NoError(t, Sort(IntID, list, ul, false))
 	require.EqualValues(t, []uint64{300, 100, 200, 400}, ul.Uids)
 	require.EqualValues(t, []string{"11", "22", "111", "212"},
-		toString(t, list, Int32ID))
+		toString(t, list, IntID))
 }
 
 func TestSortFloats(t *testing.T) {

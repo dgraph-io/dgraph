@@ -75,12 +75,12 @@ func Str(val string, nq *graphp.NQuad) error {
 }
 
 func Int(val int32, nq *graphp.NQuad) error {
-	v, err := types.ObjectValue(types.Int32ID, val)
+	v, err := types.ObjectValue(types.IntID, val)
 	if err != nil {
 		return err
 	}
 	nq.ObjectValue = v
-	nq.ObjectType = int32(types.Int32ID)
+	nq.ObjectType = int32(types.IntID)
 	return nil
 
 }
@@ -106,9 +106,9 @@ func Bool(val bool, nq *graphp.NQuad) error {
 	return nil
 }
 
-// Uid converts an uint64 to a string, which can be used as part of
+// Uid converts an uint32 to a string, which can be used as part of
 // Subject and ObjectId fields in the graphp.NQuad
-func Uid(uid uint64) string {
+func Uid(uid uint32) string {
 	return fmt.Sprintf("%#x", uid)
 }
 

@@ -58,15 +58,15 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	var res types.Val
 	switch ag.name {
 	case "sumvar":
-		if va.Tid == types.Int32ID && vb.Tid == types.Int32ID {
-			va.Value = va.Value.(int32) + vb.Value.(int32)
+		if va.Tid == types.IntID && vb.Tid == types.IntID {
+			va.Value = va.Value.(int64) + vb.Value.(int64)
 		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
 			va.Value = va.Value.(float64) + vb.Value.(float64)
-		} else if va.Tid == types.Int32ID && vb.Tid == types.FloatID {
-			va.Value = float64(va.Value.(int32)) + vb.Value.(float64)
+		} else if va.Tid == types.IntID && vb.Tid == types.FloatID {
+			va.Value = float64(va.Value.(int64)) + vb.Value.(float64)
 			va.Tid = types.FloatID
-		} else if va.Tid == types.FloatID && vb.Tid == types.Int32ID {
-			va.Value = va.Value.(float64) + float64(vb.Value.(int32))
+		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
+			va.Value = va.Value.(float64) + float64(vb.Value.(int64))
 		} else {
 			// This pair cannot be summed. So pass.
 			log.Fatalf("Wrong arguments for Sum aggregator.")
@@ -114,8 +114,8 @@ func (ag *aggregator) Apply(val *taskp.Value) {
 			res = va
 		}
 	case "sum", "avg":
-		if va.Tid == types.Int32ID && vb.Tid == types.Int32ID {
-			va.Value = va.Value.(int32) + vb.Value.(int32)
+		if va.Tid == types.IntID && vb.Tid == types.IntID {
+			va.Value = va.Value.(int64) + vb.Value.(int64)
 		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
 			va.Value = va.Value.(float64) + vb.Value.(float64)
 		} else {
@@ -150,8 +150,8 @@ func (ag *aggregator) divideByCount() {
 		return
 	}
 	var v float64
-	if ag.result.Tid == types.Int32ID {
-		v = float64(ag.result.Value.(int32))
+	if ag.result.Tid == types.IntID {
+		v = float64(ag.result.Value.(int64))
 	} else if ag.result.Tid == types.FloatID {
 		v = ag.result.Value.(float64)
 	}

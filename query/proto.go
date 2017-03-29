@@ -34,8 +34,8 @@ func toProtoValue(v types.Val) *graphp.Value {
 	case types.StringID:
 		return &graphp.Value{&graphp.Value_StrVal{v.Value.(string)}}
 
-	case types.Int32ID:
-		return &graphp.Value{&graphp.Value_IntVal{v.Value.(int32)}}
+	case types.IntID:
+		return &graphp.Value{&graphp.Value_IntVal{v.Value.(int64)}}
 
 	case types.FloatID:
 		return &graphp.Value{&graphp.Value_DoubleVal{v.Value.(float64)}}

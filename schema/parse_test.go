@@ -59,12 +59,12 @@ func TestSchema(t *testing.T) {
 		{"name", &typesp.Schema{ValueType: uint32(types.StringID)}},
 		{"address", &typesp.Schema{ValueType: uint32(types.StringID)}},
 		{"http://scalar.com/helloworld/", &typesp.Schema{ValueType: uint32(types.StringID)}},
-		{"age", &typesp.Schema{ValueType: uint32(types.Int32ID)}},
+		{"age", &typesp.Schema{ValueType: uint32(types.IntID)}},
 	})
 
 	typ, err := State().TypeOf("age")
 	require.NoError(t, err)
-	require.Equal(t, types.Int32ID, typ)
+	require.Equal(t, types.IntID, typ)
 
 	typ, err = State().TypeOf("agea")
 	require.Error(t, err)
@@ -164,7 +164,7 @@ func TestSchemaIndexCustom(t *testing.T) {
 			Directive: typesp.Schema_INDEX,
 		}},
 		{"age", &typesp.Schema{
-			ValueType: uint32(types.Int32ID),
+			ValueType: uint32(types.IntID),
 			Tokenizer: []string{"int"},
 			Directive: typesp.Schema_INDEX,
 		}},

@@ -69,7 +69,7 @@ func TestConvertFromDefault(t *testing.T) {
 		out Val
 		typ TypeID
 	}{
-		{Val{DefaultID, []byte("1")}, Val{Int32ID, int32(1)}, Int32ID},
+		{Val{DefaultID, []byte("1")}, Val{IntID, int64(1)}, IntID},
 		{Val{DefaultID, []byte("1.3")}, Val{FloatID, 1.3}, FloatID},
 		{Val{DefaultID, []byte("true")}, Val{BoolID, true}, BoolID},
 		{Val{DefaultID, []byte("2016")}, Val{DateID, val}, DateID},
@@ -114,7 +114,7 @@ func TestSameConversionInt(t *testing.T) {
 		{0, 0},
 	}
 	for _, tc := range data {
-		if out, err := Convert(&tc.in, Int32ID); err != nil {
+		if out, err := Convert(&tc.in, IntID); err != nil {
 			t.Errorf("Unexpected error converting int to bool: %v", err)
 		} else if *(out.(*Int32)) != tc.out {
 			t.Errorf("Converting int to int: Expected %v, got %v", tc.out, out)
@@ -215,7 +215,7 @@ func TestConvertBoolToInt32(t *testing.T) {
 		{false, 0},
 	}
 	for _, tc := range data {
-		if out, err := Convert(&tc.in, Int32ID); err != nil {
+		if out, err := Convert(&tc.in, IntID); err != nil {
 			t.Errorf("Unexpected error converting bool to int: %v", err)
 		} else if *(out.(*Int32)) != tc.out {
 			t.Errorf("Converting bool to in: Expected %v, got %v", tc.out, out)
@@ -234,7 +234,7 @@ func TestConvertFloatToInt32(t *testing.T) {
 		{-0.0, 0},
 	}
 	for _, tc := range data {
-		if out, err := Convert(&tc.in, Int32ID); err != nil {
+		if out, err := Convert(&tc.in, IntID); err != nil {
 			t.Errorf("Unexpected error converting float to int: %v", err)
 		} else if *(out.(*Int32)) != tc.out {
 			t.Errorf("Converting float to int: Expected %v, got %v", tc.out, out)
@@ -248,7 +248,7 @@ func TestConvertFloatToInt32(t *testing.T) {
 		-522638295213.3243,
 	}
 	for _, tc := range errData {
-		if out, err := Convert((*Float)(&tc), Int32ID); err == nil {
+		if out, err := Convert((*Float)(&tc), IntID); err == nil {
 			t.Errorf("Expected error converting float %f to int %v", tc, out)
 		}
 	}
@@ -265,7 +265,7 @@ func TestConvertStringToInt32(t *testing.T) {
 		{"0", 0},
 	}
 	for _, tc := range data {
-		if out, err := Convert(&tc.in, Int32ID); err != nil {
+		if out, err := Convert(&tc.in, IntID); err != nil {
 			t.Errorf("Unexpected error converting string to int: %v", err)
 		} else if *(out.(*Int32)) != tc.out {
 			t.Errorf("Converting string to int: Expected %v, got %v", tc.out, out)
@@ -281,7 +281,7 @@ func TestConvertStringToInt32(t *testing.T) {
 	}
 
 	for _, tc := range errData {
-		if out, err := Convert(&tc, Int32ID); err == nil {
+		if out, err := Convert(&tc, IntID); err == nil {
 			t.Errorf("Expected error converting string %s to int %v", tc, out)
 		}
 	}
@@ -296,7 +296,7 @@ func TestConvertDateTimeToInt32(t *testing.T) {
 		{time.Date(1969, time.November, 10, 23, 0, 0, 0, time.UTC), -4410000},
 	}
 	for _, tc := range data {
-		if out, err := Convert(&Time{tc.in}, Int32ID); err != nil {
+		if out, err := Convert(&Time{tc.in}, IntID); err != nil {
 			t.Errorf("Unexpected error converting time to int: %v", err)
 		} else if *(out.(*Int32)) != tc.out {
 			t.Errorf("Converting time to int: Expected %v, got %v", tc.out, out)
@@ -309,7 +309,7 @@ func TestConvertDateTimeToInt32(t *testing.T) {
 	}
 
 	for _, tc := range errData {
-		if out, err := Convert(&Time{tc}, Int32ID); err == nil {
+		if out, err := Convert(&Time{tc}, IntID); err == nil {
 			t.Errorf("Expected error converting time %s to int %v", tc, out)
 		}
 	}

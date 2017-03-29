@@ -51,11 +51,11 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = data
 			case StringID, DefaultID:
 				*res = string(data)
-			case Int32ID:
-				if len(data) < 4 {
-					return to, x.Errorf("Invalid data for int32 %v", data)
+			case IntID:
+				if len(data) < 8 {
+					return to, x.Errorf("Invalid data for int64 %v", data)
 				}
-				*res = int32(binary.LittleEndian.Uint32(data))
+				*res = int64(binary.LittleEndian.Uint64(data))
 			case FloatID:
 				if len(data) < 8 {
 					return to, x.Errorf("Invalid data for float %v", data)
@@ -105,13 +105,13 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case BinaryID:
 				// Marshal Binary
 				*res = []byte(vc)
-			case Int32ID:
+			case IntID:
 				// Marshal text.
-				val, err := strconv.ParseInt(string(vc), 10, 32)
+				val, err := strconv.ParseInt(string(vc), 10, 64)
 				if err != nil {
 					return to, err
 				}
-				*res = int32(val)
+				*res = int64(val)
 			case FloatID:
 				val, err := strconv.ParseFloat(string(vc), 64)
 				if err != nil {
@@ -164,31 +164,31 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				return to, cantConvert(fromID, toID)
 			}
 		}
-	case Int32ID:
+	case IntID:
 		{
-			if len(data) < 4 {
-				return to, x.Errorf("Invalid data for int32 %v", data)
+			if len(data) < 8 {
+				return to, x.Errorf("Invalid data for int64 %v", data)
 			}
-			vc := int32(binary.LittleEndian.Uint32(data))
+			vc := int64(binary.LittleEndian.Uint64(data))
 			switch toID {
-			case Int32ID:
+			case IntID:
 				*res = vc
 			case BinaryID:
 				// Marshal Binary
-				var bs [4]byte
-				binary.LittleEndian.PutUint32(bs[:], uint32(vc))
+				var bs [8]byte
+				binary.LittleEndian.PutUint64(bs[:], uint64(vc))
 				*res = bs[:]
 			case FloatID:
 				*res = float64(vc)
 			case BoolID:
 				*res = bool(vc != 1)
 			case StringID, DefaultID:
-				*res = string(strconv.FormatInt(int64(vc), 10))
+				*res = string(strconv.FormatInt(vc, 10))
 			case DateID:
-				date := time.Unix(int64(vc), 0).UTC()
+				date := time.Unix(vc, 0).UTC()
 				*res = createDate(date.Date())
 			case DateTimeID:
-				*res = time.Unix(int64(vc), 0).UTC()
+				*res = time.Unix(vc, 0).UTC()
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -210,11 +210,11 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				u := math.Float64bits(float64(vc))
 				binary.LittleEndian.PutUint64(bs[:], u)
 				*res = bs[:]
-			case Int32ID:
-				if vc > math.MaxInt32 || vc < math.MinInt32 || math.IsNaN(float64(vc)) {
-					return to, x.Errorf("Float out of int32 range")
+			case IntID:
+				if vc > math.MaxInt64 || vc < math.MinInt64 || math.IsNaN(float64(vc)) {
+					return to, x.Errorf("Float out of int64 range")
 				}
-				*res = int32(vc)
+				*res = int64(vc)
 			case BoolID:
 				*res = bool(vc != 1)
 			case StringID, DefaultID:
@@ -256,10 +256,10 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					bs[0] = 1
 				}
 				*res = bs[:]
-			case Int32ID:
-				*res = int32(0)
+			case IntID:
+				*res = int64(0)
 				if vc {
-					*res = int32(1)
+					*res = int64(1)
 				}
 			case FloatID:
 				*res = float64(0)
@@ -293,12 +293,12 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = createDate(vc.Date())
 			case StringID, DefaultID:
 				*res = vc.Format(dateFormatYMD)
-			case Int32ID:
+			case IntID:
 				secs := vc.Unix()
-				if secs > math.MaxInt32 || secs < math.MinInt32 {
-					return to, x.Errorf("Time out of int32 range")
+				if secs > math.MaxInt64 || secs < math.MinInt64 {
+					return to, x.Errorf("Time out of int64 range")
 				}
-				*res = int32(secs)
+				*res = int64(secs)
 			case FloatID:
 				secs := float64(vc.Unix())
 				nano := float64(vc.Nanosecond())
@@ -333,12 +333,12 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, err
 				}
 				*res = string(val)
-			case Int32ID:
+			case IntID:
 				secs := vc.Unix()
-				if secs > math.MaxInt32 || secs < math.MinInt32 {
-					return to, x.Errorf("Time out of int32 range")
+				if secs > math.MaxInt64 || secs < math.MinInt64 {
+					return to, x.Errorf("Time out of int64 range")
 				}
-				*res = int32(secs)
+				*res = int64(secs)
 			case FloatID:
 				secs := float64(vc.Unix())
 				nano := float64(vc.Nanosecond())
@@ -425,15 +425,15 @@ func Marshal(from Val, to *Val) error {
 		default:
 			return cantConvert(fromID, toID)
 		}
-	case Int32ID:
-		vc := val.(int32)
+	case IntID:
+		vc := val.(int64)
 		switch toID {
 		case StringID, DefaultID:
 			*res = strconv.FormatInt(int64(vc), 10)
 		case BinaryID:
 			// Marshal Binary
-			var bs [4]byte
-			binary.LittleEndian.PutUint32(bs[:], uint32(vc))
+			var bs [8]byte
+			binary.LittleEndian.PutUint64(bs[:], uint64(vc))
 			*res = bs[:]
 		default:
 			return cantConvert(fromID, toID)
@@ -557,10 +557,10 @@ func ObjectValue(id TypeID, value interface{}) (*graphp.Value, error) {
 			return def, x.Errorf("Expected value of type string. Got : %v", value)
 		}
 		return &graphp.Value{&graphp.Value_DefaultVal{v}}, nil
-	case Int32ID:
-		var v int32
-		if v, ok = value.(int32); !ok {
-			return def, x.Errorf("Expected value of type int32. Got : %v", value)
+	case IntID:
+		var v int64
+		if v, ok = value.(int64); !ok {
+			return def, x.Errorf("Expected value of type int64. Got : %v", value)
 		}
 		return &graphp.Value{&graphp.Value_IntVal{v}}, nil
 	case FloatID:
@@ -626,8 +626,8 @@ func cantConvert(from TypeID, to TypeID) error {
 
 func (v Val) MarshalJSON() ([]byte, error) {
 	switch v.Tid {
-	case Int32ID:
-		return json.Marshal(v.Value.(int32))
+	case IntID:
+		return json.Marshal(v.Value.(int64))
 	case BoolID:
 		return json.Marshal(v.Value.(bool))
 	case FloatID:

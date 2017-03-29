@@ -115,12 +115,12 @@ func populateGraph(t *testing.T) {
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "loc", 1, types.GeoID, gData.Value.([]byte), nil)
 
-	// Int32ID
+	// IntID
 	data := types.ValueForType(types.BinaryID)
-	intD := types.Val{types.Int32ID, int32(15)}
+	intD := types.Val{types.IntID, int64(15)}
 	err = types.Marshal(intD, &data)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "age", 1, types.Int32ID, data.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "age", 1, types.IntID, data.Value.([]byte), nil)
 
 	// FloatID
 	fdata := types.ValueForType(types.BinaryID)
@@ -230,17 +230,17 @@ func populateGraph(t *testing.T) {
 	// for aggregator(sum) test
 	{
 		data := types.ValueForType(types.BinaryID)
-		intD := types.Val{types.Int32ID, int32(4)}
+		intD := types.Val{types.IntID, int64(4)}
 		err = types.Marshal(intD, &data)
 		require.NoError(t, err)
-		addEdgeToTypedValue(t, "shadow_deep", 23, types.Int32ID, data.Value.([]byte), nil)
+		addEdgeToTypedValue(t, "shadow_deep", 23, types.IntID, data.Value.([]byte), nil)
 	}
 	{
 		data := types.ValueForType(types.BinaryID)
-		intD := types.Val{types.Int32ID, int32(14)}
+		intD := types.Val{types.IntID, int64(14)}
 		err = types.Marshal(intD, &data)
 		require.NoError(t, err)
-		addEdgeToTypedValue(t, "shadow_deep", 24, types.Int32ID, data.Value.([]byte), nil)
+		addEdgeToTypedValue(t, "shadow_deep", 24, types.IntID, data.Value.([]byte), nil)
 	}
 
 	// language stuff
@@ -1358,7 +1358,7 @@ func TestMinSchema(t *testing.T) {
 		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1.600000}],"gender":"female","name":"Michonne"}]}`,
 		js)
 
-	schema.State().Set("survival_rate", typesp.Schema{ValueType: uint32(types.Int32ID)})
+	schema.State().Set("survival_rate", typesp.Schema{ValueType: uint32(types.IntID)})
 	js = processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1}],"gender":"female","name":"Michonne"}]}`,
@@ -3166,11 +3166,11 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 }
 
 // Mocking Subgraph and Testing fast-json with it.
-func ageSg(uidMatrix []*taskp.List, srcUids *taskp.List, ages []uint32) *SubGraph {
+func ageSg(uidMatrix []*taskp.List, srcUids *taskp.List, ages []uint64) *SubGraph {
 	var as []*taskp.Value
 	for _, a := range ages {
 		bs := make([]byte, 4)
-		binary.LittleEndian.PutUint32(bs, a)
+		binary.LittleEndian.PutUint64(bs, a)
 		as = append(as, &taskp.Value{[]byte(bs), 2})
 	}
 
@@ -3205,7 +3205,7 @@ func friendsSg(uidMatrix []*taskp.List, srcUids *taskp.List, friends []*SubGraph
 		Children:  friends,
 	}
 }
-func rootSg(uidMatrix []*taskp.List, srcUids *taskp.List, names []string, ages []uint32) *SubGraph {
+func rootSg(uidMatrix []*taskp.List, srcUids *taskp.List, names []string, ages []uint64) *SubGraph {
 	nameSg := nameSg(uidMatrix, srcUids, names)
 	ageSg := ageSg(uidMatrix, srcUids, ages)
 

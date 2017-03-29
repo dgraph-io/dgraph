@@ -7,7 +7,7 @@ package facetsp;
 message Facet {
 	enum ValType {
 	     STRING = 0;
-	     INT32 = 1;
+	     INT = 1;
 	     FLOAT = 2;
 	     BOOL = 3;
 	     DATETIME = 4;
