@@ -56,8 +56,8 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	return nil
 }
 
-func parseScalarPair(it *lex.ItemIterator, predicate string,
-	allowIndex bool) (*graphp.SchemaUpdate, error) {
+func parseScalarPair(it *lex.ItemIterator, predicate string) (*graphp.SchemaUpdate,
+	error) {
 	it.Next()
 	if next := it.Item(); next.Typ != itemColon {
 		return nil, x.Errorf("Missing colon")
@@ -89,23 +89,13 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 			if t != types.UidID {
 				return nil, x.Errorf("Cannot reverse for non-UID type")
 			}
-			schema = &graphp.SchemaUpdate{
-				Predicate: predicate,
-				ValueType: uint32(t),
-				Directive: graphp.SchemaUpdate_REVERSE,
-			}
+			schema.Directive = graphp.SchemaUpdate_REVERSE
 		case "index":
-			if !allowIndex {
-				return nil, x.Errorf("@index not allowed")
-			}
 			if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
 				return nil, err
 			} else {
-				schema = &graphp.SchemaUpdate{
-					Predicate: predicate, ValueType: uint32(t),
-					Directive: graphp.SchemaUpdate_INDEX,
-					Tokenizer: tokenizer,
-				}
+				schema.Directive = graphp.SchemaUpdate_INDEX
+				schema.Tokenizer = tokenizer
 			}
 		default:
 			return nil, x.Errorf("Invalid index specification")
@@ -195,7 +185,7 @@ func Parse(s string) ([]*graphp.SchemaUpdate, error) {
 		case lex.ItemEOF:
 			return schemas, nil
 		case itemText:
-			if schema, err := parseScalarPair(it, item.Val, true); err != nil {
+			if schema, err := parseScalarPair(it, item.Val); err != nil {
 				return nil, err
 			} else {
 				schemas = append(schemas, schema)
