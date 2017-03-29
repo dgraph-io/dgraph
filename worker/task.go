@@ -503,8 +503,12 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case StandardFn, FullTextSearchFn:
-		// srcfunc 0th val is func name and and [1:] are args.
+		// srcfunc 0th val is func name and and [2:] are args.
 		// we tokenize the arguments of the query.
+		required, found := verifyStringIndex(attr, fnType)
+		if !found {
+			return nil, x.Errorf("Attribute %s is not indexed with type %s", attr, required)
+		}
 		fc.tokens, err = getStringTokens(q.SrcFunc[2:], q.SrcFunc[1], fnType)
 		if err != nil {
 			return nil, err

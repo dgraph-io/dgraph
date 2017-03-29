@@ -18,11 +18,33 @@
 package worker
 
 import (
+	"strings"
+
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
+
+func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
+	var requiredTokenizer string
+	switch funcType {
+	case FullTextSearchFn:
+		requiredTokenizer = tok.FullTextTokenizer{}.Name()
+	default:
+		requiredTokenizer = tok.TermTokenizer{}.Name()
+	}
+
+	tokenizers := schema.State().Tokenizer(attr)
+	for _, tokenizer := range tokenizers {
+		// check for prefix, in case of explicit usage of language specific full text tokenizer
+		if strings.HasPrefix(tokenizer.Name(), requiredTokenizer) {
+			return requiredTokenizer, true
+		}
+	}
+
+	return requiredTokenizer, false
+}
 
 // Return string tokens from function arguments. It maps function type to correct tokenizer.
 // Note: regexp functions require regexp compilation of argument, not tokenization.
