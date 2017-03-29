@@ -10,10 +10,10 @@ function truncateName(name) {
         return "_uid_";
     }
 
-    if (name.length <= 10) {
+    if (name.length <= 8) {
         return name;
     }
-    return name.substr(0, 5) + "..." + name.substr(name.length - 5);
+    return name.substr(0, 4) + "..." + name.substr(name.length - 4);
 }
 
 function Scratchpad(props) {
