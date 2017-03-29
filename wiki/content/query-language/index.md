@@ -191,13 +191,13 @@ dgraph
 curl localhost:8080/query -XPOST -d $'
 mutation {
   schema {
-    director.film: uid @reverse
-    genre: uid @reverse
-    initial_release_date: date @index
-    rating: uid @reverse
-    country: uid @reverse
-    loc: geo @index
-    name: string @index
+    director.film: uid @reverse .
+    genre: uid @reverse .
+    initial_release_date: date @index .
+    rating: uid @reverse .
+    country: uid @reverse .
+    loc: geo @index .
+    name: string @index .
   }
 }' | python -m json.tool | less
 ```
@@ -435,7 +435,7 @@ We can add or modify the schema by specfiying the schema inside mutation block.
 curl localhost:8080/query -XPOST -d $'
 mutation {
   schema {
-    genre: uid @reverse
+    genre: uid @reverse .
   }
 }' | python -m json.tool | less
 

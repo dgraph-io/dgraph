@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var sc = `type.object.name.en: string @index
-film.film.initial_release_date: date @index`
+var sc = `type.object.name.en: string @index .
+film.film.initial_release_date: date @index .`
 
 func benchmarkParsingHelper(b *testing.B, q string) {
 	schema.ParseBytes([]byte(sc), 1)

@@ -46,11 +46,11 @@ func checkSchema(t *testing.T, h map[string]*typesp.Schema, expected []nameType)
 }
 
 var schemaVal = `
-age:int
+age:int .
 
-name: string
- address: string
-<http://scalar.com/helloworld/> : string
+name: string .
+ address: string .
+<http://scalar.com/helloworld/> : string .
 `
 
 func TestSchema(t *testing.T) {
@@ -71,10 +71,10 @@ func TestSchema(t *testing.T) {
 }
 
 var schemaVal1 = `
-age:int
+age:int .
 
-name: string
-address: string
+name: string .
+address: string .
 
 )
 `
@@ -100,11 +100,10 @@ func TestSchema3_Error(t *testing.T) {
 }
 
 var schemaIndexVal1 = `
-age:int @index
+age:int @index .
 
-name: string 
-address: string @index
-`
+name: string .
+address: string @index .`
 
 func TestSchemaIndex(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal1), 1))
@@ -112,11 +111,11 @@ func TestSchemaIndex(t *testing.T) {
 }
 
 var schemaIndexVal2 = `
-age:uid @index(int)
+age:uid @index(int) .
 
-name: string @index(exact, exact)
-address: string @index(term)
-id: id @index(exact, term, exact)
+name: string @index(exact, exact) .
+address: string @index(term) .
+id: id @index(exact, term, exact) .
 `
 
 // Duplicate tokenizers
@@ -125,7 +124,7 @@ func TestSchemaIndex_Error1(t *testing.T) {
 }
 
 var schemaIndexVal3 = `
-person:uid @index
+person:uid @index .
 `
 
 // Object types cant be indexed.
@@ -134,7 +133,7 @@ func TestSchemaIndex_Error2(t *testing.T) {
 }
 
 var schemaIndexVal4 = `
-name:string @index(exact term)
+name:string @index(exact term) .
 `
 
 // Missing comma.
@@ -143,11 +142,11 @@ func TestSchemaIndex_Error3(t *testing.T) {
 }
 
 var schemaIndexVal5 = `
-age:int @index(int)
+age:int @index(int) .
 
-name: string @index(exact)
-address: string @index(term)
-id: id @index(exact, term)
+name: string @index(exact) .
+address: string @index(term) .
+id: id @index(exact, term) .
 `
 
 func TestSchemaIndexCustom(t *testing.T) {
@@ -182,10 +181,8 @@ func TestSchemaIndexCustom(t *testing.T) {
 
 func TestParse(t *testing.T) {
 	reset()
-	schemas, err := Parse("age:int @index name:string")
-	require.NoError(t, err)
-	require.Equal(t, "int", schemas[0].Tokenizer[0])
-	require.Equal(t, 2, len(schemas))
+	_, err := Parse("age:int @index . name:string")
+	require.Error(t, err)
 }
 
 func TestParse2(t *testing.T) {
@@ -197,7 +194,7 @@ func TestParse2(t *testing.T) {
 
 func TestParse3_Error(t *testing.T) {
 	reset()
-	schemas, err := Parse("age:uid @index")
+	schemas, err := Parse("age:uid @index .")
 	require.Error(t, err)
 	require.Nil(t, schemas)
 }

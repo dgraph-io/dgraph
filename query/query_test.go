@@ -4569,18 +4569,18 @@ func TestSchemaBlock5(t *testing.T) {
 }
 
 const schemaStr = `
-name:string @index(term, exact)
-alias:string @index(exact, term)
-dob:date @index
-film.film.initial_release_date:date @index
-loc:geo @index
-genre:uid @reverse
-survival_rate : float
-alive         : bool
-age           : int
-shadow_deep   : int
-friend:uid @reverse
-geometry:geo @index
+name:string @index(term, exact) .
+alias:string @index(exact, term) .
+dob:date @index .
+film.film.initial_release_date:date @index .
+loc:geo @index .
+genre:uid @reverse .
+survival_rate : float .
+alive         : bool .
+age           : int .
+shadow_deep   : int .
+friend:uid @reverse .
+geometry:geo @index .
 `
 
 func TestMain(m *testing.M) {

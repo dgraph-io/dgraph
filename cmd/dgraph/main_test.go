@@ -153,18 +153,18 @@ func TestSchemaMutation(t *testing.T) {
 	var m = `
 	mutation {
 		schema {
-            name:string @index(term, exact)
-			alias:string @index(exact, term)
-			dob:date @index
-			film.film.initial_release_date:date @index
-			loc:geo @index
-			genre:uid @reverse
-			survival_rate : float
-			alive         : bool
-			age           : int
-			shadow_deep   : int
-			friend:uid @reverse
-			geometry:geo @index
+            name:string @index(term, exact) .
+			alias:string @index(exact, term) .
+			dob:date @index .
+			film.film.initial_release_date:date @index .
+			loc:geo @index .
+			genre:uid @reverse .
+			survival_rate : float .
+			alive         : bool .
+			age           : int .
+			shadow_deep   : int .
+			friend:uid @reverse .
+			geometry:geo @index .
 		}
 	}
 
@@ -191,7 +191,7 @@ func TestSchemaMutation2Error(t *testing.T) {
 	var m = `
 	mutation {
 		schema {
-            age:string @reverse
+            age:string @reverse .
 		}
 	}
 	`
@@ -205,7 +205,7 @@ func TestSchemaMutation3Error(t *testing.T) {
 	var m = `
 	mutation {
 		schema {
-            age:uid @index
+            age:uid @index .
 		}
 	}
 	`
@@ -218,7 +218,7 @@ func TestSchemaMutation4Error(t *testing.T) {
 	var m = `
 	mutation {
 		schema {
-            age:uid
+            age:uid .
 		}
 	}
 	`
@@ -230,7 +230,7 @@ func TestSchemaMutation4Error(t *testing.T) {
 	m = `
 	mutation {
 		schema {
-            age:string
+            age:string .
 		}
 	}
 	`
@@ -243,7 +243,7 @@ func TestSchemaMutation5Error(t *testing.T) {
 	var m = `
 	mutation {
 		schema {
-            age:string
+            age:string .
 		}
 	}
 	`
@@ -255,7 +255,7 @@ func TestSchemaMutation5Error(t *testing.T) {
 	m = `
 	mutation {
 		schema {
-            age:uid
+            age:uid .
 		}
 	}
 	`
@@ -284,7 +284,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 	var s = `
 	mutation {
 		schema {
-            name:string @index
+            name:string @index .
 		}
 	}
 	`
@@ -325,14 +325,14 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	var s1 = `
 	mutation {
 		schema {
-            name:string @index
+            name:string @index .
 		}
 	}
 	`
 	var s2 = `
 	mutation {
 		schema {
-            name:string
+            name:string .
 		}
 	}
 	`
@@ -382,7 +382,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 	var s = `
 	mutation {
 		schema {
-            friend:uid @reverse
+            friend:uid @reverse .
 		}
 	}
 	`
@@ -426,7 +426,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	var s1 = `
 	mutation {
 		schema {
-            friend:uid @reverse
+            friend:uid @reverse .
 		}
 	}
 	`
@@ -434,7 +434,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	var s2 = `
 	mutation {
 		schema {
-            friend:uid
+            friend:uid .
 		}
 	}
 	`
