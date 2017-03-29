@@ -100,10 +100,10 @@ func (s *stateGroup) update(se SyncEntry) {
 	s.predicate[se.Attr] = &se.Schema
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- se
-	s.elog.Printf("Setting schema type for attr %s: %v, tokenizer: %v\n", se.Attr,
-		types.TypeID(se.Schema.ValueType).Name(), se.Schema.Tokenizer)
-	fmt.Printf("Setting schema type for attr %s: %v, tokenizer: %v\n", se.Attr,
-		types.TypeID(se.Schema.ValueType).Name(), se.Schema.Tokenizer)
+	s.elog.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v\n", se.Attr,
+		types.TypeID(se.Schema.ValueType).Name(), se.Schema.Tokenizer, se.Schema.Directive)
+	fmt.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v\n", se.Attr,
+		types.TypeID(se.Schema.ValueType).Name(), se.Schema.Tokenizer, se.Schema.Directive)
 }
 
 // Set sets the schema for given predicate in memory
@@ -117,8 +117,8 @@ func (s *stateGroup) set(pred string, schema typesp.Schema) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = &schema
-	s.elog.Printf("Setting schema type for attr %s: %v, tokenizer: %v\n", pred,
-		types.TypeID(schema.ValueType).Name(), schema.Tokenizer)
+	s.elog.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v\n", pred,
+		types.TypeID(schema.ValueType).Name(), schema.Tokenizer, schema.Directive)
 }
 
 // Get gets the schema for given predicate
