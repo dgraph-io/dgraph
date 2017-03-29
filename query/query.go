@@ -135,6 +135,7 @@ type params struct {
 	uidToVal     map[uint64]types.Val
 	Langs        []string
 	Normalize    bool
+	Cascade      bool
 	From         uint64
 	To           uint64
 	Facet        *facetsp.Param
@@ -660,6 +661,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Var:        gq.Var,
 		ParentVars: make(map[string]*taskp.List),
 		Normalize:  gq.Normalize,
+		Cascade:    gq.Cascade,
 	}
 	if gq.Facets != nil {
 		args.Facet = &facetsp.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -1014,11 +1016,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			if err != nil {
 				return nil, err
 			}
-			if len(res.QueryVars[idx].Defines) == 0 {
-				continue
-			}
-
-			isCascade := shouldCascade(res, idx)
+			isCascade := sg.Params.Cascade || shouldCascade(res, idx)
 			populateVarMap(sg, doneVars, isCascade)
 			err = sg.populatePostAggregation(doneVars)
 			if err != nil {
@@ -1049,6 +1047,9 @@ func shouldCascade(res gql.Result, idx int) bool {
 		return false
 	}
 
+	if len(res.QueryVars[idx].Defines) == 0 {
+		return false
+	}
 	for _, def := range res.QueryVars[idx].Defines {
 		for _, need := range res.QueryVars[idx].Needs {
 			if def == need {

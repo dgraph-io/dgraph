@@ -48,6 +48,7 @@ type GraphQuery struct {
 	Children     []*GraphQuery
 	Filter       *FilterTree
 	Normalize    bool
+	Cascade      bool
 	Facets       *Facets
 	FacetsFilter *FilterTree
 
@@ -586,6 +587,8 @@ L:
 
 			case "normalize":
 				gq.Normalize = true
+			case "cascade":
+				gq.Cascade = true
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
