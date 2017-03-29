@@ -1047,6 +1047,9 @@ func shouldCascade(res gql.Result, idx int) bool {
 		return false
 	}
 
+	if len(res.QueryVars[idx].Defines) == 0 {
+		return false
+	}
 	for _, def := range res.QueryVars[idx].Defines {
 		for _, need := range res.QueryVars[idx].Needs {
 			if def == need {
