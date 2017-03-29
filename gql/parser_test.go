@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1301,7 +1300,6 @@ func TestParseVariablesiError8(t *testing.T) {
 }
 
 func TestParseFilter_root(t *testing.T) {
-	schema.ParseBytes([]byte("scalar abc: string @index ."), 1)
 	query := `
 	query {
 		me(func:abc(abc)) @filter(allofterms(name, "alice")) {
@@ -1327,7 +1325,6 @@ func TestParseFilter_root(t *testing.T) {
 }
 
 func TestParseFuncNested(t *testing.T) {
-	schema.ParseBytes([]byte("scalar friend: string @index ."), 0)
 	query := `
 	query {
 		me(func: gt(count(friend), 10)) {
@@ -1347,7 +1344,6 @@ func TestParseFuncNested(t *testing.T) {
 }
 
 func TestParseFilter_root2(t *testing.T) {
-	schema.ParseBytes([]byte("scalar abc: string @index ."), 1)
 	query := `
 	query {
 		me(func:abc(abc)) @filter(gt(count(friends), 10)) {
@@ -1385,7 +1381,6 @@ func TestParseFilter_root_Error(t *testing.T) {
 }
 
 func TestParseFilter_root_Error2(t *testing.T) {
-	schema.ParseBytes([]byte("scalar abc: string @index ."), 1)
 	// filter-by-count only support first argument as function
 	query := `
 	query {
@@ -1676,7 +1671,6 @@ func TestParseGeneratorError(t *testing.T) {
 }
 
 func TestParseCountAsFuncMultiple(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index ."), 1)
 	query := `{
 		me(id:1) {
 			count(friends), count(relatives)
@@ -1698,7 +1692,6 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 }
 
 func TestParseCountAsFuncMultipleError(t *testing.T) {
-	require.NoError(t, schema.ParseBytes([]byte("name:string @index ."), 1))
 	query := `{
 		me(id:1) {
 			count(friends, relatives
@@ -1713,7 +1706,6 @@ func TestParseCountAsFuncMultipleError(t *testing.T) {
 }
 
 func TestParseCountAsFunc(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index ."), 1)
 	query := `{
 		me(id:1) {
 			count(friends)
@@ -1730,7 +1722,6 @@ func TestParseCountAsFunc(t *testing.T) {
 }
 
 func TestParseCountError1(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index ."), 1)
 	query := `{
 		me(id:1) {
 			count(friends
@@ -1744,7 +1735,6 @@ func TestParseCountError1(t *testing.T) {
 }
 
 func TestParseCountError2(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index ."), 1)
 	query := `{
 		me(id:1) {
 			count((friends)
@@ -1759,7 +1749,6 @@ func TestParseCountError2(t *testing.T) {
 
 func TestParseCheckPwd(t *testing.T) {
 
-	schema.ParseBytes([]byte("scalar name:string @index ."), 1)
 	query := `{
 		me(id:1) {
 			checkpwd(password, "123456")
@@ -1775,7 +1764,6 @@ func TestParseCheckPwd(t *testing.T) {
 }
 
 func TestParseComments(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index ."), 1)
 	query := `
 	# Something
 	{
@@ -1793,7 +1781,6 @@ func TestParseComments(t *testing.T) {
 }
 
 func TestParseComments1(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index ."), 1)
 	query := `{
 		#Something 
 		me(func:allofterms(name, "barack")) {
@@ -1810,7 +1797,6 @@ func TestParseComments1(t *testing.T) {
 }
 
 func TestParseGenerator(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index ."), 1)
 	query := `{
 		me(func:allofterms(name, "barack")) {
 			friends {
@@ -1847,8 +1833,6 @@ func TestParseIRIRef(t *testing.T) {
 }
 
 func TestParseIRIRef2(t *testing.T) {
-	require.NoError(t, schema.ParseBytes(
-		[]byte("<http://helloworld.com/how/are/you>:string @index ."), 1))
 	query := `{
 		me(func:anyofterms(<http://helloworld.com/how/are/you>, "good better bad")) {
 			<http://verygood.com/what/about/you>
@@ -2131,7 +2115,6 @@ func TestLangsFilter_error2(t *testing.T) {
 }
 
 func TestLangsFunction(t *testing.T) {
-	schema.ParseBytes([]byte("scalar descr: string @index(fulltext) ."), 0)
 	query := `
 	query {
 		me(func:alloftext(descr@en, "something")) {
