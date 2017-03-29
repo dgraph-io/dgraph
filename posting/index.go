@@ -317,8 +317,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 	}
 	close(ch)
 	for i := 0; i < 1000; i++ {
-		err := <-che
-		if err != nil {
+		if err := <-che; err != nil {
 			return err
 		}
 
@@ -430,8 +429,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	}
 	close(ch)
 	for i := 0; i < 1000; i++ {
-		err := <-che
-		if err != nil {
+		if err := <-che; err != nil {
 			return err
 		}
 	}
