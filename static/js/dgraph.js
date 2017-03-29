@@ -120,7 +120,6 @@
     }
   });
 
-
   // version selector
   var currentVersion = location.pathname.split("/")[1];
   document
@@ -139,12 +138,28 @@
       }
     });
 
+  var versionSelector = document.getElementsByClassName("version-selector")[0],
+    options = versionSelector.options;
+
+  for (var i = 0; i < options.length; i++) {
+    if (options[i].value.indexOf("latest") != -1) {
+      options[i].value = options[i].value.replace(/\s\(latest\)/, "");
+    }
+  }
+
+  for (var i = 0; i < options.length; i++) {
+    if (options[i].value === currentVersion) {
+      options[i].selected = true;
+      break;
+    }
+  }
+
   // Add target = _blank to all external links.
   var links = document.links;
 
   for (var i = 0, linksLength = links.length; i < linksLength; i++) {
-     if (links[i].hostname != window.location.hostname) {
-         links[i].target = '_blank';
-     }
+    if (links[i].hostname != window.location.hostname) {
+      links[i].target = "_blank";
+    }
   }
 })();
