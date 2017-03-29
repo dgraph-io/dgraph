@@ -75,7 +75,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 	switch funcName {
 	case "near":
 		if len(funcArgs) != 4 {
-			return nil, nil, x.Errorf("near function requires 4 arguments, but got %d",
+			return nil, nil, x.Errorf("near function requires 2 arguments, but got %d",
 				len(funcArgs))
 		}
 		maxDist, err := strconv.ParseFloat(funcArgs[3], 64)
@@ -92,7 +92,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 		return queryTokensGeo(QueryTypeNear, g, maxDist)
 	case "within":
 		if len(funcArgs) != 3 {
-			return nil, nil, x.Errorf("within function requires 3 arguments, but got %d",
+			return nil, nil, x.Errorf("within function requires 1 arguments, but got %d",
 				len(funcArgs))
 		}
 		g, err := convertToGeom(funcArgs[2])
@@ -102,7 +102,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 		return queryTokensGeo(QueryTypeWithin, g, 0.0)
 	case "contains":
 		if len(funcArgs) != 3 {
-			return nil, nil, x.Errorf("contains function requires 3 arguments, but got %d",
+			return nil, nil, x.Errorf("contains function requires 1 arguments, but got %d",
 				len(funcArgs))
 		}
 		g, err := convertToGeom(funcArgs[2])
@@ -112,7 +112,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 		return queryTokensGeo(QueryTypeContains, g, 0.0)
 	case "intersects":
 		if len(funcArgs) != 3 {
-			return nil, nil, x.Errorf("intersects function requires 3 arguments, but got %d",
+			return nil, nil, x.Errorf("intersects function requires 1 arguments, but got %d",
 				len(funcArgs))
 		}
 		g, err := convertToGeom(funcArgs[2])

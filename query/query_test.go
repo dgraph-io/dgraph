@@ -1978,7 +1978,7 @@ func TestToFastJSONFilterallofterms(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
-func TestInvalidStringFilter(t *testing.T) {
+func TestInvalidStringIndex(t *testing.T) {
 	// no FTS index defined for name
 	populateGraph(t)
 	query := `
@@ -1995,6 +1995,25 @@ func TestInvalidStringFilter(t *testing.T) {
 
 	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
+}
+
+func TestValidFulltextIndex(t *testing.T) {
+	// no FTS index defined for name
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend @filter(alloftext(alias, "BOB")) {
+					alias
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne", "friend":[{"alias":"Bob Joe"}]}]}`, js)
 }
 
 func TestFilterRegex1(t *testing.T) {
@@ -3868,7 +3887,7 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
 
 	var l Latency
 	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.NotNil(t, queryErr)
+	require.Error(t, queryErr)
 }
 
 func TestToProtoMultiRoot(t *testing.T) {
@@ -4589,7 +4608,7 @@ func TestSchemaBlock5(t *testing.T) {
 
 const schemaStr = `
 name:string @index(term, exact)
-alias:string @index(exact, term)
+alias:string @index(exact, term, fulltext)
 dob:date @index
 film.film.initial_release_date:date @index
 loc:geo @index

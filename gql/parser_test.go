@@ -2151,6 +2151,23 @@ func TestLangsFunction(t *testing.T) {
 	require.Equal(t, "en", res.Query[0].Func.Lang)
 }
 
+func TestLangsFunctionMultipleLangs(t *testing.T) {
+	schema.ParseBytes([]byte("scalar descr: string @index(fulltext)"), 0)
+	query := `
+	query {
+		me(func:alloftext(descr@hi:en, "something")) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseNormalize(t *testing.T) {
 	query := `
 	query {

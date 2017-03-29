@@ -436,6 +436,19 @@ type functionContext struct {
 	isCompareAtRoot bool
 }
 
+func ensureArgsCount(funcStr []string, expected int) error {
+	actual := len(funcStr) - 2
+	switch {
+	case actual == 0:
+		return x.Errorf("No arguments passed to function '%s'", funcStr[0])
+	case actual != expected:
+		return x.Errorf("Function '%s' requires %d arguments, but got %d (%v)",
+			funcStr[0], expected, actual, funcStr[2:])
+	default:
+		return nil
+	}
+}
+
 func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 	fnType, f := parseFuncType(q.SrcFunc)
 	attr := q.Attr
@@ -457,9 +470,9 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case CompareAttrFn:
-		if len(q.SrcFunc) != 3 {
-			return nil, x.Errorf("Function requires 3 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
+		err = ensureArgsCount(q.SrcFunc, 1)
+		if err != nil {
+			return nil, err
 		}
 		fc.ineqValue, err = convertValue(attr, q.SrcFunc[2])
 		if err != nil {
@@ -472,9 +485,9 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(fc.tokens)
 	case CompareScalarFn:
-		if len(q.SrcFunc) != 4 {
-			return nil, x.Errorf("Function requires 4 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
+		err = ensureArgsCount(q.SrcFunc, 2)
+		if err != nil {
+			return nil, err
 		}
 		fc.threshold, err = strconv.ParseInt(q.SrcFunc[3], 10, 64)
 		if err != nil {
@@ -497,14 +510,18 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(fc.tokens)
 	case PasswordFn:
-		if len(q.SrcFunc) != 4 {
-			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
-				len(q.SrcFunc)-2, q.SrcFunc[2:])
+		err = ensureArgsCount(q.SrcFunc, 2)
+		if err != nil {
+			return nil, err
 		}
 		fc.n = len(q.UidList.Uids)
 	case StandardFn, FullTextSearchFn:
 		// srcfunc 0th val is func name and and [2:] are args.
 		// we tokenize the arguments of the query.
+		err = ensureArgsCount(q.SrcFunc, 1)
+		if err != nil {
+			return nil, err
+		}
 		required, found := verifyStringIndex(attr, fnType)
 		if !found {
 			return nil, x.Errorf("Attribute %s is not indexed with type %s", attr, required)
@@ -517,6 +534,10 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case RegexFn:
+		err = ensureArgsCount(q.SrcFunc, 1)
+		if err != nil {
+			return nil, err
+		}
 		fc.regex, err = regexp.Compile(q.SrcFunc[2])
 		if err != nil {
 			return nil, err
