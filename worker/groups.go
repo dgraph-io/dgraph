@@ -109,7 +109,10 @@ func StartRaftNodes(walDir string) {
 		node := gr.newNode(uint32(gid), *raftId, *myAddr)
 		schema.ReloadData(*schemaFile, uint32(gid))
 		wg.Add(1)
-		go node.InitAndStartNode(gr.wal, &wg)
+		go func() {
+			defer wg.Done()
+			node.InitAndStartNode(gr.wal)
+		}()
 	}
 	wg.Wait()
 	atomic.StoreUint32(&healthCheck, 1)
@@ -199,7 +202,7 @@ func (g *groupi) Servers(group uint32) []string {
 	return out
 }
 
-// Servers return addresses of all servers in group.
+// Peer returns node(raft) id of the peer of given nodeid of given group
 func (g *groupi) Peer(group uint32, nodeId uint64) (uint64, bool) {
 	g.RLock()
 	defer g.RUnlock()

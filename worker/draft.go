@@ -776,8 +776,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 }
 
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
-func (n *node) InitAndStartNode(wal *raftwal.Wal, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	restart, err := n.initFromWal(wal)
 	x.Check(err)
 
