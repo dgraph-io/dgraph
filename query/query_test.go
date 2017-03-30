@@ -261,6 +261,9 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
 
 	addEdgeToValue(t, "name", 240, "Andrea With no friends", nil)
+	addEdgeToUID(t, "friend", 25, 240, nil)
+	addEdgeToUID(t, "friend", 25, 23, nil)
+	addEdgeToUID(t, "friend", 25, 31, nil)
 
 	time.Sleep(5 * time.Millisecond)
 }
@@ -1311,6 +1314,144 @@ func TestMinMulti(t *testing.T) {
 		js)
 }
 
+func TestMinMultiProto(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+	{
+		me(id: [1,25]) {
+			name
+			friend {
+				name
+				min(dob)
+				max(dob)
+			}
+		}
+	}
+`
+	pb := processToPB(t, query, false)
+	res := `attribute: "_root_"
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "min(dob)"
+      value: <
+        str_val: "1901-01-15T00:00:00Z"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "max(dob)"
+      value: <
+        str_val: "1910-01-02T00:00:00Z"
+      >
+    >
+  >
+>
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Daryl Dixon"
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea With no friends"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "min(dob)"
+      value: <
+        str_val: "1901-01-15T00:00:00Z"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "max(dob)"
+      value: <
+        str_val: "1910-01-02T00:00:00Z"
+      >
+    >
+  >
+>
+`
+	require.Equal(t, res, proto.MarshalTextString(pb[0]))
+}
+
 func TestMin(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
@@ -1951,7 +2092,7 @@ children: <
 `
 	require.EqualValues(t,
 		expectedPb,
-		proto.MarshalTextString(pb))
+		proto.MarshalTextString(pb[0]))
 }
 
 func TestToFastJSONFilter(t *testing.T) {
@@ -2907,7 +3048,7 @@ children: <
     attribute: "friend"
   >
 >
-`, proto.MarshalTextString(pb))
+`, proto.MarshalTextString(pb[0]))
 
 }
 
@@ -2953,7 +3094,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 func TestToProtoFilterOr(t *testing.T) {
@@ -3007,7 +3148,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 func TestToProtoFilterAnd(t *testing.T) {
@@ -3043,7 +3184,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 // Test sorting / ordering by dob.
@@ -3316,7 +3457,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 // Test sorting / ordering by dob.
@@ -3370,7 +3511,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 // Test sorting / ordering by dob.
@@ -3424,7 +3565,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 func TestSchema1(t *testing.T) {
@@ -3922,7 +4063,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 func TestNearGenerator(t *testing.T) {
@@ -4186,7 +4327,7 @@ children: <
 `
 	require.EqualValues(t,
 		expectedPb,
-		proto.MarshalTextString(pb))
+		proto.MarshalTextString(pb[0]))
 }
 
 func TestNormalizeDirective(t *testing.T) {
@@ -4231,23 +4372,23 @@ func TestSchema(t *testing.T) {
 		}
   `
 	gr := processToPB(t, query, true)
-	require.EqualValues(t, "debug", gr.Children[0].Attribute)
-	require.EqualValues(t, 1, gr.Children[0].Uid)
-	require.EqualValues(t, "mich", gr.Children[0].Xid)
-	require.Len(t, gr.Children[0].Properties, 4)
+	require.EqualValues(t, "debug", gr[0].Children[0].Attribute)
+	require.EqualValues(t, 1, gr[0].Children[0].Uid)
+	require.EqualValues(t, "mich", gr[0].Children[0].Xid)
+	require.Len(t, gr[0].Children[0].Properties, 4)
 
 	require.EqualValues(t, "Michonne",
-		getProperty(gr.Children[0].Properties, "name").GetStrVal())
+		getProperty(gr[0].Children[0].Properties, "name").GetStrVal())
 
 	g := types.ValueForType(types.GeoID)
-	g.Value = getProperty(gr.Children[0].Properties, "loc").GetGeoVal()
+	g.Value = getProperty(gr[0].Children[0].Properties, "loc").GetGeoVal()
 	g1, err := types.Convert(g, types.StringID)
 	x.Check(err)
 	require.EqualValues(t, "{'type':'Point','coordinates':[1.1,2]}", string(g1.Value.(string)))
 
-	require.Len(t, gr.Children[0].Children, 5)
+	require.Len(t, gr[0].Children[0].Children, 5)
 
-	child := gr.Children[0].Children[0]
+	child := gr[0].Children[0].Children[0]
 	require.EqualValues(t, 23, child.Uid)
 	require.EqualValues(t, "friend", child.Attribute)
 
@@ -4260,7 +4401,7 @@ func TestSchema(t *testing.T) {
 	require.EqualValues(t, "1910-01-02 00:00:00 +0000 UTC", date.String())
 	require.Empty(t, child.Children)
 
-	child = gr.Children[0].Children[4]
+	child = gr[0].Children[0].Children[4]
 	require.EqualValues(t, 101, child.Uid)
 	require.EqualValues(t, "friend", child.Attribute)
 	require.Empty(t, child.Properties)
@@ -4838,7 +4979,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 func TestToJSONReverseNegativeFirst(t *testing.T) {
