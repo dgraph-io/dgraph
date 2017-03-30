@@ -44,7 +44,10 @@ func From(s *graphp.SchemaUpdate) typesp.Schema {
 // all the globals.
 // Overwrites schema blindly - called only during initilization in testing
 func ParseBytes(s []byte, gid uint32) (rerr error) {
-	reset()
+	if pstate == nil {
+		reset()
+	}
+	pstate.m = make(map[uint32]*stateGroup)
 	updates, err := Parse(string(s))
 	if err != nil {
 		return err
@@ -125,7 +128,8 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 	var seen = make(map[string]bool)
 
 	if typ == types.UidID {
-		return tokenizers, x.Errorf("Indexing not allowed on predicate %s of type uid", predicate)
+		return tokenizers, x.Errorf("Indexing not allowed on predicate %s of type uid",
+			predicate)
 	}
 	if !it.Next() {
 		// Nothing to read.
@@ -163,12 +167,17 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		if !has {
 			return tokenizers, x.Errorf("Invalid tokenizer %s", next.Val)
 		}
-		if _, found := seen[tokenizer.Name()]; found {
-			return tokenizers, x.Errorf("Duplicate tokenizers defined for pred %v", predicate)
-		} else {
-			tokenizers = append(tokenizers, tokenizer.Name())
-			seen[tokenizer.Name()] = true
+		if tokenizer.Type() != typ {
+			return tokenizers,
+				x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
+					tokenizer.Name(), predicate, typ.Name())
 		}
+		if _, found := seen[tokenizer.Name()]; found {
+			return tokenizers, x.Errorf("Duplicate tokenizers defined for pred %v",
+				predicate)
+		}
+		tokenizers = append(tokenizers, tokenizer.Name())
+		seen[tokenizer.Name()] = true
 		expectArg = false
 	}
 	return tokenizers, nil
