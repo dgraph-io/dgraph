@@ -429,7 +429,7 @@ The results are:
 ```
 ### Adding or Modifying Schema
 
-We can add or modify the schema by specfiying the schema inside mutation block.
+We can add or modify the schema by specfiying the schema inside mutation block. We don't verify whether the already stored values are compatible with schema or not. We will try to convert the already stored values to schema type and return on query, or else we would ignore them on conversion failure.
 
 ```
 curl localhost:8080/query -XPOST -d $'
@@ -509,7 +509,18 @@ The following table lists all the supported [RDF datatypes](https://www.w3.org/T
 |  <http://www.w3.org/2001/XMLSchema#float> |    Float |
 
 
-In case a predicate has different schema type and storage type, the convertibility between the two is ensured during mutation and an error is thrown if they are incompatible.  The values are always stored as storage type if specified, or else they are converted to schema type and stored.
+In case a predicate has different schema type and storage type, the convertibility between the two is ensured during mutation and an error is thrown if they are incompatible.  The values are always stored as storage type if specified, or else they are converted to schema type and stored. Storage type is property of the value we are storing and schema type is property of the edge. 
+
+Example: If schema type is int and we do the following mutations.
+
+```
+<a> age "13" .
+<b> age "13"^^<xs:string> .
+<c> age "14.5"^^<xs:string> .
+<d> age "14.5"
+```
+
+For each nquad we will try to convert the value to integer. Since no storage type is specified for a, it would be converted to int and stored. For b we will store the age as string after checking that it can be parsed to integer. Age for c and d won't be stored because the values are not compatible with type schema type(integer).
 
 ### Extended
 
