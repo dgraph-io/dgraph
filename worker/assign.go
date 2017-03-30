@@ -90,15 +90,11 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 
 	var ul *taskp.List
 	var err error
-	lid, _ := groups().Leader(gid)
 	n := groups().Node(gid)
-	if n != nil {
-		// This is useful for testing, when the membership information doesn't have chance
-		// to propagate.
-		lid = n.Raft().Status().Lead
-	}
 
-	if n != nil && n.id == lid {
+	// This is useful for testing, when the membership information doesn't
+	// have chance to propagate
+	if n != nil && n.AmLeader() {
 		x.Trace(ctx, "Calling assignUids as I'm leader of group: %d", gid)
 		ul, err = assignUids(ctx, num)
 		if err != nil {
@@ -106,8 +102,8 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 		}
 
 	} else {
+		lid, addr := groups().Leader(gid)
 		x.Trace(ctx, "Not leader of group: %d. Sending to: %d", gid, lid)
-		_, addr := groups().Leader(gid)
 		p := pools().get(addr)
 		conn, err := p.Get()
 		if err != nil {
@@ -146,7 +142,7 @@ func (w *grpcWorker) AssignUids(ctx context.Context, num *taskp.Num) (*taskp.Lis
 	}
 
 	if !groups().ServesGroup(num.Group) {
-		x.Fatalf("groupId: %v. GetOrAssign. We shouldn't be getting this req", num.Group)
+		return &emptyUIDList, x.Errorf("groupId: %v. GetOrAssign. We shouldn't be getting this req", num.Group)
 	}
 
 	reply := &emptyUIDList

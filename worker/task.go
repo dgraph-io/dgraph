@@ -358,6 +358,26 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 	if srcFn.fnType == RegexFn {
 		// Go through the indexkeys for the predicate and match them with
 		// the regex matcher.
+		typ, err := schema.State().TypeOf(attr)
+		if err != nil || !typ.IsScalar() {
+			return nil, x.Errorf("Attribute not scalar: %s %v", attr, typ)
+		}
+		if typ != types.StringID {
+			return nil,
+				x.Errorf("Got non-string type. Regex match is allowed only on string type.")
+		}
+		tokenizers := schema.State().TokenizerNames(q.Attr)
+		var tokenizer string
+		for _, t := range tokenizers {
+			if t == "exact" {
+				tokenizer = t
+			}
+		}
+		if tokenizer == "" {
+			return nil,
+				x.Errorf("Attribute %v does not have exact index for regex matching.", q.Attr)
+		}
+
 		it := pstore.NewIterator()
 		defer it.Close()
 		prefixKey := x.IndexKey(q.Attr, string(exactTok.Identifier()))

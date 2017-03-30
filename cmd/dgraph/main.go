@@ -349,8 +349,12 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	if worker.HealthCheck() {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	} else {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
 }
 
 // parseQueryAndMutation handles the cases where the query parsing code can hang indefinitely.
@@ -391,6 +395,10 @@ func hasGQLOps(mu *gql.Mutation) bool {
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
+	if !worker.HealthCheck() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	// Add a limit on how many pending queries can be run in the system.
 	pendingQueries <- struct{}{}
 	defer func() { <-pendingQueries }()
@@ -590,6 +598,11 @@ type grpcServer struct{}
 // client as a protocol buffer message.
 func (s *grpcServer) Run(ctx context.Context,
 	req *graphp.Request) (resp *graphp.Response, err error) {
+	// we need membership information
+	if !worker.HealthCheck() {
+		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		return resp, x.Errorf("Uninitiated server. Please retry later")
+	}
 	var allocIds map[string]uint64
 	var schemaNodes []*graphp.SchemaNode
 	if rand.Float64() < *tracing {

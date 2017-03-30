@@ -408,7 +408,7 @@ func (w *grpcWorker) Backup(ctx context.Context, req *workerp.BackupPayload) (*w
 
 func BackupOverNetwork(ctx context.Context) error {
 	// If we haven't even had a single membership update, don't run backup.
-	if len(*peerAddr) > 0 && groups().LastUpdate() == 0 {
+	if !HealthCheck() {
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return x.Errorf("Uninitiated server. Please retry later")
 	}

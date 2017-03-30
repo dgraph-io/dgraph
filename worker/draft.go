@@ -40,9 +40,10 @@ import (
 )
 
 const (
-	proposalMutation  = 0
-	proposalReindex   = 1
-	ErrorNodeIDExists = "Error Node ID already exists in the cluster"
+	proposalMutation   = 0
+	proposalReindex    = 1
+	proposalMembership = 2
+	ErrorNodeIDExists  = "Error Node ID already exists in the cluster"
 )
 
 // peerPool stores the peers per node and the addresses corresponding to them.
@@ -297,10 +298,14 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) err
 	proposalData := make([]byte, upto+1)
 	// Examining first byte of proposalData will quickly tell us what kind of
 	// proposal this is.
-	if proposal.RebuildIndex == nil {
-		proposalData[0] = proposalMutation
-	} else {
+	if proposal.RebuildIndex != nil {
 		proposalData[0] = proposalReindex
+	} else if proposal.Mutations != nil {
+		proposalData[0] = proposalMutation
+	} else if proposal.Membership != nil {
+		proposalData[0] = proposalMembership
+	} else {
+		x.Fatalf("Unkonw proposal")
 	}
 	copy(proposalData[1:], slice)
 
@@ -314,8 +319,12 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) err
 	// Wait for the proposal to be committed.
 	if proposal.Mutations != nil {
 		x.Trace(ctx, "Waiting for the proposal: mutations.")
-	} else {
+	} else if proposal.Membership != nil {
 		x.Trace(ctx, "Waiting for the proposal: membership update.")
+	} else if proposal.RebuildIndex != nil {
+		x.Trace(ctx, "Waiting for the proposal: RebuildIndex")
+	} else {
+		x.Fatalf("Unknown proposal")
 	}
 
 	select {
@@ -585,6 +594,7 @@ func (n *node) retrieveSnapshot(rc taskp.RaftContext) {
 
 func (n *node) Run() {
 	firstRun := true
+	var leader bool
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	rcBytes, err := n.raftContext.Marshal()
@@ -595,6 +605,15 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			if rd.SoftState != nil {
+				if rd.RaftState == raft.StateFollower && leader {
+					// stepped down as leader do a sync membership immediately
+					groups().syncMemberships()
+				} else if rd.RaftState == raft.StateLeader && !leader {
+					groups().syncMemberships()
+				}
+				leader = rd.RaftState == raft.StateLeader
+			}
 			x.Check(n.wal.StoreSnapshot(n.gid, rd.Snapshot))
 			x.Check(n.wal.Store(n.gid, rd.HardState, rd.Entries))
 
@@ -646,7 +665,23 @@ func (n *node) Run() {
 			}
 
 		case <-n.stop:
-			close(n.done)
+			if peerId, has := groups().Peer(n.gid, *raftId); has && n.AmLeader() {
+				n.Raft().TransferLeadership(n.ctx, *raftId, peerId)
+				go func() {
+					select {
+					case <-n.ctx.Done(): // time out
+						x.Trace(n.ctx, "context timed out while transfering leadership")
+					case <-time.After(1 * time.Second):
+						x.Trace(n.ctx, "Timed out transfering leadership")
+					}
+					n.Raft().Stop()
+					close(n.done)
+				}()
+			} else {
+				n.Raft().Stop()
+				close(n.done)
+			}
+		case <-n.done:
 			return
 		}
 	}
@@ -674,49 +709,40 @@ func (n *node) snapshotPeriodically() {
 		return
 	}
 
-	var prev string
-	// TODO: What should be ideal value for snapshotting ? If a node is lost due to network
-	// partition or some other issue for more than log compaction tick interval, then that
-	// node needs to fetch snapshot since logs would be truncated
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			water := posting.SyncMarkFor(n.gid)
-			le := water.DoneUntil()
-
-			existing, err := n.store.Snapshot()
-			x.Checkf(err, "Unable to get existing snapshot")
-
-			si := existing.Metadata.Index
-			if le <= si {
-				msg := fmt.Sprintf("Current watermark %d <= previous snapshot %d. Skipping.", le, si)
-				if msg != prev {
-					prev = msg
-					fmt.Println(msg)
-				}
-				continue
-			}
-			msg := fmt.Sprintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, le)
-			if msg != prev {
-				prev = msg
-				fmt.Println(msg)
-			}
-
-			rc, err := n.raftContext.Marshal()
-			x.Check(err)
-
-			s, err := n.store.CreateSnapshot(le, n.ConfState(), rc)
-			x.Checkf(err, "While creating snapshot")
-			x.Checkf(n.store.Compact(le), "While compacting snapshot")
-			x.Check(n.wal.StoreSnapshot(n.gid, s))
+			n.snapshot(*maxPendingCount)
 
 		case <-n.done:
 			return
 		}
 	}
+}
+
+func (n *node) snapshot(skip uint64) {
+	water := posting.SyncMarkFor(n.gid)
+	le := water.DoneUntil()
+
+	existing, err := n.store.Snapshot()
+	x.Checkf(err, "Unable to get existing snapshot")
+
+	si := existing.Metadata.Index
+	if le <= si+skip {
+		return
+	}
+	snapshotIdx := le - skip
+	x.Trace(n.ctx, "Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
+	rc, err := n.raftContext.Marshal()
+	x.Check(err)
+
+	s, err := n.store.CreateSnapshot(snapshotIdx, n.ConfState(), rc)
+	x.Checkf(err, "While creating snapshot")
+	x.Checkf(n.store.Compact(snapshotIdx), "While compacting snapshot")
+	x.Check(n.wal.StoreSnapshot(n.gid, s))
 }
 
 func (n *node) joinPeers() {
