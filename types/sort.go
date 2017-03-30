@@ -49,8 +49,8 @@ func (s byValue) Less(i, j int) bool {
 		return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
 	case DateID:
 		return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
-	case Int32ID:
-		return (s.values[i].Value.(int32)) < (s.values[j].Value.(int32))
+	case IntID:
+		return (s.values[i].Value.(int64)) < (s.values[j].Value.(int64))
 	case FloatID:
 		return (s.values[i].Value.(float64)) < (s.values[j].Value.(float64))
 	case StringID, DefaultID:
@@ -82,8 +82,8 @@ func Less(a, b Val) (bool, error) {
 		return a.Value.(time.Time).Before(b.Value.(time.Time)), nil
 	case DateTimeID:
 		return a.Value.(time.Time).Before(b.Value.(time.Time)), nil
-	case Int32ID:
-		return (a.Value.(int32)) < (b.Value.(int32)), nil
+	case IntID:
+		return (a.Value.(int64)) < (b.Value.(int64)), nil
 	case FloatID:
 		return (a.Value.(float64)) < (b.Value.(float64)), nil
 	case StringID, DefaultID:
@@ -102,8 +102,8 @@ func Equal(a, b Val) (bool, error) {
 		return a.Value.(time.Time) == (b.Value.(time.Time)), nil
 	case DateTimeID:
 		return a.Value.(time.Time) == (b.Value.(time.Time)), nil
-	case Int32ID:
-		return (a.Value.(int32)) == (b.Value.(int32)), nil
+	case IntID:
+		return (a.Value.(int64)) == (b.Value.(int64)), nil
 	case FloatID:
 		return (a.Value.(float64)) == (b.Value.(float64)), nil
 	case StringID, DefaultID:

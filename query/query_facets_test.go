@@ -494,7 +494,7 @@ children: <
   >
 >
 `,
-		proto.MarshalTextString(pb))
+		proto.MarshalTextString(pb[0]))
 }
 
 func TestFacetsFilterSimple(t *testing.T) {

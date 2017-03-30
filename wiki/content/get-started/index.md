@@ -114,10 +114,10 @@ Lets add a schema so that we can perform some interesting queries with term matc
 curl localhost:8080/query -XPOST -d $'
 mutation {
   schema {
-    name: string @index
-    release_date: date @index
-    revenue: float
-    running_time: int
+    name: string @index .
+    release_date: date @index .
+    revenue: float .
+    running_time: int .
   }
 }' | python -m json.tool | less
 ```
@@ -214,7 +214,7 @@ Lets add a type for `initial_release_date` which is a new predicate that we will
 curl localhost:8080/query -XPOST -d '
 mutation {
   schema {
-    initial_release_date: date @index
+    initial_release_date: date @index .
   }
 }'
 ```

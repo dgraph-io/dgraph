@@ -135,6 +135,7 @@ type params struct {
 	uidToVal     map[uint64]types.Val
 	Langs        []string
 	Normalize    bool
+	Cascade      bool
 	From         uint64
 	To           uint64
 	Facet        *facetsp.Param
@@ -274,8 +275,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		}
 
 		if len(pc.counts) > 0 {
-			c := types.ValueForType(types.Int32ID)
-			c.Value = int32(pc.counts[idx])
+			c := types.ValueForType(types.IntID)
+			c.Value = int64(pc.counts[idx])
 			uc := dst.New(pc.Attr)
 			uc.AddValue("count", c)
 			dst.AddListChild(pc.Attr, uc)
@@ -336,6 +337,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				}
 			}
 		} else {
+			if len(pc.Params.Langs) > 0 {
+				fieldName += "@"
+				for _, it := range pc.Params.Langs {
+					fieldName += it + ":"
+				}
+				fieldName = fieldName[:len(fieldName)-1]
+			}
 			tv := pc.values[idx]
 			v, err := getValue(tv)
 			if err != nil {
@@ -461,19 +469,22 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// So, we work on the children, and then recurse for grand children.
 	attrsSeen := make(map[string]struct{})
 	for _, gchild := range gq.Children {
-		if !gchild.IsCount { // ignore count subgraphs..
-			key := gchild.Attr
-			if gchild.Func != nil && gchild.Func.IsAggregator() {
-				key += gchild.Func.Name
-			} else if gchild.Attr == "var" {
-				key += fmt.Sprintf("%v", gchild.NeedsVar)
-			}
-			if _, ok := attrsSeen[key]; ok {
-				return x.Errorf("%s not allowed multiple times in same sub-query.",
-					key)
-			}
-			attrsSeen[key] = struct{}{}
+		key := gchild.Attr
+		if gchild.Func != nil && gchild.Func.IsAggregator() {
+			key += gchild.Func.Name
+		} else if gchild.Attr == "var" {
+			key += fmt.Sprintf("%v", gchild.NeedsVar)
+		} else if gchild.IsCount { // ignore count subgraphs..
+			key += "count"
+		} else if len(gchild.Langs) > 0 {
+			key += fmt.Sprintf("%v", gchild.Langs)
 		}
+		if _, ok := attrsSeen[key]; ok {
+			return x.Errorf("%s not allowed multiple times in same sub-query.",
+				key)
+		}
+		attrsSeen[key] = struct{}{}
+
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
 		}
@@ -652,6 +663,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Var:        gq.Var,
 		ParentVars: make(map[string]*taskp.List),
 		Normalize:  gq.Normalize,
+		Cascade:    gq.Cascade,
 	}
 	if gq.Facets != nil {
 		args.Facet = &facetsp.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -1007,11 +1019,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			if err != nil {
 				return nil, err
 			}
-			if len(res.QueryVars[idx].Defines) == 0 {
-				continue
-			}
-
-			isCascade := shouldCascade(res, idx)
+			isCascade := sg.Params.Cascade || shouldCascade(res, idx)
 			populateVarMap(sg, doneVars, isCascade)
 			err = sg.populatePostAggregation(doneVars)
 			if err != nil {
@@ -1042,6 +1050,9 @@ func shouldCascade(res gql.Result, idx int) bool {
 		return false
 	}
 
+	if len(res.QueryVars[idx].Defines) == 0 {
+		return false
+	}
 	for _, def := range res.QueryVars[idx].Defines {
 		for _, need := range res.QueryVars[idx].Needs {
 			if def == need {
@@ -1109,8 +1120,8 @@ AssignStep:
 			for idx, uid := range sg.SrcUIDs.Uids {
 				//val, _ := getValue(sg.values[idx])
 				val := types.Val{
-					Tid:   types.Int32ID,
-					Value: int32(sg.counts[idx]),
+					Tid:   types.IntID,
+					Value: int64(sg.counts[idx]),
 				}
 				doneVars[sg.Params.Var].vals[uid] = val
 			}

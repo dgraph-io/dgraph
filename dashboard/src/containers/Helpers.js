@@ -316,7 +316,8 @@ export function processGraph(
     groups = {},
     displayLabel,
     fullName,
-    regexEx = new RegExp(regex);
+    regexEx = new RegExp(regex),
+    isSchema = false;
 
   for (var k in response) {
     if (!response.hasOwnProperty(k)) {
@@ -327,7 +328,12 @@ export function processGraph(
     ignoredChildren = [];
 
     if (k !== "server_latency" && k !== "uids") {
+      // For schema, we should should all predicates, irrespective of
+      // whether they have children or not. Some predicate have tokenizers,
+      // are considered as children because it is an array of values.
       let block = response[k];
+
+      isSchema = k === "schema";
       for (let i = 0; i < block.length; i++) {
         let rn: ResponseNode = {
           node: block[i],
@@ -337,7 +343,7 @@ export function processGraph(
           }
         };
 
-        if (hasChildren(block[i])) {
+        if (isSchema || hasChildren(block[i])) {
           someNodeHasChildren = true;
           nodesQueue.push(rn);
         } else {
@@ -405,7 +411,12 @@ export function processGraph(
 
       // We can have a key-val pair, another array or an object here (in case of facets)
       let val = obj.node[prop];
-      if (Array.isArray(val)) {
+      // We get back tokenizer as an array, we usually consider arrays as children. Though
+      // in this case tokenizer is a property of the same node and not a child. So we handle
+      // it in a special manner.
+      if (isSchema && prop === "tokenizer") {
+        properties["attrs"][prop] = JSON.stringify(val);
+      } else if (Array.isArray(val)) {
         // These are child nodes, lets add them to the queue.
         let arr = val, xposition = 1;
         for (let j = 0; j < arr.length; j++) {

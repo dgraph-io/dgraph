@@ -13,7 +13,7 @@ message Posting {
 	enum ValType {
 		DEFAULT = 0;
 		BINARY = 1;
-		INT32 = 2;
+		INT = 2; // We treat it as int64.
 		FLOAT = 3;
 		BOOL = 4;
 		DATE = 5;

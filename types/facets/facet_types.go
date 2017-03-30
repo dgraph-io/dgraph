@@ -20,7 +20,7 @@ package facets
 import "github.com/dgraph-io/dgraph/protos/facetsp"
 
 const (
-	Int32ID    = TypeID(facetsp.Facet_INT32)
+	IntID      = TypeID(facetsp.Facet_INT)
 	FloatID    = TypeID(facetsp.Facet_FLOAT)
 	BoolID     = TypeID(facetsp.Facet_BOOL)
 	DateTimeID = TypeID(facetsp.Facet_DATETIME)
@@ -32,8 +32,8 @@ type TypeID facetsp.Facet_ValType
 // ValTypeForTypeID gives facetsp.Facet_ValType for given TypeID
 func ValTypeForTypeID(typId TypeID) facetsp.Facet_ValType {
 	switch typId {
-	case Int32ID:
-		return facetsp.Facet_INT32
+	case IntID:
+		return facetsp.Facet_INT
 	case FloatID:
 		return facetsp.Facet_FLOAT
 	case BoolID:
@@ -49,8 +49,8 @@ func ValTypeForTypeID(typId TypeID) facetsp.Facet_ValType {
 // TypeIDForValType gives TypeID for facetsp.Facet_ValType
 func TypeIDForValType(valType facetsp.Facet_ValType) TypeID {
 	switch valType {
-	case facetsp.Facet_INT32:
-		return Int32ID
+	case facetsp.Facet_INT:
+		return IntID
 	case facetsp.Facet_FLOAT:
 		return FloatID
 	case facetsp.Facet_BOOL:

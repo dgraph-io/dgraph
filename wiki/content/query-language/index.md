@@ -112,12 +112,12 @@ curl localhost:8080/query -XPOST -d $'{
 # This query on execution results in
 {
   "class": {
-    "name": "awesome class",
+    "name@en": "awesome class",
     "student": {
       "friend": {
-        "name": "bob"
+        "name@en": "bob"
       },
-      "name": "alice",
+      "name@en": "alice",
       "planet": "Mars"
     }
   }
@@ -191,13 +191,13 @@ dgraph
 curl localhost:8080/query -XPOST -d $'
 mutation {
   schema {
-    director.film: uid @reverse
-    genre: uid @reverse
-    initial_release_date: date @index
-    rating: uid @reverse
-    country: uid @reverse
-    loc: geo @index
-    name: string @index
+    director.film: uid @reverse .
+    genre: uid @reverse .
+    initial_release_date: date @index .
+    rating: uid @reverse .
+    country: uid @reverse .
+    loc: geo @index .
+    name: string @index .
   }
 }' | python -m json.tool | less
 ```
@@ -238,20 +238,20 @@ curl localhost:8080/query -XPOST -d $'{
       {
         "genre": [
           {
-            "name": "Costume Adventure"
+            "name@en": "Costume Adventure"
           },
           {
-            "name": "Adventure Film"
+            "name@en": "Adventure Film"
           },
           {
-            "name": "Action/Adventure"
+            "name@en": "Action/Adventure"
           },
           {
-            "name": "Action Film"
+            "name@en": "Action Film"
           }
         ],
         "initial_release_date": "1984-05-22",
-        "name": "Indiana Jones and the Temple of Doom"
+        "name@en": "Indiana Jones and the Temple of Doom"
       },
       ...
       ...
@@ -259,14 +259,14 @@ curl localhost:8080/query -XPOST -d $'{
       {
         "genre": [
           {
-            "name": "Drama"
+            "name@en": "Drama"
           }
         ],
         "initial_release_date": "1985-12-15",
-        "name": "The Color Purple"
+        "name@en": "The Color Purple"
       }
     ],
-    "name": "Steven Spielberg"
+    "name@en": "Steven Spielberg"
   }
   ]
 }
@@ -311,7 +311,7 @@ The following types are supported by Dgraph.
 
 | Dgraph Type | Go type |
 | ------------|:--------|
-|  `int`      | int32   |
+|  `int`      | int64   |
 |  `float`    | float   |
 |  `string`   | string  |
 |  `bool`     | bool    |
@@ -405,22 +405,22 @@ The results are:
 {
   "me":[
     {
-      "name":"Steven Spielberg",
+      "name@en":"Steven Spielberg",
       "~directed_by":[
         {
-          "name":"Indiana Jones and the Temple of Doom"
+          "name@en":"Indiana Jones and the Temple of Doom"
         },
         {
-          "name":"Jaws"
+          "name@en":"Jaws"
         },
         {
-          "name":"Saving Private Ryan"
+          "name@en":"Saving Private Ryan"
         },
         {
-          "name":"Close Encounters of the Third Kind"
+          "name@en":"Close Encounters of the Third Kind"
         },
         {
-          "name":"Catch Me If You Can"
+          "name@en":"Catch Me If You Can"
         }
       ]
     }
@@ -435,7 +435,7 @@ We can add or modify the schema by specfiying the schema inside mutation block.
 curl localhost:8080/query -XPOST -d $'
 mutation {
   schema {
-    genre: uid @reverse
+    genre: uid @reverse .
   }
 }' | python -m json.tool | less
 
@@ -495,7 +495,7 @@ The following table lists all the supported [RDF datatypes](https://www.w3.org/T
 |  <xs:string> | String |
 |  <xs:dateTime> |                               DateTime |
 |  <xs:date> |                                   Date |
-|  <xs:int> |                                    Int32 |
+|  <xs:int> |                                    Int |
 |  <xs:boolean> |                                Bool |
 |  <xs:double> |                                 Float |
 |  <xs:float> |                                  Float |
@@ -503,7 +503,7 @@ The following table lists all the supported [RDF datatypes](https://www.w3.org/T
 |  <http://www.w3.org/2001/XMLSchema#string> |   String |
 |  <http://www.w3.org/2001/XMLSchema#dateTime> | DateTime |
 |  <http://www.w3.org/2001/XMLSchema#date> |     Date |
-|  <http://www.w3.org/2001/XMLSchema#int> |      Int32 |
+|  <http://www.w3.org/2001/XMLSchema#int> |      Int |
 |  <http://www.w3.org/2001/XMLSchema#boolean> |  Bool |
 |  <http://www.w3.org/2001/XMLSchema#double> |   Float |
 |  <http://www.w3.org/2001/XMLSchema#float> |    Float |
@@ -544,7 +544,7 @@ Output:
 {
   "director": [
     {
-      "name": "Steven Spielberg",
+      "name@en": "Steven Spielberg",
       "password": [
         {
           "checkpwd": true
@@ -588,32 +588,32 @@ curl localhost:8080/query -XPOST -d $'{
                 {
                     "genre": [
                         {
-                            "name": "Adventure Film"
+                            "name@en": "Adventure Film"
                         },
                         {
-                            "name": "Action/Adventure"
+                            "name@en": "Action/Adventure"
                         },
                         {
-                            "name": "Action Film"
+                            "name@en": "Action Film"
                         }
                     ],
                     "initial_release_date": "1984-05-23",
-                    "name": "Indiana Jones and the Temple of Doom"
+                    "name@en": "Indiana Jones and the Temple of Doom"
                 },
                 {
                     "genre": [
                         {
-                            "name": "Mystery film"
+                            "name@en": "Mystery film"
                         },
                         {
-                            "name": "Horror"
+                            "name@en": "Horror"
                         },
                         {
-                            "name": "Thriller"
+                            "name@en": "Thriller"
                         }
                     ],
                     "initial_release_date": "1975-06-20",
-                    "name": "Jaws"
+                    "name@en": "Jaws"
                 }
             ]
         }
@@ -653,20 +653,20 @@ Notice the `first` and `offset` arguments. Here is the output which contains onl
         {
           "genre": [
             {
-              "name": "War film"
+              "name@en": "War film"
             },
             {
-              "name": "Drama"
+              "name@en": "Drama"
             },
             {
-              "name": "Action Film"
+              "name@en": "Action Film"
             }
           ],
           "initial_release_date": "1998-07-23",
-          "name": "Saving Private Ryan"
+          "name@en": "Saving Private Ryan"
         }
       ],
-      "name": "Steven Spielberg"
+      "name@en": "Steven Spielberg"
     }
   ]
 }
@@ -703,14 +703,14 @@ The response looks like:
       "director.film": [
         {
           "_uid_": "0xc17b416e58b32bb",
-          "name": "Indiana Jones and the Temple of Doom"
+          "name@en": "Indiana Jones and the Temple of Doom"
         },
         {
           "_uid_": "0xc6f4b3d7f8cbbad",
-          "name": "Jaws"
+          "name@en": "Jaws"
         }
       ],
-      "name": "Steven Spielberg"
+      "name@en": "Steven Spielberg"
     }
   ]
 }
@@ -743,20 +743,20 @@ The response is the same as before when we use `offset:2` and `first:1`.
                 {
                     "genre": [
                         {
-                            "name": "War film"
+                            "name@en": "War film"
                         },
                         {
-                            "name": "Drama"
+                            "name@en": "Drama"
                         },
                         {
-                            "name": "Action Film"
+                            "name@en": "Action Film"
                         }
                     ],
                     "initial_release_date": "1998-07-24",
-                    "name": "Saving Private Ryan"
+                    "name@en": "Saving Private Ryan"
                 }
             ],
-            "name": "Steven Spielberg"
+            "name@en": "Steven Spielberg"
         }
     ]
 }
@@ -808,7 +808,7 @@ curl localhost:8080/query -XPOST -d $'{
        "count": 75
       }
     ],
-    "name": "Tom Hanks"
+    "name@en": "Tom Hanks"
   }
  ]
 }
@@ -847,22 +847,22 @@ curl localhost:8080/query -XPOST -d $'{
       "director.film": [
         {
           "_uid_": "0xc17b416e58b32bb",
-          "name": "Indiana Jones and the Temple of Doom"
+          "name@en": "Indiana Jones and the Temple of Doom"
         },
         {
           "_uid_": "0x7d0807a6740c25dc",
-          "name": "Indiana Jones and the Kingdom of the Crystal Skull"
+          "name@en": "Indiana Jones and the Kingdom of the Crystal Skull"
         },
         {
           "_uid_": "0xa4c4cc65751e98e7",
-          "name": "Indiana Jones and the Last Crusade"
+          "name@en": "Indiana Jones and the Last Crusade"
         },
         {
           "_uid_": "0xd1c161bed9769cbc",
-          "name": "Indiana Jones and the Raiders of the Lost Ark"
+          "name@en": "Indiana Jones and the Raiders of the Lost Ark"
         }
       ],
-      "name": "Steven Spielberg"
+      "name@en": "Steven Spielberg"
     }
   ]
 }
@@ -891,33 +891,33 @@ Here is a part of the response.
     {
       "genre": [
         {
-          "name": "Adventure Film"
+          "name@en": "Adventure Film"
         },
         {
-          "name": "Horror"
+          "name@en": "Horror"
         }
       ],
-      "name": "The Adventures of Young Indiana Jones: Masks of Evil"
+      "name@en": "The Adventures of Young Indiana Jones: Masks of Evil"
     },
     {
       "genre": [
         {
-          "name": "War film"
+          "name@en": "War film"
         },
         {
-          "name": "Adventure Film"
+          "name@en": "Adventure Film"
         }
       ],
-      "name": "The Adventures of Young Indiana Jones: Adventures in the Secret Service"
+      "name@en": "The Adventures of Young Indiana Jones: Adventures in the Secret Service"
     },
     ...
     {
       "genre": [
         {
-          "name": "Comedy"
+          "name@en": "Comedy"
         }
       ],
-      "name": "The Adventures of Young Indiana Jones: Espionage Escapades"
+      "name@en": "The Adventures of Young Indiana Jones: Espionage Escapades"
     }
   ]
 }
@@ -949,18 +949,18 @@ curl localhost:8080/query -XPOST -d $'{
       "director.film": [
         {
           "_uid_": "0x38160fa42cf3f4c9",
-          "name": "War Horse"
+          "name@en": "War Horse"
         },
         {
           "_uid_": "0x39d8574f26521fcc",
-          "name": "War of the Worlds"
+          "name@en": "War of the Worlds"
         },
         {
           "_uid_": "0xd915cb0eb9ad47c0",
-          "name": "Bridge of Spies"
+          "name@en": "Bridge of Spies"
         }
       ],
-      "name": "Steven Spielberg"
+      "name@en": "Steven Spielberg"
     }
   ]
 }
@@ -985,47 +985,114 @@ curl localhost:8080/query -XPOST -d $'{
 {
   "me": [
     {
-      "name": "Unexpected Passion"
+      "name@en": "Unexpected Passion"
     },
     {
       "genre": [
         {
-          "name": "Drama"
+          "name@en": "Drama"
         },
         {
-          "name": "Silent film"
+          "name@en": "Silent film"
         }
       ],
-      "name": "The New York Peacock"
+      "name@en": "The New York Peacock"
     },
     {
       "genre": [
         {
-          "name": "Drama"
+          "name@en": "Drama"
         },
         {
-          "name": "Romance Film"
+          "name@en": "Romance Film"
         }
       ],
-      "name": "Passion of Love"
+      "name@en": "Passion of Love"
     },
     ...
     {
       "genre": [
         {
-          "name": "Crime Fiction"
+          "name@en": "Crime Fiction"
         },
         {
-          "name": "Comedy"
+          "name@en": "Comedy"
         }
       ],
-      "name": "The Passion of the Reefer"
+      "name@en": "The Passion of the Reefer"
     }
   ]
 }
 ```
 Note that the first result with the name "Unexpected Passion" is either not a film entity, or it is a film entity with no genre.
 
+### Regex search 
+`regexp` function allows a regular expression match on the values. It requires exact index to be present for working.
+
+```
+curl localhost:8080/query -XPOST -d $'{
+  directors(func: regexp(name, "^Steven Sp.*$")) {
+    name@en
+    director.film @filter(regexp(name, "Ryan")) {
+      name@en
+    }
+  }
+}
+' 
+```
+Output:
+```
+{
+  "directors": [
+    {
+      "director.film": [
+        {
+          "name@en": "Saving Private Ryan"
+        }
+      ],
+      "name@en": "Steven Spielberg"
+    },
+    {
+      "name@en": "Steven Spurrier"
+    },
+    {
+      "name@en": "Steven Spurrier"
+    },
+    {
+      "name@en": "Steven Spencer"
+    },
+    {
+      "name@en": "Steve Spurrier"
+    },
+    {
+      "name@en": "Steven Spieldal"
+    },
+    {
+      "name@en": "Steven Spielberg And The Return To Film School"
+    },
+    {
+      "name@en": "Steven Sperling"
+    },
+    {
+      "name@en": "Steven Spohn"
+    },
+    {
+      "name@en": "Steven Spielberg"
+    },
+    {
+      "name@en": "Steven Spielberg"
+    },
+    {
+      "name@en": "Steven Spencer"
+    },
+    {
+      "name@en": "Steven Spielberg"
+    }
+  ]
+}
+```
+
+{{% notice "note" %}}Regex function requires full index scan as of v0.7.4 which is slow. So it's recommended to use them only if absolutely necessary {{% /notice %}}
 
 ### Full Text Search
 There are two functions for full text search - `alloftext` and `anyoftext`.
@@ -1094,18 +1161,18 @@ This query would return the name and release date of all the movies directed by 
             "director.film": [
                 {
                     "initial_release_date": "1964-03-24",
-                    "name": "Firelight"
+                    "name@en": "Firelight"
                 },
                 {
                     "initial_release_date": "1968-12-18",
-                    "name": "Amblin"
+                    "name@en": "Amblin"
                 },
                 {
                     "initial_release_date": "1967-01-01",
-                    "name": "Slipstream"
+                    "name@en": "Slipstream"
                 }
             ],
-            "name": "Steven Spielberg"
+            "name@en": "Steven Spielberg"
         }
     ]
 }
@@ -1151,7 +1218,7 @@ This query would return Name and Release date of movies directed by Steven Spiel
                     "Release_date": "2011-10-23"
                 }
             ],
-            "name": "Steven Spielberg"
+            "name@en": "Steven Spielberg"
         }
     ]
 }
@@ -1338,30 +1405,30 @@ curl localhost:8080/query -XPOST -d $'{
       "director.film": [
         {
           "_uid_": "0xc17b416e58b32bb",
-          "name": "Indiana Jones and the Temple of Doom"
+          "name@en": "Indiana Jones and the Temple of Doom"
         },
         {
           "_uid_": "0x22e65757df0c94d2",
-          "name": "Jurassic Park"
+          "name@en": "Jurassic Park"
         },
         {
           "_uid_": "0x7d0807a6740c25dc",
-          "name": "Indiana Jones and the Kingdom of the Crystal Skull"
+          "name@en": "Indiana Jones and the Kingdom of the Crystal Skull"
         },
         {
           "_uid_": "0x8f2485e4242cbe6e",
-          "name": "The Lost World: Jurassic Park"
+          "name@en": "The Lost World: Jurassic Park"
         },
         {
           "_uid_": "0xa4c4cc65751e98e7",
-          "name": "Indiana Jones and the Last Crusade"
+          "name@en": "Indiana Jones and the Last Crusade"
         },
         {
           "_uid_": "0xd1c161bed9769cbc",
-          "name": "Indiana Jones and the Raiders of the Lost Ark"
+          "name@en": "Indiana Jones and the Raiders of the Lost Ark"
         }
       ],
-      "name": "Steven Spielberg"
+      "name@en": "Steven Spielberg"
     }
   ]
 }
@@ -1371,7 +1438,7 @@ curl localhost:8080/query -XPOST -d $'{
 
 Dgraph also supports compare filter, which takes form as @filter(compare(count(attribute), N)), only entities fulfill such predication will be returned.
 
-{{% notice "note" %}}"Compare" here includes "eq", "gt", "geq", "lt", "leg".  And "count" should be applied on non-scalar types.{{% /notice %}}
+{{% notice "note" %}}"Compare" here includes "eq", "gt", "geq", "lt", "leq".  And "count" should be applied on non-scalar types.{{% /notice %}}
 ```
 curl localhost:8080/query -XPOST -d $'{
   director(func:anyofterms(name, "Steven Spielberg")) @filter(gt(count(director.film), 36)) {
@@ -1392,7 +1459,7 @@ Output:
           "count": 39
         }
       ],
-      "name": "Steven Spielberg"
+      "name@en": "Steven Spielberg"
     },
     {
       "director.film": [
@@ -1400,7 +1467,7 @@ Output:
           "count": 115
         }
       ],
-      "name": "Steven Scarborough"
+      "name@en": "Steven Scarborough"
     }
   ]
 }
@@ -1423,34 +1490,34 @@ Output:
 {
   "genre": [
     {
-      "name": "Short Film",
+      "name@en": "Short Film",
       "~genre": [
         {
-          "name": "Eine Rolle Duschen"
+          "name@en": "Eine Rolle Duschen"
         }
       ]
     },
     {
-      "name": "Drama",
+      "name@en": "Drama",
       "~genre": [
         {
-          "name": "Prisoners"
+          "name@en": "Prisoners"
         }
       ]
     },
     {
-      "name": "Comedy",
+      "name@en": "Comedy",
       "~genre": [
         {
-          "name": "A tu per tu"
+          "name@en": "A tu per tu"
         }
       ]
     },
     {
-      "name": "Documentary film",
+      "name@en": "Documentary film",
       "~genre": [
         {
-          "name": "Short Cut to Nirvana: Kumbh Mela"
+          "name@en": "Short Cut to Nirvana: Kumbh Mela"
         }
       ]
     }
@@ -1483,29 +1550,29 @@ curl localhost:8080/query -XPOST -d $'{
       "director.film": [
         {
           "initial_release_date": "1964-03-23",
-          "name": "Firelight"
+          "name@en": "Firelight"
         },
         {
           "initial_release_date": "1966-12-31",
-          "name": "Slipstream"
+          "name@en": "Slipstream"
         },
         {
           "initial_release_date": "1968-12-17",
-          "name": "Amblin"
+          "name@en": "Amblin"
         },
         ...
         ...
         ...
         {
           "initial_release_date": "2012-10-07",
-          "name": "Lincoln"
+          "name@en": "Lincoln"
         },
         {
           "initial_release_date": "2015-10-15",
-          "name": "Bridge of Spies"
+          "name@en": "Bridge of Spies"
         }
       ],
-      "name": "Steven Spielberg"
+      "name@en": "Steven Spielberg"
     }
   ]
 }
@@ -1534,14 +1601,14 @@ Here is the output.
       "director.film": [
         {
           "initial_release_date": "2015-10-15",
-          "name": "Bridge of Spies"
+          "name@en": "Bridge of Spies"
         },
         {
           "initial_release_date": "2012-10-07",
-          "name": "Lincoln"
+          "name@en": "Lincoln"
         },
       ],
-      "name": "Steven Spielberg"
+      "name@en": "Steven Spielberg"
     }
   ]
 }
@@ -1560,31 +1627,31 @@ curl localhost:8080/query -XPOST -d $'{
 {
     "me": [
         {
-            "name": "Steven's Friend #1"
+            "name@en": "Steven's Friend #1"
         },
         {
-            "name": "Steven's Friend #2"
+            "name@en": "Steven's Friend #2"
         },
         {
-            "name": "Steven's Orderly #2"
+            "name@en": "Steven's Orderly #2"
         },
         {
-            "name": "United Standards 2 (as Steven Carell)"
+            "name@en": "United Standards 2 (as Steven Carell)"
         },
         {
-            "name": "American Boy: A Profile of Steven Prince"
+            "name@en": "American Boy: A Profile of Steven Prince"
         },
         {
-            "name": "Steven A Burd"
+            "name@en": "Steven A Burd"
 ....
  {
-            "name": "Steven Kirshoff"
+            "name@en": "Steven Kirshoff"
         },
         {
-            "name": "Steven Kirtley"
+            "name@en": "Steven Kirtley"
         },
         {
-            "name": "Steven Kissel"
+            "name@en": "Steven Kissel"
         }
     ]
 }
@@ -2141,10 +2208,10 @@ curl localhost:8080/query -XPOST -d $'{
 {
   "AngelinaInfo": [
     {
-      "name": "Angelina Jolie Look-a-Like"
+      "name@en": "Angelina Jolie Look-a-Like"
     },
     {
-      "name": "Angelina Jolie"
+      "name@en": "Angelina Jolie"
     },
     {
       "actor.film": [
@@ -2153,19 +2220,19 @@ curl localhost:8080/query -XPOST -d $'{
             {
               "genre": [
                 {
-                  "name": "Animation"
+                  "name@en": "Animation"
                 },
                 {
-                  "name": "Fantasy"
+                  "name@en": "Fantasy"
                 },
                 {
-                  "name": "Computer Animation"
+                  "name@en": "Computer Animation"
                 },
                 {
-                  "name": "Adventure Film"
+                  "name@en": "Adventure Film"
                 },
                 {
-                  "name": "Action Film"
+                  "name@en": "Action Film"
                 }
               ]
             }
@@ -2176,7 +2243,7 @@ curl localhost:8080/query -XPOST -d $'{
             {
               "genre": [
                 {
-                  "name": "Comedy"
+                  "name@en": "Comedy"
                 }
               ]
             }
@@ -2210,7 +2277,7 @@ curl localhost:8080/query -XPOST -d $'{
           "Release_date": "2011-10-23"
         }
       ],
-      "name": "Steven Spielberg"
+      "name@en": "Steven Spielberg"
     }
   ]
 }
@@ -2245,24 +2312,24 @@ This query returns.
     {
       "~genre": [
         {
-          "name": "Hackers"
+          "name@en": "Hackers"
         }
       ]
     },
     {
       "~genre": [
         {
-          "name": "Mr. & Mrs. Smith"
+          "name@en": "Mr. & Mrs. Smith"
         }
       ]
     },
     {
       "~genre": [
         {
-          "name": "Hackers"
+          "name@en": "Hackers"
         },
         {
-          "name": "Foxfire"
+          "name@en": "Foxfire"
         }
       ]
     },
@@ -2270,27 +2337,27 @@ This query returns.
 .
 .
       {
-          "name": "Without Evidence"
+          "name@en": "Without Evidence"
         },
         {
-          "name": "True Women"
+          "name@en": "True Women"
         },
         {
-          "name": "Salt"
+          "name@en": "Salt"
         }
       ]
     },
     {
       "~genre": [
         {
-          "name": "Confessions of an Action Star"
+          "name@en": "Confessions of an Action Star"
         }
       ]
     },
     {
       "~genre": [
         {
-          "name": "Without Evidence"
+          "name@en": "Without Evidence"
         }
       ]
     }
@@ -2337,63 +2404,63 @@ curl localhost:8080/query -XPOST -d $'{
     {
       "~genre": [
         {
-          "name": "Hackers"
+          "name@en": "Hackers"
         },
         {
-          "name": "No Way Out"
+          "name@en": "No Way Out"
         }
       ]
     },
     {
       "~genre": [
         {
-          "name": "Being John Malkovich"
+          "name@en": "Being John Malkovich"
         },
         {
-          "name": "Burn After Reading"
+          "name@en": "Burn After Reading"
         },
         {
-          "name": "Inglourious Basterds"
+          "name@en": "Inglourious Basterds"
         },
         {
-          "name": "Mr. & Mrs. Smith"
+          "name@en": "Mr. & Mrs. Smith"
         }
       ]
     },
     {
       "~genre": [
         {
-          "name": "Less Than Zero"
+          "name@en": "Less Than Zero"
         },
         {
-          "name": "Hackers"
+          "name@en": "Hackers"
         },
         {
-          "name": "Foxfire"
+          "name@en": "Foxfire"
 .
 .
 .
-     "name": "Salt"
+     "name@en": "Salt"
         }
       ]
     },
     {
       "~genre": [
         {
-          "name": "Johnny Suede"
+          "name@en": "Johnny Suede"
         },
         {
-          "name": "Confessions of an Action Star"
+          "name@en": "Confessions of an Action Star"
         }
       ]
     },
     {
       "~genre": [
         {
-          "name": "Without Evidence"
+          "name@en": "Without Evidence"
         },
         {
-          "name": "Too Young to Die?"
+          "name@en": "Too Young to Die?"
         }
       ]
     }
@@ -2517,23 +2584,23 @@ Output:
 {
   "TopMovies": [
     {
-      "name": "Lincoln",
+      "name@en": "Lincoln",
       "var[score]": 179
     },
     {
-      "name": "Minority Report",
+      "name@en": "Minority Report",
       "var[score]": 156
     },
     {
-      "name": "Schindler's List",
+      "name@en": "Schindler's List",
       "var[score]": 145
     },
     {
-      "name": "The Terminal",
+      "name@en": "The Terminal",
       "var[score]": 118
     },
     {
-      "name": "Saving Private Ryan",
+      "name@en": "Saving Private Ryan",
       "var[score]": 99
     }
   ]
@@ -2705,193 +2772,193 @@ Output:
 {
   "recurse": [
     {
-      "name": "Short Film",
+      "name@en": "Short Film",
       "~genre": [
         {
-          "name": "Life Begins for Andy Panda",
+          "name@en": "Life Begins for Andy Panda",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name": "Bernice Hansen"
+                  "name@en": "Bernice Hansen"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name": "Mel Blanc"
+                  "name@en": "Mel Blanc"
                 }
               ]
             }
           ]
         },
         {
-          "name": "Liviu's Dream",
+          "name@en": "Liviu's Dream",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name": "Catalina Harabagiu"
+                  "name@en": "Catalina Harabagiu"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name": "Adrian Vancică"
+                  "name@en": "Adrian Vancică"
                 }
               ]
             }
           ]
         },
         {
-          "name": "Payload",
+          "name@en": "Payload",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name": "Roshan Johal"
+                  "name@en": "Roshan Johal"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name": "Dylan Russell"
+                  "name@en": "Dylan Russell"
                 }
               ]
             }
           ]
         },
         {
-          "name": "Green Eyes",
+          "name@en": "Green Eyes",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name": "Ignas Miskinis"
+                  "name@en": "Ignas Miskinis"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name": "Ieva Matulionytė"
+                  "name@en": "Ieva Matulionytė"
                 }
               ]
             }
           ]
         },
         {
-          "name": "Dogonauts: Enemy Line",
+          "name@en": "Dogonauts: Enemy Line",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name": "Don Chatfield"
+                  "name@en": "Don Chatfield"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name": "Justin Rasch"
+                  "name@en": "Justin Rasch"
                 }
               ]
             }
           ]
         },
         {
-          "name": "Morning Prayers",
+          "name@en": "Morning Prayers",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name": "Ismir Gagula"
+                  "name@en": "Ismir Gagula"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name": "Serafedin Redzepov"
+                  "name@en": "Serafedin Redzepov"
                 }
               ]
             }
           ]
         },
         {
-          "name": "A Letter to Uncle Boonmee",
+          "name@en": "A Letter to Uncle Boonmee",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name": "Nuttapon  Kemthong"
+                  "name@en": "Nuttapon  Kemthong"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name": "Kumgieng Jittamaat"
+                  "name@en": "Kumgieng Jittamaat"
                 }
               ]
             }
           ]
         },
         {
-          "name": "Lot in Sodom",
+          "name@en": "Lot in Sodom",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name": "Dorthea House"
+                  "name@en": "Dorthea House"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name": "Hildegarde Watson"
+                  "name@en": "Hildegarde Watson"
                 }
               ]
             }
           ]
         },
         {
-          "name": "Rush Hour",
+          "name@en": "Rush Hour",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name": "Christelle Seyvecon"
+                  "name@en": "Christelle Seyvecon"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name": "Nicolas Guillot"
+                  "name@en": "Nicolas Guillot"
                 }
               ]
             }
           ]
         },
         {
-          "name": "Sound Collector",
+          "name@en": "Sound Collector",
           "starring": [
             {
               "performance.actor": [
                 {
-                  "name": "Steve Alexander"
+                  "name@en": "Steve Alexander"
                 }
               ]
             },
             {
               "performance.actor": [
                 {
-                  "name": "Joann McIntyre"
+                  "name@en": "Joann McIntyre"
                 }
               ]
             }
@@ -2925,52 +2992,240 @@ Output:
 {
   "recurse": [
     {
-      "name": "Short Film",
+      "name@en": "Short Film",
       "~genre": [
         {
-          "name": "Life Begins for Andy Panda"
+          "name@en": "Life Begins for Andy Panda"
         },
         {
-          "name": "Liviu's Dream"
+          "name@en": "Liviu's Dream"
         }
       ]
     },
     {
-      "name": "Drama",
+      "name@en": "Drama",
       "~genre": [
         {
-          "name": "Prisoners"
+          "name@en": "Prisoners"
         },
         {
-          "name": "Stoker"
+          "name@en": "Stoker"
         }
       ]
     },
     {
-      "name": "Comedy",
+      "name@en": "Comedy",
       "~genre": [
         {
-          "name": "A tu per tu"
+          "name@en": "A tu per tu"
         },
         {
-          "name": "Gastone"
+          "name@en": "Gastone"
         }
       ]
     },
     {
-      "name": "Documentary film",
+      "name@en": "Documentary film",
       "~genre": [
         {
-          "name": "Dream Theater: Chaos in Motion"
+          "name@en": "Dream Theater: Chaos in Motion"
         },
         {
-          "name": "Filming Othello"
+          "name@en": "Filming Othello"
         }
       ]
     }
   ]
 }
 ```
+## Cascade Directive 
+
+`@cascade` directive forces a removal of those entites that don't have all the fields specified in the query. This can be useful in cases where some filter was applied. For example, consider this query:
+
+```
+curl localhost:8080/query -XPOST -d $'{
+  HP(func: allofterms(name, "Harry Potter")) @cascade {
+    name@en
+    starring{
+        performance.character {
+          name@en
+        }
+        performance.actor @filter(allofterms(name, "Warwick")){
+            name@en
+         }
+    }
+  }
+}'
+```
+Output:
+```
+{
+  "HP": [
+    {
+      "name@en": "Harry Potter and the Order of the Phoenix",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Philosopher's Stone",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Goblin Bank Teller"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Prisoner of Azkaban",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Half-Blood Prince",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Chamber of Secrets",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Deathly Hallows – Part 2",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        },
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Griphook"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Deathly Hallows - Part I",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Griphook"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name@en": "Harry Potter and the Goblet of Fire",
+      "starring": [
+        {
+          "performance.actor": [
+            {
+              "name@en": "Warwick Davis"
+            }
+          ],
+          "performance.character": [
+            {
+              "name@en": "Professor Filius Flitwick"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Here we also remove all the nodes that don't have a corresponding valid sibling node for `Warwick Davis`.
 
 ## Normalize directive
 
@@ -3046,7 +3301,7 @@ Returns `_uid_` and `server_latency`
   "director": [
     {
       "_uid_": "0xff4c6752867d137d",
-      "name": "The Big Lebowski"
+      "name@en": "The Big Lebowski"
     }
   ],
   "server_latency": {

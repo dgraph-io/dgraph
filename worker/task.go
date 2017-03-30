@@ -474,6 +474,10 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		if err != nil {
 			return nil, err
 		}
+		typ, err := schema.State().TypeOf(attr)
+		if typ == types.BoolID && fc.fname != "eq" {
+			return nil, x.Errorf("Only eq operator defined for type bool. Got: %v", fc.fname)
+		}
 		fc.ineqValue, err = convertValue(attr, q.SrcFunc[2])
 		if err != nil {
 			return nil, err

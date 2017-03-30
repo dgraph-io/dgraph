@@ -115,12 +115,12 @@ func populateGraph(t *testing.T) {
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "loc", 1, types.GeoID, gData.Value.([]byte), nil)
 
-	// Int32ID
+	// IntID
 	data := types.ValueForType(types.BinaryID)
-	intD := types.Val{types.Int32ID, int32(15)}
+	intD := types.Val{types.IntID, int64(15)}
 	err = types.Marshal(intD, &data)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "age", 1, types.Int32ID, data.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "age", 1, types.IntID, data.Value.([]byte), nil)
 
 	// FloatID
 	fdata := types.ValueForType(types.BinaryID)
@@ -135,6 +135,14 @@ func populateGraph(t *testing.T) {
 	err = types.Marshal(boolD, &data)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "alive", 1, types.BoolID, data.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "alive", 23, types.BoolID, data.Value.([]byte), nil)
+
+	boolD = types.Val{types.BoolID, false}
+	err = types.Marshal(boolD, &data)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, "alive", 25, types.BoolID, data.Value.([]byte), nil)
+	addEdgeToTypedValue(t, "alive", 31, types.BoolID, data.Value.([]byte), nil)
+
 	addEdgeToValue(t, "age", 1, "38", nil)
 	addEdgeToValue(t, "survival_rate", 1, "98.99", nil)
 	addEdgeToValue(t, "sword_present", 1, "true", nil)
@@ -230,17 +238,17 @@ func populateGraph(t *testing.T) {
 	// for aggregator(sum) test
 	{
 		data := types.ValueForType(types.BinaryID)
-		intD := types.Val{types.Int32ID, int32(4)}
+		intD := types.Val{types.IntID, int64(4)}
 		err = types.Marshal(intD, &data)
 		require.NoError(t, err)
-		addEdgeToTypedValue(t, "shadow_deep", 23, types.Int32ID, data.Value.([]byte), nil)
+		addEdgeToTypedValue(t, "shadow_deep", 23, types.IntID, data.Value.([]byte), nil)
 	}
 	{
 		data := types.ValueForType(types.BinaryID)
-		intD := types.Val{types.Int32ID, int32(14)}
+		intD := types.Val{types.IntID, int64(14)}
 		err = types.Marshal(intD, &data)
 		require.NoError(t, err)
-		addEdgeToTypedValue(t, "shadow_deep", 24, types.Int32ID, data.Value.([]byte), nil)
+		addEdgeToTypedValue(t, "shadow_deep", 24, types.IntID, data.Value.([]byte), nil)
 	}
 
 	// language stuff
@@ -253,6 +261,9 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
 
 	addEdgeToValue(t, "name", 240, "Andrea With no friends", nil)
+	addEdgeToUID(t, "friend", 25, 240, nil)
+	addEdgeToUID(t, "friend", 25, 23, nil)
+	addEdgeToUID(t, "friend", 25, 31, nil)
 
 	time.Sleep(5 * time.Millisecond)
 }
@@ -335,6 +346,30 @@ func TestGetUIDNotInChild(t *testing.T) {
 		js)
 }
 
+func TestCascadeDirective(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) @cascade {
+				name
+				gender
+				friend {
+					name
+					friend{
+						name
+						dob
+						age
+					}
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"friend":[{"age":38,"dob":"1910-01-01","name":"Michonne"}],"name":"Rick Grimes"},{"friend":[{"age":15,"dob":"1909-05-05","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
 func TestQueryVarValAggMinMaxSelf(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -399,7 +434,7 @@ func TestQueryVarValAggOrderDesc(t *testing.T) {
 			}
 
 			me(id: var(f), orderdesc: var(sum)) {
-				name 
+				name
 				age
 				count(friend)
 			}
@@ -424,7 +459,7 @@ func TestQueryVarValAggOrderAsc(t *testing.T) {
 			}
 
 			me(id: var(f), orderasc: var(sum)) {
-				name 
+				name
 				age
 				survival_rate
 			}
@@ -1279,6 +1314,144 @@ func TestMinMulti(t *testing.T) {
 		js)
 }
 
+func TestMinMultiProto(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+	{
+		me(id: [1,25]) {
+			name
+			friend {
+				name
+				min(dob)
+				max(dob)
+			}
+		}
+	}
+`
+	pb := processToPB(t, query, false)
+	res := `attribute: "_root_"
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "min(dob)"
+      value: <
+        str_val: "1901-01-15T00:00:00Z"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "max(dob)"
+      value: <
+        str_val: "1910-01-02T00:00:00Z"
+      >
+    >
+  >
+>
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Daryl Dixon"
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea With no friends"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "min(dob)"
+      value: <
+        str_val: "1901-01-15T00:00:00Z"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "max(dob)"
+      value: <
+        str_val: "1910-01-02T00:00:00Z"
+      >
+    >
+  >
+>
+`
+	require.Equal(t, res, proto.MarshalTextString(pb[0]))
+}
+
 func TestMin(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
@@ -1358,7 +1531,7 @@ func TestMinSchema(t *testing.T) {
 		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1.600000}],"gender":"female","name":"Michonne"}]}`,
 		js)
 
-	schema.State().Set("survival_rate", typesp.Schema{ValueType: uint32(types.Int32ID)})
+	schema.State().Set("survival_rate", typesp.Schema{ValueType: uint32(types.IntID)})
 	js = processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1}],"gender":"female","name":"Michonne"}]}`,
@@ -1919,7 +2092,7 @@ children: <
 `
 	require.EqualValues(t,
 		expectedPb,
-		proto.MarshalTextString(pb))
+		proto.MarshalTextString(pb[0]))
 }
 
 func TestToFastJSONFilter(t *testing.T) {
@@ -2746,14 +2919,14 @@ func TestToFastJSONReverse(t *testing.T) {
 				~friend {
 					name
 					gender
-			  	alive
+					alive
 				}
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Glenn Rhee","~friend":[{"alive":true,"gender":"female","name":"Michonne"},{"name":"Andrea"}]}]}`,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"alive":true,"gender":"female","name":"Michonne"},{"alive": false, "name":"Andrea"}]}]}`,
 		js)
 }
 
@@ -2766,7 +2939,6 @@ func TestToFastJSONReverseFilter(t *testing.T) {
 				~friend @filter(allofterms(name, "Andrea")) {
 					name
 					gender
-			  	alive
 				}
 			}
 		}
@@ -2790,7 +2962,6 @@ func TestToFastJSONReverseDelSet(t *testing.T) {
 				~friend {
 					name
 					gender
-			  	alive
 				}
 			}
 		}
@@ -2915,7 +3086,7 @@ children: <
     attribute: "friend"
   >
 >
-`, proto.MarshalTextString(pb))
+`, proto.MarshalTextString(pb[0]))
 
 }
 
@@ -2961,7 +3132,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 func TestToProtoFilterOr(t *testing.T) {
@@ -3015,7 +3186,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 func TestToProtoFilterAnd(t *testing.T) {
@@ -3051,7 +3222,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 // Test sorting / ordering by dob.
@@ -3204,11 +3375,11 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 }
 
 // Mocking Subgraph and Testing fast-json with it.
-func ageSg(uidMatrix []*taskp.List, srcUids *taskp.List, ages []uint32) *SubGraph {
+func ageSg(uidMatrix []*taskp.List, srcUids *taskp.List, ages []uint64) *SubGraph {
 	var as []*taskp.Value
 	for _, a := range ages {
 		bs := make([]byte, 4)
-		binary.LittleEndian.PutUint32(bs, a)
+		binary.LittleEndian.PutUint64(bs, a)
 		as = append(as, &taskp.Value{[]byte(bs), 2})
 	}
 
@@ -3243,7 +3414,7 @@ func friendsSg(uidMatrix []*taskp.List, srcUids *taskp.List, friends []*SubGraph
 		Children:  friends,
 	}
 }
-func rootSg(uidMatrix []*taskp.List, srcUids *taskp.List, names []string, ages []uint32) *SubGraph {
+func rootSg(uidMatrix []*taskp.List, srcUids *taskp.List, names []string, ages []uint64) *SubGraph {
 	nameSg := nameSg(uidMatrix, srcUids, names)
 	ageSg := ageSg(uidMatrix, srcUids, ages)
 
@@ -3324,7 +3495,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 // Test sorting / ordering by dob.
@@ -3378,7 +3549,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 // Test sorting / ordering by dob.
@@ -3432,7 +3603,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 func TestSchema1(t *testing.T) {
@@ -3930,7 +4101,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 func TestNearGenerator(t *testing.T) {
@@ -4194,7 +4365,7 @@ children: <
 `
 	require.EqualValues(t,
 		expectedPb,
-		proto.MarshalTextString(pb))
+		proto.MarshalTextString(pb[0]))
 }
 
 func TestNormalizeDirective(t *testing.T) {
@@ -4239,23 +4410,23 @@ func TestSchema(t *testing.T) {
 		}
   `
 	gr := processToPB(t, query, true)
-	require.EqualValues(t, "debug", gr.Children[0].Attribute)
-	require.EqualValues(t, 1, gr.Children[0].Uid)
-	require.EqualValues(t, "mich", gr.Children[0].Xid)
-	require.Len(t, gr.Children[0].Properties, 4)
+	require.EqualValues(t, "debug", gr[0].Children[0].Attribute)
+	require.EqualValues(t, 1, gr[0].Children[0].Uid)
+	require.EqualValues(t, "mich", gr[0].Children[0].Xid)
+	require.Len(t, gr[0].Children[0].Properties, 4)
 
 	require.EqualValues(t, "Michonne",
-		getProperty(gr.Children[0].Properties, "name").GetStrVal())
+		getProperty(gr[0].Children[0].Properties, "name").GetStrVal())
 
 	g := types.ValueForType(types.GeoID)
-	g.Value = getProperty(gr.Children[0].Properties, "loc").GetGeoVal()
+	g.Value = getProperty(gr[0].Children[0].Properties, "loc").GetGeoVal()
 	g1, err := types.Convert(g, types.StringID)
 	x.Check(err)
 	require.EqualValues(t, "{'type':'Point','coordinates':[1.1,2]}", string(g1.Value.(string)))
 
-	require.Len(t, gr.Children[0].Children, 5)
+	require.Len(t, gr[0].Children[0].Children, 5)
 
-	child := gr.Children[0].Children[0]
+	child := gr[0].Children[0].Children[0]
 	require.EqualValues(t, 23, child.Uid)
 	require.EqualValues(t, "friend", child.Attribute)
 
@@ -4268,7 +4439,7 @@ func TestSchema(t *testing.T) {
 	require.EqualValues(t, "1910-01-02 00:00:00 +0000 UTC", date.String())
 	require.Empty(t, child.Children)
 
-	child = gr.Children[0].Children[4]
+	child = gr[0].Children[0].Children[4]
 	require.EqualValues(t, 101, child.Uid)
 	require.EqualValues(t, "friend", child.Attribute)
 	require.Empty(t, child.Properties)
@@ -4433,6 +4604,22 @@ func TestLangDefault(t *testing.T) {
 		js)
 }
 
+func TestLangMultiple(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@pl
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Badger","name@pl":"Borsuk europejski"}]}`,
+		js)
+}
+
 func TestLangSingle(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -4444,7 +4631,7 @@ func TestLangSingle(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Borsuk europejski"}]}`,
+		`{"me":[{"name@pl":"Borsuk europejski"}]}`,
 		js)
 }
 
@@ -4459,7 +4646,7 @@ func TestLangSingleFallback(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Badger"}]}`,
+		`{"me":[{"name@cn":"Badger"}]}`,
 		js)
 }
 
@@ -4474,7 +4661,7 @@ func TestLangMany1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Барсук"}]}`,
+		`{"me":[{"name@ru:en:fr":"Барсук"}]}`,
 		js)
 }
 
@@ -4489,7 +4676,7 @@ func TestLangMany2(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Blaireau européen"}]}`,
+		`{"me":[{"name@hu:fi:fr":"Blaireau européen"}]}`,
 		js)
 }
 
@@ -4504,7 +4691,7 @@ func TestLangMany3(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Blaireau européen"}]}`,
+		`{"me":[{"name@hu:fr:fi":"Blaireau européen"}]}`,
 		js)
 }
 
@@ -4519,7 +4706,7 @@ func TestLangManyFallback(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Badger"}]}`,
+		`{"me":[{"name@hu:fi:cn":"Badger"}]}`,
 		js)
 }
 
@@ -4607,18 +4794,18 @@ func TestSchemaBlock5(t *testing.T) {
 }
 
 const schemaStr = `
-name:string @index(term, exact)
-alias:string @index(exact, term, fulltext)
-dob:date @index
-film.film.initial_release_date:date @index
-loc:geo @index
-genre:uid @reverse
-survival_rate : float
-alive         : bool
-age           : int
-shadow_deep   : int
-friend:uid @reverse
-geometry:geo @index
+name:string @index(term, exact) .
+alias:string @index(exact, term. fulltext) .
+dob:date @index .
+film.film.initial_release_date:date @index .
+loc:geo @index .
+genre:uid @reverse .
+survival_rate : float .
+alive         : bool @index .
+age           : int .
+shadow_deep   : int .
+friend:uid @reverse .
+geometry:geo @index .
 `
 
 func TestMain(m *testing.M) {
@@ -4830,7 +5017,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb[0]))
 }
 
 func TestToJSONReverseNegativeFirst(t *testing.T) {
@@ -4868,4 +5055,93 @@ func TestToFastJSONOrderLang(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"alias":"Zambo Alice"},{"alias":"John Oliver"}]}]}`,
 		js)
+}
+
+func TestBoolIndexEqRoot1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: eq(alive, true)) {
+				name
+				alive
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"alive":true,"name":"Michonne"},{"alive":true,"name":"Rick Grimes"}]}`,
+		js)
+}
+
+func TestBoolIndexEqRoot2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: eq(alive, false)) {
+				name
+				alive
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"alive":false,"name":"Daryl Dixon"},{"alive":false,"name":"Andrea"}]}`,
+		js)
+}
+
+func TestBoolIndexGeqRoot(t *testing.T) {
+	populateGraph(t)
+	q := `
+		{
+			me(func: geq(alive, true)) {
+				name
+				alive
+				friend {
+					name
+					alive
+				}
+			}
+		}`
+	res, _ := gql.Parse(q)
+	var l Latency
+	ctx := context.Background()
+	_, err := ProcessQuery(ctx, res, &l)
+	require.Equal(t, "Only eq operator defined for type bool. Got: geq", err.Error())
+}
+
+func TestBoolIndexEqChild(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: eq(alive, true)) {
+				name
+				alive
+				friend @filter(eq(alive, false)) {
+					name
+					alive
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"alive":true,"friend":[{"alive":false,"name":"Daryl Dixon"},{"alive":false,"name":"Andrea"}],"name":"Michonne"},{"alive":true,"name":"Rick Grimes"}]}`,
+		js)
+}
+
+func TestBoolSort(t *testing.T) {
+	populateGraph(t)
+	q := `
+		{
+			me(func: anyofterms(name, "Michonne Andrea Rick"), orderasc: alive) {
+				name
+				alive
+			}
+		}
+	`
+	res, _ := gql.Parse(q)
+	var l Latency
+	ctx := context.Background()
+	_, err := ProcessQuery(ctx, res, &l)
+	require.NotNil(t, err)
 }

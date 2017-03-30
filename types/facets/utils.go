@@ -68,8 +68,8 @@ func CopyFacets(fcs []*facetsp.Facet, param *facetsp.Param) (fs []*facetsp.Facet
 func valAndValType(val string) (interface{}, facetsp.Facet_ValType, error) {
 	// TODO(ashish) : strings should be in quotes.. \"\"
 	// No need to check for nonNumChar then.
-	if intVal, err := strconv.ParseInt(val, 0, 32); err == nil {
-		return int32(intVal), facetsp.Facet_INT32, nil
+	if intVal, err := strconv.ParseInt(val, 0, 64); err == nil {
+		return int64(intVal), facetsp.Facet_INT, nil
 	} else if numErr := err.(*strconv.NumError); numErr.Err == strconv.ErrRange {
 		// check if whole string is only of nums or not.
 		// comes here for : 11111111111111111111132333uasfk333 ; see test.
@@ -81,7 +81,7 @@ func valAndValType(val string) (interface{}, facetsp.Facet_ValType, error) {
 			}
 		}
 		if !nonNumChar { // return error
-			return nil, facetsp.Facet_INT32, err
+			return nil, facetsp.Facet_INT, err
 		}
 	}
 	if floatVal, err := strconv.ParseFloat(val, 64); err == nil {
@@ -162,8 +162,8 @@ const dateTimeFormat = "2006-01-02T15:04:05"
 // TypeIDFor gives TypeID for facet.
 func TypeIDFor(f *facetsp.Facet) types.TypeID {
 	switch TypeIDForValType(f.ValType) {
-	case Int32ID:
-		return types.Int32ID
+	case IntID:
+		return types.IntID
 	case StringID:
 		return types.StringID
 	case BoolID:

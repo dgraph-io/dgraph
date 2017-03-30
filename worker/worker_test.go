@@ -123,7 +123,7 @@ func initTest(t *testing.T, schemaStr string) (string, *store.Store) {
 }
 
 func TestProcessTask(t *testing.T) {
-	dir, ps := initTest(t, `friend:string @index`)
+	dir, ps := initTest(t, `friend:string @index .`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	defer waitForSyncMark(context.Background(), 1, math.MaxUint64)
@@ -153,7 +153,7 @@ func newQuery(attr string, uids []uint64, srcFunc []string) *taskp.Query {
 // at the end. In other words, everything is happening only in mutation layers,
 // and not committed to RocksDB until near the end.
 func TestProcessTaskIndexMLayer(t *testing.T) {
-	dir, ps := initTest(t, `friend:string @index`)
+	dir, ps := initTest(t, `friend:string @index .`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	defer waitForSyncMark(context.Background(), 1, math.MaxUint64)
@@ -240,7 +240,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 // Index-related test. Similar to TestProcessTaskIndeMLayer except we call
 // MergeLists in between a lot of updates.
 func TestProcessTaskIndex(t *testing.T) {
-	dir, ps := initTest(t, `friend:string @index`)
+	dir, ps := initTest(t, `friend:string @index .`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	defer waitForSyncMark(context.Background(), 1, math.MaxUint64)
@@ -364,7 +364,7 @@ func newSort(uids [][]uint64, offset, count int) *taskp.Sort {
 }
 
 func TestProcessSort(t *testing.T) {
-	dir, ps := initTest(t, `dob:date @index`)
+	dir, ps := initTest(t, `dob:date @index .`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
@@ -386,7 +386,7 @@ func TestProcessSort(t *testing.T) {
 }
 
 func TestProcessSortOffset(t *testing.T) {
-	dir, ps := initTest(t, `dob:date @index`)
+	dir, ps := initTest(t, `dob:date @index .`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
@@ -448,7 +448,7 @@ func TestProcessSortOffset(t *testing.T) {
 }
 
 func TestProcessSortCount(t *testing.T) {
-	dir, ps := initTest(t, `dob:date @index`)
+	dir, ps := initTest(t, `dob:date @index .`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
@@ -518,7 +518,7 @@ func TestProcessSortCount(t *testing.T) {
 }
 
 func TestProcessSortOffsetCount(t *testing.T) {
-	dir, ps := initTest(t, `dob:date @index`)
+	dir, ps := initTest(t, `dob:date @index .`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)

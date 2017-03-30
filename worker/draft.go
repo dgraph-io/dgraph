@@ -626,6 +626,11 @@ func (n *node) Run() {
 
 			for _, entry := range rd.CommittedEntries {
 				// Need applied watermarks for schema mutation also for read linearazibility
+				// Applied watermarks needs to be emitted as soon as possible sequentially.
+				// If we emit Mark{4, false} and Mark{4, true} before emitting Mark{3, false}
+				// then doneUntil would be set as 4 as soon as Mark{4,true} is done and before
+				// Mark{3, false} is emitted. So it's safer to emit watermarks as soon as
+				// possible sequentially
 				status := x.Mark{Index: entry.Index, Done: false}
 				n.applied.Ch <- status
 				posting.SyncMarkFor(n.gid).Ch <- status
@@ -757,6 +762,8 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 		}
 		term = sp.Metadata.Term
 		idx = sp.Metadata.Index
+		n.applied.SetDoneUntil(idx)
+		posting.SyncMarkFor(n.gid).SetDoneUntil(idx)
 	}
 
 	var hd raftpb.HardState

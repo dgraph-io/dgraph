@@ -20,7 +20,6 @@ package posting
 import (
 	"context"
 	"math"
-	"sync"
 
 	"golang.org/x/net/trace"
 
@@ -85,14 +84,15 @@ func IndexTokens(attr, lang string, src types.Val) ([]string, error) {
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 // t represents the original uid -> value edge.
-func addIndexMutations(ctx context.Context, t *taskp.DirectedEdge, p types.Val, op taskp.DirectedEdge_Op) {
+func addIndexMutations(ctx context.Context, t *taskp.DirectedEdge, p types.Val,
+	op taskp.DirectedEdge_Op) error {
 	attr := t.Attr
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
 	tokens, err := IndexTokens(attr, t.GetLang(), p)
 	if err != nil {
 		// This data is not indexable
-		return
+		return err
 	}
 
 	// Create a value token -> uid edge.
@@ -104,11 +104,15 @@ func addIndexMutations(ctx context.Context, t *taskp.DirectedEdge, p types.Val, 
 	}
 
 	for _, token := range tokens {
-		addIndexMutation(ctx, edge, token)
+		if err := addIndexMutation(ctx, edge, token); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func addIndexMutation(ctx context.Context, edge *taskp.DirectedEdge, token string) {
+func addIndexMutation(ctx context.Context, edge *taskp.DirectedEdge,
+	token string) error {
 	key := x.IndexKey(edge.Attr, token)
 
 	var groupId uint32
@@ -129,12 +133,14 @@ func addIndexMutation(ctx context.Context, edge *taskp.DirectedEdge, token strin
 		x.TraceError(ctx, x.Wrapf(err,
 			"Error adding/deleting %s for attr %s entity %d: %v",
 			token, edge.Attr, edge.Entity))
+		return err
 	}
 	indexLog.Printf("%s [%s] [%d] Term [%s]",
 		edge.Op, edge.Attr, edge.Entity, token)
+	return nil
 }
 
-func addReverseMutation(ctx context.Context, t *taskp.DirectedEdge) {
+func addReverseMutation(ctx context.Context, t *taskp.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
 	groupId := group.BelongsTo(t.Attr)
 
@@ -157,8 +163,10 @@ func addReverseMutation(ctx context.Context, t *taskp.DirectedEdge) {
 		x.TraceError(ctx, x.Wrapf(err,
 			"Error adding/deleting reverse edge for attr %s src %d dst %d",
 			t.Attr, t.Entity, t.ValueId))
+		return err
 	}
 	reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)
+	return nil
 }
 
 // AddMutationWithIndex is AddMutation with support for indexing. It also
@@ -261,7 +269,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 
 	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add reverse entries for values in posting list
-	addReversePostings := func(uid uint64, pl *typesp.PostingList) {
+	addReversePostings := func(uid uint64, pl *typesp.PostingList) error {
 		postingsLen := len(pl.Postings)
 		edge := taskp.DirectedEdge{Attr: attr, Entity: uid}
 		for idx := 0; idx < postingsLen; idx++ {
@@ -271,8 +279,17 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 			edge.Op = taskp.DirectedEdge_SET
 			edge.Facets = p.Facets
 			edge.Label = p.Label
-			addReverseMutation(ctx, &edge)
+			err := addReverseMutation(ctx, &edge)
+			// We retry once in case we do GetOrCreate and stop the world happens
+			// before we do addmutation
+			if err == ErrRetry {
+				err = addReverseMutation(ctx, &edge)
+			}
+			if err != nil {
+				return err
+			}
 		}
+		return nil
 	}
 
 	type item struct {
@@ -280,14 +297,17 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		list *typesp.PostingList
 	}
 	ch := make(chan item, 10000)
-	var wg sync.WaitGroup
+	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
-		wg.Add(1)
 		go func() {
+			var err error
 			for it := range ch {
-				addReversePostings(it.uid, it.list)
+				err = addReversePostings(it.uid, it.list)
+				if err != nil {
+					break
+				}
 			}
-			wg.Done()
+			che <- err
 		}()
 	}
 
@@ -305,7 +325,12 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		}
 	}
 	close(ch)
-	wg.Wait()
+	for i := 0; i < 1000; i++ {
+		if err := <-che; err != nil {
+			return err
+		}
+
+	}
 	return nil
 }
 
@@ -356,7 +381,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 
 	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add index entries for values in posting list
-	addPostingsToIndex := func(uid uint64, pl *typesp.PostingList) {
+	addPostingsToIndex := func(uid uint64, pl *typesp.PostingList) error {
 		postingsLen := len(pl.Postings)
 		edge := taskp.DirectedEdge{Attr: attr, Entity: uid}
 		for idx := 0; idx < postingsLen; idx++ {
@@ -366,8 +391,17 @@ func RebuildIndex(ctx context.Context, attr string) error {
 				Value: p.Value,
 				Tid:   types.TypeID(p.ValType),
 			}
-			addIndexMutations(ctx, &edge, val, taskp.DirectedEdge_SET)
+			err := addIndexMutations(ctx, &edge, val, taskp.DirectedEdge_SET)
+			// We retry once in case we do GetOrCreate and stop the world happens
+			// before we do addmutation
+			if err == ErrRetry {
+				err = addIndexMutations(ctx, &edge, val, taskp.DirectedEdge_SET)
+			}
+			if err != nil {
+				return err
+			}
 		}
+		return nil
 	}
 
 	type item struct {
@@ -375,14 +409,17 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		list *typesp.PostingList
 	}
 	ch := make(chan item, 10000)
-	var wg sync.WaitGroup
+	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
-		wg.Add(1)
 		go func() {
+			var err error
 			for it := range ch {
-				addPostingsToIndex(it.uid, it.list)
+				err = addPostingsToIndex(it.uid, it.list)
+				if err != nil {
+					break
+				}
 			}
-			wg.Done()
+			che <- err
 		}()
 	}
 
@@ -400,6 +437,10 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		}
 	}
 	close(ch)
-	wg.Wait()
+	for i := 0; i < 1000; i++ {
+		if err := <-che; err != nil {
+			return err
+		}
+	}
 	return nil
 }

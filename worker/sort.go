@@ -18,6 +18,7 @@
 package worker
 
 import (
+	"fmt"
 	"golang.org/x/net/context"
 	"strings"
 
@@ -117,6 +118,9 @@ func sortWithoutIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, e
 	if err != nil || !sType.IsScalar() {
 		return r, x.Errorf("Cannot sort attribute %s of type object.", ts.Attr)
 	}
+	if sType == types.BoolID {
+		return r, x.Errorf("Cannot sort attribute %v of type bool", ts.Attr)
+	}
 	for i := 0; i < n; i++ {
 		select {
 		case <-ctx.Done():
@@ -149,35 +153,45 @@ func sortWithIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, erro
 	it := pstore.NewIterator()
 	defer it.Close()
 
+	typ, err := schema.State().TypeOf(ts.Attr)
+	if err != nil {
+		return &emptySortResult, fmt.Errorf("Attribute %s not defined in schema", ts.Attr)
+	}
+
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(ts.Attr) {
 		return &emptySortResult, x.Errorf("Attribute %s is not indexed.", ts.Attr)
 	}
 
 	tokenizers := schema.State().Tokenizer(ts.Attr)
-	var tok tok.Tokenizer
+	var tokenizer tok.Tokenizer
 	for _, t := range tokenizers {
 		// Get the first sortable index.
 		if t.IsSortable() {
-			tok = t
+			tokenizer = t
 			break
 		}
 	}
-	if tok == nil {
-		return &emptySortResult,
-			x.Errorf("Attribute:%s does not have proper index",
+	if tokenizer == nil {
+		// String type can have multiple tokenizers, only one of which is
+		// sortable.
+		if typ == types.StringID {
+			return &emptySortResult, x.Errorf("Attribute:%s does not have exact index for sorting.",
 				ts.Attr)
-
+		}
+		// Other types just have one tokenizer, so if we didn't find a
+		// sortable tokenizer, then attribute isn't sortable.
+		return &emptySortResult, x.Errorf("Attribute:%s is not sortable.", ts.Attr)
 	}
 
-	indexPrefix := x.IndexKey(ts.Attr, string(tok.Identifier()))
+	indexPrefix := x.IndexKey(ts.Attr, string(tokenizer.Identifier()))
 	if !ts.Desc {
 		// We need to seek to the first key of this index type.
 		seekKey := indexPrefix
 		it.Seek(seekKey)
 	} else {
 		// We need to reach the last key of this index type.
-		seekKey := x.IndexKey(ts.Attr, string(tok.Identifier()+1))
+		seekKey := x.IndexKey(ts.Attr, string(tokenizer.Identifier()+1))
 		it.SeekForPrev(seekKey)
 	}
 

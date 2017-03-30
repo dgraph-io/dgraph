@@ -31,6 +31,8 @@ const (
 	itemRightRound                         // right round bracket
 	itemAt
 	itemComma
+	itemNewLine
+	itemDot
 )
 
 func lexText(l *lex.Lexer) lex.StateFn {
@@ -42,8 +44,12 @@ Loop:
 		case isNameBegin(r):
 			l.Backup()
 			return lexWord
-		case isSpace(r) || isEndOfLine(r):
+		case isSpace(r):
 			l.Ignore()
+		case isEndOfLine(r):
+			l.Emit(itemNewLine)
+		case r == '.':
+			l.Emit(itemDot)
 		case r == ',':
 			l.Emit(itemComma)
 		case r == '<':
@@ -119,5 +125,5 @@ func isSpace(r rune) bool {
 
 // isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
 func isEndOfLine(r rune) bool {
-	return r == '\u000A' || r == '\u000D'
+	return r == '\n' || r == '\u000D'
 }

@@ -60,27 +60,39 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 // getInequalityTokens gets tokens geq / leq compared to given token using the first sortable
 // index that is found for the predicate.
 func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string, error) {
+	typ, err := schema.State().TypeOf(attr)
+	if err != nil {
+		return nil, "", x.Errorf("Attribute %s not defined in schema", attr)
+	}
+
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(attr) {
 		return nil, "", x.Errorf("Attribute %s is not indexed.", attr)
 	}
 
 	tokenizers := schema.State().Tokenizer(attr)
-	var tok tok.Tokenizer
+	var tokenizer tok.Tokenizer
 	for _, t := range tokenizers {
 		// Get the first sortable index.
 		if t.IsSortable() {
-			tok = t
+			tokenizer = t
 			break
 		}
 	}
-	if tok == nil {
+
+	// Even though bool doesn't have a sortable index, it supports eq operator. So
+	// we use the default tokenizer for it.
+	if typ == types.BoolID {
+		tokenizer = tok.Default(types.BoolID)
+	}
+
+	if tokenizer == nil {
 		return nil, "", x.Errorf("Attribute:%s does not have proper index for comparison",
 			attr)
 	}
 
 	// Get the token for the value passed in function.
-	ineqTokens, err := tok.Tokens(ineqValue)
+	ineqTokens, err := tokenizer.Tokens(ineqValue)
 	if err != nil {
 		return nil, "", err
 	}
@@ -108,7 +120,7 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	}
 
 	var out []string
-	indexPrefix := x.IndexKey(attr, string(tok.Identifier()))
+	indexPrefix := x.IndexKey(attr, string(tokenizer.Identifier()))
 	for it.Valid() && it.ValidForPrefix(indexPrefix) {
 		k := x.Parse(it.Key().Data())
 		x.AssertTrue(k != nil)
