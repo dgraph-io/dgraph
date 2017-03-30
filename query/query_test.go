@@ -4798,8 +4798,6 @@ func TestMain(m *testing.M) {
 	worker.StartRaftNodes(dir2)
 	// Load schema after nodes have started
 	schema.ParseBytes([]byte(schemaStr), 1)
-	// wait for group membership sync
-	time.Sleep(15 * time.Second)
 	defer os.RemoveAll(dir2)
 
 	os.Exit(m.Run())

@@ -156,6 +156,10 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *taskp.Schema, ch c
 // GetSchemaOverNetwork checks which group should be serving the schema
 // according to fingerprint of the predicate and sends it to that instance.
 func GetSchemaOverNetwork(ctx context.Context, schema *graphp.Schema) ([]*graphp.SchemaNode, error) {
+	if !HealthCheck() {
+		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		return nil, x.Errorf("Uninitiated server. Please retry later")
+	}
 	schemaMap := make(map[uint32]*taskp.Schema)
 	addToSchemaMap(schemaMap, schema)
 
