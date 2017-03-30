@@ -131,11 +131,13 @@ class Editor extends Component {
         .then(checkStatus)
         .then(response => response.json())
         .then(function(result) {
-          keywords = keywords.concat(
-            result.schema.map(kw => {
-              return kw.predicate;
-            })
-          );
+          if (result.schema && result.schema.length !== 0) {
+            keywords = keywords.concat(
+              result.schema.map(kw => {
+                return kw.predicate;
+              })
+            );
+          }
         })
     )
       .catch(function(error) {

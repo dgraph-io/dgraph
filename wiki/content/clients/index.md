@@ -16,7 +16,9 @@ The proto file used by Dgraph is located at [graphresponse.proto](https://github
 ### Go
 After you have the followed [Get started]({{< relref "get-started/index.md">}}) and got the server running on `127.0.0.1:8080`, you can use the Go client to run queries and mutations as shown in the example below.
 
-{{% notice "note" %}}The example below would store values with the correct types only if Dgraph is run with a [schema]({{< relref "query-language/index.md#schema" >}}) defining the appropriate types, otherwise everything would be stored as a string.{{% /notice %}}
+{{% notice "note" %}}The example below would store values with the correct types only if the
+correct [schema type]({{< relref "query-language/index.md#schema" >}}) is specified in the mutation, otherwise everything would be stored as the default type.{{% /notice %}}
+
 
 #### Installation
 

@@ -1,4 +1,3 @@
-# baseurl = "https://wiki.dgraph.io"
 baseurl = "http://localhost:1313/latest"
 languageCode = "en-us"
 theme = "hugo-docs"

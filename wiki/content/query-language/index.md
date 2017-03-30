@@ -301,11 +301,11 @@ To specify the language of the value to be returned from query `@lang1:lang2:lan
 
 ## Schema
 
-{{% notice "note" %}}Schema file is not supported from v0.7.4 onwards. You can use the `/query` endpoint to add/modify or retrieve the schema.{{% /notice %}}
+{{% notice "note" %}}Schema file is not supported from v0.7.4 onwards. You can use the `/query` endpoint to [add/modify]({{< relref "#adding-or-modifying-schema" >}}) or retrieve the schema.{{% /notice %}}
 
-Schema is used to specify the types of the predicates. This schema would be used for type checking, result validation, type coercion.
+Schema is used to specify the types of the predicates. This schema would be used for type checking and type coercion.
 
-### Scalar Types
+### Schema Types
 
 The following types are supported by Dgraph.
 
