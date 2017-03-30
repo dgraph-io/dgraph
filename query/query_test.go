@@ -4800,7 +4800,7 @@ func TestSchemaBlock5(t *testing.T) {
 
 const schemaStr = `
 name:string @index(term, exact) .
-alias:string @index(exact, term. fulltext) .
+alias:string @index(exact, term, fulltext) .
 dob:date @index .
 film.film.initial_release_date:date @index .
 loc:geo @index .
