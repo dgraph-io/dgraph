@@ -282,6 +282,10 @@ func enrichSchema(updates []*graphp.SchemaUpdate) error {
 			if !has {
 				return x.Errorf("Invalid tokenizer %s", t)
 			}
+			if tokenizer.Type() != typ {
+				return x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
+					tokenizer.Name(), schema.Predicate, typ.Name())
+			}
 			if _, ok := seen[tokenizer.Name()]; !ok {
 				seen[tokenizer.Name()] = true
 			} else {

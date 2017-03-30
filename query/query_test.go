@@ -4964,5 +4964,5 @@ func TestBoolSort(t *testing.T) {
 	var l Latency
 	ctx := context.Background()
 	_, err := ProcessQuery(ctx, res, &l)
-	require.Equal(t, "Attribute:alive is not sortable.", err.Error())
+	require.NotNil(t, err)
 }
