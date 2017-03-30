@@ -199,6 +199,21 @@ func TestParse3_Error(t *testing.T) {
 	require.Nil(t, schemas)
 }
 
+func TestParse4_Error(t *testing.T) {
+	reset()
+	schemas, err := Parse("alive:bool @index(geo) .")
+	require.Equal(t, "Tokenizer: geo isn't valid for predicate: alive of type: bool",
+		err.Error())
+	require.Nil(t, schemas)
+}
+
+func TestParse4_NoError(t *testing.T) {
+	reset()
+	schemas, err := Parse("name:string @index(fulltext) .")
+	require.NotNil(t, schemas)
+	require.Nil(t, err)
+}
+
 var ps *store.Store
 
 func TestMain(m *testing.M) {

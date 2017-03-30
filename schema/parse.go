@@ -163,6 +163,10 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		if !has {
 			return tokenizers, x.Errorf("Invalid tokenizer %s", next.Val)
 		}
+		if tokenizer.Type() != typ {
+			return tokenizers, x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
+				tokenizer.Name(), predicate, typ.Name())
+		}
 		if _, found := seen[tokenizer.Name()]; found {
 			return tokenizers, x.Errorf("Duplicate tokenizers defined for pred %v", predicate)
 		} else {
