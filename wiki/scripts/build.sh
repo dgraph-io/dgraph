@@ -55,6 +55,7 @@ while true; do
 
 	# Lets check if the theme was updated.
 	pushd themes/hugo-docs > /dev/null
+	git remote update > /dev/null
 	themeUpdated=1
 	if branchUpdated "master" ; then
 		echo -e "$(date) $GREEN Theme has been updated. Now will update the docs.$RESET"
