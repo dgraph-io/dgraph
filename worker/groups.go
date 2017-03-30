@@ -44,6 +44,11 @@ var (
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	peerAddr = flag.String("peer", "", "IP_ADDRESS:PORT of any healthy peer.")
 	raftId   = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
+	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
+	// so that the nodes which have lagged behind leader can just replay entries instead of
+	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
+	// are taken
+	maxPendingCount = flag.Uint64("sc", 1000, "Max number of pending entries in wal after which snapshot is taken")
 
 	healthCheck           uint32
 	emptyMembershipUpdate taskp.MembershipUpdate
@@ -600,6 +605,19 @@ func syncAllMarks(ctx context.Context) error {
 	}
 	wg.Wait()
 	return err
+}
+
+// snapshotAll takes snapshot of all nodes of the worker group
+func snapshotAll() {
+	var wg sync.WaitGroup
+	for _, n := range groups().nodes() {
+		wg.Add(1)
+		go func(n *node) {
+			defer wg.Done()
+			n.snapshot(0)
+		}(n)
+	}
+	wg.Wait()
 }
 
 // StopAllNodes stops all the nodes of the worker group.
