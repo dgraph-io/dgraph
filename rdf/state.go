@@ -23,6 +23,7 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // The constants represent different types of lexed Items possible for an rdf N-Quad.
@@ -388,6 +389,11 @@ forLoop:
 		case r == lex.EOF:
 			l.Emit(lex.ItemEOF)
 			return nil
+		case r == quote:
+			if err := lexQuotedString(l); err != nil {
+				return l.Errorf(err.Error())
+			}
+			l.Emit(itemText)
 		default:
 			l.AcceptRun(func(r rune) bool {
 				return r != equal && !isSpace(r) && r != rightRound && r != comma
@@ -410,6 +416,31 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 	l.Emit(itemComment)
 	l.Emit(lex.ItemEOF)
 	return nil // Stop the run loop.
+}
+
+func lexQuotedString(l *lex.Lexer) error {
+	l.Backup()
+	r := l.Next()
+	if r != quote {
+		return x.Errorf("String should start with quote.")
+	}
+	for {
+		r := l.Next()
+		if r == lex.EOF {
+			return x.Errorf("Unexpected end of input.")
+		}
+		if r == '\\' {
+			r := l.Next()
+			if !isEscChar(r) {
+				return x.Errorf("Not a valid escape char: %v", r)
+			}
+			continue // eat the next char
+		}
+		if r == quote {
+			break
+		}
+	}
+	return nil
 }
 
 func isClosingBracket(r rune) bool {

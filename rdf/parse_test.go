@@ -671,6 +671,55 @@ var testNQuads = []struct {
 			},
 		},
 	},
+	{
+		// integer can be in any valid format.
+		input: `_:alice <knows> "stuff" (k=0x0D) .`,
+		nq: graphp.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facetsp.Facet{
+				{"k", []byte("\r\000\000\000\000\000\000\000"),
+					facets.ValTypeForTypeID(facets.IntID),
+					nil},
+			},
+		},
+	},
+	{
+		// That what can not fit in integer fits in float.
+		input: `_:alice <knows> "stuff" (k=111111111111111111888888.23) .`,
+		nq: graphp.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facetsp.Facet{
+				{"k", []byte("\240\250OlX\207\267D"),
+					facets.ValTypeForTypeID(facets.FloatID),
+					nil},
+			},
+		},
+	},
+	{
+		// Quotes inside facet string values.
+		input: `_:alice <knows> "stuff" (key1="\"hello world\"") .`,
+		nq: graphp.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facetsp.Facet{
+				{"key1", []byte(`\"hello world\"`),
+					facets.ValTypeForTypeID(facets.StringID),
+					[]string{"\001hello", "\001world"},
+				},
+			},
+		},
+	},
 	// failing tests for facets
 	{
 		input:       `_:alice <knows> "stuff" (key1="val1",key2) .`,
@@ -725,20 +774,8 @@ var testNQuads = []struct {
 		expectedErr: true, // integer can not fit in int64.
 	},
 	{
-		// That what can not fit in integer fits in float.
-		input: `_:alice <knows> "stuff" (k=111111111111111111888888.23) .`,
-		nq: graphp.NQuad{
-			Subject:     "_:alice",
-			Predicate:   "knows",
-			ObjectId:    "",
-			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"stuff"}},
-			ObjectType:  0,
-			Facets: []*facetsp.Facet{
-				{"k", []byte("\240\250OlX\207\267D"),
-					facets.ValTypeForTypeID(facets.FloatID),
-					nil},
-			},
-		},
+		input:       `_:alice <knows> "stuff" (k=0x1787586C4FA8A0284FF8) .`,
+		expectedErr: true, // integer can not fit in int32 and also does not become float.
 	},
 	// Facet tests end
 	{
