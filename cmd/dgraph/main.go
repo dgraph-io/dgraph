@@ -74,7 +74,6 @@ var (
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
 	dumpSubgraph   = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
-	uiDir          = flag.String("ui", os.Getenv("GOPATH")+"/src/github.com/dgraph-io/dgraph/dashboard/build", "Directory which contains assets for the user interface")
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
@@ -680,6 +679,18 @@ func (s *grpcServer) Run(ctx context.Context,
 	return resp, err
 }
 
+var uiDir string
+
+func init() {
+	// uiDir can also be set through -ldflags while doing a release build. In that
+	// case it points to usr/local/share/dgraph/assets where we store assets for
+	// the user. In other cases, it should point to the build directory within the repository.
+	flag.StringVar(&uiDir, "ui", uiDir, "Directory which contains assets for the user interface")
+	if uiDir == "" {
+		uiDir = os.Getenv("GOPATH") + "/src/github.com/dgraph-io/dgraph/dashboard/build"
+	}
+}
+
 func checkFlagsAndInitDirs() {
 	if len(*cpuprofile) > 0 {
 		f, err := os.Create(*cpuprofile)
@@ -769,7 +780,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/backup", backupHandler)
 
 	// UI related API's.
-	http.Handle("/", http.FileServer(http.Dir(*uiDir)))
+	http.Handle("/", http.FileServer(http.Dir(uiDir)))
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initilize the servers.

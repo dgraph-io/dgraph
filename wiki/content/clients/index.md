@@ -49,7 +49,7 @@ var (
 )
 
 func main() {
-	conn, err := grpc.Dial(*dgraphp, grpc.WithInsecure())
+	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
 
 	// Creating a new client.
 	c := graphp.NewDgraphClient(conn)
