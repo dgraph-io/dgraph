@@ -45,7 +45,7 @@ If you wan't to persist the data while you play around with Dgraph then you shou
 #### Map to default port (8080)
 ```
 mkdir -p ~/dgraph
-docker run -it -p 8080:8080 -v ~/dgraph/dgraph:/dgraph dgraph/dgraph dgraph --bindall=true
+docker run -it -p 8080:8080 -v ~/dgraph:/dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
 
@@ -53,7 +53,7 @@ docker run -it -p 8080:8080 -v ~/dgraph/dgraph:/dgraph dgraph/dgraph dgraph --bi
 ```
 mkdir -p ~/dgraph
 # Mapping port 8080 from within the container to 9090  of the instance
-docker run -it -p 9090:8080 -v ~/dgraph/dgraph:/dgraph dgraph/dgraph dgraph --bindall=true
+docker run -it -p 9090:8080 -v ~/dgraph:/dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
 {{% notice "note" %}}The dgraph server listens on port 8080 (unless you have mapped to another port above) with log output to the terminal.{{% /notice %}}
