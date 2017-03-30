@@ -550,7 +550,7 @@ func syncAllMarks(ctx context.Context) error {
 }
 
 // snapshotAll takes snapshot of all nodes of the worker group
-func snapshotAll(ctx context.Context) {
+func snapshotAll() {
 	var wg sync.WaitGroup
 	for _, n := range groups().nodes() {
 		wg.Add(1)
