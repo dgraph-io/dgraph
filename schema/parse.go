@@ -44,7 +44,7 @@ func From(s *graphp.SchemaUpdate) typesp.Schema {
 // all the globals.
 // Overwrites schema blindly - called only during initilization in testing
 func ParseBytes(s []byte, gid uint32) (rerr error) {
-	reset()
+	pstate.m = make(map[uint32]*stateGroup)
 	updates, err := Parse(string(s))
 	if err != nil {
 		return err
