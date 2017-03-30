@@ -76,7 +76,8 @@ func valAndValType(val string) (interface{}, facetsp.Facet_ValType, error) {
 	if intVal, err := strconv.ParseInt(val, 0, 32); err == nil {
 		return int32(intVal), facetsp.Facet_INT32, nil
 	} else if numErr := err.(*strconv.NumError); numErr.Err == strconv.ErrRange {
-		// check if we have one . for floating values.
+		// if we have only digits in val, then val is a big integer : return error
+		// otherwise try to parse as float.
 		allNumChars := true
 		for _, v := range val {
 			if !unicode.IsDigit(v) {
@@ -84,7 +85,7 @@ func valAndValType(val string) (interface{}, facetsp.Facet_ValType, error) {
 				break
 			}
 		}
-		if allNumChars { // all are numbers, so user gave us a big integer.
+		if allNumChars {
 			return nil, facetsp.Facet_INT32, err
 		}
 	}
