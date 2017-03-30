@@ -261,10 +261,6 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
 
 	addEdgeToValue(t, "name", 240, "Andrea With no friends", nil)
-	addEdgeToUID(t, "friend", 25, 240, nil)
-	addEdgeToUID(t, "friend", 25, 23, nil)
-	addEdgeToUID(t, "friend", 25, 31, nil)
-
 	time.Sleep(5 * time.Millisecond)
 }
 
@@ -1319,7 +1315,7 @@ func TestMinMultiProto(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 	{
-		me(id: [1,25]) {
+		me(id: [1,23]) {
 			name
 			friend {
 				name
@@ -1399,7 +1395,7 @@ children: <
   properties: <
     prop: "name"
     value: <
-      str_val: "Daryl Dixon"
+      str_val: "Rick Grimes"
     >
   >
   children: <
@@ -1407,25 +1403,7 @@ children: <
     properties: <
       prop: "name"
       value: <
-        str_val: "Rick Grimes"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Andrea"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Andrea With no friends"
+        str_val: "Michonne"
       >
     >
   >
@@ -1434,7 +1412,7 @@ children: <
     properties: <
       prop: "min(dob)"
       value: <
-        str_val: "1901-01-15T00:00:00Z"
+        str_val: "1910-01-01T00:00:00Z"
       >
     >
   >
@@ -1443,7 +1421,7 @@ children: <
     properties: <
       prop: "max(dob)"
       value: <
-        str_val: "1910-01-02T00:00:00Z"
+        str_val: "1910-01-01T00:00:00Z"
       >
     >
   >
@@ -2149,6 +2127,33 @@ func TestToFastJSONFilterallofterms(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
+}
+
+func TestFilterRegexError(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+      me(id:0x01) {
+        name
+        friend @filter(regexp(dob, "^[a-z A-Z]+$")) {
+          name
+        }
+      }
+    }
+  `
+
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, res.Query[0])
+	require.NoError(t, err)
+	sg.DebugPrint("")
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.Error(t, err)
 }
 
 func TestFilterRegex1(t *testing.T) {
