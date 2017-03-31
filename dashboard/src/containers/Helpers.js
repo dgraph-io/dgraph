@@ -119,7 +119,7 @@ export function isNotEmpty(response) {
 
   for (let i = 0; i < keys.length; i++) {
     if (keys[i] !== "server_latency" && keys[i] !== "uids") {
-      return keys[i].length > 0;
+      return keys[i].length > 0 && response[keys[i]];
     }
   }
   return false;
