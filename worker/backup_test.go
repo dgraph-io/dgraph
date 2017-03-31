@@ -99,7 +99,7 @@ func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
 
 func TestBackup(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on backup.
-	dir, ps := initTestBackup(t, "name:string @index")
+	dir, ps := initTestBackup(t, "name:string @index .")
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	// Remove already existing backup folders is any.
@@ -175,7 +175,7 @@ func TestBackup(t *testing.T) {
 				require.Equal(t, "close", nq.Facets[1].Key)
 				require.Equal(t, "since", nq.Facets[2].Key)
 				// byte representation for facets.
-				require.Equal(t, []byte{0x21, 0x0, 0x0, 0x0}, nq.Facets[0].Value)
+				require.Equal(t, []byte{0x21, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, nq.Facets[0].Value)
 				require.Equal(t, []byte{0x1}, nq.Facets[1].Value)
 				require.Equal(t, "\x01\x00\x00\x00\x0e\xba\b8e\x00\x00\x00\x00\xff\xff",
 					string(nq.Facets[2].Value))
@@ -243,7 +243,7 @@ func generateBenchValues() []kv {
 
 	// Posting_STRING   Posting_ValType = 0
 	// Posting_BINARY   Posting_ValType = 1
-	// Posting_INT32    Posting_ValType = 2
+	// Posting_INT    Posting_ValType = 2
 	// Posting_FLOAT    Posting_ValType = 3
 	// Posting_BOOL     Posting_ValType = 4
 	// Posting_DATE     Posting_ValType = 5
@@ -283,7 +283,7 @@ func generateBenchValues() []kv {
 		{prefix: "testInt",
 			list: &typesp.PostingList{
 				Postings: []*typesp.Posting{{
-					ValType: typesp.Posting_INT32,
+					ValType: typesp.Posting_INT,
 					Value:   byteInt,
 					Uid:     uint64(65454),
 					Facets:  fac,
@@ -292,7 +292,7 @@ func generateBenchValues() []kv {
 		{prefix: "testUid",
 			list: &typesp.PostingList{
 				Postings: []*typesp.Posting{{
-					ValType: typesp.Posting_INT32,
+					ValType: typesp.Posting_INT,
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},

@@ -52,20 +52,22 @@ var (
 
 func init() {
 	RegisterTokenizer(GeoTokenizer{})
-	RegisterTokenizer(Int32Tokenizer{})
+	RegisterTokenizer(IntTokenizer{})
 	RegisterTokenizer(FloatTokenizer{})
 	RegisterTokenizer(DateTokenizer{})
 	RegisterTokenizer(DateTimeTokenizer{})
 	RegisterTokenizer(TermTokenizer{})
 	RegisterTokenizer(ExactTokenizer{})
+	RegisterTokenizer(BoolTokenizer{})
 	SetDefault(types.GeoID, "geo")
-	SetDefault(types.Int32ID, "int")
+	SetDefault(types.IntID, "int")
 	SetDefault(types.FloatID, "float")
 	SetDefault(types.DateID, "date")
 	SetDefault(types.DateTimeID, "datetime")
 	SetDefault(types.StringID, "term")
+	SetDefault(types.BoolID, "bool")
 
-	// Check for duplicate prexif bytes.
+	// Check for duplicate prefix bytes.
 	usedIds := make(map[byte]struct{})
 	for _, tok := range tokenizers {
 		tokID := tok.Identifier()
@@ -124,22 +126,22 @@ func (t GeoTokenizer) Tokens(sv types.Val) ([]string, error) {
 func (t GeoTokenizer) Identifier() byte { return 0x5 }
 func (t GeoTokenizer) IsSortable() bool { return false }
 
-type Int32Tokenizer struct{}
+type IntTokenizer struct{}
 
-func (t Int32Tokenizer) Name() string       { return "int" }
-func (t Int32Tokenizer) Type() types.TypeID { return types.Int32ID }
-func (t Int32Tokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(sv.Value.(int32)), t.Identifier())}, nil
+func (t IntTokenizer) Name() string       { return "int" }
+func (t IntTokenizer) Type() types.TypeID { return types.IntID }
+func (t IntTokenizer) Tokens(sv types.Val) ([]string, error) {
+	return []string{encodeToken(encodeInt(sv.Value.(int64)), t.Identifier())}, nil
 }
-func (t Int32Tokenizer) Identifier() byte { return 0x6 }
-func (t Int32Tokenizer) IsSortable() bool { return true }
+func (t IntTokenizer) Identifier() byte { return 0x6 }
+func (t IntTokenizer) IsSortable() bool { return true }
 
 type FloatTokenizer struct{}
 
 func (t FloatTokenizer) Name() string       { return "float" }
 func (t FloatTokenizer) Type() types.TypeID { return types.FloatID }
 func (t FloatTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(int32(sv.Value.(float64))), t.Identifier())}, nil
+	return []string{encodeToken(encodeInt(int64(sv.Value.(float64))), t.Identifier())}, nil
 }
 func (t FloatTokenizer) Identifier() byte { return 0x7 }
 func (t FloatTokenizer) IsSortable() bool { return true }
@@ -149,7 +151,7 @@ type DateTokenizer struct{}
 func (t DateTokenizer) Name() string       { return "date" }
 func (t DateTokenizer) Type() types.TypeID { return types.DateID }
 func (t DateTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), t.Identifier())}, nil
+	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Year())), t.Identifier())}, nil
 }
 func (t DateTokenizer) Identifier() byte { return 0x3 }
 func (t DateTokenizer) IsSortable() bool { return true }
@@ -159,7 +161,7 @@ type DateTimeTokenizer struct{}
 func (t DateTimeTokenizer) Name() string       { return "datetime" }
 func (t DateTimeTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), t.Identifier())}, nil
+	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Year())), t.Identifier())}, nil
 }
 func (t DateTimeTokenizer) Identifier() byte { return 0x4 }
 func (t DateTimeTokenizer) IsSortable() bool { return true }
@@ -215,9 +217,9 @@ func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error
 	return terms, nil
 }
 
-func encodeInt(val int32) string {
-	buf := make([]byte, 5)
-	binary.BigEndian.PutUint32(buf[1:], uint32(val))
+func encodeInt(val int64) string {
+	buf := make([]byte, 9)
+	binary.BigEndian.PutUint64(buf[1:], uint64(val))
 	if val < 0 {
 		buf[0] = 0
 	} else {
@@ -232,6 +234,20 @@ func encodeToken(tok string, typ byte) string {
 
 func EncodeGeoTokens(tokens []string) {
 	for i := 0; i < len(tokens); i++ {
-		tokens[i] = encodeToken(tokens[i], 0x4)
+		tokens[i] = encodeToken(tokens[i], GeoTokenizer{}.Identifier())
 	}
 }
+
+type BoolTokenizer struct{}
+
+func (t BoolTokenizer) Name() string       { return "bool" }
+func (t BoolTokenizer) Type() types.TypeID { return types.BoolID }
+func (t BoolTokenizer) Tokens(v types.Val) ([]string, error) {
+	var b int64
+	if v.Value.(bool) {
+		b = 1
+	}
+	return []string{encodeToken(encodeInt(b), t.Identifier())}, nil
+}
+func (t BoolTokenizer) Identifier() byte { return 0x9 }
+func (t BoolTokenizer) IsSortable() bool { return false }

@@ -44,7 +44,10 @@ func From(s *graphp.SchemaUpdate) typesp.Schema {
 // all the globals.
 // Overwrites schema blindly - called only during initilization in testing
 func ParseBytes(s []byte, gid uint32) (rerr error) {
-	reset()
+	if pstate == nil {
+		reset()
+	}
+	pstate.m = make(map[uint32]*stateGroup)
 	updates, err := Parse(string(s))
 	if err != nil {
 		return err
@@ -56,8 +59,8 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	return nil
 }
 
-func parseScalarPair(it *lex.ItemIterator, predicate string,
-	allowIndex bool) (*graphp.SchemaUpdate, error) {
+func parseScalarPair(it *lex.ItemIterator, predicate string) (*graphp.SchemaUpdate,
+	error) {
 	it.Next()
 	if next := it.Item(); next.Typ != itemColon {
 		return nil, x.Errorf("Missing colon")
@@ -75,48 +78,47 @@ func parseScalarPair(it *lex.ItemIterator, predicate string,
 	}
 
 	// Check for index / reverse.
-	for it.Next() {
+	schema := &graphp.SchemaUpdate{Predicate: predicate, ValueType: uint32(t)}
+	it.Next()
+	next = it.Item()
+	if next.Typ == itemAt {
+		it.Next()
 		next = it.Item()
-		if next.Typ == lex.ItemError {
-			return nil, x.Errorf(next.Val)
+		if next.Typ != itemText {
+			return nil, x.Errorf("Missing directive name")
 		}
-		if next.Typ == itemAt {
-			it.Next()
-			next = it.Item()
-			if next.Typ != itemText {
-				return nil, x.Errorf("Missing directive name")
+		switch next.Val {
+		case "reverse":
+			if t != types.UidID {
+				return nil, x.Errorf("Cannot reverse for non-UID type")
 			}
-			switch next.Val {
-			case "reverse":
-				if t != types.UidID {
-					return nil, x.Errorf("Cannot reverse for non-UID type")
-				}
-				return &graphp.SchemaUpdate{
-					Predicate: predicate,
-					ValueType: uint32(t),
-					Directive: graphp.SchemaUpdate_REVERSE,
-				}, nil
-			case "index":
-				if !allowIndex {
-					return nil, x.Errorf("@index not allowed")
-				}
-				if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
-					return nil, err
-				} else {
-					return &graphp.SchemaUpdate{
-						Predicate: predicate, ValueType: uint32(t),
-						Directive: graphp.SchemaUpdate_INDEX,
-						Tokenizer: tokenizer,
-					}, nil
-				}
-			default:
-				return nil, x.Errorf("Invalid index specification")
+			schema.Directive = graphp.SchemaUpdate_REVERSE
+		case "index":
+			if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
+				return nil, err
+			} else {
+				schema.Directive = graphp.SchemaUpdate_INDEX
+				schema.Tokenizer = tokenizer
 			}
+		default:
+			return nil, x.Errorf("Invalid index specification")
 		}
-		it.Prev()
-		break
+		it.Next()
+		next = it.Item()
 	}
-	return &graphp.SchemaUpdate{Predicate: predicate, ValueType: uint32(t)}, nil
+	if next.Typ != itemDot {
+		return nil, x.Errorf("Invalid ending")
+	}
+	it.Next()
+	next = it.Item()
+	if next.Typ == lex.ItemEOF {
+		it.Prev()
+		return schema, nil
+	}
+	if next.Typ != itemNewLine {
+		return nil, x.Errorf("Invalid ending")
+	}
+	return schema, nil
 }
 
 // parseIndexDirective works on "@index" or "@index(customtokenizer)".
@@ -126,7 +128,8 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 	var seen = make(map[string]bool)
 
 	if typ == types.UidID {
-		return tokenizers, x.Errorf("Indexing not allowed on predicate %s of type uid", predicate)
+		return tokenizers, x.Errorf("Indexing not allowed on predicate %s of type uid",
+			predicate)
 	}
 	if !it.Next() {
 		// Nothing to read.
@@ -164,12 +167,17 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		if !has {
 			return tokenizers, x.Errorf("Invalid tokenizer %s", next.Val)
 		}
-		if _, found := seen[tokenizer.Name()]; found {
-			return tokenizers, x.Errorf("Duplicate tokenizers defined for pred %v", predicate)
-		} else {
-			tokenizers = append(tokenizers, tokenizer.Name())
-			seen[tokenizer.Name()] = true
+		if tokenizer.Type() != typ {
+			return tokenizers,
+				x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
+					tokenizer.Name(), predicate, typ.Name())
 		}
+		if _, found := seen[tokenizer.Name()]; found {
+			return tokenizers, x.Errorf("Duplicate tokenizers defined for pred %v",
+				predicate)
+		}
+		tokenizers = append(tokenizers, tokenizer.Name())
+		seen[tokenizer.Name()] = true
 		expectArg = false
 	}
 	return tokenizers, nil
@@ -186,13 +194,15 @@ func Parse(s string) ([]*graphp.SchemaUpdate, error) {
 		case lex.ItemEOF:
 			return schemas, nil
 		case itemText:
-			if schema, err := parseScalarPair(it, item.Val, true); err != nil {
+			if schema, err := parseScalarPair(it, item.Val); err != nil {
 				return nil, err
 			} else {
 				schemas = append(schemas, schema)
 			}
 		case lex.ItemError:
 			return nil, x.Errorf(item.Val)
+		case itemNewLine:
+			// pass empty line
 		default:
 			return nil, x.Errorf("Unexpected token: %v", item)
 		}

@@ -303,7 +303,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 	switch v.Tid {
 	case types.BinaryID:
 		return v.Value.([]byte), nil
-	case types.Int32ID:
+	case types.IntID:
 		return []byte(fmt.Sprintf("%d", v.Value)), nil
 	case types.FloatID:
 		return []byte(fmt.Sprintf("%f", v.Value)), nil

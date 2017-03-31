@@ -74,7 +74,6 @@ var (
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
 	dumpSubgraph   = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
-	uiDir          = flag.String("ui", os.Getenv("GOPATH")+"/src/github.com/dgraph-io/dgraph/dashboard/build", "Directory which contains assets for the user interface")
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
@@ -282,6 +281,10 @@ func enrichSchema(updates []*graphp.SchemaUpdate) error {
 			if !has {
 				return x.Errorf("Invalid tokenizer %s", t)
 			}
+			if tokenizer.Type() != typ {
+				return x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
+					tokenizer.Name(), schema.Predicate, typ.Name())
+			}
 			if _, ok := seen[tokenizer.Name()]; !ok {
 				seen[tokenizer.Name()] = true
 			} else {
@@ -345,8 +348,12 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	if worker.HealthCheck() {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	} else {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
 }
 
 // parseQueryAndMutation handles the cases where the query parsing code can hang indefinitely.
@@ -382,50 +389,15 @@ type wrappedErr struct {
 	Message string
 }
 
-func processRequest(ctx context.Context, gq *gql.GraphQuery,
-	l *query.Latency) (*query.SubGraph, wrappedErr) {
-	if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
-		return &query.SubGraph{}, wrappedErr{nil, x.Success}
-	}
-
-	sg, err := query.ToSubGraph(ctx, gq)
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while conversion to internal format"))
-		return &query.SubGraph{}, wrappedErr{err, x.ErrorInvalidRequest}
-	}
-
-	l.Parsing = time.Since(l.Start)
-	x.Trace(ctx, "Query parsed")
-
-	rch := make(chan error)
-	go query.ProcessGraph(ctx, sg, nil, rch)
-	err = <-rch
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
-		return &query.SubGraph{}, wrappedErr{err, x.Error}
-	}
-
-	l.Processing = time.Since(l.Start) - l.Parsing
-	x.Trace(ctx, "Graph processed")
-
-	if len(*dumpSubgraph) > 0 {
-		x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
-		s := time.Now().Format("20060102.150405.000000.gob")
-		filename := path.Join(*dumpSubgraph, s)
-		f, err := os.Create(filename)
-		x.Checkf(err, filename)
-		enc := gob.NewEncoder(f)
-		x.Check(enc.Encode(sg))
-		x.Checkf(f.Close(), filename)
-	}
-	return sg, wrappedErr{nil, ""}
-}
-
 func hasGQLOps(mu *gql.Mutation) bool {
 	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
+	if !worker.HealthCheck() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	// Add a limit on how many pending queries can be run in the system.
 	pendingQueries <- struct{}{}
 	defer func() { <-pendingQueries }()
@@ -625,6 +597,11 @@ type grpcServer struct{}
 // client as a protocol buffer message.
 func (s *grpcServer) Run(ctx context.Context,
 	req *graphp.Request) (resp *graphp.Response, err error) {
+	// we need membership information
+	if !worker.HealthCheck() {
+		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		return resp, x.Errorf("Uninitiated server. Please retry later")
+	}
 	var allocIds map[string]uint64
 	var schemaNodes []*graphp.SchemaNode
 	if rand.Float64() < *tracing {
@@ -700,6 +677,18 @@ func (s *grpcServer) Run(ctx context.Context,
 		l.ProtocolBuffer.String()
 	resp.L = gl
 	return resp, err
+}
+
+var uiDir string
+
+func init() {
+	// uiDir can also be set through -ldflags while doing a release build. In that
+	// case it points to usr/local/share/dgraph/assets where we store assets for
+	// the user. In other cases, it should point to the build directory within the repository.
+	flag.StringVar(&uiDir, "ui", uiDir, "Directory which contains assets for the user interface")
+	if uiDir == "" {
+		uiDir = os.Getenv("GOPATH") + "/src/github.com/dgraph-io/dgraph/dashboard/build"
+	}
 }
 
 func checkFlagsAndInitDirs() {
@@ -791,7 +780,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/backup", backupHandler)
 
 	// UI related API's.
-	http.Handle("/", http.FileServer(http.Dir(*uiDir)))
+	http.Handle("/", http.FileServer(http.Dir(uiDir)))
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initilize the servers.

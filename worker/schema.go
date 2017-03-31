@@ -44,10 +44,16 @@ type resultErr struct {
 func getSchema(ctx context.Context, s *taskp.Schema) (*taskp.SchemaResult, error) {
 	var result taskp.SchemaResult
 	var predicates []string
+	var fields []string
 	if len(s.Predicates) > 0 {
 		predicates = s.Predicates
 	} else {
 		predicates = schema.State().Predicates(s.GroupId)
+	}
+	if len(s.Fields) > 0 {
+		fields = s.Fields
+	} else {
+		fields = []string{"type", "index", "tokenizer", "reverse"}
 	}
 
 	for _, attr := range predicates {
@@ -55,7 +61,7 @@ func getSchema(ctx context.Context, s *taskp.Schema) (*taskp.SchemaResult, error
 			return &emptySchemaResult,
 				x.Errorf("Predicate fingerprint doesn't match this instance")
 		}
-		if schemaNode := populateSchema(attr, s.Fields); schemaNode != nil {
+		if schemaNode := populateSchema(attr, fields); schemaNode != nil {
 			result.Schema = append(result.Schema, schemaNode)
 		}
 	}
@@ -150,6 +156,10 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *taskp.Schema, ch c
 // GetSchemaOverNetwork checks which group should be serving the schema
 // according to fingerprint of the predicate and sends it to that instance.
 func GetSchemaOverNetwork(ctx context.Context, schema *graphp.Schema) ([]*graphp.SchemaNode, error) {
+	if !HealthCheck() {
+		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		return nil, x.Errorf("Uninitiated server. Please retry later")
+	}
 	schemaMap := make(map[uint32]*taskp.Schema)
 	addToSchemaMap(schemaMap, schema)
 

@@ -62,7 +62,7 @@ func typeValFrom(val *graphp.Value) types.Val {
 	case *graphp.Value_BytesVal:
 		return types.Val{types.BinaryID, val.GetBytesVal()}
 	case *graphp.Value_IntVal:
-		return types.Val{types.Int32ID, val.GetIntVal()}
+		return types.Val{types.IntID, val.GetIntVal()}
 	case *graphp.Value_StrVal:
 		return types.Val{types.StringID, val.GetStrVal()}
 	case *graphp.Value_BoolVal:
@@ -401,7 +401,7 @@ var typeMap = map[string]types.TypeID{
 	"xs:string":                                   types.StringID,
 	"xs:dateTime":                                 types.DateTimeID,
 	"xs:date":                                     types.DateID,
-	"xs:int":                                      types.Int32ID,
+	"xs:int":                                      types.IntID,
 	"xs:boolean":                                  types.BoolID,
 	"xs:double":                                   types.FloatID,
 	"xs:float":                                    types.FloatID,
@@ -410,7 +410,7 @@ var typeMap = map[string]types.TypeID{
 	"http://www.w3.org/2001/XMLSchema#string":     types.StringID,
 	"http://www.w3.org/2001/XMLSchema#dateTime":   types.DateTimeID,
 	"http://www.w3.org/2001/XMLSchema#date":       types.DateID,
-	"http://www.w3.org/2001/XMLSchema#int":        types.Int32ID,
+	"http://www.w3.org/2001/XMLSchema#int":        types.IntID,
 	"http://www.w3.org/2001/XMLSchema#boolean":    types.BoolID,
 	"http://www.w3.org/2001/XMLSchema#double":     types.FloatID,
 	"http://www.w3.org/2001/XMLSchema#float":      types.FloatID,

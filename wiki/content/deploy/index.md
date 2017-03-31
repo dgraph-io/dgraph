@@ -64,6 +64,75 @@ w: w
 debugmode: false
 ```
 
+### TLS configuration
+Connections between client and server can be secured with TLS.
+Both encrypted (password protected) and unencrypted private keys are supported.
+
+{{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
+
+Following configuration options are available for the server:
+```
+# Use TLS connections with clients.
+tls.on
+
+# CA Certs file path.
+tls.ca_certs string
+
+# Include System CA into CA Certs.
+tls.use_system_ca
+
+# Certificate file path.
+tls.cert string
+
+# Certificate key file path.
+tls.cert_key string
+
+# Certificate key passphrase.
+tls.cert_key_passphrase string
+
+# Enable TLS client authentication
+tls.client_auth string
+
+# TLS max version. (default "TLS12")
+tls.max_version string
+
+# TLS min version. (default "TLS11")
+tls.min_version string
+```
+
+Dgraph loader can be configured with following options:
+```
+# Use TLS connections.
+tls.on
+
+# CA Certs file path.
+tls.ca_certs string
+
+# Include System CA into CA Certs.
+tls.use_system_ca
+
+# Certificate file path.
+tls.cert string
+
+# Certificate key file path.
+tls.cert_key string
+
+# Certificate key passphrase.
+tls.cert_key_passphrase string
+
+# Server name.
+tls.server_name string
+ 
+# Skip certificate validation (insecure)
+tls.insecure
+ 
+# TLS max version. (default "TLS12")
+tls.max_version string
+
+# TLS min version. (default "TLS11")
+tls.min_version string
+```
+
 ## Single Instance
 You could run a single instance like this
 ```

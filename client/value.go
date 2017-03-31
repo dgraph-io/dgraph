@@ -74,13 +74,13 @@ func Str(val string, nq *graphp.NQuad) error {
 	return nil
 }
 
-func Int(val int32, nq *graphp.NQuad) error {
-	v, err := types.ObjectValue(types.Int32ID, val)
+func Int(val int64, nq *graphp.NQuad) error {
+	v, err := types.ObjectValue(types.IntID, val)
 	if err != nil {
 		return err
 	}
 	nq.ObjectValue = v
-	nq.ObjectType = int32(types.Int32ID)
+	nq.ObjectType = int32(types.IntID)
 	return nil
 
 }

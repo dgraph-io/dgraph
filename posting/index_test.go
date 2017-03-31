@@ -32,46 +32,46 @@ import (
 )
 
 const schemaStr = `
-name:string @index
+name:string @index .
 `
 
 func TestIndexingInt(t *testing.T) {
-	schema.ParseBytes([]byte("age:int @index"), 1)
+	schema.ParseBytes([]byte("age:int @index ."), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("10")})
 	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x6, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
+	require.EqualValues(t, []byte{0x6, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingIntNegative(t *testing.T) {
-	schema.ParseBytes([]byte("age:int @index"), 1)
+	schema.ParseBytes([]byte("age:int @index ."), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("-10")})
 	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x6, 0x0, 0xff, 0xff, 0xff, 0xf6}, []byte(a[0]))
+	require.EqualValues(t, []byte{0x6, 0x0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf6}, []byte(a[0]))
 }
 
 func TestIndexingFloat(t *testing.T) {
-	schema.ParseBytes([]byte("age:float @index"), 1)
+	schema.ParseBytes([]byte("age:float @index ."), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("10.43")})
 	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x7, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
+	require.EqualValues(t, []byte{0x7, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingDate(t *testing.T) {
-	schema.ParseBytes([]byte("age:date @index"), 1)
+	schema.ParseBytes([]byte("age:date @index ."), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("0010-01-01")})
 	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x3, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
+	require.EqualValues(t, []byte{0x3, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingTime(t *testing.T) {
-	schema.ParseBytes([]byte("age:datetime @index"), 1)
+	schema.ParseBytes([]byte("age:datetime @index ."), 1)
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("0010-01-01T01:01:01.000000001")})
 	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x4, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
+	require.EqualValues(t, []byte{0x4, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexing(t *testing.T) {
-	schema.ParseBytes([]byte("name:string @index"), 1)
+	schema.ParseBytes([]byte("name:string @index ."), 1)
 	a, err := IndexTokens("name", types.Val{types.StringID, []byte("abc")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x01abc", string(a[0]))
@@ -89,9 +89,9 @@ func addMutationWithIndex(t *testing.T, l *List, edge *taskp.DirectedEdge, op ui
 }
 
 const schemaVal = `
-name:string @index
-dob:date @index
-friend:uid @reverse
+name:string @index .
+dob:date @index .
+friend:uid @reverse .
 	`
 
 func TestTokensTable(t *testing.T) {

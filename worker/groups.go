@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -43,7 +44,13 @@ var (
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	peerAddr = flag.String("peer", "", "IP_ADDRESS:PORT of any healthy peer.")
 	raftId   = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
+	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
+	// so that the nodes which have lagged behind leader can just replay entries instead of
+	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
+	// are taken
+	maxPendingCount = flag.Uint64("sc", 1000, "Max number of pending entries in wal after which snapshot is taken")
 
+	healthCheck           uint32
 	emptyMembershipUpdate taskp.MembershipUpdate
 )
 
@@ -98,6 +105,7 @@ func StartRaftNodes(walDir string) {
 		// after starting the leader of group zero, that leader might not have updated
 		// itself in the memberships; and hence this node would think that no one is handling
 		// group zero. Therefore, we MUST wait to get pass a last update raft index of zero.
+		gr.syncMemberships()
 		for gr.LastUpdate() == 0 {
 			time.Sleep(time.Second)
 			fmt.Println("Last update raft index for membership information is zero. Syncing...")
@@ -115,14 +123,28 @@ func StartRaftNodes(walDir string) {
 		*myAddr = fmt.Sprintf("localhost:%d", *workerPort)
 	}
 
+	var wg sync.WaitGroup
 	for _, id := range strings.Split(*groupIds, ",") {
 		gid, err := strconv.ParseUint(id, 0, 32)
 		x.Checkf(err, "Unable to parse group id: %v", id)
 		node := gr.newNode(uint32(gid), *raftId, *myAddr)
 		schema.LoadFromDb(uint32(gid))
-		go node.InitAndStartNode(gr.wal)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			node.InitAndStartNode(gr.wal)
+		}()
 	}
+	wg.Wait()
+	atomic.StoreUint32(&healthCheck, 1)
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
+}
+
+// HealthCheck returns whether the server is ready to accept requests or not
+// Load balancer would add the node to the endpoint once health check starts
+// returning true
+func HealthCheck() bool {
+	return atomic.LoadUint32(&healthCheck) != 0
 }
 
 func (g *groupi) Node(groupId uint32) *node {
@@ -201,6 +223,22 @@ func (g *groupi) Servers(group uint32) []string {
 	return out
 }
 
+// Peer returns node(raft) id of the peer of given nodeid of given group
+func (g *groupi) Peer(group uint32, nodeId uint64) (uint64, bool) {
+	g.RLock()
+	defer g.RUnlock()
+	all := g.all[group]
+	if all == nil {
+		return 0, false
+	}
+	for _, s := range all.list {
+		if s.NodeId != nodeId {
+			return s.NodeId, true
+		}
+	}
+	return 0, false
+}
+
 func (g *groupi) HasPeer(group uint32) bool {
 	g.RLock()
 	defer g.RUnlock()
@@ -229,6 +267,12 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 	defer g.RUnlock()
 	for gid := range g.all {
 		gids = append(gids, gid)
+	}
+	// If we start a single node cluster without group zero
+	if len(gids) == 0 {
+		for gid := range g.local {
+			gids = append(gids, gid)
+		}
 	}
 	return
 }
@@ -561,6 +605,19 @@ func syncAllMarks(ctx context.Context) error {
 	}
 	wg.Wait()
 	return err
+}
+
+// snapshotAll takes snapshot of all nodes of the worker group
+func snapshotAll() {
+	var wg sync.WaitGroup
+	for _, n := range groups().nodes() {
+		wg.Add(1)
+		go func(n *node) {
+			defer wg.Done()
+			n.snapshot(0)
+		}(n)
+	}
+	wg.Wait()
 }
 
 // StopAllNodes stops all the nodes of the worker group.

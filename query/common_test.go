@@ -189,7 +189,7 @@ func processSchemaQuery(t *testing.T, q string) []*graphp.SchemaNode {
 	return schema
 }
 
-func processToPB(t *testing.T, query string, debug bool) *graphp.Node {
+func processToPB(t *testing.T, query string, debug bool) []*graphp.Node {
 	res, err := gql.Parse(query)
 	require.NoError(t, err)
 	var ctx context.Context
@@ -198,16 +198,11 @@ func processToPB(t *testing.T, query string, debug bool) *graphp.Node {
 	} else {
 		ctx = context.Background()
 	}
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
 	var l Latency
-	pb, err := sg.ToProtocolBuffer(&l)
+	sgl, err := ProcessQuery(ctx, res, &l)
+	require.NoError(t, err)
+
+	pb, err := ToProtocolBuf(&l, sgl)
 	require.NoError(t, err)
 	return pb
 }

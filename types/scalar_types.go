@@ -34,7 +34,7 @@ const (
 // Never delete anything from this list even if it becomes unused.
 const (
 	BinaryID   = TypeID(typesp.Posting_BINARY)
-	Int32ID    = TypeID(typesp.Posting_INT32)
+	IntID      = TypeID(typesp.Posting_INT)
 	FloatID    = TypeID(typesp.Posting_FLOAT)
 	BoolID     = TypeID(typesp.Posting_BOOL)
 	DateTimeID = TypeID(typesp.Posting_DATETIME)
@@ -47,7 +47,7 @@ const (
 )
 
 var typeNameMap = map[string]TypeID{
-	"int":      Int32ID,
+	"int":      IntID,
 	"float":    FloatID,
 	"string":   StringID,
 	"bool":     BoolID,
@@ -64,7 +64,7 @@ type TypeID typesp.Posting_ValType
 
 func (t TypeID) Name() string {
 	switch t {
-	case Int32ID:
+	case IntID:
 		return "int"
 	case FloatID:
 		return "float"
@@ -112,9 +112,9 @@ func ValueForType(id TypeID) Val {
 		var b []byte
 		return Val{BinaryID, &b}
 
-	case Int32ID:
-		var i int32
-		return Val{Int32ID, &i}
+	case IntID:
+		var i int64
+		return Val{IntID, &i}
 
 	case FloatID:
 		var f float64
