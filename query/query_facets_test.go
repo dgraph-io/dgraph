@@ -49,14 +49,14 @@ func populateGraphWithFacets(t *testing.T) {
 	addEdgeToUID(t, "friend", 23, 1, friendFacets1)
 
 	friendFacets5 := map[string]string{
-		"games": "football basketball chess tennis", "close": "false", "age": "35"}
+		"games": `"football basketball chess tennis"`, "close": "false", "age": "35"}
 	friendFacets6 := map[string]string{
-		"games": "football basketball hockey", "close": "false"}
+		"games": `"football basketball hockey"`, "close": "false"}
 
 	addEdgeToUID(t, "friend", 31, 1, friendFacets5)
 	addEdgeToUID(t, "friend", 31, 25, friendFacets6)
 
-	nameFacets := map[string]string{"origin": "french"}
+	nameFacets := map[string]string{"origin": `"french"`}
 	// Now let's add a few properties for the main user.
 	addEdgeToValue(t, "name", 1, "Michonne", nameFacets)
 	addEdgeToValue(t, "gender", 1, "female", nil)
@@ -257,7 +257,7 @@ func TestFacetsMutation(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
 	delEdgeToUID(t, "friend", 1, 24) // Delete friendship between Michonne and Glenn
-	friendFacets := map[string]string{"since": "11-10-2001", "close": "false", "family": "false"}
+	friendFacets := map[string]string{"since": "2001-11-10", "close": "false", "family": "false"}
 	addEdgeToUID(t, "friend", 1, 101, friendFacets) // and 101 is not close friend now.
 	query := `
 		{
@@ -272,7 +272,7 @@ func TestFacetsMutation(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Rick Grimes"},{"@facets":{"_":{"close":false,"family":true,"since":"2007-05-02T15:04:05Z"}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Andrea"},{"@facets":{"_":{"close":false,"family":false,"since":"11-10-2001"}}}],"name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Rick Grimes"},{"@facets":{"_":{"close":false,"family":true,"since":"2007-05-02T15:04:05Z"}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Andrea"},{"@facets":{"_":{"close":false,"family":false,"since":"2001-11-10T00:00:00Z"}}}],"name":"Michonne"}]}`,
 		js)
 }
 
@@ -897,7 +897,7 @@ func TestFacetsFilterAtValueFail(t *testing.T) {
 	{
 		me(id:1) {
 			friend {
-				name @facets(eq(origin, french))
+				name @facets(eq(origin, "french"))
 			}
 		}
 	}

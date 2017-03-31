@@ -51,7 +51,7 @@ func populateGraphBackup(t *testing.T) {
 		"<1> <friend> <5> <author0> .",
 		"<2> <friend> <5> <author0> .",
 		"<3> <friend> <5> .",
-		"<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,age=33) .",
+		"<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,age=33,game=\"football\") .",
 		"<1> <name> \"pho\\ton\" <author0> .",
 		"<2> <name> \"pho\\ton\"@en <author0> .",
 	}
@@ -173,16 +173,19 @@ func TestBackup(t *testing.T) {
 			if nq.Subject == "0x4" {
 				require.Equal(t, "age", nq.Facets[0].Key)
 				require.Equal(t, "close", nq.Facets[1].Key)
-				require.Equal(t, "since", nq.Facets[2].Key)
+				require.Equal(t, "game", nq.Facets[2].Key)
+				require.Equal(t, "since", nq.Facets[3].Key)
 				// byte representation for facets.
 				require.Equal(t, []byte{0x21, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, nq.Facets[0].Value)
 				require.Equal(t, []byte{0x1}, nq.Facets[1].Value)
+				require.Equal(t, []byte("football"), nq.Facets[2].Value)
 				require.Equal(t, "\x01\x00\x00\x00\x0e\xba\b8e\x00\x00\x00\x00\xff\xff",
-					string(nq.Facets[2].Value))
+					string(nq.Facets[3].Value))
 				// valtype for facets.
 				require.Equal(t, 1, int(nq.Facets[0].ValType))
 				require.Equal(t, 3, int(nq.Facets[1].ValType))
-				require.Equal(t, 4, int(nq.Facets[2].ValType))
+				require.Equal(t, 0, int(nq.Facets[2].ValType))
+				require.Equal(t, 4, int(nq.Facets[3].ValType))
 			}
 			// Test label
 			if nq.Subject != "0x3" {

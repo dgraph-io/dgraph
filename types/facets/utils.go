@@ -66,21 +66,26 @@ func CopyFacets(fcs []*facetsp.Facet, param *facetsp.Param) (fs []*facetsp.Facet
 
 // valAndValType returns interface val and valtype for facet.
 func valAndValType(val string) (interface{}, facetsp.Facet_ValType, error) {
-	// TODO(ashish) : strings should be in quotes.. \"\"
-	// No need to check for nonNumChar then.
+	if len(val) == 0 { // empty string case
+		return "", facetsp.Facet_STRING, nil
+	}
+	// strings should be in quotes.
+	if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
+		return val[1 : len(val)-1], facetsp.Facet_STRING, nil
+	}
 	if intVal, err := strconv.ParseInt(val, 0, 64); err == nil {
 		return int64(intVal), facetsp.Facet_INT, nil
 	} else if numErr := err.(*strconv.NumError); numErr.Err == strconv.ErrRange {
-		// check if whole string is only of nums or not.
-		// comes here for : 11111111111111111111132333uasfk333 ; see test.
-		nonNumChar := false
+		// if we have only digits in val, then val is a big integer : return error
+		// otherwise try to parse as float.
+		allNumChars := true
 		for _, v := range val {
 			if !unicode.IsDigit(v) {
-				nonNumChar = true
+				allNumChars = false
 				break
 			}
 		}
-		if !nonNumChar { // return error
+		if allNumChars {
 			return nil, facetsp.Facet_INT, err
 		}
 	}
@@ -95,7 +100,7 @@ func valAndValType(val string) (interface{}, facetsp.Facet_ValType, error) {
 	if t, err := parseTime(val); err == nil {
 		return t, facetsp.Facet_DATETIME, nil
 	}
-	return val, facetsp.Facet_STRING, nil
+	return nil, facetsp.Facet_STRING, x.Errorf("Could not parse the facet value : [%s]", val)
 }
 
 // FacetFor returns Facet for given key and val.
