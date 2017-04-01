@@ -153,8 +153,8 @@ func setupConnection() (*grpc.ClientConn, error) {
 		return grpc.Dial(*dgraph, grpc.WithInsecure())
 	}
 
-	tlsCfg, err := x.GenerateTLSConfig(x.TLSHelperConfig{
-		ConfigType:           x.TLSServerConfig,
+	tlsCfg, _, err := x.GenerateTLSConfig(x.TLSHelperConfig{
+		ConfigType:           x.TLSClientConfig,
 		Insecure:             *tlsInsecure,
 		ServerName:           *tlsServerName,
 		Cert:                 *tlsCert,
