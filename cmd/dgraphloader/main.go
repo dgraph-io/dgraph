@@ -154,6 +154,7 @@ func setupConnection() (*grpc.ClientConn, error) {
 	}
 
 	tlsCfg, err := x.GenerateTLSConfig(x.TLSHelperConfig{
+		ConfigType:           x.TLSServerConfig,
 		Insecure:             *tlsInsecure,
 		ServerName:           *tlsServerName,
 		Cert:                 *tlsCert,

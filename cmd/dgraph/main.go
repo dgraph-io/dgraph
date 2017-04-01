@@ -708,7 +708,8 @@ func setupListener(addr string, port int) (net.Listener, error) {
 		return net.Listen("tcp", laddr)
 	}
 
-	tlsCfg, err := x.GenerateTLSConfig(x.TLSHelperConfig{
+	tlsCfg, reload, err := x.GenerateTLSConfig(x.TLSHelperConfig{
+		ConfigType:             x.TLSServerConfig,
 		CertRequired:           *tlsEnabled,
 		Cert:                   *tlsCert,
 		Key:                    *tlsKey,
@@ -721,6 +722,16 @@ func setupListener(addr string, port int) (net.Listener, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+	if reload != nil {
+		go func() {
+			sigChan := make(chan os.Signal, 1)
+			signal.Notify(sigChan, syscall.SIGHUP)
+			for range sigChan {
+				reload()
+				log.Println("TLS certificates and CAs reloaded")
+			}
+		}()
 	}
 
 	return tls.Listen("tcp", laddr, tlsCfg)
