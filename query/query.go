@@ -839,6 +839,9 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 }
 
 func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
+	if mNode.Const.Value != nil {
+		return nil
+	}
 	if mNode.Var != "" {
 		d, ok := doneVars[mNode.Var]
 		if !ok || d.vals == nil {
@@ -878,7 +881,12 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
 		// Only the UIDs that have all the values will be considered.
 		for _, ch := range mNode.Child {
 			curMap := ch.Val
-			ag.ApplyVal(curMap[k])
+			curVal := curMap[k]
+			if ch.Const.Value != nil {
+				// Use the constant valuse that was supplied.
+				curVal = ch.Const
+			}
+			ag.ApplyVal(curVal)
 		}
 		destMap[k] = ag.Value()
 	}
