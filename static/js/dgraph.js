@@ -1,3 +1,20 @@
+// debounce limits the amount of function invocation by spacing out the calls
+// by at least `wait` ms.
+function debounce(func, wait, immediate) {
+	var timeout;
+	return function() {
+		var context = this, args = arguments;
+		var later = function() {
+			timeout = null;
+			if (!immediate) func.apply(context, args);
+		};
+		var callNow = immediate && !timeout;
+		clearTimeout(timeout);
+		timeout = setTimeout(later, wait);
+		if (callNow) func.apply(context, args);
+	};
+};
+
 function slugify(text) {
   return text.toString().toLowerCase()
     .replace(/\s+/g, '-')           // Replace spaces with -
@@ -58,9 +75,8 @@ function slugify(text) {
   var isAfter = function(e1, e2) {
     return e1.compareDocumentPosition(e2) & Node.DOCUMENT_POSITION_FOLLOWING;
   };
-  var activeLink = document.querySelector(".doc-toc.active");
+  var activeLink = document.querySelector(".topic.active");
 
-  // TODO: h2sWithH3s
   var h2sWithH3s = [];
   var j = 0;
   for (var i = 0; i < h2s.length; i++) {
@@ -80,18 +96,21 @@ function slugify(text) {
     });
   }
 
-  if (h2sWithH3s.length > 0) {
-    createSubtopic(activeLink, h2sWithH3s);
-  }
+  // console.log(h2sWithH3s);
 
   function createSubtopic(container, headers) {
     var subMenu = document.createElement("ul");
-    subMenu.className = "sub-topic";
+    subMenu.className = "sub-topics";
     container.appendChild(subMenu);
 
     Array.prototype.forEach.call(headers, function(h) {
       var li = createSubtopicItem(h.header);
+      li.className = 'topic sub-topic';
       subMenu.appendChild(li);
+
+      // if (h.subHeaders) {
+      //   createSubtopic(subMenu, h.subHeaders)
+      // }
     });
   }
 
@@ -101,11 +120,64 @@ function slugify(text) {
       h.id +
       '" data-scroll class="' +
       h.tagName +
-      '"><span>' +
+      '">' +
       (h.title || h.textContent) +
-      "</span></a>";
+      "</a>";
     return li;
   }
+
+  // setActiveSubTopic updates the active subtopic on the sidebar based on the
+  // hash
+  // @params hash [String] - hash including the hash sign at the beginning
+  function setActiveSubTopic(hash) {
+    // Set inactive the previously active topic
+    var prevActiveTopic = document.querySelector('.sub-topics .topic.active');
+    if (prevActiveTopic) {
+      prevActiveTopic.classList.remove('active');
+    }
+
+    var nextActiveTopicAnchor = document.querySelector('.sub-topics a[href="' + hash + '"]');
+    nextActiveTopicAnchor.parentNode.classList.add('active');
+  }
+
+  function updateSidebar() {
+    var currentScrollY = document.body.scrollTop;
+
+    var activeHash;
+    for (var i = 0; i < h2sWithH3s.length; i++) {
+      var h = h2sWithH3s[i];
+      var hash = h.header.getElementsByTagName('a')[0].hash;
+
+      if (h.header.offsetTop - 250 > currentScrollY) {
+        if (!activeHash) {
+          activeHash = hash;
+          break;
+        }
+      } else {
+        activeHash = hash;
+      }
+    }
+
+    if (activeHash) {
+      setActiveSubTopic(activeHash);
+    }
+  }
+
+  if (h2sWithH3s.length > 0) {
+    createSubtopic(activeLink, h2sWithH3s);
+  }
+
+  var subTopics = document.querySelectorAll('.sub-topics .sub-topic')
+  for (var i = 0; i < subTopics.length; i++) {
+    var subTopic = subTopics[i]
+    subTopic.addEventListener('click', function (e) {
+      var hash = e.target.hash;
+      setActiveSubTopic(hash);
+    });
+  }
+
+  // Scrollspy for sidebar
+  window.addEventListener('scroll', debounce(updateSidebar, 15));
 
   // Sidebar toggle
   document.getElementById('sidebar-toggle').addEventListener('click', function (e) {
@@ -206,4 +278,7 @@ function slugify(text) {
       links[i].target = "_blank";
     }
   }
+
+  // On page load
+  updateSidebar();
 })();

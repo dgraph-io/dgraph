@@ -12,17 +12,10 @@
 
   <ul class="topics">
     {{ range .Site.Menus.main }}
-      <li class="doc-toc{{if or ($.IsMenuCurrent "main" .) ($.HasMenuCurrent "main" .) }} active{{end}}">
+      <li class="topic main-topic{{if or ($.IsMenuCurrent "main" .) ($.HasMenuCurrent "main" .) }} active{{end}}">
         <a href="{{.URL}}">
           {{ .Name }}
         </a>
-        {{ if and (.HasChildren) ($.IsMenuCurrent "main" .) }}
-        <ul class="sub-topic">
-          {{ range .Children.ByWeight }}
-            <li{{if $.IsMenuCurrent "main" . }} class="active"{{end}}><a href="#{{.URL}}">{{ .Name }}</a></li>
-          {{ end }}
-        </ul>
-        {{end}}
       </li>
     {{ end }}
   </ul>
