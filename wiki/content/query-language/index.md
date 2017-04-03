@@ -1,6 +1,5 @@
 +++
 title = "Query Language"
-weight = 0
 +++
 
 ## GraphQL+-

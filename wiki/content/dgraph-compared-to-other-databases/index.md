@@ -1,6 +1,5 @@
 +++
 title = "Dgraph compared to other databases"
-weight = 0
 +++
 
 {{% notice "incomplete" %}}Needs a summarized view on graph databases.{{% /notice %}}

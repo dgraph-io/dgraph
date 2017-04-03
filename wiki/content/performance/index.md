@@ -1,6 +1,5 @@
 +++
 title = "Performance"
-weight = 0
 +++
 
 ## General
