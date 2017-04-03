@@ -483,6 +483,8 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			key += "count"
 		} else if len(gchild.Langs) > 0 {
 			key += fmt.Sprintf("%v", gchild.Langs)
+		} else if gchild.MathExp != nil {
+			key += fmt.Sprintf("%+v", gchild.MathExp)
 		}
 		if _, ok := attrsSeen[key]; ok {
 			return x.Errorf("%s not allowed multiple times in same sub-query.",
@@ -854,16 +856,21 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
 	}
 
 	aggName := mNode.Fn
-
-	// TODO(Ashwin): Check the type of aggregator here and the num child.
+	if isUnary(aggName) && len(mNode.Child) != 1 {
+		return x.Errorf("Function %v expects 1 argument. But got: %v", len(mNode.Child))
+	}
+	if isBinary(aggName) && len(mNode.Child) != 2 {
+		return x.Errorf("Function %v expects 2 argument. But got: %v", len(mNode.Child))
+	}
+	if isTernary(aggName) && len(mNode.Child) != 3 {
+		return x.Errorf("Function %v expects 3 argument. But got: %v", len(mNode.Child))
+	}
+	if isMultiArgFunc(aggName) && len(mNode.Child) <= 1 {
+		return x.Errorf("Function %v expects more than 1 argument. But got: %v", len(mNode.Child))
+	}
 
 	destMap := make(map[uint64]types.Val)
 	srcMap := mNode.Child[0].Val
-	/*
-		if srcMap.vals == nil {
-			return x.Errorf("Expected a value variable but missing")
-		}
-	*/
 	for k := range srcMap {
 		ag := aggregator{
 			name: aggName,

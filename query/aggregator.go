@@ -19,7 +19,7 @@ package query
 
 import (
 	"bytes"
-	"log"
+	"math"
 
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types"
@@ -30,6 +30,22 @@ type aggregator struct {
 	name   string
 	result types.Val
 	count  int // used when we need avergae.
+}
+
+func isUnary(f string) bool {
+	return f == "log" || f == "exp"
+}
+
+func isBinary(f string) bool {
+	return f == "max" || f == "min"
+}
+
+func isTernary(f string) bool {
+	return false
+}
+
+func isMultiArgFunc(f string) bool {
+	return f == "sumvar" || f == "mulvar" || f == "diffvar"
 }
 
 func convertTo(from *taskp.Value) (types.Val, error) {
@@ -48,6 +64,30 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	if v.Value == nil {
 		return ErrEmptyVal
 	}
+
+	var res types.Val
+	if isUnary(ag.name) {
+		switch ag.name {
+		case "log":
+			if v.Tid == types.IntID {
+				v.Value = math.Log(float64(v.Value.(int64)))
+				v.Tid = types.FloatID
+			} else if v.Tid == types.FloatID {
+				v.Value = math.Log(v.Value.(float64))
+			}
+			res = v
+		case "exp":
+			if v.Tid == types.IntID {
+				v.Value = math.Exp(float64(v.Value.(int64)))
+				v.Tid = types.FloatID
+			} else if v.Tid == types.FloatID {
+				v.Value = math.Exp(v.Value.(float64))
+			}
+			res = v
+		}
+		ag.result = res
+	}
+
 	if ag.result.Value == nil {
 		ag.result = v
 		return nil
@@ -55,7 +95,6 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 
 	va := ag.result
 	vb := v
-	var res types.Val
 	switch ag.name {
 	case "sumvar":
 		if va.Tid == types.IntID && vb.Tid == types.IntID {
@@ -68,8 +107,21 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
 			va.Value = va.Value.(float64) + float64(vb.Value.(int64))
 		} else {
-			// This pair cannot be summed. So pass.
-			log.Fatalf("Wrong arguments for Sum aggregator.")
+			// This pair cannot be aggregated. So pass.
+		}
+		res = va
+	case "diffvar":
+		if va.Tid == types.IntID && vb.Tid == types.IntID {
+			va.Value = va.Value.(int64) - vb.Value.(int64)
+		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
+			va.Value = va.Value.(float64) - vb.Value.(float64)
+		} else if va.Tid == types.IntID && vb.Tid == types.FloatID {
+			va.Value = float64(va.Value.(int64)) - vb.Value.(float64)
+			va.Tid = types.FloatID
+		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
+			va.Value = va.Value.(float64) - float64(vb.Value.(int64))
+		} else {
+			// This pair cannot be aggregated. So pass.
 		}
 		res = va
 	case "mulvar":
@@ -83,8 +135,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
 			va.Value = va.Value.(float64) * float64(vb.Value.(int64))
 		} else {
-			// This pair cannot be summed. So pass.
-			log.Fatalf("Wrong arguments for Sum aggregator.")
+			// This pair cannot be aggregated. So pass.
 		}
 		res = va
 	default:
@@ -177,5 +228,12 @@ func (ag *aggregator) divideByCount() {
 
 func (ag *aggregator) Value() types.Val {
 	ag.divideByCount()
+	if ag.result.Tid == types.FloatID {
+		if math.IsInf(ag.result.Value.(float64), 1) {
+			ag.result.Value = math.MaxFloat64
+		} else if math.IsInf(ag.result.Value.(float64), -1) {
+			ag.result.Value = -1 * math.MaxFloat64
+		}
+	}
 	return ag.result
 }

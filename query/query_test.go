@@ -366,6 +366,43 @@ func TestCascadeDirective(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValAggNestedFuncUnary(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as age
+				friend {
+					n as min(age)
+					s as max(age)
+					combiLog as sumvar(a, log(diffvar(s, n)))
+					combiExp as sumvar(a, exp(diffvar(s, n)))
+				}
+			}
+
+			LogMe(id: var(f), orderasc: var(combiLog)) {
+				name
+				var(combiLog)
+				var(a)
+				var(n)
+				var(s)
+			}
+
+			ExpMe(id: var(f), orderasc: var(combiExp)) {
+				name
+				var(combiExp)
+				var(a)
+				var(n)
+				var(s)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"ExpMe":[{"name":"Rick Grimes","var[a]":15,"var[combiExp]":16.000000,"var[n]":38,"var[s]":38},{"name":"Andrea","var[a]":19,"var[combiExp]":20.000000,"var[n]":15,"var[s]":15},{"name":"Michonne","var[a]":38,"var[combiExp]":92.598150,"var[n]":15,"var[s]":19}],"LogMe":[{"name":"Rick Grimes","var[a]":15,"var[combiLog]":-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000,"var[n]":38,"var[s]":38},{"name":"Andrea","var[a]":19,"var[combiLog]":-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000,"var[n]":15,"var[s]":15},{"name":"Michonne","var[a]":38,"var[combiLog]":39.386294,"var[n]":15,"var[s]":19}]}`,
+		js)
+}
+
 func TestQueryVarValAggNestedFunc(t *testing.T) {
 	populateGraph(t)
 	query := `
