@@ -1,6 +1,5 @@
 +++
 title = "Get Started"
-weight = 0
 +++
 
 **New to Dgraph? Here's a 5 step tutorial to get you up and running.**
