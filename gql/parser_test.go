@@ -137,7 +137,10 @@ func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	require.Equal(t, "b", res.Query[1].Children[0].Children[1].Var)
 	require.Equal(t, "c", res.Query[1].Children[0].Children[2].Var)
 	require.True(t, res.Query[1].Children[0].Children[2].IsInternal)
-	require.Equal(t, "sumvar", res.Query[1].Children[0].Children[2].Attr)
+	require.NotNil(t, res.Query[1].Children[0].Children[2].MathExp)
+	require.Equal(t, "sumvar", res.Query[1].Children[0].Children[2].MathExp.Fn)
+	require.Equal(t, "a", res.Query[1].Children[0].Children[2].MathExp.Child[0].Var)
+	require.Equal(t, "b", res.Query[1].Children[0].Children[2].MathExp.Child[1].Var)
 }
 
 func TestParseQueryWithVarValAgg(t *testing.T) {
