@@ -366,6 +366,34 @@ func TestCascadeDirective(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValAggNestedFunc(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as age
+				friend {
+					n as min(age)
+					s as max(age)
+					combi as sumvar(a, mulvar(n, s))
+				}
+			}
+
+			me(id: var(f), orderasc: var(combi)) {
+				name
+				var(combi)
+				var(a)
+				var(n)
+				var(s)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea","var[a]":19,"var[combi]":244,"var[n]":15,"var[s]":15},{"name":"Michonne","var[a]":38,"var[combi]":323,"var[n]":15,"var[s]":19},{"name":"Rick Grimes","var[a]":15,"var[combi]":1459,"var[n]":38,"var[s]":38}]}`,
+		js)
+}
+
 func TestQueryVarValAggMinMaxSelf(t *testing.T) {
 	populateGraph(t)
 	query := `
