@@ -64,7 +64,7 @@ Posting List. This means, one RPC to
 the machine serving that Posting List would result in a join, without any further
 network calls, reducing joins to lookups.
 
-Implementation wise, a `Posting List` is a list of `Postings`. This is how they look in [Protocol Buffers]({{< relref "#protcol-buffers" >}}) format.
+Implementation wise, a `Posting List` is a list of `Postings`. This is how they look in [Protocol Buffers]({{< relref "#protocol-buffers" >}}) format.
 ```
 message Posting {
   fixed64 uid = 1;
@@ -144,10 +144,11 @@ If a groups gets too big, it could be split further. In this case, a single `Pre
 Note that keys are sorted in RocksDB. So, the group split would be done in a way to maintain that sorting order, i.e. it would be split in a way where the lexicographically earlier subjects would be in one group, and the later in the second.
 
 ### Replication and Server Failure
-Each group should typically be served by atleast 3 servers, if available. In the case o a machine failure, other servers serving the same group can still handle the load in that case.
+Each group should typically be served by atleast 3 servers, if available. In the case of a machine failure, other servers serving the same group can still handle the load in that case.
 
 ### New Server and Discovery
-Dgraph cluster can detect new machines allocated to the [cluster]({{< relref "deploy/index.md#cluster" >}}), establish connections, and reassign a subset of existing tablets to it.
+Dgraph cluster can detect new machines allocated to the [cluster]({{< relref "deploy/index.md#cluster" >}}), establish connections, and transfer a subset of existing predicates to it based on the groups served
+by the new machine.
 
 ### Write Ahead Logs
 Every mutation upon hitting the database doesn't immediately make it on disk via RocksDB. We avoid re-generating the posting list too often, because all the postings need to be kept sorted, and it's expensive. Instead, every mutation gets logged and synced to disk via append only log files called `write-ahead logs`. So, any acknowledged writes would always be on disk. This allows us to recover from a system crash, by replaying all the mutations since the last write to `Posting List`.
@@ -210,23 +211,23 @@ me(id: m.abcde) {
 
 Let's assume we have 3 server instances, and instance id = 2 receives this query. These are the steps:
 
-* Determine the UID of provided XID, in this case `m.abcde`. Server id 2 would query server id 0 to do `XID -> UID` conversion. Say the UID = u.
-* Send queries to look up keys = `pred_A, u`, `pred_B, u`, and `pred_C, u`. These predicates belong to 3 different tablets, served by potentially different servers. So, this would typically incur at max 3 network calls (equal to number of predicates at this step).
+* Determine the UID of provided XID, in this case `m.abcde` using fingerprinting. Say the UID = u.
+* Send queries to look up keys = `pred_A, u`, `pred_B, u`, and `pred_C, u`. These predicates could belong to 3 different groups, served by potentially different servers. So, this would typically incur at max 3 network calls (equal to number of predicates at this step).
 * The above queries would return back 3 list of ids or value. The result of `pred_B` and `pred_C` would be converted into queries for `pred_Bi` and `pred_Ci`.
 * `pred_Bi` and `pred_Ci` would then cause at max 4 network calls, depending upon where these predicates are located. The keys for `pred_Bi` for e.g. would be `pred_Bi, res_pred_Bk`, where res_pred_Bk = list of resulting ids from `pred_B, u`.
 * Looking at `res_pred_C2`, you'll notice that this would be a list of lists aka list matrix. We merge these list of lists into a sorted list with distinct elements to form the query for `pred_C21`.
 * Another network call depending upon where `pred_C21` lies, and this would again give us a list of list ids / value.
 
-If the query was run via HTTP interface `/query`, this subgraph gets converted into JSON for replying back to the client. If the query was run via GRPC<ref name="grpc">http://www.grpc.io/</ref> interface `Dgraph.Query`, the subgraph gets converted to protocol buffer<ref>https://developers.google.com/protocol-buffers/</ref> format, and returned to client.
+If the query was run via HTTP interface `/query`, this subgraph gets converted into JSON for replying back to the client. If the query was run via [gRPC](https://www.grpc.io/) interface using the language [clients]({{< relref "clients/index.md" >}}), the subgraph gets converted to [protocol buffer](https://developers.google.com/protocol-buffers/) format, and returned to client.
 
 ### Network Calls
 Compared to RAM or SSD access, network calls are slow.
-DGraph minimizes the number of network calls required to execute queries. As explained above, the data sharding is done based on `predicate`, not `entity`. Thus, even if we have a large set of intermediate results, they'd still only increase the payload of a network call, not the number of network calls itself. In general, the number of network calls done in DGraph is directly proportional to the number of predicates in the query, or the complexity of the query, not the number of intermediate or final results.
+Dgraph minimizes the number of network calls required to execute queries. As explained above, the data sharding is done based on `predicate`, not `entity`. Thus, even if we have a large set of intermediate results, they'd still only increase the payload of a network call, not the number of network calls itself. In general, the number of network calls done in Dgraph is directly proportional to the number of predicates in the query, or the complexity of the query, not the number of intermediate or final results.
 
 In the above example, we have eight predicates, and so including a call to convert to UID, we'll have at max nine network calls. The total number of entity results could be in millions.
 
 ### Worker
-In Queries section, you noticed how the calls were made to query for `XID -> UID`, and then for `(predicate, uids)`. All those network calls / local processing are done via workers. Each server exposes a GRPC<ref name="grpc" /> interface, which can then be called by the query processor to retrieve data.
+In Queries section, you noticed how the calls were made to query for `(predicate, uids)`. All those network calls / local processing are done via workers. Each server exposes a [gRPC](https://www.grpc.io) interface, which can then be called by the query processor to retrieve data.
 
 ### Worker Pool
 Worker Pool is just a pool of open TCP connections which can be reused by multiple goroutines. This avoids having to recreate a new connection every time a network call needs to be made.
@@ -239,17 +240,15 @@ All data in Dgraph that is stored or transmitted is first converted into byte ar
 To explain how Dgraph minimizes network calls, let's start with an example query we should be able
 to run.
 
-```
-  Find all posts liked by friends of friends of mine over the last year, written by a popular author X.
-```
+*Find all posts liked by friends of friends of mine over the last year, written by a popular author X.*
 
 ### SQL/NoSQL
 In a distributed SQL/NoSQL database, this would require you to retrieve a lot of data.
 
 Method 1:
 
-* Find all the friends (~ 338 friends<ref>http://www.pewresearch.org/fact-tank/2014/02/03/6-new-facts-about-facebook/</ref>)
-* Find all their friends (~ 338 * 338 = 40,000 people)
+* Find all the friends (~ 338 [friends](http://www.pewresearch.org/fact-tank/2014/02/03/6-new-facts-about-facebook/</ref>)).
+* Find all their friends (~ 338 * 338 = 40,000 people).
 * Find all the posts liked by these people over the last year (resulting set in millions).
 * Intersect these posts with posts authored by person X.
 
@@ -257,7 +256,7 @@ Method 2:
 
 * Find all posts written by popular author X over the last year (possibly thousands).
 * Find all people who liked those posts (easily millions) `result set 1`.
-* Find all your friends
+* Find all your friends.
 * Find all their friends `result set 2`.
 * Intersect `result set 1` with `result set 2`.
 
@@ -266,7 +265,7 @@ Both of these approaches would result in a lot of data going back and forth betw
 ### Dgraph
 This is how it would run in Dgraph:
 
-* Node X contains posting list for predicate `friends`
+* Node X contains posting list for predicate `friends`.
 * Seek to caller's userid in Node X **(1 RPC)**. Retrieve a list of friend uids.
 * Do multiple seeks for each of the friend uids, to generate a list of friends of friends uids. `result set 1`
 * Node Y contains posting list for predicate `posts_liked`.
@@ -308,7 +307,7 @@ A leader could revert to being a follower without an election, if it finds anoth
 ### Communication
 There is unidirectional RPC communication, from leader to followers. The followers never ping the leader. The leader sends `AppendEntries` messages to the followers with logs containing state updates. When the leader sends `AppendEntries` with zero logs, that's considered a <tt>Heartbeat</tt>. Leader sends all followers <tt>Heartbeats</tt> at regular intervals.
 
-If a follower doesn't receive <tt>Heartbeat</tt> for `ElectionTimeout` duration (generally between 150ms to 300ms), it converts it's state to candidate (as mentioned in [[#Server States]]]). It then requests for votes by sending a `RequestVote` call to other servers. Again, if it gets majority votes, candidate becomes a leader. At becoming leader, it then sends <tt>Heartbeats</tt> to all other servers to establish its authority *(Cartman style, "Respect my authoritah!")*.
+If a follower doesn't receive <tt>Heartbeat</tt> for `ElectionTimeout` duration (generally between 150ms to 300ms), it converts it's state to candidate (as mentioned in [Server States]({{< relref "#server-states" >}})). It then requests for votes by sending a `RequestVote` call to other servers. Again, if it gets majority votes, candidate becomes a leader. At becoming leader, it then sends <tt>Heartbeats</tt> to all other servers to establish its authority *(Cartman style, "Respect my authoritah!")*.
 
 Every communication request contains a term number. If a server receives a request with a stale term number, it rejects the request.
 
@@ -343,7 +342,7 @@ The significant difference in how cluster configuration changes are applied comp
 
 A server can respond to both `AppendEntries` and `RequestVote`, without checking current configuration. This mechanism allows new servers to participate without officially being part of the cluster. Without this feature, things won't work.
 
-When a new server joins, it won't have any logs, and they need to be streamed. To ensure cluster availability, Raft allows this server to join the cluster as a non-voting member. Once it's caught up, voting can be enabled. This also allows the cluster to remove this server in case it's too slow to catch up, before giving voting rights ''(sort of like getting a green card to allow assimilation before citizenship is awarded providing voting rights)''.
+When a new server joins, it won't have any logs, and they need to be streamed. To ensure cluster availability, Raft allows this server to join the cluster as a non-voting member. Once it's caught up, voting can be enabled. This also allows the cluster to remove this server in case it's too slow to catch up, before giving voting rights *(sort of like getting a green card to allow assimilation before citizenship is awarded providing voting rights)*.
 
 
 {{% notice "tip" %}}If you want to add a few servers and remove a few servers, do the addition before the removal. To bootstrap a cluster, start with one server to allow it to become the leader, and then add servers to the cluster one-by-one.{{% /notice %}}
