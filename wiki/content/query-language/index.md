@@ -325,8 +325,8 @@ The following types are supported by Dgraph.
 
 ```
 # Sample schema
-name: string
-age: int
+name: string .
+age: int .
 ```
 
 * Mutations only check the scalar types. For example, in the given schema, any mutation that sets age would be checked for being a valid integer, any mutation that sets name would be checked for being a valid string.
@@ -337,30 +337,30 @@ age: int
 
 `@index` keyword at the end of a scalar field declaration in the schema specifies that the predicate should be indexed. For example, if we want to index some fields, we should have a schema similar to the one below.
 ```
-name: string @index
-age: int @index
-address: string @index
-dateofbirth: date @index
-health: float @index
-location: geo @index
-timeafterbirth:  dateTime @index
+name: string @index .
+age: int @index .
+address: string @index .
+dateofbirth: date @index .
+health: float @index .
+location: geo @index .
+timeafterbirth:  datetime @index .
 ```
 
-All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`. 
+All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`.
 
 ```
-name: string @index(exact, term)
-age: int @index(int)
-address: string @index(term)
-dateofbirth: date @index(date)
-health: float @index(float)
-location: geo @index(geo)
-timeafterbirth:  dateTime @index(datetime)
+name: string @index(exact, term) .
+age: int @index(int) .
+address: string @index(term) .
+dateofbirth: date @index(date) .
+health: float @index(float) .
+location: geo @index(geo) .
+timeafterbirth:  datetime @index(datetime) .
 ```
 
 The available tokenizers are currently `term, fulltext, exact, int, float, geo, date, datetime`. All of them except `exact` and `fulltext` are the default tokenizers for their respective data types. You can specify multiple indexes per predicate as shown for `name` in the above example.
 
-{{% notice "note" %}}To be able to do sorting and filtering on a predicate, you must index it.{{% /notice %}}
+{{% notice "note" %}}To be able to do filtering on a predicate, you must index it.{{% /notice %}}
 
 #### String Indices
 There are three types of string indices: `exact`, `term` and `fulltext`. Following table summarize usage of each index type.
@@ -375,15 +375,14 @@ There are three types of string indices: `exact`, `term` and `fulltext`. Followi
 
 Not all the indices establish a total order among the values that they index. So, in order to order based on the values or do inequality operations, the corresponding predicates must have a sortable index. The non-sortable indices that are curently present are `term`. All other indices are sortable. For example to sort by names or do any inequality operations on it, this line **must** be specified in schema.
 ```
-name: string @index(exact)
+name: string @index(exact) .
 ```
 
 ### Reverse Edges
 Each graph edge is unidirectional. It points from one node to another. A lot of times,  you wish to access data in both directions, forward and backward. Instead of having to send edges in both directions, you can use the `@reverse` keyword at the end of a uid (entity) field declaration in the schema. This specifies that the reverse edge should be automatically generated. For example, if we want to add a reverse edge for `directed_by` predicate, we should have a schema as follows.
 
 ```
-name: string @index
-directed_by: uid @reverse
+directed_by: uid @reverse .
 ```
 
 This would add a reverse edge for each `directed_by` edge and that edge can be accessed by prefixing `~` with the original predicate, i.e. `~directed_by`.
