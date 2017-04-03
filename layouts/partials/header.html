@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     {{ .Hugo.Generator }}
     {{ partial "meta.html" . }}
-    <!-- <link rel="shortcut icon" href="/images/favicons/favicon.ico" type="image/x-icon" /> -->
 
     <link rel="apple-touch-icon" sizes="57x57" href="{{ .Site.BaseURL }}/images/favicons/apple-touch-icon-57x57.png">
     <link rel="apple-touch-icon" sizes="60x60" href="{{ .Site.BaseURL }}/images/favicons/apple-touch-icon-60x60.png">
@@ -28,20 +27,13 @@
     <meta name="msapplication-TileImage" content="{{ .Site.BaseURL }}/images/favicons/mstile-144x144.png">
     <meta name="msapplication-config" content="{{ .Site.BaseURL }}/images/favicons/browserconfig.xml">
 
-    <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
-    <!-- {{ .Scratch.Add "title" "" }}
-    {{ if isset .Site.Data.titles .Title }}
-      {{ .Scratch.Set "title" (index .Site.Data.titles .Title).title }}
-    {{ else }}
-      {{ .Scratch.Set "title" .Title}}
-    {{end}} -->
-
     <title>
       {{.Section | humanize}} — {{ .Site.Title }}
     </title>
 
     <link href="{{ .Site.BaseURL }}/css/theme.css?{{ .Now.Unix }}" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css?family=Lato:400,700" rel="stylesheet">
+    <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
   </head>
   <body class="" data-url="{{ .RelPermalink }}">
     {{ partial "topbar.html" . }}

@@ -1,3 +1,12 @@
+function slugify(text) {
+  return text.toString().toLowerCase()
+    .replace(/\s+/g, '-')           // Replace spaces with -
+    .replace(/[^\w\-]+/g, '')       // Remove all non-word chars
+    .replace(/\-\-+/g, '-')         // Replace multiple - with single -
+    .replace(/^-+/, '')             // Trim - from start of text
+    .replace(/-+$/, '');            // Trim - from end of text
+}
+
 (function() {
   // clipboard
   var clipInit = false;
@@ -111,7 +120,35 @@
     } else {
       document.body.className = "sidebar-visible";
     }
-  })
+  });
+
+  // Anchor tags for headings
+  function appendAnchor(heading) {
+    // First remove the id from heading
+    // Instead we will assign the id to the .anchor-offset element to account
+    // for the fixed header height
+    heading.id = '';
+
+    var text = heading.innerText;
+    var slug = slugify(text);
+
+    var anchorOffset = document.createElement('div');
+    anchorOffset.className = 'anchor-offset';
+    anchorOffset.id = slug;
+
+    var anchor = document.createElement("a");
+    anchor.href = '#' + slug;
+    anchor.className = 'anchor';
+    // anchor.innerHTML = 'link'
+    anchor.innerHTML = '<i class="fa fa-link"></i>'
+    heading.insertBefore(anchor, heading.firstChild);
+    heading.insertBefore(anchorOffset, heading.firstChild);
+  }
+  var h2s = document.querySelectorAll(
+    '.content-wrapper h2, .content-wrapper h3');
+  for (var i = 0; i < h2s.length; i++) {
+    appendAnchor(h2s[i]);
+  }
 
   // code collapse
   var pres = document.getElementsByTagName("pre");
