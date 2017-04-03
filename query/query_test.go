@@ -417,6 +417,32 @@ func TestQueryVarValAggMinMax(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValAggMul(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				f as friend {
+					n as age
+					s as count(friend)
+					mul as mulvar(n, s)
+				}
+			}
+
+			me(id: var(f), orderdesc: var(mul)) {
+				name
+				var(s)
+				var(n)
+				var(mul)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea","var[mul]":19,"var[n]":19,"var[s]":1},{"name":"Rick Grimes","var[mul]":15,"var[n]":15,"var[s]":1},{"name":"Glenn Rhee","var[mul]":0,"var[n]":15,"var[s]":0},{"name":"Daryl Dixon","var[mul]":0,"var[n]":17,"var[s]":0}]}`,
+		js)
+}
+
 func TestQueryVarValAggOrderDesc(t *testing.T) {
 	populateGraph(t)
 	query := `

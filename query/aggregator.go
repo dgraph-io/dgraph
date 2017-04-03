@@ -72,6 +72,21 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			log.Fatalf("Wrong arguments for Sum aggregator.")
 		}
 		res = va
+	case "mulvar":
+		if va.Tid == types.IntID && vb.Tid == types.IntID {
+			va.Value = va.Value.(int64) * vb.Value.(int64)
+		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
+			va.Value = va.Value.(float64) * vb.Value.(float64)
+		} else if va.Tid == types.IntID && vb.Tid == types.FloatID {
+			va.Value = float64(va.Value.(int64)) * vb.Value.(float64)
+			va.Tid = types.FloatID
+		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
+			va.Value = va.Value.(float64) * float64(vb.Value.(int64))
+		} else {
+			// This pair cannot be summed. So pass.
+			log.Fatalf("Wrong arguments for Sum aggregator.")
+		}
+		res = va
 	default:
 		return x.Errorf("Unhandled aggregator function %v", ag.name)
 	}
