@@ -15,24 +15,39 @@ title = "Dgraph Documentation"
   name = "Get Started"
   url = "/get-started/"
   identifier = "get-started"
-  weight = -100
+  weight = 1
 [[menu.main]]
   name = "Query Language"
   url = "/query-language/"
   identifier = "query-language"
-  weight = -80
+  weight = 2
 [[menu.main]]
   name = "Clients"
   url = "/clients/"
   identifier = "clients"
-  weight = -60
+  weight = 3
 [[menu.main]]
   name = "Deploy"
   url = "/deploy/"
   identifier = "deploy"
-  weight = -40
+  weight = 4
 [[menu.main]]
   name = "FAQ"
   url = "/faq/"
   identifier = "faq"
-  weight = -20
+  weight = 5
+[[menu.main]]
+  name = "Performance"
+  url = "/performance/"
+  identifier = "performance"
+  weight = 6
+[[menu.main]]
+  name = "Design Concepts"
+  url = "/design-concepts/"
+  identifier = "design-concepts"
+  weight = 7
+[[menu.main]]
+  name = "Dgraph compared to other databases"
+  url = "/dgraph-compared-to-other databases/"
+  identifier = "dgraph-compared-to-other databases"
+  weight = 8
