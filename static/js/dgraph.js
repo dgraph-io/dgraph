@@ -102,6 +102,17 @@
     return li;
   }
 
+  // Sidebar toggle
+  document.getElementById('sidebar-toggle').addEventListener('click', function (e) {
+    e.preventDefault();
+    var klass = document.body.className;
+    if (klass === "sidebar-visible") {
+      document.body.className = "";
+    } else {
+      document.body.className = "sidebar-visible";
+    }
+  })
+
   // code collapse
   var pres = document.getElementsByTagName("pre");
   Array.prototype.forEach.call(pres, function(pre) {

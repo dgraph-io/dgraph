@@ -28,6 +28,7 @@
     <meta name="msapplication-TileImage" content="{{ .Site.BaseURL }}/images/favicons/mstile-144x144.png">
     <meta name="msapplication-config" content="{{ .Site.BaseURL }}/images/favicons/browserconfig.xml">
 
+    <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
     <!-- {{ .Scratch.Add "title" "" }}
     {{ if isset .Site.Data.titles .Title }}
       {{ .Scratch.Set "title" (index .Site.Data.titles .Title).title }}
@@ -43,7 +44,9 @@
     <link href="https://fonts.googleapis.com/css?family=Lato:400,700" rel="stylesheet">
   </head>
   <body class="" data-url="{{ .RelPermalink }}">
-    <main>
-      {{ partial "menu.html" . }}
+    {{ partial "topbar.html" . }}
 
-      <section class="content">
+    {{ partial "sidebar.html" . }}
+
+    <main class="content-wrapper">
+      <div class="content">

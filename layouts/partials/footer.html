@@ -1,9 +1,9 @@
-      </section>
+      </div>
     </main>
 
     <script src="{{ .Site.BaseURL }}/js/jquery-2.x.min.js"></script>
     <script src="{{ .Site.BaseURL }}/js/clipboard.min.js"></script>
-    <script src="{{ .Site.BaseURL }}/js/dgraph.js?{{ .Now.Unix }}"></script>
+    <script src="{{ .Site.BaseURL }}/js/dgraph.js?{{ .Now }}"></script>
     {{ partial "script.html" . }}
   </body>
 </html>
