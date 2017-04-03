@@ -792,7 +792,7 @@ pre code {
   font-size: 90%;
 }
 pre.collapsed {
-  max-height: 500px;
+  max-height: 330px;
   overflow: hidden;
 }
 pre.collapsed .showmore {
@@ -804,12 +804,12 @@ pre.collapsed .showmore {
   padding-bottom: 5px;
   padding-top: 26px;
   cursor: pointer;
-  background: linear-gradient(180deg, hsla(0, 0%, 100%, 0), #e6e6e6);
-  background-repeat: repeat-x;
-  text-transform: uppercase;
+  background: linear-gradient(180deg, hsla(0, 0%, 100%, 0.1), rgba(226, 226, 226, 0.72));
+  color: #5a5a5a;
 }
 pre.collapsed .showmore:hover {
-  background: linear-gradient(180deg, hsla(0, 0%, 100%, 0), #dadada);
+  background: linear-gradient(180deg, hsla(0, 0%, 100%, 0.1), rgba(226, 226, 226, 0.91));
+  font-weight: 600;
 }
 .copy-btn {
   position: absolute;

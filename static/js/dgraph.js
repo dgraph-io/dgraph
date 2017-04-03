@@ -149,12 +149,12 @@ function slugify(text) {
   // code collapse
   var pres = document.getElementsByTagName("pre");
   Array.prototype.forEach.call(pres, function(pre) {
-    if (pre.clientHeight > 500) {
+    if (pre.clientHeight > 330) {
       pre.className += " collapsed";
 
       var showMore = document.createElement("div");
       showMore.className = "showmore";
-      showMore.innerHTML = "Show full code";
+      showMore.innerHTML = "Show all";
       showMore.addEventListener("click", function() {
         pre.className = "";
         showMore.parentNode.removeChild(showMore);
