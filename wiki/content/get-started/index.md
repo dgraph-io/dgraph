@@ -13,7 +13,7 @@ You could simply install the binaries with
 curl https://get.dgraph.io -sSf | bash
 ```
 
-That script would automatically install Dgraph for you. Once done, you can jump straight to [step 2]({{< relref "#step-2" >}}).
+That script would automatically install Dgraph for you. Once done, you can jump straight to [step 2]({{< relref "#step-2-run-dgraph" >}}).
 
 **Alternative:** To mitigate potential security risks, you could instead do this:
 ```
@@ -29,7 +29,7 @@ You may pull our Docker images [from here](https://hub.docker.com/r/dgraph/dgrap
 docker pull dgraph/dgraph
 ```
 
-## Step 2: Run Dgraph {#step-2}
+## Step 2: Run Dgraph
 
 ### Using System Installation
 Follow this command to run Dgraph:
