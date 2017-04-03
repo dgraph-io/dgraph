@@ -36,7 +36,7 @@ RDF N-Quad allows specifying the language for string values, using `@lang`. Usin
 ```
 To specify the language of the value to be returned from query `@lang1:lang2:lang3` notation is used. It is extension over RDF N-Quad syntax, and allows specifying multiple languages in order of preference. If value in given language is not found, next language from list is considered. If there are no values in any of specified languages, the value without specified language is returned. At last, if there is no value without language, value in ''some'' language is returned (this is implementation specific).
 
-{{ Note | Languages preference list cannot be used in functions.}}
+{{% notice "note" %}}Languages preference list cannot be used in functions.{{% /notice %}}
 
 ### Batch mutations
 
