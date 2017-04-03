@@ -162,6 +162,7 @@ type SubGraph struct {
 	FilterOp     string
 	Filters      []*SubGraph
 	facetsFilter *facetsp.FilterTree
+	MathExp      *gql.MathTree
 	Children     []*SubGraph
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
@@ -243,7 +244,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if pc.Params.uidToVal == nil {
 				return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
 			}
-			fieldName := fmt.Sprintf("%s%v", pc.Attr, pc.Params.NeedsVar)
+			var fieldName string
+			if pc.Params.Var != "" {
+				fieldName = fmt.Sprintf("var(%v)", pc.Params.Var)
+			} else {
+				fieldName = fmt.Sprintf("%s%v", pc.Attr, pc.Params.NeedsVar)
+			}
 			sv, ok := pc.Params.uidToVal[uid]
 			if !ok {
 				continue
@@ -518,8 +524,9 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		dst := &SubGraph{
-			Attr:   gchild.Attr,
-			Params: args,
+			Attr:    gchild.Attr,
+			MathExp: gchild.MathExp,
+			Params:  args,
 		}
 
 		if gchild.Func != nil &&
@@ -829,37 +836,46 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 	return nil
 }
 
-func (sg *SubGraph) sumAggregation(doneVars map[string]values) (rerr error) {
+func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
+	if mNode.Var != "" {
+		d, ok := doneVars[mNode.Var]
+		if !ok || d.vals == nil {
+			return x.Errorf("Variable %v not yet populated or missing.", mNode.Var)
+		}
+		mNode.Val = d.vals
+		return nil
+	}
+
+	for _, child := range mNode.Child {
+		err := evalMathTree(child, doneVars)
+		if err != nil {
+			return err
+		}
+	}
+
+	aggName := mNode.Fn
+
+	// TODO(Ashwin): Check the type of aggregator here and the num child.
+
 	destMap := make(map[uint64]types.Val)
-	x.AssertTruef(len(sg.Params.NeedsVar) > 0,
-		"Received empty variable list in %v. Expected atleast one.", sg.Attr)
-	srcVar := sg.Params.NeedsVar[0]
-	srcMap := doneVars[srcVar]
-	if srcMap.vals == nil {
-		return x.Errorf("Expected a value variable but missing")
-	}
-	for k := range srcMap.vals {
+	srcMap := mNode.Child[0].Val
+	/*
+		if srcMap.vals == nil {
+			return x.Errorf("Expected a value variable but missing")
+		}
+	*/
+	for k := range srcMap {
 		ag := aggregator{
-			name: "sumvar",
+			name: aggName,
 		}
-		for _, va := range sg.Params.NeedsVar {
-			curMap := doneVars[va]
-			if curMap.vals == nil {
-				return x.Errorf("Expected a value variable but missing")
-			}
-			if rerr = ag.ApplyVal(curMap.vals[k]); rerr != nil {
-				if rerr == ErrEmptyVal {
-					break
-				}
-				return rerr
-			}
+		// Only the UIDs that have all the values will be considered.
+		for _, ch := range mNode.Child {
+			curMap := ch.Val
+			ag.ApplyVal(curMap[k])
 		}
-		if rerr != ErrEmptyVal {
-			// We want to skip even if one of the value is missing.
-			destMap[k] = ag.Value()
-		}
+		destMap[k] = ag.Value()
 	}
-	doneVars[sg.Params.Var] = values{vals: destMap}
+	mNode.Val = destMap
 	return nil
 }
 
@@ -867,32 +883,23 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 	if !sg.IsInternal() {
 		return nil
 	}
-
-	destMap := make(map[uint64]types.Val)
-	x.AssertTruef(len(sg.Params.NeedsVar) > 0,
-		"Received empty variable list in %v. Expected atleast one.", sg.Attr)
-	srcVar := sg.Params.NeedsVar[0]
-	srcMap := doneVars[srcVar]
-	if srcMap.vals == nil {
-		return x.Errorf("Expected a value variable but missing")
-	}
-	for k := range srcMap.vals {
-		ag := aggregator{
-			name: sg.Attr,
+	if sg.MathExp == nil {
+		// This is a var() block.
+		srcVar := sg.Params.NeedsVar[0]
+		srcMap := doneVars[srcVar]
+		if srcMap.vals == nil {
+			return x.Errorf("Missing value variable %v", srcVar)
 		}
-		// Only the UIDs that have all the values will be considered.
-		for _, va := range sg.Params.NeedsVar {
-			curMap := doneVars[va]
-			if curMap.vals == nil {
-				return x.Errorf("Expected a value variable but missing")
-			}
-			ag.ApplyVal(curMap.vals[k])
-		}
-		destMap[k] = ag.Value()
+		sg.Params.uidToVal = srcMap.vals
+		return nil
 	}
-	doneVars[sg.Params.Var] = values{vals: destMap}
+	err := evalMathTree(sg.MathExp, doneVars)
+	if err != nil {
+		return err
+	}
+	doneVars[sg.Params.Var] = values{vals: sg.MathExp.Val}
 	// Put it in this node.
-	sg.Params.uidToVal = destMap
+	sg.Params.uidToVal = sg.MathExp.Val
 	return nil
 }
 

@@ -9,7 +9,7 @@ import (
 type MathTree struct {
 	Fn    string
 	Var   string
-	Val   map[uint64]*types.Val
+	Val   map[uint64]types.Val
 	Child []*MathTree
 }
 
@@ -25,7 +25,7 @@ func parseMathFunc(it *lex.ItemIterator) (*MathTree, error) {
 
 	curNode := &MathTree{
 		Fn:  fn.Val,
-		Val: make(map[uint64]*types.Val),
+		Val: make(map[uint64]types.Val),
 	}
 
 	it.Next()
