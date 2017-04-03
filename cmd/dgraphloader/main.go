@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -178,7 +179,7 @@ func main() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	batch := client.NewBatchMutation(context.Background(), conn, *numRdf, *concurrent)
+	batch := client.NewBatchMutation(context.Background(), graphp.NewDgraphClient(conn), *numRdf, *concurrent)
 
 	ticker := time.NewTicker(2 * time.Second)
 	go printCounters(batch, ticker)
