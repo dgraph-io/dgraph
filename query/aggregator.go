@@ -37,7 +37,7 @@ func isUnary(f string) bool {
 }
 
 func isBinary(f string) bool {
-	return f == "max" || f == "min"
+	return false
 }
 
 func isTernary(f string) bool {
@@ -45,7 +45,8 @@ func isTernary(f string) bool {
 }
 
 func isMultiArgFunc(f string) bool {
-	return f == "sumvar" || f == "mulvar" || f == "diffvar"
+	return f == "sumvar" || f == "mulvar" || f == "diffvar" ||
+		f == "maxvar" || f == "minvar"
 }
 
 func convertTo(from *taskp.Value) (types.Val, error) {
@@ -138,6 +139,20 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			// This pair cannot be aggregated. So pass.
 		}
 		res = va
+	case "minvar":
+		r, err := types.Less(va, vb)
+		if err == nil && !r {
+			res = vb
+		} else {
+			res = va
+		}
+	case "maxvar":
+		r, err := types.Less(va, vb)
+		if err == nil && r {
+			res = vb
+		} else {
+			res = va
+		}
 	default:
 		return x.Errorf("Unhandled aggregator function %v", ag.name)
 	}

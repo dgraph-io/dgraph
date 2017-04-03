@@ -366,6 +366,43 @@ func TestCascadeDirective(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValAggNestedFuncMinMaxVars(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as age
+				friend {
+					n as min(age)
+					s as max(age)
+					p as maxvar(a, s, n)
+					q as minvar(a, s, n)
+				}
+			}
+
+			MaxMe(id: var(f), orderasc: var(p)) {
+				name
+				var(p)
+				var(a)
+				var(n)
+				var(s)
+			}
+
+			MinMe(id: var(f), orderasc: var(q)) {
+				name
+				var(q)
+				var(a)
+				var(n)
+				var(s)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"MinMe":[{"name":"Michonne","var[a]":38,"var[n]":15,"var[q]":15,"var[s]":19},{"name":"Rick Grimes","var[a]":15,"var[n]":38,"var[q]":15,"var[s]":38},{"name":"Andrea","var[a]":19,"var[n]":15,"var[q]":15,"var[s]":15}],"MaxMe":[{"name":"Andrea","var[a]":19,"var[n]":15,"var[p]":19,"var[s]":15},{"name":"Michonne","var[a]":38,"var[n]":15,"var[p]":38,"var[s]":19},{"name":"Rick Grimes","var[a]":15,"var[n]":38,"var[p]":38,"var[s]":38}]}`,
+		js)
+}
+
 func TestQueryVarValAggNestedFuncUnary(t *testing.T) {
 	populateGraph(t)
 	query := `
