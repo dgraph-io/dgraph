@@ -16,7 +16,7 @@ function slugify(text) {
     if (text.length > 5) {
       if (!clipInit) {
         var text,
-          clip = new Clipboard(".copy-to-clipboard", {
+          clip = new Clipboard(".copy-btn", {
             text: function(trigger) {
               text = $(trigger).prev("code").text();
               return text.replace(/^\$\s/gm, "");
@@ -27,32 +27,28 @@ function slugify(text) {
         clip.on("success", function(e) {
           e.clearSelection();
           inPre = $(e.trigger).parent().prop("tagName") == "PRE";
-          $(e.trigger)
-            .attr("aria-label", "Copied to clipboard!")
-            .addClass("tooltipped tooltipped-" + (inPre ? "w" : "s"));
+          $(e.trigger).text("Copied to clipboard!")
+            .addClass('copied');
+
+          window.setTimeout(function() {
+            $(e.trigger).text("Copy").removeClass('copied');
+          }, 2000);
         });
 
         clip.on("error", function(e) {
+          e.clearSelection();
           inPre = $(e.trigger).parent().prop("tagName") == "PRE";
-          $(e.trigger)
-            .attr("aria-label", fallbackMessage(e.action))
-            .addClass("tooltipped tooltipped-" + (inPre ? "w" : "s"));
-          $(document).one("copy", function() {
-            $(e.trigger)
-              .attr("aria-label", "Copied to clipboard!")
-              .addClass("tooltipped tooltipped-" + (inPre ? "w" : "s"));
-          });
+          $(e.trigger).text("Error copying");
+
+          window.setTimeout(function() {
+            $(e.trigger).text("Copy");
+          }, 2000);
         });
 
         clipInit = true;
       }
 
-      code.after('<span class="copy-to-clipboard">Copy</span>');
-      code.next(".copy-to-clipboard").on("mouseleave", function() {
-        $(this)
-          .attr("aria-label", null)
-          .removeClass("tooltipped tooltipped-s tooltipped-w");
-      });
+      code.after('<span class="copy-btn">Copy</span>');
     }
   });
 

@@ -296,12 +296,12 @@ hr {
 #body-inner pre {
     white-space: pre-wrap;
 }*/
-.tabs-wrapper pre {
+/*.tabs-wrapper pre {
     margin: 1rem 0;
     border: 0;
     padding: 0;
     background: inherit;
-}
+}*/
 table {
     border: 1px solid #eaeaea;
     table-layout: auto;
@@ -775,6 +775,7 @@ pre {
   border: 0;
   border-radius: 2px;
   line-height: 1.45;
+  border: 1px solid #ececec;
 }
 pre code {
   color: #237794;
@@ -810,36 +811,27 @@ pre.collapsed .showmore {
 pre.collapsed .showmore:hover {
   background: linear-gradient(180deg, hsla(0, 0%, 100%, 0), #dadada);
 }
-.copy-to-clipboard {
+.copy-btn {
   position: absolute;
   right: 0;
   top: 0;
-  border: 1px solid #dedede;
-  color: #797979;
+  color: #5a5a5a;
   background: white;
   padding: 6px 11px 3px;
   text-transform: uppercase;
   font-size: 11px;
   letter-spacing: 0.5px;
-  border-top: 1px solid #f9f9f9;
-  border-right: 1px solid #f9f9f9;
+  border-bottom: 1px solid #ececec;
+  border-left: 1px solid #ececec;
   border-bottom-left-radius: 3px;
   cursor: pointer;
 }
-.copy-to-clipboard:hover {
+.copy-btn:not(.copied):hover {
     background-color: #fdfdfd;
 }
-/*#header {
-  text-align: center;
+.copy-btn.copied {
+  cursor: default;
 }
-#header img {
-  width: 144px;
-}
-#header a {
-  padding: 18px 0;
-  display: inline-block;
-  width: 100%;
-}*/
 
 #header {
   height: 64px;
