@@ -216,7 +216,21 @@ The query could be of the following forms :
 	 }`
 */
 
-func parseQueryWithVariables(str string) (string, varMap, error) {
+func convertToVarMap(variables map[string]string) varMap {
+	// Go client passes in variables separately.
+	vm := make(varMap)
+
+	for k, v := range variables {
+		vm[k] = varInfo{
+			Value: v,
+		}
+	}
+
+	return vm
+}
+
+func parseQueryWithVariables(str string, variables map[string]string) (string,
+	varMap, error) {
 	var q query
 	vm := make(varMap)
 	mp := make(map[string]string)
@@ -241,6 +255,7 @@ func parseQueryWithVariables(str string) (string, varMap, error) {
 			Value: v,
 		}
 	}
+
 	return q.Query, vm, nil
 }
 
@@ -330,8 +345,8 @@ type Result struct {
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
-func Parse(input string) (res Result, rerr error) {
-	query, vmap, err := parseQueryWithVariables(input)
+func Parse(input string, variables map[string]string) (res Result, rerr error) {
+	query, vmap, err := parseQueryWithVariables(input, variables)
 	if err != nil {
 		return res, err
 	}
