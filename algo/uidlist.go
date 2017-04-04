@@ -221,7 +221,8 @@ func Difference(u, v *taskp.List) {
 	out := u.Uids[:0]
 	n := len(u.Uids)
 	m := len(v.Uids)
-	for i, k := 0, 0; i < n && k < m; {
+	i, k := 0, 0
+	for i < n && k < m {
 		uid := u.Uids[i]
 		vid := v.Uids[k]
 		if uid < vid {
@@ -236,6 +237,10 @@ func Difference(u, v *taskp.List) {
 			for k = k + 1; k < m && v.Uids[k] < uid; k++ {
 			}
 		}
+	}
+	for i < n && k >= m {
+		out = append(out, u.Uids[i])
+		i++
 	}
 	u.Uids = out
 }
