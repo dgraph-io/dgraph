@@ -158,7 +158,7 @@ func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string
 }
 
 func processToFastJsonReq(t *testing.T, query string) (string, error) {
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query, Http: true})
 	if err != nil {
 		return "", err
 	}
@@ -180,7 +180,7 @@ func processToFastJSON(t *testing.T, query string) string {
 }
 
 func processSchemaQuery(t *testing.T, q string) []*graphp.SchemaNode {
-	res, err := gql.Parse(q)
+	res, err := gql.Parse(gql.Request{Str: q})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -189,8 +189,9 @@ func processSchemaQuery(t *testing.T, q string) []*graphp.SchemaNode {
 	return schema
 }
 
-func processToPB(t *testing.T, query string, debug bool) []*graphp.Node {
-	res, err := gql.Parse(query)
+func processToPB(t *testing.T, query string, variables map[string]string,
+	debug bool) []*graphp.Node {
+	res, err := gql.Parse(gql.Request{Str: query, Variables: variables})
 	require.NoError(t, err)
 	var ctx context.Context
 	if debug {
