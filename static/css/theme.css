@@ -140,6 +140,9 @@ p {
   width: 100%;
 }
 
+body.sidebar-visible {
+  overflow-x: hidden;
+}
 body.sidebar-visible .content-wrapper {
   transform: translateX(280px);
 }
