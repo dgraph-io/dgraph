@@ -56,7 +56,7 @@ func main() {
 	// Starting a new request.
 	req := client.Req{}
 	// _:person1 tells Dgraph to assign a new Uid and is the preferred way of creating new nodes.
-	// See https://wiki.dgraph.io/index.php?title=Query_Language&redirect=no#Assigning_UID for more details.
+	// See https://docs.dgraph.io/master/query-language/#assigning-uid for more details.
 	nq := graphp.NQuad{
 		Subject:   "_:person1",
 		Predicate: "name",
@@ -156,7 +156,8 @@ func main() {
 	// Lets initiate a new request and query for the data.
 	req = client.Req{}
 	// Lets set the starting node id to person1Uid.
-	req.SetQuery(fmt.Sprintf("{ me(id: %v) { _uid_ name now birthday loc salary age married friend {_uid_ name} } }", client.Uid(person1Uid)))
+	req.SetQuery(fmt.Sprintf("{ me(id: %v) { _uid_ name now birthday loc salary age married friend {_uid_ name} } }", client.Uid(person1Uid)),
+	 map[string]string{})
 	resp, err = c.Run(context.Background(), req.Request())
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
@@ -252,7 +253,7 @@ mutation {
    }
   }
  }
-}`)
+}`, map[string]string{})
 resp, err := c.Run(context.Background(), req.Request())
 if err != nil {
 	log.Fatalf("Error in getting response from server, %s", err)
