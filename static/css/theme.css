@@ -465,7 +465,7 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   padding: 2px 9px;
   color: #5d5d5d;
   font-size: 12px;
-  margin-top: 8px;
+  margin: 8px 4px;
 }
 .edit-btn:hover {
   color: #333333;
