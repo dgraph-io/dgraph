@@ -10,7 +10,8 @@ const emptyState = {
     numNodes: 0,
     numEdges: 0,
     treeView: false,
-    isFetching: false
+    isFetching: false,
+    mutation: false
 };
 
 const response = (state = emptyState, action) => {
@@ -19,14 +20,16 @@ const response = (state = emptyState, action) => {
             return {
                 ...state,
                 text: action.text,
-                success: false
+                success: false,
+                data: action.json
             };
         case "SUCCESS_RESPONSE":
             return {
                 ...state,
                 data: action.data,
                 text: action.text || "",
-                success: true
+                success: true,
+                mutation: action.isMutation
             };
         case "RESPONSE_PROPERTIES":
             return {

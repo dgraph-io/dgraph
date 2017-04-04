@@ -48,15 +48,17 @@ const fetchedResponse = () => ({
     fetching: false
 });
 
-const saveSuccessResponse = (text, data) => ({
+const saveSuccessResponse = (text, data, isMutation) => ({
     type: "SUCCESS_RESPONSE",
     text,
-    data
+    data,
+    isMutation
 });
 
-const saveErrorResponse = text => ({
+const saveErrorResponse = (text, json = {}) => ({
     type: "ERROR_RESPONSE",
-    text
+    text,
+    json
 });
 
 const saveResponseProperties = obj => ({
@@ -137,19 +139,18 @@ export const runQuery = query => {
                             // We display the response from server.
                         } else {
                             dispatch(addQuery(query));
-                            dispatch(
-                                saveSuccessResponse(JSON.stringify(result))
-                            );
+                            dispatch(saveSuccessResponse("", result, true));
                         }
                     } else if (isNotEmpty(result)) {
                         dispatch(addQuery(query));
                         let mantainSortOrder = showTreeView(query);
-                        dispatch(saveSuccessResponse(null, result));
+                        dispatch(saveSuccessResponse("", result, false));
                         dispatch(renderGraph(query, result, mantainSortOrder));
                     } else {
                         dispatch(
                             saveErrorResponse(
-                                "Your query did not return any results."
+                                "Your query did not return any results.",
+                                result
                             )
                         );
                     }

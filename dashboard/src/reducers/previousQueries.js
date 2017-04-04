@@ -2,8 +2,7 @@ const query = (state, action) => {
     switch (action.type) {
         case "ADD_QUERY":
             return {
-                text: action.text,
-                lastRun: Date.now()
+                text: action.text
             };
         default:
             return state;
