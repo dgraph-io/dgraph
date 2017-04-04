@@ -15,7 +15,8 @@ HOST=https://docs.dgraph.io
 rebuild() {
 	echo -e "$(date) $GREEN Updating docs for branch: $1.$RESET"
 	# Generate new docs after merging.
-	HUGO_TITLE="Dgraph Doc ${2}" hugo\
+	HUGO_TITLE="Dgraph Doc ${2}"\
+	CURRENT_BRANCH=${1} hugo\
 		--destination=public/"$2"\
 		--baseURL="$HOST"/"$2" 1> /dev/null
 }
