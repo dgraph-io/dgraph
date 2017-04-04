@@ -16,14 +16,16 @@ title = "Get Started"
 ### System Installation
 
 You could simply install the binaries with
-```
+
+```sh
 curl https://get.dgraph.io -sSf | bash
 ```
 
 That script would automatically install Dgraph for you. Once done, you can jump straight to [step 2]({{< relref "#step-2-run-dgraph" >}}).
 
 **Alternative:** To mitigate potential security risks, you could instead do this:
-```
+
+```sh
 curl https://get.dgraph.io > /tmp/get.sh
 vim /tmp/get.sh  # Inspect the script
 sh /tmp/get.sh   # Execute the script
@@ -32,7 +34,8 @@ sh /tmp/get.sh   # Execute the script
 ### Docker Image Installation
 
 You may pull our Docker images [from here](https://hub.docker.com/r/dgraph/dgraph/). From terminal, just type:
-```
+
+```sh
 docker pull dgraph/dgraph
 ```
 
@@ -40,7 +43,8 @@ docker pull dgraph/dgraph
 
 ### Using System Installation
 Follow this command to run Dgraph:
-```
+
+```sh
 dgraph
 ```
 
@@ -51,14 +55,14 @@ If you want to persist the data while you play with Dgraph, you should mount the
 {{% /notice %}}
 
 #### Map to default port (8080)
-```
+
+```sh
 mkdir -p ~/dgraph
 docker run -it -p 8080:8080 -v ~/dgraph:/dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
-
 #### Map to custom port
-```
+```sh
 mkdir -p ~/dgraph
 # Mapping port 8080 from within the container to 9090  of the instance
 docker run -it -p 9090:8080 -v ~/dgraph:/dgraph dgraph/dgraph dgraph --bindall=true
@@ -70,7 +74,8 @@ docker run -it -p 9090:8080 -v ~/dgraph:/dgraph dgraph/dgraph dgraph --bindall=t
 {{% notice "tip" %}}From v0.7.3,  a user interface is available at [`http://localhost:8080`](http://localhost:8080) from the browser to run mutations and visualise  results from the queries.{{% /notice %}}
 
 Lets do a mutation which stores information about the first three releases of the the ''Star Wars'' series and one of the ''Star Trek'' movies.
-```
+
+```sh
 curl localhost:8080/query -XPOST -d $'
 mutation {
   set {
@@ -118,7 +123,7 @@ mutation {
 
 Lets add a schema so that we can perform some interesting queries with term matching, filtering and sorting.
 
-```
+```sh
 curl localhost:8080/query -XPOST -d $'
 mutation {
   schema {
@@ -131,7 +136,8 @@ mutation {
 ```
 
 Now lets get the movies (and their associated information) starting with "Star Wars" and which were released after "1980".
-```
+
+```sh
 curl localhost:8080/query -XPOST -d $'{
   me(func:allofterms(name, "Star Wars")) @filter(geq(release_date, "1980")) {
     name
@@ -150,7 +156,7 @@ curl localhost:8080/query -XPOST -d $'{
 
 Output
 
-```
+```json
 {
     "me": [
         {
@@ -207,7 +213,7 @@ Output
 ### Download dataset
 First, download the goldendata.rdf.gz dataset from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz) ([download](https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz)). Put it in `~/dgraph` directory, creating it if necessary using `mkdir ~/dgraph`.
 
-```
+```sh
 mkdir -p ~/dgraph
 cd ~/dgraph
 wget "https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz?raw=true" -O goldendata.rdf.gz -q
@@ -218,7 +224,8 @@ wget "https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz
 Assuming that Dgraph is running as mentioned in Step 2.
 
 Lets add a type for `initial_release_date` which is a new predicate that we will be loading. Note the `name` predicate is already indexed from the previous step.
-```
+
+```sh
 curl localhost:8080/query -XPOST -d '
 mutation {
   schema {
@@ -228,20 +235,22 @@ mutation {
 ```
 
 Now lets load the golden dataset that you previously downloaded by running the following in another terminal:
-```
+
+```sh
 cd ~/dgraph # The directory where you downloaded the rdf.gz file.
 dgraphloader -r goldendata.rdf.gz
 ```
 
 Output
-```
+
+```sh
 Processing goldendata.rdf.gz
 Number of mutations run   : 1121
 Number of RDFs processed  : 1120879
 Time spent                : MMmSS.FFFFFFFFs
 RDFs processed per second : XXXXX
-
 ```
+
 {{% notice "tip" %}}Your counts should be the same, but your statistics will vary.{{% /notice %}}
 
 ## Step 5: Run some queries
@@ -251,7 +260,8 @@ RDFs processed per second : XXXXX
 ### Movies by Steven Spielberg
 
 Let's now find all the entities named "Steven Spielberg" and the movies directed by them.
-```
+
+```sh
 curl localhost:8080/query -XPOST -d '{
   director(func:allofterms(name, "steven spielberg")) {
     name@en
@@ -269,7 +279,8 @@ This query will return all the movies by the popular director Steven Spielberg, 
 
 ### Released after August 1984
 Now, let's do some filtering. This time we'll only retrieve the movies which were released after August 1984. We'll sort in increasing order this time by using `orderasc`, instead of `orderdesc`.
-```
+
+```sh
 curl localhost:8080/query -XPOST -d '{
   director(func:allofterms(name, "steven spielberg")) {
     name@en
@@ -283,7 +294,8 @@ curl localhost:8080/query -XPOST -d '{
 
 ### Released in 1990s
 We'll now add an AND filter using `AND` and find only the movies released in the 90s.
-```
+
+```sh
 curl localhost:8080/query -XPOST -d '{
   director(func:allofterms(name, "steven spielberg")) {
     name@en
@@ -325,7 +337,7 @@ This should give you an idea of some of the queries Dgraph is capable of. A wide
 
 One of the things to try would be to open bash in the container and try to run Dgraph from within it.
 
-```
+```sh
 docker run -it dgraph/dgraph bash
 # Now that you are within the container, run Dgraph.
 dgraph

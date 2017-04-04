@@ -12,7 +12,7 @@ If you followed one of the [recommended installation]({{< relref "get-started/in
 
 If you don't want to follow the automatic installation method, you could manually download the appropriate tar for your platform from **[Dgraph releases](https://github.com/dgraph-io/dgraph/releases)**. After downloading the tar for your platform from Github, extract the binaries to `/usr/local/bin` like so.
 
-```
+```sh
 # For Linux
 $ sudo tar -C /usr/local/bin -xzf dgraph-linux-amd64-VERSION.tar.gz
 
@@ -27,7 +27,7 @@ $ sudo tar -C /usr/local/bin -xzf dgraph-darwin-amd64-VERSION.tar.gz
 ### Config
 As a helper utility, any of the flags provided to Dgraph binary on command-line can be stored in a YAML file and provided via `-config` flag. This is the default config located at `dgraph/cmd/dgraph/config.yaml`.
 
-```
+```sh
 # Folder in which to store backups.
 backup: backup
 
@@ -69,7 +69,8 @@ Both encrypted (password protected) and unencrypted private keys are supported.
 {{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
 
 Following configuration options are available for the server:
-```
+
+```sh
 # Use TLS connections with clients.
 tls.on
 
@@ -99,7 +100,8 @@ tls.min_version string
 ```
 
 Dgraph loader can be configured with following options:
-```
+
+```sh
 # Use TLS connections.
 tls.on
 
@@ -133,7 +135,8 @@ tls.min_version string
 
 ### Single Instance
 You could run a single instance like this
-```
+
+```sh
 mkdir ~/dgraph # The folder where dgraph binary will create the directories it requires.
 cd ~/dgraph
 dgraph
@@ -159,6 +162,7 @@ The groups config syntax is as follows:
 ```
 
 The default groups config used by Dgraph, when nothing is provided is:
+
 ```
 $ cat cmd/dgraph/groups.conf
 // Default formula for getting group where fp is the fingerprint of a predicate.
@@ -169,6 +173,7 @@ default: fp % 1 + 1
 {{% notice "warning" %}}Group id 0 is used to store membership information for the entire cluster. We don't take any snapshots of this group, so no data should be stored on group zero. [Related Github issue](https://github.com/dgraph-io/dgraph/issues/427){{% /notice %}}
 
 Example of a valid groups.conf is:
+
 ```
 // If * is specified prefix matching would be done, otherwise equality matching would be done.
 
@@ -232,13 +237,13 @@ $ dgraphloader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file>
 $ dgraphloader -r <path-to-rdf-gzipped-file> -d <dgraph-server-address:port>
 # For example to load goldendata with the corresponding schema.
 $ dgraphloader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -s github.com/dgraph-io/benchmarks/data/goldendata.schema
-
 ```
 
 ## Backup
 
 You can take a backup of a running Dgraph cluster, by running the following command from any server in the cluster, like so:
-```
+
+```sh
 $ curl localhost:8080/admin/backup
 ```
 {{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.{{% /notice %}}
@@ -250,7 +255,8 @@ You can do this via a browser as well, as long as the HTTP GET is being run from
 ## Shutdown
 
 You can do a clean exit of a single dgraph node by running the following command on that server in the cluster, like so:
-```
+
+```sh
 $ curl localhost:8080/admin/shutdown
 ```
 {{% notice "warning" %}}This won't work if called from outside the server which is running dgraph.{{% /notice %}}
