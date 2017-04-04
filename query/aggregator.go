@@ -127,6 +127,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			res = v
 		}
 		ag.result = res
+		return nil
 	}
 
 	if ag.result.Value == nil {
