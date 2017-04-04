@@ -166,7 +166,7 @@ pre {
   border: 1px solid #ececec;
 }
 pre code {
-  color: #237794;
+  /*color: #237794;*/
   background: inherit;
   white-space: inherit;
   border: 0;
@@ -198,6 +198,13 @@ pre.collapsed .showmore {
 pre.collapsed .showmore:hover {
   background: linear-gradient(180deg, hsla(0, 0%, 100%, 0.1), rgba(226, 226, 226, 0.91));
   font-weight: 600;
+}
+/* unset the default hljs default style*/
+.hljs {
+  display: block;
+  overflow-x: inherit;
+  padding: 0;
+  background: inherit;
 }
 .copy-btn {
   position: absolute;
@@ -342,6 +349,7 @@ pre.collapsed .showmore:hover {
   padding-bottom: 8px;
 }
 .topics .main-topic.active > a {
+  font-weight: 600;
   color: #fb5812;
 }
 
