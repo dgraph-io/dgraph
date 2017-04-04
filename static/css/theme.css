@@ -334,20 +334,47 @@ pre.collapsed .showmore:hover {
 .topics .main-topic.active > a {
   color: #fb5812;
 }
+
+.topic {
+  position: relative;
+  transition: all 250ms ease-out;
+}
+
+.topic .fa {
+  visibility: hidden;
+  position: absolute;
+  left: -11px;
+  top: 9.5px;
+  font-size: 12px;
+  transition: all 250ms ease-out;
+}
+
+.topic:hover > .fa {
+  visibility: visible;
+  color: #fb5812;
+}
+.topic.active > .fa {
+  visibility: visible;
+  color: #fb5812;
+}
+
 .sub-topics {
   list-style: none;
   padding-left: 14px;
   font-weight: 400;
 }
-.sub-topics li a {
+.sub-topics li {
   color: #707070;
+}
+.sub-topics li.active {
+  /*color: #ff6929;*/
+  color: #fb5812;
+}
+.sub-topics li a {
+  color: inherit;
   display: block;
   font-size: 0.95em;
   padding: 5px 0px;
-}
-.sub-topics li.active a {
-  text-decoration: underline;
-  color: #fb5812;
 }
 .menu-header {
   padding: 20px 20px 10px;

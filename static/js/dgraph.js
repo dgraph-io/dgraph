@@ -1,18 +1,20 @@
 // debounce limits the amount of function invocation by spacing out the calls
 // by at least `wait` ms.
 function debounce(func, wait, immediate) {
-	var timeout;
-	return function() {
-		var context = this, args = arguments;
-		var later = function() {
-			timeout = null;
-			if (!immediate) func.apply(context, args);
-		};
-		var callNow = immediate && !timeout;
-		clearTimeout(timeout);
-		timeout = setTimeout(later, wait);
-		if (callNow) func.apply(context, args);
-	};
+  var timeout;
+
+  return function() {
+    var context = this, args = arguments;
+    var later = function() {
+      timeout = null;
+      if (!immediate) func.apply(context, args);
+    };
+
+    var callNow = immediate && !timeout;
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+    if (callNow) func.apply(context, args);
+  };
 };
 
 function slugify(text) {
@@ -76,6 +78,7 @@ function slugify(text) {
     return e1.compareDocumentPosition(e2) & Node.DOCUMENT_POSITION_FOLLOWING;
   };
   var activeLink = document.querySelector(".topic.active");
+  var allLinks = [];
 
   var h2sWithH3s = [];
   var j = 0;
@@ -108,15 +111,17 @@ function slugify(text) {
       li.className = 'topic sub-topic';
       subMenu.appendChild(li);
 
-      // if (h.subHeaders) {
-      //   createSubtopic(subMenu, h.subHeaders)
-      // }
+      if (h.subHeaders) {
+        createSubtopic(subMenu, h.subHeaders)
+      }
     });
   }
 
   function createSubtopicItem(h) {
+  allLinks.push(h);
+
     var li = document.createElement("li");
-    li.innerHTML = '<a href="#' +
+    li.innerHTML = '<i class="fa fa-angle-right"></i> <a href="#' +
       h.id +
       '" data-scroll class="' +
       h.tagName +
@@ -132,12 +137,15 @@ function slugify(text) {
   function setActiveSubTopic(hash) {
     // Set inactive the previously active topic
     var prevActiveTopic = document.querySelector('.sub-topics .topic.active');
-    if (prevActiveTopic) {
-      prevActiveTopic.classList.remove('active');
-    }
+    var nextActiveTopic = document.querySelector('.sub-topics a[href="' + hash + '"]').parentNode;
 
-    var nextActiveTopicAnchor = document.querySelector('.sub-topics a[href="' + hash + '"]');
-    nextActiveTopicAnchor.parentNode.classList.add('active');
+    if (prevActiveTopic !== nextActiveTopic) {
+      nextActiveTopic.classList.add('active');
+
+      if (prevActiveTopic) {
+        prevActiveTopic.classList.remove('active');
+      }
+    }
   }
 
   // updateSidebar updates the active menu in the sidebar
@@ -145,11 +153,11 @@ function slugify(text) {
     var currentScrollY = document.body.scrollTop;
 
     var activeHash;
-    for (var i = 0; i < h2sWithH3s.length; i++) {
-      var h = h2sWithH3s[i];
-      var hash = h.header.getElementsByTagName('a')[0].hash;
+    for (var i = 0; i < allLinks.length; i++) {
+      var h = allLinks[i];
+      var hash = h.getElementsByTagName('a')[0].hash;
 
-      if (h.header.offsetTop - 250 > currentScrollY) {
+      if (h.offsetTop - 250 > currentScrollY) {
         if (!activeHash) {
           activeHash = hash;
           break;
