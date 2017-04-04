@@ -330,7 +330,7 @@ age: int .
 
 * Mutations only check the scalar types. For example, in the given schema, any mutation that sets age would be checked for being a valid integer, any mutation that sets name would be checked for being a valid string.
 * The returned fields are of types specified in the schema (given they were specified, or else derived from first mutation).
-* **If schema was not specified, the schema would be derived based on the first mutation for that predicate.**  The [rdf type]({{< relref "#rdf-type" >}}) present in the first mutation would be considered as the schema for the field. If no storage type is specified in rdf, then it would be treated as default type(Dgraph Type) and it is stored internally as string(Go Type).
+* **If schema was not specified, the schema would be derived based on the first mutation for that predicate.**  The [rdf types]({{< relref "#rdf-types" >}}) present in the first mutation would be considered as the schema for the field. If no storage type is specified in rdf, then it would be treated as default type(Dgraph Type) and it is stored internally as string(Go Type).
 
 ### Indexing
 
@@ -467,7 +467,7 @@ schema(pred: [name, friend]) {
 }' | python -m json.tool | less
 ```
 
-## RDF Types {#rdf-type}
+## RDF Types
 RDF types can also be used to specify the type of values. They can be attached to the values using the `^^` separator.
 
 ```
@@ -507,7 +507,7 @@ The following table lists all the supported [RDF datatypes](https://www.w3.org/T
 |  <http://www.w3.org/2001/XMLSchema#float> |    Float |
 
 
-In case a predicate has different schema type and storage type, the convertibility between the two is ensured during mutation and an error is thrown if they are incompatible.  The values are always stored as storage type if specified, or else they are converted to schema type and stored. Storage type is property of the value we are storing and schema type is property of the edge. 
+In case a predicate has different schema type and storage type, the convertibility between the two is ensured during mutation and an error is thrown if they are incompatible.  The values are always stored as storage type if specified, or else they are converted to schema type and stored. Storage type is property of the value we are storing and schema type is property of the edge.
 
 Example: If schema type is int and we do the following mutations.
 
@@ -1035,7 +1035,7 @@ curl localhost:8080/query -XPOST -d $'{
 ```
 Note that the first result with the name "Unexpected Passion" is either not a film entity, or it is a film entity with no genre.
 
-### Regex search 
+### Regex search
 `regexp` function allows a regular expression match on the values. It requires exact index to be present for working.
 
 ```
@@ -1047,7 +1047,7 @@ curl localhost:8080/query -XPOST -d $'{
     }
   }
 }
-' 
+'
 ```
 Output:
 ```
@@ -3047,7 +3047,7 @@ Output:
   ]
 }
 ```
-## Cascade Directive 
+## Cascade Directive
 
 `@cascade` directive forces a removal of those entites that don't have all the fields specified in the query. This can be useful in cases where some filter was applied. For example, consider this query:
 
