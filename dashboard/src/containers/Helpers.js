@@ -1,6 +1,6 @@
 import randomColor from "randomcolor";
 import uuid from "uuid";
-import _ from "lodash/object";
+import _ from "lodash";
 
 export function checkStatus(response) {
   if (response.status >= 200 && response.status < 300) {
@@ -318,6 +318,8 @@ export function processGraph(
     fullName,
     regexEx = new RegExp(regex),
     isSchema = false;
+
+  response = _.cloneDeep(response);
 
   for (var k in response) {
     if (!response.hasOwnProperty(k)) {

@@ -95,7 +95,7 @@ func childAttrs(sg *query.SubGraph) []string {
 }
 
 func processToFastJSON(q string) string {
-	res, err := gql.Parse(q)
+	res, err := gql.Parse(gql.Request{Str: q, Http: true})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func processToFastJSON(q string) string {
 }
 
 func runQuery(q string) (string, error) {
-	res, err := gql.Parse(q)
+	res, err := gql.Parse(gql.Request{Str: q, Http: true})
 	if err != nil {
 		return "", err
 	}
@@ -139,7 +139,7 @@ func runQuery(q string) (string, error) {
 }
 
 func runMutation(m string) error {
-	res, err := gql.Parse(m)
+	res, err := gql.Parse(gql.Request{Str: m, Http: true})
 	if err != nil {
 		return err
 	}
@@ -461,7 +461,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
-	res, err := gql.Parse(m)
+	res, err := gql.Parse(gql.Request{Str: m, Http: true})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -490,7 +490,7 @@ var q5 = `
 `
 
 func TestSchemaValidationError(t *testing.T) {
-	res, err := gql.Parse(m5)
+	res, err := gql.Parse(gql.Request{Str: m5, Http: true})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -520,7 +520,7 @@ var q6 = `
 `
 
 func TestSchemaConversion(t *testing.T) {
-	res, err := gql.Parse(m6)
+	res, err := gql.Parse(gql.Request{Str: m6, Http: true})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -547,7 +547,7 @@ var qErr = `
 `
 
 func TestMutationError(t *testing.T) {
-	res, err := gql.Parse(qErr)
+	res, err := gql.Parse(gql.Request{Str: qErr, Http: true})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -568,7 +568,7 @@ var qm = `
 `
 
 func TestAssignUid(t *testing.T) {
-	res, err := gql.Parse(qm)
+	res, err := gql.Parse(gql.Request{Str: qm, Http: true})
 	require.NoError(t, err)
 
 	ctx := context.Background()

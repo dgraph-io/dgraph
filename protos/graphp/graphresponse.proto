@@ -56,13 +56,14 @@ message SchemaUpdate {
         REVERSE = 2;
     }
     Directive directive = 3;
-    repeated string tokenizer = 4; 
+    repeated string tokenizer = 4;
 }
 
 message Request {
     string query = 1;
     Mutation mutation = 2;
     Schema schema = 3;
+    map<string, string> vars = 4; // Support for GraphQL like variables.
 }
 
 message Latency {
