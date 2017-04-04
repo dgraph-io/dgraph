@@ -232,7 +232,9 @@ func convertToVarMap(variables map[string]string) varMap {
 type Request struct {
 	Str       string
 	Variables map[string]string
-	Http      bool
+	// We need this so that we don't try to do JSON.Unmarshal for request coming
+	// from Go client, as we directly get the variables in a map.
+	Http bool
 }
 
 func parseQueryWithVariables(r Request) (string, varMap, error) {
@@ -366,8 +368,6 @@ func Parse(r Request) (res Result, rerr error) {
 	if err != nil {
 		return res, err
 	}
-
-	fmt.Println("query", query, "vmap", vmap)
 
 	l := lex.NewLexer(query).Run(lexText)
 
