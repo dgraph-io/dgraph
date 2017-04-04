@@ -4,6 +4,13 @@ title = "Get Started"
 
 **New to Dgraph? Here's a 5 step tutorial to get you up and running.**
 
+![logo](https://img.shields.io/badge/status-alpha-red.svg)
+[![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://docs.dgraph.io)
+[![Build Status](https://travis-ci.org/dgraph-io/dgraph.svg?branch=master)](https://travis-ci.org/dgraph-io/dgraph)
+[![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/dgraph?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
+[![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
+
 ## Step 1: Installation
 
 ### System Installation
