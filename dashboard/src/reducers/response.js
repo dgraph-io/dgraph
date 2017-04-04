@@ -29,7 +29,7 @@ const response = (state = emptyState, action) => {
                 data: action.data,
                 text: action.text || "",
                 success: true,
-                mutation: action.mutation
+                mutation: action.isMutation
             };
         case "RESPONSE_PROPERTIES":
             return {
