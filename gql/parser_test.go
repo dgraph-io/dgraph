@@ -2461,6 +2461,23 @@ func TestParseQueryWithAttrLang(t *testing.T) {
 	require.Equal(t, "name@en:fr", res.Query[0].Children[1].Args["orderasc"])
 }
 
+func TestParseQueryWithAttrLang2(t *testing.T) {
+	query := `
+	{
+	  me(func:regexp(name, "^[a-zA-z]*[^Kk ]?[Nn]ight"), orderasc: name@en, first:5) {
+		name@en
+		name@de
+		name@it
+	  }
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, "name@en", res.Query[0].Args["orderasc"])
+}
+
 func TestMain(m *testing.M) {
 	group.ParseGroupConfig("")
 	os.Exit(m.Run())
