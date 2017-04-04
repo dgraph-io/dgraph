@@ -253,9 +253,10 @@ pre.collapsed .showmore:hover {
 }
 #header .menu-container ul li a {
   color: #5f5f5f;
-  padding: 19px 17px 20px;
+  padding: 21px 17px;
   display: inline-block;
   text-decoration: none;
+  font-size: 14px;
 }
 #header .menu-container ul li a:hover {
   text-decoration: none;
@@ -393,6 +394,23 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   position: relative;
   top: -83px;
   visibility: hidden;
+}
+
+.community-cta {
+  position: fixed;
+  bottom: 0;
+  right: 5%;
+  padding: 10px 22px;
+  background: #29b1ff;
+  color: white;
+  text-decoration: none;
+  box-shadow: 0px 1px 10px 0.2px #888888;
+}
+.community-cta:hover {
+  text-decoration: none;
+  color: white;
+  background: #10a8ff;
+  box-shadow: 0px 1px 13px 0.2px #888888;
 }
 
 /* min-width: 800px */
