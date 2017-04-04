@@ -3357,19 +3357,26 @@ curl localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
-The type of a variable can be suffixed with a ! to enforce that the variable must have a value. Also, the value of the variable must be parsable to the given type, if not, an error is thrown. Any variable that is being used must be declared in the named query clause in the beginning. And we also support default values for the variables. Example:
-
+* Variables whose type is suffixed with a `!` can't have a default value but must
+have a value as part of the variables map.
+* The value of the variable must be parsable to the given type, if not, an error is thrown.
+* Any variable that is being used must be declared in the named query clause in the beginning.
+* We also support default values for the variables. In the example below, `$a` has a
+default value of `2`.
 ```
 curl localhost:8080/query -XPOST -d $'{
- "query": "query test($a: int = 2, $b: int! = 3){  me(id: m.06pj8) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
+ "query": "query test($a: int = 2, $b: int!){  me(id: m.06pj8) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
  "variables" : {
-  "$a": "5"
+   "$a": "5",
+   "$b": "10"
  }
 }' | python -m json.tool | less
 ```
 
-If the variable is initialized in the variable map, the default value will be overridden (In the example, $a will be 5 and $b will be 3).
+* If the variable is initialized in the variable map, the default value will be
+overridden (In the example, `$a` will have value 5 and `$b` will be 3).
 
-The variable types that are supported as of now are: `int`, `float`, `bool` and `string`.
+* The variable types that are supported as of now are: `int`, `float`, `bool` and `string`.
+
 
 {{% notice "note" %}}In GraphiQL interface, the query and the variables have to be separately entered in their respective boxes.{{% /notice %}}

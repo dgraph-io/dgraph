@@ -358,13 +358,14 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 
 // parseQueryAndMutation handles the cases where the query parsing code can hang indefinitely.
 // We allow 1 second for parsing the query; and then give up.
-func parseQueryAndMutation(ctx context.Context, query string) (res gql.Result, err error) {
-	x.Trace(ctx, "Query received: %v", query)
+func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result,
+	err error) {
+	x.Trace(ctx, "Query received: %v", r.Str)
 	errc := make(chan error, 1)
 
 	go func() {
 		var err error
-		res, err = gql.Parse(query)
+		res, err = gql.Parse(r)
 		errc <- err
 	}()
 
@@ -431,7 +432,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := parseQueryAndMutation(ctx, q)
+	res, err := parseQueryAndMutation(ctx, gql.Request{
+		Str:       q,
+		Variables: map[string]string{},
+		Http:      true,
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -618,8 +623,12 @@ func (s *grpcServer) Run(ctx context.Context,
 
 	var l query.Latency
 	l.Start = time.Now()
-	x.Trace(ctx, "Query received: %v", req.Query)
-	res, err := parseQueryAndMutation(ctx, req.Query)
+	x.Trace(ctx, "Query received: %v, variables: %v", req.Query, req.Variables)
+	res, err := parseQueryAndMutation(ctx, gql.Request{
+		Str:       req.Query,
+		Variables: req.Variables,
+		Http:      false,
+	})
 	if err != nil {
 		return resp, err
 	}

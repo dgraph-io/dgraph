@@ -76,8 +76,9 @@ func checkNQuad(nq graphp.NQuad) error {
 // req.SetQuery("{ me(_xid_: alice) { name falls.in } }")
 // resp, err := c.Query(context.Background(), req.Request())
 // Check response and handle errors
-func (req *Req) SetQuery(q string) {
+func (req *Req) SetQuery(q string, variables map[string]string) {
 	req.gr.Query = q
+	req.gr.Variables = variables
 }
 
 func (req *Req) addMutation(nq graphp.NQuad, op Op) {
