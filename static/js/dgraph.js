@@ -140,6 +140,7 @@ function slugify(text) {
     nextActiveTopicAnchor.parentNode.classList.add('active');
   }
 
+  // updateSidebar updates the active menu in the sidebar
   function updateSidebar() {
     var currentScrollY = document.body.scrollTop;
 

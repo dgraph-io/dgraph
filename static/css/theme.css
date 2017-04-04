@@ -136,8 +136,15 @@ p {
 .content-wrapper .content {
   padding: 21px 43px;
 }
+
+@media screen and (max-width:480px) {
+  .content-wrapper .content {
+    padding: 23px 22px;
+  }
+}
+
 .content img {
-  width: 100%;
+  max-width: 100%;
 }
 
 body.sidebar-visible {
