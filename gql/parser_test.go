@@ -2471,7 +2471,7 @@ func TestParseQueryWithAttrLang2(t *testing.T) {
 	  }
 	}
 `
-	res, err := Parse(query)
+	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))

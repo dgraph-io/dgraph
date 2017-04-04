@@ -217,6 +217,7 @@ The query could be of the following forms :
 */
 
 func convertToVarMap(variables map[string]string) (vm varMap) {
+	vm = make(map[string]varInfo)
 	// Go client passes in variables separately.
 	for k, v := range variables {
 		vm[k] = varInfo{
