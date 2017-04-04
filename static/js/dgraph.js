@@ -154,9 +154,6 @@ function isElementInViewport(el) {
 
     if (prevActiveTopic !== nextActiveTopic) {
       nextActiveTopic.classList.add('active');
-      if (!isElementInViewport(nextActiveTopic)) {
-        nextActiveTopic.scrollIntoView();
-      }
 
       if (prevActiveTopic) {
         prevActiveTopic.classList.remove('active');
@@ -306,4 +303,5 @@ function isElementInViewport(el) {
 
   // On page load
   updateSidebar();
+  document.querySelector('.sub-topics .topic.active').scrollIntoView();
 })();
