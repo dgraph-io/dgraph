@@ -26,6 +26,19 @@ function slugify(text) {
     .replace(/-+$/, '');            // Trim - from end of text
 }
 
+// isElementInViewport checks if element is visible in the DOM
+function isElementInViewport(el) {
+  var rect = el.getBoundingClientRect();
+  var topbarOffset = 64;
+
+  return (
+    rect.top >= topbarOffset &&
+    rect.left >= 0 &&
+    rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+    rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+  );
+}
+
 (function() {
   // clipboard
   var clipInit = false;
@@ -141,6 +154,9 @@ function slugify(text) {
 
     if (prevActiveTopic !== nextActiveTopic) {
       nextActiveTopic.classList.add('active');
+      if (!isElementInViewport(nextActiveTopic)) {
+        nextActiveTopic.scrollIntoView();
+      }
 
       if (prevActiveTopic) {
         prevActiveTopic.classList.remove('active');

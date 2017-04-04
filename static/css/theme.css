@@ -286,10 +286,20 @@ pre.collapsed .showmore:hover {
   bottom: 0;
   left: 0;
   font-weight: 400;
-  overflow: scroll;
+  overflow-x: hidden;
+  overflow-y: scroll;
   font-size: 15px;
   top: 64px;
   transition: all 300ms cubic-bezier(0.175, 0.885, 0.335, 1.05);
+}
+#sidebar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.06);
+}
+#sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+#sidebar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 #sidebar a {
