@@ -1555,6 +1555,14 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				}
 			} else {
 				val = item.Val
+				// Get language list, if present
+				items, err := it.Peek(1)
+				if err == nil && items[0].Typ == itemAt {
+					it.Next() // consume '@'
+					it.Next() // move forward
+					langs := parseLanguageList(it)
+					val = val + "@" + strings.Join(langs, ":")
+				}
 			}
 			if val == "" {
 				val = gq.NeedsVar[len(gq.NeedsVar)-1]
