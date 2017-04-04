@@ -36,12 +36,13 @@ func isUnary(f string) bool {
 	return f == "log" || f == "exp"
 }
 
-func isBinary(f string) bool {
-	return false
+func isBinaryBoolean(f string) bool {
+	return f == "lt" || f == "gt" || f == "leq" || f == "geq" ||
+		f == "eq"
 }
 
 func isTernary(f string) bool {
-	return false
+	return f == "conditional"
 }
 
 func isMultiArgFunc(f string) bool {
@@ -59,6 +60,45 @@ func convertTo(from *taskp.Value) (types.Val, error) {
 		return vh, x.Wrapf(err, "Fail to convert from taskp.Value to types.Val")
 	}
 	return va, err
+}
+
+func compareValues(ag string, va, vb types.Val) (bool, error) {
+	if !isBinaryBoolean(ag) {
+		x.Fatalf("Function %v is not binary boolean", ag)
+	}
+
+	isLess, err := types.Less(va, vb)
+	if err != nil {
+		//Try to convert values.
+		if va.Tid == types.IntID {
+			va.Tid = types.FloatID
+			va.Value = float64(va.Value.(int64))
+		} else if vb.Tid == types.IntID {
+			vb.Tid = types.FloatID
+			vb.Value = float64(vb.Value.(int64))
+		} else {
+			return false, err
+		}
+	}
+	isMore, err := types.Less(vb, va)
+	if err != nil {
+		return false, err
+	}
+	switch ag {
+	case "lt":
+		return isLess, nil
+	case "gt":
+		return isMore, nil
+	case "leq":
+		return isLess && !isMore, nil
+	case "geq":
+		return isMore && !isLess, nil
+	case "eq":
+		return !isMore && !isLess, nil
+	default:
+		x.Fatalf("Function %v not handled in compareValues", ag)
+	}
+	return false, nil
 }
 
 func (ag *aggregator) ApplyVal(v types.Val) error {

@@ -862,7 +862,7 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
 	if isUnary(aggName) && len(mNode.Child) != 1 {
 		return x.Errorf("Function %v expects 1 argument. But got: %v", aggName, len(mNode.Child))
 	}
-	if isBinary(aggName) && len(mNode.Child) != 2 {
+	if isBinaryBoolean(aggName) && len(mNode.Child) != 2 {
 		return x.Errorf("Function %v expects 2 argument. But got: %v", aggName, len(mNode.Child))
 	}
 	if isTernary(aggName) && len(mNode.Child) != 3 {
@@ -874,6 +874,68 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
 
 	destMap := make(map[uint64]types.Val)
 	srcMap := mNode.Child[0].Val
+
+	// Handle ternary conditional operator separately here.
+	if isTernary(aggName) {
+		condMap := mNode.Child[0].Val
+		if condMap == nil {
+			return x.Errorf("Expected a value variable in %v but missing.", aggName)
+		}
+		varOne := mNode.Child[1].Val
+		varTwo := mNode.Child[2].Val
+		constOne := mNode.Child[1].Const
+		constTwo := mNode.Child[2].Const
+		for k, val := range condMap {
+			var res types.Val
+			v, ok := val.Value.(bool)
+			if !ok {
+				return x.Errorf("First variable of conditional function not a bool value")
+			}
+			if v {
+				// Pick the value of first map.
+				if constOne.Value != nil {
+					res = constOne
+				} else {
+					res = varOne[k]
+				}
+			} else {
+				// Pick the value of second map.
+				if constTwo.Value != nil {
+					res = constTwo
+				} else {
+					res = varTwo[k]
+				}
+			}
+			destMap[k] = res
+		}
+		mNode.Val = destMap
+		return nil
+	}
+
+	// Handle binary boolean operators separately here.
+	if isBinaryBoolean(aggName) {
+		ch := mNode.Child[1]
+		curMap := ch.Val
+		for k, val := range srcMap {
+			curVal := curMap[k]
+			if ch.Const.Value != nil {
+				// Use the constant value that was supplied.
+				curVal = ch.Const
+			}
+			res, err := compareValues(aggName, val, curVal)
+			if err != nil {
+				return x.Wrapf(err, "Wrong values in comaprison function.")
+			}
+			destMap[k] = types.Val{
+				Tid:   types.BoolID,
+				Value: res,
+			}
+		}
+		mNode.Val = destMap
+		return nil
+	}
+
+	// Note: The first value cannot be a constant.
 	for k := range srcMap {
 		ag := aggregator{
 			name: aggName,
@@ -883,7 +945,7 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
 			curMap := ch.Val
 			curVal := curMap[k]
 			if ch.Const.Value != nil {
-				// Use the constant valuse that was supplied.
+				// Use the constant value that was supplied.
 				curVal = ch.Const
 			}
 			ag.ApplyVal(curVal)

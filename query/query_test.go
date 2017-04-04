@@ -440,6 +440,40 @@ func TestQueryVarValAggNestedFuncMinMaxVars(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValAggNestedFuncConditional(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as age
+				friend {
+					n as min(age)
+					condLog as conditional(gt(a, 10), log(n), 1)
+					condExp as conditional(lt(a, 40), 1, exp(n))
+				}
+			}
+
+			LogMe(id: var(f), orderasc: var(condLog)) {
+				name
+				var(condLog)
+				var(n)
+				var(a)
+			}
+
+			ExpMe(id: var(f), orderasc: var(condExp)) {
+				name
+				var(condExp)
+				var(n)
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"ExpMe":[{"name":"Michonne","var[a]":38,"var[condExp]":3269017.372472,"var[n]":15},{"name":"Andrea","var[a]":19,"var[condExp]":3269017.372472,"var[n]":15},{"name":"Rick Grimes","var[a]":15,"var[condExp]":31855931757113756.000000,"var[n]":38}],"LogMe":[{"name":"Michonne","var[a]":38,"var[condLog]":2.708050,"var[n]":15},{"name":"Andrea","var[a]":19,"var[condLog]":2.708050,"var[n]":15},{"name":"Rick Grimes","var[a]":15,"var[condLog]":3.637586,"var[n]":38}]}`,
+		js)
+}
+
 func TestQueryVarValAggNestedFuncUnary(t *testing.T) {
 	populateGraph(t)
 	query := `

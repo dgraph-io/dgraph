@@ -1753,5 +1753,6 @@ func isAggregator(fname string) bool {
 
 func isValVarFunc(name string) bool {
 	return name == "sumvar" || name == "diffvar" || name == "mulvar" || name == "log" || name == "exp" ||
-		name == "conditional" || name == "maxvar" || name == "minvar"
+		name == "conditional" || name == "maxvar" || name == "minvar" || name == "conditional" ||
+		name == "lt" || name == "gt" || name == "eq" || name == "leq" || name == "geq"
 }
