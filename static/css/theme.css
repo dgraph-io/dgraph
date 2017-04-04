@@ -361,7 +361,7 @@ pre.collapsed .showmore:hover {
   font-weight: 600;
 }
 
-h1, h2, h3 {
+h2, h3 {
   position: relative;
 }
 h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
@@ -401,6 +401,7 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   bottom: 0;
   right: 5%;
   padding: 10px 22px;
+  font-size: 13px;
   background: #29b1ff;
   color: white;
   text-decoration: none;
@@ -411,6 +412,23 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   color: white;
   background: #10a8ff;
   box-shadow: 0px 1px 13px 0.2px #888888;
+}
+.edit-btn {
+  float: right;
+  text-decoration: none;
+  border: 1px solid #d6d6d6;
+  border-radius: 2px;
+  padding: 2px 9px;
+  color: #5d5d5d;
+  font-size: 12px;
+  margin-top: 8px;
+}
+.edit-btn:hover {
+  color: #333333;
+  box-shadow: 0px 0px 0.5px 0px #888888;
+}
+.edit-btn .fa {
+  margin-right: 3px;
 }
 
 /* min-width: 800px */
@@ -429,6 +447,9 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
 }
 @media screen and (max-width: 799px) {
   .menu-container {
+    display: none;
+  }
+  .edit-btn {
     display: none;
   }
 }

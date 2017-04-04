@@ -5,7 +5,11 @@
     </div>
     <select class="version-selector">
       {{ range $i, $version := .Site.Params.Versions }}
-          <option value="{{$version}}">{{ $version }}</option>
+          {{ if eq $i 0 }}
+            <option value="{{$version}}">{{ $version }} (latest)</option>
+          {{ else }}
+            <option value="{{$version}}">{{ $version }}</option>
+          {{ end }}
       {{ end }}
     </select>
   </div>
