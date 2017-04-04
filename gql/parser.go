@@ -116,6 +116,7 @@ type Facets struct {
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
 var filterOpPrecedence map[string]int
+var mathOpPrecedence map[string]int
 
 func init() {
 	filterOpPrecedence = map[string]int{
@@ -123,6 +124,15 @@ func init() {
 		"and": 2,
 		"or":  1,
 	}
+	mathOpPrecedence = map[string]int{
+		"exp": 100,
+		"log": 50,
+		"/":   20,
+		"*":   10,
+		"+":   5,
+		"-":   3,
+	}
+
 }
 
 func (f *Function) IsAggregator() bool {
@@ -1642,7 +1652,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if varName == "" {
 					return x.Errorf("Function %v should be used with a variable", val)
 				}
-				it.Prev()
+				//it.Prev()
 				mathTree, err := parseMathFunc(it)
 				if err != nil {
 					return err
@@ -1752,7 +1762,10 @@ func isAggregator(fname string) bool {
 }
 
 func isValVarFunc(name string) bool {
-	return name == "sumvar" || name == "diffvar" || name == "mulvar" || name == "log" || name == "exp" ||
-		name == "conditional" || name == "maxvar" || name == "minvar" || name == "conditional" ||
-		name == "lt" || name == "gt" || name == "eq" || name == "leq" || name == "geq"
+	return name == "math"
+	/*
+		|| name == "sumvar" || name == "diffvar" || name == "mulvar" || name == "log" || name == "exp" ||
+			name == "conditional" || name == "maxvar" || name == "minvar" || name == "conditional" ||
+			name == "lt" || name == "gt" || name == "eq" || name == "leq" || name == "geq"
+	*/
 }

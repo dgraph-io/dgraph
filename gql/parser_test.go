@@ -18,6 +18,7 @@
 package gql
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -116,13 +117,58 @@ func TestParseQueryWithVarValAggNested(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as sumvar(a, mulvar(b,c))
+				d as math(a + b*c)
 			}
 		}
 	}
 `
-	_, err := Parse(query)
+	res, err := Parse(query)
+	fmt.Println(res.Query[1].Children[0].Children[3].MathExp.debugString())
 	require.NoError(t, err)
+}
+
+func TestParseQueryWithVarValAggNested2(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(d) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L as friends {
+				a as age
+				b as count(friends)
+				c as count(relatives)
+				d as math(exp(a + b + 1) - log(c))
+			}
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	fmt.Println(res.Query[1].Children[0].Children[3].MathExp.debugString())
+}
+
+func TestParseQueryWithVarValAggNested3(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(d) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L as friends {
+				a as age
+				b as count(friends)
+				c as count(relatives)
+				d as math(a + b * c / a + exp(a + b + 1) - log(c))
+			}
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	fmt.Println(res.Query[1].Children[0].Children[3].MathExp.debugString())
 }
 
 func TestParseQueryWithVarValAggNested_Error1(t *testing.T) {

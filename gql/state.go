@@ -65,6 +65,7 @@ const (
 	itemLeftSquare
 	itemRightSquare
 	itemComma
+	itemMathOp
 )
 
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
@@ -213,6 +214,8 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 					return l.Errorf("Invalid bracket sequence")
 				}
 			}
+		case isMathOp(r):
+			l.Emit(itemMathOp)
 		case r == '#':
 			return lexComment
 		default:
@@ -521,6 +524,16 @@ func isNameBegin(r rune) bool {
 		return false
 	}
 }
+
+func isMathOp(r rune) bool {
+	switch r {
+	case '+', '-', '*', '/':
+		return true
+	default:
+		return false
+	}
+}
+
 func isNumber(r rune) bool {
 	switch {
 	case (r >= '0' && r <= '9') || r == '-' || r == '+':
@@ -529,6 +542,7 @@ func isNumber(r rune) bool {
 		return false
 	}
 }
+
 func isNameSuffix(r rune) bool {
 	if isNameBegin(r) {
 		return true
@@ -536,7 +550,7 @@ func isNameSuffix(r rune) bool {
 	if isNumber(r) {
 		return true
 	}
-	if r == '.' || r == '-' || r == '!' { // Use by freebase.
+	if r == '.' /*|| r == '-'*/ || r == '!' { // Use by freebase.
 		return true
 	}
 	return false
