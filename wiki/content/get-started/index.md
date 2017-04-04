@@ -46,7 +46,9 @@ dgraph
 
 ### Using Docker
 
-If you wan't to persist the data while you play around with Dgraph then you should mount the `dgraph` volume.
+{{% notice "tip" %}}
+If you want to persist the data while you play with Dgraph, you should mount the `dgraph` volume, using the `-v` flag.
+{{% /notice %}}
 
 #### Map to default port (8080)
 ```
