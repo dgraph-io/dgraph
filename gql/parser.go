@@ -216,16 +216,13 @@ The query could be of the following forms :
 	 }`
 */
 
-func convertToVarMap(variables map[string]string) varMap {
+func convertToVarMap(variables map[string]string) (vm varMap) {
 	// Go client passes in variables separately.
-	vm := make(varMap)
-
 	for k, v := range variables {
 		vm[k] = varInfo{
 			Value: v,
 		}
 	}
-
 	return vm
 }
 
@@ -237,7 +234,7 @@ type Request struct {
 	Http bool
 }
 
-func parseQueryWithVariables(r Request) (string, varMap, error) {
+func parseQueryWithGqlVars(r Request) (string, varMap, error) {
 	var q query
 	vm := make(varMap)
 	mp := make(map[string]string)
@@ -326,7 +323,7 @@ func checkValueType(vm varMap) error {
 
 func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	for k, v := range gq.Args {
-		// v won't be empty as its handled in parseVariables.
+		// v won't be empty as its handled in parseGqlVariables.
 		if v[0] == '$' {
 			va, ok := vmap[v]
 			if !ok {
@@ -364,7 +361,7 @@ type Result struct {
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
 func Parse(r Request) (res Result, rerr error) {
-	query, vmap, err := parseQueryWithVariables(r)
+	query, vmap, err := parseQueryWithGqlVars(r)
 	if err != nil {
 		return res, err
 	}
@@ -564,7 +561,7 @@ L2:
 				return nil, x.Errorf("Variables can be defined only in named queries.")
 			}
 
-			if rerr = parseVariables(it, vmap); rerr != nil {
+			if rerr = parseGqlVariables(it, vmap); rerr != nil {
 				return nil, rerr
 			}
 
@@ -837,8 +834,8 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 	return x.Errorf("Invalid mutation formatting.")
 }
 
-// parseVariables parses the the graphQL variable declaration.
-func parseVariables(it *lex.ItemIterator, vmap varMap) error {
+// parseGqlVariables parses the the graphQL variable declaration.
+func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 	expectArg := true
 	for it.Next() {
 		var varName string
