@@ -864,14 +864,14 @@ func TestParse_block(t *testing.T) {
 	query := `
 		{
 			root(id: 0x0a) {
-				type.object.name.es-419
+				type.object.name.es.419
 			}
 		}
 	`
 	res, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
-	require.Equal(t, childAttrs(res.Query[0]), []string{"type.object.name.es-419"})
+	require.Equal(t, childAttrs(res.Query[0]), []string{"type.object.name.es.419"})
 }
 
 func TestParseSchema(t *testing.T) {
@@ -2564,7 +2564,7 @@ func TestFacetsFilterAtValue(t *testing.T) {
 	{
 		me(id:0x1) {
 			friend	{
-				name @facets(eq(some-facet, true))
+				name @facets(eq(some.facet, true))
 			}
 		}
 	}
@@ -2576,7 +2576,7 @@ func TestFacetsFilterAtValue(t *testing.T) {
 	nameChild := res.Query[0].Children[0].Children[0]
 	require.NotNil(t, nameChild)
 	require.NotNil(t, nameChild.FacetsFilter)
-	require.Equal(t, `(eq some-facet "true")`, nameChild.FacetsFilter.debugString())
+	require.Equal(t, `(eq some.facet "true")`, nameChild.FacetsFilter.debugString())
 }
 
 func TestParseQueryWithAttrLang(t *testing.T) {

@@ -19,6 +19,8 @@
 package gql
 
 import (
+	"fmt"
+
 	"github.com/dgraph-io/dgraph/lex"
 )
 
@@ -144,6 +146,9 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		case r == at:
 			l.Emit(itemAt)
 			return lexDirective
+		case isNameBegin(r) || isNumber(r):
+			empty = false
+			return lexArgName
 		case isMathOp(r):
 			l.Emit(itemMathOp)
 		case r == leftRound:
@@ -174,9 +179,6 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemComma)
 		case isDollar(r):
 			l.Emit(itemDollar)
-		case isNameBegin(r) || isNumber(r):
-			empty = false
-			return lexArgName
 		case r == colon:
 			l.Emit(itemColon)
 		case r == equal:
@@ -475,6 +477,7 @@ func lexArgName(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
 		if isNameSuffix(r) {
+			fmt.Println(l.Input[l.Start:l.Pos], "!!!")
 			continue
 		}
 		l.Backup()
@@ -534,9 +537,18 @@ func isMathOp(r rune) bool {
 	}
 }
 
+func isPlusMinus(r rune) bool {
+	switch {
+	case r == '-' || r == '+':
+		return true
+	default:
+		return false
+	}
+}
+
 func isNumber(r rune) bool {
 	switch {
-	case (r >= '0' && r <= '9') || r == '-' || r == '+':
+	case (r >= '0' && r <= '9'):
 		return true
 	default:
 		return false
@@ -544,10 +556,10 @@ func isNumber(r rune) bool {
 }
 
 func isNameSuffix(r rune) bool {
-	if isNameBegin(r) {
-		return true
+	if isMathOp(r) {
+		return false
 	}
-	if isNumber(r) {
+	if isNameBegin(r) || isNumber(r) {
 		return true
 	}
 	if r == '.' /*|| r == '-'*/ || r == '!' { // Use by freebase.

@@ -489,6 +489,13 @@ func checkDependency(vl []*Vars) error {
 			defines, needs)
 	}
 
+	for i := 0; i < len(defines); i++ {
+		if defines[i] != needs[i] {
+			return x.Errorf("Variables are not used properly. \nDefined:%v\nUsed:%v\n",
+				defines, needs)
+		}
+	}
+	fmt.Println(defines, needs)
 	return nil
 }
 
