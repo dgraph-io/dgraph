@@ -935,6 +935,27 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
 		return nil
 	}
 
+	// Handle unary operators here.
+	if isUnary(aggName) {
+		ch := mNode.Child[0]
+		ag := aggregator{
+			name: aggName,
+		}
+		if ch.Const.Value != nil {
+			// Use the constant value that was supplied.
+			ag.ApplyVal(ch.Const)
+			mNode.Const = ag.Value()
+			return nil
+		}
+
+		for k, val := range srcMap {
+			ag.ApplyVal(val)
+			destMap[k] = ag.Value()
+		}
+		mNode.Val = destMap
+		return nil
+	}
+
 	// Note: The first value cannot be a constant.
 	for k := range srcMap {
 		ag := aggregator{
