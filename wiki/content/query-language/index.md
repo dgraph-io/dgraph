@@ -1389,8 +1389,9 @@ This query returns all the entities that intersect with the [http://bl.ocks.org/
 Dgraph supports AND, OR and NOT filters. The syntax is of form: `A OR B`, `A AND B`, or `NOT A`. You can add round brackets to make these filters more complex. `(NOT A OR B) AND (C AND NOT (D OR E))`
 
 In this query, we are getting film names which contain either both "indiana" and "jones" OR both "jurassic" AND "park".
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film @filter(allofterms(name, "jones indiana") OR allofterms(name, "jurassic park"))  {
@@ -1398,136 +1399,37 @@ curl localhost:8080/query -XPOST -d $'{
       name@en
     }
   }
-}' | python -m json.tool | less
-```
-
-
-```
-{
-  "me": [
-    {
-      "director.film": [
-        {
-          "_uid_": "0xc17b416e58b32bb",
-          "name@en": "Indiana Jones and the Temple of Doom"
-        },
-        {
-          "_uid_": "0x22e65757df0c94d2",
-          "name@en": "Jurassic Park"
-        },
-        {
-          "_uid_": "0x7d0807a6740c25dc",
-          "name@en": "Indiana Jones and the Kingdom of the Crystal Skull"
-        },
-        {
-          "_uid_": "0x8f2485e4242cbe6e",
-          "name@en": "The Lost World: Jurassic Park"
-        },
-        {
-          "_uid_": "0xa4c4cc65751e98e7",
-          "name@en": "Indiana Jones and the Last Crusade"
-        },
-        {
-          "_uid_": "0xd1c161bed9769cbc",
-          "name@en": "Indiana Jones and the Raiders of the Lost Ark"
-        }
-      ],
-      "name@en": "Steven Spielberg"
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 #### Filter on Compare
 
 Dgraph also supports compare filter, which takes form as @filter(compare(count(attribute), N)), only entities fulfill such predication will be returned.
 
 {{% notice "note" %}}"Compare" here includes "eq", "gt", "geq", "lt", "leq".  And "count" should be applied on non-scalar types.{{% /notice %}}
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+{
   director(func:anyofterms(name, "Steven Spielberg")) @filter(gt(count(director.film), 36)) {
     name@en
     count(director.film)
   }
-}' | python -m json.tool | less
-```
-
-Output:
-
-```
-{
-  "director": [
-    {
-      "director.film": [
-        {
-          "count": 39
-        }
-      ],
-      "name@en": "Steven Spielberg"
-    },
-    {
-      "director.film": [
-        {
-          "count": 115
-        }
-      ],
-      "name@en": "Steven Scarborough"
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 These compare functions can also be used at root. To obtain one movie per genre which have atleast 30000 movies, we'd do as follows:
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
 	genre(func: gt(count(~genre), 30000)){
 		name@en
 		~genre (first:1) {
 			name@en
 		}
 	}
-}'
-```
-Output:
-```
-{
-  "genre": [
-    {
-      "name@en": "Short Film",
-      "~genre": [
-        {
-          "name@en": "Eine Rolle Duschen"
-        }
-      ]
-    },
-    {
-      "name@en": "Drama",
-      "~genre": [
-        {
-          "name@en": "Prisoners"
-        }
-      ]
-    },
-    {
-      "name@en": "Comedy",
-      "~genre": [
-        {
-          "name@en": "A tu per tu"
-        }
-      ]
-    },
-    {
-      "name@en": "Documentary film",
-      "~genre": [
-        {
-          "name@en": "Short Cut to Nirvana: Kumbh Mela"
-        }
-      ]
-    }
-  ]
 }
-```
+{{< /runnable >}}
+
 These functions can help is starting from nodes which have some conditions based on count and might help in determining the type of a node if modelled accordingly. For example, to start with all the directors, we can do `gt(count(director.film), 0)` which means all the nodes that have alteast one outgoing `director.film` edge.
 
 ## Sorting
@@ -1535,8 +1437,8 @@ These functions can help is starting from nodes which have some conditions based
 We can sort results by a predicate using the `orderasc` or `orderdesc` argument. The predicate has to be indexed and this has to be specified in the schema. As you may expect, `orderasc` sorts in ascending order while `orderdesc` sorts in descending order.
 
 For example, we can sort the films of Steven Spielberg by their release date, in ascending order.
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film(orderasc: initial_release_date) {
@@ -1544,47 +1446,12 @@ curl localhost:8080/query -XPOST -d $'{
       initial_release_date
     }
   }
-}' | python -m json.tool | less
-```
-
-```
-{
-  "me": [
-    {
-      "director.film": [
-        {
-          "initial_release_date": "1964-03-23",
-          "name@en": "Firelight"
-        },
-        {
-          "initial_release_date": "1966-12-31",
-          "name@en": "Slipstream"
-        },
-        {
-          "initial_release_date": "1968-12-17",
-          "name@en": "Amblin"
-        },
-        ...
-        ...
-        ...
-        {
-          "initial_release_date": "2012-10-07",
-          "name@en": "Lincoln"
-        },
-        {
-          "initial_release_date": "2015-10-15",
-          "name@en": "Bridge of Spies"
-        }
-      ],
-      "name@en": "Steven Spielberg"
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 If you use `orderdesc` instead, the films will be listed in descending order.
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film(orderdesc: initial_release_date, first: 2) {
@@ -1592,74 +1459,18 @@ curl localhost:8080/query -XPOST -d $'{
       initial_release_date
     }
   }
-}' | python -m json.tool | less
-```
-
-
-Here is the output.
-
-```
-{
-  "me": [
-    {
-      "director.film": [
-        {
-          "initial_release_date": "2015-10-15",
-          "name@en": "Bridge of Spies"
-        },
-        {
-          "initial_release_date": "2012-10-07",
-          "name@en": "Lincoln"
-        },
-      ],
-      "name@en": "Steven Spielberg"
-    }
-  ]
 }
-```
+{{< /runnable >}}
+
 
 To sort at root level, we can do as follows:
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(func: allofterms(name, "ste"), orderasc: name) {
     name@en
   }
-}' | python -m json.tool | less
-```
-
-```
-{
-    "me": [
-        {
-            "name@en": "Steven's Friend #1"
-        },
-        {
-            "name@en": "Steven's Friend #2"
-        },
-        {
-            "name@en": "Steven's Orderly #2"
-        },
-        {
-            "name@en": "United Standards 2 (as Steven Carell)"
-        },
-        {
-            "name@en": "American Boy: A Profile of Steven Prince"
-        },
-        {
-            "name@en": "Steven A Burd"
-....
- {
-            "name@en": "Steven Kirshoff"
-        },
-        {
-            "name@en": "Steven Kirtley"
-        },
-        {
-            "name@en": "Steven Kissel"
-        }
-    ]
 }
-```
+{{< /runnable >}}
 
 
 ## Facets : Edge attributes
