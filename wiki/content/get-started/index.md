@@ -261,8 +261,7 @@ RDFs processed per second : XXXXX
 
 Let's now find all the entities named "Steven Spielberg" and the movies directed by them.
 
-```sh
-curl localhost:8080/query -XPOST -d '{
+{{< runnable >}}{
   director(func:allofterms(name, "steven spielberg")) {
     name@en
     director.film (orderdesc: initial_release_date) {
@@ -270,8 +269,8 @@ curl localhost:8080/query -XPOST -d '{
       initial_release_date
     }
   }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 This query will return all the movies by the popular director Steven Spielberg, sorted by release date in descending order. The query  also returns two other entities which have "Steven Spielberg" in their names.
 
@@ -280,8 +279,7 @@ This query will return all the movies by the popular director Steven Spielberg, 
 ### Released after August 1984
 Now, let's do some filtering. This time we'll only retrieve the movies which were released after August 1984. We'll sort in increasing order this time by using `orderasc`, instead of `orderdesc`.
 
-```sh
-curl localhost:8080/query -XPOST -d '{
+{{< runnable >}}{
   director(func:allofterms(name, "steven spielberg")) {
     name@en
     director.film (orderasc: initial_release_date) @filter(geq(initial_release_date, "1984-08")) {
@@ -289,14 +287,13 @@ curl localhost:8080/query -XPOST -d '{
       initial_release_date
     }
   }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 ### Released in 1990s
 We'll now add an AND filter using `AND` and find only the movies released in the 90s.
 
-```sh
-curl localhost:8080/query -XPOST -d '{
+{{< runnable >}}{
   director(func:allofterms(name, "steven spielberg")) {
     name@en
     director.film (orderasc: initial_release_date) @filter(geq(initial_release_date, "1990") AND leq(initial_release_date, "2000")) {
@@ -304,15 +301,14 @@ curl localhost:8080/query -XPOST -d '{
       initial_release_date
     }
   }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 
 ### Released since 2016
 So far, we've been retrieving film titles using the name of the director. Now, we'll start with films released since 2016, and their directors. To make things interesting, we'll only retrieve the director name, if it matches any of ''travis'' or ''knight''. In addition, we'll also alias `initial_release_date` to `release`. This will make the result look better.
 
-```
-curl localhost:8080/query -XPOST -d '{
+{{< runnable >}}{
   films(func:geq(initial_release_date, "2016")) {
     name@en
     release: initial_release_date
@@ -321,8 +317,7 @@ curl localhost:8080/query -XPOST -d '{
     }
   }
 }
-' | python -m json.tool | less
-```
+{{< /runnable >}}
 
 This should give you an idea of some of the queries Dgraph is capable of. A wider range of queries can been found in the [Query Language]({{< relref "query-language/index.md" >}}) section.
 

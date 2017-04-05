@@ -277,8 +277,7 @@ Then for each of these film entities, we expand by three predicates: `name@en` w
 
 If you want to use a list, then the query would look like:
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}{
   me(id: [m.06pj8, m.0bxtg]) {
     name@en
     director.film  {
@@ -289,8 +288,8 @@ curl localhost:8080/query -XPOST -d $'{
       initial_release_date
     }
   }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 The list can contain XIDs or UIDs or a combination of both.
 
@@ -445,27 +444,23 @@ Based on the given schema mutation, the query blocks until the index/reverse edg
 
 Schema can be fetched using schema block inside query. Required fields can be specified inside schema block (type, index, reverse or tokenizer).
 
-```
-curl localhost:8080/query -XPOST -d $'
-schema {
+{{< runnable >}}schema {
   type
   index
   reverse
   tokenizer
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 We can also specify the list of predicates for which we need the schema.
 
-```
-curl localhost:8080/query -XPOST -d $'
-schema(pred: [name, friend]) {
+{{< runnable >}}schema(pred: [name, friend]) {
   type
   index
   reverse
   tokenizer
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 ## RDF Types
 RDF types can also be used to specify the type of values. They can be attached to the values using the `^^` separator.
