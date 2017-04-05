@@ -1,0 +1,39 @@
+<div class="runnable" data-initial="{{ .Inner }}">
+  <div class="container">
+    <div class="row row-no-padding">
+      <div class="col-12 col-sm-12 col-md-12 col-lg-6">
+        <div class="runnable-pane">
+          <div class="topbar">
+            <div class="row">
+              <div class="col-12 col-sm-6">
+                <!-- <div class="languages">
+                  <a class="code-btn active" href="#">Bash</a>
+                </div> -->
+              </div>
+              <div class="col-12 col-sm-6">
+                <div class="actions  pull-right">
+                  <a class="code-btn" data-action="reset" href="#"><i class="fa fa-refresh"></i></a>
+                  <span class="code-btn" data-action="copy" href="#">Copy</span>
+                  <a class="code-btn" data-action="run" href="#">Run</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="runnable-content runnable-code">
+            <pre><code class="no-copy">curl localhost:8080/query -XPOST -d '<div class="query-editable" spellcheck="false" contenteditable="true">{{ .Inner }}</div>' | python -m json.tool | less</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-12 col-md-12 col-lg-6">
+        <div class="runnable-pane">
+          <div class="topbar">
+            Output
+          </div>
+          <div class="runnable-content runnable-output" style="background-url: url('{{ .Site.BaseURL }}/images/dgraph.svg')">
+            <pre class="output-container empty"><code class="output"></code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

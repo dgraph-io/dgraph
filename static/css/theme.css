@@ -1,10 +1,11 @@
 @charset "UTF-8";
-body {
+html body {
     font-family: "Lato", sans-serif;
     font-size: 15px;
     line-height: 1.6;
-    background: #fff;
-    color: #777;
+    background-color: #fff;
+    color: #4a4a4a;
+    margin: 0;
 }
 a {
     color: #00bdf3;
@@ -12,28 +13,17 @@ a {
 a:hover {
     color: #0082a7;
 }
-pre {
-    position: relative;
-}
-.bg {
-    background: #fff;
-    border: 1px solid #eaeaea;
-}
 b, strong, label, th {
     font-weight: 600;
 }
-code, kbd, pre, samp {
-    font-family: "Consolas", menlo, monospace;
-    font-size: 92%;
-}
-code {
+/*code {
     border-radius: 2px;
     white-space: nowrap;
     color: #5e5e5e;
     background: #FFF7DD;
     border: 1px solid #fbf0cb;
     padding: 0px 2px;
-}
+}*/
 hr {
     border-bottom: 4px solid #F0F2F4;
 }
@@ -92,35 +82,26 @@ td {
   border: 1px solid #e2e2e2;
 }
 
-body {
-  background-color: #fff;
-  color: #4a4a4a;
-  font-family: "Lato", sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
-  margin: 0;
-}
-
 /* headers */
-h1, h2, h3, h4, h5, h6 {
+html h1, html h2, html h3, html h4, html h5, html h6 {
   font-family: "Lato", sans-serif;
   font-weight: 700;
   color: #232323;
   line-height: 1.1;
   margin: 1.6em 0 0.8em;
 }
-h1 {
+html h1 {
   font-size: 2.1em;
   border-bottom: 1px solid #f4f4f4;
   padding-bottom: 0.6em;
 }
-h2 {
+html h2 {
   font-size: 1.9em;
 }
-h3 {
+html h3 {
   font-size: 1.5em;
 }
-p {
+html p {
   margin: 0 0 0.8em;
 }
 
@@ -155,7 +136,8 @@ body.sidebar-visible .content-wrapper {
   border-left: 1px solid #f1f1f1;
 }
 
-pre {
+html pre {
+  position: relative;
   padding: 1rem;
   transition: all 300ms cubic-bezier(0.175, 0.885, 0.335, 1.05);
   margin: 2rem 0;
@@ -165,7 +147,7 @@ pre {
   line-height: 1.45;
   border: 1px solid #ececec;
 }
-pre code {
+html pre code {
   /*color: #237794;*/
   background: inherit;
   white-space: inherit;
@@ -199,6 +181,13 @@ pre.collapsed .showmore:hover {
   background: linear-gradient(180deg, hsla(0, 0%, 100%, 0.1), rgba(226, 226, 226, 0.91));
   font-weight: 600;
 }
+pre.collapsed .showmore span {
+  /*background: white;
+  border: 1px solid #ececec;
+  padding: 6px 11px 3px;
+  text-transform: uppercase;
+  font-size: 11px;*/
+}
 /* unset the default hljs default style*/
 .hljs {
   display: block;
@@ -226,6 +215,17 @@ pre.collapsed .showmore:hover {
 }
 .copy-btn.copied {
   cursor: default;
+}
+
+.code-btn {
+  color: #5a5a5a;
+  background: white;
+  padding: 6px 12px 6px;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  border: 1px solid #ececec;
+  cursor: pointer;
 }
 
 #header {
@@ -504,4 +504,85 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   #header {
     padding: 0 13px 0 31px;
   }
+}
+
+.runnable {
+  background: #ffffff;
+  padding: 29px 0px;
+  margin-bottom: 13px;
+}
+.runnable .runnable-pane {
+  margin: 0px 2px 4px 0;
+  padding: 3px;
+  border: 1px solid #ececec;
+  background: #f9f9f9;
+  height: 263px;
+  display: flex;
+  flex-direction: column;
+}
+.runnable .runnable-content {
+  flex: 1;
+  background: url(http://localhost:1313/latest//images/dgraph.svg);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: #fff;
+  display: flex;
+  flex-direction: column;
+}
+.runnable .topbar {
+  overflow: auto;
+  padding: 2px 17px 8px 18px;
+}
+.runnable .output {
+  /*overflow-y: scroll;
+  max-height: 202px;*/
+}
+.runnable .query-editable {
+  /*background: #FFFFD8;*/
+}
+.runnable .code-btn:hover {
+  text-decoration: none;
+  color: inherit;
+}
+.runnable .code-btn[data-action='run'] {
+  background-color: #3e65b7;
+  color: white;
+}
+.runnable .output-container.empty {
+  visibility: hidden;
+}
+.runnable .output-container:not(.empty) {
+  visibility: visible;
+}
+.runnable .output-container.error code {
+  color: #bf0000;
+}
+
+.runnable .runnable-code {
+  background: #FFFFD8;
+}
+html .runnable pre {
+  padding: 17px 12px;
+  border: 0;
+  margin: 0;
+  background: #fffff3;
+}
+/*.runnable .languages {
+  float: left;
+}
+.runnable .actions {
+  float: right;
+}*/
+.runnable .runnable-tab-content:not(.active) {
+  display: none;
+}
+/*
+.CodeMirror-scroll {
+  background: #FFFFD8;
+}*/
+
+/* custom bootstrap */
+.row-no-padding [class^="col-"] {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
