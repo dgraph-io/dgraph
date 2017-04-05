@@ -495,7 +495,6 @@ func checkDependency(vl []*Vars) error {
 				defines, needs)
 		}
 	}
-	fmt.Println(defines, needs)
 	return nil
 }
 
@@ -1000,6 +999,13 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			if item.Typ != itemName {
 				return result, x.Errorf("Expecting argument value. Got: %v", item)
 			}
+		} else if item.Typ == itemMathOp {
+			if item.Val != "+" && item.Val != "-" {
+				return result, x.Errorf("Only Plus and minus are allowed unary ops. Got: %v", item.Val)
+			}
+			val = item.Val
+			it.Next()
+			item = it.Item()
 		} else if item.Typ != itemName {
 			return result, x.Errorf("Expecting argument value. Got: %v", item)
 		}
@@ -1587,7 +1593,17 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return nil, x.Errorf("Invalid query")
 			}
 			item := it.Item()
-			if item.Val == "var" {
+
+			if item.Typ == itemMathOp {
+				if item.Val != "+" && item.Val != "-" {
+					return nil, x.Errorf("Only Plus and minus are allowed unary ops. Got: %v", item.Val)
+				}
+				val = item.Val
+				it.Next()
+				item = it.Item()
+			}
+
+			if val == "" && item.Val == "var" {
 				count, err := parseVarList(it, gq)
 				if err != nil {
 					return nil, err
@@ -1596,8 +1612,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, x.Errorf("Expected only one variable but got: %d", count)
 				}
 			} else {
-				val = item.Val
+				val += item.Val
 			}
+
 			if val == "" {
 				val = gq.NeedsVar[len(gq.NeedsVar)-1]
 			}

@@ -2,7 +2,6 @@ package gql
 
 import (
 	"bytes"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -107,7 +106,6 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 	for it.Next() {
 		item := it.Item()
 		lval := strings.ToLower(item.Val)
-		fmt.Println(lval, item.Typ)
 		if isMathFunc(lval) {
 			op := lval
 			opPred := mathOpPrecedence[op]

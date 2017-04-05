@@ -18,11 +18,7 @@
 // Package gql is responsible for lexing and parsing a GraphQL query/mutation.
 package gql
 
-import (
-	"fmt"
-
-	"github.com/dgraph-io/dgraph/lex"
-)
+import "github.com/dgraph-io/dgraph/lex"
 
 const (
 	leftCurl     = '{'
@@ -477,7 +473,6 @@ func lexArgName(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
 		if isNameSuffix(r) {
-			fmt.Println(l.Input[l.Start:l.Pos], "!!!")
 			continue
 		}
 		l.Backup()
