@@ -1077,15 +1077,12 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 			if child.Params.Order != "" {
 				// We can't do intersection directly as the list is not sorted by UIDs.
 				// So do filter.
-				included := make([]bool, len(l.Uids))
-				for _, uid := range l.Uids {
-					idx := algo.IndexOf(child.DestUIDs, uid) // Binary search.
-					if idx >= 0 {
-						included[idx] = true
-					}
-				}
 				algo.ApplyFilter(l, func(uid uint64, idx int) bool {
-					return included[idx]
+					i := algo.IndexOf(child.DestUIDs, uid) // Binary search.
+					if i >= 0 {
+						return true
+					}
+					return false
 				})
 			} else {
 				// If we didn't order on UIDmatrix, it'll be sorted.
