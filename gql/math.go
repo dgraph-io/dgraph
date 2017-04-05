@@ -42,6 +42,10 @@ func isUnary(f string) bool {
 	return f == "exp" || f == "log"
 }
 
+func isTernary(f string) bool {
+	return f == "conditional"
+}
+
 func evalMathStack(opStack, valueStack *mathTreeStack) error {
 	topOp, err := opStack.pop()
 	if err != nil {
@@ -51,13 +55,21 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		// Since "not" is a unary operator, just pop one value.
 		topVal, err := valueStack.pop()
 		if err != nil {
-			return x.Errorf("Invalid math statement")
+			return x.Errorf("Invalid math statement. Expected 1 operands")
 		}
 		topOp.Child = []*MathTree{topVal}
+	} else if isTernary(topOp.Fn) {
+		if valueStack.size() < 3 {
+			return x.Errorf("Invalid Math expression. Expected 3 operands")
+		}
+		topVal1, _ := valueStack.pop()
+		topVal2, _ := valueStack.pop()
+		topVal3, _ := valueStack.pop()
+		topOp.Child = []*MathTree{topVal3, topVal2, topVal1}
+
 	} else {
-		// "and" and "or" are binary operators, so pop two values.
 		if valueStack.size() < 2 {
-			return x.Errorf("Invalid Math expression")
+			return x.Errorf("Invalid Math expression. Expected 2 operands")
 		}
 		topVal1, _ := valueStack.pop()
 		topVal2, _ := valueStack.pop()
@@ -68,11 +80,13 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 	return nil
 }
 
-func parseMathFunc(it *lex.ItemIterator) (*MathTree, error) {
-	it.Next()
-	item := it.Item()
-	if item.Typ != itemLeftRound {
-		return nil, x.Errorf("Expected ( after math")
+func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
+	if !again {
+		it.Next()
+		item := it.Item()
+		if item.Typ != itemLeftRound {
+			return nil, false, x.Errorf("Expected ( after math")
+		}
 	}
 
 	// opStack is used to collect the operators in right order.
@@ -85,7 +99,7 @@ func parseMathFunc(it *lex.ItemIterator) (*MathTree, error) {
 		item := it.Item()
 		lval := strings.ToLower(item.Val)
 		if lval == "*" || lval == "+" || lval == "-" || lval == "/" ||
-			lval == "exp" || lval == "log" { // Handle operators.
+			lval == "exp" || lval == "log" || lval == "conditional" || lval == "lt" { // Handle operators.
 			op := lval
 			opPred := mathOpPrecedence[op]
 			x.AssertTruef(opPred > 0, "Expected opPred > 0 for %v: %d", op, opPred)
@@ -97,33 +111,47 @@ func parseMathFunc(it *lex.ItemIterator) (*MathTree, error) {
 				}
 				err := evalMathStack(opStack, valueStack)
 				if err != nil {
-					return nil, err
+					return nil, false, err
 				}
 			}
 			opStack.push(&MathTree{Fn: op}) // Push current operator.
 			peekIt, err := it.Peek(1)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			if peekIt[0].Typ == itemLeftRound {
-				child, err := parseMathFunc(it)
-				if err != nil {
-					return nil, err
+				again := false
+				var child *MathTree
+				for {
+					child, again, err = parseMathFunc(it, again)
+					if err != nil {
+						return nil, false, err
+					}
+					valueStack.push(child)
+					if !again {
+						break
+					}
 				}
-				valueStack.push(child)
 			}
 		} else if item.Typ == itemName { // Value.
 			peekIt, err := it.Peek(1)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			if peekIt[0].Typ == itemLeftRound {
-				child, err := parseMathFunc(it)
-				if err != nil {
-					return nil, err
+				again := false
+				var child *MathTree
+				for {
+					child, again, err = parseMathFunc(it, again)
+					if err != nil {
+						return nil, false, err
+					}
+					//curNode.Child = append(curNode.Child, child)
+					valueStack.push(child)
+					if !again {
+						break
+					}
 				}
-				//curNode.Child = append(curNode.Child, child)
-				valueStack.push(child)
 				continue
 			}
 			// Try to parse it as a constant.
@@ -137,17 +165,34 @@ func parseMathFunc(it *lex.ItemIterator) (*MathTree, error) {
 					Value: v,
 				}
 			}
-			//curNode.Child = append(curNode.Child, child)
-			//continue
-			//f, err := parseFunction(it)
-			//if err != nil {
-			//	return nil, err
-			//}
-			//leaf := &MathTree{Func: f}
 			valueStack.push(child)
 		} else if item.Typ == itemLeftRound { // Just push to op stack.
 			opStack.push(&MathTree{Fn: "("})
 
+		} else if item.Typ == itemComma {
+			for !opStack.empty() {
+				topOp := opStack.peek()
+				if topOp.Fn == "(" {
+					break
+				}
+				err := evalMathStack(opStack, valueStack)
+				if err != nil {
+					return nil, false, err
+				}
+			}
+			_, err := opStack.pop() // Pop away the (.
+			if err != nil {
+				return nil, false, x.Errorf("Invalid Math expression")
+			}
+			if !opStack.empty() {
+				return nil, false, x.Errorf("Invalid math expression.")
+			}
+			if valueStack.size() != 1 {
+				return nil, false, x.Errorf("Expected one item in value stack, but got %d",
+					valueStack.size())
+			}
+			res, err := valueStack.pop()
+			return res, true, err
 		} else if item.Typ == itemRightRound { // Pop op stack until we see a (.
 			for !opStack.empty() {
 				topOp := opStack.peek()
@@ -156,19 +201,19 @@ func parseMathFunc(it *lex.ItemIterator) (*MathTree, error) {
 				}
 				err := evalMathStack(opStack, valueStack)
 				if err != nil {
-					return nil, err
+					return nil, false, err
 				}
 			}
 			_, err := opStack.pop() // Pop away the (.
 			if err != nil {
-				return nil, x.Errorf("Invalid Math expression")
+				return nil, false, x.Errorf("Invalid Math expression")
 			}
 			if opStack.empty() {
 				// The parentheses are balanced out. Let's break.
 				break
 			}
 		} else {
-			return nil, x.Errorf("Unexpected item while parsing math expression: %v", item)
+			return nil, false, x.Errorf("Unexpected item while parsing math expression: %v", item)
 		}
 	}
 
@@ -182,14 +227,15 @@ func parseMathFunc(it *lex.ItemIterator) (*MathTree, error) {
 	if valueStack.empty() {
 		// This happens when we have math(). We can either return an error or
 		// ignore. Currently, let's just ignore and pretend there is no expression.
-		return nil, nil
+		return nil, false, nil
 	}
 
 	if valueStack.size() != 1 {
-		return nil, x.Errorf("Expected one item in value stack, but got %d",
+		return nil, false, x.Errorf("Expected one item in value stack, but got %d",
 			valueStack.size())
 	}
-	return valueStack.pop()
+	res, err := valueStack.pop()
+	return res, false, err
 }
 
 // debugString converts mathTree to a string. Good for testing, debugging.
@@ -227,6 +273,10 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 		buf.WriteString("exp")
 	case "log":
 		buf.WriteString("log")
+	case "conditional":
+		buf.WriteString("conditional")
+	case "lt":
+		buf.WriteString("lt")
 	default:
 		x.Fatalf("Unknown operator: %q", t.Fn)
 	}

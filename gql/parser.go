@@ -125,12 +125,14 @@ func init() {
 		"or":  1,
 	}
 	mathOpPrecedence = map[string]int{
-		"exp": 100,
-		"log": 50,
-		"/":   20,
-		"*":   10,
-		"+":   5,
-		"-":   3,
+		"exp":         100,
+		"log":         50,
+		"lt":          30,
+		"conditional": 20,
+		"/":           20,
+		"*":           10,
+		"+":           5,
+		"-":           3,
 	}
 
 }
@@ -1653,9 +1655,12 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return x.Errorf("Function %v should be used with a variable", val)
 				}
 				//it.Prev()
-				mathTree, err := parseMathFunc(it)
+				mathTree, again, err := parseMathFunc(it, false)
 				if err != nil {
 					return err
+				}
+				if again {
+					return x.Errorf("Comma encountered in math() at unexpected place.")
 				}
 				child := &GraphQuery{
 					Attr:       item.Val,

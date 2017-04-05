@@ -18,7 +18,6 @@
 package gql
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -123,7 +122,8 @@ func TestParseQueryWithVarValAggNested(t *testing.T) {
 	}
 `
 	res, err := Parse(query)
-	fmt.Println(res.Query[1].Children[0].Children[3].MathExp.debugString())
+	require.EqualValues(t, "(+ a (* b c))",
+		res.Query[1].Children[0].Children[3].MathExp.debugString())
 	require.NoError(t, err)
 }
 
@@ -146,7 +146,31 @@ func TestParseQueryWithVarValAggNested2(t *testing.T) {
 `
 	res, err := Parse(query)
 	require.NoError(t, err)
-	fmt.Println(res.Query[1].Children[0].Children[3].MathExp.debugString())
+	require.EqualValues(t, "(- (exp (+ (+ a b) 1E+00)) (log c))",
+		res.Query[1].Children[0].Children[3].MathExp.debugString())
+}
+
+func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(d) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L as friends {
+				a as age
+				b as count(friends)
+				c as count(relatives)
+				d as math(conditional(lt(a, 10), exp(a + b + 1), log(c)))
+			}
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.EqualValues(t, "(conditional (lt a 1E+01) (exp (+ (+ a b) 1E+00)) (log c))",
+		res.Query[1].Children[0].Children[3].MathExp.debugString())
 }
 
 func TestParseQueryWithVarValAggNested3(t *testing.T) {
@@ -168,7 +192,8 @@ func TestParseQueryWithVarValAggNested3(t *testing.T) {
 `
 	res, err := Parse(query)
 	require.NoError(t, err)
-	fmt.Println(res.Query[1].Children[0].Children[3].MathExp.debugString())
+	require.EqualValues(t, "(- (+ (+ a (* b (/ c a))) (exp (+ (+ a b) 1E+00))) (log c))",
+		res.Query[1].Children[0].Children[3].MathExp.debugString())
 }
 
 func TestParseQueryWithVarValAggNested_Error1(t *testing.T) {
