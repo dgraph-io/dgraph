@@ -144,6 +144,8 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		case r == at:
 			l.Emit(itemAt)
 			return lexDirective
+		case isMathOp(r):
+			l.Emit(itemMathOp)
 		case r == leftRound:
 			l.Emit(itemLeftRound)
 			l.ArgDepth++
@@ -214,8 +216,6 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 					return l.Errorf("Invalid bracket sequence")
 				}
 			}
-		case isMathOp(r):
-			l.Emit(itemMathOp)
 		case r == '#':
 			return lexComment
 		default:
