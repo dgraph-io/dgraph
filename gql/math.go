@@ -294,6 +294,8 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 		buf.WriteString("conditional")
 	case "lt":
 		buf.WriteString("lt")
+	case "u-":
+		buf.WriteString("u-")
 	default:
 		x.Fatalf("Unknown operator: %q", t.Fn)
 	}

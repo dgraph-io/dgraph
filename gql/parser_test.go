@@ -132,6 +132,7 @@ func TestParseQueryWithVarValAggNested2(t *testing.T) {
 	{	
 		me(id: var(L), orderasc: var(d) ) {
 			name
+			var(q)
 		}
 
 		var(id:0x0a) {
@@ -140,7 +141,7 @@ func TestParseQueryWithVarValAggNested2(t *testing.T) {
 				b as count(friends)
 				c as count(relatives)
 				d as math(exp(a + b + 1) - log(c))
-		 		q as math(a * b * c * -1)
+		 		q as math(c * -1 + -b + (-b*c))
 			}
 		}
 	}
@@ -149,7 +150,7 @@ func TestParseQueryWithVarValAggNested2(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, "(- (exp (+ (+ a b) 1E+00)) (log c))",
 		res.Query[1].Children[0].Children[3].MathExp.debugString())
-	require.EqualValues(t, "(- (exp (+ (+ a b) 1E+00)) (log c))",
+	require.EqualValues(t, "(+ (+ (* c (u- 1E+00)) (u- b)) (* (u- b) c))",
 		res.Query[1].Children[0].Children[4].MathExp.debugString())
 }
 
