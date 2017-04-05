@@ -311,8 +311,12 @@ function isElementInViewport(el) {
       $(el).find('.output-container').removeClass('empty error');
       codeEl.innerText = 'Waiting for the server response...';
 
-      $.post('https://play.dgraph.io/query', query)
-        .done(function (res) {
+      $.post({
+        url: 'https://play.dgraph.io/query',
+        data: query,
+        dataType: 'json'
+      })
+      .done(function (res) {
         var resText = JSON.stringify(res, null, 2);
 
         codeEl.innerText = resText;

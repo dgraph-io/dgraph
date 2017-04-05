@@ -115,7 +115,7 @@ html p {
   margin-top: 0;
 }
 .content-wrapper .content {
-  padding: 21px 43px;
+  padding: 21px 43px 67px;
 }
 
 @media screen and (max-width:480px) {
@@ -443,7 +443,7 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
 .community-cta {
   position: fixed;
   bottom: 0;
-  right: 5%;
+  right: 3%;
   padding: 10px 22px;
   font-size: 13px;
   background: #29b1ff;
