@@ -39,7 +39,11 @@ type MathTree struct {
 }
 
 func isUnary(f string) bool {
-	return f == "exp" || f == "log"
+	return f == "exp" || f == "log" || f == "u-"
+}
+
+func isBinaryMath(f string) bool {
+	return f == "*" || f == "+" || f == "-" || f == "/"
 }
 
 func isTernary(f string) bool {
@@ -108,6 +112,12 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 		lval := strings.ToLower(item.Val)
 		if isMathFunc(lval) {
 			op := lval
+			it.Prev()
+			lastItem := it.Item()
+			it.Next()
+			if op == "-" && (lastItem.Val == "(" || lastItem.Val == "," || isBinaryMath(lastItem.Val)) {
+				op = "u-" // This is a unary -
+			}
 			opPred := mathOpPrecedence[op]
 			x.AssertTruef(opPred > 0, "Expected opPred > 0 for %v: %d", op, opPred)
 			// Evaluate the stack until we see an operator with strictly lower pred.

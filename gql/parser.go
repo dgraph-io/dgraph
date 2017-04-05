@@ -125,6 +125,7 @@ func init() {
 		"or":  1,
 	}
 	mathOpPrecedence = map[string]int{
+		"u-":  500,
 		"exp": 100,
 		"log": 99,
 
@@ -1141,6 +1142,7 @@ L:
 			expectArg = true
 			for it.Next() {
 				itemInFunc := it.Item()
+				var val string
 				if itemInFunc.Typ == itemRightRound {
 					break L
 				} else if itemInFunc.Typ == itemComma {
@@ -1172,6 +1174,10 @@ L:
 					} else {
 						return nil, x.Errorf("Invalid usage of '@' in function argument")
 					}
+				} else if itemInFunc.Typ == itemMathOp {
+					val = itemInFunc.Val
+					it.Next()
+					itemInFunc = it.Item()
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -1179,7 +1185,7 @@ L:
 				if !expectArg && !expectLang {
 					return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
 				}
-				val := strings.Trim(itemInFunc.Val, "\" \t")
+				val += strings.Trim(itemInFunc.Val, "\" \t")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
