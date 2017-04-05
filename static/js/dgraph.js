@@ -42,23 +42,21 @@ function isElementInViewport(el) {
 (function() {
   // clipboard
   var clipInit = false;
-  $("pre code").each(function() {
+  $("pre code:not(.no-copy)").each(function() {
     var code = $(this), text = code.text();
 
     if (text.length > 5) {
       if (!clipInit) {
-        var text,
-          clip = new Clipboard(".copy-btn", {
-            text: function(trigger) {
-              text = $(trigger).prev("code").text();
-              return text.replace(/^\$\s/gm, "");
-            }
-          });
+        var text;
+        var clip = new Clipboard(".copy-btn", {
+          text: function(trigger) {
+            text = $(trigger).prev("code").text();
+            return text.replace(/^\$\s/gm, "");
+          }
+        });
 
-        var inPre;
         clip.on("success", function(e) {
           e.clearSelection();
-          inPre = $(e.trigger).parent().prop("tagName") == "PRE";
           $(e.trigger).text("Copied to clipboard!")
             .addClass('copied');
 
@@ -69,7 +67,6 @@ function isElementInViewport(el) {
 
         clip.on("error", function(e) {
           e.clearSelection();
-          inPre = $(e.trigger).parent().prop("tagName") == "PRE";
           $(e.trigger).text("Error copying");
 
           window.setTimeout(function() {
@@ -248,7 +245,7 @@ function isElementInViewport(el) {
 
       var showMore = document.createElement("div");
       showMore.className = "showmore";
-      showMore.innerHTML = "Show all";
+      showMore.innerHTML = "<span>Show all</span>";
       showMore.addEventListener("click", function() {
         pre.className = "";
         showMore.parentNode.removeChild(showMore);
@@ -300,6 +297,68 @@ function isElementInViewport(el) {
       links[i].target = "_blank";
     }
   }
+
+  // Runnables
+  $('.runnable').each(function () {
+    var el = this;
+    var codeEl = $(el).find('.output')[0];
+
+    // Running code
+    $(el).find('[data-action="run"]').on('click', function (e) {
+      e.preventDefault();
+      var query = $(el).find('.query-editable').text();
+
+      $(el).find('.output-container').removeClass('empty error');
+      codeEl.innerText = 'Waiting for the server response...';
+
+      $.post('http://play.dgraph.io/query', query)
+        .done(function (res) {
+        var resText = JSON.stringify(res, null, 2);
+
+        codeEl.innerText = resText;
+        hljs.highlightBlock(codeEl);
+      })
+      .fail(function (xhr, status, error) {
+        $(el).find('.output-container').addClass('error');
+
+        codeEl.innerText = xhr.responseText || error;
+      });
+    });
+
+    // Refresh code
+    $(el).find('[data-action="reset"]').on('click', function (e) {
+      e.preventDefault();
+
+      var initialQuery = $(el).data('initial');
+      $('.query-editable').text('');
+      window.setTimeout(function() {
+        $('.query-editable').text(initialQuery);
+      }, 80);
+    });
+
+    $(el).find('.runnable-code').on('click', function () {
+      $(this).find('.query-editable').focus();
+    });
+  });
+
+  // Init code copy buttons for runnables
+  var text;
+  var clip = new Clipboard('[data-action="copy"]', {
+    text: function(trigger) {
+      text = $(trigger).closest('.runnable').text();
+      return text.replace(/^\$\s/gm, "");
+    }
+  });
+
+  clip.on("success", function(e) {
+    e.clearSelection();
+    $(e.trigger).text("Copied")
+      .addClass('copied');
+
+    window.setTimeout(function() {
+      $(e.trigger).text("Copy").removeClass('copied');
+    }, 2000);
+  });
 
   // On page load
   updateSidebar();
