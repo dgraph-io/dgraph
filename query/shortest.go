@@ -104,7 +104,7 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	}
 	tv := facets.ValFor(fcs.Facets[0])
 	if tv.Tid == types.IntID {
-		cost = float64(tv.Value.(int32))
+		cost = float64(tv.Value.(int64))
 	} else if tv.Tid == types.FloatID {
 		cost = float64(tv.Value.(float64))
 	} else {
