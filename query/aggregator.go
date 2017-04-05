@@ -45,9 +45,12 @@ func isTernary(f string) bool {
 	return f == "conditional"
 }
 
+func isBinary(f string) bool {
+	return f == "+" || f == "*" || f == "-"
+}
+
 func isMultiArgFunc(f string) bool {
-	return f == "sumvar" || f == "mulvar" || f == "diffvar" ||
-		f == "maxvar" || f == "minvar"
+	return f == "max" || f == "min"
 }
 
 func convertTo(from *taskp.Value) (types.Val, error) {
@@ -138,7 +141,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	va := ag.result
 	vb := v
 	switch ag.name {
-	case "sumvar":
+	case "+":
 		if va.Tid == types.IntID && vb.Tid == types.IntID {
 			va.Value = va.Value.(int64) + vb.Value.(int64)
 		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
@@ -152,7 +155,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			// This pair cannot be aggregated. So pass.
 		}
 		res = va
-	case "diffvar":
+	case "-":
 		if va.Tid == types.IntID && vb.Tid == types.IntID {
 			va.Value = va.Value.(int64) - vb.Value.(int64)
 		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
@@ -166,7 +169,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			// This pair cannot be aggregated. So pass.
 		}
 		res = va
-	case "mulvar":
+	case "*":
 		if va.Tid == types.IntID && vb.Tid == types.IntID {
 			va.Value = va.Value.(int64) * vb.Value.(int64)
 		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
@@ -180,14 +183,14 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			// This pair cannot be aggregated. So pass.
 		}
 		res = va
-	case "minvar":
+	case "min":
 		r, err := types.Less(va, vb)
 		if err == nil && !r {
 			res = vb
 		} else {
 			res = va
 		}
-	case "maxvar":
+	case "max":
 		r, err := types.Less(va, vb)
 		if err == nil && r {
 			res = vb

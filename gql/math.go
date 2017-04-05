@@ -84,7 +84,8 @@ func isMathFunc(lval string) bool {
 	// While adding an op, also add it to the corresponding function type.
 	return lval == "*" || lval == "+" || lval == "-" || lval == "/" ||
 		lval == "exp" || lval == "log" || lval == "conditional" || lval == "lt" ||
-		lval == "gt" || lval == "geq" || lval == "leq" || lval == "eq"
+		lval == "gt" || lval == "geq" || lval == "leq" || lval == "eq" ||
+		lval == "min" || lval == "max"
 }
 
 func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {

@@ -375,8 +375,8 @@ func TestQueryVarValAggNestedFuncConst(t *testing.T) {
 				friend {
 					n as min(age)
 					s as max(age)
-					p as sumvar(a, s, n, 10)
-					q as mulvar(a, s, n, -1)
+					p as math(a + s + n + 10)
+					q as math(a * s * n * -1)
 				}
 			}
 
@@ -412,8 +412,8 @@ func TestQueryVarValAggNestedFuncMinMaxVars(t *testing.T) {
 				friend {
 					n as min(age)
 					s as max(age)
-					p as maxvar(a, s, n)
-					q as minvar(a, s, n)
+					p as math(max(max(a, s), n))
+					q as math(min(min(a, s), n))
 				}
 			}
 
@@ -448,8 +448,8 @@ func TestQueryVarValAggNestedFuncConditional(t *testing.T) {
 				a as age
 				friend {
 					n as min(age)
-					condLog as conditional(gt(a, 10), log(n), 1)
-					condExp as conditional(lt(a, 40), 1, exp(n))
+					condLog as math(conditional(gt(a, 10), log(n), 1))
+					condExp as math(conditional(lt(a, 40), 1, exp(n)))
 				}
 			}
 
@@ -483,8 +483,8 @@ func TestQueryVarValAggNestedFuncUnary(t *testing.T) {
 				friend {
 					n as min(age)
 					s as max(age)
-					combiLog as sumvar(a, log(diffvar(s, n)))
-					combiExp as sumvar(a, exp(diffvar(s, n)))
+					combiLog as math(a + log(s - n))
+					combiExp as math(a + exp(s - n))
 				}
 			}
 
@@ -520,7 +520,7 @@ func TestQueryVarValAggNestedFunc(t *testing.T) {
 				friend {
 					n as min(age)
 					s as max(age)
-					combi as sumvar(a, mulvar(n, s))
+					combi as math(a + n * s)
 				}
 			}
 
@@ -548,7 +548,7 @@ func TestQueryVarValAggMinMaxSelf(t *testing.T) {
 				friend {
 					n as min(age)
 					s as max(age)
-					sum as sumvar(n, a, s)
+					sum as math(n +  a + s)
 				}
 			}
 
@@ -573,7 +573,7 @@ func TestQueryVarValAggMinMax(t *testing.T) {
 				friend {
 					n as min(age)
 					s as max(age)
-					sum as sumvar(n, s)
+					sum as math(n + s)
 				}
 			}
 
@@ -598,7 +598,7 @@ func TestQueryVarValAggMul(t *testing.T) {
 				f as friend {
 					n as age
 					s as count(friend)
-					mul as mulvar(n, s)
+					mul as math(n * s)
 				}
 			}
 
@@ -624,7 +624,7 @@ func TestQueryVarValAggOrderDesc(t *testing.T) {
 				f as friend {
 					n as age
 					s as count(friend)
-					sum as sumvar(n, s)
+					sum as math(n + s)
 				}
 			}
 
@@ -649,7 +649,7 @@ func TestQueryVarValAggOrderAsc(t *testing.T) {
 				f as friend {
 					n as age
 					s as survival_rate
-					sum as sumvar(n, s)
+					sum as math(n + s)
 				}
 			}
 
