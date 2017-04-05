@@ -334,9 +334,9 @@ function isElementInViewport(el) {
       e.preventDefault();
 
       var initialQuery = $(el).data('initial');
-      $('.query-editable').text('');
+      $(el).find('.query-editable').text('');
       window.setTimeout(function() {
-        $('.query-editable').text(initialQuery);
+        $(el).find('.query-editable').text(initialQuery);
       }, 80);
     });
 
