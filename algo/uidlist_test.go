@@ -156,6 +156,51 @@ func TestIntersectSorted6(t *testing.T) {
 	require.Empty(t, IntersectSorted(input).Uids)
 }
 
+func TestDiffSorted1(t *testing.T) {
+	input := []*taskp.List{
+		newList([]uint64{1, 2, 3}),
+		newList([]uint64{1}),
+	}
+	Difference(input[0], input[1])
+	require.Equal(t, []uint64{2, 3}, input[0].Uids)
+}
+
+func TestDiffSorted2(t *testing.T) {
+	input := []*taskp.List{
+		newList([]uint64{1, 2, 3}),
+		newList([]uint64{2}),
+	}
+	Difference(input[0], input[1])
+	require.Equal(t, []uint64{1, 3}, input[0].Uids)
+}
+
+func TestDiffSorted3(t *testing.T) {
+	input := []*taskp.List{
+		newList([]uint64{1, 2, 3}),
+		newList([]uint64{3}),
+	}
+	Difference(input[0], input[1])
+	require.Equal(t, []uint64{1, 2}, input[0].Uids)
+}
+
+func TestDiffSorted4(t *testing.T) {
+	input := []*taskp.List{
+		newList([]uint64{1, 2, 3}),
+		newList([]uint64{}),
+	}
+	Difference(input[0], input[1])
+	require.Equal(t, []uint64{1, 2, 3}, input[0].Uids)
+}
+
+func TestDiffSorted5(t *testing.T) {
+	input := []*taskp.List{
+		newList([]uint64{}),
+		newList([]uint64{1, 2}),
+	}
+	Difference(input[0], input[1])
+	require.Equal(t, []uint64{}, input[0].Uids)
+}
+
 func TestSubSorted1(t *testing.T) {
 	input := []*taskp.List{
 		newList([]uint64{1, 2, 3}),
