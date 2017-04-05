@@ -1074,7 +1074,23 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 		// Intersect the UidMatrix with the DestUids as some UIDs might have been removed
 		// by other operations. So we need to apply it on the UidMatrix.
 		for _, l := range child.uidMatrix {
-			algo.IntersectWith(l, child.DestUIDs, l)
+			if child.Params.Order != "" {
+				// We can't do intersection directly as the list is not sorted by UIDs.
+				// So do filter.
+				included := make([]bool, len(l.Uids))
+				for _, uid := range l.Uids {
+					idx := algo.IndexOf(child.DestUIDs, uid) // Binary search.
+					if idx >= 0 {
+						included[idx] = true
+					}
+				}
+				algo.ApplyFilter(l, func(uid uint64, idx int) bool {
+					return included[idx]
+				})
+			} else {
+				// If we didn't order on UIDmatrix, it'll be sorted.
+				algo.IntersectWith(l, child.DestUIDs, l)
+			}
 		}
 	}
 
