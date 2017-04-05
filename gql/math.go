@@ -80,6 +80,13 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 	return nil
 }
 
+func isMathFunc(lval string) bool {
+	// While adding an op, also add it to the corresponding function type.
+	return lval == "*" || lval == "+" || lval == "-" || lval == "/" ||
+		lval == "exp" || lval == "log" || lval == "conditional" || lval == "lt" ||
+		lval == "gt" || lval == "geq" || lval == "leq" || lval == "eq"
+}
+
 func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 	if !again {
 		it.Next()
@@ -98,8 +105,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 	for it.Next() {
 		item := it.Item()
 		lval := strings.ToLower(item.Val)
-		if lval == "*" || lval == "+" || lval == "-" || lval == "/" ||
-			lval == "exp" || lval == "log" || lval == "conditional" || lval == "lt" { // Handle operators.
+		if isMathFunc(lval) {
 			op := lval
 			opPred := mathOpPrecedence[op]
 			x.AssertTruef(opPred > 0, "Expected opPred > 0 for %v: %d", op, opPred)
