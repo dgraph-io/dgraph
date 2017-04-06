@@ -98,8 +98,33 @@ func TestTermTokenizer(t *testing.T) {
 	val.Value = "Tokenizer works!"
 
 	tokens, err := tokenizer.Tokens(val)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
 	require.Equal(t, []string{encodeToken("tokenizer", id), encodeToken("works", id)}, tokens)
+}
+
+func TestTrigramTokenizer(t *testing.T) {
+	tokenizer, has := GetTokenizer("trigram")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.StringID)
+	val.Value = "Dgraph rocks!"
+	tokens, err := tokenizer.Tokens(val)
+	require.NoError(t, err)
+	require.Equal(t, 11, len(tokens))
+	id := tokenizer.Identifier()
+	require.Equal(t, []string{
+		encodeToken("Dgr", id),
+		encodeToken("gra", id),
+		encodeToken("rap", id),
+		encodeToken("aph", id),
+		encodeToken("ph ", id),
+		encodeToken("h r", id),
+		encodeToken(" ro", id),
+		encodeToken("roc", id),
+		encodeToken("ock", id),
+		encodeToken("cks", id),
+		encodeToken("ks!", id),
+	}, tokens)
 }
