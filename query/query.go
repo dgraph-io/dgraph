@@ -246,7 +246,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			}
 			var fieldName string
 			if pc.Params.Var != "" {
-				fieldName = fmt.Sprintf("var(%v)", pc.Params.Var)
+				fieldName = fmt.Sprintf("var[%v]", pc.Params.Var)
 			} else {
 				fieldName = fmt.Sprintf("%s%v", pc.Attr, pc.Params.NeedsVar)
 			}
@@ -860,16 +860,20 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
 
 	aggName := mNode.Fn
 	if isUnary(aggName) && len(mNode.Child) != 1 {
-		return x.Errorf("Function %v expects 1 argument. But got: %v", aggName, len(mNode.Child))
+		return x.Errorf("Function %v expects 1 argument. But got: %v", aggName,
+			len(mNode.Child))
 	}
 	if isBinaryBoolean(aggName) && len(mNode.Child) != 2 {
-		return x.Errorf("Function %v expects 2 argument. But got: %v", aggName, len(mNode.Child))
+		return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
+			len(mNode.Child))
 	}
 	if isTernary(aggName) && len(mNode.Child) != 3 {
-		return x.Errorf("Function %v expects 3 argument. But got: %v", aggName, len(mNode.Child))
+		return x.Errorf("Function %v expects 3 argument. But got: %v", aggName,
+			len(mNode.Child))
 	}
 	if isMultiArgFunc(aggName) && len(mNode.Child) <= 1 {
-		return x.Errorf("Function %v expects more than 1 argument. But got: %v", aggName, len(mNode.Child))
+		return x.Errorf("Function %v expects more than 1 argument. But got: %v",
+			aggName, len(mNode.Child))
 	}
 
 	destMap := make(map[uint64]types.Val)
