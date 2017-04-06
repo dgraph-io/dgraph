@@ -14,6 +14,93 @@
  * limitations under the License.
  */
 
+// This package provides helper function for interacting with the Dgraph server.
+// You can use it to run mutations and queries. You can also use BatchMutation
+// to upload data concurrently.
+//  conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
+
+//  // Creating a new client.
+//  c := graphp.NewDgraphClient(conn)
+//  // Starting a new request.
+//  req := client.Req{}
+//  // _:person1 tells Dgraph to assign a new Uid and is the preferred way of creating new nodes.
+//  // See https://docs.dgraph.io/master/query-language/#assigning-uid for more details.
+//  nq := graphp.NQuad{
+//  	Subject:   "_:person1",
+//  	Predicate: "name",
+//  }
+//  // Str is a helper function to add a string value.
+//  client.Str("Steven Spielberg", &nq)
+//  // Adding a new mutation.
+//  req.AddMutation(nq, client.SET)
+//  nq = graphp.NQuad{
+//  	Subject:   "_:person1",
+//  	Predicate: "age",
+//  }
+//  // Int is used to add integer values.
+//  if err = client.Int(25, &nq); err != nil {
+//  	log.Fatal(err)
+//  }
+//  req.AddMutation(nq, client.SET)
+
+//  Lets create another person and add a name for it.
+//  nq = graphp.NQuad{
+//  	Subject:   "_:person2",
+//  	Predicate: "name",
+//  }
+//  // Str is a helper function to add a string value.
+//  client.Str("William Jones", &nq)
+//  // Adding a new mutation.
+//  req.AddMutation(nq, client.SET)
+
+//  // Lets connect the two nodes together.
+//  nq = graphp.NQuad{
+//  	Subject:   "_:person1",
+//  	Predicate: "friend",
+//  	ObjectId:  "_:person2",
+//  }
+//  req.AddMutation(nq, client.SET)
+//  // Lets run the request with all these mutations.
+//  resp, err := c.Run(context.Background(), req.Request())
+//  if err != nil {
+//  	log.Fatalf("Error in getting response from server, %s", err)
+//  }
+//  person1Uid := resp.AssignedUids["person1"]
+//  person2Uid := resp.AssignedUids["person2"]
+
+//  // Lets initiate a new request and query for the data.
+//  req = client.Req{}
+//  // Lets set the starting node id to person1Uid.
+//  req.SetQuery(fmt.Sprintf("{ me(id: %v) { _uid_ name now birthday loc salary age married friend {_uid_ name} } }", client.Uid(person1Uid)),
+//  	map[string]string{})
+//  resp, err = c.Run(context.Background(), req.Request())
+//  if err != nil {
+//  	log.Fatalf("Error in getting response from server, %s", err)
+//  }
+
+//  person1 := resp.N[0].Children[0]
+//  props := person1.Properties
+//  name := props[0].Value.GetStrVal()
+//  fmt.Println("Name: ", name)
+
+//  fmt.Println("Age: ", props[1].Value.GetIntVal())
+
+//  person2 := person1.Children[0]
+//  fmt.Printf("%v name: %v\n", person2.Attribute, person2.Properties[0].Value.GetStrVal())
+
+//  // Deleting an edge.
+//  nq = graphp.NQuad{
+//  	Subject:   client.Uid(person1Uid),
+//  	Predicate: "friend",
+//  	ObjectId:  client.Uid(person2Uid),
+//  }
+//  req = client.Req{}
+//  req.AddMutation(nq, client.DEL)
+//  // Lets run the request with all these mutations.
+//  resp, err = c.Run(context.Background(), req.Request())
+//  if err != nil {
+//  	log.Fatalf("Error in getting response from server, %s", err)
+//  }
 package client
 
 import (
@@ -36,12 +123,13 @@ import (
 type Op int
 
 const (
+	// Indicates a Set mutation.
 	SET Op = iota
+	// Indicates a Delete mutation.
 	DEL
 )
 
-// Req wraps the graphp.Request so that we can define helper methods for the
-// client around it.
+// Req wraps the graphp.Request so that helper methods can be defined on it.
 type Req struct {
 	gr graphp.Request
 }
@@ -71,11 +159,6 @@ func checkNQuad(nq graphp.NQuad) error {
 }
 
 // SetQuery sets a query as part of the request.
-// Example usage
-// req := client.Req{}
-// req.SetQuery("{ me(_xid_: alice) { name falls.in } }")
-// resp, err := c.Query(context.Background(), req.Request())
-// Check response and handle errors
 func (req *Req) SetQuery(q string, vars map[string]string) {
 	req.gr.Query = q
 	req.gr.Vars = vars
@@ -93,42 +176,8 @@ func (req *Req) addMutation(nq graphp.NQuad, op Op) {
 	}
 }
 
-// AddMutation adds a SET/DELETE mutation operation.
-//
-// Example usage
-// req := client.Req{}
-// To set a string value
-// if err := req.AddMutation(graphp.NQuad{
-// 	Sub:   "alice",
-// 	Pred:  "name",
-// 	Value: client.Str("Alice"),
-// }, client.SET); err != nil {
-// ....
-// handle error
-// ....
-// }
-
-// To set an integer value
-// if err := req.AddMutation(graphp.NQuad{
-// 	Sub:   "alice",
-// 	Pred:  "age",
-// 	Value: client.Int(13),
-// }, client.SET); err != nil {
-// ....
-// handle error
-// ....
-// }
-
-// To add a mutation with a DELETE operation
-// if err := req.AddMutation(graphp.NQuad{
-// 	Sub:   "alice",
-// 	Pred:  "name",
-// 	Value: client.Str("Alice"),
-// }, client.DEL); err != nil {
-// ....
-// handle error
-// ....
-// }
+// AddMutation adds (but does not send) a mutation to the Req object. Mutations
+// are sent when client.Run() is called.
 func (req *Req) AddMutation(nq graphp.NQuad, op Op) error {
 	if err := checkNQuad(nq); err != nil {
 		return err
@@ -178,6 +227,10 @@ type nquadOp struct {
 	op Op
 }
 
+// BatchMutation is used to batch mutations and send them off to the server
+// concurrently. It is useful while doing migrations and bulk data loading.
+// It is possible to control the batch size and the number of concurrent requests
+// to make.
 type BatchMutation struct {
 	size    int
 	pending int
@@ -257,6 +310,9 @@ LOOP:
 	batch.wg.Done()
 }
 
+// NewBatchMutation is used to create a new batch.
+// size is the number of RDF's that are sent as part of one request to Dgraph.
+// pending is the number of concurrent requests to make to Dgraph server.
 func NewBatchMutation(ctx context.Context, client graphp.DgraphClient,
 	size int, pending int) *BatchMutation {
 	bm := BatchMutation{
@@ -277,6 +333,8 @@ func NewBatchMutation(ctx context.Context, client graphp.DgraphClient,
 	return &bm
 }
 
+// AddMutation is used to add a NQuad to a batch. It can either have SET or
+// DEL as Op(operation).
 func (batch *BatchMutation) AddMutation(nq graphp.NQuad, op Op) error {
 	if err := checkNQuad(nq); err != nil {
 		return err
@@ -286,6 +344,15 @@ func (batch *BatchMutation) AddMutation(nq graphp.NQuad, op Op) error {
 	return nil
 }
 
+// Flush waits for all pending requests to complete. It should always be called
+// after adding all the NQuads using batch.AddMutation().
+func (batch *BatchMutation) Flush() {
+	close(batch.nquads)
+	close(batch.schema)
+	batch.wg.Wait()
+}
+
+// AddSchema is used to add a schema mutation.
 func (batch *BatchMutation) AddSchema(s graphp.SchemaUpdate) error {
 	if err := checkSchema(s); err != nil {
 		return err
@@ -294,22 +361,21 @@ func (batch *BatchMutation) AddSchema(s graphp.SchemaUpdate) error {
 	return nil
 }
 
+// Counter keeps a track of various parameters about a batch mutation.
 type Counter struct {
-	Rdfs      uint64
+	// Number of RDF's processed by server.
+	Rdfs uint64
+	// Number of mutations processed by the server.
 	Mutations uint64
-	Elapsed   time.Duration
+	// Time elapsed sinze the batch started.
+	Elapsed time.Duration
 }
 
+// Counter returns the current state of the BatchMutation.
 func (batch *BatchMutation) Counter() Counter {
 	return Counter{
 		Rdfs:      atomic.LoadUint64(&batch.rdfs),
 		Mutations: atomic.LoadUint64(&batch.mutations),
 		Elapsed:   time.Since(batch.start),
 	}
-}
-
-func (batch *BatchMutation) Flush() {
-	close(batch.nquads)
-	close(batch.schema)
-	batch.wg.Wait()
 }
