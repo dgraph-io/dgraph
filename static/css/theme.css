@@ -597,20 +597,41 @@ html .runnable pre {
 #runnable-modal .code-btn[data-action='expand'] {
   display: none;
 }
+#runnable-modal .modal-close-btn {
+  top: 19px;
+  right: 33px;
+  position: absolute;
+  color: white;
+  padding-bottom: 1px;
+  border-bottom: 1px solid white;
+  line-height: 19px;
+  letter-spacing: 1px;
+  font-size: 16px;
+}
+#runnable-modal .modal-close-btn:hover {
+  color: #afafaf;
+  border-color: #afafaf;
+  text-decoration: none;
+}
 @media screen and (min-width: 1024px) {
   #runnable-modal .modal-dialog {
     max-width: 80%;
+    margin-top: 69px;
   }
 }
 @media screen and (min-width: 768px) and (max-width: 1024px) {
+  #runnable-modal .runnable {
+    padding: 23px 0;
+  }
   #runnable-modal .modal-dialog {
     max-width: 90%;
+    margin-top: 69px;
   }
 }
 @media screen and (max-width: 768px) {
   #runnable-modal .modal-dialog {
     max-width: 100%;
-    margin-top: 0;
+    margin-top: 69px;
   }
   #runnable-modal .runnable-pane {
     height: 375px;

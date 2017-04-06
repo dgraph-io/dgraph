@@ -310,6 +310,69 @@ function isElementInViewport(el) {
     $otherRunnable.find('.query-editable').text(text);
   }
 
+  // setupRunnableClipboard configures clipboard buttons for runnable
+  // @params runnableEl {HTMLElement} - HTML Element for runnable
+  function setupRunnableClipboard(runnableEl) {
+    // Set up clipboard
+    var codeClipEl = $(runnableEl).find('.code-btn[data-action="copy-code"]')[0];
+    var codeClip = new Clipboard(codeClipEl, {
+      text: function(trigger) {
+        var $runnable = $(trigger).closest('.runnable');
+        var text = $runnable.find('.runnable-code').text().trim();
+        return text.replace(/^\$\s/gm, "");
+      }
+    });
+
+    codeClip.on("success", function(e) {
+      e.clearSelection();
+      $(e.trigger).text("Copied")
+        .addClass('copied');
+
+      window.setTimeout(function() {
+        $(e.trigger).text("Copy").removeClass('copied');
+      }, 2000);
+    });
+
+    codeClip.on("error", function(e) {
+      e.clearSelection();
+      $(e.trigger).text("Error copying");
+
+      window.setTimeout(function() {
+        $(e.trigger).text("Copy");
+      }, 2000);
+    });
+
+    var outputClipEl = $(runnableEl).find('.code-btn[data-action="copy-output"]')[0];
+    var outputClip = new Clipboard(outputClipEl, {
+      text: function(trigger) {
+        var $runnable = $(trigger).closest('.runnable');
+        var $output = $runnable.find('.output');
+
+        var text = $output.text().trim() || ' ';
+        return text;
+      }
+    });
+
+    outputClip.on("success", function(e) {
+      e.clearSelection();
+      $(e.trigger).text("Copied")
+        .addClass('copied');
+
+      window.setTimeout(function() {
+        $(e.trigger).text("Copy").removeClass('copied');
+      }, 2000);
+    });
+
+    outputClip.on("error", function(e) {
+      e.clearSelection();
+      $(e.trigger).text("Error copying");
+
+      window.setTimeout(function() {
+        $(e.trigger).text("Copy");
+      }, 2000);
+    });
+  }
+
 
   $(document).on('input', '#runnable-modal .query-editable', function (e) {
     syncWithOriginalRunnable(this, e.target.innerText);
@@ -384,60 +447,13 @@ function isElementInViewport(el) {
       keyboard: true
     });
 
-    // Set up clipboard
-    var text;
-    var clip = new Clipboard('[data-action="copy"]', {
-      text: function(trigger) {
-        var $runnable = $(trigger).closest('.runnable');
-        text = $runnable.find('.runnable-code').text().trim();
-        return text.replace(/^\$\s/gm, "");
-      }
-    });
-
-    clip.on("success", function(e) {
-      e.clearSelection();
-      $(e.trigger).text("Copied")
-        .addClass('copied');
-
-      window.setTimeout(function() {
-        $(e.trigger).text("Copy").removeClass('copied');
-      }, 2000);
-    });
-
-    clip.on("error", function(e) {
-      e.clearSelection();
-      $(e.trigger).text("Error copying");
-
-      window.setTimeout(function() {
-        $(e.trigger).text("Copy");
-      }, 2000);
-    });
-
+    var runnableEl = $modal.find('.runnable');
+    setupRunnableClipboard(runnableEl);
   });
 
   // Focus editable parts when code is clicked
   $(document).on('click', '.runnable-code', function () {
     $(this).find('.query-editable').focus();
-  });
-
-  // Init code copy buttons for runnables
-  var text;
-  var clip = new Clipboard('[data-action="copy"]', {
-    text: function(trigger) {
-      var $runnable = $(trigger).closest('.runnable');
-      text = $runnable.find('.runnable-code').text().trim();
-      return text.replace(/^\$\s/gm, "");
-    }
-  });
-
-  clip.on("success", function(e) {
-    e.clearSelection();
-    $(e.trigger).text("Copied")
-      .addClass('copied');
-
-    window.setTimeout(function() {
-      $(e.trigger).text("Copy").removeClass('copied');
-    }, 2000);
   });
 
   // Runnable modal event hooks
@@ -448,4 +464,14 @@ function isElementInViewport(el) {
   // On page load
   updateSidebar();
   document.querySelector('.sub-topics .topic.active').scrollIntoView();
+
+  $('.runnable').each(function () {
+    setupRunnableClipboard(this);
+  });
+
+  /********** Config **/
+
+  // Get clipboard.js to work inside bootstrap modal
+  // http://stackoverflow.com/questions/38398070/bootstrap-modal-does-not-work-with-clipboard-js-on-firefox
+  $.fn.modal.Constructor.prototype._enforceFocus = function() {};
 })();
