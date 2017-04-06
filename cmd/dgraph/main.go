@@ -476,6 +476,48 @@ func hasGQLOps(mu *gql.Mutation) bool {
 	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
 }
 
+func clusterHandler(w http.ResponseWriter, r *http.Request) {
+	if !worker.HealthCheck() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	// Cors header required ??
+	//addCorsHeaders(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != "POST" {
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	ctx := context.Background()
+
+	req, err := ioutil.ReadAll(r.Body)
+	if err != nil || len(req) == 0 {
+		x.TraceError(ctx, x.Wrapf(err, "Error while reading cluster request"))
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
+		return
+	}
+
+	var mc worker.ClusterConfChanges
+	if err = json.Unmarshal(req, &mc); err != nil || !mc.Valid() {
+		x.TraceError(ctx, x.Wrapf(err, "Error while unmarshalling cluster request"))
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
+		return
+	}
+
+	if err = worker.ManageClusterOverNetwork(mc); err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while handling manage cluster"))
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+
+	x.SetStatus(w, x.Success, "SUCCESS")
+
+}
+
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if !worker.HealthCheck() {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -957,6 +999,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
+	http.HandleFunc("/admin/manageCluster", clusterHandler)
 
 	// UI related API's.
 	// Share urls have a hex string as the shareId. So if
