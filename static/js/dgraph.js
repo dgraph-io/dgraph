@@ -298,58 +298,134 @@ function isElementInViewport(el) {
     }
   }
 
-  // Runnables
-  $('.runnable').each(function () {
-    var el = this;
-    var codeEl = $(el).find('.output')[0];
+  // syncWithOriginalRunnable syncs the code change in the runnable modal with
+  // the original runnable
+  // @params modalRunnableEl - HTML element for modal runable
+  // @params text - text to sync
+  function syncWithOriginalRunnable(modalRunnableEl, text) {
+    var checksum = $(modalRunnableEl).closest('.runnable').data('checksum');
+    var $otherRunnable = $('.runnable[data-checksum="' + checksum + '"]')
+                          .not('#runnable-modal .runnable');
 
-    // Running code
-    $(el).find('[data-action="run"]').on('click', function (e) {
-      e.preventDefault();
-      var query = $(el).find('.query-editable').text();
+    $otherRunnable.find('.query-editable').text(text);
+  }
 
-      $(el).find('.output-container').removeClass('empty error');
-      codeEl.innerText = 'Waiting for the server response...';
 
-      $.post({
-        url: 'https://play.dgraph.io/query',
-        data: query,
-        dataType: 'json'
-      })
-      .done(function (res) {
-        var resText = JSON.stringify(res, null, 2);
+  $(document).on('input', '#runnable-modal .query-editable', function (e) {
+    syncWithOriginalRunnable(this, e.target.innerText);
+  });
 
-        codeEl.innerText = resText;
-        hljs.highlightBlock(codeEl);
-      })
-      .fail(function (xhr, status, error) {
-        $(el).find('.output-container').addClass('error');
+  // Running code
+  $(document).on('click', '.runnable [data-action="run"]', function (e) {
+    e.preventDefault();
 
-        codeEl.innerText = xhr.responseText || error;
-      });
+    // there can be at most two instances of a same runnable because users can
+    // launch a runnable as a modal. they share the same checksum
+    var checksum = $(this).closest('.runnable').data('checksum');
+    var $runnables = $('.runnable[data-checksum="' + checksum + '"]');
+    var codeEl = $runnables.find('.output');
+    var query = $(this).closest('.runnable').find('.query-editable').text();
+
+    $runnables.find('.output-container').removeClass('empty error');
+    codeEl.text('Waiting for the server response...');
+
+    $.post({
+      url: 'https://play.dgraph.io/query',
+      data: query,
+      dataType: 'json'
+    })
+    .done(function (res) {
+      var resText = JSON.stringify(res, null, 2);
+
+      codeEl.text(resText);
+      for (var i = 0; i < codeEl.length; i++) {
+        hljs.highlightBlock(codeEl[i]);
+      }
+    })
+    .fail(function (xhr, status, error) {
+      $runnables.find('.output-container').addClass('error');
+
+      codeEl.text(xhr.responseText || error);
+    });
+  });
+
+  // Refresh code
+  $(document).on('click', '.runnable [data-action="reset"]', function (e) {
+    e.preventDefault();
+
+    var $runnable = $(this).closest('.runnable');
+    var initialQuery = $runnable.data('initial');
+
+    $runnable.find('.query-editable').text('');
+
+    var isModal = $runnable.parents('#runnable-modal').length > 0;
+    if (isModal) {
+      syncWithOriginalRunnable($runnable[0], initialQuery);
+    }
+
+    window.setTimeout(function() {
+      $runnable.find('.query-editable').text(initialQuery);
+    }, 80);
+  });
+
+  $(document).on('click', '.runnable [data-action="expand"]', function (e) {
+    e.preventDefault();
+
+    var $runnable = $(this).closest('.runnable');
+    var $modal = $('#runnable-modal');
+    var $modalBody = $modal.find('.modal-body');
+
+    // set inner html as runnable
+    var str = $runnable.prop('outerHTML');
+    $modalBody.html(str);
+
+    // show modal
+    $modal.modal({
+      keyboard: true
     });
 
-    // Refresh code
-    $(el).find('[data-action="reset"]').on('click', function (e) {
-      e.preventDefault();
+    // Set up clipboard
+    var text;
+    var clip = new Clipboard('[data-action="copy"]', {
+      text: function(trigger) {
+        var $runnable = $(trigger).closest('.runnable');
+        text = $runnable.find('.runnable-code').text().trim();
+        return text.replace(/^\$\s/gm, "");
+      }
+    });
 
-      var initialQuery = $(el).data('initial');
-      $(el).find('.query-editable').text('');
+    clip.on("success", function(e) {
+      e.clearSelection();
+      $(e.trigger).text("Copied")
+        .addClass('copied');
+
       window.setTimeout(function() {
-        $(el).find('.query-editable').text(initialQuery);
-      }, 80);
+        $(e.trigger).text("Copy").removeClass('copied');
+      }, 2000);
     });
 
-    $(el).find('.runnable-code').on('click', function () {
-      $(this).find('.query-editable').focus();
+    clip.on("error", function(e) {
+      e.clearSelection();
+      $(e.trigger).text("Error copying");
+
+      window.setTimeout(function() {
+        $(e.trigger).text("Copy");
+      }, 2000);
     });
+
+  });
+
+  // Focus editable parts when code is clicked
+  $(document).on('click', '.runnable-code', function () {
+    $(this).find('.query-editable').focus();
   });
 
   // Init code copy buttons for runnables
   var text;
   var clip = new Clipboard('[data-action="copy"]', {
     text: function(trigger) {
-      text = $(trigger).closest('.runnable').text();
+      var $runnable = $(trigger).closest('.runnable');
+      text = $runnable.find('.runnable-code').text().trim();
       return text.replace(/^\$\s/gm, "");
     }
   });
@@ -362,6 +438,11 @@ function isElementInViewport(el) {
     window.setTimeout(function() {
       $(e.trigger).text("Copy").removeClass('copied');
     }, 2000);
+  });
+
+  // Runnable modal event hooks
+  $('#runnable-modal').on('hidden.bs.modal', function (e) {
+    $(this).find('.modal-body').html('');
   });
 
   // On page load

@@ -226,6 +226,7 @@ pre.collapsed .showmore span {
   letter-spacing: 0.5px;
   border: 1px solid #ececec;
   cursor: pointer;
+  /*display: inline-block;*/
 }
 
 #header {
@@ -522,7 +523,6 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
 }
 .runnable .runnable-content {
   flex: 1;
-  background: url(http://localhost:1313/latest//images/dgraph.svg);
   background-repeat: no-repeat;
   background-position: center;
   background-color: #fff;
@@ -580,6 +580,42 @@ html .runnable pre {
 .CodeMirror-scroll {
   background: #FFFFD8;
 }*/
+
+#runnable-modal {
+  background: rgba(0, 0, 0, 0.63);
+}
+#runnable-modal .modal-title {
+  margin: 0;
+}
+#runnable-modal .runnable {
+  padding: 0;
+  margin-bottom: 0;
+}
+#runnable-modal .runnable-pane {
+  height: 644px;
+}
+#runnable-modal .code-btn[data-action='expand'] {
+  display: none;
+}
+@media screen and (min-width: 1024px) {
+  #runnable-modal .modal-dialog {
+    max-width: 80%;
+  }
+}
+@media screen and (min-width: 768px) and (max-width: 1024px) {
+  #runnable-modal .modal-dialog {
+    max-width: 90%;
+  }
+}
+@media screen and (max-width: 768px) {
+  #runnable-modal .modal-dialog {
+    max-width: 100%;
+    margin-top: 0;
+  }
+  #runnable-modal .runnable-pane {
+    height: 375px;
+  }
+}
 
 /* custom bootstrap */
 .row-no-padding [class^="col-"] {

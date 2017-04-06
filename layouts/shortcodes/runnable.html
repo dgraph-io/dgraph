@@ -1,18 +1,21 @@
-<div class="runnable" data-initial="{{ .Inner }}">
+{{ $checksum := md5 .Inner }}
+
+<div class="runnable" data-checksum="{{ $checksum }}" data-initial="{{ .Inner }}">
   <div class="container">
     <div class="row row-no-padding">
       <div class="col-12 col-sm-12 col-md-12 col-lg-6">
         <div class="runnable-pane">
           <div class="topbar">
             <div class="row">
-              <div class="col-12 col-sm-6">
+              <div class="col-12 col-sm-3">
                 <!-- <div class="languages">
                   <a class="code-btn active" href="#">Bash</a>
                 </div> -->
               </div>
-              <div class="col-12 col-sm-6">
-                <div class="actions  pull-right">
+              <div class="col-12 col-sm-9">
+                <div class="actions pull-right">
                   <a class="code-btn" data-action="reset" href="#"><i class="fa fa-refresh"></i></a>
+                  <a class="code-btn hidden-sm-down" data-action="expand" href="#"><i class="fa fa-expand"></i></a>
                   <span class="code-btn" data-action="copy" href="#">Copy</span>
                   <a class="code-btn" data-action="run" href="#">Run</a>
                 </div>
@@ -27,9 +30,17 @@
       <div class="col-12 col-sm-12 col-md-12 col-lg-6">
         <div class="runnable-pane">
           <div class="topbar">
-            Output
+            <div class="row">
+              <div class="col-12 col-sm-6">
+                Output
+              </div>
+              <div class="col-12 col-sm-6">
+                <div class="actions pull-right">
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="runnable-content runnable-output" style="background-url: url('{{ .Site.BaseURL }}/images/dgraph.svg')">
+          <div class="runnable-content runnable-output" style="background: url('{{ .Site.BaseURL }}images/dgraph.svg'); background-repeat: no-repeat; background-position: center; background-color: #fff;">
             <pre class="output-container empty"><code class="output"></code></pre>
           </div>
         </div>
