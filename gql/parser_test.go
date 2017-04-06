@@ -66,6 +66,27 @@ func TestParseQueryAggChild(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseQueryWithDash(t *testing.T) {
+	query := `
+{
+      me(id: alice-in-wonderland) {
+        type
+        written-in
+        name
+        character {
+                name
+        }
+        author {
+                name
+                born
+                died
+        }
+      }
+    }`
+	_, err := Parse(query)
+	require.NoError(t, err)
+}
+
 func TestParseQueryWithMultiVarValError(t *testing.T) {
 	query := `
 	{	

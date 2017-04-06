@@ -309,6 +309,8 @@ func lexText(l *lex.Lexer) lex.StateFn {
 			return lexName
 		case r == '#':
 			return lexComment
+		case r == '-':
+			l.Emit(itemMathOp)
 		case r == leftRound:
 			l.Emit(itemLeftRound)
 			l.AcceptRun(isSpace)
@@ -569,7 +571,7 @@ func isNameSuffix(r rune) bool {
 	if isNameBegin(r) || isNumber(r) {
 		return true
 	}
-	if r == '.' /*|| r == '-'*/ || r == '!' { // Use by freebase.
+	if r == '.' || r == '!' { // Use by freebase.
 		return true
 	}
 	return false

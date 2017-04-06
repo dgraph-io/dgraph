@@ -1012,6 +1012,18 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		}
 
 		p.Val = val + item.Val
+		var dashOrName bool // false if expecting dash, true if expecting name
+		for {
+			items, err := it.Peek(1)
+			if err == nil && ((items[0].Typ == itemName && dashOrName) ||
+				(items[0].Val == "-" && !dashOrName)) {
+				it.Next()
+				p.Val += it.Item().Val
+				dashOrName = !dashOrName
+			} else {
+				break
+			}
+		}
 
 		// Get language list, if present
 		items, err := it.Peek(1)
@@ -1582,7 +1594,20 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				continue
 			}
 			// Check and parse if its a list.
-			err := parseID(gq, item.Val)
+			val := item.Val
+			var dashOrName bool // false if expecting dash, true if expecting name
+			for {
+				items, err := it.Peek(1)
+				if err == nil && ((items[0].Typ == itemName && dashOrName) ||
+					(items[0].Val == "-" && !dashOrName)) {
+					it.Next()
+					val += it.Item().Val
+					dashOrName = !dashOrName
+				} else {
+					break
+				}
+			}
+			err := parseID(gq, val)
 			if err != nil {
 				return nil, err
 			}
@@ -1619,6 +1644,18 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				}
 			} else {
 				val += item.Val
+				var dashOrName bool // false if expecting dash, true if expecting name
+				for {
+					items, err := it.Peek(1)
+					if err == nil && ((items[0].Typ == itemName && dashOrName) ||
+						(items[0].Val == "-" && !dashOrName)) {
+						it.Next()
+						val += it.Item().Val
+						dashOrName = !dashOrName
+					} else {
+						break
+					}
+				}
 			}
 
 			if val == "" {
