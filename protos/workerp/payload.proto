@@ -41,6 +41,8 @@ service Worker {
 	// RAFT serving RPCs.
 	rpc RaftMessage (Payload)                     returns (Payload) {}
 	rpc JoinCluster (taskp.RaftContext)            returns (Payload) {}
+	rpc StartGroup(taskp.RaftContext)					returns (Payload) {}
+	rpc StopGroup(taskp.RaftContext)					returns (Payload) {}
 	rpc UpdateMembership (taskp.MembershipUpdate)  returns (taskp.MembershipUpdate) {}
 	rpc Backup (BackupPayload)                    returns (BackupPayload) {}
 }

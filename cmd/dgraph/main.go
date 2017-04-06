@@ -584,6 +584,84 @@ func handlerInit(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
+func addGroupHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r) {
+		return
+	}
+
+	// Send request to corresponding node
+
+	x.SetStatus(w, x.Success, "Server is shutting down")
+}
+
+func removeGroupHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r) {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	groupId := r.URL.Query().Get("gid")
+	if len(groupId) == 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No group id defined.")
+		return
+	}
+	gid, err := strconv.ParseUint(groupId, 0, 32)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Not valid group id")
+		return
+	}
+	nodeId := r.URL.Query().Get("nodeId")
+	if len(nodeId) == 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No node id defined.")
+		return
+	}
+	nid, err := strconv.ParseUint(nodeId, 0, 64)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Not valid node id")
+		return
+	}
+	if err := worker.StopServingGroup(ctx, nid, uint32(gid)); err != nil {
+		x.SetStatus(w, err.Error(), "RemoveGroup failed.")
+	} else {
+		x.SetStatus(w, x.Success, fmt.Sprint("Group %d belonging to node %d removed",
+			gid, nid))
+	}
+}
+
+func addServerHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r) {
+		return
+	}
+
+	// GetKnown groups and remove all groups served by that server
+	x.SetStatus(w, x.Success, "Server is shutting down")
+}
+
+func removeServerHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r) {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	nodeId := r.URL.Query().Get("nodeId")
+	if len(nodeId) == 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No node id defined.")
+		return
+	}
+	nid, err := strconv.ParseUint(nodeId, 0, 64)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Not valid node id")
+		return
+	}
+	if err := worker.RemoveServer(ctx, nid); err != nil {
+		x.SetStatus(w, err.Error(), "RemoveServer failed.")
+	} else {
+		x.SetStatus(w, x.Success, fmt.Sprint("Server %d removed", nid))
+	}
+}
+
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r) {
 		return
@@ -833,6 +911,10 @@ func setupServer(che chan error) {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
+	http.HandleFunc("/admin/addServer", addServerHandler)
+	http.HandleFunc("/admin/removeServer", removeServerHandler)
+	http.HandleFunc("/admin/addGroup", addGroupHandler)
+	http.HandleFunc("/admin/removeGroup", removeGroupHandler)
 
 	// UI related API's.
 	// Share urls have a hex string as the shareId. So if

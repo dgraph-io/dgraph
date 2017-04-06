@@ -75,7 +75,7 @@ message Membership {
 	uint32 group_id = 2;
 	string addr = 3;
 	bool leader = 4;
-	bool am_dead = 5;
+	bool removed = 5;
 	uint64 last_update = 6;
 }
 
@@ -129,7 +129,7 @@ message RebuildIndex {
 }
 
 message Proposal {
-	uint32 id = 1;
+	uint64 id = 1;
 	Mutations mutations = 2;
 	Membership membership = 3;
 	RebuildIndex rebuild_index = 4;

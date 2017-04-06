@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/workerp"
@@ -72,10 +73,13 @@ type groupi struct {
 	wal    *raftwal.Wal
 	// local stores the groupId to node map for this server.
 	local map[uint32]*node
+	// banned stores Raft Id to raft Index map at which it was removed per group
+	banned map[uint32]*servers
 	// all stores the groupId to servers map for the entire cluster.
 	all        map[uint32]*servers
 	num        uint32
 	lastUpdate uint64
+	elog       trace.EventLog
 }
 
 var gr *groupi
@@ -91,6 +95,8 @@ func groups() *groupi {
 func StartRaftNodes(walDir string) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
+	gr.banned = make(map[uint32]*servers)
+	gr.elog = trace.NewEventLog("Membership Changes", fmt.Sprintf("%d", *raftId))
 
 	// Successfully connect with the peer, before doing anything else.
 	if len(*peerAddr) > 0 {
@@ -108,10 +114,10 @@ func StartRaftNodes(walDir string) {
 		gr.syncMemberships()
 		for gr.LastUpdate() == 0 {
 			time.Sleep(time.Second)
-			fmt.Println("Last update raft index for membership information is zero. Syncing...")
+			gr.elog.Printf("Last update raft index for membership information is zero. Syncing...\n")
 			gr.syncMemberships()
 		}
-		fmt.Printf("Last update is now: %d\n", gr.LastUpdate())
+		gr.elog.Printf("Last update is now: %d\n", gr.LastUpdate())
 	}
 
 	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
@@ -154,6 +160,57 @@ func (g *groupi) Node(groupId uint32) *node {
 		return n
 	}
 	return nil
+}
+
+func (g *groupi) bannedId(groupId uint32, nodeId uint64) bool {
+	g.RLock()
+	defer g.RUnlock()
+	bannedServers, has := g.banned[groupId]
+	if !has {
+		return false
+	}
+
+	for _, s := range bannedServers.list {
+		if s.NodeId == nodeId {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *groupi) banId(groupId uint32, sv server) {
+	g.AssertLock()
+	bs := g.banned[groupId]
+
+	if bs == nil {
+		bs = new(servers)
+		g.all[groupId] = bs
+	}
+	for {
+		// Remove all instances of the provided node. There should only be one.
+		found := false
+		for i, s := range bs.list {
+			if s.NodeId == sv.NodeId {
+				found = true
+				bs.list[i] = bs.list[len(bs.list)-1]
+				bs.list = bs.list[:len(bs.list)-1]
+			}
+		}
+		if !found {
+			break
+		}
+	}
+	bs.list = append(bs.list, sv)
+}
+
+func (g *groupi) removeNode(groupId uint32) {
+	g.AssertLock()
+	n, has := g.local[groupId]
+	if !has {
+		return
+	}
+	n.Stop()
+	delete(g.local, groupId)
 }
 
 func (g *groupi) ServesGroup(groupId uint32) bool {
@@ -323,6 +380,27 @@ func (g *groupi) TouchLastUpdate(u uint64) {
 	}
 }
 
+func (g *groupi) syncBannedId(gid uint32, nodeId uint64, addr string) error {
+	mm := &taskp.Membership{
+		Id:      nodeId,
+		GroupId: gid,
+		Removed: true,
+		Addr:    addr,
+	}
+	if g.ServesGroup(0) {
+		zero := g.Node(0)
+		x.AssertTruef(zero != nil, "Expected node 0")
+		return zero.ProposeAndWait(zero.ctx, &taskp.Proposal{Membership: mm})
+	}
+
+	// This server doesn't serve group zero.
+	mu := taskp.MembershipUpdate{
+		Members:    []*taskp.Membership{mm},
+		LastUpdate: g.LastUpdate(),
+	}
+	return g.syncMembershipOverNetwork(&mu)
+}
+
 // syncMemberships needs to be called in an periodic loop.
 // How syncMemberships works:
 // - Each server iterates over all the nodes it's serving, present in local.
@@ -382,6 +460,13 @@ func (g *groupi) syncMemberships() {
 		g.RUnlock()
 	}
 
+	err := g.syncMembershipOverNetwork(&mu)
+	if err != nil {
+		x.TraceError(g.ctx, err)
+	}
+}
+
+func (g *groupi) syncMembershipOverNetwork(mu *taskp.MembershipUpdate) error {
 	// Send an update to peer.
 	var pl *pool
 	addr := g.AnyServer(0)
@@ -394,26 +479,24 @@ UPDATEMEMBERSHIP:
 	}
 	conn, err := pl.Get()
 	if err == errNoConnection {
-		fmt.Println("Unable to sync memberships. No valid connection")
-		return
+		return x.Errorf("Unable to sync memberships. No valid connection")
 	}
 	x.Check(err)
 	defer pl.Put(conn)
 
 	c := workerp.NewWorkerClient(conn)
-	update, err := c.UpdateMembership(g.ctx, &mu)
+	update, err := c.UpdateMembership(g.ctx, mu)
 	if err != nil {
-		x.TraceError(g.ctx, err)
-		return
+		return err
 	}
 
 	// Check if we got a redirect.
 	if update.Redirect {
 		addr = update.RedirectAddr
 		if len(addr) == 0 {
-			return
+			return x.Errorf("Redirect addr not found")
 		}
-		fmt.Printf("Got redirect for: %q\n", addr)
+		g.elog.Printf("Got redirect for: %q\n", addr)
 		pools().connect(addr)
 		goto UPDATEMEMBERSHIP
 	}
@@ -426,6 +509,7 @@ UPDATEMEMBERSHIP:
 		}
 	}
 	g.TouchLastUpdate(lu)
+	return nil
 }
 
 func (g *groupi) periodicSyncMemberships() {
@@ -453,9 +537,14 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
 		go pools().connect(update.Addr)
 	}
 
-	fmt.Println("----------------------------")
-	fmt.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", update)
-	fmt.Println("----------------------------")
+	if g.bannedId(mm.GroupId, mm.Id) {
+		// Ignore sync memberships from node which has been removed
+		return
+	}
+
+	g.elog.Printf("----------------------------\n")
+	g.elog.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", update)
+	g.elog.Printf("----------------------------\n")
 	g.Lock()
 	defer g.Unlock()
 
@@ -484,21 +573,32 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
 		}
 	}
 
-	// Append update to the list. If it's a leader, move it to index zero.
-	sl.list = append(sl.list, update)
-	last := len(sl.list) - 1
-	if update.Leader {
-		sl.list[0], sl.list[last] = sl.list[last], sl.list[0]
-	}
+	if !mm.Removed {
+		// Append update to the list. If it's a leader, move it to index zero.
+		sl.list = append(sl.list, update)
+		last := len(sl.list) - 1
+		if update.Leader {
+			sl.list[0], sl.list[last] = sl.list[last], sl.list[0]
+		}
 
-	// Update all servers upwards of index zero as followers.
-	for i := 1; i < len(sl.list); i++ {
-		sl.list[i].Leader = false
+		// Update all servers upwards of index zero as followers.
+		for i := 1; i < len(sl.list); i++ {
+			sl.list[i].Leader = false
+		}
+	} else {
+		if mm.Id == *raftId {
+			g.removeNode(mm.GroupId)
+		}
+		g.banId(mm.GroupId, update)
 	}
 
 	// Print out the entire list.
 	for gid, sl := range g.all {
-		fmt.Printf("Group: %v. List: %+v\n", gid, sl.list)
+		g.elog.Printf("Group: %v. Active List: %+v\n", gid, sl.list)
+	}
+	// Print Removed Ids list
+	for gid, bl := range g.banned {
+		g.elog.Printf("Group: %v. Removed List:: %+v\n", gid, bl.list)
 	}
 }
 
@@ -525,6 +625,24 @@ func (g *groupi) MembershipUpdateAfter(ridx uint64) *taskp.MembershipUpdate {
 					Id:      s.NodeId,
 					GroupId: gid,
 					Addr:    s.Addr,
+				})
+		}
+	}
+
+	for gid, banPeers := range g.banned {
+		for _, s := range banPeers.list {
+			if s.RaftIdx <= ridx {
+				continue
+			}
+			if s.RaftIdx > maxIdx {
+				maxIdx = s.RaftIdx
+			}
+			out.Members = append(out.Members,
+				&taskp.Membership{
+					Id:      s.NodeId,
+					GroupId: gid,
+					Addr:    s.Addr,
+					Removed: true,
 				})
 		}
 	}
@@ -562,6 +680,7 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 			Id:      mm.Id,
 			GroupId: mm.GroupId,
 			Addr:    mm.Addr,
+			Removed: mm.Removed,
 		}
 
 		go func(mmNew *taskp.Membership) {
