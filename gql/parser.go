@@ -1675,8 +1675,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 
 			val := collectName(it, item.Val)
-			val = strings.ToLower(val)
-			if isAggregator(val) || val == "checkpwd" {
+			valLower := strings.ToLower(val)
+			if isAggregator(valLower) || valLower == "checkpwd" {
 				child := &GraphQuery{
 					Args: make(map[string]string),
 					Var:  varName,
@@ -1686,14 +1686,14 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if child.Func, err = parseFunction(it); err != nil {
 					return err
 				}
-				if val == "checkpwd" {
+				if valLower == "checkpwd" {
 					child.Func.Args = append(child.Func.Args, child.Func.Attr)
 				}
 				child.Attr = child.Func.Attr
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
-			} else if isValVarFunc(val) {
+			} else if isValVarFunc(valLower) {
 				//item.Val = val
 				if varName == "" {
 					return x.Errorf("Function %v should be used with a variable", val)
@@ -1707,7 +1707,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return x.Errorf("Comma encountered in math() at unexpected place.")
 				}
 				child := &GraphQuery{
-					Attr:       item.Val,
+					Attr:       val,
 					Args:       make(map[string]string),
 					Var:        varName,
 					MathExp:    mathTree,
@@ -1718,7 +1718,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				curp = nil
 				continue
 
-			} else if val == "count" {
+			} else if valLower == "count" {
 				if isCount != 0 {
 					return x.Errorf("Invalid mention of function count")
 				}
@@ -1729,7 +1729,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return x.Errorf("Invalid mention of count.")
 				}
 				continue
-			} else if val == "var" {
+			} else if valLower == "var" {
 				if varName != "" {
 					return x.Errorf("Cannot assign a variable to var()")
 				}
