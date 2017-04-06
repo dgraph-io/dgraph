@@ -129,13 +129,13 @@ func init() {
 		"exp": 100,
 		"log": 99,
 
-		"lt":  30,
-		"gt":  29,
-		"leq": 28,
-		"geq": 27,
-		"eq":  26,
+		"<":  30,
+		">":  29,
+		"<=": 28,
+		">=": 27,
+		"==": 26,
 
-		"conditional": 20,
+		"cond": 20,
 
 		"/":   20,
 		"*":   10,
@@ -1807,9 +1807,4 @@ func isAggregator(fname string) bool {
 
 func isValVarFunc(name string) bool {
 	return name == "math"
-	/*
-		|| name == "sumvar" || name == "diffvar" || name == "mulvar" || name == "log" || name == "exp" ||
-			name == "conditional" || name == "maxvar" || name == "minvar" || name == "conditional" ||
-			name == "lt" || name == "gt" || name == "eq" || name == "leq" || name == "geq"
-	*/
 }

@@ -24,7 +24,7 @@ import (
 
 func LexIRIRef(l *Lexer, styp ItemType) error {
 	l.Ignore() // ignore '<'
-	l.AcceptRunRec(isIRIChar)
+	l.AcceptRunRec(IsIRIChar)
 	l.Emit(styp) // will emit without '<' and '>'
 	r := l.Next()
 	if r == EOF {
@@ -39,7 +39,7 @@ func LexIRIRef(l *Lexer, styp ItemType) error {
 }
 
 // IRIREF ::= '<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>'
-func isIRIChar(r rune, l *Lexer) bool {
+func IsIRIChar(r rune, l *Lexer) bool {
 	if r <= 32 { // no chars b/w 0x00 to 0x20 inclusive
 		return false
 	}

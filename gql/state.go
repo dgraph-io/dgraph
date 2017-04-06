@@ -147,6 +147,22 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			return lexArgName
 		case isMathOp(r):
 			l.Emit(itemMathOp)
+		case isInequalityOp(r):
+			if r == equal {
+				if !isInequalityOp(l.Peek()) {
+					l.Emit(itemEqual)
+					continue
+				}
+			} else if r == lsThan {
+				if !isSpace(l.Peek()) && l.Peek() != '=' {
+					// as long as its not '=' or ' '
+					return lexIRIRef
+				}
+			}
+			if isInequalityOp(l.Peek()) {
+				l.Next()
+			}
+			l.Emit(itemMathOp)
 		case r == leftRound:
 			l.Emit(itemLeftRound)
 			l.ArgDepth++
@@ -177,8 +193,6 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemDollar)
 		case r == colon:
 			l.Emit(itemColon)
-		case r == equal:
-			l.Emit(itemEqual)
 		case isEndLiteral(r):
 			{
 				empty = false
@@ -186,8 +200,6 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 				l.Next()                    // Consume the " .
 				l.Emit(itemName)
 			}
-		case r == lsThan:
-			return lexIRIRef
 		case r == '[':
 			{
 				depth := 1
@@ -532,9 +544,9 @@ func isMathOp(r rune) bool {
 	}
 }
 
-func isPlusMinus(r rune) bool {
+func isInequalityOp(r rune) bool {
 	switch {
-	case r == '-' || r == '+':
+	case r == '<' || r == '>' || r == '=':
 		return true
 	default:
 		return false

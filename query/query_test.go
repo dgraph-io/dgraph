@@ -448,8 +448,8 @@ func TestQueryVarValAggNestedFuncConditional(t *testing.T) {
 				a as age
 				friend {
 					n as min(age)
-					condLog as math(conditional(gt(a, 10), log(n), 1))
-					condExp as math(conditional(lt(a, 40), 1, exp(n)))
+					condLog as math(cond(a > 10, log(n), 1))
+					condExp as math(cond(a < 40, 1, exp(n)))
 				}
 			}
 

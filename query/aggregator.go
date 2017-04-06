@@ -37,12 +37,12 @@ func isUnary(f string) bool {
 }
 
 func isBinaryBoolean(f string) bool {
-	return f == "lt" || f == "gt" || f == "leq" || f == "geq" ||
-		f == "eq"
+	return f == "<" || f == ">" || f == "<=" || f == ">=" ||
+		f == "=="
 }
 
 func isTernary(f string) bool {
-	return f == "conditional"
+	return f == "cond"
 }
 
 func isBinary(f string) bool {
@@ -88,18 +88,18 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 		return false, err
 	}
 	switch ag {
-	case "lt":
+	case "<":
 		return isLess, nil
-	case "gt":
+	case ">":
 		return isMore, nil
-	case "leq":
+	case "<=":
 		return isLess && !isMore, nil
-	case "geq":
+	case ">=":
 		return isMore && !isLess, nil
-	case "eq":
+	case "==":
 		return !isMore && !isLess, nil
 	default:
-		x.Fatalf("Function %v not handled in compareValues", ag)
+		return false, x.Errorf("Invalid compare function %v", ag)
 	}
 	return false, nil
 }

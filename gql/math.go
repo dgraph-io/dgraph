@@ -47,7 +47,7 @@ func isBinaryMath(f string) bool {
 }
 
 func isTernary(f string) bool {
-	return f == "conditional"
+	return f == "cond"
 }
 
 func evalMathStack(opStack, valueStack *mathTreeStack) error {
@@ -87,8 +87,8 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 func isMathFunc(lval string) bool {
 	// While adding an op, also add it to the corresponding function type.
 	return lval == "*" || lval == "+" || lval == "-" || lval == "/" ||
-		lval == "exp" || lval == "log" || lval == "conditional" || lval == "lt" ||
-		lval == "gt" || lval == "geq" || lval == "leq" || lval == "eq" ||
+		lval == "exp" || lval == "log" || lval == "cond" ||
+		lval == "<" || lval == ">" || lval == ">=" || lval == "<=" || lval == "==" ||
 		lval == "min" || lval == "max"
 }
 
@@ -278,24 +278,8 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 	// Non-leaf node.
 	buf.WriteRune('(')
 	switch t.Fn {
-	case "+":
-		buf.WriteString("+")
-	case "-":
-		buf.WriteString("-")
-	case "/":
-		buf.WriteString("/")
-	case "*":
-		buf.WriteString("*")
-	case "exp":
-		buf.WriteString("exp")
-	case "log":
-		buf.WriteString("log")
-	case "conditional":
-		buf.WriteString("conditional")
-	case "lt":
-		buf.WriteString("lt")
-	case "u-":
-		buf.WriteString("u-")
+	case "+", "-", "/", "*", "exp", "log", "cond", "<", ">", "<=", ">=", "==", "u-":
+		buf.WriteString(t.Fn)
 	default:
 		x.Fatalf("Unknown operator: %q", t.Fn)
 	}

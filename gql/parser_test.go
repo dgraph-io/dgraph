@@ -166,14 +166,14 @@ func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(conditional(lt(a, 10), exp(a + b + 1), log(c)))
+				d as math(cond(a <= 10, exp(a + b + 1), log(c)))
 			}
 		}
 	}
 `
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.EqualValues(t, "(conditional (lt a 1E+01) (exp (+ (+ a b) 1E+00)) (log c))",
+	require.EqualValues(t, "(cond (<= a 1E+01) (exp (+ (+ a b) 1E+00)) (log c))",
 		res.Query[1].Children[0].Children[3].MathExp.debugString())
 }
 
