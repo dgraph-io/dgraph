@@ -373,6 +373,27 @@ function isElementInViewport(el) {
     });
   }
 
+  // launchRunnableModal launches a runnable in a modal and configures the
+  // clipboard buttons
+  // @params runnabelEl {HTMLElement} - a runnable element
+  function launchRunnableModal(runnabelEl) {
+    var $runnable = $(runnabelEl);
+    var $modal = $('#runnable-modal');
+    var $modalBody = $modal.find('.modal-body');
+
+    // set inner html as runnable
+    var str = $runnable.prop('outerHTML');
+    $modalBody.html(str);
+
+    // show modal
+    $modal.modal({
+      keyboard: true
+    });
+
+    var runnableEl = $modal.find('.runnable');
+    setupRunnableClipboard(runnableEl);
+  }
+
 
   $(document).on('input', '#runnable-modal .query-editable', function (e) {
     syncWithOriginalRunnable(this, e.target.innerText);
@@ -385,8 +406,10 @@ function isElementInViewport(el) {
     // there can be at most two instances of a same runnable because users can
     // launch a runnable as a modal. they share the same checksum
     var checksum = $(this).closest('.runnable').data('checksum');
+    var $currentRunnable = $(this).closest('.runnable');
     var $runnables = $('.runnable[data-checksum="' + checksum + '"]');
     var codeEl = $runnables.find('.output');
+    var isModal = $currentRunnable.parents('#runnable-modal').length > 0;
     var query = $(this).closest('.runnable').find('.query-editable').text();
 
     $runnables.find('.output-container').removeClass('empty error');
@@ -403,6 +426,11 @@ function isElementInViewport(el) {
       codeEl.text(resText);
       for (var i = 0; i < codeEl.length; i++) {
         hljs.highlightBlock(codeEl[i]);
+      }
+
+      if (!isModal) {
+        var currentRunnableEl = $currentRunnable[0];
+        launchRunnableModal(currentRunnableEl);
       }
     })
     .fail(function (xhr, status, error) {
@@ -435,20 +463,8 @@ function isElementInViewport(el) {
     e.preventDefault();
 
     var $runnable = $(this).closest('.runnable');
-    var $modal = $('#runnable-modal');
-    var $modalBody = $modal.find('.modal-body');
-
-    // set inner html as runnable
-    var str = $runnable.prop('outerHTML');
-    $modalBody.html(str);
-
-    // show modal
-    $modal.modal({
-      keyboard: true
-    });
-
-    var runnableEl = $modal.find('.runnable');
-    setupRunnableClipboard(runnableEl);
+    var runnableEl = $runnable[0];
+    launchRunnableModal(runnableEl)
   });
 
   // Focus editable parts when code is clicked
