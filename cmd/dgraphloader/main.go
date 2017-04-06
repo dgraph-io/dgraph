@@ -179,7 +179,24 @@ func main() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	batch := client.NewBatchMutation(context.Background(), graphp.NewDgraphClient(conn), *numRdf, *concurrent)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	dgraphClient := graphp.NewDgraphClient(conn)
+	v, err := dgraphClient.CheckVersion(ctx, &graphp.Check{})
+	if err != nil {
+		fmt.Println("Got error while fetching version: %v", err)
+	}
+
+	version := x.Version()
+	if version != "" && version != v.Tag {
+		fmt.Printf(`
+Dgraph server: %v, loader: %v dont' match.
+Get the latest version from https://docs.dgraph.io
+`, v.Tag, version)
+	}
+
+	batch := client.NewBatchMutation(context.Background(), dgraphClient, *numRdf, *concurrent)
 
 	ticker := time.NewTicker(2 * time.Second)
 	go printCounters(batch, ticker)
