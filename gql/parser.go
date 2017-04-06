@@ -713,14 +713,16 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 		case itemRightSquare:
 			return items, nil
 		case itemName:
-			items = append(items, item.Val)
+			val := collectName(it, item.Val)
+			items = append(items, val)
 		case itemComma:
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
 				return items, x.Errorf("Invalid scheam block")
 			}
-			items = append(items, item.Val)
+			val := collectName(it, item.Val)
+			items = append(items, val)
 		default:
 			return items, x.Errorf("Invalid schema block")
 		}
@@ -953,7 +955,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			if !expectArg {
 				return result, x.Errorf("Expecting a comma. But got: %v", item.Val)
 			}
-			p.Key = item.Val
+			p.Key = collectName(it, item.Val)
 			expectArg = false
 		} else if item.Typ == itemRightRound {
 			if expectArg {
@@ -1011,19 +1013,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			return result, x.Errorf("Expecting argument value. Got: %v", item)
 		}
 
-		p.Val = val + item.Val
-		var dashOrName bool // false if expecting dash, true if expecting name
-		for {
-			items, err := it.Peek(1)
-			if err == nil && ((items[0].Typ == itemName && dashOrName) ||
-				(items[0].Val == "-" && !dashOrName)) {
-				it.Next()
-				p.Val += it.Item().Val
-				dashOrName = !dashOrName
-			} else {
-				break
-			}
-		}
+		p.Val = collectName(it, val+item.Val)
 
 		// Get language list, if present
 		items, err := it.Peek(1)
@@ -1144,7 +1134,8 @@ L:
 	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemName { // Value.
-			g = &Function{Name: strings.ToLower(item.Val)}
+			val := collectName(it, item.Val)
+			g = &Function{Name: strings.ToLower(val)}
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
@@ -1244,7 +1235,8 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 				if !expectArg {
 					return nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
 				}
-				facets.Keys = append(facets.Keys, item.Val)
+				val := collectName(it, item.Val)
+				facets.Keys = append(facets.Keys, val)
 				expectArg = false
 			} else if item.Typ == itemComma {
 				if expectArg {
@@ -1594,19 +1586,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				continue
 			}
 			// Check and parse if its a list.
-			val := item.Val
-			var dashOrName bool // false if expecting dash, true if expecting name
-			for {
-				items, err := it.Peek(1)
-				if err == nil && ((items[0].Typ == itemName && dashOrName) ||
-					(items[0].Val == "-" && !dashOrName)) {
-					it.Next()
-					val += it.Item().Val
-					dashOrName = !dashOrName
-				} else {
-					break
-				}
-			}
+			val := collectName(it, item.Val)
 			err := parseID(gq, val)
 			if err != nil {
 				return nil, err
@@ -1643,19 +1623,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, x.Errorf("Expected only one variable but got: %d", count)
 				}
 			} else {
-				val += item.Val
-				var dashOrName bool // false if expecting dash, true if expecting name
-				for {
-					items, err := it.Peek(1)
-					if err == nil && ((items[0].Typ == itemName && dashOrName) ||
-						(items[0].Val == "-" && !dashOrName)) {
-						it.Next()
-						val += it.Item().Val
-						dashOrName = !dashOrName
-					} else {
-						break
-					}
-				}
+				val = collectName(it, val+item.Val)
 			}
 
 			if val == "" {
@@ -1706,9 +1674,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			}
 
-			val := strings.ToLower(item.Val)
+			val := collectName(it, item.Val)
+			val = strings.ToLower(val)
 			if isAggregator(val) || val == "checkpwd" {
-				item.Val = val
 				child := &GraphQuery{
 					Args: make(map[string]string),
 					Var:  varName,
@@ -1718,7 +1686,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if child.Func, err = parseFunction(it); err != nil {
 					return err
 				}
-				if item.Val == "checkpwd" {
+				if val == "checkpwd" {
 					child.Func.Args = append(child.Func.Args, child.Func.Attr)
 				}
 				child.Attr = child.Func.Attr
@@ -1786,7 +1754,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 			child := &GraphQuery{
 				Args:    make(map[string]string),
-				Attr:    item.Val,
+				Attr:    val,
 				IsCount: isCount == 1,
 				Var:     varName,
 			}
@@ -1802,8 +1770,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			if item.Typ != itemName {
 				return x.Errorf("Predicate Expected but got: %s", item.Val)
 			}
+			val := collectName(it, item.Val)
 			curp.Alias = curp.Attr
-			curp.Attr = item.Val
+			curp.Attr = val
 		case itemLeftCurl:
 			if err := godeep(it, curp); err != nil {
 				return err
@@ -1844,4 +1813,20 @@ func isAggregator(fname string) bool {
 
 func isValVarFunc(name string) bool {
 	return name == "math"
+}
+
+func collectName(it *lex.ItemIterator, val string) string {
+	var dashOrName bool // false if expecting dash, true if expecting name
+	for {
+		items, err := it.Peek(1)
+		if err == nil && ((items[0].Typ == itemName && dashOrName) ||
+			(items[0].Val == "-" && !dashOrName)) {
+			it.Next()
+			val += it.Item().Val
+			dashOrName = !dashOrName
+		} else {
+			break
+		}
+	}
+	return val
 }

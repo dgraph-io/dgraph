@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/group"
+	farm "github.com/dgryski/go-farm"
 	"github.com/stretchr/testify/require"
 )
 
@@ -83,8 +84,10 @@ func TestParseQueryWithDash(t *testing.T) {
         }
       }
     }`
-	_, err := Parse(query)
+	res, err := Parse(query)
 	require.NoError(t, err)
+	require.Equal(t, farm.Fingerprint64([]byte("alice-in-wonderland")), res.Query[0].UID[0])
+	require.Equal(t, "written-in", res.Query[0].Children[1].Attr)
 }
 
 func TestParseQueryWithMultiVarValError(t *testing.T) {
