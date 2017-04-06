@@ -4,23 +4,8 @@
   {{ .Render "article" }}
 {{ end }}
 
-<a target="_blank" href="https://discuss.dgraph.io/" class="community-cta">
-  Talk to community
-</a>
+{{ partial "community-footer.html" . }}
 
-<!-- Modal -->
-<div class="modal" id="runnable-modal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
-  <a href="#" data-dismiss="modal" class="modal-close-btn">
-    Close
-  </a>
-
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-body">
-
-      </div>
-    </div>
-  </div>
-</div>
+{{ partial "runnable-modal.html" . }}
 
 {{ partial "footer.html" . }}
