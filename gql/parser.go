@@ -1191,6 +1191,12 @@ L:
 				if itemInFunc.Typ == itemRightRound {
 					break L
 				} else if itemInFunc.Typ == itemComma {
+					if expectArg {
+						return nil, x.Errorf("Invalid use of comma.")
+					}
+					if isDollar {
+						return nil, x.Errorf("Invalid use of comma after dollar.")
+					}
 					expectArg = true
 					continue
 				} else if itemInFunc.Typ == itemLeftRound {
