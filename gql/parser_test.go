@@ -1151,6 +1151,17 @@ func TestParseFragmentMissing(t *testing.T) {
 	require.Error(t, err, "Expected error with missing fragment")
 }
 
+func TestParseVarInFunc(t *testing.T) {
+	query := `{
+		"query" : "query versions($version: int!){versions(func:eq(type, \"version\")){versions @filter(eq(version_number, $version)) { version_number}}}",
+		"variables" : {"$version": "3"}
+	}`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, "3", res.Query[0].Children[0].Filter.Func.Args[0])
+}
+
 func TestParseVariables(t *testing.T) {
 	query := `{
 		"query": "query testQuery( $a  : int   , $b: int){root(id: 0x0a) {name(first: $b, after: $a){english}}}",

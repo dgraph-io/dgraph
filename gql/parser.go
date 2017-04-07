@@ -334,12 +334,74 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 		}
 	}
 
+	if gq.Func != nil {
+		if gq.Func.Attr[0] == '$' {
+			va, ok := vmap[gq.Func.Attr]
+			if !ok {
+				return x.Errorf("Variable not defined %v", gq.Func.Attr)
+			}
+			gq.Func.Attr = va.Value
+		}
+
+		for idx, v := range gq.Func.Args {
+			if v[0] == '$' {
+				va, ok := vmap[v]
+				if !ok {
+					return x.Errorf("Variable not defined %v", v)
+				}
+				gq.Func.Args[idx] = va.Value
+			}
+		}
+	}
+	for idx, v := range gq.NeedsVar {
+		if v[0] == '$' {
+			va, ok := vmap[v]
+			if !ok {
+				return x.Errorf("Variable not defined %v", v)
+			}
+			gq.NeedsVar[idx] = va.Value
+		}
+	}
+
 	for _, child := range gq.Children {
 		if err := substituteVariables(child, vmap); err != nil {
 			return err
 		}
 	}
+	if gq.Filter != nil {
+		if err := substituteVariablesFilter(gq.Filter, vmap); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
+	if f.Func != nil {
+		if f.Func.Attr[0] == '$' {
+			va, ok := vmap[f.Func.Attr]
+			if !ok {
+				return x.Errorf("Variable not defined %v", f.Func.Attr)
+			}
+			f.Func.Attr = va.Value
+		}
+
+		for idx, v := range f.Func.Args {
+			if v[0] == '$' {
+				va, ok := vmap[v]
+				if !ok {
+					return x.Errorf("Variable not defined %v", v)
+				}
+				f.Func.Args[idx] = va.Value
+			}
+		}
+	}
+
+	for _, fChild := range f.Child {
+		if err := substituteVariablesFilter(fChild, vmap); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -1111,7 +1173,7 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
-	var expectArg, seenFuncArg, expectLang bool
+	var expectArg, seenFuncArg, expectLang, isDollar bool
 L:
 	for it.Next() {
 		item := it.Item()
@@ -1157,6 +1219,12 @@ L:
 					} else {
 						return nil, x.Errorf("Invalid usage of '@' in function argument")
 					}
+				} else if itemInFunc.Typ == itemDollar {
+					if isDollar {
+						return nil, x.Errorf("Invalid use of $ in func args")
+					}
+					isDollar = true
+					continue
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -1167,6 +1235,10 @@ L:
 				val := strings.Trim(itemInFunc.Val, "\" \t")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
+				}
+				if isDollar {
+					val = "$" + val
+					isDollar = false
 				}
 				if len(g.Attr) == 0 {
 					if strings.ContainsRune(itemInFunc.Val, '"') {
