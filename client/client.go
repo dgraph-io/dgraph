@@ -71,8 +71,13 @@ func checkNQuad(nq graphp.NQuad) error {
 	return nil
 }
 
-// SetQuery sets a query as part of the request.
-func (req *Req) SetQuery(q string, vars map[string]string) {
+// SetQuery sets a query with graphQL variables as part of the request.
+func (req *Req) SetQuery(q string) {
+	req.gr.Query = q
+}
+
+// SetQueryWithVariables sets a query with graphQL variables as part of the request.
+func (req *Req) SetQueryWithVariables(q string, vars map[string]string) {
 	req.gr.Query = q
 	req.gr.Vars = vars
 }
