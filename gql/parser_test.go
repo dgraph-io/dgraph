@@ -1153,6 +1153,17 @@ func TestParseFragmentMissing(t *testing.T) {
 
 func TestParseVarInFunc(t *testing.T) {
 	query := `{
+		"query" : "query versions($version: int!){versions(func:eq(type, $version)){versions{ version_number}}}",
+		"variables" : {"$version": "3"}
+	}`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, "3", res.Query[0].Func.Args[0])
+}
+
+func TestParseVarInFilter(t *testing.T) {
+	query := `{
 		"query" : "query versions($version: int!){versions(func:eq(type, \"version\")){versions @filter(eq(version_number, $version)) { version_number}}}",
 		"variables" : {"$version": "3"}
 	}`
