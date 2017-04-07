@@ -134,15 +134,16 @@ func init() {
 		"<=": 28,
 		">=": 27,
 		"==": 26,
+		"!=": 25,
 
 		"cond": 20,
+		"max":  19,
+		"min":  18,
 
-		"/":   20,
-		"*":   10,
-		"+":   5,
-		"-":   3,
-		"max": 2,
-		"min": 1,
+		"/": 20,
+		"*": 10,
+		"+": 5,
+		"-": 3,
 	}
 
 }
@@ -897,7 +898,13 @@ func parseVariables(it *lex.ItemIterator, vmap varMap) error {
 		if varType == "" {
 			return x.Errorf("Type of a variable can't be empty")
 		}
-
+		it.Next()
+		item = it.Item()
+		if item.Typ == itemMathOp && item.Val == "!" {
+			varType += item.Val
+			it.Next()
+			item = it.Item()
+		}
 		// Insert the variable into the map. The variable might already be defiend
 		// in the variable list passed with the query.
 		if _, ok := vmap[varName]; ok {
@@ -912,8 +919,6 @@ func parseVariables(it *lex.ItemIterator, vmap varMap) error {
 		}
 
 		// Check for '=' sign and optional default value.
-		it.Next()
-		item = it.Item()
 		if item.Typ == itemEqual {
 			it.Next()
 			it := it.Item()

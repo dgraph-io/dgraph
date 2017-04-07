@@ -178,7 +178,7 @@ func TestParseQueryWithVarValAggNested2(t *testing.T) {
 		res.Query[1].Children[0].Children[4].MathExp.debugString())
 }
 
-func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
+func TestParseQueryWithVarValAggNested4(t *testing.T) {
 	query := `
 	{	
 		me(id: var(L), orderasc: var(d) ) {
@@ -190,7 +190,33 @@ func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
+				d as math(exp(a + b + 1) - max(c,log(c)))
+			}
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.EqualValues(t, "(- (exp (+ (+ a b) 1E+00)) (max c (log c)))",
+		res.Query[1].Children[0].Children[3].MathExp.debugString())
+}
+
+func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(d) ) {
+			name
+			var(f)
+		}
+
+		var(id:0x0a) {
+			L as friends {
+				a as age
+				b as count(friends)
+				c as count(relatives)
 				d as math(cond(a <= 10, exp(a + b + 1), log(c)))
+				e as math(cond(a!=10, exp(a + b + 1), log(d)))
+				f as math(cond(a==10, exp(a + b + 1), log(e)))
 			}
 		}
 	}
@@ -199,6 +225,10 @@ func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, "(cond (<= a 1E+01) (exp (+ (+ a b) 1E+00)) (log c))",
 		res.Query[1].Children[0].Children[3].MathExp.debugString())
+	require.EqualValues(t, "(cond (!= a 1E+01) (exp (+ (+ a b) 1E+00)) (log d))",
+		res.Query[1].Children[0].Children[4].MathExp.debugString())
+	require.EqualValues(t, "(cond (== a 1E+01) (exp (+ (+ a b) 1E+00)) (log e))",
+		res.Query[1].Children[0].Children[5].MathExp.debugString())
 }
 
 func TestParseQueryWithVarValAggNested3(t *testing.T) {
@@ -235,7 +265,7 @@ func TestParseQueryWithVarValAggNested_Error1(t *testing.T) {
 		var(id:0x0a) {
 			L as friends {
 				a as age
-				d as sumvar(a, mulvar())
+				d as math(a + *)
 			}
 		}
 	}
@@ -256,7 +286,7 @@ func TestParseQueryWithVarValAggNested_Error2(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as sumvar(a, mulvar(b,c),)
+				d as math(a +b*c -)
 			}
 		}
 	}

@@ -153,7 +153,8 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 					l.Emit(itemEqual)
 					continue
 				}
-			} else if r == lsThan {
+			}
+			if r == lsThan {
 				if !isSpace(l.Peek()) && l.Peek() != '=' {
 					// as long as its not '=' or ' '
 					return lexIRIRef
@@ -547,8 +548,8 @@ func isMathOp(r rune) bool {
 }
 
 func isInequalityOp(r rune) bool {
-	switch {
-	case r == '<' || r == '>' || r == '=':
+	switch r {
+	case '<', '>', '=', '!':
 		return true
 	default:
 		return false
@@ -571,7 +572,7 @@ func isNameSuffix(r rune) bool {
 	if isNameBegin(r) || isNumber(r) {
 		return true
 	}
-	if r == '.' || r == '!' { // Use by freebase.
+	if r == '.' /*|| r == '!'*/ { // Use by freebase.
 		return true
 	}
 	return false

@@ -469,8 +469,44 @@ func TestQueryVarValAggNestedFuncConditional(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
+	fmt.Println(string(js))
 	require.JSONEq(t,
-		`{"ExpMe":[{"name":"Michonne","var[a]":38,"var[condExp]":3269017.372472,"var[n]":15},{"name":"Andrea","var[a]":19,"var[condExp]":3269017.372472,"var[n]":15},{"name":"Rick Grimes","var[a]":15,"var[condExp]":31855931757113756.000000,"var[n]":38}],"LogMe":[{"name":"Michonne","var[a]":38,"var[condLog]":2.708050,"var[n]":15},{"name":"Andrea","var[a]":19,"var[condLog]":2.708050,"var[n]":15},{"name":"Rick Grimes","var[a]":15,"var[condLog]":3.637586,"var[n]":38}]}`,
+		`{"ExpMe":[{"name":"Michonne","var[a]":38,"var[condExp]":1.000000,"var[n]":15},{"name":"Rick Grimes","var[a]":15,"var[condExp]":1.000000,"var[n]":38},{"name":"Andrea","var[a]":19,"var[condExp]":1.000000,"var[n]":15}],"LogMe":[{"name":"Michonne","var[a]":38,"var[condLog]":2.708050,"var[n]":15},{"name":"Andrea","var[a]":19,"var[condLog]":2.708050,"var[n]":15},{"name":"Rick Grimes","var[a]":15,"var[condLog]":3.637586,"var[n]":38}]}`,
+		js)
+}
+
+func TestQueryVarValAggNestedFuncConditional2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as age
+				friend {
+					n as min(age)
+					condLog as math(cond(a==38, n/2, 1))
+					condExp as math(cond(a!=38, 1, 2*n))
+				}
+			}
+
+			LogMe(id: var(f), orderasc: var(condLog)) {
+				name
+				var(condLog)
+				var(n)
+				var(a)
+			}
+
+			ExpMe(id: var(f), orderasc: var(condExp)) {
+				name
+				var(condExp)
+				var(n)
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	fmt.Println(string(js))
+	require.JSONEq(t,
+		`{"ExpMe":[{"name":"Rick Grimes","var[a]":15,"var[condExp]":1.000000,"var[n]":38},{"name":"Andrea","var[a]":19,"var[condExp]":1.000000,"var[n]":15},{"name":"Michonne","var[a]":38,"var[condExp]":30.000000,"var[n]":15}],"LogMe":[{"name":"Rick Grimes","var[a]":15,"var[condLog]":1.000000,"var[n]":38},{"name":"Andrea","var[a]":19,"var[condLog]":1.000000,"var[n]":15},{"name":"Michonne","var[a]":38,"var[condLog]":7.500000,"var[n]":15}]}`,
 		js)
 }
 

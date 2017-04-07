@@ -38,7 +38,7 @@ func isUnary(f string) bool {
 
 func isBinaryBoolean(f string) bool {
 	return f == "<" || f == ">" || f == "<=" || f == ">=" ||
-		f == "=="
+		f == "==" || f == "!="
 }
 
 func isTernary(f string) bool {
@@ -46,11 +46,8 @@ func isTernary(f string) bool {
 }
 
 func isBinary(f string) bool {
-	return f == "+" || f == "*" || f == "-"
-}
-
-func isMultiArgFunc(f string) bool {
-	return f == "max" || f == "min"
+	return f == "+" || f == "*" || f == "-" || f == "/" ||
+		f == "max" || f == "min"
 }
 
 func convertTo(from *taskp.Value) (types.Val, error) {
@@ -83,6 +80,7 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 			return false, err
 		}
 	}
+	isLess, err = types.Less(va, vb)
 	isMore, err := types.Less(vb, va)
 	if err != nil {
 		return false, err
@@ -98,6 +96,8 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 		return isMore && !isLess, nil
 	case "==":
 		return !isMore && !isLess, nil
+	case "!=":
+		return isMore || isLess, nil
 	default:
 		return false, x.Errorf("Invalid compare function %v", ag)
 	}
@@ -307,14 +307,16 @@ func (ag *aggregator) divideByCount() {
 	ag.result.Value = v / float64(ag.count)
 }
 
-func (ag *aggregator) Value() types.Val {
+func (ag *aggregator) Value() (types.Val, error) {
 	ag.divideByCount()
 	if ag.result.Tid == types.FloatID {
 		if math.IsInf(ag.result.Value.(float64), 1) {
 			ag.result.Value = math.MaxFloat64
 		} else if math.IsInf(ag.result.Value.(float64), -1) {
 			ag.result.Value = -1 * math.MaxFloat64
+		} else if math.IsNaN(ag.result.Value.(float64)) {
+			return ag.result, x.Errorf("Invalid math operation. Produced NaN")
 		}
 	}
-	return ag.result
+	return ag.result, nil
 }

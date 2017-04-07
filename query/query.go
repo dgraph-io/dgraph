@@ -251,7 +251,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fieldName = fmt.Sprintf("%s%v", pc.Attr, pc.Params.NeedsVar)
 			}
 			sv, ok := pc.Params.uidToVal[uid]
-			if !ok {
+			if !ok || sv.Value == nil {
 				continue
 			}
 			if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
@@ -838,7 +838,7 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 	return nil
 }
 
-func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
+func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) (err error) {
 	if mNode.Const.Value != nil {
 		return nil
 	}
@@ -863,17 +863,13 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
 		return x.Errorf("Function %v expects 1 argument. But got: %v", aggName,
 			len(mNode.Child))
 	}
-	if isBinaryBoolean(aggName) && len(mNode.Child) != 2 {
+	if (isBinary(aggName) || isBinaryBoolean(aggName)) && len(mNode.Child) != 2 {
 		return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
 			len(mNode.Child))
 	}
 	if isTernary(aggName) && len(mNode.Child) != 3 {
 		return x.Errorf("Function %v expects 3 argument. But got: %v", aggName,
 			len(mNode.Child))
-	}
-	if isMultiArgFunc(aggName) && len(mNode.Child) <= 1 {
-		return x.Errorf("Function %v expects more than 1 argument. But got: %v",
-			aggName, len(mNode.Child))
 	}
 
 	destMap := make(map[uint64]types.Val)
@@ -948,37 +944,79 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
 		if ch.Const.Value != nil {
 			// Use the constant value that was supplied.
 			ag.ApplyVal(ch.Const)
-			mNode.Const = ag.Value()
-			return nil
+			mNode.Const, err = ag.Value()
+			return err
 		}
 
 		for k, val := range srcMap {
 			ag.ApplyVal(val)
-			destMap[k] = ag.Value()
+			destMap[k], err = ag.Value()
+			if err != nil {
+				return err
+			}
 		}
 		mNode.Val = destMap
 		return nil
 	}
 
-	// Note: The first value cannot be a constant.
-	for k := range srcMap {
+	if isBinary(aggName) {
+		mpl := mNode.Child[0].Val
+		mpr := mNode.Child[1].Val
+		cl := mNode.Child[0].Const
+		cr := mNode.Child[1].Const
+
+		if mpl != nil {
+			for k, lVal := range mpl {
+				ag := aggregator{
+					name: aggName,
+				}
+				// Only the UIDs that have all the values will be considered.
+				rVal := mpr[k]
+				if cr.Value != nil {
+					// Use the constant value that was supplied.
+					rVal = cr
+				}
+				ag.ApplyVal(lVal)
+				ag.ApplyVal(rVal)
+				destMap[k], err = ag.Value()
+				if err != nil {
+					return err
+				}
+			}
+			mNode.Val = destMap
+			return nil
+		}
+		if mpr != nil {
+			for k, rVal := range mpr {
+				ag := aggregator{
+					name: aggName,
+				}
+				// Only the UIDs that have all the values will be considered.
+				lVal := mpl[k]
+				if cl.Value != nil {
+					// Use the constant value that was supplied.
+					lVal = cl
+				}
+				ag.ApplyVal(lVal)
+				ag.ApplyVal(rVal)
+				destMap[k], err = ag.Value()
+				if err != nil {
+					return err
+				}
+			}
+			mNode.Val = destMap
+			return nil
+		}
+		// Both maps are nil, so 2 constatns.
 		ag := aggregator{
 			name: aggName,
 		}
-		// Only the UIDs that have all the values will be considered.
-		for _, ch := range mNode.Child {
-			curMap := ch.Val
-			curVal := curMap[k]
-			if ch.Const.Value != nil {
-				// Use the constant value that was supplied.
-				curVal = ch.Const
-			}
-			ag.ApplyVal(curVal)
-		}
-		destMap[k] = ag.Value()
+		ag.ApplyVal(cl)
+		ag.ApplyVal(cr)
+		mNode.Const, err = ag.Value()
+		return err
 	}
-	mNode.Val = destMap
-	return nil
+	return x.Errorf("Unhandled Math operator: %v", aggName)
 }
 
 func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
