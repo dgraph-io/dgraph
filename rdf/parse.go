@@ -267,7 +267,7 @@ func Parse(line string) (rnq graphp.NQuad, rerr error) {
 				oval = ""
 				continue
 			}
-			return rnq, x.Errorf("Undefined rdf type %s", val)
+			return rnq, x.Errorf("Unrecognized rdf type %s", val)
 
 		case lex.ItemError:
 			return rnq, x.Errorf(item.Val)
