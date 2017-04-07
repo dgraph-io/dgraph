@@ -1,4 +1,4 @@
-package client
+package client_test
 
 import (
 	"context"
@@ -27,10 +27,11 @@ func ExampleBatchMutation() {
 	// Process your file, convert data to a graphp.NQuad and add it to the batch.
 	// For each graph.NQuad, run batch.AddMutation (this would typically be done in a loop
 	// after processing the data into nquads)
+
 	// for nquads := range nquads {
-	if err = batch.AddMutation(nquad, client.SET); err != nil {
-		log.Fatal("While adding mutation to batch: ", err)
-	}
+	// 	if err = batch.AddMutation(nquad, client.SET); err != nil {
+	// 		log.Fatal("While adding mutation to batch: ", err)
+	// 	}
 	// }
 
 	// Wait for all requests to complete. This is very important, else some
