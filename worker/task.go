@@ -87,7 +87,10 @@ func ProcessTaskOverNetwork(ctx context.Context, q *taskp.Query) (*taskp.Result,
 func convertValue(attr, data string) (types.Val, error) {
 	// Parse given value and get token. There should be only one token.
 	t, err := schema.State().TypeOf(attr)
-	if err != nil || !t.IsScalar() {
+	if err != nil {
+		return types.Val{}, err
+	}
+	if !t.IsScalar() {
 		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
 	}
 
@@ -487,7 +490,7 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.ineqValue, err = convertValue(attr, q.SrcFunc[1])
 		if err != nil {
-			return nil, err
+			return nil, x.Errorf("Got error: %v while running: %v", err.Error(), q.SrcFunc)
 		}
 		// Get tokens geq / leq ineqValueToken.
 		fc.tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f, fc.ineqValue)

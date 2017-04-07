@@ -147,7 +147,7 @@ func (s *stateGroup) typeOf(pred string) (types.TypeID, error) {
 	if schema, ok := s.predicate[pred]; ok {
 		return types.TypeID(schema.ValueType), nil
 	}
-	return types.TypeID(100), x.Errorf("Undefined predicate")
+	return types.TypeID(100), x.Errorf("Undefined predicate: %v.", pred)
 }
 
 // IsIndexed returns whether the predicate is indexed or not
