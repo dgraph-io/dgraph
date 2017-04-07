@@ -1237,7 +1237,7 @@ func TestParseVariablesFragments(t *testing.T) {
 	require.Equal(t, childAttrs(res.Query[0]), []string{"id", "friends"})
 	require.Empty(t, childAttrs(res.Query[0].Children[0]))
 	require.Equal(t, childAttrs(res.Query[0].Children[1]), []string{"name"})
-	require.Equal(t, res.Query[0].Children[0].Args["first"], "5")
+	require.Equal(t, "5", res.Query[0].Children[0].Args["first"])
 }
 
 func TestParseVariablesError1(t *testing.T) {

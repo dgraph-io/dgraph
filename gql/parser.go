@@ -322,44 +322,36 @@ func checkValueType(vm varMap) error {
 	return nil
 }
 
+func substituteVar(f string, res *string, vmap varMap) error {
+	if f[0] == '$' {
+		va, ok := vmap[f]
+		if !ok {
+			return x.Errorf("Variable not defined %v", f)
+		}
+		*res = va.Value
+	}
+	return nil
+}
+
 func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	for k, v := range gq.Args {
 		// v won't be empty as its handled in parseGqlVariables.
-		if v[0] == '$' {
-			va, ok := vmap[v]
-			if !ok {
-				return x.Errorf("Variable not defined %v", v)
-			}
-			gq.Args[k] = va.Value
+		val := gq.Args[k]
+		if err := substituteVar(v, &val, vmap); err != nil {
+			return err
 		}
+		gq.Args[k] = val
 	}
 
 	if gq.Func != nil {
-		if gq.Func.Attr[0] == '$' {
-			va, ok := vmap[gq.Func.Attr]
-			if !ok {
-				return x.Errorf("Variable not defined %v", gq.Func.Attr)
-			}
-			gq.Func.Attr = va.Value
+		if err := substituteVar(gq.Func.Attr, &gq.Func.Attr, vmap); err != nil {
+			return err
 		}
 
 		for idx, v := range gq.Func.Args {
-			if v[0] == '$' {
-				va, ok := vmap[v]
-				if !ok {
-					return x.Errorf("Variable not defined %v", v)
-				}
-				gq.Func.Args[idx] = va.Value
+			if err := substituteVar(v, &gq.Func.Args[idx], vmap); err != nil {
+				return err
 			}
-		}
-	}
-	for idx, v := range gq.NeedsVar {
-		if v[0] == '$' {
-			va, ok := vmap[v]
-			if !ok {
-				return x.Errorf("Variable not defined %v", v)
-			}
-			gq.NeedsVar[idx] = va.Value
 		}
 	}
 
@@ -378,21 +370,13 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 
 func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 	if f.Func != nil {
-		if f.Func.Attr[0] == '$' {
-			va, ok := vmap[f.Func.Attr]
-			if !ok {
-				return x.Errorf("Variable not defined %v", f.Func.Attr)
-			}
-			f.Func.Attr = va.Value
+		if err := substituteVar(f.Func.Attr, &f.Func.Attr, vmap); err != nil {
+			return err
 		}
 
 		for idx, v := range f.Func.Args {
-			if v[0] == '$' {
-				va, ok := vmap[v]
-				if !ok {
-					return x.Errorf("Variable not defined %v", v)
-				}
-				f.Func.Args[idx] = va.Value
+			if err := substituteVar(v, &f.Func.Args[idx], vmap); err != nil {
+				return err
 			}
 		}
 	}
