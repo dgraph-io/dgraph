@@ -189,10 +189,10 @@ func main() {
 	}
 
 	version := x.Version()
-	if version != "" && version != v.Tag {
+	if version != "" && v.Tag != "" && version != v.Tag {
 		fmt.Printf(`
 Dgraph server: %v, loader: %v dont' match.
-Get the latest version from https://docs.dgraph.io
+Get the latest version from https://docs.dgraph.io.
 `, v.Tag, version)
 	}
 
