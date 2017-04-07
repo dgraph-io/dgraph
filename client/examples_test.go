@@ -173,22 +173,6 @@ func ExampleReq_SetQueryWithVariables() {
 	dgraphClient := graphp.NewDgraphClient(conn)
 
 	req := client.Req{}
-	nq := graphp.NQuad{
-		Subject:   "alice",
-		Predicate: "name",
-	}
-	client.Str("Alice", &nq)
-	req.AddMutation(nq, client.SET)
-
-	nq = graphp.NQuad{
-		Subject:   "alice",
-		Predicate: "falls.in",
-	}
-	if err = client.Str("Rabbit hole", &nq); err != nil {
-		log.Fatal(err)
-	}
-	req.AddMutation(nq, client.SET)
-
 	variables := make(map[string]string)
 	variables["$a"] = "3"
 	req.SetQueryWithVariables(`
