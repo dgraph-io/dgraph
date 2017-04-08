@@ -2,8 +2,6 @@
 title = "Introduction to Graphs & Dgraph"
 +++
 
-# Introduction to Graphs with Dgraph
-
 ## What is a graph?
 
 A graph is comprised of "nodes" and "edges". A node is useless by itself, and
