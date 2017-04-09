@@ -2148,7 +2148,7 @@ func TestLangsFunctionMultipleLangs(t *testing.T) {
 		}
 	}
 `
-	_, err := Parse(query)
+	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 }
 
