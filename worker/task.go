@@ -147,7 +147,7 @@ func parseFuncType(arr []string) (FuncType, string) {
 		//    takes advantage of indexed-attr
 		// gt(count(films), 0) is 'CompareScalar', we first do
 		//    counting on attr, then compare the result as scalar with int
-		if len(arr) > 2 && arr[1] == "count" {
+		if len(arr) > 3 && arr[2] == "count" {
 			return CompareScalarFn, f
 		}
 		return CompareAttrFn, f
@@ -302,7 +302,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			if len(newValue.Val) == 0 {
 				out.Values[lastPos] = task.FalseVal
 			}
-			pwd := q.SrcFunc[1]
+			pwd := q.SrcFunc[2]
 			err = types.VerifyPassword(pwd, string(newValue.Val))
 			if err != nil {
 				out.Values[lastPos] = task.FalseVal
@@ -459,6 +459,19 @@ type functionContext struct {
 	isCompareAtRoot bool
 }
 
+func ensureArgsCount(funcStr []string, expected int) error {
+	actual := len(funcStr) - 2
+	switch {
+	case actual == 0:
+		return x.Errorf("No arguments passed to function '%s'", funcStr[0])
+	case actual != expected:
+		return x.Errorf("Function '%s' requires %d arguments, but got %d (%v)",
+			funcStr[0], expected, actual, funcStr[2:])
+	default:
+		return nil
+	}
+}
+
 func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 	fnType, f := parseFuncType(q.SrcFunc)
 	attr := q.Attr
@@ -480,15 +493,15 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case CompareAttrFn:
-		if len(q.SrcFunc) != 2 {
-			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
+		err = ensureArgsCount(q.SrcFunc, 1)
+		if err != nil {
+			return nil, err
 		}
 		typ, err := schema.State().TypeOf(attr)
 		if typ == types.BoolID && fc.fname != "eq" {
 			return nil, x.Errorf("Only eq operator defined for type bool. Got: %v", fc.fname)
 		}
-		fc.ineqValue, err = convertValue(attr, q.SrcFunc[1])
+		fc.ineqValue, err = convertValue(attr, q.SrcFunc[2])
 		if err != nil {
 			return nil, x.Errorf("Got error: %v while running: %v", err.Error(), q.SrcFunc)
 		}
@@ -499,14 +512,14 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(fc.tokens)
 	case CompareScalarFn:
-		if len(q.SrcFunc) != 3 {
-			return nil, x.Errorf("Function requires 3 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
+		err = ensureArgsCount(q.SrcFunc, 2)
+		if err != nil {
+			return nil, err
 		}
-		fc.threshold, err = strconv.ParseInt(q.SrcFunc[2], 10, 64)
+		fc.threshold, err = strconv.ParseInt(q.SrcFunc[3], 10, 64)
 		if err != nil {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
-				q.SrcFunc[0], q.SrcFunc[1])
+				q.SrcFunc[0], q.SrcFunc[2])
 		}
 		if q.UidList == nil {
 			// Fetch Uids from Store and populate in q.UidList.
@@ -524,15 +537,23 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		}
 		fc.n = len(fc.tokens)
 	case PasswordFn:
-		if len(q.SrcFunc) != 3 {
-			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
-				len(q.SrcFunc)-1, q.SrcFunc[1:])
+		err = ensureArgsCount(q.SrcFunc, 2)
+		if err != nil {
+			return nil, err
 		}
 		fc.n = len(q.UidList.Uids)
 	case StandardFn, FullTextSearchFn:
-		// srcfunc 0th val is func name and and [1:] are args.
+		// srcfunc 0th val is func name and and [2:] are args.
 		// we tokenize the arguments of the query.
-		fc.tokens, err = getStringTokens(q.SrcFunc[1:], "", fnType) // TODO(tzdybal) - get language
+		err = ensureArgsCount(q.SrcFunc, 1)
+		if err != nil {
+			return nil, err
+		}
+		required, found := verifyStringIndex(attr, fnType)
+		if !found {
+			return nil, x.Errorf("Attribute %s is not indexed with type %s", attr, required)
+		}
+		fc.tokens, err = getStringTokens(q.SrcFunc[2:], q.SrcFunc[1], fnType)
 		if err != nil {
 			return nil, err
 		}
@@ -540,7 +561,11 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case RegexFn:
-		fc.regex, err = regexp.Compile(q.SrcFunc[1])
+		err = ensureArgsCount(q.SrcFunc, 1)
+		if err != nil {
+			return nil, err
+		}
+		fc.regex, err = regexp.Compile(q.SrcFunc[2])
 		if err != nil {
 			return nil, err
 		}

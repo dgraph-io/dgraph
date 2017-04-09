@@ -158,7 +158,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	defer ps.Close()
 	defer waitForSyncMark(context.Background(), 1, math.MaxUint64)
 
-	query := newQuery("friend", nil, []string{"anyofterms", "hey photon"})
+	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
 	r, err := processTask(query, 1)
 	require.NoError(t, err)
 
@@ -181,7 +181,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyofterms", "hey photon notphoton notphotonExtra"})
+	query = newQuery("friend", nil, []string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
 	r, err = processTask(query, 1)
 	require.NoError(t, err)
 
@@ -212,7 +212,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyofterms", "photon notphoton ignored"})
+	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
 	r, err = processTask(query, 1)
 	require.NoError(t, err)
 
@@ -226,7 +226,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	posting.CommitLists(10, 1)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
-	query = newQuery("friend", nil, []string{"anyofterms", "photon notphoton ignored"})
+	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
 	r, err = processTask(query, 1)
 	require.NoError(t, err)
 
@@ -245,7 +245,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	defer ps.Close()
 	defer waitForSyncMark(context.Background(), 1, math.MaxUint64)
 
-	query := newQuery("friend", nil, []string{"anyofterms", "hey photon"})
+	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
 	r, err := processTask(query, 1)
 	require.NoError(t, err)
 
@@ -271,7 +271,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyofterms", "hey photon notphoton notphotonExtra"})
+	query = newQuery("friend", nil, []string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
 	r, err = processTask(query, 1)
 	require.NoError(t, err)
 
@@ -305,7 +305,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let indexing finish.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"anyofterms", "photon notphoton ignored"})
+	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
 	r, err = processTask(query, 1)
 	require.NoError(t, err)
 

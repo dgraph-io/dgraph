@@ -38,6 +38,7 @@ var (
 )
 
 const (
+	FTSTokenizerName   = "fulltext"
 	normalizerFormNFKC = "nfkc"
 	normalizerName     = "nfkc_normalizer"
 )
@@ -112,7 +113,7 @@ func defineTermAnalyzer() {
 
 // default full text search analyzer - does english stop-words removal and Porter stemming
 func defineDefaultFullTextAnalyzer() {
-	_, err := bleveCache.DefineAnalyzer("fulltext", map[string]interface{}{
+	_, err := bleveCache.DefineAnalyzer(FTSTokenizerName, map[string]interface{}{
 		"type":      custom.Name,
 		"tokenizer": unicode.Name,
 		"token_filters": []string{
@@ -127,7 +128,7 @@ func defineDefaultFullTextAnalyzer() {
 // full text search analyzer - does language-specific stop-words removal and stemming
 func defineAnalyzer(lang string) {
 	ln := countryCode(lang)
-	_, err := bleveCache.DefineAnalyzer(ftsTokenizerName(ln), map[string]interface{}{
+	_, err := bleveCache.DefineAnalyzer(FtsTokenizerName(ln), map[string]interface{}{
 		"type":      custom.Name,
 		"tokenizer": unicode.Name,
 		"token_filters": []string{
@@ -140,8 +141,8 @@ func defineAnalyzer(lang string) {
 	x.Check(err)
 }
 
-func ftsTokenizerName(lang string) string {
-	return "fulltext" + lang
+func FtsTokenizerName(lang string) string {
+	return FTSTokenizerName + lang
 }
 
 func stemmerName(lang string) string {

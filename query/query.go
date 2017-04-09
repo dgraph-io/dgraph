@@ -448,6 +448,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 			return x.Errorf("Invalid function name : %s", ft.Func.Name)
 		}
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
+		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Lang)
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
 		sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar...)
 	}
@@ -539,6 +540,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 				return errors.New(note)
 			}
 			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Name)
+			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Lang)
 			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Args...)
 		}
 
@@ -690,6 +692,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 			return nil, x.Errorf("Invalid function name : %s", gq.Func.Name)
 		}
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Name)
+		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Lang)
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 	if len(gq.UID) > 0 {
