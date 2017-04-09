@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -46,7 +47,7 @@ func init() {
 }
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
-func IndexTokens(attr string, src types.Val) ([]string, error) {
+func IndexTokens(attr, lang string, src types.Val) ([]string, error) {
 	schemaType, err := schema.State().TypeOf(attr)
 	if err != nil || !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
@@ -64,6 +65,14 @@ func IndexTokens(attr string, src types.Val) ([]string, error) {
 	var tokens []string
 	tokenizers := schema.State().Tokenizer(attr)
 	for _, it := range tokenizers {
+		if tok.FtsTokenizerName("") == it.Name() && len(lang) > 0 {
+			newTokenizer, ok := tok.GetTokenizer(tok.FtsTokenizerName(lang))
+			if ok {
+				it = newTokenizer
+			} else {
+				return nil, x.Errorf("Tokenizer not available for language: %s", lang)
+			}
+		}
 		toks, err := it.Tokens(sv)
 		if err != nil {
 			return tokens, err
@@ -80,7 +89,7 @@ func addIndexMutations(ctx context.Context, t *taskp.DirectedEdge, p types.Val,
 	attr := t.Attr
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
-	tokens, err := IndexTokens(attr, p)
+	tokens, err := IndexTokens(attr, t.GetLang(), p)
 	if err != nil {
 		// This data is not indexable
 		return err

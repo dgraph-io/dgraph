@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/stretchr/testify/require"
 )
 
@@ -2132,6 +2133,23 @@ func TestLangsFunction(t *testing.T) {
 	require.NotNil(t, res.Query[0].Func)
 	require.Equal(t, "descr", res.Query[0].Func.Attr)
 	require.Equal(t, "en", res.Query[0].Func.Lang)
+}
+
+func TestLangsFunctionMultipleLangs(t *testing.T) {
+	schema.ParseBytes([]byte("scalar descr: string @index(fulltext) ."), 0)
+	query := `
+	query {
+		me(func:alloftext(descr@hi:en, "something")) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
 }
 
 func TestParseNormalize(t *testing.T) {
