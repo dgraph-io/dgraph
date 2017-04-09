@@ -210,7 +210,11 @@ func GenerateTLSConfig(config TLSHelperConfig) (tlsCfg *tls.Config, reloadConfig
 	}
 
 	if auth >= tls.VerifyClientCertIfGiven {
-		tlsCfg.ClientAuth = tls.RequireAnyClientCert
+		if auth == tls.VerifyClientCertIfGiven {
+			tlsCfg.ClientAuth = tls.RequestClientCert
+		} else {
+			tlsCfg.ClientAuth = tls.RequireAnyClientCert
+		}
 		wrapper.clientAuth = auth
 	} else {
 		tlsCfg.ClientAuth = auth
@@ -286,7 +290,9 @@ func (c *wrapperTLSConfig) getClientCertificate(_ *tls.CertificateRequestInfo) (
 }
 
 func (c *wrapperTLSConfig) verifyPeerCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-	if c.clientAuth >= tls.VerifyClientCertIfGiven {
+	if c.clientAuth == tls.VerifyClientCertIfGiven && len(rawCerts) == 0 {
+		return nil
+	} else if c.clientAuth >= tls.VerifyClientCertIfGiven {
 		if len(rawCerts) > 0 {
 			pool := x509.NewCertPool()
 			for _, raw := range rawCerts[1:] {
