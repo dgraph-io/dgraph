@@ -265,9 +265,9 @@ func Parse(line string) (rnq graphp.NQuad, rerr error) {
 					return rnq, err
 				}
 				oval = ""
-			} else {
-				oval += "@@" + val
+				continue
 			}
+			return rnq, x.Errorf("Unrecognized rdf type %s", val)
 
 		case lex.ItemError:
 			return rnq, x.Errorf(item.Val)
@@ -411,6 +411,7 @@ var typeMap = map[string]types.TypeID{
 	"http://www.w3.org/2001/XMLSchema#dateTime":   types.DateTimeID,
 	"http://www.w3.org/2001/XMLSchema#date":       types.DateID,
 	"http://www.w3.org/2001/XMLSchema#int":        types.IntID,
+	"http://www.w3.org/2001/XMLSchema#integer":    types.IntID,
 	"http://www.w3.org/2001/XMLSchema#boolean":    types.BoolID,
 	"http://www.w3.org/2001/XMLSchema#double":     types.FloatID,
 	"http://www.w3.org/2001/XMLSchema#float":      types.FloatID,

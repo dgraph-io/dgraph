@@ -439,6 +439,10 @@ var testNQuads = []struct {
 		expectedErr: true,
 	},
 	{
+		input:       `_:gabe <name> "Gabe'^^<xs:yo> .`,
+		expectedErr: true,
+	},
+	{
 		input: `_:0 <name> <good> .`,
 		nq: graphp.NQuad{
 			Subject:   "_:0",
