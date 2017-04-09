@@ -485,21 +485,21 @@ The following table lists all the supported [RDF datatypes](https://www.w3.org/T
 
 | Storage Type | Dgraph type |
 | -------------|:------------:|
-|  <xs:string> | String |
-|  <xs:dateTime> |                               DateTime |
-|  <xs:date> |                                   Date |
-|  <xs:int> |                                    Int |
-|  <xs:boolean> |                                Bool |
-|  <xs:double> |                                 Float |
-|  <xs:float> |                                  Float |
-|  <geo:geojson> |                               Geo |
-|  <http://www.w3.org/2001/XMLSchema#string> |   String |
-|  <http://www.w3.org/2001/XMLSchema#dateTime> | DateTime |
-|  <http://www.w3.org/2001/XMLSchema#date> |     Date |
-|  <http://www.w3.org/2001/XMLSchema#int> |      Int |
-|  <http://www.w3.org/2001/XMLSchema#boolean> |  Bool |
-|  <http://www.w3.org/2001/XMLSchema#double> |   Float |
-|  <http://www.w3.org/2001/XMLSchema#float> |    Float |
+|  &#60;xs:string&#62; | String |
+|  &#60;xs:dateTime&#62; |                               DateTime |
+|  &#60;xs:date&#62; |                                   Date |
+|  &#60;xs:int&#62; |                                    Int |
+|  &#60;xs:boolean&#62; |                                Bool |
+|  &#60;xs:double&#62; |                                 Float |
+|  &#60;xs:float&#62; |                                  Float |
+|  &#60;geo:geojson&#62; |                               Geo |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62; |   String |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | DateTime |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62; |     Date |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62; |      Int |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62; |  Bool |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62; |   Float |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62; |    Float |
 
 
 In case a predicate has different schema type and storage type, the convertibility between the two is ensured during mutation and an error is thrown if they are incompatible.  The values are always stored as storage type if specified, or else they are converted to schema type and stored. Storage type is property of the value we are storing and schema type is property of the edge.
