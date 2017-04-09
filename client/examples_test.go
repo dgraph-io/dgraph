@@ -131,6 +131,32 @@ mutation {
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 }
 
+func ExampleReq_AddMutation_schema() {
+	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	dgraphClient := graphp.NewDgraphClient(conn)
+
+	req := client.Req{}
+	// Doing mutation and setting schema, then getting schema.
+	req.SetQuery(`
+mutation {
+ schema {
+  name: string @index .
+  release_date: date @index .
+ }
+}
+
+schema {}
+`)
+	resp, err := dgraphClient.Run(context.Background(), req.Request())
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+}
+
 func ExampleReq_SetQuery() {
 	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
