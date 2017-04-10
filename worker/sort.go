@@ -19,8 +19,9 @@ package worker
 
 import (
 	"fmt"
-	"golang.org/x/net/context"
 	"strings"
+
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -281,7 +282,10 @@ func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error)
 	r := <-resCh
 	if r.err == nil {
 		cancel()
+		// wait for other goroutine to get cancelled
+		<-resCh
 	} else {
+		x.TraceError(ctx, r.err)
 		r = <-resCh
 	}
 	return r.res, r.err
