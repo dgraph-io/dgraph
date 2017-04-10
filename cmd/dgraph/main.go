@@ -276,6 +276,7 @@ func enrichSchema(updates []*graphp.SchemaUpdate) error {
 		}
 		// check for valid tokeniser types and duplicates
 		var seen = make(map[string]bool)
+		var seenSortableTok bool
 		for _, t := range schema.Tokenizer {
 			tokenizer, has := tok.GetTokenizer(t)
 			if !has {
@@ -290,8 +291,14 @@ func enrichSchema(updates []*graphp.SchemaUpdate) error {
 			} else {
 				return x.Errorf("Duplicate tokenizers present for attr %s", schema.Predicate)
 			}
+			if tokenizer.IsSortable() {
+				if seenSortableTok {
+					return nil, x.Errorf("More than one sortable index encountered for: %v",
+						predicate)
+				}
+				seenSortableTok = true
+			}
 		}
-
 	}
 	return nil
 }

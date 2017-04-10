@@ -126,6 +126,7 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 	typ types.TypeID) ([]string, error) {
 	var tokenizers []string
 	var seen = make(map[string]bool)
+	var seenSortableTok bool
 
 	if typ == types.UidID {
 		return tokenizers, x.Errorf("Indexing not allowed on predicate %s of type uid",
@@ -175,6 +176,13 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 		if _, found := seen[tokenizer.Name()]; found {
 			return tokenizers, x.Errorf("Duplicate tokenizers defined for pred %v",
 				predicate)
+		}
+		if tokenizer.IsSortable() {
+			if seenSortableTok {
+				return nil, x.Errorf("More than one sortable index encountered for: %v",
+					predicate)
+			}
+			seenSortableTok = true
 		}
 		tokenizers = append(tokenizers, tokenizer.Name())
 		seen[tokenizer.Name()] = true
