@@ -58,12 +58,8 @@ mkdir dgraph && pushd &> /dev/null dgraph;
 cp $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraphloader/dgraphloader .;
 
 # Stripping the binaries.
-# Stripping binaries on Mac doesn't lead to much reduction in size and
-# instead gives an error.
-if [ "$platform" = "linux" ]; then
-  strip dgraph dgraphloader
-  echo -e "\n\033[1;34mSize of files after strip: $(du -sh)\033[0m"
-fi
+strip dgraph dgraphloader
+echo -e "\n\033[1;34mSize of files after strip: $(du -sh)\033[0m"
 
 digest_cmd=""
 if hash shasum 2>/dev/null; then
