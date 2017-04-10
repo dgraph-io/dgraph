@@ -265,7 +265,7 @@ This would only stop the server on which the command is executed and not the ent
 
 ## Upgrade Dgraph
 
-{{% notice "tip" %}}If you are upgrading from v0.7.3 you can modify the [schema file]({{< relref "query-language/index.md#schema">}}) to use the new syntax and give it to the dgraphloader using the `-s` flag.{{% /notice %}}
+{{% notice "tip" %}}If you are upgrading from v0.7.3 you can modify the [schema file]({{< relref "query-language/index.md#schema">}}) to use the new syntax and give it to the dgraphloader using the `-s` flag while reloading your data.{{% /notice %}}
 
 Doing periodic backups is always a good idea due to various reasons. This is particularly useful if you wish to upgrade Dgraph. The following are the right steps to switch over to a newer version of Dgraph.
 

@@ -8,6 +8,7 @@ package graphp;
 
 service Dgraph {
     rpc Run (Request) returns (Response) {};
+    rpc CheckVersion(Check) returns (Version) {};
 }
 
 message NQuad {
@@ -98,4 +99,10 @@ message Response {
     Latency l = 2;
     map<string, uint64> AssignedUids = 3;
     repeated SchemaNode schema = 4;
+}
+
+message Check {}
+
+message Version {
+    string tag = 1;
 }

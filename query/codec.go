@@ -29,35 +29,47 @@ type Codec struct{}
 
 // Marshal release the graphp.Node pointers after marshalling the response.
 func (c *Codec) Marshal(v interface{}) ([]byte, error) {
-	r, ok := v.(*graphp.Response)
-	if !ok {
+	var b []byte
+	var err error
+	switch val := v.(type) {
+	case *graphp.Version:
+		b, err = proto.Marshal(val)
+		if err != nil {
+			return []byte{}, err
+		}
+		return b, nil
+
+	case *graphp.Response:
+		b, err = proto.Marshal(val)
+		if err != nil {
+			return []byte{}, err
+		}
+
+		for _, it := range val.N {
+			select {
+			// Passing onto to channel which would put it into the sync pool.
+			case nodeCh <- it:
+			default:
+			}
+		}
+	default:
 		log.Fatalf("Invalid type of value: %+v", v)
 	}
-
-	b, err := proto.Marshal(r)
-	if err != nil {
-		return []byte{}, err
-	}
-
-	for _, it := range r.N {
-		select {
-		// Passing onto to channel which would put it into the sync pool.
-		case nodeCh <- it:
-		default:
-		}
-	}
-
 	return b, nil
 }
 
 // Unmarshal constructs graphp.Request from the byte slice.
 func (c *Codec) Unmarshal(data []byte, v interface{}) error {
-	n, ok := v.(*graphp.Request)
+	check, ok := v.(*graphp.Check)
+	if ok {
+		return proto.Unmarshal(data, check)
+	}
+
+	r, ok := v.(*graphp.Request)
 	if !ok {
 		log.Fatalf("Invalid type of value: %+v", v)
 	}
-
-	return proto.Unmarshal(data, n)
+	return proto.Unmarshal(data, r)
 }
 
 func (c *Codec) String() string {
