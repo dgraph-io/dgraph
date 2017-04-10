@@ -417,7 +417,7 @@ func TestQueryVarValAggMinMax(t *testing.T) {
 		js)
 }
 
-func TestWrongVarType_Error(t *testing.T) {
+func TestWrongVarType_Error1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
@@ -433,6 +433,63 @@ func TestWrongVarType_Error(t *testing.T) {
 				name 
 				var(n)
 				var(s)
+			}
+		}
+	`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
+func TestWrongVarType_Error2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				friend {
+					n as min(age)
+					s as max(age)
+					sum as sumvar(n, s)
+				}
+			}
+
+			me(id: var(sum)) {
+				name 
+				var(n)
+				var(s)
+			}
+		}
+	`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
+func TestWrongVarType_Error3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				friend {
+					n as min(age)
+					s as max(age)
+					sum as sumvar(n, s)
+				}
+			}
+
+			me(id: var(f), orderdesc: var(f)) {
+				name 
+				var(n)
+				var(s)
+				var(sum)
 			}
 		}
 	`
