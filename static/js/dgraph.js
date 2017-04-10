@@ -467,6 +467,13 @@ function isElementInViewport(el) {
     launchRunnableModal(runnableEl)
   });
 
+  $(document).on('click', '.runnable [data-action="edit"]', function (e) {
+    e.preventDefault();
+
+    var $runnable = $(this).closest('.runnable');
+    // TODO
+  });
+
   // Focus editable parts when code is clicked
   $(document).on('click', '.runnable-code', function () {
     $(this).find('.query-editable').focus();

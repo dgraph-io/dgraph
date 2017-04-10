@@ -228,6 +228,9 @@ pre.collapsed .showmore span {
   cursor: pointer;
   /*display: inline-block;*/
 }
+.code-btn.active {
+  background: #E0EBF5;
+}
 
 #header {
   height: 64px;
@@ -559,9 +562,22 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
 .runnable .output-container.error code {
   color: #bf0000;
 }
+.runnable .nav-languages {
+  padding-left: 4px;
+}
+.runnable .nav-languages .language {
+  font-size: 14px;
+  color: #373e42;
+  display: inline-block;
+  padding: 0 8px 0 7px;
+}
+.runnable .nav-languages .language.active {
+  color: #0094de;
+}
 
 .runnable .runnable-code {
   background: #fffff3;
+  overflow-y: scroll;
 }
 html .runnable pre {
   padding: 17px 12px;
