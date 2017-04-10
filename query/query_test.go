@@ -417,6 +417,34 @@ func TestQueryVarValAggMinMax(t *testing.T) {
 		js)
 }
 
+func TestWrongVarType_Error(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				friend {
+					n as min(age)
+					s as max(age)
+					sum as sumvar(n, s)
+				}
+			}
+
+			me(id: var(sum), orderdesc: var(f)) {
+				name 
+				var(n)
+				var(s)
+			}
+		}
+	`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
 func TestQueryVarValAggOrderDesc(t *testing.T) {
 	populateGraph(t)
 	query := `
