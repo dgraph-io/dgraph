@@ -345,7 +345,7 @@ function isElementInViewport(el) {
   }
 
   // setupRunnableClipboard configures clipboard buttons for runnable
-  // @params runnableEl {HTMLElement} - HTML Element for runnable
+  // @params runnableEl {HTMLElement|JQueryElement} - HTML Element for runnable
   function setupRunnableClipboard(runnableEl) {
     // Set up clipboard
     var codeClipEl = $(runnableEl).find('.code-btn[data-action="copy-code"]')[0];
@@ -424,8 +424,9 @@ function isElementInViewport(el) {
       keyboard: true
     });
 
-    var runnableEl = $modal.find('.runnable');
-    setupRunnableClipboard(runnableEl);
+    var $runnableEl = $modal.find('.runnable');
+
+    setupRunnableClipboard($runnableEl);
   }
 
   /**
@@ -573,7 +574,7 @@ function isElementInViewport(el) {
 
     var $runnable = $(this).closest('.runnable');
     var runnableEl = $runnable[0];
-    launchRunnableModal(runnableEl)
+    launchRunnableModal(runnableEl);
   });
 
   $(document).on('click', '.runnable [data-action="edit"]', function (e) {
