@@ -41,7 +41,7 @@ type GraphQuery struct {
 	IsCount    bool
 	IsInternal bool
 	Var        string
-	NeedsVar   []string
+	NeedsVar   []varContext
 	Func       *Function
 
 	Args         map[string]string
@@ -81,12 +81,23 @@ type fragmentNode struct {
 // Key is fragment names.
 type fragmentMap map[string]*fragmentNode
 
+const (
+	UID_VAR   = 1
+	VALUE_VAR = 2
+)
+
+type varContext struct {
+	name string
+	typ  int //  1 for UID vars, 2 for value vars
+}
+
+// varInfo holds information on GQL variables.
 type varInfo struct {
 	Value string
 	Type  string
 }
 
-// varMap is a map with key as variable name.
+// varMap is a map with key as GQL variable name.
 type varMap map[string]varInfo
 
 // FilterTree is the result of parsing the filter directive.
@@ -101,10 +112,10 @@ type FilterTree struct {
 // Function holds the information about gql functions.
 type Function struct {
 	Attr     string
-	Lang     string   // language of the attribute value
-	Name     string   // Specifies the name of the function.
-	Args     []string // Contains the arguments of the function.
-	NeedsVar []string // If the function requires some variable
+	Lang     string       // language of the attribute value
+	Name     string       // Specifies the name of the function.
+	Args     []string     // Contains the arguments of the function.
+	NeedsVar []varContext // If the function requires some variable
 }
 
 // Facet holds the information about gql Facets (edge key-value pairs).
@@ -506,7 +517,9 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 		v.Defines = append(v.Defines, qu.Var)
 	}
 
-	v.Needs = append(v.Needs, qu.NeedsVar...)
+	for _, va := range qu.NeedsVar {
+		v.Needs = append(v.Needs, va.name)
+	}
 
 	for _, ch := range qu.Children {
 		ch.collectVars(v)
@@ -518,7 +531,9 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 
 func (f *FilterTree) collectVars(v *Vars) {
 	if f.Func != nil {
-		v.Needs = append(v.Needs, f.Func.NeedsVar...)
+		for _, va := range f.Func.NeedsVar {
+			v.Needs = append(v.Needs, va.name)
+		}
 	}
 	for _, fch := range f.Child {
 		fch.collectVars(v)
@@ -979,7 +994,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			if count != 1 {
 				return result, x.Errorf("Only one variable expected. Got %d", count)
 			}
-			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1]
+			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1].name
 			result = append(result, p)
 			continue
 		}
@@ -1181,7 +1196,10 @@ L:
 					g.Args = append(g.Args, val)
 				}
 				if g.Name == "var" {
-					g.NeedsVar = append(g.NeedsVar, val)
+					g.NeedsVar = append(g.NeedsVar, varContext{
+						name: val,
+						typ:  UID_VAR,
+					})
 				}
 				expectArg = false
 			}
@@ -1400,7 +1418,10 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 				return count, x.Errorf("Expected a variable but got comma")
 			}
 			count++
-			gq.NeedsVar = append(gq.NeedsVar, item.Val)
+			gq.NeedsVar = append(gq.NeedsVar, varContext{
+				name: item.Val,
+				typ:  UID_VAR,
+			})
 			expectArg = false
 		}
 	}
@@ -1586,6 +1607,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				if count != 1 {
 					return nil, x.Errorf("Expected only one variable but got: %d", count)
 				}
+				// Modify the NeedsVar context here.
+				gq.NeedsVar[len(gq.NeedsVar)-1].typ = VALUE_VAR
 			} else {
 				val = item.Val
 				// Get language list, if present
@@ -1598,7 +1621,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				}
 			}
 			if val == "" {
-				val = gq.NeedsVar[len(gq.NeedsVar)-1]
+				val = gq.NeedsVar[len(gq.NeedsVar)-1].name
 			}
 			gq.Args[key] = val
 		}
