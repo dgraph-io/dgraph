@@ -185,15 +185,22 @@ func main() {
 	dgraphClient := graphp.NewDgraphClient(conn)
 	v, err := dgraphClient.CheckVersion(ctx, &graphp.Check{})
 	if err != nil {
-		fmt.Println("Got error while fetching version: %v", err)
-	}
-
-	version := x.Version()
-	if version != "" && v.Tag != "" && version != v.Tag {
+		// Error could be unknown service graphp.Dgraph (because we updated proto
+		// package) if Dgraph version is < 0.7.4 and loader version is >= 0.7.4.
+		// It could be Unknown method CheckVersion if Dgraph version < 0.7.5 and
+		// Dgraphloader version is >= 0.7.5 because this method was added in v0.7.5.
 		fmt.Printf(`
+Could not fetch version information from Dgraph. Got err: %v.
+Looks like you are using an older version of Dgraph. Get the latest version from https://docs.dgraph.io.
+`, err)
+	} else {
+		version := x.Version()
+		if version != "" && v.Tag != "" && version != v.Tag {
+			fmt.Printf(`
 Dgraph server: %v, loader: %v dont match.
 You can get the latest version from https://docs.dgraph.io.
 `, v.Tag, version)
+		}
 	}
 
 	batch := client.NewBatchMutation(context.Background(), dgraphClient, *numRdf, *concurrent)
