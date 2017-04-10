@@ -528,6 +528,7 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   background-color: #fff;
   display: flex;
   flex-direction: column;
+  overflow-y: scroll;
 }
 .runnable .topbar {
   overflow: auto;
