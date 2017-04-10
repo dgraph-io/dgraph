@@ -534,6 +534,7 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   padding: 2px 17px 8px 18px;
 }
 .runnable .output {
+  overflow-y: scroll;
   /*overflow-y: scroll;
   max-height: 202px;*/
 }
