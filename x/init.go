@@ -117,7 +117,7 @@ func printVersionOnly() {
 		fmt.Println("Copyright 2017 Dgraph Labs, Inc.")
 		fmt.Println(`
 Licensed under AGPLv3.
-For Dgraph official documentation, visit https://wiki.dgraph.io.
+For Dgraph official documentation, visit https://docs.dgraph.io.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 To say hi to the community       , visit https://dgraph.slack.com.
 `)
