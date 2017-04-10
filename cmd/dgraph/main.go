@@ -293,8 +293,8 @@ func enrichSchema(updates []*graphp.SchemaUpdate) error {
 			}
 			if tokenizer.IsSortable() {
 				if seenSortableTok {
-					return nil, x.Errorf("More than one sortable index encountered for: %v",
-						predicate)
+					return x.Errorf("More than one sortable index encountered for: %v",
+						schema.Predicate)
 				}
 				seenSortableTok = true
 			}
@@ -692,6 +692,19 @@ func (s *grpcServer) Run(ctx context.Context,
 		l.ProtocolBuffer.String()
 	resp.L = gl
 	return resp, err
+}
+
+func (s *grpcServer) CheckVersion(ctx context.Context, c *graphp.Check) (v *graphp.Version,
+	err error) {
+	// we need membership information
+	if !worker.HealthCheck() {
+		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		return v, x.Errorf("Uninitiated server. Please retry later")
+	}
+
+	v = new(graphp.Version)
+	v.Tag = x.Version()
+	return v, nil
 }
 
 var uiDir string

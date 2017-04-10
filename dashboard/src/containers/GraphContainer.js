@@ -51,6 +51,13 @@ function doOnClick(params, allNodeSet, edgeSet, dispatch) {
 
 // create a network
 function renderNetwork(props, dispatch) {
+    dispatch(
+        updateLatency({
+            rendering: {
+                start: new Date()
+            }
+        })
+    );
     var container = document.getElementById("graph");
     var data = {
         nodes: new vis.DataSet(props.nodes),
@@ -97,13 +104,7 @@ function renderNetwork(props, dispatch) {
                 updateInterval: 5,
                 iterations: 20
             },
-            // timestep: 0.4,
             barnesHut: {
-                // gravitationalConstant: -80000,
-                // springConstant: 0.1,
-                // springLength: 10,
-                // avoidOverlap: 0.8,
-                // springConstant: 0.1,
                 damping: 0.7
             }
         }
@@ -416,12 +417,11 @@ class GraphContainer extends Component {
     };
 
     selectTab = eventKey => {
-        event.preventDefault();
         this.setState({
             selectedTab: eventKey
         });
         // eventKey is graph.
-        if (eventKey === "1") {
+        if (eventKey === "1" && !this.props.treeView) {
             renderNetwork.bind(this, this.props, this.props.dispatch)();
         }
     };

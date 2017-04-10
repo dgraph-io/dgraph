@@ -126,13 +126,15 @@ func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 2, len(res.Query))
-	require.Equal(t, "L", res.Query[0].NeedsVar[0])
-	require.Equal(t, "c", res.Query[0].NeedsVar[1])
+	require.Equal(t, "L", res.Query[0].NeedsVar[0].Name)
+	require.Equal(t, UID_VAR, res.Query[0].NeedsVar[0].Typ)
+	require.Equal(t, "c", res.Query[0].NeedsVar[1].Name)
+	require.Equal(t, VALUE_VAR, res.Query[0].NeedsVar[1].Typ)
 	require.Equal(t, "c", res.Query[0].Args["orderasc"])
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 	require.Equal(t, "var", res.Query[0].Children[1].Attr)
 	require.Equal(t, 1, len(res.Query[0].Children[1].NeedsVar))
-	require.Equal(t, "c", res.Query[0].Children[1].NeedsVar[0])
+	require.Equal(t, "c", res.Query[0].Children[1].NeedsVar[0].Name)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
 	require.Equal(t, "a", res.Query[1].Children[0].Children[0].Var)
 	require.Equal(t, "b", res.Query[1].Children[0].Children[1].Var)
@@ -159,8 +161,10 @@ func TestParseQueryWithVarValAgg(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 2, len(res.Query))
-	require.Equal(t, "L", res.Query[0].NeedsVar[0])
-	require.Equal(t, "n", res.Query[0].NeedsVar[1])
+	require.Equal(t, "L", res.Query[0].NeedsVar[0].Name)
+	require.Equal(t, UID_VAR, res.Query[0].NeedsVar[0].Typ)
+	require.Equal(t, "n", res.Query[0].NeedsVar[1].Name)
+	require.Equal(t, VALUE_VAR, res.Query[0].NeedsVar[1].Typ)
 	require.Equal(t, "n", res.Query[0].Args["orderasc"])
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
@@ -186,8 +190,10 @@ func TestParseQueryWithVarValCount(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 2, len(res.Query))
-	require.Equal(t, "L", res.Query[0].NeedsVar[0])
-	require.Equal(t, "n", res.Query[0].NeedsVar[1])
+	require.Equal(t, "L", res.Query[0].NeedsVar[0].Name)
+	require.Equal(t, UID_VAR, res.Query[0].NeedsVar[0].Typ)
+	require.Equal(t, "n", res.Query[0].NeedsVar[1].Name)
+	require.Equal(t, VALUE_VAR, res.Query[0].NeedsVar[1].Typ)
 	require.Equal(t, "n", res.Query[0].Args["orderasc"])
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
@@ -212,8 +218,10 @@ func TestParseQueryWithVarVal(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 2, len(res.Query))
-	require.Equal(t, "L", res.Query[0].NeedsVar[0])
-	require.Equal(t, "n", res.Query[0].NeedsVar[1])
+	require.Equal(t, "L", res.Query[0].NeedsVar[0].Name)
+	require.Equal(t, UID_VAR, res.Query[0].NeedsVar[0].Typ)
+	require.Equal(t, "n", res.Query[0].NeedsVar[1].Name)
+	require.Equal(t, VALUE_VAR, res.Query[0].NeedsVar[1].Typ)
 	require.Equal(t, "n", res.Query[0].Args["orderasc"])
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
@@ -233,9 +241,12 @@ func TestParseQueryWithVarMultiRoot(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 4, len(res.Query))
-	require.Equal(t, "L", res.Query[0].NeedsVar[0])
-	require.Equal(t, "J", res.Query[0].NeedsVar[1])
-	require.Equal(t, "K", res.Query[0].NeedsVar[2])
+	require.Equal(t, "L", res.Query[0].NeedsVar[0].Name)
+	require.Equal(t, "J", res.Query[0].NeedsVar[1].Name)
+	require.Equal(t, "K", res.Query[0].NeedsVar[2].Name)
+	require.Equal(t, UID_VAR, res.Query[0].NeedsVar[0].Typ)
+	require.Equal(t, UID_VAR, res.Query[0].NeedsVar[1].Typ)
+	require.Equal(t, UID_VAR, res.Query[0].NeedsVar[2].Typ)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
 	require.Equal(t, "J", res.Query[2].Children[0].Var)
 	require.Equal(t, "K", res.Query[3].Children[0].Var)
@@ -256,9 +267,12 @@ func TestParseQueryWithVar(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 6, len(res.Query))
-	require.Equal(t, "L", res.Query[0].NeedsVar[0])
-	require.Equal(t, "J", res.Query[1].NeedsVar[0])
-	require.Equal(t, "K", res.Query[2].NeedsVar[0])
+	require.Equal(t, "L", res.Query[0].NeedsVar[0].Name)
+	require.Equal(t, "J", res.Query[1].NeedsVar[0].Name)
+	require.Equal(t, "K", res.Query[2].NeedsVar[0].Name)
+	require.Equal(t, UID_VAR, res.Query[0].NeedsVar[0].Typ)
+	require.Equal(t, UID_VAR, res.Query[1].NeedsVar[0].Typ)
+	require.Equal(t, UID_VAR, res.Query[2].NeedsVar[0].Typ)
 	require.Equal(t, "L", res.Query[3].Children[0].Var)
 	require.Equal(t, "J", res.Query[4].Children[0].Var)
 	require.Equal(t, "K", res.Query[5].Children[0].Var)
@@ -333,7 +347,8 @@ func TestParseQueryWithVarAtRootFilterID(t *testing.T) {
 	require.Equal(t, 2, len(res.Query))
 	require.Equal(t, "K", res.Query[0].Var)
 	require.Equal(t, "L", res.Query[0].Children[0].Var)
-	require.Equal(t, "L", res.Query[1].Filter.Func.NeedsVar[0])
+	require.Equal(t, "L", res.Query[1].Filter.Func.NeedsVar[0].Name)
+	require.Equal(t, UID_VAR, res.Query[1].Filter.Func.NeedsVar[0].Typ)
 	require.Equal(t, []string{"K", "L"}, res.QueryVars[0].Defines)
 }
 
@@ -354,7 +369,8 @@ func TestParseQueryWithVarAtRoot(t *testing.T) {
 	require.Equal(t, 2, len(res.Query))
 	require.Equal(t, "K", res.Query[0].Var)
 	require.Equal(t, "fr", res.Query[0].Children[0].Var)
-	require.Equal(t, "fr", res.Query[1].NeedsVar[0])
+	require.Equal(t, "fr", res.Query[1].NeedsVar[0].Name)
+	require.Equal(t, UID_VAR, res.Query[1].NeedsVar[0].Typ)
 	require.Equal(t, []string{"K", "fr"}, res.QueryVars[0].Defines)
 }
 
@@ -375,7 +391,8 @@ func TestParseQueryWithVar1(t *testing.T) {
 	require.NotNil(t, res.Query)
 	require.Equal(t, 2, len(res.Query))
 	require.Equal(t, "L", res.Query[0].Children[0].Var)
-	require.Equal(t, "L", res.Query[1].NeedsVar[0])
+	require.Equal(t, "L", res.Query[1].NeedsVar[0].Name)
+	require.Equal(t, UID_VAR, res.Query[1].NeedsVar[0].Typ)
 }
 
 func TestParseQueryWithMultipleVar(t *testing.T) {
@@ -402,8 +419,10 @@ func TestParseQueryWithMultipleVar(t *testing.T) {
 	require.Equal(t, 3, len(res.Query))
 	require.Equal(t, "L", res.Query[0].Children[0].Var)
 	require.Equal(t, "B", res.Query[0].Children[0].Children[0].Var)
-	require.Equal(t, "L", res.Query[1].NeedsVar[0])
-	require.Equal(t, "B", res.Query[2].NeedsVar[0])
+	require.Equal(t, "L", res.Query[1].NeedsVar[0].Name)
+	require.Equal(t, "B", res.Query[2].NeedsVar[0].Name)
+	require.Equal(t, UID_VAR, res.Query[1].NeedsVar[0].Typ)
+	require.Equal(t, UID_VAR, res.Query[2].NeedsVar[0].Typ)
 	require.Equal(t, []string{"L", "B"}, res.QueryVars[0].Defines)
 	require.Equal(t, []string{"L"}, res.QueryVars[1].Needs)
 	require.Equal(t, []string{"B"}, res.QueryVars[2].Needs)
@@ -1152,6 +1171,28 @@ func TestParseFragmentMissing(t *testing.T) {
 	require.Error(t, err, "Expected error with missing fragment")
 }
 
+func TestParseVarInFunc(t *testing.T) {
+	query := `{
+		"query" : "query versions($version: int!){versions(func:eq(type, $version)){versions{ version_number}}}",
+		"variables" : {"$version": "3"}
+	}`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, "3", res.Query[0].Func.Args[0])
+}
+
+func TestParseVarInFilter(t *testing.T) {
+	query := `{
+		"query" : "query versions($version: int!){versions(func:eq(type, \"version\")){versions @filter(eq(version_number, $version)) { version_number}}}",
+		"variables" : {"$version": "3"}
+	}`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, "3", res.Query[0].Children[0].Filter.Func.Args[0])
+}
+
 func TestParseVariables(t *testing.T) {
 	query := `{
 		"query": "query testQuery( $a  : int   , $b: int){root(id: 0x0a) {name(first: $b, after: $a){english}}}",
@@ -1216,7 +1257,7 @@ func TestParseVariablesFragments(t *testing.T) {
 	require.Equal(t, childAttrs(res.Query[0]), []string{"id", "friends"})
 	require.Empty(t, childAttrs(res.Query[0].Children[0]))
 	require.Equal(t, childAttrs(res.Query[0].Children[1]), []string{"name"})
-	require.Equal(t, res.Query[0].Children[0].Args["first"], "5")
+	require.Equal(t, "5", res.Query[0].Children[0].Args["first"])
 }
 
 func TestParseVariablesError1(t *testing.T) {

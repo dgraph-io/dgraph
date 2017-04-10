@@ -36,12 +36,13 @@ import (
 type Op int
 
 const (
+	// SET indicates a Set mutation.
 	SET Op = iota
+	// DEL indicates a Delete mutation.
 	DEL
 )
 
-// Req wraps the graphp.Request so that we can define helper methods for the
-// client around it.
+// Req wraps the graphp.Request so that helper methods can be defined on it.
 type Req struct {
 	gr graphp.Request
 }
@@ -70,13 +71,13 @@ func checkNQuad(nq graphp.NQuad) error {
 	return nil
 }
 
-// SetQuery sets a query as part of the request.
-// Example usage
-// req := client.Req{}
-// req.SetQuery("{ me(_xid_: alice) { name falls.in } }")
-// resp, err := c.Query(context.Background(), req.Request())
-// Check response and handle errors
-func (req *Req) SetQuery(q string, vars map[string]string) {
+// SetQuery sets a query with graphQL variables as part of the request.
+func (req *Req) SetQuery(q string) {
+	req.gr.Query = q
+}
+
+// SetQueryWithVariables sets a query with graphQL variables as part of the request.
+func (req *Req) SetQueryWithVariables(q string, vars map[string]string) {
 	req.gr.Query = q
 	req.gr.Vars = vars
 }
@@ -93,42 +94,8 @@ func (req *Req) addMutation(nq graphp.NQuad, op Op) {
 	}
 }
 
-// AddMutation adds a SET/DELETE mutation operation.
-//
-// Example usage
-// req := client.Req{}
-// To set a string value
-// if err := req.AddMutation(graphp.NQuad{
-// 	Sub:   "alice",
-// 	Pred:  "name",
-// 	Value: client.Str("Alice"),
-// }, client.SET); err != nil {
-// ....
-// handle error
-// ....
-// }
-
-// To set an integer value
-// if err := req.AddMutation(graphp.NQuad{
-// 	Sub:   "alice",
-// 	Pred:  "age",
-// 	Value: client.Int(13),
-// }, client.SET); err != nil {
-// ....
-// handle error
-// ....
-// }
-
-// To add a mutation with a DELETE operation
-// if err := req.AddMutation(graphp.NQuad{
-// 	Sub:   "alice",
-// 	Pred:  "name",
-// 	Value: client.Str("Alice"),
-// }, client.DEL); err != nil {
-// ....
-// handle error
-// ....
-// }
+// AddMutation adds (but does not send) a mutation to the Req object. Mutations
+// are sent when client.Run() is called.
 func (req *Req) AddMutation(nq graphp.NQuad, op Op) error {
 	if err := checkNQuad(nq); err != nil {
 		return err
@@ -178,6 +145,10 @@ type nquadOp struct {
 	op Op
 }
 
+// BatchMutation is used to batch mutations and send them off to the server
+// concurrently. It is useful while doing migrations and bulk data loading.
+// It is possible to control the batch size and the number of concurrent requests
+// to make.
 type BatchMutation struct {
 	size    int
 	pending int
@@ -257,6 +228,9 @@ LOOP:
 	batch.wg.Done()
 }
 
+// NewBatchMutation is used to create a new batch.
+// size is the number of RDF's that are sent as part of one request to Dgraph.
+// pending is the number of concurrent requests to make to Dgraph server.
 func NewBatchMutation(ctx context.Context, client graphp.DgraphClient,
 	size int, pending int) *BatchMutation {
 	bm := BatchMutation{
@@ -277,6 +251,8 @@ func NewBatchMutation(ctx context.Context, client graphp.DgraphClient,
 	return &bm
 }
 
+// AddMutation is used to add a NQuad to a batch. It can either have SET or
+// DEL as Op(operation).
 func (batch *BatchMutation) AddMutation(nq graphp.NQuad, op Op) error {
 	if err := checkNQuad(nq); err != nil {
 		return err
@@ -286,6 +262,15 @@ func (batch *BatchMutation) AddMutation(nq graphp.NQuad, op Op) error {
 	return nil
 }
 
+// Flush waits for all pending requests to complete. It should always be called
+// after adding all the NQuads using batch.AddMutation().
+func (batch *BatchMutation) Flush() {
+	close(batch.nquads)
+	close(batch.schema)
+	batch.wg.Wait()
+}
+
+// AddSchema is used to add a schema mutation.
 func (batch *BatchMutation) AddSchema(s graphp.SchemaUpdate) error {
 	if err := checkSchema(s); err != nil {
 		return err
@@ -294,22 +279,21 @@ func (batch *BatchMutation) AddSchema(s graphp.SchemaUpdate) error {
 	return nil
 }
 
+// Counter keeps a track of various parameters about a batch mutation.
 type Counter struct {
-	Rdfs      uint64
+	// Number of RDF's processed by server.
+	Rdfs uint64
+	// Number of mutations processed by the server.
 	Mutations uint64
-	Elapsed   time.Duration
+	// Time elapsed sinze the batch started.
+	Elapsed time.Duration
 }
 
+// Counter returns the current state of the BatchMutation.
 func (batch *BatchMutation) Counter() Counter {
 	return Counter{
 		Rdfs:      atomic.LoadUint64(&batch.rdfs),
 		Mutations: atomic.LoadUint64(&batch.mutations),
 		Elapsed:   time.Since(batch.start),
 	}
-}
-
-func (batch *BatchMutation) Flush() {
-	close(batch.nquads)
-	close(batch.schema)
-	batch.wg.Wait()
 }

@@ -41,7 +41,7 @@ type GraphQuery struct {
 	IsCount    bool
 	IsInternal bool
 	Var        string
-	NeedsVar   []string
+	NeedsVar   []VarContext
 	Func       *Function
 
 	Args         map[string]string
@@ -81,12 +81,23 @@ type fragmentNode struct {
 // Key is fragment names.
 type fragmentMap map[string]*fragmentNode
 
+const (
+	UID_VAR   = 1
+	VALUE_VAR = 2
+)
+
+type VarContext struct {
+	Name string
+	Typ  int //  1 for UID vars, 2 for value vars
+}
+
+// varInfo holds information on GQL variables.
 type varInfo struct {
 	Value string
 	Type  string
 }
 
-// varMap is a map with key as variable name.
+// varMap is a map with key as GQL variable name.
 type varMap map[string]varInfo
 
 // FilterTree is the result of parsing the filter directive.
@@ -101,10 +112,10 @@ type FilterTree struct {
 // Function holds the information about gql functions.
 type Function struct {
 	Attr     string
-	Lang     string   // language of the attribute value
-	Name     string   // Specifies the name of the function.
-	Args     []string // Contains the arguments of the function.
-	NeedsVar []string // If the function requires some variable
+	Lang     string       // language of the attribute value
+	Name     string       // Specifies the name of the function.
+	Args     []string     // Contains the arguments of the function.
+	NeedsVar []VarContext // If the function requires some variable
 }
 
 // Facet holds the information about gql Facets (edge key-value pairs).
@@ -322,15 +333,36 @@ func checkValueType(vm varMap) error {
 	return nil
 }
 
+func substituteVar(f string, res *string, vmap varMap) error {
+	if f[0] == '$' {
+		va, ok := vmap[f]
+		if !ok {
+			return x.Errorf("Variable not defined %v", f)
+		}
+		*res = va.Value
+	}
+	return nil
+}
+
 func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	for k, v := range gq.Args {
 		// v won't be empty as its handled in parseGqlVariables.
-		if v[0] == '$' {
-			va, ok := vmap[v]
-			if !ok {
-				return x.Errorf("Variable not defined %v", v)
+		val := gq.Args[k]
+		if err := substituteVar(v, &val, vmap); err != nil {
+			return err
+		}
+		gq.Args[k] = val
+	}
+
+	if gq.Func != nil {
+		if err := substituteVar(gq.Func.Attr, &gq.Func.Attr, vmap); err != nil {
+			return err
+		}
+
+		for idx, v := range gq.Func.Args {
+			if err := substituteVar(v, &gq.Func.Args[idx], vmap); err != nil {
+				return err
 			}
-			gq.Args[k] = va.Value
 		}
 	}
 
@@ -339,7 +371,32 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 			return err
 		}
 	}
+	if gq.Filter != nil {
+		if err := substituteVariablesFilter(gq.Filter, vmap); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
+	if f.Func != nil {
+		if err := substituteVar(f.Func.Attr, &f.Func.Attr, vmap); err != nil {
+			return err
+		}
+
+		for idx, v := range f.Func.Args {
+			if err := substituteVar(v, &f.Func.Args[idx], vmap); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, fChild := range f.Child {
+		if err := substituteVariablesFilter(fChild, vmap); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -506,7 +563,9 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 		v.Defines = append(v.Defines, qu.Var)
 	}
 
-	v.Needs = append(v.Needs, qu.NeedsVar...)
+	for _, va := range qu.NeedsVar {
+		v.Needs = append(v.Needs, va.Name)
+	}
 
 	for _, ch := range qu.Children {
 		ch.collectVars(v)
@@ -518,7 +577,9 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 
 func (f *FilterTree) collectVars(v *Vars) {
 	if f.Func != nil {
-		v.Needs = append(v.Needs, f.Func.NeedsVar...)
+		for _, va := range f.Func.NeedsVar {
+			v.Needs = append(v.Needs, va.Name)
+		}
 	}
 	for _, fch := range f.Child {
 		fch.collectVars(v)
@@ -979,7 +1040,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			if count != 1 {
 				return result, x.Errorf("Only one variable expected. Got %d", count)
 			}
-			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1]
+			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 			result = append(result, p)
 			continue
 		}
@@ -1111,7 +1172,7 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
-	var expectArg, seenFuncArg, expectLang bool
+	var expectArg, seenFuncArg, expectLang, isDollar bool
 L:
 	for it.Next() {
 		item := it.Item()
@@ -1129,6 +1190,12 @@ L:
 				if itemInFunc.Typ == itemRightRound {
 					break L
 				} else if itemInFunc.Typ == itemComma {
+					if expectArg {
+						return nil, x.Errorf("Invalid use of comma.")
+					}
+					if isDollar {
+						return nil, x.Errorf("Invalid use of comma after dollar.")
+					}
 					expectArg = true
 					continue
 				} else if itemInFunc.Typ == itemLeftRound {
@@ -1157,6 +1224,12 @@ L:
 					} else {
 						return nil, x.Errorf("Invalid usage of '@' in function argument")
 					}
+				} else if itemInFunc.Typ == itemDollar {
+					if isDollar {
+						return nil, x.Errorf("Invalid use of $ in func args")
+					}
+					isDollar = true
+					continue
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -1167,6 +1240,10 @@ L:
 				val := strings.Trim(itemInFunc.Val, "\" \t")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
+				}
+				if isDollar {
+					val = "$" + val
+					isDollar = false
 				}
 				if len(g.Attr) == 0 {
 					if strings.ContainsRune(itemInFunc.Val, '"') {
@@ -1181,7 +1258,10 @@ L:
 					g.Args = append(g.Args, val)
 				}
 				if g.Name == "var" {
-					g.NeedsVar = append(g.NeedsVar, val)
+					g.NeedsVar = append(g.NeedsVar, VarContext{
+						Name: val,
+						Typ:  UID_VAR,
+					})
 				}
 				expectArg = false
 			}
@@ -1400,7 +1480,10 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 				return count, x.Errorf("Expected a variable but got comma")
 			}
 			count++
-			gq.NeedsVar = append(gq.NeedsVar, item.Val)
+			gq.NeedsVar = append(gq.NeedsVar, VarContext{
+				Name: item.Val,
+				Typ:  UID_VAR,
+			})
 			expectArg = false
 		}
 	}
@@ -1586,6 +1669,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				if count != 1 {
 					return nil, x.Errorf("Expected only one variable but got: %d", count)
 				}
+				// Modify the NeedsVar context here.
+				gq.NeedsVar[len(gq.NeedsVar)-1].Typ = VALUE_VAR
 			} else {
 				val = item.Val
 				// Get language list, if present
@@ -1598,7 +1683,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				}
 			}
 			if val == "" {
-				val = gq.NeedsVar[len(gq.NeedsVar)-1]
+				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 			}
 			gq.Args[key] = val
 		}
@@ -1714,6 +1799,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if count != 1 {
 					return x.Errorf("Invalid use of var(). Exactly one variable expected.")
 				}
+				// Only value vars can be retrieved.
+				child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
