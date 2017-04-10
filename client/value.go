@@ -26,6 +26,8 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
+// ValueFromGeoJson is a helper function to add a geojson string to an
+// NQuad.ObjectValue.
 func ValueFromGeoJson(json string, nq *graphp.NQuad) error {
 	var g geom.T
 	// Parse the json
@@ -44,6 +46,8 @@ func ValueFromGeoJson(json string, nq *graphp.NQuad) error {
 	return nil
 }
 
+// Date is a helper function to add a date(time.Time) to an
+// NQuad.ObjectValue.
 func Date(date time.Time, nq *graphp.NQuad) error {
 	d, err := types.ObjectValue(types.DateID, date)
 	if err != nil {
@@ -54,8 +58,10 @@ func Date(date time.Time, nq *graphp.NQuad) error {
 	return nil
 }
 
-func Datetime(date time.Time, nq *graphp.NQuad) error {
-	d, err := types.ObjectValue(types.DateTimeID, date)
+// Datetime is a helper function to add a date(time.Time) to an
+// NQuad.ObjectValue.
+func Datetime(dateTime time.Time, nq *graphp.NQuad) error {
+	d, err := types.ObjectValue(types.DateTimeID, dateTime)
 	if err != nil {
 		return err
 	}
@@ -64,6 +70,7 @@ func Datetime(date time.Time, nq *graphp.NQuad) error {
 	return nil
 }
 
+// Str is a helper function to add a string to an NQuad.ObjectValue.
 func Str(val string, nq *graphp.NQuad) error {
 	v, err := types.ObjectValue(types.StringID, val)
 	if err != nil {
@@ -74,6 +81,7 @@ func Str(val string, nq *graphp.NQuad) error {
 	return nil
 }
 
+// Int is a helper function to add a int to an NQuad.ObjectValue.
 func Int(val int64, nq *graphp.NQuad) error {
 	v, err := types.ObjectValue(types.IntID, val)
 	if err != nil {
@@ -85,6 +93,7 @@ func Int(val int64, nq *graphp.NQuad) error {
 
 }
 
+// Float is a helper function to add a float to an NQuad.ObjectValue.
 func Float(val float64, nq *graphp.NQuad) error {
 	v, err := types.ObjectValue(types.FloatID, val)
 	if err != nil {
@@ -96,6 +105,7 @@ func Float(val float64, nq *graphp.NQuad) error {
 
 }
 
+// Bool is a helper function to add a bool to an NQuad.ObjectValue.
 func Bool(val bool, nq *graphp.NQuad) error {
 	v, err := types.ObjectValue(types.BoolID, val)
 	if err != nil {
@@ -107,11 +117,12 @@ func Bool(val bool, nq *graphp.NQuad) error {
 }
 
 // Uid converts an uint64 to a string, which can be used as part of
-// Subject and ObjectId fields in the graphp.NQuad
+// Subject and ObjectId fields in the graphp.NQuad.
 func Uid(uid uint64) string {
 	return fmt.Sprintf("%#x", uid)
 }
 
+// Password is a helper function to add a bool to an NQuad.ObjectValue.
 func Password(val string, nq *graphp.NQuad) error {
 	v, err := types.ObjectValue(types.PasswordID, val)
 	if err != nil {

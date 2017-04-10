@@ -694,6 +694,19 @@ func (s *grpcServer) Run(ctx context.Context,
 	return resp, err
 }
 
+func (s *grpcServer) CheckVersion(ctx context.Context, c *graphp.Check) (v *graphp.Version,
+	err error) {
+	// we need membership information
+	if !worker.HealthCheck() {
+		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		return v, x.Errorf("Uninitiated server. Please retry later")
+	}
+
+	v = new(graphp.Version)
+	v.Tag = x.Version()
+	return v, nil
+}
+
 var uiDir string
 
 func init() {

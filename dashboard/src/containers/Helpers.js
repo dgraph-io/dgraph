@@ -66,7 +66,7 @@ function shortenName(label) {
     // First word is less than 10 chars so we can display it in full.
     if (words.length > 1) {
       if (words[1].length > 10) {
-        label = [firstWord, words[1] + "..."].join("\n");
+        label = [firstWord, words[1].substr(0, 7) + "..."].join("\n");
       } else {
         label = [firstWord, words[1]].join("\n");
       }

@@ -125,6 +125,10 @@ To say hi to the community       , visit https://dgraph.slack.com.
 	}
 }
 
+func Version() string {
+	return dgraphVersion
+}
+
 // Printf does a log.Printf. We often do printf for debugging but has to keep
 // adding import "fmt" or "log" and removing them after we are done.
 // Let's add Printf to "x" and include "x" almost everywhere. Caution: Do remember
