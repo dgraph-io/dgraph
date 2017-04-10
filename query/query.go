@@ -130,7 +130,7 @@ type params struct {
 	OrderDesc    bool
 	isDebug      bool
 	Var          string
-	NeedsVar     []string
+	NeedsVar     []gql.VarContext
 	ParentVars   map[string]*taskp.List
 	uidToVal     map[uint64]types.Val
 	Langs        []string
@@ -243,7 +243,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if pc.Params.uidToVal == nil {
 				return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
 			}
-			fieldName := fmt.Sprintf("%s%v", pc.Attr, pc.Params.NeedsVar)
+			fieldName := fmt.Sprintf("var[%v]", pc.Params.NeedsVar[0].Name)
+			if pc.Params.Var != "" {
+				fieldName = fmt.Sprintf("var[%v]", pc.Params.Var)
+			}
 			sv, ok := pc.Params.uidToVal[uid]
 			if !ok {
 				continue
@@ -836,7 +839,7 @@ func (sg *SubGraph) sumAggregation(doneVars map[string]values) (rerr error) {
 	destMap := make(map[uint64]types.Val)
 	x.AssertTruef(len(sg.Params.NeedsVar) > 0,
 		"Received empty variable list in %v. Expected atleast one.", sg.Attr)
-	srcVar := sg.Params.NeedsVar[0]
+	srcVar := sg.Params.NeedsVar[0].Name
 	srcMap := doneVars[srcVar]
 	if srcMap.vals == nil {
 		return x.Errorf("Expected a value variable but missing")
@@ -846,7 +849,7 @@ func (sg *SubGraph) sumAggregation(doneVars map[string]values) (rerr error) {
 			name: "sumvar",
 		}
 		for _, va := range sg.Params.NeedsVar {
-			curMap := doneVars[va]
+			curMap := doneVars[va.Name]
 			if curMap.vals == nil {
 				return x.Errorf("Expected a value variable but missing")
 			}
@@ -874,7 +877,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 	destMap := make(map[uint64]types.Val)
 	x.AssertTruef(len(sg.Params.NeedsVar) > 0,
 		"Received empty variable list in %v. Expected atleast one.", sg.Attr)
-	srcVar := sg.Params.NeedsVar[0]
+	srcVar := sg.Params.NeedsVar[0].Name
 	srcMap := doneVars[srcVar]
 	if srcMap.vals == nil {
 		return x.Errorf("Expected a value variable but missing")
@@ -885,7 +888,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 		}
 		// Only the UIDs that have all the values will be considered.
 		for _, va := range sg.Params.NeedsVar {
-			curMap := doneVars[va]
+			curMap := doneVars[va.Name]
 			if curMap.vals == nil {
 				return x.Errorf("Expected a value variable but missing")
 			}
@@ -1168,7 +1171,7 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]values) error {
 		}
 	}
 	for _, fchild := range sg.Filters {
-		fchild.recursiveFillVars(doneVars)
+		err = fchild.recursiveFillVars(doneVars)
 		if err != nil {
 			return err
 		}
@@ -1182,7 +1185,7 @@ func (sg *SubGraph) fillUidVars(mp map[string]*taskp.List) {
 		lists = append(lists, sg.DestUIDs)
 	}
 	for _, v := range sg.Params.NeedsVar {
-		if l, ok := mp[v]; ok {
+		if l, ok := mp[v.Name]; ok {
 			lists = append(lists, l)
 		}
 	}
@@ -1193,13 +1196,15 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 	var isVar bool
 	lists := make([]*taskp.List, 0, 3)
 	for _, v := range sg.Params.NeedsVar {
-		if l, ok := mp[v]; ok {
-			if l.uids != nil {
+		if l, ok := mp[v.Name]; ok {
+			if v.Typ != gql.VALUE_VAR && l.uids != nil {
 				isVar = true
 				lists = append(lists, l.uids)
-			} else if l.vals != nil {
+			} else if v.Typ != gql.UID_VAR && len(l.vals) != 0 {
 				// This should happened only once.
 				sg.Params.uidToVal = l.vals
+			} else if len(l.vals) != 0 || l.uids != nil {
+				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 			}
 		}
 	}
@@ -1432,7 +1437,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	}
 
 	for _, it := range sg.Params.NeedsVar {
-		if it == sg.Params.Order {
+		if it.Name == sg.Params.Order {
 			// If the Order name is same as var name, we sort using that variable.
 			return sg.sortAndPaginateUsingVar(ctx)
 		}
