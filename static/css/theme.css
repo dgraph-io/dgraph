@@ -228,6 +228,9 @@ pre.collapsed .showmore span {
   cursor: pointer;
   /*display: inline-block;*/
 }
+.code-btn.active {
+  background: #E0EBF5;
+}
 
 #header {
   height: 64px;
@@ -517,7 +520,7 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   padding: 3px;
   border: 1px solid #ececec;
   background: #f9f9f9;
-  height: 263px;
+  height: 326px;
   display: flex;
   flex-direction: column;
 }
@@ -528,26 +531,33 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   background-color: #fff;
   display: flex;
   flex-direction: column;
+  overflow-y: scroll;
 }
 .runnable .topbar {
-  overflow: auto;
-  padding: 2px 17px 8px 18px;
+  /*overflow: auto;*/
+  /*padding: 4px 17px 4px 18px;*/
+  padding: 1px 0px 8px;
+}
+.runnable .footer {
+  padding: 4px 0;
 }
 .runnable .output {
   overflow-y: scroll;
-  /*overflow-y: scroll;
-  max-height: 202px;*/
-}
-.runnable .query-editable {
-  /*background: #FFFFD8;*/
+  background: #fffff3;
 }
 .runnable .code-btn:hover {
   text-decoration: none;
   color: inherit;
 }
-.runnable .code-btn[data-action='run'] {
+.runnable .code-btn[data-action='run'],
+.runnable .code-btn[data-action='save'] {
   background-color: #3e65b7;
   color: white;
+}
+.runnable .code-btn[data-action='run']:hover {
+  background-color: white;
+  color: #3e65b7;
+  border: 1px solid #3e65b7;
 }
 .runnable .output-container.empty {
   visibility: hidden;
@@ -558,29 +568,61 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
 .runnable .output-container.error code {
   color: #bf0000;
 }
-
+.runnable .nav-languages {
+  padding-left: 4px;
+}
+.runnable .nav-languages .language {
+  font-size: 14px;
+  color: #373e42;
+  display: inline-block;
+  padding: 0 8px 0 7px;
+  text-decoration: none;
+}
+.runnable .nav-languages .language.active {
+  color: #0094de;
+}
+.CodeMirror {
+  font-size: 80%;
+  height: auto;
+  z-index: 0;
+}
+.CodeMirror-lines {
+  background: #fffff3;
+}
+.runnable.editing .normal-actions {
+  display: none;
+}
+.runnable:not(.editing) .edit-actions {
+  display: none;
+}
+.runnable.editing [data-action="expand"] {
+  display: none;
+}
 .runnable .runnable-code {
   background: #fffff3;
+  overflow-y: scroll;
+}
+.runnable .query-content {
+  background: rgba(217, 234, 234, 0.8)
 }
 html .runnable pre {
-  padding: 17px 12px;
+  padding: 0;
   border: 0;
   margin: 0;
-  background: #fffff3;
+  background: inherit;
 }
-/*.runnable .languages {
-  float: left;
+html .runnable code {
+  padding: 17px 12px;
 }
-.runnable .actions {
-  float: right;
-}*/
 .runnable .runnable-tab-content:not(.active) {
   display: none;
 }
-/*
-.CodeMirror-scroll {
-  background: #FFFFD8;
-}*/
+.runnable:not(.editing) .editing-header {
+  display: none;
+}
+.runnable.editing .normal-header {
+  display: none;
+}
 
 #runnable-modal {
   background: rgba(0, 0, 0, 0.63);
@@ -643,4 +685,8 @@ html .runnable pre {
 .row-no-padding [class^="col-"] {
   padding-left: 0 !important;
   padding-right: 0 !important;
+}
+.nopadding {
+   padding: 0 !important;
+   margin: 0 !important;
 }

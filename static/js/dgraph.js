@@ -26,6 +26,34 @@ function slugify(text) {
     .replace(/-+$/, '');            // Trim - from end of text
 }
 
+/********** Cookie helpers **/
+
+function createCookie(name, val, days) {
+  var expires = '';
+  if (days) {
+    var date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = '; expires=' + date.toUTCString();
+  }
+
+  document.cookie = name + '=' + val + expires + '; path=/';
+}
+
+function readCookie(name) {
+  var nameEQ = name + '=';
+  var ca = document.cookie.split(';');
+  for (var i = 0; i < ca.length; i++) {
+    var c = ca[i];
+    while (c.charAt(0)==' ') c = c.substring(1,c.length);
+    if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+  }
+  return null;
+}
+
+function eraseCookie(name) {
+  createCookie(name, '', -1);
+}
+
 // isElementInViewport checks if element is visible in the DOM
 function isElementInViewport(el) {
   var rect = el.getBoundingClientRect();
@@ -40,6 +68,18 @@ function isElementInViewport(el) {
 }
 
 (function() {
+  // Initialize languages
+  var preferredLang = readCookie('lang');
+  if (preferredLang) {
+    $('.runnable').each(function () {
+      var $runnable = $(this);
+
+      navToRunnableTab($runnable, preferredLang);
+    });
+  } else {
+    createCookie('lang', 'curl', 365);
+  }
+
   // clipboard
   var clipInit = false;
   $("pre code:not(.no-copy)").each(function() {
@@ -238,20 +278,26 @@ function isElementInViewport(el) {
   }
 
   // code collapse
-  var pres = document.getElementsByTagName("pre");
-  Array.prototype.forEach.call(pres, function(pre) {
-    if (pre.clientHeight > 330) {
-      pre.className += " collapsed";
+  // var pres = document.getElementsByTagName("pre");
+  var pres = $('pre');
+  pres.each(function() {
+    var isInRunnable = $(this).parents('.runnable').length > 0;
+    if (isInRunnable) {
+      return;
+    }
+
+    if (this.clientHeight > 330) {
+      this.className += " collapsed";
 
       var showMore = document.createElement("div");
       showMore.className = "showmore";
       showMore.innerHTML = "<span>Show all</span>";
       showMore.addEventListener("click", function() {
-        pre.className = "";
+        this.className = "";
         showMore.parentNode.removeChild(showMore);
       });
 
-      pre.appendChild(showMore);
+      this.appendChild(showMore);
     }
   });
 
@@ -298,27 +344,15 @@ function isElementInViewport(el) {
     }
   }
 
-  // syncWithOriginalRunnable syncs the code change in the runnable modal with
-  // the original runnable
-  // @params modalRunnableEl - HTML element for modal runable
-  // @params text - text to sync
-  function syncWithOriginalRunnable(modalRunnableEl, text) {
-    var checksum = $(modalRunnableEl).closest('.runnable').data('checksum');
-    var $otherRunnable = $('.runnable[data-checksum="' + checksum + '"]')
-                          .not('#runnable-modal .runnable');
-
-    $otherRunnable.find('.query-editable').text(text);
-  }
-
   // setupRunnableClipboard configures clipboard buttons for runnable
-  // @params runnableEl {HTMLElement} - HTML Element for runnable
+  // @params runnableEl {HTMLElement|JQueryElement} - HTML Element for runnable
   function setupRunnableClipboard(runnableEl) {
     // Set up clipboard
     var codeClipEl = $(runnableEl).find('.code-btn[data-action="copy-code"]')[0];
     var codeClip = new Clipboard(codeClipEl, {
       text: function(trigger) {
         var $runnable = $(trigger).closest('.runnable');
-        var text = $runnable.find('.runnable-code').text().trim();
+        var text = $runnable.find('.runnable-code .runnable-tab-content.active').text().trim();
         return text.replace(/^\$\s/gm, "");
       }
     });
@@ -390,14 +424,57 @@ function isElementInViewport(el) {
       keyboard: true
     });
 
-    var runnableEl = $modal.find('.runnable');
-    setupRunnableClipboard(runnableEl);
+    var $runnableEl = $modal.find('.runnable');
+
+    setupRunnableClipboard($runnableEl);
   }
 
+  /**
+   * navToRunnableTab navigates to the target tab
+   * @params targetTab {String}
+   */
+  function navToRunnableTab($runnable, targetTab) {
+    // If needed, exit the edit mode
+    if (targetTab !== 'edit' && $runnable.hasClass('editing')) {
+      $runnable.removeClass('editing');
+    }
 
-  $(document).on('input', '#runnable-modal .query-editable', function (e) {
-    syncWithOriginalRunnable(this, e.target.innerText);
-  });
+    $runnable.find('.nav-languages .language.active').removeClass('active');
+    $runnable.find('.language[data-target="' + targetTab + '"]').addClass('active');
+
+    $runnable.find('.runnable-tab-content.active').removeClass('active');
+    $runnable.find('.runnable-tab-content[data-tab="' + targetTab + '"]').addClass('active');
+  }
+
+  function changeLanguage(language) {
+    // First, set cookie
+    createCookie('lang', language, 365);
+
+    // Navigate all runnable tabs to the langauge
+    $('.runnable').each(function () {
+      var $runnable = $(this);
+
+      navToRunnableTab($runnable, language);
+    });
+  }
+
+  function initCodeMirror($runnable) {
+    $runnable.find('.CodeMirror').remove();
+
+    var editableEl = $runnable.find('.query-content-editable')[0];
+    var cm = CodeMirror.fromTextArea(editableEl, {
+      lineNumbers: true,
+      autoCloseBrackets: true,
+      lineWrapping: true,
+      tabSize: 2
+    });
+
+    cm.on('change', function (c) {
+      var val = c.doc.getValue();
+      $runnable.attr('data-unsaved', val);
+      c.save();
+    });
+  }
 
   // Running code
   $(document).on('click', '.runnable [data-action="run"]', function (e) {
@@ -410,7 +487,7 @@ function isElementInViewport(el) {
     var $runnables = $('.runnable[data-checksum="' + checksum + '"]');
     var codeEl = $runnables.find('.output');
     var isModal = $currentRunnable.parents('#runnable-modal').length > 0;
-    var query = $(this).closest('.runnable').find('.query-editable').text();
+    var query = $(this).closest('.runnable').attr('data-current');
 
     $runnables.find('.output-container').removeClass('empty error');
     codeEl.text('Waiting for the server response...');
@@ -447,16 +524,49 @@ function isElementInViewport(el) {
     var $runnable = $(this).closest('.runnable');
     var initialQuery = $runnable.data('initial');
 
-    $runnable.find('.query-editable').text('');
+    $runnable.attr('data-unsaved', initialQuery);
+    $runnable.find('.query-content-editable').val(initialQuery).text(initialQuery);
 
-    var isModal = $runnable.parents('#runnable-modal').length > 0;
-    if (isModal) {
-      syncWithOriginalRunnable($runnable[0], initialQuery);
-    }
+    initCodeMirror($runnable);
 
     window.setTimeout(function() {
-      $runnable.find('.query-editable').text(initialQuery);
+      $runnable.find('.query-content-editable').text(initialQuery);
     }, 80);
+  });
+
+  $(document).on('click', '.runnable [data-action="save"]', function (e) {
+    e.preventDefault();
+
+    var checksum = $(this).closest('.runnable').data('checksum');
+    var $currentRunnable = $(this).closest('.runnable');
+    var $runnables = $('.runnable[data-checksum="' + checksum + '"]');
+
+    // Update query examples and the textarea with the current query
+    var newQuery = $currentRunnable.attr('data-unsaved');
+    $runnables.attr('data-current', newQuery);
+    $runnables.find('.query-content').text(newQuery);
+    // We update the value as well as the inner text because when launched in
+    // a modal, value will be lose as HTML is copied
+    // TODO: implement JS object for runnable instead of storing these states
+    // in DOM. Is there a good way to do so without framework?
+    $runnables.find('.query-content-editable').val(newQuery).text(newQuery);
+
+    var dest = readCookie('lang');
+    navToRunnableTab($currentRunnable, dest);
+  });
+
+  $(document).on('click', '.runnable [data-action="discard"]', function (e) {
+    e.preventDefault();
+
+    var $runnable = $(this).closest('.runnable');
+
+    // Restore to initial query
+    var currentQuery = $runnable.attr('data-current');
+    $runnable.find('.query-content').text(currentQuery);
+    $runnable.find('.query-content-editable').val(currentQuery).text(currentQuery);
+
+    var dest = readCookie('lang');
+    navToRunnableTab($runnable, dest);
   });
 
   $(document).on('click', '.runnable [data-action="expand"]', function (e) {
@@ -464,12 +574,26 @@ function isElementInViewport(el) {
 
     var $runnable = $(this).closest('.runnable');
     var runnableEl = $runnable[0];
-    launchRunnableModal(runnableEl)
+    launchRunnableModal(runnableEl);
   });
 
-  // Focus editable parts when code is clicked
-  $(document).on('click', '.runnable-code', function () {
-    $(this).find('.query-editable').focus();
+  $(document).on('click', '.runnable [data-action="edit"]', function (e) {
+    e.preventDefault();
+
+    var $runnable = $(this).closest('.runnable');
+
+    $runnable.addClass('editing');
+
+    navToRunnableTab($runnable, 'edit');
+    initCodeMirror($runnable);
+  });
+
+  $(document).on('click', '.runnable [data-action="nav-lang"]', function (e) {
+    e.preventDefault();
+    var targetTab = $(this).data('target');
+    var $runnable = $(this).closest('.runnable');
+
+    changeLanguage(targetTab);
   });
 
   // Runnable modal event hooks
