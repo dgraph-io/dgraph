@@ -162,6 +162,7 @@ type SubGraph struct {
 	FilterOp     string
 	Filters      []*SubGraph
 	facetsFilter *facetsp.FilterTree
+	MathExp      *gql.MathTree
 	Children     []*SubGraph
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
@@ -243,7 +244,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if pc.Params.uidToVal == nil {
 				return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
 			}
-			fieldName := fmt.Sprintf("%s%v", pc.Attr, pc.Params.NeedsVar)
+			var fieldName string
+			if pc.Params.Var != "" {
+				fieldName = fmt.Sprintf("var(%v)", pc.Params.Var)
+			} else {
+				fieldName = fmt.Sprintf("%s%v", pc.Attr, pc.Params.NeedsVar)
+			}
 			sv, ok := pc.Params.uidToVal[uid]
 			if !ok {
 				continue
@@ -478,6 +484,8 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			key += "count"
 		} else if len(gchild.Langs) > 0 {
 			key += fmt.Sprintf("%v", gchild.Langs)
+		} else if gchild.MathExp != nil {
+			key += fmt.Sprintf("%+v", gchild.MathExp)
 		}
 		if _, ok := attrsSeen[key]; ok {
 			return x.Errorf("%s not allowed multiple times in same sub-query.",
@@ -519,8 +527,9 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		dst := &SubGraph{
-			Attr:   gchild.Attr,
-			Params: args,
+			Attr:    gchild.Attr,
+			MathExp: gchild.MathExp,
+			Params:  args,
 		}
 
 		if gchild.Func != nil &&
@@ -832,37 +841,121 @@ func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
 	return nil
 }
 
-func (sg *SubGraph) sumAggregation(doneVars map[string]values) (rerr error) {
+func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) error {
+	if mNode.Const.Value != nil {
+		return nil
+	}
+	if mNode.Var != "" {
+		d, ok := doneVars[mNode.Var]
+		if !ok || d.vals == nil {
+			return x.Errorf("Variable %v not yet populated or missing.", mNode.Var)
+		}
+		mNode.Val = d.vals
+		return nil
+	}
+
+	for _, child := range mNode.Child {
+		err := evalMathTree(child, doneVars)
+		if err != nil {
+			return err
+		}
+	}
+
+	aggName := mNode.Fn
+	if isUnary(aggName) && len(mNode.Child) != 1 {
+		return x.Errorf("Function %v expects 1 argument. But got: %v", aggName, len(mNode.Child))
+	}
+	if isBinaryBoolean(aggName) && len(mNode.Child) != 2 {
+		return x.Errorf("Function %v expects 2 argument. But got: %v", aggName, len(mNode.Child))
+	}
+	if isTernary(aggName) && len(mNode.Child) != 3 {
+		return x.Errorf("Function %v expects 3 argument. But got: %v", aggName, len(mNode.Child))
+	}
+	if isMultiArgFunc(aggName) && len(mNode.Child) <= 1 {
+		return x.Errorf("Function %v expects more than 1 argument. But got: %v", aggName, len(mNode.Child))
+	}
+
 	destMap := make(map[uint64]types.Val)
-	x.AssertTruef(len(sg.Params.NeedsVar) > 0,
-		"Received empty variable list in %v. Expected atleast one.", sg.Attr)
-	srcVar := sg.Params.NeedsVar[0]
-	srcMap := doneVars[srcVar]
-	if srcMap.vals == nil {
-		return x.Errorf("Expected a value variable but missing")
-	}
-	for k := range srcMap.vals {
-		ag := aggregator{
-			name: "sumvar",
+	srcMap := mNode.Child[0].Val
+
+	// Handle ternary conditional operator separately here.
+	if isTernary(aggName) {
+		condMap := mNode.Child[0].Val
+		if condMap == nil {
+			return x.Errorf("Expected a value variable in %v but missing.", aggName)
 		}
-		for _, va := range sg.Params.NeedsVar {
-			curMap := doneVars[va]
-			if curMap.vals == nil {
-				return x.Errorf("Expected a value variable but missing")
+		varOne := mNode.Child[1].Val
+		varTwo := mNode.Child[2].Val
+		constOne := mNode.Child[1].Const
+		constTwo := mNode.Child[2].Const
+		for k, val := range condMap {
+			var res types.Val
+			v, ok := val.Value.(bool)
+			if !ok {
+				return x.Errorf("First variable of conditional function not a bool value")
 			}
-			if rerr = ag.ApplyVal(curMap.vals[k]); rerr != nil {
-				if rerr == ErrEmptyVal {
-					break
+			if v {
+				// Pick the value of first map.
+				if constOne.Value != nil {
+					res = constOne
+				} else {
+					res = varOne[k]
 				}
-				return rerr
+			} else {
+				// Pick the value of second map.
+				if constTwo.Value != nil {
+					res = constTwo
+				} else {
+					res = varTwo[k]
+				}
+			}
+			destMap[k] = res
+		}
+		mNode.Val = destMap
+		return nil
+	}
+
+	// Handle binary boolean operators separately here.
+	if isBinaryBoolean(aggName) {
+		ch := mNode.Child[1]
+		curMap := ch.Val
+		for k, val := range srcMap {
+			curVal := curMap[k]
+			if ch.Const.Value != nil {
+				// Use the constant value that was supplied.
+				curVal = ch.Const
+			}
+			res, err := compareValues(aggName, val, curVal)
+			if err != nil {
+				return x.Wrapf(err, "Wrong values in comaprison function.")
+			}
+			destMap[k] = types.Val{
+				Tid:   types.BoolID,
+				Value: res,
 			}
 		}
-		if rerr != ErrEmptyVal {
-			// We want to skip even if one of the value is missing.
-			destMap[k] = ag.Value()
-		}
+		mNode.Val = destMap
+		return nil
 	}
-	doneVars[sg.Params.Var] = values{vals: destMap}
+
+	// Note: The first value cannot be a constant.
+	for k := range srcMap {
+		ag := aggregator{
+			name: aggName,
+		}
+		// Only the UIDs that have all the values will be considered.
+		for _, ch := range mNode.Child {
+			curMap := ch.Val
+			curVal := curMap[k]
+			if ch.Const.Value != nil {
+				// Use the constant value that was supplied.
+				curVal = ch.Const
+			}
+			ag.ApplyVal(curVal)
+		}
+		destMap[k] = ag.Value()
+	}
+	mNode.Val = destMap
 	return nil
 }
 
@@ -870,32 +963,23 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 	if !sg.IsInternal() {
 		return nil
 	}
-
-	destMap := make(map[uint64]types.Val)
-	x.AssertTruef(len(sg.Params.NeedsVar) > 0,
-		"Received empty variable list in %v. Expected atleast one.", sg.Attr)
-	srcVar := sg.Params.NeedsVar[0]
-	srcMap := doneVars[srcVar]
-	if srcMap.vals == nil {
-		return x.Errorf("Expected a value variable but missing")
-	}
-	for k := range srcMap.vals {
-		ag := aggregator{
-			name: sg.Attr,
+	if sg.MathExp == nil {
+		// This is a var() block.
+		srcVar := sg.Params.NeedsVar[0]
+		srcMap := doneVars[srcVar]
+		if srcMap.vals == nil {
+			return x.Errorf("Missing value variable %v", srcVar)
 		}
-		// Only the UIDs that have all the values will be considered.
-		for _, va := range sg.Params.NeedsVar {
-			curMap := doneVars[va]
-			if curMap.vals == nil {
-				return x.Errorf("Expected a value variable but missing")
-			}
-			ag.ApplyVal(curMap.vals[k])
-		}
-		destMap[k] = ag.Value()
+		sg.Params.uidToVal = srcMap.vals
+		return nil
 	}
-	doneVars[sg.Params.Var] = values{vals: destMap}
+	err := evalMathTree(sg.MathExp, doneVars)
+	if err != nil {
+		return err
+	}
+	doneVars[sg.Params.Var] = values{vals: sg.MathExp.Val}
 	// Put it in this node.
-	sg.Params.uidToVal = destMap
+	sg.Params.uidToVal = sg.MathExp.Val
 	return nil
 }
 
@@ -1104,8 +1188,8 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 		for _, child := range sg.Children {
 			// If the length of child UID list is zero and it has no valid value, then the
 			// current UID should be removed from this level.
-			if len(child.values[i].Val) == 0 && (len(child.counts) <= i) &&
-				len(child.uidMatrix[i].Uids) == 0 {
+			if (len(child.values) <= i || len(child.values[i].Val) == 0) && (len(child.counts) <= i) &&
+				(child.uidMatrix != nil && len(child.uidMatrix[i].Uids) == 0) {
 				exclude = true
 				break
 			}

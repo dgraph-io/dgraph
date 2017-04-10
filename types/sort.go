@@ -44,6 +44,9 @@ type byValue struct{ sortBase }
 
 // Less compares two elements
 func (s byValue) Less(i, j int) bool {
+	if s.values[i].Tid != s.values[j].Tid {
+		return false
+	}
 	switch s.values[i].Tid {
 	case DateTimeID:
 		return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))

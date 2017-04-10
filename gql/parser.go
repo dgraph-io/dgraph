@@ -47,6 +47,7 @@ type GraphQuery struct {
 	Args         map[string]string
 	Children     []*GraphQuery
 	Filter       *FilterTree
+	MathExp      *MathTree
 	Normalize    bool
 	Cascade      bool
 	Facets       *Facets
@@ -513,6 +514,19 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 	}
 	if qu.Filter != nil {
 		qu.Filter.collectVars(v)
+	}
+	if qu.MathExp != nil {
+		qu.MathExp.collectVars(v)
+	}
+}
+
+func (f *MathTree) collectVars(v *Vars) {
+	if f.Var != "" {
+		v.Needs = append(v.Needs, f.Var)
+		return
+	}
+	for _, fch := range f.Child {
+		fch.collectVars(v)
 	}
 }
 
@@ -1665,24 +1679,23 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				curp = nil
 				continue
 			} else if isValVarFunc(val) {
-				item.Val = val
+				//item.Val = val
 				if varName == "" {
 					return x.Errorf("Function %v should be used with a variable", val)
+				}
+				it.Prev()
+				mathTree, err := parseMathFunc(it)
+				if err != nil {
+					return err
 				}
 				child := &GraphQuery{
 					Attr:       item.Val,
 					Args:       make(map[string]string),
 					Var:        varName,
+					MathExp:    mathTree,
 					IsInternal: true,
 				}
 				varName = ""
-				count, err := parseVarList(it, child)
-				if err != nil {
-					return err
-				}
-				if count == 0 {
-					return x.Errorf("Should have atleast one variable inside %v", val)
-				}
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
@@ -1780,5 +1793,7 @@ func isAggregator(fname string) bool {
 }
 
 func isValVarFunc(name string) bool {
-	return name == "sumvar"
+	return name == "sumvar" || name == "diffvar" || name == "mulvar" || name == "log" || name == "exp" ||
+		name == "conditional" || name == "maxvar" || name == "minvar" || name == "conditional" ||
+		name == "lt" || name == "gt" || name == "eq" || name == "leq" || name == "geq"
 }

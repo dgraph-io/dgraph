@@ -105,6 +105,68 @@ func TestParseQueryWithVarValAggErr(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseQueryWithVarValAggNested(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(d) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L as friends {
+				a as age
+				b as count(friends)
+				c as count(relatives)
+				d as sumvar(a, mulvar(b,c))
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.NoError(t, err)
+}
+
+func TestParseQueryWithVarValAggNested_Error1(t *testing.T) {
+	// No args to mulvar.
+	query := `
+	{	
+		me(id: var(L), orderasc: var(d) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L as friends {
+				a as age
+				d as sumvar(a, mulvar())
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryWithVarValAggNested_Error2(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(d) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L as friends {
+				a as age
+				b as count(friends)
+				c as count(relatives)
+				d as sumvar(a, mulvar(b,c),)
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	query := `
 	{	
@@ -138,7 +200,10 @@ func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	require.Equal(t, "b", res.Query[1].Children[0].Children[1].Var)
 	require.Equal(t, "c", res.Query[1].Children[0].Children[2].Var)
 	require.True(t, res.Query[1].Children[0].Children[2].IsInternal)
-	require.Equal(t, "sumvar", res.Query[1].Children[0].Children[2].Attr)
+	require.NotNil(t, res.Query[1].Children[0].Children[2].MathExp)
+	require.Equal(t, "sumvar", res.Query[1].Children[0].Children[2].MathExp.Fn)
+	require.Equal(t, "a", res.Query[1].Children[0].Children[2].MathExp.Child[0].Var)
+	require.Equal(t, "b", res.Query[1].Children[0].Children[2].MathExp.Child[1].Var)
 }
 
 func TestParseQueryWithVarValAgg(t *testing.T) {
