@@ -520,7 +520,7 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   padding: 3px;
   border: 1px solid #ececec;
   background: #f9f9f9;
-  height: 263px;
+  height: 326px;
   display: flex;
   flex-direction: column;
 }
@@ -534,7 +534,7 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   overflow-y: scroll;
 }
 .runnable .topbar {
-  overflow: auto;
+  /*overflow: auto;*/
   /*padding: 4px 17px 4px 18px;*/
   padding: 1px 0px 8px;
 }
@@ -549,7 +549,8 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   text-decoration: none;
   color: inherit;
 }
-.runnable .code-btn[data-action='run'] {
+.runnable .code-btn[data-action='run'],
+.runnable .code-btn[data-action='save'] {
   background-color: #3e65b7;
   color: white;
 }
@@ -575,6 +576,7 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   color: #373e42;
   display: inline-block;
   padding: 0 8px 0 7px;
+  text-decoration: none;
 }
 .runnable .nav-languages .language.active {
   color: #0094de;
@@ -605,7 +607,11 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
 }*/
 .runnable .runnable-code {
   background: #fffff3;
+  /*background: #f7f8f9;*/
   overflow-y: scroll;
+}
+.runnable .query-content {
+  background: rgba(217, 234, 234, 0.8)
 }
 html .runnable pre {
   padding: 0;

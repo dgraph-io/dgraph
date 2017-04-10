@@ -278,20 +278,26 @@ function isElementInViewport(el) {
   }
 
   // code collapse
-  var pres = document.getElementsByTagName("pre");
-  Array.prototype.forEach.call(pres, function(pre) {
-    if (pre.clientHeight > 330) {
-      pre.className += " collapsed";
+  // var pres = document.getElementsByTagName("pre");
+  var pres = $('pre');
+  pres.each(function() {
+    var isInRunnable = $(this).parents('.runnable').length > 0;
+    if (isInRunnable) {
+      return;
+    }
+
+    if (this.clientHeight > 330) {
+      this.className += " collapsed";
 
       var showMore = document.createElement("div");
       showMore.className = "showmore";
       showMore.innerHTML = "<span>Show all</span>";
       showMore.addEventListener("click", function() {
-        pre.className = "";
+        this.className = "";
         showMore.parentNode.removeChild(showMore);
       });
 
-      pre.appendChild(showMore);
+      this.appendChild(showMore);
     }
   });
 
@@ -336,18 +342,6 @@ function isElementInViewport(el) {
     if (links[i].hostname != window.location.hostname) {
       links[i].target = "_blank";
     }
-  }
-
-  // syncWithOriginalRunnable syncs the code change in the runnable modal with
-  // the original runnable
-  // @params modalRunnableEl - HTML element for modal runable
-  // @params text - text to sync
-  function syncWithOriginalRunnable(modalRunnableEl, text) {
-    var checksum = $(modalRunnableEl).closest('.runnable').data('checksum');
-    var $otherRunnable = $('.runnable[data-checksum="' + checksum + '"]')
-                          .not('#runnable-modal .runnable');
-
-    $otherRunnable.find('.query-content-editable').text(text);
   }
 
   // setupRunnableClipboard configures clipboard buttons for runnable
@@ -476,19 +470,10 @@ function isElementInViewport(el) {
 
     cm.on('change', function (c) {
       var val = c.doc.getValue();
-      $runnable.data('unsaved', val);
+      $runnable.attr('data-unsaved', val);
       c.save();
     });
   }
-
-  $(document).on('input', '#runnable-modal .query-content-editable', function (e) {
-    syncWithOriginalRunnable(this, e.target.innerText);
-  });
-
-  // Codemirror
-  $('.query-content-editable').each(function () {
-
-  });
 
   // Running code
   $(document).on('click', '.runnable [data-action="run"]', function (e) {
@@ -501,7 +486,7 @@ function isElementInViewport(el) {
     var $runnables = $('.runnable[data-checksum="' + checksum + '"]');
     var codeEl = $runnables.find('.output');
     var isModal = $currentRunnable.parents('#runnable-modal').length > 0;
-    var query = $(this).closest('.runnable').data('current');
+    var query = $(this).closest('.runnable').attr('data-current');
 
     $runnables.find('.output-container').removeClass('empty error');
     codeEl.text('Waiting for the server response...');
@@ -538,15 +523,10 @@ function isElementInViewport(el) {
     var $runnable = $(this).closest('.runnable');
     var initialQuery = $runnable.data('initial');
 
-    $runnable.data('unsaved', initialQuery);
-    $runnable.find('.query-content-editable').val(initialQuery);
+    $runnable.attr('data-unsaved', initialQuery);
+    $runnable.find('.query-content-editable').val(initialQuery).text(initialQuery);
 
-    initCodeMirror($runnable)
-
-    var isModal = $runnable.parents('#runnable-modal').length > 0;
-    if (isModal) {
-      syncWithOriginalRunnable($runnable[0], initialQuery);
-    }
+    initCodeMirror($runnable);
 
     window.setTimeout(function() {
       $runnable.find('.query-content-editable').text(initialQuery);
@@ -556,16 +536,22 @@ function isElementInViewport(el) {
   $(document).on('click', '.runnable [data-action="save"]', function (e) {
     e.preventDefault();
 
-    var $runnable = $(this).closest('.runnable');
+    var checksum = $(this).closest('.runnable').data('checksum');
+    var $currentRunnable = $(this).closest('.runnable');
+    var $runnables = $('.runnable[data-checksum="' + checksum + '"]');
 
     // Update query examples and the textarea with the current query
-    var newQuery = $runnable.data('unsaved');
-    $runnable.data('current', newQuery);
-    $runnable.find('.query-content').text(newQuery);
-    $runnable.find('.query-content-editable').val(newQuery);
+    var newQuery = $currentRunnable.attr('data-unsaved');
+    $runnables.attr('data-current', newQuery);
+    $runnables.find('.query-content').text(newQuery);
+    // We update the value as well as the inner text because when launched in
+    // a modal, value will be lose as HTML is copied
+    // TODO: implement JS object for runnable instead of storing these states
+    // in DOM. Is there a good way to do so without framework?
+    $runnables.find('.query-content-editable').val(newQuery).text(newQuery);
 
     var dest = readCookie('lang');
-    navToRunnableTab($runnable, dest);
+    navToRunnableTab($currentRunnable, dest);
   });
 
   $(document).on('click', '.runnable [data-action="discard"]', function (e) {
@@ -574,9 +560,9 @@ function isElementInViewport(el) {
     var $runnable = $(this).closest('.runnable');
 
     // Restore to initial query
-    var currentQuery = $runnable.data('current');
+    var currentQuery = $runnable.attr('data-current');
     $runnable.find('.query-content').text(currentQuery);
-    $runnable.find('.query-content-editable').val(currentQuery);
+    $runnable.find('.query-content-editable').val(currentQuery).text(currentQuery);
 
     var dest = readCookie('lang');
     navToRunnableTab($runnable, dest);

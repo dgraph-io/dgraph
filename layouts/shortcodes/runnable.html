@@ -12,7 +12,7 @@
                 <div class="col-10">
                   <nav class="nav-languages">
                     <a class="language active" data-action="nav-lang" data-target="curl" href="#">curl</a>
-                    <a class="language" data-action="nav-lang" data-target="go" href="#">Go</a>
+                    <a class="language" data-action="nav-lang" data-target="java" href="#">Java</a>
                   </nav>
                 </div>
                 <div class="col-2">
@@ -35,10 +35,24 @@
 
           <div class="runnable-content runnable-code">
             <div class="runnable-tab-content active" data-tab="curl">
-              <pre><code class="no-copy">curl localhost:8080/query -XPOST -d '<span class="query-content">{{ .Inner }}</span>' | python -m json.tool | less</code></pre>
+              <pre><code class="no-copy">curl localhost:8080/query -XPOST -d '
+<span class="query-content">{{ .Inner }}</span>' | python -m json.tool | less</code></pre>
             </div>
-            <div class="runnable-tab-content" data-tab="go">
-              <pre><code class="no-copy">golang '<span class="query-content">{{ .Inner }}</span>'</code></pre>
+            <div class="runnable-tab-content" data-tab="java">
+              <pre><code class="no-copy">import io.dgraph.client.DgraphClient;
+import io.dgraph.client.GrpcDgraphClient;
+import io.dgraph.client.DgraphResult;
+
+public class DgraphMain {
+  public static void main(final String[] args) {
+    final DgraphClient dgraphClient = GrpcDgraphClient.newInstance("localhost", 8080);
+    final DgraphResult result = dgraphClient.query("
+    <span class="query-content">{{ .Inner }}</span>
+    "
+    );
+    System.out.println(result.toJsonObject().toString());
+  }
+}</code></pre>
             </div>
             <div class="runnable-tab-content" data-tab="edit">
               <textarea class="query-content-editable">{{ .Inner }}</textarea>
@@ -54,7 +68,7 @@
                   <a class="code-btn" data-action="save" href="#"><i class="fa fa-save"></i> Save</a>
                 </div>
                 <div class="normal-actions">
-                  <a class="code-btn" data-action="edit" href="#"><i class="fa fa-edit"></i> Edit</a>
+                  <a class="code-btn" data-action="edit" href="#"><i class="fa fa-edit"></i> Edit query</a>
                   <span class="code-btn" data-action="copy-code" href="#">Copy</span>
                 </div>
               </div>
