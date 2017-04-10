@@ -249,25 +249,25 @@ func Parse(line string) (rnq graphp.NQuad, rerr error) {
 				return rnq, x.Errorf("itemObject can't be *")
 			}
 			// Lets find out the storage type from the type map.
-			if t, ok := typeMap[val]; ok {
-				if oval == "_nil_" && t != types.StringID {
-					return rnq, x.Errorf("Invalid ObjectValue")
-				}
-				rnq.ObjectType = int32(t)
-				src := types.ValueForType(types.StringID)
-				src.Value = []byte(oval)
-				p, err := types.Convert(src, t)
-				if err != nil {
-					return rnq, err
-				}
-
-				if rnq.ObjectValue, err = types.ObjectValue(t, p.Value); err != nil {
-					return rnq, err
-				}
-				oval = ""
-			} else {
-				oval += "@@" + val
+			t, ok := typeMap[val]
+			if !ok {
+				return rnq, x.Errorf("Unrecognized rdf type %s", val)
 			}
+			if oval == "_nil_" && t != types.StringID {
+				return rnq, x.Errorf("Invalid ObjectValue")
+			}
+			rnq.ObjectType = int32(t)
+			src := types.ValueForType(types.StringID)
+			src.Value = []byte(oval)
+			p, err := types.Convert(src, t)
+			if err != nil {
+				return rnq, err
+			}
+
+			if rnq.ObjectValue, err = types.ObjectValue(t, p.Value); err != nil {
+				return rnq, err
+			}
+			oval = ""
 
 		case lex.ItemError:
 			return rnq, x.Errorf(item.Val)
@@ -411,6 +411,7 @@ var typeMap = map[string]types.TypeID{
 	"http://www.w3.org/2001/XMLSchema#dateTime":   types.DateTimeID,
 	"http://www.w3.org/2001/XMLSchema#date":       types.DateID,
 	"http://www.w3.org/2001/XMLSchema#int":        types.IntID,
+	"http://www.w3.org/2001/XMLSchema#integer":    types.IntID,
 	"http://www.w3.org/2001/XMLSchema#boolean":    types.BoolID,
 	"http://www.w3.org/2001/XMLSchema#double":     types.FloatID,
 	"http://www.w3.org/2001/XMLSchema#float":      types.FloatID,
