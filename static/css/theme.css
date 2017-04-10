@@ -535,15 +535,15 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
 }
 .runnable .topbar {
   overflow: auto;
-  padding: 2px 17px 8px 18px;
+  /*padding: 4px 17px 4px 18px;*/
+  padding: 1px 0px 8px;
+}
+.runnable .footer {
+  padding: 4px 0;
 }
 .runnable .output {
   overflow-y: scroll;
-  /*overflow-y: scroll;
-  max-height: 202px;*/
-}
-.runnable .query-editable {
-  /*background: #FFFFD8;*/
+  background: #fffff3;
 }
 .runnable .code-btn:hover {
   text-decoration: none;
@@ -552,6 +552,11 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
 .runnable .code-btn[data-action='run'] {
   background-color: #3e65b7;
   color: white;
+}
+.runnable .code-btn[data-action='run']:hover {
+  background-color: white;
+  color: #3e65b7;
+  border: 1px solid #3e65b7;
 }
 .runnable .output-container.empty {
   visibility: hidden;
@@ -574,16 +579,42 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
 .runnable .nav-languages .language.active {
   color: #0094de;
 }
-
+.CodeMirror {
+  font-size: 80%;
+  height: auto;
+  z-index: 0;
+}
+.CodeMirror-lines {
+  background: #fffff3;
+}
+.runnable.editing .normal-actions {
+  display: none;
+}
+.runnable:not(.editing) .edit-actions {
+  display: none;
+}
+/*.runnable-col {
+  transition: all 300ms cubic-bezier(0.175, 0.885, 0.335, 1.05);
+}
+.runnable.editing .runnable-col-code {
+  max-width: 100%;
+  flex: 0 0 100%;
+}
+.runnable.editing .runnable-col-output {
+ display: none;
+}*/
 .runnable .runnable-code {
   background: #fffff3;
   overflow-y: scroll;
 }
 html .runnable pre {
-  padding: 17px 12px;
+  padding: 0;
   border: 0;
   margin: 0;
-  background: #fffff3;
+  background: inherit;
+}
+html .runnable code {
+  padding: 17px 12px;
 }
 /*.runnable .languages {
   float: left;
@@ -592,6 +623,12 @@ html .runnable pre {
   float: right;
 }*/
 .runnable .runnable-tab-content:not(.active) {
+  display: none;
+}
+.runnable:not(.editing) .editing-header {
+  display: none;
+}
+.runnable.editing .normal-header {
   display: none;
 }
 /*
@@ -660,4 +697,8 @@ html .runnable pre {
 .row-no-padding [class^="col-"] {
   padding-left: 0 !important;
   padding-right: 0 !important;
+}
+.nopadding {
+   padding: 0 !important;
+   margin: 0 !important;
 }

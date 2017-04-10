@@ -1,59 +1,94 @@
 {{ $checksum := md5 .Inner }}
 
-<div class="runnable" data-checksum="{{ $checksum }}" data-initial="{{ .Inner }}">
+<div class="runnable" data-checksum="{{ $checksum }}" data-initial="{{ .Inner }}" data-current="{{ .Inner }}" data-dirty="false">
   <div class="container">
-    <div class="row row-no-padding">
-      <div class="col-12 col-sm-12 col-md-12 col-lg-6">
+    <div class="row">
+      <div class="runnable-col runnable-col-code col-12 col-sm-12 col-md-12 col-lg-6 nopadding">
         <div class="runnable-pane">
           <div class="topbar">
-            <div class="row">
-              <div class="col-12 col-sm-12 col-md-5 col-lg-12 col-xl-5 push-xl-7 push-lg-0 push-md-7">
-                <div class="actions pull-right">
-                  <!-- <a class="code-btn" data-action="reset" href="#"><i class="fa fa-refresh"></i></a> -->
-                  <a class="code-btn" data-action="edit" href="#"><i class="fa fa-edit"></i> Edit</a>
-                  <span class="code-btn" data-action="copy-code" href="#">Copy</span>
-                  <!-- <a class="code-btn active" data-action="save" href="#"><i class="fa fa-check-square-o"></i> Save</a> -->
-                  <a class="code-btn" data-action="run" href="#">Run</a>
+
+            <div class="normal-header">
+              <div class="row">
+                <div class="col-10">
+                  <nav class="nav-languages">
+                    <a class="language active" data-action="nav-lang" data-target="curl" href="#">curl</a>
+                    <a class="language" data-action="nav-lang" data-target="go" href="#">Go</a>
+                  </nav>
+                </div>
+                <div class="col-2">
+                  <div class="actions pull-right">
+                    <a class="code-btn" data-action="run" href="#">Run</a>
+                  </div>
                 </div>
               </div>
-              <div class="col-12 col-sm-12 col-md-7 col-lg-12 col-xl-7 pull-xl-5 pull-lg-0 pull-md-5">
-                <nav class="nav-languages">
-                  <a class="language active" href="#">curl</a>
-                  <a class="language" href="#">Go</a>
-                  <a class="language" href="#">Python</a>
-                  <a class="language" href="#">Java</a>
-                </nav>
+            </div>
+
+            <div class="editing-header">
+              <div class="row">
+                <div class="col-12">
+                  Editing query...
+                </div>
               </div>
             </div>
+
           </div>
+
           <div class="runnable-content runnable-code">
-            <div class="runnable-tab-content active" data-type="curl">
-              <pre><code class="no-copy">curl localhost:8080/query -XPOST -d '{{ .Inner }}' | python -m json.tool | less</code></pre>
+            <div class="runnable-tab-content active" data-tab="curl">
+              <pre><code class="no-copy">curl localhost:8080/query -XPOST -d '<span class="query-content">{{ .Inner }}</span>' | python -m json.tool | less</code></pre>
             </div>
-            <div class="runnable-tab-content" data-type="edit">
-              <pre><code class="no-copy">curl localhost:8080/query -XPOST -d '{{ .Inner }}' | python -m json.tool | less</code></pre>
+            <div class="runnable-tab-content" data-tab="go">
+              <pre><code class="no-copy">golang '<span class="query-content">{{ .Inner }}</span>'</code></pre>
+            </div>
+            <div class="runnable-tab-content" data-tab="edit">
+              <textarea class="query-content-editable">{{ .Inner }}</textarea>
+            </div>
+          </div>
+
+          <div class="row footer">
+            <div class="col-12">
+              <div class="actions pull-right">
+                <div class="edit-actions">
+                  <a class="code-btn" data-action="reset" href="#">Reset</a>
+                  <a class="code-btn" data-action="discard" href="#">Discard</a>
+                  <a class="code-btn" data-action="save" href="#"><i class="fa fa-save"></i> Save</a>
+                </div>
+                <div class="normal-actions">
+                  <a class="code-btn" data-action="edit" href="#"><i class="fa fa-edit"></i> Edit</a>
+                  <span class="code-btn" data-action="copy-code" href="#">Copy</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-      <div class="col-12 col-sm-12 col-md-12 col-lg-6">
+
+      <div class="runnable-col runnable-col-output col-12 col-sm-12 col-md-12 col-lg-6 nopadding">
         <div class="runnable-pane">
-          <div class="topbar">
-            <div class="row">
-              <div class="col-6 col-sm-6">
-                Response
-              </div>
-              <div class="col-6 col-sm-6">
-                <div class="actions pull-right">
-                  <a class="code-btn hidden-sm-down" data-action="expand" href="#"><i class="fa fa-expand"></i></a>
-                  <span class="code-btn" data-action="copy-output" href="#">Copy</span>
-                </div>
-              </div>
+          <div class="row topbar">
+            <div class="col-6 col-sm-6">
+              Response
+            </div>
+            <div class="col-6 col-sm-6">
+
             </div>
           </div>
+
           <div class="runnable-content runnable-output" style="background: url('{{ .Site.BaseURL }}images/dgraph-black.png'); background-repeat: no-repeat; background-position: center; background-color: #fff;">
             <pre class="output-container empty"><code class="output"></code></pre>
           </div>
+
+          <div class="row footer">
+            <div class="col-6 col-sm-6">
+            </div>
+            <div class="col-6 col-sm-6">
+              <div class="actions pull-right">
+                <a class="code-btn hidden-sm-down" data-action="expand" href="#"><i class="fa fa-expand"></i></a>
+                <span class="code-btn" data-action="copy-output" href="#">Copy</span>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>

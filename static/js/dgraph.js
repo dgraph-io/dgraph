@@ -26,6 +26,34 @@ function slugify(text) {
     .replace(/-+$/, '');            // Trim - from end of text
 }
 
+/********** Cookie helpers **/
+
+function createCookie(name, val, days) {
+  var expires = '';
+  if (days) {
+    var date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = '; expires=' + date.toUTCString();
+  }
+
+  document.cookie = name + '=' + val + expires + '; path=/';
+}
+
+function readCookie(name) {
+  var nameEQ = name + '=';
+  var ca = document.cookie.split(';');
+  for (var i = 0; i < ca.length; i++) {
+    var c = ca[i];
+    while (c.charAt(0)==' ') c = c.substring(1,c.length);
+    if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+  }
+  return null;
+}
+
+function eraseCookie(name) {
+  createCookie(name, '', -1);
+}
+
 // isElementInViewport checks if element is visible in the DOM
 function isElementInViewport(el) {
   var rect = el.getBoundingClientRect();
@@ -40,6 +68,18 @@ function isElementInViewport(el) {
 }
 
 (function() {
+  // Initialize languages
+  var preferredLang = readCookie('lang');
+  if (preferredLang) {
+    $('.runnable').each(function () {
+      var $runnable = $(this);
+
+      navToRunnableTab($runnable, preferredLang);
+    });
+  } else {
+    createCookie('lang', 'curl', 365);
+  }
+
   // clipboard
   var clipInit = false;
   $("pre code:not(.no-copy)").each(function() {
@@ -307,7 +347,7 @@ function isElementInViewport(el) {
     var $otherRunnable = $('.runnable[data-checksum="' + checksum + '"]')
                           .not('#runnable-modal .runnable');
 
-    $otherRunnable.find('.query-editable').text(text);
+    $otherRunnable.find('.query-content-editable').text(text);
   }
 
   // setupRunnableClipboard configures clipboard buttons for runnable
@@ -318,7 +358,7 @@ function isElementInViewport(el) {
     var codeClip = new Clipboard(codeClipEl, {
       text: function(trigger) {
         var $runnable = $(trigger).closest('.runnable');
-        var text = $runnable.find('.runnable-code').text().trim();
+        var text = $runnable.find('.runnable-code .runnable-tab-content.active').text().trim();
         return text.replace(/^\$\s/gm, "");
       }
     });
@@ -394,9 +434,60 @@ function isElementInViewport(el) {
     setupRunnableClipboard(runnableEl);
   }
 
+  /**
+   * navToRunnableTab navigates to the target tab
+   * @params targetTab {String}
+   */
+  function navToRunnableTab($runnable, targetTab) {
+    // If needed, exit the edit mode
+    if (targetTab !== 'edit' && $runnable.hasClass('editing')) {
+      $runnable.removeClass('editing');
+    }
 
-  $(document).on('input', '#runnable-modal .query-editable', function (e) {
+    $runnable.find('.nav-languages .language.active').removeClass('active');
+    $runnable.find('.language[data-target="' + targetTab + '"]').addClass('active');
+
+    $runnable.find('.runnable-tab-content.active').removeClass('active');
+    $runnable.find('.runnable-tab-content[data-tab="' + targetTab + '"]').addClass('active');
+  }
+
+  function changeLanguage(language) {
+    // First, set cookie
+    createCookie('lang', language, 365);
+
+    // Navigate all runnable tabs to the langauge
+    $('.runnable').each(function () {
+      var $runnable = $(this);
+
+      navToRunnableTab($runnable, language);
+    });
+  }
+
+  function initCodeMirror($runnable) {
+    $runnable.find('.CodeMirror').remove();
+
+    var editableEl = $runnable.find('.query-content-editable')[0];
+    var cm = CodeMirror.fromTextArea(editableEl, {
+      lineNumbers: true,
+      autoCloseBrackets: true,
+      lineWrapping: true,
+      tabSize: 2
+    });
+
+    cm.on('change', function (c) {
+      var val = c.doc.getValue();
+      $runnable.data('unsaved', val);
+      c.save();
+    });
+  }
+
+  $(document).on('input', '#runnable-modal .query-content-editable', function (e) {
     syncWithOriginalRunnable(this, e.target.innerText);
+  });
+
+  // Codemirror
+  $('.query-content-editable').each(function () {
+
   });
 
   // Running code
@@ -410,7 +501,7 @@ function isElementInViewport(el) {
     var $runnables = $('.runnable[data-checksum="' + checksum + '"]');
     var codeEl = $runnables.find('.output');
     var isModal = $currentRunnable.parents('#runnable-modal').length > 0;
-    var query = $(this).closest('.runnable').find('.query-editable').text();
+    var query = $(this).closest('.runnable').data('current');
 
     $runnables.find('.output-container').removeClass('empty error');
     codeEl.text('Waiting for the server response...');
@@ -447,7 +538,10 @@ function isElementInViewport(el) {
     var $runnable = $(this).closest('.runnable');
     var initialQuery = $runnable.data('initial');
 
-    $runnable.find('.query-editable').text('');
+    $runnable.data('unsaved', initialQuery);
+    $runnable.find('.query-content-editable').val(initialQuery);
+
+    initCodeMirror($runnable)
 
     var isModal = $runnable.parents('#runnable-modal').length > 0;
     if (isModal) {
@@ -455,8 +549,37 @@ function isElementInViewport(el) {
     }
 
     window.setTimeout(function() {
-      $runnable.find('.query-editable').text(initialQuery);
+      $runnable.find('.query-content-editable').text(initialQuery);
     }, 80);
+  });
+
+  $(document).on('click', '.runnable [data-action="save"]', function (e) {
+    e.preventDefault();
+
+    var $runnable = $(this).closest('.runnable');
+
+    // Update query examples and the textarea with the current query
+    var newQuery = $runnable.data('unsaved');
+    $runnable.data('current', newQuery);
+    $runnable.find('.query-content').text(newQuery);
+    $runnable.find('.query-content-editable').val(newQuery);
+
+    var dest = readCookie('lang');
+    navToRunnableTab($runnable, dest);
+  });
+
+  $(document).on('click', '.runnable [data-action="discard"]', function (e) {
+    e.preventDefault();
+
+    var $runnable = $(this).closest('.runnable');
+
+    // Restore to initial query
+    var currentQuery = $runnable.data('current');
+    $runnable.find('.query-content').text(currentQuery);
+    $runnable.find('.query-content-editable').val(currentQuery);
+
+    var dest = readCookie('lang');
+    navToRunnableTab($runnable, dest);
   });
 
   $(document).on('click', '.runnable [data-action="expand"]', function (e) {
@@ -471,12 +594,19 @@ function isElementInViewport(el) {
     e.preventDefault();
 
     var $runnable = $(this).closest('.runnable');
-    // TODO
+
+    $runnable.addClass('editing');
+
+    navToRunnableTab($runnable, 'edit');
+    initCodeMirror($runnable);
   });
 
-  // Focus editable parts when code is clicked
-  $(document).on('click', '.runnable-code', function () {
-    $(this).find('.query-editable').focus();
+  $(document).on('click', '.runnable [data-action="nav-lang"]', function (e) {
+    e.preventDefault();
+    var targetTab = $(this).data('target');
+    var $runnable = $(this).closest('.runnable');
+
+    changeLanguage(targetTab);
   });
 
   // Runnable modal event hooks
