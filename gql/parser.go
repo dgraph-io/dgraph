@@ -523,6 +523,9 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 }
 
 func (f *MathTree) collectVars(v *Vars) {
+	if f == nil {
+		return
+	}
 	if f.Var != "" {
 		v.Needs = append(v.Needs, f.Var)
 		return

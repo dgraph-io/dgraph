@@ -17,7 +17,7 @@ func (s *mathTreeStack) size() int        { return len(s.a) }
 func (s *mathTreeStack) push(t *MathTree) { s.a = append(s.a, t) }
 
 func (s *mathTreeStack) popAssert() *MathTree {
-	x.AssertTrue(!s.empty())
+	x.AssertTruef(!s.empty(), "Expected a non-empty stack")
 	last := s.a[len(s.a)-1]
 	s.a = s.a[:len(s.a)-1]
 	return last
@@ -126,7 +126,9 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 			it.Prev()
 			lastItem := it.Item()
 			it.Next()
-			if op == "-" && (lastItem.Val == "(" || lastItem.Val == "," || isBinaryMath(lastItem.Val)) {
+			if op == "-" &&
+				(lastItem.Val == "(" || lastItem.Val == "," ||
+					isBinaryMath(lastItem.Val)) {
 				op = "u-" // This is a unary -
 			}
 			opPred := mathOpPrecedence[op]
@@ -174,7 +176,6 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 					if err != nil {
 						return nil, false, err
 					}
-					//curNode.Child = append(curNode.Child, child)
 					valueStack.push(child)
 					if !again {
 						break
@@ -220,7 +221,10 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 					valueStack.size())
 			}
 			res, err := valueStack.pop()
-			return res, true, err
+			if err != nil {
+				return nil, false, err
+			}
+			return res, true, nil
 		} else if item.Typ == itemRightRound { // Pop op stack until we see a (.
 			for !opStack.empty() {
 				topOp := opStack.peek()
@@ -255,7 +259,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 	if valueStack.empty() {
 		// This happens when we have math(). We can either return an error or
 		// ignore. Currently, let's just ignore and pretend there is no expression.
-		return nil, false, nil
+		return nil, false, x.Errorf("Empty () not allowed in math block.")
 	}
 
 	if valueStack.size() != 1 {
@@ -275,7 +279,7 @@ func (t *MathTree) debugString() string {
 
 // stringHelper does simple DFS to convert MathTree to string.
 func (t *MathTree) stringHelper(buf *bytes.Buffer) {
-	x.AssertTrue(t != nil)
+	x.AssertTruef(t != nil, "Nil Math tree")
 	if t.Var != "" {
 		// Leaf node.
 		buf.WriteString(t.Var)

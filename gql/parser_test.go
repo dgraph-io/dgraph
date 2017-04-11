@@ -128,6 +128,70 @@ func TestParseQueryWithVarValAggErr(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseQueryWithVarValAgg_Error1(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(d) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L as friends {
+				a as age
+				b as count(friends)
+				c as count(relatives)
+				d as math(a + b*c + exp())
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryWithVarValAgg_Error2(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(d) ) {
+			name
+		}
+
+		var(id:0x0a) {
+			L as friends {
+				a as age
+				b as count(friends)
+				c as count(relatives)
+				d as math(a + b*c+ log())
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryWithVarValAgg_Error3(t *testing.T) {
+	query := `
+	{	
+		me(id: var(L), orderasc: var(d) ) {
+			name
+			var(f)
+		}
+
+		var(id:0x0a) {
+			L as friends {
+				a as age
+				b as count(friends)
+				c as count(relatives)
+				d as math(a + b*c)
+				f as math()
+			}
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
 func TestParseQueryWithVarValAggNested(t *testing.T) {
 	query := `
 	{	
@@ -165,7 +229,7 @@ func TestParseQueryWithVarValAggNested2(t *testing.T) {
 				b as count(friends)
 				c as count(relatives)
 				d as math(exp(a + b + 1) - ln(c))
-		 		q as math(c * -1 + -b + (-b*c))
+				q as math(c*-1+-b+(-b*c))
 			}
 		}
 	}
@@ -239,7 +303,7 @@ func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
 				a as age
 				b as count(friends)
 				c as count(relatives)
-				d as math(cond(a <= 10, exp(a + b + 1), ln(c)))
+				d as math(cond(a <= 10, exp(a + b + 1), ln(c)) + 10*a)
 				e as math(cond(a!=10, exp(a + b + 1), ln(d)))
 				f as math(cond(a==10, exp(a + b + 1), ln(e)))
 			}
@@ -248,7 +312,7 @@ func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
 `
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.EqualValues(t, "(cond (<= a 1E+01) (exp (+ (+ a b) 1E+00)) (ln c))",
+	require.EqualValues(t, "(+ (cond (<= a 1E+01) (exp (+ (+ a b) 1E+00)) (ln c)) (* 1E+01 a))",
 		res.Query[1].Children[0].Children[3].MathExp.debugString())
 	require.EqualValues(t, "(cond (!= a 1E+01) (exp (+ (+ a b) 1E+00)) (ln d))",
 		res.Query[1].Children[0].Children[4].MathExp.debugString())
