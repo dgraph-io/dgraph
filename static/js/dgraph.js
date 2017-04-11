@@ -18,7 +18,7 @@ function debounce(func, wait, immediate) {
 };
 
 function formatJavaCode(code) {
-  return code.replace(/"/g, '\'')
+  return code.replace(/"/g, '\\"')
              .replace(/\s+/g, ' ')
              .replace(/\n/g, ' ');
 }
