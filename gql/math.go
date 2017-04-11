@@ -46,7 +46,7 @@ type MathTree struct {
 }
 
 func isUnary(f string) bool {
-	return f == "exp" || f == "log" || f == "u-" || f == "sqrt"
+	return f == "exp" || f == "ln" || f == "u-" || f == "sqrt"
 }
 
 func isBinaryMath(f string) bool {
@@ -69,6 +69,7 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 			return x.Errorf("Invalid math statement. Expected 1 operands")
 		}
 		topOp.Child = []*MathTree{topVal}
+
 	} else if isTernary(topOp.Fn) {
 		if valueStack.size() < 3 {
 			return x.Errorf("Invalid Math expression. Expected 3 operands")
@@ -85,6 +86,7 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		topVal1 := valueStack.popAssert()
 		topVal2 := valueStack.popAssert()
 		topOp.Child = []*MathTree{topVal2, topVal1}
+
 	}
 	// Push the new value (tree) into the valueStack.
 	valueStack.push(topOp)
@@ -94,7 +96,7 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 func isMathFunc(f string) bool {
 	// While adding an op, also add it to the corresponding function type.
 	return f == "*" || f == "%" || f == "+" || f == "-" || f == "/" ||
-		f == "exp" || f == "log" || f == "cond" ||
+		f == "exp" || f == "ln" || f == "cond" ||
 		f == "<" || f == ">" || f == ">=" || f == "<=" ||
 		f == "==" || f == "!=" ||
 		f == "min" || f == "max" || f == "sqrt" ||
@@ -287,7 +289,7 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 	// Non-leaf node.
 	buf.WriteRune('(')
 	switch t.Fn {
-	case "+", "-", "/", "*", "%", "exp", "log", "cond", "min",
+	case "+", "-", "/", "*", "%", "exp", "ln", "cond", "min",
 		"sqrt", "max", "<", ">", "<=", ">=", "==", "!=", "u-",
 		"logbase", "pow":
 		buf.WriteString(t.Fn)

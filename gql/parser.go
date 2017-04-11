@@ -127,7 +127,7 @@ func init() {
 	mathOpPrecedence = map[string]int{
 		"u-":   500,
 		"exp":  100,
-		"log":  99,
+		"ln":   99,
 		"sqrt": 98,
 
 		"<":  30,
