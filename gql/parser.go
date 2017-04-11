@@ -1096,6 +1096,13 @@ func (s *filterTreeStack) empty() bool        { return len(s.a) == 0 }
 func (s *filterTreeStack) size() int          { return len(s.a) }
 func (s *filterTreeStack) push(t *FilterTree) { s.a = append(s.a, t) }
 
+func (s *filterTreeStack) popAssert() *FilterTree {
+	x.AssertTrue(!s.empty())
+	last := s.a[len(s.a)-1]
+	s.a = s.a[:len(s.a)-1]
+	return last
+}
+
 func (s *filterTreeStack) pop() (*FilterTree, error) {
 	if s.empty() {
 		return nil, x.Errorf("Empty stack")
@@ -1127,8 +1134,8 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 		if valueStack.size() < 2 {
 			return x.Errorf("Invalid filter statement")
 		}
-		topVal1, _ := valueStack.pop()
-		topVal2, _ := valueStack.pop()
+		topVal1 := valueStack.popAssert()
+		topVal2 := valueStack.popAssert()
 		topOp.Child = []*FilterTree{topVal2, topVal1}
 	}
 	// Push the new value (tree) into the valueStack.

@@ -16,6 +16,13 @@ func (s *mathTreeStack) empty() bool      { return len(s.a) == 0 }
 func (s *mathTreeStack) size() int        { return len(s.a) }
 func (s *mathTreeStack) push(t *MathTree) { s.a = append(s.a, t) }
 
+func (s *mathTreeStack) popAssert() *MathTree {
+	x.AssertTrue(!s.empty())
+	last := s.a[len(s.a)-1]
+	s.a = s.a[:len(s.a)-1]
+	return last
+}
+
 func (s *mathTreeStack) pop() (*MathTree, error) {
 	if s.empty() {
 		return nil, x.Errorf("Empty stack")
@@ -66,17 +73,17 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 		if valueStack.size() < 3 {
 			return x.Errorf("Invalid Math expression. Expected 3 operands")
 		}
-		topVal1, _ := valueStack.pop()
-		topVal2, _ := valueStack.pop()
-		topVal3, _ := valueStack.pop()
+		topVal1 := valueStack.popAssert()
+		topVal2 := valueStack.popAssert()
+		topVal3 := valueStack.popAssert()
 		topOp.Child = []*MathTree{topVal3, topVal2, topVal1}
 
 	} else {
 		if valueStack.size() < 2 {
 			return x.Errorf("Invalid Math expression. Expected 2 operands")
 		}
-		topVal1, _ := valueStack.pop()
-		topVal2, _ := valueStack.pop()
+		topVal1 := valueStack.popAssert()
+		topVal2 := valueStack.popAssert()
 		topOp.Child = []*MathTree{topVal2, topVal1}
 	}
 	// Push the new value (tree) into the valueStack.
