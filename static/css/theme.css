@@ -531,7 +531,7 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   background-color: #fff;
   display: flex;
   flex-direction: column;
-  overflow-y: scroll;
+  overflow-y: auto;
 }
 .runnable .topbar {
   /*overflow: auto;*/
@@ -542,7 +542,7 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   padding: 4px 0;
 }
 .runnable .output {
-  overflow-y: scroll;
+  overflow-y: auto;
   background: #fffff3;
 }
 .runnable .code-btn:hover {
@@ -600,7 +600,7 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
 }
 .runnable .runnable-code {
   background: #fffff3;
-  overflow-y: scroll;
+  overflow-y: auto;
 }
 html .runnable pre {
   padding: 0;
