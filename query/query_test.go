@@ -375,7 +375,7 @@ func TestQueryVarValAggNestedFuncConst(t *testing.T) {
 				friend {
 					n as min(age)
 					s as max(age)
-					p as math(a + s + n + 10)
+					p as math(a + s % n + 10)
 					q as math(a * s * n * -1)
 				}
 			}
@@ -398,8 +398,9 @@ func TestQueryVarValAggNestedFuncConst(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
+	fmt.Println(string(js))
 	require.JSONEq(t,
-		`{"MaxMe":[{"name":"Andrea","var[a]":19,"var[n]":15,"var[p]":59.000000,"var[s]":15},{"name":"Michonne","var[a]":38,"var[n]":15,"var[p]":82.000000,"var[s]":19},{"name":"Rick Grimes","var[a]":15,"var[n]":38,"var[p]":101.000000,"var[s]":38}],"MinMe":[{"name":"Rick Grimes","var[a]":15,"var[n]":38,"var[q]":-21660.000000,"var[s]":38},{"name":"Michonne","var[a]":38,"var[n]":15,"var[q]":-10830.000000,"var[s]":19},{"name":"Andrea","var[a]":19,"var[n]":15,"var[q]":-4275.000000,"var[s]":15}]}`,
+		`{"MaxMe":[{"name":"Rick Grimes","var[a]":15,"var[n]":38,"var[p]":25.000000,"var[s]":38},{"name":"Andrea","var[a]":19,"var[n]":15,"var[p]":29.000000,"var[s]":15},{"name":"Michonne","var[a]":38,"var[n]":15,"var[p]":52.000000,"var[s]":19}],"MinMe":[{"name":"Rick Grimes","var[a]":15,"var[n]":38,"var[q]":-21660.000000,"var[s]":38},{"name":"Michonne","var[a]":38,"var[n]":15,"var[q]":-10830.000000,"var[s]":19},{"name":"Andrea","var[a]":19,"var[n]":15,"var[q]":-4275.000000,"var[s]":15}]}`,
 		js)
 }
 
@@ -469,7 +470,6 @@ func TestQueryVarValAggNestedFuncConditional(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	fmt.Println(string(js))
 	require.JSONEq(t,
 		`{"ExpMe":[{"name":"Michonne","var[a]":38,"var[condExp]":1.000000,"var[n]":15},{"name":"Rick Grimes","var[a]":15,"var[condExp]":1.000000,"var[n]":38},{"name":"Andrea","var[a]":19,"var[condExp]":1.000000,"var[n]":15}],"LogMe":[{"name":"Michonne","var[a]":38,"var[condLog]":2.708050,"var[n]":15},{"name":"Andrea","var[a]":19,"var[condLog]":2.708050,"var[n]":15},{"name":"Rick Grimes","var[a]":15,"var[condLog]":3.637586,"var[n]":38}]}`,
 		js)
@@ -484,7 +484,7 @@ func TestQueryVarValAggNestedFuncConditional2(t *testing.T) {
 				friend {
 					n as min(age)
 					condLog as math(cond(a==38, n/2, 1))
-					condExp as math(cond(a!=38, 1, 2*n))
+					condExp as math(cond(a!=38, 1, sqrt(2*n)))
 				}
 			}
 
@@ -504,9 +504,8 @@ func TestQueryVarValAggNestedFuncConditional2(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	fmt.Println(string(js))
 	require.JSONEq(t,
-		`{"ExpMe":[{"name":"Rick Grimes","var[a]":15,"var[condExp]":1.000000,"var[n]":38},{"name":"Andrea","var[a]":19,"var[condExp]":1.000000,"var[n]":15},{"name":"Michonne","var[a]":38,"var[condExp]":30.000000,"var[n]":15}],"LogMe":[{"name":"Rick Grimes","var[a]":15,"var[condLog]":1.000000,"var[n]":38},{"name":"Andrea","var[a]":19,"var[condLog]":1.000000,"var[n]":15},{"name":"Michonne","var[a]":38,"var[condLog]":7.500000,"var[n]":15}]}`,
+		`{"ExpMe":[{"name":"Rick Grimes","var[a]":15,"var[condExp]":1.000000,"var[n]":38},{"name":"Andrea","var[a]":19,"var[condExp]":1.000000,"var[n]":15},{"name":"Michonne","var[a]":38,"var[condExp]":5.477226,"var[n]":15}],"LogMe":[{"name":"Rick Grimes","var[a]":15,"var[condLog]":1.000000,"var[n]":38},{"name":"Andrea","var[a]":19,"var[condLog]":1.000000,"var[n]":15},{"name":"Michonne","var[a]":38,"var[condLog]":7.500000,"var[n]":15}]}`,
 		js)
 }
 

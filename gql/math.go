@@ -39,11 +39,11 @@ type MathTree struct {
 }
 
 func isUnary(f string) bool {
-	return f == "exp" || f == "log" || f == "u-"
+	return f == "exp" || f == "log" || f == "u-" || f == "sqrt"
 }
 
 func isBinaryMath(f string) bool {
-	return f == "*" || f == "+" || f == "-" || f == "/"
+	return f == "*" || f == "+" || f == "-" || f == "/" || f == "%"
 }
 
 func isTernary(f string) bool {
@@ -84,13 +84,13 @@ func evalMathStack(opStack, valueStack *mathTreeStack) error {
 	return nil
 }
 
-func isMathFunc(lval string) bool {
+func isMathFunc(f string) bool {
 	// While adding an op, also add it to the corresponding function type.
-	return lval == "*" || lval == "+" || lval == "-" || lval == "/" ||
-		lval == "exp" || lval == "log" || lval == "cond" ||
-		lval == "<" || lval == ">" || lval == ">=" || lval == "<=" ||
-		lval == "==" || lval == "!=" ||
-		lval == "min" || lval == "max"
+	return f == "*" || f == "%" || f == "+" || f == "-" || f == "/" ||
+		f == "exp" || f == "log" || f == "cond" ||
+		f == "<" || f == ">" || f == ">=" || f == "<=" ||
+		f == "==" || f == "!=" ||
+		f == "min" || f == "max" || f == "sqrt"
 }
 
 func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
@@ -279,8 +279,8 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 	// Non-leaf node.
 	buf.WriteRune('(')
 	switch t.Fn {
-	case "+", "-", "/", "*", "exp", "log", "cond", "min",
-		"max", "<", ">", "<=", ">=", "==", "!=", "u-":
+	case "+", "-", "/", "*", "%", "exp", "log", "cond", "min",
+		"sqrt", "max", "<", ">", "<=", ">=", "==", "!=", "u-":
 		buf.WriteString(t.Fn)
 	default:
 		x.Fatalf("Unknown operator: %q", t.Fn)

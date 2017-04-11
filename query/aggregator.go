@@ -33,7 +33,7 @@ type aggregator struct {
 }
 
 func isUnary(f string) bool {
-	return f == "log" || f == "exp" || f == "u-"
+	return f == "log" || f == "exp" || f == "u-" || f == "sqrt"
 }
 
 func isBinaryBoolean(f string) bool {
@@ -46,7 +46,7 @@ func isTernary(f string) bool {
 }
 
 func isBinary(f string) bool {
-	return f == "+" || f == "*" || f == "-" || f == "/" ||
+	return f == "+" || f == "*" || f == "-" || f == "/" || f == "%" ||
 		f == "max" || f == "min"
 }
 
@@ -136,6 +136,14 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 				v.Value = -v.Value.(float64)
 			}
 			res = v
+		case "sqrt":
+			if v.Tid == types.IntID {
+				v.Value = math.Sqrt(float64(v.Value.(int64)))
+				v.Tid = types.FloatID
+			} else if v.Tid == types.FloatID {
+				v.Value = math.Sqrt(v.Value.(float64))
+			}
+			res = v
 		}
 		ag.result = res
 		return nil
@@ -201,6 +209,21 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			va.Tid = types.FloatID
 		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
 			va.Value = va.Value.(float64) / float64(vb.Value.(int64))
+		} else {
+			// This pair cannot be aggregated. So pass.
+		}
+		res = va
+	case "%":
+		if va.Tid == types.IntID && vb.Tid == types.IntID {
+			va.Value = math.Mod(float64(va.Value.(int64)), float64(vb.Value.(int64)))
+			va.Tid = types.FloatID
+		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
+			va.Value = math.Mod(va.Value.(float64), vb.Value.(float64))
+		} else if va.Tid == types.IntID && vb.Tid == types.FloatID {
+			va.Value = math.Mod(float64(va.Value.(int64)), vb.Value.(float64))
+			va.Tid = types.FloatID
+		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
+			va.Value = math.Mod(va.Value.(float64), float64(vb.Value.(int64)))
 		} else {
 			// This pair cannot be aggregated. So pass.
 		}

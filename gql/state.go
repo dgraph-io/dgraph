@@ -540,7 +540,7 @@ func isNameBegin(r rune) bool {
 
 func isMathOp(r rune) bool {
 	switch r {
-	case '+', '-', '*', '/':
+	case '+', '-', '*', '/', '%':
 		return true
 	default:
 		return false
