@@ -278,27 +278,33 @@ function isElementInViewport(el) {
   }
 
   // code collapse
-  // var pres = document.getElementsByTagName("pre");
   var pres = $('pre');
   pres.each(function() {
-    var isInRunnable = $(this).parents('.runnable').length > 0;
+    var self = this;
+
+    var isInRunnable = $(self).parents('.runnable').length > 0;
     if (isInRunnable) {
       return;
     }
 
-    if (this.clientHeight > 330) {
-      this.className += " collapsed";
+    if (self.clientHeight > 330) {
+      if (self.clientHeight < 380) {
+        return;
+      }
+
+      self.className += " collapsed";
 
       var showMore = document.createElement("div");
       showMore.className = "showmore";
       showMore.innerHTML = "<span>Show all</span>";
       showMore.addEventListener("click", function() {
-        this.className = "";
+        self.className = "";
         showMore.parentNode.removeChild(showMore);
       });
 
       this.appendChild(showMore);
     }
+
   });
 
   // version selector
