@@ -4694,6 +4694,23 @@ func TestLangDefault(t *testing.T) {
 		js)
 }
 
+func TestLangMultiple_Alias(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				a: name@pl
+				b: name@cn
+				c: name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"c":"Badger","b":"Badger","a":"Borsuk europejski"}]}`,
+		js)
+}
+
 func TestLangMultiple(t *testing.T) {
 	populateGraph(t)
 	query := `
