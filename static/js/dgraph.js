@@ -17,6 +17,11 @@ function debounce(func, wait, immediate) {
   };
 };
 
+function formatJavaCode(code) {
+  return code.replace(/"/g, '\'')
+             .replace(/\s+/g, ' ')
+             .replace(/\n/g, ' ');
+}
 
 /********** Cookie helpers **/
 
@@ -473,6 +478,14 @@ function isElementInViewport(el) {
     });
   }
 
+  // updateQueryContents updates the query contents in all tabs
+  function updateQueryContents($runnables, newQuery) {
+    $runnables.find('.query-content').not('.java').text(newQuery);
+
+    var javaTxt = formatJavaCode(newQuery);
+    $runnables.find('.query-content.java').text(javaTxt);
+  }
+
   // Running code
   $(document).on('click', '.runnable [data-action="run"]', function (e) {
     e.preventDefault();
@@ -537,11 +550,12 @@ function isElementInViewport(el) {
     var checksum = $(this).closest('.runnable').data('checksum');
     var $currentRunnable = $(this).closest('.runnable');
     var $runnables = $('.runnable[data-checksum="' + checksum + '"]');
+    var newQuery = $currentRunnable.attr('data-unsaved') ||
+                   $currentRunnable.attr('data-current');
 
     // Update query examples and the textarea with the current query
-    var newQuery = $currentRunnable.attr('data-unsaved');
     $runnables.attr('data-current', newQuery);
-    $runnables.find('.query-content').text(newQuery);
+    updateQueryContents($runnables, newQuery);
     // We update the value as well as the inner text because when launched in
     // a modal, value will be lose as HTML is copied
     // TODO: implement JS object for runnable instead of storing these states
@@ -559,7 +573,7 @@ function isElementInViewport(el) {
 
     // Restore to initial query
     var currentQuery = $runnable.attr('data-current');
-    $runnable.find('.query-content').text(currentQuery);
+    updateQueryContents($runnable, currentQuery);
     $runnable.find('.query-content-editable').val(currentQuery).text(currentQuery);
 
     var dest = readCookie('lang');
@@ -604,13 +618,20 @@ function isElementInViewport(el) {
     $output.focus();
   });
 
-  // On page load
+  /********** On page load **/
   updateSidebar();
   document.querySelector('.sub-topics .topic.active').scrollIntoView();
 
-  $('.runnable').each(function () {
-    setupRunnableClipboard(this);
-  });
+  // Initialize runnables
+   $('.runnable').each(function () {
+     // First, we reinitialize the query contents because some languages require
+     // specific formatting
+     var $runnable = $(this);
+     var currentQuery = $runnable.attr('data-current');
+     updateQueryContents($runnable, currentQuery);
+
+     setupRunnableClipboard(this);
+   });
 
   /********** Config **/
 
