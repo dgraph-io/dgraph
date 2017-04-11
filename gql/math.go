@@ -90,7 +90,8 @@ func isMathFunc(f string) bool {
 		f == "exp" || f == "log" || f == "cond" ||
 		f == "<" || f == ">" || f == ">=" || f == "<=" ||
 		f == "==" || f == "!=" ||
-		f == "min" || f == "max" || f == "sqrt"
+		f == "min" || f == "max" || f == "sqrt" ||
+		f == "pow" || f == "logbase"
 }
 
 func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
@@ -280,7 +281,8 @@ func (t *MathTree) stringHelper(buf *bytes.Buffer) {
 	buf.WriteRune('(')
 	switch t.Fn {
 	case "+", "-", "/", "*", "%", "exp", "log", "cond", "min",
-		"sqrt", "max", "<", ">", "<=", ">=", "==", "!=", "u-":
+		"sqrt", "max", "<", ">", "<=", ">=", "==", "!=", "u-",
+		"logbase", "pow":
 		buf.WriteString(t.Fn)
 	default:
 		x.Fatalf("Unknown operator: %q", t.Fn)

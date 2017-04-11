@@ -47,7 +47,7 @@ func isTernary(f string) bool {
 
 func isBinary(f string) bool {
 	return f == "+" || f == "*" || f == "-" || f == "/" || f == "%" ||
-		f == "max" || f == "min"
+		f == "max" || f == "min" || f == "logbase" || f == "pow"
 }
 
 func convertTo(from *taskp.Value) (types.Val, error) {
@@ -227,6 +227,40 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		} else {
 			// This pair cannot be aggregated. So pass.
 		}
+		res = va
+	case "pow":
+		if va.Tid == types.IntID && vb.Tid == types.IntID {
+			va.Value = math.Pow(float64(va.Value.(int64)), float64(vb.Value.(int64)))
+			va.Tid = types.FloatID
+		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
+			va.Value = math.Pow(va.Value.(float64), vb.Value.(float64))
+		} else if va.Tid == types.IntID && vb.Tid == types.FloatID {
+			va.Value = math.Pow(float64(va.Value.(int64)), vb.Value.(float64))
+			va.Tid = types.FloatID
+		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
+			va.Value = math.Pow(va.Value.(float64), float64(vb.Value.(int64)))
+		} else {
+			// This pair cannot be aggregated. So pass.
+		}
+		res = va
+	case "logbase":
+		var a, b float64
+		if vb.Tid == types.IntID {
+			b = float64(vb.Value.(int64))
+		} else if vb.Tid == types.FloatID {
+			b = vb.Value.(float64)
+		}
+		if b == 1 {
+			return nil
+		}
+		if va.Tid == types.IntID {
+			a = float64(va.Value.(int64))
+		} else if va.Tid == types.FloatID {
+			a = va.Value.(float64)
+		}
+
+		va.Tid = types.FloatID
+		va.Value = math.Log(a) / math.Log(b)
 		res = va
 	case "min":
 		r, err := types.Less(va, vb)
