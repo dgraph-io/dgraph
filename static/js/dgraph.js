@@ -193,7 +193,7 @@ function isElementInViewport(el) {
   // updateSidebar updates the active menu in the sidebar
   function updateSidebar() {
     var currentScrollY = document.body.scrollTop;
-    var topSideOffset = 250;
+    var topSideOffset = 120;
 
     var activeHash;
     for (var i = 0; i < allLinks.length; i++) {
