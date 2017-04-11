@@ -17,14 +17,6 @@ function debounce(func, wait, immediate) {
   };
 };
 
-function slugify(text) {
-  return text.toString().toLowerCase()
-    .replace(/\s+/g, '-')           // Replace spaces with -
-    .replace(/[^\w\-]+/g, '')       // Remove all non-word chars
-    .replace(/\-\-+/g, '-')         // Replace multiple - with single -
-    .replace(/^-+/, '')             // Trim - from start of text
-    .replace(/-+$/, '');            // Trim - from end of text
-}
 
 /********** Cookie helpers **/
 
@@ -168,7 +160,7 @@ function isElementInViewport(el) {
   }
 
   function createSubtopicItem(h) {
-  allLinks.push(h);
+    allLinks.push(h);
 
     var li = document.createElement("li");
     li.innerHTML = '<i class="fa fa-angle-right"></i> <a href="#' +
@@ -201,13 +193,14 @@ function isElementInViewport(el) {
   // updateSidebar updates the active menu in the sidebar
   function updateSidebar() {
     var currentScrollY = document.body.scrollTop;
+    var topSideOffset = 250;
 
     var activeHash;
     for (var i = 0; i < allLinks.length; i++) {
       var h = allLinks[i];
       var hash = h.getElementsByTagName('a')[0].hash;
 
-      if (h.offsetTop - 250 > currentScrollY) {
+      if (h.offsetTop - topSideOffset > currentScrollY) {
         if (!activeHash) {
           activeHash = hash;
           break;
@@ -251,25 +244,23 @@ function isElementInViewport(el) {
 
   // Anchor tags for headings
   function appendAnchor(heading) {
-    // First remove the id from heading
-    // Instead we will assign the id to the .anchor-offset element to account
-    // for the fixed header height
-    heading.id = '';
-
-    var text = heading.innerText;
-    var slug = slugify(text);
-
+    var id = heading.id;
     var anchorOffset = document.createElement('div');
     anchorOffset.className = 'anchor-offset';
-    anchorOffset.id = slug;
+    anchorOffset.id = id;
 
     var anchor = document.createElement("a");
-    anchor.href = '#' + slug;
+    anchor.href = '#' + id;
     anchor.className = 'anchor';
     // anchor.innerHTML = 'link'
     anchor.innerHTML = '<i class="fa fa-link"></i>'
     heading.insertBefore(anchor, heading.firstChild);
     heading.insertBefore(anchorOffset, heading.firstChild);
+
+    // Remove the id from heading
+    // Instead we will assign the id to the .anchor-offset element to account
+    // for the fixed header height
+    heading.removeAttribute('id');
   }
   var h2s = document.querySelectorAll(
     '.content-wrapper h2, .content-wrapper h3');
