@@ -57,10 +57,7 @@ import io.dgraph.client.DgraphResult;
 public class DgraphMain {
   public static void main(final String[] args) {
     final DgraphClient dgraphClient = GrpcDgraphClient.newInstance("localhost", 8080);
-    final DgraphResult result = dgraphClient.query("
-    <span class="query-content">{{ .Inner }}</span>
-    "
-    );
+    final DgraphResult result = dgraphClient.query("<span class="query-content java">{{ .Inner }}</span>");
     System.out.println(result.toJsonObject().toString());
   }
 }</code></pre>
