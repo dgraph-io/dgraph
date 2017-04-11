@@ -33,7 +33,7 @@ type aggregator struct {
 }
 
 func isUnary(f string) bool {
-	return f == "log" || f == "exp" || f == "u-" || f == "sqrt"
+	return f == "ln" || f == "exp" || f == "u-" || f == "sqrt"
 }
 
 func isBinaryBoolean(f string) bool {
@@ -112,7 +112,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	var res types.Val
 	if isUnary(ag.name) {
 		switch ag.name {
-		case "log":
+		case "ln":
 			if v.Tid == types.IntID {
 				v.Value = math.Log(float64(v.Value.(int64)))
 				v.Tid = types.FloatID

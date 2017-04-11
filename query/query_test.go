@@ -517,7 +517,7 @@ func TestQueryVarValAggNestedFuncUnary(t *testing.T) {
 				friend {
 					n as min(age)
 					s as max(age)
-					combiLog as math(a + log(s - n))
+					combiLog as math(a + ln(s - n))
 					combiExp as math(a + exp(s - n))
 				}
 			}
