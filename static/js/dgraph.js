@@ -607,6 +607,12 @@ function isElementInViewport(el) {
     $(this).find('.modal-body').html('');
   });
 
+  $('#runnable-modal').on('shown.bs.modal', function () {
+    // Focus the output so that it is scrollable by keyboard
+    var $output = $(this).find('.output');
+    $output.focus();
+  });
+
   // On page load
   updateSidebar();
   document.querySelector('.sub-topics .topic.active').scrollIntoView();

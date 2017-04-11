@@ -35,11 +35,11 @@
 
           <div class="runnable-content runnable-code">
             <div class="runnable-tab-content active" data-tab="curl">
-              <pre><code class="no-copy">curl localhost:8080/query -XPOST -d '
+              <pre><code class="no-copy" tabindex="-1">curl localhost:8080/query -XPOST -d '
 <span class="query-content">{{ .Inner }}</span>' | python -m json.tool | less</code></pre>
             </div>
             <div class="runnable-tab-content" data-tab="java">
-              <pre><code class="no-copy">import io.dgraph.client.DgraphClient;
+              <pre><code class="no-copy" tabindex="-1">import io.dgraph.client.DgraphClient;
 import io.dgraph.client.GrpcDgraphClient;
 import io.dgraph.client.DgraphResult;
 
@@ -89,7 +89,7 @@ public class DgraphMain {
           </div>
 
           <div class="runnable-content runnable-output" style="background: url('{{ .Site.BaseURL }}images/dgraph-black.png'); background-repeat: no-repeat; background-position: center; background-color: #fff;">
-            <pre class="output-container empty"><code class="output"></code></pre>
+            <pre class="output-container empty"><code class="output" tabindex="-1"></code></pre>
           </div>
 
           <div class="row footer">
