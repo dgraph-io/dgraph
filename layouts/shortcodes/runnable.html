@@ -11,7 +11,8 @@
               <div class="row">
                 <div class="col-10">
                   <nav class="nav-languages">
-                    <a class="language active" data-action="nav-lang" data-target="curl" href="#">curl</a>
+                    <a class="language active" data-action="nav-lang" data-target="query" href="#">Query</a>
+                    <a class="language" data-action="nav-lang" data-target="curl" href="#">Curl</a>
                     <a class="language" data-action="nav-lang" data-target="java" href="#">Java</a>
                   </nav>
                 </div>
@@ -34,10 +35,20 @@
           </div>
 
           <div class="runnable-content runnable-code">
-            <div class="runnable-tab-content active" data-tab="curl">
+            <div class="runnable-tab-content active" data-tab="query">
+              <pre><code class="no-copy"><span class="query-content">{{ .Inner }}</span></code></pre>
+
+            </div>
+
+            <div class="runnable-tab-content" data-tab="edit">
+              <textarea class="query-content-editable">{{ .Inner }}</textarea>
+            </div>
+
+            <div class="runnable-tab-content" data-tab="curl">
               <pre><code class="no-copy" tabindex="-1">curl localhost:8080/query -XPOST -d '
 <span class="query-content">{{ .Inner }}</span>' | python -m json.tool | less</code></pre>
             </div>
+
             <div class="runnable-tab-content" data-tab="java">
               <pre><code class="no-copy" tabindex="-1">import io.dgraph.client.DgraphClient;
 import io.dgraph.client.GrpcDgraphClient;
@@ -53,9 +64,6 @@ public class DgraphMain {
     System.out.println(result.toJsonObject().toString());
   }
 }</code></pre>
-            </div>
-            <div class="runnable-tab-content" data-tab="edit">
-              <textarea class="query-content-editable">{{ .Inner }}</textarea>
             </div>
           </div>
 

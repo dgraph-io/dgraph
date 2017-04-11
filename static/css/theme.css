@@ -602,9 +602,6 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   background: #fffff3;
   overflow-y: scroll;
 }
-.runnable .query-content {
-  background: rgb(226, 255, 226);
-}
 html .runnable pre {
   padding: 0;
   border: 0;
