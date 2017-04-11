@@ -44,7 +44,7 @@ name "Millhouse".
 ## Adding data to Dgraph
 
 Now let's do this in Dgraph! If you haven't followed the getting started
-guide, do so now: https://docs.dgraph.io/v0.7.4/get-started
+guide, do so now: [Get Started]({{< relref "get-started/index.md" >}})
 
 Note that you must be using version 0.7.4 or later for the examples
 in this guide to work.
