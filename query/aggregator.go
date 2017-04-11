@@ -20,6 +20,7 @@ package query
 import (
 	"bytes"
 	"math"
+	"time"
 
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types"
@@ -33,7 +34,8 @@ type aggregator struct {
 }
 
 func isUnary(f string) bool {
-	return f == "ln" || f == "exp" || f == "u-" || f == "sqrt"
+	return f == "ln" || f == "exp" || f == "u-" || f == "sqrt" ||
+		f == "floor" || f == "ceil" || f == "since"
 }
 
 func isBinaryBoolean(f string) bool {
@@ -142,6 +144,31 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 				v.Tid = types.FloatID
 			} else if v.Tid == types.FloatID {
 				v.Value = math.Sqrt(v.Value.(float64))
+			}
+			res = v
+		case "floor":
+			if v.Tid == types.IntID {
+				v.Value = math.Floor(float64(v.Value.(int64)))
+				v.Tid = types.FloatID
+			} else if v.Tid == types.FloatID {
+				v.Value = math.Floor(v.Value.(float64))
+			}
+			res = v
+		case "ceil":
+			if v.Tid == types.IntID {
+				v.Value = math.Ceil(float64(v.Value.(int64)))
+				v.Tid = types.FloatID
+			} else if v.Tid == types.FloatID {
+				v.Value = math.Ceil(v.Value.(float64))
+			}
+			res = v
+		case "since":
+			if v.Tid == types.DateID {
+				v.Value = float64(time.Since(v.Value.(time.Time))) / 1000000000.0
+				v.Tid = types.FloatID
+			} else if v.Tid == types.DateTimeID {
+				v.Value = float64(time.Since(v.Value.(time.Time))) / 1000000000.0
+				v.Tid = types.FloatID
 			}
 			res = v
 		}

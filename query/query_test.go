@@ -366,6 +366,27 @@ func TestCascadeDirective(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValAggSince(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as dob
+				b as math(since(a)/(60*60*24*365))
+			}
+
+			AgeOrder(id: var(f), orderasc: var(b)) {
+				name
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"AgeOrder":[{"name":"Rick Grimes","var[a]":"1910-01-02"},{"name":"Michonne","var[a]":"1910-01-01"},{"name":"Andrea","var[a]":"1901-01-15"}]}`,
+		js)
+}
+
 func TestQueryVarValAggNestedFuncConst(t *testing.T) {
 	populateGraph(t)
 	query := `

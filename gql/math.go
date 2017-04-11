@@ -46,7 +46,8 @@ type MathTree struct {
 }
 
 func isUnary(f string) bool {
-	return f == "exp" || f == "ln" || f == "u-" || f == "sqrt"
+	return f == "exp" || f == "ln" || f == "u-" || f == "sqrt" ||
+		f == "floor" || f == "ceil" || f == "since"
 }
 
 func isBinaryMath(f string) bool {
@@ -100,7 +101,8 @@ func isMathFunc(f string) bool {
 		f == "<" || f == ">" || f == ">=" || f == "<=" ||
 		f == "==" || f == "!=" ||
 		f == "min" || f == "max" || f == "sqrt" ||
-		f == "pow" || f == "logbase"
+		f == "pow" || f == "logbase" || f == "floor" || f == "ceil" ||
+		f == "since"
 }
 
 func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
