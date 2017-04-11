@@ -35,6 +35,10 @@ func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
 		requiredTokenizer = tok.TermTokenizer{}.Name()
 	}
 
+	if !schema.State().IsIndexed(attr) {
+		return requiredTokenizer, false
+	}
+
 	tokenizers := schema.State().Tokenizer(attr)
 	for _, tokenizer := range tokenizers {
 		// check for prefix, in case of explicit usage of language specific full text tokenizer
