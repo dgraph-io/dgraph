@@ -689,6 +689,7 @@ func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
 }
 
 func (l *List) valueForTag(tag string) (rval types.Val, rerr error) {
+	l.AssertRLock()
 	uid := farm.Fingerprint64([]byte(tag))
 	found, rval := l.findValue(uid)
 	if !found {
