@@ -215,7 +215,7 @@ const doShareMutation = (dispatch, getState) => {
         mutation = `
     mutation {
         set {
-            <_:share> <internal_share> ${stringifiedQuery} .
+            <_:share> <_share_> ${stringifiedQuery} .
         }
     }`;
 
@@ -237,7 +237,7 @@ const doShareMutation = (dispatch, getState) => {
         })
         .catch(function(error) {
             console.log(error.stack);
-            return error;
+            return error.message;
         })
         .then(function(errorMsg) {
             if (errorMsg !== undefined) {
@@ -262,11 +262,11 @@ export const getShareId = (dispatch, getState) => {
         checkQuery = `
 mutation {
     schema {
-        internal_share: string @index(exact) .
+        _share_: string @index(exact) .
     }
 }
 {
-    query(func:eq(internal_share, ${stringifiedQuery})) {
+    query(func:eq(_share_, ${stringifiedQuery})) {
         _uid_
     }
 }`;
@@ -286,10 +286,10 @@ mutation {
             .then(response => response.json())
             .then(function handleResponse(result) {
                 if (result.query && result.query.length > 0) {
-                    return dispatch(updateShareId(result.query[0]["_uid_"]));
+                    dispatch(updateShareId(result.query[0]["_uid_"]));
                 } else {
                     // Else do a mutation to store the query.
-                    return doShareMutation(dispatch, getState);
+                    doShareMutation(dispatch, getState);
                 }
             })
     )
@@ -320,7 +320,7 @@ export const getQuery = shareId => {
                 },
                 body: `{
                     query(id: ${shareId}) {
-                        internal_share
+                        _share_
                     }
                 }`
             })
@@ -329,9 +329,7 @@ export const getQuery = shareId => {
                 .then(function handleResponse(result) {
                     if (result.query && result.query.length > 0) {
                         dispatch(
-                            selectQuery(
-                                decodeURI(result.query[0].internal_share)
-                            )
+                            selectQuery(decodeURI(result.query[0]["_share_"]))
                         );
                         return;
                     }
@@ -339,6 +337,7 @@ export const getQuery = shareId => {
                 })
         )
             .catch(function(error) {
+                console.log(error.stack);
                 return error.message;
             })
             .then(function(errorMsg) {

@@ -231,25 +231,25 @@ func applyMutations(ctx context.Context, m *taskp.Mutations) error {
 	return nil
 }
 
-const INTERNAL_SHARE = "internal_share"
+const INTERNAL_SHARE = "_share_"
 
-func mutationsAllowed(mutation *graphp.Mutation) error {
+func ismutationAllowed(mutation *graphp.Mutation) error {
 	if *nomutations {
 		if *noshare {
-			return fmt.Errorf("Mutations are forbidden on this server.")
+			return x.Errorf("Mutations are forbidden on this server.")
 		}
 
 		// Sharing is allowed, lets check that mutation should have only internal
 		// share predicate.
 		if !hasOnlySharePred(mutation) {
-			return fmt.Errorf("Only mutations with: %v as predicate are allowed ",
+			return x.Errorf("Only mutations with: %v as predicate are allowed ",
 				INTERNAL_SHARE)
 		}
 	}
 	// Mutations are allowed but sharing isn't allowed.
 	if *noshare {
 		if hasSharePred(mutation) {
-			return fmt.Errorf("Mutations with: %v as predicate are not allowed ",
+			return x.Errorf("Mutations with: %v as predicate are not allowed ",
 				INTERNAL_SHARE)
 		}
 	}
@@ -262,7 +262,7 @@ func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string
 	var err error
 	var mr mutationResult
 
-	if err := mutationsAllowed(mutation); err != nil {
+	if err := ismutationAllowed(mutation); err != nil {
 		return nil, err
 	}
 
