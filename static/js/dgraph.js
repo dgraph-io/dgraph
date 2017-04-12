@@ -409,16 +409,22 @@ function isElementInViewport(el) {
     });
   }
 
-  // launchRunnableModal launches a runnable in a modal and configures the
-  // clipboard buttons
-  // @params runnabelEl {HTMLElement} - a runnable element
-  function launchRunnableModal(runnabelEl) {
-    var $runnable = $(runnabelEl);
+  /**
+   * launchRunnableModal launches a runnable in a modal and configures the
+   * clipboard buttons
+   *
+   * @params runnabelEl {HTMLElement} - a runnable element
+   * @params options {Object}
+   * @params options.runnableClass {String} - the class name to apply to the
+   *         '.runnable' div. Useful when launching the runnabe as editing mode.
+   */
+  function launchRunnableModal(runnabelEl, options) {
+    var $originalRunnable = $(runnabelEl);
     var $modal = $('#runnable-modal');
     var $modalBody = $modal.find('.modal-body');
 
     // set inner html as runnable
-    var str = $runnable.prop('outerHTML');
+    var str = $originalRunnable.prop('outerHTML');
     $modalBody.html(str);
 
     // show modal
@@ -428,6 +434,11 @@ function isElementInViewport(el) {
 
     var $runnableEl = $modal.find('.runnable');
 
+    if (options.runnableClass) {
+      $runnableEl.addClass(options.runnableClass);
+    }
+
+    // intiailze clipboard
     setupRunnableClipboard($runnableEl);
   }
 
@@ -448,6 +459,9 @@ function isElementInViewport(el) {
     $runnable.find('.runnable-tab-content[data-tab="' + targetTab + '"]').addClass('active');
   }
 
+  // changeLanguage changes the preferred programminng language for the examples
+  // and navigate all example tabs to that language
+  // @params language {String}
   function changeLanguage(language) {
     // First, set cookie
     createCookie('lang', language, 365);
@@ -468,6 +482,7 @@ function isElementInViewport(el) {
       lineNumbers: true,
       autoCloseBrackets: true,
       lineWrapping: true,
+      autofocus: true,
       tabSize: 2
     });
 
@@ -592,11 +607,16 @@ function isElementInViewport(el) {
     e.preventDefault();
 
     var $runnable = $(this).closest('.runnable');
+    var isModal = $runnable.parents('#runnable-modal').length > 0;
 
-    $runnable.addClass('editing');
-
-    navToRunnableTab($runnable, 'edit');
-    initCodeMirror($runnable);
+    if (isModal) {
+      $runnable.addClass('editing');
+      navToRunnableTab($runnable, 'edit');
+      initCodeMirror($runnable);
+    } else {
+      var currentRunnableEl = $runnable;
+      launchRunnableModal(currentRunnableEl, { runnableClass: 'editing' });
+    }
   });
 
   $(document).on('click', '.runnable [data-action="nav-lang"]', function (e) {
@@ -613,9 +633,22 @@ function isElementInViewport(el) {
   });
 
   $('#runnable-modal').on('shown.bs.modal', function () {
+    var $runnable = $(this).find('.runnable');
+
     // Focus the output so that it is scrollable by keyboard
     var $output = $(this).find('.output');
     $output.focus();
+
+    // if .editing class is found on .runnable, we transition to the edit tab
+    // and initialize the code mirror. Such transition and initialization should
+    // be done when the modal has been completely transitioned, and therefore
+    // we put this logic here instead of in launchRunnableModal function at the
+    // cost of some added complexity
+    var isEditing = $runnable.hasClass('editing');
+    if (isEditing) {
+      navToRunnableTab($runnable, 'edit')
+      initCodeMirror($runnable);
+    }
   });
 
   /********** On page load **/
