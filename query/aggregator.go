@@ -108,7 +108,7 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 
 func (ag *aggregator) ApplyVal(v types.Val) error {
 	if v.Value == nil {
-		return ErrEmptyVal
+		return nil
 	}
 
 	var isIntOrFloat bool
@@ -128,34 +128,40 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	if isUnary(ag.name) {
 		switch ag.name {
 		case "ln":
-			if isIntOrFloat {
-				v.Value = math.Log(l)
+			if !isIntOrFloat {
+				return x.Errorf("Wrong type encountered for func %v", ag.name)
 			}
+			v.Value = math.Log(l)
 			res = v
 		case "exp":
-			if isIntOrFloat {
-				v.Value = math.Exp(l)
+			if !isIntOrFloat {
+				return x.Errorf("Wrong type encountered for func %v", ag.name)
 			}
+			v.Value = math.Exp(l)
 			res = v
 		case "u-":
-			if isIntOrFloat {
-				v.Value = -l
+			if !isIntOrFloat {
+				return x.Errorf("Wrong type encountered for func %v", ag.name)
 			}
+			v.Value = -l
 			res = v
 		case "sqrt":
-			if isIntOrFloat {
-				v.Value = math.Sqrt(l)
+			if !isIntOrFloat {
+				return x.Errorf("Wrong type encountered for func %v", ag.name)
 			}
+			v.Value = math.Sqrt(l)
 			res = v
 		case "floor":
-			if isIntOrFloat {
-				v.Value = math.Floor(l)
+			if !isIntOrFloat {
+				return x.Errorf("Wrong type encountered for func %v", ag.name)
 			}
+			v.Value = math.Floor(l)
 			res = v
 		case "ceil":
-			if isIntOrFloat {
-				v.Value = math.Ceil(l)
+			if !isIntOrFloat {
+				return x.Errorf("Wrong type encountered for func %v", ag.name)
 			}
+			v.Value = math.Ceil(l)
 			res = v
 		case "since":
 			if v.Tid == types.DateID {
@@ -164,6 +170,8 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			} else if v.Tid == types.DateTimeID {
 				v.Value = float64(time.Since(v.Value.(time.Time))) / 1000000000.0
 				v.Tid = types.FloatID
+			} else {
+				return x.Errorf("Wrong type encountered for func %v", ag.name)
 			}
 			res = v
 		}
@@ -177,44 +185,54 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	}
 
 	va := ag.result
+	if va.Tid != types.IntID && va.Tid != types.FloatID {
+		isIntOrFloat = false
+	}
 	switch ag.name {
 	case "+":
-		if isIntOrFloat {
-			va.Value = va.Value.(float64) + l
+		if !isIntOrFloat {
+			return x.Errorf("Wrong type encountered for func %v", ag.name)
 		}
+		va.Value = va.Value.(float64) + l
 		res = va
 	case "-":
-		if isIntOrFloat {
-			va.Value = va.Value.(float64) - l
+		if !isIntOrFloat {
+			return x.Errorf("Wrong type encountered for func %v", ag.name)
 		}
+		va.Value = va.Value.(float64) - l
 		res = va
 	case "*":
-		if isIntOrFloat {
-			va.Value = va.Value.(float64) * l
+		if !isIntOrFloat {
+			return x.Errorf("Wrong type encountered for func %v", ag.name)
 		}
+		va.Value = va.Value.(float64) * l
 		res = va
 	case "/":
-		if isIntOrFloat {
-			va.Value = va.Value.(float64) / l
+		if !isIntOrFloat {
+			return x.Errorf("Wrong type encountered for func %v %v %v", ag.name, va.Tid, v.Tid)
 		}
+		va.Value = va.Value.(float64) / l
 		res = va
 	case "%":
-		if isIntOrFloat {
-			va.Value = math.Mod(va.Value.(float64), l)
+		if !isIntOrFloat {
+			return x.Errorf("Wrong type encountered for func %v", ag.name)
 		}
+		va.Value = math.Mod(va.Value.(float64), l)
 		res = va
 	case "pow":
-		if isIntOrFloat {
-			va.Value = math.Pow(va.Value.(float64), l)
+		if !isIntOrFloat {
+			return x.Errorf("Wrong type encountered for func %v", ag.name)
 		}
+		va.Value = math.Pow(va.Value.(float64), l)
 		res = va
 	case "logbase":
 		if l == 1 {
 			return nil
 		}
-		if isIntOrFloat {
-			va.Value = math.Log(va.Value.(float64)) / math.Log(l)
+		if !isIntOrFloat {
+			return x.Errorf("Wrong type encountered for func %v", ag.name)
 		}
+		va.Value = math.Log(va.Value.(float64)) / math.Log(l)
 		res = va
 	case "min":
 		r, err := types.Less(va, v)

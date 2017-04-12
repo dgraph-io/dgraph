@@ -28,8 +28,14 @@ func processBinary(mNode *gql.MathTree) (err error) {
 				// Use the constant value that was supplied.
 				rVal = cr
 			}
-			ag.ApplyVal(lVal)
-			ag.ApplyVal(rVal)
+			err = ag.ApplyVal(lVal)
+			if err != nil {
+				return err
+			}
+			err = ag.ApplyVal(rVal)
+			if err != nil {
+				return err
+			}
 			destMap[k], err = ag.Value()
 			if err != nil {
 				return err
@@ -49,8 +55,14 @@ func processBinary(mNode *gql.MathTree) (err error) {
 				// Use the constant value that was supplied.
 				lVal = cl
 			}
-			ag.ApplyVal(lVal)
-			ag.ApplyVal(rVal)
+			err = ag.ApplyVal(lVal)
+			if err != nil {
+				return err
+			}
+			err = ag.ApplyVal(rVal)
+			if err != nil {
+				return err
+			}
 			destMap[k], err = ag.Value()
 			if err != nil {
 				return err
@@ -63,8 +75,14 @@ func processBinary(mNode *gql.MathTree) (err error) {
 	ag := aggregator{
 		name: aggName,
 	}
-	ag.ApplyVal(cl)
-	ag.ApplyVal(cr)
+	err = ag.ApplyVal(cl)
+			if err != nil {
+				return err
+			}
+	err = ag.ApplyVal(cr)
+			if err != nil {
+				return err
+			}
 	mNode.Const, err = ag.Value()
 	return err
 }
@@ -81,13 +99,19 @@ func processUnary(mNode *gql.MathTree) (err error) {
 	}
 	if ch.Const.Value != nil {
 		// Use the constant value that was supplied.
-		ag.ApplyVal(ch.Const)
+		err = ag.ApplyVal(ch.Const)
+			if err != nil {
+				return err
+			}
 		mNode.Const, err = ag.Value()
 		return err
 	}
 
 	for k, val := range srcMap {
-		ag.ApplyVal(val)
+		err = ag.ApplyVal(val)
+			if err != nil {
+				return err
+			}
 		destMap[k], err = ag.Value()
 		if err != nil {
 			return err
