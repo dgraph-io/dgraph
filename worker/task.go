@@ -334,7 +334,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isCompareAtRoot {
-		f := func(key, val []byte, mtx sync.Mutex) {
+		f := func(key, val []byte, mu sync.Mutex) {
 			pl, decr := posting.GetOrUnmarshal(key, val, gid)
 			count := int64(pl.Length(0))
 			decr()
@@ -343,12 +343,12 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 				// TODO: Look if we want to put these UIDs in one list before
 				// passing it back to query package.
 				tlist := &taskp.List{[]uint64{pk.Uid}}
-				mtx.Lock()
+				mu.Lock()
 				out.UidMatrix = append(out.UidMatrix, tlist)
-				mtx.Unlock()
+				mu.Unlock()
 			}
 		}
-		iterateParallel(q, srcFn, f)
+		iterateParallel(q, f)
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -799,11 +799,11 @@ type itkv struct {
 	val []byte
 }
 
-func iterateParallel(q *taskp.Query, srcFn *functionContext, f func([]byte, []byte, sync.Mutex)) {
+func iterateParallel(q *taskp.Query, f func([]byte, []byte, sync.Mutex)) {
 	numPart := uint64(50)
 	grpSize := uint64(math.MaxUint64 / uint64(numPart))
 	var wg sync.WaitGroup
-	var mtx sync.Mutex
+	var mu sync.Mutex
 
 	for i := uint64(0); i < numPart; i++ {
 		minUid := grpSize*i + 1
@@ -831,7 +831,7 @@ func iterateParallel(q *taskp.Query, srcFn *functionContext, f func([]byte, []by
 				}
 				key := it.Key().Data()
 				val := it.Value().Data()
-				f(key, val, mtx)
+				f(key, val, mu)
 			}
 			wg.Done()
 		}()
