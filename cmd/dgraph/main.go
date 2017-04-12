@@ -35,6 +35,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"regexp"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
@@ -70,6 +71,7 @@ var (
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	nomutations    = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+	noshare        = flag.Bool("noshare", false, "Don't allow sharing queries through the UI.")
 	tracing        = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
@@ -229,14 +231,39 @@ func applyMutations(ctx context.Context, m *taskp.Mutations) error {
 	return nil
 }
 
+const INTERNAL_SHARE = "_share_"
+
+func ismutationAllowed(mutation *graphp.Mutation) error {
+	if *nomutations {
+		if *noshare {
+			return x.Errorf("Mutations are forbidden on this server.")
+		}
+
+		// Sharing is allowed, lets check that mutation should have only internal
+		// share predicate.
+		if !hasOnlySharePred(mutation) {
+			return x.Errorf("Only mutations with: %v as predicate are allowed ",
+				INTERNAL_SHARE)
+		}
+	}
+	// Mutations are allowed but sharing isn't allowed.
+	if *noshare {
+		if hasSharePred(mutation) {
+			return x.Errorf("Mutations with: %v as predicate are not allowed ",
+				INTERNAL_SHARE)
+		}
+	}
+	return nil
+}
+
 func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var m taskp.Mutations
 	var err error
 	var mr mutationResult
 
-	if *nomutations {
-		return nil, fmt.Errorf("Mutations are forbidden on this server.")
+	if err := ismutationAllowed(mutation); err != nil {
+		return nil, err
 	}
 
 	if mr, err = convertToEdges(ctx, mutation.Set); err != nil {
@@ -801,8 +828,12 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/backup", backupHandler)
 
 	// UI related API's.
-	http.Handle("/", http.FileServer(http.Dir(uiDir)))
+	// Share urls have a hex string as the shareId. So if
+	// our url path matches it, we wan't to serve index.html.
+	reg := regexp.MustCompile(`\/0[xX][0-9a-fA-F]+`)
+	http.Handle("/", homeHandler(http.FileServer(http.Dir(uiDir)), reg))
 	http.HandleFunc("/ui/keywords", keywordHandler)
+	http.HandleFunc("/ui/init", initialState)
 
 	// Initilize the servers.
 	go serveGRPC(grpcl)
