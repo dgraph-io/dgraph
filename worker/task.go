@@ -808,6 +808,9 @@ func iterateParallel(ctx context.Context, q *taskp.Query, f func([]byte, []byte,
 	for i := uint64(0); i < numPart; i++ {
 		minUid := grpSize*i + 1
 		maxUid := grpSize * (i + 1)
+		if i == numPart-1 {
+			maxUid = math.MaxUint64
+		}
 		x.Trace(ctx, "Running go-routine %v for iteration", i)
 		wg.Add(1)
 		go func() {
