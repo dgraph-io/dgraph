@@ -517,7 +517,7 @@ function isElementInViewport(el) {
     var val = totalServerLatency.slice(0, -2);
 
     if (unit === 'µs') {
-      return val * 1000;
+      return val / 1000;
     }
 
     // else assume 'ms'
