@@ -58,7 +58,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *taskp.Query) (*taskp.Result,
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
-		return processTask(q, gid)
+		return processTask(ctx, q, gid)
 	}
 
 	// Send this over the network.
@@ -179,7 +179,7 @@ func needsIndex(fnType FuncType) bool {
 }
 
 // processTask processes the query, accumulates and returns the result.
-func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
+func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result, error) {
 	attr := q.Attr
 	srcFn, err := parseSrcFn(q)
 	if err != nil {
@@ -348,7 +348,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 				mu.Unlock()
 			}
 		}
-		iterateParallel(q, f)
+		iterateParallel(ctx, q, f)
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -584,7 +584,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *taskp.Query) (*taskp.Resu
 	c := make(chan error, 1)
 	go func() {
 		var err error
-		reply, err = processTask(q, gid)
+		reply, err = processTask(ctx, q, gid)
 		c <- err
 	}()
 
@@ -799,8 +799,8 @@ type itkv struct {
 	val []byte
 }
 
-func iterateParallel(q *taskp.Query, f func([]byte, []byte, sync.Mutex)) {
-	numPart := uint64(50)
+func iterateParallel(ctx context.Context, q *taskp.Query, f func([]byte, []byte, sync.Mutex)) {
+	numPart := uint64(32)
 	grpSize := uint64(math.MaxUint64 / uint64(numPart))
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -808,7 +808,7 @@ func iterateParallel(q *taskp.Query, f func([]byte, []byte, sync.Mutex)) {
 	for i := uint64(0); i < numPart; i++ {
 		minUid := grpSize*i + 1
 		maxUid := grpSize * (i + 1)
-
+		x.Trace(ctx, "Running go-routine %v for iteration", i)
 		wg.Add(1)
 		go func() {
 			it := pstore.NewIterator()
