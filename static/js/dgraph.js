@@ -419,6 +419,9 @@ function isElementInViewport(el) {
    *         '.runnable' div. Useful when launching the runnabe as editing mode.
    */
   function launchRunnableModal(runnabelEl, options) {
+    // default argument
+    options = typeof options !== 'undefined' ? options : {};
+
     var $originalRunnable = $(runnabelEl);
     var $modal = $('#runnable-modal');
     var $modalBody = $modal.find('.modal-body');
@@ -433,7 +436,6 @@ function isElementInViewport(el) {
     });
 
     var $runnableEl = $modal.find('.runnable');
-
     if (options.runnableClass) {
       $runnableEl.addClass(options.runnableClass);
     }
@@ -501,6 +503,39 @@ function isElementInViewport(el) {
     $runnables.find('.query-content.java').text(javaTxt);
   }
 
+  function getLatencyTooltipHTML(serverLatencyInfo, networkLatency) {
+    var contentHTML = '<div class="measurement-row"><div class="measurement-key">JSON:</div><div class="measurement-val">' + serverLatencyInfo.json + '</div></div><div class="measurement-row"><div class="measurement-key">Parsing:</div><div class="measurement-val">' + serverLatencyInfo.parsing + '</div></div><div class="measurement-row"><div class="measurement-key">Processing:</div><div class="measurement-val">' + serverLatencyInfo.processing + '</div></div><div class="divider"></div><div class="measurement-row"><div class="measurement-key total">Total:</div><div class="measurement-val">' + serverLatencyInfo.total + '</div></div>';
+    var outputHTML = '<div class="latency-tooltip-container">' + contentHTML + '</div>';
+
+    return outputHTML;
+  }
+
+  /**
+   * updateLatencyInformation update the latency information displayed in the
+   * $runnable.
+   *
+   * @params $runnable {JQueryElement}
+   * @params serverLatencyInfo {Object} - latency info returned by the server
+   * @params networkLatency {Number} - network latency in milliseconds
+   */
+  function updateLatencyInformation($runnable, serverLatencyInfo, networkLatency) {
+    var isModal = $runnable.parents('#runnable-modal').length > 0;
+
+    // Remove the unit which is assumed to be 'ms'
+    var totalServerLatency = serverLatencyInfo.total.slice(0, -2);
+    var networkOnlyLatency = networkLatency - totalServerLatency;
+
+    $runnable.find('.latency-info').removeClass('hidden');
+    $runnable.find('.server-latency .number').text(totalServerLatency + 'ms');
+    $runnable.find('.network-latency .number').text(networkOnlyLatency + 'ms');
+
+    var tooltipHTML = getLatencyTooltipHTML(serverLatencyInfo, networkOnlyLatency);
+
+    $runnable.find('.server-latency-tooltip-trigger')
+     .attr('title', tooltipHTML)
+     .tooltip();
+  }
+
   // Running code
   $(document).on('click', '.runnable [data-action="run"]', function (e) {
     e.preventDefault();
@@ -517,15 +552,25 @@ function isElementInViewport(el) {
     $runnables.find('.output-container').removeClass('empty error');
     codeEl.text('Waiting for the server response...');
 
+    var startTime;
     $.post({
-      url: 'https://play.dgraph.io/query',
+      url: 'https://play.dgraph.io/query?latency=true',
       data: query,
-      dataType: 'json'
+      dataType: 'json',
+      beforeSend: function () {
+        startTime = new Date().getTime();
+      }
     })
     .done(function (res) {
-      var resText = JSON.stringify(res, null, 2);
+      var now = new Date().getTime();
+      var networkLatency = now - startTime;
+      var serverLatencyInfo = res.server_latency;
+      delete res.server_latency;
 
-      codeEl.text(resText);
+      updateLatencyInformation($runnables, serverLatencyInfo, networkLatency);
+
+      var userOutput = JSON.stringify(res, null, 2);
+      codeEl.text(userOutput);
       for (var i = 0; i < codeEl.length; i++) {
         hljs.highlightBlock(codeEl[i]);
       }
@@ -567,6 +612,8 @@ function isElementInViewport(el) {
     var $runnables = $('.runnable[data-checksum="' + checksum + '"]');
     var newQuery = $currentRunnable.attr('data-unsaved') ||
                    $currentRunnable.attr('data-current');
+
+    newQuery = newQuery.trim();
 
     // Update query examples and the textarea with the current query
     $runnables.attr('data-current', newQuery);
@@ -629,6 +676,7 @@ function isElementInViewport(el) {
 
   // Runnable modal event hooks
   $('#runnable-modal').on('hidden.bs.modal', function (e) {
+    $(this).find('.server-latency-tooltip-trigger').tooltip('dispose');
     $(this).find('.modal-body').html('');
   });
 
@@ -648,6 +696,11 @@ function isElementInViewport(el) {
     if (isEditing) {
       navToRunnableTab($runnable, 'edit')
       initCodeMirror($runnable);
+    }
+
+    var hasRun = !$runnable.find('.latency-info').hasClass('hidden');
+    if (hasRun) {
+      $runnable.find('.server-latency-tooltip-trigger').tooltip();
     }
   });
 

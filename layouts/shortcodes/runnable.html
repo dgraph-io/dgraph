@@ -1,7 +1,7 @@
 {{ $checksum := md5 .Inner }}
 
 <div class="runnable" data-checksum="{{ $checksum }}" data-initial="{{ .Inner }}" data-current="{{ .Inner }}" data-dirty="false">
-  <div class="container">
+  <div class="container-fluid">
     <div class="row">
       <div class="runnable-col runnable-col-code col-12 col-sm-12 col-md-12 col-lg-6 nopadding">
         <div class="runnable-pane">
@@ -27,7 +27,9 @@
             <div class="editing-header">
               <div class="row">
                 <div class="col-12">
-                  Editing query...
+                  <span class="pane-title">
+                    Editing query...
+                  </span>
                 </div>
               </div>
             </div>
@@ -85,11 +87,10 @@ public class DgraphMain {
       <div class="runnable-col runnable-col-output col-12 col-sm-12 col-md-12 col-lg-6 nopadding">
         <div class="runnable-pane">
           <div class="row topbar">
-            <div class="col-6 col-sm-6">
-              Response
-            </div>
-            <div class="col-6 col-sm-6">
-
+            <div class="col-12">
+              <span class="pane-title">
+                Response
+              </span>
             </div>
           </div>
 
@@ -98,9 +99,17 @@ public class DgraphMain {
           </div>
 
           <div class="row footer">
-            <div class="col-6 col-sm-6">
+            <div class="col-12 col-sm-8">
+              <div class="latency-info hidden">
+                <div class="stat server-latency">
+                  <span class="label">Server latency:</span> <span class="number"></span> <i class="fa fa-question-circle server-latency-tooltip-trigger" data-toggle="tooltip" data-placement="bottom" data-html="true" title="Latency information" data-animation="false"></i>
+                </div>
+                <div class="stat network-latency">
+                  <span class="label">Network latency:</span> <span class="number"></span>
+                </div>
+              </div>
             </div>
-            <div class="col-6 col-sm-6">
+            <div class="col-12 col-sm-4">
               <div class="actions pull-right">
                 <a class="code-btn hidden-sm-down" data-action="expand" href="#"><i class="fa fa-expand"></i></a>
                 <span class="code-btn" data-action="copy-output" href="#">Copy</span>

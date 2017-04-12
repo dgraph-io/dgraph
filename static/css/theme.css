@@ -602,10 +602,28 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   background: #fffff3;
   overflow-y: auto;
 }
-/*.runnable .runnable-code code {
-  white-space: inherit;
-  overflow-x: auto;
-}*/
+.runnable .latency-info {
+  display: inline-block;
+  font-size: 13px;
+  padding-left: 5px;
+}
+.runnable .latency-info .stat {
+  display: inline-block;
+  color: gray;
+  padding-right: 5px;
+}
+.runnable .latency-info .number {
+  color: #3e65b7;
+  font-weight: 600;
+}
+.runnable .pane-title {
+  vertical-align: middle;
+  padding: 0px 13px;
+  display: inline-block;
+}
+.runnable .latency-info {
+  vertical-align: middle;
+}
 html .runnable pre {
   padding: 0;
   border: 0;
@@ -636,7 +654,7 @@ html .runnable code {
   margin-bottom: 0;
 }
 #runnable-modal .runnable-pane {
-  height: 644px;
+  height: 77vh;
 }
 #runnable-modal .code-btn[data-action='expand'] {
   display: none;
@@ -675,11 +693,49 @@ html .runnable code {
 @media screen and (max-width: 768px) {
   #runnable-modal .modal-dialog {
     max-width: 100%;
-    margin-top: 69px;
+    margin: 58px 9px;
+  }
+  #runnable-modal .modal-close-btn {
+    font-size: 13px;
   }
   #runnable-modal .runnable-pane {
-    height: 375px;
+    height: 50vh;
   }
+}
+@media screen and (min-width: 1441px) {
+  #runnable-modal .runnable-pane {
+    height: 84vh;
+  }
+}
+@media screen and (max-width: 375px) {
+  #runnable-modal .modal-dialog {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+.latency-tooltip-container {
+  font-size: 11px;
+}
+.latency-tooltip-container .measurement-row {
+  overflow: auto;
+  width: 117px;
+}
+.latency-tooltip-container .measurement-key {
+  display: inline-block;
+  float: left;
+}
+.latency-tooltip-container .measurement-key.total  {
+  font-weight: 600;
+}
+.latency-tooltip-container .measurement-val {
+  display: inline-block;
+  float: right;
+  font-weight: 600;
+}
+.latency-tooltip-container .divider {
+  width: 100%;
+  border-bottom: 1px solid white;
+  margin: 2px 0 3px;
 }
 
 /* custom bootstrap */
@@ -690,4 +746,7 @@ html .runnable code {
 .nopadding {
    padding: 0 !important;
    margin: 0 !important;
+}
+.hidden {
+  display: none !important;
 }
