@@ -1,14 +1,19 @@
 import React from "react";
 import ReactDOM from "react-dom";
+import {
+    BrowserRouter as Router,
+    Route,
+    browserHistory
+} from "react-router-dom";
 import { compose, createStore, applyMiddleware } from "redux";
 import { Provider } from "react-redux";
 import thunk from "redux-thunk";
 import { persistStore, autoRehydrate } from "redux-persist";
 import reducer from "./reducers";
-import App from "./containers/App";
 
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap/dist/css/bootstrap-theme.css";
+import App from "./containers/App";
 
 const middleware = [thunk];
 
@@ -26,7 +31,9 @@ persistStore(store, { whitelist: ["previousQueries", "query", "scratchpad"] });
 const render = Component => {
     return ReactDOM.render(
         <Provider store={store}>
-            <Component />
+            <Router history={browserHistory}>
+                <Route path="/:id?" component={Component} />
+            </Router>
         </Provider>,
         document.getElementById("root")
     );

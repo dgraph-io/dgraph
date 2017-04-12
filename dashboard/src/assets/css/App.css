@@ -92,3 +92,7 @@ input.form-control {
 .form-group {
     margin-bottom: 5px;
 }
+
+.App-hide {
+    display: none;
+}

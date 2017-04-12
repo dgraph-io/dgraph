@@ -5,6 +5,7 @@ import response from "./response";
 import interaction from "./interaction";
 import latency from "./latency";
 import scratchpad from "./scratchpad";
+import share from "./share";
 
 const rootReducer = combineReducers({
     query,
@@ -12,7 +13,8 @@ const rootReducer = combineReducers({
     response,
     interaction,
     latency,
-    scratchpad
+    scratchpad,
+    share
 });
 
 export default rootReducer;

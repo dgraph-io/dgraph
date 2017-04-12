@@ -19,7 +19,20 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 )
+
+func homeHandler(h http.Handler, reg *regexp.Regexp) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// If path is '/hexValue', lets return the index.html.
+		if reg.MatchString(r.URL.Path) {
+			http.ServeFile(w, r, uiDir+"/index.html")
+			return
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
 
 type keyword struct {
 	// Type could be a predicate, function etc.

@@ -4,7 +4,8 @@ import {
     isNotEmpty,
     showTreeView,
     processGraph,
-    dgraphAddress
+    dgraphAddress,
+    dgraphQuery
 } from "../containers/Helpers";
 
 // TODO - Check if its better to break this file down into multiple files.
@@ -197,3 +198,148 @@ export const addScratchpadEntry = entry => ({
 export const deleteScratchpadEntries = () => ({
     type: "DELETE_SCRATCHPAD_ENTRIES"
 });
+
+export const updateShareId = shareId => ({
+    type: "UPDATE_SHARE_ID",
+    shareId
+});
+
+export const queryFound = found => ({
+    type: "QUERY_FOUND",
+    found: found
+});
+
+const doShareMutation = (dispatch, getState) => {
+    let query = getState().query.text,
+        stringifiedQuery = JSON.stringify(encodeURI(query)),
+        mutation = `
+    mutation {
+        set {
+            <_:share> <internal_share> ${stringifiedQuery} .
+        }
+    }`;
+
+    fetch(dgraphQuery(false), {
+        method: "POST",
+        mode: "cors",
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "text/plain"
+        },
+        body: mutation
+    })
+        .then(checkStatus)
+        .then(response => response.json())
+        .then(function handleResponse(result) {
+            console.log(result);
+            if (result.uids && result.uids.share) {
+                dispatch(updateShareId(result.uids.share));
+            }
+        })
+        .catch(function(error) {
+            console.log(error.stack);
+            return error;
+        })
+        .then(function(errorMsg) {
+            if (errorMsg !== undefined) {
+                // Display somewhere.
+            }
+        });
+};
+
+export const getShareId = (dispatch, getState) => {
+    let query = getState().query.text;
+    // TODO - Share button shouldn't be displayed when query block is empty.
+    if (query === "") {
+        return;
+    }
+    let stringifiedQuery = JSON.stringify(encodeURI(query)),
+        checkQuery = `
+mutation {
+    schema {
+        internal_share: string @index(exact) .
+    }
+}
+{
+    query(func:eq(internal_share, ${stringifiedQuery})) {
+        _uid_
+    }
+}`;
+
+    timeout(
+        6000,
+        fetch(dgraphQuery(false), {
+            method: "POST",
+            mode: "cors",
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "text/plain"
+            },
+            body: checkQuery
+        })
+            .then(checkStatus)
+            .then(response => response.json())
+            .then(function handleResponse(result) {
+                if (result.query && result.query.length > 0) {
+                    return dispatch(updateShareId(result.query[0]["_uid_"]));
+                } else {
+                    // Else do a mutation to store the query.
+                    return doShareMutation(dispatch, getState);
+                }
+            })
+    )
+        .catch(function(error) {
+            console.log(error.stack);
+            return error;
+        })
+        .then(function(errorMsg) {
+            if (errorMsg !== undefined) {
+                // Display somewhere.
+            }
+        });
+};
+
+export const getQuery = shareId => {
+    return dispatch => {
+        timeout(
+            6000,
+            fetch(dgraphQuery(false), {
+                method: "POST",
+                mode: "cors",
+                headers: {
+                    Accept: "application/json"
+                },
+                body: `{
+                    query(id: ${shareId}) {
+                        internal_share
+                    }
+                }`
+            })
+                .then(checkStatus)
+                .then(response => response.json())
+                .then(function handleResponse(result) {
+                    if (result.query && result.query.length > 0) {
+                        dispatch(
+                            selectQuery(
+                                decodeURI(result.query[0].internal_share)
+                            )
+                        );
+                        return;
+                    }
+                })
+        )
+            .catch(function(error) {
+                dispatch(queryFound(false));
+
+                console.log(error.stack);
+                var err = (error.response && error.response.text()) ||
+                    error.message;
+                return err;
+            })
+            .then(function(errorMsg) {
+                if (errorMsg !== undefined) {
+                    // Display somewhere.
+                }
+            });
+    };
+};

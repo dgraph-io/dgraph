@@ -1,0 +1,23 @@
+.Nav-url-hide {
+	display: none !important;
+}
+
+.Nav-share-url {
+	margin-left: 10px;
+}
+
+.Nav-pad a {
+	padding-top: 10px !important;
+}
+
+@media only screen and (min-width: 992px) {
+	.Nav-share-url.form-control {
+		width: 350px;
+	}
+}
+
+@media only screen and (max-width: 992px) {
+	.Nav-share-url.form-control {
+		width: 200px;
+	}
+}
