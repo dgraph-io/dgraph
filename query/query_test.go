@@ -4817,6 +4817,21 @@ func TestLangManyFallback(t *testing.T) {
 		js)
 }
 
+func TestLangFilterMismatch1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func:allofterms(name@pl, "badger")) {
+				name@pl
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
 func checkSchemaNodes(t *testing.T, expected []*graphp.SchemaNode, actual []*graphp.SchemaNode) {
 	sort.Slice(expected, func(i, j int) bool {
 		return expected[i].Predicate >= expected[j].Predicate
