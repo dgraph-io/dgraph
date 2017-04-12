@@ -656,10 +656,9 @@ func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
 
 	// look for language in preffered order
 	for _, lang := range langs {
-		langUid := farm.Fingerprint64([]byte(lang))
-		found, rval = l.findValue(langUid)
-		if found {
-			break
+		rval, rerr = l.valueForTag(lang)
+		if rerr == nil {
+			return rval, nil
 		}
 	}
 

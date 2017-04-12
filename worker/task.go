@@ -452,6 +452,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 
 			val, err := pl.ValueForTag(srcFn.lang)
 			if err != nil {
+				decr()
 				continue
 			}
 			// conver data from binary to appropriate format
