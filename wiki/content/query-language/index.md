@@ -2372,19 +2372,36 @@ Output:
 ```
 This query shows a mix of how things can be used.
 
-### Aggregating value variables
+## Aggregating value variables
 
-Currently we allow adding value variabels and assigning it to a new variable. This can be very useful if you want a simple recommendation system based on a formula. For example:
+Value variables can be combined using complex mathematical functions to asscociate a score for the entities which could then be used to order the entites or perform other operations on them. This can be useful for building newsfeeds, simple recommendation systems and the likes.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+All these statements must be enclosed within a `math( <exp> )` block.
+
+The supported operators are as follows:
+
+| Operators    | Types accepted | What it does             |
+|:------------:|:--------------:|:------------------------:|
+| `+` `-` `*` `/` `%`  | int, float   | performs the corresponding operation |
+| `min` `max`      | All types except geo, bool  (binary functions) | selects the min/max value among the two|
+| `<` `>` `<=` `>=` `==` `!=`  | All types except geo, bool     | Returns true or false based on the values |
+| `floor` `ceil``ln` `exp` `sqrt`  | int, float (unary function)| performs the corresponding operation|
+| `since` | date, datetime | Returns the number of seconds in float from the time specified |
+| `pow(a, b)` | int, float | Returns `a to the power b` |
+| `logbase(a,b)` | int, float | Returns `log(a)` to the base `b`|
+| `cond(a, b, c)`    | first operand must be a boolean  | selects `b` if `a` is true else `c` |
+
+A simple example is: 
+
+{{< runnable >}}
+{
 	var(func:allofterms(name, "steven spielberg")) {
 		name@en
 		films as director.film {
 			p as count(starring)
 			q as count(genre)
 			r as count(country)
-			score as sumvar(p, q, r)
+			score as math(p + q + r)
 		}
 	}
 
@@ -2392,37 +2409,33 @@ curl localhost:8080/query -XPOST -d $'{
 		name@en
 		var(score)
 	}
-}' | python -m json.tool | less
-```
-Output:
-```
-{
-  "TopMovies": [
-    {
-      "name@en": "Lincoln",
-      "var[score]": 179
-    },
-    {
-      "name@en": "Minority Report",
-      "var[score]": 156
-    },
-    {
-      "name@en": "Schindler's List",
-      "var[score]": 145
-    },
-    {
-      "name@en": "The Terminal",
-      "var[score]": 118
-    },
-    {
-      "name@en": "Saving Private Ryan",
-      "var[score]": 99
-    }
-  ]
 }
-```
+{{< /runnable >}}
+
 In the above query we retrieve the top movies (by sum of number of actors, genres, countries) of the entity named steven spielberg.
 
+if we want to add a condition based on release date to peanalize movies that are more than 10 years old, we could do:
+
+{{< runnable >}}
+{
+  var(func:allofterms(name, "steven spielberg")) {
+    name@en
+    films as director.film {
+      p as count(starring)
+      q as count(genre)
+      date as initial_release_date
+      years as math(since(date)/(365*24*60*60))
+      score as math(cond(years > 10, 0, ln(p)+q-ln(years)))
+    }
+  }
+
+  TopMovies(id: var(films), orderdesc: var(score), first: 5){
+    name@en
+    var(score)
+    var(date)
+  }
+}
+{{< /runnable >}}
 
 ## Shortest Path Queries
 
