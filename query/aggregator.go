@@ -111,56 +111,36 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		return ErrEmptyVal
 	}
 
+	var l float64
+	if v.Tid == types.IntID {
+		l = float64(v.Value.(int64))
+		v.Value = l
+		v.Tid = types.FloatID
+	} else if v.Tid == types.FloatID {
+		l = v.Value.(float64)
+	}
+	// If its not int or float, keep the type.
+
 	var res types.Val
 	if isUnary(ag.name) {
 		switch ag.name {
 		case "ln":
-			if v.Tid == types.IntID {
-				v.Value = math.Log(float64(v.Value.(int64)))
-				v.Tid = types.FloatID
-			} else if v.Tid == types.FloatID {
-				v.Value = math.Log(v.Value.(float64))
-			}
+			v.Value = math.Log(l)
 			res = v
 		case "exp":
-			if v.Tid == types.IntID {
-				v.Value = math.Exp(float64(v.Value.(int64)))
-				v.Tid = types.FloatID
-			} else if v.Tid == types.FloatID {
-				v.Value = math.Exp(v.Value.(float64))
-			}
+			v.Value = math.Exp(l)
 			res = v
 		case "u-":
-			if v.Tid == types.IntID {
-				v.Value = -float64(v.Value.(int64))
-				v.Tid = types.FloatID
-			} else if v.Tid == types.FloatID {
-				v.Value = -v.Value.(float64)
-			}
+			v.Value = -l
 			res = v
 		case "sqrt":
-			if v.Tid == types.IntID {
-				v.Value = math.Sqrt(float64(v.Value.(int64)))
-				v.Tid = types.FloatID
-			} else if v.Tid == types.FloatID {
-				v.Value = math.Sqrt(v.Value.(float64))
-			}
+			v.Value = math.Sqrt(l)
 			res = v
 		case "floor":
-			if v.Tid == types.IntID {
-				v.Value = math.Floor(float64(v.Value.(int64)))
-				v.Tid = types.FloatID
-			} else if v.Tid == types.FloatID {
-				v.Value = math.Floor(v.Value.(float64))
-			}
+			v.Value = math.Floor(l)
 			res = v
 		case "ceil":
-			if v.Tid == types.IntID {
-				v.Value = math.Ceil(float64(v.Value.(int64)))
-				v.Tid = types.FloatID
-			} else if v.Tid == types.FloatID {
-				v.Value = math.Ceil(v.Value.(float64))
-			}
+			v.Value = math.Ceil(l)
 			res = v
 		case "since":
 			if v.Tid == types.DateID {
@@ -182,124 +162,42 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	}
 
 	va := ag.result
-	vb := v
 	switch ag.name {
 	case "+":
-		if va.Tid == types.IntID && vb.Tid == types.IntID {
-			va.Value = va.Value.(int64) + vb.Value.(int64)
-		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
-			va.Value = va.Value.(float64) + vb.Value.(float64)
-		} else if va.Tid == types.IntID && vb.Tid == types.FloatID {
-			va.Value = float64(va.Value.(int64)) + vb.Value.(float64)
-			va.Tid = types.FloatID
-		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
-			va.Value = va.Value.(float64) + float64(vb.Value.(int64))
-		} else {
-			// This pair cannot be aggregated. So pass.
-		}
+		va.Value = va.Value.(float64) + l
 		res = va
 	case "-":
-		if va.Tid == types.IntID && vb.Tid == types.IntID {
-			va.Value = va.Value.(int64) - vb.Value.(int64)
-		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
-			va.Value = va.Value.(float64) - vb.Value.(float64)
-		} else if va.Tid == types.IntID && vb.Tid == types.FloatID {
-			va.Value = float64(va.Value.(int64)) - vb.Value.(float64)
-			va.Tid = types.FloatID
-		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
-			va.Value = va.Value.(float64) - float64(vb.Value.(int64))
-		} else {
-			// This pair cannot be aggregated. So pass.
-		}
+		va.Value = va.Value.(float64) - l
 		res = va
 	case "*":
-		if va.Tid == types.IntID && vb.Tid == types.IntID {
-			va.Value = va.Value.(int64) * vb.Value.(int64)
-		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
-			va.Value = va.Value.(float64) * vb.Value.(float64)
-		} else if va.Tid == types.IntID && vb.Tid == types.FloatID {
-			va.Value = float64(va.Value.(int64)) * vb.Value.(float64)
-			va.Tid = types.FloatID
-		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
-			va.Value = va.Value.(float64) * float64(vb.Value.(int64))
-		} else {
-			// This pair cannot be aggregated. So pass.
-		}
+		va.Value = va.Value.(float64) * l
 		res = va
 	case "/":
-		if va.Tid == types.IntID && vb.Tid == types.IntID {
-			va.Value = va.Value.(int64) / vb.Value.(int64)
-		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
-			va.Value = va.Value.(float64) / vb.Value.(float64)
-		} else if va.Tid == types.IntID && vb.Tid == types.FloatID {
-			va.Value = float64(va.Value.(int64)) / vb.Value.(float64)
-			va.Tid = types.FloatID
-		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
-			va.Value = va.Value.(float64) / float64(vb.Value.(int64))
-		} else {
-			// This pair cannot be aggregated. So pass.
-		}
+		va.Value = va.Value.(float64) / l
 		res = va
 	case "%":
-		if va.Tid == types.IntID && vb.Tid == types.IntID {
-			va.Value = math.Mod(float64(va.Value.(int64)), float64(vb.Value.(int64)))
-			va.Tid = types.FloatID
-		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
-			va.Value = math.Mod(va.Value.(float64), vb.Value.(float64))
-		} else if va.Tid == types.IntID && vb.Tid == types.FloatID {
-			va.Value = math.Mod(float64(va.Value.(int64)), vb.Value.(float64))
-			va.Tid = types.FloatID
-		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
-			va.Value = math.Mod(va.Value.(float64), float64(vb.Value.(int64)))
-		} else {
-			// This pair cannot be aggregated. So pass.
-		}
+		va.Value = math.Mod(va.Value.(float64), l)
 		res = va
 	case "pow":
-		if va.Tid == types.IntID && vb.Tid == types.IntID {
-			va.Value = math.Pow(float64(va.Value.(int64)), float64(vb.Value.(int64)))
-			va.Tid = types.FloatID
-		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
-			va.Value = math.Pow(va.Value.(float64), vb.Value.(float64))
-		} else if va.Tid == types.IntID && vb.Tid == types.FloatID {
-			va.Value = math.Pow(float64(va.Value.(int64)), vb.Value.(float64))
-			va.Tid = types.FloatID
-		} else if va.Tid == types.FloatID && vb.Tid == types.IntID {
-			va.Value = math.Pow(va.Value.(float64), float64(vb.Value.(int64)))
-		} else {
-			// This pair cannot be aggregated. So pass.
-		}
+		va.Value = math.Pow(va.Value.(float64), l)
 		res = va
 	case "logbase":
-		var a, b float64
-		if vb.Tid == types.IntID {
-			b = float64(vb.Value.(int64))
-		} else if vb.Tid == types.FloatID {
-			b = vb.Value.(float64)
-		}
-		if b == 1 {
+		if l == 1 {
 			return nil
 		}
-		if va.Tid == types.IntID {
-			a = float64(va.Value.(int64))
-		} else if va.Tid == types.FloatID {
-			a = va.Value.(float64)
-		}
-
-		va.Tid = types.FloatID
-		va.Value = math.Log(a) / math.Log(b)
+		va.Value = math.Log(va.Value.(float64)) / math.Log(l)
 		res = va
 	case "min":
-		r, err := types.Less(va, vb)
+		r, err := types.Less(va, v)
 		if err == nil && !r {
-			res = vb
+			res = v
 		} else {
 			res = va
 		}
 	case "max":
-		r, err := types.Less(va, vb)
+		r, err := types.Less(va, v)
 		if err == nil && r {
-			res = vb
+			res = v
 		} else {
 			res = va
 		}
