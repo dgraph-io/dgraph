@@ -6,6 +6,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// processBinary handles the binary operands like
+// +, -, *, /, %, max, min, logbase
 func processBinary(mNode *gql.MathTree) (err error) {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
@@ -66,6 +68,9 @@ func processBinary(mNode *gql.MathTree) (err error) {
 	mNode.Const, err = ag.Value()
 	return err
 }
+
+// processUnary handles the unary operands like
+// u-, log, exp, since, floor, ceil
 func processUnary(mNode *gql.MathTree) (err error) {
 	destMap := make(map[uint64]types.Val)
 	srcMap := mNode.Child[0].Val
@@ -92,6 +97,10 @@ func processUnary(mNode *gql.MathTree) (err error) {
 	return nil
 
 }
+
+// processBinaryBoolean handles the binary operands which
+// return a boolean value.
+// All the inequality operators (<, >, <=, >=, !=, ==)
 func processBinaryBoolean(mNode *gql.MathTree) (err error) {
 	destMap := make(map[uint64]types.Val)
 	srcMap := mNode.Child[0].Val
@@ -118,6 +127,7 @@ func processBinaryBoolean(mNode *gql.MathTree) (err error) {
 	return nil
 }
 
+// processTernary handles the ternary operand cond()
 func processTernary(mNode *gql.MathTree) (err error) {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
@@ -170,6 +180,7 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) (err error) {
 	}
 
 	for _, child := range mNode.Child {
+		// Process the child nodes first.
 		err := evalMathTree(child, doneVars)
 		if err != nil {
 			return err
@@ -177,36 +188,37 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) (err error) {
 	}
 
 	aggName := mNode.Fn
-	if isUnary(aggName) && len(mNode.Child) != 1 {
-		return x.Errorf("Function %v expects 1 argument. But got: %v", aggName,
-			len(mNode.Child))
-	}
-	if (isBinary(aggName) || isBinaryBoolean(aggName)) && len(mNode.Child) != 2 {
-		return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
-			len(mNode.Child))
-	}
-	if isTernary(aggName) && len(mNode.Child) != 3 {
-		return x.Errorf("Function %v expects 3 argument. But got: %v", aggName,
-			len(mNode.Child))
-	}
-
-	// Handle ternary conditional operator separately here.
-	if isTernary(aggName) {
-		return processTernary(mNode)
-	}
-
-	// Handle binary boolean operators separately here.
-	if isBinaryBoolean(aggName) {
-		return processBinaryBoolean(mNode)
-	}
-
-	// Handle unary operators here.
 	if isUnary(aggName) {
+		if len(mNode.Child) != 1 {
+			return x.Errorf("Function %v expects 1 argument. But got: %v", aggName,
+				len(mNode.Child))
+		}
 		return processUnary(mNode)
 	}
 
 	if isBinary(aggName) {
+		if len(mNode.Child) != 2 {
+			return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
+				len(mNode.Child))
+		}
 		return processBinary(mNode)
 	}
+
+	if isBinaryBoolean(aggName) {
+		if len(mNode.Child) != 2 {
+			return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
+				len(mNode.Child))
+		}
+		return processBinaryBoolean(mNode)
+	}
+
+	if isTernary(aggName) {
+		if len(mNode.Child) != 3 {
+			return x.Errorf("Function %v expects 3 argument. But got: %v", aggName,
+				len(mNode.Child))
+		}
+		return processTernary(mNode)
+	}
+
 	return x.Errorf("Unhandled Math operator: %v", aggName)
 }
