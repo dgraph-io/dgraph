@@ -979,7 +979,7 @@ func TestNestedFuncRoot(t *testing.T) {
 func TestNestedFuncRoot2(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	query := `
 		{
 			me(func: geq(count(friend), 1)) {
