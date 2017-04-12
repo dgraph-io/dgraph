@@ -510,6 +510,20 @@ function isElementInViewport(el) {
     return outputHTML;
   }
 
+  function getTotalServerLatencyInMS(serverLatencyInfo) {
+    var totalServerLatency = serverLatencyInfo.total;
+
+    var unit = totalServerLatency.slice(-2);
+    var val = totalServerLatency.slice(0, -2);
+
+    if (unit === 'µs') {
+      return val * 1000;
+    }
+
+    // else assume 'ms'
+    return val;
+  }
+
   /**
    * updateLatencyInformation update the latency information displayed in the
    * $runnable.
@@ -521,12 +535,11 @@ function isElementInViewport(el) {
   function updateLatencyInformation($runnable, serverLatencyInfo, networkLatency) {
     var isModal = $runnable.parents('#runnable-modal').length > 0;
 
-    // Remove the unit which is assumed to be 'ms'
-    var totalServerLatency = serverLatencyInfo.total.slice(0, -2);
+    var totalServerLatency = getTotalServerLatencyInMS(serverLatencyInfo);
     var networkOnlyLatency = networkLatency - totalServerLatency;
 
     $runnable.find('.latency-info').removeClass('hidden');
-    $runnable.find('.server-latency .number').text(totalServerLatency + 'ms');
+    $runnable.find('.server-latency .number').text(serverLatencyInfo.total);
     $runnable.find('.network-latency .number').text(networkOnlyLatency + 'ms');
 
     var tooltipHTML = getLatencyTooltipHTML(serverLatencyInfo, networkOnlyLatency);
@@ -567,7 +580,12 @@ function isElementInViewport(el) {
       var serverLatencyInfo = res.server_latency;
       delete res.server_latency;
 
-      updateLatencyInformation($runnables, serverLatencyInfo, networkLatency);
+      // In some cases, the server does not return latency information
+      // TODO: find better ways to check for errors or fix dgraph to make the
+      // response consistent
+      if (!res.code || !/Error/i.test(res.code)) {
+        updateLatencyInformation($runnables, serverLatencyInfo, networkLatency);
+      }
 
       var userOutput = JSON.stringify(res, null, 2);
       codeEl.text(userOutput);
