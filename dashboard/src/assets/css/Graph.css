@@ -7,7 +7,6 @@
 .Graph {
     font-size: 12px;
     word-break: break-all;
-    margin-top: 9px;
     width: 100%;
     border: 1px solid gray;
     border-bottom: 0px;
@@ -64,11 +63,13 @@
     border-bottom: 0px;
     flex: auto;
     display: flex;
+    overflow: auto;
     flex-direction: column;
 }
 
 .Graph-fixed-height {
     height: 500px;
+    overflow: auto;
     position: relative;
 }
 
@@ -95,29 +96,6 @@
     width: 80%;
 }
 
-
-/*.Graph-zoom {
-    display: none;
-    text-align: right;
-    position: absolute;
-    top: 15px;
-    right: 10px;
-    z-index: 10;
-}
-
-.Graph-zoom-plus {
-    font-size: 20px;
-    padding: 5px;
-    margin-bottom: 5px;
-    display: block !important;
-}
-
-.Graph-zoom-minus {
-    font-size: 20px;
-    padding: 5px;
-    display: block !important;
-}*/
-
 .vis-zoomExtends,
 .vis-right,
 .vis-left,
@@ -130,4 +108,33 @@
     position: absolute;
     top: 60px;
     right: 5px;
+}
+
+.Graph-hide {
+    display: none;
+}
+
+.Graph-wrapper > .nav-tabs {
+    border-bottom: none;
+}
+
+.Graph-outer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.Graph-json pre {
+    border: none;
+    border-radius: 0px;
+}
+
+.Graph-json {
+    border: 1px solid gray;
+    background: #f9f9f9;
+}
+
+.Graph-json pre, code {
+    font-size: 12px;
+    background: #f9f9f9;
 }

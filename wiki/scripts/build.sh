@@ -15,7 +15,12 @@ HOST=https://docs.dgraph.io
 rebuild() {
 	echo -e "$(date) $GREEN Updating docs for branch: $1.$RESET"
 	# Generate new docs after merging.
-	HUGO_TITLE="Dgraph Doc ${2}" hugo\
+
+	# In Unix environments, env variables should also be exported to be seen by Hugo
+	export CURRENT_BRANCH=${1}
+
+	HUGO_TITLE="Dgraph Doc ${2}"\
+	CURRENT_BRANCH=${1} hugo\
 		--destination=public/"$2"\
 		--baseURL="$HOST"/"$2" 1> /dev/null
 }
@@ -69,6 +74,8 @@ while true; do
 	# Now lets check the theme.
 	echo -e "$(date)  Starting to check branches."
 	git remote update > /dev/null
+	# Todo have these in an array and loop over the array.
+	checkAndUpdate "release/v0.7.5" "v0.7.5"
 	checkAndUpdate "release/v0.7.4" "v0.7.4"
 	checkAndUpdate "master" "master"
 	echo -e "$(date)  Done checking branches.\n"

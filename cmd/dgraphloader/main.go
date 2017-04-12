@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -178,7 +179,31 @@ func main() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	batch := client.NewBatchMutation(context.Background(), conn, *numRdf, *concurrent)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	dgraphClient := graphp.NewDgraphClient(conn)
+	v, err := dgraphClient.CheckVersion(ctx, &graphp.Check{})
+	if err != nil {
+		// Error could be unknown service graphp.Dgraph (because we updated proto
+		// package) if Dgraph version is < 0.7.4 and loader version is >= 0.7.4.
+		// It could be Unknown method CheckVersion if Dgraph version < 0.7.5 and
+		// Dgraphloader version is >= 0.7.5 because this method was added in v0.7.5.
+		fmt.Printf(`
+Could not fetch version information from Dgraph. Got err: %v.
+Looks like you are using an older version of Dgraph. Get the latest version from https://docs.dgraph.io
+`, err)
+	} else {
+		version := x.Version()
+		if version != "" && v.Tag != "" && version != v.Tag {
+			fmt.Printf(`
+Dgraph server: %v, loader: %v dont match.
+You can get the latest version from https://docs.dgraph.io
+`, v.Tag, version)
+		}
+	}
+
+	batch := client.NewBatchMutation(context.Background(), dgraphClient, *numRdf, *concurrent)
 
 	ticker := time.NewTicker(2 * time.Second)
 	go printCounters(batch, ticker)

@@ -17,7 +17,24 @@ class NavBar extends Component {
                 </Navbar.Header>
                 <Navbar.Collapse>
                     <Nav>
-                        <NavItem eventKey={1} href="#">Visualization</NavItem>
+                        <NavItem target="_blank" href="https://docs.dgraph.io">
+                            Documentation
+                        </NavItem>
+                        <NavItem
+                            target="_blank"
+                            href="https://github.com/dgraph-io/dgraph"
+                        >
+                            Github
+                        </NavItem>
+                        <NavItem target="_blank" href="https://open.dgraph.io">
+                            Blog
+                        </NavItem>
+                        <NavItem
+                            target="_blank"
+                            href="https://dgraph.slack.com"
+                        >
+                            Community
+                        </NavItem>
                     </Nav>
                 </Navbar.Collapse>
             </Navbar>

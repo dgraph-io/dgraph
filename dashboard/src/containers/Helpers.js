@@ -1,6 +1,6 @@
 import randomColor from "randomcolor";
 import uuid from "uuid";
-import _ from "lodash/object";
+import _ from "lodash";
 
 export function checkStatus(response) {
   if (response.status >= 200 && response.status < 300) {
@@ -66,7 +66,7 @@ function shortenName(label) {
     // First word is less than 10 chars so we can display it in full.
     if (words.length > 1) {
       if (words[1].length > 10) {
-        label = [firstWord, words[1] + "..."].join("\n");
+        label = [firstWord, words[1].substr(0, 7) + "..."].join("\n");
       } else {
         label = [firstWord, words[1]].join("\n");
       }
@@ -318,6 +318,8 @@ export function processGraph(
     fullName,
     regexEx = new RegExp(regex),
     isSchema = false;
+
+  response = _.cloneDeep(response);
 
   for (var k in response) {
     if (!response.hasOwnProperty(k)) {

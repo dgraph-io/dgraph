@@ -6,8 +6,11 @@ theme = "hugo-docs"
 title = "Dgraph Documentation"
 
 [params]
+  # Place the latest version at the beginning so that version selector can
+  # append '(latest)' to the version string
   versions = [
-    "v0.7.4 (latest)",
+    "v0.7.5",
+    "v0.7.4",
     "master"
   ]
 
@@ -15,24 +18,44 @@ title = "Dgraph Documentation"
   name = "Get Started"
   url = "/get-started/"
   identifier = "get-started"
-  weight = -100
+  weight = 1
+[[menu.main]]
+  name = "Guides"
+  url = "/guides/"
+  identifier = "guides"
+  weight = 2
 [[menu.main]]
   name = "Query Language"
   url = "/query-language/"
   identifier = "query-language"
-  weight = -80
+  weight = 3
 [[menu.main]]
   name = "Clients"
   url = "/clients/"
   identifier = "clients"
-  weight = -60
+  weight = 4
 [[menu.main]]
   name = "Deploy"
   url = "/deploy/"
   identifier = "deploy"
-  weight = -40
+  weight = 5
 [[menu.main]]
   name = "FAQ"
   url = "/faq/"
   identifier = "faq"
-  weight = -20
+  weight = 6
+[[menu.main]]
+  name = "Performance"
+  url = "/performance/"
+  identifier = "performance"
+  weight = 7
+[[menu.main]]
+  name = "Design Concepts"
+  url = "/design-concepts/"
+  identifier = "design-concepts"
+  weight = 8
+[[menu.main]]
+  name = "Dgraph compared to other databases"
+  url = "/dgraph-compared-to-other databases/"
+  identifier = "dgraph-compared-to-other databases"
+  weight = 9

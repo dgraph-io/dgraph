@@ -302,7 +302,7 @@ func TestReturnUids(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	var l Latency
@@ -1086,7 +1086,7 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 				name
 			}
 		}`
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	var l Latency
@@ -1328,7 +1328,7 @@ func TestDebug1(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	var l Latency
@@ -1387,7 +1387,7 @@ func TestDebug3(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	var l Latency
@@ -1447,7 +1447,7 @@ func TestCountError1(t *testing.T) {
 			}
 		}
 	`
-	_, err := gql.Parse(query)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
 }
 
@@ -1467,7 +1467,7 @@ func TestCountError2(t *testing.T) {
 			}
 		}
 	`
-	_, err := gql.Parse(query)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
 }
 
@@ -1483,7 +1483,7 @@ func TestCountError3(t *testing.T) {
 			}
 		}
 	`
-	_, err := gql.Parse(query)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
 }
 
@@ -1579,7 +1579,7 @@ func TestMinMultiProto(t *testing.T) {
 		}
 	}
 `
-	pb := processToPB(t, query, false)
+	pb := processToPB(t, query, map[string]string{}, false)
 	res := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -1716,7 +1716,7 @@ func TestMinError1(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	var l Latency
@@ -1739,7 +1739,7 @@ func TestMinError2(t *testing.T) {
                         }
                 }
         `
-	_, err := gql.Parse(query)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
 }
 
@@ -1807,7 +1807,7 @@ func TestMaxError1(t *testing.T) {
                         }
                 }
         `
-	_, err := gql.Parse(query)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
 }
 
@@ -1885,7 +1885,7 @@ func TestSumError1(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	var l Latency
@@ -1904,7 +1904,7 @@ func TestQueryPassword(t *testing.T) {
                         }
                 }
 	`
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	var l Latency
@@ -2044,7 +2044,7 @@ func TestToSubgraphInvalidFnName(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -2063,7 +2063,7 @@ func TestToSubgraphInvalidFnName2(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -2083,7 +2083,7 @@ func TestToSubgraphInvalidFnName3(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -2104,7 +2104,7 @@ func TestToSubgraphInvalidFnName4(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -2124,7 +2124,7 @@ func TestToSubgraphInvalidArgs1(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -2144,7 +2144,7 @@ func TestToSubgraphInvalidArgs2(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -2167,7 +2167,7 @@ func TestProcessGraph(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -2262,7 +2262,7 @@ func TestFieldAliasProto(t *testing.T) {
 			}
 		}
 	`
-	pb := processToPB(t, query, false)
+	pb := processToPB(t, query, map[string]string{}, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -2360,7 +2360,7 @@ func TestToFastJSONFilterMissBrac(t *testing.T) {
 			}
 		}
 	`
-	_, err := gql.Parse(query)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
 }
 
@@ -2383,6 +2383,44 @@ func TestToFastJSONFilterallofterms(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
+func TestInvalidStringIndex(t *testing.T) {
+	// no FTS index defined for name
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend @filter(alloftext(name, "Andrea SomethingElse")) {
+					name
+				}
+			}
+		}
+	`
+
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
+
+func TestValidFulltextIndex(t *testing.T) {
+	// no FTS index defined for name
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend @filter(alloftext(alias, "BOB")) {
+					alias
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne", "friend":[{"alias":"Bob Joe"}]}]}`, js)
+}
+
 func TestFilterRegexError(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -2396,7 +2434,7 @@ func TestFilterRegexError(t *testing.T) {
     }
   `
 
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -2831,7 +2869,7 @@ func TestToFastJSONOrderNameError(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -3237,7 +3275,7 @@ func TestToProto(t *testing.T) {
 			}
 		}
   `
-	pb := processToPB(t, query, true)
+	pb := processToPB(t, query, map[string]string{}, true)
 	require.EqualValues(t,
 		`attribute: "_root_"
 children: <
@@ -3326,7 +3364,7 @@ func TestToProtoFilter(t *testing.T) {
 		}
 	`
 
-	pb := processToPB(t, query, false)
+	pb := processToPB(t, query, map[string]string{}, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -3371,7 +3409,7 @@ func TestToProtoFilterOr(t *testing.T) {
 		}
 	`
 
-	pb := processToPB(t, query, false)
+	pb := processToPB(t, query, map[string]string{}, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -3425,7 +3463,7 @@ func TestToProtoFilterAnd(t *testing.T) {
 		}
 	`
 
-	pb := processToPB(t, query, false)
+	pb := processToPB(t, query, map[string]string{}, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -3662,7 +3700,7 @@ func TestToProtoOrder(t *testing.T) {
 		}
 	`
 
-	pb := processToPB(t, query, false)
+	pb := processToPB(t, query, map[string]string{}, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -3734,7 +3772,7 @@ func TestToProtoOrderCount(t *testing.T) {
 		}
 	`
 
-	pb := processToPB(t, query, false)
+	pb := processToPB(t, query, map[string]string{}, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -3788,7 +3826,7 @@ func TestToProtoOrderOffsetCount(t *testing.T) {
 		}
 	`
 
-	pb := processToPB(t, query, false)
+	pb := processToPB(t, query, map[string]string{}, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -3882,7 +3920,7 @@ func TestMultiQueryError1(t *testing.T) {
       }
     }
   `
-	_, err := gql.Parse(query)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
 }
 
@@ -3901,7 +3939,7 @@ func TestMultiQueryError2(t *testing.T) {
       }
     }
   `
-	_, err := gql.Parse(query)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
 }
 
@@ -4167,7 +4205,7 @@ func TestGeneratorRootFilterOnCountGt(t *testing.T) {
                         }
                 }
         `
-	_, err := gql.Parse(query)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	js := processToFastJSON(t, query)
@@ -4183,7 +4221,7 @@ func TestGeneratorRootFilterOnCountLeq(t *testing.T) {
                         }
                 }
         `
-	_, err := gql.Parse(query)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	js := processToFastJSON(t, query)
@@ -4202,7 +4240,7 @@ func TestGeneratorRootFilterOnCountChildLevel(t *testing.T) {
                         }
                 }
         `
-	_, err := gql.Parse(query)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	js := processToFastJSON(t, query)
@@ -4221,7 +4259,7 @@ func TestGeneratorRootFilterOnCountWithAnd(t *testing.T) {
                         }
                 }
         `
-	_, err := gql.Parse(query)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	js := processToFastJSON(t, query)
@@ -4238,7 +4276,7 @@ func TestGeneratorRootFilterOnCountError1(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	var l Latency
@@ -4256,7 +4294,7 @@ func TestGeneratorRootFilterOnCountError2(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	var l Latency
@@ -4274,12 +4312,12 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	var l Latency
 	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.NotNil(t, queryErr)
+	require.Error(t, queryErr)
 }
 
 func TestToProtoMultiRoot(t *testing.T) {
@@ -4292,7 +4330,7 @@ func TestToProtoMultiRoot(t *testing.T) {
     }
   `
 
-	pb := processToPB(t, query, false)
+	pb := processToPB(t, query, map[string]string{}, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -4360,7 +4398,7 @@ func TestNearGeneratorError(t *testing.T) {
 		}
 	}`
 
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -4383,7 +4421,7 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 		}
 	}`
 
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -4406,7 +4444,7 @@ func TestWithinGeneratorError(t *testing.T) {
 		}
 	}`
 
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -4464,7 +4502,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 		}
 	}`
 
-	res, err := gql.Parse(query)
+	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -4507,7 +4545,7 @@ func TestToProtoNormalizeDirective(t *testing.T) {
 			}
 		}
 	`
-	pb := processToPB(t, query, false)
+	pb := processToPB(t, query, map[string]string{}, false)
 	expectedPb := `attribute: "_root_"
 children: <
   properties: <
@@ -4630,7 +4668,7 @@ func TestSchema(t *testing.T) {
 			}
 		}
   `
-	gr := processToPB(t, query, true)
+	gr := processToPB(t, query, map[string]string{}, true)
 	require.EqualValues(t, "debug", gr[0].Children[0].Attribute)
 	require.EqualValues(t, 1, gr[0].Children[0].Uid)
 	require.EqualValues(t, "mich", gr[0].Children[0].Xid)
@@ -4825,6 +4863,23 @@ func TestLangDefault(t *testing.T) {
 		js)
 }
 
+func TestLangMultiple_Alias(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				a: name@pl
+				b: name@cn
+				c: name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"c":"Badger","b":"Badger","a":"Borsuk europejski"}]}`,
+		js)
+}
+
 func TestLangMultiple(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -5016,7 +5071,7 @@ func TestSchemaBlock5(t *testing.T) {
 
 const schemaStr = `
 name:string @index(term, exact) .
-alias:string @index(exact, term) .
+alias:string @index(exact, term, fulltext) .
 dob:date @index .
 film.film.initial_release_date:date @index .
 loc:geo @index .
@@ -5174,7 +5229,7 @@ func TestXidInvalidProto(t *testing.T) {
 			}
 		}
 	`
-	pb := processToPB(t, query, false)
+	pb := processToPB(t, query, map[string]string{}, false)
 	expectedPb := `attribute: "_root_"
 children: <
   xid: "mich"
@@ -5321,7 +5376,7 @@ func TestBoolIndexGeqRoot(t *testing.T) {
 				}
 			}
 		}`
-	res, _ := gql.Parse(q)
+	res, _ := gql.Parse(gql.Request{Str: q})
 	var l Latency
 	ctx := context.Background()
 	_, err := ProcessQuery(ctx, res, &l)
@@ -5358,9 +5413,70 @@ func TestBoolSort(t *testing.T) {
 			}
 		}
 	`
-	res, _ := gql.Parse(q)
+	res, _ := gql.Parse(gql.Request{Str: q, Http: true})
 	var l Latency
 	ctx := context.Background()
 	_, err := ProcessQuery(ctx, res, &l)
 	require.NotNil(t, err)
+}
+
+func TestJSONQueryVariables(t *testing.T) {
+	populateGraph(t)
+	q := `{"query": "query test ($a: int = 1) { me(id: 0x01) { name, gender, friend(first: $a) { name }}}",
+	"variables" : { "$a": "2"}}`
+	js := processToFastJSON(t, q)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`, string(js))
+}
+
+func TestPBQueryVariables(t *testing.T) {
+	populateGraph(t)
+	q := `query test ($a: int = 1) { me(id: 0x01) { name, gender, friend(first: $a) { name }}}`
+
+	variables := make(map[string]string)
+	variables["$a"] = "3"
+	pb := processToPB(t, q, variables, false)
+	require.Equal(t, `attribute: "_root_"
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "gender"
+    value: <
+      default_val: "female"
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+  >
+>
+`, proto.MarshalTextString(pb[0]))
 }

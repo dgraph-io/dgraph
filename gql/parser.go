@@ -41,7 +41,7 @@ type GraphQuery struct {
 	IsCount    bool
 	IsInternal bool
 	Var        string
-	NeedsVar   []string
+	NeedsVar   []VarContext
 	Func       *Function
 
 	Args         map[string]string
@@ -82,12 +82,23 @@ type fragmentNode struct {
 // Key is fragment names.
 type fragmentMap map[string]*fragmentNode
 
+const (
+	UID_VAR   = 1
+	VALUE_VAR = 2
+)
+
+type VarContext struct {
+	Name string
+	Typ  int //  1 for UID vars, 2 for value vars
+}
+
+// varInfo holds information on GQL variables.
 type varInfo struct {
 	Value string
 	Type  string
 }
 
-// varMap is a map with key as variable name.
+// varMap is a map with key as GQL variable name.
 type varMap map[string]varInfo
 
 // FilterTree is the result of parsing the filter directive.
@@ -102,10 +113,10 @@ type FilterTree struct {
 // Function holds the information about gql functions.
 type Function struct {
 	Attr     string
-	Lang     string   // language of the attribute value
-	Name     string   // Specifies the name of the function.
-	Args     []string // Contains the arguments of the function.
-	NeedsVar []string // If the function requires some variable
+	Lang     string       // language of the attribute value
+	Name     string       // Specifies the name of the function.
+	Args     []string     // Contains the arguments of the function.
+	NeedsVar []VarContext // If the function requires some variable
 }
 
 // Facet holds the information about gql Facets (edge key-value pairs).
@@ -246,15 +257,45 @@ The query could be of the following forms :
 	 }`
 */
 
-func parseQueryWithVariables(str string) (string, varMap, error) {
+func convertToVarMap(variables map[string]string) (vm varMap) {
+	vm = make(map[string]varInfo)
+	// Go client passes in variables separately.
+	for k, v := range variables {
+		vm[k] = varInfo{
+			Value: v,
+		}
+	}
+	return vm
+}
+
+type Request struct {
+	Str       string
+	Variables map[string]string
+	// We need this so that we don't try to do JSON.Unmarshal for request coming
+	// from Go client, as we directly get the variables in a map.
+	Http bool
+}
+
+func parseQueryWithGqlVars(r Request) (string, varMap, error) {
 	var q query
 	vm := make(varMap)
 	mp := make(map[string]string)
-	if err := json.Unmarshal([]byte(str), &q); err != nil {
+
+	// Go client can send variable map separately.
+	if len(r.Variables) != 0 {
+		vm = convertToVarMap(r.Variables)
+	}
+
+	// If its a language driver like Go, no more parsing needed.
+	if !r.Http {
+		return r.Str, vm, nil
+	}
+
+	if err := json.Unmarshal([]byte(r.Str), &q); err != nil {
 		// Check if the json object is stringified.
 		var q1 queryAlt
-		if err := json.Unmarshal([]byte(str), &q1); err != nil {
-			return str, vm, nil // It does not obey GraphiQL format but valid.
+		if err := json.Unmarshal([]byte(r.Str), &q1); err != nil {
+			return r.Str, vm, nil // It does not obey GraphiQL format but valid.
 		}
 		// Convert the stringified variables to map if it is not nil.
 		if q1.Variables != "" {
@@ -271,6 +312,7 @@ func parseQueryWithVariables(str string) (string, varMap, error) {
 			Value: v,
 		}
 	}
+
 	return q.Query, vm, nil
 }
 
@@ -321,15 +363,36 @@ func checkValueType(vm varMap) error {
 	return nil
 }
 
+func substituteVar(f string, res *string, vmap varMap) error {
+	if f[0] == '$' {
+		va, ok := vmap[f]
+		if !ok {
+			return x.Errorf("Variable not defined %v", f)
+		}
+		*res = va.Value
+	}
+	return nil
+}
+
 func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	for k, v := range gq.Args {
-		// v won't be empty as its handled in parseVariables.
-		if v[0] == '$' {
-			va, ok := vmap[v]
-			if !ok {
-				return x.Errorf("Variable not defined %v", v)
+		// v won't be empty as its handled in parseGqlVariables.
+		val := gq.Args[k]
+		if err := substituteVar(v, &val, vmap); err != nil {
+			return err
+		}
+		gq.Args[k] = val
+	}
+
+	if gq.Func != nil {
+		if err := substituteVar(gq.Func.Attr, &gq.Func.Attr, vmap); err != nil {
+			return err
+		}
+
+		for idx, v := range gq.Func.Args {
+			if err := substituteVar(v, &gq.Func.Args[idx], vmap); err != nil {
+				return err
 			}
-			gq.Args[k] = va.Value
 		}
 	}
 
@@ -338,7 +401,32 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 			return err
 		}
 	}
+	if gq.Filter != nil {
+		if err := substituteVariablesFilter(gq.Filter, vmap); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
+	if f.Func != nil {
+		if err := substituteVar(f.Func.Attr, &f.Func.Attr, vmap); err != nil {
+			return err
+		}
+
+		for idx, v := range f.Func.Args {
+			if err := substituteVar(v, &f.Func.Args[idx], vmap); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, fChild := range f.Child {
+		if err := substituteVariablesFilter(fChild, vmap); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -360,8 +448,8 @@ type Result struct {
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
-func Parse(input string) (res Result, rerr error) {
-	query, vmap, err := parseQueryWithVariables(input)
+func Parse(r Request) (res Result, rerr error) {
+	query, vmap, err := parseQueryWithGqlVars(r)
 	if err != nil {
 		return res, err
 	}
@@ -511,7 +599,9 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 		v.Defines = append(v.Defines, qu.Var)
 	}
 
-	v.Needs = append(v.Needs, qu.NeedsVar...)
+	for _, va := range qu.NeedsVar {
+		v.Needs = append(v.Needs, va.Name)
+	}
 
 	for _, ch := range qu.Children {
 		ch.collectVars(v)
@@ -539,7 +629,9 @@ func (f *MathTree) collectVars(v *Vars) {
 
 func (f *FilterTree) collectVars(v *Vars) {
 	if f.Func != nil {
-		v.Needs = append(v.Needs, f.Func.NeedsVar...)
+		for _, va := range f.Func.NeedsVar {
+			v.Needs = append(v.Needs, va.Name)
+		}
 	}
 	for _, fch := range f.Child {
 		fch.collectVars(v)
@@ -583,7 +675,7 @@ L2:
 				return nil, x.Errorf("Variables can be defined only in named queries.")
 			}
 
-			if rerr = parseVariables(it, vmap); rerr != nil {
+			if rerr = parseGqlVariables(it, vmap); rerr != nil {
 				return nil, rerr
 			}
 
@@ -597,6 +689,7 @@ L2:
 			break L2
 		}
 	}
+
 	return gq, nil
 }
 
@@ -857,7 +950,8 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 	return x.Errorf("Invalid mutation formatting.")
 }
 
-func parseVariables(it *lex.ItemIterator, vmap varMap) error {
+// parseGqlVariables parses the the graphQL variable declaration.
+func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 	expectArg := true
 	for it.Next() {
 		var varName string
@@ -1004,7 +1098,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			if count != 1 {
 				return result, x.Errorf("Only one variable expected. Got %d", count)
 			}
-			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1]
+			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 			result = append(result, p)
 			continue
 		}
@@ -1150,7 +1244,7 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
-	var expectArg, seenFuncArg, expectLang bool
+	var expectArg, seenFuncArg, expectLang, isDollar bool
 L:
 	for it.Next() {
 		item := it.Item()
@@ -1170,6 +1264,12 @@ L:
 				if itemInFunc.Typ == itemRightRound {
 					break L
 				} else if itemInFunc.Typ == itemComma {
+					if expectArg {
+						return nil, x.Errorf("Invalid use of comma.")
+					}
+					if isDollar {
+						return nil, x.Errorf("Invalid use of comma after dollar.")
+					}
 					expectArg = true
 					continue
 				} else if itemInFunc.Typ == itemLeftRound {
@@ -1202,6 +1302,12 @@ L:
 					val = itemInFunc.Val
 					it.Next()
 					itemInFunc = it.Item()
+				} else if itemInFunc.Typ == itemDollar {
+					if isDollar {
+						return nil, x.Errorf("Invalid use of $ in func args")
+					}
+					isDollar = true
+					continue
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -1212,6 +1318,10 @@ L:
 				val += strings.Trim(itemInFunc.Val, "\" \t")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
+				}
+				if isDollar {
+					val = "$" + val
+					isDollar = false
 				}
 				if len(g.Attr) == 0 {
 					if strings.ContainsRune(itemInFunc.Val, '"') {
@@ -1226,7 +1336,10 @@ L:
 					g.Args = append(g.Args, val)
 				}
 				if g.Name == "var" {
-					g.NeedsVar = append(g.NeedsVar, val)
+					g.NeedsVar = append(g.NeedsVar, VarContext{
+						Name: val,
+						Typ:  UID_VAR,
+					})
 				}
 				expectArg = false
 			}
@@ -1446,7 +1559,10 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 				return count, x.Errorf("Expected a variable but got comma")
 			}
 			count++
-			gq.NeedsVar = append(gq.NeedsVar, item.Val)
+			gq.NeedsVar = append(gq.NeedsVar, VarContext{
+				Name: item.Val,
+				Typ:  UID_VAR,
+			})
 			expectArg = false
 		}
 	}
@@ -1643,12 +1759,22 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				if count != 1 {
 					return nil, x.Errorf("Expected only one variable but got: %d", count)
 				}
+				// Modify the NeedsVar context here.
+				gq.NeedsVar[len(gq.NeedsVar)-1].Typ = VALUE_VAR
 			} else {
 				val = collectName(it, val+item.Val)
+				// Get language list, if present
+				items, err := it.Peek(1)
+				if err == nil && items[0].Typ == itemAt {
+					it.Next() // consume '@'
+					it.Next() // move forward
+					langs := parseLanguageList(it)
+					val = val + "@" + strings.Join(langs, ":")
+				}
 			}
 
 			if val == "" {
-				val = gq.NeedsVar[len(gq.NeedsVar)-1]
+				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 			}
 			gq.Args[key] = val
 		}
@@ -1766,6 +1892,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if count != 1 {
 					return x.Errorf("Invalid use of var(). Exactly one variable expected.")
 				}
+				// Only value vars can be retrieved.
+				child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue

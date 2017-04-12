@@ -31,7 +31,7 @@ func benchmarkParsingHelper(b *testing.B, q string) {
 	schema.ParseBytes([]byte(sc), 1)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := Parse(q)
+		_, err := Parse(Request{Str: q})
 		require.NoError(b, err)
 	}
 }
@@ -41,7 +41,7 @@ func benchmarkParsingParallelHelper(b *testing.B, q string) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			_, err := Parse(q)
+			_, err := Parse(Request{Str: q})
 			require.NoError(b, err)
 		}
 	})
@@ -63,7 +63,7 @@ func Benchmark_Mutation_parallel(b *testing.B)     { benchmarkParsingParallelHel
 func Benchmark_Mutation1000_parallel(b *testing.B) { benchmarkParsingParallelHelper(b, m1000) }
 
 var q1 = `{
-  debug(allofterms("type.object.name.en", "steven spielberg")) {
+  debug(func: allofterms(type.object.name.en, "steven spielberg")) {
     type.object.name.en
     film.director.film {
       type.object.name.en
@@ -85,7 +85,7 @@ var q1 = `{
 }`
 
 var q2 = `{
-  debug(anyofterms("type.object.name.en","big lebowski")) {
+  debug(func: anyofterms(type.object.name.en,"big lebowski")) {
     type.object.name.en
     film.film.initial_release_date
     film.film.country
@@ -106,7 +106,7 @@ var q2 = `{
 var q3 = `{
   debug(id: m.06pj8) {
     type.object.name.en
-    film.director.film @filter(allofterms("type.object.name.en", "jones indiana") or allofterms("type.object.name.en", "jurassic park"))  {
+    film.director.film @filter(allofterms(type.object.name.en, "jones indiana") or allofterms(type.object.name.en, "jurassic park"))  {
 	      _uid_
 	      type.object.name.en
      }
@@ -116,7 +116,7 @@ var q3 = `{
 var q4 = `{
   debug(id: m.0bxtg) {
     type.object.name.en
-    film.director.film @filter(geq("film.film.initial_release_date", "1970-01-01")) {
+    film.director.film @filter(geq(film.film.initial_release_date, "1970-01-01")) {
       film.film.initial_release_date
       type.object.name.en
     }
@@ -124,7 +124,7 @@ var q4 = `{
 }`
 
 var q5 = `{
-   debug(allofterms("type.object.name.en", "steven spielberg")) {
+   debug(func: allofterms(type.object.name.en, "steven spielberg")) {
      type.object.name.en
      film.director.film(order: film.film.initial_release_date) {
        type.object.name.en

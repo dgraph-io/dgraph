@@ -289,7 +289,7 @@ func TestToProtoFacets(t *testing.T) {
 			}
 		}
 	`
-	pb := processToPB(t, query, true)
+	pb := processToPB(t, query, map[string]string{}, true)
 	require.EqualValues(t,
 		`attribute: "_root_"
 children: <

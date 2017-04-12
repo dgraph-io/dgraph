@@ -77,7 +77,7 @@ func TestFullTextTokenizer(t *testing.T) {
 }
 
 func TestFullTextTokenizerLang(t *testing.T) {
-	tokenizer, has := GetTokenizer(ftsTokenizerName("de"))
+	tokenizer, has := GetTokenizer(FtsTokenizerName("de"))
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 	val := types.ValueForType(types.StringID)

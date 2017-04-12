@@ -1,8 +1,6 @@
 +++
 date = "2017-03-20T19:35:35+11:00"
 title = "Clients"
-weight = 0
-
 +++
 
 ## Implementation
@@ -14,6 +12,9 @@ The proto file used by Dgraph is located at [graphresponse.proto](https://github
 ## Languages
 
 ### Go
+
+[![GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client?status.svg)](https://godoc.org/github.com/dgraph-io/dgraph/client)
+
 After you have the followed [Get started]({{< relref "get-started/index.md">}}) and got the server running on `127.0.0.1:8080`, you can use the Go client to run queries and mutations as shown in the example below.
 
 {{% notice "note" %}}The example below would store values with the correct types only if the
@@ -58,7 +59,7 @@ func main() {
 	// Starting a new request.
 	req := client.Req{}
 	// _:person1 tells Dgraph to assign a new Uid and is the preferred way of creating new nodes.
-	// See https://wiki.dgraph.io/index.php?title=Query_Language&redirect=no#Assigning_UID for more details.
+	// See https://docs.dgraph.io/master/query-language/#assigning-uid for more details.
 	nq := graphp.NQuad{
 		Subject:   "_:person1",
 		Predicate: "name",
@@ -158,7 +159,8 @@ func main() {
 	// Lets initiate a new request and query for the data.
 	req = client.Req{}
 	// Lets set the starting node id to person1Uid.
-	req.SetQuery(fmt.Sprintf("{ me(id: %v) { _uid_ name now birthday loc salary age married friend {_uid_ name} } }", client.Uid(person1Uid)))
+	req.SetQuery(fmt.Sprintf("{ me(id: %v) { _uid_ name now birthday loc salary age married friend {_uid_ name} } }", client.Uid(person1Uid)),
+	 map[string]string{})
 	resp, err = c.Run(context.Background(), req.Request())
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
@@ -212,7 +214,7 @@ func main() {
 }
 ```
 
-An appropriate schema for the above example would be 
+An appropriate schema for the above example would be
 ```
 curl localhost:8080/query -XPOST -d $'
 mutation {
@@ -254,7 +256,7 @@ mutation {
    }
   }
  }
-}`)
+}`, map[string]string{})
 resp, err := c.Run(context.Background(), req.Request())
 if err != nil {
 	log.Fatalf("Error in getting response from server, %s", err)

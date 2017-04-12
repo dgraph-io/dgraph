@@ -520,6 +520,7 @@ func (n *node) processApplyCh() {
 					n.applied.Ch <- mark
 					posting.SyncMarkFor(n.gid).Ch <- mark
 					n.props.Done(proposal.Id, err)
+					continue
 				}
 			}
 
@@ -724,6 +725,12 @@ func (n *node) snapshotPeriodically() {
 }
 
 func (n *node) snapshot(skip uint64) {
+	if n.gid == 0 {
+		// Group zero is dedicated for membership information, whose state we don't persist.
+		// So, taking snapshots would end up deleting the RAFT entries that we need to
+		// regenerate the state on a crash. Therefore, don't take snapshots.
+		return
+	}
 	water := posting.SyncMarkFor(n.gid)
 	le := water.DoneUntil()
 

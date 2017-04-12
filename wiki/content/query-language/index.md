@@ -1,6 +1,5 @@
 +++
 title = "Query Language"
-weight = 0
 +++
 
 ## GraphQL+-
@@ -36,7 +35,7 @@ RDF N-Quad allows specifying the language for string values, using `@lang`. Usin
 ```
 To specify the language of the value to be returned from query `@lang1:lang2:lang3` notation is used. It is extension over RDF N-Quad syntax, and allows specifying multiple languages in order of preference. If value in given language is not found, next language from list is considered. If there are no values in any of specified languages, the value without specified language is returned. At last, if there is no value without language, value in ''some'' language is returned (this is implementation specific).
 
-{{ Note | Languages preference list cannot be used in functions.}}
+{{% notice "note" %}}Languages preference list cannot be used in functions.{{% /notice %}}
 
 ### Batch mutations
 
@@ -278,8 +277,7 @@ Then for each of these film entities, we expand by three predicates: `name@en` w
 
 If you want to use a list, then the query would look like:
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}{
   me(id: [m.06pj8, m.0bxtg]) {
     name@en
     director.film  {
@@ -290,8 +288,8 @@ curl localhost:8080/query -XPOST -d $'{
       initial_release_date
     }
   }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 The list can contain XIDs or UIDs or a combination of both.
 
@@ -325,42 +323,42 @@ The following types are supported by Dgraph.
 
 ```
 # Sample schema
-name: string
-age: int
+name: string .
+age: int .
 ```
 
 * Mutations only check the scalar types. For example, in the given schema, any mutation that sets age would be checked for being a valid integer, any mutation that sets name would be checked for being a valid string.
 * The returned fields are of types specified in the schema (given they were specified, or else derived from first mutation).
-* **If schema was not specified, the schema would be derived based on the first mutation for that predicate.**  The [rdf type]({{< relref "#rdf-type" >}}) present in the first mutation would be considered as the schema for the field. If no storage type is specified in rdf, then it would be treated as default type(Dgraph Type) and it is stored internally as string(Go Type).
+* **If schema was not specified, the schema would be derived based on the first mutation for that predicate.**  The [rdf types]({{< relref "#rdf-types" >}}) present in the first mutation would be considered as the schema for the field. If no storage type is specified in rdf, then it would be treated as default type(Dgraph Type) and it is stored internally as string(Go Type).
 
 ### Indexing
 
 `@index` keyword at the end of a scalar field declaration in the schema specifies that the predicate should be indexed. For example, if we want to index some fields, we should have a schema similar to the one below.
 ```
-name: string @index
-age: int @index
-address: string @index
-dateofbirth: date @index
-health: float @index
-location: geo @index
-timeafterbirth:  dateTime @index
+name: string @index .
+age: int @index .
+address: string @index .
+dateofbirth: date @index .
+health: float @index .
+location: geo @index .
+timeafterbirth:  datetime @index .
 ```
 
-All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`. 
+All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`.
 
 ```
-name: string @index(exact, term)
-age: int @index(int)
-address: string @index(term)
-dateofbirth: date @index(date)
-health: float @index(float)
-location: geo @index(geo)
-timeafterbirth:  dateTime @index(datetime)
+name: string @index(exact, term) .
+age: int @index(int) .
+address: string @index(term) .
+dateofbirth: date @index(date) .
+health: float @index(float) .
+location: geo @index(geo) .
+timeafterbirth:  datetime @index(datetime) .
 ```
 
 The available tokenizers are currently `term, fulltext, exact, int, float, geo, date, datetime`. All of them except `exact` and `fulltext` are the default tokenizers for their respective data types. You can specify multiple indexes per predicate as shown for `name` in the above example.
 
-{{% notice "note" %}}To be able to do sorting and filtering on a predicate, you must index it.{{% /notice %}}
+{{% notice "note" %}}To be able to do filtering on a predicate, you must index it.{{% /notice %}}
 
 #### String Indices
 There are three types of string indices: `exact`, `term` and `fulltext`. Following table summarize usage of each index type.
@@ -375,15 +373,14 @@ There are three types of string indices: `exact`, `term` and `fulltext`. Followi
 
 Not all the indices establish a total order among the values that they index. So, in order to order based on the values or do inequality operations, the corresponding predicates must have a sortable index. The non-sortable indices that are curently present are `term`. All other indices are sortable. For example to sort by names or do any inequality operations on it, this line **must** be specified in schema.
 ```
-name: string @index(exact)
+name: string @index(exact) .
 ```
 
 ### Reverse Edges
 Each graph edge is unidirectional. It points from one node to another. A lot of times,  you wish to access data in both directions, forward and backward. Instead of having to send edges in both directions, you can use the `@reverse` keyword at the end of a uid (entity) field declaration in the schema. This specifies that the reverse edge should be automatically generated. For example, if we want to add a reverse edge for `directed_by` predicate, we should have a schema as follows.
 
 ```
-name: string @index
-directed_by: uid @reverse
+directed_by: uid @reverse .
 ```
 
 This would add a reverse edge for each `directed_by` edge and that edge can be accessed by prefixing `~` with the original predicate, i.e. `~directed_by`.
@@ -447,29 +444,25 @@ Based on the given schema mutation, the query blocks until the index/reverse edg
 
 Schema can be fetched using schema block inside query. Required fields can be specified inside schema block (type, index, reverse or tokenizer).
 
-```
-curl localhost:8080/query -XPOST -d $'
-schema {
+{{< runnable >}}schema {
   type
   index
   reverse
   tokenizer
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 We can also specify the list of predicates for which we need the schema.
 
-```
-curl localhost:8080/query -XPOST -d $'
-schema(pred: [name, friend]) {
+{{< runnable >}}schema(pred: [name, friend]) {
   type
   index
   reverse
   tokenizer
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
-## RDF Types {#rdf-type}
+## RDF Types
 RDF types can also be used to specify the type of values. They can be attached to the values using the `^^` separator.
 
 ```
@@ -492,24 +485,24 @@ The following table lists all the supported [RDF datatypes](https://www.w3.org/T
 
 | Storage Type | Dgraph type |
 | -------------|:------------:|
-|  <xs:string> | String |
-|  <xs:dateTime> |                               DateTime |
-|  <xs:date> |                                   Date |
-|  <xs:int> |                                    Int |
-|  <xs:boolean> |                                Bool |
-|  <xs:double> |                                 Float |
-|  <xs:float> |                                  Float |
-|  <geo:geojson> |                               Geo |
-|  <http://www.w3.org/2001/XMLSchema#string> |   String |
-|  <http://www.w3.org/2001/XMLSchema#dateTime> | DateTime |
-|  <http://www.w3.org/2001/XMLSchema#date> |     Date |
-|  <http://www.w3.org/2001/XMLSchema#int> |      Int |
-|  <http://www.w3.org/2001/XMLSchema#boolean> |  Bool |
-|  <http://www.w3.org/2001/XMLSchema#double> |   Float |
-|  <http://www.w3.org/2001/XMLSchema#float> |    Float |
+|  &#60;xs:string&#62; | String |
+|  &#60;xs:dateTime&#62; |                               DateTime |
+|  &#60;xs:date&#62; |                                   Date |
+|  &#60;xs:int&#62; |                                    Int |
+|  &#60;xs:boolean&#62; |                                Bool |
+|  &#60;xs:double&#62; |                                 Float |
+|  &#60;xs:float&#62; |                                  Float |
+|  &#60;geo:geojson&#62; |                               Geo |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62; |   String |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | DateTime |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62; |     Date |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62; |      Int |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62; |  Bool |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62; |   Float |
+|  &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62; |    Float |
 
 
-In case a predicate has different schema type and storage type, the convertibility between the two is ensured during mutation and an error is thrown if they are incompatible.  The values are always stored as storage type if specified, or else they are converted to schema type and stored. Storage type is property of the value we are storing and schema type is property of the edge. 
+In case a predicate has different schema type and storage type, the convertibility between the two is ensured during mutation and an error is thrown if they are incompatible.  The values are always stored as storage type if specified, or else they are converted to schema type and stored. Storage type is property of the value we are storing and schema type is property of the edge.
 
 Example: If schema type is int and we do the following mutations.
 
@@ -1037,7 +1030,7 @@ curl localhost:8080/query -XPOST -d $'{
 ```
 Note that the first result with the name "Unexpected Passion" is either not a film entity, or it is a film entity with no genre.
 
-### Regex search 
+### Regex search
 `regexp` function allows a regular expression match on the values. It requires exact index to be present for working.
 
 ```
@@ -1049,7 +1042,7 @@ curl localhost:8080/query -XPOST -d $'{
     }
   }
 }
-' 
+'
 ```
 Output:
 ```
@@ -1396,8 +1389,9 @@ This query returns all the entities that intersect with the [http://bl.ocks.org/
 Dgraph supports AND, OR and NOT filters. The syntax is of form: `A OR B`, `A AND B`, or `NOT A`. You can add round brackets to make these filters more complex. `(NOT A OR B) AND (C AND NOT (D OR E))`
 
 In this query, we are getting film names which contain either both "indiana" and "jones" OR both "jurassic" AND "park".
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film @filter(allofterms(name, "jones indiana") OR allofterms(name, "jurassic park"))  {
@@ -1405,136 +1399,37 @@ curl localhost:8080/query -XPOST -d $'{
       name@en
     }
   }
-}' | python -m json.tool | less
-```
-
-
-```
-{
-  "me": [
-    {
-      "director.film": [
-        {
-          "_uid_": "0xc17b416e58b32bb",
-          "name@en": "Indiana Jones and the Temple of Doom"
-        },
-        {
-          "_uid_": "0x22e65757df0c94d2",
-          "name@en": "Jurassic Park"
-        },
-        {
-          "_uid_": "0x7d0807a6740c25dc",
-          "name@en": "Indiana Jones and the Kingdom of the Crystal Skull"
-        },
-        {
-          "_uid_": "0x8f2485e4242cbe6e",
-          "name@en": "The Lost World: Jurassic Park"
-        },
-        {
-          "_uid_": "0xa4c4cc65751e98e7",
-          "name@en": "Indiana Jones and the Last Crusade"
-        },
-        {
-          "_uid_": "0xd1c161bed9769cbc",
-          "name@en": "Indiana Jones and the Raiders of the Lost Ark"
-        }
-      ],
-      "name@en": "Steven Spielberg"
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 #### Filter on Compare
 
 Dgraph also supports compare filter, which takes form as @filter(compare(count(attribute), N)), only entities fulfill such predication will be returned.
 
 {{% notice "note" %}}"Compare" here includes "eq", "gt", "geq", "lt", "leq".  And "count" should be applied on non-scalar types.{{% /notice %}}
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+{
   director(func:anyofterms(name, "Steven Spielberg")) @filter(gt(count(director.film), 36)) {
     name@en
     count(director.film)
   }
-}' | python -m json.tool | less
-```
-
-Output:
-
-```
-{
-  "director": [
-    {
-      "director.film": [
-        {
-          "count": 39
-        }
-      ],
-      "name@en": "Steven Spielberg"
-    },
-    {
-      "director.film": [
-        {
-          "count": 115
-        }
-      ],
-      "name@en": "Steven Scarborough"
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 These compare functions can also be used at root. To obtain one movie per genre which have atleast 30000 movies, we'd do as follows:
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
 	genre(func: gt(count(~genre), 30000)){
 		name@en
 		~genre (first:1) {
 			name@en
 		}
 	}
-}'
-```
-Output:
-```
-{
-  "genre": [
-    {
-      "name@en": "Short Film",
-      "~genre": [
-        {
-          "name@en": "Eine Rolle Duschen"
-        }
-      ]
-    },
-    {
-      "name@en": "Drama",
-      "~genre": [
-        {
-          "name@en": "Prisoners"
-        }
-      ]
-    },
-    {
-      "name@en": "Comedy",
-      "~genre": [
-        {
-          "name@en": "A tu per tu"
-        }
-      ]
-    },
-    {
-      "name@en": "Documentary film",
-      "~genre": [
-        {
-          "name@en": "Short Cut to Nirvana: Kumbh Mela"
-        }
-      ]
-    }
-  ]
 }
-```
+{{< /runnable >}}
+
 These functions can help is starting from nodes which have some conditions based on count and might help in determining the type of a node if modelled accordingly. For example, to start with all the directors, we can do `gt(count(director.film), 0)` which means all the nodes that have alteast one outgoing `director.film` edge.
 
 ## Sorting
@@ -1542,8 +1437,8 @@ These functions can help is starting from nodes which have some conditions based
 We can sort results by a predicate using the `orderasc` or `orderdesc` argument. The predicate has to be indexed and this has to be specified in the schema. As you may expect, `orderasc` sorts in ascending order while `orderdesc` sorts in descending order.
 
 For example, we can sort the films of Steven Spielberg by their release date, in ascending order.
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film(orderasc: initial_release_date) {
@@ -1551,47 +1446,12 @@ curl localhost:8080/query -XPOST -d $'{
       initial_release_date
     }
   }
-}' | python -m json.tool | less
-```
-
-```
-{
-  "me": [
-    {
-      "director.film": [
-        {
-          "initial_release_date": "1964-03-23",
-          "name@en": "Firelight"
-        },
-        {
-          "initial_release_date": "1966-12-31",
-          "name@en": "Slipstream"
-        },
-        {
-          "initial_release_date": "1968-12-17",
-          "name@en": "Amblin"
-        },
-        ...
-        ...
-        ...
-        {
-          "initial_release_date": "2012-10-07",
-          "name@en": "Lincoln"
-        },
-        {
-          "initial_release_date": "2015-10-15",
-          "name@en": "Bridge of Spies"
-        }
-      ],
-      "name@en": "Steven Spielberg"
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 If you use `orderdesc` instead, the films will be listed in descending order.
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film(orderdesc: initial_release_date, first: 2) {
@@ -1599,74 +1459,18 @@ curl localhost:8080/query -XPOST -d $'{
       initial_release_date
     }
   }
-}' | python -m json.tool | less
-```
-
-
-Here is the output.
-
-```
-{
-  "me": [
-    {
-      "director.film": [
-        {
-          "initial_release_date": "2015-10-15",
-          "name@en": "Bridge of Spies"
-        },
-        {
-          "initial_release_date": "2012-10-07",
-          "name@en": "Lincoln"
-        },
-      ],
-      "name@en": "Steven Spielberg"
-    }
-  ]
 }
-```
+{{< /runnable >}}
+
 
 To sort at root level, we can do as follows:
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(func: allofterms(name, "ste"), orderasc: name) {
     name@en
   }
-}' | python -m json.tool | less
-```
-
-```
-{
-    "me": [
-        {
-            "name@en": "Steven's Friend #1"
-        },
-        {
-            "name@en": "Steven's Friend #2"
-        },
-        {
-            "name@en": "Steven's Orderly #2"
-        },
-        {
-            "name@en": "United Standards 2 (as Steven Carell)"
-        },
-        {
-            "name@en": "American Boy: A Profile of Steven Prince"
-        },
-        {
-            "name@en": "Steven A Burd"
-....
- {
-            "name@en": "Steven Kirshoff"
-        },
-        {
-            "name@en": "Steven Kirtley"
-        },
-        {
-            "name@en": "Steven Kissel"
-        }
-    ]
 }
-```
+{{< /runnable >}}
 
 
 ## Facets : Edge attributes
@@ -3049,7 +2853,7 @@ Output:
   ]
 }
 ```
-## Cascade Directive 
+## Cascade Directive
 
 `@cascade` directive forces a removal of those entites that don't have all the fields specified in the query. This can be useful in cases where some filter was applied. For example, consider this query:
 
@@ -3359,19 +3163,26 @@ curl localhost:8080/query -XPOST -d $'{
 }' | python -m json.tool | less
 ```
 
-The type of a variable can be suffixed with a ! to enforce that the variable must have a value. Also, the value of the variable must be parsable to the given type, if not, an error is thrown. Any variable that is being used must be declared in the named query clause in the beginning. And we also support default values for the variables. Example:
-
+* Variables whose type is suffixed with a `!` can't have a default value but must
+have a value as part of the variables map.
+* The value of the variable must be parsable to the given type, if not, an error is thrown.
+* Any variable that is being used must be declared in the named query clause in the beginning.
+* We also support default values for the variables. In the example below, `$a` has a
+default value of `2`.
 ```
 curl localhost:8080/query -XPOST -d $'{
- "query": "query test($a: int = 2, $b: int! = 3){  me(id: m.06pj8) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
+ "query": "query test($a: int = 2, $b: int!){  me(id: m.06pj8) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
  "variables" : {
-  "$a": "5"
+   "$a": "5",
+   "$b": "10"
  }
 }' | python -m json.tool | less
 ```
 
-If the variable is initialized in the variable map, the default value will be overridden (In the example, $a will be 5 and $b will be 3).
+* If the variable is initialized in the variable map, the default value will be
+overridden (In the example, `$a` will have value 5 and `$b` will be 3).
 
-The variable types that are supported as of now are: `int`, `float`, `bool` and `string`.
+* The variable types that are supported as of now are: `int`, `float`, `bool` and `string`.
+
 
 {{% notice "note" %}}In GraphiQL interface, the query and the variables have to be separately entered in their respective boxes.{{% /notice %}}

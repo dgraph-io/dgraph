@@ -51,6 +51,13 @@ function doOnClick(params, allNodeSet, edgeSet, dispatch) {
 
 // create a network
 function renderNetwork(props, dispatch) {
+    dispatch(
+        updateLatency({
+            rendering: {
+                start: new Date()
+            }
+        })
+    );
     var container = document.getElementById("graph");
     var data = {
         nodes: new vis.DataSet(props.nodes),
@@ -97,13 +104,7 @@ function renderNetwork(props, dispatch) {
                 updateInterval: 5,
                 iterations: 20
             },
-            // timestep: 0.4,
             barnesHut: {
-                // gravitationalConstant: -80000,
-                // springConstant: 0.1,
-                // springLength: 10,
-                // avoidOverlap: 0.8,
-                // springConstant: 0.1,
                 damping: 0.7
             }
         }
@@ -403,6 +404,7 @@ class GraphContainer extends Component {
         super(props);
 
         this.state = {
+            selectedTab: "1",
             selectedNode: false,
             network: undefined,
             expand: function() {},
@@ -414,8 +416,25 @@ class GraphContainer extends Component {
         this.state.expand.bind(this)();
     };
 
+    selectTab = eventKey => {
+        this.setState({
+            selectedTab: eventKey
+        });
+        // eventKey is graph.
+        if (eventKey === "1" && !this.props.treeView) {
+            renderNetwork.bind(this, this.props, this.props.dispatch)();
+        }
+    };
+
     render() {
-        const { plotAxis, text, success, fs, isFetching } = this.props;
+        const {
+            plotAxis,
+            text,
+            success,
+            fs,
+            isFetching,
+            data
+        } = this.props;
         return (
             <Graph
                 plotAxis={plotAxis}
@@ -423,12 +442,23 @@ class GraphContainer extends Component {
                 success={success}
                 fs={fs}
                 isFetching={isFetching}
+                json={data}
+                selectTab={this.selectTab}
+                selectedTab={this.state.selectedTab}
             />
         );
     }
 
     componentWillReceiveProps = nextProps => {
         let network = this.state.network;
+
+        let selectedTab = "1";
+        if (nextProps.mutation) {
+            selectedTab = "2";
+        }
+        this.setState({
+            selectedTab: selectedTab
+        });
 
         if (nextProps.nodes.length === 0) {
             network && network.destroy();

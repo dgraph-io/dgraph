@@ -276,6 +276,7 @@ func enrichSchema(updates []*graphp.SchemaUpdate) error {
 		}
 		// check for valid tokeniser types and duplicates
 		var seen = make(map[string]bool)
+		var seenSortableTok bool
 		for _, t := range schema.Tokenizer {
 			tokenizer, has := tok.GetTokenizer(t)
 			if !has {
@@ -290,8 +291,14 @@ func enrichSchema(updates []*graphp.SchemaUpdate) error {
 			} else {
 				return x.Errorf("Duplicate tokenizers present for attr %s", schema.Predicate)
 			}
+			if tokenizer.IsSortable() {
+				if seenSortableTok {
+					return x.Errorf("More than one sortable index encountered for: %v",
+						schema.Predicate)
+				}
+				seenSortableTok = true
+			}
 		}
-
 	}
 	return nil
 }
@@ -358,13 +365,13 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 
 // parseQueryAndMutation handles the cases where the query parsing code can hang indefinitely.
 // We allow 1 second for parsing the query; and then give up.
-func parseQueryAndMutation(ctx context.Context, query string) (res gql.Result, err error) {
-	x.Trace(ctx, "Query received: %v", query)
+func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, err error) {
+	x.Trace(ctx, "Query received: %v", r.Str)
 	errc := make(chan error, 1)
 
 	go func() {
 		var err error
-		res, err = gql.Parse(query)
+		res, err = gql.Parse(r)
 		errc <- err
 	}()
 
@@ -431,7 +438,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := parseQueryAndMutation(ctx, q)
+	res, err := parseQueryAndMutation(ctx, gql.Request{
+		Str:       q,
+		Variables: map[string]string{},
+		Http:      true,
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -618,8 +629,12 @@ func (s *grpcServer) Run(ctx context.Context,
 
 	var l query.Latency
 	l.Start = time.Now()
-	x.Trace(ctx, "Query received: %v", req.Query)
-	res, err := parseQueryAndMutation(ctx, req.Query)
+	x.Trace(ctx, "Query received: %v, variables: %v", req.Query, req.Vars)
+	res, err := parseQueryAndMutation(ctx, gql.Request{
+		Str:       req.Query,
+		Variables: req.Vars,
+		Http:      false,
+	})
 	if err != nil {
 		return resp, err
 	}
@@ -677,6 +692,19 @@ func (s *grpcServer) Run(ctx context.Context,
 		l.ProtocolBuffer.String()
 	resp.L = gl
 	return resp, err
+}
+
+func (s *grpcServer) CheckVersion(ctx context.Context, c *graphp.Check) (v *graphp.Version,
+	err error) {
+	// we need membership information
+	if !worker.HealthCheck() {
+		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		return v, x.Errorf("Uninitiated server. Please retry later")
+	}
+
+	v = new(graphp.Version)
+	v.Tag = x.Version()
+	return v, nil
 }
 
 var uiDir string
