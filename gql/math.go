@@ -1,3 +1,20 @@
+/*
+ * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package gql
 
 import (
@@ -129,8 +146,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 			lastItem := it.Item()
 			it.Next()
 			if op == "-" &&
-				(lastItem.Val == "(" || lastItem.Val == "," ||
-					isBinaryMath(lastItem.Val)) {
+				(lastItem.Val == "(" || lastItem.Val == "," || isBinaryMath(lastItem.Val)) {
 				op = "u-" // This is a unary -
 			}
 			opPred := mathOpPrecedence[op]

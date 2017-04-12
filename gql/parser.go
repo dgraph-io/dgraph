@@ -125,13 +125,18 @@ func init() {
 		"or":  1,
 	}
 	mathOpPrecedence = map[string]int{
-		"u-":    500,
-		"floor": 105,
-		"ceil":  104,
-		"since": 103,
-		"exp":   100,
-		"ln":    99,
-		"sqrt":  98,
+		"u-":      500,
+		"floor":   105,
+		"ceil":    104,
+		"since":   103,
+		"exp":     100,
+		"ln":      99,
+		"sqrt":    98,
+		"cond":    90,
+		"pow":     89,
+		"logbase": 88,
+		"max":     85,
+		"min":     84,
 
 		"<":  30,
 		">":  29,
@@ -139,12 +144,6 @@ func init() {
 		">=": 27,
 		"==": 26,
 		"!=": 25,
-
-		"cond":    20,
-		"pow":     19,
-		"logbase": 18,
-		"max":     15,
-		"min":     14,
 
 		"/": 10,
 		"*": 9,
