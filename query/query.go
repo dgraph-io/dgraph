@@ -340,7 +340,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				}
 			}
 		} else {
-			if len(pc.Params.Langs) > 0 {
+			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
 				fieldName += "@"
 				for _, it := range pc.Params.Langs {
 					fieldName += it + ":"
