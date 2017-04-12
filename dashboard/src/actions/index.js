@@ -4,7 +4,8 @@ import {
     isNotEmpty,
     showTreeView,
     processGraph,
-    dgraphAddress
+    dgraphAddress,
+    dgraphQuery
 } from "../containers/Helpers";
 
 // TODO - Check if its better to break this file down into multiple files.
@@ -152,19 +153,10 @@ export const runQuery = query => {
                         );
                     }
                 })
-        )
-            .catch(function(error) {
-                console.log(error.stack);
-                var err = (error.response && error.response.text()) ||
-                    error.message;
-                return err;
-            })
-            .then(function(errorMsg) {
-                if (errorMsg !== undefined) {
-                    dispatch(fetchedResponse());
-                    dispatch(saveErrorResponse(errorMsg));
-                }
-            });
+        ).catch(function(error) {
+            dispatch(fetchedResponse());
+            dispatch(saveErrorResponse(error.message));
+        });
     };
 };
 
@@ -197,3 +189,171 @@ export const addScratchpadEntry = entry => ({
 export const deleteScratchpadEntries = () => ({
     type: "DELETE_SCRATCHPAD_ENTRIES"
 });
+
+export const updateShareId = shareId => ({
+    type: "UPDATE_SHARE_ID",
+    shareId
+});
+
+export const queryFound = found => ({
+    type: "QUERY_FOUND",
+    found: found
+});
+
+const doShareMutation = (dispatch, getState) => {
+    let query = getState().query.text,
+        stringifiedQuery = JSON.stringify(encodeURI(query)),
+        mutation = `
+    mutation {
+        set {
+            <_:share> <_share_> ${stringifiedQuery} .
+        }
+    }`;
+
+    fetch(dgraphQuery(false), {
+        method: "POST",
+        mode: "cors",
+        headers: {
+            Accept: "application/json",
+            "Content-Type": "text/plain"
+        },
+        body: mutation
+    })
+        .then(checkStatus)
+        .then(response => response.json())
+        .then(function handleResponse(result) {
+            if (result.uids && result.uids.share) {
+                dispatch(updateShareId(result.uids.share));
+            }
+        })
+        .catch(function(error) {
+            dispatch(
+                saveErrorResponse(
+                    "Got error while saving querying for share: " +
+                        error.message
+                )
+            );
+        });
+};
+
+export const getShareId = (dispatch, getState) => {
+    let query = getState().query.text;
+    if (query === "") {
+        return;
+    }
+    let stringifiedQuery = JSON.stringify(encodeURI(query)),
+        // Considering that index is already set on the pred, schema mutation
+        // should be a no-op. Lets see if we have already stored this query by
+        // performing an exact match.
+        checkQuery = `
+mutation {
+    schema {
+        _share_: string @index(exact) .
+    }
+}
+{
+    query(func:eq(_share_, ${stringifiedQuery})) {
+        _uid_
+    }
+}`;
+
+    timeout(
+        6000,
+        fetch(dgraphQuery(false), {
+            method: "POST",
+            mode: "cors",
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "text/plain"
+            },
+            body: checkQuery
+        })
+            .then(checkStatus)
+            .then(response => response.json())
+            .then(function handleResponse(result) {
+                if (result.query && result.query.length > 0) {
+                    dispatch(updateShareId(result.query[0]["_uid_"]));
+                } else {
+                    // Else do a mutation to store the query.
+                    doShareMutation(dispatch, getState);
+                }
+            })
+    ).catch(function(error) {
+        dispatch(
+            saveErrorResponse(
+                "Got error while saving querying for share: " + error.message
+            )
+        );
+    });
+};
+
+export const getQuery = shareId => {
+    return dispatch => {
+        timeout(
+            6000,
+            fetch(dgraphQuery(false), {
+                method: "POST",
+                mode: "cors",
+                headers: {
+                    Accept: "application/json"
+                },
+                body: `{
+                    query(id: ${shareId}) {
+                        _share_
+                    }
+                }`
+            })
+                .then(checkStatus)
+                .then(response => response.json())
+                .then(function(result) {
+                    if (result.query && result.query.length > 0) {
+                        dispatch(
+                            selectQuery(decodeURI(result.query[0]["_share_"]))
+                        );
+                        return;
+                    }
+                    dispatch(queryFound(false));
+                })
+        ).catch(function(error) {
+            dispatch(
+                saveErrorResponse(
+                    `Got error while getting query for id: ${shareId}, err: ` +
+                        error.message
+                )
+            );
+        });
+    };
+};
+
+const updateAllowed = allowed => ({
+    type: "UPDATE_ALLOWED",
+    allowed: allowed
+});
+
+export const initialServerState = () => {
+    const endpoint = [dgraphAddress(), "ui/init"].join("/");
+    return dispatch => {
+        timeout(
+            6000,
+            fetch(endpoint, {
+                method: "GET",
+                mode: "cors",
+                headers: {
+                    Accept: "application/json"
+                }
+            })
+                .then(checkStatus)
+                .then(response => response.json())
+                .then(function(result) {
+                    dispatch(updateAllowed(result.share));
+                })
+        ).catch(function(error) {
+            dispatch(
+                saveErrorResponse(
+                    "Got error while communicating with server: " +
+                        error.message
+                )
+            );
+        });
+    };
+};

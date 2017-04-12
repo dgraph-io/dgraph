@@ -231,3 +231,9 @@ func TestMain(m *testing.M) {
 
 	os.Exit(m.Run())
 }
+
+func TestParseUnderscore(t *testing.T) {
+	reset()
+	_, err := Parse("_share_:string @index .")
+	require.NoError(t, err)
+}
