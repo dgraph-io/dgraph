@@ -33,6 +33,7 @@ const (
 	itemComma
 	itemNewLine
 	itemDot
+	itemUnderscore
 )
 
 func lexText(l *lex.Lexer) lex.StateFn {
@@ -68,6 +69,9 @@ Loop:
 			l.Emit(itemColon)
 		case r == '@':
 			l.Emit(itemAt)
+		case r == '_':
+			// Predicates can start with _.
+			return lexWord
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}

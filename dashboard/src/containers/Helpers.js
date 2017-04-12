@@ -547,3 +547,11 @@ export function dgraphAddress() {
   // For development, we just connect to the Dgraph server at http://localhost:8080.
   return "http://localhost:8080";
 }
+
+export function dgraphQuery(debug = true) {
+  let url = [dgraphAddress(), "query"].join("/");
+  if (debug) {
+    url = [url, "debug=true"].join("?");
+  }
+  return url;
+}
