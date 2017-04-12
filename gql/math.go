@@ -172,6 +172,9 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 			}
 			if peekIt[0].Typ == itemLeftRound {
 				again := false
+				if !isMathFunc(item.Val) {
+					return nil, false, x.Errorf("Unknown math function: %v", item.Val)
+				}
 				var child *MathTree
 				for {
 					child, again, err = parseMathFunc(it, again)

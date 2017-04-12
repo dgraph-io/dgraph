@@ -111,13 +111,16 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		return ErrEmptyVal
 	}
 
+	var isIntOrFloat bool
 	var l float64
 	if v.Tid == types.IntID {
 		l = float64(v.Value.(int64))
 		v.Value = l
 		v.Tid = types.FloatID
+		isIntOrFloat = true
 	} else if v.Tid == types.FloatID {
 		l = v.Value.(float64)
+		isIntOrFloat = true
 	}
 	// If its not int or float, keep the type.
 
@@ -125,22 +128,34 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	if isUnary(ag.name) {
 		switch ag.name {
 		case "ln":
-			v.Value = math.Log(l)
+			if isIntOrFloat {
+				v.Value = math.Log(l)
+			}
 			res = v
 		case "exp":
-			v.Value = math.Exp(l)
+			if isIntOrFloat {
+				v.Value = math.Exp(l)
+			}
 			res = v
 		case "u-":
-			v.Value = -l
+			if isIntOrFloat {
+				v.Value = -l
+			}
 			res = v
 		case "sqrt":
-			v.Value = math.Sqrt(l)
+			if isIntOrFloat {
+				v.Value = math.Sqrt(l)
+			}
 			res = v
 		case "floor":
-			v.Value = math.Floor(l)
+			if isIntOrFloat {
+				v.Value = math.Floor(l)
+			}
 			res = v
 		case "ceil":
-			v.Value = math.Ceil(l)
+			if isIntOrFloat {
+				v.Value = math.Ceil(l)
+			}
 			res = v
 		case "since":
 			if v.Tid == types.DateID {
@@ -164,28 +179,42 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	va := ag.result
 	switch ag.name {
 	case "+":
-		va.Value = va.Value.(float64) + l
+		if isIntOrFloat {
+			va.Value = va.Value.(float64) + l
+		}
 		res = va
 	case "-":
-		va.Value = va.Value.(float64) - l
+		if isIntOrFloat {
+			va.Value = va.Value.(float64) - l
+		}
 		res = va
 	case "*":
-		va.Value = va.Value.(float64) * l
+		if isIntOrFloat {
+			va.Value = va.Value.(float64) * l
+		}
 		res = va
 	case "/":
-		va.Value = va.Value.(float64) / l
+		if isIntOrFloat {
+			va.Value = va.Value.(float64) / l
+		}
 		res = va
 	case "%":
-		va.Value = math.Mod(va.Value.(float64), l)
+		if isIntOrFloat {
+			va.Value = math.Mod(va.Value.(float64), l)
+		}
 		res = va
 	case "pow":
-		va.Value = math.Pow(va.Value.(float64), l)
+		if isIntOrFloat {
+			va.Value = math.Pow(va.Value.(float64), l)
+		}
 		res = va
 	case "logbase":
 		if l == 1 {
 			return nil
 		}
-		va.Value = math.Log(va.Value.(float64)) / math.Log(l)
+		if isIntOrFloat {
+			va.Value = math.Log(va.Value.(float64)) / math.Log(l)
+		}
 		res = va
 	case "min":
 		r, err := types.Less(va, v)
