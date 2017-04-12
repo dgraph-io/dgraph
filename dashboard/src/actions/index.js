@@ -231,7 +231,6 @@ const doShareMutation = (dispatch, getState) => {
         .then(checkStatus)
         .then(response => response.json())
         .then(function handleResponse(result) {
-            console.log(result);
             if (result.uids && result.uids.share) {
                 dispatch(updateShareId(result.uids.share));
             }
@@ -242,18 +241,24 @@ const doShareMutation = (dispatch, getState) => {
         })
         .then(function(errorMsg) {
             if (errorMsg !== undefined) {
-                // Display somewhere.
+                dispatch(
+                    saveErrorResponse(
+                        "Got error while saving querying for share: " + errorMsg
+                    )
+                );
             }
         });
 };
 
 export const getShareId = (dispatch, getState) => {
     let query = getState().query.text;
-    // TODO - Share button shouldn't be displayed when query block is empty.
     if (query === "") {
         return;
     }
     let stringifiedQuery = JSON.stringify(encodeURI(query)),
+        // Considering that index is already set on the pred, schema mutation
+        // should be a no-op. Lets see if we have already stored this query by
+        // performing an exact match.
         checkQuery = `
 mutation {
     schema {
@@ -290,11 +295,15 @@ mutation {
     )
         .catch(function(error) {
             console.log(error.stack);
-            return error;
+            return error.message;
         })
         .then(function(errorMsg) {
             if (errorMsg !== undefined) {
-                // Display somewhere.
+                dispatch(
+                    saveErrorResponse(
+                        "Got error while saving querying for share: " + errorMsg
+                    )
+                );
             }
         });
 };
@@ -330,14 +339,16 @@ export const getQuery = shareId => {
                 })
         )
             .catch(function(error) {
-                console.log(error.stack);
-                var err = (error.response && error.response.text()) ||
-                    error.message;
-                return err;
+                return error.message;
             })
             .then(function(errorMsg) {
                 if (errorMsg !== undefined) {
-                    // Display somewhere.
+                    dispatch(
+                        saveErrorResponse(
+                            `Got error while getting query for id: ${shareId}, err: ` +
+                                errorMsg
+                        )
+                    );
                 }
             });
     };
@@ -367,13 +378,16 @@ export const initialServerState = () => {
         )
             .catch(function(error) {
                 console.log(error.stack);
-                var err = (error.response && error.response.text()) ||
-                    error.message;
-                return err;
+                return error.message;
             })
             .then(function(errorMsg) {
                 if (errorMsg !== undefined) {
-                    // Display somewhere.
+                    dispatch(
+                        saveErrorResponse(
+                            "Got error while communicating with server: " +
+                                errorMsg
+                        )
+                    );
                 }
             });
     };
