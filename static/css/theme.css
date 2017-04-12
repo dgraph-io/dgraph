@@ -636,7 +636,7 @@ html .runnable code {
   margin-bottom: 0;
 }
 #runnable-modal .runnable-pane {
-  height: 644px;
+  height: 77vh;
 }
 #runnable-modal .code-btn[data-action='expand'] {
   display: none;
@@ -675,10 +675,24 @@ html .runnable code {
 @media screen and (max-width: 768px) {
   #runnable-modal .modal-dialog {
     max-width: 100%;
-    margin-top: 69px;
+    margin: 58px 9px;
+  }
+  #runnable-modal .modal-close-btn {
+    font-size: 13px;
   }
   #runnable-modal .runnable-pane {
-    height: 375px;
+    height: 50vh;
+  }
+}
+@media screen and (min-width: 1441px) {
+  #runnable-modal .runnable-pane {
+    height: 84vh;
+  }
+}
+@media screen and (max-width: 375px) {
+  #runnable-modal .modal-dialog {
+    margin-left: 0;
+    margin-right: 0;
   }
 }
 

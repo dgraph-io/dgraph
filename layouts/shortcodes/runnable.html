@@ -1,7 +1,7 @@
 {{ $checksum := md5 .Inner }}
 
 <div class="runnable" data-checksum="{{ $checksum }}" data-initial="{{ .Inner }}" data-current="{{ .Inner }}" data-dirty="false">
-  <div class="container">
+  <div class="container-fluid">
     <div class="row">
       <div class="runnable-col runnable-col-code col-12 col-sm-12 col-md-12 col-lg-6 nopadding">
         <div class="runnable-pane">
