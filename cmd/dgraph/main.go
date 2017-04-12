@@ -231,14 +231,39 @@ func applyMutations(ctx context.Context, m *taskp.Mutations) error {
 	return nil
 }
 
+const INTERNAL_SHARE = "internal_share"
+
+func mutationsAllowed(mutation *graphp.Mutation) error {
+	if *nomutations {
+		if *noshare {
+			return fmt.Errorf("Mutations are forbidden on this server.")
+		}
+
+		// Sharing is allowed, lets check that mutation should have only internal
+		// share predicate.
+		if !hasOnlySharePred(mutation) {
+			return fmt.Errorf("Only mutations with: %v as predicate are allowed ",
+				INTERNAL_SHARE)
+		}
+	}
+	// Mutations are allowed but sharing isn't allowed.
+	if *noshare {
+		if hasSharePred(mutation) {
+			return fmt.Errorf("Mutations with: %v as predicate are not allowed ",
+				INTERNAL_SHARE)
+		}
+	}
+	return nil
+}
+
 func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var m taskp.Mutations
 	var err error
 	var mr mutationResult
 
-	if *nomutations {
-		return nil, fmt.Errorf("Mutations are forbidden on this server.")
+	if err := mutationsAllowed(mutation); err != nil {
+		return nil, err
 	}
 
 	if mr, err = convertToEdges(ctx, mutation.Set); err != nil {
@@ -808,6 +833,7 @@ func setupServer(che chan error) {
 	reg := regexp.MustCompile(`\/0[xX][0-9a-fA-F]+`)
 	http.Handle("/", homeHandler(http.FileServer(http.Dir(uiDir)), reg))
 	http.HandleFunc("/ui/keywords", keywordHandler)
+	http.HandleFunc("/ui/init", initialState)
 
 	// Initilize the servers.
 	go serveGRPC(grpcl)

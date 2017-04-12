@@ -8,6 +8,7 @@
 
 .Nav-pad a {
 	padding-top: 10px !important;
+	height: 50px;
 }
 
 @media only screen and (min-width: 992px) {

@@ -326,11 +326,46 @@ export const getQuery = shareId => {
                         );
                         return;
                     }
+                    dispatch(queryFound(false));
                 })
         )
             .catch(function(error) {
-                dispatch(queryFound(false));
+                console.log(error.stack);
+                var err = (error.response && error.response.text()) ||
+                    error.message;
+                return err;
+            })
+            .then(function(errorMsg) {
+                if (errorMsg !== undefined) {
+                    // Display somewhere.
+                }
+            });
+    };
+};
 
+const updateAllowed = allowed => ({
+    type: "UPDATE_ALLOWED",
+    allowed: allowed
+});
+
+export const initialServerState = () => {
+    return dispatch => {
+        timeout(
+            6000,
+            fetch([dgraphAddress(), "ui/init"].join("/"), {
+                method: "GET",
+                mode: "cors",
+                headers: {
+                    Accept: "application/json"
+                }
+            })
+                .then(checkStatus)
+                .then(response => response.json())
+                .then(function handleResponse(result) {
+                    dispatch(updateAllowed(result.share));
+                })
+        )
+            .catch(function(error) {
                 console.log(error.stack);
                 var err = (error.response && error.response.text()) ||
                     error.message;

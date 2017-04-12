@@ -11,7 +11,8 @@ import {
   updateFullscreen,
   getQuery,
   updateInitialQuery,
-  queryFound
+  queryFound,
+  initialServerState
 } from "../actions";
 
 import "../assets/css/App.css";
@@ -76,9 +77,9 @@ const App = React.createClass({
   },
 
   componentDidMount() {
+    this.props.initialServerState();
     let id = this.props.match.params.id;
     if (id !== undefined) {
-      console.log("here", id);
       this.props.getQuery(id);
     }
   },
@@ -112,6 +113,9 @@ const mapDispatchToProps = dispatch => ({
   },
   queryFound: found => {
     dispatch(queryFound(found));
+  },
+  initialServerState: () => {
+    dispatch(initialServerState());
   }
 });
 

@@ -27,8 +27,9 @@ const NavBar = React.createClass({
     },
 
     render() {
-        let { getShareId, shareId } = this.props,
-            urlClass = shareId === "" ? "Nav-url-hide" : "";
+        let { getShareId, shareId, allowed, query } = this.props,
+            urlClass = shareId === "" ? "Nav-url-hide" : "",
+            hideShare = !allowed || query === "" ? "Nav-url-hide" : "";
         return (
             <Navbar style={{ borderBottom: "0.5px solid gray" }} fluid={true}>
                 <Navbar.Header>
@@ -63,7 +64,7 @@ const NavBar = React.createClass({
                         >
                             Community
                         </NavItem>
-                        <NavItem className="Nav-pad hidden-xs">
+                        <NavItem className={`Nav-pad hidden-xs  ${hideShare}`}>
                             <form className="form-inline">
                                 <button
                                     className="btn btn-default"
