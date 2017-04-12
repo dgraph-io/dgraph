@@ -568,6 +568,8 @@ function isElementInViewport(el) {
     var newQuery = $currentRunnable.attr('data-unsaved') ||
                    $currentRunnable.attr('data-current');
 
+    newQuery = newQuery.trim();
+
     // Update query examples and the textarea with the current query
     $runnables.attr('data-current', newQuery);
     updateQueryContents($runnables, newQuery);
