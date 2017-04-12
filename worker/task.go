@@ -18,10 +18,12 @@
 package worker
 
 import (
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/context"
 
@@ -332,20 +334,13 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isCompareAtRoot {
-		it := pstore.NewIterator()
-		defer it.Close()
-		pk := x.Parse(x.DataKey(q.Attr, 0))
-		dataPrefix := pk.DataPrefix()
-		if q.Reverse {
-			pk = x.Parse(x.ReverseKey(q.Attr, 0))
-			dataPrefix = pk.ReversePrefix()
-		}
 
-		for it.Seek(dataPrefix); it.ValidForPrefix(dataPrefix); it.Next() {
-			x.AssertTruef(pk.Attr == q.Attr,
-				"Invalid key obtained for comparison")
-			key := it.Key().Data()
-			pl, decr := posting.GetOrUnmarshal(key, it.Value().Data(), gid)
+		ch := make(chan itkv, 10000)
+		iterateParallel(q, srcFn, ch)
+
+		for it := range ch {
+			key := it.key
+			pl, decr := posting.GetOrUnmarshal(key, it.val, gid)
 			count := int64(pl.Length(0))
 			decr()
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
@@ -799,4 +794,56 @@ func preprocessFilter(tree *facetsp.FilterTree) (*facetsTree, error) {
 		return nil, x.Errorf("Unsupported operation in facet filtering: %s.", tree.Op)
 	}
 	return ftree, nil
+}
+
+type itkv struct {
+	key []byte
+	val []byte
+}
+
+func iterateParallel(q *taskp.Query, srcFn *functionContext, ch chan itkv) {
+	numPart := uint64(10)
+	grpSize := uint64(math.MaxUint64 / uint64(numPart))
+	var wg sync.WaitGroup
+
+	for i := uint64(0); i < numPart; i++ {
+		minUid := grpSize*i + 1
+		maxUid := grpSize * (i + 1)
+
+		wg.Add(1)
+		go func() {
+			it := pstore.NewIterator()
+			defer it.Close()
+			startKey := x.DataKey(q.Attr, minUid)
+			pk := x.Parse(startKey)
+			dataPrefix := pk.DataPrefix()
+			if q.Reverse {
+				startKey = x.ReverseKey(q.Attr, minUid)
+				pk = x.Parse(startKey)
+				dataPrefix = pk.ReversePrefix()
+			}
+
+			for it.Seek(startKey); it.ValidForPrefix(dataPrefix); it.Next() {
+				pk := x.Parse(it.Key().Data())
+				x.AssertTruef(pk.Attr == q.Attr,
+					"Invalid key obtained for comparison")
+				if pk.Uid >= maxUid {
+					break
+				}
+				data := it.Key().Data()
+				val := it.Value().Data()
+				a := make([]byte, len(data))
+				b := make([]byte, len(val))
+				copy(a, data)
+				copy(b, val)
+				ch <- itkv{
+					key: a,
+					val: b,
+				}
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	close(ch)
 }
