@@ -1085,6 +1085,8 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 AssignStep:
 	if sg.Params.Var != "" {
 		if sg.Params.Facet != nil {
+			// If @facets was specified, we only consider the first edge out and
+			// assign the value of that facet to the variable.
 			if len(sg.facetsMatrix) == 0 {
 				return
 			}
@@ -1092,7 +1094,7 @@ AssignStep:
 				vals: make(map[uint64]types.Val),
 			}
 			for idx, uid := range sg.SrcUIDs.Uids {
-				if len(sg.facetsMatrix[idx].FacetsList[0].Facets) != 1 {
+				if len(sg.facetsMatrix[idx].FacetsList) == 0 || len(sg.facetsMatrix[idx].FacetsList[0].Facets) != 1 {
 					continue
 				}
 				f := sg.facetsMatrix[idx].FacetsList[0].Facets[0]
