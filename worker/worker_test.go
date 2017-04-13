@@ -129,7 +129,7 @@ func TestProcessTask(t *testing.T) {
 	defer waitForSyncMark(context.Background(), 1, math.MaxUint64)
 
 	query := newQuery("neighbour", []uint64{10, 11, 12}, nil)
-	r, err := processTask(query, 1)
+	r, err := processTask(context.Background(), query, 1)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		[][]uint64{
@@ -159,7 +159,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	defer waitForSyncMark(context.Background(), 1, math.MaxUint64)
 
 	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
-	r, err := processTask(query, 1)
+	r, err := processTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -182,7 +182,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
-	r, err = processTask(query, 1)
+	r, err = processTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -213,7 +213,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = processTask(query, 1)
+	r, err = processTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -227,7 +227,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = processTask(query, 1)
+	r, err = processTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -246,7 +246,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	defer waitForSyncMark(context.Background(), 1, math.MaxUint64)
 
 	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
-	r, err := processTask(query, 1)
+	r, err := processTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -272,7 +272,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
-	r, err = processTask(query, 1)
+	r, err = processTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -306,7 +306,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = processTask(query, 1)
+	r, err = processTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{

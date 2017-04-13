@@ -18,10 +18,12 @@
 package worker
 
 import (
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/context"
 
@@ -56,7 +58,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *taskp.Query) (*taskp.Result,
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
-		return processTask(q, gid)
+		return processTask(ctx, q, gid)
 	}
 
 	// Send this over the network.
@@ -136,6 +138,8 @@ const (
 	StandardFn = 100
 )
 
+const numPart = uint64(32)
+
 func parseFuncType(arr []string) (FuncType, string) {
 	if len(arr) == 0 {
 		return NotAFunction, ""
@@ -177,7 +181,7 @@ func needsIndex(fnType FuncType) bool {
 }
 
 // processTask processes the query, accumulates and returns the result.
-func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
+func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result, error) {
 	attr := q.Attr
 	srcFn, err := parseSrcFn(q)
 	if err != nil {
@@ -332,20 +336,8 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isCompareAtRoot {
-		it := pstore.NewIterator()
-		defer it.Close()
-		pk := x.Parse(x.DataKey(q.Attr, 0))
-		dataPrefix := pk.DataPrefix()
-		if q.Reverse {
-			pk = x.Parse(x.ReverseKey(q.Attr, 0))
-			dataPrefix = pk.ReversePrefix()
-		}
-
-		for it.Seek(dataPrefix); it.ValidForPrefix(dataPrefix); it.Next() {
-			x.AssertTruef(pk.Attr == q.Attr,
-				"Invalid key obtained for comparison")
-			key := it.Key().Data()
-			pl, decr := posting.GetOrUnmarshal(key, it.Value().Data(), gid)
+		f := func(key, val []byte, mu sync.Mutex) {
+			pl, decr := posting.GetOrUnmarshal(key, val, gid)
 			count := int64(pl.Length(0))
 			decr()
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
@@ -353,9 +345,12 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 				// TODO: Look if we want to put these UIDs in one list before
 				// passing it back to query package.
 				tlist := &taskp.List{[]uint64{pk.Uid}}
+				mu.Lock()
 				out.UidMatrix = append(out.UidMatrix, tlist)
+				mu.Unlock()
 			}
 		}
+		iterateParallel(ctx, q, f)
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -591,7 +586,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *taskp.Query) (*taskp.Resu
 	c := make(chan error, 1)
 	go func() {
 		var err error
-		reply, err = processTask(q, gid)
+		reply, err = processTask(ctx, q, gid)
 		c <- err
 	}()
 
@@ -799,4 +794,56 @@ func preprocessFilter(tree *facetsp.FilterTree) (*facetsTree, error) {
 		return nil, x.Errorf("Unsupported operation in facet filtering: %s.", tree.Op)
 	}
 	return ftree, nil
+}
+
+type itkv struct {
+	key []byte
+	val []byte
+}
+
+func iterateParallel(ctx context.Context, q *taskp.Query, f func([]byte, []byte, sync.Mutex)) {
+	grpSize := uint64(math.MaxUint64 / uint64(numPart))
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for i := uint64(0); i < numPart; i++ {
+		minUid := grpSize*i + 1
+		maxUid := grpSize * (i + 1)
+		if i == numPart-1 {
+			maxUid = math.MaxUint64
+		}
+		x.Trace(ctx, "Running go-routine %v for iteration", i)
+		wg.Add(1)
+		go func() {
+			it := pstore.NewIterator()
+			defer it.Close()
+			startKey := x.DataKey(q.Attr, minUid)
+			pk := x.Parse(startKey)
+			prefix := pk.DataPrefix()
+			if q.Reverse {
+				startKey = x.ReverseKey(q.Attr, minUid)
+				pk = x.Parse(startKey)
+				prefix = pk.ReversePrefix()
+			}
+
+			w := 0
+			for it.Seek(startKey); it.ValidForPrefix(prefix); it.Next() {
+				pk := x.Parse(it.Key().Data())
+				x.AssertTruef(pk.Attr == q.Attr,
+					"Invalid key obtained for comparison")
+				if w%1000 == 0 {
+					x.Trace(ctx, "iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+				}
+				w++
+				if pk.Uid > maxUid {
+					break
+				}
+				key := it.Key().Data()
+				val := it.Value().Data()
+				f(key, val, mu)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
