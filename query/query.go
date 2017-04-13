@@ -1084,7 +1084,21 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 
 AssignStep:
 	if sg.Params.Var != "" {
-		if len(sg.DestUIDs.Uids) != 0 {
+		if sg.Params.Facet != nil {
+			if len(sg.facetsMatrix) == 0 {
+				return
+			}
+			doneVars[sg.Params.Var] = values{
+				vals: make(map[uint64]types.Val),
+			}
+			for idx, uid := range sg.SrcUIDs.Uids {
+				if len(sg.facetsMatrix[idx].FacetsList[0].Facets) != 1 {
+					continue
+				}
+				f := sg.facetsMatrix[idx].FacetsList[0].Facets[0]
+				doneVars[sg.Params.Var].vals[uid] = facets.ValFor(f)
+			}
+		} else if len(sg.DestUIDs.Uids) != 0 {
 			// This implies it is a entity variable.
 			doneVars[sg.Params.Var] = values{
 				uids: sg.DestUIDs,
