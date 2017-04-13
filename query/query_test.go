@@ -366,6 +366,234 @@ func TestCascadeDirective(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValAggSince(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as dob
+				b as math(since(a)/(60*60*24*365))
+			}
+
+			AgeOrder(id: var(f), orderasc: var(b)) {
+				name
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"AgeOrder":[{"name":"Rick Grimes","var[a]":"1910-01-02"},{"name":"Michonne","var[a]":"1910-01-01"},{"name":"Andrea","var[a]":"1901-01-15"}]}`,
+		js)
+}
+
+func TestQueryVarValAggNestedFuncConst(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as age
+				friend {
+					n as min(age)
+					s as max(age)
+					p as math(a + s % n + 10)
+					q as math(a * s * n * -1)
+				}
+			}
+
+			MaxMe(id: var(f), orderasc: var(p)) {
+				name
+				var(p)
+				var(a)
+				var(n)
+				var(s)
+			}
+
+			MinMe(id: var(f), orderasc: var(q)) {
+				name
+				var(q)
+				var(a)
+				var(n)
+				var(s)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"MaxMe":[{"name":"Rick Grimes","var[a]":15,"var[n]":38,"var[p]":25.000000,"var[s]":38},{"name":"Andrea","var[a]":19,"var[n]":15,"var[p]":29.000000,"var[s]":15},{"name":"Michonne","var[a]":38,"var[n]":15,"var[p]":52.000000,"var[s]":19}],"MinMe":[{"name":"Rick Grimes","var[a]":15,"var[n]":38,"var[q]":-21660.000000,"var[s]":38},{"name":"Michonne","var[a]":38,"var[n]":15,"var[q]":-10830.000000,"var[s]":19},{"name":"Andrea","var[a]":19,"var[n]":15,"var[q]":-4275.000000,"var[s]":15}]}`,
+		js)
+}
+
+func TestQueryVarValAggNestedFuncMinMaxVars(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as age
+				friend {
+					n as min(age)
+					s as max(age)
+					p as math(max(max(a, s), n))
+					q as math(min(min(a, s), n))
+				}
+			}
+
+			MaxMe(id: var(f), orderasc: var(p)) {
+				name
+				var(p)
+				var(a)
+				var(n)
+				var(s)
+			}
+
+			MinMe(id: var(f), orderasc: var(q)) {
+				name
+				var(q)
+				var(a)
+				var(n)
+				var(s)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"MinMe":[{"name":"Michonne","var[a]":38,"var[n]":15,"var[q]":15,"var[s]":19},{"name":"Rick Grimes","var[a]":15,"var[n]":38,"var[q]":15,"var[s]":38},{"name":"Andrea","var[a]":19,"var[n]":15,"var[q]":15,"var[s]":15}],"MaxMe":[{"name":"Andrea","var[a]":19,"var[n]":15,"var[p]":19,"var[s]":15},{"name":"Michonne","var[a]":38,"var[n]":15,"var[p]":38,"var[s]":19},{"name":"Rick Grimes","var[a]":15,"var[n]":38,"var[p]":38,"var[s]":38}]}`,
+		js)
+}
+
+func TestQueryVarValAggNestedFuncConditional(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as age
+				friend {
+					n as min(age)
+					condLog as math(cond(a > 10, logbase(n, 5), 1))
+					condExp as math(cond(a < 40, 1, pow(2, n)))
+				}
+			}
+
+			LogMe(id: var(f), orderasc: var(condLog)) {
+				name
+				var(condLog)
+				var(n)
+				var(a)
+			}
+
+			ExpMe(id: var(f), orderasc: var(condExp)) {
+				name
+				var(condExp)
+				var(n)
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"ExpMe":[{"name":"Michonne","var[a]":38,"var[condExp]":1.000000,"var[n]":15},{"name":"Rick Grimes","var[a]":15,"var[condExp]":1.000000,"var[n]":38},{"name":"Andrea","var[a]":19,"var[condExp]":1.000000,"var[n]":15}],"LogMe":[{"name":"Michonne","var[a]":38,"var[condLog]":1.682606,"var[n]":15},{"name":"Andrea","var[a]":19,"var[condLog]":1.682606,"var[n]":15},{"name":"Rick Grimes","var[a]":15,"var[condLog]":2.260159,"var[n]":38}]}`,
+		js)
+}
+
+func TestQueryVarValAggNestedFuncConditional2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as age
+				friend {
+					n as min(age)
+					condLog as math(cond(a==38, n/2, 1))
+					condExp as math(cond(a!=38, 1, sqrt(2*n)))
+				}
+			}
+
+			LogMe(id: var(f), orderasc: var(condLog)) {
+				name
+				var(condLog)
+				var(n)
+				var(a)
+			}
+
+			ExpMe(id: var(f), orderasc: var(condExp)) {
+				name
+				var(condExp)
+				var(n)
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"ExpMe":[{"name":"Rick Grimes","var[a]":15,"var[condExp]":1.000000,"var[n]":38},{"name":"Andrea","var[a]":19,"var[condExp]":1.000000,"var[n]":15},{"name":"Michonne","var[a]":38,"var[condExp]":5.477226,"var[n]":15}],"LogMe":[{"name":"Rick Grimes","var[a]":15,"var[condLog]":1.000000,"var[n]":38},{"name":"Andrea","var[a]":19,"var[condLog]":1.000000,"var[n]":15},{"name":"Michonne","var[a]":38,"var[condLog]":7.500000,"var[n]":15}]}`,
+		js)
+}
+
+func TestQueryVarValAggNestedFuncUnary(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as age
+				friend {
+					n as min(age)
+					s as max(age)
+					combiLog as math(a + ln(s - n))
+					combiExp as math(a + exp(s - n))
+				}
+			}
+
+			LogMe(id: var(f), orderasc: var(combiLog)) {
+				name
+				var(combiLog)
+				var(a)
+				var(n)
+				var(s)
+			}
+
+			ExpMe(id: var(f), orderasc: var(combiExp)) {
+				name
+				var(combiExp)
+				var(a)
+				var(n)
+				var(s)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"ExpMe":[{"name":"Rick Grimes","var[a]":15,"var[combiExp]":16.000000,"var[n]":38,"var[s]":38},{"name":"Andrea","var[a]":19,"var[combiExp]":20.000000,"var[n]":15,"var[s]":15},{"name":"Michonne","var[a]":38,"var[combiExp]":92.598150,"var[n]":15,"var[s]":19}],"LogMe":[{"name":"Rick Grimes","var[a]":15,"var[combiLog]":-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000,"var[n]":38,"var[s]":38},{"name":"Andrea","var[a]":19,"var[combiLog]":-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000,"var[n]":15,"var[s]":15},{"name":"Michonne","var[a]":38,"var[combiLog]":39.386294,"var[n]":15,"var[s]":19}]}`,
+		js)
+}
+
+func TestQueryVarValAggNestedFunc(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				a as age
+				friend {
+					n as min(age)
+					s as max(age)
+					combi as math(a + n * s)
+				}
+			}
+
+			me(id: var(f), orderasc: var(combi)) {
+				name
+				var(combi)
+				var(a)
+				var(n)
+				var(s)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea","var[a]":19,"var[combi]":244,"var[n]":15,"var[s]":15},{"name":"Michonne","var[a]":38,"var[combi]":323,"var[n]":15,"var[s]":19},{"name":"Rick Grimes","var[a]":15,"var[combi]":1459,"var[n]":38,"var[s]":38}]}`,
+		js)
+}
+
 func TestQueryVarValAggMinMaxSelf(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -375,7 +603,7 @@ func TestQueryVarValAggMinMaxSelf(t *testing.T) {
 				friend {
 					n as min(age)
 					s as max(age)
-					sum as sumvar(n, a, s)
+					sum as math(n +  a + s)
 				}
 			}
 
@@ -400,7 +628,7 @@ func TestQueryVarValAggMinMax(t *testing.T) {
 				friend {
 					n as min(age)
 					s as max(age)
-					sum as sumvar(n, s)
+					sum as math(n + s)
 				}
 			}
 
@@ -417,89 +645,30 @@ func TestQueryVarValAggMinMax(t *testing.T) {
 		js)
 }
 
-func TestWrongVarType_Error1(t *testing.T) {
+func TestQueryVarValAggMul(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
-				friend {
-					n as min(age)
-					s as max(age)
-					sum as sumvar(n, s)
+			var(id: 1) {
+				f as friend {
+					n as age
+					s as count(friend)
+					mul as math(n * s)
 				}
 			}
 
-			me(id: var(sum), orderdesc: var(f)) {
-				name 
-				var(n)
+			me(id: var(f), orderdesc: var(mul)) {
+				name
 				var(s)
+				var(n)
+				var(mul)
 			}
 		}
 	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	var l Latency
-	ctx := context.Background()
-	_, err = ProcessQuery(ctx, res, &l)
-	require.Error(t, err)
-}
-
-func TestWrongVarType_Error2(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			var(func: anyofterms(name, "Michonne Andrea Rick")) {
-				friend {
-					n as min(age)
-					s as max(age)
-					sum as sumvar(n, s)
-				}
-			}
-
-			me(id: var(sum)) {
-				name 
-				var(n)
-				var(s)
-			}
-		}
-	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	var l Latency
-	ctx := context.Background()
-	_, err = ProcessQuery(ctx, res, &l)
-	require.Error(t, err)
-}
-
-func TestWrongVarType_Error3(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
-				friend {
-					n as min(age)
-					s as max(age)
-					sum as sumvar(n, s)
-				}
-			}
-
-			me(id: var(f), orderdesc: var(f)) {
-				name 
-				var(n)
-				var(s)
-				var(sum)
-			}
-		}
-	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	var l Latency
-	ctx := context.Background()
-	_, err = ProcessQuery(ctx, res, &l)
-	require.Error(t, err)
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea","var[mul]":19,"var[n]":19,"var[s]":1},{"name":"Rick Grimes","var[mul]":15,"var[n]":15,"var[s]":1},{"name":"Glenn Rhee","var[mul]":0,"var[n]":15,"var[s]":0},{"name":"Daryl Dixon","var[mul]":0,"var[n]":17,"var[s]":0}]}`,
+		js)
 }
 
 func TestQueryVarValAggOrderDesc(t *testing.T) {
@@ -510,7 +679,7 @@ func TestQueryVarValAggOrderDesc(t *testing.T) {
 				f as friend {
 					n as age
 					s as count(friend)
-					sum as sumvar(n, s)
+					sum as math(n + s)
 				}
 			}
 
@@ -535,7 +704,7 @@ func TestQueryVarValAggOrderAsc(t *testing.T) {
 				f as friend {
 					n as age
 					s as survival_rate
-					sum as sumvar(n, s)
+					sum as math(n + s)
 				}
 			}
 
@@ -3992,7 +4161,7 @@ func TestGeneratorMultiRootFilter1(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms(name, "Daryl Rick Glenn")) @filter(leq(dob, 1909-01-10)) {
+			me(func:anyofterms(name, "Daryl Rick Glenn")) @filter(leq(dob, "1909-01-10")) {
         name
       }
     }
@@ -4005,7 +4174,7 @@ func TestGeneratorMultiRootFilter2(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(geq(dob, 1909-01-10)) {
+			me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(geq(dob, "1909-01-10")) {
         name
       }
     }
@@ -4018,7 +4187,7 @@ func TestGeneratorMultiRootFilter3(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(anyofterms(name, "Glenn") and geq(dob, 1909-01-10)) {
+			me(func:anyofterms(name, "Michonne Rick Glenn")) @filter(anyofterms(name, "Glenn") and geq(dob, "1909-01-10")) {
         name
       }
     }

@@ -47,6 +47,7 @@ type GraphQuery struct {
 	Args         map[string]string
 	Children     []*GraphQuery
 	Filter       *FilterTree
+	MathExp      *MathTree
 	Normalize    bool
 	Cascade      bool
 	Facets       *Facets
@@ -126,6 +127,7 @@ type Facets struct {
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
 var filterOpPrecedence map[string]int
+var mathOpPrecedence map[string]int
 
 func init() {
 	filterOpPrecedence = map[string]int{
@@ -133,6 +135,34 @@ func init() {
 		"and": 2,
 		"or":  1,
 	}
+	mathOpPrecedence = map[string]int{
+		"u-":      500,
+		"floor":   105,
+		"ceil":    104,
+		"since":   103,
+		"exp":     100,
+		"ln":      99,
+		"sqrt":    98,
+		"cond":    90,
+		"pow":     89,
+		"logbase": 88,
+		"max":     85,
+		"min":     84,
+
+		"/": 50,
+		"*": 49,
+		"%": 48,
+		"-": 47,
+		"+": 46,
+
+		"<":  10,
+		">":  9,
+		"<=": 8,
+		">=": 7,
+		"==": 6,
+		"!=": 5,
+	}
+
 }
 
 func (f *Function) IsAggregator() bool {
@@ -555,6 +585,12 @@ func checkDependency(vl []*Vars) error {
 			defines, needs)
 	}
 
+	for i := 0; i < len(defines); i++ {
+		if defines[i] != needs[i] {
+			return x.Errorf("Variables are not used properly. \nDefined:%v\nUsed:%v\n",
+				defines, needs)
+		}
+	}
 	return nil
 }
 
@@ -572,6 +608,22 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 	}
 	if qu.Filter != nil {
 		qu.Filter.collectVars(v)
+	}
+	if qu.MathExp != nil {
+		qu.MathExp.collectVars(v)
+	}
+}
+
+func (f *MathTree) collectVars(v *Vars) {
+	if f == nil {
+		return
+	}
+	if f.Var != "" {
+		v.Needs = append(v.Needs, f.Var)
+		return
+	}
+	for _, fch := range f.Child {
+		fch.collectVars(v)
 	}
 }
 
@@ -764,14 +816,16 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 		case itemRightSquare:
 			return items, nil
 		case itemName:
-			items = append(items, item.Val)
+			val := collectName(it, item.Val)
+			items = append(items, val)
 		case itemComma:
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
 				return items, x.Errorf("Invalid scheam block")
 			}
-			items = append(items, item.Val)
+			val := collectName(it, item.Val)
+			items = append(items, val)
 		default:
 			return items, x.Errorf("Invalid schema block")
 		}
@@ -947,7 +1001,13 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 		if varType == "" {
 			return x.Errorf("Type of a variable can't be empty")
 		}
-
+		it.Next()
+		item = it.Item()
+		if item.Typ == itemMathOp && item.Val == "!" {
+			varType += item.Val
+			it.Next()
+			item = it.Item()
+		}
 		// Insert the variable into the map. The variable might already be defiend
 		// in the variable list passed with the query.
 		if _, ok := vmap[varName]; ok {
@@ -962,8 +1022,6 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 		}
 
 		// Check for '=' sign and optional default value.
-		it.Next()
-		item = it.Item()
 		if item.Typ == itemEqual {
 			it.Next()
 			it := it.Item()
@@ -1005,7 +1063,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			if !expectArg {
 				return result, x.Errorf("Expecting a comma. But got: %v", item.Val)
 			}
-			p.Key = item.Val
+			p.Key = collectName(it, item.Val)
 			expectArg = false
 		} else if item.Typ == itemRightRound {
 			if expectArg {
@@ -1052,11 +1110,18 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			if item.Typ != itemName {
 				return result, x.Errorf("Expecting argument value. Got: %v", item)
 			}
+		} else if item.Typ == itemMathOp {
+			if item.Val != "+" && item.Val != "-" {
+				return result, x.Errorf("Only Plus and minus are allowed unary ops. Got: %v", item.Val)
+			}
+			val = item.Val
+			it.Next()
+			item = it.Item()
 		} else if item.Typ != itemName {
 			return result, x.Errorf("Expecting argument value. Got: %v", item)
 		}
 
-		p.Val = val + item.Val
+		p.Val = collectName(it, val+item.Val)
 
 		// Get language list, if present
 		items, err := it.Peek(1)
@@ -1130,6 +1195,13 @@ func (s *filterTreeStack) empty() bool        { return len(s.a) == 0 }
 func (s *filterTreeStack) size() int          { return len(s.a) }
 func (s *filterTreeStack) push(t *FilterTree) { s.a = append(s.a, t) }
 
+func (s *filterTreeStack) popAssert() *FilterTree {
+	x.AssertTrue(!s.empty())
+	last := s.a[len(s.a)-1]
+	s.a = s.a[:len(s.a)-1]
+	return last
+}
+
 func (s *filterTreeStack) pop() (*FilterTree, error) {
 	if s.empty() {
 		return nil, x.Errorf("Empty stack")
@@ -1161,8 +1233,8 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 		if valueStack.size() < 2 {
 			return x.Errorf("Invalid filter statement")
 		}
-		topVal1, _ := valueStack.pop()
-		topVal2, _ := valueStack.pop()
+		topVal1 := valueStack.popAssert()
+		topVal2 := valueStack.popAssert()
 		topOp.Child = []*FilterTree{topVal2, topVal1}
 	}
 	// Push the new value (tree) into the valueStack.
@@ -1177,7 +1249,8 @@ L:
 	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemName { // Value.
-			g = &Function{Name: strings.ToLower(item.Val)}
+			val := collectName(it, item.Val)
+			g = &Function{Name: strings.ToLower(val)}
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
@@ -1187,6 +1260,7 @@ L:
 			expectArg = true
 			for it.Next() {
 				itemInFunc := it.Item()
+				var val string
 				if itemInFunc.Typ == itemRightRound {
 					break L
 				} else if itemInFunc.Typ == itemComma {
@@ -1224,6 +1298,10 @@ L:
 					} else {
 						return nil, x.Errorf("Invalid usage of '@' in function argument")
 					}
+				} else if itemInFunc.Typ == itemMathOp {
+					val = itemInFunc.Val
+					it.Next()
+					itemInFunc = it.Item()
 				} else if itemInFunc.Typ == itemDollar {
 					if isDollar {
 						return nil, x.Errorf("Invalid use of $ in func args")
@@ -1237,7 +1315,7 @@ L:
 				if !expectArg && !expectLang {
 					return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
 				}
-				val := strings.Trim(itemInFunc.Val, "\" \t")
+				val += strings.Trim(itemInFunc.Val, "\" \t")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
@@ -1291,7 +1369,8 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 				if !expectArg {
 					return nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
 				}
-				facets.Keys = append(facets.Keys, item.Val)
+				val := collectName(it, item.Val)
+				facets.Keys = append(facets.Keys, val)
 				expectArg = false
 			} else if item.Typ == itemComma {
 				if expectArg {
@@ -1644,7 +1723,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				continue
 			}
 			// Check and parse if its a list.
-			err := parseID(gq, item.Val)
+			val := collectName(it, item.Val)
+			err := parseID(gq, val)
 			if err != nil {
 				return nil, err
 			}
@@ -1661,7 +1741,17 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return nil, x.Errorf("Invalid query")
 			}
 			item := it.Item()
-			if item.Val == "var" {
+
+			if item.Typ == itemMathOp {
+				if item.Val != "+" && item.Val != "-" {
+					return nil, x.Errorf("Only Plus and minus are allowed unary ops. Got: %v", item.Val)
+				}
+				val = item.Val
+				it.Next()
+				item = it.Item()
+			}
+
+			if val == "" && item.Val == "var" {
 				count, err := parseVarList(it, gq)
 				if err != nil {
 					return nil, err
@@ -1672,7 +1762,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				// Modify the NeedsVar context here.
 				gq.NeedsVar[len(gq.NeedsVar)-1].Typ = VALUE_VAR
 			} else {
-				val = item.Val
+				val = collectName(it, val+item.Val)
 				// Get language list, if present
 				items, err := it.Peek(1)
 				if err == nil && items[0].Typ == itemAt {
@@ -1682,6 +1772,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					val = val + "@" + strings.Join(langs, ":")
 				}
 			}
+
 			if val == "" {
 				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 			}
@@ -1730,9 +1821,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			}
 
-			val := strings.ToLower(item.Val)
-			if isAggregator(val) || val == "checkpwd" {
-				item.Val = val
+			val := collectName(it, item.Val)
+			valLower := strings.ToLower(val)
+			if isAggregator(valLower) || valLower == "checkpwd" {
 				child := &GraphQuery{
 					Args: make(map[string]string),
 					Var:  varName,
@@ -1742,37 +1833,39 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if child.Func, err = parseFunction(it); err != nil {
 					return err
 				}
-				if item.Val == "checkpwd" {
+				if valLower == "checkpwd" {
 					child.Func.Args = append(child.Func.Args, child.Func.Attr)
 				}
 				child.Attr = child.Func.Attr
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
-			} else if isValVarFunc(val) {
-				item.Val = val
+			} else if isValVarFunc(valLower) {
+				//item.Val = val
 				if varName == "" {
 					return x.Errorf("Function %v should be used with a variable", val)
 				}
-				child := &GraphQuery{
-					Attr:       item.Val,
-					Args:       make(map[string]string),
-					Var:        varName,
-					IsInternal: true,
-				}
-				varName = ""
-				count, err := parseVarList(it, child)
+				//it.Prev()
+				mathTree, again, err := parseMathFunc(it, false)
 				if err != nil {
 					return err
 				}
-				if count == 0 {
-					return x.Errorf("Should have atleast one variable inside %v", val)
+				if again {
+					return x.Errorf("Comma encountered in math() at unexpected place.")
 				}
+				child := &GraphQuery{
+					Attr:       val,
+					Args:       make(map[string]string),
+					Var:        varName,
+					MathExp:    mathTree,
+					IsInternal: true,
+				}
+				varName = ""
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
 
-			} else if val == "count" {
+			} else if valLower == "count" {
 				if isCount != 0 {
 					return x.Errorf("Invalid mention of function count")
 				}
@@ -1783,7 +1876,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return x.Errorf("Invalid mention of count.")
 				}
 				continue
-			} else if val == "var" {
+			} else if valLower == "var" {
 				if varName != "" {
 					return x.Errorf("Cannot assign a variable to var()")
 				}
@@ -1810,7 +1903,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 			child := &GraphQuery{
 				Args:    make(map[string]string),
-				Attr:    item.Val,
+				Attr:    val,
 				IsCount: isCount == 1,
 				Var:     varName,
 			}
@@ -1826,8 +1919,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			if item.Typ != itemName {
 				return x.Errorf("Predicate Expected but got: %s", item.Val)
 			}
+			val := collectName(it, item.Val)
 			curp.Alias = curp.Attr
-			curp.Attr = item.Val
+			curp.Attr = val
 		case itemLeftCurl:
 			if err := godeep(it, curp); err != nil {
 				return err
@@ -1867,5 +1961,21 @@ func isAggregator(fname string) bool {
 }
 
 func isValVarFunc(name string) bool {
-	return name == "sumvar"
+	return name == "math"
+}
+
+func collectName(it *lex.ItemIterator, val string) string {
+	var dashOrName bool // false if expecting dash, true if expecting name
+	for {
+		items, err := it.Peek(1)
+		if err == nil && ((items[0].Typ == itemName && dashOrName) ||
+			(items[0].Val == "-" && !dashOrName)) {
+			it.Next()
+			val += it.Item().Val
+			dashOrName = !dashOrName
+		} else {
+			break
+		}
+	}
+	return val
 }

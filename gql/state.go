@@ -18,9 +18,7 @@
 // Package gql is responsible for lexing and parsing a GraphQL query/mutation.
 package gql
 
-import (
-	"github.com/dgraph-io/dgraph/lex"
-)
+import "github.com/dgraph-io/dgraph/lex"
 
 const (
 	leftCurl     = '{'
@@ -65,6 +63,7 @@ const (
 	itemLeftSquare
 	itemRightSquare
 	itemComma
+	itemMathOp
 )
 
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
@@ -143,6 +142,28 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		case r == at:
 			l.Emit(itemAt)
 			return lexDirective
+		case isNameBegin(r) || isNumber(r):
+			empty = false
+			return lexArgName
+		case isMathOp(r):
+			l.Emit(itemMathOp)
+		case isInequalityOp(r):
+			if r == equal {
+				if !isInequalityOp(l.Peek()) {
+					l.Emit(itemEqual)
+					continue
+				}
+			}
+			if r == lsThan {
+				if !isSpace(l.Peek()) && l.Peek() != '=' {
+					// as long as its not '=' or ' '
+					return lexIRIRef
+				}
+			}
+			if isInequalityOp(l.Peek()) {
+				l.Next()
+			}
+			l.Emit(itemMathOp)
 		case r == leftRound:
 			l.Emit(itemLeftRound)
 			l.ArgDepth++
@@ -171,13 +192,8 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemComma)
 		case isDollar(r):
 			l.Emit(itemDollar)
-		case isNameBegin(r) || isNumber(r):
-			empty = false
-			return lexArgName
 		case r == colon:
 			l.Emit(itemColon)
-		case r == equal:
-			l.Emit(itemEqual)
 		case isEndLiteral(r):
 			{
 				empty = false
@@ -185,8 +201,6 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 				l.Next()                    // Consume the " .
 				l.Emit(itemName)
 			}
-		case r == lsThan:
-			return lexIRIRef
 		case r == '[':
 			{
 				depth := 1
@@ -296,6 +310,8 @@ func lexText(l *lex.Lexer) lex.StateFn {
 			return lexName
 		case r == '#':
 			return lexComment
+		case r == '-':
+			l.Emit(itemMathOp)
 		case r == leftRound:
 			l.Emit(itemLeftRound)
 			l.AcceptRun(isSpace)
@@ -521,22 +537,42 @@ func isNameBegin(r rune) bool {
 		return false
 	}
 }
-func isNumber(r rune) bool {
-	switch {
-	case (r >= '0' && r <= '9') || r == '-' || r == '+':
+
+func isMathOp(r rune) bool {
+	switch r {
+	case '+', '-', '*', '/', '%':
 		return true
 	default:
 		return false
 	}
 }
+
+func isInequalityOp(r rune) bool {
+	switch r {
+	case '<', '>', '=', '!':
+		return true
+	default:
+		return false
+	}
+}
+
+func isNumber(r rune) bool {
+	switch {
+	case (r >= '0' && r <= '9'):
+		return true
+	default:
+		return false
+	}
+}
+
 func isNameSuffix(r rune) bool {
-	if isNameBegin(r) {
+	if isMathOp(r) {
+		return false
+	}
+	if isNameBegin(r) || isNumber(r) {
 		return true
 	}
-	if isNumber(r) {
-		return true
-	}
-	if r == '.' || r == '-' || r == '!' { // Use by freebase.
+	if r == '.' /*|| r == '!'*/ { // Use by freebase.
 		return true
 	}
 	return false

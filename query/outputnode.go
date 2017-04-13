@@ -241,7 +241,7 @@ type fastJsonNode struct {
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 	if bs, err := valToBytes(v); err == nil {
 		_, found := fj.attrs[attr]
-		x.AssertTruef(!found, "Setting value twice for same attribute")
+		x.AssertTruef(!found, "Setting value twice for same attribute %v", attr)
 		fj.attrs[attr] = makeScalarAttr(bs)
 	}
 }

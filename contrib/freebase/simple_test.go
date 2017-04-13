@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func decodeResponse(q string) string {
@@ -75,7 +77,5 @@ func TestSimple(t *testing.T) {
 
 	expectedRes := `{"me":[{"author":[{"born":"1832","died":"1898","name":"Lewis Carroll"}],"character":[{"name":"Alice"}],"name":"Alice in Wonderland","written-in":"1865"}]}`
 	res := decodeResponse(q)
-	if res != expectedRes {
-		log.Fatal("Query response is not as expected")
-	}
+	require.JSONEq(t, expectedRes, res)
 }
