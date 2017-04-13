@@ -138,6 +138,8 @@ const (
 	StandardFn = 100
 )
 
+const numPart = uint64(32)
+
 func parseFuncType(arr []string) (FuncType, string) {
 	if len(arr) == 0 {
 		return NotAFunction, ""
@@ -800,7 +802,6 @@ type itkv struct {
 }
 
 func iterateParallel(ctx context.Context, q *taskp.Query, f func([]byte, []byte, sync.Mutex)) {
-	numPart := uint64(32)
 	grpSize := uint64(math.MaxUint64 / uint64(numPart))
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -825,11 +826,16 @@ func iterateParallel(ctx context.Context, q *taskp.Query, f func([]byte, []byte,
 				prefix = pk.ReversePrefix()
 			}
 
+			w := 0
 			for it.Seek(startKey); it.ValidForPrefix(prefix); it.Next() {
 				pk := x.Parse(it.Key().Data())
 				x.AssertTruef(pk.Attr == q.Attr,
 					"Invalid key obtained for comparison")
-				if pk.Uid >= maxUid {
+				if w%1000 == 0 {
+					x.Trace(ctx, "iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+				}
+				w++
+				if pk.Uid > maxUid {
 					break
 				}
 				key := it.Key().Data()
