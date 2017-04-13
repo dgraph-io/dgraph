@@ -203,10 +203,10 @@
 			"revisionTime": "2016-07-25T01:59:00Z"
 		},
 		{
-			"checksumSHA1": "kVJ5YScYaDWw6iotbpZwQJ6xCGM=",
+			"checksumSHA1": "kBeNcaKk56FguvPSUCEaH6AxpRc=",
 			"path": "github.com/golang/protobuf/proto",
-			"revision": "0c1f6d65b5a189c2250d10e71a5506f06f9fa0a0",
-			"revisionTime": "2016-06-14T22:31:40Z"
+			"revision": "2bba0603135d7d7f5cb73b2125beeda19c09f4ef",
+			"revisionTime": "2017-03-31T03:19:02Z"
 		},
 		{
 			"checksumSHA1": "lZFWy27Qo6+m/keDjNFYTxSmvZw=",
@@ -293,16 +293,16 @@
 			"revisionTime": "2016-12-29T22:47:41Z"
 		},
 		{
-			"checksumSHA1": "nnTwJD196DUJlp748YVbht2uWeU=",
+			"checksumSHA1": "5EW9+Ej/HUL6hRVqji5I4/F3Twg=",
 			"path": "golang.org/x/net/http2",
-			"revision": "ef00b378c73f107bf44d5c9b69875255ce89b79a",
-			"revisionTime": "2016-05-15T03:16:23Z"
+			"revision": "d1e1b351919c6738fdeb9893d5c998b161464f0c",
+			"revisionTime": "2016-12-29T22:47:41Z"
 		},
 		{
-			"checksumSHA1": "EYNaHp7XdLWRydUCE0amEkKAtgk=",
+			"checksumSHA1": "CBoO1DFToP49Ezph60yZ4J4PBBs=",
 			"path": "golang.org/x/net/http2/hpack",
-			"revision": "ef00b378c73f107bf44d5c9b69875255ce89b79a",
-			"revisionTime": "2016-05-15T03:16:23Z"
+			"revision": "d1e1b351919c6738fdeb9893d5c998b161464f0c",
+			"revisionTime": "2016-12-29T22:47:41Z"
 		},
 		{
 			"checksumSHA1": "VrzPJyWI6disCgYuVEQzkjqUsJk=",
@@ -335,10 +335,10 @@
 			"revisionTime": "2017-03-31T22:43:49Z"
 		},
 		{
-			"checksumSHA1": "TZDHZj3zWDc5LKqpoLamOKt6Nmo=",
+			"checksumSHA1": "ziMb9+ANGRJSSIuxYdRbA+cDRBQ=",
 			"path": "golang.org/x/text/transform",
-			"revision": "d69c40b4be55797923cec7457fac7a244d91a9b6",
-			"revisionTime": "2016-08-15T22:39:46Z"
+			"revision": "f4b4367115ec2de254587813edaa901bc1c723a8",
+			"revisionTime": "2017-03-31T22:43:49Z"
 		},
 		{
 			"checksumSHA1": "KG+XZAbxdkpBm3Fa3bJ3Ylq8CKI=",
@@ -347,10 +347,10 @@
 			"revisionTime": "2017-03-31T22:43:49Z"
 		},
 		{
-			"checksumSHA1": "pDDMc5yLVQ2xeR9CajcgIJODPcw=",
+			"checksumSHA1": "gYoNrZgxCQAHutg2rGHcFoKJtpA=",
 			"path": "golang.org/x/text/unicode/norm",
-			"revision": "d69c40b4be55797923cec7457fac7a244d91a9b6",
-			"revisionTime": "2016-08-15T22:39:46Z"
+			"revision": "f4b4367115ec2de254587813edaa901bc1c723a8",
+			"revisionTime": "2017-03-31T22:43:49Z"
 		},
 		{
 			"checksumSHA1": "61oRC/n7DFqHNu6Z+4fAKY1FVCY=",
