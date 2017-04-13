@@ -818,14 +818,14 @@ func iterateParallel(ctx context.Context, q *taskp.Query, f func([]byte, []byte,
 			defer it.Close()
 			startKey := x.DataKey(q.Attr, minUid)
 			pk := x.Parse(startKey)
-			dataPrefix := pk.DataPrefix()
+			prefix := pk.DataPrefix()
 			if q.Reverse {
 				startKey = x.ReverseKey(q.Attr, minUid)
 				pk = x.Parse(startKey)
-				dataPrefix = pk.ReversePrefix()
+				prefix = pk.ReversePrefix()
 			}
 
-			for it.Seek(startKey); it.ValidForPrefix(dataPrefix); it.Next() {
+			for it.Seek(startKey); it.ValidForPrefix(prefix); it.Next() {
 				pk := x.Parse(it.Key().Data())
 				x.AssertTruef(pk.Attr == q.Attr,
 					"Invalid key obtained for comparison")
