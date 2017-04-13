@@ -113,12 +113,10 @@ func TestRetrieveFacetsAsVars(t *testing.T) {
 	query := `
 		{
 			var(id:0x1) {
-				f as friend {
-				 a as	name @facets
-				}
+				a as friend @facets(since)
 			}
 
-			me(id: var(f), orderasc: var(a)) {
+			me(id: 23) {
 				name
 				var(a)
 			}
@@ -127,7 +125,7 @@ func TestRetrieveFacetsAsVars(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Rick Grimes","var[a]":"french"},{"name":"Glenn Rhee","var[a]":"french"}]}`,
+		`{"me":[{"name":"Rick Grimes","var[a]":"2006-01-02T15:04:05Z"}]}`,
 		js)
 }
 
