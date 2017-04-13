@@ -1,0 +1,294 @@
+/**
+ * CSS for runnable component
+ *
+ * IF USED IN BLOG, DO NOT MODIFY - To make it easier to share runnable with the
+ * docs, write any custom CSS rules in runnable-custom.css
+ *
+ * All CSS rules except for the latency tooltip is scoped to class or id
+ * specific to runnable.
+ *
+ * Runnable CSS depends on bootstrap 4 alpha.6 for responsive grid
+ */
+
+.runnable pre {
+  position: relative;
+  padding: 1rem;
+  transition: all 300ms cubic-bezier(0.175, 0.885, 0.335, 1.05);
+  margin: 2rem 0;
+  background: #f9f9f9;
+  border: 0;
+  border-radius: 2px;
+  line-height: 1.45;
+  border: 1px solid #ececec;
+}
+.runnable pre code {
+  /*color: #237794;*/
+  background: inherit;
+  white-space: inherit;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  white-space: pre-wrap;
+  white-space: -moz-pre-wrap;
+  white-space: -pre-wrap;
+  white-space: -o-pre-wrap;
+  word-wrap: break-word;
+  font-size: 90%;
+}
+
+.runnable {
+  background: #ffffff;
+  padding: 29px 0px;
+  margin-bottom: 13px;
+}
+.runnable .runnable-pane {
+  margin: 0px 2px 4px 0;
+  padding: 3px;
+  border: 1px solid #ececec;
+  background: #f9f9f9;
+  height: 326px;
+  display: flex;
+  flex-direction: column;
+}
+.runnable .runnable-content {
+  flex: 1;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.runnable .topbar {
+  /*overflow: auto;*/
+  /*padding: 4px 17px 4px 18px;*/
+  padding: 1px 0px 8px;
+}
+.runnable .footer {
+  padding: 4px 0;
+}
+.runnable .output {
+  overflow-y: auto;
+  background: #fffff3;
+}
+.runnable .code-btn:hover {
+  text-decoration: none;
+  color: inherit;
+}
+.runnable .code-btn[data-action='run'],
+.runnable .code-btn[data-action='save'] {
+  background-color: #3e65b7;
+  color: white;
+}
+.runnable .code-btn[data-action='run']:hover {
+  background-color: white;
+  color: #3e65b7;
+  border: 1px solid #3e65b7;
+}
+.runnable .output-container.empty {
+  visibility: hidden;
+}
+.runnable .output-container:not(.empty) {
+  visibility: visible;
+}
+.runnable .output-container.error code {
+  color: #bf0000;
+}
+.runnable .nav-languages {
+  padding-left: 4px;
+}
+.runnable .nav-languages .language {
+  font-size: 14px;
+  color: #373e42;
+  display: inline-block;
+  padding: 0 8px 0 7px;
+  text-decoration: none;
+}
+.runnable .nav-languages .language.active {
+  color: #0094de;
+}
+.CodeMirror {
+  font-size: 80%;
+  height: auto;
+  z-index: 0;
+}
+.CodeMirror-lines {
+  background: #fffff3;
+}
+.runnable.editing .normal-actions {
+  display: none;
+}
+.runnable:not(.editing) .edit-actions {
+  display: none;
+}
+.runnable.editing [data-action="expand"] {
+  display: none;
+}
+.runnable .runnable-code {
+  background: #fffff3;
+  overflow-y: auto;
+}
+.runnable .latency-info {
+  display: inline-block;
+  font-size: 13px;
+  padding-left: 5px;
+}
+.runnable .latency-info .stat {
+  display: inline-block;
+  color: gray;
+  padding-right: 5px;
+}
+.runnable .latency-info .number {
+  color: #3e65b7;
+  font-weight: 600;
+}
+.runnable .pane-title {
+  vertical-align: middle;
+  padding: 0px 13px;
+  display: inline-block;
+}
+.runnable .latency-info {
+  vertical-align: middle;
+}
+html .runnable pre {
+  padding: 0;
+  border: 0;
+  margin: 0;
+  background: inherit;
+}
+html .runnable code {
+  padding: 17px 12px;
+}
+.runnable .runnable-tab-content:not(.active) {
+  display: none;
+}
+.runnable:not(.editing) .editing-header {
+  display: none;
+}
+.runnable.editing .normal-header {
+  display: none;
+}
+
+#runnable-modal {
+  background: rgba(0, 0, 0, 0.63);
+}
+#runnable-modal .modal-title {
+  margin: 0;
+}
+#runnable-modal .runnable {
+  padding: 0;
+  margin-bottom: 0;
+}
+#runnable-modal .runnable-pane {
+  height: 77vh;
+}
+#runnable-modal .code-btn[data-action='expand'] {
+  display: none;
+}
+#runnable-modal .modal-close-btn {
+  top: 19px;
+  right: 33px;
+  position: absolute;
+  color: white;
+  padding-bottom: 1px;
+  border-bottom: 1px solid white;
+  line-height: 19px;
+  letter-spacing: 1px;
+  font-size: 16px;
+}
+#runnable-modal .modal-close-btn:hover {
+  color: #afafaf;
+  border-color: #afafaf;
+  text-decoration: none;
+}
+@media screen and (min-width: 1024px) {
+  #runnable-modal .modal-dialog {
+    max-width: 80%;
+    margin-top: 69px;
+  }
+}
+@media screen and (min-width: 768px) and (max-width: 1024px) {
+  #runnable-modal .runnable {
+    padding: 23px 0;
+  }
+  #runnable-modal .modal-dialog {
+    max-width: 90%;
+    margin-top: 69px;
+  }
+}
+@media screen and (max-width: 768px) {
+  #runnable-modal .modal-dialog {
+    max-width: 100%;
+    margin: 58px 9px;
+  }
+  #runnable-modal .modal-close-btn {
+    font-size: 13px;
+  }
+  #runnable-modal .runnable-pane {
+    height: 50vh;
+  }
+}
+@media screen and (min-width: 1441px) {
+  #runnable-modal .runnable-pane {
+    height: 84vh;
+  }
+}
+@media screen and (max-width: 375px) {
+  #runnable-modal .modal-dialog {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+.latency-tooltip-container {
+  font-size: 11px;
+}
+.latency-tooltip-container .measurement-row {
+  overflow: auto;
+  width: 117px;
+}
+.latency-tooltip-container .measurement-key {
+  display: inline-block;
+  float: left;
+}
+.latency-tooltip-container .measurement-key.total  {
+  font-weight: 600;
+}
+.latency-tooltip-container .measurement-val {
+  display: inline-block;
+  float: right;
+  font-weight: 600;
+}
+.latency-tooltip-container .divider {
+  width: 100%;
+  border-bottom: 1px solid white;
+  margin: 2px 0 3px;
+}
+
+.runnable .code-btn {
+  color: #5a5a5a;
+  background: white;
+  padding: 6px 12px 6px;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  border: 1px solid #ececec;
+  cursor: pointer;
+  /*display: inline-block;*/
+}
+.runnable .code-btn.active {
+  background: #E0EBF5;
+}
+
+
+/* custom bootstrap */
+/*.row-no-padding [class^="col-"] {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}*/
+.runnable .nopadding {
+   padding: 0 !important;
+   margin: 0 !important;
+}
+.runnable .hidden {
+  display: none !important;
+}
