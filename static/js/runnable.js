@@ -205,9 +205,11 @@ function eraseCookie(name) {
 
   // updateQueryContents updates the query contents in all tabs
   function updateQueryContents($runnables, newQuery) {
-    $runnables.find('.query-content').not('.java').text(newQuery);
+    var cleanValue = newQuery.trim().replace(/\n$/g, '');
 
-    var javaTxt = formatJavaCode(newQuery);
+    $runnables.find('.query-content').not('.java').text(cleanValue);
+
+    var javaTxt = formatJavaCode(cleanValue);
     $runnables.find('.query-content.java').text(javaTxt);
   }
 
