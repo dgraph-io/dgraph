@@ -214,8 +214,8 @@ dgraphloader -r 21million.rdf.gz,sf.tourism.gz -s golden.schema
 Queries in GraphQL+- look very much like queries in GraphQL. You typically start with a node or a list of nodes, and expand edges from there.
 Each `{}` block goes one layer deep.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film  {
@@ -226,50 +226,8 @@ curl localhost:8080/query -XPOST -d $'{
       initial_release_date
     }
   }
-}' | python -m json.tool | less
-```
-
-```
-{
-  "me": [
-  {
-    "director.film": [
-      {
-        "genre": [
-          {
-            "name@en": "Costume Adventure"
-          },
-          {
-            "name@en": "Adventure Film"
-          },
-          {
-            "name@en": "Action/Adventure"
-          },
-          {
-            "name@en": "Action Film"
-          }
-        ],
-        "initial_release_date": "1984-05-22",
-        "name@en": "Indiana Jones and the Temple of Doom"
-      },
-      ...
-      ...
-      ...
-      {
-        "genre": [
-          {
-            "name@en": "Drama"
-          }
-        ],
-        "initial_release_date": "1985-12-15",
-        "name@en": "The Color Purple"
-      }
-    ],
-    "name@en": "Steven Spielberg"
-  }
-  ]
 }
-```
+{{< /runnable >}}
 
 What happened above is that we start the query with an entity denoting Steven Spielberg (from Freebase data), then expand by two predicates `name@en`(name in English) which yields the value `Steven Spielberg`, and `director.film` which yields the entities of films directed by Steven Spielberg.
 
@@ -386,44 +344,17 @@ directed_by: uid @reverse .
 This would add a reverse edge for each `directed_by` edge and that edge can be accessed by prefixing `~` with the original predicate, i.e. `~directed_by`.
 
 In the following example, we find films that are directed by Steven Spielberg, by using the reverse edges of `directed_by`. Here is the sample query:
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     ~directed_by(first: 5) {
       name@en
     }
   }
-}' | python -m json.tool | less
-```
-
-The results are:
-```
-{
-  "me":[
-    {
-      "name@en":"Steven Spielberg",
-      "~directed_by":[
-        {
-          "name@en":"Indiana Jones and the Temple of Doom"
-        },
-        {
-          "name@en":"Jaws"
-        },
-        {
-          "name@en":"Saving Private Ryan"
-        },
-        {
-          "name@en":"Close Encounters of the Third Kind"
-        },
-        {
-          "name@en":"Catch Me If You Can"
-        }
-      ]
-    }
-  ]
 }
-```
+{{< /runnable >}}
+
 ### Adding or Modifying Schema
 
 We can add or modify the schema by specfiying the schema inside mutation block. We don't verify whether the already stored values are compatible with schema or not. We will try to convert the already stored values to schema type and return on query, or else we would ignore them on conversion failure.
@@ -570,8 +501,8 @@ If you want just the first few results as you expand the predicate for an entity
 
 This query retrieves the first two films directed by Steven Spielberg and their last 3 genres.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     director.film (first: 2) {
       name@en
@@ -581,49 +512,8 @@ curl localhost:8080/query -XPOST -d $'{
       }
     }
   }
-}' | python -m json.tool | less
-```
-
-```
-{
-    "me": [
-        {
-            "director.film": [
-                {
-                    "genre": [
-                        {
-                            "name@en": "Adventure Film"
-                        },
-                        {
-                            "name@en": "Action/Adventure"
-                        },
-                        {
-                            "name@en": "Action Film"
-                        }
-                    ],
-                    "initial_release_date": "1984-05-23",
-                    "name@en": "Indiana Jones and the Temple of Doom"
-                },
-                {
-                    "genre": [
-                        {
-                            "name@en": "Mystery film"
-                        },
-                        {
-                            "name@en": "Horror"
-                        },
-                        {
-                            "name@en": "Thriller"
-                        }
-                    ],
-                    "initial_release_date": "1975-06-20",
-                    "name@en": "Jaws"
-                }
-            ]
-        }
-    ]
 }
-```
+{{< /runnable >}}
 
 `first` can also be specified at root.
 
@@ -631,8 +521,8 @@ curl localhost:8080/query -XPOST -d $'{
 
 If you want the '''next''' one result, you want to skip the first two results with `offset:2` and keep only one result  with `first:1`.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film(first:1, offset:2)  {
@@ -643,40 +533,10 @@ curl localhost:8080/query -XPOST -d $'{
       initial_release_date
     }
   }
-}' | python -m json.tool | less
-```
-
-
-Notice the `first` and `offset` arguments. Here is the output which contains only one result.
-
-```
-{
-  "me": [
-    {
-      "director.film": [
-        {
-          "genre": [
-            {
-              "name@en": "War film"
-            },
-            {
-              "name@en": "Drama"
-            },
-            {
-              "name@en": "Action Film"
-            }
-          ],
-          "initial_release_date": "1998-07-23",
-          "name@en": "Saving Private Ryan"
-        }
-      ],
-      "name@en": "Steven Spielberg"
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
-`offset` can also be specified at root to skip over some results.
+Notice the `first` and `offset` arguments. `offset` can also be specified at root to skip over some results.
 
 ### After
 
@@ -686,8 +546,8 @@ This helps in pagination where the first query would be of the form `<attribute>
 
 In the above example, the first two results are the film entities of "Indiana Jones and the Temple of Doom" and "Jaws". You can obtain their UIDs by adding the predicate `_uid_` in the query.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film(first:2) {
@@ -695,35 +555,14 @@ curl localhost:8080/query -XPOST -d $'{
       name@en
     }
   }
-}' | python -m json.tool | less
-```
-
-
-The response looks like:
-```
-{
-  "me": [
-    {
-      "director.film": [
-        {
-          "_uid_": "0xc17b416e58b32bb",
-          "name@en": "Indiana Jones and the Temple of Doom"
-        },
-        {
-          "_uid_": "0xc6f4b3d7f8cbbad",
-          "name@en": "Jaws"
-        }
-      ],
-      "name@en": "Steven Spielberg"
-    }
-  ]
 }
-```
+{{< /runnable >}}
+
 
 Now we know the UID of the second result is `0xc6f4b3d7f8cbbad`. We can get the next one result by specifying the `after` argument.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film(first:1, after:0xc6f4b3d7f8cbbad)  {
@@ -734,89 +573,37 @@ curl localhost:8080/query -XPOST -d $'{
       initial_release_date
     }
   }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 The response is the same as before when we use `offset:2` and `first:1`.
-
-```
-{
-    "me": [
-        {
-            "director.film": [
-                {
-                    "genre": [
-                        {
-                            "name@en": "War film"
-                        },
-                        {
-                            "name@en": "Drama"
-                        },
-                        {
-                            "name@en": "Action Film"
-                        }
-                    ],
-                    "initial_release_date": "1998-07-24",
-                    "name@en": "Saving Private Ryan"
-                }
-            ],
-            "name@en": "Steven Spielberg"
-        }
-    ]
-}
-```
 
 ## Alias
 
 Alias lets us provide alternate names to predicates in results for convenience.
 
 For example, the following query replaces the predicate `name` with `full_name` in the JSON result.
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.0bxtg) {
     full_name:name@en
   }
-}' | python -m json.tool | less
-```
-
-```
-{
-  "me":[
-    {
-      "full_name":"Tom Hanks"
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 ## Count
 
 `count` function lets us obtain the number of entities instead of retrieving the entire list. For example, the following query
 retrieves the name and the number of films acted by an actor with `_xid_` m.0bxtg.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.0bxtg) {
     name@en
     count(actor.film)
   }
-}' | python -m json.tool | less
-```
-
-```
-{
- "me": [
-  {
-   "actor.film": [
-     {
-       "count": 75
-      }
-    ],
-    "name@en": "Tom Hanks"
-  }
- ]
 }
-```
+{{< /runnable >}}
 
 ## Functions
 
@@ -831,101 +618,36 @@ curl localhost:8080/query -XPOST -d $'{
 ##### Usage as Filter
 
 Suppose we want the films of Steven Spielberg that contain the word `indiana` and `jones`.
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film @filter(allofterms(name, "jones indiana"))  {
       name@en
     }
   }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 `allofterms` tells Dgraph that the matching films' `name` have to contain both the words "indiana" and "jones". Here is the response.
-
-```
-{
-  "me": [
-    {
-      "director.film": [
-        {
-          "_uid_": "0xc17b416e58b32bb",
-          "name@en": "Indiana Jones and the Temple of Doom"
-        },
-        {
-          "_uid_": "0x7d0807a6740c25dc",
-          "name@en": "Indiana Jones and the Kingdom of the Crystal Skull"
-        },
-        {
-          "_uid_": "0xa4c4cc65751e98e7",
-          "name@en": "Indiana Jones and the Last Crusade"
-        },
-        {
-          "_uid_": "0xd1c161bed9769cbc",
-          "name@en": "Indiana Jones and the Raiders of the Lost Ark"
-        }
-      ],
-      "name@en": "Steven Spielberg"
-    }
-  ]
-}
-```
 
 ##### Usage at root
 
 In the following example, we list all the entities (in this case all films) that have both terms "jones" and "indiana". Moreover, for each entity, we query their film genre and names.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(func:allofterms(name, "jones indiana")) {
     name@en
     genre {
       name@en
     }
   }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 Here is a part of the response.
-
-```
-{
-  "me": [
-    {
-      "genre": [
-        {
-          "name@en": "Adventure Film"
-        },
-        {
-          "name@en": "Horror"
-        }
-      ],
-      "name@en": "The Adventures of Young Indiana Jones: Masks of Evil"
-    },
-    {
-      "genre": [
-        {
-          "name@en": "War film"
-        },
-        {
-          "name@en": "Adventure Film"
-        }
-      ],
-      "name@en": "The Adventures of Young Indiana Jones: Adventures in the Secret Service"
-    },
-    ...
-    {
-      "genre": [
-        {
-          "name@en": "Comedy"
-        }
-      ],
-      "name@en": "The Adventures of Young Indiana Jones: Espionage Escapades"
-    }
-  ]
-}
-```
 
 #### AnyOfTerms
 
@@ -933,8 +655,8 @@ Here is a part of the response.
 
 ##### Usage as filter
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film @filter(anyofterms(name, "war spies"))  {
@@ -942,99 +664,31 @@ curl localhost:8080/query -XPOST -d $'{
       name@en
     }
   }
-}' | python -m json.tool | less
-```
-
-
-```
-{
-  "me": [
-    {
-      "director.film": [
-        {
-          "_uid_": "0x38160fa42cf3f4c9",
-          "name@en": "War Horse"
-        },
-        {
-          "_uid_": "0x39d8574f26521fcc",
-          "name@en": "War of the Worlds"
-        },
-        {
-          "_uid_": "0xd915cb0eb9ad47c0",
-          "name@en": "Bridge of Spies"
-        }
-      ],
-      "name@en": "Steven Spielberg"
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 ##### Usage at root
 
 We can look up films that contain either the word "passion" or "peacock". Surprisingly many films satisfy this criteria. We will query their name and their genres.
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+{
   me(func:anyofterms(name, "passion peacock")) {
     name@en
     genre {
       name@en
     }
   }
-}' | python -m json.tool | less
-```
-
-
-```
-{
-  "me": [
-    {
-      "name@en": "Unexpected Passion"
-    },
-    {
-      "genre": [
-        {
-          "name@en": "Drama"
-        },
-        {
-          "name@en": "Silent film"
-        }
-      ],
-      "name@en": "The New York Peacock"
-    },
-    {
-      "genre": [
-        {
-          "name@en": "Drama"
-        },
-        {
-          "name@en": "Romance Film"
-        }
-      ],
-      "name@en": "Passion of Love"
-    },
-    ...
-    {
-      "genre": [
-        {
-          "name@en": "Crime Fiction"
-        },
-        {
-          "name@en": "Comedy"
-        }
-      ],
-      "name@en": "The Passion of the Reefer"
-    }
-  ]
 }
-```
+{{< /runnable >}}
+
 Note that the first result with the name "Unexpected Passion" is either not a film entity, or it is a film entity with no genre.
 
 ### Regex search
 `regexp` function allows a regular expression match on the values. It requires exact index to be present for working.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   directors(func: regexp(name, "^Steven Sp.*$")) {
     name@en
     director.film @filter(regexp(name, "Ryan")) {
@@ -1042,59 +696,7 @@ curl localhost:8080/query -XPOST -d $'{
     }
   }
 }
-'
-```
-Output:
-```
-{
-  "directors": [
-    {
-      "director.film": [
-        {
-          "name@en": "Saving Private Ryan"
-        }
-      ],
-      "name@en": "Steven Spielberg"
-    },
-    {
-      "name@en": "Steven Spurrier"
-    },
-    {
-      "name@en": "Steven Spurrier"
-    },
-    {
-      "name@en": "Steven Spencer"
-    },
-    {
-      "name@en": "Steve Spurrier"
-    },
-    {
-      "name@en": "Steven Spieldal"
-    },
-    {
-      "name@en": "Steven Spielberg And The Return To Film School"
-    },
-    {
-      "name@en": "Steven Sperling"
-    },
-    {
-      "name@en": "Steven Spohn"
-    },
-    {
-      "name@en": "Steven Spielberg"
-    },
-    {
-      "name@en": "Steven Spielberg"
-    },
-    {
-      "name@en": "Steven Spencer"
-    },
-    {
-      "name@en": "Steven Spielberg"
-    }
-  ]
-}
-```
+{{< /runnable >}}
 
 {{% notice "note" %}}Regex function requires full index scan as of v0.7.4 which is slow. So it's recommended to use them only if absolutely necessary {{% /notice %}}
 
@@ -1145,8 +747,8 @@ The following [Scalar_Types]({{<relref "#scalar-types">}}) can be used in inequa
 #### Less than or equal to
 `leq` is used to filter or obtain UIDs whose value for a predicate is less than or equal to a given value.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film @filter(leq(initial_release_date, "1970-01-01"))  {
@@ -1154,37 +756,15 @@ curl localhost:8080/query -XPOST -d $'{
       name@en
     }
   }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 This query would return the name and release date of all the movies directed by on or Steven Spielberg before 1970-01-01.
-```
-{
-    "me": [
-        {
-            "director.film": [
-                {
-                    "initial_release_date": "1964-03-24",
-                    "name@en": "Firelight"
-                },
-                {
-                    "initial_release_date": "1968-12-18",
-                    "name@en": "Amblin"
-                },
-                {
-                    "initial_release_date": "1967-01-01",
-                    "name@en": "Slipstream"
-                }
-            ],
-            "name@en": "Steven Spielberg"
-        }
-    ]
-}
-```
 
 #### Greater than or equal to
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+{
   me(id: m.06pj8) {
     name@en
     director.film @filter(geq(initial_release_date, "2008"))  {
@@ -1192,41 +772,10 @@ curl localhost:8080/query -XPOST -d $'{
       Name: name@en
     }
   }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 This query would return Name and Release date of movies directed by Steven Spielberg after 2010.
-```
-{
-    "me": [
-        {
-            "director.film": [
-                {
-                    "Name": "War Horse",
-                    "Release_date": "2011-12-04"
-                },
-                {
-                    "Name": "Indiana Jones and the Kingdom of the Crystal Skull",
-                    "Release_date": "2008-05-18"
-                },
-                {
-                    "Name": "Lincoln",
-                    "Release_date": "2012-10-08"
-                },
-                {
-                    "Name": "Bridge of Spies",
-                    "Release_date": "2015-10-16"
-                },
-                {
-                    "Name": "The Adventures of Tintin: The Secret of the Unicorn",
-                    "Release_date": "2011-10-23"
-                }
-            ],
-            "name@en": "Steven Spielberg"
-        }
-    ]
-}
-```
 
 #### Less than, greater than, equal to
 
@@ -1878,57 +1427,28 @@ Aggregation functions that are supported are `min, max, sum, avg`. While min and
 {{% notice "note" %}}We support aggregation on scalar type only.{{% /notice %}}
 
 ### Min
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+{
   director(id: m.06pj8) {
     director.film {
     	min(initial_release_date)
     }
   }
-}' | python -m json.tool | less
-```
-Output:
-
-```
-{
-  "director": [
-    {
-      "director.film": [
-        {
-          "min(initial_release_date)": "1964-03-24"
-        }
-      ]
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 ### Max
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+{
   director(id: m.06pj8) {
     director.film {
     	max(initial_release_date)
     }
   }
-}' | python -m json.tool | less
-```
-
-Output:
-
-```
-{
-  "director": [
-    {
-      "director.film": [
-        {
-          "max(initial_release_date)": "2015-10-16"
-        }
-      ]
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 ### Sum, Avg
 ```
@@ -1995,8 +1515,8 @@ Output:
 ## Multiple Query Blocks
 Multiple blocks can be inside a single query and they would be returned in the result with the corresponding block names.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
  AngelinaInfo(func:allofterms(name, "angelina jolie")) {
   name@en
    actor.film {
@@ -2015,94 +1535,14 @@ curl localhost:8080/query -XPOST -d $'{
         Name: name@en
     }
   }
-}' | python -m json.tool | less
-```
-
-
-```
-{
-  "AngelinaInfo": [
-    {
-      "name@en": "Angelina Jolie Look-a-Like"
-    },
-    {
-      "name@en": "Angelina Jolie"
-    },
-    {
-      "actor.film": [
-        {
-          "performance.film": [
-            {
-              "genre": [
-                {
-                  "name@en": "Animation"
-                },
-                {
-                  "name@en": "Fantasy"
-                },
-                {
-                  "name@en": "Computer Animation"
-                },
-                {
-                  "name@en": "Adventure Film"
-                },
-                {
-                  "name@en": "Action Film"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "performance.film": [
-            {
-              "genre": [
-                {
-                  "name@en": "Comedy"
-                }
-              ]
-            }
-          ]
-        },
-
-.
-.
-.
-  "DirectorInfo": [
-    {
-      "director.film": [
-        {
-          "Name": "War Horse",
-          "Release_date": "2011-12-04"
-        },
-        {
-          "Name": "Indiana Jones and the Kingdom of the Crystal Skull",
-          "Release_date": "2008-05-18"
-        },
-        {
-          "Name": "Lincoln",
-          "Release_date": "2012-10-08"
-        },
-        {
-          "Name": "Bridge of Spies",
-          "Release_date": "2015-10-16"
-        },
-        {
-          "Name": "The Adventures of Tintin: The Secret of the Unicorn",
-          "Release_date": "2011-10-23"
-        }
-      ],
-      "name@en": "Steven Spielberg"
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 ### Var Blocks
 Var blocks are the blocks which start with the keyword `var` and these blocks are not returned in the query results.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
  var(func:allofterms(name, "angelina jolie")) {
   name@en
    actor.film {
@@ -2117,77 +1557,16 @@ curl localhost:8080/query -XPOST -d $'{
      name@en
    }
  }
-}' | python -m json.tool | less
-```
-
-This query returns.
-```
-{
-  "films": [
-    {
-      "~genre": [
-        {
-          "name@en": "Hackers"
-        }
-      ]
-    },
-    {
-      "~genre": [
-        {
-          "name@en": "Mr. & Mrs. Smith"
-        }
-      ]
-    },
-    {
-      "~genre": [
-        {
-          "name@en": "Hackers"
-        },
-        {
-          "name@en": "Foxfire"
-        }
-      ]
-    },
-.
-.
-.
-      {
-          "name@en": "Without Evidence"
-        },
-        {
-          "name@en": "True Women"
-        },
-        {
-          "name@en": "Salt"
-        }
-      ]
-    },
-    {
-      "~genre": [
-        {
-          "name@en": "Confessions of an Action Star"
-        }
-      ]
-    },
-    {
-      "~genre": [
-        {
-          "name@en": "Without Evidence"
-        }
-      ]
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 ## Query Variables
 
 Variables can be defined at different levels of the query using the keyword `AS` and would contain the result list at that level as its value. These variables can be used in other query blocks or the same block (as long as it is used in the child nodes).
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
  var(func:allofterms(name, "angelina jolie")) {
-  name@en
    actor.film {
     A AS performance.film {  # All the films done by Angelina Jolie
      B As genre  # Genres of all the films done by Angelina Jolie
@@ -2196,7 +1575,6 @@ curl localhost:8080/query -XPOST -d $'{
   }
 
  var(func:allofterms(name, "brad pitt")) {
-  name@en
    actor.film {
     C AS performance.film {  # All the films done by Brad Pitt
      D as genre  # Genres of all the films done by Brad Pitt
@@ -2204,172 +1582,43 @@ curl localhost:8080/query -XPOST -d $'{
    }
   }
 
- films(id: var(D)) @filter(var(B)) {   # movies done by both Angelina and Brad
+ films(id: var(D)) @filter(var(B)) {   # Genres done by both Angelina and Brad
   name@en
-   ~genre @filter(var(A) OR var(C)) {  # Genres of movies done by Angelina or Brad
+   ~genre @filter(var(A) OR var(C)) {  # Movies done by either.
      name@en
    }
  }
-}' | python -m json.tool | less
-```
-
-```
-{
-  "films": [
-    {
-      "~genre": [
-        {
-          "name@en": "Hackers"
-        },
-        {
-          "name@en": "No Way Out"
-        }
-      ]
-    },
-    {
-      "~genre": [
-        {
-          "name@en": "Being John Malkovich"
-        },
-        {
-          "name@en": "Burn After Reading"
-        },
-        {
-          "name@en": "Inglourious Basterds"
-        },
-        {
-          "name@en": "Mr. & Mrs. Smith"
-        }
-      ]
-    },
-    {
-      "~genre": [
-        {
-          "name@en": "Less Than Zero"
-        },
-        {
-          "name@en": "Hackers"
-        },
-        {
-          "name@en": "Foxfire"
-.
-.
-.
-     "name@en": "Salt"
-        }
-      ]
-    },
-    {
-      "~genre": [
-        {
-          "name@en": "Johnny Suede"
-        },
-        {
-          "name@en": "Confessions of an Action Star"
-        }
-      ]
-    },
-    {
-      "~genre": [
-        {
-          "name@en": "Without Evidence"
-        },
-        {
-          "name@en": "Too Young to Die?"
-        }
-      ]
-    }
-  ]
 }
-
-```
+{{< /runnable >}}
 
 ## Value Variables
 
 Value variables are those which store the scalar values (unlike the UID lists which we saw above). These are a map from the UID to the corresponding value. They can store scalar predicates, aggregate functions, can be used for sorting resutls and retrieving. For example:
 
-```
-curl localhost:8080/query -XPOST -d $'{
-	var(func:allofterms(name, "angelina jolie")) {
- 		name@en
-		actor.film {
-			performance.film {
-				B AS genre {
-					A as name@en
-				}
-			}
-		}
-	}
-
-	genre(id: var(B), orderasc: var(A)) @filter(gt(count(~genre), 30000)){
-		var(A)
-		~genre {
-			min(name)
-			max(name)
-			min(initial_release_date)
-			max(initial_release_date)
-		}
-	}
-}' | python -m json.tool | less
-```
-Output:
-```
+{{< runnable >}}
 {
-  "genre": [
-    {
-      "var[A]": "Comedy",
-      "~genre": [
-        {
-          "min(name)": "#1 Cheerleader Camp"
-        },
-        {
-          "max(name)": "후라이보이 박사소동"
-        },
-        {
-          "min(initial_release_date)": "0214-02-28"
-        },
-        {
-          "max(initial_release_date)": "2103-01-01"
+  var(func:allofterms(name, "angelina jolie")) {
+    actor.film {
+      performance.film {
+        B AS genre {
+          A as name@en
         }
-      ]
-    },
-    {
-      "var[A]": "Drama",
-      "~genre": [
-        {
-          "min(name)": "#Stuck"
-        },
-        {
-          "max(name)": "李朝 春花圖"
-        },
-        {
-          "min(initial_release_date)": "0214-02-28"
-        },
-        {
-          "max(initial_release_date)": "2017-12-01"
-        }
-      ]
-    },
-    {
-      "var[A]": "Short Film",
-      "~genre": [
-        {
-          "min(name)": "#11, MareyMoiré"
-        },
-        {
-          "max(name)": "휴가"
-        },
-        {
-          "min(initial_release_date)": "0214-02-28"
-        },
-        {
-          "max(initial_release_date)": "2103-05-22"
-        }
-      ]
+      }
     }
-  ]
+  }
+
+  genre(id: var(B), orderasc: var(A)) @filter(gt(count(~genre), 30000)){
+    var(A)
+    ~genre {
+      min(name)
+      max(name)
+      min(initial_release_date)
+      max(initial_release_date)
+    }
+  }
 }
-```
+{{< /runnable >}}
+
 This query shows a mix of how things can be used.
 
 ## Aggregating value variables
@@ -2870,8 +2119,8 @@ Output:
 
 `@cascade` directive forces a removal of those entites that don't have all the fields specified in the query. This can be useful in cases where some filter was applied. For example, consider this query:
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   HP(func: allofterms(name, "Harry Potter")) @cascade {
     name@en
     starring{
@@ -2883,175 +2132,8 @@ curl localhost:8080/query -XPOST -d $'{
          }
     }
   }
-}'
-```
-Output:
-```
-{
-  "HP": [
-    {
-      "name@en": "Harry Potter and the Order of the Phoenix",
-      "starring": [
-        {
-          "performance.actor": [
-            {
-              "name@en": "Warwick Davis"
-            }
-          ],
-          "performance.character": [
-            {
-              "name@en": "Professor Filius Flitwick"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name@en": "Harry Potter and the Philosopher's Stone",
-      "starring": [
-        {
-          "performance.actor": [
-            {
-              "name@en": "Warwick Davis"
-            }
-          ],
-          "performance.character": [
-            {
-              "name@en": "Professor Filius Flitwick"
-            }
-          ]
-        },
-        {
-          "performance.actor": [
-            {
-              "name@en": "Warwick Davis"
-            }
-          ],
-          "performance.character": [
-            {
-              "name@en": "Goblin Bank Teller"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name@en": "Harry Potter and the Prisoner of Azkaban",
-      "starring": [
-        {
-          "performance.actor": [
-            {
-              "name@en": "Warwick Davis"
-            }
-          ],
-          "performance.character": [
-            {
-              "name@en": "Professor Filius Flitwick"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name@en": "Harry Potter and the Half-Blood Prince",
-      "starring": [
-        {
-          "performance.actor": [
-            {
-              "name@en": "Warwick Davis"
-            }
-          ],
-          "performance.character": [
-            {
-              "name@en": "Professor Filius Flitwick"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name@en": "Harry Potter and the Chamber of Secrets",
-      "starring": [
-        {
-          "performance.actor": [
-            {
-              "name@en": "Warwick Davis"
-            }
-          ],
-          "performance.character": [
-            {
-              "name@en": "Professor Filius Flitwick"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name@en": "Harry Potter and the Deathly Hallows – Part 2",
-      "starring": [
-        {
-          "performance.actor": [
-            {
-              "name@en": "Warwick Davis"
-            }
-          ],
-          "performance.character": [
-            {
-              "name@en": "Professor Filius Flitwick"
-            }
-          ]
-        },
-        {
-          "performance.actor": [
-            {
-              "name@en": "Warwick Davis"
-            }
-          ],
-          "performance.character": [
-            {
-              "name@en": "Griphook"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name@en": "Harry Potter and the Deathly Hallows - Part I",
-      "starring": [
-        {
-          "performance.actor": [
-            {
-              "name@en": "Warwick Davis"
-            }
-          ],
-          "performance.character": [
-            {
-              "name@en": "Griphook"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name@en": "Harry Potter and the Goblet of Fire",
-      "starring": [
-        {
-          "performance.actor": [
-            {
-              "name@en": "Warwick Davis"
-            }
-          ],
-          "performance.character": [
-            {
-              "name@en": "Professor Filius Flitwick"
-            }
-          ]
-        }
-      ]
-    }
-  ]
 }
-```
+{{< /runnable >}}
 
 Here we also remove all the nodes that don't have a corresponding valid sibling node for `Warwick Davis`.
 
@@ -3059,8 +2141,8 @@ Here we also remove all the nodes that don't have a corresponding valid sibling 
 
 Queries can have a `@normalize` directive, which if supplied at the root, the response would only contain the predicates which are asked with an alias in the query. The response is also flatter and avoids nesting, hence would be easier to parse in some cases.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   director(func:allofterms(name, "steven spielberg")) @normalize {
     d: name@en
     director.film {
@@ -3073,41 +2155,9 @@ curl localhost:8080/query -XPOST -d $'{
       }
     }
   }
-}' | python -m json.tool | less
-```
-
-
-The response for this would be
-```
-{
-  "director": [{
-      "d": "Steven Spielberg",
-      "f": "Indiana Jones and the Temple of Doom"
-    }, {
-      "d": "Steven Spielberg",
-      "f": "Jaws"
-    }, {
-      "a": "Tom Hanks",
-      "d": "Steven Spielberg",
-      "f": "Saving Private Ryan"
-    }, {
-      "a": "Tom Sizemore",
-      "d": "Steven Spielberg",
-      "f": "Saving Private Ryan"
-    },
-    .
-    .
-    .
-  },
-  {
-    "d": "Young Steven Spielberg"
-  },
-  {
-    "d": "Steven Spielberg"
-  }
-  ]
 }
-```
+{{< /runnable >}}
+
 From the results we can see that since we didn't ask for `release_date` with an alias we didn't get it back. We got back all other combinations of movies directed by Steven Spielberg with an actor whose name has anyofterms Tom Hanks.
 
 ## Debug
@@ -3166,15 +2216,15 @@ fragment TestFragB {
 
 `Variables` can be defined and used in GraphQL queries which helps in query reuse and avoids costly string building in clients at runtime by passing a separate variable map. A variable starts with a $ symbol. For complete information on variables, please check out GraphQL specification on [variables](https://facebook.github.io/graphql/#sec-Language.Variables). We encode the variables as a separate JSON object as show in the example below.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
  "query": "query test($a: int, $b: int){  me(id: m.06pj8) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
  "variables" : {
   "$a": "5",
   "$b": "10"
  }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 * Variables whose type is suffixed with a `!` can't have a default value but must
 have a value as part of the variables map.
@@ -3182,20 +2232,20 @@ have a value as part of the variables map.
 * Any variable that is being used must be declared in the named query clause in the beginning.
 * We also support default values for the variables. In the example below, `$a` has a
 default value of `2`.
-```
-curl localhost:8080/query -XPOST -d $'{
+
+{{< runnable >}}
+{
  "query": "query test($a: int = 2, $b: int!){  me(id: m.06pj8) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
  "variables" : {
    "$a": "5",
    "$b": "10"
  }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 * If the variable is initialized in the variable map, the default value will be
 overridden (In the example, `$a` will have value 5 and `$b` will be 3).
 
 * The variable types that are supported as of now are: `int`, `float`, `bool` and `string`.
-
 
 {{% notice "note" %}}In GraphiQL interface, the query and the variables have to be separately entered in their respective boxes.{{% /notice %}}

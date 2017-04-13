@@ -195,7 +195,7 @@ func processToPB(t *testing.T, query string, variables map[string]string,
 	require.NoError(t, err)
 	var ctx context.Context
 	if debug {
-		ctx = metadata.NewContext(context.Background(), metadata.Pairs("debug", "true"))
+		ctx = metadata.NewIncomingContext(context.Background(), metadata.Pairs("debug", "true"))
 	} else {
 		ctx = context.Background()
 	}
