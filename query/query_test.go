@@ -1159,7 +1159,7 @@ func TestShortestPathWeights(t *testing.T) {
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
-				p{"me":[{"var[f]":0.200000}]}ath @facets(weight)
+				path @facets(weight)
 			}
 
 			me(id: var( A)) {
