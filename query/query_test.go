@@ -891,6 +891,48 @@ func TestUseVarsMultiOrder(t *testing.T) {
 		js)
 }
 
+func TestFilterFacetVar(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			friend(id:0x01) {
+				L as path @facets(weight) {
+				name
+				 friend @filter(var(L)){
+						name
+						var(L)
+					}
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.200000}},"name":"Glenn Rhee"},{"@facets":{"_":{"weight":0.100000}},"friend":[{"name":"Glenn Rhee","var[L]":0.200000}],"name":"Andrea"}]}]}`,
+		js)
+}
+
+func TestFilterFacetVar1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			friend(id:0x01) {
+				L as path @facets(weight1) {
+				name
+				 friend @filter(var(L)){
+						name
+						var(L)
+					}
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"path":[{"name":"Glenn Rhee"},{"@facets":{"_":{"weight1":0.200000}},"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}]}]}`,
+		js)
+}
+
 func TestUseVarsFilterVarReuse1(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1071,6 +1113,43 @@ func TestShortestPathRev(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"_path_":[{"_uid_":"0x17","friend":[{"_uid_":"0x1"}]}],"me":[{"name":"Rick Grimes"},{"name":"Michonne"}]}`,
+		js)
+}
+
+func TestFacetVarRetrieval(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id:1) {
+				f as path @facets(weight)
+			}
+
+			me(id: 24) {
+				var(f)
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"var[f]":0.200000}]}`,
+		js)
+}
+
+func TestFacetVarRetrieveOrder(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id:1) {
+				f as path @facets(weight)
+			}
+
+			me(id: var(f), orderasc: var(f)) {
+				name
+				var(f)
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea","var[f]":0.100000},{"name":"Glenn Rhee","var[f]":0.200000}]}`,
 		js)
 }
 

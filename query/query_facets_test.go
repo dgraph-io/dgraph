@@ -106,6 +106,29 @@ func TestRetrieveFacetsSimple(t *testing.T) {
 		js)
 }
 
+func TestRetrieveFacetsAsVars(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+	// to see how friend @facets are positioned in output.
+	query := `
+		{
+			var(id:0x1) {
+				a as friend @facets(since)
+			}
+
+			me(id: 23) {
+				name
+				var(a)
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Rick Grimes","var[a]":"2006-01-02T15:04:05Z"}]}`,
+		js)
+}
+
 func TestRetrieveFacetsUidValues(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
