@@ -128,6 +128,12 @@ func (nq NQuad) ToEdge() (*taskp.DirectedEdge, error) {
 			return &emptyEdge, err
 		}
 	}
+
+	if nq.DeleteAll {
+		// DeleteAll op.
+		out.Op = taskp.DirectedEdge_DEL_ALL
+	}
+
 	return out, nil
 }
 
@@ -166,6 +172,10 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*taskp.DirectedEdge, er
 			return &emptyEdge, err
 		}
 	}
+	if nq.DeleteAll {
+		// DeleteAll op.
+		out.Op = taskp.DirectedEdge_DEL_ALL
+	}
 	return out, nil
 }
 
@@ -192,6 +202,7 @@ func sane(s string) bool {
 	if len(s) == 0 {
 		return true
 	}
+
 	// s should have atleast one alphanumeric character.
 	for _, r := range s {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
@@ -219,6 +230,10 @@ func Parse(line string) (rnq graphp.NQuad, rerr error) {
 
 		case itemObject:
 			rnq.ObjectId = strings.Trim(item.Val, " ")
+
+		case itemStar:
+			// This is a special case of object.
+			rnq.DeleteAll = true
 
 		case itemLiteral:
 			oval = item.Val
@@ -304,7 +319,7 @@ func Parse(line string) (rnq graphp.NQuad, rerr error) {
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)
 	}
-	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
+	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil && !rnq.DeleteAll {
 		return rnq, x.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
 	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) ||
