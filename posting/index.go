@@ -188,9 +188,9 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 
 			return true
 		})
-
-		l.SetForDeletion()
-		return nil
+		l.Lock()
+		defer l.Unlock()
+		return l.delete(ctx, t)
 	}
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)

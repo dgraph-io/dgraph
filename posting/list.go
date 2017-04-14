@@ -420,6 +420,29 @@ func (l *List) addMutation(ctx context.Context, t *taskp.DirectedEdge) (bool, er
 	return hasMutated, nil
 }
 
+func (l *List) delete(ctx context.Context, t *taskp.DirectedEdge) error {
+	l.AssertLock()
+
+	plist := new(typesp.PostingList)
+	atomic.StorePointer(&l.pbuffer, unsafe.Pointer(plist)) // Make this an empty list
+	l.mlayer = l.mlayer[:0]                                // Clear the mutation layer.
+
+	var gid uint32
+	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
+		l.water.Ch <- x.Mark{Index: rv.Index}
+		l.pending = append(l.pending, rv.Index)
+		gid = rv.Group
+	}
+	// if mutation doesn't come via raft
+	if gid == 0 {
+		gid = group.BelongsTo(t.Attr)
+	}
+	if dirtyChan != nil {
+		dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
+	}
+	return nil
+}
+
 // Iterate will allow you to iterate over this Posting List, while having acquired a read lock.
 // So, please keep this iteration cheap, otherwise mutations would get stuck.
 // The iteration will start after the provided UID. The results would not include this UID.

@@ -200,9 +200,10 @@ func validateAndConvert(edge *taskp.DirectedEdge, schemaType types.TypeID) error
 		if edge.Op != taskp.DirectedEdge_DEL {
 			return x.Errorf("* allowed only with delete operation")
 		}
+		return nil
 	}
-	storageType := posting.TypeID(edge)
 
+	storageType := posting.TypeID(edge)
 	if !schemaType.IsScalar() && !storageType.IsScalar() {
 		return nil
 	} else if !schemaType.IsScalar() && storageType.IsScalar() {
