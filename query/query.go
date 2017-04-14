@@ -1083,61 +1083,60 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 	sg.DestUIDs = &taskp.List{out}
 
 AssignStep:
-	if sg.Params.Var != "" {
-		if sg.Params.Facet != nil {
-			// If @facets was specified, we only consider the first edge out and
-			// assign the value of that facet to the variable.
-			if len(sg.facetsMatrix) == 0 {
-				return
-			}
-			doneVars[sg.Params.Var] = values{
-				vals: make(map[uint64]types.Val),
-			}
-			// Note: We ignore the facets if its a value edge as we can't
-			// attach the value to any node.
-			for i, uids := range sg.uidMatrix {
-				for j, uid := range uids.Uids {
-					facet := sg.facetsMatrix[i].FacetsList[j]
-					if len(facet.Facets) != 1 {
-						continue
-					}
-					f := facet.Facets[0]
-					doneVars[sg.Params.Var].vals[uid] = facets.ValFor(f)
-				}
-			}
-		} else if len(sg.DestUIDs.Uids) != 0 {
-			// This implies it is a entity variable.
-			doneVars[sg.Params.Var] = values{
-				uids: sg.DestUIDs,
-			}
-		} else if len(sg.counts) != 0 {
-			// This implies it is a value variable.
-			doneVars[sg.Params.Var] = values{
-				vals: make(map[uint64]types.Val),
-			}
-			for idx, uid := range sg.SrcUIDs.Uids {
-				//val, _ := getValue(sg.values[idx])
-				val := types.Val{
-					Tid:   types.IntID,
-					Value: int64(sg.counts[idx]),
-				}
-				doneVars[sg.Params.Var].vals[uid] = val
-			}
-		} else if len(sg.values) != 0 {
-			// This implies it is a value variable.
-			doneVars[sg.Params.Var] = values{
-				vals: make(map[uint64]types.Val),
-			}
-			for idx, uid := range sg.SrcUIDs.Uids {
-				val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
-				if err != nil {
+	if sg.Params.Var == "" {
+		return
+	}
+	if sg.Params.Facet != nil {
+		if len(sg.facetsMatrix) == 0 {
+			return
+		}
+		doneVars[sg.Params.Var] = values{
+			vals: make(map[uint64]types.Val),
+		}
+		// Note: We ignore the facets if its a value edge as we can't
+		// attach the value to any node.
+		for i, uids := range sg.uidMatrix {
+			for j, uid := range uids.Uids {
+				facet := sg.facetsMatrix[i].FacetsList[j]
+				if len(facet.Facets) != 1 {
 					continue
 				}
-				doneVars[sg.Params.Var].vals[uid] = val
+				f := facet.Facets[0]
+				doneVars[sg.Params.Var].vals[uid] = facets.ValFor(f)
 			}
-		} else {
-			doneVars[sg.Params.Var] = values{}
 		}
+	} else if len(sg.DestUIDs.Uids) != 0 {
+		// This implies it is a entity variable.
+		doneVars[sg.Params.Var] = values{
+			uids: sg.DestUIDs,
+		}
+	} else if len(sg.counts) != 0 {
+		// This implies it is a value variable.
+		doneVars[sg.Params.Var] = values{
+			vals: make(map[uint64]types.Val),
+		}
+		for idx, uid := range sg.SrcUIDs.Uids {
+			//val, _ := getValue(sg.values[idx])
+			val := types.Val{
+				Tid:   types.IntID,
+				Value: int64(sg.counts[idx]),
+			}
+			doneVars[sg.Params.Var].vals[uid] = val
+		}
+	} else if len(sg.values) != 0 {
+		// This implies it is a value variable.
+		doneVars[sg.Params.Var] = values{
+			vals: make(map[uint64]types.Val),
+		}
+		for idx, uid := range sg.SrcUIDs.Uids {
+			val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
+			if err != nil {
+				continue
+			}
+			doneVars[sg.Params.Var].vals[uid] = val
+		}
+	} else {
+		doneVars[sg.Params.Var] = values{}
 	}
 }
 
