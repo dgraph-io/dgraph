@@ -186,9 +186,10 @@ var testNQuads = []struct {
 	{
 		input: `<alice> <knows> * .`,
 		nq: graphp.NQuad{
-			Subject:   "alice",
-			Predicate: "knows",
-			ObjectId:  "_DELETE_POSTING_",
+			Subject:     "alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"_DELETE_POSTING_"}},
 		},
 		expectedErr: false,
 	},

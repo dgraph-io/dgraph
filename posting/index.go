@@ -181,6 +181,18 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 	l.index.Lock()
 	defer l.index.Unlock()
 
+	if t.Op == taskp.DirectedEdge_DEL && string(t.Value) == x.DeleteAll {
+		// TODO: Delete the index and reverse edges on sp*.
+		l.Iterate(0, func(p *typesp.Posting) bool {
+			// Delete the index or reverse edge for each posting.
+
+			return true
+		})
+
+		l.SetForDeletion()
+		return nil
+	}
+
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
 	{
 		l.Lock()

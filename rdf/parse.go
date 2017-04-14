@@ -224,7 +224,7 @@ func Parse(line string) (rnq graphp.NQuad, rerr error) {
 
 		case itemStar:
 			// This is a special case of object.
-			rnq.ObjectId = "_DELETE_POSTING_"
+			rnq.ObjectValue = &graphp.Value{&graphp.Value_DefaultVal{x.DeleteAll}}
 
 		case itemLiteral:
 			oval = item.Val
