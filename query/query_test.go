@@ -1092,6 +1092,25 @@ func TestFacetVarRetrieval(t *testing.T) {
 		js)
 }
 
+func TestFacetVarRetrieveOrder(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id:1) {
+				f as path @facets(weight)
+			}
+
+			me(id: var(f), orderasc: var(f)) {
+				name
+				var(f)
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea","var[f]":0.100000},{"name":"Glenn Rhee","var[f]":0.200000}]}`,
+		js)
+}
+
 func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 	populateGraph(t)
 	query := `

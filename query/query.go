@@ -1183,6 +1183,13 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 			} else if v.Typ != gql.UID_VAR && len(l.vals) != 0 {
 				// This should happened only once.
 				sg.Params.uidToVal = l.vals
+			} else if len(l.vals) != 0 && v.Typ == gql.UID_VAR {
+				// Derive the UID list from value var.
+				uids := make([]uint64, 0, len(l.vals))
+				for k := range l.vals {
+					uids = append(uids, k)
+				}
+				lists = append(lists, &taskp.List{uids})
 			} else if len(l.vals) != 0 || l.uids != nil {
 				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 			}
