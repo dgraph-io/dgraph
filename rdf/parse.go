@@ -129,11 +129,6 @@ func (nq NQuad) ToEdge() (*taskp.DirectedEdge, error) {
 		}
 	}
 
-	if nq.DeleteAll {
-		// DeleteAll op.
-		out.Op = taskp.DirectedEdge_DEL_ALL
-	}
-
 	return out, nil
 }
 
@@ -171,10 +166,6 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*taskp.DirectedEdge, er
 		if err = copyValue(out, nq); err != nil {
 			return &emptyEdge, err
 		}
-	}
-	if nq.DeleteAll {
-		// DeleteAll op.
-		out.Op = taskp.DirectedEdge_DEL_ALL
 	}
 	return out, nil
 }
@@ -233,7 +224,7 @@ func Parse(line string) (rnq graphp.NQuad, rerr error) {
 
 		case itemStar:
 			// This is a special case of object.
-			rnq.DeleteAll = true
+			rnq.ObjectId = "_DELETE_POSTING_"
 
 		case itemLiteral:
 			oval = item.Val
@@ -319,7 +310,7 @@ func Parse(line string) (rnq graphp.NQuad, rerr error) {
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)
 	}
-	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil && !rnq.DeleteAll {
+	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
 		return rnq, x.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
 	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) ||

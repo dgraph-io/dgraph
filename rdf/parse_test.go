@@ -184,6 +184,15 @@ var testNQuads = []struct {
 		expectedErr: false,
 	},
 	{
+		input: `<alice> <knows> * .`,
+		nq: graphp.NQuad{
+			Subject:   "alice",
+			Predicate: "knows",
+			ObjectId:  "_DELETE_POSTING_",
+		},
+		expectedErr: false,
+	},
+	{
 		input:       "<alice> <knows> .",
 		expectedErr: true,
 	},
@@ -229,11 +238,6 @@ var testNQuads = []struct {
 	},
 	{
 		input:       `_:alice <age> "thirteen"^^<xs:int> .`,
-		expectedErr: true,
-	},
-
-	{
-		input:       `<alice> <knows> * .`,
 		expectedErr: true,
 	},
 	{
