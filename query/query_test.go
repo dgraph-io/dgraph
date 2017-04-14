@@ -1074,6 +1074,24 @@ func TestShortestPathRev(t *testing.T) {
 		js)
 }
 
+func TestFacetVarRetrieval(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id:1) {
+				f as path @facets(weight)
+			}
+
+			me(id: 24) {
+				var(f)
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"var[f]":0.200000}]}`,
+		js)
+}
+
 func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1100,7 +1118,7 @@ func TestShortestPathWeights(t *testing.T) {
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
-				path @facets(weight)
+				p{"me":[{"var[f]":0.200000}]}ath @facets(weight)
 			}
 
 			me(id: var( A)) {
