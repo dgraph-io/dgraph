@@ -1093,6 +1093,8 @@ AssignStep:
 			doneVars[sg.Params.Var] = values{
 				vals: make(map[uint64]types.Val),
 			}
+			// Note: We ignore the facets if its a value edge as we can't
+			// attach the value to any node.
 			for i, uids := range sg.uidMatrix {
 				for j, uid := range uids.Uids {
 					facet := sg.facetsMatrix[i].FacetsList[j]
