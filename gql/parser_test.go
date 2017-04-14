@@ -2494,6 +2494,22 @@ func TestParseNormalize(t *testing.T) {
 	require.True(t, res.Query[0].Normalize)
 }
 
+func TestParseFacetsVarError(t *testing.T) {
+	query := `
+	query {
+		me(id:0x1) {
+			f as friends @facets(a, b) {
+				name
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
 func TestParseFacetsError1(t *testing.T) {
 	query := `
 	query {

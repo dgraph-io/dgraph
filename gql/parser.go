@@ -1586,6 +1586,9 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 				if curp.Facets != nil {
 					return x.Errorf("Only one facets allowed")
 				}
+				if curp.Var != "" && len(facets.Keys) != 1 {
+					return x.Errorf("Exactly one facet key is expected when using a variable")
+				}
 				curp.Facets = facets
 			} else if facetsFilter != nil {
 				if curp.FacetsFilter != nil {
