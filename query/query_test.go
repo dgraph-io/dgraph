@@ -891,6 +891,28 @@ func TestUseVarsMultiOrder(t *testing.T) {
 		js)
 }
 
+func TestUseVarsFilterFacetVarReuse(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			friend(id:0x01) {
+				L as path @facets(weight) {
+				name
+				 friend @filter(var(L)){
+						name
+						var(L)
+					}
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	fmt.Println(string(js))
+	require.JSONEq(t,
+		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.200000}},"name":"Glenn Rhee"},{"@facets":{"_":{"weight":0.100000}},"friend":[{"name":"Glenn Rhee","var[L]":0.200000}],"name":"Andrea"}]}]}`,
+		js)
+}
+
 func TestUseVarsFilterVarReuse1(t *testing.T) {
 	populateGraph(t)
 	query := `
