@@ -20,13 +20,14 @@ After you have the followed [Get started]({{< relref "get-started/index.md">}}) 
 {{% notice "note" %}}The example below would store values with the correct types only if the
 correct [schema type]({{< relref "query-language/index.md#schema" >}}) is specified in the mutation, otherwise everything would be converted to schema type and stored. Schema is derived based on first mutation received by the server. If first mutation is of default type then everything would be stored as default type.{{% /notice %}}
 
-
 #### Installation
 
 To get the Go client, you can run
 ```
 go get -u -v github.com/dgraph-io/dgraph/client github.com/dgraph-io/dgraph/protos/graphp
 ```
+
+{{% notice "warning" %}}Since dgraph uses Go vendoring for its dependencies, calling certain functions such as `graphp.NewDgraphClient(conn)` outside of the dgraph project will produce compile errors like, `cannot use conn (type *"google.golang.org/grpc".ClientConn) as type *"github.com/dgraph-io/dgraph/vendor/google.golang.org/grpc".ClientConn in argument to graph.NewDgraphClient`. In order to use these APIs, one must fork the dgraph repo and delete the offending dependencies - most often it is just vendor/google.golang.org/grpc. This must be done for each dependency that you wish to sync between the dgraph client and your code at compile time. {{% /notice %}}
 
 #### Example
 
