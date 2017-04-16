@@ -215,6 +215,12 @@
 			"revisionTime": "2017-03-31T03:19:02Z"
 		},
 		{
+			"checksumSHA1": "z4copNgeTN77OymdDKqLaIK/vSI=",
+			"path": "github.com/google/codesearch/index",
+			"revision": "a45d81b686e85d01f2838439deaf72126ccd5a96",
+			"revisionTime": "2015-06-17T15:18:51Z"
+		},
+		{
 			"checksumSHA1": "qP1B+z4GLh2VNc/tYrQgL658QOs=",
 			"path": "github.com/google/codesearch/regexp",
 			"revision": "a45d81b686e85d01f2838439deaf72126ccd5a96",
