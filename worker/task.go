@@ -384,6 +384,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 		empty := taskp.List{}
 		uids := uidsForRegex(attr, gid, query, &empty)
 		if uids != nil {
+			fmt.Println("tzdybal results pre-filtered down to: ", uids.Size(), "uids")
 			out.UidMatrix = append(out.UidMatrix, uids)
 
 			var values []types.Val

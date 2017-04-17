@@ -18,8 +18,6 @@
 package worker
 
 import (
-	"fmt"
-
 	"github.com/google/codesearch/index"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -53,7 +51,6 @@ func uidsForRegex(attr string, gid uint32, query *index.Query, intersect *taskp.
 			} else {
 				algo.IntersectWith(results, trigramUids, results)
 			}
-			fmt.Printf("tzdybal AND trigram: '%s' list: %v\n", t, results)
 
 			if results.Size() == 0 {
 				return results
@@ -65,7 +62,6 @@ func uidsForRegex(attr string, gid uint32, query *index.Query, intersect *taskp.
 			}
 			// current list of result is passed for intersection
 			results = uidsForRegex(attr, gid, sub, results)
-			fmt.Printf("tzdybal AND sub: '%s' list: %v\n", sub, results)
 			if results.Size() == 0 {
 				return nil
 			}
@@ -75,7 +71,6 @@ func uidsForRegex(attr string, gid uint32, query *index.Query, intersect *taskp.
 		uidMatrix := make([]*taskp.List, len(query.Trigram))
 		for i, t := range query.Trigram {
 			uidMatrix[i] = uidsForTrigram(t)
-			fmt.Printf("tzdybal OR trigram: '%s' list: %v\n", t, results)
 		}
 		results = algo.MergeSorted(uidMatrix)
 		for _, sub := range query.Sub {
@@ -84,7 +79,6 @@ func uidsForRegex(attr string, gid uint32, query *index.Query, intersect *taskp.
 			}
 			subUids := uidsForRegex(attr, gid, sub, intersect)
 			results = algo.MergeSorted([]*taskp.List{results, subUids})
-			fmt.Printf("tzdybal OR sub: '%s' list: %v\n", sub, results)
 		}
 	default:
 		// do nothing - we're going to return nil to indicate that full scan of values is required
