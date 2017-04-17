@@ -1,6 +1,7 @@
-{{ $checksum := md5 .Inner }}
+{{ $code := trim .Inner "\n" }}
+{{ $checksum := md5 $code }}
 
-<div class="runnable" data-checksum="{{ $checksum }}" data-initial="{{ .Inner }}" data-current="{{ .Inner }}" data-dirty="false">
+<div class="runnable" data-checksum="{{ $checksum }}" data-initial="{{ $code }}" data-current="{{ $code }}" data-dirty="false">
   <div class="container-fluid">
     <div class="row">
       <div class="runnable-col runnable-col-code col-12 col-sm-12 col-md-12 col-lg-6 nopadding">
@@ -13,6 +14,7 @@
                   <nav class="nav-languages">
                     <a class="language active" data-action="nav-lang" data-target="query" href="#">Query</a>
                     <a class="language" data-action="nav-lang" data-target="curl" href="#">Curl</a>
+                    <a class="language" data-action="nav-lang" data-target="go" href="#">Go</a>
                     <a class="language" data-action="nav-lang" data-target="java" href="#">Java</a>
                   </nav>
                 </div>
@@ -38,17 +40,17 @@
 
           <div class="runnable-content runnable-code">
             <div class="runnable-tab-content active" data-tab="query">
-              <pre><code class="no-copy"><span class="query-content">{{ .Inner }}</span></code></pre>
+              <pre><code class="no-copy"><span class="query-content">{{ $code }}</span></code></pre>
 
             </div>
 
             <div class="runnable-tab-content" data-tab="edit">
-              <textarea class="query-content-editable">{{ .Inner }}</textarea>
+              <textarea class="query-content-editable">{{ $code }}</textarea>
             </div>
 
             <div class="runnable-tab-content" data-tab="curl">
               <pre><code class="no-copy" tabindex="-1">curl localhost:8080/query -XPOST -d '
-<span class="query-content">{{ .Inner }}</span>' | python -m json.tool | less</code></pre>
+<span class="query-content">{{ $code }}</span>' | python -m json.tool | less</code></pre>
             </div>
 
             <div class="runnable-tab-content" data-tab="java">
@@ -59,9 +61,47 @@ import io.dgraph.client.DgraphResult;
 public class DgraphMain {
   public static void main(final String[] args) {
     final DgraphClient dgraphClient = GrpcDgraphClient.newInstance("localhost", 8080);
-    final DgraphResult result = dgraphClient.query("<span class="query-content java">{{ .Inner }}</span>");
+    final DgraphResult result = dgraphClient.query("<span class="query-content java">{{ $code }}</span>");
     System.out.println(result.toJsonObject().toString());
   }
+}</code></pre>
+            </div>
+
+            <div class="runnable-tab-content" data-tab="go">
+              <pre><code class="no-copy" tabindex="-1">package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"log"
+
+	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/gogo/protobuf/proto"
+	"google.golang.org/grpc"
+)
+
+var (
+	dgraph = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
+)
+
+func main() {
+	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+
+	dgraphClient := graphp.NewDgraphClient(conn)
+	req := client.Req{}
+	req.SetQuery(`<span class="query-content">{{ $code }}</span>`)
+
+	resp, err := dgraphClient.Run(context.Background(), req.Request())
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+	fmt.Printf("Response %+v\n", proto.MarshalTextString(resp))
 }</code></pre>
             </div>
           </div>
