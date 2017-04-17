@@ -18,7 +18,6 @@
 package worker
 
 import (
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -380,11 +379,9 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 		}
 
 		query := index.RegexpQuery(srcFn.regex.Syntax)
-		fmt.Println("tzdybal query", query)
 		empty := taskp.List{}
 		uids := uidsForRegex(attr, gid, query, &empty)
 		if uids != nil {
-			fmt.Println("tzdybal results pre-filtered down to: ", uids.Size(), "uids")
 			out.UidMatrix = append(out.UidMatrix, uids)
 
 			var values []types.Val
@@ -416,7 +413,6 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 				algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
 			}
 		} else {
-			fmt.Printf("tzdybal FULL SCAN '%s'\n", q.Attr)
 			// Full scan (without index)
 			it := pstore.NewIterator()
 			defer it.Close()
