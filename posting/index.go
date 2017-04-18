@@ -190,10 +190,9 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 			Facets: t.Facets,
 		}
 
-		// TODO: Delete the index and reverse edges on sp*.
 		l.Iterate(0, func(p *typesp.Posting) bool {
-			// Delete the index or reverse edge for each posting.
 			if isReversed {
+				// Delete reverse edge for each posting.
 				key := x.ReverseKey(t.Attr, p.Uid)
 				groupId := group.BelongsTo(t.Attr)
 
@@ -216,6 +215,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 					delEdge.Entity, delEdge.ValueId)
 				decr()
 			} else if isIndexed {
+				// Delete index edge of each posting.
 				p := types.Val{
 					Tid:   types.TypeID(p.ValType),
 					Value: p.Value,
