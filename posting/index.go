@@ -168,6 +168,53 @@ func addReverseMutation(ctx context.Context, t *taskp.DirectedEdge) error {
 	reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)
 	return nil
 }
+func (l *List) handleDeleteAll(ctx context.Context, t *taskp.DirectedEdge) error {
+	isReversed := schema.State().IsReversed(t.Attr)
+	isIndexed := schema.State().IsIndexed(t.Attr)
+	delEdge := &taskp.DirectedEdge{
+		Attr:   t.Attr,
+		Op:     t.Op,
+		Facets: t.Facets,
+	}
+
+	l.Iterate(0, func(p *typesp.Posting) bool {
+		if isReversed {
+			// Delete reverse edge for each posting.
+			key := x.ReverseKey(t.Attr, p.Uid)
+			groupId := group.BelongsTo(t.Attr)
+
+			plist, decr := GetOrCreate(key, groupId)
+			x.AssertTruef(plist != nil, "plist is nil [%s] %d %d",
+				t.Attr, t.Entity, t.ValueId)
+
+			delEdge.ValueId = t.Entity
+			delEdge.Entity = p.Uid
+
+			_, err := plist.AddMutation(ctx, delEdge)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err,
+					"Error adding/deleting reverse edge for attr %s src %d dst %d",
+					t.Attr, t.Entity, t.ValueId))
+				decr()
+				return true
+			}
+			reverseLog.Printf("%s [%s] [%d] [%d]", delEdge.Op, delEdge.Attr,
+				delEdge.Entity, delEdge.ValueId)
+			decr()
+		} else if isIndexed {
+			// Delete index edge of each posting.
+			p := types.Val{
+				Tid:   types.TypeID(p.ValType),
+				Value: p.Value,
+			}
+			addIndexMutations(ctx, t, p, taskp.DirectedEdge_DEL)
+		}
+		return true
+	})
+	l.Lock()
+	defer l.Unlock()
+	return l.delete(ctx, t)
+}
 
 // AddMutationWithIndex is AddMutation with support for indexing. It also
 // supports reverse edges.
@@ -182,51 +229,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 	defer l.index.Unlock()
 
 	if t.Op == taskp.DirectedEdge_DEL && string(t.Value) == x.DeleteAll {
-		isReversed := schema.State().IsReversed(t.Attr)
-		isIndexed := schema.State().IsIndexed(t.Attr)
-		delEdge := &taskp.DirectedEdge{
-			Attr:   t.Attr,
-			Op:     t.Op,
-			Facets: t.Facets,
-		}
-
-		l.Iterate(0, func(p *typesp.Posting) bool {
-			if isReversed {
-				// Delete reverse edge for each posting.
-				key := x.ReverseKey(t.Attr, p.Uid)
-				groupId := group.BelongsTo(t.Attr)
-
-				plist, decr := GetOrCreate(key, groupId)
-				x.AssertTruef(plist != nil, "plist is nil [%s] %d %d",
-					t.Attr, t.Entity, t.ValueId)
-
-				delEdge.ValueId = t.Entity
-				delEdge.Entity = p.Uid
-
-				_, err := plist.AddMutation(ctx, delEdge)
-				if err != nil {
-					x.TraceError(ctx, x.Wrapf(err,
-						"Error adding/deleting reverse edge for attr %s src %d dst %d",
-						t.Attr, t.Entity, t.ValueId))
-					decr()
-					return true
-				}
-				reverseLog.Printf("%s [%s] [%d] [%d]", delEdge.Op, delEdge.Attr,
-					delEdge.Entity, delEdge.ValueId)
-				decr()
-			} else if isIndexed {
-				// Delete index edge of each posting.
-				p := types.Val{
-					Tid:   types.TypeID(p.ValType),
-					Value: p.Value,
-				}
-				addIndexMutations(ctx, t, p, taskp.DirectedEdge_DEL)
-			}
-			return true
-		})
-		l.Lock()
-		defer l.Unlock()
-		return l.delete(ctx, t)
+		return l.handleDeleteAll(ctx, t)
 	}
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)

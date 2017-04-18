@@ -51,6 +51,7 @@ var (
 	// ErrNoValue would be returned if no value was found in the posting list.
 	ErrNoValue   = fmt.Errorf("No value found")
 	emptyPosting = &typesp.Posting{}
+	emptyList    = &typesp.PostingList{}
 )
 
 const (
@@ -73,6 +74,7 @@ type List struct {
 	lastCompact time.Time
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount    int32
+	deleteAll   bool
 
 	water   *x.WaterMark
 	pending []uint64
@@ -423,9 +425,9 @@ func (l *List) addMutation(ctx context.Context, t *taskp.DirectedEdge) (bool, er
 func (l *List) delete(ctx context.Context, t *taskp.DirectedEdge) error {
 	l.AssertLock()
 
-	plist := new(typesp.PostingList)
-	atomic.StorePointer(&l.pbuffer, unsafe.Pointer(plist)) // Make this an empty list
-	l.mlayer = l.mlayer[:0]                                // Clear the mutation layer.
+	atomic.StorePointer(&l.pbuffer, unsafe.Pointer(emptyList)) // Make this an empty list
+	l.mlayer = l.mlayer[:0]                                    // Clear the mutation layer.
+	l.deleteAll = true
 
 	var gid uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
@@ -549,7 +551,7 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
 
-	if len(l.mlayer) == 0 {
+	if len(l.mlayer) == 0 && !l.deleteAll {
 		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
 		l.pending = make([]uint64, 0, 3)
 		return false, nil
