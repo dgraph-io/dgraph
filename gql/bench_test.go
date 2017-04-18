@@ -50,14 +50,14 @@ func benchmarkParsingParallelHelper(b *testing.B, q string) {
 func Benchmark_directors(b *testing.B)             { benchmarkParsingHelper(b, q1) }
 func Benchmark_Movies(b *testing.B)                { benchmarkParsingHelper(b, q2) }
 func Benchmark_Filters(b *testing.B)               { benchmarkParsingHelper(b, q3) }
-func Benchmark_Geq(b *testing.B)                   { benchmarkParsingHelper(b, q4) }
+func Benchmark_ge(b *testing.B)                    { benchmarkParsingHelper(b, q4) }
 func Benchmark_Date(b *testing.B)                  { benchmarkParsingHelper(b, q5) }
 func Benchmark_Mutation(b *testing.B)              { benchmarkParsingHelper(b, m1) }
 func Benchmark_Mutation1000(b *testing.B)          { benchmarkParsingHelper(b, m1000) }
 func Benchmark_directors_parallel(b *testing.B)    { benchmarkParsingParallelHelper(b, q1) }
 func Benchmark_Movies_parallel(b *testing.B)       { benchmarkParsingParallelHelper(b, q2) }
 func Benchmark_Filters_parallel(b *testing.B)      { benchmarkParsingParallelHelper(b, q3) }
-func Benchmark_Geq_parallel(b *testing.B)          { benchmarkParsingParallelHelper(b, q4) }
+func Benchmark_ge_parallel(b *testing.B)           { benchmarkParsingParallelHelper(b, q4) }
 func Benchmark_Date_parallel(b *testing.B)         { benchmarkParsingParallelHelper(b, q5) }
 func Benchmark_Mutation_parallel(b *testing.B)     { benchmarkParsingParallelHelper(b, m1) }
 func Benchmark_Mutation1000_parallel(b *testing.B) { benchmarkParsingParallelHelper(b, m1000) }
@@ -116,7 +116,7 @@ var q3 = `{
 var q4 = `{
   debug(id: m.0bxtg) {
     type.object.name.en
-    film.director.film @filter(geq(film.film.initial_release_date, "1970-01-01")) {
+    film.director.film @filter(ge(film.film.initial_release_date, "1970-01-01")) {
       film.film.initial_release_date
       type.object.name.en
     }

@@ -61,7 +61,7 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	}
 }
 
-// getInequalityTokens gets tokens geq / leq compared to given token using the first sortable
+// getInequalityTokens gets tokens ge / le compared to given token using the first sortable
 // index that is found for the predicate.
 func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string, error) {
 	typ, err := schema.State().TypeOf(attr)
@@ -107,8 +107,8 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 
 	it := pstore.NewIterator()
 	defer it.Close()
-	isGeqOrGt := f == "geq" || f == "gt"
-	if isGeqOrGt {
+	isgeOrGt := f == "ge" || f == "gt"
+	if isgeOrGt {
 		it.Seek(x.IndexKey(attr, ineqToken))
 	} else {
 		it.SeekForPrev(x.IndexKey(attr, ineqToken))
@@ -129,7 +129,7 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 		k := x.Parse(it.Key().Data())
 		x.AssertTrue(k != nil)
 		out = append(out, k.Term)
-		if isGeqOrGt {
+		if isgeOrGt {
 			it.Next()
 		} else {
 			it.Prev()

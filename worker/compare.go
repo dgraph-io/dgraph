@@ -19,9 +19,9 @@ package worker
 
 func EvalCompare(cmp string, lv, rv int64) bool {
 	switch cmp {
-	case "leq":
+	case "le":
 		return lv <= rv
-	case "geq":
+	case "ge":
 		return lv >= rv
 	case "lt":
 		return lv < rv

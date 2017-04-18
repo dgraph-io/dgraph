@@ -33,7 +33,7 @@ message List {
 }
 
 message Function {
-	string name = 1;          // Name of the function : eq, leq
+	string name = 1;          // Name of the function : eq, le
 	string key = 2;           // Facet key over which to run the function.
 	repeated string args = 3; // Arguments of the function.
 }

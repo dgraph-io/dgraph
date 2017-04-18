@@ -588,7 +588,7 @@ func TestFacetsFilterAnd(t *testing.T) {
 		js)
 }
 
-func TestFacetsFilterLeq(t *testing.T) {
+func TestFacetsFilterle(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
 	// find friends of 1 below 36 years of age.
@@ -596,7 +596,7 @@ func TestFacetsFilterLeq(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @facets(leq(age, 35)) {
+				friend @facets(le(age, 35)) {
 					name
 					_uid_
 				}
@@ -610,7 +610,7 @@ func TestFacetsFilterLeq(t *testing.T) {
 		js)
 }
 
-func TestFacetsFilterGeq(t *testing.T) {
+func TestFacetsFilterge(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
 	// find friends of 1 above 32 years of age.
@@ -618,7 +618,7 @@ func TestFacetsFilterGeq(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @facets(geq(age, 33)) {
+				friend @facets(ge(age, 33)) {
 					name
 					_uid_
 				}
@@ -632,7 +632,7 @@ func TestFacetsFilterGeq(t *testing.T) {
 		js)
 }
 
-func TestFacetsFilterAndOrLeq(t *testing.T) {
+func TestFacetsFilterAndOrle(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
 	// find close or family friends of 1 before 2007-01-10
@@ -640,7 +640,7 @@ func TestFacetsFilterAndOrLeq(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @facets(eq(close, true) OR eq(family, true) AND leq(since, "2007-01-10")) {
+				friend @facets(eq(close, true) OR eq(family, true) AND le(since, "2007-01-10")) {
 					name
 					_uid_
 				}
@@ -655,7 +655,7 @@ func TestFacetsFilterAndOrLeq(t *testing.T) {
 		js)
 }
 
-func TestFacetsFilterAndOrGeq2(t *testing.T) {
+func TestFacetsFilterAndOrge2(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
 	// find close or family friends of 1 after 2007-01-10
@@ -663,7 +663,7 @@ func TestFacetsFilterAndOrGeq2(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @facets(eq(close, false) OR eq(family, true) AND geq(since, "2007-01-10")) {
+				friend @facets(eq(close, false) OR eq(family, true) AND ge(since, "2007-01-10")) {
 					name
 					_uid_
 				}
@@ -677,16 +677,16 @@ func TestFacetsFilterAndOrGeq2(t *testing.T) {
 		js)
 }
 
-func TestFacetsFilterNotAndOrGeqMutuallyExclusive(t *testing.T) {
+func TestFacetsFilterNotAndOrgeMutuallyExclusive(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
 	// find Not (close or family friends of 1 after 2007-01-10)
-	// Mutually exclusive of above result : TestFacetsFilterNotAndOrGeq
+	// Mutually exclusive of above result : TestFacetsFilterNotAndOrge
 	query := `
 		{
 			me(id:0x1) {
 				name
-				friend @facets(not (eq(close, false) OR eq(family, true) AND geq(since, "2007-01-10"))) {
+				friend @facets(not (eq(close, false) OR eq(family, true) AND ge(since, "2007-01-10"))) {
 					name
 					_uid_
 				}
@@ -708,7 +708,7 @@ func TestFacetsFilterUnknownFacets(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @facets(geq(dob, "2007-01-10")) {
+				friend @facets(ge(dob, "2007-01-10")) {
 					name
 					_uid_
 				}
@@ -730,7 +730,7 @@ func TestFacetsFilterUnknownOrKnown(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @facets(geq(dob, "2007-01-10") OR eq(family, true)) {
+				friend @facets(ge(dob, "2007-01-10") OR eq(family, true)) {
 					name
 					_uid_
 				}
@@ -752,7 +752,7 @@ func TestFacetsFilterFail1(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @facets(geq(age, 111111111111111111118888888)) {
+				friend @facets(ge(age, 111111111111111111118888888)) {
 					name
 					_uid_
 				}

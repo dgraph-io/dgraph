@@ -1528,7 +1528,7 @@ func isValidFuncName(f string) bool {
 
 func isCompareFn(f string) bool {
 	switch f {
-	case "leq", "geq", "lt", "gt", "eq":
+	case "le", "ge", "lt", "gt", "eq":
 		return true
 	}
 	return false

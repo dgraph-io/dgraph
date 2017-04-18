@@ -146,7 +146,7 @@ func parseFuncType(arr []string) (FuncType, string) {
 	}
 	f := strings.ToLower(arr[0])
 	switch f {
-	case "leq", "geq", "lt", "gt", "eq":
+	case "le", "ge", "lt", "gt", "eq":
 		// gt(release_date, "1990") is 'CompareAttr' which
 		//    takes advantage of indexed-attr
 		// gt(count(films), 0) is 'CompareScalar', we first do
@@ -500,7 +500,7 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		if err != nil {
 			return nil, x.Errorf("Got error: %v while running: %v", err.Error(), q.SrcFunc)
 		}
-		// Get tokens geq / leq ineqValueToken.
+		// Get tokens ge / le ineqValueToken.
 		fc.tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f, fc.ineqValue)
 		if err != nil {
 			return nil, err
@@ -662,11 +662,11 @@ func compareTypeVals(op string, arg1, arg2 types.Val) bool {
 		return b && e == nil
 	}
 	switch op {
-	case "geq":
+	case "ge":
 		return noError(revRes(types.Less(arg1, arg2)))
 	case "gt":
 		return noError(types.Less(arg2, arg1))
-	case "leq":
+	case "le":
 		return noError(revRes(types.Less(arg2, arg1)))
 	case "lt":
 		return noError(types.Less(arg1, arg2))

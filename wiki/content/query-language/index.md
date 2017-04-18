@@ -745,13 +745,13 @@ The following [Scalar_Types]({{<relref "#scalar-types">}}) can be used in inequa
 * datetime
 
 #### Less than or equal to
-`leq` is used to filter or obtain UIDs whose value for a predicate is less than or equal to a given value.
+`le` is used to filter or obtain UIDs whose value for a predicate is less than or equal to a given value.
 
 {{< runnable >}}
 {
   me(id: m.06pj8) {
     name@en
-    director.film @filter(leq(initial_release_date, "1970-01-01"))  {
+    director.film @filter(le(initial_release_date, "1970-01-01"))  {
       initial_release_date
       name@en
     }
@@ -767,7 +767,7 @@ This query would return the name and release date of all the movies directed by 
 {
   me(id: m.06pj8) {
     name@en
-    director.film @filter(geq(initial_release_date, "2008"))  {
+    director.film @filter(ge(initial_release_date, "2008"))  {
       Release_date: initial_release_date
       Name: name@en
     }
@@ -779,7 +779,7 @@ This query would return Name and Release date of movies directed by Steven Spiel
 
 #### Less than, greater than, equal to
 
-Above, we have seen the usage of `geq` and `leq`. You can also use `gt` for "strictly greater than" and `lt` for "strictly less than" and `eq` for "equal to".
+Above, we have seen the usage of `ge` and `le`. You can also use `gt` for "strictly greater than" and `lt` for "strictly less than" and `eq` for "equal to".
 
 ### Geolocation
 {{% notice "note" %}}Geolocation functions support only polygons and points as of now. Also, polygons with holes are replaced with the outer loop ignoring any holes.  {{% /notice %}}
@@ -955,7 +955,7 @@ In this query, we are getting film names which contain either both "indiana" and
 
 Dgraph also supports compare filter, which takes form as @filter(compare(count(attribute), N)), only entities fulfill such predication will be returned.
 
-{{% notice "note" %}}"Compare" here includes "eq", "gt", "geq", "lt", "leq".  And "count" should be applied on non-scalar types.{{% /notice %}}
+{{% notice "note" %}}"Compare" here includes "eq", "gt", "ge", "lt", "le".  And "count" should be applied on non-scalar types.{{% /notice %}}
 
 {{< runnable >}}
 {
@@ -1319,7 +1319,7 @@ curl localhost:8080/query -XPOST -d $'
 On previous dataset, this adds `dave` as friend of `alice` and `relative` facet on all friend edges.
 
 We support filtering edges based on facets. You can use all kinds of filtering functions like
-`allofterms, geq, eq etc.` with facets.
+`allofterms, ge, eq etc.` with facets.
 
 Have a look at below example:
 ```
@@ -1530,7 +1530,7 @@ Multiple blocks can be inside a single query and they would be returned in the r
 
  DirectorInfo(id: m.06pj8) {
     name@en
-    director.film @filter(geq(initial_release_date, "2008"))  {
+    director.film @filter(ge(initial_release_date, "2008"))  {
         Release_date: initial_release_date
         Name: name@en
     }

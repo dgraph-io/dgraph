@@ -139,7 +139,7 @@ Now lets get the movies (and their associated information) starting with "Star W
 
 ```sh
 curl localhost:8080/query -XPOST -d $'{
-  me(func:allofterms(name, "Star Wars")) @filter(geq(release_date, "1980")) {
+  me(func:allofterms(name, "Star Wars")) @filter(ge(release_date, "1980")) {
     name
     release_date
     revenue
@@ -282,7 +282,7 @@ Now, let's do some filtering. This time we'll only retrieve the movies which wer
 {{< runnable >}}{
   director(func:allofterms(name, "steven spielberg")) {
     name@en
-    director.film (orderasc: initial_release_date) @filter(geq(initial_release_date, "1984-08")) {
+    director.film (orderasc: initial_release_date) @filter(ge(initial_release_date, "1984-08")) {
       name@en
       initial_release_date
     }
@@ -296,7 +296,7 @@ We'll now add an AND filter using `AND` and find only the movies released in the
 {{< runnable >}}{
   director(func:allofterms(name, "steven spielberg")) {
     name@en
-    director.film (orderasc: initial_release_date) @filter(geq(initial_release_date, "1990") AND leq(initial_release_date, "2000")) {
+    director.film (orderasc: initial_release_date) @filter(ge(initial_release_date, "1990") AND le(initial_release_date, "2000")) {
       name@en
       initial_release_date
     }
@@ -309,7 +309,7 @@ We'll now add an AND filter using `AND` and find only the movies released in the
 So far, we've been retrieving film titles using the name of the director. Now, we'll start with films released since 2016, and their directors. To make things interesting, we'll only retrieve the director name, if it matches any of ''travis'' or ''knight''. In addition, we'll also alias `initial_release_date` to `release`. This will make the result look better.
 
 {{< runnable >}}{
-  films(func:geq(initial_release_date, "2016")) {
+  films(func:ge(initial_release_date, "2016")) {
     name@en
     release: initial_release_date
     directed_by @filter(anyofterms(name, "travis knight")) {
