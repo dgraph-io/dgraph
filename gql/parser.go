@@ -739,6 +739,8 @@ L:
 			}
 			goto L
 		}
+	} else if item.Typ == itemRightCurl {
+		// Do nothing.
 	} else {
 		return nil, x.Errorf("Malformed Query. Missing {")
 	}
