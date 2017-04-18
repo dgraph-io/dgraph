@@ -25,14 +25,14 @@ const (
 	ValueEmpty                        // no UID and no value
 	ValueUid                          // UID
 	ValuePlain                        // plain old value without defined language tag
-	ValueLang                         // value with defined language tag
+	ValueMulti                        // Value which is part of a multi-value posting list (like language).
 )
 
 // Helper function, to decide value type of DirectedEdge/Posting/NQuad
 func ValueType(hasValue, hasLang, hasSpecialId bool) ValueTypeInfo {
 	switch {
 	case hasValue && hasLang:
-		return ValueLang
+		return ValueMulti
 	case hasValue && !hasLang:
 		return ValuePlain
 	case !hasValue && hasSpecialId:

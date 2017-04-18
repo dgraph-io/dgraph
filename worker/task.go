@@ -18,6 +18,7 @@
 package worker
 
 import (
+	"fmt"
 	"math"
 	"regexp"
 	"sort"
@@ -180,9 +181,44 @@ func needsIndex(fnType FuncType) bool {
 	}
 }
 
+func getPredList(uid uint64, gid uint32) ([]types.Val, error) {
+	key := x.DataKey("_predicate_", uid)
+	// Get or create the posting list for an entity, attribute combination.
+	pl, decr := posting.GetOrCreate(key, gid)
+	defer decr()
+	// TODO: Get the list of values here.
+	return pl.AllValues()
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result, error) {
+	var out taskp.Result
 	attr := q.Attr
+
+	fmt.Println(attr)
+	if attr == "_predicate_" {
+		predMap := make(map[string]struct{})
+		for _, uid := range q.UidList.Uids {
+			predicates, err := getPredList(uid, gid)
+			if err != nil {
+				return &out, err
+			}
+			for _, pred := range predicates {
+				predMap[string(pred.Value.([]byte))] = struct{}{}
+			}
+		}
+		for pred := range predMap {
+			// Add it to values.
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			out.Values = append(out.Values, &taskp.Value{
+				ValType: int32(types.StringID),
+				Val:     []byte(pred),
+			})
+		}
+		fmt.Println(predMap, "!!!")
+		return &out, nil
+	}
+
 	srcFn, err := parseSrcFn(q)
 	if err != nil {
 		return nil, err
@@ -195,7 +231,6 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
 	}
 
-	var out taskp.Result
 	opts := posting.ListOptions{
 		AfterUID: uint64(q.AfterUid),
 	}

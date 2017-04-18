@@ -264,6 +264,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			continue
 		}
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
+		fmt.Println(idx, pc.Attr, pc.SrcUIDs, pc.uidMatrix)
 		if idx < 0 {
 			continue
 		}
@@ -956,6 +957,10 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 				go func() {
 					errChan <- Recurse(ctx, sg)
 				}()
+			} else if sg.Params.Alias == "listpred" {
+				go func() {
+					errChan <- GetPredList(ctx, sg)
+				}()
 			} else {
 				go ProcessGraph(ctx, sg, nil, errChan)
 			}
@@ -1200,6 +1205,29 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 		lists = append(lists, sg.DestUIDs)
 	}
 	sg.DestUIDs = algo.MergeSorted(lists)
+	return nil
+}
+
+func GetPredList(ctx context.Context, sg *SubGraph) error {
+	rch := make(chan error, 1)
+	go ProcessGraph(ctx, sg, nil, rch)
+	if err := <-rch; err != nil {
+		return err
+	}
+	temp := new(SubGraph)
+	sg.Children = append(sg.Children, temp)
+	temp.Attr = "_predicate_"
+	temp.SrcUIDs = sg.DestUIDs
+	taskQuery := createTaskQuery(temp)
+	result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
+		return err
+	}
+	temp.values = result.Values
+	temp.uidMatrix = result.UidMatrix
+	temp.DestUIDs = &taskp.List{}
+	fmt.Println(temp.values)
 	return nil
 }
 
