@@ -172,9 +172,8 @@ func (l *List) handleDeleteAll(ctx context.Context, t *taskp.DirectedEdge) error
 	isReversed := schema.State().IsReversed(t.Attr)
 	isIndexed := schema.State().IsIndexed(t.Attr)
 	delEdge := &taskp.DirectedEdge{
-		Attr:   t.Attr,
-		Op:     t.Op,
-		Facets: t.Facets,
+		Attr: t.Attr,
+		Op:   t.Op,
 	}
 
 	l.Iterate(0, func(p *typesp.Posting) bool {
