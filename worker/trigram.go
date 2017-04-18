@@ -27,7 +27,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func uidsForRegex(attr string, gid uint32, query *index.Query, intersect *taskp.List) *taskp.List {
+const (
+	maxUidsForTrigram = 1000000
+)
+
+func uidsForRegex(attr string, gid uint32,
+	query *index.Query, intersect *taskp.List) (*taskp.List, error) {
 	var results *taskp.List
 	opts := posting.ListOptions{}
 	if intersect.Size() > 0 {
@@ -52,8 +57,8 @@ func uidsForRegex(attr string, gid uint32, query *index.Query, intersect *taskp.
 				algo.IntersectWith(results, trigramUids, results)
 			}
 
-			if results.Size() == 0 {
-				return results
+			if results.Size() == 0 || results.Size() > maxUidsForTrigram {
+				return results, regexToWideError()
 			}
 		}
 		for _, sub := range query.Sub {
@@ -61,9 +66,12 @@ func uidsForRegex(attr string, gid uint32, query *index.Query, intersect *taskp.
 				results = intersect
 			}
 			// current list of result is passed for intersection
-			results = uidsForRegex(attr, gid, sub, results)
-			if results.Size() == 0 {
-				return nil
+			results, err := uidsForRegex(attr, gid, sub, results)
+			if err != nil {
+				return nil, err
+			}
+			if results.Size() == 0 || results.Size() > maxUidsForTrigram {
+				return nil, regexToWideError()
 			}
 		}
 	case index.QOr:
@@ -77,11 +85,21 @@ func uidsForRegex(attr string, gid uint32, query *index.Query, intersect *taskp.
 			if results == nil {
 				results = intersect
 			}
-			subUids := uidsForRegex(attr, gid, sub, intersect)
+			subUids, err := uidsForRegex(attr, gid, sub, intersect)
+			if err != nil {
+				return nil, err
+			}
 			results = algo.MergeSorted([]*taskp.List{results, subUids})
+			if results.Size() > maxUidsForTrigram {
+				return nil, regexToWideError()
+			}
 		}
 	default:
-		// do nothing - we're going to return nil to indicate that full scan of values is required
+		return nil, regexToWideError()
 	}
-	return results
+	return results, nil
+}
+
+func regexToWideError() error {
+	return x.Errorf("Regular expression is too wide-ranging and can't be executed efficiently.")
 }

@@ -380,7 +380,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 
 		query := index.RegexpQuery(srcFn.regex.Syntax)
 		empty := taskp.List{}
-		uids := uidsForRegex(attr, gid, query, &empty)
+		uids, err := uidsForRegex(attr, gid, query, &empty)
 		if uids != nil {
 			out.UidMatrix = append(out.UidMatrix, uids)
 
@@ -413,45 +413,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 				algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
 			}
 		} else {
-			// Full scan (without index)
-			it := pstore.NewIterator()
-			defer it.Close()
-			pk := x.Parse(x.DataKey(q.Attr, 0))
-			dataPrefix := pk.DataPrefix()
-			if q.Reverse {
-				pk = x.Parse(x.ReverseKey(q.Attr, 0))
-				dataPrefix = pk.ReversePrefix()
-			}
-
-			for it.Seek(dataPrefix); it.ValidForPrefix(dataPrefix); it.Next() {
-				x.AssertTruef(pk.Attr == q.Attr,
-					"Invalid key obtained for comparison")
-				key := it.Key().Data()
-				pl, decr := posting.GetOrUnmarshal(key, it.Value().Data(), gid)
-				var val types.Val
-				if len(srcFn.lang) > 0 {
-					val, err = pl.ValueForTag(srcFn.lang)
-				} else {
-					val, err = pl.Value()
-				}
-
-				if err != nil {
-					decr()
-					continue
-				}
-				// conver data from binary to appropriate format
-				strVal, err := types.Convert(val, types.StringID)
-				if err == nil {
-					if srcFn.regex.MatchString(strVal.Value.(string), true, true) > 0 {
-						pk := x.Parse(key)
-						// TODO: Look if we want to put these UIDs in one list before
-						// passing it back to query package.
-						tlist := &taskp.List{[]uint64{pk.Uid}}
-						out.UidMatrix = append(out.UidMatrix, tlist)
-					}
-				}
-				decr()
-			}
+			return nil, err
 		}
 	}
 

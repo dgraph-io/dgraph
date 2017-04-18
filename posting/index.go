@@ -46,12 +46,6 @@ func init() {
 	reverseLog = trace.NewEventLog("reverse", "Logger")
 }
 
-var tokenMap map[string]int
-
-func init() {
-	tokenMap = map[string]int{}
-}
-
 // IndexTokens return tokens, without the predicate prefix and index rune.
 func IndexTokens(attr, lang string, src types.Val) ([]string, error) {
 	schemaType, err := schema.State().TypeOf(attr)
