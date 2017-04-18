@@ -1212,7 +1212,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		rch <- nil
 		return
 	}
-
 	if parent == nil && len(sg.SrcFunc) == 0 {
 		// I'm root and I'm using some varaible that has been populated.
 		// Retain the actual order in uidMatrix. But sort the destUids.
@@ -1369,6 +1368,33 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		rch <- nil
 		return
 	}
+
+	/*
+		if sg.Attr == "_all_" {
+			// Modify the subgraph tree to include all the predicates of the UIDs in SrcUIDs.
+			taskQuery := createTaskQuery(sg)
+			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
+				rch <- err
+				return
+			}
+			temp := new(SubGraph)
+			*temp = *sg
+			// Go through the values and create those subgraphs and attach it to parent,
+			// process them.
+			for _, attr := range result.Values {
+				if attr.GetValType() != types.StringID {
+					rch <- x.Errorf("Expected a string type")
+					return
+				}
+
+				temp.Attr = attr
+				parent.Children = append(parent.Children, temp)
+				go ProcessGraph(ctx, temp, parent, rch)
+			}
+		}
+	*/
 
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {

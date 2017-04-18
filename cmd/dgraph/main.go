@@ -222,7 +222,26 @@ func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult
 	return mr, nil
 }
 
+func AddInternalEdge(ctx context.Context, m *taskp.Mutations) {
+	var newEdges []*taskp.DirectedEdge
+	for _, mu := range m.Edges {
+		if mu.Op == taskp.DirectedEdge_SET {
+			edge := &taskp.DirectedEdge{
+				Op:     taskp.DirectedEdge_SET,
+				Entity: mu.GetEntity(),
+				Attr:   "_predicate_",
+				Value:  []byte(mu.GetAttr()),
+			}
+			newEdges = append(newEdges, edge)
+		}
+	}
+	m.Edges = append(m.Edges, newEdges...)
+}
+
 func applyMutations(ctx context.Context, m *taskp.Mutations) error {
+	fmt.Println(len(m.Edges))
+	AddInternalEdge(ctx, m)
+	fmt.Println(len(m.Edges))
 	err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
