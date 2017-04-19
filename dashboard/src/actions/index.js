@@ -1,11 +1,11 @@
+import md5 from 'md5';
 import {
     timeout,
     checkStatus,
     isNotEmpty,
     showTreeView,
     processGraph,
-    dgraphAddress,
-    dgraphQuery
+    getEndpoint
 } from "../containers/Helpers";
 
 // TODO - Check if its better to break this file down into multiple files.
@@ -116,7 +116,7 @@ export const runQuery = query => {
 
         return timeout(
             60000,
-            fetch(dgraphAddress() + "/query?debug=true", {
+            fetch(getEndpoint('query', { debug: true }), {
                 method: "POST",
                 mode: "cors",
                 headers: {
@@ -208,10 +208,11 @@ const doShareMutation = (dispatch, getState) => {
     mutation {
         set {
             <_:share> <_share_> ${stringifiedQuery} .
+            <_:share> <_share_hash_> "${md5(stringifiedQuery)}" .
         }
     }`;
 
-    fetch(dgraphQuery(false), {
+      fetch(getEndpoint('share'), {
         method: "POST",
         mode: "cors",
         headers: {
@@ -237,30 +238,67 @@ const doShareMutation = (dispatch, getState) => {
         });
 };
 
+// breakHashCollision returns a promise that resolves with the uid of the
+// query matching the query string, given the uids that hash to the same hash
+const breakHashCollision = (uids, queryString) => {
+    const query = `
+  {
+  query(id: [${uids}]) {
+    _share_
+  }
+}`
+
+    return new Promise((resolve, reject) => {
+        timeout(
+            6000,
+            fetch(getEndpoint('query'), {
+                method: "POST",
+                mode: "cors",
+                headers: {
+                    Accept: "application/json",
+                    "Content-Type": "text/plain"
+                },
+                body: query
+            })
+                .then(checkStatus)
+                .then(response => response.json())
+                .then((result) => {
+                    for (let i = 0; i < result.query.length; i++) {
+                       const q = result.query[i];
+                       if (`"${q._share_}"` === queryString) {
+                          resolve(q._uid_);
+                       }
+                    }
+
+                    reject(new Error(
+                      'Could not find the matching query from the given uids'
+                    ));
+                })
+                .catch(reject)
+        )
+    });
+}
+
 export const getShareId = (dispatch, getState) => {
-    let query = getState().query.text;
+    const query = getState().query.text;
     if (query === "") {
         return;
     }
-    let stringifiedQuery = JSON.stringify(encodeURI(query)),
+    const stringifiedQuery = JSON.stringify(encodeURI(query));
+    const queryHash = md5(stringifiedQuery);
         // Considering that index is already set on the pred, schema mutation
         // should be a no-op. Lets see if we have already stored this query by
         // performing an exact match.
-        checkQuery = `
-mutation {
-    schema {
-        _share_: string @index(exact) .
-    }
-}
+    const checkQuery = `
 {
-    query(func:eq(_share_, ${stringifiedQuery})) {
+    query(func:eq(_share_hash_, ${queryHash})) {
         _uid_
     }
 }`;
 
-    timeout(
+    return timeout(
         6000,
-        fetch(dgraphQuery(false), {
+        fetch(getEndpoint('query'), {
             method: "POST",
             mode: "cors",
             headers: {
@@ -271,12 +309,22 @@ mutation {
         })
             .then(checkStatus)
             .then(response => response.json())
-            .then(function handleResponse(result) {
-                if (result.query && result.query.length > 0) {
-                    dispatch(updateShareId(result.query[0]["_uid_"]));
-                } else {
-                    // Else do a mutation to store the query.
-                    doShareMutation(dispatch, getState);
+            .then((result) => {
+                const matchingQueries = result.query;
+
+                // If no match, store the query
+                if (!matchingQueries) {
+                    return doShareMutation(dispatch, getState);
+                }
+                if (matchingQueries.length === 1) {
+                    return dispatch(updateShareId(result.query[0]["_uid_"]));
+                } else if (matchingQueries.length > 1) {
+                    const uids = matchingQueries.map(query => query._uid_);
+
+                    return breakHashCollision(uids, stringifiedQuery)
+                        .then(uid => {
+                            return dispatch(updateShareId(uid));
+                        })
                 }
             })
     ).catch(function(error) {
@@ -292,7 +340,7 @@ export const getQuery = shareId => {
     return dispatch => {
         timeout(
             6000,
-            fetch(dgraphQuery(false), {
+            fetch(getEndpoint(), {
                 method: "POST",
                 mode: "cors",
                 headers: {
@@ -319,39 +367,6 @@ export const getQuery = shareId => {
             dispatch(
                 saveErrorResponse(
                     `Got error while getting query for id: ${shareId}, err: ` +
-                        error.message
-                )
-            );
-        });
-    };
-};
-
-const updateAllowed = allowed => ({
-    type: "UPDATE_ALLOWED",
-    allowed: allowed
-});
-
-export const initialServerState = () => {
-    const endpoint = [dgraphAddress(), "ui/init"].join("/");
-    return dispatch => {
-        timeout(
-            6000,
-            fetch(endpoint, {
-                method: "GET",
-                mode: "cors",
-                headers: {
-                    Accept: "application/json"
-                }
-            })
-                .then(checkStatus)
-                .then(response => response.json())
-                .then(function(result) {
-                    dispatch(updateAllowed(result.share));
-                })
-        ).catch(function(error) {
-            dispatch(
-                saveErrorResponse(
-                    "Got error while communicating with server: " +
                         error.message
                 )
             );

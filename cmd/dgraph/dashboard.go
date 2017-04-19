@@ -133,28 +133,3 @@ func validateSharePred(mutation *graphp.Mutation) error {
 
 	return nil
 }
-
-type dashboardState struct {
-	Share     bool   `json:"share"`
-	SharePred string `json:"share_pred"`
-}
-
-func initialState(w http.ResponseWriter, r *http.Request) {
-	addCorsHeaders(w)
-	if r.Method != "GET" {
-		http.Error(w, x.ErrorInvalidMethod, http.StatusBadRequest)
-		return
-	}
-
-	ds := dashboardState{
-		Share:     !*noshare,
-		SharePred: InternalShare,
-	}
-
-	js, err := json.Marshal(ds)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Write(js)
-}

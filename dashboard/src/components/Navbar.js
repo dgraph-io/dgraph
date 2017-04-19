@@ -2,13 +2,13 @@ import React from "react";
 import { Navbar, Nav, NavItem, Button } from "react-bootstrap";
 import CopyToClipboard from "react-copy-to-clipboard";
 
-import { dgraphAddress } from "../containers/Helpers.js";
+import { getEndpointBaseURL } from "../containers/Helpers.js";
 
 import logo from "../assets/images/logo.svg";
 import "../assets/css/Navbar.css";
 
 function url(id) {
-    return dgraphAddress() + "/" + id;
+    return getEndpointBaseURL() + "/" + id;
 }
 
 const NavBar = React.createClass({
@@ -27,9 +27,9 @@ const NavBar = React.createClass({
     },
 
     render() {
-        let { getShareId, shareId, allowed, query } = this.props,
+        let { getShareId, shareId, query } = this.props,
             urlClass = shareId === "" ? "Nav-url-hide" : "",
-            hideShare = !allowed || query === "" ? "Nav-url-hide" : "";
+            hideShare = query === "" ? "Nav-url-hide" : "";
         return (
             <Navbar style={{ borderBottom: "0.5px solid gray" }} fluid={true}>
                 <Navbar.Header>
