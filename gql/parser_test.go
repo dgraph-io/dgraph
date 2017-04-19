@@ -36,14 +36,34 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
-func TestParseQueryListPred(t *testing.T) {
+func TestParseQueryListPred1(t *testing.T) {
+	query := `
+	{	
+		var(id: 0x0a) {
+			friends {
+				expand(_all_)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestParseQueryListPred2(t *testing.T) {
 	query := `
 	{	
 		var(id:0x0a) {
 			f as friends 
 		}
 	
-		listPred(id: var(f))
+		l as listPred(id: var(f))
+
+		var(id: 0x0a) {
+			friends {
+				expand(var(l))
+			}
+		}
 	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
