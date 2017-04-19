@@ -273,8 +273,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				if err != nil {
 					return err
 				}
+				sv, err := types.Convert(v, v.Tid)
 				uc := dst.New(pc.Attr)
-				uc.AddValue("name", v)
+				uc.AddValue("name", sv)
 				dst.AddListChild(pc.Attr, uc)
 			}
 		}

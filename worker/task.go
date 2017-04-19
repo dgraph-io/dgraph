@@ -210,7 +210,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 			// Add it to values.
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			out.Values = append(out.Values, &taskp.Value{
-				ValType: int32(types.BinaryID),
+				ValType: int32(types.StringID),
 				Val:     []byte(pred),
 			})
 		}

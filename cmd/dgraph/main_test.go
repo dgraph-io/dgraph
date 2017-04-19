@@ -20,6 +20,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
@@ -261,6 +262,47 @@ func TestSchemaMutation5Error(t *testing.T) {
 	`
 	err = runMutation(m)
 	require.Error(t, err)
+}
+
+func TestListPred(t *testing.T) {
+	var q1 = `
+	{
+		listpred(func:anyofterms(name, "Alice"))
+	}
+	`
+	var m = `
+	mutation {
+		set {
+			<alice> <name> "Alice" .
+			<alice> <age> "13" .
+			<alice> <friend> <bob> .
+		}
+	}
+	`
+	var s = `
+	mutation {
+		schema {
+            name:string @index .
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	// add index to name
+	err = runMutation(s)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	var mp map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(output), &mp))
+	require.Equal(t, 3, len(mp["listpred"].([]interface{})[0].(map[string]interface{})["_predicate_"].([]interface{})),
+		output)
+
 }
 
 // add index
