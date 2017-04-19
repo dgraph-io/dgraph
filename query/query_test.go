@@ -255,6 +255,8 @@ func populateGraph(t *testing.T) {
 	// 0x1001 is uid of interest for language tests
 	addEdgeToLangValue(t, "name", 0x1001, "Badger", "", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "European badger", "en", nil)
+	addEdgeToLangValue(t, "name", 0x1001, "European badger barger European", "xx", nil)
+	addEdgeToLangValue(t, "name", 0x1002, "Honey badger", "en", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "Borsuk europejski", "pl", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "Europäischer Dachs", "de", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "Барсук", "ru", nil)
@@ -4817,11 +4819,28 @@ func TestLangManyFallback(t *testing.T) {
 		js)
 }
 
-func TestLangFilterMismatch1(t *testing.T) {
+func TestLangFilterMatch1(t *testing.T) {
 	populateGraph(t)
+	posting.CommitLists(10, 1)
 	query := `
 		{
-			me(func:allofterms(name@pl, "badger")) {
+			me(func:allofterms(name@pl, "Europejski borsuk"))  {
+				name@pl
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name@pl":"Borsuk europejski"}]}`,
+		js)
+}
+
+func TestLangFilterMismatch1(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	query := `
+		{
+			me(func:allofterms(name@pl, "European Badger"))  {
 				name@pl
 			}
 		}
@@ -4834,14 +4853,49 @@ func TestLangFilterMismatch1(t *testing.T) {
 
 func TestLangFilterMismatch2(t *testing.T) {
 	populateGraph(t)
+	posting.CommitLists(10, 1)
 	query := `
 		{
-			me(id: [0x1, 0x2, 0x3, 0x1001]) @filter(anyofterms(name@pl, "badger is cool")) {
+			me(id: [0x1, 0x2, 0x3, 0x1001]) @filter(anyofterms(name@pl, "Badger is cool")) {
 				name@pl
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestLangFilterMismatch3(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	query := `
+		{
+			me(id: [0x1, 0x2, 0x3, 0x1001]) @filter(allofterms(name@pl, "European borsuk")) {
+				name@pl
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestLangFilterMismatch4(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	query := `
+		{
+			me(id: [0x1, 0x2, 0x3, 0x1001]) @filter(allofterms(name@en, "European borsuk")) {
+				name@en
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
 	require.JSONEq(t,
 		`{}`,
 		js)

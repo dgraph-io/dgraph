@@ -457,7 +457,7 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			}
 			// conver data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
-			if err != nil {
+			if err == nil {
 				values = append(values, strVal)
 			}
 			decr() // Decrement the reference count of the pl.
@@ -467,7 +467,10 @@ func processTask(q *taskp.Query, gid uint32) (*taskp.Result, error) {
 			funcName: srcFn.fname,
 			funcType: srcFn.fnType,
 			lang:     srcFn.lang,
-			tokens:   srcFn.tokens,
+			tokenMap: map[string]bool{},
+		}
+		for _, t := range srcFn.tokens {
+			filter.tokenMap[t] = false
 		}
 		filtered := matchStrings(uids, values, filter)
 		for i := 0; i < len(out.UidMatrix); i++ {
