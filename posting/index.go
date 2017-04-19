@@ -175,31 +175,12 @@ func (l *List) handleDeleteAll(ctx context.Context, t *taskp.DirectedEdge) error
 		Attr: t.Attr,
 		Op:   t.Op,
 	}
-
 	l.Iterate(0, func(p *typesp.Posting) bool {
 		if isReversed {
 			// Delete reverse edge for each posting.
-			key := x.ReverseKey(t.Attr, p.Uid)
-			groupId := group.BelongsTo(t.Attr)
-
-			plist, decr := GetOrCreate(key, groupId)
-			x.AssertTruef(plist != nil, "plist is nil [%s] %d %d",
-				t.Attr, t.Entity, t.ValueId)
-
-			delEdge.ValueId = t.Entity
-			delEdge.Entity = p.Uid
-
-			_, err := plist.AddMutation(ctx, delEdge)
-			if err != nil {
-				x.TraceError(ctx, x.Wrapf(err,
-					"Error adding/deleting reverse edge for attr %s src %d dst %d",
-					t.Attr, t.Entity, t.ValueId))
-				decr()
-				return true
-			}
-			reverseLog.Printf("%s [%s] [%d] [%d]", delEdge.Op, delEdge.Attr,
-				delEdge.Entity, delEdge.ValueId)
-			decr()
+			delEdge.ValueId = p.Uid
+			addReverseMutation(ctx, delEdge)
+			return true
 		} else if isIndexed {
 			// Delete index edge of each posting.
 			p := types.Val{

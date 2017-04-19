@@ -257,6 +257,11 @@ func (batch *BatchMutation) AddMutation(nq graphp.NQuad, op Op) error {
 	if err := checkNQuad(nq); err != nil {
 		return err
 	}
+	if op == SET &&
+		((nq.ObjectType == int32(types.DefaultID) && nq.ObjectValue.GetDefaultVal() == "*") ||
+			(nq.ObjectType == int32(types.StringID) && nq.ObjectValue.GetStrVal() == "*")) {
+		return x.Errorf("Cannot set the value as '*'")
+	}
 	batch.nquads <- nquadOp{nq: nq, op: op}
 	atomic.AddUint64(&batch.rdfs, 1)
 	return nil

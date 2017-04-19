@@ -74,7 +74,7 @@ type List struct {
 	lastCompact time.Time
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount    int32
-	deleteAll   bool
+	deleteAll   int32
 
 	water   *x.WaterMark
 	pending []uint64
@@ -427,7 +427,7 @@ func (l *List) delete(ctx context.Context, t *taskp.DirectedEdge) error {
 
 	atomic.StorePointer(&l.pbuffer, unsafe.Pointer(emptyList)) // Make this an empty list
 	l.mlayer = l.mlayer[:0]                                    // Clear the mutation layer.
-	l.deleteAll = true
+	atomic.StoreInt32(&l.deleteAll, 1)
 
 	var gid uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
@@ -551,7 +551,7 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
 
-	if len(l.mlayer) == 0 && !l.deleteAll {
+	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
 		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
 		l.pending = make([]uint64, 0, 3)
 		return false, nil
@@ -596,6 +596,7 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.
 	l.mlayer = l.mlayer[:0]
 	l.lastCompact = time.Now()
+	atomic.StoreInt32(&l.deleteAll, 0) // Unset deleteAll
 	return true, nil
 }
 
