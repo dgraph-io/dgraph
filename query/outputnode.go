@@ -206,6 +206,10 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graphp.Node, error) {
 		}
 		if !sg.Params.Normalize {
 			n.AddListChild(sg.Params.Alias, n1)
+			if sg.Params.Alias == "listpred" {
+				// For listpred block, we only want to return the list once for all the UIDs.
+				break
+			}
 			continue
 		}
 
@@ -436,12 +440,17 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 			}
 			return err
 		}
+
 		if n1.IsEmpty() {
 			continue
 		}
 
 		if !sg.Params.Normalize {
 			n.AddListChild(sg.Params.Alias, n1)
+			if sg.Params.Alias == "listpred" {
+				// For listpred block, we only want to return the list once for all the UIDs.
+				break
+			}
 			continue
 		}
 
