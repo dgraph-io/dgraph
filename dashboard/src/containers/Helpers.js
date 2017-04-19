@@ -555,3 +555,35 @@ export function dgraphQuery(debug = true) {
   }
   return url;
 }
+
+function createCookie(name, val, days, options) {
+  let expires = '';
+  if (days) {
+    let date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = '; expires=' + date.toUTCString();
+  }
+
+  let cookie = name + '=' + val + expires + '; path=/';
+  if (options.crossDomain) {
+    cookie += '; domain=.dgraph.io';
+  }
+
+  document.cookie = cookie;
+}
+
+export function readCookie(name) {
+  let nameEQ = name + '=';
+  let ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    var c = ca[i];
+    while (c.charAt(0) === ' ') c = c.substring(1,c.length);
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length,c.length);
+  }
+
+  return null;
+}
+
+export function eraseCookie(name, options) {
+  createCookie(name, '', -1, options);
+}
