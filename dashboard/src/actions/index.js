@@ -238,47 +238,6 @@ const doShareMutation = (dispatch, getState) => {
         });
 };
 
-// breakHashCollision returns a promise that resolves with the uid of the
-// query matching the query string, given the uids that hash to the same hash
-const breakHashCollision = (uids, queryString) => {
-    const query = `
-  {
-  query(id: [${uids}]) {
-    _share_
-  }
-}`
-
-    return new Promise((resolve, reject) => {
-        timeout(
-            6000,
-            fetch(getEndpoint('query'), {
-                method: "POST",
-                mode: "cors",
-                headers: {
-                    Accept: "application/json",
-                    "Content-Type": "text/plain"
-                },
-                body: query
-            })
-                .then(checkStatus)
-                .then(response => response.json())
-                .then((result) => {
-                    for (let i = 0; i < result.query.length; i++) {
-                       const q = result.query[i];
-                       if (`"${q._share_}"` === queryString) {
-                          resolve(q._uid_);
-                       }
-                    }
-
-                    reject(new Error(
-                      'Could not find the matching query from the given uids'
-                    ));
-                })
-                .catch(reject)
-        )
-    });
-}
-
 export const getShareId = (dispatch, getState) => {
     const query = getState().query.text;
     if (query === "") {
@@ -293,6 +252,7 @@ export const getShareId = (dispatch, getState) => {
 {
     query(func:eq(_share_hash_, ${queryHash})) {
         _uid_
+        _share_
     }
 }`;
 
@@ -317,14 +277,14 @@ export const getShareId = (dispatch, getState) => {
                     return doShareMutation(dispatch, getState);
                 }
                 if (matchingQueries.length === 1) {
-                    return dispatch(updateShareId(result.query[0]["_uid_"]));
+                    return dispatch(updateShareId(result.query[0]._uid_));
                 } else if (matchingQueries.length > 1) {
-                    const uids = matchingQueries.map(query => query._uid_);
-
-                    return breakHashCollision(uids, stringifiedQuery)
-                        .then(uid => {
-                            return dispatch(updateShareId(uid));
-                        })
+                    for (let i = 0; i < matchingQueries.length; i++) {
+                        const q = matchingQueries[i];
+                        if (`"${q._share_}"` === stringifiedQuery) {
+                            return dispatch(updateShareId(q._uid_));
+                        }
+                    }
                 }
             })
     ).catch(function(error) {
