@@ -71,7 +71,6 @@ var (
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	nomutations    = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	noshare        = flag.Bool("noshare", false, "Don't allow sharing queries through the UI.")
 	tracing        = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
@@ -234,7 +233,7 @@ func applyMutations(ctx context.Context, m *taskp.Mutations) error {
 // InternalShare is the name of a predicate used to store query strings shared from the UI
 const InternalShare = "_share_"
 
-// InternalShareHash is the name of a predicate to store hash of query strings
+// InternalShareHash is the name of a predicate to store md5 hash of query strings
 const InternalShareHash = "_share_hash_"
 
 func ismutationAllowed(ctx context.Context, mutation *graphp.Mutation) error {
