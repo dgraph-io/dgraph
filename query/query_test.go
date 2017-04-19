@@ -4878,7 +4878,6 @@ func TestLangFilterMismatch3(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	fmt.Println(js)
 	require.JSONEq(t,
 		`{}`,
 		js)
@@ -4895,7 +4894,6 @@ func TestLangFilterMismatch4(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	fmt.Println(js)
 	require.JSONEq(t,
 		`{}`,
 		js)
