@@ -108,28 +108,12 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(js)
 }
 
-// validateSharePred checks if the predicates for share mutation are valid
-// Concretely, it checks that the mutation (1) does not have forbidden predicates
-// (2) specifies both the actual query string and its hash
-func validateSharePred(mutation *graphp.Mutation) error {
-	var hasInternalShare bool
-	var hasInternalShareHash bool
-
+func hasOnlySharePred(mutation *graphp.Mutation) bool {
 	for _, nq := range mutation.Set {
-		if nq.Predicate == InternalShare {
-			hasInternalShare = true
-		} else if nq.Predicate == InternalShareHash {
-			hasInternalShareHash = true
-		} else {
-			return x.Errorf("Only mutations with: %v as predicate are allowed ",
-				InternalShare)
+		if nq.Predicate != "_share_" && nq.Predicate != "_share_hash_" {
+			return false
 		}
 	}
 
-	if !hasInternalShare || !hasInternalShareHash {
-		return x.Errorf("To share, you need mutations with following predicates: %v and %v",
-			InternalShare, InternalShareHash)
-	}
-
-	return nil
+	return true
 }
