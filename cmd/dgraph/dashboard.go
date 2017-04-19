@@ -108,34 +108,30 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(js)
 }
 
-func hasOnlySharePred(mutation *graphp.Mutation) bool {
+// validateSharePred checks if the predicates for share mutation are valid
+// Concretely, it checks that the mutation (1) does not have forbidden predicates
+// (2) specifies both the actual query string and its hash
+func validateSharePred(mutation *graphp.Mutation) error {
+	var hasInternalShare bool
+	var hasInternalShareHash bool
+
 	for _, nq := range mutation.Set {
-		if nq.Predicate != INTERNAL_SHARE {
-			return false
+		if nq.Predicate == InternalShare {
+			hasInternalShare = true
+		} else if nq.Predicate == InternalShareHash {
+			hasInternalShareHash = true
+		} else {
+			return x.Errorf("Only mutations with: %v as predicate are allowed ",
+				InternalShare)
 		}
 	}
 
-	for _, nq := range mutation.Del {
-		if nq.Predicate != INTERNAL_SHARE {
-			return false
-		}
-	}
-	return true
-}
-
-func hasSharePred(mutation *graphp.Mutation) bool {
-	for _, nq := range mutation.Set {
-		if nq.Predicate == INTERNAL_SHARE {
-			return true
-		}
+	if !hasInternalShare || !hasInternalShareHash {
+		return x.Errorf("To share, you need mutations with following predicates: %v and %v",
+			InternalShare, InternalShareHash)
 	}
 
-	for _, nq := range mutation.Del {
-		if nq.Predicate == INTERNAL_SHARE {
-			return true
-		}
-	}
-	return false
+	return nil
 }
 
 type dashboardState struct {
@@ -152,7 +148,7 @@ func initialState(w http.ResponseWriter, r *http.Request) {
 
 	ds := dashboardState{
 		Share:     !*noshare,
-		SharePred: INTERNAL_SHARE,
+		SharePred: InternalShare,
 	}
 
 	js, err := json.Marshal(ds)
