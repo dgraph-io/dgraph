@@ -1905,8 +1905,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				it.Next() // Consume ')'
 				gq.Children = append(gq.Children, child)
-				curp = nil
-
+				// Note: curp is not set to nil. So it can have children, filters, etc.
+				curp = child
 				continue
 			} else if valLower == "count" {
 				if isCount != 0 {

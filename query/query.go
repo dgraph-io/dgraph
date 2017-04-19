@@ -141,7 +141,8 @@ type params struct {
 	Facet        *facetsp.Param
 	RecurseDepth uint64
 	isInternal   bool
-	isListNode   bool // This is for listPred block.
+	isListNode   bool   // This is for listPred block.
+	Expand       string // Var to use for expand.
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -247,6 +248,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	// We go through all predicate children of the subgraphp.
 	for _, pc := range sg.Children {
 		if pc.IsInternal() {
+			if pc.Params.Expand != "" {
+				continue
+			}
 			if pc.Params.uidToVal == nil {
 				return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
 			}
@@ -268,8 +272,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		if pc.IsListNode() {
 			for _, val := range pc.values {
 				v, err := getValue(val)
-				fmt.Println(val, "!!")
-				fmt.Println(v, "%%")
 				if err != nil {
 					return err
 				}
@@ -324,7 +326,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			uc := dst.New(pc.Attr)
 			uc.AddValue("checkpwd", c)
 			dst.AddListChild(pc.Attr, uc)
-		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
+		} else if len(ul.Uids) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			var fcsList []*facetsp.Facets
@@ -523,6 +525,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Var:        gchild.Var,
 			Normalize:  sg.Params.Normalize,
 			isInternal: gchild.IsInternal,
+			Expand:     gchild.Expand,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &facetsp.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -865,6 +868,9 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 	if !sg.IsInternal() {
 		return nil
 	}
+	if sg.Params.Expand != "" {
+		return nil
+	}
 	if sg.MathExp == nil {
 		// This is a var() block.
 		srcVar := sg.Params.NeedsVar[0]
@@ -1116,10 +1122,10 @@ AssignStep:
 		return
 	}
 
-	if sg.IsListNode() {
+	if sg.Params.Alias == "listpred" {
 		// This is a predicates list.
 		doneVars[sg.Params.Var] = values{
-			strList: sg.values,
+			strList: sg.Children[0].values,
 		}
 	} else if sg.Params.Facet != nil {
 		if len(sg.facetsMatrix) == 0 {
@@ -1213,7 +1219,7 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 	lists := make([]*taskp.List, 0, 3)
 	for _, v := range sg.Params.NeedsVar {
 		if l, ok := mp[v.Name]; ok {
-			if v.Typ == gql.ANY_VAR || v.Typ == gql.LIST_VAR && l.strList != nil {
+			if (v.Typ == gql.ANY_VAR || v.Typ == gql.LIST_VAR) && l.strList != nil {
 				sg.ExpandPreds = l.strList
 			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.uids != nil {
 				isVar = true
@@ -1258,7 +1264,6 @@ func GetPredList(ctx context.Context, sg *SubGraph) error {
 		return err
 	}
 	temp.values = result.Values
-	fmt.Println(temp.values)
 	return nil
 }
 
@@ -1423,32 +1428,49 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		return
 	}
 
-	/*
-		if sg.Attr == "_all_" {
-			// Modify the subgraph tree to include all the predicates of the UIDs in SrcUIDs.
-			taskQuery := createTaskQuery(sg)
+	out := sg.Children[:0]
+	for i := 0; i < len(sg.Children); i++ {
+		child := sg.Children[i]
+		if !child.IsInternal() {
+			out = append(out, child)
+			continue
+		}
+		if child.Params.Expand == "" {
+			out = append(out, child)
+			continue
+		}
+		if child.Params.Expand == "_all_" {
+			// Get the predicate list for expansion. Otherwise we already
+			// have the list populated.
+			temp := new(SubGraph)
+			temp.Attr = "_predicate_"
+			temp.SrcUIDs = sg.DestUIDs
+			temp.Params.isListNode = true
+			taskQuery := createTaskQuery(temp)
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 			if err != nil {
 				x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 				rch <- err
 				return
 			}
-			temp := new(SubGraph)
-			*temp = *sg
-			// Go through the values and create those subgraphs and attach it to parent,
-			// process them.
-			for _, attr := range result.Values {
-				if attr.GetValType() != types.StringID {
-					rch <- x.Errorf("Expected a string type")
-					return
-				}
-
-				temp.Attr = attr
-				parent.Children = append(parent.Children, temp)
-				go ProcessGraph(ctx, temp, parent, rch)
-			}
+			child.ExpandPreds = result.Values
 		}
-	*/
+
+		for _, v := range child.ExpandPreds {
+			temp := new(SubGraph)
+			*temp = *child
+			temp.Params.isInternal = false
+			temp.Params.Expand = ""
+			if v.ValType != int32(types.StringID) {
+				rch <- x.Errorf("Expected a string type")
+				return
+			}
+			attr := string(v.Val)
+			temp.Attr = attr
+			out = append(out, temp)
+		}
+	}
+	sg.Children = out
 
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {

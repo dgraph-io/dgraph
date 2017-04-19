@@ -18,7 +18,6 @@
 package worker
 
 import (
-	"fmt"
 	"math"
 	"regexp"
 	"sort"
@@ -194,7 +193,6 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 	var out taskp.Result
 	attr := q.Attr
 
-	fmt.Println(attr)
 	if attr == "_predicate_" {
 		predMap := make(map[string]struct{})
 		for _, uid := range q.UidList.Uids {
@@ -214,7 +212,6 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 				Val:     []byte(pred),
 			})
 		}
-		fmt.Println(predMap, "!!!")
 		return &out, nil
 	}
 
