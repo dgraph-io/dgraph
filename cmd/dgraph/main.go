@@ -20,6 +20,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/gob"
 	"encoding/json"
@@ -89,6 +90,8 @@ var (
 	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min version.")
 	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max version.")
 )
+
+var mutationNotAllowedErr = x.Errorf("Mutations are forbidden on this server.")
 
 type mutationResult struct {
 	edges   []*taskp.DirectedEdge
@@ -230,25 +233,19 @@ func applyMutations(ctx context.Context, m *taskp.Mutations) error {
 	return nil
 }
 
-// InternalShare is the name of a predicate used to store query strings shared from the UI
-const InternalShare = "_share_"
-
-// InternalShareHash is the name of a predicate to store md5 hash of query strings
-const InternalShareHash = "_share_hash_"
-
-func ismutationAllowed(ctx context.Context, mutation *graphp.Mutation) error {
+func ismutationAllowed(ctx context.Context, mutation *graphp.Mutation) bool {
 	if *nomutations {
 		shareAllowed, ok := ctx.Value("_share_").(bool)
 		if !ok || !shareAllowed {
-			return x.Errorf("Mutations are forbidden on this server.")
+			return false
 		}
 
-		if err := validateSharePred(mutation); err != nil {
-			return err
+		if !hasOnlySharePred(mutation) {
+			return false
 		}
 	}
 
-	return nil
+	return true
 }
 
 func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string]uint64, error) {
@@ -257,8 +254,8 @@ func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string
 	var err error
 	var mr mutationResult
 
-	if err := ismutationAllowed(ctx, mutation); err != nil {
-		return nil, err
+	if !ismutationAllowed(ctx, mutation) {
+		return nil, mutationNotAllowedErr
 	}
 
 	if mr, err = convertToEdges(ctx, mutation.Set); err != nil {
@@ -557,41 +554,33 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.WithValue(context.Background(), "_share_", true)
-	ctx = context.WithValue(ctx, "debug", r.URL.Query().Get("debug"))
 
 	defer r.Body.Close()
 	req, err := ioutil.ReadAll(r.Body)
-	q := string(req)
-	if err != nil || len(q) == 0 {
-		x.TraceError(ctx, x.Wrapf(err, "Error while reading query"))
+	strQuery := string(req)
+	if err != nil || len(strQuery) == 0 {
+		x.TraceError(ctx, x.Wrapf(err, "Error while reading the stringified query payload"))
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
 
-	res, err := parseQueryAndMutation(ctx, gql.Request{
-		Str:       q,
-		Variables: map[string]string{},
-		Http:      true,
-	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	// Generate mutation with query and hash
+	queryHash := sha256.Sum256([]byte(strQuery))
+	mutation := gql.Mutation{
+		Set: fmt.Sprintf("<_:share> <_share_> %s .\n<_:share> <_share_hash_> \"%x\" .", strQuery, queryHash),
 	}
 
 	var allocIds map[string]uint64
 	var allocIdsStr map[string]string
-	// If we have mutations, run them first.
-	if res.Mutation != nil && hasGQLOps(res.Mutation) {
-		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
-			x.SetStatus(w, x.Error, err.Error())
-			return
-		}
-		// convert the new UIDs to hex string.
-		allocIdsStr = make(map[string]string)
-		for k, v := range allocIds {
-			allocIdsStr[k] = fmt.Sprintf("%#x", v)
-		}
+	if allocIds, err = mutationHandler(ctx, &mutation); err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+	// convert the new UIDs to hex string.
+	allocIdsStr = make(map[string]string)
+	for k, v := range allocIds {
+		allocIdsStr[k] = fmt.Sprintf("%#x", v)
 	}
 
 	mp := map[string]interface{}{
