@@ -141,7 +141,7 @@ type params struct {
 	Facet        *facetsp.Param
 	RecurseDepth uint64
 	isInternal   bool
-	isListNode   bool
+	isListNode   bool // This is for listPred block.
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -1266,11 +1266,6 @@ func GetPredList(ctx context.Context, sg *SubGraph) error {
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-	if sg.IsInternal() {
-		// We dont have to execute these nodes.
-		rch <- nil
-		return
-	}
 	if parent == nil && len(sg.SrcFunc) == 0 {
 		// I'm root and I'm using some varaible that has been populated.
 		// Retain the actual order in uidMatrix. But sort the destUids.
@@ -1458,13 +1453,20 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
+		if child.IsInternal() {
+			// We dont have to execute these nodes.
+			continue
+		}
 		child.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
 		child.SrcUIDs = sg.DestUIDs                    // Make the connection.
 		go ProcessGraph(ctx, child, sg, childChan)
 	}
 
 	// Now get all the results back.
-	for range sg.Children {
+	for _, child := range sg.Children {
+		if child.IsInternal() {
+			continue
+		}
 		select {
 		case err = <-childChan:
 			if err != nil {
