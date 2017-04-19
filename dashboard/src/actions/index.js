@@ -1,4 +1,3 @@
-import md5 from 'md5';
 import {
     timeout,
     checkStatus,
@@ -7,6 +6,7 @@ import {
     processGraph,
     getEndpoint
 } from "../containers/Helpers";
+import SHA256 from "crypto-js/sha256";
 
 // TODO - Check if its better to break this file down into multiple files.
 
@@ -201,16 +201,10 @@ export const queryFound = found => ({
     found: found
 });
 
-const doShareMutation = (dispatch, getState) => {
-    let query = getState().query.text,
-        stringifiedQuery = JSON.stringify(encodeURI(query)),
-        mutation = `
-    mutation {
-        set {
-            <_:share> <_share_> ${stringifiedQuery} .
-            <_:share> <_share_hash_> "${md5(stringifiedQuery)}" .
-        }
-    }`;
+// createShare posts the query to the server to be persisted
+const createShare = (dispatch, getState) => {
+    const query = getState().query.text;
+    const stringifiedQuery = JSON.stringify(encodeURI(query));
 
       fetch(getEndpoint('share'), {
         method: "POST",
@@ -219,11 +213,11 @@ const doShareMutation = (dispatch, getState) => {
             Accept: "application/json",
             "Content-Type": "text/plain"
         },
-        body: mutation
+        body: stringifiedQuery
     })
         .then(checkStatus)
         .then(response => response.json())
-        .then(function handleResponse(result) {
+        .then((result) => {
             if (result.uids && result.uids.share) {
                 dispatch(updateShareId(result.uids.share));
             }
@@ -244,10 +238,7 @@ export const getShareId = (dispatch, getState) => {
         return;
     }
     const stringifiedQuery = JSON.stringify(encodeURI(query));
-    const queryHash = md5(stringifiedQuery);
-        // Considering that index is already set on the pred, schema mutation
-        // should be a no-op. Lets see if we have already stored this query by
-        // performing an exact match.
+    const queryHash = SHA256(stringifiedQuery).toString();
     const checkQuery = `
 {
     query(func:eq(_share_hash_, ${queryHash})) {
@@ -274,7 +265,7 @@ export const getShareId = (dispatch, getState) => {
 
                 // If no match, store the query
                 if (!matchingQueries) {
-                    return doShareMutation(dispatch, getState);
+                    return createShare(dispatch, getState);
                 }
                 if (matchingQueries.length === 1) {
                     return dispatch(updateShareId(result.query[0]._uid_));
