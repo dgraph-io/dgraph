@@ -538,7 +538,7 @@ export function sortStrings(a, b) {
   return 0; //default return value (no sorting)
 }
 
-export function dgraphAddress() {
+export function getEndpointBaseURL() {
   if (process.env.NODE_ENV === "production") {
     // This is defined in index.html and we get it from the url.
     return window.SERVER_URL;
@@ -548,11 +548,16 @@ export function dgraphAddress() {
   return "http://localhost:8080";
 }
 
-export function dgraphQuery(debug = true) {
-  let url = [dgraphAddress(), "query"].join("/");
-  if (debug) {
-    url = [url, "debug=true"].join("?");
+// getEndpoint returns a URL for the dgraph endpoint, optionally followed by
+// path string. Do not prepend `path` with slash.
+export function getEndpoint(path = '', options = { debug: true }) {
+  const baseURL = getEndpointBaseURL();
+  const url = `${baseURL}/${path}`;
+
+  if (options.debug) {
+    return `${url}?debug=true`;
   }
+
   return url;
 }
 

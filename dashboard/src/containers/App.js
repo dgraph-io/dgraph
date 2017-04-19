@@ -12,7 +12,6 @@ import {
   getQuery,
   updateInitialQuery,
   queryFound,
-  initialServerState,
   selectQuery,
   runQuery
 } from "../actions";
@@ -82,7 +81,6 @@ class App extends React.Component {
   componentDidMount = () => {
     const { handleSelectQuery, handleRunQuery } = this.props;
 
-    this.props.initialServerState();
     let id = this.props.match.params.id;
     if (id !== undefined) {
       this.props.getQuery(id);
@@ -129,9 +127,6 @@ const mapDispatchToProps = dispatch => ({
   },
   queryFound: found => {
     dispatch(queryFound(found));
-  },
-  initialServerState: () => {
-    dispatch(initialServerState());
   },
   handleSelectQuery: (queryText) => {
     dispatch(selectQuery(queryText));

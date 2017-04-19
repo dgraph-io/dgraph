@@ -550,6 +550,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func shareHandler(w http.ResponseWriter, r *http.Request) {
+	addCorsHeaders(w)
+
 	if r.Method != "POST" {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
@@ -892,7 +894,6 @@ func setupServer(che chan error) {
 	reg := regexp.MustCompile(`\/0[xX][0-9a-fA-F]+`)
 	http.Handle("/", homeHandler(http.FileServer(http.Dir(uiDir)), reg))
 	http.HandleFunc("/ui/keywords", keywordHandler)
-	http.HandleFunc("/ui/init", initialState)
 
 	// Initilize the servers.
 	go serveGRPC(grpcl)
