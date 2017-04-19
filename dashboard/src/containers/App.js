@@ -12,8 +12,11 @@ import {
   getQuery,
   updateInitialQuery,
   queryFound,
-  initialServerState
+  initialServerState,
+  selectQuery,
+  runQuery
 } from "../actions";
+import { readCookie, eraseCookie } from './Helpers';
 
 import "../assets/css/App.css";
 
@@ -77,10 +80,23 @@ class App extends React.Component {
   };
 
   componentDidMount = () => {
+    const { handleSelectQuery, handleRunQuery } = this.props;
+
     this.props.initialServerState();
     let id = this.props.match.params.id;
     if (id !== undefined) {
       this.props.getQuery(id);
+    }
+
+    // If playQuery cookie is set, run the query and erase the cookie
+    // The cookie is used to communicate the query string between docs and play
+    const playQuery = readCookie('playQuery');
+    if (playQuery) {
+      const queryString = decodeURI(playQuery);
+      handleSelectQuery(queryString);
+      handleRunQuery(queryString).then(() => {
+        eraseCookie('playQuery', { crossDomain: true });
+      });
     }
   };
 
@@ -116,6 +132,12 @@ const mapDispatchToProps = dispatch => ({
   },
   initialServerState: () => {
     dispatch(initialServerState());
+  },
+  handleSelectQuery: (queryText) => {
+    dispatch(selectQuery(queryText));
+  },
+  handleRunQuery: (query) => {
+    return dispatch(runQuery(query));
   }
 });
 
