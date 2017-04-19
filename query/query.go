@@ -280,6 +280,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				uc.AddValue("name", sv)
 				dst.AddListChild(pc.Attr, uc)
 			}
+			continue
 		}
 
 		if pc.uidMatrix == nil {
