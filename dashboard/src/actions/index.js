@@ -113,7 +113,8 @@ export const runQuery = query => {
     return dispatch => {
         dispatch(resetResponseState());
         dispatch(isFetching());
-        timeout(
+
+        return timeout(
             60000,
             fetch(dgraphAddress() + "/query?debug=true", {
                 method: "POST",
