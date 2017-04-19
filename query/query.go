@@ -141,7 +141,7 @@ type params struct {
 	Facet        *facetsp.Param
 	RecurseDepth uint64
 	isInternal   bool
-	isListNode   bool   // This is for listPred block.
+	isListNode   bool   // This is for _predicate_ block.
 	Expand       string // Var to use for expand.
 }
 
@@ -984,10 +984,6 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 				go func() {
 					errChan <- Recurse(ctx, sg)
 				}()
-			} else if sg.Params.Alias == "listpred" {
-				go func() {
-					errChan <- GetPredList(ctx, sg)
-				}()
 			} else {
 				go ProcessGraph(ctx, sg, nil, errChan)
 			}
@@ -1122,10 +1118,10 @@ AssignStep:
 		return
 	}
 
-	if sg.Params.Alias == "listpred" {
+	if sg.IsListNode() {
 		// This is a predicates list.
 		doneVars[sg.Params.Var] = values{
-			strList: sg.Children[0].values,
+			strList: sg.values,
 		}
 	} else if sg.Params.Facet != nil {
 		if len(sg.facetsMatrix) == 0 {
@@ -1246,6 +1242,7 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 	return nil
 }
 
+/*
 func GetPredList(ctx context.Context, sg *SubGraph) error {
 	rch := make(chan error, 1)
 	go ProcessGraph(ctx, sg, nil, rch)
@@ -1266,6 +1263,7 @@ func GetPredList(ctx context.Context, sg *SubGraph) error {
 	temp.values = result.Values
 	return nil
 }
+*/
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
@@ -1309,6 +1307,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
+		if sg.Attr == "_predicate_" {
+			sg.Params.isListNode = true
+		}
 		sg.uidMatrix = result.UidMatrix
 		sg.values = result.Values
 		sg.facetsMatrix = result.FacetMatrix

@@ -57,7 +57,9 @@ func TestParseQueryListPred2(t *testing.T) {
 			f as friends 
 		}
 	
-		l as listPred(id: var(f))
+		var(id: var(f)) {
+			l as _predicate_		
+		}
 
 		var(id: 0x0a) {
 			friends {
