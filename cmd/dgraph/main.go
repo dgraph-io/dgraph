@@ -231,28 +231,24 @@ func applyMutations(ctx context.Context, m *taskp.Mutations) error {
 	return nil
 }
 
-const INTERNAL_SHARE = "_share_"
+// InternalShare is the name of a predicate used to store query strings shared from the UI
+const InternalShare = "_share_"
 
-func ismutationAllowed(mutation *graphp.Mutation) error {
+// InternalShareHash is the name of a predicate to store hash of query strings
+const InternalShareHash = "_share_hash_"
+
+func ismutationAllowed(ctx context.Context, mutation *graphp.Mutation) error {
 	if *nomutations {
-		if *noshare {
+		shareAllowed, ok := ctx.Value("_share_").(bool)
+		if !ok || !shareAllowed {
 			return x.Errorf("Mutations are forbidden on this server.")
 		}
 
-		// Sharing is allowed, lets check that mutation should have only internal
-		// share predicate.
-		if !hasOnlySharePred(mutation) {
-			return x.Errorf("Only mutations with: %v as predicate are allowed ",
-				INTERNAL_SHARE)
+		if err := validateSharePred(mutation); err != nil {
+			return err
 		}
 	}
-	// Mutations are allowed but sharing isn't allowed.
-	if *noshare {
-		if hasSharePred(mutation) {
-			return x.Errorf("Mutations with: %v as predicate are not allowed ",
-				INTERNAL_SHARE)
-		}
-	}
+
 	return nil
 }
 
@@ -262,7 +258,7 @@ func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string
 	var err error
 	var mr mutationResult
 
-	if err := ismutationAllowed(mutation); err != nil {
+	if err := ismutationAllowed(ctx, mutation); err != nil {
 		return nil, err
 	}
 
@@ -553,6 +549,65 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
 }
 
+func shareHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	ctx := context.WithValue(context.Background(), "_share_", true)
+	ctx = context.WithValue(ctx, "debug", r.URL.Query().Get("debug"))
+
+	defer r.Body.Close()
+	req, err := ioutil.ReadAll(r.Body)
+	q := string(req)
+	if err != nil || len(q) == 0 {
+		x.TraceError(ctx, x.Wrapf(err, "Error while reading query"))
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
+		return
+	}
+
+	res, err := parseQueryAndMutation(ctx, gql.Request{
+		Str:       q,
+		Variables: map[string]string{},
+		Http:      true,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var allocIds map[string]uint64
+	var allocIdsStr map[string]string
+	// If we have mutations, run them first.
+	if res.Mutation != nil && hasGQLOps(res.Mutation) {
+		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
+			x.SetStatus(w, x.Error, err.Error())
+			return
+		}
+		// convert the new UIDs to hex string.
+		allocIdsStr = make(map[string]string)
+		for k, v := range allocIds {
+			allocIdsStr[k] = fmt.Sprintf("%#x", v)
+		}
+	}
+
+	mp := map[string]interface{}{
+		"code":    x.Success,
+		"message": "Done",
+		"uids":    allocIdsStr,
+	}
+
+	if js, err := json.Marshal(mp); err == nil {
+		w.Write(js)
+	} else {
+		x.SetStatus(w, "Error", "Unable to marshal map")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+}
+
 // storeStatsHandler outputs some basic stats for data store.
 func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
@@ -640,6 +695,9 @@ func (s *grpcServer) Run(ctx context.Context,
 		defer tr.Finish()
 		ctx = trace.NewContext(ctx, tr)
 	}
+
+	// Sanitize the context of the keys used for internal purposes only
+	ctx = context.WithValue(ctx, "_share_", nil)
 
 	resp = new(graphp.Response)
 	if len(req.Query) == 0 && req.Mutation == nil {
@@ -823,6 +881,7 @@ func setupServer(che chan error) {
 
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/query", queryHandler)
+	http.HandleFunc("/share", shareHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
