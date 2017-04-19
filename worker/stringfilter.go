@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type stringFilter struct {
@@ -80,11 +81,11 @@ func tokenizeValue(value types.Val, filter stringFilter) []string {
 
 	tokenizer, found := tok.GetTokenizer(tokName)
 
-	if found {
-		tokens, err := tokenizer.Tokens(value)
-		if err == nil {
-			return tokens
-		}
+	// tokenizer was used in previous stages of query proccessing, it has to be available
+	x.AssertTrue(found)
+	tokens, err := tokenizer.Tokens(value)
+	if err == nil {
+		return tokens
 	}
 	return []string{}
 }
