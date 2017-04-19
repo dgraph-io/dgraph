@@ -2558,9 +2558,8 @@ func TestFilterRegex1(t *testing.T) {
     }
   `
 
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}, {"name":"Andrea"}]}]}`, js)
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
 }
 
 func TestFilterRegex2(t *testing.T) {
@@ -2577,9 +2576,8 @@ func TestFilterRegex2(t *testing.T) {
     }
   `
 
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}`, js)
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
 }
 
 func TestFilterRegex3(t *testing.T) {

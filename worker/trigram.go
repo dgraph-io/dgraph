@@ -18,6 +18,8 @@
 package worker
 
 import (
+	"errors"
+
 	"github.com/google/codesearch/index"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -101,5 +103,5 @@ func uidsForRegex(attr string, gid uint32,
 }
 
 func regexToWideError() error {
-	return x.Errorf("Regular expression is too wide-ranging and can't be executed efficiently.")
+	return errors.New("Regular expression is too wide-ranging and can't be executed efficiently.")
 }
