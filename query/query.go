@@ -141,6 +141,7 @@ type params struct {
 	Facet        *facetsp.Param
 	RecurseDepth uint64
 	isInternal   bool
+	isListNode   bool
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -153,6 +154,7 @@ type SubGraph struct {
 	values       []*taskp.Value
 	uidMatrix    []*taskp.List
 	facetsMatrix []*facetsp.List
+	ExpandPreds  []*taskp.Value
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -167,6 +169,10 @@ type SubGraph struct {
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *taskp.List
+}
+
+func (sg *SubGraph) IsListNode() bool {
+	return sg.Params.isListNode
 }
 
 func (sg *SubGraph) IsInternal() bool {
@@ -259,12 +265,25 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			continue
 		}
 
+		if pc.IsListNode() {
+			for _, val := range pc.values {
+				v, err := getValue(val)
+				fmt.Println(val, "!!")
+				fmt.Println(v, "%%")
+				if err != nil {
+					return err
+				}
+				uc := dst.New(pc.Attr)
+				uc.AddValue("name", v)
+				dst.AddListChild(pc.Attr, uc)
+			}
+		}
+
 		if pc.uidMatrix == nil {
 			// Can happen in recurse query.
 			continue
 		}
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
-		fmt.Println(idx, pc.Attr, pc.SrcUIDs, pc.uidMatrix)
 		if idx < 0 {
 			continue
 		}
@@ -792,8 +811,9 @@ func createTaskQuery(sg *SubGraph) *taskp.Query {
 }
 
 type values struct {
-	uids *taskp.List
-	vals map[uint64]types.Val
+	uids    *taskp.List
+	vals    map[uint64]types.Val
+	strList []*taskp.Value
 }
 
 func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
@@ -1033,6 +1053,9 @@ func shouldCascade(res gql.Result, idx int) bool {
 }
 
 func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
+	if sg.DestUIDs == nil {
+		return
+	}
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
 		goto AssignStep
@@ -1091,7 +1114,13 @@ AssignStep:
 	if sg.Params.Var == "" {
 		return
 	}
-	if sg.Params.Facet != nil {
+
+	if sg.IsListNode() {
+		// This is a predicates list.
+		doneVars[sg.Params.Var] = values{
+			strList: sg.values,
+		}
+	} else if sg.Params.Facet != nil {
 		if len(sg.facetsMatrix) == 0 {
 			return
 		}
@@ -1183,13 +1212,15 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 	lists := make([]*taskp.List, 0, 3)
 	for _, v := range sg.Params.NeedsVar {
 		if l, ok := mp[v.Name]; ok {
-			if v.Typ != gql.VALUE_VAR && l.uids != nil {
+			if v.Typ == gql.ANY_VAR || v.Typ == gql.LIST_VAR && l.strList != nil {
+				sg.ExpandPreds = l.strList
+			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.uids != nil {
 				isVar = true
 				lists = append(lists, l.uids)
-			} else if v.Typ != gql.UID_VAR && len(l.vals) != 0 {
+			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.vals) != 0 {
 				// This should happened only once.
 				sg.Params.uidToVal = l.vals
-			} else if len(l.vals) != 0 && v.Typ == gql.UID_VAR {
+			} else if len(l.vals) != 0 && (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) {
 				// Derive the UID list from value var.
 				uids := make([]uint64, 0, len(l.vals))
 				for k := range l.vals {
@@ -1218,6 +1249,7 @@ func GetPredList(ctx context.Context, sg *SubGraph) error {
 	sg.Children = append(sg.Children, temp)
 	temp.Attr = "_predicate_"
 	temp.SrcUIDs = sg.DestUIDs
+	temp.Params.isListNode = true
 	taskQuery := createTaskQuery(temp)
 	result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 	if err != nil {
@@ -1225,8 +1257,6 @@ func GetPredList(ctx context.Context, sg *SubGraph) error {
 		return err
 	}
 	temp.values = result.Values
-	temp.uidMatrix = result.UidMatrix
-	temp.DestUIDs = &taskp.List{}
 	fmt.Println(temp.values)
 	return nil
 }

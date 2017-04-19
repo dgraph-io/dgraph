@@ -186,7 +186,6 @@ func getPredList(uid uint64, gid uint32) ([]types.Val, error) {
 	// Get or create the posting list for an entity, attribute combination.
 	pl, decr := posting.GetOrCreate(key, gid)
 	defer decr()
-	// TODO: Get the list of values here.
 	return pl.AllValues()
 }
 
@@ -211,7 +210,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 			// Add it to values.
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			out.Values = append(out.Values, &taskp.Value{
-				ValType: int32(types.StringID),
+				ValType: int32(types.BinaryID),
 				Val:     []byte(pred),
 			})
 		}

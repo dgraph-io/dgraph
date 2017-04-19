@@ -83,8 +83,10 @@ type fragmentNode struct {
 type fragmentMap map[string]*fragmentNode
 
 const (
+	ANY_VAR   = 0
 	UID_VAR   = 1
 	VALUE_VAR = 2
+	LIST_VAR  = 3
 )
 
 type VarContext struct {
@@ -741,8 +743,11 @@ L:
 		}
 	} else if item.Typ == itemRightCurl {
 		// Do nothing.
+	} else if item.Typ == itemName {
+		it.Prev()
+		return gq, nil
 	} else {
-		return nil, x.Errorf("Malformed Query. Missing {")
+		return nil, x.Errorf("Malformed Query. Missing {. Got %v", item.Val)
 	}
 
 	return gq, nil
