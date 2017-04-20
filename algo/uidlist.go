@@ -256,6 +256,9 @@ func MergeSorted(lists []*taskp.List) *taskp.List {
 	maxSz := 0
 
 	for i, l := range lists {
+		if l == nil {
+			continue
+		}
 		lenList := len(l.Uids)
 		if lenList > 0 {
 			heap.Push(h, elem{
