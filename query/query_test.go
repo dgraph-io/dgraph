@@ -251,7 +251,7 @@ func populateGraph(t *testing.T) {
 		addEdgeToTypedValue(t, "shadow_deep", 24, types.IntID, data.Value.([]byte), nil)
 	}
 
-	// language stuff
+	// Natural Language Processing test data
 	// 0x1001 is uid of interest for language tests
 	addEdgeToLangValue(t, "name", 0x1001, "Badger", "", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "European badger", "en", nil)
@@ -261,6 +261,23 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 0x1001, "Europäischer Dachs", "de", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "Барсук", "ru", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
+
+	// regex test data
+	// 0x1234 is uid of interest for regex testing
+	addEdgeToValue(t, "name", 0x1234, "Regex Master", nil)
+	nextId := uint64(0x2000)
+	patterns := []string{"mississippi", "missouri", "mission", "missionary",
+		"whissle", "transmission", "zipped", "monosiphonic", "vasopressin", "vapoured",
+		"virtuously", "zurich", "synopsis", "subsensuously",
+		"admission", "commission", "submission", "subcommission", "retransmission", "omission",
+		"permission", "intermission", "dimission", "discommission",
+	}
+
+	for _, p := range patterns {
+		addEdgeToValue(t, "value", nextId, p, nil)
+		addEdgeToUID(t, "pattern", 0x1234, nextId, nil)
+		nextId++
+	}
 
 	addEdgeToValue(t, "name", 240, "Andrea With no friends", nil)
 	time.Sleep(5 * time.Millisecond)
@@ -2531,6 +2548,7 @@ func TestFilterRegexError(t *testing.T) {
 
 func TestFilterRegex1(t *testing.T) {
 	populateGraph(t)
+	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
@@ -2542,13 +2560,13 @@ func TestFilterRegex1(t *testing.T) {
     }
   `
 
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}, {"name":"Andrea"}]}]}`, js)
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
 }
 
 func TestFilterRegex2(t *testing.T) {
 	populateGraph(t)
+	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
@@ -2560,18 +2578,18 @@ func TestFilterRegex2(t *testing.T) {
     }
   `
 
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}`, js)
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
 }
 
 func TestFilterRegex3(t *testing.T) {
 	populateGraph(t)
+	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
         name
-        friend @filter(regexp(name, "^(Ri)")) {
+        friend @filter(regexp(name, "^Rick")) {
           name
         }
       }
@@ -2581,6 +2599,139 @@ func TestFilterRegex3(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"}]}]}`, js)
+}
+
+func TestFilterRegex4(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	query := `
+    {
+      me(id:0x01) {
+        name
+        friend @filter(regexp(name, "((en)|(xo))n")) {
+          name
+        }
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"} ]}]}`, js)
+}
+
+func TestFilterRegex5(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	query := `
+    {
+      me(id:0x01) {
+        name
+        friend @filter(regexp(name, "^[a-zA-z]*[^Kk ]?[Nn]ight")) {
+          name
+        }
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne"}]}`, js)
+}
+
+func TestFilterRegex6(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+    {
+	  me(id:0x1234) {
+		pattern @filter(regexp(value, "miss((issippi)|(ouri))")) {
+			value
+		}
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"pattern":[{"value":"mississippi"}, {"value":"missouri"}]}]}`, js)
+}
+
+func TestFilterRegex7(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+    {
+	  me(id:0x1234) {
+		pattern @filter(regexp(value, "[aeiou]mission")) {
+			value
+		}
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"pattern":[{"value":"omission"}, {"value":"dimission"}]}]}`, js)
+}
+
+func TestFilterRegex8(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+    {
+	  me(id:0x1234) {
+		pattern @filter(regexp(value, "^(trans)?mission")) {
+			value
+		}
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"pattern":[{"value":"mission"}, {"value":"missionary"}, {"value":"transmission"}]}]}`, js)
+}
+
+func TestFilterRegex9(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+    {
+	  me(id:0x1234) {
+		pattern @filter(regexp(value, "s.{2,5}mission")) {
+			value
+		}
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"pattern":[{"value":"submission"}, {"value":"subcommission"}, {"value":"discommission"}]}]}`, js)
+}
+
+func TestFilterRegex10(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+    {
+	  me(id:0x1234) {
+		pattern @filter(regexp(value, "[^m]iss")) {
+			value
+		}
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"pattern":[{"value":"mississippi"}, {"value":"whissle"}]}]}`, js)
 }
 
 func TestToFastJSONFilterUID(t *testing.T) {
@@ -5171,7 +5322,8 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "loc", Type: "geo"}, {Predicate: "alive", Type: "bool"},
 		{Predicate: "shadow_deep", Type: "int"}, {Predicate: "friend", Type: "uid"},
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
-		{Predicate: "dob", Type: "date"}, {Predicate: "survival_rate", Type: "float"}}
+		{Predicate: "dob", Type: "date"}, {Predicate: "survival_rate", Type: "float"},
+		{Predicate: "value", Type: "string"}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -5186,7 +5338,7 @@ func TestSchemaBlock2(t *testing.T) {
 	`
 	actual := processSchemaQuery(t, query)
 	expected := []*graphp.SchemaNode{
-		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact"}}}
+		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact", "trigram"}}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -5226,12 +5378,12 @@ func TestSchemaBlock5(t *testing.T) {
 	`
 	actual := processSchemaQuery(t, query)
 	expected := []*graphp.SchemaNode{
-		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact"}}}
+		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact", "trigram"}}}
 	checkSchemaNodes(t, expected, actual)
 }
 
 const schemaStr = `
-name:string @index(term, exact) .
+name:string @index(term, exact, trigram ) .
 alias:string @index(exact, term, fulltext) .
 dob:date @index .
 film.film.initial_release_date:date @index .
@@ -5243,6 +5395,7 @@ age           : int .
 shadow_deep   : int .
 friend:uid @reverse .
 geometry:geo @index .
+value:string @index(trigram) .
 `
 
 func TestMain(m *testing.M) {
@@ -5267,7 +5420,8 @@ func TestMain(m *testing.M) {
 
 	worker.StartRaftNodes(dir2)
 	// Load schema after nodes have started
-	schema.ParseBytes([]byte(schemaStr), 1)
+	err = schema.ParseBytes([]byte(schemaStr), 1)
+	x.Check(err)
 	defer os.RemoveAll(dir2)
 
 	os.Exit(m.Run())

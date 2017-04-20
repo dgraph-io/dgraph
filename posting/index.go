@@ -79,6 +79,7 @@ func IndexTokens(attr, lang string, src types.Val) ([]string, error) {
 		}
 		tokens = append(tokens, toks...)
 	}
+
 	return tokens, nil
 }
 

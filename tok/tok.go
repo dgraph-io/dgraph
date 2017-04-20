@@ -18,6 +18,7 @@
 package tok
 
 import (
+	"bytes"
 	"encoding/binary"
 	"time"
 
@@ -59,6 +60,7 @@ func init() {
 	RegisterTokenizer(TermTokenizer{})
 	RegisterTokenizer(ExactTokenizer{})
 	RegisterTokenizer(BoolTokenizer{})
+	RegisterTokenizer(TrigramTokenizer{})
 	SetDefault(types.GeoID, "geo")
 	SetDefault(types.IntID, "int")
 	SetDefault(types.FloatID, "float")
@@ -238,6 +240,12 @@ func EncodeGeoTokens(tokens []string) {
 	}
 }
 
+func EncodeRegexTokens(tokens []string) {
+	for i := 0; i < len(tokens); i++ {
+		tokens[i] = encodeToken(tokens[i], TrigramTokenizer{}.Identifier())
+	}
+}
+
 type BoolTokenizer struct{}
 
 func (t BoolTokenizer) Name() string       { return "bool" }
@@ -251,3 +259,27 @@ func (t BoolTokenizer) Tokens(v types.Val) ([]string, error) {
 }
 func (t BoolTokenizer) Identifier() byte { return 0x9 }
 func (t BoolTokenizer) IsSortable() bool { return false }
+
+type TrigramTokenizer struct{}
+
+func (t TrigramTokenizer) Name() string       { return "trigram" }
+func (t TrigramTokenizer) Type() types.TypeID { return types.StringID }
+func (t TrigramTokenizer) Tokens(sv types.Val) ([]string, error) {
+	value, ok := sv.Value.(string)
+	if !ok {
+		return nil, x.Errorf("Trigram indices only supported for string types")
+	}
+	runes := bytes.Runes([]byte(value))
+	l := len(runes) - 2
+	if l > 0 {
+		tokens := make([]string, l)
+		for i := 0; i < l; i++ {
+			trigram := string(runes[i : i+3])
+			tokens[i] = encodeToken(trigram, t.Identifier())
+		}
+		return tokens, nil
+	}
+	return nil, nil
+}
+func (t TrigramTokenizer) Identifier() byte { return 0xA }
+func (t TrigramTokenizer) IsSortable() bool { return false }

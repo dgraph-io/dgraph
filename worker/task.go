@@ -19,7 +19,6 @@ package worker
 
 import (
 	"math"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,12 +39,15 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+
+	cindex "github.com/google/codesearch/index"
+	cregexp "github.com/google/codesearch/regexp"
 )
 
 var (
 	emptyUIDList taskp.List
 	emptyResult  taskp.Result
-	exactTok     tok.ExactTokenizer
+	regexTok     tok.ExactTokenizer
 )
 
 // ProcessTaskOverNetwork is used to process the query and get the result from
@@ -365,30 +367,53 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 				x.Errorf("Got non-string type. Regex match is allowed only on string type.")
 		}
 		tokenizers := schema.State().TokenizerNames(q.Attr)
-		var tokenizer string
+		var found bool
 		for _, t := range tokenizers {
-			if t == "exact" {
-				tokenizer = t
+			if t == "trigram" { // TODO(tzdybal) - maybe just rename to 'regex' tokenizer?
+				found = true
 			}
 		}
-		if tokenizer == "" {
+		if !found {
 			return nil,
-				x.Errorf("Attribute %v does not have exact index for regex matching.", q.Attr)
+				x.Errorf("Attribute %v does not have trigram index for regex matching.", q.Attr)
 		}
 
-		it := pstore.NewIterator()
-		defer it.Close()
-		prefixKey := x.IndexKey(q.Attr, string(exactTok.Identifier()))
-		for it.Seek(prefixKey); it.ValidForPrefix(prefixKey); it.Next() {
-			key := it.Key().Data()
-			pk := x.Parse(key)
-			x.AssertTrue(pk.Attr == q.Attr)
-			term := pk.Term[1:] // skip the first byte which is tokenizer prefix.
-			if srcFn.regex.MatchString(term) {
-				pl, decr := posting.GetOrUnmarshal(key, it.Value().Data(), gid)
-				out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
-				decr()
+		query := cindex.RegexpQuery(srcFn.regex.Syntax)
+		empty := taskp.List{}
+		uids, err := uidsForRegex(attr, gid, query, &empty)
+		if uids != nil {
+			out.UidMatrix = append(out.UidMatrix, uids)
+
+			var values []types.Val
+			for _, uid := range uids.Uids {
+				key := x.DataKey(attr, uid)
+				pl, decr := posting.GetOrCreate(key, gid)
+
+				var val types.Val
+				if len(srcFn.lang) > 0 {
+					val, err = pl.ValueForTag(srcFn.lang)
+				} else {
+					val, err = pl.Value()
+				}
+
+				if err != nil {
+					decr()
+					continue
+				}
+				// conver data from binary to appropriate format
+				strVal, err := types.Convert(val, types.StringID)
+				if err == nil {
+					values = append(values, strVal)
+				}
+				decr() // Decrement the reference count of the pl.
 			}
+
+			filtered := matchRegex(uids, values, srcFn.regex)
+			for i := 0; i < len(out.UidMatrix); i++ {
+				algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
+			}
+		} else {
+			return nil, err
 		}
 	}
 
@@ -477,6 +502,21 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 	return &out, nil
 }
 
+func matchRegex(uids *taskp.List, values []types.Val, regex *cregexp.Regexp) *taskp.List {
+	rv := &taskp.List{}
+	for i := 0; i < len(values); i++ {
+		if len(values[i].Value.(string)) == 0 {
+			continue
+		}
+
+		if regex.MatchString(values[i].Value.(string), true, true) > 0 {
+			rv.Uids = append(rv.Uids, uids.Uids[i])
+		}
+	}
+
+	return rv
+}
+
 type functionContext struct {
 	tokens          []string
 	geoQuery        *types.GeoQueryData
@@ -488,7 +528,7 @@ type functionContext struct {
 	fname           string
 	lang            string
 	fnType          FuncType
-	regex           *regexp.Regexp
+	regex           *cregexp.Regexp
 	isCompareAtRoot bool
 }
 
@@ -599,10 +639,12 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		if err != nil {
 			return nil, err
 		}
-		fc.regex, err = regexp.Compile(q.SrcFunc[2])
+		fc.regex, err = cregexp.Compile("(?m)" + q.SrcFunc[2])
 		if err != nil {
 			return nil, err
 		}
+		fc.n = 0
+		fc.lang = q.SrcFunc[1]
 	default:
 		return nil, x.Errorf("FnType %d not handled in numFnAttrs.", fnType)
 	}
