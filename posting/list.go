@@ -621,7 +621,6 @@ func (l *List) AllValues() (vals []types.Val, rerr error) {
 	defer l.RUnlock()
 
 	l.iterate(0, func(p *typesp.Posting) bool {
-		fmt.Println(p.Value, p.PostingType, "...")
 		// x.AssertTruef(postingType(p) == x.ValueMulti,
 		//	"Expected a value posting.")
 		vals = append(vals, types.Val{
