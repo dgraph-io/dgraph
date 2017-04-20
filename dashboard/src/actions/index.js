@@ -204,9 +204,9 @@ export const queryFound = found => ({
 // createShare posts the query to the server to be persisted
 const createShare = (dispatch, getState) => {
     const query = getState().query.text;
-    const stringifiedQuery = JSON.stringify(encodeURI(query));
+    const stringifiedQuery = encodeURI(query);
 
-      fetch(getEndpoint('share'), {
+    fetch(getEndpoint('share'), {
         method: "POST",
         mode: "cors",
         headers: {
@@ -237,8 +237,8 @@ export const getShareId = (dispatch, getState) => {
     if (query === "") {
         return;
     }
-    const stringifiedQuery = JSON.stringify(encodeURI(query));
-    const queryHash = SHA256(stringifiedQuery).toString();
+    const encodedQuery = encodeURI(query);
+    const queryHash = SHA256(encodedQuery).toString();
     const checkQuery = `
 {
     query(func:eq(_share_hash_, ${queryHash})) {
@@ -272,7 +272,7 @@ export const getShareId = (dispatch, getState) => {
                 } else if (matchingQueries.length > 1) {
                     for (let i = 0; i < matchingQueries.length; i++) {
                         const q = matchingQueries[i];
-                        if (`"${q._share_}"` === stringifiedQuery) {
+                        if (`"${q._share_}"` === encodedQuery) {
                             return dispatch(updateShareId(q._uid_));
                         }
                     }
@@ -291,7 +291,7 @@ export const getQuery = shareId => {
     return dispatch => {
         timeout(
             6000,
-            fetch(getEndpoint(), {
+            fetch(getEndpoint('query'), {
                 method: "POST",
                 mode: "cors",
                 headers: {
@@ -307,12 +307,10 @@ export const getQuery = shareId => {
                 .then(response => response.json())
                 .then(function(result) {
                     if (result.query && result.query.length > 0) {
-                        dispatch(
-                            selectQuery(decodeURI(result.query[0]["_share_"]))
-                        );
-                        return;
+                        dispatch(selectQuery(decodeURI(result.query[0]._share_)));
+                    } else {
+                        dispatch(queryFound(false));
                     }
-                    dispatch(queryFound(false));
                 })
         ).catch(function(error) {
             dispatch(
