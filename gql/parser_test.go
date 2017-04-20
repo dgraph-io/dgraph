@@ -1465,6 +1465,25 @@ func TestParseVarInFunc(t *testing.T) {
 	require.Equal(t, "3", res.Query[0].Func.Args[0])
 }
 
+func TestParseStringVarInFilter(t *testing.T) {
+	query := `
+		query versions($version: string = "v0.7.3/beta")
+		{
+			versions(func:eq(type, "version"))
+			{
+				versions @filter(eq(version_number, $version)) 
+				{ 
+					version_number
+				}
+			}
+		}
+	`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, "v0.7.3/beta", res.Query[0].Children[0].Filter.Func.Args[0])
+}
+
 func TestParseVarInFilter(t *testing.T) {
 	query := `{
 		"query" : "query versions($version: int!){versions(func:eq(type, \"version\")){versions @filter(eq(version_number, $version)) { version_number}}}",

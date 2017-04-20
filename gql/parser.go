@@ -1037,7 +1037,7 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 			// as the intialised value will override the default value.
 			if vmap[varName].Value == "" {
 				vmap[varName] = varInfo{
-					Value: it.Val,
+					Value: strings.Trim(it.Val, "\""),
 					Type:  varType,
 				}
 			}
