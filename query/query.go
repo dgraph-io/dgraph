@@ -1243,29 +1243,6 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 	return nil
 }
 
-/*
-func GetPredList(ctx context.Context, sg *SubGraph) error {
-	rch := make(chan error, 1)
-	go ProcessGraph(ctx, sg, nil, rch)
-	if err := <-rch; err != nil {
-		return err
-	}
-	temp := new(SubGraph)
-	sg.Children = append(sg.Children, temp)
-	temp.Attr = "_predicate_"
-	temp.SrcUIDs = sg.DestUIDs
-	temp.Params.isListNode = true
-	taskQuery := createTaskQuery(temp)
-	result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
-		return err
-	}
-	temp.values = result.Values
-	return nil
-}
-*/
-
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
