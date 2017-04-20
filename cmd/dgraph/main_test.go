@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -303,7 +302,6 @@ func TestListPred(t *testing.T) {
 	require.NoError(t, err)
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(output), &mp))
-	fmt.Println(mp, output)
 	require.Equal(t, 3, len(mp["listpred"].([]interface{})[0].(map[string]interface{})["_predicate_"].([]interface{})),
 		output)
 

@@ -1444,8 +1444,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				rch <- x.Errorf("Expected a string type")
 				return
 			}
-			attr := string(v.Val)
-			temp.Attr = attr
+			temp.Attr = string(v.Val)
 			out = append(out, temp)
 		}
 	}

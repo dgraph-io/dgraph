@@ -239,9 +239,7 @@ func AddInternalEdge(ctx context.Context, m *taskp.Mutations) {
 }
 
 func applyMutations(ctx context.Context, m *taskp.Mutations) error {
-	fmt.Println(len(m.Edges))
 	AddInternalEdge(ctx, m)
-	fmt.Println(len(m.Edges))
 	err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
