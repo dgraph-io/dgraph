@@ -40,8 +40,8 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 
-	"github.com/google/codesearch/index"
-	"github.com/google/codesearch/regexp"
+	cindex "github.com/google/codesearch/index"
+	cregexp "github.com/google/codesearch/regexp"
 )
 
 var (
@@ -378,7 +378,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 				x.Errorf("Attribute %v does not have trigram index for regex matching.", q.Attr)
 		}
 
-		query := index.RegexpQuery(srcFn.regex.Syntax)
+		query := cindex.RegexpQuery(srcFn.regex.Syntax)
 		empty := taskp.List{}
 		uids, err := uidsForRegex(attr, gid, query, &empty)
 		if uids != nil {
@@ -465,7 +465,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 	return &out, nil
 }
 
-func matchRegex(uids *taskp.List, values []types.Val, regex *regexp.Regexp) *taskp.List {
+func matchRegex(uids *taskp.List, values []types.Val, regex *cregexp.Regexp) *taskp.List {
 	rv := &taskp.List{}
 	for i := 0; i < len(values); i++ {
 		if len(values[i].Value.(string)) == 0 {
@@ -491,7 +491,7 @@ type functionContext struct {
 	fname           string
 	lang            string
 	fnType          FuncType
-	regex           *regexp.Regexp
+	regex           *cregexp.Regexp
 	isCompareAtRoot bool
 }
 
@@ -601,7 +601,7 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		if err != nil {
 			return nil, err
 		}
-		fc.regex, err = regexp.Compile("(?m)" + q.SrcFunc[2])
+		fc.regex, err = cregexp.Compile("(?m)" + q.SrcFunc[2])
 		if err != nil {
 			return nil, err
 		}

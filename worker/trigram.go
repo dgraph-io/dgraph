@@ -20,7 +20,7 @@ package worker
 import (
 	"errors"
 
-	"github.com/google/codesearch/index"
+	cindex "github.com/google/codesearch/index"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
@@ -29,12 +29,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	maxUidsForTrigram = 1000000
-)
+const maxUidsForTrigram = 1000000
+
+var regexTooWideErr = errors.New("Regular expression is too wide-ranging and can't be executed efficiently.")
 
 func uidsForRegex(attr string, gid uint32,
-	query *index.Query, intersect *taskp.List) (*taskp.List, error) {
+	query *cindex.Query, intersect *taskp.List) (*taskp.List, error) {
 	var results *taskp.List
 	opts := posting.ListOptions{}
 	if intersect.Size() > 0 {
@@ -49,7 +49,7 @@ func uidsForRegex(attr string, gid uint32,
 	}
 
 	switch query.Op {
-	case index.QAnd:
+	case cindex.QAnd:
 		tok.EncodeRegexTokens(query.Trigram)
 		for _, t := range query.Trigram {
 			trigramUids := uidsForTrigram(t)
@@ -60,7 +60,7 @@ func uidsForRegex(attr string, gid uint32,
 			}
 
 			if results.Size() == 0 || results.Size() > maxUidsForTrigram {
-				return results, regexToWideError()
+				return results, regexTooWideErr
 			}
 		}
 		for _, sub := range query.Sub {
@@ -73,10 +73,10 @@ func uidsForRegex(attr string, gid uint32,
 				return nil, err
 			}
 			if results.Size() == 0 || results.Size() > maxUidsForTrigram {
-				return nil, regexToWideError()
+				return nil, regexTooWideErr
 			}
 		}
-	case index.QOr:
+	case cindex.QOr:
 		tok.EncodeRegexTokens(query.Trigram)
 		uidMatrix := make([]*taskp.List, len(query.Trigram))
 		for i, t := range query.Trigram {
@@ -93,15 +93,11 @@ func uidsForRegex(attr string, gid uint32,
 			}
 			results = algo.MergeSorted([]*taskp.List{results, subUids})
 			if results.Size() > maxUidsForTrigram {
-				return nil, regexToWideError()
+				return nil, regexTooWideErr
 			}
 		}
 	default:
-		return nil, regexToWideError()
+		return nil, regexTooWideErr
 	}
 	return results, nil
-}
-
-func regexToWideError() error {
-	return errors.New("Regular expression is too wide-ranging and can't be executed efficiently.")
 }
