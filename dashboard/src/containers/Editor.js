@@ -1,15 +1,6 @@
 import React, { Component } from "react";
 import { connect } from "react-redux";
-import {
-  Button,
-  Form,
-  FormControl,
-  FormGroup,
-  ControlLabel,
-  Col
-} from "react-bootstrap";
 
-import { runQuery, updateRegex, selectQuery, updateShareId } from "../actions";
 import { timeout, checkStatus, sortStrings, getEndpointBaseURL } from "./Helpers";
 import "../assets/css/Editor.css";
 
@@ -22,45 +13,12 @@ class Editor extends Component {
 
   render() {
     return (
-      <div>
-        <Form horizontal bsSize="sm" style={{ marginBottom: "10px" }}>
-          <FormGroup bsSize="sm">
-            <Col xs={2}>
-              <ControlLabel>Query</ControlLabel>
-            </Col>
-            <Col xs={8}>
-              <FormControl
-                type="text"
-                placeholder="Regex to choose property for display"
-                value={this.props.regex}
-                onChange={e => {
-                  e.preventDefault();
-                  this.props.updateRegex(e.target.value);
-                }}
-              />
-            </Col>
-            <Col xs={2}>
-              <Button
-                type="submit"
-                className="btn btn-primary pull-right"
-                onClick={e => {
-                  e.preventDefault();
-                  this.props.onRunQuery(this.getValue());
-                }}
-              >
-                Run
-              </Button>
-            </Col>
-          </FormGroup>
-        </Form>
-
-        <div
-          className="Editor-basic"
-          ref={editor => {
-            this._editor = editor;
-          }}
-        />
-      </div>
+      <div
+        className="Editor-basic"
+        ref={editor => {
+          this._editor = editor;
+        }}
+      />
     );
   }
 
@@ -71,6 +29,8 @@ class Editor extends Component {
   };
 
   componentDidMount = () => {
+    const { saveCodeMirrorInstance } = this.props;
+
     const CodeMirror = require("codemirror");
     require("codemirror/addon/hint/show-hint");
     require("codemirror/addon/comment/comment");
@@ -157,7 +117,7 @@ class Editor extends Component {
       tabSize: 2,
       lineWrapping: true,
       mode: "graphql",
-      theme: "graphiql",
+      theme: "neo",
       keyMap: "sublime",
       autoCloseBrackets: true,
       completeSingle: false,
@@ -246,8 +206,13 @@ class Editor extends Component {
     };
 
     this.editor.on("change", cm => {
-      this.props.updateShareId("");
-      this.props.updateQuery(this.editor.getValue());
+      const { onUpdateQuery } = this.props;
+      if (!onUpdateQuery) {
+        return;
+      }
+
+      const val = this.editor.getValue();
+      onUpdateQuery(val);
     });
 
     this.editor.on("keydown", function(cm, event) {
@@ -257,19 +222,17 @@ class Editor extends Component {
         CodeMirror.commands.autocomplete(cm);
       }
     });
+
+    if (saveCodeMirrorInstance) {
+      saveCodeMirrorInstance(this.editor);
+    }
   };
 }
 
 const mapStateToProps = state => ({
-  query: state.query.text,
-  regex: state.regex.propertyRegex
 });
 
 const mapDispatchToProps = {
-  onRunQuery: runQuery,
-  updateQuery: selectQuery,
-  updateShareId,
-  updateRegex
 };
 
 export default connect(mapStateToProps, mapDispatchToProps)(Editor);
