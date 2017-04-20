@@ -43,6 +43,7 @@ const (
 	ErrorUptodate        = "ErrorUptodate"
 	ErrorNoPermission    = "ErrorNoPermission"
 	ErrorInvalidMutation = "ErrorInvalidMutation"
+	DeleteAll            = "_DELETE_POSTING_"
 )
 
 var (

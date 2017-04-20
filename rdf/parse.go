@@ -128,6 +128,7 @@ func (nq NQuad) ToEdge() (*taskp.DirectedEdge, error) {
 			return &emptyEdge, err
 		}
 	}
+
 	return out, nil
 }
 
@@ -192,6 +193,7 @@ func sane(s string) bool {
 	if len(s) == 0 {
 		return true
 	}
+
 	// s should have atleast one alphanumeric character.
 	for _, r := range s {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
@@ -219,6 +221,10 @@ func Parse(line string) (rnq graphp.NQuad, rerr error) {
 
 		case itemObject:
 			rnq.ObjectId = strings.Trim(item.Val, " ")
+
+		case itemStar:
+			// This is a special case of object.
+			rnq.ObjectValue = &graphp.Value{&graphp.Value_DefaultVal{x.DeleteAll}}
 
 		case itemLiteral:
 			oval = item.Val

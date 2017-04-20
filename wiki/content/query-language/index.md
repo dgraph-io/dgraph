@@ -177,6 +177,17 @@ mutation {
 }' | python -m json.tool | less
 ```
 
+If you want to delete all the objects/values of a `S P *` triple, you can do. 
+```
+curl localhost:8080/query -XPOST -d $'
+mutation {
+  delete {
+     <lewis-carrol> <died> * .
+  }
+}
+```
+{{% notice "note" %}} On using *, all the derived edges (indexes, reverses) related to that edge would also be deleted.{{% /notice %}}
+
 ## Queries
 {{% notice "note" %}}Most of the examples here are based on the 21million.rdf.gz file [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz). The geo-location queries are based on sf.tourism.gz file [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz).{{% /notice %}}
 

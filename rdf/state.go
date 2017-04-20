@@ -42,6 +42,7 @@ const (
 	itemEqual                              // equal, 16
 	itemLeftRound                          // '(', 17
 	itemRightRound                         // ')', 18
+	itemStar                               // *, 19
 )
 
 // These constants keep a track of the depth while parsing an rdf N-Quad.
@@ -116,6 +117,12 @@ Loop:
 			}
 			return lexComment
 
+		case r == '*':
+			if l.Depth != atObject {
+				return l.Errorf("'*' only allowed at object in del mutations")
+			}
+			l.Depth++
+			l.Emit(itemStar)
 		case r == leftRound:
 			if l.Depth > atObject {
 				l.Backup()
@@ -325,7 +332,8 @@ func lexObjectType(l *lex.Lexer) lex.StateFn {
 
 func lexObject(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
-	// The object can be an IRI, blank node or a literal.
+	// The object can be an IRI, blank node, literal.
+
 	if r == lsThan {
 		l.Depth++
 		return lexIRIRef(l, itemObject, lexText)

@@ -638,6 +638,32 @@ func TestAfterUIDCount2(t *testing.T) {
 	deletePl(t, ol)
 }
 
+func TestDelete(t *testing.T) {
+	key := x.DataKey("value", 10)
+	ol := getNew(key, ps)
+
+	// Set value to cars and merge to RocksDB.
+	edge := &taskp.DirectedEdge{
+		Label: "jchiu",
+	}
+
+	for i := 1; i <= 30; i++ {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 30, ol.Length(0))
+	ol.Lock()
+	ol.delete(context.Background(), &taskp.DirectedEdge{Attr: "value"})
+	ol.Unlock()
+	require.EqualValues(t, 0, ol.Length(0))
+	commited, err := ol.SyncIfDirty(context.Background())
+	require.NoError(t, err)
+	require.True(t, commited)
+	ol.WaitForCommit()
+
+	require.EqualValues(t, 0, ol.Length(0))
+}
+
 func TestAfterUIDCountWithCommit(t *testing.T) {
 	key := x.DataKey("value", 10)
 	ol := getNew(key, ps)

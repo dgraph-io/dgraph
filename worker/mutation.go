@@ -51,7 +51,7 @@ func runMutations(ctx context.Context, edges []*taskp.DirectedEdge) error {
 		typ, err := schema.State().TypeOf(edge.Attr)
 		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
-		// Once mutation comes via raft we do best effor conversion
+		// Once mutation comes via raft we do best effort conversion
 		// Type check is done before proposing mutation, in case schema is not
 		// present, some invalid entries might be written initially
 		err = validateAndConvert(edge, typ)
@@ -195,8 +195,14 @@ func checkSchema(s *graphp.SchemaUpdate) error {
 // If storage type is specified, then check compatibility or convert to schema type
 // if no storage type is specified then convert to schema type
 func validateAndConvert(edge *taskp.DirectedEdge, schemaType types.TypeID) error {
-	storageType := posting.TypeID(edge)
+	if types.TypeID(edge.ValueType) == types.DefaultID && string(edge.Value) == x.DeleteAll {
+		if edge.Op != taskp.DirectedEdge_DEL {
+			return x.Errorf("* allowed only with delete operation")
+		}
+		return nil
+	}
 
+	storageType := posting.TypeID(edge)
 	if !schemaType.IsScalar() && !storageType.IsScalar() {
 		return nil
 	} else if !schemaType.IsScalar() && storageType.IsScalar() {
