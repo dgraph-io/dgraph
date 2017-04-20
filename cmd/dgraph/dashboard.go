@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -106,14 +105,4 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(js)
-}
-
-func hasOnlySharePred(mutation *graphp.Mutation) bool {
-	for _, nq := range mutation.Set {
-		if nq.Predicate != "_share_" && nq.Predicate != "_share_hash_" {
-			return false
-		}
-	}
-
-	return true
 }

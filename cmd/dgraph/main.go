@@ -239,10 +239,6 @@ func ismutationAllowed(ctx context.Context, mutation *graphp.Mutation) bool {
 		if !ok || !shareAllowed {
 			return false
 		}
-
-		if !hasOnlySharePred(mutation) {
-			return false
-		}
 	}
 
 	return true
@@ -546,6 +542,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func shareHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	addCorsHeaders(w)
 
 	if r.Method != "POST" {
@@ -553,21 +550,21 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set context to allow mutation
 	ctx := context.WithValue(context.Background(), "_share_", true)
 
 	defer r.Body.Close()
-	req, err := ioutil.ReadAll(r.Body)
-	strQuery := string(req)
-	if err != nil || len(strQuery) == 0 {
+	rawQuery, err := ioutil.ReadAll(r.Body)
+	if err != nil || len(rawQuery) == 0 {
 		x.TraceError(ctx, x.Wrapf(err, "Error while reading the stringified query payload"))
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
 
 	// Generate mutation with query and hash
-	queryHash := sha256.Sum256([]byte(strQuery))
+	queryHash := sha256.Sum256(rawQuery)
 	mutation := gql.Mutation{
-		Set: fmt.Sprintf("<_:share> <_share_> %s .\n<_:share> <_share_hash_> \"%x\" .", strQuery, queryHash),
+		Set: fmt.Sprintf("<_:share> <_share_> %q . \n <_:share> <_share_hash_> \"%x\" .", rawQuery, queryHash),
 	}
 
 	var allocIds map[string]uint64
@@ -583,19 +580,17 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		allocIdsStr[k] = fmt.Sprintf("%#x", v)
 	}
 
-	mp := map[string]interface{}{
+	payload := map[string]interface{}{
 		"code":    x.Success,
 		"message": "Done",
 		"uids":    allocIdsStr,
 	}
 
-	if js, err := json.Marshal(mp); err == nil {
-		w.Write(js)
+	if res, err := json.Marshal(payload); err == nil {
+		w.Write(res)
 	} else {
 		x.SetStatus(w, "Error", "Unable to marshal map")
 	}
-
-	w.Header().Set("Content-Type", "application/json")
 }
 
 // storeStatsHandler outputs some basic stats for data store.
