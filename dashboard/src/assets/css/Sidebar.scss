@@ -1,0 +1,100 @@
+ .sidebar-container {
+  flex: 0;
+  flex-direction: row;
+  display: flex;
+
+}
+
+.sidebar-menu {
+  flex: 0;
+  background-color: #292929;
+
+  ul {
+    list-style: none;
+    padding-left: 0;
+  }
+
+  li {
+    width: 78px;
+    text-align: center;
+    font-size: 29px;
+    border-bottom: 1px solid #505050;
+  }
+  li:hover {
+    background-color: #353836;
+  }
+  li a {
+    color: #a9a9a9;
+    padding: 19px 0;
+    display: block;
+    user-select: none;
+    user-drag: none;
+  }
+  li a.active {
+    background: #3c3c3c;
+  }
+
+  .logo {
+    width: 52px;
+    transition: transform 200ms;
+    user-select: none;
+    user-drag: none;
+
+    &.rotate {
+      transform: rotate(720deg);
+    }
+  }
+}
+
+.sidebar-content {
+  flex: auto;
+  width: 280px;
+  transition: all 130ms cubic-bezier(0.175, 0.885, 0.335, 1.05);
+  background: #3c3c3c;
+  color: white;
+  position: relative;
+
+  &.open {
+    padding: 0px 16px;
+  }
+
+  a {
+    color: white;
+    text-decoration: underline;
+  }
+
+  h3 {
+    font-size: 14px;
+  }
+}
+
+.sidebar-content:not(.open) {
+  width: 0;
+}
+
+.sidebar-help {
+  .link-icon {
+    margin-right: 7px;
+    vertical-align: middle;
+  }
+
+  .who-made-this {
+    position: absolute;
+    bottom: 12px;
+    left: 0;
+    right: 0;
+    text-align: center;
+
+    .who {
+      padding: 0 8px;
+    }
+
+    .team-link {
+      margin-left: 4px;
+    }
+  }
+
+  section {
+    padding: 7px 0;
+  }
+}

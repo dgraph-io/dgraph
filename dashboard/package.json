@@ -10,15 +10,20 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "flow-bin": "^0.39.0",
+    "node-sass": "^4.5.2",
+    "npm-run-all": "^4.0.2",
     "react-scripts": "0.9.0"
   },
   "dependencies": {
     "bootstrap": "^3.3.7",
+    "classnames": "^2.2.5",
     "codemirror": "^5.23.0",
     "codemirror-graphql": "^0.6.3",
     "crypto-js": "^3.1.9-1",
     "graphql": "^0.9.1",
+    "highlight.js": "^9.11.0",
     "lodash": "^4.17.4",
+    "pluralize": "^4.0.0",
     "randomcolor": "^0.4.4",
     "raven-js": "^3.15.0",
     "react": "^15.4.2",
@@ -27,19 +32,23 @@
     "react-dom": "^15.4.2",
     "react-redux": "^5.0.3",
     "react-router-dom": "^4.0.0",
+    "react-transition-group": "^1.1.2",
     "redux": "^3.6.0",
     "redux-persist": "^4.4.2",
     "redux-thunk": "^2.2.0",
     "screenfull": "^3.0.2",
     "uuid": "^3.0.1",
-    "vis": "^4.18.1"
+    "vis": "^4.19.1"
   },
   "peerDependencies": {
     "graphql": "^0.6.0 || ^0.7.0 || ^0.8.0-b || ^0.9.0"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build-css": "node-sass src/assets/css -o src/assets/css",
+    "watch-css": "npm run build-css && node-sass src/ -o src/ --watch --recursive",
+    "start-js": "react-scripts start",
+    "start": "npm-run-all -p watch-css start-js",
+    "build": "npm run build-css && react-scripts build",
     "test": "react-scripts test --env=jsdom",
     "eject": "react-scripts eject",
     "flow": "flow"

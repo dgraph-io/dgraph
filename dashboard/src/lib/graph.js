@@ -1,30 +1,74 @@
-import randomColor from "randomcolor";
-import uuid from "uuid";
-import _ from "lodash";
+/**
+ * graph helpers
+ */
 
-export function checkStatus(response) {
-  if (response.status >= 200 && response.status < 300) {
-    return response;
-  } else {
-    let error = new Error(response.statusText);
-    error["response"] = response;
-    throw error;
+import vis from "vis";
+import _ from "lodash";
+import uuid from "uuid";
+import randomColor from "randomcolor";
+
+function hasChildren(node: Object): boolean {
+  for (var prop in node) {
+    if (Array.isArray(node[prop])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function extractFacets(val, edgeAttributes, properties) {
+  // lets handle @facets between uids here.
+  for (let pred in val) {
+    if (!val.hasOwnProperty(pred)) {
+      continue;
+    }
+
+    // pred could either be _ or other predicates. If its a predicate it could have
+    // multiple k-v pairs.
+    if (pred === "_") {
+      edgeAttributes["facets"] = val["_"];
+    } else {
+      let predFacets = val[pred];
+      for (let f in predFacets) {
+        if (!predFacets.hasOwnProperty(f)) {
+          continue;
+        }
+
+        properties["facets"][`${pred}[${f}]`] = predFacets[f];
+      }
+    }
   }
 }
 
-export function timeout(ms, promise) {
-  return new Promise(function(resolve, reject) {
-    setTimeout(
-      function() {
-        reject(new Error("timeout"));
-      },
-      ms
-    );
-    promise.then(resolve, reject);
-  });
+function findAndMerge(nodes, n) {
+  let properties = JSON.parse(n.title),
+    uid = properties["attrs"]["_uid_"],
+    idx = nodes.findIndex(function(node) {
+      return node.id === uid;
+    });
+
+  if (idx === -1) {
+    console.warn("Expected to find node with uid: ", uid);
+    return;
+  }
+
+  let node = nodes[idx], props = JSON.parse(node.title);
+  _.merge(props, properties);
+  node.title = JSON.stringify(props);
+  // For shortest path, this would overwrite the color and this is fine
+  // because actual shortes path is traversed later.
+  node.color = n.color;
+
+  if (node.label === "") {
+    node.label = n.label;
+  }
+  if (node.name === "" && n.name !== "") {
+    node.name = n.name;
+  }
+  nodes[idx] = node;
 }
 
-export function aggregationPrefix(properties) {
+function aggregationPrefix(properties) {
   let aggTerms = ["max(", "min(", "sum("];
   for (let k in properties) {
     if (!properties.hasOwnProperty(k)) {
@@ -42,19 +86,7 @@ export function aggregationPrefix(properties) {
   return ["", ""];
 }
 
-function getNameKey(properties, regex) {
-  for (let i in properties) {
-    if (!properties.hasOwnProperty(i)) {
-      continue;
-    }
-    if (regex.test(i)) {
-      return i;
-    }
-  }
-  return "";
-}
-
-function shortenName(label) {
+export function shortenName(label) {
   let words = label.split(" "), firstWord = words[0];
   if (firstWord.length > 20) {
     label = [firstWord.substr(0, 9), firstWord.substr(9, 7) + "..."].join(
@@ -78,7 +110,7 @@ function shortenName(label) {
   return label;
 }
 
-function getNodeLabel(properties: Object, regex: string): string {
+export function getNodeLabel(properties: Object, regex: string): string {
   var label = "";
 
   let keys = Object.keys(properties);
@@ -93,65 +125,16 @@ function getNodeLabel(properties: Object, regex: string): string {
   return properties[nameKey] || "";
 }
 
-export function outgoingEdges(nodeId, edgeSet) {
-  return edgeSet.get({
-    filter: function(edge) {
-      return edge.from === nodeId;
+function getNameKey(properties, regex) {
+  for (let i in properties) {
+    if (!properties.hasOwnProperty(i)) {
+      continue;
     }
-  });
-}
-
-export function isShortestPath(query) {
-  return query.indexOf("shortest") !== -1 &&
-    query.indexOf("to") !== -1 &&
-    query.indexOf("from") !== -1;
-}
-
-export function showTreeView(query) {
-  return query.indexOf("orderasc") !== -1 || query.indexOf("orderdesc") !== -1;
-}
-
-export function isNotEmpty(response) {
-  let keys = Object.keys(response);
-  if (keys.length === 0) {
-    return false;
-  }
-
-  for (let i = 0; i < keys.length; i++) {
-    if (keys[i] !== "server_latency" && keys[i] !== "uids") {
-      return keys[i].length > 0 && response[keys[i]];
+    if (regex.test(i)) {
+      return i;
     }
   }
-  return false;
-}
-
-function hasChildren(node: Object): boolean {
-  for (var prop in node) {
-    if (Array.isArray(node[prop])) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function getRandomColor(randomColors) {
-  if (randomColors.length === 0) {
-    return randomColor();
-  }
-
-  let color = randomColors[0];
-  randomColors.splice(0, 1);
-  return color;
-}
-
-// TODO - Needs some refactoring. Too many arguments are passed.
-function checkAndAssign(groups, pred, l, edgeLabels, randomColors) {
-  // This label hasn't been allocated yet.
-  groups[pred] = {
-    label: l,
-    color: getRandomColor(randomColors)
-  };
-  edgeLabels[l] = true;
+  return "";
 }
 
 // This function shortens and calculates the label for a predicate.
@@ -214,63 +197,131 @@ function createAxisPlot(groups) {
   return axisPlot;
 }
 
-function extractFacets(val, edgeAttributes, properties) {
-  // lets handle @facets between uids here.
-  for (let pred in val) {
-    if (!val.hasOwnProperty(pred)) {
-      continue;
-    }
+// TODO - Needs some refactoring. Too many arguments are passed.
+function checkAndAssign(groups, pred, l, edgeLabels, randomColors) {
+  // This label hasn't been allocated yet.
+  groups[pred] = {
+    label: l,
+    color: getRandomColor(randomColors)
+  };
+  edgeLabels[l] = true;
+}
 
-    // pred could either be _ or other predicates. If its a predicate it could have
-    // multiple k-v pairs.
-    if (pred === "_") {
-      edgeAttributes["facets"] = val["_"];
-    } else {
-      let predFacets = val[pred];
-      for (let f in predFacets) {
-        if (!predFacets.hasOwnProperty(f)) {
-          continue;
+function getRandomColor(randomColors) {
+  if (randomColors.length === 0) {
+    return randomColor();
+  }
+
+  let color = randomColors[0];
+  randomColors.splice(0, 1);
+  return color;
+}
+
+/**
+ * renderNetwork renders a vis.Network within the containerEl
+ * nodes {vis.DataSet}
+ * edges {vis.DataSet}
+ * containerEl {HTMLElement}
+ */
+export function renderNetwork({
+  nodes,
+  edges,
+  treeView,
+  allNodes,
+  allEdges,
+  containerEl
+}) {
+  var data = {
+    nodes,
+    edges
+  };
+  var options = {
+    nodes: {
+      shape: "circle",
+      scaling: {
+        max: 20,
+        min: 20,
+        label: {
+          enabled: true,
+          min: 14,
+          max: 14
         }
-
-        properties["facets"][`${pred}[${f}]`] = predFacets[f];
+      },
+      font: {
+        size: 16
+      },
+      margin: {
+        top: 25
+      }
+    },
+    height: "100%",
+    width: "100%",
+    interaction: {
+      hover: true,
+      keyboard: {
+        enabled: true,
+        bindToWindow: false
+      },
+      navigationButtons: true,
+      tooltipDelay: 1000000,
+      hideEdgesOnDrag: true,
+      zoomView: false
+    },
+    layout: {
+      randomSeed: 42,
+      improvedLayout: false
+    },
+    physics: {
+      stabilization: {
+        fit: true,
+        updateInterval: 5,
+        iterations: 20
+      },
+      barnesHut: {
+        damping: 0.7
       }
     }
-  }
-}
+  };
 
-function findAndMerge(nodes, n) {
-  let properties = JSON.parse(n.title),
-    uid = properties["attrs"]["_uid_"],
-    idx = nodes.findIndex(function(node) {
-      return node.id === uid;
+  if (data.nodes.length < 100) {
+    _.merge(options, {
+      physics: {
+        stabilization: {
+          iterations: 200,
+          updateInterval: 50
+        }
+      }
     });
-
-  if (idx === -1) {
-    console.warn("Expected to find node with uid: ", uid);
-    return;
   }
 
-  let node = nodes[idx], props = JSON.parse(node.title);
-  _.merge(props, properties);
-  node.title = JSON.stringify(props);
-  // For shortest path, this would overwrite the color and this is fine
-  // because actual shortes path is traversed later.
-  node.color = n.color;
+  if (treeView) {
+    Object.assign(options, {
+      layout: {
+        hierarchical: {
+          sortMethod: "directed"
+        }
+      },
+      physics: {
+        // Otherwise there is jittery movement (existing nodes move
+        // horizontally which doesn't look good) when you expand some nodes.
+        enabled: false,
+        barnesHut: {}
+      }
+    });
+  }
 
-  if (node.label === "") {
-    node.label = n.label;
-  }
-  if (node.name === "" && n.name !== "") {
-    node.name = n.name;
-  }
-  nodes[idx] = node;
+  const network = new vis.Network(containerEl, data, options);
+
+  return {
+    network
+  };
 }
 
+// processGraph returns graph properties from response
 export function processGraph(
   response: Object,
   treeView: boolean,
-  query: string,
-  regex: string
+  query: string
 ) {
   let nodesQueue: Array<ResponseNode> = [],
     // Contains map of a lable to its shortform thats displayed.
@@ -316,7 +367,6 @@ export function processGraph(
     groups = {},
     displayLabel,
     fullName,
-    regexEx = new RegExp(regex),
     isSchema = false;
 
   response = _.cloneDeep(response);
@@ -454,7 +504,8 @@ export function processGraph(
     if (aggrTerm !== "") {
       displayLabel = nodeAttrs[aggrPred];
     } else {
-      fullName = regex === "" ? "" : getNodeLabel(nodeAttrs, regexEx);
+      //fullName = regex === "" ? "" : getNodeLabel(nodeAttrs, regexEx);
+      fullName = "";
       displayLabel = shortenName(fullName);
     }
 
@@ -525,70 +576,11 @@ export function processGraph(
     }
   }
 
-  return [nodes, edges, createAxisPlot(groups), nodesIndex, edgesIndex];
-}
-
-export function sortStrings(a, b) {
-  var nameA = a.toLowerCase(), nameB = b.toLowerCase();
-  if (
-    nameA < nameB //sort string ascending
-  )
-    return -1;
-  if (nameA > nameB) return 1;
-  return 0; //default return value (no sorting)
-}
-
-export function getEndpointBaseURL() {
-  if (process.env.NODE_ENV === "production") {
-    // This is defined in index.html and we get it from the url.
-    return window.SERVER_URL;
-  }
-
-  // For development, we just connect to the Dgraph server at http://localhost:8080.
-  return "http://localhost:8080";
-}
-
-// getEndpoint returns a URL for the dgraph endpoint, optionally followed by
-// path string. Do not prepend `path` with slash.
-export function getEndpoint(path = '', options = { debug: true }) {
-  const baseURL = getEndpointBaseURL();
-  const url = `${baseURL}/${path}`;
-
-  if (options.debug) {
-    return `${url}?debug=true`;
-  }
-
-  return url;
-}
-
-function createCookie(name, val, days, options) {
-  let expires = '';
-  if (days) {
-    let date = new Date();
-    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-    expires = '; expires=' + date.toUTCString();
-  }
-
-  let cookie = name + '=' + val + expires + '; path=/';
-  if (options.crossDomain) {
-    cookie += '; domain=.dgraph.io';
-  }
-
-  document.cookie = cookie;
-}
-
-export function readCookie(name) {
-  let nameEQ = name + '=';
-  let ca = document.cookie.split(';');
-  for (let i = 0; i < ca.length; i++) {
-    var c = ca[i];
-    while (c.charAt(0) === ' ') c = c.substring(1,c.length);
-    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length,c.length);
-  }
-
-  return null;
-}
-
-export function eraseCookie(name, options) {
-  createCookie(name, '', -1, options);
+  return {
+    nodes,
+    edges,
+    labels: createAxisPlot(groups),
+    nodesIndex,
+    edgesIndex
+  };
 }

@@ -1,0 +1,24 @@
+.entity-selector {
+  padding: 11px 12px;
+  background: white;
+  border-top: 1px solid #d2d2d2;
+}
+
+.label-container {
+  display: inline-block;
+  padding: 0.5px 7px 1.5px;
+  border-radius: 5px;
+  margin-right: 9px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 7px;
+
+  .label-value {
+    text-transform: uppercase;
+    margin-right: 4px;
+  }
+
+  .shorthand {
+    font-weight: 400;
+  }
+}

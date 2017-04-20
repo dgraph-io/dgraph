@@ -1,3 +1,26 @@
+.app-layout {
+  display: flex;
+  flex-direction: auto;
+  height: 100vh;
+}
+
+.click-capture {
+  width: calc(100% - 358px);
+  height: 100%;
+  position: absolute;
+  top: 0;
+  z-index: 5;
+  opacity: 0.76;
+  background: white;
+}
+
+.main-content {
+  overflow-y: auto;
+  background-color: #ececec;
+  padding-top: 13px;
+  flex: auto;
+}
+
 .App-statistics {
     display: inline-block;
     padding: 5px;
@@ -95,4 +118,9 @@ input.form-control {
 
 .App-hide {
     display: none;
+}
+
+// override the library default
+.hljs {
+  background: none;
 }
