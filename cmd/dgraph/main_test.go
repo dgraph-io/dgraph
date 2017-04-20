@@ -460,6 +460,82 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestDeleteAll(t *testing.T) {
+	var q1 = `
+	{
+		user(id:alice2) {
+			~friend {
+				name
+			}
+		}
+	}
+	`
+	var q2 = `
+	{
+		user(func: anyofterms(name, "alice")) {
+			friend {
+				name
+			}
+		}
+	}
+	`
+
+	var m2 = `
+	mutation{
+		delete{
+			<alice> <friend> * .
+			<alice> <name> * .
+		}
+	}
+	`
+	var m1 = `
+	mutation {
+		set {
+			<alice> <friend> <alice1> .
+			<alice> <friend> <alice2> .
+			<alice> <name> "Alice" .
+			<alice1> <name> "Alice1" .
+			<alice2> <name> "Alice2" .
+		}
+	}
+	`
+
+	var s1 = `
+	mutation {
+		schema {
+      friend:uid @reverse .
+			name: string @index .
+		}
+	}
+	`
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(s1)
+	require.NoError(t, err)
+
+	err = runMutation(m1)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"~friend" : [{"name":"Alice"}]}]}`, output)
+
+	output, err = runQuery(q2)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}`,
+		output)
+
+	err = runMutation(m2)
+	require.NoError(t, err)
+
+	output, err = runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{}`, output)
+
+	output, err = runQuery(q2)
+	require.NoError(t, err)
+	require.JSONEq(t, `{}`, output)
+}
+
 func TestQuery(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: m, Http: true})
 	require.NoError(t, err)
