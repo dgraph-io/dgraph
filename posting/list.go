@@ -657,6 +657,12 @@ func (l *List) ValueFor(langs []string) (rval types.Val, rerr error) {
 	return l.valueFor(langs)
 }
 
+func (l *List) ValueForTag(tag string) (rval types.Val, rerr error) {
+	l.RLock()
+	defer l.RUnlock()
+	return l.valueForTag(tag)
+}
+
 func (l *List) value() (rval types.Val, rerr error) {
 	l.AssertRLock()
 	var found bool
@@ -676,10 +682,9 @@ func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
 
 	// look for language in preffered order
 	for _, lang := range langs {
-		langUid := farm.Fingerprint64([]byte(lang))
-		found, rval = l.findValue(langUid)
-		if found {
-			break
+		rval, rerr = l.valueForTag(lang)
+		if rerr == nil {
+			return rval, nil
 		}
 	}
 
@@ -702,6 +707,17 @@ func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
 		})
 	}
 
+	if !found {
+		return rval, ErrNoValue
+	}
+
+	return rval, nil
+}
+
+func (l *List) valueForTag(tag string) (rval types.Val, rerr error) {
+	l.AssertRLock()
+	uid := farm.Fingerprint64([]byte(tag))
+	found, rval := l.findValue(uid)
 	if !found {
 		return rval, ErrNoValue
 	}

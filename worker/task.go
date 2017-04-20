@@ -436,6 +436,43 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 			algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
 		}
 	}
+
+	// For string matching functions, check the language.
+	if (srcFn.fnType == StandardFn || srcFn.fnType == FullTextSearchFn) && len(srcFn.lang) > 0 {
+		uids := algo.MergeSorted(out.UidMatrix)
+		var values []types.Val
+		for _, uid := range uids.Uids {
+			key := x.DataKey(attr, uid)
+			pl, decr := posting.GetOrCreate(key, gid)
+
+			val, err := pl.ValueForTag(srcFn.lang)
+			if err != nil {
+				decr()
+				continue
+			}
+			// conver data from binary to appropriate format
+			strVal, err := types.Convert(val, types.StringID)
+			if err == nil {
+				values = append(values, strVal)
+			}
+			decr() // Decrement the reference count of the pl.
+		}
+
+		filter := stringFilter{
+			funcName: srcFn.fname,
+			funcType: srcFn.fnType,
+			lang:     srcFn.lang,
+			tokenMap: map[string]bool{},
+		}
+		for _, t := range srcFn.tokens {
+			filter.tokenMap[t] = false
+		}
+		filtered := matchStrings(uids, values, filter)
+		for i := 0; i < len(out.UidMatrix); i++ {
+			algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
+		}
+	}
+
 	out.IntersectDest = srcFn.intersectDest
 	return &out, nil
 }
@@ -449,6 +486,7 @@ type functionContext struct {
 	n               int
 	threshold       int64
 	fname           string
+	lang            string
 	fnType          FuncType
 	regex           *regexp.Regexp
 	isCompareAtRoot bool
@@ -553,6 +591,7 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 			return nil, err
 		}
 		fnName := strings.ToLower(q.SrcFunc[0])
+		fc.lang = q.SrcFunc[1]
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case RegexFn:
