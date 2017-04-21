@@ -25,7 +25,8 @@ const (
 	ValueEmpty                        // no UID and no value
 	ValueUid                          // UID
 	ValuePlain                        // plain old value without defined language tag
-	ValueMulti                        // Value which is part of a multi-value posting list (like language).
+	// Value which is part of a multi-value posting list (like language).
+	ValueMulti
 )
 
 // Helper function, to decide value type of DirectedEdge/Posting/NQuad
