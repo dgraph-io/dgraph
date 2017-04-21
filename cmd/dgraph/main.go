@@ -589,9 +589,35 @@ func addGroupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send request to corresponding node
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	groupId := r.URL.Query().Get("gid")
+	if len(groupId) == 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No group id defined.")
+		return
+	}
+	gid, err := strconv.ParseUint(groupId, 0, 32)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Not valid group id")
+		return
+	}
+	nodeId := r.URL.Query().Get("nodeId")
+	if len(nodeId) == 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No node id defined.")
+		return
+	}
+	nid, err := strconv.ParseUint(nodeId, 0, 64)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Not valid node id")
+		return
+	}
 
-	x.SetStatus(w, x.Success, "Server is shutting down")
+	if err := worker.StartServingGroup(ctx, nid, uint32(gid)); err != nil {
+		x.SetStatus(w, err.Error(), "AddGroup failed.")
+	} else {
+		x.SetStatus(w, x.Success, fmt.Sprint("Node %d started serving group %d",
+			nid, gid))
+	}
 }
 
 func removeGroupHandler(w http.ResponseWriter, r *http.Request) {
@@ -634,8 +660,39 @@ func addServerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// GetKnown groups and remove all groups served by that server
-	x.SetStatus(w, x.Success, "Server is shutting down")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	groupIds := r.URL.Query().Get("gid")
+	var gids []uint32
+	if len(groupIds) == 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No group ids defined.")
+		return
+	}
+	for _, groupId := range strings.Split(groupIds, ",") {
+		gid, err := strconv.ParseUint(groupId, 0, 32)
+		if err != nil {
+			x.SetStatus(w, x.ErrorInvalidRequest, "Not valid group ids")
+			return
+		}
+		gids = append(gids, uint32(gid))
+	}
+	nodeId := r.URL.Query().Get("nodeId")
+	if len(nodeId) == 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No node id defined.")
+		return
+	}
+	nid, err := strconv.ParseUint(nodeId, 0, 64)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Not valid node id")
+		return
+	}
+
+	if err := worker.AddServer(ctx, nid, gids); err != nil {
+		x.SetStatus(w, err.Error(), "AddServer failed.")
+	} else {
+		x.SetStatus(w, x.Success, fmt.Sprint("Node %d started serving groups %v",
+			nid, gids))
+	}
 }
 
 func removeServerHandler(w http.ResponseWriter, r *http.Request) {

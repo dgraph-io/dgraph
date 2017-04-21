@@ -260,6 +260,7 @@ func (n *node) RemoveFromCluster(ctx context.Context, pid uint64) error {
 		}
 	}
 	addr := n.peers.Get(pid)
+	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
 	if err := groups().syncBannedId(n.gid, pid, addr); err != nil {
 		return err
 	}
@@ -994,11 +995,36 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *workerp.Payload) (*
 	return &workerp.Payload{}, nil
 }
 
+func StartGroup(gid uint32) error {
+	node := gr.newNode(uint32(gid), *raftId, *myAddr)
+	err := schema.LoadFromDb(uint32(gid))
+	x.Checkf(err, "Schema load for group %d failed", gid)
+	node.InitAndStartNode(gr.wal)
+	return nil
+}
+
 func (w *grpcWorker) StartGroup(ctx context.Context, rc *taskp.RaftContext) (*workerp.Payload, error) {
 	if ctx.Err() != nil {
 		return &workerp.Payload{}, ctx.Err()
 	}
-	return &workerp.Payload{}, nil
+	x.AssertTrue(rc.Id == *raftId)
+
+	c := make(chan error, 1)
+	go func() { c <- StartGroup(rc.Group) }()
+
+	select {
+	case <-ctx.Done():
+		return &workerp.Payload{}, ctx.Err()
+	case err := <-c:
+		return &workerp.Payload{}, err
+	}
+}
+
+func StopGroup(ctx context.Context, gid uint32, nodeId uint64) error {
+	node := groups().Node(gid)
+	x.AssertTruef(node != nil, "Node %d not serving group %d", nodeId, gid)
+
+	return node.RemoveFromCluster(ctx, nodeId)
 }
 
 func (w *grpcWorker) StopGroup(ctx context.Context, rc *taskp.RaftContext) (*workerp.Payload, error) {
@@ -1006,13 +1032,12 @@ func (w *grpcWorker) StopGroup(ctx context.Context, rc *taskp.RaftContext) (*wor
 		return &workerp.Payload{}, ctx.Err()
 	}
 
-	node := groups().Node(rc.Group)
-	if node == nil {
+	if !groups().ServesGroup(rc.Group) {
 		return &workerp.Payload{}, x.Errorf("Node %d is not serving group %d", rc.Id, rc.Group)
 	}
 
 	c := make(chan error, 1)
-	go func() { c <- node.RemoveFromCluster(ctx, rc.Id) }()
+	go func() { c <- StopGroup(ctx, rc.Group, rc.Id) }()
 
 	select {
 	case <-ctx.Done():
@@ -1049,10 +1074,52 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *taskp.RaftContext) (*w
 	}
 }
 
+func StartServingGroup(ctx context.Context, nodeId uint64, gid uint32) error {
+	if nodeId == *raftId {
+		return StartGroup(gid)
+	}
+
+	// Get leader information for MY group.
+	paddr, found := groups().address(nodeId)
+	if !found {
+		return x.Errorf("Node with id %d not found", nodeId)
+	}
+	pools().connect(paddr)
+	fmt.Printf("StartServingGroup connected with: %q with node id: %d\n", paddr, nodeId)
+
+	pool := pools().get(paddr)
+	x.AssertTruef(pool != nil, "Unable to get pool for addr: %q for node: %d", paddr, nodeId)
+
+	conn, err := pool.Get()
+	x.Check(err)
+	defer pool.Put(conn)
+
+	c := workerp.NewWorkerClient(conn)
+	x.Printf("Calling StartServingGroup")
+	_, err = c.StartGroup(ctx, &taskp.RaftContext{
+		Id:    nodeId,
+		Group: gid,
+	})
+	return err
+}
+
+func AddServer(ctx context.Context, nodeId uint64, gids []uint32) error {
+	for _, gid := range gids {
+		if err := StartServingGroup(ctx, nodeId, gid); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func StopServingGroup(ctx context.Context, nodeId uint64, gid uint32) error {
 	_, found := groups().Server(nodeId, gid)
 	if !found {
 		return x.Errorf("Node %d doesn't serve group %d", nodeId, gid)
+	}
+
+	if groups().ServesGroup(gid) {
+		return StopGroup(ctx, gid, nodeId)
 	}
 
 	// Get leader information for MY group.
@@ -1077,28 +1144,10 @@ func StopServingGroup(ctx context.Context, nodeId uint64, gid uint32) error {
 }
 
 func RemoveServer(ctx context.Context, nodeId uint64) error {
-	_, found := groups().Server(nodeId, gid)
-	if !found {
-		return x.Errorf("Node %d doesn't serve group %d", nodeId, gid)
+	for _, n := range groups().nodes() {
+		if err := StopServingGroup(ctx, nodeId, n.gid); err != nil {
+			return err
+		}
 	}
-
-	// Get leader information for MY group.
-	pid, paddr := groups().Leader(gid)
-	pools().connect(paddr)
-	fmt.Printf("StopServingGroup connected with: %q with peer id: %d\n", paddr, pid)
-
-	pool := pools().get(paddr)
-	x.AssertTruef(pool != nil, "Unable to get pool for addr: %q for peer: %d", paddr, pid)
-
-	conn, err := pool.Get()
-	x.Check(err)
-	defer pool.Put(conn)
-
-	c := workerp.NewWorkerClient(conn)
-	x.Printf("Calling StopServingGroup")
-	_, err = c.StopGroup(ctx, &taskp.RaftContext{
-		Id:    nodeId,
-		Group: gid,
-	})
-	return err
+	return nil
 }

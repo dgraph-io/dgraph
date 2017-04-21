@@ -319,6 +319,20 @@ func (g *groupi) Leader(group uint32) (uint64, string) {
 	return all.list[0].NodeId, all.list[0].Addr
 }
 
+// Address will return the address of the node with given id
+func (g *groupi) address(nodeId uint64) (string, bool) {
+	g.RLock()
+	defer g.RUnlock()
+	for _, all := range g.all {
+		for _, s := range all.list {
+			if s.NodeId == nodeId {
+				return s.Addr, true
+			}
+		}
+	}
+	return "", false
+}
+
 func (g *groupi) KnownGroups() (gids []uint32) {
 	g.RLock()
 	defer g.RUnlock()
