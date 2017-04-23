@@ -1,0 +1,27 @@
+// Cannot be used lang tag for predicate ->>> #683
+{
+    me(func:anyof(type.object.name@en, "Films")){
+        type.object.name
+    }
+}
+
+// cannot be used "..." as term
+{
+query(func:anyof(name, "...")){...
+type.object.name
+}
+}
+
+
+
+var format1 = `query testQuery($a: int = 3  , $b: int =  4 ,  $c : int = 3){root(id: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}`
+
+var format2 = `{
+		"query": "query testQuery($a: int = 3  , $b: int =  4 ,  $c : int = 3){root(id: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}",
+		"variables": "{\"$a\": \"5\" }"
+	}`
+
+var format3 = `{
+		"query": "query testQuery($a: int = 3  , $b: int =  4 ,  $c : int = 3){root(id: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}",
+		"variables": {"$b": "5" }
+	}`

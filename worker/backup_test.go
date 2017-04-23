@@ -54,6 +54,7 @@ func populateGraphBackup(t *testing.T) {
 		"<4> <friend> <5> <author0> (since=2005-05-02T15:04:05,close=true,age=33,game=\"football\") .",
 		"<1> <name> \"pho\\ton\" <author0> .",
 		"<2> <name> \"pho\\ton\"@en <author0> .",
+		"<2> <zdata> \"-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000\"^^<xs:float> .",
 	}
 	idMap := map[string]uint64{
 		"1": 1,
@@ -105,7 +106,7 @@ func TestBackup(t *testing.T) {
 	// Remove already existing backup folders is any.
 	bdir, err := ioutil.TempDir("", "backup")
 	require.NoError(t, err)
-	defer os.RemoveAll(bdir)
+	//defer os.RemoveAll(bdir)
 
 	posting.CommitLists(10, 1)
 	time.Sleep(time.Second)

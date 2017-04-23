@@ -5,19 +5,20 @@ idx: 2
 port: 8082
 
 # Directory to store posting lists.
-p: p2
+p: /tmp/p2
 
 # Directory to store raft write-ahead logs.
-w: w2
+w: /tmp/w2
 
 # Port used by worker for internal communication.
 workerport: 12346
 
 groups: 0,1
 
-nomutations: true
+nomutations: false
 
 group_conf: groups.conf
 
 peer: localhost:12345
 
+tls: false

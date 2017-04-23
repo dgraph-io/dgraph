@@ -207,5 +207,12 @@ func GenerateTLSConfig(config TLSHelperConfig) (*tls.Config, error) {
 	tlsCfg.ServerName = config.ServerName
 	tlsCfg.BuildNameToCertificate()
 
+	tlsCfg.PreferServerCipherSuites = true
+
+	tlsCfg.NextProtos = []string{
+		"http/1.1", //http 1.1 support
+		"h2",       //http2 support
+	}
+
 	return tlsCfg, nil
 }

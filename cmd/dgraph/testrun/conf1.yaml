@@ -5,17 +5,43 @@ idx: 1
 port: 8080
 
 # Directory to store posting lists.
-p: p1
+p: /tmp/p1
 
 # Directory to store raft write-ahead logs.
-w: w1
+w: /tmp/w1
+
+backup: /tmp/backup
 
 # Port used by worker for internal communication.
 workerport: 12345
 
+gentlecommit: 0.5
+debugmode: false
+
 groups: 0,1
 
-nomutations: true
+nomutations: false
 
 group_conf: groups.conf
 
+bindall: true
+
+schema: schema_scalar
+
+stw_ram_mb: 1536
+
+tls.on: false
+tls.cert: ../test_data/cert.crt
+tls.cert_key: ../test_data/cert.key
+# tls.cert: tarrovs.xyz.crt
+# tls.cert_key: tarrovs.xyz.key
+# tls.cert_key_passphere: qwerty
+tls.min_version: TLS11
+tls.max_version: TLS12
+
+# tls.client_auth: "REQUIREANY"
+# tls.client_auth: "REQUIREANDVERIFY"
+# tls.client_auth: "REQUEST"
+tls.ca_certs: "../test_data/ca.pem"
+# # tls.client_ca_certs: ""
+tls.use_system_ca: true

@@ -5,10 +5,10 @@ idx: 3
 port: 8084
 
 # Directory to store posting lists.
-p: p3
+p: /tmp/p3
 
 # Directory to store raft write-ahead logs.
-w: w3
+w: /tmp/w3
 
 # Port used by worker for internal communication.
 workerport: 12347
@@ -21,3 +21,4 @@ group_conf: groups.conf
 
 peer: localhost:12345
 
+tls: false
