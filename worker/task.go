@@ -635,11 +635,16 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case RegexFn:
-		err = ensureArgsCount(q.SrcFunc, 1)
+		err = ensureArgsCount(q.SrcFunc, 2)
 		if err != nil {
 			return nil, err
 		}
-		fc.regex, err = cregexp.Compile("(?m)" + q.SrcFunc[2])
+		ignoreCase := q.SrcFunc[3] == "i"
+		matchType := "(?m)" // this is cregexp library specific
+		if ignoreCase {
+			matchType = "(?i)" + matchType
+		}
+		fc.regex, err = cregexp.Compile(matchType + q.SrcFunc[2])
 		if err != nil {
 			return nil, err
 		}

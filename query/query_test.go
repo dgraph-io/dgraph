@@ -2519,18 +2519,19 @@ func TestValidFulltextIndex(t *testing.T) {
 		`{"me":[{"name":"Michonne", "friend":[{"alias":"Bob Joe"}]}]}`, js)
 }
 
+// dob (date of birth) is not a string
 func TestFilterRegexError(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
       me(id:0x01) {
         name
-        friend @filter(regexp(dob, "^[a-z A-Z]+$")) {
+        friend @filter(regexp(dob, /^[a-z A-Z]+$/)) {
           name
         }
       }
     }
-  `
+`
 
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
@@ -2553,12 +2554,12 @@ func TestFilterRegex1(t *testing.T) {
     {
       me(id:0x01) {
         name
-        friend @filter(regexp(name, "^[a-z A-Z]+$")) {
+        friend @filter(regexp(name, /^[a-z A-Z]+$/)) {
           name
         }
       }
     }
-  `
+`
 
 	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
@@ -2571,12 +2572,12 @@ func TestFilterRegex2(t *testing.T) {
     {
       me(id:0x01) {
         name
-        friend @filter(regexp(name, "^[^ao]+$")) {
+        friend @filter(regexp(name, /^[^ao]+$/)) {
           name
         }
       }
     }
-  `
+`
 
 	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
@@ -2589,12 +2590,12 @@ func TestFilterRegex3(t *testing.T) {
     {
       me(id:0x01) {
         name
-        friend @filter(regexp(name, "^Rick")) {
+        friend @filter(regexp(name, /^Rick/)) {
           name
         }
       }
     }
-  `
+`
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
@@ -2608,12 +2609,12 @@ func TestFilterRegex4(t *testing.T) {
     {
       me(id:0x01) {
         name
-        friend @filter(regexp(name, "((en)|(xo))n")) {
+        friend @filter(regexp(name, /((en)|(xo))n/)) {
           name
         }
       }
     }
-  `
+`
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
@@ -2627,12 +2628,12 @@ func TestFilterRegex5(t *testing.T) {
     {
       me(id:0x01) {
         name
-        friend @filter(regexp(name, "^[a-zA-z]*[^Kk ]?[Nn]ight")) {
+        friend @filter(regexp(name, /^[a-zA-z]*[^Kk ]?[Nn]ight/)) {
           name
         }
       }
     }
-  `
+`
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
@@ -2642,16 +2643,16 @@ func TestFilterRegex5(t *testing.T) {
 func TestFilterRegex6(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
-		pattern @filter(regexp(value, "miss((issippi)|(ouri))")) {
+		pattern @filter(regexp(value, /miss((issippi)|(ouri))/)) {
 			value
 		}
       }
     }
-  `
+`
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
@@ -2661,16 +2662,16 @@ func TestFilterRegex6(t *testing.T) {
 func TestFilterRegex7(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
-		pattern @filter(regexp(value, "[aeiou]mission")) {
+		pattern @filter(regexp(value, /[aeiou]mission/)) {
 			value
 		}
       }
     }
-  `
+`
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
@@ -2680,16 +2681,16 @@ func TestFilterRegex7(t *testing.T) {
 func TestFilterRegex8(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
-		pattern @filter(regexp(value, "^(trans)?mission")) {
+		pattern @filter(regexp(value, /^(trans)?mission/)) {
 			value
 		}
       }
     }
-  `
+`
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
@@ -2699,16 +2700,16 @@ func TestFilterRegex8(t *testing.T) {
 func TestFilterRegex9(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
-		pattern @filter(regexp(value, "s.{2,5}mission")) {
+		pattern @filter(regexp(value, /s.{2,5}mission/)) {
 			value
 		}
       }
     }
-  `
+`
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
@@ -2718,20 +2719,82 @@ func TestFilterRegex9(t *testing.T) {
 func TestFilterRegex10(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
-		pattern @filter(regexp(value, "[^m]iss")) {
+		pattern @filter(regexp(value, /[^m]iss/)) {
 			value
 		}
       }
     }
-  `
+`
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"pattern":[{"value":"mississippi"}, {"value":"whissle"}]}]}`, js)
+}
+
+func TestFilterRegex11(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(50 * time.Millisecond)
+	query := `
+    {
+	  me(id:0x1234) {
+		pattern @filter(regexp(value, /SUB[cm]/i)) {
+			value
+		}
+      }
+    }
+`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"pattern":[{"value":"submission"}, {"value":"subcommission"}]}]}`, js)
+}
+
+// case insensitive mode may be turned on with modifier:
+// http://www.regular-expressions.info/modifiers.html - this is completely legal
+func TestFilterRegex12(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(50 * time.Millisecond)
+	query := `
+    {
+	  me(id:0x1234) {
+		pattern @filter(regexp(value, /(?i)SUB[cm]/)) {
+			value
+		}
+      }
+    }
+`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"pattern":[{"value":"submission"}, {"value":"subcommission"}]}]}`, js)
+}
+
+// case insensitive mode may be turned on and off with modifier:
+// http://www.regular-expressions.info/modifiers.html - this is completely legal
+func TestFilterRegex13(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(50 * time.Millisecond)
+	query := `
+    {
+	  me(id:0x1234) {
+		pattern @filter(regexp(value, /(?i)SUB[cm](?-i)ISSION/)) {
+			value
+		}
+      }
+    }
+`
+
+	// no results are returned, becaues case insensive mode is turned off before 'ISSION'
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`, js)
 }
 
 func TestToFastJSONFilterUID(t *testing.T) {
