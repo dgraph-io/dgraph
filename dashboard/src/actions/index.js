@@ -4,9 +4,9 @@ import {
     isNotEmpty,
     showTreeView,
     processGraph,
-    dgraphAddress,
-    dgraphQuery
+    getEndpoint
 } from "../containers/Helpers";
+import SHA256 from "crypto-js/sha256";
 
 // TODO - Check if its better to break this file down into multiple files.
 
@@ -113,9 +113,10 @@ export const runQuery = query => {
     return dispatch => {
         dispatch(resetResponseState());
         dispatch(isFetching());
-        timeout(
+
+        return timeout(
             60000,
-            fetch(dgraphAddress() + "/query?debug=true", {
+            fetch(getEndpoint('query', { debug: true }), {
                 method: "POST",
                 mode: "cors",
                 headers: {
@@ -200,28 +201,23 @@ export const queryFound = found => ({
     found: found
 });
 
-const doShareMutation = (dispatch, getState) => {
-    let query = getState().query.text,
-        stringifiedQuery = JSON.stringify(encodeURI(query)),
-        mutation = `
-    mutation {
-        set {
-            <_:share> <_share_> ${stringifiedQuery} .
-        }
-    }`;
+// createShare posts the query to the server to be persisted
+const createShare = (dispatch, getState) => {
+    const query = getState().query.text;
+    const stringifiedQuery = encodeURI(query);
 
-    fetch(dgraphQuery(false), {
+    fetch(getEndpoint('share'), {
         method: "POST",
         mode: "cors",
         headers: {
             Accept: "application/json",
             "Content-Type": "text/plain"
         },
-        body: mutation
+        body: stringifiedQuery
     })
         .then(checkStatus)
         .then(response => response.json())
-        .then(function handleResponse(result) {
+        .then((result) => {
             if (result.uids && result.uids.share) {
                 dispatch(updateShareId(result.uids.share));
             }
@@ -237,29 +233,23 @@ const doShareMutation = (dispatch, getState) => {
 };
 
 export const getShareId = (dispatch, getState) => {
-    let query = getState().query.text;
+    const query = getState().query.text;
     if (query === "") {
         return;
     }
-    let stringifiedQuery = JSON.stringify(encodeURI(query)),
-        // Considering that index is already set on the pred, schema mutation
-        // should be a no-op. Lets see if we have already stored this query by
-        // performing an exact match.
-        checkQuery = `
-mutation {
-    schema {
-        _share_: string @index(exact) .
-    }
-}
+    const encodedQuery = encodeURI(query);
+    const queryHash = SHA256(encodedQuery).toString();
+    const checkQuery = `
 {
-    query(func:eq(_share_, ${stringifiedQuery})) {
+    query(func:eq(_share_hash_, ${queryHash})) {
         _uid_
+        _share_
     }
 }`;
 
-    timeout(
+    return timeout(
         6000,
-        fetch(dgraphQuery(false), {
+        fetch(getEndpoint('query'), {
             method: "POST",
             mode: "cors",
             headers: {
@@ -270,12 +260,22 @@ mutation {
         })
             .then(checkStatus)
             .then(response => response.json())
-            .then(function handleResponse(result) {
-                if (result.query && result.query.length > 0) {
-                    dispatch(updateShareId(result.query[0]["_uid_"]));
-                } else {
-                    // Else do a mutation to store the query.
-                    doShareMutation(dispatch, getState);
+            .then((result) => {
+                const matchingQueries = result.query;
+
+                // If no match, store the query
+                if (!matchingQueries) {
+                    return createShare(dispatch, getState);
+                }
+                if (matchingQueries.length === 1) {
+                    return dispatch(updateShareId(result.query[0]._uid_));
+                } else if (matchingQueries.length > 1) {
+                    for (let i = 0; i < matchingQueries.length; i++) {
+                        const q = matchingQueries[i];
+                        if (`"${q._share_}"` === encodedQuery) {
+                            return dispatch(updateShareId(q._uid_));
+                        }
+                    }
                 }
             })
     ).catch(function(error) {
@@ -291,7 +291,7 @@ export const getQuery = shareId => {
     return dispatch => {
         timeout(
             6000,
-            fetch(dgraphQuery(false), {
+            fetch(getEndpoint('query'), {
                 method: "POST",
                 mode: "cors",
                 headers: {
@@ -307,50 +307,15 @@ export const getQuery = shareId => {
                 .then(response => response.json())
                 .then(function(result) {
                     if (result.query && result.query.length > 0) {
-                        dispatch(
-                            selectQuery(decodeURI(result.query[0]["_share_"]))
-                        );
-                        return;
+                        dispatch(selectQuery(decodeURI(result.query[0]._share_)));
+                    } else {
+                        dispatch(queryFound(false));
                     }
-                    dispatch(queryFound(false));
                 })
         ).catch(function(error) {
             dispatch(
                 saveErrorResponse(
                     `Got error while getting query for id: ${shareId}, err: ` +
-                        error.message
-                )
-            );
-        });
-    };
-};
-
-const updateAllowed = allowed => ({
-    type: "UPDATE_ALLOWED",
-    allowed: allowed
-});
-
-export const initialServerState = () => {
-    const endpoint = [dgraphAddress(), "ui/init"].join("/");
-    return dispatch => {
-        timeout(
-            6000,
-            fetch(endpoint, {
-                method: "GET",
-                mode: "cors",
-                headers: {
-                    Accept: "application/json"
-                }
-            })
-                .then(checkStatus)
-                .then(response => response.json())
-                .then(function(result) {
-                    dispatch(updateAllowed(result.share));
-                })
-        ).catch(function(error) {
-            dispatch(
-                saveErrorResponse(
-                    "Got error while communicating with server: " +
                         error.message
                 )
             );

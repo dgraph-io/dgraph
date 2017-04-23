@@ -20,6 +20,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/gob"
 	"encoding/json"
@@ -71,7 +72,6 @@ var (
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	nomutations    = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	noshare        = flag.Bool("noshare", false, "Don't allow sharing queries through the UI.")
 	tracing        = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
@@ -90,6 +90,8 @@ var (
 	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min version.")
 	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max version.")
 )
+
+var mutationNotAllowedErr = x.Errorf("Mutations are forbidden on this server.")
 
 type mutationResult struct {
 	edges   []*taskp.DirectedEdge
@@ -231,29 +233,15 @@ func applyMutations(ctx context.Context, m *taskp.Mutations) error {
 	return nil
 }
 
-const INTERNAL_SHARE = "_share_"
-
-func ismutationAllowed(mutation *graphp.Mutation) error {
+func ismutationAllowed(ctx context.Context, mutation *graphp.Mutation) bool {
 	if *nomutations {
-		if *noshare {
-			return x.Errorf("Mutations are forbidden on this server.")
+		shareAllowed, ok := ctx.Value("_share_").(bool)
+		if !ok || !shareAllowed {
+			return false
 		}
+	}
 
-		// Sharing is allowed, lets check that mutation should have only internal
-		// share predicate.
-		if !hasOnlySharePred(mutation) {
-			return x.Errorf("Only mutations with: %v as predicate are allowed ",
-				INTERNAL_SHARE)
-		}
-	}
-	// Mutations are allowed but sharing isn't allowed.
-	if *noshare {
-		if hasSharePred(mutation) {
-			return x.Errorf("Mutations with: %v as predicate are not allowed ",
-				INTERNAL_SHARE)
-		}
-	}
-	return nil
+	return true
 }
 
 func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string]uint64, error) {
@@ -262,8 +250,8 @@ func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string
 	var err error
 	var mr mutationResult
 
-	if err := ismutationAllowed(mutation); err != nil {
-		return nil, err
+	if !ismutationAllowed(ctx, mutation) {
+		return nil, mutationNotAllowedErr
 	}
 
 	if mr, err = convertToEdges(ctx, mutation.Set); err != nil {
@@ -560,6 +548,58 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
 }
 
+func shareHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	addCorsHeaders(w)
+
+	if r.Method != "POST" {
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	// Set context to allow mutation
+	ctx := context.WithValue(context.Background(), "_share_", true)
+
+	defer r.Body.Close()
+	rawQuery, err := ioutil.ReadAll(r.Body)
+	if err != nil || len(rawQuery) == 0 {
+		x.TraceError(ctx, x.Wrapf(err, "Error while reading the stringified query payload"))
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
+		return
+	}
+
+	// Generate mutation with query and hash
+	queryHash := sha256.Sum256(rawQuery)
+	mutation := gql.Mutation{
+		Set: fmt.Sprintf("<_:share> <_share_> %q . \n <_:share> <_share_hash_> \"%x\" .", rawQuery, queryHash),
+	}
+
+	var allocIds map[string]uint64
+	var allocIdsStr map[string]string
+	if allocIds, err = mutationHandler(ctx, &mutation); err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+	// convert the new UIDs to hex string.
+	allocIdsStr = make(map[string]string)
+	for k, v := range allocIds {
+		allocIdsStr[k] = fmt.Sprintf("%#x", v)
+	}
+
+	payload := map[string]interface{}{
+		"code":    x.Success,
+		"message": "Done",
+		"uids":    allocIdsStr,
+	}
+
+	if res, err := json.Marshal(payload); err == nil {
+		w.Write(res)
+	} else {
+		x.SetStatus(w, "Error", "Unable to marshal map")
+	}
+}
+
 // storeStatsHandler outputs some basic stats for data store.
 func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
@@ -647,6 +687,9 @@ func (s *grpcServer) Run(ctx context.Context,
 		defer tr.Finish()
 		ctx = trace.NewContext(ctx, tr)
 	}
+
+	// Sanitize the context of the keys used for internal purposes only
+	ctx = context.WithValue(ctx, "_share_", nil)
 
 	resp = new(graphp.Response)
 	if len(req.Query) == 0 && req.Mutation == nil {
@@ -830,6 +873,7 @@ func setupServer(che chan error) {
 
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/query", queryHandler)
+	http.HandleFunc("/share", shareHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
@@ -840,7 +884,6 @@ func setupServer(che chan error) {
 	reg := regexp.MustCompile(`\/0[xX][0-9a-fA-F]+`)
 	http.Handle("/", homeHandler(http.FileServer(http.Dir(uiDir)), reg))
 	http.HandleFunc("/ui/keywords", keywordHandler)
-	http.HandleFunc("/ui/init", initialState)
 
 	// Initilize the servers.
 	go serveGRPC(grpcl)

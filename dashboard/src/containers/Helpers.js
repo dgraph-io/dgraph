@@ -538,7 +538,7 @@ export function sortStrings(a, b) {
   return 0; //default return value (no sorting)
 }
 
-export function dgraphAddress() {
+export function getEndpointBaseURL() {
   if (process.env.NODE_ENV === "production") {
     // This is defined in index.html and we get it from the url.
     return window.SERVER_URL;
@@ -548,10 +548,47 @@ export function dgraphAddress() {
   return "http://localhost:8080";
 }
 
-export function dgraphQuery(debug = true) {
-  let url = [dgraphAddress(), "query"].join("/");
-  if (debug) {
-    url = [url, "debug=true"].join("?");
+// getEndpoint returns a URL for the dgraph endpoint, optionally followed by
+// path string. Do not prepend `path` with slash.
+export function getEndpoint(path = '', options = { debug: true }) {
+  const baseURL = getEndpointBaseURL();
+  const url = `${baseURL}/${path}`;
+
+  if (options.debug) {
+    return `${url}?debug=true`;
   }
+
   return url;
+}
+
+function createCookie(name, val, days, options) {
+  let expires = '';
+  if (days) {
+    let date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = '; expires=' + date.toUTCString();
+  }
+
+  let cookie = name + '=' + val + expires + '; path=/';
+  if (options.crossDomain) {
+    cookie += '; domain=.dgraph.io';
+  }
+
+  document.cookie = cookie;
+}
+
+export function readCookie(name) {
+  let nameEQ = name + '=';
+  let ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    var c = ca[i];
+    while (c.charAt(0) === ' ') c = c.substring(1,c.length);
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length,c.length);
+  }
+
+  return null;
+}
+
+export function eraseCookie(name, options) {
+  createCookie(name, '', -1, options);
 }
