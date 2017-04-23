@@ -2841,7 +2841,7 @@ func TestParseQueryWithAttrLang(t *testing.T) {
 func TestParseQueryWithAttrLang2(t *testing.T) {
 	query := `
 	{
-	  me(func:regexp(name, "^[a-zA-z]*[^Kk ]?[Nn]ight"), orderasc: name@en, first:5) {
+	  me(func:regexp(name, /^[a-zA-z]*[^Kk ]?[Nn]ight/), orderasc: name@en, first:5) {
 		name@en
 		name@de
 		name@it
@@ -2853,6 +2853,83 @@ func TestParseQueryWithAttrLang2(t *testing.T) {
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
 	require.Equal(t, "name@en", res.Query[0].Args["orderasc"])
+}
+
+func TestParseRegexp1(t *testing.T) {
+	query := `
+	{
+	  me(ix:0x1) {
+	    name
+		friend @filter(regexp(name@en, /case INSENSITIVE regexp with \/ escaped value/i)) {
+	      name@en
+	    }
+	  }
+    }
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, []string{"case INSENSITIVE regexp with / escaped value", "i"},
+		res.Query[0].Children[1].Filter.Func.Args)
+}
+
+func TestParseRegexp2(t *testing.T) {
+	query := `
+	{
+	  me(func:regexp(name@en, /another\/compilicated ("") regexp('')/)) {
+	    name
+	  }
+    }
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, []string{"another/compilicated (\"\") regexp('')", ""},
+		res.Query[0].Func.Args)
+}
+
+func TestParseRegexp3(t *testing.T) {
+	query := `
+	{
+	  me(func:allofterms(name, "barack")) @filter(regexp(secret, /whitehouse[0-9]{1,4}/fLaGs)) {
+	    name
+	  }
+    }
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, []string{"whitehouse[0-9]{1,4}", "fLaGs"},
+		res.Query[0].Filter.Func.Args)
+}
+
+func TestParseRegexp4(t *testing.T) {
+	query := `
+	{
+	  me(func:regexp(name@en, /pattern/123)) {
+	    name
+	  }
+    }
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	// only [a-zA-Z] characters can be used as flags
+	require.Error(t, err)
+}
+
+func TestParseRegexp5(t *testing.T) {
+	query := `
+	{
+	  me(func:regexp(name@en, /pattern/flag123)) {
+	    name
+	  }
+    }
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	// only [a-zA-Z] characters can be used as flags
+	require.Error(t, err)
 }
 
 func TestMain(m *testing.M) {
