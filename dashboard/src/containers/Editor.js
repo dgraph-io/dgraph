@@ -10,7 +10,7 @@ import {
 } from "react-bootstrap";
 
 import { runQuery, updateRegex, selectQuery, updateShareId } from "../actions";
-import { timeout, checkStatus, sortStrings, dgraphAddress } from "./Helpers";
+import { timeout, checkStatus, sortStrings, getEndpointBaseURL } from "./Helpers";
 import "../assets/css/Editor.css";
 
 require("codemirror/addon/hint/show-hint.css");
@@ -90,7 +90,7 @@ class Editor extends Component {
     let keywords = [];
     timeout(
       1000,
-      fetch(dgraphAddress() + "/ui/keywords", {
+      fetch(getEndpointBaseURL() + "/ui/keywords", {
         method: "GET",
         mode: "cors"
       })
@@ -123,7 +123,7 @@ class Editor extends Component {
 
     timeout(
       1000,
-      fetch(dgraphAddress() + "/query", {
+      fetch(getEndpointBaseURL() + "/query", {
         method: "POST",
         mode: "cors",
         body: "schema {}"
