@@ -75,17 +75,11 @@ func processSchemaFile(file string, batch *client.BatchMutation) {
 	defer f.Close()
 
 	var reader io.Reader
-	reader, err = gzip.NewReader(f)
-	if err != nil {
-		if err == gzip.ErrHeader {
-			log.Println("Schema file is not a valid gzip file, reading as plain text instead.")
-			if _, err = f.Seek(0, 0); err != nil {
-				log.Fatal(err)
-			}
-			reader = f
-		} else {
-			log.Fatal(err)
-		}
+	if size := len(file); size > 3 && strings.ToLower(file[size-3:size]) == ".gz" {
+		reader, err = gzip.NewReader(f)
+		x.Check(err)
+	} else {
+		reader = f
 	}
 
 	var buf bytes.Buffer
