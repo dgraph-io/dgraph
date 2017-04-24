@@ -364,7 +364,7 @@ func checkValueType(vm varMap) error {
 }
 
 func substituteVar(f string, res *string, vmap varMap) error {
-	if f[0] == '$' {
+	if len(f) > 0 && f[0] == '$' {
 		va, ok := vmap[f]
 		if !ok {
 			return x.Errorf("Variable not defined %v", f)
@@ -1847,6 +1847,11 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						x.Errorf("Expected one variable inside var() of aggregator but got %v", count)
 					}
 					child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
+					child.Attr = "var"
+					child.Func = &Function{
+						Name:     valLower,
+						NeedsVar: child.NeedsVar,
+					}
 					it.Next() // Skip the closing ')'
 					child.IsInternal = true
 				} else {

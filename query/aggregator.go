@@ -255,6 +255,47 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	return nil
 }
 
+func (ag *aggregator) ApplyConverted(val types.Val) {
+	if ag.result.Value == nil {
+		ag.result = val
+		ag.count++
+		return
+	}
+
+	va := ag.result
+	vb := val
+	var res types.Val
+	switch ag.name {
+	case "min":
+		r, err := types.Less(va, vb)
+		if err == nil && !r {
+			res = vb
+		} else {
+			res = va
+		}
+	case "max":
+		r, err := types.Less(va, vb)
+		if err == nil && r {
+			res = vb
+		} else {
+			res = va
+		}
+	case "sum", "avg":
+		if va.Tid == types.IntID && vb.Tid == types.IntID {
+			va.Value = va.Value.(int64) + vb.Value.(int64)
+		} else if va.Tid == types.FloatID && vb.Tid == types.FloatID {
+			va.Value = va.Value.(float64) + vb.Value.(float64)
+		} else {
+			// This pair cannot be summed. So pass.
+		}
+		res = va
+	default:
+		x.Fatalf("Unhandled aggregator function %v", ag.name)
+	}
+	ag.count++
+	ag.result = res
+}
+
 func (ag *aggregator) Apply(val *taskp.Value) {
 	if ag.result.Value == nil {
 		v, err := convertTo(val)

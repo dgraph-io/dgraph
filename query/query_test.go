@@ -1626,6 +1626,77 @@ func TestMultiCountSort(t *testing.T) {
 		js)
 }
 
+func TestMultiLevelAgg(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+	{
+		sumorder(func: anyofterms(name, "michonne rick andrea")) {
+			name
+			friend {
+				s as count(friend)
+			}
+			sum(var(s))
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"sumorder":[{"friend":[{"friend":[{"count":1}]},{"friend":[{"count":0}]},{"friend":[{"count":0}]},{"friend":[{"count":1}]},{"friend":[{"count":0}]}],"name":"Michonne","sum[var[s]]":2},{"friend":[{"friend":[{"count":5}]}],"name":"Rick Grimes","sum[var[s]]":5},{"friend":[{"friend":[{"count":0}]}],"name":"Andrea","sum[var[s]]":0},{"name":"Andrea With no friends"}]}`,
+		js)
+}
+
+func TestMultiLevelAgg1(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+	{
+		var(func: anyofterms(name, "michonne rick andrea")) @filter(gt(count(friend), 0)){
+			friend {
+				s as count(friend)
+			}
+			ss as sum(var(s))
+		}
+
+		sumorder(id: var(ss), orderasc: var(ss)) {
+			name
+			var(ss)
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"sumorder":[{"name":"Andrea","var[ss]":0},{"name":"Michonne","var[ss]":2},{"name":"Rick Grimes","var[ss]":5}]}`,
+		js)
+}
+
+func TestMultiLevelAgg1Error(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+	{
+		var(func: anyofterms(name, "michonne rick andrea")) @filter(gt(count(friend), 0)){
+			friend {
+				s as count(friend)
+				ss as sum(var(s))
+			}
+		}
+
+		sumorder(id: var(ss), orderasc: var(ss)) {
+			name
+			var(ss)
+		}
+	}
+`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.Error(t, queryErr)
+
+}
+
 func TestMultiAggSort(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
@@ -1839,7 +1910,7 @@ func TestMinError1(t *testing.T) {
 
 	var l Latency
 	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.NotNil(t, queryErr)
+	require.Error(t, queryErr)
 }
 
 func TestMinError2(t *testing.T) {
