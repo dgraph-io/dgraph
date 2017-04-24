@@ -280,7 +280,7 @@ func TestFacetsMutation(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
 	delEdgeToUID(t, "friend", 1, 24) // Delete friendship between Michonne and Glenn
-	friendFacets := map[string]string{"since": "2001-11-10", "close": "false", "family": "false"}
+	friendFacets := map[string]string{"since": "2001-11-10T00:00:00Z", "close": "false", "family": "false"}
 	addEdgeToUID(t, "friend", 1, 101, friendFacets) // and 101 is not close friend now.
 	query := `
 		{

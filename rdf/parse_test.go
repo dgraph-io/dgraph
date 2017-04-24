@@ -660,7 +660,7 @@ var testNQuads = []struct {
 	},
 	// Should parse dates
 	{
-		input: `_:alice <knows> "stuff" (key1=2002-10-02T15:00:00.05Z, key2=2006-01-02T15:04:05, key3=2006-01-02) .`,
+		input: `_:alice <knows> "stuff" (key1=2002-10-02T15:00:00.05Z, key2=2006-01-02T15:04:05, key3=2006-01-02T00:00:00Z) .`,
 		nq: graphp.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
