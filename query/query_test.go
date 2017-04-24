@@ -4863,6 +4863,12 @@ children: <
     >
   >
   properties: <
+    prop: "fn"
+    value: <
+      str_val: "Glenn Rhee"
+    >
+  >
+  properties: <
     prop: "sn"
     value: <
       str_val: "Andre"
@@ -4930,7 +4936,7 @@ func TestNormalizeDirective(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"d":"1910-01-02","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1909-05-05","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-01-10","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1901-01-15","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"}]}`,
+		`{"me":[{"d":"1910-01-02","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1909-05-05","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-01-10","fn":"Glenn Rhee","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1901-01-15","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"}]}`,
 		js)
 }
 

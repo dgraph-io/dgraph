@@ -177,7 +177,7 @@ mutation {
 }' | python -m json.tool | less
 ```
 
-If you want to delete all the objects/values of a `S P *` triple, you can do. 
+If you want to delete all the objects/values of a `S P *` triple, you can do.
 ```
 curl localhost:8080/query -XPOST -d $'
 mutation {
@@ -1486,7 +1486,7 @@ query {
 			name
 			age
 			sum(age)
-			avg(age)			
+			avg(age)
 		}
 	}
 }' | python -m json.tool | less
@@ -1651,7 +1651,7 @@ The supported operators are as follows:
 | `logbase(a,b)` | int, float | Returns `log(a)` to the base `b`|
 | `cond(a, b, c)`    | first operand must be a boolean  | selects `b` if `a` is true else `c` |
 
-A simple example is: 
+A simple example is:
 
 {{< runnable >}}
 {
@@ -2161,8 +2161,15 @@ Queries can have a `@normalize` directive, which if supplied at the root, the re
       release_date
       starring {
         performance.actor @filter(anyofterms(name, "tom hanks")) {
-          a: name@en
+          pa: name@en
         }
+        performance.character {
+          pc: name@en
+        }
+      }
+      }
+      country {
+        c: name@en
       }
     }
   }
