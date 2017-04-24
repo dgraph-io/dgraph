@@ -75,7 +75,7 @@ func processSchemaFile(file string, batch *client.BatchMutation) {
 	defer f.Close()
 
 	var reader io.Reader
-	if size := len(file); size > 3 && strings.ToLower(file[size-3:size]) == ".gz" {
+	if strings.HasSuffix(strings.ToLower(file), ".gz") {
 		reader, err = gzip.NewReader(f)
 		x.Check(err)
 	} else {
