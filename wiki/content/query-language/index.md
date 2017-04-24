@@ -1443,8 +1443,9 @@ Aggregation functions that are supported are `min, max, sum, avg`. While min and
 {
   director(id: m.06pj8) {
     director.film {
-    	min(initial_release_date)
-    }
+    	x as initial_release_date
+		}
+		min(var(x))
   }
 }
 {{< /runnable >}}
@@ -1455,8 +1456,9 @@ Aggregation functions that are supported are `min, max, sum, avg`. While min and
 {
   director(id: m.06pj8) {
     director.film {
-    	max(initial_release_date)
+    	x as initial_release_date
     }
+		max(var(x))
   }
 }
 {{< /runnable >}}
@@ -1484,43 +1486,12 @@ query {
 	me(id:0x01) {
 		friend {
 			name
-			age
-			sum(age)
-			avg(age)			
+			a as age
 		}
+		sum(var(a))
+		avg(var(a))			
 	}
 }' | python -m json.tool | less
-```
-
-Output:
-
-```
-{
-    "me": [
-        {
-            "friend": [
-                {
-                    "age": 99,
-                    "name": "Tom"
-                },
-                {
-                    "age": 100,
-                    "name": "Jerry"
-                },
-                {
-                    "age": 101,
-                    "name": "Teddy"
-                },
-                {
-                    "sum(age)": 300
-                },
-                {
-                    "avg(age)": 100.0
-                }
-            ]
-        }
-    ]
-}
 ```
 
 ## Multiple Query Blocks
@@ -1621,11 +1592,13 @@ Value variables are those which store the scalar values (unlike the UID lists wh
   genre(id: var(B), orderasc: var(A)) @filter(gt(count(~genre), 30000)){
     var(A)
     ~genre {
-      min(name)
-      max(name)
-      min(initial_release_date)
-      max(initial_release_date)
-    }
+      n as name 
+			m as initial_release_date
+		}
+		min(var(n))
+    max(var(n))
+    min(var(m))
+    max(var(m))
   }
 }
 {{< /runnable >}}
