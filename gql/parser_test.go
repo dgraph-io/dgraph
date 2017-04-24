@@ -390,7 +390,7 @@ func TestParseQueryWithLevelAgg(t *testing.T) {
 	{	
 		var(id:0x0a) {
 			friends {
-				a as sum(age)
+				a as count(age)
 			}
 			s as sum(var(a))
 		}
@@ -421,10 +421,11 @@ func TestParseQueryWithVarValAggCombination(t *testing.T) {
 
 		var(id:0x0a) {
 			L as friends {
-				a as min(age)
-				b as max(age)
-				c as math(a + b)
+				x as age
 			}
+			a as min(var(x))
+			b as max(var(x))
+			c as math(a + b)
 		}
 	}
 `
@@ -442,14 +443,13 @@ func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	require.Equal(t, 1, len(res.Query[0].Children[1].NeedsVar))
 	require.Equal(t, "c", res.Query[0].Children[1].NeedsVar[0].Name)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
-	require.Equal(t, "a", res.Query[1].Children[0].Children[0].Var)
-	require.Equal(t, "b", res.Query[1].Children[0].Children[1].Var)
-	require.Equal(t, "c", res.Query[1].Children[0].Children[2].Var)
-	require.True(t, res.Query[1].Children[0].Children[2].IsInternal)
-	require.NotNil(t, res.Query[1].Children[0].Children[2].MathExp)
-	require.Equal(t, "+", res.Query[1].Children[0].Children[2].MathExp.Fn)
-	require.Equal(t, "a", res.Query[1].Children[0].Children[2].MathExp.Child[0].Var)
-	require.Equal(t, "b", res.Query[1].Children[0].Children[2].MathExp.Child[1].Var)
+	require.Equal(t, "a", res.Query[1].Children[1].Var)
+	require.Equal(t, "b", res.Query[1].Children[2].Var)
+	require.Equal(t, "c", res.Query[1].Children[3].Var)
+	require.NotNil(t, res.Query[1].Children[3].MathExp)
+	require.Equal(t, "+", res.Query[1].Children[3].MathExp.Fn)
+	require.Equal(t, "a", res.Query[1].Children[3].MathExp.Child[0].Var)
+	require.Equal(t, "b", res.Query[1].Children[3].MathExp.Child[1].Var)
 }
 
 func TestParseQueryWithVarValAgg(t *testing.T) {
@@ -461,8 +461,9 @@ func TestParseQueryWithVarValAgg(t *testing.T) {
 
 		var(id:0x0a) {
 			L AS friends {
-				n AS min(name)
+				na as name
 			}
+			n as min(var(na))
 		}
 	}
 `
@@ -477,8 +478,9 @@ func TestParseQueryWithVarValAgg(t *testing.T) {
 	require.Equal(t, "n", res.Query[0].Args["orderasc"])
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
-	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
-	require.Equal(t, "min", res.Query[1].Children[0].Children[0].Func.Name)
+	require.Equal(t, "na", res.Query[1].Children[0].Children[0].Var)
+	require.Equal(t, "n", res.Query[1].Children[1].Var)
+	require.Equal(t, "min", res.Query[1].Children[1].Func.Name)
 }
 
 func TestParseQueryWithVarValCount(t *testing.T) {
