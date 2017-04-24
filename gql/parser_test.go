@@ -385,6 +385,32 @@ func TestParseQueryWithVarValAggNested_Error2(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseQueryWithLevelAgg(t *testing.T) {
+	query := `
+	{	
+		var(id:0x0a) {
+			friends {
+				a as sum(age)
+			}
+			s as sum(var(a))
+		}
+
+		sumage(id: 0x0a) {
+			var(s)
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "a", res.Query[0].Children[0].Children[0].Var)
+	require.True(t, res.Query[0].Children[1].IsInternal)
+	require.Equal(t, "a", res.Query[0].Children[1].NeedsVar[0].Name)
+	require.Equal(t, VALUE_VAR, res.Query[0].Children[1].NeedsVar[0].Typ)
+	require.Equal(t, "s", res.Query[0].Children[1].Var)
+}
+
 func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	query := `
 	{	
