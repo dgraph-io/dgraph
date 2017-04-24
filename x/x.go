@@ -24,7 +24,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,11 +47,13 @@ const (
 	ErrorNoPermission    = "ErrorNoPermission"
 	ErrorInvalidMutation = "ErrorInvalidMutation"
 	DeleteAll            = "_DELETE_POSTING_"
+	ValidHostnameRegex   = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
 )
 
 var (
 	debugMode = flag.Bool("debugmode", false,
 		"enable debug mode for more debug information")
+	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 )
 
 // WhiteSpace Replacer removes spaces and tabs from a string.
@@ -186,4 +191,23 @@ func PageRange(count, offset, n int) (int, int) {
 		end = n
 	}
 	return start, end
+}
+
+// ValidateAddress checks whether given address can be used with grpc dial function
+func ValidateAddress(addr string) bool {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if p, err := strconv.Atoi(port); err != nil || p <= 0 || p >= 65536 {
+		return false
+	}
+	if err := net.ParseIP(host); err == nil {
+		return true
+	}
+	// try to parse as hostname as per hostname RFC
+	if len(strings.Replace(host, ".", "", -1)) > 255 {
+		return false
+	}
+	return regExpHostName.MatchString(host)
 }

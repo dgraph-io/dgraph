@@ -92,6 +92,14 @@ func StartRaftNodes(walDir string) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
+	if len(*myAddr) == 0 {
+		*myAddr = fmt.Sprintf("localhost:%d", *workerPort)
+	} else {
+		// check if address is valid or not
+		ok := x.ValidateAddress(*myAddr)
+		x.AssertTruef(ok, "%s is not valid address", *myAddr)
+	}
+
 	// Successfully connect with the peer, before doing anything else.
 	if len(*peerAddr) > 0 {
 		pools().connect(*peerAddr)
@@ -118,10 +126,6 @@ func StartRaftNodes(walDir string) {
 	wals, err := store.NewSyncStore(walDir)
 	x.Checkf(err, "Error initializing wal store")
 	gr.wal = raftwal.Init(wals, *raftId)
-
-	if len(*myAddr) == 0 {
-		*myAddr = fmt.Sprintf("localhost:%d", *workerPort)
-	}
 
 	var wg sync.WaitGroup
 	for _, id := range strings.Split(*groupIds, ",") {
@@ -449,7 +453,10 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
 		Leader:  mm.Leader,
 		RaftIdx: raftIdx,
 	}
-	if update.Addr != *myAddr {
+	if n := g.Node(mm.GroupId); n != nil {
+		// update peer address on address change
+		n.Connect(mm.Id, mm.Addr)
+	} else if update.Addr != *myAddr {
 		go pools().connect(update.Addr)
 	}
 
