@@ -112,6 +112,16 @@ func (p *poolsi) connect(addr string) {
 	p.all[addr] = pool
 }
 
+func (p *poolsi) close(addr string) {
+	p.Lock()
+	defer p.Unlock()
+	pool, has := p.all[addr]
+	if !has {
+		return
+	}
+	pool.close()
+}
+
 // NewPool initializes an instance of Pool which is used to connect with other
 // workers. The pool instance also has a buffered channel,conn with capacity
 // maxCap that stores the connections.
@@ -155,5 +165,12 @@ func (p *pool) Put(conn *grpc.ClientConn) error {
 		return nil
 	default:
 		return conn.Close()
+	}
+}
+
+func (p *pool) close() {
+	close(p.conns)
+	for conns := range p.conns {
+		conns.Close()
 	}
 }

@@ -497,7 +497,10 @@ func (n *node) processSchemaMutations(e raftpb.Entry, m *taskp.Mutations) error 
 
 func (n *node) processMembership(e raftpb.Entry, mm *taskp.Membership) error {
 	x.AssertTrue(n.gid == 0)
-
+	if groups().bannedId(mm.GroupId, mm.Id) {
+		// Ignore sync memberships from node which has been removed
+		return nil
+	}
 	x.Printf("group: %v Addr: %q leader: %v removed: %v\n",
 		mm.GroupId, mm.Addr, mm.Leader, mm.Removed)
 	groups().applyMembershipUpdate(e.Index, mm)
@@ -549,6 +552,8 @@ func (n *node) processApplyCh() {
 			cc.Unmarshal(e.Data)
 
 			if cc.Type == raftpb.ConfChangeRemoveNode {
+				addr := n.peers.Get(cc.NodeID)
+				pools().close(addr)
 				n.peers.Del(cc.NodeID)
 			} else if len(cc.Context) > 0 {
 				var rc taskp.RaftContext

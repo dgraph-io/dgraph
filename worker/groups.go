@@ -555,10 +555,6 @@ func (g *groupi) periodicSyncMemberships() {
 // raftIdx is the RAFT index corresponding to the application of this
 // membership update in group zero.
 func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
-	if g.bannedId(mm.GroupId, mm.Id) {
-		// Ignore sync memberships from node which has been removed
-		return
-	}
 	update := server{
 		NodeId:  mm.Id,
 		Addr:    mm.Addr,

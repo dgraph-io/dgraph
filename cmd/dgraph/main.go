@@ -614,7 +614,7 @@ func removeGroupHandler(w http.ResponseWriter, r *http.Request) {
 	if err := worker.StopServingGroup(ctx, nid, uint32(gid)); err != nil {
 		x.SetStatus(w, err.Error(), "RemoveGroup failed.")
 	} else {
-		x.SetStatus(w, x.Success, fmt.Sprint("Group %d belonging to node %d removed",
+		x.SetStatus(w, x.Success, fmt.Sprintf("Group %d belonging to node %d removed",
 			gid, nid))
 	}
 }
@@ -654,7 +654,7 @@ func addGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	if err := worker.StartServingGroups(ctx, nid, gids); err != nil {
 		x.SetStatus(w, err.Error(), "AddServer failed.")
 	} else {
-		x.SetStatus(w, x.Success, fmt.Sprint("Node %d started serving groups %v",
+		x.SetStatus(w, x.Success, fmt.Sprintf("Node %d started serving groups %v",
 			nid, gids))
 	}
 }
