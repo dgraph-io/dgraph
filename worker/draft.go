@@ -260,14 +260,14 @@ func (n *node) RemoveFromCluster(ctx context.Context, pid uint64) error {
 		}
 	}
 	addr := n.peers.Get(pid)
-	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
-	if err := groups().syncBannedId(n.gid, pid, addr); err != nil {
-		return err
-	}
-	return n.proposeConfChange(ctx, &raftpb.ConfChange{
+	err := n.proposeConfChange(ctx, &raftpb.ConfChange{
 		Type:   raftpb.ConfChangeRemoveNode,
 		NodeID: pid,
 	})
+	if err != nil {
+		return err
+	}
+	return groups().syncBannedId(n.gid, pid, addr)
 }
 
 type header struct {
@@ -554,7 +554,7 @@ func (n *node) processApplyCh() {
 				var rc taskp.RaftContext
 				x.Check(rc.Unmarshal(cc.Context))
 				// check for removed node id
-				if len(n.peers.Get(cc.NodeID)) > 0 {
+				if n.duplicateID(cc.NodeID) {
 					err = x.Errorf(ErrorNodeIDExists)
 				} else if groups().bannedId(n.gid, rc.Id) {
 					err = x.Errorf(ErrorNodeIDRemoved)
@@ -631,6 +631,8 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 		if err := n.store.ApplySnapshot(s); err != nil {
 			log.Fatalf("Applying snapshot: %v", err)
 		}
+		cs := s.Metadata.ConfState
+		n.SetConfState(&cs)
 	}
 
 	if !raft.IsEmptyHardState(h) {
@@ -852,6 +854,17 @@ func (n *node) joinPeers() {
 	x.Printf("Done with JoinCluster call\n")
 }
 
+func (n *node) duplicateID(nid uint64) bool {
+	n.RLock()
+	defer n.RUnlock()
+	for _, id := range n.ConfState().Nodes {
+		if id == nid {
+			return true
+		}
+	}
+	return false
+}
+
 func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	n.wal = wal
 
@@ -867,6 +880,9 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 		if rerr = n.store.ApplySnapshot(sp); rerr != nil {
 			return
 		}
+		// copy
+		cs := sp.Metadata.ConfState
+		n.SetConfState(&cs)
 		term = sp.Metadata.Term
 		idx = sp.Metadata.Index
 		n.applied.SetDoneUntil(idx)
@@ -996,7 +1012,13 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *workerp.Payload) (*
 }
 
 func StartGroup(gid uint32) error {
-	node := gr.newNode(uint32(gid), *raftId, *myAddr)
+	if groups().ServesGroup(gid) {
+		return x.Errorf("Node %v is already serving group %v", *raftId, gid)
+	}
+	if groups().bannedId(gid, *raftId) {
+		return x.Errorf("Node id %v is banned for group %v", *raftId, gid)
+	}
+	node := groups().newNode(uint32(gid), *raftId, *myAddr)
 	err := schema.LoadFromDb(uint32(gid))
 	x.Checkf(err, "Schema load for group %d failed", gid)
 	node.InitAndStartNode(gr.wal)
@@ -1103,7 +1125,7 @@ func StartServingGroup(ctx context.Context, nodeId uint64, gid uint32) error {
 	return err
 }
 
-func AddServer(ctx context.Context, nodeId uint64, gids []uint32) error {
+func StartServingGroups(ctx context.Context, nodeId uint64, gids []uint32) error {
 	for _, gid := range gids {
 		if err := StartServingGroup(ctx, nodeId, gid); err != nil {
 			return err
@@ -1144,8 +1166,12 @@ func StopServingGroup(ctx context.Context, nodeId uint64, gid uint32) error {
 }
 
 func RemoveServer(ctx context.Context, nodeId uint64) error {
-	for _, n := range groups().nodes() {
-		if err := StopServingGroup(ctx, nodeId, n.gid); err != nil {
+	gids := groups().groupsServed(nodeId)
+	if len(gids) == 0 {
+		return x.Errorf("Node %d doesn't serve anything", nodeId)
+	}
+	for _, gid := range gids {
+		if err := StopServingGroup(ctx, nodeId, gid); err != nil {
 			return err
 		}
 	}

@@ -184,7 +184,7 @@ func (g *groupi) banId(groupId uint32, sv server) {
 
 	if bs == nil {
 		bs = new(servers)
-		g.all[groupId] = bs
+		g.banned[groupId] = bs
 	}
 	for {
 		// Remove all instances of the provided node. There should only be one.
@@ -205,11 +205,10 @@ func (g *groupi) banId(groupId uint32, sv server) {
 
 func (g *groupi) removeNode(groupId uint32) {
 	g.AssertLock()
-	n, has := g.local[groupId]
+	_, has := g.local[groupId]
 	if !has {
 		return
 	}
-	n.Stop()
 	delete(g.local, groupId)
 }
 
@@ -331,6 +330,21 @@ func (g *groupi) address(nodeId uint64) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// GroupsServed will return the groups served by the node with given id
+func (g *groupi) groupsServed(nodeId uint64) []uint32 {
+	g.RLock()
+	defer g.RUnlock()
+	var gids []uint32
+	for gid, all := range g.all {
+		for _, s := range all.list {
+			if s.NodeId == nodeId {
+				gids = append(gids, gid)
+			}
+		}
+	}
+	return gids
 }
 
 func (g *groupi) KnownGroups() (gids []uint32) {
@@ -541,6 +555,10 @@ func (g *groupi) periodicSyncMemberships() {
 // raftIdx is the RAFT index corresponding to the application of this
 // membership update in group zero.
 func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
+	if g.bannedId(mm.GroupId, mm.Id) {
+		// Ignore sync memberships from node which has been removed
+		return
+	}
 	update := server{
 		NodeId:  mm.Id,
 		Addr:    mm.Addr,
@@ -551,13 +569,8 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
 		go pools().connect(update.Addr)
 	}
 
-	if g.bannedId(mm.GroupId, mm.Id) {
-		// Ignore sync memberships from node which has been removed
-		return
-	}
-
 	g.elog.Printf("----------------------------\n")
-	g.elog.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", update)
+	g.elog.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v, removed: %v\n", update, mm.Removed)
 	g.elog.Printf("----------------------------\n")
 	g.Lock()
 	defer g.Unlock()
@@ -601,7 +614,7 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
 		}
 	} else {
 		if mm.Id == *raftId {
-			g.removeNode(mm.GroupId)
+			//g.removeNode(mm.GroupId)
 		}
 		g.banId(mm.GroupId, update)
 	}

@@ -584,42 +584,6 @@ func handlerInit(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func addGroupHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	groupId := r.URL.Query().Get("gid")
-	if len(groupId) == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No group id defined.")
-		return
-	}
-	gid, err := strconv.ParseUint(groupId, 0, 32)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Not valid group id")
-		return
-	}
-	nodeId := r.URL.Query().Get("nodeId")
-	if len(nodeId) == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No node id defined.")
-		return
-	}
-	nid, err := strconv.ParseUint(nodeId, 0, 64)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Not valid node id")
-		return
-	}
-
-	if err := worker.StartServingGroup(ctx, nid, uint32(gid)); err != nil {
-		x.SetStatus(w, err.Error(), "AddGroup failed.")
-	} else {
-		x.SetStatus(w, x.Success, fmt.Sprint("Node %d started serving group %d",
-			nid, gid))
-	}
-}
-
 func removeGroupHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r) {
 		return
@@ -655,7 +619,7 @@ func removeGroupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func addServerHandler(w http.ResponseWriter, r *http.Request) {
+func addGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r) {
 		return
 	}
@@ -687,7 +651,7 @@ func addServerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := worker.AddServer(ctx, nid, gids); err != nil {
+	if err := worker.StartServingGroups(ctx, nid, gids); err != nil {
 		x.SetStatus(w, err.Error(), "AddServer failed.")
 	} else {
 		x.SetStatus(w, x.Success, fmt.Sprint("Node %d started serving groups %v",
@@ -968,9 +932,8 @@ func setupServer(che chan error) {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
-	http.HandleFunc("/admin/addServer", addServerHandler)
 	http.HandleFunc("/admin/removeServer", removeServerHandler)
-	http.HandleFunc("/admin/addGroup", addGroupHandler)
+	http.HandleFunc("/admin/addGroups", addGroupsHandler)
 	http.HandleFunc("/admin/removeGroup", removeGroupHandler)
 
 	// UI related API's.
