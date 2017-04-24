@@ -280,6 +280,9 @@ func populateGraph(t *testing.T) {
 	}
 
 	addEdgeToValue(t, "name", 240, "Andrea With no friends", nil)
+	addEdgeToUID(t, "son", 1, 2300, nil)
+	addEdgeToValue(t, "name", 2300, "Andre", nil)
+
 	time.Sleep(5 * time.Millisecond)
 }
 
@@ -652,7 +655,7 @@ func TestQueryVarValAggMinMax(t *testing.T) {
 			}
 
 			me(id: var(f), orderdesc: var(sum)) {
-				name 
+				name
 				var(n)
 				var(s)
 			}
@@ -847,7 +850,7 @@ func TestUseVarsMultiCascade1(t *testing.T) {
 			him(id:0x01) {
 				L as friend {
 				 B as friend
-					name	
+					name
 			 }
 			}
 
@@ -1057,7 +1060,7 @@ func TestRecurseQuery(t *testing.T) {
 	query := `
 		{
 			recurse(id:0x01) {
-				friend 
+				friend
 				name
 			}
 		}`
@@ -1071,7 +1074,7 @@ func TestRecurseQueryLimitDepth(t *testing.T) {
 	query := `
 		{
 			recurse(id:0x01, depth: 2) {
-				friend 
+				friend
 				name
 			}
 		}`
@@ -1104,7 +1107,7 @@ func TestShortestPath(t *testing.T) {
 	query := `
 		{
 			A as shortest(from:0x01, to:31) {
-				friend 
+				friend
 			}
 
 			me(id: var( A)) {
@@ -1122,7 +1125,7 @@ func TestShortestPathRev(t *testing.T) {
 	query := `
 		{
 			A as shortest(from:23, to:1) {
-				friend 
+				friend
 			}
 
 			me(id: var( A)) {
@@ -1216,7 +1219,7 @@ func TestShortestPath2(t *testing.T) {
 	query := `
 		{
 			A as shortest(from:0x01, to:1000) {
-				path 
+				path
 			}
 
 			me(id: var( A)) {
@@ -1235,7 +1238,7 @@ func TestShortestPath3(t *testing.T) {
 	query := `
 		{
 			A as shortest(from:1, to:1003) {
-				path 
+				path
 			}
 
 			me(id: var( A)) {
@@ -1253,7 +1256,7 @@ func TestShortestPath4(t *testing.T) {
 	query := `
 		{
 			A as shortest(from:1, to:1003) {
-				path 
+				path
 				follow
 			}
 
@@ -1591,7 +1594,7 @@ func TestMultiCountSort(t *testing.T) {
 	query := `
 	{
 		f as var(func: anyofterms(name, "michonne rick andrea")) {
-		 	n as count(friend) 
+		 	n as count(friend)
 		}
 
 		countorder(id: var(f), orderasc: var(n)) {
@@ -3242,7 +3245,7 @@ func TestToFastJSONFilterOrFirstOffsetCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				count(friend(offset:1, first:1) @filter(anyofterms(name, "Andrea") or anyofterms(name, "SomethingElse Rhee") or anyofterms(name, "Daryl Dixon"))) 
+				count(friend(offset:1, first:1) @filter(anyofterms(name, "Andrea") or anyofterms(name, "SomethingElse Rhee") or anyofterms(name, "Daryl Dixon")))
 			}
 		}
 	`
@@ -3812,7 +3815,7 @@ func TestToFastJSONOrderDescCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				count(friend @filter(anyofterms(name, "Rick")) (orderasc: dob)) 
+				count(friend @filter(anyofterms(name, "Rick")) (orderasc: dob))
 			}
 		}
 	`
@@ -4769,10 +4772,13 @@ func TestToProtoNormalizeDirective(t *testing.T) {
 				gender
 				friend {
 					n: name
-					dob
+					d: dob
 					friend {
 						fn : name
 					}
+				}
+				son {
+					sn: name
 				}
 			}
 		}
@@ -4793,9 +4799,21 @@ children: <
     >
   >
   properties: <
+    prop: "d"
+    value: <
+      str_val: "1910-01-02T00:00:00Z"
+    >
+  >
+  properties: <
     prop: "fn"
     value: <
       str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "sn"
+    value: <
+      str_val: "Andre"
     >
   >
 >
@@ -4810,6 +4828,18 @@ children: <
     prop: "n"
     value: <
       str_val: "Glenn Rhee"
+    >
+  >
+  properties: <
+    prop: "d"
+    value: <
+      str_val: "1909-05-05T00:00:00Z"
+    >
+  >
+  properties: <
+    prop: "sn"
+    value: <
+      str_val: "Andre"
     >
   >
 >
@@ -4827,9 +4857,15 @@ children: <
     >
   >
   properties: <
-    prop: "fn"
+    prop: "d"
     value: <
-      str_val: "Glenn Rhee"
+      str_val: "1909-01-10T00:00:00Z"
+    >
+  >
+  properties: <
+    prop: "sn"
+    value: <
+      str_val: "Andre"
     >
   >
 >
@@ -4847,9 +4883,21 @@ children: <
     >
   >
   properties: <
+    prop: "d"
+    value: <
+      str_val: "1901-01-15T00:00:00Z"
+    >
+  >
+  properties: <
     prop: "fn"
     value: <
       str_val: "Glenn Rhee"
+    >
+  >
+  properties: <
+    prop: "sn"
+    value: <
+      str_val: "Andre"
     >
   >
 >
@@ -4868,10 +4916,13 @@ func TestNormalizeDirective(t *testing.T) {
 				gender
 				friend {
 					n: name
-					dob
+					d: dob
 					friend {
 						fn : name
 					}
+				}
+				son {
+					sn: name
 				}
 			}
 		}
@@ -4879,7 +4930,7 @@ func TestNormalizeDirective(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"fn":"Michonne","mn":"Michonne","n":"Rick Grimes"},{"mn":"Michonne","n":"Glenn Rhee"},{"fn":"Glenn Rhee","mn":"Michonne","n":"Daryl Dixon"},{"fn":"Glenn Rhee","mn":"Michonne","n":"Andrea"}]}`,
+		`{"me":[{"d":"1910-01-02","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1909-05-05","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-01-10","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1901-01-15","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"}]}`,
 		js)
 }
 
