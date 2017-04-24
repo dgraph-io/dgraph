@@ -857,7 +857,18 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 	if err != nil {
 		return err
 	}
-	doneVars[sg.Params.Var] = values{vals: sg.MathExp.Val}
+	if sg.MathExp.Val != nil {
+		doneVars[sg.Params.Var] = values{vals: sg.MathExp.Val}
+	} else if sg.MathExp.Const.Value != nil {
+		// Assign the const for all the srcUids.
+		mp := make(map[uint64]types.Val)
+		for _, uid := range sg.SrcUIDs.Uids {
+			mp[uid] = sg.MathExp.Const
+		}
+		doneVars[sg.Params.Var] = values{vals: mp}
+	} else {
+		return x.Errorf("Missing values/constant in math expression")
+	}
 	// Put it in this node.
 	sg.Params.uidToVal = sg.MathExp.Val
 	return nil
