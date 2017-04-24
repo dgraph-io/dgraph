@@ -433,11 +433,12 @@ func TestQueryVarValAggNestedFuncConst(t *testing.T) {
 			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
 				a as age
 				friend {
-					n as min(age)
-					s as max(age)
-					p as math(a + s % n + 10)
-					q as math(a * s * n * -1)
+					x as age
 				}
+				n as min(var(x))
+				s as max(var(x))
+				p as math(a + s % n + 10)
+				q as math(a * s * n * -1)
 			}
 
 			MaxMe(id: var(f), orderasc: var(p)) {
@@ -470,11 +471,12 @@ func TestQueryVarValAggNestedFuncMinMaxVars(t *testing.T) {
 			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
 				a as age
 				friend {
-					n as min(age)
-					s as max(age)
-					p as math(max(max(a, s), n))
-					q as math(min(min(a, s), n))
+					x as age
 				}
+				n as min(var(x))
+				s as max(var(x))
+				p as math(max(max(a, s), n))
+				q as math(min(min(a, s), n))
 			}
 
 			MaxMe(id: var(f), orderasc: var(p)) {
@@ -503,14 +505,15 @@ func TestQueryVarValAggNestedFuncMinMaxVars(t *testing.T) {
 func TestQueryVarValAggNestedFuncConditional(t *testing.T) {
 	populateGraph(t)
 	query := `
-		{
+	{
 			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
 				a as age
 				friend {
-					n as min(age)
-					condLog as math(cond(a > 10, logbase(n, 5), 1))
-					condExp as math(cond(a < 40, 1, pow(2, n)))
+					x as age
 				}
+				n as min(var(x))
+				condLog as math(cond(a > 10, logbase(n, 5), 1))
+				condExp as math(cond(a < 40, 1, pow(2, n)))
 			}
 
 			LogMe(id: var(f), orderasc: var(condLog)) {
@@ -541,10 +544,11 @@ func TestQueryVarValAggNestedFuncConditional2(t *testing.T) {
 			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
 				a as age
 				friend {
-					n as min(age)
-					condLog as math(cond(a==38, n/2, 1))
-					condExp as math(cond(a!=38, 1, sqrt(2*n)))
+					x as age
 				}
+				n as min(var(x))
+				condLog as math(cond(a==38, n/2, 1))
+				condExp as math(cond(a!=38, 1, sqrt(2*n)))
 			}
 
 			LogMe(id: var(f), orderasc: var(condLog)) {
@@ -575,11 +579,12 @@ func TestQueryVarValAggNestedFuncUnary(t *testing.T) {
 			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
 				a as age
 				friend {
-					n as min(age)
-					s as max(age)
-					combiLog as math(a + ln(s - n))
-					combiExp as math(a + exp(s - n))
+					x as age
 				}
+				n as min(var(x))
+				s as max(var(x))
+				combiLog as math(a + ln(s - n))
+				combiExp as math(a + exp(s - n))
 			}
 
 			LogMe(id: var(f), orderasc: var(combiLog)) {
@@ -612,10 +617,11 @@ func TestQueryVarValAggNestedFunc(t *testing.T) {
 			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
 				a as age
 				friend {
-					n as min(age)
-					s as max(age)
-					combi as math(a + n * s)
+					x as age
 				}
+				n as min(var(x))
+				s as max(var(x))
+				combi as math(a + n * s)
 			}
 
 			me(id: var(f), orderasc: var(combi)) {
@@ -640,10 +646,11 @@ func TestQueryVarValAggMinMaxSelf(t *testing.T) {
 			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
 				a as age
 				friend {
-					n as min(age)
-					s as max(age)
-					sum as math(n +  a + s)
+					x as age
 				}
+				n as min(var(x))
+				s as max(var(x))
+				sum as math(n +  a + s)
 			}
 
 			me(id: var(f), orderasc: var(sum)) {
@@ -665,10 +672,11 @@ func TestQueryVarValAggMinMax(t *testing.T) {
 		{
 			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
 				friend {
-					n as min(age)
-					s as max(age)
-					sum as math(n + s)
+					x as age
 				}
+				n as min(var(x))
+				s as max(var(x))
+				sum as math(n + s)
 			}
 
 			me(id: var(f), orderdesc: var(sum)) {
@@ -1705,30 +1713,26 @@ func TestMultiAggSort(t *testing.T) {
 		f as var(func: anyofterms(name, "michonne rick andrea")) {
 			name
 			friend {
-				mindob as min(dob)
-				maxdob as max(dob)
-				dob
+				x as dob
 			}
+			mindob as min(var(x))
+			maxdob as max(var(x))
 		}
 
 		maxorder(id: var(f), orderasc: var(maxdob)) {
 			name
-			friend {
-				max(dob)
-			}
+			var(maxdob)
 		}
 
 		minorder(id: var(f), orderasc: var(mindob)) {
 			name
-			friend {
-				min(dob)
-			}
+			var(mindob)
 		}
 	}
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"maxorder":[{"friend":[{"max(dob)":"1909-05-05"}],"name":"Andrea"},{"friend":[{"max(dob)":"1910-01-01"}],"name":"Rick Grimes"},{"friend":[{"max(dob)":"1910-01-02"}],"name":"Michonne"}],"minorder":[{"friend":[{"min(dob)":"1901-01-15"}],"name":"Michonne"},{"friend":[{"min(dob)":"1909-05-05"}],"name":"Andrea"},{"friend":[{"min(dob)":"1910-01-01"}],"name":"Rick Grimes"}]}`,
+		`{"maxorder":[{"name":"Andrea","var[maxdob]":"1909-05-05"},{"name":"Rick Grimes","var[maxdob]":"1910-01-01"},{"name":"Michonne","var[maxdob]":"1910-01-02"}],"minorder":[{"name":"Michonne","var[mindob]":"1901-01-15"},{"name":"Andrea","var[mindob]":"1909-05-05"},{"name":"Rick Grimes","var[mindob]":"1910-01-01"}]}`,
 		js)
 }
 
@@ -1740,16 +1744,16 @@ func TestMinMulti(t *testing.T) {
 		me(func: anyofterms(name, "michonne rick andrea")) {
 			name
 			friend {
-				min(dob)
-				max(dob)
-				dob
+				x as dob
 			}
+			min(var(x))
+			max(var(x))
 		}
 	}
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"dob":"1910-01-02"},{"dob":"1909-05-05"},{"dob":"1909-01-10"},{"dob":"1901-01-15"},{"min(dob)":"1901-01-15"},{"max(dob)":"1910-01-02"}],"name":"Michonne"},{"friend":[{"dob":"1910-01-01"},{"min(dob)":"1910-01-01"},{"max(dob)":"1910-01-01"}],"name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05"},{"min(dob)":"1909-05-05"},{"max(dob)":"1909-05-05"}],"name":"Andrea"},{"name":"Andrea With no friends"}]}`,
+		`{"me":[{"friend":[{"dob":"1910-01-02"},{"dob":"1909-05-05"},{"dob":"1909-01-10"},{"dob":"1901-01-15"}],"max[var[x]]":"1910-01-02","min[var[x]]":"1901-01-15","name":"Michonne"},{"friend":[{"dob":"1910-01-01"}],"max[var[x]]":"1910-01-01","min[var[x]]":"1910-01-01","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05"}],"max[var[x]]":"1909-05-05","min[var[x]]":"1909-05-05","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
 		js)
 }
 
@@ -1762,11 +1766,12 @@ func TestMinMultiProto(t *testing.T) {
 			name
 			friend {
 				name
-				min(dob)
-				max(dob)
+				x as dob
 			}
-		}
+			min(var(x))
+			max(var(x))
 	}
+}
 `
 	pb := processToPB(t, query, map[string]string{}, false)
 	res := `attribute: "_root_"
@@ -1778,12 +1783,30 @@ children: <
       str_val: "Michonne"
     >
   >
+  properties: <
+    prop: "min[var[x]]"
+    value: <
+      str_val: "1901-01-15T00:00:00Z"
+    >
+  >
+  properties: <
+    prop: "max[var[x]]"
+    value: <
+      str_val: "1910-01-02T00:00:00Z"
+    >
+  >
   children: <
     attribute: "friend"
     properties: <
       prop: "name"
       value: <
         str_val: "Rick Grimes"
+      >
+    >
+    properties: <
+      prop: "dob"
+      value: <
+        str_val: "1910-01-02T00:00:00Z"
       >
     >
   >
@@ -1795,6 +1818,12 @@ children: <
         str_val: "Glenn Rhee"
       >
     >
+    properties: <
+      prop: "dob"
+      value: <
+        str_val: "1909-05-05T00:00:00Z"
+      >
+    >
   >
   children: <
     attribute: "friend"
@@ -1802,6 +1831,12 @@ children: <
       prop: "name"
       value: <
         str_val: "Daryl Dixon"
+      >
+    >
+    properties: <
+      prop: "dob"
+      value: <
+        str_val: "1909-01-10T00:00:00Z"
       >
     >
   >
@@ -1813,22 +1848,10 @@ children: <
         str_val: "Andrea"
       >
     >
-  >
-  children: <
-    attribute: "friend"
     properties: <
-      prop: "min(dob)"
+      prop: "dob"
       value: <
         str_val: "1901-01-15T00:00:00Z"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "max(dob)"
-      value: <
-        str_val: "1910-01-02T00:00:00Z"
       >
     >
   >
@@ -1841,6 +1864,18 @@ children: <
       str_val: "Rick Grimes"
     >
   >
+  properties: <
+    prop: "min[var[x]]"
+    value: <
+      str_val: "1910-01-01T00:00:00Z"
+    >
+  >
+  properties: <
+    prop: "max[var[x]]"
+    value: <
+      str_val: "1910-01-01T00:00:00Z"
+    >
+  >
   children: <
     attribute: "friend"
     properties: <
@@ -1849,20 +1884,8 @@ children: <
         str_val: "Michonne"
       >
     >
-  >
-  children: <
-    attribute: "friend"
     properties: <
-      prop: "min(dob)"
-      value: <
-        str_val: "1910-01-01T00:00:00Z"
-      >
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "max(dob)"
+      prop: "dob"
       value: <
         str_val: "1910-01-01T00:00:00Z"
       >
@@ -1871,65 +1894,6 @@ children: <
 >
 `
 	require.Equal(t, res, proto.MarshalTextString(pb[0]))
-}
-
-func TestMin(t *testing.T) {
-	populateGraph(t)
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-	{
-		me(id:0x01) {
-			name
-			friend {
-				min(dob)
-			}
-		}
-	}
-`
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"me":[{"friend":[{"min(dob)":"1901-01-15"}],"name":"Michonne"}]}`,
-		js)
-}
-
-func TestMinError1(t *testing.T) {
-	populateGraph(t)
-	// error: min could not performed on non-scalar-type
-	query := `
-                {
-                        me(id:0x01) {
-                                name
-                                gender
-                                alive
-                                min(friend)
-                        }
-                }
-        `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	var l Latency
-	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.Error(t, queryErr)
-}
-
-func TestMinError2(t *testing.T) {
-	populateGraph(t)
-	// error: min should not have children
-	query := `
-                {
-                        me(id:0x01) {
-                                name
-                                gender
-                                alive
-                                min(friend) {
-                                    name
-                                }
-                        }
-                }
-        `
-	_, err := gql.Parse(gql.Request{Str: query})
-	require.Error(t, err)
 }
 
 func TestMinSchema(t *testing.T) {
@@ -1942,62 +1906,23 @@ func TestMinSchema(t *testing.T) {
                                 gender
                                 alive
                                 friend {
-                                    min(survival_rate)
+                                    x as survival_rate
                                 }
+																min(var(x))
                         }
                 }
         `
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1.600000}],"gender":"female","name":"Michonne"}]}`,
+	require.JSONEq(t,
+		`{"me":[{"alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"gender":"female","min[var[x]]":1.600000,"name":"Michonne"}]}`,
 		js)
 
 	schema.State().Set("survival_rate", typesp.Schema{ValueType: uint32(types.IntID)})
 	js = processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"min(survival_rate)":1}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"survival_rate":1},{"survival_rate":1},{"survival_rate":1},{"survival_rate":1}],"gender":"female","min[var[x]]":1,"name":"Michonne"}]}`,
 		js)
 	schema.State().Set("survival_rate", typesp.Schema{ValueType: uint32(types.FloatID)})
-}
-
-func TestMax(t *testing.T) {
-	populateGraph(t)
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-                {
-                        me(id:0x01) {
-                                name
-                                gender
-                                alive
-                                friend {
-                                    max(dob)
-                                }
-                        }
-                }
-        `
-	js := processToFastJSON(t, query)
-	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"max(dob)":"1910-01-02"}],"gender":"female","name":"Michonne"}]}`,
-		js)
-}
-
-func TestMaxError1(t *testing.T) {
-	populateGraph(t)
-	// error: aggregator 'max' should not have filters on its own
-	query := `
-                {
-                        me(id:0x01) {
-                                name
-                                gender
-                                alive
-                                friend {
-                                    max(dob @filter(gt(dob, "1910-01-02")))
-                                }
-                        }
-                }
-        `
-	_, err := gql.Parse(gql.Request{Str: query})
-	require.Error(t, err)
 }
 
 func TestAvg(t *testing.T) {
@@ -2009,34 +1934,16 @@ func TestAvg(t *testing.T) {
 			gender
 			alive
 			friend {
-				avg(shadow_deep)
+				x as shadow_deep
 			}
+			avg(var(x))
 		}
 	}
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":true,"friend":[{"avg(shadow_deep)":9}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"avg[var[x]]":9.000000,"friend":[{"shadow_deep":4},{"shadow_deep":14}],"gender":"female","name":"Michonne"}]}`,
 		js)
-}
-
-func TestAvgError(t *testing.T) {
-	populateGraph(t)
-	query := `
-	{
-		me(id:0x01) {
-			name
-			gender
-			alive
-			friend {
-				avg(name)
-			}
-		}
-	}
-`
-
-	_, err := processToFastJsonReq(t, query)
-	require.Error(t, err)
 }
 
 func TestSum(t *testing.T) {
@@ -2048,38 +1955,16 @@ func TestSum(t *testing.T) {
                                 gender
                                 alive
                                 friend {
-                                    sum(shadow_deep)
+                                    x as shadow_deep
                                 }
+																sum(var(x))
                         }
                 }
         `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":true,"friend":[{"sum(shadow_deep)":18}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"shadow_deep":4},{"shadow_deep":14}],"gender":"female","name":"Michonne","sum[var[x]]":18}]}`,
 		js)
-}
-
-func TestSumError1(t *testing.T) {
-	populateGraph(t)
-	// error: sum could only be applied on int/float
-	query := `
-                {
-                        me(id:0x01) {
-                                name
-                                gender
-                                alive
-                                friend {
-                                    sum(name)
-                                }
-                        }
-                }
-        `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	var l Latency
-	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.NotNil(t, queryErr)
 }
 
 func TestQueryPassword(t *testing.T) {
