@@ -688,7 +688,7 @@ func removeServerHandler(w http.ResponseWriter, r *http.Request) {
 	if err := worker.RemoveServer(ctx, nid, gids); err != nil {
 		x.SetStatus(w, err.Error(), "RemoveServer failed.")
 	} else {
-		x.SetStatus(w, x.Success, fmt.Sprint("Server %d removed", nid))
+		x.SetStatus(w, x.Success, fmt.Sprintf("Server %d removed", nid))
 	}
 }
 

@@ -47,6 +47,7 @@ const (
 	ErrorInvalidToNodeId     = "Error Invalid Recipient Node ID"
 	ErrorNodeIDBanned        = "Error Node with given ID has been banned"
 	ErrorStoppedServingGroup = "Node has stopped serving the group"
+	ErrorNoPeer              = "Peer doesn't exist"
 )
 
 // peerPool stores the peers per node and the addresses corresponding to them.
@@ -66,12 +67,6 @@ func (p *peerPool) Set(id uint64, addr string) {
 	p.Lock()
 	defer p.Unlock()
 	p.peers[id] = addr
-}
-
-func (p *peerPool) Del(id uint64) {
-	p.Lock()
-	defer p.Unlock()
-	delete(p.peers, id)
 }
 
 type proposals struct {
@@ -547,12 +542,17 @@ func (n *node) processApplyCh() {
 			cc.Unmarshal(e.Data)
 
 			if cc.Type == raftpb.ConfChangeRemoveNode {
-				n.peers.Del(cc.NodeID)
+				if n.numPeers() == 0 {
+					err = x.Errorf(ErrorNoPeer)
+				}
+				// Can't remove node here, otherwise on replay of logs
+				// the node would be removed and we won't be able to add
+				// it ever
 			} else if len(cc.Context) > 0 {
 				var rc taskp.RaftContext
 				x.Check(rc.Unmarshal(cc.Context))
 				// check for removed node id
-				if n.duplicateID(cc.NodeID) {
+				if n.hasID(cc.NodeID) {
 					err = x.Errorf(ErrorNodeIDExists)
 				} else if groups().bannedId(rc.Id) {
 					err = x.Errorf(ErrorNodeIDBanned)
@@ -852,7 +852,7 @@ func (n *node) joinPeers() {
 	x.Printf("Done with JoinCluster call\n")
 }
 
-func (n *node) duplicateID(nid uint64) bool {
+func (n *node) hasID(nid uint64) bool {
 	n.RLock()
 	defer n.RUnlock()
 	for _, id := range n.ConfState().Nodes {
@@ -861,6 +861,12 @@ func (n *node) duplicateID(nid uint64) bool {
 		}
 	}
 	return false
+}
+
+func (n *node) numPeers() int {
+	n.RLock()
+	defer n.RUnlock()
+	return len(n._confState.Nodes) - 1
 }
 
 func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
@@ -1010,16 +1016,18 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *workerp.Payload) (*
 }
 
 func StartGroup(gid uint32) error {
-	if !groups().ServesGroup(gid) {
-		node := groups().newNode(uint32(gid), *raftId, *myAddr)
-		err := schema.LoadFromDb(uint32(gid))
-		x.Checkf(err, "Schema load for group %d failed", gid)
-		// Reset watermark
-		posting.SyncMarkFor(gid).SetDoneUntil(0)
-		node.InitAndStartNode(gr.wal)
+	if groups().ServesGroup(gid) {
+		return nil
 	}
-	if groups().HasPeer(gid) {
-		groups().Node(gid).joinPeers()
+	node := groups().newNode(uint32(gid), *raftId, *myAddr)
+	err := schema.LoadFromDb(uint32(gid))
+	x.Checkf(err, "Schema load for group %d failed", gid)
+	// Reset watermark
+	posting.SyncMarkFor(gid).SetDoneUntil(0)
+	node.InitAndStartNode(gr.wal)
+	_, has := groups().Peer(gid, *raftId)
+	if has && groups().removedNode(gid) {
+		node.joinPeers()
 	}
 	return nil
 }
@@ -1043,7 +1051,9 @@ func (w *grpcWorker) StartGroup(ctx context.Context, rc *taskp.RaftContext) (*wo
 
 func StopGroup(ctx context.Context, gid uint32, nodeId uint64) error {
 	node := groups().Node(gid)
-	x.AssertTruef(node != nil, "Node %d not serving group %d", nodeId, gid)
+	if node == nil {
+		return nil
+	}
 
 	if err := node.RemoveFromCluster(ctx, nodeId); err != nil {
 		return err
@@ -1201,6 +1211,9 @@ func RemoveGroup(ctx context.Context, nodeId uint64, gid uint32) error {
 	// Get leader information for MY group.
 	// The server might be down
 	pid, paddr := groups().Leader(gid)
+	if len(paddr) == 0 {
+		return x.Errorf("Leader not found for group %d", gid)
+	}
 	pools().connect(paddr)
 	fmt.Printf("removeGroup connected with: %q with peer id: %d\n", paddr, pid)
 

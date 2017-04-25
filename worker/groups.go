@@ -133,16 +133,21 @@ func StartRaftNodes(walDir string) {
 	}
 
 	var wg sync.WaitGroup
-	for _, id := range strings.Split(*groupIds, ",") {
-		gid, err := strconv.ParseUint(id, 0, 32)
-		x.Checkf(err, "Unable to parse group id: %v", id)
-		node := gr.newNode(uint32(gid), *raftId, *myAddr)
-		schema.LoadFromDb(uint32(gid))
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			node.InitAndStartNode(gr.wal)
-		}()
+	if len(*groupIds) > 0 {
+		for _, id := range strings.Split(*groupIds, ",") {
+			gid, err := strconv.ParseUint(id, 0, 32)
+			x.Checkf(err, "Unable to parse group id: %v", id)
+			if gr.removedNode(uint32(gid)) {
+				x.Fatalf("group id %d has been removed from current node", gid)
+			}
+			node := gr.newNode(uint32(gid), *raftId, *myAddr)
+			schema.LoadFromDb(uint32(gid))
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				node.InitAndStartNode(gr.wal)
+			}()
+		}
 	}
 	wg.Wait()
 	atomic.StoreUint32(&healthCheck, 1)
@@ -176,7 +181,24 @@ func (g *groupi) bannedId(nodeId uint64) bool {
 	return false
 }
 
+func (g *groupi) removedNode(gid uint32) bool {
+	g.RLock()
+	defer g.RUnlock()
+	rs := g.removed[gid]
+
+	if rs == nil {
+		return false
+	}
+	for _, s := range rs.list {
+		if s.NodeId == *raftId {
+			return true
+		}
+	}
+	return false
+}
+
 func (g *groupi) banId(nodeId uint64, sv server) {
+	g.AssertLock()
 	for {
 		// Remove all instances of the provided node. There should only be one.
 		found := false
@@ -217,6 +239,29 @@ func (g *groupi) removeId(groupId uint32, sv server) {
 		}
 	}
 	rs.list = append(rs.list, sv)
+}
+
+func (g *groupi) clearRemoveId(groupId uint32, sv server) {
+	g.AssertLock()
+	rs := g.removed[groupId]
+
+	if rs == nil {
+		return
+	}
+	for {
+		// Remove all instances of the provided node. There should only be one.
+		found := false
+		for i, s := range rs.list {
+			if s.NodeId == sv.NodeId {
+				found = true
+				rs.list[i] = rs.list[len(rs.list)-1]
+				rs.list = rs.list[:len(rs.list)-1]
+			}
+		}
+		if !found {
+			break
+		}
+	}
 }
 
 func (g *groupi) removeNode(groupId uint32, nodeId uint64) {
@@ -332,7 +377,7 @@ func (g *groupi) Leader(group uint32) (uint64, string) {
 	defer g.RUnlock()
 
 	all := g.all[group]
-	if all == nil {
+	if all == nil || len(all.list) == 0 {
 		return 0, ""
 	}
 	return all.list[0].NodeId, all.list[0].Addr
@@ -631,6 +676,7 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
 	}
 
 	if !mm.Removed && !mm.Banned {
+		g.clearRemoveId(mm.GroupId, update)
 		// Append update to the list. If it's a leader, move it to index zero.
 		sl.list = append(sl.list, update)
 		last := len(sl.list) - 1
