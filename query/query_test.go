@@ -1061,6 +1061,27 @@ func TestRecurseQueryLimitDepth(t *testing.T) {
 		`{"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }
 
+func TestShortestPath_ExpandError(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:0x01, to:101) {
+				expand(_all_)
+			}
+
+			me(id: var( A)) {
+				name
+			}
+		}`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
 func TestShortestPath_NoPath(t *testing.T) {
 	populateGraph(t)
 	query := `
