@@ -639,7 +639,15 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		if err != nil {
 			return nil, err
 		}
-		ignoreCase := q.SrcFunc[3] == "i"
+		ignoreCase := false
+		modifiers := q.SrcFunc[3]
+		if len(modifiers) > 0 {
+			if modifiers == "i" {
+				ignoreCase = true
+			} else {
+				return nil, x.Errorf("Invalid regexp modifier: %s", modifiers)
+			}
+		}
 		matchType := "(?m)" // this is cregexp library specific
 		if ignoreCase {
 			matchType = "(?i)" + matchType

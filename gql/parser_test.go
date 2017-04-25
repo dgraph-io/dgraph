@@ -2932,6 +2932,18 @@ func TestParseRegexp5(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseRegexp6(t *testing.T) {
+	query := `
+	{
+	  me(func:regexp(name@en, /pattern\/)) {
+	    name
+	  }
+    }
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
 func TestMain(m *testing.M) {
 	group.ParseGroupConfig("")
 	os.Exit(m.Run())

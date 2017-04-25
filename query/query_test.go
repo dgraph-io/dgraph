@@ -2817,6 +2817,25 @@ func TestFilterRegex13(t *testing.T) {
 		`{}`, js)
 }
 
+// invalid regexp modifier
+func TestFilterRegex14(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(50 * time.Millisecond)
+	query := `
+    {
+	  me(id:0x1234) {
+		pattern @filter(regexp(value, /pattern/x)) {
+			value
+		}
+      }
+    }
+`
+
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
+
 func TestToFastJSONFilterUID(t *testing.T) {
 	populateGraph(t)
 	query := `
