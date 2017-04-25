@@ -1433,9 +1433,9 @@ Output : `dave` is only close friend who is also my relative.
 ```
 
 ## Aggregation
-Aggregation functions that are supported are `min, max, sum, avg`. While min and max operate on all scalar-values, sum and avg can operate only on `int and float` types. Aggregation does not depend on the index. All the aggregation results are attached one level above in the result.
+Aggregation functions that are supported are `min, max, sum, avg`. While min and max operate on all scalar-values, sum and avg can operate only on `int and float` values. These functions can only be applied on variables. Aggregation does not depend on the index.
 
-{{% notice "note" %}}We support aggregation on scalar type only.{{% /notice %}}
+{{% notice "note" %}}We support aggregation on scalar value variables only.{{% /notice %}}
 
 ### Min
 
