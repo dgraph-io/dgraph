@@ -101,6 +101,9 @@ html h2 {
 html h3 {
   font-size: 1.5em;
 }
+html h4 {
+  font-size: 1.25em;
+}
 html p {
   margin: 0 0 0.8em;
 }
