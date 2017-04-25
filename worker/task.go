@@ -204,7 +204,12 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 				predMap[string(pred.Value.([]byte))] = struct{}{}
 			}
 		}
+		predList := make([]string, 0, len(predMap))
 		for pred := range predMap {
+			predList = append(predList, pred)
+		}
+		sort.Strings(predList)
+		for _, pred := range predList {
 			// Add it to values.
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			out.Values = append(out.Values, &taskp.Value{

@@ -20,7 +20,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
@@ -300,11 +299,8 @@ func TestListPred(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	var mp map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(output), &mp))
-	require.Equal(t, 3, len(mp["listpred"].([]interface{})[0].(map[string]interface{})["_predicate_"].([]interface{})),
+	require.Equal(t, `{"listpred":[{"_predicate_":[{"_name_":"age"},{"_name_":"friend"},{"_name_":"name"}]}]}`,
 		output)
-
 }
 
 func TestExpandPred(t *testing.T) {
