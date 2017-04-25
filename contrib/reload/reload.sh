@@ -45,9 +45,9 @@ updateBranch()
 
 dgraphRepo=$GOPATH/src/github.com/dgraph-io/dgraph
 benchmarksRepo=$GOPATH/src/github.com/dgraph-io/benchmarks
-schema="data/goldendata.schema"
+schema="data/21million.schema"
 schemaPath="$benchmarksRepo/$schema"
-data="data/goldendata.rdf.gz"
+data="data/21million.rdf.gz"
 dataPath="$benchmarksRepo/$data"
 
 checkDir $dgraphRepo
