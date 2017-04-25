@@ -701,6 +701,132 @@ func BenchmarkQuery(b *testing.B) {
 	}
 }
 
+func TestListPred(t *testing.T) {
+	var q1 = `
+	{
+		listpred(func:anyofterms(name, "Alice")) {
+				_predicate_
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+			<alice> <name> "Alice" .
+			<alice> <age> "13" .
+			<alice> <friend> <bob> .
+		}
+	}
+	`
+	var s = `
+	mutation {
+		schema {
+            name:string @index .
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	// add index to name
+	err = runMutation(s)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.Equal(t, `{"listpred":[{"_predicate_":[{"_name_":"age"},{"_name_":"friend"},{"_name_":"name"}]}]}`,
+		output)
+}
+
+func TestExpandPredError(t *testing.T) {
+	var q1 = `
+	{
+		me(func:anyofterms(name, "Alice")) {
+  		expand(_all_)
+			name
+			friend
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+			<alice> <name> "Alice" .
+			<alice> <age> "13" .
+			<alice> <friend> <bob> .
+			<bob> <name> "bob" .
+			<bob> <age> "12" .
+		}
+	}
+	`
+	var s = `
+	mutation {
+		schema {
+            name:string @index .
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	// add index to name
+	err = runMutation(s)
+	require.NoError(t, err)
+
+	_, err = runQuery(q1)
+	require.Error(t, err)
+}
+
+func TestExpandPred(t *testing.T) {
+	var q1 = `
+	{
+		me(func:anyofterms(name, "Alice")) {
+			expand(_all_) {
+  			expand(_all_)
+			}
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+			<alice> <name> "Alice" .
+			<alice> <age> "13" .
+			<alice> <friend> <bob> .
+			<bob> <name> "bob" .
+			<bob> <age> "12" .
+		}
+	}
+	`
+	var s = `
+	mutation {
+		schema {
+            name:string @index .
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	// add index to name
+	err = runMutation(s)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"me":[{"age":"13","friend":[{"age":"12","name":"bob"}],"name":"Alice"}]}`,
+		output)
+
+}
 func TestMain(m *testing.M) {
 	x.Init()
 	dir1, dir2, _, _ := prepare()

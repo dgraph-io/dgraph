@@ -141,6 +141,8 @@ type params struct {
 	Facet        *facetsp.Param
 	RecurseDepth uint64
 	isInternal   bool
+	isListNode   bool   // This is for _predicate_ block.
+	Expand       string // Var to use for expand.
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -153,6 +155,7 @@ type SubGraph struct {
 	values       []*taskp.Value
 	uidMatrix    []*taskp.List
 	facetsMatrix []*facetsp.List
+	ExpandPreds  []*taskp.Value
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -167,6 +170,10 @@ type SubGraph struct {
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *taskp.List
+}
+
+func (sg *SubGraph) IsListNode() bool {
+	return sg.Params.isListNode
 }
 
 func (sg *SubGraph) IsInternal() bool {
@@ -233,7 +240,39 @@ var (
 	ErrWrongAgg = errors.New("Wrong level for var aggregation.")
 )
 
-// This method gets the values and children for a subgraph.
+func (sg *SubGraph) isSimilar(ssg *SubGraph) bool {
+	if sg.Attr != ssg.Attr {
+		return false
+	}
+	if len(sg.Params.Langs) != len(ssg.Params.Langs) {
+		return false
+	}
+	for i := 0; i < len(sg.Params.Langs) && i < len(ssg.Params.Langs); i++ {
+		if sg.Params.Langs[i] != ssg.Params.Langs[i] {
+			return false
+		}
+	}
+	if sg.Params.DoCount {
+		if ssg.Params.DoCount {
+			return true
+		}
+		return false
+	}
+	if ssg.Params.DoCount {
+		return false
+	}
+	if len(sg.SrcFunc) > 0 {
+		if len(ssg.SrcFunc) > 0 {
+			if sg.SrcFunc[0] == ssg.SrcFunc[0] {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
+// This method gets the values and children for a subgraphp.
 func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 	uidAlreadySet := false
@@ -242,6 +281,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	// We go through all predicate children of the subgraphp.
 	for _, pc := range sg.Children {
 		if pc.IsInternal() {
+			if pc.Params.Expand != "" {
+				continue
+			}
 			if pc.Params.uidToVal == nil {
 				return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
 			}
@@ -260,6 +302,20 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				sv.Value = ""
 			}
 			dst.AddValue(fieldName, sv)
+			continue
+		}
+
+		if pc.IsListNode() {
+			for _, val := range pc.values {
+				v, err := getValue(val)
+				if err != nil {
+					return err
+				}
+				sv, err := types.Convert(v, v.Tid)
+				uc := dst.New(pc.Attr)
+				uc.AddValue("_name_", sv)
+				dst.AddListChild(pc.Attr, uc)
+			}
 			continue
 		}
 
@@ -307,7 +363,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			uc := dst.New(pc.Attr)
 			uc.AddValue("checkpwd", c)
 			dst.AddListChild(pc.Attr, uc)
-		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
+		} else if len(ul.Uids) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			var fcsList []*facetsp.Facets
@@ -478,6 +534,11 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	attrsSeen := make(map[string]struct{})
 	for _, gchild := range gq.Children {
 		key := gchild.Attr
+		if (sg.Params.Alias == "shortest" || sg.Params.Alias == "recurse") &&
+			gchild.Expand != "" {
+			return x.Errorf("expand() not allowed inside shortest/recurse")
+		}
+
 		if gchild.Func != nil && gchild.Func.IsAggregator() {
 			key += gchild.Func.Name
 		} else if gchild.Attr == "var" {
@@ -506,6 +567,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Var:        gchild.Var,
 			Normalize:  sg.Params.Normalize,
 			isInternal: gchild.IsInternal,
+			Expand:     gchild.Expand,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &facetsp.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -795,8 +857,9 @@ func createTaskQuery(sg *SubGraph) *taskp.Query {
 }
 
 type values struct {
-	uids *taskp.List
-	vals map[uint64]types.Val
+	uids    *taskp.List
+	vals    map[uint64]types.Val
+	strList []*taskp.Value
 }
 
 func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint64]types.Val,
@@ -1052,6 +1115,9 @@ func shouldCascade(res gql.Result, idx int) bool {
 }
 
 func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
+	if sg.DestUIDs == nil {
+		return
+	}
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
 		goto AssignStep
@@ -1110,7 +1176,13 @@ AssignStep:
 	if sg.Params.Var == "" {
 		return
 	}
-	if sg.Params.Facet != nil {
+
+	if sg.IsListNode() {
+		// This is a predicates list.
+		doneVars[sg.Params.Var] = values{
+			strList: sg.values,
+		}
+	} else if sg.Params.Facet != nil {
 		if len(sg.facetsMatrix) == 0 {
 			return
 		}
@@ -1202,13 +1274,15 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 	lists := make([]*taskp.List, 0, 3)
 	for _, v := range sg.Params.NeedsVar {
 		if l, ok := mp[v.Name]; ok {
-			if v.Typ != gql.VALUE_VAR && l.uids != nil {
+			if (v.Typ == gql.ANY_VAR || v.Typ == gql.LIST_VAR) && l.strList != nil {
+				sg.ExpandPreds = l.strList
+			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.uids != nil {
 				isVar = true
 				lists = append(lists, l.uids)
-			} else if v.Typ != gql.UID_VAR && len(l.vals) != 0 {
+			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.vals) != 0 {
 				// This should happened only once.
 				sg.Params.uidToVal = l.vals
-			} else if len(l.vals) != 0 && v.Typ == gql.UID_VAR {
+			} else if len(l.vals) != 0 && (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) {
 				// Derive the UID list from value var.
 				uids := make([]uint64, 0, len(l.vals))
 				for k := range l.vals {
@@ -1231,12 +1305,6 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-	if sg.IsInternal() {
-		// We dont have to execute these nodes.
-		rch <- nil
-		return
-	}
-
 	if parent == nil && len(sg.SrcFunc) == 0 {
 		// I'm root and I'm using some varaible that has been populated.
 		// Retain the actual order in uidMatrix. But sort the destUids.
@@ -1275,6 +1343,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
+		if sg.Attr == "_predicate_" {
+			sg.Params.isListNode = true
+		}
 		sg.uidMatrix = result.UidMatrix
 		sg.values = result.Values
 		sg.facetsMatrix = result.FacetMatrix
@@ -1394,16 +1465,72 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		return
 	}
 
+	out := sg.Children[:0]
+	for i := 0; i < len(sg.Children); i++ {
+		child := sg.Children[i]
+		if !child.IsInternal() {
+			out = append(out, child)
+			continue
+		}
+		if child.Params.Expand == "" {
+			out = append(out, child)
+			continue
+		}
+		if child.Params.Expand == "_all_" {
+			// Get the predicate list for expansion. Otherwise we already
+			// have the list populated.
+			temp := new(SubGraph)
+			temp.Attr = "_predicate_"
+			temp.SrcUIDs = sg.DestUIDs
+			temp.Params.isListNode = true
+			taskQuery := createTaskQuery(temp)
+			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
+				rch <- err
+				return
+			}
+			child.ExpandPreds = result.Values
+		}
+
+		for _, v := range child.ExpandPreds {
+			temp := new(SubGraph)
+			*temp = *child
+			temp.Params.isInternal = false
+			temp.Params.Expand = ""
+			if v.ValType != int32(types.StringID) {
+				rch <- x.Errorf("Expected a string type")
+				return
+			}
+			temp.Attr = string(v.Val)
+			for _, ch := range sg.Children {
+				if ch.isSimilar(temp) {
+					rch <- x.Errorf("Repeated subgraph while using expand()")
+					return
+				}
+			}
+			out = append(out, temp)
+		}
+	}
+	sg.Children = out
+
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		child.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
 		child.SrcUIDs = sg.DestUIDs                    // Make the connection.
+		if child.IsInternal() {
+			// We dont have to execute these nodes.
+			continue
+		}
 		go ProcessGraph(ctx, child, sg, childChan)
 	}
 
 	// Now get all the results back.
-	for range sg.Children {
+	for _, child := range sg.Children {
+		if child.IsInternal() {
+			continue
+		}
 		select {
 		case err = <-childChan:
 			if err != nil {

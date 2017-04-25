@@ -43,6 +43,7 @@ type GraphQuery struct {
 	Var        string
 	NeedsVar   []VarContext
 	Func       *Function
+	Expand     string // Which variable to expand with.
 
 	Args         map[string]string
 	Children     []*GraphQuery
@@ -83,8 +84,10 @@ type fragmentNode struct {
 type fragmentMap map[string]*fragmentNode
 
 const (
+	ANY_VAR   = 0
 	UID_VAR   = 1
 	VALUE_VAR = 2
+	LIST_VAR  = 3
 )
 
 type VarContext struct {
@@ -739,8 +742,13 @@ L:
 			}
 			goto L
 		}
+	} else if item.Typ == itemRightCurl {
+		// Do nothing.
+	} else if item.Typ == itemName {
+		it.Prev()
+		return gq, nil
 	} else {
-		return nil, x.Errorf("Malformed Query. Missing {")
+		return nil, x.Errorf("Malformed Query. Missing {. Got %v", item.Val)
 	}
 
 	return gq, nil
@@ -1882,12 +1890,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
-			} else if isValVarFunc(valLower) {
-				//item.Val = val
+			} else if isMathBlock(valLower) {
 				if varName == "" {
 					return x.Errorf("Function %v should be used with a variable", val)
 				}
-				//it.Prev()
 				mathTree, again, err := parseMathFunc(it, false)
 				if err != nil {
 					return err
@@ -1906,7 +1912,41 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
-
+			} else if isExpandFunc(valLower) {
+				if varName != "" {
+					return x.Errorf("expand() cannot be used with a variable", val)
+				}
+				it.Next() // Consume the '('
+				if it.Item().Typ != itemLeftRound {
+					return x.Errorf("Invalid use of expand()", val)
+				}
+				it.Next()
+				item := it.Item()
+				child := &GraphQuery{
+					Attr:       val,
+					Args:       make(map[string]string),
+					IsInternal: true,
+				}
+				if item.Val == "var" {
+					count, err := parseVarList(it, child)
+					if err != nil {
+						return err
+					}
+					if count != 1 {
+						return x.Errorf("Invalid use of expand(). Exactly one variable expected.")
+					}
+					child.NeedsVar[len(child.NeedsVar)-1].Typ = LIST_VAR
+					child.Expand = child.NeedsVar[len(child.NeedsVar)-1].Name
+				} else if item.Val == "_all_" {
+					child.Expand = "_all_"
+				} else {
+					return x.Errorf("Invalid argument %v in expand()", item.Val)
+				}
+				it.Next() // Consume ')'
+				gq.Children = append(gq.Children, child)
+				// Note: curp is not set to nil. So it can have children, filters, etc.
+				curp = child
+				continue
 			} else if valLower == "count" {
 				if isCount != 0 {
 					return x.Errorf("Invalid mention of function count")
@@ -2002,7 +2042,11 @@ func isAggregator(fname string) bool {
 	return fname == "min" || fname == "max" || fname == "sum" || fname == "avg"
 }
 
-func isValVarFunc(name string) bool {
+func isExpandFunc(name string) bool {
+	return name == "expand"
+}
+
+func isMathBlock(name string) bool {
 	return name == "math"
 }
 

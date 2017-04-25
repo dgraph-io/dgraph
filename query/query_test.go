@@ -1111,6 +1111,27 @@ func TestRecurseQueryLimitDepth(t *testing.T) {
 		`{"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }
 
+func TestShortestPath_ExpandError(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:0x01, to:101) {
+				expand(_all_)
+			}
+
+			me(id: var( A)) {
+				name
+			}
+		}`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
 func TestShortestPath_NoPath(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -2518,7 +2539,6 @@ func TestFilterRegexError(t *testing.T) {
 	ctx := context.Background()
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
-	sg.DebugPrint("")
 
 	ch := make(chan error)
 	go ProcessGraph(ctx, sg, nil, ch)
@@ -3168,7 +3188,6 @@ func TestToFastJSONOrderNameError(t *testing.T) {
 	ctx := context.Background()
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
-	sg.DebugPrint("")
 
 	ch := make(chan error)
 	go ProcessGraph(ctx, sg, nil, ch)
@@ -4697,7 +4716,6 @@ func TestNearGeneratorError(t *testing.T) {
 	ctx := context.Background()
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
-	sg.DebugPrint("")
 
 	ch := make(chan error)
 	go ProcessGraph(ctx, sg, nil, ch)
@@ -4720,7 +4738,6 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 	ctx := context.Background()
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
-	sg.DebugPrint("")
 
 	ch := make(chan error)
 	go ProcessGraph(ctx, sg, nil, ch)
@@ -4743,7 +4760,6 @@ func TestWithinGeneratorError(t *testing.T) {
 	ctx := context.Background()
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
-	sg.DebugPrint("")
 
 	ch := make(chan error)
 	go ProcessGraph(ctx, sg, nil, ch)
@@ -4801,7 +4817,6 @@ func TestIntersectsGeneratorError(t *testing.T) {
 	ctx := context.Background()
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
-	sg.DebugPrint("")
 
 	ch := make(chan error)
 	go ProcessGraph(ctx, sg, nil, ch)

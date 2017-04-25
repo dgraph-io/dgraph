@@ -342,7 +342,7 @@ func edgeType(t *taskp.DirectedEdge) x.ValueTypeInfo {
 	hasId := t.ValueId != 0
 	switch {
 	case hasVal && hasId:
-		return x.ValueLang
+		return x.ValueMulti
 	case hasVal && !hasId:
 		return x.ValuePlain
 	case !hasVal && hasId:
@@ -359,7 +359,7 @@ func postingType(p *typesp.Posting) x.ValueTypeInfo {
 	case typesp.Posting_VALUE:
 		return x.ValuePlain
 	case typesp.Posting_VALUE_LANG:
-		return x.ValueLang
+		return x.ValueMulti
 	default:
 		return x.ValueEmpty
 	}
@@ -387,6 +387,10 @@ func (l *List) addMutation(ctx context.Context, t *taskp.DirectedEdge) (bool, er
 			t.ValueId = farm.Fingerprint64([]byte(t.Lang))
 		} else {
 			t.ValueId = math.MaxUint64
+		}
+
+		if t.Attr == "_predicate_" {
+			t.ValueId = farm.Fingerprint64(t.Value)
 		}
 	}
 	if t.ValueId == 0 {
@@ -638,6 +642,22 @@ func (l *List) Postings(opt ListOptions, postFn func(*typesp.Posting) bool) {
 	})
 }
 
+func (l *List) AllValues() (vals []types.Val, rerr error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	l.iterate(0, func(p *typesp.Posting) bool {
+		// x.AssertTruef(postingType(p) == x.ValueMulti,
+		//	"Expected a value posting.")
+		vals = append(vals, types.Val{
+			Tid:   types.TypeID(p.ValType),
+			Value: p.Value,
+		})
+		return true
+	})
+	return
+}
+
 // Returns Value from posting list.
 // This function looks only for "default" value (one without language).
 func (l *List) Value() (rval types.Val, rerr error) {
@@ -696,7 +716,7 @@ func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
 	// last resort - return value with smallest lang Uid
 	if !found {
 		l.iterate(0, func(p *typesp.Posting) bool {
-			if postingType(p) == x.ValueLang {
+			if postingType(p) == x.ValueMulti {
 				val := make([]byte, len(p.Value))
 				copy(val, p.Value)
 				rval.Value = val
