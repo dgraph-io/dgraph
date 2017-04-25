@@ -125,7 +125,7 @@ func TestRetrieveFacetsAsVars(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Rick Grimes","var[a]":"2006-01-02T15:04:05Z"}]}`,
+		`{"me":[{"name":"Rick Grimes","var(a)":"2006-01-02T15:04:05Z"}]}`,
 		js)
 }
 

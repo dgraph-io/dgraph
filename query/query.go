@@ -230,6 +230,7 @@ func init() {
 
 var (
 	ErrEmptyVal = errors.New("query: harmless error, e.g. task.Val is nil")
+	ErrWrongAgg = errors.New("Wrong level for var aggregation.")
 )
 
 // This method gets the values and children for a subgraph.
@@ -244,9 +245,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if pc.Params.uidToVal == nil {
 				return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
 			}
-			fieldName := fmt.Sprintf("var[%v]", pc.Params.Var)
-			if fieldName != "" && len(pc.Params.NeedsVar) > 0 {
-				fieldName = fmt.Sprintf("var[%v]", pc.Params.NeedsVar[0].Name)
+			fieldName := fmt.Sprintf("var(%v)", pc.Params.Var)
+			if len(pc.Params.NeedsVar) > 0 {
+				fieldName = fmt.Sprintf("var(%v)", pc.Params.NeedsVar[0].Name)
+				if len(pc.SrcFunc) > 0 {
+					fieldName = fmt.Sprintf("%s(%v)", pc.SrcFunc[0], fieldName)
+				}
 			}
 			sv, ok := pc.Params.uidToVal[uid]
 			if !ok || sv.Value == nil {
@@ -795,55 +799,87 @@ type values struct {
 	vals map[uint64]types.Val
 }
 
-func (sg *SubGraph) populateAggregation(parent *SubGraph) error {
-	finalChild := sg.Children[:0]
-	for idx := 0; idx < len(sg.Children); idx++ {
-		child := sg.Children[idx]
-		err := child.populateAggregation(sg)
-		if err != nil {
-			return err
-		}
-		if parent == nil || len(child.SrcFunc) == 0 || !isAggregatorFn(child.SrcFunc[0]) ||
-			child.Params.Alias == sg.Attr {
-			finalChild = append(finalChild, child)
+func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint64]types.Val,
+	rerr error) {
+	if parent == nil {
+		return mp, ErrWrongAgg
+	}
+	var relSG *SubGraph
+	needsVar := sg.Params.NeedsVar[0].Name
+	for _, ch := range parent.Children {
+		if sg == ch {
 			continue
 		}
-
-		sibling := new(SubGraph)
-		*sibling = *child // Sibling of sg.
-		sibling.Children = []*SubGraph{}
-		sibling.SrcUIDs = sg.SrcUIDs // Point the new Subgraphs srcUids
-		parent.Children = append(parent.Children, sibling)
-		sibling.values = make([]*taskp.Value, 0, 1)
-		sibling.Params.Alias = sg.Attr
-		for _, list := range sg.uidMatrix {
-			ag := aggregator{
-				name: child.SrcFunc[0],
+		for _, cch := range ch.Children {
+			// Find the sibling node whose child has the required variable.
+			if cch.Params.Var == needsVar {
+				relSG = ch
 			}
-			for _, uid := range list.Uids {
-				idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
-					return child.SrcUIDs.Uids[i] >= uid
-				})
-				if idx < len(child.SrcUIDs.Uids) && child.SrcUIDs.Uids[idx] == uid {
-					ag.Apply(child.values[idx])
-				}
-			}
-			v, err := ag.ValueMarshalled()
-			if err != nil {
-				return err
-			}
-			sibling.values = append(sibling.values, v)
 		}
 	}
-	sg.Children = finalChild
-	return nil
+	if relSG == nil {
+		return mp, x.Errorf("Invalid variable aggregation. Check the levels.")
+	}
+
+	vals := doneVars[needsVar].vals
+	mp = make(map[uint64]types.Val)
+	// Go over the sibling node and aggregate.
+	for i, list := range relSG.uidMatrix {
+		ag := aggregator{
+			name: sg.SrcFunc[0],
+		}
+		for _, uid := range list.Uids {
+			if val, ok := vals[uid]; ok {
+				ag.Apply(val)
+			}
+		}
+		v, err := ag.Value()
+		if err != nil {
+			return mp, err
+		}
+		if v.Value != nil {
+			mp[relSG.SrcUIDs.Uids[i]] = v
+		}
+	}
+	return mp, nil
 }
 
-func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
+func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubGraph) error {
 	if !sg.IsInternal() {
 		return nil
 	}
-	if sg.MathExp == nil {
+	if len(sg.SrcFunc) > 0 && isAggregatorFn(sg.SrcFunc[0]) {
+		// Aggregate the value over level.
+		mp, err := evalLevelAgg(doneVars, sg, parent)
+		if err != nil {
+			return err
+		}
+		if sg.Params.Var != "" {
+			doneVars[sg.Params.Var] = values{
+				vals: mp,
+			}
+		}
+		sg.Params.uidToVal = mp
+	} else if sg.MathExp != nil {
+		err := evalMathTree(sg.MathExp, doneVars)
+		if err != nil {
+			return err
+		}
+		if sg.MathExp.Val != nil {
+			doneVars[sg.Params.Var] = values{vals: sg.MathExp.Val}
+		} else if sg.MathExp.Const.Value != nil {
+			// Assign the const for all the srcUids.
+			mp := make(map[uint64]types.Val)
+			for _, uid := range sg.SrcUIDs.Uids {
+				mp[uid] = sg.MathExp.Const
+			}
+			doneVars[sg.Params.Var] = values{vals: mp}
+		} else {
+			return x.Errorf("Missing values/constant in math expression")
+		}
+		// Put it in this node.
+		sg.Params.uidToVal = sg.MathExp.Val
+	} else {
 		// This is a var() block.
 		srcVar := sg.Params.NeedsVar[0]
 		srcMap := doneVars[srcVar.Name]
@@ -851,39 +887,20 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values) error {
 			return x.Errorf("Missing value variable %v", srcVar)
 		}
 		sg.Params.uidToVal = srcMap.vals
-		return nil
 	}
-	err := evalMathTree(sg.MathExp, doneVars)
-	if err != nil {
-		return err
-	}
-	if sg.MathExp.Val != nil {
-		doneVars[sg.Params.Var] = values{vals: sg.MathExp.Val}
-	} else if sg.MathExp.Const.Value != nil {
-		// Assign the const for all the srcUids.
-		mp := make(map[uint64]types.Val)
-		for _, uid := range sg.SrcUIDs.Uids {
-			mp[uid] = sg.MathExp.Const
-		}
-		doneVars[sg.Params.Var] = values{vals: mp}
-	} else {
-		return x.Errorf("Missing values/constant in math expression")
-	}
-	// Put it in this node.
-	sg.Params.uidToVal = sg.MathExp.Val
 	return nil
 }
 
-func (sg *SubGraph) populatePostAggregation(doneVars map[string]values) error {
+func (sg *SubGraph) populatePostAggregation(doneVars map[string]values, parent *SubGraph) error {
 	for idx := 0; idx < len(sg.Children); idx++ {
 		child := sg.Children[idx]
-		err := child.populatePostAggregation(doneVars)
+		err := child.populatePostAggregation(doneVars, sg)
 		if err != nil {
 			return err
 		}
 		// We'd also need to do aggregation over levels here.
 	}
-	return sg.valueVarAggregation(doneVars)
+	return sg.valueVarAggregation(doneVars, parent)
 }
 
 func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
@@ -990,13 +1007,9 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
-			err := sg.populateAggregation(nil)
-			if err != nil {
-				return nil, err
-			}
 			isCascade := sg.Params.Cascade || shouldCascade(res, idx)
 			populateVarMap(sg, doneVars, isCascade)
-			err = sg.populatePostAggregation(doneVars)
+			err = sg.populatePostAggregation(doneVars, nil)
 			if err != nil {
 				return nil, err
 			}

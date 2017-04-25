@@ -1830,7 +1830,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			if err != nil {
 				return x.Errorf("Invalid query")
 			}
-
 			if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
 				varName = item.Val
 				it.Next() // "As" was checked before.
@@ -1839,7 +1838,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 			val := collectName(it, item.Val)
 			valLower := strings.ToLower(val)
-			if isAggregator(valLower) || valLower == "checkpwd" {
+			if valLower == "checkpwd" {
 				child := &GraphQuery{
 					Args: make(map[string]string),
 					Var:  varName,
@@ -1849,10 +1848,37 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if child.Func, err = parseFunction(it); err != nil {
 					return err
 				}
-				if valLower == "checkpwd" {
-					child.Func.Args = append(child.Func.Args, child.Func.Attr)
-				}
+				child.Func.Args = append(child.Func.Args, child.Func.Attr)
 				child.Attr = child.Func.Attr
+				gq.Children = append(gq.Children, child)
+				curp = nil
+				continue
+			} else if isAggregator(valLower) {
+				child := &GraphQuery{
+					Attr:       "var",
+					Args:       make(map[string]string),
+					Var:        varName,
+					IsInternal: true,
+				}
+				varName = ""
+				it.Next()
+				it.Next()
+				if it.Item().Val != "var" {
+					return x.Errorf("Only variables allowed in aggregate functions.")
+				}
+				count, err := parseVarList(it, child)
+				if err != nil {
+					return err
+				}
+				if count != 1 {
+					x.Errorf("Expected one variable inside var() of aggregator but got %v", count)
+				}
+				child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
+				child.Func = &Function{
+					Name:     valLower,
+					NeedsVar: child.NeedsVar,
+				}
+				it.Next() // Skip the closing ')'
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
