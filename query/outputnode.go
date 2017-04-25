@@ -157,21 +157,51 @@ func (p *protoNode) IsEmpty() bool {
 	return true
 }
 
-func (n *protoNode) normalize(props []*graphp.Property, out []protoNode) []protoNode {
-	if len(n.Children) == 0 {
-		props = append(props, n.Properties...)
-		pn := protoNode{&graphp.Node{Properties: props}}
-		out = append(out, pn)
-		return out
+func mergeProto(parent [][]*graphp.Property, child [][]*graphp.Property) [][]*graphp.Property {
+	if len(parent) == 0 {
+		return child
 	}
 
-	for _, child := range n.Children {
-		p := make([]*graphp.Property, len(props))
-		copy(p, props)
-		p = append(p, n.Properties...)
-		out = (&protoNode{child}).normalize(p, out)
+	mergedLists := make([][]*graphp.Property, 0, len(parent)*len(child))
+	for _, pa := range parent {
+		for _, ca := range child {
+			mergeList := make([]*graphp.Property, 0, len(parent))
+			mergeList = append(mergeList, pa...)
+			mergeList = append(mergeList, ca...)
+			mergedLists = append(mergedLists, mergeList)
+		}
 	}
-	return out
+	return mergedLists
+}
+
+func (n *protoNode) normalize() [][]*graphp.Property {
+	if len(n.Children) == 0 {
+		return [][]*graphp.Property{n.Properties}
+	}
+
+	parentSlice := make([][]*graphp.Property, 0, len(n.Properties))
+	if len(n.Properties) > 0 {
+		parentSlice = append(parentSlice, n.Properties)
+	}
+
+	// Temporary map, so that we can group children by attribute, similar to how
+	// we have in JSON. Then we can call normalize on all children with same attribute,
+	// aggregate results and merge them with the results of children with some other attribute.
+	attrChildrenMap := make(map[string][]*graphp.Node)
+	for _, child := range n.Children {
+		attrChildrenMap[child.Attribute] = append(attrChildrenMap[child.Attribute], child)
+	}
+
+	for _, attrChildren := range attrChildrenMap {
+		childSlice := make([][]*graphp.Property, 0, 5)
+
+		for _, child := range attrChildren {
+			childSlice = append(childSlice, (&protoNode{child}).normalize()...)
+		}
+		parentSlice = mergeProto(parentSlice, childSlice)
+
+	}
+	return parentSlice
 }
 
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
@@ -210,10 +240,8 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graphp.Node, error) {
 		}
 
 		// Lets normalize the response now.
-		normalized := make([]protoNode, 0, 10)
-		props := make([]*graphp.Property, 0, 10)
-		for _, c := range (n1.(*protoNode)).normalize(props, normalized) {
-			n.AddListChild(sg.Params.Alias, &c)
+		for _, c := range n1.(*protoNode).normalize() {
+			n.AddListChild(sg.Params.Alias, &protoNode{&graphp.Node{Properties: c}})
 		}
 	}
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
@@ -375,37 +403,52 @@ func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 	bufw.WriteRune('}')
 }
 
-func (n *fastJsonNode) normalize(av []attrVal, out []fastJsonNode) []fastJsonNode {
-	if len(n.children) == 0 {
-		// No more children nodes, lets copy the attrs to the slice and attach the
-		// result to out.
-		for k, v := range n.attrs {
-			av = append(av, attrVal{k, v})
-		}
-
-		fn := fastJsonNode{
-			attrs: make(map[string]*fastJsonAttr),
-		}
-		for _, pair := range av {
-			fn.attrs[pair.attr] = pair.val
-		}
-		out = append(out, fn)
-		return out
+func merge(parent []map[string]*fastJsonAttr, child []map[string]*fastJsonAttr) []map[string]*fastJsonAttr {
+	if len(parent) == 0 {
+		return child
 	}
 
-	for _, child := range n.children {
-		// n.children is a map of string -> []*fastJsonNode.
-		for _, jn := range child {
-			vals := make([]attrVal, len(av))
-			copy(vals, av)
-			// Create a copy of the attr-val slice, attach attrs and pass to children.
-			for k, v := range n.attrs {
-				vals = append(vals, attrVal{k, v})
+	// Here we merge two slices of maps.
+	mergedList := make([]map[string]*fastJsonAttr, 0, len(parent)*len(child))
+	for _, pa := range parent {
+		for _, ca := range child {
+			mergeMap := make(map[string]*fastJsonAttr)
+			for k, v := range pa {
+				mergeMap[k] = v
 			}
-			out = jn.normalize(vals, out)
+			// Copy over child map entries to mergeMap created above.
+			for k, v := range ca {
+				mergeMap[k] = v
+			}
+			// Add the
+			mergedList = append(mergedList, mergeMap)
 		}
 	}
-	return out
+	return mergedList
+}
+
+func (n *fastJsonNode) normalize() []map[string]*fastJsonAttr {
+	if len(n.children) == 0 {
+		// Recursion base case
+		// There are no children, we can just return slice with n.attrs map.
+		return []map[string]*fastJsonAttr{n.attrs}
+	}
+
+	parentSlice := make([]map[string]*fastJsonAttr, 0, 5)
+	// If the parents has attrs, lets add them to the slice so that it can be
+	// merged with children later.
+	parentSlice = append(parentSlice, n.attrs)
+
+	for _, childNodes := range n.children {
+		childSlice := make([]map[string]*fastJsonAttr, 0, 5)
+		// Normalizing children.
+		for _, childNode := range childNodes {
+			childSlice = append(childSlice, childNode.normalize()...)
+		}
+		// Merging with parent.
+		parentSlice = merge(parentSlice, childSlice)
+	}
+	return parentSlice
 }
 
 type attrVal struct {
@@ -446,13 +489,8 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		}
 
 		// Lets normalize the response now.
-		normalized := make([]fastJsonNode, 0, 10)
-
-		// This slice is used to mantain the leaf nodes along a path while traversing
-		// the Subgraph.
-		av := make([]attrVal, 0, 10)
-		for _, c := range (n1.(*fastJsonNode)).normalize(av, normalized) {
-			n.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c.attrs})
+		for _, c := range n1.(*fastJsonNode).normalize() {
+			n.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c})
 		}
 	}
 	return nil

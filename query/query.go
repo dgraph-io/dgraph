@@ -232,7 +232,7 @@ var (
 	ErrEmptyVal = errors.New("query: harmless error, e.g. task.Val is nil")
 )
 
-// This method gets the values and children for a subgraphp.
+// This method gets the values and children for a subgraph.
 func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 	uidAlreadySet := false
