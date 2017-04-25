@@ -303,6 +303,48 @@ func TestListPred(t *testing.T) {
 		output)
 }
 
+func TestExpandPredError(t *testing.T) {
+	var q1 = `
+	{
+		me(func:anyofterms(name, "Alice")) {
+  		expand(_all_)
+			name
+			friend
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+			<alice> <name> "Alice" .
+			<alice> <age> "13" .
+			<alice> <friend> <bob> .
+			<bob> <name> "bob" .
+			<bob> <age> "12" .
+		}
+	}
+	`
+	var s = `
+	mutation {
+		schema {
+            name:string @index .
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	// add index to name
+	err = runMutation(s)
+	require.NoError(t, err)
+
+	_, err = runQuery(q1)
+	require.Error(t, err)
+}
+
 func TestExpandPred(t *testing.T) {
 	var q1 = `
 	{

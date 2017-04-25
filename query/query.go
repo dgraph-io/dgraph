@@ -239,6 +239,43 @@ var (
 	ErrEmptyVal = errors.New("query: harmless error, e.g. task.Val is nil")
 )
 
+func (sg *SubGraph) isSimilar(ssg *SubGraph) bool {
+	if sg.Attr != ssg.Attr {
+		return false
+	}
+
+	if len(sg.Params.Langs) != len(ssg.Params.Langs) {
+		return false
+	}
+
+	for i := 0; i < len(sg.Params.Langs) && i < len(ssg.Params.Langs); i++ {
+		if sg.Params.Langs[i] != ssg.Params.Langs[i] {
+			return false
+		}
+	}
+
+	if sg.Params.DoCount {
+		if ssg.Params.DoCount {
+			return true
+		}
+		return false
+	}
+
+	if ssg.Params.DoCount {
+		return false
+	}
+
+	if len(sg.SrcFunc) > 0 {
+		if len(ssg.SrcFunc) > 0 {
+			if sg.SrcFunc[0] == ssg.SrcFunc[0] {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
 // This method gets the values and children for a subgraphp.
 func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
@@ -1448,6 +1485,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			if v.ValType != int32(types.StringID) {
 				rch <- x.Errorf("Expected a string type")
 				return
+			}
+			for _, ch := range sg.Children {
+				if ch.isSimilar(temp) {
+					rch <- x.Errorf("Repeated subgraph while using expand()")
+					return
+				}
 			}
 			temp.Attr = string(v.Val)
 			out = append(out, temp)
