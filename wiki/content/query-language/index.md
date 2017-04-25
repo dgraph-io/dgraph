@@ -1493,6 +1493,31 @@ query {
 	}
 }' | python -m json.tool | less
 ```
+Output:
+```
+{
+  "me": [
+    {
+      "avg[var[a]]": 100,
+      "friend": [
+        {
+          "age": 99,
+          "name": "Tom"
+        },
+        {
+          "age": 100,
+          "name": "Jerry"
+        },
+        {
+          "age": 101,
+          "name": "Teddy"
+        }
+      ],
+      "sum[var[a]]": 300
+    }
+  ]
+}
+```
 
 ## Multiple Query Blocks
 Multiple blocks can be inside a single query and they would be returned in the result with the corresponding block names.

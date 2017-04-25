@@ -230,6 +230,7 @@ func init() {
 
 var (
 	ErrEmptyVal = errors.New("query: harmless error, e.g. task.Val is nil")
+	ErrWrongAgg = errors.New("Wrong level for var aggregation.")
 )
 
 // This method gets the values and children for a subgraphp.
@@ -244,11 +245,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if pc.Params.uidToVal == nil {
 				return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
 			}
-			fieldName := fmt.Sprintf("var[%v]", pc.Params.Var)
+			fieldName := fmt.Sprintf("var(%v)", pc.Params.Var)
 			if len(pc.Params.NeedsVar) > 0 {
-				fieldName = fmt.Sprintf("var[%v]", pc.Params.NeedsVar[0].Name)
+				fieldName = fmt.Sprintf("var(%v)", pc.Params.NeedsVar[0].Name)
 				if len(pc.SrcFunc) > 0 {
-					fieldName = fmt.Sprintf("%s[%v]", pc.SrcFunc[0], fieldName)
+					fieldName = fmt.Sprintf("%s(%v)", pc.SrcFunc[0], fieldName)
 				}
 			}
 			sv, ok := pc.Params.uidToVal[uid]
@@ -801,7 +802,7 @@ type values struct {
 func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint64]types.Val,
 	rerr error) {
 	if parent == nil {
-		return mp, x.Errorf("Wrong level for var aggregation.")
+		return mp, ErrWrongAgg
 	}
 	var relSG *SubGraph
 	needsVar := sg.Params.NeedsVar[0].Name
