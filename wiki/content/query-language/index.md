@@ -334,13 +334,14 @@ There are three types of string indices: `exact`, `term` and `fulltext`. Followi
 
 | Index type |                          Usage                         |
 |:----------:|:------------------------------------------------------:|
-|   `exact`  | matching of entire value, regular expressions          |
+|   `exact`  | matching of entire value                               |
 |   `term`   | matching of terms/words                                |
 | `fulltext` | matching with language specific stemming and stopwords |
+| `trigram`  | regular expressions matching                           |
 
 #### Sortable Indices
 
-Not all the indices establish a total order among the values that they index. So, in order to order based on the values or do inequality operations, the corresponding predicates must have a sortable index. The non-sortable indices that are curently present are `term`. All other indices are sortable. For example to sort by names or do any inequality operations on it, this line **must** be specified in schema.
+Not all the indices establish a total order among the values that they index. So, in order to order based on the values or do inequality operations, the corresponding predicates must have a sortable index. The non-sortable indices that are currently present are `term`. All other indices are sortable. For example to sort by names or do any inequality operations on it, this line **must** be specified in schema.
 ```
 name: string @index(exact) .
 ```
@@ -695,21 +696,37 @@ We can look up films that contain either the word "passion" or "peacock". Surpri
 
 Note that the first result with the name "Unexpected Passion" is either not a film entity, or it is a film entity with no genre.
 
-### Regex search
-`regexp` function allows a regular expression match on the values. It requires exact index to be present for working.
+### Regular Expressions
+`regexp` function allows a regular expression match on the values. It requires `trigram` index to be present for working.
 
 {{< runnable >}}
 {
-  directors(func: regexp(name, "^Steven Sp.*$")) {
+  directors(func: regexp(name@en, "^Steven Sp.*$")) {
     name@en
-    director.film @filter(regexp(name, "Ryan")) {
+    director.film @filter(regexp(name@en, "Ryan")) {
       name@en
     }
   }
 }
 {{< /runnable >}}
 
-{{% notice "note" %}}Regex function requires full index scan as of v0.7.4 which is slow. So it's recommended to use them only if absolutely necessary {{% /notice %}}
+#### Technical details
+
+{{% notice "note" %}}Trigram is a substring of three continous runes. For example: string `Dgraph` has following trigrams: `Dgr`, `gra`, `rap`, `aph`.{{% /notice %}}
+
+To ensure high efficiency of regular expression matching, [trigram indexing](https://swtch.com/~rsc/regexp/regexp4.html) is used.
+As full scan of all values is definitely too slow, Dgraph handles only the regular expression that can be converted to trigram query.
+Moreover if partial result (for subset of trigrams) exceeds 1000000 uids during index scan, we stop the query (again, to prohibit too expensive queries).
+
+#### Limitations
+When designing a regular expression to run on Dgraph, you should have following rules in mind:
+
+- at least one trigram must be matched by the regexp (patterns shorter than 3 runes are not supported)
+- number of alternative trigrams matched by the regexp should be as small as possible  (`[a-zA-Z][a-zA-Z][0-9]` is not a good idea)
+- regexp should be as precise as possible (matching longer strings means more required trigrams, which helps to effectively use the index)
+- if repeat specifications (`*`, `+`, `?`, `{n,m}`) are used, entire regexp must not match _empty_ string or _any_ string; for example `*` may be used like `[Aa]bcd*` but not like `(abcd)*` or `(abcd)|((defg)*)`
+- the repeat specifications after bracket expressions (like `[fgh]{7}`, `[0-9]+` or `[a-z]{3,5}`) are are often considered as _match any_, because they match too many trigrams
+
 
 ### Full Text Search
 There are two functions for full text search - `alloftext` and `anyoftext`.
