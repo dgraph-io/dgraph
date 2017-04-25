@@ -307,6 +307,51 @@ func TestListPred(t *testing.T) {
 
 }
 
+func TestExpandPred(t *testing.T) {
+	var q1 = `
+	{
+		me(func:anyofterms(name, "Alice")) {
+			expand(_all_) {
+  			expand(_all_)
+			}
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+			<alice> <name> "Alice" .
+			<alice> <age> "13" .
+			<alice> <friend> <bob> .
+			<bob> <name> "bob" .
+			<bob> <age> "12" .
+		}
+	}
+	`
+	var s = `
+	mutation {
+		schema {
+            name:string @index .
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	// add index to name
+	err = runMutation(s)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"me":[{"age":"13","friend":[{"age":"12","name":"bob"}],"name":"Alice"}]}`,
+		output)
+
+}
+
 // add index
 func TestSchemaMutationIndexAdd(t *testing.T) {
 	var q1 = `

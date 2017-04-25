@@ -498,6 +498,11 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	attrsSeen := make(map[string]struct{})
 	for _, gchild := range gq.Children {
 		key := gchild.Attr
+		if (sg.Params.Alias == "shortest" || sg.Params.Alias == "recurse") &&
+			gchild.Expand != "" {
+			return x.Errorf("expand() not allowed inside shortest/recurse")
+		}
+
 		if gchild.Func != nil && gchild.Func.IsAggregator() {
 			key += gchild.Func.Name
 		} else if gchild.Attr == "var" {
