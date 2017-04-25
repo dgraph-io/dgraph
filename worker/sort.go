@@ -119,9 +119,7 @@ func sortWithoutIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, e
 	if err != nil || !sType.IsScalar() {
 		return r, x.Errorf("Cannot sort attribute %s of type object.", ts.Attr)
 	}
-	if sType == types.BoolID {
-		return r, x.Errorf("Cannot sort attribute %v of type bool", ts.Attr)
-	}
+
 	for i := 0; i < n; i++ {
 		select {
 		case <-ctx.Done():
@@ -173,6 +171,7 @@ func sortWithIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, erro
 			break
 		}
 	}
+
 	if tokenizer == nil {
 		// String type can have multiple tokenizers, only one of which is
 		// sortable.
@@ -392,7 +391,7 @@ func sortByValue(attr string, langs []string, ul *taskp.List, typ types.TypeID, 
 		uids = append(uids, uid)
 		values = append(values, val)
 	}
-	err := types.Sort(typ, values, &taskp.List{uids}, desc)
+	err := types.Sort(values, &taskp.List{uids}, desc)
 	ul.Uids = uids
 	return err
 }

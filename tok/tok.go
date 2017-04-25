@@ -44,6 +44,11 @@ type Tokenizer interface {
 
 	// IsSortable returns if the index can be used for sorting.
 	IsSortable() bool
+
+	// IsLossy() returns true if we don't store the values directly as keys during
+	// tokenization. We can do eq operation if a predicate has a tokenizer which
+	// is not lossy.
+	IsLossy() bool
 }
 
 var (
@@ -127,6 +132,7 @@ func (t GeoTokenizer) Tokens(sv types.Val) ([]string, error) {
 }
 func (t GeoTokenizer) Identifier() byte { return 0x5 }
 func (t GeoTokenizer) IsSortable() bool { return false }
+func (t GeoTokenizer) IsLossy() bool    { return false }
 
 type IntTokenizer struct{}
 
@@ -137,6 +143,7 @@ func (t IntTokenizer) Tokens(sv types.Val) ([]string, error) {
 }
 func (t IntTokenizer) Identifier() byte { return 0x6 }
 func (t IntTokenizer) IsSortable() bool { return true }
+func (t IntTokenizer) IsLossy() bool    { return false }
 
 type FloatTokenizer struct{}
 
@@ -147,6 +154,7 @@ func (t FloatTokenizer) Tokens(sv types.Val) ([]string, error) {
 }
 func (t FloatTokenizer) Identifier() byte { return 0x7 }
 func (t FloatTokenizer) IsSortable() bool { return true }
+func (t FloatTokenizer) IsLossy() bool    { return true }
 
 type DateTokenizer struct{}
 
@@ -157,6 +165,7 @@ func (t DateTokenizer) Tokens(sv types.Val) ([]string, error) {
 }
 func (t DateTokenizer) Identifier() byte { return 0x3 }
 func (t DateTokenizer) IsSortable() bool { return true }
+func (t DateTokenizer) IsLossy() bool    { return true }
 
 type DateTimeTokenizer struct{}
 
@@ -167,6 +176,7 @@ func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
 }
 func (t DateTimeTokenizer) Identifier() byte { return 0x4 }
 func (t DateTimeTokenizer) IsSortable() bool { return true }
+func (t DateTimeTokenizer) IsLossy() bool    { return true }
 
 type TermTokenizer struct{}
 
@@ -177,6 +187,7 @@ func (t TermTokenizer) Tokens(sv types.Val) ([]string, error) {
 }
 func (t TermTokenizer) Identifier() byte { return 0x1 }
 func (t TermTokenizer) IsSortable() bool { return false }
+func (t TermTokenizer) IsLossy() bool    { return true }
 
 type ExactTokenizer struct{}
 
@@ -191,6 +202,7 @@ func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
 }
 func (t ExactTokenizer) Identifier() byte { return 0x2 }
 func (t ExactTokenizer) IsSortable() bool { return true }
+func (t ExactTokenizer) IsLossy() bool    { return false }
 
 // Full text tokenizer, with language support
 type FullTextTokenizer struct {
@@ -204,6 +216,7 @@ func (t FullTextTokenizer) Tokens(sv types.Val) ([]string, error) {
 }
 func (t FullTextTokenizer) Identifier() byte { return 0x8 }
 func (t FullTextTokenizer) IsSortable() bool { return false }
+func (t FullTextTokenizer) IsLossy() bool    { return true }
 
 func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error) {
 	analyzer, err := bleveCache.AnalyzerNamed(name)
@@ -259,6 +272,7 @@ func (t BoolTokenizer) Tokens(v types.Val) ([]string, error) {
 }
 func (t BoolTokenizer) Identifier() byte { return 0x9 }
 func (t BoolTokenizer) IsSortable() bool { return false }
+func (t BoolTokenizer) IsLossy() bool    { return false }
 
 type TrigramTokenizer struct{}
 
@@ -283,3 +297,4 @@ func (t TrigramTokenizer) Tokens(sv types.Val) ([]string, error) {
 }
 func (t TrigramTokenizer) Identifier() byte { return 0xA }
 func (t TrigramTokenizer) IsSortable() bool { return false }
+func (t TrigramTokenizer) IsLossy() bool    { return true }

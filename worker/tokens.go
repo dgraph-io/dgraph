@@ -64,35 +64,46 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 // getInequalityTokens gets tokens ge / le compared to given token using the first sortable
 // index that is found for the predicate.
 func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string, error) {
-	typ, err := schema.State().TypeOf(attr)
-	if err != nil {
-		return nil, "", x.Errorf("Attribute %s not defined in schema", attr)
-	}
-
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(attr) {
 		return nil, "", x.Errorf("Attribute %s is not indexed.", attr)
 	}
 
 	tokenizers := schema.State().Tokenizer(attr)
-	var tokenizer tok.Tokenizer
+	var comparableTok tok.Tokenizer
+	var sortableTok tok.Tokenizer
 	for _, t := range tokenizers {
-		// Get the first sortable index.
-		if t.IsSortable() {
-			tokenizer = t
+		if comparableTok == nil && !t.IsLossy() {
+			comparableTok = t
+		}
+		if sortableTok == nil && t.IsSortable() {
+			sortableTok = t
+		}
+
+		if comparableTok != nil && sortableTok != nil {
 			break
 		}
 	}
 
-	// Even though bool doesn't have a sortable index, it supports eq operator. So
-	// we use the default tokenizer for it.
-	if typ == types.BoolID {
-		tokenizer = tok.Default(types.BoolID)
+	if f == "eq" {
+		// eq operations requires either a comparable or a sortable tokenizer.
+		if comparableTok == nil && sortableTok == nil {
+			return nil, "", x.Errorf("Attribute: %s does not have proper index for comparison",
+				attr)
+		}
+		// rest of the cases, ge, gt , le , lt require a sortable tokenizer.
+	} else if sortableTok == nil {
+		return nil, "", x.Errorf("Attribute:%s does not have proper index for sorting",
+			attr)
 	}
 
-	if tokenizer == nil {
-		return nil, "", x.Errorf("Attribute:%s does not have proper index for comparison",
-			attr)
+	var tokenizer tok.Tokenizer
+	// sortableTok can be used for all operations, eq, ge, gt, lt, le so if an attr has one lets
+	// use that.
+	if sortableTok != nil {
+		tokenizer = sortableTok
+	} else {
+		tokenizer = comparableTok
 	}
 
 	// Get the token for the value passed in function.

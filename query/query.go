@@ -1501,8 +1501,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		typ := values[0].Tid
-		types.Sort(typ, values, &taskp.List{uids}, sg.Params.OrderDesc)
+		types.Sort(values, &taskp.List{uids}, sg.Params.OrderDesc)
 		sg.uidMatrix[i].Uids = uids
 	}
 

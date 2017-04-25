@@ -18,6 +18,7 @@
 package types
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -64,7 +65,15 @@ func (s byValue) Less(i, j int) bool {
 }
 
 // Sort sorts the given array in-place.
-func Sort(sID TypeID, v []Val, ul *taskp.List, desc bool) error {
+func Sort(v []Val, ul *taskp.List, desc bool) error {
+	typ := v[0].Tid
+	switch typ {
+	case DateTimeID, DateID, IntID, FloatID, StringID, DefaultID:
+		// Don't do anything, we can sort values of this type.
+	default:
+		return fmt.Errorf("Value of type: %s isn't sortable.", typ.Name())
+	}
+
 	var toBeSorted sort.Interface
 	b := sortBase{v, ul}
 	toBeSorted = byValue{b}
