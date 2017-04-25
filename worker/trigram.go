@@ -59,8 +59,10 @@ func uidsForRegex(attr string, gid uint32,
 				algo.IntersectWith(results, trigramUids, results)
 			}
 
-			if results.Size() == 0 || results.Size() > maxUidsForTrigram {
-				return results, regexTooWideErr
+			if results.Size() == 0 {
+				return results, nil
+			} else if results.Size() > maxUidsForTrigram {
+				return nil, regexTooWideErr
 			}
 		}
 		for _, sub := range query.Sub {
@@ -68,11 +70,14 @@ func uidsForRegex(attr string, gid uint32,
 				results = intersect
 			}
 			// current list of result is passed for intersection
-			results, err := uidsForRegex(attr, gid, sub, results)
+			var err error
+			results, err = uidsForRegex(attr, gid, sub, results)
 			if err != nil {
 				return nil, err
 			}
-			if results.Size() == 0 || results.Size() > maxUidsForTrigram {
+			if results.Size() == 0 {
+				return results, nil
+			} else if results.Size() > maxUidsForTrigram {
 				return nil, regexTooWideErr
 			}
 		}

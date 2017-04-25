@@ -364,7 +364,7 @@ func checkValueType(vm varMap) error {
 }
 
 func substituteVar(f string, res *string, vmap varMap) error {
-	if f[0] == '$' {
+	if len(f) > 0 && f[0] == '$' {
 		va, ok := vmap[f]
 		if !ok {
 			return x.Errorf("Variable not defined %v", f)
@@ -1308,6 +1308,18 @@ L:
 						return nil, x.Errorf("Invalid use of $ in func args")
 					}
 					isDollar = true
+					continue
+				} else if itemInFunc.Typ == itemRegex {
+					end := strings.LastIndex(itemInFunc.Val, "/")
+					x.AssertTrue(end >= 0)
+					expr := strings.Replace(itemInFunc.Val[1:end], "\\/", "/", -1)
+					flags := ""
+					if end+1 < len(itemInFunc.Val) {
+						flags = itemInFunc.Val[end+1:]
+					}
+
+					g.Args = append(g.Args, expr, flags)
+					expectArg = false
 					continue
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
