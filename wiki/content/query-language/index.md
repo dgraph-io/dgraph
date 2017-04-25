@@ -698,17 +698,23 @@ Note that the first result with the name "Unexpected Passion" is either not a fi
 
 ### Regular Expressions
 `regexp` function allows a regular expression match on the values. It requires `trigram` index to be present for working.
+Regular expressions are delimited by `/`.
+After closing `/`, extra modifiers can be specified.
+Currently only one modifier is available: `i` - ignore case.
+
+Following example shows usage of `regexp` function and regular expression modifier (`/ryan/i` is a case insensitive match).
 
 {{< runnable >}}
 {
-  directors(func: regexp(name@en, "^Steven Sp.*$")) {
+  directors(func: regexp(name@en, /^Steven Sp.*$/)) {
     name@en
-    director.film @filter(regexp(name@en, "Ryan")) {
+    director.film @filter(regexp(name@en, /ryan/i)) {
       name@en
     }
   }
 }
 {{< /runnable >}}
+
 
 #### Technical details
 
