@@ -9,13 +9,13 @@ GREEN='\033[32;1m'
 RED='\033[91;1m'
 RESET='\033[0m'
 
-GOPATH=$HOME/work
+GOPATH=$HOME/go
 PATH=$HOME/bin:/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/home/ubuntu/go/bin
 
 checkDir()
 {
 	if [ ! -d "$1" ]; then
-		echo -e "$(date)$RED $1 not found. Exiting"
+		echo -e "$(date)$RED $1 not found. Exiting$RESET"
 		exit 1
 	fi
 }
@@ -23,7 +23,7 @@ checkDir()
 checkFile()
 {
 	if [ ! -f "$1" ]; then
-		echo -e "$(date)$RED $1 not found. Exiting"
+		echo -e "$(date)$RED $1 not found. Exiting$RESET"
 		exit 1
 	fi
 }
@@ -33,21 +33,21 @@ updateBranch()
 	if [[ `git status --porcelain` ]]; then
 		# This means there are some local changes, which shouldn't happen as code
 		# shouldn't be modified on the server, lets exit.
-		echo -e "$(date)$RED Found local changes in $(pwd), exiting."
+		echo -e "$(date)$RED Found local changes in $(pwd), exiting.$RESET"
 		exit 1
 	fi
 
 	# Pulling in the latest master changes.
 	branch="master"
-	git checkout $branch > /dev/null
+	git checkout -q $branch
 	git merge -q origin/"$branch"
 }
 
 dgraphRepo=$GOPATH/src/github.com/dgraph-io/dgraph
 benchmarksRepo=$GOPATH/src/github.com/dgraph-io/benchmarks
-schema="data/21million.schema"
+schema="data/goldendata.schema"
 schemaPath="$benchmarksRepo/$schema"
-data="data/21million.rdf.gz"
+data="data/goldendata.rdf.gz"
 dataPath="$benchmarksRepo/$data"
 
 checkDir $dgraphRepo
@@ -70,7 +70,9 @@ cd $dgraphRepo/cmd/dgraphloader && go build .
 echo -e "$(date)$GREEN dgraph and dgraphloader built successfully. $RESET"
 
 latestCommit=$(git rev-parse --short HEAD)
-mkdir -p ~/dgraph/$latestCommit && cd ~/dgraph/$latestCommit
+unixTs=$(date +%s)
+dgraphDir="$latestCommit-$unixTs"
+mkdir -p ~/dgraph/$dgraphDir && cd ~/dgraph/$dgraphDir
 # Starting Dgraph in background and outputting log to file.
 $dgraphRepo/cmd/dgraph/dgraph --port 8082 --workerport 12346 > dgraph.log 2>&1 &
 sleep 15
@@ -81,12 +83,14 @@ echo -e "$(date)$GREEN Data loaded successfully. $RESET"
 
 # Lets shutdown old and new Dgraph instance. Then restart new instance with nomutations
 # flag.
-curl localhost:80/admin/shutdown > /dev/null
-curl localhost:8082/admin/shutdown > /dev/null
+curl -s localhost:80/admin/shutdown
+curl -s localhost:8082/admin/shutdown
 
+sleep 10
 sudo $dgraphRepo/cmd/dgraph/dgraph --bindall=true --nomutations=true --port 80 \
-	--workerport 12346 > dgraph.log 2>&1 &
+	--workerport 12345 -ui $dgraphRepo/dashboard/build > dgraph.log 2>&1 &
+echo -e "$(date)$GREEN Started Dgraph on port 80.$RESET"
 
 cd ~/dgraph
 # Delete all folders except the latest commit and its p and w directory.
-ls | grep -v $latestCommit | xargs rm -rf
+ls | grep -v $dgraphDir | xargs sudo rm -rf
