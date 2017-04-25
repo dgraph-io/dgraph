@@ -942,7 +942,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 		}
 		// Put it in this node.
 		sg.Params.uidToVal = sg.MathExp.Val
-	} else {
+	} else if len(sg.Params.NeedsVar) > 0 {
 		// This is a var() block.
 		srcVar := sg.Params.NeedsVar[0]
 		srcMap := doneVars[srcVar.Name]
@@ -950,6 +950,8 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 			return x.Errorf("Missing value variable %v", srcVar)
 		}
 		sg.Params.uidToVal = srcMap.vals
+	} else {
+		return x.Errorf("Unhandled internal node %v with parent %v", sg.Attr, parent.Attr)
 	}
 	return nil
 }
@@ -1377,6 +1379,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
+		sg.Children = sg.Children[:0] // Remove any expand nodes we might have added.
 		rch <- nil
 		return
 	}
@@ -1465,7 +1468,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		return
 	}
 
-	out := sg.Children[:0]
+	var out []*SubGraph
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		if !child.IsInternal() {
