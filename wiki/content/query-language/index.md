@@ -177,7 +177,7 @@ mutation {
 }' | python -m json.tool | less
 ```
 
-If you want to delete all the objects/values of a `S P *` triple, you can do. 
+If you want to delete all the objects/values of a `S P *` triple, you can do.
 ```
 curl localhost:8080/query -XPOST -d $'
 mutation {
@@ -1509,7 +1509,7 @@ query {
 			name
 			age
 			sum(age)
-			avg(age)			
+			avg(age)
 		}
 	}
 }' | python -m json.tool | less
@@ -1674,7 +1674,7 @@ The supported operators are as follows:
 | `logbase(a,b)` | int, float | Returns `log(a)` to the base `b`|
 | `cond(a, b, c)`    | first operand must be a boolean  | selects `b` if `a` is true else `c` |
 
-A simple example is: 
+A simple example is:
 
 {{< runnable >}}
 {
@@ -2182,17 +2182,23 @@ Queries can have a `@normalize` directive, which if supplied at the root, the re
     director.film {
       f: name@en
       release_date
-      starring {
-        performance.actor @filter(anyofterms(name, "tom hanks")) {
-          a: name@en
+      starring(first: 2) {
+        performance.actor {
+          pa: name@en
         }
+        performance.character {
+          pc: name@en
+        }
+      }
+      country {
+        c: name@en
       }
     }
   }
 }
 {{< /runnable >}}
 
-From the results we can see that since we didn't ask for `release_date` with an alias we didn't get it back. We got back all other combinations of movies directed by Steven Spielberg with an actor whose name has anyofterms Tom Hanks.
+From the results we can see that since we didn't ask for `release_date` with an alias we didn't get it back. We got back all other combinations of movies directed by Steven Spielberg with all unique combinations of performance.actor, performance.character and country.
 
 ## Debug
 
