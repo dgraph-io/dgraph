@@ -36,6 +36,68 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
+func TestParseQueryListPred1(t *testing.T) {
+	query := `
+	{	
+		var(id: 0x0a) {
+			friends {
+				expand(_all_)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestParseQueryListPred2(t *testing.T) {
+	query := `
+	{	
+		var(id:0x0a) {
+			f as friends 
+		}
+	
+		var(id: var(f)) {
+			l as _predicate_		
+		}
+
+		var(id: 0x0a) {
+			friends {
+				expand(var(l))
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestParseQueryListPred_MultiVarError(t *testing.T) {
+	query := `
+	{	
+		var(id:0x0a) {
+			f as friends 
+		}
+	
+		var(id: var(f)) {
+			l as _predicate_
+			friend {
+				g as _predicate_
+			}
+		}
+
+		var(id: 0x0a) {
+			friends {
+				expand(var(l, g))
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	// Only one variable allowed in expand.
+	require.Error(t, err)
+}
+
 func TestParseQueryWithNoVarValError(t *testing.T) {
 	query := `
 	{	

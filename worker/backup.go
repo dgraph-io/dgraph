@@ -260,7 +260,7 @@ func backup(gid uint32, bdir string) error {
 			it.Seek(pk.SkipRangeOfSameType())
 			continue
 		}
-		if pk.Attr == "_uid_" {
+		if pk.Attr == "_uid_" ||  pk.Attr == "_predicate_"{
 			// Skip the UID mappings.
 			it.Seek(pk.SkipPredicate())
 			continue

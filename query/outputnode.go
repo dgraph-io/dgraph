@@ -480,6 +480,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 			}
 			return err
 		}
+
 		if n1.IsEmpty() {
 			continue
 		}
