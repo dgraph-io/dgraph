@@ -810,6 +810,7 @@ func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint
 			continue
 		}
 		for _, cch := range ch.Children {
+			// Find the sibling node whose child has the required variable.
 			if cch.Params.Var == needsVar {
 				relSG = ch
 			}
@@ -821,6 +822,7 @@ func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint
 
 	vals := doneVars[needsVar].vals
 	mp = make(map[uint64]types.Val)
+	// Go over the sibling node and aggregate.
 	for i, list := range relSG.uidMatrix {
 		ag := aggregator{
 			name: sg.SrcFunc[0],
