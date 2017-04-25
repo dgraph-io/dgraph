@@ -243,28 +243,23 @@ func (sg *SubGraph) isSimilar(ssg *SubGraph) bool {
 	if sg.Attr != ssg.Attr {
 		return false
 	}
-
 	if len(sg.Params.Langs) != len(ssg.Params.Langs) {
 		return false
 	}
-
 	for i := 0; i < len(sg.Params.Langs) && i < len(ssg.Params.Langs); i++ {
 		if sg.Params.Langs[i] != ssg.Params.Langs[i] {
 			return false
 		}
 	}
-
 	if sg.Params.DoCount {
 		if ssg.Params.DoCount {
 			return true
 		}
 		return false
 	}
-
 	if ssg.Params.DoCount {
 		return false
 	}
-
 	if len(sg.SrcFunc) > 0 {
 		if len(ssg.SrcFunc) > 0 {
 			if sg.SrcFunc[0] == ssg.SrcFunc[0] {
@@ -1486,13 +1481,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				rch <- x.Errorf("Expected a string type")
 				return
 			}
+			temp.Attr = string(v.Val)
 			for _, ch := range sg.Children {
 				if ch.isSimilar(temp) {
 					rch <- x.Errorf("Repeated subgraph while using expand()")
 					return
 				}
 			}
-			temp.Attr = string(v.Val)
 			out = append(out, temp)
 		}
 	}
