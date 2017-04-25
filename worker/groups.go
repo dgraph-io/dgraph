@@ -73,8 +73,10 @@ type groupi struct {
 	wal    *raftwal.Wal
 	// local stores the groupId to node map for this server.
 	local map[uint32]*node
-	// banned stores Raft Id to raft Index map at which it was removed per group
-	banned map[uint32]*servers
+	// removed stores Raft Id to raft Index map at which it was removed per group
+	removed map[uint32]*servers
+	// banned stores list of banned raft id's
+	banned *servers
 	// all stores the groupId to servers map for the entire cluster.
 	all        map[uint32]*servers
 	num        uint32
@@ -95,7 +97,8 @@ func groups() *groupi {
 func StartRaftNodes(walDir string) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
-	gr.banned = make(map[uint32]*servers)
+	gr.removed = make(map[uint32]*servers)
+	gr.banned = new(servers)
 	gr.elog = trace.NewEventLog("Membership Changes", fmt.Sprintf("%d", *raftId))
 
 	// Successfully connect with the peer, before doing anything else.
@@ -162,15 +165,10 @@ func (g *groupi) Node(groupId uint32) *node {
 	return nil
 }
 
-func (g *groupi) bannedId(groupId uint32, nodeId uint64) bool {
+func (g *groupi) bannedId(nodeId uint64) bool {
 	g.RLock()
 	defer g.RUnlock()
-	bannedServers, has := g.banned[groupId]
-	if !has {
-		return false
-	}
-
-	for _, s := range bannedServers.list {
+	for _, s := range g.banned.list {
 		if s.NodeId == nodeId {
 			return true
 		}
@@ -178,38 +176,60 @@ func (g *groupi) bannedId(groupId uint32, nodeId uint64) bool {
 	return false
 }
 
-func (g *groupi) banId(groupId uint32, sv server) {
-	g.AssertLock()
-	bs := g.banned[groupId]
-
-	if bs == nil {
-		bs = new(servers)
-		g.banned[groupId] = bs
-	}
+func (g *groupi) banId(nodeId uint64, sv server) {
 	for {
 		// Remove all instances of the provided node. There should only be one.
 		found := false
-		for i, s := range bs.list {
+		for i, s := range g.banned.list {
 			if s.NodeId == sv.NodeId {
 				found = true
-				bs.list[i] = bs.list[len(bs.list)-1]
-				bs.list = bs.list[:len(bs.list)-1]
+				g.banned.list[i] = g.banned.list[len(g.banned.list)-1]
+				g.banned.list = g.banned.list[:len(g.banned.list)-1]
 			}
 		}
 		if !found {
 			break
 		}
 	}
-	bs.list = append(bs.list, sv)
+	g.banned.list = append(g.banned.list, sv)
 }
 
-func (g *groupi) removeNode(groupId uint32) {
+func (g *groupi) removeId(groupId uint32, sv server) {
 	g.AssertLock()
-	_, has := g.local[groupId]
+	rs := g.removed[groupId]
+
+	if rs == nil {
+		rs = new(servers)
+		g.removed[groupId] = rs
+	}
+	for {
+		// Remove all instances of the provided node. There should only be one.
+		found := false
+		for i, s := range rs.list {
+			if s.NodeId == sv.NodeId {
+				found = true
+				rs.list[i] = rs.list[len(rs.list)-1]
+				rs.list = rs.list[:len(rs.list)-1]
+			}
+		}
+		if !found {
+			break
+		}
+	}
+	rs.list = append(rs.list, sv)
+}
+
+func (g *groupi) removeNode(groupId uint32, nodeId uint64) {
+	if *raftId != nodeId {
+		return
+	}
+	n, has := g.local[groupId]
 	if !has {
 		return
 	}
+	n.Stop()
 	delete(g.local, groupId)
+	g.elog.Printf("Group %d removed from node %d", groupId, *raftId)
 }
 
 func (g *groupi) ServesGroup(groupId uint32) bool {
@@ -319,17 +339,17 @@ func (g *groupi) Leader(group uint32) (uint64, string) {
 }
 
 // Address will return the address of the node with given id
-func (g *groupi) address(nodeId uint64) (string, bool) {
+func (g *groupi) address(nodeId uint64) string {
 	g.RLock()
 	defer g.RUnlock()
 	for _, all := range g.all {
 		for _, s := range all.list {
 			if s.NodeId == nodeId {
-				return s.Addr, true
+				return s.Addr
 			}
 		}
 	}
-	return "", false
+	return ""
 }
 
 // GroupsServed will return the groups served by the node with given id
@@ -408,13 +428,24 @@ func (g *groupi) TouchLastUpdate(u uint64) {
 	}
 }
 
-func (g *groupi) syncBannedId(gid uint32, nodeId uint64, addr string) error {
+func (g *groupi) syncBannedId(nodeId uint64) error {
+	mm := &taskp.Membership{
+		Id:     nodeId,
+		Banned: true,
+	}
+	return g.syncMembership(mm)
+}
+
+func (g *groupi) syncRemovedId(gid uint32, nodeId uint64) error {
 	mm := &taskp.Membership{
 		Id:      nodeId,
 		GroupId: gid,
 		Removed: true,
-		Addr:    addr,
 	}
+	return g.syncMembership(mm)
+}
+
+func (g *groupi) syncMembership(mm *taskp.Membership) error {
 	if g.ServesGroup(0) {
 		zero := g.Node(0)
 		x.AssertTruef(zero != nil, "Expected node 0")
@@ -555,18 +586,21 @@ func (g *groupi) periodicSyncMemberships() {
 // raftIdx is the RAFT index corresponding to the application of this
 // membership update in group zero.
 func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
+	x.AssertTruef(!groups().bannedId(mm.Id), "membership update coming from banned server")
 	update := server{
 		NodeId:  mm.Id,
 		Addr:    mm.Addr,
 		Leader:  mm.Leader,
 		RaftIdx: raftIdx,
 	}
-	if update.Addr != *myAddr {
+
+	// TODO: close pool when remove node is no longer serving any group
+	if update.Addr != *myAddr && !mm.Removed && !mm.Banned {
 		go pools().connect(update.Addr)
 	}
 
 	g.elog.Printf("----------------------------\n")
-	g.elog.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v, removed: %v\n", update, mm.Removed)
+	g.elog.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", mm)
 	g.elog.Printf("----------------------------\n")
 	g.Lock()
 	defer g.Unlock()
@@ -596,7 +630,7 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
 		}
 	}
 
-	if !mm.Removed {
+	if !mm.Removed && !mm.Banned {
 		// Append update to the list. If it's a leader, move it to index zero.
 		sl.list = append(sl.list, update)
 		last := len(sl.list) - 1
@@ -608,21 +642,18 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
 		for i := 1; i < len(sl.list); i++ {
 			sl.list[i].Leader = false
 		}
-	} else {
-		if mm.Id == *raftId {
-			//g.removeNode(mm.GroupId)
-		}
-		g.banId(mm.GroupId, update)
+	} else if mm.Banned {
+		g.banId(mm.Id, update)
+	} else if mm.Removed {
+		g.removeId(mm.GroupId, update)
 	}
 
 	// Print out the entire list.
 	for gid, sl := range g.all {
 		g.elog.Printf("Group: %v. Active List: %+v\n", gid, sl.list)
 	}
-	// Print Removed Ids list
-	for gid, bl := range g.banned {
-		g.elog.Printf("Group: %v. Removed List:: %+v\n", gid, bl.list)
-	}
+	// Print Banned Ids list
+	g.elog.Printf("Banned List:: %+v\n", g.banned.list)
 }
 
 // MembershipUpdateAfter generates the Flatbuffer response containing all the
@@ -652,8 +683,8 @@ func (g *groupi) MembershipUpdateAfter(ridx uint64) *taskp.MembershipUpdate {
 		}
 	}
 
-	for gid, banPeers := range g.banned {
-		for _, s := range banPeers.list {
+	for gid, removed := range g.removed {
+		for _, s := range removed.list {
 			if s.RaftIdx <= ridx {
 				continue
 			}
@@ -668,6 +699,20 @@ func (g *groupi) MembershipUpdateAfter(ridx uint64) *taskp.MembershipUpdate {
 					Removed: true,
 				})
 		}
+	}
+
+	for _, s := range g.banned.list {
+		if s.RaftIdx <= ridx {
+			continue
+		}
+		if s.RaftIdx > maxIdx {
+			maxIdx = s.RaftIdx
+		}
+		out.Members = append(out.Members,
+			&taskp.Membership{
+				Id:     s.NodeId,
+				Banned: true,
+			})
 	}
 
 	out.LastUpdate = maxIdx
@@ -704,6 +749,7 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 			GroupId: mm.GroupId,
 			Addr:    mm.Addr,
 			Removed: mm.Removed,
+			Banned:  mm.Banned,
 		}
 
 		go func(mmNew *taskp.Membership) {

@@ -584,38 +584,61 @@ func handlerInit(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func removeGroupHandler(w http.ResponseWriter, r *http.Request) {
+func groupIdsFromRequest(r *http.Request) (gids []uint32, msg string) {
+	groupIds := r.URL.Query().Get("gids")
+	if len(groupIds) == 0 {
+		msg = "Invalid request. No group ids defined."
+		return
+	}
+	for _, groupId := range strings.Split(groupIds, ",") {
+		gid, err := strconv.ParseUint(groupId, 0, 32)
+		if err != nil {
+			msg = "Not valid group ids"
+			return
+		}
+		gids = append(gids, uint32(gid))
+	}
+	return
+}
+
+func nodeIdFromRequest(r *http.Request) (nid uint64, msg string) {
+	nodeId := r.URL.Query().Get("nodeId")
+	var err error
+	if len(nodeId) == 0 {
+		msg = "Invalid request. No node id defined."
+		return
+	}
+	nid, err = strconv.ParseUint(nodeId, 0, 64)
+	if err != nil {
+		msg = "Not valid node id"
+		return
+	}
+	return
+}
+
+func removeGroupsHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r) {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	groupId := r.URL.Query().Get("gid")
-	if len(groupId) == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No group id defined.")
+
+	gids, msg := groupIdsFromRequest(r)
+	if len(msg) > 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, msg)
 		return
 	}
-	gid, err := strconv.ParseUint(groupId, 0, 32)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Not valid group id")
+	nid, msg := nodeIdFromRequest(r)
+	if len(msg) > 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, msg)
 		return
 	}
-	nodeId := r.URL.Query().Get("nodeId")
-	if len(nodeId) == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No node id defined.")
-		return
-	}
-	nid, err := strconv.ParseUint(nodeId, 0, 64)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Not valid node id")
-		return
-	}
-	if err := worker.StopServingGroup(ctx, nid, uint32(gid)); err != nil {
+	if err := worker.StopServingGroups(ctx, nid, gids); err != nil {
 		x.SetStatus(w, err.Error(), "RemoveGroup failed.")
 	} else {
-		x.SetStatus(w, x.Success, fmt.Sprintf("Group %d belonging to node %d removed",
-			gid, nid))
+		x.SetStatus(w, x.Success, fmt.Sprintf("Groups %d belonging to node %d removed",
+			gids, nid))
 	}
 }
 
@@ -626,31 +649,17 @@ func addGroupsHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	groupIds := r.URL.Query().Get("gid")
-	var gids []uint32
-	if len(groupIds) == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No group ids defined.")
-		return
-	}
-	for _, groupId := range strings.Split(groupIds, ",") {
-		gid, err := strconv.ParseUint(groupId, 0, 32)
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest, "Not valid group ids")
-			return
-		}
-		gids = append(gids, uint32(gid))
-	}
-	nodeId := r.URL.Query().Get("nodeId")
-	if len(nodeId) == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No node id defined.")
-		return
-	}
-	nid, err := strconv.ParseUint(nodeId, 0, 64)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Not valid node id")
-		return
-	}
 
+	gids, msg := groupIdsFromRequest(r)
+	if len(msg) > 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, msg)
+		return
+	}
+	nid, msg := nodeIdFromRequest(r)
+	if len(msg) > 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, msg)
+		return
+	}
 	if err := worker.StartServingGroups(ctx, nid, gids); err != nil {
 		x.SetStatus(w, err.Error(), "AddServer failed.")
 	} else {
@@ -666,17 +675,17 @@ func removeServerHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	nodeId := r.URL.Query().Get("nodeId")
-	if len(nodeId) == 0 {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No node id defined.")
+	// User can specify group id's in case server crashed before membership sync
+	gids, msg := groupIdsFromRequest(r)
+	if len(msg) > 0 {
+		gids = gids[:0]
+	}
+	nid, msg := nodeIdFromRequest(r)
+	if len(msg) > 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, msg)
 		return
 	}
-	nid, err := strconv.ParseUint(nodeId, 0, 64)
-	if err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Not valid node id")
-		return
-	}
-	if err := worker.RemoveServer(ctx, nid); err != nil {
+	if err := worker.RemoveServer(ctx, nid, gids); err != nil {
 		x.SetStatus(w, err.Error(), "RemoveServer failed.")
 	} else {
 		x.SetStatus(w, x.Success, fmt.Sprint("Server %d removed", nid))
@@ -934,7 +943,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/backup", backupHandler)
 	http.HandleFunc("/admin/removeServer", removeServerHandler)
 	http.HandleFunc("/admin/addGroups", addGroupsHandler)
-	http.HandleFunc("/admin/removeGroup", removeGroupHandler)
+	http.HandleFunc("/admin/removeGroups", removeGroupsHandler)
 
 	// UI related API's.
 	// Share urls have a hex string as the shareId. So if

@@ -76,7 +76,8 @@ message Membership {
 	string addr = 3;
 	bool leader = 4;
 	bool removed = 5;
-	uint64 last_update = 6;
+	bool banned = 6;
+	uint64 last_update = 7;
 }
 
 // MembershipUpdate is used to pack together the current membership state of all the nodes
