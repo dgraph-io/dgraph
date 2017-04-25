@@ -1161,7 +1161,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 			// If the length of child UID list is zero and it has no valid value, then the
 			// current UID should be removed from this level.
 			if (len(child.values) <= i || len(child.values[i].Val) == 0) && (len(child.counts) <= i) &&
-				(child.uidMatrix != nil && len(child.uidMatrix[i].Uids) == 0) {
+				(len(child.uidMatrix) <= i || len(child.uidMatrix[i].Uids) == 0) {
 				exclude = true
 				break
 			}
@@ -1221,7 +1221,7 @@ AssignStep:
 			}
 			doneVars[sg.Params.Var].vals[uid] = val
 		}
-	} else if len(sg.values) != 0 {
+	} else if len(sg.values) != 0 && sg.SrcUIDs != nil {
 		// This implies it is a value variable.
 		doneVars[sg.Params.Var] = values{
 			vals: make(map[uint64]types.Val),
