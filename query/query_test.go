@@ -283,6 +283,8 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "son", 1, 2300, nil)
 	addEdgeToValue(t, "name", 2300, "Andre", nil)
 
+	addEdgeToValue(t, "name", 2301, `Alice\"`, nil)
+
 	time.Sleep(5 * time.Millisecond)
 }
 
@@ -5924,4 +5926,19 @@ children: <
   >
 >
 `, proto.MarshalTextString(pb[0]))
+}
+
+func TestStringEscape(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 2301) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Alice\""}]}`,
+		js)
 }
