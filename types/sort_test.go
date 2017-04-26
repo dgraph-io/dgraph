@@ -56,7 +56,7 @@ func getUIDList(n int) *taskp.List {
 func TestSortStrings(t *testing.T) {
 	list := getInput(t, StringID, []string{"bb", "aaa", "aa", "bab"})
 	ul := getUIDList(4)
-	require.NoError(t, Sort(StringID, list, ul, false))
+	require.NoError(t, Sort(list, ul, false))
 	require.EqualValues(t, []uint64{300, 200, 400, 100}, ul.Uids)
 	require.EqualValues(t, []string{"aa", "aaa", "bab", "bb"},
 		toString(t, list, StringID))
@@ -65,7 +65,7 @@ func TestSortStrings(t *testing.T) {
 func TestSortInts(t *testing.T) {
 	list := getInput(t, IntID, []string{"22", "111", "11", "212"})
 	ul := getUIDList(4)
-	require.NoError(t, Sort(IntID, list, ul, false))
+	require.NoError(t, Sort(list, ul, false))
 	require.EqualValues(t, []uint64{300, 100, 200, 400}, ul.Uids)
 	require.EqualValues(t, []string{"11", "22", "111", "212"},
 		toString(t, list, IntID))
@@ -74,7 +74,7 @@ func TestSortInts(t *testing.T) {
 func TestSortFloats(t *testing.T) {
 	list := getInput(t, FloatID, []string{"22.2", "11.2", "11.5", "2.12"})
 	ul := getUIDList(4)
-	require.NoError(t, Sort(FloatID, list, ul, false))
+	require.NoError(t, Sort(list, ul, false))
 	require.EqualValues(t, []uint64{400, 200, 300, 100}, ul.Uids)
 	require.EqualValues(t,
 		[]string{"2.12E+00", "1.12E+01", "1.15E+01", "2.22E+01"},
@@ -84,7 +84,7 @@ func TestSortFloats(t *testing.T) {
 func TestSortFloatsDesc(t *testing.T) {
 	list := getInput(t, FloatID, []string{"22.2", "11.2", "11.5", "2.12"})
 	ul := getUIDList(4)
-	require.NoError(t, Sort(FloatID, list, ul, true))
+	require.NoError(t, Sort(list, ul, true))
 	require.EqualValues(t, []uint64{100, 300, 200, 400}, ul.Uids)
 	require.EqualValues(t,
 		[]string{"2.22E+01", "1.15E+01", "1.12E+01", "2.12E+00"},
@@ -95,7 +95,7 @@ func TestSortDates(t *testing.T) {
 	in := []string{"2022-01-01", "2022-02-03", "2021-01-05", "2021-01-07"}
 	list := getInput(t, DateID, in)
 	ul := getUIDList(4)
-	require.NoError(t, Sort(DateID, list, ul, false))
+	require.NoError(t, Sort(list, ul, false))
 	require.EqualValues(t, []uint64{300, 400, 100, 200}, ul.Uids)
 	require.EqualValues(t,
 		[]string{"2021-01-05", "2021-01-07", "2022-01-01", "2022-02-03"},
@@ -111,7 +111,7 @@ func TestSortDateTimes(t *testing.T) {
 	}
 	list := getInput(t, DateTimeID, in)
 	ul := getUIDList(4)
-	require.NoError(t, Sort(DateTimeID, list, ul, false))
+	require.NoError(t, Sort(list, ul, false))
 	require.EqualValues(t, []uint64{400, 200, 300, 100}, ul.Uids)
 	require.EqualValues(t,
 		[]string{"2006-01-02T15:04:01Z", "2006-01-02T15:04:05Z",
