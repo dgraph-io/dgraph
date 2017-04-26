@@ -942,7 +942,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 		}
 		// Put it in this node.
 		sg.Params.uidToVal = sg.MathExp.Val
-	} else {
+	} else if len(sg.Params.NeedsVar) > 0 {
 		// This is a var() block.
 		srcVar := sg.Params.NeedsVar[0]
 		srcMap := doneVars[srcVar.Name]
@@ -950,6 +950,8 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 			return x.Errorf("Missing value variable %v", srcVar)
 		}
 		sg.Params.uidToVal = srcMap.vals
+	} else {
+		return x.Errorf("Unhandled internal node %v with parent %v", sg.Attr, parent.Attr)
 	}
 	return nil
 }
@@ -1158,8 +1160,8 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 		for _, child := range sg.Children {
 			// If the length of child UID list is zero and it has no valid value, then the
 			// current UID should be removed from this level.
-			if (len(child.values) <= i || len(child.values[i].Val) == 0) && (len(child.counts) <= i) &&
-				(child.uidMatrix != nil && len(child.uidMatrix[i].Uids) == 0) {
+			if !child.IsInternal() && (len(child.values) <= i || len(child.values[i].Val) == 0) && (len(child.counts) <= i) &&
+				(len(child.uidMatrix) <= i || len(child.uidMatrix[i].Uids) == 0) {
 				exclude = true
 				break
 			}
@@ -1219,7 +1221,7 @@ AssignStep:
 			}
 			doneVars[sg.Params.Var].vals[uid] = val
 		}
-	} else if len(sg.values) != 0 {
+	} else if len(sg.values) != 0 && sg.SrcUIDs != nil {
 		// This implies it is a value variable.
 		doneVars[sg.Params.Var] = values{
 			vals: make(map[uint64]types.Val),
@@ -1232,6 +1234,7 @@ AssignStep:
 			doneVars[sg.Params.Var].vals[uid] = val
 		}
 	} else {
+		// Insert a empty entry to keep the dependency happy.
 		doneVars[sg.Params.Var] = values{}
 	}
 }
@@ -1377,6 +1380,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
+		out := sg.Children[:0]
+		for _, child := range sg.Children {
+			if child.IsInternal() && child.Attr == "expand" {
+				continue
+			}
+			out = append(out, child)
+		}
+		sg.Children = out // Remove any expand nodes we might have added.
 		rch <- nil
 		return
 	}
@@ -1465,7 +1476,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		return
 	}
 
-	out := sg.Children[:0]
+	var out []*SubGraph
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		if !child.IsInternal() {
