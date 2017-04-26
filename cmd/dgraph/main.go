@@ -224,8 +224,8 @@ func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult
 	return mr, nil
 }
 
-func AddInternalEdge(ctx context.Context, m *taskp.Mutations) {
-	var newEdges []*taskp.DirectedEdge
+func AddInternalEdge(ctx context.Context, m *taskp.Mutations) error {
+	newEdges := make([]*taskp.DirectedEdge, 0, 2*len(m.Edges))
 	for _, mu := range m.Edges {
 		if mu.Op == taskp.DirectedEdge_SET {
 			edge := &taskp.DirectedEdge{
@@ -234,15 +234,41 @@ func AddInternalEdge(ctx context.Context, m *taskp.Mutations) {
 				Attr:   "_predicate_",
 				Value:  []byte(mu.GetAttr()),
 			}
+			newEdges = append(newEdges, mu)
 			newEdges = append(newEdges, edge)
+		} else if mu.Op == taskp.DirectedEdge_DEL {
+			if mu.Attr == x.AllPredicates {
+				// Fetch all the predicates and replace them
+				preds, err := query.GetNodePredicates(ctx, &taskp.List{[]uint64{mu.GetEntity()}})
+				if err != nil {
+					return err
+				}
+				for _, pred := range preds {
+					edge := &taskp.DirectedEdge{
+						Op:     taskp.DirectedEdge_DEL,
+						Entity: mu.GetEntity(),
+						Attr:   string(pred.Val),
+						Value:  mu.GetValue(),
+					}
+					newEdges = append(newEdges, edge)
+				}
+			} else {
+				newEdges = append(newEdges, mu)
+			}
+		} else {
+			newEdges = append(newEdges, mu)
 		}
 	}
-	m.Edges = append(m.Edges, newEdges...)
+	m.Edges = newEdges
+	return nil
 }
 
 func applyMutations(ctx context.Context, m *taskp.Mutations) error {
-	AddInternalEdge(ctx, m)
-	err := worker.MutateOverNetwork(ctx, m)
+	err := AddInternalEdge(ctx, m)
+	if err != nil {
+		return x.Wrapf(err, "While adding internal edges")
+	}
+	err = worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
 		return err
