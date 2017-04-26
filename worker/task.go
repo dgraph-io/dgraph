@@ -523,10 +523,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 			funcName: srcFn.fname,
 			funcType: srcFn.fnType,
 			lang:     srcFn.lang,
-			tokenMap: map[string]bool{},
-		}
-		for _, t := range srcFn.tokens {
-			filter.tokenMap[t] = false
+			tokens:   srcFn.tokens,
 		}
 		filtered := matchStrings(uids, values, filter)
 		for i := 0; i < len(out.UidMatrix); i++ {

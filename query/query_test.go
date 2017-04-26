@@ -256,11 +256,12 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 0x1001, "Badger", "", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "European badger", "en", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "European badger barger European", "xx", nil)
-	addEdgeToLangValue(t, "name", 0x1002, "Honey badger", "en", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "Borsuk europejski", "pl", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "Europäischer Dachs", "de", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "Барсук", "ru", nil)
 	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
+	addEdgeToLangValue(t, "name", 0x1002, "Honey badger", "en", nil)
+	addEdgeToLangValue(t, "name", 0x1003, "Honey bee", "en", nil)
 
 	// regex test data
 	// 0x1234 is uid of interest for regex testing
@@ -5412,19 +5413,19 @@ func TestLangFilterMismatch3(t *testing.T) {
 		js)
 }
 
-func TestLangFilterMismatch4(t *testing.T) {
+func TestLangFilterMismatch5(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
 	query := `
 		{
-			me(id: [0x1, 0x2, 0x3, 0x1001]) @filter(allofterms(name@en, "European borsuk")) {
+			me(func:anyofterms(name@en, "european honey")) {
 				name@en
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{}`,
+		`{"me":[{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"}]}`,
 		js)
 }
 
