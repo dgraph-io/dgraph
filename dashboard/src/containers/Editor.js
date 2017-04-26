@@ -186,18 +186,6 @@ class Editor extends Component {
     CodeMirror.registerHelper("hint", "fromList", function(cm, options) {
       var cur = cm.getCursor(), token = cm.getTokenAt(cur);
 
-      // This is so that we automatically have a space before (, so that auto-
-      // complete inside braces works. Otherwise it doesn't work for
-      // director.film(orderasc: release_date).
-      let openBrac = token.string.indexOf("(");
-      if (
-        openBrac !== -1 &&
-        token.string[openBrac - 1] !== undefined &&
-        token.string[openBrac - 1] !== " "
-      ) {
-        cm.replaceRange(" ", { line: cur.line, ch: token.start + openBrac });
-      }
-
       var to = CodeMirror.Pos(cur.line, token.end);
       let from = "", term = "";
       if (token.string) {
@@ -274,7 +262,7 @@ class Editor extends Component {
 
 const mapStateToProps = state => ({
   query: state.query.text,
-  regex: state.query.propertyRegex
+  regex: state.regex.propertyRegex
 });
 
 const mapDispatchToProps = {

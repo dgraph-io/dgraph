@@ -78,7 +78,7 @@ export const renderGraph = (query, result, treeView) => {
             result,
             treeView,
             query,
-            getState().query.propertyRegex
+            getState().regex.propertyRegex
         );
 
         dispatch(
@@ -110,9 +110,16 @@ export const resetResponseState = () => ({
 });
 
 export const runQuery = query => {
+    if(query.trim() === "") {
+        return dispatch => {
+
+        }
+    }
+
     return dispatch => {
         dispatch(resetResponseState());
         dispatch(isFetching());
+        dispatch(addQuery(query));
 
         return timeout(
             60000,
@@ -137,11 +144,9 @@ export const runQuery = query => {
                             // This is the case in which user sends a mutation.
                             // We display the response from server.
                         } else {
-                            dispatch(addQuery(query));
                             dispatch(saveSuccessResponse("", result, true));
                         }
                     } else if (isNotEmpty(result)) {
-                        dispatch(addQuery(query));
                         let mantainSortOrder = showTreeView(query);
                         dispatch(saveSuccessResponse("", result, false));
                         dispatch(renderGraph(query, result, mantainSortOrder));
@@ -156,7 +161,9 @@ export const runQuery = query => {
                 })
         ).catch(function(error) {
             dispatch(fetchedResponse());
-            dispatch(saveErrorResponse(error.message));
+            error.response.text().then(function (text) {
+                dispatch(saveErrorResponse(text));
+            })
         });
     };
 };

@@ -26,7 +26,7 @@ const store = createStore(
 );
 
 // begin periodically persisting the store
-persistStore(store, { whitelist: ["previousQueries", "scratchpad"] });
+persistStore(store, { whitelist: ["previousQueries", "scratchpad", "regex"] });
 
 const render = Component => {
     return ReactDOM.render(
