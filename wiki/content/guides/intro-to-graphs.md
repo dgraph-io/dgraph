@@ -92,7 +92,7 @@ The next line is a little different.  Up until now everything has been a string,
 but for age we want to represent it using a number (in years). To insert a float
 we use `"0.7"^^<xs:float>`. The way Dgraph models data is based on the RDF
 specification, and it uses the same type system.  You can read more
-about types in Dgraph here: https://docs.dgraph.io/v0.7.4/query-language/#rdf-type
+about types in Dgraph [here]({{< relref "query-language/index.md#rdf-type">}})
 
 Next we do the same thing for the human, "Kaley", automatically creating a new
 node and adding a name, age, and favourite food.
@@ -206,6 +206,6 @@ either post an issue on github, post on slack, or our discourse.
 
 ## Further Reading
 
-* https://docs.dgraph.io/v0.7.4/query-language/
+* [Dgraph Docs: Query Language]({{< relref "query-language/index.md">}})
 * https://www.w3.org/TR/rdf11-concepts/
 * https://en.wikipedia.org/wiki/Graph_database
