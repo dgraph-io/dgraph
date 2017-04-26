@@ -1234,6 +1234,7 @@ AssignStep:
 			doneVars[sg.Params.Var].vals[uid] = val
 		}
 	} else {
+		// Insert a empty entry to keep the dependency happy.
 		doneVars[sg.Params.Var] = values{}
 	}
 }
@@ -1379,7 +1380,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
-		sg.Children = sg.Children[:0] // Remove any expand nodes we might have added.
+		out := sg.Children[:0]
+		for _, child := range sg.Children {
+			if child.IsInternal() && child.Attr == "expand" {
+				continue
+			}
+			out = append(out, child)
+		}
+		sg.Children = out // Remove any expand nodes we might have added.
 		rch <- nil
 		return
 	}
