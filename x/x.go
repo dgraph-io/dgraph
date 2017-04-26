@@ -44,6 +44,7 @@ const (
 	ErrorNoPermission    = "ErrorNoPermission"
 	ErrorInvalidMutation = "ErrorInvalidMutation"
 	DeleteAll            = "_DELETE_POSTING_"
+	AllPredicates        = "_ALL_PREDICATES_"
 )
 
 var (
