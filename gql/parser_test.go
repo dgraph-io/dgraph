@@ -1078,6 +1078,69 @@ func TestParse_pass1(t *testing.T) {
 	require.Empty(t, childAttrs(res.Query[0].Children[1]))
 }
 
+func TestParse_alias_count(t *testing.T) {
+	query := `
+		{
+			me(id:0x0a) {
+				name,
+				bestFriend: friends(first: 10) {
+					nameCount: count(name)
+				}
+			}
+		}
+	`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "friends"})
+	require.Equal(t, res.Query[0].Children[1].Alias, "bestFriend")
+	require.Equal(t, childAttrs(res.Query[0].Children[1]), []string{"name"})
+	require.Equal(t, "nameCount", res.Query[0].Children[1].Children[0].Alias)
+}
+
+func TestParse_alias_var(t *testing.T) {
+	query := `
+		{
+			me(id:0x0a) {
+				name,
+				f as bestFriend: friends(first: 10) {
+					c as count(friend)
+				}
+			}
+
+			friend(id: var(f)) {
+				name
+				fcount: var(c)
+			}
+		}
+	`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "friends"})
+	require.Equal(t, res.Query[0].Children[1].Alias, "bestFriend")
+	require.Equal(t, "fcount", res.Query[1].Children[1].Alias)
+}
+
+func TestParse_alias_max(t *testing.T) {
+	query := `
+		{
+			me(id:0x0a) {
+				name,
+				bestFriend: friends(first: 10) {
+					x as count(friends)
+				}
+				maxfriendcount: max(var(x))
+			}
+		}
+	`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, res.Query[0].Children[1].Alias, "bestFriend")
+	require.Equal(t, "maxfriendcount", res.Query[0].Children[2].Alias)
+}
+
 func TestParse_alias(t *testing.T) {
 	query := `
 		{

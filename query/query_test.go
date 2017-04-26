@@ -695,6 +695,32 @@ func TestQueryVarValAggMinMax(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValAggMinMaxAlias(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as var(func: anyofterms(name, "Michonne Andrea Rick")) {
+				friend {
+					x as age
+				}
+				n as min(var(x))
+				s as max(var(x))
+				sum as math(n + s)
+			}
+
+			me(id: var(f), orderdesc: var(sum)) {
+				name
+				MinAge: var(n)
+				MaxAge: var(s)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Rick Grimes","MinAge":38,"MaxAge":38},{"name":"Michonne","MinAge":15,"MaxAge":19},{"name":"Andrea","MinAge":15,"MaxAge":15}]}`,
+		js)
+}
+
 func TestQueryVarValAggMul(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1562,6 +1588,7 @@ func TestDebug3(t *testing.T) {
 	_, ok := latency.(map[string]interface{})
 	require.True(t, ok)
 }
+
 func TestCount(t *testing.T) {
 	populateGraph(t)
 
@@ -1580,6 +1607,26 @@ func TestCount(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"alive":true,"friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+func TestCountAlias(t *testing.T) {
+	populateGraph(t)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				alive
+				friendcount: count(friend)
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"alive":true,"friend":[{"friendcount":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -1778,6 +1825,27 @@ func TestMinMulti(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"dob":"1910-01-02"},{"dob":"1909-05-05"},{"dob":"1909-01-10"},{"dob":"1901-01-15"}],"max(var(x))":"1910-01-02","min(var(x))":"1901-01-15","name":"Michonne"},{"friend":[{"dob":"1910-01-01"}],"max(var(x))":"1910-01-01","min(var(x))":"1910-01-01","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05"}],"max(var(x))":"1909-05-05","min(var(x))":"1909-05-05","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
+		js)
+}
+
+func TestMinMultiAlias(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+	{
+		me(func: anyofterms(name, "michonne rick andrea")) {
+			name
+			friend {
+				x as dob
+			}
+			mindob: min(var(x))
+			maxdob: max(var(x))
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"dob":"1910-01-02"},{"dob":"1909-05-05"},{"dob":"1909-01-10"},{"dob":"1901-01-15"}],"maxdob":"1910-01-02","mindob":"1901-01-15","name":"Michonne"},{"friend":[{"dob":"1910-01-01"}],"maxdob":"1910-01-01","mindob":"1910-01-01","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05"}],"maxdob":"1909-05-05","mindob":"1909-05-05","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
 		js)
 }
 
