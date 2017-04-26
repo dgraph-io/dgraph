@@ -692,6 +692,32 @@ func removeServerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func clearMembershipHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r) {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	// User can specify group id's in case server crashed before membership sync
+	gids, msg := groupIdsFromRequest(r)
+	if len(msg) > 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, msg)
+		return
+	}
+	nid, msg := nodeIdFromRequest(r)
+	if len(msg) > 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, msg)
+		return
+	}
+	if err := worker.ClearMembership(ctx, nid, gids); err != nil {
+		x.SetStatus(w, err.Error(), "Clear Membership failed.")
+	} else {
+		x.SetStatus(w, x.Success,
+			fmt.Sprintf("Server %d removed from membership", nid))
+	}
+}
+
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r) {
 		return
@@ -944,6 +970,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/removeServer", removeServerHandler)
 	http.HandleFunc("/admin/addGroups", addGroupsHandler)
 	http.HandleFunc("/admin/removeGroups", removeGroupsHandler)
+	http.HandleFunc("/admin/clearMembership", clearMembershipHandler)
 
 	// UI related API's.
 	// Share urls have a hex string as the shareId. So if

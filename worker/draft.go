@@ -1252,3 +1252,10 @@ func RemoveServer(ctx context.Context, nodeId uint64, gids []uint32) error {
 	groups().syncBannedId(nodeId)
 	return nil
 }
+
+func ClearMembership(ctx context.Context, nodeId uint64, gids []uint32) error {
+	for _, gid := range gids {
+		groups().syncRemovedId(gid, nodeId)
+	}
+	return nil
+}
