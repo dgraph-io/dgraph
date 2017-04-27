@@ -883,6 +883,40 @@ func TestQueryVarValOrderDescMissing(t *testing.T) {
 	require.JSONEq(t, `{}`, js)
 }
 
+func TestGroupBy(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 1) {
+				friend @groupby(name) {
+					count(_uid_)
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"him": [{"friend":[{"name":"Rick Grimes"}, {"name":"Andrea"}]}], "me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}, {"name":"Andrea"}]}`,
+		js)
+}
+
+func TestGroupByMulti(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 1) {
+				friend @groupby(friend,name) {
+					count(_uid_)
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"him": [{"friend":[{"name":"Rick Grimes"}, {"name":"Andrea"}]}], "me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}, {"name":"Andrea"}]}`,
+		js)
+}
+
 func TestMultiEmptyBlocks(t *testing.T) {
 	populateGraph(t)
 	query := `
