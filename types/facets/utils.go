@@ -155,9 +155,13 @@ func parseTime(val string) (time.Time, error) {
 	if err := t.UnmarshalText([]byte(val)); err == nil {
 		return t, err
 	}
-	return time.Parse(dateTimeFormat, val)
+	if t, err := time.Parse(dateTimeFormat, val); err == nil {
+		return t, err
+	}
+	return time.Parse(dateFormatYMD, val)
 }
 
+const dateFormatYMD = "2006-01-02"
 const dateTimeFormat = "2006-01-02T15:04:05"
 
 // TypeIDFor gives TypeID for facet.
