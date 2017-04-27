@@ -456,6 +456,7 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
 	if n := g.Node(mm.GroupId); n != nil {
 		// update peer address on address change
 		n.Connect(mm.Id, mm.Addr)
+		// TODO: Clean up old pools
 	} else if update.Addr != *myAddr && mm.Id != *raftId { // ignore previous addr
 		go pools().connect(update.Addr)
 	}
