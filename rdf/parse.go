@@ -223,9 +223,12 @@ func Parse(line string) (rnq graphp.NQuad, rerr error) {
 			rnq.ObjectId = strings.Trim(item.Val, " ")
 
 		case itemStar:
-			// This is a special case of object.
-			rnq.ObjectValue = &graphp.Value{&graphp.Value_DefaultVal{x.DeleteAll}}
-
+			// This is a special case for predicate or object.
+			if rnq.Predicate == "" {
+				rnq.Predicate = x.DeleteAllPredicates
+			} else {
+				rnq.ObjectValue = &graphp.Value{&graphp.Value_DefaultVal{x.DeleteAllObjects}}
+			}
 		case itemLiteral:
 			oval = item.Val
 			if oval == "" {
@@ -249,6 +252,10 @@ func Parse(line string) (rnq graphp.NQuad, rerr error) {
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
+			if rnq.Predicate == x.DeleteAllPredicates {
+				return rnq, x.Errorf("If predicate is *, value should be * as well")
+			}
+
 			val := strings.Trim(item.Val, " ")
 			// TODO: Check if this condition is required.
 			if strings.Trim(val, " ") == "*" {

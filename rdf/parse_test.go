@@ -22,6 +22,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/stretchr/testify/assert"
@@ -189,7 +190,17 @@ var testNQuads = []struct {
 			Subject:     "alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{"_DELETE_POSTING_"}},
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{x.DeleteAllObjects}},
+		},
+		expectedErr: false,
+	},
+	{
+		input: `<alice> * * .`,
+		nq: graphp.NQuad{
+			Subject:     "alice",
+			Predicate:   x.DeleteAllPredicates,
+			ObjectId:    "",
+			ObjectValue: &graphp.Value{&graphp.Value_DefaultVal{x.DeleteAllObjects}},
 		},
 		expectedErr: false,
 	},

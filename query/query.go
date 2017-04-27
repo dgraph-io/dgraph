@@ -1497,18 +1497,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if child.Params.Expand == "_all_" {
 			// Get the predicate list for expansion. Otherwise we already
 			// have the list populated.
-			temp := new(SubGraph)
-			temp.Attr = "_predicate_"
-			temp.SrcUIDs = sg.DestUIDs
-			temp.Params.isListNode = true
-			taskQuery := createTaskQuery(temp)
-			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+			child.ExpandPreds, err = GetNodePredicates(ctx, sg.DestUIDs)
 			if err != nil {
-				x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 				rch <- err
 				return
 			}
-			child.ExpandPreds = result.Values
 		}
 
 		for _, v := range child.ExpandPreds {
@@ -1708,4 +1701,17 @@ func isAggregatorFn(f string) bool {
 		return true
 	}
 	return false
+}
+
+func GetNodePredicates(ctx context.Context, uids *taskp.List) ([]*taskp.Value, error) {
+	temp := new(SubGraph)
+	temp.Attr = "_predicate_"
+	temp.SrcUIDs = uids
+	temp.Params.isListNode = true
+	taskQuery := createTaskQuery(temp)
+	result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+	if err != nil {
+		return nil, err
+	}
+	return result.Values, nil
 }
