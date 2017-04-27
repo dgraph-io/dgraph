@@ -36,6 +36,68 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
+func TestParseQueryListPred1(t *testing.T) {
+	query := `
+	{	
+		var(id: 0x0a) {
+			friends {
+				expand(_all_)
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestParseQueryListPred2(t *testing.T) {
+	query := `
+	{	
+		var(id:0x0a) {
+			f as friends 
+		}
+	
+		var(id: var(f)) {
+			l as _predicate_		
+		}
+
+		var(id: 0x0a) {
+			friends {
+				expand(var(l))
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestParseQueryListPred_MultiVarError(t *testing.T) {
+	query := `
+	{	
+		var(id:0x0a) {
+			f as friends 
+		}
+	
+		var(id: var(f)) {
+			l as _predicate_
+			friend {
+				g as _predicate_
+			}
+		}
+
+		var(id: 0x0a) {
+			friends {
+				expand(var(l, g))
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	// Only one variable allowed in expand.
+	require.Error(t, err)
+}
+
 func TestParseQueryWithNoVarValError(t *testing.T) {
 	query := `
 	{	
@@ -385,6 +447,32 @@ func TestParseQueryWithVarValAggNested_Error2(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseQueryWithLevelAgg(t *testing.T) {
+	query := `
+	{	
+		var(id:0x0a) {
+			friends {
+				a as count(age)
+			}
+			s as sum(var(a))
+		}
+
+		sumage(id: 0x0a) {
+			var(s)
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "a", res.Query[0].Children[0].Children[0].Var)
+	require.True(t, res.Query[0].Children[1].IsInternal)
+	require.Equal(t, "a", res.Query[0].Children[1].NeedsVar[0].Name)
+	require.Equal(t, VALUE_VAR, res.Query[0].Children[1].NeedsVar[0].Typ)
+	require.Equal(t, "s", res.Query[0].Children[1].Var)
+}
+
 func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	query := `
 	{	
@@ -395,10 +483,11 @@ func TestParseQueryWithVarValAggCombination(t *testing.T) {
 
 		var(id:0x0a) {
 			L as friends {
-				a as min(age)
-				b as max(age)
-				c as math(a + b)
+				x as age
 			}
+			a as min(var(x))
+			b as max(var(x))
+			c as math(a + b)
 		}
 	}
 `
@@ -416,14 +505,13 @@ func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	require.Equal(t, 1, len(res.Query[0].Children[1].NeedsVar))
 	require.Equal(t, "c", res.Query[0].Children[1].NeedsVar[0].Name)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
-	require.Equal(t, "a", res.Query[1].Children[0].Children[0].Var)
-	require.Equal(t, "b", res.Query[1].Children[0].Children[1].Var)
-	require.Equal(t, "c", res.Query[1].Children[0].Children[2].Var)
-	require.True(t, res.Query[1].Children[0].Children[2].IsInternal)
-	require.NotNil(t, res.Query[1].Children[0].Children[2].MathExp)
-	require.Equal(t, "+", res.Query[1].Children[0].Children[2].MathExp.Fn)
-	require.Equal(t, "a", res.Query[1].Children[0].Children[2].MathExp.Child[0].Var)
-	require.Equal(t, "b", res.Query[1].Children[0].Children[2].MathExp.Child[1].Var)
+	require.Equal(t, "a", res.Query[1].Children[1].Var)
+	require.Equal(t, "b", res.Query[1].Children[2].Var)
+	require.Equal(t, "c", res.Query[1].Children[3].Var)
+	require.NotNil(t, res.Query[1].Children[3].MathExp)
+	require.Equal(t, "+", res.Query[1].Children[3].MathExp.Fn)
+	require.Equal(t, "a", res.Query[1].Children[3].MathExp.Child[0].Var)
+	require.Equal(t, "b", res.Query[1].Children[3].MathExp.Child[1].Var)
 }
 
 func TestParseQueryWithVarValAgg(t *testing.T) {
@@ -435,8 +523,9 @@ func TestParseQueryWithVarValAgg(t *testing.T) {
 
 		var(id:0x0a) {
 			L AS friends {
-				n AS min(name)
+				na as name
 			}
+			n as min(var(na))
 		}
 	}
 `
@@ -451,8 +540,9 @@ func TestParseQueryWithVarValAgg(t *testing.T) {
 	require.Equal(t, "n", res.Query[0].Args["orderasc"])
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
-	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
-	require.Equal(t, "min", res.Query[1].Children[0].Children[0].Func.Name)
+	require.Equal(t, "na", res.Query[1].Children[0].Children[0].Var)
+	require.Equal(t, "n", res.Query[1].Children[1].Var)
+	require.Equal(t, "min", res.Query[1].Children[1].Func.Name)
 }
 
 func TestParseQueryWithVarValCount(t *testing.T) {
@@ -986,6 +1076,69 @@ func TestParse_pass1(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "friends"})
 	require.Empty(t, childAttrs(res.Query[0].Children[1]))
+}
+
+func TestParse_alias_count(t *testing.T) {
+	query := `
+		{
+			me(id:0x0a) {
+				name,
+				bestFriend: friends(first: 10) {
+					nameCount: count(name)
+				}
+			}
+		}
+	`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "friends"})
+	require.Equal(t, res.Query[0].Children[1].Alias, "bestFriend")
+	require.Equal(t, childAttrs(res.Query[0].Children[1]), []string{"name"})
+	require.Equal(t, "nameCount", res.Query[0].Children[1].Children[0].Alias)
+}
+
+func TestParse_alias_var(t *testing.T) {
+	query := `
+		{
+			me(id:0x0a) {
+				name,
+				f as bestFriend: friends(first: 10) {
+					c as count(friend)
+				}
+			}
+
+			friend(id: var(f)) {
+				name
+				fcount: var(c)
+			}
+		}
+	`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "friends"})
+	require.Equal(t, res.Query[0].Children[1].Alias, "bestFriend")
+	require.Equal(t, "fcount", res.Query[1].Children[1].Alias)
+}
+
+func TestParse_alias_max(t *testing.T) {
+	query := `
+		{
+			me(id:0x0a) {
+				name,
+				bestFriend: friends(first: 10) {
+					x as count(friends)
+				}
+				maxfriendcount: max(var(x))
+			}
+		}
+	`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, res.Query[0].Children[1].Alias, "bestFriend")
+	require.Equal(t, "maxfriendcount", res.Query[0].Children[2].Alias)
 }
 
 func TestParse_alias(t *testing.T) {
@@ -2841,7 +2994,7 @@ func TestParseQueryWithAttrLang(t *testing.T) {
 func TestParseQueryWithAttrLang2(t *testing.T) {
 	query := `
 	{
-	  me(func:regexp(name, "^[a-zA-z]*[^Kk ]?[Nn]ight"), orderasc: name@en, first:5) {
+	  me(func:regexp(name, /^[a-zA-z]*[^Kk ]?[Nn]ight/), orderasc: name@en, first:5) {
 		name@en
 		name@de
 		name@it
@@ -2853,6 +3006,95 @@ func TestParseQueryWithAttrLang2(t *testing.T) {
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
 	require.Equal(t, "name@en", res.Query[0].Args["orderasc"])
+}
+
+func TestParseRegexp1(t *testing.T) {
+	query := `
+	{
+	  me(ix:0x1) {
+	    name
+		friend @filter(regexp(name@en, /case INSENSITIVE regexp with \/ escaped value/i)) {
+	      name@en
+	    }
+	  }
+    }
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, []string{"case INSENSITIVE regexp with / escaped value", "i"},
+		res.Query[0].Children[1].Filter.Func.Args)
+}
+
+func TestParseRegexp2(t *testing.T) {
+	query := `
+	{
+	  me(func:regexp(name@en, /another\/compilicated ("") regexp('')/)) {
+	    name
+	  }
+    }
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, []string{"another/compilicated (\"\") regexp('')", ""},
+		res.Query[0].Func.Args)
+}
+
+func TestParseRegexp3(t *testing.T) {
+	query := `
+	{
+	  me(func:allofterms(name, "barack")) @filter(regexp(secret, /whitehouse[0-9]{1,4}/fLaGs)) {
+	    name
+	  }
+    }
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, []string{"whitehouse[0-9]{1,4}", "fLaGs"},
+		res.Query[0].Filter.Func.Args)
+}
+
+func TestParseRegexp4(t *testing.T) {
+	query := `
+	{
+	  me(func:regexp(name@en, /pattern/123)) {
+	    name
+	  }
+    }
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	// only [a-zA-Z] characters can be used as flags
+	require.Error(t, err)
+}
+
+func TestParseRegexp5(t *testing.T) {
+	query := `
+	{
+	  me(func:regexp(name@en, /pattern/flag123)) {
+	    name
+	  }
+    }
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	// only [a-zA-Z] characters can be used as flags
+	require.Error(t, err)
+}
+
+func TestParseRegexp6(t *testing.T) {
+	query := `
+	{
+	  me(func:regexp(name@en, /pattern\/)) {
+	    name
+	  }
+    }
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
 }
 
 func TestMain(m *testing.M) {

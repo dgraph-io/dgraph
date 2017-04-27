@@ -209,7 +209,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 	l.index.Lock()
 	defer l.index.Unlock()
 
-	if t.Op == taskp.DirectedEdge_DEL && string(t.Value) == x.DeleteAll {
+	if t.Op == taskp.DirectedEdge_DEL && string(t.Value) == x.DeleteAllObjects {
 		return l.handleDeleteAll(ctx, t)
 	}
 
@@ -219,9 +219,9 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 		if doUpdateIndex {
 			// Check original value BEFORE any mutation actually happens.
 			if len(t.Lang) > 0 {
-				found, val = l.findValue(farm.Fingerprint64([]byte(t.Lang)))
+				val, found = l.findValue(farm.Fingerprint64([]byte(t.Lang)))
 			} else {
-				found, val = l.findValue(math.MaxUint64)
+				val, found = l.findValue(math.MaxUint64)
 			}
 		}
 		_, err := l.addMutation(ctx, t)

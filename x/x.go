@@ -46,8 +46,9 @@ const (
 	ErrorUptodate        = "ErrorUptodate"
 	ErrorNoPermission    = "ErrorNoPermission"
 	ErrorInvalidMutation = "ErrorInvalidMutation"
-	DeleteAll            = "_DELETE_POSTING_"
 	ValidHostnameRegex   = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
+	DeleteAllObjects     = "_DELETE_POSTING_"
+	DeleteAllPredicates  = "_ALL_PREDICATES_"
 )
 
 var (

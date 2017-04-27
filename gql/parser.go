@@ -43,6 +43,7 @@ type GraphQuery struct {
 	Var        string
 	NeedsVar   []VarContext
 	Func       *Function
+	Expand     string // Which variable to expand with.
 
 	Args         map[string]string
 	Children     []*GraphQuery
@@ -83,8 +84,10 @@ type fragmentNode struct {
 type fragmentMap map[string]*fragmentNode
 
 const (
+	ANY_VAR   = 0
 	UID_VAR   = 1
 	VALUE_VAR = 2
+	LIST_VAR  = 3
 )
 
 type VarContext struct {
@@ -364,7 +367,7 @@ func checkValueType(vm varMap) error {
 }
 
 func substituteVar(f string, res *string, vmap varMap) error {
-	if f[0] == '$' {
+	if len(f) > 0 && f[0] == '$' {
 		va, ok := vmap[f]
 		if !ok {
 			return x.Errorf("Variable not defined %v", f)
@@ -739,8 +742,13 @@ L:
 			}
 			goto L
 		}
+	} else if item.Typ == itemRightCurl {
+		// Do nothing.
+	} else if item.Typ == itemName {
+		it.Prev()
+		return gq, nil
 	} else {
-		return nil, x.Errorf("Malformed Query. Missing {")
+		return nil, x.Errorf("Malformed Query. Missing {. Got %v", item.Val)
 	}
 
 	return gq, nil
@@ -1309,6 +1317,18 @@ L:
 					}
 					isDollar = true
 					continue
+				} else if itemInFunc.Typ == itemRegex {
+					end := strings.LastIndex(itemInFunc.Val, "/")
+					x.AssertTrue(end >= 0)
+					expr := strings.Replace(itemInFunc.Val[1:end], "\\/", "/", -1)
+					flags := ""
+					if end+1 < len(itemInFunc.Val) {
+						flags = itemInFunc.Val[end+1:]
+					}
+
+					g.Args = append(g.Args, expr, flags)
+					expectArg = false
+					continue
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -1793,7 +1813,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 		return x.Errorf("Bad nesting of predicates or functions")
 	}
 	var isCount uint16
-	varName := ""
+	var alias, varName string
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {
 		item := it.Item()
@@ -1818,7 +1838,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			if err != nil {
 				return x.Errorf("Invalid query")
 			}
-
 			if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
 				varName = item.Val
 				it.Next() // "As" was checked before.
@@ -1827,29 +1846,59 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 			val := collectName(it, item.Val)
 			valLower := strings.ToLower(val)
-			if isAggregator(valLower) || valLower == "checkpwd" {
+			if valLower == "checkpwd" {
 				child := &GraphQuery{
-					Args: make(map[string]string),
-					Var:  varName,
+					Args:  make(map[string]string),
+					Var:   varName,
+					Alias: alias,
 				}
-				varName = ""
+				varName, alias = "", ""
 				it.Prev()
 				if child.Func, err = parseFunction(it); err != nil {
 					return err
 				}
-				if valLower == "checkpwd" {
-					child.Func.Args = append(child.Func.Args, child.Func.Attr)
-				}
+				child.Func.Args = append(child.Func.Args, child.Func.Attr)
 				child.Attr = child.Func.Attr
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
-			} else if isValVarFunc(valLower) {
-				//item.Val = val
+			} else if isAggregator(valLower) {
+				child := &GraphQuery{
+					Attr:       "var",
+					Args:       make(map[string]string),
+					Var:        varName,
+					IsInternal: true,
+					Alias:      alias,
+				}
+				varName, alias = "", ""
+				it.Next()
+				it.Next()
+				if it.Item().Val != "var" {
+					return x.Errorf("Only variables allowed in aggregate functions.")
+				}
+				count, err := parseVarList(it, child)
+				if err != nil {
+					return err
+				}
+				if count != 1 {
+					x.Errorf("Expected one variable inside var() of aggregator but got %v", count)
+				}
+				child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
+				child.Func = &Function{
+					Name:     valLower,
+					NeedsVar: child.NeedsVar,
+				}
+				it.Next() // Skip the closing ')'
+				gq.Children = append(gq.Children, child)
+				curp = nil
+				continue
+			} else if isMathBlock(valLower) {
 				if varName == "" {
 					return x.Errorf("Function %v should be used with a variable", val)
 				}
-				//it.Prev()
+				if alias != "" {
+					return x.Errorf("math() cannot have an alias")
+				}
 				mathTree, again, err := parseMathFunc(it, false)
 				if err != nil {
 					return err
@@ -1868,7 +1917,44 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
-
+			} else if isExpandFunc(valLower) {
+				if varName != "" {
+					return x.Errorf("expand() cannot be used with a variable", val)
+				}
+				if alias != "" {
+					return x.Errorf("expand() cannot have an alias")
+				}
+				it.Next() // Consume the '('
+				if it.Item().Typ != itemLeftRound {
+					return x.Errorf("Invalid use of expand()", val)
+				}
+				it.Next()
+				item := it.Item()
+				child := &GraphQuery{
+					Attr:       val,
+					Args:       make(map[string]string),
+					IsInternal: true,
+				}
+				if item.Val == "var" {
+					count, err := parseVarList(it, child)
+					if err != nil {
+						return err
+					}
+					if count != 1 {
+						return x.Errorf("Invalid use of expand(). Exactly one variable expected.")
+					}
+					child.NeedsVar[len(child.NeedsVar)-1].Typ = LIST_VAR
+					child.Expand = child.NeedsVar[len(child.NeedsVar)-1].Name
+				} else if item.Val == "_all_" {
+					child.Expand = "_all_"
+				} else {
+					return x.Errorf("Invalid argument %v in expand()", item.Val)
+				}
+				it.Next() // Consume ')'
+				gq.Children = append(gq.Children, child)
+				// Note: curp is not set to nil. So it can have children, filters, etc.
+				curp = child
+				continue
 			} else if valLower == "count" {
 				if isCount != 0 {
 					return x.Errorf("Invalid mention of function count")
@@ -1888,7 +1974,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					Attr:       val,
 					Args:       make(map[string]string),
 					IsInternal: true,
+					Alias:      alias,
 				}
+				alias = ""
 				count, err := parseVarList(it, child)
 				if err != nil {
 					return err
@@ -1902,6 +1990,15 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				curp = nil
 				continue
 			}
+			peekIt, err = it.Peek(1)
+			if err != nil {
+				return err
+			}
+			if peekIt[0].Typ == itemColon {
+				alias = val
+				it.Next() //Consume the itemCollon
+				continue
+			}
 			if isCount == 2 {
 				return x.Errorf("Multiple predicates not allowed in single count.")
 			}
@@ -1910,22 +2007,14 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				Attr:    val,
 				IsCount: isCount == 1,
 				Var:     varName,
+				Alias:   alias,
 			}
-			varName = ""
+			varName, alias = "", ""
 			gq.Children = append(gq.Children, child)
 			curp = child
 			if isCount == 1 {
 				isCount = 2
 			}
-		case itemColon:
-			it.Next()
-			item = it.Item()
-			if item.Typ != itemName {
-				return x.Errorf("Predicate Expected but got: %s", item.Val)
-			}
-			val := collectName(it, item.Val)
-			curp.Alias = curp.Attr
-			curp.Attr = val
 		case itemLeftCurl:
 			if err := godeep(it, curp); err != nil {
 				return err
@@ -1964,7 +2053,11 @@ func isAggregator(fname string) bool {
 	return fname == "min" || fname == "max" || fname == "sum" || fname == "avg"
 }
 
-func isValVarFunc(name string) bool {
+func isExpandFunc(name string) bool {
+	return name == "expand"
+}
+
+func isMathBlock(name string) bool {
 	return name == "math"
 }
 

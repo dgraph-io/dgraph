@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -103,61 +102,6 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
-		return
-	}
-	w.Write(js)
-}
-
-func hasOnlySharePred(mutation *graphp.Mutation) bool {
-	for _, nq := range mutation.Set {
-		if nq.Predicate != INTERNAL_SHARE {
-			return false
-		}
-	}
-
-	for _, nq := range mutation.Del {
-		if nq.Predicate != INTERNAL_SHARE {
-			return false
-		}
-	}
-	return true
-}
-
-func hasSharePred(mutation *graphp.Mutation) bool {
-	for _, nq := range mutation.Set {
-		if nq.Predicate == INTERNAL_SHARE {
-			return true
-		}
-	}
-
-	for _, nq := range mutation.Del {
-		if nq.Predicate == INTERNAL_SHARE {
-			return true
-		}
-	}
-	return false
-}
-
-type dashboardState struct {
-	Share     bool   `json:"share"`
-	SharePred string `json:"share_pred"`
-}
-
-func initialState(w http.ResponseWriter, r *http.Request) {
-	addCorsHeaders(w)
-	if r.Method != "GET" {
-		http.Error(w, x.ErrorInvalidMethod, http.StatusBadRequest)
-		return
-	}
-
-	ds := dashboardState{
-		Share:     !*noshare,
-		SharePred: INTERNAL_SHARE,
-	}
-
-	js, err := json.Marshal(ds)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Write(js)

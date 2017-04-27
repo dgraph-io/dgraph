@@ -182,9 +182,46 @@ func needsIndex(fnType FuncType) bool {
 	}
 }
 
+func getPredList(uid uint64, gid uint32) ([]types.Val, error) {
+	key := x.DataKey("_predicate_", uid)
+	// Get or create the posting list for an entity, attribute combination.
+	pl, decr := posting.GetOrCreate(key, gid)
+	defer decr()
+	return pl.AllValues()
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result, error) {
+	var out taskp.Result
 	attr := q.Attr
+
+	if attr == "_predicate_" {
+		predMap := make(map[string]struct{})
+		for _, uid := range q.UidList.Uids {
+			predicates, err := getPredList(uid, gid)
+			if err != nil {
+				return &out, err
+			}
+			for _, pred := range predicates {
+				predMap[string(pred.Value.([]byte))] = struct{}{}
+			}
+		}
+		predList := make([]string, 0, len(predMap))
+		for pred := range predMap {
+			predList = append(predList, pred)
+		}
+		sort.Strings(predList)
+		for _, pred := range predList {
+			// Add it to values.
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			out.Values = append(out.Values, &taskp.Value{
+				ValType: int32(types.StringID),
+				Val:     []byte(pred),
+			})
+		}
+		return &out, nil
+	}
+
 	srcFn, err := parseSrcFn(q)
 	if err != nil {
 		return nil, err
@@ -197,7 +234,6 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
 	}
 
-	var out taskp.Result
 	opts := posting.ListOptions{
 		AfterUID: uint64(q.AfterUid),
 	}
@@ -278,7 +314,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 		// add facets to result.
 		if q.FacetParam != nil {
 			if isValueEdge {
-				fs, err := pl.Facets(q.FacetParam)
+				fs, err := pl.Facets(q.FacetParam, q.Langs)
 				if err != nil {
 					fs = []*facetsp.Facet{}
 				}
@@ -487,10 +523,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 			funcName: srcFn.fname,
 			funcType: srcFn.fnType,
 			lang:     srcFn.lang,
-			tokenMap: map[string]bool{},
-		}
-		for _, t := range srcFn.tokens {
-			filter.tokenMap[t] = false
+			tokens:   srcFn.tokens,
 		}
 		filtered := matchStrings(uids, values, filter)
 		for i := 0; i < len(out.UidMatrix); i++ {
@@ -635,11 +668,24 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case RegexFn:
-		err = ensureArgsCount(q.SrcFunc, 1)
+		err = ensureArgsCount(q.SrcFunc, 2)
 		if err != nil {
 			return nil, err
 		}
-		fc.regex, err = cregexp.Compile("(?m)" + q.SrcFunc[2])
+		ignoreCase := false
+		modifiers := q.SrcFunc[3]
+		if len(modifiers) > 0 {
+			if modifiers == "i" {
+				ignoreCase = true
+			} else {
+				return nil, x.Errorf("Invalid regexp modifier: %s", modifiers)
+			}
+		}
+		matchType := "(?m)" // this is cregexp library specific
+		if ignoreCase {
+			matchType = "(?i)" + matchType
+		}
+		fc.regex, err = cregexp.Compile(matchType + q.SrcFunc[2])
 		if err != nil {
 			return nil, err
 		}

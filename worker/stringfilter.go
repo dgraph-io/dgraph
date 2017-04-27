@@ -30,7 +30,7 @@ type stringFilter struct {
 	funcName string
 	funcType FuncType
 	lang     string
-	tokenMap map[string]bool
+	tokens   []string
 }
 
 func matchStrings(uids *taskp.List, values []types.Val, filter stringFilter) *taskp.List {
@@ -49,12 +49,17 @@ func matchStrings(uids *taskp.List, values []types.Val, filter stringFilter) *ta
 }
 
 func match(value types.Val, filter stringFilter) bool {
+	tokenMap := map[string]bool{}
+	for _, t := range filter.tokens {
+		tokenMap[t] = false
+	}
+
 	tokens := tokenizeValue(value, filter)
 	cnt := 0
 	for _, token := range tokens {
-		previous, ok := filter.tokenMap[token]
+		previous, ok := tokenMap[token]
 		if ok {
-			filter.tokenMap[token] = true
+			tokenMap[token] = true
 			if previous == false { // count only once
 				cnt++
 			}
@@ -64,7 +69,7 @@ func match(value types.Val, filter stringFilter) bool {
 	all := strings.HasPrefix(filter.funcName, "allof") // anyofterms or anyoftext
 
 	if all {
-		return cnt == len(filter.tokenMap)
+		return cnt == len(filter.tokens)
 	} else {
 		return cnt > 0
 	}

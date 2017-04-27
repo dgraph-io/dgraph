@@ -31,6 +31,8 @@ const (
 	comma        = ','
 	bang         = '!'
 	dollar       = '$'
+	slash        = '/'
+	backslash    = '\\'
 	queryMode    = 1
 	mutationMode = 2
 	fragmentMode = 3
@@ -57,6 +59,8 @@ const (
 	itemColon                                   // Colon
 	itemAt                                      // @
 	itemDollar                                  // $
+	itemRegex                                   // /
+	itemBackslash                               // \
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
 	itemThreeDots                               // three dots (...)
@@ -145,6 +149,15 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		case isNameBegin(r) || isNumber(r):
 			empty = false
 			return lexArgName
+		case r == slash:
+			// if argument starts with '/' it's a regex, otherwise it's a division
+			if empty {
+				empty = false
+				lexRegex(l)
+				l.Emit(itemRegex)
+				return lexText
+			}
+			fallthrough
 		case isMathOp(r):
 			l.Emit(itemMathOp)
 		case isInequalityOp(r):
@@ -451,6 +464,22 @@ LOOP:
 	return lexTextMutation
 }
 
+func lexRegex(l *lex.Lexer) {
+LOOP:
+	for {
+		r := l.Next()
+		switch r {
+		case lex.EOF:
+			return
+		case '\\':
+			l.Next()
+		case '/':
+			break LOOP
+		}
+	}
+	l.AcceptRun(isRegexFlag)
+}
+
 // lexOperationType lexes a query or mutation or schema operation type.
 func lexOperationType(l *lex.Lexer) lex.StateFn {
 	for {
@@ -576,4 +605,15 @@ func isNameSuffix(r rune) bool {
 		return true
 	}
 	return false
+}
+
+func isRegexFlag(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z':
+		return true
+	case r >= 'A' && r <= 'Z':
+		return true
+	default:
+		return false
+	}
 }

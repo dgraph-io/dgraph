@@ -1,8 +1,6 @@
 const query = (
     state = {
         text: "",
-        // Regex to match property name to display in Graph for nodes.
-        propertyRegex: ""
     },
     action
 ) => {
@@ -11,11 +9,6 @@ const query = (
             return {
                 ...state,
                 text: action.text
-            };
-        case "UPDATE_PROPERTY_REGEX":
-            return {
-                ...state,
-                propertyRegex: action.regex
             };
         default:
             return state;

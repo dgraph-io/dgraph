@@ -342,7 +342,7 @@ func edgeType(t *taskp.DirectedEdge) x.ValueTypeInfo {
 	hasId := t.ValueId != 0
 	switch {
 	case hasVal && hasId:
-		return x.ValueLang
+		return x.ValueMulti
 	case hasVal && !hasId:
 		return x.ValuePlain
 	case !hasVal && hasId:
@@ -359,7 +359,7 @@ func postingType(p *typesp.Posting) x.ValueTypeInfo {
 	case typesp.Posting_VALUE:
 		return x.ValuePlain
 	case typesp.Posting_VALUE_LANG:
-		return x.ValueLang
+		return x.ValueMulti
 	default:
 		return x.ValueEmpty
 	}
@@ -387,6 +387,10 @@ func (l *List) addMutation(ctx context.Context, t *taskp.DirectedEdge) (bool, er
 			t.ValueId = farm.Fingerprint64([]byte(t.Lang))
 		} else {
 			t.ValueId = math.MaxUint64
+		}
+
+		if t.Attr == "_predicate_" {
+			t.ValueId = farm.Fingerprint64(t.Value)
 		}
 	}
 	if t.ValueId == 0 {
@@ -638,12 +642,32 @@ func (l *List) Postings(opt ListOptions, postFn func(*typesp.Posting) bool) {
 	})
 }
 
+func (l *List) AllValues() (vals []types.Val, rerr error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	l.iterate(0, func(p *typesp.Posting) bool {
+		// x.AssertTruef(postingType(p) == x.ValueMulti,
+		//	"Expected a value posting.")
+		vals = append(vals, types.Val{
+			Tid:   types.TypeID(p.ValType),
+			Value: p.Value,
+		})
+		return true
+	})
+	return
+}
+
 // Returns Value from posting list.
 // This function looks only for "default" value (one without language).
 func (l *List) Value() (rval types.Val, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
-	return l.value()
+	val, found := l.findValue(math.MaxUint64)
+	if !found {
+		return val, ErrNoValue
+	}
+	return val, nil
 }
 
 // Returns Value from posting list, according to preferred language list (langs).
@@ -652,120 +676,113 @@ func (l *List) Value() (rval types.Val, rerr error) {
 // If list consists of one or more languages, first available value is returned; if no language
 // from list match the values, processing is the same as for empty list.
 func (l *List) ValueFor(langs []string) (rval types.Val, rerr error) {
+	p, err := l.postingFor(langs)
+	if err != nil {
+		return rval, err
+	}
+	return copyValueToVal(p), nil
+}
+
+func (l *List) postingFor(langs []string) (p *typesp.Posting, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
-	return l.valueFor(langs)
+	return l.postingForLangs(langs)
 }
 
 func (l *List) ValueForTag(tag string) (rval types.Val, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
-	return l.valueForTag(tag)
-}
-
-func (l *List) value() (rval types.Val, rerr error) {
-	l.AssertRLock()
-	var found bool
-
-	found, rval = l.findValue(math.MaxUint64)
-
-	if !found {
-		return rval, ErrNoValue
+	p, err := l.postingForTag(tag)
+	if err != nil {
+		return rval, err
 	}
-
-	return rval, nil
+	return copyValueToVal(p), nil
 }
 
-func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
+func copyValueToVal(p *typesp.Posting) (rval types.Val) {
+	val := make([]byte, len(p.Value))
+	copy(val, p.Value)
+	rval.Value = val
+	rval.Tid = types.TypeID(p.ValType)
+	return
+}
+
+func (l *List) postingForLangs(langs []string) (pos *typesp.Posting, rerr error) {
 	l.AssertRLock()
 	var found bool
 
 	// look for language in preffered order
 	for _, lang := range langs {
-		rval, rerr = l.valueForTag(lang)
+		pos, rerr = l.postingForTag(lang)
 		if rerr == nil {
-			return rval, nil
+			return pos, nil
 		}
 	}
 
 	// look for value without language
 	if !found {
-		found, rval = l.findValue(math.MaxUint64)
+		found, pos = l.findPosting(math.MaxUint64)
 	}
 
 	// last resort - return value with smallest lang Uid
 	if !found {
 		l.iterate(0, func(p *typesp.Posting) bool {
-			if postingType(p) == x.ValueLang {
-				val := make([]byte, len(p.Value))
-				copy(val, p.Value)
-				rval.Value = val
-				rval.Tid = types.TypeID(p.ValType)
-				found = true
+			if postingType(p) == x.ValueMulti {
+				pos = p
+				return false
 			}
-			return false
+			return true
 		})
 	}
 
 	if !found {
-		return rval, ErrNoValue
+		return pos, ErrNoValue
 	}
 
-	return rval, nil
+	return pos, nil
 }
 
-func (l *List) valueForTag(tag string) (rval types.Val, rerr error) {
+func (l *List) postingForTag(tag string) (p *typesp.Posting, rerr error) {
 	l.AssertRLock()
 	uid := farm.Fingerprint64([]byte(tag))
-	found, rval := l.findValue(uid)
+	found, p := l.findPosting(uid)
 	if !found {
-		return rval, ErrNoValue
+		return p, ErrNoValue
 	}
 
-	return rval, nil
+	return p, nil
 }
 
-func (l *List) findValue(uid uint64) (found bool, rval types.Val) {
+func (l *List) findValue(uid uint64) (rval types.Val, found bool) {
+	l.AssertRLock()
+	found, p := l.findPosting(uid)
+	if !found {
+		return rval, found
+	}
+
+	return copyValueToVal(p), true
+}
+
+func (l *List) findPosting(uid uint64) (found bool, pos *typesp.Posting) {
 	l.iterate(uid-1, func(p *typesp.Posting) bool {
 		if p.Uid == uid {
-			val := make([]byte, len(p.Value))
-			copy(val, p.Value)
-			rval.Value = val
-			rval.Tid = types.TypeID(p.ValType)
+			pos = p
 			found = true
 		}
 		return false
 	})
 
-	return found, rval
+	return found, pos
 }
 
 // Facets gives facets for the posting representing value.
-func (l *List) Facets(param *facetsp.Param) (fs []*facetsp.Facet, ferr error) {
+func (l *List) Facets(param *facetsp.Param, langs []string) (fs []*facetsp.Facet,
+	ferr error) {
 	l.RLock()
 	defer l.RUnlock()
-	p, err := l.valuePosting()
+	p, err := l.postingFor(langs)
 	if err != nil {
 		return nil, err
 	}
 	return facets.CopyFacets(p.Facets, param), nil
-}
-
-// valuePosting gives the posting representing value.
-// This fn expects to be called from inside a read lock.
-func (l *List) valuePosting() (p *typesp.Posting, err error) {
-	l.AssertRLock()
-	var found bool
-	l.iterate(math.MaxUint64-1, func(pi *typesp.Posting) bool {
-		if pi.Uid == math.MaxUint64 {
-			p = pi
-			found = true
-		}
-		return false
-	})
-
-	if !found {
-		return p, ErrNoValue
-	}
-	return p, nil
 }

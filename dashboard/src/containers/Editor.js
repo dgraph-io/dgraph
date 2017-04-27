@@ -10,7 +10,7 @@ import {
 } from "react-bootstrap";
 
 import { runQuery, updateRegex, selectQuery, updateShareId } from "../actions";
-import { timeout, checkStatus, sortStrings, dgraphAddress } from "./Helpers";
+import { timeout, checkStatus, sortStrings, getEndpointBaseURL } from "./Helpers";
 import "../assets/css/Editor.css";
 
 require("codemirror/addon/hint/show-hint.css");
@@ -90,7 +90,7 @@ class Editor extends Component {
     let keywords = [];
     timeout(
       1000,
-      fetch(dgraphAddress() + "/ui/keywords", {
+      fetch(getEndpointBaseURL() + "/ui/keywords", {
         method: "GET",
         mode: "cors"
       })
@@ -123,7 +123,7 @@ class Editor extends Component {
 
     timeout(
       1000,
-      fetch(dgraphAddress() + "/query", {
+      fetch(getEndpointBaseURL() + "/query", {
         method: "POST",
         mode: "cors",
         body: "schema {}"
@@ -185,18 +185,6 @@ class Editor extends Component {
 
     CodeMirror.registerHelper("hint", "fromList", function(cm, options) {
       var cur = cm.getCursor(), token = cm.getTokenAt(cur);
-
-      // This is so that we automatically have a space before (, so that auto-
-      // complete inside braces works. Otherwise it doesn't work for
-      // director.film(orderasc: release_date).
-      let openBrac = token.string.indexOf("(");
-      if (
-        openBrac !== -1 &&
-        token.string[openBrac - 1] !== undefined &&
-        token.string[openBrac - 1] !== " "
-      ) {
-        cm.replaceRange(" ", { line: cur.line, ch: token.start + openBrac });
-      }
 
       var to = CodeMirror.Pos(cur.line, token.end);
       let from = "", term = "";
@@ -274,7 +262,7 @@ class Editor extends Component {
 
 const mapStateToProps = state => ({
   query: state.query.text,
-  regex: state.query.propertyRegex
+  regex: state.regex.propertyRegex
 });
 
 const mapDispatchToProps = {

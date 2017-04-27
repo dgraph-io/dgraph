@@ -255,24 +255,15 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 	return nil
 }
 
-func (ag *aggregator) Apply(val *taskp.Value) {
+func (ag *aggregator) Apply(val types.Val) {
 	if ag.result.Value == nil {
-		v, err := convertTo(val)
-		if err != nil {
-			x.AssertTruef(err == ErrEmptyVal, "Expected Empty Val error. But got: %v", err)
-			return
-		}
-		ag.result = v
+		ag.result = val
 		ag.count++
 		return
 	}
 
 	va := ag.result
-	vb, err := convertTo(val)
-	if err != nil {
-		x.AssertTruef(err == ErrEmptyVal, "Expected Empty Val error. But got: %v", err)
-		return
-	}
+	vb := val
 	var res types.Val
 	switch ag.name {
 	case "min":

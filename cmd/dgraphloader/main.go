@@ -2,7 +2,7 @@
 // mutations using the HTTP interface.
 //
 // You can run the script like
-// go build . && ./dgraphloader -r path-to-gzipped-rdf.gz
+// go build . && ./dgraphloader -r path-to-gzipped-rdf.gz -s path-to-gzipped-schema-rdf.gz
 package main
 
 import (
@@ -74,8 +74,16 @@ func processSchemaFile(file string, batch *client.BatchMutation) {
 	x.Check(err)
 	defer f.Close()
 
+	var reader io.Reader
+	if strings.HasSuffix(strings.ToLower(file), ".gz") {
+		reader, err = gzip.NewReader(f)
+		x.Check(err)
+	} else {
+		reader = f
+	}
+
 	var buf bytes.Buffer
-	bufReader := bufio.NewReader(f)
+	bufReader := bufio.NewReader(reader)
 	var line int
 	for {
 		err = readLine(bufReader, &buf)
