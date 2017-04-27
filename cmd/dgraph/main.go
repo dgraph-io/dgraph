@@ -59,6 +59,7 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/soheilhy/cmux"
@@ -166,25 +167,25 @@ func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult
 		if strings.HasPrefix(nq.Subject, "_:") {
 			newUids[nq.Subject] = 0
 		} else {
-			// Only store xids that need to be marked as used.
-			if _, err := strconv.ParseInt(nq.Subject, 0, 64); err != nil {
-				uid, err := rdf.GetUid(nq.Subject)
-				if err != nil {
-					return mr, err
-				}
-				newUids[nq.Subject] = uid
+			// Only store xids that need to be generated.
+			_, err := rdf.GetUid(nq.Subject)
+			if err == rdf.ErrInvalidUID {
+				return mr, err
+			} else if err != nil {
+				newUids[nq.Subject] = 0
 			}
 		}
 
 		if len(nq.ObjectId) > 0 {
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
-			} else if !strings.HasPrefix(nq.ObjectId, "_uid_:") {
-				uid, err := rdf.GetUid(nq.ObjectId)
-				if err != nil {
+			} else {
+				_, err := rdf.GetUid(nq.ObjectId)
+				if err == rdf.ErrInvalidUID {
 					return mr, err
+				} else if err != nil {
+					newUids[nq.ObjectId] = 0
 				}
-				newUids[nq.ObjectId] = uid
 			}
 		}
 	}
@@ -214,6 +215,8 @@ func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult
 	for k, v := range newUids {
 		if strings.HasPrefix(k, "_:") {
 			resultUids[k[2:]] = v
+		} else {
+			resultUids[k] = v
 		}
 	}
 
@@ -983,6 +986,7 @@ func main() {
 
 	x.Check(group.ParseGroupConfig(*gconf))
 	schema.Init(ps)
+	uid.Init(ps)
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

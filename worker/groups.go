@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -132,7 +133,8 @@ func StartRaftNodes(walDir string) {
 		gid, err := strconv.ParseUint(id, 0, 32)
 		x.Checkf(err, "Unable to parse group id: %v", id)
 		node := gr.newNode(uint32(gid), *raftId, *myAddr)
-		schema.LoadFromDb(uint32(gid))
+		x.Checkf(schema.LoadFromDb(uint32(gid)), "Error while initilizating schema")
+		x.Checkf(uid.LeaseManager().Reload(uint32(gid)), "Error while initilizating lease")
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

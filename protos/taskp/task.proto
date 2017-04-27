@@ -57,8 +57,8 @@ message SortResult {
 
 message Num {
 	uint32 group = 1;
-	int64 val = 2;
-	repeated uint64 uids = 3;
+	uint64 val = 2;
+	repeated string xids = 3;
 }
 
 message RaftContext {
@@ -128,11 +128,18 @@ message RebuildIndex {
 	string attr = 2;  // For simplicity, just do one attribute per request.
 }
 
+message UIDLease {
+	uint32 group_id = 1;
+	uint64 next_id = 2;
+	uint64 leased_id = 3;
+}
+
 message Proposal {
 	uint32 id = 1;
 	Mutations mutations = 2;
 	Membership membership = 3;
 	RebuildIndex rebuild_index = 4;
+	UIDLease uid_lease = 5;
 }
 
 message KV {

@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -43,6 +44,7 @@ const (
 	proposalMutation   = 0
 	proposalReindex    = 1
 	proposalMembership = 2
+	proposalUidLease   = 3
 	ErrorNodeIDExists  = "Error Node ID already exists in the cluster"
 )
 
@@ -304,8 +306,10 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) err
 		proposalData[0] = proposalMutation
 	} else if proposal.Membership != nil {
 		proposalData[0] = proposalMembership
+	} else if proposal.UidLease != nil {
+		proposalData[0] = proposalUidLease
 	} else {
-		x.Fatalf("Unkonw proposal")
+		x.Fatalf("Unknown proposal")
 	}
 	copy(proposalData[1:], slice)
 
@@ -323,6 +327,8 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) err
 		x.Trace(ctx, "Waiting for the proposal: membership update.")
 	} else if proposal.RebuildIndex != nil {
 		x.Trace(ctx, "Waiting for the proposal: RebuildIndex")
+	} else if proposal.UidLease != nil {
+		x.Trace(ctx, "Waiting for the proposal: UidLease")
 	} else {
 		x.Fatalf("Unknown proposal")
 	}
@@ -447,6 +453,13 @@ func (n *node) processMembership(e raftpb.Entry, mm *taskp.Membership) error {
 	return nil
 }
 
+func (n *node) processUidLease(e raftpb.Entry, l *taskp.UIDLease) error {
+	x.AssertTrue(n.gid == l.GroupId)
+	rv := x.RaftValue{Group: n.gid, Index: e.Index}
+	uid.LeaseManager().Update(l.NextId, l.LeasedId, rv)
+	return nil
+}
+
 func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	defer func() {
 		n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
@@ -467,6 +480,8 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 		err = n.processMutation(e, proposal.Mutations)
 	} else if proposal.Membership != nil {
 		err = n.processMembership(e, proposal.Membership)
+	} else if proposal.UidLease != nil {
+		err = n.processUidLease(e, proposal.UidLease)
 	}
 	n.props.Done(proposal.Id, err)
 	<-pending // Release one.
@@ -590,7 +605,9 @@ func (n *node) retrieveSnapshot(rc taskp.RaftContext) {
 	x.Check2(populateShard(n.ctx, pool, n.gid))
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
-	x.Checkf(schema.Refresh(n.gid), "Error while initilizating schema")
+	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
+	// we need to refresh lease from the snapshot
+	x.Checkf(uid.LeaseManager().Reload(n.gid), "Error while initilizating lease")
 }
 
 func (n *node) Run() {
