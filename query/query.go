@@ -294,6 +294,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					fieldName = fmt.Sprintf("%s(%v)", pc.SrcFunc[0], fieldName)
 				}
 			}
+			if pc.Params.Alias != "" {
+				fieldName = pc.Params.Alias
+			}
 			sv, ok := pc.Params.uidToVal[uid]
 			if !ok || sv.Value == nil {
 				continue
@@ -342,7 +345,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			c := types.ValueForType(types.IntID)
 			c.Value = int64(pc.counts[idx])
 			uc := dst.New(pc.Attr)
-			uc.AddValue("count", c)
+			fieldName = "count"
+			if pc.Params.Alias != "" {
+				fieldName = pc.Params.Alias
+			}
+			uc.AddValue(fieldName, c)
 			dst.AddListChild(pc.Attr, uc)
 		} else if len(pc.SrcFunc) > 0 && isAggregatorFn(pc.SrcFunc[0]) {
 			// add sg.Attr as child on 'parent' instead of 'dst', otherwise
