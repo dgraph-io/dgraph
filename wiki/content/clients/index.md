@@ -30,6 +30,8 @@ go get -u -v github.com/dgraph-io/dgraph/client github.com/dgraph-io/dgraph/prot
 
 #### Example
 
+The working example below shows the common operations that one would perform on a graph.
+
 ```
 package main
 
@@ -54,48 +56,50 @@ var (
 func main() {
 	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
 
-	// Creating a new client.
 	c := graphp.NewDgraphClient(conn)
-	// Starting a new request.
 	req := client.Req{}
+
 	// _:person1 tells Dgraph to assign a new Uid and is the preferred way of creating new nodes.
 	// See https://docs.dgraph.io/master/query-language/#assigning-uid for more details.
+
 	nq := graphp.NQuad{
 		Subject:   "_:person1",
 		Predicate: "name",
 	}
-	// Str is a helper function to add a string value.
 	client.Str("Steven Spielberg", &nq)
-	// Adding a new mutation.
+
+	if err := client.AddFacet("since", "2006-01-02T15:04:05", &nq); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := client.AddFacet("alias", `"Steve"`, &nq); err != nil {
+		log.Fatal(err)
+	}
+
 	req.AddMutation(nq, client.SET)
 
 	nq = graphp.NQuad{
 		Subject:   "_:person1",
 		Predicate: "now",
 	}
-	// Datetime is a helper function to add a datetime value.
 	if err = client.Datetime(time.Now(), &nq); err != nil {
 		log.Fatal(err)
 	}
-	// Adding another mutation to the same request.
 	req.AddMutation(nq, client.SET)
 
 	nq = graphp.NQuad{
 		Subject:   "_:person1",
 		Predicate: "birthday",
 	}
-	// Date is a helper function to add a date value.
 	if err = client.Date(time.Date(1991, 2, 1, 0, 0, 0, 0, time.UTC), &nq); err != nil {
 		log.Fatal(err)
 	}
-	// Add another mutation.
 	req.AddMutation(nq, client.SET)
 
 	nq = graphp.NQuad{
 		Subject:   "_:person1",
 		Predicate: "loc",
 	}
-	// ValueFromGeoJson is used to set a Geo value.
 	if err = client.ValueFromGeoJson(`{"type":"Point","coordinates":[-122.2207184,37.72129059]}`, &nq); err != nil {
 		log.Fatal(err)
 	}
@@ -105,7 +109,6 @@ func main() {
 		Subject:   "_:person1",
 		Predicate: "age",
 	}
-	// Int is used to add integer values.
 	if err = client.Int(25, &nq); err != nil {
 		log.Fatal(err)
 	}
@@ -115,7 +118,6 @@ func main() {
 		Subject:   "_:person1",
 		Predicate: "salary",
 	}
-	// Float is used to floating values.
 	if err = client.Float(13333.6161, &nq); err != nil {
 		log.Fatal(err)
 	}
@@ -125,20 +127,16 @@ func main() {
 		Subject:   "_:person1",
 		Predicate: "married",
 	}
-	// Bool is used to set boolean values.
 	if err = client.Bool(false, &nq); err != nil {
 		log.Fatal(err)
 	}
 	req.AddMutation(nq, client.SET)
 
-	// Lets create another person and add a name for it.
 	nq = graphp.NQuad{
 		Subject:   "_:person2",
 		Predicate: "name",
 	}
-	// Str is a helper function to add a string value.
 	client.Str("William Jones", &nq)
-	// Adding a new mutation.
 	req.AddMutation(nq, client.SET)
 
 	// Lets connect the two nodes together.
@@ -147,6 +145,11 @@ func main() {
 		Predicate: "friend",
 		ObjectId:  "_:person2",
 	}
+
+	if err := client.AddFacet("close", "true", &nq); err != nil {
+		log.Fatal(err)
+	}
+
 	req.AddMutation(nq, client.SET)
 	// Lets run the request with all these mutations.
 	resp, err := c.Run(context.Background(), req.Request())
@@ -159,8 +162,22 @@ func main() {
 	// Lets initiate a new request and query for the data.
 	req = client.Req{}
 	// Lets set the starting node id to person1Uid.
-	req.SetQuery(fmt.Sprintf("{ me(id: %v) { _uid_ name now birthday loc salary age married friend {_uid_ name} } }", client.Uid(person1Uid)),
-	 map[string]string{})
+	req.SetQuery(fmt.Sprintf(`{
+		me(id: %v) {
+			_uid_
+			name
+			now
+			birthday
+			loc
+			salary
+			age
+			married
+			friend {
+				_uid_
+				name
+			}
+		}
+	}`, client.Uid(person1Uid)))
 	resp, err = c.Run(context.Background(), req.Request())
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
@@ -206,13 +223,15 @@ func main() {
 	}
 	req = client.Req{}
 	req.AddMutation(nq, client.DEL)
-	// Lets run the request with all these mutations.
 	resp, err = c.Run(context.Background(), req.Request())
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
 }
 ```
+
+{{% notice "note" %}}Type for the facets are automatically interpreted from the value. If you want it to
+be interpreted as string, it has to be a raw query with `""` as shown above for `alias` facet.{{% /notice %}}
 
 An appropriate schema for the above example would be
 ```

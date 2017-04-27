@@ -30,6 +30,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -101,6 +102,15 @@ func (req *Req) AddMutation(nq graphp.NQuad, op Op) error {
 		return err
 	}
 	req.addMutation(nq, op)
+	return nil
+}
+
+func AddFacet(key string, val string, nq *graphp.NQuad) error {
+	facet, err := facets.FacetFor(key, val)
+	if err != nil {
+		return err
+	}
+	nq.Facets = append(nq.Facets, facet)
 	return nil
 }
 
