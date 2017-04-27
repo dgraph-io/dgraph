@@ -28,13 +28,13 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
 	UID        []uint64
+	ID         []string
 	Attr       string
 	Langs      []string
 	Alias      string
@@ -1587,16 +1587,8 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 
 func parseID(gq *GraphQuery, val string) error {
 	val = x.WhiteSpace.Replace(val)
-	toUid := func(str string) {
-		uid, rerr := strconv.ParseUint(str, 0, 64)
-		if rerr == nil {
-			gq.UID = append(gq.UID, uid)
-		} else {
-			gq.UID = append(gq.UID, farm.Fingerprint64([]byte(str)))
-		}
-	}
 	if val[0] != '[' {
-		toUid(val)
+		gq.ID = append(gq.ID, val)
 		return nil
 	}
 
@@ -1609,7 +1601,7 @@ func parseID(gq *GraphQuery, val string) error {
 			if buf.Len() == 0 {
 				continue
 			}
-			toUid(buf.String())
+			gq.ID = append(gq.ID, buf.String())
 			buf.Reset()
 			continue
 		}

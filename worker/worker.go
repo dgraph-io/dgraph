@@ -27,11 +27,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 )
 
@@ -46,6 +48,14 @@ var (
 
 func Init(ps *store.Store) {
 	pstore = ps
+	gid = group.BelongsTo("_lease_")
+	leaseKey = x.DataKey(LeasePredicate, 1)
+
+	lmgr = new(lockManager)
+	lmgr.uids = make(map[string]*Uid)
+
+	leasemgr = new(leaseManager)
+	leasemgr.elog = trace.NewEventLog("Lease Manager", "")
 }
 
 // grpcWorker struct implements the gRPC server interface.

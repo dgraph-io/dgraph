@@ -57,8 +57,8 @@ message SortResult {
 
 message Num {
 	uint32 group = 1;
-	int64 val = 2;
-	repeated uint64 uids = 3;
+	uint64 val = 2;
+	repeated string xids = 3;
 }
 
 message RaftContext {

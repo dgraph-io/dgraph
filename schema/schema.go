@@ -256,8 +256,6 @@ func Init(ps *store.Store) {
 }
 
 // LoadFromDb reads schema information from db and stores it in memory
-// This is used on server start to load schema for all groups, avoid repeated
-// query to disk if we have large number of groups
 func LoadFromDb(gid uint32) error {
 	prefix := x.SchemaPrefix()
 	itr := pstore.NewIterator()
@@ -274,26 +272,14 @@ func LoadFromDb(gid uint32) error {
 		}
 		State().Set(attr, s)
 	}
-	return nil
-}
-
-func Refresh(groupId uint32) error {
-	prefix := x.SchemaPrefix()
-	itr := pstore.NewIterator()
-	defer itr.Close()
-
-	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
-		key := itr.Key().Data()
-		attr := x.Parse(key).Attr
-		if group.BelongsTo(attr) != groupId {
-			continue
-		}
-		data := itr.Value().Data()
-		var s protos.SchemaUpdate
-		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
-		State().Set(attr, s)
+	if group.BelongsTo("_xid_") != gid {
+		return nil
 	}
-
+	State().Set("_xid_", protos.SchemaUpdate{
+		ValueType: uint32(types.StringID),
+		Directive: protos.SchemaUpdate_INDEX,
+		Tokenizer: []string{"exact"},
+	})
 	return nil
 }
 

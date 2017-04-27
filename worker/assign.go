@@ -18,73 +18,161 @@
 package worker
 
 import (
+	"errors"
+	"strings"
+
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var emptyNum protos.Num
+var (
+	emptyNum        protos.Num
+	emptyListOption posting.ListOptions
+	UidNotFound     = errors.New("Uid not found for xid")
+)
 
 func createNumQuery(group uint32, umap map[string]uint64) *protos.Num {
 	out := &protos.Num{Group: group}
-	for _, v := range umap {
-		if v != 0 {
-			out.Uids = append(out.Uids, v)
+	for k := range umap {
+		if strings.HasPrefix(k, "_:") {
+			//generate new for this xid
+			out.Val = out.Val + 1
 		} else {
-			out.Val++
+			out.Xids = append(out.Xids, k)
 		}
 	}
 	return out
 }
 
+func GetUid(ctx context.Context, xid string) (uint64, error) {
+	out := &protos.Query{
+		Attr:    "_xid_",
+		SrcFunc: []string{"eq", "", xid},
+	}
+	var result *protos.Result
+	var err error
+	if groups().ServesGroup(gid) {
+		result, err = processTask(ctx, out, gid)
+	} else {
+		result, err = ProcessTaskOverNetwork(ctx, out)
+	}
+	if err != nil {
+		return 0, err
+	}
+	if len(result.UidMatrix) > 0 && len(result.UidMatrix[0].Uids) > 0 {
+		return result.UidMatrix[0].Uids[0], nil
+	}
+	return 0, UidNotFound
+}
+
+type resErr struct {
+	xid string
+	uid uint64
+	err error
+}
+
+// AllocateOrGetUniqueUids assigns a new uid for xid if not already assigned or returns
+// already assigned uid
+func AllocateOrGetUniqueUids(ctx context.Context, xids []string) ([]uint64, error) {
+	num := len(xids)
+	ids := make([]uint64, num, num)
+	xidMap := make(map[string]uint64)
+	ch := make(chan resErr, num)
+
+	for _, x := range xids {
+		xid := x
+		go func() {
+			uid, err := LockManager().getUid(ctx, xid)
+			ch <- resErr{xid: xid, uid: uid, err: err}
+		}()
+	}
+	for i := 0; i < num; i++ {
+		res := <-ch
+		if res.err != nil {
+			return ids, res.err
+		}
+		xidMap[res.xid] = res.uid
+	}
+
+	close(ch)
+	for i, xid := range xids {
+		v, found := xidMap[xid]
+		x.AssertTruef(found, "uid not found/generated for xid")
+		ids[i] = v
+	}
+
+	return ids, nil
+}
+
 // assignUids returns a byte slice containing uids.
 // This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
-// so we can tackle any collisions that might happen with the lockmanager.
+// so we can tackle any collisions that might happen with the leasemanager
 // In essence, we just want one server to be handing out new uids.
 func assignUids(ctx context.Context, num *protos.Num) (*protos.List, error) {
 	node := groups().Node(num.Group)
+	x.AssertTrue(num.Group == gid)
 	if !node.AmLeader() {
 		return &emptyUIDList, x.Errorf("Assigning UIDs is only allowed on leader.")
 	}
 
 	val := int(num.Val)
-	markNum := len(num.Uids)
-	if val == 0 && markNum == 0 {
+	numXids := len(num.Xids)
+	if val == 0 && numXids == 0 {
 		return &emptyUIDList, x.Errorf("Nothing to be marked or assigned")
 	}
 
-	mutations := uid.AssignNew(val, num.Group)
+	out := make([]uint64, val+numXids, val+numXids)
+	che := make(chan error, 2)
 
-	for _, uid := range num.Uids {
-		mutations.Edges = append(mutations.Edges, &protos.DirectedEdge{
-			Entity: uid,
-			Attr:   "_uid_",
-			Value:  []byte("_"), // not txid
-			Label:  "A",
-			Op:     protos.DirectedEdge_SET,
-		})
-	}
+	go func() {
+		if num.Val == 0 {
+			che <- nil
+			return
+		}
+		startId, err := LeaseManager().assignNew(ctx, num.Val)
+		if err != nil {
+			che <- err
+			return
+		}
+		// First N entities are newly assigned UIDs, so we collect them.
+		for i := uint64(0); i < num.Val; i++ {
+			out[i] = startId + i
+		}
+		che <- nil
+	}()
 
-	proposal := &protos.Proposal{Mutations: mutations}
-	if err := node.ProposeAndWait(ctx, proposal); err != nil {
-		return &emptyUIDList, err
-	}
-	// Mutations successfully applied.
+	go func() {
+		ids, err := AllocateOrGetUniqueUids(ctx, num.Xids)
+		if err != nil {
+			che <- err
+			return
+		}
+		for i, id := range ids {
+			out[num.Val+uint64(i)] = id
+		}
+		che <- nil
+	}()
 
-	out := make([]uint64, 0, val)
-	// Only the First N entities are newly assigned UIDs, so we collect them.
-	for i := 0; i < val; i++ {
-		out = append(out, mutations.Edges[i].Entity)
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-che:
+			if err != nil {
+				return &emptyUIDList, err
+			}
+		case <-ctx.Done():
+			return &emptyUIDList, ctx.Err()
+		}
 	}
 	return &protos.List{out}, nil
 }
 
 // AssignUidsOverNetwork assigns new uids and writes them to the umap.
 func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
-	gid := group.BelongsTo("_uid_")
+	gid := group.BelongsTo("_xid_")
 	num := createNumQuery(gid, umap)
 
 	var ul *protos.List
@@ -120,10 +208,15 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 		}
 	}
 
-	x.AssertTruef(len(ul.Uids) == int(num.Val),
-		"Requested: %d != Retrieved Uids: %d", num.Val, len(ul.Uids))
+	x.AssertTruef(len(ul.Uids) == len(umap),
+		"Requested: %d != Retrieved Uids: %d", len(umap), len(ul.Uids))
 
 	i := 0
+	xidStart := int(num.Val)
+	for i, xid := range num.Xids {
+		umap[xid] = ul.Uids[xidStart+i]
+	}
+	// assign generated ones now
 	for k, v := range umap {
 		if v == 0 {
 			umap[k] = ul.Uids[i] // Write uids to map.

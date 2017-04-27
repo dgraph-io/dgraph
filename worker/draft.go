@@ -304,7 +304,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	} else if proposal.Membership != nil {
 		proposalData[0] = proposalMembership
 	} else {
-		x.Fatalf("Unkonw proposal")
+		x.Fatalf("Unknown proposal")
 	}
 	copy(proposalData[1:], slice)
 
@@ -589,7 +589,7 @@ func (n *node) retrieveSnapshot(rc protos.RaftContext) {
 	x.Check2(populateShard(n.ctx, pool, n.gid))
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
-	x.Checkf(schema.Refresh(n.gid), "Error while initilizating schema")
+	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
 }
 
 func (n *node) Run() {
@@ -610,6 +610,8 @@ func (n *node) Run() {
 					// stepped down as leader do a sync membership immediately
 					groups().syncMemberships()
 				} else if rd.RaftState == raft.StateLeader && !leader {
+					// TODO:wait for apply watermark ??
+					LeaseManager().resetLease()
 					groups().syncMemberships()
 				}
 				leader = rd.RaftState == raft.StateLeader

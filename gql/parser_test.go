@@ -18,13 +18,17 @@
 package gql
 
 import (
+	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
-	farm "github.com/dgryski/go-farm"
+	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -149,7 +153,7 @@ func TestParseQueryWithDash(t *testing.T) {
     }`
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	require.Equal(t, farm.Fingerprint64([]byte("alice-in-wonderland")), res.Query[0].UID[0])
+	require.Equal(t, "alice-in-wonderland", res.Query[0].ID[0])
 	require.Equal(t, "written-in", res.Query[0].Children[1].Attr)
 }
 
@@ -943,7 +947,7 @@ func TestParseIdList(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
-	require.Equal(t, []uint64{1}, gq.UID)
+	require.Equal(t, []string{"0x1"}, gq.ID)
 }
 
 func TestParseIdList1(t *testing.T) {
@@ -958,8 +962,8 @@ func TestParseIdList1(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
-	require.Equal(t, []uint64{0xfe5de827fdf27a88, 0x1, 0x24a5b3a074e7f369, 0xf023e8d0d7c08cf3, 0x34}, gq.UID)
-	require.Equal(t, 5, len(gq.UID))
+	require.Equal(t, []string{"m.abcd", "0x1", "abc", "ade", "0x34"}, gq.ID)
+	require.Equal(t, 5, len(gq.ID))
 }
 
 func TestParseIdListError(t *testing.T) {
@@ -1403,7 +1407,7 @@ func TestParseMutationAndQueryWithComments(t *testing.T) {
 	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
 
 	require.NotNil(t, res.Query[0])
-	require.Equal(t, 1, len(res.Query[0].UID))
+	require.Equal(t, 1, len(res.Query[0].ID))
 	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
 }
 
@@ -1433,7 +1437,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
 
 	require.NotNil(t, res.Query[0])
-	require.Equal(t, 1, len(res.Query[0].UID))
+	require.Equal(t, 1, len(res.Query[0].ID))
 	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
 }
 
@@ -3213,6 +3217,23 @@ func TestParseRegexp6(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	x.Init()
+	dir, err := ioutil.TempDir("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	x.Check(err)
+	defer ps.Close()
+
 	group.ParseGroupConfig("")
+	schema.Init(ps)
+	posting.Init(ps)
+	worker.Init(ps)
+
+	dir2, err := ioutil.TempDir("", "wal_")
+	x.Check(err)
+
+	worker.StartRaftNodes(dir2)
 	os.Exit(m.Run())
 }

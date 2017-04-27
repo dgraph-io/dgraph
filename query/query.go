@@ -39,7 +39,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
 )
 
 /*
@@ -696,7 +695,19 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 }
 
 func (args *params) fill(gq *gql.GraphQuery) error {
-
+	for _, id := range gq.ID {
+		if uid, err := strconv.ParseUint(id, 0, 64); err == nil {
+			gq.UID = append(gq.UID, uid)
+			continue
+		}
+		// It's an xid
+		uid, err := worker.GetUid(context.Background(), id)
+		if err != nil && err != worker.UidNotFound {
+			return err
+		} else if err == nil {
+			gq.UID = append(gq.UID, uid)
+		}
+	}
 	if v, ok := gq.Args["offset"]; ok {
 		offset, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
@@ -722,7 +733,11 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
-			from = farm.Fingerprint64([]byte(v))
+			uid, err := worker.GetUid(context.Background(), v)
+			if err != nil && err != worker.UidNotFound {
+				return err
+			}
+			from = uid
 		}
 		args.From = uint64(from)
 	}
@@ -730,7 +745,11 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		to, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
-			to = farm.Fingerprint64([]byte(v))
+			uid, err := worker.GetUid(context.Background(), v)
+			if err != nil && err != worker.UidNotFound {
+				return err
+			}
+			to = uid
 		}
 		args.To = uint64(to)
 	}
@@ -775,7 +794,7 @@ func isDebug(ctx context.Context) bool {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
+	if len(gq.UID) == 0 && len(gq.ID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -1137,7 +1156,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil &&
+		if gq == nil || (len(gq.UID) == 0 && len(gq.ID) == 0 && gq.Func == nil &&
 			len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
 			continue
 		}
