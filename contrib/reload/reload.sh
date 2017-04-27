@@ -83,7 +83,7 @@ echo -e "$(date)$GREEN Data loaded successfully. $RESET"
 
 # Lets shutdown old and new Dgraph instance. Then restart new instance with nomutations
 # flag.
-curl -s localhost:80/admin/shutdown
+curl -s localhost:80/admin/shutdown || true
 curl -s localhost:8082/admin/shutdown
 
 sleep 10
