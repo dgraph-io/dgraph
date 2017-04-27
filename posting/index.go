@@ -209,7 +209,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 	l.index.Lock()
 	defer l.index.Unlock()
 
-	if t.Op == taskp.DirectedEdge_DEL && string(t.Value) == x.DeleteAll {
+	if t.Op == taskp.DirectedEdge_DEL && string(t.Value) == x.DeleteAllObjects {
 		return l.handleDeleteAll(ctx, t)
 	}
 

@@ -227,6 +227,7 @@ func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult
 func AddInternalEdge(ctx context.Context, m *taskp.Mutations) error {
 	newEdges := make([]*taskp.DirectedEdge, 0, 2*len(m.Edges))
 	for _, mu := range m.Edges {
+		x.AssertTrue(mu.Op == taskp.DirectedEdge_DEL || mu.Op == taskp.DirectedEdge_SET)
 		if mu.Op == taskp.DirectedEdge_SET {
 			edge := &taskp.DirectedEdge{
 				Op:     taskp.DirectedEdge_SET,
@@ -237,26 +238,44 @@ func AddInternalEdge(ctx context.Context, m *taskp.Mutations) error {
 			newEdges = append(newEdges, mu)
 			newEdges = append(newEdges, edge)
 		} else if mu.Op == taskp.DirectedEdge_DEL {
-			if mu.Attr == x.AllPredicates {
+			if mu.Attr != x.DeleteAllPredicates {
+				newEdges = append(newEdges, mu)
+				if string(mu.GetValue()) == x.DeleteAllObjects {
+					// Delete the given predicate from _predicate_.
+					edge := &taskp.DirectedEdge{
+						Op:     taskp.DirectedEdge_DEL,
+						Entity: mu.GetEntity(),
+						Attr:   "_predicate_",
+						Value:  []byte(mu.GetAttr()),
+					}
+					newEdges = append(newEdges, edge)
+				}
+			} else {
 				// Fetch all the predicates and replace them
 				preds, err := query.GetNodePredicates(ctx, &taskp.List{[]uint64{mu.GetEntity()}})
 				if err != nil {
 					return err
 				}
+				val := mu.GetValue()
 				for _, pred := range preds {
 					edge := &taskp.DirectedEdge{
 						Op:     taskp.DirectedEdge_DEL,
 						Entity: mu.GetEntity(),
 						Attr:   string(pred.Val),
-						Value:  mu.GetValue(),
+						Value:  val,
 					}
 					newEdges = append(newEdges, edge)
 				}
-			} else {
-				newEdges = append(newEdges, mu)
+				edge := &taskp.DirectedEdge{
+					Op:     taskp.DirectedEdge_DEL,
+					Entity: mu.GetEntity(),
+					Attr:   "_predicate_",
+					Value:  val,
+				}
+				// Delete all the _predicate_ values
+				edge.Attr = "_predicate_"
+				newEdges = append(newEdges, edge)
 			}
-		} else {
-			newEdges = append(newEdges, mu)
 		}
 	}
 	m.Edges = newEdges

@@ -555,7 +555,13 @@ func TestDeleteAllSP(t *testing.T) {
 		}
 	}
 	`
-
+	var q3 = `
+	{
+		user(id: alice) {
+			_predicate_
+		}
+	}
+	`
 	var m2 = `
 	mutation{
 		delete{
@@ -599,6 +605,11 @@ func TestDeleteAllSP(t *testing.T) {
 	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}`,
 		output)
 
+	output, err = runQuery(q3)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"friend"},{"_name_":"name"}]}]}`,
+		output)
+
 	err = runMutation(m2)
 	require.NoError(t, err)
 
@@ -609,6 +620,11 @@ func TestDeleteAllSP(t *testing.T) {
 	output, err = runQuery(q2)
 	require.NoError(t, err)
 	require.JSONEq(t, `{}`, output)
+
+	output, err = runQuery(q3)
+	require.NoError(t, err)
+	require.JSONEq(t, `{}`,
+		output)
 }
 
 func TestQuery(t *testing.T) {
