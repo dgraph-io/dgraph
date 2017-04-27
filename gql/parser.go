@@ -40,6 +40,7 @@ type GraphQuery struct {
 	Alias      string
 	IsCount    bool
 	IsInternal bool
+	IsGroupby  bool
 	Var        string
 	NeedsVar   []VarContext
 	Func       *Function
@@ -53,6 +54,7 @@ type GraphQuery struct {
 	Cascade      bool
 	Facets       *Facets
 	FacetsFilter *FilterTree
+	GroupbyAttrs []string
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -733,6 +735,9 @@ L:
 				}
 				gq.Filter = filter
 
+			case "groupby":
+				gq.IsGroupby = true
+				parseGroupby(it, gq)
 			case "normalize":
 				gq.Normalize = true
 			case "cascade":
@@ -1433,6 +1438,42 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 	return facets, nil, nil
 }
 
+// parseGroupby parses the groupby directive.
+func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
+	count := 0
+	expectArg := true
+	it.Next()
+	item := it.Item()
+	if item.Typ != itemLeftRound {
+		return x.Errorf("Expected a left round after groupby")
+	}
+	for it.Next() {
+		item := it.Item()
+		if item.Typ == itemRightRound {
+			break
+		}
+		if item.Typ == itemComma {
+			if expectArg {
+				return x.Errorf("Expected a variable but got comma")
+			}
+			expectArg = true
+		} else if item.Typ == itemName {
+			if !expectArg {
+				return x.Errorf("Expected a variable but got comma")
+			}
+			gq.GroupbyAttrs = append(gq.GroupbyAttrs, item.Val)
+			expectArg = false
+		}
+	}
+	if expectArg {
+		return x.Errorf("Unnecessary comma in groupby()")
+	}
+	if count == 0 {
+		return x.Errorf("Expected atleast one attribute in groupby")
+	}
+	return nil
+}
+
 // parseFilter parses the filter directive to produce a QueryFilter / parse tree.
 func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	it.Next()
@@ -1594,6 +1635,9 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 }
 
 func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
+	if curp == nil {
+		return x.Errorf("Invalid use of directive.")
+	}
 	it.Next()
 	item := it.Item()
 	peek, err := it.Peek(1)
@@ -1632,7 +1676,9 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 					return err
 				}
 				curp.Filter = filter
-
+			case "groupby":
+				curp.IsGroupby = true
+				parseGroupby(it, curp)
 			default:
 				return x.Errorf("Unknown directive [%s]", item.Val)
 			}

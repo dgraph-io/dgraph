@@ -2666,6 +2666,24 @@ func TestParseNormalize(t *testing.T) {
 	require.True(t, res.Query[0].Normalize)
 }
 
+func TestParseGroupby(t *testing.T) {
+	query := `
+	query {
+		me(id:0x1) {
+			friends @groupby(name) {
+				count(_uid_)
+			}
+			hometown
+			age
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res.Query[0].Children[0].GroupbyAttrs))
+	require.Equal(t, "name", res.Query[0].Children[0].GroupbyAttrs[0])
+}
+
 func TestParseFacetsVarError(t *testing.T) {
 	query := `
 	query {
