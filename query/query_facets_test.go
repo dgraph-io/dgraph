@@ -66,9 +66,13 @@ func populateGraphWithFacets(t *testing.T) {
 	addEdgeToValue(t, "gender", 23, "male", nil)
 	addEdgeToValue(t, "name", 24, "Glenn Rhee", nameFacets)
 	addEdgeToValue(t, "name", 25, "Daryl Dixon", nil)
+
 	addEdgeToValue(t, "name", 31, "Andrea", nil)
+
 	addEdgeToValue(t, "name", 33, "Michale", nil)
 	// missing name for 101 -- no name edge and no facets.
+
+	addEdgeToLangValue(t, "name", 320, "Test facet", "en", map[string]string{"type": `"Test facet with lang"`})
 
 	time.Sleep(5 * time.Millisecond)
 }
@@ -950,4 +954,19 @@ func TestFacetsFilterAndRetrieval(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"@facets":{"_":{"family":true}},"_uid_":"0x18","name":"Glenn Rhee"},{"@facets":{"_":{"family":false}},"_uid_":"0x65"}],"name":"Michonne"}]}`,
 		js)
+}
+
+func TestFacetWithLang(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+	query := `
+		{
+			me(id:320) {
+				name@en @facets
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"@facets":{"name@en":{"type":"Test facet with lang"}},"name@en":"Test facet"}]}`, js)
 }
