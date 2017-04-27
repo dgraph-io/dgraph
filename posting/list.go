@@ -729,6 +729,7 @@ func (l *List) postingForLangs(langs []string) (pos *typesp.Posting, rerr error)
 		l.iterate(0, func(p *typesp.Posting) bool {
 			if postingType(p) == x.ValueMulti {
 				pos = p
+				found = true
 				return false
 			}
 			return true
