@@ -314,7 +314,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 		// add facets to result.
 		if q.FacetParam != nil {
 			if isValueEdge {
-				fs, err := pl.Facets(q.FacetParam)
+				fs, err := pl.Facets(q.FacetParam, q.Langs)
 				if err != nil {
 					fs = []*facetsp.Facet{}
 				}
