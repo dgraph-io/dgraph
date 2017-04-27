@@ -328,6 +328,22 @@ function isElementInViewport(el) {
     }
   }
 
+  // Community selector
+  $(document).on('click', '.community-cta', function (e) {
+    e.stopPropagation();
+    e.preventDefault();
+    $(this).closest('.community-cta-wrapper').toggleClass('open');
+  });
+
+  $(document).on('click', '.community-link', function (e) {
+    e.stopPropagation();
+    $(this).closest('.community-cta-wrapper').toggleClass('open');
+  });
+
+  $(document).click(function () {
+    $('.community-cta-wrapper').removeClass('open');
+  });
+
   /********** On page load **/
   updateSidebar();
   document.querySelector('.sub-topics .topic.active').scrollIntoView();

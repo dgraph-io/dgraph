@@ -432,22 +432,60 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   visibility: hidden;
 }
 
-.community-cta {
+.community-cta-wrapper {
   position: fixed;
-  bottom: 0;
+  bottom: -75px;
   right: 3%;
+  transition: bottom 300ms ease-in;
+}
+.community-cta-wrapper.open {
+  bottom: 0;
+}
+.community-cta-wrapper.open .community-cta {
+  box-shadow: none;
+}
+.community-cta {
   padding: 10px 22px;
   font-size: 13px;
   background: #29b1ff;
   color: white;
   text-decoration: none;
   box-shadow: 0px 1px 10px 0.2px #888888;
+  display: inline-block;
+  border-top-left-radius: 2px;
+  border-top-right-radius: 2px;
 }
 .community-cta:hover {
   text-decoration: none;
   color: white;
   background: #10a8ff;
   box-shadow: 0px 1px 13px 0.2px #888888;
+}
+.community-cta:focus {
+  color: white;
+  text-decoration: none;
+}
+.community-cta-wrapper .community-list {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: 0;
+}
+.community-cta-wrapper .community-list a {
+  display: block;
+  padding: 7px 12px;
+  color: black;
+  background: #f7f7f7;
+  font-size: 14px;
+}
+.community-cta-wrapper .community-list a:hover {
+  background: #dbf2ff;
+  text-decoration: none;
+}
+.community-cta-wrapper .community-list a .fa {
+  margin-right: 5px;
+}
+.community-cta-wrapper .community-list a .name {
+  font-size: 90%;
 }
 .edit-btn {
   float: right;
