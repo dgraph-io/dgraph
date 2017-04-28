@@ -6011,3 +6011,21 @@ func TestStringEscape(t *testing.T) {
 		`{"me":[{"name":"Alice\""}]}`,
 		js)
 }
+
+func TestOrderDescFilterCount(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				friend(first:2, orderdesc: age) @filter(eq(alias, "Zambo Alice")) {
+					alias
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"alias":"Zambo Alice"}]}]}`,
+		js)
+}
