@@ -75,6 +75,7 @@ while true; do
 	echo -e "$(date)  Starting to check branches."
 	git remote update > /dev/null
 	# Todo have these in an array and loop over the array.
+	checkAndUpdate "release/v0.7.6" "v0.7.6"
 	checkAndUpdate "release/v0.7.5" "v0.7.5"
 	checkAndUpdate "release/v0.7.4" "v0.7.4"
 	checkAndUpdate "master" "master"
