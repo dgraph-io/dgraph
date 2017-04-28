@@ -186,6 +186,15 @@ mutation {
   }
 }
 ```
+If you want to delete all the objects/values of all the predicates going out of S, you can do.
+```
+curl localhost:8080/query -XPOST -d $'
+mutation {
+  delete {
+     <lewis-carrol> * * .
+  }
+}
+```
 {{% notice "note" %}} On using *, all the derived edges (indexes, reverses) related to that edge would also be deleted.{{% /notice %}}
 
 ## Queries
@@ -1653,6 +1662,11 @@ Value variables are those which store the scalar values (unlike the UID lists wh
 
 This query shows a mix of how things can be used.
 
+Facets can also be stored in value variables, but exactly one facet has to be specified.
+
+{{% notice "note" %}} Value variables can be used in place of UID variables, in which case the UIDs would be extracted from it.{{% /notice %}}
+
+
 ## Aggregating value variables
 
 Value variables can be combined using complex mathematical functions to asscociate a score for the entities which could then be used to order the entites or perform other operations on them. This can be useful for building newsfeeds, simple recommendation systems and the likes.
@@ -1717,6 +1731,60 @@ if we want to add a condition based on release date to peanalize movies that are
   }
 }
 {{< /runnable >}}
+
+To aggregate the values over level we can do something like 
+{{< runnable >}}
+{
+	steven as var(func:allofterms(name, "steven spielberg")) {
+		name@en
+		director.film {
+			p as count(starring)
+			q as count(genre)
+			r as count(country)
+			score as math(p + q + r)
+		}
+		directorScore as sum(var(score))
+	}
+
+	score(id: var(steven)){
+		name@en
+		var(directorScore)
+	}
+}
+{{< /runnable >}}
+
+Here `directorScore` would be sum of `score` of all the movies directed by a director.
+
+## Expand Predicates
+
+`_predicate_` can be used to retrieve all the predicates that go out of the nodes at that level. For example:
+
+{{< runnable >}}
+{
+  director(func: allofterms(name, "steven spielberg")) {
+    _predicate_
+  }
+}
+{{< /runnable >}}
+
+This can be stored in a variable and passed to `expand()` function to expand all the predicates in that list.
+
+{{< runnable >}}
+{
+  var(func: allofterms(name@en, "steven spielberg")) {
+    name
+    pred as _predicate_
+  }
+  
+  director(func: allofterms(name@en, "steven spielberg")) {
+    expand(var(pred)) {
+      expand(_all_) # Expand all the predicates at this level
+    }
+  }
+}
+{{< /runnable >}}
+
+If `_all_` is passed as an argument to `expand()`, all the predicates at that level would be retrieved. More levels can be specfied in a nested fashion under `expand()`.
 
 ## Shortest Path Queries
 
