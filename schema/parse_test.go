@@ -111,8 +111,6 @@ func TestSchemaIndex(t *testing.T) {
 }
 
 var schemaIndexVal2 = `
-age:uid @index(int) .
-
 name: string @index(exact, exact) .
 address: string @index(term) .
 id: id @index(exact, term, exact) .
@@ -123,13 +121,18 @@ func TestSchemaIndex_Error1(t *testing.T) {
 	require.Error(t, ParseBytes([]byte(schemaIndexVal2), 1))
 }
 
-var schemaIndexVal3 = `
+var schemaIndexVal3Uid = `
 person:uid @index .
+`
+
+var schemaIndexVal3Default = `
+value:default @index .
 `
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
-	require.Error(t, ParseBytes([]byte(schemaIndexVal3), 1))
+	require.Error(t, ParseBytes([]byte(schemaIndexVal3Uid), 1))
+	require.Error(t, ParseBytes([]byte(schemaIndexVal3Default), 1))
 }
 
 var schemaIndexVal4 = `
@@ -212,6 +215,13 @@ func TestParse4_NoError(t *testing.T) {
 	schemas, err := Parse("name:string @index(fulltext) .")
 	require.NotNil(t, schemas)
 	require.Nil(t, err)
+}
+
+func TestParse5_Error(t *testing.T) {
+	reset()
+	schemas, err := Parse("value:default @index .")
+	require.Error(t, err)
+	require.Nil(t, schemas)
 }
 
 var ps *store.Store
