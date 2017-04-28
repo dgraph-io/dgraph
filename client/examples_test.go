@@ -109,22 +109,50 @@ func ExampleReq_AddMutation_facets() {
 	dgraphClient := graphp.NewDgraphClient(conn)
 
 	req := client.Req{}
-	// Doing mutation and setting facets while using the raw query block.
-	req.SetQuery(`
-mutation {
- set {
-  <alice> <name> "alice" .
-  <alice> <mobile> "040123456" (since=2006-01-02T15:04:05) .
-  <alice> <car> "MA0123" (since=2006-02-02T13:01:09, first=true) .
- }
-}
-{
- data(id:alice) {
-  name
-  mobile @facets
-  car @facets
- }
-}`)
+	nq := graphp.NQuad{
+		Subject:   "person1",
+		Predicate: "name",
+	}
+	client.Str("Steven Spielberg", &nq)
+
+	if err := client.AddFacet("since", "2006-01-02T15:04:05", &nq); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := client.AddFacet("alias", `"Steve"`, &nq); err != nil {
+		log.Fatal(err)
+	}
+
+	req.AddMutation(nq, client.SET)
+
+	nq = graphp.NQuad{
+		Subject:   "person2",
+		Predicate: "name",
+	}
+	client.Str("William Jones", &nq)
+	req.AddMutation(nq, client.SET)
+
+	// Lets connect the two nodes together and add a facet to the edge.
+	nq = graphp.NQuad{
+		Subject:   "person1",
+		Predicate: "friend",
+		ObjectId:  "person2",
+	}
+
+	if err := client.AddFacet("close", "true", &nq); err != nil {
+		log.Fatal(err)
+	}
+
+	req.AddMutation(nq, client.SET)
+	req.SetQuery(`{
+		me(id: person1) {
+			name @facets
+			friend @facets {
+				name
+			}
+		}
+	}`)
+
 	resp, err := dgraphClient.Run(context.Background(), req.Request())
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
