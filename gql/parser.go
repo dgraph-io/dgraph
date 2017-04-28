@@ -1919,17 +1919,24 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				varName, alias = "", ""
 				it.Next()
 				it.Next()
-				if it.Item().Val != "var" {
-					return x.Errorf("Only variables allowed in aggregate functions.")
+				if gq.IsGroupby {
+					item = it.Item()
+					it.Next()
+					child.Attr = item.Val
+					child.IsInternal = false
+				} else {
+					if it.Item().Val != "var" {
+						return x.Errorf("Only variables allowed in aggregate functions.")
+					}
+					count, err := parseVarList(it, child)
+					if err != nil {
+						return err
+					}
+					if count != 1 {
+						x.Errorf("Expected one variable inside var() of aggregator but got %v", count)
+					}
+					child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
 				}
-				count, err := parseVarList(it, child)
-				if err != nil {
-					return err
-				}
-				if count != 1 {
-					x.Errorf("Expected one variable inside var() of aggregator but got %v", count)
-				}
-				child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
 				child.Func = &Function{
 					Name:     valLower,
 					NeedsVar: child.NeedsVar,

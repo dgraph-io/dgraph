@@ -159,7 +159,7 @@ type SubGraph struct {
 	uidMatrix    []*taskp.List
 	facetsMatrix []*facetsp.List
 	ExpandPreds  []*taskp.Value
-	GroupByMap   map[string]GroupInfo
+	GroupbyRes   []GroupInfo
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -289,6 +289,22 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	// We go through all predicate children of the subgraphp.
 	for _, pc := range sg.Children {
 		if pc.Params.ignoreResult {
+			continue
+		}
+		if pc.Params.isGroupBy {
+			// TODO: Add the results for groupby node here.
+			g := dst.New(pc.Attr)
+			for _, grp := range pc.GroupbyRes {
+				uc := g.New("@groupby")
+				for _, it := range grp.values {
+					uc.AddValue(it.attr, it.val)
+				}
+				for _, it := range grp.aggregates {
+					uc.AddValue(it.attr, it.val)
+				}
+				g.AddListChild("@groupby", uc)
+			}
+			dst.AddMapChild(pc.Attr, g, false)
 			continue
 		}
 		if pc.IsInternal() {
@@ -929,9 +945,14 @@ func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint
 	return mp, nil
 }
 
+type groupPair struct {
+	val  types.Val
+	attr string
+}
+
 type GroupInfo struct {
-	values     []types.Val
-	aggregates []types.Val
+	values     []groupPair
+	aggregates []groupPair
 	uids       []uint64
 }
 
@@ -942,10 +963,10 @@ type idVal struct {
 
 // formGroup creates all possible groups with the list of uids that belong to that
 // group.
-func formGroups(l int, dedupMap []map[string][]idVal, res *[]GroupInfo, cur []uint64, groupVal []types.Val) {
+func formGroups(l int, attrList []string, dedupMap []map[string][]idVal, res *[]GroupInfo, cur []uint64, groupVal []groupPair) {
 	if l == len(dedupMap) {
 		a := make([]uint64, len(cur))
-		b := make([]types.Val, len(groupVal))
+		b := make([]groupPair, len(groupVal))
 		copy(a, cur)
 		copy(b, groupVal)
 		*res = append(*res, GroupInfo{
@@ -957,27 +978,30 @@ func formGroups(l int, dedupMap []map[string][]idVal, res *[]GroupInfo, cur []ui
 
 	for _, v := range dedupMap[l] {
 		var temp []uint64
-		groupVal = append(groupVal, v[0].val)
+		groupVal = append(groupVal, groupPair{
+			val:  v[0].val,
+			attr: attrList[l],
+		})
 		for _, it := range v {
 			temp = append(temp, it.uid)
 		}
 		if l != 0 {
 			algo.IntersectWithList(cur, temp, &temp)
 		}
-		formGroups(l+1, dedupMap, res, temp, groupVal)
+		formGroups(l+1, attrList, dedupMap, res, temp, groupVal)
 		groupVal = groupVal[:len(groupVal)-1]
 	}
 }
 
 func processGroupBy(sg *SubGraph) error {
-	var keyTemplate string
 	mp := make(map[string]GroupInfo)
 	_ = mp
 	dedupMap := make([]map[string][]idVal, len(sg.Params.groupbyAttrs))
 	idx := 0
+	var attrList []string
 	for _, child := range sg.Children {
 		if child.Params.ignoreResult {
-			keyTemplate = keyTemplate + child.Attr + "|"
+			attrList = append(attrList, child.Attr)
 			dedupMap[idx] = make(map[string][]idVal)
 		} else {
 			continue
@@ -1017,16 +1041,70 @@ func processGroupBy(sg *SubGraph) error {
 		}
 		idx++
 	}
-	fmt.Println(dedupMap, "~~~~")
 
+	// Create all the groups here.
 	var res []GroupInfo
 	var cur []uint64
-	var groupVal []types.Val
-	formGroups(0, dedupMap, &res, cur, groupVal)
-	fmt.Println(res, "$$$")
+	var groupVal []groupPair
+	formGroups(0, attrList, dedupMap, &res, cur, groupVal)
 
-	// TODO: Go over the groups and aggregate the values.
+	// Go over the groups and aggregate the values.
+	for i := range res {
+		grp := &res[i]
+		for _, child := range sg.Children {
+			if child.Params.ignoreResult {
+				continue
+			}
+			// This is a aggregation node.
+			if child.Params.DoCount {
+				(*grp).aggregates = append((*grp).aggregates, groupPair{
+					attr: "count",
+					val: types.Val{
+						Tid:   types.IntID,
+						Value: int64(len(grp.uids)),
+					},
+				})
+				fmt.Println("count", grp.aggregates)
+			} else if isAggregatorFn(child.SrcFunc[0]) {
+				fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
+				fmt.Println(fieldName)
+				ag := aggregator{
+					name: child.SrcFunc[0],
+				}
+				for _, uid := range grp.uids {
+					idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
+						return child.SrcUIDs.Uids[i] >= uid
+					})
+					if idx == len(child.SrcUIDs.Uids) || child.SrcUIDs.Uids[idx] != uid {
+						continue
+					}
+					v := child.values[idx]
+					val, err := convertWithBestEffort(v, child.Attr)
+					if err != nil {
+						continue
+					}
+					ag.Apply(val)
+				}
+				finalVal, err := ag.Value()
+				if err != nil {
+					return err
+				}
+				(*grp).aggregates = append((*grp).aggregates, groupPair{
+					attr: fieldName,
+					val:  finalVal,
+				})
+			}
+		}
+	}
+	for _, grp := range res {
+		fmt.Println(grp.aggregates, " | ", grp.values, " | ", grp.uids)
+	}
+	sort.Slice(res, func(i, j int) bool {
+		return (len(res[i].uids) + len(res[i].aggregates) + len(res[i].values)) <
+			(len(res[i].uids) + len(res[i].aggregates) + len(res[i].values))
 
+	})
+	sg.GroupbyRes = res
 	return nil
 }
 
