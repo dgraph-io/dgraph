@@ -212,14 +212,16 @@ mutation {
 }' | python -m json.tool | less
 ```
 
+To get the data and schema files, run
 ```
-# Loading up the data from within the directory that contains your data files.
-dgraphloader -r 21million.rdf.gz,sf.tourism.gz
+wget "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true" -O 21million.rdf.gz -q
+wget "https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz?raw=true" -O sf.tourism.gz -q
+wget "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema?raw=true" -O 21million.schema -q
 ```
-We can also load the schema with dgraphloader
 
+# Loading up the data from within the directory that contains your data files.
 ```
-dgraphloader -r 21million.rdf.gz,sf.tourism.gz -s golden.schema
+dgraphloader -r 21million.rdf.gz,sf.tourism.gz -s 21million.schema
 ```
 
 Queries in GraphQL+- look very much like queries in GraphQL. You typically start with a node or a list of nodes, and expand edges from there.
@@ -1512,7 +1514,7 @@ query {
 			a as age
 		}
 		sum(var(a))
-		avg(var(a))			
+		avg(var(a))
 	}
 }' | python -m json.tool | less
 ```
@@ -1640,7 +1642,7 @@ Value variables are those which store the scalar values (unlike the UID lists wh
   genre(id: var(B), orderasc: var(A)) @filter(gt(count(~genre), 30000)){
     var(A)
     ~genre {
-      n as name 
+      n as name
 			m as initial_release_date
 		}
 		min(var(n))
