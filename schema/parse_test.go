@@ -129,10 +129,15 @@ var schemaIndexVal3Default = `
 value:default @index .
 `
 
+var schemaIndexVal3Password = `
+pass:password @index .
+`
+
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
 	require.Error(t, ParseBytes([]byte(schemaIndexVal3Uid), 1))
 	require.Error(t, ParseBytes([]byte(schemaIndexVal3Default), 1))
+	require.Error(t, ParseBytes([]byte(schemaIndexVal3Password), 1))
 }
 
 var schemaIndexVal4 = `
@@ -220,6 +225,13 @@ func TestParse4_NoError(t *testing.T) {
 func TestParse5_Error(t *testing.T) {
 	reset()
 	schemas, err := Parse("value:default @index .")
+	require.Error(t, err)
+	require.Nil(t, schemas)
+}
+
+func TestParse6_Error(t *testing.T) {
+	reset()
+	schemas, err := Parse("pass:password @index .")
 	require.Error(t, err)
 	require.Nil(t, schemas)
 }
