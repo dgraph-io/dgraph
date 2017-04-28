@@ -574,9 +574,11 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 		attrsSeen[key] = struct{}{}
 
-		if gchild.Attr == "_uid_" {
-			sg.Params.GetUID = true
-		}
+		/*
+			if gchild.Attr == "_uid_" {
+				sg.Params.GetUID = true
+			}
+		*/
 
 		args := params{
 			Alias:        gchild.Alias,
@@ -930,17 +932,53 @@ func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint
 type GroupInfo struct {
 	values     []types.Val
 	aggregates []types.Val
+	uids       []uint64
+}
+
+type idVal struct {
+	uid uint64
+	val types.Val
+}
+
+// formGroup creates all possible groups with the list of uids that belong to that
+// group.
+func formGroups(l int, dedupMap []map[string][]idVal, res *[]GroupInfo, cur []uint64, groupVal []types.Val) {
+	if l == len(dedupMap) {
+		a := make([]uint64, len(cur))
+		b := make([]types.Val, len(groupVal))
+		copy(a, cur)
+		copy(b, groupVal)
+		*res = append(*res, GroupInfo{
+			uids:   a,
+			values: b,
+		})
+		return
+	}
+
+	for _, v := range dedupMap[l] {
+		var temp []uint64
+		groupVal = append(groupVal, v[0].val)
+		for _, it := range v {
+			temp = append(temp, it.uid)
+		}
+		if l != 0 {
+			algo.IntersectWithList(cur, temp, &temp)
+		}
+		formGroups(l+1, dedupMap, res, temp, groupVal)
+		groupVal = groupVal[:len(groupVal)-1]
+	}
 }
 
 func processGroupBy(sg *SubGraph) error {
 	var keyTemplate string
 	mp := make(map[string]GroupInfo)
 	_ = mp
-	dedupMap := make(map[string]map[string][]uint64)
+	dedupMap := make([]map[string][]idVal, len(sg.Params.groupbyAttrs))
+	idx := 0
 	for _, child := range sg.Children {
 		if child.Params.ignoreResult {
 			keyTemplate = keyTemplate + child.Attr + "|"
-			dedupMap[child.Attr] = make(map[string][]uint64)
+			dedupMap[idx] = make(map[string][]idVal)
 		} else {
 			continue
 		}
@@ -951,7 +989,10 @@ func processGroupBy(sg *SubGraph) error {
 				ul := child.uidMatrix[i]
 				for _, uid := range ul.Uids {
 					uidstr := strconv.FormatUint(uid, 10)
-					dedupMap[child.Attr][uidstr] = append(dedupMap[child.Attr][uidstr], srcUid)
+					dedupMap[idx][uidstr] = append(dedupMap[idx][uidstr], idVal{
+						val: types.Val{Tid: types.UidID, Value: uid},
+						uid: srcUid,
+					})
 				}
 			}
 		} else {
@@ -968,13 +1009,24 @@ func processGroupBy(sg *SubGraph) error {
 					continue
 				}
 				valstr := valC.Value.(string)
-				dedupMap[child.Attr][valstr] = append(dedupMap[child.Attr][valstr], srcUid)
+				dedupMap[idx][valstr] = append(dedupMap[idx][valstr], idVal{
+					uid: srcUid,
+					val: val,
+				})
 			}
 		}
+		idx++
 	}
-	fmt.Println(keyTemplate, "$$$")
 	fmt.Println(dedupMap, "~~~~")
-	// TODO(Ashwin): Now create the groups by intersecting the lists in dedupMap.
+
+	var res []GroupInfo
+	var cur []uint64
+	var groupVal []types.Val
+	formGroups(0, dedupMap, &res, cur, groupVal)
+	fmt.Println(res, "$$$")
+
+	// TODO: Go over the groups and aggregate the values.
+
 	return nil
 }
 
@@ -1149,7 +1201,6 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
-			sg.DebugPrint("|||")
 			isCascade := sg.Params.Cascade || shouldCascade(res, idx)
 			populateVarMap(sg, doneVars, isCascade)
 			err = sg.populatePostAggregation(doneVars, nil)

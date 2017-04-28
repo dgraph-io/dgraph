@@ -888,7 +888,7 @@ func TestGroupBy(t *testing.T) {
 	query := `
 		{
 			me(id: 1) {
-				friend @groupby(name) {
+				friend @groupby(age) {
 					count(_uid_)
 				}
 			}
