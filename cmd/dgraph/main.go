@@ -702,39 +702,42 @@ func checkFlagsAndInitDirs() {
 	x.Check(os.MkdirAll(*postingDir, 0700))
 }
 
-func setupListener(addr string, port int) (net.Listener, error) {
+func setupListener(addr string, port int) (listener net.Listener, err error) {
+	var reload func()
 	laddr := fmt.Sprintf("%s:%d", addr, port)
 	if !*tlsEnabled {
-		return net.Listen("tcp", laddr)
+		listener, err = net.Listen("tcp", laddr)
+	} else {
+		var tlsCfg *tls.Config
+		tlsCfg, reload, err = x.GenerateTLSConfig(x.TLSHelperConfig{
+			ConfigType:             x.TLSServerConfig,
+			CertRequired:           *tlsEnabled,
+			Cert:                   *tlsCert,
+			Key:                    *tlsKey,
+			KeyPassphrase:          *tlsKeyPass,
+			ClientAuth:             *tlsClientAuth,
+			ClientCACerts:          *tlsClientCACerts,
+			UseSystemClientCACerts: *tlsSystemCACerts,
+			MinVersion:             *tlsMinVersion,
+			MaxVersion:             *tlsMaxVersion,
+		})
+		if err != nil {
+			return nil, err
+		}
+		listener, err = tls.Listen("tcp", laddr, tlsCfg)
 	}
-
-	tlsCfg, reload, err := x.GenerateTLSConfig(x.TLSHelperConfig{
-		ConfigType:             x.TLSServerConfig,
-		CertRequired:           *tlsEnabled,
-		Cert:                   *tlsCert,
-		Key:                    *tlsKey,
-		KeyPassphrase:          *tlsKeyPass,
-		ClientAuth:             *tlsClientAuth,
-		ClientCACerts:          *tlsClientCACerts,
-		UseSystemClientCACerts: *tlsSystemCACerts,
-		MinVersion:             *tlsMinVersion,
-		MaxVersion:             *tlsMaxVersion,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if reload != nil {
-		go func() {
-			sigChan := make(chan os.Signal, 1)
-			signal.Notify(sigChan, syscall.SIGHUP)
-			for range sigChan {
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGHUP)
+		for range sigChan {
+			log.Println("SIGHUP signal received")
+			if reload != nil {
 				reload()
 				log.Println("TLS certificates and CAs reloaded")
 			}
-		}()
-	}
-
-	return tls.Listen("tcp", laddr, tlsCfg)
+		}
+	}()
+	return listener, err
 }
 
 func serveGRPC(l net.Listener) {

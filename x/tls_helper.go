@@ -192,12 +192,11 @@ func GenerateTLSConfig(config TLSHelperConfig) (tlsCfg *tls.Config, reloadConfig
 	}
 
 	if cert != nil {
-		if config.ConfigType == TLSClientConfig {
+		switch config.ConfigType {
+		case TLSClientConfig:
 			tlsCfg.Certificates = []tls.Certificate{*cert}
 			tlsCfg.BuildNameToCertificate()
-		}
-
-		if config.ConfigType == TLSServerConfig {
+		case TLSServerConfig:
 			wrapper.cert = &wrapperCert{cert: cert}
 			tlsCfg.GetCertificate = wrapper.getCertificate
 			tlsCfg.VerifyPeerCertificate = wrapper.verifyPeerCertificate
@@ -209,7 +208,13 @@ func GenerateTLSConfig(config TLSHelperConfig) (tlsCfg *tls.Config, reloadConfig
 		return nil, nil, err
 	}
 
+	// If the client cert is required to be checked with the CAs
 	if auth >= tls.VerifyClientCertIfGiven {
+		// A custom cert validation is set because the current implementation is
+		// not thread safe, it's needed bypass that validation and manually
+		// manage the different cases, for that reason, the wrapper is
+		// configured with the real auth level and the tlsCfg is only set with a
+		// auth level who are a simile but without the use of any CA
 		if auth == tls.VerifyClientCertIfGiven {
 			tlsCfg.ClientAuth = tls.RequestClientCert
 		} else {
@@ -217,6 +222,8 @@ func GenerateTLSConfig(config TLSHelperConfig) (tlsCfg *tls.Config, reloadConfig
 		}
 		wrapper.clientAuth = auth
 	} else {
+		// it's not necessary a external validation with the CAs, so the wrapper
+		// is not used
 		tlsCfg.ClientAuth = auth
 	}
 
@@ -307,9 +314,9 @@ func (c *wrapperTLSConfig) verifyPeerCertificate(rawCerts [][]byte, verifiedChai
 			clientCAs := c.clientCAPool.pool
 			c.clientCAPool.RUnlock()
 			opts := x509.VerifyOptions{
+				Intermediates: pool,
 				Roots:         clientCAs,
 				CurrentTime:   time.Now(),
-				Intermediates: pool,
 				KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 			}
 
