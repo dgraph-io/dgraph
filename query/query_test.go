@@ -339,7 +339,7 @@ func TestReturnUids(t *testing.T) {
 	mp := map[string]string{
 		"a": "123",
 	}
-	require.NoError(t, ToJson(&l, sgl, &buf, mp))
+	require.NoError(t, ToJson(&l, sgl, &buf, mp, false))
 	js := buf.String()
 	require.JSONEq(t,
 		`{"uids":{"a":"123"},"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
@@ -1517,7 +1517,7 @@ func TestDebug1(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf, nil))
+	require.NoError(t, ToJson(&l, sgl, &buf, nil, false))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -1576,7 +1576,7 @@ func TestDebug3(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf, nil))
+	require.NoError(t, ToJson(&l, sgl, &buf, nil, false))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -5150,7 +5150,7 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 
 	var l Latency
 	var buf bytes.Buffer
-	err = sg.ToFastJSON(&l, &buf, nil)
+	err = sg.ToFastJSON(&l, &buf, nil, false)
 	require.NoError(t, err)
 	return string(buf.Bytes())
 }
