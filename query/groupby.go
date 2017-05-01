@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type groupPair struct {
@@ -190,8 +191,6 @@ func processGroupBy(sg *SubGraph) error {
 	res := new(groupResults)
 	res.formGroups(dedupMap, &taskp.List{}, []groupPair{})
 
-	fmt.Println(res)
-
 	// Go over the groups and aggregate the values.
 	for i := range res.group {
 		grp := res.group[i]
@@ -203,6 +202,10 @@ func processGroupBy(sg *SubGraph) error {
 			grp.aggregateChild(child)
 		}
 	}
+	// Note: This is expensive. But done to keep the result order deterministic
+	sort.Slice(res.group, func(i, j int) bool {
+		return groupLess(res.group[i], res.group[j])
+	})
 	sg.GroupbyRes = res
 	return nil
 }
@@ -227,4 +230,64 @@ func (grp *groupResult) aggregateChild(child *SubGraph) {
 			key:  finalVal,
 		})
 	}
+}
+
+func groupLess(a, b *groupResult) bool {
+	if len(a.keys) < len(b.keys) {
+		return true
+	} else if len(a.keys) != len(b.keys) {
+		return false
+	}
+	if len(a.aggregates) < len(b.aggregates) {
+		return true
+	} else if len(a.aggregates) != len(b.aggregates) {
+		return false
+	}
+	if len(a.uids) < len(b.uids) {
+		return true
+	} else if len(a.uids) != len(b.uids) {
+		return false
+	}
+
+	for i := range a.keys {
+		l, err := types.Less(a.keys[i].key, b.keys[i].key)
+		if err == nil {
+			if l {
+				return l
+			}
+			l, _ = types.Less(b.keys[i].key, a.keys[i].key)
+			if l {
+				return !l
+			}
+		}
+	}
+
+	for i := range a.aggregates {
+		if l, err := types.Less(a.aggregates[i].key, b.aggregates[i].key); err == nil {
+			if l {
+				return l
+			}
+			l, _ = types.Less(b.aggregates[i].key, a.aggregates[i].key)
+			if l {
+				return !l
+			}
+		}
+	}
+	var asum, bsum uint64
+	for i := range a.uids {
+		asum += a.uids[i]
+		bsum += b.uids[i]
+		if a.uids[i] < b.uids[i] {
+			return true
+		} else if a.uids[i] > b.uids[i] {
+			return false
+		}
+	}
+	if asum < bsum {
+		return true
+	} else if asum != bsum {
+		return false
+	}
+	x.Fatalf("wrong groups")
+	return false
 }
