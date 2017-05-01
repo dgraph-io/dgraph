@@ -937,8 +937,9 @@ func TestGroupByMulti(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
+	fmt.Println(js)
 	require.JSONEq(t,
-		`{"me":[{"friend":{"@groupby":[{"count":0,"friend":"0x18","name":"Daryl Dixon"},{"count":0,"friend":"0x1","name":"Glenn Rhee"},{"count":0,"friend":"0x1","name":"Daryl Dixon"},{"count":0,"friend":"0x1","name":"Andrea"},{"count":0,"friend":"0x18","name":"Rick Grimes"},{"count":0,"friend":"0x18","name":"Glenn Rhee"},{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}}]}`,
+		`{"me":[{"friend":{"@groupby":[{"count":0,"friend":"0x1","name":"Glenn Rhee"},{"count":0,"friend":"0x1","name":"Daryl Dixon"},{"count":0,"friend":"0x1","name":"Andrea"},{"count":0,"friend":"0x18","name":"Glenn Rhee"},{"count":0,"friend":"0x18","name":"Daryl Dixon"},{"count":0,"friend":"0x18","name":"Rick Grimes"},{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}}]}`,
 		js)
 }
 
