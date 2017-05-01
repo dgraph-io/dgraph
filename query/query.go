@@ -1095,11 +1095,19 @@ func processGroupBy(sg *SubGraph) error {
 		}
 	}
 	sort.Slice(res, func(i, j int) bool {
-		if len(res[i].uids) != 0 && len(res[j].uids) != 0 {
-			return res[i].uids[0] < res[j].uids[0]
+		var u1, u2 uint64
+		for _, it := range res[i].uids {
+			u1 += it
 		}
-		return (len(res[i].uids) + len(res[i].aggregates) + len(res[i].values)) <
-			(len(res[i].uids) + len(res[i].aggregates) + len(res[i].values))
+		for _, it := range res[j].uids {
+			u2 += it
+		}
+		if u1 == u2 {
+			if l, err := types.Less(res[i].values[0].val, res[j].values[0].val); err != nil {
+				return l
+			}
+		}
+		return u1 < u2
 	})
 	sg.GroupbyRes = res
 	return nil
