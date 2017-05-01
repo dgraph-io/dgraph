@@ -1893,6 +1893,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			val := collectName(it, item.Val)
 			valLower := strings.ToLower(val)
 			if gq.IsGroupby && (!isAggregator(val) && val != "count" && isCount != 1) {
+				// Only aggregator or count allowed inside the groupby block.
 				return x.Errorf("Only aggrgator/count functions allowed inside @groupby. Got: %v", val)
 			}
 			if valLower == "checkpwd" {
