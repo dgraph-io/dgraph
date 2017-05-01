@@ -184,7 +184,7 @@ mutation {
   delete {
      <lewis-carrol> <died> * .
   }
-}
+}'
 ```
 If you want to delete all the objects/values of all the predicates going out of S, you can do.
 ```
@@ -193,7 +193,7 @@ mutation {
   delete {
      <lewis-carrol> * * .
   }
-}
+}'
 ```
 {{% notice "note" %}} On using *, all the derived edges (indexes, reverses) related to that edge would also be deleted.{{% /notice %}}
 
