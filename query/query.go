@@ -1098,26 +1098,9 @@ func processGroupBy(sg *SubGraph) error {
 				})
 			} else if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
 				fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
-				ag := aggregator{
-					name: child.SrcFunc[0],
-				}
-				for _, uid := range grp.uids {
-					idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
-						return child.SrcUIDs.Uids[i] >= uid
-					})
-					if idx == len(child.SrcUIDs.Uids) || child.SrcUIDs.Uids[idx] != uid {
-						continue
-					}
-					v := child.values[idx]
-					val, err := convertWithBestEffort(v, child.Attr)
-					if err != nil {
-						continue
-					}
-					ag.Apply(val)
-				}
-				finalVal, err := ag.Value()
+				finalVal, err := child.aggregateGroup(grp)
 				if err != nil {
-					return err
+					continue
 				}
 				(*grp).aggregates = append((*grp).aggregates, groupPair{
 					attr: fieldName,
@@ -1143,6 +1126,27 @@ func processGroupBy(sg *SubGraph) error {
 	})
 	sg.GroupbyRes = res
 	return nil
+}
+
+func (child *SubGraph) aggregateGroup(grp *GroupInfo) (types.Val, error) {
+	ag := aggregator{
+		name: child.SrcFunc[0],
+	}
+	for _, uid := range grp.uids {
+		idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
+			return child.SrcUIDs.Uids[i] >= uid
+		})
+		if idx == len(child.SrcUIDs.Uids) || child.SrcUIDs.Uids[idx] != uid {
+			continue
+		}
+		v := child.values[idx]
+		val, err := convertWithBestEffort(v, child.Attr)
+		if err != nil {
+			continue
+		}
+		ag.Apply(val)
+	}
+	return ag.Value()
 }
 
 func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubGraph) error {
