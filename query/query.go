@@ -957,14 +957,58 @@ type GroupInfo struct {
 }
 
 type idVal struct {
-	uid uint64
-	val types.Val
+	entities *taskp.List
+	val      types.Val
+}
+
+type dedup struct {
+	mp    []map[string]idVal
+	attrs []string
+}
+
+func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
+	idx := -1
+	for i, it := range d.attrs {
+		if attr == it {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		// Create a new entry.
+		d.attrs = append(d.attrs, attr)
+		d.mp = append(d.mp, make(map[string]idVal))
+		idx = len(d.attrs) - 1
+	}
+
+	// Create the string key.
+	var strKey string
+	if value.Tid == types.UidID {
+		strKey = strconv.FormatUint(uid, 10)
+	} else {
+		valC := types.Val{types.StringID, ""}
+		err := types.Marshal(value, &valC)
+		if err != nil {
+			return
+		}
+		strKey = valC.Value.(string)
+	}
+
+	if _, ok := d.mp[idx][strKey]; !ok {
+		d.mp[idx][strKey] = idVal{
+			val:      value,
+			entities: &taskp.List{make([]uint64, 0)},
+		}
+	}
+
+	cur := d.mp[idx][strKey].entities
+	cur.Uids = append(cur.Uids, uid)
 }
 
 // formGroup creates all possible groups with the list of uids that belong to that
 // group.
-func formGroups(l int, attrList []string, dedupMap []map[string][]idVal, res *[]GroupInfo, cur []uint64, groupVal []groupPair) {
-	if l == len(dedupMap) {
+func formGroups(l int, dedupMap dedup, res *[]GroupInfo, cur []uint64, groupVal []groupPair) {
+	if l == len(dedupMap.attrs) {
 		a := make([]uint64, len(cur))
 		b := make([]groupPair, len(groupVal))
 		copy(a, cur)
@@ -976,19 +1020,19 @@ func formGroups(l int, attrList []string, dedupMap []map[string][]idVal, res *[]
 		return
 	}
 
-	for _, v := range dedupMap[l] {
+	for _, v := range dedupMap.mp[l] {
 		var temp []uint64
 		groupVal = append(groupVal, groupPair{
-			val:  v[0].val,
-			attr: attrList[l],
+			val:  v.val,
+			attr: dedupMap.attrs[l],
 		})
-		for _, it := range v {
-			temp = append(temp, it.uid)
+		for _, it := range v.entities.Uids {
+			temp = append(temp, it)
 		}
 		if l != 0 {
 			algo.IntersectWithList(cur, temp, &temp)
 		}
-		formGroups(l+1, attrList, dedupMap, res, temp, groupVal)
+		formGroups(l+1, dedupMap, res, temp, groupVal)
 		groupVal = groupVal[:len(groupVal)-1]
 	}
 }
@@ -996,14 +1040,10 @@ func formGroups(l int, attrList []string, dedupMap []map[string][]idVal, res *[]
 func processGroupBy(sg *SubGraph) error {
 	mp := make(map[string]GroupInfo)
 	_ = mp
-	dedupMap := make([]map[string][]idVal, len(sg.Params.groupbyAttrs))
+	var dedupMap dedup
 	idx := 0
-	var attrList []string
 	for _, child := range sg.Children {
-		if child.Params.ignoreResult {
-			attrList = append(attrList, child.Attr)
-			dedupMap[idx] = make(map[string][]idVal)
-		} else {
+		if !child.Params.ignoreResult {
 			continue
 		}
 		if len(child.DestUIDs.Uids) != 0 {
@@ -1012,11 +1052,13 @@ func processGroupBy(sg *SubGraph) error {
 				srcUid := child.SrcUIDs.Uids[i]
 				ul := child.uidMatrix[i]
 				for _, uid := range ul.Uids {
-					uidstr := strconv.FormatUint(uid, 10)
-					dedupMap[idx][uidstr] = append(dedupMap[idx][uidstr], idVal{
-						val: types.Val{Tid: types.UidID, Value: uid},
-						uid: srcUid,
-					})
+					dedupMap.addValue(child.Attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
+					/*
+						dedupMap[idx][uidstr] = append(dedupMap[idx][uidstr], idVal{
+							val: types.Val{Tid: types.UidID, Value: uid},
+							uid: srcUid,
+						})
+					*/
 				}
 			}
 		} else {
@@ -1027,26 +1069,35 @@ func processGroupBy(sg *SubGraph) error {
 				if err != nil {
 					continue
 				}
-				valC := types.Val{types.StringID, ""}
-				err = types.Marshal(val, &valC)
-				if err != nil {
-					continue
-				}
-				valstr := valC.Value.(string)
-				dedupMap[idx][valstr] = append(dedupMap[idx][valstr], idVal{
-					uid: srcUid,
-					val: val,
-				})
+				dedupMap.addValue(child.Attr, val, srcUid)
+				/*
+					srcUid := child.SrcUIDs.Uids[i]
+					val, err := convertTo(v)
+					if err != nil {
+						continue
+					}
+					valC := types.Val{types.StringID, ""}
+					err = types.Marshal(val, &valC)
+					if err != nil {
+						continue
+					}
+					valstr := valC.Value.(string)
+					dedupMap[idx][valstr] = append(dedupMap[idx][valstr], idVal{
+						uid: srcUid,
+						val: val,
+					})
+				*/
 			}
 		}
 		idx++
 	}
 
+	fmt.Println(dedupMap, "****")
 	// Create all the groups here.
 	var res []GroupInfo
 	var cur []uint64
 	var groupVal []groupPair
-	formGroups(0, attrList, dedupMap, &res, cur, groupVal)
+	formGroups(0, dedupMap, &res, cur, groupVal)
 
 	// Go over the groups and aggregate the values.
 	for i := range res {
