@@ -205,6 +205,8 @@ func processGroupBy(sg *SubGraph) error {
 		if u1 == u2 {
 			if l, err := types.Less(res.group[i].values[0].val, res.group[j].values[0].val); err != nil {
 				return l
+			} else if l, err = types.Less(res.group[i].aggregates[0].val, res.group[j].aggregates[0].val); err != nil {
+				return l
 			}
 		}
 		return u1 < u2
