@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -76,6 +77,8 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 	posting.Init(ps)
 	group.ParseGroupConfig("groups.conf")
 	schema.Init(ps)
+	uid.Init(ps)
+	worker.Init(ps)
 	worker.StartRaftNodes(dir2)
 
 	return dir1, dir2, ps, nil
@@ -290,7 +293,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 	`
 
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	schema.ParseBytes([]byte("<_xid_>:string @index(exact) ."), 1)
 	err := runMutation(m)
 	require.NoError(t, err)
 
@@ -338,7 +341,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	`
 
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	schema.ParseBytes([]byte("<_xid_>:string @index(exact) ."), 1)
 	// add index to name
 	err := runMutation(s1)
 	require.NoError(t, err)
@@ -388,7 +391,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 	`
 
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	schema.ParseBytes([]byte("<_xid_>:string @index(exact) ."), 1)
 	err := runMutation(m)
 	require.NoError(t, err)
 
@@ -440,7 +443,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	`
 
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	schema.ParseBytes([]byte("<_xid_>:string @index(exact) ."), 1)
 	err := runMutation(m)
 	require.NoError(t, err)
 
@@ -508,7 +511,7 @@ func TestDeleteAll(t *testing.T) {
 		}
 	}
 	`
-	schema.ParseBytes([]byte(""), 1)
+	schema.ParseBytes([]byte("<_xid_>:string @index(exact) ."), 1)
 	err := runMutation(s1)
 	require.NoError(t, err)
 
@@ -521,7 +524,7 @@ func TestDeleteAll(t *testing.T) {
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}`,
+	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice2"},{"name":"Alice1"}]}]}`,
 		output)
 
 	err = runMutation(m2)
@@ -589,7 +592,7 @@ func TestDeleteAllSP(t *testing.T) {
 		}
 	}
 	`
-	schema.ParseBytes([]byte(""), 1)
+	schema.ParseBytes([]byte("<_xid_>:string @index(exact) ."), 1)
 	err := runMutation(s1)
 	require.NoError(t, err)
 
@@ -602,7 +605,7 @@ func TestDeleteAllSP(t *testing.T) {
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}`,
+	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice2"},{"name":"Alice1"}]}]}`,
 		output)
 
 	output, err = runQuery(q3)
@@ -664,7 +667,7 @@ func TestSchemaValidationError(t *testing.T) {
 	_, err = mutationHandler(ctx, res.Mutation)
 
 	require.Error(t, err)
-	output := processToFastJSON(strings.Replace(q5, "<id>", "ram", -1))
+	output := processToFastJSON(strings.Replace(q5, "<id>", "0x01", -1))
 	require.JSONEq(t, `{}`, output)
 }
 
@@ -703,24 +706,6 @@ func TestSchemaConversion(t *testing.T) {
 	schema.State().Set("name2", s)
 	output = processToFastJSON(strings.Replace(q6, "<id>", "shyam2", -1))
 	require.JSONEq(t, `{"user":[{"name2":1.5}]}`, output)
-}
-
-var qErr = `
-	mutation {
-		set {
-			<0x0> <name> "Alice" .
-		}
-	}
-`
-
-func TestMutationError(t *testing.T) {
-	res, err := gql.Parse(gql.Request{Str: qErr, Http: true})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	_, err = mutationHandler(ctx, res.Mutation)
-	require.Error(t, err)
-
 }
 
 var qm = `
@@ -818,7 +803,7 @@ func TestListPred(t *testing.T) {
 	`
 
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	schema.ParseBytes([]byte("<_xid_>:string @index(exact) ."), 1)
 	err := runMutation(m)
 	require.NoError(t, err)
 
@@ -862,7 +847,7 @@ func TestExpandPredError(t *testing.T) {
 	`
 
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	schema.ParseBytes([]byte("<_xid_>:string @index(exact) ."), 1)
 	err := runMutation(m)
 	require.NoError(t, err)
 
@@ -904,7 +889,7 @@ func TestExpandPred(t *testing.T) {
 	`
 
 	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
+	schema.ParseBytes([]byte("<_xid_>:string @index(exact) ."), 1)
 	err := runMutation(m)
 	require.NoError(t, err)
 

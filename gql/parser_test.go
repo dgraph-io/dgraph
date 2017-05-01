@@ -18,13 +18,18 @@
 package gql
 
 import (
+	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
-	farm "github.com/dgryski/go-farm"
+	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/uid"
+	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -147,10 +152,8 @@ func TestParseQueryWithDash(t *testing.T) {
         }
       }
     }`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	require.Equal(t, farm.Fingerprint64([]byte("alice-in-wonderland")), res.Query[0].UID[0])
-	require.Equal(t, "written-in", res.Query[0].Children[1].Attr)
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
 }
 
 func TestParseQueryWithMultiVarValError(t *testing.T) {
@@ -949,7 +952,7 @@ func TestParseIdList(t *testing.T) {
 func TestParseIdList1(t *testing.T) {
 	query := `
 	query {
-		user(id: [m.abcd, 0x1, abc, ade, 0x34]) {
+		user(id: [0x1, 0x34]) {
 			type.object.name
 		}
 	}`
@@ -958,8 +961,8 @@ func TestParseIdList1(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
-	require.Equal(t, []uint64{0xfe5de827fdf27a88, 0x1, 0x24a5b3a074e7f369, 0xf023e8d0d7c08cf3, 0x34}, gq.UID)
-	require.Equal(t, 5, len(gq.UID))
+	require.Equal(t, []uint64{0x1, 0x34}, gq.UID)
+	require.Equal(t, 2, len(gq.UID))
 }
 
 func TestParseIdListError(t *testing.T) {
@@ -976,7 +979,7 @@ func TestParseIdListError(t *testing.T) {
 func TestParseFirst(t *testing.T) {
 	query := `
 	query {
-		user(id: m.abcd) {
+		user(id: 0x1) {
 			type.object.name
 			friends (first: 10) {
 			}
@@ -992,7 +995,7 @@ func TestParseFirst(t *testing.T) {
 func TestParseFirst_error(t *testing.T) {
 	query := `
 	query {
-		user(id: m.abcd) {
+		user(id: 0x1) {
 			type.object.name
 			friends (first: ) {
 			}
@@ -1005,7 +1008,7 @@ func TestParseFirst_error(t *testing.T) {
 func TestParseAfter(t *testing.T) {
 	query := `
 	query {
-		user(id: m.abcd) {
+		user(id: 0x1) {
 			type.object.name
 			friends (first: 10, after: 3) {
 			}
@@ -1022,7 +1025,7 @@ func TestParseAfter(t *testing.T) {
 func TestParseOffset(t *testing.T) {
 	query := `
 	query {
-		user(id: m.abcd) {
+		user(id: 0x1) {
 			type.object.name
 			friends (first: 10, offset: 3) {
 			}
@@ -1039,7 +1042,7 @@ func TestParseOffset(t *testing.T) {
 func TestParseOffset_error(t *testing.T) {
 	query := `
 	query {
-		user(id: m.abcd) {
+		user(id: 0x1) {
 			type.object.name
 			friends (first: 10, offset: ) {
 			}
@@ -1389,7 +1392,7 @@ func TestParseMutationAndQueryWithComments(t *testing.T) {
 		}
 		# Query starts here.
 		query {
-			me(id: tomhanks) { # now mention children
+			me(id: 0x04) { # now mention children
 				name		# Name
 				hometown # hometown of the person
 			}
@@ -1419,7 +1422,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 			}
 		}
 		query {
-			me(id: tomhanks) {
+			me(id: 0x04) {
 				name
 				hometown
 			}
@@ -2310,7 +2313,7 @@ func TestParseGenerator(t *testing.T) {
 
 func TestParseIRIRef(t *testing.T) {
 	query := `{
-		me(id: <http://helloworld.com/how/are/you>) {
+		me(id: 0x1) {
 			<http://verygood.com/what/about/you>
 			friends @filter(allofterms(<http://verygood.com/what/about/you>,
 				"good better bad")){
@@ -2651,7 +2654,7 @@ func TestLangsFunctionMultipleLangs(t *testing.T) {
 func TestParseNormalize(t *testing.T) {
 	query := `
 	query {
-		me(id: abc) @normalize {
+		me(id: 0x1) @normalize {
 			friends {
 				name
 			}
@@ -3213,6 +3216,23 @@ func TestParseRegexp6(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	dir, err := ioutil.TempDir("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	x.Check(err)
+	defer ps.Close()
+
 	group.ParseGroupConfig("")
+	schema.Init(ps)
+	posting.Init(ps)
+	worker.Init(ps)
+	uid.Init(ps)
+
+	dir2, err := ioutil.TempDir("", "wal_")
+	x.Check(err)
+
+	worker.StartRaftNodes(dir2)
 	os.Exit(m.Run())
 }

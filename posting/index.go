@@ -89,7 +89,6 @@ func addIndexMutations(ctx context.Context, t *taskp.DirectedEdge, p types.Val,
 	op taskp.DirectedEdge_Op) error {
 	attr := t.Attr
 	uid := t.Entity
-	x.AssertTrue(uid != 0)
 	tokens, err := IndexTokens(attr, t.GetLang(), p)
 	if err != nil {
 		// This data is not indexable
