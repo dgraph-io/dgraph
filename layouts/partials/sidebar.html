@@ -3,8 +3,10 @@
     <div class="heading">
       Dgraph manual
     </div>
+    {{ $VersionString := getenv "VERSIONS" }}
+    {{ $Versions := split $VersionString "," }}
     <select class="version-selector">
-      {{ range $i, $version := .Site.Params.Versions }}
+      {{ range $i, $version := $Versions }}
           {{ if eq $i 0 }}
             <option value="{{$version}}">{{ $version }} (latest)</option>
           {{ else }}
