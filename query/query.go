@@ -1064,10 +1064,8 @@ func processGroupBy(sg *SubGraph) error {
 						Value: int64(len(grp.uids)),
 					},
 				})
-				fmt.Println("count", grp.aggregates)
 			} else if isAggregatorFn(child.SrcFunc[0]) {
 				fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
-				fmt.Println(fieldName)
 				ag := aggregator{
 					name: child.SrcFunc[0],
 				}
@@ -1100,9 +1098,11 @@ func processGroupBy(sg *SubGraph) error {
 		fmt.Println(grp.aggregates, " | ", grp.values, " | ", grp.uids)
 	}
 	sort.Slice(res, func(i, j int) bool {
+		if len(res[i].uids) != 0 && len(res[j].uids) != 0 {
+			return res[i].uids[0] < res[j].uids[0]
+		}
 		return (len(res[i].uids) + len(res[i].aggregates) + len(res[i].values)) <
 			(len(res[i].uids) + len(res[i].aggregates) + len(res[i].values))
-
 	})
 	sg.GroupbyRes = res
 	return nil
