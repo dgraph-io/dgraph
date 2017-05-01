@@ -192,6 +192,9 @@ func (lm *lockManager) clean() {
 			// A minute is enough to avoid the race condition issue for
 			// proposing different uid for same xid
 			if now.Sub(ts) > time.Minute {
+				for _, ch := range lm.ch[xid] {
+					ch <- struct{}{}
+				}
 				delete(lm.uids, xid)
 				delete(lm.ch, xid)
 			}

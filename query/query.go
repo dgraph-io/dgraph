@@ -33,6 +33,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
@@ -41,7 +42,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
 )
 
 /*
@@ -702,7 +702,11 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
-			from = farm.Fingerprint64([]byte(v))
+			id, err := worker.GetUid(context.Background(), v, group.BelongsTo("_xid_"))
+			if err != nil {
+				return err
+			}
+			from = id
 		}
 		args.From = uint64(from)
 	}
@@ -710,7 +714,11 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		to, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
-			to = farm.Fingerprint64([]byte(v))
+			id, err := worker.GetUid(context.Background(), v, group.BelongsTo("_xid_"))
+			if err != nil {
+				return err
+			}
+			to = id
 		}
 		args.To = uint64(to)
 	}

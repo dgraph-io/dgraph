@@ -48,7 +48,7 @@ func createNumQuery(group uint32, umap map[string]uint64) *taskp.Num {
 	out := &taskp.Num{Group: group}
 	for k := range umap {
 		if strings.HasPrefix(k, "_:") {
-			// generate new for this xid
+			//generate new for this xid
 			out.Val = out.Val + 1
 		} else {
 			out.Xids = append(out.Xids, k)
@@ -57,18 +57,19 @@ func createNumQuery(group uint32, umap map[string]uint64) *taskp.Num {
 	return out
 }
 
-func getUid(xid string, group uint32) (uint64, error) {
-	tokens, _ := posting.IndexTokens("_xid_", "", types.Val{Tid: types.StringID, Value: []byte(xid)})
-	x.AssertTrue(len(tokens) == 1)
-	key := x.IndexKey("_xid_", tokens[0])
-	pl, decr := posting.GetOrCreate(key, group)
-	defer decr()
-	ul := pl.Uids(emptyListOption)
-	if len(ul.Uids) > 0 {
-		// TODO: Ensure user can't change xid until we take care of corner cases
-		x.AssertTrue(len(ul.Uids) == 1)
-		if ul.Uids[0] > 1 {
-			return ul.Uids[0], nil
+func GetUid(ctx context.Context, xid string, group uint32) (uint64, error) {
+	out := &taskp.Query{
+		Attr:    "_xid_",
+		SrcFunc: []string{"eq", "", xid},
+	}
+	result, err := ProcessTaskOverNetwork(context.Background(), out)
+	if err != nil {
+		return 0, err
+	}
+	if len(result.UidMatrix) > 0 && len(result.UidMatrix[0].Uids) > 0 {
+		x.AssertTrue(len(result.UidMatrix) == 1 && len(result.UidMatrix[0].Uids) == 1)
+		if result.UidMatrix[0].Uids[0] > 1 {
+			return result.UidMatrix[0].Uids[0], nil
 		}
 		// don't allow lease edges to be fetched.
 		// since xid's are always non-integers(strings which can't be parsed to integer),
@@ -85,10 +86,11 @@ func AllocateOrGetUniqueUids(ctx context.Context, xids []string, group uint32) (
 	ids := make([]uint64, num, num)
 	xidMap := make(map[string]uint64)
 	var numRequired, numWaiting uint64
-	ch := make(chan struct{})
+	// assuing max size
+	ch := make(chan struct{}, len(xids))
 	for _, xid := range xids {
 		// Check if uid has already been allocated from this xid
-		if uid, err := getUid(xid, group); err == nil {
+		if uid, err := GetUid(ctx, xid, group); err == nil {
 			xidMap[xid] = uid
 			continue
 		}
@@ -97,29 +99,21 @@ func AllocateOrGetUniqueUids(ctx context.Context, xids []string, group uint32) (
 			xidMap[xid] = waitForUid
 			numWaiting++
 		} else {
+			// check uid again
+			if uid, err := GetUid(ctx, xid, group); err == nil {
+				xidMap[xid] = uid
+				continue
+			}
 			xidMap[xid] = generateNewUid
 			numRequired++
 		}
 	}
-
 	// generate required number of uids
 	startId, err := assignNew(ctx, numRequired, group)
 	if err != nil {
 		return ids, err
 	}
-
-	// wait for assignment
-	for i := uint64(0); i < numWaiting; i++ {
-		select {
-		case <-ch:
-			//pass
-		case <-ctx.Done():
-			return ids, ctx.Err()
-		}
-	}
-	close(ch)
-
-	// populate ids
+	// populate uid to xid mapping
 	mutations := &taskp.Mutations{GroupId: group}
 	for i, xid := range xids {
 		v, found := xidMap[xid]
@@ -134,17 +128,12 @@ func AllocateOrGetUniqueUids(ctx context.Context, xids []string, group uint32) (
 				Op:        taskp.DirectedEdge_SET,
 			})
 			startId += 1
-		} else if v == waitForUid {
-			if uid, err := getUid(xid, group); err != nil {
-				return ids, err
-			} else {
-				ids[i] = uid
-			}
-		} else {
+		} else if v != waitForUid {
 			ids[i] = v
+		} else {
+			// fill later after uid to xid has been persisted by other mutations
 		}
 	}
-
 	if numRequired > 0 {
 		// persist mutations, iterate over them and mark xid as done
 		proposal := &taskp.Proposal{Mutations: mutations}
@@ -155,6 +144,29 @@ func AllocateOrGetUniqueUids(ctx context.Context, xids []string, group uint32) (
 		}
 		for _, edge := range mutations.Edges {
 			uid.LockManager().Done(string(edge.Value))
+		}
+	}
+	// wait at the end to avoid circular dependencies between mutations
+	for i := uint64(0); i < numWaiting; i++ {
+		select {
+		case <-ch:
+			//pass
+		case <-ctx.Done():
+			return ids, ctx.Err()
+		}
+	}
+	close(ch)
+
+	for i, xid := range xids {
+		v, found := xidMap[xid]
+		x.AssertTrue(found)
+		if v != waitForUid {
+			continue
+		}
+		if id, err := GetUid(ctx, xid, group); err != nil {
+			return ids, err
+		} else {
+			ids[i] = id
 		}
 	}
 	return ids, nil
@@ -177,7 +189,7 @@ func assignUids(ctx context.Context, num *taskp.Num) (*taskp.List, error) {
 	}
 
 	out := make([]uint64, val+numXids, val+numXids)
-	che := make(chan error)
+	che := make(chan error, 2)
 
 	go func() {
 		startId, err := assignNew(ctx, num.Val, num.Group)
@@ -259,9 +271,15 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 		"Requested: %d != Retrieved Uids: %d", len(umap), len(ul.Uids))
 
 	i := 0
-	for k := range umap {
-		umap[k] = ul.Uids[i] // Write uids to map.
-		i++
+	xidStart := int(num.Val)
+	for i, xid := range num.Xids {
+		umap[xid] = ul.Uids[xidStart+i]
+	}
+	for k, v := range umap {
+		if v == 0 {
+			umap[k] = ul.Uids[i] // Write uids to map.
+			i++
+		}
 	}
 	return nil
 }

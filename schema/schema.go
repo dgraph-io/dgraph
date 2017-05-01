@@ -272,6 +272,9 @@ func LoadFromDb(gid uint32) error {
 		}
 		State().Set(attr, s)
 	}
+	if group.BelongsTo("_xid_") != gid {
+		return nil
+	}
 	State().Set("_xid_", typesp.Schema{
 		ValueType: uint32(types.StringID),
 		Directive: typesp.Schema_INDEX,
