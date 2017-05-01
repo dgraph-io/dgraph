@@ -159,7 +159,7 @@ type SubGraph struct {
 	uidMatrix    []*taskp.List
 	facetsMatrix []*facetsp.List
 	ExpandPreds  []*taskp.Value
-	GroupbyRes   []GroupInfo
+	GroupbyRes   *groups
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -294,7 +294,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		if pc.Params.isGroupBy {
 			// TODO: Add the results for groupby node here.
 			g := dst.New(pc.Attr)
-			for _, grp := range pc.GroupbyRes {
+			for _, grp := range pc.GroupbyRes.group {
 				uc := g.New("@groupby")
 				for _, it := range grp.values {
 					uc.AddValue(it.attr, it.val)
@@ -950,6 +950,10 @@ type groupPair struct {
 	attr string
 }
 
+type groups struct {
+	group []GroupInfo
+}
+
 type GroupInfo struct {
 	values     []groupPair
 	aggregates []groupPair
@@ -1007,13 +1011,13 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 
 // formGroup creates all possible groups with the list of uids that belong to that
 // group.
-func formGroups(l int, dedupMap dedup, res *[]GroupInfo, cur *taskp.List, groupVal []groupPair) {
+func (res *groups) formGroups(l int, dedupMap dedup, cur *taskp.List, groupVal []groupPair) {
 	if l == len(dedupMap.attrs) {
 		a := make([]uint64, len(cur.Uids))
 		b := make([]groupPair, len(groupVal))
 		copy(a, cur.Uids)
 		copy(b, groupVal)
-		*res = append(*res, GroupInfo{
+		res.group = append(res.group, GroupInfo{
 			uids:   a,
 			values: b,
 		})
@@ -1032,7 +1036,7 @@ func formGroups(l int, dedupMap dedup, res *[]GroupInfo, cur *taskp.List, groupV
 			temp.Uids = make([]uint64, len(v.entities.Uids))
 			copy(temp.Uids, v.entities.Uids)
 		}
-		formGroups(l+1, dedupMap, res, temp, groupVal)
+		res.formGroups(l+1, dedupMap, temp, groupVal)
 		groupVal = groupVal[:len(groupVal)-1]
 	}
 }
@@ -1070,15 +1074,15 @@ func processGroupBy(sg *SubGraph) error {
 	}
 
 	// Create all the groups here.
-	var res []GroupInfo
+	res := new(groups)
 	var groupVal []groupPair
-	formGroups(0, dedupMap, &res, &taskp.List{}, groupVal)
+	res.formGroups(0, dedupMap, &taskp.List{}, groupVal)
 
 	fmt.Println(res)
 
 	// Go over the groups and aggregate the values.
-	for i := range res {
-		grp := &res[i]
+	for i := range res.group {
+		grp := &res.group[i]
 		for _, child := range sg.Children {
 			if child.Params.ignoreResult {
 				continue
@@ -1122,16 +1126,16 @@ func processGroupBy(sg *SubGraph) error {
 			}
 		}
 	}
-	sort.Slice(res, func(i, j int) bool {
+	sort.Slice(res.group, func(i, j int) bool {
 		var u1, u2 uint64
-		for _, it := range res[i].uids {
+		for _, it := range res.group[i].uids {
 			u1 += it
 		}
-		for _, it := range res[j].uids {
+		for _, it := range res.group[j].uids {
 			u2 += it
 		}
 		if u1 == u2 {
-			if l, err := types.Less(res[i].values[0].val, res[j].values[0].val); err != nil {
+			if l, err := types.Less(res.group[i].values[0].val, res.group[j].values[0].val); err != nil {
 				return l
 			}
 		}
