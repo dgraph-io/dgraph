@@ -159,7 +159,7 @@ type SubGraph struct {
 	uidMatrix    []*taskp.List
 	facetsMatrix []*facetsp.List
 	ExpandPreds  []*taskp.Value
-	GroupbyRes   *groups
+	GroupbyRes   *groupResults
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -297,10 +297,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			for _, grp := range pc.GroupbyRes.group {
 				uc := g.New("@groupby")
 				for _, it := range grp.values {
-					uc.AddValue(it.attr, it.val)
+					uc.AddValue(it.attr, it.key)
 				}
 				for _, it := range grp.aggregates {
-					uc.AddValue(it.attr, it.val)
+					uc.AddValue(it.attr, it.key)
 				}
 				g.AddListChild("@groupby", uc)
 			}

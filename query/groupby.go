@@ -28,23 +28,23 @@ import (
 )
 
 type groupPair struct {
-	val  types.Val
+	key  types.Val
 	attr string
 }
 
-type groups struct {
-	group []GroupInfo
-}
-
-type GroupInfo struct {
+type groupResult struct {
 	values     []groupPair
 	aggregates []groupPair
 	uids       []uint64
 }
 
+type groupResults struct {
+	group []groupResult
+}
+
 type groupElements struct {
 	entities *taskp.List
-	val      types.Val
+	key      types.Val
 }
 
 type dedup struct {
@@ -52,7 +52,7 @@ type dedup struct {
 	attrs []string
 }
 
-func (child *SubGraph) aggregateGroup(grp *GroupInfo) (types.Val, error) {
+func (child *SubGraph) aggregateGroup(grp *groupResult) (types.Val, error) {
 	ag := aggregator{
 		name: child.SrcFunc[0],
 	}
@@ -107,7 +107,7 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 	if _, ok := d.mp[idx][strKey]; !ok {
 		// If this is the first element of the group.
 		d.mp[idx][strKey] = groupElements{
-			val:      value,
+			key:      value,
 			entities: &taskp.List{make([]uint64, 0)},
 		}
 	}
@@ -117,13 +117,13 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 
 // formGroup creates all possible groups with the list of uids that belong to that
 // group.
-func (res *groups) formGroups(l int, dedupMap dedup, cur *taskp.List, groupVal []groupPair) {
+func (res *groupResults) formGroups(l int, dedupMap dedup, cur *taskp.List, groupVal []groupPair) {
 	if l == len(dedupMap.attrs) {
 		a := make([]uint64, len(cur.Uids))
 		b := make([]groupPair, len(groupVal))
 		copy(a, cur.Uids)
 		copy(b, groupVal)
-		res.group = append(res.group, GroupInfo{
+		res.group = append(res.group, groupResult{
 			uids:   a,
 			values: b,
 		})
@@ -133,7 +133,7 @@ func (res *groups) formGroups(l int, dedupMap dedup, cur *taskp.List, groupVal [
 	for _, v := range dedupMap.mp[l] {
 		temp := new(taskp.List)
 		groupVal = append(groupVal, groupPair{
-			val:  v.val,
+			key:  v.key,
 			attr: dedupMap.attrs[l],
 		})
 		if l != 0 {
@@ -148,7 +148,7 @@ func (res *groups) formGroups(l int, dedupMap dedup, cur *taskp.List, groupVal [
 }
 
 func processGroupBy(sg *SubGraph) error {
-	mp := make(map[string]GroupInfo)
+	mp := make(map[string]groupResult)
 	_ = mp
 	var dedupMap dedup
 	idx := 0
@@ -180,7 +180,7 @@ func processGroupBy(sg *SubGraph) error {
 	}
 
 	// Create all the groups here.
-	res := new(groups)
+	res := new(groupResults)
 	var groupVal []groupPair
 	res.formGroups(0, dedupMap, &taskp.List{}, groupVal)
 
@@ -197,7 +197,7 @@ func processGroupBy(sg *SubGraph) error {
 			if child.Params.DoCount {
 				(*grp).aggregates = append((*grp).aggregates, groupPair{
 					attr: "count",
-					val: types.Val{
+					key: types.Val{
 						Tid:   types.IntID,
 						Value: int64(len(grp.uids)),
 					},
@@ -210,28 +210,11 @@ func processGroupBy(sg *SubGraph) error {
 				}
 				(*grp).aggregates = append((*grp).aggregates, groupPair{
 					attr: fieldName,
-					val:  finalVal,
+					key:  finalVal,
 				})
 			}
 		}
 	}
-	sort.Slice(res.group, func(i, j int) bool {
-		var u1, u2 uint64
-		for _, it := range res.group[i].uids {
-			u1 += it
-		}
-		for _, it := range res.group[j].uids {
-			u2 += it
-		}
-		if u1 == u2 {
-			if l, err := types.Less(res.group[i].values[0].val, res.group[j].values[0].val); err != nil {
-				return l
-			} else if l, err = types.Less(res.group[i].aggregates[0].val, res.group[j].aggregates[0].val); err != nil {
-				return l
-			}
-		}
-		return u1 < u2
-	})
 	sg.GroupbyRes = res
 	return nil
 }
