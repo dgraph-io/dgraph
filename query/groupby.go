@@ -33,7 +33,7 @@ type groupPair struct {
 }
 
 type groupResult struct {
-	values     []groupPair
+	keys       []groupPair
 	aggregates []groupPair
 	uids       []uint64
 }
@@ -48,11 +48,15 @@ type groupElements struct {
 }
 
 type dedup struct {
-	mp    []map[string]groupElements
-	attrs []string
+	groups []uniq
 }
 
-func (child *SubGraph) aggregateGroup(grp *groupResult) (types.Val, error) {
+type uniq struct {
+	elements map[string]groupElements
+	attr     string
+}
+
+func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 	ag := aggregator{
 		name: child.SrcFunc[0],
 	}
@@ -77,8 +81,8 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 	idx := -1
 	// Going last to first as we'll always add new ones to last and
 	// would access it till we add a new entry.
-	for i := len(d.attrs) - 1; i >= 0; i-- {
-		it := d.attrs[i]
+	for i := len(d.groups) - 1; i >= 0; i-- {
+		it := d.groups[i].attr
 		if attr == it {
 			idx = i
 			break
@@ -86,9 +90,11 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 	}
 	if idx == -1 {
 		// Create a new entry.
-		d.attrs = append(d.attrs, attr)
-		d.mp = append(d.mp, make(map[string]groupElements))
-		idx = len(d.attrs) - 1
+		d.groups = append(d.groups, uniq{
+			attr:     attr,
+			elements: make(map[string]groupElements),
+		})
+		idx = len(d.groups) - 1
 	}
 
 	// Create the string key.
@@ -104,37 +110,38 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 		strKey = valC.Value.(string)
 	}
 
-	if _, ok := d.mp[idx][strKey]; !ok {
+	if _, ok := d.groups[idx].elements[strKey]; !ok {
 		// If this is the first element of the group.
-		d.mp[idx][strKey] = groupElements{
+		d.groups[idx].elements[strKey] = groupElements{
 			key:      value,
 			entities: &taskp.List{make([]uint64, 0)},
 		}
 	}
-	cur := d.mp[idx][strKey].entities
+	cur := d.groups[idx].elements[strKey].entities
 	cur.Uids = append(cur.Uids, uid)
 }
 
 // formGroup creates all possible groups with the list of uids that belong to that
 // group.
-func (res *groupResults) formGroups(l int, dedupMap dedup, cur *taskp.List, groupVal []groupPair) {
-	if l == len(dedupMap.attrs) {
+func (res *groupResults) formGroups(dedupMap dedup, cur *taskp.List, groupVal []groupPair) {
+	l := len(groupVal)
+	if l == len(dedupMap.groups) {
 		a := make([]uint64, len(cur.Uids))
 		b := make([]groupPair, len(groupVal))
 		copy(a, cur.Uids)
 		copy(b, groupVal)
 		res.group = append(res.group, groupResult{
-			uids:   a,
-			values: b,
+			uids: a,
+			keys: b,
 		})
 		return
 	}
 
-	for _, v := range dedupMap.mp[l] {
+	for _, v := range dedupMap.groups[l].elements {
 		temp := new(taskp.List)
 		groupVal = append(groupVal, groupPair{
 			key:  v.key,
-			attr: dedupMap.attrs[l],
+			attr: dedupMap.groups[l].attr,
 		})
 		if l != 0 {
 			algo.IntersectWith(cur, v.entities, temp)
@@ -142,7 +149,7 @@ func (res *groupResults) formGroups(l int, dedupMap dedup, cur *taskp.List, grou
 			temp.Uids = make([]uint64, len(v.entities.Uids))
 			copy(temp.Uids, v.entities.Uids)
 		}
-		res.formGroups(l+1, dedupMap, temp, groupVal)
+		res.formGroups(dedupMap, temp, groupVal)
 		groupVal = groupVal[:len(groupVal)-1]
 	}
 }
@@ -181,8 +188,7 @@ func processGroupBy(sg *SubGraph) error {
 
 	// Create all the groups here.
 	res := new(groupResults)
-	var groupVal []groupPair
-	res.formGroups(0, dedupMap, &taskp.List{}, groupVal)
+	res.formGroups(dedupMap, &taskp.List{}, []groupPair{})
 
 	fmt.Println(res)
 
@@ -194,27 +200,31 @@ func processGroupBy(sg *SubGraph) error {
 				continue
 			}
 			// This is a aggregation node.
-			if child.Params.DoCount {
-				(*grp).aggregates = append((*grp).aggregates, groupPair{
-					attr: "count",
-					key: types.Val{
-						Tid:   types.IntID,
-						Value: int64(len(grp.uids)),
-					},
-				})
-			} else if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
-				fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
-				finalVal, err := child.aggregateGroup(grp)
-				if err != nil {
-					continue
-				}
-				(*grp).aggregates = append((*grp).aggregates, groupPair{
-					attr: fieldName,
-					key:  finalVal,
-				})
-			}
+			grp.aggregateChild(child)
 		}
 	}
 	sg.GroupbyRes = res
 	return nil
+}
+
+func (grp *groupResult) aggregateChild(child *SubGraph) {
+	if child.Params.DoCount {
+		(*grp).aggregates = append((*grp).aggregates, groupPair{
+			attr: "count",
+			key: types.Val{
+				Tid:   types.IntID,
+				Value: int64(len(grp.uids)),
+			},
+		})
+	} else if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
+		fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
+		finalVal, err := aggregateGroup(grp, child)
+		if err != nil {
+			return
+		}
+		(*grp).aggregates = append((*grp).aggregates, groupPair{
+			attr: fieldName,
+			key:  finalVal,
+		})
+	}
 }
