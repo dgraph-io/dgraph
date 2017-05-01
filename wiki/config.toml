@@ -5,16 +5,6 @@ theme = "hugo-docs"
 # set by build script: title, baseurl
 title = "Dgraph Documentation"
 
-[params]
-  # Place the latest version at the beginning so that version selector can
-  # append '(latest)' to the version string
-  versions = [
-    "v0.7.6",
-    "v0.7.5",
-    "v0.7.4",
-    "master"
-  ]
-
 [[menu.main]]
   name = "Get Started"
   url = "/get-started/"
