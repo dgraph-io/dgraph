@@ -39,7 +39,7 @@ type groupResult struct {
 }
 
 type groupResults struct {
-	group []groupResult
+	group []*groupResult
 }
 
 type groupElements struct {
@@ -130,7 +130,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *taskp.List, groupVal []
 		b := make([]groupPair, len(groupVal))
 		copy(a, cur.Uids)
 		copy(b, groupVal)
-		res.group = append(res.group, groupResult{
+		res.group = append(res.group, &groupResult{
 			uids: a,
 			keys: b,
 		})
@@ -194,7 +194,7 @@ func processGroupBy(sg *SubGraph) error {
 
 	// Go over the groups and aggregate the values.
 	for i := range res.group {
-		grp := &res.group[i]
+		grp := res.group[i]
 		for _, child := range sg.Children {
 			if child.Params.ignoreResult {
 				continue
