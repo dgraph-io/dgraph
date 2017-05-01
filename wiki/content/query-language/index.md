@@ -834,145 +834,56 @@ The data used for testing the geo functions can be found in [benchmarks reposito
 
 `Near` returns all entities which lie within a specified distance from a given point. It takes in three arguments namely
 the predicate (on which the index is based), geo-location point and a distance (in metres).
-
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   tourist(func: near(loc, [-122.469829, 37.771935], 1000) ) {
     name
   }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
 This query returns all the entities located within 1000 metres from the [specified point](http://bl.ocks.org/d/2ba9f626cb7be1bcc012be1dc7db40ff) in geojson format.
-```
-{
-    "tourist": [
-        {
-            "name": "National AIDS Memorial Grove"
-        },
-        {
-            "name": "Japanese Tea Garden"
-        },
-        {
-            "name": "Peace Lantern"
-        },
-        {
-            "name": "Steinhart Aquarium"
-        },
-        {
-            "name": "De Young Museum"
-        },
-        {
-            "name": "Morrison Planetarium"
-        },
-         .
-         .
-        {
-            "name": "San Francisco Botanical Garden"
-        },
-        {
-            "name": "Buddha"
-        }
-    ]
-}
-```
 
 #### Within
 
 `Within` returns all entities which completely lie within the specified region. It takes in two arguments namely the predicate (on which the index is based) and geo-location region.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   tourist(func: within(loc, [[-122.47266769409178, 37.769018558337926 ], [ -122.47266769409178, 37.773699921075135 ], [ -122.4651575088501, 37.773699921075135 ], [ -122.4651575088501, 37.769018558337926 ], [ -122.47266769409178, 37.769018558337926]] )) {
     name
   }
-}' | python -m json.tool | less
-```
-This query returns all the entities (points/polygons) located completely within the [specified polygon](http://bl.ocks.org/d/b81a6589fa9639c9424faad778004dae) in geojson format.
-```
-{
-    "tourist": [
-        {
-            "name": "Japanese Tea Garden"
-        },
-        {
-            "name": "Peace Lantern"
-        },
-        {
-            "name": "Rose Garden"
-        },
-        {
-            "name": "Steinhart Aquarium"
-        },
-        {
-            "name": "De Young Museum"
-        },
-        {
-            "name": "Morrison Planetarium"
-        },
-        {
-            "name": "Spreckels Temple of Music"
-        },
-        {
-            "name": "Hamon Tower"
-        },
-        {
-            "name": "Buddha"
-        }
-    ]
 }
-```
+{{< /runnable >}}
+This query returns all the entities (points/polygons) located completely within the [specified polygon](http://bl.ocks.org/d/b81a6589fa9639c9424faad778004dae) in geojson format.
 {{% notice "note" %}}The containment check for polygons are approximate as of v0.7.1.{{% /notice %}}
 
 #### Contains
 
 `Contains` returns all entities which completely enclose the specified point or region. It takes in two arguments namely the predicate (on which the index is based) and geo-location region.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   tourist(func: contains(loc, [ -122.50326097011566, 37.73353615592843 ] )) {
     name
   }
 }
-```
+{{< /runnable >}}
 This query returns all the entities that completely enclose the [http://bl.ocks.org/d/7218dd34391fac518e3516ea6fc1b6b1 specified point] (or polygon) in geojson format.
-```
-{
-    "tourist": [
-        {
-            "name": "San Francisco Zoo"
-        },
-        {
-            "name": "Flamingo"
-        }
-    ]
-}
-```
 
 #### Intersects
 
 `Intersects` returns all entities which intersect with the given polygon. It takes in two arguments namely the predicate (on which the index is based) and geo-location region.
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
   tourist(func: intersects(loc, [[-122.503325343132, 37.73345766902749 ], [ -122.503325343132, 37.733903134117966 ], [ -122.50271648168564, 37.733903134117966 ], [ -122.50271648168564, 37.73345766902749 ], [ -122.503325343132, 37.73345766902749]] )) {
     name
   }
 }
-```
+{{< /runnable >}}
+
 This query returns all the entities that intersect with the [http://bl.ocks.org/d/2ed3361a25442414e15d7eab88574b67 specified polygon/point] in geojson format.
-```
-{
-    "tourist": [
-        {
-            "name": "San Francisco Zoo"
-        },
-        {
-            "name": "Flamingo"
-        }
-    ]
-}
-```
 
 ## Filters
 
@@ -1478,8 +1389,8 @@ Aggregation functions that are supported are `min, max, sum, avg`. While min and
   director(id: m.06pj8) {
     director.film {
     	x as initial_release_date
-		}
-		min(var(x))
+    }
+    min(var(x))
   }
 }
 {{< /runnable >}}
@@ -1492,66 +1403,26 @@ Aggregation functions that are supported are `min, max, sum, avg`. While min and
     director.film {
     	x as initial_release_date
     }
-		max(var(x))
+    max(var(x))
   }
 }
 {{< /runnable >}}
 
 ### Sum, Avg
-```
-curl localhost:8080/query -XPOST -d $'
-mutation {
- set {
-	<0x01> <name> "Alice"^^<xs:string> .
-	<0x02> <name> "Tom"^^<xs:string> .
-	<0x03> <name> "Jerry"^^<xs:string> .
-	<0x04> <name> "Teddy"^^<xs:string> .
-	# friend of 0x01 Alice
-	<0x01> <friend> <0x02> .
-	<0x01> <friend> <0x03> .
-	<0x01> <friend> <0x04> .
-	# set age
-	<0x02> <age> "99"^^<xs:int> .
-	<0x03> <age> "100"^^<xs:int>	.
-	<0x04> <age> "101"^^<xs:int>	.
- }
-}
-query {
-	me(id:0x01) {
-		friend {
-			name
-			a as age
-		}
-		sum(var(a))
-		avg(var(a))
-	}
-}' | python -m json.tool | less
-```
-Output:
-```
+In this example we get the sum and the average of the count of genres for movies directed by Steven Spielberg.
+{{< runnable >}}
 {
-  "me": [
-    {
-      "avg[var[a]]": 100,
-      "friend": [
-        {
-          "age": 99,
-          "name": "Tom"
-        },
-        {
-          "age": 100,
-          "name": "Jerry"
-        },
-        {
-          "age": 101,
-          "name": "Teddy"
-        }
-      ],
-      "sum[var[a]]": 300
+  director(func: allofterms(name, "steven spielberg")) {
+    name@en
+    director.film {
+      g as count(genre)
     }
-  ]
+    sum(var(g))
+    avg(var(g))
+  }
 }
-```
+{{< /runnable >}}
+
 
 ## Multiple Query Blocks
 Multiple blocks can be inside a single query and they would be returned in the result with the corresponding block names.
@@ -1634,7 +1505,7 @@ Variables can be defined at different levels of the query using the keyword `AS`
 
 ## Value Variables
 
-Value variables are those which store the scalar values (unlike the UID lists which we saw above). These are a map from the UID to the corresponding value. They can store scalar predicates, aggregate functions, can be used for sorting resutls and retrieving. For example:
+Value variables are those which store the scalar values (unlike the UID lists which we saw above). These are a map from the UID to the corresponding value. They can store scalar predicates, aggregate functions, can be used for sorting results and retrieving. For example:
 
 {{< runnable >}}
 {
@@ -1652,9 +1523,9 @@ Value variables are those which store the scalar values (unlike the UID lists wh
     var(A)
     ~genre {
       n as name
-			m as initial_release_date
-		}
-		min(var(n))
+      m as initial_release_date
+    }
+    min(var(n))
     max(var(n))
     min(var(m))
     max(var(m))
@@ -1711,7 +1582,7 @@ A simple example is:
 
 In the above query we retrieve the top movies (by sum of number of actors, genres, countries) of the entity named steven spielberg.
 
-if we want to add a condition based on release date to peanalize movies that are more than 10 years old, we could do:
+If we want to add a condition based on release date to penalize movies that are more than 10 years old, we could do:
 
 {{< runnable >}}
 {
@@ -1936,218 +1807,16 @@ This query would again retrieve the shortest path but using some different param
 `Recurse` queries let you traverse a set of predicates (with filter, facets, etc.) until we reach all leaf nodes or we reach the maximum depth which is specified by the `depth` parameter.
 
 To get 10 movies from a genre that has more than 30000 films and then get two actors for those movies we'd do something as follows:
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
 	recurse(func: gt(count(~genre), 30000), first: 1){
 		name@en
 		~genre (first:10) @filter(gt(count(starring), 2))
 		starring (first: 2)
 		performance.actor
 	}
-}'
-```
-Output:
-```
-{
-  "recurse": [
-    {
-      "name@en": "Short Film",
-      "~genre": [
-        {
-          "name@en": "Life Begins for Andy Panda",
-          "starring": [
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Bernice Hansen"
-                }
-              ]
-            },
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Mel Blanc"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "name@en": "Liviu's Dream",
-          "starring": [
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Catalina Harabagiu"
-                }
-              ]
-            },
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Adrian Vancică"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "name@en": "Payload",
-          "starring": [
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Roshan Johal"
-                }
-              ]
-            },
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Dylan Russell"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "name@en": "Green Eyes",
-          "starring": [
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Ignas Miskinis"
-                }
-              ]
-            },
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Ieva Matulionytė"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "name@en": "Dogonauts: Enemy Line",
-          "starring": [
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Don Chatfield"
-                }
-              ]
-            },
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Justin Rasch"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "name@en": "Morning Prayers",
-          "starring": [
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Ismir Gagula"
-                }
-              ]
-            },
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Serafedin Redzepov"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "name@en": "A Letter to Uncle Boonmee",
-          "starring": [
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Nuttapon  Kemthong"
-                }
-              ]
-            },
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Kumgieng Jittamaat"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "name@en": "Lot in Sodom",
-          "starring": [
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Dorthea House"
-                }
-              ]
-            },
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Hildegarde Watson"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "name@en": "Rush Hour",
-          "starring": [
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Christelle Seyvecon"
-                }
-              ]
-            },
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Nicolas Guillot"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "name@en": "Sound Collector",
-          "starring": [
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Steve Alexander"
-                }
-              ]
-            },
-            {
-              "performance.actor": [
-                {
-                  "name@en": "Joann McIntyre"
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  ]
 }
-```
+{{< /runnable >}}
 Some points to keep in mind while using recurse queries are:
 
 - Each edge would be traversed only once. Hence, cycles would be avoided.
@@ -2155,68 +1824,17 @@ Some points to keep in mind while using recurse queries are:
 - Only one recurse block is advised per query.
 - Be careful as the result size could explode quickly and an error would be returned if the result set gets too large. In such cases use more filter, limit resutls using pagination, or provide a depth parameter at root as follows:
 
-```
-curl localhost:8080/query -XPOST -d $'{
+{{< runnable >}}
+{
 	recurse(func: gt(count(~genre), 30000), depth: 2){
 		name@en
 		~genre (first:2) @filter(gt(count(starring), 2))
 		starring (first: 2)
 		performance.actor
 	}
-}'
-```
-
-Output:
-```
-{
-  "recurse": [
-    {
-      "name@en": "Short Film",
-      "~genre": [
-        {
-          "name@en": "Life Begins for Andy Panda"
-        },
-        {
-          "name@en": "Liviu's Dream"
-        }
-      ]
-    },
-    {
-      "name@en": "Drama",
-      "~genre": [
-        {
-          "name@en": "Prisoners"
-        },
-        {
-          "name@en": "Stoker"
-        }
-      ]
-    },
-    {
-      "name@en": "Comedy",
-      "~genre": [
-        {
-          "name@en": "A tu per tu"
-        },
-        {
-          "name@en": "Gastone"
-        }
-      ]
-    },
-    {
-      "name@en": "Documentary film",
-      "~genre": [
-        {
-          "name@en": "Dream Theater: Chaos in Motion"
-        },
-        {
-          "name@en": "Filming Othello"
-        }
-      ]
-    }
-  ]
 }
-```
+{{< /runnable >}}
+
 ## Cascade Directive
 
 `@cascade` directive forces a removal of those entites that don't have all the fields specified in the query. This can be useful in cases where some filter was applied. For example, consider this query:

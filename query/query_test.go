@@ -5896,7 +5896,7 @@ func TestBoolIndexgeRoot(t *testing.T) {
 	var l Latency
 	ctx := context.Background()
 	_, err := ProcessQuery(ctx, res, &l)
-	require.Equal(t, "Only eq operator defined for type bool. Got: ge", err.Error())
+	require.NotNil(t, err)
 }
 
 func TestBoolIndexEqChild(t *testing.T) {
