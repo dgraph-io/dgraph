@@ -1094,9 +1094,6 @@ func processGroupBy(sg *SubGraph) error {
 			}
 		}
 	}
-	for _, grp := range res {
-		fmt.Println(grp.aggregates, " | ", grp.values, " | ", grp.uids)
-	}
 	sort.Slice(res, func(i, j int) bool {
 		if len(res[i].uids) != 0 && len(res[j].uids) != 0 {
 			return res[i].uids[0] < res[j].uids[0]
