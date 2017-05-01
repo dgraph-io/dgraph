@@ -1064,7 +1064,7 @@ func processGroupBy(sg *SubGraph) error {
 						Value: int64(len(grp.uids)),
 					},
 				})
-			} else if isAggregatorFn(child.SrcFunc[0]) {
+			} else if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
 				fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
 				ag := aggregator{
 					name: child.SrcFunc[0],

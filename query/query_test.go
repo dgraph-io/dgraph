@@ -898,13 +898,13 @@ func TestGroupBy(t *testing.T) {
 			friend @groupby(age) {
 				count(_uid_)
 			}
+			name
 		}
 	}
 	`
 	js := processToFastJSON(t, query)
-	fmt.Println(js)
 	require.JSONEq(t,
-		`{"age":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}]}],"me":[{"friend":{"@groupby":[{"age":15,"count":2},{"age":17,"count":1},{"age":19,"count":1}]}}]}`,
+		`{"age":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}]}],"me":[{"friend":{"@groupby":[{"age":15,"count":2},{"age":17,"count":1},{"age":19,"count":1}]},"name":"Michonne"}]}`,
 		js)
 }
 
@@ -920,7 +920,6 @@ func TestGroupByAgg(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	fmt.Println(js)
 	require.JSONEq(t,
 		`{"me":[{"friend":{"@groupby":[{"age":15,"max(name)":"Rick Grimes"},{"age":17,"max(name)":"Daryl Dixon"},{"age":19,"max(name)":"Andrea"}]}}]}`,
 		js)
@@ -938,7 +937,6 @@ func TestGroupByMulti(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	fmt.Println(js)
 	require.JSONEq(t,
 		`{"me":[{"friend":{"@groupby":[{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":0,"friend":"0x1","name":"Glenn Rhee"},{"count":0,"friend":"0x1","name":"Daryl Dixon"},{"count":0,"friend":"0x1","name":"Andrea"},{"count":0,"friend":"0x18","name":"Rick Grimes"},{"count":0,"friend":"0x18","name":"Glenn Rhee"},{"count":0,"friend":"0x18","name":"Daryl Dixon"},{"count":1,"friend":"0x18","name":"Andrea"}]}}]}`,
 		js)

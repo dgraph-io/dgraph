@@ -2684,6 +2684,24 @@ func TestParseGroupby(t *testing.T) {
 	require.Equal(t, "name", res.Query[0].Children[0].GroupbyAttrs[0])
 }
 
+func TestParseGroupbyError(t *testing.T) {
+	// predicates not allowed inside groupby.
+	query := `
+	query {
+		me(id:0x1) {
+			friends @groupby(name) {
+				name
+				count(_uid_)
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
 func TestParseFacetsVarError(t *testing.T) {
 	query := `
 	query {
