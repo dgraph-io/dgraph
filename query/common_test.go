@@ -169,7 +169,7 @@ func processToFastJsonReq(t *testing.T, query string) (string, error) {
 		return "", err
 	}
 	var buf bytes.Buffer
-	err = ToJson(&l, sgl, &buf, nil)
+	err = ToJson(&l, sgl, &buf, nil, false)
 	return string(buf.Bytes()), err
 }
 

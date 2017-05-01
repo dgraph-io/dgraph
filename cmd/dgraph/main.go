@@ -598,7 +598,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = query.ToJson(&l, sgl, w, allocIdsStr)
+	var addLatency bool
+	// If there is an error parsing, then addLatency would remain false.
+	addLatency, _ = strconv.ParseBool(r.URL.Query().Get("latency"))
+	err = query.ToJson(&l, sgl, w, allocIdsStr, addLatency)
 	if err != nil {
 		// since we performed w.Write in ToJson above,
 		// calling WriteHeader with 500 code will be ignored.
