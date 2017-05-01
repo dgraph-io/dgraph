@@ -52,6 +52,27 @@ type dedup struct {
 	attrs []string
 }
 
+func (child *SubGraph) aggregateGroup(grp *GroupInfo) (types.Val, error) {
+	ag := aggregator{
+		name: child.SrcFunc[0],
+	}
+	for _, uid := range grp.uids {
+		idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
+			return child.SrcUIDs.Uids[i] >= uid
+		})
+		if idx == len(child.SrcUIDs.Uids) || child.SrcUIDs.Uids[idx] != uid {
+			continue
+		}
+		v := child.values[idx]
+		val, err := convertWithBestEffort(v, child.Attr)
+		if err != nil {
+			continue
+		}
+		ag.Apply(val)
+	}
+	return ag.Value()
+}
+
 func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 	idx := -1
 	// Going last to first as we'll always add new ones to last and
@@ -84,12 +105,12 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 	}
 
 	if _, ok := d.mp[idx][strKey]; !ok {
+		// If this is the first element of the group.
 		d.mp[idx][strKey] = groupElements{
 			val:      value,
 			entities: &taskp.List{make([]uint64, 0)},
 		}
 	}
-
 	cur := d.mp[idx][strKey].entities
 	cur.Uids = append(cur.Uids, uid)
 }
@@ -213,25 +234,4 @@ func processGroupBy(sg *SubGraph) error {
 	})
 	sg.GroupbyRes = res
 	return nil
-}
-
-func (child *SubGraph) aggregateGroup(grp *GroupInfo) (types.Val, error) {
-	ag := aggregator{
-		name: child.SrcFunc[0],
-	}
-	for _, uid := range grp.uids {
-		idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
-			return child.SrcUIDs.Uids[i] >= uid
-		})
-		if idx == len(child.SrcUIDs.Uids) || child.SrcUIDs.Uids[idx] != uid {
-			continue
-		}
-		v := child.values[idx]
-		val, err := convertWithBestEffort(v, child.Attr)
-		if err != nil {
-			continue
-		}
-		ag.Apply(val)
-	}
-	return ag.Value()
 }
