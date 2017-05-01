@@ -39,33 +39,6 @@ func ApplyFilter(u *taskp.List, f func(uint64, int) bool) {
 
 // IntersectWith intersects u with v. The update is made to o.
 // u, v should be sorted.
-func IntersectWithList(u, v []uint64, o *[]uint64) {
-	n := len(u)
-	m := len(v)
-
-	if n > m {
-		n, m = m, n
-	}
-	if o == nil {
-		*o = make([]uint64, 0, n)
-	}
-	*o = (*o)[:0]
-	if n == 0 {
-		n += 1
-	}
-	// Select appropriate function based on heuristics.
-	ratio := float64(m) / float64(n)
-	if ratio < 100 {
-		IntersectWithLin(u, v, o)
-	} else if ratio < 500 {
-		IntersectWithJump(u, v, o)
-	} else {
-		IntersectWithBin(u, v, o)
-	}
-}
-
-// IntersectWith intersects u with v. The update is made to o.
-// u, v should be sorted.
 func IntersectWith(u, v, o *taskp.List) {
 	n := len(u.Uids)
 	m := len(v.Uids)
