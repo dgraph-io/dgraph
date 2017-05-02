@@ -293,7 +293,7 @@ function eraseCookie(name) {
       // In some cases, the server does not return latency information
       // TODO: find better ways to check for errors or fix dgraph to make the
       // response consistent
-      if (!res.code || !/Error/i.test(res.code)) {
+      if ((!res.code || !/Error/i.test(res.code)) && serverLatencyInfo) {
         updateLatencyInformation($runnables, serverLatencyInfo, networkLatency);
       }
 
