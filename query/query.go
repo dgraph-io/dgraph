@@ -965,15 +965,18 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 }
 
 func (sg *SubGraph) populatePostAggregation(doneVars map[string]values, parent *SubGraph) error {
+	err := sg.valueVarAggregation(doneVars, parent)
+	if err != nil {
+		return err
+	}
 	for idx := 0; idx < len(sg.Children); idx++ {
 		child := sg.Children[idx]
 		err := child.populatePostAggregation(doneVars, sg)
 		if err != nil {
 			return err
 		}
-		// We'd also need to do aggregation over levels here.
 	}
-	return sg.valueVarAggregation(doneVars, parent)
+	return nil
 }
 
 func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
