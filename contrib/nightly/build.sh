@@ -6,9 +6,10 @@ if [[ $TRAVIS_TAG == "nightly" ]]; then
   exit 0
 fi
 
-# if [[ $TRAVIS_EVENT_TYPE != "cron" ]]; then
-#   exit 0
-# fi
+# We run a cron job daily on Travis which will update the nightly binaries.
+if [[ $TRAVIS_EVENT_TYPE != "cron" ]]; then
+   exit 0
+fi
 
 set -e
 
