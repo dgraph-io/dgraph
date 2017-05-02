@@ -9,7 +9,7 @@ NIGHTLY_TAG="nightly"
 DGRAPH_REPO="dgraph-io/dgraph"
 DGRAPH_VERSION=$(git describe --abbrev=0)
 DGRAPH_COMMIT=$(git rev-parse --short HEAD)
-TAR_FILE="dgraph-linuxplatform-amd64-${DGRAPH_VERSION}"
+TAR_FILE="dgraph-linux-amd64-${DGRAPH_VERSION}.tar.gz"
 NIGHTLY_FILE="${BUILD_DIR}/${TAR_FILE}"
 
 delete_old_nightly() {
@@ -60,7 +60,7 @@ upload_nightly() {
 go get -u golang.org/x/net/context golang.org/x/text/unicode/norm google.golang.org/grpc
 
 # Building embedded binaries.
-contrib/releases/build.sh
+# contrib/releases/build.sh
 pwd
 ls
 delete_old_nightly
