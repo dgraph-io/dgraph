@@ -181,7 +181,6 @@ func processGroupBy(sg *SubGraph) error {
 	mp := make(map[string]groupResult)
 	_ = mp
 	var dedupMap dedup
-	idx := 0
 	for _, child := range sg.Children {
 		if !child.Params.ignoreResult {
 			continue
@@ -206,7 +205,6 @@ func processGroupBy(sg *SubGraph) error {
 				dedupMap.addValue(child.Attr, val, srcUid)
 			}
 		}
-		idx++
 	}
 
 	// Create all the groups here.
