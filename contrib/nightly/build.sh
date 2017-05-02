@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# if [ $TRAVIS_EVENT_TYPE != "cron" ]
+#   exit 0
+# fi
+
 set -e
 
 BUILD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -11,6 +15,7 @@ DGRAPH_VERSION=$(git describe --abbrev=0)
 DGRAPH_COMMIT=$(git rev-parse HEAD)
 TAR_FILE="dgraph-linux-amd64-${DGRAPH_VERSION}.tar.gz"
 NIGHTLY_FILE="${BUILD_DIR}/${TAR_FILE}"
+ASSETS_FILE="${BUILD_DIR}/assets.tar.gz"
 
 delete_old_nightly() {
   local release_id
@@ -56,13 +61,15 @@ upload_nightly() {
   upload_release_asset ${NIGHTLY_FILE} "$name" \
     ${DGRAPH_REPO} ${release_id} \
     > /dev/null
+  upload_release_asset ${NIGHTLY_FILE} "assets.tar.gz" \
+    ${DGRAPH_REPO} ${release_id} \
+    > /dev/null
 }
 
 go get -u golang.org/x/net/context golang.org/x/text/unicode/norm google.golang.org/grpc
 
 # Building embedded binaries.
-# contrib/releases/build.sh
-pwd
-ls
+echo "Building embedded binaries"
+contrib/releases/build.sh
 delete_old_nightly
 upload_nightly
