@@ -1733,8 +1733,10 @@ func TestMultiLevelAgg1(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 	{
-		var(func: anyofterms(name, "michonne rick andrea")) @filter(gt(count(friend), 0)){
+		info(func: anyofterms(name, "michonne rick andrea")) @filter(gt(count(friend), 0)){
+			name
 			friend {
+				name
 				s as count(friend)
 			}
 			ss as sum(var(s))
@@ -1748,7 +1750,7 @@ func TestMultiLevelAgg1(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"sumorder":[{"name":"Andrea","var(ss)":0},{"name":"Michonne","var(ss)":2},{"name":"Rick Grimes","var(ss)":5}]}`,
+		`{"info":[{"friend":[{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":0}],"name":"Glenn Rhee"},{"friend":[{"count":0}],"name":"Daryl Dixon"},{"friend":[{"count":1}],"name":"Andrea"},{"friend":[{"count":0}]}],"name":"Michonne","sum(var(s))":2},{"friend":[{"friend":[{"count":5}],"name":"Michonne"}],"name":"Rick Grimes","sum(var(s))":5},{"friend":[{"friend":[{"count":0}],"name":"Glenn Rhee"}],"name":"Andrea","sum(var(s))":0}],"sumorder":[{"name":"Andrea","var(ss)":0},{"name":"Michonne","var(ss)":2},{"name":"Rick Grimes","var(ss)":5}]}`,
 		js)
 }
 

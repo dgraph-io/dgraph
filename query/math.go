@@ -76,13 +76,13 @@ func processBinary(mNode *gql.MathTree) (err error) {
 		name: aggName,
 	}
 	err = ag.ApplyVal(cl)
-			if err != nil {
-				return err
-			}
+	if err != nil {
+		return err
+	}
 	err = ag.ApplyVal(cr)
-			if err != nil {
-				return err
-			}
+	if err != nil {
+		return err
+	}
 	mNode.Const, err = ag.Value()
 	return err
 }
@@ -100,18 +100,18 @@ func processUnary(mNode *gql.MathTree) (err error) {
 	if ch.Const.Value != nil {
 		// Use the constant value that was supplied.
 		err = ag.ApplyVal(ch.Const)
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
+		}
 		mNode.Const, err = ag.Value()
 		return err
 	}
 
 	for k, val := range srcMap {
 		err = ag.ApplyVal(val)
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
+		}
 		destMap[k], err = ag.Value()
 		if err != nil {
 			return err

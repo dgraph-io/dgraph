@@ -864,6 +864,7 @@ func createTaskQuery(sg *SubGraph) *taskp.Query {
 }
 
 type values struct {
+	valType int // 0 -> attribute, 1 -> facet
 	uids    *taskp.List
 	vals    map[uint64]types.Val
 	strList []*taskp.Value
@@ -1123,9 +1124,9 @@ func shouldCascade(res gql.Result, idx int) bool {
 	return true
 }
 
-func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
+func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) error {
 	if sg.DestUIDs == nil {
-		return
+		return nil
 	}
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
@@ -1183,7 +1184,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 
 AssignStep:
 	if sg.Params.Var == "" {
-		return
+		return nil
 	}
 
 	if sg.IsListNode() {
@@ -1193,10 +1194,11 @@ AssignStep:
 		}
 	} else if sg.Params.Facet != nil {
 		if len(sg.facetsMatrix) == 0 {
-			return
+			return nil
 		}
 		doneVars[sg.Params.Var] = values{
-			vals: make(map[uint64]types.Val),
+			valType: 1, // Since this is a facetVar.
+			vals:    make(map[uint64]types.Val),
 		}
 		// Note: We ignore the facets if its a value edge as we can't
 		// attach the value to any node.
@@ -1207,7 +1209,22 @@ AssignStep:
 					continue
 				}
 				f := facet.Facets[0]
-				doneVars[sg.Params.Var].vals[uid] = facets.ValFor(f)
+				if pVal, ok := doneVars[sg.Params.Var].vals[uid]; !ok {
+					doneVars[sg.Params.Var].vals[uid] = facets.ValFor(f)
+				} else {
+					nVal := facets.ValFor(f)
+					if nVal.Tid != types.IntID && nVal.Tid != types.FloatID {
+						return x.Errorf("Repeated id with non int/float value for facet var encountered.")
+					}
+					ag := aggregator{name: "+"}
+					ag.Apply(pVal)
+					ag.Apply(nVal)
+					fVal, err := ag.Value()
+					if err != nil {
+						continue
+					}
+					doneVars[sg.Params.Var].vals[uid] = fVal
+				}
 			}
 		}
 	} else if len(sg.DestUIDs.Uids) != 0 {
@@ -1244,6 +1261,7 @@ AssignStep:
 		// Insert a empty entry to keep the dependency happy.
 		doneVars[sg.Params.Var] = values{}
 	}
+	return nil
 }
 
 func (sg *SubGraph) recursiveFillVars(doneVars map[string]values) error {
