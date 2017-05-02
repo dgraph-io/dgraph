@@ -190,7 +190,7 @@ func processTernary(mNode *gql.MathTree) (err error) {
 	return nil
 }
 
-func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) (err error) {
+func (sg *SubGraph) evalMathTree(mNode *gql.MathTree, parent *SubGraph, doneVars map[string]values) (err error) {
 	if mNode.Const.Value != nil {
 		return nil
 	}
@@ -205,7 +205,7 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) (err error) {
 
 	for _, child := range mNode.Child {
 		// Process the child nodes first.
-		err := evalMathTree(child, doneVars)
+		err := sg.evalMathTree(child, parent, doneVars)
 		if err != nil {
 			return err
 		}
