@@ -66,6 +66,9 @@ func (s byValue) Less(i, j int) bool {
 
 // Sort sorts the given array in-place.
 func Sort(v []Val, ul *taskp.List, desc bool) error {
+	if len(v) == 0 {
+		return nil
+	}
 	typ := v[0].Tid
 	switch typ {
 	case DateTimeID, DateID, IntID, FloatID, StringID, DefaultID:

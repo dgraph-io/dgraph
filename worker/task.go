@@ -603,10 +603,6 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 		if err != nil {
 			return nil, err
 		}
-		typ, err := schema.State().TypeOf(attr)
-		if typ == types.BoolID && fc.fname != "eq" {
-			return nil, x.Errorf("Only eq operator defined for type bool. Got: %v", fc.fname)
-		}
 		fc.ineqValue, err = convertValue(attr, q.SrcFunc[2])
 		if err != nil {
 			return nil, x.Errorf("Got error: %v while running: %v", err.Error(), q.SrcFunc)
@@ -747,7 +743,18 @@ func applyFacetsTree(postingFacets []*facetsp.Facet, ftree *facetsTree) (bool, e
 		fnType, fname := parseFuncType([]string{fname})
 		switch fnType {
 		case CompareAttrFn: // lt, gt, le, ge, eq
-			return compareTypeVals(fname, facets.ValFor(fc), ftree.function.val), nil
+			var err error
+			typId := facets.TypeIDFor(fc)
+			v, has := ftree.function.convertedVal[typId]
+			if !has {
+				if v, err = types.Convert(ftree.function.val, typId); err != nil {
+					// ignore facet if not of appropriate type
+					return false, nil
+				} else {
+					ftree.function.convertedVal[typId] = v
+				}
+			}
+			return compareTypeVals(fname, facets.ValFor(fc), v), nil
 
 		case StandardFn: // allofterms, anyofterms
 			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
@@ -850,6 +857,8 @@ type facetsFunc struct {
 	args   []string
 	tokens []string
 	val    types.Val
+	// convertedVal is used to cache the converted value of val for each type
+	convertedVal map[types.TypeID]types.Val
 }
 type facetsTree struct {
 	op       string
@@ -865,6 +874,7 @@ func preprocessFilter(tree *facetsp.FilterTree) (*facetsTree, error) {
 	ftree.op = tree.Op
 	if tree.Func != nil {
 		ftree.function = &facetsFunc{}
+		ftree.function.convertedVal = make(map[types.TypeID]types.Val)
 		ftree.function.name = tree.Func.Name
 		ftree.function.key = tree.Func.Key
 		ftree.function.args = tree.Func.Args
@@ -877,11 +887,7 @@ func preprocessFilter(tree *facetsp.FilterTree) (*facetsTree, error) {
 
 		switch fnType {
 		case CompareAttrFn:
-			argf, err := facets.FacetFor(tree.Func.Key, tree.Func.Args[0])
-			if err != nil {
-				return nil, err // stop processing as this is query error
-			}
-			ftree.function.val = facets.ValFor(argf)
+			ftree.function.val = types.Val{Tid: types.StringID, Value: []byte(tree.Func.Args[0])}
 		case StandardFn:
 			argTokens, aerr := tok.GetTokens(tree.Func.Args)
 			if aerr != nil { // query error ; stop processing.

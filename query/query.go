@@ -1633,6 +1633,10 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		sg.Params.Count = 1000
 	}
 
+	for i := 0; i < len(sg.uidMatrix); i++ {
+		algo.IntersectWith(sg.uidMatrix[i], sg.DestUIDs, sg.uidMatrix[i])
+	}
+
 	for _, it := range sg.Params.NeedsVar {
 		if it.Name == sg.Params.Order {
 			// If the Order name is same as var name, we sort using that variable.

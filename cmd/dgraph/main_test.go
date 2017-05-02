@@ -109,7 +109,7 @@ func processToFastJSON(q string) string {
 	}
 
 	var buf bytes.Buffer
-	err = query.ToJson(&l, sgl, &buf, nil)
+	err = query.ToJson(&l, sgl, &buf, nil, false)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func runQuery(q string) (string, error) {
 	}
 
 	var buf bytes.Buffer
-	err = query.ToJson(&l, sgl, &buf, nil)
+	err = query.ToJson(&l, sgl, &buf, nil, false)
 	if err != nil {
 		return "", err
 	}
