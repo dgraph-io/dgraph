@@ -212,83 +212,85 @@ func (sg *SubGraph) evalMathTree(mNode *gql.MathTree, parent *SubGraph, doneVars
 			return err
 		}
 	}
-
-	siblingVar, parentVar := "", ""
-	isSameLevel := true
-	var modMathNode *gql.MathTree
-	for _, mch := range mNode.Child {
-		if parent.Params.Var == mch.Var {
-			parentVar = mch.Var
-			isSameLevel = false
-			modMathNode = mch
-		} else {
-			siblingVar = mch.Var
-		}
-	}
-
-	if !isSameLevel {
-		// The parent has the variable. So do some iterative summing.
-		var siblingNode *SubGraph
-		for _, ch := range parent.Children {
-			if ch.Params.Var == siblingVar {
-				siblingNode = ch
-			}
-		}
-		if siblingNode == nil || parentVar != parent.Params.Var {
-			return x.Errorf("Var %v is used at a wrong level", parentVar)
-		}
-		v, ok := doneVars[parentVar]
-		fmt.Println(doneVars[siblingVar], "YYYY")
-		if !ok {
-			return x.Errorf("Variable not found.")
-		}
-		newMap := make(map[uint64]types.Val)
-		//if v.valType != 1 {
-		// Only facet value var can have a child math node.
-		fmt.Println(parent.Attr, siblingNode.Attr)
-		for i := 0; i < len(siblingNode.uidMatrix); i++ {
-			ul := siblingNode.uidMatrix[i]
-			fmt.Println(i, ul, "****")
-			srcUid := siblingNode.SrcUIDs.Uids[i]
-			curVal, ok := v.vals[srcUid]
-			if !ok || curVal.Value == nil {
-				continue
-			}
-			for j := 0; j < len(ul.Uids); j++ {
-				dstUid := ul.Uids[j]
-				ag := aggregator{name: "sum"}
-				ag.Apply(curVal)
-				ag.Apply(newMap[dstUid])
-				val, err := ag.Value()
-				fmt.Println(dstUid, val, err)
-				if err != nil {
-					continue
-				}
-				newMap[dstUid] = val
-			}
-		}
-		fmt.Println(newMap)
-		//v.vals = newMap
-		//doneVars[parentVar] = v
-		modMathNode.Val = newMap
-		//}
-	}
-
 	aggName := mNode.Fn
+	if isBinary(aggName) {
+		if len(mNode.Child) != 2 {
+			return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
+				len(mNode.Child))
+		}
+		{
+			// If a variable from parent level is used at this level, we do some
+			// level based processing before doing the math op.
+			siblingVar, parentVar := "", ""
+			isSameLevel := true
+			var modMathNode *gql.MathTree
+			for _, mch := range mNode.Child {
+				if parent.Params.Var == mch.Var {
+					parentVar = mch.Var
+					isSameLevel = false
+					modMathNode = mch
+				} else {
+					siblingVar = mch.Var
+				}
+			}
+
+			if !isSameLevel {
+				// The parent has the variable. So do some iterative summing.
+				var siblingNode *SubGraph
+				for _, ch := range parent.Children {
+					if ch.Params.Var == siblingVar {
+						siblingNode = ch
+					}
+				}
+				if siblingNode == nil || parentVar != parent.Params.Var {
+					return x.Errorf("Var %v is used at a wrong level", parentVar)
+				}
+				v, ok := doneVars[parentVar]
+				fmt.Println(doneVars[siblingVar], "YYYY")
+				if !ok {
+					return x.Errorf("Variable not found.")
+				}
+				newMap := make(map[uint64]types.Val)
+				//if v.valType != 1 {
+				// Only facet value var can have a child math node.
+				fmt.Println(parent.Attr, siblingNode.Attr)
+				for i := 0; i < len(siblingNode.uidMatrix); i++ {
+					ul := siblingNode.uidMatrix[i]
+					fmt.Println(i, ul, "****")
+					srcUid := siblingNode.SrcUIDs.Uids[i]
+					curVal, ok := v.vals[srcUid]
+					if !ok || curVal.Value == nil {
+						continue
+					}
+					for j := 0; j < len(ul.Uids); j++ {
+						dstUid := ul.Uids[j]
+						ag := aggregator{name: "sum"}
+						ag.Apply(curVal)
+						ag.Apply(newMap[dstUid])
+						val, err := ag.Value()
+						fmt.Println(dstUid, val, err)
+						if err != nil {
+							continue
+						}
+						newMap[dstUid] = val
+					}
+				}
+				fmt.Println(newMap)
+				//v.vals = newMap
+				//doneVars[parentVar] = v
+				modMathNode.Val = newMap
+				//}
+			}
+		}
+		return processBinary(mNode)
+	}
+
 	if isUnary(aggName) {
 		if len(mNode.Child) != 1 {
 			return x.Errorf("Function %v expects 1 argument. But got: %v", aggName,
 				len(mNode.Child))
 		}
 		return processUnary(mNode)
-	}
-
-	if isBinary(aggName) {
-		if len(mNode.Child) != 2 {
-			return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
-				len(mNode.Child))
-		}
-		return processBinary(mNode)
 	}
 
 	if isBinaryBoolean(aggName) {
