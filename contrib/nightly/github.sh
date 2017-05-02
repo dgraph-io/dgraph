@@ -20,7 +20,7 @@ send_gh_api_request() {
   local endpoint="${1}"
   local verb="${2:-GET}"
 
-  local response="$(curl -H "Accept: application/vnd.github.v3+json" \
+  local response="$(curl -v -H "Accept: application/vnd.github.v3+json" \
     -H "User-Agent: travis" \
     -u "${GH_TOKEN}:x-oauth-basic" \
     -X ${verb} \
