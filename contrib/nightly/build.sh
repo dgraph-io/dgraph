@@ -70,7 +70,8 @@ upload_nightly() {
     ${DGRAPH_REPO} ${release_id} \
     > /dev/null
 
-  echo $ASSETS_FILE
+  pwd
+  ls
   upload_release_asset ${ASSETS_FILE} "assets.tar.gz" \
     ${DGRAPH_REPO} ${release_id} \
     > /dev/null
@@ -81,5 +82,7 @@ go get -u golang.org/x/net/context golang.org/x/text/unicode/norm google.golang.
 # Building embedded binaries.
 echo "Building embedded binaries"
 contrib/releases/build.sh
+pwd
+ls
 delete_old_nightly
 upload_nightly
