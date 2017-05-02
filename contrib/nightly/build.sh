@@ -8,7 +8,7 @@ source ${BUILD_DIR}/nightly/github.sh
 NIGHTLY_TAG="nightly"
 DGRAPH_REPO="dgraph-io/dgraph"
 DGRAPH_VERSION=$(git describe --abbrev=0)
-DGRAPH_COMMIT=$(git rev-parse --short HEAD)
+DGRAPH_COMMIT=$(git rev-parse HEAD)
 TAR_FILE="dgraph-linux-amd64-${DGRAPH_VERSION}.tar.gz"
 NIGHTLY_FILE="${BUILD_DIR}/${TAR_FILE}"
 
@@ -21,6 +21,7 @@ delete_old_nightly() {
 
   echo $release_id
   if [[ ! -z "${release_id}" ]]; then
+    echo "Deleting old nightly release"
     send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id} \
         DELETE \
         > /dev/null
@@ -35,7 +36,7 @@ upload_nightly() {
   echo "Creating release for tag ${NIGHTLY_TAG}."
   read release_id < <( \
     send_gh_api_data_request repos/${DGRAPH_REPO}/releases POST \
-    "{ \"name\": \"Dgraph v${DGRAPH_VERSION}-dev\", \"tag_name\": \"${NIGHTLY_TAG}\", \
+    "{ \"name\": \"Dgraph ${DGRAPH_VERSION}-dev\", \"tag_name\": \"${NIGHTLY_TAG}\", \
     \"prerelease\": true }" \
     | jq -r -c '.id') \
     || exit
