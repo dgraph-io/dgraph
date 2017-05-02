@@ -24,7 +24,7 @@ delete_old_nightly() {
     | jq -r -c "(.[] | select(.tag_name == \"${NIGHTLY_TAG}\").id), \"\"") \
     || exit
 
-  echo $release_id
+  echo "release_id ${release_id}"
   if [[ ! -z "${release_id}" ]]; then
     echo "Deleting old nightly release"
     send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id} \
@@ -63,7 +63,9 @@ upload_nightly() {
   upload_release_asset ${NIGHTLY_FILE} "$name" \
     ${DGRAPH_REPO} ${release_id} \
     > /dev/null
-  upload_release_asset ${NIGHTLY_FILE} "assets.tar.gz" \
+
+  echo $ASSETS_FILE
+  upload_release_asset ${ASSETS_FILE} "assets.tar.gz" \
     ${DGRAPH_REPO} ${release_id} \
     > /dev/null
 }
