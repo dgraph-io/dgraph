@@ -1,5 +1,11 @@
 #!/bin/bash
 
+if [ $TRAVIS_TAG != "nightly" ]
+  # We create nightly tag using the script so we don't want to run this script
+  # when the tagged build is triggered.
+  exit 0
+fi
+
 # if [ $TRAVIS_EVENT_TYPE != "cron" ]
 #   exit 0
 # fi
