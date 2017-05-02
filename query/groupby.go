@@ -39,6 +39,28 @@ type groupResult struct {
 	uids       []uint64
 }
 
+func (grp *groupResult) aggregateChild(child *SubGraph) {
+	if child.Params.DoCount {
+		(*grp).aggregates = append((*grp).aggregates, groupPair{
+			attr: "count",
+			key: types.Val{
+				Tid:   types.IntID,
+				Value: int64(len(grp.uids)),
+			},
+		})
+	} else if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
+		fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
+		finalVal, err := aggregateGroup(grp, child)
+		if err != nil {
+			return
+		}
+		(*grp).aggregates = append((*grp).aggregates, groupPair{
+			attr: fieldName,
+			key:  finalVal,
+		})
+	}
+}
+
 type groupResults struct {
 	group []*groupResult
 }
@@ -48,34 +70,13 @@ type groupElements struct {
 	key      types.Val
 }
 
-type dedup struct {
-	groups []uniq
-}
-
 type uniq struct {
 	elements map[string]groupElements
 	attr     string
 }
 
-func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
-	ag := aggregator{
-		name: child.SrcFunc[0],
-	}
-	for _, uid := range grp.uids {
-		idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
-			return child.SrcUIDs.Uids[i] >= uid
-		})
-		if idx == len(child.SrcUIDs.Uids) || child.SrcUIDs.Uids[idx] != uid {
-			continue
-		}
-		v := child.values[idx]
-		val, err := convertWithBestEffort(v, child.Attr)
-		if err != nil {
-			continue
-		}
-		ag.Apply(val)
-	}
-	return ag.Value()
+type dedup struct {
+	groups []uniq
 }
 
 func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
@@ -120,6 +121,27 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 	}
 	cur := d.groups[idx].elements[strKey].entities
 	cur.Uids = append(cur.Uids, uid)
+}
+
+func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
+	ag := aggregator{
+		name: child.SrcFunc[0],
+	}
+	for _, uid := range grp.uids {
+		idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {
+			return child.SrcUIDs.Uids[i] >= uid
+		})
+		if idx == len(child.SrcUIDs.Uids) || child.SrcUIDs.Uids[idx] != uid {
+			continue
+		}
+		v := child.values[idx]
+		val, err := convertWithBestEffort(v, child.Attr)
+		if err != nil {
+			continue
+		}
+		ag.Apply(val)
+	}
+	return ag.Value()
 }
 
 // formGroup creates all possible groups with the list of uids that belong to that
@@ -210,28 +232,6 @@ func processGroupBy(sg *SubGraph) error {
 	return nil
 }
 
-func (grp *groupResult) aggregateChild(child *SubGraph) {
-	if child.Params.DoCount {
-		(*grp).aggregates = append((*grp).aggregates, groupPair{
-			attr: "count",
-			key: types.Val{
-				Tid:   types.IntID,
-				Value: int64(len(grp.uids)),
-			},
-		})
-	} else if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
-		fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
-		finalVal, err := aggregateGroup(grp, child)
-		if err != nil {
-			return
-		}
-		(*grp).aggregates = append((*grp).aggregates, groupPair{
-			attr: fieldName,
-			key:  finalVal,
-		})
-	}
-}
-
 func groupLess(a, b *groupResult) bool {
 	if len(a.keys) < len(b.keys) {
 		return true
@@ -272,21 +272,6 @@ func groupLess(a, b *groupResult) bool {
 				return !l
 			}
 		}
-	}
-	var asum, bsum uint64
-	for i := range a.uids {
-		asum += a.uids[i]
-		bsum += b.uids[i]
-		if a.uids[i] < b.uids[i] {
-			return true
-		} else if a.uids[i] > b.uids[i] {
-			return false
-		}
-	}
-	if asum < bsum {
-		return true
-	} else if asum != bsum {
-		return false
 	}
 	x.Fatalf("wrong groups")
 	return false
