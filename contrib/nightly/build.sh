@@ -34,7 +34,9 @@ delete_old_nightly() {
 }
 
 get_release_body() {
-  echo 'Dgraph development (pre-release) build. See **[Installing-Dgraph](http://docs.dgraph.io/master/deploy#manual-download-optional)**.'
+  echo 'Dgraph development (pre-release) build.'
+  echo 'You can run `tar -xzf dgraph-linux64.tar.gz` to unzip the tar.gz which creates a `dgraph` folder with the binaries.'
+  echo 'See **[Get Started](http://docs.dgraph.io/master/get-started/#step-2-run-dgraph)** for documentation.'
 }
 
 upload_nightly() {
