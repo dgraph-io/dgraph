@@ -13,19 +13,23 @@ addons:
   apt:
     sources:
     - ubuntu-toolchain-r-test
-    - llvm-toolchain-precise-3.8
+    - llvm-toolchain-precise-3.9
     packages:
-    - clang-3.8
+    - clang-3.9
     - libbz2-dev
     - libsnappy-dev
     - zlib1g-dev
     - jq
     - graphviz
   hosts:
-    - server1.dgraph.io
-    - server2.dgraph.io
+  - server1.dgraph.io
+  - server2.dgraph.io
 env:
-- CC=clang-3.8 CXX=clang++-3.8
+  matrix:
+  - CC=clang-3.9 CXX=clang++-3.9
+  global:
+    # GH_TOKEN
+    secure: Kj7Y1beeorefXbpLWK+kgJEmwBFw69TgYcXcYCOt2W8kQFIJXom8QqEt8/BcYrhc0dI41J/x/abt/XSRUqCg6IsFwJiVZusVVRKl4IDC6i43CoLWudObp7u7eqZ+FBLin/YxpRFB/btYYiblmDSlSvO09nSODzaDaUTfyEqjAxBgOVK+DHDwCXaGVAaZsBd8JTVRkkO9uGqMRDPmEgDMbv6S9Pmfjb5/p2Om8OCnNZNgsglJMVNWFjVYE1pxxcSsgnNrIcQGx1X5qPcX4OHcR1DfsgmwrZ/Jz/Hl0RmCljpPZeAk2BW4zi6LkHZr0K6kOrXasqfAZwlBUd6RtMZLpHOlgwXCXL4hHQEtF6PmyaICuwucv90vcLrAbIWVZBEa0vtPpkZiNCb2Lb0aaT1R+boBravWLzlsqB8xDuvpewe3pLNrDwU1COFKdEJT0T8mZ7RVHEPGU9jjg+j4rmQElRIbyifQp300XVCcD3xoful/ONdx8ljOk7Has2aRFmwpCZrRV06SrPgkfceIgIv9rQidoy2K/JbFjDkcqZxTC/hKaSm0ZSjf4oBs2RK4XkKK9z296B+cyfy4PFyGFYKJPjjMbn3WQmG+ojp/GbW6M84CTAjB9GxSIHQtQjkZkJ95xa25fMYIrPFAaFeMKpcHocqp5OW0HyEv+JWJ0ObkP0Q=
 cache:
   apt: true
   directories:
@@ -35,8 +39,4 @@ install:
 before_script:
 - go get github.com/mattn/goveralls
 script:
-        # - bash contrib/cover.sh $HOME/build coverage.out
-        # - bash contrib/load-test.sh $HOME/build
-        # - goveralls -service=travis-ci -coverprofile=coverage.out || true
-        # - contrib/tlstest/run.sh
 - contrib/nightly/build.sh
