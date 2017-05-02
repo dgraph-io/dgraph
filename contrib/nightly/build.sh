@@ -30,7 +30,6 @@ delete_old_nightly() {
     | jq -r -c "(.[] | select(.tag_name == \"${NIGHTLY_TAG}\").id), \"\"") \
     || exit
 
-  echo "release_id ${release_id}"
   if [[ ! -z "${release_id}" ]]; then
     echo "Deleting old nightly release"
     send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id} \
@@ -40,9 +39,19 @@ delete_old_nightly() {
 }
 
 get_release_body() {
-  echo 'Dgraph development (pre-release) build.'
-  echo 'You can run `tar -xzf dgraph-linux64.tar.gz` to unzip the tar.gz which creates a `dgraph` folder with the binaries.'
-  echo 'See **[Get Started](http://docs.dgraph.io/master/get-started/#step-2-run-dgraph)** for documentation.'
+  echo '
+  Dgraph development (pre-release) build.
+
+  You can run the following commands to run dgraph with the UI after downloading the assets.tar.gz and dgraph-linux64.tar.gz.
+  ```
+  mkdir -p ~/dgraph ~/dgraph/ui
+  tar -C ~/dgraph -xzf dgraph-linux64.tar.gz --strip-components=1
+  tar -C ~/dgraph/ui -xzf assets.tar.gz
+  cd ~/dgraph
+  dgraph --ui ui
+  ```
+
+  See **[Get Started](http://docs.dgraph.io/master/get-started/#step-2-run-dgraph)** for documentation.'
 }
 
 upload_nightly() {
@@ -70,8 +79,6 @@ upload_nightly() {
     ${DGRAPH_REPO} ${release_id} \
     > /dev/null
 
-  pwd
-  ls
   upload_release_asset ${ASSETS_FILE} "assets.tar.gz" \
     ${DGRAPH_REPO} ${release_id} \
     > /dev/null
@@ -82,7 +89,5 @@ go get -u golang.org/x/net/context golang.org/x/text/unicode/norm google.golang.
 # Building embedded binaries.
 echo "Building embedded binaries"
 contrib/releases/build.sh
-pwd
-ls
 delete_old_nightly
 upload_nightly
