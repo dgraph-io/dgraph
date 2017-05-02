@@ -3,7 +3,7 @@
 set -e
 
 BUILD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source ${BUILD_DIR}/github.sh
+source ${BUILD_DIR}/nightly/github.sh
 
 NIGHTLY_TAG="nightly"
 DGRAPH_REPO="dgraph-io/dgraph"
