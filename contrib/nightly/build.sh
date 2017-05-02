@@ -32,7 +32,6 @@ get_release_body() {
 }
 
 upload_nightly() {
-  echo ${GH_TOKEN}
   echo "Creating release for tag ${NIGHTLY_TAG}."
   read release_id < <( \
     send_gh_api_data_request repos/${DGRAPH_REPO}/releases POST \
