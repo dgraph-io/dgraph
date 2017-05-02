@@ -1166,6 +1166,56 @@ func TestRecurseQueryLimitDepth(t *testing.T) {
 		`{"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }
 
+func TestWrongFacetVarLevel_Error1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 1) {
+				l1 as path @facets(weight) {
+					l2 as path @facets(weight) {
+						l3 as math(l2 + l1)
+					}
+				}
+			}
+			you(id:var(l3)) {
+				name
+				var(l3)
+			}
+		}`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+func TestWrongFacetVarLevel_Error2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 1) {
+				l1 as path @facets(weight) {
+					path {
+						l2 as path @facets(weight) 
+						l3 as math(l2 + l1)
+					}
+				}
+			}
+			you(id:var(l3)) {
+				name
+				var(l3)
+			}
+		}`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
 func TestShortestPath_ExpandError(t *testing.T) {
 	populateGraph(t)
 	query := `

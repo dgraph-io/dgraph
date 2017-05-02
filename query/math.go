@@ -212,6 +212,19 @@ func (sg *SubGraph) evalMathTree(mNode *gql.MathTree, parent *SubGraph, doneVars
 			return err
 		}
 	}
+
+	allowedVars := make(map[string]struct{})
+	allowedVars[parent.Params.Var] = struct{}{}
+	for _, ch := range parent.Children {
+		allowedVars[ch.Params.Var] = struct{}{}
+	}
+
+	for _, mch := range mNode.Child {
+		if _, ok := allowedVars[mch.Var]; !ok {
+			return x.Errorf("Var %v used at wrong math level", mch.Var)
+		}
+	}
+
 	aggName := mNode.Fn
 	if isBinary(aggName) {
 		if len(mNode.Child) != 2 {
