@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [[ $TRAVIS_TAG != "nightly" ]]; then
+if [[ $TRAVIS_TAG == "nightly" ]]; then
   # We create nightly tag using the script so we don't want to run this script
   # when the tagged build is triggered.
   exit 0
