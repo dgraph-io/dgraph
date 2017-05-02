@@ -1218,7 +1218,7 @@ AssignStep:
 					if nVal.Tid != types.IntID && nVal.Tid != types.FloatID {
 						return x.Errorf("Repeated id with non int/float value for facet var encountered.")
 					}
-					ag := aggregator{name: "+"}
+					ag := aggregator{name: "sum"}
 					ag.Apply(pVal)
 					ag.Apply(nVal)
 					fVal, err := ag.Value()

@@ -256,6 +256,9 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 }
 
 func (ag *aggregator) Apply(val types.Val) {
+	if val.Value == nil {
+		return
+	}
 	if ag.result.Value == nil {
 		ag.result = val
 		ag.count++
