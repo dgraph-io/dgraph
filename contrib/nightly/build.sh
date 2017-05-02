@@ -20,8 +20,8 @@ DGRAPH_REPO="dgraph-io/dgraph"
 DGRAPH_VERSION=$(git describe --abbrev=0)
 DGRAPH_COMMIT=$(git rev-parse HEAD)
 TAR_FILE="dgraph-linux-amd64-${DGRAPH_VERSION}.tar.gz"
-NIGHTLY_FILE="${BUILD_DIR}/${TAR_FILE}"
-ASSETS_FILE="${BUILD_DIR}/assets.tar.gz"
+NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${TAR_FILE}"
+ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
 
 delete_old_nightly() {
   local release_id
