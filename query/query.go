@@ -1212,6 +1212,8 @@ AssignStep:
 				if pVal, ok := doneVars[sg.Params.Var].vals[uid]; !ok {
 					doneVars[sg.Params.Var].vals[uid] = facets.ValFor(f)
 				} else {
+					// If the value is int/float we add them up. Else we throw an error as
+					// many to one maps are not allowed for other types.
 					nVal := facets.ValFor(f)
 					if nVal.Tid != types.IntID && nVal.Tid != types.FloatID {
 						return x.Errorf("Repeated id with non int/float value for facet var encountered.")
