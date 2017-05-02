@@ -220,7 +220,7 @@ func (sg *SubGraph) evalMathTree(mNode *gql.MathTree, parent *SubGraph, doneVars
 	}
 
 	for _, mch := range mNode.Child {
-		if _, ok := allowedVars[mch.Var]; !ok {
+		if _, ok := allowedVars[mch.Var]; !ok && mch.Var != "" {
 			return x.Errorf("Var %v used at wrong math level", mch.Var)
 		}
 	}
