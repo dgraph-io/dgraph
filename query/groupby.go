@@ -181,7 +181,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *taskp.List, groupVal []
 	}
 }
 
-func processGroupBy(sg *SubGraph) error {
+func (sg *SubGraph) processGroupBy(doneVars map[string]values) error {
 	mp := make(map[string]groupResult)
 	_ = mp
 	var dedupMap dedup
@@ -216,17 +216,30 @@ func processGroupBy(sg *SubGraph) error {
 	res.formGroups(dedupMap, &taskp.List{}, []groupPair{})
 
 	// Go over the groups and aggregate the values.
-	for i := range res.group {
-		grp := res.group[i]
-		for _, child := range sg.Children {
-			if child.Params.ignoreResult {
-				continue
-			}
-			// This is a aggregation node.
+	for _, child := range sg.Children {
+		if child.Params.ignoreResult {
+			continue
+		}
+		// This is a aggregation node.
+		for _, grp := range res.group {
 			err := grp.aggregateChild(child)
 			if err != nil {
 				return err
 			}
+		}
+		chVar := child.Params.Var
+		if chVar != "" {
+			tempMap := make(map[uint64]types.Val)
+			for _, grp := range res.group {
+				uidVal := grp.keys[0].key.Value
+				uid, ok := uidVal.(uint64)
+				if !ok {
+					return x.Errorf("Vars can be assigned only when grouped by UID attribute")
+				}
+				tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
+			}
+			fmt.Println(tempMap)
+			doneVars[chVar] = values{vals: tempMap}
 		}
 	}
 	// Note: This is expensive. But done to keep the result order deterministic

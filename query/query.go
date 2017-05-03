@@ -951,10 +951,12 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 	}
 
 	if sg.IsGroupBy() {
-		err := processGroupBy(sg)
+		err := sg.processGroupBy(doneVars)
 		if err != nil {
 			return err
 		}
+		// TODO: Fill in the variables that are part of groupby.
+
 	} else if len(sg.SrcFunc) > 0 && !parent.IsGroupBy() && isAggregatorFn(sg.SrcFunc[0]) {
 		// Aggregate the value over level.
 		mp, err := evalLevelAgg(doneVars, sg, parent)
