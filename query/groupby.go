@@ -51,13 +51,13 @@ func (grp *groupResult) aggregateChild(child *SubGraph) error {
 				Value: int64(len(grp.uids)),
 			},
 		})
-		return
+		return nil
 	}
 	if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
 		fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
 		finalVal, err := aggregateGroup(grp, child)
 		if err != nil {
-			return
+			return err
 		}
 		grp.aggregates = append(grp.aggregates, groupPair{
 			attr: fieldName,
