@@ -39,6 +39,7 @@ type groupResult struct {
 	uids       []uint64
 }
 
+// aggregateChild does the specified aggregation among the group elements.
 func (grp *groupResult) aggregateChild(child *SubGraph) {
 	if child.Params.DoCount {
 		grp.aggregates = append(grp.aggregates, groupPair{
