@@ -883,6 +883,65 @@ func TestQueryVarValOrderDescMissing(t *testing.T) {
 	require.JSONEq(t, `{}`, js)
 }
 
+func TestGroupBy(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		age(id: 1) {
+			friend {
+				age
+				name
+			}
+		}
+
+		me(id: 1) {
+			friend @groupby(age) {
+				count(_uid_)
+			}
+			name
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"age":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}]}],"me":[{"friend":{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":15,"count":2}]},"name":"Michonne"}]}`,
+		js)
+}
+
+func TestGroupByAgg(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 1) {
+				friend @groupby(age) {
+					max(name)
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":{"@groupby":[{"age":17,"max(name)":"Daryl Dixon"},{"age":19,"max(name)":"Andrea"},{"age":15,"max(name)":"Rick Grimes"}]}}]}`,
+		js)
+}
+
+func TestGroupByMulti(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 1) {
+				friend @groupby(friend,name) {
+					count(_uid_)
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":{"@groupby":[{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}}]}`,
+		js)
+}
+
 func TestMultiEmptyBlocks(t *testing.T) {
 	populateGraph(t)
 	query := `

@@ -140,9 +140,12 @@ type params struct {
 	To           uint64
 	Facet        *facetsp.Param
 	RecurseDepth uint64
-	isInternal   bool
+	isInternal   bool   // Determines if processTask has to be called or not.
 	isListNode   bool   // This is for _predicate_ block.
+	ignoreResult bool   // Node results are ignored.
 	Expand       string // Var to use for expand.
+	isGroupBy    bool
+	groupbyAttrs []string
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -156,6 +159,7 @@ type SubGraph struct {
 	uidMatrix    []*taskp.List
 	facetsMatrix []*facetsp.List
 	ExpandPreds  []*taskp.Value
+	GroupbyRes   *groupResults
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -176,6 +180,10 @@ func (sg *SubGraph) IsListNode() bool {
 	return sg.Params.isListNode
 }
 
+func (sg *SubGraph) IsGroupBy() bool {
+	return sg.Params.isGroupBy
+}
+
 func (sg *SubGraph) IsInternal() bool {
 	return sg.Params.isInternal
 }
@@ -189,9 +197,9 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 	if sg.DestUIDs != nil {
 		dst = len(sg.DestUIDs.Uids)
 	}
-	x.Printf("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v Dest: %p ValueSz:%v]\n",
+	x.Printf("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v IsCount: %v ValueSz:%v]\n",
 		prefix, sg.Attr, sg.Params.Alias, sg.SrcFunc, src, sg.FilterOp,
-		dst, sg.DestUIDs, len(sg.values))
+		dst, sg.Params.DoCount, len(sg.values))
 	for _, f := range sg.Filters {
 		f.DebugPrint(prefix + "|-f->")
 	}
@@ -280,6 +288,25 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	facetsNode := dst.New("@facets")
 	// We go through all predicate children of the subgraphp.
 	for _, pc := range sg.Children {
+		if pc.Params.ignoreResult {
+			continue
+		}
+		if pc.Params.isGroupBy {
+			// TODO: Add the results for groupby node here.
+			g := dst.New(pc.Attr)
+			for _, grp := range pc.GroupbyRes.group {
+				uc := g.New("@groupby")
+				for _, it := range grp.keys {
+					uc.AddValue(it.attr, it.key)
+				}
+				for _, it := range grp.aggregates {
+					uc.AddValue(it.attr, it.key)
+				}
+				g.AddListChild("@groupby", uc)
+			}
+			dst.AddMapChild(pc.Attr, g, false)
+			continue
+		}
 		if pc.IsInternal() {
 			if pc.Params.Expand != "" {
 				continue
@@ -563,18 +590,22 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 		attrsSeen[key] = struct{}{}
 
-		if gchild.Attr == "_uid_" {
-			sg.Params.GetUID = true
-		}
+		/*
+			if gchild.Attr == "_uid_" {
+				sg.Params.GetUID = true
+			}
+		*/
 
 		args := params{
-			Alias:      gchild.Alias,
-			Langs:      gchild.Langs,
-			isDebug:    sg.Params.isDebug,
-			Var:        gchild.Var,
-			Normalize:  sg.Params.Normalize,
-			isInternal: gchild.IsInternal,
-			Expand:     gchild.Expand,
+			Alias:        gchild.Alias,
+			Langs:        gchild.Langs,
+			isDebug:      sg.Params.isDebug,
+			Var:          gchild.Var,
+			Normalize:    sg.Params.Normalize,
+			isInternal:   gchild.IsInternal,
+			Expand:       gchild.Expand,
+			isGroupBy:    gchild.IsGroupby,
+			groupbyAttrs: gchild.GroupbyAttrs,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &facetsp.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -915,10 +946,16 @@ func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint
 }
 
 func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubGraph) error {
-	if !sg.IsInternal() {
+	if !sg.IsInternal() && !sg.IsGroupBy() {
 		return nil
 	}
-	if len(sg.SrcFunc) > 0 && isAggregatorFn(sg.SrcFunc[0]) {
+
+	if sg.IsGroupBy() {
+		err := processGroupBy(sg)
+		if err != nil {
+			return nil
+		}
+	} else if len(sg.SrcFunc) > 0 && !parent.IsGroupBy() && isAggregatorFn(sg.SrcFunc[0]) {
 		// Aggregate the value over level.
 		mp, err := evalLevelAgg(doneVars, sg, parent)
 		if err != nil {
@@ -1298,6 +1335,9 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 				for k := range l.vals {
 					uids = append(uids, k)
 				}
+				sort.Slice(uids, func(i, j int) bool {
+					return uids[i] < uids[j]
+				})
 				lists = append(lists, &taskp.List{uids})
 			} else if len(l.vals) != 0 || l.uids != nil {
 				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
@@ -1486,44 +1526,54 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var out []*SubGraph
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		if !child.IsInternal() {
-			out = append(out, child)
-			continue
-		}
-		if child.Params.Expand == "" {
-			out = append(out, child)
-			continue
-		}
-		if child.Params.Expand == "_all_" {
-			// Get the predicate list for expansion. Otherwise we already
-			// have the list populated.
-			child.ExpandPreds, err = GetNodePredicates(ctx, sg.DestUIDs)
-			if err != nil {
-				rch <- err
-				return
-			}
-		}
 
-		for _, v := range child.ExpandPreds {
-			temp := new(SubGraph)
-			*temp = *child
-			temp.Params.isInternal = false
-			temp.Params.Expand = ""
-			if v.ValType != int32(types.StringID) {
-				rch <- x.Errorf("Expected a string type")
-				return
-			}
-			temp.Attr = string(v.Val)
-			for _, ch := range sg.Children {
-				if ch.isSimilar(temp) {
-					rch <- x.Errorf("Repeated subgraph while using expand()")
+		if child.Params.Expand != "" {
+			if child.Params.Expand == "_all_" {
+				// Get the predicate list for expansion. Otherwise we already
+				// have the list populated.
+				child.ExpandPreds, err = GetNodePredicates(ctx, sg.DestUIDs)
+				if err != nil {
+					rch <- err
 					return
 				}
 			}
-			out = append(out, temp)
+
+			for _, v := range child.ExpandPreds {
+				temp := new(SubGraph)
+				*temp = *child
+				temp.Params.isInternal = false
+				temp.Params.Expand = ""
+				if v.ValType != int32(types.StringID) {
+					rch <- x.Errorf("Expected a string type")
+					return
+				}
+				temp.Attr = string(v.Val)
+				for _, ch := range sg.Children {
+					if ch.isSimilar(temp) {
+						rch <- x.Errorf("Repeated subgraph while using expand()")
+						return
+					}
+				}
+				out = append(out, temp)
+			}
+		} else {
+			out = append(out, child)
+			continue
 		}
 	}
 	sg.Children = out
+
+	if sg.IsGroupBy() {
+		// Add the attrs required by groupby nodes
+		for _, attr := range sg.Params.groupbyAttrs {
+			sg.Children = append(sg.Children, &SubGraph{
+				Attr: attr,
+				Params: params{
+					ignoreResult: true,
+				},
+			})
+		}
+	}
 
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
