@@ -39,8 +39,11 @@ type groupResult struct {
 	uids       []uint64
 }
 
-func (grp *groupResult) aggregateChild(child *SubGraph) {
+func (grp *groupResult) aggregateChild(child *SubGraph) error {
 	if child.Params.DoCount {
+		if child.Attr != "_uid_" {
+			return x.Errorf("Only _uid_ predicate is allowed in count within groupby")
+		}
 		(*grp).aggregates = append((*grp).aggregates, groupPair{
 			attr: "count",
 			key: types.Val{
@@ -52,13 +55,14 @@ func (grp *groupResult) aggregateChild(child *SubGraph) {
 		fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
 		finalVal, err := aggregateGroup(grp, child)
 		if err != nil {
-			return
+			return err
 		}
 		(*grp).aggregates = append((*grp).aggregates, groupPair{
 			attr: fieldName,
 			key:  finalVal,
 		})
 	}
+	return nil
 }
 
 type groupResults struct {
@@ -219,7 +223,10 @@ func processGroupBy(sg *SubGraph) error {
 				continue
 			}
 			// This is a aggregation node.
-			grp.aggregateChild(child)
+			err := grp.aggregateChild(child)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	// Note: This is expensive. But done to keep the result order deterministic

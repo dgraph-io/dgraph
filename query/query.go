@@ -953,7 +953,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 	if sg.IsGroupBy() {
 		err := processGroupBy(sg)
 		if err != nil {
-			return nil
+			return err
 		}
 	} else if len(sg.SrcFunc) > 0 && !parent.IsGroupBy() && isAggregatorFn(sg.SrcFunc[0]) {
 		// Aggregate the value over level.
