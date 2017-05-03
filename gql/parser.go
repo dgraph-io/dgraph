@@ -735,9 +735,6 @@ L:
 				}
 				gq.Filter = filter
 
-			case "groupby":
-				gq.IsGroupby = true
-				parseGroupby(it, gq)
 			case "normalize":
 				gq.Normalize = true
 			case "cascade":

@@ -775,6 +775,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		ParentVars: make(map[string]*taskp.List),
 		Normalize:  gq.Normalize,
 		Cascade:    gq.Cascade,
+		isGroupBy:  gq.IsGroupby,
 	}
 	if gq.Facets != nil {
 		args.Facet = &facetsp.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -955,8 +956,6 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 		if err != nil {
 			return err
 		}
-		// TODO: Fill in the variables that are part of groupby.
-
 	} else if len(sg.SrcFunc) > 0 && !parent.IsGroupBy() && isAggregatorFn(sg.SrcFunc[0]) {
 		// Aggregate the value over level.
 		mp, err := evalLevelAgg(doneVars, sg, parent)
@@ -1163,9 +1162,10 @@ func shouldCascade(res gql.Result, idx int) bool {
 }
 
 func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
-	if sg.DestUIDs == nil {
+	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return
 	}
+	fmt.Println(sg.Attr, "$$$")
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
 		goto AssignStep
@@ -1224,7 +1224,7 @@ AssignStep:
 	if sg.Params.Var == "" {
 		return
 	}
-
+	fmt.Println(sg.Params.Var)
 	if sg.IsListNode() {
 		// This is a predicates list.
 		doneVars[sg.Params.Var] = values{

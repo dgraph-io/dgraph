@@ -73,6 +73,16 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "friend", 31, 24, nil)
 	addEdgeToUID(t, "friend", 23, 1, nil)
 
+	addEdgeToUID(t, "school", 1, 5000, nil)
+	addEdgeToUID(t, "school", 23, 5001, nil)
+	addEdgeToUID(t, "school", 24, 5000, nil)
+	addEdgeToUID(t, "school", 25, 5000, nil)
+	addEdgeToUID(t, "school", 31, 5001, nil)
+	addEdgeToUID(t, "school", 101, 5001, nil)
+
+	addEdgeToValue(t, "name", 5000, "School A", nil)
+	addEdgeToValue(t, "name", 5001, "School B", nil)
+
 	addEdgeToUID(t, "follow", 1, 31, nil)
 	addEdgeToUID(t, "follow", 1, 24, nil)
 	addEdgeToUID(t, "follow", 31, 1001, nil)
@@ -912,11 +922,13 @@ func TestGroupByAggVar(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			var(id: 1) @groupby(friend) {
-				a as count(_uid_)
+			var(id: 1) {
+				friend @groupby(school) {
+					a as count(_uid_)
+				}
 			}
 
-			order(id:1) {
+			order(id:var(a), orderdesc: var(a)) {
 				name
 				var(a)
 			}
@@ -924,7 +936,7 @@ func TestGroupByAggVar(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":{"@groupby":[{"age":17,"max(name)":"Daryl Dixon"},{"age":19,"max(name)":"Andrea"},{"age":15,"max(name)":"Rick Grimes"}]}}]}`,
+		`{"order":[{"name":"School B","var(a)":3},{"name":"School A","var(a)":2}]}`,
 		js)
 }
 
