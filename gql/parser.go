@@ -1923,7 +1923,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				it.Next()
 				if gq.IsGroupby {
 					item = it.Item()
-					it.Next()
 					child.Attr = item.Val
 					child.IsInternal = false
 				} else {

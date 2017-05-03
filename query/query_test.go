@@ -918,7 +918,7 @@ func TestGroupBy(t *testing.T) {
 		js)
 }
 
-func TestGroupByAggVar(t *testing.T) {
+func TestGroupByCountVar(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
@@ -937,6 +937,33 @@ func TestGroupByAggVar(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"order":[{"name":"School B","var(a)":3},{"name":"School A","var(a)":2}]}`,
+		js)
+}
+func TestGroupByAggVar(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				friend @groupby(school) {
+					a as max(name)
+					b as min(name)
+				}
+			}
+
+			orderMax(id:var(a), orderdesc: var(a)) {
+				name
+				var(a)
+			}
+
+			orderMin(id:var(b), orderdesc: var(b)) {
+				name
+				var(b)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"orderMax":[{"name":"School B","var(a)":"Rick Grimes"},{"name":"School A","var(a)":"Glenn Rhee"}],"orderMin":[{"name":"School A","var(b)":"Daryl Dixon"},{"name":"School B","var(b)":"Andrea"}]}`,
 		js)
 }
 
