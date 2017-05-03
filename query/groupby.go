@@ -41,7 +41,7 @@ type groupResult struct {
 
 func (grp *groupResult) aggregateChild(child *SubGraph) {
 	if child.Params.DoCount {
-		(*grp).aggregates = append((*grp).aggregates, groupPair{
+		grp.aggregates = append(grp.aggregates, groupPair{
 			attr: "count",
 			key: types.Val{
 				Tid:   types.IntID,
@@ -54,7 +54,7 @@ func (grp *groupResult) aggregateChild(child *SubGraph) {
 		if err != nil {
 			return
 		}
-		(*grp).aggregates = append((*grp).aggregates, groupPair{
+		grp.aggregates = append(grp.aggregates, groupPair{
 			attr: fieldName,
 			key:  finalVal,
 		})
