@@ -36,8 +36,8 @@ install:
 before_script:
 - go get github.com/mattn/goveralls
 script:
-- bash contrib/cover.sh $HOME/build coverage.out
-- bash contrib/load-test.sh $HOME/build
+- bash contrib/cover.sh $HOME/build coverage.out || travis_terminate 1
 - goveralls -service=travis-ci -coverprofile=coverage.out || true
+- bash contrib/load-test.sh $HOME/build || travis_terminate 1
 - contrib/tlstest/run.sh
 - contrib/nightly/build.sh
