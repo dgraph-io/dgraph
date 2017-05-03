@@ -7,9 +7,9 @@ if [[ $TRAVIS_TAG == "nightly" ]]; then
 fi
 
 # We run a cron job daily on Travis which will update the nightly binaries.
-if [[ $TRAVIS_EVENT_TYPE != "cron" ]]; then
-   exit 0
-fi
+# if [[ $TRAVIS_EVENT_TYPE != "cron" ]]; then
+#    exit 0
+# fi
 
 set -e
 
@@ -85,6 +85,17 @@ upload_nightly() {
     > /dev/null
 }
 
+upload_docker_image() {
+  pushd ${GOPATH}/src/github.com/dgraph-io/dgraph/contrib/nightly > /dev/null
+  # Extract dgraph folder from the tar as its required by the Dockerfile.
+  tar -xzf ${NIGHTLY_FILE}
+  cp ${ASSETS_FILE} .
+  docker build -t dgraph/dgraph:master .
+  docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
+  docker push dgraph/dgraph:master
+  popd > /dev/null
+}
+
 go get -u golang.org/x/net/context golang.org/x/text/unicode/norm google.golang.org/grpc
 
 # Building embedded binaries.
@@ -92,3 +103,5 @@ echo "Building embedded binaries"
 contrib/releases/build.sh
 delete_old_nightly
 upload_nightly
+
+upload_docker_image
