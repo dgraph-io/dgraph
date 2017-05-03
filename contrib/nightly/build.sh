@@ -1,4 +1,7 @@
 #!/bin/bash
+if [[ "${TRAVIS_OS_NAME}" == "osx" ]]; then
+  exit 0;
+fi
 
 if [[ $TRAVIS_TAG == "nightly" ]]; then
   # We create nightly tag using the script so we don't want to run this script
@@ -7,9 +10,9 @@ if [[ $TRAVIS_TAG == "nightly" ]]; then
 fi
 
 # We run a cron job daily on Travis which will update the nightly binaries.
-if [[ $TRAVIS_EVENT_TYPE != "cron" ]]; then
-   exit 0
-fi
+#if [[ $TRAVIS_EVENT_TYPE != "cron" ]]; then
+#   exit 0
+#fi
 
 set -e
 
