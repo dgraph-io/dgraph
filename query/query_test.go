@@ -6026,6 +6026,6 @@ func TestOrderDescFilterCount(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"ias":"Zambo Alice"}]}]}`,
+		`{"me":[{"friend":[{"alias":"Zambo Alice"}]}]}`,
 		js)
 }
