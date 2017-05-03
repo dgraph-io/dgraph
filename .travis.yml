@@ -26,6 +26,7 @@ env:
   - CC=clang-3.9 CXX=clang++-3.9
   global:
   - secure: VkBvETNHIhgegl3tLYI3fqDKD8CdZiYMgDCT1vetInyFjB2OQElOLD9TUwtTdWPoo9Oc/GiLJsx29yWAEVbw4nToyULDv8IbNV2IVA2FiQPijhLlwaiQxE3cbgo6e572C/SO+w2DVdBsBO+wFDhm8lj0/P9C+eBbRvEp0oBBKjDfR7yb3/YKi1S8WxGCHK4lMMlYKPc2s8RTIdGh+5ChQmQVp3ve0zEdmq5rCLwS5BbzNw21iw3Cw1/AyaBeKyNH8wNVg7QqxX56LIWFtcu03uz+l7PQDfFsaZo4Gsu1iYBO7aZcwlBwVxQr6L0dHzQy4KSpk6tHOQycDEDM+gMPe7RMJxEqwtRCa8ffNn2uXWp1MyXTUhSgqzQ1TWcZaFn/7V+KXNZJYNA2OT1TPodNblunMKwzth8XxyCGMhSeXb2ZsTxotzZ9GEBwwa9YA/5dHYfY+zKDhcMlLUFipqq3e9sfY3eMX1kg6rhYk0snBFYrf2X6d7Ug0+EF9pYsRHs9IqY8uQTyMHDNSzKzRrJjLyVX3/XORQHDjiVGrxXkf+3lWj3Dz76NfD8ZJwnx2ecYG81jgdB/Jt5Rsn5UrIw2Q95c0AqqZX17p1/Ws+g4A8rPyJlaSIsrnICRnXIrxHdVrgqNFxS/24SvaWLCjycdz2nM1RlssIaTu/J99G/WpJI=
+  - secure: HkLqlXk2pREPmivuuNUfwSzOsIoMe8HkdU8qHzYt8GAxYbhXgdvrzYMWQ6ZTu3sYFLHdhlrqYxoZu1b98IkiIEWkirM5S+pI2BrVyqw1w3eerNCa+KFZTSr6fX4rUFIr8BItKwuu3FtlFj86g+DGUzz8QJHFTNd/582Bft0KU3kxruv6pvlLAJ6zd3lk3QClNuAR5Hj2VwIWNM32Iyx2lQmFVF9vkBUBr3+qWXErspTs3g4bHmXGjlBFJf83msWehW5JSwa7aQxykbmtqiCda9GWPWl3KXFWpG9RuHE6+clZFSPvAu6LW7P9/EBIKClL6/G7PFK80cuxwvzZgCjIiBitxRQacJoqyD5ODoqBuak2YwudEddL/3TYNUQeigr5RhJywgzuVBTO6p66r5tmWLJgJHHTLGt7+FXfeP15OQGd64NDSHT64CItyNZV81ywhRVA7o86eAtzkrLER2C3iLDwKG6B94Cowq255YdYH6xiG/O/upBdpzjK7i3yZniZihLINBP2gmILvDOFs9NwZJz4Gh1nVarBgkyAeq+IlWb4g5T4g774HBOfu/wWkWurmDG/9BISJvsLGYPgGGNCggSEDXxSD3HWSc4UfTWsjaE/987XmEvEcQ9iLkhntMq5F6mXWti2BtqKS9L2JXLzac1jKBuxcwyoKkkqfLpbums=
 cache:
   apt: true
   directories:
@@ -35,8 +36,4 @@ install:
 before_script:
 - go get github.com/mattn/goveralls
 script:
-        # - bash contrib/cover.sh $HOME/build coverage.out
-        # - bash contrib/load-test.sh $HOME/build
-        # - goveralls -service=travis-ci -coverprofile=coverage.out || true
-        # - contrib/tlstest/run.sh
 - contrib/nightly/build.sh
