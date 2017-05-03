@@ -1454,14 +1454,15 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 		}
 		if item.Typ == itemComma {
 			if expectArg {
-				return x.Errorf("Expected a variable but got comma")
+				return x.Errorf("Expected a predicate but got comma")
 			}
 			expectArg = true
 		} else if item.Typ == itemName {
 			if !expectArg {
-				return x.Errorf("Expected a variable but got comma")
+				return x.Errorf("Expected a comma or right round but got: %v", item.Val)
 			}
 			gq.GroupbyAttrs = append(gq.GroupbyAttrs, item.Val)
+			count++
 			expectArg = false
 		}
 	}

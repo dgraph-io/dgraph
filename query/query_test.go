@@ -927,6 +927,7 @@ func TestGroupByAggVar(t *testing.T) {
 		`{"me":[{"friend":{"@groupby":[{"age":17,"max(name)":"Daryl Dixon"},{"age":19,"max(name)":"Andrea"},{"age":15,"max(name)":"Rick Grimes"}]}}]}`,
 		js)
 }
+
 func TestGroupByAgg(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -957,7 +958,7 @@ func TestGroupByMulti(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":{"@groupby":[{"count":0,"friend":"0x1","name":"Andrea"},{"count":0,"friend":"0x1","name":"Daryl Dixon"},{"count":0,"friend":"0x1","name":"Glenn Rhee"},{"count":0,"friend":"0x18","name":"Daryl Dixon"},{"count":0,"friend":"0x18","name":"Glenn Rhee"},{"count":0,"friend":"0x18","name":"Rick Grimes"},{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}}]}`,
+		`{"me":[{"friend":{"@groupby":[{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}}]}`,
 		js)
 }
 

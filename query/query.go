@@ -1337,6 +1337,9 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 				for k := range l.vals {
 					uids = append(uids, k)
 				}
+				sort.Slice(uids, func(i, j int) bool {
+					return uids[i] < uids[j]
+				})
 				lists = append(lists, &taskp.List{uids})
 			} else if len(l.vals) != 0 || l.uids != nil {
 				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
