@@ -90,8 +90,11 @@ upload_docker_image() {
   # Extract dgraph folder from the tar as its required by the Dockerfile.
   tar -xzf ${NIGHTLY_FILE}
   cp ${ASSETS_FILE} .
+  echo "Building the dgraph master image."
   docker build -t dgraph/dgraph:master .
+  echo "Logging into Docker."
   docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
+  echo "Pushing the image"
   docker push dgraph/dgraph:master
   popd > /dev/null
 }
