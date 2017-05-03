@@ -908,6 +908,25 @@ func TestGroupBy(t *testing.T) {
 		js)
 }
 
+func TestGroupByAggVar(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) @groupby(friend) {
+				a as count(_uid_)
+			}
+
+			order(id:1) {
+				name
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":{"@groupby":[{"age":17,"max(name)":"Daryl Dixon"},{"age":19,"max(name)":"Andrea"},{"age":15,"max(name)":"Rick Grimes"}]}}]}`,
+		js)
+}
 func TestGroupByAgg(t *testing.T) {
 	populateGraph(t)
 	query := `
