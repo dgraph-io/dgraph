@@ -76,29 +76,31 @@ type uniq struct {
 }
 
 type dedup struct {
-	groups []uniq
+	groups []*uniq
 }
 
-func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
-	idx := -1
-	// Going last to first as we'll always add new ones to last and
-	// would access it till we add a new entry.
+func (d *dedup) getGroup(attr string) *uniq {
+	var res *uniq
 	for i := len(d.groups) - 1; i >= 0; i-- {
-		it := d.groups[i].attr
-		if attr == it {
-			idx = i
+		it := d.groups[i]
+		if attr == it.attr {
+			res = it
 			break
 		}
 	}
-	if idx == -1 {
+	if res == nil {
 		// Create a new entry.
-		d.groups = append(d.groups, uniq{
+		res = &uniq{
 			attr:     attr,
 			elements: make(map[string]groupElements),
-		})
-		idx = len(d.groups) - 1
+		}
+		d.groups = append(d.groups, res)
 	}
+	return res
+}
 
+func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
+	cur := d.getGroup(attr)
 	// Create the string key.
 	var strKey string
 	if value.Tid == types.UidID {
@@ -112,15 +114,15 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 		strKey = valC.Value.(string)
 	}
 
-	if _, ok := d.groups[idx].elements[strKey]; !ok {
+	if _, ok := cur.elements[strKey]; !ok {
 		// If this is the first element of the group.
-		d.groups[idx].elements[strKey] = groupElements{
+		cur.elements[strKey] = groupElements{
 			key:      value,
 			entities: &taskp.List{make([]uint64, 0)},
 		}
 	}
-	cur := d.groups[idx].elements[strKey].entities
-	cur.Uids = append(cur.Uids, uid)
+	curEntity := cur.elements[strKey].entities
+	curEntity.Uids = append(curEntity.Uids, uid)
 }
 
 func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
@@ -148,6 +150,11 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 // group.
 func (res *groupResults) formGroups(dedupMap dedup, cur *taskp.List, groupVal []groupPair) {
 	l := len(groupVal)
+	if l != 0 && len(cur.Uids) == 0 {
+		// This group is already empty. So stop.
+		return
+	}
+
 	if l == len(dedupMap.groups) {
 		a := make([]uint64, len(cur.Uids))
 		b := make([]groupPair, len(groupVal))
@@ -222,7 +229,7 @@ func processGroupBy(sg *SubGraph) error {
 			grp.aggregateChild(child)
 		}
 	}
-	// Note: This is expensive. But done to keep the result order deterministic
+	// Sort to order the groups for determinism.
 	sort.Slice(res.group, func(i, j int) bool {
 		return groupLess(res.group[i], res.group[j])
 	})
@@ -231,6 +238,11 @@ func processGroupBy(sg *SubGraph) error {
 }
 
 func groupLess(a, b *groupResult) bool {
+	if len(a.uids) < len(b.uids) {
+		return true
+	} else if len(a.uids) != len(b.uids) {
+		return false
+	}
 	if len(a.keys) < len(b.keys) {
 		return true
 	} else if len(a.keys) != len(b.keys) {
@@ -239,11 +251,6 @@ func groupLess(a, b *groupResult) bool {
 	if len(a.aggregates) < len(b.aggregates) {
 		return true
 	} else if len(a.aggregates) != len(b.aggregates) {
-		return false
-	}
-	if len(a.uids) < len(b.uids) {
-		return true
-	} else if len(a.uids) != len(b.uids) {
 		return false
 	}
 
