@@ -121,7 +121,6 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 		strKey = valC.Value.(string)
 	}
 
-	fmt.Println(uid, value, strKey)
 	if _, ok := cur.elements[strKey]; !ok {
 		// If this is the first element of the group.
 		cur.elements[strKey] = groupElements{
@@ -205,7 +204,6 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]values) error {
 			for i := 0; i < len(child.uidMatrix); i++ {
 				srcUid := child.SrcUIDs.Uids[i]
 				ul := child.uidMatrix[i]
-				fmt.Println(child.Attr, srcUid, ul.Uids)
 				for _, uid := range ul.Uids {
 					dedupMap.addValue(child.Attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
 				}
@@ -223,9 +221,6 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]values) error {
 		}
 	}
 
-	for _, it := range dedupMap.groups {
-		fmt.Println(it)
-	}
 	// Create all the groups here.
 	res := new(groupResults)
 	res.formGroups(dedupMap, &taskp.List{}, []groupPair{})
@@ -243,7 +238,6 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]values) error {
 			}
 		}
 		chVar := child.Params.Var
-		fmt.Println(chVar, "****")
 		if chVar != "" {
 			tempMap := make(map[uint64]types.Val)
 			for _, grp := range res.group {
@@ -257,13 +251,9 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]values) error {
 				}
 				tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
 			}
-			fmt.Println(tempMap)
 			doneVars[chVar] = values{vals: tempMap}
 		}
 		child.Params.ignoreResult = true
-	}
-	for _, grp := range res.group {
-		fmt.Println(grp.aggregates, grp.keys, grp.uids, "@@@")
 	}
 	// Sort to order the groups for determinism.
 	sort.Slice(res.group, func(i, j int) bool {

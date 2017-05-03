@@ -1165,7 +1165,6 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return
 	}
-	fmt.Println(sg.Attr, "$$$")
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
 		goto AssignStep
@@ -1224,7 +1223,6 @@ AssignStep:
 	if sg.Params.Var == "" {
 		return
 	}
-	fmt.Println(sg.Params.Var)
 	if sg.IsListNode() {
 		// This is a predicates list.
 		doneVars[sg.Params.Var] = values{
