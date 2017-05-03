@@ -48,7 +48,9 @@ func (grp *groupResult) aggregateChild(child *SubGraph) {
 				Value: int64(len(grp.uids)),
 			},
 		})
-	} else if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
+		return
+	}
+	if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
 		fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
 		finalVal, err := aggregateGroup(grp, child)
 		if err != nil {
@@ -81,6 +83,7 @@ type dedup struct {
 
 func (d *dedup) getGroup(attr string) *uniq {
 	var res *uniq
+	// Looping last to first is better in this case.
 	for i := len(d.groups) - 1; i >= 0; i-- {
 		it := d.groups[i]
 		if attr == it.attr {
