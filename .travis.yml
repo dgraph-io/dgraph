@@ -11,6 +11,8 @@ matrix:
       go: 1.8
       env: CC=clang CXX=clang++;
 
+git:
+  depth: 1000
 install:
 - bash contrib/build-rocksdb.sh $HOME/build
 dist: trusty
