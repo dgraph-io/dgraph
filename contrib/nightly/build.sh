@@ -68,17 +68,9 @@ delete_old_nightly() {
 get_release_body() {
   echo '
   Dgraph development (pre-release) build.
-
-  You can run the following commands to run dgraph with the UI after downloading the assets.tar.gz and dgraph-linux64.tar.gz.
-  ```
-  mkdir -p ~/dgraph ~/dgraph/ui
-  tar -C ~/dgraph -xzf dgraph-linux64.tar.gz --strip-components=1
-  tar -C ~/dgraph/ui -xzf assets.tar.gz
-  cd ~/dgraph
-  dgraph --ui ui
-  ```
-
-  See **[Get Started](http://docs.dgraph.io/master/get-started/#step-2-run-dgraph)** for documentation.'
+  You can automatically install the nightly binaries with the assets by running
+  `curl https://nightly.dgraph.io -sSf | bash`.
+  '
 }
 
 upload_nightly() {
