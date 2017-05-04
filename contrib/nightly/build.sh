@@ -36,11 +36,7 @@ update_or_create_asset() {
   local release_id=$1
   local asset=$2
   local asset_file=$3
-  local asset_id
-  while read asset_id; do
-    [[ -n "${asset_id}" ]] && echo "${asset_id}"
-  done < <( \
-    send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id}/assets \
+  local asset_id=$(send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id}/assets \
     | jq -r -c ".[] | select(.name == \"${asset}\").id")
 
   echo "asset_id: ${asset_id}, release_id: ${release_id}"
