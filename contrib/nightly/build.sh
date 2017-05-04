@@ -41,7 +41,7 @@ update_or_create_asset() {
     [[ -n "${asset_id}" ]] && echo "${asset_id}"
   done < <( \
     send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id}/assets \
-    | jq -r -c '.[] | select(.name == "${asset}").id')
+    | jq -r -c ".[] | select(.name == \"${asset}\").id")
 
   echo "asset_id: ${asset_id}, release_id: ${release_id}"
   if [[ -n "${asset_id}" ]]; then
