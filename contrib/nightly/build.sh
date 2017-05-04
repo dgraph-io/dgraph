@@ -35,6 +35,7 @@ ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
 update_or_create_asset() {
   local release_id=$1
   local asset=$2
+  local asset_file=$3
   local asset_id
     while read asset_id; do
       [[ -n "${asset_id}" ]] && echo "${asset_id}"
@@ -45,7 +46,9 @@ update_or_create_asset() {
     if [[ -n "${asset_id}" ]]; then
 	  echo "found asset"
     else
-	    echo "not found, have to create"
+      upload_release_asset ${asset_file} "$asset" \
+      ${DGRAPH_REPO} ${release_id} \
+      > /dev/null
     fi
 }
 
@@ -100,26 +103,17 @@ upload_nightly() {
     # We upload the tar binary.
     echo "Uploading binaries. ${NIGHTLY_FILE} ${name}"
     local name="dgraph-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
-    upload_or_create_asset $release_id $name
-    upload_release_asset ${NIGHTLY_FILE} "$name" \
-      ${DGRAPH_REPO} ${release_id} \
-      > /dev/null
+    update_or_create_asset $release_id $name ${NIGHTLY_FILE}
 
     echo "Uploading shasum file. ${SHA_FILE} name ${sha_name}"
     local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
-    upload_or_create_asset $release_id $sha_name
-    upload_release_asset ${SHA_FILE} "$sha_name" \
-      ${DGRAPH_REPO} ${release_id} \
-      > /dev/null
+    update_or_create_asset $release_id $sha_name ${SHA_FILE}
 
 
     if [[ $TRAVIS_OS_NAME == "linux" ]]; then
       echo 'Uploading assets file.'
       # As asset would be the same on both platforms, we only upload it from linux.
-      upload_or_create_asset $release_id "assets.tar.gz"
-      upload_release_asset ${ASSETS_FILE} "assets.tar.gz" \
-        ${DGRAPH_REPO} ${release_id} \
-        > /dev/null
+      update_or_create_asset $release_id "assets.tar.gz" ${ASSETS_FILE}
     fi
   fi
 
