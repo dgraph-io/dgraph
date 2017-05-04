@@ -24,14 +24,8 @@ source ${BUILD_DIR}/nightly/github.sh
 
 NIGHTLY_TAG="nightly"
 DGRAPH_REPO="dgraph-io/dgraph"
-
-echo "before version $(git describe --abbrev=0)"
-git tag
-echo "before version $(git describe --tags --abbrev=0)"
 DGRAPH_VERSION=$(git describe --abbrev=0)
-echo $DGRAPH_VERSION
 DGRAPH_COMMIT=$(git rev-parse HEAD)
-echo $DGRAPH_COMMIT
 TAR_FILE="dgraph-${OS}-amd64-${DGRAPH_VERSION}.tar.gz"
 NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${TAR_FILE}"
 SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}.tar.gz"
@@ -87,7 +81,6 @@ get_release_body() {
 }
 
 upload_nightly() {
-  echo "tag ${NIGHTLY_TAG}"
   local release_id
   # We check if a release with tag nightly already exists, else we create it.
   read release_id < <( \
@@ -95,7 +88,6 @@ upload_nightly() {
     | jq -r -c "(.[] | select(.tag_name == \"${NIGHTLY_TAG}\").id), \"\"") \
     || exit
 
-  echo "releaseid ${release_id}"
   if [[ -z "${release_id}" ]]; then
     echo "Creating release for tag ${NIGHTLY_TAG}."
     read release_id < <( \
@@ -108,12 +100,14 @@ upload_nightly() {
     # We upload the tar binary.
     echo "Uploading binaries. ${NIGHTLY_FILE} ${name}"
     local name="dgraph-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
+    upload_or_create_asset $release_id $name
     upload_release_asset ${NIGHTLY_FILE} "$name" \
       ${DGRAPH_REPO} ${release_id} \
       > /dev/null
 
     echo "Uploading shasum file. ${SHA_FILE} name ${sha_name}"
     local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
+    upload_or_create_asset $release_id $sha_name
     upload_release_asset ${SHA_FILE} "$sha_name" \
       ${DGRAPH_REPO} ${release_id} \
       > /dev/null
@@ -122,6 +116,7 @@ upload_nightly() {
     if [[ $TRAVIS_OS_NAME == "linux" ]]; then
       echo 'Uploading assets file.'
       # As asset would be the same on both platforms, we only upload it from linux.
+      upload_or_create_asset $release_id "assets.tar.gz"
       upload_release_asset ${ASSETS_FILE} "assets.tar.gz" \
         ${DGRAPH_REPO} ${release_id} \
         > /dev/null
