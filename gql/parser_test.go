@@ -2770,7 +2770,7 @@ func TestParseFacets(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
-	require.Equal(t, "facet1", res.Query[0].Children[0].Children[0].Facets.Keys[0].Fkey)
+	require.Equal(t, "facet1", res.Query[0].Children[0].Children[0].Facets.Keys[0])
 }
 
 func TestParseFacetsMultiple(t *testing.T) {
@@ -2822,9 +2822,9 @@ func TestParseFacetsMultipleVar(t *testing.T) {
 	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
 	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
 	require.Equal(t, 3, len(res.Query[0].Children[0].Children[0].Facets.Keys))
-	require.Equal(t, "a", res.Query[0].Children[0].Children[0].Facets.Keys[0].Fvar)
-	require.Equal(t, "", res.Query[0].Children[0].Children[0].Facets.Keys[1].Fvar)
-	require.Equal(t, "b", res.Query[0].Children[0].Children[0].Facets.Keys[2].Fvar)
+	require.Equal(t, "a", res.Query[0].Children[0].Children[0].FacetVar["key1"])
+	require.Equal(t, "", res.Query[0].Children[0].Children[0].FacetVar["key2"])
+	require.Equal(t, "b", res.Query[0].Children[0].Children[0].FacetVar["key3"])
 }
 
 func TestParseFacetsMultipleRepeat(t *testing.T) {
@@ -2930,9 +2930,9 @@ func TestFacetsFilterAll(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"name", "friend"}, childAttrs(res.Query[0]))
 	require.NotNil(t, res.Query[0].Children[1].Facets)
-	require.Equal(t, "close", res.Query[0].Children[1].Facets.Keys[0].Fkey)
-	require.Equal(t, "family", res.Query[0].Children[1].Facets.Keys[1].Fkey)
-	require.Equal(t, "since", res.Query[0].Children[1].Facets.Keys[2].Fkey)
+	require.Equal(t, "close", res.Query[0].Children[1].Facets.Keys[0])
+	require.Equal(t, "family", res.Query[0].Children[1].Facets.Keys[1])
+	require.Equal(t, "since", res.Query[0].Children[1].Facets.Keys[2])
 	require.NotNil(t, res.Query[0].Children[1].FacetsFilter)
 	require.Equal(t, `(OR (eq close "true") (eq family "true"))`,
 		res.Query[0].Children[1].FacetsFilter.debugString())
