@@ -47,8 +47,6 @@ delete_old_nightly() {
 }
 
 get_release_body() {
-  # TODO - Update it after you bring you set up getting binaries using get.dgraph.iot
-
   echo '
   Dgraph development (pre-release) build.
 
@@ -82,12 +80,13 @@ upload_nightly() {
       || exit
   else
     # We upload the tar binary.
-    echo 'Uploading package.'
+    echo 'Uploading binaries. ${NIGHTLY_FILE} ${name}'
     local name="dgraph-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
     upload_release_asset ${NIGHTLY_FILE} "$name" \
       ${DGRAPH_REPO} ${release_id} \
       > /dev/null
 
+    echo 'Uploading shasum file. ${SHA_FILE} name ${sha_name}'
     local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
     upload_release_asset ${SHA_FILE} "$sha_name" \
       ${DGRAPH_REPO} ${release_id} \
@@ -95,6 +94,7 @@ upload_nightly() {
 
 
     if [[ $TRAVIS_OS_NAME == "linux" ]]; then
+      echo 'Uploading assets file.'
       # As asset would be the same on both platforms, we only upload it from linux.
       upload_release_asset ${ASSETS_FILE} "assets.tar.gz" \
         ${DGRAPH_REPO} ${release_id} \
@@ -139,11 +139,11 @@ read nightly_sha < <( \
   send_gh_api_request repos/${DGRAPH_REPO}/git/refs/tags/${NIGHTLY_TAG} \
   | jq -r '.object.sha') || true
 
-# if [[ $nightly_sha == $DGRAPH_COMMIT ]]; then
-#   echo "nightly $nightly_sha, dgraph commit $DGRAPH_COMMIT"
-#   echo "Latest commit on master hasn't changed. Exiting"
-#   exit 0
-# fi
+if [[ $nightly_sha == $DGRAPH_COMMIT ]]; then
+  echo "nightly $nightly_sha, dgraph commit $DGRAPH_COMMIT"
+  echo "Latest commit on master hasn't changed. Exiting"
+  exit 0
+fi
 go get -u golang.org/x/net/context golang.org/x/text/unicode/norm google.golang.org/grpc
 
 echo "Building embedded binaries"

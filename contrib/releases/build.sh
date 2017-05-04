@@ -87,6 +87,6 @@ rm -rf $tmp_dir
 
 echo -e "Calculating and storing checksum for tar gzipped assets."
 cd $cur_dir
-tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashboard/build .
+GZIP=-n tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashboard/build .
 checksum=$($digest_cmd assets.tar.gz | awk '{print $1}')
 echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $checksum_file
