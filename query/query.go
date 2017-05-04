@@ -1233,7 +1233,6 @@ func (sg *SubGraph) assignVars(doneVars map[string]values) {
 				continue
 			}
 			fmap[it.Fkey] = it.Fvar
-			fmt.Println(sg.Attr, it, "###")
 			doneVars[it.Fvar] = values{
 				vals: make(map[uint64]types.Val),
 			}
