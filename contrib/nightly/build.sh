@@ -75,6 +75,7 @@ get_release_body() {
 }
 
 upload_nightly() {
+  echo "tag ${NIGHTLY_TAG}"
   local release_id
   # We check if a release with tag nightly already exists, else we create it.
   read release_id < <( \
@@ -82,7 +83,7 @@ upload_nightly() {
     | jq -r -c "(.[] | select(.tag_name == \"${NIGHTLY_TAG}\").id), \"\"") \
     || exit
 
-  echo $release_id
+  echo "releaseid ${release_id}"
   if [[ -z "${release_id}" ]]; then
     echo "Creating release for tag ${NIGHTLY_TAG}."
     read release_id < <( \
