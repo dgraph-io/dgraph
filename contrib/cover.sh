@@ -15,12 +15,17 @@ if [ -z "$OUT" ]; then
 fi
 rm -f $OUT
 
-ROCKSDBDIR=$BUILD/rocksdb-5.1.4
+if [[ "${TRAVIS_OS_NAME}" == "osx" ]]; then
+  export LIBRARY_PATH=$LIBRARY_PATH:/usr/local/lib;
+  export C_INCLUDE_PATH=$C_INCLUDE_PATH:/usr/local/include;
+else
+  ROCKSDBDIR=$BUILD/rocksdb-5.1.4
 
-# build flags needed for rocksdb
-export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
-export CGO_LDFLAGS="-L${ROCKSDBDIR}"
-export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
+  # build flags needed for rocksdb
+  export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
+  export CGO_LDFLAGS="-L${ROCKSDBDIR}"
+  export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
+fi
 
 set -e
 
