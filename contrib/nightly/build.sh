@@ -37,20 +37,21 @@ update_or_create_asset() {
   local asset=$2
   local asset_file=$3
   local asset_id
-    while read asset_id; do
-      [[ -n "${asset_id}" ]] && echo "${asset_id}"
-    done < <( \
-      send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id}/assets \
-      | jq -r -c '.[] | select(.name == "${asset}").id')
+  while read asset_id; do
+    [[ -n "${asset_id}" ]] && echo "${asset_id}"
+  done < <( \
+    send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id}/assets \
+    | jq -r -c '.[] | select(.name == "${asset}").id')
 
-    if [[ -n "${asset_id}" ]]; then
-      echo "Found asset file for ${asset}. Deleting"
-      send_gh_api_request repos/${DGRAPH_REPO}/releases/assets/${asset_id} \
-      DELETE
-    fi
-      upload_release_asset ${asset_file} "$asset" \
-      ${DGRAPH_REPO} ${release_id} \
-      > /dev/null
+  if [[ -n "${asset_id}" ]]; then
+    echo "Found asset file for ${asset}. Deleting"
+    send_gh_api_request repos/${DGRAPH_REPO}/releases/assets/${asset_id} \
+    DELETE
+  fi
+  echo "Uplading asset ${asset}, loc: ${asset_file}"
+  upload_release_asset ${asset_file} "$asset" \
+  ${DGRAPH_REPO} ${release_id} \
+  > /dev/null
 }
 
 delete_old_nightly() {
