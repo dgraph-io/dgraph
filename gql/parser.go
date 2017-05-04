@@ -124,10 +124,15 @@ type Function struct {
 	NeedsVar []VarContext // If the function requires some variable
 }
 
+type FacetVar struct {
+	key     string
+	varName string
+}
+
 // Facet holds the information about gql Facets (edge key-value pairs).
 type Facets struct {
 	AllKeys bool
-	Keys    []string // should be in sorted order.
+	Keys    []FacetVar // should be in sorted order.
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -1378,6 +1383,7 @@ L:
 
 func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 	facets := new(Facets)
+	var varName string
 	peeks, err := it.Peek(1)
 	expectArg := true
 	if err == nil && peeks[0].Typ == itemLeftRound {
@@ -1395,8 +1401,21 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 				if !expectArg {
 					return nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
 				}
+				peekIt, err := it.Peek(1)
+				if err != nil {
+					return nil, nil, err
+				}
+				if peekIt[0].Val == "as" {
+					varName = it.Item().Val
+					it.Next() // Skip the "as"
+					continue
+				}
 				val := collectName(it, item.Val)
-				facets.Keys = append(facets.Keys, val)
+				facets.Keys = append(facets.Keys, FacetVar{
+					key:     val,
+					varName: varName,
+				})
+				varName = ""
 				expectArg = false
 			} else if item.Typ == itemComma {
 				if expectArg {
@@ -1422,12 +1441,17 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 	if len(facets.Keys) == 0 {
 		facets.AllKeys = true
 	} else {
-		sort.Strings(facets.Keys)
+		sort.Slice(facets.Keys, func(i, j int) bool {
+			return facets.Keys[i].key < facets.Keys[j].key
+		})
 		// deduplicate facets
 		out := facets.Keys[:0]
 		flen := len(facets.Keys)
 		for i := 1; i < flen; i++ {
-			if facets.Keys[i-1] == facets.Keys[i] {
+			if facets.Keys[i-1].key == facets.Keys[i].key {
+				if facets.Keys[i-1].varName != facets.Keys[i].varName {
+					return nil, nil, x.Errorf("Different vars for the same facet")
+				}
 				continue
 			}
 			out = append(out, facets.Keys[i-1])
