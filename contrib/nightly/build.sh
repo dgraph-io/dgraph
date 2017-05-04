@@ -103,7 +103,7 @@ upload_nightly() {
   local name="dgraph-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
   update_or_create_asset $release_id $name ${NIGHTLY_FILE}
 
-  local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
+  local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.sha256"
   update_or_create_asset $release_id $sha_name ${SHA_FILE}
 
 
