@@ -67,8 +67,8 @@ delete_old_nightly() {
 
 get_release_body() {
   echo '
-  Dgraph development (pre-release) build.
-  You can automatically install the nightly binaries with the assets by running
+  Dgraph development (pre-release) build which is updated every night.
+  You can automatically install the nightly binaries along with the assets by running
   `curl https://nightly.dgraph.io -sSf | bash`.
   '
 }
