@@ -44,12 +44,12 @@ update_or_create_asset() {
       | jq -r -c '.[] | select(.name == "${asset}").id')
 
     if [[ -n "${asset_id}" ]]; then
-	  echo "found asset, first delete old, then update"
-    else
+      send_gh_api_request repos/${DGRAPH_REPO}/releases/assets/${asset_id} \
+      DELETE
+    fi
       upload_release_asset ${asset_file} "$asset" \
       ${DGRAPH_REPO} ${release_id} \
       > /dev/null
-    fi
 }
 
 delete_old_nightly() {
