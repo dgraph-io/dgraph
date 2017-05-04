@@ -80,13 +80,13 @@ upload_nightly() {
       || exit
   else
     # We upload the tar binary.
-    echo 'Uploading binaries. ${NIGHTLY_FILE} ${name}'
+    echo "Uploading binaries. ${NIGHTLY_FILE} ${name}"
     local name="dgraph-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
     upload_release_asset ${NIGHTLY_FILE} "$name" \
       ${DGRAPH_REPO} ${release_id} \
       > /dev/null
 
-    echo 'Uploading shasum file. ${SHA_FILE} name ${sha_name}'
+    echo "Uploading shasum file. ${SHA_FILE} name ${sha_name}"
     local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
     upload_release_asset ${SHA_FILE} "$sha_name" \
       ${DGRAPH_REPO} ${release_id} \
