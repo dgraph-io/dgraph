@@ -606,7 +606,6 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 	}
 	if qu.FacetVar != nil {
 		for _, va := range qu.FacetVar {
-			fmt.Println(va)
 			v.Defines = append(v.Defines, va)
 		}
 	}

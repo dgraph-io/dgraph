@@ -1377,6 +1377,60 @@ Output : `dave` is only close friend who is also my relative.
 }
 ```
 
+### Assigning Facets to a variable
+
+Facets that are a part of UID edges can be stored to a variable and used akin value variables.
+```
+curl localhost:8080/query -XPOST -d $'{
+  var(id:<alice>) {
+    friend @facets(a as close, b as relative) 
+  }
+
+	friend(id: var(a)) {
+		name 
+		var(a)
+	}
+
+	relative(id: var(b)) {
+		name
+		var(b)
+	}
+}' | python -m json.tool | less
+```
+Output: 
+```
+{
+  "friend": [
+    {
+      "name": "bob",
+      "var(a)": true
+    },
+    {
+      "name": "dave",
+      "var(a)": true
+    },
+    {
+      "name": "charlie",
+      "var(a)": false
+    }
+  ],
+  "relative": [
+    {
+      "name": "bob",
+      "var(b)": false
+    },
+    {
+      "name": "dave",
+      "var(b)": true
+    },
+    {
+      "name": "charlie",
+      "var(b)": true
+    }
+  ]
+}
+```
+
 ## Aggregation
 Aggregation functions that are supported are `min, max, sum, avg`. While min and max operate on all scalar-values, sum and avg can operate only on `int and float` values. These functions can only be applied on variables. Aggregation does not depend on the index.
 
