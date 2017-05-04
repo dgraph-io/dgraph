@@ -33,14 +33,14 @@ import (
 )
 
 func checkShard(ps *store.Store) (int, []byte) {
-	it := ps.NewIterator()
+	it := ps.NewIterator(false)
 	defer it.Close()
 
 	count := 0
-	for it.SeekToFirst(); it.Valid(); it.Next() {
+	for it.Rewind(); it.Valid(); it.Next() {
 		count++
 	}
-	return count, it.Key().Data()
+	return count, it.Key()
 }
 
 func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store) {

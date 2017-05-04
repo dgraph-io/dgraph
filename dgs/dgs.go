@@ -9,20 +9,13 @@ type Store interface {
 	// Also returns the deallocate function. This is for freeing RocksDB slice.
 	Get(key []byte) ([]byte, func(), error)
 
-	// SetOne adds a key-value to data store.
-	SetOne(k []byte, val []byte) error
-
-	// Delete deletes a key from data store.
-	Delete(k []byte) error
-
-	// Execute a WriteBatch.
 	WriteBatch(wb WriteBatch) error
-
+	SetOne(k []byte, val []byte) error
+	Delete(k []byte) error
 	Close()
-
 	NewWriteBatch() WriteBatch
-
 	NewIterator(reversed bool) Iterator
+	GetStats() string
 }
 
 type WriteBatch interface {
@@ -36,10 +29,12 @@ type WriteBatch interface {
 type Iterator interface {
 	Rewind()
 	Seek(key []byte)
+	SeekForPrev(key []byte)
 	Close()
 	Next()
 	Valid() bool
 	ValidForPrefix(prefix []byte) bool
 	Key() []byte
 	Value() []byte
+	Err() error
 }

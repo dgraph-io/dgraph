@@ -149,7 +149,7 @@ func sortWithIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, erro
 	}
 	r := new(taskp.SortResult)
 	// Iterate over every bucket / token.
-	it := pstore.NewIterator()
+	it := pstore.NewIterator(ts.Desc)
 	defer it.Close()
 
 	typ, err := schema.State().TypeOf(ts.Attr)
@@ -203,7 +203,7 @@ BUCKETS:
 		case <-ctx.Done():
 			return nil, nil
 		default:
-			k := x.Parse(it.Key().Data())
+			k := x.Parse(it.Key())
 			x.AssertTrue(k != nil)
 			x.AssertTrue(k.IsIndex())
 			token := k.Term
@@ -219,11 +219,7 @@ BUCKETS:
 			default:
 				return &emptySortResult, err
 			}
-			if ts.Desc {
-				it.Prev()
-			} else {
-				it.Next()
-			}
+			it.Next()
 		}
 	}
 
