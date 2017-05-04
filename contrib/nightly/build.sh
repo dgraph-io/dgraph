@@ -28,7 +28,7 @@ DGRAPH_VERSION=$(git describe --abbrev=0)
 DGRAPH_COMMIT=$(git rev-parse HEAD)
 TAR_FILE="dgraph-${OS}-amd64-${DGRAPH_VERSION}.tar.gz"
 NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${TAR_FILE}"
-SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}.tar.gz"
+SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}.sha256"
 SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${SHA_FILE_NAME}"
 ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
 
