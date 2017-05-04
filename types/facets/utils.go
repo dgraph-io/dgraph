@@ -48,14 +48,14 @@ func CopyFacets(fcs []*facetsp.Facet, param *facetsp.Param) (fs []*facetsp.Facet
 	numFacets := len(fcs)
 	for kidx, fidx := 0, 0; (param.AllKeys || kidx < numKeys) && fidx < numFacets; {
 		f := fcs[fidx]
-		if param.AllKeys || param.Keys[kidx] == f.Key {
+		if param.AllKeys || param.Keys[kidx].Fkey == f.Key {
 			fcopy := &facetsp.Facet{Key: f.Key, Value: nil, ValType: f.ValType}
 			fcopy.Value = make([]byte, len(f.Value))
 			copy(fcopy.Value, f.Value)
 			fs = append(fs, fcopy)
 			kidx++
 			fidx++
-		} else if f.Key > param.Keys[kidx] {
+		} else if f.Key > param.Keys[kidx].Fkey {
 			kidx++
 		} else {
 			fidx++

@@ -19,9 +19,14 @@ message Facet {
 	repeated string tokens = 4; // tokens of value.
 }
 
+message keyInfo {
+	string fkey = 1;
+	string fvar = 2;
+}
+
 message Param {
 	bool all_keys = 1;
-	repeated string keys = 2;
+	repeated keyInfo keys = 2; 
 }
 
 message Facets {
