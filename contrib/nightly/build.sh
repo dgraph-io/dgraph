@@ -22,6 +22,8 @@ fi
 BUILD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source ${BUILD_DIR}/nightly/github.sh
 
+git fetch --tags
+
 NIGHTLY_TAG="nightly"
 DGRAPH_REPO="dgraph-io/dgraph"
 DGRAPH_VERSION=$(git describe --abbrev=0)
