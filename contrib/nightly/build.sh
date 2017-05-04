@@ -134,7 +134,7 @@ upload_docker_image() {
   popd > /dev/null
 }
 
-local nightly_sha
+nightly_sha=""
 read nightly_sha < <( \
   send_gh_api_request repos/${DGRAPH_REPO}/git/refs/tags/${NIGHTLY_TAG} \
   | jq -r '.object.sha') || true
