@@ -55,6 +55,7 @@ type GraphQuery struct {
 	Facets       *Facets
 	FacetsFilter *FilterTree
 	GroupbyAttrs []string
+	FacetVar     map[string]string
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -602,6 +603,11 @@ func checkDependency(vl []*Vars) error {
 func (qu *GraphQuery) collectVars(v *Vars) {
 	if qu.Var != "" {
 		v.Defines = append(v.Defines, qu.Var)
+	}
+	if qu.FacetVar != nil {
+		for _, va := range qu.FacetVar {
+			v.Defines = append(v.Defines, va)
+		}
 	}
 
 	for _, va := range qu.NeedsVar {
@@ -1376,8 +1382,10 @@ L:
 	return g, nil
 }
 
-func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
+func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string, error) {
 	facets := new(Facets)
+	facetVar := make(map[string]string)
+	var varName string
 	peeks, err := it.Peek(1)
 	expectArg := true
 	if err == nil && peeks[0].Typ == itemLeftRound {
@@ -1389,18 +1397,33 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 			numTokens++
 			item := it.Item()
 			if item.Typ == itemRightRound { // done
-				done = true
+				if varName == "" {
+					done = true
+				}
 				break
 			} else if item.Typ == itemName {
 				if !expectArg {
-					return nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
+					return nil, nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
+				}
+				peekIt, err := it.Peek(1)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				if peekIt[0].Val == "as" {
+					varName = it.Item().Val
+					it.Next() // Skip the "as"
+					continue
 				}
 				val := collectName(it, item.Val)
 				facets.Keys = append(facets.Keys, val)
+				if varName != "" {
+					facetVar[val] = varName
+				}
+				varName = ""
 				expectArg = false
 			} else if item.Typ == itemComma {
-				if expectArg {
-					return nil, nil, x.Errorf("Expected Argument but got comma.")
+				if expectArg || varName != "" {
+					return nil, nil, nil, x.Errorf("Expected Argument but got comma.")
 				}
 				expectArg = true
 				continue
@@ -1416,13 +1439,15 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 				it.Prev()
 			}
 			filterTree, err := parseFilter(it)
-			return nil, filterTree, err
+			return nil, filterTree, facetVar, err
 		}
 	}
 	if len(facets.Keys) == 0 {
 		facets.AllKeys = true
 	} else {
-		sort.Strings(facets.Keys)
+		sort.Slice(facets.Keys, func(i, j int) bool {
+			return facets.Keys[i] < facets.Keys[j]
+		})
 		// deduplicate facets
 		out := facets.Keys[:0]
 		flen := len(facets.Keys)
@@ -1435,7 +1460,7 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 		out = append(out, facets.Keys[flen-1])
 		facets.Keys = out
 	}
-	return facets, nil, nil
+	return facets, nil, facetVar, nil
 }
 
 // parseGroupby parses the groupby directive.
@@ -1644,16 +1669,14 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	peek, err := it.Peek(1)
 	if err == nil && item.Typ == itemName {
 		if item.Val == "facets" { // because @facets can come w/t '()'
-			facets, facetsFilter, err := parseFacets(it)
+			facets, facetsFilter, facetVar, err := parseFacets(it)
 			if err != nil {
 				return err
 			}
+			curp.FacetVar = facetVar
 			if facets != nil {
 				if curp.Facets != nil {
 					return x.Errorf("Only one facets allowed")
-				}
-				if curp.Var != "" && len(facets.Keys) != 1 {
-					return x.Errorf("Exactly one facet key is expected when using a variable")
 				}
 				curp.Facets = facets
 			} else if facetsFilter != nil {

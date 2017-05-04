@@ -117,7 +117,7 @@ func TestRetrieveFacetsAsVars(t *testing.T) {
 	query := `
 		{
 			var(id:0x1) {
-				a as friend @facets(since)
+				friend @facets(a as since)
 			}
 
 			me(id: 23) {
