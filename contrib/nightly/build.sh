@@ -100,25 +100,20 @@ upload_nightly() {
       \"prerelease\": true }" \
       | jq -r -c '.id') \
       || exit
-  else
-    # We upload the tar binary.
-    local name="dgraph-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
-    echo "Uploading binaries. ${NIGHTLY_FILE} ${name}"
-    update_or_create_asset $release_id $name ${NIGHTLY_FILE}
-
-    local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
-    echo "Uploading shasum file. ${SHA_FILE} name ${sha_name}"
-    update_or_create_asset $release_id $sha_name ${SHA_FILE}
-
-
-    if [[ $TRAVIS_OS_NAME == "linux" ]]; then
-      echo 'Uploading assets file.'
-      # As asset would be the same on both platforms, we only upload it from linux.
-      update_or_create_asset $release_id "assets.tar.gz" ${ASSETS_FILE}
-    fi
   fi
 
+  # We upload the tar binary.
+  local name="dgraph-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
+  update_or_create_asset $release_id $name ${NIGHTLY_FILE}
+
+  local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
+  update_or_create_asset $release_id $sha_name ${SHA_FILE}
+
+
   if [[ $TRAVIS_OS_NAME == "linux" ]]; then
+    # As asset would be the same on both platforms, we only upload it from linux.
+    update_or_create_asset $release_id "assets.tar.gz" ${ASSETS_FILE}
+
     echo 'Updating release description.'
     send_gh_api_data_request repos/${DGRAPH_REPO}/releases/${release_id} PATCH \
       "{ \"body\": $(get_release_body | jq -s -c -R '.') }" \
@@ -128,7 +123,6 @@ upload_nightly() {
     send_gh_api_data_request repos/${DGRAPH_REPO}/git/refs/tags/${NIGHTLY_TAG} PATCH \
       "{ \"force\": true, \"sha\": \"${DGRAPH_COMMIT}\" }" \
       > /dev/null
-
   fi
 }
 
