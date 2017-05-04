@@ -43,6 +43,8 @@ cache:
   apt: true
   directories:
   - "$HOME/build"
+  - $HOME/Library/Caches/Homebrew
+
 install:
 - bash contrib/build-rocksdb.sh $HOME/build
 before_script:

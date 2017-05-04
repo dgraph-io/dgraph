@@ -141,16 +141,17 @@ upload_docker_image() {
   popd > /dev/null
 }
 
-nightly_sha=""
-read nightly_sha < <( \
-  send_gh_api_request repos/${DGRAPH_REPO}/git/refs/tags/${NIGHTLY_TAG} \
-  | jq -r '.object.sha') || true
-
-if [[ $nightly_sha == $DGRAPH_COMMIT ]]; then
-  echo "nightly $nightly_sha, dgraph commit $DGRAPH_COMMIT"
-  echo "Latest commit on master hasn't changed. Exiting"
-  exit 0
-fi
+# Dont check because Mac and Linux run in two separate scripts.
+# nightly_sha=""
+# read nightly_sha < <( \
+#   send_gh_api_request repos/${DGRAPH_REPO}/git/refs/tags/${NIGHTLY_TAG} \
+#   | jq -r '.object.sha') || true
+#
+# if [[ $nightly_sha == $DGRAPH_COMMIT ]]; then
+#   echo "nightly $nightly_sha, dgraph commit $DGRAPH_COMMIT"
+#   echo "Latest commit on master hasn't changed. Exiting"
+#   exit 0
+# fi
 go get -u golang.org/x/net/context golang.org/x/text/unicode/norm google.golang.org/grpc
 
 echo "Building embedded binaries"
