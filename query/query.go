@@ -1518,7 +1518,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 	// we store any variable defined by this node in the map and pass it on
 	// to the children which might depend on it.
-	sg.assignVars(sg.Params.ParentVars)
+	if sg.Params.ParentVars != nil {
+		// For some query types we dont need this.
+		sg.assignVars(sg.Params.ParentVars)
+	}
 
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
