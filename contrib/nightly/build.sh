@@ -40,7 +40,13 @@ update_or_create_asset() {
       [[ -n "${asset_id}" ]] && echo "${asset_id}"
     done < <( \
       send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id}/assets \
-      | jq -r -c '.[].id')
+      | jq -r -c '.[] | select(.name == "${asset}").id')
+
+    if [[ -n "${asset_id}" ]]; then
+	  echo "found asset"
+    else
+	    echo "not found, have to create"
+    fi
 }
 
 delete_old_nightly() {
@@ -149,10 +155,12 @@ upload_docker_image() {
 }
 
 nightly_sha=""
+echo "tag ${NiGHTLY_TAG}"
 read nightly_sha < <( \
   send_gh_api_request repos/${DGRAPH_REPO}/git/refs/tags/${NIGHTLY_TAG} \
   | jq -r '.object.sha') || true
 
+echo "here"
 if [[ $nightly_sha == $DGRAPH_COMMIT ]]; then
   echo "nightly $nightly_sha, dgraph commit $DGRAPH_COMMIT"
   echo "Latest commit on master hasn't changed. Exiting"
