@@ -131,7 +131,8 @@ type params struct {
 	isDebug      bool
 	Var          string
 	NeedsVar     []gql.VarContext
-	ParentVars   map[string]values // *taskp.List
+	ParentVars   map[string]values
+	FacetVar     map[string]string
 	uidToVal     map[uint64]types.Val
 	Langs        []string
 	Normalize    bool
@@ -590,12 +591,6 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 		attrsSeen[key] = struct{}{}
 
-		/*
-			if gchild.Attr == "_uid_" {
-				sg.Params.GetUID = true
-			}
-		*/
-
 		args := params{
 			Alias:        gchild.Alias,
 			Langs:        gchild.Langs,
@@ -606,6 +601,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Expand:       gchild.Expand,
 			isGroupBy:    gchild.IsGroupby,
 			groupbyAttrs: gchild.GroupbyAttrs,
+			FacetVar:     gchild.FacetVar,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &facetsp.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -1223,17 +1219,16 @@ AssignStep:
 }
 
 func (sg *SubGraph) assignVars(doneVars map[string]values) {
-	if sg.Params.Facet != nil {
+	if sg.Params.FacetVar != nil {
 		if len(sg.facetsMatrix) == 0 {
 			return
 		}
-		fmap := make(map[string]string)
 		for _, it := range sg.Params.Facet.Keys {
-			if it.Fvar == "" {
+			fvar, ok := sg.Params.FacetVar[it]
+			if !ok {
 				continue
 			}
-			fmap[it.Fkey] = it.Fvar
-			doneVars[it.Fvar] = values{
+			doneVars[fvar] = values{
 				vals: make(map[uint64]types.Val),
 			}
 		}
@@ -1242,15 +1237,10 @@ func (sg *SubGraph) assignVars(doneVars map[string]values) {
 		for i, uids := range sg.uidMatrix {
 			for j, uid := range uids.Uids {
 				facet := sg.facetsMatrix[i].FacetsList[j]
-				/*
-					if len(facet.Facets) != 1 {
-						continue
-					}
-				*/
 				for _, f := range facet.Facets {
-					k, ok := fmap[f.Key]
+					fvar, ok := sg.Params.FacetVar[f.Key]
 					if ok {
-						doneVars[k].vals[uid] = facets.ValFor(f)
+						doneVars[fvar].vals[uid] = facets.ValFor(f)
 					}
 				}
 			}
