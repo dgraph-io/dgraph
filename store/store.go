@@ -20,6 +20,7 @@ package store
 import (
 	"strconv"
 
+	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -81,14 +82,22 @@ func NewReadOnlyStore(filepath string) (*Store, error) {
 }
 
 // Get returns the value given a key for RocksDB.
-func (s *Store) Get(key []byte) (*rdb.Slice, error) {
+func (s *Store) Get(key []byte) ([]byte, func(), error) {
 	valSlice, err := s.db.Get(s.ropt, key)
 	if err != nil {
-		return nil, x.Wrapf(err, "Key: %v", key)
+		return nil, func() {}, x.Wrapf(err, "Key: %v", key)
 	}
-
-	return valSlice, nil
+	return valSlice.Data(), func() { valSlice.Free() }, nil
 }
+
+//func (s *Store) Get(key []byte) (*rdb.Slice, error) {
+//	valSlice, err := s.db.Get(s.ropt, key)
+//	if err != nil {
+//		return nil, x.Wrapf(err, "Key: %v", key)
+//	}
+
+//	return valSlice, nil
+//}
 
 // SetOne adds a key-value to data store.
 func (s *Store) SetOne(k []byte, val []byte) error { return s.db.Put(s.wopt, k, val) }
@@ -124,8 +133,8 @@ func (s *Store) IndexFilterblockSize() uint64 {
 func (s *Store) NewWriteBatch() *rdb.WriteBatch { return rdb.NewWriteBatch() }
 
 // WriteBatch does a batch write to RocksDB from the data in WriteBatch object.
-func (s *Store) WriteBatch(wb *rdb.WriteBatch) error {
-	return x.Wrap(s.db.Write(s.wopt, wb))
+func (s *Store) WriteBatch(wb dgs.WriteBatch) error {
+	return x.Wrap(s.db.Write(s.wopt, wb.(*rdb.WriteBatch)))
 }
 
 // NewCheckpoint creates new checkpoint from current store.

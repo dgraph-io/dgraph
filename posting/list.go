@@ -214,9 +214,14 @@ func (l *List) getPostingList(loop int) *typesp.PostingList {
 		x.AssertTrue(l.pstore != nil)
 		plist = new(typesp.PostingList)
 
-		if slice, err := l.pstore.Get(l.key); err == nil && slice != nil {
-			x.Checkf(plist.Unmarshal(slice.Data()), "Unable to Unmarshal PostingList from store")
-			slice.Free()
+		//		if slice, err := l.pstore.Get(l.key); err == nil && slice != nil {
+		//			x.Checkf(plist.Unmarshal(slice.Data()), "Unable to Unmarshal PostingList from store")
+		//			slice.Free()
+		//		}
+		val, freeVal, err := l.pstore.Get(l.key)
+		defer freeVal()
+		if err == nil && val != nil {
+			x.Checkf(plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 		}
 		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(plist)) {
 			return plist

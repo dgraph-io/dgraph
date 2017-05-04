@@ -48,6 +48,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -977,7 +978,9 @@ func main() {
 
 	// All the writes to posting store should be synchronous. We use batched writers
 	// for posting lists, so the cost of sync writes is amortized.
-	ps, err := store.NewSyncStore(*postingDir)
+	var ps dgs.Store
+	var err error
+	ps, err = store.NewSyncStore(*postingDir)
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 

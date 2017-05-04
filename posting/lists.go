@@ -447,13 +447,11 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		l.Lock()
 		go func(key []byte) {
 			defer l.Unlock()
-			slice, err := pstore.Get(key)
+			val, freeVal, err := pstore.Get(key)
+			defer freeVal()
 			x.Check(err)
-			if slice.Size() == 0 {
+			if len(val) == 0 {
 				x.Check(pstore.SetOne(key, dummyPostingList))
-			}
-			if slice != nil {
-				slice.Free() // Remember to free.
 			}
 		}(key)
 	}

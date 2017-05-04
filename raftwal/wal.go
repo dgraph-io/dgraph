@@ -143,22 +143,22 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 }
 
 func (w *Wal) Snapshot(gid uint32) (snap raftpb.Snapshot, rerr error) {
-	slice, err := w.wals.Get(w.snapshotKey(gid))
-	if err != nil || slice == nil {
+	val, freeVal, err := w.wals.Get(w.snapshotKey(gid))
+	defer freeVal()
+	if err != nil || val == nil {
 		return snap, x.Wrapf(err, "While getting snapshot")
 	}
-	rerr = x.Wrapf(snap.Unmarshal(slice.Data()), "While unmarshal snapshot")
-	slice.Free()
+	rerr = x.Wrapf(snap.Unmarshal(val), "While unmarshal snapshot")
 	return
 }
 
 func (w *Wal) HardState(gid uint32) (hd raftpb.HardState, rerr error) {
-	slice, err := w.wals.Get(w.hardStateKey(gid))
-	if err != nil || slice == nil {
+	val, freeVal, err := w.wals.Get(w.hardStateKey(gid))
+	defer freeVal()
+	if err != nil || val == nil {
 		return hd, x.Wrapf(err, "While getting hardstate")
 	}
-	rerr = x.Wrapf(hd.Unmarshal(slice.Data()), "While unmarshal hardstate")
-	slice.Free()
+	rerr = x.Wrapf(hd.Unmarshal(val), "While unmarshal hardstate")
 	return
 }
 
