@@ -8,9 +8,13 @@
 # Exit script in case an error is encountered.
 set -e
 
+dev=$1
 cur_dir=$(pwd);
 tmp_dir=/tmp/dgraph-build;
 release_version=$(git describe --abbrev=0);
+if [[ -n $dev ]]; then
+  release_version="$release_version-dev"
+fi
 platform="$(uname | tr '[:upper:]' '[:lower:]')"
 checksum_file=$cur_dir/"dgraph-checksum-$platform-amd64-$release_version".sha256
 if [ -f "$checksum_file" ]; then
@@ -87,6 +91,6 @@ rm -rf $tmp_dir
 
 echo -e "Calculating and storing checksum for tar gzipped assets."
 cd $cur_dir
-tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashboard/build .
+GZIP=-n tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashboard/build .
 checksum=$($digest_cmd assets.tar.gz | awk '{print $1}')
 echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $checksum_file

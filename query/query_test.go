@@ -177,6 +177,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "name", farm.Fingerprint64([]byte("a.bc")), "Alice", nil)
 	addEdgeToValue(t, "name", 25, "Daryl Dixon", nil)
 	addEdgeToValue(t, "name", 31, "Andrea", nil)
+	addEdgeToValue(t, "name", 2300, "Andre", nil)
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[2.0, 2.0]}`)
 	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
@@ -282,7 +283,6 @@ func populateGraph(t *testing.T) {
 
 	addEdgeToValue(t, "name", 240, "Andrea With no friends", nil)
 	addEdgeToUID(t, "son", 1, 2300, nil)
-	addEdgeToValue(t, "name", 2300, "Andre", nil)
 
 	addEdgeToValue(t, "name", 2301, `Alice\"`, nil)
 
