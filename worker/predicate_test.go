@@ -25,14 +25,14 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/workerp"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func checkShard(ps *store.Store) (int, []byte) {
+func checkShard(ps dgs.Store) (int, []byte) {
 	it := ps.NewIterator(false)
 	defer it.Close()
 
@@ -43,7 +43,7 @@ func checkShard(ps *store.Store) (int, []byte) {
 	return count, it.Key()
 }
 
-func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store) {
+func writePLs(t *testing.T, pred string, count int, vid uint64, ps dgs.Store) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i))
 		list, _ := posting.GetOrCreate(k, 0)

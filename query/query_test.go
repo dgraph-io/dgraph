@@ -43,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 
+	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
@@ -59,7 +60,7 @@ func addPassword(t *testing.T, uid uint64, attr, password string) {
 	addEdgeToTypedValue(t, attr, uid, types.PasswordID, value.Value.([]byte), nil)
 }
 
-var ps *store.Store
+var ps dgs.Store
 
 func populateGraph(t *testing.T) {
 	x.AssertTrue(ps != nil)

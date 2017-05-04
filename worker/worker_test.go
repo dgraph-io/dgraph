@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/schema"
@@ -106,7 +107,7 @@ func taskValues(t *testing.T, v []*taskp.Value) []string {
 	return out
 }
 
-func initTest(t *testing.T, schemaStr string) (string, *store.Store) {
+func initTest(t *testing.T, schemaStr string) (string, dgs.Store) {
 	schema.ParseBytes([]byte(schemaStr), 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")

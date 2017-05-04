@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/store"
@@ -236,7 +237,7 @@ func TestParse6_Error(t *testing.T) {
 	require.Nil(t, schemas)
 }
 
-var ps *store.Store
+var ps dgs.Store
 
 func TestMain(m *testing.M) {
 	x.SetTestRun()

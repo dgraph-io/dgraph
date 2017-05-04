@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
@@ -744,7 +745,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	deletePl(t, ol)
 }
 
-var ps *store.Store
+var ps dgs.Store
 
 func TestMain(m *testing.M) {
 	x.SetTestRun()
