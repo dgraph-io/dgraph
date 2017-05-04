@@ -22,12 +22,14 @@ fi
 BUILD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source ${BUILD_DIR}/nightly/github.sh
 
-git fetch --tags
-
 NIGHTLY_TAG="nightly"
 DGRAPH_REPO="dgraph-io/dgraph"
+
+echo "before version"
 DGRAPH_VERSION=$(git describe --abbrev=0)
+echo $DGRAPH_VERSION
 DGRAPH_COMMIT=$(git rev-parse HEAD)
+echo $DGRAPH_COMMIT
 TAR_FILE="dgraph-${OS}-amd64-${DGRAPH_VERSION}.tar.gz"
 NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${TAR_FILE}"
 SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}.tar.gz"
