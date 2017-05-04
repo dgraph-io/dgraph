@@ -36,6 +36,7 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
@@ -380,7 +381,7 @@ type fingerPrint struct {
 
 var (
 	stopTheWorld x.SafeMutex
-	pstore       *store.Store
+	pstore       dgs.Store
 	syncCh       chan syncEntry
 	dirtyChan    chan fingerPrint // All dirty posting list keys are pushed here.
 	marks        *syncMarks
@@ -568,7 +569,7 @@ func batchSync() {
 				loop++
 				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
 				for _, e := range entries {
-					b.Put(e.key, e.val)
+					b.SetOne(e.key, e.val)
 				}
 				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
 				b.Clear()

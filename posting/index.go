@@ -258,14 +258,14 @@ func DeleteReverseEdges(ctx context.Context, attr string) error {
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
-	idxIt := pstore.NewIterator()
+	idxIt := pstore.NewIterator(false)
 	defer idxIt.Close()
 
 	wb := pstore.NewWriteBatch()
 	defer wb.Destroy()
 	var batchSize int
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
-		key := idxIt.Key().Data()
+		key := idxIt.Key()
 		batchSize += len(key)
 		wb.Delete(key)
 
@@ -296,7 +296,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.DataPrefix()
-	it := pstore.NewIterator()
+	it := pstore.NewIterator(false)
 	defer it.Close()
 
 	EvictGroup(group.BelongsTo(attr))
@@ -344,9 +344,9 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 	}
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		pki := x.Parse(it.Key().Data())
+		pki := x.Parse(it.Key())
 		var pl typesp.PostingList
-		x.Check(pl.Unmarshal(it.Value().Data()))
+		x.Check(pl.Unmarshal(it.Value()))
 
 		// Posting list contains only values or only UIDs.
 		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) == x.ValueUid {
@@ -370,14 +370,14 @@ func DeleteIndex(ctx context.Context, attr string) error {
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	idxIt := pstore.NewIterator()
+	idxIt := pstore.NewIterator(false)
 	defer idxIt.Close()
 
 	wb := pstore.NewWriteBatch()
 	defer wb.Destroy()
 	var batchSize int
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
-		key := idxIt.Key().Data()
+		key := idxIt.Key()
 		batchSize += len(key)
 		wb.Delete(key)
 
@@ -408,7 +408,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.DataPrefix()
-	it := pstore.NewIterator()
+	it := pstore.NewIterator(false)
 	defer it.Close()
 
 	EvictGroup(group.BelongsTo(attr))
@@ -456,9 +456,9 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	}
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		pki := x.Parse(it.Key().Data())
+		pki := x.Parse(it.Key())
 		var pl typesp.PostingList
-		x.Check(pl.Unmarshal(it.Value().Data()))
+		x.Check(pl.Unmarshal(it.Value()))
 
 		// Posting list contains only values or only UIDs.
 		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) != x.ValueUid {

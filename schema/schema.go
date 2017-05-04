@@ -26,7 +26,6 @@ import (
 	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/typesp"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -249,7 +248,7 @@ func (s *stateGroup) isReversed(pred string) bool {
 	return false
 }
 
-func Init(ps *store.Store) {
+func Init(ps dgs.Store) {
 	pstore = ps
 	syncCh = make(chan SyncEntry, 10000)
 	reset()
