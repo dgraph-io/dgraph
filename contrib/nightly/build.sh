@@ -44,6 +44,7 @@ update_or_create_asset() {
       | jq -r -c '.[] | select(.name == "${asset}").id')
 
     if [[ -n "${asset_id}" ]]; then
+      echo "Found asset file for ${asset}. Deleting"
       send_gh_api_request repos/${DGRAPH_REPO}/releases/assets/${asset_id} \
       DELETE
     fi
