@@ -39,7 +39,6 @@ update_or_create_asset() {
   local asset_id=$(send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id}/assets \
     | jq -r -c ".[] | select(.name == \"${asset}\").id")
 
-  echo "asset_id: ${asset_id}, release_id: ${release_id}"
   if [[ -n "${asset_id}" ]]; then
     echo "Found asset file for ${asset}. Deleting"
     send_gh_api_request repos/${DGRAPH_REPO}/releases/assets/${asset_id} \
@@ -155,7 +154,7 @@ fi
 go get -u golang.org/x/net/context golang.org/x/text/unicode/norm google.golang.org/grpc
 
 echo "Building embedded binaries"
-# contrib/releases/build.sh
+contrib/releases/build.sh
 # delete_old_nightly
 upload_nightly
 
