@@ -190,6 +190,74 @@ func processTernary(mNode *gql.MathTree) (err error) {
 	return nil
 }
 
+// transformParentVar transforms the value variable at the parent level to the variable
+// at its child level using the childs UID matrix.
+func transformParentVar(mNode *gql.MathTree, parent *SubGraph, doneVars map[string]values) error {
+	// If a variable from parent level is used at this level, we do some
+	// level based processing before doing the math op.
+	siblingVar, parentVar := "", ""
+	isSameLevel := true
+	var modMathNode *gql.MathTree
+	for _, mch := range mNode.Child {
+		if parent.Params.Var == mch.Var {
+			parentVar = mch.Var
+			isSameLevel = false
+			modMathNode = mch
+		} else {
+			siblingVar = mch.Var
+		}
+	}
+
+	if isSameLevel {
+		// No transformation required.
+		return nil
+	}
+
+	// The parent has the variable. So do an iterative summing.
+	var siblingNode *SubGraph
+	for _, ch := range parent.Children {
+		if ch.Params.Var == siblingVar {
+			siblingNode = ch
+		}
+	}
+	if siblingNode == nil || parentVar != parent.Params.Var {
+		return x.Errorf("Var %v is used at a wrong level", parentVar)
+	}
+	v, ok := doneVars[parentVar]
+	if !ok {
+		return x.Errorf("Variable not found.")
+	}
+	newMap := make(map[uint64]types.Val)
+	if v.valType != 1 {
+		// Ensure that this is a facet var.
+		return x.Errorf("Invalid variable type encountered in math.")
+	}
+	for i := 0; i < len(siblingNode.uidMatrix); i++ {
+		ul := siblingNode.uidMatrix[i]
+		srcUid := siblingNode.SrcUIDs.Uids[i]
+		curVal, ok := v.vals[srcUid]
+		if curVal.Tid != types.IntID && curVal.Tid != types.FloatID {
+			return x.Errorf("Encountered non int/float type for summing")
+		}
+		if !ok || curVal.Value == nil {
+			continue
+		}
+		for j := 0; j < len(ul.Uids); j++ {
+			dstUid := ul.Uids[j]
+			ag := aggregator{name: "sum"}
+			ag.Apply(curVal)
+			ag.Apply(newMap[dstUid])
+			val, err := ag.Value()
+			if err != nil {
+				continue
+			}
+			newMap[dstUid] = val
+		}
+	}
+	modMathNode.Val = newMap
+	return nil
+}
+
 func (sg *SubGraph) evalMathTree(mNode *gql.MathTree, parent *SubGraph, doneVars map[string]values) (err error) {
 	if mNode.Const.Value != nil {
 		return nil
@@ -229,62 +297,9 @@ func (sg *SubGraph) evalMathTree(mNode *gql.MathTree, parent *SubGraph, doneVars
 			return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
 				len(mNode.Child))
 		}
-		{
-			// If a variable from parent level is used at this level, we do some
-			// level based processing before doing the math op.
-			siblingVar, parentVar := "", ""
-			isSameLevel := true
-			var modMathNode *gql.MathTree
-			for _, mch := range mNode.Child {
-				if parent.Params.Var == mch.Var {
-					parentVar = mch.Var
-					isSameLevel = false
-					modMathNode = mch
-				} else {
-					siblingVar = mch.Var
-				}
-			}
-
-			if !isSameLevel {
-				// The parent has the variable. So do some iterative summing.
-				var siblingNode *SubGraph
-				for _, ch := range parent.Children {
-					if ch.Params.Var == siblingVar {
-						siblingNode = ch
-					}
-				}
-				if siblingNode == nil || parentVar != parent.Params.Var {
-					return x.Errorf("Var %v is used at a wrong level", parentVar)
-				}
-				v, ok := doneVars[parentVar]
-				if !ok {
-					return x.Errorf("Variable not found.")
-				}
-				newMap := make(map[uint64]types.Val)
-				if v.valType != 1 {
-					return x.Errorf("Invalid variable type encountered in math.")
-				}
-				for i := 0; i < len(siblingNode.uidMatrix); i++ {
-					ul := siblingNode.uidMatrix[i]
-					srcUid := siblingNode.SrcUIDs.Uids[i]
-					curVal, ok := v.vals[srcUid]
-					if !ok || curVal.Value == nil {
-						continue
-					}
-					for j := 0; j < len(ul.Uids); j++ {
-						dstUid := ul.Uids[j]
-						ag := aggregator{name: "sum"}
-						ag.Apply(curVal)
-						ag.Apply(newMap[dstUid])
-						val, err := ag.Value()
-						if err != nil {
-							continue
-						}
-						newMap[dstUid] = val
-					}
-				}
-				modMathNode.Val = newMap
-			}
+		err := transformParentVar(mNode, parent, doneVars)
+		if err != nil {
+			return err
 		}
 		return processBinary(mNode)
 	}

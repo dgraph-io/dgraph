@@ -1190,6 +1190,10 @@ AssignStep:
 		return nil
 	}
 
+	return sg.assignVar(doneVars)
+}
+
+func (sg *SubGraph) assignVar(doneVars map[string]values) error {
 	if sg.IsListNode() {
 		// This is a predicates list.
 		doneVars[sg.Params.Var] = values{
