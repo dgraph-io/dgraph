@@ -31,6 +31,17 @@ SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}.tar.gz"
 SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${SHA_FILE_NAME}"
 ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
 
+update_or_create_asset() {
+  local release_id=$1
+  local asset=$2
+  local asset_id
+    while read asset_id; do
+      [[ -n "${asset_id}" ]] && echo "${asset_id}"
+    done < <( \
+      send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id}/assets \
+      | jq -r -c '.[].id') \
+}
+
 delete_old_nightly() {
   local release_id
   read release_id < <( \
@@ -148,7 +159,7 @@ fi
 go get -u golang.org/x/net/context golang.org/x/text/unicode/norm google.golang.org/grpc
 
 echo "Building embedded binaries"
-contrib/releases/build.sh
+# contrib/releases/build.sh
 # delete_old_nightly
 upload_nightly
 
