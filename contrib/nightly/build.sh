@@ -70,6 +70,7 @@ upload_nightly() {
     | jq -r -c "(.[] | select(.tag_name == \"${NIGHTLY_TAG}\").id), \"\"") \
     || exit
 
+  echo $release_id
   if [[ -z "${release_id}" ]]; then
     echo "Creating release for tag ${NIGHTLY_TAG}."
     read release_id < <( \
