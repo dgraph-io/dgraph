@@ -11,6 +11,7 @@ fi
 #fi
 
 set -e
+export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 
 if [[ $TRAVIS_OS_NAME == "osx" ]]; then
   OS="darwin"
@@ -39,7 +40,7 @@ update_or_create_asset() {
       [[ -n "${asset_id}" ]] && echo "${asset_id}"
     done < <( \
       send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id}/assets \
-      | jq -r -c '.[].id') \
+      | jq -r -c '.[].id')
 }
 
 delete_old_nightly() {
