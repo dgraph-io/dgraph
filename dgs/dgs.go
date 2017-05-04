@@ -39,6 +39,7 @@ type Iterator interface {
 	Close()
 	Next()
 	Valid() bool
+	ValidForPrefix(prefix []byte) bool
 	Key() []byte
-	//	Value() []byte
+	Value() []byte
 }

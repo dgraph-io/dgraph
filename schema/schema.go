@@ -261,13 +261,13 @@ func Init(ps *store.Store) {
 // query to disk if we have large number of groups
 func LoadFromDb(gid uint32) error {
 	prefix := x.SchemaPrefix()
-	itr := pstore.NewIterator()
+	itr := pstore.NewIterator(false)
 	defer itr.Close()
 
 	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
-		key := itr.Key().Data()
+		key := itr.Key()
 		attr := x.Parse(key).Attr
-		data := itr.Value().Data()
+		data := itr.Value()
 		var s typesp.Schema
 		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
 		if group.BelongsTo(attr) != gid {
@@ -280,16 +280,16 @@ func LoadFromDb(gid uint32) error {
 
 func Refresh(groupId uint32) error {
 	prefix := x.SchemaPrefix()
-	itr := pstore.NewIterator()
+	itr := pstore.NewIterator(false)
 	defer itr.Close()
 
 	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
-		key := itr.Key().Data()
+		key := itr.Key()
 		attr := x.Parse(key).Attr
 		if group.BelongsTo(attr) != groupId {
 			continue
 		}
-		data := itr.Value().Data()
+		data := itr.Value()
 		var s typesp.Schema
 		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
 		State().Set(attr, s)
@@ -341,7 +341,7 @@ func batchSync() {
 				for _, e := range entries {
 					val, err := e.Schema.Marshal()
 					x.Checkf(err, "Error while marshalling schema description")
-					b.Put(x.SchemaKey(e.Attr), val)
+					b.SetOne(x.SchemaKey(e.Attr), val)
 				}
 				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
 				b.Clear()

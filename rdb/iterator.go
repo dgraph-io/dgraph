@@ -63,13 +63,14 @@ func (iter *Iterator) Key() []byte {
 }
 
 // Value returns the value in the database the iterator currently holds.
-func (iter *Iterator) Value() *Slice {
+func (iter *Iterator) Value() []byte {
 	var cLen C.size_t
 	cVal := C.rdb_iter_value(iter.c, &cLen)
 	if cVal == nil {
 		return nil
 	}
-	return &Slice{cVal, cLen, true}
+	slice := &Slice{cVal, cLen, true}
+	return slice.Data()
 }
 
 // Next moves the iterator to the next sequential key in the database.
