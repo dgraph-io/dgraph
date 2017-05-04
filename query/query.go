@@ -131,7 +131,7 @@ type params struct {
 	isDebug      bool
 	Var          string
 	NeedsVar     []gql.VarContext
-	ParentVars   map[string]*taskp.List
+	ParentVars   map[string]values // *taskp.List
 	uidToVal     map[uint64]types.Val
 	Langs        []string
 	Normalize    bool
@@ -772,7 +772,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Alias:      gq.Alias,
 		Langs:      gq.Langs,
 		Var:        gq.Var,
-		ParentVars: make(map[string]*taskp.List),
+		ParentVars: make(map[string]values),
 		Normalize:  gq.Normalize,
 		Cascade:    gq.Cascade,
 	}
@@ -1219,6 +1219,41 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 	sg.DestUIDs = &taskp.List{out}
 
 AssignStep:
+	sg.assignVars(doneVars)
+}
+
+func (sg *SubGraph) assignVars(doneVars map[string]values) {
+	if sg.Params.Facet != nil {
+		if len(sg.facetsMatrix) == 0 {
+			return
+		}
+		fmap := make(map[string]string)
+		for _, it := range sg.Params.Facet.Keys {
+			fmap[it.Fkey] = it.Fvar
+			doneVars[it.Fvar] = values{
+				vals: make(map[uint64]types.Val),
+			}
+		}
+		// Note: We ignore the facets if its a value edge as we can't
+		// attach the value to any node.
+		for i, uids := range sg.uidMatrix {
+			for j, uid := range uids.Uids {
+				facet := sg.facetsMatrix[i].FacetsList[j]
+				/*
+					if len(facet.Facets) != 1 {
+						continue
+					}
+				*/
+				for _, f := range facet.Facets {
+					k, ok := fmap[f.Key]
+					if ok {
+						doneVars[k].vals[uid] = facets.ValFor(f)
+					}
+				}
+			}
+		}
+	}
+
 	if sg.Params.Var == "" {
 		return
 	}
@@ -1227,25 +1262,6 @@ AssignStep:
 		// This is a predicates list.
 		doneVars[sg.Params.Var] = values{
 			strList: sg.values,
-		}
-	} else if sg.Params.Facet != nil {
-		if len(sg.facetsMatrix) == 0 {
-			return
-		}
-		doneVars[sg.Params.Var] = values{
-			vals: make(map[uint64]types.Val),
-		}
-		// Note: We ignore the facets if its a value edge as we can't
-		// attach the value to any node.
-		for i, uids := range sg.uidMatrix {
-			for j, uid := range uids.Uids {
-				facet := sg.facetsMatrix[i].FacetsList[j]
-				if len(facet.Facets) != 1 {
-					continue
-				}
-				f := facet.Facets[0]
-				doneVars[sg.Params.Var].vals[uid] = facets.ValFor(f)
-			}
 		}
 	} else if len(sg.DestUIDs.Uids) != 0 {
 		// This implies it is a entity variable.
@@ -1303,6 +1319,7 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]values) error {
 	return nil
 }
 
+/*
 func (sg *SubGraph) fillUidVars(mp map[string]*taskp.List) {
 	lists := make([]*taskp.List, 0, 3)
 	if sg.DestUIDs != nil {
@@ -1315,6 +1332,7 @@ func (sg *SubGraph) fillUidVars(mp map[string]*taskp.List) {
 	}
 	sg.DestUIDs = algo.MergeSorted(lists)
 }
+*/
 
 func (sg *SubGraph) fillVars(mp map[string]values) error {
 	var isVar bool
@@ -1339,6 +1357,7 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 					return uids[i] < uids[j]
 				})
 				lists = append(lists, &taskp.List{uids})
+				isVar = true
 			} else if len(l.vals) != 0 || l.uids != nil {
 				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 			}
@@ -1377,9 +1396,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		sg.DestUIDs = sg.SrcUIDs
 	} else {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "var" {
-			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
+			// If its a var() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
-			sg.fillUidVars(sg.Params.ParentVars)
+			sg.fillVars(sg.Params.ParentVars)
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
 			rch <- nil
 			return
@@ -1497,11 +1516,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	// If the current node defines a variable, we store it in the map and pass it on
-	// to the children later which might depend on it.
-	if sg.Params.Var != "" {
-		sg.Params.ParentVars[sg.Params.Var] = sg.DestUIDs
-	}
+	// we store any variable defined by this node in the map and pass it on
+	// to the children which might depend on it.
+	sg.assignVars(sg.Params.ParentVars)
 
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination

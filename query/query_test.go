@@ -1034,9 +1034,9 @@ func TestFilterFacetVar(t *testing.T) {
 	query := `
 		{
 			friend(id:0x01) {
-				L as path @facets(weight) {
-				name
-				 friend @filter(var(L)){
+				path @facets(L as weight) {
+					name
+				 	friend @filter(var(L)) {
 						name
 						var(L)
 					}
@@ -1055,9 +1055,9 @@ func TestFilterFacetVar1(t *testing.T) {
 	query := `
 		{
 			friend(id:0x01) {
-				L as path @facets(weight1) {
-				name
-				 friend @filter(var(L)){
+				path @facets(L as weight1) {
+					name
+				 	friend @filter(var(L)){
 						name
 						var(L)
 					}
@@ -1067,7 +1067,7 @@ func TestFilterFacetVar1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"path":[{"name":"Glenn Rhee"},{"@facets":{"_":{"weight1":0.200000}},"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}]}]}`,
+		`{"friend":[{"path":[{"name":"Glenn Rhee"},{"@facets":{"_":{"weight1":0.200000}},"name":"Andrea"}]}]}`,
 		js)
 }
 
@@ -1280,7 +1280,7 @@ func TestFacetVarRetrieval(t *testing.T) {
 	query := `
 		{
 			var(id:1) {
-				f as path @facets(weight)
+				path @facets(f as weight)
 			}
 
 			me(id: 24) {
@@ -1298,7 +1298,7 @@ func TestFacetVarRetrieveOrder(t *testing.T) {
 	query := `
 		{
 			var(id:1) {
-				f as path @facets(weight)
+				path @facets(f as weight)
 			}
 
 			me(id: var(f), orderasc: var(f)) {

@@ -604,6 +604,13 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 	if qu.Var != "" {
 		v.Defines = append(v.Defines, qu.Var)
 	}
+	if qu.Facets != nil {
+		for _, it := range qu.Facets.Keys {
+			if it.Fvar != "" {
+				v.Defines = append(v.Defines, it.Fvar)
+			}
+		}
+	}
 
 	for _, va := range qu.NeedsVar {
 		v.Needs = append(v.Needs, va.Name)

@@ -2807,6 +2807,9 @@ func TestParseFacetsMultipleVar(t *testing.T) {
 			hometown
 			age
 		}
+		h(id: var(a, b)) {
+			_uid_
+		}
 	}
 `
 	res, err := Parse(Request{Str: query, Http: true})
