@@ -24,9 +24,12 @@ source ${BUILD_DIR}/nightly/github.sh
 NIGHTLY_TAG="nightly"
 DGRAPH_REPO="dgraph-io/dgraph"
 DGRAPH_VERSION=$(git describe --abbrev=0)
+pwd
 DGRAPH_COMMIT=$(git rev-parse master)
 TAR_FILE="dgraph-${OS}-amd64-${DGRAPH_VERSION}.tar.gz"
 NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${TAR_FILE}"
+SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}.tar.gz"
+SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${SHA_FILE_NAME}"
 ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
 
 delete_old_nightly() {
@@ -83,6 +86,12 @@ upload_nightly() {
     upload_release_asset ${NIGHTLY_FILE} "$name" \
       ${DGRAPH_REPO} ${release_id} \
       > /dev/null
+
+    local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
+    upload_release_asset ${SHA_FILE} "$sha_name" \
+      ${DGRAPH_REPO} ${release_id} \
+      > /dev/null
+
 
     if [[ $TRAVIS_OS_NAME == "linux" ]]; then
       # As asset would be the same on both platforms, we only upload it from linux.
