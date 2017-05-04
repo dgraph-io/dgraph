@@ -44,7 +44,7 @@ update_or_create_asset() {
       | jq -r -c '.[] | select(.name == "${asset}").id')
 
     if [[ -n "${asset_id}" ]]; then
-	  echo "found asset"
+	  echo "found asset, first delete old, then update"
     else
       upload_release_asset ${asset_file} "$asset" \
       ${DGRAPH_REPO} ${release_id} \
