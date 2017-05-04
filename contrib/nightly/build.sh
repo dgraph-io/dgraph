@@ -26,9 +26,9 @@ NIGHTLY_TAG="nightly"
 DGRAPH_REPO="dgraph-io/dgraph"
 DGRAPH_VERSION=$(git describe --abbrev=0)
 DGRAPH_COMMIT=$(git rev-parse HEAD)
-TAR_FILE="dgraph-${OS}-amd64-${DGRAPH_VERSION}.tar.gz"
+TAR_FILE="dgraph-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
 NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${TAR_FILE}"
-SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}.sha256"
+SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.sha256"
 SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${SHA_FILE_NAME}"
 ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
 
@@ -147,7 +147,7 @@ upload_docker_image() {
 go get -u golang.org/x/net/context golang.org/x/text/unicode/norm google.golang.org/grpc
 
 echo "Building embedded binaries"
-contrib/releases/build.sh
+contrib/releases/build.sh dev
 # delete_old_nightly
 upload_nightly
 
