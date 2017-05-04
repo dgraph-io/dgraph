@@ -1115,32 +1115,6 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 		js)
 }
 
-func TestUseVarsFilterVarReuse3(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			var(id:0x01) {
-				fr as friend(first:2, offset:2, orderasc: dob)
-			}
-
-			friend(id:0x01) {
-				L as friend {
-					friend {
-						name
-						friend @filter(var(L) and var(fr)) {
-							name
-						}
-					}
-				}
-			}
-		}
-	`
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
-		js)
-}
-
 func TestNestedFuncRoot(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)

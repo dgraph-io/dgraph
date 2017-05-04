@@ -1229,7 +1229,11 @@ func (sg *SubGraph) assignVars(doneVars map[string]values) {
 		}
 		fmap := make(map[string]string)
 		for _, it := range sg.Params.Facet.Keys {
+			if it.Fvar == "" {
+				continue
+			}
 			fmap[it.Fkey] = it.Fvar
+			fmt.Println(sg.Attr, it, "###")
 			doneVars[it.Fvar] = values{
 				vals: make(map[uint64]types.Val),
 			}
@@ -1335,14 +1339,12 @@ func (sg *SubGraph) fillUidVars(mp map[string]*taskp.List) {
 */
 
 func (sg *SubGraph) fillVars(mp map[string]values) error {
-	var isVar bool
 	lists := make([]*taskp.List, 0, 3)
 	for _, v := range sg.Params.NeedsVar {
 		if l, ok := mp[v.Name]; ok {
 			if (v.Typ == gql.ANY_VAR || v.Typ == gql.LIST_VAR) && l.strList != nil {
 				sg.ExpandPreds = l.strList
 			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.uids != nil {
-				isVar = true
 				lists = append(lists, l.uids)
 			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.vals) != 0 {
 				// This should happened only once.
@@ -1357,15 +1359,12 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 					return uids[i] < uids[j]
 				})
 				lists = append(lists, &taskp.List{uids})
-				isVar = true
 			} else if len(l.vals) != 0 || l.uids != nil {
 				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 			}
 		}
 	}
-	if isVar && sg.DestUIDs != nil {
-		lists = append(lists, sg.DestUIDs)
-	}
+	lists = append(lists, sg.DestUIDs)
 	sg.DestUIDs = algo.MergeSorted(lists)
 	return nil
 }
@@ -1516,19 +1515,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	// we store any variable defined by this node in the map and pass it on
+	// We store any variable defined by this node in the map and pass it on
 	// to the children which might depend on it.
-	if sg.Params.ParentVars != nil {
-		// For some query types we dont need this.
-		sg.assignVars(sg.Params.ParentVars)
-	}
+	sg.assignVars(sg.Params.ParentVars)
 
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
 	// taken into account. For example, a PL might have only 50 entries but the
 	// user wants to skip 100 entries and return 10 entries. In this case, you
 	// should return a count of 0, not 10.
-
 	// take care of the order
 	if sg.Params.DoCount {
 		x.AssertTrue(len(sg.Filters) > 0)
