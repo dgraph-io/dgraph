@@ -90,15 +90,6 @@ func (s *Store) Get(key []byte) ([]byte, func(), error) {
 	return valSlice.Data(), func() { valSlice.Free() }, nil
 }
 
-//func (s *Store) Get(key []byte) (*rdb.Slice, error) {
-//	valSlice, err := s.db.Get(s.ropt, key)
-//	if err != nil {
-//		return nil, x.Wrapf(err, "Key: %v", key)
-//	}
-
-//	return valSlice, nil
-//}
-
 // SetOne adds a key-value to data store.
 func (s *Store) SetOne(k []byte, val []byte) error { return s.db.Put(s.wopt, k, val) }
 

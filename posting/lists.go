@@ -38,7 +38,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/protos/typesp"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -389,7 +388,7 @@ var (
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *store.Store) {
+func Init(ps dgs.Store) {
 	marks = new(syncMarks)
 	pstore = ps
 	lhmaps = new(listMaps)
