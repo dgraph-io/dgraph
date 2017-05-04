@@ -23,6 +23,7 @@ import (
 
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/store"
@@ -33,7 +34,7 @@ import (
 
 var (
 	pstate *state
-	pstore *store.Store
+	pstore dgs.Store
 	syncCh chan SyncEntry
 )
 

@@ -19,12 +19,26 @@ type Store interface {
 	WriteBatch(wb WriteBatch) error
 
 	Close()
+
+	NewWriteBatch() WriteBatch
+
+	NewIterator(reversed bool) Iterator
 }
 
 type WriteBatch interface {
-	Put(key, value []byte)
+	SetOne(key, value []byte)
 	Delete(key []byte)
 	Count() int
 	Clear()
 	Destroy()
+}
+
+type Iterator interface {
+	Rewind()
+	Seek(key []byte)
+	Close()
+	Next()
+	Valid() bool
+	Key() []byte
+	//	Value() []byte
 }

@@ -25,6 +25,8 @@ import (
 	"path"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/dgs"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,14 +41,16 @@ func TestGet(t *testing.T) {
 	k := []byte("mykey")
 	require.NoError(t, s.SetOne(k, []byte("neo")))
 
-	val, err := s.Get(k)
+	val, freeVal, err := s.Get(k)
+	defer freeVal()
 	require.NoError(t, err)
-	require.EqualValues(t, val.Data(), "neo")
+	require.EqualValues(t, val, "neo")
 
 	require.NoError(t, s.SetOne(k, []byte("the one")))
-	val, err = s.Get(k)
+	val, freeVal, err = s.Get(k)
+	defer freeVal()
 	require.NoError(t, err)
-	require.EqualValues(t, val.Data(), "the one")
+	require.EqualValues(t, val, "the one")
 }
 
 func TestSnapshot(t *testing.T) {
@@ -64,21 +68,24 @@ func TestSnapshot(t *testing.T) {
 	require.NoError(t, s.SetOne(k, []byte("trinity")))
 
 	// Before setting snapshot, do a get. Expect to get trinity.
-	val, err := s.Get(k)
+	val, freeVal, err := s.Get(k)
+	defer freeVal()
 	require.NoError(t, err)
-	require.EqualValues(t, val.Data(), "trinity")
+	require.EqualValues(t, val, "trinity")
 
 	s.SetSnapshot(snapshot)
 	// After setting snapshot, we expect to get neo.
-	val, err = s.Get(k)
+	val, freeVal, err = s.Get(k)
+	defer freeVal()
 	require.NoError(t, err)
-	require.EqualValues(t, val.Data(), "neo")
+	require.EqualValues(t, val, "neo")
 
 	s.SetSnapshot(nil)
 	// After clearing snapshot, we expect to get trinity again.
-	val, err = s.Get(k)
+	val, freeVal, err = s.Get(k)
+	defer freeVal()
 	require.NoError(t, err)
-	require.EqualValues(t, val.Data(), "trinity")
+	require.EqualValues(t, val, "trinity")
 }
 
 func TestCheckpoint(t *testing.T) {
@@ -93,9 +100,10 @@ func TestCheckpoint(t *testing.T) {
 	require.NoError(t, s.SetOne(key, []byte("neo")))
 
 	// Make sure neo did get written as we expect.
-	val, err := s.Get(key)
+	val, freeVal, err := s.Get(key)
+	defer freeVal()
 	require.NoError(t, err)
-	require.EqualValues(t, val.Data(), "neo")
+	require.EqualValues(t, val, "neo")
 
 	// Do checkpointing. Checkpoint should contain neo.
 	checkpoint, err := s.NewCheckpoint()
@@ -109,17 +117,61 @@ func TestCheckpoint(t *testing.T) {
 	require.NoError(t, s.SetOne(key, []byte("trinity")))
 
 	// Original store should contain trinity.
-	val, err = s.Get(key)
+	val, freeVal, err = s.Get(key)
+	defer freeVal()
 	require.NoError(t, err)
-	require.EqualValues(t, val.Data(), "trinity")
+	require.EqualValues(t, val, "trinity")
 
 	// Open checkpoint and check that it contains neo, not trinity.
 	s2, err := NewStore(pathCheckpoint)
 	require.NoError(t, err)
 
-	val, err = s2.Get(key)
+	val, freeVal, err = s2.Get(key)
+	defer freeVal()
 	require.NoError(t, err)
-	require.EqualValues(t, val.Data(), "neo")
+	require.EqualValues(t, val, "neo")
+}
+
+func TestBasic(t *testing.T) {
+	dbPath, err := ioutil.TempDir("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dbPath)
+
+	var s dgs.Store
+	s, err = NewStore(dbPath)
+	defer s.Close()
+	require.NoError(t, err)
+
+	wb := s.NewWriteBatch()
+	wb.SetOne([]byte("hey"), []byte("world"))
+	wb.SetOne([]byte("aaa"), []byte("bbb"))
+	require.NoError(t, s.WriteBatch(wb))
+
+	val, freeVal, err := s.Get([]byte("no"))
+	defer freeVal()
+	require.NoError(t, err)
+	require.Nil(t, val)
+
+	val, freeVal, err = s.Get([]byte("aaa"))
+	defer freeVal()
+	require.NoError(t, err)
+	require.EqualValues(t, "bbb", string(val))
+
+	it := s.NewIterator(false)
+	defer it.Close()
+	var keys []string
+	for it.Rewind(); it.Valid(); it.Next() {
+		keys = append(keys, string(it.Key()))
+	}
+	require.EqualValues(t, []string{"aaa", "hey"}, keys)
+
+	it = s.NewIterator(true)
+	defer it.Close()
+	keys = keys[:0]
+	for it.Rewind(); it.Valid(); it.Next() {
+		keys = append(keys, string(it.Key()))
+	}
+	require.EqualValues(t, []string{"hey", "aaa"}, keys)
 }
 
 func benchmarkGet(valSize int, b *testing.B) {
@@ -150,16 +202,17 @@ func benchmarkGet(valSize int, b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		k := rand.Int() % nkeys
 		key := []byte(fmt.Sprintf("key_%d", k))
-		valSlice, err := s.Get(key)
+		valSlice, freeVal, err := s.Get(key)
 		if valSlice == nil {
 			b.Error("Missing value")
 		}
 		if err != nil {
 			b.Error(err)
 		}
-		if len(valSlice.Data()) != valSize {
-			b.Errorf("Value size expected: %d. Found: %d", valSize, len(valSlice.Data()))
+		if len(valSlice) != valSize {
+			b.Errorf("Value size expected: %d. Found: %d", valSize, len(valSlice))
 		}
+		freeVal()
 	}
 	b.StopTimer()
 }

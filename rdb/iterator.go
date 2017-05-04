@@ -27,12 +27,16 @@ import (
 //    return err
 //  }
 type Iterator struct {
-	c *C.rdb_iterator_t
+	c        *C.rdb_iterator_t
+	reversed bool
 }
 
 // NewNativeIterator creates a Iterator object.
-func NewNativeIterator(c unsafe.Pointer) *Iterator {
-	return &Iterator{(*C.rdb_iterator_t)(c)}
+func NewNativeIterator(c unsafe.Pointer, reversed bool) *Iterator {
+	return &Iterator{
+		c:        (*C.rdb_iterator_t)(c),
+		reversed: reversed,
+	}
 }
 
 // Valid returns false only when an Iterator has iterated past either the
@@ -44,17 +48,18 @@ func (iter *Iterator) Valid() bool {
 // ValidForPrefix returns false only when an Iterator has iterated past the
 // first or the last key in the database or the specified prefix.
 func (iter *Iterator) ValidForPrefix(prefix []byte) bool {
-	return C.rdb_iter_valid(iter.c) != 0 && bytes.HasPrefix(iter.Key().Data(), prefix)
+	return C.rdb_iter_valid(iter.c) != 0 && bytes.HasPrefix(iter.Key(), prefix)
 }
 
 // Key returns the key the iterator currently holds.
-func (iter *Iterator) Key() *Slice {
+func (iter *Iterator) Key() []byte {
 	var cLen C.size_t
 	cKey := C.rdb_iter_key(iter.c, &cLen)
 	if cKey == nil {
 		return nil
 	}
-	return &Slice{cKey, cLen, true}
+	slice := &Slice{cKey, cLen, true}
+	return slice.Data()
 }
 
 // Value returns the value in the database the iterator currently holds.
@@ -69,34 +74,31 @@ func (iter *Iterator) Value() *Slice {
 
 // Next moves the iterator to the next sequential key in the database.
 func (iter *Iterator) Next() {
-	C.rdb_iter_next(iter.c)
+	if !iter.reversed {
+		C.rdb_iter_next(iter.c)
+	} else {
+		C.rdb_iter_prev(iter.c)
+	}
 }
 
-// Prev moves the iterator to the previous sequential key in the database.
-func (iter *Iterator) Prev() {
-	C.rdb_iter_prev(iter.c)
+// Rewind either seeks to first or last.
+func (iter *Iterator) Rewind() {
+	if !iter.reversed {
+		C.rdb_iter_seek_to_first(iter.c)
+	} else {
+		C.rdb_iter_seek_to_last(iter.c)
+	}
 }
 
-// SeekToFirst moves the iterator to the first key in the database.
-func (iter *Iterator) SeekToFirst() {
-	C.rdb_iter_seek_to_first(iter.c)
-}
-
-// SeekToLast moves the iterator to the last key in the database.
-func (iter *Iterator) SeekToLast() {
-	C.rdb_iter_seek_to_last(iter.c)
-}
-
-// Seek moves the iterator to the position greater than or equal to the key.
+// Seek moves the iterator to the position >= key, if reversed=false.
+// Otherwise, seek to position <= key.
 func (iter *Iterator) Seek(key []byte) {
 	cKey := byteToChar(key)
-	C.rdb_iter_seek(iter.c, cKey, C.size_t(len(key)))
-}
-
-// SeekForPrev moves the iterator to the position less than or equal to the key.
-func (iter *Iterator) SeekForPrev(key []byte) {
-	cKey := byteToChar(key)
-	C.rdb_iter_seek_for_prev(iter.c, cKey, C.size_t(len(key)))
+	if !iter.reversed {
+		C.rdb_iter_seek(iter.c, cKey, C.size_t(len(key)))
+	} else {
+		C.rdb_iter_seek_for_prev(iter.c, cKey, C.size_t(len(key)))
+	}
 }
 
 // Err returns nil if no errors happened during iteration, or the actual

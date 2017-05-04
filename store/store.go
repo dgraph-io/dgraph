@@ -106,12 +106,12 @@ func (s *Store) SetOne(k []byte, val []byte) error { return s.db.Put(s.wopt, k, 
 func (s *Store) Delete(k []byte) error { return s.db.Delete(s.wopt, k) }
 
 // NewIterator initializes a new iterator and returns it.
-func (s *Store) NewIterator() *rdb.Iterator {
+func (s *Store) NewIterator(reversed bool) dgs.Iterator {
 	ro := rdb.NewDefaultReadOptions()
 	// SetFillCache should be set to false for bulk reads to avoid caching data
 	// while doing bulk scans.
 	ro.SetFillCache(false)
-	return s.db.NewIterator(ro)
+	return s.db.NewIterator(ro, reversed)
 }
 
 // Close closes our data store.
@@ -130,7 +130,9 @@ func (s *Store) IndexFilterblockSize() uint64 {
 }
 
 // NewWriteBatch creates a new WriteBatch object and returns a pointer to it.
-func (s *Store) NewWriteBatch() *rdb.WriteBatch { return rdb.NewWriteBatch() }
+func (s *Store) NewWriteBatch() dgs.WriteBatch {
+	return rdb.NewWriteBatch()
+}
 
 // WriteBatch does a batch write to RocksDB from the data in WriteBatch object.
 func (s *Store) WriteBatch(wb dgs.WriteBatch) error {
