@@ -21,10 +21,6 @@ fi
 BUILD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source ${BUILD_DIR}/nightly/github.sh
 
-git remote update
-git checkout master
-git status
-
 NIGHTLY_TAG="nightly"
 DGRAPH_REPO="dgraph-io/dgraph"
 DGRAPH_VERSION=$(git describe --abbrev=0)
@@ -51,6 +47,8 @@ delete_old_nightly() {
 }
 
 get_release_body() {
+  # TODO - Update it after you bring you set up getting binaries using get.dgraph.iot
+
   echo '
   Dgraph development (pre-release) build.
 
