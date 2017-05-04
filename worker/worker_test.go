@@ -318,7 +318,7 @@ func TestProcessTaskIndex(t *testing.T) {
 }
 
 /*
-func populateGraphForSort(t *testing.T, ps *store.Store) {
+func populateGraphForSort(t *testing.T, ps dgs.Store) {
 	edge := &taskp.DirectedEdge{
 		Label: "author1",
 		Attr:  "dob",
