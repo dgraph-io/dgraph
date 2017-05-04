@@ -101,12 +101,12 @@ upload_nightly() {
       || exit
   else
     # We upload the tar binary.
-    echo "Uploading binaries. ${NIGHTLY_FILE} ${name}"
     local name="dgraph-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
+    echo "Uploading binaries. ${NIGHTLY_FILE} ${name}"
     update_or_create_asset $release_id $name ${NIGHTLY_FILE}
 
-    echo "Uploading shasum file. ${SHA_FILE} name ${sha_name}"
     local sha_name="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.tar.gz"
+    echo "Uploading shasum file. ${SHA_FILE} name ${sha_name}"
     update_or_create_asset $release_id $sha_name ${SHA_FILE}
 
 
@@ -168,4 +168,4 @@ echo "Building embedded binaries"
 # delete_old_nightly
 upload_nightly
 
-upload_docker_image
+# upload_docker_image
