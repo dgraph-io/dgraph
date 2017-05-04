@@ -193,7 +193,17 @@ func (n *protoNode) normalize() [][]*graphp.Property {
 		attrChildrenMap[child.Attribute] = append(attrChildrenMap[child.Attribute], child)
 	}
 
-	for _, attrChildren := range attrChildrenMap {
+	// A temporary slice in which we store the attrs and then sort them. We need this so that
+	// the order of results is deterministic which wont be the case if we directly iterated over
+	// the map.
+	attrSlice := make([]string, 0, len(n.Children))
+	for attr, _ := range attrChildrenMap {
+		attrSlice = append(attrSlice, attr)
+	}
+	sort.Strings(attrSlice)
+
+	for _, attr := range attrSlice {
+		attrChildren := attrChildrenMap[attr]
 		childSlice := make([][]*graphp.Property, 0, 5)
 
 		for _, child := range attrChildren {
