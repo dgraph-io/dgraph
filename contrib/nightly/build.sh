@@ -25,7 +25,9 @@ source ${BUILD_DIR}/nightly/github.sh
 NIGHTLY_TAG="nightly"
 DGRAPH_REPO="dgraph-io/dgraph"
 
-echo "before version"
+echo "before version $(git describe --abbrev=0)"
+git tag
+echo "before version $(git describe --tags --abbrev=0)"
 DGRAPH_VERSION=$(git describe --abbrev=0)
 echo $DGRAPH_VERSION
 DGRAPH_COMMIT=$(git rev-parse HEAD)
