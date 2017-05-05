@@ -131,7 +131,8 @@ type params struct {
 	isDebug      bool
 	Var          string
 	NeedsVar     []gql.VarContext
-	ParentVars   map[string]*taskp.List
+	ParentVars   map[string]values
+	FacetVar     map[string]string
 	uidToVal     map[uint64]types.Val
 	Langs        []string
 	Normalize    bool
@@ -590,12 +591,6 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 		attrsSeen[key] = struct{}{}
 
-		/*
-			if gchild.Attr == "_uid_" {
-				sg.Params.GetUID = true
-			}
-		*/
-
 		args := params{
 			Alias:        gchild.Alias,
 			Langs:        gchild.Langs,
@@ -606,6 +601,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Expand:       gchild.Expand,
 			isGroupBy:    gchild.IsGroupby,
 			groupbyAttrs: gchild.GroupbyAttrs,
+			FacetVar:     gchild.FacetVar,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &facetsp.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -772,9 +768,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Alias:      gq.Alias,
 		Langs:      gq.Langs,
 		Var:        gq.Var,
-		ParentVars: make(map[string]*taskp.List),
+		ParentVars: make(map[string]values),
 		Normalize:  gq.Normalize,
 		Cascade:    gq.Cascade,
+		isGroupBy:  gq.IsGroupby,
 	}
 	if gq.Facets != nil {
 		args.Facet = &facetsp.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -951,9 +948,9 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 	}
 
 	if sg.IsGroupBy() {
-		err := processGroupBy(sg)
+		err := sg.processGroupBy(doneVars)
 		if err != nil {
-			return nil
+			return err
 		}
 	} else if len(sg.SrcFunc) > 0 && !parent.IsGroupBy() && isAggregatorFn(sg.SrcFunc[0]) {
 		// Aggregate the value over level.
@@ -1161,7 +1158,7 @@ func shouldCascade(res gql.Result, idx int) bool {
 }
 
 func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
-	if sg.DestUIDs == nil {
+	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return
 	}
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
@@ -1219,6 +1216,38 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 	sg.DestUIDs = &taskp.List{out}
 
 AssignStep:
+	sg.assignVars(doneVars)
+}
+
+func (sg *SubGraph) assignVars(doneVars map[string]values) {
+	if sg.Params.FacetVar != nil {
+		if len(sg.facetsMatrix) == 0 {
+			return
+		}
+		for _, it := range sg.Params.Facet.Keys {
+			fvar, ok := sg.Params.FacetVar[it]
+			if !ok {
+				continue
+			}
+			doneVars[fvar] = values{
+				vals: make(map[uint64]types.Val),
+			}
+		}
+		// Note: We ignore the facets if its a value edge as we can't
+		// attach the value to any node.
+		for i, uids := range sg.uidMatrix {
+			for j, uid := range uids.Uids {
+				facet := sg.facetsMatrix[i].FacetsList[j]
+				for _, f := range facet.Facets {
+					fvar, ok := sg.Params.FacetVar[f.Key]
+					if ok {
+						doneVars[fvar].vals[uid] = facets.ValFor(f)
+					}
+				}
+			}
+		}
+	}
+
 	if sg.Params.Var == "" {
 		return
 	}
@@ -1227,25 +1256,6 @@ AssignStep:
 		// This is a predicates list.
 		doneVars[sg.Params.Var] = values{
 			strList: sg.values,
-		}
-	} else if sg.Params.Facet != nil {
-		if len(sg.facetsMatrix) == 0 {
-			return
-		}
-		doneVars[sg.Params.Var] = values{
-			vals: make(map[uint64]types.Val),
-		}
-		// Note: We ignore the facets if its a value edge as we can't
-		// attach the value to any node.
-		for i, uids := range sg.uidMatrix {
-			for j, uid := range uids.Uids {
-				facet := sg.facetsMatrix[i].FacetsList[j]
-				if len(facet.Facets) != 1 {
-					continue
-				}
-				f := facet.Facets[0]
-				doneVars[sg.Params.Var].vals[uid] = facets.ValFor(f)
-			}
 		}
 	} else if len(sg.DestUIDs.Uids) != 0 {
 		// This implies it is a entity variable.
@@ -1303,28 +1313,13 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]values) error {
 	return nil
 }
 
-func (sg *SubGraph) fillUidVars(mp map[string]*taskp.List) {
-	lists := make([]*taskp.List, 0, 3)
-	if sg.DestUIDs != nil {
-		lists = append(lists, sg.DestUIDs)
-	}
-	for _, v := range sg.Params.NeedsVar {
-		if l, ok := mp[v.Name]; ok {
-			lists = append(lists, l)
-		}
-	}
-	sg.DestUIDs = algo.MergeSorted(lists)
-}
-
 func (sg *SubGraph) fillVars(mp map[string]values) error {
-	var isVar bool
 	lists := make([]*taskp.List, 0, 3)
 	for _, v := range sg.Params.NeedsVar {
 		if l, ok := mp[v.Name]; ok {
 			if (v.Typ == gql.ANY_VAR || v.Typ == gql.LIST_VAR) && l.strList != nil {
 				sg.ExpandPreds = l.strList
 			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.uids != nil {
-				isVar = true
 				lists = append(lists, l.uids)
 			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.vals) != 0 {
 				// This should happened only once.
@@ -1344,9 +1339,7 @@ func (sg *SubGraph) fillVars(mp map[string]values) error {
 			}
 		}
 	}
-	if isVar && sg.DestUIDs != nil {
-		lists = append(lists, sg.DestUIDs)
-	}
+	lists = append(lists, sg.DestUIDs)
 	sg.DestUIDs = algo.MergeSorted(lists)
 	return nil
 }
@@ -1377,9 +1370,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		sg.DestUIDs = sg.SrcUIDs
 	} else {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "var" {
-			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
+			// If its a var() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
-			sg.fillUidVars(sg.Params.ParentVars)
+			sg.fillVars(sg.Params.ParentVars)
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
 			rch <- nil
 			return
@@ -1497,18 +1490,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	// If the current node defines a variable, we store it in the map and pass it on
-	// to the children later which might depend on it.
-	if sg.Params.Var != "" {
-		sg.Params.ParentVars[sg.Params.Var] = sg.DestUIDs
-	}
+	// We store any variable defined by this node in the map and pass it on
+	// to the children which might depend on it.
+	sg.assignVars(sg.Params.ParentVars)
 
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
 	// taken into account. For example, a PL might have only 50 entries but the
 	// user wants to skip 100 entries and return 10 entries. In this case, you
 	// should return a count of 0, not 10.
-
 	// take care of the order
 	if sg.Params.DoCount {
 		x.AssertTrue(len(sg.Filters) > 0)

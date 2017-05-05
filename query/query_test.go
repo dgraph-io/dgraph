@@ -74,6 +74,16 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "friend", 31, 24, nil)
 	addEdgeToUID(t, "friend", 23, 1, nil)
 
+	addEdgeToUID(t, "school", 1, 5000, nil)
+	addEdgeToUID(t, "school", 23, 5001, nil)
+	addEdgeToUID(t, "school", 24, 5000, nil)
+	addEdgeToUID(t, "school", 25, 5000, nil)
+	addEdgeToUID(t, "school", 31, 5001, nil)
+	addEdgeToUID(t, "school", 101, 5001, nil)
+
+	addEdgeToValue(t, "name", 5000, "School A", nil)
+	addEdgeToValue(t, "name", 5001, "School B", nil)
+
 	addEdgeToUID(t, "follow", 1, 31, nil)
 	addEdgeToUID(t, "follow", 1, 24, nil)
 	addEdgeToUID(t, "follow", 31, 1001, nil)
@@ -178,6 +188,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "name", farm.Fingerprint64([]byte("a.bc")), "Alice", nil)
 	addEdgeToValue(t, "name", 25, "Daryl Dixon", nil)
 	addEdgeToValue(t, "name", 31, "Andrea", nil)
+	addEdgeToValue(t, "name", 2300, "Andre", nil)
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[2.0, 2.0]}`)
 	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
@@ -283,7 +294,6 @@ func populateGraph(t *testing.T) {
 
 	addEdgeToValue(t, "name", 240, "Andrea With no friends", nil)
 	addEdgeToUID(t, "son", 1, 2300, nil)
-	addEdgeToValue(t, "name", 2300, "Andre", nil)
 
 	addEdgeToValue(t, "name", 2301, `Alice\"`, nil)
 
@@ -909,6 +919,55 @@ func TestGroupBy(t *testing.T) {
 		js)
 }
 
+func TestGroupByCountVar(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				friend @groupby(school) {
+					a as count(_uid_)
+				}
+			}
+
+			order(id:var(a), orderdesc: var(a)) {
+				name
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"order":[{"name":"School B","var(a)":3},{"name":"School A","var(a)":2}]}`,
+		js)
+}
+func TestGroupByAggVar(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				friend @groupby(school) {
+					a as max(name)
+					b as min(name)
+				}
+			}
+
+			orderMax(id:var(a), orderdesc: var(a)) {
+				name
+				var(a)
+			}
+
+			orderMin(id:var(b), orderdesc: var(b)) {
+				name
+				var(b)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"orderMax":[{"name":"School B","var(a)":"Rick Grimes"},{"name":"School A","var(a)":"Glenn Rhee"}],"orderMin":[{"name":"School A","var(b)":"Daryl Dixon"},{"name":"School B","var(b)":"Andrea"}]}`,
+		js)
+}
+
 func TestGroupByAgg(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1035,9 +1094,9 @@ func TestFilterFacetVar(t *testing.T) {
 	query := `
 		{
 			friend(id:0x01) {
-				L as path @facets(weight) {
-				name
-				 friend @filter(var(L)){
+				path @facets(L as weight) {
+					name
+				 	friend @filter(var(L)) {
 						name
 						var(L)
 					}
@@ -1056,9 +1115,9 @@ func TestFilterFacetVar1(t *testing.T) {
 	query := `
 		{
 			friend(id:0x01) {
-				L as path @facets(weight1) {
-				name
-				 friend @filter(var(L)){
+				path @facets(L as weight1) {
+					name
+				 	friend @filter(var(L)){
 						name
 						var(L)
 					}
@@ -1068,7 +1127,7 @@ func TestFilterFacetVar1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"path":[{"name":"Glenn Rhee"},{"@facets":{"_":{"weight1":0.200000}},"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}]}]}`,
+		`{"friend":[{"path":[{"name":"Glenn Rhee"},{"@facets":{"_":{"weight1":0.200000}},"name":"Andrea"}]}]}`,
 		js)
 }
 
@@ -1113,32 +1172,6 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
-		js)
-}
-
-func TestUseVarsFilterVarReuse3(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			var(id:0x01) {
-				fr as friend(first:2, offset:2, orderasc: dob)
-			}
-
-			friend(id:0x01) {
-				L as friend {
-					friend {
-						name
-						friend @filter(var(L) and var(fr)) {
-							name
-						}
-					}
-				}
-			}
-		}
-	`
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
 		js)
 }
 
@@ -1281,7 +1314,7 @@ func TestFacetVarRetrieval(t *testing.T) {
 	query := `
 		{
 			var(id:1) {
-				f as path @facets(weight)
+				path @facets(f as weight)
 			}
 
 			me(id: 24) {
@@ -1299,7 +1332,7 @@ func TestFacetVarRetrieveOrder(t *testing.T) {
 	query := `
 		{
 			var(id:1) {
-				f as path @facets(weight)
+				path @facets(f as weight)
 			}
 
 			me(id: var(f), orderasc: var(f)) {
