@@ -73,6 +73,16 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "friend", 31, 24, nil)
 	addEdgeToUID(t, "friend", 23, 1, nil)
 
+	addEdgeToUID(t, "school", 1, 5000, nil)
+	addEdgeToUID(t, "school", 23, 5001, nil)
+	addEdgeToUID(t, "school", 24, 5000, nil)
+	addEdgeToUID(t, "school", 25, 5000, nil)
+	addEdgeToUID(t, "school", 31, 5001, nil)
+	addEdgeToUID(t, "school", 101, 5001, nil)
+
+	addEdgeToValue(t, "name", 5000, "School A", nil)
+	addEdgeToValue(t, "name", 5001, "School B", nil)
+
 	addEdgeToUID(t, "follow", 1, 31, nil)
 	addEdgeToUID(t, "follow", 1, 24, nil)
 	addEdgeToUID(t, "follow", 31, 1001, nil)
@@ -178,6 +188,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "name", farm.Fingerprint64([]byte("a.bc")), "Alice", nil)
 	addEdgeToValue(t, "name", 25, "Daryl Dixon", nil)
 	addEdgeToValue(t, "name", 31, "Andrea", nil)
+	addEdgeToValue(t, "name", 2300, "Andre", nil)
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[2.0, 2.0]}`)
 	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
@@ -283,7 +294,6 @@ func populateGraph(t *testing.T) {
 
 	addEdgeToValue(t, "name", 240, "Andrea With no friends", nil)
 	addEdgeToUID(t, "son", 1, 2300, nil)
-	addEdgeToValue(t, "name", 2300, "Andre", nil)
 
 	addEdgeToValue(t, "name", 2301, `Alice\"`, nil)
 
@@ -340,7 +350,7 @@ func TestReturnUids(t *testing.T) {
 	mp := map[string]string{
 		"a": "123",
 	}
-	require.NoError(t, ToJson(&l, sgl, &buf, mp))
+	require.NoError(t, ToJson(&l, sgl, &buf, mp, false))
 	js := buf.String()
 	require.JSONEq(t,
 		`{"uids":{"a":"123"},"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
@@ -884,6 +894,114 @@ func TestQueryVarValOrderDescMissing(t *testing.T) {
 	require.JSONEq(t, `{}`, js)
 }
 
+func TestGroupBy(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		age(id: 1) {
+			friend {
+				age
+				name
+			}
+		}
+
+		me(id: 1) {
+			friend @groupby(age) {
+				count(_uid_)
+			}
+			name
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"age":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}]}],"me":[{"friend":{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":15,"count":2}]},"name":"Michonne"}]}`,
+		js)
+}
+
+func TestGroupByCountVar(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				friend @groupby(school) {
+					a as count(_uid_)
+				}
+			}
+
+			order(id:var(a), orderdesc: var(a)) {
+				name
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"order":[{"name":"School B","var(a)":3},{"name":"School A","var(a)":2}]}`,
+		js)
+}
+func TestGroupByAggVar(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id: 1) {
+				friend @groupby(school) {
+					a as max(name)
+					b as min(name)
+				}
+			}
+
+			orderMax(id:var(a), orderdesc: var(a)) {
+				name
+				var(a)
+			}
+
+			orderMin(id:var(b), orderdesc: var(b)) {
+				name
+				var(b)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"orderMax":[{"name":"School B","var(a)":"Rick Grimes"},{"name":"School A","var(a)":"Glenn Rhee"}],"orderMin":[{"name":"School A","var(b)":"Daryl Dixon"},{"name":"School B","var(b)":"Andrea"}]}`,
+		js)
+}
+
+func TestGroupByAgg(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 1) {
+				friend @groupby(age) {
+					max(name)
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":{"@groupby":[{"age":17,"max(name)":"Daryl Dixon"},{"age":19,"max(name)":"Andrea"},{"age":15,"max(name)":"Rick Grimes"}]}}]}`,
+		js)
+}
+
+func TestGroupByMulti(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 1) {
+				friend @groupby(friend,name) {
+					count(_uid_)
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":{"@groupby":[{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}}]}`,
+		js)
+}
+
 func TestMultiEmptyBlocks(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1001,9 +1119,9 @@ func TestFilterFacetVar(t *testing.T) {
 	query := `
 		{
 			friend(id:0x01) {
-				L as path @facets(weight) {
-				name
-				 friend @filter(var(L)){
+				path @facets(L as weight) {
+					name
+				 	friend @filter(var(L)) {
 						name
 						var(L)
 					}
@@ -1022,9 +1140,9 @@ func TestFilterFacetVar1(t *testing.T) {
 	query := `
 		{
 			friend(id:0x01) {
-				L as path @facets(weight1) {
-				name
-				 friend @filter(var(L)){
+				path @facets(L as weight1) {
+					name
+				 	friend @filter(var(L)){
 						name
 						var(L)
 					}
@@ -1034,7 +1152,7 @@ func TestFilterFacetVar1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"path":[{"name":"Glenn Rhee"},{"@facets":{"_":{"weight1":0.200000}},"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}]}]}`,
+		`{"friend":[{"path":[{"name":"Glenn Rhee"},{"@facets":{"_":{"weight1":0.200000}},"name":"Andrea"}]}]}`,
 		js)
 }
 
@@ -1079,32 +1197,6 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
-		js)
-}
-
-func TestUseVarsFilterVarReuse3(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			var(id:0x01) {
-				fr as friend(first:2, offset:2, orderasc: dob)
-			}
-
-			friend(id:0x01) {
-				L as friend {
-					friend {
-						name
-						friend @filter(var(L) and var(fr)) {
-							name
-						}
-					}
-				}
-			}
-		}
-	`
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
 		js)
 }
 
@@ -1297,7 +1389,7 @@ func TestFacetVarRetrieval(t *testing.T) {
 	query := `
 		{
 			var(id:1) {
-				f as path @facets(weight)
+				path @facets(f as weight)
 			}
 
 			me(id: 24) {
@@ -1315,7 +1407,7 @@ func TestFacetVarRetrieveOrder(t *testing.T) {
 	query := `
 		{
 			var(id:1) {
-				f as path @facets(weight)
+				path @facets(f as weight)
 			}
 
 			me(id: var(f), orderasc: var(f)) {
@@ -1575,7 +1667,7 @@ func TestDebug1(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf, nil))
+	require.NoError(t, ToJson(&l, sgl, &buf, nil, false))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -1634,7 +1726,7 @@ func TestDebug3(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf, nil))
+	require.NoError(t, ToJson(&l, sgl, &buf, nil, false))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -5210,7 +5302,7 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 
 	var l Latency
 	var buf bytes.Buffer
-	err = sg.ToFastJSON(&l, &buf, nil)
+	err = sg.ToFastJSON(&l, &buf, nil, false)
 	require.NoError(t, err)
 	return string(buf.Bytes())
 }
@@ -5956,7 +6048,7 @@ func TestBoolIndexgeRoot(t *testing.T) {
 	var l Latency
 	ctx := context.Background()
 	_, err := ProcessQuery(ctx, res, &l)
-	require.Equal(t, "Only eq operator defined for type bool. Got: ge", err.Error())
+	require.NotNil(t, err)
 }
 
 func TestBoolIndexEqChild(t *testing.T) {

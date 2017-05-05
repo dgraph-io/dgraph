@@ -8,8 +8,6 @@ if [ -z "$1" ]; then
   BUILD=$SRC/build
 fi
 
-ROCKSDBDIR=$BUILD/rocksdb-5.1.4
-
 set -e
 
 pushd $BUILD &> /dev/null
@@ -24,10 +22,17 @@ ls -la goldendata.rdf.gz
 benchmark=$(pwd)
 popd &> /dev/null
 
-# build flags needed for rocksdb
-export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
-export CGO_LDFLAGS="-L${ROCKSDBDIR}"
-export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
+if [[ "${TRAVIS_OS_NAME}" == "osx" ]]; then
+  export LIBRARY_PATH=$LIBRARY_PATH:/usr/local/lib;
+  export C_INCLUDE_PATH=$C_INCLUDE_PATH:/usr/local/include;
+else
+  ROCKSDBDIR=$BUILD/rocksdb-5.1.4
+
+  # build flags needed for rocksdb
+  export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
+  export CGO_LDFLAGS="-L${ROCKSDBDIR}"
+  export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
+fi
 
 pushd cmd/dgraph &> /dev/null
 go build .

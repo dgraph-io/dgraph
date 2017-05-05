@@ -40,6 +40,7 @@ type GraphQuery struct {
 	Alias      string
 	IsCount    bool
 	IsInternal bool
+	IsGroupby  bool
 	Var        string
 	NeedsVar   []VarContext
 	Func       *Function
@@ -53,6 +54,8 @@ type GraphQuery struct {
 	Cascade      bool
 	Facets       *Facets
 	FacetsFilter *FilterTree
+	GroupbyAttrs []string
+	FacetVar     map[string]string
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -600,6 +603,11 @@ func checkDependency(vl []*Vars) error {
 func (qu *GraphQuery) collectVars(v *Vars) {
 	if qu.Var != "" {
 		v.Defines = append(v.Defines, qu.Var)
+	}
+	if qu.FacetVar != nil {
+		for _, va := range qu.FacetVar {
+			v.Defines = append(v.Defines, va)
+		}
 	}
 
 	for _, va := range qu.NeedsVar {
@@ -1371,8 +1379,10 @@ L:
 	return g, nil
 }
 
-func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
+func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string, error) {
 	facets := new(Facets)
+	facetVar := make(map[string]string)
+	var varName string
 	peeks, err := it.Peek(1)
 	expectArg := true
 	if err == nil && peeks[0].Typ == itemLeftRound {
@@ -1384,18 +1394,33 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 			numTokens++
 			item := it.Item()
 			if item.Typ == itemRightRound { // done
-				done = true
+				if varName == "" {
+					done = true
+				}
 				break
 			} else if item.Typ == itemName {
 				if !expectArg {
-					return nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
+					return nil, nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
+				}
+				peekIt, err := it.Peek(1)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				if peekIt[0].Val == "as" {
+					varName = it.Item().Val
+					it.Next() // Skip the "as"
+					continue
 				}
 				val := collectName(it, item.Val)
 				facets.Keys = append(facets.Keys, val)
+				if varName != "" {
+					facetVar[val] = varName
+				}
+				varName = ""
 				expectArg = false
 			} else if item.Typ == itemComma {
-				if expectArg {
-					return nil, nil, x.Errorf("Expected Argument but got comma.")
+				if expectArg || varName != "" {
+					return nil, nil, nil, x.Errorf("Expected Argument but got comma.")
 				}
 				expectArg = true
 				continue
@@ -1411,13 +1436,15 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 				it.Prev()
 			}
 			filterTree, err := parseFilter(it)
-			return nil, filterTree, err
+			return nil, filterTree, facetVar, err
 		}
 	}
 	if len(facets.Keys) == 0 {
 		facets.AllKeys = true
 	} else {
-		sort.Strings(facets.Keys)
+		sort.Slice(facets.Keys, func(i, j int) bool {
+			return facets.Keys[i] < facets.Keys[j]
+		})
 		// deduplicate facets
 		out := facets.Keys[:0]
 		flen := len(facets.Keys)
@@ -1430,7 +1457,44 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 		out = append(out, facets.Keys[flen-1])
 		facets.Keys = out
 	}
-	return facets, nil, nil
+	return facets, nil, facetVar, nil
+}
+
+// parseGroupby parses the groupby directive.
+func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
+	count := 0
+	expectArg := true
+	it.Next()
+	item := it.Item()
+	if item.Typ != itemLeftRound {
+		return x.Errorf("Expected a left round after groupby")
+	}
+	for it.Next() {
+		item := it.Item()
+		if item.Typ == itemRightRound {
+			break
+		}
+		if item.Typ == itemComma {
+			if expectArg {
+				return x.Errorf("Expected a predicate but got comma")
+			}
+			expectArg = true
+		} else if item.Typ == itemName {
+			if !expectArg {
+				return x.Errorf("Expected a comma or right round but got: %v", item.Val)
+			}
+			gq.GroupbyAttrs = append(gq.GroupbyAttrs, item.Val)
+			count++
+			expectArg = false
+		}
+	}
+	if expectArg {
+		return x.Errorf("Unnecessary comma in groupby()")
+	}
+	if count == 0 {
+		return x.Errorf("Expected atleast one attribute in groupby")
+	}
+	return nil
 }
 
 // parseFilter parses the filter directive to produce a QueryFilter / parse tree.
@@ -1594,21 +1658,22 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 }
 
 func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
+	if curp == nil {
+		return x.Errorf("Invalid use of directive.")
+	}
 	it.Next()
 	item := it.Item()
 	peek, err := it.Peek(1)
 	if err == nil && item.Typ == itemName {
 		if item.Val == "facets" { // because @facets can come w/t '()'
-			facets, facetsFilter, err := parseFacets(it)
+			facets, facetsFilter, facetVar, err := parseFacets(it)
 			if err != nil {
 				return err
 			}
+			curp.FacetVar = facetVar
 			if facets != nil {
 				if curp.Facets != nil {
 					return x.Errorf("Only one facets allowed")
-				}
-				if curp.Var != "" && len(facets.Keys) != 1 {
-					return x.Errorf("Exactly one facet key is expected when using a variable")
 				}
 				curp.Facets = facets
 			} else if facetsFilter != nil {
@@ -1632,7 +1697,9 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 					return err
 				}
 				curp.Filter = filter
-
+			case "groupby":
+				curp.IsGroupby = true
+				parseGroupby(it, curp)
 			default:
 				return x.Errorf("Unknown directive [%s]", item.Val)
 			}
@@ -1846,6 +1913,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 			val := collectName(it, item.Val)
 			valLower := strings.ToLower(val)
+			if gq.IsGroupby && (!isAggregator(val) && val != "count" && isCount != 1) {
+				// Only aggregator or count allowed inside the groupby block.
+				return x.Errorf("Only aggrgator/count functions allowed inside @groupby. Got: %v", val)
+			}
 			if valLower == "checkpwd" {
 				child := &GraphQuery{
 					Args:  make(map[string]string),
@@ -1873,17 +1944,23 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				varName, alias = "", ""
 				it.Next()
 				it.Next()
-				if it.Item().Val != "var" {
-					return x.Errorf("Only variables allowed in aggregate functions.")
+				if gq.IsGroupby {
+					item = it.Item()
+					child.Attr = item.Val
+					child.IsInternal = false
+				} else {
+					if it.Item().Val != "var" {
+						return x.Errorf("Only variables allowed in aggregate functions.")
+					}
+					count, err := parseVarList(it, child)
+					if err != nil {
+						return err
+					}
+					if count != 1 {
+						x.Errorf("Expected one variable inside var() of aggregator but got %v", count)
+					}
+					child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
 				}
-				count, err := parseVarList(it, child)
-				if err != nil {
-					return err
-				}
-				if count != 1 {
-					x.Errorf("Expected one variable inside var() of aggregator but got %v", count)
-				}
-				child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
 				child.Func = &Function{
 					Name:     valLower,
 					NeedsVar: child.NeedsVar,

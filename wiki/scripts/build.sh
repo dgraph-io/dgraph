@@ -12,14 +12,30 @@ GREEN='\033[32;1m'
 RESET='\033[0m'
 HOST=https://docs.dgraph.io
 
+# Place the latest version at the beginning so that version selector can
+# append '(latest)' to the version string
+VERSIONS=(
+  'v0.7.6'
+  'master'
+  'v0.7.5'
+  'v0.7.4'
+)
+
+joinVersions() {
+	versions=$(printf ",%s" "${VERSIONS[@]}")
+	echo ${versions:1}
+}
+
 rebuild() {
 	echo -e "$(date) $GREEN Updating docs for branch: $1.$RESET"
 	# Generate new docs after merging.
 
 	# In Unix environments, env variables should also be exported to be seen by Hugo
 	export CURRENT_BRANCH=${1}
+	export VERSION_STRING=$(joinVersions)
 
 	HUGO_TITLE="Dgraph Doc ${2}"\
+	VERSIONS=${VERSION_STRING} \
 	CURRENT_BRANCH=${1} hugo\
 		--destination=public/"$2"\
 		--baseURL="$HOST"/"$2" 1> /dev/null
@@ -75,6 +91,7 @@ while true; do
 	echo -e "$(date)  Starting to check branches."
 	git remote update > /dev/null
 	# Todo have these in an array and loop over the array.
+	checkAndUpdate "release/v0.7.6" "v0.7.6"
 	checkAndUpdate "release/v0.7.5" "v0.7.5"
 	checkAndUpdate "release/v0.7.4" "v0.7.4"
 	checkAndUpdate "master" "master"
