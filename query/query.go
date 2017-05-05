@@ -943,6 +943,10 @@ func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint
 	return mp, nil
 }
 
+func transformVars(mNode) error {
+
+}
+
 func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubGraph) error {
 	if !sg.IsInternal() && !sg.IsGroupBy() {
 		return nil
@@ -966,6 +970,9 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 		}
 		sg.Params.uidToVal = mp
 	} else if sg.MathExp != nil {
+		// TODO: Do some prepocessing to get all variables at the same level.
+		newMap, err := transformVars(sg.MathExp, doneVars)
+
 		err := evalMathTree(sg.MathExp, doneVars)
 		if err != nil {
 			return err
