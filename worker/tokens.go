@@ -119,11 +119,7 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	isgeOrGt := f == "ge" || f == "gt"
 	it := pstore.NewIterator(!isgeOrGt)
 	defer it.Close()
-	if isgeOrGt {
-		it.Seek(x.IndexKey(attr, ineqToken))
-	} else {
-		it.SeekForPrev(x.IndexKey(attr, ineqToken))
-	}
+	it.Seek(x.IndexKey(attr, ineqToken)) // If !isgeOrGt, then this is a SeekForPrev.
 
 	isPresent := it.Valid() && len(it.Value()) > 0
 	idxKey := x.Parse(it.Key())

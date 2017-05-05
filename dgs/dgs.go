@@ -27,11 +27,16 @@ type WriteBatch interface {
 }
 
 type Iterator interface {
-	Rewind()
+	// Seek to >= key if !reversed. Seek to <= key if reversed. This makes merge iterators simpler.
 	Seek(key []byte)
-	SeekForPrev(key []byte)
+
+	// SeekToFirst if !reversed. SeekToLast if reversed.
+	Rewind()
 	Close()
+
+	// Next if !reversed. Prev if reversed.
 	Next()
+
 	Valid() bool
 	ValidForPrefix(prefix []byte) bool
 	Key() []byte

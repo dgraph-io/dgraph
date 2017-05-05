@@ -91,16 +91,14 @@ func (iter *Iterator) Rewind() {
 	}
 }
 
-// Seek moves the iterator to the position >= key.
+// Seek moves the iterator to the position >= key or <= key.
 func (iter *Iterator) Seek(key []byte) {
 	cKey := byteToChar(key)
-	C.rdb_iter_seek(iter.c, cKey, C.size_t(len(key)))
-}
-
-// SeekForPrev moves the iterator to the position <= key.
-func (iter *Iterator) SeekForPrev(key []byte) {
-	cKey := byteToChar(key)
-	C.rdb_iter_seek_for_prev(iter.c, cKey, C.size_t(len(key)))
+	if !iter.reversed {
+		C.rdb_iter_seek(iter.c, cKey, C.size_t(len(key)))
+	} else {
+		C.rdb_iter_seek_for_prev(iter.c, cKey, C.size_t(len(key)))
+	}
 }
 
 // Err returns nil if no errors happened during iteration, or the actual

@@ -185,15 +185,15 @@ func sortWithIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, erro
 	}
 
 	indexPrefix := x.IndexKey(ts.Attr, string(tokenizer.Identifier()))
+	var seekKey []byte
 	if !ts.Desc {
 		// We need to seek to the first key of this index type.
-		seekKey := indexPrefix
-		it.Seek(seekKey)
+		seekKey = indexPrefix
 	} else {
 		// We need to reach the last key of this index type.
-		seekKey := x.IndexKey(ts.Attr, string(tokenizer.Identifier()+1))
-		it.SeekForPrev(seekKey)
+		seekKey = x.IndexKey(ts.Attr, string(tokenizer.Identifier()+1))
 	}
+	it.Seek(seekKey)
 
 BUCKETS:
 
