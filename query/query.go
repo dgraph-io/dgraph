@@ -895,6 +895,7 @@ type values struct {
 	uids    *taskp.List
 	vals    map[uint64]types.Val
 	strList []*taskp.Value
+	path    []*SubGraph // This stores the subgraph path from root to var definition.
 }
 
 func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint64]types.Val,
@@ -1114,7 +1115,8 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		for _, idx := range idxList {
 			sg := sgl[idx]
 			isCascade := sg.Params.Cascade || shouldCascade(res, idx)
-			populateVarMap(sg, doneVars, isCascade)
+			var sgPath []*SubGraph
+			populateVarMap(sg, doneVars, isCascade, sgPath)
 			err = sg.populatePostAggregation(doneVars, nil)
 			if err != nil {
 				return nil, err
@@ -1157,7 +1159,8 @@ func shouldCascade(res gql.Result, idx int) bool {
 	return true
 }
 
-func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
+func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool,
+	sgPath []*SubGraph) {
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return
 	}
@@ -1166,7 +1169,9 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 		goto AssignStep
 	}
 	for _, child := range sg.Children {
-		populateVarMap(child, doneVars, isCascade)
+		sgPath = append(sgPath, sg) // Add the current node to path
+		populateVarMap(child, doneVars, isCascade, sgPath)
+		sgPath = sgPath[:len(sgPath)-1] // Backtrack
 		if !isCascade {
 			continue
 		}
@@ -1216,11 +1221,66 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 	sg.DestUIDs = &taskp.List{out}
 
 AssignStep:
-	sg.assignVars(doneVars)
+	sg.assignVars(doneVars, sgPath)
 }
 
-func (sg *SubGraph) assignVars(doneVars map[string]values) {
+func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) {
+	if doneVars == nil || (sg.Params.Var == "" && sg.Params.FacetVar == nil) {
+		return
+	}
+
+	if sg.IsListNode() {
+		// This is a predicates list.
+		doneVars[sg.Params.Var] = values{
+			strList: sg.values,
+			path:    sgPath,
+		}
+	} else if len(sg.DestUIDs.Uids) != 0 {
+		// This implies it is a entity variable.
+		doneVars[sg.Params.Var] = values{
+			uids: sg.DestUIDs,
+			path: sgPath,
+		}
+	} else if len(sg.counts) != 0 {
+		// This implies it is a value variable.
+		doneVars[sg.Params.Var] = values{
+			vals: make(map[uint64]types.Val),
+			path: sgPath,
+		}
+		for idx, uid := range sg.SrcUIDs.Uids {
+			//val, _ := getValue(sg.values[idx])
+			val := types.Val{
+				Tid:   types.IntID,
+				Value: int64(sg.counts[idx]),
+			}
+			doneVars[sg.Params.Var].vals[uid] = val
+		}
+	} else if len(sg.values) != 0 && sg.SrcUIDs != nil {
+		// This implies it is a value variable.
+		doneVars[sg.Params.Var] = values{
+			vals: make(map[uint64]types.Val),
+			path: sgPath,
+		}
+		for idx, uid := range sg.SrcUIDs.Uids {
+			val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
+			if err != nil {
+				continue
+			}
+			doneVars[sg.Params.Var].vals[uid] = val
+		}
+	} else {
+		// Insert a empty entry to keep the dependency happy.
+		doneVars[sg.Params.Var] = values{
+			path: sgPath,
+		}
+	}
+
 	if sg.Params.FacetVar != nil {
+		sgPath = append(sgPath, sg)
+		defer func() {
+			sgPath = sgPath[:len(sgPath)-1] // Backtrack
+		}()
+
 		if len(sg.facetsMatrix) == 0 {
 			return
 		}
@@ -1231,6 +1291,7 @@ func (sg *SubGraph) assignVars(doneVars map[string]values) {
 			}
 			doneVars[fvar] = values{
 				vals: make(map[uint64]types.Val),
+				path: sgPath,
 			}
 		}
 		// Note: We ignore the facets if its a value edge as we can't
@@ -1246,50 +1307,6 @@ func (sg *SubGraph) assignVars(doneVars map[string]values) {
 				}
 			}
 		}
-	}
-
-	if sg.Params.Var == "" {
-		return
-	}
-
-	if sg.IsListNode() {
-		// This is a predicates list.
-		doneVars[sg.Params.Var] = values{
-			strList: sg.values,
-		}
-	} else if len(sg.DestUIDs.Uids) != 0 {
-		// This implies it is a entity variable.
-		doneVars[sg.Params.Var] = values{
-			uids: sg.DestUIDs,
-		}
-	} else if len(sg.counts) != 0 {
-		// This implies it is a value variable.
-		doneVars[sg.Params.Var] = values{
-			vals: make(map[uint64]types.Val),
-		}
-		for idx, uid := range sg.SrcUIDs.Uids {
-			//val, _ := getValue(sg.values[idx])
-			val := types.Val{
-				Tid:   types.IntID,
-				Value: int64(sg.counts[idx]),
-			}
-			doneVars[sg.Params.Var].vals[uid] = val
-		}
-	} else if len(sg.values) != 0 && sg.SrcUIDs != nil {
-		// This implies it is a value variable.
-		doneVars[sg.Params.Var] = values{
-			vals: make(map[uint64]types.Val),
-		}
-		for idx, uid := range sg.SrcUIDs.Uids {
-			val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
-			if err != nil {
-				continue
-			}
-			doneVars[sg.Params.Var].vals[uid] = val
-		}
-	} else {
-		// Insert a empty entry to keep the dependency happy.
-		doneVars[sg.Params.Var] = values{}
 	}
 }
 
@@ -1492,7 +1509,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 	// We store any variable defined by this node in the map and pass it on
 	// to the children which might depend on it.
-	sg.assignVars(sg.Params.ParentVars)
+	sg.assignVars(sg.Params.ParentVars, []*SubGraph{})
 
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
