@@ -58,14 +58,14 @@ If you want to persist the data while you play with Dgraph, you should mount the
 
 ```sh
 mkdir -p ~/dgraph
-docker run -it -p 8080:8080 -v ~/dgraph:/dgraph dgraph/dgraph dgraph --bindall=true
+docker run -it -p 8080:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
 #### Map to custom port
 ```sh
 mkdir -p ~/dgraph
 # Mapping port 8080 from within the container to 9090  of the instance
-docker run -it -p 9090:8080 -v ~/dgraph:/dgraph dgraph/dgraph dgraph --bindall=true
+docker run -it -p 9090:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
 {{% notice "note" %}}The dgraph server listens on port 8080 (unless you have mapped to another port above) with log output to the terminal.{{% /notice %}}
@@ -239,6 +239,12 @@ Now lets load the golden dataset that you previously downloaded by running the f
 ```sh
 cd ~/dgraph # The directory where you downloaded the rdf.gz file.
 dgraphloader -r goldendata.rdf.gz
+```
+
+### Using docker
+
+```sh
+docker exec -it dgraph dgraphloader -r goldendata.rdf.gz
 ```
 
 Output
