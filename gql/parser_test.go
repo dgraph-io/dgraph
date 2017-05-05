@@ -3216,6 +3216,7 @@ func TestParseRegexp6(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	x.Init()
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
 	defer os.RemoveAll(dir)
