@@ -771,6 +771,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		ParentVars: make(map[string]values),
 		Normalize:  gq.Normalize,
 		Cascade:    gq.Cascade,
+		isGroupBy:  gq.IsGroupby,
 	}
 	if gq.Facets != nil {
 		args.Facet = &facetsp.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -947,9 +948,9 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 	}
 
 	if sg.IsGroupBy() {
-		err := processGroupBy(sg)
+		err := sg.processGroupBy(doneVars)
 		if err != nil {
-			return nil
+			return err
 		}
 	} else if len(sg.SrcFunc) > 0 && !parent.IsGroupBy() && isAggregatorFn(sg.SrcFunc[0]) {
 		// Aggregate the value over level.
@@ -1157,7 +1158,7 @@ func shouldCascade(res gql.Result, idx int) bool {
 }
 
 func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
-	if sg.DestUIDs == nil {
+	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return
 	}
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
@@ -1311,21 +1312,6 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]values) error {
 	}
 	return nil
 }
-
-/*
-func (sg *SubGraph) fillUidVars(mp map[string]*taskp.List) {
-	lists := make([]*taskp.List, 0, 3)
-	if sg.DestUIDs != nil {
-		lists = append(lists, sg.DestUIDs)
-	}
-	for _, v := range sg.Params.NeedsVar {
-		if l, ok := mp[v.Name]; ok {
-			lists = append(lists, l)
-		}
-	}
-	sg.DestUIDs = algo.MergeSorted(lists)
-}
-*/
 
 func (sg *SubGraph) fillVars(mp map[string]values) error {
 	lists := make([]*taskp.List, 0, 3)

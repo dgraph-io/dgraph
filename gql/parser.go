@@ -741,9 +741,6 @@ L:
 				}
 				gq.Filter = filter
 
-			case "groupby":
-				gq.IsGroupby = true
-				parseGroupby(it, gq)
 			case "normalize":
 				gq.Normalize = true
 			case "cascade":
@@ -1949,7 +1946,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				it.Next()
 				if gq.IsGroupby {
 					item = it.Item()
-					it.Next()
 					child.Attr = item.Val
 					child.IsInternal = false
 				} else {

@@ -39,9 +39,11 @@ type groupResult struct {
 	uids       []uint64
 }
 
-// aggregateChild does the specified aggregation among the group elements.
-func (grp *groupResult) aggregateChild(child *SubGraph) {
+func (grp *groupResult) aggregateChild(child *SubGraph) error {
 	if child.Params.DoCount {
+		if child.Attr != "_uid_" {
+			return x.Errorf("Only _uid_ predicate is allowed in count within groupby")
+		}
 		grp.aggregates = append(grp.aggregates, groupPair{
 			attr: "count",
 			key: types.Val{
@@ -49,19 +51,20 @@ func (grp *groupResult) aggregateChild(child *SubGraph) {
 				Value: int64(len(grp.uids)),
 			},
 		})
-		return
+		return nil
 	}
 	if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
 		fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
 		finalVal, err := aggregateGroup(grp, child)
 		if err != nil {
-			return
+			return err
 		}
 		grp.aggregates = append(grp.aggregates, groupPair{
 			attr: fieldName,
 			key:  finalVal,
 		})
 	}
+	return nil
 }
 
 type groupResults struct {
@@ -108,7 +111,7 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 	// Create the string key.
 	var strKey string
 	if value.Tid == types.UidID {
-		strKey = strconv.FormatUint(uid, 10)
+		strKey = strconv.FormatUint(value.Value.(uint64), 10)
 	} else {
 		valC := types.Val{types.StringID, ""}
 		err := types.Marshal(value, &valC)
@@ -188,7 +191,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *taskp.List, groupVal []
 	}
 }
 
-func processGroupBy(sg *SubGraph) error {
+func (sg *SubGraph) processGroupBy(doneVars map[string]values) error {
 	mp := make(map[string]groupResult)
 	_ = mp
 	var dedupMap dedup
@@ -223,15 +226,34 @@ func processGroupBy(sg *SubGraph) error {
 	res.formGroups(dedupMap, &taskp.List{}, []groupPair{})
 
 	// Go over the groups and aggregate the values.
-	for i := range res.group {
-		grp := res.group[i]
-		for _, child := range sg.Children {
-			if child.Params.ignoreResult {
-				continue
-			}
-			// This is a aggregation node.
-			grp.aggregateChild(child)
+	for _, child := range sg.Children {
+		if child.Params.ignoreResult {
+			continue
 		}
+		// This is a aggregation node.
+		for _, grp := range res.group {
+			err := grp.aggregateChild(child)
+			if err != nil {
+				return err
+			}
+		}
+		chVar := child.Params.Var
+		if chVar != "" {
+			tempMap := make(map[uint64]types.Val)
+			for _, grp := range res.group {
+				if len(grp.keys) != 1 {
+					return x.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
+				}
+				uidVal := grp.keys[0].key.Value
+				uid, ok := uidVal.(uint64)
+				if !ok {
+					return x.Errorf("Vars can be assigned only when grouped by UID attribute")
+				}
+				tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
+			}
+			doneVars[chVar] = values{vals: tempMap}
+		}
+		child.Params.ignoreResult = true
 	}
 	// Sort to order the groups for determinism.
 	sort.Slice(res.group, func(i, j int) bool {
