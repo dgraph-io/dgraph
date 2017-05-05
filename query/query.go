@@ -1223,7 +1223,7 @@ AssignStep:
 }
 
 func (sg *SubGraph) assignVars(doneVars map[string]values) error {
-	if sg.Params.FacetVar != nil {
+	if sg.Params.FacetVar != nil && sg.Params.Facet != nil {
 		for _, it := range sg.Params.Facet.Keys {
 			fvar, ok := sg.Params.FacetVar[it]
 			if !ok {
