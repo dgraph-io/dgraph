@@ -11,12 +11,13 @@ hasChanged() {
 	return 1;
 }
 
-dgraph=$GOPATH/src/github.com/dgraph-io/dgraph
-cd $dgraph
-for f in $dgraph/protos/**/*.proto;
+protos=$GOPATH/src/github.com/dgraph-io/dgraph/protos
+cd $protos
+for f in $protos/*.proto;
 do
-	path=$(realpath --relative-to=$dgraph $f)
-	if hasChanged $path; then
+	path=$(realpath --relative-to=$protos $f)
+	echo $path
+	#if hasChanged $path; then
 		protoc --gofast_out=plugins=grpc:$GOPATH/src --proto_path=. $path
-	fi
+	#fi
 done

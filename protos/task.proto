@@ -1,17 +1,17 @@
 // Use protos/gen.sh to generate .pb.go files.
 
 syntax = "proto3";
-import "protos/facetsp/facets.proto";
-import "protos/graphp/graphresponse.proto";
+import "facets.proto";
+import "graphresponse.proto";
 
-package taskp;
-option go_package = "github.com/dgraph-io/dgraph/protos/taskp";
+package protos;
+option go_package = "github.com/dgraph-io/dgraph/protos";
 
 message List {
 	repeated fixed64 uids = 1;
 }
 
-message Value {
+message TaskValue {
 	bytes val = 1;
 	int32 val_type = 2;
 }
@@ -30,8 +30,8 @@ message Query {
 
 	bool reverse = 7;  // Whether this is a reverse edge.
 
-	facetsp.Param facet_param = 8; // which facets to fetch
-	facetsp.FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
+	Param facet_param = 8; // which facets to fetch
+	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
 }
 
 message Result {
@@ -39,10 +39,10 @@ message Result {
 	repeated Value values = 2;
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
-	repeated facetsp.List facet_matrix = 5;
+	repeated List facet_matrix = 5;
 }
 
-message Sort {
+message SortMessage {
 	string attr = 1;
 	repeated string langs = 2;
 	repeated List uid_matrix = 3;
@@ -103,16 +103,16 @@ message DirectedEdge {
 		DEL = 1;
 	}
 	Op op = 8;
-	repeated facetsp.Facet facets = 9;
+	repeated Facet facets = 9;
 }
 
 message Mutations {
 	uint32 group_id = 1;
 	repeated DirectedEdge edges = 2;
-	repeated graphp.SchemaUpdate schema = 3;
+	repeated SchemaUpdate schema = 3;
 }
 
-message Schema {
+message SchemaMessage {
 	uint32 group_id = 1;
 	repeated string predicates = 2;
 	// fields can be on of type, index, reverse or tokenizer
@@ -120,10 +120,10 @@ message Schema {
 }
 
 message SchemaResult {
-	repeated graphp.SchemaNode schema = 1;
+	repeated SchemaNode schema = 1;
 }
 
-message RebuildIndex {
+message RebuildIndexMessage {
 	uint32 group_id = 1;
 	string attr = 2;  // For simplicity, just do one attribute per request.
 }
@@ -132,7 +132,7 @@ message Proposal {
 	uint32 id = 1;
 	Mutations mutations = 2;
 	Membership membership = 3;
-	RebuildIndex rebuild_index = 4;
+	RebuildIndexMessage rebuild_index = 4;
 }
 
 message KV {

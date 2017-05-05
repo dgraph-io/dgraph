@@ -22,7 +22,7 @@ import (
 	"context"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/protos/facetsp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -70,7 +70,7 @@ type nodeInfo struct {
 	cost   float64
 	parent uint64
 	attr   string
-	facet  *facetsp.Facets
+	facet  *protos.Facets
 	// Pointer to the item in heap. Used to update priority
 	node *Item
 }
@@ -78,11 +78,11 @@ type nodeInfo struct {
 type mapItem struct {
 	attr  string
 	cost  float64
-	facet *facetsp.Facets
+	facet *protos.Facets
 }
 
 func (sg *SubGraph) getCost(matrix, list int) (cost float64,
-	fcs *facetsp.Facets, rerr error) {
+	fcs *protos.Facets, rerr error) {
 
 	cost = 1.0
 	if sg.Params.Facet == nil {
@@ -402,10 +402,10 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		}
 		if nodeInfo.facet != nil {
 			// For consistent later processing.
-			node.Params.Facet = &facetsp.Param{}
+			node.Params.Facet = &protos.Param{}
 		}
 		node.Attr = nodeInfo.attr
-		node.facetsMatrix = []*facetsp.List{{[]*facetsp.Facets{nodeInfo.facet}}}
+		node.facetsMatrix = []*protos.List{{[]*protos.Facets{nodeInfo.facet}}}
 		node.SrcUIDs = &taskp.List{[]uint64{curUid}}
 		node.DestUIDs = &taskp.List{[]uint64{childUid}}
 		node.uidMatrix = []*taskp.List{{[]uint64{childUid}}}

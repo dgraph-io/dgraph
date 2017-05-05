@@ -2,8 +2,7 @@
 
 syntax = "proto3";
 
-package facetsp;
-option go_package = "github.com/dgraph-io/dgraph/protos/facetsp";
+package protos;
 
 message Facet {
 	enum ValType {
@@ -29,7 +28,7 @@ message Facets {
 	repeated Facet facets = 1;
 }
 
-message List {
+message FacetsList {
 	repeated Facets facets_list = 1;
 }
 

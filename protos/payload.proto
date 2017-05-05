@@ -1,11 +1,10 @@
-// Use protos/gen.sh to generate .pb.go files.
+// Use gen.sh to generate .pb.go files.
 
 syntax = "proto3";
+import "task.proto";
 
-import "protos/taskp/task.proto";
-
-package workerp;
-option go_package = "github.com/dgraph-io/dgraph/protos/workerp";
+package protos;
+option go_package = "github.com/dgraph-io/dgraph/protos";
 
 message Payload {
 	bytes Data = 1;
@@ -31,17 +30,17 @@ service Worker {
 	rpc Echo (Payload)             returns (Payload) {}
 
 	// Data serving RPCs.
-	rpc AssignUids (taskp.Num)                 returns (taskp.List) {}
-	rpc Mutate (taskp.Mutations)               returns (Payload) {}
-	rpc ServeTask (taskp.Query)                returns (taskp.Result) {}
-	rpc PredicateAndSchemaData (stream taskp.GroupKeys) returns (stream taskp.KV) {}
-	rpc Sort (taskp.Sort)                      returns (taskp.SortResult) {}
-	rpc RebuildIndex (taskp.RebuildIndex)      returns (Payload) {}
-	rpc Schema (taskp.Schema)                  returns (taskp.SchemaResult) {}
+	rpc AssignUids (Num)                 returns (List) {}
+	rpc Mutate (Mutations)               returns (Payload) {}
+	rpc ServeTask (Query)                returns (Result) {}
+	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
+	rpc Sort (SortMessage)                      returns (SortResult) {}
+	rpc RebuildIndex (RebuildIndexMessage)      returns (Payload) {}
+	rpc Schema (SchemaMessage)                  returns (SchemaResult) {}
 
 	// RAFT serving RPCs.
 	rpc RaftMessage (Payload)                     returns (Payload) {}
-	rpc JoinCluster (taskp.RaftContext)            returns (Payload) {}
-	rpc UpdateMembership (taskp.MembershipUpdate)  returns (taskp.MembershipUpdate) {}
+	rpc JoinCluster (RaftContext)            returns (Payload) {}
+	rpc UpdateMembership (MembershipUpdate)  returns (MembershipUpdate) {}
 	rpc Backup (BackupPayload)                    returns (BackupPayload) {}
 }

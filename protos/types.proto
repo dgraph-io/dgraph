@@ -1,11 +1,10 @@
 // Use protos/gen.sh to generate .pb.go files.
 
 syntax = "proto3";
+import "facets.proto";
 
-import "protos/facetsp/facets.proto";
-
-package typesp;
-option go_package = "github.com/dgraph-io/dgraph/protos/typesp";
+package protos;
+option go_package = "github.com/dgraph-io/dgraph/protos";
 
 message Posting {
 	fixed64 uid = 1;
@@ -35,7 +34,7 @@ message Posting {
 	bytes metadata = 5; // for VALUE_LANG: Language, for VALUE_TIMESERIES: timestamp, etc..
 	string label = 6;
 	uint64 commit = 7;  // More inclination towards smaller values.
-	repeated facetsp.Facet facets = 8;
+	repeated Facet facets = 8;
 
 	// TODO: op is only used temporarily. See if we can remove it from here.
 	uint32 op = 12;
