@@ -1,4 +1,7 @@
 matrix:
+  fast_finish: true
+  allow_failures:
+    - os: osx
   include:
     - os: linux
       compiler: clang-3.9
