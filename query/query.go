@@ -293,7 +293,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			continue
 		}
 		if pc.Params.isGroupBy {
-			// TODO: Add the results for groupby node here.
 			g := dst.New(pc.Attr)
 			for _, grp := range pc.GroupbyRes.group {
 				uc := g.New("@groupby")
@@ -892,6 +891,7 @@ func createTaskQuery(sg *SubGraph) *taskp.Query {
 }
 
 type values struct {
+	valType int // 0 -> attribute, 1 -> facet
 	uids    *taskp.List
 	vals    map[uint64]types.Val
 	strList []*taskp.Value
@@ -965,7 +965,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 		}
 		sg.Params.uidToVal = mp
 	} else if sg.MathExp != nil {
-		err := evalMathTree(sg.MathExp, doneVars)
+		err := sg.evalMathTree(sg.MathExp, parent, doneVars)
 		if err != nil {
 			return err
 		}
@@ -998,15 +998,18 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 }
 
 func (sg *SubGraph) populatePostAggregation(doneVars map[string]values, parent *SubGraph) error {
+	err := sg.valueVarAggregation(doneVars, parent)
+	if err != nil {
+		return err
+	}
 	for idx := 0; idx < len(sg.Children); idx++ {
 		child := sg.Children[idx]
 		err := child.populatePostAggregation(doneVars, sg)
 		if err != nil {
 			return err
 		}
-		// We'd also need to do aggregation over levels here.
 	}
-	return sg.valueVarAggregation(doneVars, parent)
+	return nil
 }
 
 func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
@@ -1157,9 +1160,9 @@ func shouldCascade(res gql.Result, idx int) bool {
 	return true
 }
 
-func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
+func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) error {
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
-		return
+		return nil
 	}
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
@@ -1216,21 +1219,19 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool) {
 	sg.DestUIDs = &taskp.List{out}
 
 AssignStep:
-	sg.assignVars(doneVars)
+	return sg.assignVars(doneVars)
 }
 
-func (sg *SubGraph) assignVars(doneVars map[string]values) {
-	if sg.Params.FacetVar != nil {
-		if len(sg.facetsMatrix) == 0 {
-			return
-		}
+func (sg *SubGraph) assignVars(doneVars map[string]values) error {
+	if sg.Params.FacetVar != nil && sg.Params.Facet != nil {
 		for _, it := range sg.Params.Facet.Keys {
 			fvar, ok := sg.Params.FacetVar[it]
 			if !ok {
 				continue
 			}
 			doneVars[fvar] = values{
-				vals: make(map[uint64]types.Val),
+				vals:    make(map[uint64]types.Val),
+				valType: 1,
 			}
 		}
 		// Note: We ignore the facets if its a value edge as we can't
@@ -1241,7 +1242,24 @@ func (sg *SubGraph) assignVars(doneVars map[string]values) {
 				for _, f := range facet.Facets {
 					fvar, ok := sg.Params.FacetVar[f.Key]
 					if ok {
-						doneVars[fvar].vals[uid] = facets.ValFor(f)
+						if pVal, ok := doneVars[fvar].vals[uid]; !ok {
+							doneVars[fvar].vals[uid] = facets.ValFor(f)
+						} else {
+							// If the value is int/float we add them up. Else we throw an error as
+							// many to one maps are not allowed for other types.
+							nVal := facets.ValFor(f)
+							if nVal.Tid != types.IntID && nVal.Tid != types.FloatID {
+								return x.Errorf("Repeated id with non int/float value for facet var encountered.")
+							}
+							ag := aggregator{name: "sum"}
+							ag.Apply(pVal)
+							ag.Apply(nVal)
+							fVal, err := ag.Value()
+							if err != nil {
+								continue
+							}
+							doneVars[fvar].vals[uid] = fVal
+						}
 					}
 				}
 			}
@@ -1249,7 +1267,7 @@ func (sg *SubGraph) assignVars(doneVars map[string]values) {
 	}
 
 	if sg.Params.Var == "" {
-		return
+		return nil
 	}
 
 	if sg.IsListNode() {
@@ -1291,6 +1309,7 @@ func (sg *SubGraph) assignVars(doneVars map[string]values) {
 		// Insert a empty entry to keep the dependency happy.
 		doneVars[sg.Params.Var] = values{}
 	}
+	return nil
 }
 
 func (sg *SubGraph) recursiveFillVars(doneVars map[string]values) error {

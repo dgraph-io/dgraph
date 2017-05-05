@@ -99,6 +99,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "path", 1000, 1002, map[string]string{"weight": "0.7"})
 	addEdgeToUID(t, "path", 1001, 1002, map[string]string{"weight": "0.1"})
 	addEdgeToUID(t, "path", 1002, 1003, map[string]string{"weight": "0.6"})
+	addEdgeToUID(t, "path", 1001, 1003, map[string]string{"weight": "1.5"})
 	addEdgeToUID(t, "path", 1003, 1001, map[string]string{})
 
 	addEdgeToValue(t, "name", 1000, "Alice", nil)
@@ -1088,6 +1089,31 @@ func TestUseVarsMultiOrder(t *testing.T) {
 		js)
 }
 
+func TestLevelBasedFacetVarSum(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			friend(id: 1000) {
+				path @facets(L1 as weight) {
+					name
+					path @facets(L2 as weight)
+					L3 as math(L1+L2)
+			 }
+			}
+
+			sum(id: var(L3), orderdesc: var(L3)) {
+				name
+				var(L3)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
+	require.JSONEq(t,
+		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"name":"Bob","path":[{"@facets":{"_":{"weight":0.100000}}},{"@facets":{"_":{"weight":1.500000}}}]},{"@facets":{"_":{"weight":0.700000}},"name":"Matt","path":[{"@facets":{"_":{"weight":0.600000}}}],"var(L3)":0.200000}]}],"sum":[{"name":"John","var(L3)":2.900000},{"name":"Matt","var(L3)":0.200000}]}`,
+		js)
+}
+
 func TestFilterFacetVar(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1230,6 +1256,56 @@ func TestRecurseQueryLimitDepth(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+}
+
+func TestWrongFacetVarLevel_Error1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 1) {
+				l1 as path @facets(weight) {
+					l2 as path @facets(weight) {
+						l3 as math(l2 + l1)
+					}
+				}
+			}
+			you(id:var(l3)) {
+				name
+				var(l3)
+			}
+		}`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+func TestWrongFacetVarLevel_Error2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 1) {
+				l1 as path @facets(weight) {
+					path {
+						l2 as path @facets(weight) 
+						l3 as math(l2 + l1)
+					}
+				}
+			}
+			you(id:var(l3)) {
+				name
+				var(l3)
+			}
+		}`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
 }
 
 func TestShortestPath_ExpandError(t *testing.T) {
@@ -1400,24 +1476,6 @@ func TestShortestPath2(t *testing.T) {
 	require.JSONEq(t,
 		`{"_path_":[{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8"}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"}]}
 `,
-		js)
-}
-
-func TestShortestPath3(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			A as shortest(from:1, to:1003) {
-				path
-			}
-
-			me(id: var( A)) {
-				name
-			}
-		}`
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"_path_":[{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3ea","path":[{"_uid_":"0x3eb"}]}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Matt"},{"name":"John"}]}`,
 		js)
 }
 
@@ -1825,8 +1883,10 @@ func TestMultiLevelAgg1(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 	{
-		var(func: anyofterms(name, "michonne rick andrea")) @filter(gt(count(friend), 0)){
+		info(func: anyofterms(name, "michonne rick andrea")) @filter(gt(count(friend), 0)){
+			name
 			friend {
+				name
 				s as count(friend)
 			}
 			ss as sum(var(s))
@@ -1840,7 +1900,7 @@ func TestMultiLevelAgg1(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"sumorder":[{"name":"Andrea","var(ss)":0},{"name":"Michonne","var(ss)":2},{"name":"Rick Grimes","var(ss)":5}]}`,
+		`{"info":[{"friend":[{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":0}],"name":"Glenn Rhee"},{"friend":[{"count":0}],"name":"Daryl Dixon"},{"friend":[{"count":1}],"name":"Andrea"},{"friend":[{"count":0}]}],"name":"Michonne","sum(var(s))":2},{"friend":[{"friend":[{"count":5}],"name":"Michonne"}],"name":"Rick Grimes","sum(var(s))":5},{"friend":[{"friend":[{"count":0}],"name":"Glenn Rhee"}],"name":"Andrea","sum(var(s))":0}],"sumorder":[{"name":"Andrea","var(ss)":0},{"name":"Michonne","var(ss)":2},{"name":"Rick Grimes","var(ss)":5}]}`,
 		js)
 }
 

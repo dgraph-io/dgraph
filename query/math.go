@@ -1,6 +1,8 @@
 package query
 
 import (
+	"fmt"
+
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -76,13 +78,13 @@ func processBinary(mNode *gql.MathTree) (err error) {
 		name: aggName,
 	}
 	err = ag.ApplyVal(cl)
-			if err != nil {
-				return err
-			}
+	if err != nil {
+		return err
+	}
 	err = ag.ApplyVal(cr)
-			if err != nil {
-				return err
-			}
+	if err != nil {
+		return err
+	}
 	mNode.Const, err = ag.Value()
 	return err
 }
@@ -100,18 +102,18 @@ func processUnary(mNode *gql.MathTree) (err error) {
 	if ch.Const.Value != nil {
 		// Use the constant value that was supplied.
 		err = ag.ApplyVal(ch.Const)
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
+		}
 		mNode.Const, err = ag.Value()
 		return err
 	}
 
 	for k, val := range srcMap {
 		err = ag.ApplyVal(val)
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
+		}
 		destMap[k], err = ag.Value()
 		if err != nil {
 			return err
@@ -190,7 +192,100 @@ func processTernary(mNode *gql.MathTree) (err error) {
 	return nil
 }
 
-func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) (err error) {
+func rec(mNode *gql.MathTree, allowedVars map[string]struct{}) error {
+	if mNode == nil {
+		return nil
+	}
+	if _, ok := allowedVars[mNode.Var]; mNode.Var != "" && !ok {
+		return x.Errorf("Var %v used at wrong math level", mNode.Var)
+	}
+	for _, ch := range mNode.Child {
+		if err := rec(ch, allowedVars); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// transformParentVar transforms the value variable at the parent level to the variable
+// at its child level using the childs UID matrix.
+func transformParentVar(mNode *gql.MathTree, parent *SubGraph, doneVars map[string]values) error {
+	// If a variable from parent level is used at this level, we do some
+	// level based processing before doing the math op.
+	siblingVar, parentVar := "", ""
+	isSameLevel := true
+	var modMathNode *gql.MathTree
+	for _, mch := range mNode.Child {
+		for _, fvar := range parent.Params.FacetVar {
+			if fvar == mch.Var {
+				parentVar = mch.Var
+				isSameLevel = false
+				modMathNode = mch
+			} else {
+				siblingVar = mch.Var
+			}
+		}
+	}
+	fmt.Println(parentVar, siblingVar, "***", isSameLevel)
+
+	if isSameLevel {
+		// No ransformation required.
+		return nil
+	}
+
+	// The parent has the variable. So do an iterative summing.
+	var siblingNode *SubGraph
+	for _, ch := range parent.Children {
+		for _, fvar := range ch.Params.FacetVar {
+			if fvar == siblingVar {
+				siblingNode = ch
+				break
+			}
+		}
+		if ch.Params.Var == siblingVar {
+			siblingNode = ch
+		}
+	}
+	if siblingNode == nil {
+		return x.Errorf("Var %v is used at a wrong level", parentVar)
+	}
+	v, ok := doneVars[parentVar]
+	if !ok {
+		return x.Errorf("Variable not found.")
+	}
+	newMap := make(map[uint64]types.Val)
+	if v.valType != 1 {
+		// Ensure that this is a facet var.
+		return x.Errorf("Invalid variable type encountered in math.")
+	}
+	for i := 0; i < len(siblingNode.uidMatrix); i++ {
+		ul := siblingNode.uidMatrix[i]
+		srcUid := siblingNode.SrcUIDs.Uids[i]
+		curVal, ok := v.vals[srcUid]
+		if curVal.Tid != types.IntID && curVal.Tid != types.FloatID {
+			return x.Errorf("Encountered non int/float type for summing")
+		}
+		if !ok || curVal.Value == nil {
+			continue
+		}
+		for j := 0; j < len(ul.Uids); j++ {
+			dstUid := ul.Uids[j]
+			ag := aggregator{name: "sum"}
+			ag.Apply(curVal)
+			ag.Apply(newMap[dstUid])
+			val, err := ag.Value()
+			if err != nil {
+				continue
+			}
+			newMap[dstUid] = val
+		}
+	}
+	fmt.Println(newMap, "$$$")
+	modMathNode.Val = newMap
+	return nil
+}
+
+func (sg *SubGraph) evalMathTree(mNode *gql.MathTree, parent *SubGraph, doneVars map[string]values) (err error) {
 	if mNode.Const.Value != nil {
 		return nil
 	}
@@ -205,27 +300,54 @@ func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) (err error) {
 
 	for _, child := range mNode.Child {
 		// Process the child nodes first.
-		err := evalMathTree(child, doneVars)
+		err := sg.evalMathTree(child, parent, doneVars)
 		if err != nil {
 			return err
 		}
 	}
 
+	allowedVars := make(map[string]struct{})
+	if parent.Params.FacetVar != nil {
+		for _, v := range parent.Params.FacetVar {
+			allowedVars[v] = struct{}{}
+		}
+	}
+
+	for _, ch := range parent.Children {
+		if ch.Params.FacetVar != nil {
+			for _, v := range ch.Params.FacetVar {
+				allowedVars[v] = struct{}{}
+			}
+		}
+		allowedVars[ch.Params.Var] = struct{}{}
+	}
+
+	if err := rec(mNode, allowedVars); err != nil {
+		return err
+	}
+	fmt.Println(allowedVars)
+
 	aggName := mNode.Fn
+	if isBinary(aggName) {
+		if len(mNode.Child) != 2 {
+			return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
+				len(mNode.Child))
+		}
+		err := transformParentVar(mNode, parent, doneVars)
+		if err != nil {
+			return err
+		}
+		fmt.Println(mNode.Child[0].Val, "@@@")
+		fmt.Println(mNode.Child[1].Val, "@@@")
+		return processBinary(mNode)
+	}
+
 	if isUnary(aggName) {
 		if len(mNode.Child) != 1 {
 			return x.Errorf("Function %v expects 1 argument. But got: %v", aggName,
 				len(mNode.Child))
 		}
 		return processUnary(mNode)
-	}
-
-	if isBinary(aggName) {
-		if len(mNode.Child) != 2 {
-			return x.Errorf("Function %v expects 2 argument. But got: %v", aggName,
-				len(mNode.Child))
-		}
-		return processBinary(mNode)
 	}
 
 	if isBinaryBoolean(aggName) {
