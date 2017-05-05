@@ -34,7 +34,6 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/protos/protos"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"

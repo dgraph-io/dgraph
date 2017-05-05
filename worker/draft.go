@@ -31,8 +31,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/protos/workerp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -115,7 +114,7 @@ type node struct {
 	messages    chan sendmsg
 	peers       peerPool
 	props       proposals
-	raftContext *taskp.RaftContext
+	raftContext *protos.RaftContext
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
 
@@ -167,7 +166,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 
 	store := raft.NewMemoryStorage()
-	rc := &taskp.RaftContext{
+	rc := &protos.RaftContext{
 		Addr:  myAddr,
 		Group: gid,
 		Id:    id,
@@ -218,7 +217,7 @@ func (n *node) Connect(pid uint64, addr string) {
 func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
 	addr := n.peers.Get(pid)
 	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
-	rc := &taskp.RaftContext{
+	rc := &protos.RaftContext{
 		Addr:  addr,
 		Group: n.raftContext.Group,
 		Id:    pid,
@@ -260,7 +259,7 @@ var slicePool = sync.Pool{
 	},
 }
 
-func (n *node) ProposeAndWait(ctx context.Context, proposal *taskp.Proposal) error {
+func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
 	}
@@ -397,8 +396,8 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	x.Check(err)
 	defer pool.Put(conn)
 
-	c := workerp.NewWorkerClient(conn)
-	p := &workerp.Payload{Data: data}
+	c := protos.NewWorkerClient(conn)
+	p := &protos.Payload{Data: data}
 
 	ch := make(chan error, 1)
 	go func() {
@@ -416,7 +415,7 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
-func (n *node) processMutation(e raftpb.Entry, m *taskp.Mutations) error {
+func (n *node) processMutation(e raftpb.Entry, m *protos.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
@@ -427,7 +426,7 @@ func (n *node) processMutation(e raftpb.Entry, m *taskp.Mutations) error {
 	return nil
 }
 
-func (n *node) processSchemaMutations(e raftpb.Entry, m *taskp.Mutations) error {
+func (n *node) processSchemaMutations(e raftpb.Entry, m *protos.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
@@ -438,7 +437,7 @@ func (n *node) processSchemaMutations(e raftpb.Entry, m *taskp.Mutations) error 
 	return nil
 }
 
-func (n *node) processMembership(e raftpb.Entry, mm *taskp.Membership) error {
+func (n *node) processMembership(e raftpb.Entry, mm *protos.Membership) error {
 	x.AssertTrue(n.gid == 0)
 
 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
@@ -458,7 +457,7 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	}
 
 	pending <- struct{}{} // This will block until we can write to it.
-	var proposal taskp.Proposal
+	var proposal protos.Proposal
 	x.AssertTrue(len(e.Data) > 0)
 	x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
 
@@ -491,7 +490,7 @@ func (n *node) processApplyCh() {
 			cc.Unmarshal(e.Data)
 
 			if len(cc.Context) > 0 {
-				var rc taskp.RaftContext
+				var rc protos.RaftContext
 				x.Check(rc.Unmarshal(cc.Context))
 				n.Connect(rc.Id, rc.Addr)
 			}
@@ -506,7 +505,7 @@ func (n *node) processApplyCh() {
 		// We derive the schema here if it's not present
 		// Since raft committed logs are serialized, we can derive
 		// schema here without any locking
-		var proposal taskp.Proposal
+		var proposal protos.Proposal
 		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
 
 		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {
@@ -569,7 +568,7 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 	n.store.Append(es)
 }
 
-func (n *node) retrieveSnapshot(rc taskp.RaftContext) {
+func (n *node) retrieveSnapshot(rc protos.RaftContext) {
 	addr := n.peers.Get(rc.Id)
 	x.AssertTruef(addr != "", "Should have the address for %d", rc.Id)
 	pool := pools().get(addr)
@@ -630,7 +629,7 @@ func (n *node) Run() {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
 				// snapshot that I created. Only the former case should be handled.
-				var rc taskp.RaftContext
+				var rc protos.RaftContext
 				x.Check(rc.Unmarshal(rd.Snapshot.Data))
 				if rc.Id != n.id {
 					fmt.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
@@ -771,7 +770,7 @@ func (n *node) joinPeers() {
 	x.Check(err)
 	defer pool.Put(conn)
 
-	c := workerp.NewWorkerClient(conn)
+	c := protos.NewWorkerClient(conn)
 	x.Printf("Calling JoinCluster")
 	_, err = c.JoinCluster(n.ctx, n.raftContext)
 	x.Checkf(err, "Error while joining cluster")
@@ -864,7 +863,7 @@ func (n *node) AmLeader() bool {
 }
 
 func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error {
-	var rc taskp.RaftContext
+	var rc protos.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
 	node := groups().Node(rc.Group)
 	// TODO: Handle the case where node isn't present for this group.
@@ -881,9 +880,9 @@ func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error
 	}
 }
 
-func (w *grpcWorker) RaftMessage(ctx context.Context, query *workerp.Payload) (*workerp.Payload, error) {
+func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*protos.Payload, error) {
 	if ctx.Err() != nil {
-		return &workerp.Payload{}, ctx.Err()
+		return &protos.Payload{}, ctx.Err()
 	}
 
 	for idx := 0; idx < len(query.Data); {
@@ -894,7 +893,7 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *workerp.Payload) (*
 		idx += 4
 		msg := raftpb.Message{}
 		if idx+sz-1 > len(query.Data) {
-			return &workerp.Payload{}, x.Errorf(
+			return &protos.Payload{}, x.Errorf(
 				"Invalid query. Size specified: %v. Size of array: %v\n", sz, len(query.Data))
 		}
 		if err := msg.Unmarshal(query.Data[idx : idx+sz]); err != nil {
@@ -904,27 +903,27 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *workerp.Payload) (*
 			fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
 		if err := w.applyMessage(ctx, msg); err != nil {
-			return &workerp.Payload{}, err
+			return &protos.Payload{}, err
 		}
 		idx += sz
 	}
 	// fmt.Printf("Got %d messages\n", count)
-	return &workerp.Payload{}, nil
+	return &protos.Payload{}, nil
 }
 
-func (w *grpcWorker) JoinCluster(ctx context.Context, rc *taskp.RaftContext) (*workerp.Payload, error) {
+func (w *grpcWorker) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*protos.Payload, error) {
 	if ctx.Err() != nil {
-		return &workerp.Payload{}, ctx.Err()
+		return &protos.Payload{}, ctx.Err()
 	}
 
 	// Best effor reject
 	if _, found := groups().Server(rc.Id, rc.Group); found || rc.Id == *raftId {
-		return &workerp.Payload{}, x.Errorf(ErrorNodeIDExists)
+		return &protos.Payload{}, x.Errorf(ErrorNodeIDExists)
 	}
 
 	node := groups().Node(rc.Group)
 	if node == nil {
-		return &workerp.Payload{}, nil
+		return &protos.Payload{}, nil
 	}
 	node.Connect(rc.Id, rc.Addr)
 
@@ -933,8 +932,8 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *taskp.RaftContext) (*w
 
 	select {
 	case <-ctx.Done():
-		return &workerp.Payload{}, ctx.Err()
+		return &protos.Payload{}, ctx.Err()
 	case err := <-c:
-		return &workerp.Payload{}, err
+		return &protos.Payload{}, err
 	}
 }

@@ -5,7 +5,6 @@ import "facets.proto";
 import "graphresponse.proto";
 
 package protos;
-option go_package = "github.com/dgraph-io/dgraph/protos";
 
 message List {
 	repeated fixed64 uids = 1;

@@ -4,7 +4,6 @@ syntax = "proto3";
 import "task.proto";
 
 package protos;
-option go_package = "github.com/dgraph-io/dgraph/protos";
 
 message Payload {
 	bytes Data = 1;

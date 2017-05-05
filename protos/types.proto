@@ -4,7 +4,6 @@ syntax = "proto3";
 import "facets.proto";
 
 package protos;
-option go_package = "github.com/dgraph-io/dgraph/protos";
 
 message Posting {
 	fixed64 uid = 1;
@@ -46,7 +45,7 @@ message PostingList {
 	uint64 commit = 3; // More inclination towards smaller values.
 }
 
-message Schema {
+message TypesSchema {
 	uint32 value_type = 1;
 	enum Directive {
         NONE = 0;

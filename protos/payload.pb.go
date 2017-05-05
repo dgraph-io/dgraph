@@ -2,22 +2,11 @@
 // source: payload.proto
 // DO NOT EDIT!
 
-/*
-	Package protos is a generated protocol buffer package.
-
-	It is generated from these files:
-		payload.proto
-
-	It has these top-level messages:
-		Payload
-		BackupPayload
-*/
 package protos
 
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import protos3 "github.com/dgraph-io/dgraph/protos"
 
 import (
 	context "golang.org/x/net/context"
@@ -30,12 +19,6 @@ import io "io"
 var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
-
-// This is a compile-time assertion to ensure that this generated file
-// is compatible with the proto package it is being compiled against.
-// A compilation error at this line likely means your copy of the
-// proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type BackupPayload_Status int32
 
@@ -137,17 +120,17 @@ type WorkerClient interface {
 	// Connection testing RPC.
 	Echo(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
 	// Data serving RPCs.
-	AssignUids(ctx context.Context, in *protos3.Num, opts ...grpc.CallOption) (*protos3.List, error)
-	Mutate(ctx context.Context, in *protos3.Mutations, opts ...grpc.CallOption) (*Payload, error)
-	ServeTask(ctx context.Context, in *protos3.Query, opts ...grpc.CallOption) (*protos3.Result, error)
+	AssignUids(ctx context.Context, in *Num, opts ...grpc.CallOption) (*List, error)
+	Mutate(ctx context.Context, in *Mutations, opts ...grpc.CallOption) (*Payload, error)
+	ServeTask(ctx context.Context, in *Query, opts ...grpc.CallOption) (*Result, error)
 	PredicateAndSchemaData(ctx context.Context, opts ...grpc.CallOption) (Worker_PredicateAndSchemaDataClient, error)
-	Sort(ctx context.Context, in *protos3.SortMessage, opts ...grpc.CallOption) (*protos3.SortResult, error)
-	RebuildIndex(ctx context.Context, in *protos3.RebuildIndexMessage, opts ...grpc.CallOption) (*Payload, error)
-	Schema(ctx context.Context, in *protos3.SchemaMessage, opts ...grpc.CallOption) (*protos3.SchemaResult, error)
+	Sort(ctx context.Context, in *SortMessage, opts ...grpc.CallOption) (*SortResult, error)
+	RebuildIndex(ctx context.Context, in *RebuildIndexMessage, opts ...grpc.CallOption) (*Payload, error)
+	Schema(ctx context.Context, in *SchemaMessage, opts ...grpc.CallOption) (*SchemaResult, error)
 	// RAFT serving RPCs.
 	RaftMessage(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
-	JoinCluster(ctx context.Context, in *protos3.RaftContext, opts ...grpc.CallOption) (*Payload, error)
-	UpdateMembership(ctx context.Context, in *protos3.MembershipUpdate, opts ...grpc.CallOption) (*protos3.MembershipUpdate, error)
+	JoinCluster(ctx context.Context, in *RaftContext, opts ...grpc.CallOption) (*Payload, error)
+	UpdateMembership(ctx context.Context, in *MembershipUpdate, opts ...grpc.CallOption) (*MembershipUpdate, error)
 	Backup(ctx context.Context, in *BackupPayload, opts ...grpc.CallOption) (*BackupPayload, error)
 }
 
@@ -168,8 +151,8 @@ func (c *workerClient) Echo(ctx context.Context, in *Payload, opts ...grpc.CallO
 	return out, nil
 }
 
-func (c *workerClient) AssignUids(ctx context.Context, in *protos3.Num, opts ...grpc.CallOption) (*protos3.List, error) {
-	out := new(protos3.List)
+func (c *workerClient) AssignUids(ctx context.Context, in *Num, opts ...grpc.CallOption) (*List, error) {
+	out := new(List)
 	err := grpc.Invoke(ctx, "/protos.Worker/AssignUids", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -177,7 +160,7 @@ func (c *workerClient) AssignUids(ctx context.Context, in *protos3.Num, opts ...
 	return out, nil
 }
 
-func (c *workerClient) Mutate(ctx context.Context, in *protos3.Mutations, opts ...grpc.CallOption) (*Payload, error) {
+func (c *workerClient) Mutate(ctx context.Context, in *Mutations, opts ...grpc.CallOption) (*Payload, error) {
 	out := new(Payload)
 	err := grpc.Invoke(ctx, "/protos.Worker/Mutate", in, out, c.cc, opts...)
 	if err != nil {
@@ -186,8 +169,8 @@ func (c *workerClient) Mutate(ctx context.Context, in *protos3.Mutations, opts .
 	return out, nil
 }
 
-func (c *workerClient) ServeTask(ctx context.Context, in *protos3.Query, opts ...grpc.CallOption) (*protos3.Result, error) {
-	out := new(protos3.Result)
+func (c *workerClient) ServeTask(ctx context.Context, in *Query, opts ...grpc.CallOption) (*Result, error) {
+	out := new(Result)
 	err := grpc.Invoke(ctx, "/protos.Worker/ServeTask", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -205,8 +188,8 @@ func (c *workerClient) PredicateAndSchemaData(ctx context.Context, opts ...grpc.
 }
 
 type Worker_PredicateAndSchemaDataClient interface {
-	Send(*protos3.GroupKeys) error
-	Recv() (*protos3.KV, error)
+	Send(*GroupKeys) error
+	Recv() (*KV, error)
 	grpc.ClientStream
 }
 
@@ -214,20 +197,20 @@ type workerPredicateAndSchemaDataClient struct {
 	grpc.ClientStream
 }
 
-func (x *workerPredicateAndSchemaDataClient) Send(m *protos3.GroupKeys) error {
+func (x *workerPredicateAndSchemaDataClient) Send(m *GroupKeys) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *workerPredicateAndSchemaDataClient) Recv() (*protos3.KV, error) {
-	m := new(protos3.KV)
+func (x *workerPredicateAndSchemaDataClient) Recv() (*KV, error) {
+	m := new(KV)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *workerClient) Sort(ctx context.Context, in *protos3.SortMessage, opts ...grpc.CallOption) (*protos3.SortResult, error) {
-	out := new(protos3.SortResult)
+func (c *workerClient) Sort(ctx context.Context, in *SortMessage, opts ...grpc.CallOption) (*SortResult, error) {
+	out := new(SortResult)
 	err := grpc.Invoke(ctx, "/protos.Worker/Sort", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -235,7 +218,7 @@ func (c *workerClient) Sort(ctx context.Context, in *protos3.SortMessage, opts .
 	return out, nil
 }
 
-func (c *workerClient) RebuildIndex(ctx context.Context, in *protos3.RebuildIndexMessage, opts ...grpc.CallOption) (*Payload, error) {
+func (c *workerClient) RebuildIndex(ctx context.Context, in *RebuildIndexMessage, opts ...grpc.CallOption) (*Payload, error) {
 	out := new(Payload)
 	err := grpc.Invoke(ctx, "/protos.Worker/RebuildIndex", in, out, c.cc, opts...)
 	if err != nil {
@@ -244,8 +227,8 @@ func (c *workerClient) RebuildIndex(ctx context.Context, in *protos3.RebuildInde
 	return out, nil
 }
 
-func (c *workerClient) Schema(ctx context.Context, in *protos3.SchemaMessage, opts ...grpc.CallOption) (*protos3.SchemaResult, error) {
-	out := new(protos3.SchemaResult)
+func (c *workerClient) Schema(ctx context.Context, in *SchemaMessage, opts ...grpc.CallOption) (*SchemaResult, error) {
+	out := new(SchemaResult)
 	err := grpc.Invoke(ctx, "/protos.Worker/Schema", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -262,7 +245,7 @@ func (c *workerClient) RaftMessage(ctx context.Context, in *Payload, opts ...grp
 	return out, nil
 }
 
-func (c *workerClient) JoinCluster(ctx context.Context, in *protos3.RaftContext, opts ...grpc.CallOption) (*Payload, error) {
+func (c *workerClient) JoinCluster(ctx context.Context, in *RaftContext, opts ...grpc.CallOption) (*Payload, error) {
 	out := new(Payload)
 	err := grpc.Invoke(ctx, "/protos.Worker/JoinCluster", in, out, c.cc, opts...)
 	if err != nil {
@@ -271,8 +254,8 @@ func (c *workerClient) JoinCluster(ctx context.Context, in *protos3.RaftContext,
 	return out, nil
 }
 
-func (c *workerClient) UpdateMembership(ctx context.Context, in *protos3.MembershipUpdate, opts ...grpc.CallOption) (*protos3.MembershipUpdate, error) {
-	out := new(protos3.MembershipUpdate)
+func (c *workerClient) UpdateMembership(ctx context.Context, in *MembershipUpdate, opts ...grpc.CallOption) (*MembershipUpdate, error) {
+	out := new(MembershipUpdate)
 	err := grpc.Invoke(ctx, "/protos.Worker/UpdateMembership", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -295,17 +278,17 @@ type WorkerServer interface {
 	// Connection testing RPC.
 	Echo(context.Context, *Payload) (*Payload, error)
 	// Data serving RPCs.
-	AssignUids(context.Context, *protos3.Num) (*protos3.List, error)
-	Mutate(context.Context, *protos3.Mutations) (*Payload, error)
-	ServeTask(context.Context, *protos3.Query) (*protos3.Result, error)
+	AssignUids(context.Context, *Num) (*List, error)
+	Mutate(context.Context, *Mutations) (*Payload, error)
+	ServeTask(context.Context, *Query) (*Result, error)
 	PredicateAndSchemaData(Worker_PredicateAndSchemaDataServer) error
-	Sort(context.Context, *protos3.SortMessage) (*protos3.SortResult, error)
-	RebuildIndex(context.Context, *protos3.RebuildIndexMessage) (*Payload, error)
-	Schema(context.Context, *protos3.SchemaMessage) (*protos3.SchemaResult, error)
+	Sort(context.Context, *SortMessage) (*SortResult, error)
+	RebuildIndex(context.Context, *RebuildIndexMessage) (*Payload, error)
+	Schema(context.Context, *SchemaMessage) (*SchemaResult, error)
 	// RAFT serving RPCs.
 	RaftMessage(context.Context, *Payload) (*Payload, error)
-	JoinCluster(context.Context, *protos3.RaftContext) (*Payload, error)
-	UpdateMembership(context.Context, *protos3.MembershipUpdate) (*protos3.MembershipUpdate, error)
+	JoinCluster(context.Context, *RaftContext) (*Payload, error)
+	UpdateMembership(context.Context, *MembershipUpdate) (*MembershipUpdate, error)
 	Backup(context.Context, *BackupPayload) (*BackupPayload, error)
 }
 
@@ -332,7 +315,7 @@ func _Worker_Echo_Handler(srv interface{}, ctx context.Context, dec func(interfa
 }
 
 func _Worker_AssignUids_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(protos3.Num)
+	in := new(Num)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -344,13 +327,13 @@ func _Worker_AssignUids_Handler(srv interface{}, ctx context.Context, dec func(i
 		FullMethod: "/protos.Worker/AssignUids",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).AssignUids(ctx, req.(*protos3.Num))
+		return srv.(WorkerServer).AssignUids(ctx, req.(*Num))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Worker_Mutate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(protos3.Mutations)
+	in := new(Mutations)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -362,13 +345,13 @@ func _Worker_Mutate_Handler(srv interface{}, ctx context.Context, dec func(inter
 		FullMethod: "/protos.Worker/Mutate",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).Mutate(ctx, req.(*protos3.Mutations))
+		return srv.(WorkerServer).Mutate(ctx, req.(*Mutations))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Worker_ServeTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(protos3.Query)
+	in := new(Query)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -380,7 +363,7 @@ func _Worker_ServeTask_Handler(srv interface{}, ctx context.Context, dec func(in
 		FullMethod: "/protos.Worker/ServeTask",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).ServeTask(ctx, req.(*protos3.Query))
+		return srv.(WorkerServer).ServeTask(ctx, req.(*Query))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -390,8 +373,8 @@ func _Worker_PredicateAndSchemaData_Handler(srv interface{}, stream grpc.ServerS
 }
 
 type Worker_PredicateAndSchemaDataServer interface {
-	Send(*protos3.KV) error
-	Recv() (*protos3.GroupKeys, error)
+	Send(*KV) error
+	Recv() (*GroupKeys, error)
 	grpc.ServerStream
 }
 
@@ -399,12 +382,12 @@ type workerPredicateAndSchemaDataServer struct {
 	grpc.ServerStream
 }
 
-func (x *workerPredicateAndSchemaDataServer) Send(m *protos3.KV) error {
+func (x *workerPredicateAndSchemaDataServer) Send(m *KV) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *workerPredicateAndSchemaDataServer) Recv() (*protos3.GroupKeys, error) {
-	m := new(protos3.GroupKeys)
+func (x *workerPredicateAndSchemaDataServer) Recv() (*GroupKeys, error) {
+	m := new(GroupKeys)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -412,7 +395,7 @@ func (x *workerPredicateAndSchemaDataServer) Recv() (*protos3.GroupKeys, error) 
 }
 
 func _Worker_Sort_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(protos3.SortMessage)
+	in := new(SortMessage)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -424,13 +407,13 @@ func _Worker_Sort_Handler(srv interface{}, ctx context.Context, dec func(interfa
 		FullMethod: "/protos.Worker/Sort",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).Sort(ctx, req.(*protos3.SortMessage))
+		return srv.(WorkerServer).Sort(ctx, req.(*SortMessage))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Worker_RebuildIndex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(protos3.RebuildIndexMessage)
+	in := new(RebuildIndexMessage)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -442,13 +425,13 @@ func _Worker_RebuildIndex_Handler(srv interface{}, ctx context.Context, dec func
 		FullMethod: "/protos.Worker/RebuildIndex",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).RebuildIndex(ctx, req.(*protos3.RebuildIndexMessage))
+		return srv.(WorkerServer).RebuildIndex(ctx, req.(*RebuildIndexMessage))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Worker_Schema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(protos3.SchemaMessage)
+	in := new(SchemaMessage)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -460,7 +443,7 @@ func _Worker_Schema_Handler(srv interface{}, ctx context.Context, dec func(inter
 		FullMethod: "/protos.Worker/Schema",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).Schema(ctx, req.(*protos3.SchemaMessage))
+		return srv.(WorkerServer).Schema(ctx, req.(*SchemaMessage))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -484,7 +467,7 @@ func _Worker_RaftMessage_Handler(srv interface{}, ctx context.Context, dec func(
 }
 
 func _Worker_JoinCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(protos3.RaftContext)
+	in := new(RaftContext)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -496,13 +479,13 @@ func _Worker_JoinCluster_Handler(srv interface{}, ctx context.Context, dec func(
 		FullMethod: "/protos.Worker/JoinCluster",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).JoinCluster(ctx, req.(*protos3.RaftContext))
+		return srv.(WorkerServer).JoinCluster(ctx, req.(*RaftContext))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Worker_UpdateMembership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(protos3.MembershipUpdate)
+	in := new(MembershipUpdate)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -514,7 +497,7 @@ func _Worker_UpdateMembership_Handler(srv interface{}, ctx context.Context, dec 
 		FullMethod: "/protos.Worker/UpdateMembership",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).UpdateMembership(ctx, req.(*protos3.MembershipUpdate))
+		return srv.(WorkerServer).UpdateMembership(ctx, req.(*MembershipUpdate))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1015,40 +998,38 @@ var (
 func init() { proto.RegisterFile("payload.proto", fileDescriptorPayload) }
 
 var fileDescriptorPayload = []byte{
-	// 547 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x8c, 0x53, 0xe1, 0x6e, 0x12, 0x4d,
-	0x14, 0xdd, 0x6d, 0xe9, 0xd2, 0x5e, 0xa0, 0x1f, 0xdf, 0xd5, 0x1a, 0x5c, 0x95, 0x90, 0xfd, 0x85,
-	0x46, 0xa9, 0xad, 0x35, 0x1a, 0x13, 0x4d, 0x28, 0xa0, 0x62, 0x01, 0x71, 0xb7, 0x68, 0xe2, 0x1f,
-	0x33, 0xb0, 0x23, 0x6c, 0x80, 0x9d, 0xed, 0xcc, 0xac, 0x29, 0x2f, 0x62, 0x7c, 0x0f, 0x5f, 0xc2,
-	0x9f, 0x3e, 0x82, 0xc1, 0x17, 0x31, 0xbb, 0xcb, 0x80, 0x18, 0x4c, 0xfc, 0xc5, 0x9c, 0x73, 0xcf,
-	0x9c, 0x73, 0x2f, 0x77, 0x16, 0x72, 0x01, 0x99, 0x4d, 0x18, 0x71, 0x2b, 0x01, 0x67, 0x92, 0xa1,
-	0x11, 0xff, 0x08, 0x13, 0x24, 0x11, 0xe3, 0x84, 0xb3, 0x6e, 0x41, 0xba, 0x9b, 0x88, 0x10, 0x21,
-	0x55, 0x27, 0x92, 0x14, 0xf4, 0x92, 0x5e, 0xce, 0xda, 0xf1, 0xd9, 0xfa, 0xaa, 0x43, 0xee, 0x94,
-	0x0c, 0xc6, 0x61, 0xa0, 0x54, 0x07, 0x60, 0x70, 0x7a, 0xf1, 0xc1, 0x73, 0x63, 0x5d, 0xca, 0xde,
-	0xe1, 0xf4, 0xa2, 0xe9, 0xe2, 0x75, 0xd8, 0x1d, 0x72, 0x16, 0x06, 0x51, 0x61, 0xab, 0xa4, 0x97,
-	0x73, 0x76, 0x3a, 0xc6, 0x4d, 0x17, 0x4f, 0xc0, 0x10, 0x92, 0xc8, 0x50, 0x14, 0xb6, 0x4b, 0x7a,
-	0x79, 0xff, 0xf8, 0x66, 0x12, 0x2d, 0x2a, 0x6b, 0xc6, 0x15, 0x27, 0xd6, 0xd8, 0x0b, 0xad, 0xf5,
-	0x04, 0x8c, 0x84, 0xc1, 0x5d, 0x48, 0x75, 0x5e, 0x77, 0x1a, 0x79, 0x0d, 0x33, 0x90, 0x76, 0x7a,
-	0xb5, 0x5a, 0xc3, 0x71, 0xf2, 0x3a, 0xe6, 0x60, 0xaf, 0xde, 0xeb, 0xb6, 0x9a, 0xb5, 0xea, 0x79,
-	0x23, 0xbf, 0x85, 0x00, 0xc6, 0xf3, 0x6a, 0xb3, 0xd5, 0xa8, 0xe7, 0xb7, 0x8f, 0x3f, 0xef, 0x80,
-	0xf1, 0x8e, 0xf1, 0x31, 0xe5, 0x78, 0x07, 0x52, 0x8d, 0xc1, 0x88, 0xe1, 0x7f, 0x2a, 0x74, 0x11,
-	0x67, 0xfe, 0x49, 0x58, 0x1a, 0xde, 0x06, 0xa8, 0x0a, 0xe1, 0x0d, 0xfd, 0x9e, 0xe7, 0x0a, 0xcc,
-	0x28, 0x41, 0x27, 0x9c, 0x9a, 0x59, 0x05, 0x5a, 0x9e, 0x90, 0x96, 0x86, 0x15, 0x30, 0xda, 0xa1,
-	0x24, 0x92, 0xe2, 0xff, 0xaa, 0x12, 0x63, 0x8f, 0xf9, 0x62, 0x93, 0xf5, 0x5d, 0xd8, 0x73, 0x28,
-	0xff, 0x44, 0xcf, 0x89, 0x18, 0x63, 0x4e, 0xd5, 0xdf, 0x84, 0x94, 0xcf, 0xcc, 0x7d, 0x05, 0x6d,
-	0x2a, 0xc2, 0x49, 0xe4, 0xfe, 0x14, 0xae, 0x75, 0x39, 0x75, 0xbd, 0x01, 0x91, 0xb4, 0xea, 0xbb,
-	0xce, 0x60, 0x44, 0xa7, 0x24, 0xda, 0xc7, 0x2a, 0xed, 0x45, 0xf4, 0xe7, 0x9e, 0xd1, 0x99, 0x30,
-	0x41, 0x51, 0x67, 0x6f, 0x2d, 0xad, 0xac, 0xdf, 0xd7, 0xf1, 0x08, 0x52, 0x0e, 0xe3, 0x12, 0xaf,
-	0xa8, 0x4a, 0x84, 0xda, 0x54, 0x08, 0x32, 0xa4, 0x26, 0xfe, 0x4e, 0x2e, 0x13, 0x9f, 0x41, 0xd6,
-	0xa6, 0xfd, 0xd0, 0x9b, 0xb8, 0x4d, 0xdf, 0xa5, 0x97, 0x78, 0x63, 0xd5, 0xd3, 0x8a, 0x55, 0x16,
-	0x1b, 0xe6, 0x7b, 0x04, 0x46, 0xd2, 0x25, 0x1e, 0x2c, 0xfd, 0x63, 0xac, 0xee, 0x5c, 0x5d, 0xa7,
-	0x97, 0xc1, 0x47, 0x90, 0xb1, 0xc9, 0x47, 0xd5, 0xdd, 0x3f, 0xad, 0xe9, 0x21, 0x64, 0x5e, 0x31,
-	0xcf, 0xaf, 0x4d, 0x42, 0x21, 0x29, 0x5f, 0x4d, 0x19, 0xf9, 0xd4, 0x98, 0x2f, 0xe9, 0xa5, 0xdc,
-	0x74, 0xed, 0x25, 0xe4, 0x7b, 0x81, 0x4b, 0x24, 0x6d, 0xd3, 0x69, 0x9f, 0x72, 0x31, 0xf2, 0x02,
-	0x2c, 0x2c, 0x97, 0xb7, 0xe4, 0x12, 0x8d, 0xf9, 0xd7, 0x8a, 0xa5, 0xe1, 0x63, 0x30, 0x92, 0xa7,
-	0xbb, 0x1a, 0x76, 0xed, 0x29, 0x9b, 0x9b, 0x69, 0x4b, 0x3b, 0x3d, 0xf9, 0x36, 0x2f, 0xea, 0xdf,
-	0xe7, 0x45, 0xfd, 0xc7, 0xbc, 0xa8, 0x7f, 0xf9, 0x59, 0xd4, 0xde, 0x5b, 0x43, 0x4f, 0x8e, 0xc2,
-	0x7e, 0x65, 0xc0, 0xa6, 0x87, 0xee, 0x90, 0x93, 0x60, 0x74, 0xcf, 0x63, 0x8b, 0xd3, 0x61, 0xe2,
-	0xd2, 0x4f, 0xbe, 0xdb, 0x07, 0xbf, 0x02, 0x00, 0x00, 0xff, 0xff, 0x15, 0x08, 0x54, 0x06, 0xcf,
-	0x03, 0x00, 0x00,
+	// 521 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x8c, 0x53, 0xd1, 0x8e, 0xd2, 0x40,
+	0x14, 0xed, 0xec, 0xb2, 0xdd, 0xdd, 0x0b, 0xac, 0xf5, 0xea, 0x1a, 0xac, 0x4a, 0x48, 0x9f, 0xd0,
+	0x18, 0xe2, 0xae, 0x1a, 0x8d, 0x89, 0x26, 0x2c, 0xa0, 0xe2, 0x02, 0x62, 0xbb, 0xe8, 0xa3, 0x19,
+	0xe8, 0x08, 0x0d, 0xd0, 0x76, 0x67, 0xa6, 0x66, 0xf9, 0x11, 0xe3, 0x7f, 0xf8, 0x13, 0x3e, 0xfa,
+	0x09, 0x06, 0x7f, 0xc4, 0xb4, 0xdd, 0xa1, 0x62, 0x30, 0xf1, 0xa9, 0x3d, 0xe7, 0x9e, 0x39, 0xe7,
+	0xde, 0xde, 0x29, 0x14, 0x43, 0xba, 0x98, 0x05, 0xd4, 0xad, 0x85, 0x3c, 0x90, 0x01, 0xea, 0xc9,
+	0x43, 0x98, 0x20, 0xa9, 0x98, 0xa6, 0x9c, 0x75, 0x07, 0x76, 0xfb, 0xa9, 0x08, 0x11, 0x72, 0x4d,
+	0x2a, 0x69, 0x89, 0x54, 0x48, 0xb5, 0x60, 0x27, 0xef, 0xd6, 0x37, 0x02, 0xc5, 0x13, 0x3a, 0x9a,
+	0x46, 0xa1, 0x52, 0x1d, 0x82, 0xce, 0xd9, 0xf9, 0x47, 0xcf, 0x4d, 0x74, 0x39, 0x7b, 0x87, 0xb3,
+	0xf3, 0xb6, 0x8b, 0x37, 0x61, 0x6f, 0xcc, 0x83, 0x28, 0x8c, 0x0b, 0x5b, 0x15, 0x52, 0x2d, 0xda,
+	0xbb, 0x09, 0x6e, 0xbb, 0xf8, 0x08, 0x74, 0x21, 0xa9, 0x8c, 0x44, 0x69, 0xbb, 0x42, 0xaa, 0x07,
+	0xc7, 0xb7, 0xd3, 0x68, 0x51, 0x5b, 0x33, 0xae, 0x39, 0x89, 0xc6, 0xbe, 0xd4, 0x5a, 0xcf, 0x40,
+	0x4f, 0x19, 0xdc, 0x83, 0x5c, 0xef, 0x6d, 0xaf, 0x65, 0x68, 0x98, 0x87, 0x5d, 0x67, 0xd0, 0x68,
+	0xb4, 0x1c, 0xc7, 0x20, 0x58, 0x84, 0xfd, 0xe6, 0xa0, 0xdf, 0x69, 0x37, 0xea, 0x67, 0x2d, 0x63,
+	0x0b, 0x01, 0xf4, 0x97, 0xf5, 0x76, 0xa7, 0xd5, 0x34, 0xb6, 0x8f, 0xbf, 0xec, 0x80, 0xfe, 0x21,
+	0xe0, 0x53, 0xc6, 0xf1, 0x1e, 0xe4, 0x5a, 0xa3, 0x49, 0x80, 0x57, 0x54, 0xe8, 0x65, 0x9c, 0xf9,
+	0x37, 0x61, 0x69, 0x78, 0x17, 0xa0, 0x2e, 0x84, 0x37, 0xf6, 0x07, 0x9e, 0x2b, 0x30, 0xaf, 0x04,
+	0xbd, 0x68, 0x6e, 0x16, 0x14, 0xe8, 0x78, 0x42, 0x5a, 0x1a, 0xd6, 0x40, 0xef, 0x46, 0x92, 0x4a,
+	0x86, 0x57, 0x55, 0x25, 0xc1, 0x5e, 0xe0, 0x8b, 0x4d, 0xd6, 0xf7, 0x61, 0xdf, 0x61, 0xfc, 0x33,
+	0x3b, 0xa3, 0x62, 0x8a, 0x45, 0x55, 0x7f, 0x17, 0x31, 0xbe, 0x30, 0x0f, 0x14, 0xb4, 0x99, 0x88,
+	0x66, 0xb1, 0xfb, 0x73, 0xb8, 0xd1, 0xe7, 0xcc, 0xf5, 0x46, 0x54, 0xb2, 0xba, 0xef, 0x3a, 0xa3,
+	0x09, 0x9b, 0xd3, 0x78, 0x1f, 0x59, 0xda, 0xab, 0xf8, 0xe3, 0x9e, 0xb2, 0x85, 0x30, 0x41, 0x51,
+	0xa7, 0xef, 0x2d, 0xad, 0x4a, 0x1e, 0x10, 0x3c, 0x82, 0x9c, 0x13, 0x70, 0x89, 0xd7, 0x54, 0x25,
+	0x46, 0x5d, 0x26, 0x04, 0x1d, 0x33, 0x13, 0xff, 0x24, 0x57, 0x89, 0x2f, 0xa0, 0x60, 0xb3, 0x61,
+	0xe4, 0xcd, 0xdc, 0xb6, 0xef, 0xb2, 0x0b, 0xbc, 0x95, 0xf5, 0x94, 0xb1, 0xca, 0x62, 0xc3, 0x7c,
+	0x4f, 0x40, 0x4f, 0xbb, 0xc4, 0xc3, 0x95, 0x7f, 0x82, 0xd5, 0x99, 0xeb, 0xeb, 0xf4, 0x2a, 0xf8,
+	0x08, 0xf2, 0x36, 0xfd, 0xa4, 0xba, 0xfb, 0xaf, 0x35, 0x3d, 0x86, 0xfc, 0x9b, 0xc0, 0xf3, 0x1b,
+	0xb3, 0x48, 0x48, 0xc6, 0xb3, 0x29, 0x63, 0x9f, 0x46, 0xe0, 0x4b, 0x76, 0x21, 0x37, 0x1d, 0x7b,
+	0x0d, 0xc6, 0x20, 0x74, 0xa9, 0x64, 0x5d, 0x36, 0x1f, 0x32, 0x2e, 0x26, 0x5e, 0x88, 0xa5, 0xd5,
+	0xf2, 0x56, 0x5c, 0xaa, 0x31, 0xff, 0x59, 0xb1, 0x34, 0x7c, 0x0a, 0x7a, 0x7a, 0x75, 0xb3, 0x61,
+	0xd7, 0xae, 0xb2, 0xb9, 0x99, 0xb6, 0xb4, 0x13, 0xe3, 0xfb, 0xb2, 0x4c, 0x7e, 0x2c, 0xcb, 0xe4,
+	0xe7, 0xb2, 0x4c, 0xbe, 0xfe, 0x2a, 0x6b, 0xc3, 0xf4, 0x9f, 0x7c, 0xf8, 0x3b, 0x00, 0x00, 0xff,
+	0xff, 0x78, 0x69, 0x6f, 0x4d, 0xab, 0x03, 0x00, 0x00,
 }

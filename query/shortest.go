@@ -23,7 +23,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -120,8 +119,8 @@ func (start *SubGraph) expandOut(ctx context.Context,
 	var exec []*SubGraph
 	var err error
 	in := []uint64{start.Params.From}
-	start.SrcUIDs = &taskp.List{in}
-	start.uidMatrix = []*taskp.List{{in}}
+	start.SrcUIDs = &protos.List{in}
+	start.uidMatrix = []*protos.List{{in}}
 	start.DestUIDs = start.SrcUIDs
 
 	for _, child := range start.Children {
@@ -363,7 +362,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 	}
 	// Put the path in DestUIDs of the root.
 	if cur != sg.Params.From {
-		sg.DestUIDs = &taskp.List{}
+		sg.DestUIDs = &protos.List{}
 		return nil, nil
 	}
 
@@ -387,9 +386,9 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		isDebug: isDebug(ctx),
 	}
 	curUid := result[0]
-	shortestSg.SrcUIDs = &taskp.List{[]uint64{curUid}}
-	shortestSg.DestUIDs = &taskp.List{[]uint64{curUid}}
-	shortestSg.uidMatrix = []*taskp.List{{[]uint64{curUid}}}
+	shortestSg.SrcUIDs = &protos.List{[]uint64{curUid}}
+	shortestSg.DestUIDs = &protos.List{[]uint64{curUid}}
+	shortestSg.uidMatrix = []*protos.List{{[]uint64{curUid}}}
 
 	curNode := shortestSg
 	for i := 0; i < len(result)-1; i++ {
@@ -406,9 +405,9 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		}
 		node.Attr = nodeInfo.attr
 		node.facetsMatrix = []*protos.List{{[]*protos.Facets{nodeInfo.facet}}}
-		node.SrcUIDs = &taskp.List{[]uint64{curUid}}
-		node.DestUIDs = &taskp.List{[]uint64{childUid}}
-		node.uidMatrix = []*taskp.List{{[]uint64{childUid}}}
+		node.SrcUIDs = &protos.List{[]uint64{curUid}}
+		node.DestUIDs = &protos.List{[]uint64{childUid}}
+		node.uidMatrix = []*protos.List{{[]uint64{childUid}}}
 
 		curNode.Children = append(curNode.Children, node)
 		curNode = node
@@ -419,8 +418,8 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		GetUID: true,
 	}
 	uid := result[len(result)-1]
-	node.SrcUIDs = &taskp.List{[]uint64{uid}}
-	node.uidMatrix = []*taskp.List{{[]uint64{uid}}}
+	node.SrcUIDs = &protos.List{[]uint64{uid}}
+	node.uidMatrix = []*protos.List{{[]uint64{uid}}}
 	curNode.Children = append(curNode.Children, node)
 
 	return shortestSg

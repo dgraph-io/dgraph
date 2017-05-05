@@ -29,10 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/facetsp"
-	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/protos/typesp"
-	"github.com/dgraph-io/dgraph/protos/workerp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/tok"
@@ -45,15 +42,15 @@ import (
 )
 
 var (
-	emptyUIDList taskp.List
-	emptyResult  taskp.Result
+	emptyUIDList protos.List
+	emptyResult  protos.Result
 	regexTok     tok.ExactTokenizer
 )
 
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
-func ProcessTaskOverNetwork(ctx context.Context, q *taskp.Query) (*taskp.Result, error) {
+func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Result, error) {
 	attr := q.Attr
 	gid := group.BelongsTo(attr)
 	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
@@ -75,7 +72,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *taskp.Query) (*taskp.Result,
 	defer pl.Put(conn)
 	x.Trace(ctx, "Sending request to %v", addr)
 
-	c := workerp.NewWorkerClient(conn)
+	c := protos.NewWorkerClient(conn)
 	reply, err := c.ServeTask(ctx, q)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.ServeTask"))
@@ -104,8 +101,8 @@ func convertValue(attr, data string) (types.Val, error) {
 }
 
 // Returns nil byte on error
-func convertToType(v types.Val, typ types.TypeID) (*taskp.Value, error) {
-	result := &taskp.Value{ValType: int32(typ), Val: x.Nilbyte}
+func convertToType(v types.Val, typ types.TypeID) (*protos.Value, error) {
+	result := &protos.Value{ValType: int32(typ), Val: x.Nilbyte}
 	if v.Tid == typ {
 		result.Val = v.Value.([]byte)
 		return result, nil
@@ -191,8 +188,8 @@ func getPredList(uid uint64, gid uint32) ([]types.Val, error) {
 }
 
 // processTask processes the query, accumulates and returns the result.
-func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result, error) {
-	var out taskp.Result
+func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
+	var out protos.Result
 	attr := q.Attr
 
 	if attr == "_predicate_" {
@@ -214,7 +211,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 		for _, pred := range predList {
 			// Add it to values.
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			out.Values = append(out.Values, &taskp.Value{
+			out.Values = append(out.Values, &protos.Value{
 				ValType: int32(types.StringID),
 				Val:     []byte(pred),
 			})
@@ -269,7 +266,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
 			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
 		}
-		newValue := &taskp.Value{ValType: int32(val.Tid), Val: x.Nilbyte}
+		newValue := &protos.Value{ValType: int32(val.Tid), Val: x.Nilbyte}
 		if isValueEdge {
 			if typ, err := schema.State().TypeOf(attr); err == nil {
 				newValue, err = convertToType(val, typ)
@@ -285,12 +282,12 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 		// get filtered uids and facets.
 		type result struct {
 			uid    uint64
-			facets []*facetsp.Facet
+			facets []*protos.Facet
 		}
 		var filteredRes []*result
 		if !isValueEdge { // for uid edge.. get postings
 			var perr error
-			pl.Postings(opts, func(p *typesp.Posting) bool {
+			pl.Postings(opts, func(p *protos.Posting) bool {
 				res := true
 				res, perr = applyFacetsTree(p.Facets, facetsTree)
 				if perr != nil {
@@ -316,16 +313,16 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 			if isValueEdge {
 				fs, err := pl.Facets(q.FacetParam, q.Langs)
 				if err != nil {
-					fs = []*facetsp.Facet{}
+					fs = []*protos.Facet{}
 				}
 				out.FacetMatrix = append(out.FacetMatrix,
-					&facetsp.List{[]*facetsp.Facets{{fs}}})
+					&protos.List{[]*protos.Facets{{fs}}})
 			} else {
-				var fcsList []*facetsp.Facets
+				var fcsList []*protos.Facets
 				for _, fres := range filteredRes {
-					fcsList = append(fcsList, &facetsp.Facets{fres.facets})
+					fcsList = append(fcsList, &protos.Facets{fres.facets})
 				}
-				out.FacetMatrix = append(out.FacetMatrix, &facetsp.List{fcsList})
+				out.FacetMatrix = append(out.FacetMatrix, &protos.List{fcsList})
 			}
 		}
 
@@ -359,14 +356,14 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 		if srcFn.fnType == CompareScalarFn {
 			count := int64(pl.Length(0))
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				tlist := &taskp.List{[]uint64{q.UidList.Uids[i]}}
+				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
 			continue
 		}
 
 		// The more usual case: Getting the UIDs.
-		uidList := new(taskp.List)
+		uidList := new(protos.List)
 		for _, fres := range filteredRes {
 			uidList.Uids = append(uidList.Uids, fres.uid)
 		}
@@ -382,7 +379,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 				pk := x.Parse(key)
 				// TODO: Look if we want to put these UIDs in one list before
 				// passing it back to query package.
-				tlist := &taskp.List{[]uint64{pk.Uid}}
+				tlist := &protos.List{[]uint64{pk.Uid}}
 				mu.Lock()
 				out.UidMatrix = append(out.UidMatrix, tlist)
 				mu.Unlock()
@@ -415,7 +412,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 		}
 
 		query := cindex.RegexpQuery(srcFn.regex.Syntax)
-		empty := taskp.List{}
+		empty := protos.List{}
 		uids, err := uidsForRegex(attr, gid, query, &empty)
 		if uids != nil {
 			out.UidMatrix = append(out.UidMatrix, uids)
@@ -474,7 +471,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 	}
 
 	// If geo filter, do value check for correctness.
-	var values []*taskp.Value
+	var values []*protos.Value
 	if srcFn.geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
 		for _, uid := range uids.Uids {
@@ -482,7 +479,7 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 			pl, decr := posting.GetOrCreate(key, gid)
 
 			val, err := pl.Value()
-			newValue := &taskp.Value{ValType: int32(val.Tid)}
+			newValue := &protos.Value{ValType: int32(val.Tid)}
 			if err == nil {
 				newValue.Val = val.Value.([]byte)
 			} else {
@@ -535,8 +532,8 @@ func processTask(ctx context.Context, q *taskp.Query, gid uint32) (*taskp.Result
 	return &out, nil
 }
 
-func matchRegex(uids *taskp.List, values []types.Val, regex *cregexp.Regexp) *taskp.List {
-	rv := &taskp.List{}
+func matchRegex(uids *protos.List, values []types.Val, regex *cregexp.Regexp) *protos.List {
+	rv := &protos.List{}
 	for i := 0; i < len(values); i++ {
 		if len(values[i].Value.(string)) == 0 {
 			continue
@@ -578,7 +575,7 @@ func ensureArgsCount(funcStr []string, expected int) error {
 	}
 }
 
-func parseSrcFn(q *taskp.Query) (*functionContext, error) {
+func parseSrcFn(q *protos.Query) (*functionContext, error) {
 	fnType, f := parseFuncType(q.SrcFunc)
 	attr := q.Attr
 	fc := &functionContext{fnType: fnType, fname: f}
@@ -694,7 +691,7 @@ func parseSrcFn(q *taskp.Query) (*functionContext, error) {
 }
 
 // ServeTask is used to respond to a query.
-func (w *grpcWorker) ServeTask(ctx context.Context, q *taskp.Query) (*taskp.Result, error) {
+func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Result, error) {
 	if ctx.Err() != nil {
 		return &emptyResult, ctx.Err()
 	}
@@ -702,7 +699,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *taskp.Query) (*taskp.Resu
 	gid := group.BelongsTo(q.Attr)
 	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, len(q.UidList.Uids), gid)
 
-	var reply *taskp.Result
+	var reply *protos.Result
 	x.AssertTruef(groups().ServesGroup(gid),
 		"attr: %q groupId: %v Request sent to wrong server.", q.Attr, gid)
 
@@ -724,13 +721,13 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *taskp.Query) (*taskp.Resu
 // applyFacetsTree : we return error only when query has some problems.
 // like Or has 3 arguments, argument facet val overflows integer.
 // returns true if postingFacets can be included.
-func applyFacetsTree(postingFacets []*facetsp.Facet, ftree *facetsTree) (bool, error) {
+func applyFacetsTree(postingFacets []*protos.Facet, ftree *facetsTree) (bool, error) {
 	if ftree == nil {
 		return true, nil
 	}
 	if ftree.function != nil {
 		fname := strings.ToLower(ftree.function.name)
-		var fc *facetsp.Facet
+		var fc *protos.Facet
 		for _, fci := range postingFacets {
 			if fci.Key == ftree.function.key {
 				fc = fci
@@ -866,7 +863,7 @@ type facetsTree struct {
 	function *facetsFunc
 }
 
-func preprocessFilter(tree *facetsp.FilterTree) (*facetsTree, error) {
+func preprocessFilter(tree *protos.FilterTree) (*facetsTree, error) {
 	if tree == nil {
 		return nil, nil
 	}
@@ -934,7 +931,7 @@ type itkv struct {
 	val []byte
 }
 
-func iterateParallel(ctx context.Context, q *taskp.Query, f func([]byte, []byte, sync.Mutex)) {
+func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte, sync.Mutex)) {
 	grpSize := uint64(math.MaxUint64 / uint64(numPart))
 	var wg sync.WaitGroup
 	var mu sync.Mutex
