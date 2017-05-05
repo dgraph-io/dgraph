@@ -1,11 +1,11 @@
-// To compile this file, in dgraph directory :
-// protoc --gofast_out=plugins=grpc:. --proto_path=${GOPATH}/src:. protos/taskp/task.proto
+// Use protos/gen.sh to generate .pb.go files.
 
 syntax = "proto3";
-import "github.com/dgraph-io/dgraph/protos/facetsp/facets.proto";
-import "github.com/dgraph-io/dgraph/protos/graphp/graphresponse.proto";
+import "protos/facetsp/facets.proto";
+import "protos/graphp/graphresponse.proto";
 
 package taskp;
+option go_package = "github.com/dgraph-io/dgraph/protos/taskp";
 
 message List {
 	repeated fixed64 uids = 1;
@@ -27,7 +27,7 @@ message Query {
 
 	// Function to generate or filter UIDs.
 	repeated string src_func = 6;
-	
+
 	bool reverse = 7;  // Whether this is a reverse edge.
 
 	facetsp.Param facet_param = 8; // which facets to fetch
@@ -116,7 +116,7 @@ message Schema {
 	uint32 group_id = 1;
 	repeated string predicates = 2;
 	// fields can be on of type, index, reverse or tokenizer
-	repeated string fields = 3; 
+	repeated string fields = 3;
 }
 
 message SchemaResult {

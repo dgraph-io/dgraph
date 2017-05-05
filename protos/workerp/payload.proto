@@ -1,10 +1,11 @@
-// protoc --gofast_out=plugins=grpc:.  --proto_path=${GOPATH}/src:. protos/workerp/payload.proto
+// Use protos/gen.sh to generate .pb.go files.
 
 syntax = "proto3";
 
-import "github.com/dgraph-io/dgraph/protos/taskp/task.proto";
+import "protos/taskp/task.proto";
 
 package workerp;
+option go_package = "github.com/dgraph-io/dgraph/protos/workerp";
 
 message Payload {
 	bytes Data = 1;

@@ -1,8 +1,9 @@
-// To compile this file, in dgraph directory :
-// protoc --gofast_out=. -I. protos/facetsp/facets.proto
+// Use protos/gen.sh to generate .pb.go files.
+
 syntax = "proto3";
 
 package facetsp;
+option go_package = "github.com/dgraph-io/dgraph/protos/facetsp";
 
 message Facet {
 	enum ValType {
