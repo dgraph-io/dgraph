@@ -1,11 +1,11 @@
-// To compile this file, in dgraph directory :
-// protoc --gofast_out=plugins=grpc:. --proto_path=${GOPATH}/src:. protos/typesp/types.proto
+// Use protos/gen.sh to generate .pb.go files.
 
 syntax = "proto3";
 
-import "github.com/dgraph-io/dgraph/protos/facetsp/facets.proto";
+import "protos/facetsp/facets.proto";
 
 package typesp;
+option go_package = "github.com/dgraph-io/dgraph/protos/typesp";
 
 message Posting {
 	fixed64 uid = 1;
@@ -26,7 +26,7 @@ message Posting {
 	}
 	ValType val_type = 3;
 	enum PostingType {
-		REF=0;          // UID 
+		REF=0;          // UID
 		VALUE=1;        // simple, plain value
 		VALUE_LANG=2;   // value with specified language
         // VALUE_TIMESERIES=3; // value from timeseries, with specified timestamp
