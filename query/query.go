@@ -1223,14 +1223,15 @@ AssignStep:
 }
 
 func (sg *SubGraph) assignVars(doneVars map[string]values) error {
-	if sg.Params.FacetVar != nil && sg.Params.Facet != nil {
+	if sg.Params.FacetVar != nil {
 		for _, it := range sg.Params.Facet.Keys {
 			fvar, ok := sg.Params.FacetVar[it]
 			if !ok {
 				continue
 			}
 			doneVars[fvar] = values{
-				vals: make(map[uint64]types.Val),
+				vals:    make(map[uint64]types.Val),
+				valType: 1,
 			}
 		}
 		// Note: We ignore the facets if its a value edge as we can't
@@ -1241,7 +1242,7 @@ func (sg *SubGraph) assignVars(doneVars map[string]values) error {
 				for _, f := range facet.Facets {
 					fvar, ok := sg.Params.FacetVar[f.Key]
 					if ok {
-						if pVal, ok := doneVars[sg.Params.Var].vals[uid]; !ok {
+						if pVal, ok := doneVars[fvar].vals[uid]; !ok {
 							doneVars[fvar].vals[uid] = facets.ValFor(f)
 						} else {
 							// If the value is int/float we add them up. Else we throw an error as

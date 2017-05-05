@@ -1,6 +1,8 @@
 package query
 
 import (
+	"fmt"
+
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -189,6 +191,7 @@ func processTernary(mNode *gql.MathTree) (err error) {
 	mNode.Val = destMap
 	return nil
 }
+
 func rec(mNode *gql.MathTree, allowedVars map[string]struct{}) error {
 	if mNode == nil {
 		return nil
@@ -213,14 +216,17 @@ func transformParentVar(mNode *gql.MathTree, parent *SubGraph, doneVars map[stri
 	isSameLevel := true
 	var modMathNode *gql.MathTree
 	for _, mch := range mNode.Child {
-		if parent.Params.Var == mch.Var {
-			parentVar = mch.Var
-			isSameLevel = false
-			modMathNode = mch
-		} else {
-			siblingVar = mch.Var
+		for _, fvar := range parent.Params.FacetVar {
+			if fvar == mch.Var {
+				parentVar = mch.Var
+				isSameLevel = false
+				modMathNode = mch
+			} else {
+				siblingVar = mch.Var
+			}
 		}
 	}
+	fmt.Println(parentVar, siblingVar, "***", isSameLevel)
 
 	if isSameLevel {
 		// No ransformation required.
@@ -230,11 +236,17 @@ func transformParentVar(mNode *gql.MathTree, parent *SubGraph, doneVars map[stri
 	// The parent has the variable. So do an iterative summing.
 	var siblingNode *SubGraph
 	for _, ch := range parent.Children {
+		for _, fvar := range ch.Params.FacetVar {
+			if fvar == siblingVar {
+				siblingNode = ch
+				break
+			}
+		}
 		if ch.Params.Var == siblingVar {
 			siblingNode = ch
 		}
 	}
-	if siblingNode == nil || parentVar != parent.Params.Var {
+	if siblingNode == nil {
 		return x.Errorf("Var %v is used at a wrong level", parentVar)
 	}
 	v, ok := doneVars[parentVar]
@@ -268,6 +280,7 @@ func transformParentVar(mNode *gql.MathTree, parent *SubGraph, doneVars map[stri
 			newMap[dstUid] = val
 		}
 	}
+	fmt.Println(newMap, "$$$")
 	modMathNode.Val = newMap
 	return nil
 }
@@ -301,12 +314,18 @@ func (sg *SubGraph) evalMathTree(mNode *gql.MathTree, parent *SubGraph, doneVars
 	}
 
 	for _, ch := range parent.Children {
+		if ch.Params.FacetVar != nil {
+			for _, v := range ch.Params.FacetVar {
+				allowedVars[v] = struct{}{}
+			}
+		}
 		allowedVars[ch.Params.Var] = struct{}{}
 	}
 
 	if err := rec(mNode, allowedVars); err != nil {
 		return err
 	}
+	fmt.Println(allowedVars)
 
 	aggName := mNode.Fn
 	if isBinary(aggName) {
@@ -318,6 +337,8 @@ func (sg *SubGraph) evalMathTree(mNode *gql.MathTree, parent *SubGraph, doneVars
 		if err != nil {
 			return err
 		}
+		fmt.Println(mNode.Child[0].Val, "@@@")
+		fmt.Println(mNode.Child[1].Val, "@@@")
 		return processBinary(mNode)
 	}
 
