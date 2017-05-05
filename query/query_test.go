@@ -1094,9 +1094,9 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 	query := `
 		{
 			friend(id: 1000) {
-				L1 as path @facets(weight) {
+				path @facets(L1 as weight) {
 					name
-					L2 as path @facets(weight)
+					path @facets(L2 as weight)
 					L3 as math(L1+L2)
 			 }
 			}

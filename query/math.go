@@ -189,6 +189,20 @@ func processTernary(mNode *gql.MathTree) (err error) {
 	mNode.Val = destMap
 	return nil
 }
+func rec(mNode *gql.MathTree, allowedVars map[string]struct{}) error {
+	if mNode == nil {
+		return nil
+	}
+	if _, ok := allowedVars[mNode.Var]; mNode.Var != "" && !ok {
+		return x.Errorf("Var %v used at wrong math level", mNode.Var)
+	}
+	for _, ch := range mNode.Child {
+		if err := rec(ch, allowedVars); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // transformParentVar transforms the value variable at the parent level to the variable
 // at its child level using the childs UID matrix.
@@ -209,7 +223,7 @@ func transformParentVar(mNode *gql.MathTree, parent *SubGraph, doneVars map[stri
 	}
 
 	if isSameLevel {
-		// No transformation required.
+		// No ransformation required.
 		return nil
 	}
 
@@ -280,15 +294,18 @@ func (sg *SubGraph) evalMathTree(mNode *gql.MathTree, parent *SubGraph, doneVars
 	}
 
 	allowedVars := make(map[string]struct{})
-	allowedVars[parent.Params.Var] = struct{}{}
+	if parent.Params.FacetVar != nil {
+		for _, v := range parent.Params.FacetVar {
+			allowedVars[v] = struct{}{}
+		}
+	}
+
 	for _, ch := range parent.Children {
 		allowedVars[ch.Params.Var] = struct{}{}
 	}
 
-	for _, mch := range mNode.Child {
-		if _, ok := allowedVars[mch.Var]; !ok && mch.Var != "" {
-			return x.Errorf("Var %v used at wrong math level", mch.Var)
-		}
+	if err := rec(mNode, allowedVars); err != nil {
+		return err
 	}
 
 	aggName := mNode.Fn

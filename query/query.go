@@ -293,7 +293,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			continue
 		}
 		if pc.Params.isGroupBy {
-			// TODO: Add the results for groupby node here.
 			g := dst.New(pc.Attr)
 			for _, grp := range pc.GroupbyRes.group {
 				uc := g.New("@groupby")
@@ -1224,7 +1223,7 @@ AssignStep:
 }
 
 func (sg *SubGraph) assignVars(doneVars map[string]values) error {
-	if sg.Params.FacetVar != nil {
+	if sg.Params.FacetVar != nil && sg.Params.Facet != nil {
 		for _, it := range sg.Params.Facet.Keys {
 			fvar, ok := sg.Params.FacetVar[it]
 			if !ok {
@@ -1258,7 +1257,7 @@ func (sg *SubGraph) assignVars(doneVars map[string]values) error {
 							if err != nil {
 								continue
 							}
-							doneVars[fvar].vals[uid] = facets.ValFor(f)
+							doneVars[fvar].vals[uid] = fVal
 						}
 					}
 				}
