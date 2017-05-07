@@ -58,25 +58,27 @@ func createNumQuery(group uint32, umap map[string]uint64) *taskp.Num {
 }
 
 func GetUid(ctx context.Context, xid string, group uint32) (uint64, error) {
-	out := &taskp.Query{
-		Attr:    "_xid_",
-		SrcFunc: []string{"eq", "", xid},
-	}
-	result, err := ProcessTaskOverNetwork(context.Background(), out)
+	tokens, err := posting.IndexTokens("_xid_", "", types.Val{Tid: types.StringID, Value: []byte(xid)})
 	if err != nil {
 		return 0, err
 	}
-	if len(result.UidMatrix) > 0 && len(result.UidMatrix[0].Uids) > 0 {
-		x.AssertTrue(len(result.UidMatrix) == 1 && len(result.UidMatrix[0].Uids) == 1)
-		if result.UidMatrix[0].Uids[0] > 1 {
-			return result.UidMatrix[0].Uids[0], nil
-		}
-		// don't allow lease edges to be fetched.
-		// since xid's are always non-integers(strings which can't be parsed to integer),
-		// indexing of lease edges won't conflict since lease values are always integers
+	x.AssertTruef(len(tokens) == 1, "_xid_ data corrupted")
+	key := x.IndexKey("_xid_", tokens[0])
+	pl, decr := posting.GetOrCreate(key, group)
+	defer decr()
+	uids := pl.Uids(emptyListOption)
+	if len(uids.Uids) == 0 {
 		return 0, UidNotFound
 	}
+	x.AssertTruef(len(uids.Uids) == 1, "_xid_ data corrupted")
+	if uids.Uids[0] > 1 {
+		return uids.Uids[0], nil
+	}
+	// don't allow lease edges to be fetched.
+	// since xid's are always non-integers(strings which can't be parsed to integer),
+	// indexing of lease edges won't conflict since lease values are always integers
 	return 0, UidNotFound
+
 }
 
 // AllocateOrGetUniqueUids assigns a new uid for xid if not already assigned or returns
@@ -87,7 +89,7 @@ func AllocateOrGetUniqueUids(ctx context.Context, xids []string, group uint32) (
 	xidMap := make(map[string]uint64)
 	var numRequired, numWaiting uint64
 	// assuing max size
-	ch := make(chan struct{}, len(xids))
+	ch := make(chan uid.XidAndUid, len(xids))
 	for _, xid := range xids {
 		// Check if uid has already been allocated from this xid
 		if uid, err := GetUid(ctx, xid, group); err == nil {
@@ -95,15 +97,21 @@ func AllocateOrGetUniqueUids(ctx context.Context, xids []string, group uint32) (
 			continue
 		}
 		// take a lock on xid so that we don't propose different uid for same xid
-		if ok := uid.LockManager().CanProposeUid(xid, ch); !ok {
+		ok := uid.LockManager().CanProposeUid(xid, ch)
+		if id, err := GetUid(ctx, xid, group); err == nil {
+			if !ok {
+				xidMap[xid] = waitForUid
+				numWaiting++
+			} else {
+				xidMap[xid] = id
+				uid.LockManager().Done(xid, id)
+			}
+			continue
+		}
+		if !ok {
 			xidMap[xid] = waitForUid
 			numWaiting++
 		} else {
-			// check uid again
-			if uid, err := GetUid(ctx, xid, group); err == nil {
-				xidMap[xid] = uid
-				continue
-			}
 			xidMap[xid] = generateNewUid
 			numRequired++
 		}
@@ -115,11 +123,9 @@ func AllocateOrGetUniqueUids(ctx context.Context, xids []string, group uint32) (
 	}
 	// populate uid to xid mapping
 	mutations := &taskp.Mutations{GroupId: group}
-	for i, xid := range xids {
-		v, found := xidMap[xid]
-		x.AssertTrue(found)
+	for xid, v := range xidMap {
 		if v == generateNewUid {
-			ids[i] = startId
+			xidMap[xid] = startId
 			mutations.Edges = append(mutations.Edges, &taskp.DirectedEdge{
 				Entity:    startId,
 				Attr:      "_xid_",
@@ -128,12 +134,9 @@ func AllocateOrGetUniqueUids(ctx context.Context, xids []string, group uint32) (
 				Op:        taskp.DirectedEdge_SET,
 			})
 			startId += 1
-		} else if v != waitForUid {
-			ids[i] = v
-		} else {
-			// fill later after uid to xid has been persisted by other mutations
 		}
 	}
+
 	if numRequired > 0 {
 		// persist mutations, iterate over them and mark xid as done
 		proposal := &taskp.Proposal{Mutations: mutations}
@@ -143,14 +146,15 @@ func AllocateOrGetUniqueUids(ctx context.Context, xids []string, group uint32) (
 			return ids, err
 		}
 		for _, edge := range mutations.Edges {
-			uid.LockManager().Done(string(edge.Value))
+			uid.LockManager().Done(string(edge.Value), edge.Entity)
 		}
 	}
 	// wait at the end to avoid circular dependencies between mutations
 	for i := uint64(0); i < numWaiting; i++ {
 		select {
-		case <-ch:
-			//pass
+		case xu := <-ch:
+			xidMap[xu.Xid] = xu.Uid
+			x.AssertTrue(xu.Uid != 0)
 		case <-ctx.Done():
 			return ids, ctx.Err()
 		}
@@ -160,15 +164,9 @@ func AllocateOrGetUniqueUids(ctx context.Context, xids []string, group uint32) (
 	for i, xid := range xids {
 		v, found := xidMap[xid]
 		x.AssertTrue(found)
-		if v != waitForUid {
-			continue
-		}
-		if id, err := GetUid(ctx, xid, group); err != nil {
-			return ids, err
-		} else {
-			ids[i] = id
-		}
+		ids[i] = v
 	}
+
 	return ids, nil
 }
 
@@ -224,6 +222,7 @@ func assignUids(ctx context.Context, num *taskp.Num) (*taskp.List, error) {
 			}
 		case <-ctx.Done():
 			return &emptyUIDList, ctx.Err()
+			// wait may be
 		}
 	}
 	return &taskp.List{out}, nil

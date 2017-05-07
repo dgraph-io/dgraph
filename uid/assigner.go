@@ -151,11 +151,16 @@ func (l *leaseManager) batchSync() {
 type lockManager struct {
 	sync.RWMutex
 	uids map[string]time.Time
-	ch   map[string][]chan struct{}
+	ch   map[string][]chan XidAndUid
+}
+
+type XidAndUid struct {
+	Xid string
+	Uid uint64
 }
 
 // CanProposeUid is used to take a lock over xid for proposing uid
-func (lm *lockManager) CanProposeUid(xid string, ch chan struct{}) bool {
+func (lm *lockManager) CanProposeUid(xid string, ch chan XidAndUid) bool {
 	lm.Lock()
 	defer lm.Unlock()
 	if _, has := lm.uids[xid]; has {
@@ -167,11 +172,11 @@ func (lm *lockManager) CanProposeUid(xid string, ch chan struct{}) bool {
 }
 
 // Done sends notification on all registered channels
-func (lm *lockManager) Done(xid string) {
+func (lm *lockManager) Done(xid string, uid uint64) {
 	lm.Lock()
 	defer lm.Unlock()
 	for _, ch := range lm.ch[xid] {
-		ch <- struct{}{}
+		ch <- XidAndUid{Xid: xid, Uid: uid}
 	}
 	delete(lm.ch, xid)
 	delete(lm.uids, xid)
@@ -184,17 +189,14 @@ func LockManager() *lockManager {
 // lock over xid would be removed in case request crashes before calling
 // done
 func (lm *lockManager) clean() {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Minute * 10)
 	for range ticker.C {
 		now := time.Now()
 		lm.Lock()
 		for xid, ts := range lm.uids {
 			// A minute is enough to avoid the race condition issue for
 			// proposing different uid for same xid
-			if now.Sub(ts) > time.Minute {
-				for _, ch := range lm.ch[xid] {
-					ch <- struct{}{}
-				}
+			if now.Sub(ts) > time.Minute*10 {
 				delete(lm.uids, xid)
 				delete(lm.ch, xid)
 			}
@@ -208,7 +210,7 @@ func Init(ps *store.Store) {
 	pstore = ps
 	lmgr = new(lockManager)
 	lmgr.uids = make(map[string]time.Time)
-	lmgr.ch = make(map[string][]chan struct{})
+	lmgr.ch = make(map[string][]chan XidAndUid)
 	go lmgr.clean()
 	leasemgr = new(leaseManager)
 	leasemgr.elog = trace.NewEventLog("Lease Manager", "")

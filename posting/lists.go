@@ -442,7 +442,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	// This replaces "TokensTable". The idea is that we want to quickly add the
 	// index key to the data store, with essentially an empty value. We just need
 	// the keys for filtering / sorting.
-	if l == lp && pk.IsIndex() {
+	if l == lp && pk.IsIndex() && pk.Attr != "_xid_" {
 		// Lock before entering goroutine. Otherwise, some tests in query will fail.
 		l.Lock()
 		go func(key []byte) {

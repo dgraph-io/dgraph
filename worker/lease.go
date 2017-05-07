@@ -42,7 +42,7 @@ func assignNew(ctx context.Context, N uint64, group uint32) (uint64, error) {
 		return nextId, nil
 	}
 	if available < N {
-		if err := proposeLease(ctx, nextId, leasedId+10000, group); err != nil {
+		if err := proposeLease(ctx, nextId, leasedId+100000, group); err != nil {
 			m.Unlock()
 			return 0, err
 		}

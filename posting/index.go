@@ -203,7 +203,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
 
 	var val types.Val
-	var found bool
+	var found, mutated bool
+	var err error
 
 	l.index.Lock()
 	defer l.index.Unlock()
@@ -223,7 +224,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 				val, found = l.findValue(math.MaxUint64)
 			}
 		}
-		_, err := l.addMutation(ctx, t)
+		mutated, err = l.addMutation(ctx, t)
 		l.Unlock()
 
 		if err != nil {
@@ -234,7 +235,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 	// eventual index consistency
 	if doUpdateIndex {
 		// Exact matches.
-		if found && val.Value != nil {
+		if found && val.Value != nil && mutated {
 			addIndexMutations(ctx, t, val, taskp.DirectedEdge_DEL)
 		}
 		if t.Op == taskp.DirectedEdge_SET {
