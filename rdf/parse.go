@@ -34,7 +34,8 @@ import (
 
 var emptyEdge taskp.DirectedEdge
 var (
-	ErrEmpty = errors.New("rdf: harmless error, e.g. comment line")
+	ErrEmpty      = errors.New("rdf: harmless error, e.g. comment line")
+	ErrInvalidUID = errors.New("UID has to be greater than one.")
 )
 
 // Gets the uid corresponding
@@ -43,6 +44,9 @@ func GetUid(xid string) (uint64, error) {
 	uid, err := strconv.ParseUint(xid, 0, 64)
 	if err != nil {
 		return 0, err
+	}
+	if uid == 0 {
+		return 0, ErrInvalidUID
 	}
 	return uid, nil
 }
@@ -127,7 +131,7 @@ func (nq NQuad) ToEdge() (*taskp.DirectedEdge, error) {
 }
 
 func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
-	if id, err := GetUid(subject); err == nil {
+	if id, err := GetUid(subject); err == nil || err == ErrInvalidUID {
 		return id, err
 	}
 	// It's an xid

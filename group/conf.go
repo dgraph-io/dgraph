@@ -183,6 +183,10 @@ func fpGroup(pred string) uint32 {
 }
 
 func BelongsTo(pred string) uint32 {
+	if pred == "_lease_" {
+		// lease is stored on same group where we store xid
+		pred = "_xid_"
+	}
 	for _, meta := range groupConfig.pred {
 		if meta.exactMatch && meta.val == pred {
 			return meta.gid

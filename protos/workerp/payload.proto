@@ -31,6 +31,7 @@ service Worker {
 
 	// Data serving RPCs.
 	rpc AssignUids (taskp.Num)                 returns (taskp.List) {}
+	rpc GetUids(taskp.Num)                     returns (taskp.List) {}
 	rpc Mutate (taskp.Mutations)               returns (Payload) {}
 	rpc ServeTask (taskp.Query)                returns (taskp.Result) {}
 	rpc PredicateAndSchemaData (stream taskp.GroupKeys) returns (stream taskp.KV) {}

@@ -19,17 +19,14 @@ package gql
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos/graphp"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -37,6 +34,7 @@ import (
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
 	UID        []uint64
+	ID         []string
 	Attr       string
 	Langs      []string
 	Alias      string
@@ -1589,23 +1587,8 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 
 func parseID(gq *GraphQuery, val string) error {
 	val = x.WhiteSpace.Replace(val)
-	toUid := func(str string) error {
-		uid, rerr := strconv.ParseUint(str, 0, 64)
-		if rerr == nil {
-			gq.UID = append(gq.UID, uid)
-		} else {
-			id, err := worker.GetUid(context.Background(), str, group.BelongsTo("_xid_"))
-			if err != nil {
-				return err
-			}
-			gq.UID = append(gq.UID, id)
-		}
-		return nil
-	}
 	if val[0] != '[' {
-		if err := toUid(val); err != nil {
-			return err
-		}
+		gq.ID = append(gq.ID, val)
 		return nil
 	}
 
@@ -1618,9 +1601,7 @@ func parseID(gq *GraphQuery, val string) error {
 			if buf.Len() == 0 {
 				continue
 			}
-			if err := toUid(buf.String()); err != nil {
-				return err
-			}
+			gq.ID = append(gq.ID, buf.String())
 			buf.Reset()
 			continue
 		}

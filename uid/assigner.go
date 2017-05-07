@@ -33,8 +33,14 @@ import (
 )
 
 const (
-	nextIdUid   = 0
-	leasedIdUid = 1
+	LeasePredicate = "_lease_"
+)
+
+type leaseType uint64
+
+const (
+	NEXT_ID leaseType = iota + 1
+	LEASE_ID
 )
 
 var (
@@ -52,6 +58,13 @@ type leaseManager struct {
 	elog     trace.EventLog
 }
 
+func (l *leaseManager) init() {
+	leasemgr.elog = trace.NewEventLog("Lease Manager", "")
+	// uid 0 is not allowed
+	leasemgr.nextId = 1
+	leasemgr.leasedId = 0
+}
+
 func LeaseManager() *leaseManager {
 	return leasemgr
 }
@@ -60,8 +73,9 @@ func (l *leaseManager) Reload(group uint32) error {
 	if group != gid {
 		return nil
 	}
-	nextId := getData(nextIdUid)
-	leasedId := getData(leasedIdUid)
+	// avoid locking during IO
+	nextId := getLease(NEXT_ID)
+	leasedId := getLease(LEASE_ID)
 	l.Lock()
 	defer l.Unlock()
 	l.set(nextId, leasedId)
@@ -77,6 +91,18 @@ func (l *leaseManager) Update(nextId uint64, leasedId uint64, rv x.RaftValue) {
 	l.elog.Printf("Updating lease, nextId: %d leasedId: %d", nextId, leasedId)
 }
 
+func (l *leaseManager) flushIndices() (indices []uint64, nextId uint64, leasedId uint64) {
+	l.Lock()
+	defer l.Unlock()
+	for _, idx := range l.indices {
+		indices = append(indices, idx)
+	}
+	l.indices = l.indices[:0]
+	nextId = l.nextId
+	leasedId = l.leasedId
+	return
+}
+
 func (l *leaseManager) flush() bool {
 	l.RLock()
 	if len(l.indices) == 0 {
@@ -85,28 +111,21 @@ func (l *leaseManager) flush() bool {
 	}
 	l.RUnlock()
 
-	l.Lock()
-	if len(l.indices) == 0 {
-		l.Unlock()
+	indices, nextId, leasedId := l.flushIndices()
+	if len(indices) == 0 {
 		return false
 	}
-	var indices []uint64
-	for _, idx := range l.indices {
-		indices = append(indices, idx)
-	}
-	l.indices = l.indices[:0]
-	nextId, leasedId := l.Get()
-	l.Unlock()
 
-	setData(leasedIdUid, leasedId)
-	setData(nextIdUid, nextId)
+	setLease(LEASE_ID, leasedId)
+	setLease(NEXT_ID, nextId)
 	posting.SyncMarkFor(gid).Ch <- x.Mark{Indices: indices, Done: true}
 	return true
 }
 
 // returns nextId and leasedId
 func (l *leaseManager) Get() (uint64, uint64) {
-	l.AssertRLock()
+	l.RLock()
+	defer l.RUnlock()
 	return l.nextId, l.leasedId
 }
 
@@ -121,16 +140,12 @@ func (l *leaseManager) set(nextId uint64, leasedId uint64) {
 	}
 }
 
-func (l *leaseManager) NumAvailable() uint64 {
-	l.AssertRLock()
-	return l.leasedId - l.nextId + 1
-}
-
 // AssignNew assigns N unique uids sequentially
 // and returns the starting number of the sequence
 func (l *leaseManager) AssignNew(N uint64) uint64 {
-	l.AssertLock()
-	x.AssertTruef(l.NumAvailable() >= N, "required number of uids not available")
+	l.Lock()
+	defer l.Unlock()
+	x.AssertTruef(l.leasedId-l.nextId+1 >= N, "required number of uids not available")
 	id := l.nextId
 	l.nextId += N
 	return id
@@ -157,6 +172,11 @@ type lockManager struct {
 type XidAndUid struct {
 	Xid string
 	Uid uint64
+}
+
+func (lm *lockManager) init() {
+	lm.uids = make(map[string]time.Time)
+	lm.ch = make(map[string][]chan XidAndUid)
 }
 
 // CanProposeUid is used to take a lock over xid for proposing uid
@@ -208,21 +228,20 @@ func (lm *lockManager) clean() {
 // package level init
 func Init(ps *store.Store) {
 	pstore = ps
+	gid = group.BelongsTo(LeasePredicate)
+
 	lmgr = new(lockManager)
-	lmgr.uids = make(map[string]time.Time)
-	lmgr.ch = make(map[string][]chan XidAndUid)
+	lmgr.init()
 	go lmgr.clean()
+
 	leasemgr = new(leaseManager)
-	leasemgr.elog = trace.NewEventLog("Lease Manager", "")
-	// 0 and 1 are used
-	leasemgr.nextId = 2
-	leasemgr.leasedId = 1
-	gid = group.BelongsTo("_xid_")
+	leasemgr.init()
 	go leasemgr.batchSync()
 }
 
-func getData(uid uint64) uint64 {
-	key := x.DataKey("_xid_", uid)
+func getLease(typ leaseType) uint64 {
+	uid := uint64(typ)
+	key := x.DataKey(LeasePredicate, uid)
 
 	slice, err := pstore.Get(key)
 	x.Checkf(err, "Error while fetching lease information")
@@ -244,8 +263,9 @@ func getData(uid uint64) uint64 {
 	return binary.LittleEndian.Uint64(data)
 }
 
-func setData(uid uint64, value uint64) {
-	key := x.DataKey("_xid_", uid)
+func setLease(typ leaseType, value uint64) {
+	uid := uint64(typ)
+	key := x.DataKey(LeasePredicate, uid)
 
 	var bs [8]byte
 	binary.LittleEndian.PutUint64(bs[:], value)

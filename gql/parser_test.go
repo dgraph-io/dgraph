@@ -152,8 +152,10 @@ func TestParseQueryWithDash(t *testing.T) {
         }
       }
     }`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, "alice-in-wonderland", res.Query[0].ID[0])
+	require.Equal(t, "written-in", res.Query[0].Children[1].Attr)
 }
 
 func TestParseQueryWithMultiVarValError(t *testing.T) {
@@ -946,13 +948,13 @@ func TestParseIdList(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
-	require.Equal(t, []uint64{1}, gq.UID)
+	require.Equal(t, []string{"0x1"}, gq.ID)
 }
 
 func TestParseIdList1(t *testing.T) {
 	query := `
 	query {
-		user(id: [0x1, 0x34]) {
+		user(id: [m.abcd, 0x1, abc, ade, 0x34]) {
 			type.object.name
 		}
 	}`
@@ -961,8 +963,8 @@ func TestParseIdList1(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
-	require.Equal(t, []uint64{0x1, 0x34}, gq.UID)
-	require.Equal(t, 2, len(gq.UID))
+	require.Equal(t, []string{"m.abcd", "0x1", "abc", "ade", "0x34"}, gq.ID)
+	require.Equal(t, 5, len(gq.ID))
 }
 
 func TestParseIdListError(t *testing.T) {
@@ -979,7 +981,7 @@ func TestParseIdListError(t *testing.T) {
 func TestParseFirst(t *testing.T) {
 	query := `
 	query {
-		user(id: 0x1) {
+		user(id: m.abcd) {
 			type.object.name
 			friends (first: 10) {
 			}
@@ -995,7 +997,7 @@ func TestParseFirst(t *testing.T) {
 func TestParseFirst_error(t *testing.T) {
 	query := `
 	query {
-		user(id: 0x1) {
+		user(id: m.abcd) {
 			type.object.name
 			friends (first: ) {
 			}
@@ -1008,7 +1010,7 @@ func TestParseFirst_error(t *testing.T) {
 func TestParseAfter(t *testing.T) {
 	query := `
 	query {
-		user(id: 0x1) {
+		user(id: m.abcd) {
 			type.object.name
 			friends (first: 10, after: 3) {
 			}
@@ -1025,7 +1027,7 @@ func TestParseAfter(t *testing.T) {
 func TestParseOffset(t *testing.T) {
 	query := `
 	query {
-		user(id: 0x1) {
+		user(id: m.abcd) {
 			type.object.name
 			friends (first: 10, offset: 3) {
 			}
@@ -1042,7 +1044,7 @@ func TestParseOffset(t *testing.T) {
 func TestParseOffset_error(t *testing.T) {
 	query := `
 	query {
-		user(id: 0x1) {
+		user(id: m.abcd) {
 			type.object.name
 			friends (first: 10, offset: ) {
 			}
@@ -1392,7 +1394,7 @@ func TestParseMutationAndQueryWithComments(t *testing.T) {
 		}
 		# Query starts here.
 		query {
-			me(id: 0x04) { # now mention children
+			me(id: tomhanks) { # now mention children
 				name		# Name
 				hometown # hometown of the person
 			}
@@ -1406,7 +1408,7 @@ func TestParseMutationAndQueryWithComments(t *testing.T) {
 	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
 
 	require.NotNil(t, res.Query[0])
-	require.Equal(t, 1, len(res.Query[0].UID))
+	require.Equal(t, 1, len(res.Query[0].ID))
 	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
 }
 
@@ -1422,7 +1424,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 			}
 		}
 		query {
-			me(id: 0x04) {
+			me(id: tomhanks) {
 				name
 				hometown
 			}
@@ -1436,7 +1438,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
 
 	require.NotNil(t, res.Query[0])
-	require.Equal(t, 1, len(res.Query[0].UID))
+	require.Equal(t, 1, len(res.Query[0].ID))
 	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
 }
 
@@ -2313,7 +2315,7 @@ func TestParseGenerator(t *testing.T) {
 
 func TestParseIRIRef(t *testing.T) {
 	query := `{
-		me(id: 0x1) {
+		me(id: <http://helloworld.com/how/are/you>) {
 			<http://verygood.com/what/about/you>
 			friends @filter(allofterms(<http://verygood.com/what/about/you>,
 				"good better bad")){
@@ -2654,7 +2656,7 @@ func TestLangsFunctionMultipleLangs(t *testing.T) {
 func TestParseNormalize(t *testing.T) {
 	query := `
 	query {
-		me(id: 0x1) @normalize {
+		me(id: abc) @normalize {
 			friends {
 				name
 			}

@@ -30,30 +30,32 @@ var (
 	m x.SafeMutex
 )
 
-func assignNew(ctx context.Context, N uint64, group uint32) (uint64, error) {
+func getStartId(ctx context.Context, N uint64, group uint32) (uint64, uint64, uint64, error) {
 	m.Lock()
-	uid.LeaseManager().RLock()
+	defer m.Unlock()
 	nextId, leasedId := uid.LeaseManager().Get()
-	available := uid.LeaseManager().NumAvailable()
-	uid.LeaseManager().RUnlock()
+	available := leasedId - nextId + 1
 
 	if N == 0 {
-		m.Unlock()
-		return nextId, nil
+		return nextId, nextId, leasedId, nil
 	}
 	if available < N {
 		if err := proposeLease(ctx, nextId, leasedId+100000, group); err != nil {
 			m.Unlock()
-			return 0, err
+			return 0, 0, 0, err
 		}
 	}
 
-	uid.LeaseManager().Lock()
 	startId := uid.LeaseManager().AssignNew(N)
 	nextId, leasedId = uid.LeaseManager().Get()
-	uid.LeaseManager().Unlock()
-	m.Unlock()
+	return startId, nextId, leasedId, nil
+}
 
+func assignNew(ctx context.Context, N uint64, group uint32) (uint64, error) {
+	startId, nextId, leasedId, err := getStartId(ctx, N, group)
+	if err != nil {
+		return 0, err
+	}
 	// Persist next Id can be done in parallel, only downside being
 	// on failure of proposal that range of uid's would be lost since we
 	// assign concurrently

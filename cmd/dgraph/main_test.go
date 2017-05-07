@@ -643,6 +643,9 @@ func TestQuery(t *testing.T) {
 
 var m5 = `
 	mutation {
+		schema {
+			<_xid_>:string @index(exact) .
+		}
 		set {
                         # comment line should be ignored
 			<ram> <name> "1"^^<xs:int> .
@@ -665,9 +668,8 @@ func TestSchemaValidationError(t *testing.T) {
 
 	ctx := context.Background()
 	_, err = mutationHandler(ctx, res.Mutation)
-
 	require.Error(t, err)
-	output := processToFastJSON(strings.Replace(q5, "<id>", "0x01", -1))
+	output := processToFastJSON(strings.Replace(q5, "<id>", "ram", -1))
 	require.JSONEq(t, `{}`, output)
 }
 
@@ -706,6 +708,24 @@ func TestSchemaConversion(t *testing.T) {
 	schema.State().Set("name2", s)
 	output = processToFastJSON(strings.Replace(q6, "<id>", "shyam2", -1))
 	require.JSONEq(t, `{"user":[{"name2":1.5}]}`, output)
+}
+
+var qErr = `		
+ 	mutation {		
+ 		set {		
+ 			<0x0> <name> "Alice" .		
+ 		}		
+ 	}		
+ `
+
+func TestMutationError(t *testing.T) {
+	res, err := gql.Parse(gql.Request{Str: qErr, Http: true})
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = mutationHandler(ctx, res.Mutation)
+	require.Error(t, err)
+
 }
 
 var qm = `

@@ -33,7 +33,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
@@ -676,7 +675,25 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 }
 
 func (args *params) fill(gq *gql.GraphQuery) error {
+	var xids []string
+	for _, id := range gq.ID {
+		if uid, err := strconv.ParseUint(id, 0, 64); err == nil {
+			gq.UID = append(gq.UID, uid)
+			continue
+		}
+		gq.UID = append(gq.UID, 0) // for consistency
+		xids = append(xids, id)
 
+	}
+	uids, err := worker.GetUidsOverNetwork(context.Background(), xids)
+	if err != nil && err != worker.UidNotFound {
+		return err
+	}
+	for i, uid := range gq.UID {
+		if uid == 0 {
+			gq.UID[i] = uids[gq.ID[i]]
+		}
+	}
 	if v, ok := gq.Args["offset"]; ok {
 		offset, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
@@ -702,11 +719,11 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
-			id, err := worker.GetUid(context.Background(), v, group.BelongsTo("_xid_"))
-			if err != nil {
+			id, err := worker.GetUidsOverNetwork(context.Background(), []string{v})
+			if err != nil && err != worker.UidNotFound {
 				return err
 			}
-			from = id
+			from = id[v]
 		}
 		args.From = uint64(from)
 	}
@@ -714,11 +731,11 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		to, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
-			id, err := worker.GetUid(context.Background(), v, group.BelongsTo("_xid_"))
-			if err != nil {
+			id, err := worker.GetUidsOverNetwork(context.Background(), []string{v})
+			if err != nil && err != worker.UidNotFound {
 				return err
 			}
-			to = id
+			to = id[v]
 		}
 		args.To = uint64(to)
 	}
@@ -763,7 +780,7 @@ func isDebug(ctx context.Context) bool {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
+	if len(gq.UID) == 0 && len(gq.ID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -1026,7 +1043,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil &&
+		if gq == nil || (len(gq.UID) == 0 && len(gq.ID) == 0 && gq.Func == nil &&
 			len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
 			continue
 		}

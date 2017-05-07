@@ -169,7 +169,9 @@ func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult
 		} else {
 			// Only store xids that need to be generated.
 			_, err := rdf.GetUid(nq.Subject)
-			if err != nil {
+			if err == rdf.ErrInvalidUID {
+				return mr, err
+			} else if err != nil {
 				newUids[nq.Subject] = 0
 			}
 		}
@@ -179,7 +181,9 @@ func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult
 				newUids[nq.ObjectId] = 0
 			} else {
 				_, err := rdf.GetUid(nq.ObjectId)
-				if err != nil {
+				if err == rdf.ErrInvalidUID {
+					return mr, err
+				} else if err != nil {
 					newUids[nq.ObjectId] = 0
 				}
 			}
