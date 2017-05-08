@@ -114,6 +114,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "name", 1, "Michonne", nil)
 	addEdgeToValue(t, "gender", 1, "female", nil)
 	addEdgeToValue(t, "full_name", 1, "Michonne's large name for hashing", nil)
+	addEdgeToValue(t, "noindex_name", 1, "Michonne's name not indexed", nil)
 
 	src := types.ValueForType(types.StringID)
 	src.Value = []byte("{\"Type\":\"Point\", \"Coordinates\":[1.1,2.0]}")
@@ -5615,7 +5616,8 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "shadow_deep", Type: "int"}, {Predicate: "friend", Type: "uid"},
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
 		{Predicate: "dob", Type: "date"}, {Predicate: "survival_rate", Type: "float"},
-		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"}}
+		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
+		{Predicate: "noindex_name", Type: "string"}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -5689,6 +5691,7 @@ friend:uid @reverse .
 geometry:geo @index .
 value:string @index(trigram) .
 full_name:string @index(hash) .
+noindex_name: string .
 `
 
 func TestMain(m *testing.M) {
@@ -6158,5 +6161,26 @@ func TestHashTokGeqErr(t *testing.T) {
 	var l Latency
 	ctx := context.Background()
 	_, err := ProcessQuery(ctx, res, &l)
-	require.NotNil(t, err)
+	require.Error(t, err)
+}
+
+func TestNameNotIndexed(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: eq(noindex_name, "Michonne's name not indexed")) {
+				full_name
+				alive
+				friend {
+					name
+				}
+			}
+		}
+	`
+	res, _ := gql.Parse(gql.Request{Str: query})
+	var l Latency
+	ctx := context.Background()
+	_, err := ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+
 }

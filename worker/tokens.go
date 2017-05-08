@@ -68,21 +68,27 @@ func pickTokenizer(attr string) (tok.Tokenizer, error) {
 	}
 
 	tokenizers := schema.State().Tokenizer(attr)
-	var tokenizer tok.Tokenizer
-	for _, t := range tokenizers {
-		if t.IsSortable() {
-			tokenizer = t
-			break
-		}
-		tokenizer = t
-	}
-
-	if tokenizer == nil {
+	if len(tokenizers) == 0 {
 		return nil, x.Errorf("Attribute:%s does not have proper index for comparsion",
 			attr)
 	}
 
-	return tokenizer, nil
+	for _, t := range tokenizers {
+		if t.IsSortable() {
+			return t, nil
+		}
+	}
+
+	// We didn't find a sortable tokenizer, lets try to find which !IsLossy() so that
+	// we don't have to do the second lookup.
+	for _, t := range tokenizers {
+		if !t.IsLossy() {
+			return t, nil
+		}
+	}
+
+	// We didn't find a sortable or !isLossy() tokenizer, lets return the first one.
+	return tokenizers[0], nil
 }
 
 // getInequalityTokens gets tokens ge / le compared to given token using the first sortable
