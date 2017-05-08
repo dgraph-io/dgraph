@@ -1310,14 +1310,13 @@ func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) {
 			path: sgPath[:len(sgPath)-1],
 		}
 		for idx, uid := range sg.SrcUIDs.Uids {
-			//val, _ := getValue(sg.values[idx])
 			val := types.Val{
 				Tid:   types.IntID,
 				Value: int64(sg.counts[idx]),
 			}
 			doneVars[sg.Params.Var].vals[uid] = val
 		}
-	} else if len(sg.values) != 0 && sg.SrcUIDs != nil {
+	} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
 		// This implies it is a value variable.
 		doneVars[sg.Params.Var] = values{
 			vals: make(map[uint64]types.Val),
