@@ -293,7 +293,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			continue
 		}
 		if pc.Params.isGroupBy {
-			// TODO: Add the results for groupby node here.
 			g := dst.New(pc.Attr)
 			for _, grp := range pc.GroupbyRes.group {
 				uc := g.New("@groupby")
@@ -977,16 +976,15 @@ func transformMap(fromNode, toNode values) (map[uint64]types.Val, error) {
 		return newMap, nil
 	}
 	x.AssertTrue(len(toNode.path) > len(fromNode.path))
-	i := 0
-	for ; i < len(fromNode.path); i++ {
-		if fromNode.path[i] != toNode.path[i] {
+	idx := 0
+	for ; idx < len(fromNode.path); idx++ {
+		if fromNode.path[idx] != toNode.path[idx] {
 			return nil, x.Errorf("Invalid combination of variables in math")
 		}
 	}
-	//TODO: Go thorugh the path diff and transform at each level.
 
-	for ; i < len(toNode.path); i++ {
-		curNode := toNode.path[i]
+	for ; idx < len(toNode.path); idx++ {
+		curNode := toNode.path[idx]
 		tempMap := make(map[uint64]types.Val)
 		for i := 0; i < len(curNode.uidMatrix); i++ {
 			ul := curNode.uidMatrix[i]
@@ -1021,7 +1019,6 @@ func transformVars(mNode *gql.MathTree, doneVars map[string]values) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(nodeList)
 	maxVa := doneVars[maxVar]
 	for _, node := range nodeList {
 		curNode := doneVars[node.Var]
@@ -1057,7 +1054,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 		}
 		sg.Params.uidToVal = mp
 	} else if sg.MathExp != nil {
-		// TODO: Do some prepocessing to get all variables at the same level.
+		// Preprocess to bring all variables to the same level.
 		err := transformVars(sg.MathExp, doneVars)
 		if err != nil {
 			return err
@@ -1213,7 +1210,10 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			sg := sgl[idx]
 			isCascade := sg.Params.Cascade || shouldCascade(res, idx)
 			var sgPath []*SubGraph
-			populateVarMap(sg, doneVars, isCascade, sgPath)
+			err = populateVarMap(sg, doneVars, isCascade, sgPath)
+			if err != nil {
+				return nil, err
+			}
 			err = sg.populatePostAggregation(doneVars, nil)
 			if err != nil {
 				return nil, err
@@ -1257,9 +1257,9 @@ func shouldCascade(res gql.Result, idx int) bool {
 }
 
 func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool,
-	sgPath []*SubGraph) {
+	sgPath []*SubGraph) error {
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
-		return
+		return nil
 	}
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
@@ -1318,12 +1318,12 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool,
 	sg.DestUIDs = &taskp.List{out}
 
 AssignStep:
-	sg.assignVars(doneVars, sgPath)
+	return sg.assignVars(doneVars, sgPath)
 }
 
-func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) {
+func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) error {
 	if doneVars == nil || (sg.Params.Var == "" && sg.Params.FacetVar == nil) {
-		return
+		return nil
 	}
 
 	if sg.IsListNode() {
@@ -1353,6 +1353,8 @@ func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) {
 		}
 	} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
 		// This implies it is a value variable.
+		// NOTE: Value variables cannot be defined and used in the same query block. so
+		// checking len(sgPath) is okay.
 		doneVars[sg.Params.Var] = values{
 			vals: make(map[uint64]types.Val),
 			path: sgPath[:len(sgPath)-1],
@@ -1378,7 +1380,7 @@ func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) {
 		}()
 
 		if len(sg.facetsMatrix) == 0 {
-			return
+			return nil
 		}
 		for _, it := range sg.Params.Facet.Keys {
 			fvar, ok := sg.Params.FacetVar[it]
@@ -1390,6 +1392,7 @@ func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) {
 				path: sgPath,
 			}
 		}
+
 		// Note: We ignore the facets if its a value edge as we can't
 		// attach the value to any node.
 		for i, uids := range sg.uidMatrix {
@@ -1398,12 +1401,30 @@ func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) {
 				for _, f := range facet.Facets {
 					fvar, ok := sg.Params.FacetVar[f.Key]
 					if ok {
-						doneVars[fvar].vals[uid] = facets.ValFor(f)
+						if pVal, ok := doneVars[fvar].vals[uid]; !ok {
+							doneVars[fvar].vals[uid] = facets.ValFor(f)
+						} else {
+							// If the value is int/float we add them up. Else we throw an error as
+							// many to one maps are not allowed for other types.
+							nVal := facets.ValFor(f)
+							if nVal.Tid != types.IntID && nVal.Tid != types.FloatID {
+								return x.Errorf("Repeated id with non int/float value for facet var encountered.")
+							}
+							ag := aggregator{name: "sum"}
+							ag.Apply(pVal)
+							ag.Apply(nVal)
+							fVal, err := ag.Value()
+							if err != nil {
+								continue
+							}
+							doneVars[fvar].vals[uid] = fVal
+						}
 					}
 				}
 			}
 		}
 	}
+	return nil
 }
 
 func (sg *SubGraph) recursiveFillVars(doneVars map[string]values) error {
