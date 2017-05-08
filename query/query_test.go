@@ -429,6 +429,28 @@ func TestLevelBasedFacetVarSumError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestLevelBasedSumMix1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			friend(id: 1) {
+				a as age
+				path @facets(L1 as weight) {
+					L2 as math(a+L1)
+			 	}
+			}
+			sum(id: var(L2), orderdesc: var(L2)) {
+				name
+				var(L2)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"age":38,"path":[{"@facets":{"_":{"weight":0.200000}},"var(L2)":38.200000},{"@facets":{"_":{"weight":0.100000}},"var(L2)":38.100000}]}],"sum":[{"name":"Glenn Rhee","var(L2)":38.200000},{"name":"Andrea","var(L2)":38.100000}]}`,
+		js)
+}
+
 func TestLevelBasedFacetVarSum1(t *testing.T) {
 	populateGraph(t)
 	query := `
