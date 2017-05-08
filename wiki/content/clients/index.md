@@ -25,7 +25,8 @@ correct [schema type]({{< relref "query-language/index.md#schema" >}}) is specif
 
 To get the Go client, you can run
 ```
-go get -u -v github.com/dgraph-io/dgraph/client github.com/dgraph-io/dgraph/protos/graphp
+go get -u -v github.com/dgraph-io/dgraph/client
+cd $GOPATH/src/github.com/dgraph-io/dgraph && git checkout v0.7.6
 ```
 
 #### Example
