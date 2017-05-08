@@ -1375,7 +1375,7 @@ func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) e
 		}
 	}
 
-	if sg.Params.FacetVar != nil {
+	if sg.Params.FacetVar != nil && sg.Params.Facet != nil {
 		sgPath = append(sgPath, sg)
 		defer func() {
 			sgPath = sgPath[:len(sgPath)-1] // Backtrack
