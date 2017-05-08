@@ -36,7 +36,7 @@ import (
 
 	"github.com/dgryski/go-farm"
 
-	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -70,7 +70,7 @@ type syncMarks struct {
 func init() {
 	x.AddInit(func() {
 		h := md5.New()
-		pl := typesp.PostingList{
+		pl := protos.PostingList{
 			Checksum: h.Sum(nil),
 		}
 		var err error
@@ -475,7 +475,7 @@ func GetOrUnmarshal(key, val []byte, gid uint32) (rlist *List, decr func()) {
 		return lp, lp.decr
 	}
 
-	var pl typesp.PostingList
+	var pl protos.PostingList
 	pl.Unmarshal(val)
 	lp = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	lp.mlayer = pl.Postings

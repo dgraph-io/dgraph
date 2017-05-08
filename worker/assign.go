@@ -21,16 +21,15 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/protos/workerp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var emptyNum taskp.Num
+var emptyNum protos.Num
 
-func createNumQuery(group uint32, umap map[string]uint64) *taskp.Num {
-	out := &taskp.Num{Group: group}
+func createNumQuery(group uint32, umap map[string]uint64) *protos.Num {
+	out := &protos.Num{Group: group}
 	for _, v := range umap {
 		if v != 0 {
 			out.Uids = append(out.Uids, v)
@@ -45,7 +44,7 @@ func createNumQuery(group uint32, umap map[string]uint64) *taskp.Num {
 // This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
 // so we can tackle any collisions that might happen with the lockmanager.
 // In essence, we just want one server to be handing out new uids.
-func assignUids(ctx context.Context, num *taskp.Num) (*taskp.List, error) {
+func assignUids(ctx context.Context, num *protos.Num) (*protos.List, error) {
 	node := groups().Node(num.Group)
 	if !node.AmLeader() {
 		return &emptyUIDList, x.Errorf("Assigning UIDs is only allowed on leader.")
@@ -60,16 +59,16 @@ func assignUids(ctx context.Context, num *taskp.Num) (*taskp.List, error) {
 	mutations := uid.AssignNew(val, num.Group)
 
 	for _, uid := range num.Uids {
-		mutations.Edges = append(mutations.Edges, &taskp.DirectedEdge{
+		mutations.Edges = append(mutations.Edges, &protos.DirectedEdge{
 			Entity: uid,
 			Attr:   "_uid_",
 			Value:  []byte("_"), // not txid
 			Label:  "A",
-			Op:     taskp.DirectedEdge_SET,
+			Op:     protos.DirectedEdge_SET,
 		})
 	}
 
-	proposal := &taskp.Proposal{Mutations: mutations}
+	proposal := &protos.Proposal{Mutations: mutations}
 	if err := node.ProposeAndWait(ctx, proposal); err != nil {
 		return &emptyUIDList, err
 	}
@@ -80,7 +79,7 @@ func assignUids(ctx context.Context, num *taskp.Num) (*taskp.List, error) {
 	for i := 0; i < val; i++ {
 		out = append(out, mutations.Edges[i].Entity)
 	}
-	return &taskp.List{out}, nil
+	return &protos.List{out}, nil
 }
 
 // AssignUidsOverNetwork assigns new uids and writes them to the umap.
@@ -88,7 +87,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 	gid := group.BelongsTo("_uid_")
 	num := createNumQuery(gid, umap)
 
-	var ul *taskp.List
+	var ul *protos.List
 	var err error
 	n := groups().Node(gid)
 
@@ -113,7 +112,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 		defer p.Put(conn)
 		x.Trace(ctx, "Calling AssignUids for group: %d, addr: %s", gid, addr)
 
-		c := workerp.NewWorkerClient(conn)
+		c := protos.NewWorkerClient(conn)
 		ul, err = c.AssignUids(ctx, num)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while getting uids"))
@@ -136,7 +135,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 
 // AssignUids is used to assign new uids by communicating with the leader of the RAFT group
 // responsible for handing out uids.
-func (w *grpcWorker) AssignUids(ctx context.Context, num *taskp.Num) (*taskp.List, error) {
+func (w *grpcWorker) AssignUids(ctx context.Context, num *protos.Num) (*protos.List, error) {
 	if ctx.Err() != nil {
 		return &emptyUIDList, ctx.Err()
 	}

@@ -26,7 +26,7 @@ export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph --p ~/dgraph/p0 --w ~/dgraph/w0 -debugmode &
+./dgraph --p ~/dgraph/p0 --w ~/dgraph/w0 &
 
 # Wait for server to start in the background.
 until nc -z 127.0.0.1 8080;
@@ -34,7 +34,7 @@ do
         sleep 1
 done
 
-go test -debugmode -v ../../contrib/freebase/simple_test.go
+go test ../../contrib/freebase/simple_test.go
 
 killall dgraph
 popd &> /dev/null

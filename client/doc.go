@@ -7,17 +7,17 @@ In this example, we first create a node, add a name (Steven Spielberg) and age
 attribute to it. We then create another node, add a name attribute (William Jones),
 we then add a friend edge between the two nodes.
 	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
-	dgraphClient := graphp.NewDgraphClient(conn)
+	dgraphClient := protos.NewDgraphClient(conn)
 	req := client.Req{}
 
-	nq := graphp.NQuad{
+	nq := protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "name",
 	}
 	client.Str("Steven Spielberg", &nq)
 	req.AddMutation(nq, client.SET)
 
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "age",
 	}
@@ -26,14 +26,14 @@ we then add a friend edge between the two nodes.
 	}
 	req.AddMutation(nq, client.SET)
 
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "_:person2",
 		Predicate: "name",
 	}
 	client.Str("William Jones", &nq)
 	req.AddMutation(nq, client.SET)
 
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "friend",
 		ObjectId:  "_:person2",
@@ -82,7 +82,7 @@ We now query for these things.
 	fmt.Printf("%v name: %v\n", person2.Attribute, person2.Properties[0].Value.GetStrVal())
 
 This is how we delete the friend edge between the two nodes.
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   client.Uid(person1Uid),
 		Predicate: "friend",
 		ObjectId:  client.Uid(person2Uid),

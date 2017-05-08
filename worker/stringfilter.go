@@ -20,7 +20,7 @@ package worker
 import (
 	"strings"
 
-	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -33,8 +33,8 @@ type stringFilter struct {
 	tokens   []string
 }
 
-func matchStrings(uids *taskp.List, values []types.Val, filter stringFilter) *taskp.List {
-	rv := &taskp.List{}
+func matchStrings(uids *protos.List, values []types.Val, filter stringFilter) *protos.List {
+	rv := &protos.List{}
 	for i := 0; i < len(values); i++ {
 		if len(values[i].Value.(string)) == 0 {
 			continue

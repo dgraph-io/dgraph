@@ -29,15 +29,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 func listToArray(t *testing.T, afterUid uint64, l *List) []uint64 {
 	out := make([]uint64, 0, 10)
-	l.Iterate(afterUid, func(p *typesp.Posting) bool {
+	l.Iterate(afterUid, func(p *protos.Posting) bool {
 		out = append(out, p.Uid)
 		return true
 	})
@@ -53,11 +52,11 @@ func checkUids(t *testing.T, l *List, uids []uint64) {
 	}
 }
 
-func addMutation(t *testing.T, l *List, edge *taskp.DirectedEdge, op uint32) {
+func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32) {
 	if op == Del {
-		edge.Op = taskp.DirectedEdge_DEL
+		edge.Op = protos.DirectedEdge_DEL
 	} else if op == Set {
-		edge.Op = taskp.DirectedEdge_SET
+		edge.Op = protos.DirectedEdge_SET
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
@@ -76,7 +75,7 @@ func TestAddMutation(t *testing.T) {
 
 	l := getNew(key, ps)
 
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		ValueId: 9,
 		Label:   "testing",
 	}
@@ -126,8 +125,8 @@ func TestAddMutation(t *testing.T) {
 	deletePl(t, l)
 }
 
-func getFirst(l *List) (res typesp.Posting) {
-	l.Iterate(0, func(p *typesp.Posting) bool {
+func getFirst(l *List) (res protos.Posting) {
+	l.Iterate(0, func(p *protos.Posting) bool {
 		res = *p
 		return false
 	})
@@ -143,7 +142,7 @@ func checkValue(t *testing.T, ol *List, val string) {
 func TestAddMutation_Value(t *testing.T) {
 	key := x.DataKey("value", 10)
 	ol := getNew(key, ps)
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Value: []byte("oh hey there"),
 		Label: "new-testing",
 	}
@@ -168,7 +167,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	ol, _ := GetOrCreate(key, 1)
 
 	// Set value to cars and merge to RocksDB.
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -182,7 +181,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	checkValue(t, ol, "cars")
 
 	// Set value to newcars, but don't merge yet.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
@@ -191,7 +190,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	checkValue(t, ol, "newcars")
 
 	// Set value to someothercars, but don't merge yet.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("someothercars"),
 		Label: "jchiu",
 	}
@@ -200,7 +199,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	checkValue(t, ol, "someothercars")
 
 	// Set value back to the committed value cars, but don't merge yet.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -216,7 +215,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	ol, _ := GetOrCreate(key, 1)
 
 	// Del a value cars and but don't merge.
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -224,7 +223,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(0))
 
 	// Set value to newcars, but don't merge yet.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
@@ -233,7 +232,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	checkValue(t, ol, "newcars")
 
 	// Del a value cars. This operation should be ignored.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -247,7 +246,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	ol, _ := GetOrCreate(key, 1)
 
 	// Set value to cars and merge to RocksDB.
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -260,7 +259,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	checkValue(t, ol, "cars")
 
 	// Del a value cars and but don't merge.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -268,7 +267,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	require.Equal(t, 0, ol.Length(0))
 
 	// Set value to newcars, but don't merge yet.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
@@ -277,7 +276,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	checkValue(t, ol, "newcars")
 
 	// Del a value othercars and but don't merge.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("othercars"),
 		Label: "jchiu",
 	}
@@ -286,7 +285,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	checkValue(t, ol, "newcars")
 
 	// Del a value newcars and but don't merge.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
@@ -301,7 +300,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	ol, _ := GetOrCreate(key, 1)
 
 	// Set a value cars and merge.
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -311,7 +310,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	require.True(t, merged)
 
 	// Delete a non-existent value newcars. This should have no effect.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("newcars"),
 		Label: "jchiu",
 	}
@@ -319,7 +318,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	checkValue(t, ol, "cars")
 
 	// Delete the previously committed value cars. But don't merge.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -328,7 +327,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 
 	// Do this again to cover Del, muid == curUid, inPlist test case.
 	// Delete the previously committed value cars. But don't merge.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -337,7 +336,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 
 	// Set the value again to cover Set, muid == curUid, inPlist test case.
 	// Set the previously committed value cars. But don't merge.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -345,7 +344,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	checkValue(t, ol, "cars")
 
 	// Delete it again, just for fun.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value: []byte("cars"),
 		Label: "jchiu",
 	}
@@ -362,13 +361,13 @@ func TestAddMutation_checksum(t *testing.T) {
 		key := x.DataKey("value", 10)
 		ol, _ := GetOrCreate(key, 1)
 
-		edge := &taskp.DirectedEdge{
+		edge := &protos.DirectedEdge{
 			ValueId: 1,
 			Label:   "jchiu",
 		}
 		addMutation(t, ol, edge, Set)
 
-		edge = &taskp.DirectedEdge{
+		edge = &protos.DirectedEdge{
 			ValueId: 3,
 			Label:   "jchiu",
 		}
@@ -388,13 +387,13 @@ func TestAddMutation_checksum(t *testing.T) {
 		ol, _ := GetOrCreate(key, 1)
 
 		// Add in reverse.
-		edge := &taskp.DirectedEdge{
+		edge := &protos.DirectedEdge{
 			ValueId: 3,
 			Label:   "jchiu",
 		}
 		addMutation(t, ol, edge, Set)
 
-		edge = &taskp.DirectedEdge{
+		edge = &protos.DirectedEdge{
 			ValueId: 1,
 			Label:   "jchiu",
 		}
@@ -415,19 +414,19 @@ func TestAddMutation_checksum(t *testing.T) {
 		ol, _ := GetOrCreate(key, 1)
 
 		// Add in reverse.
-		edge := &taskp.DirectedEdge{
+		edge := &protos.DirectedEdge{
 			ValueId: 3,
 			Label:   "jchiu",
 		}
 		addMutation(t, ol, edge, Set)
 
-		edge = &taskp.DirectedEdge{
+		edge = &protos.DirectedEdge{
 			ValueId: 1,
 			Label:   "jchiu",
 		}
 		addMutation(t, ol, edge, Set)
 
-		edge = &taskp.DirectedEdge{
+		edge = &protos.DirectedEdge{
 			ValueId: 4,
 			Label:   "jchiu",
 		}
@@ -450,12 +449,12 @@ func TestAddMutation_gru(t *testing.T) {
 
 	{
 		// Set two tag ids and merge.
-		edge := &taskp.DirectedEdge{
+		edge := &protos.DirectedEdge{
 			ValueId: 0x2b693088816b04b7,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
-		edge = &taskp.DirectedEdge{
+		edge = &protos.DirectedEdge{
 			ValueId: 0x29bf442b48a772e0,
 			Label:   "gru",
 		}
@@ -466,12 +465,12 @@ func TestAddMutation_gru(t *testing.T) {
 	}
 
 	{
-		edge := &taskp.DirectedEdge{
+		edge := &protos.DirectedEdge{
 			ValueId: 0x38dec821d2ac3a79,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
-		edge = &taskp.DirectedEdge{
+		edge = &protos.DirectedEdge{
 			ValueId: 0x2b693088816b04b7,
 			Label:   "gru",
 		}
@@ -490,12 +489,12 @@ func TestAddMutation_gru2(t *testing.T) {
 
 	{
 		// Set two tag ids and merge.
-		edge := &taskp.DirectedEdge{
+		edge := &protos.DirectedEdge{
 			ValueId: 0x02,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
-		edge = &taskp.DirectedEdge{
+		edge = &protos.DirectedEdge{
 			ValueId: 0x03,
 			Label:   "gru",
 		}
@@ -507,18 +506,18 @@ func TestAddMutation_gru2(t *testing.T) {
 
 	{
 		// Lets set a new tag and delete the two older ones.
-		edge := &taskp.DirectedEdge{
+		edge := &protos.DirectedEdge{
 			ValueId: 0x02,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Del)
-		edge = &taskp.DirectedEdge{
+		edge = &protos.DirectedEdge{
 			ValueId: 0x03,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Del)
 
-		edge = &taskp.DirectedEdge{
+		edge = &protos.DirectedEdge{
 			ValueId: 0x04,
 			Label:   "gru",
 		}
@@ -540,7 +539,7 @@ func TestAfterUIDCount(t *testing.T) {
 	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Label: "jchiu",
 	}
 
@@ -614,7 +613,7 @@ func TestAfterUIDCount2(t *testing.T) {
 	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Label: "jchiu",
 	}
 
@@ -643,7 +642,7 @@ func TestDelete(t *testing.T) {
 	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Label: "jchiu",
 	}
 
@@ -653,7 +652,7 @@ func TestDelete(t *testing.T) {
 	}
 	require.EqualValues(t, 30, ol.Length(0))
 	ol.Lock()
-	ol.delete(context.Background(), &taskp.DirectedEdge{Attr: "value"})
+	ol.delete(context.Background(), &protos.DirectedEdge{Attr: "value"})
 	ol.Unlock()
 	require.EqualValues(t, 0, ol.Length(0))
 	commited, err := ol.SyncIfDirty(context.Background())
@@ -669,7 +668,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Label: "jchiu",
 	}
 
@@ -774,10 +773,10 @@ func BenchmarkAddMutations(b *testing.B) {
 			b.Error(err)
 			return
 		}
-		edge := &taskp.DirectedEdge{
+		edge := &protos.DirectedEdge{
 			ValueId: uint64(rand.Intn(b.N) + 1),
 			Label:   "testing",
-			Op:      taskp.DirectedEdge_SET,
+			Op:      protos.DirectedEdge_SET,
 		}
 		if _, err = l.AddMutation(ctx, edge); err != nil {
 			b.Error(err)

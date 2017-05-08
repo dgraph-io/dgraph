@@ -22,7 +22,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -52,14 +52,14 @@ func isBinary(f string) bool {
 		f == "max" || f == "min" || f == "logbase" || f == "pow"
 }
 
-func convertTo(from *taskp.Value) (types.Val, error) {
+func convertTo(from *protos.TaskValue) (types.Val, error) {
 	vh, _ := getValue(from)
 	if bytes.Equal(from.Val, x.Nilbyte) {
 		return vh, ErrEmptyVal
 	}
 	va, err := types.Convert(vh, vh.Tid)
 	if err != nil {
-		return vh, x.Wrapf(err, "Fail to convert from taskp.Value to types.Val")
+		return vh, x.Wrapf(err, "Fail to convert from protos.Value to types.Val")
 	}
 	return va, err
 }
@@ -296,10 +296,10 @@ func (ag *aggregator) Apply(val types.Val) {
 	ag.result = res
 }
 
-func (ag *aggregator) ValueMarshalled() (*taskp.Value, error) {
+func (ag *aggregator) ValueMarshalled() (*protos.TaskValue, error) {
 	data := types.ValueForType(types.BinaryID)
 	ag.divideByCount()
-	res := &taskp.Value{ValType: int32(ag.result.Tid), Val: x.Nilbyte}
+	res := &protos.TaskValue{ValType: int32(ag.result.Tid), Val: x.Nilbyte}
 	if ag.result.Value == nil {
 		return res, nil
 	}

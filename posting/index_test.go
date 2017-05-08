@@ -24,8 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -109,11 +108,11 @@ func TestIndexingInvalidLang(t *testing.T) {
 	require.Error(t, err)
 }
 
-func addMutationWithIndex(t *testing.T, l *List, edge *taskp.DirectedEdge, op uint32) {
+func addMutationWithIndex(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32) {
 	if op == Del {
-		edge.Op = taskp.DirectedEdge_DEL
+		edge.Op = protos.DirectedEdge_DEL
 	} else if op == Set {
-		edge.Op = taskp.DirectedEdge_SET
+		edge.Op = protos.DirectedEdge_SET
 	} else {
 		x.Fatalf("Unhandled op: %v", op)
 	}
@@ -132,7 +131,7 @@ func TestTokensTable(t *testing.T) {
 	key := x.DataKey("name", 1)
 	l := getNew(key, ps)
 
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Value:  []byte("david"),
 		Label:  "testing",
 		Attr:   "name",
@@ -144,7 +143,7 @@ func TestTokensTable(t *testing.T) {
 	slice, err := ps.Get(key)
 	require.NoError(t, err)
 
-	var pl typesp.PostingList
+	var pl protos.PostingList
 	x.Check(pl.Unmarshal(slice.Data()))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
@@ -179,12 +178,12 @@ func tokensForTest(attr string) []string {
 // addEdgeToValue adds edge without indexing.
 func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string) {
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Value:  []byte(value),
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
-		Op:     taskp.DirectedEdge_SET,
+		Op:     protos.DirectedEdge_SET,
 	}
 	l, _ := GetOrCreate(x.DataKey(attr, src), 1)
 	// No index entries added here as we do not call AddMutationWithIndex.
@@ -196,12 +195,12 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 // addEdgeToUID adds uid edge with reverse edge
 func addEdgeToUID(t *testing.T, attr string, src uint64,
 	dst uint64) {
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
 		Attr:    attr,
 		Entity:  src,
-		Op:      taskp.DirectedEdge_SET,
+		Op:      protos.DirectedEdge_SET,
 	}
 	l, _ := GetOrCreate(x.DataKey(attr, src), 1)
 	// No index entries added here as we do not call AddMutationWithIndex.
@@ -213,12 +212,12 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 // addEdgeToUID adds uid edge with reverse edge
 func addReverseEdge(t *testing.T, attr string, src uint64,
 	dst uint64) {
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
 		Attr:    attr,
 		Entity:  src,
-		Op:      taskp.DirectedEdge_SET,
+		Op:      protos.DirectedEdge_SET,
 	}
 	addReverseMutation(context.Background(), edge)
 }
@@ -252,10 +251,10 @@ func TestRebuildIndex(t *testing.T) {
 	pk := x.ParsedKey{Attr: "name"}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
-	var idxVals []*typesp.PostingList
+	var idxVals []*protos.PostingList
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		idxKeys = append(idxKeys, string(it.Key().Data()))
-		pl := new(typesp.PostingList)
+		pl := new(protos.PostingList)
 		require.NoError(t, pl.Unmarshal(it.Value().Data()))
 		idxVals = append(idxVals, pl)
 	}
@@ -302,10 +301,10 @@ func TestRebuildReverseEdges(t *testing.T) {
 	pk := x.ParsedKey{Attr: "friend"}
 	prefix := pk.ReversePrefix()
 	var revKeys []string
-	var revVals []*typesp.PostingList
+	var revVals []*protos.PostingList
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		revKeys = append(revKeys, string(it.Key().Data()))
-		pl := new(typesp.PostingList)
+		pl := new(protos.PostingList)
 		require.NoError(t, pl.Unmarshal(it.Value().Data()))
 		revVals = append(revVals, pl)
 	}
