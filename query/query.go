@@ -1019,10 +1019,10 @@ func transformVars(mNode *gql.MathTree, doneVars map[string]values) error {
 	if err != nil {
 		return err
 	}
-	maxVa := doneVars[maxVar]
+	maxNode := doneVars[maxVar]
 	for _, node := range nodeList {
 		curNode := doneVars[node.Var]
-		newMap, err := transformMap(curNode, maxVa)
+		newMap, err := transformMap(curNode, maxNode)
 		if err != nil {
 			return err
 		}
@@ -1265,10 +1265,10 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool,
 	if sg.Params.Alias == "shortest" {
 		goto AssignStep
 	}
+
+	sgPath = append(sgPath, sg) // Add the current node to path
 	for _, child := range sg.Children {
-		sgPath = append(sgPath, sg) // Add the current node to path
 		populateVarMap(child, doneVars, isCascade, sgPath)
-		sgPath = sgPath[:len(sgPath)-1] // Backtrack
 		if !isCascade {
 			continue
 		}
@@ -1292,6 +1292,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool,
 			}
 		}
 	}
+	sgPath = sgPath[:len(sgPath)-1] // Backtrack
 
 	if !isCascade {
 		goto AssignStep
