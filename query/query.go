@@ -943,8 +943,33 @@ func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint
 	return mp, nil
 }
 
-func transformVars(mNode) error {
+func recurse(node *gql.MathTree, doneVars map[string]values) (int, string, error) {
+	if node.Var != "" {
+		v, ok := doneVars[node.Var]
+		if !ok {
+			return 0, "", x.Errorf("Missing variable")
+		}
+		fmt.Println(node.Var, len(v.path), "###")
+		return len(v.path), node.Var, nil
+	}
+	curLevel := -1
+	var curVar string
+	for _, ch := range node.Child {
+		maxLevel, maxVar, err := recurse(ch, doneVars)
+		if err != nil {
+			return 0, "", err
+		}
+		if curLevel <= maxLevel {
+			curLevel = maxLevel
+			curVar = maxVar
+		}
+	}
+	return curLevel, curVar, nil
+}
 
+func transformVars(mNode *gql.MathTree, doneVars map[string]values) error {
+	fmt.Println(recurse(mNode, doneVars))
+	return nil
 }
 
 func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubGraph) error {
@@ -971,9 +996,12 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 		sg.Params.uidToVal = mp
 	} else if sg.MathExp != nil {
 		// TODO: Do some prepocessing to get all variables at the same level.
-		newMap, err := transformVars(sg.MathExp, doneVars)
+		err := transformVars(sg.MathExp, doneVars)
+		if err != nil {
+			return err
+		}
 
-		err := evalMathTree(sg.MathExp, doneVars)
+		err = evalMathTree(sg.MathExp, doneVars)
 		if err != nil {
 			return err
 		}
@@ -1252,7 +1280,7 @@ func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) {
 		// This implies it is a value variable.
 		doneVars[sg.Params.Var] = values{
 			vals: make(map[uint64]types.Val),
-			path: sgPath,
+			path: sgPath[:len(sgPath)-1],
 		}
 		for idx, uid := range sg.SrcUIDs.Uids {
 			//val, _ := getValue(sg.values[idx])
@@ -1266,7 +1294,7 @@ func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) {
 		// This implies it is a value variable.
 		doneVars[sg.Params.Var] = values{
 			vals: make(map[uint64]types.Val),
-			path: sgPath,
+			path: sgPath[:len(sgPath)-1],
 		}
 		for idx, uid := range sg.SrcUIDs.Uids {
 			val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
