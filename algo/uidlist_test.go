@@ -23,23 +23,23 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/stretchr/testify/require"
 )
 
-func newList(data []uint64) *taskp.List {
-	return &taskp.List{data}
+func newList(data []uint64) *protos.List {
+	return &protos.List{data}
 }
 
 func TestMergeSorted1(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{55}),
 	}
 	require.Equal(t, MergeSorted(input).Uids, []uint64{55})
 }
 
 func TestMergeSorted2(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{1, 3, 6, 8, 10}),
 		newList([]uint64{2, 4, 5, 7, 15}),
 	}
@@ -48,7 +48,7 @@ func TestMergeSorted2(t *testing.T) {
 }
 
 func TestMergeSorted3(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{1, 3, 6, 8, 10}),
 		newList([]uint64{}),
 	}
@@ -56,7 +56,7 @@ func TestMergeSorted3(t *testing.T) {
 }
 
 func TestMergeSorted4(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{}),
 		newList([]uint64{1, 3, 6, 8, 10}),
 	}
@@ -64,7 +64,7 @@ func TestMergeSorted4(t *testing.T) {
 }
 
 func TestMergeSorted5(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{}),
 		newList([]uint64{}),
 	}
@@ -72,7 +72,7 @@ func TestMergeSorted5(t *testing.T) {
 }
 
 func TestMergeSorted6(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{11, 13, 16, 18, 20}),
 		newList([]uint64{12, 14, 15, 15, 16, 16, 17, 25}),
 		newList([]uint64{1, 2}),
@@ -82,7 +82,7 @@ func TestMergeSorted6(t *testing.T) {
 }
 
 func TestMergeSorted7(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{5, 6, 7}),
 		newList([]uint64{3, 4}),
 		newList([]uint64{1, 2}),
@@ -92,19 +92,19 @@ func TestMergeSorted7(t *testing.T) {
 }
 
 func TestMergeSorted8(t *testing.T) {
-	input := []*taskp.List{}
+	input := []*protos.List{}
 	require.Empty(t, MergeSorted(input).Uids)
 }
 
 func TestMergeSorted9(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{1, 1, 1}),
 	}
 	require.Equal(t, MergeSorted(input).Uids, []uint64{1})
 }
 
 func TestMergeSorted10(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{1, 2, 3, 3, 6}),
 		newList([]uint64{4, 8, 9}),
 	}
@@ -112,7 +112,7 @@ func TestMergeSorted10(t *testing.T) {
 }
 
 func TestIntersectSorted1(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{2, 3, 4, 5}),
 	}
@@ -120,26 +120,26 @@ func TestIntersectSorted1(t *testing.T) {
 }
 
 func TestIntersectSorted2(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{1, 2, 3}),
 	}
 	require.Equal(t, IntersectSorted(input).Uids, []uint64{1, 2, 3})
 }
 
 func TestIntersectSorted3(t *testing.T) {
-	input := []*taskp.List{}
+	input := []*protos.List{}
 	require.Empty(t, IntersectSorted(input).Uids)
 }
 
 func TestIntersectSorted4(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{100, 101}),
 	}
 	require.Equal(t, IntersectSorted(input).Uids, []uint64{100, 101})
 }
 
 func TestIntersectSorted5(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{2, 3, 4, 5}),
 		newList([]uint64{4, 5, 6}),
@@ -148,7 +148,7 @@ func TestIntersectSorted5(t *testing.T) {
 }
 
 func TestIntersectSorted6(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{10, 12, 13}),
 		newList([]uint64{2, 3, 4, 13}),
 		newList([]uint64{4, 5, 6}),
@@ -157,7 +157,7 @@ func TestIntersectSorted6(t *testing.T) {
 }
 
 func TestDiffSorted1(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{1}),
 	}
@@ -166,7 +166,7 @@ func TestDiffSorted1(t *testing.T) {
 }
 
 func TestDiffSorted2(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{2}),
 	}
@@ -175,7 +175,7 @@ func TestDiffSorted2(t *testing.T) {
 }
 
 func TestDiffSorted3(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{3}),
 	}
@@ -184,7 +184,7 @@ func TestDiffSorted3(t *testing.T) {
 }
 
 func TestDiffSorted4(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{}),
 	}
@@ -193,7 +193,7 @@ func TestDiffSorted4(t *testing.T) {
 }
 
 func TestDiffSorted5(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{}),
 		newList([]uint64{1, 2}),
 	}
@@ -202,7 +202,7 @@ func TestDiffSorted5(t *testing.T) {
 }
 
 func TestSubSorted1(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{2, 3, 4, 5}),
 	}
@@ -211,7 +211,7 @@ func TestSubSorted1(t *testing.T) {
 }
 
 func TestSubSorted6(t *testing.T) {
-	input := []*taskp.List{
+	input := []*protos.List{
 		newList([]uint64{10, 12, 13}),
 		newList([]uint64{2, 3, 4, 13}),
 	}
@@ -353,8 +353,8 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			sort.Slice(u1, func(i, j int) bool { return u1[i] < u1[j] })
 			sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
 
-			u := &taskp.List{u1}
-			v := &taskp.List{v1}
+			u := &protos.List{u1}
+			v := &protos.List{v1}
 			ucopy := make([]uint64, len(u1), len(u1))
 			copy(ucopy, u1)
 

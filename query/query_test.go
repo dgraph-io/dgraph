@@ -39,9 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/graphp"
-	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos"
 
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -2071,12 +2069,12 @@ func TestMinSchema(t *testing.T) {
 		`{"me":[{"alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"gender":"female","min(var(x))":1.600000,"name":"Michonne"}]}`,
 		js)
 
-	schema.State().Set("survival_rate", typesp.Schema{ValueType: uint32(types.IntID)})
+	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: uint32(types.IntID)})
 	js = processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"alive":true,"friend":[{"survival_rate":1},{"survival_rate":1},{"survival_rate":1},{"survival_rate":1}],"gender":"female","min(var(x))":1,"name":"Michonne"}]}`,
 		js)
-	schema.State().Set("survival_rate", typesp.Schema{ValueType: uint32(types.FloatID)})
+	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: uint32(types.FloatID)})
 }
 
 func TestAvg(t *testing.T) {
@@ -3693,7 +3691,7 @@ func TestToFastJSONReverseDelSetCount(t *testing.T) {
 		js)
 }
 
-func getProperty(properties []*graphp.Property, prop string) *graphp.Value {
+func getProperty(properties []*protos.Property, prop string) *protos.Value {
 	for _, p := range properties {
 		if p.Prop == prop {
 			return p.Value
@@ -4076,12 +4074,12 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 }
 
 // Mocking Subgraph and Testing fast-json with it.
-func ageSg(uidMatrix []*taskp.List, srcUids *taskp.List, ages []uint64) *SubGraph {
-	var as []*taskp.Value
+func ageSg(uidMatrix []*protos.List, srcUids *protos.List, ages []uint64) *SubGraph {
+	var as []*protos.TaskValue
 	for _, a := range ages {
 		bs := make([]byte, 4)
 		binary.LittleEndian.PutUint64(bs, a)
-		as = append(as, &taskp.Value{[]byte(bs), 2})
+		as = append(as, &protos.TaskValue{[]byte(bs), 2})
 	}
 
 	return &SubGraph{
@@ -4092,10 +4090,10 @@ func ageSg(uidMatrix []*taskp.List, srcUids *taskp.List, ages []uint64) *SubGrap
 		Params:    params{isDebug: false, GetUID: true},
 	}
 }
-func nameSg(uidMatrix []*taskp.List, srcUids *taskp.List, names []string) *SubGraph {
-	var ns []*taskp.Value
+func nameSg(uidMatrix []*protos.List, srcUids *protos.List, names []string) *SubGraph {
+	var ns []*protos.TaskValue
 	for _, n := range names {
-		ns = append(ns, &taskp.Value{[]byte(n), 0})
+		ns = append(ns, &protos.TaskValue{[]byte(n), 0})
 	}
 	return &SubGraph{
 		Attr:      "name",
@@ -4106,7 +4104,7 @@ func nameSg(uidMatrix []*taskp.List, srcUids *taskp.List, names []string) *SubGr
 	}
 
 }
-func friendsSg(uidMatrix []*taskp.List, srcUids *taskp.List, friends []*SubGraph) *SubGraph {
+func friendsSg(uidMatrix []*protos.List, srcUids *protos.List, friends []*SubGraph) *SubGraph {
 	return &SubGraph{
 		Attr:      "friend",
 		uidMatrix: uidMatrix,
@@ -4115,7 +4113,7 @@ func friendsSg(uidMatrix []*taskp.List, srcUids *taskp.List, friends []*SubGraph
 		Children:  friends,
 	}
 }
-func rootSg(uidMatrix []*taskp.List, srcUids *taskp.List, names []string, ages []uint64) *SubGraph {
+func rootSg(uidMatrix []*protos.List, srcUids *protos.List, names []string, ages []uint64) *SubGraph {
 	nameSg := nameSg(uidMatrix, srcUids, names)
 	ageSg := ageSg(uidMatrix, srcUids, ages)
 
@@ -5558,7 +5556,7 @@ func TestLangFilterMismatch5(t *testing.T) {
 		js)
 }
 
-func checkSchemaNodes(t *testing.T, expected []*graphp.SchemaNode, actual []*graphp.SchemaNode) {
+func checkSchemaNodes(t *testing.T, expected []*protos.SchemaNode, actual []*protos.SchemaNode) {
 	sort.Slice(expected, func(i, j int) bool {
 		return expected[i].Predicate >= expected[j].Predicate
 	})
@@ -5576,7 +5574,7 @@ func TestSchemaBlock1(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*graphp.SchemaNode{{Predicate: "genre", Type: "uid"},
+	expected := []*protos.SchemaNode{{Predicate: "genre", Type: "uid"},
 		{Predicate: "age", Type: "int"}, {Predicate: "name", Type: "string"},
 		{Predicate: "film.film.initial_release_date", Type: "date"},
 		{Predicate: "loc", Type: "geo"}, {Predicate: "alive", Type: "bool"},
@@ -5597,7 +5595,7 @@ func TestSchemaBlock2(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*graphp.SchemaNode{
+	expected := []*protos.SchemaNode{
 		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact", "trigram"}}}
 	checkSchemaNodes(t, expected, actual)
 }
@@ -5612,7 +5610,7 @@ func TestSchemaBlock3(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*graphp.SchemaNode{{Predicate: "age", Type: "int"}}
+	expected := []*protos.SchemaNode{{Predicate: "age", Type: "int"}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -5626,7 +5624,7 @@ func TestSchemaBlock4(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*graphp.SchemaNode{
+	expected := []*protos.SchemaNode{
 		{Predicate: "genre", Type: "uid", Reverse: true}, {Predicate: "age", Type: "int"}}
 	checkSchemaNodes(t, expected, actual)
 }
@@ -5637,7 +5635,7 @@ func TestSchemaBlock5(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*graphp.SchemaNode{
+	expected := []*protos.SchemaNode{
 		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact", "trigram"}}}
 	checkSchemaNodes(t, expected, actual)
 }

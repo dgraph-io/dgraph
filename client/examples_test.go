@@ -11,7 +11,7 @@ import (
 	"os"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
@@ -23,12 +23,12 @@ func ExampleBatchMutation() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := graphp.NewDgraphClient(conn)
+	dgraphClient := protos.NewDgraphClient(conn)
 
 	// Start a new batch with batch size 1000 and 100 concurrent requests.
 	batch := client.NewBatchMutation(context.Background(), dgraphClient, 1000, 100)
 
-	// Process your file, convert data to a graphp.NQuad and add it to the batch.
+	// Process your file, convert data to a protos.NQuad and add it to the batch.
 	// For each graph.NQuad, run batch.AddMutation (this would typically be done in a loop
 	// after processing the data into nquads). Here we show example of reading a
 	// file with RDF data, converting it to NQuads and adding it to the batch.
@@ -73,11 +73,11 @@ func ExampleReq_AddMutation() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := graphp.NewDgraphClient(conn)
+	dgraphClient := protos.NewDgraphClient(conn)
 
 	req := client.Req{}
 	// Creating a person node, and adding a name attribute to it.
-	nq := graphp.NQuad{
+	nq := protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "name",
 	}
@@ -86,7 +86,7 @@ func ExampleReq_AddMutation() {
 	if err := req.AddMutation(nq, client.SET); err != nil {
 		// handle error
 	}
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "salary",
 	}
@@ -106,10 +106,10 @@ func ExampleReq_AddMutation_facets() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := graphp.NewDgraphClient(conn)
+	dgraphClient := protos.NewDgraphClient(conn)
 
 	req := client.Req{}
-	nq := graphp.NQuad{
+	nq := protos.NQuad{
 		Subject:   "person1",
 		Predicate: "name",
 	}
@@ -125,7 +125,7 @@ func ExampleReq_AddMutation_facets() {
 
 	req.AddMutation(nq, client.SET)
 
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "person2",
 		Predicate: "name",
 	}
@@ -133,7 +133,7 @@ func ExampleReq_AddMutation_facets() {
 	req.AddMutation(nq, client.SET)
 
 	// Lets connect the two nodes together and add a facet to the edge.
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "person1",
 		Predicate: "friend",
 		ObjectId:  "person2",
@@ -165,7 +165,7 @@ func ExampleReq_AddMutation_schema() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := graphp.NewDgraphClient(conn)
+	dgraphClient := protos.NewDgraphClient(conn)
 
 	req := client.Req{}
 	// Doing mutation and setting schema, then getting schema.
@@ -191,17 +191,17 @@ func ExampleReq_SetQuery() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := graphp.NewDgraphClient(conn)
+	dgraphClient := protos.NewDgraphClient(conn)
 
 	req := client.Req{}
-	nq := graphp.NQuad{
+	nq := protos.NQuad{
 		Subject:   "alice",
 		Predicate: "name",
 	}
 	client.Str("Alice", &nq)
 	req.AddMutation(nq, client.SET)
 
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "alice",
 		Predicate: "falls.in",
 	}
@@ -225,7 +225,7 @@ func ExampleReq_SetQueryWithVariables() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := graphp.NewDgraphClient(conn)
+	dgraphClient := protos.NewDgraphClient(conn)
 
 	req := client.Req{}
 	variables := make(map[string]string)
