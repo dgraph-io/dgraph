@@ -68,10 +68,6 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 	}
 
 	tokenizers := schema.State().Tokenizer(attr)
-	if len(tokenizers) == 0 {
-		return nil, x.Errorf("Attribute:%s does not have proper index for comparsion",
-			attr)
-	}
 
 	var tokenizer tok.Tokenizer
 	for _, t := range tokenizers {
@@ -94,6 +90,12 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 		}
 	}
 
+	// rest of the cases, ge, gt , le , lt require a sortable tokenizer.
+	if f != "eq" {
+		return nil, x.Errorf("Attribute:%s does not have proper index for comparison",
+			attr)
+	}
+
 	// We didn't find a sortable or !isLossy() tokenizer, lets return the first one.
 	return tokenizers[0], nil
 }
@@ -104,12 +106,6 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	tokenizer, err := pickTokenizer(attr, f)
 	if err != nil {
 		return nil, "", err
-	}
-
-	// rest of the cases, ge, gt , le , lt require a sortable tokenizer.
-	if f != "eq" && !tokenizer.IsSortable() {
-		return nil, "", x.Errorf("Attribute:%s does not have proper index for comparison",
-			attr)
 	}
 
 	// Get the token for the value passed in function.

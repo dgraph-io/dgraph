@@ -310,8 +310,8 @@ func (t HashTokenizer) Tokens(sv types.Val) ([]string, error) {
 	if !ok {
 		return nil, x.Errorf("Hash tokenizer only supported for string types")
 	}
-	return []string{encodeToken(encodeInt(int64(farm.Hash32([]byte(term)))),
-		t.Identifier())}, nil
+	var hash int64 = int64(farm.Hash64([]byte(term)))
+	return []string{encodeToken(encodeInt(hash), t.Identifier())}, nil
 }
 func (t HashTokenizer) Identifier() byte { return 0xB }
 func (t HashTokenizer) IsSortable() bool { return false }
