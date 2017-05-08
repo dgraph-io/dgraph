@@ -967,32 +967,67 @@ func recurse(node *gql.MathTree, doneVars map[string]values, nodeList *[]*gql.Ma
 	return curLevel, curVar, nil
 }
 
-func transformMap() (map[uint64]types.Val, error) {
-	return nil, nil
+func transformMap(fromNode, toNode values) (map[uint64]types.Val, error) {
+	newMap := fromNode.vals
+	if len(fromNode.path) == len(toNode.path) {
+		if len(toNode.path) != 0 &&
+			fromNode.path[len(fromNode.path)-1] != toNode.path[len(toNode.path)-1] {
+			return nil, x.Errorf("Invalid combination of variables in math")
+		}
+		return newMap, nil
+	}
+	x.AssertTrue(len(toNode.path) > len(fromNode.path))
+	i := 0
+	for ; i < len(fromNode.path); i++ {
+		if fromNode.path[i] != toNode.path[i] {
+			return nil, x.Errorf("Invalid combination of variables in math")
+		}
+	}
+	//TODO: Go thorugh the path diff and transform at each level.
+
+	for ; i < len(toNode.path); i++ {
+		curNode := toNode.path[i]
+		tempMap := make(map[uint64]types.Val)
+		for i := 0; i < len(curNode.uidMatrix); i++ {
+			ul := curNode.uidMatrix[i]
+			srcUid := curNode.SrcUIDs.Uids[i]
+			curVal, ok := newMap[srcUid]
+			if curVal.Tid != types.IntID && curVal.Tid != types.FloatID {
+				return nil, x.Errorf("Encountered non int/float type for summing")
+			}
+			if !ok || curVal.Value == nil {
+				continue
+			}
+			for j := 0; j < len(ul.Uids); j++ {
+				dstUid := ul.Uids[j]
+				ag := aggregator{name: "sum"}
+				ag.Apply(curVal)
+				ag.Apply(tempMap[dstUid])
+				val, err := ag.Value()
+				if err != nil {
+					continue
+				}
+				tempMap[dstUid] = val
+			}
+		}
+		newMap = tempMap
+	}
+	return newMap, nil
 }
 
 func transformVars(mNode *gql.MathTree, doneVars map[string]values) error {
 	var nodeList []*gql.MathTree
-	maxLen, maxVar, err := recurse(mNode, doneVars, &nodeList)
+	_, maxVar, err := recurse(mNode, doneVars, &nodeList)
 	if err != nil {
 		return err
 	}
 	fmt.Println(nodeList)
 	maxVa := doneVars[maxVar]
 	for _, node := range nodeList {
-		va := doneVars[node.Var]
-		newMap := va.vals
-		if maxLen != 0 {
-			if len(va.path) != maxLen {
-				newMap, err = transformMap()
-				if err != nil {
-					return err
-				}
-			} else {
-				if va.path[len(va.path)-1] != maxVa.path[len(maxVa.path)-1] {
-					return x.Errorf("Invalid combination of variables in math")
-				}
-			}
+		curNode := doneVars[node.Var]
+		newMap, err := transformMap(curNode, maxVa)
+		if err != nil {
+			return err
 		}
 		node.Val = newMap
 	}
