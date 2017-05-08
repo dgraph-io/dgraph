@@ -190,22 +190,20 @@ func processTernary(mNode *gql.MathTree) (err error) {
 	return nil
 }
 
-func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) (err error) {
+func evalMathTree(mNode *gql.MathTree) (err error) {
 	if mNode.Const.Value != nil {
 		return nil
 	}
 	if mNode.Var != "" {
-		d, ok := doneVars[mNode.Var]
-		if !ok || d.vals == nil {
+		if mNode.Val == nil {
 			return x.Errorf("Variable %v not yet populated or missing.", mNode.Var)
 		}
-		mNode.Val = d.vals
 		return nil
 	}
 
 	for _, child := range mNode.Child {
 		// Process the child nodes first.
-		err := evalMathTree(child, doneVars)
+		err := evalMathTree(child)
 		if err != nil {
 			return err
 		}

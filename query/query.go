@@ -943,19 +943,19 @@ func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint
 	return mp, nil
 }
 
-func recurse(node *gql.MathTree, doneVars map[string]values) (int, string, error) {
+func recurse(node *gql.MathTree, doneVars map[string]values, nodeList *[]*gql.MathTree) (int, string, error) {
 	if node.Var != "" {
 		v, ok := doneVars[node.Var]
 		if !ok {
 			return 0, "", x.Errorf("Missing variable")
 		}
-		fmt.Println(node.Var, len(v.path), "###")
+		*nodeList = append(*nodeList, node)
 		return len(v.path), node.Var, nil
 	}
 	curLevel := -1
 	var curVar string
 	for _, ch := range node.Child {
-		maxLevel, maxVar, err := recurse(ch, doneVars)
+		maxLevel, maxVar, err := recurse(ch, doneVars, nodeList)
 		if err != nil {
 			return 0, "", err
 		}
@@ -967,8 +967,35 @@ func recurse(node *gql.MathTree, doneVars map[string]values) (int, string, error
 	return curLevel, curVar, nil
 }
 
+func transformMap() (map[uint64]types.Val, error) {
+	return nil, nil
+}
+
 func transformVars(mNode *gql.MathTree, doneVars map[string]values) error {
-	fmt.Println(recurse(mNode, doneVars))
+	var nodeList []*gql.MathTree
+	maxLen, maxVar, err := recurse(mNode, doneVars, &nodeList)
+	if err != nil {
+		return err
+	}
+	fmt.Println(nodeList)
+	maxVa := doneVars[maxVar]
+	for _, node := range nodeList {
+		va := doneVars[node.Var]
+		newMap := va.vals
+		if maxLen != 0 {
+			if len(va.path) != maxLen {
+				newMap, err = transformMap()
+				if err != nil {
+					return err
+				}
+			} else {
+				if va.path[len(va.path)-1] != maxVa.path[len(maxVa.path)-1] {
+					return x.Errorf("Invalid combination of variables in math")
+				}
+			}
+		}
+		node.Val = newMap
+	}
 	return nil
 }
 
@@ -1001,7 +1028,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]values, parent *SubG
 			return err
 		}
 
-		err = evalMathTree(sg.MathExp, doneVars)
+		err = evalMathTree(sg.MathExp)
 		if err != nil {
 			return err
 		}
