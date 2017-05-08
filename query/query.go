@@ -946,7 +946,7 @@ func recurse(node *gql.MathTree, doneVars map[string]values, nodeList *[]*gql.Ma
 	if node.Var != "" {
 		v, ok := doneVars[node.Var]
 		if !ok {
-			return 0, "", x.Errorf("Missing variable")
+			return 0, "", x.Errorf("Missing variable %v", node.Var)
 		}
 		*nodeList = append(*nodeList, node)
 		return len(v.path), node.Var, nil
@@ -1326,50 +1326,52 @@ func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) e
 		return nil
 	}
 
-	if sg.IsListNode() {
-		// This is a predicates list.
-		doneVars[sg.Params.Var] = values{
-			strList: sg.values,
-			path:    sgPath,
-		}
-	} else if len(sg.DestUIDs.Uids) != 0 {
-		// This implies it is a entity variable.
-		doneVars[sg.Params.Var] = values{
-			uids: sg.DestUIDs,
-			path: sgPath,
-		}
-	} else if len(sg.counts) != 0 {
-		// This implies it is a value variable.
-		doneVars[sg.Params.Var] = values{
-			vals: make(map[uint64]types.Val),
-			path: sgPath[:len(sgPath)-1],
-		}
-		for idx, uid := range sg.SrcUIDs.Uids {
-			val := types.Val{
-				Tid:   types.IntID,
-				Value: int64(sg.counts[idx]),
+	if sg.Params.Var != "" {
+		if sg.IsListNode() {
+			// This is a predicates list.
+			doneVars[sg.Params.Var] = values{
+				strList: sg.values,
+				path:    sgPath,
 			}
-			doneVars[sg.Params.Var].vals[uid] = val
-		}
-	} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
-		// This implies it is a value variable.
-		// NOTE: Value variables cannot be defined and used in the same query block. so
-		// checking len(sgPath) is okay.
-		doneVars[sg.Params.Var] = values{
-			vals: make(map[uint64]types.Val),
-			path: sgPath[:len(sgPath)-1],
-		}
-		for idx, uid := range sg.SrcUIDs.Uids {
-			val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
-			if err != nil {
-				continue
+		} else if len(sg.DestUIDs.Uids) != 0 {
+			// This implies it is a entity variable.
+			doneVars[sg.Params.Var] = values{
+				uids: sg.DestUIDs,
+				path: sgPath,
 			}
-			doneVars[sg.Params.Var].vals[uid] = val
-		}
-	} else {
-		// Insert a empty entry to keep the dependency happy.
-		doneVars[sg.Params.Var] = values{
-			path: sgPath,
+		} else if len(sg.counts) != 0 {
+			// This implies it is a value variable.
+			doneVars[sg.Params.Var] = values{
+				vals: make(map[uint64]types.Val),
+				path: sgPath[:len(sgPath)-1],
+			}
+			for idx, uid := range sg.SrcUIDs.Uids {
+				val := types.Val{
+					Tid:   types.IntID,
+					Value: int64(sg.counts[idx]),
+				}
+				doneVars[sg.Params.Var].vals[uid] = val
+			}
+		} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
+			// This implies it is a value variable.
+			// NOTE: Value variables cannot be defined and used in the same query block. so
+			// checking len(sgPath) is okay.
+			doneVars[sg.Params.Var] = values{
+				vals: make(map[uint64]types.Val),
+				path: sgPath[:len(sgPath)-1],
+			}
+			for idx, uid := range sg.SrcUIDs.Uids {
+				val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
+				if err != nil {
+					continue
+				}
+				doneVars[sg.Params.Var].vals[uid] = val
+			}
+		} else {
+			// Insert a empty entry to keep the dependency happy.
+			doneVars[sg.Params.Var] = values{
+				path: sgPath,
+			}
 		}
 	}
 
@@ -1379,9 +1381,6 @@ func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) e
 			sgPath = sgPath[:len(sgPath)-1] // Backtrack
 		}()
 
-		if len(sg.facetsMatrix) == 0 {
-			return nil
-		}
 		for _, it := range sg.Params.Facet.Keys {
 			fvar, ok := sg.Params.FacetVar[it]
 			if !ok {
@@ -1391,6 +1390,10 @@ func (sg *SubGraph) assignVars(doneVars map[string]values, sgPath []*SubGraph) e
 				vals: make(map[uint64]types.Val),
 				path: sgPath,
 			}
+		}
+
+		if len(sg.facetsMatrix) == 0 {
+			return nil
 		}
 
 		// Note: We ignore the facets if its a value edge as we can't
