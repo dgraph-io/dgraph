@@ -454,7 +454,6 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 			if slice != nil {
 				slice.Free() // Remember to free.
 			}
-			fmt.Printf("done\n")
 		}(key)
 	}
 	return lp, lp.decr
