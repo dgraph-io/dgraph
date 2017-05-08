@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SRC="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
-TMP=$(mktemp -p /tmp dgraph-coverage-XXXXX.txt)
+TMP=$(mktemp /tmp/dgraph-coverage-XXXXX.txt)
 
 BUILD=$1
 # If build variable is empty then we set it.

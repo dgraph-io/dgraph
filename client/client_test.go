@@ -19,35 +19,35 @@ package client
 import (
 	"testing"
 
-	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/stretchr/testify/assert"
 )
 
-func graphValue(x string) *graphp.Value {
-	return &graphp.Value{&graphp.Value_StrVal{x}}
+func graphValue(x string) *protos.Value {
+	return &protos.Value{&protos.Value_StrVal{x}}
 }
 
 func TestCheckNQuad(t *testing.T) {
 	s := graphValue("Alice")
-	if err := checkNQuad(graphp.NQuad{
+	if err := checkNQuad(protos.NQuad{
 		Predicate:   "name",
 		ObjectValue: s,
 	}); err == nil {
 		t.Fatal(err)
 	}
-	if err := checkNQuad(graphp.NQuad{
+	if err := checkNQuad(protos.NQuad{
 		Subject:     "alice",
 		ObjectValue: s,
 	}); err == nil {
 		t.Fatal(err)
 	}
-	if err := checkNQuad(graphp.NQuad{
+	if err := checkNQuad(protos.NQuad{
 		Subject:   "alice",
 		Predicate: "name",
 	}); err == nil {
 		t.Fatal(err)
 	}
-	if err := checkNQuad(graphp.NQuad{
+	if err := checkNQuad(protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "name",
 		ObjectValue: s,
@@ -61,7 +61,7 @@ func TestSetMutation(t *testing.T) {
 	req := Req{}
 
 	s := graphValue("Alice")
-	if err := req.AddMutation(graphp.NQuad{
+	if err := req.AddMutation(protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "name",
 		ObjectValue: s,
@@ -70,7 +70,7 @@ func TestSetMutation(t *testing.T) {
 	}
 
 	s = graphValue("rabbithole")
-	if err := req.AddMutation(graphp.NQuad{
+	if err := req.AddMutation(protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
 		ObjectValue: s,
@@ -78,7 +78,7 @@ func TestSetMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := req.AddMutation(graphp.NQuad{
+	if err := req.AddMutation(protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
 		ObjectValue: s,
@@ -93,7 +93,7 @@ func TestSetMutation(t *testing.T) {
 func TestAddSchema(t *testing.T) {
 	req := Req{}
 
-	if err := req.addSchema(graphp.SchemaUpdate{Predicate: "name"}); err != nil {
+	if err := req.addSchema(protos.SchemaUpdate{Predicate: "name"}); err != nil {
 		t.Fatal(err)
 	}
 

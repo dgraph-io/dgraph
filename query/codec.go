@@ -20,26 +20,26 @@ package query
 import (
 	"log"
 
-	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/gogo/protobuf/proto"
 )
 
 // Codec implements the custom codec interface.
 type Codec struct{}
 
-// Marshal release the graphp.Node pointers after marshalling the response.
+// Marshal release the protos.Node pointers after marshalling the response.
 func (c *Codec) Marshal(v interface{}) ([]byte, error) {
 	var b []byte
 	var err error
 	switch val := v.(type) {
-	case *graphp.Version:
+	case *protos.Version:
 		b, err = proto.Marshal(val)
 		if err != nil {
 			return []byte{}, err
 		}
 		return b, nil
 
-	case *graphp.Response:
+	case *protos.Response:
 		b, err = proto.Marshal(val)
 		if err != nil {
 			return []byte{}, err
@@ -58,14 +58,14 @@ func (c *Codec) Marshal(v interface{}) ([]byte, error) {
 	return b, nil
 }
 
-// Unmarshal constructs graphp.Request from the byte slice.
+// Unmarshal constructs protos.Request from the byte slice.
 func (c *Codec) Unmarshal(data []byte, v interface{}) error {
-	check, ok := v.(*graphp.Check)
+	check, ok := v.(*protos.Check)
 	if ok {
 		return proto.Unmarshal(data, check)
 	}
 
-	r, ok := v.(*graphp.Request)
+	r, ok := v.(*protos.Request)
 	if !ok {
 		log.Fatalf("Invalid type of value: %+v", v)
 	}

@@ -1,10 +1,10 @@
-// To compile this file, in dgraph directory :
-// protoc --gofast_out=plugins=grpc:. --proto_path=${GOPATH}/src:. protos/graphp/graphresponse.proto
+// Use protos/gen.sh to generate .pb.go files.
 
 syntax="proto3";
-import "github.com/dgraph-io/dgraph/protos/facetsp/facets.proto";
+import "facets.proto";
+import "schema.proto";
 
-package graphp;
+package protos;
 
 service Dgraph {
     rpc Run (Request) returns (Response) {};
@@ -19,7 +19,7 @@ message NQuad {
     string label = 5;
     string lang = 7;
     sint32 objectType = 6;
-    repeated facetsp.Facet facets = 8;
+    repeated Facet facets = 8;
 }
 
 message Value {
@@ -37,33 +37,16 @@ message Value {
     }
 }
 
-message Schema {
-    repeated string predicates = 1;
-    repeated string fields = 2;
-}
-
 message Mutation {
     repeated NQuad set = 1;
     repeated NQuad del = 2;
     repeated SchemaUpdate schema = 3;
 }
 
-message SchemaUpdate {
-    string predicate = 1;
-    uint32 value_type = 2;
-    enum Directive {
-        NONE = 0;
-        INDEX = 1;
-        REVERSE = 2;
-    }
-    Directive directive = 3;
-    repeated string tokenizer = 4;
-}
-
 message Request {
     string query = 1;
     Mutation mutation = 2;
-    Schema schema = 3;
+    SchemaRequest schema = 3;
     map<string, string> vars = 4; // Support for GraphQL like variables.
 }
 
@@ -84,14 +67,6 @@ message Node {
     string attribute = 3;
     repeated Property properties = 4;
     repeated Node children = 5; // Each node can have multiple children
-}
-
-message SchemaNode {
-    string predicate = 1;
-    string type = 2;
-    bool index = 3;
-    repeated string tokenizer = 4;
-    bool reverse = 5;
 }
 
 message Response {

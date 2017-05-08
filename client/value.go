@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -28,7 +28,7 @@ import (
 
 // ValueFromGeoJson is a helper function to add a geojson string to an
 // NQuad.ObjectValue.
-func ValueFromGeoJson(json string, nq *graphp.NQuad) error {
+func ValueFromGeoJson(json string, nq *protos.NQuad) error {
 	var g geom.T
 	// Parse the json
 	err := geojson.Unmarshal([]byte(json), &g)
@@ -48,7 +48,7 @@ func ValueFromGeoJson(json string, nq *graphp.NQuad) error {
 
 // Date is a helper function to add a date(time.Time) to an
 // NQuad.ObjectValue.
-func Date(date time.Time, nq *graphp.NQuad) error {
+func Date(date time.Time, nq *protos.NQuad) error {
 	d, err := types.ObjectValue(types.DateID, date)
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func Date(date time.Time, nq *graphp.NQuad) error {
 
 // Datetime is a helper function to add a date(time.Time) to an
 // NQuad.ObjectValue.
-func Datetime(dateTime time.Time, nq *graphp.NQuad) error {
+func Datetime(dateTime time.Time, nq *protos.NQuad) error {
 	d, err := types.ObjectValue(types.DateTimeID, dateTime)
 	if err != nil {
 		return err
@@ -80,7 +80,7 @@ func validateStr(val string) error {
 }
 
 // Str is a helper function to add a string to an NQuad.ObjectValue.
-func Str(val string, nq *graphp.NQuad) error {
+func Str(val string, nq *protos.NQuad) error {
 	if err := validateStr(val); err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func Str(val string, nq *graphp.NQuad) error {
 }
 
 // Int is a helper function to add a int to an NQuad.ObjectValue.
-func Int(val int64, nq *graphp.NQuad) error {
+func Int(val int64, nq *protos.NQuad) error {
 	v, err := types.ObjectValue(types.IntID, val)
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func Int(val int64, nq *graphp.NQuad) error {
 }
 
 // Float is a helper function to add a float to an NQuad.ObjectValue.
-func Float(val float64, nq *graphp.NQuad) error {
+func Float(val float64, nq *protos.NQuad) error {
 	v, err := types.ObjectValue(types.FloatID, val)
 	if err != nil {
 		return err
@@ -119,7 +119,7 @@ func Float(val float64, nq *graphp.NQuad) error {
 }
 
 // Bool is a helper function to add a bool to an NQuad.ObjectValue.
-func Bool(val bool, nq *graphp.NQuad) error {
+func Bool(val bool, nq *protos.NQuad) error {
 	v, err := types.ObjectValue(types.BoolID, val)
 	if err != nil {
 		return err
@@ -130,13 +130,13 @@ func Bool(val bool, nq *graphp.NQuad) error {
 }
 
 // Uid converts an uint64 to a string, which can be used as part of
-// Subject and ObjectId fields in the graphp.NQuad.
+// Subject and ObjectId fields in the protos.NQuad.
 func Uid(uid uint64) string {
 	return fmt.Sprintf("%#x", uid)
 }
 
 // Password is a helper function to add a bool to an NQuad.ObjectValue.
-func Password(val string, nq *graphp.NQuad) error {
+func Password(val string, nq *protos.NQuad) error {
 	v, err := types.ObjectValue(types.PasswordID, val)
 	if err != nil {
 		return err

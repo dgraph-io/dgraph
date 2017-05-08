@@ -1,0 +1,46 @@
+// Use gen.sh to generate .pb.go files.
+
+syntax = "proto3";
+import "schema.proto";
+import "task.proto";
+
+package protos;
+
+message Payload {
+	bytes Data = 1;
+}
+
+// BackupPayload is used both as a request and a response.
+// When used in request, groups represents the list of groups that need to be backed up.
+// When used in response, groups represent the list of groups that were backed up.
+message BackupPayload {
+	uint64 req_id = 1;    // Use req_id to handle duplicate requests.
+	uint32 group_id = 2;  // Group id to back up.
+	enum Status {
+		NONE      = 0;
+		SUCCESS   = 1;
+		DUPLICATE = 2;
+		FAILED    = 3;
+	}
+	Status status = 3;
+}
+
+service Worker {
+	// Connection testing RPC.
+	rpc Echo (Payload)             returns (Payload) {}
+
+	// Data serving RPCs.
+	rpc AssignUids (Num)                 returns (List) {}
+	rpc Mutate (Mutations)               returns (Payload) {}
+	rpc ServeTask (Query)                returns (Result) {}
+	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
+	rpc Sort (SortMessage)                      returns (SortResult) {}
+	rpc RebuildIndex (RebuildIndexMessage)      returns (Payload) {}
+	rpc Schema (SchemaRequest)                  returns (SchemaResult) {}
+
+	// RAFT serving RPCs.
+	rpc RaftMessage (Payload)                     returns (Payload) {}
+	rpc JoinCluster (RaftContext)            returns (Payload) {}
+	rpc UpdateMembership (MembershipUpdate)  returns (MembershipUpdate) {}
+	rpc Backup (BackupPayload)                    returns (BackupPayload) {}
+}

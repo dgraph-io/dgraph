@@ -31,15 +31,15 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// ToProtocolBuf returns the list of graphp.Node which would be returned to the go
+// ToProtocolBuf returns the list of protos.Node which would be returned to the go
 // client.
-func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graphp.Node, error) {
-	var resNode []*graphp.Node
+func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*protos.Node, error) {
+	var resNode []*protos.Node
 	for _, sg := range sgl {
 		if sg.Params.Alias == "var" || sg.Params.Alias == "shortest" {
 			continue
@@ -84,7 +84,7 @@ type outputNode interface {
 
 // protoNode is the proto output for preTraverse.
 type protoNode struct {
-	*graphp.Node
+	*protos.Node
 }
 
 // AddValue adds an attribute value for protoOutputNode.
@@ -95,7 +95,7 @@ func (p *protoNode) AddValue(attr string, v types.Val) {
 // AddMapChild adds a node value for protoOutputNode.
 func (p *protoNode) AddMapChild(attr string, v outputNode, isRoot bool) {
 	// Assert that attr == v.Node.Attribute
-	var childNode *graphp.Node
+	var childNode *protos.Node
 	var as []string
 	for _, c := range p.Node.Children {
 		as = append(as, c.Attribute)
@@ -134,7 +134,7 @@ func (p *protoNode) AddListChild(attr string, child outputNode) {
 
 // New creates a new node for protoOutputNode.
 func (p *protoNode) New(attr string) outputNode {
-	uc := nodePool.Get().(*graphp.Node)
+	uc := nodePool.Get().(*protos.Node)
 	uc.Attribute = attr
 	return &protoNode{uc}
 }
@@ -158,15 +158,15 @@ func (p *protoNode) IsEmpty() bool {
 	return true
 }
 
-func mergeProto(parent [][]*graphp.Property, child [][]*graphp.Property) [][]*graphp.Property {
+func mergeProto(parent [][]*protos.Property, child [][]*protos.Property) [][]*protos.Property {
 	if len(parent) == 0 {
 		return child
 	}
 
-	mergedLists := make([][]*graphp.Property, 0, len(parent)*len(child))
+	mergedLists := make([][]*protos.Property, 0, len(parent)*len(child))
 	for _, pa := range parent {
 		for _, ca := range child {
-			mergeList := make([]*graphp.Property, 0, len(parent))
+			mergeList := make([]*protos.Property, 0, len(parent))
 			mergeList = append(mergeList, pa...)
 			mergeList = append(mergeList, ca...)
 			mergedLists = append(mergedLists, mergeList)
@@ -175,12 +175,12 @@ func mergeProto(parent [][]*graphp.Property, child [][]*graphp.Property) [][]*gr
 	return mergedLists
 }
 
-func (n *protoNode) normalize() [][]*graphp.Property {
+func (n *protoNode) normalize() [][]*protos.Property {
 	if len(n.Children) == 0 {
-		return [][]*graphp.Property{n.Properties}
+		return [][]*protos.Property{n.Properties}
 	}
 
-	parentSlice := make([][]*graphp.Property, 0, len(n.Properties))
+	parentSlice := make([][]*protos.Property, 0, len(n.Properties))
 	if len(n.Properties) > 0 {
 		parentSlice = append(parentSlice, n.Properties)
 	}
@@ -188,7 +188,7 @@ func (n *protoNode) normalize() [][]*graphp.Property {
 	// Temporary map, so that we can group children by attribute, similar to how
 	// we have in JSON. Then we can call normalize on all children with same attribute,
 	// aggregate results and merge them with the results of children with some other attribute.
-	attrChildrenMap := make(map[string][]*graphp.Node)
+	attrChildrenMap := make(map[string][]*protos.Node)
 	for _, child := range n.Children {
 		attrChildrenMap[child.Attribute] = append(attrChildrenMap[child.Attribute], child)
 	}
@@ -204,7 +204,7 @@ func (n *protoNode) normalize() [][]*graphp.Property {
 
 	for _, attr := range attrSlice {
 		attrChildren := attrChildrenMap[attr]
-		childSlice := make([][]*graphp.Property, 0, 5)
+		childSlice := make([][]*protos.Property, 0, 5)
 
 		for _, child := range attrChildren {
 			childSlice = append(childSlice, (&protoNode{child}).normalize()...)
@@ -218,7 +218,7 @@ func (n *protoNode) normalize() [][]*graphp.Property {
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
 // used postorder traversal before, but preorder seems simpler and faster for
 // most cases.
-func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graphp.Node, error) {
+func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 	var seedNode *protoNode
 	if sg.uidMatrix == nil {
 		return seedNode.New(sg.Params.Alias).(*protoNode).Node, nil
@@ -252,7 +252,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graphp.Node, error) {
 
 		// Lets normalize the response now.
 		for _, c := range n1.(*protoNode).normalize() {
-			n.AddListChild(sg.Params.Alias, &protoNode{&graphp.Node{Properties: c}})
+			n.AddListChild(sg.Params.Alias, &protoNode{&protos.Node{Properties: c}})
 		}
 	}
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing

@@ -19,25 +19,24 @@ package schema
 
 import (
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/protos/graphp"
-	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func From(s *graphp.SchemaUpdate) typesp.Schema {
-	if s.Directive == graphp.SchemaUpdate_REVERSE {
-		return typesp.Schema{
+func From(s *protos.SchemaUpdate) protos.SchemaUpdate {
+	if s.Directive == protos.SchemaUpdate_REVERSE {
+		return protos.SchemaUpdate{
 			ValueType: s.ValueType,
-			Directive: typesp.Schema_REVERSE}
-	} else if s.Directive == graphp.SchemaUpdate_INDEX {
-		return typesp.Schema{
+			Directive: protos.SchemaUpdate_REVERSE}
+	} else if s.Directive == protos.SchemaUpdate_INDEX {
+		return protos.SchemaUpdate{
 			ValueType: s.ValueType,
-			Directive: typesp.Schema_INDEX,
+			Directive: protos.SchemaUpdate_INDEX,
 			Tokenizer: s.Tokenizer}
 	}
-	return typesp.Schema{ValueType: s.ValueType}
+	return protos.SchemaUpdate{ValueType: s.ValueType}
 }
 
 // ParseBytes parses the byte array which holds the schema. We will reset
@@ -59,7 +58,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	return nil
 }
 
-func parseScalarPair(it *lex.ItemIterator, predicate string) (*graphp.SchemaUpdate,
+func parseScalarPair(it *lex.ItemIterator, predicate string) (*protos.SchemaUpdate,
 	error) {
 	it.Next()
 	if next := it.Item(); next.Typ != itemColon {
@@ -78,7 +77,7 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*graphp.SchemaUpda
 	}
 
 	// Check for index / reverse.
-	schema := &graphp.SchemaUpdate{Predicate: predicate, ValueType: uint32(t)}
+	schema := &protos.SchemaUpdate{Predicate: predicate, ValueType: uint32(t)}
 	it.Next()
 	next = it.Item()
 	if next.Typ == itemAt {
@@ -92,12 +91,12 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*graphp.SchemaUpda
 			if t != types.UidID {
 				return nil, x.Errorf("Cannot reverse for non-UID type")
 			}
-			schema.Directive = graphp.SchemaUpdate_REVERSE
+			schema.Directive = protos.SchemaUpdate_REVERSE
 		case "index":
 			if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
 				return nil, err
 			} else {
-				schema.Directive = graphp.SchemaUpdate_INDEX
+				schema.Directive = protos.SchemaUpdate_INDEX
 				schema.Tokenizer = tokenizer
 			}
 		default:
@@ -192,8 +191,8 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 }
 
 // Parse parses a schema string and returns the schema representation for it.
-func Parse(s string) ([]*graphp.SchemaUpdate, error) {
-	var schemas []*graphp.SchemaUpdate
+func Parse(s string) ([]*protos.SchemaUpdate, error) {
+	var schemas []*protos.SchemaUpdate
 	l := lex.NewLexer(s).Run(lexText)
 	it := l.NewIterator()
 	for it.Next() {

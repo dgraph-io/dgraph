@@ -35,9 +35,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/facetsp"
-	"github.com/dgraph-io/dgraph/protos/graphp"
-	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 
 	"github.com/dgraph-io/dgraph/rdf"
@@ -85,10 +83,10 @@ func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
 
 	posting.Init(ps)
 	Init(ps)
-	val, err := (&typesp.Schema{ValueType: uint32(typesp.Posting_UID)}).Marshal()
+	val, err := (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
 	require.NoError(t, err)
 	ps.SetOne(x.SchemaKey("friend"), val)
-	val, err = (&typesp.Schema{ValueType: uint32(typesp.Posting_UID)}).Marshal()
+	val, err = (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
 	require.NoError(t, err)
 	ps.SetOne(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
 	populateGraphBackup(t)
@@ -150,7 +148,7 @@ func TestBackup(t *testing.T) {
 			require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4"}, nq.Subject)
 			// The only value we set was "photon".
 			if nq.ObjectValue != nil {
-				require.Equal(t, &graphp.Value{&graphp.Value_DefaultVal{"pho\\ton"}},
+				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\\ton"}},
 					nq.ObjectValue)
 				// Test objecttype
 				if nq.Subject == "0x1" {
@@ -235,7 +233,7 @@ func generateBenchValues() []kv {
 	byteInt := make([]byte, 4)
 	binary.LittleEndian.PutUint32(byteInt, 123)
 
-	fac := []*facetsp.Facet{
+	fac := []*protos.Facet{
 		{
 			Key:   "facetTest",
 			Value: []byte("testVal"),
@@ -256,9 +254,9 @@ func generateBenchValues() []kv {
 	benchItems := []kv{
 		{
 			prefix: "testString",
-			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{{
-					ValType: typesp.Posting_STRING,
+			list: &protos.PostingList{
+				Postings: []*protos.Posting{{
+					ValType: protos.Posting_STRING,
 					Value:   []byte("手機裡的眼淚"),
 					Uid:     uint64(65454),
 					Facets:  fac,
@@ -266,36 +264,36 @@ func generateBenchValues() []kv {
 			},
 		},
 		{prefix: "testGeo",
-			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{{
-					ValType: typesp.Posting_GEO,
+			list: &protos.PostingList{
+				Postings: []*protos.Posting{{
+					ValType: protos.Posting_GEO,
 					Value:   geoData,
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},
 			}},
 		{prefix: "testPassword",
-			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{{
-					ValType: typesp.Posting_PASSWORD,
+			list: &protos.PostingList{
+				Postings: []*protos.Posting{{
+					ValType: protos.Posting_PASSWORD,
 					Value:   []byte("test"),
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},
 			}},
 		{prefix: "testInt",
-			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{{
-					ValType: typesp.Posting_INT,
+			list: &protos.PostingList{
+				Postings: []*protos.Posting{{
+					ValType: protos.Posting_INT,
 					Value:   byteInt,
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},
 			}},
 		{prefix: "testUid",
-			list: &typesp.PostingList{
-				Postings: []*typesp.Posting{{
-					ValType: typesp.Posting_INT,
+			list: &protos.PostingList{
+				Postings: []*protos.Posting{{
+					ValType: protos.Posting_INT,
 					Uid:     uint64(65454),
 					Facets:  fac,
 				}},

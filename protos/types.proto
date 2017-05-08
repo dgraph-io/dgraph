@@ -1,11 +1,9 @@
-// To compile this file, in dgraph directory :
-// protoc --gofast_out=plugins=grpc:. --proto_path=${GOPATH}/src:. protos/typesp/types.proto
+// Use protos/gen.sh to generate .pb.go files.
 
 syntax = "proto3";
+import "facets.proto";
 
-import "github.com/dgraph-io/dgraph/protos/facetsp/facets.proto";
-
-package typesp;
+package protos;
 
 message Posting {
 	fixed64 uid = 1;
@@ -26,7 +24,7 @@ message Posting {
 	}
 	ValType val_type = 3;
 	enum PostingType {
-		REF=0;          // UID 
+		REF=0;          // UID
 		VALUE=1;        // simple, plain value
 		VALUE_LANG=2;   // value with specified language
         // VALUE_TIMESERIES=3; // value from timeseries, with specified timestamp
@@ -35,7 +33,7 @@ message Posting {
 	bytes metadata = 5; // for VALUE_LANG: Language, for VALUE_TIMESERIES: timestamp, etc..
 	string label = 6;
 	uint64 commit = 7;  // More inclination towards smaller values.
-	repeated facetsp.Facet facets = 8;
+	repeated Facet facets = 8;
 
 	// TODO: op is only used temporarily. See if we can remove it from here.
 	uint32 op = 12;
@@ -45,15 +43,4 @@ message PostingList {
 	repeated Posting postings = 1;
 	bytes checksum = 2;
 	uint64 commit = 3; // More inclination towards smaller values.
-}
-
-message Schema {
-	uint32 value_type = 1;
-	enum Directive {
-        NONE = 0;
-        INDEX = 1;
-        REVERSE = 2;
-    }
-    Directive directive = 2;
-	repeated string tokenizer = 3;
 }
