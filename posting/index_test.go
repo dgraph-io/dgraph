@@ -138,6 +138,7 @@ func TestTokensTable(t *testing.T) {
 		Entity: 157,
 	}
 	addMutationWithIndex(t, l, edge, Set)
+	time.Sleep(20 * time.Millisecond)
 
 	key = x.IndexKey("name", "david")
 	slice, err := ps.Get(key)
