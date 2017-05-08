@@ -50,6 +50,14 @@ var (
 	pstore   *store.Store
 )
 
+// Other alternatives could be
+// 1. depending on number of xids in request, we take a lease for that
+//    many xids. But the lease would need to be serialized and would be
+//    a bottleneck
+// 2. we take a lease for large number of xids, then we assign uids to
+//    xids until we have sufficient number of uids. But we won't persist the
+//    the  nextId, so we would loose uid range on restart and we would also
+//     need to reset on leader change
 type leaseManager struct {
 	x.SafeMutex
 	leasedId uint64
