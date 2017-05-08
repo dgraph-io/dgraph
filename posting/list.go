@@ -108,8 +108,8 @@ func getNew(key []byte, pstore *store.Store) *List {
 // ListOptions is used in List.Uids (in posting) to customize our output list of
 // UIDs, for each posting list. It should be internal to this package.
 type ListOptions struct {
-	AfterUID  uint64      // Any UID returned must be after this value.
-	Intersect *taskp.List // Intersect results with this list of UIDs.
+	AfterUID  uint64       // Any UID returned must be after this value.
+	Intersect *protos.List // Intersect results with this list of UIDs.
 }
 
 type ByUid []*protos.Posting
@@ -147,14 +147,14 @@ func samePosting(oldp *protos.Posting, newp *protos.Posting) bool {
 	return facets.SameFacets(oldp.Facets, newp.Facets)
 }
 
-func newPosting(t *taskp.DirectedEdge) *protos.Posting {
+func newPosting(t *protos.DirectedEdge) *protos.Posting {
 	x.AssertTruef(edgeType(t) != x.ValueEmpty,
 		"This should have been set by the caller.")
 
 	var op uint32
-	if t.Op == taskp.DirectedEdge_SET {
+	if t.Op == protos.DirectedEdge_SET {
 		op = Set
-	} else if t.Op == taskp.DirectedEdge_DEL {
+	} else if t.Op == protos.DirectedEdge_DEL {
 		op = Del
 	} else {
 		x.Fatalf("Unhandled operation: %+v", t)
@@ -329,13 +329,13 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
-func (l *List) AddMutation(ctx context.Context, t *taskp.DirectedEdge) (bool, error) {
+func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
 	l.Lock()
 	defer l.Unlock()
 	return l.addMutation(ctx, t)
 }
 
-func edgeType(t *taskp.DirectedEdge) x.ValueTypeInfo {
+func edgeType(t *protos.DirectedEdge) x.ValueTypeInfo {
 	hasVal := !bytes.Equal(t.Value, nil)
 	hasId := t.ValueId != 0
 	switch {
@@ -364,14 +364,14 @@ func postingType(p *protos.Posting) x.ValueTypeInfo {
 }
 
 // TypeID returns the typeid of destination vertex
-func TypeID(edge *taskp.DirectedEdge) types.TypeID {
+func TypeID(edge *protos.DirectedEdge) types.TypeID {
 	if edge.ValueId != 0 {
 		return types.UidID
 	}
 	return types.TypeID(edge.ValueType)
 }
 
-func (l *List) addMutation(ctx context.Context, t *taskp.DirectedEdge) (bool, error) {
+func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
 		return false, ErrRetry
@@ -424,7 +424,7 @@ func (l *List) addMutation(ctx context.Context, t *taskp.DirectedEdge) (bool, er
 	return hasMutated, nil
 }
 
-func (l *List) delete(ctx context.Context, t *taskp.DirectedEdge) error {
+func (l *List) delete(ctx context.Context, t *protos.DirectedEdge) error {
 	l.AssertLock()
 
 	atomic.StorePointer(&l.pbuffer, unsafe.Pointer(emptyList)) // Make this an empty list
@@ -610,7 +610,7 @@ func (l *List) LastCompactionTs() time.Time {
 
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
-func (l *List) Uids(opt ListOptions) *taskp.List {
+func (l *List) Uids(opt ListOptions) *protos.List {
 	// Pre-assign length to make it faster.
 	res := make([]uint64, 0, l.Length(opt.AfterUID))
 
@@ -619,7 +619,7 @@ func (l *List) Uids(opt ListOptions) *taskp.List {
 		return true
 	})
 	// Do The intersection here as it's optimized.
-	out := &taskp.List{res}
+	out := &protos.List{res}
 	if opt.Intersect != nil {
 		algo.IntersectWith(out, opt.Intersect, out)
 	}

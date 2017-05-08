@@ -41,12 +41,12 @@ type stateGroup struct {
 	// Can have fine grained locking later if necessary, per group or predicate
 	x.SafeMutex
 	// Map containing predicate to type information.
-	predicate map[string]*protos.TypesSchema
+	predicate map[string]*protos.SchemaUpdate
 	elog      trace.EventLog
 }
 
 func (s *stateGroup) init(group uint32) {
-	s.predicate = make(map[string]*protos.TypesSchema)
+	s.predicate = make(map[string]*protos.SchemaUpdate)
 	s.elog = trace.NewEventLog("Dynamic Schema", fmt.Sprintf("%d", group))
 }
 
@@ -109,11 +109,11 @@ func (s *stateGroup) update(se SyncEntry) {
 // Set sets the schema for given predicate in memory
 // schema mutations must flow through update function, which are
 // synced to db
-func (s *state) Set(pred string, schema protos.TypesSchema) {
+func (s *state) Set(pred string, schema protos.SchemaUpdate) {
 	s.get(group.BelongsTo(pred)).set(pred, schema)
 }
 
-func (s *stateGroup) set(pred string, schema protos.TypesSchema) {
+func (s *stateGroup) set(pred string, schema protos.SchemaUpdate) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = &schema
@@ -122,16 +122,16 @@ func (s *stateGroup) set(pred string, schema protos.TypesSchema) {
 }
 
 // Get gets the schema for given predicate
-func (s *state) Get(pred string) (protos.TypesSchema, bool) {
+func (s *state) Get(pred string) (protos.SchemaUpdate, bool) {
 	return s.get(group.BelongsTo(pred)).get(pred)
 }
 
-func (s *stateGroup) get(pred string) (protos.TypesSchema, bool) {
+func (s *stateGroup) get(pred string) (protos.SchemaUpdate, bool) {
 	s.Lock()
 	defer s.Unlock()
 	schema, has := s.predicate[pred]
 	if !has {
-		return protos.TypesSchema{}, false
+		return protos.SchemaUpdate{}, false
 	}
 	return *schema, true
 }
@@ -243,7 +243,7 @@ func (s *stateGroup) isReversed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
-		return schema.Directive == protos.TypesSchema_REVERSE
+		return schema.Directive == protos.SchemaUpdate_REVERSE
 	}
 	return false
 }
@@ -267,7 +267,7 @@ func LoadFromDb(gid uint32) error {
 		key := itr.Key().Data()
 		attr := x.Parse(key).Attr
 		data := itr.Value().Data()
-		var s protos.TypesSchema
+		var s protos.SchemaUpdate
 		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
 		if group.BelongsTo(attr) != gid {
 			continue
@@ -289,7 +289,7 @@ func Refresh(groupId uint32) error {
 			continue
 		}
 		data := itr.Value().Data()
-		var s protos.TypesSchema
+		var s protos.SchemaUpdate
 		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
 		State().Set(attr, s)
 	}
@@ -305,7 +305,7 @@ func reset() {
 // SyncEntry stores the schema mutation information
 type SyncEntry struct {
 	Attr   string
-	Schema protos.TypesSchema
+	Schema protos.SchemaUpdate
 	Water  *x.WaterMark
 	Index  uint64
 }

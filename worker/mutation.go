@@ -96,11 +96,11 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 		// We need watermark for index/reverse edge addition for linearizable reads.
 		// (both applied and synced watermarks).
 		if !ok {
-			if current.Directive == protos.Schema_INDEX {
+			if current.Directive == protos.SchemaUpdate_INDEX {
 				if err := n.rebuildOrDelIndex(ctx, update.Predicate, true); err != nil {
 					return err
 				}
-			} else if current.Directive == protos.Schema_REVERSE {
+			} else if current.Directive == protos.SchemaUpdate_REVERSE {
 				if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true); err != nil {
 					return err
 				}
@@ -111,14 +111,14 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 		if needReindexing(old, current) {
 			// Reindex if update.Index is true or remove index
 			if err := n.rebuildOrDelIndex(ctx, update.Predicate,
-				current.Directive == protos.Schema_INDEX); err != nil {
+				current.Directive == protos.SchemaUpdate_INDEX); err != nil {
 				return err
 			}
-		} else if (current.Directive == protos.Schema_REVERSE) !=
-			(old.Directive == protos.Schema_REVERSE) {
+		} else if (current.Directive == protos.SchemaUpdate_REVERSE) !=
+			(old.Directive == protos.SchemaUpdate_REVERSE) {
 			// Add or remove reverse edge based on update.Reverse
 			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
-				current.Directive == protos.Schema_REVERSE); err != nil {
+				current.Directive == protos.SchemaUpdate_REVERSE); err != nil {
 				return err
 			}
 		}
@@ -126,12 +126,12 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 	return nil
 }
 
-func needReindexing(old protos.Schema, current protos.Schema) bool {
-	if (current.Directive == protos.Schema_INDEX) != (old.Directive == protos.Schema_INDEX) {
+func needReindexing(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
+	if (current.Directive == protos.SchemaUpdate_INDEX) != (old.Directive == protos.SchemaUpdate_INDEX) {
 		return true
 	}
 	// if value types has changed
-	if current.Directive == protos.Schema_INDEX && current.ValueType != old.ValueType {
+	if current.Directive == protos.SchemaUpdate_INDEX && current.ValueType != old.ValueType {
 		return true
 	}
 	// if tokenizer has changed - if same tokenizer works differently
@@ -148,7 +148,7 @@ func needReindexing(old protos.Schema, current protos.Schema) bool {
 	return false
 }
 
-func updateSchema(attr string, s protos.Schema, raftIndex uint64, group uint32) {
+func updateSchema(attr string, s protos.SchemaUpdate, raftIndex uint64, group uint32) {
 	ce := schema.SyncEntry{
 		Attr:   attr,
 		Schema: s,
@@ -165,7 +165,7 @@ func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uin
 	if ok {
 		s.ValueType = uint32(typ)
 	} else {
-		s = protos.Schema{ValueType: uint32(typ)}
+		s = protos.SchemaUpdate{ValueType: uint32(typ)}
 	}
 	updateSchema(attr, s, raftIndex, group)
 }

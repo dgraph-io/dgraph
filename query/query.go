@@ -153,10 +153,10 @@ type SubGraph struct {
 	Attr         string
 	Params       params
 	counts       []uint32
-	values       []*protos.Value
+	values       []*protos.TaskValue
 	uidMatrix    []*protos.List
-	facetsMatrix []*protos.List
-	ExpandPreds  []*protos.Value
+	facetsMatrix []*protos.FacetsList
+	ExpandPreds  []*protos.TaskValue
 	GroupbyRes   *groupResults
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
@@ -207,7 +207,7 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 }
 
 // getValue gets the value from the task.
-func getValue(tv *protos.Value) (types.Val, error) {
+func getValue(tv *protos.TaskValue) (types.Val, error) {
 	vID := types.TypeID(tv.ValType)
 	val := types.ValueForType(vID)
 	val.Value = tv.Val
@@ -505,7 +505,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 
 // convert from task.Val to types.Value, based on schema appropriate type
 // is already set in protos.Value
-func convertWithBestEffort(tv *protos.Value, attr string) (types.Val, error) {
+func convertWithBestEffort(tv *protos.TaskValue, attr string) (types.Val, error) {
 	// value would be in binary format with appropriate type
 	v, _ := getValue(tv)
 	if !v.Tid.IsScalar() {
@@ -831,10 +831,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	return sg, nil
 }
 
-func createNilValuesList(count int) []*protos.Value {
-	out := make([]*protos.Value, count)
+func createNilValuesList(count int) []*protos.TaskValue {
+	out := make([]*protos.TaskValue, count)
 	for i := 0; i < count; i++ {
-		out[i] = &protos.Value{
+		out[i] = &protos.TaskValue{
 			Val: x.Nilbyte,
 		}
 	}
@@ -895,7 +895,7 @@ func createTaskQuery(sg *SubGraph) *protos.Query {
 type values struct {
 	uids    *protos.List
 	vals    map[uint64]types.Val
-	strList []*protos.Value
+	strList []*protos.TaskValue
 }
 
 func evalLevelAgg(doneVars map[string]values, sg, parent *SubGraph) (mp map[uint64]types.Val,
@@ -1645,7 +1645,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		}
 	}
 
-	sort := &protos.Sort{
+	sort := &protos.SortMessage{
 		Attr:      sg.Params.Order,
 		Langs:     sg.Params.Langs,
 		UidMatrix: sg.uidMatrix,
@@ -1755,7 +1755,7 @@ func isAggregatorFn(f string) bool {
 	return false
 }
 
-func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.Value, error) {
+func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.TaskValue, error) {
 	temp := new(SubGraph)
 	temp.Attr = "_predicate_"
 	temp.SrcUIDs = uids

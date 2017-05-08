@@ -2,6 +2,7 @@
 
 syntax="proto3";
 import "facets.proto";
+import "schema.proto";
 
 package protos;
 
@@ -36,33 +37,16 @@ message Value {
     }
 }
 
-message Schema {
-    repeated string predicates = 1;
-    repeated string fields = 2;
-}
-
 message Mutation {
     repeated NQuad set = 1;
     repeated NQuad del = 2;
     repeated SchemaUpdate schema = 3;
 }
 
-message SchemaUpdate {
-    string predicate = 1;
-    uint32 value_type = 2;
-    enum Directive {
-        NONE = 0;
-        INDEX = 1;
-        REVERSE = 2;
-    }
-    Directive directive = 3;
-    repeated string tokenizer = 4;
-}
-
 message Request {
     string query = 1;
     Mutation mutation = 2;
-    Schema schema = 3;
+    SchemaRequest schema = 3;
     map<string, string> vars = 4; // Support for GraphQL like variables.
 }
 
@@ -83,14 +67,6 @@ message Node {
     string attribute = 3;
     repeated Property properties = 4;
     repeated Node children = 5; // Each node can have multiple children
-}
-
-message SchemaNode {
-    string predicate = 1;
-    string type = 2;
-    bool index = 3;
-    repeated string tokenizer = 4;
-    bool reverse = 5;
 }
 
 message Response {

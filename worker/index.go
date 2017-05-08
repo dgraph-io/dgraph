@@ -24,6 +24,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -147,7 +148,7 @@ func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) {
 
 // RebuildIndex request is used to trigger rebuilding of index for the requested
 // attribute. Payload is not really used.
-func (w *grpcWorker) RebuildIndex(ctx context.Context, req *protos.RebuildIndex) (*protos.Payload, error) {
+func (w *grpcWorker) RebuildIndex(ctx context.Context, req *protos.RebuildIndexMessage) (*protos.Payload, error) {
 	if ctx.Err() != nil {
 		return &protos.Payload{}, ctx.Err()
 	}
@@ -160,7 +161,7 @@ func (w *grpcWorker) RebuildIndex(ctx context.Context, req *protos.RebuildIndex)
 	return &protos.Payload{}, nil
 }
 
-func proposeRebuildIndex(ctx context.Context, ri *protos.RebuildIndex) error {
+func proposeRebuildIndex(ctx context.Context, ri *protos.RebuildIndexMessage) error {
 	gid := ri.GroupId
 	n := groups().Node(gid)
 	proposal := &protos.Proposal{RebuildIndex: ri}
@@ -181,7 +182,7 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 		return x.Errorf("Attribute %s is not indexed", attr)
 	} else if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
-		return proposeRebuildIndex(ctx, &protos.RebuildIndex{GroupId: gid, Attr: attr})
+		return proposeRebuildIndex(ctx, &protos.RebuildIndexMessage{GroupId: gid, Attr: attr})
 	}
 
 	// Send this over the network.
@@ -196,7 +197,7 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 	x.Trace(ctx, "Sending request to %v", addr)
 
 	c := protos.NewWorkerClient(conn)
-	_, err = c.RebuildIndex(ctx, &protos.RebuildIndex{Attr: attr, GroupId: gid})
+	_, err = c.RebuildIndex(ctx, &protos.RebuildIndexMessage{Attr: attr, GroupId: gid})
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.RebuildIndex"))
 		return err

@@ -1,6 +1,7 @@
 // Use gen.sh to generate .pb.go files.
 
 syntax = "proto3";
+import "schema.proto";
 import "task.proto";
 
 package protos;
@@ -35,7 +36,7 @@ service Worker {
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                      returns (SortResult) {}
 	rpc RebuildIndex (RebuildIndexMessage)      returns (Payload) {}
-	rpc Schema (SchemaMessage)                  returns (SchemaResult) {}
+	rpc Schema (SchemaRequest)                  returns (SchemaResult) {}
 
 	// RAFT serving RPCs.
 	rpc RaftMessage (Payload)                     returns (Payload) {}

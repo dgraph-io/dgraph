@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -47,7 +48,7 @@ type kv struct {
 
 type skv struct {
 	attr   string
-	schema *protos.Schema
+	schema *protos.SchemaUpdate
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {
@@ -129,9 +130,9 @@ func toSchema(buf *bytes.Buffer, s *skv) {
 	}
 	buf.WriteByte(':')
 	buf.WriteString(types.TypeID(s.schema.ValueType).Name())
-	if s.schema.Directive == protos.Schema_REVERSE {
+	if s.schema.Directive == protos.SchemaUpdate_REVERSE {
 		buf.WriteString(" @reverse")
-	} else if s.schema.Directive == protos.Schema_INDEX && len(s.schema.Tokenizer) > 0 {
+	} else if s.schema.Directive == protos.SchemaUpdate_INDEX && len(s.schema.Tokenizer) > 0 {
 		buf.WriteString(" @index(")
 		buf.WriteString(strings.Join(s.schema.Tokenizer, ","))
 		buf.WriteByte(')')
@@ -265,7 +266,7 @@ func backup(gid uint32, bdir string) error {
 		}
 		if pk.IsSchema() {
 			if group.BelongsTo(pk.Attr) == gid {
-				s := &protos.Schema{}
+				s := &protos.SchemaUpdate{}
 				x.Check(s.Unmarshal(it.Value().Data()))
 				chs <- &skv{
 					attr:   pk.Attr,

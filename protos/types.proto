@@ -44,14 +44,3 @@ message PostingList {
 	bytes checksum = 2;
 	uint64 commit = 3; // More inclination towards smaller values.
 }
-
-message TypesSchema {
-	uint32 value_type = 1;
-	enum Directive {
-        NONE = 0;
-        INDEX = 1;
-        REVERSE = 2;
-    }
-    Directive directive = 2;
-	repeated string tokenizer = 3;
-}

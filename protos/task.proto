@@ -2,6 +2,7 @@
 
 syntax = "proto3";
 import "facets.proto";
+import "schema.proto";
 import "graphresponse.proto";
 
 package protos;
@@ -35,10 +36,10 @@ message Query {
 
 message Result {
 	repeated List uid_matrix = 1;
-	repeated Value values = 2;
+	repeated TaskValue values = 2;
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
-	repeated List facet_matrix = 5;
+	repeated FacetsList facet_matrix = 5;
 }
 
 message SortMessage {
@@ -109,17 +110,6 @@ message Mutations {
 	uint32 group_id = 1;
 	repeated DirectedEdge edges = 2;
 	repeated SchemaUpdate schema = 3;
-}
-
-message SchemaMessage {
-	uint32 group_id = 1;
-	repeated string predicates = 2;
-	// fields can be on of type, index, reverse or tokenizer
-	repeated string fields = 3;
-}
-
-message SchemaResult {
-	repeated SchemaNode schema = 1;
 }
 
 message RebuildIndexMessage {

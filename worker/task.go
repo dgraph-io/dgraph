@@ -101,8 +101,8 @@ func convertValue(attr, data string) (types.Val, error) {
 }
 
 // Returns nil byte on error
-func convertToType(v types.Val, typ types.TypeID) (*protos.Value, error) {
-	result := &protos.Value{ValType: int32(typ), Val: x.Nilbyte}
+func convertToType(v types.Val, typ types.TypeID) (*protos.TaskValue, error) {
+	result := &protos.TaskValue{ValType: int32(typ), Val: x.Nilbyte}
 	if v.Tid == typ {
 		result.Val = v.Value.([]byte)
 		return result, nil
@@ -211,7 +211,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		for _, pred := range predList {
 			// Add it to values.
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			out.Values = append(out.Values, &protos.Value{
+			out.Values = append(out.Values, &protos.TaskValue{
 				ValType: int32(types.StringID),
 				Val:     []byte(pred),
 			})
@@ -266,7 +266,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
 			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
 		}
-		newValue := &protos.Value{ValType: int32(val.Tid), Val: x.Nilbyte}
+		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
 		if isValueEdge {
 			if typ, err := schema.State().TypeOf(attr); err == nil {
 				newValue, err = convertToType(val, typ)
@@ -316,13 +316,13 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 					fs = []*protos.Facet{}
 				}
 				out.FacetMatrix = append(out.FacetMatrix,
-					&protos.List{[]*protos.Facets{{fs}}})
+					&protos.FacetsList{[]*protos.Facets{{fs}}})
 			} else {
 				var fcsList []*protos.Facets
 				for _, fres := range filteredRes {
 					fcsList = append(fcsList, &protos.Facets{fres.facets})
 				}
-				out.FacetMatrix = append(out.FacetMatrix, &protos.List{fcsList})
+				out.FacetMatrix = append(out.FacetMatrix, &protos.FacetsList{fcsList})
 			}
 		}
 
@@ -471,7 +471,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	// If geo filter, do value check for correctness.
-	var values []*protos.Value
+	var values []*protos.TaskValue
 	if srcFn.geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
 		for _, uid := range uids.Uids {
@@ -479,7 +479,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			pl, decr := posting.GetOrCreate(key, gid)
 
 			val, err := pl.Value()
-			newValue := &protos.Value{ValType: int32(val.Tid)}
+			newValue := &protos.TaskValue{ValType: int32(val.Tid)}
 			if err == nil {
 				newValue.Val = val.Value.([]byte)
 			} else {

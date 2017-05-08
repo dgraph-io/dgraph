@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -34,7 +35,7 @@ import (
 var emptySortResult protos.SortResult
 
 // SortOverNetwork sends sort query over the network.
-func SortOverNetwork(ctx context.Context, q *protos.Sort) (*protos.SortResult, error) {
+func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
 	gid := group.BelongsTo(q.Attr)
 	x.Trace(ctx, "worker.Sort attr: %v groupId: %v", q.Attr, gid)
 
@@ -76,7 +77,7 @@ func SortOverNetwork(ctx context.Context, q *protos.Sort) (*protos.SortResult, e
 }
 
 // Sort is used to sort given UID matrix.
-func (w *grpcWorker) Sort(ctx context.Context, s *protos.Sort) (*protos.SortResult, error) {
+func (w *grpcWorker) Sort(ctx context.Context, s *protos.SortMessage) (*protos.SortResult, error) {
 	if ctx.Err() != nil {
 		return &emptySortResult, ctx.Err()
 	}
@@ -108,7 +109,7 @@ var (
 	errDone     = x.Errorf("Done processing buckets")
 )
 
-func sortWithoutIndex(ctx context.Context, ts *protos.Sort) (*protos.SortResult, error) {
+func sortWithoutIndex(ctx context.Context, ts *protos.SortMessage) (*protos.SortResult, error) {
 	n := len(ts.UidMatrix)
 	r := new(protos.SortResult)
 	// Sort and paginate directly as it'd be expensive to iterate over the index which
@@ -135,7 +136,7 @@ func sortWithoutIndex(ctx context.Context, ts *protos.Sort) (*protos.SortResult,
 	return r, nil
 }
 
-func sortWithIndex(ctx context.Context, ts *protos.Sort) (*protos.SortResult, error) {
+func sortWithIndex(ctx context.Context, ts *protos.SortMessage) (*protos.SortResult, error) {
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	for i := 0; i < n; i++ {
@@ -243,7 +244,7 @@ BUCKETS:
 // bucket if we haven't hit the offset. We stop getting results when we got
 // enough for our pagination params. When all the UID lists are done, we stop
 // iterating over the index.
-func processSort(ctx context.Context, ts *protos.Sort) (*protos.SortResult, error) {
+func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResult, error) {
 	if ts.Count < 0 {
 		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
 			"Try flipping order and return first few elements instead.", ts.Attr, ts.Count)
@@ -295,7 +296,7 @@ type intersectedList struct {
 
 // intersectBucket intersects every UID list in the UID matrix with the
 // indexed bucket.
-func intersectBucket(ts *protos.Sort, attr, token string, out []intersectedList) error {
+func intersectBucket(ts *protos.SortMessage, attr, token string, out []intersectedList) error {
 	count := int(ts.Count)
 	sType, err := schema.State().TypeOf(attr)
 	if err != nil || !sType.IsScalar() {

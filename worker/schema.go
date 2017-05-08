@@ -39,7 +39,7 @@ type resultErr struct {
 // getSchema iterates over all predicates and populates the asked fields, if list of
 // predicates is not specified, then all the predicates belonging to the group
 // are returned
-func getSchema(ctx context.Context, s *protos.Schema) (*protos.SchemaResult, error) {
+func getSchema(ctx context.Context, s *protos.SchemaRequest) (*protos.SchemaResult, error) {
 	var result protos.SchemaResult
 	var predicates []string
 	var fields []string
@@ -97,12 +97,12 @@ func populateSchema(attr string, fields []string) *protos.SchemaNode {
 
 // addToSchemaMap groups the predicates by group id, if list of predicates is
 // empty then it adds all known groups
-func addToSchemaMap(schemaMap map[uint32]*protos.Schema, schema *protos.Schema) {
+func addToSchemaMap(schemaMap map[uint32]*protos.SchemaRequest, schema *protos.SchemaRequest) {
 	for _, attr := range schema.Predicates {
 		gid := group.BelongsTo(attr)
 		s := schemaMap[gid]
 		if s == nil {
-			s = &protos.Schema{GroupId: gid}
+			s = &protos.SchemaRequest{GroupId: gid}
 			s.Fields = schema.Fields
 			schemaMap[gid] = s
 		}
@@ -120,7 +120,7 @@ func addToSchemaMap(schemaMap map[uint32]*protos.Schema, schema *protos.Schema) 
 		}
 		s := schemaMap[gid]
 		if s == nil {
-			s = &protos.Schema{GroupId: gid}
+			s = &protos.SchemaRequest{GroupId: gid}
 			s.Fields = schema.Fields
 			schemaMap[gid] = s
 		}
@@ -130,7 +130,7 @@ func addToSchemaMap(schemaMap map[uint32]*protos.Schema, schema *protos.Schema) 
 // If the current node serves the group serve the schema or forward
 // to relevant node
 // TODO: Janardhan - if read fails try other servers serving same group
-func getSchemaOverNetwork(ctx context.Context, gid uint32, s *protos.Schema, ch chan resultErr) {
+func getSchemaOverNetwork(ctx context.Context, gid uint32, s *protos.SchemaRequest, ch chan resultErr) {
 	if groups().ServesGroup(gid) {
 		schema, e := getSchema(ctx, s)
 		ch <- resultErr{result: schema, err: e}
@@ -153,12 +153,12 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *protos.Schema, ch 
 
 // GetSchemaOverNetwork checks which group should be serving the schema
 // according to fingerprint of the predicate and sends it to that instance.
-func GetSchemaOverNetwork(ctx context.Context, schema *protos.Schema) ([]*protos.SchemaNode, error) {
+func GetSchemaOverNetwork(ctx context.Context, schema *protos.SchemaRequest) ([]*protos.SchemaNode, error) {
 	if !HealthCheck() {
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return nil, x.Errorf("Uninitiated server. Please retry later")
 	}
-	schemaMap := make(map[uint32]*protos.Schema)
+	schemaMap := make(map[uint32]*protos.SchemaRequest)
 	addToSchemaMap(schemaMap, schema)
 
 	results := make(chan resultErr, len(schemaMap))
@@ -187,7 +187,7 @@ func GetSchemaOverNetwork(ctx context.Context, schema *protos.Schema) ([]*protos
 }
 
 // Schema is used to get schema information over the network on other instances.
-func (w *grpcWorker) Schema(ctx context.Context, s *protos.Schema) (*protos.SchemaResult, error) {
+func (w *grpcWorker) Schema(ctx context.Context, s *protos.SchemaRequest) (*protos.SchemaResult, error) {
 	if ctx.Err() != nil {
 		return &emptySchemaResult, ctx.Err()
 	}

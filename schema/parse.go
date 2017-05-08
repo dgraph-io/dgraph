@@ -25,18 +25,18 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func From(s *protos.SchemaUpdate) protos.Schema {
+func From(s *protos.SchemaUpdate) protos.SchemaUpdate {
 	if s.Directive == protos.SchemaUpdate_REVERSE {
-		return protos.Schema{
+		return protos.SchemaUpdate{
 			ValueType: s.ValueType,
-			Directive: protos.Schema_REVERSE}
+			Directive: protos.SchemaUpdate_REVERSE}
 	} else if s.Directive == protos.SchemaUpdate_INDEX {
-		return protos.Schema{
+		return protos.SchemaUpdate{
 			ValueType: s.ValueType,
-			Directive: protos.Schema_INDEX,
+			Directive: protos.SchemaUpdate_INDEX,
 			Tokenizer: s.Tokenizer}
 	}
-	return protos.Schema{ValueType: s.ValueType}
+	return protos.SchemaUpdate{ValueType: s.ValueType}
 }
 
 // ParseBytes parses the byte array which holds the schema. We will reset

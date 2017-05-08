@@ -9,6 +9,7 @@
 		facets.proto
 		graphresponse.proto
 		payload.proto
+		schema.proto
 		task.proto
 		types.proto
 
@@ -21,19 +22,20 @@
 		FilterTree
 		NQuad
 		Value
-		Schema
 		Mutation
-		SchemaUpdate
 		Request
 		Latency
 		Property
 		Node
-		SchemaNode
 		Response
 		Check
 		Version
 		Payload
 		BackupPayload
+		SchemaRequest
+		SchemaResult
+		SchemaNode
+		SchemaUpdate
 		List
 		TaskValue
 		Query
@@ -46,8 +48,6 @@
 		MembershipUpdate
 		DirectedEdge
 		Mutations
-		SchemaMessage
-		SchemaResult
 		RebuildIndexMessage
 		Proposal
 		KV
@@ -55,7 +55,6 @@
 		GroupKeys
 		Posting
 		PostingList
-		TypesSchema
 */
 package protos
 
