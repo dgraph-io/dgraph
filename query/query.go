@@ -967,7 +967,10 @@ func recurse(node *gql.MathTree, doneVars map[string]values, nodeList *[]*gql.Ma
 }
 
 func transformMap(fromNode, toNode values) (map[uint64]types.Val, error) {
-	newMap := fromNode.vals
+	newMap := make(map[uint64]types.Val)
+	for k, v := range fromNode.vals {
+		newMap[k] = v
+	}
 	if len(fromNode.path) == len(toNode.path) {
 		if len(toNode.path) != 0 &&
 			fromNode.path[len(fromNode.path)-1] != toNode.path[len(toNode.path)-1] {
@@ -1007,6 +1010,7 @@ func transformMap(fromNode, toNode values) (map[uint64]types.Val, error) {
 				}
 				tempMap[dstUid] = val
 			}
+
 		}
 		newMap = tempMap
 	}
@@ -1266,9 +1270,10 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool,
 		goto AssignStep
 	}
 
-	sgPath = append(sgPath, sg) // Add the current node to path
 	for _, child := range sg.Children {
+		sgPath = append(sgPath, sg) // Add the current node to path
 		populateVarMap(child, doneVars, isCascade, sgPath)
+		sgPath = sgPath[:len(sgPath)-1] // Backtrack
 		if !isCascade {
 			continue
 		}
@@ -1292,7 +1297,6 @@ func populateVarMap(sg *SubGraph, doneVars map[string]values, isCascade bool,
 			}
 		}
 	}
-	sgPath = sgPath[:len(sgPath)-1] // Backtrack
 
 	if !isCascade {
 		goto AssignStep

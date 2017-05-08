@@ -1,6 +1,8 @@
 package query
 
 import (
+	"fmt"
+
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -194,6 +196,7 @@ func evalMathTree(mNode *gql.MathTree) (err error) {
 	if mNode.Const.Value != nil {
 		return nil
 	}
+	fmt.Println(mNode.Val, mNode.Var, "$$$")
 	if mNode.Var != "" {
 		if mNode.Val == nil {
 			return x.Errorf("Variable %v not yet populated or missing.", mNode.Var)
