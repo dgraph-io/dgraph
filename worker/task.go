@@ -454,7 +454,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	// request and filter the uids only if the tokenizer IsLossy.
 	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 &&
 		srcFn.ineqValueToken == srcFn.tokens[0] {
-		tokenizer, err := pickTokenizer(attr)
+		tokenizer, err := pickTokenizer(attr, srcFn.fname)
 		// We should already have checked this in getInequalityTokens.
 		x.Check(err)
 		// Only if the tokenizer that we used IsLossy, then we need to fetch

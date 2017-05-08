@@ -61,7 +61,7 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	}
 }
 
-func pickTokenizer(attr string) (tok.Tokenizer, error) {
+func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(attr) {
 		return nil, x.Errorf("Attribute %s is not indexed.", attr)
@@ -73,16 +73,23 @@ func pickTokenizer(attr string) (tok.Tokenizer, error) {
 			attr)
 	}
 
+	var tokenizer tok.Tokenizer
 	for _, t := range tokenizers {
-		if t.IsSortable() {
-			return t, nil
+		if !t.IsLossy() {
+			tokenizer = t
+			break
 		}
 	}
 
-	// We didn't find a sortable tokenizer, lets try to find which !IsLossy() so that
-	// we don't have to do the second lookup.
+	// If function is eq and we found a tokenizer thats !Lossy(), lets return
+	// it to avoid the second lookup.
+	if f == "eq" && tokenizer != nil {
+		return tokenizer, nil
+	}
+
+	// Lets try to find a sortable tokenizer.
 	for _, t := range tokenizers {
-		if !t.IsLossy() {
+		if t.IsSortable() {
 			return t, nil
 		}
 	}
@@ -94,7 +101,7 @@ func pickTokenizer(attr string) (tok.Tokenizer, error) {
 // getInequalityTokens gets tokens ge / le compared to given token using the first sortable
 // index that is found for the predicate.
 func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string, error) {
-	tokenizer, err := pickTokenizer(attr)
+	tokenizer, err := pickTokenizer(attr, f)
 	if err != nil {
 		return nil, "", err
 	}
