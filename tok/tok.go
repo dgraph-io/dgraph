@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"time"
 
+	farm "github.com/dgryski/go-farm"
 	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/types"
@@ -42,12 +43,12 @@ type Tokenizer interface {
 	// Identifier returns the prefix byte for this token type.
 	Identifier() byte
 
-	// IsSortable returns if the index can be used for sorting.
+	// IsSortable returns true if the tokenizer can be used for sorting/ordering.
 	IsSortable() bool
 
-	// IsLossy() returns true if we don't store the values directly as keys during
-	// tokenization. We can do eq operation if a predicate has a tokenizer which
-	// is not lossy.
+	// IsLossy() returns true if we don't store the values directly as index keys
+	// during tokenization. If a predicate is tokenized using an IsLossy() tokenizer,
+	// then we need to fetch the actual value and compare.
 	IsLossy() bool
 }
 
@@ -66,6 +67,7 @@ func init() {
 	RegisterTokenizer(ExactTokenizer{})
 	RegisterTokenizer(BoolTokenizer{})
 	RegisterTokenizer(TrigramTokenizer{})
+	RegisterTokenizer(HashTokenizer{})
 	SetDefault(types.GeoID, "geo")
 	SetDefault(types.IntID, "int")
 	SetDefault(types.FloatID, "float")
@@ -298,3 +300,19 @@ func (t TrigramTokenizer) Tokens(sv types.Val) ([]string, error) {
 func (t TrigramTokenizer) Identifier() byte { return 0xA }
 func (t TrigramTokenizer) IsSortable() bool { return false }
 func (t TrigramTokenizer) IsLossy() bool    { return true }
+
+type HashTokenizer struct{}
+
+func (t HashTokenizer) Name() string       { return "hash" }
+func (t HashTokenizer) Type() types.TypeID { return types.StringID }
+func (t HashTokenizer) Tokens(sv types.Val) ([]string, error) {
+	term, ok := sv.Value.(string)
+	if !ok {
+		return nil, x.Errorf("Hash tokenizer only supported for string types")
+	}
+	var hash int64 = int64(farm.Hash64([]byte(term)))
+	return []string{encodeToken(encodeInt(hash), t.Identifier())}, nil
+}
+func (t HashTokenizer) Identifier() byte { return 0xB }
+func (t HashTokenizer) IsSortable() bool { return false }
+func (t HashTokenizer) IsLossy() bool    { return true }
