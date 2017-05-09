@@ -1,8 +1,4 @@
-/*
-
-dgs is dgraph store.
-*/
-package dgs
+package store
 
 type Store interface {
 	// Returns the value as a byte array.

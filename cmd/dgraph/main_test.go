@@ -29,7 +29,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -37,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -58,7 +58,7 @@ var m = `
 	}
 `
 
-func prepare() (dir1, dir2 string, ps dgs.Store, rerr error) {
+func prepare() (dir1, dir2 string, ps store.Store, rerr error) {
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {

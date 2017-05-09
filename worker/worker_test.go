@@ -28,11 +28,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -107,7 +107,7 @@ func taskValues(t *testing.T, v []*taskp.Value) []string {
 	return out
 }
 
-func initTest(t *testing.T, schemaStr string) (string, dgs.Store) {
+func initTest(t *testing.T, schemaStr string) (string, store.Store) {
 	schema.ParseBytes([]byte(schemaStr), 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")
@@ -318,7 +318,7 @@ func TestProcessTaskIndex(t *testing.T) {
 }
 
 /*
-func populateGraphForSort(t *testing.T, ps dgs.Store) {
+func populateGraphForSort(t *testing.T, ps store.Store) {
 	edge := &taskp.DirectedEdge{
 		Label: "author1",
 		Attr:  "dob",

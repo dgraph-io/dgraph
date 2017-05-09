@@ -23,9 +23,9 @@ import (
 
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -33,7 +33,7 @@ import (
 
 var (
 	pstate *state
-	pstore dgs.Store
+	pstore store.Store
 	syncCh chan SyncEntry
 )
 
@@ -248,7 +248,7 @@ func (s *stateGroup) isReversed(pred string) bool {
 	return false
 }
 
-func Init(ps dgs.Store) {
+func Init(ps store.Store) {
 	pstore = ps
 	syncCh = make(chan SyncEntry, 10000)
 	reset()

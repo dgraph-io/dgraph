@@ -25,16 +25,16 @@ import (
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 
-	"github.com/dgraph-io/dgraph/dgs"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type Wal struct {
-	wals dgs.Store
+	wals store.Store
 	id   uint64
 }
 
-func Init(walStore dgs.Store, id uint64) *Wal {
+func Init(walStore store.Store, id uint64) *Wal {
 	return &Wal{wals: walStore, id: id}
 }
 

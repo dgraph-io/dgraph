@@ -24,9 +24,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -237,7 +237,7 @@ func TestParse6_Error(t *testing.T) {
 	require.Nil(t, schemas)
 }
 
-var ps dgs.Store
+var ps store.Store
 
 func TestMain(m *testing.M) {
 	x.SetTestRun()
@@ -245,7 +245,7 @@ func TestMain(m *testing.M) {
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
-	ps, err = store.NewStore(dir)
+	ps, err = rdb.NewStore(dir)
 	x.Check(err)
 	x.Check(group.ParseGroupConfig("groups.conf"))
 	Init(ps)

@@ -3,7 +3,7 @@ package rdb
 import (
 	"strconv"
 
-	"github.com/dgraph-io/dgraph/dgs"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -79,7 +79,7 @@ func (s *Store) SetOne(k []byte, val []byte) error { return s.db.Put(s.wopt, k, 
 func (s *Store) Delete(k []byte) error { return s.db.Delete(s.wopt, k) }
 
 // NewIterator initializes a new iterator and returns it.
-func (s *Store) NewIterator(reversed bool) dgs.Iterator {
+func (s *Store) NewIterator(reversed bool) store.Iterator {
 	ro := NewDefaultReadOptions()
 	// SetFillCache should be set to false for bulk reads to avoid caching data
 	// while doing bulk scans.
@@ -103,12 +103,12 @@ func (s *Store) IndexFilterblockSize() uint64 {
 }
 
 // NewWriteBatch creates a new WriteBatch object and returns a pointer to it.
-func (s *Store) NewWriteBatch() dgs.WriteBatch {
+func (s *Store) NewWriteBatch() store.WriteBatch {
 	return NewWriteBatch()
 }
 
 // WriteBatch does a batch write to RocksDB from the data in WriteBatch object.
-func (s *Store) WriteBatch(wb dgs.WriteBatch) error {
+func (s *Store) WriteBatch(wb store.WriteBatch) error {
 	return x.Wrap(s.db.Write(s.wopt, wb.(*WriteBatch)))
 }
 

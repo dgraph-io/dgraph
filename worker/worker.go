@@ -27,8 +27,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/protos/workerp"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 
 	"golang.org/x/net/context"
@@ -40,11 +40,11 @@ var (
 		"Port used by worker for internal communication.")
 	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
-	pstore       dgs.Store
+	pstore       store.Store
 	workerServer *grpc.Server
 )
 
-func Init(ps dgs.Store) {
+func Init(ps store.Store) {
 	pstore = ps
 }
 

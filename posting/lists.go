@@ -36,8 +36,8 @@ import (
 
 	"github.com/dgryski/go-farm"
 
-	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -380,7 +380,7 @@ type fingerPrint struct {
 
 var (
 	stopTheWorld x.SafeMutex
-	pstore       dgs.Store
+	pstore       store.Store
 	syncCh       chan syncEntry
 	dirtyChan    chan fingerPrint // All dirty posting list keys are pushed here.
 	marks        *syncMarks
@@ -388,7 +388,7 @@ var (
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps dgs.Store) {
+func Init(ps store.Store) {
 	marks = new(syncMarks)
 	pstore = ps
 	lhmaps = new(listMaps)

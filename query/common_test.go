@@ -28,12 +28,12 @@ import (
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
 
-	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
@@ -145,7 +145,7 @@ func delEdgeToUID(t *testing.T, attr string, src uint64, dst uint64) {
 	addEdge(t, attr, src, edge)
 }
 
-func addGeoData(t *testing.T, ps dgs.Store, uid uint64, p geom.T, name string) {
+func addGeoData(t *testing.T, ps store.Store, uid uint64, p geom.T, name string) {
 	value := types.ValueForType(types.BinaryID)
 	src := types.ValueForType(types.GeoID)
 	src.Value = p

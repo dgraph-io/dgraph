@@ -34,11 +34,11 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/facetsp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -70,7 +70,7 @@ type List struct {
 	ghash       uint64
 	pbuffer     unsafe.Pointer
 	mlayer      []*typesp.Posting // mutations
-	pstore      dgs.Store         // postinglist store
+	pstore      store.Store       // postinglist store
 	lastCompact time.Time
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount    int32
@@ -97,7 +97,7 @@ var listPool = sync.Pool{
 	},
 }
 
-func getNew(key []byte, pstore dgs.Store) *List {
+func getNew(key []byte, pstore store.Store) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
 	l.key = key

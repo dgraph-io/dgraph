@@ -25,7 +25,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgs"
+	"github.com/dgraph-io/dgraph/store"
 
 	"github.com/stretchr/testify/require"
 )
@@ -137,7 +137,7 @@ func TestBasic(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dbPath)
 
-	var s dgs.Store
+	var s store.Store
 	s, err = NewStore(dbPath)
 	defer s.Close()
 	require.NoError(t, err)
