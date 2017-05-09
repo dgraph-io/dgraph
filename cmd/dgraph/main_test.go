@@ -35,8 +35,8 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/typesp"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -64,7 +64,7 @@ func prepare() (dir1, dir2 string, ps dgs.Store, rerr error) {
 	if err != nil {
 		return "", "", nil, err
 	}
-	ps, err = store.NewStore(dir1)
+	ps, err = rdb.NewStore(dir1)
 	if err != nil {
 		return "", "", nil, err
 	}

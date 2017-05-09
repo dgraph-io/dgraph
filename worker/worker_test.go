@@ -31,8 +31,8 @@ import (
 	"github.com/dgraph-io/dgraph/dgs"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -113,7 +113,7 @@ func initTest(t *testing.T, schemaStr string) (string, dgs.Store) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 
-	ps, err := store.NewStore(dir)
+	ps, err := rdb.NewStore(dir)
 	require.NoError(t, err)
 
 	posting.Init(ps)

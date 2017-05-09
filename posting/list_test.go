@@ -32,7 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/typesp"
-	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -754,7 +754,7 @@ func TestMain(m *testing.M) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
 
-	ps, err = store.NewStore(dir)
+	ps, err = rdb.NewStore(dir)
 	x.Check(err)
 
 	Init(ps)

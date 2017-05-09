@@ -55,9 +55,9 @@ import (
 	"github.com/dgraph-io/dgraph/protos/graphp"
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
@@ -980,7 +980,7 @@ func main() {
 	// for posting lists, so the cost of sync writes is amortized.
 	var ps dgs.Store
 	var err error
-	ps, err = store.NewSyncStore(*postingDir)
+	ps, err = rdb.NewSyncStore(*postingDir)
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 

@@ -33,8 +33,8 @@ import (
 	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/protos/workerp"
 	"github.com/dgraph-io/dgraph/raftwal"
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -123,7 +123,7 @@ func StartRaftNodes(walDir string) {
 	}
 
 	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
-	wals, err := store.NewSyncStore(walDir)
+	wals, err := rdb.NewSyncStore(walDir)
 	x.Checkf(err, "Error initializing wal store")
 	gr.wal = raftwal.Init(wals, *raftId)
 

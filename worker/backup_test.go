@@ -41,9 +41,9 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 
 	"github.com/dgraph-io/dgraph/dgs"
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -81,7 +81,7 @@ func initTestBackup(t *testing.T, schemaStr string) (string, dgs.Store) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 
-	ps, err := store.NewStore(dir)
+	ps, err := rdb.NewStore(dir)
 	require.NoError(t, err)
 
 	posting.Init(ps)

@@ -44,8 +44,8 @@ import (
 	"github.com/dgraph-io/dgraph/protos/typesp"
 
 	"github.com/dgraph-io/dgraph/dgs"
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -5700,7 +5700,7 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	defer os.RemoveAll(dir)
 
-	ps, err = store.NewStore(dir)
+	ps, err = rdb.NewStore(dir)
 	x.Check(err)
 	defer ps.Close()
 
