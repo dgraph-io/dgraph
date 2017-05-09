@@ -964,28 +964,16 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 	return mp, nil
 }
 
-func recurse(node *mathTree, doneVars map[string]varValue, nodeList *[]*mathTree) (int, string, error) {
-	if node.Var != "" {
-		v, ok := doneVars[node.Var]
-		if !ok {
-			return 0, "", x.Errorf("Missing variable %v", node.Var)
-		}
-		*nodeList = append(*nodeList, node)
-		return len(v.path), node.Var, nil
+func (mt *mathTree) recurse() []*mathTree {
+	var nodeList []*mathTree
+	for _, ch := range mt.Child {
+		nodeList = append(nodeList, ch.recurse()...)
 	}
-	curLevel := -1
-	var curVar string
-	for _, ch := range node.Child {
-		maxLevel, maxVar, err := recurse(ch, doneVars, nodeList)
-		if err != nil {
-			return 0, "", err
-		}
-		if curLevel <= maxLevel {
-			curLevel = maxLevel
-			curVar = maxVar
-		}
+	if mt.Var != "" {
+		nodeList = append(nodeList, mt)
+		return nodeList
 	}
-	return curLevel, curVar, nil
+	return nodeList
 }
 
 func transformMap(fromNode, toNode varValue) (map[uint64]types.Val, error) {
@@ -1040,19 +1028,29 @@ func transformMap(fromNode, toNode varValue) (map[uint64]types.Val, error) {
 }
 
 func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
-	var nodeList []*mathTree
-	_, maxVar, err := recurse(mNode, doneVars, &nodeList)
-	if err != nil {
-		return err
+	mvarList := mNode.recurse()
+	// Iterate over the node list to find the node at the lowest level.
+	var maxVar string
+	var maxLevel int
+	for _, mt := range mvarList {
+		mvarVal, ok := doneVars[mt.Var]
+		if !ok {
+			return x.Errorf("Variable not yet populated: %v", mt.Var)
+		}
+		if maxLevel < len(mvarVal.path) {
+			maxLevel = len(mvarVal.path)
+			maxVar = mt.Var
+		}
 	}
+
 	maxNode := doneVars[maxVar]
-	for _, node := range nodeList {
-		curNode := doneVars[node.Var]
+	for _, mt := range mvarList {
+		curNode := doneVars[mt.Var]
 		newMap, err := transformMap(curNode, maxNode)
 		if err != nil {
 			return err
 		}
-		node.Val = newMap
+		mt.Val = newMap
 	}
 	return nil
 }
