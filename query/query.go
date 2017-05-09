@@ -976,19 +976,8 @@ func (mt *mathTree) recurse() []*mathTree {
 	return nodeList
 }
 
-func transformMap(fromNode, toNode varValue) (map[uint64]types.Val, error) {
-	newMap := make(map[uint64]types.Val)
-	for k, v := range fromNode.vals {
-		newMap[k] = v
-	}
-	if len(fromNode.path) == len(toNode.path) {
-		if len(toNode.path) != 0 &&
-			fromNode.path[len(fromNode.path)-1] != toNode.path[len(toNode.path)-1] {
-			return nil, x.Errorf("Invalid combination of variables in math")
-		}
-		return newMap, nil
-	}
-	x.AssertTrue(len(toNode.path) > len(fromNode.path))
+func (fromNode *varValue) transformMap(toNode varValue) (map[uint64]types.Val, error) {
+	x.AssertTrue(len(toNode.path) >= len(fromNode.path))
 	idx := 0
 	for ; idx < len(fromNode.path); idx++ {
 		if fromNode.path[idx] != toNode.path[idx] {
@@ -996,6 +985,7 @@ func transformMap(fromNode, toNode varValue) (map[uint64]types.Val, error) {
 		}
 	}
 
+	newMap := fromNode.vals
 	for ; idx < len(toNode.path); idx++ {
 		curNode := toNode.path[idx]
 		tempMap := make(map[uint64]types.Val)
@@ -1046,7 +1036,7 @@ func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
 	maxNode := doneVars[maxVar]
 	for _, mt := range mvarList {
 		curNode := doneVars[mt.Var]
-		newMap, err := transformMap(curNode, maxNode)
+		newMap, err := curNode.transformMap(maxNode)
 		if err != nil {
 			return err
 		}
