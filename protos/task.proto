@@ -1,17 +1,17 @@
-// To compile this file, in dgraph directory :
-// protoc --gofast_out=plugins=grpc:. --proto_path=${GOPATH}/src:. protos/taskp/task.proto
+// Use protos/gen.sh to generate .pb.go files.
 
 syntax = "proto3";
-import "github.com/dgraph-io/dgraph/protos/facetsp/facets.proto";
-import "github.com/dgraph-io/dgraph/protos/graphp/graphresponse.proto";
+import "facets.proto";
+import "schema.proto";
+import "graphresponse.proto";
 
-package taskp;
+package protos;
 
 message List {
 	repeated fixed64 uids = 1;
 }
 
-message Value {
+message TaskValue {
 	bytes val = 1;
 	int32 val_type = 2;
 }
@@ -27,22 +27,22 @@ message Query {
 
 	// Function to generate or filter UIDs.
 	repeated string src_func = 6;
-	
+
 	bool reverse = 7;  // Whether this is a reverse edge.
 
-	facetsp.Param facet_param = 8; // which facets to fetch
-	facetsp.FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
+	Param facet_param = 8; // which facets to fetch
+	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
 }
 
 message Result {
 	repeated List uid_matrix = 1;
-	repeated Value values = 2;
+	repeated TaskValue values = 2;
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
-	repeated facetsp.List facet_matrix = 5;
+	repeated FacetsList facet_matrix = 5;
 }
 
-message Sort {
+message SortMessage {
 	string attr = 1;
 	repeated string langs = 2;
 	repeated List uid_matrix = 3;
@@ -103,27 +103,16 @@ message DirectedEdge {
 		DEL = 1;
 	}
 	Op op = 8;
-	repeated facetsp.Facet facets = 9;
+	repeated Facet facets = 9;
 }
 
 message Mutations {
 	uint32 group_id = 1;
 	repeated DirectedEdge edges = 2;
-	repeated graphp.SchemaUpdate schema = 3;
+	repeated SchemaUpdate schema = 3;
 }
 
-message Schema {
-	uint32 group_id = 1;
-	repeated string predicates = 2;
-	// fields can be on of type, index, reverse or tokenizer
-	repeated string fields = 3; 
-}
-
-message SchemaResult {
-	repeated graphp.SchemaNode schema = 1;
-}
-
-message RebuildIndex {
+message RebuildIndexMessage {
 	uint32 group_id = 1;
 	string attr = 2;  // For simplicity, just do one attribute per request.
 }
@@ -132,7 +121,7 @@ message Proposal {
 	uint32 id = 1;
 	Mutations mutations = 2;
 	Membership membership = 3;
-	RebuildIndex rebuild_index = 4;
+	RebuildIndexMessage rebuild_index = 4;
 }
 
 message KV {

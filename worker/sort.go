@@ -25,18 +25,17 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/protos/workerp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var emptySortResult taskp.SortResult
+var emptySortResult protos.SortResult
 
 // SortOverNetwork sends sort query over the network.
-func SortOverNetwork(ctx context.Context, q *taskp.Sort) (*taskp.SortResult, error) {
+func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
 	gid := group.BelongsTo(q.Attr)
 	x.Trace(ctx, "worker.Sort attr: %v groupId: %v", q.Attr, gid)
 
@@ -57,8 +56,8 @@ func SortOverNetwork(ctx context.Context, q *taskp.Sort) (*taskp.SortResult, err
 	defer pl.Put(conn)
 	x.Trace(ctx, "Sending request to %v", addr)
 
-	c := workerp.NewWorkerClient(conn)
-	var reply *taskp.SortResult
+	c := protos.NewWorkerClient(conn)
+	var reply *protos.SortResult
 	cerr := make(chan error, 1)
 	go func() {
 		var err error
@@ -78,7 +77,7 @@ func SortOverNetwork(ctx context.Context, q *taskp.Sort) (*taskp.SortResult, err
 }
 
 // Sort is used to sort given UID matrix.
-func (w *grpcWorker) Sort(ctx context.Context, s *taskp.Sort) (*taskp.SortResult, error) {
+func (w *grpcWorker) Sort(ctx context.Context, s *protos.SortMessage) (*protos.SortResult, error) {
 	if ctx.Err() != nil {
 		return &emptySortResult, ctx.Err()
 	}
@@ -86,7 +85,7 @@ func (w *grpcWorker) Sort(ctx context.Context, s *taskp.Sort) (*taskp.SortResult
 	gid := group.BelongsTo(s.Attr)
 	x.Trace(ctx, "Sorting: Attribute: %q groupId: %v Sort", s.Attr, gid)
 
-	var reply *taskp.SortResult
+	var reply *protos.SortResult
 	x.AssertTruef(groups().ServesGroup(gid),
 		"attr: %q groupId: %v Request sent to wrong server.", s.Attr, gid)
 
@@ -110,9 +109,9 @@ var (
 	errDone     = x.Errorf("Done processing buckets")
 )
 
-func sortWithoutIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error) {
+func sortWithoutIndex(ctx context.Context, ts *protos.SortMessage) (*protos.SortResult, error) {
 	n := len(ts.UidMatrix)
-	r := new(taskp.SortResult)
+	r := new(protos.SortResult)
 	// Sort and paginate directly as it'd be expensive to iterate over the index which
 	// might have millions of keys just for retrieving some values.
 	sType, err := schema.State().TypeOf(ts.Attr)
@@ -126,7 +125,7 @@ func sortWithoutIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, e
 			return nil, nil
 		default:
 			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
-			tempList := &taskp.List{ts.UidMatrix[i].Uids}
+			tempList := &protos.List{ts.UidMatrix[i].Uids}
 			if err := sortByValue(ts.Attr, ts.Langs, tempList, sType, ts.Desc); err != nil {
 				return r, err
 			}
@@ -137,17 +136,17 @@ func sortWithoutIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, e
 	return r, nil
 }
 
-func sortWithIndex(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error) {
+func sortWithIndex(ctx context.Context, ts *protos.SortMessage) (*protos.SortResult, error) {
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	for i := 0; i < n; i++ {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset)
-		var emptyList taskp.List
+		var emptyList protos.List
 		out[i].ulist = &emptyList
 	}
-	r := new(taskp.SortResult)
+	r := new(protos.SortResult)
 	// Iterate over every bucket / token.
 	it := pstore.NewIterator(ts.Desc)
 	defer it.Close()
@@ -241,7 +240,7 @@ BUCKETS:
 // bucket if we haven't hit the offset. We stop getting results when we got
 // enough for our pagination params. When all the UID lists are done, we stop
 // iterating over the index.
-func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error) {
+func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResult, error) {
 	if ts.Count < 0 {
 		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
 			"Try flipping order and return first few elements instead.", ts.Attr, ts.Count)
@@ -254,7 +253,7 @@ func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error)
 
 	type result struct {
 		err error
-		res *taskp.SortResult
+		res *protos.SortResult
 	}
 	cctx, cancel := context.WithCancel(ctx)
 	resCh := make(chan result, 2)
@@ -288,12 +287,12 @@ func processSort(ctx context.Context, ts *taskp.Sort) (*taskp.SortResult, error)
 
 type intersectedList struct {
 	offset int
-	ulist  *taskp.List
+	ulist  *protos.List
 }
 
 // intersectBucket intersects every UID list in the UID matrix with the
 // indexed bucket.
-func intersectBucket(ts *taskp.Sort, attr, token string, out []intersectedList) error {
+func intersectBucket(ts *protos.SortMessage, attr, token string, out []intersectedList) error {
 	count := int(ts.Count)
 	sType, err := schema.State().TypeOf(attr)
 	if err != nil || !sType.IsScalar() {
@@ -367,13 +366,13 @@ func intersectBucket(ts *taskp.Sort, attr, token string, out []intersectedList) 
 	return errDone
 }
 
-func paginate(offset, count int, dest *taskp.List) {
+func paginate(offset, count int, dest *protos.List) {
 	start, end := x.PageRange(count, offset, len(dest.Uids))
 	dest.Uids = dest.Uids[start:end]
 }
 
 // sortByValue fetches values and sort UIDList.
-func sortByValue(attr string, langs []string, ul *taskp.List, typ types.TypeID, desc bool) error {
+func sortByValue(attr string, langs []string, ul *protos.List, typ types.TypeID, desc bool) error {
 	lenList := len(ul.Uids)
 	var uids []uint64
 	values := make([]types.Val, 0, lenList)
@@ -387,7 +386,7 @@ func sortByValue(attr string, langs []string, ul *taskp.List, typ types.TypeID, 
 		uids = append(uids, uid)
 		values = append(values, val)
 	}
-	err := types.Sort(values, &taskp.List{uids}, desc)
+	err := types.Sort(values, &protos.List{uids}, desc)
 	ul.Uids = uids
 	return err
 }

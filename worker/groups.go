@@ -30,8 +30,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/protos/workerp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -51,7 +50,7 @@ var (
 	maxPendingCount = flag.Uint64("sc", 1000, "Max number of pending entries in wal after which snapshot is taken")
 
 	healthCheck           uint32
-	emptyMembershipUpdate taskp.MembershipUpdate
+	emptyMembershipUpdate protos.MembershipUpdate
 )
 
 type server struct {
@@ -350,8 +349,8 @@ func (g *groupi) syncMemberships() {
 				continue
 			}
 
-			go func(rc *taskp.RaftContext, amleader bool) {
-				mm := &taskp.Membership{
+			go func(rc *protos.RaftContext, amleader bool) {
+				mm := &protos.Membership{
 					Leader:  amleader,
 					Id:      rc.Id,
 					GroupId: rc.Group,
@@ -359,7 +358,7 @@ func (g *groupi) syncMemberships() {
 				}
 				zero := g.Node(0)
 				x.AssertTruef(zero != nil, "Expected node 0")
-				if err := zero.ProposeAndWait(zero.ctx, &taskp.Proposal{Membership: mm}); err != nil {
+				if err := zero.ProposeAndWait(zero.ctx, &protos.Proposal{Membership: mm}); err != nil {
 					x.TraceError(g.ctx, err)
 				}
 			}(rc, n.AmLeader())
@@ -369,13 +368,13 @@ func (g *groupi) syncMemberships() {
 
 	// This server doesn't serve group zero.
 	// Generate membership update of all local nodes.
-	var mu taskp.MembershipUpdate
+	var mu protos.MembershipUpdate
 	{
 		g.RLock()
 		for _, n := range g.local {
 			rc := n.raftContext
 			mu.Members = append(mu.Members,
-				&taskp.Membership{
+				&protos.Membership{
 					Leader:  n.AmLeader(),
 					Id:      rc.Id,
 					GroupId: rc.Group,
@@ -404,7 +403,7 @@ UPDATEMEMBERSHIP:
 	x.Check(err)
 	defer pl.Put(conn)
 
-	c := workerp.NewWorkerClient(conn)
+	c := protos.NewWorkerClient(conn)
 	update, err := c.UpdateMembership(g.ctx, &mu)
 	if err != nil {
 		x.TraceError(g.ctx, err)
@@ -446,7 +445,7 @@ func (g *groupi) periodicSyncMemberships() {
 
 // raftIdx is the RAFT index corresponding to the application of this
 // membership update in group zero.
-func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
+func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 	update := server{
 		NodeId:  mm.Id,
 		Addr:    mm.Addr,
@@ -512,12 +511,12 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *taskp.Membership) {
 
 // MembershipUpdateAfter generates the Flatbuffer response containing all the
 // membership updates after the provided raft index.
-func (g *groupi) MembershipUpdateAfter(ridx uint64) *taskp.MembershipUpdate {
+func (g *groupi) MembershipUpdateAfter(ridx uint64) *protos.MembershipUpdate {
 	g.RLock()
 	defer g.RUnlock()
 
 	maxIdx := ridx
-	out := new(taskp.MembershipUpdate)
+	out := new(protos.MembershipUpdate)
 
 	for gid, peers := range g.all {
 		for _, s := range peers.list {
@@ -528,7 +527,7 @@ func (g *groupi) MembershipUpdateAfter(ridx uint64) *taskp.MembershipUpdate {
 				maxIdx = s.RaftIdx
 			}
 			out.Members = append(out.Members,
-				&taskp.Membership{
+				&protos.Membership{
 					Leader:  s.Leader,
 					Id:      s.NodeId,
 					GroupId: gid,
@@ -544,7 +543,7 @@ func (g *groupi) MembershipUpdateAfter(ridx uint64) *taskp.MembershipUpdate {
 // UpdateMembership is the RPC call for updating membership for servers
 // which don't serve group zero.
 func (w *grpcWorker) UpdateMembership(ctx context.Context,
-	update *taskp.MembershipUpdate) (*taskp.MembershipUpdate, error) {
+	update *protos.MembershipUpdate) (*protos.MembershipUpdate, error) {
 	if ctx.Err() != nil {
 		return &emptyMembershipUpdate, ctx.Err()
 	}
@@ -552,7 +551,7 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 		addr := groups().AnyServer(0)
 		// fmt.Printf("I don't serve group zero. But, here's who does: %v\n", addr)
 
-		return &taskp.MembershipUpdate{
+		return &protos.MembershipUpdate{
 			Redirect:     true,
 			RedirectAddr: addr,
 		}, nil
@@ -565,16 +564,16 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 			continue
 		}
 
-		mmNew := &taskp.Membership{
+		mmNew := &protos.Membership{
 			Leader:  mm.Leader,
 			Id:      mm.Id,
 			GroupId: mm.GroupId,
 			Addr:    mm.Addr,
 		}
 
-		go func(mmNew *taskp.Membership) {
+		go func(mmNew *protos.Membership) {
 			zero := groups().Node(0)
-			che <- zero.ProposeAndWait(zero.ctx, &taskp.Proposal{Membership: mmNew})
+			che <- zero.ProposeAndWait(zero.ctx, &protos.Proposal{Membership: mmNew})
 		}(mmNew)
 	}
 

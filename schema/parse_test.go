@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
@@ -34,10 +34,10 @@ import (
 
 type nameType struct {
 	name string
-	typ  *typesp.Schema
+	typ  *protos.SchemaUpdate
 }
 
-func checkSchema(t *testing.T, h map[string]*typesp.Schema, expected []nameType) {
+func checkSchema(t *testing.T, h map[string]*protos.SchemaUpdate, expected []nameType) {
 	require.Len(t, h, len(expected))
 	for _, nt := range expected {
 		typ, found := h[nt.name]
@@ -57,10 +57,10 @@ name: string .
 func TestSchema(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaVal), 1))
 	checkSchema(t, State().get(1).predicate, []nameType{
-		{"name", &typesp.Schema{ValueType: uint32(types.StringID)}},
-		{"address", &typesp.Schema{ValueType: uint32(types.StringID)}},
-		{"http://scalar.com/helloworld/", &typesp.Schema{ValueType: uint32(types.StringID)}},
-		{"age", &typesp.Schema{ValueType: uint32(types.IntID)}},
+		{"name", &protos.SchemaUpdate{ValueType: uint32(types.StringID)}},
+		{"address", &protos.SchemaUpdate{ValueType: uint32(types.StringID)}},
+		{"http://scalar.com/helloworld/", &protos.SchemaUpdate{ValueType: uint32(types.StringID)}},
+		{"age", &protos.SchemaUpdate{ValueType: uint32(types.IntID)}},
 	})
 
 	typ, err := State().TypeOf("age")
@@ -161,25 +161,25 @@ id: id @index(exact, term) .
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal5), 1))
 	checkSchema(t, State().get(1).predicate, []nameType{
-		{"name", &typesp.Schema{
+		{"name", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"exact"},
-			Directive: typesp.Schema_INDEX,
+			Directive: protos.SchemaUpdate_INDEX,
 		}},
-		{"address", &typesp.Schema{
+		{"address", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"term"},
-			Directive: typesp.Schema_INDEX,
+			Directive: protos.SchemaUpdate_INDEX,
 		}},
-		{"age", &typesp.Schema{
+		{"age", &protos.SchemaUpdate{
 			ValueType: uint32(types.IntID),
 			Tokenizer: []string{"int"},
-			Directive: typesp.Schema_INDEX,
+			Directive: protos.SchemaUpdate_INDEX,
 		}},
-		{"id", &typesp.Schema{
+		{"id", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"exact", "term"},
-			Directive: typesp.Schema_INDEX,
+			Directive: protos.SchemaUpdate_INDEX,
 		}},
 	})
 	require.True(t, State().IsIndexed("name"))

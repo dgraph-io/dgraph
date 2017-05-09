@@ -26,7 +26,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 )
@@ -449,7 +449,7 @@ type Result struct {
 	Query     []*GraphQuery
 	QueryVars []*Vars
 	Mutation  *Mutation
-	Schema    *graphp.Schema
+	Schema    *protos.SchemaRequest
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -850,7 +850,7 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 }
 
 // parses till rightround is found
-func parseSchemaPredicates(it *lex.ItemIterator, s *graphp.Schema) error {
+func parseSchemaPredicates(it *lex.ItemIterator, s *protos.SchemaRequest) error {
 	// pred should be followed by colon
 	it.Next()
 	item := it.Item()
@@ -886,7 +886,7 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *graphp.Schema) error {
 }
 
 // parses till rightcurl is found
-func parseSchemaFields(it *lex.ItemIterator, s *graphp.Schema) error {
+func parseSchemaFields(it *lex.ItemIterator, s *protos.SchemaRequest) error {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
@@ -901,8 +901,8 @@ func parseSchemaFields(it *lex.ItemIterator, s *graphp.Schema) error {
 	return x.Errorf("Invalid schema block.")
 }
 
-func getSchema(it *lex.ItemIterator) (*graphp.Schema, error) {
-	var s graphp.Schema
+func getSchema(it *lex.ItemIterator) (*protos.SchemaRequest, error) {
+	var s protos.SchemaRequest
 	leftRoundSeen := false
 	for it.Next() {
 		item := it.Item()

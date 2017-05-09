@@ -51,8 +51,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/graphp"
-	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/rdf"
@@ -95,7 +94,7 @@ var (
 var mutationNotAllowedErr = x.Errorf("Mutations are forbidden on this server.")
 
 type mutationResult struct {
-	edges   []*taskp.DirectedEdge
+	edges   []*protos.DirectedEdge
 	newUids map[string]uint64
 }
 
@@ -126,8 +125,8 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func convertToNQuad(ctx context.Context, mutation string) ([]*graphp.NQuad, error) {
-	var nquads []*graphp.NQuad
+func convertToNQuad(ctx context.Context, mutation string) ([]*protos.NQuad, error) {
+	var nquads []*protos.NQuad
 	r := strings.NewReader(mutation)
 	reader := bufio.NewReader(r)
 	x.Trace(ctx, "Converting to NQuad")
@@ -158,8 +157,8 @@ func convertToNQuad(ctx context.Context, mutation string) ([]*graphp.NQuad, erro
 	return nquads, nil
 }
 
-func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult, error) {
-	var edges []*taskp.DirectedEdge
+func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult, error) {
+	var edges []*protos.DirectedEdge
 	var mr mutationResult
 
 	newUids := make(map[string]uint64)
@@ -197,7 +196,7 @@ func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult
 		}
 	}
 
-	// Wrapper for a pointer to graphp.Nquad
+	// Wrapper for a pointer to protos.Nquad
 	var wnq rdf.NQuad
 	for _, nq := range nquads {
 		// Get edges from nquad using newUids.
@@ -225,26 +224,26 @@ func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult
 	return mr, nil
 }
 
-func AddInternalEdge(ctx context.Context, m *taskp.Mutations) error {
-	newEdges := make([]*taskp.DirectedEdge, 0, 2*len(m.Edges))
+func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
+	newEdges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
 	for _, mu := range m.Edges {
-		x.AssertTrue(mu.Op == taskp.DirectedEdge_DEL || mu.Op == taskp.DirectedEdge_SET)
-		if mu.Op == taskp.DirectedEdge_SET {
-			edge := &taskp.DirectedEdge{
-				Op:     taskp.DirectedEdge_SET,
+		x.AssertTrue(mu.Op == protos.DirectedEdge_DEL || mu.Op == protos.DirectedEdge_SET)
+		if mu.Op == protos.DirectedEdge_SET {
+			edge := &protos.DirectedEdge{
+				Op:     protos.DirectedEdge_SET,
 				Entity: mu.GetEntity(),
 				Attr:   "_predicate_",
 				Value:  []byte(mu.GetAttr()),
 			}
 			newEdges = append(newEdges, mu)
 			newEdges = append(newEdges, edge)
-		} else if mu.Op == taskp.DirectedEdge_DEL {
+		} else if mu.Op == protos.DirectedEdge_DEL {
 			if mu.Attr != x.DeleteAllPredicates {
 				newEdges = append(newEdges, mu)
 				if string(mu.GetValue()) == x.DeleteAllObjects {
 					// Delete the given predicate from _predicate_.
-					edge := &taskp.DirectedEdge{
-						Op:     taskp.DirectedEdge_DEL,
+					edge := &protos.DirectedEdge{
+						Op:     protos.DirectedEdge_DEL,
 						Entity: mu.GetEntity(),
 						Attr:   "_predicate_",
 						Value:  []byte(mu.GetAttr()),
@@ -253,22 +252,22 @@ func AddInternalEdge(ctx context.Context, m *taskp.Mutations) error {
 				}
 			} else {
 				// Fetch all the predicates and replace them
-				preds, err := query.GetNodePredicates(ctx, &taskp.List{[]uint64{mu.GetEntity()}})
+				preds, err := query.GetNodePredicates(ctx, &protos.List{[]uint64{mu.GetEntity()}})
 				if err != nil {
 					return err
 				}
 				val := mu.GetValue()
 				for _, pred := range preds {
-					edge := &taskp.DirectedEdge{
-						Op:     taskp.DirectedEdge_DEL,
+					edge := &protos.DirectedEdge{
+						Op:     protos.DirectedEdge_DEL,
 						Entity: mu.GetEntity(),
 						Attr:   string(pred.Val),
 						Value:  val,
 					}
 					newEdges = append(newEdges, edge)
 				}
-				edge := &taskp.DirectedEdge{
-					Op:     taskp.DirectedEdge_DEL,
+				edge := &protos.DirectedEdge{
+					Op:     protos.DirectedEdge_DEL,
 					Entity: mu.GetEntity(),
 					Attr:   "_predicate_",
 					Value:  val,
@@ -283,7 +282,7 @@ func AddInternalEdge(ctx context.Context, m *taskp.Mutations) error {
 	return nil
 }
 
-func applyMutations(ctx context.Context, m *taskp.Mutations) error {
+func applyMutations(ctx context.Context, m *protos.Mutations) error {
 	err := AddInternalEdge(ctx, m)
 	if err != nil {
 		return x.Wrapf(err, "While adding internal edges")
@@ -296,7 +295,7 @@ func applyMutations(ctx context.Context, m *taskp.Mutations) error {
 	return nil
 }
 
-func ismutationAllowed(ctx context.Context, mutation *graphp.Mutation) bool {
+func ismutationAllowed(ctx context.Context, mutation *protos.Mutation) bool {
 	if *nomutations {
 		shareAllowed, ok := ctx.Value("_share_").(bool)
 		if !ok || !shareAllowed {
@@ -307,9 +306,9 @@ func ismutationAllowed(ctx context.Context, mutation *graphp.Mutation) bool {
 	return true
 }
 
-func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string]uint64, error) {
+func convertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string]uint64, error) {
 	var allocIds map[string]uint64
-	var m taskp.Mutations
+	var m protos.Mutations
 	var err error
 	var mr mutationResult
 
@@ -322,7 +321,7 @@ func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string
 	}
 	m.Edges, allocIds = mr.edges, mr.newUids
 	for i := range m.Edges {
-		m.Edges[i].Op = taskp.DirectedEdge_SET
+		m.Edges[i].Op = protos.DirectedEdge_SET
 	}
 
 	if mr, err = convertToEdges(ctx, mutation.Del); err != nil {
@@ -330,7 +329,7 @@ func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string
 	}
 	for i := range mr.edges {
 		edge := mr.edges[i]
-		edge.Op = taskp.DirectedEdge_DEL
+		edge.Op = protos.DirectedEdge_DEL
 		m.Edges = append(m.Edges, edge)
 	}
 
@@ -341,15 +340,15 @@ func convertAndApply(ctx context.Context, mutation *graphp.Mutation) (map[string
 	return allocIds, nil
 }
 
-func enrichSchema(updates []*graphp.SchemaUpdate) error {
+func enrichSchema(updates []*protos.SchemaUpdate) error {
 	for _, schema := range updates {
 		typ := types.TypeID(schema.ValueType)
 		if typ == types.UidID {
 			continue
 		}
-		if len(schema.Tokenizer) == 0 && schema.Directive == graphp.SchemaUpdate_INDEX {
+		if len(schema.Tokenizer) == 0 && schema.Directive == protos.SchemaUpdate_INDEX {
 			schema.Tokenizer = []string{tok.Default(typ).Name()}
-		} else if len(schema.Tokenizer) > 0 && schema.Directive != graphp.SchemaUpdate_INDEX {
+		} else if len(schema.Tokenizer) > 0 && schema.Directive != protos.SchemaUpdate_INDEX {
 			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
 		}
 		// check for valid tokeniser types and duplicates
@@ -383,7 +382,7 @@ func enrichSchema(updates []*graphp.SchemaUpdate) error {
 
 // This function is used to run mutations for the requests from different
 // language clients.
-func runMutations(ctx context.Context, mu *graphp.Mutation) (map[string]uint64, error) {
+func runMutations(ctx context.Context, mu *protos.Mutation) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var err error
 
@@ -391,7 +390,7 @@ func runMutations(ctx context.Context, mu *graphp.Mutation) (map[string]uint64, 
 		return nil, err
 	}
 
-	mutation := &graphp.Mutation{Set: mu.Set, Del: mu.Del, Schema: mu.Schema}
+	mutation := &protos.Mutation{Set: mu.Set, Del: mu.Del, Schema: mu.Schema}
 	if allocIds, err = convertAndApply(ctx, mutation); err != nil {
 		return nil, err
 	}
@@ -401,9 +400,9 @@ func runMutations(ctx context.Context, mu *graphp.Mutation) (map[string]uint64, 
 // This function is used to run mutations for the requests received from the
 // http client.
 func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
-	var set []*graphp.NQuad
-	var del []*graphp.NQuad
-	var s []*graphp.SchemaUpdate
+	var set []*protos.NQuad
+	var del []*protos.NQuad
+	var s []*protos.SchemaUpdate
 	var allocIds map[string]uint64
 	var err error
 
@@ -425,7 +424,7 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 		}
 	}
 
-	mutation := &graphp.Mutation{Set: set, Del: del, Schema: s}
+	mutation := &protos.Mutation{Set: set, Del: del, Schema: s}
 	if allocIds, err = convertAndApply(ctx, mutation); err != nil {
 		return nil, err
 	}
@@ -550,7 +549,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var schemaNode []*graphp.SchemaNode
+	var schemaNode []*protos.SchemaNode
 	if res.Schema != nil {
 		if schemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
@@ -730,24 +729,24 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	x.SetStatus(w, x.Success, "Backup completed.")
 }
 
-func hasGraphOps(mu *graphp.Mutation) bool {
+func hasGraphOps(mu *protos.Mutation) bool {
 	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
 }
 
-// server is used to implement graphp.DgraphServer
+// server is used to implement protos.DgraphServer
 type grpcServer struct{}
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *grpcServer) Run(ctx context.Context,
-	req *graphp.Request) (resp *graphp.Response, err error) {
+	req *protos.Request) (resp *protos.Response, err error) {
 	// we need membership information
 	if !worker.HealthCheck() {
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return resp, x.Errorf("Uninitiated server. Please retry later")
 	}
 	var allocIds map[string]uint64
-	var schemaNodes []*graphp.SchemaNode
+	var schemaNodes []*protos.SchemaNode
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		defer tr.Finish()
@@ -757,7 +756,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	// Sanitize the context of the keys used for internal purposes only
 	ctx = context.WithValue(ctx, "_share_", nil)
 
-	resp = new(graphp.Response)
+	resp = new(protos.Response)
 	if len(req.Query) == 0 && req.Mutation == nil {
 		x.TraceError(ctx, x.Errorf("Empty query and mutation."))
 		return resp, fmt.Errorf("Empty query and mutation.")
@@ -823,14 +822,14 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.N = nodes
 
-	gl := new(graphp.Latency)
+	gl := new(protos.Latency)
 	gl.Parsing, gl.Processing, gl.Pb = l.Parsing.String(), l.Processing.String(),
 		l.ProtocolBuffer.String()
 	resp.L = gl
 	return resp, err
 }
 
-func (s *grpcServer) CheckVersion(ctx context.Context, c *graphp.Check) (v *graphp.Version,
+func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version,
 	err error) {
 	// we need membership information
 	if !worker.HealthCheck() {
@@ -838,7 +837,7 @@ func (s *grpcServer) CheckVersion(ctx context.Context, c *graphp.Check) (v *grap
 		return v, x.Errorf("Uninitiated server. Please retry later")
 	}
 
-	v = new(graphp.Version)
+	v = new(protos.Version)
 	v.Tag = x.Version()
 	return v, nil
 }
@@ -893,7 +892,7 @@ func setupListener(addr string, port int) (net.Listener, error) {
 func serveGRPC(l net.Listener) {
 	defer func() { finishCh <- struct{}{} }()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
-	graphp.RegisterDgraphServer(s, &grpcServer{})
+	protos.RegisterDgraphServer(s, &grpcServer{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
 	s.GracefulStop()

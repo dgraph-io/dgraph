@@ -31,8 +31,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/protos/typesp"
-	"github.com/dgraph-io/dgraph/protos/workerp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -44,12 +43,12 @@ const numBackupRoutines = 10
 
 type kv struct {
 	prefix string
-	list   *typesp.PostingList
+	list   *protos.PostingList
 }
 
 type skv struct {
 	attr   string
-	schema *typesp.Schema
+	schema *protos.SchemaUpdate
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {
@@ -74,7 +73,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				buf.WriteString("^^<pwd:")
 				buf.WriteString(vID.Name())
 				buf.WriteByte('>')
-			} else if p.PostingType == typesp.Posting_VALUE_LANG {
+			} else if p.PostingType == protos.Posting_VALUE_LANG {
 				buf.WriteByte('@')
 				buf.WriteString(string(p.Metadata))
 			} else if vID != types.BinaryID &&
@@ -131,9 +130,9 @@ func toSchema(buf *bytes.Buffer, s *skv) {
 	}
 	buf.WriteByte(':')
 	buf.WriteString(types.TypeID(s.schema.ValueType).Name())
-	if s.schema.Directive == typesp.Schema_REVERSE {
+	if s.schema.Directive == protos.SchemaUpdate_REVERSE {
 		buf.WriteString(" @reverse")
-	} else if s.schema.Directive == typesp.Schema_INDEX && len(s.schema.Tokenizer) > 0 {
+	} else if s.schema.Directive == protos.SchemaUpdate_INDEX && len(s.schema.Tokenizer) > 0 {
 		buf.WriteString(" @index(")
 		buf.WriteString(strings.Join(s.schema.Tokenizer, ","))
 		buf.WriteByte(')')
@@ -217,7 +216,7 @@ func backup(gid uint32, bdir string) error {
 		}()
 	}
 
-	// Use a goroutine to convert typesp.Schema to string
+	// Use a goroutine to convert protos.Schema to string
 	chs := make(chan *skv, 1000)
 	wg.Add(1)
 	go func() {
@@ -267,7 +266,7 @@ func backup(gid uint32, bdir string) error {
 		}
 		if pk.IsSchema() {
 			if group.BelongsTo(pk.Attr) == gid {
-				s := &typesp.Schema{}
+				s := &protos.SchemaUpdate{}
 				x.Check(s.Unmarshal(it.Value()))
 				chs <- &skv{
 					attr:   pk.Attr,
@@ -291,7 +290,7 @@ func backup(gid uint32, bdir string) error {
 		prefix.WriteString("> <")
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
-		pl := &typesp.PostingList{}
+		pl := &protos.PostingList{}
 		x.Check(pl.Unmarshal(it.Value()))
 		chkv <- kv{
 			prefix: prefix.String(),
@@ -313,21 +312,21 @@ func backup(gid uint32, bdir string) error {
 	return err
 }
 
-func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *workerp.BackupPayload {
+func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *protos.BackupPayload {
 	n := groups().Node(gid)
 	if n.AmLeader() {
 		x.Trace(ctx, "Leader of group: %d. Running backup.", gid)
 		if err := backup(gid, *backupPath); err != nil {
 			x.TraceError(ctx, err)
-			return &workerp.BackupPayload{
+			return &protos.BackupPayload{
 				ReqId:  reqId,
-				Status: workerp.BackupPayload_FAILED,
+				Status: protos.BackupPayload_FAILED,
 			}
 		}
 		x.Trace(ctx, "Backup done for group: %d.", gid)
-		return &workerp.BackupPayload{
+		return &protos.BackupPayload{
 			ReqId:   reqId,
-			Status:  workerp.BackupPayload_SUCCESS,
+			Status:  protos.BackupPayload_SUCCESS,
 			GroupId: gid,
 		}
 	}
@@ -360,24 +359,24 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *worker
 	// But probably not worthy of crashing the server. We can just skip the backup.
 	if conn == nil {
 		x.Trace(ctx, fmt.Sprintf("Unable to find a server to backup group: %d", gid))
-		return &workerp.BackupPayload{
+		return &protos.BackupPayload{
 			ReqId:   reqId,
-			Status:  workerp.BackupPayload_FAILED,
+			Status:  protos.BackupPayload_FAILED,
 			GroupId: gid,
 		}
 	}
 
-	c := workerp.NewWorkerClient(conn)
-	nr := &workerp.BackupPayload{
+	c := protos.NewWorkerClient(conn)
+	nr := &protos.BackupPayload{
 		ReqId:   reqId,
 		GroupId: gid,
 	}
 	nrep, err := c.Backup(ctx, nr)
 	if err != nil {
 		x.TraceError(ctx, err)
-		return &workerp.BackupPayload{
+		return &protos.BackupPayload{
 			ReqId:   reqId,
-			Status:  workerp.BackupPayload_FAILED,
+			Status:  protos.BackupPayload_FAILED,
 			GroupId: gid,
 		}
 	}
@@ -387,19 +386,19 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *worker
 // Backup request is used to trigger backups for the request list of groups.
 // If a server receives request to backup a group that it doesn't handle, it would
 // automatically relay that request to the server that it thinks should handle the request.
-func (w *grpcWorker) Backup(ctx context.Context, req *workerp.BackupPayload) (*workerp.BackupPayload, error) {
-	reply := &workerp.BackupPayload{ReqId: req.ReqId}
-	reply.Status = workerp.BackupPayload_FAILED // Set by default.
+func (w *grpcWorker) Backup(ctx context.Context, req *protos.BackupPayload) (*protos.BackupPayload, error) {
+	reply := &protos.BackupPayload{ReqId: req.ReqId}
+	reply.Status = protos.BackupPayload_FAILED // Set by default.
 
 	if ctx.Err() != nil {
 		return reply, ctx.Err()
 	}
 	if !w.addIfNotPresent(req.ReqId) {
-		reply.Status = workerp.BackupPayload_DUPLICATE
+		reply.Status = protos.BackupPayload_DUPLICATE
 		return reply, nil
 	}
 
-	chb := make(chan *workerp.BackupPayload, 1)
+	chb := make(chan *protos.BackupPayload, 1)
 	go func() {
 		chb <- handleBackupForGroup(ctx, req.ReqId, req.GroupId)
 	}()
@@ -428,7 +427,7 @@ func BackupOverNetwork(ctx context.Context) error {
 		}
 	}
 
-	ch := make(chan *workerp.BackupPayload, len(gids))
+	ch := make(chan *protos.BackupPayload, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
 			reqId := uint64(rand.Int63())
@@ -438,7 +437,7 @@ func BackupOverNetwork(ctx context.Context) error {
 
 	for i := 0; i < len(gids); i++ {
 		bp := <-ch
-		if bp.Status != workerp.BackupPayload_SUCCESS {
+		if bp.Status != protos.BackupPayload_SUCCESS {
 			x.Trace(ctx, "Backup status: %v for group id: %d", bp.Status, bp.GroupId)
 			return fmt.Errorf("Backup status: %v for group id: %d", bp.Status, bp.GroupId)
 		}

@@ -61,49 +61,51 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	}
 }
 
-// getInequalityTokens gets tokens ge / le compared to given token using the first sortable
-// index that is found for the predicate.
-func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string, error) {
+func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(attr) {
-		return nil, "", x.Errorf("Attribute %s is not indexed.", attr)
+		return nil, x.Errorf("Attribute %s is not indexed.", attr)
 	}
 
 	tokenizers := schema.State().Tokenizer(attr)
-	var comparableTok tok.Tokenizer
-	var sortableTok tok.Tokenizer
-	for _, t := range tokenizers {
-		if comparableTok == nil && !t.IsLossy() {
-			comparableTok = t
-		}
-		if sortableTok == nil && t.IsSortable() {
-			sortableTok = t
-		}
 
-		if comparableTok != nil && sortableTok != nil {
+	var tokenizer tok.Tokenizer
+	for _, t := range tokenizers {
+		if !t.IsLossy() {
+			tokenizer = t
 			break
 		}
 	}
 
-	if f == "eq" {
-		// eq operations requires either a comparable or a sortable tokenizer.
-		if comparableTok == nil && sortableTok == nil {
-			return nil, "", x.Errorf("Attribute: %s does not have proper index for comparison",
-				attr)
+	// If function is eq and we found a tokenizer thats !Lossy(), lets return
+	// it to avoid the second lookup.
+	if f == "eq" && tokenizer != nil {
+		return tokenizer, nil
+	}
+
+	// Lets try to find a sortable tokenizer.
+	for _, t := range tokenizers {
+		if t.IsSortable() {
+			return t, nil
 		}
-		// rest of the cases, ge, gt , le , lt require a sortable tokenizer.
-	} else if sortableTok == nil {
-		return nil, "", x.Errorf("Attribute:%s does not have proper index for sorting",
+	}
+
+	// rest of the cases, ge, gt , le , lt require a sortable tokenizer.
+	if f != "eq" {
+		return nil, x.Errorf("Attribute:%s does not have proper index for comparison",
 			attr)
 	}
 
-	var tokenizer tok.Tokenizer
-	// sortableTok can be used for all operations, eq, ge, gt, lt, le so if an attr has one lets
-	// use that.
-	if sortableTok != nil {
-		tokenizer = sortableTok
-	} else {
-		tokenizer = comparableTok
+	// We didn't find a sortable or !isLossy() tokenizer, lets return the first one.
+	return tokenizers[0], nil
+}
+
+// getInequalityTokens gets tokens ge / le compared to given token using the first sortable
+// index that is found for the predicate.
+func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string, error) {
+	tokenizer, err := pickTokenizer(attr, f)
+	if err != nil {
+		return nil, "", err
 	}
 
 	// Get the token for the value passed in function.

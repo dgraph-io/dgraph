@@ -26,8 +26,7 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/protos/taskp"
-	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -85,8 +84,8 @@ func IndexTokens(attr, lang string, src types.Val) ([]string, error) {
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 // t represents the original uid -> value edge.
-func addIndexMutations(ctx context.Context, t *taskp.DirectedEdge, p types.Val,
-	op taskp.DirectedEdge_Op) error {
+func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
+	op protos.DirectedEdge_Op) error {
 	attr := t.Attr
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
@@ -97,7 +96,7 @@ func addIndexMutations(ctx context.Context, t *taskp.DirectedEdge, p types.Val,
 	}
 
 	// Create a value token -> uid edge.
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		ValueId: uid,
 		Attr:    attr,
 		Label:   "idx",
@@ -112,7 +111,7 @@ func addIndexMutations(ctx context.Context, t *taskp.DirectedEdge, p types.Val,
 	return nil
 }
 
-func addIndexMutation(ctx context.Context, edge *taskp.DirectedEdge,
+func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
 
@@ -141,7 +140,7 @@ func addIndexMutation(ctx context.Context, edge *taskp.DirectedEdge,
 	return nil
 }
 
-func addReverseMutation(ctx context.Context, t *taskp.DirectedEdge) error {
+func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
 	groupId := group.BelongsTo(t.Attr)
 
@@ -150,7 +149,7 @@ func addReverseMutation(ctx context.Context, t *taskp.DirectedEdge) error {
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d %d",
 		t.Attr, t.Entity, t.ValueId)
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Entity:  t.ValueId,
 		ValueId: t.Entity,
 		Attr:    t.Attr,
@@ -169,14 +168,14 @@ func addReverseMutation(ctx context.Context, t *taskp.DirectedEdge) error {
 	reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)
 	return nil
 }
-func (l *List) handleDeleteAll(ctx context.Context, t *taskp.DirectedEdge) error {
+func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) error {
 	isReversed := schema.State().IsReversed(t.Attr)
 	isIndexed := schema.State().IsIndexed(t.Attr)
-	delEdge := &taskp.DirectedEdge{
+	delEdge := &protos.DirectedEdge{
 		Attr: t.Attr,
 		Op:   t.Op,
 	}
-	l.Iterate(0, func(p *typesp.Posting) bool {
+	l.Iterate(0, func(p *protos.Posting) bool {
 		if isReversed {
 			// Delete reverse edge for each posting.
 			delEdge.ValueId = p.Uid
@@ -188,7 +187,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *taskp.DirectedEdge) error
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			}
-			addIndexMutations(ctx, t, p, taskp.DirectedEdge_DEL)
+			addIndexMutations(ctx, t, p, protos.DirectedEdge_DEL)
 		}
 		return true
 	})
@@ -199,7 +198,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *taskp.DirectedEdge) error
 
 // AddMutationWithIndex is AddMutation with support for indexing. It also
 // supports reverse edges.
-func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) error {
+func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge) error {
 	x.AssertTruef(len(t.Attr) > 0,
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
 
@@ -209,7 +208,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 	l.index.Lock()
 	defer l.index.Unlock()
 
-	if t.Op == taskp.DirectedEdge_DEL && string(t.Value) == x.DeleteAllObjects {
+	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.DeleteAllObjects {
 		return l.handleDeleteAll(ctx, t)
 	}
 
@@ -236,14 +235,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *taskp.DirectedEdge) 
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {
-			addIndexMutations(ctx, t, val, taskp.DirectedEdge_DEL)
+			addIndexMutations(ctx, t, val, protos.DirectedEdge_DEL)
 		}
-		if t.Op == taskp.DirectedEdge_SET {
+		if t.Op == protos.DirectedEdge_SET {
 			p := types.Val{
 				Tid:   types.TypeID(t.ValueType),
 				Value: t.Value,
 			}
-			addIndexMutations(ctx, t, p, taskp.DirectedEdge_SET)
+			addIndexMutations(ctx, t, p, protos.DirectedEdge_SET)
 		}
 	}
 	// Add reverse mutation irrespective of hashMutated, server crash can happen after
@@ -301,14 +300,14 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 
 	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add reverse entries for values in posting list
-	addReversePostings := func(uid uint64, pl *typesp.PostingList) error {
+	addReversePostings := func(uid uint64, pl *protos.PostingList) error {
 		postingsLen := len(pl.Postings)
-		edge := taskp.DirectedEdge{Attr: attr, Entity: uid}
+		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
 		for idx := 0; idx < postingsLen; idx++ {
 			p := pl.Postings[idx]
 			// Add reverse entries based on p.
 			edge.ValueId = p.Uid
-			edge.Op = taskp.DirectedEdge_SET
+			edge.Op = protos.DirectedEdge_SET
 			edge.Facets = p.Facets
 			edge.Label = p.Label
 			err := addReverseMutation(ctx, &edge)
@@ -326,7 +325,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 
 	type item struct {
 		uid  uint64
-		list *typesp.PostingList
+		list *protos.PostingList
 	}
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
@@ -345,7 +344,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		pki := x.Parse(it.Key())
-		var pl typesp.PostingList
+		var pl protos.PostingList
 		x.Check(pl.Unmarshal(it.Value()))
 
 		// Posting list contains only values or only UIDs.
@@ -413,9 +412,9 @@ func RebuildIndex(ctx context.Context, attr string) error {
 
 	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add index entries for values in posting list
-	addPostingsToIndex := func(uid uint64, pl *typesp.PostingList) error {
+	addPostingsToIndex := func(uid uint64, pl *protos.PostingList) error {
 		postingsLen := len(pl.Postings)
-		edge := taskp.DirectedEdge{Attr: attr, Entity: uid}
+		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
 		for idx := 0; idx < postingsLen; idx++ {
 			p := pl.Postings[idx]
 			// Add index entries based on p.
@@ -423,11 +422,11 @@ func RebuildIndex(ctx context.Context, attr string) error {
 				Value: p.Value,
 				Tid:   types.TypeID(p.ValType),
 			}
-			err := addIndexMutations(ctx, &edge, val, taskp.DirectedEdge_SET)
+			err := addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)
 			// We retry once in case we do GetOrCreate and stop the world happens
 			// before we do addmutation
 			if err == ErrRetry {
-				err = addIndexMutations(ctx, &edge, val, taskp.DirectedEdge_SET)
+				err = addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)
 			}
 			if err != nil {
 				return err
@@ -438,7 +437,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 
 	type item struct {
 		uid  uint64
-		list *typesp.PostingList
+		list *protos.PostingList
 	}
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
@@ -457,7 +456,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		pki := x.Parse(it.Key())
-		var pl typesp.PostingList
+		var pl protos.PostingList
 		x.Check(pl.Unmarshal(it.Value()))
 
 		// Posting list contains only values or only UIDs.

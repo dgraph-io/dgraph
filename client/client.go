@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 
-	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -43,18 +43,18 @@ const (
 	DEL
 )
 
-// Req wraps the graphp.Request so that helper methods can be defined on it.
+// Req wraps the protos.Request so that helper methods can be defined on it.
 type Req struct {
-	gr graphp.Request
+	gr protos.Request
 }
 
 // Request returns the graph request object which is sent to the server to perform
 // a query/mutation.
-func (req *Req) Request() *graphp.Request {
+func (req *Req) Request() *protos.Request {
 	return &req.gr
 }
 
-func checkNQuad(nq graphp.NQuad) error {
+func checkNQuad(nq protos.NQuad) error {
 	if len(nq.Subject) == 0 {
 		return fmt.Errorf("Subject can't be empty")
 	}
@@ -83,9 +83,9 @@ func (req *Req) SetQueryWithVariables(q string, vars map[string]string) {
 	req.gr.Vars = vars
 }
 
-func (req *Req) addMutation(nq graphp.NQuad, op Op) {
+func (req *Req) addMutation(nq protos.NQuad, op Op) {
 	if req.gr.Mutation == nil {
-		req.gr.Mutation = new(graphp.Mutation)
+		req.gr.Mutation = new(protos.Mutation)
 	}
 
 	if op == SET {
@@ -97,7 +97,7 @@ func (req *Req) addMutation(nq graphp.NQuad, op Op) {
 
 // AddMutation adds (but does not send) a mutation to the Req object. Mutations
 // are sent when client.Run() is called.
-func (req *Req) AddMutation(nq graphp.NQuad, op Op) error {
+func (req *Req) AddMutation(nq protos.NQuad, op Op) error {
 	if err := checkNQuad(nq); err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func (req *Req) AddMutation(nq graphp.NQuad, op Op) error {
 	return nil
 }
 
-func AddFacet(key string, val string, nq *graphp.NQuad) error {
+func AddFacet(key string, val string, nq *protos.NQuad) error {
 	facet, err := facets.FacetFor(key, val)
 	if err != nil {
 		return err
@@ -114,13 +114,13 @@ func AddFacet(key string, val string, nq *graphp.NQuad) error {
 	return nil
 }
 
-func checkSchema(schema graphp.SchemaUpdate) error {
+func checkSchema(schema protos.SchemaUpdate) error {
 	typ := types.TypeID(schema.ValueType)
-	if typ == types.UidID && schema.Directive == graphp.SchemaUpdate_INDEX {
+	if typ == types.UidID && schema.Directive == protos.SchemaUpdate_INDEX {
 		// index on uid type
 		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
 			schema.Predicate)
-	} else if typ != types.UidID && schema.Directive == graphp.SchemaUpdate_REVERSE {
+	} else if typ != types.UidID && schema.Directive == protos.SchemaUpdate_REVERSE {
 		// reverse on non-uid type
 		return x.Errorf("Cannot reverse for non-uid type on predicate %s", schema.Predicate)
 	}
@@ -128,9 +128,9 @@ func checkSchema(schema graphp.SchemaUpdate) error {
 }
 
 // AddSchema sets the schema mutations
-func (req *Req) addSchema(s graphp.SchemaUpdate) error {
+func (req *Req) addSchema(s protos.SchemaUpdate) error {
 	if req.gr.Mutation == nil {
-		req.gr.Mutation = new(graphp.Mutation)
+		req.gr.Mutation = new(protos.Mutation)
 	}
 	req.gr.Mutation.Schema = append(req.gr.Mutation.Schema, &s)
 	return nil
@@ -151,7 +151,7 @@ func (req *Req) reset() {
 }
 
 type nquadOp struct {
-	nq graphp.NQuad
+	nq protos.NQuad
 	op Op
 }
 
@@ -164,8 +164,8 @@ type BatchMutation struct {
 	pending int
 
 	nquads chan nquadOp
-	schema chan graphp.SchemaUpdate
-	dc     graphp.DgraphClient
+	schema chan protos.SchemaUpdate
+	dc     protos.DgraphClient
 	wg     sync.WaitGroup
 
 	// Miscellaneous information to print counters.
@@ -241,13 +241,13 @@ LOOP:
 // NewBatchMutation is used to create a new batch.
 // size is the number of RDF's that are sent as part of one request to Dgraph.
 // pending is the number of concurrent requests to make to Dgraph server.
-func NewBatchMutation(ctx context.Context, client graphp.DgraphClient,
+func NewBatchMutation(ctx context.Context, client protos.DgraphClient,
 	size int, pending int) *BatchMutation {
 	bm := BatchMutation{
 		size:    size,
 		pending: pending,
 		nquads:  make(chan nquadOp, 2*size),
-		schema:  make(chan graphp.SchemaUpdate, 2*size),
+		schema:  make(chan protos.SchemaUpdate, 2*size),
 		start:   time.Now(),
 		dc:      client,
 	}
@@ -263,7 +263,7 @@ func NewBatchMutation(ctx context.Context, client graphp.DgraphClient,
 
 // AddMutation is used to add a NQuad to a batch. It can either have SET or
 // DEL as Op(operation).
-func (batch *BatchMutation) AddMutation(nq graphp.NQuad, op Op) error {
+func (batch *BatchMutation) AddMutation(nq protos.NQuad, op Op) error {
 	if err := checkNQuad(nq); err != nil {
 		return err
 	}
@@ -286,7 +286,7 @@ func (batch *BatchMutation) Flush() {
 }
 
 // AddSchema is used to add a schema mutation.
-func (batch *BatchMutation) AddSchema(s graphp.SchemaUpdate) error {
+func (batch *BatchMutation) AddSchema(s protos.SchemaUpdate) error {
 	if err := checkSchema(s); err != nil {
 		return err
 	}

@@ -29,7 +29,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/taskp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -38,16 +38,16 @@ import (
 
 var raftIndex uint64
 
-func addEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
-	edge.Op = taskp.DirectedEdge_SET
+func addEdge(t *testing.T, edge *protos.DirectedEdge, l *posting.List) {
+	edge.Op = protos.DirectedEdge_SET
 	raftIndex++
 	rv := x.RaftValue{Group: 1, Index: raftIndex}
 	ctx := context.WithValue(context.Background(), "raft", rv)
 	require.NoError(t, l.AddMutationWithIndex(ctx, edge))
 }
 
-func delEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
-	edge.Op = taskp.DirectedEdge_DEL
+func delEdge(t *testing.T, edge *protos.DirectedEdge, l *posting.List) {
+	edge.Op = protos.DirectedEdge_DEL
 	raftIndex++
 	rv := x.RaftValue{Group: 1, Index: raftIndex}
 	ctx := context.WithValue(context.Background(), "raft", rv)
@@ -61,7 +61,7 @@ func getOrCreate(key []byte) *posting.List {
 
 func populateGraph(t *testing.T) {
 	// Add uid edges : predicate neightbour.
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		ValueId: 23,
 		Label:   "author0",
 		Attr:    "neighbour",
@@ -99,7 +99,7 @@ func populateGraph(t *testing.T) {
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
 }
 
-func taskValues(t *testing.T, v []*taskp.Value) []string {
+func taskValues(t *testing.T, v []*protos.TaskValue) []string {
 	out := make([]string, len(v))
 	for i, tv := range v {
 		out[i] = string(tv.Val)
@@ -141,10 +141,10 @@ func TestProcessTask(t *testing.T) {
 }
 
 // newQuery creates a Query task and returns it.
-func newQuery(attr string, uids []uint64, srcFunc []string) *taskp.Query {
+func newQuery(attr string, uids []uint64, srcFunc []string) *protos.Query {
 	x.AssertTrue(uids == nil || srcFunc == nil)
-	return &taskp.Query{
-		UidList: &taskp.List{uids},
+	return &protos.Query{
+		UidList: &protos.List{uids},
 		SrcFunc: srcFunc,
 		Attr:    attr,
 	}
@@ -170,7 +170,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Value:  []byte("notphotonExtra"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -194,7 +194,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Try deleting.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value:  []byte("photon"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -260,7 +260,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := &taskp.DirectedEdge{
+	edge := &protos.DirectedEdge{
 		Value:  []byte("notphotonExtra"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -287,7 +287,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Try deleting.
-	edge = &taskp.DirectedEdge{
+	edge = &protos.DirectedEdge{
 		Value:  []byte("photon"),
 		Label:  "author0",
 		Attr:   "friend",
@@ -318,8 +318,13 @@ func TestProcessTaskIndex(t *testing.T) {
 }
 
 /*
+<<<<<<< HEAD
 func populateGraphForSort(t *testing.T, ps store.Store) {
 	edge := &taskp.DirectedEdge{
+=======
+func populateGraphForSort(t *testing.T, ps *store.Store) {
+	edge := &protos.DirectedEdge{
+>>>>>>> origin/master
 		Label: "author1",
 		Attr:  "dob",
 	}
@@ -349,14 +354,14 @@ func populateGraphForSort(t *testing.T, ps store.Store) {
 	time.Sleep(200 * time.Millisecond) // Let indexing finish.
 }
 
-// newSort creates a taskp.Sort for sorting.
-func newSort(uids [][]uint64, offset, count int) *taskp.Sort {
+// newSort creates a protos.Sort for sorting.
+func newSort(uids [][]uint64, offset, count int) *protos.Sort {
 	x.AssertTrue(uids != nil)
-	uidMatrix := make([]*taskp.List, len(uids))
+	uidMatrix := make([]*protos.List, len(uids))
 	for i, l := range uids {
-		uidMatrix[i] = &taskp.List{Uids: l}
+		uidMatrix[i] = &protos.List{Uids: l}
 	}
-	return &taskp.Sort{
+	return &protos.Sort{
 		Attr:      "dob",
 		Offset:    int32(offset),
 		Count:     int32(count),

@@ -25,7 +25,7 @@ correct [schema type]({{< relref "query-language/index.md#schema" >}}) is specif
 
 To get the Go client, you can run
 ```
-go get -u -v github.com/dgraph-io/dgraph/client github.com/dgraph-io/dgraph/protos/graphp
+go get -u -v github.com/dgraph-io/dgraph/client github.com/dgraph-io/dgraph/protos
 ```
 
 #### Example
@@ -45,7 +45,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/graphp"
+	"github.com/dgraph-io/dgraph/protos"
+	"github.com/gogo/protobuf/proto"
 	"github.com/twpayne/go-geom/encoding/wkb"
 )
 
@@ -56,12 +57,12 @@ var (
 func main() {
 	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
 
-	c := graphp.NewDgraphClient(conn)
+	c := protos.NewDgraphClient(conn)
 	req := client.Req{}
 
 	// _:person1 tells Dgraph to assign a new Uid and is the preferred way of creating new nodes.
 	// See https://docs.dgraph.io/master/query-language/#assigning-uid for more details.
-	nq := graphp.NQuad{
+	nq := protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "name",
 	}
@@ -80,7 +81,7 @@ func main() {
 
 	req.AddMutation(nq, client.SET)
 
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "now",
 	}
@@ -89,7 +90,7 @@ func main() {
 	}
 	req.AddMutation(nq, client.SET)
 
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "birthday",
 	}
@@ -98,7 +99,7 @@ func main() {
 	}
 	req.AddMutation(nq, client.SET)
 
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "loc",
 	}
@@ -107,7 +108,7 @@ func main() {
 	}
 	req.AddMutation(nq, client.SET)
 
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "age",
 	}
@@ -116,7 +117,7 @@ func main() {
 	}
 	req.AddMutation(nq, client.SET)
 
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "salary",
 	}
@@ -125,7 +126,7 @@ func main() {
 	}
 	req.AddMutation(nq, client.SET)
 
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "married",
 	}
@@ -134,7 +135,7 @@ func main() {
 	}
 	req.AddMutation(nq, client.SET)
 
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "_:person2",
 		Predicate: "name",
 	}
@@ -142,7 +143,7 @@ func main() {
 	req.AddMutation(nq, client.SET)
 
 	// Lets connect the two nodes together.
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   "_:person1",
 		Predicate: "friend",
 		ObjectId:  "_:person2",
@@ -159,7 +160,7 @@ func main() {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
 	person1Uid := resp.AssignedUids["person1"]
-        person2Uid := resp.AssignedUids["person2"]
+	person2Uid := resp.AssignedUids["person2"]
 
 	// Lets initiate a new request and query for the data.
 	req = client.Req{}
@@ -220,7 +221,7 @@ func main() {
 	fmt.Printf("%v name: %v\n", person2.Attribute, person2.Properties[0].Value.GetStrVal())
 
 	// Deleting an edge.
-	nq = graphp.NQuad{
+	nq = protos.NQuad{
 		Subject:   client.Uid(person1Uid),
 		Predicate: "friend",
 		ObjectId:  client.Uid(person2Uid),
@@ -279,7 +280,7 @@ mutation {
    }
   }
  }
-}`, map[string]string{})
+}`)
 resp, err := c.Run(context.Background(), req.Request())
 if err != nil {
 	log.Fatalf("Error in getting response from server, %s", err)

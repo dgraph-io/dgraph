@@ -32,7 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -171,11 +171,11 @@ func TestSchemaMutation(t *testing.T) {
 
 ` // reset schema
 	schema.ParseBytes([]byte(""), 1)
-	expected := map[string]*typesp.Schema{
+	expected := map[string]*protos.SchemaUpdate{
 		"name": {
 			Tokenizer: []string{"term", "exact"},
 			ValueType: uint32(types.StringID),
-			Directive: typesp.Schema_INDEX},
+			Directive: protos.SchemaUpdate_INDEX},
 	}
 
 	err := runMutation(m)
