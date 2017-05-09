@@ -105,6 +105,7 @@ type node struct {
 	// SafeMutex is for fields which can be changed after init.
 	_confState *raftpb.ConfState
 	_raft      raft.Node
+	term       uint64
 
 	// Fields which are never changed after init.
 	cfg         *raft.Config
@@ -126,6 +127,18 @@ type node struct {
 	// The stages are proposed -> committed (accepted by cluster) ->
 	// applied (to PL) -> synced (to RocksDB).
 	applied x.WaterMark
+}
+
+func (n *node) SetTerm(term uint64) {
+	n.Lock()
+	defer n.Unlock()
+	n.term = term
+}
+
+func (n *node) Term() uint64 {
+	n.RLock()
+	defer n.RUnlock()
+	return n.term
 }
 
 // SetRaft would set the provided raft.Node to this node.
@@ -456,7 +469,10 @@ func (n *node) processMembership(e raftpb.Entry, mm *taskp.Membership) error {
 func (n *node) processUidLease(e raftpb.Entry, l *taskp.UIDLease) error {
 	x.AssertTrue(n.gid == l.GroupId)
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
-	uid.LeaseManager().Update(l.NextId, l.LeasedId, rv)
+	uid.LeaseManager().Update(l.LeasedId, rv)
+	if e.Term < n.Term() {
+		uid.LeaseManager().UseAllIds()
+	}
 	return nil
 }
 
@@ -628,6 +644,7 @@ func (n *node) Run() {
 					// stepped down as leader do a sync membership immediately
 					groups().syncMemberships()
 				} else if rd.RaftState == raft.StateLeader && !leader {
+					uid.LeaseManager().UseAllIds()
 					groups().syncMemberships()
 				}
 				leader = rd.RaftState == raft.StateLeader
@@ -635,6 +652,7 @@ func (n *node) Run() {
 			x.Check(n.wal.StoreSnapshot(n.gid, rd.Snapshot))
 			x.Check(n.wal.Store(n.gid, rd.HardState, rd.Entries))
 
+			n.SetTerm(rd.HardState.Term)
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 
 			for _, msg := range rd.Messages {

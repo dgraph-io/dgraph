@@ -130,8 +130,7 @@ message RebuildIndex {
 
 message UIDLease {
 	uint32 group_id = 1;
-	uint64 next_id = 2;
-	uint64 leased_id = 3;
+	uint64 leased_id = 2;
 }
 
 message Proposal {

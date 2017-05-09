@@ -19,6 +19,7 @@ package uid
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -36,18 +37,12 @@ const (
 	LeasePredicate = "_lease_"
 )
 
-type leaseType uint64
-
-const (
-	NEXT_ID leaseType = iota + 1
-	LEASE_ID
-)
-
 var (
 	lmgr     *lockManager
 	leasemgr *leaseManager
 	gid      uint32
 	pstore   *store.Store
+	leaseKey []byte
 )
 
 // Other alternatives could be
@@ -81,32 +76,31 @@ func (l *leaseManager) Reload(group uint32) error {
 	if group != gid {
 		return nil
 	}
-	// avoid locking during IO
-	nextId := getLease(NEXT_ID)
-	leasedId := getLease(LEASE_ID)
+	leasedId := getLease()
+	fmt.Printf("got leased id %v\n", leasedId)
 	l.Lock()
 	defer l.Unlock()
-	l.set(nextId, leasedId)
+	l.setLeasedId(leasedId)
+	l.useAllIds()
 	return nil
 }
 
-func (l *leaseManager) Update(nextId uint64, leasedId uint64, rv x.RaftValue) {
+func (l *leaseManager) Update(leasedId uint64, rv x.RaftValue) {
 	l.Lock()
 	defer l.Unlock()
 	posting.SyncMarkFor(gid).Ch <- x.Mark{Index: rv.Index, Done: false}
 	l.indices = append(l.indices, rv.Index)
-	l.set(nextId, leasedId)
-	l.elog.Printf("Updating lease, nextId: %d leasedId: %d", nextId, leasedId)
+	l.setLeasedId(leasedId)
+	l.elog.Printf("Updating lease, leasedId: %d", leasedId)
 }
 
-func (l *leaseManager) flushIndices() (indices []uint64, nextId uint64, leasedId uint64) {
+func (l *leaseManager) flushIndices() (indices []uint64, leasedId uint64) {
 	l.Lock()
 	defer l.Unlock()
 	for _, idx := range l.indices {
 		indices = append(indices, idx)
 	}
 	l.indices = l.indices[:0]
-	nextId = l.nextId
 	leasedId = l.leasedId
 	return
 }
@@ -119,13 +113,12 @@ func (l *leaseManager) flush() bool {
 	}
 	l.RUnlock()
 
-	indices, nextId, leasedId := l.flushIndices()
+	indices, leasedId := l.flushIndices()
 	if len(indices) == 0 {
 		return false
 	}
 
-	setLease(LEASE_ID, leasedId)
-	setLease(NEXT_ID, nextId)
+	setLease(leasedId)
 	posting.SyncMarkFor(gid).Ch <- x.Mark{Indices: indices, Done: true}
 	return true
 }
@@ -137,15 +130,21 @@ func (l *leaseManager) Get() (uint64, uint64) {
 	return l.nextId, l.leasedId
 }
 
-func (l *leaseManager) set(nextId uint64, leasedId uint64) {
+func (l *leaseManager) setLeasedId(leasedId uint64) {
 	l.AssertLock()
-	// while replaying lease logs snapshot might be from future
-	if leasedId > l.leasedId {
-		l.leasedId = leasedId
-	}
-	if nextId > l.nextId {
-		l.nextId = nextId
-	}
+	l.leasedId = leasedId
+}
+
+func (l *leaseManager) UseAllIds() {
+	l.Lock()
+	defer l.Unlock()
+	l.nextId = l.leasedId + 1
+	l.elog.Printf("Updating nextId : %d", nextId)
+}
+
+func (l *leaseManager) useAllIds() {
+	l.AssertLock()
+	l.nextId = l.leasedId + 1
 }
 
 // AssignNew assigns N unique uids sequentially
@@ -237,6 +236,7 @@ func (lm *lockManager) clean() {
 func Init(ps *store.Store) {
 	pstore = ps
 	gid = group.BelongsTo(LeasePredicate)
+	leaseKey = x.DataKey(LeasePredicate, 1)
 
 	lmgr = new(lockManager)
 	lmgr.init()
@@ -247,11 +247,8 @@ func Init(ps *store.Store) {
 	go leasemgr.batchSync()
 }
 
-func getLease(typ leaseType) uint64 {
-	uid := uint64(typ)
-	key := x.DataKey(LeasePredicate, uid)
-
-	slice, err := pstore.Get(key)
+func getLease() uint64 {
+	slice, err := pstore.Get(leaseKey)
 	x.Checkf(err, "Error while fetching lease information")
 	if slice == nil {
 		return 0
@@ -271,10 +268,7 @@ func getLease(typ leaseType) uint64 {
 	return binary.LittleEndian.Uint64(data)
 }
 
-func setLease(typ leaseType, value uint64) {
-	uid := uint64(typ)
-	key := x.DataKey(LeasePredicate, uid)
-
+func setLease(value uint64) {
 	var bs [8]byte
 	binary.LittleEndian.PutUint64(bs[:], value)
 	p := &typesp.Posting{
@@ -288,5 +282,5 @@ func setLease(typ leaseType, value uint64) {
 	pl.Postings = append(pl.Postings, p)
 	val, err := pl.Marshal()
 	x.Checkf(err, "Error while marshalling lease pl")
-	x.Checkf(pstore.SetOne(key, val), "Error while writing lease to db")
+	x.Checkf(pstore.SetOne(leaseKey, val), "Error while writing lease to db")
 }

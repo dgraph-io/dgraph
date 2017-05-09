@@ -30,44 +30,33 @@ var (
 	m x.SafeMutex
 )
 
-func getStartId(ctx context.Context, N uint64, group uint32) (uint64, uint64, uint64, error) {
+func assignNew(ctx context.Context, N uint64, group uint32) (uint64, error) {
+	if N == 0 {
+		// No need to do anything
+		return 0, nil
+	}
+
 	m.Lock()
 	defer m.Unlock()
 	nextId, leasedId := uid.LeaseManager().Get()
 	available := leasedId - nextId + 1
+	numLease := uint64(500)
 
-	if N == 0 {
-		return nextId, nextId, leasedId, nil
+	if N > numLease {
+		numLease = N
 	}
 	if available < N {
-		if err := proposeLease(ctx, nextId, leasedId+100000, group); err != nil {
-			m.Unlock()
-			return 0, 0, 0, err
+		if err := proposeLease(ctx, leasedId+numLease, group); err != nil {
+			return 0, err
 		}
 	}
 
 	startId := uid.LeaseManager().AssignNew(N)
-	nextId, leasedId = uid.LeaseManager().Get()
-	return startId, nextId, leasedId, nil
-}
-
-func assignNew(ctx context.Context, N uint64, group uint32) (uint64, error) {
-	startId, nextId, leasedId, err := getStartId(ctx, N, group)
-	if err != nil {
-		return 0, err
-	}
-	// Persist next Id can be done in parallel, only downside being
-	// on failure of proposal that range of uid's would be lost since we
-	// assign concurrently
-	if err := proposeLease(ctx, nextId, leasedId, group); err != nil {
-		return 0, err
-	}
-
 	return startId, nil
 }
 
-func proposeLease(ctx context.Context, nextId uint64, leasedId uint64, group uint32) error {
-	lease := &taskp.UIDLease{GroupId: group, NextId: nextId, LeasedId: leasedId}
+func proposeLease(ctx context.Context, leasedId uint64, group uint32) error {
+	lease := &taskp.UIDLease{GroupId: group, LeasedId: leasedId}
 	proposal := &taskp.Proposal{UidLease: lease}
 	n := groups().Node(group)
 	x.AssertTruef(n != nil, "Node doesn't serve group %d", group)
