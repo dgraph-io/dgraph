@@ -469,7 +469,10 @@ func (n *node) processMembership(e raftpb.Entry, mm *taskp.Membership) error {
 func (n *node) processUidLease(e raftpb.Entry, l *taskp.UIDLease) error {
 	x.AssertTrue(n.gid == l.GroupId)
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
-	uid.LeaseManager().Update(l.LeasedId, rv)
+	ctx := context.WithValue(n.ctx, "raft", rv)
+	if err := uid.LeaseManager().Update(ctx, l.LeasedId); err != nil {
+		return err
+	}
 	if e.Term < n.Term() {
 		uid.LeaseManager().UseAllIds()
 	}

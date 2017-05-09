@@ -18,15 +18,14 @@
 package uid
 
 import (
+	"context"
 	"encoding/binary"
-	"fmt"
-	"math"
 	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/typesp"
+	"github.com/dgraph-io/dgraph/protos/taskp"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -57,7 +56,6 @@ type leaseManager struct {
 	x.SafeMutex
 	leasedId uint64
 	nextId   uint64
-	indices  []uint64
 	elog     trace.EventLog
 }
 
@@ -77,7 +75,6 @@ func (l *leaseManager) Reload(group uint32) error {
 		return nil
 	}
 	leasedId := getLease()
-	fmt.Printf("got leased id %v\n", leasedId)
 	l.Lock()
 	defer l.Unlock()
 	l.setLeasedId(leasedId)
@@ -85,42 +82,13 @@ func (l *leaseManager) Reload(group uint32) error {
 	return nil
 }
 
-func (l *leaseManager) Update(leasedId uint64, rv x.RaftValue) {
+func (l *leaseManager) Update(ctx context.Context, leasedId uint64) error {
 	l.Lock()
 	defer l.Unlock()
-	posting.SyncMarkFor(gid).Ch <- x.Mark{Index: rv.Index, Done: false}
-	l.indices = append(l.indices, rv.Index)
 	l.setLeasedId(leasedId)
+	err := setLease(ctx, leasedId)
 	l.elog.Printf("Updating leasedId: %d", leasedId)
-}
-
-func (l *leaseManager) flushIndices() (indices []uint64, leasedId uint64) {
-	l.Lock()
-	defer l.Unlock()
-	for _, idx := range l.indices {
-		indices = append(indices, idx)
-	}
-	l.indices = l.indices[:0]
-	leasedId = l.leasedId
-	return
-}
-
-func (l *leaseManager) flush() bool {
-	l.RLock()
-	if len(l.indices) == 0 {
-		l.RUnlock()
-		return false
-	}
-	l.RUnlock()
-
-	indices, leasedId := l.flushIndices()
-	if len(indices) == 0 {
-		return false
-	}
-
-	setLease(leasedId)
-	posting.SyncMarkFor(gid).Ch <- x.Mark{Indices: indices, Done: true}
-	return true
+	return err
 }
 
 // returns nextId and leasedId
@@ -156,18 +124,6 @@ func (l *leaseManager) AssignNew(N uint64) uint64 {
 	id := l.nextId
 	l.nextId += N
 	return id
-}
-
-func (l *leaseManager) batchSync() {
-	for {
-		start := time.Now()
-		if LeaseManager().flush() {
-			LeaseManager().elog.Printf("Flushed lease")
-		}
-		// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
-		sleepFor := 10*time.Millisecond - time.Since(start)
-		time.Sleep(sleepFor)
-	}
 }
 
 type lockManager struct {
@@ -244,43 +200,29 @@ func Init(ps *store.Store) {
 
 	leasemgr = new(leaseManager)
 	leasemgr.init()
-	go leasemgr.batchSync()
 }
 
 func getLease() uint64 {
-	slice, err := pstore.Get(leaseKey)
-	x.Checkf(err, "Error while fetching lease information")
-	if slice == nil {
+	plist, decr := posting.GetOrCreate(leaseKey, gid)
+	defer decr()
+	val, err := plist.Value()
+	if err == posting.ErrNoValue {
 		return 0
 	}
-	var pl typesp.PostingList
-	x.Check(pl.Unmarshal(slice.Data()))
-	slice.Free()
-	if len(pl.Postings) == 0 {
-		return 0
-	}
-	x.AssertTruef(pl.Postings[0].ValType ==
-		typesp.Posting_ValType(uint32(types.IntID)), "Lease data corrupted")
-	data := pl.Postings[0].Value
-	if len(data) == 0 {
-		return 0
-	}
-	return binary.LittleEndian.Uint64(data)
+	return binary.LittleEndian.Uint64(val.Value.([]byte))
 }
 
-func setLease(value uint64) {
+func setLease(ctx context.Context, value uint64) error {
 	var bs [8]byte
 	binary.LittleEndian.PutUint64(bs[:], value)
-	p := &typesp.Posting{
-		Uid:         math.MaxUint64,
-		Value:       bs[:],
-		ValType:     typesp.Posting_ValType(uint32(types.IntID)),
-		PostingType: typesp.Posting_VALUE,
-		Op:          posting.Set,
+	edge := &taskp.DirectedEdge{
+		Entity:    1,
+		Attr:      LeasePredicate,
+		Value:     bs[:],
+		ValueType: uint32(types.IntID),
+		Op:        taskp.DirectedEdge_SET,
 	}
-	pl := &typesp.PostingList{}
-	pl.Postings = append(pl.Postings, p)
-	val, err := pl.Marshal()
-	x.Checkf(err, "Error while marshalling lease pl")
-	x.Checkf(pstore.SetOne(leaseKey, val), "Error while writing lease to db")
+	plist, decr := posting.GetOrCreate(leaseKey, gid)
+	defer decr()
+	return plist.AddMutationWithIndex(ctx, edge)
 }
