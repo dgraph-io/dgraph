@@ -85,6 +85,70 @@ func TestConvertFromDefault(t *testing.T) {
 	}
 }
 
+func TestConversionToDateTime(t *testing.T) {
+	data := []struct {
+		in  Val
+		out time.Time
+	}{
+		{
+			Val{StringID, []byte("2006-01-02T15:04:05")},
+			time.Date(2006, 01, 02, 15, 04, 05, 0, time.UTC),
+		},
+		{
+			Val{StringID, []byte("2006-01-02")},
+			time.Date(2006, 01, 02, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			Val{StringID, []byte("2006-01")},
+			time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			Val{StringID, []byte("2006")},
+			time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tc := range data {
+		if val, err := Convert(tc.in, DateTimeID); err != nil {
+			t.Errorf("Unexpected error converting string to datetime: %v", err)
+		} else if !tc.out.Equal(val.Value.(time.Time)) {
+			t.Errorf("Converting string to datetime: Expected %+v, got %+v", tc.out, val.Value)
+		}
+	}
+}
+
+func TestConversionToDate(t *testing.T) {
+	data := []struct {
+		in  Val
+		out time.Time
+	}{
+		{
+			Val{StringID, []byte("2006-01-02T15:04:05")},
+			time.Date(2006, 01, 02, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			Val{StringID, []byte("2006-01-02")},
+			time.Date(2006, 01, 02, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			Val{StringID, []byte("2006-01")},
+			time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			Val{StringID, []byte("2006")},
+			time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tc := range data {
+		if val, err := Convert(tc.in, DateID); err != nil {
+			t.Errorf("Unexpected error converting string to datetime: %v", err)
+		} else if !tc.out.Equal(val.Value.(time.Time)) {
+			t.Errorf("Converting string to datetime: Expected %+v, got %+v", tc.out, val.Value)
+		}
+	}
+}
+
 /*
 func TestSameConversionFloat(t *testing.T) {
 	data := []struct {
