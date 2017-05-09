@@ -1,14 +1,21 @@
 package query
 
 import (
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type mathTree struct {
+	Fn    string
+	Var   string
+	Const types.Val
+	Val   map[uint64]types.Val
+	Child []*mathTree
+}
+
 // processBinary handles the binary operands like
 // +, -, *, /, %, max, min, logbase
-func processBinary(mNode *gql.MathTree) (err error) {
+func processBinary(mNode *mathTree) (err error) {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
 
@@ -89,7 +96,7 @@ func processBinary(mNode *gql.MathTree) (err error) {
 
 // processUnary handles the unary operands like
 // u-, log, exp, since, floor, ceil
-func processUnary(mNode *gql.MathTree) (err error) {
+func processUnary(mNode *mathTree) (err error) {
 	destMap := make(map[uint64]types.Val)
 	srcMap := mNode.Child[0].Val
 	aggName := mNode.Fn
@@ -125,7 +132,7 @@ func processUnary(mNode *gql.MathTree) (err error) {
 // processBinaryBoolean handles the binary operands which
 // return a boolean value.
 // All the inequality operators (<, >, <=, >=, !=, ==)
-func processBinaryBoolean(mNode *gql.MathTree) (err error) {
+func processBinaryBoolean(mNode *mathTree) (err error) {
 	destMap := make(map[uint64]types.Val)
 	srcMap := mNode.Child[0].Val
 	aggName := mNode.Fn
@@ -152,7 +159,7 @@ func processBinaryBoolean(mNode *gql.MathTree) (err error) {
 }
 
 // processTernary handles the ternary operand cond()
-func processTernary(mNode *gql.MathTree) (err error) {
+func processTernary(mNode *mathTree) (err error) {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
 	condMap := mNode.Child[0].Val
@@ -190,7 +197,7 @@ func processTernary(mNode *gql.MathTree) (err error) {
 	return nil
 }
 
-func evalMathTree(mNode *gql.MathTree) (err error) {
+func evalMathTree(mNode *mathTree) (err error) {
 	if mNode.Const.Value != nil {
 		return nil
 	}

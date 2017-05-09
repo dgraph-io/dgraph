@@ -168,7 +168,7 @@ type SubGraph struct {
 	FilterOp     string
 	Filters      []*SubGraph
 	facetsFilter *protos.FilterTree
-	MathExp      *gql.MathTree
+	MathExp      *mathTree
 	Children     []*SubGraph
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
@@ -534,6 +534,23 @@ func isPresent(list []string, str string) bool {
 	return false
 }
 
+func mathCopy(mnode *mathTree, mt *gql.MathTree) error {
+	// Either we'll have an operation specified, or the function specified.
+	mnode.Const = mt.Const
+	mnode.Fn = mt.Fn
+	mnode.Val = mt.Val
+	mnode.Var = mt.Var
+
+	for _, mc := range mt.Child {
+		child := &mathTree{}
+		if err := mathCopy(child, mc); err != nil {
+			return err
+		}
+		mnode.Child = append(mnode.Child, child)
+	}
+	return nil
+}
+
 func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 	// Either we'll have an operation specified, or the function specified.
 	if len(ft.Op) > 0 {
@@ -622,9 +639,15 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		dst := &SubGraph{
-			Attr:    gchild.Attr,
-			MathExp: gchild.MathExp,
-			Params:  args,
+			Attr:   gchild.Attr,
+			Params: args,
+		}
+		if gchild.MathExp != nil {
+			mathExp := &mathTree{}
+			if err := mathCopy(mathExp, gchild.MathExp); err != nil {
+				return err
+			}
+			dst.MathExp = mathExp
 		}
 
 		if gchild.Func != nil &&
@@ -941,7 +964,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 	return mp, nil
 }
 
-func recurse(node *gql.MathTree, doneVars map[string]varValue, nodeList *[]*gql.MathTree) (int, string, error) {
+func recurse(node *mathTree, doneVars map[string]varValue, nodeList *[]*mathTree) (int, string, error) {
 	if node.Var != "" {
 		v, ok := doneVars[node.Var]
 		if !ok {
@@ -1016,8 +1039,8 @@ func transformMap(fromNode, toNode varValue) (map[uint64]types.Val, error) {
 	return newMap, nil
 }
 
-func transformVars(mNode *gql.MathTree, doneVars map[string]varValue) error {
-	var nodeList []*gql.MathTree
+func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
+	var nodeList []*mathTree
 	_, maxVar, err := recurse(mNode, doneVars, &nodeList)
 	if err != nil {
 		return err
@@ -1330,6 +1353,14 @@ func (sg *SubGraph) assignVars(doneVars map[string]varValue, sgPath []*SubGraph)
 		return nil
 	}
 
+	err := sg.populateUidValVar(doneVars, sgPath)
+	if err != nil {
+		return err
+	}
+	return sg.populateFacetVars(doneVars, sgPath)
+}
+
+func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*SubGraph) error {
 	if sg.Params.Var != "" {
 		if sg.IsListNode() {
 			// This is a predicates list.
@@ -1378,7 +1409,9 @@ func (sg *SubGraph) assignVars(doneVars map[string]varValue, sgPath []*SubGraph)
 			}
 		}
 	}
-
+	return nil
+}
+func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
 	if sg.Params.FacetVar != nil && sg.Params.Facet != nil {
 		sgPath = append(sgPath, sg)
 		defer func() {
