@@ -371,7 +371,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isCompareAtRoot {
-		f := func(key, val []byte, mu sync.Mutex) {
+		f := func(key, val []byte, mu *sync.Mutex) {
 			pl, decr := posting.GetOrUnmarshal(key, val, gid)
 			count := int64(pl.Length(0))
 			decr()
@@ -940,10 +940,10 @@ type itkv struct {
 	val []byte
 }
 
-func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte, sync.Mutex)) {
+func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte, *sync.Mutex)) {
 	grpSize := uint64(math.MaxUint64 / uint64(numPart))
 	var wg sync.WaitGroup
-	var mu sync.Mutex
+	mu := &sync.Mutex{}
 
 	for i := uint64(0); i < numPart; i++ {
 		minUid := grpSize*i + 1
@@ -953,7 +953,7 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 		}
 		x.Trace(ctx, "Running go-routine %v for iteration", i)
 		wg.Add(1)
-		go func() {
+		go func(i uint64) {
 			it := pstore.NewIterator()
 			defer it.Close()
 			startKey := x.DataKey(q.Attr, minUid)
@@ -982,7 +982,7 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 				f(key, val, mu)
 			}
 			wg.Done()
-		}()
+		}(i)
 	}
 	wg.Wait()
 }
