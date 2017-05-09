@@ -14,8 +14,8 @@
                   <nav class="nav-languages">
                     <a class="language active" data-action="nav-lang" data-target="query" href="#">Query</a>
                     <a class="language" data-action="nav-lang" data-target="curl" href="#">Curl</a>
-                    <a class="language" data-action="nav-lang" data-target="go" href="#">Go</a>
-                    <a class="language" data-action="nav-lang" data-target="java" href="#">Java</a>
+                    <a class="language" data-action="nav-lang" data-target="go-grpc" href="#">Go (grpc)</a>
+                    <a class="language" data-action="nav-lang" data-target="go-http" href="#">Go (http)</a>
                   </nav>
                 </div>
                 <div class="col-2">
@@ -52,22 +52,7 @@
               <pre><code class="no-copy" tabindex="-1">curl localhost:8080/query -XPOST -d '
 <span class="query-content">{{ $code }}</span>' | python -m json.tool | less</code></pre>
             </div>
-
-            <div class="runnable-tab-content" data-tab="java">
-              <pre><code class="no-copy" tabindex="-1">import io.dgraph.client.DgraphClient;
-import io.dgraph.client.GrpcDgraphClient;
-import io.dgraph.client.DgraphResult;
-
-public class DgraphMain {
-  public static void main(final String[] args) {
-    final DgraphClient dgraphClient = GrpcDgraphClient.newInstance("localhost", 8080);
-    final DgraphResult result = dgraphClient.query("<span class="query-content java">{{ $code }}</span>");
-    System.out.println(result.toJsonObject().toString());
-  }
-}</code></pre>
-            </div>
-
-            <div class="runnable-tab-content" data-tab="go">
+            <div class="runnable-tab-content" data-tab="go-grpc">
               <pre><code class="no-copy" tabindex="-1">package main
 
 import (
@@ -102,6 +87,39 @@ func main() {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
 	fmt.Printf("Response %+v\n", proto.MarshalTextString(resp))
+}</code></pre>
+            </div>
+            <div class="runnable-tab-content" data-tab="go-http">
+              <pre><code class="no-copy" tabindex="-1">package main
+
+import (
+        "bytes"
+        "flag"
+        "log"
+        "net/http"
+)
+
+var (
+        baseURL = flag.String("d", "http://127.0.0.1:8080/", "Dgraph server address")
+)
+
+func main() {
+        client := &amp;http.Client{}
+        body := bytes.NewBufferString(`<span class="query-content">{{ $code }}</span>`)
+        req, err := http.NewRequest("POST", *baseURL, body)
+        if err != nil {
+                log.Fatal(err)
+                return
+        }
+
+        resp, err := client.Do(req)
+        if err != nil {
+                log.Fatal(err)
+                return
+        }
+        defer resp.Body.Close()
+
+        log.Printf("Response %+v\n", resp)
 }</code></pre>
             </div>
           </div>
