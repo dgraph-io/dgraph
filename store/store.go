@@ -24,20 +24,40 @@ type Store interface {
 	// Also returns the deallocate function. This is for freeing RocksDB slice.
 	Get(key []byte) ([]byte, func(), error)
 
+	// WriteBatch executes the given WriteBatch.
 	WriteBatch(wb WriteBatch) error
+
+	// SetOne sets a kv pair.
 	SetOne(k []byte, val []byte) error
+
+	// Delete deletes a key.
 	Delete(k []byte) error
+
+	// Close closes the KV store.
 	Close()
+
+	// NewWriteBatch creates a new WriteBatch for store.
 	NewWriteBatch() WriteBatch
+
+	// NewIterator creates a new Iterator for store.
 	NewIterator(reversed bool) Iterator
+
+	// GetStats returns some stats about the store.
 	GetStats() string
 }
 
 // WriteBatch is used for batching mutations to Store.
 type WriteBatch interface {
+	// SetOne adds a Set operation to the WriteBatch.
 	SetOne(key, value []byte)
+
+	// Delete adds a Del operation to the WriteBatch.
 	Delete(key []byte)
+
+	// Count returns the size of the WriteBatch.
 	Count() int
+
+	// Clear clears the WriteBatch. Good to reuse WriteBatch.
 	Clear()
 
 	// Destroy destroys our WriteBatch. It is important to call this especially for RocksDB.
@@ -58,9 +78,18 @@ type Iterator interface {
 	// Next if !reversed. Prev if reversed.
 	Next()
 
+	// Valid returns whether the Iterator is still valid.
 	Valid() bool
+
+	// ValidForPrefix returns whether the Iterator is valid and its current key has the right prefix.
 	ValidForPrefix(prefix []byte) bool
+
+	// Key returns the current key.
 	Key() []byte
+
+	// Value returns the current value.
 	Value() []byte
+
+	// Err returns the error for the last operation if any.
 	Err() error
 }
