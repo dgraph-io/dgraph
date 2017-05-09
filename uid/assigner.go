@@ -91,7 +91,7 @@ func (l *leaseManager) Update(leasedId uint64, rv x.RaftValue) {
 	posting.SyncMarkFor(gid).Ch <- x.Mark{Index: rv.Index, Done: false}
 	l.indices = append(l.indices, rv.Index)
 	l.setLeasedId(leasedId)
-	l.elog.Printf("Updating lease, leasedId: %d", leasedId)
+	l.elog.Printf("Updating leasedId: %d", leasedId)
 }
 
 func (l *leaseManager) flushIndices() (indices []uint64, leasedId uint64) {
@@ -139,7 +139,7 @@ func (l *leaseManager) UseAllIds() {
 	l.Lock()
 	defer l.Unlock()
 	l.nextId = l.leasedId + 1
-	l.elog.Printf("Updating nextId : %d", nextId)
+	l.elog.Printf("Updating nextId : %d", l.nextId)
 }
 
 func (l *leaseManager) useAllIds() {
