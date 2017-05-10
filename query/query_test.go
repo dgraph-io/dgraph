@@ -422,7 +422,6 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	fmt.Println(js)
 	require.JSONEq(t, `{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"follow":[{"count":1}]},{"@facets":{"_":{"weight":1.500000}},"follow":[{"count":1}]}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"follow":[{"count":1}]}],"var(L4)":1.200000}]}],"sum":[{"name":"John","var(L4)":3.900000},{"name":"Matt","var(L4)":1.200000}]}`,
 		js)
 }
@@ -878,7 +877,7 @@ func TestQueryVarValAggMul(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea","var(mul)":19,"var(n)":19,"var(s)":1},{"name":"Rick Grimes","var(mul)":15,"var(n)":15,"var(s)":1},{"name":"Glenn Rhee","var(mul)":0,"var(n)":15,"var(s)":0},{"name":"Daryl Dixon","var(mul)":0,"var(n)":17,"var(s)":0}]}`,
+		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"follow":[{"count":1}]},{"@facets":{"_":{"weight":1.500000}},"follow":[{"count":1}]}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"follow":[{"count":1}]}],"var(L4)":1.200000}]}],"sum":[{"name":"John","var(L4)":3.900000},{"name":"Matt","var(L4)":1.200000}]}`,
 		js)
 }
 
@@ -903,7 +902,7 @@ func TestQueryVarValAggOrderDesc(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"info":[{"friend":[{"age":15,"friend":[{"count":1}],"var(sum)":16},{"age":15,"friend":[{"count":0}],"var(sum)":15},{"age":17,"friend":[{"count":0}],"var(sum)":17},{"age":19,"friend":[{"count":1}],"var(sum)":20},{"friend":[{"count":0}]}]}],"me":[{"age":19,"friend":[{"count":1}],"name":"Andrea"},{"age":17,"friend":[{"count":0}],"name":"Daryl Dixon"},{"age":15,"friend":[{"count":1}],"name":"Rick Grimes"},{"age":15,"friend":[{"count":0}],"name":"Glenn Rhee"}]}`,
+		`{"info":[{"friend":[{"age":15,"friend":[{"count":1}],"var(sum)":16.000000},{"age":15,"friend":[{"count":0}],"var(sum)":15.000000},{"age":17,"friend":[{"count":0}],"var(sum)":17.000000},{"age":19,"friend":[{"count":1}],"var(sum)":20.000000},{"friend":[{"count":0}],"var(sum)":0.000000}]}],"me":[{"age":19,"friend":[{"count":1}],"name":"Andrea"},{"age":17,"friend":[{"count":0}],"name":"Daryl Dixon"},{"age":15,"friend":[{"count":1}],"name":"Rick Grimes"},{"age":15,"friend":[{"count":0}],"name":"Glenn Rhee"},{"friend":[{"count":0}]}]}`,
 		js)
 }
 
