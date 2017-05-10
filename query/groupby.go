@@ -241,7 +241,10 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue) error {
 		if chVar != "" {
 			tempMap := make(map[uint64]types.Val)
 			for _, grp := range res.group {
-				if len(grp.keys) != 1 {
+				if len(grp.keys) == 0 {
+					continue
+				}
+				if len(grp.keys) > 1 {
 					return x.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
 				}
 				uidVal := grp.keys[0].key.Value

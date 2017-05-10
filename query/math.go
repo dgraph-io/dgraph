@@ -24,12 +24,21 @@ func processBinary(mNode *mathTree) (err error) {
 	cl := mNode.Child[0].Const
 	cr := mNode.Child[1].Const
 
+	union := make(map[uint64]struct{})
+
+	for k := range mpr {
+		union[k] = struct{}{}
+	}
+	for k := range mpl {
+		union[k] = struct{}{}
+	}
+
 	if mpl != nil {
-		for k, lVal := range mpl {
+		for k := range union {
 			ag := aggregator{
 				name: aggName,
 			}
-			// Only the UIDs that have all the values will be considered.
+			lVal := mpl[k]
 			rVal := mpr[k]
 			if cr.Value != nil {
 				// Use the constant value that was supplied.
@@ -52,11 +61,11 @@ func processBinary(mNode *mathTree) (err error) {
 		return nil
 	}
 	if mpr != nil {
-		for k, rVal := range mpr {
+		for k := range union {
 			ag := aggregator{
 				name: aggName,
 			}
-			// Only the UIDs that have all the values will be considered.
+			rVal := mpr[k]
 			lVal := mpl[k]
 			if cl.Value != nil {
 				// Use the constant value that was supplied.
