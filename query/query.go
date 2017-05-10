@@ -986,6 +986,9 @@ func (fromNode *varValue) transformMap(toNode varValue) (map[uint64]types.Val, e
 	}
 
 	newMap := fromNode.vals
+	if newMap == nil {
+		newMap = make(map[uint64]types.Val)
+	}
 	for ; idx < len(toNode.path); idx++ {
 		curNode := toNode.path[idx]
 		tempMap := make(map[uint64]types.Val)
@@ -1034,7 +1037,8 @@ func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
 	}
 
 	maxNode := doneVars[maxVar]
-	for _, mt := range mvarList {
+	for i := 0; i < len(mvarList); i++ {
+		mt := mvarList[i]
 		curNode := doneVars[mt.Var]
 		newMap, err := curNode.transformMap(maxNode)
 		if err != nil {
