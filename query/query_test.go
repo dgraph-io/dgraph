@@ -422,7 +422,8 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"follow":[{"count":1}]},{"@facets":{"_":{"weight":1.500000}},"follow":[{"count":1}]}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"follow":[{"count":1}]}]}]}],"sum":[{"name":"John","var(L4)":3.900000}]}`,
+	fmt.Println(js)
+	require.JSONEq(t, `{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"follow":[{"count":1}]},{"@facets":{"_":{"weight":1.500000}},"follow":[{"count":1}]}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"follow":[{"count":1}]}],"var(L4)":1.200000}]}],"sum":[{"name":"John","var(L4)":3.900000},{"name":"Matt","var(L4)":1.200000}]}`,
 		js)
 }
 

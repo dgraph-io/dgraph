@@ -994,6 +994,10 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 	for ; idx < len(toNode.path); idx++ {
 		curNode := toNode.path[idx]
 		tempMap := make(map[uint64]types.Val)
+		if idx == 0 {
+			continue
+		}
+
 		for i := 0; i < len(curNode.uidMatrix); i++ {
 			ul := curNode.uidMatrix[i]
 			srcUid := curNode.SrcUIDs.Uids[i]
@@ -1120,7 +1124,6 @@ func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, parent
 		if err != nil {
 			return err
 		}
-		// We'd also need to do aggregation over levels here.
 	}
 	return sg.valueVarAggregation(doneVars, parent)
 }
@@ -1375,7 +1378,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			// This implies it is a value variable.
 			doneVars[sg.Params.Var] = varValue{
 				vals: make(map[uint64]types.Val),
-				path: sgPath[:len(sgPath)-1],
+				path: sgPath,
 			}
 			for idx, uid := range sg.SrcUIDs.Uids {
 				val := types.Val{
@@ -1390,7 +1393,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			// checking len(sgPath) is okay.
 			doneVars[sg.Params.Var] = varValue{
 				vals: make(map[uint64]types.Val),
-				path: sgPath[:len(sgPath)-1],
+				path: sgPath,
 			}
 			for idx, uid := range sg.SrcUIDs.Uids {
 				val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
