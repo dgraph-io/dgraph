@@ -131,6 +131,7 @@ build_docker_image() {
   docker build -t dgraph/dgraph:$CURRENT_BRANCH .
   # Lets remove the dgraph folder now.
   rm -rf dgraph
+  rm assets.tar.gz
 }
 
 upload_docker_image() {
@@ -153,5 +154,4 @@ if [ "$TRAVIS" = true ] ; then
 #  upload_docker_image
 fi
 
-mv $NIGHTLY_FILE $SHA_FILE $ASSETS_FILE $CURRENT_DIR
 popd > /dev/null
