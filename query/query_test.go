@@ -6285,7 +6285,6 @@ func TestNameNotIndexed(t *testing.T) {
 	ctx := context.Background()
 	_, err := ProcessQuery(ctx, res, &l)
 	require.Error(t, err)
-
 }
 
 func TestMultipleMinMax(t *testing.T) {
@@ -6307,4 +6306,24 @@ func TestMultipleMinMax(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}],"max(var(n))":"Rick Grimes","max(var(x))":19,"min(var(n))":"Andrea","min(var(x))":15}]}`,
 		js)
+}
+
+func TestDuplicateAlias(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x01) {
+				friend {
+					x as age
+					n as name
+				}
+				a: min(var(x))
+				a: max(var(x))
+			}
+		}`
+	res, _ := gql.Parse(gql.Request{Str: query})
+	var l Latency
+	ctx := context.Background()
+	_, err := ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
 }
