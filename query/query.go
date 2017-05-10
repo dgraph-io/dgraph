@@ -1280,6 +1280,26 @@ func shouldCascade(res gql.Result, idx int) bool {
 	return true
 }
 
+func (sg *SubGraph) updateUidMatrix() {
+	for _, l := range sg.uidMatrix {
+		if sg.Params.Order != "" {
+			// We can't do intersection directly as the list is not sorted by UIDs.
+			// So do filter.
+			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
+				i := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
+				if i >= 0 {
+					return true
+				}
+				return false
+			})
+		} else {
+			// If we didn't order on UIDmatrix, it'll be sorted.
+			algo.IntersectWith(l, sg.DestUIDs, l)
+		}
+	}
+
+}
+
 func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
 	sgPath []*SubGraph) error {
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
@@ -1290,6 +1310,9 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
 		goto AssignStep
 	}
 
+	if len(sg.Filters) > 0 {
+		sg.updateUidMatrix()
+	}
 	for _, child := range sg.Children {
 		sgPath = append(sgPath, sg) // Add the current node to path
 		child.populateVarMap(doneVars, isCascade, sgPath)
@@ -1300,22 +1323,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
 
 		// Intersect the UidMatrix with the DestUids as some UIDs might have been removed
 		// by other operations. So we need to apply it on the UidMatrix.
-		for _, l := range child.uidMatrix {
-			if child.Params.Order != "" {
-				// We can't do intersection directly as the list is not sorted by UIDs.
-				// So do filter.
-				algo.ApplyFilter(l, func(uid uint64, idx int) bool {
-					i := algo.IndexOf(child.DestUIDs, uid) // Binary search.
-					if i >= 0 {
-						return true
-					}
-					return false
-				})
-			} else {
-				// If we didn't order on UIDmatrix, it'll be sorted.
-				algo.IntersectWith(l, child.DestUIDs, l)
-			}
-		}
+		child.updateUidMatrix()
 	}
 
 	if !isCascade {
@@ -1776,8 +1784,10 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
+
+	sg.updateUidMatrix()
 	for i := 0; i < len(sg.uidMatrix); i++ {
-		algo.IntersectWith(sg.uidMatrix[i], sg.DestUIDs, sg.uidMatrix[i])
+		// Apply the offsets.
 		start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
 		sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
 	}
@@ -1797,9 +1807,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		sg.Params.Count = 1000
 	}
 
-	for i := 0; i < len(sg.uidMatrix); i++ {
-		algo.IntersectWith(sg.uidMatrix[i], sg.DestUIDs, sg.uidMatrix[i])
-	}
+	sg.updateUidMatrix()
 
 	for _, it := range sg.Params.NeedsVar {
 		if it.Name == sg.Params.Order {
