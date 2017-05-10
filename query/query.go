@@ -590,8 +590,13 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 
 		if gchild.Func != nil && gchild.Func.IsAggregator() {
 			key += gchild.Func.Name
+			// Aggregator functions could depend on variables, so lets add
+			// that to test for uniqueness too.
+			if len(gchild.NeedsVar) > 0 {
+				key += gchild.NeedsVar[0].Name
+			}
 		} else if gchild.Attr == "var" {
-			key += fmt.Sprintf("%v", gchild.NeedsVar)
+			key += gchild.NeedsVar[0].Name
 		} else if gchild.IsCount { // ignore count subgraphs..
 			key += "count"
 		} else if len(gchild.Langs) > 0 {

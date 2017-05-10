@@ -407,14 +407,14 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 	query := `
 		{
 			friend(id: 1000) {
-				path @facets(L1 as weight) { 
+				path @facets(L1 as weight) {
 						path @facets(L2 as weight) {
 							c as count(follow)
 						}
 						L4 as math(c+L2+L1)
 				}
 			}
-		
+
 			sum(id: var(L4), orderdesc: var(L4)) {
 				name
 				var(L4)
@@ -431,13 +431,13 @@ func TestLevelBasedFacetVarSumError(t *testing.T) {
 	query := `
 		{
 			friend(id: 1000) {
-				path @facets(L1 as weight) 
+				path @facets(L1 as weight)
 				follow {
 					path @facets(L2 as weight)
 					L3 as math(L1+L2)
 				}
 			}
-		
+
 			sum(id: var(L3), orderdesc: var(L3)) {
 				name
 				var(L3)
@@ -6286,4 +6286,25 @@ func TestNameNotIndexed(t *testing.T) {
 	_, err := ProcessQuery(ctx, res, &l)
 	require.Error(t, err)
 
+}
+
+func TestMultipleMinMax(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x01) {
+				friend {
+					x as age
+					n as name
+				}
+				min(var(x))
+				max(var(x))
+				min(var(n))
+				max(var(n))
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}],"max(var(n))":"Rick Grimes","max(var(x))":19,"min(var(n))":"Andrea","min(var(x))":15}]}`,
+		js)
 }
