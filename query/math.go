@@ -8,7 +8,7 @@ import (
 type mathTree struct {
 	Fn    string
 	Var   string
-	Const types.Val
+	Const types.Val // If its a const value node.
 	Val   map[uint64]types.Val
 	Child []*mathTree
 }

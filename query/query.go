@@ -534,19 +534,19 @@ func isPresent(list []string, str string) bool {
 	return false
 }
 
-func mathCopy(mnode *mathTree, mt *gql.MathTree) error {
+func mathCopy(dst *mathTree, src *gql.MathTree) error {
 	// Either we'll have an operation specified, or the function specified.
-	mnode.Const = mt.Const
-	mnode.Fn = mt.Fn
-	mnode.Val = mt.Val
-	mnode.Var = mt.Var
+	dst.Const = src.Const
+	dst.Fn = src.Fn
+	dst.Val = src.Val
+	dst.Var = src.Var
 
-	for _, mc := range mt.Child {
+	for _, mc := range src.Child {
 		child := &mathTree{}
 		if err := mathCopy(child, mc); err != nil {
 			return err
 		}
-		mnode.Child = append(mnode.Child, child)
+		dst.Child = append(dst.Child, child)
 	}
 	return nil
 }
@@ -964,10 +964,10 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 	return mp, nil
 }
 
-func (mt *mathTree) recurse() []*mathTree {
+func (mt *mathTree) extractVarNodes() []*mathTree {
 	var nodeList []*mathTree
 	for _, ch := range mt.Child {
-		nodeList = append(nodeList, ch.recurse()...)
+		nodeList = append(nodeList, ch.extractVarNodes()...)
 	}
 	if mt.Var != "" {
 		nodeList = append(nodeList, mt)
@@ -976,7 +976,9 @@ func (mt *mathTree) recurse() []*mathTree {
 	return nodeList
 }
 
-func (fromNode *varValue) transformMap(toNode varValue) (map[uint64]types.Val, error) {
+// transformTo transforms fromNode to toNode level using the path between them and the
+// corresponding uidMatrices.
+func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, error) {
 	x.AssertTrue(len(toNode.path) >= len(fromNode.path))
 	idx := 0
 	for ; idx < len(fromNode.path); idx++ {
@@ -1020,8 +1022,9 @@ func (fromNode *varValue) transformMap(toNode varValue) (map[uint64]types.Val, e
 	return newMap, nil
 }
 
+// transformVars transforms all the variables to the variable at the lowest level
 func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
-	mvarList := mNode.recurse()
+	mvarList := mNode.extractVarNodes()
 	// Iterate over the node list to find the node at the lowest level.
 	var maxVar string
 	var maxLevel int
@@ -1040,7 +1043,7 @@ func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
 	for i := 0; i < len(mvarList); i++ {
 		mt := mvarList[i]
 		curNode := doneVars[mt.Var]
-		newMap, err := curNode.transformMap(maxNode)
+		newMap, err := curNode.transformTo(maxNode)
 		if err != nil {
 			return err
 		}
@@ -1345,11 +1348,13 @@ func (sg *SubGraph) assignVars(doneVars map[string]varValue, sgPath []*SubGraph)
 		return nil
 	}
 
-	err := sg.populateUidValVar(doneVars, sgPath)
+	sgPathCopy := make([]*SubGraph, len(sgPath))
+	copy(sgPathCopy, sgPath)
+	err := sg.populateUidValVar(doneVars, sgPathCopy)
 	if err != nil {
 		return err
 	}
-	return sg.populateFacetVars(doneVars, sgPath)
+	return sg.populateFacetVars(doneVars, sgPathCopy)
 }
 
 func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*SubGraph) error {
@@ -1406,9 +1411,6 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
 	if sg.Params.FacetVar != nil && sg.Params.Facet != nil {
 		sgPath = append(sgPath, sg)
-		defer func() {
-			sgPath = sgPath[:len(sgPath)-1] // Backtrack
-		}()
 
 		for _, it := range sg.Params.Facet.Keys {
 			fvar, ok := sg.Params.FacetVar[it]
