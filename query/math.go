@@ -24,83 +24,72 @@ func processBinary(mNode *mathTree) (err error) {
 	cl := mNode.Child[0].Const
 	cr := mNode.Child[1].Const
 
-	union := make(map[uint64]struct{})
-
-	for k := range mpr {
-		union[k] = struct{}{}
+	f := func(k uint64) error {
+		ag := aggregator{
+			name: aggName,
+		}
+		lVal := mpl[k]
+		if cl.Value != nil {
+			// Use the constant value that was supplied.
+			lVal = cl
+		}
+		rVal := mpr[k]
+		if cr.Value != nil {
+			// Use the constant value that was supplied.
+			rVal = cr
+		}
+		err = ag.ApplyVal(lVal)
+		if err != nil {
+			return err
+		}
+		err = ag.ApplyVal(rVal)
+		if err != nil {
+			return err
+		}
+		destMap[k], err = ag.Value()
+		if err != nil {
+			return err
+		}
+		return nil
 	}
-	for k := range mpl {
-		union[k] = struct{}{}
-	}
-
-	if mpl != nil {
-		for k := range union {
-			ag := aggregator{
-				name: aggName,
-			}
-			lVal := mpl[k]
-			rVal := mpr[k]
-			if cr.Value != nil {
-				// Use the constant value that was supplied.
-				rVal = cr
-			}
-			err = ag.ApplyVal(lVal)
-			if err != nil {
+	if mpl != nil || mpr != nil {
+		for k := range mpr {
+			if err := f(k); err != nil {
 				return err
 			}
-			err = ag.ApplyVal(rVal)
-			if err != nil {
-				return err
+
+		}
+
+		for k := range mpl {
+			if _, ok := mpr[k]; ok {
+				continue
 			}
-			destMap[k], err = ag.Value()
-			if err != nil {
+			if err := f(k); err != nil {
 				return err
 			}
 		}
 		mNode.Val = destMap
-		return nil
+		return
 	}
-	if mpr != nil {
-		for k := range union {
-			ag := aggregator{
-				name: aggName,
-			}
-			rVal := mpr[k]
-			lVal := mpl[k]
-			if cl.Value != nil {
-				// Use the constant value that was supplied.
-				lVal = cl
-			}
-			err = ag.ApplyVal(lVal)
-			if err != nil {
-				return err
-			}
-			err = ag.ApplyVal(rVal)
-			if err != nil {
-				return err
-			}
-			destMap[k], err = ag.Value()
-			if err != nil {
-				return err
-			}
+
+	if cl.Value != nil && cr.Value != nil {
+		// Both maps are nil, so 2 constatns.
+		ag := aggregator{
+			name: aggName,
 		}
-		mNode.Val = destMap
-		return nil
-	}
-	// Both maps are nil, so 2 constatns.
-	ag := aggregator{
-		name: aggName,
-	}
-	err = ag.ApplyVal(cl)
-	if err != nil {
+		err = ag.ApplyVal(cl)
+		if err != nil {
+			return err
+		}
+		err = ag.ApplyVal(cr)
+		if err != nil {
+			return err
+		}
+		mNode.Const, err = ag.Value()
 		return err
 	}
-	err = ag.ApplyVal(cr)
-	if err != nil {
-		return err
-	}
-	mNode.Const, err = ag.Value()
-	return err
+	x.Fatalf("Empty maps and constant")
+	return nil
 }
 
 // processUnary handles the unary operands like
