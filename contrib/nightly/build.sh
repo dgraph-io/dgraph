@@ -7,9 +7,9 @@ fi
 
 TRAVIS_EVENT_TYPE=${TRAVIS_EVENT_TYPE:-cron}
 # We run a cron job daily on Travis which will update the nightly binaries.
-if [[ $TRAVIS_EVENT_TYPE != "cron" ]]; then
-   exit 0
-fi
+# if [[ $TRAVIS_EVENT_TYPE != "cron" ]]; then
+#    exit 0
+# fi
 
 set -e
 
@@ -144,11 +144,13 @@ upload_docker_image() {
 pushd $DGRAPH > /dev/null
 echo "Building embedded binaries"
 contrib/releases/build.sh dev
+pwd
+ls
 build_docker_image
 
 if [ "$TRAVIS" = true ] ; then
-  upload_nightly
-  upload_docker_image
+#  upload_nightly
+#  upload_docker_image
 fi
 
 mv $NIGHTLY_FILE $SHA_FILE $ASSETS_FILE $CURRENT_DIR
