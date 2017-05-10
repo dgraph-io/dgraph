@@ -390,8 +390,11 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 		gq.Args[k] = val
 	}
 
-	idVal := gq.Args["id"]
-	if idVal != "" && len(gq.UID) == 0 {
+	idVal, ok := gq.Args["id"]
+	if ok && len(gq.UID) == 0 {
+		if idVal == "" {
+			return x.Errorf("Id can't be empty")
+		}
 		parseID(gq, idVal)
 		// Deleting it here because we don't need to fill it in query.go.
 		delete(gq.Args, "id")
