@@ -473,9 +473,6 @@ func (n *node) processUidLease(e raftpb.Entry, l *taskp.UIDLease) error {
 	if err := uid.LeaseManager().Update(ctx, l.LeasedId); err != nil {
 		return err
 	}
-	if e.Term < n.Term() {
-		uid.LeaseManager().UseAllIds()
-	}
 	return nil
 }
 
