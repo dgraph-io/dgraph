@@ -577,20 +577,19 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 
 func uniqueKey(gchild *gql.GraphQuery) string {
 	key := gchild.Attr
-	if gchild.Func != nil && gchild.Func.IsAggregator() {
-		key += gchild.Func.Name
-		// Aggregator functions could depend on variables, so lets add
-		// that to test for uniqueness too.
-		if len(gchild.NeedsVar) > 0 {
-			key += gchild.NeedsVar[0].Name
-		}
-	} else if gchild.Attr == "var" {
-		key += gchild.NeedsVar[0].Name
-	} else if gchild.IsCount { // ignore count subgraphs..
+	if gchild.Func != nil {
+		key += fmt.Sprintf("%v", gchild.Func)
+	}
+	if len(gchild.NeedsVar) > 0 {
+		key += fmt.Sprintf("%v", gchild.NeedsVar)
+	}
+	if gchild.IsCount { // ignore count subgraphs..
 		key += "count"
-	} else if len(gchild.Langs) > 0 {
+	}
+	if len(gchild.Langs) > 0 {
 		key += fmt.Sprintf("%v", gchild.Langs)
-	} else if gchild.MathExp != nil {
+	}
+	if gchild.MathExp != nil {
 		key += fmt.Sprintf("%+v", gchild.MathExp)
 	}
 	return key
