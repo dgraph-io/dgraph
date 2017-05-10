@@ -215,8 +215,6 @@ func convertToEdges(ctx context.Context, nquads []*graphp.NQuad) (mutationResult
 	for k, v := range newUids {
 		if strings.HasPrefix(k, "_:") {
 			resultUids[k[2:]] = v
-		} else {
-			resultUids[k] = v
 		}
 	}
 

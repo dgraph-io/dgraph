@@ -207,6 +207,9 @@ func AllocateOrGetUniqueUids(ctx context.Context, xids []string, group uint32) (
 		node := groups().Node(group)
 		x.AssertTruef(node != nil, "Node doesn't serve group %d", group)
 		if err := node.ProposeAndWait(ctx, proposal); err != nil {
+			for _, edge := range mutations.Edges {
+				uid.LockManager().Done(string(edge.Value), 0)
+			}
 			return ids, err
 		}
 		for _, edge := range mutations.Edges {
@@ -215,8 +218,12 @@ func AllocateOrGetUniqueUids(ctx context.Context, xids []string, group uint32) (
 	}
 	// wait at the end to avoid circular dependencies between mutations
 	for i := 0; i < len(wait); i++ {
+		x.Trace(ctx, "waiting for uid assignment %v", wait)
 		select {
 		case xu := <-ch:
+			if xu.Uid == 0 {
+				return ids, x.Errorf("Error while generating uid for %s", xu.Xid)
+			}
 			xidMap[xu.Xid] = xu.Uid
 		case <-ctx.Done():
 			return ids, ctx.Err()
