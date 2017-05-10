@@ -6315,7 +6315,6 @@ func TestDuplicateAlias(t *testing.T) {
 			me(id: 0x01) {
 				friend {
 					x as age
-					n as name
 				}
 				a: min(var(x))
 				a: max(var(x))
