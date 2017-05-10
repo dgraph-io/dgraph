@@ -5,13 +5,13 @@ if [[ $TRAVIS_TAG == "nightly" ]]; then
   exit 0
 fi
 
+TRAVIS_EVENT_TYPE=${TRAVIS_EVENT_TYPE:-cron}
 # We run a cron job daily on Travis which will update the nightly binaries.
-if [[ $TRAVIS_EVENT_TYPE != "cron" ]]; then
-   exit 0
-fi
+# if [[ $TRAVIS_EVENT_TYPE != "cron" ]]; then
+#    exit 0
+# fi
 
 set -e
-export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 
 if [[ $TRAVIS_OS_NAME == "osx" ]]; then
   OS="darwin"
@@ -19,7 +19,8 @@ else
   OS="linux"
 fi
 
-BUILD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DGRAPH=$GOPATH/src/github.com/dgraph-io/dgraph
+BUILD_DIR=$DGRAPH/contrib
 source ${BUILD_DIR}/nightly/github.sh
 
 NIGHTLY_TAG="nightly"
@@ -31,6 +32,7 @@ NIGHTLY_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${TAR_FILE}"
 SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.sha256"
 SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${SHA_FILE_NAME}"
 ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
+CURRENT_BRANCH=$(git rev-parse --symbolic-full-name --abbrev-ref HEAD)
 
 update_or_create_asset() {
   local release_id=$1
@@ -115,7 +117,7 @@ upload_nightly() {
   fi
 }
 
-upload_docker_image() {
+build_docker_image() {
   if [[ $TRAVIS_OS_NAME == "osx" ]]; then
     return 0
   fi
@@ -125,11 +127,14 @@ upload_docker_image() {
   tar -xzf ${NIGHTLY_FILE}
   cp ${ASSETS_FILE} .
   echo "Building the dgraph master image."
-  docker build -t dgraph/dgraph:master .
+  docker build -t dgraph/dgraph:$CURRENT_BRANCH .
+}
+
+upload_docker_image() {
   echo "Logging into Docker."
   docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
   echo "Pushing the image"
-  docker push dgraph/dgraph:master
+  docker push dgraph/dgraph:$CURRENT_BRANCH
   popd > /dev/null
 }
 
@@ -144,10 +149,16 @@ upload_docker_image() {
 #   echo "Latest commit on master hasn't changed. Exiting"
 #   exit 0
 # fi
-go get -u golang.org/x/net/context golang.org/x/text/unicode/norm google.golang.org/grpc
 
+pushd $DGRAPH > /dev/null
 echo "Building embedded binaries"
 contrib/releases/build.sh dev
-upload_nightly
+build_docker_image
 
-upload_docker_image
+if [ "$TRAVIS" = true ] ; then
+  echo "here travis is true"
+#  upload_nightly
+#  upload_docker_image
+fi
+
+popd > /dev/null
