@@ -6184,3 +6184,46 @@ func TestNameNotIndexed(t *testing.T) {
 	require.Error(t, err)
 
 }
+
+func TestGraphQLId(t *testing.T) {
+	populateGraph(t)
+	q := `{"query": "query test ($a: string = 1) { me(id: $a) { name, gender, friend(first: 1) { name }}}",
+	"variables" : { "$a": "[1, 31]"}}`
+	js := processToFastJSON(t, q)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"},{"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}]}`, string(js))
+}
+
+func TestGraphQLIdProto(t *testing.T) {
+	populateGraph(t)
+	q := `query test ($id: int) { me(id: $id) { name, gender, friend(first: 1) { name }}}`
+
+	variables := make(map[string]string)
+	variables["$id"] = "1"
+	pb := processToPB(t, q, variables, false)
+	require.Equal(t, `attribute: "_root_"
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "gender"
+    value: <
+      default_val: "female"
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
+    >
+  >
+>
+`, proto.MarshalTextString(pb[0]))
+}
