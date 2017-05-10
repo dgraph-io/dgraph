@@ -7,9 +7,9 @@ fi
 
 TRAVIS_EVENT_TYPE=${TRAVIS_EVENT_TYPE:-cron}
 # We run a cron job daily on Travis which will update the nightly binaries.
-# if [[ $TRAVIS_EVENT_TYPE != "cron" ]]; then
-#    exit 0
-# fi
+if [[ $TRAVIS_EVENT_TYPE != "cron" ]]; then
+   exit 0
+fi
 
 set -e
 
@@ -33,6 +33,7 @@ SHA_FILE_NAME="dgraph-checksum-${OS}-amd64-${DGRAPH_VERSION}-dev.sha256"
 SHA_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/${SHA_FILE_NAME}"
 ASSETS_FILE="${GOPATH}/src/github.com/dgraph-io/dgraph/assets.tar.gz"
 CURRENT_BRANCH=$(git rev-parse --symbolic-full-name --abbrev-ref HEAD)
+CURRENT_DIR=$(pwd)
 
 update_or_create_asset() {
   local release_id=$1
@@ -128,6 +129,8 @@ build_docker_image() {
   cp ${ASSETS_FILE} .
   echo "Building the dgraph master image."
   docker build -t dgraph/dgraph:$CURRENT_BRANCH .
+  # Lets remove the dgraph folder now.
+  rm dgraph
 }
 
 upload_docker_image() {
@@ -138,27 +141,15 @@ upload_docker_image() {
   popd > /dev/null
 }
 
-# Dont check because Mac and Linux run in two separate scripts.
-# nightly_sha=""
-# read nightly_sha < <( \
-#   send_gh_api_request repos/${DGRAPH_REPO}/git/refs/tags/${NIGHTLY_TAG} \
-#   | jq -r '.object.sha') || true
-#
-# if [[ $nightly_sha == $DGRAPH_COMMIT ]]; then
-#   echo "nightly $nightly_sha, dgraph commit $DGRAPH_COMMIT"
-#   echo "Latest commit on master hasn't changed. Exiting"
-#   exit 0
-# fi
-
 pushd $DGRAPH > /dev/null
 echo "Building embedded binaries"
 contrib/releases/build.sh dev
 build_docker_image
 
 if [ "$TRAVIS" = true ] ; then
-  echo "here travis is true"
-#  upload_nightly
-#  upload_docker_image
+  upload_nightly
+  upload_docker_image
 fi
 
+mv $NIGHTLY_FILE $SHA_FILE $ASSETS_FILE $CURRENT_DIR
 popd > /dev/null
