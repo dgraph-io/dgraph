@@ -315,47 +315,51 @@ age: int .
 
 `@index` keyword at the end of a scalar field declaration in the schema specifies that the predicate should be indexed. For example, if we want to index some fields, we should have a schema similar to the one below.
 ```
-name: string @index .
-age: int @index .
-address: string @index .
-dateofbirth: date @index .
-health: float @index .
-location: geo @index .
-timeafterbirth:  datetime @index .
+name           : string @index   .
+age            : int @index      .
+address        : string @index   .
+dateofbirth    : date @index     .
+health         : float @index    .
+location       : geo @index      .
+timeafterbirth : datetime @index .
 ```
 
 All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`.
 
 ```
-name: string @index(exact, term) .
-age: int @index(int) .
-address: string @index(term) .
-dateofbirth: date @index(date) .
-health: float @index(float) .
-location: geo @index(geo) .
-timeafterbirth:  datetime @index(datetime) .
+name	       : string @index(exact, term) .
+large_name     : string @index(hash) 	    .
+age            : int @index(int)            .
+address        : string @index(term)        .
+dateofbirth    : date @index(date)          .
+health         : float @index(float)        .
+location       : geo @index(geo)            .
+timeafterbirth : datetime @index(datetime)  .
 ```
 
-The available tokenizers are currently `term, fulltext, exact, int, float, geo, date, datetime`. All of them except `exact` and `fulltext` are the default tokenizers for their respective data types. You can specify multiple indexes per predicate as shown for `name` in the above example.
+The available tokenizers are currently `term, fulltext, exact, trigram, hash, int, float, geo, date, datetime`. String has `term` as the default tokenizer. All of the other data types have a default tokenizer with the same name as the type. You can specify multiple tokenizers per predicate as shown for `name` in the above example. Currently, only predicates of type string support more than one tokenizer.
 
 {{% notice "note" %}}To be able to do filtering on a predicate, you must index it.{{% /notice %}}
 
 #### String Indices
-There are three types of string indices: `exact`, `term` and `fulltext`. Following table summarize usage of each index type.
+Following table summarizes usage of different index types available for strings.
 
-| Index type |                          Usage                         |
-|:----------:|:------------------------------------------------------:|
-|   `exact`  | matching of entire value                               |
-|   `term`   | matching of terms/words                                |
-| `fulltext` | matching with language specific stemming and stopwords |
-| `trigram`  | regular expressions matching                           |
+| Index type   | Usage                                                                              |
+| :----------: | :--------------------------------------------------------------------------------: |
+| `exact`      | matching of entire value                                                           |
+| `hash`       | matching of entire value, useful when the values are large in size                 |
+| `term`       | matching of terms/words                                                            |
+| `fulltext`   | matching with language specific stemming and stopwords                             |
+| `trigram`    | regular expressions matching                                                       |
 
 #### Sortable Indices
 
-Not all the indices establish a total order among the values that they index. So, in order to order based on the values or do inequality operations, the corresponding predicates must have a sortable index. The non-sortable indices that are currently present are `term`. All other indices are sortable. For example to sort by names or do any inequality operations on it, this line **must** be specified in schema.
+Not all the indices establish a total order among the values that they index. So, in order to order based on the values or do inequality operations, the corresponding predicates must have a sortable index. The only sortable index for strings is `exact`. All other indices can be only be used for checking equality(`eq`). For example to sort by names or do any inequality operations on it, this line **must** be specified in schema.
 ```
 name: string @index(exact) .
 ```
+
+For string, only `exact` is a sortable index. `int`, `float`, `date` and `datetime` are also sortable indices.
 
 ### Reverse Edges
 Each graph edge is unidirectional. It points from one node to another. A lot of times,  you wish to access data in both directions, forward and backward. Instead of having to send edges in both directions, you can use the `@reverse` keyword at the end of a uid (entity) field declaration in the schema. This specifies that the reverse edge should be automatically generated. For example, if we want to add a reverse edge for `directed_by` predicate, we should have a schema as follows.
@@ -437,23 +441,23 @@ This implies that name be stored as string(default), age as int and health as fl
 
 The following table lists all the supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Datatypes) and the corresponding internal type format in which the data is stored.
 
-| Storage Type | Dgraph type |
-| -------------|:------------:|
-|  &#60;xs:string&#62; | String |
-|  &#60;xs:dateTime&#62; |                               DateTime |
-|  &#60;xs:date&#62; |                                   Date |
-|  &#60;xs:int&#62; |                                    Int |
-|  &#60;xs:boolean&#62; |                                Bool |
-|  &#60;xs:double&#62; |                                 Float |
-|  &#60;xs:float&#62; |                                  Float |
-|  &#60;geo:geojson&#62; |                               Geo |
-|  &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62; |   String |
-|  &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | DateTime |
-|  &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62; |     Date |
-|  &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62; |      Int |
-|  &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62; |  Bool |
-|  &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62; |   Float |
-|  &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62; |    Float |
+| Storage Type                                            | Dgraph type    |
+| -------------                                           | :------------: |
+| &#60;xs:string&#62;                                     | String         |
+| &#60;xs:dateTime&#62;                                   | DateTime       |
+| &#60;xs:date&#62;                                       | Date           |
+| &#60;xs:int&#62;                                        | Int            |
+| &#60;xs:boolean&#62;                                    | Bool           |
+| &#60;xs:double&#62;                                     | Float          |
+| &#60;xs:float&#62;                                      | Float          |
+| &#60;geo:geojson&#62;                                   | Geo            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;   | String         |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | DateTime       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | Date           |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;      | Int            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;  | Bool           |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;   | Float          |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;    | Float          |
 
 
 In case a predicate has different schema type and storage type, the convertibility between the two is ensured during mutation and an error is thrown if they are incompatible.  The values are always stored as storage type if specified, or else they are converted to schema type and stored. Storage type is property of the value we are storing and schema type is property of the edge.
@@ -1602,16 +1606,16 @@ All these statements must be enclosed within a `math( <exp> )` block.
 
 The supported operators are as follows:
 
-| Operators    | Types accepted | What it does             |
-|:------------:|:--------------:|:------------------------:|
-| `+` `-` `*` `/` `%`  | int, float   | performs the corresponding operation |
-| `min` `max`      | All types except geo, bool  (binary functions) | selects the min/max value among the two|
-| `<` `>` `<=` `>=` `==` `!=`  | All types except geo, bool     | Returns true or false based on the values |
-| `floor` `ceil``ln` `exp` `sqrt`  | int, float (unary function)| performs the corresponding operation|
-| `since` | date, datetime | Returns the number of seconds in float from the time specified |
-| `pow(a, b)` | int, float | Returns `a to the power b` |
-| `logbase(a,b)` | int, float | Returns `log(a)` to the base `b`|
-| `cond(a, b, c)`    | first operand must be a boolean  | selects `b` if `a` is true else `c` |
+| Operators                       | Types accepted                                 | What it does                                                   |
+| :------------:                  | :--------------:                               | :------------------------:                                     |
+| `+` `-` `*` `/` `%`             | int, float                                     | performs the corresponding operation                           |
+| `min` `max`                     | All types except geo, bool  (binary functions) | selects the min/max value among the two                        |
+| `<` `>` `<=` `>=` `==` `!=`     | All types except geo, bool                     | Returns true or false based on the values                      |
+| `floor` `ceil``ln` `exp` `sqrt` | int, float (unary function)                    | performs the corresponding operation                           |
+| `since`                         | date, datetime                                 | Returns the number of seconds in float from the time specified |
+| `pow(a, b)`                     | int, float                                     | Returns `a to the power b`                                     |
+| `logbase(a,b)`                  | int, float                                     | Returns `log(a)` to the base `b`                               |
+| `cond(a, b, c)`                 | first operand must be a boolean                | selects `b` if `a` is true else `c`                            |
 
 A simple example is:
 

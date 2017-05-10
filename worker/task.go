@@ -371,7 +371,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isCompareAtRoot {
-		f := func(key, val []byte, mu sync.Mutex) {
+		f := func(key, val []byte, mu *sync.Mutex) {
 			pl, decr := posting.GetOrUnmarshal(key, val, gid)
 			count := int64(pl.Length(0))
 			decr()
@@ -450,24 +450,33 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		}
 	}
 
+	// We fetch the actual value for the uids, compare them to the value in the
+	// request and filter the uids only if the tokenizer IsLossy.
 	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 &&
 		srcFn.ineqValueToken == srcFn.tokens[0] {
-		// Need to evaluate inequality for entries in the first bucket.
-		typ, err := schema.State().TypeOf(attr)
-		if err != nil || !typ.IsScalar() {
-			return nil, x.Errorf("Attribute not scalar: %s %v", attr, typ)
-		}
-
-		x.AssertTrue(len(out.UidMatrix) > 0)
-		// Filter the first row of UidMatrix. Since ineqValue != nil, we may
-		// assume that ineqValue is equal to the first token found in TokensTable.
-		algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
-			sv, err := fetchValue(uid, attr, q.Langs, typ)
-			if sv.Value == nil || err != nil {
-				return false
+		tokenizer, err := pickTokenizer(attr, srcFn.fname)
+		// We should already have checked this in getInequalityTokens.
+		x.Check(err)
+		// Only if the tokenizer that we used IsLossy, then we need to fetch
+		// and compare the actual values.
+		if tokenizer.IsLossy() {
+			// Need to evaluate inequality for entries in the first bucket.
+			typ, err := schema.State().TypeOf(attr)
+			if err != nil || !typ.IsScalar() {
+				return nil, x.Errorf("Attribute not scalar: %s %v", attr, typ)
 			}
-			return compareTypeVals(q.SrcFunc[0], sv, srcFn.ineqValue)
-		})
+
+			x.AssertTrue(len(out.UidMatrix) > 0)
+			// Filter the first row of UidMatrix. Since ineqValue != nil, we may
+			// assume that ineqValue is equal to the first token found in TokensTable.
+			algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
+				sv, err := fetchValue(uid, attr, q.Langs, typ)
+				if sv.Value == nil || err != nil {
+					return false
+				}
+				return compareTypeVals(q.SrcFunc[0], sv, srcFn.ineqValue)
+			})
+		}
 	}
 
 	// If geo filter, do value check for correctness.
@@ -931,10 +940,10 @@ type itkv struct {
 	val []byte
 }
 
-func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte, sync.Mutex)) {
+func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte, *sync.Mutex)) {
 	grpSize := uint64(math.MaxUint64 / uint64(numPart))
 	var wg sync.WaitGroup
-	var mu sync.Mutex
+	mu := &sync.Mutex{}
 
 	for i := uint64(0); i < numPart; i++ {
 		minUid := grpSize*i + 1
@@ -944,7 +953,7 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 		}
 		x.Trace(ctx, "Running go-routine %v for iteration", i)
 		wg.Add(1)
-		go func() {
+		go func(i uint64) {
 			it := pstore.NewIterator()
 			defer it.Close()
 			startKey := x.DataKey(q.Attr, minUid)
@@ -973,7 +982,7 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 				f(key, val, mu)
 			}
 			wg.Done()
-		}()
+		}(i)
 	}
 	wg.Wait()
 }
