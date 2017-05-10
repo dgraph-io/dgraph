@@ -998,11 +998,11 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 			ul := curNode.uidMatrix[i]
 			srcUid := curNode.SrcUIDs.Uids[i]
 			curVal, ok := newMap[srcUid]
-			if curVal.Tid != types.IntID && curVal.Tid != types.FloatID {
-				return nil, x.Errorf("Encountered non int/float type for summing")
-			}
 			if !ok || curVal.Value == nil {
 				continue
+			}
+			if curVal.Tid != types.IntID && curVal.Tid != types.FloatID {
+				return nil, x.Errorf("Encountered non int/float type for summing")
 			}
 			for j := 0; j < len(ul.Uids); j++ {
 				dstUid := ul.Uids[j]
