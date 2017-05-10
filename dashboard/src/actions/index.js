@@ -7,6 +7,7 @@ import {
     getEndpoint
 } from "../containers/Helpers";
 import SHA256 from "crypto-js/sha256";
+import Raven from "raven-js";
 
 // TODO - Check if its better to break this file down into multiple files.
 
@@ -110,10 +111,8 @@ export const resetResponseState = () => ({
 });
 
 export const runQuery = query => {
-    if(query.trim() === "") {
-        return dispatch => {
-
-        }
+    if (query.trim() === "") {
+        return dispatch => {};
     }
 
     return dispatch => {
@@ -123,7 +122,7 @@ export const runQuery = query => {
 
         return timeout(
             60000,
-            fetch(getEndpoint('query', { debug: true }), {
+            fetch(getEndpoint("query", { debug: true }), {
                 method: "POST",
                 mode: "cors",
                 headers: {
@@ -161,9 +160,13 @@ export const runQuery = query => {
                 })
         ).catch(function(error) {
             dispatch(fetchedResponse());
-            error.response.text().then(function (text) {
-                dispatch(saveErrorResponse(text));
-            })
+            if (error.response) {
+                error.response.text().then(function(text) {
+                    dispatch(saveErrorResponse(text));
+                });
+            } else {
+                Raven.captureException(error);
+            }
         });
     };
 };
@@ -213,7 +216,7 @@ const createShare = (dispatch, getState) => {
     const query = getState().query.text;
     const stringifiedQuery = encodeURI(query);
 
-    fetch(getEndpoint('share'), {
+    fetch(getEndpoint("share"), {
         method: "POST",
         mode: "cors",
         headers: {
@@ -224,12 +227,13 @@ const createShare = (dispatch, getState) => {
     })
         .then(checkStatus)
         .then(response => response.json())
-        .then((result) => {
+        .then(result => {
             if (result.uids && result.uids.share) {
                 dispatch(updateShareId(result.uids.share));
             }
         })
         .catch(function(error) {
+            Raven.captureException(error);
             dispatch(
                 saveErrorResponse(
                     "Got error while saving querying for share: " +
@@ -256,7 +260,7 @@ export const getShareId = (dispatch, getState) => {
 
     return timeout(
         6000,
-        fetch(getEndpoint('query'), {
+        fetch(getEndpoint("query"), {
             method: "POST",
             mode: "cors",
             headers: {
@@ -267,7 +271,7 @@ export const getShareId = (dispatch, getState) => {
         })
             .then(checkStatus)
             .then(response => response.json())
-            .then((result) => {
+            .then(result => {
                 const matchingQueries = result.query;
 
                 // If no match, store the query
@@ -286,6 +290,7 @@ export const getShareId = (dispatch, getState) => {
                 }
             })
     ).catch(function(error) {
+        Raven.captureException(error);
         dispatch(
             saveErrorResponse(
                 "Got error while saving querying for share: " + error.message
@@ -298,7 +303,7 @@ export const getQuery = shareId => {
     return dispatch => {
         timeout(
             6000,
-            fetch(getEndpoint('query'), {
+            fetch(getEndpoint("query"), {
                 method: "POST",
                 mode: "cors",
                 headers: {
@@ -314,12 +319,15 @@ export const getQuery = shareId => {
                 .then(response => response.json())
                 .then(function(result) {
                     if (result.query && result.query.length > 0) {
-                        dispatch(selectQuery(decodeURI(result.query[0]._share_)));
+                        dispatch(
+                            selectQuery(decodeURI(result.query[0]._share_))
+                        );
                     } else {
                         dispatch(queryFound(false));
                     }
                 })
         ).catch(function(error) {
+            Raven.captureException(error);
             dispatch(
                 saveErrorResponse(
                     `Got error while getting query for id: ${shareId}, err: ` +

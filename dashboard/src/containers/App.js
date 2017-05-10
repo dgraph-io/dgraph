@@ -15,9 +15,14 @@ import {
   selectQuery,
   runQuery
 } from "../actions";
-import { readCookie, eraseCookie } from './Helpers';
+import { readCookie, eraseCookie } from "./Helpers";
 
 import "../assets/css/App.css";
+
+import Raven from "raven-js";
+Raven.config(
+  "https://1621cc56d5ee47ceabe32d9b0ac4ed7e@sentry.io/166278"
+).install();
 
 class App extends React.Component {
   enterFullScreen = updateFullscreen => {
@@ -64,9 +69,7 @@ class App extends React.Component {
                     className="pull-right App-fullscreen"
                     onClick={() => this.enterFullScreen(this.props.updateFs)}
                   >
-                    <span
-                      className="App-fs-icon glyphicon glyphicon-glyphicon glyphicon-resize-full"
-                    />
+                    <span className="App-fs-icon glyphicon glyphicon-glyphicon glyphicon-resize-full" />
                   </div>}
                 <Response />
                 <PreviousQueryListContainer xs="visible-xs-block" />
@@ -88,12 +91,12 @@ class App extends React.Component {
 
     // If playQuery cookie is set, run the query and erase the cookie
     // The cookie is used to communicate the query string between docs and play
-    const playQuery = readCookie('playQuery');
+    const playQuery = readCookie("playQuery");
     if (playQuery) {
       const queryString = decodeURI(playQuery);
       handleSelectQuery(queryString);
       handleRunQuery(queryString).then(() => {
-        eraseCookie('playQuery', { crossDomain: true });
+        eraseCookie("playQuery", { crossDomain: true });
       });
     }
   };
@@ -101,12 +104,9 @@ class App extends React.Component {
   componentWillReceiveProps = nextProps => {
     if (!nextProps.found) {
       // Lets auto close the alert after 2 secs.
-      setTimeout(
-        () => {
-          this.props.queryFound(true);
-        },
-        3000
-      );
+      setTimeout(() => {
+        this.props.queryFound(true);
+      }, 3000);
     }
   };
 }
@@ -128,10 +128,10 @@ const mapDispatchToProps = dispatch => ({
   queryFound: found => {
     dispatch(queryFound(found));
   },
-  handleSelectQuery: (queryText) => {
+  handleSelectQuery: queryText => {
     dispatch(selectQuery(queryText));
   },
-  handleRunQuery: (query) => {
+  handleRunQuery: query => {
     return dispatch(runQuery(query));
   }
 });
