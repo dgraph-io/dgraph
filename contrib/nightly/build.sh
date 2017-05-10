@@ -130,7 +130,7 @@ build_docker_image() {
   echo "Building the dgraph master image."
   docker build -t dgraph/dgraph:$CURRENT_BRANCH .
   # Lets remove the dgraph folder now.
-  rm dgraph
+  rm -rf dgraph
 }
 
 upload_docker_image() {
