@@ -1815,6 +1815,14 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return nil, x.Errorf("Invalid query")
 			}
 			item = it.Item()
+			if item.Val == "var" {
+				// Any number of variables allowed here.
+				_, err := parseVarList(it, gq)
+				if err != nil {
+					return nil, err
+				}
+				continue
+			}
 			isDollar := false
 			if item.Typ == itemDollar {
 				isDollar = true
@@ -1823,17 +1831,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				if item.Typ != itemName {
 					return nil, x.Errorf("Expected a variable name. Got: %v", item.Val)
 				}
-			}
-			if item.Val == "var" {
-				if isDollar {
-					return nil, x.Errorf("var can't be used as a GraphQL variable for id at root")
-				}
-				// Any number of variables allowed here.
-				_, err := parseVarList(it, gq)
-				if err != nil {
-					return nil, err
-				}
-				continue
 			}
 			// Check and parse if its a list.
 			val := collectName(it, item.Val)
