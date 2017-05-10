@@ -38,7 +38,7 @@ func childAttrs(g *GraphQuery) []string {
 
 func TestParseQueryListPred1(t *testing.T) {
 	query := `
-	{	
+	{
 		var(id: 0x0a) {
 			friends {
 				expand(_all_)
@@ -52,13 +52,13 @@ func TestParseQueryListPred1(t *testing.T) {
 
 func TestParseQueryListPred2(t *testing.T) {
 	query := `
-	{	
+	{
 		var(id:0x0a) {
-			f as friends 
+			f as friends
 		}
-	
+
 		var(id: var(f)) {
-			l as _predicate_		
+			l as _predicate_
 		}
 
 		var(id: 0x0a) {
@@ -74,11 +74,11 @@ func TestParseQueryListPred2(t *testing.T) {
 
 func TestParseQueryListPred_MultiVarError(t *testing.T) {
 	query := `
-	{	
+	{
 		var(id:0x0a) {
-			f as friends 
+			f as friends
 		}
-	
+
 		var(id: var(f)) {
 			l as _predicate_
 			friend {
@@ -100,7 +100,7 @@ func TestParseQueryListPred_MultiVarError(t *testing.T) {
 
 func TestParseQueryWithNoVarValError(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(), orderasc: var(n) ) {
 			name
 		}
@@ -118,7 +118,7 @@ func TestParseQueryWithNoVarValError(t *testing.T) {
 
 func TestParseQueryAggChild(t *testing.T) {
 	query := `
-	{	
+	{
 		var(id:0x0a) {
 			min(friends) {
 				name
@@ -155,7 +155,7 @@ func TestParseQueryWithDash(t *testing.T) {
 
 func TestParseQueryWithMultiVarValError(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(n, d) ) {
 			name
 		}
@@ -174,7 +174,7 @@ func TestParseQueryWithMultiVarValError(t *testing.T) {
 
 func TestParseQueryWithVarValAggErr(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(c) ) {
 			name
 		}
@@ -193,7 +193,7 @@ func TestParseQueryWithVarValAggErr(t *testing.T) {
 
 func TestParseQueryWithVarValAgg_Error1(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(d) ) {
 			name
 		}
@@ -214,7 +214,7 @@ func TestParseQueryWithVarValAgg_Error1(t *testing.T) {
 
 func TestParseQueryWithVarValAgg_Error2(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(d) ) {
 			name
 		}
@@ -235,7 +235,7 @@ func TestParseQueryWithVarValAgg_Error2(t *testing.T) {
 
 func TestParseQueryWithVarValAgg_Error3(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(d) ) {
 			name
 			var(f)
@@ -257,7 +257,7 @@ func TestParseQueryWithVarValAgg_Error3(t *testing.T) {
 }
 func TestParseQueryWithVarValAggNested(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(d) ) {
 			name
 		}
@@ -280,7 +280,7 @@ func TestParseQueryWithVarValAggNested(t *testing.T) {
 
 func TestParseQueryWithVarValAggNested2(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(d) ) {
 			name
 			var(q)
@@ -307,7 +307,7 @@ func TestParseQueryWithVarValAggNested2(t *testing.T) {
 
 func TestParseQueryWithVarValAggNested4(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(d) ) {
 			name
 		}
@@ -330,7 +330,7 @@ func TestParseQueryWithVarValAggNested4(t *testing.T) {
 
 func TestParseQueryWithVarValAggLogSqrt(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(d) ) {
 			name
 			var(e)
@@ -355,7 +355,7 @@ func TestParseQueryWithVarValAggLogSqrt(t *testing.T) {
 
 func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(d) ) {
 			name
 			var(f)
@@ -385,7 +385,7 @@ func TestParseQueryWithVarValAggNestedConditional(t *testing.T) {
 
 func TestParseQueryWithVarValAggNested3(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(d) ) {
 			name
 		}
@@ -409,7 +409,7 @@ func TestParseQueryWithVarValAggNested3(t *testing.T) {
 func TestParseQueryWithVarValAggNested_Error1(t *testing.T) {
 	// No args to mulvar.
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(d) ) {
 			name
 		}
@@ -428,7 +428,7 @@ func TestParseQueryWithVarValAggNested_Error1(t *testing.T) {
 
 func TestParseQueryWithVarValAggNested_Error2(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(d) ) {
 			name
 		}
@@ -449,7 +449,7 @@ func TestParseQueryWithVarValAggNested_Error2(t *testing.T) {
 
 func TestParseQueryWithLevelAgg(t *testing.T) {
 	query := `
-	{	
+	{
 		var(id:0x0a) {
 			friends {
 				a as count(age)
@@ -475,7 +475,7 @@ func TestParseQueryWithLevelAgg(t *testing.T) {
 
 func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(c) ) {
 			name
 			var(c)
@@ -516,7 +516,7 @@ func TestParseQueryWithVarValAggCombination(t *testing.T) {
 
 func TestParseQueryWithVarValAgg(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(n) ) {
 			name
 		}
@@ -547,7 +547,7 @@ func TestParseQueryWithVarValAgg(t *testing.T) {
 
 func TestParseQueryWithVarValCount(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(n) ) {
 			name
 		}
@@ -575,7 +575,7 @@ func TestParseQueryWithVarValCount(t *testing.T) {
 
 func TestParseQueryWithVarVal(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L), orderasc: var(n) ) {
 			name
 		}
@@ -603,7 +603,7 @@ func TestParseQueryWithVarVal(t *testing.T) {
 
 func TestParseQueryWithVarMultiRoot(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L, J, K)) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
@@ -627,7 +627,7 @@ func TestParseQueryWithVarMultiRoot(t *testing.T) {
 
 func TestParseQueryWithVar(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L)) {name}
 		him(id: var(J)) {name}
 		you(id: var(K)) {name}
@@ -653,7 +653,7 @@ func TestParseQueryWithVar(t *testing.T) {
 
 func TestParseQueryWithVarError1(t *testing.T) {
 	query := `
-	{	
+	{
 		him(id: var(J)) {name}
 		you(id: var(K)) {name}
 		var(id:0x0a) {L AS friends}
@@ -667,9 +667,9 @@ func TestParseQueryWithVarError1(t *testing.T) {
 
 func TestParseQueryWithVarError2(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id: var(L)) {name}
-		him(id: var(J)) {name}	
+		him(id: var(J)) {name}
 		you(id: var(K)) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {K AS friends}
@@ -683,7 +683,7 @@ func TestParseQueryFilterError1(t *testing.T) {
 	query := `
 	{
 		me(id: abc) @filter(anyof(name"alice")) {
-		 name	
+		 name
 		}
 	}
 `
@@ -695,7 +695,7 @@ func TestParseQueryFilterError2(t *testing.T) {
 	query := `
 	{
 		me(id: abc) @filter(anyof(name "alice")) {
-		 name	
+		 name
 		}
 	}
 `
@@ -710,7 +710,7 @@ func TestParseQueryWithVarAtRootFilterID(t *testing.T) {
 			L AS friends
 		}
 		me(id: var(K)) @filter(var(L)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -753,9 +753,9 @@ func TestParseQueryWithVar1(t *testing.T) {
 		var(id:0x0a) {
 			L AS friends
 		}
-	
+
 		me(id: var(L)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -776,9 +776,9 @@ func TestParseQueryWithMultipleVar(t *testing.T) {
 				B AS relatives
 			}
 		}
-	
+
 		me(id:var(L)) {
-		 name	
+		 name
 		}
 
 		relatives(id:var(B)) {
@@ -1624,8 +1624,8 @@ func TestParseStringVarInFilter(t *testing.T) {
 		{
 			versions(func:eq(type, "version"))
 			{
-				versions @filter(eq(version_number, $version)) 
-				{ 
+				versions @filter(eq(version_number, $version))
+				{
 					version_number
 				}
 			}
@@ -2279,7 +2279,7 @@ func TestParseComments(t *testing.T) {
 
 func TestParseComments1(t *testing.T) {
 	query := `{
-		#Something 
+		#Something
 		me(func:allofterms(name, "barack")) {
 			friends {
 				name  # Name of my friend
@@ -2676,7 +2676,7 @@ func TestParseGroupbyWithCountVar(t *testing.T) {
 			hometown
 			age
 		}
-		
+
 		groups(id: var(a)) {
 			_uid_
 			var(a)
@@ -2700,7 +2700,7 @@ func TestParseGroupbyWithMaxVar(t *testing.T) {
 			hometown
 			age
 		}
-		
+
 		groups(id: var(a)) {
 			_uid_
 			var(a)
@@ -3090,7 +3090,7 @@ func TestFacetsFilterAtValue(t *testing.T) {
 
 func TestParseQueryWithAttrLang(t *testing.T) {
 	query := `
-	{	
+	{
 		me(id:0x1) {
 			name
 			friend(first:5, orderasc: name@en:fr) {
@@ -3208,6 +3208,15 @@ func TestParseRegexp6(t *testing.T) {
 	  }
     }
 `
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseGraphQLVarId(t *testing.T) {
+	query := `{
+		"query" : "query versions($a: string){versions(id: $var(a,b,c)){versions{ version_number}}}",
+		"variables" : {"$a": "3"}
+	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 }

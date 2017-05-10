@@ -1825,6 +1825,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				}
 			}
 			if item.Val == "var" {
+				if isDollar {
+					return nil, x.Errorf("var can't be used as a GraphQL variable for id at root")
+				}
 				// Any number of variables allowed here.
 				_, err := parseVarList(it, gq)
 				if err != nil {
