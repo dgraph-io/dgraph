@@ -611,7 +611,7 @@ func (n *node) Run() {
 					groups().syncMemberships()
 				} else if rd.RaftState == raft.StateLeader && !leader {
 					// TODO:wait for apply watermark ??
-					LeaseManager().resetLease()
+					LeaseManager().resetLease(n.gid)
 					groups().syncMemberships()
 				}
 				leader = rd.RaftState == raft.StateLeader

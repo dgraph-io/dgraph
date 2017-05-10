@@ -48,7 +48,10 @@ type leaseManager struct {
 }
 
 // called on leader change
-func (l *leaseManager) resetLease() {
+func (l *leaseManager) resetLease(group uint32) {
+	if group != gid {
+		return
+	}
 	l.Lock()
 	defer l.Unlock()
 	l.maxLeaseId = readMaxLease()
@@ -178,6 +181,10 @@ func (lm *lockManager) getUid(ctx context.Context, xid string) (uint64, error) {
 	}
 	s.uid = uid
 	return s.uid, nil
+}
+
+func (lm *lockManager) clean() {
+
 }
 
 func LockManager() *lockManager {

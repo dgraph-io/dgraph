@@ -56,6 +56,7 @@ func Init(ps *store.Store) {
 
 	leasemgr = new(leaseManager)
 	leasemgr.elog = trace.NewEventLog("Lease Manager", "")
+	go lmgr.clean()
 }
 
 // grpcWorker struct implements the gRPC server interface.
