@@ -877,7 +877,7 @@ func TestQueryVarValAggMul(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"follow":[{"count":1}]},{"@facets":{"_":{"weight":1.500000}},"follow":[{"count":1}]}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"follow":[{"count":1}]}],"var(L4)":1.200000}]}],"sum":[{"name":"John","var(L4)":3.900000},{"name":"Matt","var(L4)":1.200000}]}`,
+		`{"me":[{"name":"Andrea","var(mul)":19.000000,"var(n)":19,"var(s)":1},{"name":"Rick Grimes","var(mul)":15.000000,"var(n)":15,"var(s)":1},{"name":"Glenn Rhee","var(mul)":0.000000,"var(n)":15,"var(s)":0},{"name":"Daryl Dixon","var(mul)":0.000000,"var(n)":17,"var(s)":0},{"var(mul)":0.000000,"var(s)":0}]}`,
 		js)
 }
 
