@@ -53,7 +53,7 @@ func Init(ps *store.Store) {
 	pending = make(chan struct{}, 5000)
 
 	lmgr = new(lockManager)
-	lmgr.uids = make(map[string]*Uid)
+	lmgr.uids = make(map[string]*uid)
 
 	leasemgr = new(leaseManager)
 	leasemgr.elog = trace.NewEventLog("Lease Manager", "")

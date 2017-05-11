@@ -59,7 +59,7 @@ func (l *leaseManager) resetLease(group uint32) {
 	l.minLeaseId = l.maxLeaseId + 1
 }
 
-func LeaseManager() *leaseManager {
+func leaseMgr() *leaseManager {
 	return leasemgr
 }
 
@@ -133,16 +133,16 @@ func propose(ctx context.Context, edge *protos.DirectedEdge) error {
 
 type lockManager struct {
 	x.SafeMutex
-	uids map[string]*Uid
+	uids map[string]*uid
 }
 
-type Uid struct {
+type uid struct {
 	x.SafeMutex
 	uid uint64
 	ts  time.Time
 }
 
-func (lm *lockManager) uid(xid string) *Uid {
+func (lm *lockManager) uid(xid string) *uid {
 	lm.RLock()
 	u, has := lm.uids[xid]
 	if has {
@@ -156,7 +156,7 @@ func (lm *lockManager) uid(xid string) *Uid {
 	if u, has := lm.uids[xid]; has {
 		return u
 	}
-	u = &Uid{}
+	u = &uid{}
 	u.ts = time.Now()
 	lm.uids[xid] = u
 	return u
@@ -170,14 +170,16 @@ func (lm *lockManager) assignUidForXid(ctx context.Context, xid string) (uint64,
 	if s.uid != 0 {
 		return s.uid, nil
 	}
-	uid, err := LeaseManager().assignNewUids(ctx, 1)
+	id, err := leaseMgr().assignNewUids(ctx, 1)
 	if err != nil {
-		return uid, err
+		return id, err
 	}
-	if err := proposeUid(ctx, xid, uid); err != nil {
-		return uid, err
+	// To ensure that the key is not deleted immediately after persisting the id
+	s.ts = time.Now()
+	if err := proposeUid(ctx, xid, id); err != nil {
+		return id, err
 	}
-	s.uid = uid
+	s.uid = id
 	return s.uid, nil
 }
 
@@ -186,20 +188,17 @@ func (lm *lockManager) clean() {
 	for range ticker.C {
 		now := time.Now()
 		lm.Lock()
-		for xid, uid := range lm.uids {
-			uid.RLock()
-			if now.Sub(uid.ts) > time.Minute {
-				// There can be only two cases, it is present in map
-				// but proposal failed so nothing was assigned
-				// or we proposed and persisted the info
+		for xid, u := range lm.uids {
+			u.RLock()
+			if now.Sub(u.ts) > 10*time.Minute {
 				delete(lm.uids, xid)
 			}
-			uid.RUnlock()
+			u.RUnlock()
 		}
 		lm.Unlock()
 	}
 }
 
-func LockManager() *lockManager {
+func lockMgr() *lockManager {
 	return lmgr
 }

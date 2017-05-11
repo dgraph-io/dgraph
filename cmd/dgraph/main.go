@@ -166,7 +166,7 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 			newUids[nq.Subject] = 0
 		} else {
 			// Only store xids that need to be generated.
-			_, err := rdf.GetUid(nq.Subject)
+			_, err := rdf.ParseUid(nq.Subject)
 			if err == rdf.ErrInvalidUID {
 				return mr, err
 			} else if err != nil {
@@ -178,7 +178,7 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
 			} else {
-				_, err := rdf.GetUid(nq.ObjectId)
+				_, err := rdf.ParseUid(nq.ObjectId)
 				if err == rdf.ErrInvalidUID {
 					return mr, err
 				} else if err != nil {

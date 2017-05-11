@@ -101,7 +101,7 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 			che <- nil
 			return
 		}
-		startId, err := LeaseManager().assignNewUids(ctx, num.Val)
+		startId, err := leaseMgr().assignNewUids(ctx, num.Val)
 		if err != nil {
 			che <- err
 			return
@@ -124,7 +124,7 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 				che <- nil
 				return
 			}
-			uid, err = LockManager().assignUidForXid(ctx, xid)
+			uid, err = lockMgr().assignUidForXid(ctx, xid)
 			if err != nil {
 				che <- err
 				return
