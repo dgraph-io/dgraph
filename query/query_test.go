@@ -1682,7 +1682,6 @@ func TestGetUIDCount(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	fmt.Println(string(js))
 	require.JSONEq(t,
 		`{"me":[{"_uid_":"0x1","alive":true,"count(friend)":5,"gender":"female","name":"Michonne"}]}`,
 		js)
