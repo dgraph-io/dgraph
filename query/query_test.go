@@ -6347,3 +6347,33 @@ children: <
 >
 `, proto.MarshalTextString(pb[0]))
 }
+
+func TestDebugUid(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x01) {
+				name
+				friend {
+				  friend
+				}
+			}
+		}`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "debug", "true")
+	sgl, err := ProcessQuery(ctx, res, &l)
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	err = ToJson(&l, sgl, &buf, nil, false)
+	require.NoError(t, err)
+	var mp map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
+	resp := mp["me"]
+	body, err := json.Marshal(resp)
+	require.NoError(t, err)
+	require.JSONEq(t, `[{"_uid_":"0x1","friend":[{"_uid_":"0x17","friend":[{"_uid_":"0x1"}]},{"_uid_":"0x18"},{"_uid_":"0x19"},{"_uid_":"0x1f","friend":[{"_uid_":"0x18"}]},{"_uid_":"0x65"}],"name":"Michonne"}]}`, string(body))
+}

@@ -586,6 +586,15 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
 	attrsSeen := make(map[string]struct{})
+
+	// Lets attach a _uid_ edge so that debug requests of the form
+	// me(id: 1) { friend } also return uids of all friends.
+	if gq.Attr != "_uid_" && len(gq.Children) == 0 && sg.Params.isDebug {
+		gq.Children = append(gq.Children, &gql.GraphQuery{
+			Attr: "_uid_",
+		})
+	}
+
 	for _, gchild := range gq.Children {
 		if (sg.Params.Alias == "shortest" || sg.Params.Alias == "recurse") &&
 			gchild.Expand != "" {
