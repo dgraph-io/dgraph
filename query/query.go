@@ -720,11 +720,15 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
-			uid, err := worker.GetUid(context.Background(), v)
-			if err != nil && err != worker.UidNotFound {
+			umap, err := worker.GetUidsOverNetwork(context.Background(), []string{v})
+			if err != nil {
 				return err
 			}
-			from = uid
+			id, found := umap[v]
+			if !found {
+				return worker.UidNotFound
+			}
+			from = id
 		}
 		args.From = uint64(from)
 	}
@@ -732,11 +736,15 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		to, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
-			uid, err := worker.GetUid(context.Background(), v)
-			if err != nil && err != worker.UidNotFound {
+			umap, err := worker.GetUidsOverNetwork(context.Background(), []string{v})
+			if err != nil {
 				return err
 			}
-			to = uid
+			id, found := umap[v]
+			if !found {
+				return worker.UidNotFound
+			}
+			to = id
 		}
 		args.To = uint64(to)
 	}
@@ -831,19 +839,26 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 
 	var uids []uint64
+	var xids []string
 	for _, id := range gq.ID {
 		if uid, err := strconv.ParseUint(id, 0, 64); err == nil {
 			uids = append(uids, uid)
-			continue
-		}
-		// It's an xid
-		uid, err := worker.GetUid(context.Background(), id)
-		if err != nil && err != worker.UidNotFound {
-			return nil, err
-		} else if err == nil {
-			uids = append(uids, uid)
+		} else {
+			uids = append(uids, 0) // for maintaining order
+			xids = append(xids, id)
 		}
 	}
+	umap, err := worker.GetUidsOverNetwork(context.Background(), xids)
+	if err != nil {
+		return nil, err
+	}
+	for i, uid := range uids {
+		if uid == 0 {
+			uids[i] = umap[gq.ID[i]]
+		}
+	}
+	// remove uid 0
+	//for i, ui
 	if len(uids) > 0 {
 		o := make([]uint64, len(uids))
 		copy(o, uids)

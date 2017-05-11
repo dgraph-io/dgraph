@@ -24,9 +24,11 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -51,27 +53,101 @@ func createNumQuery(group uint32, umap map[string]uint64) *protos.Num {
 	return out
 }
 
-func GetUid(ctx context.Context, xid string) (uint64, error) {
-	out := &protos.Query{
-		Attr:    "_xid_",
-		SrcFunc: []string{"eq", "", xid},
-	}
-	var result *protos.Result
-	var err error
-	if groups().ServesGroup(gid) {
-		result, err = processTask(ctx, out, gid)
-	} else {
-		result, err = ProcessTaskOverNetwork(ctx, out)
-	}
+func getUid(ctx context.Context, xid string) (uint64, error) {
+	x.AssertTrue(groups().ServesGroup(gid))
+	tokens, err := posting.IndexTokens("_xid_", "", types.Val{Tid: types.StringID, Value: []byte(xid)})
 	if err != nil {
 		return 0, err
 	}
-	if len(result.UidMatrix) > 0 && len(result.UidMatrix[0].Uids) > 0 {
-		x.AssertTrue(len(result.UidMatrix) == 1 &&
-			len(result.UidMatrix[0].Uids) == 1)
-		return result.UidMatrix[0].Uids[0], nil
+	x.AssertTrue(len(tokens) == 1)
+	key := x.IndexKey("_xid_", tokens[0])
+	pl, decr := posting.GetOrCreate(key, gid)
+	defer decr()
+	ul := pl.Uids(emptyListOption)
+	algo.ApplyFilter(ul, func(uid uint64, i int) bool {
+		sv, err := fetchValue(uid, "_xid_", nil, types.StringID)
+		if sv.Value == nil || err != nil {
+			return false
+		}
+		return compareTypeVals("eq", sv, types.Val{Tid: types.StringID, Value: xid})
+	})
+	if len(ul.Uids) == 0 {
+		return 0, UidNotFound
 	}
-	return 0, UidNotFound
+	x.AssertTrue(len(ul.Uids) == 1)
+	return ul.Uids[0], nil
+}
+
+func getUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+	out := &protos.AssignedIds{}
+	out.M = make(map[string]uint64)
+	for _, xid := range num.Xids {
+		uid, err := getUid(ctx, xid)
+		if err == UidNotFound {
+			continue
+		} else if err != nil {
+			return out, err
+		}
+		out.M[xid] = uid
+	}
+	return out, nil
+}
+
+func (w *grpcWorker) GetUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+	if ctx.Err() != nil {
+		return &emptyAssignedIds, ctx.Err()
+	}
+
+	if !groups().ServesGroup(num.Group) {
+		return &emptyAssignedIds, x.Errorf("groupId: %v.  We shouldn't be getting this req", num.Group)
+	}
+
+	reply := &emptyAssignedIds
+	c := make(chan error, 1)
+	go func() {
+		var err error
+		reply, err = getUids(ctx, num)
+		c <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		return reply, ctx.Err()
+	case err := <-c:
+		return reply, err
+	}
+}
+
+func GetUidsOverNetwork(ctx context.Context, xids []string) (map[string]uint64, error) {
+	var res *protos.AssignedIds
+	var err error
+	num := &protos.Num{Xids: xids}
+	if groups().ServesGroup(gid) {
+		res, err = getUids(ctx, num)
+		if err != nil {
+			return res.M, x.Wrap(err)
+		}
+
+	} else {
+		addr := groups().AnyServer(gid)
+		p := pools().get(addr)
+		conn, err := p.Get()
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while retrieving connection"))
+			return res.M, err
+		}
+		defer p.Put(conn)
+		x.Trace(ctx, "Calling GetUids for group: %d, addr: %s", gid, addr)
+
+		c := protos.NewWorkerClient(conn)
+		res, err = c.GetUids(ctx, num)
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while getting uids"))
+			return res.M, err
+		}
+	}
+
+	return res.M, nil
 }
 
 // assignUids returns a byte slice containing uids.
@@ -116,7 +192,7 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 			// ensures that we don't launch too many goroutines
 			pending <- struct{}{}
 			defer func() { <-pending }()
-			uid, err := GetUid(ctx, xid)
+			uid, err := getUid(ctx, xid)
 			if err == nil {
 				m.Lock()
 				defer m.Unlock()
