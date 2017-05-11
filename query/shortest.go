@@ -193,8 +193,8 @@ func (start *SubGraph) expandOut(ctx context.Context,
 			}
 			for _, child := range start.Children {
 				temp := new(SubGraph)
-				*temp = *child
-				temp.Children = []*SubGraph{}
+				temp.copyFiltersRecurse(child)
+
 				temp.SrcUIDs = sg.DestUIDs
 				// Remove those nodes which we have already traversed. As this cannot be
 				// in the path again.
@@ -216,6 +216,17 @@ func (start *SubGraph) expandOut(ctx context.Context,
 		}
 		rch <- nil
 		exec = out
+	}
+}
+
+func (temp *SubGraph) copyFiltersRecurse(sg *SubGraph) {
+	*temp = *sg
+	temp.Children = []*SubGraph{}
+	temp.Filters = []*SubGraph{}
+	for _, fc := range sg.Filters {
+		tempChild := new(SubGraph)
+		tempChild.copyFiltersRecurse(fc)
+		temp.Filters = append(temp.Filters, tempChild)
 	}
 }
 
