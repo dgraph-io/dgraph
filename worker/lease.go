@@ -71,6 +71,8 @@ func (l *leaseManager) resetLease(group uint32) {
 	if err == posting.ErrNoValue {
 		// starts from two, 1 is used for storing lease data
 		l.maxLeaseId = 1
+		l.minLeaseId = l.maxLeaseId + 1
+		return
 	}
 	l.maxLeaseId = binary.LittleEndian.Uint64(val.Value.([]byte))
 	l.minLeaseId = l.maxLeaseId + 1
