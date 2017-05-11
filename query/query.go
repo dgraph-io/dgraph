@@ -1747,8 +1747,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
-		child.SrcUIDs = sg.DestUIDs                    // Make the connection.
+		child.Params.ParentVars = make(map[string]varValue)
+		for k, v := range sg.Params.ParentVars {
+			child.Params.ParentVars[k] = v
+		}
+		child.SrcUIDs = sg.DestUIDs // Make the connection.
 		if child.IsInternal() {
 			// We dont have to execute these nodes.
 			continue
