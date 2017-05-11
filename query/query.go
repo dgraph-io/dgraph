@@ -575,6 +575,26 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 	return nil
 }
 
+func uniqueKey(gchild *gql.GraphQuery) string {
+	key := gchild.Attr
+	if gchild.Func != nil {
+		key += fmt.Sprintf("%v", gchild.Func)
+	}
+	if len(gchild.NeedsVar) > 0 {
+		key += fmt.Sprintf("%v", gchild.NeedsVar)
+	}
+	if gchild.IsCount { // ignore count subgraphs..
+		key += "count"
+	}
+	if len(gchild.Langs) > 0 {
+		key += fmt.Sprintf("%v", gchild.Langs)
+	}
+	if gchild.MathExp != nil {
+		key += fmt.Sprintf("%+v", gchild.MathExp)
+	}
+	return key
+}
+
 func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
@@ -582,22 +602,16 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// So, we work on the children, and then recurse for grand children.
 	attrsSeen := make(map[string]struct{})
 	for _, gchild := range gq.Children {
-		key := gchild.Attr
 		if (sg.Params.Alias == "shortest" || sg.Params.Alias == "recurse") &&
 			gchild.Expand != "" {
 			return x.Errorf("expand() not allowed inside shortest/recurse")
 		}
 
-		if gchild.Func != nil && gchild.Func.IsAggregator() {
-			key += gchild.Func.Name
-		} else if gchild.Attr == "var" {
-			key += fmt.Sprintf("%v", gchild.NeedsVar)
-		} else if gchild.IsCount { // ignore count subgraphs..
-			key += "count"
-		} else if len(gchild.Langs) > 0 {
-			key += fmt.Sprintf("%v", gchild.Langs)
-		} else if gchild.MathExp != nil {
-			key += fmt.Sprintf("%+v", gchild.MathExp)
+		key := ""
+		if gchild.Alias != "" {
+			key = gchild.Alias
+		} else {
+			key = uniqueKey(gchild)
 		}
 		if _, ok := attrsSeen[key]; ok {
 			return x.Errorf("%s not allowed multiple times in same sub-query.",
