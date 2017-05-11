@@ -33,7 +33,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 )
 
@@ -44,20 +43,13 @@ var (
 		"Folder in which to store backups.")
 	pstore       *store.Store
 	workerServer *grpc.Server
+	leaseGid     uint32
 )
 
 func Init(ps *store.Store) {
 	pstore = ps
-	gid = group.BelongsTo("_lease_")
-	leaseKey = x.DataKey(LeasePredicate, 1)
-	pending = make(chan struct{}, 5000)
-
-	lmgr = new(lockManager)
-	lmgr.uids = make(map[string]*uid)
-
-	leasemgr = new(leaseManager)
-	leasemgr.elog = trace.NewEventLog("Lease Manager", "")
-	go lmgr.clean()
+	// needs to be initialized after group config
+	leaseGid = group.BelongsTo("_lease_")
 }
 
 // grpcWorker struct implements the gRPC server interface.

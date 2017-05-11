@@ -64,8 +64,8 @@ message Num {
 message AssignedIds {
 	uint64 startId = 1;
 	uint64 endId = 2;
-	// map of xid -> assigend uid
-	map<string, uint64> m = 3;
+	// map of xid -> assigned uid
+	map<string, uint64> xidToUid = 3;
 }
 
 message RaftContext {

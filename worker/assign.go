@@ -33,12 +33,16 @@ import (
 )
 
 var (
-	emptyNum         protos.Num
-	emptyListOption  posting.ListOptions
-	emptyAssignedIds protos.AssignedIds
-	UidNotFound      = errors.New("Uid not found for xid")
-	pending          chan struct{}
+	emptyNum          protos.Num
+	emptyListOption   posting.ListOptions
+	emptyAssignedIds  protos.AssignedIds
+	UidNotFound       = errors.New("Uid not found for xid")
+	pendingAssignXids chan struct{}
 )
+
+func init() {
+	pendingAssignXids = make(chan struct{}, 5000)
+}
 
 func createNumQuery(group uint32, umap map[string]uint64) *protos.Num {
 	out := &protos.Num{Group: group}
@@ -54,14 +58,14 @@ func createNumQuery(group uint32, umap map[string]uint64) *protos.Num {
 }
 
 func getUid(ctx context.Context, xid string) (uint64, error) {
-	x.AssertTrue(groups().ServesGroup(gid))
+	x.AssertTrue(groups().ServesGroup(leaseGid))
 	tokens, err := posting.IndexTokens("_xid_", "", types.Val{Tid: types.StringID, Value: []byte(xid)})
 	if err != nil {
 		return 0, err
 	}
 	x.AssertTrue(len(tokens) == 1)
 	key := x.IndexKey("_xid_", tokens[0])
-	pl, decr := posting.GetOrCreate(key, gid)
+	pl, decr := posting.GetOrCreate(key, leaseGid)
 	defer decr()
 	ul := pl.Uids(emptyListOption)
 	algo.ApplyFilter(ul, func(uid uint64, i int) bool {
@@ -80,7 +84,7 @@ func getUid(ctx context.Context, xid string) (uint64, error) {
 
 func getUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	out := &protos.AssignedIds{}
-	out.M = make(map[string]uint64)
+	out.XidToUid = make(map[string]uint64)
 	for _, xid := range num.Xids {
 		uid, err := getUid(ctx, xid)
 		if err == UidNotFound {
@@ -88,7 +92,7 @@ func getUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) 
 		} else if err != nil {
 			return out, err
 		}
-		out.M[xid] = uid
+		out.XidToUid[xid] = uid
 	}
 	return out, nil
 }
@@ -122,32 +126,32 @@ func GetUidsOverNetwork(ctx context.Context, xids []string) (map[string]uint64, 
 	var res *protos.AssignedIds
 	var err error
 	num := &protos.Num{Xids: xids}
-	if groups().ServesGroup(gid) {
+	if groups().ServesGroup(leaseGid) {
 		res, err = getUids(ctx, num)
 		if err != nil {
-			return res.M, x.Wrap(err)
+			return res.XidToUid, x.Wrap(err)
 		}
 
 	} else {
-		addr := groups().AnyServer(gid)
+		addr := groups().AnyServer(leaseGid)
 		p := pools().get(addr)
 		conn, err := p.Get()
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while retrieving connection"))
-			return res.M, err
+			return res.XidToUid, err
 		}
 		defer p.Put(conn)
-		x.Trace(ctx, "Calling GetUids for group: %d, addr: %s", gid, addr)
+		x.Trace(ctx, "Calling GetUids for group: %d, addr: %s", leaseGid, addr)
 
 		c := protos.NewWorkerClient(conn)
 		res, err = c.GetUids(ctx, num)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while getting uids"))
-			return res.M, err
+			return res.XidToUid, err
 		}
 	}
 
-	return res.M, nil
+	return res.XidToUid, nil
 }
 
 // assignUids returns a byte slice containing uids.
@@ -156,7 +160,7 @@ func GetUidsOverNetwork(ctx context.Context, xids []string) (map[string]uint64, 
 // In essence, we just want one server to be handing out new uids.
 func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	node := groups().Node(num.Group)
-	x.AssertTrue(num.Group == gid)
+	x.AssertTrue(num.Group == leaseGid)
 	if !node.AmLeader() {
 		return &emptyAssignedIds, x.Errorf("Assigning UIDs is only allowed on leader.")
 	}
@@ -168,7 +172,7 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 	}
 
 	out := &protos.AssignedIds{}
-	out.M = make(map[string]uint64)
+	out.XidToUid = make(map[string]uint64)
 	che := make(chan error, 1+numXids)
 	var m sync.Mutex
 
@@ -190,13 +194,13 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 	for _, xid := range num.Xids {
 		go func(xid string) {
 			// ensures that we don't launch too many goroutines
-			pending <- struct{}{}
-			defer func() { <-pending }()
+			pendingAssignXids <- struct{}{}
+			defer func() { <-pendingAssignXids }()
 			uid, err := getUid(ctx, xid)
 			if err == nil {
 				m.Lock()
 				defer m.Unlock()
-				out.M[xid] = uid
+				out.XidToUid[xid] = uid
 				che <- nil
 				return
 			}
@@ -207,7 +211,7 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 			}
 			m.Lock()
 			defer m.Unlock()
-			out.M[xid] = uid
+			out.XidToUid[xid] = uid
 			che <- nil
 		}(xid)
 	}
@@ -272,7 +276,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 			currId++
 			continue
 		}
-		uid, found := res.M[k]
+		uid, found := res.XidToUid[k]
 		x.AssertTrue(found)
 		umap[k] = uid
 	}

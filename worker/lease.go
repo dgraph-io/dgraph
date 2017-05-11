@@ -32,14 +32,24 @@ import (
 
 const (
 	LeasePredicate = "_lease_"
+	minLeaseNum    = uint64(500)
 )
 
 var (
 	lmgr     *lockManager
 	leasemgr *leaseManager
-	gid      uint32
 	leaseKey []byte
 )
+
+func init() {
+	leaseKey = x.DataKey(LeasePredicate, 1)
+	lmgr = new(lockManager)
+	lmgr.uids = make(map[string]*uid)
+
+	leasemgr = new(leaseManager)
+	leasemgr.elog = trace.NewEventLog("Lease Manager", "")
+	go lmgr.clean()
+}
 
 type leaseManager struct {
 	x.SafeMutex
@@ -50,28 +60,24 @@ type leaseManager struct {
 
 // called on leader change
 func (l *leaseManager) resetLease(group uint32) {
-	if group != gid {
+	if group != leaseGid {
 		return
 	}
 	l.Lock()
 	defer l.Unlock()
-	l.maxLeaseId = readMaxLease()
+	plist, decr := posting.GetOrCreate(leaseKey, leaseGid)
+	defer decr()
+	val, err := plist.Value()
+	if err == posting.ErrNoValue {
+		// starts from two, 1 is used for storing lease data
+		l.maxLeaseId = 1
+	}
+	l.maxLeaseId = binary.LittleEndian.Uint64(val.Value.([]byte))
 	l.minLeaseId = l.maxLeaseId + 1
 }
 
 func leaseMgr() *leaseManager {
 	return leasemgr
-}
-
-func readMaxLease() uint64 {
-	plist, decr := posting.GetOrCreate(leaseKey, gid)
-	defer decr()
-	val, err := plist.Value()
-	if err == posting.ErrNoValue {
-		// starts from two, 1 is used for storing lease data
-		return 1
-	}
-	return binary.LittleEndian.Uint64(val.Value.([]byte))
 }
 
 // AssignNew assigns N unique uids sequentially
@@ -81,7 +87,7 @@ func (l *leaseManager) assignNewUids(ctx context.Context, N uint64) (uint64, err
 	l.Lock()
 	defer l.Unlock()
 	available := l.maxLeaseId - l.minLeaseId + 1
-	numLease := uint64(500)
+	numLease := minLeaseNum
 
 	if N > numLease {
 		numLease = N
@@ -90,8 +96,8 @@ func (l *leaseManager) assignNewUids(ctx context.Context, N uint64) (uint64, err
 		if err := proposeLease(ctx, l.maxLeaseId+numLease); err != nil {
 			return 0, err
 		}
+		l.maxLeaseId = l.maxLeaseId + numLease
 	}
-	l.maxLeaseId = l.maxLeaseId + numLease
 
 	id := l.minLeaseId
 	l.minLeaseId += N
@@ -123,11 +129,11 @@ func proposeUid(ctx context.Context, xid string, uid uint64) error {
 }
 
 func propose(ctx context.Context, edge *protos.DirectedEdge) error {
-	mutations := &protos.Mutations{GroupId: gid}
+	mutations := &protos.Mutations{GroupId: leaseGid}
 	mutations.Edges = append(mutations.Edges, edge)
 	proposal := &protos.Proposal{Mutations: mutations}
-	node := groups().Node(gid)
-	x.AssertTruef(node != nil, "Node doesn't serve group %d", gid)
+	node := groups().Node(leaseGid)
+	x.AssertTruef(node != nil, "Node doesn't serve group %d", leaseGid)
 	return node.ProposeAndWait(ctx, proposal)
 }
 
@@ -175,10 +181,10 @@ func (lm *lockManager) assignUidForXid(ctx context.Context, xid string) (uint64,
 		return id, err
 	}
 	// To ensure that the key is not deleted immediately after persisting the id
-	s.ts = time.Now()
 	if err := proposeUid(ctx, xid, id); err != nil {
 		return id, err
 	}
+	s.ts = time.Now()
 	s.uid = id
 	return s.uid, nil
 }
