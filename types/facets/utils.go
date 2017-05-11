@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"sort"
 	"strconv"
-	"time"
 	"unicode"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -97,7 +96,7 @@ func valAndValType(val string) (interface{}, protos.Facet_ValType, error) {
 	if val == "true" || val == "false" {
 		return val == "true", protos.Facet_BOOL, nil
 	}
-	if t, err := parseTime(val); err == nil {
+	if t, err := types.ParseTime(val); err == nil {
 		return t, protos.Facet_DATETIME, nil
 	}
 	return nil, protos.Facet_STRING, x.Errorf("Could not parse the facet value : [%s]", val)
@@ -148,21 +147,6 @@ func SameFacets(a []*protos.Facet, b []*protos.Facet) bool {
 	}
 	return true
 }
-
-// Move to types/parse namespace.
-func parseTime(val string) (time.Time, error) {
-	var t time.Time
-	if err := t.UnmarshalText([]byte(val)); err == nil {
-		return t, err
-	}
-	if t, err := time.Parse(dateTimeFormat, val); err == nil {
-		return t, err
-	}
-	return time.Parse(dateFormatYMD, val)
-}
-
-const dateFormatYMD = "2006-01-02"
-const dateTimeFormat = "2006-01-02T15:04:05"
 
 // TypeIDFor gives TypeID for facet.
 func TypeIDFor(f *protos.Facet) types.TypeID {

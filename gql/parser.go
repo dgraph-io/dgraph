@@ -1950,7 +1950,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					child.IsInternal = false
 				} else {
 					if it.Item().Val != "var" {
-						return x.Errorf("Only variables allowed in aggregate functions.")
+						return x.Errorf("Only variables allowed in aggregate functions. Got: %v",
+							it.Item().Val)
 					}
 					count, err := parseVarList(it, child)
 					if err != nil {

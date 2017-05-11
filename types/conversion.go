@@ -127,24 +127,16 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				*res = bool(val)
 			case DateID:
-				val, err := time.Parse(dateFormatYMD, string(vc))
+				t, err := ParseTime(vc)
 				if err != nil {
-					val, err = time.Parse(dateFormatYM, string(vc))
-					if err != nil {
-						val, err = time.Parse(dateFormatY, string(vc))
-						if err != nil {
-							return to, err
-						}
-					}
+					return to, err
 				}
-				*res = val
+				// trim time part
+				*res = createDate(t.Date())
 			case DateTimeID:
-				var t time.Time
-				if err := t.UnmarshalText([]byte(vc)); err != nil {
-					// Try parsing without timezone since that is a valid format
-					if t, err = time.Parse(dateTimeFormat, vc); err != nil {
-						return to, err
-					}
+				t, err := ParseTime(vc)
+				if err != nil {
+					return to, err
 				}
 				*res = t
 			case GeoID:

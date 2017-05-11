@@ -163,6 +163,24 @@ func createDate(y int, m time.Month, d int) time.Time {
 	return dt
 }
 
+func ParseTime(val string) (time.Time, error) {
+	var t time.Time
+	if err := t.UnmarshalText([]byte(val)); err == nil {
+		return t, err
+	}
+	// try without timezone
+	if t, err := time.Parse(dateTimeFormat, val); err == nil {
+		return t, err
+	}
+	if t, err := time.Parse(dateFormatYMD, val); err == nil {
+		return t, err
+	}
+	if t, err := time.Parse(dateFormatYM, val); err == nil {
+		return t, err
+	}
+	return time.Parse(dateFormatY, val)
+}
+
 const dateFormatYMD = "2006-01-02"
 const dateFormatYM = "2006-01"
 const dateFormatY = "2006"

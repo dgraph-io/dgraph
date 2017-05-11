@@ -1,14 +1,21 @@
 package query
 
 import (
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type mathTree struct {
+	Fn    string
+	Var   string
+	Const types.Val // If its a const value node.
+	Val   map[uint64]types.Val
+	Child []*mathTree
+}
+
 // processBinary handles the binary operands like
 // +, -, *, /, %, max, min, logbase
-func processBinary(mNode *gql.MathTree) (err error) {
+func processBinary(mNode *mathTree) (err error) {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
 
@@ -17,79 +24,77 @@ func processBinary(mNode *gql.MathTree) (err error) {
 	cl := mNode.Child[0].Const
 	cr := mNode.Child[1].Const
 
-	if mpl != nil {
-		for k, lVal := range mpl {
-			ag := aggregator{
-				name: aggName,
-			}
-			// Only the UIDs that have all the values will be considered.
-			rVal := mpr[k]
-			if cr.Value != nil {
-				// Use the constant value that was supplied.
-				rVal = cr
-			}
-			err = ag.ApplyVal(lVal)
-			if err != nil {
+	f := func(k uint64) error {
+		ag := aggregator{
+			name: aggName,
+		}
+		lVal := mpl[k]
+		if cl.Value != nil {
+			// Use the constant value that was supplied.
+			lVal = cl
+		}
+		rVal := mpr[k]
+		if cr.Value != nil {
+			// Use the constant value that was supplied.
+			rVal = cr
+		}
+		err = ag.ApplyVal(lVal)
+		if err != nil {
+			return err
+		}
+		err = ag.ApplyVal(rVal)
+		if err != nil {
+			return err
+		}
+		destMap[k], err = ag.Value()
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	if mpl != nil || mpr != nil {
+		for k := range mpr {
+			if err := f(k); err != nil {
 				return err
 			}
-			err = ag.ApplyVal(rVal)
-			if err != nil {
-				return err
+
+		}
+
+		for k := range mpl {
+			if _, ok := mpr[k]; ok {
+				continue
 			}
-			destMap[k], err = ag.Value()
-			if err != nil {
+			if err := f(k); err != nil {
 				return err
 			}
 		}
 		mNode.Val = destMap
-		return nil
+		return
 	}
-	if mpr != nil {
-		for k, rVal := range mpr {
-			ag := aggregator{
-				name: aggName,
-			}
-			// Only the UIDs that have all the values will be considered.
-			lVal := mpl[k]
-			if cl.Value != nil {
-				// Use the constant value that was supplied.
-				lVal = cl
-			}
-			err = ag.ApplyVal(lVal)
-			if err != nil {
-				return err
-			}
-			err = ag.ApplyVal(rVal)
-			if err != nil {
-				return err
-			}
-			destMap[k], err = ag.Value()
-			if err != nil {
-				return err
-			}
+
+	if cl.Value != nil && cr.Value != nil {
+		// Both maps are nil, so 2 constatns.
+		ag := aggregator{
+			name: aggName,
 		}
-		mNode.Val = destMap
-		return nil
+		err = ag.ApplyVal(cl)
+		if err != nil {
+			return err
+		}
+		err = ag.ApplyVal(cr)
+		if err != nil {
+			return err
+		}
+		mNode.Const, err = ag.Value()
+		return err
 	}
-	// Both maps are nil, so 2 constatns.
-	ag := aggregator{
-		name: aggName,
-	}
-	err = ag.ApplyVal(cl)
-			if err != nil {
-				return err
-			}
-	err = ag.ApplyVal(cr)
-			if err != nil {
-				return err
-			}
-	mNode.Const, err = ag.Value()
-	return err
+	x.Fatalf("Empty maps and constant")
+	return nil
 }
 
 // processUnary handles the unary operands like
 // u-, log, exp, since, floor, ceil
-func processUnary(mNode *gql.MathTree) (err error) {
+func processUnary(mNode *mathTree) (err error) {
 	destMap := make(map[uint64]types.Val)
 	srcMap := mNode.Child[0].Val
 	aggName := mNode.Fn
@@ -100,18 +105,18 @@ func processUnary(mNode *gql.MathTree) (err error) {
 	if ch.Const.Value != nil {
 		// Use the constant value that was supplied.
 		err = ag.ApplyVal(ch.Const)
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
+		}
 		mNode.Const, err = ag.Value()
 		return err
 	}
 
 	for k, val := range srcMap {
 		err = ag.ApplyVal(val)
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
+		}
 		destMap[k], err = ag.Value()
 		if err != nil {
 			return err
@@ -125,7 +130,7 @@ func processUnary(mNode *gql.MathTree) (err error) {
 // processBinaryBoolean handles the binary operands which
 // return a boolean value.
 // All the inequality operators (<, >, <=, >=, !=, ==)
-func processBinaryBoolean(mNode *gql.MathTree) (err error) {
+func processBinaryBoolean(mNode *mathTree) (err error) {
 	destMap := make(map[uint64]types.Val)
 	srcMap := mNode.Child[0].Val
 	aggName := mNode.Fn
@@ -152,7 +157,7 @@ func processBinaryBoolean(mNode *gql.MathTree) (err error) {
 }
 
 // processTernary handles the ternary operand cond()
-func processTernary(mNode *gql.MathTree) (err error) {
+func processTernary(mNode *mathTree) (err error) {
 	destMap := make(map[uint64]types.Val)
 	aggName := mNode.Fn
 	condMap := mNode.Child[0].Val
@@ -190,22 +195,21 @@ func processTernary(mNode *gql.MathTree) (err error) {
 	return nil
 }
 
-func evalMathTree(mNode *gql.MathTree, doneVars map[string]values) (err error) {
+func evalMathTree(mNode *mathTree) (err error) {
 	if mNode.Const.Value != nil {
 		return nil
 	}
 	if mNode.Var != "" {
-		d, ok := doneVars[mNode.Var]
-		if !ok || d.vals == nil {
+		if mNode.Val == nil {
 			return x.Errorf("Variable %v not yet populated or missing.", mNode.Var)
 		}
-		mNode.Val = d.vals
+		// This is a leaf node whose value is already populated. So return.
 		return nil
 	}
 
 	for _, child := range mNode.Child {
 		// Process the child nodes first.
-		err := evalMathTree(child, doneVars)
+		err := evalMathTree(child)
 		if err != nil {
 			return err
 		}

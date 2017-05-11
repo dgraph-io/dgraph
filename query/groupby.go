@@ -191,7 +191,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *protos.List, groupVal [
 	}
 }
 
-func (sg *SubGraph) processGroupBy(doneVars map[string]values) error {
+func (sg *SubGraph) processGroupBy(doneVars map[string]varValue) error {
 	mp := make(map[string]groupResult)
 	_ = mp
 	var dedupMap dedup
@@ -241,7 +241,10 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]values) error {
 		if chVar != "" {
 			tempMap := make(map[uint64]types.Val)
 			for _, grp := range res.group {
-				if len(grp.keys) != 1 {
+				if len(grp.keys) == 0 {
+					continue
+				}
+				if len(grp.keys) > 1 {
 					return x.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
 				}
 				uidVal := grp.keys[0].key.Value
@@ -251,7 +254,7 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]values) error {
 				}
 				tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
 			}
-			doneVars[chVar] = values{vals: tempMap}
+			doneVars[chVar] = varValue{vals: tempMap}
 		}
 		child.Params.ignoreResult = true
 	}
