@@ -369,26 +369,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		if len(pc.counts) > 0 {
 			c := types.ValueForType(types.IntID)
 			c.Value = int64(pc.counts[idx])
-			uc := dst.New(pc.Attr)
-			fieldName = "count"
+			fieldName = fmt.Sprintf("count(%s)", pc.Attr)
 			if pc.Params.Alias != "" {
 				fieldName = pc.Params.Alias
 			}
-			uc.AddValue(fieldName, c)
-			dst.AddListChild(pc.Attr, uc)
-		} else if len(pc.SrcFunc) > 0 && isAggregatorFn(pc.SrcFunc[0]) {
-			// add sg.Attr as child on 'parent' instead of 'dst', otherwise
-			// within output, aggregator will messed with other attrs
-			uc := dst.New(pc.Params.Alias)
-			name := fmt.Sprintf("%s(%s)", pc.SrcFunc[0], pc.Attr)
-			sv, err := convertWithBestEffort(pc.values[idx], pc.Attr)
-			if err == ErrEmptyVal {
-				continue
-			} else if err != nil {
-				return err
-			}
-			uc.AddValue(name, sv)
-			dst.AddListChild(pc.Params.Alias, uc)
+			dst.AddValue(fieldName, c)
 		} else if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
 			c := types.ValueForType(types.BoolID)
 			c.Value = task.ToBool(pc.values[idx])
@@ -959,6 +944,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 	mp = make(map[uint64]types.Val)
 	// Go over the sibling node and aggregate.
 	for i, list := range relSG.uidMatrix {
+
 		ag := aggregator{
 			name: sg.SrcFunc[0],
 		}
