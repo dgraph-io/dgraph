@@ -176,7 +176,7 @@ func populateGraph(t *testing.T) {
 
 	addEdgeToValue(t, "address", 23, "21, mark street, Mars", nil)
 	addEdgeToValue(t, "name", 24, "Glenn Rhee", nil)
-	addEdgeToValue(t, "_xid_", 24, "g\"lenn", nil)
+	addEdgeToValue(t, "_xid_", 24, `g\"lenn`, nil)
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[1.10001,2.000001]}`)
 	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
@@ -1712,7 +1712,7 @@ func TestDebug1(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf, nil, false))
+	require.NoError(t, ToJson(&l, sgl, &buf, nil, true))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -1771,7 +1771,7 @@ func TestDebug3(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf, nil, false))
+	require.NoError(t, ToJson(&l, sgl, &buf, nil, true))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -3857,9 +3857,19 @@ func TestToProto(t *testing.T) {
 	require.EqualValues(t,
 		`attribute: "_root_"
 children: <
-  uid: 1
-  xid: "mich"
   attribute: "me"
+  properties: <
+    prop: "_uid_"
+    value: <
+      uid_val: 1
+    >
+  >
+  properties: <
+    prop: "_xid_"
+    value: <
+      default_val: "mich"
+    >
+  >
   properties: <
     prop: "name"
     value: <
@@ -3879,8 +3889,13 @@ children: <
     >
   >
   children: <
-    uid: 23
     attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 23
+      >
+    >
     properties: <
       prop: "name"
       value: <
@@ -3889,8 +3904,13 @@ children: <
     >
   >
   children: <
-    uid: 24
     attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 24
+      >
+    >
     properties: <
       prop: "name"
       value: <
@@ -3899,8 +3919,13 @@ children: <
     >
   >
   children: <
-    uid: 25
     attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 25
+      >
+    >
     properties: <
       prop: "name"
       value: <
@@ -3909,8 +3934,13 @@ children: <
     >
   >
   children: <
-    uid: 31
     attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 31
+      >
+    >
     properties: <
       prop: "name"
       value: <
@@ -3919,8 +3949,13 @@ children: <
     >
   >
   children: <
-    uid: 101
     attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 101
+      >
+    >
   >
 >
 `, proto.MarshalTextString(pb[0]))
@@ -4225,7 +4260,7 @@ func ageSg(uidMatrix []*protos.List, srcUids *protos.List, ages []uint64) *SubGr
 		uidMatrix: uidMatrix,
 		SrcUIDs:   srcUids,
 		values:    as,
-		Params:    params{isDebug: false, GetUID: true},
+		Params:    params{GetUid: true},
 	}
 }
 func nameSg(uidMatrix []*protos.List, srcUids *protos.List, names []string) *SubGraph {
@@ -4238,7 +4273,7 @@ func nameSg(uidMatrix []*protos.List, srcUids *protos.List, names []string) *Sub
 		uidMatrix: uidMatrix,
 		SrcUIDs:   srcUids,
 		values:    ns,
-		Params:    params{isDebug: false, GetUID: true},
+		Params:    params{GetUid: true},
 	}
 
 }
@@ -4247,7 +4282,7 @@ func friendsSg(uidMatrix []*protos.List, srcUids *protos.List, friends []*SubGra
 		Attr:      "friend",
 		uidMatrix: uidMatrix,
 		SrcUIDs:   srcUids,
-		Params:    params{isDebug: false, GetUID: true},
+		Params:    params{GetUid: true},
 		Children:  friends,
 	}
 }
@@ -4257,7 +4292,7 @@ func rootSg(uidMatrix []*protos.List, srcUids *protos.List, names []string, ages
 
 	return &SubGraph{
 		Children:  []*SubGraph{nameSg, ageSg},
-		Params:    params{isDebug: false, GetUID: true},
+		Params:    params{GetUid: true},
 		SrcUIDs:   srcUids,
 		uidMatrix: uidMatrix,
 	}
@@ -5283,7 +5318,7 @@ func TestSchema(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			debug(id:0x1) {
+			debug(id: 0x1 ) {
 				_xid_
 				name
 				gender
@@ -5297,40 +5332,140 @@ func TestSchema(t *testing.T) {
 		}
   `
 	gr := processToPB(t, query, map[string]string{}, true)
-	require.EqualValues(t, "debug", gr[0].Children[0].Attribute)
-	require.EqualValues(t, 1, gr[0].Children[0].Uid)
-	require.EqualValues(t, "mich", gr[0].Children[0].Xid)
-	require.Len(t, gr[0].Children[0].Properties, 4)
-
-	require.EqualValues(t, "Michonne",
-		getProperty(gr[0].Children[0].Properties, "name").GetStrVal())
-
-	g := types.ValueForType(types.GeoID)
-	g.Value = getProperty(gr[0].Children[0].Properties, "loc").GetGeoVal()
-	g1, err := types.Convert(g, types.StringID)
-	x.Check(err)
-	require.EqualValues(t, "{'type':'Point','coordinates':[1.1,2]}", string(g1.Value.(string)))
-
-	require.Len(t, gr[0].Children[0].Children, 5)
-
-	child := gr[0].Children[0].Children[0]
-	require.EqualValues(t, 23, child.Uid)
-	require.EqualValues(t, "friend", child.Attribute)
-
-	require.Len(t, child.Properties, 2)
-	require.EqualValues(t, "Rick Grimes",
-		getProperty(child.Properties, "name").GetStrVal())
-	dob := getProperty(child.Properties, "dob").GetStrVal()
-	date, err := time.Parse(time.RFC3339, dob)
-	require.NoError(t, err)
-	require.EqualValues(t, "1910-01-02 00:00:00 +0000 UTC", date.String())
-	require.Empty(t, child.Children)
-
-	child = gr[0].Children[0].Children[4]
-	require.EqualValues(t, 101, child.Uid)
-	require.EqualValues(t, "friend", child.Attribute)
-	require.Empty(t, child.Properties)
-	require.Empty(t, child.Children)
+	require.Equal(t, `attribute: "_root_"
+children: <
+  attribute: "debug"
+  properties: <
+    prop: "_uid_"
+    value: <
+      uid_val: 1
+    >
+  >
+  properties: <
+    prop: "_xid_"
+    value: <
+      default_val: "mich"
+    >
+  >
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "gender"
+    value: <
+      default_val: "female"
+    >
+  >
+  properties: <
+    prop: "alive"
+    value: <
+      bool_val: true
+    >
+  >
+  properties: <
+    prop: "loc"
+    value: <
+      geo_val: "\001\001\000\000\000\232\231\231\231\231\231\361?\000\000\000\000\000\000\000@"
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 23
+      >
+    >
+    properties: <
+      prop: "dob"
+      value: <
+        str_val: "1910-01-02T00:00:00Z"
+      >
+    >
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 24
+      >
+    >
+    properties: <
+      prop: "dob"
+      value: <
+        str_val: "1909-05-05T00:00:00Z"
+      >
+    >
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 25
+      >
+    >
+    properties: <
+      prop: "dob"
+      value: <
+        str_val: "1909-01-10T00:00:00Z"
+      >
+    >
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 31
+      >
+    >
+    properties: <
+      prop: "dob"
+      value: <
+        str_val: "1901-01-15T00:00:00Z"
+      >
+    >
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 101
+      >
+    >
+  >
+>
+`, proto.MarshalTextString(gr[0]))
 }
 
 func runQuery(t *testing.T, gq *gql.GraphQuery) string {
@@ -5946,12 +6081,17 @@ func TestXidInvalidProto(t *testing.T) {
 	pb := processToPB(t, query, map[string]string{}, false)
 	expectedPb := `attribute: "_root_"
 children: <
-  xid: "mich"
   attribute: "me"
   properties: <
     prop: "name"
     value: <
       str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "_xid_"
+    value: <
+      default_val: "mich"
     >
   >
   properties: <
@@ -5976,8 +6116,13 @@ children: <
     >
   >
   children: <
-    xid: "g\"lenn"
     attribute: "friend"
+    properties: <
+      prop: "_xid_"
+      value: <
+        default_val: "g\\\"lenn"
+      >
+    >
     properties: <
       prop: "name"
       value: <
@@ -6286,4 +6431,157 @@ func TestNameNotIndexed(t *testing.T) {
 	_, err := ProcessQuery(ctx, res, &l)
 	require.Error(t, err)
 
+}
+
+func TestDebugUid(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x01) {
+				name
+				friend {
+				  friend
+				}
+			}
+		}`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "debug", "true")
+	sgl, err := ProcessQuery(ctx, res, &l)
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	err = ToJson(&l, sgl, &buf, nil, false)
+	require.NoError(t, err)
+	var mp map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
+	resp := mp["me"]
+	body, err := json.Marshal(resp)
+	require.NoError(t, err)
+	require.Equal(t, `[{"_uid_":"0x1","friend":[{"_uid_":"0x17","friend":[{"_uid_":"0x1"}]},{"_uid_":"0x18"},{"_uid_":"0x19","friend":[{"_uid_":"0x18"}]},{"_uid_":"0x1f","friend":[{"_uid_":"0x18"}]},{"_uid_":"0x65"}],"name":"Michonne"}]`, string(body))
+}
+
+func TestUidAlias(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x1) {
+				id: _uid_
+				alive
+				friend {
+					uid: _uid_
+					name
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes","uid":"0x17"},{"name":"Glenn Rhee","uid":"0x18"},{"name":"Daryl Dixon","uid":"0x19"},{"name":"Andrea","uid":"0x1f"},{"uid":"0x65"}],"id":"0x1"}]}`,
+		js)
+}
+
+func TestUidAliasProto(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x1) {
+				id: _uid_
+				alive
+				friend {
+					uid: _uid_
+					name
+				}
+			}
+		}
+	`
+	pb := processToPB(t, query, nil, false)
+	require.Equal(t, `attribute: "_root_"
+children: <
+  attribute: "me"
+  properties: <
+    prop: "id"
+    value: <
+      uid_val: 1
+    >
+  >
+  properties: <
+    prop: "alive"
+    value: <
+      bool_val: true
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "uid"
+      value: <
+        uid_val: 23
+      >
+    >
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "uid"
+      value: <
+        uid_val: 24
+      >
+    >
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "uid"
+      value: <
+        uid_val: 25
+      >
+    >
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "uid"
+      value: <
+        uid_val: 31
+      >
+    >
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "uid"
+      value: <
+        uid_val: 101
+      >
+    >
+  >
+>
+`, proto.MarshalTextString(pb[0]))
 }

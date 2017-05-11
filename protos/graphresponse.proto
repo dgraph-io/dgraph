@@ -34,6 +34,7 @@ message Value {
         bytes date_val = 8;
         bytes datetime_val = 9;
         string password_val = 10;
+        uint64 uid_val=11;
     }
 }
 
@@ -62,11 +63,9 @@ message Property {
 }
 
 message Node {
-    uint64 uid = 1;
-    string xid = 2;
-    string attribute = 3;
-    repeated Property properties = 4;
-    repeated Node children = 5; // Each node can have multiple children
+    string attribute = 1;
+    repeated Property properties = 2;
+    repeated Node children = 3; // Each node can have multiple children
 }
 
 message Response {

@@ -320,8 +320,13 @@ func TestToProtoFacets(t *testing.T) {
 	require.EqualValues(t,
 		`attribute: "_root_"
 children: <
-  uid: 1
   attribute: "me"
+  properties: <
+    prop: "_uid_"
+    value: <
+      uid_val: 1
+    >
+  >
   properties: <
     prop: "name"
     value: <
@@ -329,8 +334,13 @@ children: <
     >
   >
   children: <
-    uid: 23
     attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 23
+      >
+    >
     properties: <
       prop: "name"
       value: <
@@ -363,8 +373,13 @@ children: <
     >
   >
   children: <
-    uid: 24
     attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 24
+      >
+    >
     properties: <
       prop: "name"
       value: <
@@ -415,8 +430,13 @@ children: <
     >
   >
   children: <
-    uid: 25
     attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 25
+      >
+    >
     properties: <
       prop: "name"
       value: <
@@ -458,8 +478,13 @@ children: <
     >
   >
   children: <
-    uid: 31
     attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 31
+      >
+    >
     properties: <
       prop: "name"
       value: <
@@ -483,8 +508,13 @@ children: <
     >
   >
   children: <
-    uid: 101
     attribute: "friend"
+    properties: <
+      prop: "_uid_"
+      value: <
+        uid_val: 101
+      >
+    >
     children: <
       attribute: "@facets"
       children: <

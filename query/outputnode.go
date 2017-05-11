@@ -63,8 +63,8 @@ func ToJson(l *Latency, sgl []*SubGraph, w io.Writer, allocIds map[string]string
 		if sg.Params.Alias == "var" || sg.Params.Alias == "shortest" {
 			continue
 		}
-		if sg.Params.isDebug {
-			sgr.Params.isDebug = true
+		if sg.Params.GetUid {
+			sgr.Params.GetUid = true
 		}
 		sgr.Children = append(sgr.Children, sg)
 	}
@@ -77,8 +77,7 @@ type outputNode interface {
 	AddMapChild(attr string, node outputNode, isRoot bool)
 	AddListChild(attr string, child outputNode)
 	New(attr string) outputNode
-	SetUID(uid uint64)
-	SetXID(xid string)
+	SetUID(uid uint64, attr string)
 	IsEmpty() bool
 }
 
@@ -109,8 +108,6 @@ func (p *protoNode) AddMapChild(attr string, v outputNode, isRoot bool) {
 	} else if childNode != nil {
 		// merge outputNode into childNode
 		vnode := v.(*protoNode).Node
-		x.AssertTruef(vnode.Uid == childNode.Uid && vnode.Xid == childNode.Xid,
-			"Invalid nodes while merging.")
 		for _, p := range vnode.Properties {
 			childNode.Properties = append(childNode.Properties, p)
 		}
@@ -140,15 +137,14 @@ func (p *protoNode) New(attr string) outputNode {
 }
 
 // SetUID sets UID of a protoOutputNode.
-func (p *protoNode) SetUID(uid uint64) { p.Node.Uid = uid }
-
-// SetXID sets XID of a protoOutputNode.
-func (p *protoNode) SetXID(xid string) { p.Node.Xid = xid }
+func (p *protoNode) SetUID(uid uint64, attr string) {
+	p.AddValue(attr, types.Val{
+		Tid:   types.UidID,
+		Value: uid,
+	})
+}
 
 func (p *protoNode) IsEmpty() bool {
-	if p.Node.Uid > 0 {
-		return false
-	}
 	if len(p.Node.Children) > 0 {
 		return false
 	}
@@ -232,9 +228,6 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 			continue
 		}
 		n1 := seedNode.New(sg.Params.Alias)
-		if sg.Params.GetUID || sg.Params.isDebug {
-			n1.SetUID(uid)
-		}
 
 		if rerr := sg.preTraverse(uid, n1, n1); rerr != nil {
 			if rerr.Error() == "_INV_" {
@@ -318,20 +311,16 @@ func (fj *fastJsonNode) New(attr string) outputNode {
 	}
 }
 
-func (fj *fastJsonNode) SetUID(uid uint64) {
-	uidBs, found := fj.attrs["_uid_"]
+func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
+	uidBs, found := fj.attrs[attr]
 	if found {
 		x.AssertTruef(uidBs.isScalar, "Found node value for _uid_. Expected scalar value.")
 		lUidBs := len(uidBs.scalarVal)
 		currUid, err := strconv.ParseUint(string(uidBs.scalarVal[1:lUidBs-1]), 0, 64)
 		x.AssertTruef(err == nil && currUid == uid, "Setting two different uids on same node.")
 	} else {
-		fj.attrs["_uid_"] = makeScalarAttr([]byte(fmt.Sprintf("\"%#x\"", uid)))
+		fj.attrs[attr] = makeScalarAttr([]byte(fmt.Sprintf("\"%#x\"", uid)))
 	}
-}
-
-func (fj *fastJsonNode) SetXID(xid string) {
-	fj.attrs["_xid_"] = makeScalarAttr([]byte(strconv.Quote(xid)))
 }
 
 func (fj *fastJsonNode) IsEmpty() bool {
@@ -482,9 +471,6 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		}
 
 		n1 := seedNode.New(sg.Params.Alias)
-		if sg.Params.GetUID || sg.Params.isDebug {
-			n1.SetUID(uid)
-		}
 		if err := sg.preTraverse(uid, n1, n1); err != nil {
 			if err.Error() == "_INV_" {
 				continue
@@ -526,7 +512,7 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 		}
 	}
 
-	if sg.Params.isDebug || addLatency {
+	if addLatency {
 		sl := seedNode.New("serverLatency").(*fastJsonNode)
 		for k, v := range l.ToMap() {
 			val := types.ValueForType(types.StringID)
