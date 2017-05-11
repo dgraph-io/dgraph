@@ -695,19 +695,6 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 }
 
 func (args *params) fill(gq *gql.GraphQuery) error {
-	for _, id := range gq.ID {
-		if uid, err := strconv.ParseUint(id, 0, 64); err == nil {
-			gq.UID = append(gq.UID, uid)
-			continue
-		}
-		// It's an xid
-		uid, err := worker.GetUid(context.Background(), id)
-		if err != nil && err != worker.UidNotFound {
-			return err
-		} else if err == nil {
-			gq.UID = append(gq.UID, uid)
-		}
-	}
 	if v, ok := gq.Args["offset"]; ok {
 		offset, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
@@ -794,7 +781,7 @@ func isDebug(ctx context.Context) bool {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.UID) == 0 && len(gq.ID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
+	if len(gq.ID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -842,10 +829,25 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Lang)
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
-	if len(gq.UID) > 0 {
-		o := make([]uint64, len(gq.UID))
-		copy(o, gq.UID)
-		sg.uidMatrix = []*protos.List{{gq.UID}}
+
+	var uids []uint64
+	for _, id := range gq.ID {
+		if uid, err := strconv.ParseUint(id, 0, 64); err == nil {
+			uids = append(uids, uid)
+			continue
+		}
+		// It's an xid
+		uid, err := worker.GetUid(context.Background(), id)
+		if err != nil && err != worker.UidNotFound {
+			return nil, err
+		} else if err == nil {
+			uids = append(uids, uid)
+		}
+	}
+	if len(uids) > 0 {
+		o := make([]uint64, len(uids))
+		copy(o, uids)
+		sg.uidMatrix = []*protos.List{{uids}}
 		// User specified list may not be sorted.
 		sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
 		sg.SrcUIDs = &protos.List{o}
@@ -1156,7 +1158,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
-		if gq == nil || (len(gq.UID) == 0 && len(gq.ID) == 0 && gq.Func == nil &&
+		if gq == nil || (len(gq.ID) == 0 && gq.Func == nil &&
 			len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
 			continue
 		}

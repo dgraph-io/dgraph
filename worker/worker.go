@@ -50,6 +50,7 @@ func Init(ps *store.Store) {
 	pstore = ps
 	gid = group.BelongsTo("_lease_")
 	leaseKey = x.DataKey(LeasePredicate, 1)
+	pending = make(chan struct{}, 5000)
 
 	lmgr = new(lockManager)
 	lmgr.uids = make(map[string]*Uid)

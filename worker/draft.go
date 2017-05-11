@@ -91,6 +91,13 @@ func (p *proposals) Done(pid uint32, err error) {
 	ch <- err
 }
 
+func (p *proposals) Has(pid uint32) bool {
+	p.RLock()
+	defer p.RUnlock()
+	_, has := p.ids[pid]
+	return has
+}
+
 type sendmsg struct {
 	to   uint64
 	data []byte
@@ -282,7 +289,13 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		}
 	}
 
-	proposal.Id = rand.Uint32()
+	for {
+		id := rand.Uint32()
+		if !n.props.Has(id) {
+			proposal.Id = id
+			break
+		}
+	}
 
 	slice := slicePool.Get().([]byte)
 	if len(slice) < proposal.Size() {

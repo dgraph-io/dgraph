@@ -20,6 +20,7 @@ package worker
 import (
 	"errors"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/context"
 
@@ -30,9 +31,11 @@ import (
 )
 
 var (
-	emptyNum        protos.Num
-	emptyListOption posting.ListOptions
-	UidNotFound     = errors.New("Uid not found for xid")
+	emptyNum         protos.Num
+	emptyListOption  posting.ListOptions
+	emptyAssignedIds protos.AssignedIds
+	UidNotFound      = errors.New("Uid not found for xid")
+	pending          chan struct{}
 )
 
 func createNumQuery(group uint32, umap map[string]uint64) *protos.Num {
@@ -41,9 +44,9 @@ func createNumQuery(group uint32, umap map[string]uint64) *protos.Num {
 		if strings.HasPrefix(k, "_:") {
 			//generate new for this xid
 			out.Val = out.Val + 1
-		} else {
-			out.Xids = append(out.Xids, k)
+			continue
 		}
+		out.Xids = append(out.Xids, k)
 	}
 	return out
 }
@@ -64,110 +67,86 @@ func GetUid(ctx context.Context, xid string) (uint64, error) {
 		return 0, err
 	}
 	if len(result.UidMatrix) > 0 && len(result.UidMatrix[0].Uids) > 0 {
+		x.AssertTrue(len(result.UidMatrix) == 1 &&
+			len(result.UidMatrix[0].Uids) == 1)
 		return result.UidMatrix[0].Uids[0], nil
 	}
 	return 0, UidNotFound
-}
-
-type resErr struct {
-	xid string
-	uid uint64
-	err error
-}
-
-// AllocateOrGetUniqueUids assigns a new uid for xid if not already assigned or returns
-// already assigned uid
-func AllocateOrGetUniqueUids(ctx context.Context, xids []string) ([]uint64, error) {
-	num := len(xids)
-	ids := make([]uint64, num, num)
-	xidMap := make(map[string]uint64)
-	ch := make(chan resErr, num)
-
-	for _, x := range xids {
-		xid := x
-		go func() {
-			uid, err := LockManager().getUid(ctx, xid)
-			ch <- resErr{xid: xid, uid: uid, err: err}
-		}()
-	}
-	for i := 0; i < num; i++ {
-		res := <-ch
-		if res.err != nil {
-			return ids, res.err
-		}
-		xidMap[res.xid] = res.uid
-	}
-
-	close(ch)
-	for i, xid := range xids {
-		v, found := xidMap[xid]
-		x.AssertTruef(found, "uid not found/generated for xid")
-		ids[i] = v
-	}
-
-	return ids, nil
 }
 
 // assignUids returns a byte slice containing uids.
 // This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
 // so we can tackle any collisions that might happen with the leasemanager
 // In essence, we just want one server to be handing out new uids.
-func assignUids(ctx context.Context, num *protos.Num) (*protos.List, error) {
+func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	node := groups().Node(num.Group)
 	x.AssertTrue(num.Group == gid)
 	if !node.AmLeader() {
-		return &emptyUIDList, x.Errorf("Assigning UIDs is only allowed on leader.")
+		return &emptyAssignedIds, x.Errorf("Assigning UIDs is only allowed on leader.")
 	}
 
 	val := int(num.Val)
 	numXids := len(num.Xids)
 	if val == 0 && numXids == 0 {
-		return &emptyUIDList, x.Errorf("Nothing to be marked or assigned")
+		return &emptyAssignedIds, x.Errorf("Nothing to be marked or assigned")
 	}
 
-	out := make([]uint64, val+numXids, val+numXids)
-	che := make(chan error, 2)
+	out := &protos.AssignedIds{}
+	out.M = make(map[string]uint64)
+	che := make(chan error, 1+numXids)
+	var m sync.Mutex
 
 	go func() {
 		if num.Val == 0 {
 			che <- nil
 			return
 		}
-		startId, err := LeaseManager().assignNew(ctx, num.Val)
+		startId, err := LeaseManager().assignNewUids(ctx, num.Val)
 		if err != nil {
 			che <- err
 			return
 		}
-		// First N entities are newly assigned UIDs, so we collect them.
-		for i := uint64(0); i < num.Val; i++ {
-			out[i] = startId + i
-		}
+		out.StartId = startId
+		out.EndId = startId + num.Val - 1
 		che <- nil
 	}()
 
-	go func() {
-		ids, err := AllocateOrGetUniqueUids(ctx, num.Xids)
-		if err != nil {
-			che <- err
-			return
-		}
-		for i, id := range ids {
-			out[num.Val+uint64(i)] = id
-		}
-		che <- nil
-	}()
+	for _, xid := range num.Xids {
+		go func(xid string) {
+			// ensures that we don't launch too many goroutines
+			pending <- struct{}{}
+			defer func() { <-pending }()
+			uid, err := GetUid(ctx, xid)
+			if err == nil {
+				m.Lock()
+				defer m.Unlock()
+				out.M[xid] = uid
+				che <- nil
+				return
+			}
+			uid, err = LockManager().assignUidForXid(ctx, xid)
+			if err != nil {
+				che <- err
+				return
+			}
+			m.Lock()
+			defer m.Unlock()
+			out.M[xid] = uid
+			che <- nil
+		}(xid)
+	}
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 1+numXids; i++ {
 		select {
 		case err := <-che:
 			if err != nil {
-				return &emptyUIDList, err
+				return &emptyAssignedIds, err
 			}
 		case <-ctx.Done():
-			return &emptyUIDList, ctx.Err()
+			return &emptyAssignedIds, ctx.Err()
 		}
 	}
-	return &protos.List{out}, nil
+	return out, nil
 }
 
 // AssignUidsOverNetwork assigns new uids and writes them to the umap.
@@ -175,7 +154,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 	gid := group.BelongsTo("_xid_")
 	num := createNumQuery(gid, umap)
 
-	var ul *protos.List
+	var res *protos.AssignedIds
 	var err error
 	n := groups().Node(gid)
 
@@ -183,7 +162,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 	// have chance to propagate
 	if n != nil && n.AmLeader() {
 		x.Trace(ctx, "Calling assignUids as I'm leader of group: %d", gid)
-		ul, err = assignUids(ctx, num)
+		res, err = assignUids(ctx, num)
 		if err != nil {
 			return x.Wrap(err)
 		}
@@ -201,43 +180,41 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 		x.Trace(ctx, "Calling AssignUids for group: %d, addr: %s", gid, addr)
 
 		c := protos.NewWorkerClient(conn)
-		ul, err = c.AssignUids(ctx, num)
+		res, err = c.AssignUids(ctx, num)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while getting uids"))
 			return err
 		}
 	}
 
-	x.AssertTruef(len(ul.Uids) == len(umap),
-		"Requested: %d != Retrieved Uids: %d", len(umap), len(ul.Uids))
-
-	i := 0
-	xidStart := int(num.Val)
-	for i, xid := range num.Xids {
-		umap[xid] = ul.Uids[xidStart+i]
-	}
+	currId := res.StartId
 	// assign generated ones now
-	for k, v := range umap {
-		if v == 0 {
-			umap[k] = ul.Uids[i] // Write uids to map.
-			i++
+	for k := range umap {
+		if strings.HasPrefix(k, "_:") {
+			x.AssertTrue(currId != 0 && currId <= res.EndId)
+			umap[k] = currId
+			currId++
+			continue
 		}
+		uid, found := res.M[k]
+		x.AssertTrue(found)
+		umap[k] = uid
 	}
 	return nil
 }
 
 // AssignUids is used to assign new uids by communicating with the leader of the RAFT group
 // responsible for handing out uids.
-func (w *grpcWorker) AssignUids(ctx context.Context, num *protos.Num) (*protos.List, error) {
+func (w *grpcWorker) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	if ctx.Err() != nil {
-		return &emptyUIDList, ctx.Err()
+		return &emptyAssignedIds, ctx.Err()
 	}
 
 	if !groups().ServesGroup(num.Group) {
-		return &emptyUIDList, x.Errorf("groupId: %v. GetOrAssign. We shouldn't be getting this req", num.Group)
+		return &emptyAssignedIds, x.Errorf("groupId: %v. GetOrAssign. We shouldn't be getting this req", num.Group)
 	}
 
-	reply := &emptyUIDList
+	reply := &emptyAssignedIds
 	c := make(chan error, 1)
 	go func() {
 		var err error

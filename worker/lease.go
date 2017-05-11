@@ -20,6 +20,7 @@ package worker
 import (
 	"context"
 	"encoding/binary"
+	"time"
 
 	"golang.org/x/net/trace"
 
@@ -67,14 +68,15 @@ func readMaxLease() uint64 {
 	defer decr()
 	val, err := plist.Value()
 	if err == posting.ErrNoValue {
-		return 0
+		// starts from two, 1 is used for storing lease data
+		return 1
 	}
 	return binary.LittleEndian.Uint64(val.Value.([]byte))
 }
 
 // AssignNew assigns N unique uids sequentially
 // and returns the starting number of the sequence
-func (l *leaseManager) assignNew(ctx context.Context, N uint64) (uint64, error) {
+func (l *leaseManager) assignNewUids(ctx context.Context, N uint64) (uint64, error) {
 	x.AssertTrue(N > 0)
 	l.Lock()
 	defer l.Unlock()
@@ -137,6 +139,7 @@ type lockManager struct {
 type Uid struct {
 	x.SafeMutex
 	uid uint64
+	ts  time.Time
 }
 
 func (lm *lockManager) uid(xid string) *Uid {
@@ -150,29 +153,24 @@ func (lm *lockManager) uid(xid string) *Uid {
 
 	lm.Lock()
 	defer lm.Unlock()
+	if u, has := lm.uids[xid]; has {
+		return u
+	}
 	u = &Uid{}
+	u.ts = time.Now()
 	lm.uids[xid] = u
 	return u
 }
 
-func (lm *lockManager) getUid(ctx context.Context, xid string) (uint64, error) {
+func (lm *lockManager) assignUidForXid(ctx context.Context, xid string) (uint64, error) {
 	s := lm.uid(xid)
-	s.RLock()
-	if s.uid != 0 {
-		s.RUnlock()
-		return s.uid, nil
-	}
-	s.RUnlock()
 
 	s.Lock()
 	defer s.Unlock()
-	uid, err := GetUid(ctx, xid)
-	if err == nil && uid != 0 {
-		s.uid = uid
+	if s.uid != 0 {
 		return s.uid, nil
 	}
-
-	uid, err = LeaseManager().assignNew(ctx, 1)
+	uid, err := LeaseManager().assignNewUids(ctx, 1)
 	if err != nil {
 		return uid, err
 	}
@@ -184,7 +182,22 @@ func (lm *lockManager) getUid(ctx context.Context, xid string) (uint64, error) {
 }
 
 func (lm *lockManager) clean() {
-
+	ticker := time.NewTicker(time.Minute)
+	for range ticker.C {
+		now := time.Now()
+		lm.Lock()
+		for xid, uid := range lm.uids {
+			uid.RLock()
+			if now.Sub(uid.ts) > time.Minute {
+				// There can be only two cases, it is present in map
+				// but proposal failed so nothing was assigned
+				// or we proposed and persisted the info
+				delete(lm.uids, xid)
+			}
+			uid.RUnlock()
+		}
+		lm.Unlock()
+	}
 }
 
 func LockManager() *lockManager {

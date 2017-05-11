@@ -58,7 +58,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	State().Set("_xid_", protos.SchemaUpdate{
 		ValueType: uint32(types.StringID),
 		Directive: protos.SchemaUpdate_INDEX,
-		Tokenizer: []string{"exact"},
+		Tokenizer: []string{"hash"},
 	})
 	return nil
 }

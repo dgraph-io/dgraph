@@ -68,7 +68,7 @@ func TestSchema(t *testing.T) {
 		}},
 		{"_xid_", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
-			Tokenizer: []string{"exact"},
+			Tokenizer: []string{"hash"},
 			Directive: protos.SchemaUpdate_INDEX,
 		}},
 	})
@@ -193,7 +193,7 @@ func TestSchemaIndexCustom(t *testing.T) {
 		}},
 		{"_xid_", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
-			Tokenizer: []string{"exact"},
+			Tokenizer: []string{"hash"},
 			Directive: protos.SchemaUpdate_INDEX,
 		}},
 	})

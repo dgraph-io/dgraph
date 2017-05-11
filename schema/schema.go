@@ -278,7 +278,7 @@ func LoadFromDb(gid uint32) error {
 	State().Set("_xid_", protos.SchemaUpdate{
 		ValueType: uint32(types.StringID),
 		Directive: protos.SchemaUpdate_INDEX,
-		Tokenizer: []string{"exact"},
+		Tokenizer: []string{"hash"},
 	})
 	return nil
 }
