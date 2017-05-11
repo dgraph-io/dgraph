@@ -149,9 +149,14 @@ pwd
 ls
 build_docker_image
 
-if [ "$TRAVIS" = true ] ; then
-#  upload_nightly
+if [ "$TRAVIS" = true ]; then
+  echo "Travis true"
+	#  upload_nightly
 #  upload_docker_image
+fi
+
+if [ "$DGRAPH" != "$CURRENT_DIR" ]; then
+  mv $ASSETS_FILE $NIGHTLY_FILE $SHA_FILE $CURRENT_DIR
 fi
 
 popd > /dev/null
