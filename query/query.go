@@ -1552,6 +1552,9 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 				sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
 			}
 		}
+		sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool {
+			return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
+		})
 		sg.uidMatrix = []*protos.List{sg.DestUIDs}
 	}
 	return nil

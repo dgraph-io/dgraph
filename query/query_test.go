@@ -1319,6 +1319,32 @@ func TestVarInIneqError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestVarInIneqScore(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			var(id: 1) {
+				friend {
+					a as age
+					s as count(friend)
+					score as math(2*a + 3 * s + 1)
+				}
+			}
+
+			me(func: ge(var(score), 35)) { 
+				name
+				var(score)
+				var(a)
+				var(s)
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
+	require.JSONEq(t, `{"me":[{"name":"Daryl Dixon","var(a)":17,"var(s)":0,"var(score)":35.000000},{"name":"Andrea","var(a)":19,"var(s)":1,"var(score)":42.000000}]}`,
+		js)
+}
+
 func TestVarInIneq(t *testing.T) {
 	populateGraph(t)
 	query := `
