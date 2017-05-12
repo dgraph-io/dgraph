@@ -609,7 +609,6 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 			v.Defines = append(v.Defines, va)
 		}
 	}
-
 	for _, va := range qu.NeedsVar {
 		v.Needs = append(v.Needs, va.Name)
 	}
@@ -1837,6 +1836,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return gq, err
 			}
 			gq.Func = gen
+			gq.NeedsVar = append(gq.NeedsVar, gen.NeedsVar...)
 		} else {
 			var val string
 			if !it.Next() {
