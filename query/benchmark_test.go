@@ -19,7 +19,7 @@ package query
 
 /*
 // TODO: Fix this test.
-func prepareTest(b *testing.B) (*store.Store, string, string) {
+func prepareTest(b *testing.B) (dgs.Store, string, string) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		b.Fatal(err)

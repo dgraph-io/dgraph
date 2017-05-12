@@ -18,14 +18,15 @@
 package schema
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
+	"github.com/dgraph-io/badger/badger"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -33,7 +34,7 @@ import (
 
 var (
 	pstate *state
-	pstore *store.Store
+	pstore *badger.KV
 	syncCh chan SyncEntry
 )
 
@@ -248,7 +249,7 @@ func (s *stateGroup) isReversed(pred string) bool {
 	return false
 }
 
-func Init(ps *store.Store) {
+func Init(ps *badger.KV) {
 	pstore = ps
 	syncCh = make(chan SyncEntry, 10000)
 	reset()
@@ -260,15 +261,18 @@ func Init(ps *store.Store) {
 // query to disk if we have large number of groups
 func LoadFromDb(gid uint32) error {
 	prefix := x.SchemaPrefix()
-	itr := pstore.NewIterator()
+	itr := pstore.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
 	defer itr.Close()
 
-	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
-		key := itr.Key().Data()
+	for itr.Seek(prefix); itr.Valid(); itr.Next() {
+		item := itr.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
 		attr := x.Parse(key).Attr
-		data := itr.Value().Data()
 		var s protos.SchemaUpdate
-		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
+		x.Checkf(s.Unmarshal(item.Value()), "Error while loading schema from db")
 		if group.BelongsTo(attr) != gid {
 			continue
 		}
@@ -279,21 +283,23 @@ func LoadFromDb(gid uint32) error {
 
 func Refresh(groupId uint32) error {
 	prefix := x.SchemaPrefix()
-	itr := pstore.NewIterator()
+	itr := pstore.NewIterator(badger.DefaultIteratorOptions) // Need values, reversed=false.
 	defer itr.Close()
 
-	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
-		key := itr.Key().Data()
+	for itr.Seek(prefix); itr.Valid(); itr.Next() {
+		item := itr.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
 		attr := x.Parse(key).Attr
 		if group.BelongsTo(attr) != groupId {
 			continue
 		}
-		data := itr.Value().Data()
 		var s protos.SchemaUpdate
-		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
+		x.Checkf(s.Unmarshal(item.Value()), "Error while loading schema from db")
 		State().Set(attr, s)
 	}
-
 	return nil
 }
 
@@ -321,10 +327,7 @@ func addToEntriesMap(entriesMap map[chan x.Mark][]uint64, entries []SyncEntry) {
 func batchSync() {
 	var entries []SyncEntry
 	var loop uint64
-
-	b := pstore.NewWriteBatch()
-	defer b.Destroy()
-
+	wb := make([]*badger.Entry, 0, 100)
 	for {
 		select {
 		case e := <-syncCh:
@@ -334,16 +337,15 @@ func batchSync() {
 			// default is executed if no other case is ready.
 			start := time.Now()
 			if len(entries) > 0 {
-				x.AssertTrue(b != nil)
 				loop++
 				State().elog.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
 				for _, e := range entries {
 					val, err := e.Schema.Marshal()
 					x.Checkf(err, "Error while marshalling schema description")
-					b.Put(x.SchemaKey(e.Attr), val)
+					wb = badger.EntriesSet(wb, x.SchemaKey(e.Attr), val)
 				}
-				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
-				b.Clear()
+				pstore.BatchSet(wb)
+				wb = wb[:0]
 
 				entriesMap := make(map[chan x.Mark][]uint64)
 				addToEntriesMap(entriesMap, entries)

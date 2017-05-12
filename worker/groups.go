@@ -28,12 +28,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/badger/badger"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -122,8 +122,9 @@ func StartRaftNodes(walDir string) {
 	}
 
 	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
-	wals, err := store.NewSyncStore(walDir)
-	x.Checkf(err, "Error initializing wal store")
+	kvOpt := badger.DefaultOptions
+	kvOpt.Dir = walDir
+	wals := badger.NewKV(&kvOpt)
 	gr.wal = raftwal.Init(wals, *raftId)
 
 	var wg sync.WaitGroup

@@ -18,10 +18,12 @@
 package posting
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -140,20 +142,18 @@ func TestTokensTable(t *testing.T) {
 	addMutationWithIndex(t, l, edge, Set)
 
 	key = x.IndexKey("name", "david")
-	slice, err := ps.Get(key)
-	require.NoError(t, err)
+	slice, _ := ps.Get(key)
 
 	var pl protos.PostingList
-	x.Check(pl.Unmarshal(slice.Data()))
+	x.Check(pl.Unmarshal(slice))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 
 	CommitLists(10, 1)
 	time.Sleep(time.Second)
 
-	slice, err = ps.Get(key)
-	require.NoError(t, err)
-	x.Check(pl.Unmarshal(slice.Data()))
+	slice, _ = ps.Get(key)
+	x.Check(pl.Unmarshal(slice))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 	deletePl(t, l)
@@ -163,12 +163,16 @@ func TestTokensTable(t *testing.T) {
 func tokensForTest(attr string) []string {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	it := pstore.NewIterator()
+	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
 	var out []string
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		k := x.Parse(it.Key().Data())
+	for it.Seek(prefix); it.Valid(); it.Next() {
+		key := it.Item().Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
+		k := x.Parse(key)
 		x.AssertTrue(k.IsIndex())
 		out = append(out, k.Term)
 	}
@@ -234,8 +238,8 @@ func TestRebuildIndex(t *testing.T) {
 	}
 
 	// Create some fake wrong entries for data store.
-	ps.SetOne(x.IndexKey("name", "wrongname1"), []byte("nothing"))
-	ps.SetOne(x.IndexKey("name", "wrongname2"), []byte("nothing"))
+	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"))
+	ps.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"))
 
 	require.NoError(t, RebuildIndex(context.Background(), "name"))
 
@@ -246,16 +250,21 @@ func TestRebuildIndex(t *testing.T) {
 	}
 
 	// Check index entries in data store.
-	it := ps.NewIterator()
+	it := ps.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 	pk := x.ParsedKey{Attr: "name"}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
 	var idxVals []*protos.PostingList
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		idxKeys = append(idxKeys, string(it.Key().Data()))
+	for it.Seek(prefix); it.Valid(); it.Next() {
+		item := it.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
+		idxKeys = append(idxKeys, string(key))
 		pl := new(protos.PostingList)
-		require.NoError(t, pl.Unmarshal(it.Value().Data()))
+		require.NoError(t, pl.Unmarshal(item.Value()))
 		idxVals = append(idxVals, pl)
 	}
 	require.Len(t, idxKeys, 2)
@@ -296,16 +305,21 @@ func TestRebuildReverseEdges(t *testing.T) {
 	}
 
 	// Check index entries in data store.
-	it := ps.NewIterator()
+	it := ps.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 	pk := x.ParsedKey{Attr: "friend"}
 	prefix := pk.ReversePrefix()
 	var revKeys []string
 	var revVals []*protos.PostingList
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		revKeys = append(revKeys, string(it.Key().Data()))
+	for it.Seek(prefix); it.Valid(); it.Next() {
+		item := it.Item()
+		key, value := item.Key(), item.Value()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
+		revKeys = append(revKeys, string(key))
 		pl := new(protos.PostingList)
-		require.NoError(t, pl.Unmarshal(it.Value().Data()))
+		require.NoError(t, pl.Unmarshal(value))
 		revVals = append(revVals, pl)
 	}
 	require.Len(t, revKeys, 2)

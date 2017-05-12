@@ -27,8 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 
 	"golang.org/x/net/context"
@@ -40,11 +40,11 @@ var (
 		"Port used by worker for internal communication.")
 	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
-	pstore       *store.Store
+	pstore       *badger.KV
 	workerServer *grpc.Server
 )
 
-func Init(ps *store.Store) {
+func Init(ps *badger.KV) {
 	pstore = ps
 }
 
@@ -96,7 +96,7 @@ func RunServer(bindall bool) {
 
 // StoreStats returns stats for data store.
 func StoreStats() string {
-	return pstore.GetStats()
+	return "Currently no stats for badger"
 }
 
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
