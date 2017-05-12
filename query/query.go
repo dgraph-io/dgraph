@@ -1536,7 +1536,7 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 	src := types.Val{types.StringID, []byte(val)}
 	dst, err := types.Convert(src, typ)
 	if err != nil {
-		return x.Errorf("Invalid argment %v", val)
+		return x.Errorf("Invalid argment %v. Comparing with different type", val)
 	}
 	for _, uid := range sg.SrcUIDs.Uids {
 		curVal, ok := sg.Params.uidToVal[uid]

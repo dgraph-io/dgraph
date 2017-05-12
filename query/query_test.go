@@ -1295,6 +1295,30 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 		js)
 }
 
+func TestVarInIneqError(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			var(id: 1) {
+				f as friend {
+					a as age
+				}
+			}
+
+			me(id: var(f)) @filter(gt(var(a), "alice")) {
+				name
+			}
+		}
+  `
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
 func TestVarInIneq(t *testing.T) {
 	populateGraph(t)
 	query := `
