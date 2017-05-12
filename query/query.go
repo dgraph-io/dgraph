@@ -800,12 +800,12 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
-	if gq.IsCount {
-		if len(gq.Children) != 0 {
-			return nil, fmt.Errorf("Cannot have children attributes when asking for count.")
-		}
-		args.DoCount = true
-	}
+	//	if gq.IsCount {
+	//		if len(gq.Children) != 0 {
+	//			return nil, fmt.Errorf("Cannot have children attributes when asking for count.")
+	//		}
+	//		args.DoCount = true
+	//	}
 
 	for argk := range gq.Args {
 		if !isValidArg(argk) {
@@ -1582,7 +1582,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			v := sg.values[0]
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
 		}
-		sg.counts = result.Counts
 
 		if sg.Params.DoCount && len(sg.Filters) == 0 {
 			// If there is a filter, we need to do more work to get the actual count.
@@ -1688,6 +1687,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	// take care of the order
 	if sg.Params.DoCount {
 		x.AssertTrue(len(sg.Filters) > 0)
+		fmt.Println(len(sg.uidMatrix))
 		sg.counts = make([]uint32, len(sg.uidMatrix))
 		for i, ul := range sg.uidMatrix {
 			// A possible optimization is to return the size of the intersection

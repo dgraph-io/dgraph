@@ -6403,3 +6403,16 @@ func TestCountAtRoot(t *testing.T) {
 	js := processToFastJSON(t, query)
 	fmt.Println(string(js))
 }
+
+func TestCountAtRoot2(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(200 * time.Millisecond)
+	query := `
+                {
+                        count(me(func: anyofterms(name, "Michonne Rick Andrea")))
+                }
+        `
+	js := processToFastJSON(t, query)
+	fmt.Println(string(js))
+}

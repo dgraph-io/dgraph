@@ -514,6 +514,7 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 	n := seedNode.New("_root_")
 	if sg.Attr == "__" {
 		for _, sg := range sg.Children {
+			fmt.Printf("Sg: %+v\n", sg)
 			err := processNodeUids(n.(*fastJsonNode), sg)
 			if err != nil {
 				return err

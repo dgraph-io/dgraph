@@ -18,6 +18,7 @@
 package gql
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -3227,7 +3228,8 @@ func TestParseCountAtRoot(t *testing.T) {
 	  count(me(func: ge(name, 0)))
     }
 `
-	_, err := Parse(Request{Str: query, Http: true})
+	res, err := Parse(Request{Str: query, Http: true})
+	fmt.Printf("Qu: %+v\n", res.Query[0])
 	require.NoError(t, err)
 }
 
