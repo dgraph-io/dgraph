@@ -6410,7 +6410,7 @@ func TestCountAtRoot2(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	query := `
                 {
-                        count(me(func: anyofterms(name, "Michonne Rick Andrea")))
+                        me(func: anyofterms(name, "Michonne Rick Andrea"))
                 }
         `
 	js := processToFastJSON(t, query)

@@ -474,6 +474,17 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		return nil
 	}
 	lenList := len(sg.uidMatrix[0].Uids)
+
+	fmt.Println("here", sg.uidMatrix[0].Uids)
+	if sg.Params.DoCount {
+		x.AssertTruef(len(sg.Children) == 0, "Cannot have children when asking for count at root")
+		c := types.ValueForType(types.IntID)
+		c.Value = lenList
+		fieldName := fmt.Sprintf("count(%s)", sg.Attr)
+		n.AddValue(fieldName, c)
+		return nil
+	}
+
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
 		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
@@ -514,7 +525,6 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 	n := seedNode.New("_root_")
 	if sg.Attr == "__" {
 		for _, sg := range sg.Children {
-			fmt.Printf("Sg: %+v\n", sg)
 			err := processNodeUids(n.(*fastJsonNode), sg)
 			if err != nil {
 				return err

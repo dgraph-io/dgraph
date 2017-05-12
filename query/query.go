@@ -800,12 +800,12 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
-	//	if gq.IsCount {
-	//		if len(gq.Children) != 0 {
-	//			return nil, fmt.Errorf("Cannot have children attributes when asking for count.")
-	//		}
-	//		args.DoCount = true
-	//	}
+	if gq.IsCount {
+		if len(gq.Children) != 0 {
+			return nil, fmt.Errorf("Cannot have children attributes when asking for count.")
+		}
+		args.DoCount = true
+	}
 
 	for argk := range gq.Args {
 		if !isValidArg(argk) {
@@ -1565,6 +1565,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		taskQuery := createTaskQuery(sg)
+		// For root node, we don't want to get counts because we just want one count which is
+		// the len(DestUids).
+		if parent == nil {
+			taskQuery.DoCount = false
+		}
+
 		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
@@ -1687,7 +1693,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	// take care of the order
 	if sg.Params.DoCount {
 		x.AssertTrue(len(sg.Filters) > 0)
-		fmt.Println(len(sg.uidMatrix))
 		sg.counts = make([]uint32, len(sg.uidMatrix))
 		for i, ul := range sg.uidMatrix {
 			// A possible optimization is to return the size of the intersection
