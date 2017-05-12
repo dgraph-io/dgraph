@@ -1302,7 +1302,7 @@ L:
 					seenFuncArg = true
 					if f.Name == "var" {
 						if len(f.NeedsVar) > 1 {
-							return nil, x.Errorf("Multiple variables not allowed in var inside a function")
+							return nil, x.Errorf("Multiple variables not allowed in a function")
 						}
 						g.Attr = "var"
 						g.Args = append(g.Args, f.NeedsVar[0].Name)
