@@ -619,7 +619,6 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 			v.Defines = append(v.Defines, va)
 		}
 	}
-
 	for _, va := range qu.NeedsVar {
 		v.Needs = append(v.Needs, va.Name)
 	}
@@ -1311,8 +1310,19 @@ L:
 						return nil, err
 					}
 					seenFuncArg = true
-					g.Attr = f.Attr
-					g.Args = append(g.Args, f.Name)
+					if f.Name == "var" {
+						if len(f.NeedsVar) > 1 {
+							return nil, x.Errorf("Multiple variables not allowed in a function")
+						}
+						g.Attr = "var"
+						g.Args = append(g.Args, f.NeedsVar[0].Name)
+						g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
+						g.NeedsVar[0].Typ = VALUE_VAR
+					} else {
+						g.Attr = f.Attr
+						g.Args = append(g.Args, f.Name)
+					}
+					expectArg = false
 					continue
 				} else if itemInFunc.Typ == itemAt {
 					if len(g.Attr) > 0 && len(g.Lang) == 0 {
@@ -1852,6 +1862,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return gq, err
 			}
 			gq.Func = gen
+			gq.NeedsVar = append(gq.NeedsVar, gen.NeedsVar...)
 		} else {
 			var val string
 			if !it.Next() {

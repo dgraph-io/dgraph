@@ -1523,6 +1523,43 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	return nil
 }
 
+func (sg *SubGraph) ApplyIneqFunc() error {
+	if sg.Params.uidToVal == nil {
+		return x.Errorf("Expected a vaild value map. But Empty.")
+	}
+	var typ types.TypeID
+	for _, v := range sg.Params.uidToVal {
+		typ = v.Tid
+		break
+	}
+	val := sg.SrcFunc[3]
+	src := types.Val{types.StringID, []byte(val)}
+	dst, err := types.Convert(src, typ)
+	if err != nil {
+		return x.Errorf("Invalid argment %v. Comparing with different type", val)
+	}
+	if sg.SrcUIDs != nil {
+		for _, uid := range sg.SrcUIDs.Uids {
+			curVal, ok := sg.Params.uidToVal[uid]
+			if ok && types.CompareVals(sg.SrcFunc[0], curVal, dst) {
+				sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
+			}
+		}
+	} else {
+		// This means its a root as SrcUIDs is nil
+		for uid, curVal := range sg.Params.uidToVal {
+			if types.CompareVals(sg.SrcFunc[0], curVal, dst) {
+				sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
+			}
+		}
+		sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool {
+			return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
+		})
+		sg.uidMatrix = []*protos.List{sg.DestUIDs}
+	}
+	return nil
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
@@ -1556,43 +1593,51 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			rch <- nil
 			return
 		}
-
-		taskQuery := createTaskQuery(sg)
-		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
-			rch <- err
-			return
-		}
-
-		if sg.Attr == "_predicate_" {
-			sg.Params.isListNode = true
-		}
-		sg.uidMatrix = result.UidMatrix
-		sg.values = result.Values
-		sg.facetsMatrix = result.FacetMatrix
-		if len(sg.values) > 0 {
-			v := sg.values[0]
-			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
-		}
-		sg.counts = result.Counts
-
-		if sg.Params.DoCount && len(sg.Filters) == 0 {
-			// If there is a filter, we need to do more work to get the actual count.
-			x.Trace(ctx, "Zero uids. Only count requested")
-			rch <- nil
-			return
-		}
-
-		if result.IntersectDest {
-			sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
+		if len(sg.SrcFunc) > 0 && isInequalityFn(sg.SrcFunc[0]) && sg.Attr == "var" {
+			// This is a ineq function which uses a value variable.
+			err = sg.ApplyIneqFunc()
+			if parent != nil {
+				rch <- err
+				return
+			}
 		} else {
-			sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
-		}
+			taskQuery := createTaskQuery(sg)
+			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
+				rch <- err
+				return
+			}
 
-		if parent == nil {
-			// I'm root. We reach here if root had a function.
-			sg.uidMatrix = []*protos.List{sg.DestUIDs}
+			if sg.Attr == "_predicate_" {
+				sg.Params.isListNode = true
+			}
+			sg.uidMatrix = result.UidMatrix
+			sg.values = result.Values
+			sg.facetsMatrix = result.FacetMatrix
+			if len(sg.values) > 0 {
+				v := sg.values[0]
+				x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
+			}
+			sg.counts = result.Counts
+
+			if sg.Params.DoCount && len(sg.Filters) == 0 {
+				// If there is a filter, we need to do more work to get the actual count.
+				x.Trace(ctx, "Zero uids. Only count requested")
+				rch <- nil
+				return
+			}
+
+			if result.IntersectDest {
+				sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
+			} else {
+				sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
+			}
+
+			if parent == nil {
+				// I'm root. We reach here if root had a function.
+				sg.uidMatrix = []*protos.List{sg.DestUIDs}
+			}
 		}
 	}
 
@@ -1617,6 +1662,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
 			filter.SrcUIDs = sg.DestUIDs
+			// Passing the pointer is okay since the filter only reads.
 			filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
@@ -1916,6 +1962,14 @@ func isValidFuncName(f string) bool {
 func isCompareFn(f string) bool {
 	switch f {
 	case "le", "ge", "lt", "gt", "eq":
+		return true
+	}
+	return false
+}
+
+func isInequalityFn(f string) bool {
+	switch f {
+	case "eq", "le", "ge", "gt", "lt":
 		return true
 	}
 	return false

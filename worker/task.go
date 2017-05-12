@@ -474,7 +474,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				if sv.Value == nil || err != nil {
 					return false
 				}
-				return compareTypeVals(q.SrcFunc[0], sv, srcFn.ineqValue)
+				return types.CompareVals(q.SrcFunc[0], sv, srcFn.ineqValue)
 			})
 		}
 	}
@@ -760,7 +760,7 @@ func applyFacetsTree(postingFacets []*protos.Facet, ftree *facetsTree) (bool, er
 					ftree.function.convertedVal[typId] = v
 				}
 			}
-			return compareTypeVals(fname, facets.ValFor(fc), v), nil
+			return types.CompareVals(fname, facets.ValFor(fc), v), nil
 
 		case StandardFn: // allofterms, anyofterms
 			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
@@ -790,33 +790,6 @@ func applyFacetsTree(postingFacets []*protos.Facet, ftree *facetsTree) (bool, er
 		return res[0] || res[1], nil
 	}
 	return false, x.Errorf("Unexpected behavior in applyFacetsTree.")
-}
-
-// Should be used only in filtering arg1 by comparing with arg2.
-// arg2 is reference Val to which arg1 is compared.
-func compareTypeVals(op string, arg1, arg2 types.Val) bool {
-	revRes := func(b bool, e error) (bool, error) { // reverses result
-		return !b, e
-	}
-	noError := func(b bool, e error) bool {
-		return b && e == nil
-	}
-	switch op {
-	case "ge":
-		return noError(revRes(types.Less(arg1, arg2)))
-	case "gt":
-		return noError(types.Less(arg2, arg1))
-	case "le":
-		return noError(revRes(types.Less(arg2, arg1)))
-	case "lt":
-		return noError(types.Less(arg1, arg2))
-	case "eq":
-		return noError(types.Equal(arg1, arg2))
-	default:
-		// should have been checked at query level.
-		x.Fatalf("Unknown ineqType %v", op)
-	}
-	return false
 }
 
 // filterOnStandardFn : tells whether facet corresponding to fcTokens can be taken or not.

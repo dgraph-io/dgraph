@@ -1294,6 +1294,117 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 		js)
 }
 
+func TestVarInAggError(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			var(id: 1) {
+				friend {
+					a as age
+				}
+			}
+
+			# var not allowed in min filter
+			me(func: min(var(a))) {
+				name
+			}
+		}
+  `
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+func TestVarInIneqError(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			var(id: 1) {
+				f as friend {
+					a as age
+				}
+			}
+
+			me(id: var(f)) @filter(gt(var(a), "alice")) {
+				name
+			}
+		}
+  `
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
+func TestVarInIneqScore(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			var(id: 1) {
+				friend {
+					a as age
+					s as count(friend)
+					score as math(2*a + 3 * s + 1)
+				}
+			}
+
+			me(func: ge(var(score), 35)) { 
+				name
+				var(score)
+				var(a)
+				var(s)
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Daryl Dixon","var(a)":17,"var(s)":0,"var(score)":35.000000},{"name":"Andrea","var(a)":19,"var(s)":1,"var(score)":42.000000}]}`,
+		js)
+}
+
+func TestVarInIneq(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			var(id: 1) {
+				f as friend {
+					a as age
+				}
+			}
+
+			me(id: var(f)) @filter(gt(var(a), 18)) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Andrea"}]}`, js)
+}
+
+func TestVarInIneq2(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			var(id: 1) {
+				friend {
+					a as age
+				}
+			}
+
+			me(func: gt(var(a), 18)) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Andrea"}]}`, js)
+}
+
 func TestNestedFuncRoot(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)

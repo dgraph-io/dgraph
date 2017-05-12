@@ -747,6 +747,53 @@ func TestParseQueryWithVarAtRoot(t *testing.T) {
 	require.Equal(t, []string{"K", "fr"}, res.QueryVars[0].Defines)
 }
 
+func TestParseQueryWithVarInIneqError(t *testing.T) {
+	query := `
+	{
+		var(id:0x0a) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(id: var(fr)) @filter(gt(var(a, b), 10)) {
+		 name	
+		}
+	}
+`
+	// Multiple vars not allowed.
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseQueryWithVarInIneq(t *testing.T) {
+	query := `
+	{
+		var(id:0x0a) {
+			fr as friends {
+				a as age
+			}
+		}
+
+		me(id: var(fr)) @filter(gt(var(a), 10)) {
+		 name	
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "fr", res.Query[0].Children[0].Var)
+	require.Equal(t, "fr", res.Query[1].NeedsVar[0].Name)
+	require.Equal(t, UID_VAR, res.Query[1].NeedsVar[0].Typ)
+	require.Equal(t, VALUE_VAR, res.Query[1].Filter.Func.NeedsVar[0].Typ)
+	require.Equal(t, 2, len(res.Query[1].Filter.Func.Args))
+	require.Equal(t, "var", res.Query[1].Filter.Func.Attr)
+	require.Equal(t, "a", res.Query[1].Filter.Func.Args[0])
+	require.Equal(t, "gt", res.Query[1].Filter.Func.Name)
+}
+
 func TestParseQueryWithVar1(t *testing.T) {
 	query := `
 	{
