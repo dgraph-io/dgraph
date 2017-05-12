@@ -6390,3 +6390,29 @@ children: <
 >
 `, proto.MarshalTextString(pb[0]))
 }
+
+func TestCountAtRoot(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+		{
+			count(me(func: ge(count(friend), 0)))
+		}
+	`
+	js := processToFastJSON(t, query)
+	fmt.Println(string(js))
+}
+
+func TestCountAtRootAlias(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+		{
+			personCount: count(me(func: ge(count(friend), 0)))
+		}
+	`
+	js := processToFastJSON(t, query)
+	fmt.Println(string(js))
+}

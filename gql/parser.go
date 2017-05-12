@@ -722,6 +722,14 @@ func getQuery(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	if rerr != nil {
 		return nil, rerr
 	}
+	peek, err := it.Peek(1)
+	if err != nil {
+		return nil, rerr
+	}
+	// Count at root shouldn't have children.
+	if gq.IsCount && peek[0].Typ != itemRightCurl {
+		return nil, x.Errorf("Invalid query")
+	}
 
 	var seenFilter bool
 L:
@@ -1758,6 +1766,17 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
 	}
 
+	if item.Val == "count" {
+		if !it.Next() {
+			return nil, x.Errorf("Invalid query")
+		}
+		item := it.Item()
+		if item.Typ != itemLeftRound {
+			return nil, x.Errorf("Expected (. Got: %s", item.Val)
+		}
+		it.Next()
+		gq.IsCount = true
+	}
 	peekIt, err := it.Peek(1)
 	if err != nil {
 		return nil, x.Errorf("Invalid Query")
@@ -1775,7 +1794,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	}
 	item = it.Item()
 	if item.Typ != itemLeftRound {
-		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
+		return nil, x.Errorf("Expected left round bracket. Got: %v", item)
 	}
 
 	expectArg := true
@@ -1897,6 +1916,13 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		}
 	}
 
+	if gq.IsCount {
+		item := it.Item()
+		if item.Typ != itemRightRound {
+			return nil, x.Errorf("Expected ). Got: %v", item.Val)
+		}
+		it.Next()
+	}
 	return gq, nil
 }
 
@@ -1905,6 +1931,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	if gq == nil {
 		return x.Errorf("Bad nesting of predicates or functions")
 	}
+
 	var isCount uint16
 	var alias, varName string
 	curp := gq // Used to track current node, for nesting.
@@ -2100,7 +2127,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 			if peekIt[0].Typ == itemColon {
 				alias = val
-				it.Next() //Consume the itemCollon
+				it.Next() // Consume the itemCollon
 				continue
 			}
 			if isCount == 2 {
