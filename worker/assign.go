@@ -73,7 +73,7 @@ func getUid(ctx context.Context, xid string) (uint64, error) {
 		if sv.Value == nil || err != nil {
 			return false
 		}
-		return compareTypeVals("eq", sv, types.Val{Tid: types.StringID, Value: xid})
+		return sv.Value.(string) == xid
 	})
 	if len(ul.Uids) == 0 {
 		return 0, UidNotFound
@@ -128,30 +128,21 @@ func GetUidsOverNetwork(ctx context.Context, xids []string) (map[string]uint64, 
 	num := &protos.Num{Xids: xids}
 	if groups().ServesGroup(leaseGid) {
 		res, err = getUids(ctx, num)
-		if err != nil {
-			return res.XidToUid, x.Wrap(err)
-		}
-
-	} else {
-		addr := groups().AnyServer(leaseGid)
-		p := pools().get(addr)
-		conn, err := p.Get()
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while retrieving connection"))
-			return res.XidToUid, err
-		}
-		defer p.Put(conn)
-		x.Trace(ctx, "Calling GetUids for group: %d, addr: %s", leaseGid, addr)
-
-		c := protos.NewWorkerClient(conn)
-		res, err = c.GetUids(ctx, num)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while getting uids"))
-			return res.XidToUid, err
-		}
+		return res.XidToUid, err
 	}
+	addr := groups().AnyServer(leaseGid)
+	p := pools().get(addr)
+	conn, err := p.Get()
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while retrieving connection"))
+		return res.XidToUid, err
+	}
+	defer p.Put(conn)
+	x.Trace(ctx, "Calling GetUids for group: %d, addr: %s", leaseGid, addr)
 
-	return res.XidToUid, nil
+	c := protos.NewWorkerClient(conn)
+	res, err = c.GetUids(ctx, num)
+	return res.XidToUid, err
 }
 
 // assignUids returns a byte slice containing uids.
@@ -175,13 +166,15 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 	out.XidToUid = make(map[string]uint64)
 	che := make(chan error, 1+numXids)
 	var m sync.Mutex
+	contxt, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	go func() {
 		if num.Val == 0 {
 			che <- nil
 			return
 		}
-		startId, err := leaseMgr().assignNewUids(ctx, num.Val)
+		startId, err := leaseMgr().assignNewUids(contxt, num.Val)
 		if err != nil {
 			che <- err
 			return
@@ -204,7 +197,7 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 				che <- nil
 				return
 			}
-			uid, err = lockMgr().assignUidForXid(ctx, xid)
+			uid, err = lockMgr().assignUidForXid(contxt, xid)
 			if err != nil {
 				che <- err
 				return
@@ -220,10 +213,20 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 		select {
 		case err := <-che:
 			if err != nil {
-				return &emptyAssignedIds, err
+				cancel()
+				for i < 1+numXids {
+					<-che
+					i++
+				}
+				return out, err
 			}
 		case <-ctx.Done():
-			return &emptyAssignedIds, ctx.Err()
+			cancel()
+			for i < 1+numXids {
+				<-che
+				i++
+			}
+			return out, ctx.Err()
 		}
 	}
 	return out, nil

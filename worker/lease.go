@@ -32,7 +32,7 @@ import (
 
 const (
 	LeasePredicate = "_lease_"
-	minLeaseNum    = uint64(500)
+	minLeaseNum    = uint64(1000)
 )
 
 var (
@@ -198,7 +198,7 @@ func (lm *lockManager) clean() {
 		lm.Lock()
 		for xid, u := range lm.uids {
 			u.RLock()
-			if now.Sub(u.ts) > 10*time.Minute {
+			if now.Sub(u.ts) > time.Minute {
 				delete(lm.uids, xid)
 			}
 			u.RUnlock()
