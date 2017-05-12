@@ -1593,8 +1593,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			rch <- nil
 			return
 		}
-		if len(sg.SrcFunc) == 4 && sg.Attr == "var" {
-			// This is a function which uses a value variable.
+		if len(sg.SrcFunc) > 0 && isInequalityFn(sg.SrcFunc[0]) && sg.Attr == "var" {
+			// This is a ineq function which uses a value variable.
 			err = sg.ApplyIneqFunc()
 			if parent != nil {
 				rch <- err
@@ -1962,6 +1962,14 @@ func isValidFuncName(f string) bool {
 func isCompareFn(f string) bool {
 	switch f {
 	case "le", "ge", "lt", "gt", "eq":
+		return true
+	}
+	return false
+}
+
+func isInequalityFn(f string) bool {
+	switch f {
+	case "eq", "le", "ge", "gt", "lt":
 		return true
 	}
 	return false

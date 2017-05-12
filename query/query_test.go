@@ -1295,6 +1295,30 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 		js)
 }
 
+func TestVarInAggError(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			var(id: 1) {
+				friend {
+					a as age
+				}
+			}
+
+			# var not allowed in min filter
+			me(func: min(var(a))) {
+				name
+			}
+		}
+  `
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
 func TestVarInIneqError(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1340,7 +1364,6 @@ func TestVarInIneqScore(t *testing.T) {
 		}
   `
 	js := processToFastJSON(t, query)
-	fmt.Println(js)
 	require.JSONEq(t, `{"me":[{"name":"Daryl Dixon","var(a)":17,"var(s)":0,"var(score)":35.000000},{"name":"Andrea","var(a)":19,"var(s)":1,"var(score)":42.000000}]}`,
 		js)
 }

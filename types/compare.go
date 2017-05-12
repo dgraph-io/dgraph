@@ -24,7 +24,7 @@ import (
 // Should be used only in filtering arg1 by comparing with arg2.
 // arg2 is reference Val to which arg1 is compared.
 func CompareVals(op string, arg1, arg2 Val) bool {
-	revRes := func(b bool, e error) (bool, error) { // reverses result
+	negateRes := func(b bool, e error) (bool, error) { // reverses result
 		return !b, e
 	}
 	noError := func(b bool, e error) bool {
@@ -32,11 +32,11 @@ func CompareVals(op string, arg1, arg2 Val) bool {
 	}
 	switch op {
 	case "ge":
-		return noError(revRes(Less(arg1, arg2)))
+		return noError(negateRes(Less(arg1, arg2)))
 	case "gt":
 		return noError(Less(arg2, arg1))
 	case "le":
-		return noError(revRes(Less(arg2, arg1)))
+		return noError(negateRes(Less(arg2, arg1)))
 	case "lt":
 		return noError(Less(arg1, arg2))
 	case "eq":
