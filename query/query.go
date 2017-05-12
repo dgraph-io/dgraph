@@ -1534,7 +1534,6 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-	fmt.Printf("%+v\n", sg)
 	if parent == nil && len(sg.SrcFunc) == 0 {
 		// I'm root and I'm using some varaible that has been populated.
 		// Retain the actual order in uidMatrix. But sort the destUids.

@@ -422,7 +422,8 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"count(follow)":1},{"@facets":{"_":{"weight":1.500000}},"count(follow)":1}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"count(follow)":1}],"var(L4)":1.200000}]}],"sum":[{"name":"John","var(L4)":3.900000},{"name":"Matt","var(L4)":1.200000}]}`, js)
+	require.JSONEq(t, `{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"follow":[{"count":1}]},{"@facets":{"_":{"weight":1.500000}},"follow":[{"count":1}]}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"follow":[{"count":1}]}],"var(L4)":1.200000}]}],"sum":[{"name":"John","var(L4)":3.900000},{"name":"Matt","var(L4)":1.200000}]}`,
+		js)
 }
 
 func TestLevelBasedFacetVarSumError(t *testing.T) {
@@ -901,7 +902,7 @@ func TestQueryVarValAggOrderDesc(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"info":[{"friend":[{"age":15,"count(friend)":1,"var(sum)":16.000000},{"age":15,"count(friend)":0,"var(sum)":15.000000},{"age":17,"count(friend)":0,"var(sum)":17.000000},{"age":19,"count(friend)":1,"var(sum)":20.000000},{"count(friend)":0,"var(sum)":0.000000}]}],"me":[{"age":19,"count(friend)":1,"name":"Andrea"},{"age":17,"count(friend)":0,"name":"Daryl Dixon"},{"age":15,"count(friend)":1,"name":"Rick Grimes"},{"age":15,"count(friend)":0,"name":"Glenn Rhee"},{"count(friend)":0}]}`,
+		`{"info":[{"friend":[{"age":15,"friend":[{"count":1}],"var(sum)":16.000000},{"age":15,"friend":[{"count":0}],"var(sum)":15.000000},{"age":17,"friend":[{"count":0}],"var(sum)":17.000000},{"age":19,"friend":[{"count":1}],"var(sum)":20.000000},{"friend":[{"count":0}],"var(sum)":0.000000}]}],"me":[{"age":19,"friend":[{"count":1}],"name":"Andrea"},{"age":17,"friend":[{"count":0}],"name":"Daryl Dixon"},{"age":15,"friend":[{"count":1}],"name":"Rick Grimes"},{"age":15,"friend":[{"count":0}],"name":"Glenn Rhee"},{"friend":[{"count":0}]}]}`,
 		js)
 }
 
@@ -1683,7 +1684,7 @@ func TestGetUIDCount(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"_uid_":"0x1","alive":true,"count(friend)":5,"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -1803,7 +1804,7 @@ func TestCount(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":true,"count(friend)":5,"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 func TestCountAlias(t *testing.T) {
@@ -1816,14 +1817,14 @@ func TestCountAlias(t *testing.T) {
 				name
 				gender
 				alive
-				friendCount: count(friend)
+				friendcount: count(friend)
 			}
 		}
 	`
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":true,"friendCount":5,"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"friendcount":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -1898,7 +1899,7 @@ func TestMultiCountSort(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"countorder":[{"count(friend)":0,"name":"Andrea With no friends"},{"count(friend)":1,"name":"Rick Grimes"},{"count(friend)":1,"name":"Andrea"},{"count(friend)":5,"name":"Michonne"}]}`,
+		`{"countorder":[{"friend":[{"count":0}],"name":"Andrea With no friends"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Andrea"},{"friend":[{"count":5}],"name":"Michonne"}]}`,
 		js)
 }
 
@@ -1918,7 +1919,7 @@ func TestMultiLevelAgg(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"sumorder":[{"friend":[{"count(friend)":1},{"count(friend)":0},{"count(friend)":0},{"count(friend)":1},{"count(friend)":0}],"name":"Michonne","sum(var(s))":2},{"friend":[{"count(friend)":5}],"name":"Rick Grimes","sum(var(s))":5},{"friend":[{"count(friend)":0}],"name":"Andrea","sum(var(s))":0},{"name":"Andrea With no friends"}]}`,
+		`{"sumorder":[{"friend":[{"friend":[{"count":1}]},{"friend":[{"count":0}]},{"friend":[{"count":0}]},{"friend":[{"count":1}]},{"friend":[{"count":0}]}],"name":"Michonne","sum(var(s))":2},{"friend":[{"friend":[{"count":5}]}],"name":"Rick Grimes","sum(var(s))":5},{"friend":[{"friend":[{"count":0}]}],"name":"Andrea","sum(var(s))":0},{"name":"Andrea With no friends"}]}`,
 		js)
 }
 
@@ -3138,7 +3139,7 @@ func TestToFastJSONFilterOrCount(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"count(friend)":2,"friend": [{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"count":2}, {"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -3594,7 +3595,7 @@ func TestToFastJSONFilterOrFirstOffsetCount(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"count(friend)":1,"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"count":1}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -3710,7 +3711,7 @@ func TestCountReverseFunc(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Glenn Rhee","count(~friend)":2}]}`,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
 		js)
 }
 
@@ -3726,7 +3727,7 @@ func TestCountReverseFilter(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Glenn Rhee","count(~friend)":2}]}`,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
 		js)
 }
 
@@ -3742,7 +3743,7 @@ func TestCountReverse(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Glenn Rhee","count(~friend)":2}]}`,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
 		js)
 }
 
@@ -3824,7 +3825,7 @@ func TestToFastJSONReverseDelSetCount(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Glenn Rhee","count(~friend)":2}]}`,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
 		js)
 }
 
@@ -4164,7 +4165,7 @@ func TestToFastJSONOrderDescCount(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"count(friend)":1,"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"count":1}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
@@ -6284,111 +6285,7 @@ func TestNameNotIndexed(t *testing.T) {
 	ctx := context.Background()
 	_, err := ProcessQuery(ctx, res, &l)
 	require.Error(t, err)
-}
 
-func TestMultipleMinMax(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(id: 0x01) {
-				friend {
-					x as age
-					n as name
-				}
-				min(var(x))
-				max(var(x))
-				min(var(n))
-				max(var(n))
-			}
-		}`
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"me":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}],"max(var(n))":"Rick Grimes","max(var(x))":19,"min(var(n))":"Andrea","min(var(x))":15}]}`,
-		js)
-}
-
-func TestDuplicateAlias(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(id: 0x01) {
-				friend {
-					x as age
-				}
-				a: min(var(x))
-				a: max(var(x))
-			}
-		}`
-	res, _ := gql.Parse(gql.Request{Str: query})
-	var l Latency
-	ctx := context.Background()
-	_, err := ProcessQuery(ctx, res, &l)
-	require.Error(t, err)
-}
-
-func TestMinSomething(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			me(id: 0x01) {
-				friendCount: count(friend)
-			}
-		}`
-	pb := processToPB(t, query, map[string]string{}, false)
-	require.Equal(t, `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "friendCount"
-    value: <
-      int_val: 5
-    >
-  >
->
-`, proto.MarshalTextString(pb[0]))
-}
-
-func TestGraphQLId(t *testing.T) {
-	populateGraph(t)
-	q := `{"query": "query test ($a: string = 1) { me(id: $a) { name, gender, friend(first: 1) { name }}}",
-	"variables" : { "$a": "[1, 31]"}}`
-	js := processToFastJSON(t, q)
-	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"},{"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}]}`, string(js))
-}
-
-func TestGraphQLIdProto(t *testing.T) {
-	populateGraph(t)
-	q := `query test ($id: string) { me(id: $id) { name, gender, friend(first: 1) { name }}}`
-
-	variables := make(map[string]string)
-	variables["$id"] = "1"
-	pb := processToPB(t, q, variables, false)
-	require.Equal(t, `attribute: "_root_"
-children: <
-  attribute: "me"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "gender"
-    value: <
-      default_val: "female"
-    >
-  >
-  children: <
-    attribute: "friend"
-    properties: <
-      prop: "name"
-      value: <
-        str_val: "Rick Grimes"
-      >
-    >
-  >
->
-`, proto.MarshalTextString(pb[0]))
 }
 
 func TestRootDummy(t *testing.T) {
@@ -6417,15 +6314,15 @@ func TestCountAtRoot(t *testing.T) {
 	fmt.Println(string(js))
 }
 
-func TestCountAtRootAlias(t *testing.T) {
-	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
-	query := `
-		{
-			personCount: count(me(func: ge(count(friend), 0)))
-		}
-	`
-	js := processToFastJSON(t, query)
-	fmt.Println(string(js))
-}
+// func TestCountAtRootAlias(t *testing.T) {
+// 	populateGraph(t)
+// 	posting.CommitLists(10, 1)
+// 	time.Sleep(100 * time.Millisecond)
+// 	query := `
+// 		{
+// 			personCount: count(me(func: ge(count(friend), 0)))
+// 		}
+// 	`
+// 	js := processToFastJSON(t, query)
+// 	fmt.Println(string(js))
+// }

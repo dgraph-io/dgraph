@@ -724,7 +724,7 @@ func getQuery(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	}
 	peek, err := it.Peek(1)
 	if err != nil {
-		return nil, rerr
+		return nil, err
 	}
 	// Count at root shouldn't have children.
 	if gq.IsCount && peek[0].Typ != itemRightCurl {
@@ -1776,6 +1776,16 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		}
 		it.Next()
 		gq.IsCount = true
+
+		// If count is asked at root, we wan't to advance and update item,
+		// so that correct alias is set for the root.
+		peekIt, err := it.Peek(1)
+		if err != nil {
+			return nil, x.Errorf("Invalid Query")
+		}
+		if peekIt[0].Typ == itemName {
+			item = it.Item()
+		}
 	}
 	peekIt, err := it.Peek(1)
 	if err != nil {

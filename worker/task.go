@@ -18,7 +18,6 @@
 package worker
 
 import (
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -243,8 +242,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("SrcFn: %+v\n", srcFn)
 
 	for i := 0; i < srcFn.n; i++ {
 		var key []byte
