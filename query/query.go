@@ -369,26 +369,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		if len(pc.counts) > 0 {
 			c := types.ValueForType(types.IntID)
 			c.Value = int64(pc.counts[idx])
-			uc := dst.New(pc.Attr)
-			fieldName = "count"
+			fieldName = fmt.Sprintf("count(%s)", pc.Attr)
 			if pc.Params.Alias != "" {
 				fieldName = pc.Params.Alias
 			}
-			uc.AddValue(fieldName, c)
-			dst.AddListChild(pc.Attr, uc)
-		} else if len(pc.SrcFunc) > 0 && isAggregatorFn(pc.SrcFunc[0]) {
-			// add sg.Attr as child on 'parent' instead of 'dst', otherwise
-			// within output, aggregator will messed with other attrs
-			uc := dst.New(pc.Params.Alias)
-			name := fmt.Sprintf("%s(%s)", pc.SrcFunc[0], pc.Attr)
-			sv, err := convertWithBestEffort(pc.values[idx], pc.Attr)
-			if err == ErrEmptyVal {
-				continue
-			} else if err != nil {
-				return err
-			}
-			uc.AddValue(name, sv)
-			dst.AddListChild(pc.Params.Alias, uc)
+			dst.AddValue(fieldName, c)
 		} else if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
 			c := types.ValueForType(types.BoolID)
 			c.Value = task.ToBool(pc.values[idx])
@@ -575,6 +560,26 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 	return nil
 }
 
+func uniqueKey(gchild *gql.GraphQuery) string {
+	key := gchild.Attr
+	if gchild.Func != nil {
+		key += fmt.Sprintf("%v", gchild.Func)
+	}
+	if len(gchild.NeedsVar) > 0 {
+		key += fmt.Sprintf("%v", gchild.NeedsVar)
+	}
+	if gchild.IsCount { // ignore count subgraphs..
+		key += "count"
+	}
+	if len(gchild.Langs) > 0 {
+		key += fmt.Sprintf("%v", gchild.Langs)
+	}
+	if gchild.MathExp != nil {
+		key += fmt.Sprintf("%+v", gchild.MathExp)
+	}
+	return key
+}
+
 func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
@@ -582,22 +587,16 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// So, we work on the children, and then recurse for grand children.
 	attrsSeen := make(map[string]struct{})
 	for _, gchild := range gq.Children {
-		key := gchild.Attr
 		if (sg.Params.Alias == "shortest" || sg.Params.Alias == "recurse") &&
 			gchild.Expand != "" {
 			return x.Errorf("expand() not allowed inside shortest/recurse")
 		}
 
-		if gchild.Func != nil && gchild.Func.IsAggregator() {
-			key += gchild.Func.Name
-		} else if gchild.Attr == "var" {
-			key += fmt.Sprintf("%v", gchild.NeedsVar)
-		} else if gchild.IsCount { // ignore count subgraphs..
-			key += "count"
-		} else if len(gchild.Langs) > 0 {
-			key += fmt.Sprintf("%v", gchild.Langs)
-		} else if gchild.MathExp != nil {
-			key += fmt.Sprintf("%+v", gchild.MathExp)
+		key := ""
+		if gchild.Alias != "" {
+			key = gchild.Alias
+		} else {
+			key = uniqueKey(gchild)
 		}
 		if _, ok := attrsSeen[key]; ok {
 			return x.Errorf("%s not allowed multiple times in same sub-query.",
@@ -945,6 +944,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 	mp = make(map[uint64]types.Val)
 	// Go over the sibling node and aggregate.
 	for i, list := range relSG.uidMatrix {
+
 		ag := aggregator{
 			name: sg.SrcFunc[0],
 		}
