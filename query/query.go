@@ -800,6 +800,13 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
+	if gq.IsCount {
+		if len(gq.Children) != 0 {
+			return nil, fmt.Errorf("Cannot have children attributes when asking for count.")
+		}
+		args.DoCount = true
+	}
+
 	for argk := range gq.Args {
 		if !isValidArg(argk) {
 			return nil, x.Errorf("Invalid argument : %s", argk)
@@ -1527,6 +1534,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
+	fmt.Printf("%+v\n", sg)
 	if parent == nil && len(sg.SrcFunc) == 0 {
 		// I'm root and I'm using some varaible that has been populated.
 		// Retain the actual order in uidMatrix. But sort the destUids.

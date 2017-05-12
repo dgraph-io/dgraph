@@ -6391,6 +6391,19 @@ children: <
 `, proto.MarshalTextString(pb[0]))
 }
 
+func TestRootDummy(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+		{
+			me(func: ge(count(friend), 0))
+		}
+	`
+	js := processToFastJSON(t, query)
+	fmt.Println(string(js))
+}
+
 func TestCountAtRoot(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
