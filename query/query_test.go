@@ -1338,6 +1338,25 @@ func TestVarInIneq(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Andrea"}]}`, js)
 }
 
+func TestVarInIneq2(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			var(id: 1) {
+				friend {
+					a as age
+				}
+			}
+
+			me(func: gt(var(a), 18)) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Andrea"}]}`, js)
+}
+
 func TestNestedFuncRoot(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
