@@ -1295,6 +1295,25 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 		js)
 }
 
+func TestVarInIneq(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			var(id: 1) {
+				f as friend {
+					a as age
+				}
+			}
+
+			me(id: var(f)) @filter(gt(var(a), 18)) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Andrea"}]}`, js)
+}
+
 func TestNestedFuncRoot(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)

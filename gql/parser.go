@@ -1313,6 +1313,7 @@ L:
 						g.Attr = f.Attr
 						g.Args = append(g.Args, f.Name)
 					}
+					expectArg = false
 					continue
 				} else if itemInFunc.Typ == itemAt {
 					if len(g.Attr) > 0 && len(g.Lang) == 0 {

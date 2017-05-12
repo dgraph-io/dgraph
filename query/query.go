@@ -1523,6 +1523,30 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	return nil
 }
 
+func (sg *SubGraph) ApplyIneqFunc() error {
+	if sg.Params.uidToVal == nil {
+		return x.Errorf("Expected a vaild value map. But Empty.")
+	}
+	var typ types.TypeID
+	for _, v := range sg.Params.uidToVal {
+		typ = v.Tid
+		break
+	}
+	val := sg.SrcFunc[3]
+	src := types.Val{types.StringID, []byte(val)}
+	dst, err := types.Convert(src, typ)
+	if err != nil {
+		return x.Errorf("Invalid argment %v", val)
+	}
+	for _, uid := range sg.SrcUIDs.Uids {
+		curVal, ok := sg.Params.uidToVal[uid]
+		if ok && types.CompareVals(sg.SrcFunc[0], curVal, dst) {
+			sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
+		}
+	}
+	return nil
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
@@ -1554,6 +1578,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.fillVars(sg.Params.ParentVars)
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
 			rch <- nil
+			return
+		}
+		if len(sg.SrcFunc) == 4 && sg.Attr == "var" {
+			// This is a function which uses a value variable.
+			err = sg.ApplyIneqFunc()
+			rch <- err
 			return
 		}
 
@@ -1617,6 +1647,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
 			filter.SrcUIDs = sg.DestUIDs
+			// Passing the pointer is okay since the filter only reads.
 			filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
