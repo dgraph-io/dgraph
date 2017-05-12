@@ -390,6 +390,16 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 		gq.Args[k] = val
 	}
 
+	idVal, ok := gq.Args["id"]
+	if ok && len(gq.UID) == 0 {
+		if idVal == "" {
+			return x.Errorf("Id can't be empty")
+		}
+		parseID(gq, idVal)
+		// Deleting it here because we don't need to fill it in query.go.
+		delete(gq.Args, "id")
+	}
+
 	if gq.Func != nil {
 		if err := substituteVar(gq.Func.Attr, &gq.Func.Attr, vmap); err != nil {
 			return err
@@ -1813,12 +1823,28 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				}
 				continue
 			}
+			isDollar := false
+			if item.Typ == itemDollar {
+				isDollar = true
+				it.Next()
+				item = it.Item()
+				if item.Typ != itemName {
+					return nil, x.Errorf("Expected a variable name. Got: %v", item.Val)
+				}
+			}
 			// Check and parse if its a list.
 			val := collectName(it, item.Val)
+			if isDollar {
+				val = "$" + val
+				gq.Args["id"] = val
+				// We can continue, we will parse the id later when we fill GraphQL variables.
+				continue
+			}
 			err := parseID(gq, val)
 			if err != nil {
 				return nil, err
 			}
+
 		} else if key == "func" {
 			// Store the generator function.
 			gen, err := parseFunction(it)

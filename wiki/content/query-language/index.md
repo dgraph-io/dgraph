@@ -2002,10 +2002,11 @@ fragment TestFragB {
 
 {{< runnable >}}
 {
- "query": "query test($a: int, $b: int){  me(id: m.06pj8) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
+ "query": "query test($a: int, $b: int, $id: string){  me(id: $id) {name@en, director.film (first: $a, offset: $b) {name @en, genre(first: $a) { name@en }}}}",
  "variables" : {
   "$a": "5",
-  "$b": "10"
+  "$b": "10",
+  "$id": "[m.06pj8, m.0bxtg]"
  }
 }
 {{< /runnable >}}
