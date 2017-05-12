@@ -100,15 +100,14 @@ type Lexer struct {
 	// NOTE: Using a text scanner wouldn't work because it's designed for parsing
 	// Golang. It won't keep track of Start Position, or allow us to retrieve
 	// slice from [Start:Pos]. Better to just use normal string.
-	Input           string // string being scanned.
-	Start           int    // Start Position of this item.
-	Pos             int    // current Position of this item.
-	Width           int    // Width of last rune read from input.
-	items           []item // channel of scanned items.
-	Depth           int    // nesting of {}
-	ArgDepth        int    // nesting of ()
-	Mode            int    // mode based on information so far.
-	InsideDirective bool   // To indicate we are inside directive.
+	Input    string  // string being scanned.
+	Start    int     // Start Position of this item.
+	Pos      int     // current Position of this item.
+	Width    int     // Width of last rune read from input.
+	items    []item  // channel of scanned items.
+	Depth    int     // nesting of {}
+	ArgDepth int     // nesting of ()
+	Mode     StateFn // Default state to go back to after reading a token.
 }
 
 func NewLexer(input string) *Lexer {

@@ -470,7 +470,7 @@ func Parse(r Request) (res Result, rerr error) {
 		return res, err
 	}
 
-	l := lex.NewLexer(query).Run(lexText)
+	l := lex.NewLexer(query).Run(lexTopLevel)
 
 	var qu *GraphQuery
 	it := l.NewIterator()
@@ -682,14 +682,11 @@ L2:
 		switch item.Typ {
 		case lex.ItemError:
 			return nil, x.Errorf(item.Val)
-		case itemText:
-			v := strings.TrimSpace(item.Val)
-			if len(v) > 0 {
-				if name != "" {
-					return nil, x.Errorf("Multiple word query name not allowed.")
-				}
-				name = item.Val
+		case itemName:
+			if name != "" {
+				return nil, x.Errorf("Multiple word query name not allowed.")
 			}
+			name = item.Val
 		case itemLeftRound:
 			if name == "" {
 				return nil, x.Errorf("Variables can be defined only in named queries.")
