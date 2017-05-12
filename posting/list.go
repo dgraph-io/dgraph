@@ -31,12 +31,12 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -68,7 +68,7 @@ type List struct {
 	ghash       uint64
 	pbuffer     unsafe.Pointer
 	mlayer      []*protos.Posting // mutations
-	pstore      *store.Store      // postinglist store
+	pstore      *badger.KV        // postinglist store
 	lastCompact time.Time
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount    int32
@@ -95,7 +95,7 @@ var listPool = sync.Pool{
 	},
 }
 
-func getNew(key []byte, pstore *store.Store) *List {
+func getNew(key []byte, pstore *badger.KV) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
 	l.key = key
@@ -212,9 +212,9 @@ func (l *List) getPostingList(loop int) *protos.PostingList {
 		x.AssertTrue(l.pstore != nil)
 		plist = new(protos.PostingList)
 
-		if slice, err := l.pstore.Get(l.key); err == nil && slice != nil {
-			x.Checkf(plist.Unmarshal(slice.Data()), "Unable to Unmarshal PostingList from store")
-			slice.Free()
+		val, _ := l.pstore.Get(l.key)
+		if val != nil {
+			x.Checkf(plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 		}
 		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(plist)) {
 			return plist

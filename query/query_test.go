@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
@@ -41,7 +42,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -56,7 +56,7 @@ func addPassword(t *testing.T, uid uint64, attr, password string) {
 	addEdgeToTypedValue(t, attr, uid, types.PasswordID, value.Value.([]byte), nil)
 }
 
-var ps *store.Store
+var ps *badger.KV
 
 func populateGraph(t *testing.T) {
 	x.AssertTrue(ps != nil)
@@ -6050,9 +6050,11 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	defer os.RemoveAll(dir)
 
-	ps, err = store.NewStore(dir)
-	x.Check(err)
+	opt := badger.DefaultOptions
+	opt.Dir = dir
+	ps = badger.NewKV(&opt)
 	defer ps.Close()
+	time.Sleep(time.Second)
 
 	group.ParseGroupConfig("")
 	schema.Init(ps)
