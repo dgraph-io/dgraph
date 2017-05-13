@@ -6401,7 +6401,7 @@ func TestCountAtRoot(t *testing.T) {
                 }
         `
 	js := processToFastJSON(t, query)
-	fmt.Println(string(js))
+	require.JSONEq(t, `{"count(me)":4}`, js)
 }
 
 func TestCountAtRoot2(t *testing.T) {
@@ -6410,9 +6410,9 @@ func TestCountAtRoot2(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	query := `
                 {
-                        me(func: anyofterms(name, "Michonne Rick Andrea"))
+                        count(me(func: anyofterms(name, "Michonne Rick Andrea")))
                 }
         `
 	js := processToFastJSON(t, query)
-	fmt.Println(string(js))
+	require.JSONEq(t, `{"count(me)":4}`, js)
 }

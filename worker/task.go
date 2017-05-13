@@ -381,6 +381,9 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				// passing it back to query package.
 				tlist := &protos.List{[]uint64{pk.Uid}}
 				mu.Lock()
+				if q.DoCount {
+					out.Counts = append(out.Counts, 1)
+				}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 				mu.Unlock()
 			}

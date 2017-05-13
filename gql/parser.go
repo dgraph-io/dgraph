@@ -1766,25 +1766,23 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
 	}
 
+	// TODO - Verify case where actual attr is count at root.
 	if item.Val == "count" {
 		if !it.Next() {
 			return nil, x.Errorf("Invalid query")
 		}
-		item := it.Item()
+		item = it.Item()
 		if item.Typ != itemLeftRound {
 			return nil, x.Errorf("Expected (. Got: %s", item.Val)
 		}
-		it.Next()
-		gq.IsCount = true
-
-		// If count is asked at root, we wan't to advance and update item,
-		// so that correct alias is set for the root.
-		peekIt, err := it.Peek(1)
-		if err != nil {
-			return nil, x.Errorf("Invalid Query")
+		if !it.Next() {
+			return nil, x.Errorf("Invalid query")
 		}
-		if peekIt[0].Typ == itemName {
-			item = it.Item()
+		// If count is asked at root, we want to advance and update item,
+		// so that correct alias is set for the root.
+		item = it.Item()
+		if item.Typ == itemName {
+			gq.IsCount = true
 		}
 	}
 	peekIt, err := it.Peek(1)

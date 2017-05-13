@@ -1565,11 +1565,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		taskQuery := createTaskQuery(sg)
-		// For root node, we don't want to get counts because we just want one count which is
-		// the len(DestUids).
-		if parent == nil {
-			taskQuery.DoCount = false
-		}
 
 		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
@@ -1588,6 +1583,16 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			v := sg.values[0]
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
 		}
+		sg.counts = result.Counts
+
+		// If count is asked at root, we accumulate the total count.
+		if sg.Params.DoCount && parent == nil {
+			var totalCount uint32
+			for _, c := range sg.counts {
+				totalCount += c
+			}
+			sg.counts = []uint32{totalCount}
+		}
 
 		if sg.Params.DoCount && len(sg.Filters) == 0 {
 			// If there is a filter, we need to do more work to get the actual count.
@@ -1595,7 +1600,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			rch <- nil
 			return
 		}
-
 		if result.IntersectDest {
 			sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
 		} else {

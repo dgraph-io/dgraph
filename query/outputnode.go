@@ -225,6 +225,11 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 	}
 
 	n := seedNode.New("_root_")
+	if sg.Params.DoCount {
+		addCountAtRoot(n, sg)
+		return n.(*protoNode).Node, nil
+	}
+
 	for _, uid := range sg.uidMatrix[0].Uids {
 		// For the root, the name is stored in Alias, not Attr.
 		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
@@ -468,6 +473,15 @@ type attrVal struct {
 	val  *fastJsonAttr
 }
 
+func addCountAtRoot(n outputNode, sg *SubGraph) {
+	x.AssertTruef(len(sg.Children) == 0, "Cannot have children when asking for count at root")
+	x.AssertTruef(len(sg.counts) == 1, "Counts at root should have length 1")
+	c := types.ValueForType(types.IntID)
+	c.Value = sg.counts[0]
+	fieldName := fmt.Sprintf("count(%s)", sg.Params.Alias)
+	n.AddValue(fieldName, c)
+}
+
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
 	if sg.uidMatrix == nil {
@@ -475,13 +489,8 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	}
 	lenList := len(sg.uidMatrix[0].Uids)
 
-	fmt.Println("here", sg.uidMatrix[0].Uids)
 	if sg.Params.DoCount {
-		x.AssertTruef(len(sg.Children) == 0, "Cannot have children when asking for count at root")
-		c := types.ValueForType(types.IntID)
-		c.Value = lenList
-		fieldName := fmt.Sprintf("count(%s)", sg.Attr)
-		n.AddValue(fieldName, c)
+		addCountAtRoot(n, sg)
 		return nil
 	}
 
