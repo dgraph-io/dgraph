@@ -6417,6 +6417,26 @@ func TestCountAtRoot2(t *testing.T) {
 	require.JSONEq(t, `{"count(me)":4}`, js)
 }
 
+func TestCountAtRoot2PB(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(200 * time.Millisecond)
+	query := `
+                {
+                        count(me(func: anyofterms(name, "Michonne Rick Andrea")))
+                }
+        `
+	pb := processToPB(t, query, nil, false)
+	require.Equal(t, `attribute: "_root_"
+properties: <
+  prop: "count(me)"
+  value: <
+    int_val: 4
+  >
+>
+`, proto.MarshalTextString(pb[0]))
+}
+
 func TestCountAtRoot3(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -6429,4 +6449,15 @@ func TestCountAtRoot3(t *testing.T) {
         `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"count":[{"count(friend)":5,"name":"Michonne"}]}`, js)
+}
+
+func TestCountAtRoot4(t *testing.T) {
+	populateGraph(t)
+	query := `
+{
+                        count(me(func:anyofterms(name, "Michonne Rick Daryl")) @filter(le(count(friend), 10)))
+                }
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"count(me)": 3}`, js)
 }

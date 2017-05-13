@@ -722,14 +722,6 @@ func getQuery(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	if rerr != nil {
 		return nil, rerr
 	}
-	peek, err := it.Peek(1)
-	if err != nil {
-		return nil, err
-	}
-	// Count at root shouldn't have children.
-	if gq.IsCount && peek[0].Typ != itemRightCurl {
-		return nil, x.Errorf("Invalid query")
-	}
 
 	var seenFilter bool
 L:
@@ -773,6 +765,8 @@ L:
 	} else if item.Typ == itemName {
 		it.Prev()
 		return gq, nil
+	} else if item.Typ == itemRightRound && gq.IsCount {
+		it.Next()
 	} else {
 		return nil, x.Errorf("Malformed Query. Missing {. Got %v", item.Val)
 	}
@@ -1941,13 +1935,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		}
 	}
 
-	if gq.IsCount {
-		item := it.Item()
-		if item.Typ != itemRightRound {
-			return nil, x.Errorf("Expected ). Got: %v", item.Val)
-		}
-		it.Next()
-	}
 	return gq, nil
 }
 
