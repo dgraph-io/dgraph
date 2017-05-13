@@ -3225,7 +3225,7 @@ func TestParseCountAtRoot(t *testing.T) {
 	query := `
 	{
 	  count(me(func: ge(name, 0)))
-    }
+    	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
@@ -3237,7 +3237,7 @@ func TestParseCountAtRootError(t *testing.T) {
 	  count(me(func: ge(name, 0))) {
 		  friend
 	  }
-    }
+    	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
