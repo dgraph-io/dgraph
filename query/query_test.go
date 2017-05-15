@@ -6471,11 +6471,11 @@ func TestCountAtRoot5(t *testing.T) {
 				name
 			}
 		}
-		count(MichonneFriends(id: var(f), first: 2))
+		count(MichonneFriends(id: var(f)))
 	}
 
 
         `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"count(MichonneFriends)":2,"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+	require.JSONEq(t, `{"count(MichonneFriends)":4,"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }
