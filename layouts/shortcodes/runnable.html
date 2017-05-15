@@ -66,40 +66,40 @@
               <pre><code class="no-copy" tabindex="-1">package main
 
 import (
-	"bytes"
-	"flag"
-	"io/ioutil"
-	"log"
-	"net/http"
+  "bytes"
+  "flag"
+  "io/ioutil"
+  "log"
+  "net/http"
 )
 
 var (
-	baseURL = flag.String("d", "http://127.0.0.1:8080/query", "Dgraph server address")
+  baseURL = flag.String("d", "http://127.0.0.1:8080/query", "Dgraph server address")
 )
 
 func main() {
-	client := &amp;http.Client{}
-	body := bytes.NewBufferString(`<span class="query-content">{{ $code }}</span>`)
-	req, err := http.NewRequest("POST", *baseURL, body)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
+  client := &amp;http.Client{}
+  body := bytes.NewBufferString(`<span class="query-content">{{ $code }}</span>`)
+  req, err := http.NewRequest("POST", *baseURL, body)
+  if err != nil {
+    log.Fatal(err)
+    return
+  }
 
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-	defer resp.Body.Close()
+  resp, err := client.Do(req)
+  if err != nil {
+    log.Fatal(err)
+    return
+  }
+  defer resp.Body.Close()
 
-	responseData, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
+  responseData, err := ioutil.ReadAll(resp.Body)
+  if err != nil {
+    log.Fatal(err)
+    return
+  }
 
-	log.Printf("Response %+v\n", string(responseData))
+  log.Printf("Response %+v\n", string(responseData))
 }</code></pre>
             </div>
           </div>

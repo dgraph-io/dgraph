@@ -29,35 +29,35 @@
 <pre><code class="no-copy" tabindex="-1">package main
 
 import (
-"context"
-"flag"
-"fmt"
-"log"
+  "context"
+  "flag"
+  "fmt"
+  "log"
 
-"github.com/dgraph-io/dgraph/client"
-"github.com/gogo/protobuf/proto"
-{{ .Content.Scratch.Get "protoPath" }}
-"google.golang.org/grpc"
+  "github.com/dgraph-io/dgraph/client"
+  "github.com/gogo/protobuf/proto"
+  {{ .Content.Scratch.Get "protoPath" }}
+  "google.golang.org/grpc"
 )
 
 var (
-dgraph = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
+  dgraph = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
 )
 
 func main() {
-conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
-if err != nil {
-log.Fatal(err)
-}
-defer conn.Close()
+  conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+  if err != nil {
+    log.Fatal(err)
+  }
+  defer conn.Close()
 
-dgraphClient := graphp.NewDgraphClient(conn)
-req := client.Req{}
-req.SetQuery(`<span class="query-content">{{ .Code }}</span>`)
+  dgraphClient := graphp.NewDgraphClient(conn)
+  req := client.Req{}
+  req.SetQuery(`<span class="query-content">{{ .Code }}</span>`)
 
-resp, err := dgraphClient.Run(context.Background(), req.Request())
-if err != nil {
-log.Fatalf("Error in getting response from server, %s", err)
-}
-fmt.Printf("Response %+v\n", proto.MarshalTextString(resp))
+  resp, err := dgraphClient.Run(context.Background(), req.Request())
+  if err != nil {
+    log.Fatalf("Error in getting response from server, %s", err)
+  }
+  fmt.Printf("Response %+v\n", proto.MarshalTextString(resp))
 }</code></pre>
