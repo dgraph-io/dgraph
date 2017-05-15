@@ -392,9 +392,8 @@ func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []uint64) *SubGraph {
 	shortestSg := new(SubGraph)
 	shortestSg.Params = params{
-		Alias:   "_path_",
-		GetUID:  true,
-		isDebug: isDebug(ctx),
+		Alias:  "_path_",
+		GetUid: true,
 	}
 	curUid := result[0]
 	shortestSg.SrcUIDs = &protos.List{[]uint64{curUid}}
@@ -408,7 +407,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 		node := new(SubGraph)
 		nodeInfo := dist[childUid]
 		node.Params = params{
-			GetUID: true,
+			GetUid: true,
 		}
 		if nodeInfo.facet != nil {
 			// For consistent later processing.
@@ -426,7 +425,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 
 	node := new(SubGraph)
 	node.Params = params{
-		GetUID: true,
+		GetUid: true,
 	}
 	uid := result[len(result)-1]
 	node.SrcUIDs = &protos.List{[]uint64{uid}}

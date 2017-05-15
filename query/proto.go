@@ -61,6 +61,9 @@ func toProtoValue(v types.Val) *protos.Value {
 	case types.PasswordID:
 		return &protos.Value{&protos.Value_PasswordVal{v.Value.(string)}}
 
+	case types.UidID:
+		return &protos.Value{&protos.Value_UidVal{v.Value.(uint64)}}
+
 	case types.DefaultID:
 		return &protos.Value{&protos.Value_DefaultVal{v.Value.(string)}}
 

@@ -123,10 +123,9 @@ type params struct {
 	Offset       int
 	AfterUID     uint64
 	DoCount      bool
-	GetUID       bool
+	GetUid       bool
 	Order        string
 	OrderDesc    bool
-	isDebug      bool
 	Var          string
 	NeedsVar     []gql.VarContext
 	ParentVars   map[string]varValue
@@ -279,10 +278,21 @@ func (sg *SubGraph) isSimilar(ssg *SubGraph) bool {
 	return true
 }
 
+func (sg *SubGraph) fieldName() string {
+	fieldName := sg.Attr
+	if sg.Params.Alias != "" {
+		fieldName = sg.Params.Alias
+	}
+	return fieldName
+}
+
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
-	uidAlreadySet := false
+
+	if sg.Params.GetUid {
+		dst.SetUID(uid, "_uid_")
+	}
 
 	facetsNode := dst.New("@facets")
 	// We go through all predicate children of the subprotos.
@@ -371,14 +381,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		}
 		ul := pc.uidMatrix[idx]
 
-		fieldName := pc.Attr
-		if pc.Params.Alias != "" {
-			fieldName = pc.Params.Alias
-		}
-		if !uidAlreadySet && (sg.Params.GetUID || sg.Params.isDebug) {
-			uidAlreadySet = true
-			dst.SetUID(uid)
-		}
+		fieldName := pc.fieldName()
 
 		if len(pc.counts) > 0 {
 			c := types.ValueForType(types.IntID)
@@ -402,7 +405,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
 			for childIdx, childUID := range ul.Uids {
-				if invalidUids[childUID] {
+				if invalidUids[childUID] || fieldName == "" {
 					continue
 				}
 				uc := dst.New(fieldName)
@@ -440,10 +443,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fieldName = fieldName[:len(fieldName)-1]
 			}
 			tv := pc.values[idx]
-			v, err := getValue(tv)
-			if err != nil {
-				return err
-			}
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
@@ -455,22 +454,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				}
 			}
 
-			if pc.Attr == "_xid_" {
-				txt, err := types.Convert(v, types.StringID)
-				if err != nil {
-					return err
-				}
-				xidVal := txt.Value.(string)
-				// If xid is empty, then we don't wan't to set it.
-				if xidVal == "" {
-					continue
-				}
-				dst.SetXID(xidVal)
-			} else if pc.Attr == "_uid_" {
-				if !uidAlreadySet {
-					uidAlreadySet = true
-					dst.SetUID(uid)
-				}
+			if pc.Attr == "_uid_" {
+				dst.SetUID(uid, pc.fieldName())
 			} else {
 				// if conversion not possible, we ignore it in the result.
 				sv, convErr := convertWithBestEffort(tv, pc.Attr)
@@ -600,6 +585,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
 	attrsSeen := make(map[string]struct{})
+
 	for _, gchild := range gq.Children {
 		if (sg.Params.Alias == "shortest" || sg.Params.Alias == "recurse") &&
 			gchild.Expand != "" {
@@ -621,7 +607,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		args := params{
 			Alias:        gchild.Alias,
 			Langs:        gchild.Langs,
-			isDebug:      sg.Params.isDebug,
+			GetUid:       sg.Params.GetUid,
 			Var:          gchild.Var,
 			Normalize:    sg.Params.Normalize,
 			isInternal:   gchild.IsInternal,
@@ -797,7 +783,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		isDebug:    isDebug(ctx),
+		GetUid:     isDebug(ctx),
 		Alias:      gq.Alias,
 		Langs:      gq.Langs,
 		Var:        gq.Var,

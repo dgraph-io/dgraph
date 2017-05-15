@@ -35,8 +35,6 @@ import (
 
 // Convert converts the value to given scalar type.
 func Convert(from Val, toID TypeID) (Val, error) {
-	// fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
-
 	to := ValueForType(toID)
 	fromID := from.Tid
 	data := from.Value.([]byte)

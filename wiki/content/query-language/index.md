@@ -609,10 +609,11 @@ The response is the same as before when we use `offset:2` and `first:1`.
 
 Alias lets us provide alternate names to predicates in results for convenience.
 
-For example, the following query replaces the predicate `name` with `full_name` in the JSON result.
+For example, the following query replaces the predicate `name` with `full_name` and _uid_ with id in the JSON result.
 {{< runnable >}}
 {
   me(id: m.0bxtg) {
+    id: _uid_
     full_name:name@en
   }
 }
