@@ -334,6 +334,20 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		}
 
 		if pc.IsListNode() {
+			if pc.Params.DoCount {
+				c := types.ValueForType(types.IntID)
+				c.Value = int64(len(pc.values))
+				fieldName := fmt.Sprintf("count(%s)", pc.Attr)
+				if pc.Params.Alias != "" {
+					fieldName = pc.Params.Alias
+				}
+				dst.AddValue(fieldName, c)
+				continue
+			}
+			fieldName := pc.Attr
+			if pc.Params.Alias != "" {
+				fieldName = pc.Params.Alias
+			}
 			for _, val := range pc.values {
 				v, err := getValue(val)
 				if err != nil {
@@ -342,7 +356,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				sv, err := types.Convert(v, v.Tid)
 				uc := dst.New(pc.Attr)
 				uc.AddValue("_name_", sv)
-				dst.AddListChild(pc.Attr, uc)
+				dst.AddListChild(fieldName, uc)
 			}
 			continue
 		}

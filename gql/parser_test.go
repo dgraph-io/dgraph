@@ -50,6 +50,34 @@ func TestParseQueryListPred1(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestParseQueryAliasListPred(t *testing.T) {
+	query := `
+	{
+		me(id:0x0a) {
+			pred: _predicate_
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, "pred", res.Query[0].Children[0].Alias)
+	require.Equal(t, "_predicate_", res.Query[0].Children[0].Attr)
+}
+
+func TestParseQueryCountListPred(t *testing.T) {
+	query := `
+	{
+		me(id:0x0a) {
+			count(_predicate_)
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, true, res.Query[0].Children[0].IsCount)
+	require.Equal(t, "_predicate_", res.Query[0].Children[0].Attr)
+}
+
 func TestParseQueryListPred2(t *testing.T) {
 	query := `
 	{
