@@ -145,7 +145,7 @@ type params struct {
 	Expand       string // Var to use for expand.
 	isGroupBy    bool
 	groupbyAttrs []string
-	uidCount     bool
+	uidCount     string
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -419,11 +419,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					dst.AddListChild(fieldName, uc)
 				}
 			}
-			if pc.Params.uidCount {
+			if pc.Params.uidCount != "" {
 				uc := dst.New(fieldName)
 				c := types.ValueForType(types.IntID)
 				c.Value = int64(len(ul.Uids))
-				uc.AddValue("count", c)
+				uc.AddValue(pc.Params.uidCount, c)
 				dst.AddListChild(fieldName, uc)
 			}
 		} else {

@@ -6504,19 +6504,19 @@ func TestCountAtRoot3(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"count":3},{"count(friend)":5,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"},{"count":5}],"name":"Michonne"},{"count(friend)":1,"friend":[{"name":"Michonne"},{"count":1}],"name":"Rick Grimes"},{"count(friend)":1,"friend":[{"name":"Glenn Rhee"},{"count":1}],"name":"Daryl Dixon"}]}`, js)
 }
 
-func TestCountAtRoot4(t *testing.T) {
+func TestCountAtRootWithAlias4(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
 	time.Sleep(100 * time.Millisecond)
 	query := `
 {
                         me(func:anyofterms(name, "Michonne Rick Daryl")) @filter(le(count(friend), 2)) {
-				count()
+				personCount: count()
 			}
                 }
         `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me": [{"count": 2}]}`, js)
+	require.JSONEq(t, `{"me": [{"personCount": 2}]}`, js)
 }
 
 func TestCountAtRoot5(t *testing.T) {

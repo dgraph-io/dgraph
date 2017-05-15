@@ -62,8 +62,9 @@ type GraphQuery struct {
 	fragment string
 
 	// Indicates whether count of uids is requested as a child node. If
-	// there is a child with count() attr, then this is true for the parent.
-	UidCount bool
+	// there is a child with count() attr, then this is not empty for the parent.
+	// If there is an alias, this has the alias value, else its value is count.
+	UidCount string
 }
 
 // Mutation stores the strings corresponding to set and delete operations.
@@ -2087,9 +2088,12 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				if peekIt[0].Typ == itemRightRound {
 					// We encountered a count(), lets reset count to notSeen
-					// and set UidCount = true on parent.
+					// and set UidCount on parent.
 					count = notSeen
-					gq.UidCount = true
+					gq.UidCount = "count"
+					if alias != "" {
+						gq.UidCount = alias
+					}
 					it.Next()
 				}
 				continue
