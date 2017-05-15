@@ -475,9 +475,8 @@ type attrVal struct {
 
 func addCountAtRoot(n outputNode, sg *SubGraph) {
 	x.AssertTruef(len(sg.Children) == 0, "Cannot have children when asking for count at root")
-	x.AssertTruef(len(sg.counts) == 1, "Counts at root should have length 1")
 	c := types.ValueForType(types.IntID)
-	c.Value = int64(sg.counts[0])
+	c.Value = int64(len(sg.DestUIDs.Uids))
 	fieldName := fmt.Sprintf("count(%s)", sg.Params.Alias)
 	n.AddValue(fieldName, c)
 }

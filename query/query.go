@@ -1530,6 +1530,15 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	return nil
 }
 
+func populateDestUIDs(result *protos.Result, sg *SubGraph) {
+	if result.IntersectDest {
+		sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
+	} else {
+		sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
+	}
+
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
@@ -1565,6 +1574,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		taskQuery := createTaskQuery(sg)
+		if parent == nil {
+			// For count at root, we want it to be a normal request, we will get the count
+			// from len(DestUIDs).
+			taskQuery.DoCount = false
+		}
 
 		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
@@ -1585,27 +1599,19 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 		sg.counts = result.Counts
 
-		// If count is asked at root, we accumulate the total count.
-		if sg.Params.DoCount && parent == nil {
-			var totalCount uint32
-			for _, c := range sg.counts {
-				totalCount += c
-			}
-			sg.counts = []uint32{totalCount}
-		}
-
 		if sg.Params.DoCount && len(sg.Filters) == 0 {
+			// We need to update the DestUids if count is asked at root, as count = len(DestUids)
+			// at root.
+			if parent == nil {
+				populateDestUIDs(result, sg)
+			}
 			// If there is a filter, we need to do more work to get the actual count.
 			x.Trace(ctx, "Zero uids. Only count requested")
 			rch <- nil
 			return
 		}
-		if result.IntersectDest {
-			sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
-		} else {
-			sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
-		}
 
+		populateDestUIDs(result, sg)
 		if parent == nil {
 			// I'm root. We reach here if root had a function.
 			sg.uidMatrix = []*protos.List{sg.DestUIDs}
@@ -1683,6 +1689,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 		}
+	}
+
+	// We are asked for count at root. Filtering, ordering and pagination is done.
+	// We can return now.
+	if parent == nil && sg.Params.DoCount {
+		rch <- nil
+		return
 	}
 
 	// We store any variable defined by this node in the map and pass it on

@@ -6461,3 +6461,21 @@ func TestCountAtRoot4(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"count(me)": 3}`, js)
 }
+
+func TestCountAtRoot5(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id: 1) {
+			f as friend {
+				name
+			}
+		}
+		count(MichonneFriends(id: var(f), first: 2))
+	}
+
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"count(MichonneFriends)":2,"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+}
