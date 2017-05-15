@@ -6397,11 +6397,13 @@ func TestCountAtRoot(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	query := `
                 {
-                        count(me(func: ge(count(friend), 0)))
+                        me(func: ge(count(friend), 0)) {
+				count()
+			}
                 }
         `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"count(me)":4}`, js)
+	require.JSONEq(t, `{"me":[{"count": 4}]}`, js)
 }
 
 func TestCountAtRoot2(t *testing.T) {
@@ -6410,11 +6412,13 @@ func TestCountAtRoot2(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	query := `
                 {
-                        count(me(func: anyofterms(name, "Michonne Rick Andrea")))
+                        me(func: anyofterms(name, "Michonne Rick Andrea")) {
+				count()
+			}
                 }
         `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"count(me)":4}`, js)
+	require.JSONEq(t, `{"me":[{"count": 4}]}`, js)
 }
 
 func TestCountAtRoot2PB(t *testing.T) {
@@ -6423,15 +6427,57 @@ func TestCountAtRoot2PB(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	query := `
                 {
-                        count(me(func: anyofterms(name, "Michonne Rick Andrea")))
+                        me(func: anyofterms(name, "Michonne Rick Andrea")) {
+				name
+				count()
+			}
                 }
         `
 	pb := processToPB(t, query, nil, false)
 	require.Equal(t, `attribute: "_root_"
-properties: <
-  prop: "count(me)"
-  value: <
-    int_val: 4
+children: <
+  attribute: "me"
+  properties: <
+    prop: "count"
+    value: <
+      int_val: 4
+    >
+  >
+>
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+>
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Rick Grimes"
+    >
+  >
+>
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Andrea"
+    >
+  >
+>
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Andrea With no friends"
+    >
   >
 >
 `, proto.MarshalTextString(pb[0]))
@@ -6439,27 +6485,38 @@ properties: <
 
 func TestCountAtRoot3(t *testing.T) {
 	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(200 * time.Millisecond)
 	query := `
                 {
-			count(id: 1) {
-				count(friend)
+			me(func:anyofterms(name, "Michonne Rick Daryl")) {
 				name
+				count()
+				count(friend)
+				friend {
+					name
+					count()
+				}
 			}
                 }
         `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"count":[{"count(friend)":5,"name":"Michonne"}]}`, js)
+	require.JSONEq(t, `{"me":[{"count":3},{"count(friend)":5,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"},{"count":5}],"name":"Michonne"},{"count(friend)":1,"friend":[{"name":"Michonne"},{"count":1}],"name":"Rick Grimes"},{"count(friend)":1,"friend":[{"name":"Glenn Rhee"},{"count":1}],"name":"Daryl Dixon"}]}`, js)
 }
 
 func TestCountAtRoot4(t *testing.T) {
 	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
 	query := `
 {
-                        count(me(func:anyofterms(name, "Michonne Rick Daryl")) @filter(le(count(friend), 10)))
+                        me(func:anyofterms(name, "Michonne Rick Daryl")) @filter(le(count(friend), 2)) {
+				count()
+			}
                 }
         `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"count(me)": 3}`, js)
+	require.JSONEq(t, `{"me": [{"count": 2}]}`, js)
 }
 
 func TestCountAtRoot5(t *testing.T) {
@@ -6471,11 +6528,13 @@ func TestCountAtRoot5(t *testing.T) {
 				name
 			}
 		}
-		count(MichonneFriends(id: var(f)))
+		MichonneFriends(id: var(f)) {
+			count()
+		}
 	}
 
 
         `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"count(MichonneFriends)":4,"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }

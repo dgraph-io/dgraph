@@ -60,6 +60,10 @@ type GraphQuery struct {
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
 	fragment string
+
+	// Indicates whether count of uids is requested as a child node. If
+	// there is a child with count() attr, then this is true for the parent.
+	UidCount bool
 }
 
 // Mutation stores the strings corresponding to set and delete operations.
@@ -2082,15 +2086,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 				if peekIt[0].Typ == itemRightRound {
-					child := &GraphQuery{
-						Args:    make(map[string]string),
-						Attr:    val,
-						IsCount: count == seen,
-						Var:     varName,
-						Alias:   alias,
-					}
-					gq.Children = append(gq.Children, child)
 					count = notSeen
+					gq.UidCount = true
 					it.Next()
 				}
 				continue

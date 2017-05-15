@@ -18,6 +18,7 @@
 package gql
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -3234,5 +3235,18 @@ func TestCountAtRoot(t *testing.T) {
 		}
 	}`
 	resp, err := Parse(Request{Str: query, Http: true})
+	fmt.Printf("%+v\n", resp.Query[0])
+	require.NoError(t, err)
+}
+
+func TestCountAtRoot2(t *testing.T) {
+	query := `{
+		me(id: 1) {
+			count()
+			count(enemy)
+		}
+	}`
+	resp, err := Parse(Request{Str: query, Http: true})
+	fmt.Printf("%+v\n", resp.Query[0])
 	require.NoError(t, err)
 }

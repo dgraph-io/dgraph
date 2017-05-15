@@ -145,6 +145,7 @@ type params struct {
 	Expand       string // Var to use for expand.
 	isGroupBy    bool
 	groupbyAttrs []string
+	uidCount     bool
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -366,7 +367,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			dst.SetUID(uid)
 		}
 
-		if len(pc.counts) > 0 {
+		if pc.Params.DoCount {
 			c := types.ValueForType(types.IntID)
 			c.Value = int64(pc.counts[idx])
 			fieldName = fmt.Sprintf("count(%s)", pc.Attr)
@@ -374,7 +375,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fieldName = pc.Params.Alias
 			}
 			dst.AddValue(fieldName, c)
-		} else if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
+			continue
+		}
+
+		if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
 			c := types.ValueForType(types.BoolID)
 			c.Value = task.ToBool(pc.values[idx])
 			uc := dst.New(pc.Attr)
@@ -387,6 +391,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
+
 			for childIdx, childUID := range ul.Uids {
 				if invalidUids[childUID] {
 					continue
@@ -416,6 +421,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				if !uc.IsEmpty() {
 					dst.AddListChild(fieldName, uc)
 				}
+			}
+			if pc.Params.uidCount {
+				uc := dst.New(fieldName)
+				c := types.ValueForType(types.IntID)
+				c.Value = int64(len(ul.Uids))
+				uc.AddValue("count", c)
+				dst.AddListChild(fieldName, uc)
 			}
 		} else {
 			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
@@ -615,6 +627,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			isGroupBy:    gchild.IsGroupby,
 			groupbyAttrs: gchild.GroupbyAttrs,
 			FacetVar:     gchild.FacetVar,
+			uidCount:     gchild.UidCount,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &protos.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -791,6 +804,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Normalize:  gq.Normalize,
 		Cascade:    gq.Cascade,
 		isGroupBy:  gq.IsGroupby,
+		uidCount:   gq.UidCount,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -1573,12 +1587,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		taskQuery := createTaskQuery(sg)
-		if parent == nil {
-			// For count at root, we want it to be a normal request, we will get the count
-			// from len(DestUIDs).
-			taskQuery.DoCount = false
+		if sg.Attr == "count" && sg.Params.DoCount {
+			rch <- nil
+			return
 		}
+
+		taskQuery := createTaskQuery(sg)
 
 		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
@@ -1600,11 +1614,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		sg.counts = result.Counts
 
 		if sg.Params.DoCount && len(sg.Filters) == 0 {
-			// We need to update the DestUids if count is asked at root, as count = len(DestUids)
-			// at root.
-			if parent == nil {
-				populateDestUIDs(result, sg)
-			}
 			// If there is a filter, we need to do more work to get the actual count.
 			x.Trace(ctx, "Zero uids. Only count requested")
 			rch <- nil
