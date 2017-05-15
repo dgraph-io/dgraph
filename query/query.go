@@ -367,7 +367,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			dst.SetUID(uid)
 		}
 
-		if pc.Params.DoCount {
+		if len(pc.counts) > 0 {
 			c := types.ValueForType(types.IntID)
 			c.Value = int64(pc.counts[idx])
 			fieldName = fmt.Sprintf("count(%s)", pc.Attr)
@@ -375,10 +375,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fieldName = pc.Params.Alias
 			}
 			dst.AddValue(fieldName, c)
-			continue
-		}
-
-		if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
+		} else if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
 			c := types.ValueForType(types.BoolID)
 			c.Value = task.ToBool(pc.values[idx])
 			uc := dst.New(pc.Attr)
@@ -1572,7 +1569,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		taskQuery := createTaskQuery(sg)
-
 		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))

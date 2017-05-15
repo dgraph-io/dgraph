@@ -2136,6 +2136,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				Var:     varName,
 				Alias:   alias,
 			}
+
+			if gq.IsCount {
+				return x.Errorf("Cannot have children attributes when asking for count.")
+			}
 			gq.Children = append(gq.Children, child)
 			varName, alias = "", ""
 			curp = child
