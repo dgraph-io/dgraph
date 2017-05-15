@@ -25,6 +25,7 @@ until nc -z 127.0.0.1 8080;
 do
         sleep 1
 done
+sleep 5
 
 go test ../../contrib/freebase/simple_test.go
 

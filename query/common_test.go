@@ -153,19 +153,23 @@ func addGeoData(t *testing.T, ps *badger.KV, uid uint64, p geom.T, name string) 
 	addEdgeToTypedValue(t, "name", uid, types.StringID, []byte(name), nil)
 }
 
+func defaultContext() context.Context {
+	return context.Background()
+}
+
 func processToFastJsonReq(t *testing.T, query string) (string, error) {
 	res, err := gql.Parse(gql.Request{Str: query, Http: true})
 	if err != nil {
 		return "", err
 	}
-	var l Latency
-	ctx := context.Background()
-	sgl, err := ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = queryRequest.ProcessQuery(ctx)
 	if err != nil {
 		return "", err
 	}
 	var buf bytes.Buffer
-	err = ToJson(&l, sgl, &buf, nil, false)
+	err = ToJson(queryRequest.Latency, queryRequest.Subgraphs, &buf, nil, false)
 	return string(buf.Bytes()), err
 }
 
@@ -195,11 +199,12 @@ func processToPB(t *testing.T, query string, variables map[string]string,
 	} else {
 		ctx = context.Background()
 	}
-	var l Latency
-	sgl, err := ProcessQuery(ctx, res, &l)
+
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = queryRequest.ProcessQuery(ctx)
 	require.NoError(t, err)
 
-	pb, err := ToProtocolBuf(&l, sgl)
+	pb, err := ToProtocolBuf(queryRequest.Latency, queryRequest.Subgraphs)
 	require.NoError(t, err)
 	return pb
 }

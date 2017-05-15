@@ -20,12 +20,12 @@ package gql
 import (
 	"io/ioutil"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -1424,7 +1424,7 @@ func TestParseMutation(t *testing.T) {
 		mutation {
 			set {
 				<name> <is> <something> .
-				<hometown> <is> <san francisco> .
+				<hometown> <is> <san/francisco> .
 			}
 			delete {
 				<name> <is> <something-else> .
@@ -1433,9 +1433,15 @@ func TestParseMutation(t *testing.T) {
 	`
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	require.NotEqual(t, strings.Index(res.Mutation.Set, "<name> <is> <something> ."), -1)
-	require.NotEqual(t, strings.Index(res.Mutation.Set, "<hometown> <is> <san francisco> ."), -1)
-	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
+	require.EqualValues(t, protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something"},
+		*res.Mutation.Set[0])
+	require.EqualValues(t, protos.NQuad{
+		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
+		*res.Mutation.Set[1])
+	require.EqualValues(t, protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something-else"},
+		*res.Mutation.Del[0])
 }
 
 func TestParseMutation_error(t *testing.T) {
@@ -1482,7 +1488,7 @@ func TestParseMutationAndQueryWithComments(t *testing.T) {
 			# Set block
 			set {
 				<name> <is> <something> .
-				<hometown> <is> <san francisco> .
+				<hometown> <is> <san/francisco> .
 			}
 			# Delete block
 			delete {
@@ -1500,9 +1506,15 @@ func TestParseMutationAndQueryWithComments(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.NotNil(t, res.Mutation)
-	require.NotEqual(t, strings.Index(res.Mutation.Set, "<name> <is> <something> ."), -1)
-	require.NotEqual(t, strings.Index(res.Mutation.Set, "<hometown> <is> <san francisco> ."), -1)
-	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
+	require.EqualValues(t, protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something"},
+		*res.Mutation.Set[0])
+	require.EqualValues(t, protos.NQuad{
+		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
+		*res.Mutation.Set[1])
+	require.EqualValues(t, protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something-else"},
+		*res.Mutation.Del[0])
 
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, 1, len(res.Query[0].ID))
@@ -1514,7 +1526,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 		mutation {
 			set {
 				<name> <is> <something> .
-				<hometown> <is> <san francisco> .
+				<hometown> <is> <san/francisco> .
 			}
 			delete {
 				<name> <is> <something-else> .
@@ -1530,9 +1542,15 @@ func TestParseMutationAndQuery(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.NotNil(t, res.Mutation)
-	require.NotEqual(t, strings.Index(res.Mutation.Set, "<name> <is> <something> ."), -1)
-	require.NotEqual(t, strings.Index(res.Mutation.Set, "<hometown> <is> <san francisco> ."), -1)
-	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
+	require.EqualValues(t, protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something"},
+		*res.Mutation.Set[0])
+	require.EqualValues(t, protos.NQuad{
+		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
+		*res.Mutation.Set[1])
+	require.EqualValues(t, protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something-else"},
+		*res.Mutation.Del[0])
 
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, 1, len(res.Query[0].ID))
@@ -2473,21 +2491,6 @@ func TestParseIRIRefInvalidChar(t *testing.T) {
 	require.Error(t, err) // because of ^
 }
 
-func TestParseGeoJson(t *testing.T) {
-	query := `
-	mutation {
-		set {
-			<_uid_:1> <loc> "{
-				\'Type\':\'Point\' ,
-				\'Coordinates\':[1.1,2.0]
-			}"^^<geo:geojson> .
-		}
-	}
-	`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-}
-
 func TestMutationOpenBrace(t *testing.T) {
 	query := `
 	mutation {
@@ -2552,7 +2555,7 @@ func TestMutationPassword(t *testing.T) {
 	query := `
 	mutation {
 		set {
-			<alice> <password> "PenAndPencil"^^<pwd:password>
+			<alice> <password> "PenAndPencil"^^<pwd:password> .
 		}
 	}
 	`
@@ -3474,6 +3477,35 @@ func TestDotsEOF(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestMutationVariables(t *testing.T) {
+	query := `
+		mutation {
+			set {
+				var(adults) <isadult> "true" .
+				<a> <b> <c> .
+			}
+		}
+		{
+			me(id: a) {
+				adults as friends @filter(gt(age, 18))
+			}
+		}
+	`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(res.MutationVars))
+
+	require.EqualValues(t, "adults", res.MutationVars[res.Mutation.Set[0]])
+
+	expected := protos.NQuad{
+		Predicate:   "isadult",
+		ObjectValue: &protos.Value{&protos.Value_DefaultVal{"true"}},
+		SubjectVar:  "adults",
+	}
+	require.EqualValues(t, expected, *res.Mutation.Set[0])
+}
+
 func TestMathWithoutVarAlias(t *testing.T) {
 	query := `{
 			f(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -3537,4 +3569,14 @@ func TestFilterUid(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"1", "3", "5", "7"}, gql.Query[0].Func.Args)
 	require.Equal(t, []string{"3", "7"}, gql.Query[0].Filter.Func.Args)
+}
+
+func TestRemoveDuplicates(t *testing.T) {
+	set := removeDuplicates([]string{"a", "a", "a", "b", "b", "c", "c"})
+	require.EqualValues(t, []string{"a", "b", "c"}, set)
+}
+
+func TestRemoveDuplicatesWithoutDuplicates(t *testing.T) {
+	set := removeDuplicates([]string{"a", "b", "c", "d"})
+	require.EqualValues(t, []string{"a", "b", "c", "d"}, set)
 }

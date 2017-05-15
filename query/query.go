@@ -34,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -994,8 +995,8 @@ func createTaskQuery(sg *SubGraph) *protos.Query {
 }
 
 type varValue struct {
-	uids *protos.List
-	vals map[uint64]types.Val
+	Uids *protos.List
+	Vals map[uint64]types.Val
 	path []*SubGraph // This stores the subgraph path from root to var definition.
 	// TODO: Check if we can do without this field.
 	strList []*protos.TaskValue
@@ -1023,7 +1024,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 		return mp, x.Errorf("Invalid variable aggregation. Check the levels.")
 	}
 
-	vals := doneVars[needsVar].vals
+	vals := doneVars[needsVar].Vals
 	mp = make(map[uint64]types.Val)
 	// Go over the sibling node and aggregate.
 	for i, list := range relSG.uidMatrix {
@@ -1073,7 +1074,7 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 		}
 	}
 
-	newMap := fromNode.vals
+	newMap := fromNode.Vals
 	if newMap == nil {
 		return nil, x.Errorf("Variables not ordered correctly")
 	}
@@ -1147,7 +1148,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		}
 		if sg.Params.Var != "" {
 			it := doneVars[sg.Params.Var]
-			it.vals = mp
+			it.Vals = mp
 			doneVars[sg.Params.Var] = it
 		}
 		sg.Params.uidToVal = mp
@@ -1164,7 +1165,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		}
 		if sg.MathExp.Val != nil {
 			it := doneVars[sg.Params.Var]
-			it.vals = sg.MathExp.Val
+			it.Vals = sg.MathExp.Val
 			// The path of math node is the path of max var node used in it.
 			it.path = path
 			doneVars[sg.Params.Var] = it
@@ -1178,7 +1179,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 			}
 			if rangeOver == nil {
 				it := doneVars[sg.Params.Var]
-				it.vals = mp
+				it.Vals = mp
 				doneVars[sg.Params.Var] = it
 				return nil
 			}
@@ -1186,7 +1187,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 				mp[uid] = sg.MathExp.Const
 			}
 			it := doneVars[sg.Params.Var]
-			it.vals = mp
+			it.Vals = mp
 			doneVars[sg.Params.Var] = it
 			sg.Params.uidToVal = mp
 		} else {
@@ -1197,10 +1198,10 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		// This is a var() block.
 		srcVar := sg.Params.NeedsVar[0]
 		srcMap := doneVars[srcVar.Name]
-		if srcMap.vals == nil {
+		if srcMap.Vals == nil {
 			return x.Errorf("Missing value variable %v", srcVar)
 		}
-		sg.Params.uidToVal = srcMap.vals
+		sg.Params.uidToVal = srcMap.Vals
 	} else {
 		return x.Errorf("Unhandled internal node %v with parent %v", sg.Attr, parent.Attr)
 	}
@@ -1219,137 +1220,6 @@ func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, path [
 		}
 	}
 	return sg.valueVarAggregation(doneVars, path, parent)
-}
-
-func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
-	var sgl []*SubGraph
-	var err error
-
-	// doneVars stores the processed variables.
-	doneVars := make(map[string]varValue)
-	loopStart := time.Now()
-	for i := 0; i < len(res.Query); i++ {
-		gq := res.Query[i]
-		if gq == nil || (len(gq.ID) == 0 && gq.Func == nil &&
-			len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
-			continue
-		}
-		sg, err := ToSubGraph(ctx, gq)
-		if err != nil {
-			return nil, err
-		}
-		x.Trace(ctx, "Query parsed")
-		sgl = append(sgl, sg)
-	}
-	l.Parsing += time.Since(loopStart)
-
-	execStart := time.Now()
-	hasExecuted := make([]bool, len(sgl))
-	numQueriesDone := 0
-
-	// canExecute returns true if a query block is ready to execute with all the variables
-	// that it depends on are already populated or are defined in the same block.
-	canExecute := func(idx int) bool {
-		for _, v := range res.QueryVars[idx].Needs {
-			// here we check if this block defines the variable v.
-			var selfDep bool
-			for _, vd := range res.QueryVars[idx].Defines {
-				if v == vd {
-					selfDep = true
-					break
-				}
-			}
-			// The variable should be defined in this block or should have already been
-			// populated by some other block, otherwise we are not ready to execute yet.
-			_, ok := doneVars[v]
-			if !ok && !selfDep {
-				return false
-			}
-		}
-		return true
-	}
-
-	var shortestSg *SubGraph
-	for i := 0; i < len(sgl) && numQueriesDone < len(sgl); i++ {
-		errChan := make(chan error, len(sgl))
-		var idxList []int
-		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
-		// to be executed.
-		for idx := 0; idx < len(sgl); idx++ {
-			if hasExecuted[idx] {
-				continue
-			}
-			sg := sgl[idx]
-			// Check the list for the requires variables.
-			if !canExecute(idx) {
-				continue
-			}
-
-			err = sg.recursiveFillVars(doneVars)
-			if err != nil {
-				return nil, err
-			}
-			hasExecuted[idx] = true
-			numQueriesDone++
-			idxList = append(idxList, idx)
-			if sg.Params.Alias == "shortest" {
-				// We allow only one shortest path block per query.
-				go func() {
-					shortestSg, err = ShortestPath(ctx, sg)
-					errChan <- err
-				}()
-			} else if sg.Params.Alias == "recurse" {
-				go func() {
-					errChan <- Recurse(ctx, sg)
-				}()
-			} else {
-				go ProcessGraph(ctx, sg, nil, errChan)
-			}
-			x.Trace(ctx, "Graph processed")
-		}
-
-		// Wait for the execution that was started in this iteration.
-		for i := 0; i < len(idxList); i++ {
-			select {
-			case err := <-errChan:
-				if err != nil {
-					x.TraceError(ctx, x.Wrapf(err, "Error while processing Query"))
-					return nil, err
-				}
-			case <-ctx.Done():
-				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
-				return nil, ctx.Err()
-			}
-		}
-
-		// If the executed subgraph had some variable defined in it, Populate it in the map.
-		for _, idx := range idxList {
-			sg := sgl[idx]
-			var sgPath []*SubGraph
-			err = sg.populateVarMap(doneVars, sgPath)
-			if err != nil {
-				return nil, err
-			}
-			err = sg.populatePostAggregation(doneVars, []*SubGraph{}, nil)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// Ensure all the queries are executed.
-	for _, it := range hasExecuted {
-		if !it {
-			return nil, x.Errorf("Query couldn't be executed")
-		}
-	}
-	l.Processing += time.Since(execStart)
-
-	// If we had a shortestPath SG, append it to the result.
-	if shortestSg != nil {
-		sgl = append(sgl, shortestSg)
-	}
-	return sgl, nil
 }
 
 func (sg *SubGraph) updateUidMatrix() {
@@ -1451,7 +1321,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		} else if len(sg.counts) != 0 {
 			// This implies it is a value variable.
 			doneVars[sg.Params.Var] = varValue{
-				vals: make(map[uint64]types.Val),
+				Vals: make(map[uint64]types.Val),
 				path: sgPath,
 			}
 			for idx, uid := range sg.SrcUIDs.Uids {
@@ -1459,12 +1329,12 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 					Tid:   types.IntID,
 					Value: int64(sg.counts[idx]),
 				}
-				doneVars[sg.Params.Var].vals[uid] = val
+				doneVars[sg.Params.Var].Vals[uid] = val
 			}
 		} else if len(sg.DestUIDs.Uids) != 0 {
 			// This implies it is a entity variable.
 			doneVars[sg.Params.Var] = varValue{
-				uids: sg.DestUIDs,
+				Uids: sg.DestUIDs,
 				path: sgPath,
 			}
 		} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
@@ -1472,7 +1342,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			// NOTE: Value variables cannot be defined and used in the same query block. so
 			// checking len(sgPath) is okay.
 			doneVars[sg.Params.Var] = varValue{
-				vals: make(map[uint64]types.Val),
+				Vals: make(map[uint64]types.Val),
 				path: sgPath,
 			}
 			for idx, uid := range sg.SrcUIDs.Uids {
@@ -1480,7 +1350,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 				if err != nil {
 					continue
 				}
-				doneVars[sg.Params.Var].vals[uid] = val
+				doneVars[sg.Params.Var].Vals[uid] = val
 			}
 		} else {
 			// Insert a empty entry to keep the dependency happy.
@@ -1501,7 +1371,7 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 				continue
 			}
 			doneVars[fvar] = varValue{
-				vals: make(map[uint64]types.Val),
+				Vals: make(map[uint64]types.Val),
 				path: sgPath,
 			}
 		}
@@ -1518,8 +1388,8 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 				for _, f := range facet.Facets {
 					fvar, ok := sg.Params.FacetVar[f.Key]
 					if ok {
-						if pVal, ok := doneVars[fvar].vals[uid]; !ok {
-							doneVars[fvar].vals[uid] = facets.ValFor(f)
+						if pVal, ok := doneVars[fvar].Vals[uid]; !ok {
+							doneVars[fvar].Vals[uid] = facets.ValFor(f)
 						} else {
 							// If the value is int/float we add them up. Else we throw an error as
 							// many to one maps are not allowed for other types.
@@ -1534,7 +1404,7 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 							if err != nil {
 								continue
 							}
-							doneVars[fvar].vals[uid] = fVal
+							doneVars[fvar].Vals[uid] = fVal
 						}
 					}
 				}
@@ -1570,22 +1440,22 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 		if l, ok := mp[v.Name]; ok {
 			if (v.Typ == gql.ANY_VAR || v.Typ == gql.LIST_VAR) && l.strList != nil {
 				sg.ExpandPreds = l.strList
-			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.uids != nil {
-				lists = append(lists, l.uids)
-			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.vals) != 0 {
+			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.Uids != nil {
+				lists = append(lists, l.Uids)
+			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.Vals) != 0 {
 				// This should happened only once.
-				sg.Params.uidToVal = l.vals
-			} else if len(l.vals) != 0 && (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) {
+				sg.Params.uidToVal = l.Vals
+			} else if len(l.Vals) != 0 && (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) {
 				// Derive the UID list from value var.
-				uids := make([]uint64, 0, len(l.vals))
-				for k := range l.vals {
+				uids := make([]uint64, 0, len(l.Vals))
+				for k := range l.Vals {
 					uids = append(uids, k)
 				}
 				sort.Slice(uids, func(i, j int) bool {
 					return uids[i] < uids[j]
 				})
 				lists = append(lists, &protos.List{uids})
-			} else if len(l.vals) != 0 || l.uids != nil {
+			} else if len(l.Vals) != 0 || l.Uids != nil {
 				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 			}
 		}
@@ -2116,4 +1986,300 @@ func (sg *SubGraph) getAllPredicates(predicates map[string]bool) {
 	for _, child := range sg.Children {
 		child.getAllPredicates(predicates)
 	}
+}
+
+// convert the new UIDs to hex string.
+func ConvertUidsToHex(m map[string]uint64) (res map[string]string) {
+	res = make(map[string]string)
+	for k, v := range m {
+		res[k] = fmt.Sprintf("%#x", v)
+	}
+	return
+}
+
+func parseFacets(nquads []*protos.NQuad) error {
+	var err error
+	var facet *protos.Facet
+	for _, nq := range nquads {
+		if len(nq.Facets) == 0 {
+			continue
+		}
+		for idx, f := range nq.Facets {
+			if facet, err = facets.FacetFor(f.Key, f.Val); err != nil {
+				return err
+			}
+			nq.Facets[idx] = facet
+		}
+
+	}
+	return nil
+}
+
+// Go client sends facets as string k-v pairs. So they need to parsed and tokenized
+// on the server.
+func parseFacetsInMutation(mu *gql.Mutation) error {
+	if err := parseFacets(mu.Set); err != nil {
+		return err
+	}
+	if err := parseFacets(mu.Del); err != nil {
+		return err
+	}
+	return nil
+}
+
+// QueryRequest wraps the state that is used when executing query.
+// Initially Latency and GqlQuery needs to be set. Subgraphs, Vars
+// and schemaUpdate are filled when processing query.
+type QueryRequest struct {
+	Latency  *Latency
+	GqlQuery *gql.Result
+
+	Subgraphs []*SubGraph
+
+	vars         map[string]varValue
+	schemaUpdate []*protos.SchemaUpdate
+}
+
+// ProcessQuery processes query part of the request (without mutations).
+// Fills Subgraphs and Vars.
+func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
+	var err error
+
+	// doneVars stores the processed variables.
+	req.vars = make(map[string]varValue)
+	loopStart := time.Now()
+	queries := req.GqlQuery.Query
+	for i := 0; i < len(queries); i++ {
+		gq := queries[i]
+		if gq == nil || (len(gq.ID) == 0 && gq.Func == nil &&
+			len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
+			continue
+		}
+		sg, err := ToSubGraph(ctx, gq)
+		if err != nil {
+			return err
+		}
+		x.Trace(ctx, "Query parsed")
+		req.Subgraphs = append(req.Subgraphs, sg)
+	}
+	req.Latency.Parsing += time.Since(loopStart)
+
+	execStart := time.Now()
+	hasExecuted := make([]bool, len(req.Subgraphs))
+	numQueriesDone := 0
+
+	// canExecute returns true if a query block is ready to execute with all the variables
+	// that it depends on are already populated or are defined in the same block.
+	canExecute := func(idx int) bool {
+		for _, v := range req.GqlQuery.QueryVars[idx].Needs {
+			// here we check if this block defines the variable v.
+			var selfDep bool
+			for _, vd := range req.GqlQuery.QueryVars[idx].Defines {
+				if v == vd {
+					selfDep = true
+					break
+				}
+			}
+			// The variable should be defined in this block or should have already been
+			// populated by some other block, otherwise we are not ready to execute yet.
+			_, ok := req.vars[v]
+			if !ok && !selfDep {
+				return false
+			}
+		}
+		return true
+	}
+
+	var shortestSg *SubGraph
+	for i := 0; i < len(req.Subgraphs) && numQueriesDone < len(req.Subgraphs); i++ {
+		errChan := make(chan error, len(req.Subgraphs))
+		var idxList []int
+		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
+		// to be executed.
+		for idx := 0; idx < len(req.Subgraphs); idx++ {
+			if hasExecuted[idx] {
+				continue
+			}
+			sg := req.Subgraphs[idx]
+			// Check the list for the requires variables.
+			if !canExecute(idx) {
+				continue
+			}
+
+			err = sg.recursiveFillVars(req.vars)
+			if err != nil {
+				return err
+			}
+			hasExecuted[idx] = true
+			numQueriesDone++
+			idxList = append(idxList, idx)
+			if sg.Params.Alias == "shortest" {
+				// We allow only one shortest path block per query.
+				go func() {
+					shortestSg, err = ShortestPath(ctx, sg)
+					errChan <- err
+				}()
+			} else if sg.Params.Alias == "recurse" {
+				go func() {
+					errChan <- Recurse(ctx, sg)
+				}()
+			} else {
+				go ProcessGraph(ctx, sg, nil, errChan)
+			}
+			x.Trace(ctx, "Graph processed")
+		}
+
+		// Wait for the execution that was started in this iteration.
+		for i := 0; i < len(idxList); i++ {
+			select {
+			case err := <-errChan:
+				if err != nil {
+					x.TraceError(ctx, x.Wrapf(err, "Error while processing Query"))
+					return err
+				}
+			case <-ctx.Done():
+				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+				return ctx.Err()
+			}
+		}
+
+		// If the executed subgraph had some variable defined in it, Populate it in the map.
+		for _, idx := range idxList {
+			sg := req.Subgraphs[idx]
+			var sgPath []*SubGraph
+			err = sg.populateVarMap(req.vars, sgPath)
+			if err != nil {
+				return err
+			}
+			err = sg.populatePostAggregation(req.vars, []*SubGraph{}, nil)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Ensure all the queries are executed.
+	for _, it := range hasExecuted {
+		if !it {
+			return x.Errorf("Query couldn't be executed")
+		}
+	}
+	req.Latency.Processing += time.Since(execStart)
+
+	// If we had a shortestPath SG, append it to the result.
+	if shortestSg != nil {
+		req.Subgraphs = append(req.Subgraphs, shortestSg)
+	}
+	return nil
+}
+
+var MutationNotAllowedErr = x.Errorf("Mutations are forbidden on this server.")
+
+type InvalidRequestError struct {
+	err error
+}
+
+func (e *InvalidRequestError) Error() string {
+	return "invalid request: " + e.err.Error()
+}
+
+type InternalError struct {
+	err error
+}
+
+func (e *InternalError) Error() string {
+	return "internal error: " + e.err.Error()
+}
+
+func (qr *QueryRequest) prepareMutation() (err error) {
+	if len(qr.GqlQuery.Mutation.Schema) > 0 {
+		if qr.schemaUpdate, err = schema.Parse(qr.GqlQuery.Mutation.Schema); err != nil {
+			return x.Wrapf(&InvalidRequestError{err: err}, "failed to parse schema")
+		}
+	}
+	if err = parseFacetsInMutation(qr.GqlQuery.Mutation); err != nil {
+		return err
+	}
+	return
+}
+
+func (qr *QueryRequest) processNquads(ctx context.Context, nquads gql.NQuads) (map[string]uint64, error) {
+	var err error
+	var mr InternalMutation
+	if !nquads.IsEmpty() {
+		if mr, err = ToInternal(ctx, nquads, qr.vars); err != nil {
+			return mr.NewUids, x.Wrapf(&InternalError{err: err}, "failed to convert NQuads to edges")
+		}
+	}
+	m := protos.Mutations{Edges: mr.Edges, Schema: qr.schemaUpdate}
+	if err = ApplyMutations(ctx, &m); err != nil {
+		return mr.NewUids, x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
+	}
+	return mr.NewUids, nil
+}
+
+type ExecuteResult struct {
+	Subgraphs   []*SubGraph
+	SchemaNode  []*protos.SchemaNode
+	Allocations map[string]uint64
+}
+
+func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResult, err error) {
+	// If we have mutations that don't depend on query, run them first.
+	mutationAllowed, ok := ctx.Value("mutation_allowed").(bool)
+	if !ok {
+		mutationAllowed = false
+	}
+
+	var depSet, indepSet, depDel, indepDel gql.NQuads
+	if qr.GqlQuery.Mutation != nil {
+		if qr.GqlQuery.Mutation.HasOps() && !mutationAllowed {
+			return er, x.Wrap(&InvalidRequestError{err: MutationNotAllowedErr})
+		}
+
+		if err = qr.prepareMutation(); err != nil {
+			return er, err
+		}
+
+		depSet, indepSet = gql.WrapNQ(qr.GqlQuery.Mutation.Set, protos.DirectedEdge_SET).
+			Partition(gql.HasVariables)
+
+		depDel, indepDel = gql.WrapNQ(qr.GqlQuery.Mutation.Del, protos.DirectedEdge_DEL).
+			Partition(gql.HasVariables)
+
+		nquads := indepSet.Add(indepDel)
+		er.Allocations, err = qr.processNquads(ctx, nquads)
+		if err != nil {
+			return er, err
+		}
+	}
+
+	if len(qr.GqlQuery.Query) == 0 {
+		return er, nil
+	}
+
+	err = qr.ProcessQuery(ctx)
+	if err != nil {
+		return er, x.Wrapf(&InternalError{err: err}, "Unable to process query")
+	}
+	er.Subgraphs = qr.Subgraphs
+
+	nquads := depSet.Add(depDel)
+	if !nquads.IsEmpty() {
+		allocations, err := qr.processNquads(ctx, nquads)
+		if err != nil {
+			return er, err
+		}
+		if len(allocations) > 0 {
+			return er, x.Wrapf(&InvalidRequestError{err: err},
+				"adding nodes when using variables is currently not supported")
+		}
+	}
+
+	if qr.GqlQuery.Schema != nil {
+		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, qr.GqlQuery.Schema); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "error while fetching schema")
+		}
+	}
+	return er, nil
 }

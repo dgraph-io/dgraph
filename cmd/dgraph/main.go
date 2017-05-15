@@ -18,15 +18,12 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/gob"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -54,13 +51,10 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"github.com/soheilhy/cmux"
 )
 
@@ -91,13 +85,6 @@ var (
 	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max version.")
 )
 
-var mutationNotAllowedErr = x.Errorf("Mutations are forbidden on this server.")
-
-type mutationResult struct {
-	edges   []*protos.DirectedEdge
-	newUids map[string]uint64
-}
-
 func stopProfiling() {
 	// Stop the CPU profiling that was initiated.
 	if len(*cpuprofile) > 0 {
@@ -125,351 +112,15 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func convertToNQuad(ctx context.Context, mutation string) ([]*protos.NQuad, error) {
-	var nquads []*protos.NQuad
-	r := strings.NewReader(mutation)
-	reader := bufio.NewReader(r)
-	x.Trace(ctx, "Converting to NQuad")
-
-	var strBuf bytes.Buffer
-	var err error
-	for {
-		err = x.ReadLine(reader, &strBuf)
-		if err != nil {
-			break
-		}
-		ln := strings.Trim(strBuf.String(), " \t")
-		if len(ln) == 0 {
-			continue
-		}
-		nq, err := rdf.Parse(ln)
-		if err == rdf.ErrEmpty { // special case: comment/empty line
-			continue
-		} else if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while parsing RDF"))
-			return nquads, err
-		}
-		nquads = append(nquads, &nq)
+func isMutationAllowed(ctx context.Context) bool {
+	if !*nomutations {
+		return true
 	}
-	if err != io.EOF {
-		return nquads, err
+	shareAllowed, ok := ctx.Value("_share_").(bool)
+	if !ok || !shareAllowed {
+		return false
 	}
-	return nquads, nil
-}
-
-func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult, error) {
-	var edges []*protos.DirectedEdge
-	var mr mutationResult
-
-	newUids := make(map[string]uint64)
-	for _, nq := range nquads {
-		if strings.HasPrefix(nq.Subject, "_:") {
-			newUids[nq.Subject] = 0
-		} else {
-			// Only store xids that need to be generated.
-			_, err := rdf.ParseUid(nq.Subject)
-			if err == rdf.ErrInvalidUID {
-				return mr, err
-			} else if err != nil {
-				newUids[nq.Subject] = 0
-			}
-		}
-
-		if len(nq.ObjectId) > 0 {
-			if strings.HasPrefix(nq.ObjectId, "_:") {
-				newUids[nq.ObjectId] = 0
-			} else {
-				_, err := rdf.ParseUid(nq.ObjectId)
-				if err == rdf.ErrInvalidUID {
-					return mr, err
-				} else if err != nil {
-					newUids[nq.ObjectId] = 0
-				}
-			}
-		}
-	}
-
-	if len(newUids) > 0 {
-		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while AssignUidsOverNetwork for newUids: %v", newUids))
-			return mr, err
-		}
-	}
-
-	// Wrapper for a pointer to protos.Nquad
-	var wnq rdf.NQuad
-	for _, nq := range nquads {
-		// Get edges from nquad using newUids.
-		wnq = rdf.NQuad{nq}
-		edge, err := wnq.ToEdgeUsing(newUids)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
-			return mr, err
-		}
-		edges = append(edges, edge)
-	}
-
-	resultUids := make(map[string]uint64)
-	// Strip out _: prefix from the blank node keys.
-	for k, v := range newUids {
-		if strings.HasPrefix(k, "_:") {
-			resultUids[k[2:]] = v
-		}
-	}
-
-	mr = mutationResult{
-		edges:   edges,
-		newUids: resultUids,
-	}
-	return mr, nil
-}
-
-func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
-	newEdges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
-	for _, mu := range m.Edges {
-		x.AssertTrue(mu.Op == protos.DirectedEdge_DEL || mu.Op == protos.DirectedEdge_SET)
-		if mu.Op == protos.DirectedEdge_SET {
-			edge := &protos.DirectedEdge{
-				Op:     protos.DirectedEdge_SET,
-				Entity: mu.GetEntity(),
-				Attr:   "_predicate_",
-				Value:  []byte(mu.GetAttr()),
-			}
-			newEdges = append(newEdges, mu)
-			newEdges = append(newEdges, edge)
-		} else if mu.Op == protos.DirectedEdge_DEL {
-			if mu.Attr != x.DeleteAllPredicates {
-				newEdges = append(newEdges, mu)
-				if string(mu.GetValue()) == x.DeleteAllObjects {
-					// Delete the given predicate from _predicate_.
-					edge := &protos.DirectedEdge{
-						Op:     protos.DirectedEdge_DEL,
-						Entity: mu.GetEntity(),
-						Attr:   "_predicate_",
-						Value:  []byte(mu.GetAttr()),
-					}
-					newEdges = append(newEdges, edge)
-				}
-			} else {
-				// Fetch all the predicates and replace them
-				preds, err := query.GetNodePredicates(ctx, &protos.List{[]uint64{mu.GetEntity()}})
-				if err != nil {
-					return err
-				}
-				val := mu.GetValue()
-				for _, pred := range preds {
-					edge := &protos.DirectedEdge{
-						Op:     protos.DirectedEdge_DEL,
-						Entity: mu.GetEntity(),
-						Attr:   string(pred.Val),
-						Value:  val,
-					}
-					newEdges = append(newEdges, edge)
-				}
-				edge := &protos.DirectedEdge{
-					Op:     protos.DirectedEdge_DEL,
-					Entity: mu.GetEntity(),
-					Attr:   "_predicate_",
-					Value:  val,
-				}
-				// Delete all the _predicate_ values
-				edge.Attr = "_predicate_"
-				newEdges = append(newEdges, edge)
-			}
-		}
-	}
-	m.Edges = newEdges
-	return nil
-}
-
-func applyMutations(ctx context.Context, m *protos.Mutations) error {
-	err := AddInternalEdge(ctx, m)
-	if err != nil {
-		return x.Wrapf(err, "While adding internal edges")
-	}
-	err = worker.MutateOverNetwork(ctx, m)
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
-		return err
-	}
-	return nil
-}
-
-func ismutationAllowed(ctx context.Context, mutation *protos.Mutation) bool {
-	if *nomutations {
-		shareAllowed, ok := ctx.Value("_share_").(bool)
-		if !ok || !shareAllowed {
-			return false
-		}
-	}
-
 	return true
-}
-
-func convertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string]uint64, error) {
-	var allocIds map[string]uint64
-	var m protos.Mutations
-	var err error
-	var mr mutationResult
-
-	if !ismutationAllowed(ctx, mutation) {
-		return nil, mutationNotAllowedErr
-	}
-
-	if mr, err = convertToEdges(ctx, mutation.Set); err != nil {
-		return nil, err
-	}
-	m.Edges, allocIds = mr.edges, mr.newUids
-	for i := range m.Edges {
-		m.Edges[i].Op = protos.DirectedEdge_SET
-	}
-
-	if mr, err = convertToEdges(ctx, mutation.Del); err != nil {
-		return nil, err
-	}
-	for i := range mr.edges {
-		edge := mr.edges[i]
-		edge.Op = protos.DirectedEdge_DEL
-		m.Edges = append(m.Edges, edge)
-	}
-
-	m.Schema = mutation.Schema
-	if err := applyMutations(ctx, &m); err != nil {
-		return nil, x.Wrap(err)
-	}
-	return allocIds, nil
-}
-
-func enrichSchema(updates []*protos.SchemaUpdate) error {
-	for _, schema := range updates {
-		typ := types.TypeID(schema.ValueType)
-
-		if (typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID) &&
-			schema.Directive == protos.SchemaUpdate_INDEX {
-			return x.Errorf("Indexing not allowed on predicate %s of type %s",
-				schema.Predicate, typ.Name())
-		}
-
-		if typ == types.UidID {
-			continue
-		}
-
-		if len(schema.Tokenizer) == 0 && schema.Directive == protos.SchemaUpdate_INDEX {
-			schema.Tokenizer = []string{tok.Default(typ).Name()}
-		} else if len(schema.Tokenizer) > 0 && schema.Directive != protos.SchemaUpdate_INDEX {
-			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
-		}
-		// check for valid tokeniser types and duplicates
-		var seen = make(map[string]bool)
-		var seenSortableTok bool
-		for _, t := range schema.Tokenizer {
-			tokenizer, has := tok.GetTokenizer(t)
-			if !has {
-				return x.Errorf("Invalid tokenizer %s", t)
-			}
-			if tokenizer.Type() != typ {
-				return x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
-					tokenizer.Name(), schema.Predicate, typ.Name())
-			}
-			if _, ok := seen[tokenizer.Name()]; !ok {
-				seen[tokenizer.Name()] = true
-			} else {
-				return x.Errorf("Duplicate tokenizers present for attr %s", schema.Predicate)
-			}
-			if tokenizer.IsSortable() {
-				if seenSortableTok {
-					return x.Errorf("More than one sortable index encountered for: %v",
-						schema.Predicate)
-				}
-				seenSortableTok = true
-			}
-		}
-	}
-	return nil
-}
-
-func parseFacets(nquads []*protos.NQuad) error {
-	var err error
-	var facet *protos.Facet
-	for _, nq := range nquads {
-		if len(nq.Facets) == 0 {
-			continue
-		}
-		for idx, f := range nq.Facets {
-			if facet, err = facets.FacetFor(f.Key, f.Val); err != nil {
-				return err
-			}
-			nq.Facets[idx] = facet
-		}
-
-	}
-	return nil
-}
-
-// Go client sends facets as string k-v pairs. So they need to parsed and tokenized
-// on the server.
-func parseFacetsInMutation(mu *protos.Mutation) error {
-	if err := parseFacets(mu.Set); err != nil {
-		return err
-	}
-	if err := parseFacets(mu.Del); err != nil {
-		return err
-	}
-	return nil
-}
-
-// This function is used to run mutations for the requests from different
-// language clients.
-func runMutations(ctx context.Context, mu *protos.Mutation) (map[string]uint64, error) {
-	var allocIds map[string]uint64
-	var err error
-
-	if err = enrichSchema(mu.Schema); err != nil {
-		return nil, err
-	}
-
-	if err = parseFacetsInMutation(mu); err != nil {
-		return nil, err
-	}
-	mutation := &protos.Mutation{Set: mu.Set, Del: mu.Del, Schema: mu.Schema}
-	if allocIds, err = convertAndApply(ctx, mutation); err != nil {
-		return nil, err
-	}
-	return allocIds, nil
-}
-
-// This function is used to run mutations for the requests received from the
-// http client.
-func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
-	var set []*protos.NQuad
-	var del []*protos.NQuad
-	var s []*protos.SchemaUpdate
-	var allocIds map[string]uint64
-	var err error
-
-	if len(mu.Set) > 0 {
-		if set, err = convertToNQuad(ctx, mu.Set); err != nil {
-			return nil, x.Wrap(err)
-		}
-	}
-
-	if len(mu.Del) > 0 {
-		if del, err = convertToNQuad(ctx, mu.Del); err != nil {
-			return nil, x.Wrap(err)
-		}
-	}
-
-	if len(mu.Schema) > 0 {
-		if s, err = schema.Parse(mu.Schema); err != nil {
-			return nil, x.Wrap(err)
-		}
-	}
-
-	mutation := &protos.Mutation{Set: set, Del: del, Schema: s}
-	if allocIds, err = convertAndApply(ctx, mutation); err != nil {
-		return nil, err
-	}
-	return allocIds, nil
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
@@ -509,15 +160,6 @@ func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 	return res, nil
 }
 
-type wrappedErr struct {
-	Err     error
-	Message string
-}
-
-func hasGQLOps(mu *gql.Mutation) bool {
-	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
-}
-
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if !worker.HealthCheck() {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -539,6 +181,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Lets add the value of the debug query parameter to the context.
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
+	ctx = context.WithValue(ctx, "mutation_allowed", !*nomutations)
 
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "Query")
@@ -547,20 +190,23 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		ctx = trace.NewContext(ctx, tr)
 	}
 
+	invalidRequest := func(err error, msg string) {
+		x.TraceError(ctx, err)
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
+	}
+
 	var l query.Latency
 	l.Start = time.Now()
 	defer r.Body.Close()
 	req, err := ioutil.ReadAll(r.Body)
 	q := string(req)
 	if err != nil || len(q) == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		x.TraceError(ctx, x.Wrapf(err, "Error while reading query"))
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
+		invalidRequest(err, "Error while reading query")
 		return
 	}
 
 	parseStart := time.Now()
-	res, err := parseQueryAndMutation(ctx, gql.Request{
+	parsed, err := parseQueryAndMutation(ctx, gql.Request{
 		Str:       q,
 		Variables: map[string]string{},
 		Http:      true,
@@ -573,39 +219,23 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	var cancel context.CancelFunc
 	// set timeout if schema mutation not present
-	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
+	if parsed.Mutation == nil || len(parsed.Mutation.Schema) == 0 {
 		// If schema mutation is not present
 		ctx, cancel = context.WithTimeout(ctx, time.Minute)
 		defer cancel()
 	}
 
-	var allocIds map[string]uint64
-	var allocIdsStr map[string]string
-	// If we have mutations, run them first.
-	if res.Mutation != nil && hasGQLOps(res.Mutation) {
-		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
+	var res query.ExecuteResult
+	var queryRequest = query.QueryRequest{Latency: &l, GqlQuery: &parsed}
+	if res, err = queryRequest.ProcessWithMutation(ctx); err != nil {
+		switch errors.Cause(err).(type) {
+		case *query.InvalidRequestError:
+			invalidRequest(err, err.Error())
+		default: // internalError or other
+			x.TraceError(ctx, x.Wrap(err))
 			x.SetStatus(w, x.Error, err.Error())
-			return
 		}
-		// convert the new UIDs to hex string.
-		allocIdsStr = make(map[string]string)
-		for k, v := range allocIds {
-			allocIdsStr[k] = fmt.Sprintf("%#x", v)
-		}
-	}
-
-	var schemaNode []*protos.SchemaNode
-	if res.Schema != nil {
-		execStart := time.Now()
-		if schemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
-			x.SetStatus(w, x.Error, err.Error())
-			return
-		}
-		l.Processing += time.Since(execStart)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -614,16 +244,19 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	addLatency, _ = strconv.ParseBool(r.URL.Query().Get("latency"))
 	debug, _ := strconv.ParseBool(r.URL.Query().Get("debug"))
 	addLatency = addLatency || debug
-	if len(res.Query) == 0 {
+
+	newUids := query.ConvertUidsToHex(res.Allocations)
+
+	if len(parsed.Query) == 0 {
 		mp := map[string]interface{}{}
-		if res.Mutation != nil {
+		if parsed.Mutation != nil {
 			mp["code"] = x.Success
 			mp["message"] = "Done"
-			mp["uids"] = allocIdsStr
+			mp["uids"] = newUids
 		}
 		// Either Schema or query can be specified
-		if res.Schema != nil {
-			js, err := json.Marshal(schemaNode)
+		if parsed.Schema != nil {
+			js, err := json.Marshal(res.SchemaNode)
 			if err != nil {
 				x.SetStatus(w, "Error", "Unable to marshal schema")
 			}
@@ -641,16 +274,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sgl, err := query.ProcessQuery(ctx, res, &l)
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while Executing query"))
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-
 	if len(*dumpSubgraph) > 0 {
-		for _, sg := range sgl {
+		for _, sg := range res.Subgraphs {
 			x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
 			s := time.Now().Format("20060102.150405.000000.gob")
 			filename := path.Join(*dumpSubgraph, s)
@@ -662,7 +287,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = query.ToJson(&l, sgl, w, allocIdsStr, addLatency)
+	w.Header().Set("Content-Type", "application/json")
+	err = query.ToJson(&l, res.Subgraphs, w,
+		query.ConvertUidsToHex(res.Allocations), addLatency)
 	if err != nil {
 		// since we performed w.Write in ToJson above,
 		// calling WriteHeader with 500 code will be ignored.
@@ -674,45 +301,53 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
 }
 
+// NewSharedQueryNQuads returns nquads with query and hash.
+func NewSharedQueryNQuads(query []byte) []*protos.NQuad {
+	val := func(s string) *protos.Value {
+		return &protos.Value{&protos.Value_DefaultVal{s}}
+	}
+	qHash := fmt.Sprintf("\"%x\"", sha256.Sum256(query))
+	return []*protos.NQuad{
+		&protos.NQuad{Subject: "<_:share>", Predicate: "<_share_>", ObjectValue: val(string(query))},
+		&protos.NQuad{Subject: "<_:share>", Predicate: "<_share_hash_>", ObjectValue: val(qHash)},
+	}
+}
+
+// shareHandler allows to share a query between users.
 func shareHandler(w http.ResponseWriter, r *http.Request) {
+	var mr query.InternalMutation
+	var err error
+	var rawQuery []byte
+
 	w.Header().Set("Content-Type", "application/json")
 	addCorsHeaders(w)
-
 	if r.Method != "POST" {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
 	}
-
-	// Set context to allow mutation
-	ctx := context.WithValue(context.Background(), "_share_", true)
-
+	ctx := context.Background()
 	defer r.Body.Close()
-	rawQuery, err := ioutil.ReadAll(r.Body)
-	if err != nil || len(rawQuery) == 0 {
+
+	if rawQuery, err = ioutil.ReadAll(r.Body); err != nil || len(rawQuery) == 0 {
 		x.TraceError(ctx, x.Wrapf(err, "Error while reading the stringified query payload"))
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
 
-	// Generate mutation with query and hash
-	queryHash := sha256.Sum256(rawQuery)
-	mutation := gql.Mutation{
-		Set: fmt.Sprintf("<_:share> <_share_> %q . \n <_:share> <_share_hash_> \"%x\" .", rawQuery, queryHash),
-	}
-
-	var allocIds map[string]uint64
-	var allocIdsStr map[string]string
-	if allocIds, err = mutationHandler(ctx, &mutation); err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
+	fail := func() {
+		x.TraceError(ctx, x.Wrap(err))
 		x.SetStatus(w, x.Error, err.Error())
+	}
+	nquads := gql.WrapNQ(NewSharedQueryNQuads(rawQuery), protos.DirectedEdge_SET)
+	if mr, err = query.ToInternal(ctx, nquads, nil); err != nil {
+		fail()
 		return
 	}
-	// convert the new UIDs to hex string.
-	allocIdsStr = make(map[string]string)
-	for k, v := range allocIds {
-		allocIdsStr[k] = fmt.Sprintf("%#x", v)
+	if err = query.ApplyMutations(ctx, &protos.Mutations{Edges: mr.Edges}); err != nil {
+		fail()
+		return
 	}
-
+	allocIdsStr := query.ConvertUidsToHex(mr.NewUids)
 	payload := map[string]interface{}{
 		"code":    x.Success,
 		"message": "Done",
@@ -806,8 +441,6 @@ func (s *grpcServer) Run(ctx context.Context,
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return resp, x.Errorf("Uninitiated server. Please retry later")
 	}
-	var allocIds map[string]uint64
-	var schemaNodes []*protos.SchemaNode
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		tr.SetMaxEvents(1000)
@@ -817,11 +450,14 @@ func (s *grpcServer) Run(ctx context.Context,
 
 	// Sanitize the context of the keys used for internal purposes only
 	ctx = context.WithValue(ctx, "_share_", nil)
+	ctx = context.WithValue(ctx, "mutation_allowed", isMutationAllowed(ctx))
 
 	resp = new(protos.Response)
-	if len(req.Query) == 0 && req.Mutation == nil {
-		x.TraceError(ctx, x.Errorf("Empty query and mutation."))
-		return resp, fmt.Errorf("Empty query and mutation.")
+	emptyMutation := len(req.Mutation.GetSet()) == 0 && len(req.Mutation.GetDel()) == 0 &&
+		len(req.Mutation.GetSchema()) == 0
+	if len(req.Query) == 0 && emptyMutation {
+		x.TraceError(ctx, x.Errorf("empty query and mutation."))
+		return resp, fmt.Errorf("empty query and mutation.")
 	}
 
 	var l query.Latency
@@ -835,7 +471,6 @@ func (s *grpcServer) Run(ctx context.Context,
 	if err != nil {
 		return resp, err
 	}
-	l.Parsing += time.Since(l.Start)
 
 	var cancel context.CancelFunc
 	// set timeout if schema mutation not present
@@ -845,50 +480,27 @@ func (s *grpcServer) Run(ctx context.Context,
 		defer cancel()
 	}
 
-	// If mutations are part of the query, we run them through the mutation handler
-	// same as the http client.
-	if res.Mutation != nil && hasGQLOps(res.Mutation) {
-		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
-			return resp, err
-		}
-	}
-
-	// Mutations are sent as part of the mutation object
-	if req.Mutation != nil && hasGraphOps(req.Mutation) {
-		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
-			return resp, err
-		}
-	}
-	resp.AssignedUids = allocIds
-
 	if req.Schema != nil && res.Schema != nil {
 		return resp, x.Errorf("Multiple schema blocks found")
 	}
-	// Schema Block can be part of query string
-	schema := res.Schema
-	if schema == nil {
-		schema = req.Schema
+	// Schema Block and Mutation can be part of query string or request
+	if res.Mutation == nil {
+		res.Mutation = &gql.Mutation{Set: req.Mutation.Set, Del: req.Mutation.Del}
+	}
+	if res.Schema == nil {
+		res.Schema = req.Schema
 	}
 
-	if schema != nil {
-		execStart := time.Now()
-		if schemaNodes, err = worker.GetSchemaOverNetwork(ctx, schema); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
-			return resp, err
-		}
-		l.Processing += time.Since(execStart)
+	var queryRequest = query.QueryRequest{Latency: &l, GqlQuery: &res}
+	var er query.ExecuteResult
+	if er, err = queryRequest.ProcessWithMutation(ctx); err != nil {
+		x.TraceError(ctx, err)
+		return resp, x.Wrap(err)
 	}
-	resp.Schema = schemaNodes
+	resp.AssignedUids = er.Allocations
+	resp.Schema = er.SchemaNode
 
-	sgl, err := query.ProcessQuery(ctx, res, &l)
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
-		return resp, err
-	}
-
-	nodes, err := query.ToProtocolBuf(&l, sgl)
+	nodes, err := query.ToProtocolBuf(&l, er.Subgraphs)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
 		return resp, err
