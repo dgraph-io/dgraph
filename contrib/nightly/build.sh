@@ -135,6 +135,10 @@ build_docker_image() {
 }
 
 upload_docker_image() {
+	if [[ $TRAVIS_OS_NAME == "osx" ]]; then
+		return 0
+	fi
+
 	echo "Logging into Docker."
 	docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
 	echo "Pushing the image"

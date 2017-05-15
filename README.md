@@ -39,7 +39,7 @@ Dgraph is currently at version 0.7. It has 90% of the features planned for v1.0;
 
 ![Loader performance](static/loader.gif)
 
-[See performance page](https://wiki.dgraph.io/Performance) for more details.
+[See performance page](https://docs.dgraph.io/master/performance/) for more details.
 
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.

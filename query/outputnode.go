@@ -225,6 +225,9 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 	}
 
 	n := seedNode.New("_root_")
+	if sg.Params.uidCount != "" {
+		addCountAtRoot(n, sg, seedNode)
+	}
 	for _, uid := range sg.uidMatrix[0].Uids {
 		// For the root, the name is stored in Alias, not Attr.
 		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
@@ -468,12 +471,26 @@ type attrVal struct {
 	val  *fastJsonAttr
 }
 
+func addCountAtRoot(n outputNode, sg *SubGraph, seedNode outputNode) {
+	c := types.ValueForType(types.IntID)
+	// This is count() without any attribute.
+	c.Value = int64(len(sg.DestUIDs.Uids))
+	n1 := seedNode.New(sg.Params.Alias)
+	n1.AddValue(sg.Params.uidCount, c)
+	n.AddListChild(sg.Params.Alias, n1)
+}
+
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
 	if sg.uidMatrix == nil {
 		return nil
 	}
 	lenList := len(sg.uidMatrix[0].Uids)
+
+	if sg.Params.uidCount != "" {
+		addCountAtRoot(n, sg, seedNode)
+	}
+
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
 		if algo.IndexOf(sg.DestUIDs, uid) < 0 {

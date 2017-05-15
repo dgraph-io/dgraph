@@ -145,6 +145,7 @@ type params struct {
 	Expand       string // Var to use for expand.
 	isGroupBy    bool
 	groupbyAttrs []string
+	uidCount     string
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -401,6 +402,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
+
 			for childIdx, childUID := range ul.Uids {
 				if invalidUids[childUID] {
 					continue
@@ -430,6 +432,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				if !uc.IsEmpty() {
 					dst.AddListChild(fieldName, uc)
 				}
+			}
+			if pc.Params.uidCount != "" {
+				uc := dst.New(fieldName)
+				c := types.ValueForType(types.IntID)
+				c.Value = int64(len(ul.Uids))
+				uc.AddValue(pc.Params.uidCount, c)
+				dst.AddListChild(fieldName, uc)
 			}
 		} else {
 			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
@@ -629,6 +638,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			isGroupBy:    gchild.IsGroupby,
 			groupbyAttrs: gchild.GroupbyAttrs,
 			FacetVar:     gchild.FacetVar,
+			uidCount:     gchild.UidCount,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &protos.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -805,6 +815,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Normalize:  gq.Normalize,
 		Cascade:    gq.Cascade,
 		isGroupBy:  gq.IsGroupby,
+		uidCount:   gq.UidCount,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
