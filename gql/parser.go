@@ -2086,6 +2086,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 				if peekIt[0].Typ == itemRightRound {
+					// We encountered a count(), lets reset count to notSeen
+					// and set UidCount = true on parent.
 					count = notSeen
 					gq.UidCount = true
 					it.Next()

@@ -814,13 +814,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
-	if gq.IsCount {
-		if len(gq.Children) != 0 {
-			return nil, fmt.Errorf("Cannot have children attributes when asking for count.")
-		}
-		args.DoCount = true
-	}
-
 	for argk := range gq.Args {
 		if !isValidArg(argk) {
 			return nil, x.Errorf("Invalid argument : %s", argk)
@@ -1544,15 +1537,6 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	return nil
 }
 
-func populateDestUIDs(result *protos.Result, sg *SubGraph) {
-	if result.IntersectDest {
-		sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
-	} else {
-		sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
-	}
-
-}
-
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
@@ -1587,11 +1571,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		if sg.Attr == "count" && sg.Params.DoCount {
-			rch <- nil
-			return
-		}
-
 		taskQuery := createTaskQuery(sg)
 
 		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
@@ -1620,7 +1599,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		populateDestUIDs(result, sg)
+		if result.IntersectDest {
+			sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
+		} else {
+			sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
+		}
+
 		if parent == nil {
 			// I'm root. We reach here if root had a function.
 			sg.uidMatrix = []*protos.List{sg.DestUIDs}
@@ -1698,13 +1682,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 		}
-	}
-
-	// We are asked for count at root. Filtering, ordering and pagination is done.
-	// We can return now.
-	if parent == nil && sg.Params.DoCount {
-		rch <- nil
-		return
 	}
 
 	// We store any variable defined by this node in the map and pass it on
