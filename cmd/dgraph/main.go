@@ -18,15 +18,12 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/gob"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -122,38 +119,6 @@ func addCorsHeaders(w http.ResponseWriter) {
 			"X-Auth-Token, Cache-Control, X-Requested-With")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Connection", "close")
-}
-
-func convertToNQuad(ctx context.Context, mutation string) ([]*protos.NQuad, error) {
-	var nquads []*protos.NQuad
-	r := strings.NewReader(mutation)
-	reader := bufio.NewReader(r)
-	x.Trace(ctx, "Converting to NQuad")
-
-	var strBuf bytes.Buffer
-	var err error
-	for {
-		err = x.ReadLine(reader, &strBuf)
-		if err != nil {
-			break
-		}
-		ln := strings.Trim(strBuf.String(), " \t")
-		if len(ln) == 0 {
-			continue
-		}
-		nq, err := rdf.Parse(ln)
-		if err == rdf.ErrEmpty { // special case: comment/empty line
-			continue
-		} else if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while parsing RDF"))
-			return nquads, err
-		}
-		nquads = append(nquads, &nq)
-	}
-	if err != io.EOF {
-		return nquads, err
-	}
-	return nquads, nil
 }
 
 func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult, error) {
@@ -399,23 +364,21 @@ func runMutations(ctx context.Context, mu *protos.Mutation) (map[string]uint64, 
 // This function is used to run mutations for the requests received from the
 // http client.
 func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
-	var set []*protos.NQuad
-	var del []*protos.NQuad
 	var s []*protos.SchemaUpdate
 	var allocIds map[string]uint64
 	var err error
 
-	if len(mu.Set) > 0 {
-		if set, err = convertToNQuad(ctx, mu.Set); err != nil {
-			return nil, x.Wrap(err)
-		}
-	}
+	// if len(mu.Set) > 0 {
+	// 	if set, err = rdf.ConvertToNQuads(ctx, mu.Set); err != nil {
+	// 		return nil, x.Wrap(err)
+	// 	}
+	// }
 
-	if len(mu.Del) > 0 {
-		if del, err = convertToNQuad(ctx, mu.Del); err != nil {
-			return nil, x.Wrap(err)
-		}
-	}
+	// if len(mu.Del) > 0 {
+	// 	if del, err = rdf.ConvertToNQuads(ctx, mu.Del); err != nil {
+	// 		return nil, x.Wrap(err)
+	// 	}
+	// }
 
 	if len(mu.Schema) > 0 {
 		if s, err = schema.Parse(mu.Schema); err != nil {
@@ -423,7 +386,7 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 		}
 	}
 
-	mutation := &protos.Mutation{Set: set, Del: del, Schema: s}
+	mutation := &protos.Mutation{Set: mu.Set, Del: mu.Del, Schema: s}
 	if allocIds, err = convertAndApply(ctx, mutation); err != nil {
 		return nil, err
 	}
@@ -636,8 +599,12 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Generate mutation with query and hash
 	queryHash := sha256.Sum256(rawQuery)
-	mutation := gql.Mutation{
-		Set: fmt.Sprintf("<_:share> <_share_> %q . \n <_:share> <_share_hash_> \"%x\" .", rawQuery, queryHash),
+	mutationString := fmt.Sprintf("<_:share> <_share_> %q . \n <_:share> <_share_hash_> \"%x\" .",
+		rawQuery, queryHash)
+	mutation := gql.Mutation{}
+	mutation.Set, err = rdf.ConvertToNQuads(mutationString)
+	if err != nil {
+		x.TraceError(ctx, err)
 	}
 
 	var allocIds map[string]uint64
