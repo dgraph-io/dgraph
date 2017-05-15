@@ -1,6 +1,8 @@
 {{ $code := trim .Inner "\n" }}
 {{ $checksum := md5 $code }}
 
+{{ $customExampleGoGRPC := replace (.Get "customExampleGoGRPC") "\\n" "\n" }}
+
 <div class="runnable" data-checksum="{{ $checksum }}" data-initial="{{ $code }}" data-current="{{ $code }}" data-dirty="false">
   <div class="container-fluid">
     <div class="row">
@@ -53,73 +55,51 @@
 <span class="query-content">{{ $code }}</span>' | python -m json.tool | less</code></pre>
             </div>
             <div class="runnable-tab-content" data-tab="go-grpc">
-              <pre><code class="no-copy" tabindex="-1">package main
-
-import (
-	"context"
-	"flag"
-	"fmt"
-	"log"
-
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/graphp"
-	"github.com/gogo/protobuf/proto"
-	"google.golang.org/grpc"
-)
-
-var (
-	dgraph = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
-)
-
-func main() {
-	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close()
-
-	dgraphClient := graphp.NewDgraphClient(conn)
-	req := client.Req{}
-	req.SetQuery(`<span class="query-content">{{ $code }}</span>`)
-
-	resp, err := dgraphClient.Run(context.Background(), req.Request())
-	if err != nil {
-		log.Fatalf("Error in getting response from server, %s", err)
-	}
-	fmt.Printf("Response %+v\n", proto.MarshalTextString(resp))
-}</code></pre>
+              {{ if eq $customExampleGoGRPC "" }}
+                {{ partial "example-go-grpc" ( dict "Content" . "Code" "blahblah" ) }}
+              {{ else }}
+                <pre><code class="no-copy" tabindex="-1">{{ $customExampleGoGRPC }}
+                </pre></code>
+              {{ end }}
             </div>
             <div class="runnable-tab-content" data-tab="go-http">
               <pre><code class="no-copy" tabindex="-1">package main
 
 import (
-        "bytes"
-        "flag"
-        "log"
-        "net/http"
+	"bytes"
+	"flag"
+	"io/ioutil"
+	"log"
+	"net/http"
 )
 
 var (
-        baseURL = flag.String("d", "http://127.0.0.1:8080/", "Dgraph server address")
+	baseURL = flag.String("d", "http://127.0.0.1:8080/query", "Dgraph server address")
 )
 
 func main() {
-        client := &amp;http.Client{}
-        body := bytes.NewBufferString(`<span class="query-content">{{ $code }}</span>`)
-        req, err := http.NewRequest("POST", *baseURL, body)
-        if err != nil {
-                log.Fatal(err)
-                return
-        }
+	client := &amp;http.Client{}
+	body := bytes.NewBufferString(`<span class="query-content">{{ $code }}</span>`)
+	req, err := http.NewRequest("POST", *baseURL, body)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
 
-        resp, err := client.Do(req)
-        if err != nil {
-                log.Fatal(err)
-                return
-        }
-        defer resp.Body.Close()
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	defer resp.Body.Close()
 
-        log.Printf("Response %+v\n", resp)
+	responseData, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	log.Printf("Response %+v\n", string(responseData))
 }</code></pre>
             </div>
           </div>
