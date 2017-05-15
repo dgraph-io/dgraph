@@ -18,7 +18,10 @@
 package rdf
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
+	"io"
 	"log"
 	"strconv"
 	"strings"
@@ -217,6 +220,19 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 		switch item.Typ {
 		case itemSubject:
 			rnq.Subject = strings.Trim(item.Val, " ")
+		case itemVarKeyword:
+			it.Next()
+			if item = it.Item(); item.Typ != itemLeftRound {
+				return rnq, x.Errorf("Expected '(', found: %s", item.Val)
+			}
+			it.Next()
+			if item = it.Item(); item.Typ != itemVarName {
+				return rnq, x.Errorf("Expected variable name, found: %s", item.Val)
+			}
+			rnq.SubjectVar = item.Val
+
+			it.Next() // parse ')'
+
 		case itemPredicate:
 			rnq.Predicate = strings.Trim(item.Val, " ")
 
@@ -315,7 +331,7 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 		// If no type is specified, we default to string.
 		rnq.ObjectType = int32(types.DefaultID)
 	}
-	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
+	if (len(rnq.Subject) == 0 && len(rnq.SubjectVar) == 0) || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)
 	}
 	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
@@ -327,6 +343,39 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 	}
 
 	return rnq, nil
+}
+
+// ConvertToNQuads parses multi line mutation string to a list of NQuads.
+func ConvertToNQuads(mutation string) ([]*protos.NQuad, error) {
+	var nquads []*protos.NQuad
+	r := strings.NewReader(mutation)
+	reader := bufio.NewReader(r)
+	// x.Trace(ctx, "Converting to NQuad")
+
+	var strBuf bytes.Buffer
+	var err error
+	for {
+		err = x.ReadLine(reader, &strBuf)
+		if err != nil {
+			break
+		}
+		ln := strings.Trim(strBuf.String(), " \t")
+		if len(ln) == 0 {
+			continue
+		}
+		nq, err := Parse(ln)
+		if err == ErrEmpty { // special case: comment/empty line
+			continue
+		} else if err != nil {
+			// x.TraceError(ctx, x.Wrapf(err, "Error while parsing RDF"))
+			return nquads, err
+		}
+		nquads = append(nquads, &nq)
+	}
+	if err != io.EOF {
+		return nquads, err
+	}
+	return nquads, nil
 }
 
 func parseFacets(it *lex.ItemIterator, rnq *protos.NQuad) error {

@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
@@ -777,10 +778,11 @@ func TestAssignUid(t *testing.T) {
 func TestConvertToEdges(t *testing.T) {
 	q1 := `<0x01> <type> <0x02> .
 	       <0x01> <character> <0x03> .`
-	nquads, err := convertToNQuad(context.Background(), q1)
+	nquads, err := rdf.ConvertToNQuads(q1)
 	require.NoError(t, err)
 
-	mr, err := convertToEdges(context.Background(), nquads)
+	ctx := context.Background()
+	mr, err := convertToEdges(ctx, nquads)
 	require.NoError(t, err)
 
 	require.EqualValues(t, len(mr.edges), 2)
