@@ -1,12 +1,30 @@
 {{ $currentBranch := getenv "CURRENT_BRANCH" }}
 
+{{/*
+  Display different import paths depending on the version of Dgraph.
+
+  NOTE: $currentBranch is in a format of `release/v0.7.6` or it is `master`
+*/}}
+
 {{ .Content.Scratch.Add "protoPath" "" }}
 {{ if eq $currentBranch "master" }}
-  {{ .Content.Scratch.Add "protoPath" "\"github.com/dgraph-io/dgraph/protos/graphp\"" }}
+  {{ .Content.Scratch.Add "protoPath" "\"github.com/dgraph-io/dgraph/protos\"" }}
 {{ else }}
-  {{ $version := slicestr $currentBranch 9 }}
-{{ end }}
+  {{ $version := slicestr $currentBranch 8 }}
+  {{ $majorVersion := int (slicestr $version 0 1) }}
+  {{ $minorVersion := int (slicestr $version 2 3) }}
+  {{ $patchVersion := int (slicestr $version 4 5) }}
 
+  {{ if gt $majorVersion 1 }}
+    {{ .Content.Scratch.Add "protoPath" "\"github.com/dgraph-io/dgraph/protos\"" }}
+  {{ else if (gt $minorVersion 7) }}
+    {{ .Content.Scratch.Add "protoPath" "\"github.com/dgraph-io/dgraph/protos\"" }}
+  {{ else if (gt $patchVersion 6) }}
+    {{ .Content.Scratch.Add "protoPath" "\"github.com/dgraph-io/dgraph/protos\"" }}
+  {{ else }}
+    {{ .Content.Scratch.Add "protoPath" "\"github.com/dgraph-io/dgraph/protos/graphp\"" }}
+  {{ end }}
+{{ end }}
 
 <pre><code class="no-copy" tabindex="-1">package main
 
