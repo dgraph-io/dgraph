@@ -3221,29 +3221,18 @@ func TestParseGraphQLVarId(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestParseCountAtRoot(t *testing.T) {
-	query := `
-	{
-	  count(me(func: ge(name, 0)))
-    	}
-`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-}
-
-func TestParseCountAtRootError(t *testing.T) {
-	query := `
-	{
-	  count(me(func: ge(name, 0))) {
-		  friend
-	  }
-    	}
-`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-}
-
 func TestMain(m *testing.M) {
 	group.ParseGroupConfig("")
 	os.Exit(m.Run())
+}
+
+func TestCountAtRoot(t *testing.T) {
+	query := `{
+		me(id: 1) {
+			count()
+			count(enemy)
+		}
+	}`
+	resp, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
 }

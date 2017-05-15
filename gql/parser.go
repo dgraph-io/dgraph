@@ -765,8 +765,6 @@ L:
 	} else if item.Typ == itemName {
 		it.Prev()
 		return gq, nil
-	} else if item.Typ == itemRightRound && gq.IsCount {
-		it.Next()
 	} else {
 		return nil, x.Errorf("Malformed Query. Missing {. Got %v", item.Val)
 	}
@@ -1760,42 +1758,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
 	}
 
-	if item.Val == "count" {
-		if !it.Next() {
-			return nil, x.Errorf("Invalid query")
-		}
-		item = it.Item()
-		if item.Typ != itemLeftRound {
-			return nil, x.Errorf("Expected (. Got: %s", item.Val)
-		}
-		if !it.Next() {
-			return nil, x.Errorf("Invalid query")
-		}
-
-		// Count could be an actual attribute, e.g - count(id: 1), so we peek
-		// and check.
-		peekIt, err := it.Peek(1)
-		if err != nil {
-			return nil, x.Errorf("Invalid Query")
-		}
-		switch peekIt[0].Typ {
-		case itemLeftRound:
-			// If count is asked at root, we want to advance and update item,
-			// so that correct alias is set for the root.
-			item = it.Item()
-			if item.Typ == itemName {
-				gq.IsCount = true
-			}
-		case itemColon:
-			// Lets move back a couple of tokens to the actual attribute.
-			it.Prev()
-			it.Prev()
-			item = it.Item()
-		default:
-			return nil, x.Errorf("Invalid Query")
-		}
-	}
-
 	peekIt, err := it.Peek(1)
 	if err != nil {
 		return nil, x.Errorf("Invalid Query")
@@ -1813,7 +1775,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	}
 	item = it.Item()
 	if item.Typ != itemLeftRound {
-		return nil, x.Errorf("Expected left round bracket. Got: %v", item)
+		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
 	}
 
 	expectArg := true
@@ -1938,13 +1900,20 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	return gq, nil
 }
 
+type Count int
+
+const (
+	notSeen      Count = iota // default value
+	seen                      // when we see count keyword
+	seenWithPred              // when we see a predicate within count.
+)
+
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	if gq == nil {
 		return x.Errorf("Bad nesting of predicates or functions")
 	}
-
-	var isCount uint16
+	var count Count
 	var alias, varName string
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {
@@ -1965,7 +1934,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				// Unlike itemName, there is no nesting, so do not change "curp".
 			}
 		case itemName:
-			// Handle count.
 			peekIt, err := it.Peek(1)
 			if err != nil {
 				return x.Errorf("Invalid query")
@@ -1978,7 +1946,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 			val := collectName(it, item.Val)
 			valLower := strings.ToLower(val)
-			if gq.IsGroupby && (!isAggregator(val) && val != "count" && isCount != 1) {
+			if gq.IsGroupby && (!isAggregator(val) && val != "count" && count != seen) {
 				// Only aggregator or count allowed inside the groupby block.
 				return x.Errorf("Only aggrgator/count functions allowed inside @groupby. Got: %v", val)
 			}
@@ -2099,14 +2067,31 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				curp = child
 				continue
 			} else if valLower == "count" {
-				if isCount != 0 {
+				if count != notSeen {
 					return x.Errorf("Invalid mention of function count")
 				}
-				isCount = 1
+				count = seen
 				it.Next()
 				item = it.Item()
 				if item.Typ != itemLeftRound {
 					return x.Errorf("Invalid mention of count.")
+				}
+
+				peekIt, err := it.Peek(1)
+				if err != nil {
+					return err
+				}
+				if peekIt[0].Typ == itemRightRound {
+					child := &GraphQuery{
+						Args:    make(map[string]string),
+						Attr:    val,
+						IsCount: count == seen,
+						Var:     varName,
+						Alias:   alias,
+					}
+					gq.Children = append(gq.Children, child)
+					count = notSeen
+					it.Next()
 				}
 				continue
 			} else if valLower == "var" {
@@ -2142,21 +2127,21 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				it.Next() // Consume the itemCollon
 				continue
 			}
-			if isCount == 2 {
+			if count == seenWithPred {
 				return x.Errorf("Multiple predicates not allowed in single count.")
 			}
 			child := &GraphQuery{
 				Args:    make(map[string]string),
 				Attr:    val,
-				IsCount: isCount == 1,
+				IsCount: count == seen,
 				Var:     varName,
 				Alias:   alias,
 			}
-			varName, alias = "", ""
 			gq.Children = append(gq.Children, child)
+			varName, alias = "", ""
 			curp = child
-			if isCount == 1 {
-				isCount = 2
+			if count == seen {
+				count = seenWithPred
 			}
 		case itemLeftCurl:
 			if err := godeep(it, curp); err != nil {
@@ -2183,10 +2168,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				return err
 			}
 		case itemRightRound:
-			if isCount != 2 {
+			if count != seenWithPred {
 				return x.Errorf("Invalid mention of brackets")
 			}
-			isCount = 0
+			count = notSeen
 		}
 	}
 	return nil
