@@ -7,11 +7,6 @@
  * Uses JQuery
  */
 
-/********** Syntax helpers **/
-function formatJavaCode(code) {
-  return code.replace(/"/g, '\\"').replace(/\s+/g, " ").replace(/\n/g, " ");
-}
-
 /********** Cookie helpers **/
 function createCookie(name, val, days) {
   var expires = "";
@@ -215,10 +210,7 @@ function eraseCookie(name) {
   function updateQueryContents($runnables, newQuery) {
     var cleanValue = newQuery.trim().replace(/\n$/g, "");
 
-    $runnables.find(".query-content").not(".java").text(cleanValue);
-
-    var javaTxt = formatJavaCode(cleanValue);
-    $runnables.find(".query-content.java").text(javaTxt);
+    $runnables.find('.query-content').text(cleanValue);
   }
 
   function getLatencyTooltipHTML(serverLatencyInfo, networkLatency) {

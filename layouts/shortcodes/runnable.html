@@ -1,6 +1,8 @@
 {{ $code := trim .Inner "\n" }}
 {{ $checksum := md5 $code }}
 
+{{ $customExampleGoGRPC := replace (.Get "customExampleGoGRPC") "\\n" "\n" }}
+
 <div class="runnable" data-checksum="{{ $checksum }}" data-initial="{{ $code }}" data-current="{{ $code }}" data-dirty="false">
   <div class="container-fluid">
     <div class="row">
@@ -14,8 +16,8 @@
                   <nav class="nav-languages">
                     <a class="language active" data-action="nav-lang" data-target="query" href="#">Query</a>
                     <a class="language" data-action="nav-lang" data-target="curl" href="#">Curl</a>
-                    <a class="language" data-action="nav-lang" data-target="go" href="#">Go</a>
-                    <a class="language" data-action="nav-lang" data-target="java" href="#">Java</a>
+                    <a class="language" data-action="nav-lang" data-target="go-grpc" href="#">Go (grpc)</a>
+                    <a class="language" data-action="nav-lang" data-target="go-http" href="#">Go (http)</a>
                   </nav>
                 </div>
                 <div class="col-2">
@@ -52,56 +54,52 @@
               <pre><code class="no-copy" tabindex="-1">curl localhost:8080/query -XPOST -d '
 <span class="query-content">{{ $code }}</span>' | python -m json.tool | less</code></pre>
             </div>
-
-            <div class="runnable-tab-content" data-tab="java">
-              <pre><code class="no-copy" tabindex="-1">import io.dgraph.client.DgraphClient;
-import io.dgraph.client.GrpcDgraphClient;
-import io.dgraph.client.DgraphResult;
-
-public class DgraphMain {
-  public static void main(final String[] args) {
-    final DgraphClient dgraphClient = GrpcDgraphClient.newInstance("localhost", 8080);
-    final DgraphResult result = dgraphClient.query("<span class="query-content java">{{ $code }}</span>");
-    System.out.println(result.toJsonObject().toString());
-  }
-}</code></pre>
+            <div class="runnable-tab-content" data-tab="go-grpc">
+              {{ if eq $customExampleGoGRPC "" }}
+                {{ partial "example-go-grpc" ( dict "Content" . "Code" "blahblah" ) }}
+              {{ else }}
+                <pre><code class="no-copy" tabindex="-1">{{ $customExampleGoGRPC }}
+                </pre></code>
+              {{ end }}
             </div>
-
-            <div class="runnable-tab-content" data-tab="go">
+            <div class="runnable-tab-content" data-tab="go-http">
               <pre><code class="no-copy" tabindex="-1">package main
 
 import (
-	"context"
+	"bytes"
 	"flag"
-	"fmt"
+	"io/ioutil"
 	"log"
-
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos/graphp"
-	"github.com/gogo/protobuf/proto"
-	"google.golang.org/grpc"
+	"net/http"
 )
 
 var (
-	dgraph = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
+	baseURL = flag.String("d", "http://127.0.0.1:8080/query", "Dgraph server address")
 )
 
 func main() {
-	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	client := &amp;http.Client{}
+	body := bytes.NewBufferString(`<span class="query-content">{{ $code }}</span>`)
+	req, err := http.NewRequest("POST", *baseURL, body)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
-	defer conn.Close()
 
-	dgraphClient := graphp.NewDgraphClient(conn)
-	req := client.Req{}
-	req.SetQuery(`<span class="query-content">{{ $code }}</span>`)
-
-	resp, err := dgraphClient.Run(context.Background(), req.Request())
+	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatalf("Error in getting response from server, %s", err)
+		log.Fatal(err)
+		return
 	}
-	fmt.Printf("Response %+v\n", proto.MarshalTextString(resp))
+	defer resp.Body.Close()
+
+	responseData, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	log.Printf("Response %+v\n", string(responseData))
 }</code></pre>
             </div>
           </div>
