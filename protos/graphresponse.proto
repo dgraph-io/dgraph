@@ -20,6 +20,7 @@ message NQuad {
     string lang = 7;
     sint32 objectType = 6;
     repeated Facet facets = 8;
+    string subject_var = 9;
 }
 
 message Value {

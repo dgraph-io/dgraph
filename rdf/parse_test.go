@@ -810,6 +810,15 @@ var testNQuads = []struct {
 		input:       `<alice> <password> "guess"^^<pwd:password> .`,
 		expectedErr: true, // len(password) should >= 6
 	},
+	// Test variable in subject
+	{
+		input: `var(alice) <knows> "stuff" .`,
+		nq: protos.NQuad{
+			Predicate:   "knows",
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"stuff"}},
+			SubjectVar:  "alice",
+		},
+	},
 }
 
 func TestLex(t *testing.T) {
