@@ -1146,7 +1146,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	var sgl []*SubGraph
 	var err error
 
-	// doneVars will store the UID list of the corresponding variables.
+	// doneVars stores the processed variables.
 	doneVars := make(map[string]varValue)
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {

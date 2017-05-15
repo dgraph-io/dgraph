@@ -157,8 +157,8 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 // group.
 func (res *groupResults) formGroups(dedupMap dedup, cur *protos.List, groupVal []groupPair) {
 	l := len(groupVal)
-	if l != 0 && len(cur.Uids) == 0 {
-		// This group is already empty. So stop.
+	if len(dedupMap.groups) == 0 || (l != 0 && len(cur.Uids) == 0) {
+		// This group is already empty or no group can be formed. So stop.
 		return
 	}
 
