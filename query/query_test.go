@@ -6409,7 +6409,7 @@ func TestCountAtRoot(t *testing.T) {
 func TestCountAtRoot2(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	query := `
                 {
                         me(func: anyofterms(name, "Michonne Rick Andrea")) {
@@ -6424,7 +6424,7 @@ func TestCountAtRoot2(t *testing.T) {
 func TestCountAtRoot2PB(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	query := `
                 {
                         me(func: anyofterms(name, "Michonne Rick Andrea")) {
@@ -6486,7 +6486,7 @@ children: <
 func TestCountAtRoot3(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	query := `
                 {
 			me(func:anyofterms(name, "Michonne Rick Daryl")) {
