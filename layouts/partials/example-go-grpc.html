@@ -10,7 +10,7 @@
 {{ if eq $currentBranch "master" }}
   {{ .Content.Scratch.Add "protoPath" "\"github.com/dgraph-io/dgraph/protos\"" }}
 {{ else }}
-  {{ $version := slicestr $currentBranch 8 }}
+  {{ $version := slicestr $currentBranch 9 }}
   {{ $majorVersion := int (slicestr $version 0 1) }}
   {{ $minorVersion := int (slicestr $version 2 3) }}
   {{ $patchVersion := int (slicestr $version 4 5) }}
