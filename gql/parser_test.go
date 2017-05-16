@@ -3300,3 +3300,36 @@ func TestMain(m *testing.M) {
 	group.ParseGroupConfig("")
 	os.Exit(m.Run())
 }
+
+func TestCountAtRoot(t *testing.T) {
+	query := `{
+		me(id: 1) {
+			count()
+			count(enemy)
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestCountAtRootErr(t *testing.T) {
+	query := `{
+		me(id: 1) {
+			count(enemy) {
+				name
+			}
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestCountAtRootErr2(t *testing.T) {
+	query := `{
+		me(id: 1) {
+			a as count()
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}

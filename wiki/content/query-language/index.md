@@ -633,6 +633,16 @@ retrieves the name and the number of films acted by an actor with `_xid_` m.0bxt
 }
 {{< /runnable >}}
 
+It can also be used to get count at root. The following query would get the count of all directors.
+{{< runnable >}}
+{
+  directors(func: gt(count(director.film), 0)) {
+    count()
+  }
+}
+{{< /runnable >}}
+
+
 ## Functions
 
 {{% notice "note" %}}Functions can only be applied to [indexed attributes]({{< relref "#indexing">}}).{{% /notice %}}
