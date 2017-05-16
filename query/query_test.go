@@ -6947,3 +6947,27 @@ func TestCountAtRoot5(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }
+
+func TestGetAllPredicatesSimple(t *testing.T) {
+	query := `
+	{
+		me(id: 0x1) {
+			name
+		}
+	}
+	`
+
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res.Query))
+
+	ctx := context.Background()
+	subGraph, err := ToSubGraph(ctx, res.Query[0])
+	require.NoError(t, err)
+	require.NotNil(t, subGraph)
+
+	predicates := subGraph.GetAllPredicates()
+	require.NotNil(t, predicates)
+	require.Equal(t, 1, len(predicates))
+	require.Equal(t, "name", predicates[0])
+}

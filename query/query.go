@@ -2006,3 +2006,15 @@ func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.TaskVa
 	}
 	return result.Values, nil
 }
+
+func (sg *SubGraph) GetAllPredicates() (predicates []string) {
+	if len(sg.Attr) != 0 {
+		predicates = append(predicates, sg.Attr)
+	}
+
+	for _, child := range sg.Children {
+		predicates = append(predicates, child.GetAllPredicates()...)
+	}
+
+	return predicates
+}
