@@ -756,6 +756,9 @@ L:
 				gq.Normalize = true
 			case "cascade":
 				gq.Cascade = true
+			case "groupby":
+				gq.IsGroupby = true
+				parseGroupby(it, gq)
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
