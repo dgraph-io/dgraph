@@ -6947,3 +6947,156 @@ func TestCountAtRoot5(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }
+
+func TestDebugUid(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x01) {
+				name
+				friend {
+				  friend
+				}
+			}
+		}`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "debug", "true")
+	sgl, err := ProcessQuery(ctx, res, &l)
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	err = ToJson(&l, sgl, &buf, nil, false)
+	require.NoError(t, err)
+	var mp map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
+	resp := mp["me"]
+	body, err := json.Marshal(resp)
+	require.NoError(t, err)
+	require.Equal(t, `[{"_uid_":"0x1","friend":[{"_uid_":"0x17","friend":[{"_uid_":"0x1"}]},{"_uid_":"0x18"},{"_uid_":"0x19","friend":[{"_uid_":"0x18"}]},{"_uid_":"0x1f","friend":[{"_uid_":"0x18"}]},{"_uid_":"0x65"}],"name":"Michonne"}]`, string(body))
+}
+
+func TestUidAlias(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x1) {
+				id: _uid_
+				alive
+				friend {
+					uid: _uid_
+					name
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes","uid":"0x17"},{"name":"Glenn Rhee","uid":"0x18"},{"name":"Daryl Dixon","uid":"0x19"},{"name":"Andrea","uid":"0x1f"},{"uid":"0x65"}],"id":"0x1"}]}`,
+		js)
+}
+
+func TestUidAliasProto(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x1) {
+				id: _uid_
+				alive
+				friend {
+					uid: _uid_
+					name
+				}
+			}
+		}
+	`
+	pb := processToPB(t, query, nil, false)
+	require.Equal(t, `attribute: "_root_"
+children: <
+  attribute: "me"
+  properties: <
+    prop: "id"
+    value: <
+      uid_val: 1
+    >
+  >
+  properties: <
+    prop: "alive"
+    value: <
+      bool_val: true
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "uid"
+      value: <
+        uid_val: 23
+      >
+    >
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "uid"
+      value: <
+        uid_val: 24
+      >
+    >
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "uid"
+      value: <
+        uid_val: 25
+      >
+    >
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "uid"
+      value: <
+        uid_val: 31
+      >
+    >
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "uid"
+      value: <
+        uid_val: 101
+      >
+    >
+  >
+>
+`, proto.MarshalTextString(pb[0]))
+}
