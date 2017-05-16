@@ -443,9 +443,8 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	// index key to the data store, with essentially an empty value. We just need
 	// the keys for filtering / sorting.
 	if l == lp && pk.IsIndex() {
-		// Lock before entering goroutine. Otherwise, some tests in query will fail.
-		l.Lock()
 		go func(key []byte) {
+			l.Lock()
 			defer l.Unlock()
 			slice, err := pstore.Get(key)
 			x.Check(err)
