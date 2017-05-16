@@ -1,6 +1,5 @@
 const share = (
     state = {
-        allowed: false,
         id: "",
         found: true
     },
@@ -16,11 +15,6 @@ const share = (
             return {
                 ...state,
                 found: action.found
-            };
-        case "UPDATE_ALLOWED":
-            return {
-                ...state,
-                allowed: action.allowed
             };
         default:
             return state;
