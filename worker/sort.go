@@ -148,7 +148,7 @@ func sortWithIndex(ctx context.Context, ts *protos.SortMessage) (*protos.SortRes
 	}
 	r := new(protos.SortResult)
 	// Iterate over every bucket / token.
-	it := pstore.NewIterator()
+	it := pstore.NewIterator(ts.Desc)
 	defer it.Close()
 
 	typ, err := schema.State().TypeOf(ts.Attr)
@@ -184,15 +184,15 @@ func sortWithIndex(ctx context.Context, ts *protos.SortMessage) (*protos.SortRes
 	}
 
 	indexPrefix := x.IndexKey(ts.Attr, string(tokenizer.Identifier()))
+	var seekKey []byte
 	if !ts.Desc {
 		// We need to seek to the first key of this index type.
-		seekKey := indexPrefix
-		it.Seek(seekKey)
+		seekKey = indexPrefix
 	} else {
 		// We need to reach the last key of this index type.
-		seekKey := x.IndexKey(ts.Attr, string(tokenizer.Identifier()+1))
-		it.SeekForPrev(seekKey)
+		seekKey = x.IndexKey(ts.Attr, string(tokenizer.Identifier()+1))
 	}
+	it.Seek(seekKey)
 
 BUCKETS:
 
@@ -202,7 +202,7 @@ BUCKETS:
 		case <-ctx.Done():
 			return nil, nil
 		default:
-			k := x.Parse(it.Key().Data())
+			k := x.Parse(it.Key())
 			x.AssertTrue(k != nil)
 			x.AssertTrue(k.IsIndex())
 			token := k.Term
@@ -218,11 +218,7 @@ BUCKETS:
 			default:
 				return &emptySortResult, err
 			}
-			if ts.Desc {
-				it.Prev()
-			} else {
-				it.Next()
-			}
+			it.Next()
 		}
 	}
 

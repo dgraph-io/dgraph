@@ -40,11 +40,11 @@ var (
 		"Port used by worker for internal communication.")
 	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
-	pstore       *store.Store
+	pstore       store.Store
 	workerServer *grpc.Server
 )
 
-func Init(ps *store.Store) {
+func Init(ps store.Store) {
 	pstore = ps
 }
 

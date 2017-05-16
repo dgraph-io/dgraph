@@ -240,13 +240,13 @@ func backup(gid uint32, bdir string) error {
 	}()
 
 	// Iterate over rocksdb.
-	it := pstore.NewIterator()
+	it := pstore.NewIterator(false)
 	defer it.Close()
 	var lastPred string
 	prefix := new(bytes.Buffer)
 	prefix.Grow(100)
-	for it.SeekToFirst(); it.Valid(); {
-		key := it.Key().Data()
+	for it.Rewind(); it.Valid(); {
+		key := it.Key()
 		pk := x.Parse(key)
 
 		if pk.IsIndex() {
@@ -267,7 +267,7 @@ func backup(gid uint32, bdir string) error {
 		if pk.IsSchema() {
 			if group.BelongsTo(pk.Attr) == gid {
 				s := &protos.SchemaUpdate{}
-				x.Check(s.Unmarshal(it.Value().Data()))
+				x.Check(s.Unmarshal(it.Value()))
 				chs <- &skv{
 					attr:   pk.Attr,
 					schema: s,
@@ -291,7 +291,7 @@ func backup(gid uint32, bdir string) error {
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
 		pl := &protos.PostingList{}
-		x.Check(pl.Unmarshal(it.Value().Data()))
+		x.Check(pl.Unmarshal(it.Value()))
 		chkv <- kv{
 			prefix: prefix.String(),
 			list:   pl,

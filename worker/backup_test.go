@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -71,14 +72,14 @@ func populateGraphBackup(t *testing.T) {
 	}
 }
 
-func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
+func initTestBackup(t *testing.T, schemaStr string) (string, store.Store) {
 	group.ParseGroupConfig("groups.conf")
 	schema.ParseBytes([]byte(schemaStr), 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 
-	ps, err := store.NewStore(dir)
+	ps, err := rdb.NewStore(dir)
 	require.NoError(t, err)
 
 	posting.Init(ps)

@@ -41,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
@@ -57,7 +58,7 @@ func addPassword(t *testing.T, uid uint64, attr, password string) {
 	addEdgeToTypedValue(t, attr, uid, types.PasswordID, value.Value.([]byte), nil)
 }
 
-var ps *store.Store
+var ps store.Store
 
 func populateGraph(t *testing.T) {
 	x.AssertTrue(ps != nil)
@@ -6050,7 +6051,7 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	defer os.RemoveAll(dir)
 
-	ps, err = store.NewStore(dir)
+	ps, err = rdb.NewStore(dir)
 	x.Check(err)
 	defer ps.Close()
 

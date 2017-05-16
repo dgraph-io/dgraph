@@ -41,7 +41,7 @@ func writeBatch(ctx context.Context, kv chan *protos.KV, che chan error) {
 	batchSize := 0
 	batchWriteNum := 1
 	for i := range kv {
-		wb.Put(i.Key, i.Val)
+		wb.SetOne(i.Key, i.Val)
 		batchSize += len(i.Key) + len(i.Val)
 		// We write in batches of size 32MB.
 		if batchSize >= 32*MB {
@@ -70,38 +70,40 @@ func writeBatch(ctx context.Context, kv chan *protos.KV, che chan error) {
 }
 
 func streamKeys(stream protos.Worker_PredicateAndSchemaDataClient, groupId uint32) error {
-	it := pstore.NewIterator()
+	it := pstore.NewIterator(false)
 	defer it.Close()
 
 	g := &protos.GroupKeys{
 		GroupId: groupId,
 	}
 
-	for it.SeekToFirst(); it.Valid(); it.Next() {
+	// Do NOT go to next by default. Be careful when you "continue" in loop.
+	for it.Rewind(); it.Valid(); {
 		k, v := it.Key(), it.Value()
-		pk := x.Parse(k.Data())
+		pk := x.Parse(k)
 
 		if pk == nil {
+			it.Next()
 			continue
 		}
 		// No need to send KC for schema keys, since we won't save anything
 		// by sending checksum of schema key
 		if pk.IsSchema() {
 			it.Seek(pk.SkipSchema())
-			it.Prev()
+			// Do not go next.
 			continue
 		}
 		if group.BelongsTo(pk.Attr) != g.GroupId {
 			it.Seek(pk.SkipPredicate())
-			it.Prev() // To tackle it.Next() called by default.
+			// Do not go next.
 			continue
 		}
 
 		var pl protos.PostingList
-		x.Check(pl.Unmarshal(v.Data()))
+		x.Check(pl.Unmarshal(v))
 
-		kdup := make([]byte, len(k.Data()))
-		copy(kdup, k.Data())
+		kdup := make([]byte, len(k))
+		copy(kdup, k)
 		key := &protos.KC{
 			Key:      kdup,
 			Checksum: pl.Checksum,
@@ -113,6 +115,7 @@ func streamKeys(stream protos.Worker_PredicateAndSchemaDataClient, groupId uint3
 			}
 			g.Keys = g.Keys[:0]
 		}
+		it.Next()
 	}
 	if err := stream.Send(g); err != nil {
 		return x.Wrapf(err, "While sending group keys to server.")
@@ -219,33 +222,36 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
 	// RocksDB library we are using.
 	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
-	it := pstore.NewIterator()
+	it := pstore.NewIterator(false)
 	defer it.Close()
 
 	var count int
-	for it.SeekToFirst(); it.Valid(); it.Next() {
+	// Do NOT it.Next() by default. Be careful when you "continue" in loop!
+	for it.Rewind(); it.Valid(); {
 		k, v := it.Key(), it.Value()
-		pk := x.Parse(k.Data())
+		pk := x.Parse(k)
 
 		if pk == nil {
+			it.Next()
 			continue
 		}
 		if group.BelongsTo(pk.Attr) != gkeys.GroupId && !pk.IsSchema() {
 			it.Seek(pk.SkipPredicate())
-			it.Prev() // To tackle it.Next() called by default.
+			// Do not go next.
 			continue
 		} else if group.BelongsTo(pk.Attr) != gkeys.GroupId {
+			it.Next()
 			continue
 		}
 
 		// No checksum check for schema keys
 		if !pk.IsSchema() {
 			var pl protos.PostingList
-			x.Check(pl.Unmarshal(v.Data()))
+			x.Check(pl.Unmarshal(v))
 
 			idx := sort.Search(len(gkeys.Keys), func(i int) bool {
 				t := gkeys.Keys[i]
-				return bytes.Compare(k.Data(), t.Key) <= 0
+				return bytes.Compare(k, t.Key) <= 0
 			})
 
 			if idx < len(gkeys.Keys) {
@@ -253,8 +259,9 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 				t := gkeys.Keys[idx]
 				// Different keys would have the same prefix. So, check Checksum first,
 				// it would be cheaper when there's no match.
-				if bytes.Equal(pl.Checksum, t.Checksum) && bytes.Equal(k.Data(), t.Key) {
+				if bytes.Equal(pl.Checksum, t.Checksum) && bytes.Equal(k, t.Key) {
 					// No need to send this.
+					it.Next()
 					continue
 				}
 			}
@@ -263,14 +270,15 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		// We just need to stream this kv. So, we can directly use the key
 		// and val without any copying.
 		kv := &protos.KV{
-			Key: k.Data(),
-			Val: v.Data(),
+			Key: k,
+			Val: v,
 		}
 
 		count++
 		if err := stream.Send(kv); err != nil {
 			return err
 		}
+		it.Next()
 	} // end of iterator
 	x.Trace(stream.Context(), "Sent %d keys to client. Done.\n", count)
 

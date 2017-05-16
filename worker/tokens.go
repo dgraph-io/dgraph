@@ -118,17 +118,13 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	}
 	ineqToken := ineqTokens[0]
 
-	it := pstore.NewIterator()
-	defer it.Close()
 	isgeOrGt := f == "ge" || f == "gt"
-	if isgeOrGt {
-		it.Seek(x.IndexKey(attr, ineqToken))
-	} else {
-		it.SeekForPrev(x.IndexKey(attr, ineqToken))
-	}
+	it := pstore.NewIterator(!isgeOrGt)
+	defer it.Close()
+	it.Seek(x.IndexKey(attr, ineqToken)) // If !isgeOrGt, then this is a SeekForPrev.
 
-	isPresent := it.Valid() && it.Value() != nil && it.Value().Size() > 0
-	idxKey := x.Parse(it.Key().Data())
+	isPresent := it.Valid() && len(it.Value()) > 0
+	idxKey := x.Parse(it.Key())
 	if f == "eq" {
 		if isPresent && idxKey.Term == ineqToken {
 			return []string{ineqToken}, ineqToken, nil
@@ -139,14 +135,10 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	var out []string
 	indexPrefix := x.IndexKey(attr, string(tokenizer.Identifier()))
 	for it.Valid() && it.ValidForPrefix(indexPrefix) {
-		k := x.Parse(it.Key().Data())
+		k := x.Parse(it.Key())
 		x.AssertTrue(k != nil)
 		out = append(out, k.Term)
-		if isgeOrGt {
-			it.Next()
-		} else {
-			it.Prev()
-		}
+		it.Next()
 	}
 	return out, ineqToken, nil
 }

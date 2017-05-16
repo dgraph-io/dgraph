@@ -30,6 +30,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -743,7 +744,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	deletePl(t, ol)
 }
 
-var ps *store.Store
+var ps store.Store
 
 func TestMain(m *testing.M) {
 	x.SetTestRun()
@@ -752,7 +753,7 @@ func TestMain(m *testing.M) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
 
-	ps, err = store.NewStore(dir)
+	ps, err = rdb.NewStore(dir)
 	x.Check(err)
 
 	Init(ps)

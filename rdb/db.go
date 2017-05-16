@@ -160,9 +160,9 @@ func (db *DB) Write(opts *WriteOptions, batch *WriteBatch) error {
 
 // NewIterator returns an Iterator over the the database that uses the
 // ReadOptions given.
-func (db *DB) NewIterator(opts *ReadOptions) *Iterator {
+func (db *DB) NewIterator(opts *ReadOptions, reversed bool) *Iterator {
 	cIter := C.rdb_create_iterator(db.c, opts.c)
-	return NewNativeIterator(unsafe.Pointer(cIter))
+	return NewNativeIterator(unsafe.Pointer(cIter), reversed)
 }
 
 // GetProperty returns the value of a database property.

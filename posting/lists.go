@@ -380,7 +380,7 @@ type fingerPrint struct {
 
 var (
 	stopTheWorld x.SafeMutex
-	pstore       *store.Store
+	pstore       store.Store
 	syncCh       chan syncEntry
 	dirtyChan    chan fingerPrint // All dirty posting list keys are pushed here.
 	marks        *syncMarks
@@ -388,7 +388,7 @@ var (
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *store.Store) {
+func Init(ps store.Store) {
 	marks = new(syncMarks)
 	pstore = ps
 	lhmaps = new(listMaps)
@@ -447,13 +447,11 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		l.Lock()
 		go func(key []byte) {
 			defer l.Unlock()
-			slice, err := pstore.Get(key)
+			val, freeVal, err := pstore.Get(key)
+			defer freeVal()
 			x.Check(err)
-			if slice.Size() == 0 {
+			if len(val) == 0 {
 				x.Check(pstore.SetOne(key, dummyPostingList))
-			}
-			if slice != nil {
-				slice.Free() // Remember to free.
 			}
 		}(key)
 	}
@@ -570,7 +568,7 @@ func batchSync() {
 				loop++
 				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
 				for _, e := range entries {
-					b.Put(e.key, e.val)
+					b.SetOne(e.key, e.val)
 				}
 				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
 				b.Clear()

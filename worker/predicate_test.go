@@ -31,18 +31,18 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func checkShard(ps *store.Store) (int, []byte) {
-	it := ps.NewIterator()
+func checkShard(ps store.Store) (int, []byte) {
+	it := ps.NewIterator(false)
 	defer it.Close()
 
 	count := 0
-	for it.SeekToFirst(); it.Valid(); it.Next() {
+	for it.Rewind(); it.Valid(); it.Next() {
 		count++
 	}
-	return count, it.Key().Data()
+	return count, it.Key()
 }
 
-func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store) {
+func writePLs(t *testing.T, pred string, count int, vid uint64, ps store.Store) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i))
 		list, _ := posting.GetOrCreate(k, 0)

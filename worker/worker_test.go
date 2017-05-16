@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
@@ -106,13 +107,13 @@ func taskValues(t *testing.T, v []*protos.TaskValue) []string {
 	return out
 }
 
-func initTest(t *testing.T, schemaStr string) (string, *store.Store) {
+func initTest(t *testing.T, schemaStr string) (string, store.Store) {
 	schema.ParseBytes([]byte(schemaStr), 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 
-	ps, err := store.NewStore(dir)
+	ps, err := rdb.NewStore(dir)
 	require.NoError(t, err)
 
 	posting.Init(ps)
@@ -317,7 +318,7 @@ func TestProcessTaskIndex(t *testing.T) {
 }
 
 /*
-func populateGraphForSort(t *testing.T, ps *store.Store) {
+func populateGraphForSort(t *testing.T, ps store.Store) {
 	edge := &protos.DirectedEdge{
 		Label: "author1",
 		Attr:  "dob",

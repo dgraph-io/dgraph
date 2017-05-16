@@ -26,7 +26,7 @@ func WriteBatchFrom(data []byte) *WriteBatch {
 }
 
 // Put queues a key-value pair.
-func (wb *WriteBatch) Put(key, value []byte) {
+func (wb *WriteBatch) SetOne(key, value []byte) {
 	cKey := byteToChar(key)
 	cValue := byteToChar(value)
 	C.rdb_writebatch_put(wb.c, cKey, C.size_t(len(key)), cValue, C.size_t(len(value)))

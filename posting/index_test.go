@@ -140,20 +140,22 @@ func TestTokensTable(t *testing.T) {
 	addMutationWithIndex(t, l, edge, Set)
 
 	key = x.IndexKey("name", "david")
-	slice, err := ps.Get(key)
+	slice, freeSlice, err := ps.Get(key)
+	defer freeSlice()
 	require.NoError(t, err)
 
 	var pl protos.PostingList
-	x.Check(pl.Unmarshal(slice.Data()))
+	x.Check(pl.Unmarshal(slice))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 
 	CommitLists(10, 1)
 	time.Sleep(time.Second)
 
-	slice, err = ps.Get(key)
+	slice, freeSlice, err = ps.Get(key)
+	defer freeSlice()
 	require.NoError(t, err)
-	x.Check(pl.Unmarshal(slice.Data()))
+	x.Check(pl.Unmarshal(slice))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 	deletePl(t, l)
@@ -163,12 +165,12 @@ func TestTokensTable(t *testing.T) {
 func tokensForTest(attr string) []string {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	it := pstore.NewIterator()
+	it := pstore.NewIterator(false)
 	defer it.Close()
 
 	var out []string
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		k := x.Parse(it.Key().Data())
+		k := x.Parse(it.Key())
 		x.AssertTrue(k.IsIndex())
 		out = append(out, k.Term)
 	}
@@ -246,16 +248,16 @@ func TestRebuildIndex(t *testing.T) {
 	}
 
 	// Check index entries in data store.
-	it := ps.NewIterator()
+	it := ps.NewIterator(false)
 	defer it.Close()
 	pk := x.ParsedKey{Attr: "name"}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
 	var idxVals []*protos.PostingList
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		idxKeys = append(idxKeys, string(it.Key().Data()))
+		idxKeys = append(idxKeys, string(it.Key()))
 		pl := new(protos.PostingList)
-		require.NoError(t, pl.Unmarshal(it.Value().Data()))
+		require.NoError(t, pl.Unmarshal(it.Value()))
 		idxVals = append(idxVals, pl)
 	}
 	require.Len(t, idxKeys, 2)
@@ -296,16 +298,16 @@ func TestRebuildReverseEdges(t *testing.T) {
 	}
 
 	// Check index entries in data store.
-	it := ps.NewIterator()
+	it := ps.NewIterator(false)
 	defer it.Close()
 	pk := x.ParsedKey{Attr: "friend"}
 	prefix := pk.ReversePrefix()
 	var revKeys []string
 	var revVals []*protos.PostingList
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		revKeys = append(revKeys, string(it.Key().Data()))
+		revKeys = append(revKeys, string(it.Key()))
 		pl := new(protos.PostingList)
-		require.NoError(t, pl.Unmarshal(it.Value().Data()))
+		require.NoError(t, pl.Unmarshal(it.Value()))
 		revVals = append(revVals, pl)
 	}
 	require.Len(t, revKeys, 2)

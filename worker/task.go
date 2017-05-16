@@ -927,7 +927,7 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 		x.Trace(ctx, "Running go-routine %v for iteration", i)
 		wg.Add(1)
 		go func(i uint64) {
-			it := pstore.NewIterator()
+			it := pstore.NewIterator(false)
 			defer it.Close()
 			startKey := x.DataKey(q.Attr, minUid)
 			pk := x.Parse(startKey)
@@ -940,7 +940,7 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 
 			w := 0
 			for it.Seek(startKey); it.ValidForPrefix(prefix); it.Next() {
-				pk := x.Parse(it.Key().Data())
+				pk := x.Parse(it.Key())
 				x.AssertTruef(pk.Attr == q.Attr,
 					"Invalid key obtained for comparison")
 				if w%1000 == 0 {
@@ -950,8 +950,8 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 				if pk.Uid > maxUid {
 					break
 				}
-				key := it.Key().Data()
-				val := it.Value().Data()
+				key := it.Key()
+				val := it.Value()
 				f(key, val, mu)
 			}
 			wg.Done()

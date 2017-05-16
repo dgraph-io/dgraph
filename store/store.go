@@ -15,127 +15,81 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// Package store is an interface with KV stores.
 package store
 
-import (
-	"strconv"
+// Store is our KV store.
+type Store interface {
+	// Returns the value as a byte array.
+	// Also returns the deallocate function. This is for freeing RocksDB slice.
+	Get(key []byte) ([]byte, func(), error)
 
-	"github.com/dgraph-io/dgraph/rdb"
-	"github.com/dgraph-io/dgraph/x"
-)
+	// WriteBatch executes the given WriteBatch.
+	WriteBatch(wb WriteBatch) error
 
-// Store contains some handles to RocksDB.
-type Store struct {
-	db       *rdb.DB
-	opt      *rdb.Options // Contains blockopt.
-	blockopt *rdb.BlockBasedTableOptions
-	ropt     *rdb.ReadOptions
-	wopt     *rdb.WriteOptions
+	// SetOne sets a kv pair.
+	SetOne(k []byte, val []byte) error
+
+	// Delete deletes a key.
+	Delete(k []byte) error
+
+	// Close closes the KV store.
+	Close()
+
+	// NewWriteBatch creates a new WriteBatch for store.
+	NewWriteBatch() WriteBatch
+
+	// NewIterator creates a new Iterator for store.
+	NewIterator(reversed bool) Iterator
+
+	// GetStats returns some stats about the store.
+	GetStats() string
 }
 
-func (s *Store) setOpts() {
-	s.opt = rdb.NewDefaultOptions()
-	s.blockopt = rdb.NewDefaultBlockBasedTableOptions()
-	s.opt.SetBlockBasedTableFactory(s.blockopt)
+// WriteBatch is used for batching mutations to Store.
+type WriteBatch interface {
+	// SetOne adds a Set operation to the WriteBatch.
+	SetOne(key, value []byte)
 
-	// If you want to access blockopt.blockCache, you need to grab handles to them
-	// as well. Otherwise, they will be nil. However, for now, we do not really need
-	// to do this.
-	// s.blockopt.SetBlockCache(rocksdb.NewLRUCache(blockCacheSize))
-	// s.blockopt.SetBlockCacheCompressed(rocksdb.NewLRUCache(blockCacheSize))
+	// Delete adds a Del operation to the WriteBatch.
+	Delete(key []byte)
 
-	s.opt.SetCreateIfMissing(true)
-	fp := rdb.NewBloomFilter(16)
-	s.blockopt.SetFilterPolicy(fp)
+	// Count returns the size of the WriteBatch.
+	Count() int
 
-	s.ropt = rdb.NewDefaultReadOptions()
-	s.wopt = rdb.NewDefaultWriteOptions()
-	s.wopt.SetSync(false) // We don't need to do synchronous writes.
+	// Clear clears the WriteBatch. Good to reuse WriteBatch.
+	Clear()
+
+	// Destroy destroys our WriteBatch. It is important to call this especially for RocksDB.
+	Destroy()
 }
 
-// NewStore constructs a Store object at filepath, given some options.
-func NewStore(filepath string) (*Store, error) {
-	s := &Store{}
-	s.setOpts()
-	var err error
-	s.db, err = rdb.OpenDb(s.opt, filepath)
-	return s, x.Wrap(err)
+// Iterator is an iterator for Store.
+type Iterator interface {
+	// Seek to >= key if !reversed. Seek to <= key if reversed. This makes merge iterators simpler.
+	Seek(key []byte)
+
+	// SeekToFirst if !reversed. SeekToLast if reversed.
+	Rewind()
+
+	// Closes closes an iterator and possibly decreases a reference. It is important to close iterators.
+	Close()
+
+	// Next if !reversed. Prev if reversed.
+	Next()
+
+	// Valid returns whether the Iterator is still valid.
+	Valid() bool
+
+	// ValidForPrefix returns whether the Iterator is valid and its current key has the right prefix.
+	ValidForPrefix(prefix []byte) bool
+
+	// Key returns the current key.
+	Key() []byte
+
+	// Value returns the current value.
+	Value() []byte
+
+	// Err returns the error for the last operation if any.
+	Err() error
 }
-
-func NewSyncStore(filepath string) (*Store, error) {
-	s := &Store{}
-	s.setOpts()
-	s.wopt.SetSync(true) // Do synchronous writes.
-	var err error
-	s.db, err = rdb.OpenDb(s.opt, filepath)
-	return s, x.Wrap(err)
-}
-
-// NewReadOnlyStore constructs a readonly Store object at filepath, given options.
-func NewReadOnlyStore(filepath string) (*Store, error) {
-	s := &Store{}
-	s.setOpts()
-	var err error
-	s.db, err = rdb.OpenDbForReadOnly(s.opt, filepath, false)
-	return s, x.Wrap(err)
-}
-
-// Get returns the value given a key for RocksDB.
-func (s *Store) Get(key []byte) (*rdb.Slice, error) {
-	valSlice, err := s.db.Get(s.ropt, key)
-	if err != nil {
-		return nil, x.Wrapf(err, "Key: %v", key)
-	}
-
-	return valSlice, nil
-}
-
-// SetOne adds a key-value to data store.
-func (s *Store) SetOne(k []byte, val []byte) error { return s.db.Put(s.wopt, k, val) }
-
-// Delete deletes a key from data store.
-func (s *Store) Delete(k []byte) error { return s.db.Delete(s.wopt, k) }
-
-// NewIterator initializes a new iterator and returns it.
-func (s *Store) NewIterator() *rdb.Iterator {
-	ro := rdb.NewDefaultReadOptions()
-	// SetFillCache should be set to false for bulk reads to avoid caching data
-	// while doing bulk scans.
-	ro.SetFillCache(false)
-	return s.db.NewIterator(ro)
-}
-
-// Close closes our data store.
-func (s *Store) Close() { s.db.Close() }
-
-// Memtable returns the memtable size.
-func (s *Store) MemtableSize() uint64 {
-	memTableSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.cur-size-all-mem-tables"), 10, 64)
-	return memTableSize
-}
-
-// IndexFilterblockSize returns the filter block size.
-func (s *Store) IndexFilterblockSize() uint64 {
-	blockSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.estimate-table-readers-mem"), 10, 64)
-	return blockSize
-}
-
-// NewWriteBatch creates a new WriteBatch object and returns a pointer to it.
-func (s *Store) NewWriteBatch() *rdb.WriteBatch { return rdb.NewWriteBatch() }
-
-// WriteBatch does a batch write to RocksDB from the data in WriteBatch object.
-func (s *Store) WriteBatch(wb *rdb.WriteBatch) error {
-	return x.Wrap(s.db.Write(s.wopt, wb))
-}
-
-// NewCheckpoint creates new checkpoint from current store.
-func (s *Store) NewCheckpoint() (*rdb.Checkpoint, error) { return s.db.NewCheckpoint() }
-
-// NewSnapshot creates new snapshot from current store.
-func (s *Store) NewSnapshot() *rdb.Snapshot { return s.db.NewSnapshot() }
-
-// SetSnapshot updates default read options to use the given snapshot.
-func (s *Store) SetSnapshot(snapshot *rdb.Snapshot) { s.ropt.SetSnapshot(snapshot) }
-
-// GetStats returns stats of our data store.
-func (s *Store) GetStats() string { return s.db.GetStats() }
