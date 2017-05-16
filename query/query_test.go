@@ -6948,15 +6948,7 @@ func TestCountAtRoot5(t *testing.T) {
 	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }
 
-func TestGetAllPredicatesSimple(t *testing.T) {
-	query := `
-	{
-		me(id: 0x1) {
-			name
-		}
-	}
-	`
-
+func getSubGraph(t *testing.T, query string) *SubGraph {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Query))
@@ -6966,8 +6958,47 @@ func TestGetAllPredicatesSimple(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, subGraph)
 
+	return subGraph
+}
+
+// simplest case
+func TestGetAllPredicatesSimple(t *testing.T) {
+	query := `
+	{
+		me(id: 0x1) {
+			name
+		}
+	}
+	`
+
+	subGraph := getSubGraph(t, query)
+
 	predicates := subGraph.GetAllPredicates()
 	require.NotNil(t, predicates)
 	require.Equal(t, 1, len(predicates))
 	require.Equal(t, "name", predicates[0])
+}
+
+// recursive SubGraph traversal; predicates should be unique
+func TestGetAllPredicatesUnique(t *testing.T) {
+	query := `
+	{
+		me(id: 0x1) {
+			name
+			friend {
+				name
+				age
+			}
+		}
+	}
+	`
+
+	subGraph := getSubGraph(t, query)
+
+	predicates := subGraph.GetAllPredicates()
+	require.NotNil(t, predicates)
+	require.Equal(t, 3, len(predicates))
+	require.Contains(t, predicates, "name")
+	require.Contains(t, predicates, "friend")
+	require.Contains(t, predicates, "age")
 }

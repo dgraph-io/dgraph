@@ -2008,13 +2008,23 @@ func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.TaskVa
 }
 
 func (sg *SubGraph) GetAllPredicates() (predicates []string) {
-	if len(sg.Attr) != 0 {
-		predicates = append(predicates, sg.Attr)
-	}
+	predicatesMap := make(map[string]bool)
+	sg.getAllPredicates(predicatesMap)
 
-	for _, child := range sg.Children {
-		predicates = append(predicates, child.GetAllPredicates()...)
+	predicates = make([]string, 0, len(predicatesMap))
+	for predicate, _ := range predicatesMap {
+		predicates = append(predicates, predicate)
 	}
 
 	return predicates
+}
+
+func (sg *SubGraph) getAllPredicates(predicates map[string]bool) {
+	if len(sg.Attr) != 0 {
+		predicates[sg.Attr] = true
+	}
+
+	for _, child := range sg.Children {
+		child.getAllPredicates(predicates)
+	}
 }
