@@ -1,8 +1,8 @@
 KEYBITS=2048
 PASS=secret
 
-KEYS=ca.key server.key client.key server_pass.key client_pass.key
-CERTS=ca.crt server.crt client.crt server_pass.crt client_pass.crt
+KEYS=ca.key server.key client.key server_pass.key client_pass.key server3.key
+CERTS=ca.crt server.crt client.crt server_pass.crt client_pass.crt server3.crt
 
 test: all
 	@echo -e "\n\n\nTESTING...\n"
@@ -18,6 +18,8 @@ test: all
 	@./test.sh ./server_nopass.sh ./client_pass.sh 1
 	@echo "TLS protocol versions mismatch (failure expected)"
 	@./test.sh ./server_11.sh ./client_12.sh 1
+	@echo "TLS certificate reloading"
+	@./test_reload.sh
 
 all: ca $(KEYS) $(CERTS)
 
@@ -38,6 +40,9 @@ ca.key:
 
 server.csr server.key:
 	openssl req -new -newkey rsa:$(KEYBITS) -keyout server.key -out server.csr -nodes -subj "/C=AU/L=Sydney/O=Dgraph/CN=server1.dgraph.io"
+
+server3.csr server3.key:
+	openssl req -new -newkey rsa:$(KEYBITS) -keyout server3.key -out server3.csr -nodes -subj "/C=AU/L=Sydney/O=Dgraph/CN=server3.dgraph.io"
 
 client.csr client.key:
 	openssl req -new -newkey rsa:$(KEYBITS) -keyout client.key -out client.csr -nodes -subj "/C=AU/L=Sydney/O=Dgraph/CN=client1.dgraph.io"
