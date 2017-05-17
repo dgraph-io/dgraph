@@ -108,7 +108,7 @@
       padding-right: 10px;
 
       &:hover {
-        background: #fffdfb;
+        background: #fcfeff;
       }
     }
 
@@ -137,7 +137,7 @@
     }
 
     .actions {
-      width: 134px;
+      min-width: 134px;
       text-align: right;
     }
   }
@@ -223,7 +223,7 @@
     }
 
     .sidebar {
-      width: 50px;
+      width: 61px;
       background: #f9f9f9;
       border-right: 1px solid #d4d4d4;
     }

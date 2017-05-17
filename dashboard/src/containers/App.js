@@ -22,7 +22,8 @@ class App extends React.Component {
 
     this.state = {
       query: "",
-      isQueryDirty: false
+      isQueryDirty: false,
+      currentSidebarMenu: ""
     };
   }
 
@@ -45,6 +46,19 @@ class App extends React.Component {
         eraseCookie("playQuery", { crossDomain: true });
       });
     }
+  };
+
+  handleToggleSidebarMenu = targetMenu => {
+    const { currentSidebarMenu } = this.state;
+
+    let nextState = "";
+    if (currentSidebarMenu !== targetMenu) {
+      nextState = targetMenu;
+    }
+
+    this.setState({
+      currentSidebarMenu: nextState
+    });
   };
 
   // saveCodeMirrorInstance saves the codemirror instance initialized in the
@@ -86,22 +100,36 @@ class App extends React.Component {
     });
   };
 
-  onRunSharedQuery(shareId) {
+  onRunSharedQuery = shareId => {
     const { handleRunSharedQuery } = this.props;
 
     handleRunSharedQuery(shareId).catch(e => {
       console.log(e);
     });
-  }
+  };
 
   render = () => {
-    const { query, isQueryDirty } = this.state;
+    const { query, isQueryDirty, currentSidebarMenu } = this.state;
     const { handleDiscardFrame, frames, connected } = this.props;
 
     return (
       <div className="app-layout">
-        <Sidebar />
+        <Sidebar
+          currentMenu={currentSidebarMenu}
+          onToggleMenu={this.handleToggleSidebarMenu}
+        />
         <div className="main-content">
+          {currentSidebarMenu !== ""
+            ? <div
+                className="click-capture"
+                onClick={e => {
+                  e.stopPropagation();
+                  this.setState({
+                    currentSidebarMenu: ""
+                  });
+                }}
+              />
+            : null}
           <div className="container-fluid">
             <div className="row justify-content-md-center">
               <div className="col-sm-12">

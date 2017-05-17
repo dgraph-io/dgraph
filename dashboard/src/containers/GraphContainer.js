@@ -6,6 +6,7 @@ import classnames from "classnames";
 
 import { renderNetwork } from "../lib/graph";
 import Progress from "../components/Progress";
+import PartialRenderInfo from "../components/PartialRenderInfo";
 import { outgoingEdges, childNodes } from "./Helpers";
 
 import "../assets/css/Graph.css";
@@ -338,12 +339,23 @@ class GraphContainer extends Component {
   };
 
   render() {
-    const { renderProgress } = this.state;
+    const { response } = this.props;
+    const { renderProgress, partiallyRendered } = this.state;
 
     const isRendering = renderProgress !== 100;
+    const canToggleExpand =
+      response.nodes.length !== response.numNodes &&
+      response.edges.length !== response.numEdges;
 
     return (
       <div className="graph-container">
+        {!isRendering && canToggleExpand
+          ? <PartialRenderInfo
+              partiallyRendered={partiallyRendered}
+              onExpandNetwork={this.handleExpandNetwork}
+              onCollapseNetwork={this.handleCollapseNetwork}
+            />
+          : null}
         {isRendering ? <Progress perc={renderProgress} /> : null}
         <div
           ref="graph"

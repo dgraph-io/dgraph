@@ -1,15 +1,18 @@
-import React from 'react';
-import { connect } from 'react-redux';
-import ReactDOM from 'react-dom';
-import screenfull from 'screenfull';
-import classnames from 'classnames';
+import React from "react";
+import { connect } from "react-redux";
+import ReactDOM from "react-dom";
+import screenfull from "screenfull";
+import classnames from "classnames";
 
-import FrameHeader from './FrameHeader';
+import FrameHeader from "./FrameHeader";
 import {
-  FRAME_TYPE_SESSION, FRAME_TYPE_ERROR, FRAME_TYPE_LOADING, FRAME_TYPE_SUCCESS
-} from '../lib/const';
-import { getShareId } from '../actions';
-import { updateFrame } from '../actions/frames';
+  FRAME_TYPE_SESSION,
+  FRAME_TYPE_ERROR,
+  FRAME_TYPE_LOADING,
+  FRAME_TYPE_SUCCESS
+} from "../lib/const";
+import { getShareId } from "../actions";
+import { updateFrame } from "../actions/frames";
 
 class FrameLayout extends React.Component {
   constructor(props) {
@@ -17,9 +20,9 @@ class FrameLayout extends React.Component {
 
     this.state = {
       isFullscreen: false,
-      shareId: '',
+      shareId: "",
       shareHidden: false,
-      editingQuery: false,
+      editingQuery: false
     };
   }
 
@@ -27,16 +30,22 @@ class FrameLayout extends React.Component {
     // Sync fullscreen exit in case exited by ESC.
     // IDEA: This is not efficient as there will be as many event listeners as
     // there are frames.
-    document.addEventListener(screenfull.raw.fullscreenchange, this.syncFullscreenExit);
+    document.addEventListener(
+      screenfull.raw.fullscreenchange,
+      this.syncFullscreenExit
+    );
   }
 
   componentWillUnmount() {
-    document.removeEventListener(screenfull.raw.fullscreenchange, this.syncFullscreenExit);
+    document.removeEventListener(
+      screenfull.raw.fullscreenchange,
+      this.syncFullscreenExit
+    );
   }
 
   componentDidUpdate(prevProps, prevState) {
     // If shareId was fetched, select the share url input
-    if (prevState.shareId !== this.state.shareId && this.state.shareId !== '') {
+    if (prevState.shareId !== this.state.shareId && this.state.shareId !== "") {
       const shareUrlEl = ReactDOM.findDOMNode(this.shareURLEl);
       shareUrlEl.select();
     }
@@ -53,7 +62,7 @@ class FrameLayout extends React.Component {
     if (!isFullscreen) {
       this.setState({ isFullscreen: false });
     }
-  }
+  };
 
   handleToggleFullscreen = () => {
     if (!screenfull.enabled) {
@@ -74,7 +83,7 @@ class FrameLayout extends React.Component {
         this.setState({ isFullscreen: true });
       }
     }
-  }
+  };
 
   handleShare = () => {
     const { frame } = this.props;
@@ -89,35 +98,34 @@ class FrameLayout extends React.Component {
       return;
     }
 
-    if (frame.type !== FRAME_TYPE_SESSION) {
-      return;
-    }
-
     const { query } = frame.data;
     getShareId(query)
       .then(shareId => {
         this.setState({ shareId });
       })
       .catch(err => {
-        console.log('error while getting share id', err);
-      })
-  }
+        console.log("error while getting share id", err);
+      });
+  };
 
   // saveShareURLRef saves the reference to the share url input as an instance
   // property of this component
-  saveShareURLRef = (el) => {
+  saveShareURLRef = el => {
     this.shareURLEl = el;
-  }
+  };
 
   handleToggleEditingQuery = () => {
-    this.setState({
-      editingQuery: !this.state.editingQuery
-    }, () => {
-      if (this.state.editingQuery) {
-        this.queryEditor.focus();
+    this.setState(
+      {
+        editingQuery: !this.state.editingQuery
+      },
+      () => {
+        if (this.state.editingQuery) {
+          this.queryEditor.focus();
+        }
       }
-    });
-  }
+    );
+  };
 
   handleToggleCollapse = (done = () => {}) => {
     const { changeCollapseState, frame } = this.props;
@@ -125,7 +133,7 @@ class FrameLayout extends React.Component {
 
     changeCollapseState(frame, nextState);
     done();
-  }
+  };
 
   render() {
     const { children, onDiscardFrame, onSelectQuery, frame } = this.props;
@@ -134,16 +142,14 @@ class FrameLayout extends React.Component {
 
     return (
       <li
-        className={
-          classnames('frame-item', {
-            fullscreen: isFullscreen,
-            collapsed: isCollapsed,
-            'frame-error': frame.type === FRAME_TYPE_ERROR,
-            'frame-session': frame.type === FRAME_TYPE_SESSION,
-            'frame-loading': frame.type === FRAME_TYPE_LOADING,
-            'frame-system': frame.type === FRAME_TYPE_SUCCESS
-          })
-        }
+        className={classnames("frame-item", {
+          fullscreen: isFullscreen,
+          collapsed: isCollapsed,
+          "frame-error": frame.type === FRAME_TYPE_ERROR,
+          "frame-session": frame.type === FRAME_TYPE_SESSION,
+          "frame-loading": frame.type === FRAME_TYPE_LOADING,
+          "frame-system": frame.type === FRAME_TYPE_SUCCESS
+        })}
         ref="frame"
       >
         <FrameHeader
@@ -176,17 +182,18 @@ class FrameLayout extends React.Component {
   }
 }
 
-const mapStateToProps = state => ({
-});
+const mapStateToProps = state => ({});
 
 const mapDispatchToProps = dispatch => ({
   changeCollapseState(frame, nextCollapseState) {
-    return dispatch(updateFrame({
-      id: frame.id,
-      type: frame.type,
-      data: frame.data,
-      meta: Object.assign({}, frame.meta, { collapsed: nextCollapseState }),
-    }))
+    return dispatch(
+      updateFrame({
+        id: frame.id,
+        type: frame.type,
+        data: frame.data,
+        meta: Object.assign({}, frame.meta, { collapsed: nextCollapseState })
+      })
+    );
   }
 });
 

@@ -4,70 +4,21 @@
   height: 100vh;
 }
 
-/* sidebar */
+.click-capture {
+  width: calc(100% - 358px);
+  height: 100%;
+  position: absolute;
+  top: 0;
+  z-index: 5;
+  opacity: 0.76;
+  background: white;
+}
+
 .main-content {
   overflow-y: auto;
   background-color: #ececec;
   padding-top: 13px;
-}
-
-.sidebar-container {
-  flex: 0;
-  flex-direction: row;
-  display: flex;
-
-}
-
-.sidebar-container .sidebar-menu {
-  flex: 0;
-  background-color: #20202b;
-}
-
-.sidebar-container .sidebar-content {
   flex: auto;
-  width: 280px;
-  transition: all 300ms cubic-bezier(0.175, 0.885, 0.335, 1.05);
-  background: #1e1e20;
-  color: white;
-}
-
-.main-content {
-  flex: auto;
-}
-
-.sidebar-container ul {
-  list-style: none;
-  padding-left: 0;
-}
-
-.sidebar-container .logo {
-  width: 80px;
-}
-
-
-.sidebar-content:not(.open) {
-  width: 0;
-}
-
-.sidebar-menu .logo {
-  width: 52px;
-}
-.sidebar-menu li {
-  width: 78px;
-  text-align: center;
-  font-size: 29px;
-  border-bottom: 1px solid #505050;
-}
-.sidebar-menu li:hover {
-  background-color: #353836;
-}
-.sidebar-menu li a {
-  color: #a9a9a9;
-  padding: 19px 0;
-  display: block;
-}
-.sidebar-menu li a.active {
-  background: #1e1e20;
 }
 
 .App-statistics {
