@@ -1,4 +1,5 @@
 /*
+
  * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -27,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 )
@@ -69,8 +71,8 @@ type GraphQuery struct {
 
 // Mutation stores the strings corresponding to set and delete operations.
 type Mutation struct {
-	Set    string
-	Del    string
+	Set    []*protos.NQuad
+	Del    []*protos.NQuad
 	Schema string
 }
 
@@ -461,10 +463,11 @@ type Vars struct {
 // Result struct contains the Query list, its corresponding variable use list
 // and the mutation block.
 type Result struct {
-	Query     []*GraphQuery
-	QueryVars []*Vars
-	Mutation  *Mutation
-	Schema    *protos.SchemaRequest
+	Query        []*GraphQuery
+	QueryVars    []*Vars
+	Mutation     *Mutation
+	MutationVars []string // mutations don't define vars so we have only needed.
+	Schema       *protos.SchemaRequest
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -533,6 +536,13 @@ func Parse(r Request) (res Result, rerr error) {
 		}
 	}
 
+	if res.Mutation != nil {
+		res.MutationVars = determineNeededVars(*res.Mutation)
+		if len(res.MutationVars) > 0 && len(res.Query) == 0 {
+			return res, x.Errorf("mutation uses undefined vars: %v", res.MutationVars)
+		}
+	}
+
 	if len(res.Query) != 0 {
 		res.QueryVars = make([]*Vars, 0, len(res.Query))
 		for i := 0; i < len(res.Query); i++ {
@@ -551,51 +561,73 @@ func Parse(r Request) (res Result, rerr error) {
 			// Collect vars used and defined in Result struct.
 			qu.collectVars(res.QueryVars[i])
 		}
-		if err := checkDependency(res.QueryVars); err != nil {
+
+		allVars := res.QueryVars
+		if len(res.MutationVars) > 0 {
+			allVars = append(allVars, &Vars{Needs: res.MutationVars})
+		}
+
+		if err := checkDependency(allVars); err != nil {
 			return res, err
 		}
 	}
+
 	return res, nil
 }
 
-func checkDependency(vl []*Vars) error {
-	needs, defines := make([]string, 0, 10), make([]string, 0, 10)
+func determineNeededVars(m Mutation) []string {
+	var vars []string
+	addIfVar := func(name string) {
+		if len(name) > 0 {
+			vars = append(vars, name)
+		}
+	}
+	for _, s := range m.Set {
+		addIfVar(s.SubjectVar)
+	}
+	for _, d := range m.Del {
+		addIfVar(d.SubjectVar)
+	}
+	sort.Strings(vars)
+	return removeDuplicates(vars)
+}
+
+func flatten(vl []*Vars) (needs []string, defines []string) {
+	needs, defines = make([]string, 0, 10), make([]string, 0, 10)
 	for _, it := range vl {
 		needs = append(needs, it.Needs...)
 		defines = append(defines, it.Defines...)
 	}
+	return
+}
+
+// removes duplicates from a sorted slice of strings. Changes underylying array.
+func removeDuplicates(s []string) (out []string) {
+	out = s[:0]
+	if len(s) > 0 {
+		for i := 1; i < len(s); i++ {
+			if s[i-1] == s[i] {
+				continue
+			}
+			out = append(out, s[i-1])
+		}
+		out = append(out, s[len(s)-1])
+	}
+	return
+}
+
+func checkDependency(vl []*Vars) error {
+	needs, defines := flatten(vl)
 
 	sort.Strings(needs)
 	sort.Strings(defines)
 
-	out := defines[:0]
-	dlen := len(defines)
-	if dlen > 0 {
-		for i := 1; i < dlen; i++ {
-			if defines[i-1] == defines[i] {
-				continue
-			}
-			out = append(out, defines[i-1])
-		}
-		out = append(out, defines[dlen-1])
-		defines = out
-		if len(defines) != dlen {
-			return x.Errorf("Some variables are declared multiple times.")
-		}
+	needs = removeDuplicates(needs)
+
+	if len(defines) != len(removeDuplicates(defines)) {
+		return x.Errorf("Some variables are declared multiple times.")
 	}
 
-	out = needs[:0]
-	nlen := len(needs)
-	if nlen > 0 {
-		for i := 1; i < nlen; i++ {
-			if needs[i-1] == needs[i] {
-				continue
-			}
-			out = append(out, needs[i-1])
-		}
-		out = append(out, needs[nlen-1])
-		needs = out
-	}
 	if len(defines) > len(needs) {
 		return x.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
 			defines, needs)
@@ -939,10 +971,13 @@ func getSchema(it *lex.ItemIterator) (*protos.SchemaRequest, error) {
 }
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.
+///  TODO: move to rdf
 func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
+	var err error
 	if mu == nil {
 		return x.Errorf("Mutation is nil.")
 	}
+	var nquads []*protos.NQuad
 
 	parse := false
 	for it.Next() {
@@ -961,9 +996,20 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 				return x.Errorf("Mutation syntax invalid.")
 			}
 			if op == "set" {
-				mu.Set = item.Val
+				if len(item.Val) > 0 {
+					if nquads, err = rdf.ConvertToNQuads(item.Val); err != nil {
+						return x.Wrap(err)
+					}
+				}
+
+				mu.Set = nquads
 			} else if op == "delete" {
-				mu.Del = item.Val
+				if len(item.Val) > 0 {
+					if nquads, err = rdf.ConvertToNQuads(item.Val); err != nil {
+						return x.Wrap(err)
+					}
+				}
+				mu.Del = nquads
 			} else if op == "schema" {
 				mu.Schema = item.Val
 			} else {
