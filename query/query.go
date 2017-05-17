@@ -302,18 +302,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			continue
 		}
 		if pc.Params.isGroupBy {
-			g := dst.New(pc.Attr)
-			for _, grp := range pc.GroupbyRes.group {
-				uc := g.New("@groupby")
-				for _, it := range grp.keys {
-					uc.AddValue(it.attr, it.key)
-				}
-				for _, it := range grp.aggregates {
-					uc.AddValue(it.attr, it.key)
-				}
-				g.AddListChild("@groupby", uc)
-			}
-			dst.AddMapChild(pc.Attr, g, false)
+			dst.addGroupby(pc, pc.Attr)
 			continue
 		}
 		if pc.IsInternal() {
