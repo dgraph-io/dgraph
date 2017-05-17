@@ -3977,7 +3977,7 @@ children: <
   properties: <
     prop: "_xid_"
     value: <
-      default_val: "mich"
+      str_val: "mich"
     >
   >
   properties: <
@@ -5454,7 +5454,7 @@ children: <
   properties: <
     prop: "_xid_"
     value: <
-      default_val: "mich"
+      str_val: "mich"
     >
   >
   properties: <
@@ -6201,7 +6201,7 @@ children: <
   properties: <
     prop: "_xid_"
     value: <
-      default_val: "mich"
+      str_val: "mich"
     >
   >
   properties: <
@@ -6230,7 +6230,7 @@ children: <
     properties: <
       prop: "_xid_"
       value: <
-        default_val: "g\\\"lenn"
+        str_val: "g\\\"lenn"
       >
     >
     properties: <

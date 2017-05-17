@@ -395,7 +395,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	}
 
 	idVal, ok := gq.Args["id"]
-	if ok && len(gq.UID) == 0 {
+	if ok && len(gq.ID) == 0 {
 		if idVal == "" {
 			return x.Errorf("Id can't be empty")
 		}
