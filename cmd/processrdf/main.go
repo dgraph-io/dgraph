@@ -1,4 +1,4 @@
-// This script is used to convert all uids to xids so that uid's
+// This script is used to convert all uids to blank nodes so that uid's
 // present in rdf file doesn't collide with the already generated
 // uid's in dgraph
 //
@@ -32,8 +32,7 @@ import (
 //  helps in restoring older xids)
 var (
 	files     = flag.String("r", "", "Location of rdf files to load")
-	outputDir = flag.String("output", "output",
-		"Folder in which to store output.")
+	outputDir = flag.String("output", "output", "Folder in which to store output.")
 )
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -138,7 +137,6 @@ func processFile(file string) {
 	of, err := os.Create(fpath)
 	x.Check(err)
 	defer of.Close()
-	var hasXid bool
 	var line int
 
 	var buf bytes.Buffer
@@ -163,17 +161,12 @@ func processFile(file string) {
 			buf.Reset()
 			continue
 		}
-		if nq.Predicate == "_xid_" {
-			hasXid = true
-			buf.Reset()
-			continue
-		}
 		if _, err := strconv.ParseUint(nq.Subject, 0, 64); err == nil {
-			nq.Subject = "n" + nq.Subject
+			nq.Subject = "_:" + nq.Subject
 		}
 		if len(nq.ObjectId) > 0 {
 			if _, err := strconv.ParseUint(nq.ObjectId, 0, 64); err == nil {
-				nq.ObjectId = "n" + nq.ObjectId
+				nq.ObjectId = "_:" + nq.ObjectId
 			}
 		}
 		buf.Reset()
@@ -184,51 +177,6 @@ func processFile(file string) {
 	}
 	if err != io.EOF {
 		x.Checkf(err, "Error while reading file")
-	}
-
-	// do a second pass and write xid edges now
-	if hasXid {
-		f, err := os.Open(file)
-		x.Check(err)
-		defer f.Close()
-		gr, err := gzip.NewReader(f)
-		x.Check(err)
-		bufReader := bufio.NewReader(gr)
-
-		for {
-			err = readLine(bufReader, &buf)
-			if err != nil {
-				break
-			}
-			nq, err := rdf.Parse(buf.String())
-			if err == rdf.ErrEmpty { // special case: comment/empty line
-				buf.Reset()
-				continue
-			}
-			// should have thrown error in first pass
-			x.Check(err)
-			if nq.Predicate != "_xid_" {
-				buf.Reset()
-				continue
-			}
-			if _, err := strconv.ParseUint(nq.Subject, 0, 64); err == nil {
-				nq.Subject = "n" + nq.Subject
-			}
-			if len(nq.ObjectId) > 0 {
-				if _, err := strconv.ParseUint(nq.ObjectId, 0, 64); err == nil {
-					nq.ObjectId = "n" + nq.ObjectId
-				}
-			}
-			buf.Reset()
-			err = toRDF(&nq, &buf)
-			x.Check(err)
-			gw.Write(buf.Bytes())
-			buf.Reset()
-		}
-
-		if err != io.EOF {
-			x.Checkf(err, "Error while reading file")
-		}
 	}
 
 	err = gw.Flush()
