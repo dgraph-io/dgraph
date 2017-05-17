@@ -1020,7 +1020,6 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 				}
 				tempMap[dstUid] = val
 			}
-
 		}
 		newMap = tempMap
 	}
@@ -1091,14 +1090,18 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 			return err
 		}
 		if sg.MathExp.Val != nil {
-			doneVars[sg.Params.Var] = varValue{vals: sg.MathExp.Val}
+			it := doneVars[sg.Params.Var]
+			it.vals = sg.MathExp.Val
+			doneVars[sg.Params.Var] = it
 		} else if sg.MathExp.Const.Value != nil {
 			// Assign the const for all the srcUids.
 			mp := make(map[uint64]types.Val)
 			for _, uid := range sg.SrcUIDs.Uids {
 				mp[uid] = sg.MathExp.Const
 			}
-			doneVars[sg.Params.Var] = varValue{vals: mp}
+			it := doneVars[sg.Params.Var]
+			it.vals = mp
+			doneVars[sg.Params.Var] = it
 		} else {
 			return x.Errorf("Missing values/constant in math expression")
 		}
