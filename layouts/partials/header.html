@@ -39,6 +39,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.25.0/mode/javascript/javascript.min.js" integrity="sha256-7Bdg/UdDMmHDPafpQDYZNPCEbnRP7eAvu+2hEoqRCXs=" crossorigin="anonymous"></script>
     <!-- END: Required by runnable -->
 
+    <script>
+      {{ $currentBranch := getenv "CURRENT_BRANCH" }}
+
+      {{/* Set dgraph endpoint depending on version to ensure that runnables work fine */}}
+      window.DGRAPH_ENDPOINT = {{ if eq $currentBranch "master" }}"https://play-master.dgraph.io/query?latency=true"{{ else }}"https://play.dgraph.io/query?latency=true"{{ end }}
+    </script>
+
     <title>
       {{.Section | humanize}} — {{ .Site.Title }}
     </title>
