@@ -36,14 +36,14 @@ const (
 )
 
 var (
-	xidCache *xidToUids
+	xidCache *xidsMap
 	leasemgr *leaseManager
 	leaseKey []byte
 )
 
 func init() {
 	leaseKey = x.DataKey(LeasePredicate, 1)
-	xidCache = new(xidToUids)
+	xidCache = new(xidsMap)
 	xidCache.uid = make(map[string]uint64)
 
 	leasemgr = new(leaseManager)
@@ -141,24 +141,24 @@ func proposeUid(ctx context.Context, xid string, uid uint64) error {
 	return proposeAndWait(ctx, edge)
 }*/
 
-type xidToUids struct {
+type xidsMap struct {
 	x.SafeMutex
 	// replace with lru cache later
 	uid map[string]uint64
 }
 
-func (xu *xidToUids) getUid(xid string) (uint64, error) {
-	xu.RLock()
-	if u, has := xu.uid[xid]; has {
-		xu.RUnlock()
-		return u, nil
+func (xm *xidsMap) getUid(xid string) (uint64, error) {
+	xm.RLock()
+	if uid, has := xm.uid[xid]; has && uid != 0 {
+		xm.RUnlock()
+		return uid, nil
 	}
-	xu.RUnlock()
+	xm.RUnlock()
 
-	xu.Lock()
-	defer xu.Unlock()
-	if u, has := xu.uid[xid]; has {
-		return u, nil
+	xm.Lock()
+	defer xm.Unlock()
+	if uid, has := xm.uid[xid]; has && uid != 0 {
+		return uid, nil
 	}
 	tokens, err := posting.IndexTokens("_xid_", "", types.Val{Tid: types.StringID, Value: []byte(xid)})
 	if err != nil {
@@ -180,12 +180,22 @@ func (xu *xidToUids) getUid(xid string) (uint64, error) {
 		return 0, UidNotFound
 	}
 	x.AssertTrue(len(ul.Uids) == 1)
-	xu.uid[xid] = ul.Uids[0]
-	return xu.uid[xid], nil
+	xm.uid[xid] = ul.Uids[0]
+	return ul.Uids[0], nil
 }
 
-func (x *xidToUids) setUid(xid string, uid uint64) {
-	x.Lock()
-	defer x.Unlock()
-	x.uid[xid] = uid
+func (xm *xidsMap) setUid(xid string, uid uint64) {
+	xm.Lock()
+	defer xm.Unlock()
+	if len(xm.uid) > 5000000 {
+		xm.clear()
+	}
+	xm.uid[xid] = uid
+}
+
+func (xm *xidsMap) clear() {
+	xm.AssertLock()
+	for xid := range xm.uid {
+		delete(xm.uid, xid)
+	}
 }

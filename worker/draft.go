@@ -69,12 +69,14 @@ type proposals struct {
 	ids map[uint32]chan error
 }
 
-func (p *proposals) Store(pid uint32, ch chan error) {
+func (p *proposals) Store(pid uint32, ch chan error) bool {
 	p.Lock()
 	defer p.Unlock()
-	_, has := p.ids[pid]
-	x.AssertTruef(!has, "Same proposal is being stored again.")
+	if _, has := p.ids[pid]; has {
+		return false
+	}
 	p.ids[pid] = ch
+	return true
 }
 
 func (p *proposals) Done(pid uint32, err error) {
@@ -289,9 +291,10 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		}
 	}
 
+	che := make(chan error, 1)
 	for {
 		id := rand.Uint32()
-		if !n.props.Has(id) {
+		if n.props.Store(id, che) {
 			proposal.Id = id
 			break
 		}
@@ -320,9 +323,6 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		x.Fatalf("Unknown proposal")
 	}
 	copy(proposalData[1:], slice)
-
-	che := make(chan error, 1)
-	n.props.Store(proposal.Id, che)
 
 	if err = n.Raft().Propose(ctx, proposalData); err != nil {
 		return x.Wrapf(err, "While proposing")
