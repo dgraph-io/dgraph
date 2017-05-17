@@ -30,7 +30,6 @@ import (
 	"testing"
 	"time"
 
-	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
@@ -185,7 +184,8 @@ func populateGraph(t *testing.T) {
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "loc", 24, types.GeoID, gData.Value.([]byte), nil)
 
-	addEdgeToValue(t, "name", farm.Fingerprint64([]byte("a.bc")), "Alice", nil)
+	addEdgeToValue(t, "name", 110, "Alice", nil)
+	addEdgeToValue(t, "_xid_", 110, "a.bc", nil)
 	addEdgeToValue(t, "name", 25, "Daryl Dixon", nil)
 	addEdgeToValue(t, "name", 31, "Andrea", nil)
 	addEdgeToValue(t, "name", 2300, "Andre", nil)
@@ -5965,7 +5965,7 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
 		{Predicate: "dob", Type: "date"}, {Predicate: "survival_rate", Type: "float"},
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
-		{Predicate: "noindex_name", Type: "string"}}
+		{Predicate: "noindex_name", Type: "string"}, {Predicate: "_xid_", Type: "string"}}
 	checkSchemaNodes(t, expected, actual)
 }
 

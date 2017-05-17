@@ -131,7 +131,7 @@ func StartRaftNodes(walDir string) {
 		gid, err := strconv.ParseUint(id, 0, 32)
 		x.Checkf(err, "Unable to parse group id: %v", id)
 		node := gr.newNode(uint32(gid), *raftId, *myAddr)
-		schema.LoadFromDb(uint32(gid))
+		x.Checkf(schema.LoadFromDb(uint32(gid)), "Error while initilizating schema")
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

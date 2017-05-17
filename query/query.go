@@ -39,7 +39,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
 )
 
 /*
@@ -705,7 +704,6 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 }
 
 func (args *params) fill(gq *gql.GraphQuery) error {
-
 	if v, ok := gq.Args["offset"]; ok {
 		offset, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
@@ -731,7 +729,15 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
-			from = farm.Fingerprint64([]byte(v))
+			umap, err := worker.GetUidsOverNetwork(context.Background(), []string{v})
+			if err != nil {
+				return err
+			}
+			id, found := umap[v]
+			if !found {
+				return worker.UidNotFound
+			}
+			from = id
 		}
 		args.From = uint64(from)
 	}
@@ -739,7 +745,15 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		to, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
-			to = farm.Fingerprint64([]byte(v))
+			umap, err := worker.GetUidsOverNetwork(context.Background(), []string{v})
+			if err != nil {
+				return err
+			}
+			id, found := umap[v]
+			if !found {
+				return worker.UidNotFound
+			}
+			to = id
 		}
 		args.To = uint64(to)
 	}
@@ -784,7 +798,7 @@ func isDebug(ctx context.Context) bool {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
+	if len(gq.ID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -833,10 +847,38 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Lang)
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
-	if len(gq.UID) > 0 {
-		o := make([]uint64, len(gq.UID))
-		copy(o, gq.UID)
-		sg.uidMatrix = []*protos.List{{gq.UID}}
+
+	var uids []uint64
+	var xids []string
+	for _, id := range gq.ID {
+		if uid, err := strconv.ParseUint(id, 0, 64); err == nil {
+			uids = append(uids, uid)
+		} else {
+			uids = append(uids, 0) // for maintaining order
+			xids = append(xids, id)
+		}
+	}
+	umap, err := worker.GetUidsOverNetwork(context.Background(), xids)
+	if err != nil {
+		return nil, err
+	}
+	for i, uid := range uids {
+		if uid == 0 {
+			uids[i] = umap[gq.ID[i]]
+		}
+	}
+	// remove uid 0
+	// we will return no result if corresponding uid is not found for an xid
+	for i, uid := range uids {
+		if uid == 0 {
+			uids[i] = uids[len(uids)-1]
+			uids = uids[:len(uids)-1]
+		}
+	}
+	if len(uids) > 0 {
+		o := make([]uint64, len(uids))
+		copy(o, uids)
+		sg.uidMatrix = []*protos.List{{uids}}
 		// User specified list may not be sorted.
 		sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
 		sg.SrcUIDs = &protos.List{o}
@@ -1148,7 +1190,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil &&
+		if gq == nil || (len(gq.ID) == 0 && gq.Func == nil &&
 			len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
 			continue
 		}

@@ -165,25 +165,25 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 		if strings.HasPrefix(nq.Subject, "_:") {
 			newUids[nq.Subject] = 0
 		} else {
-			// Only store xids that need to be marked as used.
-			if _, err := strconv.ParseInt(nq.Subject, 0, 64); err != nil {
-				uid, err := rdf.GetUid(nq.Subject)
-				if err != nil {
-					return mr, err
-				}
-				newUids[nq.Subject] = uid
+			// Only store xids that need to be generated.
+			_, err := rdf.ParseUid(nq.Subject)
+			if err == rdf.ErrInvalidUID {
+				return mr, err
+			} else if err != nil {
+				newUids[nq.Subject] = 0
 			}
 		}
 
 		if len(nq.ObjectId) > 0 {
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
-			} else if !strings.HasPrefix(nq.ObjectId, "_uid_:") {
-				uid, err := rdf.GetUid(nq.ObjectId)
-				if err != nil {
+			} else {
+				_, err := rdf.ParseUid(nq.ObjectId)
+				if err == rdf.ErrInvalidUID {
 					return mr, err
+				} else if err != nil {
+					newUids[nq.ObjectId] = 0
 				}
-				newUids[nq.ObjectId] = uid
 			}
 		}
 	}

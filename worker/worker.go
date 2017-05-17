@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
@@ -42,10 +43,13 @@ var (
 		"Folder in which to store backups.")
 	pstore       *store.Store
 	workerServer *grpc.Server
+	leaseGid     uint32
 )
 
 func Init(ps *store.Store) {
 	pstore = ps
+	// needs to be initialized after group config
+	leaseGid = group.BelongsTo("_lease_")
 }
 
 // grpcWorker struct implements the gRPC server interface.

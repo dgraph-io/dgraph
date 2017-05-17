@@ -28,13 +28,13 @@ func TestSpielberg(t *testing.T) {
     {
       me(id: m.06pj8) {
         name@en
-        director.film (first: 4)  {
+				director.film (first: 4, orderasc: initial_release_date)  {
             name@en
         }
       }
     }`
 
 	res := decodeResponse(q)
-	expectedRes := `{"me":[{"director.film":[{"name@en":"Indiana Jones and the Temple of Doom"},{"name@en":"Jaws"},{"name@en":"Saving Private Ryan"},{"name@en":"Close Encounters of the Third Kind"}],"name@en":"Steven Spielberg"}]}`
+	expectedRes := `{"me":[{"director.film":[{"name@en":"Firelight"},{"name@en":"Slipstream"},{"name@en":"Amblin"},{"name@en":"Duel"}],"name@en":"Steven Spielberg"}]}`
 	require.JSONEq(t, expectedRes, res)
 }

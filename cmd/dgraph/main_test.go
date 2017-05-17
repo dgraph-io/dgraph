@@ -76,6 +76,7 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 	posting.Init(ps)
 	group.ParseGroupConfig("groups.conf")
 	schema.Init(ps)
+	worker.Init(ps)
 	worker.StartRaftNodes(dir2)
 
 	return dir1, dir2, ps, nil
@@ -521,7 +522,7 @@ func TestDeleteAll(t *testing.T) {
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}`,
+	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice2"},{"name":"Alice1"}]}]}`,
 		output)
 
 	err = runMutation(m2)
@@ -617,7 +618,7 @@ func TestDeleteAllSP(t *testing.T) {
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}`,
+	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice2"},{"name":"Alice1"}]}]}`,
 		output)
 
 	output, err = runQuery(q3)
@@ -687,7 +688,6 @@ func TestSchemaValidationError(t *testing.T) {
 
 	ctx := context.Background()
 	_, err = mutationHandler(ctx, res.Mutation)
-
 	require.Error(t, err)
 	output := processToFastJSON(strings.Replace(q5, "<id>", "ram", -1))
 	require.JSONEq(t, `{}`, output)
@@ -730,13 +730,13 @@ func TestSchemaConversion(t *testing.T) {
 	require.JSONEq(t, `{"user":[{"name2":1.5}]}`, output)
 }
 
-var qErr = `
-	mutation {
-		set {
-			<0x0> <name> "Alice" .
-		}
-	}
-`
+var qErr = `		
+ 	mutation {		
+ 		set {		
+ 			<0x0> <name> "Alice" .		
+ 		}		
+ 	}		
+ `
 
 func TestMutationError(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: qErr, Http: true})
