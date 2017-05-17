@@ -20,10 +20,10 @@ package worker
 import (
 	"context"
 	"encoding/binary"
-	"time"
 
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
@@ -32,23 +32,22 @@ import (
 
 const (
 	LeasePredicate = "_lease_"
-	minLeaseNum    = uint64(1000)
+	minLeaseNum    = uint64(10000)
 )
 
 var (
-	lmgr     *lockManager
+	xidCache *xidToUids
 	leasemgr *leaseManager
 	leaseKey []byte
 )
 
 func init() {
 	leaseKey = x.DataKey(LeasePredicate, 1)
-	lmgr = new(lockManager)
-	lmgr.uids = make(map[string]*uid)
+	xidCache = new(xidToUids)
+	xidCache.uid = make(map[string]uint64)
 
 	leasemgr = new(leaseManager)
 	leasemgr.elog = trace.NewEventLog("Lease Manager", "")
-	go lmgr.clean()
 }
 
 type leaseManager struct {
@@ -76,6 +75,7 @@ func (l *leaseManager) resetLease(group uint32) {
 	}
 	l.maxLeaseId = binary.LittleEndian.Uint64(val.Value.([]byte))
 	l.minLeaseId = l.maxLeaseId + 1
+	l.elog.Printf("reset lease, minLeasedId: %d maxLeasedId: %d\n", l.minLeaseId, l.maxLeaseId)
 }
 
 func leaseMgr() *leaseManager {
@@ -95,18 +95,19 @@ func (l *leaseManager) assignNewUids(ctx context.Context, N uint64) (uint64, err
 		numLease = N
 	}
 	if available < N {
-		if err := proposeLease(ctx, l.maxLeaseId+numLease); err != nil {
+		if err := proposeAndWaitForLease(ctx, l.maxLeaseId+numLease); err != nil {
 			return 0, err
 		}
 		l.maxLeaseId = l.maxLeaseId + numLease
 	}
 
-	id := l.minLeaseId
+	id := l.minLeaseId // rand.Uint64()
 	l.minLeaseId += N
+	l.elog.Printf("assigned %d ids starting from %d\n", N, id)
 	return id, nil
 }
 
-func proposeLease(ctx context.Context, maxLeaseId uint64) error {
+func proposeAndWaitForLease(ctx context.Context, maxLeaseId uint64) error {
 	var bs [8]byte
 	binary.LittleEndian.PutUint64(bs[:], maxLeaseId)
 	edge := &protos.DirectedEdge{
@@ -116,9 +117,19 @@ func proposeLease(ctx context.Context, maxLeaseId uint64) error {
 		ValueType: uint32(types.IntID),
 		Op:        protos.DirectedEdge_SET,
 	}
-	return propose(ctx, edge)
+	mutations := &protos.Mutations{GroupId: leaseGid}
+	mutations.Edges = append(mutations.Edges, edge)
+	return proposeAndWait(ctx, mutations)
 }
 
+func proposeAndWait(ctx context.Context, mutations *protos.Mutations) error {
+	proposal := &protos.Proposal{Mutations: mutations}
+	node := groups().Node(leaseGid)
+	x.AssertTruef(node != nil, "Node doesn't serve group %d", leaseGid)
+	return node.ProposeAndWait(ctx, proposal)
+}
+
+/*
 func proposeUid(ctx context.Context, xid string, uid uint64) error {
 	edge := &protos.DirectedEdge{
 		Entity:    uid,
@@ -127,86 +138,54 @@ func proposeUid(ctx context.Context, xid string, uid uint64) error {
 		ValueType: uint32(types.StringID),
 		Op:        protos.DirectedEdge_SET,
 	}
-	return propose(ctx, edge)
-}
+	return proposeAndWait(ctx, edge)
+}*/
 
-func propose(ctx context.Context, edge *protos.DirectedEdge) error {
-	mutations := &protos.Mutations{GroupId: leaseGid}
-	mutations.Edges = append(mutations.Edges, edge)
-	proposal := &protos.Proposal{Mutations: mutations}
-	node := groups().Node(leaseGid)
-	x.AssertTruef(node != nil, "Node doesn't serve group %d", leaseGid)
-	return node.ProposeAndWait(ctx, proposal)
-}
-
-type lockManager struct {
+type xidToUids struct {
 	x.SafeMutex
-	uids map[string]*uid
+	// replace with lru cache later
+	uid map[string]uint64
 }
 
-type uid struct {
-	x.SafeMutex
-	uid uint64
-	ts  time.Time
-}
-
-func (lm *lockManager) uid(xid string) *uid {
-	lm.RLock()
-	u, has := lm.uids[xid]
-	if has {
-		lm.RUnlock()
-		return u
+func (xu *xidToUids) getUid(xid string) (uint64, error) {
+	xu.RLock()
+	if u, has := xu.uid[xid]; has {
+		xu.RUnlock()
+		return u, nil
 	}
-	lm.RUnlock()
+	xu.RUnlock()
 
-	lm.Lock()
-	defer lm.Unlock()
-	if u, has := lm.uids[xid]; has {
-		return u
+	xu.Lock()
+	defer xu.Unlock()
+	if u, has := xu.uid[xid]; has {
+		return u, nil
 	}
-	u = &uid{}
-	u.ts = time.Now()
-	lm.uids[xid] = u
-	return u
-}
-
-func (lm *lockManager) assignUidForXid(ctx context.Context, xid string) (uint64, error) {
-	s := lm.uid(xid)
-
-	s.Lock()
-	defer s.Unlock()
-	if s.uid != 0 {
-		return s.uid, nil
-	}
-	id, err := leaseMgr().assignNewUids(ctx, 1)
+	tokens, err := posting.IndexTokens("_xid_", "", types.Val{Tid: types.StringID, Value: []byte(xid)})
 	if err != nil {
-		return id, err
+		return 0, err
 	}
-	// To ensure that the key is not deleted immediately after persisting the id
-	if err := proposeUid(ctx, xid, id); err != nil {
-		return id, err
-	}
-	s.ts = time.Now()
-	s.uid = id
-	return s.uid, nil
-}
-
-func (lm *lockManager) clean() {
-	ticker := time.NewTicker(time.Minute)
-	for range ticker.C {
-		now := time.Now()
-		lm.Lock()
-		for xid, u := range lm.uids {
-			u.RLock()
-			if now.Sub(u.ts) > time.Minute {
-				delete(lm.uids, xid)
-			}
-			u.RUnlock()
+	x.AssertTrue(len(tokens) == 1)
+	key := x.IndexKey("_xid_", tokens[0])
+	pl, decr := posting.GetOrCreate(key, leaseGid)
+	defer decr()
+	ul := pl.Uids(emptyListOption)
+	algo.ApplyFilter(ul, func(uid uint64, i int) bool {
+		sv, err := fetchValue(uid, "_xid_", nil, types.StringID)
+		if sv.Value == nil || err != nil {
+			return false
 		}
-		lm.Unlock()
+		return sv.Value.(string) == xid
+	})
+	if len(ul.Uids) == 0 {
+		return 0, UidNotFound
 	}
+	x.AssertTrue(len(ul.Uids) == 1)
+	xu.uid[xid] = ul.Uids[0]
+	return xu.uid[xid], nil
 }
 
-func lockMgr() *lockManager {
-	return lmgr
+func (x *xidToUids) setUid(xid string, uid uint64) {
+	x.Lock()
+	defer x.Unlock()
+	x.uid[xid] = uid
 }

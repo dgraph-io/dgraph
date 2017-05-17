@@ -20,11 +20,9 @@ package worker
 import (
 	"errors"
 	"strings"
-	"sync"
 
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -33,15 +31,16 @@ import (
 )
 
 var (
-	emptyNum          protos.Num
-	emptyListOption   posting.ListOptions
-	emptyAssignedIds  protos.AssignedIds
-	UidNotFound       = errors.New("Uid not found for xid")
-	pendingAssignXids chan struct{}
+	emptyNum         protos.Num
+	emptyListOption  posting.ListOptions
+	emptyAssignedIds protos.AssignedIds
+	UidNotFound      = errors.New("Uid not found for xid")
+	chXids           chan xidsReq
 )
 
 func init() {
-	pendingAssignXids = make(chan struct{}, 5000)
+	chXids = make(chan xidsReq, 10000)
+	go assignUidsForXids()
 }
 
 func createNumQuery(group uint32, umap map[string]uint64) *protos.Num {
@@ -57,36 +56,11 @@ func createNumQuery(group uint32, umap map[string]uint64) *protos.Num {
 	return out
 }
 
-func getUid(ctx context.Context, xid string) (uint64, error) {
-	x.AssertTrue(groups().ServesGroup(leaseGid))
-	tokens, err := posting.IndexTokens("_xid_", "", types.Val{Tid: types.StringID, Value: []byte(xid)})
-	if err != nil {
-		return 0, err
-	}
-	x.AssertTrue(len(tokens) == 1)
-	key := x.IndexKey("_xid_", tokens[0])
-	pl, decr := posting.GetOrCreate(key, leaseGid)
-	defer decr()
-	ul := pl.Uids(emptyListOption)
-	algo.ApplyFilter(ul, func(uid uint64, i int) bool {
-		sv, err := fetchValue(uid, "_xid_", nil, types.StringID)
-		if sv.Value == nil || err != nil {
-			return false
-		}
-		return sv.Value.(string) == xid
-	})
-	if len(ul.Uids) == 0 {
-		return 0, UidNotFound
-	}
-	x.AssertTrue(len(ul.Uids) == 1)
-	return ul.Uids[0], nil
-}
-
 func getUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	out := &protos.AssignedIds{}
 	out.XidToUid = make(map[string]uint64)
 	for _, xid := range num.Xids {
-		uid, err := getUid(ctx, xid)
+		uid, err := xidCache.getUid(xid)
 		if err == UidNotFound {
 			continue
 		} else if err != nil {
@@ -145,6 +119,62 @@ func GetUidsOverNetwork(ctx context.Context, xids []string) (map[string]uint64, 
 	return res.XidToUid, err
 }
 
+type xidsReq struct {
+	num *protos.Num
+	out *protos.AssignedIds
+	ch  chan error
+	ctx context.Context
+}
+
+func assignUidsForXids() {
+OUTER:
+	for req := range chXids {
+		var xids []string
+		for _, xid := range req.num.Xids {
+			uid, err := xidCache.getUid(xid)
+			if err == UidNotFound {
+				xids = append(xids, xid)
+			} else if err != nil {
+				req.ch <- err
+				continue OUTER
+			} else {
+				req.out.XidToUid[xid] = uid
+			}
+		}
+		if len(xids) == 0 {
+			req.ch <- nil
+			continue
+		}
+
+		mutations := &protos.Mutations{GroupId: leaseGid}
+		startId, err := leaseMgr().assignNewUids(req.ctx, uint64(len(xids)))
+		if err != nil {
+			req.ch <- err
+			continue
+		}
+		for _, xid := range xids {
+			mutations.Edges = append(mutations.Edges, &protos.DirectedEdge{
+				Entity:    startId,
+				Attr:      "_xid_",
+				Value:     []byte(xid),
+				ValueType: uint32(types.StringID),
+				Op:        protos.DirectedEdge_SET,
+			})
+			startId++
+		}
+		if err = proposeAndWait(req.ctx, mutations); err != nil {
+			req.ch <- err
+			continue
+		}
+		for _, edge := range mutations.Edges {
+			xid := string(edge.Value)
+			req.out.XidToUid[xid] = edge.Entity
+			xidCache.setUid(xid, edge.Entity)
+		}
+		req.ch <- nil
+	}
+}
+
 // assignUids returns a byte slice containing uids.
 // This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
 // so we can tackle any collisions that might happen with the leasemanager
@@ -164,72 +194,20 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 
 	out := &protos.AssignedIds{}
 	out.XidToUid = make(map[string]uint64)
-	che := make(chan error, 1+numXids)
-	var m sync.Mutex
-	contxt, cancel := context.WithCancel(ctx)
-	defer cancel()
 
-	go func() {
-		if num.Val == 0 {
-			che <- nil
-			return
-		}
-		startId, err := leaseMgr().assignNewUids(contxt, num.Val)
+	if num.Val > 0 {
+		startId, err := leaseMgr().assignNewUids(ctx, num.Val)
 		if err != nil {
-			che <- err
-			return
+			return out, err
 		}
 		out.StartId = startId
 		out.EndId = startId + num.Val - 1
-		che <- nil
-	}()
-
-	for _, xid := range num.Xids {
-		go func(xid string) {
-			// ensures that we don't launch too many goroutines
-			pendingAssignXids <- struct{}{}
-			defer func() { <-pendingAssignXids }()
-			uid, err := getUid(ctx, xid)
-			if err == nil {
-				m.Lock()
-				defer m.Unlock()
-				out.XidToUid[xid] = uid
-				che <- nil
-				return
-			}
-			uid, err = lockMgr().assignUidForXid(contxt, xid)
-			if err != nil {
-				che <- err
-				return
-			}
-			m.Lock()
-			defer m.Unlock()
-			out.XidToUid[xid] = uid
-			che <- nil
-		}(xid)
 	}
 
-	for i := 0; i < 1+numXids; i++ {
-		select {
-		case err := <-che:
-			if err != nil {
-				cancel()
-				for i < 1+numXids {
-					<-che
-					i++
-				}
-				return out, err
-			}
-		case <-ctx.Done():
-			cancel()
-			for i < 1+numXids {
-				<-che
-				i++
-			}
-			return out, ctx.Err()
-		}
-	}
-	return out, nil
+	che := make(chan error, 1)
+	chXids <- xidsReq{num: num, out: out, ch: che, ctx: ctx}
+	err := <-che
+	return out, err
 }
 
 // AssignUidsOverNetwork assigns new uids and writes them to the umap.
