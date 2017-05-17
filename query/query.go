@@ -990,7 +990,7 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 
 	newMap := fromNode.vals
 	if newMap == nil {
-		newMap = make(map[uint64]types.Val)
+		return nil, x.Errorf("Variables not ordered correctly")
 	}
 	for ; idx < len(toNode.path); idx++ {
 		curNode := toNode.path[idx]
@@ -1027,7 +1027,7 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 }
 
 // transformVars transforms all the variables to the variable at the lowest level
-func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
+func transformVars(mNode *mathTree, doneVars map[string]varValue) ([]*SubGraph, error) {
 	mvarList := mNode.extractVarNodes()
 	// Iterate over the node list to find the node at the lowest level.
 	var maxVar string
@@ -1035,7 +1035,7 @@ func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
 	for _, mt := range mvarList {
 		mvarVal, ok := doneVars[mt.Var]
 		if !ok {
-			return x.Errorf("Variable not yet populated: %v", mt.Var)
+			return nil, x.Errorf("Variable not yet populated: %v", mt.Var)
 		}
 		if maxLevel < len(mvarVal.path) {
 			maxLevel = len(mvarVal.path)
@@ -1049,11 +1049,11 @@ func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
 		curNode := doneVars[mt.Var]
 		newMap, err := curNode.transformTo(maxNode)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		mt.Val = newMap
 	}
-	return nil
+	return maxNode.path, nil
 }
 
 func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *SubGraph) error {
@@ -1073,14 +1073,14 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 			return err
 		}
 		if sg.Params.Var != "" {
-			doneVars[sg.Params.Var] = varValue{
-				vals: mp,
-			}
+			it := doneVars[sg.Params.Var]
+			it.vals = mp
+			doneVars[sg.Params.Var] = it
 		}
 		sg.Params.uidToVal = mp
 	} else if sg.MathExp != nil {
 		// Preprocess to bring all variables to the same level.
-		err := transformVars(sg.MathExp, doneVars)
+		maxPath, err := transformVars(sg.MathExp, doneVars)
 		if err != nil {
 			return err
 		}
@@ -1092,6 +1092,8 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 		if sg.MathExp.Val != nil {
 			it := doneVars[sg.Params.Var]
 			it.vals = sg.MathExp.Val
+			// The path of math node is the path of max var node used in it.
+			it.path = maxPath
 			doneVars[sg.Params.Var] = it
 		} else if sg.MathExp.Const.Value != nil {
 			// Assign the const for all the srcUids.
