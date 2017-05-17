@@ -235,31 +235,47 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 	if sg.Params.uidCount != "" {
 		n.addCountAtRoot(sg, seedNode)
 	}
-	for _, uid := range sg.uidMatrix[0].Uids {
-		// For the root, the name is stored in Alias, not Attr.
-		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
-			// This UID was filtered. So Ignore it.
-			continue
-		}
-		n1 := seedNode.New(sg.Params.Alias)
 
-		if rerr := sg.preTraverse(uid, n1, n1); rerr != nil {
-			if rerr.Error() == "_INV_" {
+	if sg.Params.isGroupBy {
+		g := seedNode.New(sg.Params.Alias)
+		for _, grp := range sg.GroupbyRes.group {
+			uc := g.New("@groupby")
+			for _, it := range grp.keys {
+				uc.AddValue(it.attr, it.key)
+			}
+			for _, it := range grp.aggregates {
+				uc.AddValue(it.attr, it.key)
+			}
+			g.AddListChild("@groupby", uc)
+		}
+		n.AddMapChild(sg.Params.Alias, g, false)
+	} else {
+		for _, uid := range sg.uidMatrix[0].Uids {
+			// For the root, the name is stored in Alias, not Attr.
+			if algo.IndexOf(sg.DestUIDs, uid) < 0 {
+				// This UID was filtered. So Ignore it.
 				continue
 			}
-			return n.(*protoNode).Node, rerr
-		}
-		if n1.IsEmpty() {
-			continue
-		}
-		if !sg.Params.Normalize {
-			n.AddListChild(sg.Params.Alias, n1)
-			continue
-		}
+			n1 := seedNode.New(sg.Params.Alias)
 
-		// Lets normalize the response now.
-		for _, c := range n1.(*protoNode).normalize() {
-			n.AddListChild(sg.Params.Alias, &protoNode{&protos.Node{Properties: c}})
+			if rerr := sg.preTraverse(uid, n1, n1); rerr != nil {
+				if rerr.Error() == "_INV_" {
+					continue
+				}
+				return n.(*protoNode).Node, rerr
+			}
+			if n1.IsEmpty() {
+				continue
+			}
+			if !sg.Params.Normalize {
+				n.AddListChild(sg.Params.Alias, n1)
+				continue
+			}
+
+			// Lets normalize the response now.
+			for _, c := range n1.(*protoNode).normalize() {
+				n.AddListChild(sg.Params.Alias, &protoNode{&protos.Node{Properties: c}})
+			}
 		}
 	}
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
@@ -489,6 +505,22 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 
 	if sg.Params.uidCount != "" {
 		n.addCountAtRoot(sg, seedNode)
+	}
+
+	if sg.Params.isGroupBy {
+		g := seedNode.New(sg.Params.Alias)
+		for _, grp := range sg.GroupbyRes.group {
+			uc := g.New("@groupby")
+			for _, it := range grp.keys {
+				uc.AddValue(it.attr, it.key)
+			}
+			for _, it := range grp.aggregates {
+				uc.AddValue(it.attr, it.key)
+			}
+			g.AddListChild("@groupby", uc)
+		}
+		n.AddMapChild(sg.Params.Alias, g, false)
+		return nil
 	}
 
 	for i := 0; i < lenList; i++ {
