@@ -2,7 +2,7 @@
 set -e
 
 # This script is run when
-# 1. A cronjob is run on master which happens everyday and updates the nightly tag,
+# 1. A cronjob is run on master which happens everyday and updates the nightly tag.
 # 2. A new tag is pushed i.e. when we make a new release.
 # 3. A release is updated.
 run_upload_script() {
