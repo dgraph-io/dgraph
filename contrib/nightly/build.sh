@@ -1,11 +1,6 @@
 #!/bin/bash
 set -e
 
-TRAVIS_EVENT_TYPE="cron"
-TRAVIS=true
-TRAVIS_BRANCH="master"
-# TRAVIS_TAG="v0.7.6"
-
 # This script is run when
 # 1. A cronjob is run on master which happens everyday and updates the nightly tag,
 # 2. A new tag is pushed i.e. when we make a new release.
@@ -20,6 +15,10 @@ run_upload_script() {
 
 	# We run a cron job daily on Travis which will update the nightly binaries.
 	if [ $TRAVIS_EVENT_TYPE == "cron" ] && [ "$TRAVIS" = true ]; then
+		if [ "$TRAVIS_BRANCH"  != "master" ];then
+			echo "Cron job can only be run on master branch"
+			return 1
+		fi
 		echo "Running nightly script for cron job."
 		return 0
 	fi
@@ -234,9 +233,11 @@ upload_docker_image() {
 	echo "Logging into Docker."
 	docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
 	echo "Pushing the image"
-	docker push dgraph/dgraph:$DOCKER_TAG
+	echo -e "Pushing image with tag $DOCKER_TAG"
+	# docker push dgraph/dgraph:$DOCKER_TAG
 	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
-		docker push dgraph/dgraph:latest
+		echo -e "Pushing latest image"
+		# docker push dgraph/dgraph:latest
 	fi
 	popd > /dev/null
 }
@@ -246,10 +247,10 @@ echo "Building embedded binaries"
 contrib/releases/build.sh $ASSET_SUFFIX
 build_docker_image
 
-# if [ "$TRAVIS" = true ]; then
-#	upload_assets
-#	upload_docker_image
-# fi
+if [ "$TRAVIS" = true ]; then
+	upload_assets
+	upload_docker_image
+fi
 
 if [ "$DGRAPH" != "$CURRENT_DIR" ]; then
 	mv $ASSETS_FILE $NIGHTLY_FILE $SHA_FILE $CURRENT_DIR
