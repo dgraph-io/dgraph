@@ -53,7 +53,7 @@ type GraphQuery struct {
 	Cascade      bool
 	Facets       *Facets
 	FacetsFilter *FilterTree
-	GroupbyAttrs []string
+	GroupbyAttrs []AttrLang
 	FacetVar     map[string]string
 
 	// Internal fields below.
@@ -71,6 +71,11 @@ type Mutation struct {
 	Set    string
 	Del    string
 	Schema string
+}
+
+type AttrLang struct {
+	Attr  string
+	Langs []string
 }
 
 // pair denotes the key value pair that is part of the GraphQL query root in parenthesis.
@@ -755,6 +760,9 @@ L:
 				gq.Normalize = true
 			case "cascade":
 				gq.Cascade = true
+			case "groupby":
+				gq.IsGroupby = true
+				parseGroupby(it, gq)
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
@@ -1504,7 +1512,19 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 			if !expectArg {
 				return x.Errorf("Expected a comma or right round but got: %v", item.Val)
 			}
-			gq.GroupbyAttrs = append(gq.GroupbyAttrs, item.Val)
+			attr := collectName(it, item.Val)
+			var langs []string
+			items, err := it.Peek(1)
+			if err == nil && items[0].Typ == itemAt {
+				it.Next() // consume '@'
+				it.Next() // move forward
+				langs = parseLanguageList(it)
+			}
+			attrLang := AttrLang{
+				Attr:  attr,
+				Langs: langs,
+			}
+			gq.GroupbyAttrs = append(gq.GroupbyAttrs, attrLang)
 			count++
 			expectArg = false
 		}
@@ -1983,7 +2003,15 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				it.Next()
 				if gq.IsGroupby {
 					item = it.Item()
-					child.Attr = item.Val
+					attr := collectName(it, item.Val)
+					// Get language list, if present
+					items, err := it.Peek(1)
+					if err == nil && items[0].Typ == itemAt {
+						it.Next() // consume '@'
+						it.Next() // move forward
+						child.Langs = parseLanguageList(it)
+					}
+					child.Attr = attr
 					child.IsInternal = false
 				} else {
 					if it.Item().Val != "var" {

@@ -1398,11 +1398,11 @@ Facets that are a part of UID edges can be stored to a variable and used akin va
 ```
 curl localhost:8080/query -XPOST -d $'{
   var(id:<alice>) {
-    friend @facets(a as close, b as relative) 
+    friend @facets(a as close, b as relative)
   }
 
 	friend(id: var(a)) {
-		name 
+		name
 		var(a)
 	}
 
@@ -1412,7 +1412,7 @@ curl localhost:8080/query -XPOST -d $'{
 	}
 }' | python -m json.tool | less
 ```
-Output: 
+Output:
 ```
 {
   "friend": [
@@ -1651,7 +1651,8 @@ A simple example is:
 
 In the above query we retrieve the top movies (by sum of number of actors, genres, countries) of the entity named steven spielberg.
 
-If we want to add a condition based on release date to penalize movies that are more than 10 years old, we could do:
+
+Value variables and aggregations of them can be used in filters.  For example, if we want to add a condition based on release date to penalize movies that are more than 10 years old and want all scores greater than some value, we could do:
 
 {{< runnable >}}
 {
@@ -1666,7 +1667,7 @@ If we want to add a condition based on release date to penalize movies that are 
     }
   }
 
-  TopMovies(id: var(films), orderdesc: var(score), first: 5){
+  TopMovies(id: var(films), orderdesc: var(score)) @filter(gt(var(score), 2)){
     name@en
     var(score)
     var(date)
@@ -1674,7 +1675,9 @@ If we want to add a condition based on release date to penalize movies that are 
 }
 {{< /runnable >}}
 
-To aggregate the values over level we can do something like 
+
+
+To aggregate the values over level we can do something like
 {{< runnable >}}
 {
 	steven as var(func:allofterms(name, "steven spielberg")) {
@@ -1697,6 +1700,35 @@ To aggregate the values over level we can do something like
 
 Here `directorScore` would be sum of `score` of all the movies directed by a director.
 
+
+
+## GroupBy
+
+A `groupby` query aggregates query results given a set of properties on which to group elements.  For example, a query containing the block `friend @groupby(age) { count(_uid_) }`, finds all nodes reachable along the friend edge, partitions these into groups based on age, then counts how many nodes are in each group.  The returned result is the grouped edges and the aggregations.
+
+Inside a `groupby` block, only aggregations are allowed and `count` may only be applied to `_uid_`.   
+
+It is often necessary to use `groupby` in conjunction with variables to extract information other than the grouped or aggregated edges.
+
+For example, the following counts the number of movies in each genre and for each of those genres returns the genre name and the count.  The name can't be extracted in the `groupby` because it is not an aggregate, but `var(a)` can be used in its function as a UID to value map to organize the `byGenre` query by genre UID.  
+
+{{< runnable >}}
+{
+  var(func:allofterms(name, "steven spielberg")) {
+    director.film @groupby(genre) {
+      a as count(_uid_)
+    }
+  }
+
+  byGenre(id: var(a), orderdesc: var(a)) {
+    name
+    total_movies : var(a)
+  }
+}
+{{< /runnable >}}
+
+
+
 ## Expand Predicates
 
 `_predicate_` can be used to retrieve all the predicates that go out of the nodes at that level. For example:
@@ -1709,6 +1741,17 @@ Here `directorScore` would be sum of `score` of all the movies directed by a dir
 }
 {{< /runnable >}}
 
+The number of predicates from a node can be counted and be aliased.
+
+{{< runnable >}}
+{
+  director(func: allofterms(name, "steven spielberg")) {
+    num_predicates: count(_predicate_)
+    my_predicates: _predicate_
+  }
+}
+{{< /runnable >}}
+
 This can be stored in a variable and passed to `expand()` function to expand all the predicates in that list.
 
 {{< runnable >}}
@@ -1717,7 +1760,7 @@ This can be stored in a variable and passed to `expand()` function to expand all
     name
     pred as _predicate_
   }
-  
+
   director(func: allofterms(name@en, "steven spielberg")) {
     expand(var(pred)) {
       expand(_all_) # Expand all the predicates at this level
@@ -2042,6 +2085,6 @@ default value of `2`.
 * If the variable is initialized in the variable map, the default value will be
 overridden (In the example, `$a` will have value 5 and `$b` will be 3).
 
-* The variable types that are supported as of now are: `int`, `float`, `bool` and `string`.
+* The variable types that are supported as of now are: `int`, `float`, `bool`, `string` and `uid`.
 
 {{% notice "note" %}}In GraphiQL interface, the query and the variables have to be separately entered in their respective boxes.{{% /notice %}}
