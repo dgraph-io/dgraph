@@ -83,7 +83,7 @@ message Membership {
 	string addr = 3;
 	bool leader = 4;
 	// Need both group_id and id for add or removed
-	bool add = 5;
+	bool clearRemoved = 5;
 	bool removed = 6;
 	// group_id is not required while banning a server, only id would do
 	bool banned = 7;

@@ -321,18 +321,13 @@ func (g *groupi) Server(id uint64, groupId uint32) (rs server, found bool) {
 func (g *groupi) address(id uint64) string {
 	g.RLock()
 	defer g.RUnlock()
-	if id == *raftId {
-		return *myAddr
-	}
 	for _, sl := range g.all {
 		if addr := sl.address(id); len(addr) > 0 {
 			return addr
 		}
 	}
-	for _, sl := range g.removed {
-		if addr := sl.address(id); len(addr) > 0 {
-			return addr
-		}
+	if id == *raftId {
+		return *myAddr
 	}
 	return ""
 }
@@ -479,10 +474,11 @@ func (g *groupi) TouchLastUpdate(u uint64) {
 	}
 }
 
-func (g *groupi) syncBannedId(nodeId uint64) error {
+func (g *groupi) syncBannedId(nodeId uint64, addr string) error {
 	mm := &protos.Membership{
 		Id:     nodeId,
 		Banned: true,
+		Addr:   addr,
 	}
 	return g.syncMembership(mm)
 }
@@ -497,12 +493,12 @@ func (g *groupi) syncRemovedId(gid uint32, nodeId uint64, addr string) error {
 	return g.syncMembership(mm)
 }
 
-func (g *groupi) syncAddId(gid uint32, nodeId uint64, addr string) error {
+func (g *groupi) syncClearRemovedId(gid uint32, nodeId uint64, addr string) error {
 	mm := &protos.Membership{
-		Id:      nodeId,
-		GroupId: gid,
-		Add:     true,
-		Addr:    addr,
+		Id:           nodeId,
+		GroupId:      gid,
+		ClearRemoved: true,
+		Addr:         addr,
 	}
 	return g.syncMembership(mm)
 }
@@ -644,10 +640,17 @@ func (g *groupi) periodicSyncMemberships() {
 	}
 }
 
-func (g *groupi) updatePool(mm *protos.Membership) {
-	if mm.Add {
-		pools().reconnect(mm.Addr)
+func (g *groupi) updatePool(mm *protos.Membership, oldAddr string, raftIdx uint64) {
+	// Or we could do sync memebership after creating the node and before starting it
+	if raftIdx <= g.LastUpdate() {
+		if n := g.Node(mm.GroupId); n != nil && mm.Id != *raftId {
+			// update peer map on address change
+			go n.Connect(mm.Id, mm.Addr)
+		}
 		return
+	}
+	if len(oldAddr) > 0 && oldAddr != mm.Addr {
+		pools().close(oldAddr)
 	}
 	if mm.Removed {
 		// For nodes serving that group, connection would be
@@ -657,33 +660,32 @@ func (g *groupi) updatePool(mm *protos.Membership) {
 			pools().close(mm.Addr)
 		}
 		return
-	}
-	if mm.Banned {
+	} else if mm.Banned {
 		// After requesting closure also, raft node might try to connect to the node
 		// which is going to be removed.
 		pools().close(mm.Addr)
 		return
+	} else if mm.ClearRemoved {
+		go pools().reconnect(mm.Addr)
+		return
 	}
-	if n := g.Node(mm.GroupId); n != nil {
-		go func() {
-			// update peer map on address change
-			n.Connect(mm.Id, mm.Addr)
-		}()
+
+	if n := g.Node(mm.GroupId); n != nil && mm.Id != *raftId {
+		// update peer map on address change
+		go n.Connect(mm.Id, mm.Addr)
 		return
 	}
 	if mm.Addr != *myAddr {
-		go func() {
-			pools().connect(mm.Addr)
-		}()
+		go pools().connect(mm.Addr)
+		return
 	}
-	// Handle cases of address change of node
 }
 
 // raftIdx is the RAFT index corresponding to the application of this
 // membership update in group zero.
 func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 	// Ignore membership update for removed nodes until it is explicity added
-	if !mm.Add && groups().reject(mm.GroupId, mm.Id) {
+	if !mm.ClearRemoved && groups().reject(mm.GroupId, mm.Id) {
 		return
 	}
 	update := server{
@@ -707,8 +709,9 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 		sl = new(servers)
 		g.all[mm.GroupId] = sl
 	}
+	oldAddr := sl.address(mm.Id)
 
-	if mm.Add {
+	if mm.ClearRemoved {
 		g.clearRemoveId(mm.GroupId, update)
 	} else if mm.Banned {
 		g.banId(update)
@@ -737,7 +740,7 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 		}
 	}
 	g.Unlock()
-	g.updatePool(mm)
+	g.updatePool(mm, oldAddr, raftIdx)
 	g.RLock()
 	defer g.RUnlock()
 
@@ -771,11 +774,17 @@ func (g *groupi) MembershipUpdateAfter(ridx uint64) *protos.MembershipUpdate {
 			}
 			out.Members = append(out.Members,
 				&protos.Membership{
+					Id:           s.NodeId,
+					GroupId:      gid,
+					ClearRemoved: true,
+					Addr:         s.Addr,
+				})
+			out.Members = append(out.Members,
+				&protos.Membership{
 					Leader:  s.Leader,
 					Id:      s.NodeId,
 					GroupId: gid,
 					Addr:    s.Addr,
-					Add:     true,
 				})
 		}
 	}
@@ -834,20 +843,20 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 	}
 	che := make(chan error, len(update.Members))
 	for _, mm := range update.Members {
-		if !mm.Add && ((groups().isDuplicate(mm.GroupId, mm.Id, mm.Addr,
+		if !mm.ClearRemoved && ((groups().isDuplicate(mm.GroupId, mm.Id, mm.Addr,
 			mm.Leader) && !mm.Banned && !mm.Removed) || groups().reject(mm.GroupId, mm.Id)) {
 			che <- nil
 			continue
 		}
 
 		mmNew := &protos.Membership{
-			Leader:  mm.Leader,
-			Id:      mm.Id,
-			GroupId: mm.GroupId,
-			Addr:    mm.Addr,
-			Removed: mm.Removed,
-			Banned:  mm.Banned,
-			Add:     mm.Add,
+			Leader:       mm.Leader,
+			Id:           mm.Id,
+			GroupId:      mm.GroupId,
+			Addr:         mm.Addr,
+			Removed:      mm.Removed,
+			Banned:       mm.Banned,
+			ClearRemoved: mm.ClearRemoved,
 		}
 
 		go func(mmNew *protos.Membership) {

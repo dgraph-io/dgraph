@@ -94,34 +94,34 @@ func (p *poolsi) connect(addr string) {
 	x.Check2(rand.Read(query.Data))
 
 	conn, err := pool.Get()
+	defer pool.Put(conn)
 	x.Checkf(err, "Unable to connect")
 
 	c := protos.NewWorkerClient(conn)
 	resp, err := c.Echo(context.Background(), query)
 	if err != nil {
-		pool.Put(conn)
+		pool.close()
 		log.Printf("While trying to connect to %q, got error: %v\n", addr, err)
 		return
 	}
 	x.AssertTrue(bytes.Equal(resp.Data, query.Data))
-	x.Check(pool.Put(conn))
 	fmt.Printf("Connection with %q successful.\n", addr)
 
 	p.Lock()
 	defer p.Unlock()
 	_, has = p.all[addr]
 	if has {
+		pool.close()
 		return
 	}
 	p.all[addr] = pool
 }
 
-// reconnect replaces the older pool as it might have been closed
+// reconnect creates a new pool if it doesn't exist or the earlier pool was closed
 func (p *poolsi) reconnect(addr string) {
 	if addr == *myAddr {
 		return
 	}
-
 	p.RLock()
 	pool, has := p.all[addr]
 	p.RUnlock()
@@ -132,6 +132,11 @@ func (p *poolsi) reconnect(addr string) {
 	pool = newPool(addr, 5)
 	p.Lock()
 	defer p.Unlock()
+	_, has = p.all[addr]
+	if has && !pool.isClosed() {
+		pool.close()
+		return
+	}
 	p.all[addr] = pool
 }
 
@@ -168,8 +173,8 @@ func (p *pool) dialNew() (*grpc.ClientConn, error) {
 // Get returns a connection from the pool of connections or a new connection if
 // the pool is empty.
 func (p *pool) Get() (*grpc.ClientConn, error) {
-	p.RLock()
-	defer p.RUnlock()
+	p.Lock()
+	defer p.Unlock()
 	if p == nil {
 		return nil, errNoConnection
 	}
@@ -189,14 +194,14 @@ func (p *pool) Get() (*grpc.ClientConn, error) {
 func (p *pool) close() {
 	p.Lock()
 	defer p.Unlock()
+	if p.closed {
+		return
+	}
 	p.closed = true
 	close(p.conns)
-	go func() {
-		// some connections might be returned later
-		for conn := range p.conns {
-			conn.Close()
-		}
-	}()
+	for conn := range p.conns {
+		conn.Close()
+	}
 }
 
 // Put returns a connection to the pool or closes and discards the connection

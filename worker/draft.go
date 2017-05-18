@@ -1253,25 +1253,25 @@ func manageClusterOverNetwork(ctx context.Context, gid uint32, nodeId uint64, op
 }
 
 func ManageClusterOverNetwork(mc ClusterConfChanges) error {
+	addr := groups().address(mc.Id)
+	if len(addr) == 0 {
+		return x.Errorf(
+			"Node with id %d not found, please retry the request on node %d",
+			mc.Id, mc.Id)
+	}
 	if mc.Op == REMOVE_SERVER {
 		if len(mc.Gids) == 0 {
 			mc.Gids = groups().groupsServed(mc.Id)
 		}
-		groups().syncBannedId(mc.Id)
+		groups().syncBannedId(mc.Id, addr)
 	}
 
-	addr := groups().address(mc.Id)
 	for _, gid := range mc.Gids {
 		if mc.Op == ADD_GROUPS {
-			if len(addr) == 0 {
-				return x.Errorf(
-					"Node with id %d not found, please retry the request on node %d",
-					mc.Id, mc.Id)
-			}
 			if _, found := groups().Server(mc.Id, gid); found {
 				return x.Errorf("Node %d is already serving group %d", mc.Id, gid)
 			}
-			groups().syncAddId(gid, mc.Id, addr)
+			groups().syncClearRemovedId(gid, mc.Id, addr)
 		} else if mc.Op == REMOVE_GROUPS {
 			if _, found := groups().Server(mc.Id, gid); !found {
 				return x.Errorf("node %d not serving group %d", mc.Id, gid)
