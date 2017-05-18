@@ -144,6 +144,7 @@ type params struct {
 	isGroupBy    bool
 	groupbyAttrs []string
 	uidCount     string
+	numPaths     int
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -724,6 +725,13 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			return err
 		}
 		args.RecurseDepth = from
+	}
+	if v, ok := gq.Args["numpaths"]; ok && args.Alias == "shortest" {
+		numPaths, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return err
+		}
+		args.numPaths = int(numPaths)
 	}
 	if v, ok := gq.Args["from"]; ok && args.Alias == "shortest" {
 		from, err := strconv.ParseUint(v, 0, 64)
@@ -1997,7 +2005,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth":
+	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth":
 		return true
 	}
 	return false

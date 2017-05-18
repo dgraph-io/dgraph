@@ -275,6 +275,11 @@ func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 	heap.Push(&pq, srcNode)
 
 	numHops := -1
+	numPaths := sg.Params.numPaths
+	if numPaths == 0 {
+		// Return 1 path by default.
+		numPaths = 1
+	}
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
@@ -323,7 +328,9 @@ func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 			for toUid, info := range neighbours {
 				cost := info.cost
 				d, ok := dist[toUid]
-				if ok && d.cost <= item.cost+cost {
+				if ok && d.cost < item.cost+cost {
+					// Skip if the new cost is strictly greater. As we want multiple paths, equality can't
+					// be ignored.
 					continue
 				}
 				if !ok {
@@ -358,7 +365,6 @@ func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 						facet:  info.facet,
 					}
 				}
-
 			}
 		}
 	}

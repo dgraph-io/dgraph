@@ -1503,6 +1503,24 @@ func TestShortestPath_NoPath(t *testing.T) {
 		js)
 }
 
+func TestTwoShortestPath(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:0x01, to:31, numpaths: 2) {
+				friend
+			}
+
+			me(id: var( A)) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"_path_":[{"_uid_":"0x1","friend":[{"_uid_":"0x1f"}]}],"me":[{"name":"Michonne"},{"name":"Andrea"}]}`,
+		js)
+}
+
 func TestShortestPath(t *testing.T) {
 	populateGraph(t)
 	query := `
