@@ -143,7 +143,7 @@ type params struct {
 	ignoreResult bool   // Node results are ignored.
 	Expand       string // Var to use for expand.
 	isGroupBy    bool
-	groupbyAttrs []string
+	groupbyAttrs []gql.AttrLang
 	uidCount     string
 }
 
@@ -1786,11 +1786,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 	if sg.IsGroupBy() {
 		// Add the attrs required by groupby nodes
-		for _, attr := range sg.Params.groupbyAttrs {
+		for _, it := range sg.Params.groupbyAttrs {
 			sg.Children = append(sg.Children, &SubGraph{
-				Attr: attr,
+				Attr: it.Attr,
 				Params: params{
 					ignoreResult: true,
+					Langs:        it.Langs,
 				},
 			})
 		}

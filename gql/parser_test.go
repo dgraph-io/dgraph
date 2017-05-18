@@ -2757,7 +2757,7 @@ func TestParseGroupbyRoot(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Query[0].GroupbyAttrs))
-	require.Equal(t, "friends", res.Query[0].GroupbyAttrs[0])
+	require.Equal(t, "friends", res.Query[0].GroupbyAttrs[0].Attr)
 	require.Equal(t, "a", res.Query[0].Children[0].Var)
 }
 
@@ -2781,7 +2781,7 @@ func TestParseGroupbyWithCountVar(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Query[0].Children[0].GroupbyAttrs))
-	require.Equal(t, "friends", res.Query[0].Children[0].GroupbyAttrs[0])
+	require.Equal(t, "friends", res.Query[0].Children[0].GroupbyAttrs[0].Attr)
 	require.Equal(t, "a", res.Query[0].Children[0].Children[0].Var)
 }
 
@@ -2790,7 +2790,7 @@ func TestParseGroupbyWithMaxVar(t *testing.T) {
 	query {
 		me(id:0x1) {
 			friends @groupby(friends) {
-				a as max(name)
+				a as max(first-name@en:ta)
 			}
 			hometown
 			age
@@ -2805,7 +2805,9 @@ func TestParseGroupbyWithMaxVar(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Query[0].Children[0].GroupbyAttrs))
-	require.Equal(t, "friends", res.Query[0].Children[0].GroupbyAttrs[0])
+	require.Equal(t, "friends", res.Query[0].Children[0].GroupbyAttrs[0].Attr)
+	require.Equal(t, "first-name", res.Query[0].Children[0].Children[0].Attr)
+	require.Equal(t, []string{"en", "ta"}, res.Query[0].Children[0].Children[0].Langs)
 	require.Equal(t, "a", res.Query[0].Children[0].Children[0].Var)
 }
 
@@ -2813,7 +2815,7 @@ func TestParseGroupby(t *testing.T) {
 	query := `
 	query {
 		me(id:0x1) {
-			friends @groupby(name) {
+			friends @groupby(name@en) {
 				count(_uid_)
 			}
 			hometown
@@ -2824,7 +2826,8 @@ func TestParseGroupby(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Query[0].Children[0].GroupbyAttrs))
-	require.Equal(t, "name", res.Query[0].Children[0].GroupbyAttrs[0])
+	require.Equal(t, "name", res.Query[0].Children[0].GroupbyAttrs[0].Attr)
+	require.Equal(t, "en", res.Query[0].Children[0].GroupbyAttrs[0].Langs[0])
 }
 
 func TestParseGroupbyError(t *testing.T) {
