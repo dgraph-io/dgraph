@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-go get -u golang.org/x/net/context
-go get -u google.golang.org/grpc
-
 # This script is run when
 # 1. A cronjob is run on master which happens everyday and updates the nightly tag,
 # 2. A new tag is pushed i.e. when we make a new release.
@@ -162,7 +159,7 @@ upload_assets() {
 		else
 			read release_id < <( \
 				send_gh_api_data_request repos/${DGRAPH_REPO}/releases POST \
-				"{ \"name\": \"Dgraph ${DGRAPH_VERSION}\", \"tag_name\": \"${BUILD_TAG}\", \
+				"{ \"name\": \"Dgraph ${DGRAPH_VERSION} Release\", \"tag_name\": \"${BUILD_TAG}\", \
 				\"draft\": true }" \
 				| jq -r -c '.id') \
 				|| exit
@@ -217,7 +214,7 @@ build_docker_image() {
 	# Extract dgraph folder from the tar as its required by the Dockerfile.
 	tar -xzf ${NIGHTLY_FILE}
 	cp ${ASSETS_FILE} .
-	echo "Building the dgraph master image."
+	echo -e "Building the docker image with tag: $DOCKER_TAG."
 	docker build -t dgraph/dgraph:$DOCKER_TAG .
 	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
 		echo "Tagging docker image with latest tag"
@@ -237,10 +234,10 @@ upload_docker_image() {
 	docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
 	echo "Pushing the image"
 	echo -e "Pushing image with tag $DOCKER_TAG"
-	# docker push dgraph/dgraph:$DOCKER_TAG
+	docker push dgraph/dgraph:$DOCKER_TAG
 	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
 		echo -e "Pushing latest image"
-		# docker push dgraph/dgraph:latest
+		docker push dgraph/dgraph:latest
 	fi
 	popd > /dev/null
 }
@@ -258,17 +255,5 @@ fi
 if [ "$DGRAPH" != "$CURRENT_DIR" ]; then
 	mv $ASSETS_FILE $NIGHTLY_FILE $SHA_FILE $CURRENT_DIR
 fi
-
-echo -e "Version $DGRAPH_VERSION"
-echo -e "Latest tag $LATEST_TAG"
-echo -e "Tar file $TAR_FILE"
-echo $NIGHTLY_FILE
-echo $SHA_FILE_NAME
-echo $SHA_FILE
-echo $ASSETS_FILE
-echo -e "Current branch $CURRENT_BRANCH"
-echo -e "Docker $DOCKER_TAG"
-
-ls $CURRENT_DIR
 
 popd > /dev/null

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-exit 0
-
 SRC="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
 TMP=$(mktemp /tmp/dgraph-coverage-XXXXX.txt)
 
