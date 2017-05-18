@@ -85,7 +85,7 @@ get_version() {
 TRAVIS_EVENT_TYPE=${TRAVIS_EVENT_TYPE:-cron}
 if ! run_upload_script; then
 	echo "Skipping running the nightly script"
-	exit 1
+	exit 0
 else
 	echo "Running nightly script"
 fi
