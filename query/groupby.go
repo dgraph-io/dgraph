@@ -191,7 +191,7 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *protos.List, groupVal [
 	}
 }
 
-func (sg *SubGraph) processGroupBy(doneVars map[string]varValue) error {
+func (sg *SubGraph) processGroupBy(doneVars map[string]VarValue) error {
 	mp := make(map[string]groupResult)
 	_ = mp
 	var dedupMap dedup
@@ -254,7 +254,7 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue) error {
 				}
 				tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
 			}
-			doneVars[chVar] = varValue{vals: tempMap}
+			doneVars[chVar] = VarValue{Vals: tempMap}
 		}
 		child.Params.ignoreResult = true
 	}
