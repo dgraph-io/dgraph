@@ -121,7 +121,9 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult, error) {
+func convertToEdges(ctx context.Context,
+	nquads []*protos.NQuad,
+	vars map[string]query.VarValue) (mutationResult, error) {
 	var edges []*protos.DirectedEdge
 	var mr mutationResult
 
@@ -132,7 +134,7 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 		} else {
 			// Only store xids that need to be marked as used.
 			if _, err := strconv.ParseInt(nq.Subject, 0, 64); err != nil {
-				uid, err := rdf.GetUid(nq.Subject)
+				uid, err := gql.GetUid(nq.Subject)
 				if err != nil {
 					return mr, err
 				}
@@ -144,7 +146,7 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
 			} else if !strings.HasPrefix(nq.ObjectId, "_uid_:") {
-				uid, err := rdf.GetUid(nq.ObjectId)
+				uid, err := gql.GetUid(nq.ObjectId)
 				if err != nil {
 					return mr, err
 				}
@@ -161,16 +163,25 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 	}
 
 	// Wrapper for a pointer to protos.Nquad
-	var wnq rdf.NQuad
+	var wnq gql.NQuad
 	for _, nq := range nquads {
-		// Get edges from nquad using newUids.
-		wnq = rdf.NQuad{nq}
-		edge, err := wnq.ToEdgeUsing(newUids)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
-			return mr, err
+		wnq = gql.NQuad{nq}
+		if len(nq.Subject) > 0 {
+			// Get edges from nquad using newUids.
+			edge, err := wnq.ToEdgeUsing(newUids)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
+				return mr, err
+			}
+			edges = append(edges, edge)
+		} else { // variable in subject
+			x.AssertTrue(len(nq.SubjectVar) > 0)
+			expanded, err := wnq.ExpandSubjectVar(vars[nq.SubjectVar].Uids.Uids, newUids)
+			if err != nil {
+				return mr, err
+			}
+			edges = append(edges, expanded...)
 		}
-		edges = append(edges, edge)
 	}
 
 	resultUids := make(map[string]uint64)
@@ -270,7 +281,9 @@ func ismutationAllowed(ctx context.Context, mutation *protos.Mutation) bool {
 	return true
 }
 
-func convertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string]uint64, error) {
+func convertAndApply(ctx context.Context,
+	mutation *protos.Mutation,
+	vars map[string]query.VarValue) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var m protos.Mutations
 	var err error
@@ -280,7 +293,7 @@ func convertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string
 		return nil, mutationNotAllowedErr
 	}
 
-	if mr, err = convertToEdges(ctx, mutation.Set); err != nil {
+	if mr, err = convertToEdges(ctx, mutation.Set, vars); err != nil {
 		return nil, err
 	}
 	m.Edges, allocIds = mr.edges, mr.newUids
@@ -288,7 +301,7 @@ func convertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string
 		m.Edges[i].Op = protos.DirectedEdge_SET
 	}
 
-	if mr, err = convertToEdges(ctx, mutation.Del); err != nil {
+	if mr, err = convertToEdges(ctx, mutation.Del, vars); err != nil {
 		return nil, err
 	}
 	for i := range mr.edges {
@@ -346,7 +359,9 @@ func enrichSchema(updates []*protos.SchemaUpdate) error {
 
 // This function is used to run mutations for the requests from different
 // language clients.
-func runMutations(ctx context.Context, mu *protos.Mutation) (map[string]uint64, error) {
+func runMutations(ctx context.Context,
+	mu *protos.Mutation,
+	vars map[string]query.VarValue) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var err error
 
@@ -355,7 +370,7 @@ func runMutations(ctx context.Context, mu *protos.Mutation) (map[string]uint64, 
 	}
 
 	mutation := &protos.Mutation{Set: mu.Set, Del: mu.Del, Schema: mu.Schema}
-	if allocIds, err = convertAndApply(ctx, mutation); err != nil {
+	if allocIds, err = convertAndApply(ctx, mutation, vars); err != nil {
 		return nil, err
 	}
 	return allocIds, nil
@@ -363,22 +378,10 @@ func runMutations(ctx context.Context, mu *protos.Mutation) (map[string]uint64, 
 
 // This function is used to run mutations for the requests received from the
 // http client.
-func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
+func mutationHandler(ctx context.Context, mu *gql.Mutation, vars map[string]query.VarValue) (map[string]uint64, error) {
 	var s []*protos.SchemaUpdate
 	var allocIds map[string]uint64
 	var err error
-
-	// if len(mu.Set) > 0 {
-	// 	if set, err = rdf.ConvertToNQuads(ctx, mu.Set); err != nil {
-	// 		return nil, x.Wrap(err)
-	// 	}
-	// }
-
-	// if len(mu.Del) > 0 {
-	// 	if del, err = rdf.ConvertToNQuads(ctx, mu.Del); err != nil {
-	// 		return nil, x.Wrap(err)
-	// 	}
-	// }
 
 	if len(mu.Schema) > 0 {
 		if s, err = schema.Parse(mu.Schema); err != nil {
@@ -387,7 +390,7 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 	}
 
 	mutation := &protos.Mutation{Set: mu.Set, Del: mu.Del, Schema: s}
-	if allocIds, err = convertAndApply(ctx, mutation); err != nil {
+	if allocIds, err = convertAndApply(ctx, mutation, vars); err != nil {
 		return nil, err
 	}
 	return allocIds, nil
@@ -433,10 +436,6 @@ func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 type wrappedErr struct {
 	Err     error
 	Message string
-}
-
-func hasGQLOps(mu *gql.Mutation) bool {
-	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
@@ -497,9 +496,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	var allocIds map[string]uint64
 	var allocIdsStr map[string]string
-	// If we have mutations, run them first.
-	if res.Mutation != nil && hasGQLOps(res.Mutation) {
-		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
+
+	// If we have mutations that don't depend on query, run them first.
+	var vars map[string]query.VarValue
+	mutationsBeforeQuery := len(res.MutationVars) == 0
+	runMutations := func() {
+		if allocIds, err = mutationHandler(ctx, res.Mutation, vars); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			x.SetStatus(w, x.Error, err.Error())
 			return
@@ -509,6 +511,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		for k, v := range allocIds {
 			allocIdsStr[k] = fmt.Sprintf("%#x", v)
 		}
+	}
+	if res.Mutation != nil && res.Mutation.HasOps() && mutationsBeforeQuery {
+		runMutations()
 	}
 
 	var schemaNode []*protos.SchemaNode
@@ -539,11 +544,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sgl, err := query.ProcessQuery(ctx, res, &l)
+	sgl, vars, err := query.ProcessQuery(ctx, res, &l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while Executing query"))
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
+	}
+
+	if !mutationsBeforeQuery {
+		runMutations()
 	}
 
 	if len(*dumpSubgraph) > 0 {
@@ -609,7 +618,7 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 
 	var allocIds map[string]uint64
 	var allocIdsStr map[string]string
-	if allocIds, err = mutationHandler(ctx, &mutation); err != nil {
+	if allocIds, err = mutationHandler(ctx, &mutation, nil); err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 		x.SetStatus(w, x.Error, err.Error())
 		return
@@ -744,8 +753,8 @@ func (s *grpcServer) Run(ctx context.Context,
 
 	// If mutations are part of the query, we run them through the mutation handler
 	// same as the http client.
-	if res.Mutation != nil && hasGQLOps(res.Mutation) {
-		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
+	if res.Mutation != nil && res.Mutation.HasOps() {
+		if allocIds, err = mutationHandler(ctx, res.Mutation, nil); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
 		}
@@ -753,7 +762,7 @@ func (s *grpcServer) Run(ctx context.Context,
 
 	// Mutations are sent as part of the mutation object
 	if req.Mutation != nil && hasGraphOps(req.Mutation) {
-		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
+		if allocIds, err = runMutations(ctx, req.Mutation, nil); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
 		}
@@ -777,7 +786,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.Schema = schemaNodes
 
-	sgl, err := query.ProcessQuery(ctx, res, &l)
+	sgl, _, err := query.ProcessQuery(ctx, res, &l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
 		return resp, err

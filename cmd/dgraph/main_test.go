@@ -103,7 +103,7 @@ func processToFastJSON(q string) string {
 
 	var l query.Latency
 	ctx := context.Background()
-	sgl, err := query.ProcessQuery(ctx, res, &l)
+	sgl, _, err := query.ProcessQuery(ctx, res, &l)
 
 	if err != nil {
 		log.Fatal(err)
@@ -125,7 +125,7 @@ func runQuery(q string) (string, error) {
 
 	var l query.Latency
 	ctx := context.Background()
-	sgl, err := query.ProcessQuery(ctx, res, &l)
+	sgl, _, err := query.ProcessQuery(ctx, res, &l)
 
 	if err != nil {
 		return "", err

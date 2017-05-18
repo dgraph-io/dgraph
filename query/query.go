@@ -128,7 +128,7 @@ type params struct {
 	OrderDesc    bool
 	Var          string
 	NeedsVar     []gql.VarContext
-	ParentVars   map[string]varValue
+	ParentVars   map[string]VarValue
 	FacetVar     map[string]string
 	uidToVal     map[uint64]types.Val
 	Langs        []string
@@ -797,7 +797,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Alias:      gq.Alias,
 		Langs:      gq.Langs,
 		Var:        gq.Var,
-		ParentVars: make(map[string]varValue),
+		ParentVars: make(map[string]VarValue),
 		Normalize:  gq.Normalize,
 		Cascade:    gq.Cascade,
 		isGroupBy:  gq.IsGroupby,
@@ -921,15 +921,15 @@ func createTaskQuery(sg *SubGraph) *protos.Query {
 	return out
 }
 
-type varValue struct {
-	uids *protos.List
-	vals map[uint64]types.Val
+type VarValue struct {
+	Uids *protos.List
+	Vals map[uint64]types.Val
 	path []*SubGraph // This stores the subgraph path from root to var definition.
 	// TODO: Check if we can do without this field.
 	strList []*protos.TaskValue
 }
 
-func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[uint64]types.Val,
+func evalLevelAgg(doneVars map[string]VarValue, sg, parent *SubGraph) (mp map[uint64]types.Val,
 	rerr error) {
 	if parent == nil {
 		return mp, ErrWrongAgg
@@ -951,7 +951,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 		return mp, x.Errorf("Invalid variable aggregation. Check the levels.")
 	}
 
-	vals := doneVars[needsVar].vals
+	vals := doneVars[needsVar].Vals
 	mp = make(map[uint64]types.Val)
 	// Go over the sibling node and aggregate.
 	for i, list := range relSG.uidMatrix {
@@ -989,7 +989,7 @@ func (mt *mathTree) extractVarNodes() []*mathTree {
 
 // transformTo transforms fromNode to toNode level using the path between them and the
 // corresponding uidMatrices.
-func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, error) {
+func (fromNode *VarValue) transformTo(toNode VarValue) (map[uint64]types.Val, error) {
 	x.AssertTrue(len(toNode.path) >= len(fromNode.path))
 	idx := 0
 	for ; idx < len(fromNode.path); idx++ {
@@ -998,7 +998,7 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 		}
 	}
 
-	newMap := fromNode.vals
+	newMap := fromNode.Vals
 	if newMap == nil {
 		newMap = make(map[uint64]types.Val)
 	}
@@ -1038,7 +1038,7 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 }
 
 // transformVars transforms all the variables to the variable at the lowest level
-func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
+func transformVars(mNode *mathTree, doneVars map[string]VarValue) error {
 	mvarList := mNode.extractVarNodes()
 	// Iterate over the node list to find the node at the lowest level.
 	var maxVar string
@@ -1067,7 +1067,7 @@ func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
 	return nil
 }
 
-func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *SubGraph) error {
+func (sg *SubGraph) valueVarAggregation(doneVars map[string]VarValue, parent *SubGraph) error {
 	if !sg.IsInternal() && !sg.IsGroupBy() {
 		return nil
 	}
@@ -1084,8 +1084,8 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 			return err
 		}
 		if sg.Params.Var != "" {
-			doneVars[sg.Params.Var] = varValue{
-				vals: mp,
+			doneVars[sg.Params.Var] = VarValue{
+				Vals: mp,
 			}
 		}
 		sg.Params.uidToVal = mp
@@ -1101,14 +1101,14 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 			return err
 		}
 		if sg.MathExp.Val != nil {
-			doneVars[sg.Params.Var] = varValue{vals: sg.MathExp.Val}
+			doneVars[sg.Params.Var] = VarValue{Vals: sg.MathExp.Val}
 		} else if sg.MathExp.Const.Value != nil {
 			// Assign the const for all the srcUids.
 			mp := make(map[uint64]types.Val)
 			for _, uid := range sg.SrcUIDs.Uids {
 				mp[uid] = sg.MathExp.Const
 			}
-			doneVars[sg.Params.Var] = varValue{vals: mp}
+			doneVars[sg.Params.Var] = VarValue{Vals: mp}
 		} else {
 			return x.Errorf("Missing values/constant in math expression")
 		}
@@ -1118,17 +1118,17 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 		// This is a var() block.
 		srcVar := sg.Params.NeedsVar[0]
 		srcMap := doneVars[srcVar.Name]
-		if srcMap.vals == nil {
+		if srcMap.Vals == nil {
 			return x.Errorf("Missing value variable %v", srcVar)
 		}
-		sg.Params.uidToVal = srcMap.vals
+		sg.Params.uidToVal = srcMap.Vals
 	} else {
 		return x.Errorf("Unhandled internal node %v with parent %v", sg.Attr, parent.Attr)
 	}
 	return nil
 }
 
-func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, parent *SubGraph) error {
+func (sg *SubGraph) populatePostAggregation(doneVars map[string]VarValue, parent *SubGraph) error {
 	for idx := 0; idx < len(sg.Children); idx++ {
 		child := sg.Children[idx]
 		err := child.populatePostAggregation(doneVars, sg)
@@ -1139,12 +1139,12 @@ func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, parent
 	return sg.valueVarAggregation(doneVars, parent)
 }
 
-func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
+func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, map[string]VarValue, error) {
 	var sgl []*SubGraph
 	var err error
 
 	// doneVars stores the processed variables.
-	doneVars := make(map[string]varValue)
+	doneVars := make(map[string]VarValue)
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
@@ -1154,7 +1154,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
-			return nil, err
+			return nil, doneVars, err
 		}
 		x.Trace(ctx, "Query parsed")
 		sgl = append(sgl, sg)
@@ -1205,7 +1205,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 			err = sg.recursiveFillVars(doneVars)
 			if err != nil {
-				return nil, err
+				return nil, doneVars, err
 			}
 			hasExecuted[idx] = true
 			numQueriesDone++
@@ -1232,11 +1232,11 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			case err := <-errChan:
 				if err != nil {
 					x.TraceError(ctx, x.Wrapf(err, "Error while processing Query"))
-					return nil, err
+					return nil, doneVars, err
 				}
 			case <-ctx.Done():
 				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
-				return nil, ctx.Err()
+				return nil, doneVars, ctx.Err()
 			}
 		}
 
@@ -1247,11 +1247,11 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			var sgPath []*SubGraph
 			err = sg.populateVarMap(doneVars, isCascade, sgPath)
 			if err != nil {
-				return nil, err
+				return nil, doneVars, err
 			}
 			err = sg.populatePostAggregation(doneVars, nil)
 			if err != nil {
-				return nil, err
+				return nil, doneVars, err
 			}
 		}
 	}
@@ -1259,7 +1259,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	// Ensure all the queries are executed.
 	for _, it := range hasExecuted {
 		if !it {
-			return nil, x.Errorf("Query couldn't be executed")
+			return nil, doneVars, x.Errorf("Query couldn't be executed")
 		}
 	}
 	l.Processing += time.Since(execStart)
@@ -1268,7 +1268,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	if shortestSg != nil {
 		sgl = append(sgl, shortestSg)
 	}
-	return sgl, nil
+	return sgl, doneVars, nil
 }
 
 // shouldCascade returns true if the query block is not self depenedent and we should
@@ -1311,7 +1311,7 @@ func (sg *SubGraph) updateUidMatrix() {
 
 }
 
-func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
+func (sg *SubGraph) populateVarMap(doneVars map[string]VarValue, isCascade bool,
 	sgPath []*SubGraph) error {
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return nil
@@ -1365,7 +1365,7 @@ AssignStep:
 	return sg.assignVars(doneVars, sgPath)
 }
 
-func (sg *SubGraph) assignVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
+func (sg *SubGraph) assignVars(doneVars map[string]VarValue, sgPath []*SubGraph) error {
 	if doneVars == nil || (sg.Params.Var == "" && sg.Params.FacetVar == nil) {
 		return nil
 	}
@@ -1379,24 +1379,24 @@ func (sg *SubGraph) assignVars(doneVars map[string]varValue, sgPath []*SubGraph)
 	return sg.populateFacetVars(doneVars, sgPathCopy)
 }
 
-func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*SubGraph) error {
+func (sg *SubGraph) populateUidValVar(doneVars map[string]VarValue, sgPath []*SubGraph) error {
 	if sg.Params.Var != "" {
 		if sg.IsListNode() {
 			// This is a predicates list.
-			doneVars[sg.Params.Var] = varValue{
+			doneVars[sg.Params.Var] = VarValue{
 				strList: sg.values,
 				path:    sgPath,
 			}
 		} else if len(sg.DestUIDs.Uids) != 0 {
 			// This implies it is a entity variable.
-			doneVars[sg.Params.Var] = varValue{
-				uids: sg.DestUIDs,
+			doneVars[sg.Params.Var] = VarValue{
+				Uids: sg.DestUIDs,
 				path: sgPath,
 			}
 		} else if len(sg.counts) != 0 {
 			// This implies it is a value variable.
-			doneVars[sg.Params.Var] = varValue{
-				vals: make(map[uint64]types.Val),
+			doneVars[sg.Params.Var] = VarValue{
+				Vals: make(map[uint64]types.Val),
 				path: sgPath,
 			}
 			for idx, uid := range sg.SrcUIDs.Uids {
@@ -1404,14 +1404,14 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 					Tid:   types.IntID,
 					Value: int64(sg.counts[idx]),
 				}
-				doneVars[sg.Params.Var].vals[uid] = val
+				doneVars[sg.Params.Var].Vals[uid] = val
 			}
 		} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
 			// This implies it is a value variable.
 			// NOTE: Value variables cannot be defined and used in the same query block. so
 			// checking len(sgPath) is okay.
-			doneVars[sg.Params.Var] = varValue{
-				vals: make(map[uint64]types.Val),
+			doneVars[sg.Params.Var] = VarValue{
+				Vals: make(map[uint64]types.Val),
 				path: sgPath,
 			}
 			for idx, uid := range sg.SrcUIDs.Uids {
@@ -1419,18 +1419,18 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 				if err != nil {
 					continue
 				}
-				doneVars[sg.Params.Var].vals[uid] = val
+				doneVars[sg.Params.Var].Vals[uid] = val
 			}
 		} else {
 			// Insert a empty entry to keep the dependency happy.
-			doneVars[sg.Params.Var] = varValue{
+			doneVars[sg.Params.Var] = VarValue{
 				path: sgPath,
 			}
 		}
 	}
 	return nil
 }
-func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*SubGraph) error {
+func (sg *SubGraph) populateFacetVars(doneVars map[string]VarValue, sgPath []*SubGraph) error {
 	if sg.Params.FacetVar != nil && sg.Params.Facet != nil {
 		sgPath = append(sgPath, sg)
 
@@ -1439,8 +1439,8 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 			if !ok {
 				continue
 			}
-			doneVars[fvar] = varValue{
-				vals: make(map[uint64]types.Val),
+			doneVars[fvar] = VarValue{
+				Vals: make(map[uint64]types.Val),
 				path: sgPath,
 			}
 		}
@@ -1457,8 +1457,8 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 				for _, f := range facet.Facets {
 					fvar, ok := sg.Params.FacetVar[f.Key]
 					if ok {
-						if pVal, ok := doneVars[fvar].vals[uid]; !ok {
-							doneVars[fvar].vals[uid] = facets.ValFor(f)
+						if pVal, ok := doneVars[fvar].Vals[uid]; !ok {
+							doneVars[fvar].Vals[uid] = facets.ValFor(f)
 						} else {
 							// If the value is int/float we add them up. Else we throw an error as
 							// many to one maps are not allowed for other types.
@@ -1473,7 +1473,7 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 							if err != nil {
 								continue
 							}
-							doneVars[fvar].vals[uid] = fVal
+							doneVars[fvar].Vals[uid] = fVal
 						}
 					}
 				}
@@ -1483,7 +1483,7 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 	return nil
 }
 
-func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
+func (sg *SubGraph) recursiveFillVars(doneVars map[string]VarValue) error {
 	err := sg.fillVars(doneVars)
 	if err != nil {
 		return err
@@ -1503,28 +1503,28 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
 	return nil
 }
 
-func (sg *SubGraph) fillVars(mp map[string]varValue) error {
+func (sg *SubGraph) fillVars(mp map[string]VarValue) error {
 	lists := make([]*protos.List, 0, 3)
 	for _, v := range sg.Params.NeedsVar {
 		if l, ok := mp[v.Name]; ok {
 			if (v.Typ == gql.ANY_VAR || v.Typ == gql.LIST_VAR) && l.strList != nil {
 				sg.ExpandPreds = l.strList
-			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.uids != nil {
-				lists = append(lists, l.uids)
-			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.vals) != 0 {
+			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.Uids != nil {
+				lists = append(lists, l.Uids)
+			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.Vals) != 0 {
 				// This should happened only once.
-				sg.Params.uidToVal = l.vals
-			} else if len(l.vals) != 0 && (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) {
+				sg.Params.uidToVal = l.Vals
+			} else if len(l.Vals) != 0 && (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) {
 				// Derive the UID list from value var.
-				uids := make([]uint64, 0, len(l.vals))
-				for k := range l.vals {
+				uids := make([]uint64, 0, len(l.Vals))
+				for k := range l.Vals {
 					uids = append(uids, k)
 				}
 				sort.Slice(uids, func(i, j int) bool {
 					return uids[i] < uids[j]
 				})
 				lists = append(lists, &protos.List{uids})
-			} else if len(l.vals) != 0 || l.uids != nil {
+			} else if len(l.Vals) != 0 || l.Uids != nil {
 				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 			}
 		}
@@ -1804,7 +1804,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.Params.ParentVars = make(map[string]varValue)
+		child.Params.ParentVars = make(map[string]VarValue)
 		for k, v := range sg.Params.ParentVars {
 			child.Params.ParentVars[k] = v
 		}
