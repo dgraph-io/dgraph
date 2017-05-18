@@ -35,7 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
@@ -104,7 +103,7 @@ func processToFastJSON(q string) string {
 
 	var l query.Latency
 	ctx := context.Background()
-	sgl, err := query.ProcessQuery(ctx, res, &l)
+	sgl, _, err := query.ProcessQuery(ctx, res, &l)
 
 	if err != nil {
 		log.Fatal(err)
@@ -126,7 +125,7 @@ func runQuery(q string) (string, error) {
 
 	var l query.Latency
 	ctx := context.Background()
-	sgl, err := query.ProcessQuery(ctx, res, &l)
+	sgl, _, err := query.ProcessQuery(ctx, res, &l)
 
 	if err != nil {
 		return "", err
@@ -684,12 +683,9 @@ var q5 = `
 `
 
 func TestSchemaValidationError(t *testing.T) {
-	res, err := gql.Parse(gql.Request{Str: m5, Http: true})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	_, err = mutationHandler(ctx, res.Mutation)
+	_, err := gql.Parse(gql.Request{Str: m5, Http: true})
 	require.Error(t, err)
+
 	output := processToFastJSON(strings.Replace(q5, "<id>", "ram", -1))
 	require.JSONEq(t, `{}`, output)
 }
@@ -773,19 +769,6 @@ func TestAssignUid(t *testing.T) {
 	require.True(t, ok)
 	_, ok = allocIds["y"]
 	require.True(t, ok)
-}
-
-func TestConvertToEdges(t *testing.T) {
-	q1 := `<0x01> <type> <0x02> .
-	       <0x01> <character> <0x03> .`
-	nquads, err := rdf.ConvertToNQuads(q1)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	mr, err := convertToEdges(ctx, nquads)
-	require.NoError(t, err)
-
-	require.EqualValues(t, len(mr.edges), 2)
 }
 
 var q1 = `
@@ -943,8 +926,112 @@ func TestExpandPred(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"me":[{"age":"13","friend":[{"age":"12","name":"bob"}],"name":"Alice"}]}`,
 		output)
-
 }
+
+var threeNiceFriends = `{
+  "me": [
+    {
+      "friend": [
+        {
+          "nice": "true"
+        },
+        {
+          "nice": "true"
+        },
+        {
+          "nice": "true"
+        }
+      ]
+    }
+  ]
+}`
+
+func TestMutationSubjectVariables(t *testing.T) {
+	m1 := `
+		mutation {
+			set {
+                <me>    <friend>   <alice> .
+                <me>    <friend>   <bob> .
+                <me>    <friend>   <chris> .
+			}
+		}
+    `
+	err := runMutation(m1)
+	require.NoError(t, err)
+
+	m2 := `
+        mutation {
+			set {
+				var(myfriend) <nice> "true" .
+			}
+		}
+		{
+			me(id: me) {
+				myfriend as friend
+			}
+		}`
+
+	ctx := context.Background()
+	parsed, err := gql.Parse(gql.Request{Str: m2, Http: true})
+	require.NoError(t, err)
+
+	var l query.Latency
+	_, err = query.Execute(ctx, parsed, &l, true)
+	require.NoError(t, err)
+
+	q1 := `
+		{
+			me(id: me) {
+				friend  {
+					nice
+				}
+			}
+		}
+    `
+	r, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, threeNiceFriends, r)
+}
+
+func TestMutationSubjectVariablesSingleMutation(t *testing.T) {
+	m1 := `
+		mutation {
+			set {
+                <me>          <friend>   <alice> .
+                <me>          <friend>   <bob> .
+                <me>          <friend>   <chris> .
+				var(myfriend) <nice>     "true" .
+			}
+		}
+		{
+			me(id: me) {
+				myfriend as friend
+			}
+		}
+    `
+
+	ctx := context.Background()
+	parsed, err := gql.Parse(gql.Request{Str: m1, Http: true})
+	require.NoError(t, err)
+
+	var l query.Latency
+	_, err = query.Execute(ctx, parsed, &l, true)
+	require.NoError(t, err)
+
+	q1 := `
+		{
+			me(id: me) {
+				friend  {
+					nice
+				}
+			}
+		}
+    `
+	r, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, threeNiceFriends, r)
+}
+
 func TestMain(m *testing.M) {
 	x.Init()
 	dir1, dir2, ps, _ := prepare()

@@ -160,7 +160,7 @@ func processToFastJsonReq(t *testing.T, query string) (string, error) {
 	}
 	var l Latency
 	ctx := context.Background()
-	sgl, err := ProcessQuery(ctx, res, &l)
+	sgl, _, err := ProcessQuery(ctx, res, &l)
 	if err != nil {
 		return "", err
 	}
@@ -196,7 +196,7 @@ func processToPB(t *testing.T, query string, variables map[string]string,
 		ctx = context.Background()
 	}
 	var l Latency
-	sgl, err := ProcessQuery(ctx, res, &l)
+	sgl, _, err := ProcessQuery(ctx, res, &l)
 	require.NoError(t, err)
 
 	pb, err := ToProtocolBuf(&l, sgl)

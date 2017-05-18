@@ -254,7 +254,7 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue) error {
 				}
 				tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
 			}
-			doneVars[chVar] = varValue{vals: tempMap}
+			doneVars[chVar] = varValue{Vals: tempMap}
 		}
 		child.Params.ignoreResult = true
 	}

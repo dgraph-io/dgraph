@@ -68,13 +68,6 @@ type GraphQuery struct {
 	UidCount string
 }
 
-// Mutation stores the strings corresponding to set and delete operations.
-type Mutation struct {
-	Set    []*protos.NQuad
-	Del    []*protos.NQuad
-	Schema string
-}
-
 type AttrLang struct {
 	Attr  string
 	Langs []string
@@ -470,7 +463,7 @@ type Result struct {
 	Query        []*GraphQuery
 	QueryVars    []*Vars
 	Mutation     *Mutation
-	MutationVars []string // mutations don't define vars so we have only needed.
+	MutationVars map[*protos.NQuad]string
 	Schema       *protos.SchemaRequest
 }
 
@@ -541,7 +534,7 @@ func Parse(r Request) (res Result, rerr error) {
 	}
 
 	if res.Mutation != nil {
-		res.MutationVars = determineNeededVars(*res.Mutation)
+		res.MutationVars = res.Mutation.NeededVars()
 		if len(res.MutationVars) > 0 && len(res.Query) == 0 {
 			return res, x.Errorf("mutation uses undefined vars: %v", res.MutationVars)
 		}
@@ -568,7 +561,14 @@ func Parse(r Request) (res Result, rerr error) {
 
 		allVars := res.QueryVars
 		if len(res.MutationVars) > 0 {
-			allVars = append(allVars, &Vars{Needs: res.MutationVars})
+			var varNames []string
+			for _, v := range res.MutationVars {
+				varNames = append(varNames, v)
+			}
+			sort.Strings(varNames)
+			varNames = removeDuplicates(varNames)
+
+			allVars = append(allVars, &Vars{Needs: varNames})
 		}
 
 		if err := checkDependency(allVars); err != nil {
@@ -577,23 +577,6 @@ func Parse(r Request) (res Result, rerr error) {
 	}
 
 	return res, nil
-}
-
-func determineNeededVars(m Mutation) []string {
-	var vars []string
-	addIfVar := func(name string) {
-		if len(name) > 0 {
-			vars = append(vars, name)
-		}
-	}
-	for _, s := range m.Set {
-		addIfVar(s.SubjectVar)
-	}
-	for _, d := range m.Del {
-		addIfVar(d.SubjectVar)
-	}
-	sort.Strings(vars)
-	return removeDuplicates(vars)
 }
 
 func flatten(vl []*Vars) (needs []string, defines []string) {
