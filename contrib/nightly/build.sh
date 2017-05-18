@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+go get -u golang.org/x/net/context
+go get -u google.golang.org/grpc
+
 # This script is run when
 # 1. A cronjob is run on master which happens everyday and updates the nightly tag,
 # 2. A new tag is pushed i.e. when we make a new release.
