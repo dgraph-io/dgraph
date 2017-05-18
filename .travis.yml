@@ -16,8 +16,6 @@ matrix:
 
 git:
   depth: 1000
-install:
-- bash contrib/build-rocksdb.sh $HOME/build
 dist: trusty
 sudo: required
 notifications:

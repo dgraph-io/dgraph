@@ -48,12 +48,12 @@ uiDir="main.uiDir"
 echo -e "\033[1;33mBuilding binaries\033[0m"
 echo "dgraph"
 cd $dgraph_cmd/dgraph && \
-   go build -v -ldflags \
+   go build -v -tags=embed -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime' -X $uiDir=$ui" .;
 echo "dgraphloader"
 echo $release
 cd $dgraph_cmd/dgraphloader && \
-   go build -v -ldflags \
+   go build -v -tags=embed -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
 
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
