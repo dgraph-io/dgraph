@@ -64,9 +64,17 @@ func toRDF(nq *protos.NQuad, buf *bytes.Buffer) error {
 
 	if len(nq.ObjectId) == 0 {
 		p := rdf.TypeValFrom(nq.ObjectValue)
-		p1 := types.ValueForType(types.StringID)
-		if err := types.Marshal(p, &p1); err != nil {
-			return err
+		var err error
+		var p1 types.Val
+		if p.Tid == types.GeoID || p.Tid == types.DateID || p.Tid == types.DateTimeID {
+			if p1, err = types.Convert(p, types.StringID); err != nil {
+				return err
+			}
+		} else {
+			p1 = types.ValueForType(types.StringID)
+			if err = types.Marshal(p, &p1); err != nil {
+				return err
+			}
 		}
 		buf.WriteByte('"')
 		buf.WriteString(p1.Value.(string))
