@@ -34,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -204,6 +205,112 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 	for _, c := range sg.Children {
 		c.DebugPrint(prefix + "|->")
 	}
+}
+
+type ExecuteResult struct {
+	Subgraphs   []*SubGraph
+	SchemaNode  []*protos.SchemaNode
+	Allocations map[string]string
+}
+
+var MutationNotAllowedErr = x.Errorf("Mutations are forbidden on this server.")
+
+type InvalidRequestError struct {
+	err error
+}
+
+func (e *InvalidRequestError) Error() string {
+	return "invalid request: " + e.err.Error()
+}
+
+type InternalError struct {
+	err error
+}
+
+func (e *InternalError) Error() string {
+	return "internal error: " + e.err.Error()
+}
+
+func Execute(ctx context.Context, res gql.Result, l *Latency, mutationAllowed bool) (ExecuteResult, error) {
+	var allocIds map[string]uint64
+	var er ExecuteResult
+	var err error
+	// If we have mutations that don't depend on query, run them first.
+	var vars map[string]varValue
+
+	var depSet, indepSet, depDel, indepDel gql.NQuads
+	if res.Mutation != nil {
+		if res.Mutation.HasOps() && !mutationAllowed {
+			return er, x.Wrap(&InvalidRequestError{err: MutationNotAllowedErr})
+		}
+		depSet, indepSet = gql.WrapNQ(res.Mutation.Set, protos.DirectedEdge_SET).
+			Partition(gql.IsDependent)
+
+		depDel, indepDel = gql.WrapNQ(res.Mutation.Del, protos.DirectedEdge_DEL).
+			Partition(gql.IsDependent)
+	}
+
+	if !indepSet.IsEmpty() {
+		var m protos.Mutations
+		var mr MutationResult
+		nquads := indepSet.Add(indepDel)
+		if mr, err = ConvertToEdges(ctx, nquads, vars); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "failed to convert NQuads to edges")
+		}
+		m.Edges, allocIds = mr.Edges, mr.NewUids
+		for i := range m.Edges {
+			m.Edges[i].Op = nquads.Types[i]
+		}
+		if len(res.Mutation.Schema) > 0 {
+			if m.Schema, err = schema.Parse(res.Mutation.Schema); err != nil {
+				return er, x.Wrapf(&InvalidRequestError{err: err}, "failed to parse schema")
+			}
+		}
+		if err = ApplyMutations(ctx, &m); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
+		}
+
+		// convert the new UIDs to hex string.
+		er.Allocations = make(map[string]string)
+		for k, v := range allocIds {
+			er.Allocations[k] = fmt.Sprintf("%#x", v)
+		}
+	}
+
+	if res.Schema != nil {
+		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "error while fetching schema")
+		}
+	}
+
+	if len(res.Query) == 0 {
+		return er, nil
+	}
+
+	er.Subgraphs, vars, err = ProcessQuery(ctx, res, l)
+	if err != nil {
+		return er, x.Wrapf(&InternalError{err: err}, "Unable to process query")
+	}
+
+	if !depSet.IsEmpty() {
+		var mr MutationResult
+		nquads := depSet.Add(depDel)
+		if mr, err = ConvertToEdges(ctx, nquads, vars); err != nil {
+			return er, x.Wrapf(&InvalidRequestError{err: err}, "Failed to convert NQuads to edges")
+		}
+		if len(mr.NewUids) > 0 {
+			return er, x.Wrapf(&InvalidRequestError{err: err},
+				"adding nodes when using variables is not allowed")
+		}
+		m := protos.Mutations{Edges: mr.Edges}
+		for i := range m.Edges {
+			m.Edges[i].Op = mr.EdgeOps[i]
+		}
+		if err := ApplyMutations(ctx, &m); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "Failed to apply mutations with variables")
+		}
+	}
+	return er, nil
 }
 
 // getValue gets the value from the task.
@@ -963,8 +1070,8 @@ func createTaskQuery(sg *SubGraph) *protos.Query {
 }
 
 type varValue struct {
-	uids *protos.List
-	vals map[uint64]types.Val
+	Uids *protos.List
+	Vals map[uint64]types.Val
 	path []*SubGraph // This stores the subgraph path from root to var definition.
 	// TODO: Check if we can do without this field.
 	strList []*protos.TaskValue
@@ -992,7 +1099,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 		return mp, x.Errorf("Invalid variable aggregation. Check the levels.")
 	}
 
-	vals := doneVars[needsVar].vals
+	vals := doneVars[needsVar].Vals
 	mp = make(map[uint64]types.Val)
 	// Go over the sibling node and aggregate.
 	for i, list := range relSG.uidMatrix {
@@ -1039,7 +1146,7 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 		}
 	}
 
-	newMap := fromNode.vals
+	newMap := fromNode.Vals
 	if newMap == nil {
 		return nil, x.Errorf("Variables not ordered correctly")
 	}
@@ -1125,7 +1232,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 		}
 		if sg.Params.Var != "" {
 			it := doneVars[sg.Params.Var]
-			it.vals = mp
+			it.Vals = mp
 			doneVars[sg.Params.Var] = it
 		}
 		sg.Params.uidToVal = mp
@@ -1142,7 +1249,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 		}
 		if sg.MathExp.Val != nil {
 			it := doneVars[sg.Params.Var]
-			it.vals = sg.MathExp.Val
+			it.Vals = sg.MathExp.Val
 			// The path of math node is the path of max var node used in it.
 			it.path = maxPath
 			doneVars[sg.Params.Var] = it
@@ -1155,7 +1262,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 			}
 			if rangeOver == nil {
 				it := doneVars[sg.Params.Var]
-				it.vals = mp
+				it.Vals = mp
 				doneVars[sg.Params.Var] = it
 				return nil
 			}
@@ -1163,7 +1270,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 				mp[uid] = sg.MathExp.Const
 			}
 			it := doneVars[sg.Params.Var]
-			it.vals = mp
+			it.Vals = mp
 			doneVars[sg.Params.Var] = it
 		} else {
 			return x.Errorf("Missing values/constant in math expression")
@@ -1174,10 +1281,10 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 		// This is a var() block.
 		srcVar := sg.Params.NeedsVar[0]
 		srcMap := doneVars[srcVar.Name]
-		if srcMap.vals == nil {
+		if srcMap.Vals == nil {
 			return x.Errorf("Missing value variable %v", srcVar)
 		}
-		sg.Params.uidToVal = srcMap.vals
+		sg.Params.uidToVal = srcMap.Vals
 	} else {
 		return x.Errorf("Unhandled internal node %v with parent %v", sg.Attr, parent.Attr)
 	}
@@ -1195,7 +1302,7 @@ func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, parent
 	return sg.valueVarAggregation(doneVars, parent)
 }
 
-func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
+func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, map[string]varValue, error) {
 	var sgl []*SubGraph
 	var err error
 
@@ -1210,7 +1317,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
-			return nil, err
+			return nil, doneVars, err
 		}
 		x.Trace(ctx, "Query parsed")
 		sgl = append(sgl, sg)
@@ -1261,7 +1368,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 			err = sg.recursiveFillVars(doneVars)
 			if err != nil {
-				return nil, err
+				return nil, doneVars, err
 			}
 			hasExecuted[idx] = true
 			numQueriesDone++
@@ -1288,11 +1395,11 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			case err := <-errChan:
 				if err != nil {
 					x.TraceError(ctx, x.Wrapf(err, "Error while processing Query"))
-					return nil, err
+					return nil, doneVars, err
 				}
 			case <-ctx.Done():
 				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
-				return nil, ctx.Err()
+				return nil, doneVars, ctx.Err()
 			}
 		}
 
@@ -1303,11 +1410,11 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			var sgPath []*SubGraph
 			err = sg.populateVarMap(doneVars, isCascade, sgPath)
 			if err != nil {
-				return nil, err
+				return nil, doneVars, err
 			}
 			err = sg.populatePostAggregation(doneVars, nil)
 			if err != nil {
-				return nil, err
+				return nil, doneVars, err
 			}
 		}
 	}
@@ -1315,7 +1422,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	// Ensure all the queries are executed.
 	for _, it := range hasExecuted {
 		if !it {
-			return nil, x.Errorf("Query couldn't be executed")
+			return nil, doneVars, x.Errorf("Query couldn't be executed")
 		}
 	}
 	l.Processing += time.Since(execStart)
@@ -1324,7 +1431,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	if shortestSg != nil {
 		sgl = append(sgl, shortestSg)
 	}
-	return sgl, nil
+	return sgl, doneVars, nil
 }
 
 // shouldCascade returns true if the query block is not self depenedent and we should
@@ -1446,7 +1553,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		} else if len(sg.counts) != 0 {
 			// This implies it is a value variable.
 			doneVars[sg.Params.Var] = varValue{
-				vals: make(map[uint64]types.Val),
+				Vals: make(map[uint64]types.Val),
 				path: sgPath,
 			}
 			for idx, uid := range sg.SrcUIDs.Uids {
@@ -1454,12 +1561,12 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 					Tid:   types.IntID,
 					Value: int64(sg.counts[idx]),
 				}
-				doneVars[sg.Params.Var].vals[uid] = val
+				doneVars[sg.Params.Var].Vals[uid] = val
 			}
 		} else if len(sg.DestUIDs.Uids) != 0 {
 			// This implies it is a entity variable.
 			doneVars[sg.Params.Var] = varValue{
-				uids: sg.DestUIDs,
+				Uids: sg.DestUIDs,
 				path: sgPath,
 			}
 		} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
@@ -1467,7 +1574,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			// NOTE: Value variables cannot be defined and used in the same query block. so
 			// checking len(sgPath) is okay.
 			doneVars[sg.Params.Var] = varValue{
-				vals: make(map[uint64]types.Val),
+				Vals: make(map[uint64]types.Val),
 				path: sgPath,
 			}
 			for idx, uid := range sg.SrcUIDs.Uids {
@@ -1475,7 +1582,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 				if err != nil {
 					continue
 				}
-				doneVars[sg.Params.Var].vals[uid] = val
+				doneVars[sg.Params.Var].Vals[uid] = val
 			}
 		} else {
 			// Insert a empty entry to keep the dependency happy.
@@ -1496,7 +1603,7 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 				continue
 			}
 			doneVars[fvar] = varValue{
-				vals: make(map[uint64]types.Val),
+				Vals: make(map[uint64]types.Val),
 				path: sgPath,
 			}
 		}
@@ -1513,8 +1620,8 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 				for _, f := range facet.Facets {
 					fvar, ok := sg.Params.FacetVar[f.Key]
 					if ok {
-						if pVal, ok := doneVars[fvar].vals[uid]; !ok {
-							doneVars[fvar].vals[uid] = facets.ValFor(f)
+						if pVal, ok := doneVars[fvar].Vals[uid]; !ok {
+							doneVars[fvar].Vals[uid] = facets.ValFor(f)
 						} else {
 							// If the value is int/float we add them up. Else we throw an error as
 							// many to one maps are not allowed for other types.
@@ -1529,7 +1636,7 @@ func (sg *SubGraph) populateFacetVars(doneVars map[string]varValue, sgPath []*Su
 							if err != nil {
 								continue
 							}
-							doneVars[fvar].vals[uid] = fVal
+							doneVars[fvar].Vals[uid] = fVal
 						}
 					}
 				}
@@ -1565,22 +1672,22 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 		if l, ok := mp[v.Name]; ok {
 			if (v.Typ == gql.ANY_VAR || v.Typ == gql.LIST_VAR) && l.strList != nil {
 				sg.ExpandPreds = l.strList
-			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.uids != nil {
-				lists = append(lists, l.uids)
-			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.vals) != 0 {
+			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.Uids != nil {
+				lists = append(lists, l.Uids)
+			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.Vals) != 0 {
 				// This should happened only once.
-				sg.Params.uidToVal = l.vals
-			} else if len(l.vals) != 0 && (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) {
+				sg.Params.uidToVal = l.Vals
+			} else if len(l.Vals) != 0 && (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) {
 				// Derive the UID list from value var.
-				uids := make([]uint64, 0, len(l.vals))
-				for k := range l.vals {
+				uids := make([]uint64, 0, len(l.Vals))
+				for k := range l.Vals {
 					uids = append(uids, k)
 				}
 				sort.Slice(uids, func(i, j int) bool {
 					return uids[i] < uids[j]
 				})
 				lists = append(lists, &protos.List{uids})
-			} else if len(l.vals) != 0 || l.uids != nil {
+			} else if len(l.Vals) != 0 || l.Uids != nil {
 				return x.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 			}
 		}

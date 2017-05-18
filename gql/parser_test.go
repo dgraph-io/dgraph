@@ -3428,6 +3428,7 @@ func TestHasFilterAtChild(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
+}
 
 func TestMutationVariables(t *testing.T) {
 	query := `
@@ -3448,7 +3449,7 @@ func TestMutationVariables(t *testing.T) {
 
 	require.Equal(t, 1, len(res.MutationVars))
 
-	require.Equal(t, "adults", res.MutationVars[0])
+	require.EqualValues(t, "adults", res.MutationVars[res.Mutation.Set[0]])
 
 	expected := protos.NQuad{
 		Predicate:   "isadult",
