@@ -1,6 +1,10 @@
 #!/bin/bash
-
 set -e
+
+TRAVIS_EVENT_TYPE="cron"
+TRAVIS=true
+TRAVIS_BRANCH="master"
+# TRAVIS_TAG="v0.7.6"
 
 # This script is run when
 # 1. A cronjob is run on master which happens everyday and updates the nightly tag,
@@ -9,13 +13,14 @@ set -e
 run_upload_script() {
 	if [[ $TRAVIS_TAG == "nightly" ]]; then
 		# We create nightly tag using the script so we don't want to run this script
-		# when the tagged build is triggered.
+		# when the nightly build is triggered on updating where the commit points too.
 		echo "Nightly tag. Skipping script"
 		return 1
 	fi
 
 	# We run a cron job daily on Travis which will update the nightly binaries.
-	if [[ $TRAVIS_EVENT_TYPE == "cron" ]]; then
+	if [ $TRAVIS_EVENT_TYPE == "cron" ] && [ "$TRAVIS" = true ]; then
+		echo "Running nightly script for cron job."
 		return 0
 	fi
 
@@ -25,10 +30,19 @@ run_upload_script() {
 		tag=${BASH_REMATCH[1]}
 		# If its the release branch and the tag already exists, then we want to update
 		# the assets.
+		echo $tag
 		if git rev-parse $tag >/dev/null 2>&1
 		then
 			return 0
+		else
+			echo "On release branch, but tag doesn't exist. Skipping"
+			return 1
 		fi
+	fi
+
+	if [[ $TRAVIS_TAG =~ v.+ ]]; then
+		echo "A new tag was pushed, running nightly script"
+		return 0
 	fi
 
 	return 1
@@ -54,21 +68,27 @@ get_tag() {
 BUILD_TAG=$(get_tag)
 ASSET_SUFFIX=""
 
+if [[ $BUILD_TAG == "nightly" ]]; then
+	ASSET_SUFFIX="-dev"
+fi
+
 get_version() {
 	# For nightly release, we find latest git tag.
 	if [[ $BUILD_TAG == "nightly" ]]; then
-		ASSET_SUFFIX="-dev"
 		echo $(git describe --abbrev=0)
 		return
 	else
-	# For an actual release, we get the version from the tag or the release branch.
+		# For an actual release, we get the version from the tag or the release branch.
 		echo $BUILD_TAG
 	fi
 }
 
 TRAVIS_EVENT_TYPE=${TRAVIS_EVENT_TYPE:-cron}
 if ! run_upload_script; then
+	echo "Skipping running the nightly script"
 	exit 1
+else
+	echo "Running nightly script"
 fi
 
 if [[ $TRAVIS_OS_NAME == "osx" ]]; then
@@ -111,22 +131,7 @@ update_or_create_asset() {
 		> /dev/null
 }
 
-delete_old_nightly() {
-	local release_id
-	read release_id < <( \
-		send_gh_api_request repos/${DGRAPH_REPO}/releases \
-		| jq -r -c "(.[] | select(.tag_name == \"${BUILD_TAG}\").id), \"\"") \
-		|| exit
-
-	if [[ ! -z "${release_id}" ]]; then
-		echo "Deleting old nightly release"
-		send_gh_api_request repos/${DGRAPH_REPO}/releases/${release_id} \
-			DELETE \
-			> /dev/null
-	fi
-}
-
-get_release_body() {
+get_nightly_release_body() {
 	echo '
 	Dgraph development (pre-release) build which is updated every night.
 	You can automatically install the nightly binaries along with the assets by running
@@ -134,7 +139,7 @@ get_release_body() {
 	'
 }
 
-upload_nightly() {
+upload_assets() {
 	local release_id
 	# We check if a release with tag nightly already exists, else we create it.
 	read release_id < <( \
@@ -144,12 +149,22 @@ upload_nightly() {
 
 	if [[ -z "${release_id}" ]]; then
 		echo "Creating release for tag ${BUILD_TAG}."
-		read release_id < <( \
-			send_gh_api_data_request repos/${DGRAPH_REPO}/releases POST \
-			"{ \"name\": \"Dgraph ${DGRAPH_VERSION}${ASSET_SUFFIX}\", \"tag_name\": \"${BUILD_TAG}\", \
-			\"prerelease\": true }" \
-			| jq -r -c '.id') \
-			|| exit
+		# For actual releases add draft true and for nightly release prerelease true.
+		if [[ $BUILD_TAG == "nightly" ]]; then
+			read release_id < <( \
+				send_gh_api_data_request repos/${DGRAPH_REPO}/releases POST \
+				"{ \"name\": \"Dgraph ${DGRAPH_VERSION}${ASSET_SUFFIX}\", \"tag_name\": \"${BUILD_TAG}\", \
+				\"prerelease\": true }" \
+				| jq -r -c '.id') \
+				|| exit
+		else
+			read release_id < <( \
+				send_gh_api_data_request repos/${DGRAPH_REPO}/releases POST \
+				"{ \"name\": \"Dgraph ${DGRAPH_VERSION}\", \"tag_name\": \"${BUILD_TAG}\", \
+				\"draft\": true }" \
+				| jq -r -c '.id') \
+				|| exit
+		fi
 	fi
 
 	# We upload the tar binary.
@@ -164,19 +179,19 @@ upload_nightly() {
 		# As asset would be the same on both platforms, we only upload it from linux.
 		update_or_create_asset $release_id "assets.tar.gz" ${ASSETS_FILE}
 
-		# We dont want to update description programatically for version releases apart from
+		# We dont want to update description programatically for version releases and commit apart from
 		# nightly.
-		if [[ $BUILD_TAG == "nightly" ]]; then;
+		if [[ $BUILD_TAG == "nightly" ]]; then
 			echo 'Updating release description.'
 			send_gh_api_data_request repos/${DGRAPH_REPO}/releases/${release_id} PATCH \
-				"{ \"body\": $(get_release_body | jq -s -c -R '.') }" \
+				"{ \"body\": $(get_nightly_release_body) | jq -s -c -R '.') }" \
+				> /dev/null
+
+			echo "Updating ${BUILD_TAG} tag to point to ${DGRAPH_COMMIT}."
+			send_gh_api_data_request repos/${DGRAPH_REPO}/git/refs/tags/${BUILD_TAG} PATCH \
+				"{ \"force\": true, \"sha\": \"${DGRAPH_COMMIT}\" }" \
 				> /dev/null
 		fi
-
-		echo "Updating ${BUILD_TAG} tag to point to ${DGRAPH_COMMIT}."
-		send_gh_api_data_request repos/${DGRAPH_REPO}/git/refs/tags/${BUILD_TAG} PATCH \
-			"{ \"force\": true, \"sha\": \"${DGRAPH_COMMIT}\" }" \
-			> /dev/null
 	fi
 }
 
@@ -203,6 +218,7 @@ build_docker_image() {
 	echo "Building the dgraph master image."
 	docker build -t dgraph/dgraph:$DOCKER_TAG .
 	if [[ $DOCKER_TAG == $LATEST_TAG ]]; then
+		echo "Tagging docker image with latest tag"
 		docker tag dgraph/dgraph:$DOCKER_TAG dgraph/dgraph:latest
 	fi
 	# Lets remove the dgraph folder now.
@@ -230,13 +246,25 @@ echo "Building embedded binaries"
 contrib/releases/build.sh $ASSET_SUFFIX
 build_docker_image
 
-if [ "$TRAVIS" = true ]; then
-	upload_nightly
-	upload_docker_image
-fi
+# if [ "$TRAVIS" = true ]; then
+#	upload_assets
+#	upload_docker_image
+# fi
 
 if [ "$DGRAPH" != "$CURRENT_DIR" ]; then
 	mv $ASSETS_FILE $NIGHTLY_FILE $SHA_FILE $CURRENT_DIR
 fi
+
+echo -e "Version $DGRAPH_VERSION"
+echo -e "Latest tag $LATEST_TAG"
+echo -e "Tar file $TAR_FILE"
+echo $NIGHTLY_FILE
+echo $SHA_FILE_NAME
+echo $SHA_FILE
+echo $ASSETS_FILE
+echo -e "Current branch $CURRENT_BRANCH"
+echo -e "Docker $DOCKER_TAG"
+
+ls $CURRENT_DIR
 
 popd > /dev/null
