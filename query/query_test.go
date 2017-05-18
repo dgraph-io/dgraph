@@ -2927,7 +2927,6 @@ func TestFilterRegexError(t *testing.T) {
 
 func TestFilterRegex1(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
@@ -2945,7 +2944,6 @@ func TestFilterRegex1(t *testing.T) {
 
 func TestFilterRegex2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
@@ -2963,7 +2961,6 @@ func TestFilterRegex2(t *testing.T) {
 
 func TestFilterRegex3(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
@@ -2982,7 +2979,6 @@ func TestFilterRegex3(t *testing.T) {
 
 func TestFilterRegex4(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
@@ -3001,7 +2997,6 @@ func TestFilterRegex4(t *testing.T) {
 
 func TestFilterRegex5(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
@@ -3020,8 +3015,6 @@ func TestFilterRegex5(t *testing.T) {
 
 func TestFilterRegex6(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3039,8 +3032,6 @@ func TestFilterRegex6(t *testing.T) {
 
 func TestFilterRegex7(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3058,8 +3049,6 @@ func TestFilterRegex7(t *testing.T) {
 
 func TestFilterRegex8(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3077,8 +3066,6 @@ func TestFilterRegex8(t *testing.T) {
 
 func TestFilterRegex9(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3096,8 +3083,6 @@ func TestFilterRegex9(t *testing.T) {
 
 func TestFilterRegex10(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3115,8 +3100,6 @@ func TestFilterRegex10(t *testing.T) {
 
 func TestFilterRegex11(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3136,8 +3119,6 @@ func TestFilterRegex11(t *testing.T) {
 // http://www.regular-expressions.info/modifiers.html - this is completely legal
 func TestFilterRegex12(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3157,8 +3138,6 @@ func TestFilterRegex12(t *testing.T) {
 // http://www.regular-expressions.info/modifiers.html - this is completely legal
 func TestFilterRegex13(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3178,8 +3157,6 @@ func TestFilterRegex13(t *testing.T) {
 // invalid regexp modifier
 func TestFilterRegex14(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3197,8 +3174,6 @@ func TestFilterRegex14(t *testing.T) {
 // multi-lang - simple
 func TestFilterRegex15(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
 		{
 			me(func:regexp(name@ru, /Барсук/)) {
@@ -3215,8 +3190,6 @@ func TestFilterRegex15(t *testing.T) {
 // multi-lang - test for bug (#945) - multi-byte runes
 func TestFilterRegex16(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
 		{
 			me(func:regexp(name@ru, /^артём/i)) {
