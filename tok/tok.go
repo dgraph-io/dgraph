@@ -288,7 +288,7 @@ func (t TrigramTokenizer) Tokens(sv types.Val) ([]string, error) {
 	if l > 0 {
 		tokens := make([]string, l)
 		for i := 0; i < l; i++ {
-			trigram := string(value[i : i+3])
+			trigram := value[i : i+3]
 			tokens[i] = encodeToken(trigram, t.Identifier())
 		}
 		return tokens, nil
