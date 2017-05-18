@@ -862,19 +862,20 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if err != nil {
 		return nil, err
 	}
+	temp := uids[:0]
 	for i, uid := range uids {
-		if uid == 0 {
-			uids[i] = umap[gq.ID[i]]
+		if uid != 0 {
+			temp = append(temp, uid)
+			continue
+		}
+		// Now check in the map and add it if present.
+		// we won't return results if uid is not found for a given xid
+		if rid, ok := umap[gq.ID[i]]; ok {
+			temp = append(temp, rid)
 		}
 	}
-	// remove uid 0
-	// we will return no result if corresponding uid is not found for an xid
-	for i, uid := range uids {
-		if uid == 0 {
-			uids[i] = uids[len(uids)-1]
-			uids = uids[:len(uids)-1]
-		}
-	}
+	uids = temp
+
 	if len(uids) > 0 {
 		o := make([]uint64, len(uids))
 		copy(o, uids)
