@@ -15,23 +15,12 @@ if [ -z "$OUT" ]; then
 fi
 rm -f $OUT
 
-if [[ "${TRAVIS_OS_NAME}" == "osx" ]]; then
-  export LIBRARY_PATH=$LIBRARY_PATH:/usr/local/lib;
-  export C_INCLUDE_PATH=$C_INCLUDE_PATH:/usr/local/include;
-else
-  ROCKSDBDIR=$BUILD/rocksdb-5.1.4
-
-  # build flags needed for rocksdb
-  export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
-  export CGO_LDFLAGS="-L${ROCKSDBDIR}"
-  export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
-fi
-
 set -e
 
 # Lets install the dependencies that are not vendored in anymore.
 go get -d golang.org/x/net/context
 go get -d google.golang.org/grpc/...
+go get -u github.com/dgraph-io/badger/...
 
 pushd $SRC &> /dev/null
 

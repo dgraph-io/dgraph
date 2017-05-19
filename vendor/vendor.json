@@ -209,7 +209,6 @@
 			"revisionTime": "2017-03-31T03:19:02Z"
 		},
 		{
-<<<<<<< HEAD
 			"checksumSHA1": "lZFWy27Qo6+m/keDjNFYTxSmvZw=",
 			"path": "github.com/golang/protobuf/ptypes/any",
 			"revision": "2bba0603135d7d7f5cb73b2125beeda19c09f4ef",
@@ -234,8 +233,6 @@
 			"revisionTime": "2015-06-17T15:18:51Z"
 		},
 		{
-=======
->>>>>>> fix/vendoring
 			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
 			"path": "github.com/pkg/errors",
 			"revision": "17b591df37844cde689f4d5813e5cea0927d8dd2",

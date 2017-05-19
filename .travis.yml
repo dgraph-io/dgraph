@@ -16,8 +16,6 @@ matrix:
 
 git:
   depth: 1000
-install:
-- bash contrib/build-rocksdb.sh $HOME/build
 dist: trusty
 sudo: required
 notifications:
@@ -48,8 +46,6 @@ cache:
   - "$HOME/build"
   - $HOME/Library/Caches/Homebrew
 
-install:
-- bash contrib/build-rocksdb.sh $HOME/build
 before_script:
 - go get github.com/mattn/goveralls
 script:
