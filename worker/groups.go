@@ -123,6 +123,7 @@ func StartRaftNodes(walDir string) {
 
 	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.DefaultOptions
+	kvOpt.SyncWrites = true
 	kvOpt.Dir = walDir
 	wals := badger.NewKV(&kvOpt)
 	gr.wal = raftwal.Init(wals, *raftId)
