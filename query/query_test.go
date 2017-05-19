@@ -1013,6 +1013,102 @@ func TestQueryVarValOrderDescMissing(t *testing.T) {
 	require.JSONEq(t, `{}`, js)
 }
 
+func TestGroupByRootProto(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id: [1, 23, 24, 25, 31]) @groupby(age) {
+				count(_uid_)
+		}
+	}
+	`
+	pb := processToPB(t, query, map[string]string{}, false)
+	resreq := `attribute: "_root_"
+children: <
+  attribute: "me"
+  children: <
+    attribute: "@groupby"
+    properties: <
+      prop: "age"
+      value: <
+        int_val: 17
+      >
+    >
+    properties: <
+      prop: "count"
+      value: <
+        int_val: 1
+      >
+    >
+  >
+  children: <
+    attribute: "@groupby"
+    properties: <
+      prop: "age"
+      value: <
+        int_val: 19
+      >
+    >
+    properties: <
+      prop: "count"
+      value: <
+        int_val: 1
+      >
+    >
+  >
+  children: <
+    attribute: "@groupby"
+    properties: <
+      prop: "age"
+      value: <
+        int_val: 38
+      >
+    >
+    properties: <
+      prop: "count"
+      value: <
+        int_val: 1
+      >
+    >
+  >
+  children: <
+    attribute: "@groupby"
+    properties: <
+      prop: "age"
+      value: <
+        int_val: 15
+      >
+    >
+    properties: <
+      prop: "count"
+      value: <
+        int_val: 2
+      >
+    >
+  >
+>
+`
+	res := proto.MarshalTextString(pb[0])
+	require.EqualValues(t,
+		resreq,
+		res)
+}
+
+func TestGroupByRoot(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id: [1, 23, 24, 25, 31]) @groupby(age) {
+				count(_uid_)
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":38,"count":1},{"age":15,"count":2}]}}`,
+		js)
+}
+
 func TestGroupBy(t *testing.T) {
 	populateGraph(t)
 	query := `
