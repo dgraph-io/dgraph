@@ -6047,6 +6047,22 @@ func TestLangFilterMismatch5(t *testing.T) {
 		js)
 }
 
+func TestLangFilterMismatch6(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	query := `
+		{
+			me(id: [0x1001, 0x1002, 0x1003]) @filter(lt(name@en, "D"))  {
+				name@en
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
 func checkSchemaNodes(t *testing.T, expected []*protos.SchemaNode, actual []*protos.SchemaNode) {
 	sort.Slice(expected, func(i, j int) bool {
 		return expected[i].Predicate >= expected[j].Predicate
