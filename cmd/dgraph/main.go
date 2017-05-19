@@ -815,7 +815,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 
 	if schema != nil {
-		execStart = time.Now()
+		execStart := time.Now()
 		if schemaNodes, err = worker.GetSchemaOverNetwork(ctx, schema); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
 			return resp, err
