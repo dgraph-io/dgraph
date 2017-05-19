@@ -27,13 +27,16 @@ import (
 )
 
 type stringFilter struct {
-	funcName string
-	funcType FuncType
-	lang     string
-	tokens   []string
+	funcName  string
+	funcType  FuncType
+	lang      string
+	tokens    []string
+	ineqValue types.Val
 }
 
-func matchStrings(uids *protos.List, values []types.Val, filter stringFilter) *protos.List {
+type matchFn func(types.Val, stringFilter) bool
+
+func matchStrings(uids *protos.List, values []types.Val, filter stringFilter, match matchFn) *protos.List {
 	rv := &protos.List{}
 	for i := 0; i < len(values); i++ {
 		if len(values[i].Value.(string)) == 0 {
@@ -48,7 +51,7 @@ func matchStrings(uids *protos.List, values []types.Val, filter stringFilter) *p
 	return rv
 }
 
-func match(value types.Val, filter stringFilter) bool {
+func defaultMatch(value types.Val, filter stringFilter) bool {
 	tokenMap := map[string]bool{}
 	for _, t := range filter.tokens {
 		tokenMap[t] = false
@@ -73,6 +76,10 @@ func match(value types.Val, filter stringFilter) bool {
 	} else {
 		return cnt > 0
 	}
+}
+
+func ineqMatch(value types.Val, filter stringFilter) bool {
+	return types.CompareVals(filter.funcName, value, filter.ineqValue)
 }
 
 func tokenizeValue(value types.Val, filter stringFilter) []string {
