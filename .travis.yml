@@ -14,6 +14,7 @@ matrix:
       go: 1.8
       env: CC=clang CXX=clang++;
 
+install: contrib/install.sh
 git:
   depth: 1000
 dist: trusty
