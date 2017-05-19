@@ -12,13 +12,17 @@ GREEN='\033[32;1m'
 RESET='\033[0m'
 HOST=https://docs.dgraph.io
 
+# TODO - Maybe get list of released versions from Github API and filter
+# those which have docs.
+
 # Place the latest version at the beginning so that version selector can
 # append '(latest)' to the version string
 VERSIONS=(
-  'v0.7.6'
-  'master'
-  'v0.7.5'
-  'v0.7.4'
+'v0.7.7'
+'master'
+'v0.7.6'
+'v0.7.5'
+'v0.7.4'
 )
 
 joinVersions() {
@@ -35,8 +39,8 @@ rebuild() {
 	export VERSION_STRING=$(joinVersions)
 
 	HUGO_TITLE="Dgraph Doc ${2}"\
-	VERSIONS=${VERSION_STRING} \
-	CURRENT_BRANCH=${1} hugo\
+		VERSIONS=${VERSION_STRING} \
+		CURRENT_BRANCH=${1} hugo\
 		--destination=public/"$2"\
 		--baseURL="$HOST"/"$2" 1> /dev/null
 }
@@ -58,16 +62,22 @@ branchUpdated()
 
 checkAndUpdate()
 {
-	local branch="$1"
-	local tag="$2"
+	local version="$1"
+	local branch=""
+
+	if [[ $version == "master" ]]; then
+		branch="master"
+	else
+		branch="release/$version"
+	fi
 
 	if branchUpdated "$branch" ; then
 		git merge -q origin/"$branch"
-		rebuild "$branch" "$tag"
+		rebuild "$branch" "$version"
 	fi
 
-	if [ "$themeUpdated" = 0 ] || [ ! -d "public/$tag" ] ; then
-		rebuild "$branch" "$tag"
+	if [ "$themeUpdated" = 0 ] || [ ! -d "public/$version" ] ; then
+		rebuild "$branch" "$version"
 	fi
 }
 
@@ -90,11 +100,12 @@ while true; do
 	# Now lets check the theme.
 	echo -e "$(date)  Starting to check branches."
 	git remote update > /dev/null
-	# Todo have these in an array and loop over the array.
-	checkAndUpdate "release/v0.7.6" "v0.7.6"
-	checkAndUpdate "release/v0.7.5" "v0.7.5"
-	checkAndUpdate "release/v0.7.4" "v0.7.4"
-	checkAndUpdate "master" "master"
+
+	for version in "${VERSIONS[@]}"
+	do
+		checkAndUpdate "$version"
+	done
+
 	echo -e "$(date)  Done checking branches.\n"
 
 	git checkout -q "$currentBranch"
