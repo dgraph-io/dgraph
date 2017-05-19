@@ -233,7 +233,7 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue) error {
 		// This is a aggregation node.
 		for _, grp := range res.group {
 			err := grp.aggregateChild(child)
-			if err != nil {
+			if err != nil && err != ErrEmptyVal {
 				return err
 			}
 		}

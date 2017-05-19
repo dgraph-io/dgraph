@@ -955,7 +955,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 			}
 		}
 		v, err := ag.Value()
-		if err != nil {
+		if err != nil && err != ErrEmptyVal {
 			return mp, err
 		}
 		if v.Value != nil {
