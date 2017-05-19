@@ -8,12 +8,12 @@
 # Exit script in case an error is encountered.
 set -e
 
-dev=$1
+asset_suffix=$1
 cur_dir=$(pwd);
 tmp_dir=/tmp/dgraph-build;
 release_version=$(git describe --abbrev=0);
-if [[ -n $dev ]]; then
-  release_version="$release_version-dev"
+if [[ -n $asset_suffix ]]; then
+  release_version="$release_version${asset_suffix}"
 fi
 platform="$(uname | tr '[:upper:]' '[:lower:]')"
 checksum_file=$cur_dir/"dgraph-checksum-$platform-amd64-$release_version".sha256
