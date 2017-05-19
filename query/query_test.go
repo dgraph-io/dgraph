@@ -7078,3 +7078,27 @@ func TestGetAllPredicatesVars(t *testing.T) {
 	require.Contains(t, predicates, "age")
 	require.Contains(t, predicates, "alias")
 }
+
+// gather predicates from groupby
+func TestGetAllPredicatesGroupby(t *testing.T) {
+	query := `
+	{
+		me(id: 1) {
+			friend @groupby(age) {
+				count(_uid_)
+			}
+			name
+		}
+	}
+	`
+
+	subGraphs := getSubGraphs(t, query)
+
+	predicates := GetAllPredicates(subGraphs)
+	require.NotNil(t, predicates)
+	require.Equal(t, 4, len(predicates))
+	require.Contains(t, predicates, "_uid_")
+	require.Contains(t, predicates, "name")
+	require.Contains(t, predicates, "age")
+	require.Contains(t, predicates, "friend")
+}

@@ -2030,6 +2030,12 @@ func (sg *SubGraph) getAllPredicates(predicates map[string]bool) {
 		predicates[sg.Params.Order] = true
 	}
 
+	if len(sg.Params.groupbyAttrs) != 0 {
+		for _, pred := range sg.Params.groupbyAttrs {
+			predicates[pred] = true
+		}
+	}
+
 	for _, filter := range sg.Filters {
 		filter.getAllPredicates(predicates)
 	}
