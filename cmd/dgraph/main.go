@@ -785,6 +785,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	if err != nil {
 		return resp, err
 	}
+	l.Parsing += time.Since(l.Start)
 
 	// If mutations are part of the query, we run them through the mutation handler
 	// same as the http client.
@@ -814,10 +815,12 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 
 	if schema != nil {
+		execStart = time.Now()
 		if schemaNodes, err = worker.GetSchemaOverNetwork(ctx, schema); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
 			return resp, err
 		}
+		l.Processing += time.Since(execStart)
 	}
 	resp.Schema = schemaNodes
 
