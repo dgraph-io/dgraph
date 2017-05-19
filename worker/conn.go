@@ -173,8 +173,8 @@ func (p *pool) dialNew() (*grpc.ClientConn, error) {
 // Get returns a connection from the pool of connections or a new connection if
 // the pool is empty.
 func (p *pool) Get() (*grpc.ClientConn, error) {
-	p.Lock()
-	defer p.Unlock()
+	p.RLock()
+	defer p.RUnlock()
 	if p == nil {
 		return nil, errNoConnection
 	}
