@@ -255,22 +255,16 @@ func backup(gid uint32, bdir string) error {
 
 		if pk.IsIndex() {
 			// Seek to the end of index keys.
-			it = pstore.NewIterator(badger.DefaultIteratorOptions) // TODO: Remove this.
-			defer it.Close()
 			it.Seek(pk.SkipRangeOfSameType())
 			continue
 		}
 		if pk.IsReverse() {
 			// Seek to the end of reverse keys.
-			it = pstore.NewIterator(badger.DefaultIteratorOptions) // TODO: Remove this.
-			defer it.Close()
 			it.Seek(pk.SkipRangeOfSameType())
 			continue
 		}
 		if pk.Attr == "_uid_" || pk.Attr == "_predicate_" {
 			// Skip the UID mappings.
-			it = pstore.NewIterator(badger.DefaultIteratorOptions) // TODO: Remove this.
-			defer it.Close()
 			it.Seek(pk.SkipPredicate())
 			continue
 		}
@@ -290,8 +284,6 @@ func backup(gid uint32, bdir string) error {
 		x.AssertTrue(pk.IsData())
 		pred, uid := pk.Attr, pk.Uid
 		if pred != lastPred && group.BelongsTo(pred) != gid {
-			it = pstore.NewIterator(badger.DefaultIteratorOptions) // TODO: Remove this.
-			defer it.Close()
 			it.Seek(pk.SkipPredicate())
 			continue
 		}

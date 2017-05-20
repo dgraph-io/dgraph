@@ -125,7 +125,8 @@ func StartRaftNodes(walDir string) {
 	kvOpt := badger.DefaultOptions
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = walDir
-	wals := badger.NewKV(&kvOpt)
+	wals, err := badger.NewKV(&kvOpt)
+	x.Checkf(err, "Error while creating badger KV store")
 	gr.wal = raftwal.Init(wals, *raftId)
 
 	var wg sync.WaitGroup
