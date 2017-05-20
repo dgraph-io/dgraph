@@ -754,7 +754,8 @@ func TestMain(m *testing.M) {
 
 	opt := badger.DefaultOptions
 	opt.Dir = dir
-	ps = badger.NewKV(&opt)
+	ps, err = badger.NewKV(&opt)
+	x.Check(err)
 	Init(ps)
 
 	group.ParseGroupConfig("")

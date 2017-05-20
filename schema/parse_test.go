@@ -262,7 +262,8 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	kvOpt := badger.DefaultOptions
 	kvOpt.Dir = dir
-	ps = badger.NewKV(&kvOpt)
+	ps, err = badger.NewKV(&kvOpt)
+	x.Check(err)
 	x.Check(group.ParseGroupConfig("groups.conf"))
 	Init(ps)
 	defer os.RemoveAll(dir)

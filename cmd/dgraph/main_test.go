@@ -65,7 +65,8 @@ func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
 	}
 	opt := badger.DefaultOptions
 	opt.Dir = dir1
-	ps = badger.NewKV(&opt)
+	ps, err = badger.NewKV(&opt)
+	x.Check(err)
 
 	dir2, err = ioutil.TempDir("", "wal_")
 	if err != nil {

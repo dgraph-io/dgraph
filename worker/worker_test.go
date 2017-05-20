@@ -114,7 +114,8 @@ func initTest(t *testing.T, schemaStr string) (string, *badger.KV) {
 
 	opt := badger.DefaultOptions
 	opt.Dir = dir
-	ps := badger.NewKV(&opt)
+	ps, err := badger.NewKV(&opt)
+	x.Check(err)
 
 	posting.Init(ps)
 	populateGraph(t)

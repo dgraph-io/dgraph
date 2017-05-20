@@ -3308,8 +3308,9 @@ func TestMain(m *testing.M) {
 
 	opt := badger.DefaultOptions
 	opt.Dir = dir
-	ps := badger.NewKV(&opt)
+	ps, err := badger.NewKV(&opt)
 	defer ps.Close()
+	x.Check(err)
 
 	group.ParseGroupConfig("")
 	schema.Init(ps)
