@@ -101,9 +101,7 @@ class App extends React.Component {
     // TODO: Compare benchmarks between d3.js and vis.js and make migration if needed
     this.collapseAllFrames();
 
-    _handleRunQuery(query, () => {
-      this.setState({ isQueryDirty: false, query: "" });
-    });
+    _handleRunQuery(query);
   };
 
   onRunSharedQuery = shareId => {

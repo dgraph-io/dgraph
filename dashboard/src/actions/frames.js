@@ -40,8 +40,10 @@ export function updateFrame({ id, type, meta, data }) {
 /**
  * toggleCollapseFrame returns an action object that will change the `collapsed`
  * state of a frame.
+ *
  * @params frame {Object} - target frame
- * @params [nextState] {Boolean} - optional param to dictate if the frame should collapse
+ * @params [nextState] {Boolean} - optional param to dictate if the frame should
+ *     collapse. If not provided, the action will toggle the collapsed state
  */
 export function toggleCollapseFrame(frame, nextState) {
   let shouldCollapse;
