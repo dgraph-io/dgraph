@@ -1108,7 +1108,7 @@ func TestGroupByRoot(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":38,"count":1},{"age":15,"count":2}]}}`,
+		`{"me":[{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":38,"count":1},{"age":15,"count":2}]}]}`,
 		js)
 }
 
@@ -1133,7 +1133,7 @@ func TestGroupBy(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"age":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}]}],"me":[{"friend":{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":15,"count":2}]},"name":"Michonne"}]}`,
+		`{"age":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}]}],"me":[{"friend":[{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":15,"count":2}]}],"name":"Michonne"}]}`,
 		js)
 }
 
@@ -1199,7 +1199,7 @@ func TestGroupByAgg(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":{"@groupby":[{"age":17,"max(name)":"Daryl Dixon"},{"age":19,"max(name)":"Andrea"},{"age":15,"max(name)":"Rick Grimes"}]}}]}`,
+		`{"me":[{"friend":[{"@groupby":[{"age":17,"max(name)":"Daryl Dixon"},{"age":19,"max(name)":"Andrea"},{"age":15,"max(name)":"Rick Grimes"}]}]}]}`,
 		js)
 }
 
@@ -1216,7 +1216,7 @@ func TestGroupByMulti(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":{"@groupby":[{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}}]}`,
+		`{"me":[{"friend":[{"@groupby":[{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}]}]}`,
 		js)
 }
 

@@ -379,34 +379,35 @@ export function processGraph(
     someNodeHasChildren = false;
     ignoredChildren = [];
 
-    if (k !== "server_latency" && k !== "uids") {
-      // For schema, we should should all predicates, irrespective of
-      // whether they have children or not. Some predicate have tokenizers,
-      // are considered as children because it is an array of values.
-      let block = response[k];
+    if (k === "server_latency" || k === "uids") {
+      continue;
+    }
+    // For schema, we should should display all predicates, irrespective of
+    // whether they have children or not. Some predicate have tokenizers,
+    // are considered as children because it is an array of values.
+    let block = response[k];
 
-      isSchema = k === "schema";
-      for (let i = 0; i < block.length; i++) {
-        let rn: ResponseNode = {
-          node: block[i],
-          src: {
-            id: "",
-            pred: k
-          }
-        };
-
-        if (isSchema || hasChildren(block[i])) {
-          someNodeHasChildren = true;
-          nodesQueue.push(rn);
-        } else {
-          ignoredChildren.push(rn);
+    isSchema = k === "schema";
+    for (let i = 0; i < block.length; i++) {
+      let rn: ResponseNode = {
+        node: block[i],
+        src: {
+          id: "",
+          pred: k
         }
-      }
+      };
 
-      // If no root node has children , then we add all root level nodes to the view.
-      if (!someNodeHasChildren) {
-        nodesQueue.push.apply(nodesQueue, ignoredChildren);
+      if (isSchema || hasChildren(block[i])) {
+        someNodeHasChildren = true;
+        nodesQueue.push(rn);
+      } else {
+        ignoredChildren.push(rn);
       }
+    }
+
+    // If no root node has children , then we add all root level nodes to the view.
+    if (!someNodeHasChildren) {
+      nodesQueue.push.apply(nodesQueue, ignoredChildren);
     }
   }
 
@@ -460,7 +461,6 @@ export function processGraph(
       if (!obj.node.hasOwnProperty(prop)) {
         continue;
       }
-
       // We can have a key-val pair, another array or an object here (in case of facets)
       let val = obj.node[prop];
       // We get back tokenizer as an array, we usually consider arrays as children. Though

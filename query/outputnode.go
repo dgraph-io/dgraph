@@ -235,7 +235,7 @@ func (n *protoNode) addGroupby(sg *SubGraph, fname string) {
 		}
 		g.AddListChild("@groupby", uc)
 	}
-	n.AddMapChild(fname, g, false)
+	n.AddListChild(fname, g)
 }
 
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
@@ -504,7 +504,7 @@ func (n *fastJsonNode) addGroupby(sg *SubGraph, fname string) {
 		}
 		g.AddListChild("@groupby", uc)
 	}
-	n.AddMapChild(fname, g, false)
+	n.AddListChild(fname, g)
 }
 
 func (n *fastJsonNode) addCountAtRoot(sg *SubGraph) {
