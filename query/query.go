@@ -292,7 +292,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 
 	if sg.Params.GetUid {
-		dst.SetUID(uid, "_uid_")
+		// If we are asked for count() and there are no other children,
+		// then we dont return the uids at this level so that UI doesn't render
+		// nodes without any other properties.
+		if sg.Params.uidCount == "" || len(sg.Children) != 0 {
+			dst.SetUID(uid, "_uid_")
+		}
 	}
 
 	facetsNode := dst.New("@facets")
