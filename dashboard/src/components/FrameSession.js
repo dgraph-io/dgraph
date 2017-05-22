@@ -186,7 +186,7 @@ class FrameSession extends React.Component {
                     <i className="icon fa fa-code" />
                   </div>
 
-                  <span className="menu-label">Code</span>
+                  <span className="menu-label">JSON</span>
 
                 </a>
               </li>

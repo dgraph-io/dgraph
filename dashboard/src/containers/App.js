@@ -6,7 +6,11 @@ import EditorPanel from "../components/EditorPanel";
 import FrameList from "../components/FrameList";
 import { runQuery, runQueryByShareId } from "../actions";
 import { refreshConnectedState } from "../actions/connection";
-import { discardFrame, toggleCollapseFrame } from "../actions/frames";
+import {
+  discardFrame,
+  discardAllFrames,
+  toggleCollapseFrame
+} from "../actions/frames";
 import { readCookie, eraseCookie } from "../lib/helpers";
 
 import "../assets/css/App.css";
@@ -104,6 +108,12 @@ class App extends React.Component {
     _handleRunQuery(query);
   };
 
+  handleDiscardAllFrames = () => {
+    const { _handleDiscardAllFrames } = this.props;
+
+    _handleDiscardAllFrames();
+  };
+
   onRunSharedQuery = shareId => {
     const { handleRunSharedQuery } = this.props;
 
@@ -115,6 +125,8 @@ class App extends React.Component {
   render = () => {
     const { query, isQueryDirty, currentSidebarMenu } = this.state;
     const { handleDiscardFrame, frames, connected } = this.props;
+
+    const canDiscardAll = frames.length > 0;
 
     return (
       <div className="app-layout">
@@ -140,6 +152,8 @@ class App extends React.Component {
                 <EditorPanel
                   query={query}
                   isQueryDirty={isQueryDirty}
+                  canDiscardAll={canDiscardAll}
+                  onDiscardAllFrames={this.handleDiscardAllFrames}
                   onRunQuery={this.handleRunQuery}
                   onUpdateQuery={this.handleUpdateQuery}
                   onClearQuery={this.handleClearQuery}
@@ -172,6 +186,9 @@ const mapStateToProps = state => ({
 const mapDispatchToProps = dispatch => ({
   _handleRunQuery(query, done = () => {}) {
     return dispatch(runQuery(query)).then(done);
+  },
+  _handleDiscardAllFrames() {
+    return dispatch(discardAllFrames());
   },
   _refreshConnectedState() {
     dispatch(refreshConnectedState());

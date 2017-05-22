@@ -1,8 +1,8 @@
-import React from 'react';
-import classnames from 'classnames';
+import React from "react";
+import classnames from "classnames";
 
-import FrameCodeTab from './FrameCodeTab';
-import FrameMessageTab from './FrameMessageTab';
+import FrameCodeTab from "./FrameCodeTab";
+import FrameMessageTab from "./FrameMessageTab";
 
 class FrameError extends React.Component {
   constructor(props) {
@@ -10,8 +10,8 @@ class FrameError extends React.Component {
 
     this.state = {
       // tabs: 'error', 'response', 'query'
-      currentTab: 'error'
-    }
+      currentTab: "error"
+    };
   }
 
   navigateTab = (tabName, e) => {
@@ -20,7 +20,7 @@ class FrameError extends React.Component {
     this.setState({
       currentTab: tabName
     });
-  }
+  };
 
   render() {
     const { data: { message, response, query } } = this.props;
@@ -34,8 +34,10 @@ class FrameError extends React.Component {
               <li>
                 <a
                   href="#query"
-                  className={classnames('sidebar-nav-item', { active: currentTab === 'error' })}
-                  onClick={this.navigateTab.bind(this, 'error')}
+                  className={classnames("sidebar-nav-item", {
+                    active: currentTab === "error"
+                  })}
+                  onClick={this.navigateTab.bind(this, "error")}
                 >
                   <div className="icon-container">
                     <i className="icon fa fa-warning" />
@@ -47,14 +49,16 @@ class FrameError extends React.Component {
               <li>
                 <a
                   href="#tree"
-                  className={classnames('sidebar-nav-item', { active: currentTab === 'response' })}
-                  onClick={this.navigateTab.bind(this, 'response')}
+                  className={classnames("sidebar-nav-item", {
+                    active: currentTab === "response"
+                  })}
+                  onClick={this.navigateTab.bind(this, "response")}
                 >
                   <div className="icon-container">
                     <i className="icon fa fa-code" />
                   </div>
 
-                  <span className="menu-label">Code</span>
+                  <span className="menu-label">JSON</span>
 
                 </a>
               </li>
@@ -62,16 +66,17 @@ class FrameError extends React.Component {
           </div>
 
           <div className="main">
-            {currentTab === 'error' ?
-              <FrameMessageTab message={message} /> :null}
-            {currentTab === 'response' ?
-              <FrameCodeTab
-                query={query}
-                response={response}
-              /> :null}
+            {currentTab === "error"
+              ? <FrameMessageTab message={message} />
+              : null}
+            {currentTab === "response"
+              ? <FrameCodeTab query={query} response={response} />
+              : null}
 
             <div className="footer error-footer">
-              <i className="fa fa-warning error-mark" /> <span className="result-message">Error occurred</span>
+              <i className="fa fa-warning error-mark" />
+              {" "}
+              <span className="result-message">Error occurred</span>
             </div>
           </div>
         </div>
