@@ -1382,12 +1382,6 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 				strList: sg.values,
 				path:    sgPath,
 			}
-		} else if len(sg.DestUIDs.Uids) != 0 {
-			// This implies it is a entity variable.
-			doneVars[sg.Params.Var] = varValue{
-				uids: sg.DestUIDs,
-				path: sgPath,
-			}
 		} else if len(sg.counts) != 0 {
 			// This implies it is a value variable.
 			doneVars[sg.Params.Var] = varValue{
@@ -1400,6 +1394,12 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 					Value: int64(sg.counts[idx]),
 				}
 				doneVars[sg.Params.Var].vals[uid] = val
+			}
+		} else if len(sg.DestUIDs.Uids) != 0 {
+			// This implies it is a entity variable.
+			doneVars[sg.Params.Var] = varValue{
+				uids: sg.DestUIDs,
+				path: sgPath,
 			}
 		} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
 			// This implies it is a value variable.
