@@ -3,6 +3,7 @@ import classnames from "classnames";
 
 import logo from "../assets/images/dgraph.png";
 import SidebarInfo from "./SidebarInfo";
+import SidebarFeedback from "./SidebarFeedback";
 
 import "../assets/css/Sidebar.css";
 
@@ -68,6 +69,20 @@ class Sidebar extends React.Component {
                 <i className="fa fa-question-circle-o" />
               </a>
             </li>
+            <li>
+              <a
+                href="#info"
+                className={classnames("link", {
+                  active: currentMenu === "feedback"
+                })}
+                onClick={e => {
+                  e.preventDefault();
+                  onToggleMenu("feedback");
+                }}
+              >
+                <i className="fa fa-commenting" />
+              </a>
+            </li>
           </ul>
         </div>
         <div
@@ -78,6 +93,7 @@ class Sidebar extends React.Component {
           {currentMenu === "favorite" ? <div>favorite</div> : null}
           {currentMenu === "about" ? <div>about</div> : null}
           {currentMenu === "info" ? <SidebarInfo /> : null}
+          {currentMenu === "feedback" ? <SidebarFeedback /> : null}
         </div>
       </div>
     );
