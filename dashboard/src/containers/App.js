@@ -11,7 +11,7 @@ import {
   discardAllFrames,
   toggleCollapseFrame
 } from "../actions/frames";
-import { readCookie, eraseCookie } from "../lib/helpers";
+import { createCookie, readCookie, eraseCookie } from "../lib/helpers";
 
 import "../assets/css/App.css";
 
@@ -112,8 +112,11 @@ class App extends React.Component {
       const { queryExecutionCounter } = this.state;
 
       if (queryExecutionCounter === 5) {
-        /* global delighted */
-        delighted.survey();
+        if (!readCookie("nps-survery-done")) {
+          /* global delighted */
+          delighted.survey();
+          createCookie("nps-survery-done", true, 180);
+        }
       } else {
         this.setState({ queryExecutionCounter: queryExecutionCounter + 1 });
       }
