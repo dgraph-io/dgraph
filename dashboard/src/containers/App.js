@@ -22,7 +22,10 @@ class App extends React.Component {
     this.state = {
       query: "",
       isQueryDirty: false,
-      currentSidebarMenu: ""
+      currentSidebarMenu: "",
+      // queryExecutionCounter is used to determine when the NPS score survey
+      // should be shown
+      queryExecutionCounter: 0
     };
   }
 
@@ -105,7 +108,16 @@ class App extends React.Component {
     // TODO: Compare benchmarks between d3.js and vis.js and make migration if needed
     this.collapseAllFrames();
 
-    _handleRunQuery(query);
+    _handleRunQuery(query, () => {
+      const { queryExecutionCounter } = this.state;
+
+      if (queryExecutionCounter === 5) {
+        /* global delighted */
+        delighted.survey();
+      } else {
+        this.setState({ queryExecutionCounter: queryExecutionCounter + 1 });
+      }
+    });
   };
 
   handleDiscardAllFrames = () => {
