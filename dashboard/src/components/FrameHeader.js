@@ -56,18 +56,20 @@ const FrameHeader = ({
           }}
         />
 
-        <a
-          href="#expand-toggle"
-          className="action"
-          onClick={e => {
-            e.preventDefault();
-            onToggleCollapse();
-          }}
-        >
-          {isCollapsed
-            ? <i className="fa fa-chevron-down" />
-            : <i className="fa fa-chevron-up" />}
-        </a>
+        {isFullscreen
+          ? null
+          : <a
+              href="#expand-toggle"
+              className="action"
+              onClick={e => {
+                e.preventDefault();
+                onToggleCollapse();
+              }}
+            >
+              {isCollapsed
+                ? <i className="fa fa-chevron-down" />
+                : <i className="fa fa-chevron-up" />}
+            </a>}
 
         <a
           href="#fullscreen-toggle"

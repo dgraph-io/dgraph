@@ -1,15 +1,15 @@
-import React from 'react';
-import classnames from 'classnames';
+import React from "react";
+import classnames from "classnames";
 
-import FrameCodeTab from './FrameCodeTab';
-import FrameMessageTab from './FrameMessageTab';
+import FrameCodeTab from "./FrameCodeTab";
+import FrameMessageTab from "./FrameMessageTab";
 
 class FrameSuccess extends React.Component {
   constructor(props) {
     super(props);
 
     this.state = {
-      currentTab: 'message'
+      currentTab: "message"
     };
   }
 
@@ -19,7 +19,7 @@ class FrameSuccess extends React.Component {
     this.setState({
       currentTab: tabName
     });
-  }
+  };
 
   render() {
     const { data } = this.props;
@@ -33,8 +33,10 @@ class FrameSuccess extends React.Component {
               <li>
                 <a
                   href="#query"
-                  className={classnames('sidebar-nav-item', { active: currentTab === 'message' })}
-                  onClick={this.navigateTab.bind(this, 'message')}
+                  className={classnames("sidebar-nav-item", {
+                    active: currentTab === "message"
+                  })}
+                  onClick={this.navigateTab.bind(this, "message")}
                 >
                   <div className="icon-container">
                     <i className="icon fa fa-check-circle" />
@@ -45,14 +47,16 @@ class FrameSuccess extends React.Component {
               <li>
                 <a
                   href="#tree"
-                  className={classnames('sidebar-nav-item', { active: currentTab === 'response' })}
-                  onClick={this.navigateTab.bind(this, 'response')}
+                  className={classnames("sidebar-nav-item", {
+                    active: currentTab === "response"
+                  })}
+                  onClick={this.navigateTab.bind(this, "response")}
                 >
                   <div className="icon-container">
                     <i className="icon fa fa-code" />
                   </div>
 
-                  <span className="menu-label">Code</span>
+                  <span className="menu-label">JSON</span>
 
                 </a>
               </li>
@@ -60,13 +64,12 @@ class FrameSuccess extends React.Component {
           </div>
 
           <div className="main">
-            {currentTab === 'message' ?
-              <FrameMessageTab message={data.message} /> :null}
-            {currentTab === 'response' ?
-              <FrameCodeTab
-                query={data.query}
-                response={data.response}
-              /> :null}
+            {currentTab === "message"
+              ? <FrameMessageTab message={data.message} />
+              : null}
+            {currentTab === "response"
+              ? <FrameCodeTab query={data.query} response={data.response} />
+              : null}
           </div>
         </div>
       </div>
