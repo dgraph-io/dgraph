@@ -1098,7 +1098,17 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 		} else if sg.MathExp.Const.Value != nil {
 			// Assign the const for all the srcUids.
 			mp := make(map[uint64]types.Val)
-			for _, uid := range sg.SrcUIDs.Uids {
+			rangeOver := sg.SrcUIDs
+			if parent == nil {
+				rangeOver = sg.DestUIDs
+			}
+			if rangeOver == nil {
+				it := doneVars[sg.Params.Var]
+				it.vals = mp
+				doneVars[sg.Params.Var] = it
+				return nil
+			}
+			for _, uid := range rangeOver.Uids {
 				mp[uid] = sg.MathExp.Const
 			}
 			it := doneVars[sg.Params.Var]
