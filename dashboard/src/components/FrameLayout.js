@@ -128,10 +128,16 @@ class FrameLayout extends React.Component {
   };
 
   handleToggleCollapse = (done = () => {}) => {
-    const { changeCollapseState, frame } = this.props;
-    const nextState = !frame.meta.collapsed;
+    const { changeCollapseState, frame, collapseAllFrames } = this.props;
+    const shouldCollapse = !frame.meta.collapsed;
 
-    changeCollapseState(frame, nextState);
+    // If the frame will expand, first collapse all other frames to avoid slow
+    // rendering
+    if (!shouldCollapse) {
+      collapseAllFrames();
+    }
+
+    changeCollapseState(frame, shouldCollapse);
     done();
   };
 

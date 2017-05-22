@@ -6,8 +6,12 @@ import EditorPanel from "../components/EditorPanel";
 import FrameList from "../components/FrameList";
 import { runQuery, runQueryByShareId } from "../actions";
 import { refreshConnectedState } from "../actions/connection";
-import { discardFrame } from "../actions/frames";
-import { readCookie, eraseCookie } from "../lib/helpers";
+import {
+  discardFrame,
+  discardAllFrames,
+  toggleCollapseFrame
+} from "../actions/frames";
+import { createCookie, readCookie, eraseCookie } from "../lib/helpers";
 
 import "../assets/css/App.css";
 
@@ -18,7 +22,10 @@ class App extends React.Component {
     this.state = {
       query: "",
       isQueryDirty: false,
-      currentSidebarMenu: ""
+      currentSidebarMenu: "",
+      // queryExecutionCounter is used to determine when the NPS score survey
+      // should be shown
+      queryExecutionCounter: 0
     };
   }
 
@@ -87,12 +94,39 @@ class App extends React.Component {
     this.handleUpdateQuery("", this.focusCodemirror);
   };
 
+  collapseAllFrames = () => {
+    const { frames, handleCollapseFrame } = this.props;
+
+    frames.forEach(handleCollapseFrame);
+  };
+
   handleRunQuery = query => {
     const { _handleRunQuery } = this.props;
 
+    // First, collapse all frames in order to prevent slow rendering
+    // FIXME: this won't be necessary if visualization took up less resources
+    // TODO: Compare benchmarks between d3.js and vis.js and make migration if needed
+    this.collapseAllFrames();
+
     _handleRunQuery(query, () => {
-      this.setState({ isQueryDirty: false, query: "" });
+      const { queryExecutionCounter } = this.state;
+
+      if (queryExecutionCounter === 5) {
+        if (!readCookie("nps-survery-done")) {
+          /* global delighted */
+          delighted.survey();
+          createCookie("nps-survery-done", true, 180);
+        }
+      } else {
+        this.setState({ queryExecutionCounter: queryExecutionCounter + 1 });
+      }
     });
+  };
+
+  handleDiscardAllFrames = () => {
+    const { _handleDiscardAllFrames } = this.props;
+
+    _handleDiscardAllFrames();
   };
 
   onRunSharedQuery = shareId => {
@@ -106,6 +140,8 @@ class App extends React.Component {
   render = () => {
     const { query, isQueryDirty, currentSidebarMenu } = this.state;
     const { handleDiscardFrame, frames, connected } = this.props;
+
+    const canDiscardAll = frames.length > 0;
 
     return (
       <div className="app-layout">
@@ -131,6 +167,8 @@ class App extends React.Component {
                 <EditorPanel
                   query={query}
                   isQueryDirty={isQueryDirty}
+                  canDiscardAll={canDiscardAll}
+                  onDiscardAllFrames={this.handleDiscardAllFrames}
                   onRunQuery={this.handleRunQuery}
                   onUpdateQuery={this.handleUpdateQuery}
                   onClearQuery={this.handleClearQuery}
@@ -144,6 +182,7 @@ class App extends React.Component {
                   frames={frames}
                   onDiscardFrame={handleDiscardFrame}
                   onSelectQuery={this.handleSelectQuery}
+                  collapseAllFrames={this.collapseAllFrames}
                 />
               </div>
             </div>
@@ -163,6 +202,9 @@ const mapDispatchToProps = dispatch => ({
   _handleRunQuery(query, done = () => {}) {
     return dispatch(runQuery(query)).then(done);
   },
+  _handleDiscardAllFrames() {
+    return dispatch(discardAllFrames());
+  },
   _refreshConnectedState() {
     dispatch(refreshConnectedState());
   },
@@ -171,6 +213,9 @@ const mapDispatchToProps = dispatch => ({
   },
   handleDiscardFrame(frameID) {
     dispatch(discardFrame(frameID));
+  },
+  handleCollapseFrame(frame) {
+    dispatch(toggleCollapseFrame(frame, true));
   }
 });
 

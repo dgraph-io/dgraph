@@ -96,7 +96,7 @@ export function getShareURL(shareId) {
   return `${baseURL}/${shareId}`;
 }
 
-function createCookie(name, val, days, options) {
+export function createCookie(name, val, days, options = {}) {
   let expires = "";
   if (days) {
     let date = new Date();
