@@ -1,10 +1,15 @@
-import React from 'react';
-import FrameItem from './FrameItem';
-import CSSTransitionGroup from 'react-transition-group/CSSTransitionGroup';
+import React from "react";
+import FrameItem from "./FrameItem";
+import CSSTransitionGroup from "react-transition-group/CSSTransitionGroup";
 
-import '../assets/css/Frames.css';
+import "../assets/css/Frames.css";
 
-const FrameList = ({ frames, onDiscardFrame, onSelectQuery }) => {
+const FrameList = ({
+  frames,
+  onDiscardFrame,
+  onSelectQuery,
+  collapseAllFrames
+}) => {
   return (
     <CSSTransitionGroup
       transitionName="frame-item"
@@ -13,18 +18,17 @@ const FrameList = ({ frames, onDiscardFrame, onSelectQuery }) => {
       component="ul"
       className="frame-list"
     >
-      {
-        frames.map((frame) => {
-          return (
-            <FrameItem
-              key={frame.id}
-              frame={frame}
-              onDiscardFrame={onDiscardFrame}
-              onSelectQuery={onSelectQuery}
-            />
-          )
-        })
-      }
+      {frames.map(frame => {
+        return (
+          <FrameItem
+            key={frame.id}
+            frame={frame}
+            onDiscardFrame={onDiscardFrame}
+            onSelectQuery={onSelectQuery}
+            collapseAllFrames={collapseAllFrames}
+          />
+        );
+      })}
     </CSSTransitionGroup>
   );
 };

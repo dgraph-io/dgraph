@@ -87,13 +87,19 @@ class App extends React.Component {
     this.handleUpdateQuery("", this.focusCodemirror);
   };
 
+  collapseAllFrames = () => {
+    const { frames, handleCollapseFrame } = this.props;
+
+    frames.forEach(handleCollapseFrame);
+  };
+
   handleRunQuery = query => {
-    const { _handleRunQuery, frames, handleCollapseFrame } = this.props;
+    const { _handleRunQuery } = this.props;
 
     // First, collapse all frames in order to prevent slow rendering
     // FIXME: this won't be necessary if visualization took up less resources
     // TODO: Compare benchmarks between d3.js and vis.js and make migration if needed
-    frames.forEach(handleCollapseFrame);
+    this.collapseAllFrames();
 
     _handleRunQuery(query, () => {
       this.setState({ isQueryDirty: false, query: "" });
@@ -149,6 +155,7 @@ class App extends React.Component {
                   frames={frames}
                   onDiscardFrame={handleDiscardFrame}
                   onSelectQuery={this.handleSelectQuery}
+                  collapseAllFrames={this.collapseAllFrames}
                 />
               </div>
             </div>
