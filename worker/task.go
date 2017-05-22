@@ -527,7 +527,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		}
 
 		var filtered *protos.List
-		var matchFunc matchFn
 		filter := stringFilter{
 			funcName: srcFn.fname,
 			funcType: srcFn.fnType,
@@ -535,12 +534,12 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		}
 		if srcFn.fnType != CompareAttrFn {
 			filter.tokens = srcFn.tokens
-			matchFunc = defaultMatch
+			filter.match = defaultMatch
 		} else {
 			filter.ineqValue = srcFn.ineqValue
-			matchFunc = ineqMatch
+			filter.match = ineqMatch
 		}
-		filtered = matchStrings(uids, values, filter, matchFunc)
+		filtered = matchStrings(uids, values, filter)
 		for i := 0; i < len(out.UidMatrix); i++ {
 			algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
 		}
