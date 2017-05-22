@@ -6,7 +6,7 @@ import EditorPanel from "../components/EditorPanel";
 import FrameList from "../components/FrameList";
 import { runQuery, runQueryByShareId } from "../actions";
 import { refreshConnectedState } from "../actions/connection";
-import { discardFrame } from "../actions/frames";
+import { discardFrame, toggleCollapseFrame } from "../actions/frames";
 import { readCookie, eraseCookie } from "../lib/helpers";
 
 import "../assets/css/App.css";
@@ -88,7 +88,12 @@ class App extends React.Component {
   };
 
   handleRunQuery = query => {
-    const { _handleRunQuery } = this.props;
+    const { _handleRunQuery, frames, handleCollapseFrame } = this.props;
+
+    // First, collapse all frames in order to prevent slow rendering
+    // FIXME: this won't be necessary if visualization took up less resources
+    // TODO: Compare benchmarks between d3.js and vis.js and make migration if needed
+    frames.forEach(handleCollapseFrame);
 
     _handleRunQuery(query, () => {
       this.setState({ isQueryDirty: false, query: "" });
@@ -171,6 +176,9 @@ const mapDispatchToProps = dispatch => ({
   },
   handleDiscardFrame(frameID) {
     dispatch(discardFrame(frameID));
+  },
+  handleCollapseFrame(frame) {
+    dispatch(toggleCollapseFrame(frame, true));
   }
 });
 
