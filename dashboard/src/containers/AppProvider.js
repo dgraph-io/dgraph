@@ -9,7 +9,7 @@ import {
 } from "react-router-dom";
 import thunk from "redux-thunk";
 import reducer from "../reducers";
-import { updateFrame } from "../actions/frames";
+import { toggleCollapseFrame } from "../actions/frames";
 
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap/dist/css/bootstrap-theme.css";
@@ -43,26 +43,12 @@ export default class AppProvider extends React.Component {
 
     // Collapse all except the first one to avoid slow render
     const firstFrame = frameItems[0];
-    store.dispatch(
-      updateFrame({
-        id: firstFrame.id,
-        type: firstFrame.type,
-        data: firstFrame.data,
-        meta: Object.assign({}, firstFrame.meta, { collapsed: false })
-      })
-    );
+    store.dispatch(toggleCollapseFrame(firstFrame, false));
 
     for (let i = 1; i < frameItems.length; i++) {
       const targetFrame = frameItems[i];
 
-      store.dispatch(
-        updateFrame({
-          id: targetFrame.id,
-          type: targetFrame.type,
-          data: targetFrame.data,
-          meta: Object.assign({}, targetFrame.meta, { collapsed: true })
-        })
-      );
+      store.dispatch(toggleCollapseFrame(targetFrame, true));
     }
   };
 
