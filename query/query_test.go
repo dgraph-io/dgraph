@@ -296,6 +296,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "son", 1, 2300, nil)
 
 	addEdgeToValue(t, "name", 2301, `Alice\"`, nil)
+	addEdgeToLangValue(t, "name", 0x1004, "Badger", "", nil)
 
 	time.Sleep(5 * time.Millisecond)
 }
@@ -6946,4 +6947,79 @@ func TestCountAtRoot5(t *testing.T) {
         `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+}
+
+func TestHasFuncAtRoot(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: has(friend)) {
+			name
+			friend {
+				count()
+			}
+		}
+	}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Daryl Dixon"},{"friend":[{"count":1}],"name":"Andrea"}]}`, string(js))
+}
+
+func TestHasFuncAtRootFilter(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: anyofterms(name, "Michonne Rick Daryl")) @filter(has(friend)) {
+			name
+			friend {
+				count()
+			}
+		}
+	}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Daryl Dixon"}]}`, string(js))
+}
+
+func TestHasFuncAtChild1(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: has(school)) {
+			name
+			friend @filter(has(scooter)) {
+				name
+			}
+		}
+	}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`, string(js))
+}
+
+func TestHasFuncAtChild2(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: has(school)) {
+			name
+			friend @filter(has(alias)) {
+				name
+				alias
+			}
+		}
+	}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"alias":"Zambo Alice","name":"Rick Grimes"},{"alias":"John Alice","name":"Glenn Rhee"},{"alias":"Bob Joe","name":"Daryl Dixon"},{"alias":"Allan Matt","name":"Andrea"},{"alias":"John Oliver"}],"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Daryl Dixon"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Andrea"}]}`, string(js))
 }

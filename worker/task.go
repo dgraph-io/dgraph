@@ -134,6 +134,7 @@ const (
 	PasswordFn
 	RegexFn
 	FullTextSearchFn
+	HasFn
 	StandardFn = 100
 )
 
@@ -162,6 +163,8 @@ func parseFuncType(arr []string) (FuncType, string) {
 		return RegexFn, f
 	case "alloftext", "anyoftext":
 		return FullTextSearchFn, f
+	case "has":
+		return HasFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
@@ -245,7 +248,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 	for i := 0; i < srcFn.n; i++ {
 		var key []byte
-		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn {
+		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn || srcFn.fnType == HasFn {
 			if q.Reverse {
 				key = x.ReverseKey(attr, q.UidList.Uids[i])
 			} else {
@@ -362,12 +365,33 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			continue
 		}
 
+		if srcFn.fnType == HasFn {
+			count := int64(pl.Length(0))
+			if EvalCompare("gt", count, 0) {
+				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
+				out.UidMatrix = append(out.UidMatrix, tlist)
+			}
+			continue
+		}
+
 		// The more usual case: Getting the UIDs.
 		uidList := new(protos.List)
 		for _, fres := range filteredRes {
 			uidList.Uids = append(uidList.Uids, fres.uid)
 		}
 		out.UidMatrix = append(out.UidMatrix, uidList)
+	}
+
+	if srcFn.fnType == HasFn && srcFn.isCompareAtRoot {
+		f := func(key, val []byte, mu *sync.Mutex) {
+			pk := x.Parse(key)
+			tlist := &protos.List{[]uint64{pk.Uid}}
+			mu.Lock()
+			out.UidMatrix = append(out.UidMatrix, tlist)
+			mu.Unlock()
+		}
+		iterateParallel(ctx, q, f, false)
+
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isCompareAtRoot {
@@ -385,7 +409,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				mu.Unlock()
 			}
 		}
-		iterateParallel(ctx, q, f)
+		iterateParallel(ctx, q, f, true)
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -574,13 +598,21 @@ type functionContext struct {
 func ensureArgsCount(funcStr []string, expected int) error {
 	actual := len(funcStr) - 2
 	switch {
-	case actual == 0:
-		return x.Errorf("No arguments passed to function '%s'", funcStr[0])
 	case actual != expected:
 		return x.Errorf("Function '%s' requires %d arguments, but got %d (%v)",
 			funcStr[0], expected, actual, funcStr[2:])
 	default:
 		return nil
+	}
+}
+
+func checkRoot(q *protos.Query, fc *functionContext) {
+	if q.UidList == nil {
+		// Fetch Uids from Store and populate in q.UidList.
+		fc.n = 0
+		fc.isCompareAtRoot = true
+	} else {
+		fc.n = len(q.UidList.Uids)
 	}
 }
 
@@ -605,10 +637,6 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case CompareAttrFn:
-		err = ensureArgsCount(q.SrcFunc, 1)
-		if err != nil {
-			return nil, err
-		}
 		fc.ineqValue, err = convertValue(attr, q.SrcFunc[2])
 		if err != nil {
 			return nil, x.Errorf("Got error: %v while running: %v", err.Error(), q.SrcFunc)
@@ -629,13 +657,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 				q.SrcFunc[0], q.SrcFunc[2])
 		}
-		if q.UidList == nil {
-			// Fetch Uids from Store and populate in q.UidList.
-			fc.n = 0
-			fc.isCompareAtRoot = true
-		} else {
-			fc.n = len(q.UidList.Uids)
-		}
+		checkRoot(q, fc)
 	case GeoFn:
 		// For geo functions, we get extra information used for filtering.
 		fc.tokens, fc.geoQuery, err = types.GetGeoTokens(q.SrcFunc)
@@ -692,6 +714,13 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 			return nil, err
 		}
 		fc.n = 0
+		fc.lang = q.SrcFunc[1]
+	case HasFn:
+		err = ensureArgsCount(q.SrcFunc, 0)
+		if err != nil {
+			return nil, err
+		}
+		checkRoot(q, fc)
 		fc.lang = q.SrcFunc[1]
 	default:
 		return nil, x.Errorf("FnType %d not handled in numFnAttrs.", fnType)
@@ -913,7 +942,8 @@ type itkv struct {
 	val []byte
 }
 
-func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte, *sync.Mutex)) {
+func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte, *sync.Mutex),
+	fetchVal bool) {
 	grpSize := uint64(math.MaxUint64 / uint64(numPart))
 	var wg sync.WaitGroup
 	mu := &sync.Mutex{}
@@ -951,8 +981,13 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 					break
 				}
 				key := it.Key().Data()
-				val := it.Value().Data()
-				f(key, val, mu)
+				// TODO(pawan) - See how we can make this cleaner.
+				if fetchVal {
+					val := it.Value().Data()
+					f(key, val, mu)
+				} else {
+					f(key, nil, mu)
+				}
 			}
 			wg.Done()
 		}(i)

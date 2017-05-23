@@ -789,7 +789,7 @@ func TestParseQueryWithVarInIneqError(t *testing.T) {
 		}
 
 		me(id: var(fr)) @filter(gt(var(a, b), 10)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -808,7 +808,7 @@ func TestParseQueryWithVarInIneq(t *testing.T) {
 		}
 
 		me(id: var(fr)) @filter(gt(var(a), 10)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -3353,4 +3353,36 @@ func TestCountAtRootErr2(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+}
+
+func TestHasFuncAtRoot(t *testing.T) {
+	query := `{
+		me(func: has(name@en)) {
+			name
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestHasFilterAtRoot(t *testing.T) {
+	query := `{
+		me(func: allofterms(name, "Steven Tom")) @filter(has(director.film)) {
+			name
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestHasFilterAtChild(t *testing.T) {
+	query := `{
+		me(func: anyofterms(name, "Steven Tom")) {
+			name
+			director.film @filter(has(genre)) {
+			}
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
 }
