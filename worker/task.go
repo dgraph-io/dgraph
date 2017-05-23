@@ -383,24 +383,28 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isCompareAtRoot {
-		f := func(key, val []byte, mu *sync.Mutex) {
-			pk := x.Parse(key)
+		f := func(kv itkv, mu *sync.Mutex) {
+			pk := x.Parse(kv.key)
 			tlist := &protos.List{[]uint64{pk.Uid}}
 			mu.Lock()
 			out.UidMatrix = append(out.UidMatrix, tlist)
 			mu.Unlock()
 		}
-		iterateParallel(ctx, q, f, false)
+		itParams := iterateParams{
+			q:        q,
+			fetchVal: false,
+		}
+		iterateParallel(ctx, itParams, f)
 
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isCompareAtRoot {
-		f := func(key, val []byte, mu *sync.Mutex) {
-			pl, decr := posting.GetOrUnmarshal(key, val, gid)
+		f := func(kv itkv, mu *sync.Mutex) {
+			pl, decr := posting.GetOrUnmarshal(kv.key, kv.val, gid)
 			count := int64(pl.Length(0))
 			decr()
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				pk := x.Parse(key)
+				pk := x.Parse(kv.key)
 				// TODO: Look if we want to put these UIDs in one list before
 				// passing it back to query package.
 				tlist := &protos.List{[]uint64{pk.Uid}}
@@ -409,7 +413,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				mu.Unlock()
 			}
 		}
-		iterateParallel(ctx, q, f, true)
+		itParams := iterateParams{
+			q:        q,
+			fetchVal: true,
+		}
+		iterateParallel(ctx, itParams, f)
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -942,8 +950,14 @@ type itkv struct {
 	val []byte
 }
 
-func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte, *sync.Mutex),
-	fetchVal bool) {
+type iterateParams struct {
+	q        *protos.Query
+	fetchVal bool // Whether value needs to be fetched along with key.
+}
+
+func iterateParallel(ctx context.Context, params iterateParams, f func(itkv, *sync.Mutex)) {
+	q := params.q
+	fetchVal := params.fetchVal
 	grpSize := uint64(math.MaxUint64 / uint64(numPart))
 	var wg sync.WaitGroup
 	mu := &sync.Mutex{}
@@ -981,13 +995,17 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 					break
 				}
 				key := it.Key().Data()
-				// TODO(pawan) - See how we can make this cleaner.
+				kv := itkv{
+					key: key,
+				}
+				// For HasFn, we dont need to fetch values. We take the presence of a key
+				// to mean HasFn is true for the uid. We need to fetchValue for CompareScalarFn
+				// though.
 				if fetchVal {
 					val := it.Value().Data()
-					f(key, val, mu)
-				} else {
-					f(key, nil, mu)
+					kv.val = val
 				}
+				f(kv, mu)
 			}
 			wg.Done()
 		}(i)
