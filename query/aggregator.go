@@ -328,6 +328,9 @@ func (ag *aggregator) divideByCount() {
 }
 
 func (ag *aggregator) Value() (types.Val, error) {
+	if ag.result.Value == nil {
+		return ag.result, ErrEmptyVal
+	}
 	ag.divideByCount()
 	if ag.result.Tid == types.FloatID {
 		if math.IsInf(ag.result.Value.(float64), 1) {

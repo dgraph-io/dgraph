@@ -18,7 +18,6 @@
 package tok
 
 import (
-	"bytes"
 	"encoding/binary"
 	"time"
 
@@ -285,12 +284,11 @@ func (t TrigramTokenizer) Tokens(sv types.Val) ([]string, error) {
 	if !ok {
 		return nil, x.Errorf("Trigram indices only supported for string types")
 	}
-	runes := bytes.Runes([]byte(value))
-	l := len(runes) - 2
+	l := len(value) - 2
 	if l > 0 {
 		tokens := make([]string, l)
 		for i := 0; i < l; i++ {
-			trigram := string(runes[i : i+3])
+			trigram := value[i : i+3]
 			tokens[i] = encodeToken(trigram, t.Identifier())
 		}
 		return tokens, nil

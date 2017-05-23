@@ -1,0 +1,46 @@
+.key-content {
+  font-weight: 500;
+}
+
+.property-pair {
+  margin-right: 12px;
+  vertical-align: middle;
+}
+
+.properties-container {
+  padding-right: 32px;
+  position: relative;
+}
+
+.property-key {
+  margin-right: 4px;
+}
+
+.property-val {
+  font-size: 12.7px;
+  color: #6b6b6b;
+}
+
+.properties {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 0;
+
+  &.expanded {
+    white-space: normal;
+  }
+}
+
+.label {
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.toggle-expand-btn {
+  position: absolute;
+  right: 2px;
+  top: 0;
+  font-size: 16px;
+  color: #6b6b6b;
+}
