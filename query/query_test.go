@@ -1111,6 +1111,27 @@ func TestGroupByRoot(t *testing.T) {
 		`{"me":[{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":38,"count":1},{"age":15,"count":2}]}]}`,
 		js)
 }
+func TestGroupBy_RepeatAttr(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id: 1) {
+			friend @groupby(age) {
+				count(_uid_)
+			}
+			friend {
+				name
+				age
+			}
+			name
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":15,"count":2}]},{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}],"name":"Michonne"}]}`,
+		js)
+}
 
 func TestGroupBy(t *testing.T) {
 	populateGraph(t)
