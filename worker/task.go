@@ -190,6 +190,11 @@ func getPredList(uid uint64, gid uint32) ([]types.Val, error) {
 	return pl.AllValues()
 }
 
+type result struct {
+	uid    uint64
+	facets []*protos.Facet
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	var out protos.Result
@@ -283,10 +288,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		out.Values = append(out.Values, newValue)
 
 		// get filtered uids and facets.
-		type result struct {
-			uid    uint64
-			facets []*protos.Facet
-		}
 		var filteredRes []*result
 		if !isValueEdge { // for uid edge.. get postings
 			var perr error
