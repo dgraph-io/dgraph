@@ -263,6 +263,15 @@ func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 		return nil, x.Errorf("Invalid shortest path query")
 	}
 
+	numPaths := sg.Params.numPaths
+	if numPaths == 0 {
+		// Return 1 path by default.
+		numPaths = 1
+	}
+	if numPaths > 1 {
+		return kShortestPath(ctx, sg)
+	}
+
 	pq := make(priorityQueue, 0)
 	heap.Init(&pq)
 
@@ -275,11 +284,6 @@ func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 	heap.Push(&pq, srcNode)
 
 	numHops := -1
-	numPaths := sg.Params.numPaths
-	if numPaths == 0 {
-		// Return 1 path by default.
-		numPaths = 1
-	}
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
@@ -439,4 +443,136 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 	curNode.Children = append(curNode.Children, node)
 
 	return shortestSg
+}
+
+// This will be a more expensive function which computes the k shortest paths
+func kShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
+	var err error
+	numPaths := sg.Params.numPaths
+	_ = numPaths
+	pq := make(priorityQueue, 0)
+	heap.Init(&pq)
+
+	// Initialize and push the source node.
+	srcNode := &Item{
+		uid:  sg.Params.From,
+		cost: 0,
+		hop:  0,
+	}
+	heap.Push(&pq, srcNode)
+
+	numHops := -1
+	next := make(chan bool, 2)
+	expandErr := make(chan error, 2)
+	adjacencyMap := make(map[uint64]map[uint64]mapItem)
+	go sg.expandOut(ctx, adjacencyMap, next, expandErr)
+
+	// map to store the min cost and parent of nodes.
+	dist := make(map[uint64]nodeInfo)
+	dist[srcNode.uid] = nodeInfo{
+		parent: 0,
+		cost:   0,
+		node:   srcNode,
+	}
+
+	var stopExpansion bool
+	for pq.Len() > 0 {
+		item := heap.Pop(&pq).(*Item)
+		if item.uid == sg.Params.To {
+			break
+		}
+		if item.hop > numHops {
+			// Explore the next level by calling processGraph and add them
+			// to the queue.
+			if !stopExpansion {
+				next <- true
+			}
+			select {
+			case err = <-expandErr:
+				if err != nil {
+					if err == ErrTooBig {
+						return nil, err
+					} else if err == ErrStop {
+						stopExpansion = true
+					} else {
+						x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
+						return nil, err
+					}
+				}
+			case <-ctx.Done():
+				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+				return nil, ctx.Err()
+			}
+			numHops++
+		}
+		if !stopExpansion {
+			neighbours := adjacencyMap[item.uid]
+			for toUid, info := range neighbours {
+				cost := info.cost
+				d, ok := dist[toUid]
+				if ok && d.cost < item.cost+cost {
+					// Skip if the new cost is strictly greater. As we want multiple paths, equality can't
+					// be ignored.
+					continue
+				}
+				if !ok {
+					// This is the first time we're seeing this node. So
+					// create a new node and add it to the heap and map.
+					node := &Item{
+						uid:  toUid,
+						cost: item.cost + cost,
+						hop:  item.hop + 1,
+					}
+					heap.Push(&pq, node)
+					dist[toUid] = nodeInfo{
+						cost:   item.cost + cost,
+						parent: item.uid,
+						node:   node,
+						attr:   info.attr,
+						facet:  info.facet,
+					}
+				} else {
+					// We've already seen this node. So, just update the cost
+					// and fix the priority in the heap and map.
+					node := dist[toUid].node
+					node.cost = item.cost + cost
+					node.hop = item.hop + 1
+					heap.Fix(&pq, node.index)
+					// Update the map with new values.
+					dist[toUid] = nodeInfo{
+						cost:   item.cost + cost,
+						parent: item.uid,
+						node:   node,
+						attr:   info.attr,
+						facet:  info.facet,
+					}
+				}
+			}
+		}
+	}
+
+	next <- false
+	// Go through the distance map to find the path.
+	var result []uint64
+	cur := sg.Params.To
+	for i := 0; cur != sg.Params.From && i < len(dist); i++ {
+		result = append(result, cur)
+		cur = dist[cur].parent
+	}
+	// Put the path in DestUIDs of the root.
+	if cur != sg.Params.From {
+		sg.DestUIDs = &protos.List{}
+		return nil, nil
+	}
+
+	result = append(result, cur)
+	l := len(result)
+	// Reverse the list.
+	for i := 0; i < l/2; i++ {
+		result[i], result[l-i-1] = result[l-i-1], result[i]
+	}
+	sg.DestUIDs.Uids = result
+
+	shortestSg := createPathSubgraph(ctx, dist, result)
+	return shortestSg, nil
 }
