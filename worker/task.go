@@ -505,7 +505,8 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	// For string matching functions, check the language.
-	if (srcFn.fnType == StandardFn || srcFn.fnType == FullTextSearchFn) && len(srcFn.lang) > 0 {
+	if len(srcFn.lang) > 0 && (srcFn.fnType == StandardFn ||
+		srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn) {
 		uids := algo.MergeSorted(out.UidMatrix)
 		var values []types.Val
 		for _, uid := range uids.Uids {
@@ -525,13 +526,20 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			decr() // Decrement the reference count of the pl.
 		}
 
+		var filtered *protos.List
 		filter := stringFilter{
 			funcName: srcFn.fname,
 			funcType: srcFn.fnType,
 			lang:     srcFn.lang,
-			tokens:   srcFn.tokens,
 		}
-		filtered := matchStrings(uids, values, filter)
+		if srcFn.fnType != CompareAttrFn {
+			filter.tokens = srcFn.tokens
+			filter.match = defaultMatch
+		} else {
+			filter.ineqValue = srcFn.ineqValue
+			filter.match = ineqMatch
+		}
+		filtered = matchStrings(uids, values, filter)
 		for i := 0; i < len(out.UidMatrix); i++ {
 			algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
 		}
@@ -619,6 +627,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 			return nil, err
 		}
 		fc.n = len(fc.tokens)
+		fc.lang = q.SrcFunc[1]
 	case CompareScalarFn:
 		err = ensureArgsCount(q.SrcFunc, 2)
 		if err != nil {

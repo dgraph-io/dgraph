@@ -1,5 +1,4 @@
 matrix:
-  fast_finish: true
   allow_failures:
     - os: osx
   include:
@@ -16,8 +15,6 @@ matrix:
 
 git:
   depth: 1000
-install:
-- bash contrib/build-rocksdb.sh $HOME/build
 dist: trusty
 sudo: required
 notifications:

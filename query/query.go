@@ -142,7 +142,7 @@ type params struct {
 	ignoreResult bool   // Node results are ignored.
 	Expand       string // Var to use for expand.
 	isGroupBy    bool
-	groupbyAttrs []string
+	groupbyAttrs []gql.AttrLang
 	uidCount     string
 }
 
@@ -291,7 +291,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 
 	if sg.Params.GetUid {
-		dst.SetUID(uid, "_uid_")
+		// If we are asked for count() and there are no other children,
+		// then we dont return the uids at this level so that UI doesn't render
+		// nodes without any other properties.
+		if sg.Params.uidCount == "" || len(sg.Children) != 0 {
+			dst.SetUID(uid, "_uid_")
+		}
 	}
 
 	facetsNode := dst.New("@facets")
@@ -301,18 +306,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			continue
 		}
 		if pc.Params.isGroupBy {
-			g := dst.New(pc.Attr)
-			for _, grp := range pc.GroupbyRes.group {
-				uc := g.New("@groupby")
-				for _, it := range grp.keys {
-					uc.AddValue(it.attr, it.key)
-				}
-				for _, it := range grp.aggregates {
-					uc.AddValue(it.attr, it.key)
-				}
-				g.AddListChild("@groupby", uc)
-			}
-			dst.AddMapChild(pc.Attr, g, false)
+			dst.addGroupby(pc, pc.Attr)
 			continue
 		}
 		if pc.IsInternal() {
@@ -807,15 +801,16 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		GetUid:     isDebug(ctx),
-		Alias:      gq.Alias,
-		Langs:      gq.Langs,
-		Var:        gq.Var,
-		ParentVars: make(map[string]varValue),
-		Normalize:  gq.Normalize,
-		Cascade:    gq.Cascade,
-		isGroupBy:  gq.IsGroupby,
-		uidCount:   gq.UidCount,
+		GetUid:       isDebug(ctx),
+		Alias:        gq.Alias,
+		Langs:        gq.Langs,
+		Var:          gq.Var,
+		ParentVars:   make(map[string]varValue),
+		Normalize:    gq.Normalize,
+		Cascade:      gq.Cascade,
+		isGroupBy:    gq.IsGroupby,
+		groupbyAttrs: gq.GroupbyAttrs,
+		uidCount:     gq.UidCount,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -1008,7 +1003,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 			}
 		}
 		v, err := ag.Value()
-		if err != nil {
+		if err != nil && err != ErrEmptyVal {
 			return mp, err
 		}
 		if v.Value != nil {
@@ -1043,7 +1038,7 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 
 	newMap := fromNode.vals
 	if newMap == nil {
-		newMap = make(map[uint64]types.Val)
+		return nil, x.Errorf("Variables not ordered correctly")
 	}
 	for ; idx < len(toNode.path); idx++ {
 		curNode := toNode.path[idx]
@@ -1073,7 +1068,6 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 				}
 				tempMap[dstUid] = val
 			}
-
 		}
 		newMap = tempMap
 	}
@@ -1081,7 +1075,7 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 }
 
 // transformVars transforms all the variables to the variable at the lowest level
-func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
+func transformVars(mNode *mathTree, doneVars map[string]varValue) ([]*SubGraph, error) {
 	mvarList := mNode.extractVarNodes()
 	// Iterate over the node list to find the node at the lowest level.
 	var maxVar string
@@ -1089,7 +1083,7 @@ func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
 	for _, mt := range mvarList {
 		mvarVal, ok := doneVars[mt.Var]
 		if !ok {
-			return x.Errorf("Variable not yet populated: %v", mt.Var)
+			return nil, x.Errorf("Variable not yet populated: %v", mt.Var)
 		}
 		if maxLevel < len(mvarVal.path) {
 			maxLevel = len(mvarVal.path)
@@ -1103,11 +1097,11 @@ func transformVars(mNode *mathTree, doneVars map[string]varValue) error {
 		curNode := doneVars[mt.Var]
 		newMap, err := curNode.transformTo(maxNode)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		mt.Val = newMap
 	}
-	return nil
+	return maxNode.path, nil
 }
 
 func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *SubGraph) error {
@@ -1127,14 +1121,14 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 			return err
 		}
 		if sg.Params.Var != "" {
-			doneVars[sg.Params.Var] = varValue{
-				vals: mp,
-			}
+			it := doneVars[sg.Params.Var]
+			it.vals = mp
+			doneVars[sg.Params.Var] = it
 		}
 		sg.Params.uidToVal = mp
 	} else if sg.MathExp != nil {
 		// Preprocess to bring all variables to the same level.
-		err := transformVars(sg.MathExp, doneVars)
+		maxPath, err := transformVars(sg.MathExp, doneVars)
 		if err != nil {
 			return err
 		}
@@ -1144,14 +1138,30 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 			return err
 		}
 		if sg.MathExp.Val != nil {
-			doneVars[sg.Params.Var] = varValue{vals: sg.MathExp.Val}
+			it := doneVars[sg.Params.Var]
+			it.vals = sg.MathExp.Val
+			// The path of math node is the path of max var node used in it.
+			it.path = maxPath
+			doneVars[sg.Params.Var] = it
 		} else if sg.MathExp.Const.Value != nil {
 			// Assign the const for all the srcUids.
 			mp := make(map[uint64]types.Val)
-			for _, uid := range sg.SrcUIDs.Uids {
+			rangeOver := sg.SrcUIDs
+			if parent == nil {
+				rangeOver = sg.DestUIDs
+			}
+			if rangeOver == nil {
+				it := doneVars[sg.Params.Var]
+				it.vals = mp
+				doneVars[sg.Params.Var] = it
+				return nil
+			}
+			for _, uid := range rangeOver.Uids {
 				mp[uid] = sg.MathExp.Const
 			}
-			doneVars[sg.Params.Var] = varValue{vals: mp}
+			it := doneVars[sg.Params.Var]
+			it.vals = mp
+			doneVars[sg.Params.Var] = it
 		} else {
 			return x.Errorf("Missing values/constant in math expression")
 		}
@@ -1430,12 +1440,6 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 				strList: sg.values,
 				path:    sgPath,
 			}
-		} else if len(sg.DestUIDs.Uids) != 0 {
-			// This implies it is a entity variable.
-			doneVars[sg.Params.Var] = varValue{
-				uids: sg.DestUIDs,
-				path: sgPath,
-			}
 		} else if len(sg.counts) != 0 {
 			// This implies it is a value variable.
 			doneVars[sg.Params.Var] = varValue{
@@ -1448,6 +1452,12 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 					Value: int64(sg.counts[idx]),
 				}
 				doneVars[sg.Params.Var].vals[uid] = val
+			}
+		} else if len(sg.DestUIDs.Uids) != 0 {
+			// This implies it is a entity variable.
+			doneVars[sg.Params.Var] = varValue{
+				uids: sg.DestUIDs,
+				path: sgPath,
 			}
 		} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
 			// This implies it is a value variable.
@@ -1834,11 +1844,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 	if sg.IsGroupBy() {
 		// Add the attrs required by groupby nodes
-		for _, attr := range sg.Params.groupbyAttrs {
+		for _, it := range sg.Params.groupbyAttrs {
 			sg.Children = append(sg.Children, &SubGraph{
-				Attr: attr,
+				Attr: it.Attr,
 				Params: params{
 					ignoreResult: true,
+					Langs:        it.Langs,
 				},
 			})
 		}

@@ -491,6 +491,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method != "POST" {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -509,6 +510,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	req, err := ioutil.ReadAll(r.Body)
 	q := string(req)
 	if err != nil || len(q) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		x.TraceError(ctx, x.Wrapf(err, "Error while reading query"))
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
@@ -539,6 +541,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// If we have mutations, run them first.
 	if res.Mutation != nil && hasGQLOps(res.Mutation) {
 		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			x.SetStatus(w, x.Error, err.Error())
 			return
@@ -554,6 +557,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if res.Schema != nil {
 		execStart := time.Now()
 		if schemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
 			x.SetStatus(w, x.Error, err.Error())
 			return
@@ -588,6 +592,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		if js, err := json.Marshal(mp); err == nil {
 			w.Write(js)
 		} else {
+			w.WriteHeader(http.StatusBadRequest)
 			x.SetStatus(w, "Error", "Unable to marshal map")
 		}
 		return
@@ -596,6 +601,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	sgl, err := query.ProcessQuery(ctx, res, &l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while Executing query"))
+		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}

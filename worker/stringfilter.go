@@ -26,11 +26,15 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type matchFn func(types.Val, stringFilter) bool
+
 type stringFilter struct {
-	funcName string
-	funcType FuncType
-	lang     string
-	tokens   []string
+	funcName  string
+	funcType  FuncType
+	lang      string
+	tokens    []string
+	match     matchFn
+	ineqValue types.Val
 }
 
 func matchStrings(uids *protos.List, values []types.Val, filter stringFilter) *protos.List {
@@ -40,7 +44,7 @@ func matchStrings(uids *protos.List, values []types.Val, filter stringFilter) *p
 			continue
 		}
 
-		if match(values[i], filter) {
+		if filter.match(values[i], filter) {
 			rv.Uids = append(rv.Uids, uids.Uids[i])
 		}
 	}
@@ -48,7 +52,7 @@ func matchStrings(uids *protos.List, values []types.Val, filter stringFilter) *p
 	return rv
 }
 
-func match(value types.Val, filter stringFilter) bool {
+func defaultMatch(value types.Val, filter stringFilter) bool {
 	tokenMap := map[string]bool{}
 	for _, t := range filter.tokens {
 		tokenMap[t] = false
@@ -73,6 +77,10 @@ func match(value types.Val, filter stringFilter) bool {
 	} else {
 		return cnt > 0
 	}
+}
+
+func ineqMatch(value types.Val, filter stringFilter) bool {
+	return types.CompareVals(filter.funcName, value, filter.ineqValue)
 }
 
 func tokenizeValue(value types.Val, filter stringFilter) []string {
