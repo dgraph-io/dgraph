@@ -7411,3 +7411,22 @@ func TestMathVar3(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"age":38,"var(a)":76.000000},{"age":15,"var(a)":30.000000},{"age":19,"var(a)":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, string(js))
 }
+
+func TestMultipleEquality(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: eq(name, ["Rick Gremes", "Michonne"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+
+
+        `
+	js := processToFastJSON(t, query)
+	fmt.Println(string(js))
+	//	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+}

@@ -3447,3 +3447,15 @@ func TestMathWithoutVarAlias(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 }
+
+func TestMultipleEqual(t *testing.T) {
+	query := `{
+		me(func: eq(name,["Steven Spielberg", "Tom Hanks"])) {
+			name
+		}
+	}`
+
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 2, len(gql.Query[0].Func.Args))
+}

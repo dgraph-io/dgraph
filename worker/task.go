@@ -500,6 +500,9 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				return nil, x.Errorf("Attribute not scalar: %s %v", attr, typ)
 			}
 
+			// TODO - for eq operator, filter all rows of the matrix with respective
+			// ineqValueTokens. We can still filter just the first row if function is
+			// something else because we dont allow multiple Args for ge, gt etc.
 			x.AssertTrue(len(out.UidMatrix) > 0)
 			// Filter the first row of UidMatrix. Since ineqValue != nil, we may
 			// assume that ineqValue is equal to the first token found in TokensTable.
@@ -665,9 +668,14 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case CompareAttrFn:
-		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
-			return nil, err
+		if fc.fname == "eq" {
+		} else {
+			err = ensureArgsCount(q.SrcFunc, 1)
+			if err != nil {
+				return nil, err
+			}
 		}
+
 		fc.ineqValue, err = convertValue(attr, q.SrcFunc[2])
 		if err != nil {
 			return nil, x.Errorf("Got error: %v while running: %v", err.Error(), q.SrcFunc)
