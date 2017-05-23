@@ -789,7 +789,7 @@ func TestParseQueryWithVarInIneqError(t *testing.T) {
 		}
 
 		me(id: var(fr)) @filter(gt(var(a, b), 10)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -808,7 +808,7 @@ func TestParseQueryWithVarInIneq(t *testing.T) {
 		}
 
 		me(id: var(fr)) @filter(gt(var(a), 10)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -2751,7 +2751,7 @@ func TestParseGroupbyRoot(t *testing.T) {
 		me(id: [1, 2, 3]) @groupby(friends) {
 				a as count(_uid_)
 		}
-		
+
 		groups(id: var(a)) {
 			_uid_
 			var(a)
@@ -3376,4 +3376,16 @@ func TestCountAtRootErr2(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+}
+
+func TestMultipleEqual(t *testing.T) {
+	query := `{
+		me(func: eq(name,["Steven Spielberg", "Tom Hanks"])) {
+			name
+		}
+	}`
+
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 2, len(gql.Query[0].Func.Args))
 }
