@@ -171,25 +171,6 @@ func enrichSchema(updates []*protos.SchemaUpdate) error {
 
 // This function is used to run mutations for the requests received from the
 // http client.
-func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
-	var s []*protos.SchemaUpdate
-	var allocIds map[string]uint64
-	var err error
-
-	if len(mu.Schema) > 0 {
-		if s, err = schema.Parse(mu.Schema); err != nil {
-			return nil, x.Wrap(err)
-		}
-	}
-
-	m := &protos.Mutation{Set: mu.Set, Del: mu.Del, Schema: s}
-
-	if allocIds, err = mutation.ConvertAndApply(ctx, m); err != nil {
-		return nil, err
-	}
-	return allocIds, nil
-}
-
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	if worker.HealthCheck() {
 		w.WriteHeader(http.StatusOK)
@@ -400,11 +381,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// convert the new UIDs to hex string.
-	newUids := make(map[string]string)
-	for k, v := range er.allocations {
-		newUids[k] = fmt.Sprintf("%#x", v)
-	}
+	newUids := convertUidsToHex(er.allocations)
 
 	if len(res.Query) == 0 {
 		mp := map[string]interface{}{}
@@ -458,18 +435,27 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
 }
 
+// convert the new UIDs to hex string.
+func convertUidsToHex(m map[string]uint64) (res map[string]string) {
+	res = make(map[string]string)
+	for k, v := range m {
+		res[k] = fmt.Sprintf("%#x", v)
+	}
+	return
+}
+
 // shareHandler allows to share a query between users.
 func shareHandler(w http.ResponseWriter, r *http.Request) {
+	var allocIds map[string]uint64
+
 	w.Header().Set("Content-Type", "application/json")
 	addCorsHeaders(w)
-
 	if r.Method != "POST" {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
 	}
 
-	// Set context to allow mutation
-	ctx := context.WithValue(context.Background(), "_share_", true)
+	ctx := context.Background()
 
 	defer r.Body.Close()
 	rawQuery, err := ioutil.ReadAll(r.Body)
@@ -487,20 +473,19 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 	mutation.Set, err = rdf.ConvertToNQuads(mutationString)
 	if err != nil {
 		x.TraceError(ctx, err)
+		x.SetStatus(w, x.Error, err.Error())
+		return
 	}
 
-	var allocIds map[string]uint64
-	var allocIdsStr map[string]string
-	if allocIds, err = mutationHandler(ctx, &mutation); err != nil {
+	m := &protos.Mutation{Set: mutation.Set, Del: nil, Schema: nil}
+
+	if allocIds, err = mutation.ConvertAndApply(ctx, m); err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
-	// convert the new UIDs to hex string.
-	allocIdsStr = make(map[string]string)
-	for k, v := range allocIds {
-		allocIdsStr[k] = fmt.Sprintf("%#x", v)
-	}
+
+	allocIdsStr := convertUidsToHex(allocIds)
 
 	payload := map[string]interface{}{
 		"code":    x.Success,
