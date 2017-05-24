@@ -106,7 +106,7 @@ func StartRaftNodes(walDir string) {
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 	gr.dispatcher = NewUpdateDispatcher()
 	// TODO(tzdybal) - remove
-	gr.dispatcher.GetUpdateStream([]string{"name", "alias"}, new(EchoObserver))
+	//gr.dispatcher.GetUpdateStream([]string{"name", "alias"}, new(EchoObserver))
 
 	if len(*myAddr) == 0 {
 		*myAddr = fmt.Sprintf("localhost:%d", *workerPort)

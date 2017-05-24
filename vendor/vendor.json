@@ -155,10 +155,10 @@
 			"revisionTime": "2016-09-05T06:26:19Z"
 		},
 		{
-			"checksumSHA1": "Lf3uUXTkKK5DJ37BxQvxO1Fq+K8=",
+			"checksumSHA1": "dvabztWVQX8f6oMLRyv4dLH+TGY=",
 			"path": "github.com/davecgh/go-spew/spew",
-			"revision": "6d212800a42e8ab5c146b8ace3490ee17e5225f9",
-			"revisionTime": "2016-09-07T16:21:46Z"
+			"revision": "346938d642f2ec3594ed81d874461961cd0faa76",
+			"revisionTime": "2016-10-29T20:57:26Z"
 		},
 		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
@@ -209,7 +209,6 @@
 			"revisionTime": "2017-03-31T03:19:02Z"
 		},
 		{
-<<<<<<< HEAD
 			"checksumSHA1": "lZFWy27Qo6+m/keDjNFYTxSmvZw=",
 			"path": "github.com/golang/protobuf/ptypes/any",
 			"revision": "2bba0603135d7d7f5cb73b2125beeda19c09f4ef",
@@ -234,8 +233,6 @@
 			"revisionTime": "2015-06-17T15:18:51Z"
 		},
 		{
-=======
->>>>>>> fix/vendoring
 			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
 			"path": "github.com/pkg/errors",
 			"revision": "17b591df37844cde689f4d5813e5cea0927d8dd2",
@@ -254,10 +251,22 @@
 			"revisionTime": "2016-09-05T20:05:55Z"
 		},
 		{
+			"checksumSHA1": "K0crHygPTP42i1nLKWphSlvOQJw=",
+			"path": "github.com/stretchr/objx",
+			"revision": "1a9d0bb9f541897e62256577b352fdbc1fb4fd94",
+			"revisionTime": "2015-09-28T12:21:52Z"
+		},
+		{
 			"checksumSHA1": "Q2V7Zs3diLmLfmfbiuLpSxETSuY=",
 			"path": "github.com/stretchr/testify/assert",
 			"revision": "976c720a22c8eb4eb6a0b4348ad85ad12491a506",
 			"revisionTime": "2016-09-25T22:06:09Z"
+		},
+		{
+			"checksumSHA1": "WGwMB6WljaeGKzuNCX5M4E8LADE=",
+			"path": "github.com/stretchr/testify/mock",
+			"revision": "4d4bfba8f1d1027c4fdbe371823030df51419987",
+			"revisionTime": "2017-01-30T11:31:45Z"
 		},
 		{
 			"checksumSHA1": "omdvCNu8sJIc9FbOfObC484M7Dg=",
