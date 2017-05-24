@@ -39,12 +39,15 @@ func (m Mutation) HasOps() bool {
 	return len(m.Set) > 0 || len(m.Del) > 0 || len(m.Schema) > 0
 }
 
-// NeededVars retrieves NQuads that refer a variable with their names.
+// NeededVars retrieves NQuads and variable names of NQuads that refer a variable.
 func (m Mutation) NeededVars() (res map[*protos.NQuad]string) {
 	res = make(map[*protos.NQuad]string)
 	addIfVar := func(nq *protos.NQuad) {
 		if len(nq.SubjectVar) > 0 {
 			res[nq] = nq.SubjectVar
+		}
+		if len(nq.ObjectVar) > 0 {
+			res[nq] = nq.ObjectVar
 		}
 	}
 	for _, s := range m.Set {
@@ -83,10 +86,6 @@ func (n NQuads) IsEmpty() bool {
 func (n NQuads) Add(m NQuads) (res NQuads) {
 	res.NQuads = n.NQuads
 	res.Types = n.Types
-	// res.NQuads = make([]*protos.NQuad, len(n.NQuads))
-	// copy(res.NQuads, n.NQuads)
-	// res.Types = make([]protos.DirectedEdge_Op, len(n.Types))
-	// copy(res.Types, n.Types)
 	res.NQuads = append(res.NQuads, m.NQuads...)
 	res.Types = append(res.Types, m.Types...)
 	return
@@ -115,7 +114,7 @@ func (n NQuads) Partition(by func(*protos.NQuad) bool) (t NQuads, f NQuads) {
 
 // IsDependent returns true iff given NQuad refers some variable.
 func IsDependent(n *protos.NQuad) bool {
-	return len(n.SubjectVar) > 0
+	return len(n.SubjectVar) > 0 || len(n.ObjectVar) > 0
 }
 
 // Gets the uid corresponding to an xid from the posting list which stores the
@@ -260,13 +259,38 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*protos.DirectedEdge, e
 	return edge, nil
 }
 
-func (nq NQuad) ExpandSubjectVar(subjectUids []uint64, newToUid map[string]uint64) (edges []*protos.DirectedEdge, err error) {
+func (nq NQuad) ExpandSubjectVar(subjectUids []uint64,
+	newToUid map[string]uint64) (edges []*protos.DirectedEdge, err error) {
 	x.AssertTrue(len(nq.SubjectVar) > 0)
+	var objectUid uint64
 
-	objectUid, err := toUid(nq.Subject, newToUid)
+	if len(nq.ObjectId) > 0 {
+		if objectUid, err = toUid(nq.ObjectId, newToUid); err != nil {
+			return
+		}
+	}
 
 	for _, uid := range subjectUids {
 		e, err := nq.createEdge(uid, objectUid)
+		if err != nil {
+			return edges, err
+		}
+		edges = append(edges, e)
+	}
+	return
+}
+
+func (nq NQuad) ExpandObjectVar(objectUids []uint64,
+	newToUid map[string]uint64) (edges []*protos.DirectedEdge, err error) {
+	x.AssertTrue(len(nq.ObjectVar) > 0)
+	var subjectUid uint64
+
+	if subjectUid, err = toUid(nq.Subject, newToUid); err != nil {
+		return edges, err
+	}
+
+	for _, uid := range objectUids {
+		e, err := nq.createEdge(subjectUid, uid)
 		if err != nil {
 			return edges, err
 		}
@@ -287,6 +311,6 @@ func copyValue(out *protos.DirectedEdge, nq NQuad) error {
 func (nq NQuad) valueType() x.ValueTypeInfo {
 	hasValue := nq.ObjectValue != nil
 	hasLang := len(nq.Lang) > 0
-	hasSpecialId := len(nq.ObjectId) == 0
+	hasSpecialId := len(nq.ObjectId) == 0 && len(nq.ObjectVar) == 0
 	return x.ValueType(hasValue, hasLang, hasSpecialId)
 }
