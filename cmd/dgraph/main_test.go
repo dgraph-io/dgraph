@@ -1032,6 +1032,43 @@ func TestMutationSubjectVariablesSingleMutation(t *testing.T) {
 	require.JSONEq(t, threeNiceFriends, r)
 }
 
+func TestMutationObjectVariables(t *testing.T) {
+	m1 := `
+		mutation {
+			set {
+                <me>          <friend>   <alice> .
+                <me>          <friend>   <bob> .
+                <me>          <friend>   <chris> .
+				<me>          <likes>    var(myfriend) .
+			}
+		}
+		{
+			me(id: me) {
+				myfriend as friend
+			}
+		}
+    `
+
+	ctx := context.Background()
+	parsed, err := gql.Parse(gql.Request{Str: m1, Http: true})
+	require.NoError(t, err)
+
+	var l query.Latency
+	_, err = query.Execute(ctx, parsed, &l, true)
+	require.NoError(t, err)
+
+	q1 := `
+		{
+			me(id: me) {
+				count(likes)
+            }
+		}
+    `
+	r, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"me":[{"count(likes)":3}]}`, r)
+}
+
 func TestMain(m *testing.M) {
 	x.Init()
 	dir1, dir2, ps, _ := prepare()
