@@ -58,6 +58,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"github.com/soheilhy/cmux"
 )
 
@@ -254,6 +255,22 @@ type executeResult struct {
 	allocations map[string]string
 }
 
+type invalidRequestError struct {
+	err error
+}
+
+func (e *invalidRequestError) Error() string {
+	return "invalid request: " + e.err.Error()
+}
+
+type internalError struct {
+	err error
+}
+
+func (e *internalError) Error() string {
+	return "internal error: " + e.err.Error()
+}
+
 func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (executeResult, error) {
 	var allocIds map[string]uint64
 	var er executeResult
@@ -264,7 +281,7 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 	var depSet, indepSet, depDel, indepDel gql.NQuads
 	if res.Mutation != nil {
 		if res.Mutation.HasOps() && !isMutationAllowed(ctx) {
-			return er, mutationNotAllowedErr
+			return er, x.Wrap(&invalidRequestError{err: mutationNotAllowedErr})
 		}
 		depSet, indepSet = gql.WrapNQ(res.Mutation.Set, protos.DirectedEdge_SET).
 			Partition(gql.IsDependent)
@@ -278,7 +295,7 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 		var mr mutation.MutationResult
 		nquads := indepSet.Add(indepDel)
 		if mr, err = mutation.ConvertToEdges(ctx, nquads, vars); err != nil {
-			return er, x.Wrapf(err, "failed to convert NQuads to edges")
+			return er, x.Wrapf(&internalError{err: err}, "failed to convert NQuads to edges")
 		}
 		m.Edges, allocIds = mr.Edges, mr.NewUids
 		for i := range m.Edges {
@@ -286,11 +303,11 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 		}
 		if len(res.Mutation.Schema) > 0 {
 			if m.Schema, err = schema.Parse(res.Mutation.Schema); err != nil {
-				return er, x.Wrapf(err, "failed to parse schema")
+				return er, x.Wrapf(&invalidRequestError{err: err}, "failed to parse schema")
 			}
 		}
-		if err := mutation.ApplyMutations(ctx, &m); err != nil {
-			return er, x.Wrapf(err, "failed to apply mutations")
+		if err = mutation.ApplyMutations(ctx, &m); err != nil {
+			return er, x.Wrapf(&internalError{err: err}, "failed to apply mutations")
 		}
 
 		// convert the new UIDs to hex string.
@@ -302,7 +319,7 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 
 	if res.Schema != nil {
 		if er.schemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
-			return er, x.Wrapf(err, "error while fetching schema")
+			return er, x.Wrapf(&internalError{err: err}, "error while fetching schema")
 		}
 	}
 
@@ -312,24 +329,25 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 
 	er.subgraphs, vars, err = query.ProcessQuery(ctx, res, l)
 	if err != nil {
-		return er, x.Wrapf(err, "Unable to process query")
+		return er, x.Wrapf(&internalError{err: err}, "Unable to process query")
 	}
 
 	if !depSet.IsEmpty() {
 		var mr mutation.MutationResult
 		nquads := depSet.Add(depDel)
 		if mr, err = mutation.ConvertToEdges(ctx, nquads, vars); err != nil {
-			return er, x.Wrapf(err, "Failed to conver NQuads to edges")
+			return er, x.Wrapf(&invalidRequestError{err: err}, "Failed to convert NQuads to edges")
 		}
 		if len(mr.NewUids) > 0 {
-			return er, x.Wrapf(err, "Adding nodes when using variables is not allowed")
+			return er, x.Wrapf(&invalidRequestError{err: err},
+				"adding nodes when using variables is not allowed")
 		}
 		m := protos.Mutations{Edges: mr.Edges}
 		for i := range m.Edges {
 			m.Edges[i].Op = mr.EdgeOps[i]
 		}
 		if err := mutation.ApplyMutations(ctx, &m); err != nil {
-			return er, x.Wrapf(err, "Failed to apply mutations with variables")
+			return er, x.Wrapf(&internalError{err: err}, "Failed to apply mutations with variables")
 		}
 	}
 	return er, nil
@@ -363,13 +381,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	invalidRequest := func(err error, msg string) {
-		var wrapped error
-		if msg == "" {
-			wrapped = x.Wrap(err)
-		} else {
-			wrapped = x.Wrapf(err, msg)
-		}
-		x.TraceError(ctx, wrapped)
+		x.TraceError(ctx, err)
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 	}
 
@@ -403,8 +415,13 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	var er executeResult
 	if er, err = executeQuery(ctx, res, &l); err != nil {
-		// TODO (szm): improve error handling
-		invalidRequest(err, "execution failed")
+		switch errors.Cause(err).(type) {
+		case *invalidRequestError:
+			invalidRequest(err, err.Error())
+		default: // internalError or other
+			x.TraceError(ctx, x.Wrap(err))
+			x.SetStatus(w, x.Error, err.Error())
+		}
 		return
 	}
 
