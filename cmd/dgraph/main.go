@@ -252,7 +252,7 @@ func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 type executeResult struct {
 	subgraphs   []*query.SubGraph
 	schemaNode  []*protos.SchemaNode
-	allocations map[string]string
+	allocations map[string]uint64
 }
 
 type invalidRequestError struct {
@@ -272,7 +272,6 @@ func (e *internalError) Error() string {
 }
 
 func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (executeResult, error) {
-	var allocIds map[string]uint64
 	var er executeResult
 	var err error
 	// If we have mutations that don't depend on query, run them first.
@@ -297,7 +296,7 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 		if mr, err = mutation.ConvertToEdges(ctx, nquads, vars); err != nil {
 			return er, x.Wrapf(&internalError{err: err}, "failed to convert NQuads to edges")
 		}
-		m.Edges, allocIds = mr.Edges, mr.NewUids
+		m.Edges, er.allocations = mr.Edges, mr.NewUids
 		for i := range m.Edges {
 			m.Edges[i].Op = nquads.Types[i]
 		}
@@ -308,12 +307,6 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 		}
 		if err = mutation.ApplyMutations(ctx, &m); err != nil {
 			return er, x.Wrapf(&internalError{err: err}, "failed to apply mutations")
-		}
-
-		// convert the new UIDs to hex string.
-		er.allocations = make(map[string]string)
-		for k, v := range allocIds {
-			er.allocations[k] = fmt.Sprintf("%#x", v)
 		}
 	}
 
@@ -425,12 +418,18 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// convert the new UIDs to hex string.
+	newUids := make(map[string]string)
+	for k, v := range er.allocations {
+		newUids[k] = fmt.Sprintf("%#x", v)
+	}
+
 	if len(res.Query) == 0 {
 		mp := map[string]interface{}{}
 		if res.Mutation != nil {
 			mp["code"] = x.Success
 			mp["message"] = "Done"
-			mp["uids"] = er.allocations
+			mp["uids"] = newUids
 		}
 		// Either Schema or query can be specified
 		if res.Schema != nil {
@@ -465,7 +464,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	addLatency, _ = strconv.ParseBool(r.URL.Query().Get("latency"))
 	debug, _ := strconv.ParseBool(r.URL.Query().Get("debug"))
 	addLatency = addLatency || debug
-	err = query.ToJson(&l, er.subgraphs, w, er.allocations, addLatency)
+	err = query.ToJson(&l, er.subgraphs, w, newUids, addLatency)
 	if err != nil {
 		// since we performed w.Write in ToJson above,
 		// calling WriteHeader with 500 code will be ignored.
@@ -614,8 +613,6 @@ func (s *grpcServer) Run(ctx context.Context,
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return resp, x.Errorf("Uninitiated server. Please retry later")
 	}
-	var allocIds map[string]uint64
-	var schemaNodes []*protos.SchemaNode
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		defer tr.Finish()
@@ -643,51 +640,23 @@ func (s *grpcServer) Run(ctx context.Context,
 		return resp, err
 	}
 
-	// If mutations are part of the query, we run them through the mutation handler
-	// same as the http client.
-	if res.Mutation != nil && res.Mutation.HasOps() {
-		if !isMutationAllowed(ctx) {
-			return resp, mutationNotAllowedErr
-		}
-		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
-			return resp, err
-		}
-	}
-
-	// Mutations are sent as part of the mutation object
-	if req.Mutation != nil && hasGraphOps(req.Mutation) {
-		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
-			return resp, err
-		}
-	}
-	resp.AssignedUids = allocIds
-
 	if req.Schema != nil && res.Schema != nil {
 		return resp, x.Errorf("Multiple schema blocks found")
 	}
-	// Schema Block can be part of query string
-	schema := res.Schema
-	if schema == nil {
-		schema = req.Schema
+	// Schema Block can be part of query string or request
+	if res.Schema == nil {
+		res.Schema = req.Schema
 	}
 
-	if schema != nil {
-		if schemaNodes, err = worker.GetSchemaOverNetwork(ctx, schema); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
-			return resp, err
-		}
+	var er executeResult
+	if er, err = executeQuery(ctx, res, &l); err != nil {
+		x.TraceError(ctx, err)
+		return resp, x.Wrap(err)
 	}
-	resp.Schema = schemaNodes
+	resp.AssignedUids = er.allocations
+	resp.Schema = er.schemaNode
 
-	sgl, _, err := query.ProcessQuery(ctx, res, &l)
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
-		return resp, err
-	}
-
-	nodes, err := query.ToProtocolBuf(&l, sgl)
+	nodes, err := query.ToProtocolBuf(&l, er.subgraphs)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
 		return resp, err
