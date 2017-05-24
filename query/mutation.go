@@ -10,15 +10,14 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type MutationResult struct {
+type MaterializedMutation struct {
 	Edges   []*protos.DirectedEdge
 	NewUids map[string]uint64
-	EdgeOps []protos.DirectedEdge_Op
 }
 
-func (mr *MutationResult) AddEdge(edge *protos.DirectedEdge, t protos.DirectedEdge_Op) {
+func (mr *MaterializedMutation) AddEdge(edge *protos.DirectedEdge, op protos.DirectedEdge_Op) {
+	edge.Op = op
 	mr.Edges = append(mr.Edges, edge)
-	mr.EdgeOps = append(mr.EdgeOps, t)
 }
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
@@ -26,8 +25,7 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
 	if err != nil {
 		return x.Wrapf(err, "While adding internal edges")
 	}
-	err = worker.MutateOverNetwork(ctx, m)
-	if err != nil {
+	if err = worker.MutateOverNetwork(ctx, m); err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
 		return err
 	}
@@ -139,10 +137,10 @@ func expandVariables(nq *gql.NQuad,
 	return nq.ExpandVariables(newUids, subjectUids, objectUids)
 }
 
-func ConvertToEdges(ctx context.Context,
+func Materialize(ctx context.Context,
 	nquads gql.NQuads,
-	vars map[string]varValue) (MutationResult, error) {
-	var mr MutationResult
+	vars map[string]varValue) (MaterializedMutation, error) {
+	var mr MaterializedMutation
 	var err error
 	var newUids map[string]uint64
 
@@ -151,8 +149,7 @@ func ConvertToEdges(ctx context.Context,
 	}
 	if len(newUids) > 0 {
 		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while AssignUidsOverNetwork for newUids: %v", newUids))
-			return mr, err
+			return mr, x.Wrapf(err, "Error while AssignUidsOverNetwork for: %v", newUids)
 		}
 	}
 
@@ -191,40 +188,26 @@ func ConvertToEdges(ctx context.Context,
 			mr.NewUids[k[2:]] = v
 		}
 	}
-
 	return mr, nil
 }
 
 // ConvertAndApply materializes edges defined by the mutation
 // and adds them to the database.
 func ConvertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string]uint64, error) {
-	var allocIds map[string]uint64
-	var m protos.Mutations
 	var err error
-	var mr MutationResult
+	var mr MaterializedMutation
 
-	nquads := gql.WrapNQ(mutation.Set, protos.DirectedEdge_SET)
-	if mr, err = ConvertToEdges(ctx, nquads, nil); err != nil {
+	set := gql.WrapNQ(mutation.Set, protos.DirectedEdge_SET)
+	del := gql.WrapNQ(mutation.Del, protos.DirectedEdge_DEL)
+	all := set.Add(del)
+
+	if mr, err = Materialize(ctx, all, nil); err != nil {
 		return nil, err
 	}
-	m.Edges, allocIds = mr.Edges, mr.NewUids
-	for i := range m.Edges {
-		m.Edges[i].Op = mr.EdgeOps[i]
-	}
+	var m = protos.Mutations{Edges: mr.Edges, Schema: mutation.Schema}
 
-	nquads = gql.WrapNQ(mutation.Del, protos.DirectedEdge_DEL)
-	if mr, err = ConvertToEdges(ctx, nquads, nil); err != nil {
-		return nil, err
-	}
-	for i := range mr.Edges {
-		edge := mr.Edges[i]
-		edge.Op = mr.EdgeOps[i]
-		m.Edges = append(m.Edges, edge)
-	}
-
-	m.Schema = mutation.Schema
 	if err := ApplyMutations(ctx, &m); err != nil {
 		return nil, x.Wrap(err)
 	}
-	return allocIds, nil
+	return mr.NewUids, nil
 }

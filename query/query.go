@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
@@ -210,7 +211,7 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 type ExecuteResult struct {
 	Subgraphs   []*SubGraph
 	SchemaNode  []*protos.SchemaNode
-	Allocations map[string]string
+	Allocations map[string]uint64
 }
 
 var MutationNotAllowedErr = x.Errorf("Mutations are forbidden on this server.")
@@ -231,55 +232,94 @@ func (e *InternalError) Error() string {
 	return "internal error: " + e.err.Error()
 }
 
+// convert the new UIDs to hex string.
+func ConvertUidsToHex(m map[string]uint64) (res map[string]string) {
+	res = make(map[string]string)
+	for k, v := range m {
+		res[k] = fmt.Sprintf("%#x", v)
+	}
+	return
+}
+
+func enrichSchema(updates []*protos.SchemaUpdate) error {
+	for _, schema := range updates {
+		typ := types.TypeID(schema.ValueType)
+		if typ == types.UidID {
+			continue
+		}
+		if len(schema.Tokenizer) == 0 && schema.Directive == protos.SchemaUpdate_INDEX {
+			schema.Tokenizer = []string{tok.Default(typ).Name()}
+		} else if len(schema.Tokenizer) > 0 && schema.Directive != protos.SchemaUpdate_INDEX {
+			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
+		}
+		// check for valid tokeniser types and duplicates
+		var seen = make(map[string]bool)
+		var seenSortableTok bool
+		for _, t := range schema.Tokenizer {
+			tokenizer, has := tok.GetTokenizer(t)
+			if !has {
+				return x.Errorf("Invalid tokenizer %s", t)
+			}
+			if tokenizer.Type() != typ {
+				return x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
+					tokenizer.Name(), schema.Predicate, typ.Name())
+			}
+			if _, ok := seen[tokenizer.Name()]; !ok {
+				seen[tokenizer.Name()] = true
+			} else {
+				return x.Errorf("Duplicate tokenizers present for attr %s", schema.Predicate)
+			}
+			if tokenizer.IsSortable() {
+				if seenSortableTok {
+					return x.Errorf("More than one sortable index encountered for: %v",
+						schema.Predicate)
+				}
+				seenSortableTok = true
+			}
+		}
+	}
+	return nil
+}
+
 func Execute(ctx context.Context, res gql.Result, l *Latency, mutationAllowed bool) (ExecuteResult, error) {
-	var allocIds map[string]uint64
 	var er ExecuteResult
 	var err error
 	// If we have mutations that don't depend on query, run them first.
 	var vars map[string]varValue
+	var schemaUpdate []*protos.SchemaUpdate
 
 	var depSet, indepSet, depDel, indepDel gql.NQuads
 	if res.Mutation != nil {
 		if res.Mutation.HasOps() && !mutationAllowed {
 			return er, x.Wrap(&InvalidRequestError{err: MutationNotAllowedErr})
 		}
-		depSet, indepSet = gql.WrapNQ(res.Mutation.Set, protos.DirectedEdge_SET).
-			Partition(gql.IsDependent)
 
-		depDel, indepDel = gql.WrapNQ(res.Mutation.Del, protos.DirectedEdge_DEL).
-			Partition(gql.IsDependent)
-	}
-
-	if !indepSet.IsEmpty() {
-		var m protos.Mutations
-		var mr MutationResult
-		nquads := indepSet.Add(indepDel)
-		if mr, err = ConvertToEdges(ctx, nquads, vars); err != nil {
-			return er, x.Wrapf(&InternalError{err: err}, "failed to convert NQuads to edges")
-		}
-		m.Edges, allocIds = mr.Edges, mr.NewUids
-		for i := range m.Edges {
-			m.Edges[i].Op = nquads.Types[i]
-		}
 		if len(res.Mutation.Schema) > 0 {
-			if m.Schema, err = schema.Parse(res.Mutation.Schema); err != nil {
+			if schemaUpdate, err = schema.Parse(res.Mutation.Schema); err != nil {
 				return er, x.Wrapf(&InvalidRequestError{err: err}, "failed to parse schema")
 			}
+			if err = enrichSchema(schemaUpdate); err != nil {
+				return er, x.Wrapf(&InternalError{err: err}, "failed to enrich schema")
+			}
 		}
+
+		depSet, indepSet = gql.WrapNQ(res.Mutation.Set, protos.DirectedEdge_SET).
+			Partition(gql.HasVariables)
+
+		depDel, indepDel = gql.WrapNQ(res.Mutation.Del, protos.DirectedEdge_DEL).
+			Partition(gql.HasVariables)
+
+		var mr MaterializedMutation
+		nquads := indepSet.Add(indepDel)
+		if !nquads.IsEmpty() {
+			if mr, err = Materialize(ctx, nquads, vars); err != nil {
+				return er, x.Wrapf(&InternalError{err: err}, "failed to convert NQuads to edges")
+			}
+			er.Allocations = mr.NewUids
+		}
+		m := protos.Mutations{Edges: mr.Edges, Schema: schemaUpdate}
 		if err = ApplyMutations(ctx, &m); err != nil {
 			return er, x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
-		}
-
-		// convert the new UIDs to hex string.
-		er.Allocations = make(map[string]string)
-		for k, v := range allocIds {
-			er.Allocations[k] = fmt.Sprintf("%#x", v)
-		}
-	}
-
-	if res.Schema != nil {
-		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
-			return er, x.Wrapf(&InternalError{err: err}, "error while fetching schema")
 		}
 	}
 
@@ -292,22 +332,25 @@ func Execute(ctx context.Context, res gql.Result, l *Latency, mutationAllowed bo
 		return er, x.Wrapf(&InternalError{err: err}, "Unable to process query")
 	}
 
-	if !depSet.IsEmpty() {
-		var mr MutationResult
-		nquads := depSet.Add(depDel)
-		if mr, err = ConvertToEdges(ctx, nquads, vars); err != nil {
+	nquads := depSet.Add(depDel)
+	if !nquads.IsEmpty() {
+		var mr MaterializedMutation
+		if mr, err = Materialize(ctx, nquads, vars); err != nil {
 			return er, x.Wrapf(&InvalidRequestError{err: err}, "Failed to convert NQuads to edges")
 		}
 		if len(mr.NewUids) > 0 {
 			return er, x.Wrapf(&InvalidRequestError{err: err},
-				"adding nodes when using variables is not allowed")
+				"adding nodes when using variables is currently not supported")
 		}
 		m := protos.Mutations{Edges: mr.Edges}
-		for i := range m.Edges {
-			m.Edges[i].Op = mr.EdgeOps[i]
-		}
-		if err := ApplyMutations(ctx, &m); err != nil {
+		if err = ApplyMutations(ctx, &m); err != nil {
 			return er, x.Wrapf(&InternalError{err: err}, "Failed to apply mutations with variables")
+		}
+	}
+
+	if res.Schema != nil {
+		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "error while fetching schema")
 		}
 	}
 	return er, nil

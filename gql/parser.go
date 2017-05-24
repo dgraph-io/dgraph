@@ -1,5 +1,4 @@
 /*
-
  * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -991,7 +990,6 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 						return x.Wrap(err)
 					}
 				}
-
 				mu.Set = nquads
 			} else if op == "delete" {
 				if len(item.Val) > 0 {
