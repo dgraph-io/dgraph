@@ -93,6 +93,8 @@ func (n NQuads) Add(m NQuads) (res NQuads) {
 	res.Types = n.Types
 	res.NQuads = append(res.NQuads, m.NQuads...)
 	res.Types = append(res.Types, m.Types...)
+	x.AssertTrue(len(res.NQuads) == len(n.NQuads)+len(m.NQuads))
+	x.AssertTrue(len(res.Types) == len(n.Types)+len(m.Types))
 	return
 }
 
@@ -114,11 +116,13 @@ func (n NQuads) Partition(by func(*protos.NQuad) bool) (t NQuads, f NQuads) {
 	for i, s := range n.NQuads {
 		p(s, n.Types[i])
 	}
+	x.AssertTrue(len(t.NQuads)+len(f.NQuads) == len(n.NQuads))
+	x.AssertTrue(len(t.Types)+len(f.Types) == len(n.Types))
 	return
 }
 
-// IsDependent returns true iff given NQuad refers some variable.
-func IsDependent(n *protos.NQuad) bool {
+// HasVariables returns true iff given NQuad refers some variable.
+func HasVariables(n *protos.NQuad) bool {
 	return len(n.SubjectVar) > 0 || len(n.ObjectVar) > 0
 }
 
