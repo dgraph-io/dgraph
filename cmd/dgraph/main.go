@@ -261,16 +261,17 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 	// If we have mutations that don't depend on query, run them first.
 	var vars map[string]query.VarValue
 
-	if res.Mutation.HasOps() && !isMutationAllowed(ctx) {
-		return er, mutationNotAllowedErr
-	}
-
 	var depSet, indepSet, depDel, indepDel gql.NQuads
-	depSet, indepSet = gql.WrapNQ(res.Mutation.Set, protos.DirectedEdge_SET).
-		Partition(gql.IsDependent)
+	if res.Mutation != nil {
+		if res.Mutation.HasOps() && !isMutationAllowed(ctx) {
+			return er, mutationNotAllowedErr
+		}
+		depSet, indepSet = gql.WrapNQ(res.Mutation.Set, protos.DirectedEdge_SET).
+			Partition(gql.IsDependent)
 
-	depDel, indepDel = gql.WrapNQ(res.Mutation.Del, protos.DirectedEdge_DEL).
-		Partition(gql.IsDependent)
+		depDel, indepDel = gql.WrapNQ(res.Mutation.Del, protos.DirectedEdge_DEL).
+			Partition(gql.IsDependent)
+	}
 
 	if !indepSet.IsEmpty() {
 		var m protos.Mutations
