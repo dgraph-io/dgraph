@@ -12,7 +12,9 @@ const SessionGraphTab = ({
   selectedNode,
   hoveredNode,
   nodesDataset,
-  edgesDataset
+  edgesDataset,
+  labelRegexText,
+  applyLabels
 }) => {
   return (
     <div className="content-container">
@@ -26,6 +28,8 @@ const SessionGraphTab = ({
         hoveredNode={hoveredNode}
         nodesDataset={nodesDataset}
         edgesDataset={edgesDataset}
+        labelRegexText={labelRegexText}
+        applyLabels={applyLabels}
       />
     </div>
   );

@@ -6,8 +6,8 @@ import "../assets/css/EntitySelector.css";
 const EntitySelector = ({
   response,
   onInitNodeTypeConfig,
-  onUpdateLabelRegex,
-  labelRegex,
+  onUpdateLabelRegexText,
+  labelRegexText,
   onUpdateLabels
 }) => {
   return (
@@ -32,9 +32,9 @@ const EntitySelector = ({
               type="text"
               className="form-control"
               placeholder="Enter regex for labels"
-              value={labelRegex}
+              value={labelRegexText}
               onChange={e => {
-                onUpdateLabelRegex(e.target.value);
+                onUpdateLabelRegexText(e.target.value);
               }}
             />
             <span className="input-group-btn">
