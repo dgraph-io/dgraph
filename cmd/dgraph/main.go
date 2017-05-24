@@ -169,28 +169,6 @@ func enrichSchema(updates []*protos.SchemaUpdate) error {
 	return nil
 }
 
-// This function is used to run mutations for the requests from different
-// language clients.
-func runMutations(ctx context.Context, mu *protos.Mutation) (map[string]uint64, error) {
-	var allocIds map[string]uint64
-	var err error
-
-	if err = enrichSchema(mu.Schema); err != nil {
-		return nil, err
-	}
-
-	m := &protos.Mutation{Set: mu.Set, Del: mu.Del, Schema: mu.Schema}
-
-	if !isMutationAllowed(ctx) {
-		return nil, mutationNotAllowedErr
-	}
-
-	if allocIds, err = mutation.ConvertAndApply(ctx, m); err != nil {
-		return nil, err
-	}
-	return allocIds, nil
-}
-
 // This function is used to run mutations for the requests received from the
 // http client.
 func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
