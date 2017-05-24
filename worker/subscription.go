@@ -34,8 +34,8 @@ type UpdateDispatcher struct {
 	mutex     sync.RWMutex
 }
 
-func NewUpdateDispatcher() UpdateDispatcher {
-	return UpdateDispatcher{observers: make(map[string]map[UpdateObserver]bool)}
+func NewUpdateDispatcher() *UpdateDispatcher {
+	return &UpdateDispatcher{observers: make(map[string]map[UpdateObserver]bool)}
 }
 
 // Registers observer for monitoring of all updates related to predicates

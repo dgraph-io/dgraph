@@ -75,12 +75,26 @@ type groupi struct {
 	all        map[uint32]*servers
 	num        uint32
 	lastUpdate uint64
+	// TODO(tzdybal) - is this a good place for UpdateDispatcher?
+	dispatcher *UpdateDispatcher
 }
 
 var gr *groupi
 
 func groups() *groupi {
 	return gr
+}
+
+// Dummy, proof of concept, hardcoded observer
+// TODO(tzdybal) - remove
+type EchoObserver struct{}
+
+func (e *EchoObserver) PredicateUpdated(predicate string) {
+	fmt.Println("tzdybal:", predicate)
+}
+
+func (e *EchoObserver) IsActive() bool {
+	return true
 }
 
 // StartRaftNodes will read the WAL dir, create the RAFT groups,
@@ -90,6 +104,9 @@ func groups() *groupi {
 func StartRaftNodes(walDir string) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
+	gr.dispatcher = NewUpdateDispatcher()
+	// TODO(tzdybal) - remove
+	gr.dispatcher.GetUpdateStream([]string{"name", "alias"}, new(EchoObserver))
 
 	if len(*myAddr) == 0 {
 		*myAddr = fmt.Sprintf("localhost:%d", *workerPort)

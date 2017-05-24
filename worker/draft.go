@@ -422,8 +422,21 @@ func (n *node) processMutation(e raftpb.Entry, m *protos.Mutations) error {
 	if err := runMutations(ctx, m.Edges); err != nil {
 		x.TraceError(n.ctx, err)
 		return err
+	} else {
+		predicates := make(map[string]bool)
+		for _, edge := range m.Edges {
+			predicates[edge.Attr] = true
+		}
+		dispatcher := getUpdateDispatcher()
+		for pred, _ := range predicates {
+			dispatcher.Update(pred)
+		}
 	}
 	return nil
+}
+
+func getUpdateDispatcher() *UpdateDispatcher {
+	return groups().dispatcher
 }
 
 func (n *node) processSchemaMutations(e raftpb.Entry, m *protos.Mutations) error {
