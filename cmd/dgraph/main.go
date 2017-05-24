@@ -276,33 +276,37 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 	var err error
 	// If we have mutations that don't depend on query, run them first.
 	var vars map[string]query.VarValue
+	var m protos.Mutations
 
 	var depSet, indepSet, depDel, indepDel gql.NQuads
 	if res.Mutation != nil {
 		if res.Mutation.HasOps() && !isMutationAllowed(ctx) {
 			return er, x.Wrap(&invalidRequestError{err: mutationNotAllowedErr})
 		}
-		depSet, indepSet = gql.WrapNQ(res.Mutation.Set, protos.DirectedEdge_SET).
-			Partition(gql.IsDependent)
 
-		depDel, indepDel = gql.WrapNQ(res.Mutation.Del, protos.DirectedEdge_DEL).
-			Partition(gql.IsDependent)
-	}
-
-	if !indepSet.IsEmpty() {
-		var m protos.Mutations
-		var mr mutation.MutationResult
-		nquads := indepSet.Add(indepDel)
-		if mr, err = mutation.ConvertToEdges(ctx, nquads, vars); err != nil {
-			return er, x.Wrapf(&internalError{err: err}, "failed to convert NQuads to edges")
-		}
-		m.Edges, er.allocations = mr.Edges, mr.NewUids
-		for i := range m.Edges {
-			m.Edges[i].Op = nquads.Types[i]
-		}
 		if len(res.Mutation.Schema) > 0 {
 			if m.Schema, err = schema.Parse(res.Mutation.Schema); err != nil {
 				return er, x.Wrapf(&invalidRequestError{err: err}, "failed to parse schema")
+			}
+			if err = enrichSchema(m.Schema); err != nil {
+				return er, x.Wrapf(&internalError{err: err}, "failed to parse schema")
+			}
+		}
+
+		depSet, indepSet = gql.WrapNQ(res.Mutation.Set, protos.DirectedEdge_SET).
+			Partition(gql.IsDependent)
+		depDel, indepDel = gql.WrapNQ(res.Mutation.Del, protos.DirectedEdge_DEL).
+			Partition(gql.IsDependent)
+
+		nquads := indepSet.Add(indepDel)
+		if !nquads.IsEmpty() {
+			var mr mutation.MutationResult
+			if mr, err = mutation.ConvertToEdges(ctx, nquads, vars); err != nil {
+				return er, x.Wrapf(&internalError{err: err}, "failed to convert NQuads to edges")
+			}
+			m.Edges, er.allocations = mr.Edges, mr.NewUids
+			for i := range m.Edges {
+				m.Edges[i].Op = nquads.Types[i]
 			}
 		}
 		if err = mutation.ApplyMutations(ctx, &m); err != nil {
@@ -322,12 +326,12 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 
 	er.subgraphs, vars, err = query.ProcessQuery(ctx, res, l)
 	if err != nil {
-		return er, x.Wrapf(&internalError{err: err}, "Unable to process query")
+		return er, x.Wrap(&internalError{err: err})
 	}
 
-	if !depSet.IsEmpty() {
+	nquads := depSet.Add(depDel)
+	if !nquads.IsEmpty() {
 		var mr mutation.MutationResult
-		nquads := depSet.Add(depDel)
 		if mr, err = mutation.ConvertToEdges(ctx, nquads, vars); err != nil {
 			return er, x.Wrapf(&invalidRequestError{err: err}, "Failed to convert NQuads to edges")
 		}
