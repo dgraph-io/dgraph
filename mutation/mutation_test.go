@@ -67,7 +67,7 @@ func TestConvertToEdges(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	mr, err := ConvertToEdges(ctx, gql.WrapNQ(nquads, protos.DirectedEdge_SET), nil)
+	mr, err := Materialize(ctx, gql.WrapNQ(nquads, protos.DirectedEdge_SET), nil)
 	require.NoError(t, err)
 
 	require.EqualValues(t, len(mr.Edges), 2)

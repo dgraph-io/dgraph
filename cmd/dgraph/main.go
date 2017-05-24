@@ -260,7 +260,7 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 		nquads := indepSet.Add(indepDel)
 		if !nquads.IsEmpty() {
 			var mr mutation.MaterializedMutation
-			if mr, err = mutation.ConvertToEdges(ctx, nquads, vars); err != nil {
+			if mr, err = mutation.Materialize(ctx, nquads, vars); err != nil {
 				return er, x.Wrapf(&internalError{err: err}, "failed to convert NQuads to edges")
 			}
 			m.Edges, er.allocations = mr.Edges, mr.NewUids
@@ -291,7 +291,7 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 	nquads := depSet.Add(depDel)
 	if !nquads.IsEmpty() {
 		var mr mutation.MaterializedMutation
-		if mr, err = mutation.ConvertToEdges(ctx, nquads, vars); err != nil {
+		if mr, err = mutation.Materialize(ctx, nquads, vars); err != nil {
 			return er, x.Wrapf(&invalidRequestError{err: err}, "Failed to convert NQuads to edges")
 		}
 		if len(mr.NewUids) > 0 {
@@ -299,9 +299,6 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 				"adding nodes when using variables is not allowed")
 		}
 		m := protos.Mutations{Edges: mr.Edges}
-		for i := range m.Edges {
-			m.Edges[i].Op = mr.EdgeOps[i]
-		}
 		if err := mutation.ApplyMutations(ctx, &m); err != nil {
 			return er, x.Wrapf(&internalError{err: err}, "Failed to apply mutations with variables")
 		}
