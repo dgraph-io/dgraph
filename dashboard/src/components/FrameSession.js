@@ -1,6 +1,7 @@
 import React from "react";
 import classnames from "classnames";
 import vis from "vis";
+import { connect } from "react-redux";
 
 import SessionGraphTab from "./SessionGraphTab";
 import FrameCodeTab from "./FrameCodeTab";
@@ -11,13 +12,15 @@ import GraphIcon from "./GraphIcon";
 import TreeIcon from "./TreeIcon";
 import { getNodeLabel, shortenName } from "../lib/graph";
 
+import { updatePreferredSessionTab } from "../actions/user";
+
 class FrameSession extends React.Component {
   constructor(props) {
     super(props);
 
     this.state = {
       // tabs: query, graph, tree, json
-      currentTab: "graph",
+      currentTab: props.preferredSessionTab,
       graphRenderStart: null,
       graphRenderEnd: null,
       treeRenderStart: null,
@@ -84,10 +87,11 @@ class FrameSession extends React.Component {
   };
 
   navigateTab = (tabName, e) => {
+    const { handleSetPreferredSessionTab } = this.props;
     e.preventDefault();
 
-    this.setState({
-      currentTab: tabName
+    this.setState({ currentTab: tabName }, () => {
+      handleSetPreferredSessionTab(tabName);
     });
   };
 
@@ -178,9 +182,9 @@ class FrameSession extends React.Component {
                 <a
                   href="#tree"
                   className={classnames("sidebar-nav-item", {
-                    active: currentTab === "code"
+                    active: currentTab === "json"
                   })}
-                  onClick={this.navigateTab.bind(this, "code")}
+                  onClick={this.navigateTab.bind(this, "json")}
                 >
                   <div className="icon-container">
                     <i className="icon fa fa-code" />
@@ -219,7 +223,7 @@ class FrameSession extends React.Component {
                 />
               : null}
 
-            {currentTab === "code"
+            {currentTab === "json"
               ? <FrameCodeTab
                   query={session.query}
                   response={session.response.data}
@@ -253,4 +257,14 @@ class FrameSession extends React.Component {
   }
 }
 
-export default FrameSession;
+const mapStateToProps = state => ({
+  preferredSessionTab: state.user.preferredSessionTab
+});
+
+const mapDispatchToProps = dispatch => ({
+  handleSetPreferredSessionTab(tabName) {
+    dispatch(updatePreferredSessionTab(tabName));
+  }
+});
+
+export default connect(mapStateToProps, mapDispatchToProps)(FrameSession);

@@ -1,8 +1,13 @@
-import { INCREMENT_VISIT_COUNT, ANSWERED_NPS_SURVEY } from "../actions/user";
+import {
+  INCREMENT_VISIT_COUNT,
+  ANSWERED_NPS_SURVEY,
+  UPDATE_PREFERRED_SESSION_TAB
+} from "../actions/user";
 
 const defaultState = {
   visitCount: 0,
-  NPSSurveyDone: false
+  NPSSurveyDone: false,
+  preferredSessionTab: "graph"
 };
 
 export default (state = defaultState, action) => {
@@ -16,6 +21,11 @@ export default (state = defaultState, action) => {
       return {
         ...state,
         NPSSurveyDone: true
+      };
+    case UPDATE_PREFERRED_SESSION_TAB:
+      return {
+        ...state,
+        preferredSessionTab: action.tabName
       };
     default:
       return state;
