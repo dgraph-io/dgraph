@@ -259,7 +259,7 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 
 		nquads := indepSet.Add(indepDel)
 		if !nquads.IsEmpty() {
-			var mr mutation.MutationResult
+			var mr mutation.MaterializedMutation
 			if mr, err = mutation.ConvertToEdges(ctx, nquads, vars); err != nil {
 				return er, x.Wrapf(&internalError{err: err}, "failed to convert NQuads to edges")
 			}
@@ -290,7 +290,7 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 
 	nquads := depSet.Add(depDel)
 	if !nquads.IsEmpty() {
-		var mr mutation.MutationResult
+		var mr mutation.MaterializedMutation
 		if mr, err = mutation.ConvertToEdges(ctx, nquads, vars); err != nil {
 			return er, x.Wrapf(&invalidRequestError{err: err}, "Failed to convert NQuads to edges")
 		}
@@ -469,17 +469,14 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 	queryHash := sha256.Sum256(rawQuery)
 	mutationString := fmt.Sprintf("<_:share> <_share_> %q . \n <_:share> <_share_hash_> \"%x\" .",
 		rawQuery, queryHash)
-	mutation := gql.Mutation{}
-	mutation.Set, err = rdf.ConvertToNQuads(mutationString)
-	if err != nil {
+	mu := gql.Mutation{}
+	if mu.Set, err = rdf.ConvertToNQuads(mutationString); err != nil {
 		x.TraceError(ctx, err)
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 
-	m := &protos.Mutation{Set: mutation.Set, Del: nil, Schema: nil}
-
-	if allocIds, err = mutation.ConvertAndApply(ctx, m); err != nil {
+	if allocIds, err = mutation.ConvertAndApply(ctx, &protos.Mutation{Set: mu.Set}); err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 		x.SetStatus(w, x.Error, err.Error())
 		return

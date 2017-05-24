@@ -12,13 +12,13 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type MutationResult struct {
+type MaterializedMutation struct {
 	Edges   []*protos.DirectedEdge
-	NewUids map[string]uint64
 	EdgeOps []protos.DirectedEdge_Op
+	NewUids map[string]uint64
 }
 
-func (mr *MutationResult) AddEdge(edge *protos.DirectedEdge, t protos.DirectedEdge_Op) {
+func (mr *MaterializedMutation) AddEdge(edge *protos.DirectedEdge, t protos.DirectedEdge_Op) {
 	mr.Edges = append(mr.Edges, edge)
 	mr.EdgeOps = append(mr.EdgeOps, t)
 }
@@ -128,8 +128,8 @@ func AssingUids(nquads gql.NQuads) (map[string]uint64, error) {
 
 func ConvertToEdges(ctx context.Context,
 	nquads gql.NQuads,
-	vars map[string]query.VarValue) (MutationResult, error) {
-	var mr MutationResult
+	vars map[string]query.VarValue) (MaterializedMutation, error) {
+	var mr MaterializedMutation
 	var err error
 	var newUids map[string]uint64
 
@@ -193,7 +193,7 @@ func ConvertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string
 	var allocIds map[string]uint64
 	var m protos.Mutations
 	var err error
-	var mr MutationResult
+	var mr MaterializedMutation
 
 	nquads := gql.WrapNQ(mutation.Set, protos.DirectedEdge_SET)
 	if mr, err = ConvertToEdges(ctx, nquads, nil); err != nil {
