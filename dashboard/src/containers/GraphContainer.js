@@ -86,6 +86,49 @@ class GraphContainer extends Component {
     }
   };
 
+  // expandNode expands all edges outgoing from the node
+  expandNode = nodeId => {
+    const {
+      response: { allNodes, allEdges },
+      labelRegexText,
+      applyLabels
+    } = this.props;
+    const { network } = this.state;
+
+    const { data } = network.body;
+    const allEdgeSet = new vis.DataSet(allEdges);
+    const allNodeSet = new vis.DataSet(allNodes);
+
+    let nodes = [nodeId];
+    let nodeStack = [nodeId];
+    let adjEdges = [];
+
+    while (nodeStack.length !== 0) {
+      let nodeId = nodeStack.pop();
+
+      let outgoing = outgoingEdges(nodeId, allEdgeSet);
+      let adjNodeIds = outgoing.map(function(edge) {
+        return edge.to;
+      });
+
+      nodeStack = nodeStack.concat(adjNodeIds);
+      nodes = nodes.concat(adjNodeIds);
+      adjEdges = adjEdges.concat(outgoing);
+      if (adjNodeIds.length > 3) {
+        break;
+      }
+    }
+    data.nodes.update(allNodeSet.get(nodes));
+    data.edges.update(adjEdges);
+
+    // Apply labels so that newly attached nodes will show labels according to
+    // the current labelRegex
+    // IDEA: Rather than applying labels to all nodes, can we just apply to newly
+    // attached nodes?
+    const re = new RegExp(labelRegexText);
+    applyLabels(data.nodes, re);
+  };
+
   // configNetwork configures the custom behaviors for a a network
   configNetwork = network => {
     const {
@@ -102,28 +145,6 @@ class GraphContainer extends Component {
       allEdgeSet.length !== data.edges.length
     ) {
       this.setState({ partiallyRendered: true });
-    }
-
-    // multiLevelExpand recursively expands all edges outgoing from the node
-    function multiLevelExpand(nodeId) {
-      let nodes = [nodeId], nodeStack = [nodeId], adjEdges = [];
-      while (nodeStack.length !== 0) {
-        let nodeId = nodeStack.pop();
-
-        let outgoing = outgoingEdges(nodeId, allEdgeSet),
-          adjNodeIds = outgoing.map(function(edge) {
-            return edge.to;
-          });
-
-        nodeStack = nodeStack.concat(adjNodeIds);
-        nodes = nodes.concat(adjNodeIds);
-        adjEdges = adjEdges.concat(outgoing);
-        if (adjNodeIds.length > 3) {
-          break;
-        }
-      }
-      data.nodes.update(allNodeSet.get(nodes));
-      data.edges.update(adjEdges);
     }
 
     network.on("stabilizationProgress", params => {
@@ -214,7 +235,7 @@ class GraphContainer extends Component {
           data.nodes.remove(allNodes);
           data.edges.remove(allEdges);
         } else {
-          multiLevelExpand(clickedNodeUid);
+          this.expandNode(clickedNodeUid);
           if (data.nodes.length === allNodeSet.length) {
             this.setState({ partiallyRendered: false });
           }

@@ -29,7 +29,7 @@ class FrameSession extends React.Component {
       hoveredNode: null,
       isTreePartial: false,
       configuringNodeType: null,
-      labelRegex: ""
+      labelRegexText: ""
     };
 
     const { session: { response } } = props;
@@ -37,8 +37,8 @@ class FrameSession extends React.Component {
     this.edges = new vis.DataSet(response.edges);
   }
 
-  handleUpdateLabelRegex = val => {
-    this.setState({ labelRegex: val });
+  handleUpdateLabelRegexText = val => {
+    this.setState({ labelRegexText: val });
   };
 
   handleBeforeGraphRender = () => {
@@ -114,13 +114,24 @@ class FrameSession extends React.Component {
   };
 
   handleUpdateLabels = () => {
-    const { labelRegex } = this.state;
-    const re = new RegExp(labelRegex);
+    const { labelRegexText } = this.state;
+    const re = new RegExp(labelRegexText);
 
-    const allNodes = this.nodes.get();
+    this.applyLabels(this.nodes, re);
+  };
+
+  /**
+   * applyLabels applies labels to a set of nodes, given a regex object for labels
+   * @params nodeSet {vis.DataSet} - a vis.js dataset holding nodes
+   * @params labelRegex {RegExp} - regex for labels
+   *
+   * mutates the nodeSet
+   */
+  applyLabels = (nodeSet, labelRegex) => {
+    const allNodes = nodeSet.get();
     const updatedNodes = allNodes.map(node => {
       const properties = JSON.parse(node.title);
-      const fullName = getNodeLabel(properties.attrs, re);
+      const fullName = getNodeLabel(properties.attrs, labelRegex);
       const displayLabel = shortenName(fullName);
 
       return Object.assign({}, node, {
@@ -128,7 +139,7 @@ class FrameSession extends React.Component {
       });
     });
 
-    this.nodes.update(updatedNodes);
+    nodeSet.update(updatedNodes);
   };
 
   render() {
@@ -139,7 +150,7 @@ class FrameSession extends React.Component {
       hoveredNode,
       configuringNodeType,
       isConfiguringLabel,
-      labelRegex
+      labelRegexText
     } = this.state;
 
     return (
@@ -191,7 +202,6 @@ class FrameSession extends React.Component {
                   </div>
 
                   <span className="menu-label">JSON</span>
-
                 </a>
               </li>
             </ul>
@@ -207,6 +217,8 @@ class FrameSession extends React.Component {
                   onNodeHovered={this.handleNodeHovered}
                   nodesDataset={this.nodes}
                   edgesDataset={this.edges}
+                  labelRegexText={labelRegexText}
+                  applyLabels={this.applyLabels}
                 />
               : null}
 
@@ -220,6 +232,8 @@ class FrameSession extends React.Component {
                   selectedNode={selectedNode}
                   nodesDataset={this.nodes}
                   edgesDataset={this.edges}
+                  labelRegexText={labelRegexText}
+                  applyLabels={this.applyLabels}
                 />
               : null}
 
@@ -234,8 +248,8 @@ class FrameSession extends React.Component {
               ? <EntitySelector
                   response={session.response}
                   onInitNodeTypeConfig={this.handleInitNodeTypeConfig}
-                  labelRegex={labelRegex}
-                  onUpdateLabelRegex={this.handleUpdateLabelRegex}
+                  labelRegexText={labelRegexText}
+                  onUpdateLabelRegexText={this.handleUpdateLabelRegexText}
                   onUpdateLabels={this.handleUpdateLabels}
                 />
               : null}
