@@ -70,7 +70,11 @@ class GraphContainer extends Component {
   }
 
   componentWillUnmount() {
+    const { network } = this.state;
+
     window.removeEventListener("resize", this.fitNetwork);
+    // Remove all eventListeners from network so that it can be garbage collected
+    network.off();
   }
 
   // fitNetwork update the fit of the network
