@@ -14,13 +14,14 @@ service Dgraph {
 message NQuad {
     string subject = 1;
     string predicate = 2;
-    string objectId = 3;
-    Value objectValue = 4;
+    string object_id = 3;
+    Value object_value = 4;
     string label = 5;
     string lang = 7;
     sint32 objectType = 6;
     repeated Facet facets = 8;
     string subject_var = 9;
+    string object_var = 10;
 }
 
 message Value {

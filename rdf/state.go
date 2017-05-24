@@ -143,7 +143,7 @@ Loop:
 			break Loop
 
 		case r == 'v':
-			if l.Depth != atSubject {
+			if l.Depth != atSubject && l.Depth != atObject {
 				return l.Errorf("Unexpected char 'v'")
 			}
 			l.Backup()

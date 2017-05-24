@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/gql"
@@ -15,6 +14,11 @@ type MutationResult struct {
 	Edges   []*protos.DirectedEdge
 	NewUids map[string]uint64
 	EdgeOps []protos.DirectedEdge_Op
+}
+
+func (mr *MutationResult) AddEdge(edge *protos.DirectedEdge, t protos.DirectedEdge_Op) {
+	mr.Edges = append(mr.Edges, edge)
+	mr.EdgeOps = append(mr.EdgeOps, t)
 }
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
@@ -88,11 +92,7 @@ func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
 	return nil
 }
 
-func ConvertToEdges(ctx context.Context,
-	nquads gql.NQuads,
-	vars map[string]varValue) (MutationResult, error) {
-	var mr MutationResult
-
+func AssignUids(nquads gql.NQuads) (map[string]uint64, error) {
 	newUids := make(map[string]uint64)
 	for _, nq := range nquads.NQuads {
 		if len(nq.Subject) > 0 {
@@ -102,7 +102,7 @@ func ConvertToEdges(ctx context.Context,
 				// Only store xids that need to be marked as used.
 				_, err := gql.ParseUid(nq.Subject)
 				if err == gql.ErrInvalidUID {
-					return mr, err
+					return newUids, err
 				} else if err != nil {
 					newUids[nq.Subject] = 0
 				}
@@ -115,7 +115,7 @@ func ConvertToEdges(ctx context.Context,
 			} else {
 				_, err := gql.ParseUid(nq.ObjectId)
 				if err == gql.ErrInvalidUID {
-					return mr, err
+					return newUids, err
 				} else if err != nil {
 					newUids[nq.ObjectId] = 0
 				}
@@ -123,7 +123,32 @@ func ConvertToEdges(ctx context.Context,
 		}
 
 	}
+	return newUids, nil
+}
 
+func expandVariables(nq *gql.NQuad,
+	newUids map[string]uint64,
+	vars map[string]varValue) ([]*protos.DirectedEdge, error) {
+	var subjectUids, objectUids []uint64
+	if len(nq.SubjectVar) > 0 {
+		subjectUids = vars[nq.SubjectVar].Uids.Uids
+	}
+	if len(nq.ObjectVar) > 0 {
+		objectUids = vars[nq.ObjectVar].Uids.Uids
+	}
+	return nq.ExpandVariables(newUids, subjectUids, objectUids)
+}
+
+func ConvertToEdges(ctx context.Context,
+	nquads gql.NQuads,
+	vars map[string]varValue) (MutationResult, error) {
+	var mr MutationResult
+	var err error
+	var newUids map[string]uint64
+
+	if newUids, err = AssignUids(nquads); err != nil {
+		return mr, err
+	}
 	if len(newUids) > 0 {
 		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while AssignUidsOverNetwork for newUids: %v", newUids))
@@ -132,29 +157,29 @@ func ConvertToEdges(ctx context.Context,
 	}
 
 	// Wrapper for a pointer to protos.Nquad
-	var wnq gql.NQuad
+	var wnq *gql.NQuad
 	for i, nq := range nquads.NQuads {
-		wnq = gql.NQuad{nq}
-		fmt.Println(nq.String())
-		if len(nq.Subject) > 0 {
-			// Get edges from nquad using newUids.
-			edge, err := wnq.ToEdgeUsing(newUids)
-			if err != nil {
-				x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
-				return mr, err
+		wnq = &gql.NQuad{nq}
+		usesVariable := len(nq.SubjectVar) > 0 || len(nq.ObjectVar) > 0
+
+		if !usesVariable {
+			if len(nq.Subject) > 0 {
+				// Get edge from nquad using newUids.
+				var edge *protos.DirectedEdge
+				edge, err = wnq.ToEdgeUsing(newUids)
+				if err != nil {
+					return mr, x.Wrap(err)
+				}
+				mr.AddEdge(edge, nquads.Types[i])
 			}
-			mr.Edges = append(mr.Edges, edge)
-			mr.EdgeOps = append(mr.EdgeOps, nquads.Types[i])
-		} else { // variable in subject
-			x.AssertTrue(len(nq.SubjectVar) > 0)
-			expanded, err := wnq.ExpandSubjectVar(vars[nq.SubjectVar].Uids.Uids, newUids)
+		} else {
+			var expanded []*protos.DirectedEdge
+			expanded, err = expandVariables(wnq, newUids, vars)
 			if err != nil {
-				return mr, err
+				return mr, x.Wrap(err)
 			}
-			mr.Edges = append(mr.Edges, expanded...)
-			for _ = range expanded {
-				fmt.Println(expanded[i].String())
-				mr.EdgeOps = append(mr.EdgeOps, nquads.Types[i])
+			for _, edge := range expanded {
+				mr.AddEdge(edge, nquads.Types[i])
 			}
 		}
 	}
