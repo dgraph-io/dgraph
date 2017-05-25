@@ -248,7 +248,7 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 				return er, x.Wrapf(&invalidRequestError{err: err}, "failed to parse schema")
 			}
 			if err = enrichSchema(m.Schema); err != nil {
-				return er, x.Wrapf(&internalError{err: err}, "failed to parse schema")
+				return er, x.Wrapf(&internalError{err: err}, "failed to enrich schema")
 			}
 		}
 
