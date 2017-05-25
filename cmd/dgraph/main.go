@@ -51,7 +51,6 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
@@ -439,9 +438,25 @@ func convertUidsToHex(m map[string]uint64) (res map[string]string) {
 	return
 }
 
+// NewSharedQueryNQuads returns nquads with query and hash.
+func NewSharedQueryNQuads(query []byte) []*protos.NQuad {
+	val := func(s string) *protos.Value {
+		return &protos.Value{&protos.Value_DefaultVal{s}}
+	}
+	qHash := func() string {
+		return fmt.Sprintf("\"%x\"", sha256.Sum256(query))
+	}
+	return []*protos.NQuad{
+		&protos.NQuad{Subject: "<_:share>", Predicate: "<_share_>", ObjectValue: val(string(query))},
+		&protos.NQuad{Subject: "<_:share>", Predicate: "<_share_hash_>", ObjectValue: val(qHash())},
+	}
+}
+
 // shareHandler allows to share a query between users.
 func shareHandler(w http.ResponseWriter, r *http.Request) {
-	var allocIds map[string]uint64
+	var mr mutation.MaterializedMutation
+	var err error
+	var rawQuery []byte
 
 	w.Header().Set("Content-Type", "application/json")
 	addCorsHeaders(w)
@@ -449,36 +464,29 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
 	}
-
 	ctx := context.Background()
-
 	defer r.Body.Close()
-	rawQuery, err := ioutil.ReadAll(r.Body)
-	if err != nil || len(rawQuery) == 0 {
+
+	if rawQuery, err = ioutil.ReadAll(r.Body); err != nil || len(rawQuery) == 0 {
 		x.TraceError(ctx, x.Wrapf(err, "Error while reading the stringified query payload"))
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
 
-	// Generate mutation with query and hash
-	queryHash := sha256.Sum256(rawQuery)
-	mutationString := fmt.Sprintf("<_:share> <_share_> %q . \n <_:share> <_share_hash_> \"%x\" .",
-		rawQuery, queryHash)
-	mu := gql.Mutation{}
-	if mu.Set, err = rdf.ConvertToNQuads(mutationString); err != nil {
-		x.TraceError(ctx, err)
+	fail := func() {
+		x.TraceError(ctx, x.Wrap(err))
 		x.SetStatus(w, x.Error, err.Error())
+	}
+	nquads := gql.WrapNQ(NewSharedQueryNQuads(rawQuery), protos.DirectedEdge_SET)
+	if mr, err = mutation.Materialize(ctx, nquads, nil); err != nil {
+		fail()
 		return
 	}
-
-	if allocIds, err = mutation.ConvertAndApply(ctx, &protos.Mutation{Set: mu.Set}); err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
-		x.SetStatus(w, x.Error, err.Error())
+	if err = mutation.ApplyMutations(ctx, &protos.Mutations{Edges: mr.Edges}); err != nil {
+		fail()
 		return
 	}
-
-	allocIdsStr := convertUidsToHex(allocIds)
-
+	allocIdsStr := convertUidsToHex(mr.NewUids)
 	payload := map[string]interface{}{
 		"code":    x.Success,
 		"message": "Done",

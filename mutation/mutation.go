@@ -198,7 +198,6 @@ func ConvertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string
 	}
 	var m = protos.Mutations{Edges: mr.Edges, Schema: mutation.Schema}
 
-	m.Schema = mutation.Schema
 	if err := ApplyMutations(ctx, &m); err != nil {
 		return nil, x.Wrap(err)
 	}
