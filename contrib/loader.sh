@@ -36,7 +36,7 @@ fi
 
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph -gentlecommit 1.0 > $BUILD/server.log &
+./dgraph -gentlecommit 1.0 -p $BUILD/loader/p -w $BUILD/loader/w > $BUILD/server.log &
 popd &> /dev/null
 
 sleep 15
