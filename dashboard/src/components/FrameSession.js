@@ -115,23 +115,28 @@ class FrameSession extends React.Component {
 
   handleUpdateLabels = () => {
     const { labelRegexText } = this.state;
-    const re = new RegExp(labelRegexText);
 
-    this.applyLabels(this.nodes, re);
+    this.applyLabels(this.nodes, labelRegexText);
   };
 
   /**
    * applyLabels applies labels to a set of nodes, given a regex object for labels
    * @params nodeSet {vis.DataSet} - a vis.js dataset holding nodes
-   * @params labelRegex {RegExp} - regex for labels
+   * @params labelRegexText {String} - a string on which the regex for labels
+   *         should be based
    *
    * mutates the nodeSet
    */
-  applyLabels = (nodeSet, labelRegex) => {
+  applyLabels = (nodeSet, labelRegexText) => {
+    if (!labelRegexText) {
+      return;
+    }
+
+    const re = new RegExp(labelRegexText);
     const allNodes = nodeSet.get();
     const updatedNodes = allNodes.map(node => {
       const properties = JSON.parse(node.title);
-      const fullName = getNodeLabel(properties.attrs, labelRegex);
+      const fullName = getNodeLabel(properties.attrs, re);
       const displayLabel = shortenName(fullName);
 
       return Object.assign({}, node, {

@@ -118,6 +118,7 @@ class GraphContainer extends Component {
         break;
       }
     }
+
     data.nodes.update(allNodeSet.get(nodes));
     data.edges.update(adjEdges);
 
@@ -125,8 +126,7 @@ class GraphContainer extends Component {
     // the current labelRegex
     // IDEA: Rather than applying labels to all nodes, can we just apply to newly
     // attached nodes?
-    const re = new RegExp(labelRegexText);
-    applyLabels(data.nodes, re);
+    applyLabels(data.nodes, labelRegexText);
   };
 
   // configNetwork configures the custom behaviors for a a network
