@@ -116,8 +116,8 @@ func (n NQuads) Partition(by func(*protos.NQuad) bool) (t NQuads, f NQuads) {
 	return
 }
 
-// IsDependent returns true iff given NQuad refers some variable.
-func IsDependent(n *protos.NQuad) bool {
+// HasVariables returns true iff given NQuad refers some variable.
+func HasVariables(n *protos.NQuad) bool {
 	return len(n.SubjectVar) > 0 || len(n.ObjectVar) > 0
 }
 

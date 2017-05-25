@@ -253,9 +253,9 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 		}
 
 		depSet, indepSet = gql.WrapNQ(res.Mutation.Set, protos.DirectedEdge_SET).
-			Partition(gql.IsDependent)
+			Partition(gql.HasVariables)
 		depDel, indepDel = gql.WrapNQ(res.Mutation.Del, protos.DirectedEdge_DEL).
-			Partition(gql.IsDependent)
+			Partition(gql.HasVariables)
 
 		nquads := indepSet.Add(indepDel)
 		if !nquads.IsEmpty() {
