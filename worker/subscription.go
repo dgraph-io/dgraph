@@ -79,8 +79,14 @@ func (d *UpdateDispatcher) Update(predicate string) error {
 
 func (d *UpdateDispatcher) Remove(observer UpdateObserver) {
 	d.mutex.Lock()
+	defer d.mutex.Unlock()
 	for _, set := range d.observers {
 		delete(set, observer)
 	}
-	d.mutex.Unlock()
+}
+
+func (d *UpdateDispatcher) RemovePredicate(predicate string) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	delete(d.observers, predicate)
 }
