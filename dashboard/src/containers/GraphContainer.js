@@ -42,7 +42,7 @@ class GraphContainer extends Component {
       edges: edgesDataset,
       allNodes: response.allNodes,
       allEdges: response.allEdges,
-      containerEl: this.refs.graph,
+      containerEl: this._graph,
       treeView
     });
 
@@ -73,8 +73,10 @@ class GraphContainer extends Component {
     const { network } = this.state;
 
     window.removeEventListener("resize", this.fitNetwork);
-    // Remove all eventListeners from network so that it can be garbage collected
+
     network.off();
+    network.destroy();
+    this.setState({ network: null });
   }
 
   // fitNetwork update the fit of the network
@@ -383,7 +385,9 @@ class GraphContainer extends Component {
           : null}
         {isRendering ? <Progress perc={renderProgress} /> : null}
         <div
-          ref="graph"
+          ref={el => {
+            this._graph = el;
+          }}
           className={classnames("graph", { hidden: isRendering })}
         />
       </div>
