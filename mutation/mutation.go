@@ -27,8 +27,7 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
 	if err != nil {
 		return x.Wrapf(err, "While adding internal edges")
 	}
-	err = worker.MutateOverNetwork(ctx, m)
-	if err != nil {
+	if err = worker.MutateOverNetwork(ctx, m); err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
 		return err
 	}

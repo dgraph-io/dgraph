@@ -264,18 +264,9 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 				return er, x.Wrapf(&internalError{err: err}, "failed to convert NQuads to edges")
 			}
 			m.Edges, er.allocations = mr.Edges, mr.NewUids
-			for i := range m.Edges {
-				m.Edges[i].Op = nquads.Types[i]
-			}
 		}
 		if err = mutation.ApplyMutations(ctx, &m); err != nil {
 			return er, x.Wrapf(&internalError{err: err}, "failed to apply mutations")
-		}
-	}
-
-	if res.Schema != nil {
-		if er.schemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
-			return er, x.Wrapf(&internalError{err: err}, "error while fetching schema")
 		}
 	}
 
@@ -296,13 +287,20 @@ func executeQuery(ctx context.Context, res gql.Result, l *query.Latency) (execut
 		}
 		if len(mr.NewUids) > 0 {
 			return er, x.Wrapf(&invalidRequestError{err: err},
-				"adding nodes when using variables is not allowed")
+				"adding nodes when using variables is currently not supported")
 		}
 		m := protos.Mutations{Edges: mr.Edges}
-		if err := mutation.ApplyMutations(ctx, &m); err != nil {
+		if err = mutation.ApplyMutations(ctx, &m); err != nil {
 			return er, x.Wrapf(&internalError{err: err}, "Failed to apply mutations with variables")
 		}
 	}
+
+	if res.Schema != nil {
+		if er.schemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
+			return er, x.Wrapf(&internalError{err: err}, "error while fetching schema")
+		}
+	}
+
 	return er, nil
 }
 
@@ -394,8 +392,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		if js, err := json.Marshal(mp); err == nil {
 			w.Write(js)
 		} else {
-			x.TraceError(ctx, err)
-			x.SetStatus(w, x.Error, "Internal error.")
+			x.TraceError(ctx, x.Wrap(err))
+			x.SetStatus(w, x.Error, err.Error())
 			return
 		}
 		return
@@ -584,9 +582,11 @@ func (s *grpcServer) Run(ctx context.Context,
 	ctx = context.WithValue(ctx, "_share_", nil)
 
 	resp = new(protos.Response)
-	if len(req.Query) == 0 && req.Mutation == nil {
-		x.TraceError(ctx, x.Errorf("Empty query and mutation."))
-		return resp, fmt.Errorf("Empty query and mutation.")
+	emptyMutation := len(req.Mutation.GetSet()) == 0 && len(req.Mutation.GetDel()) == 0 &&
+		len(req.Mutation.GetSchema()) == 0
+	if len(req.Query) == 0 && emptyMutation {
+		x.TraceError(ctx, x.Errorf("empty query and mutation."))
+		return resp, fmt.Errorf("empty query and mutation.")
 	}
 
 	var l query.Latency
@@ -600,11 +600,16 @@ func (s *grpcServer) Run(ctx context.Context,
 	if err != nil {
 		return resp, err
 	}
-
+	if res.Mutation != nil && res.Mutation != nil {
+		return resp, x.Errorf("Multiple mutation definitions found")
+	}
 	if req.Schema != nil && res.Schema != nil {
 		return resp, x.Errorf("Multiple schema blocks found")
 	}
-	// Schema Block can be part of query string or request
+	// Schema Block and Mutation can be part of query string or request
+	if res.Mutation == nil {
+		res.Mutation = &gql.Mutation{Set: req.Mutation.Set, Del: req.Mutation.Del}
+	}
 	if res.Schema == nil {
 		res.Schema = req.Schema
 	}

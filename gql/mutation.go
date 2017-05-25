@@ -88,6 +88,8 @@ func (n NQuads) Add(m NQuads) (res NQuads) {
 	res.Types = n.Types
 	res.NQuads = append(res.NQuads, m.NQuads...)
 	res.Types = append(res.Types, m.Types...)
+	x.AssertTrue(len(res.NQuads) == len(n.NQuads)+len(m.NQuads))
+	x.AssertTrue(len(res.Types) == len(n.Types)+len(m.Types))
 	return
 }
 
@@ -109,6 +111,8 @@ func (n NQuads) Partition(by func(*protos.NQuad) bool) (t NQuads, f NQuads) {
 	for i, s := range n.NQuads {
 		p(s, n.Types[i])
 	}
+	x.AssertTrue(len(t.NQuads)+len(f.NQuads) == len(n.NQuads))
+	x.AssertTrue(len(t.Types)+len(f.Types) == len(n.Types))
 	return
 }
 
@@ -236,6 +240,8 @@ func (nq NQuad) createEdge(subjectUid uint64, objectUid uint64) (*protos.Directe
 		if err = copyValue(out, nq); err != nil {
 			return &emptyEdge, err
 		}
+	default:
+		x.AssertTruef(false, "unknown value type")
 	}
 	return out, nil
 }
