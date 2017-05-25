@@ -60,9 +60,11 @@ class SessionFooterProperties extends React.Component {
 
     const nodeProperties = JSON.parse(entity.title);
 
-    // Nodes have facets and attrs keys.
     const isNode = Object.keys(nodeProperties).length !== 1;
+    // Nodes have attrs
     const attrs = nodeProperties.attrs;
+
+    // Facets on UID edges are displayed on edges and scalar edges on nodes
     const facets = nodeProperties.facets;
     const facetKeys = Object.keys(facets);
 
@@ -93,12 +95,12 @@ class SessionFooterProperties extends React.Component {
               })
             : null}
 
-          {isNode && facetKeys.length > 0
+          {facetKeys.length > 0
             ? <span>
                 <span className="label label-default">
                   Facets
                 </span>
-                {Object.keys(facets).map(function(key, idx) {
+                {facetKeys.map(function(key, idx) {
                   return (
                     <span className="property-pair" key={idx}>
                       <span className="property-key">
