@@ -18,6 +18,7 @@
 package worker
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -26,20 +27,25 @@ import (
 
 type mockObserver struct {
 	mock.Mock
+	wg *sync.WaitGroup
 }
 
 func (m *mockObserver) PredicateUpdated(predicate string) {
+	defer m.wg.Done()
 	m.Called(predicate)
 }
 
 func (m *mockObserver) IsActive() bool {
+	defer m.wg.Done()
 	args := m.Called()
 	return args.Bool(0)
 }
 
-func TestGetUpdateStream(t *testing.T) {
+func TestSubscriptionGetUpdateStream(t *testing.T) {
 	predicates := []string{"pred1", "pred2", "pred3"}
-	observer := new(mockObserver)
+	wg := new(sync.WaitGroup)
+	observer := &mockObserver{wg: wg}
+	wg.Add(6) // 3 x IsActive + 3 x PredicateUpdated
 	observer.On("IsActive").Return(true)
 	observer.On("PredicateUpdated", "pred1").Return().Once()
 	observer.On("PredicateUpdated", "pred2").Return().Twice()
@@ -60,19 +66,23 @@ func TestGetUpdateStream(t *testing.T) {
 	err = updateDispatcher.Update("pred2")
 	require.NoError(t, err)
 
+	wg.Wait()
 	observer.AssertNotCalled(t, "PredicateUpdated", "pred4")
 }
 
-func TestMultipleObservers(t *testing.T) {
+func TestSubscriptionMultipleObservers(t *testing.T) {
 	predicates1 := []string{"pred1", "pred2"}
-	observer1 := new(mockObserver)
+	wg := new(sync.WaitGroup)
+	observer1 := &mockObserver{wg: wg}
+	wg.Add(4) // 2 x IsActive + 2 x Predicate Updated
 	observer1.On("IsActive").Return(true)
 	observer1.On("PredicateUpdated", "pred1").Return().Once()
 	observer1.On("PredicateUpdated", "pred2").Return().Once()
 	defer observer1.AssertExpectations(t)
 
 	predicates2 := []string{"pred3", "pred2"}
-	observer2 := new(mockObserver)
+	observer2 := &mockObserver{wg: wg}
+	wg.Add(4) // 2 x IsActive + 2 x Predicate Updated
 	observer2.On("IsActive").Return(true)
 	observer2.On("PredicateUpdated", "pred3").Return().Once()
 	observer2.On("PredicateUpdated", "pred2").Return().Once()
@@ -92,19 +102,24 @@ func TestMultipleObservers(t *testing.T) {
 	err = updateDispatcher.Update("pred3")
 	require.NoError(t, err)
 
+	wg.Wait()
+
 	observer1.AssertNotCalled(t, "PredicateUpdated", "pred3")
 	observer2.AssertNotCalled(t, "PredicateUpdated", "pred1")
 }
 
-func TestDeadObserverRemoved(t *testing.T) {
+func TestSubscriptionDeadObserverRemoved(t *testing.T) {
 	predicates := []string{"pred1", "pred2"}
-	observer := new(mockObserver)
+	wg := new(sync.WaitGroup)
+	observer := &mockObserver{wg: wg}
+	wg.Add(5) // 3 x IsActive + 2 x Predicate Updated
 	observer.On("IsActive").Return(true).Twice()
 	observer.On("IsActive").Return(false)
 	observer.On("PredicateUpdated", "pred1").Return().Twice()
 	defer observer.AssertExpectations(t)
 
-	observer2 := new(mockObserver)
+	observer2 := &mockObserver{wg: wg}
+	wg.Add(10) // 5 x IsActive + 5 x Predicate Updated
 	observer2.On("IsActive").Return(true)
 	observer2.On("PredicateUpdated", "pred1").Return().Times(5)
 	defer observer2.AssertExpectations(t)
@@ -123,11 +138,13 @@ func TestDeadObserverRemoved(t *testing.T) {
 	err = updateDispatcher.Update("pred2")
 	require.NoError(t, err)
 
+	wg.Wait()
+
 	observer.AssertNotCalled(t, "PredicateUpdated", "pred2")
 }
 
 // This test uses many gorutines to that all operations can safely be executed concurrently
-func TestDispatcherMultithreading(t *testing.T) {
+func TestSubscriptionDispatcherMultithreading(t *testing.T) {
 	predicates := []string{"a", "b", "c", "d"}
 	n := 100  // number of observers
 	m := 1000 // number of iterations where all observers are alive
@@ -135,16 +152,19 @@ func TestDispatcherMultithreading(t *testing.T) {
 	var updateDispatcher = NewUpdateDispatcher()
 
 	observers := make([]*mockObserver, n)
+	wg := new(sync.WaitGroup)
 
 	test := func(i, n int) {
 		for ; i < n; i++ {
-			observers[i] = new(mockObserver)
+			observers[i] = &mockObserver{wg: wg}
 			k := m + n - i/1
+			wg.Add((len(predicates)+1)*k + 1) // k+1 x IsActive + len(...)*k x PredicateUpdated
 			observers[i].On("IsActive").Return(true).Times(k)
 			observers[i].On("IsActive").Return(false)
 			for _, pred := range predicates {
 				observers[i].On("PredicateUpdated", pred).Return().Times(k)
 			}
+			defer observers[i].AssertExpectations(t)
 			err := updateDispatcher.GetUpdateStream(predicates, observers[i])
 			require.NoError(t, err)
 		}
@@ -161,16 +181,21 @@ func TestDispatcherMultithreading(t *testing.T) {
 			updateDispatcher.Update("b")
 		}()
 		go func() {
-			if m%n == 0 {
-				obs := new(mockObserver)
+			if m%n == 1 {
+				k := n / 2
+				obs := &mockObserver{wg: wg}
+				wg.Add((len(predicates)+1)*k + 1) // k+1 x IsActive + len(...)*k x PredicateUpdated
 				obs.On("IsActive").Return(true).Times(n)
 				obs.On("IsActive").Return(false)
 				for _, pred := range predicates {
 					obs.On("PredicateUpdated", pred).Return().Times(n)
 				}
+				defer obs.AssertExpectations(t)
 
 				updateDispatcher.GetUpdateStream(predicates, obs)
 			}
 		}()
 	}
+
+	wg.Wait()
 }

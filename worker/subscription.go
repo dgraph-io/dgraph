@@ -62,7 +62,7 @@ func (d *UpdateDispatcher) Update(predicate string) error {
 	d.mutex.RLock()
 	for observer, _ := range d.observers[predicate] {
 		if observer.IsActive() {
-			observer.PredicateUpdated(predicate)
+			go observer.PredicateUpdated(predicate)
 		} else {
 			inactive = append(inactive, observer)
 		}
@@ -70,13 +70,17 @@ func (d *UpdateDispatcher) Update(predicate string) error {
 	d.mutex.RUnlock()
 
 	// remove all inactive observers, for all predicates
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-	for _, set := range d.observers {
-		for _, i := range inactive {
-			delete(set, i)
-		}
+	for _, observer := range inactive {
+		d.Remove(observer)
 	}
 
 	return nil
+}
+
+func (d *UpdateDispatcher) Remove(observer UpdateObserver) {
+	d.mutex.Lock()
+	for _, set := range d.observers {
+		delete(set, observer)
+	}
+	d.mutex.Unlock()
 }
