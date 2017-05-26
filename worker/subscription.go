@@ -23,12 +23,9 @@ import (
 
 type UpdateObserver interface {
 	PredicateUpdated(predicate string)
-	IsActive() bool
 }
 
 // UpdateDispatcher is a thread-safe implementation of Subject from Observer pattern.
-// To decouple Observers from Subject, removal is handled by UpdateDispatcher itself - observers
-// that are not active are removed. This way observer can just mark it should be unregistered.
 type UpdateDispatcher struct {
 	observers map[string]map[UpdateObserver]bool
 	mutex     sync.RWMutex
@@ -57,36 +54,21 @@ func (d *UpdateDispatcher) GetUpdateStream(predicates []string, observer UpdateO
 // This method notifies all observers registered for the predicated about the change.
 // As a side effect, all observers that are not alive are unregistered.
 func (d *UpdateDispatcher) Update(predicate string) error {
-	var inactive []UpdateObserver
-
 	d.mutex.RLock()
 	for observer, _ := range d.observers[predicate] {
-		if observer.IsActive() {
-			go observer.PredicateUpdated(predicate)
-		} else {
-			inactive = append(inactive, observer)
-		}
+		go observer.PredicateUpdated(predicate)
 	}
 	d.mutex.RUnlock()
-
-	// remove all inactive observers, for all predicates
-	for _, observer := range inactive {
-		d.Remove(observer)
-	}
 
 	return nil
 }
 
+// Removes observer from dispatcher. Each observer should call this method as soon as it is
+// no longer interested in updates or stopped working.
 func (d *UpdateDispatcher) Remove(observer UpdateObserver) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	for _, set := range d.observers {
 		delete(set, observer)
 	}
-}
-
-func (d *UpdateDispatcher) RemovePredicate(predicate string) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-	delete(d.observers, predicate)
 }

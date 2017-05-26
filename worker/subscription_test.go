@@ -28,33 +28,39 @@ import (
 
 type mockObserver struct {
 	mock.Mock
-	wg *sync.WaitGroup
+	dispatcher *UpdateDispatcher
+	wg         *sync.WaitGroup
+}
+
+func NewMockObserver(dispatcher *UpdateDispatcher, wg *sync.WaitGroup) *mockObserver {
+	return &mockObserver{dispatcher: dispatcher, wg: wg}
 }
 
 func (m *mockObserver) PredicateUpdated(predicate string) {
-	m.Called(predicate)
-	m.wg.Done()
+	if !m.isActive() {
+		m.dispatcher.Remove(m)
+	} else {
+		m.wg.Done()
+		m.Called(predicate)
+	}
 }
 
-func (m *mockObserver) IsActive() bool {
+func (m *mockObserver) isActive() bool {
 	args := m.Called()
-	if args.Bool(0) {
-		m.wg.Done()
-	}
 	return args.Bool(0)
 }
 
 func TestSubscriptionGetUpdateStream(t *testing.T) {
 	predicates := []string{"pred1", "pred2", "pred3"}
 	wg := new(sync.WaitGroup)
-	observer := &mockObserver{wg: wg}
-	wg.Add(6) // 3 x IsActive + 3 x PredicateUpdated
-	observer.On("IsActive").Return(true)
+	updateDispatcher := NewUpdateDispatcher()
+	observer := NewMockObserver(updateDispatcher, wg)
+	wg.Add(3) // 3 x PredicateUpdated
+	observer.On("isActive").Return(true)
 	observer.On("PredicateUpdated", "pred1").Return().Once()
 	observer.On("PredicateUpdated", "pred2").Return().Twice()
 	defer observer.AssertExpectations(t)
 
-	var updateDispatcher = NewUpdateDispatcher()
 	err := updateDispatcher.GetUpdateStream(predicates, observer)
 	require.NoError(t, err)
 
@@ -76,22 +82,22 @@ func TestSubscriptionGetUpdateStream(t *testing.T) {
 func TestSubscriptionMultipleObservers(t *testing.T) {
 	predicates1 := []string{"pred1", "pred2"}
 	wg := new(sync.WaitGroup)
-	observer1 := &mockObserver{wg: wg}
-	wg.Add(4) // 2 x IsActive + 2 x Predicate Updated
-	observer1.On("IsActive").Return(true)
+	updateDispatcher := NewUpdateDispatcher()
+	observer1 := NewMockObserver(updateDispatcher, wg)
+	wg.Add(2) // 2 x Predicate Updated
+	observer1.On("isActive").Return(true)
 	observer1.On("PredicateUpdated", "pred1").Return().Once()
 	observer1.On("PredicateUpdated", "pred2").Return().Once()
 	defer observer1.AssertExpectations(t)
 
 	predicates2 := []string{"pred3", "pred2"}
-	observer2 := &mockObserver{wg: wg}
-	wg.Add(4) // 2 x IsActive + 2 x Predicate Updated
-	observer2.On("IsActive").Return(true)
+	observer2 := NewMockObserver(updateDispatcher, wg)
+	wg.Add(2) // 2 x Predicate Updated
+	observer2.On("isActive").Return(true)
 	observer2.On("PredicateUpdated", "pred3").Return().Once()
 	observer2.On("PredicateUpdated", "pred2").Return().Once()
 	defer observer2.AssertExpectations(t)
 
-	var updateDispatcher = NewUpdateDispatcher()
 	err := updateDispatcher.GetUpdateStream(predicates1, observer1)
 	require.NoError(t, err)
 
@@ -114,20 +120,20 @@ func TestSubscriptionMultipleObservers(t *testing.T) {
 func TestSubscriptionDeadObserverRemoved(t *testing.T) {
 	predicates := []string{"pred1", "pred2"}
 	wg := new(sync.WaitGroup)
-	observer := &mockObserver{wg: wg}
-	wg.Add(4) // 2 x IsActive + 2 x Predicate Updated
-	observer.On("IsActive").Return(true).Twice()
-	observer.On("IsActive").Return(false)
+	updateDispatcher := NewUpdateDispatcher()
+	observer := NewMockObserver(updateDispatcher, wg)
+	wg.Add(2) // 2 x Predicate Updated
+	observer.On("isActive").Return(true).Twice()
+	observer.On("isActive").Return(false)
 	observer.On("PredicateUpdated", "pred1").Return().Twice()
 	defer observer.AssertExpectations(t)
 
-	observer2 := &mockObserver{wg: wg}
-	wg.Add(10) // 5 x IsActive + 5 x Predicate Updated
-	observer2.On("IsActive").Return(true)
+	observer2 := NewMockObserver(updateDispatcher, wg)
+	wg.Add(5) // 5 x Predicate Updated
+	observer2.On("isActive").Return(true)
 	observer2.On("PredicateUpdated", "pred1").Return().Times(5)
 	defer observer2.AssertExpectations(t)
 
-	var updateDispatcher = NewUpdateDispatcher()
 	err := updateDispatcher.GetUpdateStream(predicates, observer)
 	require.NoError(t, err)
 	err = updateDispatcher.GetUpdateStream([]string{"pred1"}, observer2)
@@ -161,11 +167,11 @@ func TestSubscriptionDispatcherMultithreading(t *testing.T) {
 		wg.Add(1)
 		defer wg.Done()
 		for ; i < n; i++ {
-			observers[i] = &mockObserver{wg: wg}
+			observers[i] = NewMockObserver(updateDispatcher, wg)
 			k := m + n - i/2
-			wg.Add(2 * k) // k x IsActive + k x PredicateUpdated
-			observers[i].On("IsActive").Return(true).Times(k)
-			observers[i].On("IsActive").Return(false)
+			wg.Add(k) // k x PredicateUpdated
+			observers[i].On("isActive").Return(true).Times(k)
+			observers[i].On("isActive").Return(false)
 			observers[i].On("PredicateUpdated", mock.AnythingOfType("string")).Return().Times(k)
 			err := updateDispatcher.GetUpdateStream(predicates, observers[i])
 			require.NoError(t, err)
@@ -189,10 +195,10 @@ func TestSubscriptionDispatcherMultithreading(t *testing.T) {
 			defer wg.Done()
 			if m%n == 1 {
 				k := n / 2
-				obs := &mockObserver{wg: wg}
-				wg.Add(2 * len(predicates) * k)
-				obs.On("IsActive").Return(true).Times(len(predicates) * k)
-				obs.On("IsActive").Return(false)
+				obs := NewMockObserver(updateDispatcher, wg)
+				wg.Add(len(predicates) * k)
+				obs.On("isActive").Return(true).Times(len(predicates) * k)
+				obs.On("isActive").Return(false)
 				for _, pred := range predicates {
 					obs.On("PredicateUpdated", pred).Return().Times(k)
 				}
@@ -204,40 +210,6 @@ func TestSubscriptionDispatcherMultithreading(t *testing.T) {
 	}
 
 	require.False(t, waitTimeout(wg, 10*time.Second))
-}
-
-// Ensures that after removing predicate from dispatcher, observers are not called
-func TestSubscriptionRemovePredicate(t *testing.T) {
-	predicates := []string{"pred1", "pred2", "pred3"}
-	wg := new(sync.WaitGroup)
-	observer := &mockObserver{wg: wg}
-	wg.Add(6) // 2 x IsActive + 2 x PredicateUpdated
-	observer.On("IsActive").Return(true)
-	observer.On("PredicateUpdated", "pred1").Return().Twice()
-	observer.On("PredicateUpdated", "pred2").Return().Once()
-	defer observer.AssertExpectations(t)
-
-	var updateDispatcher = NewUpdateDispatcher()
-	err := updateDispatcher.GetUpdateStream(predicates, observer)
-	require.NoError(t, err)
-
-	err = updateDispatcher.Update("pred1")
-	require.NoError(t, err)
-	err = updateDispatcher.Update("pred2")
-	require.NoError(t, err)
-
-	updateDispatcher.RemovePredicate("pred2")
-
-	err = updateDispatcher.Update("pred4")
-	require.NoError(t, err)
-
-	err = updateDispatcher.Update("pred1")
-	require.NoError(t, err)
-	err = updateDispatcher.Update("pred2")
-	require.NoError(t, err)
-
-	require.False(t, waitTimeout(wg, time.Second))
-	observer.AssertNotCalled(t, "PredicateUpdated", "pred4")
 }
 
 // code from: https://stackoverflow.com/a/32843750/3474438
