@@ -69,7 +69,7 @@ func TestSubscriptionGetUpdateStream(t *testing.T) {
 	err = updateDispatcher.Update("pred2")
 	require.NoError(t, err)
 
-	wg.Wait()
+	require.False(t, waitTimeout(wg, time.Second))
 	observer.AssertNotCalled(t, "PredicateUpdated", "pred4")
 }
 
@@ -105,7 +105,7 @@ func TestSubscriptionMultipleObservers(t *testing.T) {
 	err = updateDispatcher.Update("pred3")
 	require.NoError(t, err)
 
-	wg.Wait()
+	require.False(t, waitTimeout(wg, time.Second))
 
 	observer1.AssertNotCalled(t, "PredicateUpdated", "pred3")
 	observer2.AssertNotCalled(t, "PredicateUpdated", "pred1")
@@ -141,7 +141,7 @@ func TestSubscriptionDeadObserverRemoved(t *testing.T) {
 	err = updateDispatcher.Update("pred2")
 	require.NoError(t, err)
 
-	wg.Wait()
+	require.False(t, waitTimeout(wg, time.Second))
 
 	observer.AssertNotCalled(t, "PredicateUpdated", "pred2")
 }
@@ -150,7 +150,7 @@ func TestSubscriptionDeadObserverRemoved(t *testing.T) {
 func TestSubscriptionDispatcherMultithreading(t *testing.T) {
 	predicates := []string{"a", "b", "c", "d"}
 	n := 10  // number of observers
-	m := 100 // number of iterations where all observers are alive
+	m := 500 // number of iterations where all observers are alive
 
 	var updateDispatcher = NewUpdateDispatcher()
 
@@ -158,6 +158,8 @@ func TestSubscriptionDispatcherMultithreading(t *testing.T) {
 	wg := new(sync.WaitGroup)
 
 	test := func(i, n int) {
+		wg.Add(1)
+		defer wg.Done()
 		for ; i < n; i++ {
 			observers[i] = &mockObserver{wg: wg}
 			k := m + n - i/2
@@ -168,16 +170,14 @@ func TestSubscriptionDispatcherMultithreading(t *testing.T) {
 			err := updateDispatcher.GetUpdateStream(predicates, observers[i])
 			require.NoError(t, err)
 		}
-		wg.Done()
 	}
 
-	wg.Add(2)
 	go test(0, n/2)
 	go test(n/2, n)
 
 	for i := 0; i < 2*m; i++ {
-		wg.Add(2)
 		go func() {
+			wg.Add(1)
 			updateDispatcher.Update("a")
 			updateDispatcher.Update("c")
 			updateDispatcher.Update("d")
@@ -185,6 +185,8 @@ func TestSubscriptionDispatcherMultithreading(t *testing.T) {
 			wg.Done()
 		}()
 		go func() {
+			wg.Add(1)
+			defer wg.Done()
 			if m%n == 1 {
 				k := n / 2
 				obs := &mockObserver{wg: wg}
@@ -201,7 +203,7 @@ func TestSubscriptionDispatcherMultithreading(t *testing.T) {
 		}()
 	}
 
-	waitTimeout(wg, 5*time.Second)
+	require.False(t, waitTimeout(wg, 10*time.Second))
 }
 
 // Ensures that after removing predicate from dispatcher, observers are not called
@@ -234,7 +236,7 @@ func TestSubscriptionRemovePredicate(t *testing.T) {
 	err = updateDispatcher.Update("pred2")
 	require.NoError(t, err)
 
-	waitTimeout(wg, time.Second)
+	require.False(t, waitTimeout(wg, time.Second))
 	observer.AssertNotCalled(t, "PredicateUpdated", "pred4")
 }
 
