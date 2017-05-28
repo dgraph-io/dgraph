@@ -578,6 +578,9 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 	if gchild.MathExp != nil {
 		key += fmt.Sprintf("%+v", gchild.MathExp)
 	}
+	if gchild.IsGroupby {
+		key += "groupby"
+	}
 	return key
 }
 
