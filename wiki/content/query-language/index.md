@@ -83,7 +83,7 @@ note about functions and Language
 
 Syntax : `allofterms(predicate, "space-separated term list")`
 
-Value types : `string`
+Schema types : `string`
 
 Index required : `term`
 
@@ -126,7 +126,7 @@ Query Example : Steven Spielberg is XID `m.06pj8`.  All his films that contain t
 
 Syntax : `anyofterms(predicate, "space-separated term list")`
 
-Value types : `string`
+Schema types : `string`
 
 Index required : `term`
 
@@ -170,7 +170,7 @@ Query Example : Steven Spielberg is XID `m.06pj8`.  All his movies that contain 
 
 Syntax : `regexp(predicate, /regular-expression/)` or case insensitive `regexp(predicate, /regular-expression/i)`
 
-Value types : `string`
+Schema types : `string`
 
 Index required : `trigram`
 
@@ -213,7 +213,7 @@ Keep the following in mind when designing regular expression queries.
 
 Syntax : `alloftext(predicate, "space-separated text")` and `anyoftext(predicate, "space-separated text")`
 
-Value types : `string`
+Schema types : `string`
 
 Index required : `fulltext`
 
@@ -270,7 +270,7 @@ Syntax :
 * `eq(var(varName), value)`
 * `eq(count(predicate), value)`
 
-Value types : `int`, `float`, `string`, `dateTime`
+Schema types : `int`, `float`, `string`, `dateTime`
 
 Index required : An index is required for `eq(predicate, value)` form, but otherwise the values have been calculated as part of the query, so no index is required.
 
@@ -309,7 +309,7 @@ With `IE` replaced by
 * `ge` greater than or equal to
 * `gt` greather than
 
-Value types : `int`, `float`, `string`, `dateTime`
+Schema types : `int`, `float`, `string`, `dateTime`
 
 Index required : An index is required for the `IE(predicate, value)` form, but otherwise the values have been calculated as part of the query, so no index is required.
 
@@ -347,7 +347,7 @@ Query Example : Movies with directors with `Steven` in `name` and have directed 
     total as sum(var(num_actors))
   }
 
-  avs(id: var(ID)) @filter(gt(var(total), 100)) {
+  dirs(id: var(ID)) @filter(gt(var(total), 100)) {
     name@en
     total_actors : var(total)
   }
@@ -355,19 +355,48 @@ Query Example : Movies with directors with `Steven` in `name` and have directed 
 {{< /runnable >}}
 
 
+Query Example : All directors.  Count in the root filter can help in determining classes of nodes.  Directors have directed at least one film.  
+
+
+{{< runnable >}}
+{
+	all_directors(func: gt(count(director.film), 0)){
+		name@en
+	}
+}
+{{< /runnable >}}
+
+
+Query Example : A movie in each genre that has over 30000 movies.
+
+{{< runnable >}}
+{
+	genre(func: gt(count(~genre), 30000)){
+		name@en
+		~genre (first:1) {
+			name@en
+		}
+	}
+}
+{{< /runnable >}}
+
 
 ### Geolocation
 
+Note that for geo queries, any polygon with holes is replace with the outer loop, ignoring holes.  Also, as for version 0.7.7 polygon containment checks are approximate.
+
 #### Near
 
-Syntax : `near(predicate, [x, y], distance)`
+Syntax : `near(predicate, [long, lat], distance)`
 
-Value types : `geo`
+Schema types : `geo`
 
 Index required : `geo`
 
-`Near` returns all entities which lie within a specified distance from a given point. It takes in three arguments namely
-the predicate (on which the index is based), geo-location point and a distance (in metres).
+Matches all entities where the location given by `predicate` is within `distance` metres of geojson coordinate `[long, lat]`.
+
+Query Example : Tourist destinations within 1 kilometer of a point in Golden Gate Park, San Fransico.
+
 {{< runnable >}}
 {
   tourist(func: near(loc, [-122.469829, 37.771935], 1000) ) {
@@ -376,11 +405,18 @@ the predicate (on which the index is based), geo-location point and a distance (
 }
 {{< /runnable >}}
 
-This query returns all the entities located within 1000 metres from the [specified point](http://bl.ocks.org/d/2ba9f626cb7be1bcc012be1dc7db40ff) in geojson format.
 
 #### Within
 
-`Within` returns all entities which completely lie within the specified region. It takes in two arguments namely the predicate (on which the index is based) and geo-location region.
+Syntax : `within(predicate, [[long1, lat1], ..., [longN, latN]])`
+
+Schema types : `geo`
+
+Index required : `geo`
+
+Matches all entities where the location given by `predicate` lies within the polygon specified by the geojson coordinate array.
+
+Query Example : Tourist destinations within the specified area of Golden Gate Park, San Fransico.  
 
 {{< runnable >}}
 {
@@ -389,13 +425,19 @@ This query returns all the entities located within 1000 metres from the [specifi
   }
 }
 {{< /runnable >}}
-This query returns all the entities (points/polygons) located completely within the [specified polygon](http://bl.ocks.org/d/b81a6589fa9639c9424faad778004dae) in geojson format.
-{{% notice "note" %}}The containment check for polygons are approximate as of v0.7.1.{{% /notice %}}
+
 
 #### Contains
 
-`Contains` returns all entities which completely enclose the specified point or region. It takes in two arguments namely the predicate (on which the index is based) and geo-location region.
+Syntax : `contains(predicate, [long, lat])` or `contains(predicate, [[long1, lat1], ..., [longN, latN]])`
 
+Schema types : `geo`
+
+Index required : `geo`
+
+Matches all entities where the polygon describing the location given by `predicate` contains geojson coordinate `[long, lat]` or given geojson polygon.
+
+Query Example : All entities that contain a point in the flamingo enclosure of San Fransico Zoo.
 {{< runnable >}}
 {
   tourist(func: contains(loc, [ -122.50326097011566, 37.73353615592843 ] )) {
@@ -403,11 +445,18 @@ This query returns all the entities (points/polygons) located completely within 
   }
 }
 {{< /runnable >}}
-This query returns all the entities that completely enclose the [http://bl.ocks.org/d/7218dd34391fac518e3516ea6fc1b6b1 specified point] (or polygon) in geojson format.
+
 
 #### Intersects
 
-`Intersects` returns all entities which intersect with the given polygon. It takes in two arguments namely the predicate (on which the index is based) and geo-location region.
+Syntax : `intersects(predicate, [[long1, lat1], ..., [longN, latN]])`
+
+Schema types : `geo`
+
+Index required : `geo`
+
+Matches all entities where the polygon describing the location given by `predicate` intersects the given geojson polygon.
+
 
 {{< runnable >}}
 {
@@ -417,7 +466,42 @@ This query returns all the entities that completely enclose the [http://bl.ocks.
 }
 {{< /runnable >}}
 
-This query returns all the entities that intersect with the [http://bl.ocks.org/d/2ed3361a25442414e15d7eab88574b67 specified polygon/point] in geojson format.
+
+
+## Filters
+
+
+**TODO grammar placeholder**
+
+filter is a function or a filter joined with a boolean connective
+ `filter := function | filter AND filter | filter OR filter | NOT filter | (filter)`
+
+usage at root
+`q(id: UID | XID) [@filter(filter)]`
+or
+`q(func: function) [@filter(filter)]`
+
+usage inside query block
+`edge @filter(filter) { ... }`
+
+
+### AND, OR and NOT
+
+Connectives `AND`, `OR` and `NOT` join filters and can be built into arbitrarily complex filters, such as `(NOT A OR B) AND (C AND NOT (D OR E))`.  Note that, `NOT` binds more tightly than `AND` which binds more tightly than `OR`.
+
+Query Example : Steven Spielberg is XID `m.06pj8`.  All his movies that contain either both "indiana" and "jones" OR both "jurassic" and "park".
+
+{{< runnable >}}
+{
+  me(id: m.06pj8) {
+    name@en
+    director.film @filter(allofterms(name, "jones indiana") OR allofterms(name, "jurassic park"))  {
+      _uid_
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
 
 
 
@@ -1126,58 +1210,6 @@ It can also be used to get count at root. The following query would get the coun
 
 
 
-
-## Filters
-
-[Functions]({{< relref "#functions" >}}) can be applied to results as Filters.
-
-#### AND, OR and NOT
-
-Dgraph supports AND, OR and NOT filters. The syntax is of form: `A OR B`, `A AND B`, or `NOT A`. You can add round brackets to make these filters more complex. `(NOT A OR B) AND (C AND NOT (D OR E))`
-
-In this query, we are getting film names which contain either both "indiana" and "jones" OR both "jurassic" AND "park".
-
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    name@en
-    director.film @filter(allofterms(name, "jones indiana") OR allofterms(name, "jurassic park"))  {
-      _uid_
-      name@en
-    }
-  }
-}
-{{< /runnable >}}
-
-#### Filter on Compare
-
-Dgraph also supports compare filter, which takes form as @filter(compare(count(attribute), N)), only entities fulfill such predication will be returned.
-
-{{% notice "note" %}}"Compare" here includes "eq", "gt", "ge", "lt", "le".  And "count" should be applied on non-scalar types.{{% /notice %}}
-
-{{< runnable >}}
-{
-  director(func:anyofterms(name, "Steven Spielberg")) @filter(gt(count(director.film), 36)) {
-    name@en
-    count(director.film)
-  }
-}
-{{< /runnable >}}
-
-These compare functions can also be used at root. To obtain one movie per genre which have atleast 30000 movies, we'd do as follows:
-
-{{< runnable >}}
-{
-	genre(func: gt(count(~genre), 30000)){
-		name@en
-		~genre (first:1) {
-			name@en
-		}
-	}
-}
-{{< /runnable >}}
-
-These functions can help is starting from nodes which have some conditions based on count and might help in determining the type of a node if modelled accordingly. For example, to start with all the directors, we can do `gt(count(director.film), 0)` which means all the nodes that have alteast one outgoing `director.film` edge.
 
 ## Sorting
 
