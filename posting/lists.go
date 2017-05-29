@@ -548,6 +548,9 @@ type syncEntry struct {
 	water   *x.WaterMark
 	pending []uint64
 	sw      *x.SafeWait
+
+	// count of postings in list. If count == 0, we delete the key from the store.
+	count int
 }
 
 func batchSync() {
@@ -570,7 +573,11 @@ func batchSync() {
 				loop++
 				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
 				for _, e := range entries {
-					b.Put(e.key, e.val)
+					if e.count == 0 {
+						b.Delete(e.key)
+					} else {
+						b.Put(e.key, e.val)
+					}
 				}
 				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
 				b.Clear()

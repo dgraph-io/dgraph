@@ -590,6 +590,7 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		sw:      sw,
 		water:   l.water,
 		pending: l.pending,
+		count:   count,
 	}
 	syncCh <- ce
 

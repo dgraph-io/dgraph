@@ -250,6 +250,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
 		addReverseMutation(ctx, t)
 	}
+
 	return nil
 }
 
