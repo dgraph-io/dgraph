@@ -7074,6 +7074,8 @@ func TestCountAtRoot5(t *testing.T) {
 
 func TestMultipleEquality(t *testing.T) {
 	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: eq(name, ["Rick Gremes", "Michonne"])) {
