@@ -537,7 +537,8 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	// For string matching functions, check the language.
-	if (srcFn.fnType == StandardFn || srcFn.fnType == FullTextSearchFn) && len(srcFn.lang) > 0 {
+	if (srcFn.fnType == StandardFn || srcFn.fnType == HasFn ||
+		srcFn.fnType == FullTextSearchFn) && len(srcFn.lang) > 0 {
 		uids := algo.MergeSorted(out.UidMatrix)
 		var values []types.Val
 		for _, uid := range uids.Uids {
