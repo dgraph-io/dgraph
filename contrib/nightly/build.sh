@@ -182,10 +182,11 @@ upload_assets() {
 		# nightly.
 		if [[ $BUILD_TAG == "nightly" ]]; then
 			echo 'Updating release description.'
-			send_gh_api_data_request repos/${DGRAPH_REPO}/releases/${release_id} PATCH \
-				"{ \"body\": $(get_nightly_release_body) | jq -s -c -R '.') }" \
-				> /dev/null
-
+			# TODO(pawan) - This fails, investigate and fix.
+			# 			send_gh_api_data_request repos/${DGRAPH_REPO}/releases/${release_id} PATCH \
+			# 				"{ \"force\": true, \"body\": $(get_nightly_release_body) | jq -s -c -R '.') }" \
+			# 				> /dev/null
+			#
 			echo "Updating ${BUILD_TAG} tag to point to ${DGRAPH_COMMIT}."
 			send_gh_api_data_request repos/${DGRAPH_REPO}/git/refs/tags/${BUILD_TAG} PATCH \
 				"{ \"force\": true, \"sha\": \"${DGRAPH_COMMIT}\" }" \
