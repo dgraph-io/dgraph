@@ -444,7 +444,7 @@ func (l *List) delete(ctx context.Context, t *protos.DirectedEdge) error {
 	if dirtyChan != nil {
 		dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
 	}
-	return l.pstore.Delete(l.key)
+	return nil
 }
 
 // Iterate will allow you to iterate over this Posting List, while having acquired a read lock.
@@ -590,6 +590,7 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		sw:      sw,
 		water:   l.water,
 		pending: l.pending,
+		count:   count,
 	}
 	syncCh <- ce
 

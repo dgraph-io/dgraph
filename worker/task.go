@@ -195,6 +195,14 @@ type result struct {
 	facets []*protos.Facet
 }
 
+func addUidToMatrix(key []byte, mu *sync.Mutex, out *protos.Result) {
+	pk := x.Parse(key)
+	tlist := &protos.List{[]uint64{pk.Uid}}
+	mu.Lock()
+	out.UidMatrix = append(out.UidMatrix, tlist)
+	mu.Unlock()
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	var out protos.Result
@@ -253,7 +261,8 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 	for i := 0; i < srcFn.n; i++ {
 		var key []byte
-		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn || srcFn.fnType == HasFn {
+		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
+			srcFn.fnType == HasFn {
 			if q.Reverse {
 				key = x.ReverseKey(attr, q.UidList.Uids[i])
 			} else {
@@ -385,11 +394,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 	if srcFn.fnType == HasFn && srcFn.isCompareAtRoot {
 		f := func(kv itkv, mu *sync.Mutex) {
-			pk := x.Parse(kv.key)
-			tlist := &protos.List{[]uint64{pk.Uid}}
-			mu.Lock()
-			out.UidMatrix = append(out.UidMatrix, tlist)
-			mu.Unlock()
+			addUidToMatrix(kv.key, mu, &out)
 		}
 		itParams := iterateParams{
 			q:        q,
@@ -405,13 +410,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			count := int64(pl.Length(0))
 			decr()
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				pk := x.Parse(kv.key)
-				// TODO: Look if we want to put these UIDs in one list before
-				// passing it back to query package.
-				tlist := &protos.List{[]uint64{pk.Uid}}
-				mu.Lock()
-				out.UidMatrix = append(out.UidMatrix, tlist)
-				mu.Unlock()
+				addUidToMatrix(kv.key, mu, &out)
 			}
 		}
 		itParams := iterateParams{
@@ -956,6 +955,8 @@ type iterateParams struct {
 	fetchVal bool // Whether value needs to be fetched along with key.
 }
 
+// TODO - We might not even need to do this with badger. Benchmark this against the serial iteration
+// once we integrate badger.
 func iterateParallel(ctx context.Context, params iterateParams, f func(itkv, *sync.Mutex)) {
 	q := params.q
 	fetchVal := params.fetchVal
