@@ -251,8 +251,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 		addReverseMutation(ctx, t)
 	}
 
-	// No postings in the list, lets set it for deletion so that the
-	// key is deleted during SyncIfDirty.
+	// No postings in the list, lets delete it from the store.
 	if t.Op == protos.DirectedEdge_DEL && l.Length(0) == 0 {
 		return l.pstore.Delete(l.key)
 	}
