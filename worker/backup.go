@@ -30,13 +30,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/badger/badger"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 )
 
 const numBackupRoutines = 10
@@ -195,7 +197,7 @@ func backup(gid uint32, bdir string) error {
 	var wg sync.WaitGroup
 	wg.Add(numBackupRoutines)
 	for i := 0; i < numBackupRoutines; i++ {
-		go func() {
+		go func(i int) {
 			buf := new(bytes.Buffer)
 			buf.Grow(50000)
 			for item := range chkv {
@@ -213,7 +215,7 @@ func backup(gid uint32, bdir string) error {
 				chb <- tmp
 			}
 			wg.Done()
-		}()
+		}(i)
 	}
 
 	// Use a goroutine to convert protos.Schema to string
@@ -240,13 +242,15 @@ func backup(gid uint32, bdir string) error {
 	}()
 
 	// Iterate over rocksdb.
-	it := pstore.NewIterator()
+	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 	var lastPred string
 	prefix := new(bytes.Buffer)
 	prefix.Grow(100)
-	for it.SeekToFirst(); it.Valid(); {
-		key := it.Key().Data()
+	var debugCount int
+	for it.Rewind(); it.Valid(); debugCount++ {
+		item := it.Item()
+		key := item.Key()
 		pk := x.Parse(key)
 
 		if pk.IsIndex() {
@@ -267,7 +271,7 @@ func backup(gid uint32, bdir string) error {
 		if pk.IsSchema() {
 			if group.BelongsTo(pk.Attr) == gid {
 				s := &protos.SchemaUpdate{}
-				x.Check(s.Unmarshal(it.Value().Data()))
+				x.Check(s.Unmarshal(item.Value()))
 				chs <- &skv{
 					attr:   pk.Attr,
 					schema: s,
@@ -277,7 +281,6 @@ func backup(gid uint32, bdir string) error {
 			it.Next()
 			continue
 		}
-
 		x.AssertTrue(pk.IsData())
 		pred, uid := pk.Attr, pk.Uid
 		if pred != lastPred && group.BelongsTo(pred) != gid {
@@ -291,7 +294,7 @@ func backup(gid uint32, bdir string) error {
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
 		pl := &protos.PostingList{}
-		x.Check(pl.Unmarshal(it.Value().Data()))
+		x.Check(pl.Unmarshal(item.Value()))
 		chkv <- kv{
 			prefix: prefix.String(),
 			list:   pl,

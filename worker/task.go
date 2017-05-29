@@ -18,12 +18,14 @@
 package worker
 
 import (
+	"bytes"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/dgraph-io/badger/badger"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -936,7 +938,7 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 		x.Trace(ctx, "Running go-routine %v for iteration", i)
 		wg.Add(1)
 		go func(i uint64) {
-			it := pstore.NewIterator()
+			it := pstore.NewIterator(badger.DefaultIteratorOptions)
 			defer it.Close()
 			startKey := x.DataKey(q.Attr, minUid)
 			pk := x.Parse(startKey)
@@ -948,8 +950,13 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 			}
 
 			w := 0
-			for it.Seek(startKey); it.ValidForPrefix(prefix); it.Next() {
-				pk := x.Parse(it.Key().Data())
+			for it.Seek(startKey); it.Valid(); it.Next() {
+				iterItem := it.Item()
+				key := iterItem.Key()
+				if !bytes.HasPrefix(key, prefix) {
+					break
+				}
+				pk := x.Parse(key)
 				x.AssertTruef(pk.Attr == q.Attr,
 					"Invalid key obtained for comparison")
 				if w%1000 == 0 {
@@ -959,8 +966,7 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 				if pk.Uid > maxUid {
 					break
 				}
-				key := it.Key().Data()
-				val := it.Value().Data()
+				val := iterItem.Value()
 				f(key, val, mu)
 			}
 			wg.Done()

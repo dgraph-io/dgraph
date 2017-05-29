@@ -23,10 +23,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -789,7 +789,7 @@ func TestParseQueryWithVarInIneqError(t *testing.T) {
 		}
 
 		me(id: var(fr)) @filter(gt(var(a, b), 10)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -808,7 +808,7 @@ func TestParseQueryWithVarInIneq(t *testing.T) {
 		}
 
 		me(id: var(fr)) @filter(gt(var(a), 10)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -3329,9 +3329,11 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	defer os.RemoveAll(dir)
 
-	ps, err := store.NewStore(dir)
-	x.Check(err)
+	opt := badger.DefaultOptions
+	opt.Dir = dir
+	ps, err := badger.NewKV(&opt)
 	defer ps.Close()
+	x.Check(err)
 
 	group.ParseGroupConfig("")
 	schema.Init(ps)

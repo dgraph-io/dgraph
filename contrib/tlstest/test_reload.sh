@@ -4,11 +4,6 @@ SERVER=./server_reload.sh
 CLIENT=./client_nopass.sh
 EXPECTED=1
 
-ROCKSDBDIR=$HOME/build/rocksdb-5.1.4
-ICUDIR=$HOME/build/icu/build
-export CGO_LDFLAGS="-L${ROCKSDBDIR}"
-export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
-
 cp server.crt server_reload.crt
 cp server.key server_reload.key
 

@@ -44,6 +44,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/badger/badger"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -55,7 +56,6 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
@@ -1012,8 +1012,11 @@ func main() {
 
 	// All the writes to posting store should be synchronous. We use batched writers
 	// for posting lists, so the cost of sync writes is amortized.
-	ps, err := store.NewSyncStore(*postingDir)
-	x.Checkf(err, "Error initializing postings store")
+	opt := badger.DefaultOptions
+	opt.SyncWrites = true
+	opt.Dir = *postingDir
+	ps, err := badger.NewKV(&opt)
+	x.Checkf(err, "Error while creating badger KV posting store")
 	defer ps.Close()
 
 	x.Check(group.ParseGroupConfig(*gconf))
