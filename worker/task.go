@@ -19,6 +19,7 @@ package worker
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -205,6 +206,10 @@ func addUidToMatrix(key []byte, mu *sync.Mutex, out *protos.Result) {
 	mu.Unlock()
 }
 
+func comparesEq(name string) bool {
+	return name == "eq" || name == "ge" || name == "le"
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	var out protos.Result
@@ -261,6 +266,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		return nil, err
 	}
 
+	fmt.Println("n", srcFn.n)
 	for i := 0; i < srcFn.n; i++ {
 		var key []byte
 		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
@@ -487,7 +493,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	// We fetch the actual value for the uids, compare them to the value in the
 	// request and filter the uids only if the tokenizer IsLossy.
 	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 &&
-		srcFn.ineqValueToken == srcFn.tokens[0] {
+		comparesEq(srcFn.fname) {
 		tokenizer, err := pickTokenizer(attr, srcFn.fname)
 		// We should already have checked this in getInequalityTokens.
 		x.Check(err)
@@ -504,15 +510,24 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			// ineqValueTokens. We can still filter just the first row if function is
 			// something else because we dont allow multiple Args for ge, gt etc.
 			x.AssertTrue(len(out.UidMatrix) > 0)
-			// Filter the first row of UidMatrix. Since ineqValue != nil, we may
-			// assume that ineqValue is equal to the first token found in TokensTable.
-			algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
-				sv, err := fetchValue(uid, attr, q.Langs, typ)
-				if sv.Value == nil || err != nil {
-					return false
-				}
-				return types.CompareVals(q.SrcFunc[0], sv, srcFn.ineqValue)
-			})
+
+			// If operation is ge or le, we only filter row number 0, which has uids
+			// corresponding to the equal token.
+			rowsToFilter := 1
+			if srcFn.fname == eq {
+				// If fn is eq, we could have multiple arguments and hence multiple rows
+				// to filter.
+				rowsToFilter = len(srcFn.tokens)
+			}
+			for row := 0; row < rowsToFilter; row++ {
+				algo.ApplyFilter(out.UidMatrix[row], func(uid uint64, i int) bool {
+					sv, err := fetchValue(uid, attr, q.Langs, typ)
+					if sv.Value == nil || err != nil {
+						return false
+					}
+					return types.CompareVals(q.SrcFunc[0], sv, srcFn.eqTokens[row])
+				})
+			}
 		}
 	}
 
@@ -616,6 +631,7 @@ type functionContext struct {
 	geoQuery       *types.GeoQueryData
 	intersectDest  bool
 	ineqValue      types.Val
+	eqTokens       []types.Val
 	ineqValueToken string
 	n              int
 	threshold      int64
@@ -626,14 +642,17 @@ type functionContext struct {
 	isFuncAtRoot   bool
 }
 
+const (
+	gt = "gt" // greater than
+	eq = "eq" // equal
+)
+
 func ensureArgsCount(funcStr []string, expected int) error {
 	actual := len(funcStr) - 2
-	switch {
-	case actual != expected:
+
+	if actual != expected {
 		return x.Errorf("Function '%s' requires %d arguments, but got %d (%v)",
 			funcStr[0], expected, actual, funcStr[2:])
-	default:
-		return nil
 	}
 }
 
@@ -668,23 +687,40 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case CompareAttrFn:
+		// Only eq can have multiple args. It should have atleast one.
 		if fc.fname == "eq" {
+			err = ensureArgsCount(q.SrcFunc, 0, gt)
+			if err != nil {
+				return nil, err
+			}
 		} else {
-			err = ensureArgsCount(q.SrcFunc, 1)
+			// Others can have only 1 arg.
+			err = ensureArgsCount(q.SrcFunc, 1, eq)
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		fc.ineqValue, err = convertValue(attr, q.SrcFunc[2])
-		if err != nil {
-			return nil, x.Errorf("Got error: %v while running: %v", err.Error(), q.SrcFunc)
+		args := q.SrcFunc[2:]
+		var tokens []string
+		// eq can have multiple args.
+		for _, arg := range args {
+			fmt.Println("attr", attr, "arg", arg)
+			fc.ineqValue, err = convertValue(attr, arg)
+			if err != nil {
+				return nil, x.Errorf("Got error: %v while running: %v", err, q.SrcFunc)
+			}
+			fmt.Println("ineq", fc.ineqValue)
+			// Get tokens ge / le ineqValueToken.
+			tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f, fc.ineqValue)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Println("tok", tokens, fc.ineqValueToken)
+			fc.tokens = append(fc.tokens, tokens...)
+			fc.eqTokens = append(fc.eqTokens, fc.ineqValue)
 		}
-		// Get tokens ge / le ineqValueToken.
-		fc.tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f, fc.ineqValue)
-		if err != nil {
-			return nil, err
-		}
+		x.AssertTrue(fc.fname == "eq" && len(fc.tokens) == len(fc.eqTokens))
 		fc.n = len(fc.tokens)
 		fc.lang = q.SrcFunc[1]
 	case CompareScalarFn:
@@ -706,7 +742,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		fc.n = len(fc.tokens)
 	case PasswordFn:
-		err = ensureArgsCount(q.SrcFunc, 2)
+		err = ensureArgsCount(q.SrcFunc, 2, eq)
 		if err != nil {
 			return nil, err
 		}
@@ -714,7 +750,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 	case StandardFn, FullTextSearchFn:
 		// srcfunc 0th val is func name and and [2:] are args.
 		// we tokenize the arguments of the query.
-		err = ensureArgsCount(q.SrcFunc, 1)
+		err = ensureArgsCount(q.SrcFunc, 1, eq)
 		if err != nil {
 			return nil, err
 		}
@@ -731,7 +767,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case RegexFn:
-		err = ensureArgsCount(q.SrcFunc, 2)
+		err = ensureArgsCount(q.SrcFunc, 2, eq)
 		if err != nil {
 			return nil, err
 		}
