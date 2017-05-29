@@ -7023,3 +7023,19 @@ func TestHasFuncAtChild2(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"friend":[{"alias":"Zambo Alice","name":"Rick Grimes"},{"alias":"John Alice","name":"Glenn Rhee"},{"alias":"Bob Joe","name":"Daryl Dixon"},{"alias":"Allan Matt","name":"Andrea"},{"alias":"John Oliver"}],"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Daryl Dixon"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Andrea"}]}`, string(js))
 }
+
+func TestHasFuncAtRoot2(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: has(name@en)) {
+			name
+		}
+	}
+	`
+
+	js := processToFastJSON(t, query)
+	fmt.Println(string(js))
+}

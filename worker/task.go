@@ -550,7 +550,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				decr()
 				continue
 			}
-			// conver data from binary to appropriate format
+			// convert data from binary to appropriate format
 			strVal, err := types.Convert(val, types.StringID)
 			if err == nil {
 				values = append(values, strVal)

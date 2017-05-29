@@ -82,6 +82,8 @@ func tokenizeValue(value types.Val, filter stringFilter) []string {
 		tokName = "term"
 	case FullTextSearchFn:
 		tokName = tok.FtsTokenizerName(filter.lang)
+	case HasFn:
+		tokName = "exact"
 	}
 
 	tokenizer, found := tok.GetTokenizer(tokName)
