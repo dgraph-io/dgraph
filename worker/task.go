@@ -956,8 +956,8 @@ type iterateParams struct {
 	fetchVal bool // Whether value needs to be fetched along with key.
 }
 
-// TODO - We might not even need to do this with badger. Benchmark this against the serial iteration
-// once we integrate badger.
+// TODO - We might not even need to do this with badger. Benchmark this against
+// the serial iteration once we integrate badger.
 func iterateParallel(ctx context.Context, params iterateParams, f func(itkv, *sync.Mutex)) {
 	q := params.q
 	fetchVal := params.fetchVal
