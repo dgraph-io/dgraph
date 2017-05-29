@@ -392,7 +392,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		out.UidMatrix = append(out.UidMatrix, uidList)
 	}
 
-	if srcFn.fnType == HasFn && srcFn.isCompareAtRoot {
+	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
 		f := func(kv itkv, mu *sync.Mutex) {
 			addUidToMatrix(kv.key, mu, &out)
 		}
@@ -404,7 +404,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 	}
 
-	if srcFn.fnType == CompareScalarFn && srcFn.isCompareAtRoot {
+	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
 		f := func(kv itkv, mu *sync.Mutex) {
 			pl, decr := posting.GetOrUnmarshal(kv.key, kv.val, gid)
 			count := int64(pl.Length(0))
@@ -590,18 +590,18 @@ func matchRegex(uids *protos.List, values []types.Val, regex *cregexp.Regexp) *p
 }
 
 type functionContext struct {
-	tokens          []string
-	geoQuery        *types.GeoQueryData
-	intersectDest   bool
-	ineqValue       types.Val
-	ineqValueToken  string
-	n               int
-	threshold       int64
-	fname           string
-	lang            string
-	fnType          FuncType
-	regex           *cregexp.Regexp
-	isCompareAtRoot bool
+	tokens         []string
+	geoQuery       *types.GeoQueryData
+	intersectDest  bool
+	ineqValue      types.Val
+	ineqValueToken string
+	n              int
+	threshold      int64
+	fname          string
+	lang           string
+	fnType         FuncType
+	regex          *cregexp.Regexp
+	isFuncAtRoot   bool
 }
 
 func ensureArgsCount(funcStr []string, expected int) error {
@@ -619,7 +619,7 @@ func checkRoot(q *protos.Query, fc *functionContext) {
 	if q.UidList == nil {
 		// Fetch Uids from Store and populate in q.UidList.
 		fc.n = 0
-		fc.isCompareAtRoot = true
+		fc.isFuncAtRoot = true
 	} else {
 		fc.n = len(q.UidList.Uids)
 	}
