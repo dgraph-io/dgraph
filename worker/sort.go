@@ -124,7 +124,7 @@ func sortWithoutIndex(ctx context.Context, ts *protos.SortMessage) (*protos.Sort
 	for i := 0; i < n; i++ {
 		select {
 		case <-ctx.Done():
-			return nil, nil
+			return nil, ctx.Err()
 		default:
 			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
 			tempList := &protos.List{ts.UidMatrix[i].Uids}
