@@ -444,7 +444,7 @@ func (l *List) delete(ctx context.Context, t *protos.DirectedEdge) error {
 	if dirtyChan != nil {
 		dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
 	}
-	return nil
+	return l.pstore.Delete(l.key)
 }
 
 // Iterate will allow you to iterate over this Posting List, while having acquired a read lock.
@@ -556,10 +556,6 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
 		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
 		l.pending = make([]uint64, 0, 3)
-		// Delete key from RocksDB.
-		if err := l.pstore.Delete(l.key); err != nil {
-			return false, err
-		}
 		return false, nil
 	}
 
