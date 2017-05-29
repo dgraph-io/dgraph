@@ -7095,3 +7095,158 @@ func TestCountAtRoot5(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }
+
+func getSubGraphs(t *testing.T, query string) (subGraphs []*SubGraph) {
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	for _, block := range res.Query {
+		subGraph, err := ToSubGraph(ctx, block)
+		require.NoError(t, err)
+		require.NotNil(t, subGraph)
+
+		subGraphs = append(subGraphs, subGraph)
+	}
+
+	return subGraphs
+}
+
+// simplest case
+func TestGetAllPredicatesSimple(t *testing.T) {
+	query := `
+	{
+		me(id: 0x1) {
+			name
+		}
+	}
+	`
+
+	subGraphs := getSubGraphs(t, query)
+
+	predicates := GetAllPredicates(subGraphs)
+	require.NotNil(t, predicates)
+	require.Equal(t, 1, len(predicates))
+	require.Equal(t, "name", predicates[0])
+}
+
+// recursive SubGraph traversal; predicates should be unique
+func TestGetAllPredicatesUnique(t *testing.T) {
+	query := `
+	{
+		me(id: 0x1) {
+			name
+			friend {
+				name
+				age
+			}
+		}
+	}
+	`
+
+	subGraphs := getSubGraphs(t, query)
+
+	predicates := GetAllPredicates(subGraphs)
+	require.NotNil(t, predicates)
+	require.Equal(t, 3, len(predicates))
+	require.Contains(t, predicates, "name")
+	require.Contains(t, predicates, "friend")
+	require.Contains(t, predicates, "age")
+}
+
+// gather predicates from functions and filters
+func TestGetAllPredicatesFunctions(t *testing.T) {
+	query := `
+	{
+		me(func:anyofterms(name, "Alice")) @filter(le(age, 30)) {
+			alias
+			friend @filter(eq(school, 5000)) {
+				alias
+				follow
+			}
+		}
+	}
+	`
+
+	subGraphs := getSubGraphs(t, query)
+
+	predicates := GetAllPredicates(subGraphs)
+	require.NotNil(t, predicates)
+	require.Equal(t, 6, len(predicates))
+	require.Contains(t, predicates, "name")
+	require.Contains(t, predicates, "age")
+	require.Contains(t, predicates, "alias")
+	require.Contains(t, predicates, "friend")
+	require.Contains(t, predicates, "school")
+	require.Contains(t, predicates, "follow")
+}
+
+// gather predicates from order
+func TestGetAllPredicatesOrdering(t *testing.T) {
+	query := `
+	{
+		me(func:anyofterms(name, "Alice"), orderasc: age) {
+			name
+			friend(orderdesc: alias) {
+				name
+			}
+		}
+	}
+	`
+
+	subGraphs := getSubGraphs(t, query)
+
+	predicates := GetAllPredicates(subGraphs)
+	require.NotNil(t, predicates)
+	require.Equal(t, 4, len(predicates))
+	require.Contains(t, predicates, "name")
+	require.Contains(t, predicates, "age")
+	require.Contains(t, predicates, "friend")
+	require.Contains(t, predicates, "alias")
+}
+
+// gather predicates from multiple query blocks (and var)
+func TestGetAllPredicatesVars(t *testing.T) {
+	query := `
+	{
+		IDS as var(func:anyofterms(name, "Alice"), orderasc: age) {}
+
+		me(id: var(IDS)) {
+			alias
+		}
+	}
+	`
+
+	subGraphs := getSubGraphs(t, query)
+
+	predicates := GetAllPredicates(subGraphs)
+	require.NotNil(t, predicates)
+	require.Equal(t, 3, len(predicates))
+	require.Contains(t, predicates, "name")
+	require.Contains(t, predicates, "age")
+	require.Contains(t, predicates, "alias")
+}
+
+// gather predicates from groupby
+func TestGetAllPredicatesGroupby(t *testing.T) {
+	query := `
+	{
+		me(id: 1) {
+			friend @groupby(age) {
+				count(_uid_)
+			}
+			name
+		}
+	}
+	`
+
+	subGraphs := getSubGraphs(t, query)
+
+	predicates := GetAllPredicates(subGraphs)
+	require.NotNil(t, predicates)
+	require.Equal(t, 4, len(predicates))
+	require.Contains(t, predicates, "_uid_")
+	require.Contains(t, predicates, "name")
+	require.Contains(t, predicates, "age")
+	require.Contains(t, predicates, "friend")
+}
