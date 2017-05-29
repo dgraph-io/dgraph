@@ -556,6 +556,10 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
 		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
 		l.pending = make([]uint64, 0, 3)
+		// Delete key from RocksDB.
+		if err := l.pstore.Delete(l.key); err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 
