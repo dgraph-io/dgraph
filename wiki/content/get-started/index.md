@@ -327,6 +327,58 @@ So far, we've been retrieving film titles using the name of the director. Now, w
 
 This should give you an idea of some of the queries Dgraph is capable of. A wider range of queries can been found in the [Query Language]({{< relref "query-language/index.md" >}}) section.
 
+
+
+
+
+
+**make sure there is some mention of how to run with curl and go and pointers on where they should go after this do including the tour**
+
+**from query doc**
+
+{{% notice "note" %}}Most of the examples here are based on the 21million.rdf.gz file [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz). The geo-location queries are based on sf.tourism.gz file [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz).{{% /notice %}}
+
+To try out these queries, you can download these files, run Dgraph and load the data like so.
+```
+dgraph
+```
+
+```
+# Adding a schema
+curl localhost:8080/query -XPOST -d $'
+mutation {
+  schema {
+    director.film: uid @reverse .
+    genre: uid @reverse .
+    initial_release_date: date @index .
+    rating: uid @reverse .
+    country: uid @reverse .
+    loc: geo @index .
+    name: string @index .
+  }
+}' | python -m json.tool | less
+```
+
+To get the data and schema files, run
+```
+wget "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true" -O 21million.rdf.gz -q
+wget "https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz?raw=true" -O sf.tourism.gz -q
+wget "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema?raw=true" -O 21million.schema -q
+```
+
+# Loading up the data from within the directory that contains your data files.
+```
+dgraphloader -r 21million.rdf.gz,sf.tourism.gz -s 21million.schema
+```
+**from query doc**
+
+
+
+
+
+
+
+
 ## Need Help
 * Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
 * Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues) if you encounter bugs or have feature requests.

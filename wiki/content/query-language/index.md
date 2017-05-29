@@ -1,15 +1,729 @@
 +++
-title = "Query Language"
+title = "Query Language - GraphQL+-"
 +++
 
-## GraphQL+-
-Dgraph uses a variation of [GraphQL](https://facebook.github.io/graphql/) as the primary language of communication.
-GraphQL is a query language created by Facebook for describing the capabilities and requirements of data models for client‐server applications.
-While GraphQL isn't aimed at Graph databases, it's graph-like query syntax, schema validation and subgraph shaped response make it a great language choice.
-Having said that, we have modified GraphQL to support graph operations and removed some of the features that we felt weren't a right fit to be a language for a graph database.
-We're calling this simplified, feature rich language, ''GraphQL+-''.
+Dgraph's GraphQL+- is based on Facebook's [GraphQL](https://facebook.github.io/graphql/).  GraphQL wasn't developed for Graph databases, but it's graph-like query syntax, schema validation and subgraph shaped response make it a great language choice.  We've modified the language to better support graph operations, adding and removing features to get the best fit for graph databases.  We're calling this simplified, feature rich language, ''GraphQL+-''.
 
-{{% notice "note" %}}This language is a work in progress. We're adding more features and we might further simplify some of the existing ones.{{% /notice %}}
+{{% notice "note" %}}GraphQL+- is a work in progress. We're adding more features and we might further simplify existing ones.{{% /notice %}}
+
+## Take a Tour - https://tour.dgraph.io
+
+This document is the Dgraph query reference material.  It is not a tutorial.  It's designed as a reference for users who already know how to write queries in GraohQL+- but need to check syntax, or indices, or functions, etc.
+
+If you are new to Dgraph and want to learn how to use Dgraph and GraphQL+-, take the tour - https://tour.dgraph.io
+
+### Running examples
+
+The examples in this reference use a database of 21 million triples about movies and actors.  The example queries run and return results.  The queries are executed by an instance of Dgraph running at https://play.dgraph.io/.  To run the queries locally or experiment a bit more, see the Getting Started guide on how to start Dgraph and how to load the 21million and tourism (for location queries) datasets.
+
+## Base Query Syntax
+
+**TODO ... grammar in here??? with basic query evaluation description**
+
+
+### Language Support
+
+Dgraph supports UTF-8 strings.  
+
+For a string valued edge `edge`, the syntax
+```
+edge@lang1:...:langN
+```
+specifies the preference order for returned languages with the following rules:
+
+* at most one result will be returned
+* if results exists in the preferred languages, the left most (in the preference list) of these is returned
+* if no result exists in the preferred languages
+  - a result without a language tag is returned, if it exists, or
+  - some language tagged result is returned if one exists, and no untagged result exists, or
+  - the edge has no matching result otherwise.
+
+In functions, a preference list is not allowed.  A string edge without a language tag means apply function to all languages, while a single language tag means apply to only the given language.
+
+
+For example, some of Bollywood actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
+
+{{< runnable >}}{
+  q(func: allofterms(name, "Farhan Akhtar")) {
+    name@hi
+    name@en
+
+    director.film {
+      name@ru:hi:en
+      name@en
+      name@hi
+      name@ru
+    }
+  }
+}{{< /runnable >}}
+
+
+## Functions
+
+{{% notice "note" %}}Functions can only be applied to [indexed predicates]({{< relref "#indexing">}}).{{% /notice %}}
+
+Functions allow filtering based on properties of nodes or variables.
+
+grammar **TODO placeholder**
+...but then some functions allow variables and some don't, better to stop grammar at this point and just do per function
+```
+fnName(var | edge, value)
+value -> "string literal" | /regular expression/ | numeric
+regular expression -> go regular expressions https://golang.org/pkg/regexp/syntax/ ???
+```
+
+...more here about how they work in general .. and distinction between at root and in filter
+
+note about functions and Language
+
+
+### Term matching
+
+#### AllOfTerms
+
+Syntax : `allofterms(predicate, "space-separated term list")`
+
+Value types : `string`
+
+Index required : `term`
+
+
+Matches strings that have all specified terms in any order; case insensitive.
+
+##### Usage at root
+
+Query Example : All nodes that have `name` containing terms `indiana` and `jones`, returning the english name and genre in english.
+
+{{< runnable >}}
+{
+  me(func: allofterms(name, "jones indiana")) {
+    name@en
+    genre {
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+##### Usage as Filter
+
+Query Example : Steven Spielberg is XID `m.06pj8`.  All his films that contain the words `indiana` and `jones`.
+
+{{< runnable >}}
+{
+  me(id: m.06pj8) {
+    name@en
+    director.film @filter(allofterms(name@en, "jones indiana"))  {
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+#### AnyOfTerms
+
+
+Syntax : `anyofterms(predicate, "space-separated term list")`
+
+Value types : `string`
+
+Index required : `term`
+
+
+Matches strings that have any of the specified terms in any order; case insensitive.
+
+##### Usage at root
+
+Query Example : All nodes that have a `name` containing either `purple` or `peacock`.  Many of the returned nodes are movies, but people like Joan Peacock also meet the search terms because without a [cascade directive]({{< relref "#cascade-directive">}}) the query doesn't require a genre.
+
+{{< runnable >}}
+{
+  me(func:anyofterms(name@en, "poison peacock")) {
+    name@en
+    genre {
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+##### Usage as filter
+
+Query Example : Steven Spielberg is XID `m.06pj8`.  All his movies that contain `war` or `spies`
+
+{{< runnable >}}
+{
+  me(id: m.06pj8) {
+    name@en
+    director.film @filter(anyofterms(name, "war spies"))  {
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+### Regular Expressions
+
+
+Syntax : `regexp(predicate, /regular-expression/)` or case insensitive `regexp(predicate, /regular-expression/i)`
+
+Value types : `string`
+
+Index required : `trigram`
+
+
+Matches strings by regular expression.  The regular expression language is that of [go regular expressions](https://golang.org/pkg/regexp/syntax/).
+
+Query Example : At root, match nodes with `Steven Sp` at the start of `name`, followed by any characters.  For each such matched uid, match the films containing `ryan`.  Note the difference with `allofterms`, which would match only `ryan` but regular expression search will also match within terms, such as `bryan`.
+
+{{< runnable >}}
+{
+  directors(func: regexp(name@en, /^Steven Sp.*$/)) {
+    name@en
+    director.film @filter(regexp(name@en, /ryan/i)) {
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+#### Technical details
+
+A Trigram is a substring of three continuous runes. For example, `Dgraph` has trigrams `Dgr`, `gra`, `rap`, `aph`.
+
+To ensure efficiency of regular expression matching, Dgraph uses [trigram indexing](https://swtch.com/~rsc/regexp/regexp4.html).  That is, Dgraph converts the regular expression to a trigram query, uses the trigram index and trigram query to find possible matches and applies the full regular expression search only to the possibles.
+
+#### Writing Efficient Regular Expressions and Limitations
+
+Keep the following in mind when designing regular expression queries.
+
+- At least one trigram must be matched by the regular expression (patterns shorter than 3 runes are not supported).  That is, Dgraph requires regular expressions that can be converted to a trigram query.
+- The number of alternative trigrams matched by the regular expression should be as small as possible  (`[a-zA-Z][a-zA-Z][0-9]` is not a good idea).  Many possible matches means the full regular expression is checked against many strings; where as, if the expression enforces more trigrams to match, Dgraph can make better use of the index and check the full regular expression against a smaller set of possible matches.
+- Thus, the regular expression should be as precise as possible.  Matching longer strings means more required trigrams, which helps to effectively use the index.
+- If repeat specifications (`*`, `+`, `?`, `{n,m}`) are used, the entire regular expression must not match the _empty_ string or _any_ string: for example, `*` may be used like `[Aa]bcd*` but not like `(abcd)*` or `(abcd)|((defg)*)`
+- Repeat specifications after bracket expressions (e.g. `[fgh]{7}`, `[0-9]+` or `[a-z]{3,5}`) are often considered as matching any string because they match too many trigrams.
+- If the partial result (for subset of trigrams) exceeds 1000000 uids during index scan, the query is stopped to prohibit expensive queries.
+
+
+### Full Text Search
+
+Syntax : `alloftext(predicate, "space-separated text")` and `anyoftext(predicate, "space-separated text")`
+
+Value types : `string`
+
+Index required : `fulltext`
+
+
+Apply full text search with stemming and stop words to find strings matching all or any of the given text.  
+
+The following steps are applied during index generation and to process full text search arguments:
+
+1. Tokenization (according to Unicode word boundaries).
+1. Conversion to lowercase.
+1. Unicode-normalization (to [Normalization Form KC](http://unicode.org/reports/tr15/#Norm_Forms)).
+1. Stemming using language-specific stemmer.
+1. Stop words removal (language-specific).
+
+Following table contains all supported languages and corresponding country-codes.
+
+| Language    | Country Code |
+|:-----------:|:------------:|
+| Danish      | da           |
+| Dutch       | nl           |
+| English     | en           |
+| Finnish     | fi           |
+| French      | fr           |
+| German      | de           |
+| Hungarian   | hu           |
+| Italian     | it           |
+| Norwegian   | no           |
+| Portuguese  | pt           |
+| Romanian    | ro           |
+| Russian     | ru           |
+| Spanish     | es           |
+| Swedish     | sv           |
+| Turkish     | tr           |
+
+
+Query Example : All names that have `run`, `running`, etc and `man`.  Stop word removal eliminates `the` and `maybe`
+
+{{< runnable >}}
+{
+  movie(func:alloftext(name@en, "the man maybe runs")) {
+	 name@en
+  }
+}
+{{< /runnable >}}
+
+
+### Inequality
+
+#### equal to
+
+Syntax :
+
+* `eq(predicate, value)`
+* `eq(var(varName), value)`
+* `eq(count(predicate), value)`
+
+Value types : `int`, `float`, `string`, `dateTime`
+
+Index required : An index is required for `eq(predicate, value)` form, but otherwise the values have been calculated as part of the query, so no index is required.
+
+| Type       | Index Options |
+|:-----------|:--------------|
+| `int`      | `int`         |
+| `float`    | `float`       |
+| `string`   | `exact`, `hash`, `term`, `fulltext` |
+| `dateTime` | `dateTime`    |
+
+Note that `eq(count(predicate), value)` iterates through the every `s predicate o` tripple to first generate the count and then applies the filter to the generated counts.  If there are many such triples, this many not be efficient.
+
+Query Example : Movies with exactly two genres.
+
+{{< runnable >}}
+{
+  me(func: eq(count(genre), 2)) {
+    name@en
+  }
+}
+{{< /runnable >}}
+
+
+#### Less than, less than or equal to, greater than and greater than or equal to
+
+Syntax : for inequality `IE`
+
+* `IE(predicate, value)`
+* `IE(var(varName), value)`
+* `IE(count(predicate), value)`
+
+With `IE` replaced by
+
+* `le` less than or equal to
+* `lt` less than
+* `ge` greater than or equal to
+* `gt` greather than
+
+Value types : `int`, `float`, `string`, `dateTime`
+
+Index required : An index is required for the `IE(predicate, value)` form, but otherwise the values have been calculated as part of the query, so no index is required.
+
+| Type       | Index Options |
+|:-----------|:--------------|
+| `int`      | `int`         |
+| `float`    | `float`       |
+| `string`   | `exact`       |
+| `dateTime` | `dateTime`    |
+
+
+Query Example : Steven Spielberg is XID `m.06pj8`.  All his movies released before 1970.
+
+{{< runnable >}}
+{
+  me(id: m.06pj8) {
+    name@en
+    director.film @filter(lt(initial_release_date, "1970-01-01"))  {
+      initial_release_date
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+Query Example : Movies with directors with `Steven` in `name` and have directed more than `100` actors.
+
+{{< runnable >}}
+{
+  ID as var(func: allofterms(name@en, "Steven")) {
+    director.film {
+      num_actors as count(starring)
+    }
+    total as sum(var(num_actors))
+  }
+
+  avs(id: var(ID)) @filter(gt(var(total), 100)) {
+    name@en
+    total_actors : var(total)
+  }
+}
+{{< /runnable >}}
+
+
+
+### Geolocation
+
+#### Near
+
+Syntax : `near(predicate, [x, y], distance)`
+
+Value types : `geo`
+
+Index required : `geo`
+
+`Near` returns all entities which lie within a specified distance from a given point. It takes in three arguments namely
+the predicate (on which the index is based), geo-location point and a distance (in metres).
+{{< runnable >}}
+{
+  tourist(func: near(loc, [-122.469829, 37.771935], 1000) ) {
+    name
+  }
+}
+{{< /runnable >}}
+
+This query returns all the entities located within 1000 metres from the [specified point](http://bl.ocks.org/d/2ba9f626cb7be1bcc012be1dc7db40ff) in geojson format.
+
+#### Within
+
+`Within` returns all entities which completely lie within the specified region. It takes in two arguments namely the predicate (on which the index is based) and geo-location region.
+
+{{< runnable >}}
+{
+  tourist(func: within(loc, [[-122.47266769409178, 37.769018558337926 ], [ -122.47266769409178, 37.773699921075135 ], [ -122.4651575088501, 37.773699921075135 ], [ -122.4651575088501, 37.769018558337926 ], [ -122.47266769409178, 37.769018558337926]] )) {
+    name
+  }
+}
+{{< /runnable >}}
+This query returns all the entities (points/polygons) located completely within the [specified polygon](http://bl.ocks.org/d/b81a6589fa9639c9424faad778004dae) in geojson format.
+{{% notice "note" %}}The containment check for polygons are approximate as of v0.7.1.{{% /notice %}}
+
+#### Contains
+
+`Contains` returns all entities which completely enclose the specified point or region. It takes in two arguments namely the predicate (on which the index is based) and geo-location region.
+
+{{< runnable >}}
+{
+  tourist(func: contains(loc, [ -122.50326097011566, 37.73353615592843 ] )) {
+    name
+  }
+}
+{{< /runnable >}}
+This query returns all the entities that completely enclose the [http://bl.ocks.org/d/7218dd34391fac518e3516ea6fc1b6b1 specified point] (or polygon) in geojson format.
+
+#### Intersects
+
+`Intersects` returns all entities which intersect with the given polygon. It takes in two arguments namely the predicate (on which the index is based) and geo-location region.
+
+{{< runnable >}}
+{
+  tourist(func: intersects(loc, [[-122.503325343132, 37.73345766902749 ], [ -122.503325343132, 37.733903134117966 ], [ -122.50271648168564, 37.733903134117966 ], [ -122.50271648168564, 37.73345766902749 ], [ -122.503325343132, 37.73345766902749]] )) {
+    name
+  }
+}
+{{< /runnable >}}
+
+This query returns all the entities that intersect with the [http://bl.ocks.org/d/2ed3361a25442414e15d7eab88574b67 specified polygon/point] in geojson format.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Schema
+
+For each predicate, the schema specifies the target's type.  If a predicate `p` has type `T`, then for all triples `s p o` the object `o` is of schema type `T`.
+
+* On mutations, scalar types are checked and an error thrown if the value cannot be converted to the schema type.
+
+* On query, value results are returned according to the schema type of the predicate. **Does this mean in the protobuf? cause the JSOn is untyped ... or that the JSON type is parsable into a var of the schema type**??
+
+If a schema type isn't specified before a mutation adds triples for a predicate, then the type is inferred from the first mutation.  This type is either:
+
+* type `uid`, if the first mutation for the predicate has nodes for the subject and object, or
+
+* derived from the [rdf type]({{< relref "#rdf-types" >}}), if the subject is a literal and an rdf type is present in the first mutation, or
+
+* `default` type, otherwise.
+
+
+### Schema Types
+
+Dgraph supports scalar types and the UID type.
+
+#### Scalar Types
+
+For all scalar types the object is a literal.
+
+| Dgraph Type | Go type |
+| ------------|:--------|
+|  `default`  | string  |
+|  `int`      | int64   |
+|  `float`    | float   |
+|  `string`   | string  |
+|  `bool`     | bool    |
+|  `id`       | string  |
+|  `dateTime` | time.Time (RFC3339 format [Optional timezone] eg: 2006-01-02T15:04:05.999999999+10:00 or 2006-01-02T15:04:05.999999999)    |
+|  `geo`      | [go-geom](https://github.com/twpayne/go-geom)    |
+
+#### UID Type
+
+The `uid` type denotes a node-node edge; internally each node is represented as a `uint64` id.
+
+| Dgraph Type | Go type |
+| ------------|:--------|
+|  `uid`      | uint64  |
+
+
+### RDF Types
+
+RDF types are attached to literals with the standard `^^` separator.
+
+The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Datatypes) and the corresponding internal type in which the data is stored are as follows.
+
+| Storage Type                                            | Dgraph type    |
+| -------------                                           | :------------: |
+| &#60;xs:string&#62;                                     | `string`         |
+| &#60;xs:dateTime&#62;                                   | `dateTime`       |
+| &#60;xs:date&#62;                                       | `datetime`       |
+| &#60;xs:int&#62;                                        | `int`            |
+| &#60;xs:boolean&#62;                                    | `bool`           |
+| &#60;xs:double&#62;                                     | `float`          |
+| &#60;xs:float&#62;                                      | `float`          |
+| &#60;geo:geojson&#62;                                   | `geo`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;   | `string`         |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | `dateTime`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | `dateTime`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;      | `int`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;  | `bool`           |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;   | `float`          |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;    | `float`          |
+
+As well as implying a schema type for a [first mutation]({{< relref "#schema" >}}), an RDF type can override a schema type for storage.
+
+If a predicate has a schema type and a mutation has an RDF type with a different underlying Dgraph type, the convertibility to schema type is checked, and an error is thrown if they are incompatible, but the value is stored in the RDF type's corresponding Dgraph type.
+
+
+For example, if no schema is set for the `age` predicate.  Given the mutation
+```
+mutation {
+ set {
+  _:a <age> "15"^^<xs:int> .
+  _:b <age> "13" .
+  _:c <age> "14"^^<xs:string> .
+  _:d <age> "14.5"^^<xs:string> .
+  _:e <age> "14.5"
+ }
+}
+```
+Dgraph:
+
+* sets the schema type to `int`, as implied the first triple,  
+* converts `"13"` to `int` on storage,
+* checks `"14"` can be converted to `int`, but stores as `string`,
+* throws an error for the remaining two triples, because `"14.5"` can't be converted to `int`.
+
+### Extended Types
+
+The following types are also accepted.
+
+#### Password type
+
+A password for an entity is set with `^^<pwd:password>`.  Passwords cannot be queried directly, only checked for a match using the `checkpwd` function.
+
+For example: to set a password:
+```
+mutation {
+  set {
+    <ex123> <name> "Password Example"
+    <ex123> <password> "ThePassword"^^<pwd:password>     .
+  }
+}
+```
+
+to check a password:
+```
+{
+  check(id: ex123) {
+    name
+    checkpwd(password, "ThePassword")
+  }
+}
+```
+
+output:
+```
+{
+  "check": [
+    {
+      "name": "Password Example",
+      "password": [
+        {
+          "checkpwd": true
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Indexing
+
+{{% notice "note" %}}Filtering on a predicate by applying a [function]({{< relref "#functions" >}}) requires an index.{{% /notice %}}
+
+When filtering by applying a function, Dgraph uses the index to make the search through a potentially large dataset efficient.
+
+All scalar types can be indexed.  
+
+Types `int`, `float`, `bool` and `geo` have only a default index each: with tokenizers named `int`, `float`, `bool` and `geo`.
+
+Types `string` and `dateTime` have a number of indices.
+
+#### String Indices
+The indices available for strings are as follows.
+
+| Index name / Tokenizer   | Purpose                                                             | Dgraph functions             |
+| :----------- | :------------------------------------------------------------------ | :--------------------------- |
+| `exact`      | matching of entire value                                            | `eq`, `le`, `ge`, `gt`, `lt` |
+| `hash`       | matching of entire value, useful when the values are large in size  | `eq`                         |
+| `term`       | matching of terms/words                                             | `eq`, `allofterms`, `anyofterms`   |
+| `fulltext`   | matching with language specific stemming and stopwords              | `eq`, `alloftext`, `anyoftext`     |
+| `trigram`    | regular expressions matching                                        | `regexp`                     |
+
+
+#### Date Time Indices
+
+**to be added after [issue #971](https://github.com/dgraph-io/dgraph/issues/971)**
+
+#### Sortable Indices
+
+Not all the indices establish a total order among the values that they index. Sortable indices allow inequality functions and sorting.
+
+* Indexes `int` and `float` are sortable.  
+* `string` index `exact` is sortable.
+* All `dateTime` indices are sortable.
+
+For example, given an edge `name` of `string` type, to sort by `name` or perform inequality filtering on names, the `exact` index must have been specified.  In which case a schema query would return at least the following tokenizers.
+
+```
+{
+  "predicate": "name",
+  "type": "string",
+  "index": true,
+  "tokenizer": [
+    "exact"
+  ]
+}
+```
+
+
+### Adding or Modifying Schema
+
+Schema mutations add or modify schema.
+
+An index is specified with `@index`, with arguments to specify the tokenizer.  For example:
+
+```
+mutation {
+  schema {
+    name: string @index(exact, fulltext) .
+    age: int @index .
+    friend: uid .
+    dob: dateTime .
+    location: geo @index .
+  }
+}
+```
+
+If no data has been stored for the predicates, a schema mutation sets up an empty schema ready to receive triples.
+
+If data is already stored before the mutation, existing values are not checked to conform to the new schema.  On query, Dgraph tries to convert existing values to the new schema types, ignoring any that fail conversion.
+
+If data exists and new indices are specified in a schema mutation, any index not in the updated list is dropped and a new index is created for every new tokenizer specified.
+
+Reverse edges are also computed if specified by a schema mutation.
+
+### Reverse Edges
+
+A graph edge is unidirectional. For node-node edges, sometimes modeling requires reverse edges.  If only some subject-predicate-object triples have a reverse, these must be manually added.  But if a predicate always has a reverse, Dgraph computes the reverse edges if `@reverse` is specified in the schema.
+
+The reverse edge of `anEdge` is `~anEdge`.  
+
+For existing data, Dgraph computes all reverse edges.  For data added after the schema mutation, Dgraph computes and stores the reverse edge for each added triple.
+
+### Querying Schema
+
+A schema query can query for the whole schema
+
+```
+schema { }
+```
+
+with particular schema fields
+
+```
+schema {
+  type
+  index
+  reverse
+  tokenizer
+}
+```
+
+and for particular predicates
+
+```
+schema(pred: [name, friend]) {
+  type
+  index
+  reverse
+  tokenizer
+}
+```
+
+
+
+
+
+
+
+## Mutations
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## OLD ---- still to be updated ----
+
+
 
 ## Mutations
 
@@ -195,43 +909,46 @@ mutation {
   }
 }'
 ```
-{{% notice "note" %}} On using *, all the derived edges (indexes, reverses) related to that edge would also be deleted.{{% /notice %}}
+{{% notice "note" %}} On using `*`, all the derived edges (indexes, reverses) related to that edge would also be deleted.{{% /notice %}}
+
+
+
+
+
+
+
+
+
 
 ## Queries
-{{% notice "note" %}}Most of the examples here are based on the 21million.rdf.gz file [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz). The geo-location queries are based on sf.tourism.gz file [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz).{{% /notice %}}
+For example, the query:
 
-To try out these queries, you can download these files, run Dgraph and load the data like so.
-```
-dgraph
-```
+{{< runnable >}}
+{
+  # query block called df with root filter
+  df(func: allofterms(name@en, "David Fincher")) {
 
-```
-# Adding a schema
-curl localhost:8080/query -XPOST -d $'
-mutation {
-  schema {
-    director.film: uid @reverse .
-    genre: uid @reverse .
-    initial_release_date: date @index .
-    rating: uid @reverse .
-    country: uid @reverse .
-    loc: geo @index .
-    name: string @index .
+    # literal about David Fincher
+    name@en
+
+    # block matching nodes found from current node
+    # along director.film edge
+    director.film  {  
+
+      # literals for the film
+      name@en
+      initial_release_date
+
+      # matching deeper
+      genre {
+        name@en
+      }
+    }
   }
-}' | python -m json.tool | less
-```
+}
+{{< /runnable >}}
 
-To get the data and schema files, run
-```
-wget "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true" -O 21million.rdf.gz -q
-wget "https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz?raw=true" -O sf.tourism.gz -q
-wget "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.schema?raw=true" -O 21million.schema -q
-```
-
-# Loading up the data from within the directory that contains your data files.
-```
-dgraphloader -r 21million.rdf.gz,sf.tourism.gz -s 21million.schema
-```
+matches all nodes
 
 Queries in GraphQL+- look very much like queries in GraphQL. You typically start with a node or a list of nodes, and expand edges from there.
 Each `{}` block goes one layer deep.
@@ -277,245 +994,8 @@ To specify the language of the value to be returned from query `@lang1:lang2:lan
 
 {{% notice "note" %}}Languages preference list cannot be used in functions.{{% /notice %}}
 
-## Schema
-
-{{% notice "note" %}}Schema file is not supported from v0.7.4 onwards. You can use the `/query` endpoint to [add/modify]({{< relref "#adding-or-modifying-schema" >}}) or retrieve the schema.{{% /notice %}}
-
-Schema is used to specify the types of the predicates. This schema would be used for type checking and type coercion.
-
-### Schema Types
-
-The following types are supported by Dgraph.
-
-| Dgraph Type | Go type |
-| ------------|:--------|
-|  `int`      | int64   |
-|  `float`    | float   |
-|  `string`   | string  |
-|  `bool`     | bool    |
-|  `id`       | string  |
-|  `date`     | time.Time (RFC3339 format [Optional timezone] eg: 2006-01-02T15:04:05.999999999+10:00 or 2006-01-02T15:04:05.999999999)    |
-|  `geo`      | [go-geom](https://github.com/twpayne/go-geom)    |
-|  `uid`      | uint64  |
-
-{{% notice "note" %}}uid type is used to denote objects though it internally uses uint64.{{% /notice %}}
 
 
-```
-# Sample schema
-name: string .
-age: int .
-```
-
-* Mutations only check the scalar types. For example, in the given schema, any mutation that sets age would be checked for being a valid integer, any mutation that sets name would be checked for being a valid string.
-* The returned fields are of types specified in the schema (given they were specified, or else derived from first mutation).
-* **If schema was not specified, the schema would be derived based on the first mutation for that predicate.**  The [rdf types]({{< relref "#rdf-types" >}}) present in the first mutation would be considered as the schema for the field. If no storage type is specified in rdf, then it would be treated as default type(Dgraph Type) and it is stored internally as string(Go Type).
-
-### Indexing
-
-`@index` keyword at the end of a scalar field declaration in the schema specifies that the predicate should be indexed. For example, if we want to index some fields, we should have a schema similar to the one below.
-```
-name           : string @index   .
-age            : int @index      .
-address        : string @index   .
-dateofbirth    : date @index     .
-health         : float @index    .
-location       : geo @index      .
-timeafterbirth : datetime @index .
-```
-
-All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`.
-
-```
-name	       : string @index(exact, term) .
-large_name     : string @index(hash) 	    .
-age            : int @index(int)            .
-address        : string @index(term)        .
-dateofbirth    : date @index(date)          .
-health         : float @index(float)        .
-location       : geo @index(geo)            .
-timeafterbirth : datetime @index(datetime)  .
-```
-
-The available tokenizers are currently `term, fulltext, exact, trigram, hash, int, float, geo, date, datetime`. String has `term` as the default tokenizer. All of the other data types have a default tokenizer with the same name as the type. You can specify multiple tokenizers per predicate as shown for `name` in the above example. Currently, only predicates of type string support more than one tokenizer.
-
-{{% notice "note" %}}To be able to do filtering on a predicate, you must index it.{{% /notice %}}
-
-#### String Indices
-Following table summarizes usage of different index types available for strings.
-
-| Index type   | Usage                                                                              |
-| :----------: | :--------------------------------------------------------------------------------: |
-| `exact`      | matching of entire value                                                           |
-| `hash`       | matching of entire value, useful when the values are large in size                 |
-| `term`       | matching of terms/words                                                            |
-| `fulltext`   | matching with language specific stemming and stopwords                             |
-| `trigram`    | regular expressions matching                                                       |
-
-#### Sortable Indices
-
-Not all the indices establish a total order among the values that they index. So, in order to order based on the values or do inequality operations, the corresponding predicates must have a sortable index. The only sortable index for strings is `exact`. All other indices can be only be used for checking equality(`eq`). For example to sort by names or do any inequality operations on it, this line **must** be specified in schema.
-```
-name: string @index(exact) .
-```
-
-For string, only `exact` is a sortable index. `int`, `float`, `date` and `datetime` are also sortable indices.
-
-### Reverse Edges
-Each graph edge is unidirectional. It points from one node to another. A lot of times,  you wish to access data in both directions, forward and backward. Instead of having to send edges in both directions, you can use the `@reverse` keyword at the end of a uid (entity) field declaration in the schema. This specifies that the reverse edge should be automatically generated. For example, if we want to add a reverse edge for `directed_by` predicate, we should have a schema as follows.
-
-```
-directed_by: uid @reverse .
-```
-
-This would add a reverse edge for each `directed_by` edge and that edge can be accessed by prefixing `~` with the original predicate, i.e. `~directed_by`.
-
-In the following example, we find films that are directed by Steven Spielberg, by using the reverse edges of `directed_by`. Here is the sample query:
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    name@en
-    ~directed_by(first: 5) {
-      name@en
-    }
-  }
-}
-{{< /runnable >}}
-
-### Adding or Modifying Schema
-
-We can add or modify the schema by specfiying the schema inside mutation block. We don't verify whether the already stored values are compatible with schema or not. We will try to convert the already stored values to schema type and return on query, or else we would ignore them on conversion failure.
-
-```
-curl localhost:8080/query -XPOST -d $'
-mutation {
-  schema {
-    genre: uid @reverse .
-  }
-}' | python -m json.tool | less
-
-```
-
-Based on the given schema mutation, the query blocks until the index/reverse edges are rebuilt.
-
-### Fetching Schema
-
-Schema can be fetched using schema block inside query. Required fields can be specified inside schema block (type, index, reverse or tokenizer).
-
-{{< runnable >}}schema {
-  type
-  index
-  reverse
-  tokenizer
-}
-{{< /runnable >}}
-
-We can also specify the list of predicates for which we need the schema.
-
-{{< runnable >}}schema(pred: [name, friend]) {
-  type
-  index
-  reverse
-  tokenizer
-}
-{{< /runnable >}}
-
-## RDF Types
-RDF types can also be used to specify the type of values. They can be attached to the values using the `^^` separator.
-
-```
-curl localhost:8080/query -XPOST -d $'
-mutation {
- set {
-  _:a <name> "Alice" .
-  _:a <age> "15"^^<xs:int> .
-  _:a <health> "99.99"^^<xs:float> .
- }
-}' | python -m json.tool | less
-```
-This implies that name be stored as string(default), age as int and health as float.
-
-{{% notice "note" %}}RDF type overwrites [schema type]({{< relref "#scalar-types" >}}) in case both are present. If both the RDF type and the schema type is missing, value is assumed to be of default type which is stored as string internally.{{% /notice %}}
-
-### Supported
-
-The following table lists all the supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Datatypes) and the corresponding internal type format in which the data is stored.
-
-| Storage Type                                            | Dgraph type    |
-| -------------                                           | :------------: |
-| &#60;xs:string&#62;                                     | String         |
-| &#60;xs:dateTime&#62;                                   | DateTime       |
-| &#60;xs:date&#62;                                       | Date           |
-| &#60;xs:int&#62;                                        | Int            |
-| &#60;xs:boolean&#62;                                    | Bool           |
-| &#60;xs:double&#62;                                     | Float          |
-| &#60;xs:float&#62;                                      | Float          |
-| &#60;geo:geojson&#62;                                   | Geo            |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;   | String         |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | DateTime       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | Date           |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;      | Int            |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;  | Bool           |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;   | Float          |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;    | Float          |
-
-
-In case a predicate has different schema type and storage type, the convertibility between the two is ensured during mutation and an error is thrown if they are incompatible.  The values are always stored as storage type if specified, or else they are converted to schema type and stored. Storage type is property of the value we are storing and schema type is property of the edge.
-
-Example: If schema type is int and we do the following mutations.
-
-```
-<a> age "13" .
-<b> age "13"^^<xs:string> .
-<c> age "14.5"^^<xs:string> .
-<d> age "14.5"
-```
-
-For each nquad we will try to convert the value to integer. Since no storage type is specified for a, it would be converted to int and stored. For b we will store the age as string after checking that it can be parsed to integer. Age for c and d won't be stored because the values are not compatible with type schema type(integer).
-
-### Extended
-
-We also support extended types besides RDF types.
-
-#### Password type
-
-Password for an entity can be set using the password type, and those attributes can not be queried directly but only be checked for a match using a function which is used to do the password verification.
-
-To set password for a given node you need to add `^^<pwd:password>`, as below
-```
-curl localhost:8080/query -XPOST -d $'
-mutation {
-  set {
-    <m.06pj8> <password> "JailBreakers"^^<pwd:password>     .
-  }
-}' | python -m json.tool | less
-```
-
-And later to check if some value is a correct password, you'd use a `checkpwd` function which would return a boolean value, true meaning the value was right and flase otherwise.
-```
-curl localhost:8080/query -XPOST -d $'{
-  director(id:m.06pj8) {
-    name@en
-    checkpwd(password, "JailBreakers")
-  }
-}' | python -m json.tool | less
-```
-
-Output:
-```
-{
-  "director": [
-    {
-      "name@en": "Steven Spielberg",
-      "password": [
-        {
-          "checkpwd": true
-        }
-      ]
-    }
-  ]
-}
-```
 
 ## Pagination
 Often there is too much data and you only want a slice of the data.
@@ -605,6 +1085,8 @@ Now we know the UID of the second result is `0xc6f4b3d7f8cbbad`. We can get the 
 
 The response is the same as before when we use `offset:2` and `first:1`.
 
+
+
 ## Alias
 
 Alias lets us provide alternate names to predicates in results for convenience.
@@ -643,262 +1125,7 @@ It can also be used to get count at root. The following query would get the coun
 {{< /runnable >}}
 
 
-## Functions
 
-{{% notice "note" %}}Functions can only be applied to [indexed attributes]({{< relref "#indexing">}}).{{% /notice %}}
-
-### Term matching
-
-#### AllOfTerms
-
-`allofterms` function will search for entities which have all of one or more terms specified. In essence, this is an intersection of entities containing the specified terms; the ordering does not matter. It follows this syntax: `allofterms(predicate, "space-separated terms")`
-
-##### Usage as Filter
-
-Suppose we want the films of Steven Spielberg that contain the word `indiana` and `jones`.
-
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    name@en
-    director.film @filter(allofterms(name, "jones indiana"))  {
-      name@en
-    }
-  }
-}
-{{< /runnable >}}
-
-`allofterms` tells Dgraph that the matching films' `name` have to contain both the words "indiana" and "jones". Here is the response.
-
-##### Usage at root
-
-In the following example, we list all the entities (in this case all films) that have both terms "jones" and "indiana". Moreover, for each entity, we query their film genre and names.
-
-{{< runnable >}}
-{
-  me(func:allofterms(name, "jones indiana")) {
-    name@en
-    genre {
-      name@en
-    }
-  }
-}
-{{< /runnable >}}
-
-Here is a part of the response.
-
-#### AnyOfTerms
-
-`anyofterms` function will search for entities which have any of two or more terms specified. In essence, this is a union of entities containing the specified terms. Again, the ordering does not matter. It follows this syntax: `anyofterms(predicate, "space-separated terms")`
-
-##### Usage as filter
-
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    name@en
-    director.film @filter(anyofterms(name, "war spies"))  {
-      _uid_
-      name@en
-    }
-  }
-}
-{{< /runnable >}}
-
-##### Usage at root
-
-We can look up films that contain either the word "passion" or "peacock". Surprisingly many films satisfy this criteria. We will query their name and their genres.
-
-{{< runnable >}}
-{
-  me(func:anyofterms(name, "passion peacock")) {
-    name@en
-    genre {
-      name@en
-    }
-  }
-}
-{{< /runnable >}}
-
-Note that the first result with the name "Unexpected Passion" is either not a film entity, or it is a film entity with no genre.
-
-### Regular Expressions
-`regexp` function allows a regular expression match on the values. It requires `trigram` index to be present for working.
-Regular expressions are delimited by `/`.
-After closing `/`, extra modifiers can be specified.
-Currently only one modifier is available: `i` - ignore case.
-
-Following example shows usage of `regexp` function and regular expression modifier (`/ryan/i` is a case insensitive match).
-
-{{< runnable >}}
-{
-  directors(func: regexp(name@en, /^Steven Sp.*$/)) {
-    name@en
-    director.film @filter(regexp(name@en, /ryan/i)) {
-      name@en
-    }
-  }
-}
-{{< /runnable >}}
-
-
-#### Technical details
-
-{{% notice "note" %}}Trigram is a substring of three continous runes. For example: string `Dgraph` has following trigrams: `Dgr`, `gra`, `rap`, `aph`.{{% /notice %}}
-
-To ensure high efficiency of regular expression matching, [trigram indexing](https://swtch.com/~rsc/regexp/regexp4.html) is used.
-As full scan of all values is definitely too slow, Dgraph handles only the regular expression that can be converted to trigram query.
-Moreover if partial result (for subset of trigrams) exceeds 1000000 uids during index scan, we stop the query (again, to prohibit too expensive queries).
-
-#### Limitations
-When designing a regular expression to run on Dgraph, you should have following rules in mind:
-
-- at least one trigram must be matched by the regexp (patterns shorter than 3 runes are not supported)
-- number of alternative trigrams matched by the regexp should be as small as possible  (`[a-zA-Z][a-zA-Z][0-9]` is not a good idea)
-- regexp should be as precise as possible (matching longer strings means more required trigrams, which helps to effectively use the index)
-- if repeat specifications (`*`, `+`, `?`, `{n,m}`) are used, entire regexp must not match _empty_ string or _any_ string; for example `*` may be used like `[Aa]bcd*` but not like `(abcd)*` or `(abcd)|((defg)*)`
-- the repeat specifications after bracket expressions (like `[fgh]{7}`, `[0-9]+` or `[a-z]{3,5}`) are are often considered as _match any_, because they match too many trigrams
-
-
-### Full Text Search
-There are two functions for full text search - `alloftext` and `anyoftext`.
-Both can be used similar to their pattern matching counterparts (`allofterms`, `anyofterms`).
-Following steps are executed to process full text search function arguments:
-
-1. Tokenization (according to Unicode word boundaries).
-1. Conversion to lowercase.
-1. Unicode-normalization (to [Normalization Form KC](http://unicode.org/reports/tr15/#Norm_Forms)).
-1. Stemming using language-specific stemmer.
-1. Stop words removal (language-specific).
-
-The same steps are invoked during `fulltext` indexing of values.
-
-Following table contains all supported languages and corresponding country-codes:
-
-| Language    | Country Code |
-|:-----------:|:------------:|
-| Danish      | da           |
-| Dutch       | nl           |
-| English     | en           |
-| Finnish     | fi           |
-| French      | fr           |
-| German      | de           |
-| Hungarian   | hu           |
-| Italian     | it           |
-| Norwegian   | no           |
-| Portuguese  | pt           |
-| Romanian    | ro           |
-| Russian     | ru           |
-| Spanish     | es           |
-| Swedish     | sv           |
-| Turkish     | tr           |
-
-
-### Inequality
-#### Type Values
-The following [Scalar_Types]({{<relref "#scalar-types">}}) can be used in inequality functions.
-
-* int
-* float
-* string
-* date
-* datetime
-
-#### Less than or equal to
-`le` is used to filter or obtain UIDs whose value for a predicate is less than or equal to a given value.
-
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    name@en
-    director.film @filter(le(initial_release_date, "1970-01-01"))  {
-      initial_release_date
-      name@en
-    }
-  }
-}
-{{< /runnable >}}
-
-This query would return the name and release date of all the movies directed by on or Steven Spielberg before 1970-01-01.
-
-#### Greater than or equal to
-
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    name@en
-    director.film @filter(ge(initial_release_date, "2008"))  {
-      Release_date: initial_release_date
-      Name: name@en
-    }
-  }
-}
-{{< /runnable >}}
-
-This query would return Name and Release date of movies directed by Steven Spielberg after 2010.
-
-#### Less than, greater than, equal to
-
-Above, we have seen the usage of `ge` and `le`. You can also use `gt` for "strictly greater than" and `lt` for "strictly less than" and `eq` for "equal to".
-
-### Geolocation
-{{% notice "note" %}}Geolocation functions support only polygons and points as of now. Also, polygons with holes are replaced with the outer loop ignoring any holes.  {{% /notice %}}
-
-The data used for testing the geo functions can be found in [benchmarks repository](https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz). You will need to [Index]({{< relref "#indexing" >}}) `loc` predicate with type `geo` before loading the data for these queries to work.
-#### Near
-
-`Near` returns all entities which lie within a specified distance from a given point. It takes in three arguments namely
-the predicate (on which the index is based), geo-location point and a distance (in metres).
-{{< runnable >}}
-{
-  tourist(func: near(loc, [-122.469829, 37.771935], 1000) ) {
-    name
-  }
-}
-{{< /runnable >}}
-
-This query returns all the entities located within 1000 metres from the [specified point](http://bl.ocks.org/d/2ba9f626cb7be1bcc012be1dc7db40ff) in geojson format.
-
-#### Within
-
-`Within` returns all entities which completely lie within the specified region. It takes in two arguments namely the predicate (on which the index is based) and geo-location region.
-
-{{< runnable >}}
-{
-  tourist(func: within(loc, [[-122.47266769409178, 37.769018558337926 ], [ -122.47266769409178, 37.773699921075135 ], [ -122.4651575088501, 37.773699921075135 ], [ -122.4651575088501, 37.769018558337926 ], [ -122.47266769409178, 37.769018558337926]] )) {
-    name
-  }
-}
-{{< /runnable >}}
-This query returns all the entities (points/polygons) located completely within the [specified polygon](http://bl.ocks.org/d/b81a6589fa9639c9424faad778004dae) in geojson format.
-{{% notice "note" %}}The containment check for polygons are approximate as of v0.7.1.{{% /notice %}}
-
-#### Contains
-
-`Contains` returns all entities which completely enclose the specified point or region. It takes in two arguments namely the predicate (on which the index is based) and geo-location region.
-
-{{< runnable >}}
-{
-  tourist(func: contains(loc, [ -122.50326097011566, 37.73353615592843 ] )) {
-    name
-  }
-}
-{{< /runnable >}}
-This query returns all the entities that completely enclose the [http://bl.ocks.org/d/7218dd34391fac518e3516ea6fc1b6b1 specified point] (or polygon) in geojson format.
-
-#### Intersects
-
-`Intersects` returns all entities which intersect with the given polygon. It takes in two arguments namely the predicate (on which the index is based) and geo-location region.
-
-{{< runnable >}}
-{
-  tourist(func: intersects(loc, [[-122.503325343132, 37.73345766902749 ], [ -122.503325343132, 37.733903134117966 ], [ -122.50271648168564, 37.733903134117966 ], [ -122.50271648168564, 37.73345766902749 ], [ -122.503325343132, 37.73345766902749]] )) {
-    name
-  }
-}
-{{< /runnable >}}
-
-This query returns all the entities that intersect with the [http://bl.ocks.org/d/2ed3361a25442414e15d7eab88574b67 specified polygon/point] in geojson format.
 
 ## Filters
 
