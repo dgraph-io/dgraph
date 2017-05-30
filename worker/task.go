@@ -19,7 +19,6 @@ package worker
 
 import (
 	"bytes"
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -266,7 +265,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		return nil, err
 	}
 
-	fmt.Println("n", srcFn.n)
 	for i := 0; i < srcFn.n; i++ {
 		var key []byte
 		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
@@ -492,8 +490,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 	// We fetch the actual value for the uids, compare them to the value in the
 	// request and filter the uids only if the tokenizer IsLossy.
-	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 &&
-		comparesEq(srcFn.fname) {
+	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 {
 		tokenizer, err := pickTokenizer(attr, srcFn.fname)
 		// We should already have checked this in getInequalityTokens.
 		x.Check(err)
@@ -506,18 +503,16 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				return nil, x.Errorf("Attribute not scalar: %s %v", attr, typ)
 			}
 
-			// TODO - for eq operator, filter all rows of the matrix with respective
-			// ineqValueTokens. We can still filter just the first row if function is
-			// something else because we dont allow multiple Args for ge, gt etc.
 			x.AssertTrue(len(out.UidMatrix) > 0)
-
-			// If operation is ge or le, we only filter row number 0, which has uids
-			// corresponding to the equal token.
-			rowsToFilter := 1
+			rowsToFilter := 0
 			if srcFn.fname == eq {
 				// If fn is eq, we could have multiple arguments and hence multiple rows
 				// to filter.
 				rowsToFilter = len(srcFn.tokens)
+			} else if srcFn.tokens[0] == srcFn.ineqValueToken {
+				// If operation is not eq and ineqValueToken equals first token,
+				// then we need to filter first row..
+				rowsToFilter = 1
 			}
 			for row := 0; row < rowsToFilter; row++ {
 				algo.ApplyFilter(out.UidMatrix[row], func(uid uint64, i int) bool {
@@ -705,22 +700,22 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		var tokens []string
 		// eq can have multiple args.
 		for _, arg := range args {
-			fmt.Println("attr", attr, "arg", arg)
 			fc.ineqValue, err = convertValue(attr, arg)
 			if err != nil {
 				return nil, x.Errorf("Got error: %v while running: %v", err, q.SrcFunc)
 			}
-			fmt.Println("ineq", fc.ineqValue)
 			// Get tokens ge / le ineqValueToken.
 			tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f, fc.ineqValue)
 			if err != nil {
 				return nil, err
 			}
-			fmt.Println("tok", tokens, fc.ineqValueToken)
+			if len(tokens) == 0 {
+				continue
+			}
 			fc.tokens = append(fc.tokens, tokens...)
 			fc.eqTokens = append(fc.eqTokens, fc.ineqValue)
+
 		}
-		x.AssertTrue(fc.fname == "eq" && len(fc.tokens) == len(fc.eqTokens))
 		fc.n = len(fc.tokens)
 		fc.lang = q.SrcFunc[1]
 	case CompareScalarFn:
