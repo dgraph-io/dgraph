@@ -142,7 +142,10 @@ func TestTokensTable(t *testing.T) {
 	addMutationWithIndex(t, l, edge, Set)
 
 	key = x.IndexKey("name", "david")
-	slice, _ := ps.Get(key)
+	var item badger.KVItem
+	err := ps.Get(key, &item)
+	x.Check(err)
+	slice := item.Value()
 
 	var pl protos.PostingList
 	x.Check(pl.Unmarshal(slice))
@@ -152,7 +155,9 @@ func TestTokensTable(t *testing.T) {
 	CommitLists(10, 1)
 	time.Sleep(time.Second)
 
-	slice, _ = ps.Get(key)
+	err = ps.Get(key, &item)
+	x.Check(err)
+	slice = item.Value()
 	x.Check(pl.Unmarshal(slice))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
