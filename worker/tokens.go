@@ -18,6 +18,7 @@
 package worker
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/schema"
@@ -117,6 +118,7 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 		return nil, "", x.Errorf("Attribute %s doest not have a valid tokenizer.", attr)
 	}
 	ineqToken := ineqTokens[0]
+	fmt.Println("ineq token", ineqToken)
 
 	it := pstore.NewIterator()
 	defer it.Close()
