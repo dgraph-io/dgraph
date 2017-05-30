@@ -6170,21 +6170,21 @@ func TestSchemaBlock5(t *testing.T) {
 }
 
 const schemaStr = `
-name:string @index(term, exact, trigram ) .
-alias:string @index(exact, term, fulltext) .
-dob:date @index .
-film.film.initial_release_date:date @index .
-loc:geo @index .
-genre:uid @reverse .
-survival_rate : float .
-alive         : bool @index .
-age           : int .
-shadow_deep   : int .
-friend:uid @reverse .
-geometry:geo @index .
-value:string @index(trigram) .
-full_name:string @index(hash) .
-noindex_name: string .
+name                           : string @index(term, exact, trigram) .
+alias                          : string @index(exact, term, fulltext) .
+dob                            : date @index .
+film.film.initial_release_date : date @index .
+loc                            : geo @index .
+genre                          : uid @reverse .
+survival_rate                  : float .
+alive                          : bool @index .
+age                            : int .
+shadow_deep                    : int .
+friend                         : uid @reverse .
+geometry                       : geo @index .
+value                          : string @index(trigram) .
+full_name                      : string @index(hash) .
+noindex_name                   : string .
 `
 
 func TestMain(m *testing.M) {
@@ -7415,10 +7415,10 @@ func TestMathVar3(t *testing.T) {
 func TestMultipleEquality(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	query := `
 	{
-		me(func: eq(name, ["Rick Gremes", "Michonne"])) {
+		me(func: eq(name, "Rick Gremes")) {
 			name
 			friend {
 				name
