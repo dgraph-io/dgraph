@@ -7075,10 +7075,31 @@ func TestCountAtRoot5(t *testing.T) {
 func TestMultipleEquality(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
-		me(func: eq(name, "Rick Gremes")) {
+		me(func: eq(name, ["Rick Grimes"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"}]}`, js)
+	//	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+}
+
+func TestMultipleEquality2(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(2 * time.Second)
+	query := `
+	{
+		me(func: eq(name, ["Badger", "Bobby", "Matt"])) {
 			name
 			friend {
 				name
@@ -7090,5 +7111,8 @@ func TestMultipleEquality(t *testing.T) {
         `
 	js := processToFastJSON(t, query)
 	fmt.Println(string(js))
+	//	require.JSONEq(t, `{"me":[{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"}]}`, js)
 	//	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }
+
+// TODO - Add test to error out if ge etc. have more than one argument.
