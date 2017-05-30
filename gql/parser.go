@@ -1391,11 +1391,13 @@ L:
 					g.Lang = val
 					expectLang = false
 				} else {
-					if val[0] == '[' && g.Name == "eq" {
+					// We only want to parse tokens for inequality functions and not for Geo functions.
+					if val[0] == '[' && isInequality(g.Name) {
 						vals, err := parseMultipleTokens(val)
 						if err != nil {
 							return nil, err
 						}
+						// Add all tokens to eq fn to Args.
 						g.Args = append(g.Args, vals...)
 					} else {
 						g.Args = append(g.Args, val)
@@ -2288,4 +2290,8 @@ func collectName(it *lex.ItemIterator, val string) string {
 		}
 	}
 	return val
+}
+
+func isInequality(name string) bool {
+	return name == "eq" || name == "gt" || name == "ge" || name == "le" || name == "lt"
 }

@@ -187,10 +187,6 @@ func getPredList(uid uint64, gid uint32) ([]types.Val, error) {
 	return pl.AllValues()
 }
 
-func comparesEq(name string) bool {
-	return name == "eq" || name == "ge" || name == "le"
-}
-
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	var out protos.Result
