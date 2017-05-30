@@ -841,6 +841,25 @@ This query would return Name and Release date of movies directed by Steven Spiel
 
 Above, we have seen the usage of `ge` and `le`. You can also use `gt` for "strictly greater than" and `lt` for "strictly less than" and `eq` for "equal to".
 
+### Has
+
+Sometimes you want to filter the nodes based on whether they have a predicate. For e.g. if you wanted to start with all the directors, you could do something like.
+{{< runnable >}}
+{
+  me(func: has(director.film), first: 5) {
+    name@en
+    director.film @filter(has(initial_release_date))  {
+      initial_release_date
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+This would only get nodes which have a `director.film` edge at root which would be directors. Then for each director it would filter the movies which have an `initial_release_date`.
+
+
+
 ### Geolocation
 {{% notice "note" %}}Geolocation functions support only polygons and points as of now. Also, polygons with holes are replaced with the outer loop ignoring any holes.  {{% /notice %}}
 

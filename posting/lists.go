@@ -563,7 +563,11 @@ func batchSync() {
 				loop++
 				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
 				for _, e := range entries {
-					wb = badger.EntriesSet(wb, e.key, e.val)
+					if e.val == nil {
+						wb = badger.EntriesDelete(wb, e.key)
+					} else {
+						wb = badger.EntriesSet(wb, e.key, e.val)
+					}
 				}
 				pstore.BatchSet(wb)
 				wb = wb[:0]
