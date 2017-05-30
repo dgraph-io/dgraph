@@ -1435,14 +1435,13 @@ L:
 					g.Lang = val
 					expectLang = false
 				} else {
-					if val[0] == '[' {
+					if val[0] == '[' && g.Name == "eq" {
 						vals, err := parseMultipleTokens(val)
 						if err != nil {
 							return nil, err
 						}
 						g.Args = append(g.Args, vals...)
 					} else {
-						fmt.Println("val", val)
 						g.Args = append(g.Args, val)
 					}
 				}
@@ -2377,8 +2376,4 @@ func collectName(it *lex.ItemIterator, val string) string {
 		}
 	}
 	return val
-}
-
-func isEqFn(name string) bool {
-	return name == "eq"
 }
