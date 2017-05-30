@@ -447,7 +447,10 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		l.Lock()
 		go func(key []byte) {
 			defer l.Unlock()
-			val, _ := pstore.Get(key)
+			var item badger.KVItem
+			err = pstore.Get(key, &item)
+			x.Check(err)
+			val := item.Value()
 			if len(val) == 0 {
 				pstore.Set(key, dummyPostingList)
 			}
