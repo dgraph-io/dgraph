@@ -3388,4 +3388,5 @@ func TestMultipleEqual(t *testing.T) {
 	gql, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, 2, len(gql.Query[0].Func.Args))
+	require.Equal(t, "Tom Hanks", gql.Query[0].Func.Args[1])
 }

@@ -1391,15 +1391,14 @@ L:
 					g.Lang = val
 					expectLang = false
 				} else {
-					// TODO - Check that we return error if val has length 0.
-					// TODO - Check that multiple tokens should only be allowed for eq operator.
-					if isEqFn(g.Name) && val[0] == '[' {
+					if val[0] == '[' {
 						vals, err := parseMultipleTokens(val)
 						if err != nil {
 							return nil, err
 						}
 						g.Args = append(g.Args, vals...)
 					} else {
+						fmt.Println("val", val)
 						g.Args = append(g.Args, val)
 					}
 				}
@@ -1431,6 +1430,10 @@ func parseMultipleTokens(val string) ([]string, error) {
 	var buf bytes.Buffer
 	var expectToken bool
 	for _, c := range val[1:] {
+		// Lets ignore spaces that are not part of the token.
+		if c == ' ' && !expectToken {
+			continue
+		}
 		if c == '"' {
 			expectToken = !expectToken
 			continue
