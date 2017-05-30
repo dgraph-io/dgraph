@@ -252,7 +252,7 @@ func (g *groupi) HasPeer(group uint32) bool {
 	if all == nil {
 		return false
 	}
-	return len(all.list) > 0
+	return len(all.list) > 1 || (len(all.list) == 1 && all.list[0].NodeId != *raftId)
 }
 
 // Leader will try to retrun the leader of a given group, based on membership information.
