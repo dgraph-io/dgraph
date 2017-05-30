@@ -7031,11 +7031,11 @@ func TestHasFuncAtRoot2(t *testing.T) {
 	query := `
 	{
 		me(func: has(name@en)) {
-			name
+			name@en
 		}
 	}
 	`
 
 	js := processToFastJSON(t, query)
-	fmt.Println(string(js))
+	require.JSONEq(t, `{"me":[{"name@en":"Test facet"},{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"}]}`, string(js))
 }

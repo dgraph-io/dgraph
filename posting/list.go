@@ -579,9 +579,16 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		final.Postings = append(final.Postings, p)
 		return true
 	})
-	final.Checksum = h.Sum(nil)
-	data, err := final.Marshal()
-	x.Checkf(err, "Unable to marshal posting list")
+
+	var data []byte
+	if len(final.Postings) == 0 {
+		// This means we should delete the key from store during SyncIfDirty.
+		data = nil
+	} else {
+		final.Checksum = h.Sum(nil)
+		data, err = final.Marshal()
+		x.Checkf(err, "Unable to marshal posting list")
+	}
 
 	sw := l.StartWait() // Corresponding l.Wait() in getPostingList.
 	ce := syncEntry{
@@ -590,7 +597,6 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		sw:      sw,
 		water:   l.water,
 		pending: l.pending,
-		count:   count,
 	}
 	syncCh <- ce
 
