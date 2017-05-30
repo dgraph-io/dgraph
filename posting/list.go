@@ -212,7 +212,12 @@ func (l *List) getPostingList(loop int) *protos.PostingList {
 		x.AssertTrue(l.pstore != nil)
 		plist = new(protos.PostingList)
 
-		val, _ := l.pstore.Get(l.key)
+		var item badger.KVItem
+		if err := l.pstore.Get(l.key, &item); err != nil {
+			// might be temporary disk failure
+			return l.getPostingList(loop + 1)
+		}
+		val := item.Value()
 		if val != nil {
 			x.Checkf(plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 		}

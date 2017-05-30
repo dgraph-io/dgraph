@@ -148,7 +148,12 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 }
 
 func (w *Wal) Snapshot(gid uint32) (snap raftpb.Snapshot, rerr error) {
-	val, _ := w.wals.Get(w.snapshotKey(gid))
+	var item badger.KVItem
+	if err := w.wals.Get(w.snapshotKey(gid), &item); err != nil {
+		rerr = x.Wrapf(err, "while fetching snapshot from wal")
+		return
+	}
+	val := item.Value()
 	// Originally, with RocksDB, this can return an error and a non-null rdb.Slice object with Data=nil.
 	// And for this case, we do NOT return.
 	rerr = x.Wrapf(snap.Unmarshal(val), "While unmarshal snapshot")
@@ -156,7 +161,12 @@ func (w *Wal) Snapshot(gid uint32) (snap raftpb.Snapshot, rerr error) {
 }
 
 func (w *Wal) HardState(gid uint32) (hd raftpb.HardState, rerr error) {
-	val, _ := w.wals.Get(w.hardStateKey(gid))
+	var item badger.KVItem
+	if err := w.wals.Get(w.hardStateKey(gid), &item); err != nil {
+		rerr = x.Wrapf(err, "while fetching hardstate from wal")
+		return
+	}
+	val := item.Value()
 	// Originally, with RocksDB, this can return an error and a non-null rdb.Slice object with Data=nil.
 	// And for this case, we do NOT return.
 	rerr = x.Wrapf(hd.Unmarshal(val), "While unmarshal hardstate")
