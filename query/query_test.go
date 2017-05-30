@@ -296,7 +296,6 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "son", 1, 2300, nil)
 
 	addEdgeToValue(t, "name", 2301, `Alice\"`, nil)
-	addEdgeToLangValue(t, "name", 0x1004, "Badger", "", nil)
 
 	time.Sleep(5 * time.Millisecond)
 }
