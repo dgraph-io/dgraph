@@ -7112,6 +7112,44 @@ func TestMultipleEquality2(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Matt"},{"name":"Badger"}]}`, js)
 }
 
+func TestMultipleEquality3(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: eq(dob, ["1910-01-01", "1909-05-05"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestMultipleEquality4(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: eq(dob, ["1910-01-01", "1909-05-05"])) {
+			name
+			friend @filter(eq(name, ["Rick Grimes", "Andrea"])) {
+				name
+			}
+		}
+	}
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}],"name":"Michonne"},{"name":"Glenn Rhee"}]}`, js)
+}
+
 func TestMultipleGtError(t *testing.T) {
 	populateGraph(t)
 	query := `
