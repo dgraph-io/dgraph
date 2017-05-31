@@ -437,12 +437,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				dst.AddListChild(fieldName, uc)
 			}
 		} else {
+			// TODO: tzdybal
 			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
 				fieldName += "@"
-				for _, it := range pc.Params.Langs {
-					fieldName += it + ":"
-				}
-				fieldName = fieldName[:len(fieldName)-1]
+				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
 			tv := pc.values[idx]
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
