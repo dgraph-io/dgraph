@@ -50,8 +50,8 @@ func CompareVals(op string, arg1, arg2 Val) bool {
 	return false
 }
 
+// parses and array of string tokens and returns them as a slice of strings.
 func Args(val string) ([]string, error) {
-	// parses and array of string tokens and returns them as a slice of strings.
 	var tokens []string
 	// Empty val is checked in parser so safe to access first index here.
 	if val[0] != '[' {
@@ -63,39 +63,34 @@ func Args(val string) ([]string, error) {
 	}
 
 	var expectArg bool
-	// lets truncate [
+	// lets remove the [
 	val = val[1:]
-	argStart := 0
-	// L:
+	var r rune
 	for i, w := 0, 0; i < len(val); i += w {
-		r, width := utf8.DecodeRuneInString(val[i:])
+		r, w = utf8.DecodeRuneInString(val[i:])
 		if expectArg {
+			argStart := i
 			// Lets collect everything till unescaped ".
-			for i < len(val) {
-				r, width := utf8.DecodeRuneInString(val[i:])
-				if r == '"' && i > 0 {
-					if val[i-1] == '\\' {
-						i = i + width
-						continue
-					} else {
-						tokens = append(tokens, val[argStart:i])
-						expectArg = false
-						i = i + width
-						break
-					}
-				} else {
-					// Accept other things.
+			for ; i < len(val); i += w {
+				r, w = utf8.DecodeRuneInString(val[i:])
+				if r == '\\' {
+					// Lets get next rune
 					i = i + w
-					continue
+					r, w = utf8.DecodeRuneInString(val[i:])
+					// this takes care of escape sequences.
+					if isEscChar(r) {
+						continue
+					}
+					return tokens, x.Errorf("Invalid escape character: %q in literal", r)
+				}
+				if r == '"' {
+					tokens = append(tokens, val[argStart:i])
+					expectArg = false
+					break
 				}
 			}
 		}
-		w = width
-		// Lets ignore spaces that are not part of the token.
 		if r == '"' {
-			if !expectArg {
-				argStart = i + 1
-			}
 			expectArg = !expectArg
 			continue
 		}
@@ -105,9 +100,15 @@ func Args(val string) ([]string, error) {
 		if r == ']' {
 			break
 		}
-		if r == '[' || r == ')' {
-			return tokens, x.Errorf("Invalid syntax for tokens. Got: %+v", val)
-		}
+		return tokens, x.Errorf("Invalid character found. Got: %q", r)
 	}
 	return tokens, nil
+}
+
+func isEscChar(r rune) bool {
+	switch r {
+	case 't', 'b', 'n', 'r', 'f', '"', '\'', '\\':
+		return true
+	}
+	return false
 }
