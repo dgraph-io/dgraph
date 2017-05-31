@@ -81,7 +81,9 @@ func Args(val string) ([]string, error) {
 					if isEscChar(r) {
 						continue
 					}
-					return tokens, x.Errorf("Invalid escape character: %q in literal", r)
+					return tokens,
+						x.Errorf("Invalid escape character: %q in literal",
+							r)
 				}
 				if r == '"' {
 					if argStart == i {
