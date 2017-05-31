@@ -89,10 +89,14 @@ func Args(val string) ([]string, error) {
 					}
 					tokens = append(tokens, val[argStart:i])
 					expectArg = false
+					i = i + w
+					// Advance r
+					r, w = utf8.DecodeRuneInString(val[i:])
 					break
 				}
 			}
 		}
+
 		if r == '"' {
 			if expectArg {
 				return tokens, x.Errorf("Expected an argument or a comma. Got: %q", r)
