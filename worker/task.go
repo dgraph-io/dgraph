@@ -644,7 +644,6 @@ const (
 
 func ensureArgsCount(funcStr []string, expected int) error {
 	actual := len(funcStr) - 2
-
 	if actual != expected {
 		return x.Errorf("Function '%s' requires %d arguments, but got %d (%v)",
 			funcStr[0], expected, actual, funcStr[2:])
@@ -682,31 +681,29 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case CompareAttrFn:
+		var args []string
+		if args, err = types.Args(q.SrcFunc[2]); err != nil {
+			return nil, err
+		}
 		// Only eq can have multiple args. It should have atleast one.
-		if fc.fname == "eq" {
-			err = ensureArgsCount(q.SrcFunc, 0, gt)
-			if err != nil {
-				return nil, err
+		if fc.fname == eq {
+			if len(args) <= 0 {
+				return nil, x.Errorf("eq expects atleast 1 argument.")
 			}
-		} else {
-			// Others can have only 1 arg.
-			err = ensureArgsCount(q.SrcFunc, 1, eq)
-			if err != nil {
-				return nil, err
+		} else { // Others can have only 1 arg.
+			if len(args) != 1 {
+				return nil, x.Errorf("eq expects atleast 1 argument.")
 			}
 		}
 
-		args := q.SrcFunc[2:]
 		var tokens []string
 		// eq can have multiple args.
 		for _, arg := range args {
-			fc.ineqValue, err = convertValue(attr, arg)
-			if err != nil {
+			if fc.ineqValue, err = convertValue(attr, arg); err != nil {
 				return nil, x.Errorf("Got error: %v while running: %v", err, q.SrcFunc)
 			}
 			// Get tokens ge / le ineqValueToken.
-			tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f, fc.ineqValue)
-			if err != nil {
+			if tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f, fc.ineqValue); err != nil {
 				return nil, err
 			}
 			if len(tokens) == 0 {
@@ -722,8 +719,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
-		fc.threshold, err = strconv.ParseInt(q.SrcFunc[3], 10, 64)
-		if err != nil {
+		if fc.threshold, err = strconv.ParseInt(q.SrcFunc[3], 10, 64); err != nil {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 				q.SrcFunc[0], q.SrcFunc[2])
 		}
@@ -737,24 +733,21 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		fc.n = len(fc.tokens)
 	case PasswordFn:
-		err = ensureArgsCount(q.SrcFunc, 2, eq)
-		if err != nil {
+		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
 		fc.n = len(q.UidList.Uids)
 	case StandardFn, FullTextSearchFn:
 		// srcfunc 0th val is func name and and [2:] are args.
 		// we tokenize the arguments of the query.
-		err = ensureArgsCount(q.SrcFunc, 1, eq)
-		if err != nil {
+		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
 		}
 		required, found := verifyStringIndex(attr, fnType)
 		if !found {
 			return nil, x.Errorf("Attribute %s is not indexed with type %s", attr, required)
 		}
-		fc.tokens, err = getStringTokens(q.SrcFunc[2:], q.SrcFunc[1], fnType)
-		if err != nil {
+		if fc.tokens, err = getStringTokens(q.SrcFunc[2:], q.SrcFunc[1], fnType); err != nil {
 			return nil, err
 		}
 		fnName := strings.ToLower(q.SrcFunc[0])
@@ -762,8 +755,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case RegexFn:
-		err = ensureArgsCount(q.SrcFunc, 2, eq)
-		if err != nil {
+		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
 		ignoreCase := false
@@ -779,8 +771,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if ignoreCase {
 			matchType = "(?i)" + matchType
 		}
-		fc.regex, err = cregexp.Compile(matchType + q.SrcFunc[2])
-		if err != nil {
+		if fc.regex, err = cregexp.Compile(matchType + q.SrcFunc[2]); err != nil {
 			return nil, err
 		}
 		fc.n = 0
