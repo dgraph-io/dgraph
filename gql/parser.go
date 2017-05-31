@@ -1391,17 +1391,7 @@ L:
 					g.Lang = val
 					expectLang = false
 				} else {
-					// We only want to parse tokens for inequality functions and not for Geo functions.
-					if val[0] == '[' && isInequality(g.Name) {
-						vals, err := parseMultipleTokens(val)
-						if err != nil {
-							return nil, err
-						}
-						// Add all tokens to eq fn to Args.
-						g.Args = append(g.Args, vals...)
-					} else {
-						g.Args = append(g.Args, val)
-					}
+					g.Args = append(g.Args, val)
 				}
 				if g.Name == "var" {
 					g.NeedsVar = append(g.NeedsVar, VarContext{
@@ -1416,46 +1406,6 @@ L:
 		}
 	}
 	return g, nil
-}
-
-// parses and array of string tokens and returns them as a slice of strings.
-func parseMultipleTokens(val string) ([]string, error) {
-	var tokens []string
-	if val[0] != '[' {
-		return tokens, x.Errorf("Expected [. Got: %q", val[0])
-	}
-
-	if val[len(val)-1] != ']' {
-		return tokens, x.Errorf("Expected ]. Got: %q", val[len(val)-1])
-	}
-	var buf bytes.Buffer
-	var expectToken bool
-	for _, c := range val[1:] {
-		// Lets ignore spaces that are not part of the token.
-		if c == ' ' && !expectToken {
-			continue
-		}
-		if c == '"' {
-			expectToken = !expectToken
-			continue
-		}
-		if c == ',' || c == ']' {
-			if buf.Len() == 0 {
-				continue
-			}
-			if expectToken {
-				return tokens, x.Errorf("Expected a \".")
-			}
-			tokens = append(tokens, buf.String())
-			buf.Reset()
-			continue
-		}
-		if c == '[' || c == ')' {
-			return tokens, x.Errorf("Invalid syntax for tokens. Got: %+v", val)
-		}
-		buf.WriteRune(c)
-	}
-	return tokens, nil
 }
 
 func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string, error) {
@@ -2290,8 +2240,4 @@ func collectName(it *lex.ItemIterator, val string) string {
 		}
 	}
 	return val
-}
-
-func isInequality(name string) bool {
-	return name == "eq" || name == "gt" || name == "ge" || name == "le" || name == "lt"
 }

@@ -18,6 +18,8 @@
 package types
 
 import (
+	"unicode/utf8"
+
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -46,4 +48,66 @@ func CompareVals(op string, arg1, arg2 Val) bool {
 		x.Fatalf("Unknown ineqType %v", op)
 	}
 	return false
+}
+
+func Args(val string) ([]string, error) {
+	// parses and array of string tokens and returns them as a slice of strings.
+	var tokens []string
+	// Empty val is checked in parser so safe to access first index here.
+	if val[0] != '[' {
+		return []string{val}, nil
+	}
+
+	if val[len(val)-1] != ']' {
+		return tokens, x.Errorf("Expected ]. Got: %q", val[len(val)-1])
+	}
+
+	var expectArg bool
+	// lets truncate [
+	val = val[1:]
+	argStart := 0
+	// L:
+	for i, w := 0, 0; i < len(val); i += w {
+		r, width := utf8.DecodeRuneInString(val[i:])
+		if expectArg {
+			// Lets collect everything till unescaped ".
+			for i < len(val) {
+				r, width := utf8.DecodeRuneInString(val[i:])
+				if r == '"' && i > 0 {
+					if val[i-1] == '\\' {
+						i = i + width
+						continue
+					} else {
+						tokens = append(tokens, val[argStart:i])
+						expectArg = false
+						i = i + width
+						break
+					}
+				} else {
+					// Accept other things.
+					i = i + w
+					continue
+				}
+			}
+		}
+		w = width
+		// Lets ignore spaces that are not part of the token.
+		if r == '"' {
+			if !expectArg {
+				argStart = i + 1
+			}
+			expectArg = !expectArg
+			continue
+		}
+		if r == ',' || r == ' ' {
+			continue
+		}
+		if r == ']' {
+			break
+		}
+		if r == '[' || r == ')' {
+			return tokens, x.Errorf("Invalid syntax for tokens. Got: %+v", val)
+		}
+	}
+	return tokens, nil
 }

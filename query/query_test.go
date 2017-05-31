@@ -7171,3 +7171,19 @@ func TestMultipleGtError(t *testing.T) {
 	_, err = ProcessQuery(ctx, res, &l)
 	require.Error(t, err)
 }
+
+func TestMultipleEqQuote(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: eq(name, ["Alice\"", "Michonne"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"name":"Alice\""}]}`, js)
+}
