@@ -84,6 +84,9 @@ func Args(val string) ([]string, error) {
 					return tokens, x.Errorf("Invalid escape character: %q in literal", r)
 				}
 				if r == '"' {
+					if argStart == i {
+						return tokens, x.Errorf("Got empty value")
+					}
 					tokens = append(tokens, val[argStart:i])
 					expectArg = false
 					break
@@ -91,7 +94,10 @@ func Args(val string) ([]string, error) {
 			}
 		}
 		if r == '"' {
-			expectArg = !expectArg
+			if expectArg {
+				return tokens, x.Errorf("Expected an argument or a comma. Got: %q", r)
+			}
+			expectArg = true
 			continue
 		}
 		if r == ',' || r == ' ' {
