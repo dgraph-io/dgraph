@@ -785,7 +785,7 @@ func TestParseQueryWithVarInIneqError(t *testing.T) {
 		}
 
 		me(id: var(fr)) @filter(gt(var(a, b), 10)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -804,7 +804,7 @@ func TestParseQueryWithVarInIneq(t *testing.T) {
 		}
 
 		me(id: var(fr)) @filter(gt(var(a), 10)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -2747,7 +2747,7 @@ func TestParseGroupbyRoot(t *testing.T) {
 		me(id: [1, 2, 3]) @groupby(friends) {
 				a as count(_uid_)
 		}
-		
+
 		groups(id: var(a)) {
 			_uid_
 			var(a)
@@ -3353,6 +3353,17 @@ func TestCountAtRootErr2(t *testing.T) {
 			a as count()
 		}
 	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestMathWithoutVarAlias(t *testing.T) {
+	query := `{
+			f(func: anyofterms(name, "Rick Michonne Andrea")) {
+				ageVar as age
+				math(ageVar *2)
+			}
+		}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 }

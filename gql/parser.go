@@ -2045,11 +2045,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				curp = nil
 				continue
 			} else if isMathBlock(valLower) {
-				if varName == "" {
-					return x.Errorf("Function %v should be used with a variable", val)
-				}
-				if alias != "" {
-					return x.Errorf("math() cannot have an alias")
+				if varName == "" && alias == "" {
+					return x.Errorf("Function math should be used with a variable or have an alias")
 				}
 				mathTree, again, err := parseMathFunc(it, false)
 				if err != nil {
@@ -2060,6 +2057,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				child := &GraphQuery{
 					Attr:       val,
+					Alias:      alias,
 					Args:       make(map[string]string),
 					Var:        varName,
 					MathExp:    mathTree,
