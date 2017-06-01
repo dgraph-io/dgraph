@@ -376,7 +376,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		ul := pc.uidMatrix[idx]
 
 		fieldName := pc.fieldName()
-
 		if len(pc.counts) > 0 {
 			c := types.ValueForType(types.IntID)
 			c.Value = int64(pc.counts[idx])
@@ -566,8 +565,20 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 	if gchild.Func != nil {
 		key += fmt.Sprintf("%v", gchild.Func)
 	}
-	if len(gchild.NeedsVar) > 0 {
-		key += fmt.Sprintf("%v", gchild.NeedsVar)
+	// This is the case when we ask for a variable.
+	if gchild.Attr == "var" {
+		// E.g. a as age, result is returned as var(a)
+		if gchild.Var != "" && gchild.Var != "var" {
+			key = fmt.Sprintf("var(%v)", gchild.Var)
+		} else if len(gchild.NeedsVar) > 0 {
+			// For var(s)
+			key = fmt.Sprintf("var(%v)", gchild.NeedsVar[0].Name)
+		}
+
+		// Could be min(var(x)) && max(var(x))
+		if gchild.Func != nil {
+			key += gchild.Func.Name
+		}
 	}
 	if gchild.IsCount { // ignore count subgraphs..
 		key += "count"
@@ -576,7 +587,9 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 		key += fmt.Sprintf("%v", gchild.Langs)
 	}
 	if gchild.MathExp != nil {
-		key += fmt.Sprintf("%+v", gchild.MathExp)
+		// We would only be here if Alias is empty, so Var would be non
+		// empty because MathExp should have atleast one of them.
+		key = fmt.Sprintf("var(%+v)", gchild.Var)
 	}
 	if gchild.IsGroupby {
 		key += "groupby"
