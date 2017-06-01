@@ -682,7 +682,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		fc.n = len(q.UidList.Uids)
 	case CompareAttrFn:
 		var args []string
-		if args, err = types.Args(q.SrcFunc[2]); err != nil {
+		if args, err = types.InequalityArgs(q.SrcFunc[2]); err != nil {
 			return nil, err
 		}
 		// Only eq can have multiple args. It should have atleast one.
