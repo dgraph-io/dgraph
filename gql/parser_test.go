@@ -2751,7 +2751,7 @@ func TestParseGroupbyRoot(t *testing.T) {
 		me(id: [1, 2, 3]) @groupby(friends) {
 				a as count(_uid_)
 		}
-		
+
 		groups(id: var(a)) {
 			_uid_
 			var(a)
@@ -3410,4 +3410,15 @@ func TestHasFilterAtChild(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
+}
+
+func TestMathWithoutVarAlias(t *testing.T) {
+	query := `{
+			f(func: anyofterms(name, "Rick Michonne Andrea")) {
+				ageVar as age
+				math(ageVar *2)
+			}
+		}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
 }
