@@ -76,9 +76,6 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 			if item = it.Item(); item.Typ != itemVarName {
 				return rnq, x.Errorf("Expected variable name, found: %s", item.Val)
 			}
-			if len(rnq.SubjectVar) > 0 {
-				return rnq, x.Errorf("Can't use variable in both subject and object: %s", line)
-			}
 			if len(rnq.Subject) > 0 {
 				rnq.ObjectVar = item.Val
 				vend = true

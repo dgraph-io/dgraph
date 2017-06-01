@@ -193,7 +193,7 @@ func Materialize(ctx context.Context,
 
 // ConvertAndApply materializes edges defined by the mutation
 // and adds them to the database.
-func ConvertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string]uint64, error) {
+func ConvertAndApply(ctx ExecutionContext, mutation *protos.Mutation) (map[string]uint64, error) {
 	var err error
 	var mr MaterializedMutation
 

@@ -181,6 +181,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Lets add the value of the debug query parameter to the context.
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
+	ctx = context.WithValue(ctx, "mutation_allowed", *nomutations)
 
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "Query")
@@ -188,13 +189,14 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		ctx = trace.NewContext(ctx, tr)
 	}
 
+	executionContext := query.NewExecutionContext(ctx)
+
 	invalidRequest := func(err error, msg string) {
-		x.TraceError(ctx, err)
+		x.TraceError(executionContext, err)
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 	}
 
-	var l query.Latency
-	l.Start = time.Now()
+	executionContext.Latency.Start = time.Now()
 	defer r.Body.Close()
 	req, err := ioutil.ReadAll(r.Body)
 	q := string(req)
@@ -204,12 +206,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parseStart := time.Now()
-	res, err := parseQueryAndMutation(ctx, gql.Request{
+	res, err := parseQueryAndMutation(executionContext, gql.Request{
 		Str:       q,
 		Variables: map[string]string{},
 		Http:      true,
 	})
-	l.Parsing += time.Since(parseStart)
+	executionContext.Latency.Parsing += time.Since(parseStart)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -219,12 +221,14 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
 		// If schema mutation is not present
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Minute)
+		ctx, cancel = context.WithTimeout(executionContext.Context, time.Minute)
+		executionContext = query.ExecutionContext{Context: ctx, Latency: executionContext.Latency}
 		defer cancel()
 	}
 
 	var er query.ExecuteResult
-	if er, err = query.Execute(ctx, res, &l, isMutationAllowed(ctx)); err != nil {
+
+	if er, err = query.Execute(executionContext, res); err != nil {
 		switch errors.Cause(err).(type) {
 		case *query.InvalidRequestError:
 			invalidRequest(err, err.Error())
@@ -259,7 +263,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			mp["schema"] = json.RawMessage(string(js))
 			if addLatency {
-				mp["server_latency"] = l.ToMap()
+				mp["server_latency"] = executionContext.Latency.ToMap()
 			}
 		}
 		if js, err := json.Marshal(mp); err == nil {
@@ -285,7 +289,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = query.ToJson(&l, er.Subgraphs, w, query.ConvertUidsToHex(er.Allocations), addLatency)
+	err = query.ToJson(executionContext.Latency, er.Subgraphs, w,
+		query.ConvertUidsToHex(er.Allocations), addLatency)
 	if err != nil {
 		// since we performed w.Write in ToJson above,
 		// calling WriteHeader with 500 code will be ignored.
@@ -293,6 +298,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
+	l := executionContext.Latency
 	x.Trace(ctx, "Latencies: Total: %v Parsing: %v Process: %v Json: %v",
 		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
 }
@@ -302,12 +308,10 @@ func NewSharedQueryNQuads(query []byte) []*protos.NQuad {
 	val := func(s string) *protos.Value {
 		return &protos.Value{&protos.Value_DefaultVal{s}}
 	}
-	qHash := func() string {
-		return fmt.Sprintf("\"%x\"", sha256.Sum256(query))
-	}
+	qHash := fmt.Sprintf("\"%x\"", sha256.Sum256(query))
 	return []*protos.NQuad{
 		&protos.NQuad{Subject: "<_:share>", Predicate: "<_share_>", ObjectValue: val(string(query))},
-		&protos.NQuad{Subject: "<_:share>", Predicate: "<_share_hash_>", ObjectValue: val(qHash())},
+		&protos.NQuad{Subject: "<_:share>", Predicate: "<_share_hash_>", ObjectValue: val(qHash)},
 	}
 }
 
@@ -456,8 +460,9 @@ func (s *grpcServer) Run(ctx context.Context,
 		return resp, fmt.Errorf("empty query and mutation.")
 	}
 
-	var l query.Latency
-	l.Start = time.Now()
+	executionContext := query.NewExecutionContext(context.WithValue(ctx, "mutation_allowed",
+		isMutationAllowed(ctx)))
+	executionContext.Latency.Start = time.Now()
 	x.Trace(ctx, "Query received: %v, variables: %v", req.Query, req.Vars)
 	res, err := parseQueryAndMutation(ctx, gql.Request{
 		Str:       req.Query,
@@ -482,14 +487,14 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 
 	var er query.ExecuteResult
-	if er, err = query.Execute(ctx, res, &l, isMutationAllowed(ctx)); err != nil {
+	if er, err = query.Execute(executionContext, res); err != nil {
 		x.TraceError(ctx, err)
 		return resp, x.Wrap(err)
 	}
 	resp.AssignedUids = er.Allocations
 	resp.Schema = er.SchemaNode
 
-	nodes, err := query.ToProtocolBuf(&l, er.Subgraphs)
+	nodes, err := query.ToProtocolBuf(executionContext.Latency, er.Subgraphs)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
 		return resp, err
@@ -497,6 +502,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	resp.N = nodes
 
 	gl := new(protos.Latency)
+	l := executionContext.Latency
 	gl.Parsing, gl.Processing, gl.Pb = l.Parsing.String(), l.Processing.String(),
 		l.ProtocolBuffer.String()
 	resp.L = gl

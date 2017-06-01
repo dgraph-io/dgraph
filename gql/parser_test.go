@@ -2466,21 +2466,6 @@ func TestParseIRIRefInvalidChar(t *testing.T) {
 	require.Error(t, err) // because of ^
 }
 
-//func TestParseGeoJson(t *testing.T) {
-//	query := `
-//	mutation {
-//		set {
-//			<_uid_:1> <loc> "{
-//				\'Type\':\'Point\' ,
-//				\'Coordinates\':[1.1,2.0]
-//			}"^^<geo:geojson> .
-//		}
-//	}
-//	`
-//	_, err := Parse(Request{Str: query, Http: true})
-//	require.NoError(t, err)
-//}
-
 func TestMutationOpenBrace(t *testing.T) {
 	query := `
 	mutation {
@@ -3457,4 +3442,9 @@ func TestMutationVariables(t *testing.T) {
 		SubjectVar:  "adults",
 	}
 	require.EqualValues(t, expected, *res.Mutation.Set[0])
+}
+
+func TestRemoveDuplicates(t *testing.T) {
+	set := removeDuplicates([]string{"a", "a", "a", "b", "b", "c", "c"})
+	require.EqualValues(t, []string{"a", "b", "c"}, set)
 }

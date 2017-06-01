@@ -344,16 +344,15 @@ func TestReturnUids(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	sgl, _, err := ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	qr, err := ProcessQuery(ctx, res)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
 	mp := map[string]string{
 		"a": "123",
 	}
-	require.NoError(t, ToJson(&l, sgl, &buf, mp, false))
+	require.NoError(t, ToJson(ctx.Latency, qr.Subgraphs, &buf, mp, false))
 	js := buf.String()
 	require.JSONEq(t,
 		`{"uids":{"a":"123"},"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
@@ -449,9 +448,8 @@ func TestLevelBasedFacetVarSumError(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	_, _, err = ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	_, err = ProcessQuery(ctx, res)
 	require.Error(t, err)
 }
 
@@ -1433,9 +1431,8 @@ func TestVarInAggError(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	_, _, err = ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	_, err = ProcessQuery(ctx, res)
 	require.Error(t, err)
 }
 func TestVarInIneqError(t *testing.T) {
@@ -1456,9 +1453,8 @@ func TestVarInIneqError(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	_, _, err = ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	_, err = ProcessQuery(ctx, res)
 	require.Error(t, err)
 }
 
@@ -1598,9 +1594,8 @@ func TestShortestPath_ExpandError(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	_, _, err = ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	_, err = ProcessQuery(ctx, res)
 	require.Error(t, err)
 }
 
@@ -1711,9 +1706,8 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	_, _, err = ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	_, err = ProcessQuery(ctx, res)
 	require.Error(t, err)
 }
 
@@ -1935,14 +1929,13 @@ func TestDebug1(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, "debug", "true")
-	sgl, _, err := ProcessQuery(ctx, res, &l)
+	eCtx := NewExecutionContext(context.WithValue(ctx, "debug", "true"))
+	qr, err := ProcessQuery(eCtx, res)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf, nil, true))
+	require.NoError(t, ToJson(eCtx.Latency, qr.Subgraphs, &buf, nil, true))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -1994,14 +1987,13 @@ func TestDebug3(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, "debug", "true")
-	sgl, _, err := ProcessQuery(ctx, res, &l)
+	eCtx := NewExecutionContext(context.WithValue(ctx, "debug", "true"))
+	qr, err := ProcessQuery(eCtx, res)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf, nil, true))
+	require.NoError(t, ToJson(eCtx.Latency, qr.Subgraphs, &buf, nil, true))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -2198,8 +2190,7 @@ func TestMultiLevelAgg1Error(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	_, _, queryErr := ProcessQuery(context.Background(), res, &l)
+	_, queryErr := ProcessQuery(defaultContext(), res)
 	require.Error(t, queryErr)
 
 }
@@ -2501,8 +2492,7 @@ func TestQueryPassword(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	_, _, queryErr := ProcessQuery(context.Background(), res, &l)
+	_, queryErr := ProcessQuery(defaultContext(), res)
 	require.NotNil(t, queryErr)
 }
 
@@ -5131,8 +5121,7 @@ func TestGeneratorRootFilterOnCountError1(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	_, _, queryErr := ProcessQuery(context.Background(), res, &l)
+	_, queryErr := ProcessQuery(defaultContext(), res)
 	require.NotNil(t, queryErr)
 }
 
@@ -5149,8 +5138,7 @@ func TestGeneratorRootFilterOnCountError2(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	_, _, queryErr := ProcessQuery(context.Background(), res, &l)
+	_, queryErr := ProcessQuery(defaultContext(), res)
 	require.NotNil(t, queryErr)
 }
 
@@ -5167,8 +5155,7 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	_, _, queryErr := ProcessQuery(context.Background(), res, &l)
+	_, queryErr := ProcessQuery(defaultContext(), res)
 	require.Error(t, queryErr)
 }
 
@@ -5708,7 +5695,7 @@ children: <
 }
 
 func runQuery(t *testing.T, gq *gql.GraphQuery) string {
-	ctx := context.Background()
+	ctx := defaultContext()
 	ch := make(chan error)
 
 	sg, err := ToSubGraph(ctx, gq)
@@ -5717,9 +5704,8 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 	err = <-ch
 	require.NoError(t, err)
 
-	var l Latency
 	var buf bytes.Buffer
-	err = sg.ToFastJSON(&l, &buf, nil, false)
+	err = sg.ToFastJSON(ctx.Latency, &buf, nil, false)
 	require.NoError(t, err)
 	return string(buf.Bytes())
 }
@@ -6499,9 +6485,8 @@ func TestBoolIndexgeRoot(t *testing.T) {
 			}
 		}`
 	res, _ := gql.Parse(gql.Request{Str: q})
-	var l Latency
-	ctx := context.Background()
-	_, _, err := ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	_, err := ProcessQuery(ctx, res)
 	require.NotNil(t, err)
 }
 
@@ -6536,9 +6521,8 @@ func TestBoolSort(t *testing.T) {
 		}
 	`
 	res, _ := gql.Parse(gql.Request{Str: q, Http: true})
-	var l Latency
-	ctx := context.Background()
-	_, _, err := ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	_, err := ProcessQuery(ctx, res)
 	require.NotNil(t, err)
 }
 
@@ -6669,9 +6653,8 @@ func TestHashTokGeqErr(t *testing.T) {
 		}
 	`
 	res, _ := gql.Parse(gql.Request{Str: query})
-	var l Latency
-	ctx := context.Background()
-	_, _, err := ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	_, err := ProcessQuery(ctx, res)
 	require.Error(t, err)
 }
 
@@ -6689,9 +6672,8 @@ func TestNameNotIndexed(t *testing.T) {
 		}
 	`
 	res, _ := gql.Parse(gql.Request{Str: query})
-	var l Latency
-	ctx := context.Background()
-	_, _, err := ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	_, err := ProcessQuery(ctx, res)
 	require.Error(t, err)
 }
 
@@ -6729,9 +6711,8 @@ func TestDuplicateAlias(t *testing.T) {
 			}
 		}`
 	res, _ := gql.Parse(gql.Request{Str: query})
-	var l Latency
-	ctx := context.Background()
-	_, _, err := ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	_, err := ProcessQuery(ctx, res)
 	require.Error(t, err)
 }
 
@@ -6814,13 +6795,13 @@ func TestDebugUid(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, "debug", "true")
-	sgl, _, err := ProcessQuery(ctx, res, &l)
+	eCtx := NewExecutionContext(context.WithValue(ctx, "debug", "true"))
+
+	qr, err := ProcessQuery(eCtx, res)
 	require.NoError(t, err)
 	var buf bytes.Buffer
-	err = ToJson(&l, sgl, &buf, nil, false)
+	err = ToJson(eCtx.Latency, qr.Subgraphs, &buf, nil, false)
 	require.NoError(t, err)
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))

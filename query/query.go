@@ -118,6 +118,16 @@ func (l *Latency) ToMap() map[string]string {
 	return m
 }
 
+type ExecutionContext struct {
+	context.Context
+	Latency *Latency
+}
+
+// NewExecutionContext returns context based on ctx.
+func NewExecutionContext(ctx context.Context) ExecutionContext {
+	return ExecutionContext{Context: ctx, Latency: &Latency{}}
+}
+
 type params struct {
 	Alias        string
 	Count        int
@@ -241,6 +251,7 @@ func ConvertUidsToHex(m map[string]uint64) (res map[string]string) {
 	return
 }
 
+// TODO(szm): name resolveTokenizers and move to tok. for named tokenizers it does verification
 func enrichSchema(updates []*protos.SchemaUpdate) error {
 	for _, schema := range updates {
 		typ := types.TypeID(schema.ValueType)
@@ -281,12 +292,17 @@ func enrichSchema(updates []*protos.SchemaUpdate) error {
 	return nil
 }
 
-func Execute(ctx context.Context, res gql.Result, l *Latency, mutationAllowed bool) (ExecuteResult, error) {
+func Execute(ctx ExecutionContext, res gql.Result) (ExecuteResult, error) {
 	var er ExecuteResult
 	var err error
 	// If we have mutations that don't depend on query, run them first.
 	var vars map[string]varValue
 	var schemaUpdate []*protos.SchemaUpdate
+
+	mutationAllowed, ok := ctx.Value("mutation_allowed").(bool)
+	if !ok {
+		mutationAllowed = false
+	}
 
 	var depSet, indepSet, depDel, indepDel gql.NQuads
 	if res.Mutation != nil {
@@ -327,7 +343,9 @@ func Execute(ctx context.Context, res gql.Result, l *Latency, mutationAllowed bo
 		return er, nil
 	}
 
-	er.Subgraphs, vars, err = ProcessQuery(ctx, res, l)
+	var qr QueryResult
+	qr, err = ProcessQuery(ctx, res)
+	er.Subgraphs = qr.Subgraphs
 	if err != nil {
 		return er, x.Wrapf(&InternalError{err: err}, "Unable to process query")
 	}
@@ -335,7 +353,7 @@ func Execute(ctx context.Context, res gql.Result, l *Latency, mutationAllowed bo
 	nquads := depSet.Add(depDel)
 	if !nquads.IsEmpty() {
 		var mr MaterializedMutation
-		if mr, err = Materialize(ctx, nquads, vars); err != nil {
+		if mr, err = Materialize(ctx, nquads, qr.Vars); err != nil {
 			return er, x.Wrapf(&InvalidRequestError{err: err}, "Failed to convert NQuads to edges")
 		}
 		if len(mr.NewUids) > 0 {
@@ -1345,12 +1363,17 @@ func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, parent
 	return sg.valueVarAggregation(doneVars, parent)
 }
 
-func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, map[string]varValue, error) {
-	var sgl []*SubGraph
+type QueryResult struct {
+	Subgraphs []*SubGraph
+	Vars      map[string]varValue
+}
+
+func ProcessQuery(ctx ExecutionContext, res gql.Result) (QueryResult, error) {
 	var err error
+	var qr QueryResult
 
 	// doneVars stores the processed variables.
-	doneVars := make(map[string]varValue)
+	qr.Vars = make(map[string]varValue)
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
@@ -1360,15 +1383,15 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
-			return nil, doneVars, err
+			return qr, err
 		}
 		x.Trace(ctx, "Query parsed")
-		sgl = append(sgl, sg)
+		qr.Subgraphs = append(qr.Subgraphs, sg)
 	}
-	l.Parsing += time.Since(loopStart)
+	ctx.Latency.Parsing += time.Since(loopStart)
 
 	execStart := time.Now()
-	hasExecuted := make([]bool, len(sgl))
+	hasExecuted := make([]bool, len(qr.Subgraphs))
 	numQueriesDone := 0
 
 	// canExecute returns true if a query block is ready to execute with all the variables
@@ -1385,7 +1408,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			}
 			// The variable should be defined in this block or should have already been
 			// populated by some other block, otherwise we are not ready to execute yet.
-			_, ok := doneVars[v]
+			_, ok := qr.Vars[v]
 			if !ok && !selfDep {
 				return false
 			}
@@ -1394,24 +1417,24 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	}
 
 	var shortestSg *SubGraph
-	for i := 0; i < len(sgl) && numQueriesDone < len(sgl); i++ {
-		errChan := make(chan error, len(sgl))
+	for i := 0; i < len(qr.Subgraphs) && numQueriesDone < len(qr.Subgraphs); i++ {
+		errChan := make(chan error, len(qr.Subgraphs))
 		var idxList []int
 		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
 		// to be executed.
-		for idx := 0; idx < len(sgl); idx++ {
+		for idx := 0; idx < len(qr.Subgraphs); idx++ {
 			if hasExecuted[idx] {
 				continue
 			}
-			sg := sgl[idx]
+			sg := qr.Subgraphs[idx]
 			// Check the list for the requires variables.
 			if !canExecute(idx) {
 				continue
 			}
 
-			err = sg.recursiveFillVars(doneVars)
+			err = sg.recursiveFillVars(qr.Vars)
 			if err != nil {
-				return nil, doneVars, err
+				return qr, err
 			}
 			hasExecuted[idx] = true
 			numQueriesDone++
@@ -1438,26 +1461,26 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			case err := <-errChan:
 				if err != nil {
 					x.TraceError(ctx, x.Wrapf(err, "Error while processing Query"))
-					return nil, doneVars, err
+					return qr, err
 				}
 			case <-ctx.Done():
 				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
-				return nil, doneVars, ctx.Err()
+				return qr, ctx.Err()
 			}
 		}
 
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
-			sg := sgl[idx]
+			sg := qr.Subgraphs[idx]
 			isCascade := sg.Params.Cascade || shouldCascade(res, idx)
 			var sgPath []*SubGraph
-			err = sg.populateVarMap(doneVars, isCascade, sgPath)
+			err = sg.populateVarMap(qr.Vars, isCascade, sgPath)
 			if err != nil {
-				return nil, doneVars, err
+				return qr, err
 			}
-			err = sg.populatePostAggregation(doneVars, nil)
+			err = sg.populatePostAggregation(qr.Vars, nil)
 			if err != nil {
-				return nil, doneVars, err
+				return qr, err
 			}
 		}
 	}
@@ -1465,16 +1488,16 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	// Ensure all the queries are executed.
 	for _, it := range hasExecuted {
 		if !it {
-			return nil, doneVars, x.Errorf("Query couldn't be executed")
+			return qr, x.Errorf("Query couldn't be executed")
 		}
 	}
-	l.Processing += time.Since(execStart)
+	ctx.Latency.Processing += time.Since(execStart)
 
 	// If we had a shortestPath SG, append it to the result.
 	if shortestSg != nil {
-		sgl = append(sgl, shortestSg)
+		qr.Subgraphs = append(qr.Subgraphs, shortestSg)
 	}
-	return sgl, doneVars, nil
+	return qr, nil
 }
 
 // shouldCascade returns true if the query block is not self depenedent and we should
