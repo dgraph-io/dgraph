@@ -3386,6 +3386,7 @@ func TestParseEqArg(t *testing.T) {
 		}
 	}
 `
-	_, err := Parse(Request{Str: query, Http: true})
+	gql, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
+	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
 }

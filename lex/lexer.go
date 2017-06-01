@@ -246,7 +246,7 @@ const (
 )
 
 // ECHAR ::= '\' [tbnrf"'\]
-func isEscChar(r rune) bool {
+func (l *Lexer) IsEscChar(r rune) bool {
 	switch r {
 	case 't', 'b', 'n', 'r', 'f', '"', '\'', '\\':
 		return true
@@ -267,7 +267,7 @@ func (l *Lexer) LexQuotedString() error {
 		}
 		if r == '\\' {
 			r := l.Next()
-			if !isEscChar(r) {
+			if !l.IsEscChar(r) {
 				return x.Errorf("Not a valid escape char: %v", r)
 			}
 			continue // eat the next char

@@ -1373,8 +1373,10 @@ L:
 				if !expectArg && !expectLang {
 					return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
 				}
-				fmt.Println("iteminFunc", itemInFunc.Val)
-				val += strings.Trim(itemInFunc.Val, "\" \t")
+				v := strings.Trim(itemInFunc.Val, " \t")
+				// Trim just one leading and triling "
+				v = strings.TrimPrefix(v, "\"")
+				val = strings.TrimSuffix(v, "\"")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
@@ -1392,9 +1394,7 @@ L:
 					g.Lang = val
 					expectLang = false
 				} else {
-					fmt.Println("Val", val)
 					g.Args = append(g.Args, val)
-					fmt.Println("Args", g.Args)
 				}
 				if g.Name == "var" {
 					g.NeedsVar = append(g.NeedsVar, VarContext{

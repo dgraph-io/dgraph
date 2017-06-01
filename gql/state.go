@@ -19,9 +19,8 @@
 package gql
 
 import (
-	"fmt"
-
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/types"
 )
 
 const (
@@ -139,8 +138,8 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 	}
 }
 
+// This function tries to find the arg name by going back.
 func findArg(l *lex.Lexer) string {
-	// TODO - Make sure we are at [
 	// lets try and find the type of arg. Lets backup till (.
 	count := 0
 	r := ' '
@@ -150,19 +149,22 @@ func findArg(l *lex.Lexer) string {
 		l.Backup()
 		r = l.Peek()
 	}
+	// Lets skip (
 	l.Next()
 	arg := ""
-	for {
+	for count > 0 {
 		count--
 		r = l.Next()
 		if isSpace(r) {
 			l.Ignore()
 		}
-		if r == comma {
+		// id has colon other args have comma.
+		if r == comma || r == colon {
 			break
 		}
 		arg += string(r)
 	}
+	// Lets move back to where we started.
 	for count > 0 {
 		l.Next()
 		count--
@@ -171,12 +173,11 @@ func findArg(l *lex.Lexer) string {
 }
 
 func lexArgTokens(arg string) bool {
-	switch arg {
-	case "eq", "gt", "lt", "ge", "le":
-		return true
-	default:
+	// args for id and geo functions are not tokenized here.
+	if types.IsGeoFunc(arg) || arg == "id" {
 		return false
 	}
+	return true
 
 }
 
@@ -189,7 +190,6 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemAt)
 			return lexDirective
 		case isNameBegin(r) || isNumber(r):
-			//fmt.Printf("yo: %#U\n\n", l.Peek())
 			empty = false
 			return lexArgName
 		case r == slash:
@@ -251,22 +251,28 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemColon)
 		case isEndLiteral(r):
 			{
+				l.Ignore() // ignore the "
 				empty = false
-				l.AcceptUntil(isEndLiteral) // This call will backup the ending ".
-				l.Next()                    // Consume the " .
+				if err := l.LexQuotedString(); err != nil {
+					return l.Errorf(err.Error())
+				}
+				l.Backup()
 				l.Emit(itemName)
+				l.Next()
 			}
-		case r == '[':
+		case r == leftSquare:
 			arg := findArg(l)
-			lexTokens := lexArgTokens(arg)
+			lexArgs := lexArgTokens(arg)
 			{
-				if lexTokens {
-					l.Ignore()
+				if lexArgs {
+					l.Ignore() // Ignore [ as we want to lex actual tokens.
 				}
 				depth := 1
 				for {
 					r := l.Next()
-					if lexTokens {
+					// Only if we want to lexArgs then we look for comma and quote.
+					// Else we absorb everything.
+					if lexArgs {
 						if r == comma {
 							l.Emit(itemComma)
 						}
@@ -274,7 +280,6 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 							if err := l.LexQuotedString(); err != nil {
 								return l.Errorf(err.Error())
 							}
-							fmt.Println("emitting")
 							l.Emit(itemName)
 						}
 					}
@@ -292,7 +297,8 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 						break
 					}
 				}
-				if !lexTokens {
+				// We would have already lexed the args if lexArgs is true.
+				if !lexArgs {
 					l.Emit(itemName)
 				}
 				empty = false
