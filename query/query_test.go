@@ -7341,3 +7341,55 @@ func TestGetAllPredicatesGroupby(t *testing.T) {
 	require.Contains(t, predicates, "age")
 	require.Contains(t, predicates, "friend")
 }
+
+func TestMathVarCrash(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f(func: anyofterms(name, "Rick Michonne Andrea")) {
+				age as age
+				a as math(age *2)
+				var(a)
+			}
+		}
+	`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
+func TestMathVarAlias(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f(func: anyofterms(name, "Rick Michonne Andrea")) {
+				ageVar as age
+				a: math(ageVar *2)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"f":[{"a":76.000000,"age":38},{"a":30.000000,"age":15},{"a":38.000000,"age":19}]}`, string(js))
+}
+
+func TestMathVarAlias2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as me(func: anyofterms(name, "Rick Michonne Andrea")) {
+				ageVar as age
+				doubleAge: a as math(ageVar *2)
+			}
+
+			me2(id: var(f)) {
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"age":38,"doubleAge":76.000000},{"age":15,"doubleAge":30.000000},{"age":19,"doubleAge":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, string(js))
+}
