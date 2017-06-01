@@ -3460,3 +3460,15 @@ func TestMultipleEqual(t *testing.T) {
 	require.Equal(t, 2, len(gql.Query[0].Func.Args))
 	require.Equal(t, "Tom Hanks", gql.Query[0].Func.Args[1])
 }
+
+func TestParseEqArg(t *testing.T) {
+	query := `
+	{
+		me(id: 1) @filter(eq(name, ["And\"rea", "Bob"])) {
+		 name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}

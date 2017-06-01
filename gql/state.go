@@ -135,6 +135,47 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 	}
 }
 
+func findArg(l *lex.Lexer) string {
+	// TODO - Make sure we are at [
+	// lets try and find the type of arg. Lets backup till (.
+	count := 0
+	r := ' '
+	l.Backup()
+	for r != leftRound {
+		count++
+		l.Backup()
+		r = l.Peek()
+	}
+	l.Next()
+	arg := ""
+	for {
+		count--
+		r = l.Next()
+		if isSpace(r) {
+			l.Ignore()
+		}
+		if r == comma {
+			break
+		}
+		arg += string(r)
+	}
+	for count > 0 {
+		l.Next()
+		count--
+	}
+	return arg
+}
+
+func lexArgTokens(arg string) bool {
+	switch arg {
+	case "eq", "gt", "lt", "ge", "le":
+		return true
+	default:
+		return false
+	}
+
+}
+
 func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexFuncOrArg
 	var empty bool
@@ -144,6 +185,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemAt)
 			return lexDirective
 		case isNameBegin(r) || isNumber(r):
+			//fmt.Printf("yo: %#U\n\n", l.Peek())
 			empty = false
 			return lexArgName
 		case r == slash:
