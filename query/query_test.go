@@ -6179,7 +6179,7 @@ loc                            : geo @index .
 genre                          : uid @reverse .
 survival_rate                  : float .
 alive                          : bool @index .
-age                            : int .
+age                            : int @index .
 shadow_deep                    : int .
 friend                         : uid @reverse .
 geometry                       : geo @index .
@@ -7526,4 +7526,20 @@ func TestMultipleEqQuote(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"name":"Alice\""}]}`, js)
+}
+
+func TestMultipleEqInt(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: eq(age, ["15", "17", "38"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}]}`, js)
 }
