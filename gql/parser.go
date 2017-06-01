@@ -1420,7 +1420,7 @@ L:
 				v := strings.Trim(itemInFunc.Val, " \t")
 				// Trim just one leading and triling "
 				v = strings.TrimPrefix(v, "\"")
-				val = strings.TrimSuffix(v, "\"")
+				val += strings.TrimSuffix(v, "\"")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
