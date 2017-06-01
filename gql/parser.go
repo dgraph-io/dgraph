@@ -1374,7 +1374,7 @@ L:
 					return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
 				}
 				v := strings.Trim(itemInFunc.Val, " \t")
-				// Trim just one leading and triling "
+				// Trim just one leading and trailing "
 				v = strings.TrimPrefix(v, "\"")
 				val += strings.TrimSuffix(v, "\"")
 				if val == "" {

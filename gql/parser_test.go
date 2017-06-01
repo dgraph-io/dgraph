@@ -3381,7 +3381,20 @@ func TestCountAtRootErr2(t *testing.T) {
 func TestParseEqArg(t *testing.T) {
 	query := `
 	{
-		me(id: 1) @filter(eq(name, ["And\"rea", "Bob"])) {
+		me(id: [1, 20]) @filter(eq(name, ["And\"rea", "Bob"])) {
+		 name
+		}
+	}
+`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
+}
+
+func TestParseEqArg2(t *testing.T) {
+	query := `
+	{
+		me(func: eq(age, ["1", "20"])) @filter(eq(name, ["And\"rea", "Bob"])) {
 		 name
 		}
 	}

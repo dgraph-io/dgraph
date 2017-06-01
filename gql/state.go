@@ -152,6 +152,7 @@ func findArg(l *lex.Lexer) string {
 
 	if r == colon {
 		// means it is id: []
+		// We are at :, we have to go till a leftRound for start of Arg.
 		for r != leftRound {
 			count++
 			l.Backup()
@@ -160,6 +161,8 @@ func findArg(l *lex.Lexer) string {
 	} else {
 		// could be func: near(loc, []) or @filter(eq(name, []))
 		leftRoundOrColon := 0
+		// We are at comma, we have to go till second Round or a colon
+		// after round.
 		for leftRoundOrColon != 2 {
 			count++
 			l.Backup()
@@ -179,7 +182,7 @@ func findArg(l *lex.Lexer) string {
 		if isSpace(r) {
 			l.Ignore()
 		}
-		// id has colon other args have comma.
+		// id has colon func/filter have comma.
 		if r == leftRound || r == colon {
 			break
 		}
