@@ -240,3 +240,41 @@ func (l *Lexer) IgnoreRun(c CheckRune) {
 	l.AcceptRun(c)
 	l.Ignore()
 }
+
+const (
+	quote = '"'
+)
+
+// ECHAR ::= '\' [tbnrf"'\]
+func isEscChar(r rune) bool {
+	switch r {
+	case 't', 'b', 'n', 'r', 'f', '"', '\'', '\\':
+		return true
+	}
+	return false
+}
+
+func (l *Lexer) LexQuotedString() error {
+	l.Backup()
+	r := l.Next()
+	if r != quote {
+		return x.Errorf("String should start with quote.")
+	}
+	for {
+		r := l.Next()
+		if r == EOF {
+			return x.Errorf("Unexpected end of input.")
+		}
+		if r == '\\' {
+			r := l.Next()
+			if !isEscChar(r) {
+				return x.Errorf("Not a valid escape char: %v", r)
+			}
+			continue // eat the next char
+		}
+		if r == quote {
+			break
+		}
+	}
+	return nil
+}

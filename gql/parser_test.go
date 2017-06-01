@@ -3377,3 +3377,15 @@ func TestCountAtRootErr2(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 }
+
+func TestParseEqArg(t *testing.T) {
+	query := `
+	{
+		me(id: 1) @filter(eq(name, ["And\"rea", "Bob"])) {
+		 name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}

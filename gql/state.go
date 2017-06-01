@@ -18,7 +18,11 @@
 // Package gql is responsible for lexing and parsing a GraphQL query/mutation.
 package gql
 
-import "github.com/dgraph-io/dgraph/lex"
+import (
+	"fmt"
+
+	"github.com/dgraph-io/dgraph/lex"
+)
 
 const (
 	leftCurl    = '{'
@@ -135,6 +139,47 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 	}
 }
 
+func findArg(l *lex.Lexer) string {
+	// TODO - Make sure we are at [
+	// lets try and find the type of arg. Lets backup till (.
+	count := 0
+	r := ' '
+	l.Backup()
+	for r != leftRound {
+		count++
+		l.Backup()
+		r = l.Peek()
+	}
+	l.Next()
+	arg := ""
+	for {
+		count--
+		r = l.Next()
+		if isSpace(r) {
+			l.Ignore()
+		}
+		if r == comma {
+			break
+		}
+		arg += string(r)
+	}
+	for count > 0 {
+		l.Next()
+		count--
+	}
+	return arg
+}
+
+func lexArgTokens(arg string) bool {
+	switch arg {
+	case "eq", "gt", "lt", "ge", "le":
+		return true
+	default:
+		return false
+	}
+
+}
+
 func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexFuncOrArg
 	var empty bool
@@ -144,6 +189,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemAt)
 			return lexDirective
 		case isNameBegin(r) || isNumber(r):
+			//fmt.Printf("yo: %#U\n\n", l.Peek())
 			empty = false
 			return lexArgName
 		case r == slash:
@@ -211,10 +257,28 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 				l.Emit(itemName)
 			}
 		case r == '[':
+			arg := findArg(l)
+			lexTokens := lexArgTokens(arg)
 			{
+				if lexTokens {
+					l.Ignore()
+				}
 				depth := 1
 				for {
 					r := l.Next()
+					if lexTokens {
+						if r == comma {
+							l.Emit(itemComma)
+						}
+						if r == quote {
+							if err := l.LexQuotedString(); err != nil {
+								return l.Errorf(err.Error())
+							}
+							fmt.Println("emitting")
+							l.Emit(itemName)
+						}
+					}
+
 					if r == lex.EOF || r == ')' {
 						return l.Errorf("Invalid bracket sequence")
 					} else if r == '[' {
@@ -228,7 +292,9 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 						break
 					}
 				}
-				l.Emit(itemName)
+				if !lexTokens {
+					l.Emit(itemName)
+				}
 				empty = false
 				l.AcceptRun(isSpace)
 				l.Ignore()
