@@ -38,6 +38,20 @@ type Mutation struct {
 	Schema string
 }
 
+func (m Mutation) HasVariables() bool {
+	for _, n := range m.Set {
+		if HasVariables(n) {
+			return true
+		}
+	}
+	for _, n := range m.Del {
+		if HasVariables(n) {
+			return true
+		}
+	}
+	return false
+}
+
 // HasOps returns true iff the mutation has at least one non-empty
 // part.
 func (m Mutation) HasOps() bool {

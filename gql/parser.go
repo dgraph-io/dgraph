@@ -590,14 +590,11 @@ func flatten(vl []*Vars) (needs []string, defines []string) {
 // removes duplicates from a sorted slice of strings. Changes underylying array.
 func removeDuplicates(s []string) (out []string) {
 	out = s[:0]
-	if len(s) > 0 {
-		for i := 1; i < len(s); i++ {
-			if s[i-1] == s[i] {
-				continue
-			}
-			out = append(out, s[i-1])
+	for i := range s {
+		if i > 0 && s[i] == s[i-1] {
+			continue
 		}
-		out = append(out, s[len(s)-1])
+		out = append(out, s[i])
 	}
 	return
 }

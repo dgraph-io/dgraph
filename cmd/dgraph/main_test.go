@@ -95,6 +95,10 @@ func childAttrs(sg *query.SubGraph) []string {
 	return out
 }
 
+func defaultContext() context.Context {
+	return context.WithValue(context.Background(), "mutation_allowed", true)
+}
+
 func processToFastJSON(q string) string {
 	res, err := gql.Parse(gql.Request{Str: q, Http: true})
 	if err != nil {
@@ -102,15 +106,16 @@ func processToFastJSON(q string) string {
 	}
 
 	var l query.Latency
-	ctx := context.Background()
-	sgl, _, err := query.ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	var buf bytes.Buffer
-	err = query.ToJson(&l, sgl, &buf, nil, false)
+	err = query.ToJson(&l, qr.Subgraphs, &buf, nil, false)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -124,15 +129,16 @@ func runQuery(q string) (string, error) {
 	}
 
 	var l query.Latency
-	ctx := context.Background()
-	sgl, _, err := query.ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
 
 	if err != nil {
 		return "", err
 	}
 
 	var buf bytes.Buffer
-	err = query.ToJson(&l, sgl, &buf, nil, false)
+	err = query.ToJson(qr.Latency, qr.Subgraphs, &buf, nil, false)
 	if err != nil {
 		return "", err
 	}
@@ -145,8 +151,9 @@ func runMutation(m string) error {
 		return err
 	}
 
-	ctx := context.Background()
-	_, err = query.Execute(ctx, res, nil, true)
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	_, err = qr.ProcessWithMutation(defaultContext())
 	return err
 }
 
@@ -657,8 +664,9 @@ func TestQuery(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: m, Http: true})
 	require.NoError(t, err)
 
-	ctx := context.Background()
-	_, err = query.Execute(ctx, res, nil, true)
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	_, err = qr.ProcessWithMutation(defaultContext())
 
 	output := processToFastJSON(q0)
 	require.JSONEq(t, `{"user":[{"name":"Alice"}]}`, output)
@@ -712,8 +720,9 @@ func TestSchemaConversion(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: m6, Http: true})
 	require.NoError(t, err)
 
-	ctx := context.Background()
-	_, err = query.Execute(ctx, res, nil, true)
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	_, err = qr.ProcessWithMutation(defaultContext())
 
 	require.NoError(t, err)
 	output := processToFastJSON(strings.Replace(q6, "<id>", "shyam2", -1))
@@ -739,10 +748,10 @@ func TestMutationError(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: qErr, Http: true})
 	require.NoError(t, err)
 
-	ctx := context.Background()
-	_, err = query.Execute(ctx, res, nil, true)
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	_, err = qr.ProcessWithMutation(defaultContext())
 	require.Error(t, err)
-
 }
 
 var qm = `
@@ -760,8 +769,9 @@ func TestAssignUid(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: qm, Http: true})
 	require.NoError(t, err)
 
-	ctx := context.Background()
-	er, err := query.Execute(ctx, res, nil, true)
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	er, err := qr.ProcessWithMutation(defaultContext())
 	require.NoError(t, err)
 
 	require.EqualValues(t, len(er.Allocations), 2, "Expected two UIDs to be allocated")
@@ -971,12 +981,12 @@ func TestMutationSubjectVariables(t *testing.T) {
 			}
 		}`
 
-	ctx := context.Background()
 	parsed, err := gql.Parse(gql.Request{Str: m2, Http: true})
 	require.NoError(t, err)
 
 	var l query.Latency
-	_, err = query.Execute(ctx, parsed, &l, true)
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &parsed}
+	_, err = qr.ProcessWithMutation(defaultContext())
 	require.NoError(t, err)
 
 	q1 := `
@@ -1010,12 +1020,12 @@ func TestMutationSubjectVariablesSingleMutation(t *testing.T) {
 		}
     `
 
-	ctx := context.Background()
 	parsed, err := gql.Parse(gql.Request{Str: m1, Http: true})
 	require.NoError(t, err)
 
 	var l query.Latency
-	_, err = query.Execute(ctx, parsed, &l, true)
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &parsed}
+	_, err = qr.ProcessWithMutation(defaultContext())
 	require.NoError(t, err)
 
 	q1 := `
@@ -1036,10 +1046,10 @@ func TestMutationObjectVariables(t *testing.T) {
 	m1 := `
 		mutation {
 			set {
-                <me>          <friend>   <alice> .
-                <me>          <friend>   <bob> .
-                <me>          <friend>   <chris> .
-				<me>          <likes>    var(myfriend) .
+                <me>    <friend>   <alice> .
+                <me>    <friend>   <bob> .
+                <me>    <friend>   <chris> .
+				<me>    <likes>    var(myfriend) .
 			}
 		}
 		{
@@ -1049,12 +1059,13 @@ func TestMutationObjectVariables(t *testing.T) {
 		}
     `
 
-	ctx := context.Background()
 	parsed, err := gql.Parse(gql.Request{Str: m1, Http: true})
 	require.NoError(t, err)
 
 	var l query.Latency
-	_, err = query.Execute(ctx, parsed, &l, true)
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &parsed}
+	_, err = qr.ProcessWithMutation(defaultContext())
+
 	require.NoError(t, err)
 
 	q1 := `

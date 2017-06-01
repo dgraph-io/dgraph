@@ -36,7 +36,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
@@ -206,188 +205,6 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 	for _, c := range sg.Children {
 		c.DebugPrint(prefix + "|->")
 	}
-}
-
-type ExecuteResult struct {
-	Subgraphs   []*SubGraph
-	SchemaNode  []*protos.SchemaNode
-	Allocations map[string]uint64
-}
-
-var MutationNotAllowedErr = x.Errorf("Mutations are forbidden on this server.")
-
-type InvalidRequestError struct {
-	err error
-}
-
-func (e *InvalidRequestError) Error() string {
-	return "invalid request: " + e.err.Error()
-}
-
-type InternalError struct {
-	err error
-}
-
-func (e *InternalError) Error() string {
-	return "internal error: " + e.err.Error()
-}
-
-// convert the new UIDs to hex string.
-func ConvertUidsToHex(m map[string]uint64) (res map[string]string) {
-	res = make(map[string]string)
-	for k, v := range m {
-		res[k] = fmt.Sprintf("%#x", v)
-	}
-	return
-}
-
-
-func parseFacets(nquads []*protos.NQuad) error {
-	var err error
-	var facet *protos.Facet
-	for _, nq := range nquads {
-		if len(nq.Facets) == 0 {
-			continue
-		}
-		for idx, f := range nq.Facets {
-			if facet, err = facets.FacetFor(f.Key, f.Val); err != nil {
-				return err
-			}
-			nq.Facets[idx] = facet
-		}
-
-	}
-	return nil
-}
-
-// Go client sends facets as string k-v pairs. So they need to parsed and tokenized
-// on the server.
-func parseFacetsInMutation(mu *protos.Mutation) error {
-	if err := parseFacets(mu.Set); err != nil {
-		return err
-	}
-	if err := parseFacets(mu.Del); err != nil {
-		return err
-	}
-	return nil
-}
-
-
-func enrichSchema(updates []*protos.SchemaUpdate) error {
-	for _, schema := range updates {
-		typ := types.TypeID(schema.ValueType)
-		if typ == types.UidID {
-			continue
-		}
-		if len(schema.Tokenizer) == 0 && schema.Directive == protos.SchemaUpdate_INDEX {
-			schema.Tokenizer = []string{tok.Default(typ).Name()}
-		} else if len(schema.Tokenizer) > 0 && schema.Directive != protos.SchemaUpdate_INDEX {
-			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
-		}
-		// check for valid tokeniser types and duplicates
-		var seen = make(map[string]bool)
-		var seenSortableTok bool
-		for _, t := range schema.Tokenizer {
-			tokenizer, has := tok.GetTokenizer(t)
-			if !has {
-				return x.Errorf("Invalid tokenizer %s", t)
-			}
-			if tokenizer.Type() != typ {
-				return x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
-					tokenizer.Name(), schema.Predicate, typ.Name())
-			}
-			if _, ok := seen[tokenizer.Name()]; !ok {
-				seen[tokenizer.Name()] = true
-			} else {
-				return x.Errorf("Duplicate tokenizers present for attr %s", schema.Predicate)
-			}
-			if tokenizer.IsSortable() {
-				if seenSortableTok {
-					return x.Errorf("More than one sortable index encountered for: %v",
-						schema.Predicate)
-				}
-				seenSortableTok = true
-			}
-		}
-	}
-	return nil
-}
-
-func Execute(ctx context.Context, res gql.Result, l *Latency, mutationAllowed bool) (ExecuteResult, error) {
-	var er ExecuteResult
-	var err error
-	// If we have mutations that don't depend on query, run them first.
-	var vars map[string]varValue
-	var schemaUpdate []*protos.SchemaUpdate
-
-	var depSet, indepSet, depDel, indepDel gql.NQuads
-	if res.Mutation != nil {
-		if res.Mutation.HasOps() && !mutationAllowed {
-			return er, x.Wrap(&InvalidRequestError{err: MutationNotAllowedErr})
-		}
-
-		if len(res.Mutation.Schema) > 0 {
-			if schemaUpdate, err = schema.Parse(res.Mutation.Schema); err != nil {
-				return er, x.Wrapf(&InvalidRequestError{err: err}, "failed to parse schema")
-			}
-			if err = enrichSchema(schemaUpdate); err != nil {
-				return er, x.Wrapf(&InternalError{err: err}, "failed to enrich schema")
-			}
-		}
-
-		if err = parseFacetsInMutation(res.M)
-
-		depSet, indepSet = gql.WrapNQ(res.Mutation.Set, protos.DirectedEdge_SET).
-			Partition(gql.HasVariables)
-
-		depDel, indepDel = gql.WrapNQ(res.Mutation.Del, protos.DirectedEdge_DEL).
-			Partition(gql.HasVariables)
-
-		var mr MaterializedMutation
-		nquads := indepSet.Add(indepDel)
-		if !nquads.IsEmpty() {
-			if mr, err = Materialize(ctx, nquads, vars); err != nil {
-				return er, x.Wrapf(&InternalError{err: err}, "failed to convert NQuads to edges")
-			}
-			er.Allocations = mr.NewUids
-		}
-		m := protos.Mutations{Edges: mr.Edges, Schema: schemaUpdate}
-		if err = ApplyMutations(ctx, &m); err != nil {
-			return er, x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
-		}
-	}
-
-	if len(res.Query) == 0 {
-		return er, nil
-	}
-
-	er.Subgraphs, vars, err = ProcessQuery(ctx, res, l)
-	if err != nil {
-		return er, x.Wrapf(&InternalError{err: err}, "Unable to process query")
-	}
-
-	nquads := depSet.Add(depDel)
-	if !nquads.IsEmpty() {
-		var mr MaterializedMutation
-		if mr, err = Materialize(ctx, nquads, vars); err != nil {
-			return er, x.Wrapf(&InvalidRequestError{err: err}, "Failed to convert NQuads to edges")
-		}
-		if len(mr.NewUids) > 0 {
-			return er, x.Wrapf(&InvalidRequestError{err: err},
-				"adding nodes when using variables is currently not supported")
-		}
-		m := protos.Mutations{Edges: mr.Edges}
-		if err = ApplyMutations(ctx, &m); err != nil {
-			return er, x.Wrapf(&InternalError{err: err}, "Failed to apply mutations with variables")
-		}
-	}
-
-	if res.Schema != nil {
-		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
-			return er, x.Wrapf(&InternalError{err: err}, "error while fetching schema")
-		}
-	}
-	return er, nil
 }
 
 // getValue gets the value from the task.
@@ -1392,138 +1209,6 @@ func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, parent
 	return sg.valueVarAggregation(doneVars, parent)
 }
 
-func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, map[string]varValue, error) {
-	var sgl []*SubGraph
-	var err error
-
-	// doneVars stores the processed variables.
-	doneVars := make(map[string]varValue)
-	loopStart := time.Now()
-	for i := 0; i < len(res.Query); i++ {
-		gq := res.Query[i]
-		if gq == nil || (len(gq.ID) == 0 && gq.Func == nil &&
-			len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
-			continue
-		}
-		sg, err := ToSubGraph(ctx, gq)
-		if err != nil {
-			return nil, doneVars, err
-		}
-		x.Trace(ctx, "Query parsed")
-		sgl = append(sgl, sg)
-	}
-	l.Parsing += time.Since(loopStart)
-
-	execStart := time.Now()
-	hasExecuted := make([]bool, len(sgl))
-	numQueriesDone := 0
-
-	// canExecute returns true if a query block is ready to execute with all the variables
-	// that it depends on are already populated or are defined in the same block.
-	canExecute := func(idx int) bool {
-		for _, v := range res.QueryVars[idx].Needs {
-			// here we check if this block defines the variable v.
-			var selfDep bool
-			for _, vd := range res.QueryVars[idx].Defines {
-				if v == vd {
-					selfDep = true
-					break
-				}
-			}
-			// The variable should be defined in this block or should have already been
-			// populated by some other block, otherwise we are not ready to execute yet.
-			_, ok := doneVars[v]
-			if !ok && !selfDep {
-				return false
-			}
-		}
-		return true
-	}
-
-	var shortestSg *SubGraph
-	for i := 0; i < len(sgl) && numQueriesDone < len(sgl); i++ {
-		errChan := make(chan error, len(sgl))
-		var idxList []int
-		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
-		// to be executed.
-		for idx := 0; idx < len(sgl); idx++ {
-			if hasExecuted[idx] {
-				continue
-			}
-			sg := sgl[idx]
-			// Check the list for the requires variables.
-			if !canExecute(idx) {
-				continue
-			}
-
-			err = sg.recursiveFillVars(doneVars)
-			if err != nil {
-				return nil, doneVars, err
-			}
-			hasExecuted[idx] = true
-			numQueriesDone++
-			idxList = append(idxList, idx)
-			if sg.Params.Alias == "shortest" {
-				// We allow only one shortest path block per query.
-				go func() {
-					shortestSg, err = ShortestPath(ctx, sg)
-					errChan <- err
-				}()
-			} else if sg.Params.Alias == "recurse" {
-				go func() {
-					errChan <- Recurse(ctx, sg)
-				}()
-			} else {
-				go ProcessGraph(ctx, sg, nil, errChan)
-			}
-			x.Trace(ctx, "Graph processed")
-		}
-
-		// Wait for the execution that was started in this iteration.
-		for i := 0; i < len(idxList); i++ {
-			select {
-			case err := <-errChan:
-				if err != nil {
-					x.TraceError(ctx, x.Wrapf(err, "Error while processing Query"))
-					return nil, doneVars, err
-				}
-			case <-ctx.Done():
-				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
-				return nil, doneVars, ctx.Err()
-			}
-		}
-
-		// If the executed subgraph had some variable defined in it, Populate it in the map.
-		for _, idx := range idxList {
-			sg := sgl[idx]
-			isCascade := sg.Params.Cascade || shouldCascade(res, idx)
-			var sgPath []*SubGraph
-			err = sg.populateVarMap(doneVars, isCascade, sgPath)
-			if err != nil {
-				return nil, doneVars, err
-			}
-			err = sg.populatePostAggregation(doneVars, nil)
-			if err != nil {
-				return nil, doneVars, err
-			}
-		}
-	}
-
-	// Ensure all the queries are executed.
-	for _, it := range hasExecuted {
-		if !it {
-			return nil, doneVars, x.Errorf("Query couldn't be executed")
-		}
-	}
-	l.Processing += time.Since(execStart)
-
-	// If we had a shortestPath SG, append it to the result.
-	if shortestSg != nil {
-		sgl = append(sgl, shortestSg)
-	}
-	return sgl, doneVars, nil
-}
-
 // shouldCascade returns true if the query block is not self depenedent and we should
 // remove the uids from the bottom up if the children are empty.
 func shouldCascade(res gql.Result, idx int) bool {
@@ -2292,4 +1977,300 @@ func (sg *SubGraph) getAllPredicates(predicates map[string]bool) {
 	for _, child := range sg.Children {
 		child.getAllPredicates(predicates)
 	}
+}
+
+// convert the new UIDs to hex string.
+func ConvertUidsToHex(m map[string]uint64) (res map[string]string) {
+	res = make(map[string]string)
+	for k, v := range m {
+		res[k] = fmt.Sprintf("%#x", v)
+	}
+	return
+}
+
+func parseFacets(nquads []*protos.NQuad) error {
+	var err error
+	var facet *protos.Facet
+	for _, nq := range nquads {
+		if len(nq.Facets) == 0 {
+			continue
+		}
+		for idx, f := range nq.Facets {
+			if facet, err = facets.FacetFor(f.Key, f.Val); err != nil {
+				return err
+			}
+			nq.Facets[idx] = facet
+		}
+
+	}
+	return nil
+}
+
+// Go client sends facets as string k-v pairs. So they need to parsed and tokenized
+// on the server.
+func parseFacetsInMutation(mu *gql.Mutation) error {
+	if err := parseFacets(mu.Set); err != nil {
+		return err
+	}
+	if err := parseFacets(mu.Del); err != nil {
+		return err
+	}
+	return nil
+}
+
+// QueryRequest wraps the state that is used when executing query.
+// Initially Latency and GqlQuery needs to be set. Subgraphs, Vars
+// and schemaUpdate are filled when processing query.
+type QueryRequest struct {
+	*Latency
+	GqlQuery *gql.Result
+
+	Subgraphs []*SubGraph
+
+	vars         map[string]varValue
+	schemaUpdate []*protos.SchemaUpdate
+}
+
+// ProcessQuery processes query part of the request (without mutations).
+// Fills Subgraphs and Vars.
+func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
+	var err error
+
+	// doneVars stores the processed variables.
+	req.vars = make(map[string]varValue)
+	loopStart := time.Now()
+	queries := req.GqlQuery.Query
+	for i := 0; i < len(queries); i++ {
+		gq := queries[i]
+		if gq == nil || (len(gq.ID) == 0 && gq.Func == nil &&
+			len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
+			continue
+		}
+		sg, err := ToSubGraph(ctx, gq)
+		if err != nil {
+			return err
+		}
+		x.Trace(ctx, "Query parsed")
+		req.Subgraphs = append(req.Subgraphs, sg)
+	}
+	req.Latency.Parsing += time.Since(loopStart)
+
+	execStart := time.Now()
+	hasExecuted := make([]bool, len(req.Subgraphs))
+	numQueriesDone := 0
+
+	// canExecute returns true if a query block is ready to execute with all the variables
+	// that it depends on are already populated or are defined in the same block.
+	canExecute := func(idx int) bool {
+		for _, v := range req.GqlQuery.QueryVars[idx].Needs {
+			// here we check if this block defines the variable v.
+			var selfDep bool
+			for _, vd := range req.GqlQuery.QueryVars[idx].Defines {
+				if v == vd {
+					selfDep = true
+					break
+				}
+			}
+			// The variable should be defined in this block or should have already been
+			// populated by some other block, otherwise we are not ready to execute yet.
+			_, ok := req.vars[v]
+			if !ok && !selfDep {
+				return false
+			}
+		}
+		return true
+	}
+
+	var shortestSg *SubGraph
+	for i := 0; i < len(req.Subgraphs) && numQueriesDone < len(req.Subgraphs); i++ {
+		errChan := make(chan error, len(req.Subgraphs))
+		var idxList []int
+		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
+		// to be executed.
+		for idx := 0; idx < len(req.Subgraphs); idx++ {
+			if hasExecuted[idx] {
+				continue
+			}
+			sg := req.Subgraphs[idx]
+			// Check the list for the requires variables.
+			if !canExecute(idx) {
+				continue
+			}
+
+			err = sg.recursiveFillVars(req.vars)
+			if err != nil {
+				return err
+			}
+			hasExecuted[idx] = true
+			numQueriesDone++
+			idxList = append(idxList, idx)
+			if sg.Params.Alias == "shortest" {
+				// We allow only one shortest path block per query.
+				go func() {
+					shortestSg, err = ShortestPath(ctx, sg)
+					errChan <- err
+				}()
+			} else if sg.Params.Alias == "recurse" {
+				go func() {
+					errChan <- Recurse(ctx, sg)
+				}()
+			} else {
+				go ProcessGraph(ctx, sg, nil, errChan)
+			}
+			x.Trace(ctx, "Graph processed")
+		}
+
+		// Wait for the execution that was started in this iteration.
+		for i := 0; i < len(idxList); i++ {
+			select {
+			case err := <-errChan:
+				if err != nil {
+					x.TraceError(ctx, x.Wrapf(err, "Error while processing Query"))
+					return err
+				}
+			case <-ctx.Done():
+				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+				return ctx.Err()
+			}
+		}
+
+		// If the executed subgraph had some variable defined in it, Populate it in the map.
+		for _, idx := range idxList {
+			sg := req.Subgraphs[idx]
+			isCascade := sg.Params.Cascade || shouldCascade(*req.GqlQuery, idx)
+			var sgPath []*SubGraph
+			err = sg.populateVarMap(req.vars, isCascade, sgPath)
+			if err != nil {
+				return err
+			}
+			err = sg.populatePostAggregation(req.vars, nil)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Ensure all the queries are executed.
+	for _, it := range hasExecuted {
+		if !it {
+			return x.Errorf("Query couldn't be executed")
+		}
+	}
+	req.Latency.Processing += time.Since(execStart)
+
+	// If we had a shortestPath SG, append it to the result.
+	if shortestSg != nil {
+		req.Subgraphs = append(req.Subgraphs, shortestSg)
+	}
+	return nil
+}
+
+var MutationNotAllowedErr = x.Errorf("Mutations are forbidden on this server.")
+
+type InvalidRequestError struct {
+	err error
+}
+
+func (e *InvalidRequestError) Error() string {
+	return "invalid request: " + e.err.Error()
+}
+
+type InternalError struct {
+	err error
+}
+
+func (e *InternalError) Error() string {
+	return "internal error: " + e.err.Error()
+}
+
+func (qr *QueryRequest) prepareMutation() (err error) {
+	if len(qr.GqlQuery.Mutation.Schema) > 0 {
+		if qr.schemaUpdate, err = schema.Parse(qr.GqlQuery.Mutation.Schema); err != nil {
+			return x.Wrapf(&InvalidRequestError{err: err}, "failed to parse schema")
+		}
+	}
+	if err = parseFacetsInMutation(qr.GqlQuery.Mutation); err != nil {
+		return err
+	}
+	return
+}
+
+func (qr *QueryRequest) processNquads(ctx context.Context, nquads gql.NQuads) (map[string]uint64, error) {
+	var err error
+	var mr InternalMutation
+	if !nquads.IsEmpty() {
+		if mr, err = Materialize(ctx, nquads, qr.vars); err != nil {
+			return mr.NewUids, x.Wrapf(&InternalError{err: err}, "failed to convert NQuads to edges")
+		}
+	}
+	m := protos.Mutations{Edges: mr.Edges, Schema: qr.schemaUpdate}
+	if err = ApplyMutations(ctx, &m); err != nil {
+		return mr.NewUids, x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
+	}
+	return mr.NewUids, nil
+}
+
+type ExecuteResult struct {
+	Subgraphs   []*SubGraph
+	SchemaNode  []*protos.SchemaNode
+	Allocations map[string]uint64
+}
+
+func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResult, err error) {
+	// If we have mutations that don't depend on query, run them first.
+
+	mutationAllowed, ok := ctx.Value("mutation_allowed").(bool)
+	if !ok {
+		mutationAllowed = false
+	}
+
+	var depSet, indepSet, depDel, indepDel gql.NQuads
+	if qr.GqlQuery.Mutation != nil {
+		if qr.GqlQuery.Mutation.HasOps() && !mutationAllowed {
+			return er, x.Wrap(&InvalidRequestError{err: MutationNotAllowedErr})
+		}
+
+		if err = qr.prepareMutation(); err != nil {
+			return er, err
+		}
+
+		depSet, indepSet = gql.WrapNQ(qr.GqlQuery.Mutation.Set, protos.DirectedEdge_SET).Partition(gql.HasVariables)
+
+		depDel, indepDel = gql.WrapNQ(qr.GqlQuery.Mutation.Del, protos.DirectedEdge_DEL).Partition(gql.HasVariables)
+
+		nquads := indepSet.Add(indepDel)
+		er.Allocations, err = qr.processNquads(ctx, nquads)
+		if err != nil {
+			return er, err
+		}
+	}
+
+	if len(qr.GqlQuery.Query) == 0 {
+		return er, nil
+	}
+
+	err = qr.ProcessQuery(ctx)
+	if err != nil {
+		return er, x.Wrapf(&InternalError{err: err}, "Unable to process query")
+	}
+	er.Subgraphs = qr.Subgraphs
+
+	nquads := depSet.Add(depDel)
+	if !nquads.IsEmpty() {
+		allocations, err := qr.processNquads(ctx, nquads)
+		if err != nil {
+			return er, err
+		}
+		if len(allocations) > 0 {
+			return er, x.Wrapf(&InvalidRequestError{err: err},
+				"adding nodes when using variables is currently not supported")
+		}
+	}
+
+	if qr.GqlQuery.Schema != nil {
+		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, qr.GqlQuery.Schema); err != nil {
+			return er, x.Wrapf(&InternalError{err: err}, "error while fetching schema")
+		}
+	}
+	return er, nil
 }

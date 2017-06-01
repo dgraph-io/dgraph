@@ -10,12 +10,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type MaterializedMutation struct {
+type InternalMutation struct {
 	Edges   []*protos.DirectedEdge
 	NewUids map[string]uint64
 }
 
-func (mr *MaterializedMutation) AddEdge(edge *protos.DirectedEdge, op protos.DirectedEdge_Op) {
+func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.DirectedEdge_Op) {
 	edge.Op = op
 	mr.Edges = append(mr.Edges, edge)
 }
@@ -139,8 +139,8 @@ func expandVariables(nq *gql.NQuad,
 
 func Materialize(ctx context.Context,
 	nquads gql.NQuads,
-	vars map[string]varValue) (MaterializedMutation, error) {
-	var mr MaterializedMutation
+	vars map[string]varValue) (InternalMutation, error) {
+	var mr InternalMutation
 	var err error
 	var newUids map[string]uint64
 
@@ -195,7 +195,7 @@ func Materialize(ctx context.Context,
 // and adds them to the database.
 func ConvertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string]uint64, error) {
 	var err error
-	var mr MaterializedMutation
+	var mr InternalMutation
 
 	set := gql.WrapNQ(mutation.Set, protos.DirectedEdge_SET)
 	del := gql.WrapNQ(mutation.Del, protos.DirectedEdge_DEL)

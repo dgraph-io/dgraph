@@ -123,27 +123,6 @@ func isMutationAllowed(ctx context.Context) bool {
 	return true
 }
 
-// This function is used to run mutations for the requests received from the
-// http client.
-func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
-	var s []*protos.SchemaUpdate
-	var allocIds map[string]uint64
-	var err error
-
-	if len(mu.Schema) > 0 {
-		if s, err = schema.Parse(mu.Schema); err != nil {
-			return nil, x.Wrap(err)
-		}
-	}
-
-	m := &protos.Mutation{Set: mu.Set, Del: mu.Del, Schema: s}
-
-	if allocIds, err = query.ConvertAndApply(ctx, m); err != nil {
-		return nil, err
-	}
-	return allocIds, nil
-}
-
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	if worker.HealthCheck() {
 		w.WriteHeader(http.StatusOK)
@@ -202,6 +181,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Lets add the value of the debug query parameter to the context.
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
+	ctx = context.WithValue(ctx, "mutation_allowed", *nomutations)
 
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "Query")
@@ -245,7 +225,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var er query.ExecuteResult
-	if er, err = query.Execute(ctx, res, &l, isMutationAllowed(ctx)); err != nil {
+
+	var queryRequest = query.QueryRequest{Latency: &l, GqlQuery: &res}
+	if er, err = queryRequest.ProcessWithMutation(ctx); err != nil {
 		switch errors.Cause(err).(type) {
 		case *query.InvalidRequestError:
 			invalidRequest(err, err.Error())
@@ -306,7 +288,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = query.ToJson(&l, er.Subgraphs, w, query.ConvertUidsToHex(er.Allocations), addLatency)
+	err = query.ToJson(&l, er.Subgraphs, w,
+		query.ConvertUidsToHex(er.Allocations), addLatency)
 	if err != nil {
 		// since we performed w.Write in ToJson above,
 		// calling WriteHeader with 500 code will be ignored.
@@ -323,18 +306,16 @@ func NewSharedQueryNQuads(query []byte) []*protos.NQuad {
 	val := func(s string) *protos.Value {
 		return &protos.Value{&protos.Value_DefaultVal{s}}
 	}
-	qHash := func() string {
-		return fmt.Sprintf("\"%x\"", sha256.Sum256(query))
-	}
+	qHash := fmt.Sprintf("\"%x\"", sha256.Sum256(query))
 	return []*protos.NQuad{
 		&protos.NQuad{Subject: "<_:share>", Predicate: "<_share_>", ObjectValue: val(string(query))},
-		&protos.NQuad{Subject: "<_:share>", Predicate: "<_share_hash_>", ObjectValue: val(qHash())},
+		&protos.NQuad{Subject: "<_:share>", Predicate: "<_share_hash_>", ObjectValue: val(qHash)},
 	}
 }
 
 // shareHandler allows to share a query between users.
 func shareHandler(w http.ResponseWriter, r *http.Request) {
-	var mr query.MaterializedMutation
+	var mr query.InternalMutation
 	var err error
 	var rawQuery []byte
 
@@ -468,6 +449,7 @@ func (s *grpcServer) Run(ctx context.Context,
 
 	// Sanitize the context of the keys used for internal purposes only
 	ctx = context.WithValue(ctx, "_share_", nil)
+	ctx = context.WithValue(ctx, "mutation_allowed", isMutationAllowed(ctx))
 
 	resp = new(protos.Response)
 	emptyMutation := len(req.Mutation.GetSet()) == 0 && len(req.Mutation.GetDel()) == 0 &&
@@ -502,8 +484,9 @@ func (s *grpcServer) Run(ctx context.Context,
 		res.Schema = req.Schema
 	}
 
+	var queryRequest = query.QueryRequest{Latency: &l, GqlQuery: &res}
 	var er query.ExecuteResult
-	if er, err = query.Execute(ctx, res, &l, isMutationAllowed(ctx)); err != nil {
+	if er, err = queryRequest.ProcessWithMutation(ctx); err != nil {
 		x.TraceError(ctx, err)
 		return resp, x.Wrap(err)
 	}
