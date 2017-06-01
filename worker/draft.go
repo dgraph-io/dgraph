@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/pubsub"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -422,8 +423,22 @@ func (n *node) processMutation(e raftpb.Entry, m *protos.Mutations) error {
 	if err := runMutations(ctx, m.Edges); err != nil {
 		x.TraceError(n.ctx, err)
 		return err
+	} else {
+		predicates := make(map[string]bool)
+		for _, edge := range m.Edges {
+			predicates[edge.Attr] = true
+		}
+		dispatcher := getUpdateDispatcher()
+		for pred, _ := range predicates {
+			dispatcher.PredicateUpdated(pred)
+		}
 	}
 	return nil
+}
+
+// TODO(tzdybal) - is it a good way to get dispatcher?
+func getUpdateDispatcher() *pubsub.UpdateDispatcher {
+	return groups().dispatcher
 }
 
 func (n *node) processSchemaMutations(e raftpb.Entry, m *protos.Mutations) error {

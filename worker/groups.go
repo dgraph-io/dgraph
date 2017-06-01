@@ -31,6 +31,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/pubsub"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -75,6 +76,8 @@ type groupi struct {
 	all        map[uint32]*servers
 	num        uint32
 	lastUpdate uint64
+	// TODO(tzdybal) - is this a good place for UpdateDispatcher?
+	dispatcher *pubsub.UpdateDispatcher
 }
 
 var gr *groupi
@@ -141,6 +144,8 @@ func StartRaftNodes(walDir string) {
 	wg.Wait()
 	atomic.StoreUint32(&healthCheck, 1)
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
+
+	gr.dispatcher = pubsub.NewUpdateDispatcher()
 }
 
 // HealthCheck returns whether the server is ready to accept requests or not
