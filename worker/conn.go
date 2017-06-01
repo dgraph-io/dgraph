@@ -33,13 +33,16 @@ import (
 
 var (
 	errNoConnection = fmt.Errorf("No connection exists")
+	errPoolClosed   = fmt.Errorf("Pool closed")
 )
 
 // Pool is used to manage the grpc client connections for communicating with
 // other worker instances.
 type pool struct {
-	conns chan *grpc.ClientConn
-	Addr  string
+	x.SafeMutex
+	conns  chan *grpc.ClientConn
+	Addr   string
+	closed bool
 }
 
 type poolsi struct {
@@ -91,25 +94,60 @@ func (p *poolsi) connect(addr string) {
 	x.Check2(rand.Read(query.Data))
 
 	conn, err := pool.Get()
+	defer pool.Put(conn)
 	x.Checkf(err, "Unable to connect")
 
 	c := protos.NewWorkerClient(conn)
 	resp, err := c.Echo(context.Background(), query)
 	if err != nil {
+		pool.close()
 		log.Printf("While trying to connect to %q, got error: %v\n", addr, err)
 		return
 	}
 	x.AssertTrue(bytes.Equal(resp.Data, query.Data))
-	x.Check(pool.Put(conn))
 	fmt.Printf("Connection with %q successful.\n", addr)
 
 	p.Lock()
 	defer p.Unlock()
 	_, has = p.all[addr]
 	if has {
+		pool.close()
 		return
 	}
 	p.all[addr] = pool
+}
+
+// reconnect creates a new pool if it doesn't exist or the earlier pool was closed
+func (p *poolsi) reconnect(addr string) {
+	if addr == *myAddr {
+		return
+	}
+	p.RLock()
+	pool, has := p.all[addr]
+	p.RUnlock()
+	if has && !pool.isClosed() {
+		return
+	}
+
+	pool = newPool(addr, 5)
+	p.Lock()
+	defer p.Unlock()
+	_, has = p.all[addr]
+	if has && !pool.isClosed() {
+		pool.close()
+		return
+	}
+	p.all[addr] = pool
+}
+
+func (p *poolsi) close(addr string) {
+	p.Lock()
+	defer p.Unlock()
+	pool, has := p.all[addr]
+	if !has {
+		return
+	}
+	pool.close()
 }
 
 // NewPool initializes an instance of Pool which is used to connect with other
@@ -135,10 +173,14 @@ func (p *pool) dialNew() (*grpc.ClientConn, error) {
 // Get returns a connection from the pool of connections or a new connection if
 // the pool is empty.
 func (p *pool) Get() (*grpc.ClientConn, error) {
+	p.RLock()
+	defer p.RUnlock()
 	if p == nil {
 		return nil, errNoConnection
 	}
-
+	if p.closed {
+		return p.dialNew()
+	}
 	select {
 	case conn := <-p.conns:
 		return conn, nil
@@ -147,13 +189,39 @@ func (p *pool) Get() (*grpc.ClientConn, error) {
 	}
 }
 
+// close causes the pool to discard all connections irrespective
+// of the pool channel capacity
+func (p *pool) close() {
+	p.Lock()
+	defer p.Unlock()
+	if p.closed {
+		return
+	}
+	p.closed = true
+	close(p.conns)
+	for conn := range p.conns {
+		conn.Close()
+	}
+}
+
 // Put returns a connection to the pool or closes and discards the connection
 // incase the pool channel is at capacity.
 func (p *pool) Put(conn *grpc.ClientConn) error {
+	p.RLock()
+	defer p.RUnlock()
+	if p.closed {
+		return conn.Close()
+	}
 	select {
 	case p.conns <- conn:
 		return nil
 	default:
 		return conn.Close()
 	}
+}
+
+func (p *pool) isClosed() bool {
+	p.RLock()
+	defer p.RUnlock()
+	return p.closed
 }

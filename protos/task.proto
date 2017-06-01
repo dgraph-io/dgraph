@@ -82,8 +82,12 @@ message Membership {
 	uint32 group_id = 2;
 	string addr = 3;
 	bool leader = 4;
-	bool am_dead = 5;
-	uint64 last_update = 6;
+	// Need both group_id and id for add or removed
+	bool clearRemoved = 5;
+	bool removed = 6;
+	// group_id is not required while banning a server, only id would do
+	bool banned = 7;
+	uint64 last_update = 8;
 }
 
 // MembershipUpdate is used to pack together the current membership state of all the nodes
@@ -125,7 +129,7 @@ message RebuildIndexMessage {
 }
 
 message Proposal {
-	uint32 id = 1;
+	uint64 id = 1;
 	Mutations mutations = 2;
 	Membership membership = 3;
 	RebuildIndexMessage rebuild_index = 4;

@@ -25,6 +25,16 @@ message BackupPayload {
 	Status status = 3;
 }
 
+message ClusterConfChange {
+	RaftContext context = 1;
+	enum Op {
+		ADD = 0;
+		REMOVE = 1;
+		JOIN = 2;
+	}
+	Op op = 2;
+}
+
 service Worker {
 	// Connection testing RPC.
 	rpc Echo (Payload)             returns (Payload) {}
@@ -41,7 +51,7 @@ service Worker {
 
 	// RAFT serving RPCs.
 	rpc RaftMessage (Payload)                     returns (Payload) {}
-	rpc JoinCluster (RaftContext)            returns (Payload) {}
-	rpc UpdateMembership (MembershipUpdate)  returns (MembershipUpdate) {}
+	rpc UpdateMembership (MembershipUpdate)       returns (MembershipUpdate) {}
 	rpc Backup (BackupPayload)                    returns (BackupPayload) {}
+	rpc ManageCluster(ClusterConfChange)					returns (Payload) {}
 }
