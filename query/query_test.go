@@ -7393,3 +7393,21 @@ func TestMathVarAlias2(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"age":38,"doubleAge":76.000000},{"age":15,"doubleAge":30.000000},{"age":19,"doubleAge":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, string(js))
 }
+
+func TestMathVar3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as me(func: anyofterms(name, "Rick Michonne Andrea")) {
+				ageVar as age
+				a as math(ageVar *2)
+			}
+
+			me2(id: var(f)) {
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"age":38,"var(a)":76.000000},{"age":15,"var(a)":30.000000},{"age":19,"var(a)":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, string(js))
+}
