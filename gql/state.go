@@ -173,23 +173,24 @@ func findArg(l *lex.Lexer) string {
 		}
 	}
 
-	// Lets skip this.
+	// Lets skip this. It can be a leftRound or colon.
 	l.Next()
 	arg := ""
+	// Now getting actual arg name.
 	for count > 0 {
 		count--
 		r = l.Next()
 		if isSpace(r) {
 			l.Ignore()
 		}
-		// id has colon func/filter have comma.
+		// id has colon, func/filter have comma.
 		if r == leftRound || r == colon {
 			break
 		}
 		arg += string(r)
 	}
 
-	// Lets move back to where we started.
+	// Lets move back to where we started so that lexer can proceed as normal.
 	for count > 0 {
 		l.Next()
 		count--
@@ -295,13 +296,14 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 				depth := 1
 				for {
 					r := l.Next()
-					// Only if we want to lexArgs then we look for comma and quote.
+					// Only if we want to lexArgs then we look the content.
 					// Else we absorb everything.
 					if lexArgs {
-						if r == comma {
+						if isNameBegin(r) || isNumber(r) {
+							lexArgName(l)
+						} else if r == comma {
 							l.Emit(itemComma)
-						}
-						if r == quote {
+						} else if r == quote {
 							if err := l.LexQuotedString(); err != nil {
 								return l.Errorf(err.Error())
 							}
@@ -323,6 +325,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 					}
 				}
 				// We would have already lexed the args if lexArgs is true.
+				// If not then we want to emit the complete value.
 				if !lexArgs {
 					l.Emit(itemName)
 				}
