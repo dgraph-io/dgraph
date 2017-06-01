@@ -140,16 +140,37 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 
 // This function tries to find the arg name by going back.
 func findArg(l *lex.Lexer) string {
-	// lets try and find the type of arg. Lets backup till (.
-	count := 0
+	count := 0 // Helps us keep track of number of backups, so that we can reset state.
 	r := ' '
 	l.Backup()
-	for r != leftRound {
+	// Lets find out if its an id: or a function/filter.
+	for r != comma && r != colon {
 		count++
 		l.Backup()
 		r = l.Peek()
 	}
-	// Lets skip (
+
+	if r == colon {
+		// means it is id: []
+		for r != leftRound {
+			count++
+			l.Backup()
+			r = l.Peek()
+		}
+	} else {
+		// could be func: near(loc, []) or @filter(eq(name, []))
+		leftRoundOrColon := 0
+		for leftRoundOrColon != 2 {
+			count++
+			l.Backup()
+			r = l.Peek()
+			if r == leftRound || r == colon {
+				leftRoundOrColon++
+			}
+		}
+	}
+
+	// Lets skip this.
 	l.Next()
 	arg := ""
 	for count > 0 {
@@ -159,11 +180,12 @@ func findArg(l *lex.Lexer) string {
 			l.Ignore()
 		}
 		// id has colon other args have comma.
-		if r == comma || r == colon {
+		if r == leftRound || r == colon {
 			break
 		}
 		arg += string(r)
 	}
+
 	// Lets move back to where we started.
 	for count > 0 {
 		l.Next()
