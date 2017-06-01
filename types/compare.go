@@ -51,7 +51,7 @@ func CompareVals(op string, arg1, arg2 Val) bool {
 }
 
 // parses and array of string tokens and returns them as a slice of strings.
-func Args(val string) ([]string, error) {
+func InequalityArgs(val string) ([]string, error) {
 	var tokens []string
 	// Empty val is checked in parser so safe to access first index here.
 	if val[0] != '[' {
