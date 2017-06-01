@@ -3477,7 +3477,7 @@ func TestParseEqArg(t *testing.T) {
 func TestParseEqArg2(t *testing.T) {
 	query := `
 	{
-		me(func: eq(age, ["1", "20"])) @filter(eq(name, ["And\"rea", "Bob"])) {
+		me(func: eq(age, [1, 20])) @filter(eq(name, ["And\"rea", "Bob"])) {
 		 name
 		}
 	}
@@ -3485,4 +3485,5 @@ func TestParseEqArg2(t *testing.T) {
 	gql, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
+	require.Equal(t, 2, len(gql.Query[0].Func.Args))
 }

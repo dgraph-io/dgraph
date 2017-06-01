@@ -6140,7 +6140,7 @@ func TestSchemaBlock3(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*protos.SchemaNode{{Predicate: "age", Type: "int"}}
+	expected := []*protos.SchemaNode{{Predicate: "age", Type: "int", Index: true, Tokenizer: []string{"int"}}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6155,7 +6155,7 @@ func TestSchemaBlock4(t *testing.T) {
 	`
 	actual := processSchemaQuery(t, query)
 	expected := []*protos.SchemaNode{
-		{Predicate: "genre", Type: "uid", Reverse: true}, {Predicate: "age", Type: "int"}}
+		{Predicate: "genre", Type: "uid", Reverse: true}, {Predicate: "age", Type: "int", Index: true, Tokenizer: []string{"int"}}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6226,7 +6226,7 @@ func TestFilterNonIndexedPredicateFail(t *testing.T) {
 	query := `
 		{
 			me(id:0x01) {
-				friend @filter(le(age, 30)) {
+				friend @filter(le(survival_rate, 30)) {
 					_uid_
 					name
 					age
@@ -7532,7 +7532,7 @@ func TestMultipleEqInt(t *testing.T) {
 	populateGraph(t)
 	query := `
 	{
-		me(func: eq(age, ["15", "17", "38"])) {
+		me(func: eq(age, [15, 17, 38])) {
 			name
 			friend {
 				name
@@ -7541,5 +7541,5 @@ func TestMultipleEqInt(t *testing.T) {
 	}
 `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}]}`, js)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"name":"Glenn Rhee"}],"name":"Daryl Dixon"}]}`, js)
 }
