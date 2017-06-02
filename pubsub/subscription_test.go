@@ -32,30 +32,22 @@ func TestSubscription(t *testing.T) {
 	dispatcher := NewUpdateDispatcher()
 	go dispatcher.Run()
 
-	for i := 0; i < 1000; i++ {
+	go func() {
+		for i := 0; i < 1000; i++ {
+			dispatcher.PredicatesUpdated([]string{"a", "c"})
+			dispatcher.PredicatesUpdated([]string{"b"})
+			dispatcher.PredicatesUpdated([]string{"d"})
+		}
+	}()
+
+	for i := 0; i < 100; i++ {
 		dispatcher.Subscribe([]string{"a", "b"}, subscriber1)
 		dispatcher.Subscribe([]string{"b", "c"}, subscriber2)
 
-		dispatcher.PredicateUpdated("a")
-		dispatcher.PredicateUpdated("b")
-		dispatcher.PredicateUpdated("c")
-		dispatcher.PredicateUpdated("d")
-
-		fmt.Println("-------")
+		fmt.Print(".")
 		dispatcher.Unsubscribe([]string{"b"}, subscriber1)
-
-		dispatcher.PredicateUpdated("a")
-		dispatcher.PredicateUpdated("b")
-		dispatcher.PredicateUpdated("c")
-		dispatcher.PredicateUpdated("d")
-
-		fmt.Println("-------")
+		fmt.Print(".")
 		dispatcher.Unsubscribe([]string{"b"}, subscriber2)
 		dispatcher.Unsubscribe([]string{"a", "b", "c"}, subscriber2)
-
-		dispatcher.PredicateUpdated("a")
-		dispatcher.PredicateUpdated("b")
-		dispatcher.PredicateUpdated("c")
-		dispatcher.PredicateUpdated("d")
 	}
 }

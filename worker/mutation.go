@@ -33,13 +33,13 @@ const (
 	del = "delete"
 )
 
-// runMutations goes through all the edges and applies them. It returns the
-// mutations which were not applied in left.
-func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
-	for _, edge := range edges {
+// runMutations goes through all the edges and applies them. If error occurs processing is stopped.
+// Function returns the index of mutation that caused processing to stop.
+func runMutations(ctx context.Context, edges []*protos.DirectedEdge) (i int, err error) {
+	for i, edge := range edges {
 		gid := group.BelongsTo(edge.Attr)
 		if !groups().ServesGroup(gid) {
-			return x.Errorf("Predicate fingerprint doesn't match this instance")
+			return 0, x.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
 		rv := ctx.Value("raft").(x.RaftValue)
@@ -59,10 +59,10 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 
 		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
 			x.Printf("Error while adding mutation: %v %v", edge, err)
-			return err // abort applying the rest of them.
+			return i, err // abort applying the rest of them.
 		}
 	}
-	return nil
+	return i, nil
 }
 
 // This is serialized with mutations, called after applied watermarks catch up

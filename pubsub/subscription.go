@@ -44,14 +44,14 @@ type Operation struct {
 
 // one channel per subscriber
 type UpdateDispatcher struct {
-	updates    chan string
+	updates    chan []string
 	operations chan Operation
 	topics     map[string]*topic
 }
 
 func NewUpdateDispatcher() *UpdateDispatcher {
 	dispatcher := &UpdateDispatcher{
-		updates:    make(chan string, 100),
+		updates:    make(chan []string, 100),
 		operations: make(chan Operation),
 		topics:     make(map[string]*topic),
 	}
@@ -63,11 +63,8 @@ func (d *UpdateDispatcher) Run() {
 		select {
 		case oper := <-d.operations:
 			d.execute(oper)
-		case pred := <-d.updates:
-			topic, ok := d.topics[pred]
-			if ok {
-				topic.predicateUpdated(pred)
-			}
+		case preds := <-d.updates:
+			d.doUpdate(preds)
 		}
 	}
 }
@@ -82,8 +79,8 @@ func (d *UpdateDispatcher) Unsubscribe(predicates []string, subscriber *UpdateSu
 	d.operations <- operation
 }
 
-func (d *UpdateDispatcher) PredicateUpdated(predicate string) {
-	d.updates <- predicate
+func (d *UpdateDispatcher) PredicatesUpdated(predicates []string) {
+	d.updates <- predicates
 }
 
 func (d *UpdateDispatcher) execute(operation Operation) {
@@ -114,6 +111,15 @@ func (d *UpdateDispatcher) doUnsubscribe(operation Operation) {
 			if topic.size() == 0 {
 				delete(d.topics, pred)
 			}
+		}
+	}
+}
+
+func (d *UpdateDispatcher) doUpdate(predicates []string) {
+	for _, pred := range predicates {
+		topic, ok := d.topics[pred]
+		if ok {
+			topic.predicateUpdated(pred)
 		}
 	}
 }

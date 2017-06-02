@@ -420,20 +420,34 @@ func (n *node) processMutation(e raftpb.Entry, m *protos.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
-	if err := runMutations(ctx, m.Edges); err != nil {
+
+	success, err := runMutations(ctx, m.Edges)
+	if err != nil {
 		x.TraceError(n.ctx, err)
 		return err
-	} else {
-		predicates := make(map[string]bool)
-		for _, edge := range m.Edges {
-			predicates[edge.Attr] = true
-		}
-		dispatcher := getUpdateDispatcher()
-		for pred, _ := range predicates {
-			dispatcher.PredicateUpdated(pred)
-		}
 	}
+
+	// aggregate information and notify only once about each predicate
+	preds := getPredicates(m, success)
+	getUpdateDispatcher().PredicatesUpdated(preds)
+
 	return nil
+}
+
+// returns unique predicates names from m.Edges[:n]
+func getPredicates(m *protos.Mutations, n int) []string {
+	predicateMap := make(map[string]bool)
+	for _, edge := range m.Edges[:n] {
+		predicateMap[edge.Attr] = true
+	}
+
+	preds := make([]string, len(predicateMap))
+	i := 0
+	for pred, _ := range predicateMap {
+		preds[i] = pred
+		i++
+	}
+	return preds
 }
 
 // TODO(tzdybal) - is it a good way to get dispatcher?
