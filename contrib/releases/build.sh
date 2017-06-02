@@ -8,12 +8,12 @@
 # Exit script in case an error is encountered.
 set -e
 
-dev=$1
+asset_suffix=$1
 cur_dir=$(pwd);
 tmp_dir=/tmp/dgraph-build;
 release_version=$(git describe --abbrev=0);
-if [[ -n $dev ]]; then
-  release_version="$release_version-dev"
+if [[ -n $asset_suffix ]]; then
+  release_version="$release_version${asset_suffix}"
 fi
 platform="$(uname | tr '[:upper:]' '[:lower:]')"
 checksum_file=$cur_dir/"dgraph-checksum-$platform-amd64-$release_version".sha256
@@ -48,12 +48,12 @@ uiDir="main.uiDir"
 echo -e "\033[1;33mBuilding binaries\033[0m"
 echo "dgraph"
 cd $dgraph_cmd/dgraph && \
-   go build -v -tags=embed -ldflags \
+   go build -v -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime' -X $uiDir=$ui" .;
 echo "dgraphloader"
 echo $release
 cd $dgraph_cmd/dgraphloader && \
-   go build -v -tags=embed -ldflags \
+   go build -v -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
 
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"

@@ -80,7 +80,8 @@ type outputNode interface {
 	SetUID(uid uint64, attr string)
 	IsEmpty() bool
 
-	addCountAtRoot(*SubGraph, outputNode)
+	addCountAtRoot(*SubGraph)
+	addGroupby(*SubGraph, string)
 }
 
 // protoNode is the proto output for preTraverse.
@@ -213,13 +214,28 @@ func (n *protoNode) normalize() [][]*protos.Property {
 	return parentSlice
 }
 
-func (n *protoNode) addCountAtRoot(sg *SubGraph, seedNode outputNode) {
+func (n *protoNode) addCountAtRoot(sg *SubGraph) {
 	c := types.ValueForType(types.IntID)
 	// This is count() without any attribute.
 	c.Value = int64(len(sg.DestUIDs.Uids))
-	n1 := seedNode.New(sg.Params.Alias)
+	n1 := n.New(sg.Params.Alias)
 	n1.AddValue(sg.Params.uidCount, c)
 	n.AddListChild(sg.Params.Alias, n1)
+}
+
+func (n *protoNode) addGroupby(sg *SubGraph, fname string) {
+	g := n.New(fname)
+	for _, grp := range sg.GroupbyRes.group {
+		uc := g.New("@groupby")
+		for _, it := range grp.keys {
+			uc.AddValue(it.attr, it.key)
+		}
+		for _, it := range grp.aggregates {
+			uc.AddValue(it.attr, it.key)
+		}
+		g.AddListChild("@groupby", uc)
+	}
+	n.AddListChild(fname, g)
 }
 
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
@@ -233,33 +249,38 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 
 	n := seedNode.New("_root_")
 	if sg.Params.uidCount != "" {
-		n.addCountAtRoot(sg, seedNode)
+		n.addCountAtRoot(sg)
 	}
-	for _, uid := range sg.uidMatrix[0].Uids {
-		// For the root, the name is stored in Alias, not Attr.
-		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
-			// This UID was filtered. So Ignore it.
-			continue
-		}
-		n1 := seedNode.New(sg.Params.Alias)
 
-		if rerr := sg.preTraverse(uid, n1, n1); rerr != nil {
-			if rerr.Error() == "_INV_" {
+	if sg.Params.isGroupBy {
+		n.addGroupby(sg, sg.Params.Alias)
+	} else {
+		for _, uid := range sg.uidMatrix[0].Uids {
+			// For the root, the name is stored in Alias, not Attr.
+			if algo.IndexOf(sg.DestUIDs, uid) < 0 {
+				// This UID was filtered. So Ignore it.
 				continue
 			}
-			return n.(*protoNode).Node, rerr
-		}
-		if n1.IsEmpty() {
-			continue
-		}
-		if !sg.Params.Normalize {
-			n.AddListChild(sg.Params.Alias, n1)
-			continue
-		}
+			n1 := seedNode.New(sg.Params.Alias)
 
-		// Lets normalize the response now.
-		for _, c := range n1.(*protoNode).normalize() {
-			n.AddListChild(sg.Params.Alias, &protoNode{&protos.Node{Properties: c}})
+			if rerr := sg.preTraverse(uid, n1, n1); rerr != nil {
+				if rerr.Error() == "_INV_" {
+					continue
+				}
+				return n.(*protoNode).Node, rerr
+			}
+			if n1.IsEmpty() {
+				continue
+			}
+			if !sg.Params.Normalize {
+				n.AddListChild(sg.Params.Alias, n1)
+				continue
+			}
+
+			// Lets normalize the response now.
+			for _, c := range n1.(*protoNode).normalize() {
+				n.AddListChild(sg.Params.Alias, &protoNode{&protos.Node{Properties: c}})
+			}
 		}
 	}
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
@@ -471,11 +492,26 @@ type attrVal struct {
 	val  *fastJsonAttr
 }
 
-func (n *fastJsonNode) addCountAtRoot(sg *SubGraph, seedNode outputNode) {
+func (n *fastJsonNode) addGroupby(sg *SubGraph, fname string) {
+	g := n.New(fname)
+	for _, grp := range sg.GroupbyRes.group {
+		uc := g.New("@groupby")
+		for _, it := range grp.keys {
+			uc.AddValue(it.attr, it.key)
+		}
+		for _, it := range grp.aggregates {
+			uc.AddValue(it.attr, it.key)
+		}
+		g.AddListChild("@groupby", uc)
+	}
+	n.AddListChild(fname, g)
+}
+
+func (n *fastJsonNode) addCountAtRoot(sg *SubGraph) {
 	c := types.ValueForType(types.IntID)
 	// This is count() without any attribute.
 	c.Value = int64(len(sg.DestUIDs.Uids))
-	n1 := seedNode.New(sg.Params.Alias)
+	n1 := n.New(sg.Params.Alias)
 	n1.AddValue(sg.Params.uidCount, c)
 	n.AddListChild(sg.Params.Alias, n1)
 }
@@ -488,7 +524,12 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	lenList := len(sg.uidMatrix[0].Uids)
 
 	if sg.Params.uidCount != "" {
-		n.addCountAtRoot(sg, seedNode)
+		n.addCountAtRoot(sg)
+	}
+
+	if sg.Params.isGroupBy {
+		n.addGroupby(sg, sg.Params.Alias)
+		return nil
 	}
 
 	for i := 0; i < lenList; i++ {

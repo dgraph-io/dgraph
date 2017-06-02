@@ -34,10 +34,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -380,7 +380,7 @@ type fingerPrint struct {
 
 var (
 	stopTheWorld x.SafeMutex
-	pstore       *store.Store
+	pstore       *badger.KV
 	syncCh       chan syncEntry
 	dirtyChan    chan fingerPrint // All dirty posting list keys are pushed here.
 	marks        *syncMarks
@@ -388,7 +388,7 @@ var (
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *store.Store) {
+func Init(ps *badger.KV) {
 	marks = new(syncMarks)
 	pstore = ps
 	lhmaps = new(listMaps)
@@ -442,18 +442,17 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	// This replaces "TokensTable". The idea is that we want to quickly add the
 	// index key to the data store, with essentially an empty value. We just need
 	// the keys for filtering / sorting.
-	if l == lp && pk.IsIndex() {
+	if l == lp && pk.IsIndex() && pk.Attr != "_xid_" {
 		// Lock before entering goroutine. Otherwise, some tests in query will fail.
 		l.Lock()
 		go func(key []byte) {
 			defer l.Unlock()
-			slice, err := pstore.Get(key)
+			var item badger.KVItem
+			err := pstore.Get(key, &item)
 			x.Check(err)
-			if slice.Size() == 0 {
-				x.Check(pstore.SetOne(key, dummyPostingList))
-			}
-			if slice != nil {
-				slice.Free() // Remember to free.
+			val := item.Value()
+			if len(val) == 0 {
+				pstore.Set(key, dummyPostingList)
 			}
 		}(key)
 	}
@@ -553,9 +552,7 @@ type syncEntry struct {
 func batchSync() {
 	var entries []syncEntry
 	var loop uint64
-
-	b := pstore.NewWriteBatch()
-	defer b.Destroy()
+	wb := make([]*badger.Entry, 0, 100)
 
 	for {
 		select {
@@ -566,14 +563,17 @@ func batchSync() {
 			// default is executed if no other case is ready.
 			start := time.Now()
 			if len(entries) > 0 {
-				x.AssertTrue(b != nil)
 				loop++
 				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
 				for _, e := range entries {
-					b.Put(e.key, e.val)
+					if e.val == nil {
+						wb = badger.EntriesDelete(wb, e.key)
+					} else {
+						wb = badger.EntriesSet(wb, e.key, e.val)
+					}
 				}
-				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
-				b.Clear()
+				pstore.BatchSet(wb)
+				wb = wb[:0]
 
 				for _, e := range entries {
 					e.sw.Done()

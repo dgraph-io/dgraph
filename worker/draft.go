@@ -70,12 +70,14 @@ type proposals struct {
 	ids map[uint32]chan error
 }
 
-func (p *proposals) Store(pid uint32, ch chan error) {
+func (p *proposals) Store(pid uint32, ch chan error) bool {
 	p.Lock()
 	defer p.Unlock()
-	_, has := p.ids[pid]
-	x.AssertTruef(!has, "Same proposal is being stored again.")
+	if _, has := p.ids[pid]; has {
+		return false
+	}
 	p.ids[pid] = ch
+	return true
 }
 
 func (p *proposals) Done(pid uint32, err error) {
@@ -90,6 +92,13 @@ func (p *proposals) Done(pid uint32, err error) {
 		return
 	}
 	ch <- err
+}
+
+func (p *proposals) Has(pid uint32) bool {
+	p.RLock()
+	defer p.RUnlock()
+	_, has := p.ids[pid]
+	return has
 }
 
 type sendmsg struct {
@@ -283,7 +292,14 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		}
 	}
 
-	proposal.Id = rand.Uint32()
+	che := make(chan error, 1)
+	for {
+		id := rand.Uint32()
+		if n.props.Store(id, che) {
+			proposal.Id = id
+			break
+		}
+	}
 
 	slice := slicePool.Get().([]byte)
 	if len(slice) < proposal.Size() {
@@ -305,12 +321,9 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	} else if proposal.Membership != nil {
 		proposalData[0] = proposalMembership
 	} else {
-		x.Fatalf("Unkonw proposal")
+		x.Fatalf("Unknown proposal")
 	}
 	copy(proposalData[1:], slice)
-
-	che := make(chan error, 1)
-	n.props.Store(proposal.Id, che)
 
 	if err = n.Raft().Propose(ctx, proposalData); err != nil {
 		return x.Wrapf(err, "While proposing")
@@ -618,7 +631,7 @@ func (n *node) retrieveSnapshot(rc protos.RaftContext) {
 	x.Check2(populateShard(n.ctx, pool, n.gid))
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
-	x.Checkf(schema.Refresh(n.gid), "Error while initilizating schema")
+	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
 }
 
 func (n *node) Run() {
@@ -639,6 +652,8 @@ func (n *node) Run() {
 					// stepped down as leader do a sync membership immediately
 					groups().syncMemberships()
 				} else if rd.RaftState == raft.StateLeader && !leader {
+					// TODO:wait for apply watermark ??
+					leaseMgr().resetLease(n.gid)
 					groups().syncMemberships()
 				}
 				leader = rd.RaftState == raft.StateLeader

@@ -24,8 +24,6 @@ import (
 	"strings"
 	"unicode"
 
-	farm "github.com/dgryski/go-farm"
-
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
@@ -35,19 +33,19 @@ import (
 
 var emptyEdge protos.DirectedEdge
 var (
-	ErrEmpty = errors.New("rdf: harmless error, e.g. comment line")
+	ErrEmpty      = errors.New("rdf: harmless error, e.g. comment line")
+	ErrInvalidUID = errors.New("UID has to be greater than one.")
 )
 
-// Gets the uid corresponding to an xid from the posting list which stores the
-// mapping.
-func GetUid(xid string) (uint64, error) {
+// Gets the uid corresponding
+func ParseUid(xid string) (uint64, error) {
 	// If string represents a UID, convert to uint64 and return.
 	uid, err := strconv.ParseUint(xid, 0, 64)
 	if err != nil {
-		return farm.Fingerprint64([]byte(xid)), nil
+		return 0, err
 	}
 	if uid == 0 {
-		return 0, x.Errorf("UID has to be greater than zero.")
+		return 0, ErrInvalidUID
 	}
 	return uid, nil
 }
@@ -103,7 +101,7 @@ func byteVal(nq NQuad) ([]byte, error) {
 // just one edge. The method doesn't automatically generate a UID for an XID.
 func (nq NQuad) ToEdge() (*protos.DirectedEdge, error) {
 	var err error
-	sid, err := GetUid(nq.Subject)
+	sid, err := ParseUid(nq.Subject)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +115,7 @@ func (nq NQuad) ToEdge() (*protos.DirectedEdge, error) {
 
 	switch nq.valueType() {
 	case x.ValueUid:
-		oid, err := GetUid(nq.ObjectId)
+		oid, err := ParseUid(nq.ObjectId)
 		if err != nil {
 			return nil, err
 		}
@@ -131,14 +129,18 @@ func (nq NQuad) ToEdge() (*protos.DirectedEdge, error) {
 	return out, nil
 }
 
-func toUid(xid string, newToUid map[string]uint64) (uid uint64, err error) {
-	if id, present := newToUid[xid]; present {
+func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
+	if id, err := ParseUid(subject); err == nil || err == ErrInvalidUID {
 		return id, err
 	}
-	return GetUid(xid)
+	// It's an xid
+	if id, present := newToUid[subject]; present {
+		return id, err
+	}
+	return 0, x.Errorf("uid not found/generated for xid %s\n", subject)
 }
 
-// ToEdgeUsing determines the UIDs for the provided XIDs and populates the
+// ToEdgeUsing determines the UIDs for the provided XIDs using the
 // xidToUid map.
 func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*protos.DirectedEdge, error) {
 	var err error

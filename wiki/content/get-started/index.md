@@ -54,18 +54,18 @@ dgraph
 If you want to persist the data while you play with Dgraph, you should mount the `dgraph` volume, using the `-v` flag.
 {{% /notice %}}
 
-#### Map to default port (8080)
+#### Map to default port (8080 on the local interface)
 
 ```sh
 mkdir -p ~/dgraph
-docker run -it -p 8080:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
+docker run -it -p 127.0.0.1:8080:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
 #### Map to custom port
 ```sh
 mkdir -p ~/dgraph
-# Mapping port 8080 from within the container to 9090  of the instance
-docker run -it -p 9090:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
+# Mapping port 8080 from within the container to 9090 (bound to the local interface) of the instance
+docker run -it -p 127.0.0.1:9090:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
 {{% notice "note" %}}The dgraph server listens on port 8080 (unless you have mapped to another port above) with log output to the terminal.{{% /notice %}}

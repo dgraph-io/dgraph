@@ -28,13 +28,12 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
-	UID        []uint64
+	ID         []string
 	Attr       string
 	Langs      []string
 	Alias      string
@@ -54,7 +53,7 @@ type GraphQuery struct {
 	Cascade      bool
 	Facets       *Facets
 	FacetsFilter *FilterTree
-	GroupbyAttrs []string
+	GroupbyAttrs []AttrLang
 	FacetVar     map[string]string
 
 	// Internal fields below.
@@ -72,6 +71,11 @@ type Mutation struct {
 	Set    string
 	Del    string
 	Schema string
+}
+
+type AttrLang struct {
+	Attr  string
+	Langs []string
 }
 
 // pair denotes the key value pair that is part of the GraphQL query root in parenthesis.
@@ -186,7 +190,7 @@ func (f *Function) IsPasswordVerifier() bool {
 
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
-	x.Printf("%s[%x %q %q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
+	x.Printf("%s[%x %q %q]\n", prefix, gq.ID, gq.Attr, gq.Alias)
 	for _, c := range gq.Children {
 		c.DebugPrint(prefix + "|->")
 	}
@@ -396,7 +400,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	}
 
 	idVal, ok := gq.Args["id"]
-	if ok && len(gq.UID) == 0 {
+	if ok && len(gq.ID) == 0 {
 		if idVal == "" {
 			return x.Errorf("Id can't be empty")
 		}
@@ -756,6 +760,9 @@ L:
 				gq.Normalize = true
 			case "cascade":
 				gq.Cascade = true
+			case "groupby":
+				gq.IsGroupby = true
+				parseGroupby(it, gq)
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
@@ -1505,7 +1512,19 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 			if !expectArg {
 				return x.Errorf("Expected a comma or right round but got: %v", item.Val)
 			}
-			gq.GroupbyAttrs = append(gq.GroupbyAttrs, item.Val)
+			attr := collectName(it, item.Val)
+			var langs []string
+			items, err := it.Peek(1)
+			if err == nil && items[0].Typ == itemAt {
+				it.Next() // consume '@'
+				it.Next() // move forward
+				langs = parseLanguageList(it)
+			}
+			attrLang := AttrLang{
+				Attr:  attr,
+				Langs: langs,
+			}
+			gq.GroupbyAttrs = append(gq.GroupbyAttrs, attrLang)
 			count++
 			expectArg = false
 		}
@@ -1609,16 +1628,8 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 
 func parseID(gq *GraphQuery, val string) error {
 	val = x.WhiteSpace.Replace(val)
-	toUid := func(str string) {
-		uid, rerr := strconv.ParseUint(str, 0, 64)
-		if rerr == nil {
-			gq.UID = append(gq.UID, uid)
-		} else {
-			gq.UID = append(gq.UID, farm.Fingerprint64([]byte(str)))
-		}
-	}
 	if val[0] != '[' {
-		toUid(val)
+		gq.ID = append(gq.ID, val)
 		return nil
 	}
 
@@ -1631,7 +1642,7 @@ func parseID(gq *GraphQuery, val string) error {
 			if buf.Len() == 0 {
 				continue
 			}
-			toUid(buf.String())
+			gq.ID = append(gq.ID, buf.String())
 			buf.Reset()
 			continue
 		}
@@ -1992,7 +2003,15 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				it.Next()
 				if gq.IsGroupby {
 					item = it.Item()
-					child.Attr = item.Val
+					attr := collectName(it, item.Val)
+					// Get language list, if present
+					items, err := it.Peek(1)
+					if err == nil && items[0].Typ == itemAt {
+						it.Next() // consume '@'
+						it.Next() // move forward
+						child.Langs = parseLanguageList(it)
+					}
+					child.Attr = attr
 					child.IsInternal = false
 				} else {
 					if it.Item().Val != "var" {

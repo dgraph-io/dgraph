@@ -44,6 +44,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/badger/badger"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -55,7 +56,6 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
@@ -165,25 +165,25 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 		if strings.HasPrefix(nq.Subject, "_:") {
 			newUids[nq.Subject] = 0
 		} else {
-			// Only store xids that need to be marked as used.
-			if _, err := strconv.ParseInt(nq.Subject, 0, 64); err != nil {
-				uid, err := rdf.GetUid(nq.Subject)
-				if err != nil {
-					return mr, err
-				}
-				newUids[nq.Subject] = uid
+			// Only store xids that need to be generated.
+			_, err := rdf.ParseUid(nq.Subject)
+			if err == rdf.ErrInvalidUID {
+				return mr, err
+			} else if err != nil {
+				newUids[nq.Subject] = 0
 			}
 		}
 
 		if len(nq.ObjectId) > 0 {
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
-			} else if !strings.HasPrefix(nq.ObjectId, "_uid_:") {
-				uid, err := rdf.GetUid(nq.ObjectId)
-				if err != nil {
+			} else {
+				_, err := rdf.ParseUid(nq.ObjectId)
+				if err == rdf.ErrInvalidUID {
 					return mr, err
+				} else if err != nil {
+					newUids[nq.ObjectId] = 0
 				}
-				newUids[nq.ObjectId] = uid
 			}
 		}
 	}
@@ -491,6 +491,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method != "POST" {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -509,16 +510,19 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	req, err := ioutil.ReadAll(r.Body)
 	q := string(req)
 	if err != nil || len(q) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		x.TraceError(ctx, x.Wrapf(err, "Error while reading query"))
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
 
+	parseStart := time.Now()
 	res, err := parseQueryAndMutation(ctx, gql.Request{
 		Str:       q,
 		Variables: map[string]string{},
 		Http:      true,
 	})
+	l.Parsing += time.Since(parseStart)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -537,6 +541,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// If we have mutations, run them first.
 	if res.Mutation != nil && hasGQLOps(res.Mutation) {
 		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			x.SetStatus(w, x.Error, err.Error())
 			return
@@ -550,13 +555,22 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	var schemaNode []*protos.SchemaNode
 	if res.Schema != nil {
+		execStart := time.Now()
 		if schemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
 			x.SetStatus(w, x.Error, err.Error())
 			return
 		}
+		l.Processing += time.Since(execStart)
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	var addLatency bool
+	// If there is an error parsing, then addLatency would remain false.
+	addLatency, _ = strconv.ParseBool(r.URL.Query().Get("latency"))
+	debug, _ := strconv.ParseBool(r.URL.Query().Get("debug"))
+	addLatency = addLatency || debug
 	if len(res.Query) == 0 {
 		mp := map[string]interface{}{}
 		if res.Mutation != nil {
@@ -566,11 +580,19 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		// Either Schema or query can be specified
 		if res.Schema != nil {
-			mp["schema"] = schemaNode
+			js, err := json.Marshal(schemaNode)
+			if err != nil {
+				x.SetStatus(w, "Error", "Unable to marshal schema")
+			}
+			mp["schema"] = json.RawMessage(string(js))
+			if addLatency {
+				mp["server_latency"] = l.ToMap()
+			}
 		}
 		if js, err := json.Marshal(mp); err == nil {
 			w.Write(js)
 		} else {
+			w.WriteHeader(http.StatusBadRequest)
 			x.SetStatus(w, "Error", "Unable to marshal map")
 		}
 		return
@@ -579,6 +601,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	sgl, err := query.ProcessQuery(ctx, res, &l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while Executing query"))
+		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
@@ -596,12 +619,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	var addLatency bool
-	// If there is an error parsing, then addLatency would remain false.
-	addLatency, _ = strconv.ParseBool(r.URL.Query().Get("latency"))
-	debug, _ := strconv.ParseBool(r.URL.Query().Get("debug"))
-	addLatency = addLatency || debug
 	err = query.ToJson(&l, sgl, w, allocIdsStr, addLatency)
 	if err != nil {
 		// since we performed w.Write in ToJson above,
@@ -774,6 +791,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	if err != nil {
 		return resp, err
 	}
+	l.Parsing += time.Since(l.Start)
 
 	// If mutations are part of the query, we run them through the mutation handler
 	// same as the http client.
@@ -803,10 +821,12 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 
 	if schema != nil {
+		execStart := time.Now()
 		if schemaNodes, err = worker.GetSchemaOverNetwork(ctx, schema); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
 			return resp, err
 		}
+		l.Processing += time.Since(execStart)
 	}
 	resp.Schema = schemaNodes
 
@@ -992,8 +1012,11 @@ func main() {
 
 	// All the writes to posting store should be synchronous. We use batched writers
 	// for posting lists, so the cost of sync writes is amortized.
-	ps, err := store.NewSyncStore(*postingDir)
-	x.Checkf(err, "Error initializing postings store")
+	opt := badger.DefaultOptions
+	opt.SyncWrites = true
+	opt.Dir = *postingDir
+	ps, err := badger.NewKV(&opt)
+	x.Checkf(err, "Error while creating badger KV posting store")
 	defer ps.Close()
 
 	x.Check(group.ParseGroupConfig(*gconf))

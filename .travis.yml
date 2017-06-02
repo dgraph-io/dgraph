@@ -1,23 +1,17 @@
 matrix:
-  fast_finish: true
   allow_failures:
     - os: osx
   include:
     - os: linux
-      compiler: clang-3.9
       go: 1.8
       language: go
-      env: CC=clang-3.9 CXX=clang++-3.9;
     - os: osx
-      compiler: clang
       language: go
       go: 1.8
-      env: CC=clang CXX=clang++;
 
+install: contrib/install.sh
 git:
   depth: 1000
-install:
-- bash contrib/build-rocksdb.sh $HOME/build
 dist: trusty
 sudo: required
 notifications:
@@ -25,14 +19,7 @@ notifications:
     secure: uezT1E7kSVRDC2El9g5syXb1I4JrUUJHW4PXAf0IhXDFqS1ewkrNMurbkltrsJp0OtH7r2rzewuZsxjZ8pz0D+9YPorQzCPUgSqHuYnplh5WJMiaImXVvyApOpVEIm/0mFitrhfGjtMDXegRw1Rk95ujKNokulCSlLqGT1GSKQXmRjBgPYPqPmWQUbzkvwgL6NcMODv1GLyslGGTVKY/WiSjYkiNsQbDjxED3w5rAoX1FG3pvcHAXGxSWbTEk2VzvjGuNwflK92FZZXS/NxXPdEa4lPjlFBRRTHWwEXS4qbaGrdQNJ1DFI/QWrKtw6sHpqt22ovXEk4qkVthaf6Yq8YxoBQ80ajY6gw72ZMXreN3AaHCi7thNKtj/v2e1qlxggNCA8WDnXQmQ0iCg+BYD63LsVbJqlAGq151GGGJXSTcci1DhsuT3JeYx2Vd+wIHNTuYRqFJACnA45KRyExejyzdAYvdBgMnbMbtKctKtFthB5g5P1evBvx/PmZxpXPxIhLKjlCwZgutfR2jy1YSFjIHDR3hBJGsPj1z0XLo36kTOUM/CpTzbNFe2xr3dZrNH/LwWiYO9NBeCHc6kCi6DKi7X7bvnlpk8tazHep7VDQputNWgwEu4flld8jy7QRnIDVIj+4qwT+YhUDG/2lPJ5/Agxjq7rGgkIpPc8Kd8sQ=
 addons:
   apt:
-    sources:
-    - ubuntu-toolchain-r-test
-    - llvm-toolchain-precise-3.9
     packages:
-    - clang-3.9
-    - libbz2-dev
-    - libsnappy-dev
-    - zlib1g-dev
     - jq
     - graphviz
   hosts:
@@ -48,8 +35,6 @@ cache:
   - "$HOME/build"
   - $HOME/Library/Caches/Homebrew
 
-install:
-- bash contrib/build-rocksdb.sh $HOME/build
 before_script:
 - go get github.com/mattn/goveralls
 script:

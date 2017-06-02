@@ -28,13 +28,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/badger/badger"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/pubsub"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -125,8 +125,11 @@ func StartRaftNodes(walDir string) {
 	}
 
 	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
-	wals, err := store.NewSyncStore(walDir)
-	x.Checkf(err, "Error initializing wal store")
+	kvOpt := badger.DefaultOptions
+	kvOpt.SyncWrites = true
+	kvOpt.Dir = walDir
+	wals, err := badger.NewKV(&kvOpt)
+	x.Checkf(err, "Error while creating badger KV store")
 	gr.wal = raftwal.Init(wals, *raftId)
 
 	var wg sync.WaitGroup
@@ -134,7 +137,7 @@ func StartRaftNodes(walDir string) {
 		gid, err := strconv.ParseUint(id, 0, 32)
 		x.Checkf(err, "Unable to parse group id: %v", id)
 		node := gr.newNode(uint32(gid), *raftId, *myAddr)
-		schema.LoadFromDb(uint32(gid))
+		x.Checkf(schema.LoadFromDb(uint32(gid)), "Error while initilizating schema")
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -254,7 +257,7 @@ func (g *groupi) HasPeer(group uint32) bool {
 	if all == nil {
 		return false
 	}
-	return len(all.list) > 0
+	return len(all.list) > 1 || (len(all.list) == 1 && all.list[0].NodeId != *raftId)
 }
 
 // Leader will try to retrun the leader of a given group, based on membership information.

@@ -18,13 +18,17 @@
 package gql
 
 import (
+	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
-	farm "github.com/dgryski/go-farm"
+	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -177,7 +181,7 @@ func TestParseQueryWithDash(t *testing.T) {
     }`
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	require.Equal(t, farm.Fingerprint64([]byte("alice-in-wonderland")), res.Query[0].UID[0])
+	require.Equal(t, "alice-in-wonderland", res.Query[0].ID[0])
 	require.Equal(t, "written-in", res.Query[0].Children[1].Attr)
 }
 
@@ -785,7 +789,7 @@ func TestParseQueryWithVarInIneqError(t *testing.T) {
 		}
 
 		me(id: var(fr)) @filter(gt(var(a, b), 10)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -804,7 +808,7 @@ func TestParseQueryWithVarInIneq(t *testing.T) {
 		}
 
 		me(id: var(fr)) @filter(gt(var(a), 10)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -1018,7 +1022,7 @@ func TestParseIdList(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
-	require.Equal(t, []uint64{1}, gq.UID)
+	require.Equal(t, []string{"0x1"}, gq.ID)
 }
 
 func TestParseIdList1(t *testing.T) {
@@ -1033,8 +1037,8 @@ func TestParseIdList1(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
-	require.Equal(t, []uint64{0xfe5de827fdf27a88, 0x1, 0x24a5b3a074e7f369, 0xf023e8d0d7c08cf3, 0x34}, gq.UID)
-	require.Equal(t, 5, len(gq.UID))
+	require.Equal(t, []string{"m.abcd", "0x1", "abc", "ade", "0x34"}, gq.ID)
+	require.Equal(t, 5, len(gq.ID))
 }
 
 func TestParseIdListError(t *testing.T) {
@@ -1478,7 +1482,7 @@ func TestParseMutationAndQueryWithComments(t *testing.T) {
 	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
 
 	require.NotNil(t, res.Query[0])
-	require.Equal(t, 1, len(res.Query[0].UID))
+	require.Equal(t, 1, len(res.Query[0].ID))
 	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
 }
 
@@ -1508,7 +1512,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
 
 	require.NotNil(t, res.Query[0])
-	require.Equal(t, 1, len(res.Query[0].UID))
+	require.Equal(t, 1, len(res.Query[0].ID))
 	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
 }
 
@@ -2741,6 +2745,26 @@ func TestParseNormalize(t *testing.T) {
 	require.True(t, res.Query[0].Normalize)
 }
 
+func TestParseGroupbyRoot(t *testing.T) {
+	query := `
+	query {
+		me(id: [1, 2, 3]) @groupby(friends) {
+				a as count(_uid_)
+		}
+		
+		groups(id: var(a)) {
+			_uid_
+			var(a)
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res.Query[0].GroupbyAttrs))
+	require.Equal(t, "friends", res.Query[0].GroupbyAttrs[0].Attr)
+	require.Equal(t, "a", res.Query[0].Children[0].Var)
+}
+
 func TestParseGroupbyWithCountVar(t *testing.T) {
 	query := `
 	query {
@@ -2761,7 +2785,7 @@ func TestParseGroupbyWithCountVar(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Query[0].Children[0].GroupbyAttrs))
-	require.Equal(t, "friends", res.Query[0].Children[0].GroupbyAttrs[0])
+	require.Equal(t, "friends", res.Query[0].Children[0].GroupbyAttrs[0].Attr)
 	require.Equal(t, "a", res.Query[0].Children[0].Children[0].Var)
 }
 
@@ -2770,7 +2794,7 @@ func TestParseGroupbyWithMaxVar(t *testing.T) {
 	query {
 		me(id:0x1) {
 			friends @groupby(friends) {
-				a as max(name)
+				a as max(first-name@en:ta)
 			}
 			hometown
 			age
@@ -2785,7 +2809,9 @@ func TestParseGroupbyWithMaxVar(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Query[0].Children[0].GroupbyAttrs))
-	require.Equal(t, "friends", res.Query[0].Children[0].GroupbyAttrs[0])
+	require.Equal(t, "friends", res.Query[0].Children[0].GroupbyAttrs[0].Attr)
+	require.Equal(t, "first-name", res.Query[0].Children[0].Children[0].Attr)
+	require.Equal(t, []string{"en", "ta"}, res.Query[0].Children[0].Children[0].Langs)
 	require.Equal(t, "a", res.Query[0].Children[0].Children[0].Var)
 }
 
@@ -2793,7 +2819,7 @@ func TestParseGroupby(t *testing.T) {
 	query := `
 	query {
 		me(id:0x1) {
-			friends @groupby(name) {
+			friends @groupby(name@en) {
 				count(_uid_)
 			}
 			hometown
@@ -2804,7 +2830,8 @@ func TestParseGroupby(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Query[0].Children[0].GroupbyAttrs))
-	require.Equal(t, "name", res.Query[0].Children[0].GroupbyAttrs[0])
+	require.Equal(t, "name", res.Query[0].Children[0].GroupbyAttrs[0].Attr)
+	require.Equal(t, "en", res.Query[0].Children[0].GroupbyAttrs[0].Langs[0])
 }
 
 func TestParseGroupbyError(t *testing.T) {
@@ -3297,7 +3324,26 @@ func TestParseGraphQLVarId(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	x.Init()
+	dir, err := ioutil.TempDir("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions
+	opt.Dir = dir
+	ps, err := badger.NewKV(&opt)
+	defer ps.Close()
+	x.Check(err)
+
 	group.ParseGroupConfig("")
+	schema.Init(ps)
+	posting.Init(ps)
+	worker.Init(ps)
+
+	dir2, err := ioutil.TempDir("", "wal_")
+	x.Check(err)
+
+	worker.StartRaftNodes(dir2)
 	os.Exit(m.Run())
 }
 
@@ -3332,4 +3378,36 @@ func TestCountAtRootErr2(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+}
+
+func TestHasFuncAtRoot(t *testing.T) {
+	query := `{
+		me(func: has(name@en)) {
+			name
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestHasFilterAtRoot(t *testing.T) {
+	query := `{
+		me(func: allofterms(name, "Steven Tom")) @filter(has(director.film)) {
+			name
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestHasFilterAtChild(t *testing.T) {
+	query := `{
+		me(func: anyofterms(name, "Steven Tom")) {
+			name
+			director.film @filter(has(genre)) {
+			}
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
 }

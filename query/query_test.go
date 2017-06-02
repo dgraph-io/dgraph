@@ -30,7 +30,7 @@ import (
 	"testing"
 	"time"
 
-	farm "github.com/dgryski/go-farm"
+	"github.com/dgraph-io/badger/badger"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
@@ -42,7 +42,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -57,7 +56,7 @@ func addPassword(t *testing.T, uid uint64, attr, password string) {
 	addEdgeToTypedValue(t, attr, uid, types.PasswordID, value.Value.([]byte), nil)
 }
 
-var ps *store.Store
+var ps *badger.KV
 
 func populateGraph(t *testing.T) {
 	x.AssertTrue(ps != nil)
@@ -185,7 +184,8 @@ func populateGraph(t *testing.T) {
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "loc", 24, types.GeoID, gData.Value.([]byte), nil)
 
-	addEdgeToValue(t, "name", farm.Fingerprint64([]byte("a.bc")), "Alice", nil)
+	addEdgeToValue(t, "name", 110, "Alice", nil)
+	addEdgeToValue(t, "_xid_", 110, "a.bc", nil)
 	addEdgeToValue(t, "name", 25, "Daryl Dixon", nil)
 	addEdgeToValue(t, "name", 31, "Andrea", nil)
 	addEdgeToValue(t, "name", 2300, "Andre", nil)
@@ -274,6 +274,9 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
 	addEdgeToLangValue(t, "name", 0x1002, "Honey badger", "en", nil)
 	addEdgeToLangValue(t, "name", 0x1003, "Honey bee", "en", nil)
+	// data for bug (#945)
+	addEdgeToLangValue(t, "name", 0x1004, "Артём Ткаченко", "ru", nil)
+	addEdgeToLangValue(t, "name", 0x1004, "Artem Tkachenko", "en", nil)
 
 	// regex test data
 	// 0x1234 is uid of interest for regex testing
@@ -1013,6 +1016,123 @@ func TestQueryVarValOrderDescMissing(t *testing.T) {
 	require.JSONEq(t, `{}`, js)
 }
 
+func TestGroupByRootProto(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id: [1, 23, 24, 25, 31]) @groupby(age) {
+				count(_uid_)
+		}
+	}
+	`
+	pb := processToPB(t, query, map[string]string{}, false)
+	resreq := `attribute: "_root_"
+children: <
+  attribute: "me"
+  children: <
+    attribute: "@groupby"
+    properties: <
+      prop: "age"
+      value: <
+        int_val: 17
+      >
+    >
+    properties: <
+      prop: "count"
+      value: <
+        int_val: 1
+      >
+    >
+  >
+  children: <
+    attribute: "@groupby"
+    properties: <
+      prop: "age"
+      value: <
+        int_val: 19
+      >
+    >
+    properties: <
+      prop: "count"
+      value: <
+        int_val: 1
+      >
+    >
+  >
+  children: <
+    attribute: "@groupby"
+    properties: <
+      prop: "age"
+      value: <
+        int_val: 38
+      >
+    >
+    properties: <
+      prop: "count"
+      value: <
+        int_val: 1
+      >
+    >
+  >
+  children: <
+    attribute: "@groupby"
+    properties: <
+      prop: "age"
+      value: <
+        int_val: 15
+      >
+    >
+    properties: <
+      prop: "count"
+      value: <
+        int_val: 2
+      >
+    >
+  >
+>
+`
+	res := proto.MarshalTextString(pb[0])
+	require.EqualValues(t,
+		resreq,
+		res)
+}
+
+func TestGroupByRoot(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id: [1, 23, 24, 25, 31]) @groupby(age) {
+				count(_uid_)
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":38,"count":1},{"age":15,"count":2}]}]}`,
+		js)
+}
+func TestGroupBy_RepeatAttr(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id: 1) {
+			friend @groupby(age) {
+				count(_uid_)
+			}
+			friend {
+				name
+				age
+			}
+			name
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":15,"count":2}]},{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}],"name":"Michonne"}]}`,
+		js)
+}
+
 func TestGroupBy(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1034,7 +1154,7 @@ func TestGroupBy(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"age":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}]}],"me":[{"friend":{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":15,"count":2}]},"name":"Michonne"}]}`,
+		`{"age":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}]}],"me":[{"friend":[{"@groupby":[{"age":17,"count":1},{"age":19,"count":1},{"age":15,"count":2}]}],"name":"Michonne"}]}`,
 		js)
 }
 
@@ -1100,7 +1220,7 @@ func TestGroupByAgg(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":{"@groupby":[{"age":17,"max(name)":"Daryl Dixon"},{"age":19,"max(name)":"Andrea"},{"age":15,"max(name)":"Rick Grimes"}]}}]}`,
+		`{"me":[{"friend":[{"@groupby":[{"age":17,"max(name)":"Daryl Dixon"},{"age":19,"max(name)":"Andrea"},{"age":15,"max(name)":"Rick Grimes"}]}]}]}`,
 		js)
 }
 
@@ -1117,7 +1237,7 @@ func TestGroupByMulti(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":{"@groupby":[{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}}]}`,
+		`{"me":[{"friend":[{"@groupby":[{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}]}]}`,
 		js)
 }
 
@@ -2924,7 +3044,6 @@ func TestFilterRegexError(t *testing.T) {
 
 func TestFilterRegex1(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
@@ -2942,7 +3061,6 @@ func TestFilterRegex1(t *testing.T) {
 
 func TestFilterRegex2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
@@ -2960,7 +3078,6 @@ func TestFilterRegex2(t *testing.T) {
 
 func TestFilterRegex3(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
@@ -2979,7 +3096,6 @@ func TestFilterRegex3(t *testing.T) {
 
 func TestFilterRegex4(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
@@ -2998,7 +3114,6 @@ func TestFilterRegex4(t *testing.T) {
 
 func TestFilterRegex5(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
     {
       me(id:0x01) {
@@ -3017,8 +3132,6 @@ func TestFilterRegex5(t *testing.T) {
 
 func TestFilterRegex6(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3036,8 +3149,6 @@ func TestFilterRegex6(t *testing.T) {
 
 func TestFilterRegex7(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3055,8 +3166,6 @@ func TestFilterRegex7(t *testing.T) {
 
 func TestFilterRegex8(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3074,8 +3183,6 @@ func TestFilterRegex8(t *testing.T) {
 
 func TestFilterRegex9(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3093,8 +3200,6 @@ func TestFilterRegex9(t *testing.T) {
 
 func TestFilterRegex10(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3112,8 +3217,6 @@ func TestFilterRegex10(t *testing.T) {
 
 func TestFilterRegex11(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3133,8 +3236,6 @@ func TestFilterRegex11(t *testing.T) {
 // http://www.regular-expressions.info/modifiers.html - this is completely legal
 func TestFilterRegex12(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3154,8 +3255,6 @@ func TestFilterRegex12(t *testing.T) {
 // http://www.regular-expressions.info/modifiers.html - this is completely legal
 func TestFilterRegex13(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3175,8 +3274,6 @@ func TestFilterRegex13(t *testing.T) {
 // invalid regexp modifier
 func TestFilterRegex14(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(50 * time.Millisecond)
 	query := `
     {
 	  me(id:0x1234) {
@@ -3189,6 +3286,38 @@ func TestFilterRegex14(t *testing.T) {
 
 	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
+}
+
+// multi-lang - simple
+func TestFilterRegex15(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func:regexp(name@ru, /Барсук/)) {
+				name@ru
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name@ru":"Барсук"}]}`,
+		js)
+}
+
+// multi-lang - test for bug (#945) - multi-byte runes
+func TestFilterRegex16(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func:regexp(name@ru, /^артём/i)) {
+				name@ru
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name@ru":"Артём Ткаченко"}]}`,
+		js)
 }
 
 func TestToFastJSONFilterUID(t *testing.T) {
@@ -3977,7 +4106,7 @@ children: <
   properties: <
     prop: "_xid_"
     value: <
-      default_val: "mich"
+      str_val: "mich"
     >
   >
   properties: <
@@ -5454,7 +5583,7 @@ children: <
   properties: <
     prop: "_xid_"
     value: <
-      default_val: "mich"
+      str_val: "mich"
     >
   >
   properties: <
@@ -5939,6 +6068,22 @@ func TestLangFilterMismatch5(t *testing.T) {
 		js)
 }
 
+func TestLangFilterMismatch6(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	query := `
+		{
+			me(id: [0x1001, 0x1002, 0x1003]) @filter(lt(name@en, "D"))  {
+				name@en
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
 func checkSchemaNodes(t *testing.T, expected []*protos.SchemaNode, actual []*protos.SchemaNode) {
 	sort.Slice(expected, func(i, j int) bool {
 		return expected[i].Predicate >= expected[j].Predicate
@@ -5965,7 +6110,7 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
 		{Predicate: "dob", Type: "date"}, {Predicate: "survival_rate", Type: "float"},
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
-		{Predicate: "noindex_name", Type: "string"}}
+		{Predicate: "noindex_name", Type: "string"}, {Predicate: "_xid_", Type: "string"}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6050,9 +6195,12 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	defer os.RemoveAll(dir)
 
-	ps, err = store.NewStore(dir)
-	x.Check(err)
+	opt := badger.DefaultOptions
+	opt.Dir = dir
+	ps, err = badger.NewKV(&opt)
 	defer ps.Close()
+	x.Check(err)
+	time.Sleep(time.Second)
 
 	group.ParseGroupConfig("")
 	schema.Init(ps)
@@ -6201,7 +6349,7 @@ children: <
   properties: <
     prop: "_xid_"
     value: <
-      default_val: "mich"
+      str_val: "mich"
     >
   >
   properties: <
@@ -6230,7 +6378,7 @@ children: <
     properties: <
       prop: "_xid_"
       value: <
-        default_val: "g\\\"lenn"
+        str_val: "g\\\"lenn"
       >
     >
     properties: <
@@ -6946,6 +7094,97 @@ func TestCountAtRoot5(t *testing.T) {
         `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+}
+
+func TestHasFuncAtRoot(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: has(friend)) {
+			name
+			friend {
+				count()
+			}
+		}
+	}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Daryl Dixon"},{"friend":[{"count":1}],"name":"Andrea"}]}`, string(js))
+}
+
+func TestHasFuncAtRootFilter(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: anyofterms(name, "Michonne Rick Daryl")) @filter(has(friend)) {
+			name
+			friend {
+				count()
+			}
+		}
+	}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Daryl Dixon"}]}`, string(js))
+}
+
+func TestHasFuncAtChild1(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: has(school)) {
+			name
+			friend @filter(has(scooter)) {
+				name
+			}
+		}
+	}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`, string(js))
+}
+
+func TestHasFuncAtChild2(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: has(school)) {
+			name
+			friend @filter(has(alias)) {
+				name
+				alias
+			}
+		}
+	}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"alias":"Zambo Alice","name":"Rick Grimes"},{"alias":"John Alice","name":"Glenn Rhee"},{"alias":"Bob Joe","name":"Daryl Dixon"},{"alias":"Allan Matt","name":"Andrea"},{"alias":"John Oliver"}],"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Daryl Dixon"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Andrea"}]}`, string(js))
+}
+
+func TestHasFuncAtRoot2(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: has(name@en)) {
+			name@en
+		}
+	}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name@en":"Test facet"},{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"},{"name@en":"Artem Tkachenko"}]}`, string(js))
 }
 
 func getSubGraphs(t *testing.T, query string) (subGraphs []*SubGraph) {
