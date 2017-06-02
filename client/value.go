@@ -46,18 +46,6 @@ func ValueFromGeoJson(json string, nq *protos.NQuad) error {
 	return nil
 }
 
-// Date is a helper function to add a date(time.Time) to an
-// NQuad.ObjectValue.
-func Date(date time.Time, nq *protos.NQuad) error {
-	d, err := types.ObjectValue(types.DateID, date)
-	if err != nil {
-		return err
-	}
-	nq.ObjectValue = d
-	nq.ObjectType = int32(types.DateID)
-	return nil
-}
-
 // Datetime is a helper function to add a date(time.Time) to an
 // NQuad.ObjectValue.
 func Datetime(dateTime time.Time, nq *protos.NQuad) error {
