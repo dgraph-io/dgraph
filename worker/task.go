@@ -509,6 +509,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn) {
 		uids := algo.MergeSorted(out.UidMatrix)
 		var values []types.Val
+		filteredUids := make([]uint64, 0, len(uids.Uids))
 		for _, uid := range uids.Uids {
 			key := x.DataKey(attr, uid)
 			pl, decr := posting.GetOrCreate(key, gid)
@@ -523,10 +524,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			if err == nil {
 				values = append(values, strVal)
 			}
+			filteredUids = append(filteredUids, uid)
 			decr() // Decrement the reference count of the pl.
 		}
 
-		var filtered *protos.List
+		filtered := &protos.List{Uids: filteredUids}
 		filter := stringFilter{
 			funcName: srcFn.fname,
 			funcType: srcFn.fnType,
@@ -539,7 +541,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			filter.ineqValue = srcFn.ineqValue
 			filter.match = ineqMatch
 		}
-		filtered = matchStrings(uids, values, filter)
+		filtered = matchStrings(filtered, values, filter)
 		for i := 0; i < len(out.UidMatrix); i++ {
 			algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
 		}
