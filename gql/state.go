@@ -277,14 +277,11 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemColon)
 		case isEndLiteral(r):
 			{
-				l.Ignore() // ignore the "
 				empty = false
 				if err := l.LexQuotedString(); err != nil {
 					return l.Errorf(err.Error())
 				}
-				l.Backup()
 				l.Emit(itemName)
-				l.Next()
 			}
 		case r == leftSquare:
 			arg := findArg(l)
@@ -292,25 +289,13 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			{
 				if lexArgs {
 					l.Ignore() // Ignore [ as we want to lex actual tokens.
+					// If lex args is true we can continue in the loop to lex
+					// tokens.
+					continue
 				}
 				depth := 1
 				for {
 					r := l.Next()
-					// Only if we want to lexArgs then we look the content.
-					// Else we absorb everything.
-					if lexArgs {
-						if isNameBegin(r) || isNumber(r) {
-							lexArgName(l)
-						} else if r == comma {
-							l.Emit(itemComma)
-						} else if r == quote {
-							if err := l.LexQuotedString(); err != nil {
-								return l.Errorf(err.Error())
-							}
-							l.Emit(itemName)
-						}
-					}
-
 					if r == lex.EOF || r == ')' {
 						return l.Errorf("Invalid bracket sequence")
 					} else if r == '[' {
@@ -324,11 +309,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 						break
 					}
 				}
-				// We would have already lexed the args if lexArgs is true.
-				// If not then we want to emit the complete value.
-				if !lexArgs {
-					l.Emit(itemName)
-				}
+				l.Emit(itemName)
 				empty = false
 				l.AcceptRun(isSpace)
 				l.Ignore()
@@ -338,6 +319,9 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			}
 		case r == '#':
 			return lexComment
+		case r == rightSquare:
+			l.Ignore()
+			continue
 		default:
 			return l.Errorf("Unrecognized character in inside a func: %#U", r)
 		}
