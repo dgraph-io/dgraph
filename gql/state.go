@@ -275,12 +275,19 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemDollar)
 		case r == colon:
 			l.Emit(itemColon)
-		case isEndLiteral(r):
+		case r == quote:
 			{
 				empty = false
 				if err := l.LexQuotedString(); err != nil {
 					return l.Errorf(err.Error())
 				}
+				l.Emit(itemName)
+			}
+		case isEndLiteral(r):
+			{
+				empty = false
+				l.AcceptUntil(isEndLiteral) // This call will backup the ending ".
+				l.Next()                    // Consume the " .
 				l.Emit(itemName)
 			}
 		case r == leftSquare:
