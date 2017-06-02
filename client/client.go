@@ -30,7 +30,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -106,11 +105,10 @@ func (req *Req) AddMutation(nq protos.NQuad, op Op) error {
 }
 
 func AddFacet(key string, val string, nq *protos.NQuad) error {
-	facet, err := facets.FacetFor(key, val)
-	if err != nil {
-		return err
-	}
-	nq.Facets = append(nq.Facets, facet)
+	nq.Facets = append(nq.Facets, &protos.Facet{
+		Key: key,
+		Val: val,
+	})
 	return nil
 }
 
