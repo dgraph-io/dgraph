@@ -39,7 +39,6 @@ const (
 	BoolID     = TypeID(protos.Posting_BOOL)
 	DateTimeID = TypeID(protos.Posting_DATETIME)
 	StringID   = TypeID(protos.Posting_STRING)
-	DateID     = TypeID(protos.Posting_DATE)
 	GeoID      = TypeID(protos.Posting_GEO)
 	UidID      = TypeID(protos.Posting_UID)
 	PasswordID = TypeID(protos.Posting_PASSWORD)
@@ -53,7 +52,6 @@ var typeNameMap = map[string]TypeID{
 	"bool":     BoolID,
 	"id":       StringID,
 	"datetime": DateTimeID,
-	"date":     DateID,
 	"geo":      GeoID,
 	"uid":      UidID,
 	"password": PasswordID,
@@ -72,8 +70,6 @@ func (t TypeID) Name() string {
 		return "bool"
 	case StringID:
 		return "string"
-	case DateID:
-		return "date"
 	case DateTimeID:
 		return "dateTime"
 	case GeoID:
@@ -135,10 +131,6 @@ func ValueForType(id TypeID) Val {
 	case DefaultID:
 		var s string
 		return Val{DefaultID, s}
-
-	case DateID:
-		var d time.Time
-		return Val{DateID, &d}
 
 	case GeoID:
 		var g geom.T

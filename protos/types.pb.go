@@ -23,7 +23,6 @@ const (
 	Posting_INT      Posting_ValType = 2
 	Posting_FLOAT    Posting_ValType = 3
 	Posting_BOOL     Posting_ValType = 4
-	Posting_DATE     Posting_ValType = 5
 	Posting_DATETIME Posting_ValType = 6
 	Posting_GEO      Posting_ValType = 7
 	Posting_UID      Posting_ValType = 8
@@ -37,7 +36,6 @@ var Posting_ValType_name = map[int32]string{
 	2:  "INT",
 	3:  "FLOAT",
 	4:  "BOOL",
-	5:  "DATE",
 	6:  "DATETIME",
 	7:  "GEO",
 	8:  "UID",
@@ -50,7 +48,6 @@ var Posting_ValType_value = map[string]int32{
 	"INT":      2,
 	"FLOAT":    3,
 	"BOOL":     4,
-	"DATE":     5,
 	"DATETIME": 6,
 	"GEO":      7,
 	"UID":      8,
