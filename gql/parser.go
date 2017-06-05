@@ -1366,6 +1366,39 @@ L:
 					g.Args = append(g.Args, expr, flags)
 					expectArg = false
 					continue
+					// TODO - Do this only for Geo.
+				} else if itemInFunc.Typ == itemLeftSquare {
+					// Lets reassemble the geo tokens.
+					buf := new(bytes.Buffer)
+					buf.WriteString(itemInFunc.Val)
+					depth := 1
+					for {
+						it.Next()
+						item = it.Item()
+						if item.Typ == itemRightRound {
+							return nil, x.Errorf("Invalid bracket sequence")
+						} else if item.Typ == itemLeftSquare {
+							buf.WriteString(item.Val)
+							depth++
+						} else if item.Typ == itemRightSquare {
+							buf.WriteString(item.Val)
+							depth--
+						} else {
+							// Writing tokens to buffer.
+							buf.WriteString(item.Val)
+						}
+
+						if depth > 2 || depth < 0 {
+							return nil, x.Errorf("Invalid bracket sequence")
+						} else if depth == 0 {
+							break
+						}
+					}
+					// Lets append the concatenated Geo arg.
+					g.Args = append(g.Args, buf.String())
+					expectArg = false
+					continue
+
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -1855,19 +1888,43 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, x.Errorf("Expected a variable name. Got: %v", item.Val)
 				}
 			}
-			// Check and parse if its a list.
+
+			// Its a list of ids.
+			if item.Typ == itemLeftSquare {
+				it.Next()
+				item = it.Item()
+			L:
+				for {
+					switch item.Typ {
+					case itemRightSquare:
+						break L
+					case itemComma:
+						it.Next()
+						item = it.Item()
+						continue
+					case itemName:
+						val := collectName(it, item.Val)
+						gq.ID = append(gq.ID, val)
+						it.Next()
+						item = it.Item()
+					default:
+						return nil, x.Errorf("Unexpected item: %s while parsing list of ids", item.Val)
+					}
+					// TODO - Verify that lexer verifies that comma and value alternate.
+				}
+				continue
+			}
+
+			// Its a single id.
 			val := collectName(it, item.Val)
+			gq.ID = append(gq.ID, val)
+
 			if isDollar {
 				val = "$" + val
 				gq.Args["id"] = val
 				// We can continue, we will parse the id later when we fill GraphQL variables.
 				continue
 			}
-			err := parseID(gq, val)
-			if err != nil {
-				return nil, err
-			}
-
 		} else if key == "func" {
 			// Store the generator function.
 			gen, err := parseFunction(it)
@@ -2224,6 +2281,8 @@ func isMathBlock(name string) bool {
 	return name == "math"
 }
 
+// Name can have dashes or alphanumeric characters. Lexer lexes them as separate items.
+// We put it back together here.
 func collectName(it *lex.ItemIterator, val string) string {
 	var dashOrName bool // false if expecting dash, true if expecting name
 	for {

@@ -18,6 +18,7 @@
 package gql
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -182,6 +183,30 @@ func TestParseQueryWithDash(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, "alice-in-wonderland", res.Query[0].ID[0])
+	require.Equal(t, "written-in", res.Query[0].Children[1].Attr)
+}
+
+func TestParseQueryWithDash2(t *testing.T) {
+	query := `
+    {
+      me(id: [alice-in-wonderland, bob-here-too]) {
+        type
+        written-in
+        name
+        character {
+                name
+        }
+        author {
+                name
+                born
+                died
+        }
+      }
+    }`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	fmt.Println(res)
+	require.Equal(t, []string{"alice-in-wonderland", "bob-here-too"}, res.Query[0].ID)
 	require.Equal(t, "written-in", res.Query[0].Children[1].Attr)
 }
 
@@ -2148,8 +2173,9 @@ func TestParseFilter_Geo1(t *testing.T) {
 		}
 	}
 `
-	_, err := Parse(Request{Str: query, Http: true})
+	resp, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
+	require.Equal(t, []string{"[-1.12,2.0123]", "100.123"}, resp.Query[0].Children[0].Filter.Func.Args)
 }
 
 func TestParseFilter_Geo2(t *testing.T) {
@@ -2164,8 +2190,9 @@ func TestParseFilter_Geo2(t *testing.T) {
 		}
 	}
 `
-	_, err := Parse(Request{Str: query, Http: true})
+	resp, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
+	require.Equal(t, []string{"[[11.2,-2.234],[-31.23,4.3214],[5.312,6.53]]"}, resp.Query[0].Children[0].Filter.Func.Args)
 }
 
 func TestParseFilter_Geo3(t *testing.T) {

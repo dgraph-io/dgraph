@@ -210,32 +210,10 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 				l.Next()                    // Consume the " .
 				l.Emit(itemName)
 			}
-		case r == '[':
-			{
-				depth := 1
-				for {
-					r := l.Next()
-					if r == lex.EOF || r == ')' {
-						return l.Errorf("Invalid bracket sequence")
-					} else if r == '[' {
-						depth++
-					} else if r == ']' {
-						depth--
-					}
-					if depth > 2 || depth < 0 {
-						return l.Errorf("Invalid bracket sequence")
-					} else if depth == 0 {
-						break
-					}
-				}
-				l.Emit(itemName)
-				empty = false
-				l.AcceptRun(isSpace)
-				l.Ignore()
-				if !isEndArg(l.Peek()) {
-					return l.Errorf("Invalid bracket sequence")
-				}
-			}
+		case r == leftSquare:
+			l.Emit(itemLeftSquare)
+		case r == rightSquare:
+			l.Emit(itemRightSquare)
 		case r == '#':
 			return lexComment
 		default:
