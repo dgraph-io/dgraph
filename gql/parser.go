@@ -1376,17 +1376,19 @@ L:
 							return nil, x.Errorf("Got EOF while parsing Geo tokens")
 						}
 						item = it.Item()
-						if item.Typ == itemRightRound {
-							return nil, x.Errorf("Invalid bracket sequence")
-						} else if item.Typ == itemLeftSquare {
+						switch item.Typ {
+						case itemLeftSquare:
 							buf.WriteString(item.Val)
 							depth++
-						} else if item.Typ == itemRightSquare {
+						case itemRightSquare:
 							buf.WriteString(item.Val)
 							depth--
-						} else {
+						case itemMathOp, itemComma, itemName:
 							// Writing tokens to buffer.
 							buf.WriteString(item.Val)
+						default:
+							return nil, x.Errorf("Found invalid item: %s while parsing geo arguments.",
+								item.Val)
 						}
 
 						if depth > 2 || depth < 0 {
@@ -1883,7 +1885,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			isDollar := false
 			if item.Typ == itemDollar {
 				isDollar = true
-				it.Next()
+				if valid := it.Next(); valid {
+					return nil, x.Errorf("Expected a variable name. Got EOF")
+				}
 				item = it.Item()
 				if item.Typ != itemName {
 					return nil, x.Errorf("Expected a variable name. Got: %v", item.Val)
@@ -1892,7 +1896,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 			// Its a list of ids.
 			if item.Typ == itemLeftSquare {
-				it.Next()
+				if valid := it.Next(); !valid {
+					return nil, x.Errorf("Unexpected EOF while parsing list of ids")
+				}
 				item = it.Item()
 			L:
 				for {
@@ -1900,13 +1906,17 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					case itemRightSquare:
 						break L
 					case itemComma:
-						it.Next()
+						if valid := it.Next(); !valid {
+							return nil, x.Errorf("Unexpected EOF while parsing list of ids")
+						}
 						item = it.Item()
 						continue
 					case itemName:
 						val := collectName(it, item.Val)
 						gq.ID = append(gq.ID, val)
-						it.Next()
+						if valid := it.Next(); !valid {
+							return nil, x.Errorf("Unexpected EOF while parsing list of ids")
+						}
 						item = it.Item()
 					default:
 						return nil, x.Errorf("Unexpected item: %s while parsing list of ids", item.Val)
