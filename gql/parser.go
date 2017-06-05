@@ -1917,14 +1917,13 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 			// Its a single id.
 			val := collectName(it, item.Val)
-			gq.ID = append(gq.ID, val)
-
 			if isDollar {
 				val = "$" + val
 				gq.Args["id"] = val
 				// We can continue, we will parse the id later when we fill GraphQL variables.
 				continue
 			}
+			gq.ID = append(gq.ID, val)
 		} else if key == "func" {
 			// Store the generator function.
 			gen, err := parseFunction(it)
