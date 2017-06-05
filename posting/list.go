@@ -721,8 +721,13 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 	l.AssertRLock()
 	var found bool
 
+	any := false
 	// look for language in preffered order
 	for _, lang := range langs {
+		if lang == "." {
+			any = true
+			break
+		}
 		pos, rerr = l.postingForTag(lang)
 		if rerr == nil {
 			return pos, nil
@@ -735,7 +740,7 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 	}
 
 	// last resort - return value with smallest lang Uid
-	if !found {
+	if !found && any {
 		l.iterate(0, func(p *protos.Posting) bool {
 			if postingType(p) == x.ValueMulti {
 				pos = p

@@ -54,6 +54,7 @@ const (
 	itemRightRound                              // right round bracket
 	itemColon                                   // Colon
 	itemAt                                      // @
+	itemPeriod                                  // .
 	itemDollar                                  // $
 	itemRegex                                   // /
 	itemBackslash                               // \
@@ -142,7 +143,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		switch r := l.Next(); {
 		case r == at:
 			l.Emit(itemAt)
-			return lexDirective
+			return lexDirectiveOrLangList
 		case isNameBegin(r) || isNumber(r):
 			empty = false
 			return lexArgName
@@ -286,13 +287,16 @@ func lexQuery(l *lex.Lexer) lex.StateFn {
 	for {
 		switch r := l.Next(); {
 		case r == period:
-			if l.Next() == period && l.Next() == period {
+			two := l.Next() == period
+			three := l.Next() == period
+			if two && three {
 				l.Emit(itemThreeDots)
 				return lexName
+			} else {
+				l.Backup()
+				l.Backup()
+				l.Emit(itemPeriod)
 			}
-			// We do not expect a period at all. If you do, you may want to
-			// backup the two extra periods we try to read.
-			return l.Errorf("Unrecognized character in lexText: %#U", r)
 		case r == rightCurl:
 			l.Depth--
 			l.Emit(itemRightCurl)
@@ -324,7 +328,7 @@ func lexQuery(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemColon)
 		case r == at:
 			l.Emit(itemAt)
-			return lexDirective
+			return lexDirectiveOrLangList
 		case r == lsThan:
 			return lexIRIRef
 		default:
@@ -355,10 +359,12 @@ func lexFilterFuncName(l *lex.Lexer) lex.StateFn {
 	return l.Mode
 }
 
-// lexDirective is called right after we see a @.
-func lexDirective(l *lex.Lexer) lex.StateFn {
+// lexDirectiveOrLangList is called right after we see a @.
+func lexDirectiveOrLangList(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
-	if !isNameBegin(r) {
+	if r == period {
+		return lexName
+	} else if !isNameBegin(r) {
 		return l.Errorf("Unrecognized character in lexDirective: %#U", r)
 	}
 

@@ -1754,7 +1754,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 func parseLanguageList(it *lex.ItemIterator) []string {
 	item := it.Item()
 	var langs []string
-	for ; item.Typ == itemName; item = it.Item() {
+	for ; item.Typ == itemName || item.Typ == itemPeriod; item = it.Item() {
 		langs = append(langs, item.Val)
 		it.Next()
 		if it.Item().Typ == itemColon {
