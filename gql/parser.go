@@ -1885,7 +1885,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			isDollar := false
 			if item.Typ == itemDollar {
 				isDollar = true
-				if valid := it.Next(); valid {
+				if valid := it.Next(); !valid {
 					return nil, x.Errorf("Expected a variable name. Got EOF")
 				}
 				item = it.Item()
