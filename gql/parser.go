@@ -1914,9 +1914,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				}
 				continue
 			}
-
 			// Its a single id.
 			val := collectName(it, item.Val)
+			// Its a GraphQL id variable.
 			if isDollar {
 				val = "$" + val
 				gq.Args["id"] = val
