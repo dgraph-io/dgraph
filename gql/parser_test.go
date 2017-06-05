@@ -18,7 +18,6 @@
 package gql
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -205,7 +204,6 @@ func TestParseQueryWithDash2(t *testing.T) {
     }`
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	fmt.Println(res)
 	require.Equal(t, []string{"alice-in-wonderland", "bob-here-too"}, res.Query[0].ID)
 	require.Equal(t, "written-in", res.Query[0].Children[1].Attr)
 }

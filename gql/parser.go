@@ -1366,14 +1366,15 @@ L:
 					g.Args = append(g.Args, expr, flags)
 					expectArg = false
 					continue
-					// TODO - Do this only for Geo.
-				} else if itemInFunc.Typ == itemLeftSquare {
 					// Lets reassemble the geo tokens.
+				} else if itemInFunc.Typ == itemLeftSquare && isGeoFunc(g.Name) {
 					buf := new(bytes.Buffer)
 					buf.WriteString(itemInFunc.Val)
 					depth := 1
 					for {
-						it.Next()
+						if valid := it.Next(); !valid {
+							return nil, x.Errorf("Got EOF while parsing Geo tokens")
+						}
 						item = it.Item()
 						if item.Typ == itemRightRound {
 							return nil, x.Errorf("Invalid bracket sequence")
@@ -1394,7 +1395,7 @@ L:
 							break
 						}
 					}
-					// Lets append the concatenated Geo arg.
+					// Lets append the concatenated Geo token to Args.
 					g.Args = append(g.Args, buf.String())
 					expectArg = false
 					continue
@@ -1910,7 +1911,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					default:
 						return nil, x.Errorf("Unexpected item: %s while parsing list of ids", item.Val)
 					}
-					// TODO - Verify that lexer verifies that comma and value alternate.
 				}
 				continue
 			}
@@ -2278,6 +2278,10 @@ func isExpandFunc(name string) bool {
 
 func isMathBlock(name string) bool {
 	return name == "math"
+}
+
+func isGeoFunc(name string) bool {
+	return name == "near" || name == "contains" || name == "within" || name == "intersects"
 }
 
 // Name can have dashes or alphanumeric characters. Lexer lexes them as separate items.
