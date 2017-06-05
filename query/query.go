@@ -437,7 +437,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				dst.AddListChild(fieldName, uc)
 			}
 		} else {
-			// TODO: tzdybal
 			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
 				fieldName += "@"
 				fieldName += strings.Join(pc.Params.Langs, ":")

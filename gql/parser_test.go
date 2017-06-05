@@ -3411,3 +3411,13 @@ func TestHasFilterAtChild(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 }
+
+// this test tests parsing of EOF inside '...'
+func TestDotsEOF(t *testing.T) {
+	query := `{
+		me(id: 0x1) {
+			name
+			..`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
