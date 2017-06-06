@@ -4,22 +4,134 @@ title = "Query Language - GraphQL+-"
 
 Dgraph's GraphQL+- is based on Facebook's [GraphQL](https://facebook.github.io/graphql/).  GraphQL wasn't developed for Graph databases, but it's graph-like query syntax, schema validation and subgraph shaped response make it a great language choice.  We've modified the language to better support graph operations, adding and removing features to get the best fit for graph databases.  We're calling this simplified, feature rich language, ''GraphQL+-''.
 
-{{% notice "note" %}}GraphQL+- is a work in progress. We're adding more features and we might further simplify existing ones.{{% /notice %}}
+GraphQL+- is a work in progress. We're adding more features and we might further simplify existing ones.
 
 ## Take a Tour - https://tour.dgraph.io
 
-This document is the Dgraph query reference material.  It is not a tutorial.  It's designed as a reference for users who already know how to write queries in GraohQL+- but need to check syntax, or indices, or functions, etc.
+This document is the Dgraph query reference material.  It is not a tutorial.  It's designed as a reference for users who already know how to write queries in GraphQL+- but need to check syntax, or indices, or functions, etc.
 
-If you are new to Dgraph and want to learn how to use Dgraph and GraphQL+-, take the tour - https://tour.dgraph.io
+{{% notice "note" %}}If you are new to Dgraph and want to learn how to use Dgraph and GraphQL+-, take the tour - https://tour.dgraph.io{{% /notice %}}
 
 ### Running examples
 
 The examples in this reference use a database of 21 million triples about movies and actors.  The example queries run and return results.  The queries are executed by an instance of Dgraph running at https://play.dgraph.io/.  To run the queries locally or experiment a bit more, see the Getting Started guide on how to start Dgraph and how to load the 21million and tourism (for location queries) datasets.
 
-## Base Query Syntax
+## GraphQL+- Fundamentals
 
-**TODO ... grammar in here??? with basic query evaluation description**
+A GraphQL+- query finds nodes based on search criteria, matches patterns in a graph and returns a graph as a result.
 
+A query is composed of nested blocks, starting with a query root.  The root finds the initial set of nodes against which the following graph matching and filtering is applied.
+
+
+### Returning Values
+
+Each query has a name, specified at the query root, and the same name identifies the results.
+
+If an edge is of a value type, the value can be returned by giving the edge name.
+
+Query Example: In the example dataset, as well as edges that link movies to directors and actors, movies have a name, release date and identifiers for a number of well known movie databases.  This query, with name `bladerunner`, and root matching a movie name, returns those values for the early 80's sci-fi classic "Blade Runner".
+
+{{< runnable >}}
+{
+  bladerunner(func: eq(name, "Blade Runner")) {
+    _uid_
+    name
+    initial_release_date
+    netflix_id
+  }
+}
+{{< /runnable >}}
+
+The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equalling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
+
+Every node had a unique identifier.  The `_uid_` edge in the query above returns that identifier.  If the required node is already known, rather than applying a function with `func:`, the node can be found directly with `id:`.  If a node has an XID, it can also be found in the same way.
+
+Query Example: "Blade Runner" movie data found by UID.
+
+{{< runnable >}}
+{
+  bladerunner(id: 0x3cf6ed367ae4fa80) {
+    _uid_
+    name
+    initial_release_date
+    netflix_id
+  }
+}
+{{< /runnable >}}
+
+A query can match many nodes and return the values for each.
+
+Query Example: All nodes that have either "Blade" or "Runner" in the name.
+
+{{< runnable >}}
+{
+  bladerunner(func: anyofterms(name, "Blade Runner")) {
+    _uid_
+    name
+    initial_release_date
+    netflix_id
+  }
+}
+{{< /runnable >}}
+
+
+### Expanding Graph Edges
+
+A query expands edges from node to node by nesting query blocks.
+
+Query Example: The actors and characters played in "Blade Runner"
+{{< runnable >}}
+{
+  brCharacters(func: eq(name, "Blade Runner")) {
+    name
+    initial_release_date
+    starring {
+      performance.actor {
+        name  # actor name
+      }
+      performance.character {
+        name  # character name
+      }
+    }
+  }
+}
+{{< /runnable >}}
+
+
+#### Comments
+
+Anything on a line following a `#` is a comment
+
+### Applying Filters
+
+The query root finds an initial set of nodes and the query proceeds by returning values and following edges to further nodes - any node reached in the query is found by traversal after the search at root.  The nodes found can be filtered by applying `@filter`, either after the root or at any edge.
+
+Query Example: "Blade Runner" director Ridley Scott's movies released before the year 2000.
+{{< runnable >}}
+{
+  scott(func: eq(name, "Ridley Scott")) {
+    name
+    initial_release_date
+    director.film @filter(le(initial_release_date, "2000")) {
+      name
+      initial_release_date
+    }
+  }
+}
+{{< /runnable >}}
+
+Query Example: Movies with either "Blade" or "Runner" in the title and released before the year 2000.
+
+{{< runnable >}}
+{
+  bladerunner(func: anyofterms(name, "Blade Runner")) @filter(le(initial_release_date, "2000")) {
+    _uid_
+    name
+    initial_release_date
+    netflix_id
+  }
+}
+{{< /runnable >}}
 
 ### Language Support
 
@@ -43,7 +155,8 @@ In functions, a preference list is not allowed.  A string edge without a languag
 
 For example, some of Bollywood actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
 
-{{< runnable >}}{
+{{< runnable >}}
+{
   q(func: allofterms(name, "Farhan Akhtar")) {
     name@hi
     name@en
@@ -55,44 +168,36 @@ For example, some of Bollywood actor Farhan Akhtar's movies have a name stored i
       name@ru
     }
   }
-}{{< /runnable >}}
+}
+{{< /runnable >}}
 
 
 ## Functions
 
-{{% notice "note" %}}Functions can only be applied to [indexed predicates]({{< relref "#indexing">}}).{{% /notice %}}
+{{% notice "note" %}}Functions can only be applied to [indexed]({{< relref "#indexing">}}) predicates.{{% /notice %}}
 
-Functions allow filtering based on properties of nodes or variables.
+Functions allow filtering based on properties of nodes or variables.  Functions can be applied in the query root or in filters.
 
-grammar **TODO placeholder**
-...but then some functions allow variables and some don't, better to stop grammar at this point and just do per function
-```
-fnName(var | edge, value)
-value -> "string literal" | /regular expression/ | numeric
-regular expression -> go regular expressions https://golang.org/pkg/regexp/syntax/ ???
-```
-
-...more here about how they work in general .. and distinction between at root and in filter
-
-note about functions and Language
+For functions on string valued predicates, if no language preference is given, the function is applied to all languages and strings without a language tag; if a language preference is given, the function is applied only to strings of the given language.
 
 
 ### Term matching
 
+
 #### AllOfTerms
 
-Syntax : `allofterms(predicate, "space-separated term list")`
+Syntax Example: `allofterms(predicate, "space-separated term list")`
 
-Schema types : `string`
+Schema Types: `string`
 
-Index required : `term`
+Index Required: `term`
 
 
 Matches strings that have all specified terms in any order; case insensitive.
 
 ##### Usage at root
 
-Query Example : All nodes that have `name` containing terms `indiana` and `jones`, returning the english name and genre in english.
+Query Example: All nodes that have `name` containing terms `indiana` and `jones`, returning the english name and genre in english.
 
 {{< runnable >}}
 {
@@ -107,7 +212,7 @@ Query Example : All nodes that have `name` containing terms `indiana` and `jones
 
 ##### Usage as Filter
 
-Query Example : Steven Spielberg is XID `m.06pj8`.  All his films that contain the words `indiana` and `jones`.
+Query Example: Steven Spielberg is XID `m.06pj8`.  All his films that contain the words `indiana` and `jones`.
 
 {{< runnable >}}
 {
@@ -124,18 +229,18 @@ Query Example : Steven Spielberg is XID `m.06pj8`.  All his films that contain t
 #### AnyOfTerms
 
 
-Syntax : `anyofterms(predicate, "space-separated term list")`
+Syntax Example: `anyofterms(predicate, "space-separated term list")`
 
-Schema types : `string`
+Schema Types: `string`
 
-Index required : `term`
+Index Required: `term`
 
 
 Matches strings that have any of the specified terms in any order; case insensitive.
 
 ##### Usage at root
 
-Query Example : All nodes that have a `name` containing either `purple` or `peacock`.  Many of the returned nodes are movies, but people like Joan Peacock also meet the search terms because without a [cascade directive]({{< relref "#cascade-directive">}}) the query doesn't require a genre.
+Query Example: All nodes that have a `name` containing either `purple` or `peacock`.  Many of the returned nodes are movies, but people like Joan Peacock also meet the search terms because without a [cascade directive]({{< relref "#cascade-directive">}}) the query doesn't require a genre.
 
 {{< runnable >}}
 {
@@ -151,7 +256,7 @@ Query Example : All nodes that have a `name` containing either `purple` or `peac
 
 ##### Usage as filter
 
-Query Example : Steven Spielberg is XID `m.06pj8`.  All his movies that contain `war` or `spies`
+Query Example: Steven Spielberg is XID `m.06pj8`.  All his movies that contain `war` or `spies`
 
 {{< runnable >}}
 {
@@ -168,16 +273,16 @@ Query Example : Steven Spielberg is XID `m.06pj8`.  All his movies that contain 
 ### Regular Expressions
 
 
-Syntax : `regexp(predicate, /regular-expression/)` or case insensitive `regexp(predicate, /regular-expression/i)`
+Syntax Examples: `regexp(predicate, /regular-expression/)` or case insensitive `regexp(predicate, /regular-expression/i)`
 
-Schema types : `string`
+Schema Types: `string`
 
-Index required : `trigram`
+Index Required: `trigram`
 
 
 Matches strings by regular expression.  The regular expression language is that of [go regular expressions](https://golang.org/pkg/regexp/syntax/).
 
-Query Example : At root, match nodes with `Steven Sp` at the start of `name`, followed by any characters.  For each such matched uid, match the films containing `ryan`.  Note the difference with `allofterms`, which would match only `ryan` but regular expression search will also match within terms, such as `bryan`.
+Query Example: At root, match nodes with `Steven Sp` at the start of `name`, followed by any characters.  For each such matched uid, match the films containing `ryan`.  Note the difference with `allofterms`, which would match only `ryan` but regular expression search will also match within terms, such as `bryan`.
 
 {{< runnable >}}
 {
@@ -211,11 +316,11 @@ Keep the following in mind when designing regular expression queries.
 
 ### Full Text Search
 
-Syntax : `alloftext(predicate, "space-separated text")` and `anyoftext(predicate, "space-separated text")`
+Syntax Examples: `alloftext(predicate, "space-separated text")` and `anyoftext(predicate, "space-separated text")`
 
-Schema types : `string`
+Schema Types: `string`
 
-Index required : `fulltext`
+Index Required: `fulltext`
 
 
 Apply full text search with stemming and stop words to find strings matching all or any of the given text.  
@@ -249,7 +354,7 @@ Following table contains all supported languages and corresponding country-codes
 | Turkish     | tr           |
 
 
-Query Example : All names that have `run`, `running`, etc and `man`.  Stop word removal eliminates `the` and `maybe`
+Query Example: All names that have `run`, `running`, etc and `man`.  Stop word removal eliminates `the` and `maybe`
 
 {{< runnable >}}
 {
@@ -264,26 +369,27 @@ Query Example : All names that have `run`, `running`, etc and `man`.  Stop word 
 
 #### equal to
 
-Syntax :
+Syntax Examples:
 
 * `eq(predicate, value)`
 * `eq(var(varName), value)`
 * `eq(count(predicate), value)`
 
-Schema types : `int`, `float`, `string`, `dateTime`
+Schema Types: `int`, `float`, `bool`, `string`, `dateTime`
 
-Index required : An index is required for `eq(predicate, value)` form, but otherwise the values have been calculated as part of the query, so no index is required.
+Index Required: An index is required for `eq(predicate, value)` form, but otherwise the values have been calculated as part of the query, so no index is required.
 
 | Type       | Index Options |
 |:-----------|:--------------|
 | `int`      | `int`         |
 | `float`    | `float`       |
+| `bool`     | `bool`        |
 | `string`   | `exact`, `hash`, `term`, `fulltext` |
 | `dateTime` | `dateTime`    |
 
 Note that `eq(count(predicate), value)` iterates through the every `s predicate o` tripple to first generate the count and then applies the filter to the generated counts.  If there are many such triples, this many not be efficient.
 
-Query Example : Movies with exactly two genres.
+Query Example: Movies with exactly two genres.
 
 {{< runnable >}}
 {
@@ -296,7 +402,7 @@ Query Example : Movies with exactly two genres.
 
 #### Less than, less than or equal to, greater than and greater than or equal to
 
-Syntax : for inequality `IE`
+Syntax Examples: for inequality `IE`
 
 * `IE(predicate, value)`
 * `IE(var(varName), value)`
@@ -309,9 +415,9 @@ With `IE` replaced by
 * `ge` greater than or equal to
 * `gt` greather than
 
-Schema types : `int`, `float`, `string`, `dateTime`
+Schema Types: `int`, `float`, `string`, `dateTime`
 
-Index required : An index is required for the `IE(predicate, value)` form, but otherwise the values have been calculated as part of the query, so no index is required.
+Index required: An index is required for the `IE(predicate, value)` form, but otherwise the values have been calculated as part of the query, so no index is required.
 
 | Type       | Index Options |
 |:-----------|:--------------|
@@ -321,7 +427,7 @@ Index required : An index is required for the `IE(predicate, value)` form, but o
 | `dateTime` | `dateTime`    |
 
 
-Query Example : Steven Spielberg is XID `m.06pj8`.  All his movies released before 1970.
+Query Example: Steven Spielberg is XID `m.06pj8`.  All his movies released before 1970.
 
 {{< runnable >}}
 {
@@ -336,7 +442,7 @@ Query Example : Steven Spielberg is XID `m.06pj8`.  All his movies released befo
 {{< /runnable >}}
 
 
-Query Example : Movies with directors with `Steven` in `name` and have directed more than `100` actors.
+Query Example: Movies with directors with `Steven` in `name` and have directed more than `100` actors.
 
 {{< runnable >}}
 {
@@ -355,30 +461,42 @@ Query Example : Movies with directors with `Steven` in `name` and have directed 
 {{< /runnable >}}
 
 
-Query Example : All directors.  Count in the root filter can help in determining classes of nodes.  Directors have directed at least one film.  
 
+Query Example: A movie in each genre that has over 30000 movies.  Because there is no order specified on genres, the order will be by UID.
 
 {{< runnable >}}
 {
-	all_directors(func: gt(count(director.film), 0)){
-		name@en
-	}
+  genre(func: gt(count(~genre), 30000)){
+    name@en
+    ~genre (first:1) {
+      name@en
+    }
+  }
 }
 {{< /runnable >}}
 
 
-Query Example : A movie in each genre that has over 30000 movies.
+### Has
+
+Syntax Examples: `has(predicate)`
+
+Schema Types: all
+
+Index Required: no
+
+Determines if a node has a particular predicate.
+
+Query Example: All directors.  Because directors have at least one film, a count at root `func: gt(count(director.film), 0)` would determine all directors, but Dgraph provides `has` as a simpler, faster method.
+
 
 {{< runnable >}}
 {
-	genre(func: gt(count(~genre), 30000)){
-		name@en
-		~genre (first:1) {
-			name@en
-		}
-	}
+  all_directors(func: has(director.film)) {
+    name@en
+  }  
 }
 {{< /runnable >}}
+
 
 
 ### Geolocation
@@ -387,15 +505,15 @@ Note that for geo queries, any polygon with holes is replace with the outer loop
 
 #### Near
 
-Syntax : `near(predicate, [long, lat], distance)`
+Syntax Example: `near(predicate, [long, lat], distance)`
 
-Schema types : `geo`
+Schema Types: `geo`
 
-Index required : `geo`
+Index Required: `geo`
 
 Matches all entities where the location given by `predicate` is within `distance` metres of geojson coordinate `[long, lat]`.
 
-Query Example : Tourist destinations within 1 kilometer of a point in Golden Gate Park, San Fransico.
+Query Example: Tourist destinations within 1 kilometer of a point in Golden Gate Park, San Fransico.
 
 {{< runnable >}}
 {
@@ -408,15 +526,15 @@ Query Example : Tourist destinations within 1 kilometer of a point in Golden Gat
 
 #### Within
 
-Syntax : `within(predicate, [[long1, lat1], ..., [longN, latN]])`
+Syntax Example: `within(predicate, [[long1, lat1], ..., [longN, latN]])`
 
-Schema types : `geo`
+Schema Types: `geo`
 
-Index required : `geo`
+Index Required: `geo`
 
 Matches all entities where the location given by `predicate` lies within the polygon specified by the geojson coordinate array.
 
-Query Example : Tourist destinations within the specified area of Golden Gate Park, San Fransico.  
+Query Example: Tourist destinations within the specified area of Golden Gate Park, San Fransico.  
 
 {{< runnable >}}
 {
@@ -429,11 +547,11 @@ Query Example : Tourist destinations within the specified area of Golden Gate Pa
 
 #### Contains
 
-Syntax : `contains(predicate, [long, lat])` or `contains(predicate, [[long1, lat1], ..., [longN, latN]])`
+Syntax Examples: `contains(predicate, [long, lat])` or `contains(predicate, [[long1, lat1], ..., [longN, latN]])`
 
-Schema types : `geo`
+Schema Types: `geo`
 
-Index required : `geo`
+Index Required: `geo`
 
 Matches all entities where the polygon describing the location given by `predicate` contains geojson coordinate `[long, lat]` or given geojson polygon.
 
@@ -449,11 +567,11 @@ Query Example : All entities that contain a point in the flamingo enclosure of S
 
 #### Intersects
 
-Syntax : `intersects(predicate, [[long1, lat1], ..., [longN, latN]])`
+Syntax Example: `intersects(predicate, [[long1, lat1], ..., [longN, latN]])`
 
-Schema types : `geo`
+Schema Types: `geo`
 
-Index required : `geo`
+Index Required: `geo`
 
 Matches all entities where the polygon describing the location given by `predicate` intersects the given geojson polygon.
 
@@ -468,22 +586,9 @@ Matches all entities where the polygon describing the location given by `predica
 
 
 
-## Filters
+## Connecting Filters
 
-
-**TODO grammar placeholder**
-
-filter is a function or a filter joined with a boolean connective
- `filter := function | filter AND filter | filter OR filter | NOT filter | (filter)`
-
-usage at root
-`q(id: UID | XID) [@filter(filter)]`
-or
-`q(func: function) [@filter(filter)]`
-
-usage inside query block
-`edge @filter(filter) { ... }`
-
+Within `@filter` multiple functions can be used with boolean connectives.
 
 ### AND, OR and NOT
 
@@ -502,6 +607,769 @@ Query Example : Steven Spielberg is XID `m.06pj8`.  All his movies that contain 
   }
 }
 {{< /runnable >}}
+
+
+## Alias
+
+Syntax Examples:
+
+* `aliasName : predicate`
+* `aliasName : predicate { ... }`
+* `aliasName : varName as ...`
+* `aliasName : count(predicate)`
+* `aliasName : max(var(varName))`
+
+An alias provides an alternate name in results.  Predicates, variables and aggregates can be aliased by prefixing with the alias name and `:`.  Aliases do not have to be different to the original predicate name, but, within a block, an alias must be distinct from predicate names and other aliases returned in the same block.  Aliases can be used to return the same predicate multiple times within a block.  
+
+
+
+Query Example: Directors with `name` matching term `Steven`, their UID, english name, average number of actors per movie, total number of films and the name of each film.  
+{{< runnable >}}
+{
+  ID as var(func: allofterms(name@en, "Steven")) @filter(has(director.film)) {
+    director.film {
+      num_actors as count(starring)
+    }
+    average as avg(var(num_actors))
+  }
+
+  films(id: var(ID)) {
+    director_id : _uid_
+    english_name : name@en
+    average_actors : var(average)
+    num_films : count(director.film)
+
+    films : director.film {
+      name : name
+    }
+  }
+}
+{{< /runnable >}}
+
+
+## Pagination
+
+Pagination allows returning only a portion, rather than the whole, result set.  This can be useful for top-k style queries as well as to reduce the size of the result set for client side processing or to allow paged access to results.
+
+Pagination is often used with [sorting]({{< relref "#sorting">}}).  
+
+{{% notice "note" %}}Without a sort order specified, the results are sorted by `_uid_`, which is assigned randomly. So the ordering, while deterministic, might not be what you expected.{{% /notice  %}}
+
+### First
+
+Syntax Examples:
+
+* `q(func: ..., first: N)`
+* `predicate (first: N) { ... }`
+* `predicate @filter(...) (first: N) { ... }`
+
+For positive `N`, `first: N` retrieves the first `N` results, by sorted or UID order.  
+
+For negative `N`, `first: N` retrieves the last `N` results, by sorted or UID order.  Currently, negative is only supported when no order is applied.  To achieve the effect of a negative with a sort, reverse the order of the sort and use a positive `N`.
+
+
+Query Example: Last two films, by UID order, directed by Steven Spielberg and the first 3 genres, sorted alphabetically by English name, of those movies.
+
+{{< runnable >}}
+{
+  me(func: allofterms(name@en, "Steven Spielberg")) {
+    director.film (first: -2) {
+      name@en
+      initial_release_date
+      genre (orderasc: name@en) (first: 3) {
+          name@en
+      }
+    }
+  }
+}
+{{< /runnable >}}
+
+
+
+Query Example: The three directors with name Steven who have directed the least actors of all directors named Steven.
+
+{{< runnable >}}
+{
+  ID as var(func: allofterms(name@en, "Steven")) {
+    director.film {
+      stars as count(starring)
+    }
+    totalActors as sum(var(stars))
+  }
+
+  leastStars(id: var(ID), orderasc: var(totalActors), first: 3) {
+    name@en
+    stars : var(totalActors)
+
+    director.film {
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+### Offset
+
+Syntax Examples:
+
+* `q(func: ..., offset: N)`
+* `predicate (offset: N) { ... }`
+* `predicate (first: M, offset: N) { ... }`
+* `predicate @filter(...) (offset: N) { ... }`
+
+With `offset: N` the first `N` results are not returned.  Used in combination with first, `first: M, offset: N` skips over `N` results and returns the following `M`.
+
+Query Example: Order Hark Tsui's films by English title, skip over the first 4 and return the following 6.
+
+{{< runnable >}}
+{
+  me(func: allofterms(name@en, "Hark Tsui")) {
+    name@zh
+    name@en
+    director.film (orderasc: name@en) (first:6, offset:4)  {
+      genre {
+        name@en
+      }
+      name@zh
+      name@en
+      initial_release_date
+    }
+  }
+}
+{{< /runnable >}}
+
+### After
+
+Syntax Examples:
+
+* `q(func: ..., after: UID)`
+* `predicate (first: N, after: UID) { ... }`
+* `predicate @filter(...) (first: N, after: UID) { ... }`
+
+Another way to get results after skipping over some results is to use the default UID ordering and skip directly past a node specified by UID.  For example, a first query could be of the form `predicate (after: 0x0, first: N)`, or just `predicate (first: N)`, with subsequent queries of the form `predicate(after: <uid of last entity in last result>, first: N)`.
+
+
+Query Example: The first five of Baz Luhrmann's films, sorted by UID order.
+
+{{< runnable >}}
+{
+  me(func: allofterms(name@en, "Baz Luhrmann")) {
+    name@en
+    director.film (first:5) {
+      _uid_
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0xeda1f2fe766ed92d`.  The results after Strictly Ballroom can now be obtained with `after`.
+
+{{< runnable >}}
+{
+  me(func: allofterms(name@en, "Baz Luhrmann")) {
+    name@en
+    director.film (first:5, after: 0xeda1f2fe766ed92d) {
+      _uid_
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+## Count
+
+Syntax Examples:
+
+* `count(predicate)`
+* `count()`
+
+The form `count(predicate)` counts how many `predicate` edges lead out of a node.
+
+The form `count()` counts the number of UIDs matched in the enclosing block.
+
+Query Example: The number of films acted in by each actor with `Orlando` in their name.
+
+{{< runnable >}}
+{
+  me(func: allofterms(name@en, "Orlando")) @filter(has(actor.film)) {
+    name@en
+    count(actor.film)
+  }
+}
+{{< /runnable >}}
+
+Count can be used at root and [aliased]({{< relref "#alias">}}).
+
+Query Example: Count of directors who have directed more than five films.
+
+{{< runnable >}}
+{
+  directors(func: gt(count(director.film), 5)) {
+    totalDirectors : count()
+  }
+}
+{{< /runnable >}}
+
+
+Count can be assigned to a [value variable]({{< relref "#value-variables">}}).
+
+Query Example: The actors of Ang Lee's 'Eat Drink Man Woman' ordered by the number of movies acted in.
+
+{{< runnable >}}
+{
+	var(func: allofterms(name@en, "eat drink man woman")) {
+    starring {
+      actors as performance.actor {
+        totalRoles as count(actor.film)
+      }
+    }
+  }
+
+  edmw(id: var(actors), orderdesc: var(totalRoles)) {
+    name@en
+    name@zh
+    totalRoles : var(totalRoles)
+  }
+}
+{{< /runnable >}}
+
+
+## Sorting
+
+Syntax Examples:
+
+* `q(func: ..., orderasc: predicate)`
+* `q(func: ..., orderdesc: var(varName))`
+* `predicate (orderdesc: predicate) { ... }`
+* `predicate @filter(...) (orderasc: N) { ... }`
+
+Sortable Types: `int`, `float`, `String`, `dateTime`, `id`, `default`
+
+Results can be sorted in ascending, `orderasc` or decending `orderdesc` order by a predicate or variable.
+
+For sorting on predicates with [sortable indices]({{< relref "#sortable-indices">}}), Dgraph sorts on the values and with the index in parallel and returns whichever result is computed first.
+
+
+Query Example: French director Jean-Pierre Jeunet's movies sorted by release date.
+
+{{< runnable >}}
+{
+  me(func: allofterms(name, "Jean-Pierre Jeunet")) {
+    name
+    director.film(orderasc: initial_release_date) {
+      name@en
+      name@fr
+      initial_release_date
+    }
+  }
+}
+{{< /runnable >}}
+
+Sorting can be performed at root and on value variables.
+
+Query Example: All genres sorted alphabetically and the five movies in each genre with the most genres.
+
+{{< runnable >}}
+{
+  genres as var(func: has(~genre)) {
+    ~genre {
+      numGenres as count(genre)
+    }
+  }
+
+  blaa(id: var(genres), orderasc: name@en) {
+    name@en
+    ~genre (orderdesc: var(numGenres), first: 5) {
+      name@en
+    	genres : var(numGenres)
+    }
+  }
+}
+{{< /runnable >}}
+
+
+
+## Multiple Query Blocks
+
+Inside a single query, multiple query blocks are allowed.  The result is all blocks with corresponding block names.
+
+Multiple query blocks are executed in parallel.
+
+The blocks need not be related in any way.
+
+Query Example: All of Angelina Jolie's films, with genres, and Steven Spielberg's films since 2008.
+
+{{< runnable >}}
+{
+ AngelinaInfo(func:allofterms(name, "angelina jolie")) {
+  name@en
+   actor.film {
+    performance.film {
+      genre {
+        name@en
+      }
+    }
+   }
+  }
+
+ DirectorInfo(id: m.06pj8) {
+    name@en
+    director.film @filter(ge(initial_release_date, "2008"))  {
+        Release_date: initial_release_date
+        Name: name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+If queries contain some overlap in answers, the result sets are still independent
+
+Query Example: The movies Mackenzie Crook has acted in and the movies Jack Davenport has acted in.  The results sets overlap because both have acted in the Pirates of the Caribbean movies, but the results are independent and both contain the full answers sets.  
+
+{{< runnable >}}
+{
+  Mackenzie(func:allofterms(name, "Mackenzie Crook")) {
+    name@en
+    actor.film {
+      performance.film {
+        _uid_
+        name@en
+      }
+      performance.character {
+        name@en
+      }
+    }
+  }
+
+  Jack(func:allofterms(name, "Jack Davenport")) {
+    name@en
+    actor.film {
+      performance.film {
+        _uid_
+        name@en
+      }
+      performance.character {
+        name@en
+      }
+    }
+  }
+}
+{{< /runnable >}}
+
+
+### Var Blocks
+
+Var blocks start with the keyword `var` and are not returned in the query results.
+
+Query Example: Angelina Jolie's movies ordered by genre.
+
+{{< runnable >}}
+{
+  var(func:allofterms(name, "angelina jolie")) {
+    name@en
+    actor.film {
+      A AS performance.film {
+        B AS genre
+      }
+    }
+  }
+
+  films(id: var(B), orderasc: name@en) {
+    name@en
+    ~genre @filter(var(A)) {
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+## Query Variables
+
+Syntax Examples:
+
+* `varName as q(func: ...) { ... }`
+* `varName as var(func: ...) { ... }`
+* `varName as predicate { ... }`
+* `varName as predicate @filter(...) { ... }`
+
+Types : `uid`
+
+Nodes (UID's) matched at one place in a query can be stored in a variable and used elsewhere.  Query variables can be used in other query blocks or in a child node of the defining block.
+
+Query variables do not affect the semantics of the query at the point of definition.  Query variables are evaluated to all nodes matched by the defining block.
+
+In general, query blocks are executed in parallel, but variables impose an evaluation order on some blocks.  Cycles induced by variable dependence are not permitted.
+
+If a variable is defined, it must be used elsewhere in the query.
+
+Query Example: The movies of Angelia Jolie and Brad Pitt where both have acted on movies in the same genre.  Note that `B` and `D` match all genres for all movies, not genres per movie.
+{{< runnable >}}
+{
+ var(func:allofterms(name, "angelina jolie")) {
+   actor.film {
+    A AS performance.film {  # All films acted in by Angelina Jolie
+     B As genre  # Genres of all the films acted in by Angelina Jolie
+    }
+   }
+  }
+
+ var(func:allofterms(name, "brad pitt")) {
+   actor.film {
+    C AS performance.film {  # All films acted in by Brad Pitt
+     D as genre  # Genres of all the films acted in by Brad Pitt
+    }
+   }
+  }
+
+ films(id: var(D)) @filter(var(B)) {   # Genres from both Angelina and Brad
+  name@en
+   ~genre @filter(var(A) OR var(C)) {  # Movies with either.
+     name@en
+   }
+ }
+}
+{{< /runnable >}}
+
+
+## Value Variables
+
+Syntax Examples:
+
+* `varName as scalarPredicate`
+* `varName as count(predicate)`
+* `varName as avg(...)`
+* `varName as math(...)`
+
+Types : `int`, `float`, `String`, `dateTime`, `id`, `default`, `geo`, `bool`
+
+Value variables store scalar values.  Value variables are a map from the UIDs of the enclosing block to the corresponding values.
+
+It is an error to define a value variable but not use it elsewhere in the query.
+
+It therefor only makes sense to use a value variable in a context that matches the same UIDs - if used in a block matching different UIDs the value variable is undefined.
+
+[Facets]({{< relref "#facets-edge-attributes">}}) can be stored in value variables.
+
+Query Example: The number of movie roles played by the actors of the 80's classic "The Princess Bride".  Query variable `pbActors` matches the UIDs of all actors from the movie.  Value variable `roles` is thus a map from actor UID to number of roles.  Value variable `roles` can be used in the the `totalRoles` query block because that query block also matches the `pbActors` UIDs, so the actor to number of roles map is available.
+
+{{< runnable >}}
+{
+  var(func:allofterms(name, "The Princess Bride")) {
+    starring {
+      pbActors as performance.actor {
+        roles as count(actor.film)
+      }
+    }
+  }
+  totalRoles(id: var(pbActors), orderasc: var(roles)) {
+    name@en
+    numRoles : var(roles)
+  }
+}
+{{< /runnable >}}
+
+
+Value variables can be used in place of UID variables, in which case they are treated as the UID list from the map.
+
+Query Example: The same query as the previous example, but using value variable `roles` for matching UIDs in the `totalRoles` query block.
+
+{{< runnable >}}
+{
+  var(func:allofterms(name, "The Princess Bride")) {
+    starring {
+      performance.actor {
+        roles as count(actor.film)
+      }
+    }
+  }
+  totalRoles(id: var(roles), orderasc: var(roles)) {
+    name@en
+    numRoles : var(roles)
+  }
+}
+{{< /runnable >}}
+
+
+## Aggregation
+
+Syntax Example: `AG(var(varName))`
+
+For `AG` replaced with
+
+* `min` : select the minimum value in the value variable `varName`
+* `max` : select the maximum value
+* `sum` : sum all values in value variable `varName`
+* `avg` : calculate the average of values in `varName`
+
+Schema Types:
+
+| Aggregation       | Schema Types |
+|:-----------|:--------------|
+| `min` / `max`     | `int`, `float`, `string`, `dateTime`, `default`         |
+| `sum` / `avg`    | `int`, `float`       |
+
+Aggregation can only be applied to [value variables]({{< relref "#value-variables">}}).  An index is not required (the values have already been found and stored in the value variable mapping).
+
+An aggregation is applied at the query block enclosing the variable definition.  As opposed to query variables and value variables, which are global, aggregation is computed locally.  For example:
+```
+A as predicateA {
+  ...
+  B as predicateB {
+    x as ...some value...
+  }
+  min(var(x))
+}
+```
+Here, `A` and `B` are the lists of all UIDs that match these blocks.  Value variable `x` is a mapping from UIDs in `B` to values.  The aggregation `min(var(x))`, however, is computed for each UID in `A`.  That is, it has a semantics of: for each UID in `A`, take the slice of `x` that corresponds to its outgoing `predicateB` edges and compute the aggregation.
+
+Aggregations can themselves be assigned to value variables, making a UID to aggregation map.
+
+
+### Min
+
+Query Example:  Directors called Steven and the date of release of their first movie, in ascending order of first movie.
+
+{{< runnable >}}
+{
+  stevens as var(func: allofterms(name@en, "steven")) {
+    director.film {
+      ird as initial_release_date  
+      # ird is a value variable mapping a film UID to its release date
+    }
+    minIRD as min(var(ird))
+    # minIRD is a value variable mapping a director UID to their first release date
+  }
+
+  byIRD(id: var(stevens), orderasc: var(minIRD)) {
+    name@en
+    firstRelease: var(minIRD)
+  }
+}
+{{< /runnable >}}
+
+### Max
+
+Query Example: Quentin Tarantino's movies and date of release of the most recent movie.
+
+{{< runnable >}}
+{
+  director(func: allofterms(name@en, "Quentin Tarantino")) {
+    director.film {
+      name@en
+      x as initial_release_date
+    }
+    max(var(x))
+  }
+}
+{{< /runnable >}}
+
+### Sum and Avg
+
+Query Example: Steven Spielberg's movies, with the number of recorded genres per movie, and the total number of genres and average genres per movie.
+
+{{< runnable >}}
+{
+  director(func: allofterms(name, "steven spielberg")) {
+    name@en
+    director.film {
+      name@en
+      numGenres : g as count(genre)
+    }
+    totalGenres : sum(var(g))
+    genresPerMovie : avg(var(g))
+  }
+}
+{{< /runnable >}}
+
+
+### Aggregating Aggregates
+
+Aggregations can be assigned to value variables, and so these variables can in turn be aggregated.
+
+Query Example: For each actor in a Peter Jackson film, find the number of roles played in any movie.  Sum these to find the total number of roles ever played by all actors in the movie.  Then sum the lot to find the total number of roles ever played by actors who have appeared in Peter Jackson movies.  Note that this demonstrates how to aggregate aggregates; the answer in this case isn't quite precise though, because actors that have appeared in multiple Peter Jackson movies are counted more than once.
+
+{{< runnable >}}
+{
+  PJ as var(func:allofterms(name, "Peter Jackson")) {
+    director.film {
+      starring {  # starring an actor
+        performance.actor {
+          movies as count(actor.film)  
+          # number of roles for this actor
+        }
+        perf_total as sum(var(movies))       
+      }
+      movie_total as sum(var(perf_total))
+      # total roles for all actors in this movie
+    }
+    gt as sum(var(movie_total))
+  }
+
+  PJmovies(id: var(PJ)) {
+    name@en
+  	director.film (orderdesc: var(movie_total), first: 5) {
+    	name@en
+    	totalRoles : var(movie_total)
+  	}
+    grandTotal : var(gt)
+  }
+}
+{{< /runnable >}}
+
+
+## Math on value variables
+
+Value variables can be combined using mathematical functions.  For example, this could be used to associate a score which is then be used to order or perform other operations, such as might be used in building newsfeeds, simple recommendation systems and the likes.
+
+Math statements must be enclosed within `math( <exp> )` and must be stored to a value variable.
+
+The supported operators are as follows:
+
+| Operators                       | Types accepted                                 | What it does                                                   |
+| :------------:                  | :--------------:                               | :------------------------:                                     |
+| `+` `-` `*` `/` `%`             | `int`, `float`                                     | performs the corresponding operation                           |
+| `min` `max`                     | All types except `geo`, `bool`  (binary functions) | selects the min/max value among the two                        |
+| `<` `>` `<=` `>=` `==` `!=`     | All types except `geo`, `bool`                     | Returns true or false based on the values                      |
+| `floor` `ceil` `ln` `exp` `sqrt` | `int`, `float` (unary function)                    | performs the corresponding operation                           |
+| `since`                         | `datetime`                                 | Returns the number of seconds in float from the time specified |
+| `pow(a, b)`                     | `int`, `float`                                     | Returns `a to the power b`                                     |
+| `logbase(a,b)`                  | `int`, `float`                                     | Returns `log(a)` to the base `b`                               |
+| `cond(a, b, c)`                 | first operand must be a boolean                | selects `b` if `a` is true else `c`                            |
+
+
+Query Example:  Form a score for each of Steven Spielberg's movies as the sum of number of actors, number of genres and number of countries.  List the top five such movies in order of decreasing score.
+
+{{< runnable >}}
+{
+	var(func:allofterms(name, "steven spielberg")) {
+		name@en
+		films as director.film {
+			p as count(starring)
+			q as count(genre)
+			r as count(country)
+			score as math(p + q + r)
+		}
+	}
+
+	TopMovies(id: var(films), orderdesc: var(score), first: 5){
+		name@en
+		var(score)
+	}
+}
+{{< /runnable >}}
+
+Value variables and aggregations of them can be used in filters.
+
+Query Example: Calculate a score for each Steven Spielberg movie with a condition on release date to penalize movies that are more than 10 years old, filtering on the resulting score.
+
+{{< runnable >}}
+{
+  var(func:allofterms(name, "steven spielberg")) {
+    name@en
+    films as director.film {
+      p as count(starring)
+      q as count(genre)
+      date as initial_release_date
+      years as math(since(date)/(365*24*60*60))
+      score as math(cond(years > 10, 0, ln(p)+q-ln(years)))
+    }
+  }
+
+  TopMovies(id: var(films), orderdesc: var(score)) @filter(gt(var(score), 2)){
+    name@en
+    var(score)
+    var(date)
+  }
+}
+{{< /runnable >}}
+
+
+Values calculated with math operations are stored to value variables and so can be aggreated.
+
+Query Example: Compute a score for each Steven Spielberg movie and then aggregate the score.
+
+{{< runnable >}}
+{
+	steven as var(func:allofterms(name, "steven spielberg")) {
+		name@en
+		director.film {
+			p as count(starring)
+			q as count(genre)
+			r as count(country)
+			score as math(p + q + r)
+		}
+		directorScore as sum(var(score))
+	}
+
+	score(id: var(steven)){
+		name@en
+		var(directorScore)
+	}
+}
+{{< /runnable >}}
+
+
+## GroupBy
+
+Syntax Examples:
+
+* `q(func: ...) @groupby(predicate) { min(...) }`
+* `predicate @groupby(pred) { count(_uid_) }``
+
+
+A `groupby` query aggregates query results given a set of properties on which to group elements.  For example, a query containing the block `friend @groupby(age) { count(_uid_) }`, finds all nodes reachable along the friend edge, partitions these into groups based on age, then counts how many nodes are in each group.  The returned result is the grouped edges and the aggregations.
+
+Inside a `groupby` block, only aggregations are allowed and `count` may only be applied to `_uid_`.   
+
+If the `groupby` is applied to a `uid` predicate, the resulting aggregations can be saved in a variable (mapping the grouped UIDs to aggregate values) and used elsewhere in the query to extract information other than the grouped or aggregated edges.
+
+Query Example: For Steven Spielberg movies, count the number of movies in each genre and for each of those genres return the genre name and the count.  The name can't be extracted in the `groupby` because it is not an aggregate, but `var(a)` can be used in its function as a UID to value map to organize the `byGenre` query by genre UID.  
+
+
+{{< runnable >}}
+{
+  var(func:allofterms(name, "steven spielberg")) {
+    director.film @groupby(genre) {
+      a as count(_uid_)
+      # a is a genre UID to count value variable
+    }
+  }
+
+  byGenre(id: var(a), orderdesc: var(a)) {
+    name
+    total_movies : var(a)
+  }
+}
+{{< /runnable >}}
+
+Query Example: Actors from Tim Burton movies and how many roles they have played in Tim Burton movies.
+{{< runnable >}}
+{
+  var(func:allofterms(name, "Tim Burton")) {
+    director.film {
+      starring @groupby(performance.actor) {
+        a as count(_uid_)
+        # a is an actor UID to count value variable
+      }
+    }
+  }
+
+  byActor(id: var(a), orderdesc: var(a)) {
+    name@en
+    var(a)
+  }
+}
+{{< /runnable >}}
+
+
+
+
+
+
 
 
 
@@ -593,7 +1461,7 @@ The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Data
 
 As well as implying a schema type for a [first mutation]({{< relref "#schema" >}}), an RDF type can override a schema type for storage.
 
-If a predicate has a schema type and a mutation has an RDF type with a different underlying Dgraph type, the convertibility to schema type is checked, and an error is thrown if they are incompatible, but the value is stored in the RDF type's corresponding Dgraph type.
+If a predicate has a schema type and a mutation has an RDF type with a different underlying Dgraph type, the convertibility to schema type is checked, and an error is thrown if they are incompatible, but the value is stored in the RDF type's corresponding Dgraph type.  Query results are always returned in schema type.
 
 
 For example, if no schema is set for the `age` predicate.  Given the mutation
@@ -610,7 +1478,7 @@ mutation {
 ```
 Dgraph:
 
-* sets the schema type to `int`, as implied the first triple,  
+* sets the schema type to `int`, as implied by the first triple,  
 * converts `"13"` to `int` on storage,
 * checks `"14"` can be converted to `int`, but stores as `string`,
 * throws an error for the remaining two triples, because `"14.5"` can't be converted to `int`.
@@ -779,7 +1647,6 @@ schema(pred: [name, friend]) {
 
 
 
-## Mutations
 
 
 
@@ -805,7 +1672,9 @@ schema(pred: [name, friend]) {
 
 
 
-## OLD ---- still to be updated ----
+
+## --- OLD below here ---
+## ---- still to be updated ----
 
 
 
@@ -1081,175 +1950,6 @@ To specify the language of the value to be returned from query `@lang1:lang2:lan
 
 
 
-## Pagination
-Often there is too much data and you only want a slice of the data.
-
-### First
-
-If you want just the first few results as you expand the predicate for an entity, you can use the `first` argument. The value of `first` can be positive for the first N results, and ''negative for the last N.''
-
-{{% notice "note" %}}Without a sort order specified, the results are sorted by `_uid_`, which is assigned randomly. So the ordering while deterministic, might not be what you expected.{{% /notice  %}}
-
-This query retrieves the first two films directed by Steven Spielberg and their last 3 genres.
-
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    director.film (first: 2) {
-      name@en
-      initial_release_date
-      genre (first: -3) {
-          name@en
-      }
-    }
-  }
-}
-{{< /runnable >}}
-
-`first` can also be specified at root.
-
-### Offset
-
-If you want the '''next''' one result, you want to skip the first two results with `offset:2` and keep only one result  with `first:1`.
-
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    name@en
-    director.film(first:1, offset:2)  {
-      genre {
-        name@en
-      }
-      name@en
-      initial_release_date
-    }
-  }
-}
-{{< /runnable >}}
-
-Notice the `first` and `offset` arguments. `offset` can also be specified at root to skip over some results.
-
-### After
-
-Dgraph assigns `uint64`'s to all entities which are called UIDs (unique internal IDs). All results are sorted by UIDs by default. Therefore, another way to get the next one result after the first two results is to specify that the UIDs of all results are larger than the UID of the second result.
-
-This helps in pagination where the first query would be of the form `<attribute>(after: 0x0, first: N)` and the subsequent ones will be of the form `<attribute>(after: <uid of last entity in last result>, first: N)`
-
-In the above example, the first two results are the film entities of "Indiana Jones and the Temple of Doom" and "Jaws". You can obtain their UIDs by adding the predicate `_uid_` in the query.
-
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    name@en
-    director.film(first:2) {
-      _uid_
-      name@en
-    }
-  }
-}
-{{< /runnable >}}
-
-
-Now we know the UID of the second result is `0xc6f4b3d7f8cbbad`. We can get the next one result by specifying the `after` argument.
-
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    name@en
-    director.film(first:1, after:0xc6f4b3d7f8cbbad)  {
-      genre {
-        name@en
-      }
-      name@en
-      initial_release_date
-    }
-  }
-}
-{{< /runnable >}}
-
-The response is the same as before when we use `offset:2` and `first:1`.
-
-
-
-## Alias
-
-Alias lets us provide alternate names to predicates in results for convenience.
-
-For example, the following query replaces the predicate `name` with `full_name` and _uid_ with id in the JSON result.
-{{< runnable >}}
-{
-  me(id: m.0bxtg) {
-    id: _uid_
-    full_name:name@en
-  }
-}
-{{< /runnable >}}
-
-## Count
-
-`count` function lets us obtain the number of entities instead of retrieving the entire list. For example, the following query
-retrieves the name and the number of films acted by an actor with `_xid_` m.0bxtg.
-
-{{< runnable >}}
-{
-  me(id: m.0bxtg) {
-    name@en
-    count(actor.film)
-  }
-}
-{{< /runnable >}}
-
-It can also be used to get count at root. The following query would get the count of all directors.
-{{< runnable >}}
-{
-  directors(func: gt(count(director.film), 0)) {
-    count()
-  }
-}
-{{< /runnable >}}
-
-
-
-
-## Sorting
-
-We can sort results by a predicate using the `orderasc` or `orderdesc` argument. The predicate has to be indexed and this has to be specified in the schema. As you may expect, `orderasc` sorts in ascending order while `orderdesc` sorts in descending order.
-
-For example, we can sort the films of Steven Spielberg by their release date, in ascending order.
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    name@en
-    director.film(orderasc: initial_release_date) {
-      name@en
-      initial_release_date
-    }
-  }
-}
-{{< /runnable >}}
-
-If you use `orderdesc` instead, the films will be listed in descending order.
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    name@en
-    director.film(orderdesc: initial_release_date, first: 2) {
-      name@en
-      initial_release_date
-    }
-  }
-}
-{{< /runnable >}}
-
-
-To sort at root level, we can do as follows:
-{{< runnable >}}
-{
-  me(func: allofterms(name, "ste"), orderasc: name) {
-    name@en
-  }
-}
-{{< /runnable >}}
 
 
 ## Facets : Edge attributes
@@ -1705,286 +2405,7 @@ Output:
 }
 ```
 
-## Aggregation
-Aggregation functions that are supported are `min, max, sum, avg`. While min and max operate on all scalar-values, sum and avg can operate only on `int and float` values. These functions can only be applied on variables. Aggregation does not depend on the index.
 
-{{% notice "note" %}}We support aggregation on scalar value variables only.{{% /notice %}}
-
-### Min
-
-{{< runnable >}}
-{
-  director(id: m.06pj8) {
-    director.film {
-    	x as initial_release_date
-    }
-    min(var(x))
-  }
-}
-{{< /runnable >}}
-
-### Max
-
-{{< runnable >}}
-{
-  director(id: m.06pj8) {
-    director.film {
-    	x as initial_release_date
-    }
-    max(var(x))
-  }
-}
-{{< /runnable >}}
-
-### Sum, Avg
-In this example we get the sum and the average of the count of genres for movies directed by Steven Spielberg.
-{{< runnable >}}
-{
-  director(func: allofterms(name, "steven spielberg")) {
-    name@en
-    director.film {
-      g as count(genre)
-    }
-    sum(var(g))
-    avg(var(g))
-  }
-}
-{{< /runnable >}}
-
-
-## Multiple Query Blocks
-Multiple blocks can be inside a single query and they would be returned in the result with the corresponding block names.
-
-{{< runnable >}}
-{
- AngelinaInfo(func:allofterms(name, "angelina jolie")) {
-  name@en
-   actor.film {
-    performance.film {
-      genre {
-        name@en
-      }
-    }
-   }
-  }
-
- DirectorInfo(id: m.06pj8) {
-    name@en
-    director.film @filter(ge(initial_release_date, "2008"))  {
-        Release_date: initial_release_date
-        Name: name@en
-    }
-  }
-}
-{{< /runnable >}}
-
-### Var Blocks
-Var blocks are the blocks which start with the keyword `var` and these blocks are not returned in the query results.
-
-{{< runnable >}}
-{
- var(func:allofterms(name, "angelina jolie")) {
-  name@en
-   actor.film {
-    A AS performance.film {
-     B AS genre
-    }
-   }
-  }
-
- films(id: var(B)) {
-   ~genre @filter(var(A)) {
-     name@en
-   }
- }
-}
-{{< /runnable >}}
-
-## Query Variables
-
-Variables can be defined at different levels of the query using the keyword `AS` and would contain the result list at that level as its value. These variables can be used in other query blocks or the same block (as long as it is used in the child nodes).
-
-{{< runnable >}}
-{
- var(func:allofterms(name, "angelina jolie")) {
-   actor.film {
-    A AS performance.film {  # All the films done by Angelina Jolie
-     B As genre  # Genres of all the films done by Angelina Jolie
-    }
-   }
-  }
-
- var(func:allofterms(name, "brad pitt")) {
-   actor.film {
-    C AS performance.film {  # All the films done by Brad Pitt
-     D as genre  # Genres of all the films done by Brad Pitt
-    }
-   }
-  }
-
- films(id: var(D)) @filter(var(B)) {   # Genres done by both Angelina and Brad
-  name@en
-   ~genre @filter(var(A) OR var(C)) {  # Movies done by either.
-     name@en
-   }
- }
-}
-{{< /runnable >}}
-
-## Value Variables
-
-Value variables are those which store the scalar values (unlike the UID lists which we saw above). These are a map from the UID to the corresponding value. They can store scalar predicates, aggregate functions, can be used for sorting results and retrieving. For example:
-
-{{< runnable >}}
-{
-  var(func:allofterms(name, "angelina jolie")) {
-    actor.film {
-      performance.film {
-        B AS genre {
-          A as name@en
-        }
-      }
-    }
-  }
-
-  genre(id: var(B), orderasc: var(A)) @filter(gt(count(~genre), 30000)){
-    var(A)
-    ~genre {
-      n as name
-      m as initial_release_date
-    }
-    min(var(n))
-    max(var(n))
-    min(var(m))
-    max(var(m))
-  }
-}
-{{< /runnable >}}
-
-This query shows a mix of how things can be used.
-
-Facets can also be stored in value variables, but exactly one facet has to be specified.
-
-{{% notice "note" %}} Value variables can be used in place of UID variables, in which case the UIDs would be extracted from it.{{% /notice %}}
-
-
-## Aggregating value variables
-
-Value variables can be combined using complex mathematical functions to asscociate a score for the entities which could then be used to order the entites or perform other operations on them. This can be useful for building newsfeeds, simple recommendation systems and the likes.
-
-All these statements must be enclosed within a `math( <exp> )` block.
-
-The supported operators are as follows:
-
-| Operators                       | Types accepted                                 | What it does                                                   |
-| :------------:                  | :--------------:                               | :------------------------:                                     |
-| `+` `-` `*` `/` `%`             | int, float                                     | performs the corresponding operation                           |
-| `min` `max`                     | All types except geo, bool  (binary functions) | selects the min/max value among the two                        |
-| `<` `>` `<=` `>=` `==` `!=`     | All types except geo, bool                     | Returns true or false based on the values                      |
-| `floor` `ceil``ln` `exp` `sqrt` | int, float (unary function)                    | performs the corresponding operation                           |
-| `since`                         | date, datetime                                 | Returns the number of seconds in float from the time specified |
-| `pow(a, b)`                     | int, float                                     | Returns `a to the power b`                                     |
-| `logbase(a,b)`                  | int, float                                     | Returns `log(a)` to the base `b`                               |
-| `cond(a, b, c)`                 | first operand must be a boolean                | selects `b` if `a` is true else `c`                            |
-
-A simple example is:
-
-{{< runnable >}}
-{
-	var(func:allofterms(name, "steven spielberg")) {
-		name@en
-		films as director.film {
-			p as count(starring)
-			q as count(genre)
-			r as count(country)
-			score as math(p + q + r)
-		}
-	}
-
-	TopMovies(id: var(films), orderdesc: var(score), first: 5){
-		name@en
-		var(score)
-	}
-}
-{{< /runnable >}}
-
-In the above query we retrieve the top movies (by sum of number of actors, genres, countries) of the entity named steven spielberg.
-
-
-Value variables and aggregations of them can be used in filters.  For example, if we want to add a condition based on release date to penalize movies that are more than 10 years old and want all scores greater than some value, we could do:
-
-{{< runnable >}}
-{
-  var(func:allofterms(name, "steven spielberg")) {
-    name@en
-    films as director.film {
-      p as count(starring)
-      q as count(genre)
-      date as initial_release_date
-      years as math(since(date)/(365*24*60*60))
-      score as math(cond(years > 10, 0, ln(p)+q-ln(years)))
-    }
-  }
-
-  TopMovies(id: var(films), orderdesc: var(score)) @filter(gt(var(score), 2)){
-    name@en
-    var(score)
-    var(date)
-  }
-}
-{{< /runnable >}}
-
-
-
-To aggregate the values over level we can do something like
-{{< runnable >}}
-{
-	steven as var(func:allofterms(name, "steven spielberg")) {
-		name@en
-		director.film {
-			p as count(starring)
-			q as count(genre)
-			r as count(country)
-			score as math(p + q + r)
-		}
-		directorScore as sum(var(score))
-	}
-
-	score(id: var(steven)){
-		name@en
-		var(directorScore)
-	}
-}
-{{< /runnable >}}
-
-Here `directorScore` would be sum of `score` of all the movies directed by a director.
-
-
-
-## GroupBy
-
-A `groupby` query aggregates query results given a set of properties on which to group elements.  For example, a query containing the block `friend @groupby(age) { count(_uid_) }`, finds all nodes reachable along the friend edge, partitions these into groups based on age, then counts how many nodes are in each group.  The returned result is the grouped edges and the aggregations.
-
-Inside a `groupby` block, only aggregations are allowed and `count` may only be applied to `_uid_`.   
-
-It is often necessary to use `groupby` in conjunction with variables to extract information other than the grouped or aggregated edges.
-
-For example, the following counts the number of movies in each genre and for each of those genres returns the genre name and the count.  The name can't be extracted in the `groupby` because it is not an aggregate, but `var(a)` can be used in its function as a UID to value map to organize the `byGenre` query by genre UID.  
-
-{{< runnable >}}
-{
-  var(func:allofterms(name, "steven spielberg")) {
-    director.film @groupby(genre) {
-      a as count(_uid_)
-    }
-  }
-
-  byGenre(id: var(a), orderdesc: var(a)) {
-    name
-    total_movies : var(a)
-  }
-}
-{{< /runnable >}}
 
 
 
