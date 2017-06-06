@@ -5878,7 +5878,7 @@ func TestLangMultiple_Alias(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"c":"Badger","b":"Badger","a":"Borsuk europejski"}]}`,
+		`{"me":[{"c":"Badger","a":"Borsuk europejski"}]}`,
 		js)
 }
 
@@ -5924,7 +5924,7 @@ func TestLangSingleFallback(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name@cn":"Badger"}]}`,
+		`{}`,
 		js)
 }
 
@@ -5984,7 +5984,7 @@ func TestLangManyFallback(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name@hu:fi:cn":"Badger"}]}`,
+		`{}`,
 		js)
 }
 
@@ -6003,7 +6003,7 @@ func TestLangNoFallbackNoDefault(t *testing.T) {
 		js)
 }
 
-func TestLangSingleFallbackNoDefault(t *testing.T) {
+func TestLangSingleNoFallbackNoDefault(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
@@ -6018,7 +6018,7 @@ func TestLangSingleFallbackNoDefault(t *testing.T) {
 		js)
 }
 
-func TestLangMultipleFallbackNoDefault(t *testing.T) {
+func TestLangMultipleNoFallbackNoDefault(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{

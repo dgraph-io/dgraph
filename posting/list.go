@@ -735,7 +735,7 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 	}
 
 	// look for value without language
-	if !found {
+	if !found && (any || len(langs) == 0) {
 		found, pos = l.findPosting(math.MaxUint64)
 	}
 
