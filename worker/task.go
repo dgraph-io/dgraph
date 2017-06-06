@@ -205,10 +205,6 @@ func addUidToMatrix(key []byte, mu *sync.Mutex, out *protos.Result) {
 	mu.Unlock()
 }
 
-func comparesEq(name string) bool {
-	return name == "eq" || name == "ge" || name == "le"
-}
-
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	var out protos.Result
