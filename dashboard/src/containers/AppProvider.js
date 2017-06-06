@@ -10,6 +10,7 @@ import {
 import thunk from "redux-thunk";
 import reducer from "../reducers";
 import { toggleCollapseFrame } from "../actions/frames";
+import { incrementVisitCount, answeredNPSSurvey } from "../actions/user";
 
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap/dist/css/bootstrap-theme.css";
@@ -32,23 +33,42 @@ export default class AppProvider extends React.Component {
 
   componentWillMount() {
     // begin periodically persisting the store
-    persistStore(store, { whitelist: ["frames"] }, () => {
+    persistStore(store, { whitelist: ["frames", "user"] }, () => {
       this.setState({ rehydrated: true }, this.onRehydrated);
     });
   }
 
   onRehydrated = () => {
     const currentState = store.getState();
-    const frameItems = currentState.frames.items;
+
+    // Increment visit count
+    store.dispatch(incrementVisitCount());
 
     // Collapse all except the first one to avoid slow render
-    const firstFrame = frameItems[0];
-    store.dispatch(toggleCollapseFrame(firstFrame, false));
+    const frameItems = currentState.frames.items;
+    if (frameItems.length > 0) {
+      const firstFrame = frameItems[0];
+      store.dispatch(toggleCollapseFrame(firstFrame, false));
 
-    for (let i = 1; i < frameItems.length; i++) {
-      const targetFrame = frameItems[i];
+      for (let i = 1; i < frameItems.length; i++) {
+        const targetFrame = frameItems[i];
 
-      store.dispatch(toggleCollapseFrame(targetFrame, true));
+        store.dispatch(toggleCollapseFrame(targetFrame, true));
+      }
+    }
+
+    // If NPS Survey is not done, show after a prolonged session
+    if (!currentState.user.NPSSurveyDone) {
+      // 30 minutes
+      const surveyDelay = 1800000;
+
+      setTimeout(() => {
+        if (!store.getState().user.NPSSurveyDone) {
+          /* global delighted */
+          delighted.survey();
+          store.dispatch(answeredNPSSurvey());
+        }
+      }, surveyDelay);
     }
   };
 
