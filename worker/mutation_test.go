@@ -50,7 +50,7 @@ func TestConvertEdgeType(t *testing.T) {
 				Value:     []byte("set edge"),
 				Label:     "test-mutation",
 				Attr:      "name",
-				ValueType: 10,
+				ValueType: 9,
 			},
 		},
 		{
