@@ -374,6 +374,7 @@ Syntax Examples:
 * `eq(predicate, value)`
 * `eq(var(varName), value)`
 * `eq(count(predicate), value)`
+* `eq(predicate, [val1, val2, ..., valN])`
 
 Schema Types: `int`, `float`, `bool`, `string`, `dateTime`
 
@@ -387,7 +388,9 @@ Index Required: An index is required for `eq(predicate, value)` form, but otherw
 | `string`   | `exact`, `hash`, `term`, `fulltext` |
 | `dateTime` | `dateTime`    |
 
-Note that `eq(count(predicate), value)` iterates through the every `s predicate o` tripple to first generate the count and then applies the filter to the generated counts.  If there are many such triples, this many not be efficient.
+Test for equality of a predicate or variable to a value or list of values.
+
+The boolean constants are `true` and `false`, so with `eq` this becomes, for example, `eq(boolPred, true)`.
 
 Query Example: Movies with exactly two genres.
 
@@ -395,6 +398,22 @@ Query Example: Movies with exactly two genres.
 {
   me(func: eq(count(genre), 2)) {
     name@en
+  }
+}
+{{< /runnable >}}
+
+
+Query Example: Directors called Steven who have directed 1,2 or 3 movies.
+
+{{< runnable >}}
+{
+  steve as var(func: allofterms(name@en, "Steven") {
+    films as count(director.film)
+  }
+
+  stevens(id: var(steve)) @filter(eq(var(films), [1,2,3])) {
+    name@en
+    numFilms : var(films)
   }
 }
 {{< /runnable >}}
