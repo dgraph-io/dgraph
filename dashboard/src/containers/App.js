@@ -6,12 +6,13 @@ import EditorPanel from "../components/EditorPanel";
 import FrameList from "../components/FrameList";
 import { runQuery, runQueryByShareId } from "../actions";
 import { refreshConnectedState } from "../actions/connection";
+import { answeredNPSSurvey } from "../actions/user";
 import {
   discardFrame,
   discardAllFrames,
   toggleCollapseFrame
 } from "../actions/frames";
-import { createCookie, readCookie, eraseCookie } from "../lib/helpers";
+import { readCookie, eraseCookie } from "../lib/helpers";
 
 import "../assets/css/App.css";
 
@@ -22,10 +23,7 @@ class App extends React.Component {
     this.state = {
       query: "",
       isQueryDirty: false,
-      currentSidebarMenu: "",
-      // queryExecutionCounter is used to determine when the NPS score survey
-      // should be shown
-      queryExecutionCounter: 0
+      currentSidebarMenu: ""
     };
   }
 
@@ -101,7 +99,12 @@ class App extends React.Component {
   };
 
   handleRunQuery = query => {
-    const { _handleRunQuery } = this.props;
+    const {
+      _handleRunQuery,
+      handleAnswerNPSSurvey,
+      visitCount,
+      NPSSurveyDone
+    } = this.props;
 
     // First, collapse all frames in order to prevent slow rendering
     // FIXME: this won't be necessary if visualization took up less resources
@@ -109,16 +112,10 @@ class App extends React.Component {
     this.collapseAllFrames();
 
     _handleRunQuery(query, () => {
-      const { queryExecutionCounter } = this.state;
-
-      if (queryExecutionCounter === 5) {
-        if (!readCookie("nps-survery-done")) {
-          /* global delighted */
-          delighted.survey();
-          createCookie("nps-survery-done", true, 180);
-        }
-      } else {
-        this.setState({ queryExecutionCounter: queryExecutionCounter + 1 });
+      if (visitCount === 3 && !NPSSurveyDone) {
+        /* global delighted */
+        delighted.survey();
+        handleAnswerNPSSurvey();
       }
     });
   };
@@ -195,7 +192,9 @@ class App extends React.Component {
 
 const mapStateToProps = state => ({
   frames: state.frames.items,
-  connected: state.connection.connected
+  connected: state.connection.connected,
+  visitCount: state.user.visitCount,
+  NPSSurveyDone: state.user.NPSSurveyDone
 });
 
 const mapDispatchToProps = dispatch => ({
@@ -216,6 +215,9 @@ const mapDispatchToProps = dispatch => ({
   },
   handleCollapseFrame(frame) {
     dispatch(toggleCollapseFrame(frame, true));
+  },
+  handleAnswerNPSSurvey() {
+    dispatch(answeredNPSSurvey());
   }
 });
 
