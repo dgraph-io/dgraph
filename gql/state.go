@@ -203,6 +203,14 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemDollar)
 		case r == colon:
 			l.Emit(itemColon)
+		case r == quote:
+			{
+				empty = false
+				if err := l.LexQuotedString(); err != nil {
+					return l.Errorf(err.Error())
+				}
+				l.Emit(itemName)
+			}
 		case isEndLiteral(r):
 			{
 				empty = false

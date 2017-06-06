@@ -1310,6 +1310,15 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 	// Lets append the concatenated Geo token to Args.
 	// TODO - See if we can directly encode to Geo format.
 	g.Args = append(g.Args, buf.String())
+	items, err := it.Peek(1)
+	if err != nil {
+		return x.Errorf("Unexpected EOF while parsing args")
+	}
+	item := items[0]
+	if item.Typ != itemRightRound && item.Typ != itemComma {
+		return x.Errorf("Expected right round or comma. Got: %+v",
+			items[0])
+	}
 	return nil
 }
 
@@ -1403,13 +1412,27 @@ L:
 					expectArg = false
 					continue
 					// Lets reassemble the geo tokens.
-				} else if itemInFunc.Typ == itemLeftSquare && isGeoFunc(g.Name) {
-					if err := parseGeoArgs(it, g); err != nil {
-						return nil, err
+				} else if itemInFunc.Typ == itemLeftSquare {
+					if isGeoFunc(g.Name) {
+						if err := parseGeoArgs(it, g); err != nil {
+							return nil, err
+						}
+						expectArg = false
+						continue
+					}
+
+					if valid := it.Next(); !valid {
+						return nil,
+							x.Errorf("Unexpected EOF while parsing args")
+					}
+					itemInFunc = it.Item()
+				} else if itemInFunc.Typ == itemRightSquare {
+					if _, err := it.Peek(1); err != nil {
+						return nil,
+							x.Errorf("Unexpected EOF while parsing args")
 					}
 					expectArg = false
 					continue
-
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -1417,7 +1440,10 @@ L:
 				if !expectArg && !expectLang {
 					return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
 				}
-				val += strings.Trim(itemInFunc.Val, "\" \t")
+				v := strings.Trim(itemInFunc.Val, " \t")
+				// Trim just one leading and trailing "
+				v = strings.TrimPrefix(v, "\"")
+				val += strings.TrimSuffix(v, "\"")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}

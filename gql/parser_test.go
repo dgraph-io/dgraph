@@ -3447,3 +3447,43 @@ func TestMathWithoutVarAlias(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 }
+
+func TestMultipleEqual(t *testing.T) {
+	query := `{
+		me(func: eq(name,["Steven Spielberg", "Tom Hanks"])) {
+			name
+		}
+	}`
+
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 2, len(gql.Query[0].Func.Args))
+	require.Equal(t, "Tom Hanks", gql.Query[0].Func.Args[1])
+}
+
+func TestParseEqArg(t *testing.T) {
+	query := `
+	{
+		me(id: [1, 20]) @filter(eq(name, ["And\"rea", "Bob"])) {
+		 name
+		}
+	}
+`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
+}
+
+func TestParseEqArg2(t *testing.T) {
+	query := `
+	{
+		me(func: eq(age, [1, 20])) @filter(eq(name, ["And\"rea", "Bob"])) {
+		 name
+		}
+	}
+`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
+	require.Equal(t, 2, len(gql.Query[0].Func.Args))
+}
