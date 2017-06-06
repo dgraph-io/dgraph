@@ -20,34 +20,53 @@ package pubsub
 import (
 	"fmt"
 	"testing"
+	"time"
 	//	"github.com/stretchr/testify/require"
+
+	"golang.org/x/net/context"
 )
 
 func TestSubscription(t *testing.T) {
-	subscriber1 := NewUpdateSubscriber()
-	subscriber2 := NewUpdateSubscriber()
-	go subscriber1.Run()
-	go subscriber2.Run()
 
-	dispatcher := NewUpdateDispatcher()
-	go dispatcher.Run()
+	hub := NewUpdateHub()
+	go hub.Run()
+	fmt.Println("tzdybal: hub started!")
+
+	var cancel []context.CancelFunc
+	var ctxs []context.Context
+	for i := 0; i < 100; i++ {
+		ctx1, cancel1 := context.WithCancel(context.Background())
+		ctx2, cancel2 := context.WithCancel(context.Background())
+		subscriber1 := NewUpdateSubscriber(ctx1)
+		subscriber2 := NewUpdateSubscriber(ctx2)
+		ctxs = append(ctxs, ctx1, ctx2)
+		cancel = append(cancel, cancel1, cancel2)
+		go subscriber1.Run()
+		go subscriber2.Run()
+		hub.Subscribe([]string{"a", "b"}, subscriber1)
+		hub.Subscribe([]string{"b", "c"}, subscriber2)
+	}
+
+	done := make(chan bool)
+	go func() {
+		for _, f := range cancel {
+			time.Sleep(25 * time.Millisecond)
+			f()
+		}
+		done <- true
+	}()
 
 	go func() {
 		for i := 0; i < 1000; i++ {
-			dispatcher.PredicatesUpdated([]string{"a", "c"})
-			dispatcher.PredicatesUpdated([]string{"b"})
-			dispatcher.PredicatesUpdated([]string{"d"})
+			fmt.Println("-----")
+			time.Sleep(5 * time.Millisecond)
+			hub.PredicatesUpdated([]string{"a", "c"})
+			hub.PredicatesUpdated([]string{"b"})
+			hub.PredicatesUpdated([]string{"d"})
 		}
 	}()
 
-	for i := 0; i < 100; i++ {
-		dispatcher.Subscribe([]string{"a", "b"}, subscriber1)
-		dispatcher.Subscribe([]string{"b", "c"}, subscriber2)
-
-		fmt.Print(".")
-		dispatcher.Unsubscribe([]string{"b"}, subscriber1)
-		fmt.Print(".")
-		dispatcher.Unsubscribe([]string{"b"}, subscriber2)
-		dispatcher.Unsubscribe([]string{"a", "b", "c"}, subscriber2)
+	select {
+	case _ = <-done:
 	}
 }

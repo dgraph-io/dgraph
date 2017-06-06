@@ -77,7 +77,7 @@ type groupi struct {
 	num        uint32
 	lastUpdate uint64
 	// TODO(tzdybal) - is this a good place for UpdateDispatcher?
-	dispatcher *pubsub.UpdateDispatcher
+	dispatcher *pubsub.UpdateHub
 }
 
 var gr *groupi
@@ -93,6 +93,7 @@ func groups() *groupi {
 func StartRaftNodes(walDir string) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
+	gr.dispatcher = pubsub.NewUpdateHub()
 
 	if len(*myAddr) == 0 {
 		*myAddr = fmt.Sprintf("localhost:%d", *workerPort)
@@ -147,8 +148,6 @@ func StartRaftNodes(walDir string) {
 	wg.Wait()
 	atomic.StoreUint32(&healthCheck, 1)
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
-
-	gr.dispatcher = pubsub.NewUpdateDispatcher()
 }
 
 // HealthCheck returns whether the server is ready to accept requests or not

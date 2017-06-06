@@ -454,17 +454,15 @@ func getPredicates(m *protos.Mutations, n int) []string {
 		predicateMap[edge.Attr] = true
 	}
 
-	preds := make([]string, len(predicateMap))
-	i := 0
+	preds := make([]string, 0, len(predicateMap))
 	for pred, _ := range predicateMap {
-		preds[i] = pred
-		i++
+		preds = append(preds, pred)
 	}
 	return preds
 }
 
 // TODO(tzdybal) - is it a good way to get dispatcher?
-func getUpdateDispatcher() *pubsub.UpdateDispatcher {
+func getUpdateDispatcher() *pubsub.UpdateHub {
 	return groups().dispatcher
 }
 

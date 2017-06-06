@@ -19,103 +19,72 @@ package pubsub
 
 import (
 	"fmt"
+
+	"golang.org/x/net/context"
 )
 
+// topic groups all subscribers interested in single predicate
 type topic struct {
-	subscribers map[*UpdateSubscriber]bool
+	subscribers []*UpdateSubscriber
 }
 
 type UpdateSubscriber struct {
-	predicatesChannel chan string
+	ctx               context.Context
+	predicatesChannel chan string // TODO(tzdybal) - this also should be []string
 }
 
-type OperationType int
-
-const (
-	subscribe   OperationType = iota
-	unsubscribe OperationType = iota
-)
-
-type Operation struct {
-	opType     OperationType
+type subscription struct {
 	predicates []string
 	subscriber *UpdateSubscriber
 }
 
 // one channel per subscriber
-type UpdateDispatcher struct {
-	updates    chan []string
-	operations chan Operation
-	topics     map[string]*topic
+type UpdateHub struct {
+	updates       chan []string
+	subscriptions chan subscription
+	topics        map[string]*topic
 }
 
-func NewUpdateDispatcher() *UpdateDispatcher {
-	dispatcher := &UpdateDispatcher{
-		updates:    make(chan []string, 100),
-		operations: make(chan Operation),
-		topics:     make(map[string]*topic),
+func NewUpdateHub() *UpdateHub {
+	hub := &UpdateHub{
+		updates:       make(chan []string, 100),
+		subscriptions: make(chan subscription, 100),
+		topics:        make(map[string]*topic),
 	}
-	return dispatcher
+	return hub
 }
 
-func (d *UpdateDispatcher) Run() {
+func (d *UpdateHub) Run() {
 	for {
 		select {
-		case oper := <-d.operations:
-			d.execute(oper)
 		case preds := <-d.updates:
 			d.doUpdate(preds)
+		case sub := <-d.subscriptions:
+			d.doSubscribe(sub)
 		}
 	}
 }
 
-func (d *UpdateDispatcher) Subscribe(predicates []string, subscriber *UpdateSubscriber) {
-	operation := Operation{opType: subscribe, predicates: predicates, subscriber: subscriber}
-	d.operations <- operation
+func (d *UpdateHub) Subscribe(predicates []string, subscriber *UpdateSubscriber) {
+	d.subscriptions <- subscription{predicates, subscriber}
 }
 
-func (d *UpdateDispatcher) Unsubscribe(predicates []string, subscriber *UpdateSubscriber) {
-	operation := Operation{opType: unsubscribe, predicates: predicates, subscriber: subscriber}
-	d.operations <- operation
-}
-
-func (d *UpdateDispatcher) PredicatesUpdated(predicates []string) {
-	d.updates <- predicates
-}
-
-func (d *UpdateDispatcher) execute(operation Operation) {
-	switch operation.opType {
-	case subscribe:
-		d.doSubscribe(operation)
-	case unsubscribe:
-		d.doUnsubscribe(operation)
-	}
-}
-
-func (d *UpdateDispatcher) doSubscribe(operation Operation) {
-	for _, pred := range operation.predicates {
+func (d *UpdateHub) doSubscribe(sub subscription) {
+	for _, pred := range sub.predicates {
 		topic, ok := d.topics[pred]
 		if !ok {
 			topic = newTopic()
 			d.topics[pred] = topic
 		}
-		topic.subscribe(operation.subscriber)
+		topic.subscribers = append(topic.subscribers, sub.subscriber)
 	}
 }
 
-func (d *UpdateDispatcher) doUnsubscribe(operation Operation) {
-	for _, pred := range operation.predicates {
-		topic, ok := d.topics[pred]
-		if ok {
-			topic.unsubscribe(operation.subscriber)
-			if topic.size() == 0 {
-				delete(d.topics, pred)
-			}
-		}
-	}
+func (d *UpdateHub) PredicatesUpdated(predicates []string) {
+	d.updates <- predicates
 }
 
-func (d *UpdateDispatcher) doUpdate(predicates []string) {
+func (d *UpdateHub) doUpdate(predicates []string) {
 	for _, pred := range predicates {
 		topic, ok := d.topics[pred]
 		if ok {
@@ -125,29 +94,30 @@ func (d *UpdateDispatcher) doUpdate(predicates []string) {
 }
 
 func newTopic() *topic {
-	return &topic{subscribers: make(map[*UpdateSubscriber]bool)}
-}
-
-func (t *topic) subscribe(subscriber *UpdateSubscriber) {
-	t.subscribers[subscriber] = true
-}
-
-func (t *topic) size() int {
-	return len(t.subscribers)
-}
-
-func (t *topic) unsubscribe(subscriber *UpdateSubscriber) {
-	delete(t.subscribers, subscriber)
+	return &topic{subscribers: make([]*UpdateSubscriber, 0, 10)}
 }
 
 func (t *topic) predicateUpdated(predicate string) {
-	for sub, _ := range t.subscribers {
-		sub.predicatesChannel <- predicate
+	subs := t.subscribers
+	last := len(subs)
+	for i := 0; i < last; i++ {
+		sub := subs[i]
+		if sub.ctx.Err() == nil {
+			sub.predicatesChannel <- predicate
+		} else {
+			// remove by swapping with last element and decreasing size
+			subs[i] = subs[last-1]
+			subs[last-1] = nil
+			last--
+		}
 	}
+	// trim to remove unsed elements
+	subs = subs[:last]
+	t.subscribers = subs
 }
 
-func NewUpdateSubscriber() *UpdateSubscriber {
-	return &UpdateSubscriber{predicatesChannel: make(chan string)}
+func NewUpdateSubscriber(ctx context.Context) *UpdateSubscriber {
+	return &UpdateSubscriber{ctx, make(chan string)}
 }
 
 func (s *UpdateSubscriber) Run() {
