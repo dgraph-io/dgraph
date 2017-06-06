@@ -7551,3 +7551,87 @@ func TestMultipleEqInt(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"name":"Glenn Rhee"}],"name":"Daryl Dixon"}]}`, js)
 }
+
+type Person struct {
+	Name    string    `dgraph:"name"`
+	Age     int       `dgraph:"age"`
+	Dob     time.Time `dgraph:"dob"`
+	Friends []Person  `dgraph:"friend"`
+}
+
+type res struct {
+	Root  []Person `dgraph:"me", json:"abc"`
+	Root2 Person   `dgraph:"me2" json:"hello"`
+}
+
+func recursivelyUnmarshal(n *protos.Node, v reflect.Value) error {
+	// TODO - Return error if struct and property response types don't match.
+	return nil
+}
+
+func unmarshal(n *protos.Node, r interface{}) error {
+	x.AssertTrue(n.Attribute == "_root_")
+	tagTypeMap := make(map[string]reflect.Type)
+	val := reflect.TypeOf(r)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+		fmt.Println(field.Tag)
+		if tag, ok := field.Tag.Lookup("dgraph"); ok {
+			tagTypeMap[tag] = field.Type
+		} else {
+			fmt.Println("didnt find tag")
+		}
+	}
+	fmt.Printf("Map: %+v\n", tagTypeMap)
+
+	for _, child := range n.Children {
+		nodeAttr := n.Attribute
+		typ, ok := tagTypeMap[nodeAttr]
+		if !ok {
+			continue
+		}
+		elemType := typ.Elem()
+		fmt.Println("elem type", elemType)
+		elem := reflect.New(elemType)
+		recursivelyUnmarshal(child, elem)
+		// if typ is slice parse type and pass that.
+
+		// Attach it back to the parent.
+		switch typ.Kind() {
+		case reflect.Struct:
+		case reflect.Slice:
+		// What if its a map?
+		default:
+		}
+	}
+	return nil
+}
+
+func TestPBUnmarshal(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: anyofterms(name, "Rick Michonne Andrea")) {
+				name
+				age
+				dob
+				friend {
+					name
+				}
+			}
+
+			me2(id: 0x01) {
+				name
+				age
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, false)
+	// fmt.Println(proto.MarshalTextString(pb[1]))
+	var r res
+	unmarshal(pb[0], &r)
+	// fmt.Printf("%+v\n", r)
+}
