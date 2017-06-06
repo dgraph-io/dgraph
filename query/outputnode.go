@@ -19,7 +19,6 @@ package query
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -377,9 +376,6 @@ func valToBytes(v types.Val) ([]byte, error) {
 		return []byte("false"), nil
 	case types.StringID, types.DefaultID:
 		return []byte(fmt.Sprintf(`"%s"`, v.Value.(string))), nil
-	case types.DateID:
-		s := v.Value.(time.Time).Format("2006-01-02")
-		return json.Marshal(s)
 	case types.DateTimeID:
 		return v.Value.(time.Time).MarshalJSON()
 	case types.GeoID:

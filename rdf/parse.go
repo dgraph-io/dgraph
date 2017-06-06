@@ -68,8 +68,6 @@ func typeValFrom(val *protos.Value) types.Val {
 		return types.Val{types.FloatID, val.GetDoubleVal()}
 	case *protos.Value_GeoVal:
 		return types.Val{types.GeoID, val.GetGeoVal()}
-	case *protos.Value_DateVal:
-		return types.Val{types.DateID, val.GetDateVal()}
 	case *protos.Value_DatetimeVal:
 		return types.Val{types.DateTimeID, val.GetDatetimeVal()}
 	case *protos.Value_PasswordVal:
@@ -86,7 +84,7 @@ func byteVal(nq NQuad) ([]byte, error) {
 	p := typeValFrom(nq.ObjectValue)
 	// These three would have already been marshalled to bytes by the client or
 	// in parse function.
-	if p.Tid == types.GeoID || p.Tid == types.DateID || p.Tid == types.DateTimeID {
+	if p.Tid == types.GeoID || p.Tid == types.DateTimeID {
 		return p.Value.([]byte), nil
 	}
 
@@ -414,7 +412,6 @@ func isNewline(r rune) bool {
 var typeMap = map[string]types.TypeID{
 	"xs:string":                                   types.StringID,
 	"xs:dateTime":                                 types.DateTimeID,
-	"xs:date":                                     types.DateID,
 	"xs:int":                                      types.IntID,
 	"xs:boolean":                                  types.BoolID,
 	"xs:double":                                   types.FloatID,
@@ -423,12 +420,12 @@ var typeMap = map[string]types.TypeID{
 	"pwd:password":                                types.PasswordID,
 	"http://www.w3.org/2001/XMLSchema#string":     types.StringID,
 	"http://www.w3.org/2001/XMLSchema#dateTime":   types.DateTimeID,
-	"http://www.w3.org/2001/XMLSchema#date":       types.DateID,
+	"http://www.w3.org/2001/XMLSchema#date":       types.DateTimeID,
 	"http://www.w3.org/2001/XMLSchema#int":        types.IntID,
 	"http://www.w3.org/2001/XMLSchema#integer":    types.IntID,
 	"http://www.w3.org/2001/XMLSchema#boolean":    types.BoolID,
 	"http://www.w3.org/2001/XMLSchema#double":     types.FloatID,
 	"http://www.w3.org/2001/XMLSchema#float":      types.FloatID,
-	"http://www.w3.org/2001/XMLSchema#gYear":      types.DateID,
-	"http://www.w3.org/2001/XMLSchema#gYearMonth": types.DateID,
+	"http://www.w3.org/2001/XMLSchema#gYear":      types.DateTimeID,
+	"http://www.w3.org/2001/XMLSchema#gYearMonth": types.DateTimeID,
 }

@@ -57,13 +57,6 @@ func TestIndexingFloat(t *testing.T) {
 	require.EqualValues(t, []byte{0x7, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
-func TestIndexingDate(t *testing.T) {
-	schema.ParseBytes([]byte("age:date @index ."), 1)
-	a, err := IndexTokens("age", "", types.Val{types.StringID, []byte("0010-01-01")})
-	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x3, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
-}
-
 func TestIndexingTime(t *testing.T) {
 	schema.ParseBytes([]byte("age:datetime @index ."), 1)
 	a, err := IndexTokens("age", "", types.Val{types.StringID, []byte("0010-01-01T01:01:01.000000001")})
@@ -123,7 +116,7 @@ func addMutationWithIndex(t *testing.T, l *List, edge *protos.DirectedEdge, op u
 
 const schemaVal = `
 name:string @index .
-dob:date @index .
+dob:datetime @index .
 friend:uid @reverse .
 	`
 
