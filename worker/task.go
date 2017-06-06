@@ -693,10 +693,12 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		// eq can have multiple args.
 		for _, arg := range args {
 			if fc.ineqValue, err = convertValue(attr, arg); err != nil {
-				return nil, x.Errorf("Got error: %v while running: %v", err, q.SrcFunc)
+				return nil, x.Errorf("Got error: %v while running: %v", err,
+					q.SrcFunc)
 			}
 			// Get tokens ge / le ineqValueToken.
-			if tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f, fc.ineqValue); err != nil {
+			if tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f,
+				fc.ineqValue); err != nil {
 				return nil, err
 			}
 			if len(tokens) == 0 {
