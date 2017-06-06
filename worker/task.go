@@ -638,7 +638,6 @@ type functionContext struct {
 }
 
 const (
-	gt = "gt" // greater than
 	eq = "eq" // equal
 )
 
@@ -648,6 +647,7 @@ func ensureArgsCount(funcStr []string, expected int) error {
 		return x.Errorf("Function '%s' requires %d arguments, but got %d (%v)",
 			funcStr[0], expected, actual, funcStr[2:])
 	}
+	return nil
 }
 
 func checkRoot(q *protos.Query, fc *functionContext) {
