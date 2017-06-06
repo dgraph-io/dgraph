@@ -486,8 +486,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 	// We fetch the actual value for the uids, compare them to the value in the
 	// request and filter the uids only if the tokenizer IsLossy.
-	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 &&
-		srcFn.ineqValueToken == srcFn.tokens[0] {
+	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 {
 		tokenizer, err := pickTokenizer(attr, srcFn.fname)
 		// We should already have checked this in getInequalityTokens.
 		x.Check(err)
@@ -501,15 +500,25 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			}
 
 			x.AssertTrue(len(out.UidMatrix) > 0)
-			// Filter the first row of UidMatrix. Since ineqValue != nil, we may
-			// assume that ineqValue is equal to the first token found in TokensTable.
-			algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
-				sv, err := fetchValue(uid, attr, q.Langs, typ)
-				if sv.Value == nil || err != nil {
-					return false
-				}
-				return types.CompareVals(q.SrcFunc[0], sv, srcFn.ineqValue)
-			})
+			rowsToFilter := 0
+			if srcFn.fname == eq {
+				// If fn is eq, we could have multiple arguments and hence multiple rows
+				// to filter.
+				rowsToFilter = len(srcFn.tokens)
+			} else if srcFn.tokens[0] == srcFn.ineqValueToken {
+				// If operation is not eq and ineqValueToken equals first token,
+				// then we need to filter first row..
+				rowsToFilter = 1
+			}
+			for row := 0; row < rowsToFilter; row++ {
+				algo.ApplyFilter(out.UidMatrix[row], func(uid uint64, i int) bool {
+					sv, err := fetchValue(uid, attr, q.Langs, typ)
+					if sv.Value == nil || err != nil {
+						return false
+					}
+					return types.CompareVals(q.SrcFunc[0], sv, srcFn.eqTokens[row])
+				})
+			}
 		}
 	}
 
@@ -613,6 +622,7 @@ type functionContext struct {
 	geoQuery       *types.GeoQueryData
 	intersectDest  bool
 	ineqValue      types.Val
+	eqTokens       []types.Val
 	ineqValueToken string
 	n              int
 	threshold      int64
@@ -623,15 +633,17 @@ type functionContext struct {
 	isFuncAtRoot   bool
 }
 
+const (
+	eq = "eq" // equal
+)
+
 func ensureArgsCount(funcStr []string, expected int) error {
 	actual := len(funcStr) - 2
-	switch {
-	case actual != expected:
+	if actual != expected {
 		return x.Errorf("Function '%s' requires %d arguments, but got %d (%v)",
 			funcStr[0], expected, actual, funcStr[2:])
-	default:
-		return nil
 	}
+	return nil
 }
 
 func checkRoot(q *protos.Query, fc *functionContext) {
@@ -665,17 +677,36 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case CompareAttrFn:
-		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
-			return nil, err
+		args := q.SrcFunc[2:]
+		// Only eq can have multiple args. It should have atleast one.
+		if fc.fname == eq {
+			if len(args) <= 0 {
+				return nil, x.Errorf("eq expects atleast 1 argument.")
+			}
+		} else { // Others can have only 1 arg.
+			if len(args) != 1 {
+				return nil, x.Errorf("eq expects atleast 1 argument.")
+			}
 		}
-		fc.ineqValue, err = convertValue(attr, q.SrcFunc[2])
-		if err != nil {
-			return nil, x.Errorf("Got error: %v while running: %v", err.Error(), q.SrcFunc)
-		}
-		// Get tokens ge / le ineqValueToken.
-		fc.tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f, fc.ineqValue)
-		if err != nil {
-			return nil, err
+
+		var tokens []string
+		// eq can have multiple args.
+		for _, arg := range args {
+			if fc.ineqValue, err = convertValue(attr, arg); err != nil {
+				return nil, x.Errorf("Got error: %v while running: %v", err,
+					q.SrcFunc)
+			}
+			// Get tokens ge / le ineqValueToken.
+			if tokens, fc.ineqValueToken, err = getInequalityTokens(attr, f,
+				fc.ineqValue); err != nil {
+				return nil, err
+			}
+			if len(tokens) == 0 {
+				continue
+			}
+			fc.tokens = append(fc.tokens, tokens...)
+			fc.eqTokens = append(fc.eqTokens, fc.ineqValue)
+
 		}
 		fc.n = len(fc.tokens)
 		fc.lang = q.SrcFunc[1]
@@ -683,8 +714,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
-		fc.threshold, err = strconv.ParseInt(q.SrcFunc[3], 10, 64)
-		if err != nil {
+		if fc.threshold, err = strconv.ParseInt(q.SrcFunc[3], 10, 64); err != nil {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 				q.SrcFunc[0], q.SrcFunc[2])
 		}
@@ -698,24 +728,21 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		fc.n = len(fc.tokens)
 	case PasswordFn:
-		err = ensureArgsCount(q.SrcFunc, 2)
-		if err != nil {
+		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
 		fc.n = len(q.UidList.Uids)
 	case StandardFn, FullTextSearchFn:
 		// srcfunc 0th val is func name and and [2:] are args.
 		// we tokenize the arguments of the query.
-		err = ensureArgsCount(q.SrcFunc, 1)
-		if err != nil {
+		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
 		}
 		required, found := verifyStringIndex(attr, fnType)
 		if !found {
 			return nil, x.Errorf("Attribute %s is not indexed with type %s", attr, required)
 		}
-		fc.tokens, err = getStringTokens(q.SrcFunc[2:], q.SrcFunc[1], fnType)
-		if err != nil {
+		if fc.tokens, err = getStringTokens(q.SrcFunc[2:], q.SrcFunc[1], fnType); err != nil {
 			return nil, err
 		}
 		fnName := strings.ToLower(q.SrcFunc[0])
@@ -723,8 +750,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case RegexFn:
-		err = ensureArgsCount(q.SrcFunc, 2)
-		if err != nil {
+		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
 		ignoreCase := false
@@ -740,8 +766,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if ignoreCase {
 			matchType = "(?i)" + matchType
 		}
-		fc.regex, err = cregexp.Compile(matchType + q.SrcFunc[2])
-		if err != nil {
+		if fc.regex, err = cregexp.Compile(matchType + q.SrcFunc[2]); err != nil {
 			return nil, err
 		}
 		fc.n = 0

@@ -203,6 +203,14 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemDollar)
 		case r == colon:
 			l.Emit(itemColon)
+		case r == quote:
+			{
+				empty = false
+				if err := l.LexQuotedString(); err != nil {
+					return l.Errorf(err.Error())
+				}
+				l.Emit(itemName)
+			}
 		case isEndLiteral(r):
 			{
 				empty = false
@@ -216,6 +224,9 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemRightSquare)
 		case r == '#':
 			return lexComment
+		case r == rightSquare:
+			l.Ignore()
+			continue
 		default:
 			return l.Errorf("Unrecognized character in inside a func: %#U", r)
 		}
