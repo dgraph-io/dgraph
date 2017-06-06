@@ -2187,11 +2187,11 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					IsInternal: true,
 				}
 				if item.Val == "var" {
-					count, err := parseVarList(it, child)
+					countVar, err := parseVarList(it, child)
 					if err != nil {
 						return err
 					}
-					if count != 1 {
+					if countVar != 1 {
 						return x.Errorf("Invalid use of expand(). Exactly one variable expected.")
 					}
 					child.NeedsVar[len(child.NeedsVar)-1].Typ = LIST_VAR
@@ -2246,15 +2246,25 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					Alias:      alias,
 				}
 				alias = ""
-				count, err := parseVarList(it, child)
+				countVar, err := parseVarList(it, child)
 				if err != nil {
 					return err
 				}
-				if count != 1 {
+				if countVar != 1 {
 					return x.Errorf("Invalid use of var(). Exactly one variable expected.")
 				}
-				// Only value vars can be retrieved.
-				child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
+				if count != seen {
+					// var() inside count can have any type. But without count can only be a
+					// value var.
+					child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
+				} else {
+					child.IsCount = true
+					it.Next()
+					item = it.Item()
+					if item.Typ != itemRightRound {
+						return x.Errorf("Invalid mention of count with var.")
+					}
+				}
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
