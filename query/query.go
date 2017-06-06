@@ -144,6 +144,7 @@ type params struct {
 	isGroupBy    bool
 	groupbyAttrs []gql.AttrLang
 	uidCount     string
+	varVal       varValue
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -286,6 +287,20 @@ func (sg *SubGraph) fieldName() string {
 	return fieldName
 }
 
+func (sg *SubGraph) getVarCount() int {
+	fmt.Println(sg.Params.varVal)
+	if sg.Params.varVal.strList != nil {
+		return len(sg.Params.varVal.strList)
+	}
+	if sg.Params.varVal.uids != nil {
+		return len(sg.Params.varVal.uids.Uids)
+	}
+	if sg.Params.varVal.vals != nil {
+		return len(sg.Params.varVal.vals)
+	}
+	return 0
+}
+
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
@@ -313,6 +328,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if pc.Params.Expand != "" {
 				continue
 			}
+			if pc.Params.DoCount {
+				fieldName := fmt.Sprintf("count(var(%v))", pc.Params.NeedsVar[0].Name)
+				dst.AddValue(fieldName, types.Val{types.IntID, pc.getVarCount()})
+				continue
+			}
+
 			if pc.Params.uidToVal == nil {
 				return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
 			}
@@ -1187,12 +1208,14 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 		// This is a var() block.
 		srcVar := sg.Params.NeedsVar[0]
 		srcMap := doneVars[srcVar.Name]
-		if srcMap.vals == nil {
-			return x.Errorf("Missing value variable %v", srcVar)
-		}
 		sg.Params.uidToVal = srcMap.vals
 	} else {
 		return x.Errorf("Unhandled internal node %v with parent %v", sg.Attr, parent.Attr)
+	}
+
+	if len(sg.Params.NeedsVar) == 1 {
+		sg.Params.varVal = doneVars[sg.Params.NeedsVar[0].Name]
+		fmt.Println("done", sg.Params.NeedsVar, sg.Params.varVal)
 	}
 	return nil
 }

@@ -82,6 +82,7 @@ func TestParseQueryCountVar(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, true, res.Query[0].Children[1].IsCount)
+	require.Equal(t, true, res.Query[0].Children[1].IsInternal)
 	require.Equal(t, "a", res.Query[0].Children[1].NeedsVar[0].Name)
 }
 

@@ -2259,6 +2259,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
 				} else {
 					child.IsCount = true
+					// We dont have to process anything for this.
+					child.IsInternal = true
 					it.Next()
 					item = it.Item()
 					if item.Typ != itemRightRound {
