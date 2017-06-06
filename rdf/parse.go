@@ -411,6 +411,7 @@ func isNewline(r rune) bool {
 
 var typeMap = map[string]types.TypeID{
 	"xs:string":                                   types.StringID,
+	"xs:date":                                     types.DateTimeID,
 	"xs:dateTime":                                 types.DateTimeID,
 	"xs:int":                                      types.IntID,
 	"xs:boolean":                                  types.BoolID,

@@ -212,7 +212,7 @@ mutation {
   schema {
     director.film: uid @reverse .
     genre: uid @reverse .
-    initial_release_date: date @index .
+    initial_release_date: datetime @index .
     rating: uid @reverse .
     country: uid @reverse .
     loc: geo @index .
@@ -294,7 +294,7 @@ The following types are supported by Dgraph.
 |  `string`   | string  |
 |  `bool`     | bool    |
 |  `id`       | string  |
-|  `date`     | time.Time (RFC3339 format [Optional timezone] eg: 2006-01-02T15:04:05.999999999+10:00 or 2006-01-02T15:04:05.999999999)    |
+|  `dateTime` | time.Time (RFC3339 format [Optional timezone] eg: 2006-01-02T15:04:05.999999999+10:00 or 2006-01-02T15:04:05.999999999)    |
 |  `geo`      | [go-geom](https://github.com/twpayne/go-geom)    |
 |  `uid`      | uint64  |
 
@@ -318,7 +318,7 @@ age: int .
 name           : string @index   .
 age            : int @index      .
 address        : string @index   .
-dateofbirth    : date @index     .
+dateofbirth    : datetime @index     .
 health         : float @index    .
 location       : geo @index      .
 timeafterbirth : datetime @index .
@@ -331,7 +331,7 @@ name	       : string @index(exact, term) .
 large_name     : string @index(hash) 	    .
 age            : int @index(int)            .
 address        : string @index(term)        .
-dateofbirth    : date @index(date)          .
+dateofbirth    : datetime @index(datetime)          .
 health         : float @index(float)        .
 location       : geo @index(geo)            .
 timeafterbirth : datetime @index(datetime)  .
@@ -445,7 +445,7 @@ The following table lists all the supported [RDF datatypes](https://www.w3.org/T
 | -------------                                           | :------------: |
 | &#60;xs:string&#62;                                     | String         |
 | &#60;xs:dateTime&#62;                                   | DateTime       |
-| &#60;xs:date&#62;                                       | Date           |
+| &#60;xs:date&#62;                                       | DateTime       |
 | &#60;xs:int&#62;                                        | Int            |
 | &#60;xs:boolean&#62;                                    | Bool           |
 | &#60;xs:double&#62;                                     | Float          |
@@ -453,7 +453,7 @@ The following table lists all the supported [RDF datatypes](https://www.w3.org/T
 | &#60;geo:geojson&#62;                                   | Geo            |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;   | String         |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | DateTime       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | Date           |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | DateTime       |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;      | Int            |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;  | Bool           |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;   | Float          |
@@ -801,7 +801,6 @@ The following [Scalar_Types]({{<relref "#scalar-types">}}) can be used in inequa
 * int
 * float
 * string
-* date
 * datetime
 
 #### Less than or equal to
