@@ -594,6 +594,9 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 	if gchild.IsGroupby {
 		key += "groupby"
 	}
+	if gchild.IsGroupby {
+		key += "groupby"
+	}
 	return key
 }
 
