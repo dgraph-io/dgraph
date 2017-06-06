@@ -14,12 +14,11 @@ message Posting {
 		INT = 2; // We treat it as int64.
 		FLOAT = 3;
 		BOOL = 4;
-		DATE = 5;
-		DATETIME = 6;
-		GEO = 7;
-		UID = 8;
-		PASSWORD = 9;
-		STRING = 10;
+		DATETIME = 5;
+		GEO = 6;
+		UID = 7;
+		PASSWORD = 8;
+		STRING = 9;
 
 	}
 	ValType val_type = 3;
