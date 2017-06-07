@@ -27,6 +27,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -7553,58 +7554,83 @@ func TestMultipleEqInt(t *testing.T) {
 }
 
 type Person struct {
-	Name    string    `dgraph:"name"`
-	Age     int       `dgraph:"age"`
-	Dob     time.Time `dgraph:"dob"`
-	Friends []Person  `dgraph:"friend"`
+	Name    string `dgraph:"name"`
+	Age     int    `dgraph:"age"`
+	Birth   time.Time
+	Friends []Person `dgraph:"friend"`
 }
 
 type res struct {
-	Root  []Person `dgraph:"me", json:"abc"`
-	Root2 Person   `dgraph:"me2" json:"hello"`
+	Root  []Person `dgraph:"me"`
+	Root2 Person   `dgraph:"me2"`
 }
 
-func recursivelyUnmarshal(n *protos.Node, v reflect.Value) error {
+func recursivelyUnmarshal(n *protos.Node, v reflect.Value, typ reflect.Type) error {
 	// TODO - Return error if struct and property response types don't match.
+	buildTypeMap(v, typ)
 	return nil
 }
 
-func unmarshal(n *protos.Node, r interface{}) error {
-	x.AssertTrue(n.Attribute == "_root_")
-	tagTypeMap := make(map[string]reflect.Type)
+func buildTypeMap(r interface{}, typ reflect.Type) map[string]reflect.Type {
+	fmt.Println("Type", typ)
 	val := reflect.TypeOf(r)
+	tagTypeMap := make(map[string]reflect.Type)
+	// Return error if nil
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
 	}
+	fmt.Println("val", val.Kind())
+	x.AssertTrue(val.Kind() == reflect.Struct)
 	for i := 0; i < val.NumField(); i++ {
-		field := val.Field(i)
-		fmt.Println(field.Tag)
+		field := typ.Field(i)
+		fmt.Println("field", field)
 		if tag, ok := field.Tag.Lookup("dgraph"); ok {
-			tagTypeMap[tag] = field.Type
+			// We want to do a case-insensitive match.
+			tagTypeMap[strings.ToLower(tag)] = field.Type
 		} else {
-			fmt.Println("didnt find tag")
+			tagTypeMap[strings.ToLower(field.Name)] = field.Type
+			// Store field name lower case and match against that.
 		}
 	}
-	fmt.Printf("Map: %+v\n", tagTypeMap)
+	return tagTypeMap
+}
 
-	for _, child := range n.Children {
-		nodeAttr := n.Attribute
-		typ, ok := tagTypeMap[nodeAttr]
-		if !ok {
-			continue
-		}
-		elemType := typ.Elem()
-		fmt.Println("elem type", elemType)
-		elem := reflect.New(elemType)
-		recursivelyUnmarshal(child, elem)
-		// if typ is slice parse type and pass that.
+func unmarshal(n []*protos.Node, r interface{}) error {
+	tagTypeMap := buildTypeMap(r, reflect.TypeOf(r))
 
-		// Attach it back to the parent.
-		switch typ.Kind() {
-		case reflect.Struct:
-		case reflect.Slice:
-		// What if its a map?
-		default:
+	//	fmt.Println("tagTypeMap", tagTypeMap)
+	for _, node := range n {
+		x.AssertTrue(node.Attribute == "_root_")
+		for _, child := range node.Children {
+			// We want to do a case-insensitive match.
+			nodeAttr := strings.ToLower(child.Attribute)
+			//			fmt.Println("attr", nodeAttr)
+			typ, ok := tagTypeMap[nodeAttr]
+			if !ok {
+				continue
+			}
+			// TODO - Also include array and other types
+			elemType := typ
+			fmt.Printf("%+v\n", typ)
+			if typ.Kind() == reflect.Slice {
+				elemType = typ.Elem()
+			}
+			elem := reflect.New(elemType)
+			fmt.Printf("new elem: %+v\n", elem.Type())
+			if typ.Kind() == reflect.Ptr {
+				typ = elem.Elem().Type()
+				fmt.Println("yo type", typ)
+			}
+			recursivelyUnmarshal(child, elem, typ)
+			// if typ is slice parse type and pass that.
+
+			// Attach it back to the parent.
+			switch typ.Kind() {
+			case reflect.Struct:
+			case reflect.Slice:
+			// What if its a map?
+			default:
+			}
 		}
 	}
 	return nil
@@ -7617,7 +7643,7 @@ func TestPBUnmarshal(t *testing.T) {
 			me(func: anyofterms(name, "Rick Michonne Andrea")) {
 				name
 				age
-				dob
+				Birth: dob
 				friend {
 					name
 				}
@@ -7632,6 +7658,6 @@ func TestPBUnmarshal(t *testing.T) {
 	pb := processToPB(t, query, map[string]string{}, false)
 	// fmt.Println(proto.MarshalTextString(pb[1]))
 	var r res
-	unmarshal(pb[0], &r)
+	unmarshal(pb, &r)
 	// fmt.Printf("%+v\n", r)
 }
