@@ -27,7 +27,6 @@ import (
 	"os"
 	"reflect"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +36,7 @@ import (
 	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -7552,102 +7552,19 @@ func TestMultipleEqInt(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"name":"Glenn Rhee"}],"name":"Daryl Dixon"}]}`, js)
 }
-
-type Person struct {
-	Name string `dgraph:"name"`
-	Age  int    `dgraph:"age"`
-	// See how to support time.Time
-	Birth   string
-	Friends []Person `dgraph:"friend"`
-}
-
-type res struct {
-	Root  []Person `dgraph:"me"`
-	Root2 Person   `dgraph:"me2"`
-}
-
-func recursivelyUnmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
-	// TODO - Return error if struct and property response types don't match.
-	m := buildTypeMap(typ)
-	val := reflect.New(typ).Elem()
-	for _, prop := range n.Properties {
-		if field, ok := m[strings.ToLower(prop.Prop)]; ok {
-			f := val.FieldByName(field.Name)
-			if !f.IsValid() {
-				fmt.Println("Invalid field", prop.Prop, field.Name)
-			}
-			switch field.Type {
-			case reflect.TypeOf(""):
-				val.FieldByName(field.Name).SetString(prop.Value.GetStrVal())
-			case reflect.TypeOf(0):
-				val.FieldByName(field.Name).SetInt(prop.Value.GetIntVal())
-			default:
-				x.Fatalf("Unhandled tag")
-			}
-		}
+func TestPBUnmarshalToStruct1(t *testing.T) {
+	type Person struct {
+		Name string `dgraph:"name"`
+		Age  int    `dgraph:"age"`
+		// TODO - See how to support time.Time
+		Birth   string
+		Friends []Person `dgraph:"friend"`
 	}
-	fmt.Println("val", val)
-	return val, nil
-}
 
-// TODO - Handle pointer type
-func buildTypeMap(typ reflect.Type) map[string]reflect.StructField {
-	tagTypeMap := make(map[string]reflect.StructField)
-	//	// Return error if nil
-	//	if val.Kind() == reflect.Ptr {
-	//		val = val.Elem()
-	//	}
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		if tag, ok := field.Tag.Lookup("dgraph"); ok {
-			// We want to do a case-insensitive match.
-			tagTypeMap[strings.ToLower(tag)] = field
-		} else {
-			tagTypeMap[strings.ToLower(field.Name)] = field
-			// Store field name lower case and match against that.
-		}
+	type res struct {
+		Root Person `dgraph:"me"`
 	}
-	return tagTypeMap
-}
 
-func unmarshal(n []*protos.Node, r interface{}) error {
-	tagTypeMap := buildTypeMap(reflect.TypeOf(r))
-
-	for _, node := range n {
-		x.AssertTrue(node.Attribute == "_root_")
-		for _, child := range node.Children {
-			// We want to do a case-insensitive match.
-			nodeAttr := strings.ToLower(child.Attribute)
-			field, ok := tagTypeMap[nodeAttr]
-			if !ok {
-				continue
-			}
-			typ := field.Type
-			// TODO - Also include array and other types
-			elemType := typ
-			if typ.Kind() == reflect.Slice {
-				elemType = typ.Elem()
-			}
-			//			if typ.Kind() == reflect.Ptr {
-			//				typ = elem.Elem().Type()
-			//				fmt.Println("yo type", typ)
-			//			}
-			recursivelyUnmarshal(child, elemType)
-			// if typ is slice parse type and pass that.
-
-			// Attach it back to the parent.
-			switch typ.Kind() {
-			case reflect.Struct:
-			case reflect.Slice:
-			// What if its a map?
-			default:
-			}
-		}
-	}
-	return nil
-}
-
-func TestPBUnmarshal(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
@@ -7660,16 +7577,74 @@ func TestPBUnmarshal(t *testing.T) {
 			#		me(func: anyof	}
 			#		me(func: anyof}
 
-			me2(id: 0x01) {
+			me(id: 0x01) {
 				name
 				age
 				Birth: dob
+				friend {
+					name
+					age
+				}
 			}
 		}
 	`
 	pb := processToPB(t, query, map[string]string{}, false)
-	// fmt.Println(proto.MarshalTextString(pb[1]))
 	var r res
-	unmarshal(pb, r)
-	// fmt.Printf("%+v\n", r)
+	client.Unmarshal(pb, &r)
+	require.Equal(t, "Michonne", r.Root.Name)
+	require.Equal(t, 38, r.Root.Age)
+	require.Equal(t, "1910-01-01T00:00:00Z", r.Root.Birth)
+	require.Equal(t, 4, len(r.Root.Friends))
+	require.Equal(t, Person{
+		Name: "Rick Grimes",
+		Age:  15,
+	}, r.Root.Friends[0])
+}
+
+func TestPBUnmarshalToStruct2(t *testing.T) {
+	type Person struct {
+		Name    string   `dgraph:"name"`
+		Age     int      `dgraph:"age"`
+		Birth   string   `dgraph:"dob"`
+		Friends []Person `dgraph:"friend"`
+	}
+
+	type res struct {
+		Root []Person `dgraph:"me"`
+	}
+
+	populateGraph(t)
+	query := `
+		{
+			me(func: anyofterms(name, "Rick Michonne Andrea")) {
+				name
+				age
+				dob
+				friend {
+					name
+					age
+					dob
+				}
+			}
+		}
+	`
+
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	client.Unmarshal(pb, &r)
+	require.Equal(t, 4, len(r.Root))
+	js, err := json.Marshal(r.Root[0])
+	require.NoError(t, err)
+	require.Equal(t, `{"Name":"Michonne","Age":38,"Birth":"1910-01-01T00:00:00Z","Friends":[{"Name":"Rick Grimes","Age":15,"Birth":"1910-01-02T00:00:00Z","Friends":null},{"Name":"Glenn Rhee","Age":15,"Birth":"1909-05-05T00:00:00Z","Friends":null},{"Name":"Daryl Dixon","Age":17,"Birth":"1909-01-10T00:00:00Z","Friends":null},{"Name":"Andrea","Age":19,"Birth":"1901-01-15T00:00:00Z","Friends":null}]}`, string(js))
+}
+
+func TestPBUnmarshalError1(t *testing.T) {
+	var a int
+	err := client.Unmarshal([]*protos.Node{}, a)
+	require.Error(t, err)
+}
+
+func TestPBUnmarshalError2(t *testing.T) {
+	err := client.Unmarshal([]*protos.Node{}, nil)
+	require.Error(t, err)
 }
