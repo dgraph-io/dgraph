@@ -1241,11 +1241,11 @@ func TestUseVarsMultiCascade1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			him(id:0x01) {
+			him(id:0x01) @cascade {
 				L as friend {
-				 B as friend
+					B as friend
 					name
-			 }
+			 	}
 			}
 
 			me(id: var(L, B)) {
@@ -1263,9 +1263,9 @@ func TestUseVarsMultiCascade(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			var(id:0x01) {
+			var(id:0x01) @cascade {
 				L as friend {
-				 B as friend
+				 	B as friend
 				}
 			}
 
@@ -1842,7 +1842,7 @@ func TestUseVarsCascade(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			var(id:0x01) {
+			var(id:0x01) @cascade {
 				L as friend {
 				  friend
 				}
@@ -7069,7 +7069,7 @@ func TestCountAtRoot5(t *testing.T) {
 
         `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+	require.JSONEq(t, `{"MichonneFriends":[{"count":5}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }
 
 func TestMathVarCrash(t *testing.T) {

@@ -632,6 +632,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			groupbyAttrs: gchild.GroupbyAttrs,
 			FacetVar:     gchild.FacetVar,
 			uidCount:     gchild.UidCount,
+			Cascade:      sg.Params.Cascade,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &protos.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -1266,9 +1267,8 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
-			isCascade := sg.Params.Cascade || shouldCascade(res, idx)
 			var sgPath []*SubGraph
-			err = sg.populateVarMap(doneVars, isCascade, sgPath)
+			err = sg.populateVarMap(doneVars, sgPath)
 			if err != nil {
 				return nil, err
 			}
@@ -1294,26 +1294,6 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	return sgl, nil
 }
 
-// shouldCascade returns true if the query block is not self depenedent and we should
-// remove the uids from the bottom up if the children are empty.
-func shouldCascade(res gql.Result, idx int) bool {
-	if res.Query[idx].Attr == "shortest" {
-		return false
-	}
-
-	if len(res.QueryVars[idx].Defines) == 0 {
-		return false
-	}
-	for _, def := range res.QueryVars[idx].Defines {
-		for _, need := range res.QueryVars[idx].Needs {
-			if def == need {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 func (sg *SubGraph) updateUidMatrix() {
 	for _, l := range sg.uidMatrix {
 		if sg.Params.Order != "" {
@@ -1334,7 +1314,7 @@ func (sg *SubGraph) updateUidMatrix() {
 
 }
 
-func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
+func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	sgPath []*SubGraph) error {
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return nil
@@ -1349,9 +1329,9 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
 	}
 	for _, child := range sg.Children {
 		sgPath = append(sgPath, sg) // Add the current node to path
-		child.populateVarMap(doneVars, isCascade, sgPath)
+		child.populateVarMap(doneVars, sgPath)
 		sgPath = sgPath[:len(sgPath)-1] // Backtrack
-		if !isCascade {
+		if !sg.Params.Cascade {
 			continue
 		}
 
@@ -1360,7 +1340,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
 		child.updateUidMatrix()
 	}
 
-	if !isCascade {
+	if !sg.Params.Cascade {
 		goto AssignStep
 	}
 
