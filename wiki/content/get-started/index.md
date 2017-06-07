@@ -354,13 +354,13 @@ These queries should give an idea of some of the things Dgraph is capable of.
 
 Take the [tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
 
-A wider range of queries can also be found in the [Query Language]({{< relref "query-language/#running-examples" >}}) section.
+A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
 
 
 
 ## Other Datasets
 
-The examples in the [Query Language]({{< ref "query-language#running-examples" >}}) reference manual use the following datasets.
+The examples in the [Query Language]({{< relref "query-language/index.md" >}}) reference manual use the following datasets.
 
 * A dataset of movies and actors - 21million.rdf.gz [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz), and
 * A tourism dataset for geo-location queries - sf.tourism.gz [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz).

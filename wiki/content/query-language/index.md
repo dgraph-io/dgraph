@@ -14,10 +14,7 @@ This document is the Dgraph query reference material.  It is not a tutorial.  It
 
 ### Running examples
 
-The examples in this reference use a database of 21 million triples about movies and actors.  The example queries run and return results.  The queries are executed by an instance of Dgraph running at https://play.dgraph.io/.  To run the queries locally or experiment a bit more, see the [Getting Started]({{< relref "get-started/index.md" >}}) guide, section on  21million and tourism (for location queries) datasets.
-
-[Getting Started]({{< relref "/get-started/#other-datasets" >}})
-[Query Language]({{< relref "query-language/index.md" >}})
+The examples in this reference use a database of 21 million triples about movies and actors.  The example queries run and return results.  The queries are executed by an instance of Dgraph running at https://play.dgraph.io/.  To run the queries locally or experiment a bit more, see the [Getting Started]({{< relref "get-started/index.md" >}}) guide, which also shows how to load the datasets used in the examples here.
 
 ## GraphQL+- Fundamentals
 
