@@ -7554,9 +7554,10 @@ func TestMultipleEqInt(t *testing.T) {
 }
 
 type Person struct {
-	Name    string `dgraph:"name"`
-	Age     int    `dgraph:"age"`
-	Birth   time.Time
+	Name string `dgraph:"name"`
+	Age  int    `dgraph:"age"`
+	// See how to support time.Time
+	Birth   string
 	Friends []Person `dgraph:"friend"`
 }
 
@@ -7565,30 +7566,44 @@ type res struct {
 	Root2 Person   `dgraph:"me2"`
 }
 
-func recursivelyUnmarshal(n *protos.Node, v reflect.Value, typ reflect.Type) error {
+func recursivelyUnmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
 	// TODO - Return error if struct and property response types don't match.
-	buildTypeMap(v, typ)
-	return nil
+	m := buildTypeMap(typ)
+	val := reflect.New(typ).Elem()
+	for _, prop := range n.Properties {
+		if field, ok := m[strings.ToLower(prop.Prop)]; ok {
+			f := val.FieldByName(field.Name)
+			if !f.IsValid() {
+				fmt.Println("Invalid field", prop.Prop, field.Name)
+			}
+			switch field.Type {
+			case reflect.TypeOf(""):
+				val.FieldByName(field.Name).SetString(prop.Value.GetStrVal())
+			case reflect.TypeOf(0):
+				val.FieldByName(field.Name).SetInt(prop.Value.GetIntVal())
+			default:
+				x.Fatalf("Unhandled tag")
+			}
+		}
+	}
+	fmt.Println("val", val)
+	return val, nil
 }
 
-func buildTypeMap(r interface{}, typ reflect.Type) map[string]reflect.Type {
-	fmt.Println("Type", typ)
-	val := reflect.TypeOf(r)
-	tagTypeMap := make(map[string]reflect.Type)
-	// Return error if nil
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-	fmt.Println("val", val.Kind())
-	x.AssertTrue(val.Kind() == reflect.Struct)
-	for i := 0; i < val.NumField(); i++ {
+// TODO - Handle pointer type
+func buildTypeMap(typ reflect.Type) map[string]reflect.StructField {
+	tagTypeMap := make(map[string]reflect.StructField)
+	//	// Return error if nil
+	//	if val.Kind() == reflect.Ptr {
+	//		val = val.Elem()
+	//	}
+	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
-		fmt.Println("field", field)
 		if tag, ok := field.Tag.Lookup("dgraph"); ok {
 			// We want to do a case-insensitive match.
-			tagTypeMap[strings.ToLower(tag)] = field.Type
+			tagTypeMap[strings.ToLower(tag)] = field
 		} else {
-			tagTypeMap[strings.ToLower(field.Name)] = field.Type
+			tagTypeMap[strings.ToLower(field.Name)] = field
 			// Store field name lower case and match against that.
 		}
 	}
@@ -7596,32 +7611,28 @@ func buildTypeMap(r interface{}, typ reflect.Type) map[string]reflect.Type {
 }
 
 func unmarshal(n []*protos.Node, r interface{}) error {
-	tagTypeMap := buildTypeMap(r, reflect.TypeOf(r))
+	tagTypeMap := buildTypeMap(reflect.TypeOf(r))
 
-	//	fmt.Println("tagTypeMap", tagTypeMap)
 	for _, node := range n {
 		x.AssertTrue(node.Attribute == "_root_")
 		for _, child := range node.Children {
 			// We want to do a case-insensitive match.
 			nodeAttr := strings.ToLower(child.Attribute)
-			//			fmt.Println("attr", nodeAttr)
-			typ, ok := tagTypeMap[nodeAttr]
+			field, ok := tagTypeMap[nodeAttr]
 			if !ok {
 				continue
 			}
+			typ := field.Type
 			// TODO - Also include array and other types
 			elemType := typ
-			fmt.Printf("%+v\n", typ)
 			if typ.Kind() == reflect.Slice {
 				elemType = typ.Elem()
 			}
-			elem := reflect.New(elemType)
-			fmt.Printf("new elem: %+v\n", elem.Type())
-			if typ.Kind() == reflect.Ptr {
-				typ = elem.Elem().Type()
-				fmt.Println("yo type", typ)
-			}
-			recursivelyUnmarshal(child, elem, typ)
+			//			if typ.Kind() == reflect.Ptr {
+			//				typ = elem.Elem().Type()
+			//				fmt.Println("yo type", typ)
+			//			}
+			recursivelyUnmarshal(child, elemType)
 			// if typ is slice parse type and pass that.
 
 			// Attach it back to the parent.
@@ -7640,24 +7651,25 @@ func TestPBUnmarshal(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: anyofterms(name, "Rick Michonne Andrea")) {
-				name
-				age
-				Birth: dob
-				friend {
-					name
-				}
-			}
+			#		me(func: anyofterms(name, "Rick Michonne Andrea")) {
+			#		me(func: anyof	name
+			#		me(func: anyof	age
+			#		me(func: anyof	Birth: dob
+			#		me(func: anyof	friend {
+			#		me(func: anyof		name
+			#		me(func: anyof	}
+			#		me(func: anyof}
 
 			me2(id: 0x01) {
 				name
 				age
+				Birth: dob
 			}
 		}
 	`
 	pb := processToPB(t, query, map[string]string{}, false)
 	// fmt.Println(proto.MarshalTextString(pb[1]))
 	var r res
-	unmarshal(pb, &r)
+	unmarshal(pb, r)
 	// fmt.Printf("%+v\n", r)
 }
