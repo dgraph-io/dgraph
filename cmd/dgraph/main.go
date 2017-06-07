@@ -343,9 +343,17 @@ func convertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string
 func enrichSchema(updates []*protos.SchemaUpdate) error {
 	for _, schema := range updates {
 		typ := types.TypeID(schema.ValueType)
+
+		if typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID &&
+			schema.Directive == protos.SchemaUpdate_INDEX {
+			return x.Errorf("Indexing not allowed on predicate %s of type %s",
+				schema.Predicate, typ.Name())
+		}
+
 		if typ == types.UidID {
 			continue
 		}
+
 		if len(schema.Tokenizer) == 0 && schema.Directive == protos.SchemaUpdate_INDEX {
 			schema.Tokenizer = []string{tok.Default(typ).Name()}
 		} else if len(schema.Tokenizer) > 0 && schema.Directive != protos.SchemaUpdate_INDEX {
@@ -524,8 +532,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != "POST" {
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
 	}
 

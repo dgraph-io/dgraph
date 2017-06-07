@@ -1438,6 +1438,7 @@ func TestVarInAggError(t *testing.T) {
 	_, err = ProcessQuery(ctx, res, &l)
 	require.Error(t, err)
 }
+
 func TestVarInIneqError(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -6139,7 +6140,10 @@ func TestSchemaBlock3(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*protos.SchemaNode{{Predicate: "age", Type: "int"}}
+	expected := []*protos.SchemaNode{{Predicate: "age",
+		Type:      "int",
+		Index:     true,
+		Tokenizer: []string{"int"}}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6154,7 +6158,12 @@ func TestSchemaBlock4(t *testing.T) {
 	`
 	actual := processSchemaQuery(t, query)
 	expected := []*protos.SchemaNode{
-		{Predicate: "genre", Type: "uid", Reverse: true}, {Predicate: "age", Type: "int"}}
+		{Predicate: "genre",
+			Type:    "uid",
+			Reverse: true}, {Predicate: "age",
+			Type:      "int",
+			Index:     true,
+			Tokenizer: []string{"int"}}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6225,7 +6234,7 @@ func TestFilterNonIndexedPredicateFail(t *testing.T) {
 	query := `
 		{
 			me(id:0x01) {
-				friend @filter(le(age, 30)) {
+				friend @filter(le(survival_rate, 30)) {
 					_uid_
 					name
 					age
@@ -7410,4 +7419,135 @@ func TestMathVar3(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"age":38,"var(a)":76.000000},{"age":15,"var(a)":30.000000},{"age":19,"var(a)":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, string(js))
+}
+
+func TestMultipleEquality(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: eq(name, ["Rick Grimes"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"}]}`, js)
+}
+
+func TestMultipleEquality2(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: eq(name, ["Badger", "Bobby", "Matt"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Matt"},{"name":"Badger"}]}`, js)
+}
+
+func TestMultipleEquality3(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: eq(dob, ["1910-01-01", "1909-05-05"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestMultipleEquality4(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: eq(dob, ["1910-01-01", "1909-05-05"])) {
+			name
+			friend @filter(eq(name, ["Rick Grimes", "Andrea"])) {
+				name
+			}
+		}
+	}
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}],"name":"Michonne"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestMultipleGtError(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: gt(name, ["Badger", "Bobby"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+
+  `
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
+func TestMultipleEqQuote(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: eq(name, ["Alice\"", "Michonne"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"name":"Alice\""}]}`, js)
+}
+
+func TestMultipleEqInt(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: eq(age, [15, 17, 38])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"name":"Glenn Rhee"}],"name":"Daryl Dixon"}]}`, js)
 }
