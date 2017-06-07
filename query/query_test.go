@@ -6187,7 +6187,7 @@ loc:geo @index .
 genre:uid @reverse .
 survival_rate : float .
 alive         : bool @index .
-age           : int .
+age           : int @index .
 shadow_deep   : int .
 friend:uid @reverse .
 geometry:geo @index .
