@@ -75,7 +75,7 @@ func (t TypeID) Name() string {
 	case DateID:
 		return "date"
 	case DateTimeID:
-		return "dateTime"
+		return "datetime"
 	case GeoID:
 		return "geo"
 	case UidID:
