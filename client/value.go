@@ -70,14 +70,14 @@ func Datetime(dateTime time.Time, nq *protos.NQuad) error {
 	return nil
 }
 
-func validateStr(val string) error {
-	for idx, c := range val {
-		if c == '"' && (idx == 0 || val[idx-1] != '\\') {
-			return fmt.Errorf(`" must be preceded by a \ in object value`)
-		}
-	}
-	return nil
-}
+// func validateStr(val string) error {
+// 	for idx, c := range val {
+// 		if c == '"' && (idx == 0 || val[idx-1] != '\\') {
+// 			return fmt.Errorf(`" must be preceded by a \ in object value`)
+// 		}
+// 	}
+// 	return nil
+// }
 
 // Str is a helper function to add a string to an NQuad.ObjectValue.
 func Str(val string, nq *protos.NQuad) error {
