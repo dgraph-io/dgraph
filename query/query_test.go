@@ -7552,6 +7552,9 @@ func TestMultipleEqInt(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"name":"Glenn Rhee"}],"name":"Daryl Dixon"}]}`, js)
 }
+
+// TODO - Move these tests to the client once client code for mutations is
+// updated.
 func TestPBUnmarshalToStruct1(t *testing.T) {
 	type Person struct {
 		Name string `dgraph:"name"`
@@ -7568,15 +7571,6 @@ func TestPBUnmarshalToStruct1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			#		me(func: anyofterms(name, "Rick Michonne Andrea")) {
-			#		me(func: anyof	name
-			#		me(func: anyof	age
-			#		me(func: anyof	Birth: dob
-			#		me(func: anyof	friend {
-			#		me(func: anyof		name
-			#		me(func: anyof	}
-			#		me(func: anyof}
-
 			me(id: 0x01) {
 				name
 				age

@@ -22,79 +22,71 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
 	// TODO - Return error if struct and property response types don't match.
-	m := buildTypeMap(typ)
+	fmap := fieldMap(typ)
 	val := reflect.New(typ).Elem()
+
 	for _, prop := range n.Properties {
-		if field, ok := m[strings.ToLower(prop.Prop)]; ok {
-			f := val.FieldByName(field.Name)
-			if !f.IsValid() {
-				fmt.Println("Invalid field", prop.Prop, field.Name)
-			}
-			switch field.Type {
-			case reflect.TypeOf(""):
+		if field, ok := fmap[strings.ToLower(prop.Prop)]; ok {
+			switch field.Type.Kind() {
+			// TODO - Handle all types.
+			case reflect.String:
 				val.FieldByName(field.Name).SetString(prop.Value.GetStrVal())
-			case reflect.TypeOf(0):
+			case reflect.Int:
 				val.FieldByName(field.Name).SetInt(prop.Value.GetIntVal())
+			case reflect.Float64:
+				val.FieldByName(field.Name).SetFloat(prop.Value.GetDoubleVal())
 			default:
-				x.Fatalf("Unhandled tag")
 			}
 		}
 	}
-	for _, c := range n.Children {
-		if field, ok := m[strings.ToLower(c.Attribute)]; ok {
-			f := val.FieldByName(field.Name)
-			if !f.IsValid() {
-				fmt.Println("Invalid field", c.Attribute, field.Name)
-			}
-			typ := field.Type
+	for _, child := range n.Children {
+		attr := child.Attribute
+		if field, ok := fmap[strings.ToLower(attr)]; ok {
+			fieldVal := val.FieldByName(field.Name)
+			ftyp := field.Type
 			// TODO - Also include array and other types
-			elemType := typ
+			typ := ftyp
 			if typ.Kind() == reflect.Slice {
-				elemType = typ.Elem()
+				// Get underlying type.
+				typ = typ.Elem()
 			}
-			//			if typ.Kind() == reflect.Ptr {
-			//				typ = elem.Elem().Type()
-			//				fmt.Println("yo type", typ)
-			//			}
-			valChild, err := unmarshal(c, elemType)
+
+			rcv, err := unmarshal(child, typ)
 			if err != nil {
 				return val, err
 			}
-			if typ.Kind() == reflect.Slice {
-				f.Set(reflect.Append(f, valChild))
+
+			if ftyp.Kind() == reflect.Slice {
+				fieldVal.Set(reflect.Append(fieldVal, rcv))
 			} else {
-				f.Set(valChild)
+				fieldVal.Set(rcv)
 			}
 
 		}
 	}
-	//fmt.Println("val", val)
 	return val, nil
 }
 
 // TODO - Handle pointer type
-func buildTypeMap(typ reflect.Type) map[string]reflect.StructField {
-	tagTypeMap := make(map[string]reflect.StructField)
-	//	// Return error if nil
-	//	if val.Kind() == reflect.Ptr {
-	//		val = val.Elem()
-	//	}
+func fieldMap(typ reflect.Type) map[string]reflect.StructField {
+	// Map[tag/fieldName] => StructField
+	fmap := make(map[string]reflect.StructField)
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
+		// If dgraph tag for a field exists we store that.
 		if tag, ok := field.Tag.Lookup("dgraph"); ok {
-			// We want to do a case-insensitive match.
-			tagTypeMap[strings.ToLower(tag)] = field
+			// Store in lower case to do a case-insensitive match.
+			fmap[strings.ToLower(tag)] = field
 		} else {
-			tagTypeMap[strings.ToLower(field.Name)] = field
-			// Store field name lower case and match against that.
+			// Else we store the field Name.
+			fmap[strings.ToLower(field.Name)] = field
 		}
 	}
-	return tagTypeMap
+	return fmap
 }
 
 func Unmarshal(n []*protos.Node, v interface{}) error {
@@ -103,38 +95,37 @@ func Unmarshal(n []*protos.Node, v interface{}) error {
 		return fmt.Errorf("Unmarshal error(non-pointer: %+v)", reflect.TypeOf(v))
 	}
 	val := rv.Elem()
-	tagTypeMap := buildTypeMap(val.Type())
+	fmap := fieldMap(val.Type())
 
+	// Root can have multiple query blocks.
 	for _, node := range n {
 		for _, child := range node.Children {
-			// We want to do a case-insensitive match.
-			nodeAttr := strings.ToLower(child.Attribute)
-			field, ok := tagTypeMap[nodeAttr]
+			// TODO - Move this out to a function so that unmarshal can share it.
+			attr := strings.ToLower(child.Attribute)
+			field, ok := fmap[attr]
 			if !ok {
 				continue
 			}
-			typ := field.Type
+
+			ftyp := field.Type
 			// TODO - Also include array and other types
-			elemType := typ
+			typ := ftyp
 			if typ.Kind() == reflect.Slice {
-				elemType = typ.Elem()
+				// Get underlying type.
+				typ = typ.Elem()
 			}
-			//			if typ.Kind() == reflect.Ptr {
-			//				typ = elem.Elem().Type()
-			//				fmt.Println("yo type", typ)
-			//			}
-			valChild, err := unmarshal(child, elemType)
+
+			rcv, err := unmarshal(child, typ)
 			if err != nil {
 				return err
 			}
-			f := val.FieldByName(field.Name)
-			if typ.Kind() == reflect.Slice {
-				f.Set(reflect.Append(f, valChild))
-			} else {
-				f.Set(valChild)
-			}
-			// if typ is slice parse type and pass that.
 
+			fieldVal := val.FieldByName(field.Name)
+			if ftyp.Kind() == reflect.Slice {
+				fieldVal.Set(reflect.Append(fieldVal, rcv))
+			} else {
+				fieldVal.Set(rcv)
+			}
 		}
 	}
 	return nil
