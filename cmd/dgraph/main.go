@@ -344,7 +344,7 @@ func enrichSchema(updates []*protos.SchemaUpdate) error {
 	for _, schema := range updates {
 		typ := types.TypeID(schema.ValueType)
 
-		if typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID &&
+		if (typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID) &&
 			schema.Directive == protos.SchemaUpdate_INDEX {
 			return x.Errorf("Indexing not allowed on predicate %s of type %s",
 				schema.Predicate, typ.Name())
