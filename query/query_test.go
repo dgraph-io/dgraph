@@ -7715,7 +7715,8 @@ func TestPBUnmarshalToStruct4(t *testing.T) {
 	`
 	pb := processToPB(t, query, map[string]string{}, false)
 	var r res
-	client.Unmarshal(pb, &r)
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
 	require.Equal(t, "Michonne", r.Root.Name)
 	require.Equal(t, 38, r.Root.Age)
 	require.Equal(t, "1910-01-01T00:00:00Z", r.Root.Birth)

@@ -34,7 +34,6 @@ func unmarshalChild(n *protos.Node, val reflect.Value) error {
 	}
 
 	ftyp := field.Type
-	// TODO - Also include array and other types
 	typ := ftyp
 	if typ.Kind() == reflect.Slice {
 		// Get underlying type.
