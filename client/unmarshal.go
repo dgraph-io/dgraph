@@ -197,8 +197,9 @@ func Unmarshal(n []*protos.Node, v interface{}) error {
 	}
 
 	val := rv.Elem()
-	if val.Kind() == reflect.Interface {
-		return fmt.Errorf("Cannot unmarshal into an interface. Require a pointer to a struct")
+	if val.Kind() != reflect.Struct {
+		return fmt.Errorf("Cannot unmarshal into: %v . Require a pointer to a struct",
+			val.Kind())
 	}
 
 	// Root can have multiple query blocks.
