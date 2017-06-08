@@ -7725,6 +7725,29 @@ func TestPBUnmarshalToStruct4(t *testing.T) {
 	}, r.Root.Friends[0])
 }
 
+func TestPBUnmarshalToStruct5(t *testing.T) {
+	type Person struct {
+		Name string `dgraph:"name.*"`
+	}
+
+	type res struct {
+		Root Person `dgraph:"me"`
+	}
+
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x1001) {
+				name@hi:ru
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	client.Unmarshal(pb, &r)
+	fmt.Println("r", r, "pb", pb[0].Children[0].Properties)
+}
+
 func TestPBUnmarshalError1(t *testing.T) {
 	var a int
 	err := client.Unmarshal([]*protos.Node{}, a)
