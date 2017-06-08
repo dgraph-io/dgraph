@@ -3896,6 +3896,28 @@ func TestToFastJSONFilterNot3(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Daryl Dixon"}]}]}`, js)
 }
 
+func TestToFastJSONFilterNot4(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend (first:2) @filter(not anyofterms(name, "Andrea")
+				and not anyofterms(name, "glenn")
+				and not anyofterms(name, "rick")
+			) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Daryl Dixon"}]}]}`, js)
+}
+
 func TestToFastJSONFilterAnd(t *testing.T) {
 	populateGraph(t)
 	query := `
