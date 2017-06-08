@@ -17,16 +17,8 @@
 package client
 
 import (
-	"context"
 	"fmt"
-	"log"
-	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
@@ -71,6 +63,19 @@ func checkNQuad(nq protos.NQuad) error {
 	return nil
 }
 
+func checkSchema(schema protos.SchemaUpdate) error {
+	typ := types.TypeID(schema.ValueType)
+	if typ == types.UidID && schema.Directive == protos.SchemaUpdate_INDEX {
+		// index on uid type
+		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
+			schema.Predicate)
+	} else if typ != types.UidID && schema.Directive == protos.SchemaUpdate_REVERSE {
+		// reverse on non-uid type
+		return x.Errorf("Cannot reverse for non-uid type on predicate %s", schema.Predicate)
+	}
+	return nil
+}
+
 // SetQuery sets a query with graphQL variables as part of the request.
 func (req *Req) SetQuery(q string) {
 	req.gr.Query = q
@@ -104,27 +109,6 @@ func (req *Req) AddMutation(nq protos.NQuad, op Op) error {
 	return nil
 }
 
-func AddFacet(key string, val string, nq *protos.NQuad) error {
-	nq.Facets = append(nq.Facets, &protos.Facet{
-		Key: key,
-		Val: val,
-	})
-	return nil
-}
-
-func checkSchema(schema protos.SchemaUpdate) error {
-	typ := types.TypeID(schema.ValueType)
-	if typ == types.UidID && schema.Directive == protos.SchemaUpdate_INDEX {
-		// index on uid type
-		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
-			schema.Predicate)
-	} else if typ != types.UidID && schema.Directive == protos.SchemaUpdate_REVERSE {
-		// reverse on non-uid type
-		return x.Errorf("Cannot reverse for non-uid type on predicate %s", schema.Predicate)
-	}
-	return nil
-}
-
 // AddSchema sets the schema mutations
 func (req *Req) addSchema(s protos.SchemaUpdate) error {
 	if req.gr.Mutation == nil {
@@ -153,144 +137,121 @@ type nquadOp struct {
 	op Op
 }
 
-// BatchMutation is used to batch mutations and send them off to the server
-// concurrently. It is useful while doing migrations and bulk data loading.
-// It is possible to control the batch size and the number of concurrent requests
-// to make.
-type BatchMutation struct {
-	size    int
-	pending int
+// // BatchMutation is used to batch mutations and send them off to the server
+// // concurrently. It is useful while doing migrations and bulk data loading.
+// // It is possible to control the batch size and the number of concurrent requests
+// // to make.
+// type BatchMutation struct {
+// 	size    int
+// 	pending int
 
-	nquads chan nquadOp
-	schema chan protos.SchemaUpdate
-	dc     protos.DgraphClient
-	wg     sync.WaitGroup
+// 	nquads chan nquadOp
+// 	schema chan protos.SchemaUpdate
+// 	dc     protos.DgraphClient
+// 	wg     sync.WaitGroup
 
-	// Miscellaneous information to print counters.
-	// Num of RDF's sent
-	rdfs uint64
-	// Num of mutations sent
-	mutations uint64
-	// To get time elapsed.
-	start time.Time
-}
+// 	// Miscellaneous information to print counters.
+// 	// Num of RDF's sent
+// 	rdfs uint64
+// 	// Num of mutations sent
+// 	mutations uint64
+// 	// To get time elapsed.
+// 	start time.Time
+// }
 
-func (batch *BatchMutation) request(req *Req) {
-	counter := atomic.AddUint64(&batch.mutations, 1)
-RETRY:
-	_, err := batch.dc.Run(context.Background(), &req.gr)
-	if err != nil {
-		errString := err.Error()
-		// Irrecoverable
-		if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
-			log.Fatal(errString)
-		}
-		fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
-		time.Sleep(5 * time.Millisecond)
-		goto RETRY
-	}
-	req.reset()
-}
+// func (batch *BatchMutation) request(req *Req) {
+// 	counter := atomic.AddUint64(&batch.mutations, 1)
+// RETRY:
+// 	_, err := batch.dc.Run(context.Background(), &req.gr)
+// 	if err != nil {
+// 		errString := err.Error()
+// 		// Irrecoverable
+// 		if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
+// 			log.Fatal(errString)
+// 		}
+// 		fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
+// 		time.Sleep(5 * time.Millisecond)
+// 		goto RETRY
+// 	}
+// 	req.reset()
+// }
 
-func (batch *BatchMutation) makeRequests() {
-	req := new(Req)
+// func (batch *BatchMutation) makeRequests() {
+// 	req := new(Req)
 
-	for n := range batch.nquads {
-		req.addMutation(n.nq, n.op)
-		if req.size() == batch.size {
-			batch.request(req)
-		}
-	}
+// 	for n := range batch.nquads {
+// 		req.addMutation(n.nq, n.op)
+// 		if req.size() == batch.size {
+// 			batch.request(req)
+// 		}
+// 	}
 
-	if req.size() > 0 {
-		batch.request(req)
-	}
-	batch.wg.Done()
-}
+// 	if req.size() > 0 {
+// 		batch.request(req)
+// 	}
+// 	batch.wg.Done()
+// }
 
-func (batch *BatchMutation) makeSchemaRequests() {
-	req := new(Req)
-LOOP:
-	for {
-		select {
-		case s, ok := <-batch.schema:
-			if !ok {
-				break LOOP
-			}
-			req.addSchema(s)
-		default:
-			start := time.Now()
-			if req.size() > 0 {
-				batch.request(req)
-			}
-			elapsedMillis := time.Since(start).Seconds() * 1e3
-			if elapsedMillis < 10 {
-				time.Sleep(time.Duration(int64(10-elapsedMillis)) * time.Millisecond)
-			}
-		}
-	}
+// func (batch *BatchMutation) makeSchemaRequests() {
+// 	req := new(Req)
+// LOOP:
+// 	for {
+// 		select {
+// 		case s, ok := <-batch.schema:
+// 			if !ok {
+// 				break LOOP
+// 			}
+// 			req.addSchema(s)
+// 		default:
+// 			start := time.Now()
+// 			if req.size() > 0 {
+// 				batch.request(req)
+// 			}
+// 			elapsedMillis := time.Since(start).Seconds() * 1e3
+// 			if elapsedMillis < 10 {
+// 				time.Sleep(time.Duration(int64(10-elapsedMillis)) * time.Millisecond)
+// 			}
+// 		}
+// 	}
 
-	if req.size() > 0 {
-		batch.request(req)
-	}
-	batch.wg.Done()
-}
+// 	if req.size() > 0 {
+// 		batch.request(req)
+// 	}
+// 	batch.wg.Done()
+// }
 
-// NewBatchMutation is used to create a new batch.
-// size is the number of RDF's that are sent as part of one request to Dgraph.
-// pending is the number of concurrent requests to make to Dgraph server.
-func NewBatchMutation(ctx context.Context, client protos.DgraphClient,
-	size int, pending int) *BatchMutation {
-	bm := BatchMutation{
-		size:    size,
-		pending: pending,
-		nquads:  make(chan nquadOp, 2*size),
-		schema:  make(chan protos.SchemaUpdate, 2*size),
-		start:   time.Now(),
-		dc:      client,
-	}
+// // AddMutation is used to add a NQuad to a batch. It can either have SET or
+// // DEL as Op(operation).
+// func (batch *BatchMutation) AddMutation(nq protos.NQuad, op Op) error {
+// 	if err := checkNQuad(nq); err != nil {
+// 		return err
+// 	}
+// 	if op == SET &&
+// 		((nq.ObjectType == int32(types.DefaultID) && nq.ObjectValue.GetDefaultVal() == "*") ||
+// 			(nq.ObjectType == int32(types.StringID) && nq.ObjectValue.GetStrVal() == "*")) {
+// 		return x.Errorf("Cannot set the value as '*'")
+// 	}
+// 	batch.nquads <- nquadOp{nq: nq, op: op}
+// 	atomic.AddUint64(&batch.rdfs, 1)
+// 	return nil
+// }
 
-	for i := 0; i < pending; i++ {
-		bm.wg.Add(1)
-		go bm.makeRequests()
-	}
-	bm.wg.Add(1)
-	go bm.makeSchemaRequests()
-	return &bm
-}
+// // Flush waits for all pending requests to complete. It should always be called
+// // after adding all the NQuads using batch.AddMutation().
+// func (batch *BatchMutation) Flush() {
+// 	close(batch.nquads)
+// 	close(batch.schema)
+// 	batch.wg.Wait()
+// }
 
-// AddMutation is used to add a NQuad to a batch. It can either have SET or
-// DEL as Op(operation).
-func (batch *BatchMutation) AddMutation(nq protos.NQuad, op Op) error {
-	if err := checkNQuad(nq); err != nil {
-		return err
-	}
-	if op == SET &&
-		((nq.ObjectType == int32(types.DefaultID) && nq.ObjectValue.GetDefaultVal() == "*") ||
-			(nq.ObjectType == int32(types.StringID) && nq.ObjectValue.GetStrVal() == "*")) {
-		return x.Errorf("Cannot set the value as '*'")
-	}
-	batch.nquads <- nquadOp{nq: nq, op: op}
-	atomic.AddUint64(&batch.rdfs, 1)
-	return nil
-}
-
-// Flush waits for all pending requests to complete. It should always be called
-// after adding all the NQuads using batch.AddMutation().
-func (batch *BatchMutation) Flush() {
-	close(batch.nquads)
-	close(batch.schema)
-	batch.wg.Wait()
-}
-
-// AddSchema is used to add a schema mutation.
-func (batch *BatchMutation) AddSchema(s protos.SchemaUpdate) error {
-	if err := checkSchema(s); err != nil {
-		return err
-	}
-	batch.schema <- s
-	return nil
-}
+// // AddSchema is used to add a schema mutation.
+// func (batch *BatchMutation) AddSchema(s protos.SchemaUpdate) error {
+// 	if err := checkSchema(s); err != nil {
+// 		return err
+// 	}
+// 	batch.schema <- s
+// 	return nil
+// }
 
 // Counter keeps a track of various parameters about a batch mutation.
 type Counter struct {
@@ -303,10 +264,10 @@ type Counter struct {
 }
 
 // Counter returns the current state of the BatchMutation.
-func (batch *BatchMutation) Counter() Counter {
-	return Counter{
-		Rdfs:      atomic.LoadUint64(&batch.rdfs),
-		Mutations: atomic.LoadUint64(&batch.mutations),
-		Elapsed:   time.Since(batch.start),
-	}
-}
+// func (batch *BatchMutation) Counter() Counter {
+// 	return Counter{
+// 		Rdfs:      atomic.LoadUint64(&batch.rdfs),
+// 		Mutations: atomic.LoadUint64(&batch.mutations),
+// 		Elapsed:   time.Since(batch.start),
+// 	}
+// }

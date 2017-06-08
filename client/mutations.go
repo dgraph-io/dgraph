@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,26 +30,66 @@ type BatchMutationOptions struct {
 	PrintCounters bool
 }
 
-type allocations struct {
-	sync.Mutex
-	allocs map[string]*sync.Mutex
+type allocator struct {
+	sync.Mutex // for startId, endId
+
+	ids chan string
+	kv  *badger.KV
+
+	startId uint64
+	endId   uint64
 }
 
-func (a *allocations) getOrBlock(id string) bool {
+func (a *allocations) getFromCache(id string) (uint64, error) {
+	var item badger.KVItem
+	if err := c.kv.Get([]byte(key), &item); err != nil {
+		return 0, err
+	}
+	val := item.Value()
+	if len(val) > 0 {
+		uid, n := binary.Uvarint(val)
+		if n <= 0 {
+			return 0, fmt.Errorf("Unable to parse val %q to uint64 for key %q", val, key)
+		}
+		return uid, nil
+	}
+	return 0, nil
+}
+
+func (a *allocations) getOneId() (uint64, error) {
 	a.Lock()
 	defer a.Unlock()
 
-	m, ok := a.allocs[id]
-	if !ok {
-		m = &sync.Mutex{}
-		m.Lock()
-		a.allocs[id] = m
-		return true // I'm the one who created the lock.
+	// TODO: Check if we can assign the endId as well?
+	if a.startId > 0 && a.endId > a.startId {
+		ret := a.startId
+		a.startId++
+		return ret, nil
 	}
-	// someone else created the lock. I'll just have to block.
-	m.Lock()
-	m.Unlock()
-	return false
+	// TODO: Do grpc here.
+	ret := a.startId
+	a.startId++
+	return ret, nil
+}
+
+func (a *allocations) get(id string) (uint64, error) {
+	uid, err := a.getFromCache(id)
+	if err != nil || uid > 0 {
+		return uid, err
+	}
+
+	a.Lock()
+	defer a.Unlock()
+
+	uid, err := a.getFromCache(id)
+	if err != nil || uid > 0 {
+		return uid, err
+	}
+
+	if strings.HasPrefix(id, "_:") {
+		return a.getOneId()
+	}
+	// TODO: Handle xid.
 }
 
 // release should be called only after writing the id to Badger.
@@ -61,11 +102,10 @@ func (a *allocations) release(id string) {
 		log.Fatalf("Id: %q should have been present", id)
 	}
 	m.Unlock()
-	delete(m.allocs, id)
+	delete(a.allocs, id)
 }
 
-type BatchMutation2 struct {
-	kv   *badger.KV
+type BatchMutation struct {
 	opts BatchMutationOptions
 
 	schema chan protos.SchemaUpdate
@@ -82,20 +122,22 @@ type BatchMutation2 struct {
 	start time.Time
 }
 
-func NewBatchMutation2(client protos.DgraphClient, opts BatchMutationOptions) *BatchMutation2 {
-	bm := BatchMutation2{
+// NewBatchMutation is used to create a new batch.
+// size is the number of RDF's that are sent as part of one request to Dgraph.
+// pending is the number of concurrent requests to make to Dgraph server.
+func NewBatchMutation(client protos.DgraphClient, opts BatchMutationOptions) *BatchMutation {
+	bm := &BatchMutation{
 		opts: opts,
 	}
 
-	for i := 0; i < pending; i++ {
+	for i := 0; i < opts.Pending; i++ {
 		bm.wg.Add(1)
 		go bm.makeRequests()
 	}
 	bm.wg.Add(1)
 
-	c := &DgraphClient{}
 	rand.Seed(time.Now().Unix())
-	return c
+	return bm
 }
 
 func (batch *BatchMutation) makeRequests() {
@@ -112,6 +154,20 @@ func (batch *BatchMutation) makeRequests() {
 		batch.request(req)
 	}
 	batch.wg.Done()
+}
+
+func (batch *BatchMutation) Set(e *Edge) error {
+	batch.nquads <- nquadOp{
+		nq: e.nq,
+		op: SET,
+	}
+}
+
+func (batch *BatchMutation) Delete(e *Edge) error {
+	batch.nquads <- nquadOp{
+		nq: e.nq,
+		op: DEL,
+	}
 }
 
 func checkSchema(schema protos.SchemaUpdate) error {
@@ -179,7 +235,7 @@ func (c *DgraphClient) NodeXid(xid string) (*Node, error) {
 	if len(xid) == 0 {
 		return nil, ErrEmptyXid
 	}
-	node, err := c.getFromCache("xid:" + xid)
+	node, err := c.getFromCache(fmt.Sprintf("<%s>", xid))
 	if err != nil {
 		return nil, err
 	}
