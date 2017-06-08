@@ -11,16 +11,25 @@
     {{end}}
     <title>{{ .Scratch.Get "title" }}</title>
 
-    <link href="{{ .Site.BaseURL }}/css/nucleus.css" rel="stylesheet">
-    <link href="{{ .Site.BaseURL }}/css/font-awesome.min.css" rel="stylesheet">
-    <link href="{{ .Site.BaseURL }}/css/hybrid.css" rel="stylesheet">
-    <link href="{{ .Site.BaseURL }}/css/featherlight.min.css" rel="stylesheet">
-    <link href="{{ .Site.BaseURL }}/css/perfect-scrollbar.min.css" rel="stylesheet">
     <link href="{{ .Site.BaseURL }}css/theme.css?{{ now }}" rel="stylesheet">
-    <link href="{{ .Site.BaseURL }}/css/hugo-theme.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css?family=Lato:400,700" rel="stylesheet">
-    <meta http-equiv="refresh" content="0; url={{ .Site.BaseURL }}get-started"/>
   </head>
   <body>
+    {{ partial "header.html" . }}
+
+    <article id="{{ .Slug }}">
+      {{ partial "request-edit.html" . }}
+      {{ partial "suggest-edit.html" . }}
+
+      <h1 class="post-title">{{ .Title }}</h1>
+
+      <div>{{ .Content }}</div>
+    </article>
+
+    {{ partial "community-footer.html" . }}
+
+    {{ partial "runnable-modal.html" . }}
+
+    {{ partial "footer.html" . }}
   </body>
 </html>

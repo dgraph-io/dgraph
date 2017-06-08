@@ -15,34 +15,35 @@ function debounce(func, wait, immediate) {
     timeout = setTimeout(later, wait);
     if (callNow) func.apply(context, args);
   };
-};
+}
 
 /********** Cookie helpers **/
 
 function createCookie(name, val, days) {
-  var expires = '';
+  var expires = "";
   if (days) {
     var date = new Date();
-    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-    expires = '; expires=' + date.toUTCString();
+    date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+    expires = "; expires=" + date.toUTCString();
   }
 
-  document.cookie = name + '=' + val + expires + '; path=/';
+  document.cookie = name + "=" + val + expires + "; path=/";
 }
 
 function readCookie(name) {
-  var nameEQ = name + '=';
-  var ca = document.cookie.split(';');
+  var nameEQ = name + "=";
+  var ca = document.cookie.split(";");
   for (var i = 0; i < ca.length; i++) {
     var c = ca[i];
-    while (c.charAt(0)==' ') c = c.substring(1,c.length);
-    if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+    while (c.charAt(0) == " ")
+      c = c.substring(1, c.length);
+    if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
   }
   return null;
 }
 
 function eraseCookie(name) {
-  createCookie(name, '', -1);
+  createCookie(name, "", -1);
 }
 
 // isElementInViewport checks if element is visible in the DOM
@@ -53,7 +54,8 @@ function isElementInViewport(el) {
   return (
     rect.top >= topbarOffset &&
     rect.left >= 0 &&
-    rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+    rect.bottom <=
+      (window.innerHeight || document.documentElement.clientHeight) &&
     rect.right <= (window.innerWidth || document.documentElement.clientWidth)
   );
 }
@@ -76,11 +78,10 @@ function isElementInViewport(el) {
 
         clip.on("success", function(e) {
           e.clearSelection();
-          $(e.trigger).text("Copied to clipboard!")
-            .addClass('copied');
+          $(e.trigger).text("Copied to clipboard!").addClass("copied");
 
           window.setTimeout(function() {
-            $(e.trigger).text("Copy").removeClass('copied');
+            $(e.trigger).text("Copy").removeClass("copied");
           }, 2000);
         });
 
@@ -116,7 +117,9 @@ function isElementInViewport(el) {
     var nextH2 = h2s[i + 1];
     var ourH3s = [];
     while (
-      h3s[j] && isAfter(h2, h3s[j]) && (!nextH2 || !isAfter(nextH2, h3s[j]))
+      h3s[j] &&
+      isAfter(h2, h3s[j]) &&
+      (!nextH2 || !isAfter(nextH2, h3s[j]))
     ) {
       ourH3s.push({ header: h3s[j] });
       j++;
@@ -137,11 +140,11 @@ function isElementInViewport(el) {
 
     Array.prototype.forEach.call(headers, function(h) {
       var li = createSubtopicItem(h.header);
-      li.className = 'topic sub-topic';
+      li.className = "topic sub-topic";
       subMenu.appendChild(li);
 
       if (h.subHeaders) {
-        createSubtopic(subMenu, h.subHeaders)
+        createSubtopic(subMenu, h.subHeaders);
       }
     });
   }
@@ -150,7 +153,8 @@ function isElementInViewport(el) {
     allLinks.push(h);
 
     var li = document.createElement("li");
-    li.innerHTML = '<i class="fa fa-angle-right"></i> <a href="#' +
+    li.innerHTML =
+      '<i class="fa fa-angle-right"></i> <a href="#' +
       h.id +
       '" data-scroll class="' +
       h.tagName +
@@ -165,14 +169,16 @@ function isElementInViewport(el) {
   // @params hash [String] - hash including the hash sign at the beginning
   function setActiveSubTopic(hash) {
     // Set inactive the previously active topic
-    var prevActiveTopic = document.querySelector('.sub-topics .topic.active');
-    var nextActiveTopic = document.querySelector('.sub-topics a[href="' + hash + '"]').parentNode;
+    var prevActiveTopic = document.querySelector(".sub-topics .topic.active");
+    var nextActiveTopic = document.querySelector(
+      '.sub-topics a[href="' + hash + '"]'
+    ).parentNode;
 
     if (prevActiveTopic !== nextActiveTopic) {
-      nextActiveTopic.classList.add('active');
+      nextActiveTopic.classList.add("active");
 
       if (prevActiveTopic) {
-        prevActiveTopic.classList.remove('active');
+        prevActiveTopic.classList.remove("active");
       }
     }
   }
@@ -185,7 +191,7 @@ function isElementInViewport(el) {
     var activeHash;
     for (var i = 0; i < allLinks.length; i++) {
       var h = allLinks[i];
-      var hash = h.getElementsByTagName('a')[0].hash;
+      var hash = h.getElementsByTagName("a")[0].hash;
 
       if (h.offsetTop - topSideOffset > currentScrollY) {
         if (!activeHash) {
@@ -202,65 +208,68 @@ function isElementInViewport(el) {
     }
   }
 
-  if (h2sWithH3s.length > 0) {
+  if (h2sWithH3s.length > 0 && activeLink) {
     createSubtopic(activeLink, h2sWithH3s);
   }
 
-  var subTopics = document.querySelectorAll('.sub-topics .sub-topic')
+  var subTopics = document.querySelectorAll(".sub-topics .sub-topic");
   for (var i = 0; i < subTopics.length; i++) {
-    var subTopic = subTopics[i]
-    subTopic.addEventListener('click', function (e) {
+    var subTopic = subTopics[i];
+    subTopic.addEventListener("click", function(e) {
       var hash = e.target.hash;
       setActiveSubTopic(hash);
     });
   }
 
   // Scrollspy for sidebar
-  window.addEventListener('scroll', debounce(updateSidebar, 15));
+  window.addEventListener("scroll", debounce(updateSidebar, 15));
 
   // Sidebar toggle
-  document.getElementById('sidebar-toggle').addEventListener('click', function (e) {
-    e.preventDefault();
-    var klass = document.body.className;
-    if (klass === "sidebar-visible") {
-      document.body.className = "";
-    } else {
-      document.body.className = "sidebar-visible";
-    }
-  });
+  document
+    .getElementById("sidebar-toggle")
+    .addEventListener("click", function(e) {
+      e.preventDefault();
+      var klass = document.body.className;
+      if (klass === "sidebar-visible") {
+        document.body.className = "";
+      } else {
+        document.body.className = "sidebar-visible";
+      }
+    });
 
   // Anchor tags for headings
   function appendAnchor(heading) {
     var id = heading.id;
-    var anchorOffset = document.createElement('div');
-    anchorOffset.className = 'anchor-offset';
+    var anchorOffset = document.createElement("div");
+    anchorOffset.className = "anchor-offset";
     anchorOffset.id = id;
 
     var anchor = document.createElement("a");
-    anchor.href = '#' + id;
-    anchor.className = 'anchor';
+    anchor.href = "#" + id;
+    anchor.className = "anchor";
     // anchor.innerHTML = 'link'
-    anchor.innerHTML = '<i class="fa fa-link"></i>'
+    anchor.innerHTML = '<i class="fa fa-link"></i>';
     heading.insertBefore(anchor, heading.firstChild);
     heading.insertBefore(anchorOffset, heading.firstChild);
 
     // Remove the id from heading
     // Instead we will assign the id to the .anchor-offset element to account
     // for the fixed header height
-    heading.removeAttribute('id');
+    heading.removeAttribute("id");
   }
   var h2s = document.querySelectorAll(
-    '.content-wrapper h2, .content-wrapper h3');
+    ".content-wrapper h2, .content-wrapper h3"
+  );
   for (var i = 0; i < h2s.length; i++) {
     appendAnchor(h2s[i]);
   }
 
   // code collapse
-  var pres = $('pre');
+  var pres = $("pre");
   pres.each(function() {
     var self = this;
 
-    var isInRunnable = $(self).parents('.runnable').length > 0;
+    var isInRunnable = $(self).parents(".runnable").length > 0;
     if (isInRunnable) {
       return;
     }
@@ -282,7 +291,6 @@ function isElementInViewport(el) {
 
       this.appendChild(showMore);
     }
-
   });
 
   // version selector
@@ -294,7 +302,8 @@ function isElementInViewport(el) {
 
       if (currentVersion !== targetVersion) {
         // Getting everything after targetVersion and concatenating it with the hash part.
-        var targetPath = "/" +
+        var targetPath =
+          "/" +
           targetVersion +
           "/" +
           location.pathname.split("/").slice(2).join("/") +
@@ -329,22 +338,26 @@ function isElementInViewport(el) {
   }
 
   // Community selector
-  $(document).on('click', '.community-cta', function (e) {
+  $(document).on("click", ".community-cta", function(e) {
     e.stopPropagation();
     e.preventDefault();
-    $(this).closest('.community-cta-wrapper').toggleClass('open');
+    $(this).closest(".community-cta-wrapper").toggleClass("open");
   });
 
-  $(document).on('click', '.community-link', function (e) {
+  $(document).on("click", ".community-link", function(e) {
     e.stopPropagation();
-    $(this).closest('.community-cta-wrapper').toggleClass('open');
+    $(this).closest(".community-cta-wrapper").toggleClass("open");
   });
 
-  $(document).click(function () {
-    $('.community-cta-wrapper').removeClass('open');
+  $(document).click(function() {
+    $(".community-cta-wrapper").removeClass("open");
   });
 
   /********** On page load **/
   updateSidebar();
-  document.querySelector('.sub-topics .topic.active').scrollIntoView();
+  var activeTopic = document.querySelector(".sub-topics .topic.active");
+
+  if (activeTopic) {
+    activeTopic.scrollIntoView();
+  }
 })();
