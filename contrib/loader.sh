@@ -47,6 +47,11 @@ sleep 20
 
 pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/indextest &> /dev/null
 
+function quit {
+	curl localhost:8080/admin/shutdown
+	return $1
+}
+
 function run_index_test {
 	X=$1
 	GREPFOR=$2
@@ -54,7 +59,7 @@ function run_index_test {
     N=`curl localhost:8080/query -XPOST -d @${X}.in 2> /dev/null | python -m json.tool | grep $GREPFOR | wc -l`
 	if [[ ! "$N" -eq "$ANS" ]]; then
 	  echo "Index test failed: ${X}  Expected: $ANS  Got: $N"
-	  exit 1
+	  quit 1
 	fi
 }
 run_index_test basic name 138676
@@ -69,4 +74,4 @@ run_index_test gen_anyof_good_bad name 1104
 
 popd &> /dev/null
 
-curl localhost:8080/admin/shutdown
+quit 0
