@@ -51,6 +51,10 @@ func unmarshalChild(n *protos.Node, val reflect.Value) error {
 	}
 
 	fieldVal := val.FieldByName(field.Name)
+	if !fieldVal.CanSet() {
+		return fmt.Errorf("Cant set field: %+v", field.Name)
+	}
+
 	if ftyp.Kind() == reflect.Slice {
 		fieldVal.Set(reflect.Append(fieldVal, rcv))
 	} else {
@@ -60,17 +64,25 @@ func unmarshalChild(n *protos.Node, val reflect.Value) error {
 	return nil
 }
 
-func setField(val reflect.Value, value *protos.Value, field reflect.StructField) {
+func setField(val reflect.Value, value *protos.Value, field reflect.StructField) error {
 	// Cannnot unmarshal into unexported fields.
 	if len(field.PkgPath) > 0 {
-		return
+		return nil
 	}
 
 	if val.Kind() == reflect.Ptr && val.IsNil() {
 		val = reflect.New(val.Type().Elem()).Elem()
 	}
 
+	if val.Kind() != reflect.Struct {
+		return fmt.Errorf("Can only set fields for struct types. Got: %+v", val.Kind())
+	}
+
 	f := val.FieldByName(field.Name)
+	if !f.CanSet() {
+		return fmt.Errorf("Cant set field: %+v", field.Name)
+	}
+
 	switch field.Type.Kind() {
 	// TODO - Handle all types.
 	case reflect.String:
@@ -88,7 +100,7 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 		case reflect.TypeOf(time.Time{}):
 			v := value.GetStrVal()
 			if v == "" {
-				return
+				return nil
 			}
 
 			t, err := time.Parse(time.RFC3339, v)
@@ -104,7 +116,7 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 			case *protos.Value_GeoVal:
 				v := value.GetGeoVal()
 				if len(v) == 0 {
-					return
+					return nil
 				}
 
 				f.Set(reflect.ValueOf(v))
@@ -117,6 +129,7 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 	default:
 	}
 
+	return nil
 }
 
 func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
@@ -132,7 +145,10 @@ func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
 
 	for _, prop := range n.Properties {
 		if field, ok := fmap[strings.ToLower(prop.Prop)]; ok {
-			setField(val, prop.Value, field)
+			if err := setField(val, prop.Value, field); err != nil {
+				return val, err
+			}
+
 		}
 	}
 	for _, child := range n.Children {
@@ -142,17 +158,21 @@ func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
 	}
 
 	if typ.Kind() == reflect.Ptr {
+		// Lets convert val back to a pointer.
 		val = val.Addr()
 	}
 
 	return val, nil
 }
 
-// TODO - Handle pointer type
 func fieldMap(typ reflect.Type) map[string]reflect.StructField {
 	// We cant do NumField on non-struct types.
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
+	}
+
+	if typ.Kind() != reflect.Struct {
+		return nil
 	}
 
 	// Map[tag/fieldName] => StructField
@@ -176,7 +196,11 @@ func Unmarshal(n []*protos.Node, v interface{}) error {
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
 		return fmt.Errorf("Unmarshal error(non-pointer: %+v)", reflect.TypeOf(v))
 	}
+
 	val := rv.Elem()
+	if val.Kind() == reflect.Interface {
+		return fmt.Errorf("Cannot unmarshal into an interface. Require a pointer to a struct")
+	}
 
 	// Root can have multiple query blocks.
 	for _, node := range n {
