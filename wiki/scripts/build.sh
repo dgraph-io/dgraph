@@ -12,9 +12,16 @@ GREEN='\033[32;1m'
 RESET='\033[0m'
 HOST=https://docs.dgraph.io
 
+
 rebuild() {
 	echo -e "$(date) $GREEN Updating docs for branch: $1.$RESET"
-	# Generate new docs after merging.
+
+	# The latest documentation is generated in the root of /public dir
+	# Older documentations are generated in their respective `/public/vx.x.x` dirs
+	dir=''
+	if [[ $2 != "${VERSIONS[0]}" ]]; then
+		dir=$2
+	fi
 
 	# In Unix environments, env variables should also be exported to be seen by Hugo
 	export CURRENT_BRANCH=${1}
