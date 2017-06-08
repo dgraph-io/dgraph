@@ -7597,10 +7597,14 @@ func TestPBUnmarshalToStruct1(t *testing.T) {
 
 func TestPBUnmarshalToStruct2(t *testing.T) {
 	type Person struct {
-		Name    string   `dgraph:"name"`
-		Age     int      `dgraph:"age"`
-		Birth   string   `dgraph:"dob"`
-		Friends []Person `dgraph:"friend"`
+		Id       uint64   `dgraph:"_uid_"`
+		Name     string   `dgraph:"name"`
+		Age      int      `dgraph:"age"`
+		Birth    string   `dgraph:"dob"`
+		Alive    bool     `dgraph:"alive"`
+		Survival float64  `dgraph:"survival_rate"`
+		Location geom.T   `dgraph:"location"`
+		Friends  []Person `dgraph:"friend"`
 	}
 
 	type res struct {
@@ -7611,10 +7615,14 @@ func TestPBUnmarshalToStruct2(t *testing.T) {
 	query := `
 		{
 			me(func: anyofterms(name, "Rick Michonne Andrea")) {
+				_uid_
 				name
 				age
 				dob
-				friend {
+				alive
+				survival_rate
+				friend (first: 1) {
+					_uid_
 					name
 					age
 					dob
@@ -7629,7 +7637,7 @@ func TestPBUnmarshalToStruct2(t *testing.T) {
 	require.Equal(t, 4, len(r.Root))
 	js, err := json.Marshal(r.Root[0])
 	require.NoError(t, err)
-	require.Equal(t, `{"Name":"Michonne","Age":38,"Birth":"1910-01-01T00:00:00Z","Friends":[{"Name":"Rick Grimes","Age":15,"Birth":"1910-01-02T00:00:00Z","Friends":null},{"Name":"Glenn Rhee","Age":15,"Birth":"1909-05-05T00:00:00Z","Friends":null},{"Name":"Daryl Dixon","Age":17,"Birth":"1909-01-10T00:00:00Z","Friends":null},{"Name":"Andrea","Age":19,"Birth":"1901-01-15T00:00:00Z","Friends":null}]}`, string(js))
+	require.Equal(t, `{"Id":1,"Name":"Michonne","Age":38,"Birth":"1910-01-01T00:00:00Z","Alive":true,"Survival":98.99,"Location":null,"Friends":[{"Id":23,"Name":"Rick Grimes","Age":15,"Birth":"1910-01-02T00:00:00Z","Alive":false,"Survival":0,"Location":null,"Friends":null}]}`, string(js))
 }
 
 func TestPBUnmarshalError1(t *testing.T) {

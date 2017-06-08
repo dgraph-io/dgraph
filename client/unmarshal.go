@@ -24,48 +24,71 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 )
 
+func unmarshalChild(n *protos.Node, val reflect.Value) error {
+	fmap := fieldMap(val.Type())
+	attr := strings.ToLower(n.Attribute)
+	field, ok := fmap[attr]
+	if !ok {
+		return nil
+	}
+
+	ftyp := field.Type
+	// TODO - Also include array and other types
+	typ := ftyp
+	if typ.Kind() == reflect.Slice {
+		// Get underlying type.
+		typ = typ.Elem()
+	}
+
+	rcv, err := unmarshal(n, typ)
+	if err != nil {
+		return err
+	}
+
+	fieldVal := val.FieldByName(field.Name)
+	if ftyp.Kind() == reflect.Slice {
+		fieldVal.Set(reflect.Append(fieldVal, rcv))
+	} else {
+		fieldVal.Set(rcv)
+	}
+	return nil
+}
+
+func setField(val reflect.Value, prop *protos.Property, field reflect.StructField) {
+	// Cannnot unmarshal into unexported fields.
+	if len(field.PkgPath) > 0 {
+		return
+	}
+
+	f := val.FieldByName(field.Name)
+	switch field.Type.Kind() {
+	// TODO - Handle all types.
+	case reflect.String:
+		f.SetString(prop.Value.GetStrVal())
+	case reflect.Int:
+		f.SetInt(prop.Value.GetIntVal())
+	case reflect.Float64:
+		f.SetFloat(prop.Value.GetDoubleVal())
+	case reflect.Bool:
+		f.SetBool(prop.Value.GetBoolVal())
+	case reflect.Uint64:
+		f.SetUint(prop.Value.GetUidVal())
+	default:
+	}
+}
+
 func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
-	// TODO - Return error if struct and property response types don't match.
 	fmap := fieldMap(typ)
 	val := reflect.New(typ).Elem()
 
 	for _, prop := range n.Properties {
 		if field, ok := fmap[strings.ToLower(prop.Prop)]; ok {
-			switch field.Type.Kind() {
-			// TODO - Handle all types.
-			case reflect.String:
-				val.FieldByName(field.Name).SetString(prop.Value.GetStrVal())
-			case reflect.Int:
-				val.FieldByName(field.Name).SetInt(prop.Value.GetIntVal())
-			case reflect.Float64:
-				val.FieldByName(field.Name).SetFloat(prop.Value.GetDoubleVal())
-			default:
-			}
+			setField(val, prop, field)
 		}
 	}
 	for _, child := range n.Children {
-		attr := child.Attribute
-		if field, ok := fmap[strings.ToLower(attr)]; ok {
-			fieldVal := val.FieldByName(field.Name)
-			ftyp := field.Type
-			// TODO - Also include array and other types
-			typ := ftyp
-			if typ.Kind() == reflect.Slice {
-				// Get underlying type.
-				typ = typ.Elem()
-			}
-
-			rcv, err := unmarshal(child, typ)
-			if err != nil {
-				return val, err
-			}
-
-			if ftyp.Kind() == reflect.Slice {
-				fieldVal.Set(reflect.Append(fieldVal, rcv))
-			} else {
-				fieldVal.Set(rcv)
-			}
-
+		if err := unmarshalChild(child, val); err != nil {
+			return val, err
 		}
 	}
 	return val, nil
@@ -95,36 +118,12 @@ func Unmarshal(n []*protos.Node, v interface{}) error {
 		return fmt.Errorf("Unmarshal error(non-pointer: %+v)", reflect.TypeOf(v))
 	}
 	val := rv.Elem()
-	fmap := fieldMap(val.Type())
 
 	// Root can have multiple query blocks.
 	for _, node := range n {
 		for _, child := range node.Children {
-			// TODO - Move this out to a function so that unmarshal can share it.
-			attr := strings.ToLower(child.Attribute)
-			field, ok := fmap[attr]
-			if !ok {
-				continue
-			}
-
-			ftyp := field.Type
-			// TODO - Also include array and other types
-			typ := ftyp
-			if typ.Kind() == reflect.Slice {
-				// Get underlying type.
-				typ = typ.Elem()
-			}
-
-			rcv, err := unmarshal(child, typ)
-			if err != nil {
+			if err := unmarshalChild(child, val); err != nil {
 				return err
-			}
-
-			fieldVal := val.FieldByName(field.Name)
-			if ftyp.Kind() == reflect.Slice {
-				fieldVal.Set(reflect.Append(fieldVal, rcv))
-			} else {
-				fieldVal.Set(rcv)
 			}
 		}
 	}
