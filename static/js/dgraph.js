@@ -298,16 +298,20 @@ function isElementInViewport(el) {
   document
     .getElementsByClassName("version-selector")[0]
     .addEventListener("change", function(e) {
+      // targetVersion: '', '/v0.7.7', 'v0.7.6', etc.
       var targetVersion = e.target.value;
 
       if (currentVersion !== targetVersion) {
         // Getting everything after targetVersion and concatenating it with the hash part.
-        var targetPath =
-          "/" +
-          targetVersion +
-          "/" +
-          location.pathname.split("/").slice(2).join("/") +
-          location.hash;
+        var currentPath =
+          location.pathname.split("/").slice(2).join("/") + location.hash;
+
+        var targetPath;
+        if (targetVersion === "") {
+          targetPath = "/" + currentPath;
+        } else {
+          targetPath = "/" + targetVersion + "/" + currentPath;
+        }
         location.assign(targetPath);
       }
     });
