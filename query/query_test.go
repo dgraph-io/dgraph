@@ -6206,6 +6206,7 @@ func TestMain(m *testing.M) {
 
 	opt := badger.DefaultOptions
 	opt.Dir = dir
+	opt.ValueDir = dir
 	ps, err = badger.NewKV(&opt)
 	defer ps.Close()
 	x.Check(err)

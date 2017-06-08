@@ -1057,6 +1057,7 @@ func main() {
 	opt := badger.DefaultOptions
 	opt.SyncWrites = true
 	opt.Dir = *postingDir
+	opt.ValueDir = *postingDir
 	ps, err := badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	defer ps.Close()

@@ -65,6 +65,7 @@ func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
 	}
 	opt := badger.DefaultOptions
 	opt.Dir = dir1
+	opt.ValueDir = dir1
 	ps, err = badger.NewKV(&opt)
 	x.Check(err)
 
