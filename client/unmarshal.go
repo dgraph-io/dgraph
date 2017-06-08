@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
 )
@@ -45,45 +46,93 @@ func unmarshalChild(n *protos.Node, val reflect.Value) error {
 		return err
 	}
 
+	if val.Kind() == reflect.Ptr {
+		val = reflect.New(val.Type().Elem()).Elem()
+	}
+
 	fieldVal := val.FieldByName(field.Name)
 	if ftyp.Kind() == reflect.Slice {
 		fieldVal.Set(reflect.Append(fieldVal, rcv))
 	} else {
 		fieldVal.Set(rcv)
 	}
+
 	return nil
 }
 
-func setField(val reflect.Value, prop *protos.Property, field reflect.StructField) {
+func setField(val reflect.Value, value *protos.Value, field reflect.StructField) {
 	// Cannnot unmarshal into unexported fields.
 	if len(field.PkgPath) > 0 {
 		return
+	}
+
+	if val.Kind() == reflect.Ptr && val.IsNil() {
+		val = reflect.New(val.Type().Elem()).Elem()
 	}
 
 	f := val.FieldByName(field.Name)
 	switch field.Type.Kind() {
 	// TODO - Handle all types.
 	case reflect.String:
-		f.SetString(prop.Value.GetStrVal())
-	case reflect.Int:
-		f.SetInt(prop.Value.GetIntVal())
+		f.SetString(value.GetStrVal())
+	case reflect.Int64, reflect.Int:
+		f.SetInt(value.GetIntVal())
 	case reflect.Float64:
-		f.SetFloat(prop.Value.GetDoubleVal())
+		f.SetFloat(value.GetDoubleVal())
 	case reflect.Bool:
-		f.SetBool(prop.Value.GetBoolVal())
+		f.SetBool(value.GetBoolVal())
 	case reflect.Uint64:
-		f.SetUint(prop.Value.GetUidVal())
+		f.SetUint(value.GetUidVal())
+	case reflect.Struct:
+		switch field.Type {
+		case reflect.TypeOf(time.Time{}):
+			v := value.GetStrVal()
+			if v == "" {
+				return
+			}
+
+			t, err := time.Parse(time.RFC3339, v)
+			if err == nil {
+				f.Set(reflect.ValueOf(t))
+			}
+
+		}
+	case reflect.Slice:
+		switch field.Type {
+		case reflect.TypeOf([]byte{}):
+			switch value.Val.(type) {
+			case *protos.Value_GeoVal:
+				v := value.GetGeoVal()
+				if len(v) == 0 {
+					return
+				}
+
+				f.Set(reflect.ValueOf(v))
+			case *protos.Value_BytesVal:
+				v := value.GetBytesVal()
+				f.Set(reflect.ValueOf(v))
+			}
+		}
+
 	default:
 	}
+
 }
 
 func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
 	fmap := fieldMap(typ)
-	val := reflect.New(typ).Elem()
+
+	var val reflect.Value
+	if typ.Kind() == reflect.Ptr {
+		// We got a pointer, lets set val to a settable type.
+		val = reflect.New(typ.Elem()).Elem()
+	} else {
+		val = reflect.New(typ).Elem()
+	}
 
 	for _, prop := range n.Properties {
 		if field, ok := fmap[strings.ToLower(prop.Prop)]; ok {
-			setField(val, prop, field)
+			setField(val, prop.Value, field)
 		}
 	}
 	for _, child := range n.Children {
@@ -91,11 +140,21 @@ func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
 			return val, err
 		}
 	}
+
+	if typ.Kind() == reflect.Ptr {
+		val = val.Addr()
+	}
+
 	return val, nil
 }
 
 // TODO - Handle pointer type
 func fieldMap(typ reflect.Type) map[string]reflect.StructField {
+	// We cant do NumField on non-struct types.
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
+
 	// Map[tag/fieldName] => StructField
 	fmap := make(map[string]reflect.StructField)
 	for i := 0; i < typ.NumField(); i++ {
