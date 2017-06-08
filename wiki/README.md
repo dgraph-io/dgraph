@@ -21,9 +21,36 @@ We use `./scripts/local.sh` script to set env variables that our documentation t
 
 Now you can make changes to the docs and see them being updated instantly thanks to Hugo.
 
+* While running locally, the version selector does not work because you need to build the documentation and serve it behind a reverse proxy to have multiple versions.
+
 ### Branch
 
-Documentation **will only run and build on `master` or `release/vx.x.x` branches.** It is because the some examples need to be adjusted depending on Dgraph version, and the documentation generator needs to know the version before.
+Depending on what branch you are on, some code examples will dynamically change. For instance, go-grpc code examples will have different import path depending on branch name.
+
+### Adding and modifying top-level menu
+
+* Add/modify top-level menu items in [config.toml](https://github.com/dgraph-io/dgraph/blob/master/wiki/config.toml)
+
+They are in a format of:
+
+```
+[[menu.main]]
+  name = "Design Concepts"
+  url = "/design-concepts/"
+  identifier = "design-concepts"
+  weight = 8
+```
+
+For the `identifier` of the menu entry, make sure that there is a matching map in `params.menudesc`. It is used to show one liner summary of the menu in the home page.
+
+```
+[params]
+  [params.menudesc]
+    ...
+    design-concepts = "A look at how Dgraph is designed to be so fast"
+    ...
+```
+
 
 ## Runnable
 
