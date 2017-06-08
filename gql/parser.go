@@ -1949,13 +1949,24 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			return nil
 		case itemRightCurl:
 			return nil
-		case itemThreeDots:
-			it.Next()
-			item = it.Item()
-			if item.Typ == itemName {
-				// item.Val is expected to start with "..." and to have len >3.
-				gq.Children = append(gq.Children, &GraphQuery{fragment: item.Val})
-				// Unlike itemName, there is no nesting, so do not change "curp".
+		case itemPeriod:
+			// looking for ...
+			dots := 1
+			for i := 0; i < 2; i++ {
+				if it.Next() && it.Item().Typ == itemPeriod {
+					dots++
+				}
+			}
+			if dots == 3 {
+				it.Next()
+				item = it.Item()
+				if item.Typ == itemName {
+					// item.Val is expected to start with "..." and to have len >3.
+					gq.Children = append(gq.Children, &GraphQuery{fragment: item.Val})
+					// Unlike itemName, there is no nesting, so do not change "curp".
+				}
+			} else {
+				return x.Errorf("Expected 3 periods (\"...\"), got %d.", dots)
 			}
 		case itemName:
 			peekIt, err := it.Peek(1)

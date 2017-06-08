@@ -60,7 +60,6 @@ const (
 	itemBackslash                               // \
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
-	itemThreeDots                               // three dots (...)
 	itemLeftSquare
 	itemRightSquare
 	itemComma
@@ -239,6 +238,8 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			}
 		case r == '#':
 			return lexComment
+		case r == '.':
+			l.Emit(itemPeriod)
 		default:
 			return l.Errorf("Unrecognized character in inside a func: %#U", r)
 		}
@@ -287,16 +288,7 @@ func lexQuery(l *lex.Lexer) lex.StateFn {
 	for {
 		switch r := l.Next(); {
 		case r == period:
-			two := l.Next() == period
-			three := l.Next() == period
-			if two && three {
-				l.Emit(itemThreeDots)
-				return lexName
-			} else {
-				l.Backup()
-				l.Backup()
-				l.Emit(itemPeriod)
-			}
+			l.Emit(itemPeriod)
 		case r == rightCurl:
 			l.Depth--
 			l.Emit(itemRightCurl)

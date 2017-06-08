@@ -6528,7 +6528,7 @@ func TestToFastJSONOrderLang(t *testing.T) {
 	query := `
 		{
 			me(id:0x01) {
-				friend(first:2, orderdesc: alias@en:de) {
+				friend(first:2, orderdesc: alias@en:de:.) {
 					alias
 				}
 			}
