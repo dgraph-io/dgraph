@@ -2,6 +2,7 @@
 
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 VERSIONS=(
+  'v0.7.7'
   'v0.7.6'
   'master'
   'v0.7.5'

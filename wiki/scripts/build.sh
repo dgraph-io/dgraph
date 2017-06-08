@@ -34,6 +34,11 @@ rebuild() {
 	echo -e "$(date) $GREEN Updating docs for branch: $1.$RESET"
 	# Generate new docs after merging.
 
+	dir=''
+	if [[ $2 != "${VERSIONS[0]}" ]]; then
+		dir=$2
+	fi
+
 	# In Unix environments, env variables should also be exported to be seen by Hugo
 	export CURRENT_BRANCH=${1}
 	export VERSION_STRING=$(joinVersions)
@@ -41,8 +46,8 @@ rebuild() {
 	HUGO_TITLE="Dgraph Doc ${2}"\
 		VERSIONS=${VERSION_STRING} \
 		CURRENT_BRANCH=${1} hugo\
-		--destination=public/"$2"\
-		--baseURL="$HOST"/"$2" 1> /dev/null
+		--destination=public/"$dir"\
+		--baseURL="$HOST"/"$dir" 1> /dev/null
 }
 
 branchUpdated()
