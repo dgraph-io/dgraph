@@ -341,7 +341,8 @@ func lexFilterFuncName(l *lex.Lexer) lex.StateFn {
 func lexDirectiveOrLangList(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
 	if r == period {
-		return lexName
+		l.Emit(itemName)
+		return l.Mode
 	} else if !isNameBegin(r) {
 		return l.Errorf("Unrecognized character in lexDirective: %#U", r)
 	}
