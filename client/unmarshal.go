@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Dgraph Labs, Inc.
+ * Copyright 2017 Dgraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 )
 
-func unmarshalChild(n *protos.Node, val reflect.Value) error {
+func unmarshalNode(n *protos.Node, val reflect.Value) error {
 	fmap := fieldMap(val.Type())
 	attr := strings.ToLower(n.Attribute)
 	field, ok := fmap[attr]
@@ -33,8 +33,7 @@ func unmarshalChild(n *protos.Node, val reflect.Value) error {
 		return nil
 	}
 
-	ftyp := field.Type
-	typ := ftyp
+	typ := field.Type
 	if typ.Kind() == reflect.Slice {
 		// Get underlying type.
 		typ = typ.Elem()
@@ -54,7 +53,7 @@ func unmarshalChild(n *protos.Node, val reflect.Value) error {
 		return fmt.Errorf("Cant set field: %+v", field.Name)
 	}
 
-	if ftyp.Kind() == reflect.Slice {
+	if field.Type.Kind() == reflect.Slice {
 		fieldVal.Set(reflect.Append(fieldVal, rcv))
 	} else {
 		fieldVal.Set(rcv)
@@ -68,20 +67,16 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 	if len(field.PkgPath) > 0 {
 		return nil
 	}
-
 	if val.Kind() == reflect.Ptr && val.IsNil() {
 		val = reflect.New(val.Type().Elem()).Elem()
 	}
-
 	if val.Kind() != reflect.Struct {
 		return fmt.Errorf("Can only set fields for struct types. Got: %+v", val.Kind())
 	}
-
 	f := val.FieldByName(field.Name)
 	if !f.CanSet() {
 		return fmt.Errorf("Cant set field: %+v", field.Name)
 	}
-
 	switch field.Type.Kind() {
 	case reflect.String:
 		f.SetString(value.GetStrVal())
@@ -100,12 +95,10 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 			if v == "" {
 				return nil
 			}
-
 			t, err := time.Parse(time.RFC3339, v)
 			if err == nil {
 				f.Set(reflect.ValueOf(t))
 			}
-
 		}
 	case reflect.Slice:
 		switch field.Type {
@@ -116,24 +109,21 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 				if len(v) == 0 {
 					return nil
 				}
-
 				f.Set(reflect.ValueOf(v))
 			case *protos.Value_BytesVal:
 				v := value.GetBytesVal()
 				f.Set(reflect.ValueOf(v))
 			}
 		}
-
 	default:
 	}
-
 	return nil
 }
 
 func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
 	fmap := fieldMap(typ)
-
 	var val reflect.Value
+
 	if typ.Kind() == reflect.Ptr {
 		// We got a pointer, lets set val to a settable type.
 		val = reflect.New(typ.Elem()).Elem()
@@ -150,11 +140,10 @@ func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
 		}
 	}
 	for _, child := range n.Children {
-		if err := unmarshalChild(child, val); err != nil {
+		if err := unmarshalNode(child, val); err != nil {
 			return val, err
 		}
 	}
-
 	if typ.Kind() == reflect.Ptr {
 		// Lets convert val back to a pointer.
 		val = val.Addr()
@@ -168,7 +157,6 @@ func fieldMap(typ reflect.Type) map[string]reflect.StructField {
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 	}
-
 	if typ.Kind() != reflect.Struct {
 		return nil
 	}
@@ -194,7 +182,6 @@ func Unmarshal(n []*protos.Node, v interface{}) error {
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
 		return fmt.Errorf("Unmarshal error(non-pointer: %+v)", reflect.TypeOf(v))
 	}
-
 	val := rv.Elem()
 	if val.Kind() != reflect.Struct {
 		return fmt.Errorf("Cannot unmarshal into: %v . Require a pointer to a struct",
@@ -204,7 +191,7 @@ func Unmarshal(n []*protos.Node, v interface{}) error {
 	// Root can have multiple query blocks.
 	for _, node := range n {
 		for _, child := range node.Children {
-			if err := unmarshalChild(child, val); err != nil {
+			if err := unmarshalNode(child, val); err != nil {
 				return err
 			}
 		}

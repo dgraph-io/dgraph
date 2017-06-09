@@ -7554,8 +7554,6 @@ func TestMultipleEqInt(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"name":"Glenn Rhee"}],"name":"Daryl Dixon"}]}`, js)
 }
 
-// TODO - Move these tests to the client once client code for mutations is
-// updated.
 func TestPBUnmarshalToStruct1(t *testing.T) {
 	type Person struct {
 		Name    string `dgraph:"name"`
@@ -7584,7 +7582,8 @@ func TestPBUnmarshalToStruct1(t *testing.T) {
 	`
 	pb := processToPB(t, query, map[string]string{}, false)
 	var r res
-	client.Unmarshal(pb, &r)
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
 	require.Equal(t, "Michonne", r.Root.Name)
 	require.Equal(t, 38, r.Root.Age)
 	require.Equal(t, "1910-01-01T00:00:00Z", r.Root.Birth)
@@ -7633,7 +7632,8 @@ func TestPBUnmarshalToStruct2(t *testing.T) {
 
 	pb := processToPB(t, query, map[string]string{}, false)
 	var r res
-	client.Unmarshal(pb, &r)
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
 	require.Equal(t, 4, len(r.Root))
 	js, err := json.Marshal(r.Root[0])
 	require.NoError(t, err)
@@ -7679,7 +7679,8 @@ func TestPBUnmarshalToStruct3(t *testing.T) {
 
 	pb := processToPB(t, query, map[string]string{}, false)
 	var r res
-	client.Unmarshal(pb, &r)
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
 	require.NotEmpty(t, r.Root[0].Location)
 	require.Equal(t, 4, len(r.Root))
 	js, err := json.Marshal(r.Root[0])
@@ -7728,9 +7729,8 @@ func TestPBUnmarshalToStruct4(t *testing.T) {
 }
 
 func TestPBUnmarshalToStruct5(t *testing.T) {
-	t.Skip()
 	type Person struct {
-		Name string `dgraph:"name.*"`
+		Name string `dgraph:"name@hi:ru"`
 	}
 
 	type res struct {
@@ -7747,7 +7747,9 @@ func TestPBUnmarshalToStruct5(t *testing.T) {
 	`
 	pb := processToPB(t, query, map[string]string{}, false)
 	var r res
-	client.Unmarshal(pb, &r)
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, r.Root.Name, "Барсук")
 }
 
 func TestPBUnmarshalToStruct6(t *testing.T) {
@@ -7777,7 +7779,6 @@ func TestPBUnmarshalToStruct6(t *testing.T) {
 		}
 	`
 	pb := processToPB(t, query, map[string]string{}, true)
-	fmt.Println(pb)
 	var r res
 	err := client.Unmarshal(pb, &r)
 	require.NoError(t, err)
