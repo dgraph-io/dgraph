@@ -1631,10 +1631,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.uidMatrix = result.UidMatrix
 			sg.values = result.Values
 			sg.facetsMatrix = result.FacetMatrix
-			if len(sg.values) > 0 {
-				v := sg.values[0]
-				x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
-			}
 			sg.counts = result.Counts
 
 			if sg.Params.DoCount && len(sg.Filters) == 0 {
@@ -1683,20 +1679,26 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
+		var filterErr error
 		for range sg.Filters {
 			select {
 			case err = <-filterChan:
 				if err != nil {
+					// Store error in a variable and wait for all filters to run
+					// before returning. Else tracing causes crashes.
+					filterErr = err
 					x.TraceError(ctx, x.Wrapf(err, "Error while processing filter task"))
-					rch <- err
-					return
 				}
 
 			case <-ctx.Done():
+				filterErr = ctx.Err()
 				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
-				rch <- ctx.Err()
-				return
 			}
+		}
+
+		if filterErr != nil {
+			rch <- filterErr
+			return
 		}
 
 		// Now apply the results from filter.
@@ -1822,6 +1824,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		go ProcessGraph(ctx, child, sg, childChan)
 	}
 
+	var childErr error
 	// Now get all the results back.
 	for _, child := range sg.Children {
 		if child.IsInternal() {
@@ -1830,17 +1833,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		select {
 		case err = <-childChan:
 			if err != nil {
+				childErr = err
 				x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
-				rch <- err
-				return
 			}
 		case <-ctx.Done():
+			childErr = ctx.Err()
 			x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
-			rch <- ctx.Err()
-			return
 		}
 	}
-	rch <- nil
+	rch <- childErr
 }
 
 // applyWindow applies windowing to sg.sorted.

@@ -542,6 +542,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "Query")
+		tr.SetMaxEvents(1000)
 		defer tr.Finish()
 		ctx = trace.NewContext(ctx, tr)
 	}
@@ -568,10 +569,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var cancel context.CancelFunc
 	// set timeout if schema mutation not present
 	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
 		// If schema mutation is not present
-		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Minute)
 		defer cancel()
 	}
@@ -798,6 +799,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	var schemaNodes []*protos.SchemaNode
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
+		tr.SetMaxEvents(1000)
 		defer tr.Finish()
 		ctx = trace.NewContext(ctx, tr)
 	}
@@ -821,6 +823,14 @@ func (s *grpcServer) Run(ctx context.Context,
 	})
 	if err != nil {
 		return resp, err
+	}
+
+	var cancel context.CancelFunc
+	// set timeout if schema mutation not present
+	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
+		// If schema mutation is not present
+		ctx, cancel = context.WithTimeout(ctx, time.Minute)
+		defer cancel()
 	}
 
 	// If mutations are part of the query, we run them through the mutation handler
