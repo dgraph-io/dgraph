@@ -262,6 +262,7 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	kvOpt := badger.DefaultOptions
 	kvOpt.Dir = dir
+	kvOpt.ValueDir = dir
 	ps, err = badger.NewKV(&kvOpt)
 	x.Check(err)
 	x.Check(group.ParseGroupConfig("groups.conf"))

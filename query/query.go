@@ -376,7 +376,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		ul := pc.uidMatrix[idx]
 
 		fieldName := pc.fieldName()
-
 		if len(pc.counts) > 0 {
 			c := types.ValueForType(types.IntID)
 			c.Value = int64(pc.counts[idx])
@@ -566,8 +565,20 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 	if gchild.Func != nil {
 		key += fmt.Sprintf("%v", gchild.Func)
 	}
-	if len(gchild.NeedsVar) > 0 {
-		key += fmt.Sprintf("%v", gchild.NeedsVar)
+	// This is the case when we ask for a variable.
+	if gchild.Attr == "var" {
+		// E.g. a as age, result is returned as var(a)
+		if gchild.Var != "" && gchild.Var != "var" {
+			key = fmt.Sprintf("var(%v)", gchild.Var)
+		} else if len(gchild.NeedsVar) > 0 {
+			// For var(s)
+			key = fmt.Sprintf("var(%v)", gchild.NeedsVar[0].Name)
+		}
+
+		// Could be min(var(x)) && max(var(x))
+		if gchild.Func != nil {
+			key += gchild.Func.Name
+		}
 	}
 	if gchild.IsCount { // ignore count subgraphs..
 		key += "count"
@@ -576,7 +587,9 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 		key += fmt.Sprintf("%v", gchild.Langs)
 	}
 	if gchild.MathExp != nil {
-		key += fmt.Sprintf("%+v", gchild.MathExp)
+		// We would only be here if Alias is empty, so Var would be non
+		// empty because MathExp should have atleast one of them.
+		key = fmt.Sprintf("var(%+v)", gchild.Var)
 	}
 	if gchild.IsGroupby {
 		key += "groupby"
@@ -621,6 +634,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			groupbyAttrs: gchild.GroupbyAttrs,
 			FacetVar:     gchild.FacetVar,
 			uidCount:     gchild.UidCount,
+			Cascade:      sg.Params.Cascade,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &protos.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -1299,9 +1313,8 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
-			isCascade := sg.Params.Cascade || shouldCascade(res, idx)
 			var sgPath []*SubGraph
-			err = sg.populateVarMap(doneVars, isCascade, sgPath)
+			err = sg.populateVarMap(doneVars, sgPath)
 			if err != nil {
 				return nil, err
 			}
@@ -1327,26 +1340,6 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	return sgl, nil
 }
 
-// shouldCascade returns true if the query block is not self depenedent and we should
-// remove the uids from the bottom up if the children are empty.
-func shouldCascade(res gql.Result, idx int) bool {
-	if res.Query[idx].Attr == "shortest" {
-		return false
-	}
-
-	if len(res.QueryVars[idx].Defines) == 0 {
-		return false
-	}
-	for _, def := range res.QueryVars[idx].Defines {
-		for _, need := range res.QueryVars[idx].Needs {
-			if def == need {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 func (sg *SubGraph) updateUidMatrix() {
 	for _, l := range sg.uidMatrix {
 		if sg.Params.Order != "" {
@@ -1367,7 +1360,7 @@ func (sg *SubGraph) updateUidMatrix() {
 
 }
 
-func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
+func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	sgPath []*SubGraph) error {
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return nil
@@ -1382,9 +1375,9 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
 	}
 	for _, child := range sg.Children {
 		sgPath = append(sgPath, sg) // Add the current node to path
-		child.populateVarMap(doneVars, isCascade, sgPath)
+		child.populateVarMap(doneVars, sgPath)
 		sgPath = sgPath[:len(sgPath)-1] // Backtrack
-		if !isCascade {
+		if !sg.Params.Cascade {
 			continue
 		}
 
@@ -1393,7 +1386,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
 		child.updateUidMatrix()
 	}
 
-	if !isCascade {
+	if !sg.Params.Cascade {
 		goto AssignStep
 	}
 
@@ -1650,7 +1643,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.
-		sg.DestUIDs = sg.SrcUIDs
+		// Each filter use it's own (shallow) copy of SrcUIDs, so there is no race conditions,
+		// when multiple filters replace their sg.DestUIDs
+		sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
 	} else {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "var" {
 			// If its a var() filter, we just have to intersect the SrcUIDs with DestUIDs

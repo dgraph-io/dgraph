@@ -58,6 +58,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/soheilhy/cmux"
@@ -342,9 +343,17 @@ func convertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string
 func enrichSchema(updates []*protos.SchemaUpdate) error {
 	for _, schema := range updates {
 		typ := types.TypeID(schema.ValueType)
+
+		if (typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID) &&
+			schema.Directive == protos.SchemaUpdate_INDEX {
+			return x.Errorf("Indexing not allowed on predicate %s of type %s",
+				schema.Predicate, typ.Name())
+		}
+
 		if typ == types.UidID {
 			continue
 		}
+
 		if len(schema.Tokenizer) == 0 && schema.Directive == protos.SchemaUpdate_INDEX {
 			schema.Tokenizer = []string{tok.Default(typ).Name()}
 		} else if len(schema.Tokenizer) > 0 && schema.Directive != protos.SchemaUpdate_INDEX {
@@ -379,6 +388,36 @@ func enrichSchema(updates []*protos.SchemaUpdate) error {
 	return nil
 }
 
+func parseFacets(nquads []*protos.NQuad) error {
+	var err error
+	var facet *protos.Facet
+	for _, nq := range nquads {
+		if len(nq.Facets) == 0 {
+			continue
+		}
+		for idx, f := range nq.Facets {
+			if facet, err = facets.FacetFor(f.Key, f.Val); err != nil {
+				return err
+			}
+			nq.Facets[idx] = facet
+		}
+
+	}
+	return nil
+}
+
+// Go client sends facets as string k-v pairs. So they need to parsed and tokenized
+// on the server.
+func parseFacetsInMutation(mu *protos.Mutation) error {
+	if err := parseFacets(mu.Set); err != nil {
+		return err
+	}
+	if err := parseFacets(mu.Del); err != nil {
+		return err
+	}
+	return nil
+}
+
 // This function is used to run mutations for the requests from different
 // language clients.
 func runMutations(ctx context.Context, mu *protos.Mutation) (map[string]uint64, error) {
@@ -389,6 +428,9 @@ func runMutations(ctx context.Context, mu *protos.Mutation) (map[string]uint64, 
 		return nil, err
 	}
 
+	if err = parseFacetsInMutation(mu); err != nil {
+		return nil, err
+	}
 	mutation := &protos.Mutation{Set: mu.Set, Del: mu.Del, Schema: mu.Schema}
 	if allocIds, err = convertAndApply(ctx, mutation); err != nil {
 		return nil, err
@@ -490,8 +532,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != "POST" {
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
 	}
 
@@ -1015,6 +1057,7 @@ func main() {
 	opt := badger.DefaultOptions
 	opt.SyncWrites = true
 	opt.Dir = *postingDir
+	opt.ValueDir = *postingDir
 	ps, err := badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	defer ps.Close()
