@@ -66,11 +66,6 @@ func TestSchema(t *testing.T) {
 		{"age", &protos.SchemaUpdate{
 			ValueType: uint32(types.IntID),
 		}},
-		{"_xid_", &protos.SchemaUpdate{
-			ValueType: uint32(types.StringID),
-			Tokenizer: []string{"hash"},
-			Directive: protos.SchemaUpdate_INDEX,
-		}},
 	})
 
 	typ, err := State().TypeOf("age")
@@ -118,7 +113,7 @@ address: string @index .`
 
 func TestSchemaIndex(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal1), 1))
-	require.Equal(t, 3, len(State().IndexedFields(1)))
+	require.Equal(t, 2, len(State().IndexedFields(1)))
 }
 
 var schemaIndexVal2 = `
@@ -191,16 +186,11 @@ func TestSchemaIndexCustom(t *testing.T) {
 			Tokenizer: []string{"exact", "term"},
 			Directive: protos.SchemaUpdate_INDEX,
 		}},
-		{"_xid_", &protos.SchemaUpdate{
-			ValueType: uint32(types.StringID),
-			Tokenizer: []string{"hash"},
-			Directive: protos.SchemaUpdate_INDEX,
-		}},
 	})
 	require.True(t, State().IsIndexed("name"))
 	require.False(t, State().IsReversed("name"))
 	require.Equal(t, "int", State().Tokenizer("age")[0].Name())
-	require.Equal(t, 5, len(State().IndexedFields(1)))
+	require.Equal(t, 4, len(State().IndexedFields(1)))
 }
 
 func TestParse(t *testing.T) {

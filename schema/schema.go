@@ -276,14 +276,6 @@ func LoadFromDb(gid uint32) error {
 		}
 		State().Set(attr, s)
 	}
-	if group.BelongsTo("_xid_") != gid {
-		return nil
-	}
-	State().Set("_xid_", protos.SchemaUpdate{
-		ValueType: uint32(types.StringID),
-		Directive: protos.SchemaUpdate_INDEX,
-		Tokenizer: []string{"hash"},
-	})
 	return nil
 }
 
