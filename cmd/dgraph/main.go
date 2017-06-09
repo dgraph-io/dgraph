@@ -160,39 +160,40 @@ func convertToNQuad(ctx context.Context, mutation string) ([]*protos.NQuad, erro
 func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult, error) {
 	var edges []*protos.DirectedEdge
 	var mr mutationResult
+	var err error
 
 	newUids := make(map[string]uint64)
+	num := &protos.Num{}
 	for _, nq := range nquads {
 		if strings.HasPrefix(nq.Subject, "_:") {
 			newUids[nq.Subject] = 0
-		} else {
-			// Only store xids that need to be generated.
-			_, err := rdf.ParseUid(nq.Subject)
-			if err == rdf.ErrInvalidUID {
-				return mr, err
-			} else if err != nil {
-				newUids[nq.Subject] = 0
-			}
+			num.Val = num.Val + 1
+		} else if _, err := rdf.ParseUid(nq.Subject); err != nil {
+			return mr, err
 		}
 
 		if len(nq.ObjectId) > 0 {
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
-			} else {
-				_, err := rdf.ParseUid(nq.ObjectId)
-				if err == rdf.ErrInvalidUID {
-					return mr, err
-				} else if err != nil {
-					newUids[nq.ObjectId] = 0
-				}
+				num.Val = num.Val + 1
+			} else if _, err := rdf.ParseUid(nq.ObjectId); err != nil {
+				return mr, err
 			}
 		}
 	}
 
-	if len(newUids) > 0 {
-		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while AssignUidsOverNetwork for newUids: %v", newUids))
+	if int(num.Val) > 0 {
+		var res *protos.AssignedIds
+		if res, err = worker.AssignUidsOverNetwork(ctx, num); err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while AssignUidsOverNetwork for newUids: %v", num))
 			return mr, err
+		}
+		currId := res.StartId
+		// assign generated ones now
+		for k := range newUids {
+			x.AssertTruef(currId != 0 && currId <= res.EndId, "not enough uids generated")
+			newUids[k] = currId
+			currId++
 		}
 	}
 
@@ -212,9 +213,7 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 	resultUids := make(map[string]uint64)
 	// Strip out _: prefix from the blank node keys.
 	for k, v := range newUids {
-		if strings.HasPrefix(k, "_:") {
-			resultUids[k[2:]] = v
-		}
+		resultUids[k[2:]] = v
 	}
 
 	mr = mutationResult{
@@ -903,6 +902,14 @@ func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *prot
 	v = new(protos.Version)
 	v.Tag = x.Version()
 	return v, nil
+}
+
+func (s *grpcServer) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+	if !worker.HealthCheck() {
+		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		return &protos.AssignedIds{}, x.Errorf("Uninitiated server. Please retry later")
+	}
+	return worker.AssignUidsOverNetwork(ctx, num)
 }
 
 var uiDir string
