@@ -1,5 +1,5 @@
 +++
-title = "Query Language - GraphQL+-"
+title = "Query Language"
 +++
 
 Dgraph's GraphQL+- is based on Facebook's [GraphQL](https://facebook.github.io/graphql/).  GraphQL wasn't developed for Graph databases, but it's graph-like query syntax, schema validation and subgraph shaped response make it a great language choice.  We've modified the language to better support graph operations, adding and removing features to get the best fit for graph databases.  We're calling this simplified, feature rich language, ''GraphQL+-''.
@@ -11,6 +11,7 @@ GraphQL+- is a work in progress. We're adding more features and we might further
 This document is the Dgraph query reference material.  It is not a tutorial.  It's designed as a reference for users who already know how to write queries in GraphQL+- but need to check syntax, or indices, or functions, etc.
 
 {{% notice "note" %}}If you are new to Dgraph and want to learn how to use Dgraph and GraphQL+-, take the tour - https://tour.dgraph.io{{% /notice %}}
+
 
 ### Running examples
 
@@ -74,12 +75,26 @@ Query Example: All nodes that have either "Blade" or "Runner" in the name.
 }
 {{< /runnable >}}
 
+Multiple IDs can be specified in a list.  The list may contain a mixture of UIDs and XIDs.
+
+Query Example:
+{{< runnable >}}
+{
+  movies(id: [0x3cf6ed367ae4fa80, 0x949c72529f812b1b]) {
+    _uid_
+    name
+    initial_release_date
+    netflix_id
+  }
+}
+{{< /runnable >}}
+
 
 ### Expanding Graph Edges
 
-A query expands edges from node to node by nesting query blocks.
+A query expands edges from node to node by nesting query blocks with `{ }`.  
 
-Query Example: The actors and characters played in "Blade Runner"
+Query Example: The actors and characters played in "Blade Runner".  The query first finds the node with name "Blade Runner", then follows  outgoing `starring` edges to nodes representing an actor's performance as a character.  From there the `performance.actor` and `performance,character` edges are expanded to find the actor names and roles for every actor in the movie.
 {{< runnable >}}
 {
   brCharacters(func: eq(name, "Blade Runner")) {
@@ -98,7 +113,7 @@ Query Example: The actors and characters played in "Blade Runner"
 {{< /runnable >}}
 
 
-#### Comments
+### Comments
 
 Anything on a line following a `#` is a comment
 
@@ -376,7 +391,7 @@ Syntax Examples:
 * `eq(count(predicate), value)`
 * `eq(predicate, [val1, val2, ..., valN])`
 
-Schema Types: `int`, `float`, `bool`, `string`, `dateTime`
+Schema Types: `int`, `float`, `bool`, `string`, `datetime`
 
 Index Required: An index is required for `eq(predicate, value)` form, but otherwise the values have been calculated as part of the query, so no index is required.
 
@@ -505,18 +520,20 @@ Index Required: no
 
 Determines if a node has a particular predicate.
 
-Query Example: All directors.  Because directors have at least one film, a count at root `func: gt(count(director.film), 0)` would determine all directors, but Dgraph provides `has` as a simpler, faster method.
 
 
+Query Example: First five directors and all their movies that have a release date recorded.  Directors have directed at least one film - a count at root `func: gt(count(director.film), 0)` would also determine all directors, but Dgraph provides `has` as a simpler, faster method.  
 {{< runnable >}}
 {
-  all_directors(func: has(director.film)) {
+  me(func: has(director.film), first: 5) {
     name@en
-  }  
+    director.film @filter(has(initial_release_date))  {
+      initial_release_date
+      name@en
+    }
+  }
 }
 {{< /runnable >}}
-
-
 
 ### Geolocation
 
@@ -1025,6 +1042,8 @@ In general, query blocks are executed in parallel, but variables impose an evalu
 
 If a variable is defined, it must be used elsewhere in the query.
 
+The syntax `id: var(A,B)` or `@filter(var(A,B))` means the union of UIDs for variables `A` and `B`.
+
 Query Example: The movies of Angelia Jolie and Brad Pitt where both have acted on movies in the same genre.  Note that `B` and `D` match all genres for all movies, not genres per movie.
 {{< runnable >}}
 {
@@ -1046,7 +1065,7 @@ Query Example: The movies of Angelia Jolie and Brad Pitt where both have acted o
 
  films(id: var(D)) @filter(var(B)) {   # Genres from both Angelina and Brad
   name@en
-   ~genre @filter(var(A) OR var(C)) {  # Movies with either.
+   ~genre @filter(var(A, C)) {  # Movies in either A or C.
      name@en
    }
  }
@@ -1386,6 +1405,136 @@ Query Example: Actors from Tim Burton movies and how many roles they have played
 
 
 
+## Expand Predicates
+
+Keyword `_predicate_` retrieves all predicates out of nodes at the level used.
+
+Query Example: All predicates from director Steven Spielberg.
+{{< runnable >}}
+{
+  director(func: allofterms(name, "steven spielberg")) {
+    _predicate_
+  }
+}
+{{< /runnable >}}
+
+The number of predicates from a node can be counted and be aliased.
+
+Query Example: All predicates from director Steven Spielberg and the count of such predicates.
+{{< runnable >}}
+{
+  director(func: allofterms(name, "steven spielberg")) {
+    num_predicates: count(_predicate_)
+    my_predicates: _predicate_
+  }
+}
+{{< /runnable >}}
+
+Predicates can be stored in a variable and passed to `expand()` to expand all the predicates in the variable.
+
+If `_all_` is passed as an argument to `expand()`, all the predicates at that level are retrieved. More levels can be specfied in a nested fashion under `expand()`.
+
+Query Example: Predicates saved to a variable and `expand`.
+{{< runnable >}}
+{
+  var(func: allofterms(name@en, "steven spielberg")) {
+    name
+    pred as _predicate_
+  }
+
+  director(func: allofterms(name@en, "steven spielberg")) {
+    expand(var(pred)) {
+      expand(_all_) # Expand all the predicates at this level
+    }
+  }
+}
+{{< /runnable >}}
+
+
+
+## Cascade Directive
+
+With the `@cascade` directive, nodes that don't have all predicates specified in the query are removed. This can be useful in cases where some filter was applied or if nodes might not have all listed predicates.
+
+
+Query Example: Harry Potter movies, with each actor and characters played.  With `@cascade`, any character not played by an actor called Warwick is removed, as is any Harry Potter movie without any actors called Warwick.  Without `@cascade`, every character is returned, but only those played by actors called Warwick also have the actor name.
+{{< runnable >}}
+{
+  HP(func: allofterms(name, "Harry Potter")) @cascade {
+    name@en
+    starring{
+        performance.character {
+          name@en
+        }
+        performance.actor @filter(allofterms(name, "Warwick")){
+            name@en
+         }
+    }
+  }
+}
+{{< /runnable >}}
+
+## Normalize directive
+
+With the `@normalize` directive, only aliased predicates are returned and the result is flattened to remove nesting.
+
+Query Example: Film name, country and first two actors (by UID order) of every Steven Spielberg movie, without `initial_release_date` because no alias is given and flattened by `@normalize`
+{{< runnable >}}
+{
+  director(func:allofterms(name@en, "steven spielberg")) @normalize {
+    d: name@en
+    director.film {
+      f: name@en
+      initial_release_date
+      starring(first: 2) {
+        performance.actor {
+          pa: name@en
+        }
+        performance.character {
+          pc: name@en
+        }
+      }
+      country {
+        c: name@en
+      }
+    }
+  }
+}
+{{< /runnable >}}
+
+## Debug
+
+For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `_uid_` attribute for all the entities along with the `server_latency` information.
+
+Query with debug as a query parameter
+```
+curl "http://localhost:8080/query?debug=true" -XPOST -d $'{
+  director(id: m.07bwr) {
+    name@en
+  }
+}' | python -m json.tool | less
+```
+
+Returns `_uid_` and `server_latency`
+```
+{
+  "director": [
+    {
+      "_uid_": "0xff4c6752867d137d",
+      "name@en": "The Big Lebowski"
+    }
+  ],
+  "server_latency": {
+    "json": "29.149µs",
+    "parsing": "129.713µs",
+    "processing": "500.276µs",
+    "total": "661.374µs"
+  }
+}
+```
+
+
+
 
 
 
@@ -1411,17 +1560,17 @@ Query Example: Actors from Tim Burton movies and how many roles they have played
 
 ## Schema
 
-For each predicate, the schema specifies the target's type.  If a predicate `p` has type `T`, then for all triples `s p o` the object `o` is of schema type `T`.
+For each predicate, the schema specifies the target's type.  If a predicate `p` has type `T`, then for all subject-predicate-object triples `s p o` the object `o` is of schema type `T`.
 
 * On mutations, scalar types are checked and an error thrown if the value cannot be converted to the schema type.
 
-* On query, value results are returned according to the schema type of the predicate. **Does this mean in the protobuf? cause the JSOn is untyped ... or that the JSON type is parsable into a var of the schema type**??
+* On query, value results are returned according to the schema type of the predicate.
 
 If a schema type isn't specified before a mutation adds triples for a predicate, then the type is inferred from the first mutation.  This type is either:
 
 * type `uid`, if the first mutation for the predicate has nodes for the subject and object, or
 
-* derived from the [rdf type]({{< relref "#rdf-types" >}}), if the subject is a literal and an rdf type is present in the first mutation, or
+* derived from the [rdf type]({{< relref "#rdf-types" >}}), if the object is a literal and an rdf type is present in the first mutation, or
 
 * `default` type, otherwise.
 
@@ -1432,7 +1581,7 @@ Dgraph supports scalar types and the UID type.
 
 #### Scalar Types
 
-For all scalar types the object is a literal.
+For all triples with a predicate of scalar types the object is a literal.
 
 | Dgraph Type | Go type |
 | ------------|:--------|
@@ -1456,32 +1605,11 @@ The `uid` type denotes a node-node edge; internally each node is represented as 
 
 ### RDF Types
 
-RDF types are attached to literals with the standard `^^` separator.
-
-The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Datatypes) and the corresponding internal type in which the data is stored are as follows.
-
-| Storage Type                                            | Dgraph type    |
-| -------------                                           | :------------: |
-| &#60;xs:string&#62;                                     | `string`         |
-| &#60;xs:dateTime&#62;                                   | `dateTime`       |
-| &#60;xs:date&#62;                                       | `datetime`       |
-| &#60;xs:int&#62;                                        | `int`            |
-| &#60;xs:boolean&#62;                                    | `bool`           |
-| &#60;xs:double&#62;                                     | `float`          |
-| &#60;xs:float&#62;                                      | `float`          |
-| &#60;geo:geojson&#62;                                   | `geo`            |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;   | `string`         |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | `dateTime`       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | `dateTime`       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;      | `int`            |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;  | `bool`           |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;   | `float`          |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;    | `float`          |
+Dgraph supports a number of [RDF types in mutations]({{< relref "#language-and-rdf-types" >}}).
 
 As well as implying a schema type for a [first mutation]({{< relref "#schema" >}}), an RDF type can override a schema type for storage.
 
 If a predicate has a schema type and a mutation has an RDF type with a different underlying Dgraph type, the convertibility to schema type is checked, and an error is thrown if they are incompatible, but the value is stored in the RDF type's corresponding Dgraph type.  Query results are always returned in schema type.
-
 
 For example, if no schema is set for the `age` predicate.  Given the mutation
 ```
@@ -1660,108 +1788,61 @@ schema(pred: [name, friend]) {
 }
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## --- OLD below here ---
-## ---- still to be updated ----
-
-
-
 ## Mutations
 
-{{% notice "note" %}}All mutations queries shown here can be run using `curl localhost:8080/query -XPOST -d $'mutation { ... }'`{{% /notice %}}
+Adding or removing data in Dgraph is called a mutation.
 
-To add data to Dgraph, GraphQL+- uses a widely-accepted [RDF N-Quad format](https://www.w3.org/TR/n-quads/).
-Simply put, RDF N-Quad represents a fact. Let's understand this with a few examples.
+A mutation that adds triples, does so with the `set` keyword.
+```
+mutation {
+  set {
+    # triples in here
+  }
+}
+```
+
+### Triples
+
+The input language is triples in the W3C standard [RDF N-Quad format](https://www.w3.org/TR/n-quads/).
+
+Each triple has the form
+```
+<subject> <predicate> <object> .
+```
+Meaning that the graph node identified by `subject` is linked to `object` with directed edge `predicate`.  Each triple ends with a full stop.  The subject of a triple is always a node in the graph, while the object may be a node or a value (a literal).
+
+For example, the triple
 ```
 <0x01> <name> "Alice" .
 ```
-
-Here, `0x01` is the internal unique id assigned to an entity.
-`name` is the predicate (relationship). This is the connector between the entity (person) and her name.
-And finally, we have `"Alice"`, which is a string value representing her name.
-RDF N-Quad ends with a `dot (.)`, to represent the end of a single fact.
-
-### Language
-
-RDF N-Quad allows specifying the language for string values, using `@lang`. Using that syntax, we can set `0x01`'s name in other languages.
+Represents that graph node with ID `0x01` has a `name` with string value `"Alice"`.  While triple
 ```
-<0x01> <name> "Алисия"@ru .
-<0x01> <name> "Adélaïde"@fr .
+<0x01> <friend> <0x02> .
 ```
-To specify the language of the value to be returned from query `@lang1:lang2:lang3` notation is used. It is extension over RDF N-Quad syntax, and allows specifying multiple languages in order of preference. If value in given language is not found, next language from list is considered. If there are no values in any of specified languages, the value without specified language is returned. At last, if there is no value without language, value in ''some'' language is returned (this is implementation specific).
+Represents that graph node with ID `0x01` is linked with the `friend` edge to node `0x02`.
 
-{{% notice "note" %}}Languages preference list cannot be used in functions.{{% /notice %}}
+Dgraph creates a unique internal identifier for every node in the graph - the node's UID.  A mutation can either let Dgraph create the UID as the only identifier for the node, using blank nodes, or can add an external identifier, an XID.
 
-### Batch mutations
 
-You can put multiple RDF lines into a single query to Dgraph. This is highly recommended.
-Dgraph loader by default batches a 1000 RDF lines into one query, while running 100 such queries in parallel.
+### Blank Nodes and UID
+
+Blank nodes in mutations, written `_:identifier`, identify nodes within the mutation, without assigning an XID.  Dgraph creates a UID identifying each blank node and returns the created UIDs as the mutation result.  For example, mutation:
 
 ```
-curl localhost:8080/query -XPOST -d $'
-mutation {
-  set {
-    <0x01> <name> "Alice" .
-    <0x01> <name> "Алисия"@ru .
-    <0x01> <name> "Adélaïde"@fr .
-  }
-}' | python -m json.tool | less
-```
-
-### Assigning UID
-
-Blank nodes (`_:<identifier>`) in mutations let you create a new entity in the database by assigning it a UID.
-Dgraph can assign multiple UIDs in a single query while preserving relationships between these entities.
-Let us say you want to create a database of students of a class using Dgraph, you could create new person entity using this method.
-Consider the example below which creates a class, students and some relationships.
-
-```
-curl localhost:8080/query -XPOST -d $'
 mutation {
  set {
     _:class <student> _:x .
+    _:class <student> _:y .
     _:class <name> "awesome class" .
-    _:x <name> "alice" .
+    _:x <name> "Alice" .
     _:x <planet> "Mars" .
     _:x <friend> _:y .
-    _:y <name> "bob" .
+    _:y <name> "Bob" .
  }
-}' | python -m json.tool | less
+}
 ```
-
+results in output (the actual UIDs will be different on any run of this mutation)
 ```
-# This on execution returns
 {
   "code": "Success",
   "message": "Done",
@@ -1771,16 +1852,33 @@ mutation {
     "y": "0xb294fb8464357b0a"
   }
 }
-# Three new entitities have been assigned UIDs.
+```
+The graph has thus been updated to have triples
+```
+<0x6bc818dc89e78754> <student> <0xc3bcc578868b719d> .
+<0x6bc818dc89e78754> <student> <0xb294fb8464357b0a> .
+<0x6bc818dc89e78754> <name> "awesome class" .
+<0xc3bcc578868b719d> <name> "Alice" .
+<0xc3bcc578868b719d> <planet> "Mars" .
+<0xc3bcc578868b719d> <friend> <0xb294fb8464357b0a> .
+<0xb294fb8464357b0a> <name> "Bob" .
+```
+The blank nodes labels `_:class`, `_:x` and `_:y` do not identify the nodes after the mutation, and could even be safely reused in a later mutation.  
+
+A later mutation can update the data for existing UIDs.  For example, the following to add a new student to the class.
+```
+mutation {
+ set {
+    <0x6bc818dc89e78754> <student> _:x .
+    _:x <name> "Chris" .
+ }
+}
 ```
 
-The result of the mutation has a field called `uids` which contains the assigned UIDs.
-The mutation above resulted in the formation of three new entities `class`, `x` and `y` which could be used by the user for later reference.
-Now we can query as follows using the `_uid_` of `class`.
-
+A query can also directly use UID.
 ```
-curl localhost:8080/query -XPOST -d $'{
- class(id:<assigned-uid>) {
+{
+ class(id: 0x6bc818dc89e78754) {
   name
   student {
    name
@@ -1790,183 +1888,127 @@ curl localhost:8080/query -XPOST -d $'{
    }
   }
  }
-}' | python -m json.tool
-```
-
-```
-# This query on execution results in
-{
-  "class": {
-    "name@en": "awesome class",
-    "student": {
-      "friend": {
-        "name@en": "bob"
-      },
-      "name@en": "alice",
-      "planet": "Mars"
-    }
-  }
 }
 ```
 
-### External IDs (_xid_)
+### External IDs (XID)
 
-While not recommended, Dgraph supports directly using external ids in queries.
-These could be useful if you are exporting existing data to Dgraph.
-You could rewrite the above example as follows:
+Dgraph also supports assigning external identifiers to nodes.  These can be used, for example, in exporting existing data to Dgraph, or in representing nodes that have a well known identifier.
+
+An XID is a string (not a number - that's parsed as a UID) and in a mutation is written `<myXID>`.  A mixture of XID, UID and blank nodes are allowed in a mutation.  For example, the following mutation adds more data to the class.
 ```
-<alice> <name> "Alice" .
-```
-
-This would use a deterministic fingerprint of the XID `alice` and map that to a UID.
-
-{{% notice "warning" %}}Dgraph does not store a UID to XID mapping. So, given a UID, it won't locate the corresponding XID automatically. Also, XID collisions are possible and are NOT checked for. If two XIDs fingerprint map to the same UID, their data would get mixed up.{{% /notice %}}
-
-You can add and query the above data like so.
-```
-curl localhost:8080/query -XPOST -d $'
 mutation {
   set {
+    <0x6bc818dc89e78754> <student> <alice> .
     <alice> <name> "Alice" .
-    <lewis-carrol> <died> "1998" .
+
+    <0x6bc818dc89e78754> <student> _:anotherStudent .
+    _:anotherStudent <name> "David" .
+    <alice> <friend> _:anotherStudent .
   }
 }
+```
+Nodes identified with an XID still receive a UID.  Internally Dgraph stores an XID to UID mapping, but not the other way around.
 
-query {
-  me(id:alice) {
+```
+{
+  me(id: <alice>) {
+    _uid_
     name
   }
-}' | python -m json.tool | less
+}
+```
+
+### Language and RDF Types
+
+RDF N-Quad allows specifying a language for string values and an RDF type.  Languages are written using `@lang`. For example
+```
+<0x01> <name> "Adelaide"@en .
+<0x01> <name> "Аделаида"@ru .
+<0x01> <name> "Adélaïde"@fr .
+```
+See also [how language is handled in query]({{< relref "#language-support" >}}).
+
+RDF types are attached to literals with the standard `^^` separator.  For example
+```
+<0x01> <age> "32"^^<xs:int> .
+<0x01> <birthdate> "1985-06-08"^^<xs:dateTime> .
+```
+
+The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Datatypes) and the corresponding internal type in which the data is stored are as follows.
+
+| Storage Type                                            | Dgraph type    |
+| -------------                                           | :------------: |
+| &#60;xs:string&#62;                                     | `string`         |
+| &#60;xs:dateTime&#62;                                   | `dateTime`       |
+| &#60;xs:date&#62;                                       | `datetime`       |
+| &#60;xs:int&#62;                                        | `int`            |
+| &#60;xs:boolean&#62;                                    | `bool`           |
+| &#60;xs:double&#62;                                     | `float`          |
+| &#60;xs:float&#62;                                      | `float`          |
+| &#60;geo:geojson&#62;                                   | `geo`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;   | `string`         |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | `dateTime`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | `dateTime`       |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;      | `int`            |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;  | `bool`           |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;   | `float`          |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;    | `float`          |
+
+
+See the section on [RDF schema types]({{< relref "#rdf-types" >}}) to understand how RDF types affect mutations and storage.
+
+
+### Batch mutations
+
+Each mutation may contain multiple RDF triples.  For large data uploads many such mutations can be batched in parallel.  The tool `dgraphloader` does just this; by default batching 1000 RDF lines into a query, while running 100 such queries in parallel.
+
+Dgraphloader takes as input gzipped N-Quad files (that is triple lists without `mutation { set {`) and batches mutations for all triples in the input.  The tool has documentation of options.
+
+```
+dgraphloader --help
 ```
 
 ### Delete
 
-`delete` keyword lets you delete a specified `S P O` triple through a mutation. For example, if you want to delete the record `<lewis-carrol> <died> "1998" .`, you would do the following.
+A delete mutation, signified with the `delete` keyword, removes triples from the store.  UIDs and XIDs are allowed in a delete mutation. For example, to delete the triple `<lewis-carrol> <died> "1998" .`
 
 ```
-curl localhost:8080/query -XPOST -d $'
 mutation {
   delete {
-     <lewis-carrol> <died> "1998" .
+     <lewis-carrol> <died> "1898" .
   }
-}' | python -m json.tool | less
+}
 ```
 
-Or you can delete it using the `_uid_` for `lewis-carrol` like
+Or with the the `_uid_` for `lewis-carrol`
 
 ```
-curl localhost:8080/query -XPOST -d $'
 mutation {
   delete {
      <0xf11168064b01135b> <died> "1998" .
   }
-}' | python -m json.tool | less
+}
 ```
 
-If you want to delete all the objects/values of a `S P *` triple, you can do.
+For a particular node `N` all data for a predicate `P` is removed with the pattern `S P *`.
 ```
-curl localhost:8080/query -XPOST -d $'
 mutation {
   delete {
      <lewis-carrol> <died> * .
   }
-}'
+}
 ```
-If you want to delete all the objects/values of all the predicates going out of S, you can do.
+
+The pattern `S * *` deletes all edges out of a node.
 ```
-curl localhost:8080/query -XPOST -d $'
 mutation {
   delete {
      <lewis-carrol> * * .
   }
-}'
+}
 ```
-{{% notice "note" %}} On using `*`, all the derived edges (indexes, reverses) related to that edge would also be deleted.{{% /notice %}}
-
-
-
-
-
-
-
-
-
-
-## Queries
-For example, the query:
-
-{{< runnable >}}
-{
-  # query block called df with root filter
-  df(func: allofterms(name@en, "David Fincher")) {
-
-    # literal about David Fincher
-    name@en
-
-    # block matching nodes found from current node
-    # along director.film edge
-    director.film  {  
-
-      # literals for the film
-      name@en
-      initial_release_date
-
-      # matching deeper
-      genre {
-        name@en
-      }
-    }
-  }
-}
-{{< /runnable >}}
-
-matches all nodes
-
-Queries in GraphQL+- look very much like queries in GraphQL. You typically start with a node or a list of nodes, and expand edges from there.
-Each `{}` block goes one layer deep.
-
-{{< runnable >}}
-{
-  me(id: m.06pj8) {
-    name@en
-    director.film  {
-      genre {
-        name@en
-      }
-      name@en
-      initial_release_date
-    }
-  }
-}
-{{< /runnable >}}
-
-What happened above is that we start the query with an entity denoting Steven Spielberg (from Freebase data), then expand by two predicates `name@en`(name in English) which yields the value `Steven Spielberg`, and `director.film` which yields the entities of films directed by Steven Spielberg.
-
-Then for each of these film entities, we expand by three predicates: `name@en` which yields the name of the film, `initial_release_date` which yields the film release date and `genre` which yields a list of genre entities. Each genre entity is then expanded by `name@en` to get the name of the genre.
-
-If you want to use a list, then the query would look like:
-
-{{< runnable >}}{
-  me(id: [m.06pj8, m.0bxtg]) {
-    name@en
-    director.film  {
-      genre {
-        name@en
-      }
-      name@en
-      initial_release_date
-    }
-  }
-}
-{{< /runnable >}}
-
-The list can contain XIDs or UIDs or a combination of both.
-
-To specify the language of the value to be returned from query `@lang1:lang2:lang3` notation is used. It is extension over RDF N-Quad syntax, and allows specifying multiple languages in order of preference. If value in given language is not found, next language from list is considered. If there are no values in any of specified languages, the value without specified language is returned. At last, if there is no value without language, value in ''some'' language is returned (this is implementation specific).
-
-{{% notice "note" %}}Languages preference list cannot be used in functions.{{% /notice %}}
-
-
+{{% notice "note" %}} On using `*`, all the derived edges (indexes, reverses) related to that edge are deleted.{{% /notice %}}
 
 
 
@@ -2426,50 +2468,6 @@ Output:
 
 
 
-
-
-## Expand Predicates
-
-`_predicate_` can be used to retrieve all the predicates that go out of the nodes at that level. For example:
-
-{{< runnable >}}
-{
-  director(func: allofterms(name, "steven spielberg")) {
-    _predicate_
-  }
-}
-{{< /runnable >}}
-
-The number of predicates from a node can be counted and be aliased.
-
-{{< runnable >}}
-{
-  director(func: allofterms(name, "steven spielberg")) {
-    num_predicates: count(_predicate_)
-    my_predicates: _predicate_
-  }
-}
-{{< /runnable >}}
-
-This can be stored in a variable and passed to `expand()` function to expand all the predicates in that list.
-
-{{< runnable >}}
-{
-  var(func: allofterms(name@en, "steven spielberg")) {
-    name
-    pred as _predicate_
-  }
-
-  director(func: allofterms(name@en, "steven spielberg")) {
-    expand(var(pred)) {
-      expand(_all_) # Expand all the predicates at this level
-    }
-  }
-}
-{{< /runnable >}}
-
-If `_all_` is passed as an argument to `expand()`, all the predicates at that level would be retrieved. More levels can be specfied in a nested fashion under `expand()`.
-
 ## Shortest Path Queries
 
 Shortest path between a `src` node and `dst` node can be found using the keyword `shortest` for the query block name. It requires the source node id, destination node id and the predicates (atleast one) that have to be considered for traversing. This query block by itself will not return any results back but the path has to be stored in a variable and used in other query blocks as required.
@@ -2646,87 +2644,8 @@ Some points to keep in mind while using recurse queries are:
 }
 {{< /runnable >}}
 
-## Cascade Directive
 
-`@cascade` directive forces a removal of those entites that don't have all the fields specified in the query. This can be useful in cases where some filter was applied. For example, consider this query:
 
-{{< runnable >}}
-{
-  HP(func: allofterms(name, "Harry Potter")) @cascade {
-    name@en
-    starring{
-        performance.character {
-          name@en
-        }
-        performance.actor @filter(allofterms(name, "Warwick")){
-            name@en
-         }
-    }
-  }
-}
-{{< /runnable >}}
-
-Here we also remove all the nodes that don't have a corresponding valid sibling node for `Warwick Davis`.
-
-## Normalize directive
-
-Queries can have a `@normalize` directive, which if supplied at the root, the response would only contain the predicates which are asked with an alias in the query. The response is also flatter and avoids nesting, hence would be easier to parse in some cases.
-
-{{< runnable >}}
-{
-  director(func:allofterms(name, "steven spielberg")) @normalize {
-    d: name@en
-    director.film {
-      f: name@en
-      release_date
-      starring(first: 2) {
-        performance.actor {
-          pa: name@en
-        }
-        performance.character {
-          pc: name@en
-        }
-      }
-      country {
-        c: name@en
-      }
-    }
-  }
-}
-{{< /runnable >}}
-
-From the results we can see that since we didn't ask for `release_date` with an alias we didn't get it back. We got back all other combinations of movies directed by Steven Spielberg with all unique combinations of performance.actor, performance.character and country.
-
-## Debug
-
-For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `_uid_` attribute for all the entities along with the `server_latency` information.
-
-Query with debug as a query parameter
-```
-curl "http://localhost:8080/query?debug=true" -XPOST -d $'{
-  director(id: m.07bwr) {
-    name@en
-  }
-}' | python -m json.tool | less
-```
-
-Returns `_uid_` and `server_latency`
-```
-{
-  "director": [
-    {
-      "_uid_": "0xff4c6752867d137d",
-      "name@en": "The Big Lebowski"
-    }
-  ],
-  "server_latency": {
-    "json": "29.149µs",
-    "parsing": "129.713µs",
-    "processing": "500.276µs",
-    "total": "661.374µs"
-  }
-}
-```
 
 ## Fragments
 

@@ -56,18 +56,18 @@ dgraph
 
 The `-v` flag lets Docker mount a directory so that dgraph can persist data to disk and access files for loading data.
 
-#### Map to default port (8080)
+#### Map to default port (8080 on the local interface)
 
 ```sh
 mkdir -p ~/dgraph
-docker run -it -p 8080:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
+docker run -it -p 127.0.0.1:8080:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
 #### Map to custom port
 ```sh
 mkdir -p ~/dgraph
-# Mapping port 8080 from within the container to 9090  of the instance
-docker run -it -p 9090:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
+# Mapping port 8080 from within the container to 9090 (bound to the local interface) of the instance
+docker run -it -p 127.0.0.1:9090:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
 {{% notice "note" %}}The dgraph server listens on port 8080 (unless mapped to another port above) with log output to the terminal.{{% /notice %}}
@@ -135,7 +135,7 @@ curl localhost:8080/query -XPOST -d $'
 mutation {
   schema {
     name: string @index .
-    release_date: date @index .
+    release_date: datetime @index .
     revenue: float .
     running_time: int .
   }
@@ -242,7 +242,7 @@ The schema needs updating to index new predicates in the dataset.  The new datas
 curl localhost:8080/query -XPOST -d '
 mutation {
   schema {
-    initial_release_date: date @index .
+    initial_release_date: datetime @index .
   }
 }
 '| python -m json.tool | less
@@ -379,7 +379,7 @@ mutation {
   schema {
     director.film: uid @reverse .
     genre: uid @reverse .
-    initial_release_date: date @index .
+    initial_release_date: datetime @index .
     rating: uid @reverse .
     country: uid @reverse .
     loc: geo @index .

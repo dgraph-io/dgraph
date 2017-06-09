@@ -16,7 +16,7 @@ title = "Dgraph Documentation"
   identifier = "guides"
   weight = 2
 [[menu.main]]
-  name = "Query Language - GraphQL+-"
+  name = "Query Language"
   url = "/query-language/"
   identifier = "query-language"
   weight = 3
