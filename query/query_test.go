@@ -6081,6 +6081,22 @@ func TestLangMultipleForcedFallbackNoDefault(t *testing.T) {
 		js)
 }
 
+func TestLangMultipleFragmentInsteadOfFallbacki(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@hi:cn:.,,
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	// this test is fragile - '.' may return value in any language (depending on data)
+	require.JSONEq(t,
+		`{"me":[{"name@hi:cn:.":"Artem Tkachenko"}]}`,
+		js)
+}
+
 func TestLangFilterMatch1(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
