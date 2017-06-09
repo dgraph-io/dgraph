@@ -571,8 +571,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// set timeout for read-only queries.
+	// set timeout if schema mutation not present
 	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
+		// If schema mutation is not present
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Minute)
 		defer cancel()
@@ -836,8 +837,9 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	l.Parsing += time.Since(l.Start)
 
-	// set timeout for read-only queries.
+	// set timeout if schema mutation not present
 	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
+		// If schema mutation is not present
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Minute)
 		defer cancel()
