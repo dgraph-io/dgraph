@@ -39,24 +39,67 @@ func unmarshalNode(n *protos.Node, val reflect.Value) error {
 		typ = typ.Elem()
 	}
 
-	rcv, err := unmarshal(n, typ)
-	if err != nil {
-		return err
-	}
-
-	if val.Kind() == reflect.Ptr {
-		val = reflect.New(val.Type().Elem()).Elem()
-	}
-
 	fieldVal := val.FieldByName(field.Name)
 	if !fieldVal.CanSet() {
 		return fmt.Errorf("Cant set field: %+v", field.Name)
+	}
+
+	if n.Attribute == "@facets" {
+		for _, cn := range n.Children {
+			attr := cn.Attribute
+			if attr == "_" {
+				if len(cn.Children) != 1 {
+					continue
+				}
+				if field, ok := fmap["@facets"]; ok {
+					ftyp := field.Type
+					if field.Type.Kind() != reflect.Struct {
+						continue
+					}
+					rcv, err := unmarshal(cn.Children[0], ftyp)
+					if err != nil {
+						return err
+					}
+					fieldVal.Set(rcv)
+				}
+
+			} else {
+				key := fmt.Sprintf("%s@facets", attr)
+				if field, ok := fmap[key]; ok {
+					ftyp := field.Type
+					if field.Type.Kind() != reflect.Struct {
+						continue
+					}
+					rcv, err := unmarshal(cn, ftyp)
+					if err != nil {
+						return err
+					}
+					fieldVal := val.FieldByName(field.Name)
+					if !fieldVal.CanSet() {
+						return fmt.Errorf("Cant set field: %+v", field.Name)
+					}
+					fieldVal.Set(rcv)
+				}
+
+			}
+		}
+
+		return nil
+	}
+
+	rcv, err := unmarshal(n, typ)
+	if err != nil {
+		return err
 	}
 
 	if field.Type.Kind() == reflect.Slice {
 		fieldVal.Set(reflect.Append(fieldVal, rcv))
 	} else {
 		fieldVal.Set(rcv)
+	}
+
+	if val.Kind() == reflect.Ptr {
+		val = reflect.New(val.Type().Elem()).Elem()
 	}
 
 	return nil

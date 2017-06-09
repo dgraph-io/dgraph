@@ -166,23 +166,15 @@ func TestRetrieveFacetsProtoUnmarshal(t *testing.T) {
 		Close  bool      `dgraph:"close"`
 	}
 
-	type nameFacet struct {
+	type nameFacets struct {
 		Origin string `dgraph:"origin"`
 	}
 
-	type uidFacet struct {
-		FriendFacet friendFacet `dgraph:"friend"`
-	}
-
-	type friendFacets struct {
-		UidFacets uidFacet  `dgraph:"_"`
-		NameFacet nameFacet `dgraph:"name"`
-	}
-
 	type Person struct {
-		Name    string       `dgraph:"name"`
-		Facets  friendFacets `dgraph:"@facets"`
-		Friends []Person     `dgraph:"friend"`
+		Name       string      `dgraph:"name"`
+		NameFacets nameFacets  `dgraph:"name@facets"`
+		Facets     friendFacet `dgraph:"@facets"`
+		Friends    []Person    `dgraph:"friend"`
 	}
 
 	type res struct {
@@ -204,13 +196,13 @@ func TestRetrieveFacetsProtoUnmarshal(t *testing.T) {
 	pb := processToPB(t, query, nil, false)
 	var r res
 	client.Unmarshal(pb, &r)
-	require.Equal(t, "french", r.Root.Friends[1].Facets.NameFacet.Origin)
-	ff := r.Root.Friends[1].Facets.UidFacets.FriendFacet
+	require.Equal(t, "french", r.Root.Friends[1].NameFacets.Origin)
+	ff := r.Root.Friends[1].Facets
 	require.NotZero(t, ff.Since)
 	require.NotZero(t, ff.Close)
 	require.NotZero(t, ff.Family)
 	require.NotZero(t, ff.Tag)
-	require.NotZero(t, r.Root.Friends[4].Facets.UidFacets.FriendFacet.Age)
+	require.NotZero(t, r.Root.Friends[4].Facets.Age)
 }
 
 func TestRetrieveFacetsAll(t *testing.T) {
