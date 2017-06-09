@@ -274,7 +274,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
 	addEdgeToLangValue(t, "name", 0x1002, "Honey badger", "en", nil)
 	addEdgeToLangValue(t, "name", 0x1003, "Honey bee", "en", nil)
-	// data for bug (#945)
+	// data for bug (#945), also used by test for #1010
 	addEdgeToLangValue(t, "name", 0x1004, "Артём Ткаченко", "ru", nil)
 	addEdgeToLangValue(t, "name", 0x1004, "Artem Tkachenko", "en", nil)
 
@@ -5901,7 +5901,7 @@ func TestLangMultiple_Alias(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"c":"Badger","b":"Badger","a":"Borsuk europejski"}]}`,
+		`{"me":[{"c":"Badger","a":"Borsuk europejski"}]}`,
 		js)
 }
 
@@ -5947,7 +5947,7 @@ func TestLangSingleFallback(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name@cn":"Badger"}]}`,
+		`{}`,
 		js)
 }
 
@@ -6007,7 +6007,100 @@ func TestLangManyFallback(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name@hu:fi:cn":"Badger"}]}`,
+		`{}`,
+		js)
+}
+
+func TestLangNoFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestLangSingleNoFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@cn
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestLangMultipleNoFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@cn:hi
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestLangOnlyForcedFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@.
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	// this test is fragile - '.' may return value in any language (depending on data)
+	require.JSONEq(t,
+		`{"me":[{"name@.":"Artem Tkachenko"}]}`,
+		js)
+}
+
+func TestLangSingleForcedFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@cn:.
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	// this test is fragile - '.' may return value in any language (depending on data)
+	require.JSONEq(t,
+		`{"me":[{"name@cn:.":"Artem Tkachenko"}]}`,
+		js)
+}
+
+func TestLangMultipleForcedFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@hi:cn:.
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	// this test is fragile - '.' may return value in any language (depending on data)
+	require.JSONEq(t,
+		`{"me":[{"name@hi:cn:.":"Artem Tkachenko"}]}`,
 		js)
 }
 
@@ -6467,7 +6560,7 @@ func TestToFastJSONOrderLang(t *testing.T) {
 	query := `
 		{
 			me(id:0x01) {
-				friend(first:2, orderdesc: alias@en:de) {
+				friend(first:2, orderdesc: alias@en:de:.) {
 					alias
 				}
 			}

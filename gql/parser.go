@@ -1826,7 +1826,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 func parseLanguageList(it *lex.ItemIterator) []string {
 	item := it.Item()
 	var langs []string
-	for ; item.Typ == itemName; item = it.Item() {
+	for ; item.Typ == itemName || item.Typ == itemPeriod; item = it.Item() {
 		langs = append(langs, item.Val)
 		it.Next()
 		if it.Item().Typ == itemColon {
@@ -2059,13 +2059,24 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			return nil
 		case itemRightCurl:
 			return nil
-		case itemThreeDots:
-			it.Next()
-			item = it.Item()
-			if item.Typ == itemName {
-				// item.Val is expected to start with "..." and to have len >3.
-				gq.Children = append(gq.Children, &GraphQuery{fragment: item.Val})
-				// Unlike itemName, there is no nesting, so do not change "curp".
+		case itemPeriod:
+			// looking for ...
+			dots := 1
+			for i := 0; i < 2; i++ {
+				if it.Next() && it.Item().Typ == itemPeriod {
+					dots++
+				}
+			}
+			if dots == 3 {
+				it.Next()
+				item = it.Item()
+				if item.Typ == itemName {
+					// item.Val is expected to start with "..." and to have len >3.
+					gq.Children = append(gq.Children, &GraphQuery{fragment: item.Val})
+					// Unlike itemName, there is no nesting, so do not change "curp".
+				}
+			} else {
+				return x.Errorf("Expected 3 periods (\"...\"), got %d.", dots)
 			}
 		case itemName:
 			peekIt, err := it.Peek(1)

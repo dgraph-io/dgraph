@@ -33,9 +33,18 @@ RDF N-Quad allows specifying the language for string values, using `@lang`. Usin
 <0x01> <name> "Алисия"@ru .
 <0x01> <name> "Adélaïde"@fr .
 ```
-To specify the language of the value to be returned from query `@lang1:lang2:lang3` notation is used. It is extension over RDF N-Quad syntax, and allows specifying multiple languages in order of preference. If value in given language is not found, next language from list is considered. If there are no values in any of specified languages, the value without specified language is returned. At last, if there is no value without language, value in ''some'' language is returned (this is implementation specific).
+To specify the language of the value to be returned from query `@lang1:lang2:lang3` notation is used. It is extension over RDF N-Quad syntax, and allows specifying multiple languages in order of preference. If value in given language is not found, next language from list is considered. If there are no values in any of specified languages, no value is returned. There is also an option to get default or any value. If `.` is used in language lists, it means that the value without specified language is returned or if there is no value without language, value in ''some'' language is returned (this is implementation specific).
 
-{{% notice "note" %}}Languages preference list cannot be used in functions.{{% /notice %}}
+{{% notice "note" %}}In functions arguments only single language can be specified. Language lists and `.` notation is not supported.{{% /notice %}}
+
+Following examples clarify the usage of language lists.
+
+- `name`   => Look for default, then return nothing.
+- `name@.` => Look for default, then any language.
+- `name@en` => Look for en, then return nothing.
+- `name@en:.` => Look for en, then default, then any language.
+- `name@en:pl` => Look for en, then pl, then return nothing.
+- `name@en:pl:.` => Look for en, then pl, then default, then any language.
 
 ### Batch mutations
 
