@@ -83,7 +83,6 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 	}
 
 	switch field.Type.Kind() {
-	// TODO - Handle all types.
 	case reflect.String:
 		f.SetString(value.GetStrVal())
 	case reflect.Int64, reflect.Int:

@@ -20,6 +20,7 @@ package query
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"testing"
 
@@ -201,5 +202,6 @@ func processToPB(t *testing.T, query string, variables map[string]string,
 
 	pb, err := ToProtocolBuf(&l, sgl)
 	require.NoError(t, err)
+	fmt.Printf("L: %+v\n", l)
 	return pb
 }

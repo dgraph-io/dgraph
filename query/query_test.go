@@ -7776,7 +7776,8 @@ func TestPBUnmarshalToStruct6(t *testing.T) {
 			}
 		}
 	`
-	pb := processToPB(t, query, map[string]string{}, false)
+	pb := processToPB(t, query, map[string]string{}, true)
+	fmt.Println(pb)
 	var r res
 	err := client.Unmarshal(pb, &r)
 	require.NoError(t, err)
