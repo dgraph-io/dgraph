@@ -24,6 +24,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -151,6 +152,65 @@ func TestRetrieveFacetsUidValues(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"},"name":{"origin":"french"}},"name":"Rick Grimes"},{"@facets":{"_":{"close":true,"family":true,"since":"2004-05-02T15:04:05Z","tag":"Domain3"},"name":{"origin":"french"}},"name":"Glenn Rhee"},{"@facets":{"_":{"close":false,"family":true,"since":"2007-05-02T15:04:05Z", "tag":34}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Andrea"},{"@facets":{"_":{"age":33,"close":true,"family":false,"since":"2005-05-02T15:04:05Z"}}}]}]}`,
 		js)
+}
+
+func TestRetrieveFacetsProtoUnmarshal(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+
+	type friendFacet struct {
+		Since  time.Time `dgraph:"since"`
+		Family bool      `dgraph:"family"`
+		Tag    string    `dgraph:"tag"`
+		Age    int       `dgraph:"age"`
+		Close  bool      `dgraph:"close"`
+	}
+
+	type nameFacet struct {
+		Origin string `dgraph:"origin"`
+	}
+
+	type uidFacet struct {
+		FriendFacet friendFacet `dgraph:"friend"`
+	}
+
+	type friendFacets struct {
+		UidFacets uidFacet  `dgraph:"_"`
+		NameFacet nameFacet `dgraph:"name"`
+	}
+
+	type Person struct {
+		Name    string       `dgraph:"name"`
+		Facets  friendFacets `dgraph:"@facets"`
+		Friends []Person     `dgraph:"friend"`
+	}
+
+	type res struct {
+		Root Person `dgraph:"me"`
+	}
+
+	// to see how friend @facets are positioned in output.
+	query := `
+		{
+			me(id:0x1) {
+				name
+				friend @facets {
+					name @facets
+				}
+			}
+		}
+	`
+
+	pb := processToPB(t, query, nil, false)
+	var r res
+	client.Unmarshal(pb, &r)
+	require.Equal(t, "french", r.Root.Friends[1].Facets.NameFacet.Origin)
+	ff := r.Root.Friends[1].Facets.UidFacets.FriendFacet
+	require.NotZero(t, ff.Since)
+	require.NotZero(t, ff.Close)
+	require.NotZero(t, ff.Family)
+	require.NotZero(t, ff.Tag)
+	require.NotZero(t, r.Root.Friends[4].Facets.UidFacets.FriendFacet.Age)
 }
 
 func TestRetrieveFacetsAll(t *testing.T) {
