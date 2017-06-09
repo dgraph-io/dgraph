@@ -1262,11 +1262,11 @@ func TestUseVarsMultiCascade1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			him(id:0x01) {
+			him(id:0x01) @cascade {
 				L as friend {
-				 B as friend
+					B as friend
 					name
-			 }
+			 	}
 			}
 
 			me(id: var(L, B)) {
@@ -1284,9 +1284,9 @@ func TestUseVarsMultiCascade(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			var(id:0x01) {
+			var(id:0x01) @cascade {
 				L as friend {
-				 B as friend
+				 	B as friend
 				}
 			}
 
@@ -1438,6 +1438,7 @@ func TestVarInAggError(t *testing.T) {
 	_, err = ProcessQuery(ctx, res, &l)
 	require.Error(t, err)
 }
+
 func TestVarInIneqError(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1863,7 +1864,7 @@ func TestUseVarsCascade(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			var(id:0x01) {
+			var(id:0x01) @cascade {
 				L as friend {
 				  friend
 				}
@@ -3906,6 +3907,28 @@ func TestToFastJSONFilterNot3(t *testing.T) {
 				name
 				gender
 				friend @filter(not (anyofterms(name, "Andrea") or anyofterms(name, "Glenn Rick Andrea"))) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Daryl Dixon"}]}]}`, js)
+}
+
+func TestToFastJSONFilterNot4(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend (first:2) @filter(not anyofterms(name, "Andrea")
+				and not anyofterms(name, "glenn")
+				and not anyofterms(name, "rick")
+			) {
 					name
 				}
 			}
@@ -6248,7 +6271,10 @@ func TestSchemaBlock3(t *testing.T) {
 		}
 	`
 	actual := processSchemaQuery(t, query)
-	expected := []*protos.SchemaNode{{Predicate: "age", Type: "int"}}
+	expected := []*protos.SchemaNode{{Predicate: "age",
+		Type:      "int",
+		Index:     true,
+		Tokenizer: []string{"int"}}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6263,7 +6289,12 @@ func TestSchemaBlock4(t *testing.T) {
 	`
 	actual := processSchemaQuery(t, query)
 	expected := []*protos.SchemaNode{
-		{Predicate: "genre", Type: "uid", Reverse: true}, {Predicate: "age", Type: "int"}}
+		{Predicate: "genre",
+			Type:    "uid",
+			Reverse: true}, {Predicate: "age",
+			Type:      "int",
+			Index:     true,
+			Tokenizer: []string{"int"}}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6279,21 +6310,21 @@ func TestSchemaBlock5(t *testing.T) {
 }
 
 const schemaStr = `
-name:string @index(term, exact, trigram ) .
-alias:string @index(exact, term, fulltext) .
-dob:date @index .
-film.film.initial_release_date:date @index .
-loc:geo @index .
-genre:uid @reverse .
-survival_rate : float .
-alive         : bool @index .
-age           : int .
-shadow_deep   : int .
-friend:uid @reverse .
-geometry:geo @index .
-value:string @index(trigram) .
-full_name:string @index(hash) .
-noindex_name: string .
+name                           : string @index(term, exact, trigram) .
+alias                          : string @index(exact, term, fulltext) .
+dob                            : date @index .
+film.film.initial_release_date : date @index .
+loc                            : geo @index .
+genre                          : uid @reverse .
+survival_rate                  : float .
+alive                          : bool @index .
+age                            : int @index .
+shadow_deep                    : int .
+friend                         : uid @reverse .
+geometry                       : geo @index .
+value                          : string @index(trigram) .
+full_name                      : string @index(hash) .
+noindex_name                   : string .
 `
 
 func TestMain(m *testing.M) {
@@ -6306,6 +6337,7 @@ func TestMain(m *testing.M) {
 
 	opt := badger.DefaultOptions
 	opt.Dir = dir
+	opt.ValueDir = dir
 	ps, err = badger.NewKV(&opt)
 	defer ps.Close()
 	x.Check(err)
@@ -6334,7 +6366,7 @@ func TestFilterNonIndexedPredicateFail(t *testing.T) {
 	query := `
 		{
 			me(id:0x01) {
-				friend @filter(le(age, 30)) {
+				friend @filter(le(survival_rate, 30)) {
 					_uid_
 					name
 					age
@@ -7202,7 +7234,7 @@ func TestCountAtRoot5(t *testing.T) {
 
         `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+	require.JSONEq(t, `{"MichonneFriends":[{"count":5}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }
 
 func TestHasFuncAtRoot(t *testing.T) {
@@ -7449,4 +7481,205 @@ func TestGetAllPredicatesGroupby(t *testing.T) {
 	require.Contains(t, predicates, "name")
 	require.Contains(t, predicates, "age")
 	require.Contains(t, predicates, "friend")
+}
+
+func TestMathVarCrash(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f(func: anyofterms(name, "Rick Michonne Andrea")) {
+				age as age
+				a as math(age *2)
+				var(a)
+			}
+		}
+	`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
+func TestMathVarAlias(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f(func: anyofterms(name, "Rick Michonne Andrea")) {
+				ageVar as age
+				a: math(ageVar *2)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"f":[{"a":76.000000,"age":38},{"a":30.000000,"age":15},{"a":38.000000,"age":19}]}`, string(js))
+}
+
+func TestMathVarAlias2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as me(func: anyofterms(name, "Rick Michonne Andrea")) {
+				ageVar as age
+				doubleAge: a as math(ageVar *2)
+			}
+
+			me2(id: var(f)) {
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"age":38,"doubleAge":76.000000},{"age":15,"doubleAge":30.000000},{"age":19,"doubleAge":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, string(js))
+}
+
+func TestMathVar3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			f as me(func: anyofterms(name, "Rick Michonne Andrea")) {
+				ageVar as age
+				a as math(ageVar *2)
+			}
+
+			me2(id: var(f)) {
+				var(a)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"age":38,"var(a)":76.000000},{"age":15,"var(a)":30.000000},{"age":19,"var(a)":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, string(js))
+}
+
+func TestMultipleEquality(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: eq(name, ["Rick Grimes"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"}]}`, js)
+}
+
+func TestMultipleEquality2(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: eq(name, ["Badger", "Bobby", "Matt"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Matt"},{"name":"Badger"}]}`, js)
+}
+
+func TestMultipleEquality3(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: eq(dob, ["1910-01-01", "1909-05-05"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestMultipleEquality4(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
+	query := `
+	{
+		me(func: eq(dob, ["1910-01-01", "1909-05-05"])) {
+			name
+			friend @filter(eq(name, ["Rick Grimes", "Andrea"])) {
+				name
+			}
+		}
+	}
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}],"name":"Michonne"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestMultipleGtError(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: gt(name, ["Badger", "Bobby"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+
+  `
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
+func TestMultipleEqQuote(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: eq(name, ["Alice\"", "Michonne"])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"name":"Alice\""}]}`, js)
+}
+
+func TestMultipleEqInt(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: eq(age, [15, 17, 38])) {
+			name
+			friend {
+				name
+			}
+		}
+	}
+`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"name":"Glenn Rhee"}],"name":"Daryl Dixon"}]}`, js)
 }

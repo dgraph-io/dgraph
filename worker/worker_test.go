@@ -114,6 +114,7 @@ func initTest(t *testing.T, schemaStr string) (string, *badger.KV) {
 
 	opt := badger.DefaultOptions
 	opt.Dir = dir
+	opt.ValueDir = dir
 	ps, err := badger.NewKV(&opt)
 	x.Check(err)
 

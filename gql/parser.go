@@ -1277,6 +1277,51 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 	return nil
 }
 
+func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
+	buf := new(bytes.Buffer)
+	buf.WriteString("[")
+	depth := 1
+	for {
+		if valid := it.Next(); !valid {
+			return x.Errorf("Got EOF while parsing Geo tokens")
+		}
+		item := it.Item()
+		switch item.Typ {
+		case itemLeftSquare:
+			buf.WriteString(item.Val)
+			depth++
+		case itemRightSquare:
+			buf.WriteString(item.Val)
+			depth--
+		case itemMathOp, itemComma, itemName:
+			// Writing tokens to buffer.
+			buf.WriteString(item.Val)
+		default:
+			return x.Errorf("Found invalid item: %s while parsing geo arguments.",
+				item.Val)
+		}
+
+		if depth > 2 || depth < 0 {
+			return x.Errorf("Invalid bracket sequence")
+		} else if depth == 0 {
+			break
+		}
+	}
+	// Lets append the concatenated Geo token to Args.
+	// TODO - See if we can directly encode to Geo format.
+	g.Args = append(g.Args, buf.String())
+	items, err := it.Peek(1)
+	if err != nil {
+		return x.Errorf("Unexpected EOF while parsing args")
+	}
+	item := items[0]
+	if item.Typ != itemRightRound && item.Typ != itemComma {
+		return x.Errorf("Expected right round or comma. Got: %+v",
+			items[0])
+	}
+	return nil
+}
+
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
 	var expectArg, seenFuncArg, expectLang, isDollar bool
@@ -1366,6 +1411,28 @@ L:
 					g.Args = append(g.Args, expr, flags)
 					expectArg = false
 					continue
+					// Lets reassemble the geo tokens.
+				} else if itemInFunc.Typ == itemLeftSquare {
+					if isGeoFunc(g.Name) {
+						if err := parseGeoArgs(it, g); err != nil {
+							return nil, err
+						}
+						expectArg = false
+						continue
+					}
+
+					if valid := it.Next(); !valid {
+						return nil,
+							x.Errorf("Unexpected EOF while parsing args")
+					}
+					itemInFunc = it.Item()
+				} else if itemInFunc.Typ == itemRightSquare {
+					if _, err := it.Peek(1); err != nil {
+						return nil,
+							x.Errorf("Unexpected EOF while parsing args")
+					}
+					expectArg = false
+					continue
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -1373,7 +1440,10 @@ L:
 				if !expectArg && !expectLang {
 					return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
 				}
-				val += strings.Trim(itemInFunc.Val, "\" \t")
+				v := strings.Trim(itemInFunc.Val, " \t")
+				// Trim just one leading and trailing "
+				v = strings.TrimPrefix(v, "\"")
+				val += strings.TrimSuffix(v, "\"")
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
@@ -1626,6 +1696,8 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	return valueStack.pop()
 }
 
+// Parses ID list. Only used for GraphQL variables.
+// TODO - Maybe get rid of this by lexing individual IDs.
 func parseID(gq *GraphQuery, val string) error {
 	val = x.WhiteSpace.Replace(val)
 	if val[0] != '[' {
@@ -1768,6 +1840,73 @@ func parseLanguageList(it *lex.ItemIterator) []string {
 	return langs
 }
 
+func parseId(it *lex.ItemIterator, gq *GraphQuery) error {
+	if !it.Next() {
+		return x.Errorf("Invalid query")
+	}
+	item := it.Item()
+	if item.Val == "var" {
+		// Any number of variables allowed here.
+		_, err := parseVarList(it, gq)
+		return err
+	}
+
+	isDollar := false
+	if item.Typ == itemDollar {
+		isDollar = true
+		if valid := it.Next(); !valid {
+			return x.Errorf("Expected a variable name. Got EOF")
+		}
+		item = it.Item()
+		if item.Typ != itemName {
+			return x.Errorf("Expected a variable name. Got: %v", item.Val)
+		}
+	}
+
+	// Its a list of ids.
+	if item.Typ == itemLeftSquare {
+		if valid := it.Next(); !valid {
+			return x.Errorf("Unexpected EOF while parsing list of ids")
+		}
+		item = it.Item()
+	L:
+		for {
+			switch item.Typ {
+			case itemRightSquare:
+				break L
+			case itemComma:
+				if valid := it.Next(); !valid {
+					return x.Errorf("Unexpected EOF while parsing list of ids")
+				}
+				item = it.Item()
+				continue
+			case itemName:
+				val := collectName(it, item.Val)
+				gq.ID = append(gq.ID, val)
+				if valid := it.Next(); !valid {
+					return x.Errorf("Unexpected EOF while parsing list of ids")
+				}
+				item = it.Item()
+			default:
+				return x.Errorf("Unexpected item: %s while parsing list of ids",
+					item.Val)
+			}
+		}
+		return nil
+	}
+	// Its a single id.
+	val := collectName(it, item.Val)
+	// Its a GraphQL id variable.
+	if isDollar {
+		val = "$" + val
+		gq.Args["id"] = val
+		// We can continue, we will parse the id later when we fill GraphQL variables.
+		return nil
+	}
+	gq.ID = append(gq.ID, val)
+	return nil
+}
+
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
@@ -1834,40 +1973,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		}
 
 		if key == "id" {
-			if !it.Next() {
-				return nil, x.Errorf("Invalid query")
-			}
-			item = it.Item()
-			if item.Val == "var" {
-				// Any number of variables allowed here.
-				_, err := parseVarList(it, gq)
-				if err != nil {
-					return nil, err
-				}
-				continue
-			}
-			isDollar := false
-			if item.Typ == itemDollar {
-				isDollar = true
-				it.Next()
-				item = it.Item()
-				if item.Typ != itemName {
-					return nil, x.Errorf("Expected a variable name. Got: %v", item.Val)
-				}
-			}
-			// Check and parse if its a list.
-			val := collectName(it, item.Val)
-			if isDollar {
-				val = "$" + val
-				gq.Args["id"] = val
-				// We can continue, we will parse the id later when we fill GraphQL variables.
-				continue
-			}
-			err := parseID(gq, val)
-			if err != nil {
+			if err := parseId(it, gq); err != nil {
 				return nil, err
 			}
-
 		} else if key == "func" {
 			// Store the generator function.
 			gen, err := parseFunction(it)
@@ -1885,7 +1993,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 			if item.Typ == itemMathOp {
 				if item.Val != "+" && item.Val != "-" {
-					return nil, x.Errorf("Only Plus and minus are allowed unary ops. Got: %v", item.Val)
+					return nil,
+						x.Errorf("Only Plus and minus are allowed unary ops. Got: %v",
+							item.Val)
 				}
 				val = item.Val
 				it.Next()
@@ -2047,11 +2157,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				curp = nil
 				continue
 			} else if isMathBlock(valLower) {
-				if varName == "" {
-					return x.Errorf("Function %v should be used with a variable", val)
-				}
-				if alias != "" {
-					return x.Errorf("math() cannot have an alias")
+				if varName == "" && alias == "" {
+					return x.Errorf("Function math should be used with a variable or have an alias")
 				}
 				mathTree, again, err := parseMathFunc(it, false)
 				if err != nil {
@@ -2062,6 +2169,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				child := &GraphQuery{
 					Attr:       val,
+					Alias:      alias,
 					Args:       make(map[string]string),
 					Var:        varName,
 					MathExp:    mathTree,
@@ -2237,6 +2345,12 @@ func isMathBlock(name string) bool {
 	return name == "math"
 }
 
+func isGeoFunc(name string) bool {
+	return name == "near" || name == "contains" || name == "within" || name == "intersects"
+}
+
+// Name can have dashes or alphanumeric characters. Lexer lexes them as separate items.
+// We put it back together here.
 func collectName(it *lex.ItemIterator, val string) string {
 	var dashOrName bool // false if expecting dash, true if expecting name
 	for {

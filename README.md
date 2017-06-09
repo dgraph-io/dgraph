@@ -13,7 +13,7 @@ with low enough latency to be serving real time user queries, over terabytes of 
 Dgraph supports [GraphQL-like query syntax](https://docs.dgraph.io/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/).
 
 ## Get Started
-**To get started with Dgraph, follow [this 5-step tutorial](https://docs.dgraph.io).**
+**To get started with Dgraph, follow this [interactive tutorial](https://tour.dgraph.io).**
 
 ## Current Status
 
