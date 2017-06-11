@@ -3940,6 +3940,36 @@ func TestToFastJSONFilterNot4(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Daryl Dixon"}]}]}`, js)
 }
 
+// TestToFastJSONFilterNot4 was unstable (fails observed locally and on travis).
+// Following method repeats the query to make sure that it never fails.
+// It's commented out, because it's too slow for everyday testing.
+/*
+func TestToFastJSONFilterNot4x1000000(t *testing.T) {
+	populateGraph(t)
+	for i := 0; i < 1000000; i++ {
+		query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend (first:2) @filter(not anyofterms(name, "Andrea")
+				and not anyofterms(name, "glenn")
+				and not anyofterms(name, "rick")
+			) {
+				name
+			}
+		}
+	}
+	`
+
+		js := processToFastJSON(t, query)
+		require.JSONEq(t,
+			`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Daryl Dixon"}]}]}`, js,
+			"tzdybal: %d", i)
+	}
+}
+*/
+
 func TestToFastJSONFilterAnd(t *testing.T) {
 	populateGraph(t)
 	query := `

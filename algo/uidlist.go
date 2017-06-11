@@ -218,9 +218,9 @@ func Difference(u, v *protos.List) {
 	if u == nil || v == nil {
 		return
 	}
-	out := u.Uids[:0]
 	n := len(u.Uids)
 	m := len(v.Uids)
+	out := make([]uint64, 0, n)
 	i, k := 0, 0
 	for i < n && k < m {
 		uid := u.Uids[i]
