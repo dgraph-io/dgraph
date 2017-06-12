@@ -60,6 +60,39 @@ function isElementInViewport(el) {
   );
 }
 
+/**
+ * getCurrentVersion gets the current doc version from the URL path and returns it
+ *
+ * @params pathname {String} - current path in a format of '/current/path'.
+ * @return {String} - e.g. 'master', 'v7.7.1', ''
+ *                    empty string denotes the latest version
+ */
+function getCurrentVersion(pathname) {
+  const candidate = pathname.split("/")[1];
+
+  if (candidate === "master") {
+    return candidate;
+  }
+
+  if (/v\d\.\d\.\d/.test(candidate)) {
+    return candidate;
+  }
+
+  return "";
+}
+
+// getPathWithoutVersionName gets the current URL path without the version prefix
+function getPathWithoutVersionName(location, versionName) {
+  let path;
+  if (versionName === "") {
+    path = location.pathname.split("/").slice(1).join("/");
+  } else {
+    path = location.pathname.split("/").slice(2).join("/");
+  }
+
+  return path + location.hash;
+}
+
 (function() {
   // clipboard
   var clipInit = false;
@@ -294,17 +327,16 @@ function isElementInViewport(el) {
   });
 
   // version selector
-  var currentVersion = location.pathname.split("/")[1];
+  var currentVersion = getCurrentVersion(location.pathname);
   document
     .getElementsByClassName("version-selector")[0]
     .addEventListener("change", function(e) {
-      // targetVersion: '', '/v0.7.7', 'v0.7.6', etc.
+      // targetVersion: '', 'master', 'v0.7.7', 'v0.7.6', etc.
       var targetVersion = e.target.value;
 
       if (currentVersion !== targetVersion) {
         // Getting everything after targetVersion and concatenating it with the hash part.
-        var currentPath =
-          location.pathname.split("/").slice(2).join("/") + location.hash;
+        var currentPath = getPathWithoutVersionName(location, currentVersion);
 
         var targetPath;
         if (targetVersion === "") {
@@ -331,6 +363,7 @@ function isElementInViewport(el) {
       break;
     }
   }
+  ("\ ");
 
   // Add target = _blank to all external links.
   var links = document.links;
