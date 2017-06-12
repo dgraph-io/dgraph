@@ -3524,3 +3524,17 @@ func TestParseEqArg2(t *testing.T) {
 	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
 	require.Equal(t, 2, len(gql.Query[0].Func.Args))
 }
+
+func TestFilterUid(t *testing.T) {
+	query := `
+	{
+		me(func: uid(1, 3 , 5, 7)) @filter(uid(3, 7)) {
+			name
+		}
+	}
+	`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, []string{"1", "3", "5", "7"}, gql.Query[0].Func.Args)
+	require.Equal(t, []string{"3", "7"}, gql.Query[0].Filter.Func.Args)
+}

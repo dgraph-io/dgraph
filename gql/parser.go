@@ -1451,7 +1451,9 @@ L:
 					val = "$" + val
 					isDollar = false
 				}
-				if len(g.Attr) == 0 {
+				// Unlike other functions, uid function has no attribute,
+				// everything is args.
+				if len(g.Attr) == 0 && g.Name != "uid" {
 					if strings.ContainsRune(itemInFunc.Val, '"') {
 						return nil, x.Errorf("Attribute in function must not be quoted with \": %s",
 							itemInFunc.Val)
@@ -1463,6 +1465,7 @@ L:
 				} else {
 					g.Args = append(g.Args, val)
 				}
+
 				if g.Name == "var" {
 					g.NeedsVar = append(g.NeedsVar, VarContext{
 						Name: val,
