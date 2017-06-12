@@ -10,17 +10,16 @@ title = "Dgraph Documentation"
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
 
+**Welcome to the official Dgraph documentation. Here you will find useful documentation for Dgraph and more.**
+
 Dgraph is an open source, scalable, distributed, highly available and fast graph database, designed from ground up to be run in production.
 
-## Get started with Dgraph
+## Using Dgraph
 
-Get started with Dgraph in a minute by following the [Get started](/get-started) section. Or take a step-by-step, guided tour of Dgraph at [Tour of Dgraph](https://tour.dgraph.io).
+{{< toc >}}
 
-## Talk to our community
+## Our Community
 
-Dgraph is made better everyday by the growing community and the contributors all over the world.
+**Dgraph is made better everyday by the growing community and the contributors all over the world.**
 
-It is very easy to get help and give feedback. The Dgraph team is always on Slack.
-
-* [Slack](https://slack.dgraph.io)
-* [Forum](https://discuss.dgraph.io)
+{{< community-toc >}}
