@@ -344,7 +344,7 @@ func enrichSchema(updates []*protos.SchemaUpdate) error {
 	for _, schema := range updates {
 		typ := types.TypeID(schema.ValueType)
 
-		if typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID &&
+		if (typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID) &&
 			schema.Directive == protos.SchemaUpdate_INDEX {
 			return x.Errorf("Indexing not allowed on predicate %s of type %s",
 				schema.Predicate, typ.Name())
@@ -542,6 +542,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "Query")
+		tr.SetMaxEvents(1000)
 		defer tr.Finish()
 		ctx = trace.NewContext(ctx, tr)
 	}
@@ -570,10 +571,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var cancel context.CancelFunc
 	// set timeout if schema mutation not present
 	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
 		// If schema mutation is not present
-		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Minute)
 		defer cancel()
 	}
@@ -809,6 +810,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	var schemaNodes []*protos.SchemaNode
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
+		tr.SetMaxEvents(1000)
 		defer tr.Finish()
 		ctx = trace.NewContext(ctx, tr)
 	}
@@ -834,6 +836,14 @@ func (s *grpcServer) Run(ctx context.Context,
 		return resp, err
 	}
 	l.Parsing += time.Since(l.Start)
+
+	var cancel context.CancelFunc
+	// set timeout if schema mutation not present
+	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
+		// If schema mutation is not present
+		ctx, cancel = context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+	}
 
 	// If mutations are part of the query, we run them through the mutation handler
 	// same as the http client.
@@ -1057,6 +1067,7 @@ func main() {
 	opt := badger.DefaultOptions
 	opt.SyncWrites = true
 	opt.Dir = *postingDir
+	opt.ValueDir = *postingDir
 	ps, err := badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	defer ps.Close()

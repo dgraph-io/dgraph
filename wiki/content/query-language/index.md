@@ -33,9 +33,18 @@ RDF N-Quad allows specifying the language for string values, using `@lang`. Usin
 <0x01> <name> "Алисия"@ru .
 <0x01> <name> "Adélaïde"@fr .
 ```
-To specify the language of the value to be returned from query `@lang1:lang2:lang3` notation is used. It is extension over RDF N-Quad syntax, and allows specifying multiple languages in order of preference. If value in given language is not found, next language from list is considered. If there are no values in any of specified languages, the value without specified language is returned. At last, if there is no value without language, value in ''some'' language is returned (this is implementation specific).
+To specify the language of the value to be returned from query `@lang1:lang2:lang3` notation is used. It is extension over RDF N-Quad syntax, and allows specifying multiple languages in order of preference. If value in given language is not found, next language from list is considered. If there are no values in any of specified languages, no value is returned. There is also an option to get default or any value. If `.` is used in language lists, it means that the value without specified language is returned or if there is no value without language, value in ''some'' language is returned (this is implementation specific).
 
-{{% notice "note" %}}Languages preference list cannot be used in functions.{{% /notice %}}
+{{% notice "note" %}}In functions arguments only single language can be specified. Language lists and `.` notation is not supported.{{% /notice %}}
+
+Following examples clarify the usage of language lists.
+
+- `name`   => Look for default, then return nothing.
+- `name@.` => Look for default, then any language.
+- `name@en` => Look for en, then return nothing.
+- `name@en:.` => Look for en, then default, then any language.
+- `name@en:pl` => Look for en, then pl, then return nothing.
+- `name@en:pl:.` => Look for en, then pl, then default, then any language.
 
 ### Batch mutations
 
@@ -212,7 +221,7 @@ mutation {
   schema {
     director.film: uid @reverse .
     genre: uid @reverse .
-    initial_release_date: datetime @index .
+    initial_release_date: dateTime @index .
     rating: uid @reverse .
     country: uid @reverse .
     loc: geo @index .
@@ -318,10 +327,10 @@ age: int .
 name           : string @index   .
 age            : int @index      .
 address        : string @index   .
-dateofbirth    : datetime @index     .
+dateofbirth    : dateTime @index     .
 health         : float @index    .
 location       : geo @index      .
-timeafterbirth : datetime @index .
+timeafterbirth : dateTime @index .
 ```
 
 All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`.
@@ -331,13 +340,13 @@ name	       : string @index(exact, term) .
 large_name     : string @index(hash) 	    .
 age            : int @index(int)            .
 address        : string @index(term)        .
-dateofbirth    : datetime @index(datetime)          .
+dateofbirth    : dateTime @index(dateTime)          .
 health         : float @index(float)        .
 location       : geo @index(geo)            .
-timeafterbirth : datetime @index(datetime)  .
+timeafterbirth : dateTime @index(dateTime)  .
 ```
 
-The available tokenizers are currently `term, fulltext, exact, trigram, hash, int, float, geo, date, datetime`. String has `term` as the default tokenizer. All of the other data types have a default tokenizer with the same name as the type. You can specify multiple tokenizers per predicate as shown for `name` in the above example. Currently, only predicates of type string support more than one tokenizer.
+The available tokenizers are currently `term, fulltext, exact, trigram, hash, int, float, geo, date, dateTime`. String has `term` as the default tokenizer. All of the other data types have a default tokenizer with the same name as the type. You can specify multiple tokenizers per predicate as shown for `name` in the above example. Currently, only predicates of type string support more than one tokenizer.
 
 {{% notice "note" %}}To be able to do filtering on a predicate, you must index it.{{% /notice %}}
 
@@ -359,7 +368,7 @@ Not all the indices establish a total order among the values that they index. So
 name: string @index(exact) .
 ```
 
-For string, only `exact` is a sortable index. `int`, `float`, `date` and `datetime` are also sortable indices.
+For string, only `exact` is a sortable index. `int`, `float` and `dateTime` are also sortable indices.
 
 ### Reverse Edges
 Each graph edge is unidirectional. It points from one node to another. A lot of times,  you wish to access data in both directions, forward and backward. Instead of having to send edges in both directions, you can use the `@reverse` keyword at the end of a uid (entity) field declaration in the schema. This specifies that the reverse edge should be automatically generated. For example, if we want to add a reverse edge for `directed_by` predicate, we should have a schema as follows.
@@ -801,7 +810,7 @@ The following [Scalar_Types]({{<relref "#scalar-types">}}) can be used in inequa
 * int
 * float
 * string
-* datetime
+* dateTime
 
 #### Less than or equal to
 `le` is used to filter or obtain UIDs whose value for a predicate is less than or equal to a given value.
@@ -1022,7 +1031,7 @@ Though you may find yourself leaning towards facets many times, they should not 
 Like `friend` edge should not have `date of birth`. That should be edge for object node of `friend`.
 Another reason is that facets are not first class citizen in Dgraph like predicates (edges).
 
-Keys are strings and Values can be string, bool, int, float and datetime.
+Keys are strings and Values can be string, bool, int, float and dateTime.
 For int and float, only decimal integer of upto 32 signed bits and 64 bit float values are accepted respectively.
 
 Example : Adds `since` facet in `mobile` edge for `alice`:
@@ -1641,7 +1650,7 @@ The supported operators are as follows:
 | `min` `max`                     | All types except geo, bool  (binary functions) | selects the min/max value among the two                        |
 | `<` `>` `<=` `>=` `==` `!=`     | All types except geo, bool                     | Returns true or false based on the values                      |
 | `floor` `ceil``ln` `exp` `sqrt` | int, float (unary function)                    | performs the corresponding operation                           |
-| `since`                         | date, datetime                                 | Returns the number of seconds in float from the time specified |
+| `since`                         | dateTime                                 | Returns the number of seconds in float from the time specified |
 | `pow(a, b)`                     | int, float                                     | Returns `a to the power b`                                     |
 | `logbase(a,b)`                  | int, float                                     | Returns `log(a)` to the base `b`                               |
 | `cond(a, b, c)`                 | first operand must be a boolean                | selects `b` if `a` is true else `c`                            |

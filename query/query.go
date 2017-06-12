@@ -438,10 +438,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		} else {
 			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
 				fieldName += "@"
-				for _, it := range pc.Params.Langs {
-					fieldName += it + ":"
-				}
-				fieldName = fieldName[:len(fieldName)-1]
+				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
 			tv := pc.values[idx]
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
@@ -634,6 +631,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			groupbyAttrs: gchild.GroupbyAttrs,
 			FacetVar:     gchild.FacetVar,
 			uidCount:     gchild.UidCount,
+			Cascade:      sg.Params.Cascade,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &protos.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -1312,9 +1310,8 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
-			isCascade := sg.Params.Cascade || shouldCascade(res, idx)
 			var sgPath []*SubGraph
-			err = sg.populateVarMap(doneVars, isCascade, sgPath)
+			err = sg.populateVarMap(doneVars, sgPath)
 			if err != nil {
 				return nil, err
 			}
@@ -1340,26 +1337,6 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	return sgl, nil
 }
 
-// shouldCascade returns true if the query block is not self depenedent and we should
-// remove the uids from the bottom up if the children are empty.
-func shouldCascade(res gql.Result, idx int) bool {
-	if res.Query[idx].Attr == "shortest" {
-		return false
-	}
-
-	if len(res.QueryVars[idx].Defines) == 0 {
-		return false
-	}
-	for _, def := range res.QueryVars[idx].Defines {
-		for _, need := range res.QueryVars[idx].Needs {
-			if def == need {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 func (sg *SubGraph) updateUidMatrix() {
 	for _, l := range sg.uidMatrix {
 		if sg.Params.Order != "" {
@@ -1380,7 +1357,7 @@ func (sg *SubGraph) updateUidMatrix() {
 
 }
 
-func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
+func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	sgPath []*SubGraph) error {
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return nil
@@ -1395,9 +1372,9 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
 	}
 	for _, child := range sg.Children {
 		sgPath = append(sgPath, sg) // Add the current node to path
-		child.populateVarMap(doneVars, isCascade, sgPath)
+		child.populateVarMap(doneVars, sgPath)
 		sgPath = sgPath[:len(sgPath)-1] // Backtrack
-		if !isCascade {
+		if !sg.Params.Cascade {
 			continue
 		}
 
@@ -1406,7 +1383,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, isCascade bool,
 		child.updateUidMatrix()
 	}
 
-	if !isCascade {
+	if !sg.Params.Cascade {
 		goto AssignStep
 	}
 
@@ -1663,7 +1640,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.
-		sg.DestUIDs = sg.SrcUIDs
+		// Each filter use it's own (shallow) copy of SrcUIDs, so there is no race conditions,
+		// when multiple filters replace their sg.DestUIDs
+		sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
 	} else {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "var" {
 			// If its a var() filter, we just have to intersect the SrcUIDs with DestUIDs
@@ -1695,10 +1674,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.uidMatrix = result.UidMatrix
 			sg.values = result.Values
 			sg.facetsMatrix = result.FacetMatrix
-			if len(sg.values) > 0 {
-				v := sg.values[0]
-				x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
-			}
 			sg.counts = result.Counts
 
 			if sg.Params.DoCount && len(sg.Filters) == 0 {
@@ -1747,20 +1722,26 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
+		var filterErr error
 		for range sg.Filters {
 			select {
 			case err = <-filterChan:
 				if err != nil {
+					// Store error in a variable and wait for all filters to run
+					// before returning. Else tracing causes crashes.
+					filterErr = err
 					x.TraceError(ctx, x.Wrapf(err, "Error while processing filter task"))
-					rch <- err
-					return
 				}
 
 			case <-ctx.Done():
+				filterErr = ctx.Err()
 				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
-				rch <- ctx.Err()
-				return
 			}
+		}
+
+		if filterErr != nil {
+			rch <- filterErr
+			return
 		}
 
 		// Now apply the results from filter.
@@ -1886,6 +1867,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		go ProcessGraph(ctx, child, sg, childChan)
 	}
 
+	var childErr error
 	// Now get all the results back.
 	for _, child := range sg.Children {
 		if child.IsInternal() {
@@ -1894,17 +1876,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		select {
 		case err = <-childChan:
 			if err != nil {
+				childErr = err
 				x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
-				rch <- err
-				return
 			}
 		case <-ctx.Done():
+			childErr = ctx.Err()
 			x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
-			rch <- ctx.Err()
-			return
 		}
 	}
-	rch <- nil
+	rch <- childErr
 }
 
 // applyWindow applies windowing to sg.sorted.

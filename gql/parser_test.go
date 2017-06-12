@@ -2659,6 +2659,32 @@ func TestLangsInvalid5(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestLangsInvalid6(t *testing.T) {
+	query := `
+		{
+			me(id:0x1004) {
+				name@hi:cn:...
+			}
+		}
+	`
+
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestLangsInvalid7(t *testing.T) {
+	query := `
+		{
+			me(id:0x1004) {
+				name@...
+			}
+		}
+	`
+
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
 func TestLangsFilter(t *testing.T) {
 	query := `
 	query {
@@ -3356,6 +3382,7 @@ func TestMain(m *testing.M) {
 
 	opt := badger.DefaultOptions
 	opt.Dir = dir
+	opt.ValueDir = dir
 	ps, err := badger.NewKV(&opt)
 	defer ps.Close()
 	x.Check(err)
@@ -3435,6 +3462,16 @@ func TestHasFilterAtChild(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
+}
+
+// this test tests parsing of EOF inside '...'
+func TestDotsEOF(t *testing.T) {
+	query := `{
+		me(id: 0x1) {
+			name
+			..`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
 }
 
 func TestMathWithoutVarAlias(t *testing.T) {

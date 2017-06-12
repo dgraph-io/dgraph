@@ -274,7 +274,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
 	addEdgeToLangValue(t, "name", 0x1002, "Honey badger", "en", nil)
 	addEdgeToLangValue(t, "name", 0x1003, "Honey bee", "en", nil)
-	// data for bug (#945)
+	// data for bug (#945), also used by test for #1010
 	addEdgeToLangValue(t, "name", 0x1004, "Артём Ткаченко", "ru", nil)
 	addEdgeToLangValue(t, "name", 0x1004, "Artem Tkachenko", "en", nil)
 
@@ -1262,11 +1262,11 @@ func TestUseVarsMultiCascade1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			him(id:0x01) {
+			him(id:0x01) @cascade {
 				L as friend {
-				 B as friend
+					B as friend
 					name
-			 }
+			 	}
 			}
 
 			me(id: var(L, B)) {
@@ -1284,9 +1284,9 @@ func TestUseVarsMultiCascade(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			var(id:0x01) {
+			var(id:0x01) @cascade {
 				L as friend {
-				 B as friend
+				 	B as friend
 				}
 			}
 
@@ -1864,7 +1864,7 @@ func TestUseVarsCascade(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			var(id:0x01) {
+			var(id:0x01) @cascade {
 				L as friend {
 				  friend
 				}
@@ -3918,6 +3918,28 @@ func TestToFastJSONFilterNot3(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Daryl Dixon"}]}]}`, js)
 }
 
+func TestToFastJSONFilterNot4(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend (first:2) @filter(not anyofterms(name, "Andrea")
+				and not anyofterms(name, "glenn")
+				and not anyofterms(name, "rick")
+			) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Daryl Dixon"}]}]}`, js)
+}
+
 func TestToFastJSONFilterAnd(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -5879,7 +5901,7 @@ func TestLangMultiple_Alias(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"c":"Badger","b":"Badger","a":"Borsuk europejski"}]}`,
+		`{"me":[{"c":"Badger","a":"Borsuk europejski"}]}`,
 		js)
 }
 
@@ -5925,7 +5947,7 @@ func TestLangSingleFallback(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name@cn":"Badger"}]}`,
+		`{}`,
 		js)
 }
 
@@ -5985,7 +6007,100 @@ func TestLangManyFallback(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name@hu:fi:cn":"Badger"}]}`,
+		`{}`,
+		js)
+}
+
+func TestLangNoFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestLangSingleNoFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@cn
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestLangMultipleNoFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@cn:hi
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestLangOnlyForcedFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@.
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	// this test is fragile - '.' may return value in any language (depending on data)
+	require.JSONEq(t,
+		`{"me":[{"name@.":"Artem Tkachenko"}]}`,
+		js)
+}
+
+func TestLangSingleForcedFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@cn:.
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	// this test is fragile - '.' may return value in any language (depending on data)
+	require.JSONEq(t,
+		`{"me":[{"name@cn:.":"Artem Tkachenko"}]}`,
+		js)
+}
+
+func TestLangMultipleForcedFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@hi:cn:.
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	// this test is fragile - '.' may return value in any language (depending on data)
+	require.JSONEq(t,
+		`{"me":[{"name@hi:cn:.":"Artem Tkachenko"}]}`,
 		js)
 }
 
@@ -6179,21 +6294,21 @@ func TestSchemaBlock5(t *testing.T) {
 }
 
 const schemaStr = `
-name:string @index(term, exact, trigram ) .
-alias:string @index(exact, term, fulltext) .
-dob:dateTime @index .
-film.film.initial_release_date:dateTime @index .
-loc:geo @index .
-genre:uid @reverse .
-survival_rate : float .
-alive         : bool @index .
-age           : int @index .
-shadow_deep   : int .
-friend:uid @reverse .
-geometry:geo @index .
-value:string @index(trigram) .
-full_name:string @index(hash) .
-noindex_name: string .
+name                           : string @index(term, exact, trigram) .
+alias                          : string @index(exact, term, fulltext) .
+dob                            : dateTime @index .
+film.film.initial_release_date : dateTime @index .
+loc                            : geo @index .
+genre                          : uid @reverse .
+survival_rate                  : float .
+alive                          : bool @index .
+age                            : int @index .
+shadow_deep                    : int .
+friend                         : uid @reverse .
+geometry                       : geo @index .
+value                          : string @index(trigram) .
+full_name                      : string @index(hash) .
+noindex_name                   : string .
 `
 
 func TestMain(m *testing.M) {
@@ -6206,6 +6321,7 @@ func TestMain(m *testing.M) {
 
 	opt := badger.DefaultOptions
 	opt.Dir = dir
+	opt.ValueDir = dir
 	ps, err = badger.NewKV(&opt)
 	defer ps.Close()
 	x.Check(err)
@@ -6444,7 +6560,7 @@ func TestToFastJSONOrderLang(t *testing.T) {
 	query := `
 		{
 			me(id:0x01) {
-				friend(first:2, orderdesc: alias@en:de) {
+				friend(first:2, orderdesc: alias@en:de:.) {
 					alias
 				}
 			}
@@ -7102,7 +7218,7 @@ func TestCountAtRoot5(t *testing.T) {
 
         `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"MichonneFriends":[{"count":4}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+	require.JSONEq(t, `{"MichonneFriends":[{"count":5}],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
 }
 
 func TestHasFuncAtRoot(t *testing.T) {
