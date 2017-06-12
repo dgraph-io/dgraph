@@ -4,12 +4,7 @@
     <meta charset="utf-8">
     {{ partial "meta.html" . }}
     {{ .Scratch.Add "title" "" }}
-    {{ if isset .Site.Data.titles .Title }}
-      {{ .Scratch.Set "title" (index .Site.Data.titles .Title).title }} {{ .Site.Title }}
-    {{ else }}
-      {{ .Scratch.Set "title" .Title}}
-    {{end}}
-    <title>{{ .Scratch.Get "title" }}</title>
+    <title>{{ .Title }}</title>
 
     <link href="{{ .Site.BaseURL }}css/theme.css?{{ now }}" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css?family=Lato:400,700" rel="stylesheet">
