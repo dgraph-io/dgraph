@@ -1068,3 +1068,31 @@ func iterateParallel(ctx context.Context, params iterateParams, f func(itkv, *sy
 	}
 	wg.Wait()
 }
+
+func GetUidsForPred(attr string) []uint64 {
+	iterOpt := badger.DefaultIteratorOptions
+	iterOpt.FetchValues = false
+	it := pstore.NewIterator(iterOpt)
+	defer it.Close()
+	// TODO - Check what if its a reverse predicate?
+	pk := x.ParsedKey{
+		Attr: attr,
+	}
+	prefix := pk.DataPrefix()
+	// Lets get all data keys and the corresponding uids for
+	// this predicate.
+	var uids []uint64
+	for it.Seek(prefix); it.Valid(); it.Next() {
+		item := it.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
+		pk := x.Parse(key)
+		x.AssertTruef(pk.Attr == attr,
+			"Invalid key obtained for comparison")
+
+		uids = append(uids, pk.Uid)
+	}
+	return uids
+}

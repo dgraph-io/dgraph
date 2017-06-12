@@ -224,7 +224,6 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 			rnq.ObjectId = strings.Trim(item.Val, " ")
 
 		case itemStar:
-			// This is a special case for predicate or object.
 			if rnq.Subject == "" {
 				rnq.Subject = x.DeletePredicate
 			} else if rnq.Predicate == "" {

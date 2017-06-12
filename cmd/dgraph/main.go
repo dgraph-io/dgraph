@@ -29,6 +29,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -206,6 +207,12 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 			x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
 			return mr, err
 		}
+
+		if nq.Subject == x.DeletePredicate {
+			// This along with edge.ObjectValue == x.DeleteAllObjects would indicate
+			// that we want to delet the predicate.
+			edge.Entity = math.MaxUint64
+		}
 		edges = append(edges, edge)
 	}
 
@@ -239,6 +246,30 @@ func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
 			newEdges = append(newEdges, edge)
 		} else if mu.Op == protos.DirectedEdge_DEL {
 			if mu.Attr != x.DeleteAllPredicates {
+				// This means we want to delete the predicate.
+				if mu.Entity == math.MaxUint64 &&
+					string(mu.GetValue()) == x.DeleteAllObjects {
+					uids := worker.GetUidsForPred(mu.Attr)
+					for _, uid := range uids {
+						delPlEdge := &protos.DirectedEdge{
+							Op:     protos.DirectedEdge_DEL,
+							Entity: uid,
+							Attr:   mu.Attr,
+							Value:  []byte(x.DeleteAllObjects),
+						}
+						newEdges = append(newEdges, delPlEdge)
+
+						delPredEdge := &protos.DirectedEdge{
+							Op:     protos.DirectedEdge_DEL,
+							Entity: uid,
+							Attr:   "_predicate_",
+							Value:  []byte(mu.Attr),
+						}
+						newEdges = append(newEdges, delPredEdge)
+					}
+					continue
+				}
+
 				newEdges = append(newEdges, mu)
 				if string(mu.GetValue()) == x.DeleteAllObjects {
 					// Delete the given predicate from _predicate_.

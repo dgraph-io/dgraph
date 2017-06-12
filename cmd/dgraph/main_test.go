@@ -41,13 +41,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var q0 = `
-	{
-		user(id:alice) {
-			name
-		}
-	}
-`
 var m = `
 	mutation {
 		set {
@@ -580,8 +573,8 @@ func TestDeleteAllSP(t *testing.T) {
 	`
 
 	var m2 = `
-	mutation{
-		delete{
+	mutation {
+		delete {
 			<alice> * * .
 		}
 	}
@@ -601,11 +594,12 @@ func TestDeleteAllSP(t *testing.T) {
 	var s1 = `
 	mutation {
 		schema {
-      friend:uid @reverse .
+			friend:uid @reverse .
 			name: string @index .
 		}
 	}
 	`
+
 	schema.ParseBytes([]byte(""), 1)
 	err := runMutation(s1)
 	require.NoError(t, err)
@@ -661,6 +655,13 @@ func TestQuery(t *testing.T) {
 	ctx := context.Background()
 	_, err = mutationHandler(ctx, res.Mutation)
 
+	var q0 = `
+	{
+		user(id:alice) {
+			name
+		}
+	}
+`
 	output := processToFastJSON(q0)
 	require.JSONEq(t, `{"user":[{"name":"Alice"}]}`, output)
 }
@@ -838,7 +839,7 @@ func TestListPred(t *testing.T) {
 	var s = `
 	mutation {
 		schema {
-            name:string @index .
+			name:string @index .
 		}
 	}
 	`
@@ -882,7 +883,7 @@ func TestExpandPredError(t *testing.T) {
 	var s = `
 	mutation {
 		schema {
-            name:string @index .
+			name:string @index .
 		}
 	}
 	`
@@ -905,7 +906,7 @@ func TestExpandPred(t *testing.T) {
 	{
 		me(func:anyofterms(name, "Alice")) {
 			expand(_all_) {
-  			expand(_all_)
+				expand(_all_)
 			}
 		}
 	}
@@ -924,7 +925,15 @@ func TestExpandPred(t *testing.T) {
 	var s = `
 	mutation {
 		schema {
-            name:string @index .
+			name:string @index .
+		}
+	}
+	`
+
+	var m2 = `
+	mutation {
+		delete {
+			<alice> <friend> <bob> .
 		}
 	}
 	`
@@ -942,8 +951,137 @@ func TestExpandPred(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"me":[{"age":"13","friend":[{"age":"12","name":"bob"}],"name":"Alice"}]}`,
 		output)
+	err = runMutation(m2)
+	require.NoError(t, err)
 
 }
+
+func TestDeletePredicate(t *testing.T) {
+	var m2 = `
+	mutation {
+		delete {
+			* <friend> * .
+			* <name> * .
+		}
+	}
+	`
+
+	var m1 = `
+	mutation {
+		set {
+			<alice> <friend> <alice1> .
+			<alice> <friend> <alice2> .
+			<alice> <name> "Alice" .
+			<alice1> <name> "Alice1" .
+			<alice2> <name> "Alice2" .
+			<alice2> <age> "13" .
+		}
+	}
+	`
+
+	var q1 = `
+	{
+		user(func: anyofterms(name, "alice")) {
+			friend {
+				name
+			}
+		}
+	}
+	`
+	var q2 = `
+	{
+		user(id: [alice, alice1, alice2]) {
+			name
+		}
+	}
+	`
+	var q3 = `
+	{
+		user(id:alice2) {
+			age
+			~friend {
+				name
+			}
+		}
+	}
+	`
+	var q4 = `
+	{
+		user(id:alice2) {
+			_predicate_
+		}
+	}
+`
+
+	var s1 = `
+	mutation {
+		schema {
+			friend: uid @reverse .
+			name: string @index .
+		}
+	}
+	`
+
+	var s2 = `
+	mutation {
+		schema {
+			friend: string @index .
+			name: uid @reverse .
+		}
+	}
+	`
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(s1)
+	require.NoError(t, err)
+
+	err = runMutation(m1)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice2"},{"name":"Alice1"}]}]}`,
+		output)
+
+	output, err = runQuery(q2)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"name":"Alice"},{"name":"Alice1"},{"name":"Alice2"}]}`,
+		output)
+
+	output, err = runQuery(q3)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"age": "13", "~friend" : [{"name":"Alice"}]}]}`, output)
+
+	output, err = runQuery(q4)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}`, output)
+
+	err = runMutation(m2)
+	require.NoError(t, err)
+
+	output, err = runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{}`,
+		output)
+
+	output, err = runQuery(q2)
+	require.NoError(t, err)
+	require.JSONEq(t, `{}`,
+		output)
+
+	output, err = runQuery(q3)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"age": "13"}]}`, output)
+
+	output, err = runQuery(q4)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"}]}]}`, output)
+
+	// Lets try to change the type of predicates now.
+	err = runMutation(s2)
+	require.NoError(t, err)
+
+}
+
 func TestMain(m *testing.M) {
 	x.Init()
 	dir1, dir2, ps, _ := prepare()
