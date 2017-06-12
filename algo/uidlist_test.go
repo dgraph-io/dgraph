@@ -161,8 +161,8 @@ func TestDiffSorted1(t *testing.T) {
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{1}),
 	}
-	Difference(input[0], input[1])
-	require.Equal(t, []uint64{2, 3}, input[0].Uids)
+	output := Difference(input[0], input[1])
+	require.Equal(t, []uint64{2, 3}, output.Uids)
 }
 
 func TestDiffSorted2(t *testing.T) {
@@ -170,8 +170,8 @@ func TestDiffSorted2(t *testing.T) {
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{2}),
 	}
-	Difference(input[0], input[1])
-	require.Equal(t, []uint64{1, 3}, input[0].Uids)
+	output := Difference(input[0], input[1])
+	require.Equal(t, []uint64{1, 3}, output.Uids)
 }
 
 func TestDiffSorted3(t *testing.T) {
@@ -179,8 +179,8 @@ func TestDiffSorted3(t *testing.T) {
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{3}),
 	}
-	Difference(input[0], input[1])
-	require.Equal(t, []uint64{1, 2}, input[0].Uids)
+	output := Difference(input[0], input[1])
+	require.Equal(t, []uint64{1, 2}, output.Uids)
 }
 
 func TestDiffSorted4(t *testing.T) {
@@ -188,8 +188,8 @@ func TestDiffSorted4(t *testing.T) {
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{}),
 	}
-	Difference(input[0], input[1])
-	require.Equal(t, []uint64{1, 2, 3}, input[0].Uids)
+	output := Difference(input[0], input[1])
+	require.Equal(t, []uint64{1, 2, 3}, output.Uids)
 }
 
 func TestDiffSorted5(t *testing.T) {
@@ -197,8 +197,8 @@ func TestDiffSorted5(t *testing.T) {
 		newList([]uint64{}),
 		newList([]uint64{1, 2}),
 	}
-	Difference(input[0], input[1])
-	require.Equal(t, []uint64{}, input[0].Uids)
+	output := Difference(input[0], input[1])
+	require.Equal(t, []uint64{}, output.Uids)
 }
 
 func TestSubSorted1(t *testing.T) {
@@ -206,8 +206,8 @@ func TestSubSorted1(t *testing.T) {
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{2, 3, 4, 5}),
 	}
-	Difference(input[0], input[1])
-	require.Equal(t, []uint64{1}, input[0].Uids)
+	output := Difference(input[0], input[1])
+	require.Equal(t, []uint64{1}, output.Uids)
 }
 
 func TestSubSorted6(t *testing.T) {
@@ -215,8 +215,8 @@ func TestSubSorted6(t *testing.T) {
 		newList([]uint64{10, 12, 13}),
 		newList([]uint64{2, 3, 4, 13}),
 	}
-	Difference(input[0], input[1])
-	require.Equal(t, []uint64{10, 12}, input[0].Uids)
+	output := Difference(input[0], input[1])
+	require.Equal(t, []uint64{10, 12}, output.Uids)
 }
 
 func TestUIDListIntersect1(t *testing.T) {
