@@ -170,7 +170,6 @@ func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
 			if err := setField(val, prop.Value, field); err != nil {
 				return val, err
 			}
-
 		}
 	}
 	for _, child := range n.Children {
