@@ -69,7 +69,7 @@ func init() {
 	SetDefault(types.GeoID, "geo")
 	SetDefault(types.IntID, "int")
 	SetDefault(types.FloatID, "float")
-	SetDefault(types.DateTimeID, "datetime")
+	SetDefault(types.DateTimeID, "dateTime")
 	SetDefault(types.StringID, "term")
 	SetDefault(types.BoolID, "bool")
 
@@ -157,7 +157,7 @@ func (t FloatTokenizer) IsLossy() bool    { return true }
 
 type DateTimeTokenizer struct{}
 
-func (t DateTimeTokenizer) Name() string       { return "datetime" }
+func (t DateTimeTokenizer) Name() string       { return "dateTime" }
 func (t DateTimeTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Year())), t.Identifier())}, nil

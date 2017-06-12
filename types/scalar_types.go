@@ -51,7 +51,7 @@ var typeNameMap = map[string]TypeID{
 	"string":   StringID,
 	"bool":     BoolID,
 	"id":       StringID,
-	"datetime": DateTimeID,
+	"dateTime": DateTimeID,
 	"geo":      GeoID,
 	"uid":      UidID,
 	"password": PasswordID,

@@ -156,8 +156,8 @@ func TestSchemaMutation(t *testing.T) {
 		schema {
       name:string @index(term, exact) .
 			alias:string @index(exact, term) .
-			dob:datetime @index .
-			film.film.initial_release_date:datetime @index .
+			dob:dateTime @index .
+			film.film.initial_release_date:dateTime @index .
 			loc:geo @index .
 			genre:uid @reverse .
 			survival_rate : float .
