@@ -1,3 +1,14 @@
+{{ $currentVersion := getenv "CURRENT_VERSION" }}
+{{ $versionString := getenv "VERSIONS" }}
+{{ $versions := split $versionString "," }}
+{{ $latestVersion := index $versions 0 }}
+
+{{ if ne $currentVersion $latestVersion }}
+  <div class="alert alert-warning">
+    <i class="fa fa-warning"></i> You are looking at a doc for older version of Dgraph ({{ $currentVersion }}). The latest version is <a href="/">{{ $latestVersion }}</a>.
+  </div>
+{{ end }}
+
 <article id="{{ .Slug }}">
   {{ partial "request-edit.html" . }}
   {{ partial "suggest-edit.html" . }}
