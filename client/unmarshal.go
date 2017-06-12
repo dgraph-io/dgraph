@@ -25,6 +25,32 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 )
 
+func unmarshalToStruct(f reflect.StructField, n *protos.Node,
+	val reflect.Value) error {
+
+	typ := f.Type
+	if typ.Kind() == reflect.Slice {
+		// Get underlying type. This is sent to unmarshal so that
+		// it can unmarshal node and its properties.
+		typ = typ.Elem()
+	}
+	rcv, err := unmarshal(n, typ)
+	if err != nil {
+		return err
+	}
+	fieldVal := val.FieldByName(f.Name)
+	if !fieldVal.CanSet() {
+		return fmt.Errorf("Cant set field: %+v", f.Name)
+	}
+	// Append if slice else set.
+	if f.Type.Kind() == reflect.Slice {
+		fieldVal.Set(reflect.Append(fieldVal, rcv))
+	} else {
+		fieldVal.Set(rcv)
+	}
+	return nil
+}
+
 func unmarshalNode(n *protos.Node, val reflect.Value) error {
 	fmap := fieldMap(val.Type())
 	attr := strings.ToLower(n.Attribute)
@@ -32,76 +58,41 @@ func unmarshalNode(n *protos.Node, val reflect.Value) error {
 	if !ok {
 		return nil
 	}
-
-	typ := field.Type
-	if typ.Kind() == reflect.Slice {
-		// Get underlying type.
-		typ = typ.Elem()
-	}
-
-	fieldVal := val.FieldByName(field.Name)
-	if !fieldVal.CanSet() {
-		return fmt.Errorf("Cant set field: %+v", field.Name)
-	}
-
 	if n.Attribute == "@facets" {
+		// We handle facets separately, so that they can be unmarshalled
+		// at the same level as other properties.
 		for _, cn := range n.Children {
 			attr := cn.Attribute
 			if attr == "_" {
+				// _ has properties in a child node.
 				if len(cn.Children) != 1 {
 					continue
 				}
 				if field, ok := fmap["@facets"]; ok {
-					ftyp := field.Type
-					if field.Type.Kind() != reflect.Struct {
-						continue
-					}
-					rcv, err := unmarshal(cn.Children[0], ftyp)
-					if err != nil {
+					if err := unmarshalToStruct(field, cn.Children[0],
+						val); err != nil {
 						return err
 					}
-					fieldVal.Set(rcv)
 				}
-
 			} else {
+				// Other facets should have a dgraph tag attribute@facets.
 				key := fmt.Sprintf("%s@facets", attr)
 				if field, ok := fmap[key]; ok {
-					ftyp := field.Type
-					if field.Type.Kind() != reflect.Struct {
-						continue
-					}
-					rcv, err := unmarshal(cn, ftyp)
-					if err != nil {
+					if err := unmarshalToStruct(field, cn,
+						val); err != nil {
 						return err
 					}
-					fieldVal := val.FieldByName(field.Name)
-					if !fieldVal.CanSet() {
-						return fmt.Errorf("Cant set field: %+v", field.Name)
-					}
-					fieldVal.Set(rcv)
 				}
-
 			}
 		}
-
 		return nil
 	}
-
-	rcv, err := unmarshal(n, typ)
-	if err != nil {
+	if err := unmarshalToStruct(field, n, val); err != nil {
 		return err
 	}
-
-	if field.Type.Kind() == reflect.Slice {
-		fieldVal.Set(reflect.Append(fieldVal, rcv))
-	} else {
-		fieldVal.Set(rcv)
-	}
-
 	if val.Kind() == reflect.Ptr {
 		val = reflect.New(val.Type().Elem()).Elem()
 	}
-
 	return nil
 }
 
@@ -191,7 +182,6 @@ func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
 		// Lets convert val back to a pointer.
 		val = val.Addr()
 	}
-
 	return val, nil
 }
 

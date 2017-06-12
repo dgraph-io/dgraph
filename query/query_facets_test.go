@@ -195,7 +195,60 @@ func TestRetrieveFacetsProtoUnmarshal(t *testing.T) {
 
 	pb := processToPB(t, query, nil, false)
 	var r res
-	client.Unmarshal(pb, &r)
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, "french", r.Root.Friends[1].NameFacets.Origin)
+	ff := r.Root.Friends[1].Facets
+	require.NotZero(t, ff.Since)
+	require.NotZero(t, ff.Close)
+	require.NotZero(t, ff.Family)
+	require.NotZero(t, ff.Tag)
+	require.NotZero(t, r.Root.Friends[4].Facets.Age)
+}
+
+func TestRetrieveFacetsProtoUnmarshalPointer(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+
+	type friendFacets struct {
+		Since  time.Time `dgraph:"since"`
+		Family bool      `dgraph:"family"`
+		Tag    string    `dgraph:"tag"`
+		Age    int       `dgraph:"age"`
+		Close  bool      `dgraph:"close"`
+	}
+
+	type nameFacets struct {
+		Origin string `dgraph:"origin"`
+	}
+
+	type Person struct {
+		Name       string        `dgraph:"name"`
+		NameFacets *nameFacets   `dgraph:"name@facets"`
+		Facets     *friendFacets `dgraph:"@facets"`
+		Friends    []Person      `dgraph:"friend"`
+	}
+
+	type res struct {
+		Root Person `dgraph:"me"`
+	}
+
+	// to see how friend @facets are positioned in output.
+	query := `
+		{
+			me(id:0x1) {
+				name
+				friend @facets {
+					name @facets
+				}
+			}
+		}
+	`
+
+	pb := processToPB(t, query, nil, false)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
 	require.Equal(t, "french", r.Root.Friends[1].NameFacets.Origin)
 	ff := r.Root.Friends[1].Facets
 	require.NotZero(t, ff.Since)
