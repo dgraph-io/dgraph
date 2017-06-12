@@ -23,3 +23,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
 **Dgraph is made better everyday by the growing community and the contributors all over the world.**
 
 {{< community-toc >}}
+
+## Resources
+
+{{< resources-toc >}}
