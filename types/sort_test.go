@@ -91,17 +91,6 @@ func TestSortFloatsDesc(t *testing.T) {
 		toString(t, list, FloatID))
 }
 
-func TestSortDates(t *testing.T) {
-	in := []string{"2022-01-01", "2022-02-03", "2021-01-05", "2021-01-07"}
-	list := getInput(t, DateID, in)
-	ul := getUIDList(4)
-	require.NoError(t, Sort(list, ul, false))
-	require.EqualValues(t, []uint64{300, 400, 100, 200}, ul.Uids)
-	require.EqualValues(t,
-		[]string{"2021-01-05", "2021-01-07", "2022-01-01", "2022-02-03"},
-		toString(t, list, DateID))
-}
-
 func TestSortDateTimes(t *testing.T) {
 	in := []string{
 		"2016-01-02T15:04:05",

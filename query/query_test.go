@@ -36,6 +36,7 @@ import (
 	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -274,7 +275,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr", nil)
 	addEdgeToLangValue(t, "name", 0x1002, "Honey badger", "en", nil)
 	addEdgeToLangValue(t, "name", 0x1003, "Honey bee", "en", nil)
-	// data for bug (#945)
+	// data for bug (#945), also used by test for #1010
 	addEdgeToLangValue(t, "name", 0x1004, "Артём Ткаченко", "ru", nil)
 	addEdgeToLangValue(t, "name", 0x1004, "Artem Tkachenko", "en", nil)
 
@@ -401,7 +402,7 @@ func TestCascadeDirective(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"friend":[{"friend":[{"age":38,"dob":"1910-01-01","name":"Michonne"}],"name":"Rick Grimes"},{"friend":[{"age":15,"dob":"1909-05-05","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+	require.JSONEq(t, `{"me":[{"friend":[{"friend":[{"age":38,"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"friend":[{"age":15,"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -561,7 +562,7 @@ func TestQueryVarValAggSince(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"AgeOrder":[{"name":"Rick Grimes","var(a)":"1910-01-02"},{"name":"Michonne","var(a)":"1910-01-01"},{"name":"Andrea","var(a)":"1901-01-15"}]}`,
+		`{"AgeOrder":[{"name":"Rick Grimes","var(a)":"1910-01-02T00:00:00Z"},{"name":"Michonne","var(a)":"1910-01-01T00:00:00Z"},{"name":"Andrea","var(a)":"1901-01-15T00:00:00Z"}]}`,
 		js)
 }
 
@@ -972,7 +973,7 @@ func TestQueryVarValOrderDob(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea", "dob":"1901-01-15"},{"name":"Daryl Dixon", "dob":"1909-01-10"},{"name":"Glenn Rhee", "dob":"1909-05-05"},{"name":"Rick Grimes", "dob":"1910-01-02"}]}`,
+		`{"me":[{"name":"Andrea", "dob":"1901-01-15T00:00:00Z"},{"name":"Daryl Dixon", "dob":"1909-01-10T00:00:00Z"},{"name":"Glenn Rhee", "dob":"1909-05-05T00:00:00Z"},{"name":"Rick Grimes", "dob":"1910-01-02T00:00:00Z"}]}`,
 		js)
 }
 
@@ -2232,7 +2233,7 @@ func TestMultiAggSort(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"maxorder":[{"name":"Andrea","var(maxdob)":"1909-05-05"},{"name":"Rick Grimes","var(maxdob)":"1910-01-01"},{"name":"Michonne","var(maxdob)":"1910-01-02"}],"minorder":[{"name":"Michonne","var(mindob)":"1901-01-15"},{"name":"Andrea","var(mindob)":"1909-05-05"},{"name":"Rick Grimes","var(mindob)":"1910-01-01"}]}`,
+		`{"maxorder":[{"name":"Andrea","var(maxdob)":"1909-05-05T00:00:00Z"},{"name":"Rick Grimes","var(maxdob)":"1910-01-01T00:00:00Z"},{"name":"Michonne","var(maxdob)":"1910-01-02T00:00:00Z"}],"minorder":[{"name":"Michonne","var(mindob)":"1901-01-15T00:00:00Z"},{"name":"Andrea","var(mindob)":"1909-05-05T00:00:00Z"},{"name":"Rick Grimes","var(mindob)":"1910-01-01T00:00:00Z"}]}`,
 		js)
 }
 
@@ -2253,7 +2254,7 @@ func TestMinMulti(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"dob":"1910-01-02"},{"dob":"1909-05-05"},{"dob":"1909-01-10"},{"dob":"1901-01-15"}],"max(var(x))":"1910-01-02","min(var(x))":"1901-01-15","name":"Michonne"},{"friend":[{"dob":"1910-01-01"}],"max(var(x))":"1910-01-01","min(var(x))":"1910-01-01","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05"}],"max(var(x))":"1909-05-05","min(var(x))":"1909-05-05","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
+		`{"me":[{"friend":[{"dob":"1910-01-02T00:00:00Z"},{"dob":"1909-05-05T00:00:00Z"},{"dob":"1909-01-10T00:00:00Z"},{"dob":"1901-01-15T00:00:00Z"}],"max(var(x))":"1910-01-02T00:00:00Z","min(var(x))":"1901-01-15T00:00:00Z","name":"Michonne"},{"friend":[{"dob":"1910-01-01T00:00:00Z"}],"max(var(x))":"1910-01-01T00:00:00Z","min(var(x))":"1910-01-01T00:00:00Z","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05T00:00:00Z"}],"max(var(x))":"1909-05-05T00:00:00Z","min(var(x))":"1909-05-05T00:00:00Z","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
 		js)
 }
 
@@ -2274,7 +2275,7 @@ func TestMinMultiAlias(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"dob":"1910-01-02"},{"dob":"1909-05-05"},{"dob":"1909-01-10"},{"dob":"1901-01-15"}],"maxdob":"1910-01-02","mindob":"1901-01-15","name":"Michonne"},{"friend":[{"dob":"1910-01-01"}],"maxdob":"1910-01-01","mindob":"1910-01-01","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05"}],"maxdob":"1909-05-05","mindob":"1909-05-05","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
+		`{"me":[{"friend":[{"dob":"1910-01-02T00:00:00Z"},{"dob":"1909-05-05T00:00:00Z"},{"dob":"1909-01-10T00:00:00Z"},{"dob":"1901-01-15T00:00:00Z"}],"maxdob":"1910-01-02T00:00:00Z","mindob":"1901-01-15T00:00:00Z","name":"Michonne"},{"friend":[{"dob":"1910-01-01T00:00:00Z"}],"maxdob":"1910-01-01T00:00:00Z","mindob":"1910-01-01T00:00:00Z","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05T00:00:00Z"}],"maxdob":"1909-05-05T00:00:00Z","mindob":"1909-05-05T00:00:00Z","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
 		js)
 }
 
@@ -3940,6 +3941,36 @@ func TestToFastJSONFilterNot4(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Daryl Dixon"}]}]}`, js)
 }
 
+// TestToFastJSONFilterNot4 was unstable (fails observed locally and on travis).
+// Following method repeats the query to make sure that it never fails.
+// It's commented out, because it's too slow for everyday testing.
+/*
+func TestToFastJSONFilterNot4x1000000(t *testing.T) {
+	populateGraph(t)
+	for i := 0; i < 1000000; i++ {
+		query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend (first:2) @filter(not anyofterms(name, "Andrea")
+				and not anyofterms(name, "glenn")
+				and not anyofterms(name, "rick")
+			) {
+				name
+			}
+		}
+	}
+	`
+
+		js := processToFastJSON(t, query)
+		require.JSONEq(t,
+			`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Daryl Dixon"}]}]}`, js,
+			"tzdybal: %d", i)
+	}
+}
+*/
+
 func TestToFastJSONFilterAnd(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -4377,7 +4408,7 @@ func TestToFastJSONOrder(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"dob":"1901-01-15T00:00:00Z","name":"Andrea"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -4399,7 +4430,7 @@ func TestToFastJSONOrderDesc(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"dob":"1910-01-02","name":"Rick Grimes"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1901-01-15","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1901-01-15T00:00:00Z","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
@@ -4421,7 +4452,7 @@ func TestToFastJSONOrderDesc_pawan(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"film.film.initial_release_date":"1929-01-10","name":"Daryl Dixon"},{"film.film.initial_release_date":"1909-05-05","name":"Glenn Rhee"},{"film.film.initial_release_date":"1900-01-02","name":"Rick Grimes"},{"film.film.initial_release_date":"1801-01-15","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"film.film.initial_release_date":"1929-01-10T00:00:00Z","name":"Daryl Dixon"},{"film.film.initial_release_date":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"film.film.initial_release_date":"1900-01-02T00:00:00Z","name":"Rick Grimes"},{"film.film.initial_release_date":"1801-01-15T00:00:00Z","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
@@ -4443,7 +4474,7 @@ func TestToFastJSONOrderDedup(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"dob":"1901-01-15T00:00:00Z","name":"Andrea"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -5572,7 +5603,7 @@ func TestNormalizeDirective(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"d":"1910-01-02","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1909-05-05","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-01-10","fn":"Glenn Rhee","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1901-01-15","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"}]}`,
+		`{"me":[{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-01-10T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"}]}`,
 		js)
 }
 
@@ -5901,7 +5932,7 @@ func TestLangMultiple_Alias(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"c":"Badger","b":"Badger","a":"Borsuk europejski"}]}`,
+		`{"me":[{"c":"Badger","a":"Borsuk europejski"}]}`,
 		js)
 }
 
@@ -5947,7 +5978,7 @@ func TestLangSingleFallback(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name@cn":"Badger"}]}`,
+		`{}`,
 		js)
 }
 
@@ -6007,7 +6038,100 @@ func TestLangManyFallback(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name@hu:fi:cn":"Badger"}]}`,
+		`{}`,
+		js)
+}
+
+func TestLangNoFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestLangSingleNoFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@cn
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestLangMultipleNoFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@cn:hi
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestLangOnlyForcedFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@.
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	// this test is fragile - '.' may return value in any language (depending on data)
+	require.JSONEq(t,
+		`{"me":[{"name@.":"Artem Tkachenko"}]}`,
+		js)
+}
+
+func TestLangSingleForcedFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@cn:.
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	// this test is fragile - '.' may return value in any language (depending on data)
+	require.JSONEq(t,
+		`{"me":[{"name@cn:.":"Artem Tkachenko"}]}`,
+		js)
+}
+
+func TestLangMultipleForcedFallbackNoDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1004) {
+				name@hi:cn:.
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	// this test is fragile - '.' may return value in any language (depending on data)
+	require.JSONEq(t,
+		`{"me":[{"name@hi:cn:.":"Artem Tkachenko"}]}`,
 		js)
 }
 
@@ -6127,11 +6251,11 @@ func TestSchemaBlock1(t *testing.T) {
 	actual := processSchemaQuery(t, query)
 	expected := []*protos.SchemaNode{{Predicate: "genre", Type: "uid"},
 		{Predicate: "age", Type: "int"}, {Predicate: "name", Type: "string"},
-		{Predicate: "film.film.initial_release_date", Type: "date"},
+		{Predicate: "film.film.initial_release_date", Type: "datetime"},
 		{Predicate: "loc", Type: "geo"}, {Predicate: "alive", Type: "bool"},
 		{Predicate: "shadow_deep", Type: "int"}, {Predicate: "friend", Type: "uid"},
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
-		{Predicate: "dob", Type: "date"}, {Predicate: "survival_rate", Type: "float"},
+		{Predicate: "dob", Type: "datetime"}, {Predicate: "survival_rate", Type: "float"},
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
 		{Predicate: "noindex_name", Type: "string"}, {Predicate: "_xid_", Type: "string"}}
 	checkSchemaNodes(t, expected, actual)
@@ -6203,8 +6327,8 @@ func TestSchemaBlock5(t *testing.T) {
 const schemaStr = `
 name                           : string @index(term, exact, trigram) .
 alias                          : string @index(exact, term, fulltext) .
-dob                            : date @index .
-film.film.initial_release_date : date @index .
+dob                            : dateTime @index .
+film.film.initial_release_date : dateTime @index .
 loc                            : geo @index .
 genre                          : uid @reverse .
 survival_rate                  : float .
@@ -6467,7 +6591,7 @@ func TestToFastJSONOrderLang(t *testing.T) {
 	query := `
 		{
 			me(id:0x01) {
-				friend(first:2, orderdesc: alias@en:de) {
+				friend(first:2, orderdesc: alias@en:de:.) {
 					alias
 				}
 			}
@@ -7573,4 +7697,248 @@ func TestMultipleEqInt(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"name":"Glenn Rhee"}],"name":"Daryl Dixon"}]}`, js)
+}
+
+func TestPBUnmarshalToStruct1(t *testing.T) {
+	type Person struct {
+		Name    string `dgraph:"name"`
+		Age     int    `dgraph:"age"`
+		Birth   string
+		Friends []Person `dgraph:"friend"`
+	}
+
+	type res struct {
+		Root Person `dgraph:"me"`
+	}
+
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x01) {
+				name
+				age
+				Birth: dob
+				friend {
+					name
+					age
+				}
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, "Michonne", r.Root.Name)
+	require.Equal(t, 38, r.Root.Age)
+	require.Equal(t, "1910-01-01T00:00:00Z", r.Root.Birth)
+	require.Equal(t, 4, len(r.Root.Friends))
+	require.Equal(t, Person{
+		Name: "Rick Grimes",
+		Age:  15,
+	}, r.Root.Friends[0])
+}
+
+func TestPBUnmarshalToStruct2(t *testing.T) {
+	type Person struct {
+		Id       uint64    `dgraph:"_uid_"`
+		Name     string    `dgraph:"name"`
+		Age      int       `dgraph:"age"`
+		Birth    time.Time `dgraph:"dob"`
+		Alive    bool      `dgraph:"alive"`
+		Survival float64   `dgraph:"survival_rate"`
+		Location geom.T    `dgraph:"location"`
+		Friends  []Person  `dgraph:"friend"`
+	}
+
+	type res struct {
+		Root []Person `dgraph:"me"`
+	}
+
+	populateGraph(t)
+	query := `
+		{
+			me(func: anyofterms(name, "Rick Michonne Andrea")) {
+				_uid_
+				name
+				age
+				dob
+				alive
+				survival_rate
+				friend (first: 1) {
+					_uid_
+					name
+					age
+					dob
+				}
+			}
+		}
+	`
+
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(r.Root))
+	js, err := json.Marshal(r.Root[0])
+	require.NoError(t, err)
+	require.Equal(t, `{"Id":1,"Name":"Michonne","Age":38,"Birth":"1910-01-01T00:00:00Z","Alive":true,"Survival":98.99,"Location":null,"Friends":[{"Id":23,"Name":"Rick Grimes","Age":15,"Birth":"1910-01-02T00:00:00Z","Alive":false,"Survival":0,"Location":null,"Friends":null}]}`, string(js))
+}
+
+func TestPBUnmarshalToStruct3(t *testing.T) {
+	type Person struct {
+		Id       uint64    `dgraph:"_uid_"`
+		Name     string    `dgraph:"name"`
+		Age      int       `dgraph:"age"`
+		Birth    time.Time `dgraph:"dob"`
+		Alive    bool      `dgraph:"alive"`
+		Survival float64   `dgraph:"survival_rate"`
+		Location []byte    `dgraph:"loc"`
+		Friends  []*Person `dgraph:"friend"`
+	}
+
+	type res struct {
+		Root []*Person `dgraph:"me"`
+	}
+
+	populateGraph(t)
+	query := `
+		{
+			me(func: anyofterms(name, "Rick Michonne Andrea")) {
+				_uid_
+				name
+				age
+				dob
+				alive
+				loc
+				survival_rate
+				friend (first: 1) {
+					_uid_
+					name
+					age
+					dob
+				}
+			}
+		}
+	`
+
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.NotEmpty(t, r.Root[0].Location)
+	require.Equal(t, 4, len(r.Root))
+	js, err := json.Marshal(r.Root[0])
+	require.NoError(t, err)
+	require.Equal(t, `{"Id":1,"Name":"Michonne","Age":38,"Birth":"1910-01-01T00:00:00Z","Alive":true,"Survival":98.99,"Location":"AQEAAACamZmZmZnxPwAAAAAAAABA","Friends":[{"Id":23,"Name":"Rick Grimes","Age":15,"Birth":"1910-01-02T00:00:00Z","Alive":false,"Survival":0,"Location":null,"Friends":null}]}`, string(js))
+}
+
+func TestPBUnmarshalToStruct4(t *testing.T) {
+	type Person struct {
+		Name    string `dgraph:"name"`
+		Age     int    `dgraph:"age"`
+		Birth   string
+		Friends []Person `dgraph:"friend"`
+	}
+
+	type res struct {
+		Root *Person `dgraph:"me"`
+	}
+
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x01) {
+				name
+				age
+				Birth: dob
+				friend {
+					name
+					age
+				}
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, "Michonne", r.Root.Name)
+	require.Equal(t, 38, r.Root.Age)
+	require.Equal(t, "1910-01-01T00:00:00Z", r.Root.Birth)
+	require.Equal(t, 4, len(r.Root.Friends))
+	require.Equal(t, Person{
+		Name: "Rick Grimes",
+		Age:  15,
+	}, r.Root.Friends[0])
+}
+
+func TestPBUnmarshalToStruct5(t *testing.T) {
+	type Person struct {
+		Name string `dgraph:"name@hi:ru"`
+	}
+
+	type res struct {
+		Root Person `dgraph:"me"`
+	}
+
+	populateGraph(t)
+	query := `
+		{
+			me(id: 0x1001) {
+				name@hi:ru
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, r.Root.Name, "Барсук")
+}
+
+func TestPBUnmarshalToStruct6(t *testing.T) {
+	populateGraph(t)
+
+	type Person struct {
+		Name string
+		Dob  time.Time
+	}
+
+	type res struct {
+		Me []Person
+	}
+
+	query := `
+		{
+			var(id: 1) {
+				f as friend {
+					n as dob
+				}
+			}
+
+			Me(id: var(f), orderasc: var(n)) {
+				Name: name
+				Dob: dob
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, true)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(r.Me))
+	require.NotZero(t, r.Me[0].Name)
+	require.NotZero(t, r.Me[0].Dob)
+}
+
+func TestPBUnmarshalError1(t *testing.T) {
+	var a int
+	err := client.Unmarshal([]*protos.Node{}, a)
+	require.Error(t, err)
+}
+
+func TestPBUnmarshalError2(t *testing.T) {
+	err := client.Unmarshal([]*protos.Node{}, nil)
+	require.Error(t, err)
 }

@@ -18,6 +18,8 @@
 package schema
 
 import (
+	"strings"
+
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/tok"
@@ -75,7 +77,8 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*protos.SchemaUpda
 	if next.Typ != itemText {
 		return nil, x.Errorf("Missing Type")
 	}
-	typ := next.Val
+	typ := strings.ToLower(next.Val)
+	// We ignore the case for types.
 	t, ok := types.TypeForName(typ)
 	if !ok {
 		return nil, x.Errorf("Undefined Type")
@@ -168,7 +171,7 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 			return tokenizers, x.Errorf("Expected a comma but got: %v", next)
 		}
 		// Look for custom tokenizer.
-		tokenizer, has := tok.GetTokenizer(next.Val)
+		tokenizer, has := tok.GetTokenizer(strings.ToLower(next.Val))
 		if !has {
 			return tokenizers, x.Errorf("Invalid tokenizer %s", next.Val)
 		}

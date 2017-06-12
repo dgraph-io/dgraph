@@ -214,13 +214,13 @@ func IntersectSorted(lists []*protos.List) *protos.List {
 	return out
 }
 
-func Difference(u, v *protos.List) {
+func Difference(u, v *protos.List) *protos.List {
 	if u == nil || v == nil {
-		return
+		return &protos.List{Uids: make([]uint64, 0)}
 	}
-	out := u.Uids[:0]
 	n := len(u.Uids)
 	m := len(v.Uids)
+	out := make([]uint64, 0, n/2)
 	i, k := 0, 0
 	for i < n && k < m {
 		uid := u.Uids[i]
@@ -242,7 +242,7 @@ func Difference(u, v *protos.List) {
 		out = append(out, u.Uids[i])
 		i++
 	}
-	u.Uids = out
+	return &protos.List{Uids: out}
 }
 
 // MergeSorted merges sorted lists.

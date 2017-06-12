@@ -1,10 +1,15 @@
-baseurl = "http://localhost:1313/latest"
+baseurl = "http://localhost:1313/"
 languageCode = "en-us"
 theme = "hugo-docs"
 
 # set by build script: title, baseurl
 title = "Dgraph Documentation"
 
+[[menu.main]]
+  name = "Home"
+  url = "/"
+  identifier = "home"
+  weight = -1
 [[menu.main]]
   name = "Get Started"
   url = "/get-started/"
@@ -46,7 +51,20 @@ title = "Dgraph Documentation"
   identifier = "design-concepts"
   weight = 8
 [[menu.main]]
-  name = "Dgraph compared to other databases"
-  url = "/dgraph-compared-to-other databases/"
-  identifier = "dgraph-compared-to-other databases"
+  name = "Dgraph Compared to Other Databases"
+  url = "/dgraph-compared-to-other-databases/"
+  identifier = "dgraph-compared-to-other-databases"
   weight = 9
+
+  [params]
+    [params.menudesc]
+      home = "Main page for official Dgraph documentation"
+      get-started = "Install Dgraph and run a query in 2 minutes."
+      guides = "A short introduction to graph database and Dgraph"
+      query-language = "An extensive guide for querying data in Dgraph"
+      clients = "Dgraph clients in various programming languages"
+      deploy = "Deploying Dgraph to production"
+      faq = "Frequently asked questions"
+      performance = "How Dgraph performs in real life"
+      design-concepts = "A look at how Dgraph is designed to be so fast"
+      dgraph-compared-to-other-databases = "Compare Dgraph to similar databases."

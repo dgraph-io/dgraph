@@ -212,6 +212,9 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 	if attr == "_predicate_" {
 		predMap := make(map[string]struct{})
+		if q.UidList == nil {
+			return &out, nil
+		}
 		for _, uid := range q.UidList.Uids {
 			predicates, err := getPredList(uid, gid)
 			if err != nil {
