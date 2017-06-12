@@ -23,7 +23,7 @@ Now you can make changes to the docs and see them being updated instantly thanks
 
 ### Branch
 
-Documentation **will only run and build on `master` or `release/vx.x.x` branches.** It is because the some examples need to be adjusted depending on Dgraph version, and the documentation generator needs to know the version before.
+Depending on what branch you are on, some code examples will dynamically change. For instance, go-grpc code examples will have different import path depending on branch name.
 
 ## Runnable
 
