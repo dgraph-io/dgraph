@@ -402,7 +402,7 @@ func TestCascadeDirective(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"friend":[{"friend":[{"age":38,"dob":"1910-01-01","name":"Michonne"}],"name":"Rick Grimes"},{"friend":[{"age":15,"dob":"1909-05-05","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+	require.JSONEq(t, `{"me":[{"friend":[{"friend":[{"age":38,"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"friend":[{"age":15,"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -562,7 +562,7 @@ func TestQueryVarValAggSince(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"AgeOrder":[{"name":"Rick Grimes","var(a)":"1910-01-02"},{"name":"Michonne","var(a)":"1910-01-01"},{"name":"Andrea","var(a)":"1901-01-15"}]}`,
+		`{"AgeOrder":[{"name":"Rick Grimes","var(a)":"1910-01-02T00:00:00Z"},{"name":"Michonne","var(a)":"1910-01-01T00:00:00Z"},{"name":"Andrea","var(a)":"1901-01-15T00:00:00Z"}]}`,
 		js)
 }
 
@@ -973,7 +973,7 @@ func TestQueryVarValOrderDob(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea", "dob":"1901-01-15"},{"name":"Daryl Dixon", "dob":"1909-01-10"},{"name":"Glenn Rhee", "dob":"1909-05-05"},{"name":"Rick Grimes", "dob":"1910-01-02"}]}`,
+		`{"me":[{"name":"Andrea", "dob":"1901-01-15T00:00:00Z"},{"name":"Daryl Dixon", "dob":"1909-01-10T00:00:00Z"},{"name":"Glenn Rhee", "dob":"1909-05-05T00:00:00Z"},{"name":"Rick Grimes", "dob":"1910-01-02T00:00:00Z"}]}`,
 		js)
 }
 
@@ -2233,7 +2233,7 @@ func TestMultiAggSort(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"maxorder":[{"name":"Andrea","var(maxdob)":"1909-05-05"},{"name":"Rick Grimes","var(maxdob)":"1910-01-01"},{"name":"Michonne","var(maxdob)":"1910-01-02"}],"minorder":[{"name":"Michonne","var(mindob)":"1901-01-15"},{"name":"Andrea","var(mindob)":"1909-05-05"},{"name":"Rick Grimes","var(mindob)":"1910-01-01"}]}`,
+		`{"maxorder":[{"name":"Andrea","var(maxdob)":"1909-05-05T00:00:00Z"},{"name":"Rick Grimes","var(maxdob)":"1910-01-01T00:00:00Z"},{"name":"Michonne","var(maxdob)":"1910-01-02T00:00:00Z"}],"minorder":[{"name":"Michonne","var(mindob)":"1901-01-15T00:00:00Z"},{"name":"Andrea","var(mindob)":"1909-05-05T00:00:00Z"},{"name":"Rick Grimes","var(mindob)":"1910-01-01T00:00:00Z"}]}`,
 		js)
 }
 
@@ -2254,7 +2254,7 @@ func TestMinMulti(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"dob":"1910-01-02"},{"dob":"1909-05-05"},{"dob":"1909-01-10"},{"dob":"1901-01-15"}],"max(var(x))":"1910-01-02","min(var(x))":"1901-01-15","name":"Michonne"},{"friend":[{"dob":"1910-01-01"}],"max(var(x))":"1910-01-01","min(var(x))":"1910-01-01","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05"}],"max(var(x))":"1909-05-05","min(var(x))":"1909-05-05","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
+		`{"me":[{"friend":[{"dob":"1910-01-02T00:00:00Z"},{"dob":"1909-05-05T00:00:00Z"},{"dob":"1909-01-10T00:00:00Z"},{"dob":"1901-01-15T00:00:00Z"}],"max(var(x))":"1910-01-02T00:00:00Z","min(var(x))":"1901-01-15T00:00:00Z","name":"Michonne"},{"friend":[{"dob":"1910-01-01T00:00:00Z"}],"max(var(x))":"1910-01-01T00:00:00Z","min(var(x))":"1910-01-01T00:00:00Z","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05T00:00:00Z"}],"max(var(x))":"1909-05-05T00:00:00Z","min(var(x))":"1909-05-05T00:00:00Z","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
 		js)
 }
 
@@ -2275,7 +2275,7 @@ func TestMinMultiAlias(t *testing.T) {
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"dob":"1910-01-02"},{"dob":"1909-05-05"},{"dob":"1909-01-10"},{"dob":"1901-01-15"}],"maxdob":"1910-01-02","mindob":"1901-01-15","name":"Michonne"},{"friend":[{"dob":"1910-01-01"}],"maxdob":"1910-01-01","mindob":"1910-01-01","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05"}],"maxdob":"1909-05-05","mindob":"1909-05-05","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
+		`{"me":[{"friend":[{"dob":"1910-01-02T00:00:00Z"},{"dob":"1909-05-05T00:00:00Z"},{"dob":"1909-01-10T00:00:00Z"},{"dob":"1901-01-15T00:00:00Z"}],"maxdob":"1910-01-02T00:00:00Z","mindob":"1901-01-15T00:00:00Z","name":"Michonne"},{"friend":[{"dob":"1910-01-01T00:00:00Z"}],"maxdob":"1910-01-01T00:00:00Z","mindob":"1910-01-01T00:00:00Z","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05T00:00:00Z"}],"maxdob":"1909-05-05T00:00:00Z","mindob":"1909-05-05T00:00:00Z","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
 		js)
 }
 
@@ -4378,7 +4378,7 @@ func TestToFastJSONOrder(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"dob":"1901-01-15T00:00:00Z","name":"Andrea"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -4400,7 +4400,7 @@ func TestToFastJSONOrderDesc(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"dob":"1910-01-02","name":"Rick Grimes"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1901-01-15","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1901-01-15T00:00:00Z","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
@@ -4422,7 +4422,7 @@ func TestToFastJSONOrderDesc_pawan(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"film.film.initial_release_date":"1929-01-10","name":"Daryl Dixon"},{"film.film.initial_release_date":"1909-05-05","name":"Glenn Rhee"},{"film.film.initial_release_date":"1900-01-02","name":"Rick Grimes"},{"film.film.initial_release_date":"1801-01-15","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"film.film.initial_release_date":"1929-01-10T00:00:00Z","name":"Daryl Dixon"},{"film.film.initial_release_date":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"film.film.initial_release_date":"1900-01-02T00:00:00Z","name":"Rick Grimes"},{"film.film.initial_release_date":"1801-01-15T00:00:00Z","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
@@ -4444,7 +4444,7 @@ func TestToFastJSONOrderDedup(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"dob":"1901-01-15T00:00:00Z","name":"Andrea"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -5573,7 +5573,7 @@ func TestNormalizeDirective(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"d":"1910-01-02","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1909-05-05","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-01-10","fn":"Glenn Rhee","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1901-01-15","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"}]}`,
+		`{"me":[{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-01-10T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"}]}`,
 		js)
 }
 
@@ -6221,11 +6221,11 @@ func TestSchemaBlock1(t *testing.T) {
 	actual := processSchemaQuery(t, query)
 	expected := []*protos.SchemaNode{{Predicate: "genre", Type: "uid"},
 		{Predicate: "age", Type: "int"}, {Predicate: "name", Type: "string"},
-		{Predicate: "film.film.initial_release_date", Type: "date"},
+		{Predicate: "film.film.initial_release_date", Type: "dateTime"},
 		{Predicate: "loc", Type: "geo"}, {Predicate: "alive", Type: "bool"},
 		{Predicate: "shadow_deep", Type: "int"}, {Predicate: "friend", Type: "uid"},
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
-		{Predicate: "dob", Type: "date"}, {Predicate: "survival_rate", Type: "float"},
+		{Predicate: "dob", Type: "dateTime"}, {Predicate: "survival_rate", Type: "float"},
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
 		{Predicate: "noindex_name", Type: "string"}, {Predicate: "_xid_", Type: "string"}}
 	checkSchemaNodes(t, expected, actual)
@@ -6297,8 +6297,8 @@ func TestSchemaBlock5(t *testing.T) {
 const schemaStr = `
 name                           : string @index(term, exact, trigram) .
 alias                          : string @index(exact, term, fulltext) .
-dob                            : date @index .
-film.film.initial_release_date : date @index .
+dob                            : dateTime @index .
+film.film.initial_release_date : dateTime @index .
 loc                            : geo @index .
 genre                          : uid @reverse .
 survival_rate                  : float .

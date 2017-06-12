@@ -158,7 +158,7 @@ func TestBackup(t *testing.T) {
 					require.Equal(t, int32(0), nq.ObjectType)
 				} else if nq.Subject == "0x2" {
 					// string type because of lang @en
-					require.Equal(t, int32(10), nq.ObjectType)
+					require.Equal(t, int32(9), nq.ObjectType)
 				}
 			}
 

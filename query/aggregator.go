@@ -164,10 +164,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 			v.Value = math.Ceil(l)
 			res = v
 		case "since":
-			if v.Tid == types.DateID {
-				v.Value = float64(time.Since(v.Value.(time.Time))) / 1000000000.0
-				v.Tid = types.FloatID
-			} else if v.Tid == types.DateTimeID {
+			if v.Tid == types.DateTimeID {
 				v.Value = float64(time.Since(v.Value.(time.Time))) / 1000000000.0
 				v.Tid = types.FloatID
 			} else {

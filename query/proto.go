@@ -43,10 +43,6 @@ func toProtoValue(v types.Val) *protos.Value {
 	case types.BoolID:
 		return &protos.Value{&protos.Value_BoolVal{v.Value.(bool)}}
 
-	case types.DateID:
-		val := v.Value.(time.Time)
-		return &protos.Value{&protos.Value_StrVal{val.Format(time.RFC3339)}}
-
 	case types.DateTimeID:
 		val := v.Value.(time.Time)
 		return &protos.Value{&protos.Value_StrVal{val.Format(time.RFC3339)}}

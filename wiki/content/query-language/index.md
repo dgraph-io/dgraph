@@ -221,7 +221,7 @@ mutation {
   schema {
     director.film: uid @reverse .
     genre: uid @reverse .
-    initial_release_date: date @index .
+    initial_release_date: dateTime @index .
     rating: uid @reverse .
     country: uid @reverse .
     loc: geo @index .
@@ -303,7 +303,7 @@ The following types are supported by Dgraph.
 |  `string`   | string  |
 |  `bool`     | bool    |
 |  `id`       | string  |
-|  `date`     | time.Time (RFC3339 format [Optional timezone] eg: 2006-01-02T15:04:05.999999999+10:00 or 2006-01-02T15:04:05.999999999)    |
+|  `dateTime` | time.Time (RFC3339 format [Optional timezone] eg: 2006-01-02T15:04:05.999999999+10:00 or 2006-01-02T15:04:05.999999999)    |
 |  `geo`      | [go-geom](https://github.com/twpayne/go-geom)    |
 |  `uid`      | uint64  |
 
@@ -327,10 +327,10 @@ age: int .
 name           : string @index   .
 age            : int @index      .
 address        : string @index   .
-dateofbirth    : date @index     .
+dateofbirth    : dateTime @index     .
 health         : float @index    .
 location       : geo @index      .
-timeafterbirth : datetime @index .
+timeafterbirth : dateTime @index .
 ```
 
 All the scalar types except uid type can be indexed in dgraph. In the above example, we use the default tokenizer for each data type. You can specify a different tokenizer by writing `@index(tokenizerName)`.
@@ -340,13 +340,13 @@ name	       : string @index(exact, term) .
 large_name     : string @index(hash) 	    .
 age            : int @index(int)            .
 address        : string @index(term)        .
-dateofbirth    : date @index(date)          .
+dateofbirth    : dateTime @index(dateTime)          .
 health         : float @index(float)        .
 location       : geo @index(geo)            .
-timeafterbirth : datetime @index(datetime)  .
+timeafterbirth : dateTime @index(dateTime)  .
 ```
 
-The available tokenizers are currently `term, fulltext, exact, trigram, hash, int, float, geo, date, datetime`. String has `term` as the default tokenizer. All of the other data types have a default tokenizer with the same name as the type. You can specify multiple tokenizers per predicate as shown for `name` in the above example. Currently, only predicates of type string support more than one tokenizer.
+The available tokenizers are currently `term, fulltext, exact, trigram, hash, int, float, geo, date, dateTime`. String has `term` as the default tokenizer. All of the other data types have a default tokenizer with the same name as the type. You can specify multiple tokenizers per predicate as shown for `name` in the above example. Currently, only predicates of type string support more than one tokenizer.
 
 {{% notice "note" %}}To be able to do filtering on a predicate, you must index it.{{% /notice %}}
 
@@ -368,7 +368,7 @@ Not all the indices establish a total order among the values that they index. So
 name: string @index(exact) .
 ```
 
-For string, only `exact` is a sortable index. `int`, `float`, `date` and `datetime` are also sortable indices.
+For string, only `exact` is a sortable index. `int`, `float` and `dateTime` are also sortable indices.
 
 ### Reverse Edges
 Each graph edge is unidirectional. It points from one node to another. A lot of times,  you wish to access data in both directions, forward and backward. Instead of having to send edges in both directions, you can use the `@reverse` keyword at the end of a uid (entity) field declaration in the schema. This specifies that the reverse edge should be automatically generated. For example, if we want to add a reverse edge for `directed_by` predicate, we should have a schema as follows.
@@ -454,7 +454,7 @@ The following table lists all the supported [RDF datatypes](https://www.w3.org/T
 | -------------                                           | :------------: |
 | &#60;xs:string&#62;                                     | String         |
 | &#60;xs:dateTime&#62;                                   | DateTime       |
-| &#60;xs:date&#62;                                       | Date           |
+| &#60;xs:date&#62;                                       | DateTime       |
 | &#60;xs:int&#62;                                        | Int            |
 | &#60;xs:boolean&#62;                                    | Bool           |
 | &#60;xs:double&#62;                                     | Float          |
@@ -462,7 +462,7 @@ The following table lists all the supported [RDF datatypes](https://www.w3.org/T
 | &#60;geo:geojson&#62;                                   | Geo            |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#string&#62;   | String         |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#dateTime&#62; | DateTime       |
-| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | Date           |
+| &#60;http&#58;//www.w3.org/2001/XMLSchema#date&#62;     | DateTime       |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#int&#62;      | Int            |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#boolean&#62;  | Bool           |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;   | Float          |
@@ -810,8 +810,7 @@ The following [Scalar_Types]({{<relref "#scalar-types">}}) can be used in inequa
 * int
 * float
 * string
-* date
-* datetime
+* dateTime
 
 #### Less than or equal to
 `le` is used to filter or obtain UIDs whose value for a predicate is less than or equal to a given value.
@@ -1032,7 +1031,7 @@ Though you may find yourself leaning towards facets many times, they should not 
 Like `friend` edge should not have `date of birth`. That should be edge for object node of `friend`.
 Another reason is that facets are not first class citizen in Dgraph like predicates (edges).
 
-Keys are strings and Values can be string, bool, int, float and datetime.
+Keys are strings and Values can be string, bool, int, float and dateTime.
 For int and float, only decimal integer of upto 32 signed bits and 64 bit float values are accepted respectively.
 
 Example : Adds `since` facet in `mobile` edge for `alice`:
@@ -1651,7 +1650,7 @@ The supported operators are as follows:
 | `min` `max`                     | All types except geo, bool  (binary functions) | selects the min/max value among the two                        |
 | `<` `>` `<=` `>=` `==` `!=`     | All types except geo, bool                     | Returns true or false based on the values                      |
 | `floor` `ceil``ln` `exp` `sqrt` | int, float (unary function)                    | performs the corresponding operation                           |
-| `since`                         | date, datetime                                 | Returns the number of seconds in float from the time specified |
+| `since`                         | dateTime                                 | Returns the number of seconds in float from the time specified |
 | `pow(a, b)`                     | int, float                                     | Returns `a to the power b`                                     |
 | `logbase(a,b)`                  | int, float                                     | Returns `log(a)` to the base `b`                               |
 | `cond(a, b, c)`                 | first operand must be a boolean                | selects `b` if `a` is true else `c`                            |
