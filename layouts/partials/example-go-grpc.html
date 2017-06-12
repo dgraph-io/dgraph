@@ -3,11 +3,13 @@
 {{/*
   Display different import paths depending on the version of Dgraph.
 
-  NOTE: $currentBranch is in a format of `release/v0.7.6` or it is `master`
+  If the branch is `master` or not in a format of `release/vx.x.x`, use default.
+  (to check for `release/vx.x.x`, here we just check if the branch name is of
+  length 14 - FIXME if better solution emerges)
 */}}
 
 {{ .Content.Scratch.Add "protoPath" "" }}
-{{ if eq $currentBranch "master" }}
+{{ if or (eq $currentBranch "master") (ne ($currentBranch | len) 14) }}
   {{ .Content.Scratch.Add "protoPath" "\"github.com/dgraph-io/dgraph/protos\"" }}
 {{ else }}
   {{ $version := slicestr $currentBranch 9 }}

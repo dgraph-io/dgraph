@@ -8,7 +8,7 @@
     <select class="version-selector">
       {{ range $i, $version := $Versions }}
           {{ if eq $i 0 }}
-            <option value="{{$version}}">{{ $version }} (latest)</option>
+            <option value="">{{ $version }} (latest)</option>
           {{ else }}
             <option value="{{$version}}">{{ $version }}</option>
           {{ end }}

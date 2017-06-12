@@ -535,3 +535,22 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
     padding: 0 13px 0 31px;
   }
 }
+
+/* table of contents in home page */
+
+section.toc .section-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+section.toc .section-desc {
+  margin-bottom: 0;
+}
+section.toc .section-item {
+  margin-bottom: 8px;
+}
+
+/* custom bootstrap */
+.row-no-padding [class^="col-"] {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}

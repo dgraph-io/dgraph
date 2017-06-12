@@ -281,10 +281,6 @@ html .runnable code {
 
 
 /* custom bootstrap */
-/*.row-no-padding [class^="col-"] {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-}*/
 .runnable .nopadding {
    padding: 0 !important;
    margin: 0 !important;

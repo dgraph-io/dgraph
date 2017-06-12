@@ -4,23 +4,27 @@
     <meta charset="utf-8">
     {{ partial "meta.html" . }}
     {{ .Scratch.Add "title" "" }}
-    {{ if isset .Site.Data.titles .Title }}
-      {{ .Scratch.Set "title" (index .Site.Data.titles .Title).title }} {{ .Site.Title }}
-    {{ else }}
-      {{ .Scratch.Set "title" .Title}}
-    {{end}}
-    <title>{{ .Scratch.Get "title" }}</title>
+    <title>{{ .Title }}</title>
 
-    <link href="{{ .Site.BaseURL }}/css/nucleus.css" rel="stylesheet">
-    <link href="{{ .Site.BaseURL }}/css/font-awesome.min.css" rel="stylesheet">
-    <link href="{{ .Site.BaseURL }}/css/hybrid.css" rel="stylesheet">
-    <link href="{{ .Site.BaseURL }}/css/featherlight.min.css" rel="stylesheet">
-    <link href="{{ .Site.BaseURL }}/css/perfect-scrollbar.min.css" rel="stylesheet">
     <link href="{{ .Site.BaseURL }}css/theme.css?{{ now }}" rel="stylesheet">
-    <link href="{{ .Site.BaseURL }}/css/hugo-theme.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css?family=Lato:400,700" rel="stylesheet">
-    <meta http-equiv="refresh" content="0; url={{ .Site.BaseURL }}get-started"/>
   </head>
   <body>
+    {{ partial "header.html" . }}
+
+    <article id="{{ .Slug }}">
+      {{ partial "request-edit.html" . }}
+      {{ partial "suggest-edit.html" . }}
+
+      <h1 class="post-title">{{ .Title }}</h1>
+
+      <div>{{ .Content }}</div>
+    </article>
+
+    {{ partial "community-footer.html" . }}
+
+    {{ partial "runnable-modal.html" . }}
+
+    {{ partial "footer.html" . }}
   </body>
 </html>
