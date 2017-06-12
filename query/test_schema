@@ -4,4 +4,4 @@
  address: string
  alive: bool
  survival_rate: float
- dob: date
+ dob: dateTime

@@ -71,13 +71,6 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				} else {
 					return to, x.Errorf("Invalid value for bool %v", data[0])
 				}
-			case DateID:
-				if len(data) < 8 {
-					return to, x.Errorf("Invalid data for date %v", data)
-				}
-				val := binary.LittleEndian.Uint64(data)
-				tm := time.Unix(int64(val), 0)
-				*res = createDate(tm.Date())
 			case DateTimeID:
 				var t time.Time
 				if err := t.UnmarshalBinary(data); err != nil {
@@ -124,13 +117,6 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, err
 				}
 				*res = bool(val)
-			case DateID:
-				t, err := ParseTime(vc)
-				if err != nil {
-					return to, err
-				}
-				// trim time part
-				*res = createDate(t.Date())
 			case DateTimeID:
 				t, err := ParseTime(vc)
 				if err != nil {
@@ -174,9 +160,6 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = bool(vc != 1)
 			case StringID, DefaultID:
 				*res = string(strconv.FormatInt(vc, 10))
-			case DateID:
-				date := time.Unix(vc, 0).UTC()
-				*res = createDate(date.Date())
 			case DateTimeID:
 				*res = time.Unix(vc, 0).UTC()
 			default:
@@ -209,12 +192,6 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = bool(vc != 1)
 			case StringID, DefaultID:
 				*res = string(strconv.FormatFloat(float64(vc), 'E', -1, 64))
-			case DateID:
-				secs := int64(vc)
-				fracSecs := vc - float64(secs)
-				nsecs := int64(fracSecs * nanoSecondsInSec)
-				date := time.Unix(secs, nsecs).UTC()
-				*res = createDate(date.Date())
 			case DateTimeID:
 				secs := int64(vc)
 				fracSecs := vc - float64(secs)
@@ -262,42 +239,6 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				return to, cantConvert(fromID, toID)
 			}
 		}
-	case DateID:
-		{
-			if len(data) < 8 {
-				return to, x.Errorf("Invalid data for date %v", data)
-			}
-			val := binary.LittleEndian.Uint64(data)
-			tm := time.Unix(int64(val), 0)
-			vc := createDate(tm.UTC().Date())
-
-			switch toID {
-			case DateID:
-				*res = vc
-			case BinaryID:
-				// Marshal Binary
-				var bs [8]byte
-				binary.LittleEndian.PutUint64(bs[:], uint64(vc.Unix()))
-				*res = bs[:]
-			case DateTimeID:
-				*res = createDate(vc.Date())
-			case StringID, DefaultID:
-				*res = vc.Format(dateFormatYMD)
-			case IntID:
-				secs := vc.Unix()
-				if secs > math.MaxInt64 || secs < math.MinInt64 {
-					return to, x.Errorf("Time out of int64 range")
-				}
-				*res = int64(secs)
-			case FloatID:
-				secs := float64(vc.Unix())
-				nano := float64(vc.Nanosecond())
-				val := secs + nano/nanoSecondsInSec
-				*res = float64(val)
-			default:
-				return to, cantConvert(fromID, toID)
-			}
-		}
 	case DateTimeID:
 		{
 			var t time.Time
@@ -315,8 +256,6 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, err
 				}
 				*res = r
-			case DateID:
-				*res = createDate(vc.Date())
 			case StringID, DefaultID:
 				val, err := vc.MarshalText()
 				if err != nil {
@@ -457,18 +396,6 @@ func Marshal(from Val, to *Val) error {
 		default:
 			return cantConvert(fromID, toID)
 		}
-	case DateID:
-		vc := val.(time.Time)
-		switch toID {
-		case StringID, DefaultID:
-			*res = vc.Format(dateFormatYMD)
-		case BinaryID:
-			var bs [8]byte
-			binary.LittleEndian.PutUint64(bs[:], uint64(vc.Unix()))
-			*res = bs[:]
-		default:
-			return cantConvert(fromID, toID)
-		}
 	case DateTimeID:
 		vc := val.(time.Time)
 		switch toID {
@@ -570,7 +497,7 @@ func ObjectValue(id TypeID, value interface{}) (*protos.Value, error) {
 			return def, x.Errorf("Expected value of type []byte. Got : %v", value)
 		}
 		return &protos.Value{&protos.Value_BytesVal{v}}, nil
-	// Geo, date and datetime are stored in binary format in the NQuad, so lets
+	// Geo and datetime are stored in binary format in the NQuad, so lets
 	// convert them here.
 	case GeoID:
 		b, err := toBinary(id, value)
@@ -578,12 +505,6 @@ func ObjectValue(id TypeID, value interface{}) (*protos.Value, error) {
 			return def, err
 		}
 		return &protos.Value{&protos.Value_GeoVal{b}}, nil
-	case DateID:
-		b, err := toBinary(id, value)
-		if err != nil {
-			return def, err
-		}
-		return &protos.Value{&protos.Value_DateVal{b}}, nil
 	case DateTimeID:
 		b, err := toBinary(id, value)
 		if err != nil {
@@ -621,9 +542,6 @@ func (v Val) MarshalJSON() ([]byte, error) {
 		return json.Marshal(v.Value.(bool))
 	case FloatID:
 		return json.Marshal(v.Value.(float64))
-	case DateID:
-		s := v.Value.(time.Time).Format(dateFormatYMD)
-		return json.Marshal(s)
 	case DateTimeID:
 		return json.Marshal(v.Value.(time.Time))
 	case GeoID:
