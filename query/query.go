@@ -1753,7 +1753,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.DestUIDs = algo.MergeSorted(lists)
 		} else if sg.FilterOp == "not" {
 			x.AssertTrue(len(sg.Filters) == 1)
-			algo.Difference(sg.DestUIDs, sg.Filters[0].DestUIDs)
+			sg.DestUIDs = algo.Difference(sg.DestUIDs, sg.Filters[0].DestUIDs)
 		} else {
 			sg.DestUIDs = algo.IntersectSorted(lists)
 		}
