@@ -542,7 +542,6 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 		if !isValidFuncName(ft.Func.Name) {
 			return x.Errorf("Invalid function name : %s", ft.Func.Name)
 		}
-
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
 		isUidFunc := isUidFn(ft.Func.Name)
 		if isUidFunc {
@@ -894,7 +893,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 
 	isUidFunc := gq.Func != nil && isUidFn(gq.Func.Name)
-
 	// Uid function doesnt have Attr. It just has a list of ids
 	if gq.Func != nil && !isUidFunc {
 		sg.Attr = gq.Func.Attr
