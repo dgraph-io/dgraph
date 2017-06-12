@@ -117,9 +117,6 @@ Loop:
 			return lexComment
 
 		case r == '*':
-			if l.Depth != atObject && l.Depth != atPredicate {
-				return l.Errorf("'*' only allowed at predicate/object in del mutations")
-			}
 			l.Depth++
 			l.Emit(itemStar)
 		case r == leftRound:

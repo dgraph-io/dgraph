@@ -810,6 +810,20 @@ var testNQuads = []struct {
 		input:       `<alice> <password> "guess"^^<pwd:password> .`,
 		expectedErr: true, // len(password) should >= 6
 	},
+	{
+		// Quotes inside facet string values.
+		input: `* <pred> * .`,
+		nq: protos.NQuad{
+			Subject:     x.DeletePredicate,
+			Predicate:   "pred",
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.DeleteAllObjects}},
+		},
+	},
+	{
+		// Quotes inside facet string values.
+		input:       `* <pred> "random"^^<int> .`,
+		expectedErr: true,
+	},
 }
 
 func TestLex(t *testing.T) {
