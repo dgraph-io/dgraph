@@ -68,6 +68,52 @@ func TestParseQueryAliasListPred(t *testing.T) {
 	require.Equal(t, "_predicate_", res.Query[0].Children[0].Attr)
 }
 
+func TestParseQueryCountVar(t *testing.T) {
+	query := `
+	{
+		me(id:0x0a) {
+			friend {
+				a as school
+			}
+			count(var(a))
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, true, res.Query[0].Children[1].IsCount)
+	require.Equal(t, true, res.Query[0].Children[1].IsInternal)
+	require.Equal(t, "a", res.Query[0].Children[1].NeedsVar[0].Name)
+}
+
+func TestParseQueryCountVarError1(t *testing.T) {
+	query := `
+	{
+		me(id:0x0a) {
+			friend {
+				a as school
+				b as city
+			}
+			count(var(a, b))
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+func TestParseQueryCountVarError2(t *testing.T) {
+	query := `
+	{
+		me(id:0x0a) {
+			friend 
+			count(var())
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
 func TestParseQueryCountListPred(t *testing.T) {
 	query := `
 	{

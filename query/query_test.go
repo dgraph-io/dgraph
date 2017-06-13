@@ -861,29 +861,44 @@ func TestQueryVarValAggMinMaxAlias(t *testing.T) {
 		js)
 }
 
-func TestQueryVarValAggMul(t *testing.T) {
+func TestQueryCountVarUids(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			var(id: 1) {
-				f as friend {
-					n as age
-					s as count(friend)
-					mul as math(n * s)
+			me(id: 1) {
+				friend {
+					s as friend {
+						_uid_
+						name
+					}
 				}
-			}
-
-			me(id: var(f), orderdesc: var(mul)) {
-				name
-				var(s)
-				var(n)
-				var(mul)
+				count(var(s))
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
+	fmt.Println(js)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea","var(mul)":19.000000,"var(n)":19,"var(s)":1},{"name":"Rick Grimes","var(mul)":15.000000,"var(n)":15,"var(s)":1},{"name":"Glenn Rhee","var(mul)":0.000000,"var(n)":15,"var(s)":0},{"name":"Daryl Dixon","var(mul)":0.000000,"var(n)":17,"var(s)":0},{"var(mul)":0.000000,"var(s)":0}]}`,
+		`{"me":[{"count(var(s))":2,"friend":[{"friend":[{"_uid_":"0x1","name":"Michonne"}]},{"friend":[{"_uid_":"0x18","name":"Glenn Rhee"}]}]}]}`,
+		js)
+}
+
+func TestQueryCountVarVals(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id: 1) {
+				friend {
+					s as count(friend)
+				}
+				count(var(s))
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
+	require.JSONEq(t,
+		`{"me":[{"count(var(s))":5,"friend":[{"count(friend)":1},{"count(friend)":0},{"count(friend)":0},{"count(friend)":1},{"count(friend)":0}]}]}`,
 		js)
 }
 
