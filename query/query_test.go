@@ -4160,7 +4160,7 @@ children: <
   properties: <
     prop: "_xid_"
     value: <
-      str_val: "mich"
+      default_val: "mich"
     >
   >
   properties: <
@@ -5044,7 +5044,7 @@ func TestRootList(t *testing.T) {
 func TestRootList1(t *testing.T) {
 	populateGraph(t)
 	query := `{
-	me(id:[0x01, 23, 24, a.bc]) {
+	me(id:[0x01, 23, 24, 110]) {
 		name
 	}
 }`
@@ -5055,7 +5055,7 @@ func TestRootList1(t *testing.T) {
 func TestRootList2(t *testing.T) {
 	populateGraph(t)
 	query := `{
-	me(id:[0x01, 23, a.bc, 24]) {
+	me(id:[0x01, 23, 110, 24]) {
 		name
 	}
 }`
@@ -5637,7 +5637,7 @@ children: <
   properties: <
     prop: "_xid_"
     value: <
-      str_val: "mich"
+      default_val: "mich"
     >
   >
   properties: <
@@ -6257,7 +6257,7 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
 		{Predicate: "dob", Type: "datetime"}, {Predicate: "survival_rate", Type: "float"},
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
-		{Predicate: "noindex_name", Type: "string"}, {Predicate: "_xid_", Type: "string"}}
+		{Predicate: "noindex_name", Type: "string"}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6505,7 +6505,7 @@ children: <
   properties: <
     prop: "_xid_"
     value: <
-      str_val: "mich"
+      default_val: "mich"
     >
   >
   properties: <
@@ -6534,7 +6534,7 @@ children: <
     properties: <
       prop: "_xid_"
       value: <
-        str_val: "g\\\"lenn"
+        default_val: "g\\\"lenn"
       >
     >
     properties: <

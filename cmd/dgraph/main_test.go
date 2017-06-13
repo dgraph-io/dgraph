@@ -43,7 +43,7 @@ import (
 
 var q0 = `
 	{
-		user(id:alice) {
+		user(id:0x1) {
 			name
 		}
 	}
@@ -52,7 +52,7 @@ var m = `
 	mutation {
 		set {
                         # comment line should be ignored
-			<alice> <name> "Alice" .
+			<0x1> <name> "Alice" .
 		}
 	}
 `
@@ -278,7 +278,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 	mutation {
 		set {
                         # comment line should be ignored
-			<alice> <name> "Alice" .
+			<0x1> <name> "Alice" .
 		}
 	}
 	`
@@ -319,7 +319,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	mutation {
 		set {
                         # comment line should be ignored
-			<alice> <name> "Alice" .
+			<0x1> <name> "Alice" .
 		}
 	}
 	`
@@ -364,7 +364,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 func TestSchemaMutationReverseAdd(t *testing.T) {
 	var q1 = `
 	{
-		user(id:alice2) {
+		user(id:0x3) {
 			~friend {
 				name
 			}
@@ -375,8 +375,8 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 	mutation {
 		set {
                         # comment line should be ignored
-			<alice> <friend> <alice2> .
-			<alice> <name> "Alice" .
+			<0x1> <friend> <0x3> .
+			<0x1> <name> "Alice" .
 		}
 	}
 	`
@@ -408,7 +408,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 func TestSchemaMutationReverseRemove(t *testing.T) {
 	var q1 = `
 	{
-		user(id:alice2) {
+		user(id:0x3) {
 			~friend {
 				name
 			}
@@ -419,8 +419,8 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	mutation {
 		set {
                         # comment line should be ignored
-			<alice> <friend> <alice2> .
-			<alice> <name> "Alice" .
+			<0x1> <friend> <0x3> .
+			<0x1> <name> "Alice" .
 		}
 	}
 	`
@@ -465,7 +465,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 func TestDeleteAll(t *testing.T) {
 	var q1 = `
 	{
-		user(id:alice2) {
+		user(id:0x3) {
 			~friend {
 				name
 			}
@@ -485,19 +485,19 @@ func TestDeleteAll(t *testing.T) {
 	var m2 = `
 	mutation{
 		delete{
-			<alice> <friend> * .
-			<alice> <name> * .
+			<0x1> <friend> * .
+			<0x1> <name> * .
 		}
 	}
 	`
 	var m1 = `
 	mutation {
 		set {
-			<alice> <friend> <alice1> .
-			<alice> <friend> <alice2> .
-			<alice> <name> "Alice" .
-			<alice1> <name> "Alice1" .
-			<alice2> <name> "Alice2" .
+			<0x1> <friend> <0x2> .
+			<0x1> <friend> <0x3> .
+			<0x1> <name> "Alice" .
+			<0x2> <name> "Alice1" .
+			<0x3> <name> "Alice2" .
 		}
 	}
 	`
@@ -523,7 +523,7 @@ func TestDeleteAll(t *testing.T) {
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice2"},{"name":"Alice1"}]}]}`,
+	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}`,
 		output)
 
 	err = runMutation(m2)
@@ -541,7 +541,7 @@ func TestDeleteAll(t *testing.T) {
 func TestDeleteAllSP(t *testing.T) {
 	var q1 = `
 	{
-		user(id:alice2) {
+		user(id:0x3) {
 			~friend {
 				name
 			}
@@ -559,21 +559,21 @@ func TestDeleteAllSP(t *testing.T) {
 	`
 	var q3 = `
 	{
-		user(id: alice) {
+		user(id: 0x1) {
 			_predicate_
 		}
 	}
 	`
 	var q4 = `
 	{
-		user(id: alice) {
+		user(id: 0x1) {
 			count(_predicate_)
 		}
 	}
 	`
 	var q5 = `
 	{
-		user(id: alice) {
+		user(id: 0x1) {
 			pred_count: count(_predicate_)
 		}
 	}
@@ -582,18 +582,18 @@ func TestDeleteAllSP(t *testing.T) {
 	var m2 = `
 	mutation{
 		delete{
-			<alice> * * .
+			<0x1> * * .
 		}
 	}
 	`
 	var m1 = `
 	mutation {
 		set {
-			<alice> <friend> <alice1> .
-			<alice> <friend> <alice2> .
-			<alice> <name> "Alice" .
-			<alice1> <name> "Alice1" .
-			<alice2> <name> "Alice2" .
+			<0x1> <friend> <0x2> .
+			<0x1> <friend> <0x3> .
+			<0x1> <name> "Alice" .
+			<0x2> <name> "Alice1" .
+			<0x3> <name> "Alice2" .
 		}
 	}
 	`
@@ -619,7 +619,7 @@ func TestDeleteAllSP(t *testing.T) {
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice2"},{"name":"Alice1"}]}]}`,
+	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}`,
 		output)
 
 	output, err = runQuery(q3)
@@ -690,7 +690,7 @@ func TestSchemaValidationError(t *testing.T) {
 	ctx := context.Background()
 	_, err = mutationHandler(ctx, res.Mutation)
 	require.Error(t, err)
-	output := processToFastJSON(strings.Replace(q5, "<id>", "ram", -1))
+	output := processToFastJSON(strings.Replace(q5, "<id>", "0x8", -1))
 	require.JSONEq(t, `{}`, output)
 }
 
@@ -698,8 +698,8 @@ var m6 = `
 	mutation {
 		set {
                         # comment line should be ignored
-			<ram2> <name2> "1"^^<xs:int> .
-			<shyam2> <name2> "1.5"^^<xs:float> .
+			<0x5> <name2> "1"^^<xs:int> .
+			<0x6> <name2> "1.5"^^<xs:float> .
 		}
 	}
 `
@@ -720,14 +720,14 @@ func TestSchemaConversion(t *testing.T) {
 	_, err = mutationHandler(ctx, res.Mutation)
 
 	require.NoError(t, err)
-	output := processToFastJSON(strings.Replace(q6, "<id>", "shyam2", -1))
+	output := processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
 	require.JSONEq(t, `{"user":[{"name2":1}]}`, output)
 
 	s, ok := schema.State().Get("name2")
 	require.True(t, ok)
 	s.ValueType = uint32(types.FloatID)
 	schema.State().Set("name2", s)
-	output = processToFastJSON(strings.Replace(q6, "<id>", "shyam2", -1))
+	output = processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
 	require.JSONEq(t, `{"user":[{"name2":1.5}]}`, output)
 }
 
@@ -789,7 +789,7 @@ func TestConvertToEdges(t *testing.T) {
 
 var q1 = `
 {
-	al(id: alice) {
+	al(id: 0x1) {
 		status
 		follows {
 			status
@@ -829,9 +829,9 @@ func TestListPred(t *testing.T) {
 	var m = `
 	mutation {
 		set {
-			<alice> <name> "Alice" .
-			<alice> <age> "13" .
-			<alice> <friend> <bob> .
+			<0x1> <name> "Alice" .
+			<0x1> <age> "13" .
+			<0x1> <friend> <0x4> .
 		}
 	}
 	`
@@ -871,11 +871,11 @@ func TestExpandPredError(t *testing.T) {
 	var m = `
 	mutation {
 		set {
-			<alice> <name> "Alice" .
-			<alice> <age> "13" .
-			<alice> <friend> <bob> .
-			<bob> <name> "bob" .
-			<bob> <age> "12" .
+			<0x1> <name> "Alice" .
+			<0x1> <age> "13" .
+			<0x1> <friend> <0x4> .
+			<0x4> <name> "bob" .
+			<0x4> <age> "12" .
 		}
 	}
 	`
@@ -913,11 +913,11 @@ func TestExpandPred(t *testing.T) {
 	var m = `
 	mutation {
 		set {
-			<alice> <name> "Alice" .
-			<alice> <age> "13" .
-			<alice> <friend> <bob> .
-			<bob> <name> "bob" .
-			<bob> <age> "12" .
+			<0x1> <name> "Alice" .
+			<0x1> <age> "13" .
+			<0x1> <friend> <0x4> .
+			<0x4> <name> "bob" .
+			<0x4> <age> "12" .
 		}
 	}
 	`
@@ -944,6 +944,7 @@ func TestExpandPred(t *testing.T) {
 		output)
 
 }
+
 func TestMain(m *testing.M) {
 	x.Init()
 	dir1, dir2, ps, _ := prepare()

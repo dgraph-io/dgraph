@@ -33,7 +33,7 @@ import (
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
-	ID         []string
+	UID        []uint64
 	Attr       string
 	Langs      []string
 	Alias      string
@@ -190,7 +190,7 @@ func (f *Function) IsPasswordVerifier() bool {
 
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
-	x.Printf("%s[%x %q %q]\n", prefix, gq.ID, gq.Attr, gq.Alias)
+	x.Printf("%s[%x %q %q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
 	for _, c := range gq.Children {
 		c.DebugPrint(prefix + "|->")
 	}
@@ -400,7 +400,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	}
 
 	idVal, ok := gq.Args["id"]
-	if ok && len(gq.ID) == 0 {
+	if ok && len(gq.UID) == 0 {
 		if idVal == "" {
 			return x.Errorf("Id can't be empty")
 		}
@@ -1701,7 +1701,11 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 func parseID(gq *GraphQuery, val string) error {
 	val = x.WhiteSpace.Replace(val)
 	if val[0] != '[' {
-		gq.ID = append(gq.ID, val)
+		uid, err := strconv.ParseUint(val, 0, 64)
+		if err != nil {
+			return err
+		}
+		gq.UID = append(gq.UID, uid)
 		return nil
 	}
 
@@ -1714,7 +1718,11 @@ func parseID(gq *GraphQuery, val string) error {
 			if buf.Len() == 0 {
 				continue
 			}
-			gq.ID = append(gq.ID, buf.String())
+			uid, err := strconv.ParseUint(buf.String(), 0, 64)
+			if err != nil {
+				return err
+			}
+			gq.UID = append(gq.UID, uid)
 			buf.Reset()
 			continue
 		}
@@ -1882,7 +1890,11 @@ func parseId(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			case itemName:
 				val := collectName(it, item.Val)
-				gq.ID = append(gq.ID, val)
+				uid, err := strconv.ParseUint(val, 0, 64)
+				if err != nil {
+					return err
+				}
+				gq.UID = append(gq.UID, uid)
 				if valid := it.Next(); !valid {
 					return x.Errorf("Unexpected EOF while parsing list of ids")
 				}
@@ -1903,7 +1915,11 @@ func parseId(it *lex.ItemIterator, gq *GraphQuery) error {
 		// We can continue, we will parse the id later when we fill GraphQL variables.
 		return nil
 	}
-	gq.ID = append(gq.ID, val)
+	uid, err := strconv.ParseUint(val, 0, 64)
+	if err != nil {
+		return err
+	}
+	gq.UID = append(gq.UID, uid)
 	return nil
 }
 
