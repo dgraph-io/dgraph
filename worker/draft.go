@@ -441,28 +441,27 @@ func (n *node) processMutation(e raftpb.Entry, m *protos.Mutations) error {
 	}
 
 	// aggregate information and notify only once about each predicate
-	preds := getPredicates(m, success)
-	getUpdateDispatcher().PredicatesUpdated(preds)
+	hub := getUpdateHub()
+	if hub.HasSubscribers() {
+		preds := getPredicates(m, success)
+		hub.PredicatesUpdated(preds)
+	}
 
 	return nil
 }
 
-// returns unique predicates names from m.Edges[:n]
+// returns predicates names from m.Edges[:n]
 func getPredicates(m *protos.Mutations, n int) []string {
-	predicateMap := make(map[string]bool)
+	preds := make([]string, 0, n)
 	for _, edge := range m.Edges[:n] {
-		predicateMap[edge.Attr] = true
+		preds = append(preds, edge.Attr)
 	}
 
-	preds := make([]string, 0, len(predicateMap))
-	for pred, _ := range predicateMap {
-		preds = append(preds, pred)
-	}
 	return preds
 }
 
 // TODO(tzdybal) - is it a good way to get dispatcher?
-func getUpdateDispatcher() *pubsub.UpdateHub {
+func getUpdateHub() *pubsub.UpdateHub {
 	return groups().dispatcher
 }
 

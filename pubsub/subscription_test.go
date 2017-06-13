@@ -19,9 +19,9 @@ package pubsub
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
-	//	"github.com/stretchr/testify/require"
 
 	"golang.org/x/net/context"
 )
@@ -30,6 +30,8 @@ func TestSubscription(t *testing.T) {
 
 	hub := NewUpdateHub()
 	go hub.Run()
+	require.Equal(t, false, hub.HasSubscribers())
+
 	fmt.Println("tzdybal: hub started!")
 
 	var cancel []context.CancelFunc
@@ -65,8 +67,12 @@ func TestSubscription(t *testing.T) {
 			hub.PredicatesUpdated([]string{"d"})
 		}
 	}()
+	require.Equal(t, true, hub.HasSubscribers())
 
 	select {
 	case _ = <-done:
 	}
+	hub.PredicatesUpdated([]string{"a", "b", "c", "d"})
+	time.Sleep(100 * time.Millisecond)
+	require.Equal(t, false, hub.HasSubscribers())
 }

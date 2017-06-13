@@ -19,6 +19,8 @@ package pubsub
 
 import (
 	"fmt"
+	"sort"
+	"sync/atomic"
 
 	"golang.org/x/net/context"
 )
@@ -43,6 +45,7 @@ type UpdateHub struct {
 	updates       chan []string
 	subscriptions chan subscription
 	topics        map[string]*topic
+	count         int64
 }
 
 func NewUpdateHub() *UpdateHub {
@@ -50,45 +53,61 @@ func NewUpdateHub() *UpdateHub {
 		updates:       make(chan []string, 100),
 		subscriptions: make(chan subscription, 100),
 		topics:        make(map[string]*topic),
+		count:         0,
 	}
 	return hub
 }
 
-func (d *UpdateHub) Run() {
+func (h *UpdateHub) Run() {
 	for {
 		select {
-		case preds := <-d.updates:
-			d.doUpdate(preds)
-		case sub := <-d.subscriptions:
-			d.doSubscribe(sub)
+		case preds := <-h.updates:
+			h.doUpdate(preds)
+		case sub := <-h.subscriptions:
+			h.doSubscribe(sub)
 		}
 	}
 }
 
-func (d *UpdateHub) Subscribe(predicates []string, subscriber *UpdateSubscriber) {
-	d.subscriptions <- subscription{predicates, subscriber}
+func (h *UpdateHub) HasSubscribers() bool {
+	cnt := atomic.LoadInt64(&h.count)
+	return cnt != 0
 }
 
-func (d *UpdateHub) doSubscribe(sub subscription) {
+func (h *UpdateHub) Subscribe(predicates []string, subscriber *UpdateSubscriber) {
+	h.subscriptions <- subscription{predicates, subscriber}
+}
+
+func (h *UpdateHub) doSubscribe(sub subscription) {
 	for _, pred := range sub.predicates {
-		topic, ok := d.topics[pred]
+		topic, ok := h.topics[pred]
 		if !ok {
 			topic = newTopic()
-			d.topics[pred] = topic
+			h.topics[pred] = topic
 		}
 		topic.subscribers = append(topic.subscribers, sub.subscriber)
+		atomic.AddInt64(&h.count, 1)
 	}
 }
 
-func (d *UpdateHub) PredicatesUpdated(predicates []string) {
-	d.updates <- predicates
+func (h *UpdateHub) PredicatesUpdated(predicates []string) {
+	// sorting is time consuming, so do it in parallel
+	go func() {
+		sort.Strings(predicates)
+		h.updates <- predicates
+	}()
 }
 
-func (d *UpdateHub) doUpdate(predicates []string) {
-	for _, pred := range predicates {
-		topic, ok := d.topics[pred]
-		if ok {
+func (h *UpdateHub) doUpdate(predicates []string) {
+	sort.Strings(predicates)
+
+	for pred, topic := range h.topics {
+		i := sort.SearchStrings(predicates, pred)
+		if i < len(predicates) && predicates[i] == pred {
+			before := len(topic.subscribers)
 			topic.predicateUpdated(pred)
+			after := len(topic.subscribers)
+			atomic.AddInt64(&h.count, int64(after-before))
 		}
 	}
 }
