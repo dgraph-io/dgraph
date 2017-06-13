@@ -3,6 +3,8 @@ date = "2017-03-20T22:25:17+11:00"
 title = "Design Concepts"
 +++
 
+{{% notice "outdated" %}}This section is outdated. You will find [Tour of Dgraph](https://tour.dgraph.io) a much helpful resource.{{% /notice %}}
+
 ## Concepts
 
 ### XID <-> UID
