@@ -1096,23 +1096,6 @@ func (sg *SubGraph) transformVars(doneVars map[string]varValue,
 	path []*SubGraph) error {
 	mNode := sg.MathExp
 	mvarList := mNode.extractVarNodes()
-	// Iterate over the node list to find the node at the lowest level.
-	/*
-		var maxVar string
-		var maxLevel int
-		for _, mt := range mvarList {
-			mvarVal, ok := doneVars[mt.Var]
-			if !ok {
-				return nil, x.Errorf("Variable not yet populated: %v", mt.Var)
-			}
-			if maxLevel < len(mvarVal.path) {
-				maxLevel = len(mvarVal.path)
-				maxVar = mt.Var
-			}
-		}
-	*/
-
-	//maxNode := doneVars[maxVar]
 	for i := 0; i < len(mvarList); i++ {
 		mt := mvarList[i]
 		curNode := doneVars[mt.Var]
