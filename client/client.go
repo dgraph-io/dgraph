@@ -23,6 +23,8 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
 type Op int
@@ -87,25 +89,31 @@ func (req *Req) SetQueryWithVariables(q string, vars map[string]string) {
 	req.gr.Vars = vars
 }
 
-func (req *Req) addMutation(nq protos.NQuad, op Op) {
+func (req *Req) addMutation(e Edge, op Op) {
 	if req.gr.Mutation == nil {
 		req.gr.Mutation = new(protos.Mutation)
 	}
 
 	if op == SET {
-		req.gr.Mutation.Set = append(req.gr.Mutation.Set, &nq)
+		req.gr.Mutation.Set = append(req.gr.Mutation.Set, &e.nq)
 	} else if op == DEL {
-		req.gr.Mutation.Del = append(req.gr.Mutation.Del, &nq)
+		req.gr.Mutation.Del = append(req.gr.Mutation.Del, &e.nq)
 	}
 }
 
-// AddMutation adds (but does not send) a mutation to the Req object. Mutations
-// are sent when client.Run() is called.
-func (req *Req) AddMutation(nq protos.NQuad, op Op) error {
-	if err := checkNQuad(nq); err != nil {
+func (req *Req) Set(e Edge) error {
+	if err := checkNQuad(e.nq); err != nil {
 		return err
 	}
-	req.addMutation(nq, op)
+	req.addMutation(e, SET)
+	return nil
+}
+
+func (req *Req) Delete(e Edge) error {
+	if err := checkNQuad(e.nq); err != nil {
+		return err
+	}
+	req.addMutation(e, DEL)
 	return nil
 }
 
@@ -133,125 +141,9 @@ func (req *Req) reset() {
 }
 
 type nquadOp struct {
-	nq protos.NQuad
+	e  Edge
 	op Op
 }
-
-// // BatchMutation is used to batch mutations and send them off to the server
-// // concurrently. It is useful while doing migrations and bulk data loading.
-// // It is possible to control the batch size and the number of concurrent requests
-// // to make.
-// type BatchMutation struct {
-// 	size    int
-// 	pending int
-
-// 	nquads chan nquadOp
-// 	schema chan protos.SchemaUpdate
-// 	dc     protos.DgraphClient
-// 	wg     sync.WaitGroup
-
-// 	// Miscellaneous information to print counters.
-// 	// Num of RDF's sent
-// 	rdfs uint64
-// 	// Num of mutations sent
-// 	mutations uint64
-// 	// To get time elapsed.
-// 	start time.Time
-// }
-
-// func (batch *BatchMutation) request(req *Req) {
-// 	counter := atomic.AddUint64(&batch.mutations, 1)
-// RETRY:
-// 	_, err := batch.dc.Run(context.Background(), &req.gr)
-// 	if err != nil {
-// 		errString := err.Error()
-// 		// Irrecoverable
-// 		if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
-// 			log.Fatal(errString)
-// 		}
-// 		fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
-// 		time.Sleep(5 * time.Millisecond)
-// 		goto RETRY
-// 	}
-// 	req.reset()
-// }
-
-// func (batch *BatchMutation) makeRequests() {
-// 	req := new(Req)
-
-// 	for n := range batch.nquads {
-// 		req.addMutation(n.nq, n.op)
-// 		if req.size() == batch.size {
-// 			batch.request(req)
-// 		}
-// 	}
-
-// 	if req.size() > 0 {
-// 		batch.request(req)
-// 	}
-// 	batch.wg.Done()
-// }
-
-// func (batch *BatchMutation) makeSchemaRequests() {
-// 	req := new(Req)
-// LOOP:
-// 	for {
-// 		select {
-// 		case s, ok := <-batch.schema:
-// 			if !ok {
-// 				break LOOP
-// 			}
-// 			req.addSchema(s)
-// 		default:
-// 			start := time.Now()
-// 			if req.size() > 0 {
-// 				batch.request(req)
-// 			}
-// 			elapsedMillis := time.Since(start).Seconds() * 1e3
-// 			if elapsedMillis < 10 {
-// 				time.Sleep(time.Duration(int64(10-elapsedMillis)) * time.Millisecond)
-// 			}
-// 		}
-// 	}
-
-// 	if req.size() > 0 {
-// 		batch.request(req)
-// 	}
-// 	batch.wg.Done()
-// }
-
-// // AddMutation is used to add a NQuad to a batch. It can either have SET or
-// // DEL as Op(operation).
-// func (batch *BatchMutation) AddMutation(nq protos.NQuad, op Op) error {
-// 	if err := checkNQuad(nq); err != nil {
-// 		return err
-// 	}
-// 	if op == SET &&
-// 		((nq.ObjectType == int32(types.DefaultID) && nq.ObjectValue.GetDefaultVal() == "*") ||
-// 			(nq.ObjectType == int32(types.StringID) && nq.ObjectValue.GetStrVal() == "*")) {
-// 		return x.Errorf("Cannot set the value as '*'")
-// 	}
-// 	batch.nquads <- nquadOp{nq: nq, op: op}
-// 	atomic.AddUint64(&batch.rdfs, 1)
-// 	return nil
-// }
-
-// // Flush waits for all pending requests to complete. It should always be called
-// // after adding all the NQuads using batch.AddMutation().
-// func (batch *BatchMutation) Flush() {
-// 	close(batch.nquads)
-// 	close(batch.schema)
-// 	batch.wg.Wait()
-// }
-
-// // AddSchema is used to add a schema mutation.
-// func (batch *BatchMutation) AddSchema(s protos.SchemaUpdate) error {
-// 	if err := checkSchema(s); err != nil {
-// 		return err
-// 	}
-// 	batch.schema <- s
-// 	return nil
-// }
 
 // Counter keeps a track of various parameters about a batch mutation.
 type Counter struct {
@@ -263,11 +155,201 @@ type Counter struct {
 	Elapsed time.Duration
 }
 
-// Counter returns the current state of the BatchMutation.
-// func (batch *BatchMutation) Counter() Counter {
-// 	return Counter{
-// 		Rdfs:      atomic.LoadUint64(&batch.rdfs),
-// 		Mutations: atomic.LoadUint64(&batch.mutations),
-// 		Elapsed:   time.Since(batch.start),
-// 	}
-// }
+type Node uint64
+
+func (n Node) String() string {
+	return fmt.Sprintf("%#x", uint64(n))
+}
+
+func (n *Node) ScalarEdge(pred string, val interface{},
+	typ types.TypeID) (Edge, error) {
+	e := n.Edge(pred)
+	switch typ {
+	case types.StringID:
+		e.SetValueString(val.(string))
+	case types.DefaultID:
+		e.SetValueDefault(val.(string))
+	case types.DateTimeID:
+		e.SetValueDatetime(val.(time.Time))
+	case types.PasswordID:
+		e.SetValuePassword(val.(string))
+	case types.IntID:
+		e.SetValueInt(val.(int64))
+	case types.FloatID:
+		e.SetValueFloat(val.(float64))
+	case types.BoolID:
+		e.SetValueBool(val.(bool))
+	case types.GeoID:
+		e.SetValueGeoJson(val.(string))
+	default:
+		return emptyEdge, ErrInvalidType
+	}
+	return e, nil
+}
+
+func (n *Node) ConnectTo(pred string, n1 Node) Edge {
+	e := Edge{}
+	e.nq.Subject = n.String()
+	e.nq.Predicate = pred
+	e.ConnectTo(n1)
+	return e
+}
+
+func (n *Node) Edge(pred string) Edge {
+	e := Edge{}
+	e.nq.Subject = n.String()
+	e.nq.Predicate = pred
+	return e
+}
+
+type Edge struct {
+	nq protos.NQuad
+}
+
+func NewEdge(nq protos.NQuad) Edge {
+	return Edge{nq}
+}
+
+func (e *Edge) ConnectTo(n Node) error {
+	if e.nq.ObjectType > 0 {
+		return ErrValue
+	}
+	e.nq.ObjectId = n.String()
+	return nil
+}
+
+func validateStr(val string) error {
+	for idx, c := range val {
+		if c == '"' && (idx == 0 || val[idx-1] != '\\') {
+			return fmt.Errorf(`" must be preceded by a \ in object value`)
+		}
+	}
+	return nil
+}
+
+func (e *Edge) SetValueString(val string) error {
+	if len(e.nq.ObjectId) > 0 {
+		return ErrConnected
+	}
+	if err := validateStr(val); err != nil {
+		return err
+	}
+
+	v, err := types.ObjectValue(types.StringID, val)
+	if err != nil {
+		return err
+	}
+	e.nq.ObjectValue = v
+	e.nq.ObjectType = int32(types.StringID)
+	return nil
+}
+
+func (e *Edge) SetValueInt(val int64) error {
+	if len(e.nq.ObjectId) > 0 {
+		return ErrConnected
+	}
+	v, err := types.ObjectValue(types.IntID, val)
+	if err != nil {
+		return err
+	}
+	e.nq.ObjectValue = v
+	e.nq.ObjectType = int32(types.IntID)
+	return nil
+}
+
+func (e *Edge) SetValueFloat(val float64) error {
+	if len(e.nq.ObjectId) > 0 {
+		return ErrConnected
+	}
+	v, err := types.ObjectValue(types.FloatID, val)
+	if err != nil {
+		return err
+	}
+	e.nq.ObjectValue = v
+	e.nq.ObjectType = int32(types.FloatID)
+	return nil
+}
+
+func (e *Edge) SetValueBool(val bool) error {
+	if len(e.nq.ObjectId) > 0 {
+		return ErrConnected
+	}
+	v, err := types.ObjectValue(types.BoolID, val)
+	if err != nil {
+		return err
+	}
+	e.nq.ObjectValue = v
+	e.nq.ObjectType = int32(types.BoolID)
+	return nil
+}
+
+func (e *Edge) SetValuePassword(val string) error {
+	if len(e.nq.ObjectId) > 0 {
+		return ErrConnected
+	}
+	v, err := types.ObjectValue(types.PasswordID, val)
+	if err != nil {
+		return err
+	}
+	e.nq.ObjectValue = v
+	e.nq.ObjectType = int32(types.PasswordID)
+	return nil
+}
+
+func (e *Edge) SetValueDatetime(dateTime time.Time) error {
+	if len(e.nq.ObjectId) > 0 {
+		return ErrConnected
+	}
+	d, err := types.ObjectValue(types.DateTimeID, dateTime)
+	if err != nil {
+		return err
+	}
+	e.nq.ObjectValue = d
+	e.nq.ObjectType = int32(types.DateTimeID)
+	return nil
+}
+
+func (e *Edge) SetValueGeoJson(json string) error {
+	if len(e.nq.ObjectId) > 0 {
+		return ErrConnected
+	}
+	var g geom.T
+	// Parse the json
+	err := geojson.Unmarshal([]byte(json), &g)
+	if err != nil {
+		return err
+	}
+
+	geo, err := types.ObjectValue(types.GeoID, g)
+	if err != nil {
+		return err
+	}
+
+	e.nq.ObjectValue = geo
+	e.nq.ObjectType = int32(types.GeoID)
+	return nil
+}
+
+func (e *Edge) SetValueDefault(val string) error {
+	if len(e.nq.ObjectId) > 0 {
+		return ErrConnected
+	}
+	if err := validateStr(val); err != nil {
+		return err
+	}
+
+	v, err := types.ObjectValue(types.DefaultID, val)
+	if err != nil {
+		return err
+	}
+	e.nq.ObjectValue = v
+	e.nq.ObjectType = int32(types.StringID)
+	return nil
+}
+
+func (e *Edge) AddFacet(key, val string) {
+	e.nq.Facets = append(e.nq.Facets, &protos.Facet{
+		Key: key,
+		Val: val,
+	})
+}

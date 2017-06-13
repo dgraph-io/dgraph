@@ -9,6 +9,8 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
@@ -23,10 +25,13 @@ func ExampleBatchMutation() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := protos.NewDgraphClient(conn)
-
 	// Start a new batch with batch size 1000 and 100 concurrent requests.
-	batch := client.NewBatchMutation(context.Background(), dgraphClient, 1000, 100)
+	bmOpts := client.BatchMutationOptions{
+		Size:          1000,
+		Pending:       100,
+		PrintCounters: false,
+	}
+	dgraphClient := client.NewDgraphClient(conn, bmOpts, "/tmp")
 
 	// Process your file, convert data to a protos.NQuad and add it to the batch.
 	// For each graph.NQuad, run batch.AddMutation (this would typically be done in a loop
@@ -56,7 +61,12 @@ func ExampleBatchMutation() {
 			log.Fatalf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
 		}
 		buf.Reset()
-		if err = batch.AddMutation(nq, client.SET); err != nil {
+
+		nq.Subject = Node(nq.Subject, dgraphClient)
+		if len(nq.ObjectId) > 0 {
+			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
+		}
+		if err = dgraphClient.Set(client.NewEdge(nq)); err != nil {
 			log.Fatal("While adding mutation to batch: ", err)
 		}
 	}
@@ -65,7 +75,25 @@ func ExampleBatchMutation() {
 	}
 	// Wait for all requests to complete. This is very important, else some
 	// data might not be sent to server.
-	batch.Flush()
+	dgraphClient.Flush()
+}
+
+func Node(val string, c *client.Dgraph) string {
+	if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
+		return c.NodeUid(uid).String()
+	}
+	if strings.HasPrefix(val, "_:") {
+		n, err := c.NodeBlank(val[2:])
+		if err != nil {
+			log.Fatal("Error while converting to node: %v", err)
+		}
+		return n.String()
+	}
+	n, err := c.NodeXid(val, true)
+	if err != nil {
+		log.Fatal("Error while converting to node: %v", err)
+	}
+	return n.String()
 }
 
 func ExampleReq_AddMutation() {
@@ -73,28 +101,35 @@ func ExampleReq_AddMutation() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := protos.NewDgraphClient(conn)
+	bmOpts := client.BatchMutationOptions{
+		Size:          1000,
+		Pending:       100,
+		PrintCounters: false,
+	}
+	dgraphClient := client.NewDgraphClient(conn, bmOpts, "/tmp")
 
 	req := client.Req{}
-	// Creating a person node, and adding a name attribute to it.
-	nq := protos.NQuad{
-		Subject:   "_:person1",
-		Predicate: "name",
-	}
-
-	client.Str("Steven Spielberg", &nq)
-	if err := req.AddMutation(nq, client.SET); err != nil {
-		// handle error
-	}
-	nq = protos.NQuad{
-		Subject:   "_:person1",
-		Predicate: "salary",
-	}
-	if err = client.Float(13333.6161, &nq); err != nil {
+	person1, err := dgraphClient.NodeBlank("person1")
+	if err != nil {
 		log.Fatal(err)
 	}
+	// Creating a person node, and adding a name attribute to it.
+	e := person1.Edge("name")
+	e.SetValueString("Steven Spielberg")
+	// Alternative syntax
+	// person1.ScalarEdge("name","Steven Spielberg", types.StringID)
+	if err := req.Set(e); err != nil {
+		// handle error
+	}
+	e = person1.Edge("salary")
+	e.SetValueFloat(13333.6161)
+	// Alternative syntax
+	// person1.ScalarEdge("salary",13333.6161, types.FloatID)
+	if err := req.Set(e); err != nil {
+		// handle error
+	}
 
-	resp, err := dgraphClient.Run(context.Background(), req.Request())
+	resp, err := dgraphClient.Run(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
@@ -106,44 +141,37 @@ func ExampleReq_AddMutation_facets() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := protos.NewDgraphClient(conn)
+	bmOpts := client.BatchMutationOptions{
+		Size:          1000,
+		Pending:       100,
+		PrintCounters: false,
+	}
+	dgraphClient := client.NewDgraphClient(conn, bmOpts, "/tmp")
 
 	req := client.Req{}
-	nq := protos.NQuad{
-		Subject:   "person1",
-		Predicate: "name",
-	}
-	client.Str("Steven Spielberg", &nq)
-
-	if err := client.AddFacet("since", "2006-01-02T15:04:05", &nq); err != nil {
+	person1, err := dgraphClient.NodeXid("person1", false)
+	if err != nil {
 		log.Fatal(err)
 	}
+	e := person1.Edge("name")
+	e.SetValueString("Steven Spielberg")
+	e.AddFacet("since", "2006-01-02T15:04:05")
+	e.AddFacet("alias", `"Steve"`)
 
-	if err := client.AddFacet("alias", `"Steve"`, &nq); err != nil {
+	req.Set(e)
+
+	person2, err := dgraphClient.NodeXid("person2", false)
+	if err != nil {
 		log.Fatal(err)
 	}
+	e = person2.Edge("name")
+	e.SetValueString("William Jones")
+	req.Set(e)
 
-	req.AddMutation(nq, client.SET)
+	e = person1.ConnectTo("friend", person2)
+	e.AddFacet("close", "true")
+	req.Set(e)
 
-	nq = protos.NQuad{
-		Subject:   "person2",
-		Predicate: "name",
-	}
-	client.Str("William Jones", &nq)
-	req.AddMutation(nq, client.SET)
-
-	// Lets connect the two nodes together and add a facet to the edge.
-	nq = protos.NQuad{
-		Subject:   "person1",
-		Predicate: "friend",
-		ObjectId:  "person2",
-	}
-
-	if err := client.AddFacet("close", "true", &nq); err != nil {
-		log.Fatal(err)
-	}
-
-	req.AddMutation(nq, client.SET)
 	req.SetQuery(`{
 		me(id: person1) {
 			name @facets
@@ -153,7 +181,7 @@ func ExampleReq_AddMutation_facets() {
 		}
 	}`)
 
-	resp, err := dgraphClient.Run(context.Background(), req.Request())
+	resp, err := dgraphClient.Run(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
@@ -191,24 +219,25 @@ func ExampleReq_SetQuery() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := protos.NewDgraphClient(conn)
+	bmOpts := client.BatchMutationOptions{
+		Size:          1000,
+		Pending:       100,
+		PrintCounters: false,
+	}
+	dgraphClient := client.NewDgraphClient(conn, bmOpts, "/tmp")
 
 	req := client.Req{}
-	nq := protos.NQuad{
-		Subject:   "alice",
-		Predicate: "name",
-	}
-	client.Str("Alice", &nq)
-	req.AddMutation(nq, client.SET)
-
-	nq = protos.NQuad{
-		Subject:   "alice",
-		Predicate: "falls.in",
-	}
-	if err = client.Str("Rabbit hole", &nq); err != nil {
+	alice, err := dgraphClient.NodeXid("alice", false)
+	if err != nil {
 		log.Fatal(err)
 	}
-	req.AddMutation(nq, client.SET)
+	e := alice.Edge("name")
+	e.SetValueString("Alice")
+	req.Set(e)
+
+	e = alice.Edge("falls.in")
+	e.SetValueString("Rabbit hole")
+	req.Set(e)
 
 	req.SetQuery(`{
 		me(id: alice) {
@@ -216,7 +245,7 @@ func ExampleReq_SetQuery() {
 			falls.in
 		}
 	}`)
-	resp, err := dgraphClient.Run(context.Background(), req.Request())
+	resp, err := dgraphClient.Run(context.Background(), &req)
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 }
 

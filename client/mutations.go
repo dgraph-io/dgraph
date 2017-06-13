@@ -1,27 +1,33 @@
 package client
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 
 	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	geom "github.com/twpayne/go-geom"
-	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
 var (
-	ErrConnected = errors.New("Edge already connected to another node.")
-	ErrValue     = errors.New("Edge already has a value.")
-	ErrEmptyXid  = errors.New("Empty XID node.")
+	ErrConnected   = errors.New("Edge already connected to another node.")
+	ErrValue       = errors.New("Edge already has a value.")
+	ErrEmptyXid    = errors.New("Empty XID node.")
+	ErrInvalidType = errors.New("Invalid value type")
+	emptyEdge      Edge
 )
 
 type BatchMutationOptions struct {
@@ -31,87 +37,82 @@ type BatchMutationOptions struct {
 }
 
 type allocator struct {
-	sync.Mutex // for startId, endId
+	x.SafeMutex
 
-	ids chan string
-	kv  *badger.KV
+	kv *badger.KV
+	dc protos.DgraphClient
+
+	ids map[string]uint64
 
 	startId uint64
 	endId   uint64
 }
 
-func (a *allocations) getFromCache(id string) (uint64, error) {
+func (a *allocator) getFromCache(id string) (uint64, error) {
+	a.RLock()
+	if uid, found := a.ids[id]; found && uid > 0 {
+		a.RUnlock()
+		return uid, nil
+	}
+	a.RUnlock()
+
 	var item badger.KVItem
-	if err := c.kv.Get([]byte(key), &item); err != nil {
+	if err := a.kv.Get([]byte(id), &item); err != nil {
 		return 0, err
 	}
 	val := item.Value()
 	if len(val) > 0 {
 		uid, n := binary.Uvarint(val)
 		if n <= 0 {
-			return 0, fmt.Errorf("Unable to parse val %q to uint64 for key %q", val, key)
+			return 0, fmt.Errorf("Unable to parse val %q to uint64 for %q", val, id)
 		}
 		return uid, nil
 	}
 	return 0, nil
 }
 
-func (a *allocations) getOneId() (uint64, error) {
+func (a *allocator) assingOrGet(id string) (uint64, error) {
+	uid, err := a.getFromCache(id)
+	if err != nil || uid > 0 {
+		return uid, err
+	}
+
+	uid, err = a.getFromCache(id)
+	if err != nil || uid > 0 {
+		return uid, err
+	}
+
 	a.Lock()
 	defer a.Unlock()
-
-	// TODO: Check if we can assign the endId as well?
-	if a.startId > 0 && a.endId > a.startId {
-		ret := a.startId
-		a.startId++
-		return ret, nil
+	if a.startId == 0 || a.endId < a.startId {
+		assignedIds, err := a.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
+		if err != nil {
+			return 0, err
+		}
+		a.startId = assignedIds.StartId
+		a.endId = assignedIds.EndId
 	}
-	// TODO: Do grpc here.
-	ret := a.startId
+
+	uid = a.startId
 	a.startId++
-	return ret, nil
+
+	buf := make([]byte, 20)
+	binary.PutUvarint(buf, uid)
+	a.ids[id] = uid
+	// Should be written to disk before mutation containing this node is persisted
+	go a.kv.Set([]byte(id), buf)
+	return uid, nil
 }
 
-func (a *allocations) get(id string) (uint64, error) {
-	uid, err := a.getFromCache(id)
-	if err != nil || uid > 0 {
-		return uid, err
-	}
-
-	a.Lock()
-	defer a.Unlock()
-
-	uid, err := a.getFromCache(id)
-	if err != nil || uid > 0 {
-		return uid, err
-	}
-
-	if strings.HasPrefix(id, "_:") {
-		return a.getOneId()
-	}
-	// TODO: Handle xid.
-}
-
-// release should be called only after writing the id to Badger.
-func (a *allocations) release(id string) {
-	a.Lock()
-	defer a.Unlock()
-
-	m, ok := a.allocs[id]
-	if !ok {
-		log.Fatalf("Id: %q should have been present", id)
-	}
-	m.Unlock()
-	delete(a.allocs, id)
-}
-
-type BatchMutation struct {
+type Dgraph struct {
 	opts BatchMutationOptions
 
 	schema chan protos.SchemaUpdate
 	nquads chan nquadOp
 	dc     protos.DgraphClient
 	wg     sync.WaitGroup
+	alloc  *allocator
+	ticker *time.Ticker
 
 	// Miscellaneous information to print counters.
 	// Num of RDF's sent
@@ -125,270 +126,221 @@ type BatchMutation struct {
 // NewBatchMutation is used to create a new batch.
 // size is the number of RDF's that are sent as part of one request to Dgraph.
 // pending is the number of concurrent requests to make to Dgraph server.
-func NewBatchMutation(client protos.DgraphClient, opts BatchMutationOptions) *BatchMutation {
-	bm := &BatchMutation{
-		opts: opts,
+func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions,
+	clientDir string) *Dgraph {
+	client := protos.NewDgraphClient(conn)
+	x.Check(os.MkdirAll(clientDir, 0700))
+	opt := badger.DefaultOptions
+	opt.SyncWrites = true
+	opt.Dir = clientDir
+	opt.ValueDir = clientDir
+	kv, err := badger.NewKV(&opt)
+	x.Checkf(err, "Error while creating badger KV posting store")
+
+	alloc := &allocator{
+		kv:  kv,
+		dc:  client,
+		ids: make(map[string]uint64),
+	}
+	d := &Dgraph{
+		opts:   opts,
+		dc:     client,
+		start:  time.Now(),
+		nquads: make(chan nquadOp, 2*opts.Size),
+		schema: make(chan protos.SchemaUpdate, 2*opts.Size),
+		alloc:  alloc,
 	}
 
 	for i := 0; i < opts.Pending; i++ {
-		bm.wg.Add(1)
-		go bm.makeRequests()
+		d.wg.Add(1)
+		go d.makeRequests()
 	}
-	bm.wg.Add(1)
+	d.wg.Add(1)
+	go d.makeSchemaRequests()
 
 	rand.Seed(time.Now().Unix())
-	return bm
+	if opts.PrintCounters {
+		go d.printCounters()
+	}
+	return d
 }
 
-func (batch *BatchMutation) makeRequests() {
-	var gr protos.Request
+func (d *Dgraph) printCounters() {
+	d.ticker = time.NewTicker(2 * time.Second)
+	start := time.Now()
 
-	for n := range batch.nquads {
-		req.addMutation(n.nq, n.op)
-		if req.size() == batch.size {
-			batch.request(req)
+	for range d.ticker.C {
+		counter := d.Counter()
+		rate := float64(counter.Rdfs) / counter.Elapsed.Seconds()
+		elapsed := ((time.Since(start) / time.Second) * time.Second).String()
+		fmt.Printf("[Request: %6d] Total RDFs done: %8d RDFs per second: %7.0f Time Elapsed: %v \r",
+			counter.Mutations, counter.Rdfs, rate, elapsed)
+
+	}
+}
+
+func (d *Dgraph) request(req *Req) {
+	counter := atomic.AddUint64(&d.mutations, 1)
+RETRY:
+	_, err := d.dc.Run(context.Background(), &req.gr)
+	if err != nil {
+		errString := err.Error()
+		// Irrecoverable
+		if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
+			log.Fatal(errString)
+		}
+		fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
+		time.Sleep(5 * time.Millisecond)
+		goto RETRY
+	}
+	req.reset()
+}
+
+func (d *Dgraph) makeRequests() {
+	req := new(Req)
+
+	for n := range d.nquads {
+		if n.op == SET {
+			req.Set(n.e)
+		} else if n.op == DEL {
+			req.Delete(n.e)
+		}
+		if req.size() == d.opts.Size {
+			d.request(req)
 		}
 	}
 
 	if req.size() > 0 {
-		batch.request(req)
+		d.request(req)
 	}
-	batch.wg.Done()
+	d.wg.Done()
 }
 
-func (batch *BatchMutation) Set(e *Edge) error {
-	batch.nquads <- nquadOp{
-		nq: e.nq,
+func (d *Dgraph) makeSchemaRequests() {
+	req := new(Req)
+LOOP:
+	for {
+		select {
+		case s, ok := <-d.schema:
+			if !ok {
+				break LOOP
+			}
+			req.addSchema(s)
+		default:
+			start := time.Now()
+			if req.size() > 0 {
+				d.request(req)
+			}
+			elapsedMillis := time.Since(start).Seconds() * 1e3
+			if elapsedMillis < 10 {
+				time.Sleep(time.Duration(int64(10-elapsedMillis)) * time.Millisecond)
+			}
+		}
+	}
+
+	if req.size() > 0 {
+		d.request(req)
+	}
+	d.wg.Done()
+}
+
+func (d *Dgraph) Set(e Edge) error {
+	d.nquads <- nquadOp{
+		e:  e,
 		op: SET,
 	}
-}
-
-func (batch *BatchMutation) Delete(e *Edge) error {
-	batch.nquads <- nquadOp{
-		nq: e.nq,
-		op: DEL,
-	}
-}
-
-func checkSchema(schema protos.SchemaUpdate) error {
-	typ := types.TypeID(schema.ValueType)
-	if typ == types.UidID && schema.Directive == protos.SchemaUpdate_INDEX {
-		// index on uid type
-		return x.Errorf("Index not allowed on predicate of type uid on predicate %s",
-			schema.Predicate)
-	} else if typ != types.UidID && schema.Directive == protos.SchemaUpdate_REVERSE {
-		// reverse on non-uid type
-		return x.Errorf("Cannot reverse for non-uid type on predicate %s", schema.Predicate)
-	}
+	atomic.AddUint64(&d.rdfs, 1)
 	return nil
 }
 
-func (batch *BatchMutation) AddSchema(s protos.SchemaUpdate) error {
+func (d *Dgraph) Delete(e Edge) error {
+	d.nquads <- nquadOp{
+		e:  e,
+		op: DEL,
+	}
+	atomic.AddUint64(&d.rdfs, 1)
+	return nil
+}
+
+func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 	if err := checkSchema(s); err != nil {
 		return err
 	}
-	batch.schema <- s
+	d.schema <- s
 	return nil
 }
 
-type Node struct {
-	uid   uint64
-	blank string
-	xid   string
+// Flush waits for all pending requests to complete. It should always be called
+// after adding all the NQuads using batch.AddMutation().
+func (d *Dgraph) Flush() {
+	close(d.nquads)
+	close(d.schema)
+	d.wg.Wait()
+	if d.ticker != nil {
+		d.ticker.Stop()
+	}
 }
 
-func (c *DgraphClient) NodeUid(uid uint64) *Node {
-	return &Node{uid: uid}
+func (d *Dgraph) Run(ctx context.Context, req *Req) (*protos.Response, error) {
+	return d.dc.Run(ctx, &req.gr)
 }
 
-func (c *DgraphClient) getFromCache(key string) (*Node, error) {
-	var item badger.KVItem
-	if err := c.kv.Get([]byte(key), &item); err != nil {
-		return nil, err
+// Counter returns the current state of the BatchMutation.
+func (d *Dgraph) Counter() Counter {
+	return Counter{
+		Rdfs:      atomic.LoadUint64(&d.rdfs),
+		Mutations: atomic.LoadUint64(&d.mutations),
+		Elapsed:   time.Since(d.start),
 	}
-	val := item.Value()
-	if len(val) == 0 {
-		return nil, nil
-	}
-	uid, n := binary.Uvarint(val)
-	if n <= 0 {
-		return nil, fmt.Errorf("Unable to parse val %q to uint64 for key %q", val, key)
-	}
-	return &Node{uid: uid}, nil
 }
 
-func (c *DgraphClient) NodeBlank(varname string) (*Node, error) {
-	if len(varname) == 0 {
-		return &Node{blank: fmt.Sprintf("noreuse-%x", rand.Uint64())}, nil
-	}
-	node, err := c.getFromCache("_:" + varname)
+func (d *Dgraph) CheckVersion(ctx context.Context) {
+	v, err := d.dc.CheckVersion(ctx, &protos.Check{})
 	if err != nil {
-		return nil, err
-	}
-	if node == nil {
-		return &Node{blank: varname}, nil
-	}
-	return node, nil
-}
-
-func (c *DgraphClient) NodeXid(xid string) (*Node, error) {
-	if len(xid) == 0 {
-		return nil, ErrEmptyXid
-	}
-	node, err := c.getFromCache(fmt.Sprintf("<%s>", xid))
-	if err != nil {
-		return nil, err
-	}
-	if node == nil {
-		return &Node{xid: xid}, nil
-	}
-	return node, nil
-}
-
-func (n *Node) String() string {
-	if n.uid > 0 {
-		return fmt.Sprintf("<%#x>", n.uid)
-	}
-	if len(n.blank) > 0 {
-		return "_:" + n.blank
-	}
-	return fmt.Sprintf("<%s>", n.xid)
-}
-
-type Edge struct {
-	nq protos.NQuad
-}
-
-func (n *Node) Edge(pred string) *Edge {
-	e := &Edge{}
-	e.nq.Subject = n.String()
-	e.nq.Predicate = pred
-	return e
-}
-
-func (e *Edge) ConnectTo(n *Node) error {
-	if e.nq.ObjectType > 0 {
-		return ErrValue
-	}
-	e.nq.ObjectId = n.String()
-	return nil
-}
-
-func validateStr(val string) error {
-	for idx, c := range val {
-		if c == '"' && (idx == 0 || val[idx-1] != '\\') {
-			return fmt.Errorf(`" must be preceded by a \ in object value`)
+		fmt.Printf(`Could not fetch version information from Dgraph. Got err: %v.`, err)
+	} else {
+		version := x.Version()
+		if version != "" && v.Tag != "" && version != v.Tag {
+			fmt.Printf(`
+Dgraph server: %v, loader: %v dont match.
+You can get the latest version from https://docs.dgraph.io
+`, v.Tag, version)
 		}
 	}
-	return nil
 }
 
-func (e *Edge) SetValueString(val string) error {
-	if len(e.nq.ObjectId) > 0 {
-		return ErrConnected
-	}
-	if err := validateStr(val); err != nil {
-		return err
-	}
-
-	v, err := types.ObjectValue(types.StringID, val)
-	if err != nil {
-		return err
-	}
-	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.StringID)
-	return nil
+func (d *Dgraph) NodeUid(uid uint64) Node {
+	return Node(uid)
 }
 
-func (e *Edge) SetValueInt(val int64) error {
-	if len(e.nq.ObjectId) > 0 {
-		return ErrConnected
+func (d *Dgraph) NodeBlank(varname string) (Node, error) {
+	if len(varname) == 0 {
+		varname = fmt.Sprintf("noreuse-%x", rand.Uint64())
 	}
-	v, err := types.ObjectValue(types.IntID, val)
+	uid, err := d.alloc.assingOrGet("_:" + varname)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.IntID)
-	return nil
+	return Node(uid), nil
 }
 
-func (e *Edge) SetValueFloat(val float64) error {
-	if len(e.nq.ObjectId) > 0 {
-		return ErrConnected
+func (d *Dgraph) NodeXid(xid string, storeXid bool) (Node, error) {
+	if len(xid) == 0 {
+		return 0, ErrEmptyXid
 	}
-	v, err := types.ObjectValue(types.FloatID, val)
+	if uid, err := d.alloc.getFromCache(xid); err == nil && uid > 0 {
+		return Node(uid), nil
+	}
+	// TODO: return assigned or got from cache and add xid based on that
+	uid, err := d.alloc.assingOrGet(xid)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.FloatID)
-	return nil
-}
-
-func (e *Edge) SetValueBool(val bool) error {
-	if len(e.nq.ObjectId) > 0 {
-		return ErrConnected
+	n := Node(uid)
+	if storeXid {
+		e, err := n.ScalarEdge("_xid_", xid, types.StringID)
+		x.Check(err)
+		d.Set(e)
 	}
-	v, err := types.ObjectValue(types.BoolID, val)
-	if err != nil {
-		return err
-	}
-	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.BoolID)
-	return nil
-}
-
-func (e *Edge) SetValuePassword(val string) error {
-	if len(e.nq.ObjectId) > 0 {
-		return ErrConnected
-	}
-	v, err := types.ObjectValue(types.PasswordID, val)
-	if err != nil {
-		return err
-	}
-	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.PasswordID)
-	return nil
-}
-
-func (e *Edge) SetValueDatetime(dateTime time.Time) error {
-	if len(e.nq.ObjectId) > 0 {
-		return ErrConnected
-	}
-	d, err := types.ObjectValue(types.DateTimeID, dateTime)
-	if err != nil {
-		return err
-	}
-	e.nq.ObjectValue = d
-	e.nq.ObjectType = int32(types.DateTimeID)
-	return nil
-}
-
-func (e *Edge) SetValueGeoJson(json string) error {
-	if len(e.nq.ObjectId) > 0 {
-		return ErrConnected
-	}
-	var g geom.T
-	// Parse the json
-	err := geojson.Unmarshal([]byte(json), &g)
-	if err != nil {
-		return err
-	}
-
-	geo, err := types.ObjectValue(types.GeoID, g)
-	if err != nil {
-		return err
-	}
-
-	e.nq.ObjectValue = geo
-	e.nq.ObjectType = int32(types.GeoID)
-	return nil
-}
-
-func (e *Edge) AddFacet(key, val string) {
-	e.nq.Facets = append(e.nq.Facets, &protos.Facet{
-		Key: key,
-		Val: val,
-	})
+	return n, nil
 }

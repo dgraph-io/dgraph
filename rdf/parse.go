@@ -34,7 +34,7 @@ import (
 var emptyEdge protos.DirectedEdge
 var (
 	ErrEmpty      = errors.New("rdf: harmless error, e.g. comment line")
-	ErrInvalidUID = errors.New("UID has to be greater than one.")
+	ErrInvalidUID = errors.New("UID has to be greater than zero.")
 )
 
 // Gets the uid corresponding
