@@ -536,6 +536,11 @@ h1:hover .anchor i, h2:hover .anchor i, h3:hover .anchor i {
   }
 }
 
+a .external-link-icon {
+  font-size: 12px;
+  margin-left: 2px;
+}
+
 /* table of contents in home page */
 
 section.toc .section-name {
