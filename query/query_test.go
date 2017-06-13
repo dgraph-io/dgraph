@@ -5060,7 +5060,7 @@ func TestRootList2(t *testing.T) {
 	}
 }`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Alice"},{"name":"Glenn Rhee"}]}`, js)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Alice"}]}`, js)
 }
 
 func TestGeneratorMultiRootFilter1(t *testing.T) {
@@ -7941,4 +7941,68 @@ func TestPBUnmarshalError1(t *testing.T) {
 func TestPBUnmarshalError2(t *testing.T) {
 	err := client.Unmarshal([]*protos.Node{}, nil)
 	require.Error(t, err)
+}
+
+func TestUidFunction(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(23, 1, 24, 25, 31)) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`, string(js))
+}
+
+func TestUidFunctionInFilter(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(23, 1, 24, 25, 31))  @filter(uid(1, 24)) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"name":"Michonne"},{"name":"Glenn Rhee"}]}`, string(js))
+}
+
+func TestUidFunctionInFilter2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(23, 1, 24, 25, 31)) {
+			name
+			# Filtering only Michonne and Rick.
+			friend @filter(uid(23, 1)) {
+				name
+			}
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"friend":[{"name":"Rick Grimes"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`, string(js))
+}
+
+func TestUidFunctionInFilter3(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: anyofterms(name, "Michonne Andrea")) @filter(uid(1)) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"name":"Michonne"}]}`, string(js))
+}
+
+func TestUidFunctionInFilter4(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: anyofterms(name, "Michonne Andrea")) @filter(not uid(1, 31)) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"name":"Andrea With no friends"}]}`, string(js))
 }
