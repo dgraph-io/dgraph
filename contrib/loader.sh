@@ -24,7 +24,7 @@ popd &> /dev/null
 
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph -gentlecommit 1.0 &
+./dgraph -gentlecommit 1.0 -x true &
 popd &> /dev/null
 
 sleep 15
@@ -34,6 +34,7 @@ curl -X POST  -d 'mutation {
   schema {
 	  name: string @index .
 	  initial_release_date: date @index .
+		_xid_: string @index(exact,term) .
 	}
 }' "http://localhost:8080/query"
 
