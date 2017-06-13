@@ -543,9 +543,14 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 			return x.Errorf("Invalid function name : %s", ft.Func.Name)
 		}
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
-		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Lang)
-		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
-		sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar...)
+		isUidFunc := isUidFn(ft.Func.Name)
+		if isUidFunc {
+			sg.uidsFromArgs(ft.Func.Args)
+		} else {
+			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Lang)
+			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
+			sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar...)
+		}
 	}
 	for _, ftc := range ft.Child {
 		child := &SubGraph{}
@@ -802,6 +807,46 @@ func isDebug(ctx context.Context) bool {
 	return debug || ctx.Value("debug") == "true"
 }
 
+func (sg *SubGraph) uidsFromArgs(ids []string) error {
+	var uids []uint64
+	var xids []string
+	for _, id := range ids {
+		if uid, err := strconv.ParseUint(id, 0, 64); err == nil {
+			uids = append(uids, uid)
+		} else {
+			uids = append(uids, 0) // for maintaining order
+			xids = append(xids, id)
+		}
+	}
+	umap, err := worker.GetUidsOverNetwork(context.Background(), xids)
+	if err != nil {
+		return err
+	}
+	temp := uids[:0]
+	for i, uid := range uids {
+		if uid != 0 {
+			temp = append(temp, uid)
+			continue
+		}
+		// Now check in the map and add it if present.
+		// we won't return results if uid is not found for a given xid
+		if rid, ok := umap[ids[i]]; ok {
+			temp = append(temp, rid)
+		}
+	}
+	uids = temp
+
+	if len(uids) > 0 {
+		o := make([]uint64, len(uids))
+		copy(o, uids)
+		// User specified list may not be sorted.
+		sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
+		sg.uidMatrix = []*protos.List{{o}}
+		sg.SrcUIDs = &protos.List{o}
+	}
+	return nil
+}
+
 // newGraph returns the SubGraph and its task query.
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
@@ -847,7 +892,9 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Params: args,
 	}
 
-	if gq.Func != nil {
+	isUidFunc := gq.Func != nil && isUidFn(gq.Func.Name)
+	// Uid function doesnt have Attr. It just has a list of ids
+	if gq.Func != nil && !isUidFunc {
 		sg.Attr = gq.Func.Attr
 		if !isValidFuncName(gq.Func.Name) {
 			return nil, x.Errorf("Invalid function name : %s", gq.Func.Name)
@@ -857,42 +904,17 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 
-	var uids []uint64
-	var xids []string
-	for _, id := range gq.ID {
-		if uid, err := strconv.ParseUint(id, 0, 64); err == nil {
-			uids = append(uids, uid)
-		} else {
-			uids = append(uids, 0) // for maintaining order
-			xids = append(xids, id)
-		}
+	var ids []string
+	// For root ids can come from uid func or id: [].
+	if isUidFunc && len(gq.Func.Args) > 0 {
+		ids = gq.Func.Args
+	} else {
+		ids = gq.ID
 	}
-	umap, err := worker.GetUidsOverNetwork(context.Background(), xids)
-	if err != nil {
+	if err := sg.uidsFromArgs(ids); err != nil {
 		return nil, err
 	}
-	temp := uids[:0]
-	for i, uid := range uids {
-		if uid != 0 {
-			temp = append(temp, uid)
-			continue
-		}
-		// Now check in the map and add it if present.
-		// we won't return results if uid is not found for a given xid
-		if rid, ok := umap[gq.ID[i]]; ok {
-			temp = append(temp, rid)
-		}
-	}
-	uids = temp
 
-	if len(uids) > 0 {
-		o := make([]uint64, len(uids))
-		copy(o, uids)
-		sg.uidMatrix = []*protos.List{{uids}}
-		// User specified list may not be sorted.
-		sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
-		sg.SrcUIDs = &protos.List{o}
-	}
 	sg.values = createNilValuesList(1)
 	// Copy roots filter.
 	if gq.Filter != nil {
@@ -1716,6 +1738,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// Run all filters in parallel.
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
+			isUidFunc := len(filter.SrcFunc) > 0 && isUidFn(filter.SrcFunc[0])
+			// For uid function filter, no need for processing. User already gave us the
+			// list. Lets just update DestUIDs.
+			if isUidFunc {
+				filter.DestUIDs = filter.SrcUIDs
+				filterChan <- nil
+				continue
+			}
+
 			filter.SrcUIDs = sg.DestUIDs
 			// Passing the pointer is okay since the filter only reads.
 			filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
@@ -2014,7 +2045,7 @@ func isValidArg(a string) bool {
 // isValidFuncName checks if fn passed is valid keyword.
 func isValidFuncName(f string) bool {
 	switch f {
-	case "anyofterms", "allofterms", "var", "regexp", "anyoftext", "alloftext", "has":
+	case "anyofterms", "allofterms", "var", "regexp", "anyoftext", "alloftext", "has", "uid":
 		return true
 	}
 	return isCompareFn(f) || types.IsGeoFunc(f)
@@ -2042,6 +2073,10 @@ func isAggregatorFn(f string) bool {
 		return true
 	}
 	return false
+}
+
+func isUidFn(f string) bool {
+	return f == "uid"
 }
 
 func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.TaskValue, error) {
