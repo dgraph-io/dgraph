@@ -82,6 +82,12 @@ td {
   border: 1px solid #e2e2e2;
 }
 
+.notices.outdated {
+  border-color: #c16560;
+  background-color: #ffefe3;
+  border: 1px solid #e2e2e2;
+}
+
 /* headers */
 html h1, html h2, html h3, html h4, html h5, html h6 {
   font-family: "Lato", sans-serif;
