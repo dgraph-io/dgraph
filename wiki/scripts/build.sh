@@ -43,11 +43,13 @@ rebuild() {
 
 	# In Unix environments, env variables should also be exported to be seen by Hugo
 	export CURRENT_BRANCH=${1}
+	export CURRENT_VERSION=${2}
 	export VERSION_STRING=$(joinVersions)
 
 	HUGO_TITLE="Dgraph Doc ${2}"\
-		VERSIONS=${VERSION_STRING} \
-		CURRENT_BRANCH=${1} hugo\
+		VERSIONS=${VERSION_STRING}\
+		CURRENT_BRANCH=${1}\
+		CURRENT_VERSION=${2} hugo\
 		--destination=public/"$dir"\
 		--baseURL="$HOST"/"$dir" 1> /dev/null
 }
