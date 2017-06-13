@@ -19,7 +19,9 @@ package rdf
 
 import (
 	"errors"
+	"fmt"
 	"log"
+	"math"
 	"strconv"
 	"strings"
 	"unicode"
@@ -97,38 +99,6 @@ func byteVal(nq NQuad) ([]byte, error) {
 	return []byte(p1.Value.([]byte)), nil
 }
 
-// ToEdge is useful when you want to find the UID corresponding to XID for
-// just one edge. The method doesn't automatically generate a UID for an XID.
-func (nq NQuad) ToEdge() (*protos.DirectedEdge, error) {
-	var err error
-	sid, err := ParseUid(nq.Subject)
-	if err != nil {
-		return nil, err
-	}
-	out := &protos.DirectedEdge{
-		Attr:   nq.Predicate,
-		Label:  nq.Label,
-		Lang:   nq.Lang,
-		Entity: sid,
-		Facets: nq.Facets,
-	}
-
-	switch nq.valueType() {
-	case x.ValueUid:
-		oid, err := ParseUid(nq.ObjectId)
-		if err != nil {
-			return nil, err
-		}
-		out.ValueId = oid
-	case x.ValuePlain, x.ValueMulti:
-		if err = copyValue(out, nq); err != nil {
-			return &emptyEdge, err
-		}
-	}
-
-	return out, nil
-}
-
 func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 	if id, err := ParseUid(subject); err == nil || err == ErrInvalidUID {
 		return id, err
@@ -138,6 +108,28 @@ func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 		return id, err
 	}
 	return 0, x.Errorf("uid not found/generated for xid %s\n", subject)
+}
+
+func (nq NQuad) ToDeletePredEdge() (*protos.DirectedEdge, error) {
+	if nq.Subject != x.DeletePredicate && nq.ObjectValue.String() != x.DeleteAllObjects {
+		return &emptyEdge, fmt.Errorf("Subject and object both should be *. Got: %+v",
+			nq)
+	}
+
+	// This along with edge.ObjectValue == x.DeleteAllObjects would indicate
+	// that we want to delet the predicate.
+	out := &protos.DirectedEdge{
+		Entity: math.MaxUint64,
+		Attr:   nq.Predicate,
+		Label:  nq.Label,
+		Lang:   nq.Lang,
+		Facets: nq.Facets,
+	}
+
+	if err := copyValue(out, nq); err != nil {
+		return &emptyEdge, err
+	}
+	return out, nil
 }
 
 // ToEdgeUsing determines the UIDs for the provided XIDs using the

@@ -163,7 +163,15 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 	var mr mutationResult
 
 	newUids := make(map[string]uint64)
+	var delPred []*protos.NQuad
+
 	for _, nq := range nquads {
+		// We dont want to assign uids to these.
+		if nq.Subject == x.DeletePredicate {
+			delPred = append(delPred, nq)
+			continue
+		}
+
 		if strings.HasPrefix(nq.Subject, "_:") {
 			newUids[nq.Subject] = 0
 		} else {
@@ -200,6 +208,10 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 	// Wrapper for a pointer to protos.Nquad
 	var wnq rdf.NQuad
 	for _, nq := range nquads {
+		if nq.Subject == x.DeletePredicate {
+			continue
+		}
+
 		// Get edges from nquad using newUids.
 		wnq = rdf.NQuad{nq}
 		edge, err := wnq.ToEdgeUsing(newUids)
@@ -207,11 +219,14 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 			x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
 			return mr, err
 		}
+		edges = append(edges, edge)
+	}
 
-		if nq.Subject == x.DeletePredicate {
-			// This along with edge.ObjectValue == x.DeleteAllObjects would indicate
-			// that we want to delet the predicate.
-			edge.Entity = math.MaxUint64
+	for _, nq := range delPred {
+		wnq = rdf.NQuad{nq}
+		edge, err := wnq.ToDeletePredEdge()
+		if err != nil {
+			return mr, err
 		}
 		edges = append(edges, edge)
 	}
