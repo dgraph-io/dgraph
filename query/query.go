@@ -838,12 +838,9 @@ func (sg *SubGraph) uidsFromArgs(ids []string) error {
 	uids = temp
 
 	if len(uids) > 0 {
-		o := make([]uint64, len(uids))
-		copy(o, uids)
-		// User specified list may not be sorted.
-		sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
-		sg.uidMatrix = []*protos.List{{o}}
-		sg.SrcUIDs = &protos.List{o}
+		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
+		sg.uidMatrix = []*protos.List{{uids}}
+		sg.SrcUIDs = &protos.List{uids}
 	}
 	return nil
 }
