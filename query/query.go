@@ -1157,6 +1157,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 			// The path of math node is the path of max var node used in it.
 			it.path = maxPath
 			doneVars[sg.Params.Var] = it
+			sg.Params.uidToVal = sg.MathExp.Val
 		} else if sg.MathExp.Const.Value != nil {
 			// Assign the const for all the srcUids.
 			mp := make(map[uint64]types.Val)
@@ -1176,11 +1177,11 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 			it := doneVars[sg.Params.Var]
 			it.vals = mp
 			doneVars[sg.Params.Var] = it
+			sg.Params.uidToVal = mp
 		} else {
 			return x.Errorf("Missing values/constant in math expression")
 		}
 		// Put it in this node.
-		sg.Params.uidToVal = sg.MathExp.Val
 	} else if len(sg.Params.NeedsVar) > 0 {
 		// This is a var() block.
 		srcVar := sg.Params.NeedsVar[0]
