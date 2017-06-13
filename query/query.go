@@ -1041,11 +1041,14 @@ func (mt *mathTree) extractVarNodes() []*mathTree {
 
 // transformTo transforms fromNode to toNode level using the path between them and the
 // corresponding uidMatrices.
-func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, error) {
-	x.AssertTrue(len(toNode.path) >= len(fromNode.path))
+func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val, error) {
+	if len(toPath) < len(fromNode.path) {
+		return nil, x.Errorf("Invalid definition/use of variables in math")
+	}
+
 	idx := 0
 	for ; idx < len(fromNode.path); idx++ {
-		if fromNode.path[idx] != toNode.path[idx] {
+		if fromNode.path[idx] != toPath[idx] {
 			return nil, x.Errorf("Invalid combination of variables in math")
 		}
 	}
@@ -1054,8 +1057,8 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 	if newMap == nil {
 		return nil, x.Errorf("Variables not ordered correctly")
 	}
-	for ; idx < len(toNode.path); idx++ {
-		curNode := toNode.path[idx]
+	for ; idx < len(toPath); idx++ {
+		curNode := toPath[idx]
 		tempMap := make(map[uint64]types.Val)
 		if idx == 0 {
 			continue
@@ -1089,36 +1092,41 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 }
 
 // transformVars transforms all the variables to the variable at the lowest level
-func transformVars(mNode *mathTree, doneVars map[string]varValue) ([]*SubGraph, error) {
+func (sg *SubGraph) transformVars(doneVars map[string]varValue,
+	path []*SubGraph) error {
+	mNode := sg.MathExp
 	mvarList := mNode.extractVarNodes()
 	// Iterate over the node list to find the node at the lowest level.
-	var maxVar string
-	var maxLevel int
-	for _, mt := range mvarList {
-		mvarVal, ok := doneVars[mt.Var]
-		if !ok {
-			return nil, x.Errorf("Variable not yet populated: %v", mt.Var)
+	/*
+		var maxVar string
+		var maxLevel int
+		for _, mt := range mvarList {
+			mvarVal, ok := doneVars[mt.Var]
+			if !ok {
+				return nil, x.Errorf("Variable not yet populated: %v", mt.Var)
+			}
+			if maxLevel < len(mvarVal.path) {
+				maxLevel = len(mvarVal.path)
+				maxVar = mt.Var
+			}
 		}
-		if maxLevel < len(mvarVal.path) {
-			maxLevel = len(mvarVal.path)
-			maxVar = mt.Var
-		}
-	}
+	*/
 
-	maxNode := doneVars[maxVar]
+	//maxNode := doneVars[maxVar]
 	for i := 0; i < len(mvarList); i++ {
 		mt := mvarList[i]
 		curNode := doneVars[mt.Var]
-		newMap, err := curNode.transformTo(maxNode)
+		newMap, err := curNode.transformTo(path)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		mt.Val = newMap
 	}
-	return maxNode.path, nil
+	return nil
 }
 
-func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *SubGraph) error {
+func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*SubGraph,
+	parent *SubGraph) error {
 	if !sg.IsInternal() && !sg.IsGroupBy() {
 		return nil
 	}
@@ -1142,7 +1150,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 		sg.Params.uidToVal = mp
 	} else if sg.MathExp != nil {
 		// Preprocess to bring all variables to the same level.
-		maxPath, err := transformVars(sg.MathExp, doneVars)
+		err := sg.transformVars(doneVars, path)
 		if err != nil {
 			return err
 		}
@@ -1155,7 +1163,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 			it := doneVars[sg.Params.Var]
 			it.vals = sg.MathExp.Val
 			// The path of math node is the path of max var node used in it.
-			it.path = maxPath
+			it.path = path
 			doneVars[sg.Params.Var] = it
 			sg.Params.uidToVal = sg.MathExp.Val
 		} else if sg.MathExp.Const.Value != nil {
@@ -1196,15 +1204,18 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, parent *Su
 	return nil
 }
 
-func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, parent *SubGraph) error {
+func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, path []*SubGraph,
+	parent *SubGraph) error {
 	for idx := 0; idx < len(sg.Children); idx++ {
 		child := sg.Children[idx]
-		err := child.populatePostAggregation(doneVars, sg)
+		path = append(path, sg)
+		err := child.populatePostAggregation(doneVars, path, sg)
+		path = path[:len(path)-1]
 		if err != nil {
 			return err
 		}
 	}
-	return sg.valueVarAggregation(doneVars, parent)
+	return sg.valueVarAggregation(doneVars, path, parent)
 }
 
 func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
@@ -1316,7 +1327,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			if err != nil {
 				return nil, err
 			}
-			err = sg.populatePostAggregation(doneVars, nil)
+			err = sg.populatePostAggregation(doneVars, []*SubGraph{}, nil)
 			if err != nil {
 				return nil, err
 			}
