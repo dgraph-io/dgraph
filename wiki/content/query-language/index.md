@@ -152,23 +152,31 @@ Query Example: Movies with either "Blade" or "Runner" in the title and released 
 
 Dgraph supports UTF-8 strings.  
 
-For a string valued edge `edge`, the syntax
+In a query, for a string valued edge `edge`, the syntax
 ```
 edge@lang1:...:langN
 ```
-specifies the preference order for returned languages with the following rules:
+specifies the preference order for returned languages, with the following rules.
 
-* at most one result will be returned
-* if results exists in the preferred languages, the left most (in the preference list) of these is returned
-* if no result exists in the preferred languages
-  - a result without a language tag is returned, if it exists, or
-  - some language tagged result is returned if one exists, and no untagged result exists, or
-  - the edge has no matching result otherwise.
+* At most one result will be returned.
+* The preference list is considered left to right: if a value in given language is not found, the next language from the list is considered.
+* If there are no values in any of the specified languages, no value is returned.
+* A final `.` means that the a value without a specified language is returned or if there is no value without language, a value in ''some'' language is returned.
 
-In functions, a preference list is not allowed.  A string edge without a language tag means apply function to all languages, while a single language tag means apply to only the given language.
+For example:
+
+- `name`   => Look for an untagged string; return nothing if no untagged value exits.
+- `name@.` => Look for an untagged string, then any language.
+- `name@en` => Look for `en` tagged string; return nothing if no `en` tagged string exists.
+- `name@en:.` => Look for `en`, then untagged, then any language.
+- `name@en:pl` => Look for `en`, then `pl`, otherwise nothing.
+- `name@en:pl:.` => Look for `en`, then `pl`, then untagged, then any language.
 
 
-For example, some of Bollywood actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
+{{% notice "note" %}}In functions, a preference list is not allowed.  A string edge without a language tag means apply function to all languages, while a single language tag means apply to only the given language. Language lists and `.` notation is not supported.{{% /notice %}}
+
+
+Query Example: Some of Bollywood actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
 
 {{< runnable >}}
 {
@@ -185,6 +193,8 @@ For example, some of Bollywood actor Farhan Akhtar's movies have a name stored i
   }
 }
 {{< /runnable >}}
+
+
 
 
 ## Functions
