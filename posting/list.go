@@ -101,7 +101,7 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	l.refcount = 1
 	l.Lock()
 
-	go func() {
+	go func(l *List) {
 		defer l.Unlock()
 
 		var item badger.KVItem
@@ -120,7 +120,7 @@ func getNew(key []byte, pstore *badger.KV) *List {
 		if val != nil {
 			x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 		}
-	}()
+	}(l)
 	return l
 }
 
