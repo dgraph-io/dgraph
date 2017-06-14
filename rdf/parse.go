@@ -206,7 +206,10 @@ func sane(s string) bool {
 
 // Parse parses a mutation string and returns the NQuad representation for it.
 func Parse(line string) (rnq protos.NQuad, rerr error) {
-	l := lex.NewLexer(line).Run(lexText)
+	l := Lexer{
+		Input: line,
+	}
+
 	it := l.NewIterator()
 	var oval string
 	var vend bool
