@@ -582,10 +582,11 @@ func batchSync() {
 					}
 				}
 				entries = entries[:0]
-			}
+			} else {
 			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
-			sleepFor := 10*time.Millisecond - time.Since(start)
+			sleepFor := time.Millisecond - time.Since(start)
 			time.Sleep(sleepFor)
+			}
 		}
 	}
 }
