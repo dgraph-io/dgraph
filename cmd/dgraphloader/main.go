@@ -36,6 +36,7 @@ var (
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
 	clientDir  = flag.String("cd", "c", "Directory to store xid to uid mapping")
 	storeXid   = flag.Bool("x", false, "Store xids by adding corresponding _xid_ edges")
+	mode       = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
 	// TLS configuration
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
 	tlsInsecure      = flag.Bool("tls.insecure", false, "Skip certificate validation (insecure)")
@@ -195,6 +196,18 @@ func setupConnection() (*grpc.ClientConn, error) {
 
 func main() {
 	x.Init()
+	switch *mode {
+	case "cpu":
+		defer profile.Start(profile.CPUProfile).Stop()
+	case "mem":
+		defer profile.Start(profile.MemProfile).Stop()
+	case "mutex":
+		defer profile.Start(profile.MutexProfile).Stop()
+	case "block":
+		defer profile.Start(profile.BlockProfile).Stop()
+	default:
+		// do nothing
+	}
 
 	conn, err := setupConnection()
 	x.Checkf(err, "While trying to dial gRPC")

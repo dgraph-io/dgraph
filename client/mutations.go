@@ -336,6 +336,8 @@ func (d *Dgraph) NodeUid(uid uint64) Node {
 
 func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 	if len(varname) == 0 {
+		d.alloc.Lock()
+		defer d.alloc.Unlock()
 		uid, err := d.alloc.fetchOne()
 		if err != nil {
 			return 0, err
