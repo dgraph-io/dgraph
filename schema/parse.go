@@ -193,7 +193,8 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 // Parse parses a schema string and returns the schema representation for it.
 func Parse(s string) ([]*protos.SchemaUpdate, error) {
 	var schemas []*protos.SchemaUpdate
-	l := lex.NewLexer(s).Run(lexText)
+	l := lex.Lexer{Input: s}
+	l.Run(lexText)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()

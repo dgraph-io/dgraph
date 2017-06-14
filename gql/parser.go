@@ -479,7 +479,8 @@ func Parse(r Request) (res Result, rerr error) {
 		return res, err
 	}
 
-	l := lex.NewLexer(query).Run(lexTopLevel)
+	l := lex.Lexer{Input: query}
+	l.Run(lexTopLevel)
 
 	var qu *GraphQuery
 	it := l.NewIterator()
