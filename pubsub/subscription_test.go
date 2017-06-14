@@ -17,7 +17,6 @@
 
 package pubsub
 
-/*
 import (
 	"fmt"
 	"github.com/stretchr/testify/require"
@@ -27,22 +26,74 @@ import (
 	"golang.org/x/net/context"
 )
 
-func TestSubscription(t *testing.T) {
-
+func TestSubscriptionCorrectness(t *testing.T) {
 	hub := NewUpdateHub()
 	go hub.Run()
 	require.Equal(t, false, hub.HasSubscribers())
 
-	fmt.Println("tzdybal: hub started!")
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	subscriber1 := NewTestSubscriber(ctx1)
+	subscriber2 := NewTestSubscriber(ctx2)
+	go subscriber1.Run()
+	go subscriber2.Run()
+	hub.Subscribe([]string{"a", "b"}, subscriber1)
+	hub.Subscribe([]string{"b", "c"}, subscriber2)
+	time.Sleep(10 * time.Millisecond)
+	require.Equal(t, true, hub.HasSubscribers())
 
+	// notify both subscribers
+	hub.PredicatesUpdated([]string{"a", "c"})
+	time.Sleep(10 * time.Millisecond)
+	require.Equal(t, true, hub.HasSubscribers())
+	require.Equal(t, 1, subscriber1.cnt)
+	require.Equal(t, 1, subscriber2.cnt)
+
+	// only one notification per batch update
+	hub.PredicatesUpdated([]string{"a", "a", "a"})
+	time.Sleep(10 * time.Millisecond)
+	require.Equal(t, true, hub.HasSubscribers())
+	require.Equal(t, 2, subscriber1.cnt)
+	require.Equal(t, 1, subscriber2.cnt)
+
+	// notify only about interesting updates
+	hub.PredicatesUpdated([]string{"d"})
+	time.Sleep(10 * time.Millisecond)
+	require.Equal(t, true, hub.HasSubscribers())
+	require.Equal(t, 2, subscriber1.cnt)
+	require.Equal(t, 1, subscriber2.cnt)
+
+	// remove one subscriber, notify another
+	cancel1()
+	hub.PredicatesUpdated([]string{"a", "b", "c", "d"})
+	time.Sleep(10 * time.Millisecond)
+	require.Equal(t, true, hub.HasSubscribers())
+	require.Equal(t, 2, subscriber1.cnt)
+	require.Equal(t, 2, subscriber2.cnt)
+
+	// remove second subscriber
+	cancel2()
+	hub.PredicatesUpdated([]string{"a", "b", "c", "d"})
+	time.Sleep(10 * time.Millisecond)
+	require.Equal(t, false, hub.HasSubscribers())
+	require.Equal(t, 2, subscriber1.cnt)
+	require.Equal(t, 2, subscriber2.cnt)
+
+}
+
+func TestSubscriptionThreadSafety(t *testing.T) {
+	hub := NewUpdateHub()
+	go hub.Run()
+	require.Equal(t, false, hub.HasSubscribers())
+
+	var subscribers []*TestSubscriber
 	var cancel []context.CancelFunc
-	var ctxs []context.Context
 	for i := 0; i < 100; i++ {
 		ctx1, cancel1 := context.WithCancel(context.Background())
 		ctx2, cancel2 := context.WithCancel(context.Background())
-		subscriber1 := NewUpdateSubscriber(ctx1)
-		subscriber2 := NewUpdateSubscriber(ctx2)
-		ctxs = append(ctxs, ctx1, ctx2)
+		subscriber1 := NewTestSubscriber(ctx1)
+		subscriber2 := NewTestSubscriber(ctx2)
+		subscribers = append(subscribers, subscriber1, subscriber2)
 		cancel = append(cancel, cancel1, cancel2)
 		go subscriber1.Run()
 		go subscriber2.Run()
@@ -52,9 +103,10 @@ func TestSubscription(t *testing.T) {
 
 	done := make(chan bool)
 	go func() {
-		for _, f := range cancel {
+		for i, f := range cancel {
 			time.Sleep(25 * time.Millisecond)
 			f()
+			require.True(t, subscribers[i].cnt > 0)
 		}
 		done <- true
 	}()
@@ -77,4 +129,38 @@ func TestSubscription(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	require.Equal(t, false, hub.HasSubscribers())
 }
-*/
+
+type TestSubscriber struct {
+	basicSubscriber
+	ctx context.Context
+	cnt int
+}
+
+func NewTestSubscriber(ctx context.Context) *TestSubscriber {
+	return &TestSubscriber{basicSubscriber{false, make(chan bool)}, ctx, 0}
+}
+
+func (s *TestSubscriber) Run() {
+	for {
+		select {
+		case <-s.updatesChan:
+			s.cnt++
+		}
+	}
+}
+
+func (s *TestSubscriber) Context() context.Context {
+	return s.ctx
+}
+
+func (s *TestSubscriber) NeedsUpdate() bool {
+	return s.needsUpdate
+}
+
+func (s *TestSubscriber) RequireUpdate(update bool) {
+	s.needsUpdate = update
+}
+
+func (s *TestSubscriber) UpdatesChan() chan bool {
+	return s.updatesChan
+}
