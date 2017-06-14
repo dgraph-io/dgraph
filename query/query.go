@@ -2035,7 +2035,7 @@ type QueryRequest struct {
 	Subgraphs []*SubGraph
 
 	vars         map[string]varValue
-	schemaUpdate []*protos.SchemaUpdate
+	SchemaUpdate []*protos.SchemaUpdate
 }
 
 // ProcessQuery processes query part of the request (without mutations).
@@ -2191,7 +2191,7 @@ func (e *InternalError) Error() string {
 
 func (qr *QueryRequest) prepareMutation() (err error) {
 	if len(qr.GqlQuery.Mutation.Schema) > 0 {
-		if qr.schemaUpdate, err = schema.Parse(qr.GqlQuery.Mutation.Schema); err != nil {
+		if qr.SchemaUpdate, err = schema.Parse(qr.GqlQuery.Mutation.Schema); err != nil {
 			return x.Wrapf(&InvalidRequestError{err: err}, "failed to parse schema")
 		}
 	}
@@ -2209,7 +2209,7 @@ func (qr *QueryRequest) processNquads(ctx context.Context, nquads gql.NQuads) (m
 			return mr.NewUids, x.Wrapf(&InternalError{err: err}, "failed to convert NQuads to edges")
 		}
 	}
-	m := protos.Mutations{Edges: mr.Edges, Schema: qr.schemaUpdate}
+	m := protos.Mutations{Edges: mr.Edges, Schema: qr.SchemaUpdate}
 	if err = ApplyMutations(ctx, &m); err != nil {
 		return mr.NewUids, x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
 	}
@@ -2252,7 +2252,7 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 		}
 	}
 
-	if len(qr.GqlQuery.Query) == 0 {
+	if len(qr.GqlQuery.Query) == 0 && qr.GqlQuery.Schema == nil {
 		return er, nil
 	}
 
