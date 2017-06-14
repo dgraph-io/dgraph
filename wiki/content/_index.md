@@ -24,7 +24,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
         <div class="section-item">
           <div class="section-name">
             <a href="https://tour.dgraph.io" target="_blank">
-              Tour of Dgraph <i class="fa fa-external-link external-link-icon"></i>
+              Tour of Dgraph
             </a>
           </div>
           <p class="section-desc">
@@ -114,11 +114,11 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
         <div class="section-item">
           <div class="section-name">
             <a href="https://slack.dgraph.io">
-              Slack <i class="fa fa-external-link external-link-icon"></i>
+              Slack
             </a>
           </div>
           <p class="section-desc">
-            Chat instantly to the Dgrpah community and engineers.
+            Chat instantly to the Dgraph community and engineers.
           </p>
         </div>
       </div>
@@ -126,7 +126,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
         <div class="section-item">
           <div class="section-name">
             <a href="https://discuss.dgraph.io">
-              Forum <i class="fa fa-external-link external-link-icon"></i>
+              Forum
             </a>
           </div>
           <p class="section-desc">
@@ -148,7 +148,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
         <div class="section-item">
           <div class="section-name">
             <a href="https://discuss.dgraph.io">
-              Dgraph Playground <i class="fa fa-external-link external-link-icon"></i>
+              Dgraph Playground
             </a>
           </div>
           <p class="section-desc">
