@@ -432,7 +432,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 
 	if lp != l {
 		// Undo the increment in getNew() call above.
-		l.decr()
+		go l.decr()
 	}
 	pk := x.Parse(key)
 
@@ -578,9 +578,9 @@ func batchSync() {
 				}
 				entries = entries[:0]
 			} else {
-			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
-			sleepFor := time.Millisecond - time.Since(start)
-			time.Sleep(sleepFor)
+				// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
+				sleepFor := time.Millisecond - time.Since(start)
+				time.Sleep(sleepFor)
 			}
 		}
 	}
