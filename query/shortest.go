@@ -417,23 +417,8 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 
 	curNode := shortestSg
 	for i := 0; i < len(result)-1; i++ {
-		curUid := result[i]
-		childUid := result[i+1]
-		node := new(SubGraph)
-		nodeInfo := dist[childUid]
-		node.Params = params{
-			GetUid: true,
-		}
-		if nodeInfo.facet != nil {
-			// For consistent later processing.
-			node.Params.Facet = &protos.Param{}
-		}
-		node.Attr = nodeInfo.attr
-		node.facetsMatrix = []*protos.FacetsList{{[]*protos.Facets{nodeInfo.facet}}}
-		node.SrcUIDs = &protos.List{[]uint64{curUid}}
-		node.DestUIDs = &protos.List{[]uint64{childUid}}
-		node.uidMatrix = []*protos.List{{[]uint64{childUid}}}
-
+		nodeInfo := dist[result[i+1]]
+		node := createNewNode(nodeInfo.attr, result[i], result[i+1], nodeInfo.facet)
 		curNode.Children = append(curNode.Children, node)
 		curNode = node
 	}
@@ -567,22 +552,7 @@ func createKPathSubgraph(ctx context.Context, kpaths [][]pathInfo) []*SubGraph {
 		curNode := shortestSg
 		i := 0
 		for ; i < len(it)-1; i++ {
-			curUid := it[i].uid
-			childUid := it[i+1].uid
-			node := new(SubGraph)
-			node.Params = params{
-				GetUid: true,
-			}
-			if it[i+1].facet != nil {
-				// For consistent later processing.
-				node.Params.Facet = &protos.Param{}
-			}
-			node.Attr = it[i+1].attr
-			node.facetsMatrix = []*protos.FacetsList{{[]*protos.Facets{it[i+1].facet}}}
-			node.SrcUIDs = &protos.List{[]uint64{curUid}}
-			node.DestUIDs = &protos.List{[]uint64{childUid}}
-			node.uidMatrix = []*protos.List{{[]uint64{childUid}}}
-
+			node := createNewNode(it[i+1].attr, it[i].uid, it[i+1].uid, it[i+1].facet)
 			curNode.Children = append(curNode.Children, node)
 			curNode = node
 		}
@@ -599,4 +569,21 @@ func createKPathSubgraph(ctx context.Context, kpaths [][]pathInfo) []*SubGraph {
 		res = append(res, shortestSg)
 	}
 	return res
+}
+
+func createNewNode(attr string, curUid, childUid uint64, facet *protos.Facets) *SubGraph {
+	node := new(SubGraph)
+	node.Params = params{
+		GetUid: true,
+	}
+	if facet != nil {
+		// For consistent later processing.
+		node.Params.Facet = &protos.Param{}
+	}
+	node.Attr = attr
+	node.facetsMatrix = []*protos.FacetsList{{[]*protos.Facets{facet}}}
+	node.SrcUIDs = &protos.List{[]uint64{curUid}}
+	node.DestUIDs = &protos.List{[]uint64{childUid}}
+	node.uidMatrix = []*protos.List{{[]uint64{childUid}}}
+	return node
 }
