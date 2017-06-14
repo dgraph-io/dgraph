@@ -20,6 +20,7 @@ package schema
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/badger"
@@ -40,7 +41,7 @@ var (
 
 type stateGroup struct {
 	// Can have fine grained locking later if necessary, per group or predicate
-	x.SafeMutex
+	sync.RWMutex // x.SafeMutex is slow.
 	// Map containing predicate to type information.
 	predicate map[string]*protos.SchemaUpdate
 	elog      trace.EventLog
