@@ -2098,7 +2098,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 		return true
 	}
 
-	var shortestSg *SubGraph
+	var shortestSg []*SubGraph
 	for i := 0; i < len(req.Subgraphs) && numQueriesDone < len(req.Subgraphs); i++ {
 		errChan := make(chan error, len(req.Subgraphs))
 		var idxList []int
@@ -2175,8 +2175,8 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 	req.Latency.Processing += time.Since(execStart)
 
 	// If we had a shortestPath SG, append it to the result.
-	if shortestSg != nil {
-		req.Subgraphs = append(req.Subgraphs, shortestSg)
+	if len(shortestSg) != 0 {
+		req.Subgraphs = append(req.Subgraphs, shortestSg...)
 	}
 	return nil
 }

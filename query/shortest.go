@@ -28,11 +28,18 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type pathInfo struct {
+	uid   uint64
+	attr  string
+	facet *protos.Facets
+}
+
 type Item struct {
 	uid   uint64  // uid of the node.
 	cost  float64 // cost of taking the path till this uid.
 	hop   int     // number of hops taken to reach this node.
 	index int
+	path  []pathInfo // used in k shortest path.
 }
 
 var ErrStop = x.Errorf("STOP")
@@ -257,7 +264,7 @@ func (temp *SubGraph) copyFiltersRecurse(sg *SubGraph) {
 // 22
 // 23     return dist[], prev[]
 
-func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
+func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
 	if sg.Params.Alias != "shortest" {
 		return nil, x.Errorf("Invalid shortest path query")
@@ -396,7 +403,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 	sg.DestUIDs.Uids = result
 
 	shortestSg := createPathSubgraph(ctx, dist, result)
-	return shortestSg, nil
+	return []*SubGraph{shortestSg}, nil
 }
 
 func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []uint64) *SubGraph {
@@ -446,8 +453,9 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 }
 
 // This will be a more expensive function which computes the k shortest paths
-func kShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
+func kShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
+	var kpaths [][]pathInfo
 	numPaths := sg.Params.numPaths
 	_ = numPaths
 	pq := make(priorityQueue, 0)
@@ -458,6 +466,10 @@ func kShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 		uid:  sg.Params.From,
 		cost: 0,
 		hop:  0,
+		path: []pathInfo{pathInfo{
+			uid: sg.Params.From,
+		},
+		},
 	}
 	heap.Push(&pq, srcNode)
 
@@ -467,19 +479,19 @@ func kShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
 	go sg.expandOut(ctx, adjacencyMap, next, expandErr)
 
+	// In k shortest path we can't have this. We store the path till a node in every
+	// node.
 	// map to store the min cost and parent of nodes.
-	dist := make(map[uint64]nodeInfo)
-	dist[srcNode.uid] = nodeInfo{
-		parent: 0,
-		cost:   0,
-		node:   srcNode,
-	}
-
 	var stopExpansion bool
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*Item)
 		if item.uid == sg.Params.To {
-			break
+			// Add path to list.
+			kpaths = append(kpaths, item.path)
+			if len(kpaths) == numPaths {
+				// We found the required number of paths.
+				break
+			}
 		}
 		if item.hop > numHops {
 			// Explore the next level by calling processGraph and add them
@@ -509,70 +521,106 @@ func kShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 			neighbours := adjacencyMap[item.uid]
 			for toUid, info := range neighbours {
 				cost := info.cost
-				d, ok := dist[toUid]
-				if ok && d.cost < item.cost+cost {
-					// Skip if the new cost is strictly greater. As we want multiple paths, equality can't
-					// be ignored.
-					continue
+				curPath := make([]pathInfo, len(item.path))
+				copy(curPath, item.path)
+				curPath = append(curPath, pathInfo{
+					uid:   toUid,
+					attr:  info.attr,
+					facet: info.facet,
+				})
+				node := &Item{
+					uid:  toUid,
+					cost: item.cost + cost,
+					hop:  item.hop + 1,
+					path: curPath,
 				}
-				if !ok {
-					// This is the first time we're seeing this node. So
-					// create a new node and add it to the heap and map.
-					node := &Item{
-						uid:  toUid,
-						cost: item.cost + cost,
-						hop:  item.hop + 1,
-					}
-					heap.Push(&pq, node)
-					dist[toUid] = nodeInfo{
-						cost:   item.cost + cost,
-						parent: item.uid,
-						node:   node,
-						attr:   info.attr,
-						facet:  info.facet,
-					}
-				} else {
-					// We've already seen this node. So, just update the cost
-					// and fix the priority in the heap and map.
-					node := dist[toUid].node
-					node.cost = item.cost + cost
-					node.hop = item.hop + 1
-					heap.Fix(&pq, node.index)
-					// Update the map with new values.
-					dist[toUid] = nodeInfo{
-						cost:   item.cost + cost,
-						parent: item.uid,
-						node:   node,
-						attr:   info.attr,
-						facet:  info.facet,
-					}
-				}
+				heap.Push(&pq, node)
 			}
 		}
 	}
 
 	next <- false
+
 	// Go through the distance map to find the path.
-	var result []uint64
-	cur := sg.Params.To
-	for i := 0; cur != sg.Params.From && i < len(dist); i++ {
+	/*
+		var result []uint64
+		cur := sg.Params.To
+		for i := 0; cur != sg.Params.From && i < len(dist); i++ {
+			result = append(result, cur)
+			cur = dist[cur].parent
+		}
+		// Put the path in DestUIDs of the root.
+		if cur != sg.Params.From {
+			sg.DestUIDs = &protos.List{}
+			return nil, nil
+		}
+
 		result = append(result, cur)
-		cur = dist[cur].parent
-	}
-	// Put the path in DestUIDs of the root.
-	if cur != sg.Params.From {
+		l := len(result)
+		// Reverse the list.
+		for i := 0; i < l/2; i++ {
+			result[i], result[l-i-1] = result[l-i-1], result[i]
+		}
+	*/
+	if len(kpaths) == 0 {
 		sg.DestUIDs = &protos.List{}
 		return nil, nil
 	}
-
-	result = append(result, cur)
-	l := len(result)
-	// Reverse the list.
-	for i := 0; i < l/2; i++ {
-		result[i], result[l-i-1] = result[l-i-1], result[i]
+	var res []uint64
+	for _, it := range kpaths[0] {
+		res = append(res, it.uid)
 	}
-	sg.DestUIDs.Uids = result
-
-	shortestSg := createPathSubgraph(ctx, dist, result)
+	sg.DestUIDs.Uids = res
+	shortestSg := createKPathSubgraph(ctx, kpaths)
 	return shortestSg, nil
+}
+
+func createKPathSubgraph(ctx context.Context, kpaths [][]pathInfo) []*SubGraph {
+	var res []*SubGraph
+	for _, it := range kpaths {
+		shortestSg := new(SubGraph)
+		shortestSg.Params = params{
+			Alias:  "_path_",
+			GetUid: true,
+		}
+		curUid := it[0].uid
+		shortestSg.SrcUIDs = &protos.List{[]uint64{curUid}}
+		shortestSg.DestUIDs = &protos.List{[]uint64{curUid}}
+		shortestSg.uidMatrix = []*protos.List{{[]uint64{curUid}}}
+
+		curNode := shortestSg
+		i := 0
+		for ; i < len(it)-1; i++ {
+			curUid := it[i].uid
+			childUid := it[i+1].uid
+			node := new(SubGraph)
+			node.Params = params{
+				GetUid: true,
+			}
+			if it[i+1].facet != nil {
+				// For consistent later processing.
+				node.Params.Facet = &protos.Param{}
+			}
+			node.Attr = it[i+1].attr
+			node.facetsMatrix = []*protos.FacetsList{{[]*protos.Facets{it[i+1].facet}}}
+			node.SrcUIDs = &protos.List{[]uint64{curUid}}
+			node.DestUIDs = &protos.List{[]uint64{childUid}}
+			node.uidMatrix = []*protos.List{{[]uint64{childUid}}}
+
+			curNode.Children = append(curNode.Children, node)
+			curNode = node
+		}
+
+		node := new(SubGraph)
+		node.Params = params{
+			GetUid: true,
+		}
+		uid := it[i].uid
+		node.SrcUIDs = &protos.List{[]uint64{uid}}
+		node.uidMatrix = []*protos.List{{[]uint64{uid}}}
+		curNode.Children = append(curNode.Children, node)
+
+		res = append(res, shortestSg)
+	}
+	return res
 }

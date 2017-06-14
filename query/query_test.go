@@ -1633,8 +1633,8 @@ func TestTwoShortestPath(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			A as shortest(from:0x01, to:31, numpaths: 2) {
-				friend
+			A as shortest(from: 1, to:1002, numpaths: 2) {
+				path
 			}
 
 			me(id: var( A)) {
@@ -1642,8 +1642,9 @@ func TestTwoShortestPath(t *testing.T) {
 			}
 		}`
 	js := processToFastJSON(t, query)
+	fmt.Println(js)
 	require.JSONEq(t,
-		`{"_path_":[{"_uid_":"0x1","friend":[{"_uid_":"0x1f"}]}],"me":[{"name":"Michonne"},{"name":"Andrea"}]}`,
+		`{"_path_":[{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3ea"}]}]}]},{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3e9","path":[{"_uid_":"0x3ea"}]}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Matt"}]}`,
 		js)
 }
 
