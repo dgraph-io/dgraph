@@ -125,6 +125,7 @@ func TestTokensTable(t *testing.T) {
 
 	key := x.DataKey("name", 1)
 	l := getNew(key, ps)
+	defer ps.Delete(key)
 
 	edge := &protos.DirectedEdge{
 		Value:  []byte("david"),
@@ -154,7 +155,7 @@ func TestTokensTable(t *testing.T) {
 	x.Check(pl.Unmarshal(slice))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
-	deletePl(t, l)
+	deletePl(t)
 }
 
 // tokensForTest returns keys for a table. This is just for testing / debugging.
@@ -275,9 +276,11 @@ func TestRebuildIndex(t *testing.T) {
 	require.EqualValues(t, 1, idxVals[1].Postings[0].Uid)
 
 	l1, _ := GetOrCreate(x.DataKey("name", 1), 1)
-	deletePl(t, l1)
+	ps.Delete(l1.key)
+	deletePl(t)
 	l2, _ := GetOrCreate(x.DataKey("name", 20), 1)
-	deletePl(t, l2)
+	ps.Delete(l2.key)
+	deletePl(t)
 }
 
 func TestRebuildReverseEdges(t *testing.T) {
