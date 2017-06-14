@@ -95,8 +95,8 @@ func (a *allocator) assignOrGet(id string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	var buf [10]byte
-	n := binary.PutUvarint(buf[:0], uid)
+	var buf [20]byte
+	n := binary.PutUvarint(buf[:], uid)
 	a.kv.Set([]byte(id), buf[:n])
 	return uid, nil
 }
