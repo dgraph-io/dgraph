@@ -2,7 +2,7 @@ package client
 
 import (
 	"context"
-	"encoding/binary"
+	// "encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -54,6 +55,7 @@ func (a *allocator) getFromCache(id string) (uint64, error) {
 		return uid, nil
 	}
 
+/*
 	var item badger.KVItem
 	if err := a.kv.Get([]byte(id), &item); err != nil {
 		return 0, err
@@ -66,6 +68,7 @@ func (a *allocator) getFromCache(id string) (uint64, error) {
 		}
 		return uid, nil
 	}
+*/
 	return 0, nil
 }
 
@@ -106,10 +109,11 @@ func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool,
 	if err != nil {
 		return
 	}
-	var buf [20]byte
-	n := binary.PutUvarint(buf[:], uid)
 	a.ids[id] = uid
-	go a.kv.Set([]byte(id), buf[:n])
+
+	// var buf [20]byte
+	// n := binary.PutUvarint(buf[:], uid)
+	// go a.kv.Set([]byte(id), buf[:n])
 	isNew = true
 	err = nil
 	return
@@ -153,6 +157,7 @@ func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions,
 	x.Check(os.MkdirAll(clientDir, 0700))
 	opt := badger.DefaultOptions
 	opt.SyncWrites = false
+	opt.MapTablesTo = table.LoadToRAM
 	opt.Dir = clientDir
 	opt.ValueDir = clientDir
 	kv, err := badger.NewKV(&opt)
