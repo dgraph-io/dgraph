@@ -1629,6 +1629,35 @@ func TestShortestPath_NoPath(t *testing.T) {
 		js)
 }
 
+func TestKShortestPath(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			shortest(from: 1, to:1001, numpaths: 4) {
+				path
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"_path_":[{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3e9"}]}]}]},{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3ea","path":[{"_uid_":"0x3eb","path":[{"_uid_":"0x3e9"}]}]}]}]}]},{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3e9","path":[{"_uid_":"0x3eb","path":[{"_uid_":"0x3e9"}]}]}]}]}]},{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3e9","path":[{"_uid_":"0x3ea","path":[{"_uid_":"0x3eb","path":[{"_uid_":"0x3e9"}]}]}]}]}]}]}]}`,
+		js)
+}
+
+func TestKShortestPathWeighted(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			shortest(from: 1, to:1001, numpaths: 4) {
+				path @facets(weight)
+			}
+		}`
+	// We only get one path in this case as the facet is present only in one path.
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"_path_":[{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9"}]}]}]}]}`,
+		js)
+}
+
 func TestTwoShortestPath(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1642,7 +1671,6 @@ func TestTwoShortestPath(t *testing.T) {
 			}
 		}`
 	js := processToFastJSON(t, query)
-	fmt.Println(js)
 	require.JSONEq(t,
 		`{"_path_":[{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3ea"}]}]}]},{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3e9","path":[{"_uid_":"0x3ea"}]}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Matt"}]}`,
 		js)

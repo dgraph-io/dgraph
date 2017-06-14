@@ -498,44 +498,42 @@ func kShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			// to the queue.
 			if !stopExpansion {
 				next <- true
-			}
-			select {
-			case err = <-expandErr:
-				if err != nil {
-					if err == ErrTooBig {
-						return nil, err
-					} else if err == ErrStop {
-						stopExpansion = true
-					} else {
-						x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
-						return nil, err
+				select {
+				case err = <-expandErr:
+					if err != nil {
+						if err == ErrTooBig {
+							return nil, err
+						} else if err == ErrStop {
+							stopExpansion = true
+						} else {
+							x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
+							return nil, err
+						}
 					}
+				case <-ctx.Done():
+					x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+					return nil, ctx.Err()
 				}
-			case <-ctx.Done():
-				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
-				return nil, ctx.Err()
+				numHops++
 			}
-			numHops++
 		}
-		if !stopExpansion {
-			neighbours := adjacencyMap[item.uid]
-			for toUid, info := range neighbours {
-				cost := info.cost
-				curPath := make([]pathInfo, len(item.path))
-				copy(curPath, item.path)
-				curPath = append(curPath, pathInfo{
-					uid:   toUid,
-					attr:  info.attr,
-					facet: info.facet,
-				})
-				node := &Item{
-					uid:  toUid,
-					cost: item.cost + cost,
-					hop:  item.hop + 1,
-					path: curPath,
-				}
-				heap.Push(&pq, node)
+		neighbours := adjacencyMap[item.uid]
+		for toUid, info := range neighbours {
+			cost := info.cost
+			curPath := make([]pathInfo, len(item.path))
+			copy(curPath, item.path)
+			curPath = append(curPath, pathInfo{
+				uid:   toUid,
+				attr:  info.attr,
+				facet: info.facet,
+			})
+			node := &Item{
+				uid:  toUid,
+				cost: item.cost + cost,
+				hop:  item.hop + 1,
+				path: curPath,
 			}
+			heap.Push(&pq, node)
 		}
 	}
 
