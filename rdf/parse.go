@@ -209,6 +209,7 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 	l := lex.Lexer{
 		Input: line,
 	}
+	l.Run(lexText)
 
 	it := l.NewIterator()
 	var oval string
