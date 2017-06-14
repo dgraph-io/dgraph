@@ -387,7 +387,7 @@ func paginate(offset, count int, dest *protos.List) {
 // sortByValue fetches values and sort UIDList.
 func sortByValue(attr string, langs []string, ul *protos.List, typ types.TypeID, desc bool) error {
 	lenList := len(ul.Uids)
-	var uids []uint64
+	uids := make([]uint64, 0, lenList)
 	values := make([]types.Val, 0, lenList)
 	for i := 0; i < lenList; i++ {
 		uid := ul.Uids[i]
