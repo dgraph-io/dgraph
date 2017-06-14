@@ -41,11 +41,19 @@ type allocator struct {
 	kv *badger.KV
 	dc protos.DgraphClient
 
+	// TODO: Evict older entries
+	ids map[string]uint64
+
 	startId uint64
 	endId   uint64
 }
 
 func (a *allocator) getFromCache(id string) (uint64, error) {
+	a.AssertRLock()
+	if uid, found := a.ids[id]; found {
+		return uid, nil
+	}
+
 	var item badger.KVItem
 	if err := a.kv.Get([]byte(id), &item); err != nil {
 		return 0, err
@@ -78,27 +86,33 @@ func (a *allocator) fetchOne() (uint64, error) {
 	return uid, nil
 }
 
-func (a *allocator) assignOrGet(id string) (uint64, error) {
-	uid, err := a.getFromCache(id)
+func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool,
+	err error) {
+	a.RLock()
+	uid, err = a.getFromCache(id)
+	a.RUnlock()
 	if err != nil || uid > 0 {
-		return uid, err
+		return
 	}
 
 	a.Lock()
 	defer a.Unlock()
 	uid, err = a.getFromCache(id)
 	if err != nil || uid > 0 {
-		return uid, err
+		return
 	}
 
 	uid, err = a.fetchOne()
 	if err != nil {
-		return 0, err
+		return
 	}
 	var buf [20]byte
 	n := binary.PutUvarint(buf[:], uid)
-	a.kv.Set([]byte(id), buf[:n])
-	return uid, nil
+	a.ids[id] = uid
+	go a.kv.Set([]byte(id), buf[:n])
+	isNew = true
+	err = nil
+	return
 }
 
 // Counter keeps a track of various parameters about a batch mutation.
@@ -145,8 +159,9 @@ func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions,
 	x.Checkf(err, "Error while creating badger KV posting store")
 
 	alloc := &allocator{
-		kv: kv,
-		dc: client,
+		kv:  kv,
+		dc:  client,
+		ids: make(map[string]uint64),
 	}
 	d := &Dgraph{
 		opts:   opts,
@@ -327,7 +342,7 @@ func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 		}
 		return Node(uid), nil
 	}
-	uid, err := d.alloc.assignOrGet("_:" + varname)
+	uid, _, err := d.alloc.assignOrGet("_:" + varname)
 	if err != nil {
 		return 0, err
 	}
@@ -338,16 +353,12 @@ func (d *Dgraph) NodeXid(xid string, storeXid bool) (Node, error) {
 	if len(xid) == 0 {
 		return 0, ErrEmptyXid
 	}
-	if uid, err := d.alloc.getFromCache(xid); err == nil && uid > 0 {
-		return Node(uid), nil
-	}
-	// TODO: return assigned or got from cache and add xid based on that
-	uid, err := d.alloc.assignOrGet(xid)
+	uid, isNew, err := d.alloc.assignOrGet(xid)
 	if err != nil {
 		return 0, err
 	}
 	n := Node(uid)
-	if storeXid {
+	if storeXid && isNew {
 		e := n.Edge("_xid_")
 		x.Check(e.SetValueString(xid))
 		d.BatchSet(e)
