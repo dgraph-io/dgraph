@@ -1009,7 +1009,7 @@ func (fromNode *varValue) transformTo(toNode varValue) (map[uint64]types.Val, er
 
 	newMap := fromNode.vals
 	if newMap == nil {
-		return nil, x.Errorf("Variables not ordered correctly")
+		return map[uint64]types.Val{}, nil
 	}
 	for ; idx < len(toNode.path); idx++ {
 		curNode := toNode.path[idx]
