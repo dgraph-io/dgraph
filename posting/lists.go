@@ -543,7 +543,6 @@ type syncEntry struct {
 	val     []byte
 	water   *x.WaterMark
 	pending []uint64
-	sw      *x.SafeWait
 }
 
 func batchSync() {
