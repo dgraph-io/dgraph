@@ -339,9 +339,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			for toUid, info := range neighbours {
 				cost := info.cost
 				d, ok := dist[toUid]
-				if ok && d.cost < item.cost+cost {
-					// Skip if the new cost is strictly greater. As we want multiple paths, equality can't
-					// be ignored.
+				if ok && d.cost <= item.cost+cost {
 					continue
 				}
 				if !ok {
@@ -452,7 +450,8 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []
 	return shortestSg
 }
 
-// This will be a more expensive function which computes the k shortest paths
+// kShortestPath is a more expensive function which computes the k shortest paths in ascending
+// order of weights. It returns a maximum of k paths.
 func kShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
 	var kpaths [][]pathInfo
@@ -539,27 +538,6 @@ func kShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 	next <- false
 
-	// Go through the distance map to find the path.
-	/*
-		var result []uint64
-		cur := sg.Params.To
-		for i := 0; cur != sg.Params.From && i < len(dist); i++ {
-			result = append(result, cur)
-			cur = dist[cur].parent
-		}
-		// Put the path in DestUIDs of the root.
-		if cur != sg.Params.From {
-			sg.DestUIDs = &protos.List{}
-			return nil, nil
-		}
-
-		result = append(result, cur)
-		l := len(result)
-		// Reverse the list.
-		for i := 0; i < l/2; i++ {
-			result[i], result[l-i-1] = result[l-i-1], result[i]
-		}
-	*/
 	if len(kpaths) == 0 {
 		sg.DestUIDs = &protos.List{}
 		return nil, nil
