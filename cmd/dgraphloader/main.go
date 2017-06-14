@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -26,6 +27,8 @@ import (
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/pkg/profile"
 )
 
 var (
@@ -196,6 +199,7 @@ func setupConnection() (*grpc.ClientConn, error) {
 
 func main() {
 	x.Init()
+	go http.ListenAndServe("localhost:6060", nil)
 	switch *mode {
 	case "cpu":
 		defer profile.Start(profile.CPUProfile).Stop()
