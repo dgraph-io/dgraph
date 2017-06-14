@@ -437,7 +437,6 @@ type grpcServer struct{}
 func (s *grpcServer) Run(ctx context.Context,
 	req *protos.Request) (resp *protos.Response, err error) {
 	// we need membership information
-
 	if !worker.HealthCheck() {
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return resp, x.Errorf("Uninitiated server. Please retry later")
