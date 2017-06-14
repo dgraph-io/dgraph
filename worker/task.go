@@ -1074,7 +1074,6 @@ func GetUidsForPred(attr string) []uint64 {
 	iterOpt.FetchValues = false
 	it := pstore.NewIterator(iterOpt)
 	defer it.Close()
-	// TODO - Check what if its a reverse predicate?
 	pk := x.ParsedKey{
 		Attr: attr,
 	}
