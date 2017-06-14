@@ -3524,3 +3524,22 @@ func TestParseEqArg2(t *testing.T) {
 	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
 	require.Equal(t, 2, len(gql.Query[0].Func.Args))
 }
+
+func TestParseSubscribe(t *testing.T) {
+	query := `
+	subscribe {
+	  everyone(func: anyofterms(name, "Michael Amit")) {
+		name
+		friend {
+		  name@ru:ko:en
+		  friend { expand(_all_) { expand(_all_) } }
+		}
+  	  }
+    }
+`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gql.Query))
+	require.True(t, gql.Query[0].Subscribe)
+
+}

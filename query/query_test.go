@@ -7371,7 +7371,7 @@ func TestGetAllPredicatesSimple(t *testing.T) {
 
 	subGraphs := getSubGraphs(t, query)
 
-	predicates := GetAllPredicates(subGraphs)
+	predicates := GetQueryPredicates(subGraphs)
 	require.NotNil(t, predicates)
 	require.Equal(t, 1, len(predicates))
 	require.Equal(t, "name", predicates[0])
@@ -7393,7 +7393,7 @@ func TestGetAllPredicatesUnique(t *testing.T) {
 
 	subGraphs := getSubGraphs(t, query)
 
-	predicates := GetAllPredicates(subGraphs)
+	predicates := GetQueryPredicates(subGraphs)
 	require.NotNil(t, predicates)
 	require.Equal(t, 3, len(predicates))
 	require.Contains(t, predicates, "name")
@@ -7417,7 +7417,7 @@ func TestGetAllPredicatesFunctions(t *testing.T) {
 
 	subGraphs := getSubGraphs(t, query)
 
-	predicates := GetAllPredicates(subGraphs)
+	predicates := GetQueryPredicates(subGraphs)
 	require.NotNil(t, predicates)
 	require.Equal(t, 6, len(predicates))
 	require.Contains(t, predicates, "name")
@@ -7443,7 +7443,7 @@ func TestGetAllPredicatesOrdering(t *testing.T) {
 
 	subGraphs := getSubGraphs(t, query)
 
-	predicates := GetAllPredicates(subGraphs)
+	predicates := GetQueryPredicates(subGraphs)
 	require.NotNil(t, predicates)
 	require.Equal(t, 4, len(predicates))
 	require.Contains(t, predicates, "name")
@@ -7466,7 +7466,7 @@ func TestGetAllPredicatesVars(t *testing.T) {
 
 	subGraphs := getSubGraphs(t, query)
 
-	predicates := GetAllPredicates(subGraphs)
+	predicates := GetQueryPredicates(subGraphs)
 	require.NotNil(t, predicates)
 	require.Equal(t, 3, len(predicates))
 	require.Contains(t, predicates, "name")
@@ -7489,7 +7489,7 @@ func TestGetAllPredicatesGroupby(t *testing.T) {
 
 	subGraphs := getSubGraphs(t, query)
 
-	predicates := GetAllPredicates(subGraphs)
+	predicates := GetQueryPredicates(subGraphs)
 	require.NotNil(t, predicates)
 	require.Equal(t, 4, len(predicates))
 	require.Contains(t, predicates, "_uid_")

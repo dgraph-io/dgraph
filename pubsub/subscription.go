@@ -22,7 +22,7 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"golang.org/x/net/context"
+	"github.com/dgraph-io/dgraph/protos"
 )
 
 // topic groups all subscribers interested in single predicate
@@ -31,8 +31,9 @@ type topic struct {
 }
 
 type UpdateSubscriber struct {
-	ctx               context.Context
-	predicatesChannel chan string // TODO(tzdybal) - this also should be []string
+	needsUpdate bool
+	updatesChan chan bool
+	server      protos.Worker_SubscribeServer
 }
 
 type subscription struct {
@@ -99,16 +100,24 @@ func (h *UpdateHub) PredicatesUpdated(predicates []string) {
 }
 
 func (h *UpdateHub) doUpdate(predicates []string) {
-	sort.Strings(predicates)
+	var updates []string
 
+	// find all subscribers that needs to be updated
 	for pred, topic := range h.topics {
 		i := sort.SearchStrings(predicates, pred)
 		if i < len(predicates) && predicates[i] == pred {
-			before := len(topic.subscribers)
-			topic.predicateUpdated(pred)
-			after := len(topic.subscribers)
-			atomic.AddInt64(&h.count, int64(after-before))
+			topic.requireUpdate()
+			updates = append(updates, pred)
 		}
+	}
+
+	// notify subscribers about update - each subscrier is notified exaclty once
+	for _, pred := range updates {
+		topic := h.topics[pred]
+		before := len(topic.subscribers)
+		topic.predicateUpdated()
+		after := len(topic.subscribers)
+		atomic.AddInt64(&h.count, int64(after-before))
 	}
 }
 
@@ -116,13 +125,24 @@ func newTopic() *topic {
 	return &topic{subscribers: make([]*UpdateSubscriber, 0, 10)}
 }
 
-func (t *topic) predicateUpdated(predicate string) {
+func (t *topic) requireUpdate() {
+	for _, sub := range t.subscribers {
+		if sub.needsUpdate == false {
+			sub.needsUpdate = true
+		}
+	}
+}
+
+func (t *topic) predicateUpdated() {
 	subs := t.subscribers
 	last := len(subs)
 	for i := 0; i < last; i++ {
 		sub := subs[i]
-		if sub.ctx.Err() == nil {
-			sub.predicatesChannel <- predicate
+		if sub.server.Context().Err() == nil {
+			if sub.needsUpdate {
+				sub.updatesChan <- true
+				sub.needsUpdate = false
+			}
 		} else {
 			// remove by swapping with last element and decreasing size
 			subs[i] = subs[last-1]
@@ -135,20 +155,16 @@ func (t *topic) predicateUpdated(predicate string) {
 	t.subscribers = subs
 }
 
-func NewUpdateSubscriber(ctx context.Context) *UpdateSubscriber {
-	return &UpdateSubscriber{ctx, make(chan string)}
+func NewUpdateSubscriber(server protos.Worker_SubscribeServer) *UpdateSubscriber {
+	return &UpdateSubscriber{false, make(chan bool), server}
 }
 
 func (s *UpdateSubscriber) Run() {
 	for {
 		select {
-		case pred, more := <-s.predicatesChannel:
-			if more {
-				fmt.Println("tzdybal:", pred)
-			} else {
-				fmt.Println("tzdybal: channel closed")
-				break
-			}
+		case <-s.updatesChan:
+			fmt.Println("tzdybal: subscriber notified!")
+			s.server.Send(&protos.PredicateUpdate{})
 		}
 	}
 }

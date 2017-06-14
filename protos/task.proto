@@ -145,3 +145,10 @@ message GroupKeys {
 	uint32 group_id = 1;
 	repeated KC keys = 2;
 }
+
+message SubscribeRequest {
+	repeated string predicates = 1;
+}
+
+message PredicateUpdate {
+}

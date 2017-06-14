@@ -64,6 +64,8 @@ type GraphQuery struct {
 	// there is a child with count() attr, then this is not empty for the parent.
 	// If there is an alias, this has the alias value, else its value is count.
 	UidCount string
+
+	Subscribe bool
 }
 
 // Mutation stores the strings corresponding to set and delete operations.
@@ -514,13 +516,15 @@ func Parse(r Request) (res Result, rerr error) {
 					return res, rerr
 				}
 				fmap[fnode.Name] = fnode
-			} else if item.Val == "query" {
+			} else if item.Val == "query" || item.Val == "subscribe" {
 				if res.Schema != nil {
-					return res, x.Errorf("schema block is not allowed with query block")
+					return res, x.Errorf("schema block is not allowed with %s block", item.Val)
 				}
+				subscribe := item.Val == "subscribe"
 				if qu, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
 					return res, rerr
 				}
+				qu.Subscribe = subscribe
 				res.Query = append(res.Query, qu)
 			}
 		case itemLeftCurl:

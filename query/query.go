@@ -1208,6 +1208,7 @@ func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, parent
 
 func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
 	var sgl []*SubGraph
+	var subs []*SubGraph
 	var err error
 
 	// doneVars stores the processed variables.
@@ -1224,9 +1225,19 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			return nil, err
 		}
 		x.Trace(ctx, "Query parsed")
-		sgl = append(sgl, sg)
+		if gq.Subscribe == true {
+			subs = append(subs, sg)
+		} else {
+			sgl = append(sgl, sg)
+		}
 	}
 	l.Parsing += time.Since(loopStart)
+
+	if len(subs) > 0 {
+		preds := GetQueryPredicates(subs)
+		err := worker.SubscribeOverNetwork(ctx, preds)
+		return nil, err
+	}
 
 	execStart := time.Now()
 	hasExecuted := make([]bool, len(sgl))
@@ -2057,7 +2068,7 @@ func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.TaskVa
 	return result.Values, nil
 }
 
-func GetAllPredicates(subGraphs []*SubGraph) (predicates []string) {
+func GetQueryPredicates(subGraphs []*SubGraph) (predicates []string) {
 	predicatesMap := make(map[string]bool)
 	for _, sg := range subGraphs {
 		sg.getAllPredicates(predicatesMap)
