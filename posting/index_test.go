@@ -276,11 +276,11 @@ func TestRebuildIndex(t *testing.T) {
 	require.EqualValues(t, 1, idxVals[1].Postings[0].Uid)
 
 	l1, _ := GetOrCreate(x.DataKey("name", 1), 1)
+	deletePl(t)
 	ps.Delete(l1.key)
-	deletePl(t)
 	l2, _ := GetOrCreate(x.DataKey("name", 20), 1)
-	ps.Delete(l2.key)
 	deletePl(t)
+	ps.Delete(l2.key)
 }
 
 func TestRebuildReverseEdges(t *testing.T) {
@@ -293,7 +293,6 @@ func TestRebuildReverseEdges(t *testing.T) {
 	for len(syncCh) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
-	time.Sleep(time.Second)
 
 	// Create some fake wrong entries for data store.
 	addEdgeToUID(t, "friend", 1, 100)
@@ -305,7 +304,6 @@ func TestRebuildReverseEdges(t *testing.T) {
 	for len(syncCh) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
-	time.Sleep(time.Second)
 
 	// Check index entries in data store.
 	it := ps.NewIterator(badger.DefaultIteratorOptions)
