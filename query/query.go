@@ -1198,9 +1198,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		// This is a var() block.
 		srcVar := sg.Params.NeedsVar[0]
 		srcMap := doneVars[srcVar.Name]
-		if srcMap.Vals == nil {
-			return x.Errorf("Missing value variable %v", srcVar)
-		}
+		// The value var can be empty. No need to check for nil.
 		sg.Params.uidToVal = srcMap.Vals
 	} else {
 		return x.Errorf("Unhandled internal node %v with parent %v", sg.Attr, parent.Attr)
