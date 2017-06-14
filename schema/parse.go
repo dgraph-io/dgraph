@@ -57,11 +57,6 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	for _, update := range updates {
 		State().Set(update.Predicate, From(update))
 	}
-	State().Set("_xid_", protos.SchemaUpdate{
-		ValueType: uint32(types.StringID),
-		Directive: protos.SchemaUpdate_INDEX,
-		Tokenizer: []string{"hash"},
-	})
 	return nil
 }
 
@@ -250,7 +245,8 @@ func resolveTokenizers(updates []*protos.SchemaUpdate) error {
 // Parse parses a schema string and returns the schema representation for it.
 func Parse(s string) ([]*protos.SchemaUpdate, error) {
 	var schemas []*protos.SchemaUpdate
-	l := lex.NewLexer(s).Run(lexText)
+	l := lex.Lexer{Input: s}
+	l.Run(lexText)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()

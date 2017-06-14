@@ -43,16 +43,16 @@ func TestSimple(t *testing.T) {
 	// Run mutation.
 	m := `mutation {
         set {
-            <alice-in-wonderland> <type> <novel> .
-            <alice-in-wonderland> <character> <alice> .
-            <alice-in-wonderland> <author> <lewis-carrol> .
-            <alice-in-wonderland> <written-in> "1865" .
-            <alice-in-wonderland> <name> "Alice in Wonderland" .
-            <alice-in-wonderland> <sequel> <looking-glass> .
-            <alice> <name> "Alice" .
-            <lewis-carrol> <name> "Lewis Carroll" .
-            <lewis-carrol> <born> "1832" .
-            <lewis-carrol> <died> "1898" .
+            <0x999999> <type> <0x3453> .
+            <0x999999> <character> <0x9874> .
+            <0x999999> <author> <0x1234> .
+            <0x999999> <written-in> "1865" .
+            <0x999999> <name> "Alice in Wonderland" .
+            <0x999999> <sequel> <0x45> .
+            <0x9874> <name> "Alice" .
+            <0x1234> <name> "Lewis Carroll" .
+            <0x1234> <born> "1832" .
+            <0x1234> <died> "1898" .
         }
      }`
 
@@ -60,7 +60,7 @@ func TestSimple(t *testing.T) {
 
 	q := `
     {
-    	me(id: alice-in-wonderland) {
+    	me(id: 0x999999) {
     		type
     		written-in
     		name

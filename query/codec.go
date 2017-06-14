@@ -32,6 +32,12 @@ func (c *Codec) Marshal(v interface{}) ([]byte, error) {
 	var b []byte
 	var err error
 	switch val := v.(type) {
+	case *protos.AssignedIds:
+		b, err = proto.Marshal(val)
+		if err != nil {
+			return []byte{}, err
+		}
+		return b, nil
 	case *protos.Version:
 		b, err = proto.Marshal(val)
 		if err != nil {
@@ -63,6 +69,11 @@ func (c *Codec) Unmarshal(data []byte, v interface{}) error {
 	check, ok := v.(*protos.Check)
 	if ok {
 		return proto.Unmarshal(data, check)
+	}
+
+	num, ok := v.(*protos.Num)
+	if ok {
+		return proto.Unmarshal(data, num)
 	}
 
 	r, ok := v.(*protos.Request)

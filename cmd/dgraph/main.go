@@ -69,6 +69,7 @@ var (
 	tracing        = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
+	blockRate      = flag.Int("block", 0, "Block profiling rate")
 	dumpSubgraph   = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
@@ -308,8 +309,8 @@ func NewSharedQueryNQuads(query []byte) []*protos.NQuad {
 	}
 	qHash := fmt.Sprintf("\"%x\"", sha256.Sum256(query))
 	return []*protos.NQuad{
-		&protos.NQuad{Subject: "<_:share>", Predicate: "<_share_>", ObjectValue: val(string(query))},
-		&protos.NQuad{Subject: "<_:share>", Predicate: "<_share_hash_>", ObjectValue: val(qHash)},
+		{Subject: "<_:share>", Predicate: "<_share_>", ObjectValue: val(string(query))},
+		{Subject: "<_:share>", Predicate: "<_share_hash_>", ObjectValue: val(qHash)},
 	}
 }
 
@@ -531,6 +532,14 @@ func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *prot
 	return v, nil
 }
 
+func (s *grpcServer) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+	if !worker.HealthCheck() {
+		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		return &protos.AssignedIds{}, x.Errorf("Uninitiated server. Please retry later")
+	}
+	return worker.AssignUidsOverNetwork(ctx, num)
+}
+
 var uiDir string
 
 func init() {
@@ -677,6 +686,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 	x.Init()
 	checkFlagsAndInitDirs()
+	runtime.SetBlockProfileRate(*blockRate)
 
 	// All the writes to posting store should be synchronous. We use batched writers
 	// for posting lists, so the cost of sync writes is amortized.

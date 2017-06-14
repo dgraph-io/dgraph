@@ -90,36 +90,44 @@ func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
 	return nil
 }
 
-func AssignUids(nquads gql.NQuads) (map[string]uint64, error) {
+func AssignUids(ctx context.Context, nquads gql.NQuads) (map[string]uint64, error) {
 	newUids := make(map[string]uint64)
+	num := &protos.Num{}
+	var err error
 	for _, nq := range nquads.NQuads {
 		if len(nq.Subject) > 0 {
 			if strings.HasPrefix(nq.Subject, "_:") {
 				newUids[nq.Subject] = 0
-			} else {
-				// Only store xids that need to be marked as used.
-				_, err := gql.ParseUid(nq.Subject)
-				if err == gql.ErrInvalidUID {
-					return newUids, err
-				} else if err != nil {
-					newUids[nq.Subject] = 0
-				}
+				num.Val = num.Val + 1
+			} else if _, err := gql.ParseUid(nq.Subject); err != nil {
+				return newUids, err
 			}
 		}
 
 		if len(nq.ObjectId) > 0 {
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
-			} else {
-				_, err := gql.ParseUid(nq.ObjectId)
-				if err == gql.ErrInvalidUID {
-					return newUids, err
-				} else if err != nil {
-					newUids[nq.ObjectId] = 0
-				}
+				num.Val = num.Val + 1
+			} else if _, err := gql.ParseUid(nq.ObjectId); err != nil {
+				return newUids, err
 			}
 		}
+	}
 
+	if int(num.Val) > 0 {
+		var res *protos.AssignedIds
+		// TODO: Optimize later by prefetching
+		if res, err = worker.AssignUidsOverNetwork(ctx, num); err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while AssignUidsOverNetwork for newUids: %v", num))
+			return newUids, err
+		}
+		curId := res.StartId
+		// assign generated ones now
+		for k := range newUids {
+			x.AssertTruef(curId != 0 && curId <= res.EndId, "not enough uids generated")
+			newUids[k] = curId
+			curId++
+		}
 	}
 	return newUids, nil
 }
@@ -144,13 +152,8 @@ func ToInternal(ctx context.Context,
 	var err error
 	var newUids map[string]uint64
 
-	if newUids, err = AssignUids(nquads); err != nil {
+	if newUids, err = AssignUids(ctx, nquads); err != nil {
 		return mr, err
-	}
-	if len(newUids) > 0 {
-		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
-			return mr, x.Wrapf(err, "Error while AssignUidsOverNetwork for: %v", newUids)
-		}
 	}
 
 	// Wrapper for a pointer to protos.Nquad

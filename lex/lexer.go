@@ -110,13 +110,6 @@ type Lexer struct {
 	Mode     StateFn // Default state to go back to after reading a token.
 }
 
-func NewLexer(input string) *Lexer {
-	l := Lexer{}
-	l.Input = input
-	l.items = make([]item, 0, 100)
-	return &l
-}
-
 func (l *Lexer) Run(f StateFn) *Lexer {
 	for state := f; state != nil; {
 		// The following statement is useful for debugging.

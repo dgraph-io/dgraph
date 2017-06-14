@@ -61,28 +61,28 @@ func TestSetMutation(t *testing.T) {
 	req := Req{}
 
 	s := graphValue("Alice")
-	if err := req.AddMutation(protos.NQuad{
+	if err := req.Set(Edge{protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "name",
 		ObjectValue: s,
-	}, SET); err != nil {
+	}}); err != nil {
 		t.Fatal(err)
 	}
 
 	s = graphValue("rabbithole")
-	if err := req.AddMutation(protos.NQuad{
+	if err := req.Set(Edge{protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
 		ObjectValue: s,
-	}, SET); err != nil {
+	}}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := req.AddMutation(protos.NQuad{
+	if err := req.Delete(Edge{protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
 		ObjectValue: s,
-	}, DEL); err != nil {
+	}}); err != nil {
 		t.Fatal(err)
 	}
 

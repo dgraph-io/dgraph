@@ -33,13 +33,14 @@ sleep 15
 curl -X POST  -d 'mutation {
   schema {
 	  name: string @index .
+		_xid_: string @index(exact,term) .
 	  initial_release_date: datetime @index .
 	}
 }' "http://localhost:8080/query"
 
 pushd cmd/dgraphloader &> /dev/null
 go build .
-./dgraphloader -r $benchmark/goldendata.rdf.gz
+./dgraphloader -r $benchmark/goldendata.rdf.gz -x true
 popd &> /dev/null
 
 # Lets wait for stuff to be committed to RocksDB.

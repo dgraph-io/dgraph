@@ -750,32 +750,14 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 	if v, ok := gq.Args["from"]; ok && args.Alias == "shortest" {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
-			// Treat it as an XID.
-			umap, err := worker.GetUidsOverNetwork(context.Background(), []string{v})
-			if err != nil {
-				return err
-			}
-			id, found := umap[v]
-			if !found {
-				return worker.UidNotFound
-			}
-			from = id
+			return err
 		}
 		args.From = uint64(from)
 	}
 	if v, ok := gq.Args["to"]; ok && args.Alias == "shortest" {
 		to, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
-			// Treat it as an XID.
-			umap, err := worker.GetUidsOverNetwork(context.Background(), []string{v})
-			if err != nil {
-				return err
-			}
-			id, found := umap[v]
-			if !found {
-				return worker.UidNotFound
-			}
-			to = id
+			return err
 		}
 		args.To = uint64(to)
 	}
@@ -818,34 +800,13 @@ func isDebug(ctx context.Context) bool {
 
 func (sg *SubGraph) uidsFromArgs(ids []string) error {
 	var uids []uint64
-	// TODO - Remove xids.
-	var xids []string
 	for _, id := range ids {
-		if uid, err := strconv.ParseUint(id, 0, 64); err == nil {
-			uids = append(uids, uid)
-		} else {
-			uids = append(uids, 0) // for maintaining order
-			xids = append(xids, id)
+		uid, err := strconv.ParseUint(id, 0, 64)
+		if err != nil {
+			return err
 		}
+		uids = append(uids, uid)
 	}
-	umap, err := worker.GetUidsOverNetwork(context.Background(), xids)
-	if err != nil {
-		return err
-	}
-	temp := uids[:0]
-	for i, uid := range uids {
-		if uid != 0 {
-			temp = append(temp, uid)
-			continue
-		}
-		// Now check in the map and add it if present.
-		// we won't return results if uid is not found for a given xid
-		if rid, ok := umap[ids[i]]; ok {
-			temp = append(temp, rid)
-		}
-	}
-	uids = temp
-
 	if len(uids) > 0 {
 		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
 		sg.uidMatrix = []*protos.List{{uids}}
@@ -858,7 +819,7 @@ func (sg *SubGraph) uidsFromArgs(ids []string) error {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.ID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
+	if len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -911,15 +872,18 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 
-	var ids []string
 	// For root ids can come from uid func or id: [].
 	if isUidFunc && len(gq.Func.Args) > 0 {
-		ids = gq.Func.Args
-	} else {
-		ids = gq.ID
-	}
-	if err := sg.uidsFromArgs(ids); err != nil {
-		return nil, err
+		if err := sg.uidsFromArgs(gq.Func.Args); err != nil {
+			return nil, err
+		}
+	} else if len(gq.UID) > 0 {
+		o := make([]uint64, len(gq.UID))
+		copy(o, gq.UID)
+		sg.uidMatrix = []*protos.List{{gq.UID}}
+		// User specified list may not be sorted.
+		sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
+		sg.SrcUIDs = &protos.List{o}
 	}
 
 	sg.values = createNilValuesList(1)
@@ -1967,7 +1931,7 @@ func GetAllPredicates(subGraphs []*SubGraph) (predicates []string) {
 		sg.getAllPredicates(predicatesMap)
 	}
 	predicates = make([]string, 0, len(predicatesMap))
-	for predicate, _ := range predicatesMap {
+	for predicate := range predicatesMap {
 		predicates = append(predicates, predicate)
 	}
 	return predicates
@@ -2057,7 +2021,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 	queries := req.GqlQuery.Query
 	for i := 0; i < len(queries); i++ {
 		gq := queries[i]
-		if gq == nil || (len(gq.ID) == 0 && gq.Func == nil &&
+		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil &&
 			len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
 			continue
 		}

@@ -74,7 +74,6 @@ func TestAddMutation(t *testing.T) {
 	key := x.DataKey("name", 1)
 
 	l := getNew(key, ps)
-	defer ps.Delete(key)
 
 	edge := &protos.DirectedEdge{
 		ValueId: 9,
@@ -124,6 +123,7 @@ func TestAddMutation(t *testing.T) {
 	dl := getNew(key, ps)
 	checkUids(t, dl, uids)
 	deletePl(t)
+	ps.Delete(dl.key)
 }
 
 func getFirst(l *List) (res protos.Posting) {
@@ -154,14 +154,15 @@ func TestAddMutation_Value(t *testing.T) {
 	_, err := ol.SyncIfDirty(context.Background())
 	require.NoError(t, err)
 	checkValue(t, ol, "oh hey there")
+	time.Sleep(time.Second)
 
 	// The value made it to the posting list. Changing it now.
 	edge.Value = []byte(strconv.Itoa(119))
 	addMutation(t, ol, edge, Set)
 	checkValue(t, ol, "119")
 
-	ps.Delete(ol.key)
 	deletePl(t)
+	ps.Delete(ol.key)
 }
 
 func TestAddMutation_jchiu1(t *testing.T) {
@@ -178,6 +179,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	merged, err := ol.SyncIfDirty(ctx)
 	require.NoError(t, err)
 	require.True(t, merged)
+	time.Sleep(time.Second)
 
 	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "cars")
@@ -209,8 +211,8 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "cars")
 
-	ps.Delete(ol.key)
 	deletePl(t)
+	ps.Delete(ol.key)
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {
@@ -260,6 +262,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	require.True(t, merged)
 	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "cars")
+	time.Sleep(time.Second)
 
 	// Del a value cars and but don't merge.
 	edge = &protos.DirectedEdge{
@@ -295,8 +298,8 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	addMutation(t, ol, edge, Del)
 	require.Equal(t, 0, ol.Length(0))
 
-	ps.Delete(ol.key)
 	deletePl(t)
+	ps.Delete(ol.key)
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
@@ -312,6 +315,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	merged, err := ol.SyncIfDirty(context.Background())
 	require.NoError(t, err)
 	require.True(t, merged)
+	time.Sleep(time.Second)
 
 	// Delete a non-existent value newcars. This should have no effect.
 	edge = &protos.DirectedEdge{
@@ -355,8 +359,8 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	addMutation(t, ol, edge, Del)
 	require.Equal(t, 0, ol.Length(0))
 
-	ps.Delete(ol.key)
 	deletePl(t)
+	ps.Delete(ol.key)
 }
 
 func TestAddMutation_checksum(t *testing.T) {
@@ -381,11 +385,12 @@ func TestAddMutation_checksum(t *testing.T) {
 		merged, err := ol.SyncIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
+		time.Sleep(time.Second)
 
 		pl := ol.PostingList()
 		c1 = pl.Checksum
-		ps.Delete(ol.key)
 		deletePl(t)
+		ps.Delete(ol.key)
 	}
 
 	{
@@ -408,11 +413,12 @@ func TestAddMutation_checksum(t *testing.T) {
 		merged, err := ol.SyncIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
+		time.Sleep(time.Second)
 
 		pl := ol.PostingList()
 		c2 = pl.Checksum
-		ps.Delete(ol.key)
 		deletePl(t)
+		ps.Delete(ol.key)
 	}
 	require.Equal(t, c1, c2)
 
@@ -442,11 +448,12 @@ func TestAddMutation_checksum(t *testing.T) {
 		merged, err := ol.SyncIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
+		time.Sleep(time.Second)
 
 		pl := ol.PostingList()
 		c3 = pl.Checksum
-		ps.Delete(ol.key)
 		deletePl(t)
+		ps.Delete(ol.key)
 	}
 	require.NotEqual(t, c3, c1)
 }
@@ -470,6 +477,7 @@ func TestAddMutation_gru(t *testing.T) {
 		merged, err := ol.SyncIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
+		time.Sleep(time.Second)
 	}
 
 	{
@@ -486,15 +494,15 @@ func TestAddMutation_gru(t *testing.T) {
 		merged, err := ol.SyncIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
+		time.Sleep(time.Second)
 	}
 
-	ps.Delete(ol.key)
 	deletePl(t)
+	ps.Delete(ol.key)
 }
 
 func TestAddMutation_gru2(t *testing.T) {
-	key := x.DataKey("question.tag", 0x01)
-	ps.Delete(key)
+	key := x.DataKey("question.tag", 0x100)
 	ol := getNew(key, ps)
 
 	{
@@ -512,6 +520,7 @@ func TestAddMutation_gru2(t *testing.T) {
 		merged, err := ol.SyncIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
+		time.Sleep(time.Second)
 	}
 
 	{
@@ -536,20 +545,19 @@ func TestAddMutation_gru2(t *testing.T) {
 		merged, err := ol.SyncIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
+		time.Sleep(time.Second)
 	}
 
 	// Posting list should just have the new tag.
 	uids := []uint64{0x04}
 	require.Equal(t, uids, listToArray(t, 0, ol))
-	ps.Delete(ol.key)
 	deletePl(t)
+	ps.Delete(ol.key)
 }
 
 func TestAfterUIDCount(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ps.Delete(key)
 	ol := getNew(key, ps)
-
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
 		Label: "jchiu",
@@ -617,8 +625,8 @@ func TestAfterUIDCount(t *testing.T) {
 	require.EqualValues(t, 100, ol.Length(0))
 	require.EqualValues(t, 50, ol.Length(199))
 	require.EqualValues(t, 0, ol.Length(300))
-	ps.Delete(ol.key)
 	deletePl(t)
+	ps.Delete(ol.key)
 }
 
 func TestAfterUIDCount2(t *testing.T) {
@@ -647,8 +655,8 @@ func TestAfterUIDCount2(t *testing.T) {
 	require.EqualValues(t, 200, ol.Length(0))
 	require.EqualValues(t, 100, ol.Length(199))
 	require.EqualValues(t, 0, ol.Length(300))
-	ps.Delete(ol.key)
 	deletePl(t)
+	ps.Delete(ol.key)
 }
 
 func TestDelete(t *testing.T) {
@@ -698,6 +706,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	merged, err := ol.SyncIfDirty(context.Background())
 	require.NoError(t, err)
 	require.True(t, merged)
+	time.Sleep(time.Second)
 
 	// Mutation layer starts afresh from here.
 	// Delete half of the edges.
@@ -754,8 +763,8 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 100, ol.Length(0))
 	require.EqualValues(t, 50, ol.Length(199))
 	require.EqualValues(t, 0, ol.Length(300))
-	ps.Delete(ol.key)
 	deletePl(t)
+	ps.Delete(ol.key)
 }
 
 var ps *badger.KV

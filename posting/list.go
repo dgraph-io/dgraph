@@ -79,6 +79,9 @@ type List struct {
 func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
 func (l *List) incr() int32     { return atomic.AddInt32(&l.refcount, 1) }
 func (l *List) decr() {
+	l.Lock()
+	l.Unlock()
+
 	val := atomic.AddInt32(&l.refcount, -1)
 	x.AssertTruef(val >= 0, "List reference should never be less than zero: %v", val)
 	if val > 0 {
@@ -101,7 +104,7 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	l.refcount = 1
 	l.Lock()
 
-	go func() {
+	go func(l *List) {
 		defer l.Unlock()
 
 		var item badger.KVItem
@@ -120,7 +123,7 @@ func getNew(key []byte, pstore *badger.KV) *List {
 		if val != nil {
 			x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 		}
-	}()
+	}(l)
 	return l
 }
 

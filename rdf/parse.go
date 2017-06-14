@@ -34,7 +34,8 @@ import (
 )
 
 var (
-	ErrEmpty = errors.New("rdf: harmless error, e.g. comment line")
+	ErrEmpty      = errors.New("rdf: harmless error, e.g. comment line")
+	ErrInvalidUID = errors.New("UID has to be greater than zero.")
 )
 
 // Function to do sanity check for subject, predicate, object and label strings.
@@ -56,7 +57,11 @@ func sane(s string) bool {
 
 // Parse parses a mutation string and returns the NQuad representation for it.
 func Parse(line string) (rnq protos.NQuad, rerr error) {
-	l := lex.NewLexer(line).Run(lexText)
+	l := lex.Lexer{
+		Input: line,
+	}
+	l.Run(lexText)
+
 	it := l.NewIterator()
 	var oval string
 	var vend bool
