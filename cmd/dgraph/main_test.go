@@ -953,7 +953,6 @@ func TestExpandPred(t *testing.T) {
 		output)
 	err = runMutation(m2)
 	require.NoError(t, err)
-
 }
 
 func TestDeletePredicate(t *testing.T) {
@@ -1005,6 +1004,7 @@ func TestDeletePredicate(t *testing.T) {
 		}
 	}
 	`
+
 	var q4 = `
 	{
 		user(id:alice2) {
@@ -1012,6 +1012,17 @@ func TestDeletePredicate(t *testing.T) {
 		}
 	}
 `
+
+	var q5 = `
+		{
+			user(id: alice2) {
+				age
+				friend {
+					name
+				}
+			}
+		}
+		`
 
 	var s1 = `
 	mutation {
@@ -1059,16 +1070,14 @@ func TestDeletePredicate(t *testing.T) {
 	require.NoError(t, err)
 
 	output, err = runQuery(q1)
-	require.NoError(t, err)
-	require.JSONEq(t, `{}`,
-		output)
+	// Name is not indexed.
+	require.Error(t, err)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{}`,
-		output)
+	require.JSONEq(t, `{}`, output)
 
-	output, err = runQuery(q3)
+	output, err = runQuery(q5)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"user":[{"age": "13"}]}`, output)
 

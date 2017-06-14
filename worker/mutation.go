@@ -114,8 +114,9 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 				current.Directive == protos.SchemaUpdate_INDEX); err != nil {
 				return err
 			}
-		} else if (current.Directive == protos.SchemaUpdate_REVERSE) !=
-			(old.Directive == protos.SchemaUpdate_REVERSE) {
+		} else if current.Directive == protos.SchemaUpdate_DELETE ||
+			(current.Directive == protos.SchemaUpdate_REVERSE) !=
+				(old.Directive == protos.SchemaUpdate_REVERSE) {
 			// Add or remove reverse edge based on update.Reverse
 			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
 				current.Directive == protos.SchemaUpdate_REVERSE); err != nil {
@@ -127,6 +128,10 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 }
 
 func needReindexing(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
+	if current.Directive == protos.SchemaUpdate_DELETE {
+		return true
+	}
+
 	if (current.Directive == protos.SchemaUpdate_INDEX) != (old.Directive == protos.SchemaUpdate_INDEX) {
 		return true
 	}
@@ -181,16 +186,24 @@ func checkSchema(s *protos.SchemaUpdate) error {
 		return x.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
 	}
 	if t, err := schema.State().TypeOf(s.Predicate); err == nil {
+		// Predicate is defined and schema and we want to delete it, lets update the
+		// type in SchemaUpdate
+		if s.Directive == protos.SchemaUpdate_DELETE {
+			s.ValueType = uint32(t)
+			return nil
+		}
+
 		// schema was defined already
 		if typ.IsScalar() != t.IsScalar() {
-			return x.Errorf("Schema change not allowed from predicate to uid or vice versa")
+			return x.Errorf("Schema change not allowed from predicate to uid or vice versa for pred: %s",
+				s.Predicate)
 		}
 	}
 	return nil
 }
 
 // If storage type is specified, then check compatibility or convert to schema type
-// if no storage type is specified then convert to schema type
+// if no storage type is specified then convert to schema type.
 func validateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) error {
 	if types.TypeID(edge.ValueType) == types.DefaultID && string(edge.Value) == x.DeleteAllObjects {
 		if edge.Op != protos.DirectedEdge_DEL {

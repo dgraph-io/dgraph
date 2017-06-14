@@ -282,6 +282,11 @@ func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
 						}
 						newEdges = append(newEdges, delPredEdge)
 					}
+
+					m.Schema = append(m.Schema, &protos.SchemaUpdate{
+						Predicate: mu.Attr,
+						Directive: protos.SchemaUpdate_DELETE,
+					})
 					continue
 				}
 
