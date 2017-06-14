@@ -162,8 +162,8 @@ func (t *topic) predicateUpdated() {
 	for i := 0; i < last; i++ {
 		sub := subs[i]
 		if sub.Context().Err() == nil {
-			fmt.Println("tzdybal: notifying!")
 			if sub.NeedsUpdate() {
+				fmt.Println("tzdybal: notifying!")
 				sub.UpdatesChan() <- true
 				sub.RequireUpdate(false)
 			}
@@ -180,8 +180,8 @@ func (t *topic) predicateUpdated() {
 	t.subscribers = subs
 }
 
-func NewNetworkSubscriber(server protos.Worker_SubscribeServer) NetworkSubscriber {
-	return NetworkSubscriber{basicSubscriber{false, make(chan bool)}, server}
+func NewNetworkSubscriber(server protos.Worker_SubscribeServer) *NetworkSubscriber {
+	return &NetworkSubscriber{basicSubscriber{false, make(chan bool)}, server}
 }
 
 func (s *NetworkSubscriber) Run() {
@@ -194,24 +194,24 @@ func (s *NetworkSubscriber) Run() {
 	}
 }
 
-func (s NetworkSubscriber) Context() context.Context {
+func (s *NetworkSubscriber) Context() context.Context {
 	return s.server.Context()
 }
 
-func (s NetworkSubscriber) NeedsUpdate() bool {
+func (s *NetworkSubscriber) NeedsUpdate() bool {
 	return s.needsUpdate
 }
 
-func (s NetworkSubscriber) RequireUpdate(update bool) {
+func (s *NetworkSubscriber) RequireUpdate(update bool) {
 	s.needsUpdate = update
 }
 
-func (s NetworkSubscriber) UpdatesChan() chan bool {
+func (s *NetworkSubscriber) UpdatesChan() chan bool {
 	return s.updatesChan
 }
 
-func NewLocalSubscriber(ctx context.Context) LocalSubscriber {
-	return LocalSubscriber{basicSubscriber{false, make(chan bool)}, ctx}
+func NewLocalSubscriber(ctx context.Context) *LocalSubscriber {
+	return &LocalSubscriber{basicSubscriber{false, make(chan bool)}, ctx}
 }
 
 func (s *LocalSubscriber) Run() {
@@ -224,18 +224,18 @@ func (s *LocalSubscriber) Run() {
 	}
 }
 
-func (s LocalSubscriber) Context() context.Context {
+func (s *LocalSubscriber) Context() context.Context {
 	return s.ctx
 }
 
-func (s LocalSubscriber) NeedsUpdate() bool {
+func (s *LocalSubscriber) NeedsUpdate() bool {
 	return s.needsUpdate
 }
 
-func (s LocalSubscriber) RequireUpdate(update bool) {
+func (s *LocalSubscriber) RequireUpdate(update bool) {
 	s.needsUpdate = update
 }
 
-func (s LocalSubscriber) UpdatesChan() chan bool {
+func (s *LocalSubscriber) UpdatesChan() chan bool {
 	return s.updatesChan
 }
