@@ -960,9 +960,9 @@ func TestMutationSubjectVariables(t *testing.T) {
 	m1 := `
 		mutation {
 			set {
-                <me>    <friend>   <alice> .
-                <me>    <friend>   <bob> .
-                <me>    <friend>   <chris> .
+                <0x500>    <friend>   <_:alice> .
+                <0x500>    <friend>   <_:bob> .
+                <0x500>    <friend>   <_:chris> .
 			}
 		}
     `
@@ -976,7 +976,7 @@ func TestMutationSubjectVariables(t *testing.T) {
 			}
 		}
 		{
-			me(id: me) {
+			me(id: 0x500) {
 				myfriend as friend
 			}
 		}`
@@ -991,7 +991,7 @@ func TestMutationSubjectVariables(t *testing.T) {
 
 	q1 := `
 		{
-			me(id: me) {
+			me(id: 0x500) {
 				friend  {
 					nice
 				}
@@ -1007,14 +1007,14 @@ func TestMutationSubjectVariablesSingleMutation(t *testing.T) {
 	m1 := `
 		mutation {
 			set {
-                <me>          <friend>   <alice> .
-                <me>          <friend>   <bob> .
-                <me>          <friend>   <chris> .
+                <0x700>          <friend>   <_:alice> .
+                <0x700>          <friend>   <_:bob> .
+                <0x700>          <friend>   <_:chris> .
 				var(myfriend) <nice>     "true" .
 			}
 		}
 		{
-			me(id: me) {
+			me(id: 0x700) {
 				myfriend as friend
 			}
 		}
@@ -1030,7 +1030,7 @@ func TestMutationSubjectVariablesSingleMutation(t *testing.T) {
 
 	q1 := `
 		{
-			me(id: me) {
+			me(id: 0x700) {
 				friend  {
 					nice
 				}
@@ -1046,14 +1046,14 @@ func TestMutationObjectVariables(t *testing.T) {
 	m1 := `
 		mutation {
 			set {
-                <0x500>    <friend>   <0x501> .
-                <0x500>    <friend>   <0x502> .
-                <0x500>    <friend>   <0x503> .
-				<0x500>    <likes>    var(myfriend) .
+                <0x600>    <friend>   <0x501> .
+                <0x600>    <friend>   <0x502> .
+                <0x600>    <friend>   <0x503> .
+				<0x600>    <likes>    var(myfriend) .
 			}
 		}
 		{
-			me(id: 0x500) {
+			me(id: 0x600) {
 				myfriend as friend
 			}
 		}
@@ -1070,7 +1070,7 @@ func TestMutationObjectVariables(t *testing.T) {
 
 	q1 := `
 		{
-			me(id: m0x500) {
+			me(id: 0x600) {
 				count(likes)
             }
 		}

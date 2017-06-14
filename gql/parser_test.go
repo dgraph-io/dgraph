@@ -3457,11 +3457,11 @@ func TestMutationVariables(t *testing.T) {
 		mutation {
 			set {
 				var(adults) <isadult> "true" .
-				<a> <b> <c> .
+				<0x900> <b> <0x901> .
 			}
 		}
 		{
-			me(id: a) {
+			me(id: 0x900) {
 				adults as friends @filter(gt(age, 18))
 			}
 		}

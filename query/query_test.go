@@ -5065,7 +5065,7 @@ func TestRootList2(t *testing.T) {
 	}
 }`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Alice"}]}`, js)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Alice"},{"name":"Glenn Rhee"}]}`, js)
 }
 
 func TestGeneratorMultiRootFilter1(t *testing.T) {
