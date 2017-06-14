@@ -810,6 +810,28 @@ var testNQuads = []struct {
 		input:       `<alice> <password> "guess"^^<pwd:password> .`,
 		expectedErr: true, // len(password) should >= 6
 	},
+	// Test variable in subject
+	{
+		input: `var(alice) <knows> "stuff" .`,
+		nq: protos.NQuad{
+			Predicate:   "knows",
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"stuff"}},
+			SubjectVar:  "alice",
+		},
+	},
+	// Test variable in object
+	{
+		input: `<alice> <knows> var(everyone) .`,
+		nq: protos.NQuad{
+			Subject:   "alice",
+			Predicate: "knows",
+			ObjectVar: "everyone",
+		},
+	},
+	{
+		input:       `var(alice) <knows> var(everyone) .`,
+		expectedErr: true, // cannot have variables in both subject and object.
+	},
 }
 
 func TestLex(t *testing.T) {
