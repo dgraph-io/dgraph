@@ -1084,7 +1084,7 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 
 	newMap := fromNode.Vals
 	if newMap == nil {
-		return nil, x.Errorf("Variables not ordered correctly")
+		return map[uint64]types.Val{}, nil
 	}
 	for ; idx < len(toPath); idx++ {
 		curNode := toPath[idx]
