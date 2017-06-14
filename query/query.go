@@ -145,6 +145,7 @@ type params struct {
 	isGroupBy    bool
 	groupbyAttrs []gql.AttrLang
 	uidCount     string
+	numPaths     int
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -738,6 +739,13 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			return err
 		}
 		args.RecurseDepth = from
+	}
+	if v, ok := gq.Args["numpaths"]; ok && args.Alias == "shortest" {
+		numPaths, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return err
+		}
+		args.numPaths = int(numPaths)
 	}
 	if v, ok := gq.Args["from"]; ok && args.Alias == "shortest" {
 		from, err := strconv.ParseUint(v, 0, 64)
@@ -1897,7 +1905,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth":
+	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth":
 		return true
 	}
 	return false
@@ -2088,7 +2096,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 		return true
 	}
 
-	var shortestSg *SubGraph
+	var shortestSg []*SubGraph
 	for i := 0; i < len(req.Subgraphs) && numQueriesDone < len(req.Subgraphs); i++ {
 		errChan := make(chan error, len(req.Subgraphs))
 		var idxList []int
@@ -2165,8 +2173,8 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 	req.Latency.Processing += time.Since(execStart)
 
 	// If we had a shortestPath SG, append it to the result.
-	if shortestSg != nil {
-		req.Subgraphs = append(req.Subgraphs, shortestSg)
+	if len(shortestSg) != 0 {
+		req.Subgraphs = append(req.Subgraphs, shortestSg...)
 	}
 	return nil
 }

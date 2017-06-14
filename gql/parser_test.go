@@ -906,7 +906,7 @@ func TestParseQueryWithMultipleVar(t *testing.T) {
 func TestParseShortestPath(t *testing.T) {
 	query := `
 	{
-		shortest(from:0x0a, to:0x0b) {
+		shortest(from:0x0a, to:0x0b, numpaths: 3) {
 			friends
 			name
 		}
@@ -918,6 +918,7 @@ func TestParseShortestPath(t *testing.T) {
 	require.Equal(t, 1, len(res.Query))
 	require.Equal(t, "0x0a", res.Query[0].Args["from"])
 	require.Equal(t, "0x0b", res.Query[0].Args["to"])
+	require.Equal(t, "3", res.Query[0].Args["numpaths"])
 }
 
 func TestParseMultipleQueries(t *testing.T) {

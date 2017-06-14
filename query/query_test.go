@@ -1629,6 +1629,53 @@ func TestShortestPath_NoPath(t *testing.T) {
 		js)
 }
 
+func TestKShortestPathWeighted(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			shortest(from: 1, to:1001, numpaths: 4) {
+				path @facets(weight)
+			}
+		}`
+	// We only get one path in this case as the facet is present only in one path.
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"_path_":[{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9"}]}]}]}]}`,
+		js)
+}
+
+func TestKShortestPathWeighted1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			shortest(from: 1, to:1003, numpaths: 3) {
+				path @facets(weight)
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"_path_":[{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3ea","path":[{"@facets":{"_":{"weight":0.600000}},"_uid_":"0x3eb"}]}]}]}]}]},{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.700000}},"_uid_":"0x3ea","path":[{"@facets":{"_":{"weight":0.600000}},"_uid_":"0x3eb"}]}]}]}]},{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9","path":[{"@facets":{"_":{"weight":1.500000}},"_uid_":"0x3eb"}]}]}]}]}]}`,
+		js)
+}
+
+func TestTwoShortestPath(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from: 1, to:1002, numpaths: 2) {
+				path
+			}
+
+			me(id: var( A)) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"_path_":[{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3ea"}]}]}]},{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3e9","path":[{"_uid_":"0x3ea"}]}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Matt"}]}`,
+		js)
+}
+
 func TestShortestPath(t *testing.T) {
 	populateGraph(t)
 	query := `
