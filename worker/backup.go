@@ -51,6 +51,20 @@ type skv struct {
 	schema *protos.SchemaUpdate
 }
 
+// Map from our types to RDF type. Useful when writing storage types
+// for RDF's in backup. This is the dgraph type name and rdf storage type
+// might not be the same always (e.g. - datetime and bool).
+var rdfTypeMap = map[types.TypeID]string{
+	types.StringID:   "xs:string",
+	types.DateTimeID: "xs:dateTime",
+	types.DateID:     "xs:date",
+	types.IntID:      "xs:int",
+	types.FloatID:    "xs:float",
+	types.BoolID:     "xs:boolean",
+	types.GeoID:      "geo:geojson",
+	types.PasswordID: "pwd:password",
+}
+
 func toRDF(buf *bytes.Buffer, item kv) {
 	pl := item.list
 	for _, p := range pl.Postings {
@@ -67,19 +81,15 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			buf.WriteByte('"')
 			buf.WriteString(str.Value.(string))
 			buf.WriteByte('"')
-			if vID == types.GeoID {
-				buf.WriteString("^^<geo:geojson> ")
-			} else if vID == types.PasswordID {
-				buf.WriteString("^^<pwd:")
-				buf.WriteString(vID.Name())
-				buf.WriteByte('>')
-			} else if p.PostingType == protos.Posting_VALUE_LANG {
+			if p.PostingType == protos.Posting_VALUE_LANG {
 				buf.WriteByte('@')
 				buf.WriteString(string(p.Metadata))
 			} else if vID != types.BinaryID &&
 				vID != types.DefaultID {
-				buf.WriteString("^^<xs:")
-				buf.WriteString(vID.Name())
+				rdfType, ok := rdfTypeMap[vID]
+				x.AssertTruef(ok, "Didn't find RDF type for dgraph type: %+v", vID.Name())
+				buf.WriteString("^^<")
+				buf.WriteString(rdfType)
 				buf.WriteByte('>')
 			}
 		} else {
