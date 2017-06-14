@@ -13,8 +13,7 @@ service Dgraph {
 }
 
 message Num {
-    uint32 group = 1;
-    uint64 val = 2;
+    uint64 val = 1;
 }
 
 message AssignedIds {

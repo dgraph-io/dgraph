@@ -34,8 +34,7 @@ var (
 // so we can tackle any collisions that might happen with the leasemanager
 // In essence, we just want one server to be handing out new uids.
 func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	node := groups().Node(num.Group)
-	x.AssertTrue(num.Group == leaseGid)
+	node := groups().Node(leaseGid)
 	if !node.AmLeader() {
 		return &emptyAssignedIds, x.Errorf("Assigning UIDs is only allowed on leader.")
 	}
@@ -57,18 +56,17 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 
 // AssignUidsOverNetwork assigns new uids and writes them to the umap.
 func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	n := groups().Node(num.Group)
-	num.Group = leaseGid
+	n := groups().Node(leaseGid)
 
 	// This is useful for testing, when the membership information doesn't
 	// have chance to propagate
 	if n != nil && n.AmLeader() {
-		x.Trace(ctx, "Calling assignUids as I'm leader of group: %d", num.Group)
+		x.Trace(ctx, "Calling assignUids as I'm leader of group: %d", leaseGid)
 		return assignUids(ctx, num)
 
 	}
-	lid, addr := groups().Leader(num.Group)
-	x.Trace(ctx, "Not leader of group: %d. Sending to: %d", num.Group, lid)
+	lid, addr := groups().Leader(leaseGid)
+	x.Trace(ctx, "Not leader of group: %d. Sending to: %d", leaseGid, lid)
 	p := pools().get(addr)
 	conn, err := p.Get()
 	if err != nil {
@@ -76,7 +74,7 @@ func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.Assign
 		return &emptyAssignedIds, err
 	}
 	defer p.Put(conn)
-	x.Trace(ctx, "Calling AssignUids for group: %d, addr: %s", num.Group, addr)
+	x.Trace(ctx, "Calling AssignUids for group: %d, addr: %s", leaseGid, addr)
 
 	c := protos.NewWorkerClient(conn)
 	return c.AssignUids(ctx, num)
@@ -89,8 +87,8 @@ func (w *grpcWorker) AssignUids(ctx context.Context, num *protos.Num) (*protos.A
 		return &emptyAssignedIds, ctx.Err()
 	}
 
-	if !groups().ServesGroup(num.Group) {
-		return &emptyAssignedIds, x.Errorf("groupId: %v. GetOrAssign. We shouldn't be getting this req", num.Group)
+	if !groups().ServesGroup(leaseGid) {
+		return &emptyAssignedIds, x.Errorf("groupId: %v. GetOrAssign. We shouldn't be getting this req", leaseGid)
 	}
 
 	reply := &emptyAssignedIds
