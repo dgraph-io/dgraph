@@ -57,15 +57,8 @@ func TestIndexingFloat(t *testing.T) {
 	require.EqualValues(t, []byte{0x7, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
-func TestIndexingDate(t *testing.T) {
-	schema.ParseBytes([]byte("age:date @index ."), 1)
-	a, err := IndexTokens("age", "", types.Val{types.StringID, []byte("0010-01-01")})
-	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x3, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
-}
-
 func TestIndexingTime(t *testing.T) {
-	schema.ParseBytes([]byte("age:datetime @index ."), 1)
+	schema.ParseBytes([]byte("age:dateTime @index ."), 1)
 	a, err := IndexTokens("age", "", types.Val{types.StringID, []byte("0010-01-01T01:01:01.000000001")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x4, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
@@ -123,7 +116,7 @@ func addMutationWithIndex(t *testing.T, l *List, edge *protos.DirectedEdge, op u
 
 const schemaVal = `
 name:string @index .
-dob:date @index .
+dob:dateTime @index .
 friend:uid @reverse .
 	`
 
@@ -132,6 +125,7 @@ func TestTokensTable(t *testing.T) {
 
 	key := x.DataKey("name", 1)
 	l := getNew(key, ps)
+	defer ps.Delete(key)
 
 	edge := &protos.DirectedEdge{
 		Value:  []byte("david"),
@@ -161,7 +155,7 @@ func TestTokensTable(t *testing.T) {
 	x.Check(pl.Unmarshal(slice))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
-	deletePl(t, l)
+	deletePl(t)
 }
 
 // tokensForTest returns keys for a table. This is just for testing / debugging.
@@ -282,9 +276,11 @@ func TestRebuildIndex(t *testing.T) {
 	require.EqualValues(t, 1, idxVals[1].Postings[0].Uid)
 
 	l1, _ := GetOrCreate(x.DataKey("name", 1), 1)
-	deletePl(t, l1)
+	ps.Delete(l1.key)
+	deletePl(t)
 	l2, _ := GetOrCreate(x.DataKey("name", 20), 1)
-	deletePl(t, l2)
+	ps.Delete(l2.key)
+	deletePl(t)
 }
 
 func TestRebuildReverseEdges(t *testing.T) {

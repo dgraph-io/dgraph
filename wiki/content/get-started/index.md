@@ -4,6 +4,8 @@ title = "Get Started"
 
 **New to Dgraph? Here's a 5 step tutorial to get you up and running.**
 
+This is a quick-start guide to running Dgraph, for a walk through, take the [tour](https://tour.dgraph.io)
+
 ![logo](https://img.shields.io/badge/status-alpha-red.svg)
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://docs.dgraph.io)
 [![Build Status](https://travis-ci.org/dgraph-io/dgraph.svg?branch=master)](https://travis-ci.org/dgraph-io/dgraph)
@@ -11,19 +13,21 @@ title = "Get Started"
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
 
-## Step 1: Installation
+## Step 1: Install Dgraph
 
-### System Installation
+Dgraph can be installed from the install scripts, or deployed in Docker.
 
-You could simply install the binaries with
+### From Install Scripts
+
+Install the binaries with
 
 ```sh
 curl https://get.dgraph.io -sSf | bash
 ```
 
-That script would automatically install Dgraph for you. Once done, you can jump straight to [step 2]({{< relref "#step-2-run-dgraph" >}}).
+The script automatically installs Dgraph. Once done, jump straight to [step 2]({{< relref "#step-2-run-dgraph" >}}).
 
-**Alternative:** To mitigate potential security risks, you could instead do this:
+**Alternative:** To mitigate potential security risks, instead try:
 
 ```sh
 curl https://get.dgraph.io > /tmp/get.sh
@@ -31,9 +35,9 @@ vim /tmp/get.sh  # Inspect the script
 sh /tmp/get.sh   # Execute the script
 ```
 
-### Docker Image Installation
+### From Docker Image
 
-You may pull our Docker images [from here](https://hub.docker.com/r/dgraph/dgraph/). From terminal, just type:
+Pull the Dgraph Docker images [from here](https://hub.docker.com/r/dgraph/dgraph/). From a terminal:
 
 ```sh
 docker pull dgraph/dgraph
@@ -41,8 +45,8 @@ docker pull dgraph/dgraph
 
 ## Step 2: Run Dgraph
 
-### Using System Installation
-Follow this command to run Dgraph:
+### From Installed Binary
+If Dgraph was installed with the install script, run Dgraph with:
 
 ```sh
 dgraph
@@ -50,9 +54,7 @@ dgraph
 
 ### Using Docker
 
-{{% notice "tip" %}}
-If you want to persist the data while you play with Dgraph, you should mount the `dgraph` volume, using the `-v` flag.
-{{% /notice %}}
+The `-v` flag lets Docker mount a directory so that dgraph can persist data to disk and access files for loading data.
 
 #### Map to default port (8080 on the local interface)
 
@@ -68,12 +70,16 @@ mkdir -p ~/dgraph
 docker run -it -p 127.0.0.1:9090:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
-{{% notice "note" %}}The dgraph server listens on port 8080 (unless you have mapped to another port above) with log output to the terminal.{{% /notice %}}
+{{% notice "note" %}}The dgraph server listens on port 8080 (unless mapped to another port above) with log output to the terminal.{{% /notice %}}
 
-## Step 3: Run some queries
-{{% notice "tip" %}}From v0.7.3,  a user interface is available at [`http://localhost:8080`](http://localhost:8080) from the browser to run mutations and visualise  results from the queries.{{% /notice %}}
+## Step 3: Run Queries
+{{% notice "tip" %}}Once Dgraph is running, a user interface is available at [`http://localhost:8080`](http://localhost:8080).  It allows browser-based queries, mutations and visualizations.
 
-Lets do a mutation which stores information about the first three releases of the the ''Star Wars'' series and one of the ''Star Trek'' movies.
+The mutations and queries below can either be run from the command line using `curl localhost:8080/query -XPOST -d $'...'` or by pasting everything between the two `'` into the running user interface on localhost.{{% /notice %}}
+
+
+Changing the data or schema stored in Dgraph is a mutation.  The following mutation stores information about the first three releases of the the ''Star Wars'' series and one of the ''Star Trek'' movies.  Running this mutation, either through the UI or on the command line, will store the data in Dgraph.
+
 
 ```sh
 curl localhost:8080/query -XPOST -d $'
@@ -118,27 +124,31 @@ mutation {
    _:st1 <revenue> "139000000" .
    _:st1 <running_time> "132" .
   }
-}' | python -m json.tool | less
+}
+' | python -m json.tool | less
 ```
 
-Lets add a schema so that we can perform some interesting queries with term matching, filtering and sorting.
+Running this next mutation adds a schema and indexes some of the data so queries can use term matching, filtering and sorting.
 
 ```sh
 curl localhost:8080/query -XPOST -d $'
 mutation {
   schema {
     name: string @index .
-    release_date: date @index .
+    release_date: datetime @index .
     revenue: float .
     running_time: int .
   }
-}' | python -m json.tool | less
+}
+' | python -m json.tool | less
 ```
 
-Now lets get the movies (and their associated information) starting with "Star Wars" and which were released after "1980".
+Run this query to get "Star Wars" movies released after "1980".  Try it in the user interface to see the result as a graph.
+
 
 ```sh
-curl localhost:8080/query -XPOST -d $'{
+curl localhost:8080/query -XPOST -d $'
+{
   me(func:allofterms(name, "Star Wars")) @filter(ge(release_date, "1980")) {
     name
     release_date
@@ -151,7 +161,8 @@ curl localhost:8080/query -XPOST -d $'{
      name
     }
   }
-}' | python -m json.tool | less
+}
+' | python -m json.tool | less
 ```
 
 Output
@@ -207,11 +218,15 @@ Output
 }
 ```
 
-## Step 4: Advanced Queries on a larger dataset
-{{% notice "note" %}}Step 4 and 5 are optional. If you'd like to experiment with a larger dataset and explore more functionality, this section is for you.{{% /notice %}}
+
+
+
+## Step 4: Load a bigger dataset
+
+Step 3 showed how to add data with a small mutation.  Bigger datasets can be loaded with dgraphloader.
 
 ### Download dataset
-First, download the goldendata.rdf.gz dataset from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz) ([download](https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz)). Put it in `~/dgraph` directory, creating it if necessary using `mkdir ~/dgraph`.
+Download the goldendata.rdf.gz dataset from [here](https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz) ([download](https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz)). Put it directory`~/dgraph`, creating the directory if necessary using `mkdir ~/dgraph`.
 
 ```sh
 mkdir -p ~/dgraph
@@ -219,33 +234,38 @@ cd ~/dgraph
 wget "https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.rdf.gz?raw=true" -O goldendata.rdf.gz -q
 ```
 
-### Load dataset
+### Update schema
 
-Assuming that Dgraph is running as mentioned in Step 2.
-
-Lets add a type for `initial_release_date` which is a new predicate that we will be loading. Note the `name` predicate is already indexed from the previous step.
+The schema needs updating to index new predicates in the dataset.  The new dataset also contains a `name` predicate, but it is already indexed from the previous step.
 
 ```sh
 curl localhost:8080/query -XPOST -d '
 mutation {
   schema {
-    initial_release_date: date @index .
+    initial_release_date: datetime @index .
   }
-}'
+}
+'| python -m json.tool | less
 ```
 
-Now lets load the golden dataset that you previously downloaded by running the following in another terminal:
+### Load data with dgraphloader
+
+Load the downloaded dataset by running the following in a terminal.
 
 ```sh
 cd ~/dgraph # The directory where you downloaded the rdf.gz file.
 dgraphloader -r goldendata.rdf.gz
 ```
 
-### Using docker
+### Load data with Docker
+
+If Dgraph was started in Docker, then load the dataset with the following.
 
 ```sh
 docker exec -it dgraph dgraphloader -r goldendata.rdf.gz
 ```
+
+### Result
 
 Output
 
@@ -257,18 +277,19 @@ Time spent                : MMmSS.FFFFFFFFs
 RDFs processed per second : XXXXX
 ```
 
-{{% notice "tip" %}}Your counts should be the same, but your statistics will vary.{{% /notice %}}
+Your counts should be the same, but your statistics will vary.
 
-## Step 5: Run some queries
+## Step 5: Query Dataset
 
-{{% notice "tip" %}} From v0.7.3, a user interface is available at [`http://localhost:8080`](http://localhost:8080) from the browser to run mutations and visualise  results from the queries.{{% /notice %}}
+{{% notice "note" %}} By default, so anyone can run them, these queries run at http://play.dgraph.io, but, if you have followed the above instructions, then the queries can be run and visualized locally by copying to [`http://localhost:8080`](http://localhost:8080).{{% /notice %}}
 
 ### Movies by Steven Spielberg
 
-Let's now find all the entities named "Steven Spielberg" and the movies directed by them.
+This query finds director "Steven Spielberg" and the movies directed by him.  The movies are sorted by release date in descending order.  A visualization of the graph won't show the order, but the JSON result shows it.
 
-{{< runnable >}}{
-  director(func:allofterms(name, "steven spielberg")) {
+{{< runnable >}}
+{
+  director(func:allofterms(name, "steven spielberg")) @cascade {
     name@en
     director.film (orderdesc: initial_release_date) {
       name@en
@@ -278,15 +299,16 @@ Let's now find all the entities named "Steven Spielberg" and the movies directed
 }
 {{< /runnable >}}
 
-This query will return all the movies by the popular director Steven Spielberg, sorted by release date in descending order. The query  also returns two other entities which have "Steven Spielberg" in their names.
-
-{{% notice "tip" %}}You may use python or python3 equally well.{{% /notice %}}
 
 ### Released after August 1984
-Now, let's do some filtering. This time we'll only retrieve the movies which were released after August 1984. We'll sort in increasing order this time by using `orderasc`, instead of `orderdesc`.
 
-{{< runnable >}}{
-  director(func:allofterms(name, "steven spielberg")) {
+This query filters out some of the results from the previous query.  It still searches for movies by Steven Spielberg, but only those released after August 1984 and ordered by ascending date.
+
+We'll sort in increasing order this time by using `orderasc`, instead of `orderdesc`.
+
+{{< runnable >}}
+{
+  director(func:allofterms(name, "steven spielberg")) @cascade {
     name@en
     director.film (orderasc: initial_release_date) @filter(ge(initial_release_date, "1984-08")) {
       name@en
@@ -296,10 +318,12 @@ Now, let's do some filtering. This time we'll only retrieve the movies which wer
 }
 {{< /runnable >}}
 
-### Released in 1990s
-We'll now add an AND filter using `AND` and find only the movies released in the 90s.
+### Released in the 1990s
 
-{{< runnable >}}{
+Using `AND` two filters can be joined.
+
+{{< runnable >}}
+{
   director(func:allofterms(name, "steven spielberg")) {
     name@en
     director.film (orderasc: initial_release_date) @filter(ge(initial_release_date, "1990") AND le(initial_release_date, "2000")) {
@@ -312,29 +336,70 @@ We'll now add an AND filter using `AND` and find only the movies released in the
 
 
 ### Released since 2016
-So far, we've been retrieving film titles using the name of the director. Now, we'll start with films released since 2016, and their directors. To make things interesting, we'll only retrieve the director name, if it matches any of ''travis'' or ''knight''. In addition, we'll also alias `initial_release_date` to `release`. This will make the result look better.
+
+For the queries so far, the search has started with the name of a director.  But Dgraph can search in many ways.  This query finds films in the dataset released since 2016 and changes the name `initial_release_date` to `released` in the output.
 
 {{< runnable >}}{
   films(func:ge(initial_release_date, "2016")) {
     name@en
-    release: initial_release_date
-    directed_by @filter(anyofterms(name, "travis knight")) {
+    released: initial_release_date
+    directed_by {
       name@en
     }
   }
 }
 {{< /runnable >}}
 
-This should give you an idea of some of the queries Dgraph is capable of. A wider range of queries can been found in the [Query Language]({{< relref "query-language/index.md" >}}) section.
+These queries should give an idea of some of the things Dgraph is capable of.
+
+Take the [tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
+
+A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
+
+
+
+## Other Datasets
+
+The examples in the [Query Language]({{< relref "query-language/index.md" >}}) reference manual use the following datasets.
+
+* A dataset of movies and actors - 21million.rdf.gz [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz), and
+* A tourism dataset for geo-location queries - sf.tourism.gz [located here](https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz).
+
+To load this data into a local instance of Dgraph.  First, get the data:
+```
+cd ~/dgraph
+wget "https://github.com/dgraph-io/benchmarks/blob/master/data/21million.rdf.gz?raw=true" -O 21million.rdf.gz -q
+wget "https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz?raw=true" -O sf.tourism.gz -q
+```
+
+Then, using the same process as [schema updating]({{< relref "#update-schema" >}}) and [data loading]({{< relref "#load-data-with-dgraphloader" >}}) (or [with Docker]({{< relref "#load-data-with-docker" >}})) from Step 4 above, mutate the schema and load the data files.  The required schema is as follows.
+
+```
+mutation {
+  schema {
+    director.film: uid @reverse .
+    genre: uid @reverse .
+    initial_release_date: datetime @index .
+    rating: uid @reverse .
+    country: uid @reverse .
+    loc: geo @index .
+    name: string @index .
+  }
+}
+```
+
+Depending on the machine used, it can take a few minutes to load the 21 million triples.
+
 
 ## Need Help
+
 * Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
 * Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues) if you encounter bugs or have feature requests.
 * You can also join our [Slack channel](http://slack.dgraph.io).
 
 ## Troubleshooting
 
-### 1. Docker: Error initialising postings store
+### 1. Docker: Error initializing postings store
 
 One of the things to try would be to open bash in the container and try to run Dgraph from within it.
 

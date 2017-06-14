@@ -234,6 +234,7 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
 	}
 	keysBuffer := make([]fingerPrint, 0, n)
 
+	// Convert map to list.
 	for key := range dirtyMap {
 		delete(dirtyMap, key)
 		keysBuffer = append(keysBuffer, key)
@@ -248,9 +249,6 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
 		if len(keys) == 0 {
 			return
 		}
-		ctr := newCounters()
-		defer ctr.ticker.Stop()
-
 		for _, key := range keys {
 			l := lhmapFor(key.gid).Get(key.fp)
 			if l == nil {
@@ -258,9 +256,8 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
 			}
 			// Not removing the postings list from the map, to avoid a race condition,
 			// where another caller re-creates the posting list before a commit happens.
-			commitOne(l, ctr)
+			commitOne(l, nil)
 		}
-		ctr.log()
 	}(keysBuffer)
 }
 
@@ -488,9 +485,9 @@ func commitOne(l *List, c *counters) {
 	}
 	if merged, err := l.SyncIfDirty(context.Background()); err != nil {
 		log.Printf("Error while committing dirty list: %v\n", err)
-	} else if merged {
+	} else if merged && c != nil {
 		atomic.AddUint64(&c.done, 1)
-	} else {
+	} else if c != nil {
 		atomic.AddUint64(&c.noop, 1)
 	}
 }
@@ -546,7 +543,6 @@ type syncEntry struct {
 	val     []byte
 	water   *x.WaterMark
 	pending []uint64
-	sw      *x.SafeWait
 }
 
 func batchSync() {
@@ -576,7 +572,6 @@ func batchSync() {
 				wb = wb[:0]
 
 				for _, e := range entries {
-					e.sw.Done()
 					if e.water != nil {
 						e.water.Ch <- x.Mark{Indices: e.pending, Done: true}
 					}

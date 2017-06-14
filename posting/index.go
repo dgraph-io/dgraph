@@ -195,7 +195,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 	})
 	l.Lock()
 	defer l.Unlock()
-	return l.delete(ctx, t)
+	return l.delete(ctx, t.Attr)
 }
 
 // AddMutationWithIndex is AddMutation with support for indexing. It also

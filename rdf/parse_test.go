@@ -114,7 +114,7 @@ var testNQuads = []struct {
 			ObjectId:    "",
 			Lang:        "en-0",
 			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"Alice In Wonderland"}},
-			ObjectType:  10,
+			ObjectType:  9,
 		},
 	},
 	{
@@ -124,7 +124,7 @@ var testNQuads = []struct {
 			Predicate:   "name",
 			ObjectId:    "",
 			ObjectValue: &protos.Value{&protos.Value_StrVal{"Alice In Wonderland"}},
-			ObjectType:  10,
+			ObjectType:  9,
 		},
 	},
 	{
@@ -145,7 +145,7 @@ var testNQuads = []struct {
 			ObjectId:    "",
 			Lang:        "en-US",
 			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"N-Edges"}},
-			ObjectType:  10,
+			ObjectType:  9,
 		},
 	},
 	{
@@ -297,7 +297,7 @@ var testNQuads = []struct {
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: &protos.Value{&protos.Value_StrVal{"_nil_"}},
-			ObjectType:  10,
+			ObjectType:  9,
 		},
 		expectedErr: false,
 	},
@@ -324,7 +324,7 @@ var testNQuads = []struct {
 			ObjectId:    "",
 			ObjectValue: &protos.Value{&protos.Value_StrVal{"stuff"}},
 			Label:       "label",
-			ObjectType:  10,
+			ObjectType:  9,
 		},
 		expectedErr: false,
 	},
@@ -336,7 +336,7 @@ var testNQuads = []struct {
 			ObjectId:    "",
 			ObjectValue: &protos.Value{&protos.Value_StrVal{"stuff"}},
 			Label:       "_:label",
-			ObjectType:  10,
+			ObjectType:  9,
 		},
 		expectedErr: false,
 	},
@@ -348,7 +348,7 @@ var testNQuads = []struct {
 			ObjectId:    "",
 			ObjectValue: &protos.Value{&protos.Value_StrVal{"stuff"}},
 			Label:       "_:label",
-			ObjectType:  10,
+			ObjectType:  9,
 		},
 		expectedErr: false,
 	},
@@ -507,7 +507,7 @@ var testNQuads = []struct {
 			Predicate:   "lives",
 			Lang:        "a-b",
 			ObjectValue: &protos.Value{&protos.Value_DefaultVal{`\t\b\n\r\f\"\'\\`}},
-			ObjectType:  10,
+			ObjectType:  9,
 		},
 	},
 	{
@@ -809,6 +809,28 @@ var testNQuads = []struct {
 	{
 		input:       `<alice> <password> "guess"^^<pwd:password> .`,
 		expectedErr: true, // len(password) should >= 6
+	},
+	// Test variable in subject
+	{
+		input: `var(alice) <knows> "stuff" .`,
+		nq: protos.NQuad{
+			Predicate:   "knows",
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"stuff"}},
+			SubjectVar:  "alice",
+		},
+	},
+	// Test variable in object
+	{
+		input: `<alice> <knows> var(everyone) .`,
+		nq: protos.NQuad{
+			Subject:   "alice",
+			Predicate: "knows",
+			ObjectVar: "everyone",
+		},
+	},
+	{
+		input:       `var(alice) <knows> var(everyone) .`,
+		expectedErr: true, // cannot have variables in both subject and object.
 	},
 }
 

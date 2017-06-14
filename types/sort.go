@@ -51,8 +51,6 @@ func (s byValue) Less(i, j int) bool {
 	switch s.values[i].Tid {
 	case DateTimeID:
 		return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
-	case DateID:
-		return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
 	case IntID:
 		return (s.values[i].Value.(int64)) < (s.values[j].Value.(int64))
 	case FloatID:
@@ -71,7 +69,7 @@ func Sort(v []Val, ul *protos.List, desc bool) error {
 	}
 	typ := v[0].Tid
 	switch typ {
-	case DateTimeID, DateID, IntID, FloatID, StringID, DefaultID:
+	case DateTimeID, IntID, FloatID, StringID, DefaultID:
 		// Don't do anything, we can sort values of this type.
 	default:
 		return fmt.Errorf("Value of type: %s isn't sortable.", typ.Name())
@@ -93,8 +91,6 @@ func Less(a, b Val) (bool, error) {
 		return false, x.Errorf("Arguments of different type can not be compared.")
 	}
 	switch a.Tid {
-	case DateID:
-		return a.Value.(time.Time).Before(b.Value.(time.Time)), nil
 	case DateTimeID:
 		return a.Value.(time.Time).Before(b.Value.(time.Time)), nil
 	case IntID:
@@ -116,8 +112,6 @@ func Equal(a, b Val) (bool, error) {
 		return false, x.Errorf("Arguments of different type can not be compared.")
 	}
 	switch a.Tid {
-	case DateID:
-		return a.Value.(time.Time) == (b.Value.(time.Time)), nil
 	case DateTimeID:
 		return a.Value.(time.Time) == (b.Value.(time.Time)), nil
 	case IntID:

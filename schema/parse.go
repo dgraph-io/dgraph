@@ -18,6 +18,8 @@
 package schema
 
 import (
+	"strings"
+
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/tok"
@@ -70,7 +72,8 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*protos.SchemaUpda
 	if next.Typ != itemText {
 		return nil, x.Errorf("Missing Type")
 	}
-	typ := next.Val
+	typ := strings.ToLower(next.Val)
+	// We ignore the case for types.
 	t, ok := types.TypeForName(typ)
 	if !ok {
 		return nil, x.Errorf("Undefined Type")
@@ -163,7 +166,7 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 			return tokenizers, x.Errorf("Expected a comma but got: %v", next)
 		}
 		// Look for custom tokenizer.
-		tokenizer, has := tok.GetTokenizer(next.Val)
+		tokenizer, has := tok.GetTokenizer(strings.ToLower(next.Val))
 		if !has {
 			return tokenizers, x.Errorf("Invalid tokenizer %s", next.Val)
 		}
@@ -190,6 +193,55 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 	return tokenizers, nil
 }
 
+// resolveTokenizers resolves default tokenizers and verifies tokenizers definitions.
+func resolveTokenizers(updates []*protos.SchemaUpdate) error {
+	for _, schema := range updates {
+		typ := types.TypeID(schema.ValueType)
+
+		if (typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID) &&
+			schema.Directive == protos.SchemaUpdate_INDEX {
+			return x.Errorf("Indexing not allowed on predicate %s of type %s",
+				schema.Predicate, typ.Name())
+		}
+
+		if typ == types.UidID {
+			continue
+		}
+
+		if len(schema.Tokenizer) == 0 && schema.Directive == protos.SchemaUpdate_INDEX {
+			schema.Tokenizer = []string{tok.Default(typ).Name()}
+		} else if len(schema.Tokenizer) > 0 && schema.Directive != protos.SchemaUpdate_INDEX {
+			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
+		}
+		// check for valid tokeniser types and duplicates
+		var seen = make(map[string]bool)
+		var seenSortableTok bool
+		for _, t := range schema.Tokenizer {
+			tokenizer, has := tok.GetTokenizer(t)
+			if !has {
+				return x.Errorf("Invalid tokenizer %s", t)
+			}
+			if tokenizer.Type() != typ {
+				return x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
+					tokenizer.Name(), schema.Predicate, typ.Name())
+			}
+			if _, ok := seen[tokenizer.Name()]; !ok {
+				seen[tokenizer.Name()] = true
+			} else {
+				return x.Errorf("Duplicate tokenizers present for attr %s", schema.Predicate)
+			}
+			if tokenizer.IsSortable() {
+				if seenSortableTok {
+					return x.Errorf("More than one sortable index encountered for: %v",
+						schema.Predicate)
+				}
+				seenSortableTok = true
+			}
+		}
+	}
+	return nil
+}
+
 // Parse parses a schema string and returns the schema representation for it.
 func Parse(s string) ([]*protos.SchemaUpdate, error) {
 	var schemas []*protos.SchemaUpdate
@@ -200,6 +252,9 @@ func Parse(s string) ([]*protos.SchemaUpdate, error) {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemEOF:
+			if err := resolveTokenizers(schemas); err != nil {
+				return nil, x.Wrapf(err, "failed to enrich schema")
+			}
 			return schemas, nil
 		case itemText:
 			if schema, err := parseScalarPair(it, item.Val); err != nil {

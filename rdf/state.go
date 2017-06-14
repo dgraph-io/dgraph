@@ -42,6 +42,8 @@ const (
 	itemLeftRound                          // '(', 17
 	itemRightRound                         // ')', 18
 	itemStar                               // *, 19
+	itemVarKeyword                         // var, 20
+	itemVarName                            // 21
 )
 
 // These constants keep a track of the depth while parsing an rdf N-Quad.
@@ -138,6 +140,14 @@ Loop:
 				l.Emit(itemValidEnd)
 			}
 			break Loop
+
+		case r == 'v':
+			if l.Depth != atSubject && l.Depth != atObject {
+				return l.Errorf("Unexpected char 'v'")
+			}
+			l.Backup()
+			l.Emit(itemText)
+			return lexVariable
 
 		case isSpace(r):
 			continue
@@ -423,6 +433,49 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 	l.Emit(itemComment)
 	l.Emit(lex.ItemEOF)
 	return nil // Stop the run loop.
+}
+
+func lexVariable(l *lex.Lexer) lex.StateFn {
+	var r rune
+
+	for _, c := range "var" {
+		if r = l.Next(); r != c {
+			return l.Errorf("Unexpected char %c when parsing var keyword", r)
+		}
+	}
+	l.Emit(itemVarKeyword)
+	l.IgnoreRun(isSpace)
+
+	if r = l.Next(); r != '(' {
+		return l.Errorf("Expected '(' after var keyword, found: %c", r)
+	}
+	l.Emit(itemLeftRound)
+
+	l.IgnoreRun(isSpace)
+
+	for {
+		r := l.Next()
+		if r == lex.EOF {
+			return l.Errorf("Unexpected end of input while reading variable name.")
+		}
+		if r == ')' {
+			l.Backup()
+			break
+		}
+		if isSpace(r) {
+			break
+		}
+	}
+	l.Emit(itemVarName)
+
+	l.IgnoreRun(isSpace)
+
+	if r = l.Next(); r != ')' {
+		return l.Errorf("Expected ')' while reading var, found: %c", r)
+	}
+	l.Depth++
+
+	return lexText
 }
 
 func isClosingBracket(r rune) bool {

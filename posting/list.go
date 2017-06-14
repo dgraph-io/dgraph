@@ -29,7 +29,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/dgraph-io/badger/badger"
 	"github.com/dgryski/go-farm"
@@ -66,9 +65,8 @@ type List struct {
 	index       x.SafeMutex
 	key         []byte
 	ghash       uint64
-	pbuffer     unsafe.Pointer
+	plist       *protos.PostingList
 	mlayer      []*protos.Posting // mutations
-	pstore      *badger.KV        // postinglist store
 	lastCompact time.Time
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount    int32
@@ -99,9 +97,30 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
 	l.key = key
-	l.pstore = pstore
 	l.ghash = farm.Fingerprint64(key)
 	l.refcount = 1
+	l.Lock()
+
+	go func() {
+		defer l.Unlock()
+
+		var item badger.KVItem
+		var err error
+		for i := 0; i < 10; i++ {
+			if err = pstore.Get(l.key, &item); err == nil {
+				break
+			}
+		}
+		if err != nil {
+			x.Fatalf("Unable to retrieve val for key: %q. Error: %v", err, l.key)
+		}
+		val := item.Value()
+
+		l.plist = new(protos.PostingList)
+		if val != nil {
+			x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
+		}
+	}()
 	return l
 }
 
@@ -183,51 +202,10 @@ func newPosting(t *protos.DirectedEdge) *protos.Posting {
 	}
 }
 
-func (l *List) WaitForCommit() {
-	l.RLock()
-	defer l.RUnlock()
-	l.Wait()
-}
-
 func (l *List) PostingList() *protos.PostingList {
 	l.RLock()
 	defer l.RUnlock()
-	return l.getPostingList(0)
-}
-
-// getPostingList tries to get posting list from l.pbuffer. If it is nil, then
-// we query RocksDB. There is no need for lock acquisition here.
-func (l *List) getPostingList(loop int) *protos.PostingList {
-	if loop >= 10 {
-		x.Fatalf("This is over the 10th loop: %v", loop)
-	}
-	l.AssertRLock()
-	// Wait for any previous commits to happen before retrieving posting list again.
-	l.Wait()
-
-	pb := atomic.LoadPointer(&l.pbuffer)
-	plist := (*protos.PostingList)(pb)
-
-	if plist == nil {
-		x.AssertTrue(l.pstore != nil)
-		plist = new(protos.PostingList)
-
-		var item badger.KVItem
-		if err := l.pstore.Get(l.key, &item); err != nil {
-			// might be temporary disk failure
-			return l.getPostingList(loop + 1)
-		}
-		val := item.Value()
-		if val != nil {
-			x.Checkf(plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
-		}
-		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(plist)) {
-			return plist
-		}
-		// Someone else replaced the pointer in the meantime. Retry recursively.
-		return l.getPostingList(loop + 1)
-	}
-	return plist
+	return l.plist
 }
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
@@ -289,7 +267,7 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 	}
 
 	// Didn't find it in mutable layer. Now check the immutable layer.
-	pl := l.getPostingList(0)
+	pl := l.plist
 	pidx := sort.Search(len(pl.Postings), func(idx int) bool {
 		p := pl.Postings[idx]
 		return mpost.Uid <= p.Uid
@@ -429,11 +407,11 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	return hasMutated, nil
 }
 
-func (l *List) delete(ctx context.Context, t *protos.DirectedEdge) error {
+func (l *List) delete(ctx context.Context, attr string) error {
 	l.AssertLock()
 
-	atomic.StorePointer(&l.pbuffer, unsafe.Pointer(emptyList)) // Make this an empty list
-	l.mlayer = l.mlayer[:0]                                    // Clear the mutation layer.
+	l.plist = emptyList
+	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
 	atomic.StoreInt32(&l.deleteAll, 1)
 
 	var gid uint32
@@ -444,7 +422,7 @@ func (l *List) delete(ctx context.Context, t *protos.DirectedEdge) error {
 	}
 	// if mutation doesn't come via raft
 	if gid == 0 {
-		gid = group.BelongsTo(t.Attr)
+		gid = group.BelongsTo(attr)
 	}
 	if dirtyChan != nil {
 		dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
@@ -472,7 +450,7 @@ func (l *List) Iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	l.AssertRLock()
 	pidx, midx := 0, 0
-	pl := l.getPostingList(0)
+	pl := l.plist
 
 	postingLen := len(pl.Postings)
 	mlayerLen := len(l.mlayer)
@@ -530,7 +508,7 @@ func (l *List) Length(afterUid uint64) int {
 	defer l.RUnlock()
 
 	pidx, midx := 0, 0
-	pl := l.getPostingList(0)
+	pl := l.plist
 
 	if afterUid > 0 {
 		pidx = sort.Search(len(pl.Postings), func(idx int) bool {
@@ -558,13 +536,15 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
 
+	// deleteAll is used to differentiate when we don't have any updates, v/s
+	// when we have explicitly deleted everything.
 	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
 		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
 		l.pending = make([]uint64, 0, 3)
 		return false, nil
 	}
 
-	var final protos.PostingList
+	final := &protos.PostingList{}
 	ubuf := make([]byte, 16)
 	h := md5.New()
 	count := 0
@@ -594,12 +574,11 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		data, err = final.Marshal()
 		x.Checkf(err, "Unable to marshal posting list")
 	}
+	l.plist = final
 
-	sw := l.StartWait() // Corresponding l.Wait() in getPostingList.
 	ce := syncEntry{
 		key:     l.key,
 		val:     data,
-		sw:      sw,
 		water:   l.water,
 		pending: l.pending,
 	}
@@ -607,7 +586,6 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 
 	// Now reset the mutation variables.
 	l.pending = make([]uint64, 0, 3)
-	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.
 	l.mlayer = l.mlayer[:0]
 	l.lastCompact = time.Now()
 	atomic.StoreInt32(&l.deleteAll, 0) // Unset deleteAll
