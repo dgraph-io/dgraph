@@ -688,7 +688,8 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 			}
 		} else { // Others can have only 1 arg.
 			if len(args) != 1 {
-				return nil, x.Errorf("eq expects atleast 1 argument.")
+				return nil, x.Errorf("%+v expects only 1 argument. Got: %+v",
+					fc.fname, args)
 			}
 		}
 
