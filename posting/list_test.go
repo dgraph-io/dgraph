@@ -26,11 +26,11 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -67,7 +67,7 @@ func addMutation(t *testing.T, l *List, edge *protos.DirectedEdge, op uint32) {
 func deletePl(t *testing.T, l *List) {
 	lhmapFor(1).EachWithDelete(func(k uint64, l *List) {
 	})
-	require.NoError(t, l.pstore.Delete(l.key))
+	l.pstore.Delete(l.key)
 }
 
 func TestAddMutation(t *testing.T) {
@@ -743,7 +743,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	deletePl(t, ol)
 }
 
-var ps *store.Store
+var ps *badger.KV
 
 func TestMain(m *testing.M) {
 	x.SetTestRun()
@@ -752,9 +752,11 @@ func TestMain(m *testing.M) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
 
-	ps, err = store.NewStore(dir)
+	opt := badger.DefaultOptions
+	opt.Dir = dir
+	opt.ValueDir = dir
+	ps, err = badger.NewKV(&opt)
 	x.Check(err)
-
 	Init(ps)
 
 	group.ParseGroupConfig("")

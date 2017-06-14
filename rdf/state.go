@@ -23,7 +23,6 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 // The constants represent different types of lexed Items possible for an rdf N-Quad.
@@ -277,7 +276,7 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 		r := l.Next()
 		if r == '\u005c' { // backslash
 			r = l.Next()
-			if isEscChar(r) || lex.HasUChars(r, l) {
+			if l.IsEscChar(r) || lex.HasUChars(r, l) {
 				continue // This would skip over the escaped rune.
 			}
 			return l.Errorf("Invalid escape character : %v in literal", r)
@@ -398,7 +397,7 @@ forLoop:
 			l.Emit(lex.ItemEOF)
 			return nil
 		case r == quote:
-			if err := lexQuotedString(l); err != nil {
+			if err := l.LexQuotedString(); err != nil {
 				return l.Errorf(err.Error())
 			}
 			l.Emit(itemText)
@@ -424,31 +423,6 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 	l.Emit(itemComment)
 	l.Emit(lex.ItemEOF)
 	return nil // Stop the run loop.
-}
-
-func lexQuotedString(l *lex.Lexer) error {
-	l.Backup()
-	r := l.Next()
-	if r != quote {
-		return x.Errorf("String should start with quote.")
-	}
-	for {
-		r := l.Next()
-		if r == lex.EOF {
-			return x.Errorf("Unexpected end of input.")
-		}
-		if r == '\\' {
-			r := l.Next()
-			if !isEscChar(r) {
-				return x.Errorf("Not a valid escape char: %v", r)
-			}
-			continue // eat the next char
-		}
-		if r == quote {
-			break
-		}
-	}
-	return nil
 }
 
 func isClosingBracket(r rune) bool {
@@ -538,13 +512,4 @@ func isPNChar(r rune) bool {
 		return isPNCharsU(r)
 	}
 	return true
-}
-
-// ECHAR ::= '\' [tbnrf"'\]
-func isEscChar(r rune) bool {
-	switch r {
-	case 't', 'b', 'n', 'r', 'f', '"', '\'', '\\':
-		return true
-	}
-	return false
 }

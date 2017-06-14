@@ -22,18 +22,6 @@ ls -la goldendata.rdf.gz
 benchmark=$(pwd)
 popd &> /dev/null
 
-if [[ "${TRAVIS_OS_NAME}" == "osx" ]]; then
-  export LIBRARY_PATH=$LIBRARY_PATH:/usr/local/lib;
-  export C_INCLUDE_PATH=$C_INCLUDE_PATH:/usr/local/include;
-else
-  ROCKSDBDIR=$BUILD/rocksdb-5.1.4
-
-  # build flags needed for rocksdb
-  export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
-  export CGO_LDFLAGS="-L${ROCKSDBDIR}"
-  export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
-fi
-
 pushd cmd/dgraph &> /dev/null
 go build .
 ./dgraph -gentlecommit 1.0 &
@@ -45,7 +33,7 @@ sleep 15
 curl -X POST  -d 'mutation {
   schema {
 	  name: string @index .
-	  initial_release_date: date @index .
+	  initial_release_date: datetime @index .
 	}
 }' "http://localhost:8080/query"
 
@@ -59,6 +47,11 @@ sleep 20
 
 pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/indextest &> /dev/null
 
+function quit {
+	curl localhost:8080/admin/shutdown
+	return $1
+}
+
 function run_index_test {
 	X=$1
 	GREPFOR=$2
@@ -66,7 +59,7 @@ function run_index_test {
     N=`curl localhost:8080/query -XPOST -d @${X}.in 2> /dev/null | python -m json.tool | grep $GREPFOR | wc -l`
 	if [[ ! "$N" -eq "$ANS" ]]; then
 	  echo "Index test failed: ${X}  Expected: $ANS  Got: $N"
-	  exit 1
+	  quit 1
 	fi
 }
 run_index_test basic name 138676
@@ -77,8 +70,8 @@ run_index_test releasedate release_date 137858
 run_index_test releasedate_sort release_date 137858
 run_index_test releasedate_sort_first_offset release_date 2315
 run_index_test releasedate_geq release_date 60991
-run_index_test gen_anyof_good_bad name 1104
+run_index_test gen_anyof_good_bad name 1103
 
 popd &> /dev/null
 
-curl localhost:8080/admin/shutdown
+quit 0

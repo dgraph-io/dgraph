@@ -30,7 +30,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -106,11 +105,10 @@ func (req *Req) AddMutation(nq protos.NQuad, op Op) error {
 }
 
 func AddFacet(key string, val string, nq *protos.NQuad) error {
-	facet, err := facets.FacetFor(key, val)
-	if err != nil {
-		return err
-	}
-	nq.Facets = append(nq.Facets, facet)
+	nq.Facets = append(nq.Facets, &protos.Facet{
+		Key: key,
+		Val: val,
+	})
 	return nil
 }
 
@@ -266,11 +264,6 @@ func NewBatchMutation(ctx context.Context, client protos.DgraphClient,
 func (batch *BatchMutation) AddMutation(nq protos.NQuad, op Op) error {
 	if err := checkNQuad(nq); err != nil {
 		return err
-	}
-	if op == SET &&
-		((nq.ObjectType == int32(types.DefaultID) && nq.ObjectValue.GetDefaultVal() == "*") ||
-			(nq.ObjectType == int32(types.StringID) && nq.ObjectValue.GetStrVal() == "*")) {
-		return x.Errorf("Cannot set the value as '*'")
 	}
 	batch.nquads <- nquadOp{nq: nq, op: op}
 	atomic.AddUint64(&batch.rdfs, 1)

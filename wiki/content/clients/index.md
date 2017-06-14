@@ -243,7 +243,7 @@ An appropriate schema for the above example would be
 curl localhost:8080/query -XPOST -d $'
 mutation {
   schema {
-	now: datetime .
+	now: dateTime .
 	birthday: date .
 	age: int .
 	salary: float .

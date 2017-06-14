@@ -63,7 +63,6 @@ func TestConvertToDefault(t *testing.T) {
 }
 
 func TestConvertFromDefault(t *testing.T) {
-	val, _ := time.Parse(dateFormatY, "2016")
 	data := []struct {
 		in  Val
 		out Val
@@ -72,7 +71,6 @@ func TestConvertFromDefault(t *testing.T) {
 		{Val{DefaultID, []byte("1")}, Val{IntID, int64(1)}, IntID},
 		{Val{DefaultID, []byte("1.3")}, Val{FloatID, 1.3}, FloatID},
 		{Val{DefaultID, []byte("true")}, Val{BoolID, true}, BoolID},
-		{Val{DefaultID, []byte("2016")}, Val{DateID, val}, DateID},
 		{Val{DefaultID, []byte("2016")}, Val{BinaryID, []byte("2016")}, BinaryID},
 	}
 
@@ -110,38 +108,6 @@ func TestConversionToDateTime(t *testing.T) {
 
 	for _, tc := range data {
 		if val, err := Convert(tc.in, DateTimeID); err != nil {
-			t.Errorf("Unexpected error converting string to datetime: %v", err)
-		} else if !tc.out.Equal(val.Value.(time.Time)) {
-			t.Errorf("Converting string to datetime: Expected %+v, got %+v", tc.out, val.Value)
-		}
-	}
-}
-
-func TestConversionToDate(t *testing.T) {
-	data := []struct {
-		in  Val
-		out time.Time
-	}{
-		{
-			Val{StringID, []byte("2006-01-02T15:04:05")},
-			time.Date(2006, 01, 02, 0, 0, 0, 0, time.UTC),
-		},
-		{
-			Val{StringID, []byte("2006-01-02")},
-			time.Date(2006, 01, 02, 0, 0, 0, 0, time.UTC),
-		},
-		{
-			Val{StringID, []byte("2006-01")},
-			time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC),
-		},
-		{
-			Val{StringID, []byte("2006")},
-			time.Date(2006, 01, 01, 0, 0, 0, 0, time.UTC),
-		},
-	}
-
-	for _, tc := range data {
-		if val, err := Convert(tc.in, DateID); err != nil {
 			t.Errorf("Unexpected error converting string to datetime: %v", err)
 		} else if !tc.out.Equal(val.Value.(time.Time)) {
 			t.Errorf("Converting string to datetime: Expected %+v, got %+v", tc.out, val.Value)

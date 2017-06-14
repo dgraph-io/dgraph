@@ -24,16 +24,17 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/badger/badger"
+
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type Wal struct {
-	wals *store.Store
+	wals *badger.KV
 	id   uint64
 }
 
-func Init(walStore *store.Store, id uint64) *Wal {
+func Init(walStore *badger.KV, id uint64) *Wal {
 	return &Wal{wals: walStore, id: id}
 }
 
@@ -70,9 +71,7 @@ func (w *Wal) prefix(gid uint32) []byte {
 }
 
 func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
-	b := w.wals.NewWriteBatch()
-	defer b.Destroy()
-
+	wb := make([]*badger.Entry, 0, 100)
 	if raft.IsEmptySnap(s) {
 		return nil
 	}
@@ -84,32 +83,33 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	// Delete all entries before this snapshot to save disk space.
 	start := w.entryKey(gid, 0, 0)
 	last := w.entryKey(gid, s.Metadata.Term, s.Metadata.Index)
-	itr := w.wals.NewIterator()
+	opt := badger.DefaultIteratorOptions
+	opt.FetchValues = false
+	itr := w.wals.NewIterator(opt)
 	defer itr.Close()
 	for itr.Seek(start); itr.Valid(); itr.Next() {
-		key := itr.Key().Data()
+		key := itr.Item().Key()
 		if bytes.Compare(key, last) > 0 {
 			break
 		}
-		b.Delete(key)
+		wb = badger.EntriesDelete(wb, key)
 	}
-	b.Put(w.snapshotKey(gid), data)
+	wb = badger.EntriesSet(wb, w.snapshotKey(gid), data)
 	fmt.Printf("Writing snapshot to WAL: %+v\n", s)
-
-	return x.Wrapf(w.wals.WriteBatch(b), "wal.Store: While Store Snapshot")
+	w.wals.BatchSet(wb)
+	return nil
 }
 
 // Store stores the snapshot, hardstate and entries for a given RAFT group.
 func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
-	b := w.wals.NewWriteBatch()
-	defer b.Destroy()
+	wb := make([]*badger.Entry, 0, 100)
 
 	if !raft.IsEmptyHardState(h) {
 		data, err := h.Marshal()
 		if err != nil {
 			return x.Wrapf(err, "wal.Store: While marshal hardstate")
 		}
-		b.Put(w.hardStateKey(gid), data)
+		wb = badger.EntriesSet(wb, w.hardStateKey(gid), data)
 	}
 
 	var t, i uint64
@@ -120,7 +120,7 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 			return x.Wrapf(err, "wal.Store: While marshal entry")
 		}
 		k := w.entryKey(gid, e.Term, e.Index)
-		b.Put(k, data)
+		wb = badger.EntriesSet(wb, k, data)
 	}
 
 	// If we get no entries, then the default value of t and i would be zero. That would
@@ -130,48 +130,63 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 		// with Index >= i must be discarded.
 		start := w.entryKey(gid, t, i+1)
 		prefix := w.prefix(gid)
-		itr := w.wals.NewIterator()
+		opt := badger.DefaultIteratorOptions
+		opt.FetchValues = false
+		itr := w.wals.NewIterator(opt)
 		defer itr.Close()
 
-		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
-			b.Delete(itr.Key().Data())
+		for itr.Seek(start); itr.Valid(); itr.Next() {
+			key := itr.Item().Key()
+			if !bytes.HasPrefix(key, prefix) {
+				break
+			}
+			wb = badger.EntriesDelete(wb, key)
 		}
 	}
-
-	err := w.wals.WriteBatch(b)
-	return x.Wrapf(err, "wal.Store: While WriteBatch")
+	w.wals.BatchSet(wb)
+	return nil
 }
 
 func (w *Wal) Snapshot(gid uint32) (snap raftpb.Snapshot, rerr error) {
-	slice, err := w.wals.Get(w.snapshotKey(gid))
-	if err != nil || slice == nil {
-		return snap, x.Wrapf(err, "While getting snapshot")
+	var item badger.KVItem
+	if err := w.wals.Get(w.snapshotKey(gid), &item); err != nil {
+		rerr = x.Wrapf(err, "while fetching snapshot from wal")
+		return
 	}
-	rerr = x.Wrapf(snap.Unmarshal(slice.Data()), "While unmarshal snapshot")
-	slice.Free()
+	val := item.Value()
+	// Originally, with RocksDB, this can return an error and a non-null rdb.Slice object with Data=nil.
+	// And for this case, we do NOT return.
+	rerr = x.Wrapf(snap.Unmarshal(val), "While unmarshal snapshot")
 	return
 }
 
 func (w *Wal) HardState(gid uint32) (hd raftpb.HardState, rerr error) {
-	slice, err := w.wals.Get(w.hardStateKey(gid))
-	if err != nil || slice == nil {
-		return hd, x.Wrapf(err, "While getting hardstate")
+	var item badger.KVItem
+	if err := w.wals.Get(w.hardStateKey(gid), &item); err != nil {
+		rerr = x.Wrapf(err, "while fetching hardstate from wal")
+		return
 	}
-	rerr = x.Wrapf(hd.Unmarshal(slice.Data()), "While unmarshal hardstate")
-	slice.Free()
+	val := item.Value()
+	// Originally, with RocksDB, this can return an error and a non-null rdb.Slice object with Data=nil.
+	// And for this case, we do NOT return.
+	rerr = x.Wrapf(hd.Unmarshal(val), "While unmarshal hardstate")
 	return
 }
 
 func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry, rerr error) {
 	start := w.entryKey(gid, fromTerm, fromIndex)
 	prefix := w.prefix(gid)
-	itr := w.wals.NewIterator()
+	itr := w.wals.NewIterator(badger.DefaultIteratorOptions)
 	defer itr.Close()
 
-	for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
-		data := itr.Value().Data()
+	for itr.Seek(start); itr.Valid(); itr.Next() {
+		item := itr.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
 		var e raftpb.Entry
-		if err := e.Unmarshal(data); err != nil {
+		if err := e.Unmarshal(item.Value()); err != nil {
 			return es, x.Wrapf(err, "While unmarshal raftpb.Entry")
 		}
 		es = append(es, e)

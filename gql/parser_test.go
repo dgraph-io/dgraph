@@ -23,10 +23,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -182,6 +182,29 @@ func TestParseQueryWithDash(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, "alice-in-wonderland", res.Query[0].ID[0])
+	require.Equal(t, "written-in", res.Query[0].Children[1].Attr)
+}
+
+func TestParseQueryWithDash2(t *testing.T) {
+	query := `
+    {
+      me(id: [alice-in-wonderland, bob-here-too]) {
+        type
+        written-in
+        name
+        character {
+                name
+        }
+        author {
+                name
+                born
+                died
+        }
+      }
+    }`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, []string{"alice-in-wonderland", "bob-here-too"}, res.Query[0].ID)
 	require.Equal(t, "written-in", res.Query[0].Children[1].Attr)
 }
 
@@ -789,7 +812,7 @@ func TestParseQueryWithVarInIneqError(t *testing.T) {
 		}
 
 		me(id: var(fr)) @filter(gt(var(a, b), 10)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -808,7 +831,7 @@ func TestParseQueryWithVarInIneq(t *testing.T) {
 		}
 
 		me(id: var(fr)) @filter(gt(var(a), 10)) {
-		 name	
+		 name
 		}
 	}
 `
@@ -2149,8 +2172,9 @@ func TestParseFilter_Geo1(t *testing.T) {
 		}
 	}
 `
-	_, err := Parse(Request{Str: query, Http: true})
+	resp, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
+	require.Equal(t, []string{"[-1.12,2.0123]", "100.123"}, resp.Query[0].Children[0].Filter.Func.Args)
 }
 
 func TestParseFilter_Geo2(t *testing.T) {
@@ -2165,8 +2189,9 @@ func TestParseFilter_Geo2(t *testing.T) {
 		}
 	}
 `
-	_, err := Parse(Request{Str: query, Http: true})
+	resp, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
+	require.Equal(t, []string{"[[11.2,-2.234],[-31.23,4.3214],[5.312,6.53]]"}, resp.Query[0].Children[0].Filter.Func.Args)
 }
 
 func TestParseFilter_Geo3(t *testing.T) {
@@ -2635,6 +2660,32 @@ func TestLangsInvalid5(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestLangsInvalid6(t *testing.T) {
+	query := `
+		{
+			me(id:0x1004) {
+				name@hi:cn:...
+			}
+		}
+	`
+
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestLangsInvalid7(t *testing.T) {
+	query := `
+		{
+			me(id:0x1004) {
+				name@...
+			}
+		}
+	`
+
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
 func TestLangsFilter(t *testing.T) {
 	query := `
 	query {
@@ -2752,7 +2803,7 @@ func TestParseGroupbyRoot(t *testing.T) {
 		me(id: [1, 2, 3]) @groupby(friends) {
 				a as count(_uid_)
 		}
-		
+
 		groups(id: var(a)) {
 			_uid_
 			var(a)
@@ -3330,9 +3381,12 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	defer os.RemoveAll(dir)
 
-	ps, err := store.NewStore(dir)
-	x.Check(err)
+	opt := badger.DefaultOptions
+	opt.Dir = dir
+	opt.ValueDir = dir
+	ps, err := badger.NewKV(&opt)
 	defer ps.Close()
+	x.Check(err)
 
 	group.ParseGroupConfig("")
 	schema.Init(ps)
@@ -3377,4 +3431,111 @@ func TestCountAtRootErr2(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+}
+
+func TestHasFuncAtRoot(t *testing.T) {
+	query := `{
+		me(func: has(name@en)) {
+			name
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestHasFilterAtRoot(t *testing.T) {
+	query := `{
+		me(func: allofterms(name, "Steven Tom")) @filter(has(director.film)) {
+			name
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestHasFilterAtChild(t *testing.T) {
+	query := `{
+		me(func: anyofterms(name, "Steven Tom")) {
+			name
+			director.film @filter(has(genre)) {
+			}
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+// this test tests parsing of EOF inside '...'
+func TestDotsEOF(t *testing.T) {
+	query := `{
+		me(id: 0x1) {
+			name
+			..`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestMathWithoutVarAlias(t *testing.T) {
+	query := `{
+			f(func: anyofterms(name, "Rick Michonne Andrea")) {
+				ageVar as age
+				math(ageVar *2)
+			}
+		}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestMultipleEqual(t *testing.T) {
+	query := `{
+		me(func: eq(name,["Steven Spielberg", "Tom Hanks"])) {
+			name
+		}
+	}`
+
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 2, len(gql.Query[0].Func.Args))
+	require.Equal(t, "Tom Hanks", gql.Query[0].Func.Args[1])
+}
+
+func TestParseEqArg(t *testing.T) {
+	query := `
+	{
+		me(id: [1, 20]) @filter(eq(name, ["And\"rea", "Bob"])) {
+		 name
+		}
+	}
+`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
+}
+
+func TestParseEqArg2(t *testing.T) {
+	query := `
+	{
+		me(func: eq(age, [1, 20])) @filter(eq(name, ["And\"rea", "Bob"])) {
+		 name
+		}
+	}
+`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 2, len(gql.Query[0].Filter.Func.Args))
+	require.Equal(t, 2, len(gql.Query[0].Func.Args))
+}
+
+func TestFilterUid(t *testing.T) {
+	query := `
+	{
+		me(func: uid(1, 3 , 5, 7)) @filter(uid(3, 7)) {
+			name
+		}
+	}
+	`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, []string{"1", "3", "5", "7"}, gql.Query[0].Func.Args)
+	require.Equal(t, []string{"3", "7"}, gql.Query[0].Filter.Func.Args)
 }

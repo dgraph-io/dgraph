@@ -54,12 +54,12 @@ const (
 	itemRightRound                              // right round bracket
 	itemColon                                   // Colon
 	itemAt                                      // @
+	itemPeriod                                  // .
 	itemDollar                                  // $
 	itemRegex                                   // /
 	itemBackslash                               // \
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
-	itemThreeDots                               // three dots (...)
 	itemLeftSquare
 	itemRightSquare
 	itemComma
@@ -142,7 +142,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		switch r := l.Next(); {
 		case r == at:
 			l.Emit(itemAt)
-			return lexDirective
+			return lexDirectiveOrLangList
 		case isNameBegin(r) || isNumber(r):
 			empty = false
 			return lexArgName
@@ -203,6 +203,14 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemDollar)
 		case r == colon:
 			l.Emit(itemColon)
+		case r == quote:
+			{
+				empty = false
+				if err := l.LexQuotedString(); err != nil {
+					return l.Errorf(err.Error())
+				}
+				l.Emit(itemName)
+			}
 		case isEndLiteral(r):
 			{
 				empty = false
@@ -210,34 +218,14 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 				l.Next()                    // Consume the " .
 				l.Emit(itemName)
 			}
-		case r == '[':
-			{
-				depth := 1
-				for {
-					r := l.Next()
-					if r == lex.EOF || r == ')' {
-						return l.Errorf("Invalid bracket sequence")
-					} else if r == '[' {
-						depth++
-					} else if r == ']' {
-						depth--
-					}
-					if depth > 2 || depth < 0 {
-						return l.Errorf("Invalid bracket sequence")
-					} else if depth == 0 {
-						break
-					}
-				}
-				l.Emit(itemName)
-				empty = false
-				l.AcceptRun(isSpace)
-				l.Ignore()
-				if !isEndArg(l.Peek()) {
-					return l.Errorf("Invalid bracket sequence")
-				}
-			}
+		case r == leftSquare:
+			l.Emit(itemLeftSquare)
+		case r == rightSquare:
+			l.Emit(itemRightSquare)
 		case r == '#':
 			return lexComment
+		case r == '.':
+			l.Emit(itemPeriod)
 		default:
 			return l.Errorf("Unrecognized character in inside a func: %#U", r)
 		}
@@ -286,13 +274,7 @@ func lexQuery(l *lex.Lexer) lex.StateFn {
 	for {
 		switch r := l.Next(); {
 		case r == period:
-			if l.Next() == period && l.Next() == period {
-				l.Emit(itemThreeDots)
-				return lexName
-			}
-			// We do not expect a period at all. If you do, you may want to
-			// backup the two extra periods we try to read.
-			return l.Errorf("Unrecognized character in lexText: %#U", r)
+			l.Emit(itemPeriod)
 		case r == rightCurl:
 			l.Depth--
 			l.Emit(itemRightCurl)
@@ -324,7 +306,7 @@ func lexQuery(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemColon)
 		case r == at:
 			l.Emit(itemAt)
-			return lexDirective
+			return lexDirectiveOrLangList
 		case r == lsThan:
 			return lexIRIRef
 		default:
@@ -355,10 +337,13 @@ func lexFilterFuncName(l *lex.Lexer) lex.StateFn {
 	return l.Mode
 }
 
-// lexDirective is called right after we see a @.
-func lexDirective(l *lex.Lexer) lex.StateFn {
+// lexDirectiveOrLangList is called right after we see a @.
+func lexDirectiveOrLangList(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
-	if !isNameBegin(r) {
+	if r == period {
+		l.Emit(itemName)
+		return l.Mode
+	} else if !isNameBegin(r) {
 		return l.Errorf("Unrecognized character in lexDirective: %#U", r)
 	}
 

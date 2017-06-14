@@ -31,12 +31,12 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -68,7 +68,7 @@ type List struct {
 	ghash       uint64
 	pbuffer     unsafe.Pointer
 	mlayer      []*protos.Posting // mutations
-	pstore      *store.Store      // postinglist store
+	pstore      *badger.KV        // postinglist store
 	lastCompact time.Time
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount    int32
@@ -95,7 +95,7 @@ var listPool = sync.Pool{
 	},
 }
 
-func getNew(key []byte, pstore *store.Store) *List {
+func getNew(key []byte, pstore *badger.KV) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
 	l.key = key
@@ -212,9 +212,14 @@ func (l *List) getPostingList(loop int) *protos.PostingList {
 		x.AssertTrue(l.pstore != nil)
 		plist = new(protos.PostingList)
 
-		if slice, err := l.pstore.Get(l.key); err == nil && slice != nil {
-			x.Checkf(plist.Unmarshal(slice.Data()), "Unable to Unmarshal PostingList from store")
-			slice.Free()
+		var item badger.KVItem
+		if err := l.pstore.Get(l.key, &item); err != nil {
+			// might be temporary disk failure
+			return l.getPostingList(loop + 1)
+		}
+		val := item.Value()
+		if val != nil {
+			x.Checkf(plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 		}
 		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(plist)) {
 			return plist
@@ -579,9 +584,16 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		final.Postings = append(final.Postings, p)
 		return true
 	})
-	final.Checksum = h.Sum(nil)
-	data, err := final.Marshal()
-	x.Checkf(err, "Unable to marshal posting list")
+
+	var data []byte
+	if len(final.Postings) == 0 {
+		// This means we should delete the key from store during SyncIfDirty.
+		data = nil
+	} else {
+		final.Checksum = h.Sum(nil)
+		data, err = final.Marshal()
+		x.Checkf(err, "Unable to marshal posting list")
+	}
 
 	sw := l.StartWait() // Corresponding l.Wait() in getPostingList.
 	ce := syncEntry{
@@ -709,8 +721,13 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 	l.AssertRLock()
 	var found bool
 
+	any := false
 	// look for language in preffered order
 	for _, lang := range langs {
+		if lang == "." {
+			any = true
+			break
+		}
 		pos, rerr = l.postingForTag(lang)
 		if rerr == nil {
 			return pos, nil
@@ -718,12 +735,12 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 	}
 
 	// look for value without language
-	if !found {
+	if !found && (any || len(langs) == 0) {
 		found, pos = l.findPosting(math.MaxUint64)
 	}
 
 	// last resort - return value with smallest lang Uid
-	if !found {
+	if !found && any {
 		l.iterate(0, func(p *protos.Posting) bool {
 			if postingType(p) == x.ValueMulti {
 				pos = p

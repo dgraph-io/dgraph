@@ -1,10 +1,15 @@
-baseurl = "http://localhost:1313/latest"
+baseurl = "http://localhost:1313/"
 languageCode = "en-us"
 theme = "hugo-docs"
 
 # set by build script: title, baseurl
 title = "Dgraph Documentation"
 
+[[menu.main]]
+  name = "Home"
+  url = "/"
+  identifier = "home"
+  weight = -1
 [[menu.main]]
   name = "Get Started"
   url = "/get-started/"
@@ -46,7 +51,7 @@ title = "Dgraph Documentation"
   identifier = "design-concepts"
   weight = 8
 [[menu.main]]
-  name = "Dgraph compared to other databases"
-  url = "/dgraph-compared-to-other databases/"
-  identifier = "dgraph-compared-to-other databases"
+  name = "Dgraph Compared to Other Databases"
+  url = "/dgraph-compared-to-other-databases/"
+  identifier = "dgraph-compared-to-other-databases"
   weight = 9

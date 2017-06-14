@@ -21,9 +21,12 @@ We use `./scripts/local.sh` script to set env variables that our documentation t
 
 Now you can make changes to the docs and see them being updated instantly thanks to Hugo.
 
+* While running locally, the version selector does not work because you need to build the documentation and serve it behind a reverse proxy to have multiple versions.
+
 ### Branch
 
-Documentation **will only run and build on `master` or `release/vx.x.x` branches.** It is because the some examples need to be adjusted depending on Dgraph version, and the documentation generator needs to know the version before.
+Depending on what branch you are on, some code examples will dynamically change. For instance, go-grpc code examples will have different import path depending on branch name.
+
 
 ## Runnable
 

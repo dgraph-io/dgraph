@@ -29,13 +29,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -57,16 +57,17 @@ var m = `
 	}
 `
 
-func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
+func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {
 		return "", "", nil, err
 	}
-	ps, err = store.NewStore(dir1)
-	if err != nil {
-		return "", "", nil, err
-	}
+	opt := badger.DefaultOptions
+	opt.Dir = dir1
+	opt.ValueDir = dir1
+	ps, err = badger.NewKV(&opt)
+	x.Check(err)
 
 	dir2, err = ioutil.TempDir("", "wal_")
 	if err != nil {
@@ -154,10 +155,10 @@ func TestSchemaMutation(t *testing.T) {
 	var m = `
 	mutation {
 		schema {
-            name:string @index(term, exact) .
+      name:string @index(term, exact) .
 			alias:string @index(exact, term) .
-			dob:date @index .
-			film.film.initial_release_date:date @index .
+			dob:dateTime @index .
+			film.film.initial_release_date:dateTime @index .
 			loc:geo @index .
 			genre:uid @reverse .
 			survival_rate : float .
@@ -730,12 +731,12 @@ func TestSchemaConversion(t *testing.T) {
 	require.JSONEq(t, `{"user":[{"name2":1.5}]}`, output)
 }
 
-var qErr = `		
- 	mutation {		
- 		set {		
- 			<0x0> <name> "Alice" .		
- 		}		
- 	}		
+var qErr = `
+ 	mutation {
+ 		set {
+ 			<0x0> <name> "Alice" .
+ 		}
+ 	}
  `
 
 func TestMutationError(t *testing.T) {
@@ -945,7 +946,8 @@ func TestExpandPred(t *testing.T) {
 }
 func TestMain(m *testing.M) {
 	x.Init()
-	dir1, dir2, _, _ := prepare()
+	dir1, dir2, ps, _ := prepare()
+	defer ps.Close()
 	defer closeAll(dir1, dir2)
 	time.Sleep(5 * time.Second) // Wait for ME to become leader.
 

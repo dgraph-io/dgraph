@@ -23,6 +23,8 @@ import (
 	"io"
 	"sort"
 
+	"github.com/dgraph-io/badger/badger"
+
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -35,73 +37,69 @@ const (
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
 func writeBatch(ctx context.Context, kv chan *protos.KV, che chan error) {
-	wb := pstore.NewWriteBatch()
-	defer wb.Destroy()
-
+	wb := make([]*badger.Entry, 0, 100)
 	batchSize := 0
 	batchWriteNum := 1
 	for i := range kv {
-		wb.Put(i.Key, i.Val)
+		wb = badger.EntriesSet(wb, i.Key, i.Val)
 		batchSize += len(i.Key) + len(i.Val)
 		// We write in batches of size 32MB.
 		if batchSize >= 32*MB {
 			x.Trace(ctx, "SNAPSHOT: Doing batch write num: %d", batchWriteNum)
-			if err := pstore.WriteBatch(wb); err != nil {
-				che <- err
-				return
-			}
+			pstore.BatchSet(wb)
 
 			batchWriteNum++
 			// Resetting batch size after a batch write.
 			batchSize = 0
 			// Since we are writing data in batches, we need to clear up items enqueued
 			// for batch write after every successful write.
-			wb.Clear()
+			wb = wb[:0]
 		}
 	}
 	// After channel is closed the above loop would exit, we write the data in
 	// write batch here.
 	if batchSize > 0 {
 		x.Trace(ctx, "Doing batch write %d.", batchWriteNum)
-		che <- pstore.WriteBatch(wb) // Returning, wb will be destroyed. No need to clear.
-		return
+		pstore.BatchSet(wb)
 	}
 	che <- nil
 }
 
 func streamKeys(stream protos.Worker_PredicateAndSchemaDataClient, groupId uint32) error {
-	it := pstore.NewIterator()
+	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
 	g := &protos.GroupKeys{
 		GroupId: groupId,
 	}
 
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		k, v := it.Key(), it.Value()
-		pk := x.Parse(k.Data())
-
+	// Do NOT go to next by default. Be careful when you "continue" in loop.
+	for it.Rewind(); it.Valid(); {
+		iterItem := it.Item()
+		k := iterItem.Key()
+		pk := x.Parse(k)
 		if pk == nil {
+			it.Next()
 			continue
 		}
 		// No need to send KC for schema keys, since we won't save anything
 		// by sending checksum of schema key
 		if pk.IsSchema() {
 			it.Seek(pk.SkipSchema())
-			it.Prev()
+			// Do not go next.
 			continue
 		}
 		if group.BelongsTo(pk.Attr) != g.GroupId {
 			it.Seek(pk.SkipPredicate())
-			it.Prev() // To tackle it.Next() called by default.
+			// Do not go next.
 			continue
 		}
 
 		var pl protos.PostingList
-		x.Check(pl.Unmarshal(v.Data()))
+		x.Check(pl.Unmarshal(iterItem.Value()))
 
-		kdup := make([]byte, len(k.Data()))
-		copy(kdup, k.Data())
+		kdup := make([]byte, len(k))
+		copy(kdup, k)
 		key := &protos.KC{
 			Key:      kdup,
 			Checksum: pl.Checksum,
@@ -113,6 +111,7 @@ func streamKeys(stream protos.Worker_PredicateAndSchemaDataClient, groupId uint3
 			}
 			g.Keys = g.Keys[:0]
 		}
+		it.Next()
 	}
 	if err := stream.Send(g); err != nil {
 		return x.Wrapf(err, "While sending group keys to server.")
@@ -219,33 +218,38 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
 	// RocksDB library we are using.
 	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
-	it := pstore.NewIterator()
+	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
 	var count int
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		k, v := it.Key(), it.Value()
-		pk := x.Parse(k.Data())
+	// Do NOT it.Next() by default. Be careful when you "continue" in loop!
+	for it.Rewind(); it.Valid(); {
+		iterItem := it.Item()
+		k := iterItem.Key()
+		pk := x.Parse(k)
 
 		if pk == nil {
+			it.Next()
 			continue
 		}
 		if group.BelongsTo(pk.Attr) != gkeys.GroupId && !pk.IsSchema() {
 			it.Seek(pk.SkipPredicate())
-			it.Prev() // To tackle it.Next() called by default.
+			// Do not go next.
 			continue
 		} else if group.BelongsTo(pk.Attr) != gkeys.GroupId {
+			it.Next()
 			continue
 		}
 
 		// No checksum check for schema keys
+		v := iterItem.Value()
 		if !pk.IsSchema() {
 			var pl protos.PostingList
-			x.Check(pl.Unmarshal(v.Data()))
+			x.Check(pl.Unmarshal(v))
 
 			idx := sort.Search(len(gkeys.Keys), func(i int) bool {
 				t := gkeys.Keys[i]
-				return bytes.Compare(k.Data(), t.Key) <= 0
+				return bytes.Compare(k, t.Key) <= 0
 			})
 
 			if idx < len(gkeys.Keys) {
@@ -253,8 +257,9 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 				t := gkeys.Keys[idx]
 				// Different keys would have the same prefix. So, check Checksum first,
 				// it would be cheaper when there's no match.
-				if bytes.Equal(pl.Checksum, t.Checksum) && bytes.Equal(k.Data(), t.Key) {
+				if bytes.Equal(pl.Checksum, t.Checksum) && bytes.Equal(k, t.Key) {
 					// No need to send this.
+					it.Next()
 					continue
 				}
 			}
@@ -263,19 +268,16 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		// We just need to stream this kv. So, we can directly use the key
 		// and val without any copying.
 		kv := &protos.KV{
-			Key: k.Data(),
-			Val: v.Data(),
+			Key: k,
+			Val: v,
 		}
 
 		count++
 		if err := stream.Send(kv); err != nil {
 			return err
 		}
+		it.Next()
 	} // end of iterator
 	x.Trace(stream.Context(), "Sent %d keys to client. Done.\n", count)
-
-	if err := it.Err(); err != nil {
-		return err
-	}
 	return nil
 }

@@ -60,7 +60,6 @@ func init() {
 	RegisterTokenizer(GeoTokenizer{})
 	RegisterTokenizer(IntTokenizer{})
 	RegisterTokenizer(FloatTokenizer{})
-	RegisterTokenizer(DateTokenizer{})
 	RegisterTokenizer(DateTimeTokenizer{})
 	RegisterTokenizer(TermTokenizer{})
 	RegisterTokenizer(ExactTokenizer{})
@@ -70,7 +69,6 @@ func init() {
 	SetDefault(types.GeoID, "geo")
 	SetDefault(types.IntID, "int")
 	SetDefault(types.FloatID, "float")
-	SetDefault(types.DateID, "date")
 	SetDefault(types.DateTimeID, "datetime")
 	SetDefault(types.StringID, "term")
 	SetDefault(types.BoolID, "bool")
@@ -156,17 +154,6 @@ func (t FloatTokenizer) Tokens(sv types.Val) ([]string, error) {
 func (t FloatTokenizer) Identifier() byte { return 0x7 }
 func (t FloatTokenizer) IsSortable() bool { return true }
 func (t FloatTokenizer) IsLossy() bool    { return true }
-
-type DateTokenizer struct{}
-
-func (t DateTokenizer) Name() string       { return "date" }
-func (t DateTokenizer) Type() types.TypeID { return types.DateID }
-func (t DateTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Year())), t.Identifier())}, nil
-}
-func (t DateTokenizer) Identifier() byte { return 0x3 }
-func (t DateTokenizer) IsSortable() bool { return true }
-func (t DateTokenizer) IsLossy() bool    { return true }
 
 type DateTimeTokenizer struct{}
 

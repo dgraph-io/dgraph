@@ -23,26 +23,26 @@ import (
 	"net"
 	"testing"
 
+	"github.com/dgraph-io/badger/badger"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func checkShard(ps *store.Store) (int, []byte) {
-	it := ps.NewIterator()
+func checkShard(ps *badger.KV) (int, []byte) {
+	it := ps.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
 	count := 0
-	for it.SeekToFirst(); it.Valid(); it.Next() {
+	for it.Rewind(); it.Valid(); it.Next() {
 		count++
 	}
-	return count, it.Key().Data()
+	return count, it.Item().Key()
 }
 
-func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store) {
+func writePLs(t *testing.T, pred string, count int, vid uint64, ps *badger.KV) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i))
 		list, _ := posting.GetOrCreate(k, 0)

@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/wkb"
@@ -40,7 +41,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -71,24 +71,27 @@ func populateGraphBackup(t *testing.T) {
 	}
 }
 
-func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
+func initTestBackup(t *testing.T, schemaStr string) (string, *badger.KV) {
 	group.ParseGroupConfig("groups.conf")
 	schema.ParseBytes([]byte(schemaStr), 1)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
+	opt := badger.DefaultOptions
+	opt.Dir = dir
+	opt.ValueDir = dir
+	ps, err := badger.NewKV(&opt)
+	x.Check(err)
 
 	posting.Init(ps)
 	Init(ps)
 	val, err := (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
 	require.NoError(t, err)
-	ps.SetOne(x.SchemaKey("friend"), val)
+	ps.Set(x.SchemaKey("friend"), val)
 	val, err = (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
 	require.NoError(t, err)
-	ps.SetOne(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
+	ps.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
 	populateGraphBackup(t)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
@@ -155,7 +158,7 @@ func TestBackup(t *testing.T) {
 					require.Equal(t, int32(0), nq.ObjectType)
 				} else if nq.Subject == "0x2" {
 					// string type because of lang @en
-					require.Equal(t, int32(10), nq.ObjectType)
+					require.Equal(t, int32(9), nq.ObjectType)
 				}
 			}
 
