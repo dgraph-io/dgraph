@@ -280,7 +280,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		numPaths = 1
 	}
 
-	var kpaths []route
+	var kroutes []route
 	pq := make(priorityQueue, 0)
 	heap.Init(&pq)
 
@@ -307,8 +307,8 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		item := heap.Pop(&pq).(*Item)
 		if item.uid == sg.Params.To {
 			// Add path to list.
-			kpaths = append(kpaths, item.path)
-			if len(kpaths) == numPaths {
+			kroutes = append(kroutes, item.path)
+			if len(kroutes) == numPaths {
 				// We found the required number of paths.
 				break
 			}
@@ -362,22 +362,22 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 	next <- false
 
-	if len(kpaths) == 0 {
+	if len(kroutes) == 0 {
 		sg.DestUIDs = &protos.List{}
 		return nil, nil
 	}
 	var res []uint64
-	for _, it := range kpaths[0].route {
+	for _, it := range kroutes[0].route {
 		res = append(res, it.uid)
 	}
 	sg.DestUIDs.Uids = res
-	shortestSg := createKPathSubgraph(ctx, kpaths)
+	shortestSg := createkroutesubgraph(ctx, kroutes)
 	return shortestSg, nil
 }
 
-func createKPathSubgraph(ctx context.Context, kpaths []route) []*SubGraph {
+func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 	var res []*SubGraph
-	for _, it := range kpaths {
+	for _, it := range kroutes {
 		shortestSg := new(SubGraph)
 		shortestSg.Params = params{
 			Alias:  "_path_",
