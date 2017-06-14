@@ -37,7 +37,10 @@ func TestNewLexer(t *testing.T) {
 			}
 		}
 	}`
-	l := lex.NewLexer(input).Run(lexQuery)
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexQuery)
 
 	it := l.NewIterator()
 	for it.Next() {
@@ -64,7 +67,10 @@ func TestNewLexerMutation(t *testing.T) {
 			_city
 		}
 	}`
-	l := lex.NewLexer(input).Run(lexTopLevel)
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexTopLevel)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
@@ -91,7 +97,10 @@ func TestNewSchemaQuery(t *testing.T) {
 		pred
 		type
 	}`
-	l := lex.NewLexer(input).Run(lexTopLevel)
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexTopLevel)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
@@ -105,7 +114,10 @@ func TestAbruptSchemaQuery(t *testing.T) {
 	schema {
 		pred
 	`
-	l := lex.NewLexer(input).Run(lexTopLevel)
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexTopLevel)
 	var typ lex.ItemType
 	it := l.NewIterator()
 	for it.Next() {
@@ -124,7 +136,10 @@ func TestAbruptMutation(t *testing.T) {
 			Why is this #!!?
 			How is this?
 	}`
-	l := lex.NewLexer(input).Run(lexTopLevel)
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexTopLevel)
 	var typ lex.ItemType
 	it := l.NewIterator()
 	for it.Next() {
@@ -142,7 +157,10 @@ func TestVariables1(t *testing.T) {
 			_city
 		}
 	}`
-	l := lex.NewLexer(input).Run(lexTopLevel)
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexTopLevel)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
@@ -158,7 +176,10 @@ func TestVariables2(t *testing.T) {
 			_city
 		}
 	}`
-	l := lex.NewLexer(input).Run(lexTopLevel)
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexTopLevel)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
@@ -174,7 +195,10 @@ func TestVariablesDefault(t *testing.T) {
 			_city
 		}
 	}`
-	l := lex.NewLexer(input).Run(lexTopLevel)
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexTopLevel)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
@@ -190,7 +214,10 @@ func TestIRIRef(t *testing.T) {
 		        <http://verygood.com/what/about/you>
 		}
 	}`
-	l := lex.NewLexer(input).Run(lexTopLevel)
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexTopLevel)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
@@ -207,7 +234,10 @@ func TestLangSupport(t *testing.T) {
 		}
 	}
 	`
-	l := lex.NewLexer(input).Run(lexTopLevel)
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexTopLevel)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
@@ -224,7 +254,10 @@ func TestMultiLangSupport(t *testing.T) {
 		}
 	}
 	`
-	l := lex.NewLexer(input).Run(lexTopLevel)
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexTopLevel)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()

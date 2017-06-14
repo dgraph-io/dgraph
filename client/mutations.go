@@ -2,12 +2,10 @@ package client
 
 import (
 	"context"
-	// "encoding/binary"
 	"errors"
 	"fmt"
 	"log"
 	"math/rand"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,8 +14,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 
-	"github.com/dgraph-io/badger/badger"
-	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -39,7 +35,6 @@ type BatchMutationOptions struct {
 type allocator struct {
 	x.SafeMutex
 
-	kv *badger.KV
 	dc protos.DgraphClient
 
 	// TODO: Evict older entries
@@ -47,29 +42,6 @@ type allocator struct {
 
 	startId uint64
 	endId   uint64
-}
-
-func (a *allocator) getFromCache(id string) (uint64, error) {
-	a.AssertRLock()
-	if uid, found := a.ids[id]; found {
-		return uid, nil
-	}
-
-/*
-	var item badger.KVItem
-	if err := a.kv.Get([]byte(id), &item); err != nil {
-		return 0, err
-	}
-	val := item.Value()
-	if len(val) > 0 {
-		uid, n := binary.Uvarint(val)
-		if n <= 0 {
-			return 0, fmt.Errorf("Unable to parse val %q to uint64 for %q", val, id)
-		}
-		return uid, nil
-	}
-*/
-	return 0, nil
 }
 
 // TODO: Add for n later
@@ -92,16 +64,16 @@ func (a *allocator) fetchOne() (uint64, error) {
 func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool,
 	err error) {
 	a.RLock()
-	uid, err = a.getFromCache(id)
+	uid = a.ids[id]
 	a.RUnlock()
-	if err != nil || uid > 0 {
+	if uid > 0 {
 		return
 	}
 
 	a.Lock()
 	defer a.Unlock()
-	uid, err = a.getFromCache(id)
-	if err != nil || uid > 0 {
+	uid = a.ids[id]
+	if uid > 0 {
 		return
 	}
 
@@ -110,10 +82,6 @@ func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool,
 		return
 	}
 	a.ids[id] = uid
-
-	// var buf [20]byte
-	// n := binary.PutUvarint(buf[:], uid)
-	// go a.kv.Set([]byte(id), buf[:n])
 	isNew = true
 	err = nil
 	return
@@ -151,20 +119,10 @@ type Dgraph struct {
 // NewBatchMutation is used to create a new batch.
 // size is the number of RDF's that are sent as part of one request to Dgraph.
 // pending is the number of concurrent requests to make to Dgraph server.
-func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions,
-	clientDir string) *Dgraph {
+func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions) *Dgraph {
 	client := protos.NewDgraphClient(conn)
-	x.Check(os.MkdirAll(clientDir, 0700))
-	opt := badger.DefaultOptions
-	opt.SyncWrites = false
-	opt.MapTablesTo = table.LoadToRAM
-	opt.Dir = clientDir
-	opt.ValueDir = clientDir
-	kv, err := badger.NewKV(&opt)
-	x.Checkf(err, "Error while creating badger KV posting store")
 
 	alloc := &allocator{
-		kv:  kv,
 		dc:  client,
 		ids: make(map[string]uint64),
 	}

@@ -38,7 +38,6 @@ var (
 	dgraph     = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
-	clientDir  = flag.String("cd", "c", "Directory to store xid to uid mapping")
 	storeXid   = flag.Bool("x", false, "Store xids by adding corresponding _xid_ edges")
 	mode       = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
 	// TLS configuration
@@ -223,7 +222,7 @@ func main() {
 		Pending:       *concurrent,
 		PrintCounters: true,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts, *clientDir)
+	dgraphClient := client.NewDgraphClient(conn, bmOpts)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()

@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
@@ -31,7 +30,7 @@ func ExampleBatchMutation() {
 		Pending:       100,
 		PrintCounters: false,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts, "/tmp")
+	dgraphClient := client.NewDgraphClient(conn, bmOpts)
 
 	// Process your file, convert data to a protos.NQuad and add it to the batch.
 	// For each graph.NQuad, run batch.AddMutation (this would typically be done in a loop
@@ -106,7 +105,7 @@ func ExampleReq_AddMutation() {
 		Pending:       100,
 		PrintCounters: false,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts, "/tmp")
+	dgraphClient := client.NewDgraphClient(conn, bmOpts)
 
 	req := client.Req{}
 	person1, err := dgraphClient.NodeBlank("person1")
@@ -139,7 +138,7 @@ func ExampleReq_BatchMutation() {
 		Pending:       100,
 		PrintCounters: false,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts, "/tmp")
+	dgraphClient := client.NewDgraphClient(conn, bmOpts)
 
 	person1, err := dgraphClient.NodeBlank("person1")
 	if err != nil {
@@ -167,7 +166,7 @@ func ExampleReq_AddMutation_facets() {
 		Pending:       100,
 		PrintCounters: false,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts, "/tmp")
+	dgraphClient := client.NewDgraphClient(conn, bmOpts)
 
 	req := client.Req{}
 	person1, err := dgraphClient.NodeXid("person1", false)
@@ -214,7 +213,12 @@ func ExampleReq_AddMutation_schema() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := protos.NewDgraphClient(conn)
+	bmOpts := client.BatchMutationOptions{
+		Size:          1000,
+		Pending:       100,
+		PrintCounters: false,
+	}
+	dgraphClient := client.NewDgraphClient(conn, bmOpts)
 
 	req := client.Req{}
 	// Doing mutation and setting schema, then getting schema.
@@ -228,7 +232,7 @@ mutation {
 
 schema {}
 `)
-	resp, err := dgraphClient.Run(context.Background(), req.Request())
+	resp, err := dgraphClient.Run(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
@@ -245,7 +249,7 @@ func ExampleReq_SetQuery() {
 		Pending:       100,
 		PrintCounters: false,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts, "/tmp")
+	dgraphClient := client.NewDgraphClient(conn, bmOpts)
 
 	req := client.Req{}
 	alice, err := dgraphClient.NodeXid("alice", false)
@@ -275,7 +279,12 @@ func ExampleReq_SetQueryWithVariables() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := protos.NewDgraphClient(conn)
+	bmOpts := client.BatchMutationOptions{
+		Size:          1000,
+		Pending:       100,
+		PrintCounters: false,
+	}
+	dgraphClient := client.NewDgraphClient(conn, bmOpts)
 
 	req := client.Req{}
 	variables := make(map[string]string)
@@ -290,6 +299,6 @@ func ExampleReq_SetQueryWithVariables() {
 				}
 			}
 		}`, variables)
-	resp, err := dgraphClient.Run(context.Background(), req.Request())
+	resp, err := dgraphClient.Run(context.Background(), &req)
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 }

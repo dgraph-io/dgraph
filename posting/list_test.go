@@ -484,7 +484,7 @@ func TestAddMutation_gru(t *testing.T) {
 }
 
 func TestAddMutation_gru2(t *testing.T) {
-	key := x.DataKey("question.tag", 0x01)
+	key := x.DataKey("question.tag", 0x100)
 	ol := getNew(key, ps)
 
 	{
