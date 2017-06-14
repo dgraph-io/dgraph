@@ -341,6 +341,10 @@ func intersectBucket(ts *protos.SortMessage, attr, token string, out []intersect
 			return err
 		}
 
+		// Result set might have reduced after sorting. As some uids might not have a
+		// value in the lang specified.
+		n = len(result.Uids)
+
 		if il.offset > 0 {
 			// Apply the offset.
 			result.Uids = result.Uids[il.offset:n]
