@@ -36,7 +36,8 @@ const (
 // runMutations goes through all the edges and applies them. If error occurs processing is stopped.
 // Function returns the index of mutation that caused processing to stop.
 func runMutations(ctx context.Context, edges []*protos.DirectedEdge) (i int, err error) {
-	for i, edge := range edges {
+	var edge *protos.DirectedEdge
+	for i, edge = range edges {
 		gid := group.BelongsTo(edge.Attr)
 		if !groups().ServesGroup(gid) {
 			return 0, x.Errorf("Predicate fingerprint doesn't match this instance")

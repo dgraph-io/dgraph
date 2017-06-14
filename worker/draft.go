@@ -444,6 +444,7 @@ func (n *node) processMutation(e raftpb.Entry, m *protos.Mutations) error {
 	hub := getUpdateHub()
 	if hub.HasSubscribers() {
 		preds := getPredicates(m, success)
+		fmt.Println("tzdybal: mutation preds:", preds)
 		hub.PredicatesUpdated(preds)
 	}
 

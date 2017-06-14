@@ -22,23 +22,41 @@ import (
 	"sort"
 	"sync/atomic"
 
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/protos"
 )
 
 // topic groups all subscribers interested in single predicate
 type topic struct {
-	subscribers []*UpdateSubscriber
+	subscribers []UpdateSubscriber
 }
 
-type UpdateSubscriber struct {
+type UpdateSubscriber interface {
+	NeedsUpdate() bool
+	RequireUpdate(bool)
+	UpdatesChan() chan bool
+	Context() context.Context
+}
+
+type basicSubscriber struct {
 	needsUpdate bool
 	updatesChan chan bool
-	server      protos.Worker_SubscribeServer
+}
+
+type NetworkSubscriber struct {
+	basicSubscriber
+	server protos.Worker_SubscribeServer
+}
+
+type LocalSubscriber struct {
+	basicSubscriber
+	ctx context.Context
 }
 
 type subscription struct {
 	predicates []string
-	subscriber *UpdateSubscriber
+	subscriber UpdateSubscriber
 }
 
 // one channel per subscriber
@@ -72,10 +90,11 @@ func (h *UpdateHub) Run() {
 
 func (h *UpdateHub) HasSubscribers() bool {
 	cnt := atomic.LoadInt64(&h.count)
+	fmt.Println("tzdybal:", cnt)
 	return cnt != 0
 }
 
-func (h *UpdateHub) Subscribe(predicates []string, subscriber *UpdateSubscriber) {
+func (h *UpdateHub) Subscribe(predicates []string, subscriber UpdateSubscriber) {
 	h.subscriptions <- subscription{predicates, subscriber}
 }
 
@@ -102,6 +121,8 @@ func (h *UpdateHub) PredicatesUpdated(predicates []string) {
 func (h *UpdateHub) doUpdate(predicates []string) {
 	var updates []string
 
+	fmt.Println("tzdybal: doUpdate(", predicates, ")")
+
 	// find all subscribers that needs to be updated
 	for pred, topic := range h.topics {
 		i := sort.SearchStrings(predicates, pred)
@@ -110,6 +131,8 @@ func (h *UpdateHub) doUpdate(predicates []string) {
 			updates = append(updates, pred)
 		}
 	}
+
+	fmt.Println("tzdybal: doUpdate:updates:", updates, ")")
 
 	// notify subscribers about update - each subscrier is notified exaclty once
 	for _, pred := range updates {
@@ -122,13 +145,13 @@ func (h *UpdateHub) doUpdate(predicates []string) {
 }
 
 func newTopic() *topic {
-	return &topic{subscribers: make([]*UpdateSubscriber, 0, 10)}
+	return &topic{subscribers: make([]UpdateSubscriber, 0, 10)}
 }
 
 func (t *topic) requireUpdate() {
 	for _, sub := range t.subscribers {
-		if sub.needsUpdate == false {
-			sub.needsUpdate = true
+		if sub.NeedsUpdate() == false {
+			sub.RequireUpdate(true)
 		}
 	}
 }
@@ -138,12 +161,14 @@ func (t *topic) predicateUpdated() {
 	last := len(subs)
 	for i := 0; i < last; i++ {
 		sub := subs[i]
-		if sub.server.Context().Err() == nil {
-			if sub.needsUpdate {
-				sub.updatesChan <- true
-				sub.needsUpdate = false
+		if sub.Context().Err() == nil {
+			fmt.Println("tzdybal: notifying!")
+			if sub.NeedsUpdate() {
+				sub.UpdatesChan() <- true
+				sub.RequireUpdate(false)
 			}
 		} else {
+			fmt.Println("tzdybal: removing!")
 			// remove by swapping with last element and decreasing size
 			subs[i] = subs[last-1]
 			subs[last-1] = nil
@@ -155,11 +180,11 @@ func (t *topic) predicateUpdated() {
 	t.subscribers = subs
 }
 
-func NewUpdateSubscriber(server protos.Worker_SubscribeServer) *UpdateSubscriber {
-	return &UpdateSubscriber{false, make(chan bool), server}
+func NewNetworkSubscriber(server protos.Worker_SubscribeServer) NetworkSubscriber {
+	return NetworkSubscriber{basicSubscriber{false, make(chan bool)}, server}
 }
 
-func (s *UpdateSubscriber) Run() {
+func (s *NetworkSubscriber) Run() {
 	for {
 		select {
 		case <-s.updatesChan:
@@ -167,4 +192,50 @@ func (s *UpdateSubscriber) Run() {
 			s.server.Send(&protos.PredicateUpdate{})
 		}
 	}
+}
+
+func (s NetworkSubscriber) Context() context.Context {
+	return s.server.Context()
+}
+
+func (s NetworkSubscriber) NeedsUpdate() bool {
+	return s.needsUpdate
+}
+
+func (s NetworkSubscriber) RequireUpdate(update bool) {
+	s.needsUpdate = update
+}
+
+func (s NetworkSubscriber) UpdatesChan() chan bool {
+	return s.updatesChan
+}
+
+func NewLocalSubscriber(ctx context.Context) LocalSubscriber {
+	return LocalSubscriber{basicSubscriber{false, make(chan bool)}, ctx}
+}
+
+func (s *LocalSubscriber) Run() {
+	for {
+		fmt.Println("tzdybal: waiting for notification...")
+		select {
+		case <-s.updatesChan:
+			fmt.Println("tzdybal: subscriber notified!")
+		}
+	}
+}
+
+func (s LocalSubscriber) Context() context.Context {
+	return s.ctx
+}
+
+func (s LocalSubscriber) NeedsUpdate() bool {
+	return s.needsUpdate
+}
+
+func (s LocalSubscriber) RequireUpdate(update bool) {
+	s.needsUpdate = update
+}
+
+func (s LocalSubscriber) UpdatesChan() chan bool {
+	return s.updatesChan
 }
