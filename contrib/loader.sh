@@ -24,7 +24,7 @@ popd &> /dev/null
 
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph -gentlecommit 1.0 -x true &
+./dgraph -gentlecommit 1.0 &
 popd &> /dev/null
 
 sleep 15
@@ -40,7 +40,7 @@ curl -X POST  -d 'mutation {
 
 pushd cmd/dgraphloader &> /dev/null
 go build .
-./dgraphloader -r $benchmark/goldendata.rdf.gz
+./dgraphloader -r $benchmark/goldendata.rdf.gz -x true
 popd &> /dev/null
 
 # Lets wait for stuff to be committed to RocksDB.
