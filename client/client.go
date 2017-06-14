@@ -145,46 +145,10 @@ type nquadOp struct {
 	op Op
 }
 
-// Counter keeps a track of various parameters about a batch mutation.
-type Counter struct {
-	// Number of RDF's processed by server.
-	Rdfs uint64
-	// Number of mutations processed by the server.
-	Mutations uint64
-	// Time elapsed sinze the batch started.
-	Elapsed time.Duration
-}
-
 type Node uint64
 
 func (n Node) String() string {
 	return fmt.Sprintf("%#x", uint64(n))
-}
-
-func (n *Node) ScalarEdge(pred string, val interface{},
-	typ types.TypeID) (Edge, error) {
-	e := n.Edge(pred)
-	switch typ {
-	case types.StringID:
-		e.SetValueString(val.(string))
-	case types.DefaultID:
-		e.SetValueDefault(val.(string))
-	case types.DateTimeID:
-		e.SetValueDatetime(val.(time.Time))
-	case types.PasswordID:
-		e.SetValuePassword(val.(string))
-	case types.IntID:
-		e.SetValueInt(val.(int64))
-	case types.FloatID:
-		e.SetValueFloat(val.(float64))
-	case types.BoolID:
-		e.SetValueBool(val.(bool))
-	case types.GeoID:
-		e.SetValueGeoJson(val.(string))
-	default:
-		return emptyEdge, ErrInvalidType
-	}
-	return e, nil
 }
 
 func (n *Node) ConnectTo(pred string, n1 Node) Edge {

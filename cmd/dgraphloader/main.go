@@ -160,7 +160,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 		if len(nq.ObjectId) > 0 {
 			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
 		}
-		if err = dgraphClient.Set(client.NewEdge(nq)); err != nil {
+		if err = dgraphClient.BatchSet(client.NewEdge(nq)); err != nil {
 			log.Fatal("While adding mutation to batch: ", err)
 		}
 	}
@@ -223,7 +223,7 @@ func main() {
 	for _, file := range filesList {
 		processFile(file, dgraphClient)
 	}
-	dgraphClient.Flush()
+	dgraphClient.BatchFlush()
 
 	c := dgraphClient.Counter()
 	var rate uint64

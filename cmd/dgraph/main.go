@@ -184,16 +184,17 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 
 	if int(num.Val) > 0 {
 		var res *protos.AssignedIds
+		// TODO: Optimize later by prefetching
 		if res, err = worker.AssignUidsOverNetwork(ctx, num); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while AssignUidsOverNetwork for newUids: %v", num))
 			return mr, err
 		}
-		currId := res.StartId
+		curId := res.StartId
 		// assign generated ones now
 		for k := range newUids {
-			x.AssertTruef(currId != 0 && currId <= res.EndId, "not enough uids generated")
-			newUids[k] = currId
-			currId++
+			x.AssertTruef(curId != 0 && curId <= res.EndId, "not enough uids generated")
+			newUids[k] = curId
+			curId++
 		}
 	}
 

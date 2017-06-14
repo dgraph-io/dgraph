@@ -18,7 +18,6 @@ import (
 
 	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -42,20 +41,11 @@ type allocator struct {
 	kv *badger.KV
 	dc protos.DgraphClient
 
-	ids map[string]uint64
-
 	startId uint64
 	endId   uint64
 }
 
 func (a *allocator) getFromCache(id string) (uint64, error) {
-	a.RLock()
-	if uid, found := a.ids[id]; found && uid > 0 {
-		a.RUnlock()
-		return uid, nil
-	}
-	a.RUnlock()
-
 	var item badger.KVItem
 	if err := a.kv.Get([]byte(id), &item); err != nil {
 		return 0, err
@@ -71,19 +61,9 @@ func (a *allocator) getFromCache(id string) (uint64, error) {
 	return 0, nil
 }
 
-func (a *allocator) assingOrGet(id string) (uint64, error) {
-	uid, err := a.getFromCache(id)
-	if err != nil || uid > 0 {
-		return uid, err
-	}
-
-	uid, err = a.getFromCache(id)
-	if err != nil || uid > 0 {
-		return uid, err
-	}
-
-	a.Lock()
-	defer a.Unlock()
+// TODO: Add for n later
+func (a *allocator) fetchOne() (uint64, error) {
+	a.AssertLock()
 	if a.startId == 0 || a.endId < a.startId {
 		assignedIds, err := a.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
 		if err != nil {
@@ -93,15 +73,42 @@ func (a *allocator) assingOrGet(id string) (uint64, error) {
 		a.endId = assignedIds.EndId
 	}
 
-	uid = a.startId
+	uid := a.startId
 	a.startId++
-
-	buf := make([]byte, 20)
-	binary.PutUvarint(buf, uid)
-	a.ids[id] = uid
-	// Should be written to disk before mutation containing this node is persisted
-	go a.kv.Set([]byte(id), buf)
 	return uid, nil
+}
+
+func (a *allocator) assignOrGet(id string) (uint64, error) {
+	uid, err := a.getFromCache(id)
+	if err != nil || uid > 0 {
+		return uid, err
+	}
+
+	a.Lock()
+	defer a.Unlock()
+	uid, err = a.getFromCache(id)
+	if err != nil || uid > 0 {
+		return uid, err
+	}
+
+	uid, err = a.fetchOne()
+	if err != nil {
+		return 0, err
+	}
+	var buf [10]byte
+	n := binary.PutUvarint(buf[:0], uid)
+	a.kv.Set([]byte(id), buf[:n])
+	return uid, nil
+}
+
+// Counter keeps a track of various parameters about a batch mutation.
+type Counter struct {
+	// Number of RDF's processed by server.
+	Rdfs uint64
+	// Number of mutations processed by the server.
+	Mutations uint64
+	// Time elapsed sinze the batch started.
+	Elapsed time.Duration
 }
 
 type Dgraph struct {
@@ -131,16 +138,15 @@ func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions,
 	client := protos.NewDgraphClient(conn)
 	x.Check(os.MkdirAll(clientDir, 0700))
 	opt := badger.DefaultOptions
-	opt.SyncWrites = true
+	opt.SyncWrites = false
 	opt.Dir = clientDir
 	opt.ValueDir = clientDir
 	kv, err := badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 
 	alloc := &allocator{
-		kv:  kv,
-		dc:  client,
-		ids: make(map[string]uint64),
+		kv: kv,
+		dc: client,
 	}
 	d := &Dgraph{
 		opts:   opts,
@@ -244,7 +250,7 @@ LOOP:
 	d.wg.Done()
 }
 
-func (d *Dgraph) Set(e Edge) error {
+func (d *Dgraph) BatchSet(e Edge) error {
 	d.nquads <- nquadOp{
 		e:  e,
 		op: SET,
@@ -253,7 +259,7 @@ func (d *Dgraph) Set(e Edge) error {
 	return nil
 }
 
-func (d *Dgraph) Delete(e Edge) error {
+func (d *Dgraph) BatchDelete(e Edge) error {
 	d.nquads <- nquadOp{
 		e:  e,
 		op: DEL,
@@ -272,7 +278,7 @@ func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 
 // Flush waits for all pending requests to complete. It should always be called
 // after adding all the NQuads using batch.AddMutation().
-func (d *Dgraph) Flush() {
+func (d *Dgraph) BatchFlush() {
 	close(d.nquads)
 	close(d.schema)
 	d.wg.Wait()
@@ -315,9 +321,13 @@ func (d *Dgraph) NodeUid(uid uint64) Node {
 
 func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 	if len(varname) == 0 {
-		varname = fmt.Sprintf("noreuse-%x", rand.Uint64())
+		uid, err := d.alloc.fetchOne()
+		if err != nil {
+			return 0, err
+		}
+		return Node(uid), nil
 	}
-	uid, err := d.alloc.assingOrGet("_:" + varname)
+	uid, err := d.alloc.assignOrGet("_:" + varname)
 	if err != nil {
 		return 0, err
 	}
@@ -332,15 +342,15 @@ func (d *Dgraph) NodeXid(xid string, storeXid bool) (Node, error) {
 		return Node(uid), nil
 	}
 	// TODO: return assigned or got from cache and add xid based on that
-	uid, err := d.alloc.assingOrGet(xid)
+	uid, err := d.alloc.assignOrGet(xid)
 	if err != nil {
 		return 0, err
 	}
 	n := Node(uid)
 	if storeXid {
-		e, err := n.ScalarEdge("_xid_", xid, types.StringID)
-		x.Check(err)
-		d.Set(e)
+		e := n.Edge("_xid_")
+		x.Check(e.SetValueString(xid))
+		d.BatchSet(e)
 	}
 	return n, nil
 }

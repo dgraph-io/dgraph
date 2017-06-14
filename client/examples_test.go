@@ -66,7 +66,7 @@ func ExampleBatchMutation() {
 		if len(nq.ObjectId) > 0 {
 			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
 		}
-		if err = dgraphClient.Set(client.NewEdge(nq)); err != nil {
+		if err = dgraphClient.BatchSet(client.NewEdge(nq)); err != nil {
 			log.Fatal("While adding mutation to batch: ", err)
 		}
 	}
@@ -75,7 +75,7 @@ func ExampleBatchMutation() {
 	}
 	// Wait for all requests to complete. This is very important, else some
 	// data might not be sent to server.
-	dgraphClient.Flush()
+	dgraphClient.BatchFlush()
 }
 
 func Node(val string, c *client.Dgraph) string {
@@ -89,7 +89,7 @@ func Node(val string, c *client.Dgraph) string {
 		}
 		return n.String()
 	}
-	n, err := c.NodeXid(val, true)
+	n, err := c.NodeXid(val, false)
 	if err != nil {
 		log.Fatal("Error while converting to node: %v", err)
 	}
@@ -113,27 +113,48 @@ func ExampleReq_AddMutation() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	// Creating a person node, and adding a name attribute to it.
 	e := person1.Edge("name")
 	e.SetValueString("Steven Spielberg")
-	// Alternative syntax
-	// person1.ScalarEdge("name","Steven Spielberg", types.StringID)
-	if err := req.Set(e); err != nil {
-		// handle error
-	}
+	req.Set(e)
 	e = person1.Edge("salary")
 	e.SetValueFloat(13333.6161)
-	// Alternative syntax
-	// person1.ScalarEdge("salary",13333.6161, types.FloatID)
-	if err := req.Set(e); err != nil {
-		// handle error
-	}
+	req.Set(e)
 
 	resp, err := dgraphClient.Run(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+}
+
+func ExampleReq_BatchMutation() {
+	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	bmOpts := client.BatchMutationOptions{
+		Size:          1000,
+		Pending:       100,
+		PrintCounters: false,
+	}
+	dgraphClient := client.NewDgraphClient(conn, bmOpts, "/tmp")
+
+	person1, err := dgraphClient.NodeBlank("person1")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Creating a person node, and adding a name attribute to it.
+	e := person1.Edge("name")
+	e.SetValueString("Steven Spielberg")
+	dgraphClient.BatchSet(e)
+	e = person1.Edge("salary")
+	e.SetValueFloat(13333.6161)
+	dgraphClient.BatchSet(e)
+
+	dgraphClient.BatchFlush()
 }
 
 func ExampleReq_AddMutation_facets() {
