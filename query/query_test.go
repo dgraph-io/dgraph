@@ -1658,6 +1658,21 @@ func TestKShortestPathWeighted(t *testing.T) {
 		js)
 }
 
+func TestKShortestPathWeighted1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			shortest(from: 1, to:1003, numpaths: 3) {
+				path @facets(weight)
+			}
+		}`
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
+	require.JSONEq(t,
+		`{"_path_":[{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3ea","path":[{"@facets":{"_":{"weight":0.600000}},"_uid_":"0x3eb"}]}]}]}]}]},{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.700000}},"_uid_":"0x3ea","path":[{"@facets":{"_":{"weight":0.600000}},"_uid_":"0x3eb"}]}]}]}]},{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9","path":[{"@facets":{"_":{"weight":1.500000}},"_uid_":"0x3eb"}]}]}]}]}]}`,
+		js)
+}
+
 func TestTwoShortestPath(t *testing.T) {
 	populateGraph(t)
 	query := `
