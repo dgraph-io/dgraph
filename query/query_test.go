@@ -1629,6 +1629,25 @@ func TestShortestPath_NoPath(t *testing.T) {
 		js)
 }
 
+func TestKShortestPath_NoPath(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:0x01, to:101, numpaths: 2) {
+				path
+				follow
+			}
+
+			me(id: var( A)) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
 func TestKShortestPathWeighted(t *testing.T) {
 	populateGraph(t)
 	query := `
