@@ -26,7 +26,7 @@ import (
 func TestSpielberg(t *testing.T) {
 	q := `
     {
-      me(id: <m.06pj8>) {
+			me(func:eq(_xid_,"m.06pj8")) {
         name@en
 				director.film (first: 4, orderasc: initial_release_date)  {
             name@en
