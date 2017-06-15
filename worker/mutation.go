@@ -161,6 +161,8 @@ func needReindexing(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
 }
 
 func updateSchema(attr string, s protos.SchemaUpdate, raftIndex uint64, group uint32) {
+	// We dont actually want to delete the schema. We just delete the reverses and indexes
+	// if any. Schema can be changed from uid <-> scalar if there is no data.
 	if s.Directive == protos.SchemaUpdate_DELETE {
 		return
 	}
@@ -228,8 +230,8 @@ func checkSchema(s *protos.SchemaUpdate) error {
 		}
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
 		if hasData(s.Predicate) {
-			return x.Errorf("Schema change not allowed from predicate to uid or vice versa for pred: %s",
-				s.Predicate)
+			return x.Errorf("Schema change not allowed from predicate to uid or vice versa"+
+				" till you have data for pred: %s", s.Predicate)
 		}
 	}
 	return nil

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 	"strconv"
 	"strings"
 	"unicode"
@@ -116,10 +115,10 @@ func (nq NQuad) ToDeletePredEdge() (*protos.DirectedEdge, error) {
 			nq)
 	}
 
-	// This along with edge.ObjectValue == x.DeleteAllObjects would indicate
-	// that we want to delet the predicate.
 	out := &protos.DirectedEdge{
-		Entity: math.MaxUint64,
+		// This along with edge.ObjectValue == x.DeleteAllObjects would indicate
+		// that we want to delete the predicate.
+		Entity: 0,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
 		Lang:   nq.Lang,

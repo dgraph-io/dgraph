@@ -30,7 +30,7 @@ message SchemaUpdate {
 	   NONE = 0;
 	   INDEX = 1;
 	   REVERSE = 2;
-	   DELETE = 3; // To delete the predicate and associated indexes.
+	   DELETE = 3; // To delete the reverses and associated indexes.
   }
 	Directive directive = 3;
 	repeated string tokenizer = 4;

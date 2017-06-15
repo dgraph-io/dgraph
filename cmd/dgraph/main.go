@@ -29,7 +29,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -262,8 +261,7 @@ func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
 		} else if mu.Op == protos.DirectedEdge_DEL {
 			if mu.Attr != x.DeleteAllPredicates {
 				// This means we want to delete the predicate.
-				if mu.Entity == math.MaxUint64 &&
-					string(mu.GetValue()) == x.DeleteAllObjects {
+				if mu.Entity == 0 && string(mu.GetValue()) == x.DeleteAllObjects {
 					uids := worker.GetUidsForPred(mu.Attr)
 					for _, uid := range uids {
 						delPlEdge := &protos.DirectedEdge{
