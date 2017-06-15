@@ -18,8 +18,6 @@
 package worker
 
 import (
-	"bytes"
-
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger/badger"
@@ -189,19 +187,19 @@ func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uin
 
 func hasData(attr string) bool {
 	iterOpt := badger.DefaultIteratorOptions
+	iterOpt.FetchValues = false
 	it := pstore.NewIterator(iterOpt)
 	defer it.Close()
 	pk := x.ParsedKey{
 		Attr: attr,
 	}
 	prefix := pk.DataPrefix()
-	schemaPrefix := x.SchemaPrefix()
 	count := 0
 	for it.Seek(prefix); it.Valid(); it.Next() {
 		item := it.Item()
 		key := item.Key()
 		pk := x.Parse(key)
-		if bytes.HasPrefix(key, schemaPrefix) || pk.Attr != attr {
+		if pk.IsSchema() || pk.Attr != attr {
 			break
 		}
 		count++

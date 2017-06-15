@@ -122,17 +122,18 @@ func TestAddToMutationArray(t *testing.T) {
 }
 
 func TestCheckSchema(t *testing.T) {
+	dir, ps := initTest(t, "name:string @index .")
+	defer os.RemoveAll(dir)
+	defer ps.Close()
 	// non uid to uid
-	err := schema.ParseBytes([]byte("name:string @index ."), 1)
-	require.NoError(t, err)
 	s1 := &protos.SchemaUpdate{Predicate: "name", ValueType: uint32(types.UidID)}
-	require.Error(t, checkSchema(s1))
+	require.NoError(t, checkSchema(s1))
 
 	// uid to non uid
-	err = schema.ParseBytes([]byte("name:uid ."), 1)
+	err := schema.ParseBytes([]byte("name:uid ."), 1)
 	require.NoError(t, err)
 	s1 = &protos.SchemaUpdate{Predicate: "name", ValueType: uint32(types.StringID)}
-	require.Error(t, checkSchema(s1))
+	require.NoError(t, checkSchema(s1))
 
 	// string to int
 	err = schema.ParseBytes([]byte("name:string ."), 1)
