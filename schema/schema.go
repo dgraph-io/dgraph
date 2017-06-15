@@ -98,11 +98,7 @@ func (s *stateGroup) update(se SyncEntry) {
 	s.Lock()
 	defer s.Unlock()
 
-	if se.Schema.Directive == protos.SchemaUpdate_DELETE {
-		delete(s.predicate, se.Attr)
-	} else {
-		s.predicate[se.Attr] = &se.Schema
-	}
+	s.predicate[se.Attr] = &se.Schema
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- se
 	s.elog.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v\n", se.Attr,
@@ -328,10 +324,6 @@ func batchSync() {
 				loop++
 				State().elog.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
 				for _, e := range entries {
-					if e.Schema.Directive == protos.SchemaUpdate_DELETE {
-						wb = badger.EntriesDelete(wb, x.SchemaKey(e.Attr))
-						continue
-					}
 					val, err := e.Schema.Marshal()
 					x.Checkf(err, "Error while marshalling schema description")
 					wb = badger.EntriesSet(wb, x.SchemaKey(e.Attr), val)

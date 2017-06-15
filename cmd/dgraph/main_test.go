@@ -208,56 +208,6 @@ func TestSchemaMutation3Error(t *testing.T) {
 	require.Error(t, err)
 }
 
-// change from uid to scalar or vice versa
-func TestSchemaMutation4Error(t *testing.T) {
-	var m = `
-	mutation {
-		schema {
-            age:uid .
-		}
-	}
-	`
-	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
-	require.NoError(t, err)
-
-	m = `
-	mutation {
-		schema {
-            age:string .
-		}
-	}
-	`
-	err = runMutation(m)
-	require.Error(t, err)
-}
-
-// change from uid to scalar or vice versa
-func TestSchemaMutation5Error(t *testing.T) {
-	var m = `
-	mutation {
-		schema {
-            age:string .
-		}
-	}
-	`
-	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
-	require.NoError(t, err)
-
-	m = `
-	mutation {
-		schema {
-            age:uid .
-		}
-	}
-	`
-	err = runMutation(m)
-	require.Error(t, err)
-}
-
 // add index
 func TestSchemaMutationIndexAdd(t *testing.T) {
 	var q1 = `
@@ -1041,6 +991,7 @@ func TestDeletePredicate(t *testing.T) {
 		}
 	}
 	`
+
 	schema.ParseBytes([]byte(""), 1)
 	err := runMutation(s1)
 	require.NoError(t, err)
@@ -1048,6 +999,9 @@ func TestDeletePredicate(t *testing.T) {
 	err = runMutation(m1)
 	require.NoError(t, err)
 
+	// For gentleCommit to happen and postings to persist to disk. To do * P * we iterate and
+	// get the uids to delete from disk.
+	time.Sleep(5 * time.Second)
 	output, err := runQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice2"},{"name":"Alice1"}]}]}`,
@@ -1068,10 +1022,11 @@ func TestDeletePredicate(t *testing.T) {
 
 	err = runMutation(m2)
 	require.NoError(t, err)
+	// Wait for gentlecommit to persist deletions.
+	time.Sleep(5 * time.Second)
 
 	output, err = runQuery(q1)
-	// Name is not indexed.
-	require.Error(t, err)
+	require.JSONEq(t, `{}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
@@ -1088,7 +1043,77 @@ func TestDeletePredicate(t *testing.T) {
 	// Lets try to change the type of predicates now.
 	err = runMutation(s2)
 	require.NoError(t, err)
+}
 
+// change from uid to scalar or vice versa
+func TestSchemaMutation4Error(t *testing.T) {
+	var m = `
+	mutation {
+		schema {
+            age:int .
+		}
+	}
+	`
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	m = `
+	mutation {
+		set {
+			<alica> <age> "13" .
+		}
+	}
+	`
+	err = runMutation(m)
+	require.NoError(t, err)
+
+	m = `
+	mutation {
+		schema {
+            age:uid .
+		}
+	}
+	`
+	err = runMutation(m)
+	require.Error(t, err)
+}
+
+// change from uid to scalar or vice versa
+func TestSchemaMutation5Error(t *testing.T) {
+	var m = `
+	mutation {
+		schema {
+            friends:uid .
+		}
+	}
+	`
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	m = `
+	mutation {
+		set {
+			<alica> <friends> <bob> .
+		}
+	}
+	`
+	err = runMutation(m)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+	m = `
+	mutation {
+		schema {
+            friends:string .
+		}
+	}
+	`
+	err = runMutation(m)
+	require.Error(t, err)
 }
 
 func TestMain(m *testing.M) {

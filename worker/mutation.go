@@ -18,8 +18,11 @@
 package worker
 
 import (
+	"bytes"
+
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -97,11 +100,11 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 		// (both applied and synced watermarks).
 		if !ok {
 			if current.Directive == protos.SchemaUpdate_INDEX {
-				if err := n.rebuildOrDelIndex(ctx, update.Predicate, true); err != nil {
+				if err := n.rebuildOrDelIndex(ctx, update.Predicate, current.Directive); err != nil {
 					return err
 				}
 			} else if current.Directive == protos.SchemaUpdate_REVERSE {
-				if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true); err != nil {
+				if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, current.Directive); err != nil {
 					return err
 				}
 			}
@@ -111,15 +114,13 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 		if needReindexing(old, current) {
 			// Reindex if update.Index is true or remove index
 			if err := n.rebuildOrDelIndex(ctx, update.Predicate,
-				current.Directive == protos.SchemaUpdate_INDEX); err != nil {
+				current.Directive); err != nil {
 				return err
 			}
-		} else if current.Directive == protos.SchemaUpdate_DELETE ||
-			(current.Directive == protos.SchemaUpdate_REVERSE) !=
-				(old.Directive == protos.SchemaUpdate_REVERSE) {
+		} else if needsRebuildingReverses(old, current) {
 			// Add or remove reverse edge based on update.Reverse
 			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
-				current.Directive == protos.SchemaUpdate_REVERSE); err != nil {
+				current.Directive); err != nil {
 				return err
 			}
 		}
@@ -127,8 +128,16 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 	return nil
 }
 
+func needsRebuildingReverses(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
+	if old.Directive == protos.SchemaUpdate_REVERSE && current.Directive == protos.SchemaUpdate_DELETE {
+		return true
+	}
+	return (current.Directive == protos.SchemaUpdate_REVERSE) !=
+		(old.Directive == protos.SchemaUpdate_REVERSE)
+}
+
 func needReindexing(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
-	if current.Directive == protos.SchemaUpdate_DELETE {
+	if old.Directive == protos.SchemaUpdate_INDEX && current.Directive == protos.SchemaUpdate_DELETE {
 		return true
 	}
 
@@ -154,6 +163,9 @@ func needReindexing(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
 }
 
 func updateSchema(attr string, s protos.SchemaUpdate, raftIndex uint64, group uint32) {
+	if s.Directive == protos.SchemaUpdate_DELETE {
+		return
+	}
 	ce := schema.SyncEntry{
 		Attr:   attr,
 		Schema: s,
@@ -175,7 +187,32 @@ func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uin
 	updateSchema(attr, s, raftIndex, group)
 }
 
+func hasData(attr string) bool {
+	iterOpt := badger.DefaultIteratorOptions
+	it := pstore.NewIterator(iterOpt)
+	defer it.Close()
+	pk := x.ParsedKey{
+		Attr: attr,
+	}
+	prefix := pk.DataPrefix()
+	schemaPrefix := x.SchemaPrefix()
+	count := 0
+	for it.Seek(prefix); it.Valid(); it.Next() {
+		item := it.Item()
+		key := item.Key()
+		pk := x.Parse(key)
+		if bytes.HasPrefix(key, schemaPrefix) || pk.Attr != attr {
+			break
+		}
+		count++
+	}
+	return count > 0
+}
+
 func checkSchema(s *protos.SchemaUpdate) error {
+	if s.Directive == protos.SchemaUpdate_DELETE {
+		return nil
+	}
 	typ := types.TypeID(s.ValueType)
 	if typ == types.UidID && s.Directive == protos.SchemaUpdate_INDEX {
 		// index on uid type
@@ -186,15 +223,13 @@ func checkSchema(s *protos.SchemaUpdate) error {
 		return x.Errorf("Cannot reverse for non-uid type on predicate %s", s.Predicate)
 	}
 	if t, err := schema.State().TypeOf(s.Predicate); err == nil {
-		// Predicate is defined and schema and we want to delete it, lets update the
-		// type in SchemaUpdate
-		if s.Directive == protos.SchemaUpdate_DELETE {
-			s.ValueType = uint32(t)
+		// schema was defined already
+		if t.IsScalar() == typ.IsScalar() {
+			// New and old type are both scalar or both are uid. Allow schema change.
 			return nil
 		}
-
-		// schema was defined already
-		if typ.IsScalar() != t.IsScalar() {
+		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
+		if hasData(s.Predicate) {
 			return x.Errorf("Schema change not allowed from predicate to uid or vice versa for pred: %s",
 				s.Predicate)
 		}

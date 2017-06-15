@@ -29,10 +29,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, indexed bool) error {
+func (n *node) rebuildOrDelIndex(ctx context.Context, attr string,
+	dir protos.SchemaUpdate_Directive) error {
+	indexed := dir == protos.SchemaUpdate_INDEX
+	delIndex := dir == protos.SchemaUpdate_DELETE
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
-	x.AssertTruef(schema.State().IsIndexed(attr) == indexed, "Attr %s index mismatch", attr)
 
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
@@ -40,6 +42,12 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, indexed bool)
 		return err
 	}
 
+	if delIndex {
+		posting.DeleteIndex(ctx, attr)
+		return nil
+	}
+
+	x.AssertTruef(schema.State().IsIndexed(attr) == indexed, "Attr %s index mismatch", attr)
 	if !indexed {
 		// Remove index edges
 		// For delete we since mutations would have been applied, we needn't
@@ -54,10 +62,11 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, indexed bool)
 	return nil
 }
 
-func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, reversed bool) error {
+func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, dir protos.SchemaUpdate_Directive) error {
 	rv := ctx.Value("raft").(x.RaftValue)
+	reversed := dir == protos.SchemaUpdate_REVERSE
+	delReverse := dir == protos.SchemaUpdate_DELETE
 	x.AssertTrue(rv.Group == n.gid)
-	x.AssertTruef(schema.State().IsReversed(attr) == reversed, "Attr %s reverse mismatch", attr)
 
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
@@ -65,6 +74,12 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, reversed bo
 		return err
 	}
 
+	if delReverse {
+		posting.DeleteReverseEdges(ctx, attr)
+		return nil
+	}
+
+	x.AssertTruef(schema.State().IsReversed(attr) == reversed, "Attr %s reverse mismatch", attr)
 	if !reversed {
 		// Remove reverse edges
 		posting.DeleteReverseEdges(ctx, attr)
