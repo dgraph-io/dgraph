@@ -36,7 +36,7 @@ Query Example: In the example dataset, as well as edges that link movies to dire
 {
   bladerunner(func: eq(name, "Blade Runner")) {
     _uid_
-    name
+    name@en
     initial_release_date
     netflix_id
   }
@@ -53,7 +53,7 @@ Query Example: "Blade Runner" movie data found by UID.
 {
   bladerunner(id: 0x3cf6ed367ae4fa80) {
     _uid_
-    name
+    name@en
     initial_release_date
     netflix_id
   }
@@ -68,7 +68,7 @@ Query Example: All nodes that have either "Blade" or "Runner" in the name.
 {
   bladerunner(func: anyofterms(name, "Blade Runner")) {
     _uid_
-    name
+    name@en
     initial_release_date
     netflix_id
   }
@@ -82,7 +82,7 @@ Query Example:
 {
   movies(id: [0x3cf6ed367ae4fa80, 0x949c72529f812b1b]) {
     _uid_
-    name
+    name@en
     initial_release_date
     netflix_id
   }
@@ -98,14 +98,14 @@ Query Example: The actors and characters played in "Blade Runner".  The query fi
 {{< runnable >}}
 {
   brCharacters(func: eq(name, "Blade Runner")) {
-    name
+    name@en
     initial_release_date
     starring {
       performance.actor {
-        name  # actor name
+        name@en  # actor name
       }
       performance.character {
-        name  # character name
+        name@en  # character name
       }
     }
   }
@@ -125,10 +125,10 @@ Query Example: "Blade Runner" director Ridley Scott's movies released before the
 {{< runnable >}}
 {
   scott(func: eq(name, "Ridley Scott")) {
-    name
+    name@en
     initial_release_date
     director.film @filter(le(initial_release_date, "2000")) {
-      name
+      name@en
       initial_release_date
     }
   }
@@ -141,7 +141,7 @@ Query Example: Movies with either "Blade" or "Runner" in the title and released 
 {
   bladerunner(func: anyofterms(name, "Blade Runner")) @filter(le(initial_release_date, "2000")) {
     _uid_
-    name
+    name@en
     initial_release_date
     netflix_id
   }
@@ -173,10 +173,10 @@ For example:
 - `name@en:pl:.` => Look for `en`, then `pl`, then untagged, then any language.
 
 
-{{% notice "note" %}}In functions, a preference list is not allowed.  A string edge without a language tag means apply function to all languages, while a single language tag means apply to only the given language. Language lists and `.` notation is not supported.{{% /notice %}}
+{{% notice "note" %}}In functions, language lists and `.` notation are not allowed.  In functions, a string edge without a language tag means apply function to all languages, while a single language tag means apply to only the given language.{{% /notice %}}
 
 
-Query Example: Some of Bollywood actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
+Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
 
 {{< runnable >}}
 {
@@ -226,7 +226,7 @@ Query Example: All nodes that have `name` containing terms `indiana` and `jones`
 
 {{< runnable >}}
 {
-  me(func: allofterms(name, "jones indiana")) {
+  me(func: allofterms(name@en, "jones indiana")) {
     name@en
     genre {
       name@en
@@ -413,16 +413,19 @@ Index Required: An index is required for `eq(predicate, value)` form, but otherw
 | `string`   | `exact`, `hash`, `term`, `fulltext` |
 | `dateTime` | `dateTime`    |
 
-Test for equality of a predicate or variable to a value or list of values.
+Test for equality of a predicate or variable to a value or find in a list of values.
 
 The boolean constants are `true` and `false`, so with `eq` this becomes, for example, `eq(boolPred, true)`.
 
-Query Example: Movies with exactly two genres.
+Query Example: Movies with exactly thirteen genres.
 
 {{< runnable >}}
 {
-  me(func: eq(count(genre), 2)) {
+  me(func: eq(count(genre), 13)) {
     name@en
+    genre {
+    	name@en
+    }
   }
 }
 {{< /runnable >}}
@@ -432,7 +435,7 @@ Query Example: Directors called Steven who have directed 1,2 or 3 movies.
 
 {{< runnable >}}
 {
-  steve as var(func: allofterms(name@en, "Steven") {
+  steve as var(func: allofterms(name@en, "Steven")) {
     films as count(director.film)
   }
 
@@ -669,7 +672,7 @@ An alias provides an alternate name in results.  Predicates, variables and aggre
 
 
 
-Query Example: Directors with `name` matching term `Steven`, their UID, english name, average number of actors per movie, total number of films and the name of each film.  
+Query Example: Directors with `name` matching term `Steven`, their UID, english name, average number of actors per movie, total number of films and the name of each film in english and french.  
 {{< runnable >}}
 {
   ID as var(func: allofterms(name@en, "Steven")) @filter(has(director.film)) {
@@ -686,7 +689,9 @@ Query Example: Directors with `name` matching term `Steven`, their UID, english 
     num_films : count(director.film)
 
     films : director.film {
-      name : name
+      name : name@en
+      english_name : name@en
+      french_name : name@fr
     }
   }
 }
@@ -861,7 +866,7 @@ Query Example: Count of directors who have directed more than five films.
 
 Count can be assigned to a [value variable]({{< relref "#value-variables">}}).
 
-Query Example: The actors of Ang Lee's 'Eat Drink Man Woman' ordered by the number of movies acted in.
+Query Example: The actors of Ang Lee's "Eat Drink Man Woman" ordered by the number of movies acted in.
 
 {{< runnable >}}
 {
@@ -903,10 +908,10 @@ Query Example: French director Jean-Pierre Jeunet's movies sorted by release dat
 {{< runnable >}}
 {
   me(func: allofterms(name, "Jean-Pierre Jeunet")) {
-    name
+    name@fr
     director.film(orderasc: initial_release_date) {
-      name@en
       name@fr
+      name@en
       initial_release_date
     }
   }
@@ -1096,9 +1101,9 @@ Types : `int`, `float`, `String`, `dateTime`, `id`, `default`, `geo`, `bool`
 
 Value variables store scalar values.  Value variables are a map from the UIDs of the enclosing block to the corresponding values.
 
-It is an error to define a value variable but not use it elsewhere in the query.
-
 It therefor only makes sense to use a value variable in a context that matches the same UIDs - if used in a block matching different UIDs the value variable is undefined.
+
+It is an error to define a value variable but not use it elsewhere in the query.
 
 [Facets]({{< relref "#facets-edge-attributes">}}) can be stored in value variables.
 
@@ -1172,7 +1177,7 @@ A as predicateA {
   min(var(x))
 }
 ```
-Here, `A` and `B` are the lists of all UIDs that match these blocks.  Value variable `x` is a mapping from UIDs in `B` to values.  The aggregation `min(var(x))`, however, is computed for each UID in `A`.  That is, it has a semantics of: for each UID in `A`, take the slice of `x` that corresponds to its outgoing `predicateB` edges and compute the aggregation.
+Here, `A` and `B` are the lists of all UIDs that match these blocks.  Value variable `x` is a mapping from UIDs in `B` to values.  The aggregation `min(var(x))`, however, is computed for each UID in `A`.  That is, it has a semantics of: for each UID in `A`, take the slice of `x` that corresponds to `A`'s outgoing `predicateB` edges and compute the aggregation for those values.
 
 Aggregations can themselves be assigned to value variables, making a UID to aggregation map.
 
@@ -1221,7 +1226,7 @@ Query Example: Steven Spielberg's movies, with the number of recorded genres per
 
 {{< runnable >}}
 {
-  director(func: allofterms(name, "steven spielberg")) {
+  director(func: eq(name@en, "Steven Spielberg")) {
     name@en
     director.film {
       name@en
@@ -1294,7 +1299,6 @@ Query Example:  Form a score for each of Steven Spielberg's movies as the sum of
 {{< runnable >}}
 {
 	var(func:allofterms(name, "steven spielberg")) {
-		name@en
 		films as director.film {
 			p as count(starring)
 			q as count(genre)
@@ -1317,7 +1321,6 @@ Query Example: Calculate a score for each Steven Spielberg movie with a conditio
 {{< runnable >}}
 {
   var(func:allofterms(name, "steven spielberg")) {
-    name@en
     films as director.film {
       p as count(starring)
       q as count(genre)
@@ -1342,8 +1345,7 @@ Query Example: Compute a score for each Steven Spielberg movie and then aggregat
 
 {{< runnable >}}
 {
-	steven as var(func:allofterms(name, "steven spielberg")) {
-		name@en
+	steven as var(func:eq(name, "Steven Spielberg")) @filter(has(director.film)) {
 		director.film {
 			p as count(starring)
 			q as count(genre)
@@ -1388,7 +1390,7 @@ Query Example: For Steven Spielberg movies, count the number of movies in each g
   }
 
   byGenre(id: var(a), orderdesc: var(a)) {
-    name
+    name@en
     total_movies : var(a)
   }
 }
@@ -1448,7 +1450,6 @@ Query Example: Predicates saved to a variable and `expand`.
 {{< runnable >}}
 {
   var(func: allofterms(name@en, "steven spielberg")) {
-    name
     pred as _predicate_
   }
 
@@ -1492,20 +1493,20 @@ Query Example: Film name, country and first two actors (by UID order) of every S
 {{< runnable >}}
 {
   director(func:allofterms(name@en, "steven spielberg")) @normalize {
-    d: name@en
+    director: name@en
     director.film {
-      f: name@en
+      film: name@en
       initial_release_date
       starring(first: 2) {
         performance.actor {
-          pa: name@en
+          actor: name@en
         }
         performance.character {
-          pc: name@en
+          character: name@en
         }
       }
       country {
-        c: name@en
+        country: name@en
       }
     }
   }
