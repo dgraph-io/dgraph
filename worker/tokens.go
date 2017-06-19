@@ -127,6 +127,9 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 		it.SeekForPrev(x.IndexKey(attr, ineqToken))
 	}
 
+	if !it.Valid() {
+		return []string{}, "", nil
+	}
 	isPresent := it.Valid() && it.Value() != nil && it.Value().Size() > 0
 	idxKey := x.Parse(it.Key().Data())
 	if f == "eq" {

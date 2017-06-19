@@ -720,7 +720,11 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Re
 	}
 
 	gid := group.BelongsTo(q.Attr)
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, len(q.UidList.Uids), gid)
+	var numUids int
+	if q.UidList != nil {
+		numUids = len(q.UidList.Uids)
+	}
+	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 
 	var reply *protos.Result
 	x.AssertTruef(groups().ServesGroup(gid),
