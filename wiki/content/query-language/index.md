@@ -45,13 +45,13 @@ Query Example: In the example dataset, as well as edges that link movies to dire
 
 The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equalling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
 
-Every node had a unique identifier.  The `_uid_` edge in the query above returns that identifier.  If the required node is already known, rather than applying a function with `func:`, the node can be found directly with `id:`.  If a node has an XID, it can also be found in the same way.
+Every node had a unique 64 bit identifier.  The `_uid_` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.  
 
 Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
-  bladerunner(id: 0x3cf6ed367ae4fa80) {
+  bladerunner(func: uid(0x3cf6ed367ae4fa80)) {
     _uid_
     name@en
     initial_release_date
@@ -75,12 +75,12 @@ Query Example: All nodes that have either "Blade" or "Runner" in the name.
 }
 {{< /runnable >}}
 
-Multiple IDs can be specified in a list.  The list may contain a mixture of UIDs and XIDs.
+Multiple IDs can be specified in a list to the `uid` function.  
 
 Query Example:
 {{< runnable >}}
 {
-  movies(id: [0x3cf6ed367ae4fa80, 0x949c72529f812b1b]) {
+  movies(func: uid(0x3cf6ed367ae4fa80, 0x949c72529f812b1b)) {
     _uid_
     name@en
     initial_release_date
@@ -237,11 +237,11 @@ Query Example: All nodes that have `name` containing terms `indiana` and `jones`
 
 ##### Usage as Filter
 
-Query Example: Steven Spielberg is XID `m.06pj8`.  All his films that contain the words `indiana` and `jones`.
+Query Example: Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his films that contain the words `indiana` and `jones`.
 
 {{< runnable >}}
 {
-  me(id: m.06pj8) {
+  me(func: uid(0x3b0de646eaf32b75)) {
     name@en
     director.film @filter(allofterms(name@en, "jones indiana"))  {
       name@en
@@ -281,11 +281,11 @@ Query Example: All nodes that have a `name` containing either `purple` or `peaco
 
 ##### Usage as filter
 
-Query Example: Steven Spielberg is XID `m.06pj8`.  All his movies that contain `war` or `spies`
+Query Example: Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his movies that contain `war` or `spies`
 
 {{< runnable >}}
 {
-  me(id: m.06pj8) {
+  me(func: uid(0x3b0de646eaf32b75)) {
     name@en
     director.film @filter(anyofterms(name, "war spies"))  {
       name@en
@@ -401,7 +401,7 @@ Syntax Examples:
 * `eq(count(predicate), value)`
 * `eq(predicate, [val1, val2, ..., valN])`
 
-Schema Types: `int`, `float`, `bool`, `string`, `datetime`
+Schema Types: `int`, `float`, `bool`, `string`, `dateTime`
 
 Index Required: An index is required for `eq(predicate, value)` form, but otherwise the values have been calculated as part of the query, so no index is required.
 
@@ -474,11 +474,11 @@ Index required: An index is required for the `IE(predicate, value)` form, but ot
 | `dateTime` | `dateTime`    |
 
 
-Query Example: Steven Spielberg is XID `m.06pj8`.  All his movies released before 1970.
+Query Example: Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his movies released before 1970.
 
 {{< runnable >}}
 {
-  me(id: m.06pj8) {
+  me(func: uid(0x3b0de646eaf32b75)) {
     name@en
     director.film @filter(lt(initial_release_date, "1970-01-01"))  {
       initial_release_date
@@ -643,11 +643,11 @@ Within `@filter` multiple functions can be used with boolean connectives.
 
 Connectives `AND`, `OR` and `NOT` join filters and can be built into arbitrarily complex filters, such as `(NOT A OR B) AND (C AND NOT (D OR E))`.  Note that, `NOT` binds more tightly than `AND` which binds more tightly than `OR`.
 
-Query Example : Steven Spielberg is XID `m.06pj8`.  All his movies that contain either both "indiana" and "jones" OR both "jurassic" and "park".
+Query Example : Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his movies that contain either both "indiana" and "jones" OR both "jurassic" and "park".
 
 {{< runnable >}}
 {
-  me(id: m.06pj8) {
+  me(func: uid(0x3b0de646eaf32b75)) {
     name@en
     director.film @filter(allofterms(name, "jones indiana") OR allofterms(name, "jurassic park"))  {
       _uid_
@@ -950,7 +950,7 @@ Multiple query blocks are executed in parallel.
 
 The blocks need not be related in any way.
 
-Query Example: All of Angelina Jolie's films, with genres, and Steven Spielberg's films since 2008.
+Query Example: All of Angelina Jolie's films, with genres, and Steven Spielberg's (UID `0x3b0de646eaf32b75`) films since 2008.
 
 {{< runnable >}}
 {
@@ -965,7 +965,7 @@ Query Example: All of Angelina Jolie's films, with genres, and Steven Spielberg'
    }
   }
 
- DirectorInfo(id: m.06pj8) {
+ DirectorInfo(func: uid(0x3b0de646eaf32b75)) {
     name@en
     director.film @filter(ge(initial_release_date, "2008"))  {
         Release_date: initial_release_date
@@ -1288,7 +1288,7 @@ The supported operators are as follows:
 | `min` `max`                     | All types except `geo`, `bool`  (binary functions) | selects the min/max value among the two                        |
 | `<` `>` `<=` `>=` `==` `!=`     | All types except `geo`, `bool`                     | Returns true or false based on the values                      |
 | `floor` `ceil` `ln` `exp` `sqrt` | `int`, `float` (unary function)                    | performs the corresponding operation                           |
-| `since`                         | `datetime`                                 | Returns the number of seconds in float from the time specified |
+| `since`                         | `dateTime`                                 | Returns the number of seconds in float from the time specified |
 | `pow(a, b)`                     | `int`, `float`                                     | Returns `a to the power b`                                     |
 | `logbase(a,b)`                  | `int`, `float`                                     | Returns `log(a)` to the base `b`                               |
 | `cond(a, b, c)`                 | first operand must be a boolean                | selects `b` if `a` is true else `c`                            |
@@ -1520,7 +1520,7 @@ For the purposes of debugging, you can attach a query parameter `debug=true` to 
 Query with debug as a query parameter
 ```
 curl "http://localhost:8080/query?debug=true" -XPOST -d $'{
-  director(id: m.07bwr) {
+  tbl(func: allofterms(name, "The Big Lebowski")) {
     name@en
   }
 }' | python -m json.tool | less
@@ -1529,7 +1529,7 @@ curl "http://localhost:8080/query?debug=true" -XPOST -d $'{
 Returns `_uid_` and `server_latency`
 ```
 {
-  "director": [
+  "tbl": [
     {
       "_uid_": "0xff4c6752867d137d",
       "name@en": "The Big Lebowski"
@@ -1543,30 +1543,6 @@ Returns `_uid_` and `server_latency`
   }
 }
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 ## Schema
@@ -1653,8 +1629,8 @@ For example: to set a password:
 ```
 mutation {
   set {
-    <ex123> <name> "Password Example"
-    <ex123> <password> "ThePassword"^^<pwd:password>     .
+    <0x123> <name> "Password Example"
+    <0x123> <password> "ThePassword"^^<pwd:password>     .
   }
 }
 ```
@@ -1662,7 +1638,7 @@ mutation {
 to check a password:
 ```
 {
-  check(id: ex123) {
+  check(id: 0x123) {
     name
     checkpwd(password, "ThePassword")
   }
@@ -1832,12 +1808,12 @@ Represents that graph node with ID `0x01` has a `name` with string value `"Alice
 ```
 Represents that graph node with ID `0x01` is linked with the `friend` edge to node `0x02`.
 
-Dgraph creates a unique internal identifier for every node in the graph - the node's UID.  A mutation can either let Dgraph create the UID as the only identifier for the node, using blank nodes, or can add an external identifier, an XID.
+Dgraph creates a unique 64 bit identifier for every node in the graph - the node's UID.  A mutation either lets Dgraph create the UID as the identifier for the subject or object, using blank or external id nodes, or specifies a known UID from a previous mutation..
 
 
 ### Blank Nodes and UID
 
-Blank nodes in mutations, written `_:identifier`, identify nodes within the mutation, without assigning an XID.  Dgraph creates a UID identifying each blank node and returns the created UIDs as the mutation result.  For example, mutation:
+Blank nodes in mutations, written `_:identifier`, identify nodes within a mutation.  Dgraph creates a UID identifying each blank node and returns the created UIDs as the mutation result.  For example, mutation:
 
 ```
 mutation {
@@ -1864,7 +1840,7 @@ results in output (the actual UIDs will be different on any run of this mutation
   }
 }
 ```
-The graph has thus been updated to have triples
+The graph has thus been updated as if it had stored the triples
 ```
 <0x6bc818dc89e78754> <student> <0xc3bcc578868b719d> .
 <0x6bc818dc89e78754> <student> <0xb294fb8464357b0a> .
@@ -1874,7 +1850,7 @@ The graph has thus been updated to have triples
 <0xc3bcc578868b719d> <friend> <0xb294fb8464357b0a> .
 <0xb294fb8464357b0a> <name> "Bob" .
 ```
-The blank nodes labels `_:class`, `_:x` and `_:y` do not identify the nodes after the mutation, and could even be safely reused in a later mutation.  
+The blank node labels `_:class`, `_:x` and `_:y` do not identify the nodes after the mutation, and can be safely reused to identify new nodes in later mutations.  
 
 A later mutation can update the data for existing UIDs.  For example, the following to add a new student to the class.
 ```
@@ -1902,33 +1878,69 @@ A query can also directly use UID.
 }
 ```
 
-### External IDs (XID)
+### External IDs
 
-Dgraph also supports assigning external identifiers to nodes.  These can be used, for example, in exporting existing data to Dgraph, or in representing nodes that have a well known identifier.
+Dgraph's input language, RDF, also supports triples of the form `<a_fixed_identifier> <predicate> literal/node` and variants on this, where the label `a_fixed_identifier` is intended as a unique identifier for a node.  For example, mixing [schema.org](http://schema.org) identifiers, [the movie database](https://www.themoviedb.org/) identifiers and blank nodes:
 
-An XID is a string (not a number - that's parsed as a UID) and in a mutation is written `<myXID>`.  A mixture of XID, UID and blank nodes are allowed in a mutation.  For example, the following mutation adds more data to the class.
+```
+_:userA <http://schema.org/type> <http://schema.org/Person> .
+_:userA <http://schema.org/name> "FirstName LastName" .
+<https://www.themoviedb.org/person/32-robin-wright> <http://schema.org/type> <http://schema.org/Person> .
+<https://www.themoviedb.org/person/32-robin-wright> <http://schema.org/name> "Robin Wright" .
+```
+
+As of version 0.8 Dgraph doesn't natively support such external IDs as node identifiers.  Instead, can be stored as properties of a node with an `_xid_` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
+
+```
+<0x123> <_xid_> "http://schema.org/Person" .
+```
+
+While Robin Wright might get UID `0x321` and triples
+
+```
+<0x321> <_xid_> "https://www.themoviedb.org/person/32-robin-wright" .
+<0x321> <http://schema.org/type> <0x123> .
+<0x321> <http://schema.org/name> "Robin Wright" .
+```
+
+An appropriate schema might be as follows.
 ```
 mutation {
-  set {
-    <0x6bc818dc89e78754> <student> <alice> .
-    <alice> <name> "Alice" .
-
-    <0x6bc818dc89e78754> <student> _:anotherStudent .
-    _:anotherStudent <name> "David" .
-    <alice> <friend> _:anotherStudent .
+  schema {
+    _xid_: string @index(exact) .
+    <http://schema.org/type>: uid @reverse .
   }
 }
 ```
-Nodes identified with an XID still receive a UID.  Internally Dgraph stores an XID to UID mapping, but not the other way around.
+
+Query Example: All people.
 
 ```
 {
-  me(id: <alice>) {
-    _uid_
-    name
+  var(func: eq(_xid_, "http://schema.org/Person")) {
+    allPeople as <~http://schema.org/type>
+  }
+
+  q(id: var(allPeople)) {
+    <http://schema.org/name>
   }
 }
 ```
+
+Query Example: Robin Wright by external ID.
+
+```
+{
+  robin(func: eq(_xid_, "https://www.themoviedb.org/person/32-robin-wright")) {
+    expand(_all_) { expand(_all_) }
+  }
+}
+
+```
+
+{{% notice "note" %}} `_xid_` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `_xid_`'s and add nodes and `_xid_` edges if necessary.  `dgraphloader` adds `_xid_` edges for bulk uploads with `-x`, see [Bulk Data Loading]({{< relref "deploy/index.md#bulk-data-loading" >}}).  Dgraph leaves all checking of uniqueness of such `_xid_`'s to external processes. {{% /notice %}}
+
+
 
 ### Language and RDF Types
 
@@ -1979,20 +1991,17 @@ Dgraphloader takes as input gzipped N-Quad files (that is triple lists without `
 ```
 dgraphloader --help
 ```
+See also [Bulk Data Loading]({{< relref "deploy/index.md#bulk-data-loading" >}}).
 
 ### Delete
 
-A delete mutation, signified with the `delete` keyword, removes triples from the store.  UIDs and XIDs are allowed in a delete mutation. For example, to delete the triple `<lewis-carrol> <died> "1998" .`
+A delete mutation, signified with the `delete` keyword, removes triples from the store.  
 
+For example, if the store contained
 ```
-mutation {
-  delete {
-     <lewis-carrol> <died> "1898" .
-  }
-}
+<0xf11168064b01135b> <name> "Lewis Carrol"
+<0xf11168064b01135b> <died> "1998"
 ```
-
-Or with the the `_uid_` for `lewis-carrol`
 
 ```
 mutation {
@@ -2002,11 +2011,14 @@ mutation {
 }
 ```
 
-For a particular node `N` all data for a predicate `P` is removed with the pattern `S P *`.
+Would delete the erroneous data.
+
+For a particular node `N`, all data for a predicate `P` is removed with the pattern `S P *`.
+
 ```
 mutation {
   delete {
-     <lewis-carrol> <died> * .
+     <0xf11168064b01135b> <author.of> * .
   }
 }
 ```
@@ -2015,14 +2027,42 @@ The pattern `S * *` deletes all edges out of a node.
 ```
 mutation {
   delete {
-     <lewis-carrol> * * .
+     <0xf11168064b01135b> * * .
   }
 }
 ```
 {{% notice "note" %}} On using `*`, all the derived edges (indexes, reverses) related to that edge are deleted.{{% /notice %}}
 
 
+### Variables in mutations
 
+A mutation may depend on a query through query variables.  
+
+For example, in a graph with people and ages, update all people 18 and over as adults.
+
+```
+{
+  adults as var(func: ge(age, 18))
+}
+mutation {
+  set {
+    var(adults) <isadult> "true"^^<xs:boolean> .
+  }
+}
+```
+
+Or, remove any data about electoral role for minors.
+
+```
+{
+  minors as var(func: lt(age, 18))
+}
+mutation {
+  set {
+    var(minors) <electoral_registration> * .
+  }
+}
+```
 
 ## Facets : Edge attributes
 
