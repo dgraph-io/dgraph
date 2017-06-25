@@ -1889,7 +1889,7 @@ _:userA <http://schema.org/name> "FirstName LastName" .
 <https://www.themoviedb.org/person/32-robin-wright> <http://schema.org/name> "Robin Wright" .
 ```
 
-As of version 0.8 Dgraph doesn't natively support such external IDs as node identifiers.  Instead, can be stored as properties of a node with an `_xid_` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
+As of version 0.8 Dgraph doesn't natively support such external IDs as node identifiers.  Instead, external IDs can be stored as properties of a node with an `_xid_` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
 
 ```
 <0x123> <_xid_> "http://schema.org/Person" .
