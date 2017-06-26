@@ -20,7 +20,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -1006,7 +1005,6 @@ func TestDeletePredicate(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	fmt.Println(output)
 	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice2"},{"name":"Alice1"}]}]}`,
 		output)
 
@@ -1039,7 +1037,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runQuery(q4)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"}]}]}`, output)
+	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}`, output)
 
 	// Lets try to change the type of predicates now.
 	err = runMutation(s2)
