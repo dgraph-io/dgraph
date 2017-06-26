@@ -18,6 +18,8 @@
 package worker
 
 import (
+	"bytes"
+
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger/badger"
@@ -49,6 +51,12 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 		typ, err := schema.State().TypeOf(edge.Attr)
 		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
+		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
+			if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
+				return err
+			}
+			continue
+		}
 		// Once mutation comes via raft we do best effort conversion
 		// Type check is done before proposing mutation, in case schema is not
 		// present, some invalid entries might be written initially
@@ -98,11 +106,11 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 		// (both applied and synced watermarks).
 		if !ok {
 			if current.Directive == protos.SchemaUpdate_INDEX {
-				if err := n.rebuildOrDelIndex(ctx, update.Predicate, current.Directive); err != nil {
+				if err := n.rebuildOrDelIndex(ctx, update.Predicate, true); err != nil {
 					return err
 				}
 			} else if current.Directive == protos.SchemaUpdate_REVERSE {
-				if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, current.Directive); err != nil {
+				if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true); err != nil {
 					return err
 				}
 			}
@@ -112,13 +120,13 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 		if needReindexing(old, current) {
 			// Reindex if update.Index is true or remove index
 			if err := n.rebuildOrDelIndex(ctx, update.Predicate,
-				current.Directive); err != nil {
+				current.Directive == protos.SchemaUpdate_INDEX); err != nil {
 				return err
 			}
 		} else if needsRebuildingReverses(old, current) {
 			// Add or remove reverse edge based on update.Reverse
 			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
-				current.Directive); err != nil {
+				current.Directive == protos.SchemaUpdate_REVERSE); err != nil {
 				return err
 			}
 		}
@@ -127,18 +135,11 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 }
 
 func needsRebuildingReverses(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
-	if old.Directive == protos.SchemaUpdate_REVERSE && current.Directive == protos.SchemaUpdate_DELETE {
-		return true
-	}
 	return (current.Directive == protos.SchemaUpdate_REVERSE) !=
 		(old.Directive == protos.SchemaUpdate_REVERSE)
 }
 
 func needReindexing(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
-	if old.Directive == protos.SchemaUpdate_INDEX && current.Directive == protos.SchemaUpdate_DELETE {
-		return true
-	}
-
 	if (current.Directive == protos.SchemaUpdate_INDEX) != (old.Directive == protos.SchemaUpdate_INDEX) {
 		return true
 	}
@@ -161,11 +162,6 @@ func needReindexing(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
 }
 
 func updateSchema(attr string, s protos.SchemaUpdate, raftIndex uint64, group uint32) {
-	// We dont actually want to delete the schema. We just delete the reverses and indexes
-	// if any. Schema can be changed from uid <-> scalar if there is no data.
-	if s.Directive == protos.SchemaUpdate_DELETE {
-		return
-	}
 	ce := schema.SyncEntry{
 		Attr:   attr,
 		Schema: s,
@@ -187,7 +183,7 @@ func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uin
 	updateSchema(attr, s, raftIndex, group)
 }
 
-func hasData(attr string) bool {
+func numEdges(attr string) int {
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.FetchValues = false
 	it := pstore.NewIterator(iterOpt)
@@ -206,13 +202,10 @@ func hasData(attr string) bool {
 		}
 		count++
 	}
-	return count > 0
+	return count
 }
 
 func checkSchema(s *protos.SchemaUpdate) error {
-	if s.Directive == protos.SchemaUpdate_DELETE {
-		return nil
-	}
 	typ := types.TypeID(s.ValueType)
 	if typ == types.UidID && s.Directive == protos.SchemaUpdate_INDEX {
 		// index on uid type
@@ -229,7 +222,7 @@ func checkSchema(s *protos.SchemaUpdate) error {
 			return nil
 		}
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
-		if hasData(s.Predicate) {
+		if numEdges(s.Predicate) > 0 {
 			return x.Errorf("Schema change not allowed from predicate to uid or vice versa"+
 				" till you have data for pred: %s", s.Predicate)
 		}

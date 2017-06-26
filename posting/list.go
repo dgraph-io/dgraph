@@ -74,8 +74,9 @@ type List struct {
 	refcount    int32
 	deleteAll   int32
 
-	water   *x.WaterMark
-	pending []uint64
+	water      *x.WaterMark
+	pending    []uint64
+	casCounter uint16
 }
 
 func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }

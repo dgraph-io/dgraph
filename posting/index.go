@@ -289,10 +289,6 @@ func DeleteReverseEdges(ctx context.Context, attr string) error {
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
 func RebuildReverseEdges(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
-	if err := DeleteReverseEdges(ctx, attr); err != nil {
-		return err
-	}
-
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.DataPrefix()
@@ -404,10 +400,6 @@ func DeleteIndex(ctx context.Context, attr string) error {
 // RebuildIndex rebuilds index for a given attribute.
 func RebuildIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
-	if err := DeleteIndex(ctx, attr); err != nil {
-		return err
-	}
-
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.DataPrefix()
@@ -482,5 +474,54 @@ func RebuildIndex(ctx context.Context, attr string) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func DeletePredicate(ctx context.Context, attr string) error {
+	EvictGroup(group.BelongsTo(attr))
+
+	iterOpt := badger.DefaultIteratorOptions
+	iterOpt.FetchValues = false
+	it := pstore.NewIterator(iterOpt)
+	defer it.Close()
+	pk := x.ParsedKey{
+		Attr: attr,
+	}
+	prefix := pk.DataPrefix()
+	// Lets get all posting lists for the given predicate.
+	// TODO - Also delete the predicate from uid + attr posting list.
+	wb := make([]*badger.Entry, 0, 100)
+	var batchSize int
+	for it.Seek(prefix); it.Valid(); it.Next() {
+		item := it.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
+		pk := x.Parse(key)
+		x.AssertTruef(pk.Attr == attr,
+			"Invalid key obtained for comparison")
+
+		batchSize += len(key)
+		wb = badger.EntriesDelete(wb, key)
+
+		if batchSize >= maxBatchSize {
+			pstore.BatchSet(wb)
+			wb = wb[:0]
+			batchSize = 0
+		}
+	}
+	if len(wb) > 0 {
+		pstore.BatchSet(wb)
+	}
+
+	indexed := schema.State().IsIndexed(attr)
+	reversed := schema.State().IsReversed(attr)
+	if indexed {
+		DeleteIndex(ctx, attr)
+	} else if reversed {
+		DeleteReverseEdges(ctx, attr)
+	}
+
 	return nil
 }

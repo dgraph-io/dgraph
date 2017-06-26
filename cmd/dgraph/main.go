@@ -245,7 +245,7 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 	return mr, nil
 }
 
-func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
+func addInternalEdge(ctx context.Context, m *protos.Mutations) error {
 	newEdges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
 	for _, mu := range m.Edges {
 		x.AssertTrue(mu.Op == protos.DirectedEdge_DEL || mu.Op == protos.DirectedEdge_SET)
@@ -259,47 +259,7 @@ func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
 			newEdges = append(newEdges, mu)
 			newEdges = append(newEdges, edge)
 		} else if mu.Op == protos.DirectedEdge_DEL {
-			if mu.Attr != x.Star {
-				// This means we want to delete the predicate.
-				if mu.Entity == 0 && string(mu.GetValue()) == x.Star {
-					uids := worker.GetUidsForPred(mu.Attr)
-					for _, uid := range uids {
-						delPlEdge := &protos.DirectedEdge{
-							Op:     protos.DirectedEdge_DEL,
-							Entity: uid,
-							Attr:   mu.Attr,
-							Value:  []byte(x.Star),
-						}
-						newEdges = append(newEdges, delPlEdge)
-
-						delPredEdge := &protos.DirectedEdge{
-							Op:     protos.DirectedEdge_DEL,
-							Entity: uid,
-							Attr:   "_predicate_",
-							Value:  []byte(mu.Attr),
-						}
-						newEdges = append(newEdges, delPredEdge)
-					}
-
-					m.Schema = append(m.Schema, &protos.SchemaUpdate{
-						Predicate: mu.Attr,
-						Directive: protos.SchemaUpdate_DELETE,
-					})
-					continue
-				}
-
-				newEdges = append(newEdges, mu)
-				if string(mu.GetValue()) == x.Star {
-					// Delete the given predicate from _predicate_.
-					edge := &protos.DirectedEdge{
-						Op:     protos.DirectedEdge_DEL,
-						Entity: mu.GetEntity(),
-						Attr:   "_predicate_",
-						Value:  []byte(mu.GetAttr()),
-					}
-					newEdges = append(newEdges, edge)
-				}
-			} else {
+			if mu.Attr == x.Star {
 				// Fetch all the predicates and replace them
 				preds, err := query.GetNodePredicates(ctx, &protos.List{[]uint64{mu.GetEntity()}})
 				if err != nil {
@@ -324,6 +284,25 @@ func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
 				// Delete all the _predicate_ values
 				edge.Attr = "_predicate_"
 				newEdges = append(newEdges, edge)
+
+			} else {
+				newEdges = append(newEdges, mu)
+				if mu.Entity == 0 && string(mu.GetValue()) == x.Star {
+					// * P * case.
+					continue
+				}
+
+				// S * * case.
+				if string(mu.GetValue()) == x.Star {
+					// Delete the given predicate from _predicate_.
+					edge := &protos.DirectedEdge{
+						Op:     protos.DirectedEdge_DEL,
+						Entity: mu.GetEntity(),
+						Attr:   "_predicate_",
+						Value:  []byte(mu.GetAttr()),
+					}
+					newEdges = append(newEdges, edge)
+				}
 			}
 		}
 	}
@@ -332,7 +311,7 @@ func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
 }
 
 func applyMutations(ctx context.Context, m *protos.Mutations) error {
-	err := AddInternalEdge(ctx, m)
+	err := addInternalEdge(ctx, m)
 	if err != nil {
 		return x.Wrapf(err, "While adding internal edges")
 	}

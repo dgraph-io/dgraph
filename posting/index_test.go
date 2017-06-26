@@ -246,6 +246,7 @@ func TestRebuildIndex(t *testing.T) {
 	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"))
 	ps.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"))
 
+	require.NoError(t, DeleteIndex(context.Background(), "name"))
 	require.NoError(t, RebuildIndex(context.Background(), "name"))
 
 	// Let's force a commit.

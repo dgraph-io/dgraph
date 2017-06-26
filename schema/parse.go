@@ -35,11 +35,6 @@ func From(s *protos.SchemaUpdate) protos.SchemaUpdate {
 			ValueType: s.ValueType,
 			Directive: protos.SchemaUpdate_INDEX,
 			Tokenizer: s.Tokenizer}
-	} else if s.Directive == protos.SchemaUpdate_DELETE {
-		return protos.SchemaUpdate{
-			ValueType: s.ValueType,
-			Directive: protos.SchemaUpdate_DELETE,
-		}
 	}
 	return protos.SchemaUpdate{ValueType: s.ValueType}
 }
