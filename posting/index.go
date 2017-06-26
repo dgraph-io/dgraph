@@ -490,7 +490,6 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	}
 	prefix := pk.DataPrefix()
 	// Delete all data postings for the given predicate.
-	// TODO - Also delete the predicate from uid + attr posting list.
 	wb := make([]*badger.Entry, 0, 100)
 	var batchSize int
 	var uids []uint64
