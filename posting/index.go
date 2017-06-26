@@ -210,7 +210,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	l.index.Lock()
 	defer l.index.Unlock()
 
-	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.DeleteAllObjects {
+	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.Star {
 		return l.handleDeleteAll(ctx, t)
 	}
 

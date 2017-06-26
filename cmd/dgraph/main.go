@@ -166,7 +166,7 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 
 	for _, nq := range nquads {
 		// We dont want to assign uids to these.
-		if nq.Subject == x.DeletePredicate {
+		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
 			delPred = append(delPred, nq)
 			continue
 		}
@@ -207,7 +207,7 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 	// Wrapper for a pointer to protos.Nquad
 	var wnq rdf.NQuad
 	for _, nq := range nquads {
-		if nq.Subject == x.DeletePredicate {
+		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
 			continue
 		}
 
@@ -259,16 +259,16 @@ func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
 			newEdges = append(newEdges, mu)
 			newEdges = append(newEdges, edge)
 		} else if mu.Op == protos.DirectedEdge_DEL {
-			if mu.Attr != x.DeleteAllPredicates {
+			if mu.Attr != x.Star {
 				// This means we want to delete the predicate.
-				if mu.Entity == 0 && string(mu.GetValue()) == x.DeleteAllObjects {
+				if mu.Entity == 0 && string(mu.GetValue()) == x.Star {
 					uids := worker.GetUidsForPred(mu.Attr)
 					for _, uid := range uids {
 						delPlEdge := &protos.DirectedEdge{
 							Op:     protos.DirectedEdge_DEL,
 							Entity: uid,
 							Attr:   mu.Attr,
-							Value:  []byte(x.DeleteAllObjects),
+							Value:  []byte(x.Star),
 						}
 						newEdges = append(newEdges, delPlEdge)
 
@@ -289,7 +289,7 @@ func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
 				}
 
 				newEdges = append(newEdges, mu)
-				if string(mu.GetValue()) == x.DeleteAllObjects {
+				if string(mu.GetValue()) == x.Star {
 					// Delete the given predicate from _predicate_.
 					edge := &protos.DirectedEdge{
 						Op:     protos.DirectedEdge_DEL,

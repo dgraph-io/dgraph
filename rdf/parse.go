@@ -110,7 +110,7 @@ func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 }
 
 func (nq NQuad) ToDeletePredEdge() (*protos.DirectedEdge, error) {
-	if nq.Subject != x.DeletePredicate && nq.ObjectValue.String() != x.DeleteAllObjects {
+	if nq.Subject != x.Star && nq.ObjectValue.String() != x.Star {
 		return &emptyEdge, fmt.Errorf("Subject and object both should be *. Got: %+v",
 			nq)
 	}
@@ -216,11 +216,11 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 
 		case itemStar:
 			if rnq.Subject == "" {
-				rnq.Subject = x.DeletePredicate
+				rnq.Subject = x.Star
 			} else if rnq.Predicate == "" {
-				rnq.Predicate = x.DeleteAllPredicates
+				rnq.Predicate = x.Star
 			} else {
-				rnq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.DeleteAllObjects}}
+				rnq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
 			}
 		case itemLiteral:
 			oval = item.Val
@@ -245,8 +245,7 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
-			if rnq.Predicate == x.DeleteAllPredicates ||
-				rnq.Subject == x.DeletePredicate {
+			if rnq.Predicate == x.Star || rnq.Subject == x.Star {
 				return rnq, x.Errorf("If predicate/subject is *, value should be * as well")
 			}
 

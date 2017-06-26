@@ -240,7 +240,7 @@ func checkSchema(s *protos.SchemaUpdate) error {
 // If storage type is specified, then check compatibility or convert to schema type
 // if no storage type is specified then convert to schema type.
 func validateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) error {
-	if types.TypeID(edge.ValueType) == types.DefaultID && string(edge.Value) == x.DeleteAllObjects {
+	if types.TypeID(edge.ValueType) == types.DefaultID && string(edge.Value) == x.Star {
 		if edge.Op != protos.DirectedEdge_DEL {
 			return x.Errorf("* allowed only with delete operation")
 		}
