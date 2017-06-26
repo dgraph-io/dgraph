@@ -39,7 +39,7 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool)
 		return err
 	}
 
-	//	x.AssertTruef(schema.State().IsIndexed(attr) == indexed, "Attr %s index mismatch", attr)
+	x.AssertTruef(schema.State().IsIndexed(attr) == rebuild, "Attr %s index mismatch", attr)
 	// Remove index edges
 	// For delete we since mutations would have been applied, we needn't
 	// wait for synced watermarks if we delete through mutations, but
@@ -63,7 +63,7 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 		return err
 	}
 
-	//	x.AssertTruef(schema.State().IsReversed(attr) == reversed, "Attr %s reverse mismatch", attr)
+	x.AssertTruef(schema.State().IsReversed(attr) == rebuild, "Attr %s reverse mismatch", attr)
 	posting.DeleteReverseEdges(ctx, attr)
 	if rebuild {
 		// Remove reverse edges

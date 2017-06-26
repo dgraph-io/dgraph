@@ -20,6 +20,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -59,6 +60,7 @@ func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
 	opt := badger.DefaultOptions
 	opt.Dir = dir1
 	opt.ValueDir = dir1
+	opt.SyncWrites = true
 	ps, err = badger.NewKV(&opt)
 	x.Check(err)
 
@@ -955,13 +957,13 @@ func TestDeletePredicate(t *testing.T) {
 	}
 	`
 
-	//	var q4 = `
-	//	{
-	//		user(id:alice2) {
-	//			_predicate_
-	//		}
-	//	}
-	//`
+	var q4 = `
+		{
+			user(id:alice2) {
+				_predicate_
+			}
+		}
+	`
 
 	var q5 = `
 		{
@@ -983,14 +985,14 @@ func TestDeletePredicate(t *testing.T) {
 	}
 	`
 
-	//	var s2 = `
-	//	mutation {
-	//		schema {
-	//			friend: string @index .
-	//			name: uid @reverse .
-	//		}
-	//	}
-	//	`
+	var s2 = `
+	mutation {
+		schema {
+			friend: string @index .
+			name: uid @reverse .
+		}
+	}
+	`
 
 	schema.ParseBytes([]byte(""), 1)
 	err := runMutation(s1)
@@ -1004,6 +1006,7 @@ func TestDeletePredicate(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	output, err := runQuery(q1)
 	require.NoError(t, err)
+	fmt.Println(output)
 	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice2"},{"name":"Alice1"}]}]}`,
 		output)
 
@@ -1016,9 +1019,9 @@ func TestDeletePredicate(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"user":[{"age": "13", "~friend" : [{"name":"Alice"}]}]}`, output)
 
-	//	output, err = runQuery(q4)
-	//	require.NoError(t, err)
-	//	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}`, output)
+	output, err = runQuery(q4)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}`, output)
 
 	err = runMutation(m2)
 	require.NoError(t, err)
@@ -1034,13 +1037,13 @@ func TestDeletePredicate(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"user":[{"age": "13"}]}`, output)
 
-	//	output, err = runQuery(q4)
-	//	require.NoError(t, err)
-	//	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"}]}]}`, output)
-	//
-	//	// Lets try to change the type of predicates now.
-	//	err = runMutation(s2)
-	//	require.NoError(t, err)
+	output, err = runQuery(q4)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"}]}]}`, output)
+
+	// Lets try to change the type of predicates now.
+	err = runMutation(s2)
+	require.NoError(t, err)
 }
 
 // change from uid to scalar or vice versa

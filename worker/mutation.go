@@ -197,7 +197,7 @@ func numEdges(attr string) int {
 		item := it.Item()
 		key := item.Key()
 		pk := x.Parse(key)
-		if pk.IsSchema() || pk.Attr != attr {
+		if !pk.IsData() || pk.Attr != attr {
 			break
 		}
 		count++

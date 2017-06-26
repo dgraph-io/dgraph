@@ -478,7 +478,8 @@ func RebuildIndex(ctx context.Context, attr string) error {
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
-	EvictGroup(group.BelongsTo(attr))
+	gid := group.BelongsTo(attr)
+	EvictGroup(gid)
 
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.FetchValues = false
@@ -488,10 +489,11 @@ func DeletePredicate(ctx context.Context, attr string) error {
 		Attr: attr,
 	}
 	prefix := pk.DataPrefix()
-	// Lets get all posting lists for the given predicate.
+	// Delete all data postings for the given predicate.
 	// TODO - Also delete the predicate from uid + attr posting list.
 	wb := make([]*badger.Entry, 0, 100)
 	var batchSize int
+	var uids []uint64
 	for it.Seek(prefix); it.Valid(); it.Next() {
 		item := it.Item()
 		key := item.Key()
@@ -501,6 +503,7 @@ func DeletePredicate(ctx context.Context, attr string) error {
 		pk := x.Parse(key)
 		x.AssertTruef(pk.Attr == attr,
 			"Invalid key obtained for comparison")
+		uids = append(uids, pk.Uid)
 
 		batchSize += len(key)
 		wb = badger.EntriesDelete(wb, key)
@@ -513,6 +516,30 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	}
 	if len(wb) > 0 {
 		pstore.BatchSet(wb)
+	}
+
+	for _, uid := range uids {
+		key := x.DataKey("_predicate_", uid)
+		// Delete the attr from the list of predicates.
+		plist, decr := GetOrCreate(key, gid)
+		defer decr()
+
+		edge := protos.DirectedEdge{
+			Entity: uid,
+			Attr:   "_predicate_",
+			Value:  []byte(attr),
+			Op:     protos.DirectedEdge_DEL,
+		}
+		x.AssertTruef(plist != nil, "plist is nil %d %s",
+			edge.ValueId, edge.Attr)
+		_, err := plist.AddMutation(ctx, &edge)
+
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err,
+				"Error adding/deleting edge for attr %s entity %d: %v",
+				edge.Attr, edge.Entity))
+			return err
+		}
 	}
 
 	indexed := schema.State().IsIndexed(attr)
