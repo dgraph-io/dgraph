@@ -19,7 +19,6 @@ package rdf
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -111,12 +110,11 @@ func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
 
 func (nq NQuad) ToDeletePredEdge() (*protos.DirectedEdge, error) {
 	if nq.Subject != x.Star && nq.ObjectValue.String() != x.Star {
-		return &emptyEdge, fmt.Errorf("Subject and object both should be *. Got: %+v",
-			nq)
+		return &emptyEdge, x.Errorf("Subject and object both should be *. Got: %+v", nq)
 	}
 
 	out := &protos.DirectedEdge{
-		// This along with edge.ObjectValue == x.DeleteAllObjects would indicate
+		// This along with edge.ObjectValue == x.Star would indicate
 		// that we want to delete the predicate.
 		Entity: 0,
 		Attr:   nq.Predicate,
