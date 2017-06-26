@@ -294,6 +294,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	heap.Push(&pq, srcNode)
 
 	numHops := -1
+	cycles := 0
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
@@ -337,8 +338,16 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				numHops++
 			}
 		}
-		if stopExpansion && numPaths == 1 {
-			continue
+		if stopExpansion {
+			if numPaths == 1 {
+				continue
+			}
+			// TODO: Check if we can have a better condition to avoid infinite loops in case of
+			// no paths.
+			cycles++
+			if cycles > numPaths {
+				continue
+			}
 		}
 		neighbours := adjacencyMap[item.uid]
 		for toUid, info := range neighbours {
