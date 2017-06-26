@@ -302,7 +302,10 @@ func (nq NQuad) ExpandVariables(newToUid map[string]uint64,
 	edges = make([]*protos.DirectedEdge, 0, len(subjectUids)*len(objectUids))
 
 	if len(subjectUids) == 0 {
-		x.AssertTrue(len(nq.Subject) > 0)
+		if len(nq.Subject) == 0 {
+			// Empty variable.
+			return
+		}
 		sUid, err := toUid(nq.Subject, newToUid)
 		if err != nil {
 			return nil, err

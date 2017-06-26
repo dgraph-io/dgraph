@@ -81,7 +81,7 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 			if item = it.Item(); item.Typ != itemVarName {
 				return rnq, x.Errorf("Expected variable name, found: %s", item.Val)
 			}
-			if len(rnq.Subject) > 0 {
+			if len(rnq.Subject) > 0 || len(rnq.SubjectVar) > 0 {
 				rnq.ObjectVar = item.Val
 				vend = true
 			} else {
