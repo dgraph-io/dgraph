@@ -829,8 +829,12 @@ var testNQuads = []struct {
 		},
 	},
 	{
-		input:       `var(alice) <knows> var(everyone) .`,
-		expectedErr: true, // cannot have variables in both subject and object.
+		input: `var(alice) <knows> var(everyone) .`,
+		nq: protos.NQuad{
+			SubjectVar: "alice",
+			Predicate:  "knows",
+			ObjectVar:  "everyone",
+		},
 	},
 }
 

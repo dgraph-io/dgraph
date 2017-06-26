@@ -137,10 +137,14 @@ func expandVariables(nq *gql.NQuad,
 	vars map[string]varValue) ([]*protos.DirectedEdge, error) {
 	var subjectUids, objectUids []uint64
 	if len(nq.SubjectVar) > 0 {
-		subjectUids = vars[nq.SubjectVar].Uids.Uids
+		if vars[nq.SubjectVar].Uids != nil {
+			subjectUids = vars[nq.SubjectVar].Uids.Uids
+		}
 	}
 	if len(nq.ObjectVar) > 0 {
-		objectUids = vars[nq.ObjectVar].Uids.Uids
+		if vars[nq.ObjectVar].Uids != nil {
+			objectUids = vars[nq.ObjectVar].Uids.Uids
+		}
 	}
 	return nq.ExpandVariables(newUids, subjectUids, objectUids)
 }
