@@ -354,6 +354,16 @@ $ curl localhost:8080/admin/shutdown
 
 This stops the server on which the command is executed and not the entire cluster.
 
+## Delete database
+
+Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/index.md#delete" >}}).  
+
+To drop all data and start from a clean database:
+
+* [stop Dgraph]({{< relref "shutdown" >}}) and wait for all writes to complete,
+* delete (maybe take a backup first) the `p` and `w` directories, then
+* restart Dgraph.
+
 ## Upgrade Dgraph
 
 <!--{{% notice "tip" %}}If you are upgrading from v0.7.3 you can modify the [schema file]({{< relref "query-language/index.md#schema">}}) to use the new syntax and give it to the dgraphloader using the `-s` flag while reloading your data.{{% /notice %}}-->
