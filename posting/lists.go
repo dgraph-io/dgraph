@@ -515,7 +515,7 @@ func evictShard() {
 	groups := lhmaps.groups()
 	group := groups[rand.Intn(len(groups))]
 	lhmap := lhmapFor(group)
-	shardNum := lhmap.DeleteShard(func(k uint64, l *List) {
+	shardNum := lhmap.DeleteRandomShard(func(k uint64, l *List) {
 		l.SetForDeletion()
 		l.decr()
 	})

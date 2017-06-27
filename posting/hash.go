@@ -113,7 +113,7 @@ func (s *listMap) EachWithDelete(f func(key uint64, val *List)) {
 	}
 }
 
-func (s *listMap) DeleteShard(f func(key uint64, val *List)) int {
+func (s *listMap) DeleteRandomShard(f func(key uint64, val *List)) int {
 	shardNum := rand.Intn(s.numShards)
 	shard := s.shard[shardNum]
 	shard.stw.Lock()
