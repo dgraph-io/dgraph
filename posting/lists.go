@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"os/exec"
 	"runtime"
@@ -192,7 +193,6 @@ func lhmapFor(group uint32) *listMap {
 }
 
 func aggressivelyEvict() {
-	stopTheWorld.AssertLock()
 	log.Println("Aggressive evict, committing to RocksDB")
 
 	// To evict entries belonging to a group no longer served by the server
@@ -287,9 +287,6 @@ func periodicCommit() {
 				break
 			}
 
-			// Do aggressive commit, which would delete all the PLs from memory.
-			// Acquire lock, so no new posting lists are given out.
-			stopTheWorld.Lock()
 		DIRTYLOOP:
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
 			// are currently being processed to not get stuck on dirtyChan, which won't be
@@ -305,11 +302,7 @@ func periodicCommit() {
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
 			log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
-			aggressivelyEvict()
-			for k := range dirtyMap {
-				delete(dirtyMap, k)
-			}
-			stopTheWorld.Unlock()
+			evictShard()
 		}
 	}
 }
@@ -376,12 +369,11 @@ type fingerPrint struct {
 }
 
 var (
-	stopTheWorld x.SafeMutex
-	pstore       *badger.KV
-	syncCh       chan syncEntry
-	dirtyChan    chan fingerPrint // All dirty posting list keys are pushed here.
-	marks        *syncMarks
-	lhmaps       *listMaps
+	pstore    *badger.KV
+	syncCh    chan syncEntry
+	dirtyChan chan fingerPrint // All dirty posting list keys are pushed here.
+	marks     *syncMarks
+	lhmaps    *listMaps
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -410,11 +402,11 @@ func Init(ps *badger.KV) {
 // That way, we don't have a dependency conflict.
 func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
+	lhmap := lhmapFor(group)
+	lhmap.RLockShard(fp)
+	defer lhmap.RUnlockShard(fp)
 
-	stopTheWorld.RLock()
-	defer stopTheWorld.RUnlock()
-
-	lp := lhmapFor(group).Get(fp)
+	lp := lhmap.Get(fp)
 	if lp != nil {
 		lp.incr()
 		return lp, lp.decr
@@ -425,7 +417,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	l.water = marks.Get(group)
 
-	lp = lhmapFor(group).PutIfMissing(fp, l)
+	lp = lhmap.PutIfMissing(fp, l)
 	// We are always going to return lp to caller, whether it is l or not. So, let's
 	// increment its reference counter.
 	lp.incr()
@@ -461,10 +453,11 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 // the list.
 func GetOrUnmarshal(key, val []byte, gid uint32) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
+	lhmap := lhmapFor(gid)
 
-	stopTheWorld.RLock()
-	lp := lhmapFor(gid).Get(fp)
-	stopTheWorld.RUnlock()
+	lhmap.RLockShard(fp)
+	lp := lhmap.Get(fp)
+	lhmap.RUnlockShard(fp)
 
 	if lp != nil {
 		lp.incr()
@@ -524,6 +517,16 @@ func CommitLists(numRoutines int, group uint32) {
 	})
 	close(workChan)
 	wg.Wait()
+}
+
+func evictShard() {
+	groups := lhmaps.groups()
+	group := groups[rand.Intn(len(groups))]
+	lhmap := lhmapFor(group)
+	lhmap.DeleteShard(func(k uint64, l *List) {
+		l.SetForDeletion()
+		l.decr()
+	})
 }
 
 // EvictAll removes all pl's stored in memory for given group

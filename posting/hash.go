@@ -17,11 +17,15 @@
 
 package posting
 
-import "sync"
+import (
+	"math/rand"
+	"sync"
+)
 
 type listMapShard struct {
 	sync.RWMutex
-	m map[uint64]*List
+	m   map[uint64]*List
+	stw sync.RWMutex
 }
 
 type listMap struct {
@@ -107,6 +111,21 @@ func (s *listMap) EachWithDelete(f func(key uint64, val *List)) {
 	for _, shard := range s.shard {
 		shard.eachWithDelete(f)
 	}
+}
+
+func (s *listMap) DeleteShard(f func(key uint64, val *List)) {
+	shard := s.shard[rand.Intn(s.numShards)]
+	shard.stw.Lock()
+	defer shard.stw.Unlock()
+	shard.eachWithDelete(f)
+}
+
+func (s *listMap) RLockShard(key uint64) {
+	s.shard[getShard(s.numShards, key)].stw.RLock()
+}
+
+func (s *listMap) RUnlockShard(key uint64) {
+	s.shard[getShard(s.numShards, key)].stw.RUnlock()
 }
 
 func (s *listMapShard) each(f func(key uint64, val *List)) {
