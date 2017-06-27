@@ -1969,16 +1969,18 @@ func ConvertUidsToHex(m map[string]uint64) (res map[string]string) {
 
 func parseFacets(nquads []*protos.NQuad) error {
 	var err error
-	var facet *protos.Facet
 	for _, nq := range nquads {
 		if len(nq.Facets) == 0 {
 			continue
 		}
 		for idx, f := range nq.Facets {
-			if facet, err = facets.FacetFor(f.Key, f.Val); err != nil {
-				return err
+			if len(f.Value) == 0 {
+				// Only do this for client which sends the facet as a string in f.Val
+				if f, err = facets.FacetFor(f.Key, f.Val); err != nil {
+					return err
+				}
 			}
-			nq.Facets[idx] = facet
+			nq.Facets[idx] = f
 		}
 
 	}
