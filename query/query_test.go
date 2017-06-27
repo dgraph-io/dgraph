@@ -8077,3 +8077,15 @@ func TestUidFunctionInFilter4(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"me":[{"name":"Andrea With no friends"}]}`, string(js))
 }
+
+func TestUidInFunction(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: anyofterms(name, "Michonne Andrea")) @filter(uid_in(friend, 23)) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"name":"Michonne"}]}`, string(js))
+}

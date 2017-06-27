@@ -137,6 +137,7 @@ const (
 	RegexFn
 	FullTextSearchFn
 	HasFn
+	UidInFn
 	StandardFn = 100
 )
 
@@ -167,6 +168,8 @@ func parseFuncType(arr []string) (FuncType, string) {
 		return FullTextSearchFn, f
 	case "has":
 		return HasFn, f
+	case "uid_in":
+		return UidIn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
