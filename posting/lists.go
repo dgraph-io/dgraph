@@ -287,22 +287,14 @@ func periodicCommit() {
 				break
 			}
 
-		DIRTYLOOP:
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
 			// are currently being processed to not get stuck on dirtyChan, which won't be
 			// processed until aggressive evict finishes.
-			for {
-				select {
-				case <-dirtyChan:
-					// pass
-				default:
-					break DIRTYLOOP
-				}
-			}
+
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
 			log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
-			evictShard()
+			go evictShard()
 		}
 	}
 }
@@ -523,10 +515,11 @@ func evictShard() {
 	groups := lhmaps.groups()
 	group := groups[rand.Intn(len(groups))]
 	lhmap := lhmapFor(group)
-	lhmap.DeleteShard(func(k uint64, l *List) {
+	shardNum := lhmap.DeleteShard(func(k uint64, l *List) {
 		l.SetForDeletion()
 		l.decr()
 	})
+	fmt.Printf("evicted shard %d from group %d\n", shardNum, group)
 }
 
 // EvictAll removes all pl's stored in memory for given group
