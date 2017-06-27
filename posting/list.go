@@ -104,26 +104,24 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	l.refcount = 1
 	l.Lock()
 
-	go func(l *List) {
-		defer l.Unlock()
+	defer l.Unlock()
 
-		var item badger.KVItem
-		var err error
-		for i := 0; i < 10; i++ {
-			if err = pstore.Get(l.key, &item); err == nil {
-				break
-			}
+	var item badger.KVItem
+	var err error
+	for i := 0; i < 10; i++ {
+		if err = pstore.Get(l.key, &item); err == nil {
+			break
 		}
-		if err != nil {
-			x.Fatalf("Unable to retrieve val for key: %q. Error: %v", err, l.key)
-		}
-		val := item.Value()
+	}
+	if err != nil {
+		x.Fatalf("Unable to retrieve val for key: %q. Error: %v", err, l.key)
+	}
+	val := item.Value()
 
-		l.plist = new(protos.PostingList)
-		if val != nil {
-			x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
-		}
-	}(l)
+	l.plist = new(protos.PostingList)
+	if val != nil {
+		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
+	}
 	return l
 }
 
