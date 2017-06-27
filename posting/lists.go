@@ -265,7 +265,7 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
 // usage. If it exceeds a certain threshold, it would stop the world, and aggressively
 // merge and evict all posting lists from memory.
 func periodicCommit() {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(time.Second)
 	dirtyMap := make(map[fingerPrint]struct{}, 1000)
 	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
 	pending := make(chan struct{}, 15)
@@ -378,7 +378,9 @@ func Init(ps *badger.KV) {
 	syncCh = make(chan syncEntry, 10000)
 
 	go periodicCommit()
-	go batchSync()
+	for i := 0; i < 4; i++ {
+		go batchSync()
+	}
 }
 
 // GetOrCreate stores the List corresponding to key, if it's not there already.
