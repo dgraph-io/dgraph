@@ -430,9 +430,18 @@ func (n *node) processMutation(e raftpb.Entry, m *protos.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
-	if err := runMutations(ctx, m.Edges); err != nil {
-		x.TraceError(n.ctx, err)
-		return err
+	numBatch := len(m.Edges) / 10 + 1
+	che := make(chan error, numBatch)
+	for i := 0; i < numBatch; i++ {
+		go func(i int) {
+			che <- runMutations(ctx, m.Edges, i * 10, i * 10 + 9)
+		}(i)
+	}
+	for i := 0; i < numBatch; i++ {
+		err := <-che
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
