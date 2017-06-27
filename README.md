@@ -44,4 +44,5 @@ Dgraph is currently at version 0.7. It has 90% of the features planned for v1.0;
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.
 - Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) for filing bugs or feature requests.
-- Or, just join [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io).
+- Join [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io).
+- Follow us on Twitter [@dgraphlabs](https://twitter.com/dgraphlabs).
