@@ -414,6 +414,26 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		out.UidMatrix = append(out.UidMatrix, uidList)
 	}
 
+	if srcFn.fnType == UidInFn && srcFn.isFuncAtRoot {
+		reqList := &protos.List{[]uint64{srcFn.uidPresent}}
+		topts := posting.ListOptions{
+			AfterUID:  0,
+			Intersect: reqList,
+		}
+		f := func(kv itkv, mu *sync.Mutex) {
+			pl, decr := posting.GetOrUnmarshal(kv.key, kv.val, gid)
+			decr()
+			if len(pl.Uids(topts).Uids) > 0 {
+				addUidToMatrix(kv.key, mu, &out)
+			}
+		}
+		itParams := iterateParams{
+			q:        q,
+			fetchVal: true,
+		}
+		iterateParallel(ctx, itParams, f)
+	}
+
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
 		f := func(kv itkv, mu *sync.Mutex) {
 			addUidToMatrix(kv.key, mu, &out)
@@ -423,7 +443,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			fetchVal: false,
 		}
 		iterateParallel(ctx, itParams, f)
-
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
@@ -806,7 +825,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if fc.uidPresent, err = strconv.ParseUint(q.SrcFunc[2], 10, 64); err != nil {
 			return nil, err
 		}
-		fc.n = len(q.UidList.Uids)
+		checkRoot(q, fc)
 	default:
 		return nil, x.Errorf("FnType %d not handled in numFnAttrs.", fnType)
 	}
