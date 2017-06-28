@@ -33,7 +33,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/badger"
@@ -111,32 +110,6 @@ func (g *syncMarks) Get(group uint32) *x.WaterMark {
 // We use this to determine the index to use when creating a new snapshot.
 func SyncMarkFor(group uint32) *x.WaterMark {
 	return marks.Get(group)
-}
-
-type counters struct {
-	ticker  *time.Ticker
-	done    uint64
-	noop    uint64
-	lastVal uint64
-}
-
-func (c *counters) periodicLog() {
-	for range c.ticker.C {
-		c.log()
-	}
-}
-
-func (c *counters) log() {
-	done := atomic.LoadUint64(&c.done)
-	noop := atomic.LoadUint64(&c.noop)
-	lastVal := atomic.LoadUint64(&c.lastVal)
-	if done == lastVal {
-		// Ignore.
-		return
-	}
-	atomic.StoreUint64(&c.lastVal, done)
-
-	log.Printf("Commit counters. done: %5d noop: %5d\n", done, noop)
 }
 
 type listMaps struct {
