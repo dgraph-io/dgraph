@@ -55,9 +55,8 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 	attr := q.Attr
 	gid := group.BelongsTo(attr)
 	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+		tr.LazyPrintf("attr: %v groupId: %v", attr, gid)
 	}
-	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
@@ -74,7 +73,9 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
 	}
 	defer pl.Put(conn)
-	x.Trace(ctx, "Sending request to %v", addr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sending request to %v", addr)
+	}
 
 	c := protos.NewWorkerClient(conn)
 	reply, err := c.ServeTask(ctx, q)
@@ -83,8 +84,10 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return &emptyResult, err
 	}
 
-	x.Trace(ctx, "Reply from server. length: %v Addr: %v Attr: %v",
-		len(reply.UidMatrix), addr, attr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Reply from server. length: %v Addr: %v Attr: %v",
+			len(reply.UidMatrix), addr, attr)
+	}
 	return reply, nil
 }
 
@@ -728,7 +731,9 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Re
 	if q.UidList != nil {
 		numUids = len(q.UidList.Uids)
 	}
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
+	}
 
 	var reply *protos.Result
 	x.AssertTruef(groups().ServesGroup(gid),

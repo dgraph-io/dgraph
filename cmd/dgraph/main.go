@@ -129,7 +129,9 @@ func convertToNQuad(ctx context.Context, mutation string) ([]*protos.NQuad, erro
 	var nquads []*protos.NQuad
 	r := strings.NewReader(mutation)
 	reader := bufio.NewReader(r)
-	x.Trace(ctx, "Converting to NQuad")
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Converting to NQuad")
+	}
 
 	var strBuf bytes.Buffer
 	var err error
@@ -484,7 +486,9 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 // parseQueryAndMutation handles the cases where the query parsing code can hang indefinitely.
 // We allow 1 second for parsing the query; and then give up.
 func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, err error) {
-	x.Trace(ctx, "Query received: %v", r.Str)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Query received: %v", r.Str)
+	}
 	errc := make(chan error, 1)
 
 	go func() {
@@ -504,7 +508,9 @@ func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 			x.TraceError(ctx, x.Wrapf(err, "Error while parsing query"))
 			return res, err
 		}
-		x.Trace(ctx, "Query parsed")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Query parsed")
+		}
 	}
 	return res, nil
 }
@@ -659,8 +665,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
-	x.Trace(ctx, "Latencies: Total: %v Parsing: %v Process: %v Json: %v",
-		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Latencies: Total: %v Parsing: %v Process: %v Json: %v",
+			time.Since(l.Start), l.Parsing, l.Processing, l.Json)
+	}
 }
 
 func shareHandler(w http.ResponseWriter, r *http.Request) {
@@ -790,13 +798,6 @@ type grpcServer struct{}
 // client as a protocol buffer message.
 func (s *grpcServer) Run(ctx context.Context,
 	req *protos.Request) (resp *protos.Response, err error) {
-	// we need membership information
-	if !worker.HealthCheck() {
-		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
-		return resp, x.Errorf("Uninitiated server. Please retry later")
-	}
-	var allocIds map[string]uint64
-	var schemaNodes []*protos.SchemaNode
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		tr.SetMaxEvents(1000)
@@ -804,6 +805,15 @@ func (s *grpcServer) Run(ctx context.Context,
 		ctx = trace.NewContext(ctx, tr)
 	}
 
+	// we need membership information
+	if !worker.HealthCheck() {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+		}
+		return resp, x.Errorf("Uninitiated server. Please retry later")
+	}
+	var allocIds map[string]uint64
+	var schemaNodes []*protos.SchemaNode
 	// Sanitize the context of the keys used for internal purposes only
 	ctx = context.WithValue(ctx, "_share_", nil)
 
@@ -815,7 +825,9 @@ func (s *grpcServer) Run(ctx context.Context,
 
 	var l query.Latency
 	l.Start = time.Now()
-	x.Trace(ctx, "Query received: %v, variables: %v", req.Query, req.Vars)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Query received: %v, variables: %v", req.Query, req.Vars)
+	}
 	res, err := parseQueryAndMutation(ctx, gql.Request{
 		Str:       req.Query,
 		Variables: req.Vars,
@@ -892,7 +904,9 @@ func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *prot
 	err error) {
 	// we need membership information
 	if !worker.HealthCheck() {
-		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+		}
 		return v, x.Errorf("Uninitiated server. Please retry later")
 	}
 

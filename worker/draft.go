@@ -29,6 +29,7 @@ import (
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -317,13 +318,19 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 
 	// Wait for the proposal to be committed.
 	if proposal.Mutations != nil {
-		x.Trace(ctx, "Waiting for the proposal: mutations.")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Waiting for the proposal: mutations.")
+		}
 	} else if proposal.Membership != nil {
-		x.Trace(ctx, "Waiting for the proposal: membership update.")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Waiting for the proposal: membership update.")
+		}
 	} else if proposal.RebuildIndex != nil {
-		x.Trace(ctx, "Waiting for the proposal: RebuildIndex")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Waiting for the proposal: RebuildIndex")
+		}
 	} else {
-		x.Fatalf("Unknown proposal")
+		log.Fatalf("Unknown proposal")
 	}
 
 	select {
@@ -640,7 +647,9 @@ func (n *node) Run() {
 				}
 			}
 			if len(rd.CommittedEntries) > 0 {
-				x.Trace(n.ctx, "Found %d committed entries", len(rd.CommittedEntries))
+				if tr, ok := trace.FromContext(n.ctx); ok {
+					tr.LazyPrintf("Found %d committed entries", len(rd.CommittedEntries))
+				}
 			}
 
 			for _, entry := range rd.CommittedEntries {
@@ -670,9 +679,13 @@ func (n *node) Run() {
 				go func() {
 					select {
 					case <-n.ctx.Done(): // time out
-						x.Trace(n.ctx, "context timed out while transfering leadership")
+						if tr, ok := trace.FromContext(n.ctx); ok {
+							tr.LazyPrintf("context timed out while transfering leadership")
+						}
 					case <-time.After(1 * time.Second):
-						x.Trace(n.ctx, "Timed out transfering leadership")
+						if tr, ok := trace.FromContext(n.ctx); ok {
+							tr.LazyPrintf("Timed out transfering leadership")
+						}
 					}
 					n.Raft().Stop()
 					close(n.done)
@@ -741,7 +754,9 @@ func (n *node) snapshot(skip uint64) {
 		return
 	}
 	snapshotIdx := le - skip
-	x.Trace(n.ctx, "Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
+	if tr, ok := trace.FromContext(n.ctx); ok {
+		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
+	}
 	rc, err := n.raftContext.Marshal()
 	x.Check(err)
 
