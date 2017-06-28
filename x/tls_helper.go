@@ -296,6 +296,11 @@ func (c *wrapperTLSConfig) getClientCertificate(_ *tls.CertificateRequestInfo) (
 	return cert, nil
 }
 
+var (
+	invalidCertErr = fmt.Errorf("Invalid certificate")
+	verifyCertErr  = fmt.Errorf("Failed to verify certificate")
+)
+
 func (c *wrapperTLSConfig) verifyPeerCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	if c.clientAuth >= tls.VerifyClientCertIfGiven && len(rawCerts) > 0 {
 		if len(rawCerts) > 0 {
@@ -304,7 +309,7 @@ func (c *wrapperTLSConfig) verifyPeerCertificate(rawCerts [][]byte, verifiedChai
 				if cert, err := x509.ParseCertificate(raw); err == nil {
 					pool.AddCert(cert)
 				} else {
-					return Errorf("Invalid certificate")
+					return invalidCertErr
 				}
 			}
 
@@ -324,10 +329,10 @@ func (c *wrapperTLSConfig) verifyPeerCertificate(rawCerts [][]byte, verifiedChai
 			}
 			_, err = cert.Verify(opts)
 			if err != nil {
-				return Errorf("Failed to verify certificate")
+				return verifyCertErr
 			}
 		} else {
-			return Errorf("Invalid certificate")
+			return invalidCertErr
 		}
 	}
 	return nil

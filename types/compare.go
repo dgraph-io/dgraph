@@ -17,9 +17,7 @@
 
 package types
 
-import (
-	"github.com/dgraph-io/dgraph/x"
-)
+import "log"
 
 // Should be used only in filtering arg1 by comparing with arg2.
 // arg2 is reference Val to which arg1 is compared.
@@ -43,7 +41,7 @@ func CompareVals(op string, arg1, arg2 Val) bool {
 		return noError(Equal(arg1, arg2))
 	default:
 		// should have been checked at query level.
-		x.Fatalf("Unknown ineqType %v", op)
+		log.Fatalf("Unknown ineqType %v", op)
 	}
 	return false
 }

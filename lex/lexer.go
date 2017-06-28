@@ -20,8 +20,6 @@ package lex
 import (
 	"fmt"
 	"unicode/utf8"
-
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const EOF = -1
@@ -88,10 +86,14 @@ func (p *ItemIterator) Prev() bool {
 	return false
 }
 
+var (
+	outOfRangeErr = fmt.Errorf("Out of range for peek")
+)
+
 // Peek returns the next n items without consuming them.
 func (p *ItemIterator) Peek(num int) ([]item, error) {
 	if (p.idx + num + 1) > len(p.l.items) {
-		return nil, x.Errorf("Out of range for peek")
+		return nil, outOfRangeErr
 	}
 	return p.l.items[p.idx+1 : p.idx+num+1], nil
 }
