@@ -22,18 +22,15 @@ import (
 	"crypto/md5"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
-	"os"
-	"os/exec"
 	"runtime"
 	"runtime/debug"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgryski/go-farm"
@@ -43,12 +40,16 @@ import (
 )
 
 var (
-	maxmemory = flag.Int("stw_ram_mb", 4096,
+	maxmemory = flag.Float64("stw_ram_mb", 4096.0,
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
 	commitFraction   = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
 	lhmapNumShards   = runtime.NumCPU() * 4
 	dummyPostingList []byte // Used for indexing.
+)
+
+const (
+	MB = 1 << 20
 )
 
 // syncMarks stores the watermark for synced RAFT proposals. Each RAFT proposal consists
@@ -159,37 +160,12 @@ func lhmapFor(group uint32) *listMap {
 	return lhmaps.get(group)
 }
 
-func aggressivelyEvict() {
-	log.Println("Aggressive evict, committing to RocksDB")
-
-	// To evict entries belonging to a group no longer served by the server
-	// CommitLists shouldn't have any affect as the entries should have been synced before
-	// we stopped serving the group
-	var wg sync.WaitGroup
-	for _, gid := range lhmaps.groups() {
-		wg.Add(1)
-		go func(gid uint32, wg *sync.WaitGroup) {
-			EvictGroup(gid)
-			wg.Done()
-		}(gid, &wg)
-	}
-	wg.Wait()
-
-	log.Println("Trying to free OS memory")
-	// Forces garbage collection followed by returning as much memory to the OS
-	// as possible.
-	debug.FreeOSMemory()
-
-	megs := getMemUsage()
-	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
-}
-
-func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{},
+func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 	commitFraction float64) {
 	select {
 	case pending <- struct{}{}:
 	default:
-		fmt.Println("Skipping gentleCommit")
+		fmt.Println("Skipping gentleCommit %v\n", len(syncCh))
 		return
 	}
 
@@ -203,7 +179,16 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{},
 	keysBuffer := make([]fingerPrint, 0, n)
 
 	// Convert map to list.
-	for key := range dirtyMap {
+	var loops int
+	for key, ts := range dirtyMap {
+		loops++
+		if loops > 3*n {
+			break
+		}
+		if time.Since(ts) < 5*time.Second {
+			continue
+		}
+
 		delete(dirtyMap, key)
 		keysBuffer = append(keysBuffer, key)
 		if len(keysBuffer) >= n {
@@ -229,19 +214,39 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{},
 	}(keysBuffer)
 }
 
+func periodicFree() {
+	ticker := time.NewTicker(5 * time.Second)
+	for range ticker.C {
+		var ms runtime.MemStats
+		runtime.ReadMemStats(&ms)
+
+		megs := (ms.HeapInuse + ms.StackInuse) / MB
+		inUse := float64(megs)
+		idle := float64((ms.HeapIdle - ms.HeapReleased) / MB)
+
+		if inUse+idle > *maxmemory {
+			fmt.Printf("Inuse: %.0f idle: %.0f. Freeing OS memory", inUse, idle)
+			x.UpdateMemoryStatus(false)
+			debug.FreeOSMemory()
+		} else {
+			x.UpdateMemoryStatus(true)
+		}
+	}
+}
+
 // periodicMerging periodically merges the dirty posting lists. It also checks our memory
 // usage. If it exceeds a certain threshold, it would stop the world, and aggressively
 // merge and evict all posting lists from memory.
 func periodicCommit() {
 	ticker := time.NewTicker(time.Second)
-	dirtyMap := make(map[fingerPrint]struct{}, 1000)
+	dirtyMap := make(map[fingerPrint]time.Time, 1000)
 	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
 	pending := make(chan struct{}, 15)
 	dsize := 0 // needed for better reporting.
 	for {
 		select {
 		case key := <-dirtyChan:
-			dirtyMap[key] = struct{}{}
+			dirtyMap[key] = time.Now()
 
 		case <-ticker.C:
 			if len(dirtyMap) != dsize {
@@ -249,8 +254,14 @@ func periodicCommit() {
 				log.Printf("Dirty map size: %d\n", dsize)
 			}
 
-			totMemory := getMemUsage()
-			fraction := math.Min(1.0, *commitFraction*math.Exp(float64(dsize)/100000.0))
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
+
+			inUse := float64(megs)
+			idle := float64((ms.HeapIdle - ms.HeapReleased) / (1 << 20))
+
+			fraction := math.Min(1.0, *commitFraction*math.Exp(float64(dsize)/1000000.0))
 			gentleCommit(dirtyMap, pending, fraction)
 
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
@@ -259,71 +270,18 @@ func periodicCommit() {
 
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
-			if float64(totMemory) > 1.5*float64(*maxmemory) {
-				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
-				go evictShards(3)
-			} else if totMemory > *maxmemory {
-				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
+			if inUse > 0.9*(*maxmemory) {
+				log.Printf("Memory usage really close to threshold. STW. Allocated MB: %v\n", inUse)
+				go evictShards(5)
+			} else if inUse > 0.75*(*maxmemory) {
+				log.Printf("Memory usage close to threshold. STW. Allocated MB: %v\n", inUse)
 				go evictShards(1)
+			} else {
+				log.Printf("Cur: %v. Idle: %v, total: %v, STW: %v, NumGoroutines: %v\n",
+					inUse, idle, inUse+idle, *maxmemory, runtime.NumGoroutine())
 			}
 		}
 	}
-}
-
-// getMemUsage returns the amount of memory used by the process in MB
-func getMemUsage() int {
-	var ms runtime.MemStats
-	runtime.ReadMemStats(&ms)
-	megs := ms.Alloc / (1 << 20)
-	return int(megs)
-
-	// Sticking to ms.Alloc temoprarily.
-	// TODO(Ashwin): Switch to total Memory(RSS) once we figure out
-	// how to release memory to OS (Currently only a small chunk
-	// is returned)
-	if runtime.GOOS != "linux" {
-		pid := os.Getpid()
-		cmd := fmt.Sprintf("ps -ao rss,pid | grep %v", pid)
-		c1, err := exec.Command("bash", "-c", cmd).Output()
-		if err != nil {
-			// In case of error running the command, resort to go way
-			var ms runtime.MemStats
-			runtime.ReadMemStats(&ms)
-			megs := ms.Alloc / (1 << 20)
-			return int(megs)
-		}
-
-		rss := strings.Split(string(c1), " ")[0]
-		kbs, err := strconv.Atoi(rss)
-		if err != nil {
-			return 0
-		}
-
-		megs := kbs / (1 << 10)
-		return megs
-	}
-
-	contents, err := ioutil.ReadFile("/proc/self/stat")
-	if err != nil {
-		log.Println("Can't read the proc file", err)
-		return 0
-	}
-
-	cont := strings.Split(string(contents), " ")
-	// 24th entry of the file is the RSS which denotes the number of pages
-	// used by the process.
-	if len(cont) < 24 {
-		log.Println("Error in RSS from stat")
-		return 0
-	}
-
-	rss, err := strconv.Atoi(cont[23])
-	if err != nil {
-		log.Println(err)
-		return 0
-	}
-
-	return rss * os.Getpagesize() / (1 << 20)
 }
 
 type fingerPrint struct {
@@ -349,8 +307,9 @@ func Init(ps *badger.KV) {
 	syncCh = make(chan syncEntry, 10000)
 
 	go periodicCommit()
+	go periodicFree()
 	for i := 0; i < runtime.NumCPU(); i++ {
-		go batchSync()
+		go batchSync(i)
 	}
 }
 
@@ -379,7 +338,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
-	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
+	l := getNew(key, group, pstore) // This retrieves a new *List and sets refcount to 1.
 	l.water = marks.Get(group)
 
 	lp = lhmap.PutIfMissing(fp, l)
@@ -391,25 +350,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		// Undo the increment in getNew() call above.
 		go l.decr()
 	}
-	pk := x.Parse(key)
 
-	// This replaces "TokensTable". The idea is that we want to quickly add the
-	// index key to the data store, with essentially an empty value. We just need
-	// the keys for filtering / sorting.
-	if l == lp && pk.IsIndex() {
-		// Lock before entering goroutine. Otherwise, some tests in query will fail.
-		l.Lock()
-		go func(key []byte) {
-			defer l.Unlock()
-			var item badger.KVItem
-			err := pstore.Get(key, &item)
-			x.Check(err)
-			val := item.Value()
-			if len(val) == 0 {
-				pstore.Set(key, dummyPostingList)
-			}
-		}(key)
-	}
 	return lp, lp.decr
 }
 
@@ -431,7 +372,7 @@ func GetOrUnmarshal(key, val []byte, gid uint32) (rlist *List, decr func()) {
 
 	var pl protos.PostingList
 	pl.Unmarshal(val)
-	lp = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
+	lp = getNew(key, gid, pstore) // This retrieves a new *List and sets refcount to 1.
 	lp.mlayer = pl.Postings
 
 	return lp, lp.decr
@@ -480,7 +421,6 @@ func CommitLists(numRoutines int, group uint32) {
 
 func evictShard(group uint32, shardNum int) {
 	lhmap := lhmapFor(group)
-
 	lhmap.DeleteShard(shardNum, func(k uint64, l *List) {
 		l.SetForDeletion()
 		commitOne(l)
@@ -525,10 +465,11 @@ type syncEntry struct {
 	pending []uint64
 }
 
-func batchSync() {
+func batchSync(i int) {
 	var entries []syncEntry
 	var loop uint64
 	wb := make([]*badger.Entry, 0, 100)
+	elog := trace.NewEventLog("Batch Sync", fmt.Sprintf("%d", i))
 
 	for {
 		select {
@@ -540,7 +481,9 @@ func batchSync() {
 			start := time.Now()
 			if len(entries) > 0 {
 				loop++
-				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
+				if len(entries) > 1000 {
+					elog.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
+				}
 				for _, e := range entries {
 					if e.val == nil {
 						wb = badger.EntriesDelete(wb, e.key)

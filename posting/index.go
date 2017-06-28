@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"time"
 
 	"golang.org/x/net/trace"
 
@@ -94,6 +95,7 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
 	tokens, err := IndexTokens(attr, t.GetLang(), p)
+
 	if err != nil {
 		// This data is not indexable
 		return err
@@ -117,7 +119,6 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
-
 	var groupId uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 		groupId = rv.Group
@@ -126,11 +127,17 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 		groupId = group.BelongsTo(edge.Attr)
 	}
 
+	t := time.Now()
 	plist, decr := GetOrCreate(key, groupId)
+	t1 := time.Since(t)
+	if t1.Nanoseconds() > 1000000 {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("retreived pl took %v", t1)
+		}
+	}
 	defer decr()
 
-	x.AssertTruef(plist != nil, "plist is nil [%s] %d %s",
-		token, edge.ValueId, edge.Attr)
+	x.AssertTrue(plist != nil)
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -162,8 +169,7 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	plist, decr := GetOrCreate(key, groupId)
 	defer decr()
 
-	x.AssertTruef(plist != nil, "plist is nil [%s] %d %d",
-		t.Attr, t.Entity, t.ValueId)
+	x.AssertTrue(plist != nil)
 	edge := &protos.DirectedEdge{
 		Entity:  t.ValueId,
 		ValueId: t.Entity,
@@ -287,7 +293,15 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
 	{
+		t2 := time.Now()
 		l.Lock()
+		t1 := time.Since(t2)
+		if t1.Nanoseconds() > 1000000 {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("acquired lock %v %v %v", t1, t.Attr, t.Entity)
+			}
+		}
+
 		if doUpdateIndex {
 			// Check original value BEFORE any mutation actually happens.
 			if len(t.Lang) > 0 {

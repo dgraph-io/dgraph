@@ -440,11 +440,11 @@ func (w *grpcWorker) Backup(ctx context.Context, req *protos.BackupPayload) (*pr
 
 func BackupOverNetwork(ctx context.Context) error {
 	// If we haven't even had a single membership update, don't run backup.
-	if !HealthCheck() {
+	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+			tr.LazyPrintf("Request rejected %v", err)
 		}
-		return x.Errorf("Uninitiated server. Please retry later")
+		return err
 	}
 	// Let's first collect all groups.
 	gids := groups().KnownGroups()

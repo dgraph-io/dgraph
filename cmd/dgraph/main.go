@@ -67,14 +67,14 @@ var (
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	nomutations    = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	tracing        = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
 	blockRate      = flag.Int("block", 0, "Block profiling rate")
 	dumpSubgraph   = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
+	numPending     = flag.Int("pending", 1000, "Number of pending queries. Useful for rate limiting.")
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
-	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
+	pendingQueries chan struct{}
 	// TLS configurations
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections with clients.")
 	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
@@ -126,7 +126,7 @@ func isMutationAllowed(ctx context.Context) bool {
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
-	if worker.HealthCheck() {
+	if err := x.HealthCheck(); err == nil {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	} else {
@@ -169,7 +169,7 @@ func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
-	if !worker.HealthCheck() {
+	if err := x.HealthCheck(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -191,7 +191,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
 	ctx = context.WithValue(ctx, "mutation_allowed", !*nomutations)
 
-	if rand.Float64() < *tracing {
+	if rand.Float64() < *worker.Tracing {
 		tr := trace.New("Dgraph", "Query")
 		tr.SetMaxEvents(1000)
 		defer tr.Finish()
@@ -454,7 +454,20 @@ type grpcServer struct{}
 // client as a protocol buffer message.
 func (s *grpcServer) Run(ctx context.Context,
 	req *protos.Request) (resp *protos.Response, err error) {
-	if rand.Float64() < *tracing {
+	// we need membership information
+	if err := x.HealthCheck(); err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Request rejected %v", err)
+		}
+		return resp, err
+	}
+	pendingQueries <- struct{}{}
+	defer func() { <-pendingQueries }()
+	if ctx.Err() != nil {
+		return resp, ctx.Err()
+	}
+
+	if rand.Float64() < *worker.Tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		tr.SetMaxEvents(1000)
 		defer tr.Finish()
@@ -548,12 +561,11 @@ func (s *grpcServer) Run(ctx context.Context,
 
 func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version,
 	err error) {
-	// we need membership information
-	if !worker.HealthCheck() {
+	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+			tr.LazyPrintf("request rejected %v", err)
 		}
-		return v, x.Errorf("Uninitiated server. Please retry later")
+		return v, err
 	}
 
 	v = new(protos.Version)
@@ -562,11 +574,11 @@ func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *prot
 }
 
 func (s *grpcServer) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	if !worker.HealthCheck() {
+	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+			tr.LazyPrintf("request rejected %v", err)
 		}
-		return &protos.AssignedIds{}, x.Errorf("Uninitiated server. Please retry later")
+		return &protos.AssignedIds{}, err
 	}
 	return worker.AssignUidsOverNetwork(ctx, num)
 }
@@ -717,10 +729,16 @@ func setupServer(che chan error) {
 }
 
 func main() {
+	/*
+		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
+			return true, true
+		}
+	*/
 	rand.Seed(time.Now().UnixNano())
 	x.Init()
 	checkFlagsAndInitDirs()
 	runtime.SetBlockProfileRate(*blockRate)
+	pendingQueries = make(chan struct{}, *numPending)
 
 	pd, err := filepath.Abs(*postingDir)
 	x.Check(err)

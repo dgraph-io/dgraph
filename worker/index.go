@@ -151,6 +151,10 @@ func (n *node) waitForAppliedMark(ctx context.Context, lastIndex uint64) error {
 	return nil
 }
 
+func (n *node) waitForSyncMark(ctx context.Context, lastIndex uint64) {
+	waitForSyncMark(ctx, n.gid, lastIndex)
+}
+
 func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) {
 	// Force an aggressive evict.
 	posting.CommitLists(10, gid)

@@ -19,6 +19,8 @@ package worker
 
 import (
 	"bytes"
+	"math/rand"
+	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
@@ -40,6 +42,7 @@ const (
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
+
 	for _, edge := range edges {
 		gid := group.BelongsTo(edge.Attr)
 		if !groups().ServesGroup(gid) {
@@ -64,7 +67,15 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 		err = validateAndConvert(edge, typ)
 
 		key := x.DataKey(edge.Attr, edge.Entity)
+
+		t := time.Now()
 		plist, decr := posting.GetOrCreate(key, gid)
+		t1 := time.Since(t)
+		if t1.Nanoseconds() > 100000 {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("retreived pl %v", t1)
+			}
+		}
 		defer decr()
 
 		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
@@ -216,6 +227,26 @@ func numEdges(attr string) int {
 	return count
 }
 
+func hasEdges(attr string) bool {
+	iterOpt := badger.DefaultIteratorOptions
+	iterOpt.FetchValues = false
+	it := pstore.NewIterator(iterOpt)
+	defer it.Close()
+	pk := x.ParsedKey{
+		Attr: attr,
+	}
+	prefix := pk.DataPrefix()
+	for it.Seek(prefix); it.Valid(); it.Next() {
+		item := it.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			return false
+		}
+		return true
+	}
+	return false
+}
+
 func checkSchema(s *protos.SchemaUpdate) error {
 	typ := types.TypeID(s.ValueType)
 	if typ == types.UidID && s.Directive == protos.SchemaUpdate_INDEX {
@@ -233,7 +264,7 @@ func checkSchema(s *protos.SchemaUpdate) error {
 			return nil
 		}
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
-		if numEdges(s.Predicate) > 0 {
+		if hasEdges(s.Predicate) {
 			return x.Errorf("Schema change not allowed from predicate to uid or vice versa"+
 				" till you have data for pred: %s", s.Predicate)
 		}
@@ -347,7 +378,7 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 
 	errors := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {
-		proposeOrSend(ctx, gid, mu, errors)
+		go proposeOrSend(ctx, gid, mu, errors)
 	}
 
 	// Wait for all the goroutines to reply back.
@@ -381,12 +412,21 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 	}
 	c := make(chan error, 1)
 	node := groups().Node(m.GroupId)
+	var tr trace.Trace
+	if rand.Float64() < *Tracing {
+		tr = trace.New("Dgraph", "GrpcMutate")
+		tr.SetMaxEvents(1000)
+		ctx = trace.NewContext(ctx, tr)
+	}
 	go func() { c <- node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}) }()
 
 	select {
 	case <-ctx.Done():
 		return &protos.Payload{}, ctx.Err()
 	case err := <-c:
+		if tr != nil {
+			tr.Finish()
+		}
 		return &protos.Payload{}, err
 	}
 }

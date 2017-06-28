@@ -81,15 +81,25 @@ type List struct {
 func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
 func (l *List) incr() int32     { return atomic.AddInt32(&l.refcount, 1) }
 func (l *List) decr() {
-	l.Lock()
-	l.Unlock()
-
 	val := atomic.AddInt32(&l.refcount, -1)
 	x.AssertTruef(val >= 0, "List reference should never be less than zero: %v", val)
 	if val > 0 {
 		return
 	}
+	postingPool.Put(l.plist)
+
+	// l.Iterate(0, func(p *protos.Posting) bool {
+	// 	*p = protos.Posting{}
+	// 	postingPool.Put(p)
+	// 	return true
+	// })
 	listPool.Put(l)
+}
+
+var postingPool = sync.Pool{
+	New: func() interface{} {
+		return &protos.PostingList{}
+	},
 }
 
 var listPool = sync.Pool{
@@ -98,7 +108,7 @@ var listPool = sync.Pool{
 	},
 }
 
-func getNew(key []byte, pstore *badger.KV) *List {
+func getNew(key []byte, gid uint32, pstore *badger.KV) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
 	l.key = key
@@ -120,7 +130,9 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	}
 	val := item.Value()
 
-	l.plist = new(protos.PostingList)
+	l.plist = postingPool.Get().(*protos.PostingList)
+	l.plist.Reset()
+	// l.plist = new(protos.PostingList)
 	if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 	}
@@ -193,16 +205,17 @@ func newPosting(t *protos.DirectedEdge) *protos.Posting {
 		postingType = protos.Posting_VALUE
 	}
 
-	return &protos.Posting{
-		Uid:         t.ValueId,
-		Value:       t.Value,
-		ValType:     protos.Posting_ValType(t.ValueType),
-		PostingType: postingType,
-		Metadata:    metadata,
-		Label:       t.Label,
-		Op:          op,
-		Facets:      t.Facets,
-	}
+	// p := postingPool.Get().(*protos.Posting)
+	p := &protos.Posting{}
+	p.Uid = t.ValueId
+	p.Value = t.Value
+	p.ValType = protos.Posting_ValType(t.ValueType)
+	p.PostingType = postingType
+	p.Metadata = metadata
+	p.Label = t.Label
+	p.Op = op
+	p.Facets = t.Facets
+	return p
 }
 
 func (l *List) PostingList() *protos.PostingList {
@@ -316,7 +329,14 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
 func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
+	t2 := time.Now()
 	l.Lock()
+	t1 := time.Since(t2)
+	if t1.Nanoseconds() > 1000000 {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("acquired lock %v %v", t1, t.Attr)
+		}
+	}
 	defer l.Unlock()
 	return l.addMutation(ctx, t)
 }
@@ -395,7 +415,15 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
 
+	t2 := time.Now()
 	hasMutated := l.updateMutationLayer(mpost)
+	t1 := time.Since(t2)
+	if t1.Nanoseconds() > 1000000 {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("updated mutation layer %v %v %v", t1, len(l.mlayer), len(l.plist.Postings))
+		}
+	}
+
 	if hasMutated {
 		var gid uint32
 		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
@@ -537,6 +565,11 @@ func (l *List) length(afterUid uint64) int {
 	return count
 }
 
+func (l *List) isClean() bool {
+	l.AssertRLock()
+	return len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0
+}
+
 // Length iterates over the mutation layer and counts number of elements.
 func (l *List) Length(afterUid uint64) int {
 	l.RLock()
@@ -550,7 +583,7 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 
 	// deleteAll is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
-	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
+	if l.isClean() {
 		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
 		l.pending = make([]uint64, 0, 3)
 		return false, nil

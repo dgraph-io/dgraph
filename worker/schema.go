@@ -155,11 +155,11 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *protos.SchemaReque
 // GetSchemaOverNetwork checks which group should be serving the schema
 // according to fingerprint of the predicate and sends it to that instance.
 func GetSchemaOverNetwork(ctx context.Context, schema *protos.SchemaRequest) ([]*protos.SchemaNode, error) {
-	if !HealthCheck() {
+	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+			tr.LazyPrintf("Request rejected %v", err)
 		}
-		return nil, x.Errorf("Uninitiated server. Please retry later")
+		return nil, err
 	}
 	schemaMap := make(map[uint32]*protos.SchemaRequest)
 	addToSchemaMap(schemaMap, schema)

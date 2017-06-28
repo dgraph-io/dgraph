@@ -2039,6 +2039,7 @@ func TestDebug2(t *testing.T) {
 
 func TestDebug3(t *testing.T) {
 	populateGraph(t)
+	time.Sleep(10 * time.Second)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
