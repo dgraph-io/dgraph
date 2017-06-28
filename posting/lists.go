@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -218,6 +219,7 @@ func aggressivelyEvict() {
 }
 
 func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}, commitFraction float64) {
+	fmt.Printf("gentlecommit fraction %v\n", commitFraction)
 	select {
 	case pending <- struct{}{}:
 	default:
@@ -282,13 +284,9 @@ func periodicCommit() {
 			}
 
 			totMemory := getMemUsage()
-			if totMemory*10 <= *maxmemory {
-				gentleCommit(dirtyMap, pending, *commitFraction)
-				break
-			} else if totMemory <= *maxmemory {
-				gentleCommit(dirtyMap, pending, *commitFraction*10.0*float64(totMemory)/float64(*maxmemory))
-				break
-			}
+			fraction := math.Max(*commitFraction, *commitFraction*math.Exp(float64(dsize)/100000.0))
+			fraction = math.Min(1.0, fraction)
+			gentleCommit(dirtyMap, pending, fraction)
 
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
 			// are currently being processed to not get stuck on dirtyChan, which won't be
@@ -296,8 +294,10 @@ func periodicCommit() {
 
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
-			log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
-			go evictShard()
+			if totMemory > *maxmemory {
+				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
+				go evictShard()
+			}
 		}
 	}
 }
@@ -526,15 +526,13 @@ func commitShard(group uint32, shardNum int) {
 	workChan := make(chan *List, 10000)
 
 	var wg sync.WaitGroup
-	for i := 0; i < runtime.NumCPU(); i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for l := range workChan {
-				commitOne(l, c)
-			}
-		}()
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for l := range workChan {
+			commitOne(l, c)
+		}
+	}()
 
 	lhmap.EachShard(shardNum, func(k uint64, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
