@@ -19,7 +19,7 @@ package query
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"math"
 	"time"
 
@@ -66,7 +66,7 @@ func convertTo(from *protos.TaskValue) (types.Val, error) {
 }
 
 var (
-	wrongTypeErr = fmt.Errorf("Wrong type encountered for function")
+	wrongTypeErr = errors.New("Wrong type encountered for function")
 )
 
 func compareValues(ag string, va, vb types.Val) (bool, error) {

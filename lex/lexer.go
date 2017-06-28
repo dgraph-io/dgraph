@@ -18,6 +18,7 @@
 package lex
 
 import (
+	"errors"
 	"fmt"
 	"unicode/utf8"
 )
@@ -87,7 +88,7 @@ func (p *ItemIterator) Prev() bool {
 }
 
 var (
-	outOfRangeErr = fmt.Errorf("Out of range for peek")
+	outOfRangeErr = errors.New("Out of range for peek")
 )
 
 // Peek returns the next n items without consuming them.

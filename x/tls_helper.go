@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -297,8 +298,8 @@ func (c *wrapperTLSConfig) getClientCertificate(_ *tls.CertificateRequestInfo) (
 }
 
 var (
-	invalidCertErr = fmt.Errorf("Invalid certificate")
-	verifyCertErr  = fmt.Errorf("Failed to verify certificate")
+	invalidCertErr = errors.New("Invalid certificate")
+	verifyCertErr  = errors.New("Failed to verify certificate")
 )
 
 func (c *wrapperTLSConfig) verifyPeerCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {

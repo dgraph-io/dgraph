@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"math"
 	"strconv"
 	"time"
@@ -34,22 +34,22 @@ import (
 )
 
 var (
-	invalidIntErr      = fmt.Errorf("Invalid data for int64")
-	invalidFloatErr    = fmt.Errorf("Invalid data for float")
-	invalidBoolErr     = fmt.Errorf("Invalid data for bool")
-	invalidDateErr     = fmt.Errorf("Invalid data for date")
-	floatOutOfRangeErr = fmt.Errorf("Float out of int64 range")
-	timeOutOfRangeErr  = fmt.Errorf("Time out of int64 range")
-	expectedGeoErr     = fmt.Errorf("Expected a Geo type")
-	expectedStringErr  = fmt.Errorf("Expected a value of type string")
-	expectedIntErr     = fmt.Errorf("Expected a value of type int64")
-	expectedFloatErr   = fmt.Errorf("Expected a value of type float")
-	expectedBoolErr    = fmt.Errorf("Expected a value of type bool")
-	expectedByteErr    = fmt.Errorf("Expected a value of type []byte")
-	expectedPassErr    = fmt.Errorf("Expected a value of type password")
-	objectValErr       = fmt.Errorf("ObjectValue not available")
-	invalidTypeErr     = fmt.Errorf("Invalid type for MarshalJSON")
-	cantConvertErr     = fmt.Errorf("Cant convert to given type.")
+	invalidIntErr      = errors.New("Invalid data for int64")
+	invalidFloatErr    = errors.New("Invalid data for float")
+	invalidBoolErr     = errors.New("Invalid data for bool")
+	invalidDateErr     = errors.New("Invalid data for date")
+	floatOutOfRangeErr = errors.New("Float out of int64 range")
+	timeOutOfRangeErr  = errors.New("Time out of int64 range")
+	expectedGeoErr     = errors.New("Expected a Geo type")
+	expectedStringErr  = errors.New("Expected a value of type string")
+	expectedIntErr     = errors.New("Expected a value of type int64")
+	expectedFloatErr   = errors.New("Expected a value of type float")
+	expectedBoolErr    = errors.New("Expected a value of type bool")
+	expectedByteErr    = errors.New("Expected a value of type []byte")
+	expectedPassErr    = errors.New("Expected a value of type password")
+	objectValErr       = errors.New("ObjectValue not available")
+	invalidTypeErr     = errors.New("Invalid type for MarshalJSON")
+	cantConvertErr     = errors.New("Cant convert to given type.")
 )
 
 // Convert converts the value to given scalar type.

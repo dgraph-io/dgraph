@@ -18,7 +18,7 @@
 package worker
 
 import (
-	"fmt"
+	"errors"
 	"math"
 	"sort"
 	"strconv"
@@ -95,18 +95,18 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 }
 
 var (
-	scalarErr        = fmt.Errorf("Attribute is not valid scalar type")
-	marshalErr       = fmt.Errorf("Failed convertToType during Marshal")
-	reverseErr       = fmt.Errorf("Predicate doesn't have reverse edge")
-	indexErr         = fmt.Errorf("Predicate is not indexed")
-	indexErr2        = fmt.Errorf("Predicate is not indexed with correct type")
-	passwordErr      = fmt.Errorf("Attribute of type password cannot be fetched")
-	argErr           = fmt.Errorf("No arguments passed to function")
-	argCountError    = fmt.Errorf("Incorrect number of arguments passed to function")
-	aggErr           = fmt.Errorf("Aggregator could not be applied")
-	compareScalarErr = fmt.Errorf("Compare scalar function got invalid number of digits")
-	regexErr         = fmt.Errorf("Invalid regexp modifier")
-	fnErr            = fmt.Errorf("Function not handled in parseSrcFn")
+	scalarErr        = errors.New("Attribute is not valid scalar type")
+	marshalErr       = errors.New("Failed convertToType during Marshal")
+	reverseErr       = errors.New("Predicate doesn't have reverse edge")
+	indexErr         = errors.New("Predicate is not indexed")
+	indexErr2        = errors.New("Predicate is not indexed with correct type")
+	passwordErr      = errors.New("Attribute of type password cannot be fetched")
+	argErr           = errors.New("No arguments passed to function")
+	argCountError    = errors.New("Incorrect number of arguments passed to function")
+	aggErr           = errors.New("Aggregator could not be applied")
+	compareScalarErr = errors.New("Compare scalar function got invalid number of digits")
+	regexErr         = errors.New("Invalid regexp modifier")
+	fnErr            = errors.New("Function not handled in parseSrcFn")
 )
 
 // convertValue converts the data to the schema.State() type of predicate.
