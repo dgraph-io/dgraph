@@ -335,8 +335,10 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 
 	select {
 	case err = <-che:
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
+		if err != nil {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(err.Error())
+			}
 		}
 		return err
 	case <-ctx.Done():

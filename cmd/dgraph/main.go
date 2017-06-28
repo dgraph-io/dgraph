@@ -48,6 +48,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
+	"github.com/cockroachdb/cmux"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -61,7 +62,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/soheilhy/cmux"
 )
 
 var (
@@ -1055,9 +1055,8 @@ func setupServer(che chan error) {
 	}
 
 	tcpm := cmux.New(l)
+	grpcl := tcpm.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
 	httpl := tcpm.Match(cmux.HTTP1Fast())
-	grpcl := tcpm.MatchWithWriters(
-		cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	http2 := tcpm.Match(cmux.HTTP2())
 
 	http.HandleFunc("/health", healthCheck)

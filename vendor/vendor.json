@@ -143,6 +143,12 @@
 			"revisionTime": "2016-11-24T05:17:49Z"
 		},
 		{
+			"checksumSHA1": "HlDspvrfA33+zVOgm5mvoiWvRhg=",
+			"path": "github.com/cockroachdb/cmux",
+			"revision": "30d10be492927e2dcae0089c374c455d42414fcb",
+			"revisionTime": "2017-01-10T19:26:07Z"
+		},
+		{
 			"checksumSHA1": "jw+XDfPJgogfSPCsuebqFZj/GJc=",
 			"path": "github.com/coreos/etcd/raft",
 			"revision": "1ebeef5cbfe69c0dab2bc701ee5307eed7a7d8d2",
@@ -209,7 +215,6 @@
 			"revisionTime": "2017-03-31T03:19:02Z"
 		},
 		{
-<<<<<<< HEAD
 			"checksumSHA1": "lZFWy27Qo6+m/keDjNFYTxSmvZw=",
 			"path": "github.com/golang/protobuf/ptypes/any",
 			"revision": "2bba0603135d7d7f5cb73b2125beeda19c09f4ef",
@@ -234,8 +239,6 @@
 			"revisionTime": "2015-06-17T15:18:51Z"
 		},
 		{
-=======
->>>>>>> fix/vendoring
 			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
 			"path": "github.com/pkg/errors",
 			"revision": "17b591df37844cde689f4d5813e5cea0927d8dd2",
@@ -246,12 +249,6 @@
 			"path": "github.com/pmezard/go-difflib/difflib",
 			"revision": "792786c7400a136282c1664665ae0a8db921c6c2",
 			"revisionTime": "2016-01-10T10:55:54Z"
-		},
-		{
-			"checksumSHA1": "W2kMUxTFJybcc8NKlqEAM4jY7Mw=",
-			"path": "github.com/soheilhy/cmux",
-			"revision": "13f520d62c8e9514090ab9f170fa5df915f2d1bf",
-			"revisionTime": "2016-09-05T20:05:55Z"
 		},
 		{
 			"checksumSHA1": "Q2V7Zs3diLmLfmfbiuLpSxETSuY=",
