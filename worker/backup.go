@@ -330,7 +330,9 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 			tr.LazyPrintf("Leader of group: %d. Running backup.", gid)
 		}
 		if err := backup(gid, *backupPath); err != nil {
-			x.TraceError(ctx, err)
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(err.Error())
+			}
 			return &protos.BackupPayload{
 				ReqId:  reqId,
 				Status: protos.BackupPayload_FAILED,
@@ -369,7 +371,9 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 			defer pl.Put(conn)
 			break
 		}
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 	}
 
 	// Unable to find any connection to any of these servers. This should be exceedingly rare.
@@ -392,7 +396,9 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 	}
 	nrep, err := c.Backup(ctx, nr)
 	if err != nil {
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return &protos.BackupPayload{
 			ReqId:   reqId,
 			Status:  protos.BackupPayload_FAILED,

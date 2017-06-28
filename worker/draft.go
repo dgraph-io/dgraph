@@ -335,7 +335,9 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 
 	select {
 	case err = <-che:
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
@@ -427,7 +429,9 @@ func (n *node) processMutation(e raftpb.Entry, m *protos.Mutations) error {
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
 	if err := runMutations(ctx, m.Edges); err != nil {
-		x.TraceError(n.ctx, err)
+		if tr, ok := trace.FromContext(n.ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return err
 	}
 	return nil
@@ -438,7 +442,9 @@ func (n *node) processSchemaMutations(e raftpb.Entry, m *protos.Mutations) error
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
 	if err := runSchemaMutations(ctx, m.Schema); err != nil {
-		x.TraceError(n.ctx, err)
+		if tr, ok := trace.FromContext(n.ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return err
 	}
 	return nil

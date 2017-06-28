@@ -18,6 +18,7 @@
 package worker
 
 import (
+	"fmt"
 	"time"
 
 	"golang.org/x/net/context"
@@ -210,7 +211,9 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 	c := protos.NewWorkerClient(conn)
 	_, err = c.RebuildIndex(ctx, &protos.RebuildIndexMessage{Attr: attr, GroupId: gid})
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.RebuildIndex"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(fmt.Sprintf("Error while calling Worker.RebuildIndex: %+v", err))
+		}
 		return err
 	}
 	if tr, ok := trace.FromContext(ctx); ok {

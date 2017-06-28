@@ -18,6 +18,8 @@
 package worker
 
 import (
+	"fmt"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
@@ -111,7 +113,9 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 		p := pools().get(addr)
 		conn, err := p.Get()
 		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while retrieving connection"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(fmt.Sprintf("Error while retrieving connection: %+v", err))
+			}
 			return err
 		}
 		defer p.Put(conn)
@@ -122,7 +126,9 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 		c := protos.NewWorkerClient(conn)
 		ul, err = c.AssignUids(ctx, num)
 		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while getting uids"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(fmt.Sprintf("Error while getting uids: %+v", err))
+			}
 			return err
 		}
 	}

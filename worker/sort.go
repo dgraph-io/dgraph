@@ -75,7 +75,9 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 		return &emptySortResult, ctx.Err()
 	case err := <-cerr:
 		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.Sort"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(fmt.Sprintf("Error while calling Worker.Sort: %+v", err))
+			}
 		}
 		return reply, err
 	}
@@ -292,7 +294,9 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		// wait for other goroutine to get cancelled
 		<-resCh
 	} else {
-		x.TraceError(ctx, r.err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(r.err.Error())
+		}
 		r = <-resCh
 	}
 	return r.res, r.err

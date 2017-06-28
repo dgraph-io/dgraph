@@ -20,6 +20,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"sort"
 
@@ -138,7 +139,9 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 
 	stream, err := c.PredicateAndSchemaData(context.Background())
 	if err != nil {
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return 0, err
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
@@ -146,7 +149,9 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 	}
 
 	if err := streamKeys(stream, group); err != nil {
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return 0, x.Wrapf(err, "While streaming keys group")
 	}
 
@@ -162,7 +167,9 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 			break
 		}
 		if err != nil {
-			x.TraceError(ctx, err)
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(err.Error())
+			}
 			close(kvs)
 			return count, err
 		}
@@ -173,11 +180,15 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 		case kvs <- kv:
 			// OK
 		case <-ctx.Done():
-			x.TraceError(ctx, x.Errorf("Context timed out while streaming group: %v", group))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(fmt.Sprintf("Context timed out while streaming group: %v", group))
+			}
 			close(kvs)
 			return count, ctx.Err()
 		case err := <-che:
-			x.TraceError(ctx, x.Errorf("Error while doing a batch write for group: %v", group))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(fmt.Sprintf("Error while doing a batch write for group: %v", group))
+			}
 			close(kvs)
 			return count, err
 		}
@@ -185,7 +196,9 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 	close(kvs)
 
 	if err := <-che; err != nil {
-		x.TraceError(ctx, x.Errorf("Error while doing a batch write for group: %v", group))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(fmt.Sprintf("Error while doing a batch write for group: %v", group))
+		}
 		return count, err
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
