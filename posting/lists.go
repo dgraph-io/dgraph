@@ -139,13 +139,6 @@ func (c *counters) log() {
 	log.Printf("Commit counters. done: %5d noop: %5d\n", done, noop)
 }
 
-func newCounters() *counters {
-	c := new(counters)
-	c.ticker = time.NewTicker(time.Second)
-	go c.periodicLog()
-	return c
-}
-
 type listMaps struct {
 	x.SafeMutex
 	m map[uint32]*listMap
@@ -218,8 +211,8 @@ func aggressivelyEvict() {
 	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
-func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}, commitFraction float64) {
-	fmt.Printf("gentlecommit fraction %v\n", commitFraction)
+func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{},
+	commitFraction float64) {
 	select {
 	case pending <- struct{}{}:
 	default:
@@ -258,7 +251,7 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}, comm
 			}
 			// Not removing the postings list from the map, to avoid a race condition,
 			// where another caller re-creates the posting list before a commit happens.
-			commitOne(l, nil)
+			commitOne(l)
 		}
 	}(keysBuffer)
 }
@@ -284,8 +277,7 @@ func periodicCommit() {
 			}
 
 			totMemory := getMemUsage()
-			fraction := math.Max(*commitFraction, *commitFraction*math.Exp(float64(dsize)/100000.0))
-			fraction = math.Min(1.0, fraction)
+			fraction := math.Min(1.0, *commitFraction*math.Exp(float64(dsize)/100000.0))
 			gentleCommit(dirtyMap, pending, fraction)
 
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
@@ -472,16 +464,12 @@ func GetOrUnmarshal(key, val []byte, gid uint32) (rlist *List, decr func()) {
 	return lp, lp.decr
 }
 
-func commitOne(l *List, c *counters) {
+func commitOne(l *List) {
 	if l == nil {
 		return
 	}
-	if merged, err := l.SyncIfDirty(context.Background()); err != nil {
+	if _, err := l.SyncIfDirty(context.Background()); err != nil {
 		log.Printf("Error while committing dirty list: %v\n", err)
-	} else if merged && c != nil {
-		atomic.AddUint64(&c.done, 1)
-	} else if c != nil {
-		atomic.AddUint64(&c.noop, 1)
 	}
 }
 
@@ -489,8 +477,6 @@ func CommitLists(numRoutines int, group uint32) {
 	if group == 0 {
 		return
 	}
-	c := newCounters()
-	defer c.ticker.Stop()
 
 	// We iterate over lhmap, deleting keys and pushing values (List) into this
 	// channel. Then goroutines right below will commit these lists to data store.
@@ -502,7 +488,7 @@ func CommitLists(numRoutines int, group uint32) {
 		go func() {
 			defer wg.Done()
 			for l := range workChan {
-				commitOne(l, c)
+				commitOne(l)
 			}
 		}()
 	}
@@ -521,17 +507,10 @@ func CommitLists(numRoutines int, group uint32) {
 
 func evictShard(group uint32, shardNum int) {
 	lhmap := lhmapFor(group)
-	c := newCounters()
-	defer c.ticker.Stop()
 
-	lhmap.EachShard(shardNum, func(k uint64, l *List) {
-		if l == nil { // To be safe. Check might be unnecessary.
-			return
-		}
-		commitOne(l, c)
-	})
 	lhmap.DeleteShard(shardNum, func(k uint64, l *List) {
 		l.SetForDeletion()
+		commitOne(l)
 		l.decr()
 	})
 	log.Printf("evicted shard %d from group %d\n", shardNum, group)
@@ -556,9 +535,11 @@ func evictShards(numShards int) {
 func EvictGroup(group uint32) {
 	// This is serialized by raft so no need to worry about race condition from getOrCreate
 	// request from same group
+	lhmapFor(group).Each(func(k uint64, l *List) {
+		l.SetForDeletion()
+	})
 	CommitLists(1, group)
 	lhmapFor(group).EachWithDelete(func(k uint64, l *List) {
-		l.SetForDeletion()
 		l.decr()
 	})
 }
