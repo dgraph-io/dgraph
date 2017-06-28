@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
@@ -53,7 +54,9 @@ var (
 func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Result, error) {
 	attr := q.Attr
 	gid := group.BelongsTo(attr)
-	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("attr: %v groupId: %v", attr, gid)
+	}
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
@@ -70,17 +73,23 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
 	}
 	defer pl.Put(conn)
-	x.Trace(ctx, "Sending request to %v", addr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sending request to %v", addr)
+	}
 
 	c := protos.NewWorkerClient(conn)
 	reply, err := c.ServeTask(ctx, q)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.ServeTask"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while calling Worker.ServeTask: %v", err)
+		}
 		return &emptyResult, err
 	}
 
-	x.Trace(ctx, "Reply from server. length: %v Addr: %v Attr: %v",
-		len(reply.UidMatrix), addr, attr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Reply from server. length: %v Addr: %v Attr: %v",
+			len(reply.UidMatrix), addr, attr)
+	}
 	return reply, nil
 }
 
@@ -724,7 +733,9 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Re
 	if q.UidList != nil {
 		numUids = len(q.UidList.Uids)
 	}
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
+	}
 
 	var reply *protos.Result
 	x.AssertTruef(groups().ServesGroup(gid),
@@ -942,7 +953,9 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 		if i == numPart-1 {
 			maxUid = math.MaxUint64
 		}
-		x.Trace(ctx, "Running go-routine %v for iteration", i)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Running go-routine %v for iteration", i)
+		}
 		wg.Add(1)
 		go func(i uint64) {
 			it := pstore.NewIterator()
@@ -962,7 +975,9 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 				x.AssertTruef(pk.Attr == q.Attr,
 					"Invalid key obtained for comparison")
 				if w%1000 == 0 {
-					x.Trace(ctx, "iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+					if tr, ok := trace.FromContext(ctx); ok {
+						tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+					}
 				}
 				w++
 				if pk.Uid > maxUid {

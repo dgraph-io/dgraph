@@ -48,6 +48,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
+	"github.com/cockroachdb/cmux"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -61,7 +62,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/soheilhy/cmux"
 )
 
 var (
@@ -129,7 +129,9 @@ func convertToNQuad(ctx context.Context, mutation string) ([]*protos.NQuad, erro
 	var nquads []*protos.NQuad
 	r := strings.NewReader(mutation)
 	reader := bufio.NewReader(r)
-	x.Trace(ctx, "Converting to NQuad")
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Converting to NQuad")
+	}
 
 	var strBuf bytes.Buffer
 	var err error
@@ -146,7 +148,9 @@ func convertToNQuad(ctx context.Context, mutation string) ([]*protos.NQuad, erro
 		if err == rdf.ErrEmpty { // special case: comment/empty line
 			continue
 		} else if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while parsing RDF"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while parsing RDF: %+v", err)
+			}
 			return nquads, err
 		}
 		nquads = append(nquads, &nq)
@@ -191,7 +195,9 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 
 	if len(newUids) > 0 {
 		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while AssignUidsOverNetwork for newUids: %v", newUids))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while AssignUidsOverNetwork for newUids: %+v", err)
+			}
 			return mr, err
 		}
 	}
@@ -203,7 +209,9 @@ func convertToEdges(ctx context.Context, nquads []*protos.NQuad) (mutationResult
 		wnq = rdf.NQuad{nq}
 		edge, err := wnq.ToEdgeUsing(newUids)
 		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while converting nquad: %+v to edge: %+v", nq, err)
+			}
 			return mr, err
 		}
 		edges = append(edges, edge)
@@ -289,7 +297,9 @@ func applyMutations(ctx context.Context, m *protos.Mutations) error {
 	}
 	err = worker.MutateOverNetwork(ctx, m)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while MutateOverNetwork: %+v", err)
+		}
 		return err
 	}
 	return nil
@@ -484,7 +494,9 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 // parseQueryAndMutation handles the cases where the query parsing code can hang indefinitely.
 // We allow 1 second for parsing the query; and then give up.
 func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, err error) {
-	x.Trace(ctx, "Query received: %v", r.Str)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Query received: %v", r.Str)
+	}
 	errc := make(chan error, 1)
 
 	go func() {
@@ -501,10 +513,14 @@ func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 		return res, child.Err()
 	case err := <-errc:
 		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while parsing query"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while parsing query: %+v", err)
+			}
 			return res, err
 		}
-		x.Trace(ctx, "Query parsed")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Query parsed")
+		}
 	}
 	return res, nil
 }
@@ -554,7 +570,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	q := string(req)
 	if err != nil || len(q) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
-		x.TraceError(ctx, x.Wrapf(err, "Error while reading query"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while reading query: %+v", err)
+		}
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
@@ -583,7 +601,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if res.Mutation != nil && hasGQLOps(res.Mutation) {
 		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while handling mutations: %+v", err)
+			}
 			x.SetStatus(w, x.Error, err.Error())
 			return
 		}
@@ -598,7 +618,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if res.Schema != nil {
 		if schemaNode, err = worker.GetSchemaOverNetwork(ctx, res.Schema); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while fetching schema: %+v", err)
+			}
 			x.SetStatus(w, x.Error, err.Error())
 			return
 		}
@@ -626,7 +648,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	sgl, err := query.ProcessQuery(ctx, res, &l)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while Executing query"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while executing query: %+v", err)
+		}
 		w.WriteHeader(http.StatusBadRequest)
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
@@ -655,12 +679,16 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// since we performed w.Write in ToJson above,
 		// calling WriteHeader with 500 code will be ignored.
-		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while converting to JSON: %+v", err)
+		}
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
-	x.Trace(ctx, "Latencies: Total: %v Parsing: %v Process: %v Json: %v",
-		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Latencies: Total: %v Parsing: %v Process: %v Json: %v",
+			time.Since(l.Start), l.Parsing, l.Processing, l.Json)
+	}
 }
 
 func shareHandler(w http.ResponseWriter, r *http.Request) {
@@ -678,7 +706,9 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	rawQuery, err := ioutil.ReadAll(r.Body)
 	if err != nil || len(rawQuery) == 0 {
-		x.TraceError(ctx, x.Wrapf(err, "Error while reading the stringified query payload"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while reading the stringified query payload: %+v", err)
+		}
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
@@ -692,7 +722,9 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 	var allocIds map[string]uint64
 	var allocIdsStr map[string]string
 	if allocIds, err = mutationHandler(ctx, &mutation); err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while handling mutations: %+v", err)
+		}
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
@@ -790,13 +822,6 @@ type grpcServer struct{}
 // client as a protocol buffer message.
 func (s *grpcServer) Run(ctx context.Context,
 	req *protos.Request) (resp *protos.Response, err error) {
-	// we need membership information
-	if !worker.HealthCheck() {
-		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
-		return resp, x.Errorf("Uninitiated server. Please retry later")
-	}
-	var allocIds map[string]uint64
-	var schemaNodes []*protos.SchemaNode
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		tr.SetMaxEvents(1000)
@@ -804,18 +829,31 @@ func (s *grpcServer) Run(ctx context.Context,
 		ctx = trace.NewContext(ctx, tr)
 	}
 
+	// we need membership information
+	if !worker.HealthCheck() {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+		}
+		return resp, x.Errorf("Uninitiated server. Please retry later")
+	}
+	var allocIds map[string]uint64
+	var schemaNodes []*protos.SchemaNode
 	// Sanitize the context of the keys used for internal purposes only
 	ctx = context.WithValue(ctx, "_share_", nil)
 
 	resp = new(protos.Response)
 	if len(req.Query) == 0 && req.Mutation == nil {
-		x.TraceError(ctx, x.Errorf("Empty query and mutation."))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Empty query and mutation.")
+		}
 		return resp, fmt.Errorf("Empty query and mutation.")
 	}
 
 	var l query.Latency
 	l.Start = time.Now()
-	x.Trace(ctx, "Query received: %v, variables: %v", req.Query, req.Vars)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Query received: %v, variables: %v", req.Query, req.Vars)
+	}
 	res, err := parseQueryAndMutation(ctx, gql.Request{
 		Str:       req.Query,
 		Variables: req.Vars,
@@ -837,7 +875,9 @@ func (s *grpcServer) Run(ctx context.Context,
 	// same as the http client.
 	if res.Mutation != nil && hasGQLOps(res.Mutation) {
 		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while handling mutations: %+v", err)
+			}
 			return resp, err
 		}
 	}
@@ -845,7 +885,9 @@ func (s *grpcServer) Run(ctx context.Context,
 	// Mutations are sent as part of the mutation object
 	if req.Mutation != nil && hasGraphOps(req.Mutation) {
 		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while handling mutations: %+v", err)
+			}
 			return resp, err
 		}
 	}
@@ -862,7 +904,9 @@ func (s *grpcServer) Run(ctx context.Context,
 
 	if schema != nil {
 		if schemaNodes, err = worker.GetSchemaOverNetwork(ctx, schema); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while fetching schema"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while fetching schema: %+v", err)
+			}
 			return resp, err
 		}
 	}
@@ -870,13 +914,17 @@ func (s *grpcServer) Run(ctx context.Context,
 
 	sgl, err := query.ProcessQuery(ctx, res, &l)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while converting to protocol buffer: %+v", err)
+		}
 		return resp, err
 	}
 
 	nodes, err := query.ToProtocolBuf(&l, sgl)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while converting to protocol buffer: %+v", err)
+		}
 		return resp, err
 	}
 	resp.N = nodes
@@ -892,7 +940,9 @@ func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *prot
 	err error) {
 	// we need membership information
 	if !worker.HealthCheck() {
-		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+		}
 		return v, x.Errorf("Uninitiated server. Please retry later")
 	}
 
@@ -991,6 +1041,8 @@ func serveHTTP(l net.Listener) {
 }
 
 func setupServer(che chan error) {
+	// By default Go GRPC traces all requests.
+	grpc.EnableTracing = false
 	go worker.RunServer(*bindall) // For internal communication.
 
 	laddr := "localhost"
@@ -1004,9 +1056,8 @@ func setupServer(che chan error) {
 	}
 
 	tcpm := cmux.New(l)
+	grpcl := tcpm.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
 	httpl := tcpm.Match(cmux.HTTP1Fast())
-	grpcl := tcpm.MatchWithWriters(
-		cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	http2 := tcpm.Match(cmux.HTTP2())
 
 	http.HandleFunc("/health", healthCheck)
