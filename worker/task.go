@@ -981,9 +981,9 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 						errChan <- ctx.Err()
 						return
 					default:
-					}
-					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+						if tr, ok := trace.FromContext(ctx); ok {
+							tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+						}
 					}
 				}
 				w++
