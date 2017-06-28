@@ -406,6 +406,22 @@ func TestCascadeDirective(t *testing.T) {
 		js)
 }
 
+func TestLevelBasedFacetVarAggSum(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			friend(id: 1000) {
+				path @facets(L1 as weight)
+				sumw: sum(var(L1))
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}}},{"@facets":{"_":{"weight":0.700000}}}],"sumw":0.800000}]}`,
+		js)
+}
+
 func TestLevelBasedFacetVarSum(t *testing.T) {
 	populateGraph(t)
 	query := `

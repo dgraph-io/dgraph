@@ -985,6 +985,13 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 		if sg == ch {
 			continue
 		}
+		if ch.Params.FacetVar != nil {
+			for _, v := range ch.Params.FacetVar {
+				if v == needsVar {
+					relSG = ch
+				}
+			}
+		}
 		for _, cch := range ch.Children {
 			// Find the sibling node whose child has the required variable.
 			if cch.Params.Var == needsVar {
