@@ -30,7 +30,7 @@ message SchemaUpdate {
 	   NONE = 0;
 	   INDEX = 1;
 	   REVERSE = 2;
-	}
+  }
 	Directive directive = 3;
 	repeated string tokenizer = 4;
 }

@@ -33,6 +33,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"runtime/pprof"
@@ -687,6 +688,12 @@ func main() {
 	x.Init()
 	checkFlagsAndInitDirs()
 	runtime.SetBlockProfileRate(*blockRate)
+
+	pd, err := filepath.Abs(*postingDir)
+	x.Check(err)
+	wd, err := filepath.Abs(*walDir)
+	x.Check(err)
+	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same.")
 
 	// All the writes to posting store should be synchronous. We use batched writers
 	// for posting lists, so the cost of sync writes is amortized.

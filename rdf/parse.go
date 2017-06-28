@@ -97,11 +97,12 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 			rnq.ObjectId = strings.Trim(item.Val, " ")
 
 		case itemStar:
-			// This is a special case for predicate or object.
-			if rnq.Predicate == "" {
-				rnq.Predicate = x.DeleteAllPredicates
+			if rnq.Subject == "" {
+				rnq.Subject = x.Star
+			} else if rnq.Predicate == "" {
+				rnq.Predicate = x.Star
 			} else {
-				rnq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.DeleteAllObjects}}
+				rnq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
 			}
 		case itemLiteral:
 			oval = item.Val
@@ -126,8 +127,8 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
-			if rnq.Predicate == x.DeleteAllPredicates {
-				return rnq, x.Errorf("If predicate is *, value should be * as well")
+			if rnq.Predicate == x.Star || rnq.Subject == x.Star {
+				return rnq, x.Errorf("If predicate/subject is *, value should be * as well")
 			}
 
 			val := strings.Trim(item.Val, " ")

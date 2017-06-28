@@ -210,7 +210,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	l.index.Lock()
 	defer l.index.Unlock()
 
-	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.DeleteAllObjects {
+	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.Star {
 		return l.handleDeleteAll(ctx, t)
 	}
 
@@ -289,10 +289,6 @@ func DeleteReverseEdges(ctx context.Context, attr string) error {
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
 func RebuildReverseEdges(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
-	if err := DeleteReverseEdges(ctx, attr); err != nil {
-		return err
-	}
-
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.DataPrefix()
@@ -404,10 +400,6 @@ func DeleteIndex(ctx context.Context, attr string) error {
 // RebuildIndex rebuilds index for a given attribute.
 func RebuildIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
-	if err := DeleteIndex(ctx, attr); err != nil {
-		return err
-	}
-
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.DataPrefix()
@@ -481,6 +473,59 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		if err := <-che; err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func DeletePredicate(ctx context.Context, attr string) error {
+	gid := group.BelongsTo(attr)
+	EvictGroup(gid)
+
+	iterOpt := badger.DefaultIteratorOptions
+	iterOpt.FetchValues = false
+	it := pstore.NewIterator(iterOpt)
+	defer it.Close()
+	pk := x.ParsedKey{
+		Attr: attr,
+	}
+	prefix := pk.DataPrefix()
+	// Delete all data postings for the given predicate.
+	wb := make([]*badger.Entry, 0, 100)
+	var batchSize int
+	for it.Seek(prefix); it.Valid(); it.Next() {
+		item := it.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
+		pk := x.Parse(key)
+		x.AssertTruef(pk.Attr == attr,
+			"Invalid key obtained for comparison")
+
+		batchSize += len(key)
+		wb = badger.EntriesDelete(wb, key)
+
+		if batchSize >= maxBatchSize {
+			if err := pstore.BatchSet(wb); err != nil {
+				return err
+			}
+			wb = wb[:0]
+			batchSize = 0
+		}
+	}
+	if len(wb) > 0 {
+		if err := pstore.BatchSet(wb); err != nil {
+			return err
+		}
+	}
+
+	// TODO - We will still have the predicate present in <uid, _predicate_> posting lists.
+	indexed := schema.State().IsIndexed(attr)
+	reversed := schema.State().IsReversed(attr)
+	if indexed {
+		DeleteIndex(ctx, attr)
+	} else if reversed {
+		DeleteReverseEdges(ctx, attr)
 	}
 	return nil
 }

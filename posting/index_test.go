@@ -240,6 +240,7 @@ func TestRebuildIndex(t *testing.T) {
 	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"))
 	ps.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"))
 
+	require.NoError(t, DeleteIndex(context.Background(), "name"))
 	require.NoError(t, RebuildIndex(context.Background(), "name"))
 
 	// Let's force a commit.
@@ -293,9 +294,6 @@ func TestRebuildReverseEdges(t *testing.T) {
 	for len(syncCh) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
-
-	// Create some fake wrong entries for data store.
-	addEdgeToUID(t, "friend", 1, 100)
 
 	require.NoError(t, RebuildReverseEdges(context.Background(), "friend"))
 

@@ -29,10 +29,9 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, indexed bool) error {
+func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
-	x.AssertTruef(schema.State().IsIndexed(attr) == indexed, "Attr %s index mismatch", attr)
 
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
@@ -40,24 +39,23 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, indexed bool)
 		return err
 	}
 
-	if !indexed {
-		// Remove index edges
-		// For delete we since mutations would have been applied, we needn't
-		// wait for synced watermarks if we delete through mutations, but
-		// it would use by lhmap
-		posting.DeleteIndex(ctx, attr)
-		return nil
-	}
-	if err := posting.RebuildIndex(ctx, attr); err != nil {
-		return err
+	x.AssertTruef(schema.State().IsIndexed(attr) == rebuild, "Attr %s index mismatch", attr)
+	// Remove index edges
+	// For delete we since mutations would have been applied, we needn't
+	// wait for synced watermarks if we delete through mutations, but
+	// it would use by lhmap
+	posting.DeleteIndex(ctx, attr)
+	if rebuild {
+		if err := posting.RebuildIndex(ctx, attr); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, reversed bool) error {
+func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild bool) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
-	x.AssertTruef(schema.State().IsReversed(attr) == reversed, "Attr %s reverse mismatch", attr)
 
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
@@ -65,13 +63,13 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, reversed bo
 		return err
 	}
 
-	if !reversed {
+	x.AssertTruef(schema.State().IsReversed(attr) == rebuild, "Attr %s reverse mismatch", attr)
+	posting.DeleteReverseEdges(ctx, attr)
+	if rebuild {
 		// Remove reverse edges
-		posting.DeleteReverseEdges(ctx, attr)
-		return nil
-	}
-	if err := posting.RebuildReverseEdges(ctx, attr); err != nil {
-		return err
+		if err := posting.RebuildReverseEdges(ctx, attr); err != nil {
+			return err
+		}
 	}
 	return nil
 }

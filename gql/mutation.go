@@ -268,6 +268,27 @@ func (nq NQuad) createValueEdge(subjectUid uint64) (*protos.DirectedEdge, error)
 	return out, nil
 }
 
+func (nq NQuad) ToDeletePredEdge() (*protos.DirectedEdge, error) {
+	if nq.Subject != x.Star && nq.ObjectValue.String() != x.Star {
+		return &emptyEdge, x.Errorf("Subject and object both should be *. Got: %+v", nq)
+	}
+
+	out := &protos.DirectedEdge{
+		// This along with edge.ObjectValue == x.Star would indicate
+		// that we want to delete the predicate.
+		Entity: 0,
+		Attr:   nq.Predicate,
+		Label:  nq.Label,
+		Lang:   nq.Lang,
+		Facets: nq.Facets,
+	}
+
+	if err := copyValue(out, nq); err != nil {
+		return &emptyEdge, err
+	}
+	return out, nil
+}
+
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
 func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*protos.DirectedEdge, error) {

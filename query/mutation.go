@@ -21,7 +21,7 @@ func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.Directe
 }
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
-	err := AddInternalEdge(ctx, m)
+	err := addInternalEdge(ctx, m)
 	if err != nil {
 		return x.Wrapf(err, "While adding internal edges")
 	}
@@ -32,7 +32,7 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
 	return nil
 }
 
-func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
+func addInternalEdge(ctx context.Context, m *protos.Mutations) error {
 	newEdges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
 	for _, mu := range m.Edges {
 		x.AssertTrue(mu.Op == protos.DirectedEdge_DEL || mu.Op == protos.DirectedEdge_SET)
@@ -46,19 +46,8 @@ func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
 			newEdges = append(newEdges, mu)
 			newEdges = append(newEdges, edge)
 		} else if mu.Op == protos.DirectedEdge_DEL {
-			if mu.Attr != x.DeleteAllPredicates {
-				newEdges = append(newEdges, mu)
-				if string(mu.GetValue()) == x.DeleteAllObjects {
-					// Delete the given predicate from _predicate_.
-					edge := &protos.DirectedEdge{
-						Op:     protos.DirectedEdge_DEL,
-						Entity: mu.GetEntity(),
-						Attr:   "_predicate_",
-						Value:  []byte(mu.GetAttr()),
-					}
-					newEdges = append(newEdges, edge)
-				}
-			} else {
+			// S * * case
+			if mu.Attr == x.Star {
 				// Fetch all the predicates and replace them
 				preds, err := GetNodePredicates(ctx, &protos.List{[]uint64{mu.GetEntity()}})
 				if err != nil {
@@ -83,6 +72,25 @@ func AddInternalEdge(ctx context.Context, m *protos.Mutations) error {
 				// Delete all the _predicate_ values
 				edge.Attr = "_predicate_"
 				newEdges = append(newEdges, edge)
+
+			} else {
+				newEdges = append(newEdges, mu)
+				if mu.Entity == 0 && string(mu.GetValue()) == x.Star {
+					// * P * case.
+					continue
+				}
+
+				// S P * case.
+				if string(mu.GetValue()) == x.Star {
+					// Delete the given predicate from _predicate_.
+					edge := &protos.DirectedEdge{
+						Op:     protos.DirectedEdge_DEL,
+						Entity: mu.GetEntity(),
+						Attr:   "_predicate_",
+						Value:  []byte(mu.GetAttr()),
+					}
+					newEdges = append(newEdges, edge)
+				}
 			}
 		}
 	}
@@ -95,6 +103,11 @@ func AssignUids(ctx context.Context, nquads gql.NQuads) (map[string]uint64, erro
 	num := &protos.Num{}
 	var err error
 	for _, nq := range nquads.NQuads {
+		// We dont want to assign uids to these.
+		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
+			continue
+		}
+
 		if len(nq.Subject) > 0 {
 			if strings.HasPrefix(nq.Subject, "_:") {
 				newUids[nq.Subject] = 0
@@ -162,7 +175,13 @@ func ToInternal(ctx context.Context,
 
 	// Wrapper for a pointer to protos.Nquad
 	var wnq *gql.NQuad
+	var delPred []*protos.NQuad
 	for i, nq := range nquads.NQuads {
+		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
+			delPred = append(delPred, nq)
+			continue
+		}
+
 		wnq = &gql.NQuad{nq}
 		usesVariable := len(nq.SubjectVar) > 0 || len(nq.ObjectVar) > 0
 
@@ -186,6 +205,15 @@ func ToInternal(ctx context.Context,
 				mr.AddEdge(edge, nquads.Types[i])
 			}
 		}
+	}
+
+	for i, nq := range delPred {
+		wnq = &gql.NQuad{nq}
+		edge, err := wnq.ToDeletePredEdge()
+		if err != nil {
+			return mr, err
+		}
+		mr.AddEdge(edge, nquads.Types[i])
 	}
 
 	mr.NewUids = make(map[string]uint64)
