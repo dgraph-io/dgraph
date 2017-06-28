@@ -169,7 +169,7 @@ func parseFuncType(arr []string) (FuncType, string) {
 	case "has":
 		return HasFn, f
 	case "uid_in":
-		return UidIn, f
+		return UidInFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
@@ -270,7 +270,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	for i := 0; i < srcFn.n; i++ {
 		var key []byte
 		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
-			srcFn.fnType == HasFn {
+			srcFn.fnType == HasFn || srcFn.fnType == UidInFn {
 			if q.Reverse {
 				key = x.ReverseKey(attr, q.UidList.Uids[i])
 			} else {
@@ -386,6 +386,20 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		if srcFn.fnType == HasFn {
 			count := int64(pl.Length(0))
 			if EvalCompare("gt", count, 0) {
+				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
+				out.UidMatrix = append(out.UidMatrix, tlist)
+			}
+			continue
+		}
+
+		if srcFn.fnType == UidInFn {
+			reqList := &protos.List{[]uint64{srcFn.uidPresent}}
+			topts := posting.ListOptions{
+				AfterUID:  0,
+				Intersect: reqList,
+			}
+			plist := pl.Uids(topts)
+			if len(plist.Uids) > 0 {
 				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
@@ -632,6 +646,7 @@ type functionContext struct {
 	ineqValueToken string
 	n              int
 	threshold      int64
+	uidPresent     uint64
 	fname          string
 	lang           string
 	fnType         FuncType
@@ -784,6 +799,14 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 		fc.lang = q.SrcFunc[1]
+	case UidInFn:
+		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
+			return nil, err
+		}
+		if fc.uidPresent, err = strconv.ParseUint(q.SrcFunc[2], 10, 64); err != nil {
+			return nil, err
+		}
+		fc.n = len(q.UidList.Uids)
 	default:
 		return nil, x.Errorf("FnType %d not handled in numFnAttrs.", fnType)
 	}

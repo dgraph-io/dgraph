@@ -8082,10 +8082,22 @@ func TestUidInFunction(t *testing.T) {
 	populateGraph(t)
 	query := `
 	{
-		me(func: anyofterms(name, "Michonne Andrea")) @filter(uid_in(friend, 23)) {
+		me(id: [1, 23, 24]) @filter(uid_in(friend, 23)) {
 			name
 		}
 	}`
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"me":[{"name":"Michonne"}]}`, string(js))
+}
+
+func TestUidInFunction1(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id: [1, 23, 24]) @filter(uid_in(school, 5000)) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"name":"Michonne"},{"name":"Glenn Rhee"}]}`, string(js))
 }
