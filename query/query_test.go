@@ -8101,3 +8101,18 @@ func TestUidInFunction1(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"me":[{"name":"Michonne"},{"name":"Glenn Rhee"}]}`, string(js))
 }
+
+func TestUidInFunction2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id: [1, 23, 24]) {
+			friend @filter(uid_in(school, 5000)) {
+				name
+			}
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}]},{"friend":[{"name":"Michonne"}]}]}`,
+		string(js))
+}
