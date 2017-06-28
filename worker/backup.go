@@ -370,9 +370,10 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 			}
 			defer pl.Put(conn)
 			break
-		}
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
+		} else {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(err.Error())
+			}
 		}
 	}
 

@@ -94,6 +94,15 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 	return reply, nil
 }
 
+const (
+	scalarErr   = fmt.Errorf("Attribute is not valid scalar type")
+	marshalErr  = fmt.Errorf("Failed convertToType during Marshal")
+	reverseErr  = fmt.Errorf("Predicate doesn't have reverse edge")
+	indexErr    = fmt.Errorf("Predicate is not indexed")
+	passwordErr = fmt.Errorf("Attribute of type password cannot be fetched")
+	argErr      = fmt.Errorf("No arguments passed to function")
+)
+
 // convertValue converts the data to the schema.State() type of predicate.
 func convertValue(attr, data string) (types.Val, error) {
 	// Parse given value and get token. There should be only one token.
@@ -102,7 +111,7 @@ func convertValue(attr, data string) (types.Val, error) {
 		return types.Val{}, err
 	}
 	if !t.IsScalar() {
-		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
+		return types.Val{}, scalarErr
 	}
 
 	src := types.Val{types.StringID, []byte(data)}
@@ -127,7 +136,7 @@ func convertToType(v types.Val, typ types.TypeID) (*protos.TaskValue, error) {
 	data := types.ValueForType(types.BinaryID)
 	err = types.Marshal(val, &data)
 	if err != nil {
-		return result, x.Errorf("Failed convertToType during Marshal")
+		return result, marshalErr
 	}
 	result.Val = data.Value.([]byte)
 	return result, nil
@@ -238,10 +247,10 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if q.Reverse && !schema.State().IsReversed(attr) {
-		return nil, x.Errorf("Predicate %s doesn't have reverse edge", attr)
+		return nil, reverseErr
 	}
 	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
-		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
+		return nil, indexErr
 	}
 
 	opts := posting.ListOptions{
@@ -277,7 +286,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+			return nil, passwordErr
 		}
 		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
 		if isValueEdge {
