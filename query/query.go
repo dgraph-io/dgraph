@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/trace"
+
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -1180,7 +1182,9 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		if err != nil {
 			return nil, err
 		}
-		x.Trace(ctx, "Query parsed")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Query parsed")
+		}
 		sgl = append(sgl, sg)
 	}
 	l.Parsing += time.Since(loopStart)
@@ -1247,7 +1251,9 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			} else {
 				go ProcessGraph(ctx, sg, nil, errChan)
 			}
-			x.Trace(ctx, "Graph processed")
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Graph processed")
+			}
 		}
 
 		// Wait for the execution that was started in this iteration.
@@ -1635,7 +1641,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 			if sg.Params.DoCount && len(sg.Filters) == 0 {
 				// If there is a filter, we need to do more work to get the actual count.
-				x.Trace(ctx, "Zero uids. Only count requested")
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Zero uids. Only count requested")
+				}
 				rch <- nil
 				return
 			}
@@ -1655,7 +1663,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
-		x.Trace(ctx, "Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
+		}
 		out := sg.Children[:0]
 		for _, child := range sg.Children {
 			if child.IsInternal() && child.Attr == "expand" {
