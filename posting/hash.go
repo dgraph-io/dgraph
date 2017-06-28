@@ -18,7 +18,6 @@
 package posting
 
 import (
-	"math/rand"
 	"sync"
 )
 
@@ -113,13 +112,11 @@ func (s *listMap) EachWithDelete(f func(key uint64, val *List)) {
 	}
 }
 
-func (s *listMap) DeleteRandomShard(f func(key uint64, val *List)) int {
-	shardNum := rand.Intn(s.numShards)
+func (s *listMap) DeleteShard(shardNum int, f func(key uint64, val *List)) {
 	shard := s.shard[shardNum]
 	shard.stw.Lock()
 	defer shard.stw.Unlock()
 	shard.eachWithDelete(f)
-	return shardNum
 }
 
 func (s *listMap) RLockShard(key uint64) {
@@ -144,4 +141,9 @@ func (s *listMap) Each(f func(key uint64, val *List)) {
 	for _, shard := range s.shard {
 		shard.each(f)
 	}
+}
+
+func (s *listMap) EachShard(shardNum int, f func(key uint64, val *List)) {
+	shard := s.shard[shardNum]
+	shard.each(f)
 }

@@ -217,7 +217,7 @@ func aggressivelyEvict() {
 	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
-func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
+func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}, commitFraction float64) {
 	select {
 	case pending <- struct{}{}:
 	default:
@@ -227,7 +227,7 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
 
 	// NOTE: No need to acquire read lock for stopTheWorld. This portion is being run
 	// serially alongside aggressive commit.
-	n := int(float64(len(dirtyMap)) * *commitFraction)
+	n := int(float64(len(dirtyMap)) * commitFraction)
 	if n < 1000 {
 		// Have a min value of n, so we can merge small number of dirty PLs fast.
 		n = 1000
@@ -282,8 +282,11 @@ func periodicCommit() {
 			}
 
 			totMemory := getMemUsage()
-			if totMemory <= *maxmemory {
-				gentleCommit(dirtyMap, pending)
+			if totMemory*10 <= *maxmemory {
+				gentleCommit(dirtyMap, pending, *commitFraction)
+				break
+			} else if totMemory <= *maxmemory {
+				gentleCommit(dirtyMap, pending, *commitFraction*10.0*float64(totMemory)/float64(*maxmemory))
 				break
 			}
 
@@ -513,11 +516,46 @@ func CommitLists(numRoutines int, group uint32) {
 	wg.Wait()
 }
 
+func commitShard(group uint32, shardNum int) {
+	lhmap := lhmapFor(group)
+	c := newCounters()
+	defer c.ticker.Stop()
+
+	// We iterate over lhmap, deleting keys and pushing values (List) into this
+	// channel. Then goroutines right below will commit these lists to data store.
+	workChan := make(chan *List, 10000)
+
+	var wg sync.WaitGroup
+	for i := 0; i < runtime.NumCPU(); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for l := range workChan {
+				commitOne(l, c)
+			}
+		}()
+	}
+
+	lhmap.EachShard(shardNum, func(k uint64, l *List) {
+		if l == nil { // To be safe. Check might be unnecessary.
+			return
+		}
+		// We lose one reference for deletion from lhmap. But we gain one reference
+		// for pushing into workChan. So no decr or incr here.
+		workChan <- l
+	})
+	close(workChan)
+	wg.Wait()
+}
+
 func evictShard() {
 	groups := lhmaps.groups()
 	group := groups[rand.Intn(len(groups))]
+	shardNum := rand.Intn(lhmapNumShards)
 	lhmap := lhmapFor(group)
-	shardNum := lhmap.DeleteRandomShard(func(k uint64, l *List) {
+
+	commitShard(group, shardNum)
+	lhmap.DeleteShard(shardNum, func(k uint64, l *List) {
 		l.SetForDeletion()
 		l.decr()
 	})
