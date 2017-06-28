@@ -20,7 +20,6 @@ package gql
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -280,7 +279,7 @@ func parseMathFunc(it *lex.ItemIterator, again bool) (*MathTree, bool, error) {
 				break
 			}
 		} else {
-			return nil, false, fmt.Errorf("Unexpected item while parsing math expression: %v", item)
+			return nil, false, invalidExprErr
 		}
 	}
 
