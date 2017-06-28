@@ -42,7 +42,9 @@ var (
 	varErr3            = errors.New("Variable not defined")
 	varErr4            = errors.New("Some variables are declared multiple times.")
 	varErr5            = errors.New("Variables can be defined only in named queries.")
+	varErr6            = errors.New("Invalid syntax for variables")
 	idErr              = errors.New("Id cant be empty")
+	idErr1             = errors.New("Invalid id list at root")
 	mutationErr        = errors.New("Only one mutation block allowed")
 	mutationErr2       = errors.New("Invalid mutation")
 	mutationErr3       = errors.New("Invalid mutation operation")
@@ -71,6 +73,22 @@ var (
 	varBlockErr11      = errors.New("Only Plus and minus are allowed unary ops")
 	stackErr           = errors.New("Empty stack")
 	filterErr          = errors.New("Invalid filter statement")
+	funcErr            = errors.New("Invalid syntax for function")
+	funcErr1           = errors.New("Multiple functions as arguments not allowed")
+	funcErr2           = errors.New("Multiple variables not allowed in a function")
+	funcErr3           = errors.New("Filter cannot be used inside a function")
+	funcErr4           = errors.New("Invalid use of @ in function args")
+	funcErr5           = errors.New("Invalid use of $ in function args")
+	funcErr6           = errors.New("Invalid syntax for function args")
+	funcErr7           = errors.New("Empty argument received")
+	funcErr8           = errors.New("Attribute in function must be quoted")
+	funcErr9           = errors.New("Expected a function but got something else")
+	facetsErr          = errors.New("Invalid syntax while parsing facets")
+	groupByErr         = errors.New("Expected a left round after groupby")
+	groupByErr1        = errors.New("Expected a predicate but got comma")
+	groupByErr2        = errors.New("Unnecessary comma in groupby()")
+	groupByErr3        = errors.New("Expected atleast one attribute in groupby")
+	groupByErr4        = errors.New("Expected a comma or right round")
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
@@ -1332,8 +1350,7 @@ L:
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s] but got %v",
-					g.Name, itemInFunc.Val)
+				return nil, funcErr
 			}
 			expectArg = true
 			for it.Next() {
@@ -1343,17 +1360,17 @@ L:
 					break L
 				} else if itemInFunc.Typ == itemComma {
 					if expectArg {
-						return nil, x.Errorf("Invalid use of comma.")
+						return nil, funcErr
 					}
 					if isDollar {
-						return nil, x.Errorf("Invalid use of comma after dollar.")
+						return nil, funcErr
 					}
 					expectArg = true
 					continue
 				} else if itemInFunc.Typ == itemLeftRound {
 					// Function inside a function.
 					if seenFuncArg {
-						return nil, x.Errorf("Multiple functions as arguments not allowed")
+						return nil, funcErr1
 					}
 					it.Prev()
 					it.Prev()
@@ -1364,7 +1381,7 @@ L:
 					seenFuncArg = true
 					if f.Name == "var" {
 						if len(f.NeedsVar) > 1 {
-							return nil, x.Errorf("Multiple variables not allowed in a function")
+							return nil, funcErr2
 						}
 						g.Attr = "var"
 						g.Args = append(g.Args, f.NeedsVar[0].Name)
@@ -1380,12 +1397,12 @@ L:
 					if len(g.Attr) > 0 && len(g.Lang) == 0 {
 						itNext, err := it.Peek(1)
 						if err == nil && itNext[0].Val == "filter" {
-							return nil, x.Errorf("Filter cannot be used inside a function.")
+							return nil, funcErr3
 						}
 						expectLang = true
 						continue
 					} else {
-						return nil, x.Errorf("Invalid usage of '@' in function argument")
+						return nil, funcErr4
 					}
 				} else if itemInFunc.Typ == itemMathOp {
 					val = itemInFunc.Val
@@ -1393,7 +1410,7 @@ L:
 					itemInFunc = it.Item()
 				} else if itemInFunc.Typ == itemDollar {
 					if isDollar {
-						return nil, x.Errorf("Invalid use of $ in func args")
+						return nil, funcErr5
 					}
 					isDollar = true
 					continue
@@ -1410,15 +1427,14 @@ L:
 					expectArg = false
 					continue
 				} else if itemInFunc.Typ != itemName {
-					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
-						g.Name, itemInFunc)
+					return nil, funcErr6
 				}
 				if !expectArg && !expectLang {
-					return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
+					return nil, funcErr6
 				}
 				val += strings.Trim(itemInFunc.Val, "\" \t")
 				if val == "" {
-					return nil, x.Errorf("Empty argument received")
+					return nil, funcErr7
 				}
 				if isDollar {
 					val = "$" + val
@@ -1426,8 +1442,7 @@ L:
 				}
 				if len(g.Attr) == 0 {
 					if strings.ContainsRune(itemInFunc.Val, '"') {
-						return nil, x.Errorf("Attribute in function must not be quoted with \": %s",
-							itemInFunc.Val)
+						return nil, funcErr8
 					}
 					g.Attr = val
 				} else if expectLang {
@@ -1445,7 +1460,7 @@ L:
 				expectArg = false
 			}
 		} else {
-			return nil, x.Errorf("Expected a function but got %q", item.Val)
+			return nil, funcErr9
 		}
 	}
 	return g, nil
@@ -1472,7 +1487,7 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string,
 				break
 			} else if item.Typ == itemName {
 				if !expectArg {
-					return nil, nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
+					return nil, nil, nil, facetsErr
 				}
 				peekIt, err := it.Peek(1)
 				if err != nil {
@@ -1492,7 +1507,7 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string,
 				expectArg = false
 			} else if item.Typ == itemComma {
 				if expectArg || varName != "" {
-					return nil, nil, nil, x.Errorf("Expected Argument but got comma.")
+					return nil, nil, nil, facetsErr
 				}
 				expectArg = true
 				continue
@@ -1539,7 +1554,7 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 	it.Next()
 	item := it.Item()
 	if item.Typ != itemLeftRound {
-		return x.Errorf("Expected a left round after groupby")
+		return groupByErr
 	}
 	for it.Next() {
 		item := it.Item()
@@ -1548,12 +1563,12 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 		}
 		if item.Typ == itemComma {
 			if expectArg {
-				return x.Errorf("Expected a predicate but got comma")
+				return groupByErr1
 			}
 			expectArg = true
 		} else if item.Typ == itemName {
 			if !expectArg {
-				return x.Errorf("Expected a comma or right round but got: %v", item.Val)
+				return groupByErr4
 			}
 			attr := collectName(it, item.Val)
 			var langs []string
@@ -1573,10 +1588,10 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 		}
 	}
 	if expectArg {
-		return x.Errorf("Unnecessary comma in groupby()")
+		return groupByErr2
 	}
 	if count == 0 {
-		return x.Errorf("Expected atleast one attribute in groupby")
+		return groupByErr3
 	}
 	return nil
 }
@@ -1586,7 +1601,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	it.Next()
 	item := it.Item()
 	if item.Typ != itemLeftRound {
-		return nil, x.Errorf("Expected ( after filter directive")
+		return nil, filterErr
 	}
 
 	// opStack is used to collect the operators in right order.
@@ -1638,14 +1653,14 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			}
 			_, err := opStack.pop() // Pop away the (.
 			if err != nil {
-				return nil, x.Errorf("Invalid filter statement")
+				return nil, filterErr
 			}
 			if opStack.empty() {
 				// The parentheses are balanced out. Let's break.
 				break
 			}
 		} else {
-			return nil, x.Errorf("Unexpected item while parsing @filter: %v", item)
+			return nil, filterErr
 		}
 	}
 
@@ -1663,8 +1678,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	}
 
 	if valueStack.size() != 1 {
-		return nil, x.Errorf("Expected one item in value stack, but got %d",
-			valueStack.size())
+		return nil, filterErr
 	}
 	return valueStack.pop()
 }
@@ -1685,7 +1699,7 @@ func parseID(gq *GraphQuery, val string) error {
 	}
 
 	if val[len(val)-1] != ']' {
-		return x.Errorf("Invalid id list at root. Got: %+v", val)
+		return idErr1
 	}
 	var buf bytes.Buffer
 	for _, c := range val[1:] {
@@ -1698,7 +1712,7 @@ func parseID(gq *GraphQuery, val string) error {
 			continue
 		}
 		if c == '[' || c == ')' {
-			return x.Errorf("Invalid id list at root. Got: %+v", val)
+			return idErr1
 		}
 		buf.WriteRune(c)
 	}
@@ -1711,7 +1725,7 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 	it.Next()
 	item := it.Item()
 	if item.Typ != itemLeftRound {
-		return count, x.Errorf("Expected a left round after var")
+		return count, varErr6
 	}
 	for it.Next() {
 		item := it.Item()
@@ -1720,12 +1734,12 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 		}
 		if item.Typ == itemComma {
 			if expectArg {
-				return count, x.Errorf("Expected a variable but got comma")
+				return count, varErr6
 			}
 			expectArg = true
 		} else if item.Typ == itemName {
 			if !expectArg {
-				return count, x.Errorf("Expected a variable but got comma")
+				return count, varErr6
 			}
 			count++
 			gq.NeedsVar = append(gq.NeedsVar, VarContext{
@@ -1736,7 +1750,7 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 		}
 	}
 	if expectArg {
-		return count, x.Errorf("Unnecessary comma in var()")
+		return count, varErr6
 	}
 	return count, nil
 }
