@@ -294,9 +294,12 @@ func periodicCommit() {
 
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
-			if totMemory > *maxmemory {
+			if float64(totMemory) > 1.5*float64(*maxmemory) {
 				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
-				go evictShard()
+				go evictShards(3)
+			} else if totMemory > *maxmemory {
+				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
+				go evictShards(1)
 			}
 		}
 	}
@@ -516,48 +519,37 @@ func CommitLists(numRoutines int, group uint32) {
 	wg.Wait()
 }
 
-func commitShard(group uint32, shardNum int) {
+func evictShard(group uint32, shardNum int) {
 	lhmap := lhmapFor(group)
 	c := newCounters()
 	defer c.ticker.Stop()
-
-	// We iterate over lhmap, deleting keys and pushing values (List) into this
-	// channel. Then goroutines right below will commit these lists to data store.
-	workChan := make(chan *List, 10000)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for l := range workChan {
-			commitOne(l, c)
-		}
-	}()
 
 	lhmap.EachShard(shardNum, func(k uint64, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
-		// We lose one reference for deletion from lhmap. But we gain one reference
-		// for pushing into workChan. So no decr or incr here.
-		workChan <- l
+		commitOne(l, c)
 	})
-	close(workChan)
-	wg.Wait()
-}
-
-func evictShard() {
-	groups := lhmaps.groups()
-	group := groups[rand.Intn(len(groups))]
-	shardNum := rand.Intn(lhmapNumShards)
-	lhmap := lhmapFor(group)
-
-	commitShard(group, shardNum)
 	lhmap.DeleteShard(shardNum, func(k uint64, l *List) {
 		l.SetForDeletion()
 		l.decr()
 	})
 	log.Printf("evicted shard %d from group %d\n", shardNum, group)
+}
+
+func evictShards(numShards int) {
+	var wg sync.WaitGroup
+	for _, gid := range lhmaps.groups() {
+		wg.Add(1)
+		go func(group uint32) {
+			defer wg.Done()
+			for i := 0; i < numShards; i++ {
+				shardNum := rand.Intn(lhmapNumShards)
+				evictShard(group, shardNum)
+			}
+		}(gid)
+	}
+	wg.Wait()
 }
 
 // EvictAll removes all pl's stored in memory for given group
