@@ -446,33 +446,6 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 		js)
 }
 
-func TestLevelBasedFacetVarSumError(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			friend(id: 1000) {
-				path @facets(L1 as weight)
-				follow {
-					path @facets(L2 as weight)
-					L3 as math(L1+L2)
-				}
-			}
-
-			sum(id: var(L3), orderdesc: var(L3)) {
-				name
-				var(L3)
-			}
-		}
-	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := defaultContext()
-	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
-	require.Error(t, err)
-}
-
 func TestLevelBasedSumMix1(t *testing.T) {
 	populateGraph(t)
 	query := `

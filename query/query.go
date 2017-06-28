@@ -1043,13 +1043,13 @@ func (mt *mathTree) extractVarNodes() []*mathTree {
 // corresponding uidMatrices.
 func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val, error) {
 	if len(toPath) < len(fromNode.path) {
-		return nil, x.Errorf("Invalid definition/use of variables in math")
+		return fromNode.Vals, nil
 	}
 
 	idx := 0
 	for ; idx < len(fromNode.path); idx++ {
 		if fromNode.path[idx] != toPath[idx] {
-			return nil, x.Errorf("Invalid combination of variables in math")
+			return fromNode.Vals, nil
 		}
 	}
 
