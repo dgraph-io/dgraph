@@ -47,7 +47,7 @@ var (
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
 	commitFraction   = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
-	lhmapNumShards   = flag.Int("lhmap", 32, "Number of shards for lhmap.")
+	lhmapNumShards   = runtime.NumCPU() * 4
 	dummyPostingList []byte // Used for indexing.
 )
 
@@ -160,7 +160,7 @@ func (l *listMaps) create(group uint32) *listMap {
 	if prev, present := l.m[group]; present {
 		return prev
 	}
-	lhmap := newShardedListMap(*lhmapNumShards)
+	lhmap := newShardedListMap(lhmapNumShards)
 	l.m[group] = lhmap
 	return lhmap
 }
@@ -378,7 +378,7 @@ func Init(ps *badger.KV) {
 	syncCh = make(chan syncEntry, 10000)
 
 	go periodicCommit()
-	for i := 0; i < 4; i++ {
+	for i := 0; i < runtime.NumCPU(); i++ {
 		go batchSync()
 	}
 }
