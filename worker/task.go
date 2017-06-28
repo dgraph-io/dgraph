@@ -82,7 +82,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 	reply, err := c.ServeTask(ctx, q)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(fmt.Sprintf("Error while calling Worker.ServeTask: %v", err))
+			tr.LazyPrintf("Error while calling Worker.ServeTask: %v", err)
 		}
 		return &emptyResult, err
 	}
@@ -94,13 +94,19 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 	return reply, nil
 }
 
-const (
-	scalarErr   = fmt.Errorf("Attribute is not valid scalar type")
-	marshalErr  = fmt.Errorf("Failed convertToType during Marshal")
-	reverseErr  = fmt.Errorf("Predicate doesn't have reverse edge")
-	indexErr    = fmt.Errorf("Predicate is not indexed")
-	passwordErr = fmt.Errorf("Attribute of type password cannot be fetched")
-	argErr      = fmt.Errorf("No arguments passed to function")
+var (
+	scalarErr        = fmt.Errorf("Attribute is not valid scalar type")
+	marshalErr       = fmt.Errorf("Failed convertToType during Marshal")
+	reverseErr       = fmt.Errorf("Predicate doesn't have reverse edge")
+	indexErr         = fmt.Errorf("Predicate is not indexed")
+	indexErr2        = fmt.Errorf("Predicate is not indexed with correct type")
+	passwordErr      = fmt.Errorf("Attribute of type password cannot be fetched")
+	argErr           = fmt.Errorf("No arguments passed to function")
+	argCountError    = fmt.Errorf("Incorrect number of arguments passed to function")
+	aggErr           = fmt.Errorf("Aggregator could not be applied")
+	compareScalarErr = fmt.Errorf("Compare scalar function got invalid number of digits")
+	regexErr         = fmt.Errorf("Invalid regexp modifier")
+	fnErr            = fmt.Errorf("Function not handled in parseSrcFn")
 )
 
 // convertValue converts the data to the schema.State() type of predicate.

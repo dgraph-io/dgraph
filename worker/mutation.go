@@ -18,8 +18,6 @@
 package worker
 
 import (
-	"fmt"
-
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
@@ -308,7 +306,7 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 		case err := <-errors:
 			if err != nil {
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf(fmt.Sprintf("Error while running all mutations: %+v", err))
+					tr.LazyPrintf("Error while running all mutations: %+v", err)
 				}
 				return err
 			}

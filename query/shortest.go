@@ -20,7 +20,6 @@ package query
 import (
 	"container/heap"
 	"context"
-	"fmt"
 
 	"golang.org/x/net/trace"
 
@@ -146,14 +145,14 @@ func (start *SubGraph) expandOut(ctx context.Context,
 			case err = <-rrch:
 				if err != nil {
 					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf(fmt.Sprintf("Error while processing child task: %+v", err))
+						tr.LazyPrintf("Error while processing child task: %+v", err)
 					}
 					rch <- err
 					return
 				}
 			case <-ctx.Done():
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf(fmt.Sprintf("Context done before full execution: %+v", ctx.Err()))
+					tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
 				}
 				rch <- ctx.Err()
 				return
@@ -316,14 +315,14 @@ func ShortestPath(ctx context.Context, sg *SubGraph) (*SubGraph, error) {
 						stopExpansion = true
 					} else {
 						if tr, ok := trace.FromContext(ctx); ok {
-							tr.LazyPrintf(fmt.Sprintf("Error while processing child task: %+v", err))
+							tr.LazyPrintf("Error while processing child task: %+v", err)
 						}
 						return nil, err
 					}
 				}
 			case <-ctx.Done():
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf(fmt.Sprintf("Context done before full execution: %+v", ctx.Err()))
+					tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
 				}
 				return nil, ctx.Err()
 			}

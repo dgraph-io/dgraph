@@ -1264,13 +1264,13 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			case err := <-errChan:
 				if err != nil {
 					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf(fmt.Sprintf("Error while processing Query: %+v", err))
+						tr.LazyPrintf("Error while processing Query: %+v", err)
 					}
 					return nil, err
 				}
 			case <-ctx.Done():
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf(fmt.Sprintf("Context done before full execution: %+v", ctx.Err()))
+					tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
 				}
 				return nil, ctx.Err()
 			}
@@ -1633,7 +1633,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 			if err != nil {
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf(fmt.Sprintf("Error while processing task: %+v", err))
+					tr.LazyPrintf("Error while processing task: %+v", err)
 				}
 				rch <- err
 				return
@@ -1706,14 +1706,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 					// before returning. Else tracing causes crashes.
 					filterErr = err
 					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf(fmt.Sprintf("Error while processing filter task: %+v", err))
+						tr.LazyPrintf("Error while processing filter task: %+v", err)
 					}
 				}
 
 			case <-ctx.Done():
 				filterErr = ctx.Err()
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf(fmt.Sprintf("Context done before full execution: %+v", err))
+					tr.LazyPrintf("Context done before full execution: %+v", err)
 				}
 			}
 		}
@@ -1857,13 +1857,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			if err != nil {
 				childErr = err
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf(fmt.Sprintf("Error while processing child task: %+v", err))
+					tr.LazyPrintf("Error while processing child task: %+v", err)
 				}
 			}
 		case <-ctx.Done():
 			childErr = ctx.Err()
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(fmt.Sprintf("Context done before full execution: %+v", ctx.Err()))
+				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
 			}
 		}
 	}

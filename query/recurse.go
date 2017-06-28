@@ -48,14 +48,14 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 	case err = <-rrch:
 		if err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(fmt.Sprintf("Error while processing child task: %+v", err))
+				tr.LazyPrintf("Error while processing child task: %+v", err)
 			}
 			rch <- err
 			return
 		}
 	case <-ctx.Done():
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(fmt.Sprintf("Context done before full execution: %+v", ctx.Err()))
+			tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
 		}
 		rch <- ctx.Err()
 		return
@@ -87,14 +87,14 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 			case err = <-rrch:
 				if err != nil {
 					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf(fmt.Sprintf("Error while processing child task: %+v", err))
+						tr.LazyPrintf("Error while processing child task: %+v", err)
 					}
 					rch <- err
 					return
 				}
 			case <-ctx.Done():
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf(fmt.Sprintf("Context done before full execution: %+v", ctx.Err()))
+					tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
 				}
 				rch <- ctx.Err()
 				return
@@ -187,13 +187,13 @@ L:
 					break L
 				}
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf(fmt.Sprintf("Error while processing child task: %+v", err))
+					tr.LazyPrintf("Error while processing child task: %+v", err)
 				}
 				return err
 			}
 		case <-ctx.Done():
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(fmt.Sprintf("Context done before full execution: %+v", ctx.Err()))
+				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
 			}
 			return ctx.Err()
 		}

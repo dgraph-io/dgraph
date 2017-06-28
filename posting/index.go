@@ -19,7 +19,6 @@ package posting
 
 import (
 	"context"
-	"fmt"
 	"math"
 
 	"golang.org/x/net/trace"
@@ -132,8 +131,8 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(fmt.Sprintf("Error adding/deleting %s for attr %s entity %d: %v",
-				token, edge.Attr, edge.Entity, err))
+			tr.LazyPrintf("Error adding/deleting %s for attr %s entity %d: %v",
+				token, edge.Attr, edge.Entity, err)
 		}
 		return err
 	}
@@ -163,8 +162,8 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(fmt.Sprintf("Error adding/deleting reverse edge for attr %s entity %d: %v",
-				t.Attr, t.Entity, err))
+			tr.LazyPrintf("Error adding/deleting reverse edge for attr %s entity %d: %v",
+				t.Attr, t.Entity, err)
 		}
 		return err
 	}

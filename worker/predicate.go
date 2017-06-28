@@ -20,7 +20,6 @@ package worker
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"sort"
 
@@ -181,13 +180,13 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 			// OK
 		case <-ctx.Done():
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(fmt.Sprintf("Context timed out while streaming group: %v", group))
+				tr.LazyPrintf("Context timed out while streaming group: %v", group)
 			}
 			close(kvs)
 			return count, ctx.Err()
 		case err := <-che:
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(fmt.Sprintf("Error while doing a batch write for group: %v", group))
+				tr.LazyPrintf("Error while doing a batch write for group: %v", group)
 			}
 			close(kvs)
 			return count, err
@@ -197,7 +196,7 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 
 	if err := <-che; err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(fmt.Sprintf("Error while doing a batch write for group: %v", group))
+			tr.LazyPrintf("Error while doing a batch write for group: %v", group)
 		}
 		return count, err
 	}
