@@ -302,29 +302,27 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 
 	slice := slicePool.Get().([]byte)
 	if len(slice) < proposal.Size() {
-		slice = make([]byte, proposal.Size())
+		slice = make([]byte, proposal.Size()+1)
 	}
 	defer slicePool.Put(slice)
 
-	upto, err := proposal.MarshalTo(slice)
+	upto, err := proposal.MarshalTo(slice[1:])
 	if err != nil {
 		return err
 	}
-	proposalData := make([]byte, upto+1)
-	// Examining first byte of proposalData will quickly tell us what kind of
+	// Examining first byte of slice will quickly tell us what kind of
 	// proposal this is.
 	if proposal.RebuildIndex != nil {
-		proposalData[0] = proposalReindex
+		slice[0] = proposalReindex
 	} else if proposal.Mutations != nil {
-		proposalData[0] = proposalMutation
+		slice[0] = proposalMutation
 	} else if proposal.Membership != nil {
-		proposalData[0] = proposalMembership
+		slice[0] = proposalMembership
 	} else {
 		x.Fatalf("Unknown proposal")
 	}
-	copy(proposalData[1:], slice)
 
-	if err = n.Raft().Propose(ctx, proposalData); err != nil {
+	if err = n.Raft().Propose(ctx, slice[:upto+1]); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
 

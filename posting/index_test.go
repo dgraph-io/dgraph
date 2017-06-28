@@ -232,9 +232,7 @@ func TestRebuildIndex(t *testing.T) {
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10, 1)
-	for len(syncCh) > 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	// Create some fake wrong entries for data store.
 	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"))
@@ -245,9 +243,7 @@ func TestRebuildIndex(t *testing.T) {
 
 	// Let's force a commit.
 	CommitLists(10, 1)
-	for len(syncCh) > 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	// Check index entries in data store.
 	it := ps.NewIterator(badger.DefaultIteratorOptions)
@@ -291,17 +287,13 @@ func TestRebuildReverseEdges(t *testing.T) {
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10, 1)
-	for len(syncCh) > 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	require.NoError(t, RebuildReverseEdges(context.Background(), "friend"))
 
 	// Let's force a commit.
 	CommitLists(10, 1)
-	for len(syncCh) > 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	// Check index entries in data store.
 	it := ps.NewIterator(badger.DefaultIteratorOptions)
