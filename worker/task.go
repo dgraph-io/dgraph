@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
@@ -53,6 +54,9 @@ var (
 func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Result, error) {
 	attr := q.Attr
 	gid := group.BelongsTo(attr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+	}
 	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
 
 	if groups().ServesGroup(gid) {
@@ -942,7 +946,9 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 		if i == numPart-1 {
 			maxUid = math.MaxUint64
 		}
-		x.Trace(ctx, "Running go-routine %v for iteration", i)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Running go-routine %v for iteration", i)
+		}
 		wg.Add(1)
 		go func(i uint64) {
 			it := pstore.NewIterator()
@@ -962,7 +968,9 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 				x.AssertTruef(pk.Attr == q.Attr,
 					"Invalid key obtained for comparison")
 				if w%1000 == 0 {
-					x.Trace(ctx, "iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+					if tr, ok := trace.FromContext(ctx); ok {
+						tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+					}
 				}
 				w++
 				if pk.Uid > maxUid {
