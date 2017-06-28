@@ -18,6 +18,7 @@
 package types
 
 import (
+	"errors"
 	"log"
 
 	"github.com/golang/geo/s2"
@@ -64,6 +65,12 @@ const (
 	coverPrefix  = "c/"
 )
 
+var (
+	coveringErr    = errors.New("Covering only available for 2D co-ordinates")
+	cannotIndexErr = errors.New("Cannot index geometry")
+	ringErr        = errors.New("Can't convert ring with less than 4 pts")
+)
+
 // IndexCells returns two cellunions. The first is a list of parents, which are all the cells upto
 // the min level that contain this geometry. The second is the cover, which are the smallest
 // possible cells required to cover the region. This makes it easier at query time to query only the
@@ -71,7 +78,7 @@ const (
 // query.
 func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 	if g.Stride() != 2 {
-		return nil, nil, x.Errorf("Covering only available for 2D co-ordinates.")
+		return nil, nil, coveringErr
 	}
 	switch v := g.(type) {
 	case *geom.Point:
@@ -86,7 +93,7 @@ func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 		parents := getParentCells(cover, MinCellLevel)
 		return parents, cover, nil
 	default:
-		return nil, nil, x.Errorf("Cannot index geometry of type %T", v)
+		return nil, nil, cannotIndexErr
 	}
 }
 
@@ -119,7 +126,7 @@ func loopFromPolygon(p *geom.Polygon) (*s2.Loop, error) {
 	r := p.LinearRing(0)
 	n := r.NumCoords()
 	if n < 4 {
-		return nil, x.Errorf("Can't convert ring with less than 4 pts")
+		return nil, ringErr
 	}
 	// S2 specifies that the orientation of the polygons should be CCW. However there is no
 	// restriction on the orientation in WKB (or geojson). To get the correct orientation we assume

@@ -18,6 +18,8 @@
 package tok
 
 import (
+	"errors"
+
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -36,10 +38,13 @@ func GetTextTokens(funcArgs []string, lang string) ([]string, error) {
 	return tokenize(funcArgs, t)
 }
 
+var (
+	invalidArgCountErr = errors.New("Invalid number of args for function.")
+)
+
 func tokenize(funcArgs []string, tokenizer Tokenizer) ([]string, error) {
 	if len(funcArgs) != 1 {
-		return nil, x.Errorf("Function requires 1 arguments, but got %d",
-			len(funcArgs))
+		return nil, invalidArgCountErr
 	}
 	sv := types.Val{types.StringID, funcArgs[0]}
 	return tokenizer.Tokens(sv)

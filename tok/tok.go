@@ -19,6 +19,7 @@ package tok
 
 import (
 	"encoding/binary"
+	"errors"
 	"time"
 
 	farm "github.com/dgryski/go-farm"
@@ -26,6 +27,12 @@ import (
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+)
+
+var (
+	exactIndexErr   = errors.New("Exact indices only supported for string type")
+	trigramIndexErr = errors.New("Trigram indices only supported for string type")
+	HashIndexErr    = errors.New("Hash indices only supported for string type")
 )
 
 // Tokenizer defines what a tokenizer must provide.
@@ -197,7 +204,7 @@ func (t ExactTokenizer) Type() types.TypeID { return types.StringID }
 func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
 	term, ok := sv.Value.(string)
 	if !ok {
-		return nil, x.Errorf("Exact indices only supported for string types")
+		return nil, exactIndexErr
 	}
 	return []string{encodeToken(term, t.Identifier())}, nil
 }
@@ -282,7 +289,7 @@ func (t TrigramTokenizer) Type() types.TypeID { return types.StringID }
 func (t TrigramTokenizer) Tokens(sv types.Val) ([]string, error) {
 	value, ok := sv.Value.(string)
 	if !ok {
-		return nil, x.Errorf("Trigram indices only supported for string types")
+		return nil, trigramIndexErr
 	}
 	l := len(value) - 2
 	if l > 0 {
@@ -306,7 +313,7 @@ func (t HashTokenizer) Type() types.TypeID { return types.StringID }
 func (t HashTokenizer) Tokens(sv types.Val) ([]string, error) {
 	term, ok := sv.Value.(string)
 	if !ok {
-		return nil, x.Errorf("Hash tokenizer only supported for string types")
+		return nil, HashIndexErr
 	}
 	var hash int64 = int64(farm.Hash64([]byte(term)))
 	return []string{encodeToken(encodeInt(hash), t.Identifier())}, nil
