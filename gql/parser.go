@@ -20,7 +20,9 @@ package gql
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,6 +31,46 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
+)
+
+var (
+	cycleErr           = errors.New("Cycle detected")
+	missingFragmentErr = errors.New("Missing fragment")
+	varErr             = errors.New("Type of variable not specified")
+	varErr1            = errors.New("Variable should be initialised")
+	varErr2            = errors.New("Type not supported")
+	varErr3            = errors.New("Variable not defined")
+	varErr4            = errors.New("Some variables are declared multiple times.")
+	varErr5            = errors.New("Variables can be defined only in named queries.")
+	idErr              = errors.New("Id cant be empty")
+	mutationErr        = errors.New("Only one mutation block allowed")
+	mutationErr2       = errors.New("Invalid mutation")
+	mutationErr3       = errors.New("Invalid mutation operation")
+	schemaErr          = errors.New("Schema block not allowed within query block")
+	schemaErr1         = errors.New("Only one schema block allowed")
+	schemaErr2         = errors.New("Invalid schema block")
+	queryErr           = errors.New("Multiple word query name not allowed")
+	queryErr1          = errors.New("Invalid query")
+	queryErr2          = errors.New("Repeated filter at root")
+	queryErr3          = errors.New("Malformed query. Expected {")
+	queryErr4          = errors.New("Invalid syntax while parsing args")
+	unknownDirErr      = errors.New("Unknown directive")
+	fragmentErr        = errors.New("Unexpected item in fragment")
+	fragmentErr1       = errors.New("Empty fragment name")
+	varBlockErr        = errors.New("Missing comma in var declaration")
+	varBlockErr1       = errors.New("Invalid comma in var block")
+	varBlockErr2       = errors.New("Expecting a variable name")
+	varBlockErr3       = errors.New("Expecting a variable type")
+	varBlockErr4       = errors.New("Unexpected item in place of a variable")
+	varBlockErr5       = errors.New("Expecting a collon")
+	varBlockErr6       = errors.New("Type of variable cant be empty")
+	varBlockErr7       = errors.New("Expecting default value of variable")
+	varBlockErr8       = errors.New("Type ending with ! can't have default value")
+	varBlockErr9       = errors.New("Only one variable expected")
+	varBlockErr10      = errors.New("Expecting argument value")
+	varBlockErr11      = errors.New("Only Plus and minus are allowed unary ops")
+	stackErr           = errors.New("Empty stack")
+	filterErr          = errors.New("Invalid filter statement")
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
@@ -207,7 +249,7 @@ func (fn *fragmentNode) expand(fmap fragmentMap) error {
 		return nil
 	}
 	if fn.Entered {
-		return x.Errorf("Cycle detected: %s", fn.Name)
+		return cycleErr
 	}
 	fn.Entered = true
 	if err := fn.Gq.expandFragments(fmap); err != nil {
@@ -227,7 +269,7 @@ func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
 			fname := child.fragment // Name of fragment being referenced.
 			fchild := fmap[fname]
 			if fchild == nil {
-				return x.Errorf("Missing fragment: %s", fname)
+				return missingFragmentErr
 			}
 			if err := fchild.expand(fmap); err != nil {
 				return err
@@ -337,13 +379,13 @@ func checkValueType(vm varMap) error {
 		typ := v.Type
 
 		if len(typ) == 0 {
-			return x.Errorf("Type of variable %v not specified", k)
+			return varErr
 		}
 
 		// Ensure value is not nil if the variable is required.
 		if typ[len(typ)-1] == '!' {
 			if v.Value == "" {
-				return x.Errorf("Variable %v should be initialised", k)
+				return varErr1
 			}
 			typ = typ[:len(typ)-1]
 		}
@@ -371,7 +413,7 @@ func checkValueType(vm varMap) error {
 				}
 			case "string": // Value is a valid string. No checks required.
 			default:
-				return x.Errorf("Type %v not supported", typ)
+				return varErr2
 			}
 		}
 	}
@@ -383,7 +425,7 @@ func substituteVar(f string, res *string, vmap varMap) error {
 	if len(f) > 0 && f[0] == '$' {
 		va, ok := vmap[f]
 		if !ok {
-			return x.Errorf("Variable not defined %v", f)
+			return varErr3
 		}
 		*res = va.Value
 	}
@@ -403,7 +445,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	idVal, ok := gq.Args["id"]
 	if ok && len(gq.UID) == 0 {
 		if idVal == "" {
-			return x.Errorf("Id can't be empty")
+			return idErr
 		}
 		parseID(gq, idVal)
 		// Deleting it here because we don't need to fill it in query.go.
@@ -489,21 +531,21 @@ func Parse(r Request) (res Result, rerr error) {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemError:
-			return res, x.Errorf(item.Val)
+			return res, fmt.Errorf(item.Val)
 		case itemOpType:
 			if item.Val == "mutation" {
 				if res.Mutation != nil {
-					return res, x.Errorf("Only one mutation block allowed.")
+					return res, mutationErr
 				}
 				if res.Mutation, rerr = getMutation(it); rerr != nil {
 					return res, rerr
 				}
 			} else if item.Val == "schema" {
 				if res.Schema != nil {
-					return res, x.Errorf("Only one schema block allowed ")
+					return res, schemaErr1
 				}
 				if res.Query != nil {
-					return res, x.Errorf("schema block is not allowed with query block")
+					return res, schemaErr
 				}
 				if res.Schema, rerr = getSchema(it); rerr != nil {
 					return res, rerr
@@ -517,7 +559,7 @@ func Parse(r Request) (res Result, rerr error) {
 				fmap[fnode.Name] = fnode
 			} else if item.Val == "query" {
 				if res.Schema != nil {
-					return res, x.Errorf("schema block is not allowed with query block")
+					return res, schemaErr
 				}
 				if qu, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
 					return res, rerr
@@ -585,7 +627,7 @@ func checkDependency(vl []*Vars) error {
 		out = append(out, defines[dlen-1])
 		defines = out
 		if len(defines) != dlen {
-			return x.Errorf("Some variables are declared multiple times.")
+			return varErr4
 		}
 	}
 
@@ -602,18 +644,18 @@ func checkDependency(vl []*Vars) error {
 		needs = out
 	}
 	if len(defines) > len(needs) {
-		return x.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
+		return fmt.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
 			defines, needs)
 	}
 
 	if len(defines) < len(needs) {
-		return x.Errorf("Some variables are used but not defined\nDefined:%v\nUsed:%v\n",
+		return fmt.Errorf("Some variables are used but not defined\nDefined:%v\nUsed:%v\n",
 			defines, needs)
 	}
 
 	for i := 0; i < len(defines); i++ {
 		if defines[i] != needs[i] {
-			return x.Errorf("Variables are not used properly. \nDefined:%v\nUsed:%v\n",
+			return fmt.Errorf("Variables are not used properly. \nDefined:%v\nUsed:%v\n",
 				defines, needs)
 		}
 	}
@@ -691,15 +733,15 @@ L2:
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemError:
-			return nil, x.Errorf(item.Val)
+			return nil, fmt.Errorf(item.Val)
 		case itemName:
 			if name != "" {
-				return nil, x.Errorf("Multiple word query name not allowed.")
+				return nil, queryErr
 			}
 			name = item.Val
 		case itemLeftRound:
 			if name == "" {
-				return nil, x.Errorf("Variables can be defined only in named queries.")
+				return nil, varErr5
 			}
 
 			if rerr = parseGqlVariables(it, vmap); rerr != nil {
@@ -733,7 +775,7 @@ func getQuery(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 L:
 	// Recurse to deeper levels through godeep.
 	if !it.Next() {
-		return nil, x.Errorf("Invalid query")
+		return nil, queryErr1
 	}
 
 	item := it.Item()
@@ -748,7 +790,7 @@ L:
 			switch item.Val {
 			case "filter":
 				if seenFilter {
-					return nil, x.Errorf("Repeated filter at root")
+					return nil, queryErr2
 				}
 				seenFilter = true
 				filter, err := parseFilter(it)
@@ -765,7 +807,7 @@ L:
 				gq.IsGroupby = true
 				parseGroupby(it, gq)
 			default:
-				return nil, x.Errorf("Unknown directive [%s]", item.Val)
+				return nil, unknownDirErr
 			}
 			goto L
 		}
@@ -775,7 +817,7 @@ L:
 		it.Prev()
 		return gq, nil
 	} else {
-		return nil, x.Errorf("Malformed Query. Missing {. Got %v", item.Val)
+		return nil, queryErr3
 	}
 
 	return gq, nil
@@ -797,11 +839,11 @@ func getFragment(it *lex.ItemIterator) (*fragmentNode, error) {
 		} else if item.Typ == itemLeftCurl {
 			break
 		} else {
-			return nil, x.Errorf("Unexpected item in fragment: %v %v", item.Typ, item.Val)
+			return nil, fragmentErr
 		}
 	}
 	if name == "" {
-		return nil, x.Errorf("Empty fragment name")
+		return nil, fragmentErr1
 	}
 
 	gq := &GraphQuery{
@@ -838,7 +880,7 @@ func getMutation(it *lex.ItemIterator) (*Mutation, error) {
 			}
 		}
 	}
-	return nil, x.Errorf("Invalid mutation.")
+	return nil, mutationErr2
 }
 
 // parses till rightSquare is found (parses [a, b]) excluding leftSquare
@@ -857,15 +899,15 @@ func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
-				return items, x.Errorf("Invalid scheam block")
+				return items, schemaErr2
 			}
 			val := collectName(it, item.Val)
 			items = append(items, val)
 		default:
-			return items, x.Errorf("Invalid schema block")
+			return items, schemaErr2
 		}
 	}
-	return items, x.Errorf("Invalid schema block")
+	return items, schemaErr2
 }
 
 // parses till rightround is found
@@ -874,12 +916,12 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *protos.SchemaRequest) error 
 	it.Next()
 	item := it.Item()
 	if item.Typ != itemName && item.Val != "pred" {
-		return x.Errorf("Invalid schema block")
+		return schemaErr2
 	}
 	it.Next()
 	item = it.Item()
 	if item.Typ != itemColon {
-		return x.Errorf("Invalid schema block")
+		return schemaErr2
 	}
 
 	// can be a or [a,b]
@@ -893,7 +935,7 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *protos.SchemaRequest) error 
 			return err
 		}
 	} else {
-		return x.Errorf("Invalid schema block")
+		return schemaErr2
 	}
 
 	it.Next()
@@ -901,7 +943,7 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *protos.SchemaRequest) error 
 	if item.Typ == itemRightRound {
 		return nil
 	}
-	return x.Errorf("Invalid schema blocks")
+	return schemaErr2
 }
 
 // parses till rightcurl is found
@@ -914,10 +956,10 @@ func parseSchemaFields(it *lex.ItemIterator, s *protos.SchemaRequest) error {
 		case itemName:
 			s.Fields = append(s.Fields, item.Val)
 		default:
-			return x.Errorf("Invalid schema block.")
+			return schemaErr2
 		}
 	}
-	return x.Errorf("Invalid schema block.")
+	return schemaErr2
 }
 
 func getSchema(it *lex.ItemIterator) (*protos.SchemaRequest, error) {
@@ -933,23 +975,23 @@ func getSchema(it *lex.ItemIterator) (*protos.SchemaRequest, error) {
 			return &s, nil
 		case itemLeftRound:
 			if leftRoundSeen {
-				return nil, x.Errorf("Too many left rounds in schema block")
+				return nil, schemaErr2
 			}
 			leftRoundSeen = true
 			if err := parseSchemaPredicates(it, &s); err != nil {
 				return nil, err
 			}
 		default:
-			return nil, x.Errorf("Invalid schema block")
+			return nil, schemaErr2
 		}
 	}
-	return nil, x.Errorf("Invalid schema block.")
+	return nil, schemaErr2
 }
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.
 func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 	if mu == nil {
-		return x.Errorf("Mutation is nil.")
+		return mutationErr2
 	}
 
 	parse := false
@@ -960,13 +1002,13 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 		}
 		if item.Typ == itemLeftCurl {
 			if parse {
-				return x.Errorf("Too many left curls in set mutation.")
+				return mutationErr2
 			}
 			parse = true
 		}
 		if item.Typ == itemMutationContent {
 			if !parse {
-				return x.Errorf("Mutation syntax invalid.")
+				return mutationErr2
 			}
 			if op == "set" {
 				mu.Set = item.Val
@@ -975,14 +1017,14 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 			} else if op == "schema" {
 				mu.Schema = item.Val
 			} else {
-				return x.Errorf("Invalid mutation operation.")
+				return mutationErr3
 			}
 		}
 		if item.Typ == itemRightCurl {
 			return nil
 		}
 	}
-	return x.Errorf("Invalid mutation formatting.")
+	return mutationErr2
 }
 
 // parseGqlVariables parses the the graphQL variable declaration.
@@ -994,47 +1036,47 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 		item := it.Item()
 		if item.Typ == itemDollar {
 			if !expectArg {
-				return x.Errorf("Missing comma in var declaration")
+				return varBlockErr
 			}
 			it.Next()
 			item = it.Item()
 			if item.Typ == itemName {
 				varName = fmt.Sprintf("$%s", item.Val)
 			} else {
-				return x.Errorf("Expecting a variable name. Got: %v", item)
+				return varBlockErr2
 			}
 		} else if item.Typ == itemRightRound {
 			if expectArg {
-				return x.Errorf("Invalid comma in var block")
+				return varBlockErr1
 			}
 			break
 		} else if item.Typ == itemComma {
 			if expectArg {
-				return x.Errorf("Invalid comma in var block")
+				return varBlockErr1
 			}
 			expectArg = true
 			continue
 		} else {
-			return x.Errorf("Unexpected item in place of variable. Got: %v %v", item, item.Typ == itemDollar)
+			return varBlockErr4
 		}
 
 		it.Next()
 		item = it.Item()
 		if item.Typ != itemColon {
-			return x.Errorf("Expecting a collon. Got: %v", item)
+			return varBlockErr5
 		}
 
 		// Get variable type.
 		it.Next()
 		item = it.Item()
 		if item.Typ != itemName {
-			return x.Errorf("Expecting a variable type. Got: %v", item)
+			return varBlockErr3
 		}
 
 		// Ensure that the type is not nil.
 		varType := item.Val
 		if varType == "" {
-			return x.Errorf("Type of a variable can't be empty")
+			return varBlockErr6
 		}
 		it.Next()
 		item = it.Item()
@@ -1061,11 +1103,11 @@ func parseGqlVariables(it *lex.ItemIterator, vmap varMap) error {
 			it.Next()
 			it := it.Item()
 			if it.Typ != itemName {
-				return x.Errorf("Expecting default value of a variable. Got: %v", item)
+				return varBlockErr7
 			}
 
 			if varType[len(varType)-1] == '!' {
-				return x.Errorf("Type ending with ! can't have default value: Got: %v", varType)
+				return varBlockErr8
 			}
 
 			// If value is empty replace, otherwise ignore the default value
@@ -1096,29 +1138,29 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		item := it.Item()
 		if item.Typ == itemName {
 			if !expectArg {
-				return result, x.Errorf("Expecting a comma. But got: %v", item.Val)
+				return result, queryErr4
 			}
 			p.Key = collectName(it, item.Val)
 			expectArg = false
 		} else if item.Typ == itemRightRound {
 			if expectArg {
-				return result, x.Errorf("Unexpected comma before ).")
+				return result, queryErr4
 			}
 			break
 		} else if item.Typ == itemComma {
 			if expectArg {
-				return result, x.Errorf("Expected Argument but got comma.")
+				return result, queryErr4
 			}
 			expectArg = true
 			continue
 		} else {
-			return result, x.Errorf("Expecting argument name. Got: %v", item)
+			return result, queryErr4
 		}
 
 		it.Next()
 		item = it.Item()
 		if item.Typ != itemColon {
-			return result, x.Errorf("Expecting a collon. Got: %v in %v", item, gq.Attr)
+			return result, queryErr4
 		}
 
 		// Get value.
@@ -1131,7 +1173,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 				return result, err
 			}
 			if count != 1 {
-				return result, x.Errorf("Only one variable expected. Got %d", count)
+				return result, varBlockErr9
 			}
 			gq.NeedsVar[len(gq.NeedsVar)-1].Typ = VALUE_VAR
 			p.Val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
@@ -1144,17 +1186,17 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
-				return result, x.Errorf("Expecting argument value. Got: %v", item)
+				return result, varBlockErr10
 			}
 		} else if item.Typ == itemMathOp {
 			if item.Val != "+" && item.Val != "-" {
-				return result, x.Errorf("Only Plus and minus are allowed unary ops. Got: %v", item.Val)
+				return result, varBlockErr11
 			}
 			val = item.Val
 			it.Next()
 			item = it.Item()
 		} else if item.Typ != itemName {
-			return result, x.Errorf("Expecting argument value. Got: %v", item)
+			return result, varBlockErr10
 		}
 
 		p.Val = collectName(it, val+item.Val)
@@ -1215,7 +1257,7 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	case "not":
 		buf.WriteString("NOT")
 	default:
-		x.Fatalf("Unknown operator: %q", t.Op)
+		log.Fatalf("Unknown operator: %q", t.Op)
 	}
 
 	for _, c := range t.Child {
@@ -1240,7 +1282,7 @@ func (s *filterTreeStack) popAssert() *FilterTree {
 
 func (s *filterTreeStack) pop() (*FilterTree, error) {
 	if s.empty() {
-		return nil, x.Errorf("Empty stack")
+		return nil, stackErr
 	}
 	last := s.a[len(s.a)-1]
 	s.a = s.a[:len(s.a)-1]
@@ -1255,19 +1297,19 @@ func (s *filterTreeStack) peek() *FilterTree {
 func evalStack(opStack, valueStack *filterTreeStack) error {
 	topOp, err := opStack.pop()
 	if err != nil {
-		return x.Errorf("Invalid filter statement")
+		return filterErr
 	}
 	if topOp.Op == "not" {
 		// Since "not" is a unary operator, just pop one value.
 		topVal, err := valueStack.pop()
 		if err != nil {
-			return x.Errorf("Invalid filter statement")
+			return filterErr
 		}
 		topOp.Child = []*FilterTree{topVal}
 	} else {
 		// "and" and "or" are binary operators, so pop two values.
 		if valueStack.size() < 2 {
-			return x.Errorf("Invalid filter statement")
+			return filterErr
 		}
 		topVal1 := valueStack.popAssert()
 		topVal2 := valueStack.popAssert()
