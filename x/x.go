@@ -20,7 +20,6 @@ package x
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -30,8 +29,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/net/trace"
 )
 
 // Error constants representing different types of errors.
@@ -103,19 +100,6 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 }
 
 var Nilbyte []byte
-
-func Trace(ctx context.Context, format string, args ...interface{}) {
-	if *debugMode {
-		fmt.Printf(format+"\n", args...)
-		return
-	}
-
-	tr, ok := trace.FromContext(ctx)
-	if !ok {
-		return
-	}
-	tr.LazyPrintf(format, args...)
-}
 
 // Reads a single line from a buffered reader. The line is read into the
 // passed in buffer to minimize allocations. This is the preferred

@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -37,7 +38,9 @@ var emptySortResult protos.SortResult
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
 	gid := group.BelongsTo(q.Attr)
-	x.Trace(ctx, "worker.Sort attr: %v groupId: %v", q.Attr, gid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("worker.Sort attr: %v groupId: %v", q.Attr, gid)
+	}
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
@@ -54,7 +57,9 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 		return &emptySortResult, x.Wrapf(err, "SortOverNetwork: while retrieving connection.")
 	}
 	defer pl.Put(conn)
-	x.Trace(ctx, "Sending request to %v", addr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sending request to %v", addr)
+	}
 
 	c := protos.NewWorkerClient(conn)
 	var reply *protos.SortResult
@@ -70,7 +75,9 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 		return &emptySortResult, ctx.Err()
 	case err := <-cerr:
 		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.Sort"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while calling Worker.Sort: %+v", err)
+			}
 		}
 		return reply, err
 	}
@@ -83,7 +90,9 @@ func (w *grpcWorker) Sort(ctx context.Context, s *protos.SortMessage) (*protos.S
 	}
 
 	gid := group.BelongsTo(s.Attr)
-	x.Trace(ctx, "Sorting: Attribute: %q groupId: %v Sort", s.Attr, gid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sorting: Attribute: %q groupId: %v Sort", s.Attr, gid)
+	}
 
 	var reply *protos.SortResult
 	x.AssertTruef(groups().ServesGroup(gid),
@@ -206,7 +215,9 @@ BUCKETS:
 			x.AssertTrue(k != nil)
 			x.AssertTrue(k.IsIndex())
 			token := k.Term
-			x.Trace(ctx, "processSort: Token: %s", token)
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("processSort: Token: %s", token)
+			}
 			// Intersect every UID list with the index bucket, and update their
 			// results (in out).
 			err := intersectBucket(ts, ts.Attr, token, out)
@@ -283,7 +294,9 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		// wait for other goroutine to get cancelled
 		<-resCh
 	} else {
-		x.TraceError(ctx, r.err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(r.err.Error())
+		}
 		r = <-resCh
 	}
 	return r.res, r.err

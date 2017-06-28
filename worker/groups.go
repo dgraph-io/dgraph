@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -359,7 +360,9 @@ func (g *groupi) syncMemberships() {
 				zero := g.Node(0)
 				x.AssertTruef(zero != nil, "Expected node 0")
 				if err := zero.ProposeAndWait(zero.ctx, &protos.Proposal{Membership: mm}); err != nil {
-					x.TraceError(g.ctx, err)
+					if tr, ok := trace.FromContext(g.ctx); ok {
+						tr.LazyPrintf(err.Error())
+					}
 				}
 			}(rc, n.AmLeader())
 		}
@@ -406,7 +409,9 @@ UPDATEMEMBERSHIP:
 	c := protos.NewWorkerClient(conn)
 	update, err := c.UpdateMembership(g.ctx, &mu)
 	if err != nil {
-		x.TraceError(g.ctx, err)
+		if tr, ok := trace.FromContext(g.ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return
 	}
 

@@ -1,6 +1,8 @@
 package query
 
 import (
+	"log"
+
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -88,7 +90,7 @@ func processBinary(mNode *mathTree) (err error) {
 		mNode.Const, err = ag.Value()
 		return err
 	}
-	x.Fatalf("Empty maps and constant")
+	log.Fatalf("Empty maps and constant")
 	return nil
 }
 

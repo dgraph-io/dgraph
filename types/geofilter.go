@@ -19,11 +19,13 @@ package types
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/golang/geo/s2"
-	"github.com/twpayne/go-geom"
+	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -67,6 +69,20 @@ func IsGeoFunc(str string) bool {
 	return false
 }
 
+var (
+	wrongNumberArgsNearErr       = errors.New("Got wrong number of args for near function")
+	wrongNumberArgsWithinErr     = errors.New("Got wrong number of args for within function")
+	wrongNumberArgsContainsErr   = errors.New("Got wrong number of args for contains function")
+	wrongNumberArgsIntersectsErr = errors.New("Got wrong number of args for intersects function")
+	negDisErr                    = errors.New("Distance connot be negative")
+	invalidGeoFnErr              = errors.New("Invalid geo fn")
+	requirePolygonErr            = errors.New("Require a polygon for within query")
+	requirePolygonErr2           = errors.New("Require a polygon for intersects query")
+	polygonErr                   = errors.New("Cannot use a polygon for near query")
+	unknownQueryErr              = errors.New("Unknown query type")
+	invalidMaxDisErr             = errors.New("Invalid max distance for near query")
+)
+
 // GetGeoTokens returns the corresponding index keys based on the type
 // of function.
 func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
@@ -75,15 +91,14 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 	switch funcName {
 	case "near":
 		if len(funcArgs) != 4 {
-			return nil, nil, x.Errorf("near function requires 2 arguments, but got %d",
-				len(funcArgs))
+			return nil, nil, wrongNumberArgsNearErr
 		}
 		maxDist, err := strconv.ParseFloat(funcArgs[3], 64)
 		if err != nil {
 			return nil, nil, x.Wrapf(err, "Error while converting distance to float")
 		}
 		if maxDist < 0 {
-			return nil, nil, x.Errorf("Distance cannot be negative")
+			return nil, nil, negDisErr
 		}
 		g, err := convertToGeom(funcArgs[2])
 		if err != nil {
@@ -92,8 +107,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 		return queryTokensGeo(QueryTypeNear, g, maxDist)
 	case "within":
 		if len(funcArgs) != 3 {
-			return nil, nil, x.Errorf("within function requires 1 arguments, but got %d",
-				len(funcArgs))
+			return nil, nil, wrongNumberArgsWithinErr
 		}
 		g, err := convertToGeom(funcArgs[2])
 		if err != nil {
@@ -102,8 +116,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 		return queryTokensGeo(QueryTypeWithin, g, 0.0)
 	case "contains":
 		if len(funcArgs) != 3 {
-			return nil, nil, x.Errorf("contains function requires 1 arguments, but got %d",
-				len(funcArgs))
+			return nil, nil, wrongNumberArgsContainsErr
 		}
 		g, err := convertToGeom(funcArgs[2])
 		if err != nil {
@@ -112,8 +125,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 		return queryTokensGeo(QueryTypeContains, g, 0.0)
 	case "intersects":
 		if len(funcArgs) != 3 {
-			return nil, nil, x.Errorf("intersects function requires 1 arguments, but got %d",
-				len(funcArgs))
+			return nil, nil, wrongNumberArgsIntersectsErr
 		}
 		g, err := convertToGeom(funcArgs[2])
 		if err != nil {
@@ -121,7 +133,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 		}
 		return queryTokensGeo(QueryTypeIntersects, g, 0.0)
 	default:
-		return nil, nil, x.Errorf("Invalid geo function")
+		return nil, nil, invalidGeoFnErr
 	}
 }
 
@@ -142,7 +154,7 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		}
 
 	default:
-		return nil, nil, x.Errorf("Cannot query using a geometry of type %T", v)
+		return nil, nil, fmt.Errorf("Cannot query using a geometry of type %T", v)
 	}
 
 	x.AssertTruef(l != nil || pt != nil, "We should have a point or a loop.")
@@ -157,7 +169,7 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		// For a within query we only need to look at the objects whose parents match our cover.
 		// So we take our cover and prefix with the parentPrefix to look in the index.
 		if l == nil {
-			return nil, nil, x.Errorf("Require a polygon for within query")
+			return nil, nil, requirePolygonErr
 		}
 		toks := createTokens(cover, parentPrefix)
 		return toks, &GeoQueryData{loop: l, qtype: qt}, nil
@@ -169,7 +181,7 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 
 	case QueryTypeNear:
 		if l != nil {
-			return nil, nil, x.Errorf("Cannot use a polygon in a near query")
+			return nil, nil, polygonErr
 		}
 		return nearQueryKeys(*pt, maxDistance)
 
@@ -178,20 +190,20 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		// given region. So we look at all the objects whose parents match our cover as well as
 		// all the objects whose cover matches our parents.
 		if l == nil {
-			return nil, nil, x.Errorf("Require a polygon for intersects query")
+			return nil, nil, requirePolygonErr2
 		}
 		toks := parentCoverTokens(parents, cover)
 		return toks, &GeoQueryData{loop: l, qtype: qt}, nil
 
 	default:
-		return nil, nil, x.Errorf("Unknown query type")
+		return nil, nil, unknownQueryErr
 	}
 }
 
 // nearQueryKeys creates a QueryKeys object for a near query.
 func nearQueryKeys(pt s2.Point, d float64) ([]string, *GeoQueryData, error) {
 	if d <= 0 {
-		return nil, nil, x.Errorf("Invalid max distance specified for a near query")
+		return nil, nil, invalidMaxDisErr
 	}
 	a := EarthAngle(d)
 	c := s2.CapFromCenterAngle(pt, a)

@@ -18,12 +18,13 @@
 package types
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 type sortBase struct {
@@ -60,7 +61,7 @@ func (s byValue) Less(i, j int) bool {
 	case StringID, DefaultID:
 		return (s.values[i].Value.(string)) < (s.values[j].Value.(string))
 	}
-	x.Fatalf("Unexpected scalar: %v", s.values[i].Tid)
+	log.Fatalf("Unexpected scalar: %v", s.values[i].Tid)
 	return false
 }
 
@@ -87,10 +88,16 @@ func Sort(v []Val, ul *protos.List, desc bool) error {
 	return nil
 }
 
+var (
+	compareErr  = errors.New("Arguments of different type can't be compared")
+	compareErr2 = errors.New("Compare not supported for type")
+	equalErr    = errors.New("Equal not supported for type")
+)
+
 // Less returns true if a is strictly less than b.
 func Less(a, b Val) (bool, error) {
 	if a.Tid != b.Tid {
-		return false, x.Errorf("Arguments of different type can not be compared.")
+		return false, compareErr
 	}
 	switch a.Tid {
 	case DateID:
@@ -107,13 +114,13 @@ func Less(a, b Val) (bool, error) {
 		return (a.Value.(string)) < (b.Value.(string)), nil
 
 	}
-	return false, x.Errorf("Compare not supported for type: %v", a.Tid)
+	return false, compareErr2
 }
 
 // Equal returns true if a is equal to b.
 func Equal(a, b Val) (bool, error) {
 	if a.Tid != b.Tid {
-		return false, x.Errorf("Arguments of different type can not be compared.")
+		return false, compareErr
 	}
 	switch a.Tid {
 	case DateID:
@@ -129,5 +136,5 @@ func Equal(a, b Val) (bool, error) {
 	case BoolID:
 		return a.Value.(bool) == (b.Value.(bool)), nil
 	}
-	return false, x.Errorf("Equal not supported for type: %v", a.Tid)
+	return false, equalErr
 }

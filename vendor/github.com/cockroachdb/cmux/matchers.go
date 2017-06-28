@@ -108,16 +108,7 @@ func HTTP1HeaderField(name, value string) Matcher {
 // headers frame.
 func HTTP2HeaderField(name, value string) Matcher {
 	return func(r io.Reader) bool {
-		return matchHTTP2Field(ioutil.Discard, r, name, value)
-	}
-}
-
-// HTTP2MatchHeaderFieldSendSettings matches the header field and writes the
-// settings to the server. Prefer HTTP2HeaderField over this one, if the client
-// does not block on receiving a SETTING frame.
-func HTTP2MatchHeaderFieldSendSettings(name, value string) MatchWriter {
-	return func(w io.Writer, r io.Reader) bool {
-		return matchHTTP2Field(w, r, name, value)
+		return matchHTTP2Field(r, name, value)
 	}
 }
 
@@ -139,12 +130,12 @@ func matchHTTP1Field(r io.Reader, name, value string) (matched bool) {
 	return req.Header.Get(name) == value
 }
 
-func matchHTTP2Field(w io.Writer, r io.Reader, name, value string) (matched bool) {
+func matchHTTP2Field(r io.Reader, name, value string) (matched bool) {
 	if !hasHTTP2Preface(r) {
 		return false
 	}
 
-	framer := http2.NewFramer(w, r)
+	framer := http2.NewFramer(ioutil.Discard, r)
 	hdec := hpack.NewDecoder(uint32(4<<10), func(hf hpack.HeaderField) {
 		if hf.Name == name && hf.Value == value {
 			matched = true
@@ -157,10 +148,6 @@ func matchHTTP2Field(w io.Writer, r io.Reader, name, value string) (matched bool
 		}
 
 		switch f := f.(type) {
-		case *http2.SettingsFrame:
-			if err := framer.WriteSettings(); err != nil {
-				return false
-			}
 		case *http2.HeadersFrame:
 			if _, err := hdec.Write(f.HeaderBlockFragment()); err != nil {
 				return false

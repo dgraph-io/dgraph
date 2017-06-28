@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"math"
 
+	"golang.org/x/net/trace"
+
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -45,12 +47,16 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 	select {
 	case err = <-rrch:
 		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while processing child task: %+v", err)
+			}
 			rch <- err
 			return
 		}
 	case <-ctx.Done():
-		x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+		}
 		rch <- ctx.Err()
 		return
 	}
@@ -80,12 +86,16 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 			select {
 			case err = <-rrch:
 				if err != nil {
-					x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
+					if tr, ok := trace.FromContext(ctx); ok {
+						tr.LazyPrintf("Error while processing child task: %+v", err)
+					}
 					rch <- err
 					return
 				}
 			case <-ctx.Done():
-				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+				}
 				rch <- ctx.Err()
 				return
 			}
@@ -176,11 +186,15 @@ L:
 				if err == ErrStop {
 					break L
 				}
-				x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Error while processing child task: %+v", err)
+				}
 				return err
 			}
 		case <-ctx.Done():
-			x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+			}
 			return ctx.Err()
 		}
 	}

@@ -19,6 +19,7 @@ package types
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -129,10 +130,15 @@ func Intersects(l1 *s2.Loop, l2 *s2.Loop) bool {
 	return loopRegion{l1}.intersects(l2)
 }
 
+var (
+	invalidCoErr   = errors.New("Invalid coordinates")
+	lastNotSameErr = errors.New("Last coord not same as first")
+)
+
 func convertToGeom(str string) (geom.T, error) {
 	s := x.WhiteSpace.Replace(str)
 	if len(s) < 5 { // [1,2]
-		return nil, x.Errorf("Invalid coordinates")
+		return nil, invalidCoErr
 	}
 	var g geojson.Geometry
 	var m json.RawMessage
@@ -141,28 +147,28 @@ func convertToGeom(str string) (geom.T, error) {
 		g.Type = "Polygon"
 		err = m.UnmarshalJSON([]byte(fmt.Sprintf("[%s]", s)))
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, invalidCoErr
 		}
 		g.Coordinates = &m
 		g1, err := g.Decode()
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, invalidCoErr
 		}
 		coords := g1.(*geom.Polygon).Coords()
 		if coords[0][0][0] != coords[0][len(coords[0])-1][0] ||
 			coords[0][0][1] != coords[0][len(coords[0])-1][1] {
-			return nil, x.Errorf("Last coord not same as first")
+			return nil, lastNotSameErr
 		}
 
 	} else if s[0] == '[' {
 		g.Type = "Point"
 		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
+			return nil, invalidCoErr
 		}
 		g.Coordinates = &m
 	} else {
-		return nil, x.Errorf("invalid coordinates")
+		return nil, invalidCoErr
 	}
 	return g.Decode()
 }

@@ -19,6 +19,7 @@ package query
 
 import (
 	"bytes"
+	"errors"
 	"math"
 	"time"
 
@@ -63,6 +64,10 @@ func convertTo(from *protos.TaskValue) (types.Val, error) {
 	}
 	return va, err
 }
+
+var (
+	wrongTypeErr = errors.New("Wrong type encountered for function")
+)
 
 func compareValues(ag string, va, vb types.Val) (bool, error) {
 	if !isBinaryBoolean(ag) {
@@ -129,37 +134,37 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 		switch ag.name {
 		case "ln":
 			if !isIntOrFloat {
-				return x.Errorf("Wrong type encountered for func %v", ag.name)
+				return wrongTypeErr
 			}
 			v.Value = math.Log(l)
 			res = v
 		case "exp":
 			if !isIntOrFloat {
-				return x.Errorf("Wrong type encountered for func %v", ag.name)
+				return wrongTypeErr
 			}
 			v.Value = math.Exp(l)
 			res = v
 		case "u-":
 			if !isIntOrFloat {
-				return x.Errorf("Wrong type encountered for func %v", ag.name)
+				return wrongTypeErr
 			}
 			v.Value = -l
 			res = v
 		case "sqrt":
 			if !isIntOrFloat {
-				return x.Errorf("Wrong type encountered for func %v", ag.name)
+				return wrongTypeErr
 			}
 			v.Value = math.Sqrt(l)
 			res = v
 		case "floor":
 			if !isIntOrFloat {
-				return x.Errorf("Wrong type encountered for func %v", ag.name)
+				return wrongTypeErr
 			}
 			v.Value = math.Floor(l)
 			res = v
 		case "ceil":
 			if !isIntOrFloat {
-				return x.Errorf("Wrong type encountered for func %v", ag.name)
+				return wrongTypeErr
 			}
 			v.Value = math.Ceil(l)
 			res = v
@@ -171,7 +176,7 @@ func (ag *aggregator) ApplyVal(v types.Val) error {
 				v.Value = float64(time.Since(v.Value.(time.Time))) / 1000000000.0
 				v.Tid = types.FloatID
 			} else {
-				return x.Errorf("Wrong type encountered for func %v", ag.name)
+				return wrongTypeErr
 			}
 			res = v
 		}

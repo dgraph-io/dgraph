@@ -18,6 +18,7 @@
 package worker
 
 import (
+	"errors"
 	"math"
 	"sort"
 	"strconv"
@@ -25,6 +26,7 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
@@ -53,7 +55,9 @@ var (
 func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Result, error) {
 	attr := q.Attr
 	gid := group.BelongsTo(attr)
-	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("attr: %v groupId: %v", attr, gid)
+	}
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
@@ -70,19 +74,40 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
 	}
 	defer pl.Put(conn)
-	x.Trace(ctx, "Sending request to %v", addr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sending request to %v", addr)
+	}
 
 	c := protos.NewWorkerClient(conn)
 	reply, err := c.ServeTask(ctx, q)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.ServeTask"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while calling Worker.ServeTask: %v", err)
+		}
 		return &emptyResult, err
 	}
 
-	x.Trace(ctx, "Reply from server. length: %v Addr: %v Attr: %v",
-		len(reply.UidMatrix), addr, attr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Reply from server. length: %v Addr: %v Attr: %v",
+			len(reply.UidMatrix), addr, attr)
+	}
 	return reply, nil
 }
+
+var (
+	scalarErr        = errors.New("Attribute is not valid scalar type")
+	marshalErr       = errors.New("Failed convertToType during Marshal")
+	reverseErr       = errors.New("Predicate doesn't have reverse edge")
+	indexErr         = errors.New("Predicate is not indexed")
+	indexErr2        = errors.New("Predicate is not indexed with correct type")
+	passwordErr      = errors.New("Attribute of type password cannot be fetched")
+	argErr           = errors.New("No arguments passed to function")
+	argCountError    = errors.New("Incorrect number of arguments passed to function")
+	aggErr           = errors.New("Aggregator could not be applied")
+	compareScalarErr = errors.New("Compare scalar function got invalid number of digits")
+	regexErr         = errors.New("Invalid regexp modifier")
+	fnErr            = errors.New("Function not handled in parseSrcFn")
+)
 
 // convertValue converts the data to the schema.State() type of predicate.
 func convertValue(attr, data string) (types.Val, error) {
@@ -92,7 +117,7 @@ func convertValue(attr, data string) (types.Val, error) {
 		return types.Val{}, err
 	}
 	if !t.IsScalar() {
-		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
+		return types.Val{}, scalarErr
 	}
 
 	src := types.Val{types.StringID, []byte(data)}
@@ -117,7 +142,7 @@ func convertToType(v types.Val, typ types.TypeID) (*protos.TaskValue, error) {
 	data := types.ValueForType(types.BinaryID)
 	err = types.Marshal(val, &data)
 	if err != nil {
-		return result, x.Errorf("Failed convertToType during Marshal")
+		return result, marshalErr
 	}
 	result.Val = data.Value.([]byte)
 	return result, nil
@@ -228,10 +253,10 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if q.Reverse && !schema.State().IsReversed(attr) {
-		return nil, x.Errorf("Predicate %s doesn't have reverse edge", attr)
+		return nil, reverseErr
 	}
 	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
-		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
+		return nil, indexErr
 	}
 
 	opts := posting.ListOptions{
@@ -267,7 +292,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+			return nil, passwordErr
 		}
 		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
 		if isValueEdge {
@@ -724,7 +749,9 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Re
 	if q.UidList != nil {
 		numUids = len(q.UidList.Uids)
 	}
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
+	}
 
 	var reply *protos.Result
 	x.AssertTruef(groups().ServesGroup(gid),
@@ -942,7 +969,9 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 		if i == numPart-1 {
 			maxUid = math.MaxUint64
 		}
-		x.Trace(ctx, "Running go-routine %v for iteration", i)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Running go-routine %v for iteration", i)
+		}
 		wg.Add(1)
 		go func(i uint64) {
 			it := pstore.NewIterator()
@@ -962,7 +991,9 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 				x.AssertTruef(pk.Attr == q.Attr,
 					"Invalid key obtained for comparison")
 				if w%1000 == 0 {
-					x.Trace(ctx, "iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+					if tr, ok := trace.FromContext(ctx); ok {
+						tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+					}
 				}
 				w++
 				if pk.Uid > maxUid {
