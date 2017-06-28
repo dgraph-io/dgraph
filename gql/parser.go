@@ -56,6 +56,7 @@ var (
 	queryErr2          = errors.New("Repeated filter at root")
 	queryErr3          = errors.New("Malformed query. Expected {")
 	queryErr4          = errors.New("Invalid syntax while parsing args")
+	queryErr5          = errors.New("Bad nesting of predicates or functions")
 	unknownDirErr      = errors.New("Unknown directive")
 	fragmentErr        = errors.New("Unexpected item in fragment")
 	fragmentErr1       = errors.New("Empty fragment name")
@@ -71,6 +72,8 @@ var (
 	varBlockErr9       = errors.New("Only one variable expected")
 	varBlockErr10      = errors.New("Expecting argument value")
 	varBlockErr11      = errors.New("Only Plus and minus are allowed unary ops")
+	varBlockErr12      = errors.New("Only variables allowed in aggregate functions")
+	varBlockErr13      = errors.New("Expected one variable inside var() of aggregator")
 	stackErr           = errors.New("Empty stack")
 	filterErr          = errors.New("Invalid filter statement")
 	funcErr            = errors.New("Invalid syntax for function")
@@ -83,12 +86,29 @@ var (
 	funcErr7           = errors.New("Empty argument received")
 	funcErr8           = errors.New("Attribute in function must be quoted")
 	funcErr9           = errors.New("Expected a function but got something else")
-	facetsErr          = errors.New("Invalid syntax while parsing facets")
 	groupByErr         = errors.New("Expected a left round after groupby")
 	groupByErr1        = errors.New("Expected a predicate but got comma")
 	groupByErr2        = errors.New("Unnecessary comma in groupby()")
 	groupByErr3        = errors.New("Expected atleast one attribute in groupby")
 	groupByErr4        = errors.New("Expected a comma or right round")
+	groupByErr5        = errors.New("Only aggrgator/count functions allowed inside @groupby")
+	directiveErr       = errors.New("Invalid use of directive")
+	directiveErr1      = errors.New("Unknown directive")
+	facetsErr          = errors.New("Invalid syntax while parsing facets")
+	facetsErr1         = errors.New("Only one facets allowed")
+	facetsErr2         = errors.New("Only one facets filter allowed")
+	facetsErr3         = errors.New("Variables are not allowed in facets filter")
+	langErr            = errors.New("Expected directive or language list")
+	langErr1           = errors.New("Expected atleast one language in list")
+	expectedErr1       = errors.New("Expected some name")
+	expectedErr2       = errors.New("Expected left round brackets")
+	expectedErr3       = errors.New("Expected comma")
+	expectedErr4       = errors.New("Expected argument")
+	expectedErr5       = errors.New("Expected colon")
+	expectedErr6       = errors.New("Expected a variable name")
+	expectedErr7       = errors.New("Expected only one variable")
+	mathErr            = errors.New("Function math should be used with a variable or have an alias")
+	mathErr4           = errors.New("Comma encountered in math at unexpected place")
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
@@ -1757,7 +1777,7 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 
 func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	if curp == nil {
-		return x.Errorf("Invalid use of directive.")
+		return directiveErr
 	}
 	it.Next()
 	item := it.Item()
@@ -1771,20 +1791,19 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			curp.FacetVar = facetVar
 			if facets != nil {
 				if curp.Facets != nil {
-					return x.Errorf("Only one facets allowed")
+					return facetsErr1
 				}
 				curp.Facets = facets
 			} else if facetsFilter != nil {
 				if curp.FacetsFilter != nil {
-					return x.Errorf("Only one facets filter allowed")
+					return facetsErr2
 				}
 				if facetsFilter.hasVars() {
-					return x.Errorf(
-						"variables are not allowed in facets filter.")
+					return facetsErr3
 				}
 				curp.FacetsFilter = facetsFilter
 			} else {
-				return x.Errorf("Facets parsing failed.")
+				return facetsErr
 			}
 		} else if peek[0].Typ == itemLeftRound {
 			// this is directive
@@ -1799,19 +1818,19 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 				curp.IsGroupby = true
 				parseGroupby(it, curp)
 			default:
-				return x.Errorf("Unknown directive [%s]", item.Val)
+				return directiveErr1
 			}
 		} else if len(curp.Attr) > 0 && len(curp.Langs) == 0 {
 			// this is language list
 			curp.Langs = parseLanguageList(it)
 			if len(curp.Langs) == 0 {
-				return x.Errorf("Expected at least 1 language in list for %s", curp.Attr)
+				return langErr1
 			}
 		} else {
-			return x.Errorf("Expected directive or language list, got @%s", item.Val)
+			return langErr
 		}
 	} else {
-		return x.Errorf("Expected directive or language list")
+		return langErr
 	}
 	return nil
 }
@@ -1839,16 +1858,16 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		Args: make(map[string]string),
 	}
 	if !it.Next() {
-		return nil, x.Errorf("Invalid query")
+		return nil, queryErr1
 	}
 	item := it.Item()
 	if item.Typ != itemName {
-		return nil, x.Errorf("Expected some name. Got: %v", item)
+		return nil, expectedErr1
 	}
 
 	peekIt, err := it.Peek(1)
 	if err != nil {
-		return nil, x.Errorf("Invalid Query")
+		return nil, queryErr1
 	}
 	if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
 		gq.Var = item.Val
@@ -1859,11 +1878,11 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 	gq.Alias = item.Val
 	if !it.Next() {
-		return nil, x.Errorf("Invalid query")
+		return nil, queryErr1
 	}
 	item = it.Item()
 	if item.Typ != itemLeftRound {
-		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
+		return nil, expectedErr2
 	}
 
 	expectArg := true
@@ -1874,7 +1893,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		item := it.Item()
 		if item.Typ == itemName {
 			if !expectArg {
-				return nil, x.Errorf("Expecting a comma. Got: %v", item)
+				return nil, expectedErr3
 			}
 			key = item.Val
 			expectArg = false
@@ -1882,25 +1901,25 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			break
 		} else if item.Typ == itemComma {
 			if expectArg {
-				return nil, x.Errorf("Expected Argument but got comma.")
+				return nil, expectedErr4
 			}
 			expectArg = true
 			continue
 		} else {
-			return nil, x.Errorf("Expecting argument name. Got: %v", item)
+			return nil, expectedErr4
 		}
 
 		if !it.Next() {
-			return nil, x.Errorf("Invalid query")
+			return nil, queryErr1
 		}
 		item = it.Item()
 		if item.Typ != itemColon {
-			return nil, x.Errorf("Expecting a colon. Got: %v", item)
+			return nil, expectedErr5
 		}
 
 		if key == "id" {
 			if !it.Next() {
-				return nil, x.Errorf("Invalid query")
+				return nil, queryErr1
 			}
 			item = it.Item()
 			if item.Val == "var" {
@@ -1917,7 +1936,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				it.Next()
 				item = it.Item()
 				if item.Typ != itemName {
-					return nil, x.Errorf("Expected a variable name. Got: %v", item.Val)
+					return nil, expectedErr6
 				}
 			}
 			// Check and parse if its a list.
@@ -1944,13 +1963,13 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		} else {
 			var val string
 			if !it.Next() {
-				return nil, x.Errorf("Invalid query")
+				return nil, queryErr1
 			}
 			item := it.Item()
 
 			if item.Typ == itemMathOp {
 				if item.Val != "+" && item.Val != "-" {
-					return nil, x.Errorf("Only Plus and minus are allowed unary ops. Got: %v", item.Val)
+					return nil, varBlockErr11
 				}
 				val = item.Val
 				it.Next()
@@ -1963,7 +1982,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					return nil, err
 				}
 				if count != 1 {
-					return nil, x.Errorf("Expected only one variable but got: %d", count)
+					return nil, expectedErr7
 				}
 				// Modify the NeedsVar context here.
 				gq.NeedsVar[len(gq.NeedsVar)-1].Typ = VALUE_VAR
@@ -2000,7 +2019,7 @@ const (
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	if gq == nil {
-		return x.Errorf("Bad nesting of predicates or functions")
+		return queryErr5
 	}
 	var count Count
 	var alias, varName string
@@ -2009,7 +2028,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemError:
-			return x.Errorf(item.Val)
+			return fmt.Errorf(item.Val)
 		case lex.ItemEOF:
 			return nil
 		case itemRightCurl:
@@ -2025,7 +2044,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 		case itemName:
 			peekIt, err := it.Peek(1)
 			if err != nil {
-				return x.Errorf("Invalid query")
+				return queryErr1
 			}
 			if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
 				varName = item.Val
@@ -2037,7 +2056,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			valLower := strings.ToLower(val)
 			if gq.IsGroupby && (!isAggregator(val) && val != "count" && count != seen) {
 				// Only aggregator or count allowed inside the groupby block.
-				return x.Errorf("Only aggrgator/count functions allowed inside @groupby. Got: %v", val)
+				return groupByErr5
 			}
 			if valLower == "checkpwd" {
 				child := &GraphQuery{
@@ -2080,15 +2099,14 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					child.IsInternal = false
 				} else {
 					if it.Item().Val != "var" {
-						return x.Errorf("Only variables allowed in aggregate functions. Got: %v",
-							it.Item().Val)
+						return varBlockErr12
 					}
 					count, err := parseVarList(it, child)
 					if err != nil {
 						return err
 					}
 					if count != 1 {
-						x.Errorf("Expected one variable inside var() of aggregator but got %v", count)
+						return varBlockErr13
 					}
 					child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
 				}
@@ -2102,14 +2120,14 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if isMathBlock(valLower) {
 				if varName == "" && alias == "" {
-					return x.Errorf("Function math should be used with a variable or have an alias")
+					return mathErr
 				}
 				mathTree, again, err := parseMathFunc(it, false)
 				if err != nil {
 					return err
 				}
 				if again {
-					return x.Errorf("Comma encountered in math() at unexpected place.")
+					return mathErr4
 				}
 				child := &GraphQuery{
 					Attr:       val,
