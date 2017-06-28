@@ -19,6 +19,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -237,9 +238,18 @@ func main() {
 
 	// wait for schema changes to be done before starting mutations
 	time.Sleep(1 * time.Second)
+	pendingFiles := make(chan struct{}, 3)
+	var wg sync.WaitGroup
 	for _, file := range filesList {
-		processFile(file, dgraphClient)
+		wg.Add(1)
+		pendingFiles <- struct{}{}
+		go func(file string) {
+			defer wg.Done()
+			processFile(file, dgraphClient)
+			<-pendingFiles
+		}(file)
 	}
+	wg.Wait()
 	dgraphClient.BatchFlush()
 
 	c := dgraphClient.Counter()
