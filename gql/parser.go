@@ -43,6 +43,8 @@ var (
 	varErr4            = errors.New("Some variables are declared multiple times.")
 	varErr5            = errors.New("Variables can be defined only in named queries.")
 	varErr6            = errors.New("Invalid syntax for variables")
+	varErr7            = errors.New("Cannot assign variable to var()")
+	varErr8            = errors.New("Invalid use of var(). Exactly one variable expected.")
 	idErr              = errors.New("Id cant be empty")
 	idErr1             = errors.New("Invalid id list at root")
 	mutationErr        = errors.New("Only one mutation block allowed")
@@ -57,6 +59,7 @@ var (
 	queryErr3          = errors.New("Malformed query. Expected {")
 	queryErr4          = errors.New("Invalid syntax while parsing args")
 	queryErr5          = errors.New("Bad nesting of predicates or functions")
+	queryErr6          = errors.New("Invalid mention of brackets")
 	unknownDirErr      = errors.New("Unknown directive")
 	fragmentErr        = errors.New("Unexpected item in fragment")
 	fragmentErr1       = errors.New("Empty fragment name")
@@ -109,6 +112,16 @@ var (
 	expectedErr7       = errors.New("Expected only one variable")
 	mathErr            = errors.New("Function math should be used with a variable or have an alias")
 	mathErr4           = errors.New("Comma encountered in math at unexpected place")
+	expandErr          = errors.New("expand() cannot be used with a variable")
+	expandErr1         = errors.New("expand() cannot have an alias")
+	expandErr2         = errors.New("Invalid use of expand()")
+	expandErr3         = errors.New("Invalid use of expand(). Exactly one variable expected")
+	expandErr4         = errors.New("Invalid argument in expand()")
+	countErr1          = errors.New("Invalid mention of function count")
+	countErr2          = errors.New("Cannot assign variable to count()")
+	countErr3          = errors.New("Multiple predicates not allowed in count function")
+	countErr4          = errors.New("Cannot have children attribute while asking for count")
+	countErr5          = errors.New("Predicate name cannot be empty")
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
@@ -413,7 +426,7 @@ func parseQueryWithGqlVars(r Request) (string, varMap, error) {
 }
 
 func checkValueType(vm varMap) error {
-	for k, v := range vm {
+	for _, v := range vm {
 		typ := v.Type
 
 		if len(typ) == 0 {
@@ -2143,14 +2156,14 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if isExpandFunc(valLower) {
 				if varName != "" {
-					return x.Errorf("expand() cannot be used with a variable", val)
+					return expandErr
 				}
 				if alias != "" {
-					return x.Errorf("expand() cannot have an alias")
+					return expandErr1
 				}
 				it.Next() // Consume the '('
 				if it.Item().Typ != itemLeftRound {
-					return x.Errorf("Invalid use of expand()", val)
+					return expandErr2
 				}
 				it.Next()
 				item := it.Item()
@@ -2165,14 +2178,14 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						return err
 					}
 					if count != 1 {
-						return x.Errorf("Invalid use of expand(). Exactly one variable expected.")
+						return expandErr3
 					}
 					child.NeedsVar[len(child.NeedsVar)-1].Typ = LIST_VAR
 					child.Expand = child.NeedsVar[len(child.NeedsVar)-1].Name
 				} else if item.Val == "_all_" {
 					child.Expand = "_all_"
 				} else {
-					return x.Errorf("Invalid argument %v in expand()", item.Val)
+					return expandErr4
 				}
 				it.Next() // Consume ')'
 				gq.Children = append(gq.Children, child)
@@ -2181,13 +2194,13 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if valLower == "count" {
 				if count != notSeen {
-					return x.Errorf("Invalid mention of function count")
+					return countErr1
 				}
 				count = seen
 				it.Next()
 				item = it.Item()
 				if item.Typ != itemLeftRound {
-					return x.Errorf("Invalid mention of count.")
+					return countErr1
 				}
 
 				peekIt, err := it.Peek(1)
@@ -2198,7 +2211,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					// We encountered a count(), lets reset count to notSeen
 					// and set UidCount on parent.
 					if varName != "" {
-						return x.Errorf("Cannot assign variable to count()")
+						return countErr2
 					}
 					count = notSeen
 					gq.UidCount = "count"
@@ -2210,7 +2223,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if valLower == "var" {
 				if varName != "" {
-					return x.Errorf("Cannot assign a variable to var()")
+					return varErr7
 				}
 				child := &GraphQuery{
 					Attr:       val,
@@ -2224,7 +2237,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 				if count != 1 {
-					return x.Errorf("Invalid use of var(). Exactly one variable expected.")
+					return varErr8
 				}
 				// Only value vars can be retrieved.
 				child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
@@ -2242,7 +2255,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			}
 			if count == seenWithPred {
-				return x.Errorf("Multiple predicates not allowed in single count.")
+				return countErr3
 			}
 			child := &GraphQuery{
 				Args:    make(map[string]string),
@@ -2253,7 +2266,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 
 			if gq.IsCount {
-				return x.Errorf("Cannot have children attributes when asking for count.")
+				return countErr4
 			}
 			gq.Children = append(gq.Children, child)
 			varName, alias = "", ""
@@ -2267,7 +2280,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 		case itemLeftRound:
 			if curp.Attr == "" {
-				return x.Errorf("Predicate name cannot be empty.")
+				return countErr5
 			}
 			args, err := parseArguments(it, curp)
 			if err != nil {
@@ -2276,7 +2289,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			// Stores args in GraphQuery, will be used later while retrieving results.
 			for _, p := range args {
 				if p.Val == "" {
-					return x.Errorf("Got empty argument")
+					return expectedErr4
 				}
 				curp.Args[p.Key] = p.Val
 			}
@@ -2287,7 +2300,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 		case itemRightRound:
 			if count != seenWithPred {
-				return x.Errorf("Invalid mention of brackets")
+				return queryErr6
 			}
 			count = notSeen
 		}
