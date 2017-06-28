@@ -521,7 +521,7 @@ func evictShard() {
 		l.SetForDeletion()
 		l.decr()
 	})
-	fmt.Printf("evicted shard %d from group %d\n", shardNum, group)
+	log.Printf("evicted shard %d from group %d\n", shardNum, group)
 }
 
 // EvictAll removes all pl's stored in memory for given group
