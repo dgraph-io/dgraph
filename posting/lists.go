@@ -391,23 +391,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		// Undo the increment in getNew() call above.
 		go l.decr()
 	}
-	pk := x.Parse(key)
 
-	// This replaces "TokensTable". The idea is that we want to quickly add the
-	// index key to the data store, with essentially an empty value. We just need
-	// the keys for filtering / sorting.
-	if l == lp && pk.IsIndex() {
-		// Lock before entering goroutine. Otherwise, some tests in query will fail.
-		l.Lock()
-		defer l.Unlock()
-		var item badger.KVItem
-		err := pstore.Get(key, &item)
-		x.Check(err)
-		val := item.Value()
-		if len(val) == 0 {
-			pstore.Set(key, dummyPostingList)
-		}
-	}
 	return lp, lp.decr
 }
 
