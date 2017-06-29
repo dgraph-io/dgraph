@@ -236,7 +236,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 			return err
 		}
 	}
-	x.Trace(ctx, "added edge")
+	x.Trace(ctx, "added normal mutation")
 	// We should always set index set and we can take care of stale indexes in
 	// eventual index consistency
 	if doUpdateIndex {
