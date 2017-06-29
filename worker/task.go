@@ -944,7 +944,8 @@ type itkv struct {
 	val []byte
 }
 
-func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte, *sync.Mutex)) error {
+func iterateParallel(ctx context.Context, q *protos.Query,
+	f func([]byte, []byte, *sync.Mutex)) error {
 	grpSize := uint64(math.MaxUint64 / uint64(numPart))
 	mu := &sync.Mutex{}
 	errChan := make(chan error, numPart)
@@ -982,7 +983,8 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 						return
 					default:
 						if tr, ok := trace.FromContext(ctx); ok {
-							tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+							tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v",
+								i, pk.Attr, pk.Uid)
 						}
 					}
 				}
@@ -998,6 +1000,7 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 		}(i)
 	}
 
+	var finalErr error
 	for i := 0; i < int(numPart); i++ {
 		select {
 		case err := <-errChan:
@@ -1005,14 +1008,16 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 				if tr, ok := trace.FromContext(ctx); ok {
 					tr.LazyPrintf("Error while running iterateParallel: %+v", err)
 				}
-				return err
+				// Note we dont return here so that all goroutines above can complete otherwise we
+				// get trace panics.
+				finalErr = err
 			}
 		case <-ctx.Done():
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
 			}
-			return ctx.Err()
+			finalErr = ctx.Err()
 		}
 	}
-	return nil
+	return finalErr
 }
