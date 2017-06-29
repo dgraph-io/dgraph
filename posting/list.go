@@ -129,6 +129,7 @@ func getNew(key []byte, gid uint32, pstore *badger.KV) *List {
 	go func() {
 		var count int
 		for range l.delayChan {
+		START:
 			count++
 			if count > 1000 {
 				count = 0
@@ -142,10 +143,7 @@ func getNew(key []byte, gid uint32, pstore *badger.KV) *List {
 			select {
 			case _, ok := <-l.delayChan:
 				if ok {
-					select {
-					case l.delayChan <- struct{}{}:
-					default:
-					}
+					goto START
 				}
 			default:
 				count = 0
