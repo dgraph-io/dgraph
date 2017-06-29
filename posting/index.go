@@ -117,21 +117,20 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
-
+	x.Trace(ctx, "initialized index key")
 	var groupId uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 		groupId = rv.Group
 	}
+	x.Trace(ctx, "retrieved raftvalue from context")
 	if groupId == 0 {
 		groupId = group.BelongsTo(edge.Attr)
 	}
-	x.Trace(ctx, "before get or create")
-	plist, decr := GetOrCreate(key, groupId)
-	x.Trace(ctx, "after get or create")
-	defer decr()
 
-	x.AssertTruef(plist != nil, "plist is nil [%s] %d %s",
-		token, edge.ValueId, edge.Attr)
+	plist, decr := GetOrCreate(key, groupId)
+	defer decr()
+	x.Trace(ctx, "retrieved pl")
+	x.Assert(plist != nil)
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err,
@@ -139,7 +138,7 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 			token, edge.Attr, edge.Entity))
 		return err
 	}
-	x.Trace(ctx, "added one index mutation")
+	x.Trace(ctx, "added one index mutation %v", edge.Attr)
 	indexLog.Printf("%s [%s] [%d] Term [%s]",
 		edge.Op, edge.Attr, edge.Entity, token)
 	return nil
