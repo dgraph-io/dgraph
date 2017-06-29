@@ -130,7 +130,7 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	plist, decr := GetOrCreate(key, groupId)
 	defer decr()
 	x.Trace(ctx, "retrieved pl")
-	x.Assert(plist != nil)
+	x.AssertTrue(plist != nil)
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err,
