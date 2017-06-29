@@ -92,6 +92,7 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
 	tokens, err := IndexTokens(attr, t.GetLang(), p)
+	x.Trace(ctx, "tokenized value, num tokens %v", len(tokens))
 	if err != nil {
 		// This data is not indexable
 		return err
@@ -234,6 +235,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 			return err
 		}
 	}
+	x.Trace(ctx, "added edge")
 	// We should always set index set and we can take care of stale indexes in
 	// eventual index consistency
 	if doUpdateIndex {

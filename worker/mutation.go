@@ -75,7 +75,7 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge, start int, 
 			x.Printf("Error while adding mutation: %v %v", edge, err)
 			return err // abort applying the rest of them.
 		}
-		x.Trace(ctx, "added an edge")
+		x.Trace(ctx, "finished adding one edge with index/reverse edge")
 	}
 	return nil
 }
