@@ -52,12 +52,12 @@ func processBinary(mNode *mathTree) (err error) {
 		}
 		return nil
 	}
+
 	if mpl != nil || mpr != nil {
 		for k := range mpr {
 			if err := f(k); err != nil {
 				return err
 			}
-
 		}
 
 		for k := range mpl {
