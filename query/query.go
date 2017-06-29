@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/trace"
+
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -821,7 +823,9 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// and populate the children for attributes.
 	if len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return nil, err
 	}
 
@@ -1525,7 +1529,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			taskQuery := createTaskQuery(sg)
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 			if err != nil {
-				x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Error while processing task: %+v", err)
+				}
 				rch <- err
 				return
 			}
@@ -1540,7 +1546,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 			if sg.Params.DoCount && len(sg.Filters) == 0 {
 				// If there is a filter, we need to do more work to get the actual count.
-				x.Trace(ctx, "Zero uids. Only count requested")
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Zero uids. Only count requested")
+				}
 				rch <- nil
 				return
 			}
@@ -1560,7 +1568,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
-		x.Trace(ctx, "Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
+		}
 		out := sg.Children[:0]
 		for _, child := range sg.Children {
 			if child.IsInternal() && child.Attr == "expand" {
@@ -1601,12 +1611,16 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 					// Store error in a variable and wait for all filters to run
 					// before returning. Else tracing causes crashes.
 					filterErr = err
-					x.TraceError(ctx, x.Wrapf(err, "Error while processing filter task"))
+					if tr, ok := trace.FromContext(ctx); ok {
+						tr.LazyPrintf("Error while processing filter task: %+v", err)
+					}
 				}
 
 			case <-ctx.Done():
 				filterErr = ctx.Err()
-				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Context done before full execution: %+v", err)
+				}
 			}
 		}
 
@@ -1748,11 +1762,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		case err = <-childChan:
 			if err != nil {
 				childErr = err
-				x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Error while processing child task: %+v", err)
+				}
 			}
 		case <-ctx.Done():
 			childErr = ctx.Err()
-			x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+			}
 		}
 	}
 	rch <- childErr

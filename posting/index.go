@@ -132,9 +132,10 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 		token, edge.ValueId, edge.Attr)
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err,
-			"Error adding/deleting %s for attr %s entity %d: %v",
-			token, edge.Attr, edge.Entity))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error adding/deleting %s for attr %s entity %d: %v",
+				token, edge.Attr, edge.Entity, err)
+		}
 		return err
 	}
 	indexLog.Printf("%s [%s] [%d] Term [%s]",
@@ -162,9 +163,10 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err,
-			"Error adding/deleting reverse edge for attr %s src %d dst %d",
-			t.Attr, t.Entity, t.ValueId))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error adding/deleting reverse edge for attr %s entity %d: %v",
+				t.Attr, t.Entity, err)
+		}
 		return err
 	}
 	reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)

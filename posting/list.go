@@ -31,6 +31,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/badger"
+	"golang.org/x/net/trace"
+
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -357,7 +359,9 @@ func TypeID(edge *protos.DirectedEdge) types.TypeID {
 
 func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("DELETEME set to true. Temporary error.")
+		}
 		return false, ErrRetry
 	}
 
@@ -377,7 +381,9 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	}
 	if t.ValueId == 0 {
 		err := x.Errorf("ValueId cannot be zero")
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return false, err
 	}
 	mpost := newPosting(t)

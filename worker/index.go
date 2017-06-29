@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -83,7 +84,9 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 
 	gid := n.gid
 	x.AssertTrue(gid == proposal.RebuildIndex.GroupId)
-	x.Trace(ctx, "Processing proposal to rebuild index: %v", proposal.RebuildIndex)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Processing proposal to rebuild index: %v", proposal.RebuildIndex)
+	}
 
 	// Get index of last committed.
 	lastIndex, err := n.store.LastIndex()
@@ -116,8 +119,10 @@ func (n *node) waitForAppliedMark(ctx context.Context, lastIndex uint64) error {
 	// Wait for applied to reach till lastIndex
 	for n.applied.WaitingFor() {
 		doneUntil := n.applied.DoneUntil() // applied until.
-		x.Trace(ctx, "syncAllMarks waiting, appliedUntil:%d lastIndex: %d",
-			doneUntil, lastIndex)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("syncAllMarks waiting, appliedUntil:%d lastIndex: %d",
+				doneUntil, lastIndex)
+		}
 		if doneUntil >= lastIndex {
 			break // Do the check before sleep.
 		}
@@ -135,8 +140,10 @@ func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) {
 	w := posting.SyncMarkFor(gid)
 	for w.WaitingFor() {
 		doneUntil := w.DoneUntil() // synced until.
-		x.Trace(ctx, "syncAllMarks waiting, syncedUntil:%d lastIndex:%d",
-			doneUntil, lastIndex)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("syncAllMarks waiting, syncedUntil:%d lastIndex: %d",
+				doneUntil, lastIndex)
+		}
 		if doneUntil >= lastIndex {
 			break // Do the check before sleep.
 		}
@@ -174,7 +181,9 @@ func proposeRebuildIndex(ctx context.Context, ri *protos.RebuildIndexMessage) er
 // serves the attr.
 func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 	gid := group.BelongsTo(attr)
-	x.Trace(ctx, "RebuildIndex attr: %v groupId: %v", attr, gid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("RebuildIndex attr: %v groupId: %v", attr, gid)
+	}
 
 	if groups().ServesGroup(gid) && !schema.State().IsIndexed(attr) {
 		return x.Errorf("Attribute %s is not indexed", attr)
@@ -192,14 +201,20 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 		return x.Wrapf(err, "RebuildIndexOverNetwork: while retrieving connection.")
 	}
 	defer pl.Put(conn)
-	x.Trace(ctx, "Sending request to %v", addr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sending request to %v", addr)
+	}
 
 	c := protos.NewWorkerClient(conn)
 	_, err = c.RebuildIndex(ctx, &protos.RebuildIndexMessage{Attr: attr, GroupId: gid})
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.RebuildIndex"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while calling Worker.RebuildIndex: %+v", err)
+		}
 		return err
 	}
-	x.Trace(ctx, "RebuildIndex reply from server. Addr: %v Attr: %v", addr, attr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("RebuildIndex reply from server. Addr: %v Attr: %v", addr, attr)
+	}
 	return nil
 }

@@ -158,9 +158,10 @@ func TestSchemaIndex_Error3(t *testing.T) {
 var schemaIndexVal5 = `
 age:int @index(int) .
 
-name: string @index(exact) .
+name: string @index(exact) @count .
 address: string @index(term) .
 id: id @index(exact, term) .
+friend: uid @reverse @count .
 `
 
 func TestSchemaIndexCustom(t *testing.T) {
@@ -170,6 +171,7 @@ func TestSchemaIndexCustom(t *testing.T) {
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"exact"},
 			Directive: protos.SchemaUpdate_INDEX,
+			Count:     true,
 		}},
 		{"address", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
@@ -185,6 +187,10 @@ func TestSchemaIndexCustom(t *testing.T) {
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"exact", "term"},
 			Directive: protos.SchemaUpdate_INDEX,
+		}},
+		{"friend", &protos.SchemaUpdate{
+			Directive: protos.SchemaUpdate_REVERSE,
+			Count:     true,
 		}},
 	})
 	require.True(t, State().IsIndexed("name"))

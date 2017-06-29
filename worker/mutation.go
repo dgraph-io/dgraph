@@ -21,6 +21,7 @@ import (
 	"bytes"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/group"
@@ -291,7 +292,9 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 	pl := pools().get(addr)
 	conn, err := pl.Get()
 	if err != nil {
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		che <- err
 		return
 	}
@@ -342,7 +345,9 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 		select {
 		case err := <-errors:
 			if err != nil {
-				x.TraceError(ctx, x.Wrapf(err, "Error while running all mutations"))
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Error while running all mutations: %+v", err)
+				}
 				return err
 			}
 		case <-ctx.Done():
