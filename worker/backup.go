@@ -39,9 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
-	"google.golang.org/grpc"
 )
 
 const numBackupRoutines = 10
