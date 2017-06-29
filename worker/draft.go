@@ -87,12 +87,13 @@ func (p *proposals) Store(pid uint32, ch chan error, ctx context.Context) bool {
 	return true
 }
 
-func (p *proposals) Ctx(pid uint32) context.Context {
+func (p *proposals) Ctx(pid uint32) (context.Context, bool) {
 	p.RLock()
 	defer p.RUnlock()
-	pd, has := p.ids[pid]
-	x.AssertTrue(has)
-	return pd.ctx
+	if pd, has := p.ids[pid]; has {
+		return pd.ctx, true
+	}
+	return nil, false
 }
 
 func (p *proposals) Done(pid uint32, err error) {
@@ -441,15 +442,20 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
-func (n *node) processMutation(ctx context.Context, e raftpb.Entry, m *protos.Mutations) error {
+func (n *node) processMutation(e raftpb.Entry, p *protos.Proposal) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
-	ctx := context.WithValue(n.ctx, "raft", rv)
+	var ctx context.Context
+	var has bool
+	if ctx, has = n.props.Ctx(p.Id); !has {
+		ctx = n.ctx
+	}
+	ctx := context.WithValue(ctx, "raft", rv)
 	numBatch := len(m.Edges)/10 + 1
 	che := make(chan error, numBatch)
 	for i := 0; i < numBatch; i++ {
 		go func(i int) {
-			che <- runMutations(ctx, m.Edges, i*10, i*10+9)
+			che <- runMutations(ctx, p.Mutations.Edges, i*10, i*10+9)
 		}(i)
 	}
 	for i := 0; i < numBatch; i++ {
@@ -498,7 +504,7 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 
 	var err error
 	if proposal.Mutations != nil {
-		err = n.processMutation(n.props.Ctx(proposal.Id), e, proposal.Mutations)
+		err = n.processMutation(e, &proposal)
 	} else if proposal.Membership != nil {
 		err = n.processMembership(e, proposal.Membership)
 	}
@@ -542,7 +548,12 @@ func (n *node) processApplyCh() {
 		// schema here without any locking
 		var proposal protos.Proposal
 		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
-		x.Trace(n.props.Ctx(proposal.Id), "proposal commited by raft")
+		var ctx context.Context
+		var has bool
+		if ctx, has = n.props.Ctx(proposal.Id); !has {
+			ctx = n.ctx
+		}
+		x.Trace(ctx, "proposal commited by raft")
 
 		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {
 			// process schema mutations before
