@@ -377,8 +377,9 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 	}
 	c := make(chan error, 1)
 	node := groups().Node(m.GroupId)
+	var tr trace.Trace
 	if rand.Float64() < *Tracing {
-		tr := trace.New("Dgraph", "GrpcMutate")
+		tr = trace.New("Dgraph", "GrpcMutate")
 		tr.SetMaxEvents(1000)
 		defer tr.Finish()
 		ctx = trace.NewContext(ctx, tr)
@@ -389,6 +390,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 	case <-ctx.Done():
 		return &protos.Payload{}, ctx.Err()
 	case err := <-c:
+		tr.Finish()
 		return &protos.Payload{}, err
 	}
 }

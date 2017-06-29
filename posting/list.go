@@ -127,10 +127,21 @@ func getNew(key []byte, gid uint32, pstore *badger.KV) *List {
 
 	l.delayChan = make(chan struct{}, 1)
 	go func() {
+		var count int
 		for range l.delayChan {
+			count++
+			if count > 1000 {
+				count = 0
+				if dirtyChan != nil {
+					dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
+				}
+				continue
+			}
+
 			t := time.NewTimer(5 * time.Second)
 			select {
 			case _, ok := <-l.delayChan:
+				t.Stop()
 				if ok {
 					select {
 					case l.delayChan <- struct{}{}:
@@ -138,6 +149,7 @@ func getNew(key []byte, gid uint32, pstore *badger.KV) *List {
 					}
 				}
 			case <-t.C:
+				count = 0
 				if dirtyChan != nil {
 					dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
 				}
