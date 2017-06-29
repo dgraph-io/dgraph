@@ -684,6 +684,9 @@ func setupServer(che chan error) {
 }
 
 func main() {
+	trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
+		return true, true
+	}
 	rand.Seed(time.Now().UnixNano())
 	x.Init()
 	checkFlagsAndInitDirs()

@@ -238,15 +238,12 @@ func main() {
 
 	// wait for schema changes to be done before starting mutations
 	time.Sleep(1 * time.Second)
-	pendingFiles := make(chan struct{}, 3)
 	var wg sync.WaitGroup
 	for _, file := range filesList {
 		wg.Add(1)
-		pendingFiles <- struct{}{}
 		go func(file string) {
 			defer wg.Done()
 			processFile(file, dgraphClient)
-			<-pendingFiles
 		}(file)
 	}
 	wg.Wait()
