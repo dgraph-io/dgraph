@@ -125,8 +125,9 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	if groupId == 0 {
 		groupId = group.BelongsTo(edge.Attr)
 	}
-
+	x.Trace(ctx, "before get or create")
 	plist, decr := GetOrCreate(key, groupId)
+	x.Trace(ctx, "after get or create")
 	defer decr()
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d %s",
@@ -138,6 +139,7 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 			token, edge.Attr, edge.Entity))
 		return err
 	}
+	x.Trace(ctx, "added one index mutation")
 	indexLog.Printf("%s [%s] [%d] Term [%s]",
 		edge.Op, edge.Attr, edge.Entity, token)
 	return nil

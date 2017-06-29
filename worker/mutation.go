@@ -336,10 +336,10 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 	mutationMap := make(map[uint32]*protos.Mutations)
 	addToMutationMap(mutationMap, m)
-
+	x.Trace(ctx, "created mutation map")
 	errors := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {
-		proposeOrSend(ctx, gid, mu, errors)
+		go proposeOrSend(ctx, gid, mu, errors)
 	}
 
 	// Wait for all the goroutines to reply back.
