@@ -27,6 +27,7 @@ const (
 	byteIndex   = byte(0x01)
 	byteReverse = byte(0x02)
 	byteSchema  = byte(0x03)
+	byteCount   = byte(0x04)
 	// same prefix for data, index and reverse keys so that relative order of data doesn't change
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)
@@ -95,11 +96,25 @@ func IndexKey(attr, term string) []byte {
 	return buf
 }
 
+func CountKey(attr string, count uint64) []byte {
+	buf := make([]byte, 1+2+len(attr)+1+8)
+	buf[0] = defaultPrefix
+	rest := buf[1:]
+
+	rest = writeAttr(rest, attr)
+	rest[0] = byteCount
+
+	rest = rest[1:]
+	binary.BigEndian.PutUint64(rest, count)
+	return buf
+}
+
 type ParsedKey struct {
 	byteType   byte
 	Attr       string
 	Uid        uint64
 	Term       string
+	Count      uint64
 	bytePrefix byte
 }
 
@@ -178,6 +193,17 @@ func (p ParsedKey) ReversePrefix() []byte {
 	return buf
 }
 
+// CountPrefix returns the prefix for count keys.
+func (p ParsedKey) CountPrefix() []byte {
+	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = p.bytePrefix
+	rest := buf[1:]
+	k := writeAttr(rest, p.Attr)
+	AssertTrue(len(k) == 1)
+	k[0] = byteCount
+	return buf
+}
+
 // SchemaPrefix returns the prefix for Schema keys.
 func SchemaPrefix() []byte {
 	buf := make([]byte, 1)
@@ -205,6 +231,8 @@ func Parse(key []byte) *ParsedKey {
 		p.Uid = binary.BigEndian.Uint64(k)
 	case byteIndex:
 		p.Term = string(k)
+	case byteCount:
+		p.Count = binary.BigEndian.Uint64(k)
 	case byteSchema:
 		break
 	default:

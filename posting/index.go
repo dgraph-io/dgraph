@@ -40,11 +40,13 @@ const maxBatchSize = 32 * (1 << 20)
 var (
 	indexLog   trace.EventLog
 	reverseLog trace.EventLog
+	countLog   trace.EventLog
 )
 
 func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
 	reverseLog = trace.NewEventLog("reverse", "Logger")
+	countLog = trace.NewEventLog("count", "Logger")
 }
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
@@ -198,6 +200,45 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 	return l.delete(ctx, t.Attr)
 }
 
+func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint64) error {
+	key := x.CountKey(t.Attr, count)
+	groupId := group.BelongsTo(t.Attr)
+
+	plist, decr := GetOrCreate(key, groupId)
+	defer decr()
+
+	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
+		t.Attr, t.ValueId)
+	_, err := plist.AddMutation(ctx, t)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err,
+			"Error adding/deleting count edge for attr %s count %d dst %d",
+			t.Attr, count, t.ValueId))
+		return err
+	}
+	countLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, count, t.ValueId)
+	return nil
+
+}
+
+func updateCount(ctx context.Context, attr string, lenBefore, lenAfter int, uid uint64) error {
+	edge := &protos.DirectedEdge{
+		ValueId: uid,
+		Attr:    attr,
+		Label:   "count",
+		Op:      protos.DirectedEdge_DEL,
+	}
+	if err := addCountMutation(ctx, edge, uint64(lenBefore)); err != nil {
+		return err
+	}
+
+	edge.Op = protos.DirectedEdge_SET
+	if err := addCountMutation(ctx, edge, uint64(lenAfter)); err != nil {
+		return err
+	}
+	return nil
+}
+
 // AddMutationWithIndex is AddMutation with support for indexing. It also
 // supports reverse edges.
 func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge) error {
@@ -216,6 +257,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
 	{
+		lenBefore := l.Length(0)
 		l.Lock()
 		if doUpdateIndex {
 			// Check original value BEFORE any mutation actually happens.
@@ -227,9 +269,16 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 		}
 		_, err := l.addMutation(ctx, t)
 		l.Unlock()
+		lenAfter := l.Length(0)
 
 		if err != nil {
 			return err
+		}
+		// TODO - Do this only if attr has Count directive.
+		if lenAfter != lenBefore {
+			if err := updateCount(ctx, t.Attr, lenBefore, lenAfter, t.Entity); err != nil {
+				return err
+			}
 		}
 	}
 	// We should always set index set and we can take care of stale indexes in
@@ -247,7 +296,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 			addIndexMutations(ctx, t, p, protos.DirectedEdge_SET)
 		}
 	}
-	// Add reverse mutation irrespective of hashMutated, server crash can happen after
+	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
 	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
 		addReverseMutation(ctx, t)
