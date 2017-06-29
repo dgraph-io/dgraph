@@ -2056,7 +2056,9 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		x.Trace(ctx, "Query parsed")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Query parsed")
+		}
 		req.Subgraphs = append(req.Subgraphs, sg)
 	}
 	req.Latency.Parsing += time.Since(loopStart)
@@ -2123,7 +2125,9 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 			} else {
 				go ProcessGraph(ctx, sg, nil, errChan)
 			}
-			x.Trace(ctx, "Graph processed")
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Graph processed")
+			}
 		}
 
 		// Wait for the execution that was started in this iteration.
@@ -2131,11 +2135,15 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 			select {
 			case err := <-errChan:
 				if err != nil {
-					x.TraceError(ctx, x.Wrapf(err, "Error while processing Query"))
+					if tr, ok := trace.FromContext(ctx); ok {
+						tr.LazyPrintf("Error while processing Query: %+v", err)
+					}
 					return err
 				}
 			case <-ctx.Done():
-				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Context done before full execution: %+v", err)
+				}
 				return ctx.Err()
 			}
 		}

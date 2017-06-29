@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"golang.org/x/net/trace"
+
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/worker"
@@ -26,7 +28,9 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
 		return x.Wrapf(err, "While adding internal edges")
 	}
 	if err = worker.MutateOverNetwork(ctx, m); err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while MutateOverNetwork: %+v", err)
+		}
 		return err
 	}
 	return nil
@@ -131,7 +135,9 @@ func AssignUids(ctx context.Context, nquads gql.NQuads) (map[string]uint64, erro
 		var res *protos.AssignedIds
 		// TODO: Optimize later by prefetching
 		if res, err = worker.AssignUidsOverNetwork(ctx, num); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while AssignUidsOverNetwork for newUids: %v", num))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while AssignUidsOverNetwork for newUids: %+v", err)
+			}
 			return newUids, err
 		}
 		curId := res.StartId

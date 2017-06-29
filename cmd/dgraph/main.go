@@ -351,7 +351,9 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fail := func() {
-		x.TraceError(ctx, x.Wrap(err))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error: %+v", err)
+		}
 		x.SetStatus(w, x.Error, err.Error())
 	}
 	nquads := gql.WrapNQ(NewSharedQueryNQuads(rawQuery), protos.DirectedEdge_SET)
@@ -466,8 +468,6 @@ func (s *grpcServer) Run(ctx context.Context,
 		}
 		return resp, x.Errorf("Uninitiated server. Please retry later")
 	}
-	var allocIds map[string]uint64
-	var schemaNodes []*protos.SchemaNode
 	// Sanitize the context of the keys used for internal purposes only
 	ctx = context.WithValue(ctx, "_share_", nil)
 	ctx = context.WithValue(ctx, "mutation_allowed", isMutationAllowed(ctx))
@@ -525,7 +525,9 @@ func (s *grpcServer) Run(ctx context.Context,
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while processing query: %+v", err)
 		}
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error: %+v", err)
+		}
 		return resp, x.Wrap(err)
 	}
 	resp.AssignedUids = er.Allocations
@@ -564,7 +566,9 @@ func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *prot
 
 func (s *grpcServer) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	if !worker.HealthCheck() {
-		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+		}
 		return &protos.AssignedIds{}, x.Errorf("Uninitiated server. Please retry later")
 	}
 	return worker.AssignUidsOverNetwork(ctx, num)
