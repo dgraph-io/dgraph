@@ -156,12 +156,11 @@ func TestSchemaIndex_Error3(t *testing.T) {
 }
 
 var schemaIndexVal5 = `
-age:int @index(int) .
-
-name: string @index(exact) @count .
-address: string @index(term) .
-id: id @index(exact, term) .
-friend: uid @reverse @count .
+age     : int @index(int) .
+name    : string @index(exact) @count .
+address : string @index(term) .
+id      : id @index(exact, term) .
+friend  : uid @reverse @count .
 `
 
 func TestSchemaIndexCustom(t *testing.T) {
@@ -189,6 +188,7 @@ func TestSchemaIndexCustom(t *testing.T) {
 			Directive: protos.SchemaUpdate_INDEX,
 		}},
 		{"friend", &protos.SchemaUpdate{
+			ValueType: uint32(types.UidID),
 			Directive: protos.SchemaUpdate_REVERSE,
 			Count:     true,
 		}},

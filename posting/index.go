@@ -274,8 +274,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 		if err != nil {
 			return err
 		}
-		// TODO - Do this only if attr has Count directive.
-		if lenAfter != lenBefore {
+		if lenAfter != lenBefore && schema.State().AddCount(t.Attr) {
 			if err := updateCount(ctx, t.Attr, lenBefore, lenAfter, t.Entity); err != nil {
 				return err
 			}

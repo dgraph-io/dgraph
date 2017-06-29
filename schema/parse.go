@@ -31,14 +31,16 @@ func From(s *protos.SchemaUpdate) protos.SchemaUpdate {
 	if s.Directive == protos.SchemaUpdate_REVERSE {
 		return protos.SchemaUpdate{
 			ValueType: s.ValueType,
-			Directive: protos.SchemaUpdate_REVERSE}
+			Directive: protos.SchemaUpdate_REVERSE,
+			Count:     s.Count}
 	} else if s.Directive == protos.SchemaUpdate_INDEX {
 		return protos.SchemaUpdate{
 			ValueType: s.ValueType,
 			Directive: protos.SchemaUpdate_INDEX,
-			Tokenizer: s.Tokenizer}
+			Tokenizer: s.Tokenizer,
+			Count:     s.Count}
 	}
-	return protos.SchemaUpdate{ValueType: s.ValueType}
+	return protos.SchemaUpdate{ValueType: s.ValueType, Count: s.Count}
 }
 
 // ParseBytes parses the byte array which holds the schema. We will reset

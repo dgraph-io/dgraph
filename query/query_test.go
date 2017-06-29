@@ -6401,7 +6401,7 @@ survival_rate                  : float .
 alive                          : bool @index .
 age                            : int @index .
 shadow_deep                    : int .
-friend                         : uid @reverse .
+friend                         : uid @reverse @count .
 geometry                       : geo @index .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .

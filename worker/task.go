@@ -19,7 +19,6 @@ package worker
 
 import (
 	"bytes"
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -439,8 +438,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				countPrefix := pk.CountPrefix()
 				for it.Valid() {
 					key := it.Item().Key()
-					parsedKey := x.Parse(key)
-					fmt.Printf("Pk: %+v\n", parsedKey)
 					if !bytes.HasPrefix(key, countPrefix) {
 						break
 					}
