@@ -399,16 +399,14 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	if l == lp && pk.IsIndex() {
 		// Lock before entering goroutine. Otherwise, some tests in query will fail.
 		l.Lock()
-		go func(key []byte) {
-			defer l.Unlock()
-			var item badger.KVItem
-			err := pstore.Get(key, &item)
-			x.Check(err)
-			val := item.Value()
-			if len(val) == 0 {
-				pstore.Set(key, dummyPostingList)
-			}
-		}(key)
+		defer l.Unlock()
+		var item badger.KVItem
+		err := pstore.Get(key, &item)
+		x.Check(err)
+		val := item.Value()
+		if len(val) == 0 {
+			pstore.Set(key, dummyPostingList)
+		}
 	}
 	return lp, lp.decr
 }
