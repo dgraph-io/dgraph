@@ -385,6 +385,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		x.TraceError(ctx, err)
 		return false, err
 	}
+	isClean := l.isClean()
 	mpost := newPosting(t)
 	//x.Trace(ctx, "created new posting")
 	// Mutation arrives:
@@ -412,7 +413,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		if gid == 0 {
 			gid = group.BelongsTo(t.Attr)
 		}
-		if dirtyChan != nil {
+		if isClean && dirtyChan != nil {
 			dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
 		}
 	}
@@ -544,13 +545,18 @@ func (l *List) Length(afterUid uint64) int {
 	return count
 }
 
+func (l *List) isClean() bool {
+	l.AssertRLock()
+	return len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0
+}
+
 func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
 
 	// deleteAll is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
-	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
+	if l.isClean() {
 		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
 		l.pending = make([]uint64, 0, 3)
 		return false, nil
