@@ -41,6 +41,7 @@ const (
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []*protos.DirectedEdge, start int, end int) error {
+	x.Trace(ctx, "In Run mutations")
 	for i := start; i <= end && i < len(edges); i++ {
 		edge := edges[i]
 		gid := group.BelongsTo(edge.Attr)
@@ -66,13 +67,15 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge, start int, 
 		err = validateAndConvert(edge, typ)
 
 		key := x.DataKey(edge.Attr, edge.Entity)
+		x.Trace(ctx, "converted edge to schema type")
 		plist, decr := posting.GetOrCreate(key, gid)
 		defer decr()
-
+		x.Trace(ctx, "after getorcreate")
 		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
 			x.Printf("Error while adding mutation: %v %v", edge, err)
 			return err // abort applying the rest of them.
 		}
+		x.Trace(ctx, "added an edge")
 	}
 	return nil
 }

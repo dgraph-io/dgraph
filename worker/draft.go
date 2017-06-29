@@ -43,6 +43,7 @@ const (
 	proposalReindex    = 1
 	proposalMembership = 2
 	ErrorNodeIDExists  = "Error Node ID already exists in the cluster"
+	batchSize          = 1000
 )
 
 // peerPool stores the peers per node and the addresses corresponding to them.
@@ -446,11 +447,11 @@ func (n *node) processMutation(ctx context.Context, e raftpb.Entry, m *protos.Mu
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx = context.WithValue(ctx, "raft", rv)
-	numBatch := len(m.Edges)/10 + 1
+	numBatch := len(m.Edges)/batchSize + 1
 	che := make(chan error, numBatch)
 	for i := 0; i < numBatch; i++ {
 		go func(i int) {
-			che <- runMutations(ctx, m.Edges, i*10, i*10+9)
+			che <- runMutations(ctx, m.Edges, i*batchSize, i*batchSize+batchSize-1)
 		}(i)
 	}
 	for i := 0; i < numBatch; i++ {

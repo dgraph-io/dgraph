@@ -207,8 +207,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	var val types.Val
 	var found bool
 
-	x.Trace(ctx, "acquiring index lock")
 	l.index.Lock()
+	x.Trace(ctx, "acquired index lock")
 	defer l.index.Unlock()
 
 	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.Star {
@@ -217,8 +217,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
 	{
-		x.Trace(ctx, "acquiring pl lock")
 		l.Lock()
+		x.Trace(ctx, "acquired pl lock")
 		if doUpdateIndex {
 			// Check original value BEFORE any mutation actually happens.
 			if len(t.Lang) > 0 {
@@ -237,7 +237,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	// We should always set index set and we can take care of stale indexes in
 	// eventual index consistency
 	if doUpdateIndex {
-		x.Trace(ctx, "adding index mutations")
 		// Exact matches.
 		if found && val.Value != nil {
 			addIndexMutations(ctx, t, val, protos.DirectedEdge_DEL)
@@ -249,12 +248,13 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 			}
 			addIndexMutations(ctx, t, p, protos.DirectedEdge_SET)
 		}
+		x.Trace(ctx, "added index mutations")
 	}
 	// Add reverse mutation irrespective of hashMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
 	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
-		x.Trace(ctx, "adding reverse mutations")
 		addReverseMutation(ctx, t)
+		x.Trace(ctx, "added reverse mutations")
 	}
 	return nil
 }
