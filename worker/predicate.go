@@ -215,9 +215,6 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		return x.Errorf("Not leader of group: %d", gkeys.GroupId)
 	}
 
-	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
-	// RocksDB library we are using.
-	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 

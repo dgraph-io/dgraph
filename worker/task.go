@@ -19,6 +19,7 @@ package worker
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -410,19 +411,47 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
-		f := func(kv itkv, mu *sync.Mutex) {
-			pl, decr := posting.GetOrUnmarshal(kv.key, kv.val, gid)
-			count := int64(pl.Length(0))
-			decr()
-			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				addUidToMatrix(kv.key, mu, &out)
+		f := srcFn.fname
+		itOpt := badger.DefaultIteratorOptions
+		isLeOrLt := f == "le" || f == "lt"
+		itOpt.Reverse = isLeOrLt
+		it := pstore.NewIterator(itOpt)
+		defer it.Close()
+
+		count := srcFn.threshold
+		if f == "lt" {
+			count -= 1
+		} else if f == "gt" {
+			count += 1
+		}
+		countKey := x.CountKey(attr, uint64(count))
+		it.Seek(countKey)
+
+		if it.Valid() {
+			if f == "eq" {
+				pl, decr := posting.GetOrCreate(countKey, gid)
+				defer decr()
+				out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+			} else {
+				pk := x.ParsedKey{
+					Attr: attr,
+				}
+				countPrefix := pk.CountPrefix()
+				for it.Valid() {
+					key := it.Item().Key()
+					parsedKey := x.Parse(key)
+					fmt.Printf("Pk: %+v\n", parsedKey)
+					if !bytes.HasPrefix(key, countPrefix) {
+						break
+					}
+					val := it.Item().Value()
+					pl, decr := posting.GetOrUnmarshal(key, val, gid)
+					defer decr()
+					out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+					it.Next()
+				}
 			}
 		}
-		itParams := iterateParams{
-			q:        q,
-			fetchVal: true,
-		}
-		iterateParallel(ctx, itParams, f)
 	}
 
 	if srcFn.fnType == RegexFn {

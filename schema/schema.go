@@ -250,6 +250,20 @@ func (s *stateGroup) isReversed(pred string) bool {
 	return false
 }
 
+// AddCount returns whether we want to mantain a count index for the given predicate or not.
+func (s *state) AddCount(pred string) bool {
+	return s.get(group.BelongsTo(pred)).addCount(pred)
+}
+
+func (s *stateGroup) addCount(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	if schema, ok := s.predicate[pred]; ok {
+		return schema.Count
+	}
+	return false
+}
+
 func Init(ps *badger.KV) {
 	pstore = ps
 	syncCh = make(chan SyncEntry, 10000)

@@ -7171,11 +7171,11 @@ func TestCountAtRoot(t *testing.T) {
 	posting.CommitLists(10, 1)
 	time.Sleep(100 * time.Millisecond)
 	query := `
-                {
-                        me(func: ge(count(friend), 0)) {
+        {
+        	me(func: ge(count(friend), 0)) {
 				count()
 			}
-                }
+        }
         `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"count": 4}]}`, js)
