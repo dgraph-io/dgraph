@@ -19,6 +19,7 @@ package worker
 
 import (
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -61,20 +62,27 @@ func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.Assign
 	// This is useful for testing, when the membership information doesn't
 	// have chance to propagate
 	if n != nil && n.AmLeader() {
-		x.Trace(ctx, "Calling assignUids as I'm leader of group: %d", leaseGid)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Calling assignUids as I'm leader of group: %d", leaseGid)
+		}
 		return assignUids(ctx, num)
-
 	}
 	lid, addr := groups().Leader(leaseGid)
-	x.Trace(ctx, "Not leader of group: %d. Sending to: %d", leaseGid, lid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Not leader of group: %d. Sending to: %d", leaseGid, lid)
+	}
 	p := pools().get(addr)
 	conn, err := p.Get()
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while retrieving connection"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while retrieving connection: %+v", err)
+		}
 		return &emptyAssignedIds, err
 	}
 	defer p.Put(conn)
-	x.Trace(ctx, "Calling AssignUids for group: %d, addr: %s", leaseGid, addr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Calling AssignUids for group: %d, addr: %s", leaseGid, addr)
+	}
 
 	c := protos.NewWorkerClient(conn)
 	return c.AssignUids(ctx, num)

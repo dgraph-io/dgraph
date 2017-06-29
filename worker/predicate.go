@@ -24,6 +24,7 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/badger/badger"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
@@ -45,7 +46,9 @@ func writeBatch(ctx context.Context, kv chan *protos.KV, che chan error) {
 		batchSize += len(i.Key) + len(i.Val)
 		// We write in batches of size 32MB.
 		if batchSize >= 32*MB {
-			x.Trace(ctx, "SNAPSHOT: Doing batch write num: %d", batchWriteNum)
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("SNAPSHOT: Doing batch write num: %d", batchWriteNum)
+			}
 			pstore.BatchSet(wb)
 
 			batchWriteNum++
@@ -56,10 +59,10 @@ func writeBatch(ctx context.Context, kv chan *protos.KV, che chan error) {
 			wb = wb[:0]
 		}
 	}
-	// After channel is closed the above loop would exit, we write the data in
-	// write batch here.
 	if batchSize > 0 {
-		x.Trace(ctx, "Doing batch write %d.", batchWriteNum)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Doing batch write %d.", batchWriteNum)
+		}
 		pstore.BatchSet(wb)
 	}
 	che <- nil
@@ -131,13 +134,19 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 
 	stream, err := c.PredicateAndSchemaData(context.Background())
 	if err != nil {
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return 0, err
 	}
-	x.Trace(ctx, "Streaming data for group: %v", group)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Streaming data for group: %v", group)
+	}
 
 	if err := streamKeys(stream, group); err != nil {
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return 0, x.Wrapf(err, "While streaming keys group")
 	}
 
@@ -153,7 +162,9 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 			break
 		}
 		if err != nil {
-			x.TraceError(ctx, err)
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(err.Error())
+			}
 			close(kvs)
 			return count, err
 		}
@@ -164,11 +175,15 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 		case kvs <- kv:
 			// OK
 		case <-ctx.Done():
-			x.TraceError(ctx, x.Errorf("Context timed out while streaming group: %v", group))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Context timed out while streaming group: %v", group)
+			}
 			close(kvs)
 			return count, ctx.Err()
 		case err := <-che:
-			x.TraceError(ctx, x.Errorf("Error while doing a batch write for group: %v", group))
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while doing a batch write for group: %v", group)
+			}
 			close(kvs)
 			return count, err
 		}
@@ -176,10 +191,14 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 	close(kvs)
 
 	if err := <-che; err != nil {
-		x.TraceError(ctx, x.Errorf("Error while doing a batch write for group: %v", group))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while doing a batch write for group: %v", group)
+		}
 		return count, err
 	}
-	x.Trace(ctx, "Streaming complete for group: %v", group)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Streaming complete for group: %v", group)
+	}
 	return count, nil
 }
 
@@ -205,7 +224,9 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		// Do we need to check if keys are sorted? They should already be.
 		gkeys.Keys = append(gkeys.Keys, keys.Keys...)
 	}
-	x.Trace(stream.Context(), "Got %d keys from client\n", len(gkeys.Keys))
+	if tr, ok := trace.FromContext(stream.Context()); ok {
+		tr.LazyPrintf("Got %d keys from client\n", len(gkeys.Keys))
+	}
 
 	if !groups().ServesGroup(gkeys.GroupId) {
 		return x.Errorf("Group %d not served.", gkeys.GroupId)
@@ -278,6 +299,8 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		}
 		it.Next()
 	} // end of iterator
-	x.Trace(stream.Context(), "Sent %d keys to client. Done.\n", count)
+	if tr, ok := trace.FromContext(stream.Context()); ok {
+		tr.LazyPrintf("Sent %d keys to client. Done.\n", count)
+	}
 	return nil
 }

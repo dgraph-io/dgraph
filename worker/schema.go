@@ -19,6 +19,7 @@ package worker
 
 import (
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
@@ -155,7 +156,9 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *protos.SchemaReque
 // according to fingerprint of the predicate and sends it to that instance.
 func GetSchemaOverNetwork(ctx context.Context, schema *protos.SchemaRequest) ([]*protos.SchemaNode, error) {
 	if !HealthCheck() {
-		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+		}
 		return nil, x.Errorf("Uninitiated server. Please retry later")
 	}
 	schemaMap := make(map[uint32]*protos.SchemaRequest)
