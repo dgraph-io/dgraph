@@ -27,6 +27,7 @@ import (
 
 	"github.com/dgraph-io/badger/badger"
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
@@ -55,7 +56,9 @@ var (
 func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Result, error) {
 	attr := q.Attr
 	gid := group.BelongsTo(attr)
-	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("attr: %v groupId: %v", attr, gid)
+	}
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
@@ -72,17 +75,23 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
 	}
 	defer pl.Put(conn)
-	x.Trace(ctx, "Sending request to %v", addr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sending request to %v", addr)
+	}
 
 	c := protos.NewWorkerClient(conn)
 	reply, err := c.ServeTask(ctx, q)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.ServeTask"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while calling Worker.ServeTask: %v", err)
+		}
 		return &emptyResult, err
 	}
 
-	x.Trace(ctx, "Reply from server. length: %v Addr: %v Attr: %v",
-		len(reply.UidMatrix), addr, attr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Reply from server. length: %v Addr: %v Attr: %v",
+			len(reply.UidMatrix), addr, attr)
+	}
 	return reply, nil
 }
 
@@ -422,7 +431,9 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			q:        q,
 			fetchVal: true,
 		}
-		iterateParallel(ctx, itParams, f)
+		if err = iterateParallel(ctx, itParams, f); err != nil {
+			return nil, err
+		}
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -798,7 +809,9 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Re
 	if q.UidList != nil {
 		numUids = len(q.UidList.Uids)
 	}
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
+	}
 
 	var reply *protos.Result
 	x.AssertTruef(groups().ServesGroup(gid),
@@ -1012,12 +1025,13 @@ type iterateParams struct {
 
 // TODO - We might not even need to do this with badger. Benchmark this against
 // the serial iteration once we integrate badger.
-func iterateParallel(ctx context.Context, params iterateParams, f func(itkv, *sync.Mutex)) {
+func iterateParallel(ctx context.Context, params iterateParams,
+	f func(itkv, *sync.Mutex)) error {
 	q := params.q
 	fetchVal := params.fetchVal
 	grpSize := uint64(math.MaxUint64 / uint64(numPart))
-	var wg sync.WaitGroup
 	mu := &sync.Mutex{}
+	errChan := make(chan error, numPart)
 
 	for i := uint64(0); i < numPart; i++ {
 		minUid := grpSize*i + 1
@@ -1025,8 +1039,9 @@ func iterateParallel(ctx context.Context, params iterateParams, f func(itkv, *sy
 		if i == numPart-1 {
 			maxUid = math.MaxUint64
 		}
-		x.Trace(ctx, "Running go-routine %v for iteration", i)
-		wg.Add(1)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Running go-routine %v for iteration", i)
+		}
 		go func(i uint64) {
 			it := pstore.NewIterator(badger.DefaultIteratorOptions)
 			defer it.Close()
@@ -1050,7 +1065,16 @@ func iterateParallel(ctx context.Context, params iterateParams, f func(itkv, *sy
 				x.AssertTruef(pk.Attr == q.Attr,
 					"Invalid key obtained for comparison")
 				if w%1000 == 0 {
-					x.Trace(ctx, "iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+					select {
+					case <-ctx.Done():
+						errChan <- ctx.Err()
+						return
+					default:
+						if tr, ok := trace.FromContext(ctx); ok {
+							tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v",
+								i, pk.Attr, pk.Uid)
+						}
+					}
 				}
 				w++
 				if pk.Uid > maxUid {
@@ -1068,8 +1092,28 @@ func iterateParallel(ctx context.Context, params iterateParams, f func(itkv, *sy
 				}
 				f(kv, mu)
 			}
-			wg.Done()
+			errChan <- nil
 		}(i)
 	}
-	wg.Wait()
+
+	var finalErr error
+	for i := 0; i < int(numPart); i++ {
+		select {
+		case err := <-errChan:
+			if err != nil {
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Error while running iterateParallel: %+v", err)
+				}
+				// Note we dont return here so that all goroutines above can complete otherwise we
+				// get trace panics.
+				finalErr = err
+			}
+		case <-ctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+			}
+			finalErr = ctx.Err()
+		}
+	}
+	return finalErr
 }
