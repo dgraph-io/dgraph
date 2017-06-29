@@ -397,7 +397,9 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				mu.Unlock()
 			}
 		}
-		iterateParallel(ctx, q, f)
+		if err = iterateParallel(ctx, q, f); err != nil {
+			return nil, err
+		}
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -942,10 +944,11 @@ type itkv struct {
 	val []byte
 }
 
-func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte, *sync.Mutex)) {
+func iterateParallel(ctx context.Context, q *protos.Query,
+	f func([]byte, []byte, *sync.Mutex)) error {
 	grpSize := uint64(math.MaxUint64 / uint64(numPart))
-	var wg sync.WaitGroup
 	mu := &sync.Mutex{}
+	errChan := make(chan error, numPart)
 
 	for i := uint64(0); i < numPart; i++ {
 		minUid := grpSize*i + 1
@@ -956,7 +959,6 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Running go-routine %v for iteration", i)
 		}
-		wg.Add(1)
 		go func(i uint64) {
 			it := pstore.NewIterator()
 			defer it.Close()
@@ -975,8 +977,15 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 				x.AssertTruef(pk.Attr == q.Attr,
 					"Invalid key obtained for comparison")
 				if w%1000 == 0 {
-					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
+					select {
+					case <-ctx.Done():
+						errChan <- ctx.Err()
+						return
+					default:
+						if tr, ok := trace.FromContext(ctx); ok {
+							tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v",
+								i, pk.Attr, pk.Uid)
+						}
 					}
 				}
 				w++
@@ -987,8 +996,28 @@ func iterateParallel(ctx context.Context, q *protos.Query, f func([]byte, []byte
 				val := it.Value().Data()
 				f(key, val, mu)
 			}
-			wg.Done()
+			errChan <- nil
 		}(i)
 	}
-	wg.Wait()
+
+	var finalErr error
+	for i := 0; i < int(numPart); i++ {
+		select {
+		case err := <-errChan:
+			if err != nil {
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Error while running iterateParallel: %+v", err)
+				}
+				// Note we dont return here so that all goroutines above can complete otherwise we
+				// get trace panics.
+				finalErr = err
+			}
+		case <-ctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+			}
+			finalErr = ctx.Err()
+		}
+	}
+	return finalErr
 }
