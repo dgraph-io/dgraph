@@ -381,7 +381,6 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 	if rand.Float64() < *Tracing {
 		tr = trace.New("Dgraph", "GrpcMutate")
 		tr.SetMaxEvents(1000)
-		defer tr.Finish()
 		ctx = trace.NewContext(ctx, tr)
 	}
 	go func() { c <- node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}) }()
