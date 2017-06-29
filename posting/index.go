@@ -139,8 +139,6 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 		return err
 	}
 	x.Trace(ctx, "added one index mutation %v", edge.Attr)
-	indexLog.Printf("%s [%s] [%d] Term [%s]",
-		edge.Op, edge.Attr, edge.Entity, token)
 	return nil
 }
 
@@ -151,8 +149,7 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	plist, decr := GetOrCreate(key, groupId)
 	defer decr()
 
-	x.AssertTruef(plist != nil, "plist is nil [%s] %d %d",
-		t.Attr, t.Entity, t.ValueId)
+	x.AssertTrue(plist != nil)
 	edge := &protos.DirectedEdge{
 		Entity:  t.ValueId,
 		ValueId: t.Entity,
@@ -169,7 +166,7 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 			t.Attr, t.Entity, t.ValueId))
 		return err
 	}
-	reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)
+	//reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)
 	return nil
 }
 func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) error {
