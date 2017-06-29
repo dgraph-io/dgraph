@@ -128,6 +128,7 @@ func getNew(key []byte, gid uint32, pstore *badger.KV) *List {
 	l.delayChan = make(chan struct{}, 1)
 	go func() {
 		var count int
+		t := time.NewTimer(5 * time.Second)
 		for range l.delayChan {
 			count++
 			if count > 1000 {
@@ -137,8 +138,14 @@ func getNew(key []byte, gid uint32, pstore *badger.KV) *List {
 				}
 				continue
 			}
+			if !t.Stop() {
+				select {
+				case <-t.C:
+				default:
+				}
+			}
+			t.Reset(5 * time.Second)
 
-			t := time.NewTimer(5 * time.Second)
 			select {
 			case _, ok := <-l.delayChan:
 				t.Stop()
