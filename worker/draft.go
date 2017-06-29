@@ -442,20 +442,15 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
-func (n *node) processMutation(e raftpb.Entry, p *protos.Proposal) error {
+func (n *node) processMutation(ctx context.Context, e raftpb.Entry, m *protos.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
-	var ctx context.Context
-	var has bool
-	if ctx, has = n.props.Ctx(p.Id); !has {
-		ctx = n.ctx
-	}
-	ctx := context.WithValue(ctx, "raft", rv)
+	ctx = context.WithValue(ctx, "raft", rv)
 	numBatch := len(m.Edges)/10 + 1
 	che := make(chan error, numBatch)
 	for i := 0; i < numBatch; i++ {
 		go func(i int) {
-			che <- runMutations(ctx, p.Mutations.Edges, i*10, i*10+9)
+			che <- runMutations(ctx, m.Edges, i*10, i*10+9)
 		}(i)
 	}
 	for i := 0; i < numBatch; i++ {
@@ -504,7 +499,12 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 
 	var err error
 	if proposal.Mutations != nil {
-		err = n.processMutation(e, &proposal)
+		var ctx context.Context
+		var has bool
+		if ctx, has = n.props.Ctx(proposal.Id); !has {
+			ctx = n.ctx
+		}
+		err = n.processMutation(ctx, e, proposal.Mutations)
 	} else if proposal.Membership != nil {
 		err = n.processMembership(e, proposal.Membership)
 	}
@@ -548,12 +548,6 @@ func (n *node) processApplyCh() {
 		// schema here without any locking
 		var proposal protos.Proposal
 		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
-		var ctx context.Context
-		var has bool
-		if ctx, has = n.props.Ctx(proposal.Id); !has {
-			ctx = n.ctx
-		}
-		x.Trace(ctx, "proposal commited by raft")
 
 		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {
 			// process schema mutations before

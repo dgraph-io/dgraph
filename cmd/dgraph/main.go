@@ -631,6 +631,7 @@ func serveHTTP(l net.Listener) {
 }
 
 func setupServer(che chan error) {
+	grpc.EnableTracing = false
 	go worker.RunServer(*bindall) // For internal communication.
 
 	laddr := "localhost"
