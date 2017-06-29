@@ -66,7 +66,7 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge, start int, 
 		key := x.DataKey(edge.Attr, edge.Entity)
 		plist, decr := posting.GetOrCreate(key, gid)
 		defer decr()
-
+		x.Trace(ctx, "calling addMutationWithIndex")
 		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
 			x.Printf("Error while adding mutation: %v %v", edge, err)
 			return err // abort applying the rest of them.

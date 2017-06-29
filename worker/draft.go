@@ -64,25 +64,40 @@ func (p *peerPool) Set(id uint64, addr string) {
 	p.peers[id] = addr
 }
 
-type proposals struct {
-	sync.RWMutex
-	ids map[uint32]chan error
+type proposalCtx struct {
+	ch  chan error
+	ctx context.Context
 }
 
-func (p *proposals) Store(pid uint32, ch chan error) bool {
+type proposals struct {
+	sync.RWMutex
+	ids map[uint32]*proposalCtx
+}
+
+func (p *proposals) Store(pid uint32, ch chan error, ctx context.Context) bool {
 	p.Lock()
 	defer p.Unlock()
 	if _, has := p.ids[pid]; has {
 		return false
 	}
-	p.ids[pid] = ch
+	p.ids[pid] = &proposalCtx{
+		ch:  ch,
+		ctx: ctx,
+	}
 	return true
 }
 
+func (p *proposals) Ctx(pid uint32) context.Context {
+	p.RLock()
+	defer p.RUnlock()
+	pd, has := p.ids[pid]
+	x.AssertTrue(has)
+	return pd.ctx
+}
+
 func (p *proposals) Done(pid uint32, err error) {
-	var ch chan error
 	p.Lock()
-	ch, has := p.ids[pid]
+	pd, has := p.ids[pid]
 	if has {
 		delete(p.ids, pid)
 	}
@@ -90,7 +105,7 @@ func (p *proposals) Done(pid uint32, err error) {
 	if !has {
 		return
 	}
-	ch <- err
+	pd.ch <- err
 }
 
 func (p *proposals) Has(pid uint32) bool {
@@ -171,7 +186,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		peers: make(map[uint64]string),
 	}
 	props := proposals{
-		ids: make(map[uint32]chan error),
+		ids: make(map[uint32]*proposalCtx),
 	}
 
 	store := raft.NewMemoryStorage()
@@ -294,7 +309,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	che := make(chan error, 1)
 	for {
 		id := rand.Uint32()
-		if n.props.Store(id, che) {
+		if n.props.Store(id, che, ctx) {
 			proposal.Id = id
 			break
 		}
@@ -426,15 +441,15 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
-func (n *node) processMutation(e raftpb.Entry, m *protos.Mutations) error {
+func (n *node) processMutation(ctx context.Context, e raftpb.Entry, m *protos.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
-	numBatch := len(m.Edges) / 10 + 1
+	numBatch := len(m.Edges)/10 + 1
 	che := make(chan error, numBatch)
 	for i := 0; i < numBatch; i++ {
 		go func(i int) {
-			che <- runMutations(ctx, m.Edges, i * 10, i * 10 + 9)
+			che <- runMutations(ctx, m.Edges, i*10, i*10+9)
 		}(i)
 	}
 	for i := 0; i < numBatch; i++ {
@@ -483,7 +498,7 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 
 	var err error
 	if proposal.Mutations != nil {
-		err = n.processMutation(e, proposal.Mutations)
+		err = n.processMutation(n.props.Ctx(proposal.Id), e, proposal.Mutations)
 	} else if proposal.Membership != nil {
 		err = n.processMembership(e, proposal.Membership)
 	}
@@ -527,6 +542,7 @@ func (n *node) processApplyCh() {
 		// schema here without any locking
 		var proposal protos.Proposal
 		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
+		x.Trace(n.props.Ctx(proposal.Id), "proposal commited by raft")
 
 		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {
 			// process schema mutations before

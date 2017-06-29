@@ -21,6 +21,7 @@ func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.Directe
 }
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
+	x.Trace(ctx, "Adding Internal edges")
 	err := addInternalEdge(ctx, m)
 	if err != nil {
 		return x.Wrapf(err, "While adding internal edges")
