@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"time"
 
 	"golang.org/x/net/trace"
 
@@ -92,7 +93,7 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
 	tokens, err := IndexTokens(attr, t.GetLang(), p)
-	x.Trace(ctx, "tokenized value, num tokens %v", len(tokens))
+	//x.Trace(ctx, "tokenized value, num tokens %v", len(tokens))
 	if err != nil {
 		// This data is not indexable
 		return err
@@ -117,19 +118,24 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
-	x.Trace(ctx, "initialized index key")
+	//x.Trace(ctx, "initialized index key")
 	var groupId uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 		groupId = rv.Group
 	}
-	x.Trace(ctx, "retrieved raftvalue from context")
+	//x.Trace(ctx, "retrieved raftvalue from context")
 	if groupId == 0 {
 		groupId = group.BelongsTo(edge.Attr)
 	}
 
+	t := time.Now()
 	plist, decr := GetOrCreate(key, groupId)
+	t1 := time.Since(t)
+	if t1.Nanoseconds() > 100000 {
+		x.Trace(ctx, "retreived pl %v", t1)
+	}
 	defer decr()
-	x.Trace(ctx, "retrieved pl")
+	//x.Trace(ctx, "retrieved pl")
 	x.AssertTrue(plist != nil)
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
@@ -138,7 +144,7 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 			token, edge.Attr, edge.Entity))
 		return err
 	}
-	x.Trace(ctx, "added one index mutation %v", edge.Attr)
+	//x.Trace(ctx, "added one index mutation %v", edge.Attr)
 	return nil
 }
 
@@ -207,7 +213,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	var found bool
 
 	l.index.Lock()
-	x.Trace(ctx, "acquired index lock")
+	//x.Trace(ctx, "acquired index lock")
 	defer l.index.Unlock()
 
 	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.Star {
@@ -217,7 +223,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
 	{
 		l.Lock()
-		x.Trace(ctx, "acquired pl lock")
+		//x.Trace(ctx, "acquired pl lock")
 		if doUpdateIndex {
 			// Check original value BEFORE any mutation actually happens.
 			if len(t.Lang) > 0 {
@@ -233,7 +239,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 			return err
 		}
 	}
-	x.Trace(ctx, "added normal mutation")
+	//x.Trace(ctx, "added normal mutation")
 	// We should always set index set and we can take care of stale indexes in
 	// eventual index consistency
 	if doUpdateIndex {
@@ -248,13 +254,13 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 			}
 			addIndexMutations(ctx, t, p, protos.DirectedEdge_SET)
 		}
-		x.Trace(ctx, "added index mutations")
+		//x.Trace(ctx, "added index mutations")
 	}
 	// Add reverse mutation irrespective of hashMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
 	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
 		addReverseMutation(ctx, t)
-		x.Trace(ctx, "added reverse mutations")
+		//x.Trace(ctx, "added reverse mutations")
 	}
 	return nil
 }

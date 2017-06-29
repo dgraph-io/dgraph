@@ -314,8 +314,12 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
 func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
+	t2 := time.Now()
 	l.Lock()
-	//x.Trace(ctx, "acquired lock")
+	t1 := time.Since(t2)
+	if t1.Nanoseconds() > 100000 {
+		x.Trace(ctx, "acquired lock %v", t1)
+	}
 	defer l.Unlock()
 	return l.addMutation(ctx, t)
 }
@@ -390,7 +394,12 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
 
+	t2 := time.Now()
 	hasMutated := l.updateMutationLayer(mpost)
+	t1 := time.Since(t2)
+	if t1.Nanoseconds() > 100000 {
+		x.Trace(ctx, "updated mutation layer %v %v", t1, len(l.mlayer))
+	}
 	//x.Trace(ctx, "updated mutation layer")
 	if hasMutated {
 		var gid uint32

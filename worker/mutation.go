@@ -20,6 +20,7 @@ package worker
 import (
 	"bytes"
 	"math/rand"
+	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
@@ -68,7 +69,12 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge, start int, 
 
 		key := x.DataKey(edge.Attr, edge.Entity)
 		//x.Trace(ctx, "converted edge to schema type")
+		t := time.Now()
 		plist, decr := posting.GetOrCreate(key, gid)
+		t1 := time.Since(t)
+		if t1.Nanoseconds() > 100000 {
+			x.Trace(ctx, "retreived pl %v", t1)
+		}
 		defer decr()
 		//x.Trace(ctx, "retreived pl")
 		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
