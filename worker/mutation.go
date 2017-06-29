@@ -19,8 +19,10 @@ package worker
 
 import (
 	"bytes"
+	"math/rand"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/group"
@@ -39,7 +41,7 @@ const (
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []*protos.DirectedEdge, start int, end int) error {
-	for i := start; i <=end && i < len(edges); i++ {
+	for i := start; i <= end && i < len(edges); i++ {
 		edge := edges[i]
 		gid := group.BelongsTo(edge.Attr)
 		if !groups().ServesGroup(gid) {
@@ -66,7 +68,7 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge, start int, 
 		key := x.DataKey(edge.Attr, edge.Entity)
 		plist, decr := posting.GetOrCreate(key, gid)
 		defer decr()
-		x.Trace(ctx, "calling addMutationWithIndex")
+
 		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
 			x.Printf("Error while adding mutation: %v %v", edge, err)
 			return err // abort applying the rest of them.
@@ -366,6 +368,12 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 	}
 	c := make(chan error, 1)
 	node := groups().Node(m.GroupId)
+	if rand.Float64() < *Tracing {
+		tr := trace.New("Dgraph", "GrpcMutate")
+		tr.SetMaxEvents(1000)
+		defer tr.Finish()
+		ctx = trace.NewContext(ctx, tr)
+	}
 	go func() { c <- node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}) }()
 
 	select {

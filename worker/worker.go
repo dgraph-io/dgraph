@@ -41,6 +41,7 @@ var (
 		"Port used by worker for internal communication.")
 	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
+	Tracing      = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	pstore       *badger.KV
 	workerServer *grpc.Server
 	leaseGid     uint32

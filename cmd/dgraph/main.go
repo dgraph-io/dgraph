@@ -67,7 +67,6 @@ var (
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	nomutations    = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	tracing        = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
 	blockRate      = flag.Int("block", 0, "Block profiling rate")
@@ -185,7 +184,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
 	ctx = context.WithValue(ctx, "mutation_allowed", !*nomutations)
 
-	if rand.Float64() < *tracing {
+	if rand.Float64() < *worker.Tracing {
 		tr := trace.New("Dgraph", "Query")
 		tr.SetMaxEvents(1000)
 		defer tr.Finish()
@@ -443,7 +442,7 @@ func (s *grpcServer) Run(ctx context.Context,
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return resp, x.Errorf("Uninitiated server. Please retry later")
 	}
-	if rand.Float64() < *tracing {
+	if rand.Float64() < *worker.Tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		tr.SetMaxEvents(1000)
 		defer tr.Finish()
