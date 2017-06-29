@@ -390,7 +390,9 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 	case <-ctx.Done():
 		return &protos.Payload{}, ctx.Err()
 	case err := <-c:
-		tr.Finish()
+		if tr != nil {
+			tr.Finish()
+		}
 		return &protos.Payload{}, err
 	}
 }
