@@ -222,7 +222,12 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
 	{
+		t2 := time.Now()
 		l.Lock()
+		t1 := time.Since(t2)
+		if t1.Nanoseconds() > 100000 {
+			x.Trace(ctx, "acquired lock normal %v %v %v", t1, t.Attr, t.Entity)
+		}
 		//x.Trace(ctx, "acquired pl lock")
 		if doUpdateIndex {
 			// Check original value BEFORE any mutation actually happens.

@@ -318,7 +318,7 @@ func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	l.Lock()
 	t1 := time.Since(t2)
 	if t1.Nanoseconds() > 100000 {
-		x.Trace(ctx, "acquired lock %v", t1)
+		x.Trace(ctx, "acquired lock %v %v", t1, t.Attr)
 	}
 	defer l.Unlock()
 	return l.addMutation(ctx, t)
@@ -398,7 +398,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	hasMutated := l.updateMutationLayer(mpost)
 	t1 := time.Since(t2)
 	if t1.Nanoseconds() > 100000 {
-		x.Trace(ctx, "updated mutation layer %v %v", t1, len(l.mlayer))
+		x.Trace(ctx, "updated mutation layer %v %v %v", t1, len(l.mlayer), len(l.plist.Postings))
 	}
 	//x.Trace(ctx, "updated mutation layer")
 	if hasMutated {
