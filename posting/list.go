@@ -71,6 +71,7 @@ type List struct {
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount    int32
 	deleteAll   int32
+	delayChan   chan struct{}
 
 	water   *x.WaterMark
 	pending []uint64
@@ -87,6 +88,7 @@ func (l *List) decr() {
 	if val > 0 {
 		return
 	}
+	close(l.delayChan)
 	listPool.Put(l)
 }
 
@@ -96,7 +98,7 @@ var listPool = sync.Pool{
 	},
 }
 
-func getNew(key []byte, pstore *badger.KV) *List {
+func getNew(key []byte, gid uint32, pstore *badger.KV) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
 	l.key = key
@@ -122,6 +124,26 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 	}
+
+	l.delayChan = make(chan struct{}, 1)
+	go func() {
+		for range l.delayChan {
+			t := time.NewTimer(5 * time.Second)
+			select {
+			case _, ok := <-l.delayChan:
+				if ok {
+					select {
+					case l.delayChan <- struct{}{}:
+					default:
+					}
+				}
+			case <-t.C:
+				if dirtyChan != nil {
+					dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
+				}
+			}
+		}
+	}()
 	return l
 }
 
@@ -385,7 +407,6 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		x.TraceError(ctx, err)
 		return false, err
 	}
-	isClean := l.isClean()
 	mpost := newPosting(t)
 	//x.Trace(ctx, "created new posting")
 	// Mutation arrives:
@@ -413,8 +434,9 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		if gid == 0 {
 			gid = group.BelongsTo(t.Attr)
 		}
-		if isClean && dirtyChan != nil {
-			dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
+		select {
+		case l.delayChan <- struct{}{}:
+		default:
 		}
 	}
 	return hasMutated, nil
