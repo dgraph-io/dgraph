@@ -304,7 +304,6 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	if len(slice) < proposal.Size() {
 		slice = make([]byte, proposal.Size()+1)
 	}
-	defer slicePool.Put(slice)
 
 	upto, err := proposal.MarshalTo(slice[1:])
 	if err != nil {
@@ -339,6 +338,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 
 	select {
 	case err = <-che:
+		slicePool.Put(slice)
 		x.TraceError(ctx, err)
 		return err
 	case <-ctx.Done():
