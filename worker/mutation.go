@@ -67,15 +67,15 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge, start int, 
 		err = validateAndConvert(edge, typ)
 
 		key := x.DataKey(edge.Attr, edge.Entity)
-		x.Trace(ctx, "converted edge to schema type")
+		//x.Trace(ctx, "converted edge to schema type")
 		plist, decr := posting.GetOrCreate(key, gid)
 		defer decr()
-		x.Trace(ctx, "retreived pl")
+		//x.Trace(ctx, "retreived pl")
 		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
 			x.Printf("Error while adding mutation: %v %v", edge, err)
 			return err // abort applying the rest of them.
 		}
-		x.Trace(ctx, "finished adding one edge with index/reverse edge")
+		//x.Trace(ctx, "finished adding one edge with index/reverse edge")
 	}
 	return nil
 }

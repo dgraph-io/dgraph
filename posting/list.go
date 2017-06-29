@@ -315,7 +315,7 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
 func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
 	l.Lock()
-	x.Trace(ctx, "acquired lock")
+	//x.Trace(ctx, "acquired lock")
 	defer l.Unlock()
 	return l.addMutation(ctx, t)
 }
@@ -382,7 +382,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		return false, err
 	}
 	mpost := newPosting(t)
-	x.Trace(ctx, "created new posting")
+	//x.Trace(ctx, "created new posting")
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
 	//		- If yes, then replace that mutation. Jump to a)
@@ -391,7 +391,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	// 				- If no, disregard this mutation.
 
 	hasMutated := l.updateMutationLayer(mpost)
-	x.Trace(ctx, "updated mutation layer")
+	//x.Trace(ctx, "updated mutation layer")
 	if hasMutated {
 		var gid uint32
 		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
