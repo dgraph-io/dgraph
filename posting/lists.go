@@ -212,7 +212,7 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 // usage. If it exceeds a certain threshold, it would stop the world, and aggressively
 // merge and evict all posting lists from memory.
 func periodicCommit() {
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(3 * time.Second)
 	dirtyMap := make(map[fingerPrint]time.Time, 1000)
 	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
 	pending := make(chan struct{}, 15)
@@ -233,7 +233,7 @@ func periodicCommit() {
 			megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
 
 			inUse := float64(megs)
-			idle := float64(ms.HeapIdle / (1 << 20))
+			idle := float64((ms.HeapIdle - ms.HeapReleased) / (1 << 20))
 
 			fraction := math.Min(1.0, *commitFraction*math.Exp(float64(dsize)/1000000.0))
 			gentleCommit(dirtyMap, pending, fraction)
