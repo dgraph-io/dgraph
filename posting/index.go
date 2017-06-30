@@ -144,6 +144,14 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	return nil
 }
 
+type ucParams struct {
+	attr      string
+	lenBefore int
+	lenAfter  int
+	entity    uint64
+	reverse   bool
+}
+
 func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
 	groupId := group.BelongsTo(t.Attr)
@@ -165,17 +173,23 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	plist.Lock()
 	lenBefore := plist.length(0)
 	_, err := plist.addMutation(ctx, edge)
+	lenAfter := plist.length(0)
+	plist.Unlock()
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err,
 			"Error adding/deleting reverse edge for attr %s src %d dst %d",
 			t.Attr, t.Entity, t.ValueId))
 		return err
 	}
-	lenAfter := plist.length(0)
-	plist.Unlock()
 
 	if lenAfter != lenBefore && schema.State().AddCount(t.Attr) {
-		if err := updateCount(ctx, t.Attr, lenBefore, lenAfter, edge.Entity, true); err != nil {
+		if err := updateCount(ctx, ucParams{
+			attr:      t.Attr,
+			lenBefore: lenBefore,
+			lenAfter:  lenAfter,
+			entity:    edge.Entity,
+			reverse:   true,
+		}); err != nil {
 			return err
 		}
 	}
@@ -232,20 +246,21 @@ func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 
 }
 
-func updateCount(ctx context.Context, attr string, lenBefore, lenAfter int, uid uint64,
-	reverse bool) error {
+func updateCount(ctx context.Context, params ucParams) error {
 	edge := &protos.DirectedEdge{
-		ValueId: uid,
-		Attr:    attr,
+		ValueId: params.entity,
+		Attr:    params.attr,
 		Label:   "count",
 		Op:      protos.DirectedEdge_DEL,
 	}
-	if err := addCountMutation(ctx, edge, uint32(lenBefore), reverse); err != nil {
+	if err := addCountMutation(ctx, edge, uint32(params.lenBefore),
+		params.reverse); err != nil {
 		return err
 	}
 
 	edge.Op = protos.DirectedEdge_SET
-	if err := addCountMutation(ctx, edge, uint32(lenAfter), reverse); err != nil {
+	if err := addCountMutation(ctx, edge, uint32(params.lenAfter),
+		params.reverse); err != nil {
 		return err
 	}
 	return nil
@@ -287,8 +302,12 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 			return err
 		}
 		if lenAfter != lenBefore && schema.State().AddCount(t.Attr) {
-			if err := updateCount(ctx, t.Attr, lenBefore, lenAfter, t.Entity,
-				false); err != nil {
+			if err := updateCount(ctx, ucParams{
+				attr:      t.Attr,
+				lenBefore: lenBefore,
+				lenAfter:  lenAfter,
+				entity:    t.Entity,
+			}); err != nil {
 				return err
 			}
 		}
@@ -401,7 +420,7 @@ func RebuildCountIndex(ctx context.Context, attr string) error {
 					Label:   "count",
 					Op:      protos.DirectedEdge_SET,
 				}
-				err = addCountMutation(ctx, t, uint32(len(pl.Postings), false)
+				err = addCountMutation(ctx, t, uint32(len(pl.Postings)), false)
 				if err != nil {
 					break
 				}

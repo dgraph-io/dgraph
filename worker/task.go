@@ -18,7 +18,6 @@
 package worker
 
 import (
-	"bytes"
 	"sort"
 	"strconv"
 	"strings"
@@ -397,33 +396,26 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
-		evaluateThreshold(countParams{
+		cp := countParams{
 			count:   0,
 			fn:      "gt",
 			attr:    attr,
 			gid:     gid,
 			reverse: q.Reverse,
-		}, &out)
+		}
+		cp.evaluateThreshold(&out)
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
 		count := srcFn.threshold
-		f := srcFn.fname
-		if f == "lt" {
-			count -= 1
-		} else if f == "gt" {
-			count += 1
-		}
-		if count < 0 {
-			count = 0
-		}
-		evaluateThreshold(countParams{
-			count:   count,
+		cp := countParams{
 			fn:      srcFn.fname,
+			count:   count,
 			attr:    attr,
 			gid:     gid,
 			reverse: q.Reverse,
-		}, &out)
+		}
+		cp.evaluateThreshold(&out)
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -1003,42 +995,46 @@ func preprocessFilter(tree *protos.FilterTree) (*facetsTree, error) {
 
 type countParams struct {
 	count   int64
-	fn      string // fn name
 	attr    string
 	gid     uint32
-	reverse bool // If query is asking for ~pred
+	reverse bool   // If query is asking for ~pred
+	fn      string // function name
 }
 
-func evaluateThreshold(cp countParams, out *protos.Result) {
-	countKey := x.CountKey(cp.attr, uint32(cp.count), cp.reverse)
+func (cp *countParams) evaluateThreshold(out *protos.Result) {
+	count := cp.count
+	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
+	if cp.fn == "eq" {
+		pl, decr := posting.GetOrCreate(countKey, cp.gid)
+		defer decr()
+		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+		return
+	}
+
+	if cp.fn == "lt" {
+		count -= 1
+	} else if cp.fn == "gt" {
+		count += 1
+	}
+	if count < 0 {
+		count = 0
+	}
+	countKey = x.CountKey(cp.attr, uint32(count), cp.reverse)
+
 	itOpt := badger.DefaultIteratorOptions
-	isLeOrLt := cp.fn == "le" || cp.fn == "lt"
-	itOpt.Reverse = isLeOrLt
+	itOpt.FetchValues = false
+	itOpt.Reverse = cp.fn == "le" || cp.fn == "lt"
 	it := pstore.NewIterator(itOpt)
 	defer it.Close()
+	pk := x.ParsedKey{
+		Attr: cp.attr,
+	}
+	countPrefix := pk.CountPrefix(cp.reverse)
 
-	it.Seek(countKey)
-	if it.Valid() {
-		if cp.fn == "eq" {
-			pl, decr := posting.GetOrCreate(countKey, cp.gid)
-			defer decr()
-			out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
-		} else {
-			pk := x.ParsedKey{
-				Attr: cp.attr,
-			}
-			countPrefix := pk.CountPrefix(cp.reverse)
-			for it.Valid() {
-				key := it.Item().Key()
-				if !bytes.HasPrefix(key, countPrefix) {
-					break
-				}
-				val := it.Item().Value()
-				pl, decr := posting.GetOrUnmarshal(key, val, cp.gid)
-				defer decr()
-				out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
-				it.Next()
-			}
-		}
+	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
+		key := it.Item().Key()
+		pl, decr := posting.GetOrCreate(key, cp.gid)
+		defer decr()
+		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 	}
 }

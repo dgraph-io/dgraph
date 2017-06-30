@@ -138,7 +138,7 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 		}
 
 		if current.Count != old.Count {
-			if err := n.rebuildOrDelCountIndex(ctxm update.Predicate, current.Count); err != nil {
+			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count); err != nil {
 			}
 		}
 	}
