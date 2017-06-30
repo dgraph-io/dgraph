@@ -96,8 +96,8 @@ func IndexKey(attr, term string) []byte {
 	return buf
 }
 
-func CountKey(attr string, count uint64) []byte {
-	buf := make([]byte, 1+2+len(attr)+1+8)
+func CountKey(attr string, count uint32) []byte {
+	buf := make([]byte, 1+2+len(attr)+1+4)
 	buf[0] = defaultPrefix
 	rest := buf[1:]
 
@@ -105,7 +105,7 @@ func CountKey(attr string, count uint64) []byte {
 	rest[0] = byteCount
 
 	rest = rest[1:]
-	binary.BigEndian.PutUint64(rest, count)
+	binary.BigEndian.PutUint32(rest, count)
 	return buf
 }
 
@@ -114,7 +114,7 @@ type ParsedKey struct {
 	Attr       string
 	Uid        uint64
 	Term       string
-	Count      uint64
+	Count      uint32
 	bytePrefix byte
 }
 
@@ -232,7 +232,7 @@ func Parse(key []byte) *ParsedKey {
 	case byteIndex:
 		p.Term = string(k)
 	case byteCount:
-		p.Count = binary.BigEndian.Uint64(k)
+		p.Count = binary.BigEndian.Uint32(k)
 	case byteSchema:
 		break
 	default:

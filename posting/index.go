@@ -200,7 +200,7 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 	return l.delete(ctx, t.Attr)
 }
 
-func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint64) error {
+func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32) error {
 	key := x.CountKey(t.Attr, count)
 	groupId := group.BelongsTo(t.Attr)
 
@@ -228,12 +228,12 @@ func updateCount(ctx context.Context, attr string, lenBefore, lenAfter int, uid 
 		Label:   "count",
 		Op:      protos.DirectedEdge_DEL,
 	}
-	if err := addCountMutation(ctx, edge, uint64(lenBefore)); err != nil {
+	if err := addCountMutation(ctx, edge, uint32(lenBefore)); err != nil {
 		return err
 	}
 
 	edge.Op = protos.DirectedEdge_SET
-	if err := addCountMutation(ctx, edge, uint64(lenAfter)); err != nil {
+	if err := addCountMutation(ctx, edge, uint32(lenAfter)); err != nil {
 		return err
 	}
 	return nil

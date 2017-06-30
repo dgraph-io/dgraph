@@ -423,7 +423,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		} else if f == "gt" {
 			count += 1
 		}
-		countKey := x.CountKey(attr, uint64(count))
+		if count < 0 {
+			count = 0
+		}
+
+		countKey := x.CountKey(attr, uint32(count))
 		it.Seek(countKey)
 
 		if it.Valid() {
