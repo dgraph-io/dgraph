@@ -22,16 +22,11 @@ import (
 	"crypto/md5"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
-	"os"
-	"os/exec"
 	"runtime"
 	"runtime/debug"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -43,7 +38,7 @@ import (
 )
 
 var (
-	maxmemory = flag.Int("stw_ram_mb", 4096,
+	maxmemory = flag.Float64("stw_ram_mb", 4096.0,
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
 	commitFraction   = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
@@ -159,31 +154,6 @@ func lhmapFor(group uint32) *listMap {
 	return lhmaps.get(group)
 }
 
-func aggressivelyEvict() {
-	log.Println("Aggressive evict, committing to RocksDB")
-
-	// To evict entries belonging to a group no longer served by the server
-	// CommitLists shouldn't have any affect as the entries should have been synced before
-	// we stopped serving the group
-	var wg sync.WaitGroup
-	for _, gid := range lhmaps.groups() {
-		wg.Add(1)
-		go func(gid uint32, wg *sync.WaitGroup) {
-			EvictGroup(gid)
-			wg.Done()
-		}(gid, &wg)
-	}
-	wg.Wait()
-
-	log.Println("Trying to free OS memory")
-	// Forces garbage collection followed by returning as much memory to the OS
-	// as possible.
-	debug.FreeOSMemory()
-
-	megs := getMemUsage()
-	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
-}
-
 func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 	commitFraction float64) {
 	select {
@@ -258,7 +228,13 @@ func periodicCommit() {
 				log.Printf("Dirty map size: %d\n", dsize)
 			}
 
-			totMemory := getMemUsage()
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			megs := (ms.Alloc + ms.StackInuse) / (1 << 20)
+
+			inUse := float64(megs)
+			idle := float64(ms.HeapIdle / (1 << 20))
+
 			fraction := math.Min(1.0, *commitFraction*math.Exp(float64(dsize)/1000000.0))
 			gentleCommit(dirtyMap, pending, fraction)
 
@@ -268,73 +244,23 @@ func periodicCommit() {
 
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
-			if float64(totMemory) > 1.5*float64(*maxmemory) {
-				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
+			if inUse+idle > *maxmemory {
+				fmt.Println("Inuse + idle: %.0f. Freeing OS memory", inUse+idle)
+				debug.FreeOSMemory()
+			}
+
+			if inUse > 1.5*(*maxmemory) {
+				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", inUse)
 				go evictShards(3)
-			} else if totMemory > *maxmemory {
-				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
+			} else if inUse > *maxmemory {
+				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", inUse)
 				go evictShards(1)
 			} else {
-				log.Printf("Current memory usage %v, stop the world limit %v, NumGoroutine %v, %v\n", totMemory, *maxmemory, runtime.NumGoroutine(), runtime.NumCgoCall())
+				log.Printf("Cur: %v. Idle: %v, STW: %v, NumGoroutines: %v\n",
+					inUse, idle, *maxmemory, runtime.NumGoroutine())
 			}
 		}
 	}
-}
-
-// getMemUsage returns the amount of memory used by the process in MB
-func getMemUsage() int {
-	var ms runtime.MemStats
-	runtime.ReadMemStats(&ms)
-	megs := (ms.Alloc + ms.StackInuse) / (1 << 20)
-	return int(megs)
-
-	// Sticking to ms.Alloc temoprarily.
-	// TODO(Ashwin): Switch to total Memory(RSS) once we figure out
-	// how to release memory to OS (Currently only a small chunk
-	// is returned)
-	if runtime.GOOS != "linux" {
-		pid := os.Getpid()
-		cmd := fmt.Sprintf("ps -ao rss,pid | grep %v", pid)
-		c1, err := exec.Command("bash", "-c", cmd).Output()
-		if err != nil {
-			// In case of error running the command, resort to go way
-			var ms runtime.MemStats
-			runtime.ReadMemStats(&ms)
-			megs := ms.Alloc / (1 << 20)
-			return int(megs)
-		}
-
-		rss := strings.Split(string(c1), " ")[0]
-		kbs, err := strconv.Atoi(rss)
-		if err != nil {
-			return 0
-		}
-
-		megs := kbs / (1 << 10)
-		return megs
-	}
-
-	contents, err := ioutil.ReadFile("/proc/self/stat")
-	if err != nil {
-		log.Println("Can't read the proc file", err)
-		return 0
-	}
-
-	cont := strings.Split(string(contents), " ")
-	// 24th entry of the file is the RSS which denotes the number of pages
-	// used by the process.
-	if len(cont) < 24 {
-		log.Println("Error in RSS from stat")
-		return 0
-	}
-
-	rss, err := strconv.Atoi(cont[23])
-	if err != nil {
-		log.Println(err)
-		return 0
-	}
-
-	return rss * os.Getpagesize() / (1 << 20)
 }
 
 type fingerPrint struct {
