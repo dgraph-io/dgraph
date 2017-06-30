@@ -404,7 +404,7 @@ func DeleteCountIndex(ctx context.Context, attr string) error {
 	return nil
 }
 
-func rebuildCountIndex(ctx context.Context, attr string, reverse bool) error {
+func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh chan error) {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.CountPrefix(reverse)
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
@@ -444,12 +444,13 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool) error {
 		}
 	}
 	close(ch)
+	var finalErr error
 	for i := 0; i < 1000; i++ {
 		if err := <-che; err != nil {
-			return err
+			finalErr = err
 		}
 	}
-	return nil
+	errCh <- finalErr
 }
 
 func RebuildCountIndex(ctx context.Context, attr string) error {
@@ -458,8 +459,8 @@ func RebuildCountIndex(ctx context.Context, attr string) error {
 
 	errCh := make(chan error, 2)
 	// Lets rebuild forward and reverse count indexes concurrently.
-	go rebuildCountIndex(ctx, attr, false)
-	go rebuildCountIndex(ctx, attr, true)
+	go rebuildCountIndex(ctx, attr, false, errCh)
+	go rebuildCountIndex(ctx, attr, true, errCh)
 
 	var rebuildErr error
 	for i := 0; i < 2; i++ {
