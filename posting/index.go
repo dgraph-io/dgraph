@@ -395,10 +395,6 @@ func DeleteCountIndex(ctx context.Context, attr string) error {
 }
 
 func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh chan error) {
-	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.CountPrefix(reverse)
-	it := pstore.NewIterator(badger.DefaultIteratorOptions)
-	defer it.Close()
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
@@ -411,8 +407,7 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 					Attr:    attr,
 					Op:      protos.DirectedEdge_SET,
 				}
-				err = addCountMutation(ctx, t, uint32(len(pl.Postings)), reverse)
-				if err != nil {
+				if err = addCountMutation(ctx, t, uint32(len(pl.Postings)), reverse); err != nil {
 					break
 				}
 			}
@@ -420,6 +415,14 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 		}()
 	}
 
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.DataPrefix()
+	if reverse {
+		prefix = pk.ReversePrefix()
+	}
+
+	it := pstore.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		iterItem := it.Item()
 		key := iterItem.Key()
