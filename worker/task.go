@@ -414,26 +414,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		out.UidMatrix = append(out.UidMatrix, uidList)
 	}
 
-	if srcFn.fnType == UidInFn && srcFn.isFuncAtRoot {
-		reqList := &protos.List{[]uint64{srcFn.uidPresent}}
-		topts := posting.ListOptions{
-			AfterUID:  0,
-			Intersect: reqList,
-		}
-		f := func(kv itkv, mu *sync.Mutex) {
-			pl, decr := posting.GetOrUnmarshal(kv.key, kv.val, gid)
-			decr()
-			if len(pl.Uids(topts).Uids) > 0 {
-				addUidToMatrix(kv.key, mu, &out)
-			}
-		}
-		itParams := iterateParams{
-			q:        q,
-			fetchVal: true,
-		}
-		iterateParallel(ctx, itParams, f)
-	}
-
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
 		f := func(kv itkv, mu *sync.Mutex) {
 			addUidToMatrix(kv.key, mu, &out)
@@ -826,6 +806,9 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 			return nil, err
 		}
 		checkRoot(q, fc)
+		if fc.isFuncAtRoot {
+			return nil, x.Errorf("uid_in function not allowed at root")
+		}
 	default:
 		return nil, x.Errorf("FnType %d not handled in numFnAttrs.", fnType)
 	}

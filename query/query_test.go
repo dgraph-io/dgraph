@@ -8119,16 +8119,18 @@ func TestUidInFunction2(t *testing.T) {
 
 func TestUidInFunctioniAtRoot(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: uid_in(school, 5000)) {
 				name
 		}
 	}`
-	js := processToFastJSON(t, query)
-	require.Equal(t,
-		`{"me":[{"name":"Michonne"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}]}`,
-		js)
+
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
+	require.Error(t, err)
 }
