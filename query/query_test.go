@@ -1522,8 +1522,6 @@ func TestVarInIneq2(t *testing.T) {
 
 func TestNestedFuncRoot(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
     {
 			me(func: gt(count(friend), 2)) {
@@ -1537,8 +1535,6 @@ func TestNestedFuncRoot(t *testing.T) {
 
 func TestNestedFuncRoot2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 		{
 			me(func: ge(count(friend), 1)) {
@@ -4052,8 +4048,6 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 
 func TestCountReverseFunc(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 		{
 			me(func: ge(count(~friend), 2)) {
@@ -6323,7 +6317,8 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
 		{Predicate: "dob", Type: "datetime"}, {Predicate: "survival_rate", Type: "float"},
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
-		{Predicate: "noindex_name", Type: "string"}}
+		{Predicate: "noindex_name", Type: "string"},
+		{Predicate: "school", Type: "uid"}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6391,7 +6386,7 @@ func TestSchemaBlock5(t *testing.T) {
 }
 
 const schemaStr = `
-name                           : string @index(term, exact, trigram) .
+name                           : string @index(term, exact, trigram) @count .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index .
 film.film.initial_release_date : dateTime @index .
@@ -6401,11 +6396,12 @@ survival_rate                  : float .
 alive                          : bool @index .
 age                            : int @index .
 shadow_deep                    : int .
-friend                         : uid @reverse .
+friend                         : uid @reverse @count .
 geometry                       : geo @index .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 noindex_name                   : string .
+school		                   : uid @count .
 `
 
 func TestMain(m *testing.M) {
@@ -7168,14 +7164,12 @@ children: <
 
 func TestCountAtRoot(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
-                {
-                        me(func: ge(count(friend), 0)) {
+        {
+        	me(func: ge(count(friend), 0)) {
 				count()
 			}
-                }
+        }
         `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"count": 4}]}`, js)
@@ -7183,8 +7177,6 @@ func TestCountAtRoot(t *testing.T) {
 
 func TestCountAtRoot2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
         {
                 me(func: anyofterms(name, "Michonne Rick Andrea")) {
@@ -7198,8 +7190,6 @@ func TestCountAtRoot2(t *testing.T) {
 
 func TestCountAtRoot2PB(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
         {
                 me(func: anyofterms(name, "Michonne Rick Andrea")) {
@@ -7316,8 +7306,6 @@ func TestCountAtRoot5(t *testing.T) {
 
 func TestHasFuncAtRoot(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: has(friend)) {
@@ -7352,8 +7340,6 @@ func TestHasFuncAtRootFilter(t *testing.T) {
 
 func TestHasFuncAtChild1(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: has(school)) {
@@ -7371,8 +7357,6 @@ func TestHasFuncAtChild1(t *testing.T) {
 
 func TestHasFuncAtChild2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: has(school)) {
@@ -7391,8 +7375,6 @@ func TestHasFuncAtChild2(t *testing.T) {
 
 func TestHasFuncAtRoot2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: has(name@en)) {

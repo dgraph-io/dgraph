@@ -115,6 +115,12 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 					return err
 				}
 			}
+
+			if current.Count {
+				if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 		// schema was present already
@@ -129,6 +135,11 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
 				current.Directive == protos.SchemaUpdate_REVERSE); err != nil {
 				return err
+			}
+		}
+
+		if current.Count != old.Count {
+			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count); err != nil {
 			}
 		}
 	}

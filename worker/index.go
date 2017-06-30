@@ -75,6 +75,25 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 	return nil
 }
 
+func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild bool) error {
+	rv := ctx.Value("raft").(x.RaftValue)
+	x.AssertTrue(rv.Group == n.gid)
+
+	// Current raft index has pending applied watermark
+	// Raft index starts from 1
+	if err := n.syncAllMarks(ctx, rv.Index-1); err != nil {
+		return err
+	}
+	posting.DeleteCountIndex(ctx, attr)
+	if rebuild {
+		// Remove reverse edges
+		if err := posting.RebuildCountIndex(ctx, attr); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // rebuildIndex is called by node.Run to rebuild index.
 func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	x.AssertTrue(proposalData[0] == proposalReindex)

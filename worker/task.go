@@ -18,8 +18,6 @@
 package worker
 
 import (
-	"bytes"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -424,32 +422,34 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
-		f := func(kv itkv, mu *sync.Mutex) {
-			addUidToMatrix(kv.key, mu, &out)
+		if ok := schema.State().HasCount(attr); !ok {
+			return nil, x.Errorf("Need @count directive in schema for attr: %s for fn: %s at root.",
+				attr, srcFn.fname)
 		}
-		itParams := iterateParams{
-			q:        q,
-			fetchVal: false,
+		cp := countParams{
+			count:   0,
+			fn:      "gt",
+			attr:    attr,
+			gid:     gid,
+			reverse: q.Reverse,
 		}
-		iterateParallel(ctx, itParams, f)
+		cp.evaluate(&out)
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
-		f := func(kv itkv, mu *sync.Mutex) {
-			pl, decr := posting.GetOrUnmarshal(kv.key, kv.val, gid)
-			count := int64(pl.Length(0))
-			decr()
-			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				addUidToMatrix(kv.key, mu, &out)
-			}
+		if ok := schema.State().HasCount(attr); !ok {
+			return nil, x.Errorf("Need @count directive in schema for attr: %s for fn: %s at root",
+				attr, srcFn.fname)
 		}
-		itParams := iterateParams{
-			q:        q,
-			fetchVal: true,
+		count := srcFn.threshold
+		cp := countParams{
+			fn:      srcFn.fname,
+			count:   count,
+			attr:    attr,
+			gid:     gid,
+			reverse: q.Reverse,
 		}
-		if err = iterateParallel(ctx, itParams, f); err != nil {
-			return nil, err
-		}
+		cp.evaluate(&out)
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -1041,107 +1041,48 @@ func preprocessFilter(tree *protos.FilterTree) (*facetsTree, error) {
 	return ftree, nil
 }
 
-type itkv struct {
-	key []byte
-	val []byte
+type countParams struct {
+	count   int64
+	attr    string
+	gid     uint32
+	reverse bool   // If query is asking for ~pred
+	fn      string // function name
 }
 
-type iterateParams struct {
-	q        *protos.Query
-	fetchVal bool // Whether value needs to be fetched along with key.
-}
-
-// TODO - We might not even need to do this with badger. Benchmark this against
-// the serial iteration once we integrate badger.
-func iterateParallel(ctx context.Context, params iterateParams,
-	f func(itkv, *sync.Mutex)) error {
-	q := params.q
-	fetchVal := params.fetchVal
-	grpSize := uint64(math.MaxUint64 / uint64(numPart))
-	mu := &sync.Mutex{}
-	errChan := make(chan error, numPart)
-
-	for i := uint64(0); i < numPart; i++ {
-		minUid := grpSize*i + 1
-		maxUid := grpSize * (i + 1)
-		if i == numPart-1 {
-			maxUid = math.MaxUint64
-		}
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Running go-routine %v for iteration", i)
-		}
-		go func(i uint64) {
-			it := pstore.NewIterator(badger.DefaultIteratorOptions)
-			defer it.Close()
-			startKey := x.DataKey(q.Attr, minUid)
-			pk := x.Parse(startKey)
-			prefix := pk.DataPrefix()
-			if q.Reverse {
-				startKey = x.ReverseKey(q.Attr, minUid)
-				pk = x.Parse(startKey)
-				prefix = pk.ReversePrefix()
-			}
-
-			w := 0
-			for it.Seek(startKey); it.Valid(); it.Next() {
-				iterItem := it.Item()
-				key := iterItem.Key()
-				if !bytes.HasPrefix(key, prefix) {
-					break
-				}
-				pk := x.Parse(key)
-				x.AssertTruef(pk.Attr == q.Attr,
-					"Invalid key obtained for comparison")
-				if w%1000 == 0 {
-					select {
-					case <-ctx.Done():
-						errChan <- ctx.Err()
-						return
-					default:
-						if tr, ok := trace.FromContext(ctx); ok {
-							tr.LazyPrintf("iterateParallel: go-routine-id: %v key: %v:%v",
-								i, pk.Attr, pk.Uid)
-						}
-					}
-				}
-				w++
-				if pk.Uid > maxUid {
-					break
-				}
-				kv := itkv{
-					key: key,
-				}
-				// For HasFn, we dont need to fetch values. We take the presence of a key
-				// to mean HasFn is true for the uid. We need to fetchValue for CompareScalarFn
-				// though.
-				if fetchVal {
-					val := iterItem.Value()
-					kv.val = val
-				}
-				f(kv, mu)
-			}
-			errChan <- nil
-		}(i)
+func (cp *countParams) evaluate(out *protos.Result) {
+	count := cp.count
+	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
+	if cp.fn == "eq" {
+		pl, decr := posting.GetOrCreate(countKey, cp.gid)
+		defer decr()
+		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+		return
 	}
 
-	var finalErr error
-	for i := 0; i < int(numPart); i++ {
-		select {
-		case err := <-errChan:
-			if err != nil {
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Error while running iterateParallel: %+v", err)
-				}
-				// Note we dont return here so that all goroutines above can complete otherwise we
-				// get trace panics.
-				finalErr = err
-			}
-		case <-ctx.Done():
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
-			}
-			finalErr = ctx.Err()
-		}
+	if cp.fn == "lt" {
+		count -= 1
+	} else if cp.fn == "gt" {
+		count += 1
 	}
-	return finalErr
+	if count < 0 {
+		count = 0
+	}
+	countKey = x.CountKey(cp.attr, uint32(count), cp.reverse)
+
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.FetchValues = false
+	itOpt.Reverse = cp.fn == "le" || cp.fn == "lt"
+	it := pstore.NewIterator(itOpt)
+	defer it.Close()
+	pk := x.ParsedKey{
+		Attr: cp.attr,
+	}
+	countPrefix := pk.CountPrefix(cp.reverse)
+
+	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
+		key := it.Item().Key()
+		pl, decr := posting.GetOrCreate(key, cp.gid)
+		defer decr()
+		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+	}
 }

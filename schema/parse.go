@@ -31,14 +31,16 @@ func From(s *protos.SchemaUpdate) protos.SchemaUpdate {
 	if s.Directive == protos.SchemaUpdate_REVERSE {
 		return protos.SchemaUpdate{
 			ValueType: s.ValueType,
-			Directive: protos.SchemaUpdate_REVERSE}
+			Directive: protos.SchemaUpdate_REVERSE,
+			Count:     s.Count}
 	} else if s.Directive == protos.SchemaUpdate_INDEX {
 		return protos.SchemaUpdate{
 			ValueType: s.ValueType,
 			Directive: protos.SchemaUpdate_INDEX,
-			Tokenizer: s.Tokenizer}
+			Tokenizer: s.Tokenizer,
+			Count:     s.Count}
 	}
-	return protos.SchemaUpdate{ValueType: s.ValueType}
+	return protos.SchemaUpdate{ValueType: s.ValueType, Count: s.Count}
 }
 
 // ParseBytes parses the byte array which holds the schema. We will reset
@@ -57,6 +59,35 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	for _, update := range updates {
 		State().Set(update.Predicate, From(update))
 	}
+	return nil
+}
+
+func parseDirective(it *lex.ItemIterator, schema *protos.SchemaUpdate, t types.TypeID) error {
+	it.Next()
+	next := it.Item()
+	if next.Typ != itemText {
+		return x.Errorf("Missing directive name")
+	}
+	switch next.Val {
+	case "reverse":
+		if t != types.UidID {
+			return x.Errorf("Cannot reverse for non-UID type")
+		}
+		schema.Directive = protos.SchemaUpdate_REVERSE
+	case "index":
+		if tokenizer, err := parseIndexDirective(it, schema.Predicate, t); err != nil {
+			return err
+		} else {
+			schema.Directive = protos.SchemaUpdate_INDEX
+			schema.Tokenizer = tokenizer
+		}
+	case "count":
+		schema.Count = true
+	default:
+		return x.Errorf("Invalid index specification")
+	}
+	it.Next()
+
 	return nil
 }
 
@@ -84,28 +115,16 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*protos.SchemaUpda
 	it.Next()
 	next = it.Item()
 	if next.Typ == itemAt {
-		it.Next()
+		if err := parseDirective(it, schema, t); err != nil {
+			return nil, err
+		}
 		next = it.Item()
-		if next.Typ != itemText {
-			return nil, x.Errorf("Missing directive name")
+	}
+	// Check for another directive, we could have @count too.
+	if next.Typ == itemAt {
+		if err := parseDirective(it, schema, t); err != nil {
+			return nil, err
 		}
-		switch next.Val {
-		case "reverse":
-			if t != types.UidID {
-				return nil, x.Errorf("Cannot reverse for non-UID type")
-			}
-			schema.Directive = protos.SchemaUpdate_REVERSE
-		case "index":
-			if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
-				return nil, err
-			} else {
-				schema.Directive = protos.SchemaUpdate_INDEX
-				schema.Tokenizer = tokenizer
-			}
-		default:
-			return nil, x.Errorf("Invalid index specification")
-		}
-		it.Next()
 		next = it.Item()
 	}
 	if next.Typ != itemDot {

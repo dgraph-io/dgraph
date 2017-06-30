@@ -509,10 +509,8 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	}
 }
 
-// Length iterates over the mutation layer and counts number of elements.
-func (l *List) Length(afterUid uint64) int {
-	l.RLock()
-	defer l.RUnlock()
+func (l *List) length(afterUid uint64) int {
+	l.AssertRLock()
 
 	pidx, midx := 0, 0
 	pl := l.plist
@@ -537,6 +535,13 @@ func (l *List) Length(afterUid uint64) int {
 		}
 	}
 	return count
+}
+
+// Length iterates over the mutation layer and counts number of elements.
+func (l *List) Length(afterUid uint64) int {
+	l.RLock()
+	defer l.RUnlock()
+	return l.length(afterUid)
 }
 
 func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
