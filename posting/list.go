@@ -421,8 +421,8 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		if gid == 0 {
 			gid = group.BelongsTo(t.Attr)
 		}
-		if l.dirtyChan != nil {
-			l.dirtyChan <- struct{}{}
+		if dirtyChan != nil {
+			dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
 		}
 	}
 	return hasMutated, nil

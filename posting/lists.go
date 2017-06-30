@@ -184,7 +184,7 @@ func aggressivelyEvict() {
 	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
-func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{},
+func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 	commitFraction float64) {
 	select {
 	case pending <- struct{}{}:
