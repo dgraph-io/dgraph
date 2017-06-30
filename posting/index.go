@@ -182,7 +182,7 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 		return err
 	}
 
-	if lenAfter != lenBefore && schema.State().AddCount(t.Attr) {
+	if lenAfter != lenBefore && schema.State().HasCount(t.Attr) {
 		if err := updateCount(ctx, ucParams{
 			attr:      t.Attr,
 			lenBefore: lenBefore,
@@ -301,7 +301,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 		if err != nil {
 			return err
 		}
-		if lenAfter != lenBefore && schema.State().AddCount(t.Attr) {
+		if lenAfter != lenBefore && schema.State().HasCount(t.Attr) {
 			if err := updateCount(ctx, ucParams{
 				attr:      t.Attr,
 				lenBefore: lenBefore,
@@ -453,7 +453,7 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool) error {
 }
 
 func RebuildCountIndex(ctx context.Context, attr string) error {
-	x.AssertTruef(schema.State().AddCount(attr), "Attr %s doesn't have count index", attr)
+	x.AssertTruef(schema.State().HasCount(attr), "Attr %s doesn't have count index", attr)
 	EvictGroup(group.BelongsTo(attr))
 
 	errCh := make(chan error, 2)
@@ -713,9 +713,19 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	indexed := schema.State().IsIndexed(attr)
 	reversed := schema.State().IsReversed(attr)
 	if indexed {
-		DeleteIndex(ctx, attr)
+		if err := DeleteIndex(ctx, attr); err != nil {
+			return err
+		}
 	} else if reversed {
-		DeleteReverseEdges(ctx, attr)
+		if err := DeleteReverseEdges(ctx, attr); err != nil {
+			return err
+		}
+	}
+
+	if ok := schema.State().HasCount(attr); ok {
+		if err := DeleteCountIndex(ctx, attr); err != nil {
+			return err
+		}
 	}
 	return nil
 }

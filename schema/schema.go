@@ -251,11 +251,11 @@ func (s *stateGroup) isReversed(pred string) bool {
 }
 
 // AddCount returns whether we want to mantain a count index for the given predicate or not.
-func (s *state) AddCount(pred string) bool {
-	return s.get(group.BelongsTo(pred)).addCount(pred)
+func (s *state) HasCount(pred string) bool {
+	return s.get(group.BelongsTo(pred)).hasCount(pred)
 }
 
-func (s *stateGroup) addCount(pred string) bool {
+func (s *stateGroup) hasCount(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {

@@ -396,6 +396,10 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
+		if ok := schema.State().HasCount(attr); !ok {
+			return nil, x.Errorf("Need @count directive in schema for attr: %s for fn: %s at root.",
+				attr, srcFn.fname)
+		}
 		cp := countParams{
 			count:   0,
 			fn:      "gt",
@@ -407,6 +411,10 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
+		if ok := schema.State().HasCount(attr); !ok {
+			return nil, x.Errorf("Need @count directive in schema for attr: %s for fn: %s at root",
+				attr, srcFn.fname)
+		}
 		count := srcFn.threshold
 		cp := countParams{
 			fn:      srcFn.fname,
