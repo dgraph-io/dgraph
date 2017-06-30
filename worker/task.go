@@ -407,7 +407,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			gid:     gid,
 			reverse: q.Reverse,
 		}
-		cp.evaluateThreshold(&out)
+		cp.evaluate(&out)
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
@@ -423,7 +423,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			gid:     gid,
 			reverse: q.Reverse,
 		}
-		cp.evaluateThreshold(&out)
+		cp.evaluate(&out)
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -1009,7 +1009,7 @@ type countParams struct {
 	fn      string // function name
 }
 
-func (cp *countParams) evaluateThreshold(out *protos.Result) {
+func (cp *countParams) evaluate(out *protos.Result) {
 	count := cp.count
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
