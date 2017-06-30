@@ -71,7 +71,6 @@ type List struct {
 	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount    int32
 	deleteAll   int32
-	delayChan   chan struct{}
 
 	water   *x.WaterMark
 	pending []uint64
@@ -86,7 +85,6 @@ func (l *List) decr() {
 		return
 	}
 
-	close(l.delayChan)
 	l.Iterate(0, func(p *protos.Posting) bool {
 		*p = protos.Posting{}
 		postingPool.Put(p)
@@ -133,35 +131,6 @@ func getNew(key []byte, gid uint32, pstore *badger.KV) *List {
 	if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 	}
-
-	l.delayChan = make(chan struct{}, 1)
-	go func() {
-		var count int
-		for range l.delayChan {
-		START:
-			count++
-			if count > 1000 {
-				count = 0
-				if dirtyChan != nil {
-					dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
-				}
-				continue
-			}
-			time.Sleep(5 * time.Second)
-
-			select {
-			case _, ok := <-l.delayChan:
-				if ok {
-					goto START
-				}
-			default:
-				count = 0
-				if dirtyChan != nil {
-					dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
-				}
-			}
-		}
-	}()
 	return l
 }
 
@@ -452,9 +421,8 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		if gid == 0 {
 			gid = group.BelongsTo(t.Attr)
 		}
-		select {
-		case l.delayChan <- struct{}{}:
-		default:
+		if l.dirtyChan != nil {
+			l.dirtyChan <- struct{}{}
 		}
 	}
 	return hasMutated, nil

@@ -203,7 +203,16 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{},
 	keysBuffer := make([]fingerPrint, 0, n)
 
 	// Convert map to list.
-	for key := range dirtyMap {
+	var loops int
+	for key, ts := range dirtyMap {
+		loops++
+		if loops > 3*n {
+			break
+		}
+		if time.Since(ts) < 5*time.Second {
+			continue
+		}
+
 		delete(dirtyMap, key)
 		keysBuffer = append(keysBuffer, key)
 		if len(keysBuffer) >= n {
@@ -234,14 +243,14 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{},
 // merge and evict all posting lists from memory.
 func periodicCommit() {
 	ticker := time.NewTicker(time.Second)
-	dirtyMap := make(map[fingerPrint]struct{}, 1000)
+	dirtyMap := make(map[fingerPrint]time.Time, 1000)
 	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
 	pending := make(chan struct{}, 15)
 	dsize := 0 // needed for better reporting.
 	for {
 		select {
 		case key := <-dirtyChan:
-			dirtyMap[key] = struct{}{}
+			dirtyMap[key] = time.Now()
 
 		case <-ticker.C:
 			if len(dirtyMap) != dsize {
@@ -250,7 +259,7 @@ func periodicCommit() {
 			}
 
 			totMemory := getMemUsage()
-			fraction := math.Min(1.0, *commitFraction*math.Exp(float64(dsize)/100000.0))
+			fraction := math.Min(1.0, *commitFraction*math.Exp(float64(dsize)/1000000.0))
 			gentleCommit(dirtyMap, pending, fraction)
 
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
