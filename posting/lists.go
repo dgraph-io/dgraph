@@ -245,15 +245,12 @@ func periodicCommit() {
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
 			if inUse+idle > *maxmemory {
-				fmt.Println("Inuse + idle: %.0f. Freeing OS memory", inUse+idle)
-				debug.FreeOSMemory()
+				fmt.Printf("Inuse: %.0f idle: %.0f. Freeing OS memory", inUse, idle)
+				go debug.FreeOSMemory()
 			}
 
-			if inUse > 1.5*(*maxmemory) {
-				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", inUse)
-				go evictShards(3)
-			} else if inUse > *maxmemory {
-				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", inUse)
+			if inUse > 0.75*(*maxmemory) {
+				log.Printf("Memory usage close to threshold. STW. Allocated MB: %v\n", inUse)
 				go evictShards(1)
 			} else {
 				log.Printf("Cur: %v. Idle: %v, STW: %v, NumGoroutines: %v\n",
