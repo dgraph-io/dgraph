@@ -88,6 +88,7 @@ func (l *List) decr() {
 
 	close(l.delayChan)
 	l.Iterate(0, func(p *protos.Posting) bool {
+		*p = protos.Posting{}
 		postingPool.Put(p)
 		return true
 	})
