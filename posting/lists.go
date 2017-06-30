@@ -266,7 +266,7 @@ func periodicCommit() {
 				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
 				go evictShards(1)
 			} else {
-				log.Printf("Current memory usage %v, stop the world limit %v\n", totMemory, *maxmemory)
+				log.Printf("Current memory usage %v, stop the world limit %v, NumGoroutine %v, %v\n", totMemory, *maxmemory, runtime.NumGoroutine(), runtime.NumCgoCall())
 			}
 		}
 	}
