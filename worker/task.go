@@ -19,7 +19,6 @@ package worker
 
 import (
 	"bytes"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -398,26 +397,12 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
-		f := func(kv itkv, mu *sync.Mutex) {
-			addUidToMatrix(kv.key, mu, &out)
-		}
-		itParams := iterateParams{
-			q:        q,
-			fetchVal: false,
-		}
-		iterateParallel(ctx, itParams, f)
-
+		evaluateThreshold(0, "gt", attr, gid, &out)
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
-		f := srcFn.fname
-		itOpt := badger.DefaultIteratorOptions
-		isLeOrLt := f == "le" || f == "lt"
-		itOpt.Reverse = isLeOrLt
-		it := pstore.NewIterator(itOpt)
-		defer it.Close()
-
 		count := srcFn.threshold
+		f := srcFn.fname
 		if f == "lt" {
 			count -= 1
 		} else if f == "gt" {
@@ -426,33 +411,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		if count < 0 {
 			count = 0
 		}
-
-		countKey := x.CountKey(attr, uint32(count))
-		it.Seek(countKey)
-
-		if it.Valid() {
-			if f == "eq" {
-				pl, decr := posting.GetOrCreate(countKey, gid)
-				defer decr()
-				out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
-			} else {
-				pk := x.ParsedKey{
-					Attr: attr,
-				}
-				countPrefix := pk.CountPrefix()
-				for it.Valid() {
-					key := it.Item().Key()
-					if !bytes.HasPrefix(key, countPrefix) {
-						break
-					}
-					val := it.Item().Value()
-					pl, decr := posting.GetOrUnmarshal(key, val, gid)
-					defer decr()
-					out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
-					it.Next()
-				}
-			}
-		}
+		evaluateThreshold(count, srcFn.fname, attr, gid, &out)
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -1030,76 +989,37 @@ func preprocessFilter(tree *protos.FilterTree) (*facetsTree, error) {
 	return ftree, nil
 }
 
-type itkv struct {
-	key []byte
-	val []byte
-}
+func evaluateThreshold(count int64, f, attr string, gid uint32, out *protos.Result) {
+	countKey := x.CountKey(attr, uint32(count))
+	itOpt := badger.DefaultIteratorOptions
+	isLeOrLt := f == "le" || f == "lt"
+	itOpt.Reverse = isLeOrLt
+	it := pstore.NewIterator(itOpt)
+	defer it.Close()
 
-type iterateParams struct {
-	q        *protos.Query
-	fetchVal bool // Whether value needs to be fetched along with key.
-}
+	it.Seek(countKey)
 
-// TODO - We might not even need to do this with badger. Benchmark this against
-// the serial iteration once we integrate badger.
-func iterateParallel(ctx context.Context, params iterateParams, f func(itkv, *sync.Mutex)) {
-	q := params.q
-	fetchVal := params.fetchVal
-	grpSize := uint64(math.MaxUint64 / uint64(numPart))
-	var wg sync.WaitGroup
-	mu := &sync.Mutex{}
-
-	for i := uint64(0); i < numPart; i++ {
-		minUid := grpSize*i + 1
-		maxUid := grpSize * (i + 1)
-		if i == numPart-1 {
-			maxUid = math.MaxUint64
+	if it.Valid() {
+		if f == "eq" {
+			pl, decr := posting.GetOrCreate(countKey, gid)
+			defer decr()
+			out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+		} else {
+			pk := x.ParsedKey{
+				Attr: attr,
+			}
+			countPrefix := pk.CountPrefix()
+			for it.Valid() {
+				key := it.Item().Key()
+				if !bytes.HasPrefix(key, countPrefix) {
+					break
+				}
+				val := it.Item().Value()
+				pl, decr := posting.GetOrUnmarshal(key, val, gid)
+				defer decr()
+				out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+				it.Next()
+			}
 		}
-		x.Trace(ctx, "Running go-routine %v for iteration", i)
-		wg.Add(1)
-		go func(i uint64) {
-			it := pstore.NewIterator(badger.DefaultIteratorOptions)
-			defer it.Close()
-			startKey := x.DataKey(q.Attr, minUid)
-			pk := x.Parse(startKey)
-			prefix := pk.DataPrefix()
-			if q.Reverse {
-				startKey = x.ReverseKey(q.Attr, minUid)
-				pk = x.Parse(startKey)
-				prefix = pk.ReversePrefix()
-			}
-
-			w := 0
-			for it.Seek(startKey); it.Valid(); it.Next() {
-				iterItem := it.Item()
-				key := iterItem.Key()
-				if !bytes.HasPrefix(key, prefix) {
-					break
-				}
-				pk := x.Parse(key)
-				x.AssertTruef(pk.Attr == q.Attr,
-					"Invalid key obtained for comparison")
-				if w%1000 == 0 {
-					x.Trace(ctx, "iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
-				}
-				w++
-				if pk.Uid > maxUid {
-					break
-				}
-				kv := itkv{
-					key: key,
-				}
-				// For HasFn, we dont need to fetch values. We take the presence of a key
-				// to mean HasFn is true for the uid. We need to fetchValue for CompareScalarFn
-				// though.
-				if fetchVal {
-					val := iterItem.Value()
-					kv.val = val
-				}
-				f(kv, mu)
-			}
-			wg.Done()
-		}(i)
 	}
-	wg.Wait()
 }
