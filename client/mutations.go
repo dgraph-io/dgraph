@@ -48,12 +48,16 @@ type allocator struct {
 func (a *allocator) fetchOne() (uint64, error) {
 	a.AssertLock()
 	if a.startId == 0 || a.endId < a.startId {
-		assignedIds, err := a.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
-		if err != nil {
-			return 0, err
+		for {
+			assignedIds, err := a.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
+			if err != nil {
+				time.Sleep(time.Second)
+			} else {
+				a.startId = assignedIds.StartId
+				a.endId = assignedIds.EndId
+				break
+			}
 		}
-		a.startId = assignedIds.StartId
-		a.endId = assignedIds.EndId
 	}
 
 	uid := a.startId
