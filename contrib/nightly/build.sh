@@ -256,4 +256,8 @@ if [ "$DGRAPH" != "$CURRENT_DIR" ]; then
 	mv $ASSETS_FILE $NIGHTLY_FILE $SHA_FILE $CURRENT_DIR
 fi
 
+# Lets rename the binaries before they are uploaded to S3.
+mv $TRAVIS_BUILD_DIR/cmd/dgraph/dgraph $TRAVIS_BUILD_DIR/cmd/dgraph/dgraph-$TRAVIS_COMMIT
+mv $TRAVIS_BUILD_DIR/cmd/dgraphloader/dgraphloader $TRAVIS_BUILD_DIR/cmd/dgraphloader/dgraphloader-$TRAVIS_COMMIT
+
 popd > /dev/null
