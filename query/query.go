@@ -1119,7 +1119,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 	}
 
 	if sg.IsGroupBy() {
-		err := sg.processGroupBy(doneVars)
+		err := sg.processGroupBy(doneVars, path)
 		if err != nil {
 			return err
 		}

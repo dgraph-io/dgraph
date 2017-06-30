@@ -191,10 +191,11 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *protos.List, groupVal [
 	}
 }
 
-func (sg *SubGraph) processGroupBy(doneVars map[string]varValue) error {
+func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGraph) error {
 	mp := make(map[string]groupResult)
 	_ = mp
 	var dedupMap dedup
+	var pathNode *SubGraph
 	for _, child := range sg.Children {
 		if !child.Params.ignoreResult {
 			continue
@@ -208,6 +209,7 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue) error {
 					dedupMap.addValue(child.Attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
 				}
 			}
+			pathNode = child
 		} else {
 			// It's a value node.
 			for i, v := range child.values {
@@ -254,7 +256,10 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue) error {
 				}
 				tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
 			}
-			doneVars[chVar] = varValue{Vals: tempMap}
+			doneVars[chVar] = varValue{
+				Vals: tempMap,
+				path: append(path, pathNode),
+			}
 		}
 		child.Params.ignoreResult = true
 	}
