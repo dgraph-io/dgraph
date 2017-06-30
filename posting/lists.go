@@ -219,9 +219,6 @@ func periodicCommit() {
 	dsize := 0 // needed for better reporting.
 	for {
 		select {
-		case key := <-dirtyChan:
-			dirtyMap[key] = time.Now()
-
 		case <-ticker.C:
 			if len(dirtyMap) != dsize {
 				dsize = len(dirtyMap)
@@ -259,6 +256,8 @@ func periodicCommit() {
 				log.Printf("Cur: %v. Idle: %v, total: %v, STW: %v, NumGoroutines: %v\n",
 					inUse, idle, inUse+idle, *maxmemory, runtime.NumGoroutine())
 			}
+		case key := <-dirtyChan:
+			dirtyMap[key] = time.Now()
 		}
 	}
 }
