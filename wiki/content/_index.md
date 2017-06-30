@@ -147,7 +147,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="https://discuss.dgraph.io">
+            <a href="https://play.dgraph.io">
               Dgraph Playground
             </a>
           </div>
