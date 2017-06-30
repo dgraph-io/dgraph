@@ -146,6 +146,7 @@ const (
 	RegexFn
 	FullTextSearchFn
 	HasFn
+	UidInFn
 	StandardFn = 100
 )
 
@@ -176,6 +177,8 @@ func parseFuncType(arr []string) (FuncType, string) {
 		return FullTextSearchFn, f
 	case "has":
 		return HasFn, f
+	case "uid_in":
+		return UidInFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
@@ -276,7 +279,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	for i := 0; i < srcFn.n; i++ {
 		var key []byte
 		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
-			srcFn.fnType == HasFn {
+			srcFn.fnType == HasFn || srcFn.fnType == UidInFn {
 			if q.Reverse {
 				key = x.ReverseKey(attr, q.UidList.Uids[i])
 			} else {
@@ -398,6 +401,20 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			continue
 		}
 
+		if srcFn.fnType == UidInFn {
+			reqList := &protos.List{[]uint64{srcFn.uidPresent}}
+			topts := posting.ListOptions{
+				AfterUID:  0,
+				Intersect: reqList,
+			}
+			plist := pl.Uids(topts)
+			if len(plist.Uids) > 0 {
+				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
+				out.UidMatrix = append(out.UidMatrix, tlist)
+			}
+			continue
+		}
+
 		// The more usual case: Getting the UIDs.
 		uidList := new(protos.List)
 		for _, fres := range filteredRes {
@@ -415,7 +432,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			fetchVal: false,
 		}
 		iterateParallel(ctx, itParams, f)
-
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
@@ -640,6 +656,7 @@ type functionContext struct {
 	ineqValueToken string
 	n              int
 	threshold      int64
+	uidPresent     uint64
 	fname          string
 	lang           string
 	fnType         FuncType
@@ -792,6 +809,17 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 		fc.lang = q.SrcFunc[1]
+	case UidInFn:
+		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
+			return nil, err
+		}
+		if fc.uidPresent, err = strconv.ParseUint(q.SrcFunc[2], 10, 64); err != nil {
+			return nil, err
+		}
+		checkRoot(q, fc)
+		if fc.isFuncAtRoot {
+			return nil, x.Errorf("uid_in function not allowed at root")
+		}
 	default:
 		return nil, x.Errorf("FnType %d not handled in numFnAttrs.", fnType)
 	}
