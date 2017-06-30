@@ -162,15 +162,18 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 		Facets:  t.Facets,
 	}
 
-	lenBefore := plist.Length(0)
-	_, err := plist.AddMutation(ctx, edge)
+	plist.Lock()
+	lenBefore := plist.length(0)
+	_, err := plist.addMutation(ctx, edge)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err,
 			"Error adding/deleting reverse edge for attr %s src %d dst %d",
 			t.Attr, t.Entity, t.ValueId))
 		return err
 	}
-	lenAfter := plist.Length(0)
+	lenAfter := plist.length(0)
+	plist.Unlock()
+
 	if lenAfter != lenBefore && schema.State().AddCount(t.Attr) {
 		if err := updateCount(ctx, t.Attr, lenBefore, lenAfter, edge.Entity, true); err != nil {
 			return err
@@ -266,7 +269,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
 	{
-		lenBefore := l.Length(0)
 		l.Lock()
 		if doUpdateIndex {
 			// Check original value BEFORE any mutation actually happens.
@@ -276,9 +278,10 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 				val, found = l.findValue(math.MaxUint64)
 			}
 		}
+		lenBefore := l.length(0)
 		_, err := l.addMutation(ctx, t)
+		lenAfter := l.length(0)
 		l.Unlock()
-		lenAfter := l.Length(0)
 
 		if err != nil {
 			return err
