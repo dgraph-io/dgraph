@@ -366,11 +366,9 @@ func DeleteReverseEdges(ctx context.Context, attr string) error {
 	return nil
 }
 
-func DeleteCountIndex(ctx context.Context, attr string) error {
-	// Delete index entries from data store.
+func deleteCountIndex(ctx context.Context, attr string, reverse bool) error {
 	pk := x.ParsedKey{Attr: attr}
-	startPrefix := pk.CountPrefix(false)
-	endPrefix := pk.CountPrefix(true) // We want to delete reverses too.
+	prefix := pk.CountPrefix(reverse)
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.FetchValues = false
 	idxIt := pstore.NewIterator(iterOpt)
@@ -378,11 +376,8 @@ func DeleteCountIndex(ctx context.Context, attr string) error {
 
 	wb := make([]*badger.Entry, 0, 100)
 	var batchSize int
-	for idxIt.Seek(startPrefix); idxIt.Valid(); idxIt.Next() {
+	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
 		key := idxIt.Item().Key()
-		if !bytes.HasPrefix(key, endPrefix) {
-			break
-		}
 		batchSize += len(key)
 		wb = badger.EntriesDelete(wb, key)
 
@@ -398,15 +393,22 @@ func DeleteCountIndex(ctx context.Context, attr string) error {
 	return nil
 }
 
-func RebuildCountIndex(ctx context.Context, attr string) error {
-	x.AssertTruef(schema.State().AddCount(attr), "Attr %s doesn't have reverse", attr)
+func DeleteCountIndex(ctx context.Context, attr string) error {
+	// Delete index entries from data store.
+	if err := deleteCountIndex(ctx, attr, false); err != nil {
+		return err
+	}
+	if err := deleteCountIndex(ctx, attr, true); err != nil { // delete reverse count indexes.
+		return err
+	}
+	return nil
+}
+
+func rebuildCountIndex(ctx context.Context, attr string, reverse bool) error {
 	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.DataPrefix()
+	prefix := pk.CountPrefix(reverse)
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
-
-	EvictGroup(group.BelongsTo(attr))
-
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
@@ -420,7 +422,7 @@ func RebuildCountIndex(ctx context.Context, attr string) error {
 					Label:   "count",
 					Op:      protos.DirectedEdge_SET,
 				}
-				err = addCountMutation(ctx, t, uint32(len(pl.Postings)), false)
+				err = addCountMutation(ctx, t, uint32(len(pl.Postings)), reverse)
 				if err != nil {
 					break
 				}
@@ -429,22 +431,16 @@ func RebuildCountIndex(ctx context.Context, attr string) error {
 		}()
 	}
 
-	for it.Seek(prefix); it.Valid(); it.Next() {
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		iterItem := it.Item()
 		key := iterItem.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
 		pki := x.Parse(key)
 		var pl protos.PostingList
 		x.Check(pl.Unmarshal(iterItem.Value()))
 
-		// Posting list contains only values or only UIDs.
-		if len(pl.Postings) != 0 {
-			ch <- item{
-				uid:  pki.Uid,
-				list: &pl,
-			}
+		ch <- item{
+			uid:  pki.Uid,
+			list: &pl,
 		}
 	}
 	close(ch)
@@ -454,6 +450,29 @@ func RebuildCountIndex(ctx context.Context, attr string) error {
 		}
 	}
 	return nil
+}
+
+func RebuildCountIndex(ctx context.Context, attr string) error {
+	x.AssertTruef(schema.State().AddCount(attr), "Attr %s doesn't have count index", attr)
+	EvictGroup(group.BelongsTo(attr))
+
+	errCh := make(chan error, 2)
+	// Lets rebuild forward and reverse count indexes concurrently.
+	go rebuildCountIndex(ctx, attr, false)
+	go rebuildCountIndex(ctx, attr, true)
+
+	var rebuildErr error
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-errCh:
+			if err != nil {
+				rebuildErr = err
+			}
+		case <-ctx.Done():
+			rebuildErr = ctx.Err()
+		}
+	}
+	return rebuildErr
 }
 
 type item struct {
