@@ -276,7 +276,7 @@ func periodicCommit() {
 func getMemUsage() int {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
-	megs := ms.Alloc / (1 << 20)
+	megs := (ms.Alloc + ms.StackInuse) / (1 << 20)
 	return int(megs)
 
 	// Sticking to ms.Alloc temoprarily.
