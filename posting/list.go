@@ -84,18 +84,19 @@ func (l *List) decr() {
 	if val > 0 {
 		return
 	}
+	postingPool.Put(l.plist)
 
-	l.Iterate(0, func(p *protos.Posting) bool {
-		*p = protos.Posting{}
-		postingPool.Put(p)
-		return true
-	})
+	// l.Iterate(0, func(p *protos.Posting) bool {
+	// 	*p = protos.Posting{}
+	// 	postingPool.Put(p)
+	// 	return true
+	// })
 	listPool.Put(l)
 }
 
 var postingPool = sync.Pool{
 	New: func() interface{} {
-		return &protos.Posting{}
+		return &protos.PostingList{}
 	},
 }
 
@@ -127,7 +128,9 @@ func getNew(key []byte, gid uint32, pstore *badger.KV) *List {
 	}
 	val := item.Value()
 
-	l.plist = new(protos.PostingList)
+	l.plist = postingPool.Get().(*protos.PostingList)
+	l.plist.Reset()
+	// l.plist = new(protos.PostingList)
 	if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 	}
@@ -200,7 +203,8 @@ func newPosting(t *protos.DirectedEdge) *protos.Posting {
 		postingType = protos.Posting_VALUE
 	}
 
-	p := postingPool.Get().(*protos.Posting)
+	// p := postingPool.Get().(*protos.Posting)
+	p := &protos.Posting{}
 	p.Uid = t.ValueId
 	p.Value = t.Value
 	p.ValType = protos.Posting_ValType(t.ValueType)
