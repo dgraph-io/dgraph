@@ -230,7 +230,7 @@ func periodicCommit() {
 
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
-			megs := (ms.Alloc + ms.StackInuse) / (1 << 20)
+			megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
 
 			inUse := float64(megs)
 			idle := float64(ms.HeapIdle / (1 << 20))
