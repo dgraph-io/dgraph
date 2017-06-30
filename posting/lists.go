@@ -208,17 +208,37 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 	}(keysBuffer)
 }
 
+func periodicFree() {
+	ticker := time.NewTicker(5 * time.Second)
+	for range ticker.C {
+		var ms runtime.MemStats
+		runtime.ReadMemStats(&ms)
+
+		megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
+		inUse := float64(megs)
+		idle := float64((ms.HeapIdle - ms.HeapReleased) / (1 << 20))
+
+		if inUse+idle > *maxmemory {
+			fmt.Printf("Inuse: %.0f idle: %.0f. Freeing OS memory", inUse, idle)
+			debug.FreeOSMemory()
+		}
+	}
+}
+
 // periodicMerging periodically merges the dirty posting lists. It also checks our memory
 // usage. If it exceeds a certain threshold, it would stop the world, and aggressively
 // merge and evict all posting lists from memory.
 func periodicCommit() {
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(time.Second)
 	dirtyMap := make(map[fingerPrint]time.Time, 1000)
 	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
 	pending := make(chan struct{}, 15)
 	dsize := 0 // needed for better reporting.
 	for {
 		select {
+		case key := <-dirtyChan:
+			dirtyMap[key] = time.Now()
+
 		case <-ticker.C:
 			if len(dirtyMap) != dsize {
 				dsize = len(dirtyMap)
@@ -241,14 +261,9 @@ func periodicCommit() {
 
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
-			if inUse+idle > *maxmemory {
-				fmt.Printf("Inuse: %.0f idle: %.0f. Freeing OS memory", inUse, idle)
-				debug.FreeOSMemory()
-			}
-
 			if inUse > 0.9*(*maxmemory) {
 				log.Printf("Memory usage really close to threshold. STW. Allocated MB: %v\n", inUse)
-				go evictShards(3)
+				go evictShards(5)
 			} else if inUse > 0.75*(*maxmemory) {
 				log.Printf("Memory usage close to threshold. STW. Allocated MB: %v\n", inUse)
 				go evictShards(1)
@@ -256,8 +271,6 @@ func periodicCommit() {
 				log.Printf("Cur: %v. Idle: %v, total: %v, STW: %v, NumGoroutines: %v\n",
 					inUse, idle, inUse+idle, *maxmemory, runtime.NumGoroutine())
 			}
-		case key := <-dirtyChan:
-			dirtyMap[key] = time.Now()
 		}
 	}
 }
@@ -285,6 +298,7 @@ func Init(ps *badger.KV) {
 	syncCh = make(chan syncEntry, 10000)
 
 	go periodicCommit()
+	go periodicFree()
 	for i := 0; i < runtime.NumCPU(); i++ {
 		go batchSync()
 	}
