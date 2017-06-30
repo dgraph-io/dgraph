@@ -425,7 +425,7 @@ func (w *grpcWorker) Backup(ctx context.Context, req *protos.BackupPayload) (*pr
 
 func BackupOverNetwork(ctx context.Context) error {
 	// If we haven't even had a single membership update, don't run backup.
-	if !HealthCheck() {
+	if !x.HealthCheck() {
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return x.Errorf("Uninitiated server. Please retry later")
 	}

@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/badger"
@@ -49,7 +48,6 @@ var (
 	// are taken
 	maxPendingCount = flag.Uint64("sc", 1000, "Max number of pending entries in wal after which snapshot is taken")
 
-	healthCheck           uint32
 	emptyMembershipUpdate protos.MembershipUpdate
 )
 
@@ -143,15 +141,8 @@ func StartRaftNodes(walDir string) {
 		}()
 	}
 	wg.Wait()
-	atomic.StoreUint32(&healthCheck, 1)
+	x.UpdateHealthStatus(true)
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
-}
-
-// HealthCheck returns whether the server is ready to accept requests or not
-// Load balancer would add the node to the endpoint once health check starts
-// returning true
-func HealthCheck() bool {
-	return atomic.LoadUint32(&healthCheck) != 0
 }
 
 func (g *groupi) Node(groupId uint32) *node {

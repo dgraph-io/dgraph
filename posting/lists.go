@@ -226,7 +226,10 @@ func periodicFree() {
 
 		if inUse+idle > *maxmemory {
 			fmt.Printf("Inuse: %.0f idle: %.0f. Freeing OS memory", inUse, idle)
+			x.UpdateMemoryStatus(false)
 			debug.FreeOSMemory()
+		} else {
+			x.UpdateMemoryStatus(true)
 		}
 	}
 }

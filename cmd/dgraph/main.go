@@ -125,7 +125,7 @@ func isMutationAllowed(ctx context.Context) bool {
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
-	if worker.HealthCheck() {
+	if x.HealthCheck() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	} else {
@@ -162,7 +162,7 @@ func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
-	if !worker.HealthCheck() {
+	if !x.HealthCheck() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -438,7 +438,7 @@ type grpcServer struct{}
 func (s *grpcServer) Run(ctx context.Context,
 	req *protos.Request) (resp *protos.Response, err error) {
 	// we need membership information
-	if !worker.HealthCheck() {
+	if !x.HealthCheck() {
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return resp, x.Errorf("Uninitiated server. Please retry later")
 	}
@@ -522,7 +522,7 @@ func (s *grpcServer) Run(ctx context.Context,
 func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version,
 	err error) {
 	// we need membership information
-	if !worker.HealthCheck() {
+	if !x.HealthCheck() {
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return v, x.Errorf("Uninitiated server. Please retry later")
 	}
@@ -533,7 +533,7 @@ func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *prot
 }
 
 func (s *grpcServer) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	if !worker.HealthCheck() {
+	if !x.HealthCheck() {
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return &protos.AssignedIds{}, x.Errorf("Uninitiated server. Please retry later")
 	}
