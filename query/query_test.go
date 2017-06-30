@@ -6323,7 +6323,8 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
 		{Predicate: "dob", Type: "datetime"}, {Predicate: "survival_rate", Type: "float"},
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
-		{Predicate: "noindex_name", Type: "string"}}
+		{Predicate: "noindex_name", Type: "string"},
+		{Predicate: "school", Type: "uid"}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6391,7 +6392,7 @@ func TestSchemaBlock5(t *testing.T) {
 }
 
 const schemaStr = `
-name                           : string @index(term, exact, trigram) .
+name                           : string @index(term, exact, trigram) @count .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index .
 film.film.initial_release_date : dateTime @index .
@@ -6406,6 +6407,7 @@ geometry                       : geo @index .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 noindex_name                   : string .
+school		                   : uid @count .
 `
 
 func TestMain(m *testing.M) {

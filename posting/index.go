@@ -162,12 +162,19 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 		Facets:  t.Facets,
 	}
 
+	lenBefore := plist.Length(0)
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err,
 			"Error adding/deleting reverse edge for attr %s src %d dst %d",
 			t.Attr, t.Entity, t.ValueId))
 		return err
+	}
+	lenAfter := plist.Length(0)
+	if lenAfter != lenBefore && schema.State().AddCount(t.Attr) {
+		if err := updateCount(ctx, t.Attr, lenBefore, lenAfter, edge.Entity, true); err != nil {
+			return err
+		}
 	}
 	reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)
 	return nil
@@ -200,8 +207,9 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 	return l.delete(ctx, t.Attr)
 }
 
-func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32) error {
-	key := x.CountKey(t.Attr, count)
+func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
+	reverse bool) error {
+	key := x.CountKey(t.Attr, count, reverse)
 	groupId := group.BelongsTo(t.Attr)
 
 	plist, decr := GetOrCreate(key, groupId)
@@ -221,19 +229,20 @@ func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32)
 
 }
 
-func updateCount(ctx context.Context, attr string, lenBefore, lenAfter int, uid uint64) error {
+func updateCount(ctx context.Context, attr string, lenBefore, lenAfter int, uid uint64,
+	reverse bool) error {
 	edge := &protos.DirectedEdge{
 		ValueId: uid,
 		Attr:    attr,
 		Label:   "count",
 		Op:      protos.DirectedEdge_DEL,
 	}
-	if err := addCountMutation(ctx, edge, uint32(lenBefore)); err != nil {
+	if err := addCountMutation(ctx, edge, uint32(lenBefore), reverse); err != nil {
 		return err
 	}
 
 	edge.Op = protos.DirectedEdge_SET
-	if err := addCountMutation(ctx, edge, uint32(lenAfter)); err != nil {
+	if err := addCountMutation(ctx, edge, uint32(lenAfter), reverse); err != nil {
 		return err
 	}
 	return nil
@@ -275,7 +284,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 			return err
 		}
 		if lenAfter != lenBefore && schema.State().AddCount(t.Attr) {
-			if err := updateCount(ctx, t.Attr, lenBefore, lenAfter, t.Entity); err != nil {
+			if err := updateCount(ctx, t.Attr, lenBefore, lenAfter, t.Entity,
+				false); err != nil {
 				return err
 			}
 		}

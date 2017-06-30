@@ -23,11 +23,12 @@ import (
 )
 
 const (
-	byteData    = byte(0x00)
-	byteIndex   = byte(0x01)
-	byteReverse = byte(0x02)
-	byteSchema  = byte(0x03)
-	byteCount   = byte(0x04)
+	byteData         = byte(0x00)
+	byteIndex        = byte(0x01)
+	byteReverse      = byte(0x02)
+	byteSchema       = byte(0x03)
+	byteCount        = byte(0x04)
+	byteCountReverse = byte(0x05)
 	// same prefix for data, index and reverse keys so that relative order of data doesn't change
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)
@@ -96,13 +97,17 @@ func IndexKey(attr, term string) []byte {
 	return buf
 }
 
-func CountKey(attr string, count uint32) []byte {
+func CountKey(attr string, count uint32, reverse bool) []byte {
 	buf := make([]byte, 1+2+len(attr)+1+4)
 	buf[0] = defaultPrefix
 	rest := buf[1:]
 
 	rest = writeAttr(rest, attr)
-	rest[0] = byteCount
+	if reverse {
+		rest[0] = byteCountReverse
+	} else {
+		rest[0] = byteCount
+	}
 
 	rest = rest[1:]
 	binary.BigEndian.PutUint32(rest, count)
@@ -194,13 +199,17 @@ func (p ParsedKey) ReversePrefix() []byte {
 }
 
 // CountPrefix returns the prefix for count keys.
-func (p ParsedKey) CountPrefix() []byte {
+func (p ParsedKey) CountPrefix(reverse bool) []byte {
 	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
-	k[0] = byteCount
+	if reverse {
+		k[0] = byteCountReverse
+	} else {
+		k[0] = byteCount
+	}
 	return buf
 }
 
@@ -231,7 +240,7 @@ func Parse(key []byte) *ParsedKey {
 		p.Uid = binary.BigEndian.Uint64(k)
 	case byteIndex:
 		p.Term = string(k)
-	case byteCount:
+	case byteCount, byteCountReverse:
 		p.Count = binary.BigEndian.Uint32(k)
 	case byteSchema:
 		break

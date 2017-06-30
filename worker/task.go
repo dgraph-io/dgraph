@@ -397,7 +397,13 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
-		evaluateThreshold(0, "gt", attr, gid, &out)
+		evaluateThreshold(countParams{
+			count:   0,
+			fn:      "gt",
+			attr:    attr,
+			gid:     gid,
+			reverse: q.Reverse,
+		}, &out)
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
@@ -411,7 +417,13 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		if count < 0 {
 			count = 0
 		}
-		evaluateThreshold(count, srcFn.fname, attr, gid, &out)
+		evaluateThreshold(countParams{
+			count:   count,
+			fn:      srcFn.fname,
+			attr:    attr,
+			gid:     gid,
+			reverse: q.Reverse,
+		}, &out)
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -989,33 +1001,40 @@ func preprocessFilter(tree *protos.FilterTree) (*facetsTree, error) {
 	return ftree, nil
 }
 
-func evaluateThreshold(count int64, f, attr string, gid uint32, out *protos.Result) {
-	countKey := x.CountKey(attr, uint32(count))
+type countParams struct {
+	count   int64
+	fn      string // fn name
+	attr    string
+	gid     uint32
+	reverse bool // If query is asking for ~pred
+}
+
+func evaluateThreshold(cp countParams, out *protos.Result) {
+	countKey := x.CountKey(cp.attr, uint32(cp.count), cp.reverse)
 	itOpt := badger.DefaultIteratorOptions
-	isLeOrLt := f == "le" || f == "lt"
+	isLeOrLt := cp.fn == "le" || cp.fn == "lt"
 	itOpt.Reverse = isLeOrLt
 	it := pstore.NewIterator(itOpt)
 	defer it.Close()
 
 	it.Seek(countKey)
-
 	if it.Valid() {
-		if f == "eq" {
-			pl, decr := posting.GetOrCreate(countKey, gid)
+		if cp.fn == "eq" {
+			pl, decr := posting.GetOrCreate(countKey, cp.gid)
 			defer decr()
 			out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 		} else {
 			pk := x.ParsedKey{
-				Attr: attr,
+				Attr: cp.attr,
 			}
-			countPrefix := pk.CountPrefix()
+			countPrefix := pk.CountPrefix(cp.reverse)
 			for it.Valid() {
 				key := it.Item().Key()
 				if !bytes.HasPrefix(key, countPrefix) {
 					break
 				}
 				val := it.Item().Value()
-				pl, decr := posting.GetOrUnmarshal(key, val, gid)
+				pl, decr := posting.GetOrUnmarshal(key, val, cp.gid)
 				defer decr()
 				out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 				it.Next()

@@ -46,8 +46,8 @@ func populateGraphWithFacets(t *testing.T) {
 	addEdgeToUID(t, "friend", 1, 31, friendFacets1)
 	addEdgeToUID(t, "friend", 1, 101, friendFacets2)
 	addEdgeToUID(t, "friend", 31, 24, nil)
-	addEdgeToUID(t, "friend", 33, 24, nil)
 	addEdgeToUID(t, "friend", 23, 1, friendFacets1)
+	addEdgeToUID(t, "schools", 33, 2433, nil)
 
 	friendFacets5 := map[string]string{
 		"games": `"football basketball chess tennis"`, "close": "false", "age": "35"}
@@ -87,10 +87,10 @@ func teardownGraphWithFacets(t *testing.T) {
 	delEdgeToUID(t, "friend", 1, 31)
 	delEdgeToUID(t, "friend", 1, 101)
 	delEdgeToUID(t, "friend", 31, 24)
-	delEdgeToUID(t, "friend", 33, 24)
 	delEdgeToUID(t, "friend", 23, 1)
 	delEdgeToUID(t, "friend", 31, 1)
 	delEdgeToUID(t, "friend", 31, 25)
+	delEdgeToUID(t, "schools", 33, 2433)
 }
 
 func TestRetrieveFacetsSimple(t *testing.T) {
@@ -305,12 +305,12 @@ func TestFacetsNotInQuery(t *testing.T) {
 func TestSubjectWithNoFacets(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
-	// id 33 does not have any facets associated with name and friend
+	// id 33 does not have any facets associated with name and school
 	query := `
 		{
 			me(id:0x21) {
 				name @facets
-				friend @facets {
+				school @facets {
 					name
 				}
 			}
@@ -318,7 +318,7 @@ func TestSubjectWithNoFacets(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"name":"Michale"}]}`,
+		`{"me":[{"name":"Michale"}]}`,
 		js)
 }
 
