@@ -1522,8 +1522,6 @@ func TestVarInIneq2(t *testing.T) {
 
 func TestNestedFuncRoot(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
     {
 			me(func: gt(count(friend), 2)) {
@@ -1537,8 +1535,6 @@ func TestNestedFuncRoot(t *testing.T) {
 
 func TestNestedFuncRoot2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 		{
 			me(func: ge(count(friend), 1)) {
@@ -4052,8 +4048,6 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 
 func TestCountReverseFunc(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 		{
 			me(func: ge(count(~friend), 2)) {
@@ -7170,8 +7164,6 @@ children: <
 
 func TestCountAtRoot(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
         {
         	me(func: ge(count(friend), 0)) {
@@ -7185,8 +7177,6 @@ func TestCountAtRoot(t *testing.T) {
 
 func TestCountAtRoot2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
         {
                 me(func: anyofterms(name, "Michonne Rick Andrea")) {
@@ -7200,8 +7190,6 @@ func TestCountAtRoot2(t *testing.T) {
 
 func TestCountAtRoot2PB(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
         {
                 me(func: anyofterms(name, "Michonne Rick Andrea")) {
@@ -7318,8 +7306,6 @@ func TestCountAtRoot5(t *testing.T) {
 
 func TestHasFuncAtRoot(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: has(friend)) {
@@ -7354,8 +7340,6 @@ func TestHasFuncAtRootFilter(t *testing.T) {
 
 func TestHasFuncAtChild1(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: has(school)) {
@@ -7373,8 +7357,6 @@ func TestHasFuncAtChild1(t *testing.T) {
 
 func TestHasFuncAtChild2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: has(school)) {
@@ -7393,8 +7375,6 @@ func TestHasFuncAtChild2(t *testing.T) {
 
 func TestHasFuncAtRoot2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: has(name@en)) {
