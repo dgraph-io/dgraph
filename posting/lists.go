@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/trace"
+
 	"github.com/dgraph-io/badger/badger"
 	"github.com/dgryski/go-farm"
 
@@ -300,7 +302,7 @@ func Init(ps *badger.KV) {
 	go periodicCommit()
 	go periodicFree()
 	for i := 0; i < runtime.NumCPU(); i++ {
-		go batchSync()
+		go batchSync(i)
 	}
 }
 
@@ -457,10 +459,11 @@ type syncEntry struct {
 	pending []uint64
 }
 
-func batchSync() {
+func batchSync(i int) {
 	var entries []syncEntry
 	var loop uint64
 	wb := make([]*badger.Entry, 0, 100)
+	elog := trace.NewEventLog("Batch Sync", fmt.Sprintf("%d", i))
 
 	for {
 		select {
@@ -472,7 +475,9 @@ func batchSync() {
 			start := time.Now()
 			if len(entries) > 0 {
 				loop++
-				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
+				if len(entries) > 1000 {
+					elog.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
+				}
 				for _, e := range entries {
 					if e.val == nil {
 						wb = badger.EntriesDelete(wb, e.key)
