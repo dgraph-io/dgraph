@@ -2003,6 +2003,8 @@ For example, if the store contained
 <0xf11168064b01135b> <died> "1998"
 ```
 
+Then delete mutation
+
 ```
 mutation {
   delete {
@@ -2011,9 +2013,9 @@ mutation {
 }
 ```
 
-Would delete the erroneous data.
+Deletes the erroneous data and removes it from indexes if present.
 
-For a particular node `N`, all data for a predicate `P` is removed with the pattern `S P *`.
+For a particular node `N`, all data for predicate `P` (and corresponding indexing) is removed with the pattern `S P *`.  
 
 ```
 mutation {
@@ -2023,7 +2025,7 @@ mutation {
 }
 ```
 
-The pattern `S * *` deletes all edges out of a node.
+The pattern `S * *` deletes all edges out of a node (the node itself may remain as the target of edges), any reverse edges corresponding to the removed edges and any indexing for the removed data.
 ```
 mutation {
   delete {
@@ -2031,7 +2033,16 @@ mutation {
   }
 }
 ```
-{{% notice "note" %}} On using `*`, all the derived edges (indexes, reverses) related to that edge are deleted.{{% /notice %}}
+
+The pattern `* P *` removes all data for predicate `P`, removes data for the reverse edge if present, removes `P` from the schema and deletes any indexes that were created on `P`.
+
+```
+mutation {
+  delete {
+     * <author.of> * .
+  }
+}
+```
 
 
 ### Variables in mutations
