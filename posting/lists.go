@@ -48,6 +48,10 @@ var (
 	dummyPostingList []byte // Used for indexing.
 )
 
+const (
+	MB = 1 << 20
+)
+
 // syncMarks stores the watermark for synced RAFT proposals. Each RAFT proposal consists
 // of many individual mutations, which could be applied to many different posting lists.
 // Thus, each PL when being mutated would send an undone Mark, and each list would
@@ -216,9 +220,9 @@ func periodicFree() {
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
 
-		megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
+		megs := (ms.HeapInuse + ms.StackInuse) / MB
 		inUse := float64(megs)
-		idle := float64((ms.HeapIdle - ms.HeapReleased) / (1 << 20))
+		idle := float64((ms.HeapIdle - ms.HeapReleased) / MB)
 
 		if inUse+idle > *maxmemory {
 			fmt.Printf("Inuse: %.0f idle: %.0f. Freeing OS memory", inUse, idle)
