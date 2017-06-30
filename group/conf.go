@@ -53,6 +53,11 @@ func parsePredicates(groupId uint32, p string) error {
 			val: pred,
 			gid: groupId,
 		}
+		if strings.HasPrefix(pred, "~") {
+			return fmt.Errorf("Cannot assign group to reverses. They are stored"+
+				" with the original predicate: %+v", pred)
+		}
+
 		if strings.HasSuffix(pred, "*") {
 			meta.val = strings.TrimSuffix(meta.val, "*")
 		} else {
