@@ -347,6 +347,101 @@ func DeleteReverseEdges(ctx context.Context, attr string) error {
 	return nil
 }
 
+func DeleteCountIndex(ctx context.Context, attr string) error {
+	// Delete index entries from data store.
+	pk := x.ParsedKey{Attr: attr}
+	startPrefix := pk.CountPrefix(false)
+	endPrefix := pk.CountPrefix(true) // We want to delete reverses too.
+	iterOpt := badger.DefaultIteratorOptions
+	iterOpt.FetchValues = false
+	idxIt := pstore.NewIterator(iterOpt)
+	defer idxIt.Close()
+
+	wb := make([]*badger.Entry, 0, 100)
+	var batchSize int
+	for idxIt.Seek(startPrefix); idxIt.Valid(); idxIt.Next() {
+		key := idxIt.Item().Key()
+		if !bytes.HasPrefix(key, endPrefix) {
+			break
+		}
+		batchSize += len(key)
+		wb = badger.EntriesDelete(wb, key)
+
+		if batchSize >= maxBatchSize {
+			pstore.BatchSet(wb)
+			wb = wb[:0]
+			batchSize = 0
+		}
+	}
+	if len(wb) > 0 {
+		pstore.BatchSet(wb)
+	}
+	return nil
+}
+
+func RebuildCountIndex(ctx context.Context, attr string) error {
+	x.AssertTruef(schema.State().AddCount(attr), "Attr %s doesn't have reverse", attr)
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.DataPrefix()
+	it := pstore.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
+
+	EvictGroup(group.BelongsTo(attr))
+
+	ch := make(chan item, 10000)
+	che := make(chan error, 1000)
+	for i := 0; i < 1000; i++ {
+		go func() {
+			var err error
+			for it := range ch {
+				pl := it.list
+				t := &protos.DirectedEdge{
+					ValueId: it.uid,
+					Attr:    attr,
+					Label:   "count",
+					Op:      protos.DirectedEdge_SET,
+				}
+				err = addCountMutation(ctx, t, uint32(len(pl.Postings), false)
+				if err != nil {
+					break
+				}
+			}
+			che <- err
+		}()
+	}
+
+	for it.Seek(prefix); it.Valid(); it.Next() {
+		iterItem := it.Item()
+		key := iterItem.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
+		pki := x.Parse(key)
+		var pl protos.PostingList
+		x.Check(pl.Unmarshal(iterItem.Value()))
+
+		// Posting list contains only values or only UIDs.
+		if len(pl.Postings) != 0 {
+			ch <- item{
+				uid:  pki.Uid,
+				list: &pl,
+			}
+		}
+	}
+	close(ch)
+	for i := 0; i < 1000; i++ {
+		if err := <-che; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type item struct {
+	uid  uint64
+	list *protos.PostingList
+}
+
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
 func RebuildReverseEdges(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().IsReversed(attr), "Attr %s doesn't have reverse", attr)
@@ -381,10 +476,6 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		return nil
 	}
 
-	type item struct {
-		uid  uint64
-		list *protos.PostingList
-	}
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
