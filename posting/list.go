@@ -80,16 +80,24 @@ type List struct {
 func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
 func (l *List) incr() int32     { return atomic.AddInt32(&l.refcount, 1) }
 func (l *List) decr() {
-	l.Lock()
-	l.Unlock()
-
 	val := atomic.AddInt32(&l.refcount, -1)
 	x.AssertTruef(val >= 0, "List reference should never be less than zero: %v", val)
 	if val > 0 {
 		return
 	}
+
 	close(l.delayChan)
+	l.Iterate(0, func(p *protos.Posting) bool {
+		postingPool.Put(p)
+		return true
+	})
 	listPool.Put(l)
+}
+
+var postingPool = sync.Pool{
+	New: func() interface{} {
+		return &protos.Posting{}
+	},
 }
 
 var listPool = sync.Pool{
@@ -222,16 +230,16 @@ func newPosting(t *protos.DirectedEdge) *protos.Posting {
 		postingType = protos.Posting_VALUE
 	}
 
-	return &protos.Posting{
-		Uid:         t.ValueId,
-		Value:       t.Value,
-		ValType:     protos.Posting_ValType(t.ValueType),
-		PostingType: postingType,
-		Metadata:    metadata,
-		Label:       t.Label,
-		Op:          op,
-		Facets:      t.Facets,
-	}
+	p := postingPool.Get().(*protos.Posting)
+	p.Uid = t.ValueId
+	p.Value = t.Value
+	p.ValType = protos.Posting_ValType(t.ValueType)
+	p.PostingType = postingType
+	p.Metadata = metadata
+	p.Label = t.Label
+	p.Op = op
+	p.Facets = t.Facets
+	return p
 }
 
 func (l *List) PostingList() *protos.PostingList {
