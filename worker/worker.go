@@ -94,7 +94,9 @@ func RunServer(bindall bool) {
 	}
 	log.Printf("Worker listening at address: %v", ln.Addr())
 
-	workerServer = grpc.NewServer()
+	workerServer = grpc.NewServer(
+		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
+		grpc.MaxSendMsgSize(x.GrpcMaxSize))
 	protos.RegisterWorkerServer(workerServer, &grpcWorker{})
 	workerServer.Serve(ln)
 }

@@ -474,6 +474,13 @@ func (s *grpcServer) Run(ctx context.Context,
 		ctx = trace.NewContext(ctx, tr)
 	}
 
+	// we need membership information
+	if !worker.HealthCheck() {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+		}
+		return resp, x.Errorf("Uninitiated server. Please retry later")
+	}
 	// Sanitize the context of the keys used for internal purposes only
 	ctx = context.WithValue(ctx, "_share_", nil)
 	ctx = context.WithValue(ctx, "mutation_allowed", isMutationAllowed(ctx))
@@ -639,7 +646,9 @@ func setupListener(addr string, port int) (listener net.Listener, err error) {
 
 func serveGRPC(l net.Listener) {
 	defer func() { finishCh <- struct{}{} }()
-	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
+	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}),
+		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
+		grpc.MaxSendMsgSize(x.GrpcMaxSize))
 	protos.RegisterDgraphServer(s, &grpcServer{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
