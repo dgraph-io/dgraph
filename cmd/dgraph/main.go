@@ -126,7 +126,7 @@ func isMutationAllowed(ctx context.Context) bool {
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
-	if x.HealthCheck() {
+	if err := x.HealthCheck(); err == nil {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	} else {
@@ -169,7 +169,7 @@ func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, 
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
-	if !x.HealthCheck() {
+	if err := x.HealthCheck(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -455,11 +455,11 @@ type grpcServer struct{}
 func (s *grpcServer) Run(ctx context.Context,
 	req *protos.Request) (resp *protos.Response, err error) {
 	// we need membership information
-	if !x.HealthCheck() {
+	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+			tr.LazyPrintf("Request rejected %v", err)
 		}
-		return resp, x.Errorf("Uninitiated server. Please retry later")
+		return resp, err
 	}
 	pendingQueries <- struct{}{}
 	defer func() { <-pendingQueries }()
@@ -474,13 +474,6 @@ func (s *grpcServer) Run(ctx context.Context,
 		ctx = trace.NewContext(ctx, tr)
 	}
 
-	// we need membership information
-	if !x.HealthCheck() {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
-		}
-		return resp, x.Errorf("Uninitiated server. Please retry later")
-	}
 	// Sanitize the context of the keys used for internal purposes only
 	ctx = context.WithValue(ctx, "_share_", nil)
 	ctx = context.WithValue(ctx, "mutation_allowed", isMutationAllowed(ctx))
@@ -561,12 +554,11 @@ func (s *grpcServer) Run(ctx context.Context,
 
 func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version,
 	err error) {
-	// we need membership information
-	if !x.HealthCheck() {
+	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+			tr.LazyPrintf("request rejected %v", err)
 		}
-		return v, x.Errorf("Uninitiated server. Please retry later")
+		return v, err
 	}
 
 	v = new(protos.Version)
@@ -575,11 +567,11 @@ func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *prot
 }
 
 func (s *grpcServer) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	if !x.HealthCheck() {
+	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+			tr.LazyPrintf("request rejected %v", err)
 		}
-		return &protos.AssignedIds{}, x.Errorf("Uninitiated server. Please retry later")
+		return &protos.AssignedIds{}, err
 	}
 	return worker.AssignUidsOverNetwork(ctx, num)
 }
