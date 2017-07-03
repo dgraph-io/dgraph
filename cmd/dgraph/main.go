@@ -634,7 +634,9 @@ func setupListener(addr string, port int) (listener net.Listener, err error) {
 
 func serveGRPC(l net.Listener) {
 	defer func() { finishCh <- struct{}{} }()
-	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
+	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}),
+		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
+		grpc.MaxSendMsgSize(x.GrpcMaxSize))
 	protos.RegisterDgraphServer(s, &grpcServer{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())

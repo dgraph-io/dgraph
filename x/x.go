@@ -45,6 +45,7 @@ const (
 	ErrorInvalidMutation = "ErrorInvalidMutation"
 	ValidHostnameRegex   = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
 	Star                 = "_STAR_"
+	GrpcMaxSize          = 256 << 20
 )
 
 var (
