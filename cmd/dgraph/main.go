@@ -474,13 +474,6 @@ func (s *grpcServer) Run(ctx context.Context,
 		ctx = trace.NewContext(ctx, tr)
 	}
 
-	// we need membership information
-	if !worker.HealthCheck() {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
-		}
-		return resp, x.Errorf("Uninitiated server. Please retry later")
-	}
 	// Sanitize the context of the keys used for internal purposes only
 	ctx = context.WithValue(ctx, "_share_", nil)
 	ctx = context.WithValue(ctx, "mutation_allowed", isMutationAllowed(ctx))
