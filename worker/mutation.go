@@ -227,6 +227,26 @@ func numEdges(attr string) int {
 	return count
 }
 
+func hasEdges(attr string) bool {
+	iterOpt := badger.DefaultIteratorOptions
+	iterOpt.FetchValues = false
+	it := pstore.NewIterator(iterOpt)
+	defer it.Close()
+	pk := x.ParsedKey{
+		Attr: attr,
+	}
+	prefix := pk.DataPrefix()
+	for it.Seek(prefix); it.Valid(); it.Next() {
+		item := it.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			return false
+		}
+		return true
+	}
+	return false
+}
+
 func checkSchema(s *protos.SchemaUpdate) error {
 	typ := types.TypeID(s.ValueType)
 	if typ == types.UidID && s.Directive == protos.SchemaUpdate_INDEX {
@@ -244,7 +264,7 @@ func checkSchema(s *protos.SchemaUpdate) error {
 			return nil
 		}
 		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
-		if numEdges(s.Predicate) > 0 {
+		if hasEdges(s.Predicate) {
 			return x.Errorf("Schema change not allowed from predicate to uid or vice versa"+
 				" till you have data for pred: %s", s.Predicate)
 		}
