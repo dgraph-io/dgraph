@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 

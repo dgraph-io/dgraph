@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
