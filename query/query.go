@@ -2217,7 +2217,9 @@ func (qr *QueryRequest) processNquads(ctx context.Context, nquads gql.NQuads) (m
 			return mr.NewUids, x.Wrapf(&InternalError{err: err}, "failed to convert NQuads to edges")
 		}
 	}
-	x.Trace(ctx, "converted nquads to directed edges")
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("converted nquads to directed edges")
+	}
 	m := protos.Mutations{Edges: mr.Edges, Schema: qr.SchemaUpdate}
 	if err = ApplyMutations(ctx, &m); err != nil {
 		return mr.NewUids, x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
