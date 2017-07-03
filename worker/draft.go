@@ -694,6 +694,8 @@ func (n *node) Run() {
 				// then doneUntil would be set as 4 as soon as Mark{4,true} is done and before
 				// Mark{3, false} is emitted. So it's safer to emit watermarks as soon as
 				// possible sequentially
+				lastIdx, _ := n.store.LastIndex()
+				fmt.Printf("current index: %v total %v, len(applyCh) %v\n", entry.Index, len(n.applyCh))
 				status := x.Mark{Index: entry.Index, Done: false}
 				n.applied.Ch <- status
 				posting.SyncMarkFor(n.gid).Ch <- status
