@@ -149,15 +149,15 @@ func TestBackup(t *testing.T) {
 			nq, err := rdf.Parse(scanner.Text())
 			require.NoError(t, err)
 			// Subject should have uid 1/2/3/4.
-			require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4"}, nq.Subject)
+			require.Contains(t, []string{"_:uid1", "_:uid2", "_:uid3", "_:uid4"}, nq.Subject)
 			// The only value we set was "photon".
 			if nq.ObjectValue != nil {
 				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\\ton"}},
 					nq.ObjectValue)
 				// Test objecttype
-				if nq.Subject == "0x1" {
+				if nq.Subject == "_:uid1" {
 					require.Equal(t, int32(0), nq.ObjectType)
-				} else if nq.Subject == "0x2" {
+				} else if nq.Subject == "_:uid2" {
 					// string type because of lang @en
 					require.Equal(t, int32(9), nq.ObjectType)
 				}
@@ -165,14 +165,14 @@ func TestBackup(t *testing.T) {
 
 			// The only objectId we set was uid 5.
 			if nq.ObjectId != "" {
-				require.Equal(t, "0x5", nq.ObjectId)
+				require.Equal(t, "_:uid5", nq.ObjectId)
 			}
 			// Test lang.
-			if nq.Subject == "0x2" && nq.Predicate == "name" {
+			if nq.Subject == "_:uid2" && nq.Predicate == "name" {
 				require.Equal(t, "en", nq.Lang)
 			}
 			// Test facets.
-			if nq.Subject == "0x4" {
+			if nq.Subject == "_:uid4" {
 				require.Equal(t, "age", nq.Facets[0].Key)
 				require.Equal(t, "close", nq.Facets[1].Key)
 				require.Equal(t, "game", nq.Facets[2].Key)
@@ -190,7 +190,7 @@ func TestBackup(t *testing.T) {
 				require.Equal(t, 4, int(nq.Facets[3].ValType))
 			}
 			// Test label
-			if nq.Subject != "0x3" {
+			if nq.Subject != "_:uid3" {
 				require.Equal(t, "author0", nq.Label)
 			} else {
 				require.Equal(t, "", nq.Label)
