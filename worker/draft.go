@@ -33,6 +33,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/pubsub"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -441,13 +442,39 @@ func (n *node) processMutation(e raftpb.Entry, m *protos.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
-	if err := runMutations(ctx, m.Edges); err != nil {
+	var success int
+	var err error
+	if success, err = runMutations(ctx, m.Edges); err != nil {
 		if tr, ok := trace.FromContext(n.ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
 		return err
 	}
+
+	// aggregate information and notify only once about each predicate
+	hub := getUpdateHub()
+	if hub.HasSubscribers() {
+		preds := getPredicates(m, success)
+		fmt.Println("tzdybal: mutation preds:", preds)
+		hub.PredicatesUpdated(preds)
+	}
+
 	return nil
+}
+
+// returns predicates names from m.Edges[:n]
+func getPredicates(m *protos.Mutations, n int) []string {
+	preds := make([]string, 0, n)
+	for _, edge := range m.Edges[:n] {
+		preds = append(preds, edge.Attr)
+	}
+
+	return preds
+}
+
+// TODO(tzdybal) - is it a good way to get dispatcher?
+func getUpdateHub() *pubsub.UpdateHub {
+	return groups().dispatcher
 }
 
 func (n *node) processSchemaMutations(e raftpb.Entry, m *protos.Mutations) error {

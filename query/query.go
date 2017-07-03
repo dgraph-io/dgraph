@@ -1951,7 +1951,7 @@ func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.TaskVa
 	return result.Values, nil
 }
 
-func GetAllPredicates(subGraphs []*SubGraph) (predicates []string) {
+func GetQueryPredicates(subGraphs []*SubGraph) (predicates []string) {
 	predicatesMap := make(map[string]bool)
 	for _, sg := range subGraphs {
 		sg.getAllPredicates(predicatesMap)

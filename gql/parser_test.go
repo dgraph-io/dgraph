@@ -3556,3 +3556,21 @@ func TestRemoveDuplicatesWithoutDuplicates(t *testing.T) {
 	set := removeDuplicates([]string{"a", "b", "c", "d"})
 	require.EqualValues(t, []string{"a", "b", "c", "d"}, set)
 }
+
+func TestParseSubscribe(t *testing.T) {
+	query := `
+	subscribe {
+	  everyone(func: anyofterms(name, "Michael Amit")) {
+		name
+		friend {
+		  name@ru:ko:en
+		  friend { expand(_all_) { expand(_all_) } }
+		}
+  	  }
+    }
+`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(gql.Query))
+	require.True(t, gql.Query[0].Subscribe)
+}

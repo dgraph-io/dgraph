@@ -470,7 +470,7 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 		} else if word == "fragment" {
 			l.Emit(itemOpType)
 			return lexQuery
-		} else if word == "query" {
+		} else if word == "query" || word == "subscribe" {
 			l.Emit(itemOpType)
 			return lexQuery
 		} else if word == "schema" {

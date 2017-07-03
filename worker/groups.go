@@ -33,6 +33,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/pubsub"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -76,6 +77,8 @@ type groupi struct {
 	all        map[uint32]*servers
 	num        uint32
 	lastUpdate uint64
+	// TODO(tzdybal) - is this a good place for UpdateDispatcher?
+	dispatcher *pubsub.UpdateHub
 }
 
 var gr *groupi
@@ -91,6 +94,8 @@ func groups() *groupi {
 func StartRaftNodes(walDir string) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
+	gr.dispatcher = pubsub.NewUpdateHub()
+	go gr.dispatcher.Run()
 
 	if len(*myAddr) == 0 {
 		*myAddr = fmt.Sprintf("localhost:%d", *workerPort)
