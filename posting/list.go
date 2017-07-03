@@ -30,7 +30,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
+	"golang.org/x/net/trace"
+
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -331,7 +333,9 @@ func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	l.Lock()
 	t1 := time.Since(t2)
 	if t1.Nanoseconds() > 100000 {
-		x.Trace(ctx, "acquired lock %v %v", t1, t.Attr)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("acquired lock %v %v", t1, t.Attr)
+		}
 	}
 	defer l.Unlock()
 	return l.addMutation(ctx, t)
@@ -375,7 +379,9 @@ func TypeID(edge *protos.DirectedEdge) types.TypeID {
 
 func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("DELETEME set to true. Temporary error.")
+		}
 		return false, ErrRetry
 	}
 
@@ -395,7 +401,9 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	}
 	if t.ValueId == 0 {
 		err := x.Errorf("ValueId cannot be zero")
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return false, err
 	}
 	mpost := newPosting(t)
@@ -411,7 +419,9 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	hasMutated := l.updateMutationLayer(mpost)
 	t1 := time.Since(t2)
 	if t1.Nanoseconds() > 100000 {
-		x.Trace(ctx, "updated mutation layer %v %v %v", t1, len(l.mlayer), len(l.plist.Postings))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("updated mutation layer %v %v %v", t1, len(l.mlayer), len(l.plist.Postings))
+		}
 	}
 	//x.Trace(ctx, "updated mutation layer")
 	if hasMutated {
@@ -527,10 +537,8 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	}
 }
 
-// Length iterates over the mutation layer and counts number of elements.
-func (l *List) Length(afterUid uint64) int {
-	l.RLock()
-	defer l.RUnlock()
+func (l *List) length(afterUid uint64) int {
+	l.AssertRLock()
 
 	pidx, midx := 0, 0
 	pl := l.plist
@@ -560,6 +568,13 @@ func (l *List) Length(afterUid uint64) int {
 func (l *List) isClean() bool {
 	l.AssertRLock()
 	return len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0
+}
+
+// Length iterates over the mutation layer and counts number of elements.
+func (l *List) Length(afterUid uint64) int {
+	l.RLock()
+	defer l.RUnlock()
+	return l.length(afterUid)
 }
 
 func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {

@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -31,7 +30,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -160,6 +159,147 @@ func runMutation(m string) error {
 	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
 	_, err = qr.ProcessWithMutation(defaultContext())
 	return err
+}
+
+func TestDeletePredicate(t *testing.T) {
+	var m2 = `
+	mutation {
+		delete {
+			* <friend> * .
+			* <name> * .
+		}
+	}
+	`
+
+	var m1 = `
+	mutation {
+		set {
+			<0x1> <friend> <0x2> .
+			<0x1> <friend> <0x3> .
+			<0x1> <name> "Alice" .
+			<0x2> <name> "Alice1" .
+			<0x3> <name> "Alice2" .
+			<0x3> <age> "13" .
+		}
+	}
+	`
+
+	var q1 = `
+	{
+		user(func: anyofterms(name, "alice")) {
+			friend {
+				name
+			}
+		}
+	}
+	`
+	var q2 = `
+	{
+		user(id: [0x1, 0x2, 0x3]) {
+			name
+		}
+	}
+	`
+	var q3 = `
+	{
+		user(id:0x3) {
+			age
+			~friend {
+				name
+			}
+		}
+	}
+	`
+
+	var q4 = `
+		{
+			user(id:0x3) {
+				_predicate_
+			}
+		}
+	`
+
+	var q5 = `
+		{
+			user(id: 0x3) {
+				age
+				friend {
+					name
+				}
+			}
+		}
+		`
+
+	var s1 = `
+	mutation {
+		schema {
+			friend: uid @reverse .
+			name: string @index .
+		}
+	}
+	`
+
+	var s2 = `
+	mutation {
+		schema {
+			friend: string @index .
+			name: uid @reverse .
+		}
+	}
+	`
+
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(s1)
+	require.NoError(t, err)
+
+	err = runMutation(m1)
+	require.NoError(t, err)
+
+	// For gentleCommit to happen and postings to persist to disk. To do * P * we iterate and
+	// get the uids to delete from disk.
+	time.Sleep(5 * time.Second)
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	var m map[string]interface{}
+	err = json.Unmarshal([]byte(output), &m)
+	require.NoError(t, err)
+	friends := m["user"].([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
+	require.Equal(t, 2, len(friends))
+
+	output, err = runQuery(q2)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"name":"Alice"},{"name":"Alice1"},{"name":"Alice2"}]}`,
+		output)
+
+	output, err = runQuery(q3)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"age": "13", "~friend" : [{"name":"Alice"}]}]}`, output)
+
+	output, err = runQuery(q4)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}`, output)
+
+	err = runMutation(m2)
+	require.NoError(t, err)
+
+	output, err = runQuery(q1)
+	require.JSONEq(t, `{}`, output)
+
+	output, err = runQuery(q2)
+	require.NoError(t, err)
+	require.JSONEq(t, `{}`, output)
+
+	output, err = runQuery(q5)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"age": "13"}]}`, output)
+
+	output, err = runQuery(q4)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}`, output)
+
+	// Lets try to change the type of predicates now.
+	err = runMutation(s2)
+	require.NoError(t, err)
 }
 
 func TestSchemaMutation(t *testing.T) {
@@ -1032,148 +1172,6 @@ func TestMutationObjectVariables(t *testing.T) {
 	r, err := runQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"me":[{"count(likes)":3}]}`, r)
-}
-
-func TestDeletePredicate(t *testing.T) {
-	var m2 = `
-	mutation {
-		delete {
-			* <friend> * .
-			* <name> * .
-		}
-	}
-	`
-
-	var m1 = `
-	mutation {
-		set {
-			<0x1> <friend> <0x2> .
-			<0x1> <friend> <0x3> .
-			<0x1> <name> "Alice" .
-			<0x2> <name> "Alice1" .
-			<0x3> <name> "Alice2" .
-			<0x3> <age> "13" .
-		}
-	}
-	`
-
-	var q1 = `
-	{
-		user(func: anyofterms(name, "alice")) {
-			friend {
-				name
-			}
-		}
-	}
-	`
-	var q2 = `
-	{
-		user(id: [0x1, 0x2, 0x3]) {
-			name
-		}
-	}
-	`
-	var q3 = `
-	{
-		user(id:0x3) {
-			age
-			~friend {
-				name
-			}
-		}
-	}
-	`
-
-	var q4 = `
-		{
-			user(id:0x3) {
-				_predicate_
-			}
-		}
-	`
-
-	var q5 = `
-		{
-			user(id: 0x3) {
-				age
-				friend {
-					name
-				}
-			}
-		}
-		`
-
-	var s1 = `
-	mutation {
-		schema {
-			friend: uid @reverse .
-			name: string @index .
-		}
-	}
-	`
-
-	var s2 = `
-	mutation {
-		schema {
-			friend: string @index .
-			name: uid @reverse .
-		}
-	}
-	`
-
-	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(s1)
-	require.NoError(t, err)
-
-	err = runMutation(m1)
-	require.NoError(t, err)
-
-	// For gentleCommit to happen and postings to persist to disk. To do * P * we iterate and
-	// get the uids to delete from disk.
-	time.Sleep(5 * time.Second)
-	output, err := runQuery(q1)
-	require.NoError(t, err)
-	var m map[string]interface{}
-	err = json.Unmarshal([]byte(output), &m)
-	require.NoError(t, err)
-	friends := m["user"].([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
-	require.Equal(t, 3, len(friends))
-
-	output, err = runQuery(q2)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"name":"Alice"},{"name":"Alice1"},{"name":"Alice2"}]}`,
-		output)
-
-	output, err = runQuery(q3)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"age": "13", "~friend" : [{"name":"Alice"}]}]}`, output)
-
-	output, err = runQuery(q4)
-	require.NoError(t, err)
-	fmt.Println(output)
-	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"},{"_name_":"pred.val"}]}]}`, output)
-
-	err = runMutation(m2)
-	require.NoError(t, err)
-
-	output, err = runQuery(q1)
-	require.JSONEq(t, `{}`, output)
-
-	output, err = runQuery(q2)
-	require.NoError(t, err)
-	require.JSONEq(t, `{}`, output)
-
-	output, err = runQuery(q5)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"age": "13"}]}`, output)
-
-	output, err = runQuery(q4)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"},{"_name_":"pred.val"}]}]}`, output)
-
-	// Lets try to change the type of predicates now.
-	err = runMutation(s2)
-	require.NoError(t, err)
 }
 
 // change from uid to scalar or vice versa

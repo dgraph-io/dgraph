@@ -32,7 +32,7 @@ import (
 
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/protos"

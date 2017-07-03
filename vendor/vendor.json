@@ -117,6 +117,12 @@
 			"revisionTime": "2016-09-15T18:50:41Z"
 		},
 		{
+			"checksumSHA1": "HlDspvrfA33+zVOgm5mvoiWvRhg=",
+			"path": "github.com/cockroachdb/cmux",
+			"revision": "30d10be492927e2dcae0089c374c455d42414fcb",
+			"revisionTime": "2017-01-10T19:26:07Z"
+		},
+		{
 			"checksumSHA1": "jw+XDfPJgogfSPCsuebqFZj/GJc=",
 			"path": "github.com/coreos/etcd/raft",
 			"revision": "1ebeef5cbfe69c0dab2bc701ee5307eed7a7d8d2",
@@ -223,12 +229,6 @@
 			"path": "github.com/pmezard/go-difflib/difflib",
 			"revision": "792786c7400a136282c1664665ae0a8db921c6c2",
 			"revisionTime": "2016-01-10T10:55:54Z"
-		},
-		{
-			"checksumSHA1": "W2kMUxTFJybcc8NKlqEAM4jY7Mw=",
-			"path": "github.com/soheilhy/cmux",
-			"revision": "13f520d62c8e9514090ab9f170fa5df915f2d1bf",
-			"revisionTime": "2016-09-05T20:05:55Z"
 		},
 		{
 			"checksumSHA1": "Q2V7Zs3diLmLfmfbiuLpSxETSuY=",

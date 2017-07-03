@@ -23,10 +23,14 @@ import (
 )
 
 const (
-	byteData    = byte(0x00)
-	byteIndex   = byte(0x01)
-	byteReverse = byte(0x02)
-	byteSchema  = byte(0x03)
+	// TODO(pawan) - Make this 2 bytes long. Right now ParsedKey has byteType and
+	// bytePrefix. Change it so that it just has one field which has all the information.
+	byteData     = byte(0x00)
+	byteSchema   = byte(0x01)
+	byteIndex    = byte(0x02)
+	byteReverse  = byte(0x04)
+	byteCount    = byte(0x08)
+	byteCountRev = byteCount | byteReverse
 	// same prefix for data, index and reverse keys so that relative order of data doesn't change
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)
@@ -95,11 +99,29 @@ func IndexKey(attr, term string) []byte {
 	return buf
 }
 
+func CountKey(attr string, count uint32, reverse bool) []byte {
+	buf := make([]byte, 1+2+len(attr)+1+4)
+	buf[0] = defaultPrefix
+	rest := buf[1:]
+
+	rest = writeAttr(rest, attr)
+	if reverse {
+		rest[0] = byteCountRev
+	} else {
+		rest[0] = byteCount
+	}
+
+	rest = rest[1:]
+	binary.BigEndian.PutUint32(rest, count)
+	return buf
+}
+
 type ParsedKey struct {
 	byteType   byte
 	Attr       string
 	Uid        uint64
 	Term       string
+	Count      uint32
 	bytePrefix byte
 }
 
@@ -178,6 +200,21 @@ func (p ParsedKey) ReversePrefix() []byte {
 	return buf
 }
 
+// CountPrefix returns the prefix for count keys.
+func (p ParsedKey) CountPrefix(reverse bool) []byte {
+	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = p.bytePrefix
+	rest := buf[1:]
+	k := writeAttr(rest, p.Attr)
+	AssertTrue(len(k) == 1)
+	if reverse {
+		k[0] = byteCountRev
+	} else {
+		k[0] = byteCount
+	}
+	return buf
+}
+
 // SchemaPrefix returns the prefix for Schema keys.
 func SchemaPrefix() []byte {
 	buf := make([]byte, 1)
@@ -205,6 +242,8 @@ func Parse(key []byte) *ParsedKey {
 		p.Uid = binary.BigEndian.Uint64(k)
 	case byteIndex:
 		p.Term = string(k)
+	case byteCount, byteCountRev:
+		p.Count = binary.BigEndian.Uint32(k)
 	case byteSchema:
 		break
 	default:

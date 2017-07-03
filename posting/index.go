@@ -25,7 +25,7 @@ import (
 
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/group"
@@ -41,11 +41,13 @@ const maxBatchSize = 32 * (1 << 20)
 var (
 	indexLog   trace.EventLog
 	reverseLog trace.EventLog
+	countLog   trace.EventLog
 )
 
 func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
 	reverseLog = trace.NewEventLog("reverse", "Logger")
+	countLog = trace.NewEventLog("count", "Logger")
 }
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
@@ -103,7 +105,6 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 	edge := &protos.DirectedEdge{
 		ValueId: uid,
 		Attr:    attr,
-		Label:   "idx",
 		Op:      op,
 	}
 
@@ -132,20 +133,34 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	plist, decr := GetOrCreate(key, groupId)
 	t1 := time.Since(t)
 	if t1.Nanoseconds() > 100000 {
-		x.Trace(ctx, "retreived pl %v", t1)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("retreived pl took %v", t1)
+		}
 	}
 	defer decr()
 	//x.Trace(ctx, "retrieved pl")
 	x.AssertTrue(plist != nil)
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err,
-			"Error adding/deleting %s for attr %s entity %d: %v",
-			token, edge.Attr, edge.Entity))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error adding/deleting %s for attr %s entity %d: %v",
+				token, edge.Attr, edge.Entity, err)
+		}
 		return err
 	}
 	//x.Trace(ctx, "added one index mutation %v", edge.Attr)
 	return nil
+}
+
+// countParams is sent to updateCount function. It is used to update the count index.
+// It deletes the uid from the key corresponding to <attr, countBefore> and adds it
+// to <attr, countAfter>.
+type countParams struct {
+	attr        string
+	countBefore int
+	countAfter  int
+	entity      uint64
+	reverse     bool
 }
 
 func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
@@ -160,19 +175,35 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 		Entity:  t.ValueId,
 		ValueId: t.Entity,
 		Attr:    t.Attr,
-		Label:   "rev",
 		Op:      t.Op,
 		Facets:  t.Facets,
 	}
 
-	_, err := plist.AddMutation(ctx, edge)
+	plist.Lock()
+	countBefore := plist.length(0)
+	_, err := plist.addMutation(ctx, edge)
+	countAfter := plist.length(0)
+	plist.Unlock()
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err,
-			"Error adding/deleting reverse edge for attr %s src %d dst %d",
-			t.Attr, t.Entity, t.ValueId))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error adding/deleting reverse edge for attr %s entity %d: %v",
+				t.Attr, t.Entity, err)
+		}
 		return err
 	}
-	//reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)
+
+	if countAfter != countBefore && schema.State().HasCount(t.Attr) {
+		if err := updateCount(ctx, countParams{
+			attr:        t.Attr,
+			countBefore: countBefore,
+			countAfter:  countAfter,
+			entity:      edge.Entity,
+			reverse:     true,
+		}); err != nil {
+			return err
+		}
+	}
+	reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)
 	return nil
 }
 func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) error {
@@ -203,6 +234,48 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 	return l.delete(ctx, t.Attr)
 }
 
+func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
+	reverse bool) error {
+	key := x.CountKey(t.Attr, count, reverse)
+	groupId := group.BelongsTo(t.Attr)
+
+	plist, decr := GetOrCreate(key, groupId)
+	defer decr()
+
+	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
+		t.Attr, t.ValueId)
+	_, err := plist.AddMutation(ctx, t)
+	if err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error adding/deleting count edge for attr %s count %d dst %d: %v",
+				t.Attr, count, t.ValueId, err)
+		}
+		return err
+	}
+	countLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, count, t.ValueId)
+	return nil
+
+}
+
+func updateCount(ctx context.Context, params countParams) error {
+	edge := protos.DirectedEdge{
+		ValueId: params.entity,
+		Attr:    params.attr,
+		Op:      protos.DirectedEdge_DEL,
+	}
+	if err := addCountMutation(ctx, &edge, uint32(params.countBefore),
+		params.reverse); err != nil {
+		return err
+	}
+
+	edge.Op = protos.DirectedEdge_SET
+	if err := addCountMutation(ctx, &edge, uint32(params.countAfter),
+		params.reverse); err != nil {
+		return err
+	}
+	return nil
+}
+
 // AddMutationWithIndex is AddMutation with support for indexing. It also
 // supports reverse edges.
 func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge) error {
@@ -226,7 +299,9 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 		l.Lock()
 		t1 := time.Since(t2)
 		if t1.Nanoseconds() > 100000 {
-			x.Trace(ctx, "acquired lock normal %v %v %v", t1, t.Attr, t.Entity)
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("acquired lock normal %v %v %v", t1, t.Attr, t.Entity)
+			}
 		}
 		//x.Trace(ctx, "acquired pl lock")
 		if doUpdateIndex {
@@ -237,11 +312,23 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 				val, found = l.findValue(math.MaxUint64)
 			}
 		}
+		countBefore := l.length(0)
 		_, err := l.addMutation(ctx, t)
+		countAfter := l.length(0)
 		l.Unlock()
 
 		if err != nil {
 			return err
+		}
+		if countAfter != countBefore && schema.State().HasCount(t.Attr) {
+			if err := updateCount(ctx, countParams{
+				attr:        t.Attr,
+				countBefore: countBefore,
+				countAfter:  countAfter,
+				entity:      t.Entity,
+			}); err != nil {
+				return err
+			}
 		}
 	}
 	//x.Trace(ctx, "added normal mutation")
@@ -261,7 +348,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 		}
 		//x.Trace(ctx, "added index mutations")
 	}
-	// Add reverse mutation irrespective of hashMutated, server crash can happen after
+	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
 	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
 		addReverseMutation(ctx, t)
@@ -270,10 +357,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	return nil
 }
 
-func DeleteReverseEdges(ctx context.Context, attr string) error {
-	// Delete index entries from data store.
-	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.ReversePrefix()
+func deleteEntries(prefix []byte) error {
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.FetchValues = false
 	idxIt := pstore.NewIterator(iterOpt)
@@ -281,24 +365,134 @@ func DeleteReverseEdges(ctx context.Context, attr string) error {
 
 	wb := make([]*badger.Entry, 0, 100)
 	var batchSize int
-	for idxIt.Seek(prefix); idxIt.Valid(); idxIt.Next() {
+	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
 		key := idxIt.Item().Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
 		batchSize += len(key)
 		wb = badger.EntriesDelete(wb, key)
 
 		if batchSize >= maxBatchSize {
-			pstore.BatchSet(wb)
+			if err := pstore.BatchSet(wb); err != nil {
+				return err
+			}
 			wb = wb[:0]
 			batchSize = 0
 		}
 	}
 	if len(wb) > 0 {
-		pstore.BatchSet(wb)
+		if err := pstore.BatchSet(wb); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func DeleteReverseEdges(ctx context.Context, attr string) error {
+	// Delete index entries from data store.
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.ReversePrefix()
+	if err := deleteEntries(prefix); err != nil {
+		return err
+	}
+	return nil
+}
+
+func deleteCountIndex(ctx context.Context, attr string, reverse bool) error {
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.CountPrefix(reverse)
+	if err := deleteEntries(prefix); err != nil {
+		return err
+	}
+	return nil
+}
+
+func DeleteCountIndex(ctx context.Context, attr string) error {
+	// Delete index entries from data store.
+	if err := deleteCountIndex(ctx, attr, false); err != nil {
+		return err
+	}
+	if err := deleteCountIndex(ctx, attr, true); err != nil { // delete reverse count indexes.
+		return err
+	}
+	return nil
+}
+
+func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh chan error) {
+	ch := make(chan item, 10000)
+	che := make(chan error, 1000)
+	for i := 0; i < 1000; i++ {
+		go func() {
+			var err error
+			for it := range ch {
+				pl := it.list
+				t := &protos.DirectedEdge{
+					ValueId: it.uid,
+					Attr:    attr,
+					Op:      protos.DirectedEdge_SET,
+				}
+				if err = addCountMutation(ctx, t, uint32(len(pl.Postings)), reverse); err != nil {
+					break
+				}
+			}
+			che <- err
+		}()
+	}
+
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.DataPrefix()
+	if reverse {
+		prefix = pk.ReversePrefix()
+	}
+
+	it := pstore.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		iterItem := it.Item()
+		key := iterItem.Key()
+		pki := x.Parse(key)
+		var pl protos.PostingList
+		x.Check(pl.Unmarshal(iterItem.Value()))
+
+		ch <- item{
+			uid:  pki.Uid,
+			list: &pl,
+		}
+	}
+	close(ch)
+	var finalErr error
+	for i := 0; i < 1000; i++ {
+		if err := <-che; err != nil {
+			finalErr = err
+		}
+	}
+	errCh <- finalErr
+}
+
+func RebuildCountIndex(ctx context.Context, attr string) error {
+	x.AssertTruef(schema.State().HasCount(attr), "Attr %s doesn't have count index", attr)
+	EvictGroup(group.BelongsTo(attr))
+
+	errCh := make(chan error, 2)
+	// Lets rebuild forward and reverse count indexes concurrently.
+	go rebuildCountIndex(ctx, attr, false, errCh)
+	go rebuildCountIndex(ctx, attr, true, errCh)
+
+	var rebuildErr error
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-errCh:
+			if err != nil {
+				rebuildErr = err
+			}
+		case <-ctx.Done():
+			rebuildErr = ctx.Err()
+		}
+	}
+	return rebuildErr
+}
+
+type item struct {
+	uid  uint64
+	list *protos.PostingList
 }
 
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
@@ -335,10 +529,6 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		return nil
 	}
 
-	type item struct {
-		uid  uint64
-		list *protos.PostingList
-	}
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
@@ -385,29 +575,8 @@ func DeleteIndex(ctx context.Context, attr string) error {
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	iterOpt := badger.DefaultIteratorOptions
-	iterOpt.FetchValues = false
-	idxIt := pstore.NewIterator(iterOpt)
-	defer idxIt.Close()
-
-	wb := make([]*badger.Entry, 0, 100)
-	var batchSize int
-	for idxIt.Seek(prefix); idxIt.Valid(); idxIt.Next() {
-		key := idxIt.Item().Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
-		batchSize += len(key)
-		wb = badger.EntriesDelete(wb, key)
-
-		if batchSize >= maxBatchSize {
-			pstore.BatchSet(wb)
-			wb = wb[:0]
-			batchSize = 0
-		}
-	}
-	if len(wb) > 0 {
-		pstore.BatchSet(wb)
+	if err := deleteEntries(prefix); err != nil {
+		return err
 	}
 	return nil
 }
@@ -505,42 +674,27 @@ func DeletePredicate(ctx context.Context, attr string) error {
 	}
 	prefix := pk.DataPrefix()
 	// Delete all data postings for the given predicate.
-	wb := make([]*badger.Entry, 0, 100)
-	var batchSize int
-	for it.Seek(prefix); it.Valid(); it.Next() {
-		item := it.Item()
-		key := item.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
-		pk := x.Parse(key)
-		x.AssertTruef(pk.Attr == attr,
-			"Invalid key obtained for comparison")
-
-		batchSize += len(key)
-		wb = badger.EntriesDelete(wb, key)
-
-		if batchSize >= maxBatchSize {
-			if err := pstore.BatchSet(wb); err != nil {
-				return err
-			}
-			wb = wb[:0]
-			batchSize = 0
-		}
-	}
-	if len(wb) > 0 {
-		if err := pstore.BatchSet(wb); err != nil {
-			return err
-		}
+	if err := deleteEntries(prefix); err != nil {
+		return err
 	}
 
 	// TODO - We will still have the predicate present in <uid, _predicate_> posting lists.
 	indexed := schema.State().IsIndexed(attr)
 	reversed := schema.State().IsReversed(attr)
 	if indexed {
-		DeleteIndex(ctx, attr)
+		if err := DeleteIndex(ctx, attr); err != nil {
+			return err
+		}
 	} else if reversed {
-		DeleteReverseEdges(ctx, attr)
+		if err := DeleteReverseEdges(ctx, attr); err != nil {
+			return err
+		}
+	}
+
+	if ok := schema.State().HasCount(attr); ok {
+		if err := DeleteCountIndex(ctx, attr); err != nil {
+			return err
+		}
 	}
 	return nil
 }

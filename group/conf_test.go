@@ -98,4 +98,8 @@ func TestGroups(t *testing.T) {
 	if gid != 11 {
 		t.Errorf("Expected groupId to be: %v. Got: %v", 11, gid)
 	}
+
+	groupConfig = config{}
+	err = ParseGroupConfig("group_tests/reverse_pred.conf")
+	require.Error(t, err)
 }

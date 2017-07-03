@@ -27,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"

@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/group"
@@ -246,6 +246,20 @@ func (s *stateGroup) isReversed(pred string) bool {
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
 		return schema.Directive == protos.SchemaUpdate_REVERSE
+	}
+	return false
+}
+
+// AddCount returns whether we want to mantain a count index for the given predicate or not.
+func (s *state) HasCount(pred string) bool {
+	return s.get(group.BelongsTo(pred)).hasCount(pred)
+}
+
+func (s *stateGroup) hasCount(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	if schema, ok := s.predicate[pred]; ok {
+		return schema.Count
 	}
 	return false
 }

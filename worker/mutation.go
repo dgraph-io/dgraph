@@ -25,7 +25,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -42,7 +42,7 @@ const (
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []*protos.DirectedEdge, start int, end int) error {
-	x.Trace(ctx, "In Run mutations")
+
 	for i := start; i <= end && i < len(edges); i++ {
 		edge := edges[i]
 		gid := group.BelongsTo(edge.Attr)
@@ -73,7 +73,9 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge, start int, 
 		plist, decr := posting.GetOrCreate(key, gid)
 		t1 := time.Since(t)
 		if t1.Nanoseconds() > 100000 {
-			x.Trace(ctx, "retreived pl %v", t1)
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("retreived pl %v", t1)
+			}
 		}
 		defer decr()
 		//x.Trace(ctx, "retreived pl")
@@ -126,6 +128,12 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 					return err
 				}
 			}
+
+			if current.Count {
+				if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 		// schema was present already
@@ -140,6 +148,11 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
 				current.Directive == protos.SchemaUpdate_REVERSE); err != nil {
 				return err
+			}
+		}
+
+		if current.Count != old.Count {
+			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count); err != nil {
 			}
 		}
 	}
@@ -303,7 +316,9 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 	pl := pools().get(addr)
 	conn, err := pl.Get()
 	if err != nil {
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		che <- err
 		return
 	}
@@ -342,7 +357,7 @@ func addToMutationMap(mutationMap map[uint32]*protos.Mutations, m *protos.Mutati
 func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 	mutationMap := make(map[uint32]*protos.Mutations)
 	addToMutationMap(mutationMap, m)
-	x.Trace(ctx, "created mutation map")
+
 	errors := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {
 		go proposeOrSend(ctx, gid, mu, errors)
@@ -354,7 +369,9 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 		select {
 		case err := <-errors:
 			if err != nil {
-				x.TraceError(ctx, x.Wrapf(err, "Error while running all mutations"))
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Error while running all mutations: %+v", err)
+				}
 				return err
 			}
 		case <-ctx.Done():

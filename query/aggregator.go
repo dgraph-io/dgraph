@@ -108,7 +108,9 @@ func compareValues(ag string, va, vb types.Val) (bool, error) {
 
 func (ag *aggregator) ApplyVal(v types.Val) error {
 	if v.Value == nil {
-		return nil
+		// If the value is missing, treat it as 0.
+		v.Value = int64(0)
+		v.Tid = types.IntID
 	}
 
 	var isIntOrFloat bool
@@ -335,7 +337,7 @@ func (ag *aggregator) Value() (types.Val, error) {
 		} else if math.IsInf(ag.result.Value.(float64), -1) {
 			ag.result.Value = -1 * math.MaxFloat64
 		} else if math.IsNaN(ag.result.Value.(float64)) {
-			return ag.result, x.Errorf("Invalid math operation. Produced NaN")
+			ag.result.Value = 0.0
 		}
 	}
 	return ag.result, nil
