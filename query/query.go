@@ -1559,6 +1559,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
 			}
 
+			fmt.Printf("Matrix: %+v\n\n", sg.uidMatrix)
+			fmt.Printf("DestUIDs: %+v\n\n", sg.DestUIDs.Uids)
+
 			if parent == nil {
 				// I'm root. We reach here if root had a function.
 				sg.uidMatrix = []*protos.List{sg.DestUIDs}
@@ -1745,7 +1748,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			child.Params.ParentVars[k] = v
 		}
 		child.SrcUIDs = sg.DestUIDs // Make the connection.
-		if child.IsInternal() {
+		// We dont need to call ProcessGraph for _uid_, as we already have uids
+		// populated from parent and there is nothing to process.
+		if child.IsInternal() || child.Attr == "_uid_" {
 			// We dont have to execute these nodes.
 			continue
 		}
@@ -1755,7 +1760,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var childErr error
 	// Now get all the results back.
 	for _, child := range sg.Children {
-		if child.IsInternal() {
+		if child.IsInternal() || child.Attr == "_uid_" {
 			continue
 		}
 		select {
