@@ -271,17 +271,28 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 
 	// Didn't find it in mutable layer. Now check the immutable layer.
 	pl := l.plist
-	pidx := sort.Search(len(pl.Postings), func(idx int) bool {
-		p := pl.Postings[idx]
-		return mpost.Uid <= p.Uid
+	uidx := sort.Search(len(pl.Uids) /*Postings)*/, func(idx int) bool {
+		//p := pl.Postings[idx]
+		return mpost.Uid <= pl.Uids[idx]
 	})
 
 	var uidFound, psame bool
-	if pidx < len(pl.Postings) {
-		p := pl.Postings[pidx]
-		uidFound = mpost.Uid == p.Uid
+	if uidx < len(pl.Uids) { // pl.Postings) {
+		puid := pl.Uids[uidx]
+		uidFound = mpost.Uid == puid
 		if uidFound {
-			psame = samePosting(p, mpost)
+			// look at the list of postings
+			pp := emptyPosting
+			pp.Uid = puid
+			pidx := sort.Search(len(pl.Postings), func(idx int) bool {
+				return puid <= pl.Postings[idx].Uid
+			})
+			if pidx < len(pl.Postings) {
+				if puid == pl.Postings[pidx].Uid {
+					pp = pl.Postings[pidx]
+				}
+			}
+			psame = samePosting(pp, mpost)
 		}
 	}
 
@@ -456,12 +467,16 @@ func (l *List) Iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 
 func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	l.AssertRLock()
-	pidx, midx := 0, 0
+	uidx, pidx, midx := 0, 0, 0
 	pl := l.plist
 
+	uidsLen := len(pl.Uids)
 	postingLen := len(pl.Postings)
 	mlayerLen := len(l.mlayer)
 	if afterUid > 0 {
+		uidx = sort.Search(uidsLen, func(idx int) bool {
+			return afterUid < pl.Uids[idx]
+		})
 		pidx = sort.Search(postingLen, func(idx int) bool {
 			p := pl.Postings[idx]
 			return afterUid < p.Uid
@@ -475,11 +490,21 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	var mp, pp *protos.Posting
 	cont := true
 	for cont {
-		if pidx < postingLen {
+		if uidx < uidsLen && pidx < postingLen {
 			pp = pl.Postings[pidx]
+			if pl.Uids[uidx] == pp.Uid {
+				pidx++
+			} else {
+				pp = emptyPosting
+				pp.Uid = pl.Uids[uidx]
+			}
+		} else if uidx < uidsLen {
+			pp = emptyPosting
+			pp.Uid = pl.Uids[uidx]
 		} else {
 			pp = emptyPosting
 		}
+
 		if midx < mlayerLen {
 			mp = l.mlayer[midx]
 		} else {
@@ -491,7 +516,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			cont = false
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			cont = f(pp)
-			pidx++
+			uidx++
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
 			if mp.Op != Del {
 				cont = f(mp)
@@ -501,7 +526,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			if mp.Op != Del {
 				cont = f(mp)
 			}
-			pidx++
+			uidx++
 			midx++
 		default:
 			log.Fatalf("Unhandled case during iteration of posting list.")
@@ -561,19 +586,23 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	h := md5.New()
 	count := 0
 	l.iterate(0, func(p *protos.Posting) bool {
-		// Checksum code.
-		n := binary.PutVarint(ubuf, int64(count))
-		h.Write(ubuf[0:n])
-		n = binary.PutUvarint(ubuf, p.Uid)
-		h.Write(ubuf[0:n])
-		h.Write(p.Value)
-		h.Write([]byte(p.Label))
-		count++
+		final.Uids = append(final.Uids, p.Uid)
 
-		// I think it's okay to take the pointer from the iterator, because we have a lock
-		// over List; which won't be released until final has been marshalled. Thus, the
-		// underlying data wouldn't be changed.
-		final.Postings = append(final.Postings, p)
+		if p.Facets != nil || p.Value != nil {
+			// Checksum code.
+			n := binary.PutVarint(ubuf, int64(count))
+			h.Write(ubuf[0:n])
+			n = binary.PutUvarint(ubuf, p.Uid)
+			h.Write(ubuf[0:n])
+			h.Write(p.Value)
+			h.Write([]byte(p.Label))
+			count++
+
+			// I think it's okay to take the pointer from the iterator, because we have a lock
+			// over List; which won't be released until final has been marshalled. Thus, the
+			// underlying data wouldn't be changed.
+			final.Postings = append(final.Postings, p)
+		}
 		return true
 	})
 
