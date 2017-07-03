@@ -42,7 +42,9 @@ const (
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
-
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("In run mutations")
+	}
 	for _, edge := range edges {
 		gid := group.BelongsTo(edge.Attr)
 		if !groups().ServesGroup(gid) {
