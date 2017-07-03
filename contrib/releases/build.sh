@@ -59,10 +59,10 @@ cd $dgraph_cmd/dgraphloader && \
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
 cd $tmp_dir;
 mkdir dgraph && pushd &> /dev/null dgraph;
+# Stripping the binaries.
+strip $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraphloader/dgraphloader;
 cp $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraphloader/dgraphloader .;
 
-# Stripping the binaries.
-strip dgraph dgraphloader
 echo -e "\n\033[1;34mSize of files after strip: $(du -sh)\033[0m"
 
 digest_cmd=""
