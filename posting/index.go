@@ -95,7 +95,7 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
 	tokens, err := IndexTokens(attr, t.GetLang(), p)
-	//x.Trace(ctx, "tokenized value, num tokens %v", len(tokens))
+
 	if err != nil {
 		// This data is not indexable
 		return err
@@ -119,12 +119,10 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
-	//x.Trace(ctx, "initialized index key")
 	var groupId uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 		groupId = rv.Group
 	}
-	//x.Trace(ctx, "retrieved raftvalue from context")
 	if groupId == 0 {
 		groupId = group.BelongsTo(edge.Attr)
 	}
@@ -132,13 +130,13 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	t := time.Now()
 	plist, decr := GetOrCreate(key, groupId)
 	t1 := time.Since(t)
-	if t1.Nanoseconds() > 100000 {
+	if t1.Nanoseconds() > 1000000 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("retreived pl took %v", t1)
 		}
 	}
 	defer decr()
-	//x.Trace(ctx, "retrieved pl")
+
 	x.AssertTrue(plist != nil)
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
@@ -148,7 +146,8 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 		}
 		return err
 	}
-	//x.Trace(ctx, "added one index mutation %v", edge.Attr)
+	indexLog.Printf("%s [%s] [%d] Term [%s]",
+		edge.Op, edge.Attr, edge.Entity, token)
 	return nil
 }
 
@@ -286,7 +285,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	var found bool
 
 	l.index.Lock()
-	//x.Trace(ctx, "acquired index lock")
 	defer l.index.Unlock()
 
 	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.Star {
@@ -298,12 +296,12 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 		t2 := time.Now()
 		l.Lock()
 		t1 := time.Since(t2)
-		if t1.Nanoseconds() > 100000 {
+		if t1.Nanoseconds() > 1000000 {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("acquired lock normal %v %v %v", t1, t.Attr, t.Entity)
+				tr.LazyPrintf("acquired lock %v %v %v", t1, t.Attr, t.Entity)
 			}
 		}
-		//x.Trace(ctx, "acquired pl lock")
+
 		if doUpdateIndex {
 			// Check original value BEFORE any mutation actually happens.
 			if len(t.Lang) > 0 {
@@ -331,7 +329,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 			}
 		}
 	}
-	//x.Trace(ctx, "added normal mutation")
 	// We should always set index set and we can take care of stale indexes in
 	// eventual index consistency
 	if doUpdateIndex {
@@ -346,13 +343,11 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 			}
 			addIndexMutations(ctx, t, p, protos.DirectedEdge_SET)
 		}
-		//x.Trace(ctx, "added index mutations")
 	}
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
 	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
 		addReverseMutation(ctx, t)
-		//x.Trace(ctx, "added reverse mutations")
 	}
 	return nil
 }

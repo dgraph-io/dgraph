@@ -457,19 +457,11 @@ func (n *node) processMutation(ctx context.Context, e raftpb.Entry, m *protos.Mu
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx = context.WithValue(ctx, "raft", rv)
-	batchSize := len(m.Edges)
-	numBatch := 1
-	che := make(chan error, numBatch)
-	for i := 0; i < numBatch; i++ {
-		go func(i int) {
-			che <- runMutations(ctx, m.Edges, i*batchSize, i*batchSize+batchSize-1)
-		}(i)
-	}
-	for i := 0; i < numBatch; i++ {
-		err := <-che
-		if err != nil {
-			return err
+	if err := runMutations(ctx, m.Edges); err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
 		}
+		return err
 	}
 	return nil
 }
@@ -709,10 +701,6 @@ func (n *node) Run() {
 				// then doneUntil would be set as 4 as soon as Mark{4,true} is done and before
 				// Mark{3, false} is emitted. So it's safer to emit watermarks as soon as
 				// possible sequentially
-				lastIdx, _ := n.store.LastIndex()
-				if lastIdx > entry.Index+5000 {
-					fmt.Printf("current index: %v total %v, len(applyCh) %v\n", lastIdx, entry.Index, len(n.applyCh))
-				}
 				status := x.Mark{Index: entry.Index, Done: false}
 				n.applied.Ch <- status
 				posting.SyncMarkFor(n.gid).Ch <- status

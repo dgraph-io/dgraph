@@ -332,7 +332,7 @@ func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	t2 := time.Now()
 	l.Lock()
 	t1 := time.Since(t2)
-	if t1.Nanoseconds() > 100000 {
+	if t1.Nanoseconds() > 1000000 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("acquired lock %v %v", t1, t.Attr)
 		}
@@ -407,7 +407,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		return false, err
 	}
 	mpost := newPosting(t)
-	//x.Trace(ctx, "created new posting")
+
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
 	//		- If yes, then replace that mutation. Jump to a)
@@ -418,12 +418,12 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	t2 := time.Now()
 	hasMutated := l.updateMutationLayer(mpost)
 	t1 := time.Since(t2)
-	if t1.Nanoseconds() > 100000 {
+	if t1.Nanoseconds() > 1000000 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("updated mutation layer %v %v %v", t1, len(l.mlayer), len(l.plist.Postings))
 		}
 	}
-	//x.Trace(ctx, "updated mutation layer")
+
 	if hasMutated {
 		var gid uint32
 		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
