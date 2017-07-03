@@ -71,9 +71,10 @@ var (
 	memprofile     = flag.String("mem", "", "write memory profile to file")
 	blockRate      = flag.Int("block", 0, "Block profiling rate")
 	dumpSubgraph   = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
+	numPending     = flag.Int("pending", 1000, "Number of pending queries. Useful for rate limiting.")
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
-	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
+	pendingQueries chan struct{}
 	// TLS configurations
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections with clients.")
 	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
@@ -442,6 +443,12 @@ func (s *grpcServer) Run(ctx context.Context,
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return resp, x.Errorf("Uninitiated server. Please retry later")
 	}
+	pendingQueries <- struct{}{}
+	defer func() { <-pendingQueries }()
+	if ctx.Err() != nil {
+		return resp, ctx.Err()
+	}
+
 	if rand.Float64() < *worker.Tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		tr.SetMaxEvents(1000)
@@ -691,6 +698,7 @@ func main() {
 	x.Init()
 	checkFlagsAndInitDirs()
 	runtime.SetBlockProfileRate(*blockRate)
+	pendingQueries = make(chan struct{}, *numPending)
 
 	pd, err := filepath.Abs(*postingDir)
 	x.Check(err)
