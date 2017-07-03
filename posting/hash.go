@@ -18,6 +18,7 @@
 package posting
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -98,6 +99,9 @@ func (s *listMap) PutIfMissing(key uint64, val *List) *List {
 func (s *listMapShard) eachWithDelete(f func(key uint64, val *List)) {
 	s.Lock()
 	defer s.Unlock()
+	if len(s.m) < 10000 {
+		fmt.Printf("deleted %v entries\n", len(s.m))
+	}
 	for k, v := range s.m {
 		delete(s.m, k)
 		f(k, v)
