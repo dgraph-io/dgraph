@@ -546,7 +546,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		x.Check(pl.Unmarshal(iterItem.Value()))
 
 		// Posting list contains only values or only UIDs.
-		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) == x.ValueUid {
+		if (len(pl.Postings) == 0 && len(pl.Uids) != 0) || postingType(pl.Postings[0]) == x.ValueUid {
 			ch <- item{
 				uid:  pki.Uid,
 				list: &pl,
