@@ -18,8 +18,6 @@
 package worker
 
 import (
-	"bytes"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/badger/badger"
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
@@ -55,7 +54,9 @@ var (
 func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Result, error) {
 	attr := q.Attr
 	gid := group.BelongsTo(attr)
-	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("attr: %v groupId: %v", attr, gid)
+	}
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
@@ -72,17 +73,23 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
 	}
 	defer pl.Put(conn)
-	x.Trace(ctx, "Sending request to %v", addr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sending request to %v", addr)
+	}
 
 	c := protos.NewWorkerClient(conn)
 	reply, err := c.ServeTask(ctx, q)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.ServeTask"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while calling Worker.ServeTask: %v", err)
+		}
 		return &emptyResult, err
 	}
 
-	x.Trace(ctx, "Reply from server. length: %v Addr: %v Attr: %v",
-		len(reply.UidMatrix), addr, attr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Reply from server. length: %v Addr: %v Attr: %v",
+			len(reply.UidMatrix), addr, attr)
+	}
 	return reply, nil
 }
 
@@ -137,6 +144,7 @@ const (
 	RegexFn
 	FullTextSearchFn
 	HasFn
+	UidInFn
 	StandardFn = 100
 )
 
@@ -167,6 +175,8 @@ func parseFuncType(arr []string) (FuncType, string) {
 		return FullTextSearchFn, f
 	case "has":
 		return HasFn, f
+	case "uid_in":
+		return UidInFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
@@ -267,7 +277,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	for i := 0; i < srcFn.n; i++ {
 		var key []byte
 		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
-			srcFn.fnType == HasFn {
+			srcFn.fnType == HasFn || srcFn.fnType == UidInFn {
 			if q.Reverse {
 				key = x.ReverseKey(attr, q.UidList.Uids[i])
 			} else {
@@ -389,6 +399,20 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			continue
 		}
 
+		if srcFn.fnType == UidInFn {
+			reqList := &protos.List{[]uint64{srcFn.uidPresent}}
+			topts := posting.ListOptions{
+				AfterUID:  0,
+				Intersect: reqList,
+			}
+			plist := pl.Uids(topts)
+			if len(plist.Uids) > 0 {
+				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
+				out.UidMatrix = append(out.UidMatrix, tlist)
+			}
+			continue
+		}
+
 		// The more usual case: Getting the UIDs.
 		uidList := new(protos.List)
 		for _, fres := range filteredRes {
@@ -398,31 +422,34 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
-		f := func(kv itkv, mu *sync.Mutex) {
-			addUidToMatrix(kv.key, mu, &out)
+		if ok := schema.State().HasCount(attr); !ok {
+			return nil, x.Errorf("Need @count directive in schema for attr: %s for fn: %s at root.",
+				attr, srcFn.fname)
 		}
-		itParams := iterateParams{
-			q:        q,
-			fetchVal: false,
+		cp := countParams{
+			count:   0,
+			fn:      "gt",
+			attr:    attr,
+			gid:     gid,
+			reverse: q.Reverse,
 		}
-		iterateParallel(ctx, itParams, f)
-
+		cp.evaluate(&out)
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
-		f := func(kv itkv, mu *sync.Mutex) {
-			pl, decr := posting.GetOrUnmarshal(kv.key, kv.val, gid)
-			count := int64(pl.Length(0))
-			decr()
-			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				addUidToMatrix(kv.key, mu, &out)
-			}
+		if ok := schema.State().HasCount(attr); !ok {
+			return nil, x.Errorf("Need @count directive in schema for attr: %s for fn: %s at root",
+				attr, srcFn.fname)
 		}
-		itParams := iterateParams{
-			q:        q,
-			fetchVal: true,
+		count := srcFn.threshold
+		cp := countParams{
+			fn:      srcFn.fname,
+			count:   count,
+			attr:    attr,
+			gid:     gid,
+			reverse: q.Reverse,
 		}
-		iterateParallel(ctx, itParams, f)
+		cp.evaluate(&out)
 	}
 
 	if srcFn.fnType == RegexFn {
@@ -629,6 +656,7 @@ type functionContext struct {
 	ineqValueToken string
 	n              int
 	threshold      int64
+	uidPresent     uint64
 	fname          string
 	lang           string
 	fnType         FuncType
@@ -688,7 +716,8 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 			}
 		} else { // Others can have only 1 arg.
 			if len(args) != 1 {
-				return nil, x.Errorf("eq expects atleast 1 argument.")
+				return nil, x.Errorf("%+v expects only 1 argument. Got: %+v",
+					fc.fname, args)
 			}
 		}
 
@@ -780,6 +809,17 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 		fc.lang = q.SrcFunc[1]
+	case UidInFn:
+		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
+			return nil, err
+		}
+		if fc.uidPresent, err = strconv.ParseUint(q.SrcFunc[2], 10, 64); err != nil {
+			return nil, err
+		}
+		checkRoot(q, fc)
+		if fc.isFuncAtRoot {
+			return nil, x.Errorf("uid_in function not allowed at root")
+		}
 	default:
 		return nil, x.Errorf("FnType %d not handled in numFnAttrs.", fnType)
 	}
@@ -793,7 +833,13 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Re
 	}
 
 	gid := group.BelongsTo(q.Attr)
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, len(q.UidList.Uids), gid)
+	var numUids int
+	if q.UidList != nil {
+		numUids = len(q.UidList.Uids)
+	}
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
+	}
 
 	var reply *protos.Result
 	x.AssertTruef(groups().ServesGroup(gid),
@@ -995,76 +1041,48 @@ func preprocessFilter(tree *protos.FilterTree) (*facetsTree, error) {
 	return ftree, nil
 }
 
-type itkv struct {
-	key []byte
-	val []byte
+type countParams struct {
+	count   int64
+	attr    string
+	gid     uint32
+	reverse bool   // If query is asking for ~pred
+	fn      string // function name
 }
 
-type iterateParams struct {
-	q        *protos.Query
-	fetchVal bool // Whether value needs to be fetched along with key.
-}
-
-// TODO - We might not even need to do this with badger. Benchmark this against
-// the serial iteration once we integrate badger.
-func iterateParallel(ctx context.Context, params iterateParams, f func(itkv, *sync.Mutex)) {
-	q := params.q
-	fetchVal := params.fetchVal
-	grpSize := uint64(math.MaxUint64 / uint64(numPart))
-	var wg sync.WaitGroup
-	mu := &sync.Mutex{}
-
-	for i := uint64(0); i < numPart; i++ {
-		minUid := grpSize*i + 1
-		maxUid := grpSize * (i + 1)
-		if i == numPart-1 {
-			maxUid = math.MaxUint64
-		}
-		x.Trace(ctx, "Running go-routine %v for iteration", i)
-		wg.Add(1)
-		go func(i uint64) {
-			it := pstore.NewIterator(badger.DefaultIteratorOptions)
-			defer it.Close()
-			startKey := x.DataKey(q.Attr, minUid)
-			pk := x.Parse(startKey)
-			prefix := pk.DataPrefix()
-			if q.Reverse {
-				startKey = x.ReverseKey(q.Attr, minUid)
-				pk = x.Parse(startKey)
-				prefix = pk.ReversePrefix()
-			}
-
-			w := 0
-			for it.Seek(startKey); it.Valid(); it.Next() {
-				iterItem := it.Item()
-				key := iterItem.Key()
-				if !bytes.HasPrefix(key, prefix) {
-					break
-				}
-				pk := x.Parse(key)
-				x.AssertTruef(pk.Attr == q.Attr,
-					"Invalid key obtained for comparison")
-				if w%1000 == 0 {
-					x.Trace(ctx, "iterateParallel: go-routine-id: %v key: %v:%v", i, pk.Attr, pk.Uid)
-				}
-				w++
-				if pk.Uid > maxUid {
-					break
-				}
-				kv := itkv{
-					key: key,
-				}
-				// For HasFn, we dont need to fetch values. We take the presence of a key
-				// to mean HasFn is true for the uid. We need to fetchValue for CompareScalarFn
-				// though.
-				if fetchVal {
-					val := iterItem.Value()
-					kv.val = val
-				}
-				f(kv, mu)
-			}
-			wg.Done()
-		}(i)
+func (cp *countParams) evaluate(out *protos.Result) {
+	count := cp.count
+	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
+	if cp.fn == "eq" {
+		pl, decr := posting.GetOrCreate(countKey, cp.gid)
+		defer decr()
+		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+		return
 	}
-	wg.Wait()
+
+	if cp.fn == "lt" {
+		count -= 1
+	} else if cp.fn == "gt" {
+		count += 1
+	}
+	if count < 0 {
+		count = 0
+	}
+	countKey = x.CountKey(cp.attr, uint32(count), cp.reverse)
+
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.FetchValues = false
+	itOpt.Reverse = cp.fn == "le" || cp.fn == "lt"
+	it := pstore.NewIterator(itOpt)
+	defer it.Close()
+	pk := x.ParsedKey{
+		Attr: cp.attr,
+	}
+	countPrefix := pk.CountPrefix(cp.reverse)
+
+	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
+		key := it.Item().Key()
+		pl, decr := posting.GetOrCreate(key, cp.gid)
+		defer decr()
+		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+	}
 }

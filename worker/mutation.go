@@ -18,8 +18,12 @@
 package worker
 
 import (
-	"golang.org/x/net/context"
+	"bytes"
 
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+
+	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -49,6 +53,12 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) (i int, err
 		typ, err := schema.State().TypeOf(edge.Attr)
 		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
+		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
+			if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
+				return i, err
+			}
+			continue
+		}
 		// Once mutation comes via raft we do best effort conversion
 		// Type check is done before proposing mutation, in case schema is not
 		// present, some invalid entries might be written initially
@@ -106,6 +116,12 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 					return err
 				}
 			}
+
+			if current.Count {
+				if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 		// schema was present already
@@ -115,16 +131,25 @@ func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) err
 				current.Directive == protos.SchemaUpdate_INDEX); err != nil {
 				return err
 			}
-		} else if (current.Directive == protos.SchemaUpdate_REVERSE) !=
-			(old.Directive == protos.SchemaUpdate_REVERSE) {
+		} else if needsRebuildingReverses(old, current) {
 			// Add or remove reverse edge based on update.Reverse
 			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
 				current.Directive == protos.SchemaUpdate_REVERSE); err != nil {
 				return err
 			}
 		}
+
+		if current.Count != old.Count {
+			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count); err != nil {
+			}
+		}
 	}
 	return nil
+}
+
+func needsRebuildingReverses(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
+	return (current.Directive == protos.SchemaUpdate_REVERSE) !=
+		(old.Directive == protos.SchemaUpdate_REVERSE)
 }
 
 func needReindexing(old protos.SchemaUpdate, current protos.SchemaUpdate) bool {
@@ -171,6 +196,27 @@ func updateSchemaType(attr string, typ types.TypeID, raftIndex uint64, group uin
 	updateSchema(attr, s, raftIndex, group)
 }
 
+func numEdges(attr string) int {
+	iterOpt := badger.DefaultIteratorOptions
+	iterOpt.FetchValues = false
+	it := pstore.NewIterator(iterOpt)
+	defer it.Close()
+	pk := x.ParsedKey{
+		Attr: attr,
+	}
+	prefix := pk.DataPrefix()
+	count := 0
+	for it.Seek(prefix); it.Valid(); it.Next() {
+		item := it.Item()
+		key := item.Key()
+		if !bytes.HasPrefix(key, prefix) {
+			break
+		}
+		count++
+	}
+	return count
+}
+
 func checkSchema(s *protos.SchemaUpdate) error {
 	typ := types.TypeID(s.ValueType)
 	if typ == types.UidID && s.Directive == protos.SchemaUpdate_INDEX {
@@ -183,17 +229,23 @@ func checkSchema(s *protos.SchemaUpdate) error {
 	}
 	if t, err := schema.State().TypeOf(s.Predicate); err == nil {
 		// schema was defined already
-		if typ.IsScalar() != t.IsScalar() {
-			return x.Errorf("Schema change not allowed from predicate to uid or vice versa")
+		if t.IsScalar() == typ.IsScalar() {
+			// New and old type are both scalar or both are uid. Allow schema change.
+			return nil
+		}
+		// uid => scalar or scalar => uid. Check that there shouldn't be any data.
+		if numEdges(s.Predicate) > 0 {
+			return x.Errorf("Schema change not allowed from predicate to uid or vice versa"+
+				" till you have data for pred: %s", s.Predicate)
 		}
 	}
 	return nil
 }
 
 // If storage type is specified, then check compatibility or convert to schema type
-// if no storage type is specified then convert to schema type
+// if no storage type is specified then convert to schema type.
 func validateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) error {
-	if types.TypeID(edge.ValueType) == types.DefaultID && string(edge.Value) == x.DeleteAllObjects {
+	if types.TypeID(edge.ValueType) == types.DefaultID && string(edge.Value) == x.Star {
 		if edge.Op != protos.DirectedEdge_DEL {
 			return x.Errorf("* allowed only with delete operation")
 		}
@@ -252,7 +304,9 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 	pl := pools().get(addr)
 	conn, err := pl.Get()
 	if err != nil {
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		che <- err
 		return
 	}
@@ -303,7 +357,9 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 		select {
 		case err := <-errors:
 			if err != nil {
-				x.TraceError(ctx, x.Wrapf(err, "Error while running all mutations"))
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Error while running all mutations: %+v", err)
+				}
 				return err
 			}
 		case <-ctx.Done():

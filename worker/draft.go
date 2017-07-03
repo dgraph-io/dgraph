@@ -29,6 +29,7 @@ import (
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -303,46 +304,54 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 
 	slice := slicePool.Get().([]byte)
 	if len(slice) < proposal.Size() {
-		slice = make([]byte, proposal.Size())
+		slice = make([]byte, proposal.Size()+1)
 	}
 	defer slicePool.Put(slice)
 
-	upto, err := proposal.MarshalTo(slice)
+	upto, err := proposal.MarshalTo(slice[1:])
 	if err != nil {
 		return err
 	}
-	proposalData := make([]byte, upto+1)
-	// Examining first byte of proposalData will quickly tell us what kind of
+	// Examining first byte of slice will quickly tell us what kind of
 	// proposal this is.
 	if proposal.RebuildIndex != nil {
-		proposalData[0] = proposalReindex
+		slice[0] = proposalReindex
 	} else if proposal.Mutations != nil {
-		proposalData[0] = proposalMutation
+		slice[0] = proposalMutation
 	} else if proposal.Membership != nil {
-		proposalData[0] = proposalMembership
+		slice[0] = proposalMembership
 	} else {
 		x.Fatalf("Unknown proposal")
 	}
-	copy(proposalData[1:], slice)
 
-	if err = n.Raft().Propose(ctx, proposalData); err != nil {
+	if err = n.Raft().Propose(ctx, slice[:upto+1]); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
 
 	// Wait for the proposal to be committed.
 	if proposal.Mutations != nil {
-		x.Trace(ctx, "Waiting for the proposal: mutations.")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Waiting for the proposal: mutations.")
+		}
 	} else if proposal.Membership != nil {
-		x.Trace(ctx, "Waiting for the proposal: membership update.")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Waiting for the proposal: membership update.")
+		}
 	} else if proposal.RebuildIndex != nil {
-		x.Trace(ctx, "Waiting for the proposal: RebuildIndex")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Waiting for the proposal: RebuildIndex")
+		}
 	} else {
-		x.Fatalf("Unknown proposal")
+		log.Fatalf("Unknown proposal")
 	}
 
 	select {
 	case err = <-che:
-		x.TraceError(ctx, err)
+		if err != nil {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(err.Error())
+			}
+		}
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
@@ -433,10 +442,12 @@ func (n *node) processMutation(e raftpb.Entry, m *protos.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
-
-	success, err := runMutations(ctx, m.Edges)
-	if err != nil {
-		x.TraceError(n.ctx, err)
+	var success int
+	var err error
+	if success, err = runMutations(ctx, m.Edges); err != nil {
+		if tr, ok := trace.FromContext(n.ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return err
 	}
 
@@ -471,7 +482,9 @@ func (n *node) processSchemaMutations(e raftpb.Entry, m *protos.Mutations) error
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
 	if err := runSchemaMutations(ctx, m.Schema); err != nil {
-		x.TraceError(n.ctx, err)
+		if tr, ok := trace.FromContext(n.ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return err
 	}
 	return nil
@@ -682,7 +695,9 @@ func (n *node) Run() {
 				}
 			}
 			if len(rd.CommittedEntries) > 0 {
-				x.Trace(n.ctx, "Found %d committed entries", len(rd.CommittedEntries))
+				if tr, ok := trace.FromContext(n.ctx); ok {
+					tr.LazyPrintf("Found %d committed entries", len(rd.CommittedEntries))
+				}
 			}
 
 			for _, entry := range rd.CommittedEntries {
@@ -712,9 +727,13 @@ func (n *node) Run() {
 				go func() {
 					select {
 					case <-n.ctx.Done(): // time out
-						x.Trace(n.ctx, "context timed out while transfering leadership")
+						if tr, ok := trace.FromContext(n.ctx); ok {
+							tr.LazyPrintf("context timed out while transfering leadership")
+						}
 					case <-time.After(1 * time.Second):
-						x.Trace(n.ctx, "Timed out transfering leadership")
+						if tr, ok := trace.FromContext(n.ctx); ok {
+							tr.LazyPrintf("Timed out transfering leadership")
+						}
 					}
 					n.Raft().Stop()
 					close(n.done)
@@ -783,7 +802,9 @@ func (n *node) snapshot(skip uint64) {
 		return
 	}
 	snapshotIdx := le - skip
-	x.Trace(n.ctx, "Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
+	if tr, ok := trace.FromContext(n.ctx); ok {
+		tr.LazyPrintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, snapshotIdx)
+	}
 	rc, err := n.raftContext.Marshal()
 	x.Check(err)
 

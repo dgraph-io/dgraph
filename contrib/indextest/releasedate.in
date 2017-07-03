@@ -1,5 +1,5 @@
 {
- me(id: <m.07mv_h>) {
+ me(func:eq(_xid_,"m.07mv_h")) {
   director.film {
    directed_by {
     director.film {

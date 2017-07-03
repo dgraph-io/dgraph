@@ -127,8 +127,7 @@ func (w *WaterMark) process() {
 		// Update mark by going through all indices in order; and checking if they have
 		// been done. Stop at the first index, which isn't done.
 		doneUntil := w.DoneUntil()
-		AssertTruef(doneUntil < index,
-			"Watermark %s: Done until %d should be below new index: %d", w.Name, doneUntil, index)
+		AssertTrue(doneUntil < index)
 
 		until := doneUntil
 		loops := 0

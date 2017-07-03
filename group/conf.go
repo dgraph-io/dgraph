@@ -53,6 +53,11 @@ func parsePredicates(groupId uint32, p string) error {
 			val: pred,
 			gid: groupId,
 		}
+		if strings.HasPrefix(pred, "~") {
+			return fmt.Errorf("Cannot assign group to reverses. They are stored"+
+				" with the original predicate: %+v", pred)
+		}
+
 		if strings.HasSuffix(pred, "*") {
 			meta.val = strings.TrimSuffix(meta.val, "*")
 		} else {
@@ -183,10 +188,6 @@ func fpGroup(pred string) uint32 {
 }
 
 func BelongsTo(pred string) uint32 {
-	if pred == "_lease_" {
-		// lease is stored on same group where we store xid
-		pred = "_xid_"
-	}
 	for _, meta := range groupConfig.pred {
 		if meta.exactMatch && meta.val == pred {
 			return meta.gid

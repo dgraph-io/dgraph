@@ -18,9 +18,11 @@
 package rdf
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
+	"io"
 	"log"
-	"strconv"
 	"strings"
 	"unicode"
 
@@ -31,159 +33,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var emptyEdge protos.DirectedEdge
 var (
 	ErrEmpty      = errors.New("rdf: harmless error, e.g. comment line")
-	ErrInvalidUID = errors.New("UID has to be greater than one.")
+	ErrInvalidUID = errors.New("UID has to be greater than zero.")
 )
-
-// Gets the uid corresponding
-func ParseUid(xid string) (uint64, error) {
-	// If string represents a UID, convert to uint64 and return.
-	uid, err := strconv.ParseUint(xid, 0, 64)
-	if err != nil {
-		return 0, err
-	}
-	if uid == 0 {
-		return 0, ErrInvalidUID
-	}
-	return uid, nil
-}
-
-type NQuad struct {
-	*protos.NQuad
-}
-
-func typeValFrom(val *protos.Value) types.Val {
-	switch val.Val.(type) {
-	case *protos.Value_BytesVal:
-		return types.Val{types.BinaryID, val.GetBytesVal()}
-	case *protos.Value_IntVal:
-		return types.Val{types.IntID, val.GetIntVal()}
-	case *protos.Value_StrVal:
-		return types.Val{types.StringID, val.GetStrVal()}
-	case *protos.Value_BoolVal:
-		return types.Val{types.BoolID, val.GetBoolVal()}
-	case *protos.Value_DoubleVal:
-		return types.Val{types.FloatID, val.GetDoubleVal()}
-	case *protos.Value_GeoVal:
-		return types.Val{types.GeoID, val.GetGeoVal()}
-	case *protos.Value_DatetimeVal:
-		return types.Val{types.DateTimeID, val.GetDatetimeVal()}
-	case *protos.Value_PasswordVal:
-		return types.Val{types.PasswordID, val.GetPasswordVal()}
-	case *protos.Value_DefaultVal:
-		return types.Val{types.DefaultID, val.GetDefaultVal()}
-	}
-	return types.Val{types.StringID, ""}
-}
-
-func byteVal(nq NQuad) ([]byte, error) {
-	// We infer object type from type of value. We set appropriate type in parse
-	// function or the Go client has already set.
-	p := typeValFrom(nq.ObjectValue)
-	// These three would have already been marshalled to bytes by the client or
-	// in parse function.
-	if p.Tid == types.GeoID || p.Tid == types.DateTimeID {
-		return p.Value.([]byte), nil
-	}
-
-	p1 := types.ValueForType(types.BinaryID)
-	if err := types.Marshal(p, &p1); err != nil {
-		return []byte{}, err
-	}
-	return []byte(p1.Value.([]byte)), nil
-}
-
-// ToEdge is useful when you want to find the UID corresponding to XID for
-// just one edge. The method doesn't automatically generate a UID for an XID.
-func (nq NQuad) ToEdge() (*protos.DirectedEdge, error) {
-	var err error
-	sid, err := ParseUid(nq.Subject)
-	if err != nil {
-		return nil, err
-	}
-	out := &protos.DirectedEdge{
-		Attr:   nq.Predicate,
-		Label:  nq.Label,
-		Lang:   nq.Lang,
-		Entity: sid,
-		Facets: nq.Facets,
-	}
-
-	switch nq.valueType() {
-	case x.ValueUid:
-		oid, err := ParseUid(nq.ObjectId)
-		if err != nil {
-			return nil, err
-		}
-		out.ValueId = oid
-	case x.ValuePlain, x.ValueMulti:
-		if err = copyValue(out, nq); err != nil {
-			return &emptyEdge, err
-		}
-	}
-
-	return out, nil
-}
-
-func toUid(subject string, newToUid map[string]uint64) (uid uint64, err error) {
-	if id, err := ParseUid(subject); err == nil || err == ErrInvalidUID {
-		return id, err
-	}
-	// It's an xid
-	if id, present := newToUid[subject]; present {
-		return id, err
-	}
-	return 0, x.Errorf("uid not found/generated for xid %s\n", subject)
-}
-
-// ToEdgeUsing determines the UIDs for the provided XIDs using the
-// xidToUid map.
-func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*protos.DirectedEdge, error) {
-	var err error
-	uid, err := toUid(nq.Subject, newToUid)
-	if err != nil {
-		return nil, err
-	}
-	out := &protos.DirectedEdge{
-		Entity: uid,
-		Attr:   nq.Predicate,
-		Label:  nq.Label,
-		Lang:   nq.Lang,
-		Facets: nq.Facets,
-	}
-
-	switch nq.valueType() {
-	case x.ValueUid:
-		uid, err := toUid(nq.ObjectId, newToUid)
-		if err != nil {
-			return nil, err
-		}
-		out.ValueId = uid
-	case x.ValuePlain, x.ValueMulti:
-		if err = copyValue(out, nq); err != nil {
-			return &emptyEdge, err
-		}
-	}
-	return out, nil
-}
-
-func copyValue(out *protos.DirectedEdge, nq NQuad) error {
-	var err error
-	if out.Value, err = byteVal(nq); err != nil {
-		return err
-	}
-	out.ValueType = uint32(nq.ObjectType)
-	return nil
-}
-
-func (nq NQuad) valueType() x.ValueTypeInfo {
-	hasValue := nq.ObjectValue != nil
-	hasLang := len(nq.Lang) > 0
-	hasSpecialId := len(nq.ObjectId) == 0
-	return x.ValueType(hasValue, hasLang, hasSpecialId)
-}
 
 // Function to do sanity check for subject, predicate, object and label strings.
 func sane(s string) bool {
@@ -204,7 +57,11 @@ func sane(s string) bool {
 
 // Parse parses a mutation string and returns the NQuad representation for it.
 func Parse(line string) (rnq protos.NQuad, rerr error) {
-	l := lex.NewLexer(line).Run(lexText)
+	l := lex.Lexer{
+		Input: line,
+	}
+	l.Run(lexText)
+
 	it := l.NewIterator()
 	var oval string
 	var vend bool
@@ -215,6 +72,24 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 		switch item.Typ {
 		case itemSubject:
 			rnq.Subject = strings.Trim(item.Val, " ")
+		case itemVarKeyword:
+			it.Next()
+			if item = it.Item(); item.Typ != itemLeftRound {
+				return rnq, x.Errorf("Expected '(', found: %s", item.Val)
+			}
+			it.Next()
+			if item = it.Item(); item.Typ != itemVarName {
+				return rnq, x.Errorf("Expected variable name, found: %s", item.Val)
+			}
+			if len(rnq.Subject) > 0 || len(rnq.SubjectVar) > 0 {
+				rnq.ObjectVar = item.Val
+				vend = true
+			} else {
+				rnq.SubjectVar = item.Val
+			}
+
+			it.Next() // parse ')'
+
 		case itemPredicate:
 			rnq.Predicate = strings.Trim(item.Val, " ")
 
@@ -222,11 +97,12 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 			rnq.ObjectId = strings.Trim(item.Val, " ")
 
 		case itemStar:
-			// This is a special case for predicate or object.
-			if rnq.Predicate == "" {
-				rnq.Predicate = x.DeleteAllPredicates
+			if rnq.Subject == "" {
+				rnq.Subject = x.Star
+			} else if rnq.Predicate == "" {
+				rnq.Predicate = x.Star
 			} else {
-				rnq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.DeleteAllObjects}}
+				rnq.ObjectValue = &protos.Value{&protos.Value_DefaultVal{x.Star}}
 			}
 		case itemLiteral:
 			oval = item.Val
@@ -251,8 +127,8 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
-			if rnq.Predicate == x.DeleteAllPredicates {
-				return rnq, x.Errorf("If predicate is *, value should be * as well")
+			if rnq.Predicate == x.Star || rnq.Subject == x.Star {
+				return rnq, x.Errorf("If predicate/subject is *, value should be * as well")
 			}
 
 			val := strings.Trim(item.Val, " ")
@@ -313,18 +189,51 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 		// If no type is specified, we default to string.
 		rnq.ObjectType = int32(types.DefaultID)
 	}
-	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
+	if (len(rnq.Subject) == 0 && len(rnq.SubjectVar) == 0) || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)
 	}
-	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
+	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil && len(rnq.ObjectVar) == 0 {
 		return rnq, x.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
-	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) ||
-		!sane(rnq.Label) {
+	if !sane(rnq.Subject) || !sane(rnq.SubjectVar) || !sane(rnq.Predicate) ||
+		!sane(rnq.ObjectId) || !sane(rnq.Label) || !sane(rnq.ObjectVar) {
 		return rnq, x.Errorf("NQuad failed sanity check:%+v", rnq)
 	}
 
 	return rnq, nil
+}
+
+// ConvertToNQuads parses multi line mutation string to a list of NQuads.
+func ConvertToNQuads(mutation string) ([]*protos.NQuad, error) {
+	var nquads []*protos.NQuad
+	r := strings.NewReader(mutation)
+	reader := bufio.NewReader(r)
+	// x.Trace(ctx, "Converting to NQuad")
+
+	var strBuf bytes.Buffer
+	var err error
+	for {
+		err = x.ReadLine(reader, &strBuf)
+		if err != nil {
+			break
+		}
+		ln := strings.Trim(strBuf.String(), " \t")
+		if len(ln) == 0 {
+			continue
+		}
+		nq, err := Parse(ln)
+		if err == ErrEmpty { // special case: comment/empty line
+			continue
+		} else if err != nil {
+			// x.TraceError(ctx, x.Wrapf(err, "Error while parsing RDF"))
+			return nquads, err
+		}
+		nquads = append(nquads, &nq)
+	}
+	if err != io.EOF {
+		return nquads, err
+	}
+	return nquads, nil
 }
 
 func parseFacets(it *lex.ItemIterator, rnq *protos.NQuad) error {

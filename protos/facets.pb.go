@@ -19,6 +19,8 @@
 		FacetsList
 		Function
 		FilterTree
+		Num
+		AssignedIds
 		NQuad
 		Value
 		Mutation
@@ -41,8 +43,6 @@
 		Result
 		SortMessage
 		SortResult
-		Num
-		AssignedIds
 		RaftContext
 		Membership
 		MembershipUpdate

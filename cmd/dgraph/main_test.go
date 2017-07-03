@@ -20,6 +20,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
@@ -43,16 +44,17 @@ import (
 
 var q0 = `
 	{
-		user(id:alice) {
+		user(id:0x1) {
 			name
 		}
 	}
 `
+
 var m = `
 	mutation {
 		set {
                         # comment line should be ignored
-			<alice> <name> "Alice" .
+			<0x1> <name> "Alice" .
 		}
 	}
 `
@@ -66,6 +68,7 @@ func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
 	opt := badger.DefaultOptions
 	opt.Dir = dir1
 	opt.ValueDir = dir1
+	opt.SyncWrites = true
 	ps, err = badger.NewKV(&opt)
 	x.Check(err)
 
@@ -96,6 +99,10 @@ func childAttrs(sg *query.SubGraph) []string {
 	return out
 }
 
+func defaultContext() context.Context {
+	return context.WithValue(context.Background(), "mutation_allowed", true)
+}
+
 func processToFastJSON(q string) string {
 	res, err := gql.Parse(gql.Request{Str: q, Http: true})
 	if err != nil {
@@ -103,15 +110,16 @@ func processToFastJSON(q string) string {
 	}
 
 	var l query.Latency
-	ctx := context.Background()
-	sgl, err := query.ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	var buf bytes.Buffer
-	err = query.ToJson(&l, sgl, &buf, nil, false)
+	err = query.ToJson(&l, qr.Subgraphs, &buf, nil, false)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -125,15 +133,16 @@ func runQuery(q string) (string, error) {
 	}
 
 	var l query.Latency
-	ctx := context.Background()
-	sgl, err := query.ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
 
 	if err != nil {
 		return "", err
 	}
 
 	var buf bytes.Buffer
-	err = query.ToJson(&l, sgl, &buf, nil, false)
+	err = query.ToJson(qr.Latency, qr.Subgraphs, &buf, nil, false)
 	if err != nil {
 		return "", err
 	}
@@ -146,8 +155,9 @@ func runMutation(m string) error {
 		return err
 	}
 
-	ctx := context.Background()
-	_, err = mutationHandler(ctx, res.Mutation)
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	_, err = qr.ProcessWithMutation(defaultContext())
 	return err
 }
 
@@ -215,56 +225,6 @@ func TestSchemaMutation3Error(t *testing.T) {
 	require.Error(t, err)
 }
 
-// change from uid to scalar or vice versa
-func TestSchemaMutation4Error(t *testing.T) {
-	var m = `
-	mutation {
-		schema {
-            age:uid .
-		}
-	}
-	`
-	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
-	require.NoError(t, err)
-
-	m = `
-	mutation {
-		schema {
-            age:string .
-		}
-	}
-	`
-	err = runMutation(m)
-	require.Error(t, err)
-}
-
-// change from uid to scalar or vice versa
-func TestSchemaMutation5Error(t *testing.T) {
-	var m = `
-	mutation {
-		schema {
-            age:string .
-		}
-	}
-	`
-	// reset Schema
-	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
-	require.NoError(t, err)
-
-	m = `
-	mutation {
-		schema {
-            age:uid .
-		}
-	}
-	`
-	err = runMutation(m)
-	require.Error(t, err)
-}
-
 // add index
 func TestSchemaMutationIndexAdd(t *testing.T) {
 	var q1 = `
@@ -278,7 +238,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 	mutation {
 		set {
                         # comment line should be ignored
-			<alice> <name> "Alice" .
+			<0x1> <name> "Alice" .
 		}
 	}
 	`
@@ -319,7 +279,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	mutation {
 		set {
                         # comment line should be ignored
-			<alice> <name> "Alice" .
+			<0x1> <name> "Alice" .
 		}
 	}
 	`
@@ -364,7 +324,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 func TestSchemaMutationReverseAdd(t *testing.T) {
 	var q1 = `
 	{
-		user(id:alice2) {
+		user(id:0x3) {
 			~friend {
 				name
 			}
@@ -375,8 +335,8 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 	mutation {
 		set {
                         # comment line should be ignored
-			<alice> <friend> <alice2> .
-			<alice> <name> "Alice" .
+			<0x1> <friend> <0x3> .
+			<0x1> <name> "Alice" .
 		}
 	}
 	`
@@ -408,7 +368,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 func TestSchemaMutationReverseRemove(t *testing.T) {
 	var q1 = `
 	{
-		user(id:alice2) {
+		user(id:0x3) {
 			~friend {
 				name
 			}
@@ -419,8 +379,8 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	mutation {
 		set {
                         # comment line should be ignored
-			<alice> <friend> <alice2> .
-			<alice> <name> "Alice" .
+			<0x1> <friend> <0x3> .
+			<0x1> <name> "Alice" .
 		}
 	}
 	`
@@ -465,7 +425,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 func TestDeleteAll(t *testing.T) {
 	var q1 = `
 	{
-		user(id:alice2) {
+		user(id:0x3) {
 			~friend {
 				name
 			}
@@ -485,19 +445,19 @@ func TestDeleteAll(t *testing.T) {
 	var m2 = `
 	mutation{
 		delete{
-			<alice> <friend> * .
-			<alice> <name> * .
+			<0x1> <friend> * .
+			<0x1> <name> * .
 		}
 	}
 	`
 	var m1 = `
 	mutation {
 		set {
-			<alice> <friend> <alice1> .
-			<alice> <friend> <alice2> .
-			<alice> <name> "Alice" .
-			<alice1> <name> "Alice1" .
-			<alice2> <name> "Alice2" .
+			<0x1> <friend> <0x2> .
+			<0x1> <friend> <0x3> .
+			<0x1> <name> "Alice" .
+			<0x2> <name> "Alice1" .
+			<0x3> <name> "Alice2" .
 		}
 	}
 	`
@@ -523,7 +483,7 @@ func TestDeleteAll(t *testing.T) {
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice2"},{"name":"Alice1"}]}]}`,
+	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}`,
 		output)
 
 	err = runMutation(m2)
@@ -541,7 +501,7 @@ func TestDeleteAll(t *testing.T) {
 func TestDeleteAllSP(t *testing.T) {
 	var q1 = `
 	{
-		user(id:alice2) {
+		user(id:0x3) {
 			~friend {
 				name
 			}
@@ -559,21 +519,21 @@ func TestDeleteAllSP(t *testing.T) {
 	`
 	var q3 = `
 	{
-		user(id: alice) {
+		user(id: 0x1) {
 			_predicate_
 		}
 	}
 	`
 	var q4 = `
 	{
-		user(id: alice) {
+		user(id: 0x1) {
 			count(_predicate_)
 		}
 	}
 	`
 	var q5 = `
 	{
-		user(id: alice) {
+		user(id: 0x1) {
 			pred_count: count(_predicate_)
 		}
 	}
@@ -582,18 +542,18 @@ func TestDeleteAllSP(t *testing.T) {
 	var m2 = `
 	mutation{
 		delete{
-			<alice> * * .
+			<0x1> * * .
 		}
 	}
 	`
 	var m1 = `
 	mutation {
 		set {
-			<alice> <friend> <alice1> .
-			<alice> <friend> <alice2> .
-			<alice> <name> "Alice" .
-			<alice1> <name> "Alice1" .
-			<alice2> <name> "Alice2" .
+			<0x1> <friend> <0x2> .
+			<0x1> <friend> <0x3> .
+			<0x1> <name> "Alice" .
+			<0x2> <name> "Alice1" .
+			<0x3> <name> "Alice2" .
 		}
 	}
 	`
@@ -601,11 +561,12 @@ func TestDeleteAllSP(t *testing.T) {
 	var s1 = `
 	mutation {
 		schema {
-      friend:uid @reverse .
+			friend:uid @reverse .
 			name: string @index .
 		}
 	}
 	`
+
 	schema.ParseBytes([]byte(""), 1)
 	err := runMutation(s1)
 	require.NoError(t, err)
@@ -619,7 +580,7 @@ func TestDeleteAllSP(t *testing.T) {
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice2"},{"name":"Alice1"}]}]}`,
+	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}`,
 		output)
 
 	output, err = runQuery(q3)
@@ -658,8 +619,9 @@ func TestQuery(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: m, Http: true})
 	require.NoError(t, err)
 
-	ctx := context.Background()
-	_, err = mutationHandler(ctx, res.Mutation)
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	_, err = qr.ProcessWithMutation(defaultContext())
 
 	output := processToFastJSON(q0)
 	require.JSONEq(t, `{"user":[{"name":"Alice"}]}`, output)
@@ -684,13 +646,9 @@ var q5 = `
 `
 
 func TestSchemaValidationError(t *testing.T) {
-	res, err := gql.Parse(gql.Request{Str: m5, Http: true})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	_, err = mutationHandler(ctx, res.Mutation)
+	_, err := gql.Parse(gql.Request{Str: m5, Http: true})
 	require.Error(t, err)
-	output := processToFastJSON(strings.Replace(q5, "<id>", "ram", -1))
+	output := processToFastJSON(strings.Replace(q5, "<id>", "0x8", -1))
 	require.JSONEq(t, `{}`, output)
 }
 
@@ -698,8 +656,8 @@ var m6 = `
 	mutation {
 		set {
                         # comment line should be ignored
-			<ram2> <name2> "1"^^<xs:int> .
-			<shyam2> <name2> "1.5"^^<xs:float> .
+			<0x5> <name2> "1"^^<xs:int> .
+			<0x6> <name2> "1.5"^^<xs:float> .
 		}
 	}
 `
@@ -716,18 +674,19 @@ func TestSchemaConversion(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: m6, Http: true})
 	require.NoError(t, err)
 
-	ctx := context.Background()
-	_, err = mutationHandler(ctx, res.Mutation)
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	_, err = qr.ProcessWithMutation(defaultContext())
 
 	require.NoError(t, err)
-	output := processToFastJSON(strings.Replace(q6, "<id>", "shyam2", -1))
+	output := processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
 	require.JSONEq(t, `{"user":[{"name2":1}]}`, output)
 
 	s, ok := schema.State().Get("name2")
 	require.True(t, ok)
 	s.ValueType = uint32(types.FloatID)
 	schema.State().Set("name2", s)
-	output = processToFastJSON(strings.Replace(q6, "<id>", "shyam2", -1))
+	output = processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
 	require.JSONEq(t, `{"user":[{"name2":1.5}]}`, output)
 }
 
@@ -743,10 +702,10 @@ func TestMutationError(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: qErr, Http: true})
 	require.NoError(t, err)
 
-	ctx := context.Background()
-	_, err = mutationHandler(ctx, res.Mutation)
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	_, err = qr.ProcessWithMutation(defaultContext())
 	require.Error(t, err)
-
 }
 
 var qm = `
@@ -764,32 +723,21 @@ func TestAssignUid(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: qm, Http: true})
 	require.NoError(t, err)
 
-	ctx := context.Background()
-	allocIds, err := mutationHandler(ctx, res.Mutation)
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
+	er, err := qr.ProcessWithMutation(defaultContext())
 	require.NoError(t, err)
 
-	require.EqualValues(t, len(allocIds), 2, "Expected two UIDs to be allocated")
-	_, ok := allocIds["x"]
+	require.EqualValues(t, len(er.Allocations), 2, "Expected two UIDs to be allocated")
+	_, ok := er.Allocations["x"]
 	require.True(t, ok)
-	_, ok = allocIds["y"]
+	_, ok = er.Allocations["y"]
 	require.True(t, ok)
-}
-
-func TestConvertToEdges(t *testing.T) {
-	q1 := `<0x01> <type> <0x02> .
-	       <0x01> <character> <0x03> .`
-	nquads, err := convertToNQuad(context.Background(), q1)
-	require.NoError(t, err)
-
-	mr, err := convertToEdges(context.Background(), nquads)
-	require.NoError(t, err)
-
-	require.EqualValues(t, len(mr.edges), 2)
 }
 
 var q1 = `
 {
-	al(id: alice) {
+	al(id: 0x1) {
 		status
 		follows {
 			status
@@ -829,16 +777,16 @@ func TestListPred(t *testing.T) {
 	var m = `
 	mutation {
 		set {
-			<alice> <name> "Alice" .
-			<alice> <age> "13" .
-			<alice> <friend> <bob> .
+			<0x1> <name> "Alice" .
+			<0x1> <age> "13" .
+			<0x1> <friend> <0x4> .
 		}
 	}
 	`
 	var s = `
 	mutation {
 		schema {
-            name:string @index .
+			name:string @index .
 		}
 	}
 	`
@@ -871,18 +819,18 @@ func TestExpandPredError(t *testing.T) {
 	var m = `
 	mutation {
 		set {
-			<alice> <name> "Alice" .
-			<alice> <age> "13" .
-			<alice> <friend> <bob> .
-			<bob> <name> "bob" .
-			<bob> <age> "12" .
+			<0x1> <name> "Alice" .
+			<0x1> <age> "13" .
+			<0x1> <friend> <0x4> .
+			<0x4> <name> "bob" .
+			<0x4> <age> "12" .
 		}
 	}
 	`
 	var s = `
 	mutation {
 		schema {
-            name:string @index .
+			name:string @index .
 		}
 	}
 	`
@@ -905,7 +853,7 @@ func TestExpandPred(t *testing.T) {
 	{
 		me(func:anyofterms(name, "Alice")) {
 			expand(_all_) {
-  			expand(_all_)
+				expand(_all_)
 			}
 		}
 	}
@@ -913,22 +861,21 @@ func TestExpandPred(t *testing.T) {
 	var m = `
 	mutation {
 		set {
-			<alice> <name> "Alice" .
-			<alice> <age> "13" .
-			<alice> <friend> <bob> .
-			<bob> <name> "bob" .
-			<bob> <age> "12" .
+			<0x1> <name> "Alice" .
+			<0x1> <age> "13" .
+			<0x1> <friend> <0x4> .
+			<0x4> <name> "bob" .
+			<0x4> <age> "12" .
 		}
 	}
 	`
 	var s = `
 	mutation {
 		schema {
-            name:string @index .
+			name:string @index .
 		}
 	}
 	`
-
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
 	err := runMutation(m)
@@ -942,8 +889,364 @@ func TestExpandPred(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"me":[{"age":"13","friend":[{"age":"12","name":"bob"}],"name":"Alice"}]}`,
 		output)
-
 }
+
+var threeNiceFriends = `{
+  "me": [
+    {
+      "friend": [
+        {
+          "nice": "true"
+        },
+        {
+          "nice": "true"
+        },
+        {
+          "nice": "true"
+        }
+      ]
+    }
+  ]
+}`
+
+func TestMutationSubjectVariables(t *testing.T) {
+	m1 := `
+		mutation {
+			set {
+                <0x500>    <friend>   <_:alice> .
+                <0x500>    <friend>   <_:bob> .
+                <0x500>    <friend>   <_:chris> .
+			}
+		}
+    `
+	err := runMutation(m1)
+	require.NoError(t, err)
+
+	m2 := `
+        mutation {
+			set {
+				var(myfriend) <nice> "true" .
+			}
+		}
+		{
+			me(id: 0x500) {
+				myfriend as friend
+			}
+		}`
+
+	parsed, err := gql.Parse(gql.Request{Str: m2, Http: true})
+	require.NoError(t, err)
+
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &parsed}
+	_, err = qr.ProcessWithMutation(defaultContext())
+	require.NoError(t, err)
+
+	q1 := `
+		{
+			me(id: 0x500) {
+				friend  {
+					nice
+				}
+			}
+		}
+    `
+	r, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, threeNiceFriends, r)
+}
+
+func TestMutationSubjectVariablesSingleMutation(t *testing.T) {
+	m1 := `
+		mutation {
+			set {
+                <0x700>          <friend>   <_:alice> .
+                <0x700>          <friend>   <_:bob> .
+                <0x700>          <friend>   <_:chris> .
+				var(myfriend) <nice>     "true" .
+			}
+		}
+		{
+			me(id: 0x700) {
+				myfriend as friend
+			}
+		}
+    `
+
+	parsed, err := gql.Parse(gql.Request{Str: m1, Http: true})
+	require.NoError(t, err)
+
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &parsed}
+	_, err = qr.ProcessWithMutation(defaultContext())
+	require.NoError(t, err)
+
+	q1 := `
+		{
+			me(id: 0x700) {
+				friend  {
+					nice
+				}
+			}
+		}
+    `
+	r, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, threeNiceFriends, r)
+}
+
+func TestMutationObjectVariables(t *testing.T) {
+	m1 := `
+		mutation {
+			set {
+                <0x600>    <friend>   <0x501> .
+                <0x600>    <friend>   <0x502> .
+                <0x600>    <friend>   <0x503> .
+				<0x600>    <likes>    var(myfriend) .
+			}
+		}
+		{
+			me(id: 0x600) {
+				myfriend as friend
+			}
+		}
+    `
+
+	parsed, err := gql.Parse(gql.Request{Str: m1, Http: true})
+	require.NoError(t, err)
+
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &parsed}
+	_, err = qr.ProcessWithMutation(defaultContext())
+
+	require.NoError(t, err)
+
+	q1 := `
+		{
+			me(id: 0x600) {
+				count(likes)
+            }
+		}
+    `
+	r, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"me":[{"count(likes)":3}]}`, r)
+}
+
+func TestDeletePredicate(t *testing.T) {
+	var m2 = `
+	mutation {
+		delete {
+			* <friend> * .
+			* <name> * .
+		}
+	}
+	`
+
+	var m1 = `
+	mutation {
+		set {
+			<0x1> <friend> <0x2> .
+			<0x1> <friend> <0x3> .
+			<0x1> <name> "Alice" .
+			<0x2> <name> "Alice1" .
+			<0x3> <name> "Alice2" .
+			<0x3> <age> "13" .
+		}
+	}
+	`
+
+	var q1 = `
+	{
+		user(func: anyofterms(name, "alice")) {
+			friend {
+				name
+			}
+		}
+	}
+	`
+	var q2 = `
+	{
+		user(id: [0x1, 0x2, 0x3]) {
+			name
+		}
+	}
+	`
+	var q3 = `
+	{
+		user(id:0x3) {
+			age
+			~friend {
+				name
+			}
+		}
+	}
+	`
+
+	var q4 = `
+		{
+			user(id:0x3) {
+				_predicate_
+			}
+		}
+	`
+
+	var q5 = `
+		{
+			user(id: 0x3) {
+				age
+				friend {
+					name
+				}
+			}
+		}
+		`
+
+	var s1 = `
+	mutation {
+		schema {
+			friend: uid @reverse .
+			name: string @index .
+		}
+	}
+	`
+
+	var s2 = `
+	mutation {
+		schema {
+			friend: string @index .
+			name: uid @reverse .
+		}
+	}
+	`
+
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(s1)
+	require.NoError(t, err)
+
+	err = runMutation(m1)
+	require.NoError(t, err)
+
+	// For gentleCommit to happen and postings to persist to disk. To do * P * we iterate and
+	// get the uids to delete from disk.
+	time.Sleep(5 * time.Second)
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	var m map[string]interface{}
+	err = json.Unmarshal([]byte(output), &m)
+	require.NoError(t, err)
+	friends := m["user"].([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
+	require.Equal(t, 3, len(friends))
+
+	output, err = runQuery(q2)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"name":"Alice"},{"name":"Alice1"},{"name":"Alice2"}]}`,
+		output)
+
+	output, err = runQuery(q3)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"age": "13", "~friend" : [{"name":"Alice"}]}]}`, output)
+
+	output, err = runQuery(q4)
+	require.NoError(t, err)
+	// TODO (pawan) - Fix tests so that they clear data before start of each test otherwise we get
+	// inconsistent results.
+	//	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"},{"_name_":"pred.rel"},{"_name_":"pred.val"}]}]}`, output)
+
+	err = runMutation(m2)
+	require.NoError(t, err)
+
+	output, err = runQuery(q1)
+	require.JSONEq(t, `{}`, output)
+
+	output, err = runQuery(q2)
+	require.NoError(t, err)
+	require.JSONEq(t, `{}`, output)
+
+	output, err = runQuery(q5)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"age": "13"}]}`, output)
+
+	output, err = runQuery(q4)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"},{"_name_":"pred.val"}]}]}`, output)
+
+	// Lets try to change the type of predicates now.
+	err = runMutation(s2)
+	require.NoError(t, err)
+}
+
+// change from uid to scalar or vice versa
+func TestSchemaMutation4Error(t *testing.T) {
+	var m = `
+	mutation {
+		schema {
+            age:int .
+		}
+	}
+	`
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	m = `
+	mutation {
+		set {
+			<0x9> <age> "13" .
+		}
+	}
+	`
+	err = runMutation(m)
+	require.NoError(t, err)
+
+	m = `
+	mutation {
+		schema {
+            age:uid .
+		}
+	}
+	`
+	err = runMutation(m)
+	require.Error(t, err)
+}
+
+// change from uid to scalar or vice versa
+func TestSchemaMutation5Error(t *testing.T) {
+	var m = `
+	mutation {
+		schema {
+            friends:uid .
+		}
+	}
+	`
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	m = `
+	mutation {
+		set {
+			<0x8> <friends> <0x5> .
+		}
+	}
+	`
+	err = runMutation(m)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+	m = `
+	mutation {
+		schema {
+            friends:string .
+		}
+	}
+	`
+	err = runMutation(m)
+	require.Error(t, err)
+}
+
 func TestMain(m *testing.M) {
 	x.Init()
 	dir1, dir2, ps, _ := prepare()

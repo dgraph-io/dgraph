@@ -20,6 +20,7 @@ package schema
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/badger"
@@ -40,7 +41,7 @@ var (
 
 type stateGroup struct {
 	// Can have fine grained locking later if necessary, per group or predicate
-	x.SafeMutex
+	sync.RWMutex // x.SafeMutex is slow.
 	// Map containing predicate to type information.
 	predicate map[string]*protos.SchemaUpdate
 	elog      trace.EventLog
@@ -249,6 +250,20 @@ func (s *stateGroup) isReversed(pred string) bool {
 	return false
 }
 
+// AddCount returns whether we want to mantain a count index for the given predicate or not.
+func (s *state) HasCount(pred string) bool {
+	return s.get(group.BelongsTo(pred)).hasCount(pred)
+}
+
+func (s *stateGroup) hasCount(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	if schema, ok := s.predicate[pred]; ok {
+		return schema.Count
+	}
+	return false
+}
+
 func Init(ps *badger.KV) {
 	pstore = ps
 	syncCh = make(chan SyncEntry, 10000)
@@ -276,14 +291,6 @@ func LoadFromDb(gid uint32) error {
 		}
 		State().Set(attr, s)
 	}
-	if group.BelongsTo("_xid_") != gid {
-		return nil
-	}
-	State().Set("_xid_", protos.SchemaUpdate{
-		ValueType: uint32(types.StringID),
-		Directive: protos.SchemaUpdate_INDEX,
-		Tokenizer: []string{"hash"},
-	})
 	return nil
 }
 

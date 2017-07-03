@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
@@ -67,14 +68,19 @@ func SubscribeOverNetwork(ctx context.Context, attrs []string) error {
 			return x.Wrapf(err, "SubscribeOverNetwork: while retrieving connection.")
 		}
 		defer pl.Put(conn)
-		x.Trace(ctx, "Sending request to %v", addr)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("attr: %v groupId: %v", attr, gid)
+		}
 
 		fmt.Println("tzdybal: sending Subscribe request (attrs: ", attrs, ")")
 		c := protos.NewWorkerClient(conn)
 		client, err := c.Subscribe(ctx, &protos.SubscribeRequest{attr})
 		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.Subscribe"))
-			return err
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while calling Worker.Subscribe: %v", err)
+				tr.SetError()
+				return err
+			}
 		}
 
 		for {

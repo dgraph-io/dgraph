@@ -55,19 +55,6 @@ message SortResult {
 	repeated List uid_matrix = 1;
 }
 
-message Num {
-	uint32 group = 1;
-	uint64 val = 2;
-	repeated string xids = 3;
-}
-
-message AssignedIds {
-	uint64 startId = 1;
-	uint64 endId = 2;
-	// map of xid -> assigned uid
-	map<string, uint64> xidToUid = 3;
-}
-
 message RaftContext {
 	fixed64 id = 1;
 	uint32 group = 2;

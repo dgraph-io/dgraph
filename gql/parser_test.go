@@ -20,12 +20,12 @@ package gql
 import (
 	"io/ioutil"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/dgraph-io/badger/badger"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -162,7 +162,7 @@ func TestParseQueryAggChild(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestParseQueryWithDash(t *testing.T) {
+func TestParseQueryWithXIDError(t *testing.T) {
 	query := `
 {
       me(id: alice-in-wonderland) {
@@ -179,33 +179,8 @@ func TestParseQueryWithDash(t *testing.T) {
         }
       }
     }`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	require.Equal(t, "alice-in-wonderland", res.Query[0].ID[0])
-	require.Equal(t, "written-in", res.Query[0].Children[1].Attr)
-}
-
-func TestParseQueryWithDash2(t *testing.T) {
-	query := `
-    {
-      me(id: [alice-in-wonderland, bob-here-too]) {
-        type
-        written-in
-        name
-        character {
-                name
-        }
-        author {
-                name
-                born
-                died
-        }
-      }
-    }`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	require.Equal(t, []string{"alice-in-wonderland", "bob-here-too"}, res.Query[0].ID)
-	require.Equal(t, "written-in", res.Query[0].Children[1].Attr)
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
 }
 
 func TestParseQueryWithMultiVarValError(t *testing.T) {
@@ -906,7 +881,7 @@ func TestParseQueryWithMultipleVar(t *testing.T) {
 func TestParseShortestPath(t *testing.T) {
 	query := `
 	{
-		shortest(from:0x0a, to:0x0b) {
+		shortest(from:0x0a, to:0x0b, numpaths: 3) {
 			friends
 			name
 		}
@@ -918,6 +893,7 @@ func TestParseShortestPath(t *testing.T) {
 	require.Equal(t, 1, len(res.Query))
 	require.Equal(t, "0x0a", res.Query[0].Args["from"])
 	require.Equal(t, "0x0b", res.Query[0].Args["to"])
+	require.Equal(t, "3", res.Query[0].Args["numpaths"])
 }
 
 func TestParseMultipleQueries(t *testing.T) {
@@ -1045,13 +1021,13 @@ func TestParseIdList(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
-	require.Equal(t, []string{"0x1"}, gq.ID)
+	require.Equal(t, []uint64{0x1}, gq.UID)
 }
 
 func TestParseIdList1(t *testing.T) {
 	query := `
 	query {
-		user(id: [m.abcd, 0x1, abc, ade, 0x34]) {
+		user(id: [0x1, 0x34]) {
 			type.object.name
 		}
 	}`
@@ -1060,14 +1036,14 @@ func TestParseIdList1(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
-	require.Equal(t, []string{"m.abcd", "0x1", "abc", "ade", "0x34"}, gq.ID)
-	require.Equal(t, 5, len(gq.ID))
+	require.Equal(t, []uint64{0x1, 0x34}, gq.UID)
+	require.Equal(t, 2, len(gq.UID))
 }
 
 func TestParseIdListError(t *testing.T) {
 	query := `
 	query {
-		user(id: [m.abcd, 0x1, abc, ade, 0x34) {
+		user(id: [0x1, 0x1, abc, ade, 0x34)] {
 			type.object.name
 		}
 	}`
@@ -1078,7 +1054,7 @@ func TestParseIdListError(t *testing.T) {
 func TestParseFirst(t *testing.T) {
 	query := `
 	query {
-		user(id: m.abcd) {
+		user(id: 0x1) {
 			type.object.name
 			friends (first: 10) {
 			}
@@ -1094,7 +1070,7 @@ func TestParseFirst(t *testing.T) {
 func TestParseFirst_error(t *testing.T) {
 	query := `
 	query {
-		user(id: m.abcd) {
+		user(id: 0x1) {
 			type.object.name
 			friends (first: ) {
 			}
@@ -1107,7 +1083,7 @@ func TestParseFirst_error(t *testing.T) {
 func TestParseAfter(t *testing.T) {
 	query := `
 	query {
-		user(id: m.abcd) {
+		user(id: 0x1) {
 			type.object.name
 			friends (first: 10, after: 3) {
 			}
@@ -1124,7 +1100,7 @@ func TestParseAfter(t *testing.T) {
 func TestParseOffset(t *testing.T) {
 	query := `
 	query {
-		user(id: m.abcd) {
+		user(id: 0x1) {
 			type.object.name
 			friends (first: 10, offset: 3) {
 			}
@@ -1141,7 +1117,7 @@ func TestParseOffset(t *testing.T) {
 func TestParseOffset_error(t *testing.T) {
 	query := `
 	query {
-		user(id: m.abcd) {
+		user(id: 0x1) {
 			type.object.name
 			friends (first: 10, offset: ) {
 			}
@@ -1424,7 +1400,7 @@ func TestParseMutation(t *testing.T) {
 		mutation {
 			set {
 				<name> <is> <something> .
-				<hometown> <is> <san francisco> .
+				<hometown> <is> <san/francisco> .
 			}
 			delete {
 				<name> <is> <something-else> .
@@ -1433,9 +1409,15 @@ func TestParseMutation(t *testing.T) {
 	`
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	require.NotEqual(t, strings.Index(res.Mutation.Set, "<name> <is> <something> ."), -1)
-	require.NotEqual(t, strings.Index(res.Mutation.Set, "<hometown> <is> <san francisco> ."), -1)
-	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
+	require.EqualValues(t, protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something"},
+		*res.Mutation.Set[0])
+	require.EqualValues(t, protos.NQuad{
+		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
+		*res.Mutation.Set[1])
+	require.EqualValues(t, protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something-else"},
+		*res.Mutation.Del[0])
 }
 
 func TestParseMutation_error(t *testing.T) {
@@ -1482,7 +1464,7 @@ func TestParseMutationAndQueryWithComments(t *testing.T) {
 			# Set block
 			set {
 				<name> <is> <something> .
-				<hometown> <is> <san francisco> .
+				<hometown> <is> <san/francisco> .
 			}
 			# Delete block
 			delete {
@@ -1491,7 +1473,7 @@ func TestParseMutationAndQueryWithComments(t *testing.T) {
 		}
 		# Query starts here.
 		query {
-			me(id: tomhanks) { # now mention children
+			me(id: 0x5) { # now mention children
 				name		# Name
 				hometown # hometown of the person
 			}
@@ -1500,12 +1482,18 @@ func TestParseMutationAndQueryWithComments(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.NotNil(t, res.Mutation)
-	require.NotEqual(t, strings.Index(res.Mutation.Set, "<name> <is> <something> ."), -1)
-	require.NotEqual(t, strings.Index(res.Mutation.Set, "<hometown> <is> <san francisco> ."), -1)
-	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
+	require.EqualValues(t, protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something"},
+		*res.Mutation.Set[0])
+	require.EqualValues(t, protos.NQuad{
+		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
+		*res.Mutation.Set[1])
+	require.EqualValues(t, protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something-else"},
+		*res.Mutation.Del[0])
 
 	require.NotNil(t, res.Query[0])
-	require.Equal(t, 1, len(res.Query[0].ID))
+	require.Equal(t, 1, len(res.Query[0].UID))
 	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
 }
 
@@ -1514,14 +1502,14 @@ func TestParseMutationAndQuery(t *testing.T) {
 		mutation {
 			set {
 				<name> <is> <something> .
-				<hometown> <is> <san francisco> .
+				<hometown> <is> <san/francisco> .
 			}
 			delete {
 				<name> <is> <something-else> .
 			}
 		}
 		query {
-			me(id: tomhanks) {
+			me(id: 0x5) {
 				name
 				hometown
 			}
@@ -1530,12 +1518,18 @@ func TestParseMutationAndQuery(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.NotNil(t, res.Mutation)
-	require.NotEqual(t, strings.Index(res.Mutation.Set, "<name> <is> <something> ."), -1)
-	require.NotEqual(t, strings.Index(res.Mutation.Set, "<hometown> <is> <san francisco> ."), -1)
-	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
+	require.EqualValues(t, protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something"},
+		*res.Mutation.Set[0])
+	require.EqualValues(t, protos.NQuad{
+		Subject: "hometown", Predicate: "is", ObjectId: "san/francisco"},
+		*res.Mutation.Set[1])
+	require.EqualValues(t, protos.NQuad{
+		Subject: "name", Predicate: "is", ObjectId: "something-else"},
+		*res.Mutation.Del[0])
 
 	require.NotNil(t, res.Query[0])
-	require.Equal(t, 1, len(res.Query[0].ID))
+	require.Equal(t, 1, len(res.Query[0].UID))
 	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
 }
 
@@ -2414,7 +2408,7 @@ func TestParseGenerator(t *testing.T) {
 
 func TestParseIRIRef(t *testing.T) {
 	query := `{
-		me(id: <http://helloworld.com/how/are/you>) {
+		me(id: 0x1) {
 			<http://verygood.com/what/about/you>
 			friends @filter(allofterms(<http://verygood.com/what/about/you>,
 				"good better bad")){
@@ -2471,21 +2465,6 @@ func TestParseIRIRefInvalidChar(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err) // because of ^
-}
-
-func TestParseGeoJson(t *testing.T) {
-	query := `
-	mutation {
-		set {
-			<_uid_:1> <loc> "{
-				\'Type\':\'Point\' ,
-				\'Coordinates\':[1.1,2.0]
-			}"^^<geo:geojson> .
-		}
-	}
-	`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
 }
 
 func TestMutationOpenBrace(t *testing.T) {
@@ -2552,7 +2531,7 @@ func TestMutationPassword(t *testing.T) {
 	query := `
 	mutation {
 		set {
-			<alice> <password> "PenAndPencil"^^<pwd:password>
+			<alice> <password> "PenAndPencil"^^<pwd:password> .
 		}
 	}
 	`
@@ -2781,7 +2760,7 @@ func TestLangsFunctionMultipleLangs(t *testing.T) {
 func TestParseNormalize(t *testing.T) {
 	query := `
 	query {
-		me(id: abc) @normalize {
+		me(id: 0x3) @normalize {
 			friends {
 				name
 			}
@@ -3474,6 +3453,35 @@ func TestDotsEOF(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestMutationVariables(t *testing.T) {
+	query := `
+		mutation {
+			set {
+				var(adults) <isadult> "true" .
+				<0x900> <b> <0x901> .
+			}
+		}
+		{
+			me(id: 0x900) {
+				adults as friends @filter(gt(age, 18))
+			}
+		}
+	`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(res.MutationVars))
+
+	require.EqualValues(t, "adults", res.MutationVars[res.Mutation.Set[0]])
+
+	expected := protos.NQuad{
+		Predicate:   "isadult",
+		ObjectValue: &protos.Value{&protos.Value_DefaultVal{"true"}},
+		SubjectVar:  "adults",
+	}
+	require.EqualValues(t, expected, *res.Mutation.Set[0])
+}
+
 func TestMathWithoutVarAlias(t *testing.T) {
 	query := `{
 			f(func: anyofterms(name, "Rick Michonne Andrea")) {
@@ -3525,6 +3533,30 @@ func TestParseEqArg2(t *testing.T) {
 	require.Equal(t, 2, len(gql.Query[0].Func.Args))
 }
 
+func TestFilterUid(t *testing.T) {
+	query := `
+	{
+		me(func: uid(1, 3 , 5, 7)) @filter(uid(3, 7)) {
+			name
+		}
+	}
+	`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, []string{"1", "3", "5", "7"}, gql.Query[0].Func.Args)
+	require.Equal(t, []string{"3", "7"}, gql.Query[0].Filter.Func.Args)
+}
+
+func TestRemoveDuplicates(t *testing.T) {
+	set := removeDuplicates([]string{"a", "a", "a", "b", "b", "c", "c"})
+	require.EqualValues(t, []string{"a", "b", "c"}, set)
+}
+
+func TestRemoveDuplicatesWithoutDuplicates(t *testing.T) {
+	set := removeDuplicates([]string{"a", "b", "c", "d"})
+	require.EqualValues(t, []string{"a", "b", "c", "d"}, set)
+}
+
 func TestParseSubscribe(t *testing.T) {
 	query := `
 	subscribe {
@@ -3541,5 +3573,4 @@ func TestParseSubscribe(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(gql.Query))
 	require.True(t, gql.Query[0].Subscribe)
-
 }

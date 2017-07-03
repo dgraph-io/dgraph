@@ -23,7 +23,6 @@ import (
 
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
@@ -36,15 +35,12 @@ const (
 )
 
 var (
-	xidCache *xidsMap
 	leasemgr *leaseManager
 	leaseKey []byte
 )
 
 func init() {
 	leaseKey = x.DataKey(LeasePredicate, 1)
-	xidCache = new(xidsMap)
-	xidCache.uid = make(map[string]uint64)
 
 	leasemgr = new(leaseManager)
 	leasemgr.elog = trace.NewEventLog("Lease Manager", "")
@@ -119,83 +115,8 @@ func proposeAndWaitForLease(ctx context.Context, maxLeaseId uint64) error {
 	}
 	mutations := &protos.Mutations{GroupId: leaseGid}
 	mutations.Edges = append(mutations.Edges, edge)
-	return proposeAndWait(ctx, mutations)
-}
-
-func proposeAndWait(ctx context.Context, mutations *protos.Mutations) error {
 	proposal := &protos.Proposal{Mutations: mutations}
 	node := groups().Node(leaseGid)
 	x.AssertTruef(node != nil, "Node doesn't serve group %d", leaseGid)
 	return node.ProposeAndWait(ctx, proposal)
-}
-
-/*
-func proposeUid(ctx context.Context, xid string, uid uint64) error {
-	edge := &protos.DirectedEdge{
-		Entity:    uid,
-		Attr:      "_xid_",
-		Value:     []byte(xid),
-		ValueType: uint32(types.StringID),
-		Op:        protos.DirectedEdge_SET,
-	}
-	return proposeAndWait(ctx, edge)
-}*/
-
-type xidsMap struct {
-	x.SafeMutex
-	// replace with lru cache later
-	uid map[string]uint64
-}
-
-func (xm *xidsMap) getUid(xid string) (uint64, error) {
-	xm.RLock()
-	if uid, has := xm.uid[xid]; has && uid != 0 {
-		xm.RUnlock()
-		return uid, nil
-	}
-	xm.RUnlock()
-
-	xm.Lock()
-	defer xm.Unlock()
-	if uid, has := xm.uid[xid]; has && uid != 0 {
-		return uid, nil
-	}
-	tokens, err := posting.IndexTokens("_xid_", "", types.Val{Tid: types.StringID, Value: []byte(xid)})
-	if err != nil {
-		return 0, err
-	}
-	x.AssertTrue(len(tokens) == 1)
-	key := x.IndexKey("_xid_", tokens[0])
-	pl, decr := posting.GetOrCreate(key, leaseGid)
-	defer decr()
-	ul := pl.Uids(emptyListOption)
-	algo.ApplyFilter(ul, func(uid uint64, i int) bool {
-		sv, err := fetchValue(uid, "_xid_", nil, types.StringID)
-		if sv.Value == nil || err != nil {
-			return false
-		}
-		return sv.Value.(string) == xid
-	})
-	if len(ul.Uids) == 0 {
-		return 0, UidNotFound
-	}
-	x.AssertTrue(len(ul.Uids) == 1)
-	xm.uid[xid] = ul.Uids[0]
-	return ul.Uids[0], nil
-}
-
-func (xm *xidsMap) setUid(xid string, uid uint64) {
-	xm.Lock()
-	defer xm.Unlock()
-	if len(xm.uid) > 5000000 {
-		xm.clear()
-	}
-	xm.uid[xid] = uid
-}
-
-func (xm *xidsMap) clear() {
-	xm.AssertLock()
-	for xid := range xm.uid {
-		delete(xm.uid, xid)
-	}
 }

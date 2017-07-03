@@ -27,13 +27,14 @@ import (
 
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
-	ID         []string
+	UID        []uint64
 	Attr       string
 	Langs      []string
 	Alias      string
@@ -66,13 +67,6 @@ type GraphQuery struct {
 	UidCount string
 
 	Subscribe bool
-}
-
-// Mutation stores the strings corresponding to set and delete operations.
-type Mutation struct {
-	Set    string
-	Del    string
-	Schema string
 }
 
 type AttrLang struct {
@@ -192,7 +186,7 @@ func (f *Function) IsPasswordVerifier() bool {
 
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
-	x.Printf("%s[%x %q %q]\n", prefix, gq.ID, gq.Attr, gq.Alias)
+	x.Printf("%s[%x %q %q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
 	for _, c := range gq.Children {
 		c.DebugPrint(prefix + "|->")
 	}
@@ -402,7 +396,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	}
 
 	idVal, ok := gq.Args["id"]
-	if ok && len(gq.ID) == 0 {
+	if ok && len(gq.UID) == 0 {
 		if idVal == "" {
 			return x.Errorf("Id can't be empty")
 		}
@@ -467,10 +461,11 @@ type Vars struct {
 // Result struct contains the Query list, its corresponding variable use list
 // and the mutation block.
 type Result struct {
-	Query     []*GraphQuery
-	QueryVars []*Vars
-	Mutation  *Mutation
-	Schema    *protos.SchemaRequest
+	Query        []*GraphQuery
+	QueryVars    []*Vars
+	Mutation     *Mutation
+	MutationVars map[*protos.NQuad]string
+	Schema       *protos.SchemaRequest
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -481,7 +476,8 @@ func Parse(r Request) (res Result, rerr error) {
 		return res, err
 	}
 
-	l := lex.NewLexer(query).Run(lexTopLevel)
+	l := lex.Lexer{Input: query}
+	l.Run(lexTopLevel)
 
 	var qu *GraphQuery
 	it := l.NewIterator()
@@ -541,6 +537,13 @@ func Parse(r Request) (res Result, rerr error) {
 		}
 	}
 
+	if res.Mutation != nil {
+		res.MutationVars = res.Mutation.NeededVars()
+		if len(res.MutationVars) > 0 && len(res.Query) == 0 {
+			return res, x.Errorf("mutation uses undefined vars: %v", res.MutationVars)
+		}
+	}
+
 	if len(res.Query) != 0 {
 		res.QueryVars = make([]*Vars, 0, len(res.Query))
 		for i := 0; i < len(res.Query); i++ {
@@ -559,51 +562,60 @@ func Parse(r Request) (res Result, rerr error) {
 			// Collect vars used and defined in Result struct.
 			qu.collectVars(res.QueryVars[i])
 		}
-		if err := checkDependency(res.QueryVars); err != nil {
+
+		allVars := res.QueryVars
+		if len(res.MutationVars) > 0 {
+			var varNames []string
+			for _, v := range res.MutationVars {
+				varNames = append(varNames, v)
+			}
+			sort.Strings(varNames)
+			varNames = removeDuplicates(varNames)
+
+			allVars = append(allVars, &Vars{Needs: varNames})
+		}
+
+		if err := checkDependency(allVars); err != nil {
 			return res, err
 		}
 	}
+
 	return res, nil
 }
 
-func checkDependency(vl []*Vars) error {
-	needs, defines := make([]string, 0, 10), make([]string, 0, 10)
+func flatten(vl []*Vars) (needs []string, defines []string) {
+	needs, defines = make([]string, 0, 10), make([]string, 0, 10)
 	for _, it := range vl {
 		needs = append(needs, it.Needs...)
 		defines = append(defines, it.Defines...)
 	}
+	return
+}
+
+// removes duplicates from a sorted slice of strings. Changes underylying array.
+func removeDuplicates(s []string) (out []string) {
+	out = s[:0]
+	for i := range s {
+		if i > 0 && s[i] == s[i-1] {
+			continue
+		}
+		out = append(out, s[i])
+	}
+	return
+}
+
+func checkDependency(vl []*Vars) error {
+	needs, defines := flatten(vl)
 
 	sort.Strings(needs)
 	sort.Strings(defines)
 
-	out := defines[:0]
-	dlen := len(defines)
-	if dlen > 0 {
-		for i := 1; i < dlen; i++ {
-			if defines[i-1] == defines[i] {
-				continue
-			}
-			out = append(out, defines[i-1])
-		}
-		out = append(out, defines[dlen-1])
-		defines = out
-		if len(defines) != dlen {
-			return x.Errorf("Some variables are declared multiple times.")
-		}
+	needs = removeDuplicates(needs)
+
+	if len(defines) != len(removeDuplicates(defines)) {
+		return x.Errorf("Some variables are declared multiple times.")
 	}
 
-	out = needs[:0]
-	nlen := len(needs)
-	if nlen > 0 {
-		for i := 1; i < nlen; i++ {
-			if needs[i-1] == needs[i] {
-				continue
-			}
-			out = append(out, needs[i-1])
-		}
-		out = append(out, needs[nlen-1])
-		needs = out
-	}
 	if len(defines) > len(needs) {
 		return x.Errorf("Some variables are defined but not used\nDefined:%v\nUsed:%v\n",
 			defines, needs)
@@ -950,10 +962,13 @@ func getSchema(it *lex.ItemIterator) (*protos.SchemaRequest, error) {
 }
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.
+///  TODO: move to rdf
 func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
+	var err error
 	if mu == nil {
 		return x.Errorf("Mutation is nil.")
 	}
+	var nquads []*protos.NQuad
 
 	parse := false
 	for it.Next() {
@@ -972,9 +987,19 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 				return x.Errorf("Mutation syntax invalid.")
 			}
 			if op == "set" {
-				mu.Set = item.Val
+				if len(item.Val) > 0 {
+					if nquads, err = rdf.ConvertToNQuads(item.Val); err != nil {
+						return x.Wrap(err)
+					}
+				}
+				mu.Set = nquads
 			} else if op == "delete" {
-				mu.Del = item.Val
+				if len(item.Val) > 0 {
+					if nquads, err = rdf.ConvertToNQuads(item.Val); err != nil {
+						return x.Wrap(err)
+					}
+				}
+				mu.Del = nquads
 			} else if op == "schema" {
 				mu.Schema = item.Val
 			} else {
@@ -1455,7 +1480,9 @@ L:
 					val = "$" + val
 					isDollar = false
 				}
-				if len(g.Attr) == 0 {
+				// Unlike other functions, uid function has no attribute,
+				// everything is args.
+				if len(g.Attr) == 0 && g.Name != "uid" {
 					if strings.ContainsRune(itemInFunc.Val, '"') {
 						return nil, x.Errorf("Attribute in function must not be quoted with \": %s",
 							itemInFunc.Val)
@@ -1467,6 +1494,7 @@ L:
 				} else {
 					g.Args = append(g.Args, val)
 				}
+
 				if g.Name == "var" {
 					g.NeedsVar = append(g.NeedsVar, VarContext{
 						Name: val,
@@ -1705,7 +1733,11 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 func parseID(gq *GraphQuery, val string) error {
 	val = x.WhiteSpace.Replace(val)
 	if val[0] != '[' {
-		gq.ID = append(gq.ID, val)
+		uid, err := strconv.ParseUint(val, 0, 64)
+		if err != nil {
+			return err
+		}
+		gq.UID = append(gq.UID, uid)
 		return nil
 	}
 
@@ -1718,7 +1750,11 @@ func parseID(gq *GraphQuery, val string) error {
 			if buf.Len() == 0 {
 				continue
 			}
-			gq.ID = append(gq.ID, buf.String())
+			uid, err := strconv.ParseUint(buf.String(), 0, 64)
+			if err != nil {
+				return err
+			}
+			gq.UID = append(gq.UID, uid)
 			buf.Reset()
 			continue
 		}
@@ -1779,8 +1815,8 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			if err != nil {
 				return err
 			}
-			curp.FacetVar = facetVar
 			if facets != nil {
+				curp.FacetVar = facetVar
 				if curp.Facets != nil {
 					return x.Errorf("Only one facets allowed")
 				}
@@ -1886,7 +1922,11 @@ func parseId(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			case itemName:
 				val := collectName(it, item.Val)
-				gq.ID = append(gq.ID, val)
+				uid, err := strconv.ParseUint(val, 0, 64)
+				if err != nil {
+					return err
+				}
+				gq.UID = append(gq.UID, uid)
 				if valid := it.Next(); !valid {
 					return x.Errorf("Unexpected EOF while parsing list of ids")
 				}
@@ -1907,7 +1947,11 @@ func parseId(it *lex.ItemIterator, gq *GraphQuery) error {
 		// We can continue, we will parse the id later when we fill GraphQL variables.
 		return nil
 	}
-	gq.ID = append(gq.ID, val)
+	uid, err := strconv.ParseUint(val, 0, 64)
+	if err != nil {
+		return err
+	}
+	gq.UID = append(gq.UID, uid)
 	return nil
 }
 

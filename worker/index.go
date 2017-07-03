@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -29,10 +30,9 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, indexed bool) error {
+func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
-	x.AssertTruef(schema.State().IsIndexed(attr) == indexed, "Attr %s index mismatch", attr)
 
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
@@ -40,24 +40,23 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, indexed bool)
 		return err
 	}
 
-	if !indexed {
-		// Remove index edges
-		// For delete we since mutations would have been applied, we needn't
-		// wait for synced watermarks if we delete through mutations, but
-		// it would use by lhmap
-		posting.DeleteIndex(ctx, attr)
-		return nil
-	}
-	if err := posting.RebuildIndex(ctx, attr); err != nil {
-		return err
+	x.AssertTruef(schema.State().IsIndexed(attr) == rebuild, "Attr %s index mismatch", attr)
+	// Remove index edges
+	// For delete we since mutations would have been applied, we needn't
+	// wait for synced watermarks if we delete through mutations, but
+	// it would use by lhmap
+	posting.DeleteIndex(ctx, attr)
+	if rebuild {
+		if err := posting.RebuildIndex(ctx, attr); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, reversed bool) error {
+func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild bool) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	x.AssertTrue(rv.Group == n.gid)
-	x.AssertTruef(schema.State().IsReversed(attr) == reversed, "Attr %s reverse mismatch", attr)
 
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
@@ -65,13 +64,32 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, reversed bo
 		return err
 	}
 
-	if !reversed {
+	x.AssertTruef(schema.State().IsReversed(attr) == rebuild, "Attr %s reverse mismatch", attr)
+	posting.DeleteReverseEdges(ctx, attr)
+	if rebuild {
 		// Remove reverse edges
-		posting.DeleteReverseEdges(ctx, attr)
-		return nil
+		if err := posting.RebuildReverseEdges(ctx, attr); err != nil {
+			return err
+		}
 	}
-	if err := posting.RebuildReverseEdges(ctx, attr); err != nil {
+	return nil
+}
+
+func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild bool) error {
+	rv := ctx.Value("raft").(x.RaftValue)
+	x.AssertTrue(rv.Group == n.gid)
+
+	// Current raft index has pending applied watermark
+	// Raft index starts from 1
+	if err := n.syncAllMarks(ctx, rv.Index-1); err != nil {
 		return err
+	}
+	posting.DeleteCountIndex(ctx, attr)
+	if rebuild {
+		// Remove reverse edges
+		if err := posting.RebuildCountIndex(ctx, attr); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -85,7 +103,9 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 
 	gid := n.gid
 	x.AssertTrue(gid == proposal.RebuildIndex.GroupId)
-	x.Trace(ctx, "Processing proposal to rebuild index: %v", proposal.RebuildIndex)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Processing proposal to rebuild index: %v", proposal.RebuildIndex)
+	}
 
 	// Get index of last committed.
 	lastIndex, err := n.store.LastIndex()
@@ -118,8 +138,10 @@ func (n *node) waitForAppliedMark(ctx context.Context, lastIndex uint64) error {
 	// Wait for applied to reach till lastIndex
 	for n.applied.WaitingFor() {
 		doneUntil := n.applied.DoneUntil() // applied until.
-		x.Trace(ctx, "syncAllMarks waiting, appliedUntil:%d lastIndex: %d",
-			doneUntil, lastIndex)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("syncAllMarks waiting, appliedUntil:%d lastIndex: %d",
+				doneUntil, lastIndex)
+		}
 		if doneUntil >= lastIndex {
 			break // Do the check before sleep.
 		}
@@ -137,8 +159,10 @@ func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) {
 	w := posting.SyncMarkFor(gid)
 	for w.WaitingFor() {
 		doneUntil := w.DoneUntil() // synced until.
-		x.Trace(ctx, "syncAllMarks waiting, syncedUntil:%d lastIndex:%d",
-			doneUntil, lastIndex)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("syncAllMarks waiting, syncedUntil:%d lastIndex: %d",
+				doneUntil, lastIndex)
+		}
 		if doneUntil >= lastIndex {
 			break // Do the check before sleep.
 		}
@@ -176,7 +200,9 @@ func proposeRebuildIndex(ctx context.Context, ri *protos.RebuildIndexMessage) er
 // serves the attr.
 func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 	gid := group.BelongsTo(attr)
-	x.Trace(ctx, "RebuildIndex attr: %v groupId: %v", attr, gid)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("RebuildIndex attr: %v groupId: %v", attr, gid)
+	}
 
 	if groups().ServesGroup(gid) && !schema.State().IsIndexed(attr) {
 		return x.Errorf("Attribute %s is not indexed", attr)
@@ -194,14 +220,20 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 		return x.Wrapf(err, "RebuildIndexOverNetwork: while retrieving connection.")
 	}
 	defer pl.Put(conn)
-	x.Trace(ctx, "Sending request to %v", addr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sending request to %v", addr)
+	}
 
 	c := protos.NewWorkerClient(conn)
 	_, err = c.RebuildIndex(ctx, &protos.RebuildIndexMessage{Attr: attr, GroupId: gid})
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.RebuildIndex"))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while calling Worker.RebuildIndex: %+v", err)
+		}
 		return err
 	}
-	x.Trace(ctx, "RebuildIndex reply from server. Addr: %v Attr: %v", addr, attr)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("RebuildIndex reply from server. Addr: %v Attr: %v", addr, attr)
+	}
 	return nil
 }

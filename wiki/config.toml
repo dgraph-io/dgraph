@@ -55,16 +55,3 @@ title = "Dgraph Documentation"
   url = "/dgraph-compared-to-other-databases/"
   identifier = "dgraph-compared-to-other-databases"
   weight = 9
-
-  [params]
-    [params.menudesc]
-      home = "Main page for official Dgraph documentation"
-      get-started = "Install Dgraph and run a query in 2 minutes."
-      guides = "A short introduction to graph database and Dgraph"
-      query-language = "An extensive guide for querying data in Dgraph"
-      clients = "Dgraph clients in various programming languages"
-      deploy = "Deploying Dgraph to production"
-      faq = "Frequently asked questions"
-      performance = "How Dgraph performs in real life"
-      design-concepts = "A look at how Dgraph is designed to be so fast"
-      dgraph-compared-to-other-databases = "Compare Dgraph to similar databases."

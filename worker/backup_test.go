@@ -34,6 +34,7 @@ import (
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/wkb"
 
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -64,7 +65,7 @@ func populateGraphBackup(t *testing.T) {
 	for _, edge := range rdfEdges {
 		nq, err := rdf.Parse(edge)
 		require.NoError(t, err)
-		rnq := rdf.NQuad{&nq}
+		rnq := gql.NQuad{&nq}
 		e, err := rnq.ToEdgeUsing(idMap)
 		require.NoError(t, err)
 		addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))

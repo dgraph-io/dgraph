@@ -20,12 +20,36 @@ $ sudo tar -C /usr/local/bin -xzf dgraph-linux-amd64-VERSION.tar.gz
 $ sudo tar -C /usr/local/bin -xzf dgraph-darwin-amd64-VERSION.tar.gz
 ```
 
+## Endpoints
+
+On its port, a running Dgraph instance exposes a number of service endpoints.
+
+* `/` Browser UI and query visualization.
+* `/query` receive queries and respond in JSON.
+* `/share`
+* `/health` HTTP status code 200 and "OK" message if worker is running, HTTP 503 otherwise.
+<!-- * `/debug/store` backend storage stats.-->
+* `/admin/shutdown` [shutdown]({{< relref "#shutdown">}}) a node.
+* `/admin/backup` take a running [backup]({{< relref "#backup">}}).
+
+
 ## Running Dgraph
 
-{{% notice "tip" %}}To view all the flags, you can run `dgraph --help`. In fact, `--help` works on all Dgraph binaries and is a great way to familiarize yourself with the tools.{{% /notice %}}
+{{% notice "tip" %}}  All Dgraph tools have `--help`.  To view all the flags, run `dgraph --help`, it's a great way to familiarize yourself with the tools.{{% /notice %}}
+
+Whether running standalone or in a cluster, each Dgraph instance relies on the following (if multiple instances are running on the same machine, instances cannot share these).
+
+* A `p` directory.  This is where Dgraph persists the graph data as posting lists. (option `--p`, default: directory `p` where the instance was started)
+* A `w` directory.  This is where Dgraph stores its write ahead logs. (option `--w`, default: directory `w` where the instance was started)
+* The `p` and `w` directories must be different.
+* A port exposing the instance for query, client connections and other [endpoints]({{< relref "#endpoints">}}). (option `--port`, default: `8080` on `localhost`)
+* A port on which to run a worker node, used for Dgraph's communication between nodes. (option `--workerport`, default: `12345`)
+* An address and port at which the node advertises its worker.  (option `--my`, default: `localhost:workerport`)
+
+{{% notice "note" %}}By default `8080` or the port specified by `--port` is bound to `localhost` (the loopback address only accessible from the same machine).  The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections. {{% /notice %}}
 
 ### Config
-As a helper utility, any of the flags provided to Dgraph binary on command-line can be stored in a YAML file and provided via `-config` flag. This is the default config located at `dgraph/cmd/dgraph/config.yaml`.
+The command-line flags can be stored in a YAML file and provided via the `--config` flag.  For example:
 
 ```sh
 # Folder in which to store backups.
@@ -134,7 +158,7 @@ tls.min_version string
 ```
 
 ### Single Instance
-You could run a single instance like this
+A single instance can be run with default options, as in:
 
 ```sh
 mkdir ~/dgraph # The folder where dgraph binary will create the directories it requires.
@@ -142,23 +166,43 @@ cd ~/dgraph
 dgraph
 ```
 
+Or by specifying `p` and `w` directories, ports, etc.  If `dgraphloader` is used, it must connect on the port exposing Dgraph services, as must the go client.  
+
 ### Multiple instances
+
+Dgraph is a truly distributed graph database - not a master-slave replication of one datastore.  Running in a cluster shards and replicates data across the cluster, queries can be run on any node and joins are handled over the distributed data.
+
+As well as the requirements for [each instance]({{< relref "#running-dgraph">}}), to run Dgraph effectively in a cluster, It's important to understand how sharding and replication work.
+
+* Dgraph stores data per predicate (not per node), thus the unit of sharding and replication is predicates.
+* To shard the graph, predicates are assigned to groups and each node in the cluster serves a number of groups.
+* Each node in a cluster stores only the predicates for the groups it is assigned to.
+* If multiple cluster nodes server the same group, the data for that group is replicated
+
+For example, if predicates `P1`, `P2` and `P3` are assigned to group 1, predicates `P4` and `P5` to group 2, and predicates `P6`, `P7` and `P8` to group 3.  If cluster node `N1` serves group 1, it stores data for only predicates `P1`, `P2` and `P3`.  While if node `N2` serves groups 1 and 3, it stores data for predicates `P1-P3` and `P6-P8`, replicating the `P1-P3` data.  A node `N3` could then, for example, serve groups 2 and 3.  A query is resolved locally for predicates the node stores and via distributed joins for predicates stored on other nodes.
+
+Note also:
+
+* Group 0 stores information about the cluster.
+* If sharding results in `N` groups, then for every group `0,...,N` there must be at least one node serving the group.  If there are no nodes serving a particular group, then the cluster won't know where to store the data for predicates in that group.
+* A Dgraph cluster can detect new machines allocated to the cluster, establish connections, and transfer a subset of existing predicates to the new node based on the groups served by the new machine.
+* Similarly, machines can be taken down and then brought back up to serve different groups and Dgraph will reorganize for the new structure.
+
+
+{{% notice "warning" %}}Group id 0 is used to store membership information for the entire cluster. Dgraph doesn't take snapshots of this group.  It is an error to assign a predicate to group 0. {{% /notice %}}
+
 
 #### Data sharding
 
-You can readily shard Dgraph data by providing a groups config using the `-group_conf` flag. The data sharding is done based on predicate name.
-Predicates are sharded over groups; where the same group could hold multiple predicates.
-However, a single predicate shard would always lie completely within a single group.
-
-{{% notice "note" %}}Shard calculation is done ''in-order of group id''. So, the lower group which applies to a predicate would be picked.{{% /notice %}}
+Sharding is specified by supplying the `--group_conf` flag.
 
 The groups config syntax is as follows:
 
 ```
-<shard-id>: comma separated list of predicate names or prefixes
+<groupID>: comma separated list of predicate names or prefixes
 
 # Last entry should be:
-<shard-id>: fp % N + k, where N = number of shards you want, and k = starting shard id.
+default: fp % N + k, where N = number of shards you want, and k = starting shard id.
 ```
 
 The default groups config used by Dgraph, when nothing is provided is:
@@ -170,109 +214,166 @@ default: fp % 1 + 1
 
 # fp % 1 is always zero. Thus, all data is located on group id 1.
 ```
-{{% notice "warning" %}}Group id 0 is used to store membership information for the entire cluster. We don't take any snapshots of this group, so no data should be stored on group zero. [Related Github issue](https://github.com/dgraph-io/dgraph/issues/427){{% /notice %}}
 
-Example of a valid groups.conf is:
+{{% notice "note" %}} Assignment of predicates to groups is done in order of group ID.  If a predicate matches multiple groups, the lowest matching group is picked.{{% /notice %}}
+
+
+A valid groups.conf is:
 
 ```
-// If * is specified prefix matching would be done, otherwise equality matching would be done.
+// Matching is by prefix when * is used, and by equality otherwise
 
-1: _uid_, type.object.name
+1: type.object.name
 2: type.object.name*, film.performance.*
 
 // Default formula for getting group where fp is the fingerprint of a predicate.
 default: fp % 10 + 2
 ```
 
-In the above spec, `_uid_`, and `type.object.name` predicates are going to be assigned to group 1.
-Any predicate with prefix `type.object.name` and `film.performance.` will be assigned to group 2.
-Note that `type.object.name` will belong to group 1 and not 2 despite matching both, because 1 is lower than 2.
+For this groups.conf:
 
-Finally, all the rest of the predicates would be assigned by this formula: `fingerprint(predicate) % 10 + 2`.
-They will occupy groups `[2, 3, 4, 5, 6, 7, 8, 9, 10, 11]`. ''Note that group 2 is overlapping between two rules.''
+* Predicate `type.object.name` is assigned to group 1.
+* Any predicate with prefix `type.object.name` and `film.performance.` will be assigned to group 2.
+* `type.object.name` belongs to group 1 and not 2 despite matching both, because 1 is lower than 2.
+* The remaining predicates are assigned by the formula: `fingerprint(predicate) % 10 + 2`, and thus occupy groups `[2, 3, 4, 5, 6, 7, 8, 9, 10, 11]`.
+* Group 2 will serve predicates matching the specified prefixes and those set by the default rule.
 
 {{% notice "warning" %}}Once sharding spec is set, it **must not be changed** without bringing the cluster down. The same spec must be passed to all the nodes in the cluster.{{% /notice %}}
 
-#### Cluster
-To run a cluster, run a single server first. Every time you run a Dgraph instance, you should specify a comma-separated list of group ids it should handle, along with a server id unique across the cluster.
+
+
+#### Running the Cluster
+
+Each machine in the cluster must be started with a unique ID (option `--idx`) and a comma-separated list of group IDs (option `--groups`).  Each machine must also satisfy the data directory and port requirements for a [single instance]({{< relref "#running-dgraph">}}).
+
+
+To run a cluster, begin by bringing up a single server that serves at least group 0.  
 
 ```
-$ dgraph --groups "0,1" --idx 1 --my "ip-address-others-should-access-me-at"
+$ dgraph --group_conf groups.conf --groups "0,1" --idx 1 --my "ip-address-others-should-access-me-at" --bindall=true
 
-# This instance would serve groups 0 and 1, using the default 8080 port for clients and 12345 for peers.
+# This instance with ID 1 will serve groups 0 and 1, using the default 8080 port for clients and 12345 for peers.
 ```
 
-Now that one of the servers is up and running, you can point any number of new servers to this.
+{{% notice "note" %}} The `--bindall=true` option is required when running on multiple machines, otherwise the node's port and workerport will be bound to localhost and not be accessible over a network. {{% /notice %}}
+
+New nodes are added to a cluster by specifying any known healthy node on startup (option `--peer`).  The address given at `--peer` must be the `workerport`.
+
 
 ```
 # Server handling only group 2.
-$ dgraph --groups "2" --idx 3 --peer "<ip address>:<port>" --my "ip-address-others-should-access-me-at"
+$ dgraph --group_conf groups.conf --groups "2" --idx 3 --peer "<ip address>:<workerport>" --my "ip-address-others-should-access-me-at" --bindall=true
 
 # Server handling groups 0, 1 and 2.
-$ dgraph --groups "0,1,2" --idx 4 --peer "<ip address>:<port>" --my "ip-address-others-should-access-me-at"
-
-# If running on the same server as other instances of Dgraph, do set the --port and the --workerport flags.
+$ dgraph --group_conf groups.conf --groups "0,1,2" --idx 4 --peer "<ip address>:<workerport>" --my "ip-address-others-should-access-me-at" --bindall=true
 ```
 
 The new servers will automatically detect each other by communicating with the provided peer and establish connections to each other.
-{{% notice "note" %}}To have consensus work correctly, each group must be served by an odd number of servers: 1, 3 or 5.{{% /notice %}}
 
-{{% notice "tip" %}}Queries can be sent to any server in the cluster.{{% /notice %}}
+{{% notice "note" %}}To have RAFT consensus work correctly, each group must be served by an odd number of Dgraph instances.{{% /notice %}}
+
+It can be worth building redundancy and extensibility into a cluster configuration so that a cluster can be extended online without needing to be restarted.  For example, by anticipating potential future shards and specifying a groups.conf file with more groups than initially needed - the first few instances might then serve many groups but it's easy to add more nodes as need arrises and even restart the initial nodes serving fewer groups once the cluster has enough redundancy.  If not enough groups are specified at the start, reconfiguration of the groups must be done offline.
+
+Query patterns might also influence sharding.  There is no value in co-locating predicates that are never used in joins while distributing predicates that are often used together in joins.  Network communication is slower than memory, so considering common query patterns can lead to fewer distributed joins and fast query times.
+
+#### Cluster Checklist
+
+In setting up a cluster be sure the check the following.
+
+* Is each dgraph instance in the cluster [set up correctly]({{< relref "#running-dgraph">}})?
+* Will each instance be accessible to all peers on `workerport`?
+* Is `groups.conf` configured to shard the predicates to groups correctly?
+* Does each node have a unique ID on startup?
+* Has `--bindall=true` been set for networked communication?
+* Is a node serving group 0 being brought up first?
+* Is every group going to be served by at least one node?
+
+
+<!---
+### In EC2
+
+To make provisioning an EC2 Dgraph cluster quick, the following script installs and starts a Dgraph node, opens ports on the host machine and enters Dgraph into systemd so that the node will restart if the machine is rebooted.
+
+We recommend an Ubuntu 16.04 AMI on a machine with at least 16GB of memory.  
+
+The i3 instances with SSD drives have the right hardware set up to run Dgraph (and its underlying key value store Badger) for performance environments.
+
+After provisioning an Ubuntu machine the following scripts installs and brings up Dgraph.
+
+
+p w ip worker groups.conf groups heathy-peer
+
+## Docker
+--->
 
 ## Bulk Data Loading
-{{% notice "tip" %}}This is an optional step, only relevant if you have a lot of data that you need to quickly import into Dgraph.{{% /notice %}}
+The `dgraphloader` binary is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph. It's not the only way to run mutations.  Mutations could also be run from the command line, e.g. with `curl`, from the UI, by sending to `/query` or by a program using a [Dgraph client]({{< relref "clients/index.md" >}}).
 
-Dgraph loader binary is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates queries and shoots off to Dgraph. You don't need to use this program to load data, you can do the same thing by issuing batched queries via your own client. The code is [relatively straighforward](https://github.com/dgraph-io/dgraph/blob/master/cmd/dgraphloader/main.go#L54-L87).
+`dgraphloader` correctly handles splitting blank nodes across multiple batches and creating `_xid_` [edges for RDF URIs]({{< relref "query-language/index.md#external-ids" >}}) (option `-x`).
 
-{{% notice "note" %}}Dgraph only accepts gzipped data in RDF NQuad/Triple format. If you have data in some other format, you'll have to convert it [to this](https://www.w3.org/TR/n-quads/).{{% /notice %}}
+{{% notice "note" %}} `dgraphloader` only accepts gzipped, RDF NQuad/Triple data. Data in other formats must be converted [to this](https://www.w3.org/TR/n-quads/).{{% /notice %}}
 
-If you just want to take Dgraph for a spin, we have both 1 million RDFs of golden data that we use for tests and 21 million RDFs from [Freebase film RDF data](https://github.com/dgraph-io/benchmarks/tree/master/data) that you can load up using this loader. Dgraphloader also accepts an
-optional [schema]({{< relref "query-language/index.md#schema">}}).
+
 
 ```
 $ dgraphloader --help # To see the available flags.
 
-# The following would read RDFs from the passed file, and send them to Dgraph.
-$ dgraphloader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file>
-$ dgraphloader -r <path-to-rdf-gzipped-file> -d <dgraph-server-address:port>
-# For example to load goldendata with the corresponding schema.
-$ dgraphloader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -s github.com/dgraph-io/benchmarks/data/goldendata.schema
+# Read RDFs from the passed file, and send them to Dgraph on localhost:8080.
+$ dgraphloader -r <path-to-rdf-gzipped-file>
+
+# Read RDFs and a schema file and send do Dgraph running at given address
+$ dgraphloader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:port>
+
+# For example to load goldendata with the corresponding schema and convert URI to _xid_.
+$ dgraphloader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -s github.com/dgraph-io/benchmarks/data/goldendata.schema -x
 ```
 
 ## Backup
 
-You can take a backup of a running Dgraph cluster, by running the following command from any server in the cluster, like so:
+A backup of all nodes is started by locally accessing the backup endpoint of any server in the cluster.
 
 ```sh
 $ curl localhost:8080/admin/backup
 ```
-{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.{{% /notice %}}
+{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.  Ensure that the port is set to the port given by `--port` on startup. {{% /notice %}}
 
-You can do this via a browser as well, as long as the HTTP GET is being run from the same server, where Dgraph is running. This would trigger a backup of all the groups spread across the entire cluster. Each server would write the output in ''gzipped rdf'' format, in the backup directory as specified in Dgraph flags. If any of the groups fail, the entire backup process is considered failed, and an error would be output.
+This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph instance is running.
 
-{{% notice "note" %}}It is up to the user to retrieve the right backups files from the servers in the cluster. Dgraph would not copy them over to the server where you ran the command from.{{% /notice %}}
+This triggers a backup of all the groups spread across the entire cluster. Each server writes output in gzipped rdf to the backup directory specified on startup by `--backup`. If any of the groups fail, the entire backup process is considered failed, and an error is returned.
+
+{{% notice "note" %}}It is up to the user to retrieve the right backups files from the servers in the cluster. Dgraph does not copy files  to the server that initiated the backup.{{% /notice %}}
 
 ## Shutdown
 
-You can do a clean exit of a single dgraph node by running the following command on that server in the cluster, like so:
+A clean exit of a single dgraph node is initiated by running the following command on that node.
 
 ```sh
 $ curl localhost:8080/admin/shutdown
 ```
-{{% notice "warning" %}}This won't work if called from outside the server which is running dgraph.{{% /notice %}}
+{{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.  Ensure that the port is set to the port given by `--port` on startup.{{% /notice %}}
 
-This would only stop the server on which the command is executed and not the entire cluster.
+This stops the server on which the command is executed and not the entire cluster.
+
+## Delete database
+
+Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs]({{< relref "query-language/index.md#delete" >}}).  
+
+To drop all data and start from a clean database:
+
+* [stop Dgraph]({{< relref "shutdown" >}}) and wait for all writes to complete,
+* delete (maybe take a backup first) the `p` and `w` directories, then
+* restart Dgraph.
 
 ## Upgrade Dgraph
 
-{{% notice "tip" %}}If you are upgrading from v0.7.3 you can modify the [schema file]({{< relref "query-language/index.md#schema">}}) to use the new syntax and give it to the dgraphloader using the `-s` flag while reloading your data.{{% /notice %}}
+<!--{{% notice "tip" %}}If you are upgrading from v0.7.3 you can modify the [schema file]({{< relref "query-language/index.md#schema">}}) to use the new syntax and give it to the dgraphloader using the `-s` flag while reloading your data.{{% /notice %}}-->
 
-Doing periodic backups is always a good idea due to various reasons. This is particularly useful if you wish to upgrade Dgraph. The following are the right steps to switch over to a newer version of Dgraph.
+Doing periodic backups is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely backup and restart.
 
 - Run a [backup]({{< relref "#backup">}})
 - Ensure it's successful
 - Bring down the cluster
-- Upgrade Dgraph binary
+- Upgrade Dgraph binary / specify a new groups.conf
 - Run Dgraph using new data directories.
 - Reload the data via [bulk data loading]({{< relref "#bulk-data-loading" >}}).
 - If all looks good, you can delete the old directories (backup serves as an insurance)

@@ -125,6 +125,7 @@ func TestTokensTable(t *testing.T) {
 
 	key := x.DataKey("name", 1)
 	l := getNew(key, ps)
+	defer ps.Delete(key)
 
 	edge := &protos.DirectedEdge{
 		Value:  []byte("david"),
@@ -154,7 +155,7 @@ func TestTokensTable(t *testing.T) {
 	x.Check(pl.Unmarshal(slice))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
-	deletePl(t, l)
+	deletePl(t)
 }
 
 // tokensForTest returns keys for a table. This is just for testing / debugging.
@@ -231,21 +232,18 @@ func TestRebuildIndex(t *testing.T) {
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10, 1)
-	for len(syncCh) > 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	// Create some fake wrong entries for data store.
 	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"))
 	ps.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"))
 
+	require.NoError(t, DeleteIndex(context.Background(), "name"))
 	require.NoError(t, RebuildIndex(context.Background(), "name"))
 
 	// Let's force a commit.
 	CommitLists(10, 1)
-	for len(syncCh) > 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	// Check index entries in data store.
 	it := ps.NewIterator(badger.DefaultIteratorOptions)
@@ -275,9 +273,11 @@ func TestRebuildIndex(t *testing.T) {
 	require.EqualValues(t, 1, idxVals[1].Postings[0].Uid)
 
 	l1, _ := GetOrCreate(x.DataKey("name", 1), 1)
-	deletePl(t, l1)
+	deletePl(t)
+	ps.Delete(l1.key)
 	l2, _ := GetOrCreate(x.DataKey("name", 20), 1)
-	deletePl(t, l2)
+	deletePl(t)
+	ps.Delete(l2.key)
 }
 
 func TestRebuildReverseEdges(t *testing.T) {
@@ -287,20 +287,13 @@ func TestRebuildReverseEdges(t *testing.T) {
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10, 1)
-	for len(syncCh) > 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	// Create some fake wrong entries for data store.
-	addEdgeToUID(t, "friend", 1, 100)
+	time.Sleep(100 * time.Millisecond)
 
 	require.NoError(t, RebuildReverseEdges(context.Background(), "friend"))
 
 	// Let's force a commit.
 	CommitLists(10, 1)
-	for len(syncCh) > 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	// Check index entries in data store.
 	it := ps.NewIterator(badger.DefaultIteratorOptions)

@@ -14,7 +14,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,10 +25,11 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/pkg/profile"
 )
 
 var (
@@ -34,6 +38,8 @@ var (
 	dgraph     = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
+	storeXid   = flag.Bool("x", false, "Store xids by adding corresponding _xid_ edges")
+	mode       = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
 	// TLS configuration
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
 	tlsInsecure      = flag.Bool("tls.insecure", false, "Skip certificate validation (insecure)")
@@ -68,7 +74,7 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 }
 
 // processSchemaFile process schema for a given gz file.
-func processSchemaFile(file string, batch *client.BatchMutation) {
+func processSchemaFile(file string, dgraphClient *client.Dgraph) {
 	fmt.Printf("\nProcessing %s\n", file)
 	f, err := os.Open(file)
 	x.Check(err)
@@ -99,7 +105,7 @@ func processSchemaFile(file string, batch *client.BatchMutation) {
 		if len(schemaUpdate) == 0 {
 			continue
 		}
-		if err = batch.AddSchema(*schemaUpdate[0]); err != nil {
+		if err = dgraphClient.AddSchema(*schemaUpdate[0]); err != nil {
 			log.Fatal("While adding schema to batch ", err)
 		}
 
@@ -109,8 +115,26 @@ func processSchemaFile(file string, batch *client.BatchMutation) {
 	}
 }
 
+func Node(val string, c *client.Dgraph) string {
+	if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
+		return c.NodeUid(uid).String()
+	}
+	if strings.HasPrefix(val, "_:") {
+		n, err := c.NodeBlank(val[2:])
+		if err != nil {
+			log.Fatal("Error while converting to node: %v", err)
+		}
+		return n.String()
+	}
+	n, err := c.NodeXid(val, *storeXid)
+	if err != nil {
+		log.Fatal("Error while converting to node: %v", err)
+	}
+	return n.String()
+}
+
 // processFile sends mutations for a given gz file.
-func processFile(file string, batch *client.BatchMutation) {
+func processFile(file string, dgraphClient *client.Dgraph) {
 	fmt.Printf("\nProcessing %s\n", file)
 	f, err := os.Open(file)
 	x.Check(err)
@@ -135,25 +159,17 @@ func processFile(file string, batch *client.BatchMutation) {
 			log.Fatalf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
 		}
 		buf.Reset()
-		if err = batch.AddMutation(nq, client.SET); err != nil {
+
+		nq.Subject = Node(nq.Subject, dgraphClient)
+		if len(nq.ObjectId) > 0 {
+			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
+		}
+		if err = dgraphClient.BatchSet(client.NewEdge(nq)); err != nil {
 			log.Fatal("While adding mutation to batch: ", err)
 		}
 	}
 	if err != io.EOF {
 		x.Checkf(err, "Error while reading file")
-	}
-}
-
-func printCounters(batch *client.BatchMutation, ticker *time.Ticker) {
-	start := time.Now()
-
-	for range ticker.C {
-		c := batch.Counter()
-		rate := float64(c.Rdfs) / c.Elapsed.Seconds()
-		elapsed := ((time.Since(start) / time.Second) * time.Second).String()
-		fmt.Printf("[Request: %6d] Total RDFs done: %8d RDFs per second: %7.0f Time Elapsed: %v \r",
-			c.Mutations, c.Rdfs, rate, elapsed)
-
 	}
 }
 
@@ -183,46 +199,50 @@ func setupConnection() (*grpc.ClientConn, error) {
 
 func main() {
 	x.Init()
+	go http.ListenAndServe("localhost:6060", nil)
+	switch *mode {
+	case "cpu":
+		defer profile.Start(profile.CPUProfile).Stop()
+	case "mem":
+		defer profile.Start(profile.MemProfile).Stop()
+	case "mutex":
+		defer profile.Start(profile.MutexProfile).Stop()
+	case "block":
+		defer profile.Start(profile.BlockProfile).Stop()
+	default:
+		// do nothing
+	}
 
 	conn, err := setupConnection()
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
+	bmOpts := client.BatchMutationOptions{
+		Size:          *numRdf,
+		Pending:       *concurrent,
+		PrintCounters: true,
+	}
+	dgraphClient := client.NewDgraphClient(conn, bmOpts)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	dgraphClient := protos.NewDgraphClient(conn)
-	v, err := dgraphClient.CheckVersion(ctx, &protos.Check{})
-	if err != nil {
-		fmt.Printf(`Could not fetch version information from Dgraph. Got err: %v.`, err)
-	} else {
-		version := x.Version()
-		if version != "" && v.Tag != "" && version != v.Tag {
-			fmt.Printf(`
-Dgraph server: %v, loader: %v dont match.
-You can get the latest version from https://docs.dgraph.io
-`, v.Tag, version)
-		}
-	}
+	dgraphClient.CheckVersion(ctx)
 
-	batch := client.NewBatchMutation(context.Background(), dgraphClient, *numRdf, *concurrent)
-
-	ticker := time.NewTicker(2 * time.Second)
-	go printCounters(batch, ticker)
 	filesList := strings.Split(*files, ",")
 	x.AssertTrue(len(filesList) > 0)
 	if len(*schemaFile) > 0 {
-		processSchemaFile(*schemaFile, batch)
+		processSchemaFile(*schemaFile, dgraphClient)
 	}
+
 	// wait for schema changes to be done before starting mutations
 	time.Sleep(1 * time.Second)
 	for _, file := range filesList {
-		processFile(file, batch)
+		processFile(file, dgraphClient)
 	}
-	batch.Flush()
-	ticker.Stop()
+	dgraphClient.BatchFlush()
 
-	c := batch.Counter()
+	c := dgraphClient.Counter()
 	var rate uint64
 	if c.Elapsed.Seconds() < 1 {
 		rate = c.Rdfs

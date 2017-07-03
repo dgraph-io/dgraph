@@ -39,6 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"golang.org/x/net/trace"
 )
 
 const numBackupRoutines = 10
@@ -51,6 +52,19 @@ type kv struct {
 type skv struct {
 	attr   string
 	schema *protos.SchemaUpdate
+}
+
+// Map from our types to RDF type. Useful when writing storage types
+// for RDF's in backup. This is the dgraph type name and rdf storage type
+// might not be the same always (e.g. - datetime and bool).
+var rdfTypeMap = map[types.TypeID]string{
+	types.StringID:   "xs:string",
+	types.DateTimeID: "xs:dateTime",
+	types.IntID:      "xs:int",
+	types.FloatID:    "xs:float",
+	types.BoolID:     "xs:boolean",
+	types.GeoID:      "geo:geojson",
+	types.PasswordID: "pwd:password",
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {
@@ -69,19 +83,15 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			buf.WriteByte('"')
 			buf.WriteString(str.Value.(string))
 			buf.WriteByte('"')
-			if vID == types.GeoID {
-				buf.WriteString("^^<geo:geojson> ")
-			} else if vID == types.PasswordID {
-				buf.WriteString("^^<pwd:")
-				buf.WriteString(vID.Name())
-				buf.WriteByte('>')
-			} else if p.PostingType == protos.Posting_VALUE_LANG {
+			if p.PostingType == protos.Posting_VALUE_LANG {
 				buf.WriteByte('@')
 				buf.WriteString(string(p.Metadata))
 			} else if vID != types.BinaryID &&
 				vID != types.DefaultID {
-				buf.WriteString("^^<xs:")
-				buf.WriteString(vID.Name())
+				rdfType, ok := rdfTypeMap[vID]
+				x.AssertTruef(ok, "Didn't find RDF type for dgraph type: %+v", vID.Name())
+				buf.WriteString("^^<")
+				buf.WriteString(rdfType)
 				buf.WriteByte('>')
 			}
 		} else {
@@ -318,15 +328,21 @@ func backup(gid uint32, bdir string) error {
 func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *protos.BackupPayload {
 	n := groups().Node(gid)
 	if n.AmLeader() {
-		x.Trace(ctx, "Leader of group: %d. Running backup.", gid)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Leader of group: %d. Running backup.", gid)
+		}
 		if err := backup(gid, *backupPath); err != nil {
-			x.TraceError(ctx, err)
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(err.Error())
+			}
 			return &protos.BackupPayload{
 				ReqId:  reqId,
 				Status: protos.BackupPayload_FAILED,
 			}
 		}
-		x.Trace(ctx, "Backup done for group: %d.", gid)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Backup done for group: %d.", gid)
+		}
 		return &protos.BackupPayload{
 			ReqId:   reqId,
 			Status:  protos.BackupPayload_SUCCESS,
@@ -351,17 +367,23 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 		var err error
 		conn, err = pl.Get()
 		if err == nil {
-			x.Trace(ctx, "Relaying backup request for group %d to %q", gid, pl.Addr)
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Relaying backup request for group %d to %q", gid, pl.Addr)
+			}
 			defer pl.Put(conn)
 			break
 		}
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 	}
 
 	// Unable to find any connection to any of these servers. This should be exceedingly rare.
 	// But probably not worthy of crashing the server. We can just skip the backup.
 	if conn == nil {
-		x.Trace(ctx, fmt.Sprintf("Unable to find a server to backup group: %d", gid))
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Unable to find a server to backup group: %d", gid)
+		}
 		return &protos.BackupPayload{
 			ReqId:   reqId,
 			Status:  protos.BackupPayload_FAILED,
@@ -376,7 +398,9 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 	}
 	nrep, err := c.Backup(ctx, nr)
 	if err != nil {
-		x.TraceError(ctx, err)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
 		return &protos.BackupPayload{
 			ReqId:   reqId,
 			Status:  protos.BackupPayload_FAILED,
@@ -417,7 +441,9 @@ func (w *grpcWorker) Backup(ctx context.Context, req *protos.BackupPayload) (*pr
 func BackupOverNetwork(ctx context.Context) error {
 	// If we haven't even had a single membership update, don't run backup.
 	if !HealthCheck() {
-		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("This server hasn't yet been fully initiated. Please retry later.")
+		}
 		return x.Errorf("Uninitiated server. Please retry later")
 	}
 	// Let's first collect all groups.
@@ -441,11 +467,17 @@ func BackupOverNetwork(ctx context.Context) error {
 	for i := 0; i < len(gids); i++ {
 		bp := <-ch
 		if bp.Status != protos.BackupPayload_SUCCESS {
-			x.Trace(ctx, "Backup status: %v for group id: %d", bp.Status, bp.GroupId)
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Backup status: %v for group id: %d", bp.Status, bp.GroupId)
+			}
 			return fmt.Errorf("Backup status: %v for group id: %d", bp.Status, bp.GroupId)
 		}
-		x.Trace(ctx, "Backup successful for group: %v", bp.GroupId)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Backup successful for group: %v", bp.GroupId)
+		}
 	}
-	x.Trace(ctx, "DONE backup")
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("DONE backup")
+	}
 	return nil
 }

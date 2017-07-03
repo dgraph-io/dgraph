@@ -345,16 +345,16 @@ func TestReturnUids(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	sgl, err := ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
 	mp := map[string]string{
 		"a": "123",
 	}
-	require.NoError(t, ToJson(&l, sgl, &buf, mp, false))
+	require.NoError(t, ToJson(qr.Latency, qr.Subgraphs, &buf, mp, false))
 	js := buf.String()
 	require.JSONEq(t,
 		`{"uids":{"a":"123"},"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
@@ -406,6 +406,22 @@ func TestCascadeDirective(t *testing.T) {
 		js)
 }
 
+func TestLevelBasedFacetVarAggSum(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			friend(id: 1000) {
+				path @facets(L1 as weight)
+				sumw: sum(var(L1))
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}}},{"@facets":{"_":{"weight":0.700000}}}],"sumw":0.800000}]}`,
+		js)
+}
+
 func TestLevelBasedFacetVarSum(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -414,8 +430,8 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 				path @facets(L1 as weight) {
 						path @facets(L2 as weight) {
 							c as count(follow)
+							L4 as math(c+L2+L1)
 						}
-						L4 as math(c+L2+L1)
 				}
 			}
 
@@ -426,34 +442,8 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"count(follow)":1},{"@facets":{"_":{"weight":1.500000}},"count(follow)":1}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"count(follow)":1}],"var(L4)":1.200000}]}],"sum":[{"name":"John","var(L4)":3.900000},{"name":"Matt","var(L4)":1.200000}]}`, js)
-}
-
-func TestLevelBasedFacetVarSumError(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			friend(id: 1000) {
-				path @facets(L1 as weight)
-				follow {
-					path @facets(L2 as weight)
-					L3 as math(L1+L2)
-				}
-			}
-
-			sum(id: var(L3), orderdesc: var(L3)) {
-				name
-				var(L3)
-			}
-		}
-	`
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	var l Latency
-	ctx := context.Background()
-	_, err = ProcessQuery(ctx, res, &l)
-	require.Error(t, err)
+	require.JSONEq(t, `{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"count(follow)":1,"var(L4)":1.200000},{"@facets":{"_":{"weight":1.500000}},"count(follow)":1,"var(L4)":3.900000}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"count(follow)":1,"var(L4)":3.900000}]}]}],"sum":[{"name":"John","var(L4)":3.900000},{"name":"Matt","var(L4)":1.200000}]}`,
+		js)
 }
 
 func TestLevelBasedSumMix1(t *testing.T) {
@@ -485,8 +475,9 @@ func TestLevelBasedFacetVarSum1(t *testing.T) {
 			friend(id: 1000) {
 				path @facets(L1 as weight) {
 					name
-					path @facets(L2 as weight)
-					L3 as math(L1+L2)
+					path @facets(L2 as weight) {
+						L3 as math(L1+L2)
+					}
 			 }
 			}
 			sum(id: var(L3), orderdesc: var(L3)) {
@@ -497,7 +488,7 @@ func TestLevelBasedFacetVarSum1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"name":"Bob","path":[{"@facets":{"_":{"weight":0.100000}}},{"@facets":{"_":{"weight":1.500000}}}]},{"@facets":{"_":{"weight":0.700000}},"name":"Matt","path":[{"@facets":{"_":{"weight":0.600000}}}],"var(L3)":0.200000}]}],"sum":[{"name":"John","var(L3)":2.900000},{"name":"Matt","var(L3)":0.200000}]}`,
+		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"name":"Bob","path":[{"@facets":{"_":{"weight":0.100000}},"var(L3)":0.200000},{"@facets":{"_":{"weight":1.500000}},"var(L3)":2.900000}]},{"@facets":{"_":{"weight":0.700000}},"name":"Matt","path":[{"@facets":{"_":{"weight":0.600000}},"var(L3)":2.900000}]}]}],"sum":[{"name":"John","var(L3)":2.900000},{"name":"Matt","var(L3)":0.200000}]}`,
 		js)
 }
 
@@ -508,8 +499,9 @@ func TestLevelBasedFacetVarSum2(t *testing.T) {
 			friend(id: 1000) {
 				path @facets(L1 as weight) {
 					path @facets(L2 as weight) {
-						path @facets(L3 as weight)
-						L4 as math(L1+L2+L3)
+						path @facets(L3 as weight) {
+							L4 as math(L1+L2+L3)
+						}
 					}
 				}
 			}
@@ -521,7 +513,7 @@ func TestLevelBasedFacetVarSum2(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.600000}}}]},{"@facets":{"_":{"weight":1.500000}},"var(L4)":0.800000}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"var(L4)":0.800000}]}]}],"sum":[{"name":"Bob","var(L4)":2.900000},{"name":"John","var(L4)":0.800000}]}`,
+		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.600000}},"var(L4)":0.800000}]},{"@facets":{"_":{"weight":1.500000}},"path":[{"var(L4)":2.900000}]}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"path":[{"var(L4)":2.900000}]}]}]}],"sum":[{"name":"Bob","var(L4)":2.900000},{"name":"John","var(L4)":0.800000}]}`,
 		js)
 }
 
@@ -1434,9 +1426,9 @@ func TestVarInAggError(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	_, err = ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -1458,9 +1450,10 @@ func TestVarInIneqError(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	_, err = ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
+
 	require.Error(t, err)
 }
 
@@ -1529,8 +1522,6 @@ func TestVarInIneq2(t *testing.T) {
 
 func TestNestedFuncRoot(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
     {
 			me(func: gt(count(friend), 2)) {
@@ -1544,8 +1535,6 @@ func TestNestedFuncRoot(t *testing.T) {
 
 func TestNestedFuncRoot2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 		{
 			me(func: ge(count(friend), 1)) {
@@ -1600,9 +1589,9 @@ func TestShortestPath_ExpandError(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	_, err = ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -1622,6 +1611,72 @@ func TestShortestPath_NoPath(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{}`,
+		js)
+}
+
+func TestKShortestPath_NoPath(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:0x01, to:101, numpaths: 2) {
+				path
+				follow
+			}
+
+			me(id: var( A)) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestKShortestPathWeighted(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			shortest(from: 1, to:1001, numpaths: 4) {
+				path @facets(weight)
+			}
+		}`
+	// We only get one path in this case as the facet is present only in one path.
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"_path_":[{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9"}]}]}]}]}`,
+		js)
+}
+
+func TestKShortestPathWeighted1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			shortest(from: 1, to:1003, numpaths: 3) {
+				path @facets(weight)
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"_path_":[{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3ea","path":[{"@facets":{"_":{"weight":0.600000}},"_uid_":"0x3eb"}]}]}]}]}]},{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.700000}},"_uid_":"0x3ea","path":[{"@facets":{"_":{"weight":0.600000}},"_uid_":"0x3eb"}]}]}]}]},{"_uid_":"0x1","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x1f","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e8","path":[{"@facets":{"_":{"weight":0.100000}},"_uid_":"0x3e9","path":[{"@facets":{"_":{"weight":1.500000}},"_uid_":"0x3eb"}]}]}]}]}]}`,
+		js)
+}
+
+func TestTwoShortestPath(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from: 1, to:1002, numpaths: 2) {
+				path
+			}
+
+			me(id: var( A)) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"_path_":[{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3ea"}]}]}]},{"_uid_":"0x1","path":[{"_uid_":"0x1f","path":[{"_uid_":"0x3e8","path":[{"_uid_":"0x3e9","path":[{"_uid_":"0x3ea"}]}]}]}]}],"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Matt"}]}`,
 		js)
 }
 
@@ -1713,9 +1768,9 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	_, err = ProcessQuery(ctx, res, &l)
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }
 
@@ -1937,14 +1992,14 @@ func TestDebug1(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, "debug", "true")
-	sgl, err := ProcessQuery(ctx, res, &l)
+	ctx := context.WithValue(defaultContext(), "debug", "true")
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
+
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf, nil, true))
+	require.NoError(t, ToJson(qr.Latency, qr.Subgraphs, &buf, nil, true))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -1996,14 +2051,14 @@ func TestDebug3(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, "debug", "true")
-	sgl, err := ProcessQuery(ctx, res, &l)
+	ctx := context.WithValue(defaultContext(), "debug", "true")
+
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf, nil, true))
+	require.NoError(t, ToJson(qr.Latency, qr.Subgraphs, &buf, nil, true))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -2200,10 +2255,10 @@ func TestMultiLevelAgg1Error(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.Error(t, queryErr)
-
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
+	require.Error(t, err)
 }
 
 func TestMultiAggSort(t *testing.T) {
@@ -2503,9 +2558,10 @@ func TestQueryPassword(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.NotNil(t, queryErr)
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = queryRequest.ProcessQuery(defaultContext())
+
+	require.NotNil(t, err)
 }
 
 func TestCheckPassword(t *testing.T) {
@@ -2839,7 +2895,7 @@ func TestFieldAlias(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"alive":true,"Buddies":[{"BudName":"Rick Grimes"},{"BudName":"Glenn Rhee"},{"BudName":"Daryl Dixon"},{"BudName":"Andrea"}],"gender":"female","MyName":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 func TestFieldAliasProto(t *testing.T) {
@@ -3992,8 +4048,6 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 
 func TestCountReverseFunc(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 		{
 			me(func: ge(count(~friend), 2)) {
@@ -4160,7 +4214,7 @@ children: <
   properties: <
     prop: "_xid_"
     value: <
-      str_val: "mich"
+      default_val: "mich"
     >
   >
   properties: <
@@ -4431,7 +4485,7 @@ func TestToFastJSONOrderDesc(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1901-01-15T00:00:00Z","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 // Test sorting / ordering by dob.
@@ -4453,7 +4507,7 @@ func TestToFastJSONOrderDesc_pawan(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"film.film.initial_release_date":"1929-01-10T00:00:00Z","name":"Daryl Dixon"},{"film.film.initial_release_date":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"film.film.initial_release_date":"1900-01-02T00:00:00Z","name":"Rick Grimes"},{"film.film.initial_release_date":"1801-01-15T00:00:00Z","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 // Test sorting / ordering by dob.
@@ -4494,7 +4548,7 @@ func TestToFastJSONOrderDescCount(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"count(friend)":1,"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 // Test sorting / ordering by dob.
@@ -5044,7 +5098,7 @@ func TestRootList(t *testing.T) {
 func TestRootList1(t *testing.T) {
 	populateGraph(t)
 	query := `{
-	me(id:[0x01, 23, 24, a.bc]) {
+	me(id:[0x01, 23, 24, 110]) {
 		name
 	}
 }`
@@ -5055,7 +5109,7 @@ func TestRootList1(t *testing.T) {
 func TestRootList2(t *testing.T) {
 	populateGraph(t)
 	query := `{
-	me(id:[0x01, 23, a.bc, 24]) {
+	me(id:[0x01, 23, 110, 24]) {
 		name
 	}
 }`
@@ -5185,9 +5239,10 @@ func TestGeneratorRootFilterOnCountError1(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.NotNil(t, queryErr)
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = queryRequest.ProcessQuery(defaultContext())
+
+	require.NotNil(t, err)
 }
 
 func TestGeneratorRootFilterOnCountError2(t *testing.T) {
@@ -5203,9 +5258,10 @@ func TestGeneratorRootFilterOnCountError2(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.NotNil(t, queryErr)
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = queryRequest.ProcessQuery(defaultContext())
+
+	require.NotNil(t, err)
 }
 
 func TestGeneratorRootFilterOnCountError3(t *testing.T) {
@@ -5221,9 +5277,9 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.Error(t, queryErr)
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = queryRequest.ProcessQuery(defaultContext())
+	require.Error(t, err)
 }
 
 func TestToProtoMultiRoot(t *testing.T) {
@@ -5279,7 +5335,7 @@ func TestNearGenerator(t *testing.T) {
 	}`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"},{"name":"Glenn Rhee"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"},{"name":"Glenn Rhee"}]}`, js)
 }
 
 func TestNearGeneratorFilter(t *testing.T) {
@@ -5292,7 +5348,7 @@ func TestNearGeneratorFilter(t *testing.T) {
 	}`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
 func TestNearGeneratorError(t *testing.T) {
@@ -5370,7 +5426,7 @@ func TestWithinGenerator(t *testing.T) {
 	}`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Glenn Rhee"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Glenn Rhee"}]}`, js)
 }
 
 func TestContainsGenerator(t *testing.T) {
@@ -5382,7 +5438,7 @@ func TestContainsGenerator(t *testing.T) {
 	}`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
 }
 
 func TestContainsGenerator2(t *testing.T) {
@@ -5394,7 +5450,7 @@ func TestContainsGenerator2(t *testing.T) {
 	}`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
 }
 
 func TestIntersectsGeneratorError(t *testing.T) {
@@ -5427,7 +5483,7 @@ func TestIntersectsGenerator(t *testing.T) {
 	}`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}, {"name":"Glenn Rhee"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}, {"name":"Glenn Rhee"}]}`, js)
 }
 
 func TestToProtoNormalizeDirective(t *testing.T) {
@@ -5637,7 +5693,7 @@ children: <
   properties: <
     prop: "_xid_"
     value: <
-      str_val: "mich"
+      default_val: "mich"
     >
   >
   properties: <
@@ -5762,7 +5818,7 @@ children: <
 }
 
 func runQuery(t *testing.T, gq *gql.GraphQuery) string {
-	ctx := context.Background()
+	ctx := defaultContext()
 	ch := make(chan error)
 
 	sg, err := ToSubGraph(ctx, gq)
@@ -5771,8 +5827,8 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 	err = <-ch
 	require.NoError(t, err)
 
-	var l Latency
 	var buf bytes.Buffer
+	var l Latency
 	err = sg.ToFastJSON(&l, &buf, nil, false)
 	require.NoError(t, err)
 	return string(buf.Bytes())
@@ -6243,6 +6299,10 @@ func checkSchemaNodes(t *testing.T, expected []*protos.SchemaNode, actual []*pro
 }
 
 func TestSchemaBlock1(t *testing.T) {
+	// reseting schema, because mutations that assing ids change it.
+	err := schema.ParseBytes([]byte(schemaStr), 1)
+	x.Check(err)
+
 	query := `
 		schema {
 			type
@@ -6257,7 +6317,8 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
 		{Predicate: "dob", Type: "datetime"}, {Predicate: "survival_rate", Type: "float"},
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
-		{Predicate: "noindex_name", Type: "string"}, {Predicate: "_xid_", Type: "string"}}
+		{Predicate: "noindex_name", Type: "string"},
+		{Predicate: "school", Type: "uid"}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6325,7 +6386,7 @@ func TestSchemaBlock5(t *testing.T) {
 }
 
 const schemaStr = `
-name                           : string @index(term, exact, trigram) .
+name                           : string @index(term, exact, trigram) @count .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index .
 film.film.initial_release_date : dateTime @index .
@@ -6335,11 +6396,12 @@ survival_rate                  : float .
 alive                          : bool @index .
 age                            : int @index .
 shadow_deep                    : int .
-friend                         : uid @reverse .
+friend                         : uid @reverse @count .
 geometry                       : geo @index .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 noindex_name                   : string .
+school		                   : uid @count .
 `
 
 func TestMain(m *testing.M) {
@@ -6370,6 +6432,7 @@ func TestMain(m *testing.M) {
 	// Load schema after nodes have started
 	err = schema.ParseBytes([]byte(schemaStr), 1)
 	x.Check(err)
+	time.Sleep(2 * time.Second)
 	defer os.RemoveAll(dir2)
 
 	os.Exit(m.Run())
@@ -6505,7 +6568,7 @@ children: <
   properties: <
     prop: "_xid_"
     value: <
-      str_val: "mich"
+      default_val: "mich"
     >
   >
   properties: <
@@ -6534,7 +6597,7 @@ children: <
     properties: <
       prop: "_xid_"
       value: <
-        str_val: "g\\\"lenn"
+        default_val: "g\\\"lenn"
       >
     >
     properties: <
@@ -6650,9 +6713,8 @@ func TestBoolIndexgeRoot(t *testing.T) {
 			}
 		}`
 	res, _ := gql.Parse(gql.Request{Str: q})
-	var l Latency
-	ctx := context.Background()
-	_, err := ProcessQuery(ctx, res, &l)
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err := queryRequest.ProcessQuery(defaultContext())
 	require.NotNil(t, err)
 }
 
@@ -6687,9 +6749,8 @@ func TestBoolSort(t *testing.T) {
 		}
 	`
 	res, _ := gql.Parse(gql.Request{Str: q, Http: true})
-	var l Latency
-	ctx := context.Background()
-	_, err := ProcessQuery(ctx, res, &l)
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err := queryRequest.ProcessQuery(defaultContext())
 	require.NotNil(t, err)
 }
 
@@ -6698,7 +6759,7 @@ func TestJSONQueryVariables(t *testing.T) {
 	q := `{"query": "query test ($a: int = 1) { me(id: 0x01) { name, gender, friend(first: $a) { name }}}",
 	"variables" : { "$a": "2"}}`
 	js := processToFastJSON(t, q)
-	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`, js)
 }
 
 func TestPBQueryVariables(t *testing.T) {
@@ -6820,9 +6881,8 @@ func TestHashTokGeqErr(t *testing.T) {
 		}
 	`
 	res, _ := gql.Parse(gql.Request{Str: query})
-	var l Latency
-	ctx := context.Background()
-	_, err := ProcessQuery(ctx, res, &l)
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err := queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -6840,9 +6900,8 @@ func TestNameNotIndexed(t *testing.T) {
 		}
 	`
 	res, _ := gql.Parse(gql.Request{Str: query})
-	var l Latency
-	ctx := context.Background()
-	_, err := ProcessQuery(ctx, res, &l)
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err := queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -6880,9 +6939,8 @@ func TestDuplicateAlias(t *testing.T) {
 			}
 		}`
 	res, _ := gql.Parse(gql.Request{Str: query})
-	var l Latency
-	ctx := context.Background()
-	_, err := ProcessQuery(ctx, res, &l)
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err := queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -6913,7 +6971,7 @@ func TestGraphQLId(t *testing.T) {
 	q := `{"query": "query test ($a: string = 1) { me(id: $a) { name, gender, friend(first: 1) { name }}}",
 	"variables" : { "$a": "[1, 31]"}}`
 	js := processToFastJSON(t, q)
-	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"},{"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"},{"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}]}`, js)
 }
 
 func TestGraphQLIdProto(t *testing.T) {
@@ -6965,13 +7023,13 @@ func TestDebugUid(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, "debug", "true")
-	sgl, err := ProcessQuery(ctx, res, &l)
+	ctx := context.WithValue(defaultContext(), "debug", "true")
+
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = queryRequest.ProcessQuery(ctx)
 	require.NoError(t, err)
 	var buf bytes.Buffer
-	err = ToJson(&l, sgl, &buf, nil, false)
+	err = ToJson(queryRequest.Latency, queryRequest.Subgraphs, &buf, nil, false)
 	require.NoError(t, err)
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -7106,14 +7164,12 @@ children: <
 
 func TestCountAtRoot(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
-                {
-                        me(func: ge(count(friend), 0)) {
+        {
+        	me(func: ge(count(friend), 0)) {
 				count()
 			}
-                }
+        }
         `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"count": 4}]}`, js)
@@ -7121,8 +7177,6 @@ func TestCountAtRoot(t *testing.T) {
 
 func TestCountAtRoot2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
         {
                 me(func: anyofterms(name, "Michonne Rick Andrea")) {
@@ -7136,8 +7190,6 @@ func TestCountAtRoot2(t *testing.T) {
 
 func TestCountAtRoot2PB(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
         {
                 me(func: anyofterms(name, "Michonne Rick Andrea")) {
@@ -7254,8 +7306,6 @@ func TestCountAtRoot5(t *testing.T) {
 
 func TestHasFuncAtRoot(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: has(friend)) {
@@ -7268,7 +7318,7 @@ func TestHasFuncAtRoot(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Daryl Dixon"},{"friend":[{"count":1}],"name":"Andrea"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Daryl Dixon"},{"friend":[{"count":1}],"name":"Andrea"}]}`, js)
 }
 
 func TestHasFuncAtRootFilter(t *testing.T) {
@@ -7285,13 +7335,11 @@ func TestHasFuncAtRootFilter(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Daryl Dixon"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Daryl Dixon"}]}`, js)
 }
 
 func TestHasFuncAtChild1(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: has(school)) {
@@ -7304,13 +7352,11 @@ func TestHasFuncAtChild1(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`, js)
 }
 
 func TestHasFuncAtChild2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: has(school)) {
@@ -7324,13 +7370,11 @@ func TestHasFuncAtChild2(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"friend":[{"alias":"Zambo Alice","name":"Rick Grimes"},{"alias":"John Alice","name":"Glenn Rhee"},{"alias":"Bob Joe","name":"Daryl Dixon"},{"alias":"Allan Matt","name":"Andrea"},{"alias":"John Oliver"}],"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Daryl Dixon"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Andrea"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"friend":[{"alias":"Zambo Alice","name":"Rick Grimes"},{"alias":"John Alice","name":"Glenn Rhee"},{"alias":"Bob Joe","name":"Daryl Dixon"},{"alias":"Allan Matt","name":"Andrea"},{"alias":"John Oliver"}],"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Daryl Dixon"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Andrea"}]}`, js)
 }
 
 func TestHasFuncAtRoot2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: has(name@en)) {
@@ -7340,7 +7384,7 @@ func TestHasFuncAtRoot2(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name@en":"Test facet"},{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"},{"name@en":"Artem Tkachenko"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"name@en":"Test facet"},{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"},{"name@en":"Artem Tkachenko"}]}`, js)
 }
 
 func getSubGraphs(t *testing.T, query string) (subGraphs []*SubGraph) {
@@ -7512,9 +7556,8 @@ func TestMathVarCrash(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	_, err = ProcessQuery(ctx, res, &l)
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -7529,7 +7572,7 @@ func TestMathVarAlias(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"f":[{"a":76.000000,"age":38},{"a":30.000000,"age":15},{"a":38.000000,"age":19}]}`, string(js))
+	require.JSONEq(t, `{"f":[{"a":76.000000,"age":38},{"a":30.000000,"age":15},{"a":38.000000,"age":19}]}`, js)
 }
 
 func TestMathVarAlias2(t *testing.T) {
@@ -7547,7 +7590,7 @@ func TestMathVarAlias2(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"age":38,"doubleAge":76.000000},{"age":15,"doubleAge":30.000000},{"age":19,"doubleAge":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"age":38,"doubleAge":76.000000},{"age":15,"doubleAge":30.000000},{"age":19,"doubleAge":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, js)
 }
 
 func TestMathVar3(t *testing.T) {
@@ -7565,7 +7608,7 @@ func TestMathVar3(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"age":38,"var(a)":76.000000},{"age":15,"var(a)":30.000000},{"age":19,"var(a)":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"age":38,"var(a)":76.000000},{"age":15,"var(a)":30.000000},{"age":19,"var(a)":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, js)
 }
 
 func TestMultipleEquality(t *testing.T) {
@@ -7661,9 +7704,8 @@ func TestMultipleGtError(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: query})
 	require.NoError(t, err)
 
-	var l Latency
-	ctx := context.Background()
-	_, err = ProcessQuery(ctx, res, &l)
+	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = queryRequest.ProcessQuery(defaultContext())
 	require.Error(t, err)
 }
 
@@ -7940,5 +7982,126 @@ func TestPBUnmarshalError1(t *testing.T) {
 
 func TestPBUnmarshalError2(t *testing.T) {
 	err := client.Unmarshal([]*protos.Node{}, nil)
+	require.Error(t, err)
+}
+
+func TestUidFunction(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(23, 1, 24, 25, 31)) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`, js)
+}
+
+func TestUidFunctionInFilter(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(23, 1, 24, 25, 31))  @filter(uid(1, 24)) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"name":"Michonne"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestUidFunctionInFilter2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(23, 1, 24, 25, 31)) {
+			name
+			# Filtering only Michonne and Rick.
+			friend @filter(uid(23, 1)) {
+				name
+			}
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"friend":[{"name":"Rick Grimes"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`, js)
+}
+
+func TestUidFunctionInFilter3(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: anyofterms(name, "Michonne Andrea")) @filter(uid(1)) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"name":"Michonne"}]}`, js)
+}
+
+func TestUidFunctionInFilter4(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: anyofterms(name, "Michonne Andrea")) @filter(not uid(1, 31)) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"name":"Andrea With no friends"}]}`, js)
+}
+
+func TestUidInFunction(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id: [1, 23, 24]) @filter(uid_in(friend, 23)) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"name":"Michonne"}]}`, js)
+}
+
+func TestUidInFunction1(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id: [1, 23, 24]) @filter(uid_in(school, 5000)) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"name":"Michonne"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestUidInFunction2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(id: [1, 23, 24]) {
+			friend @filter(uid_in(school, 5000)) {
+				name
+			}
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}]},{"friend":[{"name":"Michonne"}]}]}`,
+		js)
+}
+
+func TestUidInFunctioniAtRoot(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid_in(school, 5000)) {
+				name
+		}
+	}`
+
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 }

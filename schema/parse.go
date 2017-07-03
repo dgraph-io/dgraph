@@ -31,14 +31,16 @@ func From(s *protos.SchemaUpdate) protos.SchemaUpdate {
 	if s.Directive == protos.SchemaUpdate_REVERSE {
 		return protos.SchemaUpdate{
 			ValueType: s.ValueType,
-			Directive: protos.SchemaUpdate_REVERSE}
+			Directive: protos.SchemaUpdate_REVERSE,
+			Count:     s.Count}
 	} else if s.Directive == protos.SchemaUpdate_INDEX {
 		return protos.SchemaUpdate{
 			ValueType: s.ValueType,
 			Directive: protos.SchemaUpdate_INDEX,
-			Tokenizer: s.Tokenizer}
+			Tokenizer: s.Tokenizer,
+			Count:     s.Count}
 	}
-	return protos.SchemaUpdate{ValueType: s.ValueType}
+	return protos.SchemaUpdate{ValueType: s.ValueType, Count: s.Count}
 }
 
 // ParseBytes parses the byte array which holds the schema. We will reset
@@ -57,11 +59,35 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	for _, update := range updates {
 		State().Set(update.Predicate, From(update))
 	}
-	State().Set("_xid_", protos.SchemaUpdate{
-		ValueType: uint32(types.StringID),
-		Directive: protos.SchemaUpdate_INDEX,
-		Tokenizer: []string{"hash"},
-	})
+	return nil
+}
+
+func parseDirective(it *lex.ItemIterator, schema *protos.SchemaUpdate, t types.TypeID) error {
+	it.Next()
+	next := it.Item()
+	if next.Typ != itemText {
+		return x.Errorf("Missing directive name")
+	}
+	switch next.Val {
+	case "reverse":
+		if t != types.UidID {
+			return x.Errorf("Cannot reverse for non-UID type")
+		}
+		schema.Directive = protos.SchemaUpdate_REVERSE
+	case "index":
+		if tokenizer, err := parseIndexDirective(it, schema.Predicate, t); err != nil {
+			return err
+		} else {
+			schema.Directive = protos.SchemaUpdate_INDEX
+			schema.Tokenizer = tokenizer
+		}
+	case "count":
+		schema.Count = true
+	default:
+		return x.Errorf("Invalid index specification")
+	}
+	it.Next()
+
 	return nil
 }
 
@@ -89,28 +115,16 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*protos.SchemaUpda
 	it.Next()
 	next = it.Item()
 	if next.Typ == itemAt {
-		it.Next()
+		if err := parseDirective(it, schema, t); err != nil {
+			return nil, err
+		}
 		next = it.Item()
-		if next.Typ != itemText {
-			return nil, x.Errorf("Missing directive name")
+	}
+	// Check for another directive, we could have @count too.
+	if next.Typ == itemAt {
+		if err := parseDirective(it, schema, t); err != nil {
+			return nil, err
 		}
-		switch next.Val {
-		case "reverse":
-			if t != types.UidID {
-				return nil, x.Errorf("Cannot reverse for non-UID type")
-			}
-			schema.Directive = protos.SchemaUpdate_REVERSE
-		case "index":
-			if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
-				return nil, err
-			} else {
-				schema.Directive = protos.SchemaUpdate_INDEX
-				schema.Tokenizer = tokenizer
-			}
-		default:
-			return nil, x.Errorf("Invalid index specification")
-		}
-		it.Next()
 		next = it.Item()
 	}
 	if next.Typ != itemDot {
@@ -198,15 +212,68 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 	return tokenizers, nil
 }
 
+// resolveTokenizers resolves default tokenizers and verifies tokenizers definitions.
+func resolveTokenizers(updates []*protos.SchemaUpdate) error {
+	for _, schema := range updates {
+		typ := types.TypeID(schema.ValueType)
+
+		if (typ == types.UidID || typ == types.DefaultID || typ == types.PasswordID) &&
+			schema.Directive == protos.SchemaUpdate_INDEX {
+			return x.Errorf("Indexing not allowed on predicate %s of type %s",
+				schema.Predicate, typ.Name())
+		}
+
+		if typ == types.UidID {
+			continue
+		}
+
+		if len(schema.Tokenizer) == 0 && schema.Directive == protos.SchemaUpdate_INDEX {
+			schema.Tokenizer = []string{tok.Default(typ).Name()}
+		} else if len(schema.Tokenizer) > 0 && schema.Directive != protos.SchemaUpdate_INDEX {
+			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
+		}
+		// check for valid tokeniser types and duplicates
+		var seen = make(map[string]bool)
+		var seenSortableTok bool
+		for _, t := range schema.Tokenizer {
+			tokenizer, has := tok.GetTokenizer(t)
+			if !has {
+				return x.Errorf("Invalid tokenizer %s", t)
+			}
+			if tokenizer.Type() != typ {
+				return x.Errorf("Tokenizer: %s isn't valid for predicate: %s of type: %s",
+					tokenizer.Name(), schema.Predicate, typ.Name())
+			}
+			if _, ok := seen[tokenizer.Name()]; !ok {
+				seen[tokenizer.Name()] = true
+			} else {
+				return x.Errorf("Duplicate tokenizers present for attr %s", schema.Predicate)
+			}
+			if tokenizer.IsSortable() {
+				if seenSortableTok {
+					return x.Errorf("More than one sortable index encountered for: %v",
+						schema.Predicate)
+				}
+				seenSortableTok = true
+			}
+		}
+	}
+	return nil
+}
+
 // Parse parses a schema string and returns the schema representation for it.
 func Parse(s string) ([]*protos.SchemaUpdate, error) {
 	var schemas []*protos.SchemaUpdate
-	l := lex.NewLexer(s).Run(lexText)
+	l := lex.Lexer{Input: s}
+	l.Run(lexText)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemEOF:
+			if err := resolveTokenizers(schemas); err != nil {
+				return nil, x.Wrapf(err, "failed to enrich schema")
+			}
 			return schemas, nil
 		case itemText:
 			if schema, err := parseScalarPair(it, item.Val); err != nil {

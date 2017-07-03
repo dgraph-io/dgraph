@@ -189,7 +189,7 @@ var testNQuads = []struct {
 			Subject:     "alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.DeleteAllObjects}},
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
 		},
 		expectedErr: false,
 	},
@@ -197,9 +197,9 @@ var testNQuads = []struct {
 		input: `<alice> * * .`,
 		nq: protos.NQuad{
 			Subject:     "alice",
-			Predicate:   x.DeleteAllPredicates,
+			Predicate:   x.Star,
 			ObjectId:    "",
-			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.DeleteAllObjects}},
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
 		},
 		expectedErr: false,
 	},
@@ -809,6 +809,46 @@ var testNQuads = []struct {
 	{
 		input:       `<alice> <password> "guess"^^<pwd:password> .`,
 		expectedErr: true, // len(password) should >= 6
+	},
+	// Test variable in subject
+	{
+		input: `var(alice) <knows> "stuff" .`,
+		nq: protos.NQuad{
+			Predicate:   "knows",
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"stuff"}},
+			SubjectVar:  "alice",
+		},
+	},
+	// Test variable in object
+	{
+		input: `<alice> <knows> var(everyone) .`,
+		nq: protos.NQuad{
+			Subject:   "alice",
+			Predicate: "knows",
+			ObjectVar: "everyone",
+		},
+	},
+	{
+		input: `var(alice) <knows> var(everyone) .`,
+		nq: protos.NQuad{
+			SubjectVar: "alice",
+			Predicate:  "knows",
+			ObjectVar:  "everyone",
+		},
+	},
+	{
+		// Quotes inside facet string values.
+		input: `* <pred> * .`,
+		nq: protos.NQuad{
+			Subject:     x.Star,
+			Predicate:   "pred",
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
+		},
+	},
+	{
+		// Quotes inside facet string values.
+		input:       `* <pred> "random"^^<int> .`,
+		expectedErr: true,
 	},
 }
 

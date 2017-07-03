@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
+	"math/rand"
 	"os"
 	"os/exec"
 	"runtime"
@@ -31,7 +33,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger/badger"
@@ -46,7 +47,7 @@ var (
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
 	commitFraction   = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
-	lhmapNumShards   = flag.Int("lhmap", 32, "Number of shards for lhmap.")
+	lhmapNumShards   = runtime.NumCPU() * 4
 	dummyPostingList []byte // Used for indexing.
 )
 
@@ -111,39 +112,6 @@ func SyncMarkFor(group uint32) *x.WaterMark {
 	return marks.Get(group)
 }
 
-type counters struct {
-	ticker  *time.Ticker
-	done    uint64
-	noop    uint64
-	lastVal uint64
-}
-
-func (c *counters) periodicLog() {
-	for range c.ticker.C {
-		c.log()
-	}
-}
-
-func (c *counters) log() {
-	done := atomic.LoadUint64(&c.done)
-	noop := atomic.LoadUint64(&c.noop)
-	lastVal := atomic.LoadUint64(&c.lastVal)
-	if done == lastVal {
-		// Ignore.
-		return
-	}
-	atomic.StoreUint64(&c.lastVal, done)
-
-	log.Printf("Commit counters. done: %5d noop: %5d\n", done, noop)
-}
-
-func newCounters() *counters {
-	c := new(counters)
-	c.ticker = time.NewTicker(time.Second)
-	go c.periodicLog()
-	return c
-}
-
 type listMaps struct {
 	x.SafeMutex
 	m map[uint32]*listMap
@@ -159,7 +127,7 @@ func (l *listMaps) create(group uint32) *listMap {
 	if prev, present := l.m[group]; present {
 		return prev
 	}
-	lhmap := newShardedListMap(*lhmapNumShards)
+	lhmap := newShardedListMap(lhmapNumShards)
 	l.m[group] = lhmap
 	return lhmap
 }
@@ -192,7 +160,6 @@ func lhmapFor(group uint32) *listMap {
 }
 
 func aggressivelyEvict() {
-	stopTheWorld.AssertLock()
 	log.Println("Aggressive evict, committing to RocksDB")
 
 	// To evict entries belonging to a group no longer served by the server
@@ -217,7 +184,8 @@ func aggressivelyEvict() {
 	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
-func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
+func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{},
+	commitFraction float64) {
 	select {
 	case pending <- struct{}{}:
 	default:
@@ -227,13 +195,14 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
 
 	// NOTE: No need to acquire read lock for stopTheWorld. This portion is being run
 	// serially alongside aggressive commit.
-	n := int(float64(len(dirtyMap)) * *commitFraction)
+	n := int(float64(len(dirtyMap)) * commitFraction)
 	if n < 1000 {
 		// Have a min value of n, so we can merge small number of dirty PLs fast.
 		n = 1000
 	}
 	keysBuffer := make([]fingerPrint, 0, n)
 
+	// Convert map to list.
 	for key := range dirtyMap {
 		delete(dirtyMap, key)
 		keysBuffer = append(keysBuffer, key)
@@ -248,9 +217,6 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
 		if len(keys) == 0 {
 			return
 		}
-		ctr := newCounters()
-		defer ctr.ticker.Stop()
-
 		for _, key := range keys {
 			l := lhmapFor(key.gid).Get(key.fp)
 			if l == nil {
@@ -258,9 +224,8 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
 			}
 			// Not removing the postings list from the map, to avoid a race condition,
 			// where another caller re-creates the posting list before a commit happens.
-			commitOne(l, ctr)
+			commitOne(l)
 		}
-		ctr.log()
 	}(keysBuffer)
 }
 
@@ -268,7 +233,7 @@ func gentleCommit(dirtyMap map[fingerPrint]struct{}, pending chan struct{}) {
 // usage. If it exceeds a certain threshold, it would stop the world, and aggressively
 // merge and evict all posting lists from memory.
 func periodicCommit() {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(time.Second)
 	dirtyMap := make(map[fingerPrint]struct{}, 1000)
 	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
 	pending := make(chan struct{}, 15)
@@ -285,34 +250,22 @@ func periodicCommit() {
 			}
 
 			totMemory := getMemUsage()
-			if totMemory <= *maxmemory {
-				gentleCommit(dirtyMap, pending)
-				break
-			}
+			fraction := math.Min(1.0, *commitFraction*math.Exp(float64(dsize)/100000.0))
+			gentleCommit(dirtyMap, pending, fraction)
 
-			// Do aggressive commit, which would delete all the PLs from memory.
-			// Acquire lock, so no new posting lists are given out.
-			stopTheWorld.Lock()
-		DIRTYLOOP:
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
 			// are currently being processed to not get stuck on dirtyChan, which won't be
 			// processed until aggressive evict finishes.
-			for {
-				select {
-				case <-dirtyChan:
-					// pass
-				default:
-					break DIRTYLOOP
-				}
-			}
+
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
-			log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
-			aggressivelyEvict()
-			for k := range dirtyMap {
-				delete(dirtyMap, k)
+			if float64(totMemory) > 1.5*float64(*maxmemory) {
+				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
+				go evictShards(3)
+			} else if totMemory > *maxmemory {
+				log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", totMemory)
+				go evictShards(1)
 			}
-			stopTheWorld.Unlock()
 		}
 	}
 }
@@ -379,12 +332,11 @@ type fingerPrint struct {
 }
 
 var (
-	stopTheWorld x.SafeMutex
-	pstore       *badger.KV
-	syncCh       chan syncEntry
-	dirtyChan    chan fingerPrint // All dirty posting list keys are pushed here.
-	marks        *syncMarks
-	lhmaps       *listMaps
+	pstore    *badger.KV
+	syncCh    chan syncEntry
+	dirtyChan chan fingerPrint // All dirty posting list keys are pushed here.
+	marks     *syncMarks
+	lhmaps    *listMaps
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -397,7 +349,9 @@ func Init(ps *badger.KV) {
 	syncCh = make(chan syncEntry, 10000)
 
 	go periodicCommit()
-	go batchSync()
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go batchSync()
+	}
 }
 
 // GetOrCreate stores the List corresponding to key, if it's not there already.
@@ -413,11 +367,11 @@ func Init(ps *badger.KV) {
 // That way, we don't have a dependency conflict.
 func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
+	lhmap := lhmapFor(group)
+	lhmap.RLockShard(fp)
+	defer lhmap.RUnlockShard(fp)
 
-	stopTheWorld.RLock()
-	defer stopTheWorld.RUnlock()
-
-	lp := lhmapFor(group).Get(fp)
+	lp := lhmap.Get(fp)
 	if lp != nil {
 		lp.incr()
 		return lp, lp.decr
@@ -428,21 +382,21 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	l.water = marks.Get(group)
 
-	lp = lhmapFor(group).PutIfMissing(fp, l)
+	lp = lhmap.PutIfMissing(fp, l)
 	// We are always going to return lp to caller, whether it is l or not. So, let's
 	// increment its reference counter.
 	lp.incr()
 
 	if lp != l {
 		// Undo the increment in getNew() call above.
-		l.decr()
+		go l.decr()
 	}
 	pk := x.Parse(key)
 
 	// This replaces "TokensTable". The idea is that we want to quickly add the
 	// index key to the data store, with essentially an empty value. We just need
 	// the keys for filtering / sorting.
-	if l == lp && pk.IsIndex() && pk.Attr != "_xid_" {
+	if l == lp && pk.IsIndex() {
 		// Lock before entering goroutine. Otherwise, some tests in query will fail.
 		l.Lock()
 		go func(key []byte) {
@@ -464,10 +418,11 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 // the list.
 func GetOrUnmarshal(key, val []byte, gid uint32) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
+	lhmap := lhmapFor(gid)
 
-	stopTheWorld.RLock()
-	lp := lhmapFor(gid).Get(fp)
-	stopTheWorld.RUnlock()
+	lhmap.RLockShard(fp)
+	lp := lhmap.Get(fp)
+	lhmap.RUnlockShard(fp)
 
 	if lp != nil {
 		lp.incr()
@@ -482,16 +437,12 @@ func GetOrUnmarshal(key, val []byte, gid uint32) (rlist *List, decr func()) {
 	return lp, lp.decr
 }
 
-func commitOne(l *List, c *counters) {
+func commitOne(l *List) {
 	if l == nil {
 		return
 	}
-	if merged, err := l.SyncIfDirty(context.Background()); err != nil {
+	if _, err := l.SyncIfDirty(context.Background()); err != nil {
 		log.Printf("Error while committing dirty list: %v\n", err)
-	} else if merged {
-		atomic.AddUint64(&c.done, 1)
-	} else {
-		atomic.AddUint64(&c.noop, 1)
 	}
 }
 
@@ -499,8 +450,6 @@ func CommitLists(numRoutines int, group uint32) {
 	if group == 0 {
 		return
 	}
-	c := newCounters()
-	defer c.ticker.Stop()
 
 	// We iterate over lhmap, deleting keys and pushing values (List) into this
 	// channel. Then goroutines right below will commit these lists to data store.
@@ -512,7 +461,7 @@ func CommitLists(numRoutines int, group uint32) {
 		go func() {
 			defer wg.Done()
 			for l := range workChan {
-				commitOne(l, c)
+				commitOne(l)
 			}
 		}()
 	}
@@ -529,13 +478,41 @@ func CommitLists(numRoutines int, group uint32) {
 	wg.Wait()
 }
 
+func evictShard(group uint32, shardNum int) {
+	lhmap := lhmapFor(group)
+
+	lhmap.DeleteShard(shardNum, func(k uint64, l *List) {
+		l.SetForDeletion()
+		commitOne(l)
+		l.decr()
+	})
+	log.Printf("evicted shard %d from group %d\n", shardNum, group)
+}
+
+func evictShards(numShards int) {
+	var wg sync.WaitGroup
+	for _, gid := range lhmaps.groups() {
+		wg.Add(1)
+		go func(group uint32) {
+			defer wg.Done()
+			for i := 0; i < numShards; i++ {
+				shardNum := rand.Intn(lhmapNumShards)
+				evictShard(group, shardNum)
+			}
+		}(gid)
+	}
+	wg.Wait()
+}
+
 // EvictAll removes all pl's stored in memory for given group
 func EvictGroup(group uint32) {
 	// This is serialized by raft so no need to worry about race condition from getOrCreate
 	// request from same group
+	lhmapFor(group).Each(func(k uint64, l *List) {
+		l.SetForDeletion()
+	})
 	CommitLists(1, group)
 	lhmapFor(group).EachWithDelete(func(k uint64, l *List) {
-		l.SetForDeletion()
 		l.decr()
 	})
 }
@@ -546,7 +523,6 @@ type syncEntry struct {
 	val     []byte
 	water   *x.WaterMark
 	pending []uint64
-	sw      *x.SafeWait
 }
 
 func batchSync() {
@@ -576,16 +552,16 @@ func batchSync() {
 				wb = wb[:0]
 
 				for _, e := range entries {
-					e.sw.Done()
 					if e.water != nil {
 						e.water.Ch <- x.Mark{Indices: e.pending, Done: true}
 					}
 				}
 				entries = entries[:0]
+			} else {
+				// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
+				sleepFor := time.Millisecond - time.Since(start)
+				time.Sleep(sleepFor)
 			}
-			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
-			sleepFor := 10*time.Millisecond - time.Since(start)
-			time.Sleep(sleepFor)
 		}
 	}
 }
