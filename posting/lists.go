@@ -165,7 +165,7 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 	select {
 	case pending <- struct{}{}:
 	default:
-		fmt.Println("Skipping gentleCommit")
+		fmt.Println("Skipping gentleCommit %v\n", len(syncCh))
 		return
 	}
 
@@ -196,7 +196,8 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 			break
 		}
 	}
-
+	fmt.Printf("starting goroutine for gentleCommit\n")
+	t := time.Now()
 	go func(keys []fingerPrint) {
 		defer func() { <-pending }()
 		if len(keys) == 0 {
@@ -211,6 +212,7 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 			// where another caller re-creates the posting list before a commit happens.
 			commitOne(l)
 		}
+		fmt.Printf("finished gentleCommit %v %v\n", len(keys), time.Since(t))
 	}(keysBuffer)
 }
 
@@ -421,7 +423,7 @@ func CommitLists(numRoutines int, group uint32) {
 
 func evictShard(group uint32, shardNum int) {
 	lhmap := lhmapFor(group)
-
+	fmt.Printf("Lhmap size: %v\n", lhmap.Size())
 	lhmap.DeleteShard(shardNum, func(k uint64, l *List) {
 		l.SetForDeletion()
 		commitOne(l)

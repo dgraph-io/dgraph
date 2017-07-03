@@ -170,6 +170,7 @@ func (d *Dgraph) printCounters() {
 func (d *Dgraph) request(req *Req) {
 	counter := atomic.AddUint64(&d.mutations, 1)
 RETRY:
+	factor := 1
 	_, err := d.dc.Run(context.Background(), &req.gr)
 	if err != nil {
 		errString := err.Error()
@@ -178,7 +179,8 @@ RETRY:
 			log.Fatal(errString)
 		}
 		fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(time.Duration(5*factor) * time.Millisecond)
+		factor = factor * 2
 		goto RETRY
 	}
 	req.reset()
