@@ -597,7 +597,7 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 
 		final.Uids = append(final.Uids, p.Uid)
 
-		if p.Facets != nil || p.Value != nil || len(p.Metadata) != 0 || p.Label != "" {
+		if p.Facets != nil || p.Value != nil || len(p.Metadata) != 0 || len(p.Label) != 0 {
 			// I think it's okay to take the pointer from the iterator, because we have a lock
 			// over List; which won't be released until final has been marshalled. Thus, the
 			// underlying data wouldn't be changed.
@@ -607,7 +607,7 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	})
 
 	var data []byte
-	if len(final.Postings) == 0 && len(final.Uids) == 0 {
+	if len(final.Uids) == 0 {
 		// This means we should delete the key from store during SyncIfDirty.
 		data = nil
 	} else {

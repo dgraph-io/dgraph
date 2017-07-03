@@ -69,66 +69,78 @@ var rdfTypeMap = map[types.TypeID]string{
 
 func toRDF(buf *bytes.Buffer, item kv) {
 	pl := item.list
-	for _, p := range pl.Postings {
+	uidx, pidx := 0, 0
+	ulen, plen := len(pl.Uids), len(pl.Postings)
+	p := &protos.Posting{}
+	for ; uidx < ulen; uidx++ {
+		p.Uid = pl.Uids[uidx]
 		buf.WriteString(item.prefix)
-
-		if !bytes.Equal(p.Value, nil) {
-			// Value posting
-			// Convert to appropriate type
-			vID := types.TypeID(p.ValType)
-			src := types.ValueForType(vID)
-			src.Value = p.Value
-			str, err := types.Convert(src, types.StringID)
-			x.Check(err)
-			buf.WriteByte('"')
-			buf.WriteString(str.Value.(string))
-			buf.WriteByte('"')
-			if p.PostingType == protos.Posting_VALUE_LANG {
-				buf.WriteByte('@')
-				buf.WriteString(string(p.Metadata))
-			} else if vID != types.BinaryID &&
-				vID != types.DefaultID {
-				rdfType, ok := rdfTypeMap[vID]
-				x.AssertTruef(ok, "Didn't find RDF type for dgraph type: %+v", vID.Name())
-				buf.WriteString("^^<")
-				buf.WriteString(rdfType)
-				buf.WriteByte('>')
-			}
-		} else {
+		if pidx >= plen || pl.Uids[uidx] != pl.Postings[pidx].Uid {
 			buf.WriteString("<0x")
 			buf.WriteString(strconv.FormatUint(p.Uid, 16))
 			buf.WriteByte('>')
-		}
-		// Label
-		if len(p.Label) > 0 {
-			buf.WriteString(" <")
-			buf.WriteString(p.Label)
-			buf.WriteByte('>')
-		}
-		// Facets.
-		fcs := p.Facets
-		if len(fcs) != 0 {
-			buf.WriteString(" (")
-			for i, f := range fcs {
-				if i != 0 {
-					buf.WriteByte(',')
+			buf.WriteString(" .\n")
+		} else {
+			p = pl.Postings[pidx]
+			pidx++
+			if !bytes.Equal(p.Value, nil) {
+				// Value posting
+				// Convert to appropriate type
+				vID := types.TypeID(p.ValType)
+				src := types.ValueForType(vID)
+				src.Value = p.Value
+				str, err := types.Convert(src, types.StringID)
+				x.Check(err)
+				buf.WriteByte('"')
+				buf.WriteString(str.Value.(string))
+				buf.WriteByte('"')
+				if p.PostingType == protos.Posting_VALUE_LANG {
+					buf.WriteByte('@')
+					buf.WriteString(string(p.Metadata))
+				} else if vID != types.BinaryID &&
+					vID != types.DefaultID {
+					rdfType, ok := rdfTypeMap[vID]
+					x.AssertTruef(ok, "Didn't find RDF type for dgraph type: %+v", vID.Name())
+					buf.WriteString("^^<")
+					buf.WriteString(rdfType)
+					buf.WriteByte('>')
 				}
-				buf.WriteString(f.Key)
-				buf.WriteByte('=')
-				fVal := &types.Val{Tid: types.StringID}
-				x.Check(types.Marshal(facets.ValFor(f), fVal))
-				if facets.TypeIDFor(f) == types.StringID {
-					buf.WriteByte('"')
-					buf.WriteString(fVal.Value.(string))
-					buf.WriteByte('"')
-				} else {
-					buf.WriteString(fVal.Value.(string))
-				}
+			} else {
+				buf.WriteString("<0x")
+				buf.WriteString(strconv.FormatUint(p.Uid, 16))
+				buf.WriteByte('>')
 			}
-			buf.WriteByte(')')
+			// Label
+			if len(p.Label) > 0 {
+				buf.WriteString(" <")
+				buf.WriteString(p.Label)
+				buf.WriteByte('>')
+			}
+			// Facets.
+			fcs := p.Facets
+			if len(fcs) != 0 {
+				buf.WriteString(" (")
+				for i, f := range fcs {
+					if i != 0 {
+						buf.WriteByte(',')
+					}
+					buf.WriteString(f.Key)
+					buf.WriteByte('=')
+					fVal := &types.Val{Tid: types.StringID}
+					x.Check(types.Marshal(facets.ValFor(f), fVal))
+					if facets.TypeIDFor(f) == types.StringID {
+						buf.WriteByte('"')
+						buf.WriteString(fVal.Value.(string))
+						buf.WriteByte('"')
+					} else {
+						buf.WriteString(fVal.Value.(string))
+					}
+				}
+				buf.WriteByte(')')
+			}
+			// End dot.
+			buf.WriteString(" .\n")
 		}
-		// End dot.
-		buf.WriteString(" .\n")
 	}
 }
 

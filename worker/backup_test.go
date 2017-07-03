@@ -200,7 +200,7 @@ func TestBackup(t *testing.T) {
 		counts = append(counts, count)
 		require.NoError(t, scanner.Err())
 	}
-	// This order will bw presereved due to file naming.
+	// This order will be presereved due to file naming.
 	require.Equal(t, []int{4, 2}, counts)
 
 	var schemaCounts []int
