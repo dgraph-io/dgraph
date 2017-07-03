@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"strings"
 
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
 
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
