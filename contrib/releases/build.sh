@@ -51,7 +51,6 @@ cd $dgraph_cmd/dgraph && \
    go build -v -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime' -X $uiDir=$ui" .;
 echo "dgraphloader"
-echo $release
 cd $dgraph_cmd/dgraphloader && \
    go build -v -ldflags \
    "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .;
