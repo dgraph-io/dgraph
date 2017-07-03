@@ -19,7 +19,6 @@ package posting
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -456,7 +455,6 @@ func TestAddMutation_checksum(t *testing.T) {
 		deletePl(t)
 		ps.Delete(ol.key)
 	}
-	fmt.Println(c1, c3)
 	require.NotEqual(t, c1, c3)
 }
 
