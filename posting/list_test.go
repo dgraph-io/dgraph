@@ -19,6 +19,7 @@ package posting
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -115,7 +116,7 @@ func TestAddMutation(t *testing.T) {
 
 	p = getFirst(l)
 	require.NotNil(t, p, "Unable to retrieve posting")
-	require.EqualValues(t, p.Label, "anti-testing")
+	require.EqualValues(t, "anti-testing", p.Label)
 	l.SyncIfDirty(context.Background())
 	time.Sleep(time.Second)
 
@@ -455,7 +456,8 @@ func TestAddMutation_checksum(t *testing.T) {
 		deletePl(t)
 		ps.Delete(ol.key)
 	}
-	require.NotEqual(t, c3, c1)
+	fmt.Println(c1, c3)
+	require.NotEqual(t, c1, c3)
 }
 
 func TestAddMutation_gru(t *testing.T) {

@@ -159,6 +159,7 @@ func samePosting(oldp *protos.Posting, newp *protos.Posting) bool {
 	if bytes.Compare(oldp.Metadata, newp.Metadata) != 0 {
 		return false
 	}
+
 	// Checking source might not be necessary.
 	if oldp.Label != newp.Label {
 		return false
@@ -282,7 +283,7 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 		uidFound = mpost.Uid == puid
 		if uidFound {
 			// look at the list of postings
-			pp := emptyPosting
+			pp := &protos.Posting{}
 			pp.Uid = puid
 			pidx := sort.Search(len(pl.Postings), func(idx int) bool {
 				return puid <= pl.Postings[idx].Uid
@@ -495,11 +496,11 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			if pl.Uids[uidx] == pp.Uid {
 				pidx++
 			} else {
-				pp = emptyPosting
+				pp = &protos.Posting{}
 				pp.Uid = pl.Uids[uidx]
 			}
 		} else if uidx < uidsLen {
-			pp = emptyPosting
+			pp = &protos.Posting{}
 			pp.Uid = pl.Uids[uidx]
 		} else {
 			pp = emptyPosting
@@ -537,13 +538,12 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 func (l *List) length(afterUid uint64) int {
 	l.AssertRLock()
 
-	pidx, midx := 0, 0
+	uidx, midx := 0, 0
 	pl := l.plist
 
 	if afterUid > 0 {
-		pidx = sort.Search(len(pl.Postings), func(idx int) bool {
-			p := pl.Postings[idx]
-			return afterUid < p.Uid
+		uidx = sort.Search(len(pl.Uids), func(idx int) bool {
+			return afterUid < pl.Uids[idx]
 		})
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {
 			mp := l.mlayer[idx]
@@ -551,7 +551,7 @@ func (l *List) length(afterUid uint64) int {
 		})
 	}
 
-	count := len(pl.Postings) - pidx
+	count := len(pl.Uids) - uidx
 	for _, p := range l.mlayer[midx:] {
 		if p.Op == Add {
 			count++
@@ -586,18 +586,18 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	h := md5.New()
 	count := 0
 	l.iterate(0, func(p *protos.Posting) bool {
+		// Checksum code.
+		n := binary.PutVarint(ubuf, int64(count))
+		h.Write(ubuf[0:n])
+		n = binary.PutUvarint(ubuf, p.Uid)
+		h.Write(ubuf[0:n])
+		h.Write(p.Value)
+		h.Write([]byte(p.Label))
+		count++
+
 		final.Uids = append(final.Uids, p.Uid)
 
-		if p.Facets != nil || p.Value != nil {
-			// Checksum code.
-			n := binary.PutVarint(ubuf, int64(count))
-			h.Write(ubuf[0:n])
-			n = binary.PutUvarint(ubuf, p.Uid)
-			h.Write(ubuf[0:n])
-			h.Write(p.Value)
-			h.Write([]byte(p.Label))
-			count++
-
+		if p.Facets != nil || p.Value != nil || len(p.Metadata) != 0 || p.Label != "" {
 			// I think it's okay to take the pointer from the iterator, because we have a lock
 			// over List; which won't be released until final has been marshalled. Thus, the
 			// underlying data wouldn't be changed.
@@ -607,7 +607,7 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	})
 
 	var data []byte
-	if len(final.Postings) == 0 {
+	if len(final.Postings) == 0 && len(final.Uids) == 0 {
 		// This means we should delete the key from store during SyncIfDirty.
 		data = nil
 	} else {

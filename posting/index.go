@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"sort"
 
 	"golang.org/x/net/trace"
 
@@ -488,15 +489,24 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add reverse entries for values in posting list
 	addReversePostings := func(uid uint64, pl *protos.PostingList) error {
-		postingsLen := len(pl.Postings)
+		postingsLen := len(pl.Uids)
 		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
 		for idx := 0; idx < postingsLen; idx++ {
-			p := pl.Postings[idx]
+			puid := pl.Uids[idx]
 			// Add reverse entries based on p.
-			edge.ValueId = p.Uid
+			edge.ValueId = puid
 			edge.Op = protos.DirectedEdge_SET
-			edge.Facets = p.Facets
-			edge.Label = p.Label
+
+			pidx := sort.Search(len(pl.Postings), func(idx int) bool {
+				return puid <= pl.Postings[idx].Uid
+			})
+			if pidx < len(pl.Postings) {
+				if puid == pl.Postings[pidx].Uid {
+					pp := pl.Postings[pidx]
+					edge.Facets = pp.Facets
+					edge.Label = pp.Label
+				}
+			}
 			err := addReverseMutation(ctx, &edge)
 			// We retry once in case we do GetOrCreate and stop the world happens
 			// before we do addmutation
