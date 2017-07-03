@@ -23,7 +23,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/posting"
