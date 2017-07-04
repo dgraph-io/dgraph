@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -178,8 +179,24 @@ func getGroupIds(groups string) ([]uint32, error) {
 			return nil, x.Errorf("Invalid group configuration item: %v", part)
 		}
 	}
+
+	// check for duplicates
+	sort.Sort(gidSlice(gids))
+	for i := 0; i < len(gids)-1; i++ {
+		if gids[i] == gids[i+1] {
+			return nil, x.Errorf("Duplicated group id: %v", gids[i])
+		}
+	}
+
 	return gids, nil
 }
+
+// just for sorting
+type gidSlice []uint32
+
+func (a gidSlice) Len() int           { return len(a) }
+func (a gidSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a gidSlice) Less(i, j int) bool { return a[i] < a[j] }
 
 // HealthCheck returns whether the server is ready to accept requests or not
 // Load balancer would add the node to the endpoint once health check starts

@@ -99,3 +99,21 @@ func TestParseGroupsError9(t *testing.T) {
 	_, err = getGroupIds("-1")
 	require.Error(t, err)
 }
+
+func TestParseGroupsError10(t *testing.T) {
+	// duplicated id is an error
+	_, err := getGroupIds("1-5,3")
+	require.Error(t, err)
+}
+
+func TestParseGroupsError11(t *testing.T) {
+	// duplicated id is an error
+	_, err := getGroupIds("1-5,4-7")
+	require.Error(t, err)
+}
+
+func TestParseGroupsError12(t *testing.T) {
+	// duplicated id is an error
+	_, err := getGroupIds("1,2,2,3")
+	require.Error(t, err)
+}
