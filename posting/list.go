@@ -98,7 +98,7 @@ var listPool = sync.Pool{
 	},
 }
 
-type Piterator struct {
+type PIterator struct {
 	pl         *protos.PostingList // Pointer to PostingList
 	uidPosting *protos.Posting
 	uidx       int // index of UIDs
@@ -108,7 +108,7 @@ type Piterator struct {
 	valid      bool
 }
 
-func (it *Piterator) NewPlIterator(pl *protos.PostingList, afterUid uint64) *Piterator {
+func (it *PIterator) Init(pl *protos.PostingList, afterUid uint64) {
 	it.pl = pl
 	it.uidPosting = &protos.Posting{}
 	it.uidx, it.pidx = 0, 0
@@ -123,21 +123,20 @@ func (it *Piterator) NewPlIterator(pl *protos.PostingList, afterUid uint64) *Pit
 	if it.uidx < it.ulen {
 		it.valid = true
 	}
-	return it
 }
 
-func (it *Piterator) Next() {
+func (it *PIterator) Next() {
 	it.uidx++
 	if it.uidx >= it.ulen {
 		it.valid = false
 	}
 }
 
-func (it *Piterator) Valid() bool {
+func (it *PIterator) Valid() bool {
 	return it.valid
 }
 
-func (it *Piterator) Posting() *protos.Posting {
+func (it *PIterator) Posting() *protos.Posting {
 	if it.pidx < it.plen {
 		for it.pl.Postings[it.pidx].Uid < it.pl.Uids[it.uidx] {
 			it.pidx++
@@ -325,11 +324,11 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 
 	// Didn't find it in mutable layer. Now check the immutable layer.
 	var uidFound, psame bool
-	pit := &Piterator{}
-	pit.NewPlIterator(l.plist, mpost.Uid-1)
-	if pit.Valid() {
+	var pitr PIterator
+	pitr.Init(l.plist, mpost.Uid-1)
+	if pitr.Valid() {
 		//if uidx < len(pl.Uids) {
-		pp := pit.Posting()
+		pp := pitr.Posting()
 		puid := pp.Uid
 		uidFound = mpost.Uid == puid
 		psame = samePosting(pp, mpost)
@@ -518,11 +517,11 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 
 	var mp, pp *protos.Posting
 	cont := true
-	pit := &Piterator{}
-	pit.NewPlIterator(l.plist, afterUid)
+	var pitr PIterator
+	pitr.Init(l.plist, afterUid)
 	for cont {
-		if pit.Valid() {
-			pp = pit.Posting()
+		if pitr.Valid() {
+			pp = pitr.Posting()
 		} else {
 			pp = emptyPosting
 		}
@@ -538,7 +537,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			cont = false
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			cont = f(pp)
-			pit.Next()
+			pitr.Next()
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
 			if mp.Op != Del {
 				cont = f(mp)
@@ -548,7 +547,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			if mp.Op != Del {
 				cont = f(mp)
 			}
-			pit.Next()
+			pitr.Next()
 			midx++
 		default:
 			log.Fatalf("Unhandled case during iteration of posting list.")

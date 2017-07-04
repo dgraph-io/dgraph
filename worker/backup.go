@@ -70,8 +70,8 @@ var rdfTypeMap = map[types.TypeID]string{
 
 func toRDF(buf *bytes.Buffer, item kv) {
 	pl := item.list
-	pit := &posting.Piterator{}
-	pit.NewPlIterator(pl, 0)
+	var pitr posting.PIterator
+	pit.Init(pl, 0)
 	for ; pit.Valid(); pit.Next() {
 		p := pit.Posting()
 		buf.WriteString(item.prefix)
