@@ -384,18 +384,18 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 
 	// Wait for all the goroutines to reply back.
 	// We return if an error was returned or the parent called ctx.Done()
+	var err error
 	for i := 0; i < len(mutationMap); i++ {
-		err := <-errors
+		err = <-errors
 		if err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while running all mutations: %+v", err)
 			}
-			return err
 		}
 	}
 	close(errors)
 
-	return nil
+	return err
 }
 
 // Mutate is used to apply mutations over the network on other instances.
