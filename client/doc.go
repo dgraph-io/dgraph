@@ -1,4 +1,20 @@
 /*
+ * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
 Package client provides helper function for interacting with the Dgraph server.
 You can use it to run mutations and queries. You can also use BatchMutation
 to upload data concurrently. It communicates with the server using gRPC.
@@ -93,8 +109,6 @@ This is how we delete the friend edge between the two nodes.
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
-
-Checkout the BatchMutation example if you want to upload large amounts of data quickly.
 
 For more details checkout https://docs.dgraph.io/master/clients/#go.
 */

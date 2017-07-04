@@ -288,6 +288,85 @@ if err != nil {
 fmt.Printf("%+v\n", resp)
 ```
 
+Here is an example of how you could use the Dgraph client to do batch mutations concurrently.
+This is what the **dgraphloader** uses internally.
+```
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"compress/gzip"
+	"io"
+	"log"
+	"os"
+
+	"google.golang.org/grpc"
+
+	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/rdf"
+	"github.com/dgraph-io/dgraph/x"
+)
+
+func ExampleBatchMutation() {
+	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	// Start a new batch with batch size 1000 and 100 concurrent requests.
+	bmOpts := client.BatchMutationOptions{
+		Size:          1000,
+		Pending:       100,
+		PrintCounters: false,
+	}
+	dgraphClient := client.NewDgraphClient(conn, bmOpts)
+
+	// Process your file, convert data to a protos.NQuad and add it to the batch.
+	// For each edge, do a BatchSet (this would typically be done in a loop
+	// after processing the data into edges). Here we show example of reading a
+	// file with RDF data, converting it to edges and adding it to the batch.
+
+	f, err := os.Open("goldendata.rdf.gz")
+	x.Check(err)
+	defer f.Close()
+	gr, err := gzip.NewReader(f)
+	x.Check(err)
+
+	var buf bytes.Buffer
+	bufReader := bufio.NewReader(gr)
+	var line int
+	for {
+		err = x.ReadLine(bufReader, &buf)
+		if err != nil {
+			break
+		}
+		line++
+		nq, err := rdf.Parse(buf.String())
+		if err == rdf.ErrEmpty { // special case: comment/empty line
+			buf.Reset()
+			continue
+		} else if err != nil {
+			log.Fatalf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
+		}
+		buf.Reset()
+
+		nq.Subject = Node(nq.Subject, dgraphClient)
+		if len(nq.ObjectId) > 0 {
+			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
+		}
+		if err = dgraphClient.BatchSet(client.NewEdge(nq)); err != nil {
+			log.Fatal("While adding mutation to batch: ", err)
+		}
+	}
+	if err != io.EOF {
+		x.Checkf(err, "Error while reading file")
+	}
+	// Wait for all requests to complete. This is very important, else some
+	// data might not be sent to server.
+	dgraphClient.BatchFlush()
+}
+```
+
 ### Python
 {{% notice "incomplete" %}}A lot of development has gone into the Go client and the Python client is not up to date with it. We are looking for help from contributors to bring it up to date.{{% /notice %}}
 

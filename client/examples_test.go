@@ -1,81 +1,33 @@
+/*
+ * Copyright (C) 2017 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package client_test
 
 import (
-	"bufio"
-	"bytes"
-	"compress/gzip"
 	"context"
 	"fmt"
-	"io"
 	"log"
-	"os"
 	"strconv"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 	"google.golang.org/grpc"
 )
-
-func ExampleBatchMutation() {
-	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
-	defer conn.Close()
-
-	// Start a new batch with batch size 1000 and 100 concurrent requests.
-	bmOpts := client.BatchMutationOptions{
-		Size:          1000,
-		Pending:       100,
-		PrintCounters: false,
-	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts)
-
-	// Process your file, convert data to a protos.NQuad and add it to the batch.
-	// For each graph.NQuad, run batch.AddMutation (this would typically be done in a loop
-	// after processing the data into nquads). Here we show example of reading a
-	// file with RDF data, converting it to NQuads and adding it to the batch.
-
-	f, err := os.Open("goldendata.rdf.gz")
-	x.Check(err)
-	defer f.Close()
-	gr, err := gzip.NewReader(f)
-	x.Check(err)
-
-	var buf bytes.Buffer
-	bufReader := bufio.NewReader(gr)
-	var line int
-	for {
-		err = x.ReadLine(bufReader, &buf)
-		if err != nil {
-			break
-		}
-		line++
-		nq, err := rdf.Parse(buf.String())
-		if err == rdf.ErrEmpty { // special case: comment/empty line
-			buf.Reset()
-			continue
-		} else if err != nil {
-			log.Fatalf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
-		}
-		buf.Reset()
-
-		nq.Subject = Node(nq.Subject, dgraphClient)
-		if len(nq.ObjectId) > 0 {
-			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
-		}
-		if err = dgraphClient.BatchSet(client.NewEdge(nq)); err != nil {
-			log.Fatal("While adding mutation to batch: ", err)
-		}
-	}
-	if err != io.EOF {
-		x.Checkf(err, "Error while reading file")
-	}
-	// Wait for all requests to complete. This is very important, else some
-	// data might not be sent to server.
-	dgraphClient.BatchFlush()
-}
 
 func Node(val string, c *client.Dgraph) string {
 	if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
