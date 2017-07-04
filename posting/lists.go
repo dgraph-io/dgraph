@@ -165,7 +165,7 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 	select {
 	case pending <- struct{}{}:
 	default:
-		fmt.Println("Skipping gentleCommit len(syncCh) %v,\n", len(syncCh))
+		fmt.Printf("Skipping gentleCommit len(syncCh) %v,\n", len(syncCh))
 		return
 	}
 
@@ -403,6 +403,7 @@ func CommitLists(numRoutines int, group uint32) {
 			defer wg.Done()
 			for l := range workChan {
 				commitOne(l)
+				l.decr()
 			}
 		}()
 	}
@@ -411,8 +412,7 @@ func CommitLists(numRoutines int, group uint32) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
-		// We lose one reference for deletion from lhmap. But we gain one reference
-		// for pushing into workChan. So no decr or incr here.
+		l.incr()
 		workChan <- l
 	})
 	close(workChan)
