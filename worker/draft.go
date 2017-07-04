@@ -319,6 +319,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	}
 
 	slice := slicePool.Get().([]byte)
+	defer slicePool.Put(slice)
 	if len(slice) < proposal.Size() {
 		slice = make([]byte, proposal.Size()+1)
 	}
@@ -360,18 +361,13 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		log.Fatalf("Unknown proposal")
 	}
 
-	select {
-	case err = <-che:
-		slicePool.Put(slice)
-		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(err.Error())
-			}
+	err = <-che
+	if err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
 		}
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
 	}
+	return err
 }
 
 func (n *node) send(m raftpb.Message) {

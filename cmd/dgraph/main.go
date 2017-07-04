@@ -66,12 +66,15 @@ var (
 	port       = flag.Int("port", 8080, "Port to run server on.")
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	nomutations    = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
-	memprofile     = flag.String("mem", "", "write memory profile to file")
-	blockRate      = flag.Int("block", 0, "Block profiling rate")
-	dumpSubgraph   = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
-	numPending     = flag.Int("pending", 1000, "Number of pending queries. Useful for rate limiting.")
+	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+	exposeTrace = flag.Bool("expose_trace", false,
+		"Allow trace endpoint to be accessible from remote")
+	cpuprofile   = flag.String("cpu", "", "write cpu profile to file")
+	memprofile   = flag.String("mem", "", "write memory profile to file")
+	blockRate    = flag.Int("block", 0, "Block profiling rate")
+	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
+	numPending   = flag.Int("pending", 1000,
+		"Number of pending queries. Useful for rate limiting.")
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries chan struct{}
@@ -722,13 +725,13 @@ func setupServer(che chan error) {
 }
 
 func main() {
-	/*
+	rand.Seed(time.Now().UnixNano())
+	x.Init()
+	if *exposeTrace {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}
-	*/
-	rand.Seed(time.Now().UnixNano())
-	x.Init()
+	}
 	checkFlagsAndInitDirs()
 	runtime.SetBlockProfileRate(*blockRate)
 	pendingQueries = make(chan struct{}, *numPending)

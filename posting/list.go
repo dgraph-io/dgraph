@@ -81,22 +81,31 @@ type List struct {
 func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
 func (l *List) incr() int32     { return atomic.AddInt32(&l.refcount, 1) }
 func (l *List) decr() {
+	// Locking is just to ensure that anything else has finished working on this
+	// list before we push it to listPool
+	l.Lock()
+	l.Unlock()
 	val := atomic.AddInt32(&l.refcount, -1)
 	x.AssertTruef(val >= 0, "List reference should never be less than zero: %v", val)
 	if val > 0 {
 		return
 	}
-	postingPool.Put(l.plist)
 
-	// l.Iterate(0, func(p *protos.Posting) bool {
-	// 	*p = protos.Posting{}
-	// 	postingPool.Put(p)
-	// 	return true
-	// })
+	l.Iterate(0, func(p *protos.Posting) bool {
+		postingPool.Put(p)
+		return true
+	})
+	postingListPool.Put(l.plist)
 	listPool.Put(l)
 }
 
 var postingPool = sync.Pool{
+	New: func() interface{} {
+		return &protos.Posting{}
+	},
+}
+
+var postingListPool = sync.Pool{
 	New: func() interface{} {
 		return &protos.PostingList{}
 	},
@@ -130,7 +139,8 @@ func getNew(key []byte, gid uint32, pstore *badger.KV) *List {
 	}
 	val := item.Value()
 
-	l.plist = postingPool.Get().(*protos.PostingList)
+	l.plist = postingListPool.Get().(*protos.PostingList)
+	// TODO: Make uid slice empty instead of resetting
 	l.plist.Reset()
 	// l.plist = new(protos.PostingList)
 	if val != nil {
@@ -205,16 +215,18 @@ func newPosting(t *protos.DirectedEdge) *protos.Posting {
 		postingType = protos.Posting_VALUE
 	}
 
-	return &protos.Posting{
-		Uid:         t.ValueId,
-		Value:       t.Value,
-		ValType:     protos.Posting_ValType(t.ValueType),
-		PostingType: postingType,
-		Metadata:    metadata,
-		Label:       t.Label,
-		Op:          op,
-		Facets:      t.Facets,
-	}
+	p := postingPool.Get().(*protos.Posting)
+	*p = protos.Posting{}
+	p.Uid = t.ValueId
+	p.Value = t.Value
+	p.ValType = protos.Posting_ValType(t.ValueType)
+	p.PostingType = postingType
+	p.Metadata = metadata
+	p.Label = t.Label
+	p.Op = op
+	p.Facets = t.Facets
+	return p
+
 }
 
 func (l *List) PostingList() *protos.PostingList {
@@ -583,7 +595,8 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		return false, nil
 	}
 
-	final := &protos.PostingList{}
+	final := postingListPool.Get().(*protos.PostingList)
+	final.Reset()
 	ubuf := make([]byte, 16)
 	h := md5.New()
 	count := 0
@@ -612,6 +625,9 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		final.Checksum = h.Sum(nil)
 		data, err = final.Marshal()
 		x.Checkf(err, "Unable to marshal posting list")
+	}
+	if l.plist != nil {
+		postingListPool.Put(l.plist)
 	}
 	l.plist = final
 

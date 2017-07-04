@@ -10,7 +10,7 @@ var (
 	healthCheck uint32
 	memoryCheck uint32
 	memoryErr   = errors.New("Please retry again, server's memory is at capacity")
-	healthErr   = errors.New("Please retry again, server is not healthy/ready to take requests")
+	healthErr   = errors.New("Please retry again, server is not ready to accept requests")
 )
 
 func UpdateMemoryStatus(ok bool) {

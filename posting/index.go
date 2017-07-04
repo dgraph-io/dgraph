@@ -129,8 +129,7 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 
 	t := time.Now()
 	plist, decr := GetOrCreate(key, groupId)
-	t1 := time.Since(t)
-	if t1.Nanoseconds() > 1000000 {
+	if t1 := time.Since(t); t1 > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("retreived pl took %v", t1)
 		}
@@ -295,8 +294,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	{
 		t2 := time.Now()
 		l.Lock()
-		t1 := time.Since(t2)
-		if t1.Nanoseconds() > 1000000 {
+		if t1 := time.Since(t2); t1 > time.Millisecond {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("acquired lock %v %v %v", t1, t.Attr, t.Entity)
 			}

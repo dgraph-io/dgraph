@@ -42,6 +42,9 @@ const (
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("In run mutations")
 	}
@@ -72,8 +75,7 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 
 		t := time.Now()
 		plist, decr := posting.GetOrCreate(key, gid)
-		t1 := time.Since(t)
-		if t1.Nanoseconds() > 100000 {
+		if t1 := time.Since(t); t1 > time.Millisecond {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("retreived pl %v", t1)
 			}
@@ -402,23 +404,14 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 	if !groups().ServesGroup(m.GroupId) {
 		return &protos.Payload{}, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
-	c := make(chan error, 1)
 	node := groups().Node(m.GroupId)
 	var tr trace.Trace
 	if rand.Float64() < *Tracing {
 		tr = trace.New("Dgraph", "GrpcMutate")
+		defer tr.Finish()
 		tr.SetMaxEvents(1000)
 		ctx = trace.NewContext(ctx, tr)
 	}
-	go func() { c <- node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m}) }()
-
-	select {
-	case <-ctx.Done():
-		return &protos.Payload{}, ctx.Err()
-	case err := <-c:
-		if tr != nil {
-			tr.Finish()
-		}
-		return &protos.Payload{}, err
-	}
+	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m})
+	return &protos.Payload{}, err
 }
