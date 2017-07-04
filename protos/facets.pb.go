@@ -33,7 +33,7 @@
 		Check
 		Version
 		Payload
-		BackupPayload
+		ExportPayload
 		SchemaRequest
 		SchemaResult
 		SchemaNode

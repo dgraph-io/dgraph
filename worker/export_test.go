@@ -45,7 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func populateGraphBackup(t *testing.T) {
+func populateGraphExport(t *testing.T) {
 	rdfEdges := []string{
 		"<1> <friend> <5> <author0> .",
 		"<2> <friend> <5> <author0> .",
@@ -72,7 +72,7 @@ func populateGraphBackup(t *testing.T) {
 	}
 }
 
-func initTestBackup(t *testing.T, schemaStr string) (string, *badger.KV) {
+func initTestExport(t *testing.T, schemaStr string) (string, *badger.KV) {
 	group.ParseGroupConfig("groups.conf")
 	schema.ParseBytes([]byte(schemaStr), 1)
 
@@ -93,19 +93,19 @@ func initTestBackup(t *testing.T, schemaStr string) (string, *badger.KV) {
 	val, err = (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
 	require.NoError(t, err)
 	ps.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
-	populateGraphBackup(t)
+	populateGraphExport(t)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	return dir, ps
 }
 
-func TestBackup(t *testing.T) {
-	// Index the name predicate. We ensure it doesn't show up on backup.
-	dir, ps := initTestBackup(t, "name:string @index .")
+func TestExport(t *testing.T) {
+	// Index the name predicate. We ensure it doesn't show up on export.
+	dir, ps := initTestExport(t, "name:string @index .")
 	defer os.RemoveAll(dir)
 	defer ps.Close()
-	// Remove already existing backup folders is any.
-	bdir, err := ioutil.TempDir("", "backup")
+	// Remove already existing export folders is any.
+	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
@@ -113,11 +113,11 @@ func TestBackup(t *testing.T) {
 	time.Sleep(time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
-	err = backup(group.BelongsTo("friend"), bdir)
+	err = export(group.BelongsTo("friend"), bdir)
 	require.NoError(t, err)
 
 	// We have 2 name type edges(with index). FP("name")%10 =7.
-	err = backup(group.BelongsTo("name"), bdir)
+	err = export(group.BelongsTo("name"), bdir)
 	require.NoError(t, err)
 
 	searchDir := bdir
@@ -149,15 +149,15 @@ func TestBackup(t *testing.T) {
 			nq, err := rdf.Parse(scanner.Text())
 			require.NoError(t, err)
 			// Subject should have uid 1/2/3/4.
-			require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4"}, nq.Subject)
+			require.Contains(t, []string{"_:uid1", "_:uid2", "_:uid3", "_:uid4"}, nq.Subject)
 			// The only value we set was "photon".
 			if nq.ObjectValue != nil {
 				require.Equal(t, &protos.Value{&protos.Value_DefaultVal{"pho\\ton"}},
 					nq.ObjectValue)
 				// Test objecttype
-				if nq.Subject == "0x1" {
+				if nq.Subject == "_:uid1" {
 					require.Equal(t, int32(0), nq.ObjectType)
-				} else if nq.Subject == "0x2" {
+				} else if nq.Subject == "_:uid2" {
 					// string type because of lang @en
 					require.Equal(t, int32(9), nq.ObjectType)
 				}
@@ -165,14 +165,14 @@ func TestBackup(t *testing.T) {
 
 			// The only objectId we set was uid 5.
 			if nq.ObjectId != "" {
-				require.Equal(t, "0x5", nq.ObjectId)
+				require.Equal(t, "_:uid5", nq.ObjectId)
 			}
 			// Test lang.
-			if nq.Subject == "0x2" && nq.Predicate == "name" {
+			if nq.Subject == "_:uid2" && nq.Predicate == "name" {
 				require.Equal(t, "en", nq.Lang)
 			}
 			// Test facets.
-			if nq.Subject == "0x4" {
+			if nq.Subject == "_:uid4" {
 				require.Equal(t, "age", nq.Facets[0].Key)
 				require.Equal(t, "close", nq.Facets[1].Key)
 				require.Equal(t, "game", nq.Facets[2].Key)
@@ -190,7 +190,7 @@ func TestBackup(t *testing.T) {
 				require.Equal(t, 4, int(nq.Facets[3].ValType))
 			}
 			// Test label
-			if nq.Subject != "0x3" {
+			if nq.Subject != "_:uid3" {
 				require.Equal(t, "author0", nq.Label)
 			} else {
 				require.Equal(t, "", nq.Label)
