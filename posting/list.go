@@ -98,6 +98,61 @@ var listPool = sync.Pool{
 	},
 }
 
+type Piterator struct {
+	pl         *protos.PostingList // Pointer to PostingList
+	uidPosting *protos.Posting
+	uidx       int // index of UIDs
+	pidx       int // index of postings
+	ulen       int
+	plen       int
+	valid      bool
+}
+
+func (l *List) NewPlIterator(afterUid uint64) *Piterator {
+	pl := l.plist
+	it := &Piterator{}
+	it.pl = pl
+	it.uidPosting = &protos.Posting{}
+	it.uidx, it.pidx = 0, 0
+	it.ulen, it.plen = len(pl.Uids), len(pl.Postings)
+	it.uidx = sort.Search(it.ulen, func(idx int) bool {
+		return afterUid < pl.Uids[idx]
+	})
+	it.pidx = sort.Search(it.plen, func(idx int) bool {
+		p := pl.Postings[idx]
+		return afterUid < p.Uid
+	})
+	if it.uidx < it.ulen {
+		it.valid = true
+	}
+	return it
+}
+
+func (it *Piterator) Next() {
+	it.uidx++
+	if it.uidx >= it.ulen {
+		it.valid = false
+	}
+}
+
+func (it *Piterator) Valid() bool {
+	return it.valid
+}
+
+func (it *Piterator) Posting() *protos.Posting {
+	if it.pidx < it.plen {
+		for it.pl.Postings[it.pidx].Uid < it.pl.Uids[it.uidx] {
+			it.pidx++
+		}
+
+		if it.pidx < it.plen && it.pl.Postings[it.pidx].Uid == it.pl.Uids[it.uidx] {
+			return it.pl.Postings[it.pidx]
+		}
+	}
+	it.uidPosting.Uid = it.pl.Uids[it.uidx]
+	return it.uidPosting
+}
+
 func getNew(key []byte, pstore *badger.KV) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
@@ -271,30 +326,14 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 	}
 
 	// Didn't find it in mutable layer. Now check the immutable layer.
-	pl := l.plist
-	uidx := sort.Search(len(pl.Uids) /*Postings)*/, func(idx int) bool {
-		//p := pl.Postings[idx]
-		return mpost.Uid <= pl.Uids[idx]
-	})
-
 	var uidFound, psame bool
-	if uidx < len(pl.Uids) { // pl.Postings) {
-		puid := pl.Uids[uidx]
+	pit := l.NewPlIterator(mpost.Uid - 1)
+	if pit.Valid() {
+		//if uidx < len(pl.Uids) {
+		pp := pit.Posting()
+		puid := pp.Uid
 		uidFound = mpost.Uid == puid
-		if uidFound {
-			// look at the list of postings
-			pp := &protos.Posting{}
-			pp.Uid = puid
-			pidx := sort.Search(len(pl.Postings), func(idx int) bool {
-				return puid <= pl.Postings[idx].Uid
-			})
-			if pidx < len(pl.Postings) {
-				if puid == pl.Postings[pidx].Uid {
-					pp = pl.Postings[pidx]
-				}
-			}
-			psame = samePosting(pp, mpost)
-		}
+		psame = samePosting(pp, mpost)
 	}
 
 	if mpost.Op == Set {
@@ -468,20 +507,10 @@ func (l *List) Iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 
 func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	l.AssertRLock()
-	uidx, pidx, midx := 0, 0, 0
-	pl := l.plist
+	midx := 0
 
-	uidsLen := len(pl.Uids)
-	postingLen := len(pl.Postings)
 	mlayerLen := len(l.mlayer)
 	if afterUid > 0 {
-		uidx = sort.Search(uidsLen, func(idx int) bool {
-			return afterUid < pl.Uids[idx]
-		})
-		pidx = sort.Search(postingLen, func(idx int) bool {
-			p := pl.Postings[idx]
-			return afterUid < p.Uid
-		})
 		midx = sort.Search(mlayerLen, func(idx int) bool {
 			mp := l.mlayer[idx]
 			return afterUid < mp.Uid
@@ -490,18 +519,10 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 
 	var mp, pp *protos.Posting
 	cont := true
+	pit := l.NewPlIterator(afterUid)
 	for cont {
-		if uidx < uidsLen && pidx < postingLen {
-			pp = pl.Postings[pidx]
-			if pl.Uids[uidx] == pp.Uid {
-				pidx++
-			} else {
-				pp = &protos.Posting{}
-				pp.Uid = pl.Uids[uidx]
-			}
-		} else if uidx < uidsLen {
-			pp = &protos.Posting{}
-			pp.Uid = pl.Uids[uidx]
+		if pit.Valid() {
+			pp = pit.Posting()
 		} else {
 			pp = emptyPosting
 		}
@@ -517,7 +538,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			cont = false
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			cont = f(pp)
-			uidx++
+			pit.Next()
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
 			if mp.Op != Del {
 				cont = f(mp)
@@ -527,7 +548,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			if mp.Op != Del {
 				cont = f(mp)
 			}
-			uidx++
+			pit.Next()
 			midx++
 		default:
 			log.Fatalf("Unhandled case during iteration of posting list.")
