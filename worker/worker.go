@@ -55,6 +55,9 @@ func Init(ps *badger.KV) {
 	// needs to be initialized after group config
 	leaseGid = group.BelongsTo("_lease_")
 	pendingProposals = make(chan struct{}, *numPendingProposals)
+	workerServer = grpc.NewServer(
+		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
+		grpc.MaxSendMsgSize(x.GrpcMaxSize))
 }
 
 // grpcWorker struct implements the gRPC server interface.
@@ -98,9 +101,6 @@ func RunServer(bindall bool) {
 	}
 	log.Printf("Worker listening at address: %v", ln.Addr())
 
-	workerServer = grpc.NewServer(
-		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
-		grpc.MaxSendMsgSize(x.GrpcMaxSize))
 	protos.RegisterWorkerServer(workerServer, &grpcWorker{})
 	workerServer.Serve(ln)
 }

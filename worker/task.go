@@ -433,7 +433,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			gid:     gid,
 			reverse: q.Reverse,
 		}
-		cp.evaluate(&out)
+		cp.evaluate(out)
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
@@ -449,7 +449,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			gid:     gid,
 			reverse: q.Reverse,
 		}
-		cp.evaluate(&out)
+		cp.evaluate(out)
 	}
 
 	if srcFn.fnType == RegexFn {
