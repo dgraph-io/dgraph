@@ -2,13 +2,13 @@ matrix:
   include:
     - os: linux
       compiler: clang-3.9
-      go: 1.8
+      go: 1.8.3
       language: go
       env: CC=clang-3.9 CXX=clang++-3.9;
     - os: osx
       compiler: clang
       language: go
-      go: 1.8
+      go: 1.8.3
       env: CC=clang CXX=clang++;
 
 git:
