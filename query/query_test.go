@@ -1647,6 +1647,21 @@ func TestKShortestPathWeighted(t *testing.T) {
 		js)
 }
 
+func TestKShortestPathWeighted_LimitDepth(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			shortest(from: 1, to:1001, depth:1, numpaths: 4) {
+				path @facets(weight)
+			}
+		}`
+	// We only get one path in this case as the facet is present only in one path.
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
 func TestKShortestPathWeighted1(t *testing.T) {
 	populateGraph(t)
 	query := `

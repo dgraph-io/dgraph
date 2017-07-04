@@ -139,7 +139,7 @@ type params struct {
 	From         uint64
 	To           uint64
 	Facet        *protos.Param
-	RecurseDepth uint64
+	ExploreDepth uint64
 	isInternal   bool   // Determines if processTask has to be called or not.
 	isListNode   bool   // This is for _predicate_ block.
 	ignoreResult bool   // Node results are ignored.
@@ -736,12 +736,13 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.AfterUID = uint64(after)
 	}
-	if v, ok := gq.Args["depth"]; ok && args.Alias == "recurse" {
+	if v, ok := gq.Args["depth"]; ok && (args.Alias == "recurse" ||
+		args.Alias == "shortest") {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			return err
 		}
-		args.RecurseDepth = from
+		args.ExploreDepth = from
 	}
 	if v, ok := gq.Args["numpaths"]; ok && args.Alias == "shortest" {
 		numPaths, err := strconv.ParseUint(v, 0, 64)
