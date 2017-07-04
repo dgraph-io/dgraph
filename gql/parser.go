@@ -31,6 +31,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	UID   = "uid"
+	VALUE = "val"
+)
+
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
@@ -1149,7 +1154,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		it.Next()
 		item = it.Item()
 		var val string
-		if item.Val == "var" {
+		if item.Val == VALUE {
 			count, err := parseVarList(it, gq)
 			if err != nil {
 				return result, err
@@ -1389,11 +1394,11 @@ L:
 						return nil, err
 					}
 					seenFuncArg = true
-					if f.Name == "var" {
+					if f.Name == VALUE {
 						if len(f.NeedsVar) > 1 {
 							return nil, x.Errorf("Multiple variables not allowed in a function")
 						}
-						g.Attr = "var"
+						g.Attr = VALUE
 						g.Args = append(g.Args, f.NeedsVar[0].Name)
 						g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
 						g.NeedsVar[0].Typ = VALUE_VAR
@@ -1487,17 +1492,32 @@ L:
 				} else if expectLang {
 					g.Lang = val
 					expectLang = false
-				} else {
+				} else if g.Name != UID {
 					g.Args = append(g.Args, val)
 				}
 
-				if g.Name == "var" {
+				expectArg = false
+				if g.Name == VALUE {
+					// E.g. @filter(gt(val(a), 10))
+					g.NeedsVar = append(g.NeedsVar, VarContext{
+						Name: val,
+						Typ:  VALUE_VAR,
+					})
+				} else if g.Name == UID {
+					// uid function could take variables as well as actual uids.
+					// If we can parse the value that means its an uid otherwise a variable.
+					g.Attr = g.Name
+					_, err := strconv.ParseUint(val, 0, 64)
+					if err == nil {
+						g.Args = append(g.Args, val)
+						continue
+					}
+					// E.g. @filter(uid(1, 2, 3))
 					g.NeedsVar = append(g.NeedsVar, VarContext{
 						Name: val,
 						Typ:  UID_VAR,
 					})
 				}
-				expectArg = false
 			}
 		} else {
 			return nil, x.Errorf("Expected a function but got %q", item.Val)
@@ -1793,7 +1813,7 @@ func parseVarList(it *lex.ItemIterator, gq *GraphQuery) (int, error) {
 		}
 	}
 	if expectArg {
-		return count, x.Errorf("Unnecessary comma in var()")
+		return count, x.Errorf("Unnecessary comma in val()")
 	}
 	return count, nil
 }
@@ -1881,7 +1901,7 @@ func parseId(it *lex.ItemIterator, gq *GraphQuery) error {
 		return x.Errorf("Invalid query")
 	}
 	item := it.Item()
-	if item.Val == "var" {
+	if item.Val == UID {
 		// Any number of variables allowed here.
 		_, err := parseVarList(it, gq)
 		return err
@@ -2046,7 +2066,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				item = it.Item()
 			}
 
-			if val == "" && item.Val == "var" {
+			if val == "" && item.Val == VALUE {
 				count, err := parseVarList(it, gq)
 				if err != nil {
 					return nil, err
@@ -2060,12 +2080,18 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				val = collectName(it, val+item.Val)
 				// Get language list, if present
 				items, err := it.Peek(1)
+				if err == nil && items[0].Typ == itemLeftRound {
+					if (key == "orderasc" || key == "orderdesc") && val != "val" {
+						return nil, x.Errorf("Expected val(). Got %s() with order.", val)
+					}
+				}
 				if err == nil && items[0].Typ == itemAt {
 					it.Next() // consume '@'
 					it.Next() // move forward
 					langs := parseLanguageList(it)
 					val = val + "@" + strings.Join(langs, ":")
 				}
+
 			}
 
 			if val == "" {
@@ -2157,7 +2183,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if isAggregator(valLower) {
 				child := &GraphQuery{
-					Attr:       "var",
+					Attr:       VALUE,
 					Args:       make(map[string]string),
 					Var:        varName,
 					IsInternal: true,
@@ -2179,7 +2205,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					child.Attr = attr
 					child.IsInternal = false
 				} else {
-					if it.Item().Val != "var" {
+					if it.Item().Val != VALUE {
 						return x.Errorf("Only variables allowed in aggregate functions. Got: %v",
 							it.Item().Val)
 					}
@@ -2188,7 +2214,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 						return err
 					}
 					if count != 1 {
-						x.Errorf("Expected one variable inside var() of aggregator but got %v", count)
+						x.Errorf("Expected one variable inside val() of aggregator but got %v", count)
 					}
 					child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR
 				}
@@ -2241,7 +2267,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					Args:       make(map[string]string),
 					IsInternal: true,
 				}
-				if item.Val == "var" {
+				if item.Val == VALUE {
 					count, err := parseVarList(it, child)
 					if err != nil {
 						return err
@@ -2290,9 +2316,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					it.Next()
 				}
 				continue
-			} else if valLower == "var" {
+			} else if valLower == VALUE {
 				if varName != "" {
-					return x.Errorf("Cannot assign a variable to var()")
+					return x.Errorf("Cannot assign a variable to val()")
 				}
 				child := &GraphQuery{
 					Attr:       val,
@@ -2306,7 +2332,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return err
 				}
 				if count != 1 {
-					return x.Errorf("Invalid use of var(). Exactly one variable expected.")
+					return x.Errorf("Invalid use of val(). Exactly one variable expected.")
 				}
 				// Only value vars can be retrieved.
 				child.NeedsVar[len(child.NeedsVar)-1].Typ = VALUE_VAR

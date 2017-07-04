@@ -1066,7 +1066,7 @@ func TestMutationSubjectVariables(t *testing.T) {
 	m2 := `
         mutation {
 			set {
-				var(myfriend) <nice> "true" .
+				uid(myfriend) <nice> "true" .
 			}
 		}
 		{
@@ -1104,7 +1104,7 @@ func TestMutationSubjectVariablesSingleMutation(t *testing.T) {
                 <0x700>          <friend>   <_:alice> .
                 <0x700>          <friend>   <_:bob> .
                 <0x700>          <friend>   <_:chris> .
-				var(myfriend) <nice>     "true" .
+				uid(myfriend) <nice>     "true" .
 			}
 		}
 		{
@@ -1143,7 +1143,7 @@ func TestMutationObjectVariables(t *testing.T) {
                 <0x600>    <friend>   <0x501> .
                 <0x600>    <friend>   <0x502> .
                 <0x600>    <friend>   <0x503> .
-				<0x600>    <likes>    var(myfriend) .
+				<0x600>    <likes>    uid(myfriend) .
 			}
 		}
 		{
@@ -1172,6 +1172,27 @@ func TestMutationObjectVariables(t *testing.T) {
 	r, err := runQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"me":[{"count(likes)":3}]}`, r)
+}
+
+func TestMutationObjectVariablesError(t *testing.T) {
+	m1 := `
+		mutation {
+			set {
+                <0x600>    <friend>   <0x501> .
+                <0x600>    <friend>   <0x502> .
+                <0x600>    <friend>   <0x503> .
+				<0x600>    <likes>    var(myfriend) .
+			}
+		}
+		{
+			me(id: 0x600) {
+				myfriend as friend
+			}
+		}
+    `
+
+	_, err := gql.Parse(gql.Request{Str: m1, Http: true})
+	require.Error(t, err)
 }
 
 // change from uid to scalar or vice versa
