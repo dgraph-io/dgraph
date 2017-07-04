@@ -542,7 +542,6 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			mp := l.mlayer[idx]
 			return afterUid < mp.Uid
 		})
-		t
 	}
 
 	var mp, pp *protos.Posting
@@ -632,14 +631,14 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	}
 
 	final := postingListPool.Get().(*protos.PostingList)
-	ubuf := make([]byte, 16)
+	var ubuf [16]byte
 	h := md5.New()
 	count := 0
 	l.iterate(0, func(p *protos.Posting) bool {
 		// Checksum code.
-		n := binary.PutVarint(ubuf, int64(count))
+		n := binary.PutVarint(ubuf[:], int64(count))
 		h.Write(ubuf[0:n])
-		n = binary.PutUvarint(ubuf, p.Uid)
+		n = binary.PutUvarint(ubuf[:], p.Uid)
 		h.Write(ubuf[0:n])
 		h.Write(p.Value)
 		h.Write([]byte(p.Label))
