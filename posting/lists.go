@@ -35,7 +35,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/protos"

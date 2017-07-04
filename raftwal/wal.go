@@ -24,7 +24,7 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/dgraph-io/badger/badger"
+	"github.com/dgraph-io/badger"
 
 	"github.com/dgraph-io/dgraph/x"
 )
