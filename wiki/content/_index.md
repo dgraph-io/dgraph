@@ -3,9 +3,6 @@ date = "2017-03-20T19:35:35+11:00"
 title = "Dgraph Documentation"
 +++
 
-[![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
-[![Twitter Follow](https://img.shields.io/twitter/follow/dgraphlabs.svg?style=social&label=Follow&style=plastic)](https://twitter.com/dgraphlabs)
-
 **Welcome to the official Dgraph documentation.**
 
 Dgraph is an open source, scalable, distributed, highly available and fast graph database, designed from ground up to be run in production.
