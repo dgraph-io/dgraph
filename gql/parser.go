@@ -1492,7 +1492,7 @@ L:
 				} else if expectLang {
 					g.Lang = val
 					expectLang = false
-				} else {
+				} else if g.Name != UID {
 					g.Args = append(g.Args, val)
 				}
 
@@ -1506,8 +1506,10 @@ L:
 				} else if g.Name == UID {
 					// uid function could take variables as well as actual uids.
 					// If we can parse the value that means its an uid otherwise a variable.
+					g.Attr = g.Name
 					_, err := strconv.ParseUint(val, 0, 64)
 					if err == nil {
+						g.Args = append(g.Args, val)
 						continue
 					}
 					// E.g. @filter(uid(1, 2, 3))
