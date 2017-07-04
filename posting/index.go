@@ -488,7 +488,8 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add reverse entries for values in posting list
 	addReversePostings := func(uid uint64, pl *protos.PostingList) error {
-		pit := NewPlIterator(pl, 0)
+		pit := &Piterator{}
+		pit.NewPlIterator(pl, 0)
 		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
 		for ; pit.Valid(); pit.Next() {
 			pp := pit.Posting()

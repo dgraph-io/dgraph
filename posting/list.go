@@ -108,8 +108,7 @@ type Piterator struct {
 	valid      bool
 }
 
-func NewPlIterator(pl *protos.PostingList, afterUid uint64) *Piterator {
-	it := &Piterator{}
+func (it *Piterator) NewPlIterator(pl *protos.PostingList, afterUid uint64) *Piterator {
 	it.pl = pl
 	it.uidPosting = &protos.Posting{}
 	it.uidx, it.pidx = 0, 0
@@ -326,7 +325,8 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 
 	// Didn't find it in mutable layer. Now check the immutable layer.
 	var uidFound, psame bool
-	pit := NewPlIterator(l.plist, mpost.Uid-1)
+	pit := &Piterator{}
+	pit.NewPlIterator(l.plist, mpost.Uid-1)
 	if pit.Valid() {
 		//if uidx < len(pl.Uids) {
 		pp := pit.Posting()
@@ -518,7 +518,8 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 
 	var mp, pp *protos.Posting
 	cont := true
-	pit := NewPlIterator(l.plist, afterUid)
+	pit := &Piterator{}
+	pit.NewPlIterator(l.plist, afterUid)
 	for cont {
 		if pit.Valid() {
 			pp = pit.Posting()
