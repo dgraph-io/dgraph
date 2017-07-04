@@ -606,13 +606,11 @@ func syncAllMarks(ctx context.Context) error {
 	for _, n := range groups().nodes() {
 		go func(n *node) {
 			// Get index of last committed.
-			var lastIndex uint64
 			lastIndex, err := n.store.LastIndex()
 			if err != nil {
 				che <- err
 				return
 			}
-
 			err = n.syncAllMarks(ctx, lastIndex)
 			che <- err
 		}(n)
