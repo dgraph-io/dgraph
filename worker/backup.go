@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -69,9 +70,11 @@ var rdfTypeMap = map[types.TypeID]string{
 
 func toRDF(buf *bytes.Buffer, item kv) {
 	pl := item.list
-	for _, p := range pl.Postings {
+	var pitr posting.PIterator
+	pitr.Init(pl, 0)
+	for ; pitr.Valid(); pitr.Next() {
+		p := pitr.Posting()
 		buf.WriteString(item.prefix)
-
 		if !bytes.Equal(p.Value, nil) {
 			// Value posting
 			// Convert to appropriate type

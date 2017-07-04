@@ -98,6 +98,57 @@ var listPool = sync.Pool{
 	},
 }
 
+type PIterator struct {
+	pl         *protos.PostingList // Pointer to PostingList
+	uidPosting *protos.Posting
+	uidx       int // index of UIDs
+	pidx       int // index of postings
+	ulen       int
+	plen       int
+	valid      bool
+}
+
+func (it *PIterator) Init(pl *protos.PostingList, afterUid uint64) {
+	it.pl = pl
+	it.uidPosting = &protos.Posting{}
+	it.ulen, it.plen = len(pl.Uids), len(pl.Postings)
+	it.uidx = sort.Search(it.ulen, func(idx int) bool {
+		return afterUid < pl.Uids[idx]
+	})
+	it.pidx = sort.Search(it.plen, func(idx int) bool {
+		p := pl.Postings[idx]
+		return afterUid < p.Uid
+	})
+	if it.uidx < it.ulen {
+		it.valid = true
+	}
+}
+
+func (it *PIterator) Next() {
+	it.uidx++
+	if it.uidx >= it.ulen {
+		it.valid = false
+	}
+}
+
+func (it *PIterator) Valid() bool {
+	return it.valid
+}
+
+func (it *PIterator) Posting() *protos.Posting {
+	if it.pidx < it.plen {
+		for it.pl.Postings[it.pidx].Uid < it.pl.Uids[it.uidx] {
+			it.pidx++
+		}
+
+		if it.pidx < it.plen && it.pl.Postings[it.pidx].Uid == it.pl.Uids[it.uidx] {
+			return it.pl.Postings[it.pidx]
+		}
+	}
+	it.uidPosting.Uid = it.pl.Uids[it.uidx]
+	return it.uidPosting
+}
+
 func getNew(key []byte, pstore *badger.KV) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
@@ -159,6 +210,7 @@ func samePosting(oldp *protos.Posting, newp *protos.Posting) bool {
 	if bytes.Compare(oldp.Metadata, newp.Metadata) != 0 {
 		return false
 	}
+
 	// Checking source might not be necessary.
 	if oldp.Label != newp.Label {
 		return false
@@ -270,19 +322,14 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 	}
 
 	// Didn't find it in mutable layer. Now check the immutable layer.
-	pl := l.plist
-	pidx := sort.Search(len(pl.Postings), func(idx int) bool {
-		p := pl.Postings[idx]
-		return mpost.Uid <= p.Uid
-	})
-
 	var uidFound, psame bool
-	if pidx < len(pl.Postings) {
-		p := pl.Postings[pidx]
-		uidFound = mpost.Uid == p.Uid
-		if uidFound {
-			psame = samePosting(p, mpost)
-		}
+	var pitr PIterator
+	pitr.Init(l.plist, mpost.Uid-1)
+	if pitr.Valid() {
+		pp := pitr.Posting()
+		puid := pp.Uid
+		uidFound = mpost.Uid == puid
+		psame = samePosting(pp, mpost)
 	}
 
 	if mpost.Op == Set {
@@ -456,16 +503,10 @@ func (l *List) Iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 
 func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	l.AssertRLock()
-	pidx, midx := 0, 0
-	pl := l.plist
+	midx := 0
 
-	postingLen := len(pl.Postings)
 	mlayerLen := len(l.mlayer)
 	if afterUid > 0 {
-		pidx = sort.Search(postingLen, func(idx int) bool {
-			p := pl.Postings[idx]
-			return afterUid < p.Uid
-		})
 		midx = sort.Search(mlayerLen, func(idx int) bool {
 			mp := l.mlayer[idx]
 			return afterUid < mp.Uid
@@ -474,12 +515,15 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 
 	var mp, pp *protos.Posting
 	cont := true
+	var pitr PIterator
+	pitr.Init(l.plist, afterUid)
 	for cont {
-		if pidx < postingLen {
-			pp = pl.Postings[pidx]
+		if pitr.Valid() {
+			pp = pitr.Posting()
 		} else {
 			pp = emptyPosting
 		}
+
 		if midx < mlayerLen {
 			mp = l.mlayer[midx]
 		} else {
@@ -491,7 +535,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			cont = false
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			cont = f(pp)
-			pidx++
+			pitr.Next()
 		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
 			if mp.Op != Del {
 				cont = f(mp)
@@ -501,7 +545,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			if mp.Op != Del {
 				cont = f(mp)
 			}
-			pidx++
+			pitr.Next()
 			midx++
 		default:
 			log.Fatalf("Unhandled case during iteration of posting list.")
@@ -512,13 +556,12 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 func (l *List) length(afterUid uint64) int {
 	l.AssertRLock()
 
-	pidx, midx := 0, 0
+	uidx, midx := 0, 0
 	pl := l.plist
 
 	if afterUid > 0 {
-		pidx = sort.Search(len(pl.Postings), func(idx int) bool {
-			p := pl.Postings[idx]
-			return afterUid < p.Uid
+		uidx = sort.Search(len(pl.Uids), func(idx int) bool {
+			return afterUid < pl.Uids[idx]
 		})
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {
 			mp := l.mlayer[idx]
@@ -526,7 +569,7 @@ func (l *List) length(afterUid uint64) int {
 		})
 	}
 
-	count := len(pl.Postings) - pidx
+	count := len(pl.Uids) - uidx
 	for _, p := range l.mlayer[midx:] {
 		if p.Op == Add {
 			count++
@@ -570,15 +613,19 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		h.Write([]byte(p.Label))
 		count++
 
-		// I think it's okay to take the pointer from the iterator, because we have a lock
-		// over List; which won't be released until final has been marshalled. Thus, the
-		// underlying data wouldn't be changed.
-		final.Postings = append(final.Postings, p)
+		final.Uids = append(final.Uids, p.Uid)
+
+		if p.Facets != nil || p.Value != nil || len(p.Metadata) != 0 || len(p.Label) != 0 {
+			// I think it's okay to take the pointer from the iterator, because we have a lock
+			// over List; which won't be released until final has been marshalled. Thus, the
+			// underlying data wouldn't be changed.
+			final.Postings = append(final.Postings, p)
+		}
 		return true
 	})
 
 	var data []byte
-	if len(final.Postings) == 0 {
+	if len(final.Uids) == 0 {
 		// This means we should delete the key from store during SyncIfDirty.
 		data = nil
 	} else {
@@ -614,12 +661,26 @@ func (l *List) LastCompactionTs() time.Time {
 // We have to apply the filtering before applying (offset, count).
 func (l *List) Uids(opt ListOptions) *protos.List {
 	// Pre-assign length to make it faster.
-	res := make([]uint64, 0, l.Length(opt.AfterUID))
+	var res []uint64
+	l.RLock()
+	if len(l.mlayer) == 0 {
+		pl := l.plist
+		uidx := sort.Search(len(pl.Uids), func(idx int) bool {
+			return opt.AfterUID < pl.Uids[idx]
+		})
+		res = make([]uint64, len(pl.Uids)-uidx)
+		copy(res, pl.Uids[uidx:])
+	} else {
+		res = make([]uint64, 0, l.length(opt.AfterUID))
+		l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
+			if postingType(p) == x.ValueUid {
+				res = append(res, p.Uid)
+			}
+			return true
+		})
+	}
+	l.RUnlock()
 
-	l.Postings(opt, func(p *protos.Posting) bool {
-		res = append(res, p.Uid)
-		return true
-	})
 	// Do The intersection here as it's optimized.
 	out := &protos.List{res}
 	if opt.Intersect != nil {
