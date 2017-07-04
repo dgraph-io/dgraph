@@ -205,17 +205,16 @@ func newPosting(t *protos.DirectedEdge) *protos.Posting {
 		postingType = protos.Posting_VALUE
 	}
 
-	// p := postingPool.Get().(*protos.Posting)
-	p := &protos.Posting{}
-	p.Uid = t.ValueId
-	p.Value = t.Value
-	p.ValType = protos.Posting_ValType(t.ValueType)
-	p.PostingType = postingType
-	p.Metadata = metadata
-	p.Label = t.Label
-	p.Op = op
-	p.Facets = t.Facets
-	return p
+	return &protos.Posting{
+		Uid:         t.ValueId,
+		Value:       t.Value,
+		ValType:     protos.Posting_ValType(t.ValueType),
+		PostingType: postingType,
+		Metadata:    metadata,
+		Label:       t.Label,
+		Op:          op,
+		Facets:      t.Facets,
+	}
 }
 
 func (l *List) PostingList() *protos.PostingList {
@@ -565,11 +564,6 @@ func (l *List) length(afterUid uint64) int {
 	return count
 }
 
-func (l *List) isClean() bool {
-	l.AssertRLock()
-	return len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0
-}
-
 // Length iterates over the mutation layer and counts number of elements.
 func (l *List) Length(afterUid uint64) int {
 	l.RLock()
@@ -583,7 +577,7 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 
 	// deleteAll is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
-	if l.isClean() {
+	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
 		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
 		l.pending = make([]uint64, 0, 3)
 		return false, nil

@@ -75,16 +75,13 @@ type proposals struct {
 	ids map[uint32]*proposalCtx
 }
 
-func (p *proposals) Store(pid uint32, ch chan error, ctx context.Context) bool {
+func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
 	p.Lock()
 	defer p.Unlock()
 	if _, has := p.ids[pid]; has {
 		return false
 	}
-	p.ids[pid] = &proposalCtx{
-		ch:  ch,
-		ctx: ctx,
-	}
+	p.ids[pid] = pctx
 	return true
 }
 
@@ -309,9 +306,13 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	}
 
 	che := make(chan error, 1)
+	pctx := &proposalCtx{
+		ch:  che,
+		ctx: ctx,
+	}
 	for {
 		id := rand.Uint32()
-		if n.props.Store(id, che, ctx) {
+		if n.props.Store(id, pctx) {
 			proposal.Id = id
 			break
 		}

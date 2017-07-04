@@ -218,12 +218,7 @@ func numEdges(attr string) int {
 	}
 	prefix := pk.DataPrefix()
 	count := 0
-	for it.Seek(prefix); it.Valid(); it.Next() {
-		item := it.Item()
-		key := item.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		count++
 	}
 	return count
@@ -238,12 +233,7 @@ func hasEdges(attr string) bool {
 		Attr: attr,
 	}
 	prefix := pk.DataPrefix()
-	for it.Seek(prefix); it.Valid(); it.Next() {
-		item := it.Item()
-		key := item.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			return false
-		}
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		return true
 	}
 	return false

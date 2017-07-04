@@ -165,7 +165,7 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 	select {
 	case pending <- struct{}{}:
 	default:
-		fmt.Println("Skipping gentleCommit %v\n", len(syncCh))
+		fmt.Println("Skipping gentleCommit len(syncCh) %v,\n", len(syncCh))
 		return
 	}
 
