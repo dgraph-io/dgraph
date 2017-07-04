@@ -95,6 +95,10 @@ func (l *List) decr() {
 		postingPool.Put(p)
 		return true
 	})
+	l.plist.Uids = l.plist.Uids[:0]
+	l.plist.Postings = l.plist.Postings[:0]
+	l.plist.Checksum = l.plist.Checksum[:0]
+	l.plist.Commit = 0
 	postingListPool.Put(l.plist)
 	listPool.Put(l)
 }
@@ -191,9 +195,6 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	val := item.Value()
 
 	l.plist = postingListPool.Get().(*protos.PostingList)
-	// TODO: Make uid slice empty instead of resetting
-	l.plist.Reset()
-	// l.plist = new(protos.PostingList)
 	if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 	}
@@ -639,7 +640,10 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	}
 
 	final := postingListPool.Get().(*protos.PostingList)
-	final.Reset()
+	final.Uids = final.Uids[:0]
+	final.Postings = final.Postings[:0]
+	final.Checksum = final.Checksum[:0]
+	final.Commit = 0
 	ubuf := make([]byte, 16)
 	h := md5.New()
 	count := 0
@@ -674,7 +678,7 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		x.Checkf(err, "Unable to marshal posting list")
 	}
 	if l.plist != nil {
-		postingListPool.Put(l.plist)
+		//postingListPool.Put(l.plist)
 	}
 	l.plist = final
 

@@ -124,7 +124,7 @@ func TestTokensTable(t *testing.T) {
 	schema.ParseBytes([]byte(schemaVal), 1)
 
 	key := x.DataKey("name", 1)
-	l := getNew(key, 1, ps)
+	l := getNew(key, ps)
 	defer ps.Delete(key)
 
 	edge := &protos.DirectedEdge{

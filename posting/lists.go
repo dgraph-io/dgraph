@@ -338,7 +338,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
-	l := getNew(key, group, pstore) // This retrieves a new *List and sets refcount to 1.
+	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	l.water = marks.Get(group)
 
 	lp = lhmap.PutIfMissing(fp, l)
@@ -372,7 +372,7 @@ func GetOrUnmarshal(key, val []byte, gid uint32) (rlist *List, decr func()) {
 
 	var pl protos.PostingList
 	pl.Unmarshal(val)
-	lp = getNew(key, gid, pstore) // This retrieves a new *List and sets refcount to 1.
+	lp = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	lp.mlayer = pl.Postings
 
 	return lp, lp.decr

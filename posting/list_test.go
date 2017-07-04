@@ -73,7 +73,7 @@ func deletePl(t *testing.T) {
 func TestAddMutation(t *testing.T) {
 	key := x.DataKey("name", 1)
 
-	l := getNew(key, 1, ps)
+	l := getNew(key, ps)
 
 	edge := &protos.DirectedEdge{
 		ValueId: 9,
@@ -120,7 +120,7 @@ func TestAddMutation(t *testing.T) {
 	time.Sleep(time.Second)
 
 	// Try reading the same data in another PostingList.
-	dl := getNew(key, 1, ps)
+	dl := getNew(key, ps)
 	checkUids(t, dl, uids)
 	deletePl(t)
 	ps.Delete(dl.key)
@@ -142,7 +142,7 @@ func checkValue(t *testing.T, ol *List, val string) {
 
 func TestAddMutation_Value(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := getNew(key, 1, ps)
+	ol := getNew(key, ps)
 	edge := &protos.DirectedEdge{
 		Value: []byte("oh hey there"),
 		Label: "new-testing",
@@ -460,7 +460,7 @@ func TestAddMutation_checksum(t *testing.T) {
 
 func TestAddMutation_gru(t *testing.T) {
 	key := x.DataKey("question.tag", 0x01)
-	ol := getNew(key, 1, ps)
+	ol := getNew(key, ps)
 
 	{
 		// Set two tag ids and merge.
@@ -503,7 +503,7 @@ func TestAddMutation_gru(t *testing.T) {
 
 func TestAddMutation_gru2(t *testing.T) {
 	key := x.DataKey("question.tag", 0x100)
-	ol := getNew(key, 1, ps)
+	ol := getNew(key, ps)
 
 	{
 		// Set two tag ids and merge.
@@ -557,7 +557,7 @@ func TestAddMutation_gru2(t *testing.T) {
 
 func TestAfterUIDCount(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := getNew(key, 1, ps)
+	ol := getNew(key, ps)
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
 		Label: "jchiu",
@@ -631,7 +631,7 @@ func TestAfterUIDCount(t *testing.T) {
 
 func TestAfterUIDCount2(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := getNew(key, 1, ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
@@ -661,7 +661,7 @@ func TestAfterUIDCount2(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := getNew(key, 1, ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
@@ -687,7 +687,7 @@ func TestDelete(t *testing.T) {
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol := getNew(key, 1, ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &protos.DirectedEdge{
@@ -789,7 +789,7 @@ func TestMain(m *testing.M) {
 
 func BenchmarkAddMutations(b *testing.B) {
 	key := x.DataKey("name", 1)
-	l := getNew(key, 1, ps)
+	l := getNew(key, ps)
 	b.ResetTimer()
 
 	ctx := context.Background()
