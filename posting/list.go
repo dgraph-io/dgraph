@@ -704,9 +704,9 @@ func (l *List) ValueForTag(tag string) (rval types.Val, rerr error) {
 }
 
 func copyValueToVal(p *protos.Posting) (rval types.Val) {
-	val := make([]byte, len(p.Value))
-	copy(val, p.Value)
-	rval.Value = val
+	// This is ok because we dont modify the value of a Posting. We create a newPosting
+	// and add it to the PostingList to do a set.
+	rval.Value = p.Value
 	rval.Tid = types.TypeID(p.ValType)
 	return
 }
@@ -773,8 +773,9 @@ func (l *List) findPosting(uid uint64) (found bool, pos *protos.Posting) {
 		if p.Uid == uid {
 			pos = p
 			found = true
+			return false
 		}
-		return false
+		return true
 	})
 
 	return found, pos

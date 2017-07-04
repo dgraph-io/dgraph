@@ -19,6 +19,7 @@ package schema
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -39,7 +40,7 @@ var (
 
 type stateGroup struct {
 	// Can have fine grained locking later if necessary, per group or predicate
-	x.SafeMutex
+	sync.RWMutex
 	// Map containing predicate to type information.
 	predicate map[string]*protos.SchemaUpdate
 	elog      trace.EventLog
@@ -51,7 +52,7 @@ func (s *stateGroup) init(group uint32) {
 }
 
 type state struct {
-	x.SafeMutex
+	sync.RWMutex
 	m    map[uint32]*stateGroup
 	elog trace.EventLog
 }
