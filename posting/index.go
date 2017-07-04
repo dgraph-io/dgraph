@@ -500,15 +500,17 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add reverse entries for values in posting list
 	addReversePostings := func(uid uint64, pl *protos.PostingList) error {
-		postingsLen := len(pl.Postings)
+		var pitr PIterator
+		pitr.Init(pl, 0)
 		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
-		for idx := 0; idx < postingsLen; idx++ {
-			p := pl.Postings[idx]
+		for ; pitr.Valid(); pitr.Next() {
+			pp := pitr.Posting()
+			puid := pp.Uid
 			// Add reverse entries based on p.
-			edge.ValueId = p.Uid
+			edge.ValueId = puid
 			edge.Op = protos.DirectedEdge_SET
-			edge.Facets = p.Facets
-			edge.Label = p.Label
+			edge.Facets = pp.Facets
+			edge.Label = pp.Label
 			err := addReverseMutation(ctx, &edge)
 			// We retry once in case we do GetOrCreate and stop the world happens
 			// before we do addmutation
@@ -548,7 +550,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		x.Check(pl.Unmarshal(iterItem.Value()))
 
 		// Posting list contains only values or only UIDs.
-		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) == x.ValueUid {
+		if (len(pl.Postings) == 0 && len(pl.Uids) != 0) || postingType(pl.Postings[0]) == x.ValueUid {
 			ch <- item{
 				uid:  pki.Uid,
 				list: &pl,
