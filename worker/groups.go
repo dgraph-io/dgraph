@@ -601,22 +601,30 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 
 // SyncAllMarks syncs marks of all nodes of the worker group.
 func syncAllMarks(ctx context.Context) error {
-	var wg sync.WaitGroup
-	var err error
+	numNodes := len(groups().nodes())
+	errCh := make(chan error, numNodes)
 	for _, n := range groups().nodes() {
-		wg.Add(1)
-		go func(n *node, err error) {
-			defer wg.Done()
+		go func(n *node, errCh chan error) {
 			// Get index of last committed.
 			var lastIndex uint64
-			lastIndex, err = n.store.LastIndex()
-			if e := n.syncAllMarks(ctx, lastIndex); e != nil && err == nil {
-				err = e
+			lastIndex, err := n.store.LastIndex()
+			if err != nil {
+				errCh <- err
+				return
 			}
-		}(n, err)
+
+			err = n.syncAllMarks(ctx, lastIndex)
+			errCh <- err
+		}(n, errCh)
 	}
-	wg.Wait()
-	return err
+
+	var finalErr error
+	for i := 0; i < numNodes; i++ {
+		if e := <-errCh; e != nil {
+			finalErr = e
+		}
+	}
+	return finalErr
 }
 
 // snapshotAll takes snapshot of all nodes of the worker group
