@@ -605,7 +605,7 @@ func syncAllMarks(ctx context.Context) error {
 	var err error
 	for _, n := range groups().nodes() {
 		wg.Add(1)
-		go func(n *node) {
+		go func(n *node, err error) {
 			defer wg.Done()
 			// Get index of last committed.
 			var lastIndex uint64
@@ -613,7 +613,7 @@ func syncAllMarks(ctx context.Context) error {
 			if e := n.syncAllMarks(ctx, lastIndex); e != nil && err == nil {
 				err = e
 			}
-		}(n)
+		}(n, err)
 	}
 	wg.Wait()
 	return err

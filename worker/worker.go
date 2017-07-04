@@ -40,7 +40,9 @@ var (
 		"Port used by worker for internal communication.")
 	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
-	pstore       *store.Store
+	pstore *store.Store
+
+	mu           sync.Mutex
 	workerServer *grpc.Server
 )
 
@@ -89,7 +91,9 @@ func RunServer(bindall bool) {
 	}
 	log.Printf("Worker listening at address: %v", ln.Addr())
 
+	mu.Lock()
 	workerServer = grpc.NewServer()
+	mu.Unlock()
 	protos.RegisterWorkerServer(workerServer, &grpcWorker{})
 	workerServer.Serve(ln)
 }
@@ -101,8 +105,10 @@ func StoreStats() string {
 
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
 func BlockingStop() {
-	stopAllNodes()              // blocking stop all nodes
+	stopAllNodes() // blocking stop all nodes
+	mu.Lock()
 	workerServer.GracefulStop() // blocking stop server
+	mu.Unlock()
 	// blocking sync all marks
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
