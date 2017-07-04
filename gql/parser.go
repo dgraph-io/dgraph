@@ -2191,6 +2191,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				varName, alias = "", ""
 				it.Next()
+				if item.Typ != itemLeftRound {
+					it.Prev()
+					goto Fall
+				}
 				it.Next()
 				if gq.IsGroupby {
 					item = it.Item()
@@ -2295,7 +2299,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				it.Next()
 				item = it.Item()
 				if item.Typ != itemLeftRound {
-					return x.Errorf("Invalid mention of count.")
+					it.Prev()
+					count = notSeen
+					goto Fall
 				}
 
 				peekIt, err := it.Peek(1)
@@ -2340,6 +2346,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				curp = nil
 				continue
 			}
+		Fall:
 			peekIt, err = it.Peek(1)
 			if err != nil {
 				return err
