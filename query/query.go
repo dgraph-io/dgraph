@@ -320,9 +320,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if pc.Params.uidToVal == nil {
 				return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
 			}
-			fieldName := fmt.Sprintf("var(%v)", pc.Params.Var)
+			fieldName := fmt.Sprintf("val(%v)", pc.Params.Var)
 			if len(pc.Params.NeedsVar) > 0 {
-				fieldName = fmt.Sprintf("var(%v)", pc.Params.NeedsVar[0].Name)
+				fieldName = fmt.Sprintf("val(%v)", pc.Params.NeedsVar[0].Name)
 				if len(pc.SrcFunc) > 0 {
 					fieldName = fmt.Sprintf("%s(%v)", pc.SrcFunc[0], fieldName)
 				}
@@ -369,7 +369,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			continue
 		}
 
-		if pc.uidMatrix == nil {
+		if pc.uidMatrix == nil && pc.Attr != "_uid_" {
 			// Can happen in recurse query.
 			continue
 		}
@@ -546,8 +546,9 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 		if !isValidFuncName(ft.Func.Name) {
 			return x.Errorf("Invalid function name : %s", ft.Func.Name)
 		}
+
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
-		isUidFunc := isUidFn(ft.Func.Name)
+		isUidFunc := isUidFnWithoutVar(ft.Func)
 		if isUidFunc {
 			sg.uidsFromArgs(ft.Func.Args)
 		} else {
@@ -572,13 +573,13 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 		key += fmt.Sprintf("%v", gchild.Func)
 	}
 	// This is the case when we ask for a variable.
-	if gchild.Attr == "var" {
+	if gchild.Attr == "val" {
 		// E.g. a as age, result is returned as var(a)
-		if gchild.Var != "" && gchild.Var != "var" {
-			key = fmt.Sprintf("var(%v)", gchild.Var)
+		if gchild.Var != "" && gchild.Var != "val" {
+			key = fmt.Sprintf("val(%v)", gchild.Var)
 		} else if len(gchild.NeedsVar) > 0 {
 			// For var(s)
-			key = fmt.Sprintf("var(%v)", gchild.NeedsVar[0].Name)
+			key = fmt.Sprintf("val(%v)", gchild.NeedsVar[0].Name)
 		}
 
 		// Could be min(var(x)) && max(var(x))
@@ -595,7 +596,7 @@ func uniqueKey(gchild *gql.GraphQuery) string {
 	if gchild.MathExp != nil {
 		// We would only be here if Alias is empty, so Var would be non
 		// empty because MathExp should have atleast one of them.
-		key = fmt.Sprintf("var(%+v)", gchild.Var)
+		key = fmt.Sprintf("val(%+v)", gchild.Var)
 	}
 	if gchild.IsGroupby {
 		key += "groupby"
@@ -864,7 +865,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Params: args,
 	}
 
-	isUidFunc := gq.Func != nil && isUidFn(gq.Func.Name)
+	isUidFunc := gq.Func != nil && isUidFnWithoutVar(gq.Func)
 	// Uid function doesnt have Attr. It just has a list of ids
 	if gq.Func != nil && !isUidFunc {
 		sg.Attr = gq.Func.Attr
@@ -876,8 +877,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 
-	// For root ids can come from uid func or id: [].
-	if isUidFunc && len(gq.Func.Args) > 0 {
+	// Root ids can come from uid func or id: [].
+	if isUidFunc && len(gq.Func.NeedsVar) == 0 && len(gq.Func.Args) > 0 {
 		if err := sg.uidsFromArgs(gq.Func.Args); err != nil {
 			return nil, err
 		}
@@ -1483,12 +1484,22 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 	return nil
 }
 
+func (sg *SubGraph) appendDummyValues() {
+	var l protos.List
+	var val protos.TaskValue
+	for i := 0; i < len(sg.SrcUIDs.Uids); i++ {
+		// This is necessary so that preTraverse can be processed smoothly.
+		sg.uidMatrix = append(sg.uidMatrix, &l)
+		sg.values = append(sg.values, &val)
+	}
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 	if parent == nil && len(sg.SrcFunc) == 0 {
-		// I'm root and I'm using some varaible that has been populated.
+		// I'm root and I'm using some variable that has been populated.
 		// Retain the actual order in uidMatrix. But sort the destUids.
 		if sg.SrcUIDs != nil && len(sg.SrcUIDs.Uids) != 0 {
 			// I am root. I don't have any function to execute, and my
@@ -1510,15 +1521,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// when multiple filters replace their sg.DestUIDs
 		sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
 	} else {
-		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "var" {
-			// If its a var() filter, we just have to intersect the SrcUIDs with DestUIDs
+		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "uid" {
+			// If its a uid() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
 			sg.fillVars(sg.Params.ParentVars)
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
 			rch <- nil
 			return
 		}
-		if len(sg.SrcFunc) > 0 && isInequalityFn(sg.SrcFunc[0]) && sg.Attr == "var" {
+		if len(sg.SrcFunc) > 0 && isInequalityFn(sg.SrcFunc[0]) && sg.Attr == "val" {
 			// This is a ineq function which uses a value variable.
 			err = sg.ApplyIneqFunc()
 			if parent != nil {
@@ -1588,7 +1599,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// Run all filters in parallel.
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
-			isUidFunc := len(filter.SrcFunc) > 0 && isUidFn(filter.SrcFunc[0])
+			isUidFunc := len(filter.SrcFunc) > 0 && filter.SrcFunc[0] == "uid" &&
+				len(filter.Params.NeedsVar) == 0
 			// For uid function filter, no need for processing. User already gave us the
 			// list. Lets just update DestUIDs.
 			if isUidFunc {
@@ -1744,9 +1756,16 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for k, v := range sg.Params.ParentVars {
 			child.Params.ParentVars[k] = v
 		}
+
 		child.SrcUIDs = sg.DestUIDs // Make the connection.
-		if child.IsInternal() {
+		if child.IsInternal() || child.Attr == "_uid_" {
 			// We dont have to execute these nodes.
+			if child.Attr == "_uid_" {
+				// We dont need to call ProcessGraph for _uid_, as we already have uids
+				// populated from parent and there is nothing to process but uidMatrix
+				// and values need to have the right sizes so that preTraverse works.
+				child.appendDummyValues()
+			}
 			continue
 		}
 		go ProcessGraph(ctx, child, sg, childChan)
@@ -1755,7 +1774,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var childErr error
 	// Now get all the results back.
 	for _, child := range sg.Children {
-		if child.IsInternal() {
+		if child.IsInternal() || child.Attr == "_uid_" {
 			continue
 		}
 		select {
@@ -1903,7 +1922,7 @@ func isValidArg(a string) bool {
 // isValidFuncName checks if fn passed is valid keyword.
 func isValidFuncName(f string) bool {
 	switch f {
-	case "anyofterms", "allofterms", "var", "regexp", "anyoftext", "alloftext",
+	case "anyofterms", "allofterms", "val", "regexp", "anyoftext", "alloftext",
 		"has", "uid", "uid_in":
 		return true
 	}
@@ -1934,8 +1953,8 @@ func isAggregatorFn(f string) bool {
 	return false
 }
 
-func isUidFn(f string) bool {
-	return f == "uid"
+func isUidFnWithoutVar(f *gql.Function) bool {
+	return f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
 func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.TaskValue, error) {

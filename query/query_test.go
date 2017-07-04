@@ -412,7 +412,7 @@ func TestLevelBasedFacetVarAggSum(t *testing.T) {
 		{
 			friend(id: 1000) {
 				path @facets(L1 as weight)
-				sumw: sum(var(L1))
+				sumw: sum(val(L1))
 			}
 		}
 	`
@@ -435,14 +435,14 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 				}
 			}
 
-			sum(id: var(L4), orderdesc: var(L4)) {
+			sum(id: uid(L4), orderdesc: val(L4)) {
 				name
-				var(L4)
+				val(L4)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"count(follow)":1,"var(L4)":1.200000},{"@facets":{"_":{"weight":1.500000}},"count(follow)":1,"var(L4)":3.900000}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"count(follow)":1,"var(L4)":3.900000}]}]}],"sum":[{"name":"John","var(L4)":3.900000},{"name":"Matt","var(L4)":1.200000}]}`,
+	require.JSONEq(t, `{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"count(follow)":1,"val(L4)":1.200000},{"@facets":{"_":{"weight":1.500000}},"count(follow)":1,"val(L4)":3.900000}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"count(follow)":1,"val(L4)":3.900000}]}]}],"sum":[{"name":"John","val(L4)":3.900000},{"name":"Matt","val(L4)":1.200000}]}`,
 		js)
 }
 
@@ -456,15 +456,15 @@ func TestLevelBasedSumMix1(t *testing.T) {
 					L2 as math(a+L1)
 			 	}
 			}
-			sum(id: var(L2), orderdesc: var(L2)) {
+			sum(id: uid(L2), orderdesc: val(L2)) {
 				name
-				var(L2)
+				val(L2)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"age":38,"path":[{"@facets":{"_":{"weight":0.200000}},"var(L2)":38.200000},{"@facets":{"_":{"weight":0.100000}},"var(L2)":38.100000}]}],"sum":[{"name":"Glenn Rhee","var(L2)":38.200000},{"name":"Andrea","var(L2)":38.100000}]}`,
+		`{"friend":[{"age":38,"path":[{"@facets":{"_":{"weight":0.200000}},"val(L2)":38.200000},{"@facets":{"_":{"weight":0.100000}},"val(L2)":38.100000}]}],"sum":[{"name":"Glenn Rhee","val(L2)":38.200000},{"name":"Andrea","val(L2)":38.100000}]}`,
 		js)
 }
 
@@ -480,15 +480,15 @@ func TestLevelBasedFacetVarSum1(t *testing.T) {
 					}
 			 }
 			}
-			sum(id: var(L3), orderdesc: var(L3)) {
+			sum(id: uid(L3), orderdesc: val(L3)) {
 				name
-				var(L3)
+				val(L3)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"name":"Bob","path":[{"@facets":{"_":{"weight":0.100000}},"var(L3)":0.200000},{"@facets":{"_":{"weight":1.500000}},"var(L3)":2.900000}]},{"@facets":{"_":{"weight":0.700000}},"name":"Matt","path":[{"@facets":{"_":{"weight":0.600000}},"var(L3)":2.900000}]}]}],"sum":[{"name":"John","var(L3)":2.900000},{"name":"Matt","var(L3)":0.200000}]}`,
+		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"name":"Bob","path":[{"@facets":{"_":{"weight":0.100000}},"val(L3)":0.200000},{"@facets":{"_":{"weight":1.500000}},"val(L3)":2.900000}]},{"@facets":{"_":{"weight":0.700000}},"name":"Matt","path":[{"@facets":{"_":{"weight":0.600000}},"val(L3)":2.900000}]}]}],"sum":[{"name":"John","val(L3)":2.900000},{"name":"Matt","val(L3)":0.200000}]}`,
 		js)
 }
 
@@ -505,15 +505,15 @@ func TestLevelBasedFacetVarSum2(t *testing.T) {
 					}
 				}
 			}
-			sum(id: var(L4), orderdesc: var(L4)) {
+			sum(id: uid(L4), orderdesc: val(L4)) {
 				name
-				var(L4)
+				val(L4)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.600000}},"var(L4)":0.800000}]},{"@facets":{"_":{"weight":1.500000}},"path":[{"var(L4)":2.900000}]}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"path":[{"var(L4)":2.900000}]}]}]}],"sum":[{"name":"Bob","var(L4)":2.900000},{"name":"John","var(L4)":0.800000}]}`,
+		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.100000}},"path":[{"@facets":{"_":{"weight":0.600000}},"val(L4)":0.800000}]},{"@facets":{"_":{"weight":1.500000}},"path":[{"val(L4)":2.900000}]}]},{"@facets":{"_":{"weight":0.700000}},"path":[{"@facets":{"_":{"weight":0.600000}},"path":[{"val(L4)":2.900000}]}]}]}],"sum":[{"name":"Bob","val(L4)":2.900000},{"name":"John","val(L4)":0.800000}]}`,
 		js)
 }
 
@@ -525,15 +525,15 @@ func TestQueryConstMathVal(t *testing.T) {
 				a as math(24/8 * 3)
 			}
 
-			AgeOrder(id: var(f)) {
+			AgeOrder(id: uid(f)) {
 				name
-				var(a)
+				val(a)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"AgeOrder":[{"name":"Michonne","var(a)":9.000000},{"name":"Rick Grimes","var(a)":9.000000},{"name":"Andrea","var(a)":9.000000},{"name":"Andrea With no friends","var(a)":9.000000}]}`,
+		`{"AgeOrder":[{"name":"Michonne","val(a)":9.000000},{"name":"Rick Grimes","val(a)":9.000000},{"name":"Andrea","val(a)":9.000000},{"name":"Andrea With no friends","val(a)":9.000000}]}`,
 		js)
 }
 
@@ -546,15 +546,15 @@ func TestQueryVarValAggSince(t *testing.T) {
 				b as math(since(a)/(60*60*24*365))
 			}
 
-			AgeOrder(id: var(f), orderasc: var(b)) {
+			AgeOrder(id: uid(f), orderasc: val(b)) {
 				name
-				var(a)
+				val(a)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"AgeOrder":[{"name":"Rick Grimes","var(a)":"1910-01-02T00:00:00Z"},{"name":"Michonne","var(a)":"1910-01-01T00:00:00Z"},{"name":"Andrea","var(a)":"1901-01-15T00:00:00Z"}]}`,
+		`{"AgeOrder":[{"name":"Rick Grimes","val(a)":"1910-01-02T00:00:00Z"},{"name":"Michonne","val(a)":"1910-01-01T00:00:00Z"},{"name":"Andrea","val(a)":"1901-01-15T00:00:00Z"}]}`,
 		js)
 }
 
@@ -567,32 +567,32 @@ func TestQueryVarValAggNestedFuncConst(t *testing.T) {
 				friend {
 					x as age
 				}
-				n as min(var(x))
-				s as max(var(x))
+				n as min(val(x))
+				s as max(val(x))
 				p as math(a + s % n + 10)
 				q as math(a * s * n * -1)
 			}
 
-			MaxMe(id: var(f), orderasc: var(p)) {
+			MaxMe(id: uid(f), orderasc: val(p)) {
 				name
-				var(p)
-				var(a)
-				var(n)
-				var(s)
+				val(p)
+				val(a)
+				val(n)
+				val(s)
 			}
 
-			MinMe(id: var(f), orderasc: var(q)) {
+			MinMe(id: uid(f), orderasc: val(q)) {
 				name
-				var(q)
-				var(a)
-				var(n)
-				var(s)
+				val(q)
+				val(a)
+				val(n)
+				val(s)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"MaxMe":[{"name":"Rick Grimes","var(a)":15,"var(n)":38,"var(p)":25.000000,"var(s)":38},{"name":"Andrea","var(a)":19,"var(n)":15,"var(p)":29.000000,"var(s)":15},{"name":"Michonne","var(a)":38,"var(n)":15,"var(p)":52.000000,"var(s)":19}],"MinMe":[{"name":"Rick Grimes","var(a)":15,"var(n)":38,"var(q)":-21660.000000,"var(s)":38},{"name":"Michonne","var(a)":38,"var(n)":15,"var(q)":-10830.000000,"var(s)":19},{"name":"Andrea","var(a)":19,"var(n)":15,"var(q)":-4275.000000,"var(s)":15}]}`,
+		`{"MaxMe":[{"name":"Rick Grimes","val(a)":15,"val(n)":38,"val(p)":25.000000,"val(s)":38},{"name":"Andrea","val(a)":19,"val(n)":15,"val(p)":29.000000,"val(s)":15},{"name":"Michonne","val(a)":38,"val(n)":15,"val(p)":52.000000,"val(s)":19}],"MinMe":[{"name":"Rick Grimes","val(a)":15,"val(n)":38,"val(q)":-21660.000000,"val(s)":38},{"name":"Michonne","val(a)":38,"val(n)":15,"val(q)":-10830.000000,"val(s)":19},{"name":"Andrea","val(a)":19,"val(n)":15,"val(q)":-4275.000000,"val(s)":15}]}`,
 		js)
 }
 
@@ -605,32 +605,32 @@ func TestQueryVarValAggNestedFuncMinMaxVars(t *testing.T) {
 				friend {
 					x as age
 				}
-				n as min(var(x))
-				s as max(var(x))
+				n as min(val(x))
+				s as max(val(x))
 				p as math(max(max(a, s), n))
 				q as math(min(min(a, s), n))
 			}
 
-			MaxMe(id: var(f), orderasc: var(p)) {
+			MaxMe(id: uid(f), orderasc: val(p)) {
 				name
-				var(p)
-				var(a)
-				var(n)
-				var(s)
+				val(p)
+				val(a)
+				val(n)
+				val(s)
 			}
 
-			MinMe(id: var(f), orderasc: var(q)) {
+			MinMe(id: uid(f), orderasc: val(q)) {
 				name
-				var(q)
-				var(a)
-				var(n)
-				var(s)
+				val(q)
+				val(a)
+				val(n)
+				val(s)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"MinMe":[{"name":"Michonne","var(a)":38,"var(n)":15,"var(q)":15,"var(s)":19},{"name":"Rick Grimes","var(a)":15,"var(n)":38,"var(q)":15,"var(s)":38},{"name":"Andrea","var(a)":19,"var(n)":15,"var(q)":15,"var(s)":15}],"MaxMe":[{"name":"Andrea","var(a)":19,"var(n)":15,"var(p)":19,"var(s)":15},{"name":"Michonne","var(a)":38,"var(n)":15,"var(p)":38,"var(s)":19},{"name":"Rick Grimes","var(a)":15,"var(n)":38,"var(p)":38,"var(s)":38}]}`,
+		`{"MinMe":[{"name":"Michonne","val(a)":38,"val(n)":15,"val(q)":15,"val(s)":19},{"name":"Rick Grimes","val(a)":15,"val(n)":38,"val(q)":15,"val(s)":38},{"name":"Andrea","val(a)":19,"val(n)":15,"val(q)":15,"val(s)":15}],"MaxMe":[{"name":"Andrea","val(a)":19,"val(n)":15,"val(p)":19,"val(s)":15},{"name":"Michonne","val(a)":38,"val(n)":15,"val(p)":38,"val(s)":19},{"name":"Rick Grimes","val(a)":15,"val(n)":38,"val(p)":38,"val(s)":38}]}`,
 		js)
 }
 
@@ -643,29 +643,29 @@ func TestQueryVarValAggNestedFuncConditional(t *testing.T) {
 				friend {
 					x as age
 				}
-				n as min(var(x))
+				n as min(val(x))
 				condLog as math(cond(a > 10, logbase(n, 5), 1))
 				condExp as math(cond(a < 40, 1, pow(2, n)))
 			}
 
-			LogMe(id: var(f), orderasc: var(condLog)) {
+			LogMe(id: uid(f), orderasc: val(condLog)) {
 				name
-				var(condLog)
-				var(n)
-				var(a)
+				val(condLog)
+				val(n)
+				val(a)
 			}
 
-			ExpMe(id: var(f), orderasc: var(condExp)) {
+			ExpMe(id: uid(f), orderasc: val(condExp)) {
 				name
-				var(condExp)
-				var(n)
-				var(a)
+				val(condExp)
+				val(n)
+				val(a)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"ExpMe":[{"name":"Michonne","var(a)":38,"var(condExp)":1.000000,"var(n)":15},{"name":"Rick Grimes","var(a)":15,"var(condExp)":1.000000,"var(n)":38},{"name":"Andrea","var(a)":19,"var(condExp)":1.000000,"var(n)":15}],"LogMe":[{"name":"Michonne","var(a)":38,"var(condLog)":1.682606,"var(n)":15},{"name":"Andrea","var(a)":19,"var(condLog)":1.682606,"var(n)":15},{"name":"Rick Grimes","var(a)":15,"var(condLog)":2.260159,"var(n)":38}]}`,
+		`{"ExpMe":[{"name":"Michonne","val(a)":38,"val(condExp)":1.000000,"val(n)":15},{"name":"Rick Grimes","val(a)":15,"val(condExp)":1.000000,"val(n)":38},{"name":"Andrea","val(a)":19,"val(condExp)":1.000000,"val(n)":15}],"LogMe":[{"name":"Michonne","val(a)":38,"val(condLog)":1.682606,"val(n)":15},{"name":"Andrea","val(a)":19,"val(condLog)":1.682606,"val(n)":15},{"name":"Rick Grimes","val(a)":15,"val(condLog)":2.260159,"val(n)":38}]}`,
 		js)
 }
 
@@ -678,29 +678,29 @@ func TestQueryVarValAggNestedFuncConditional2(t *testing.T) {
 				friend {
 					x as age
 				}
-				n as min(var(x))
+				n as min(val(x))
 				condLog as math(cond(a==38, n/2, 1))
 				condExp as math(cond(a!=38, 1, sqrt(2*n)))
 			}
 
-			LogMe(id: var(f), orderasc: var(condLog)) {
+			LogMe(id: uid(f), orderasc: val(condLog)) {
 				name
-				var(condLog)
-				var(n)
-				var(a)
+				val(condLog)
+				val(n)
+				val(a)
 			}
 
-			ExpMe(id: var(f), orderasc: var(condExp)) {
+			ExpMe(id: uid(f), orderasc: val(condExp)) {
 				name
-				var(condExp)
-				var(n)
-				var(a)
+				val(condExp)
+				val(n)
+				val(a)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"ExpMe":[{"name":"Rick Grimes","var(a)":15,"var(condExp)":1.000000,"var(n)":38},{"name":"Andrea","var(a)":19,"var(condExp)":1.000000,"var(n)":15},{"name":"Michonne","var(a)":38,"var(condExp)":5.477226,"var(n)":15}],"LogMe":[{"name":"Rick Grimes","var(a)":15,"var(condLog)":1.000000,"var(n)":38},{"name":"Andrea","var(a)":19,"var(condLog)":1.000000,"var(n)":15},{"name":"Michonne","var(a)":38,"var(condLog)":7.500000,"var(n)":15}]}`,
+		`{"ExpMe":[{"name":"Rick Grimes","val(a)":15,"val(condExp)":1.000000,"val(n)":38},{"name":"Andrea","val(a)":19,"val(condExp)":1.000000,"val(n)":15},{"name":"Michonne","val(a)":38,"val(condExp)":5.477226,"val(n)":15}],"LogMe":[{"name":"Rick Grimes","val(a)":15,"val(condLog)":1.000000,"val(n)":38},{"name":"Andrea","val(a)":19,"val(condLog)":1.000000,"val(n)":15},{"name":"Michonne","val(a)":38,"val(condLog)":7.500000,"val(n)":15}]}`,
 		js)
 }
 
@@ -713,32 +713,32 @@ func TestQueryVarValAggNestedFuncUnary(t *testing.T) {
 				friend {
 					x as age
 				}
-				n as min(var(x))
-				s as max(var(x))
+				n as min(val(x))
+				s as max(val(x))
 				combiLog as math(a + ln(s - n))
 				combiExp as math(a + exp(s - n))
 			}
 
-			LogMe(id: var(f), orderasc: var(combiLog)) {
+			LogMe(id: uid(f), orderasc: val(combiLog)) {
 				name
-				var(combiLog)
-				var(a)
-				var(n)
-				var(s)
+				val(combiLog)
+				val(a)
+				val(n)
+				val(s)
 			}
 
-			ExpMe(id: var(f), orderasc: var(combiExp)) {
+			ExpMe(id: uid(f), orderasc: val(combiExp)) {
 				name
-				var(combiExp)
-				var(a)
-				var(n)
-				var(s)
+				val(combiExp)
+				val(a)
+				val(n)
+				val(s)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"ExpMe":[{"name":"Rick Grimes","var(a)":15,"var(combiExp)":16.000000,"var(n)":38,"var(s)":38},{"name":"Andrea","var(a)":19,"var(combiExp)":20.000000,"var(n)":15,"var(s)":15},{"name":"Michonne","var(a)":38,"var(combiExp)":92.598150,"var(n)":15,"var(s)":19}],"LogMe":[{"name":"Rick Grimes","var(a)":15,"var(combiLog)":-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000,"var(n)":38,"var(s)":38},{"name":"Andrea","var(a)":19,"var(combiLog)":-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000,"var(n)":15,"var(s)":15},{"name":"Michonne","var(a)":38,"var(combiLog)":39.386294,"var(n)":15,"var(s)":19}]}`,
+		`{"ExpMe":[{"name":"Rick Grimes","val(a)":15,"val(combiExp)":16.000000,"val(n)":38,"val(s)":38},{"name":"Andrea","val(a)":19,"val(combiExp)":20.000000,"val(n)":15,"val(s)":15},{"name":"Michonne","val(a)":38,"val(combiExp)":92.598150,"val(n)":15,"val(s)":19}],"LogMe":[{"name":"Rick Grimes","val(a)":15,"val(combiLog)":-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000,"val(n)":38,"val(s)":38},{"name":"Andrea","val(a)":19,"val(combiLog)":-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000,"val(n)":15,"val(s)":15},{"name":"Michonne","val(a)":38,"val(combiLog)":39.386294,"val(n)":15,"val(s)":19}]}`,
 		js)
 }
 
@@ -751,23 +751,23 @@ func TestQueryVarValAggNestedFunc(t *testing.T) {
 				friend {
 					x as age
 				}
-				n as min(var(x))
-				s as max(var(x))
+				n as min(val(x))
+				s as max(val(x))
 				combi as math(a + n * s)
 			}
 
-			me(id: var(f), orderasc: var(combi)) {
+			me(id: uid(f), orderasc: val(combi)) {
 				name
-				var(combi)
-				var(a)
-				var(n)
-				var(s)
+				val(combi)
+				val(a)
+				val(n)
+				val(s)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea","var(a)":19,"var(combi)":244,"var(n)":15,"var(s)":15},{"name":"Michonne","var(a)":38,"var(combi)":323,"var(n)":15,"var(s)":19},{"name":"Rick Grimes","var(a)":15,"var(combi)":1459,"var(n)":38,"var(s)":38}]}`,
+		`{"me":[{"name":"Andrea","val(a)":19,"val(combi)":244,"val(n)":15,"val(s)":15},{"name":"Michonne","val(a)":38,"val(combi)":323,"val(n)":15,"val(s)":19},{"name":"Rick Grimes","val(a)":15,"val(combi)":1459,"val(n)":38,"val(s)":38}]}`,
 		js)
 }
 
@@ -780,21 +780,21 @@ func TestQueryVarValAggMinMaxSelf(t *testing.T) {
 				friend {
 					x as age
 				}
-				n as min(var(x))
-				s as max(var(x))
+				n as min(val(x))
+				s as max(val(x))
 				sum as math(n +  a + s)
 			}
 
-			me(id: var(f), orderasc: var(sum)) {
+			me(id: uid(f), orderasc: val(sum)) {
 				name
-				var(sum)
-				var(s)
+				val(sum)
+				val(s)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea","var(s)":15,"var(sum)":49},{"name":"Michonne","var(s)":19,"var(sum)":72},{"name":"Rick Grimes","var(s)":38,"var(sum)":91}]}`,
+		`{"me":[{"name":"Andrea","val(s)":15,"val(sum)":49},{"name":"Michonne","val(s)":19,"val(sum)":72},{"name":"Rick Grimes","val(s)":38,"val(sum)":91}]}`,
 		js)
 }
 
@@ -806,21 +806,21 @@ func TestQueryVarValAggMinMax(t *testing.T) {
 				friend {
 					x as age
 				}
-				n as min(var(x))
-				s as max(var(x))
+				n as min(val(x))
+				s as max(val(x))
 				sum as math(n + s)
 			}
 
-			me(id: var(f), orderdesc: var(sum)) {
+			me(id: uid(f), orderdesc: val(sum)) {
 				name
-				var(n)
-				var(s)
+				val(n)
+				val(s)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Rick Grimes","var(n)":38,"var(s)":38},{"name":"Michonne","var(n)":15,"var(s)":19},{"name":"Andrea","var(n)":15,"var(s)":15}]}`,
+		`{"me":[{"name":"Rick Grimes","val(n)":38,"val(s)":38},{"name":"Michonne","val(n)":15,"val(s)":19},{"name":"Andrea","val(n)":15,"val(s)":15}]}`,
 		js)
 }
 
@@ -832,15 +832,15 @@ func TestQueryVarValAggMinMaxAlias(t *testing.T) {
 				friend {
 					x as age
 				}
-				n as min(var(x))
-				s as max(var(x))
+				n as min(val(x))
+				s as max(val(x))
 				sum as math(n + s)
 			}
 
-			me(id: var(f), orderdesc: var(sum)) {
+			me(id: uid(f), orderdesc: val(sum)) {
 				name
-				MinAge: var(n)
-				MaxAge: var(s)
+				MinAge: val(n)
+				MaxAge: val(s)
 			}
 		}
 	`
@@ -862,17 +862,17 @@ func TestQueryVarValAggMul(t *testing.T) {
 				}
 			}
 
-			me(id: var(f), orderdesc: var(mul)) {
+			me(id: uid(f), orderdesc: val(mul)) {
 				name
-				var(s)
-				var(n)
-				var(mul)
+				val(s)
+				val(n)
+				val(mul)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea","var(mul)":19.000000,"var(n)":19,"var(s)":1},{"name":"Rick Grimes","var(mul)":15.000000,"var(n)":15,"var(s)":1},{"name":"Glenn Rhee","var(mul)":0.000000,"var(n)":15,"var(s)":0},{"name":"Daryl Dixon","var(mul)":0.000000,"var(n)":17,"var(s)":0},{"var(mul)":0.000000,"var(s)":0}]}`,
+		`{"me":[{"name":"Andrea","val(mul)":19.000000,"val(n)":19,"val(s)":1},{"name":"Rick Grimes","val(mul)":15.000000,"val(n)":15,"val(s)":1},{"name":"Glenn Rhee","val(mul)":0.000000,"val(n)":15,"val(s)":0},{"name":"Daryl Dixon","val(mul)":0.000000,"val(n)":17,"val(s)":0},{"val(mul)":0.000000,"val(s)":0}]}`,
 		js)
 }
 
@@ -888,7 +888,7 @@ func TestQueryVarValAggOrderDesc(t *testing.T) {
 				}
 			}
 
-			me(id: var(f), orderdesc: var(sum)) {
+			me(id: uid(f), orderdesc: val(sum)) {
 				name
 				age
 				count(friend)
@@ -897,7 +897,7 @@ func TestQueryVarValAggOrderDesc(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"info":[{"friend":[{"age":15,"count(friend)":1,"var(sum)":16.000000},{"age":15,"count(friend)":0,"var(sum)":15.000000},{"age":17,"count(friend)":0,"var(sum)":17.000000},{"age":19,"count(friend)":1,"var(sum)":20.000000},{"count(friend)":0,"var(sum)":0.000000}]}],"me":[{"age":19,"count(friend)":1,"name":"Andrea"},{"age":17,"count(friend)":0,"name":"Daryl Dixon"},{"age":15,"count(friend)":1,"name":"Rick Grimes"},{"age":15,"count(friend)":0,"name":"Glenn Rhee"},{"count(friend)":0}]}`,
+		`{"info":[{"friend":[{"age":15,"count(friend)":1,"val(sum)":16.000000},{"age":15,"count(friend)":0,"val(sum)":15.000000},{"age":17,"count(friend)":0,"val(sum)":17.000000},{"age":19,"count(friend)":1,"val(sum)":20.000000},{"count(friend)":0,"val(sum)":0.000000}]}],"me":[{"age":19,"count(friend)":1,"name":"Andrea"},{"age":17,"count(friend)":0,"name":"Daryl Dixon"},{"age":15,"count(friend)":1,"name":"Rick Grimes"},{"age":15,"count(friend)":0,"name":"Glenn Rhee"},{"count(friend)":0}]}`,
 		js)
 }
 
@@ -913,7 +913,7 @@ func TestQueryVarValAggOrderAsc(t *testing.T) {
 				}
 			}
 
-			me(id: var(f), orderasc: var(sum)) {
+			me(id: uid(f), orderasc: val(sum)) {
 				name
 				age
 				survival_rate
@@ -936,7 +936,7 @@ func TestQueryVarValOrderAsc(t *testing.T) {
 				}
 			}
 
-			me(id: var(f), orderasc: var(n)) {
+			me(id: uid(f), orderasc: val(n)) {
 				name
 			}
 		}
@@ -957,7 +957,7 @@ func TestQueryVarValOrderDob(t *testing.T) {
 				}
 			}
 
-			me(id: var(f), orderasc: var(n)) {
+			me(id: uid(f), orderasc: val(n)) {
 				name
 				dob
 			}
@@ -979,7 +979,7 @@ func TestQueryVarValOrderDesc(t *testing.T) {
 				}
 			}
 
-			me(id: var(f), orderdesc: var(n)) {
+			me(id: uid(f), orderdesc: val(n)) {
 				name
 			}
 		}
@@ -1000,7 +1000,7 @@ func TestQueryVarValOrderDescMissing(t *testing.T) {
 				}
 			}
 
-			me(id: var(f), orderdesc: var(n)) {
+			me(id: uid(f), orderdesc: val(n)) {
 				name
 			}
 		}
@@ -1151,7 +1151,7 @@ func TestGroupBy(t *testing.T) {
 		js)
 }
 
-func TestGroupByCountVar(t *testing.T) {
+func TestGroupByCountval(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
@@ -1161,18 +1161,18 @@ func TestGroupByCountVar(t *testing.T) {
 				}
 			}
 
-			order(id:var(a), orderdesc: var(a)) {
+			order(id:uid(a), orderdesc: val(a)) {
 				name
-				var(a)
+				val(a)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"order":[{"name":"School B","var(a)":3},{"name":"School A","var(a)":2}]}`,
+		`{"order":[{"name":"School B","val(a)":3},{"name":"School A","val(a)":2}]}`,
 		js)
 }
-func TestGroupByAggVar(t *testing.T) {
+func TestGroupByAggval(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
@@ -1183,20 +1183,20 @@ func TestGroupByAggVar(t *testing.T) {
 				}
 			}
 
-			orderMax(id:var(a), orderdesc: var(a)) {
+			orderMax(id:uid(a), orderdesc: val(a)) {
 				name
-				var(a)
+				val(a)
 			}
 
-			orderMin(id:var(b), orderdesc: var(b)) {
+			orderMin(id:uid(b), orderdesc: val(b)) {
 				name
-				var(b)
+				val(b)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"orderMax":[{"name":"School B","var(a)":"Rick Grimes"},{"name":"School A","var(a)":"Glenn Rhee"}],"orderMin":[{"name":"School A","var(b)":"Daryl Dixon"},{"name":"School B","var(b)":"Andrea"}]}`,
+		`{"orderMax":[{"name":"School B","val(a)":"Rick Grimes"},{"name":"School A","val(a)":"Glenn Rhee"}],"orderMin":[{"name":"School A","val(b)":"Daryl Dixon"},{"name":"School B","val(b)":"Andrea"}]}`,
 		js)
 }
 
@@ -1262,7 +1262,7 @@ func TestUseVarsMultiCascade1(t *testing.T) {
 			 	}
 			}
 
-			me(id: var(L, B)) {
+			me(id: uid(L, B)) {
 				name
 			}
 		}
@@ -1283,7 +1283,7 @@ func TestUseVarsMultiCascade(t *testing.T) {
 				}
 			}
 
-			me(id: var(L, B)) {
+			me(id: uid(L, B)) {
 				name
 			}
 		}
@@ -1306,11 +1306,11 @@ func TestUseVarsMultiOrder(t *testing.T) {
 				G as friend(first:2, offset:2, orderasc: dob)
 			}
 
-			friend1(id: var(L)) {
+			friend1(id: uid(L)) {
 				name
 			}
 
-			friend2(id: var(G)) {
+			friend2(id: uid(G)) {
 				name
 			}
 		}
@@ -1321,16 +1321,16 @@ func TestUseVarsMultiOrder(t *testing.T) {
 		js)
 }
 
-func TestFilterFacetVar(t *testing.T) {
+func TestFilterFacetval(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
 			friend(id:0x01) {
 				path @facets(L as weight) {
 					name
-				 	friend @filter(var(L)) {
+				 	friend @filter(uid(L)) {
 						name
-						var(L)
+						val(L)
 					}
 				}
 			}
@@ -1338,7 +1338,7 @@ func TestFilterFacetVar(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.200000}},"name":"Glenn Rhee"},{"@facets":{"_":{"weight":0.100000}},"friend":[{"name":"Glenn Rhee","var(L)":0.200000}],"name":"Andrea"}]}]}`,
+		`{"friend":[{"path":[{"@facets":{"_":{"weight":0.200000}},"name":"Glenn Rhee"},{"@facets":{"_":{"weight":0.100000}},"friend":[{"name":"Glenn Rhee","val(L)":0.200000}],"name":"Andrea"}]}]}`,
 		js)
 }
 
@@ -1349,9 +1349,8 @@ func TestFilterFacetVar1(t *testing.T) {
 			friend(id:0x01) {
 				path @facets(L as weight1) {
 					name
-				 	friend @filter(var(L)){
+				 	friend @filter(uid(L)){
 						name
-						var(L)
 					}
 				}
 			}
@@ -1371,7 +1370,7 @@ func TestUseVarsFilterVarReuse1(t *testing.T) {
 				friend {
 					L as friend {
 						name
-						friend @filter(var(L)) {
+						friend @filter(uid(L)) {
 							name
 						}
 					}
@@ -1393,7 +1392,7 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 				friend {
 				 L as friend {
 					 name
-					 friend @filter(var(L)) {
+					 friend @filter(uid(L)) {
 						name
 					}
 				}
@@ -1418,7 +1417,7 @@ func TestVarInAggError(t *testing.T) {
 			}
 
 			# var not allowed in min filter
-			me(func: min(var(a))) {
+			me(func: min(val(a))) {
 				name
 			}
 		}
@@ -1442,7 +1441,7 @@ func TestVarInIneqError(t *testing.T) {
 				}
 			}
 
-			me(id: var(f)) @filter(gt(var(a), "alice")) {
+			me(id: uid(f)) @filter(gt(val(a), "alice")) {
 				name
 			}
 		}
@@ -1469,16 +1468,16 @@ func TestVarInIneqScore(t *testing.T) {
 				}
 			}
 
-			me(func: ge(var(score), 35)) {
+			me(func: ge(val(score), 35)) {
 				name
-				var(score)
-				var(a)
-				var(s)
+				val(score)
+				val(a)
+				val(s)
 			}
 		}
   `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Daryl Dixon","var(a)":17,"var(s)":0,"var(score)":35.000000},{"name":"Andrea","var(a)":19,"var(s)":1,"var(score)":42.000000}]}`,
+	require.JSONEq(t, `{"me":[{"name":"Daryl Dixon","val(a)":17,"val(s)":0,"val(score)":35.000000},{"name":"Andrea","val(a)":19,"val(s)":1,"val(score)":42.000000}]}`,
 		js)
 }
 
@@ -1492,7 +1491,7 @@ func TestVarInIneq(t *testing.T) {
 				}
 			}
 
-			me(id: var(f)) @filter(gt(var(a), 18)) {
+			me(id: uid(f)) @filter(gt(val(a), 18)) {
 				name
 			}
 		}
@@ -1511,7 +1510,7 @@ func TestVarInIneq2(t *testing.T) {
 				}
 			}
 
-			me(func: gt(var(a), 18)) {
+			me(func: gt(val(a), 18)) {
 				name
 			}
 		}
@@ -1582,7 +1581,7 @@ func TestShortestPath_ExpandError(t *testing.T) {
 				expand(_all_)
 			}
 
-			me(id: var( A)) {
+			me(id: uid( A)) {
 				name
 			}
 		}`
@@ -1604,7 +1603,7 @@ func TestShortestPath_NoPath(t *testing.T) {
 				follow
 			}
 
-			me(id: var( A)) {
+			me(id: uid( A)) {
 				name
 			}
 		}`
@@ -1623,7 +1622,7 @@ func TestKShortestPath_NoPath(t *testing.T) {
 				follow
 			}
 
-			me(id: var( A)) {
+			me(id: uid( A)) {
 				name
 			}
 		}`
@@ -1670,7 +1669,7 @@ func TestTwoShortestPath(t *testing.T) {
 				path
 			}
 
-			me(id: var( A)) {
+			me(id: uid( A)) {
 				name
 			}
 		}`
@@ -1688,7 +1687,7 @@ func TestShortestPath(t *testing.T) {
 				friend
 			}
 
-			me(id: var( A)) {
+			me(id: uid( A)) {
 				name
 			}
 		}`
@@ -1706,7 +1705,7 @@ func TestShortestPathRev(t *testing.T) {
 				friend
 			}
 
-			me(id: var( A)) {
+			me(id: uid( A)) {
 				name
 			}
 		}`
@@ -1725,12 +1724,12 @@ func TestFacetVarRetrieval(t *testing.T) {
 			}
 
 			me(id: 24) {
-				var(f)
+				val(f)
 			}
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"var(f)":0.200000}]}`,
+		`{"me":[{"val(f)":0.200000}]}`,
 		js)
 }
 
@@ -1742,14 +1741,14 @@ func TestFacetVarRetrieveOrder(t *testing.T) {
 				path @facets(f as weight)
 			}
 
-			me(id: var(f), orderasc: var(f)) {
+			me(id: uid(f), orderasc: val(f)) {
 				name
-				var(f)
+				val(f)
 			}
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea","var(f)":0.100000},{"name":"Glenn Rhee","var(f)":0.200000}]}`,
+		`{"me":[{"name":"Andrea","val(f)":0.100000},{"name":"Glenn Rhee","val(f)":0.200000}]}`,
 		js)
 }
 
@@ -1761,7 +1760,7 @@ func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 				path @facets(weight, weight1)
 			}
 
-			me(id: var( A)) {
+			me(id: uid( A)) {
 				name
 			}
 		}`
@@ -1782,7 +1781,7 @@ func TestShortestPathWeights(t *testing.T) {
 				path @facets(weight)
 			}
 
-			me(id: var( A)) {
+			me(id: uid( A)) {
 				name
 			}
 		}`
@@ -1800,7 +1799,7 @@ func TestShortestPath2(t *testing.T) {
 				path
 			}
 
-			me(id: var( A)) {
+			me(id: uid( A)) {
 				name
 			}
 		}`
@@ -1820,7 +1819,7 @@ func TestShortestPath4(t *testing.T) {
 				follow
 			}
 
-			me(id: var( A)) {
+			me(id: uid( A)) {
 				name
 			}
 		}`
@@ -1839,7 +1838,7 @@ func TestShortestPath_filter(t *testing.T) {
 				follow
 			}
 
-			me(id: var( A)) {
+			me(id: uid( A)) {
 				name
 			}
 		}`
@@ -1858,7 +1857,7 @@ func TestShortestPath_filter2(t *testing.T) {
 				follow @filter(not anyofterms(name, "bob"))
 			}
 
-			me(id: var(A)) {
+			me(id: uid(A)) {
 				name
 			}
 		}`
@@ -1882,7 +1881,7 @@ func TestUseVarsFilterMultiId(t *testing.T) {
 				G as friend
 			}
 
-			friend(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(var(G, L)) {
+			friend(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(uid(G, L)) {
 				name
 			}
 		}
@@ -1905,7 +1904,7 @@ func TestUseVarsMultiFilterId(t *testing.T) {
 				G as friend
 			}
 
-			friend(id: var(L)) @filter(var(G)) {
+			friend(id: uid(L)) @filter(uid(G)) {
 				name
 			}
 		}
@@ -1926,7 +1925,7 @@ func TestUseVarsCascade(t *testing.T) {
 				}
 			}
 
-			me(id: var(L)) {
+			me(id: uid(L)) {
 				name
 			}
 		}
@@ -1945,7 +1944,7 @@ func TestUseVars(t *testing.T) {
 				L as friend
 			}
 
-			me(id: var(L)) {
+			me(id: uid(L)) {
 				name
 			}
 		}
@@ -2179,7 +2178,7 @@ func TestMultiCountSort(t *testing.T) {
 		 	n as count(friend)
 		}
 
-		countorder(id: var(f), orderasc: var(n)) {
+		countorder(id: uid(f), orderasc: val(n)) {
 			name
 			count(friend)
 		}
@@ -2201,13 +2200,13 @@ func TestMultiLevelAgg(t *testing.T) {
 			friend {
 				s as count(friend)
 			}
-			sum(var(s))
+			sum(val(s))
 		}
 	}
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"sumorder":[{"friend":[{"count(friend)":1},{"count(friend)":0},{"count(friend)":0},{"count(friend)":1},{"count(friend)":0}],"name":"Michonne","sum(var(s))":2},{"friend":[{"count(friend)":5}],"name":"Rick Grimes","sum(var(s))":5},{"friend":[{"count(friend)":0}],"name":"Andrea","sum(var(s))":0},{"name":"Andrea With no friends"}]}`,
+		`{"sumorder":[{"friend":[{"count(friend)":1},{"count(friend)":0},{"count(friend)":0},{"count(friend)":1},{"count(friend)":0}],"name":"Michonne","sum(val(s))":2},{"friend":[{"count(friend)":5}],"name":"Rick Grimes","sum(val(s))":5},{"friend":[{"count(friend)":0}],"name":"Andrea","sum(val(s))":0},{"name":"Andrea With no friends"}]}`,
 		js)
 }
 
@@ -2220,18 +2219,18 @@ func TestMultiLevelAgg1(t *testing.T) {
 			friend {
 				s as count(friend)
 			}
-			ss as sum(var(s))
+			ss as sum(val(s))
 		}
 
-		sumorder(id: var(ss), orderasc: var(ss)) {
+		sumorder(id: uid(ss), orderasc: val(ss)) {
 			name
-			var(ss)
+			val(ss)
 		}
 	}
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"sumorder":[{"name":"Andrea","var(ss)":0},{"name":"Michonne","var(ss)":2},{"name":"Rick Grimes","var(ss)":5}]}`,
+		`{"sumorder":[{"name":"Andrea","val(ss)":0},{"name":"Michonne","val(ss)":2},{"name":"Rick Grimes","val(ss)":5}]}`,
 		js)
 }
 
@@ -2243,13 +2242,13 @@ func TestMultiLevelAgg1Error(t *testing.T) {
 		var(func: anyofterms(name, "michonne rick andrea")) @filter(gt(count(friend), 0)){
 			friend {
 				s as count(friend)
-				ss as sum(var(s))
+				ss as sum(val(s))
 			}
 		}
 
-		sumorder(id: var(ss), orderasc: var(ss)) {
+		sumorder(id: uid(ss), orderasc: val(ss)) {
 			name
-			var(ss)
+			val(ss)
 		}
 	}
 `
@@ -2272,24 +2271,24 @@ func TestMultiAggSort(t *testing.T) {
 			friend {
 				x as dob
 			}
-			mindob as min(var(x))
-			maxdob as max(var(x))
+			mindob as min(val(x))
+			maxdob as max(val(x))
 		}
 
-		maxorder(id: var(f), orderasc: var(maxdob)) {
+		maxorder(id: uid(f), orderasc: val(maxdob)) {
 			name
-			var(maxdob)
+			val(maxdob)
 		}
 
-		minorder(id: var(f), orderasc: var(mindob)) {
+		minorder(id: uid(f), orderasc: val(mindob)) {
 			name
-			var(mindob)
+			val(mindob)
 		}
 	}
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"maxorder":[{"name":"Andrea","var(maxdob)":"1909-05-05T00:00:00Z"},{"name":"Rick Grimes","var(maxdob)":"1910-01-01T00:00:00Z"},{"name":"Michonne","var(maxdob)":"1910-01-02T00:00:00Z"}],"minorder":[{"name":"Michonne","var(mindob)":"1901-01-15T00:00:00Z"},{"name":"Andrea","var(mindob)":"1909-05-05T00:00:00Z"},{"name":"Rick Grimes","var(mindob)":"1910-01-01T00:00:00Z"}]}`,
+		`{"maxorder":[{"name":"Andrea","val(maxdob)":"1909-05-05T00:00:00Z"},{"name":"Rick Grimes","val(maxdob)":"1910-01-01T00:00:00Z"},{"name":"Michonne","val(maxdob)":"1910-01-02T00:00:00Z"}],"minorder":[{"name":"Michonne","val(mindob)":"1901-01-15T00:00:00Z"},{"name":"Andrea","val(mindob)":"1909-05-05T00:00:00Z"},{"name":"Rick Grimes","val(mindob)":"1910-01-01T00:00:00Z"}]}`,
 		js)
 }
 
@@ -2303,14 +2302,14 @@ func TestMinMulti(t *testing.T) {
 			friend {
 				x as dob
 			}
-			min(var(x))
-			max(var(x))
+			min(val(x))
+			max(val(x))
 		}
 	}
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"dob":"1910-01-02T00:00:00Z"},{"dob":"1909-05-05T00:00:00Z"},{"dob":"1909-01-10T00:00:00Z"},{"dob":"1901-01-15T00:00:00Z"}],"max(var(x))":"1910-01-02T00:00:00Z","min(var(x))":"1901-01-15T00:00:00Z","name":"Michonne"},{"friend":[{"dob":"1910-01-01T00:00:00Z"}],"max(var(x))":"1910-01-01T00:00:00Z","min(var(x))":"1910-01-01T00:00:00Z","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05T00:00:00Z"}],"max(var(x))":"1909-05-05T00:00:00Z","min(var(x))":"1909-05-05T00:00:00Z","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
+		`{"me":[{"friend":[{"dob":"1910-01-02T00:00:00Z"},{"dob":"1909-05-05T00:00:00Z"},{"dob":"1909-01-10T00:00:00Z"},{"dob":"1901-01-15T00:00:00Z"}],"max(val(x))":"1910-01-02T00:00:00Z","min(val(x))":"1901-01-15T00:00:00Z","name":"Michonne"},{"friend":[{"dob":"1910-01-01T00:00:00Z"}],"max(val(x))":"1910-01-01T00:00:00Z","min(val(x))":"1910-01-01T00:00:00Z","name":"Rick Grimes"},{"friend":[{"dob":"1909-05-05T00:00:00Z"}],"max(val(x))":"1909-05-05T00:00:00Z","min(val(x))":"1909-05-05T00:00:00Z","name":"Andrea"},{"name":"Andrea With no friends"}]}`,
 		js)
 }
 
@@ -2324,8 +2323,8 @@ func TestMinMultiAlias(t *testing.T) {
 			friend {
 				x as dob
 			}
-			mindob: min(var(x))
-			maxdob: max(var(x))
+			mindob: min(val(x))
+			maxdob: max(val(x))
 		}
 	}
 `
@@ -2346,8 +2345,8 @@ func TestMinMultiProto(t *testing.T) {
 				name
 				x as dob
 			}
-			min(var(x))
-			max(var(x))
+			min(val(x))
+			max(val(x))
 	}
 }
 `
@@ -2362,13 +2361,13 @@ children: <
     >
   >
   properties: <
-    prop: "min(var(x))"
+    prop: "min(val(x))"
     value: <
       str_val: "1901-01-15T00:00:00Z"
     >
   >
   properties: <
-    prop: "max(var(x))"
+    prop: "max(val(x))"
     value: <
       str_val: "1910-01-02T00:00:00Z"
     >
@@ -2443,13 +2442,13 @@ children: <
     >
   >
   properties: <
-    prop: "min(var(x))"
+    prop: "min(val(x))"
     value: <
       str_val: "1910-01-01T00:00:00Z"
     >
   >
   properties: <
-    prop: "max(var(x))"
+    prop: "max(val(x))"
     value: <
       str_val: "1910-01-01T00:00:00Z"
     >
@@ -2486,19 +2485,19 @@ func TestMinSchema(t *testing.T) {
                                 friend {
 																	x as survival_rate
                                 }
-																min(var(x))
+																min(val(x))
                         }
                 }
         `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"gender":"female","min(var(x))":1.600000,"name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"gender":"female","min(val(x))":1.600000,"name":"Michonne"}]}`,
 		js)
 
 	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: uint32(types.IntID)})
 	js = processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"survival_rate":1},{"survival_rate":1},{"survival_rate":1},{"survival_rate":1}],"gender":"female","min(var(x))":1,"name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"survival_rate":1},{"survival_rate":1},{"survival_rate":1},{"survival_rate":1}],"gender":"female","min(val(x))":1,"name":"Michonne"}]}`,
 		js)
 	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: uint32(types.FloatID)})
 }
@@ -2514,13 +2513,13 @@ func TestAvg(t *testing.T) {
 			friend {
 				x as shadow_deep
 			}
-			avg(var(x))
+			avg(val(x))
 		}
 	}
 `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":true,"avg(var(x))":9.000000,"friend":[{"shadow_deep":4},{"shadow_deep":14}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"avg(val(x))":9.000000,"friend":[{"shadow_deep":4},{"shadow_deep":14}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -2535,13 +2534,13 @@ func TestSum(t *testing.T) {
                                 friend {
                                     x as shadow_deep
                                 }
-																sum(var(x))
+																sum(val(x))
                         }
                 }
         `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":true,"friend":[{"shadow_deep":4},{"shadow_deep":14}],"gender":"female","name":"Michonne","sum(var(x))":18}]}`,
+		`{"me":[{"alive":true,"friend":[{"shadow_deep":4},{"shadow_deep":14}],"gender":"female","name":"Michonne","sum(val(x))":18}]}`,
 		js)
 }
 
@@ -2751,7 +2750,7 @@ func TestToSubgraphInvalidFnName4(t *testing.T) {
                                 name
                         }
                         you(func:anyofterms(name, "Michonne")) {
-                                friend @filter(var(f)) {
+                                friend @filter(uid(f)) {
                                         name
                                 }
                         }
@@ -4918,7 +4917,7 @@ func TestGenerator(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
-func TestGeneratorMultiRootMultiQueryRootVar(t *testing.T) {
+func TestGeneratorMultiRootMultiQueryRootval(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
@@ -4926,7 +4925,7 @@ func TestGeneratorMultiRootMultiQueryRootVar(t *testing.T) {
       	name
 			}
 
-			you(id: var(friend)) {
+			you(id: uid(friend)) {
 				name
 			}
     }
@@ -4940,11 +4939,11 @@ func TestGeneratorMultiRootMultiQueryVarFilter(t *testing.T) {
 	query := `
     {
 			f as var(func:anyofterms(name, "Michonne Rick Glenn")) {
-      	name
+      			name
 			}
 
 			you(func:anyofterms(name, "Michonne")) {
-				friend @filter(var(f)) {
+				friend @filter(uid(f)) {
 					name
 				}
 			}
@@ -4961,7 +4960,7 @@ func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
 			friend as var(func:anyofterms(name, "Michonne Rick Glenn")) {
 			}
 
-			you(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(var(friend)) {
+			you(func:anyofterms(name, "Michonne Andrea Glenn")) @filter(uid(friend)) {
 				name
 			}
     }
@@ -4995,7 +4994,7 @@ func TestGeneratorMultiRootVarOrderOffset(t *testing.T) {
         name
       }
 
-			me(id: var(L)) {
+			me(id: uid(L)) {
 			 name
 			}
     }
@@ -5024,7 +5023,7 @@ func TestGeneratorMultiRootOrderOffset(t *testing.T) {
 			L as var(func:anyofterms(name, "Michonne Rick Glenn")) {
         name
       }
-			me(id: var(L), orderasc: dob, offset:2) {
+			me(id: uid(L), orderasc: dob, offset:2) {
         name
       }
     }
@@ -6915,15 +6914,15 @@ func TestMultipleMinMax(t *testing.T) {
 					x as age
 					n as name
 				}
-				min(var(x))
-				max(var(x))
-				min(var(n))
-				max(var(n))
+				min(val(x))
+				max(val(x))
+				min(val(n))
+				max(val(n))
 			}
 		}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}],"max(var(n))":"Rick Grimes","max(var(x))":19,"min(var(n))":"Andrea","min(var(x))":15}]}`,
+		`{"me":[{"friend":[{"age":15,"name":"Rick Grimes"},{"age":15,"name":"Glenn Rhee"},{"age":17,"name":"Daryl Dixon"},{"age":19,"name":"Andrea"}],"max(val(n))":"Rick Grimes","max(val(x))":19,"min(val(n))":"Andrea","min(val(x))":15}]}`,
 		js)
 }
 
@@ -6935,8 +6934,8 @@ func TestDuplicateAlias(t *testing.T) {
 				friend {
 					x as age
 				}
-				a: min(var(x))
-				a: max(var(x))
+				a: min(val(x))
+				a: max(val(x))
 			}
 		}`
 	res, _ := gql.Parse(gql.Request{Str: query})
@@ -7294,7 +7293,7 @@ func TestCountAtRoot5(t *testing.T) {
 				name
 			}
 		}
-		MichonneFriends(id: var(f)) {
+		MichonneFriends(id: uid(f)) {
 			count()
 		}
 	}
@@ -7503,7 +7502,7 @@ func TestGetAllPredicatesVars(t *testing.T) {
 	{
 		IDS as var(func:anyofterms(name, "Alice"), orderasc: age) {}
 
-		me(id: var(IDS)) {
+		me(id: uid(IDS)) {
 			alias
 		}
 	}
@@ -7550,7 +7549,7 @@ func TestMathVarCrash(t *testing.T) {
 			f(func: anyofterms(name, "Rick Michonne Andrea")) {
 				age as age
 				a as math(age *2)
-				var(a)
+				val(a)
 			}
 		}
 	`
@@ -7585,13 +7584,13 @@ func TestMathVarAlias2(t *testing.T) {
 				doubleAge: a as math(ageVar *2)
 			}
 
-			me2(id: var(f)) {
-				var(a)
+			me2(id: uid(f)) {
+				val(a)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"age":38,"doubleAge":76.000000},{"age":15,"doubleAge":30.000000},{"age":19,"doubleAge":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, js)
+	require.JSONEq(t, `{"me":[{"age":38,"doubleAge":76.000000},{"age":15,"doubleAge":30.000000},{"age":19,"doubleAge":38.000000}],"me2":[{"val(a)":76.000000},{"val(a)":30.000000},{"val(a)":38.000000}]}`, js)
 }
 
 func TestMathVar3(t *testing.T) {
@@ -7603,13 +7602,13 @@ func TestMathVar3(t *testing.T) {
 				a as math(ageVar *2)
 			}
 
-			me2(id: var(f)) {
-				var(a)
+			me2(id: uid(f)) {
+				val(a)
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"age":38,"var(a)":76.000000},{"age":15,"var(a)":30.000000},{"age":19,"var(a)":38.000000}],"me2":[{"var(a)":76.000000},{"var(a)":30.000000},{"var(a)":38.000000}]}`, js)
+	require.JSONEq(t, `{"me":[{"age":38,"val(a)":76.000000},{"age":15,"val(a)":30.000000},{"age":19,"val(a)":38.000000}],"me2":[{"val(a)":76.000000},{"val(a)":30.000000},{"val(a)":38.000000}]}`, js)
 }
 
 func TestMultipleEquality(t *testing.T) {
@@ -7960,7 +7959,7 @@ func TestPBUnmarshalToStruct6(t *testing.T) {
 				}
 			}
 
-			Me(id: var(f), orderasc: var(n)) {
+			Me(id: uid(f), orderasc: val(n)) {
 				Name: name
 				Dob: dob
 			}

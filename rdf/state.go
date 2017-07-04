@@ -138,9 +138,9 @@ Loop:
 			}
 			break Loop
 
-		case r == 'v':
+		case r == 'u':
 			if l.Depth != atSubject && l.Depth != atObject {
-				return l.Errorf("Unexpected char 'v'")
+				return l.Errorf("Unexpected char 'u'")
 			}
 			l.Backup()
 			l.Emit(itemText)
@@ -435,7 +435,7 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 func lexVariable(l *lex.Lexer) lex.StateFn {
 	var r rune
 
-	for _, c := range "var" {
+	for _, c := range "uid" {
 		if r = l.Next(); r != c {
 			return l.Errorf("Unexpected char %c when parsing var keyword", r)
 		}

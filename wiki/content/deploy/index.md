@@ -29,7 +29,7 @@ On its port, a running Dgraph instance exposes a number of service endpoints.
 * `/share`
 * `/health` HTTP status code 200 and "OK" message if worker is running, HTTP 503 otherwise.
 <!-- * `/debug/store` backend storage stats.-->
-* `/admin/shutdown` [shutdown]({{< relref "#shutdown">}}) a node.
+* `/admin/shutdown` [shutdown]({{< relref "#shutdown" >}}) a node.
 * `/admin/backup` take a running [backup]({{< relref "#backup">}}).
 
 
@@ -61,8 +61,8 @@ gentlecommit: 0.33
 # RAFT ID that this server will use to join RAFT groups.
 idx: 1
 
-# Groups to be served by this instance.
-groups: "0,1"
+# Groups to be served by this instance (comma separated list, ranges are supported).
+groups: "0,1-5"
 
 # Port to run server on. (default 8080)
 port: 8080
@@ -170,9 +170,9 @@ Or by specifying `p` and `w` directories, ports, etc.  If `dgraphloader` is used
 
 ### Multiple instances
 
-Dgraph is a truly distributed graph database - not a master-slave replication of one datastore.  Running in a cluster shards and replicates data across the cluster, queries can be run on any node and joins are handled over the distributed data.
+Dgraph is a truly distributed graph database - not a master-slave replication of one datastore.  Dgraph shards by predicate, not by node.  Running in a cluster shards and replicates predicates across the cluster, queries can be run on any node and joins are handled over the distributed data.
 
-As well as the requirements for [each instance]({{< relref "#running-dgraph">}}), to run Dgraph effectively in a cluster, It's important to understand how sharding and replication work.
+As well as the requirements for [each instance]({{< relref "#running-dgraph">}}), to run Dgraph effectively in a cluster, it's important to understand how sharding and replication work.
 
 * Dgraph stores data per predicate (not per node), thus the unit of sharding and replication is predicates.
 * To shard the graph, predicates are assigned to groups and each node in the cluster serves a number of groups.
@@ -237,6 +237,8 @@ For this groups.conf:
 * `type.object.name` belongs to group 1 and not 2 despite matching both, because 1 is lower than 2.
 * The remaining predicates are assigned by the formula: `fingerprint(predicate) % 10 + 2`, and thus occupy groups `[2, 3, 4, 5, 6, 7, 8, 9, 10, 11]`.
 * Group 2 will serve predicates matching the specified prefixes and those set by the default rule.
+
+{{% notice "note" %}} Data for reverse edges are always stored with the corresponding forward edge.  It's an error to use a reverse edge in groups.conf. {{% /notice %}}
 
 {{% notice "warning" %}}Once sharding spec is set, it **must not be changed** without bringing the cluster down. The same spec must be passed to all the nodes in the cluster.{{% /notice %}}
 
@@ -360,7 +362,7 @@ Individual triples, patterns of triples and predicates can be deleted as describ
 
 To drop all data and start from a clean database:
 
-* [stop Dgraph]({{< relref "shutdown" >}}) and wait for all writes to complete,
+* [stop Dgraph]({{< relref "#shutdown" >}}) and wait for all writes to complete,
 * delete (maybe take a backup first) the `p` and `w` directories, then
 * restart Dgraph.
 
