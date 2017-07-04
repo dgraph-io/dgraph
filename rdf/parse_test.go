@@ -812,7 +812,7 @@ var testNQuads = []struct {
 	},
 	// Test variable in subject
 	{
-		input: `var(alice) <knows> "stuff" .`,
+		input: `uid(alice) <knows> "stuff" .`,
 		nq: protos.NQuad{
 			Predicate:   "knows",
 			ObjectValue: &protos.Value{&protos.Value_DefaultVal{"stuff"}},
@@ -821,7 +821,7 @@ var testNQuads = []struct {
 	},
 	// Test variable in object
 	{
-		input: `<alice> <knows> var(everyone) .`,
+		input: `<alice> <knows> uid(everyone) .`,
 		nq: protos.NQuad{
 			Subject:   "alice",
 			Predicate: "knows",
@@ -829,7 +829,7 @@ var testNQuads = []struct {
 		},
 	},
 	{
-		input: `var(alice) <knows> var(everyone) .`,
+		input: `uid(alice) <knows> uid(everyone) .`,
 		nq: protos.NQuad{
 			SubjectVar: "alice",
 			Predicate:  "knows",
