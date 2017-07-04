@@ -1174,6 +1174,27 @@ func TestMutationObjectVariables(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"count(likes)":3}]}`, r)
 }
 
+func TestMutationObjectVariablesError(t *testing.T) {
+	m1 := `
+		mutation {
+			set {
+                <0x600>    <friend>   <0x501> .
+                <0x600>    <friend>   <0x502> .
+                <0x600>    <friend>   <0x503> .
+				<0x600>    <likes>    var(myfriend) .
+			}
+		}
+		{
+			me(id: 0x600) {
+				myfriend as friend
+			}
+		}
+    `
+
+	_, err := gql.Parse(gql.Request{Str: m1, Http: true})
+	require.Error(t, err)
+}
+
 // change from uid to scalar or vice versa
 func TestSchemaMutation4Error(t *testing.T) {
 	var m = `

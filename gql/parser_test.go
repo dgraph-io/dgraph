@@ -575,6 +575,44 @@ func TestParseQueryWithVarValAgg(t *testing.T) {
 	require.Equal(t, "min", res.Query[1].Children[1].Func.Name)
 }
 
+func TestParseQueryWithVarValAggError(t *testing.T) {
+	query := `
+	{
+		me(id: uid(L), orderasc: uid(n)) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends {
+				na as name
+			}
+			n as min(val(na))
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseQueryWithVarValAggError2(t *testing.T) {
+	query := `
+	{
+		me(id: val(L), orderasc: val(n)) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends {
+				na as name
+			}
+			n as min(val(na))
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
 func TestParseQueryWithVarValCount(t *testing.T) {
 	query := `
 	{

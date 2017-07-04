@@ -1901,7 +1901,7 @@ func parseId(it *lex.ItemIterator, gq *GraphQuery) error {
 		return x.Errorf("Invalid query")
 	}
 	item := it.Item()
-	if item.Val == "uid" {
+	if item.Val == UID {
 		// Any number of variables allowed here.
 		_, err := parseVarList(it, gq)
 		return err
@@ -2080,12 +2080,18 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				val = collectName(it, val+item.Val)
 				// Get language list, if present
 				items, err := it.Peek(1)
+				if err == nil && items[0].Typ == itemLeftRound {
+					if (key == "orderasc" || key == "orderdesc") && val != "val" {
+						return nil, x.Errorf("Expected val(). Got %s() with order.", val)
+					}
+				}
 				if err == nil && items[0].Typ == itemAt {
 					it.Next() // consume '@'
 					it.Next() // move forward
 					langs := parseLanguageList(it)
 					val = val + "@" + strings.Join(langs, ":")
 				}
+
 			}
 
 			if val == "" {
