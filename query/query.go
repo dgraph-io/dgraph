@@ -369,7 +369,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			continue
 		}
 
-		if pc.uidMatrix == nil {
+		if pc.uidMatrix == nil && pc.Attr != "_uid_" {
 			// Can happen in recurse query.
 			continue
 		}
@@ -1483,6 +1483,16 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 	return nil
 }
 
+func (sg *SubGraph) appendDummyValues() {
+	var l protos.List
+	var val protos.TaskValue
+	for i := 0; i < len(sg.SrcUIDs.Uids); i++ {
+		// This is necessary so that preTraverse can be processed smoothly.
+		sg.uidMatrix = append(sg.uidMatrix, &l)
+		sg.values = append(sg.values, &val)
+	}
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
@@ -1744,9 +1754,16 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for k, v := range sg.Params.ParentVars {
 			child.Params.ParentVars[k] = v
 		}
+
 		child.SrcUIDs = sg.DestUIDs // Make the connection.
-		if child.IsInternal() {
+		if child.IsInternal() || child.Attr == "_uid_" {
 			// We dont have to execute these nodes.
+			if child.Attr == "_uid_" {
+				// We dont need to call ProcessGraph for _uid_, as we already have uids
+				// populated from parent and there is nothing to process but uidMatrix
+				// and values need to have the right sizes so that preTraverse works.
+				child.appendDummyValues()
+			}
 			continue
 		}
 		go ProcessGraph(ctx, child, sg, childChan)
@@ -1755,7 +1772,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var childErr error
 	// Now get all the results back.
 	for _, child := range sg.Children {
-		if child.IsInternal() {
+		if child.IsInternal() || child.Attr == "_uid_" {
 			continue
 		}
 		select {
