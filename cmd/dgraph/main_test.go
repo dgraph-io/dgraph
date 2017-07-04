@@ -1066,7 +1066,7 @@ func TestMutationSubjectVariables(t *testing.T) {
 	m2 := `
         mutation {
 			set {
-				var(myfriend) <nice> "true" .
+				uid(myfriend) <nice> "true" .
 			}
 		}
 		{
@@ -1104,7 +1104,7 @@ func TestMutationSubjectVariablesSingleMutation(t *testing.T) {
                 <0x700>          <friend>   <_:alice> .
                 <0x700>          <friend>   <_:bob> .
                 <0x700>          <friend>   <_:chris> .
-				var(myfriend) <nice>     "true" .
+				uid(myfriend) <nice>     "true" .
 			}
 		}
 		{
@@ -1143,7 +1143,7 @@ func TestMutationObjectVariables(t *testing.T) {
                 <0x600>    <friend>   <0x501> .
                 <0x600>    <friend>   <0x502> .
                 <0x600>    <friend>   <0x503> .
-				<0x600>    <likes>    var(myfriend) .
+				<0x600>    <likes>    uid(myfriend) .
 			}
 		}
 		{
