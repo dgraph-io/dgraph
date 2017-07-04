@@ -91,12 +91,11 @@ func (l *List) decr() {
 		return
 	}
 
-	l.Iterate(0, func(p *protos.Posting) bool {
+	for _, p := range l.plist.Postings {
 		postingPool.Put(p)
-		return true
-	})
-	l.plist.Uids = l.plist.Uids[:0]
+	}
 	l.plist.Postings = l.plist.Postings[:0]
+	l.plist.Uids = l.plist.Uids[:0]
 	postingListPool.Put(l.plist)
 	listPool.Put(l)
 }
@@ -278,12 +277,6 @@ func newPosting(t *protos.DirectedEdge) *protos.Posting {
 	p.Facets = t.Facets
 	return p
 
-}
-
-func (l *List) PostingList() *protos.PostingList {
-	l.RLock()
-	defer l.RUnlock()
-	return l.plist
 }
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
@@ -549,6 +542,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			mp := l.mlayer[idx]
 			return afterUid < mp.Uid
 		})
+		t
 	}
 
 	var mp, pp *protos.Posting
@@ -670,11 +664,6 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		final.Checksum = h.Sum(nil)
 		data, err = final.Marshal()
 		x.Checkf(err, "Unable to marshal posting list")
-	}
-	if l.plist != nil {
-		l.plist.Uids = l.plist.Uids[:0]
-		l.plist.Postings = l.plist.Postings[:0]
-		postingListPool.Put(l.plist)
 	}
 	l.plist = final
 
