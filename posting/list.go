@@ -668,7 +668,7 @@ func (l *List) Uids(opt ListOptions) *protos.List {
 		uidx := sort.Search(len(pl.Uids), func(idx int) bool {
 			return opt.AfterUID < pl.Uids[idx]
 		})
-		res = make([]uint64, 0, len(pl.Uids)-uidx)
+		res = make([]uint64, len(pl.Uids)-uidx)
 		copy(res, pl.Uids[uidx:])
 	} else {
 		res = make([]uint64, 0, l.length(opt.AfterUID))
