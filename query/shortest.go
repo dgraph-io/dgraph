@@ -20,6 +20,7 @@ package query
 import (
 	"container/heap"
 	"context"
+	"math"
 
 	"golang.org/x/net/trace"
 
@@ -300,6 +301,10 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	heap.Push(&pq, srcNode)
 
 	numHops := -1
+	maxHops := int(sg.Params.ExploreDepth)
+	if maxHops == 0 {
+		maxHops = int(math.MaxInt32)
+	}
 	cycles := 0
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
@@ -320,7 +325,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				break
 			}
 		}
-		if item.hop > numHops {
+		if item.hop > numHops && numHops < maxHops {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
 			if !stopExpansion {

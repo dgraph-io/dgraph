@@ -166,7 +166,7 @@ func Recurse(ctx context.Context, sg *SubGraph) error {
 	expandErr := make(chan error, 2)
 	next := make(chan bool, 2)
 	go sg.expandRecurse(ctx, next, expandErr)
-	depth := sg.Params.RecurseDepth
+	depth := sg.Params.ExploreDepth
 	if depth == 0 {
 		// If no depth is specified, expand till we reach all leaf nodes
 		// or we see reach too many nodes.
