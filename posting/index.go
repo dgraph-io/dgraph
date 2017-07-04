@@ -20,6 +20,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
 	"time"
 
@@ -37,18 +38,6 @@ import (
 )
 
 const maxBatchSize = 32 * (1 << 20)
-
-var (
-	indexLog   trace.EventLog
-	reverseLog trace.EventLog
-	countLog   trace.EventLog
-)
-
-func init() {
-	indexLog = trace.NewEventLog("index", "Logger")
-	reverseLog = trace.NewEventLog("reverse", "Logger")
-	countLog = trace.NewEventLog("count", "Logger")
-}
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
 func IndexTokens(attr, lang string, src types.Val) ([]string, error) {
@@ -131,13 +120,14 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	plist, decr := GetOrCreate(key, groupId)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("retreived pl took %v", dur)
+			tr.LazyPrintf("GetOrCreate took %v", dur)
 		}
 	}
 	defer decr()
 
 	x.AssertTrue(plist != nil)
 	_, err := plist.AddMutation(ctx, edge)
+	x.PredicateStats.Add(fmt.Sprintf("Index.%s", edge.Attr), 1)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error adding/deleting %s for attr %s entity %d: %v",
@@ -145,8 +135,6 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 		}
 		return err
 	}
-	indexLog.Printf("%s [%s] [%d] Term [%s]",
-		edge.Op, edge.Attr, edge.Entity, token)
 	return nil
 }
 
@@ -180,6 +168,7 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	plist.Lock()
 	countBefore := plist.length(0)
 	_, err := plist.addMutation(ctx, edge)
+	x.PredicateStats.Add(fmt.Sprintf("Reverse.%s", edge.Attr), 1)
 	countAfter := plist.length(0)
 	plist.Unlock()
 	if err != nil {
@@ -201,7 +190,6 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 			return err
 		}
 	}
-	reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)
 	return nil
 }
 func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) error {
@@ -243,6 +231,7 @@ func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
 	_, err := plist.AddMutation(ctx, t)
+	x.PredicateStats.Add(fmt.Sprintf("Count.%s", t.Attr), 1)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error adding/deleting count edge for attr %s count %d dst %d: %v",
@@ -250,7 +239,6 @@ func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 		}
 		return err
 	}
-	countLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, count, t.ValueId)
 	return nil
 
 }
@@ -310,6 +298,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 		}
 		countBefore := l.length(0)
 		_, err := l.addMutation(ctx, t)
+		x.PredicateStats.Add(t.Attr, 1)
 		countAfter := l.length(0)
 		l.Unlock()
 

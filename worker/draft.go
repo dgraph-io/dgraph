@@ -287,6 +287,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		return x.Errorf("RAFT isn't initialized yet")
 	}
 	pendingProposals <- struct{}{}
+	x.PendingProposals.Set(int64(len(pendingProposals)))
 	defer func() { <-pendingProposals }()
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -343,7 +344,9 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	} else {
 		x.Fatalf("Unknown proposal")
 	}
-
+	l := int64(proposal.Size() * 2)
+	// Track memory consumed by proposal, protos.Proposal and the slice
+	x.ProposalMemory.Add(l)
 	//	we don't timeout on a mutation which has already been proposed.
 	if err = n.Raft().Propose(ctx, slice[:upto+1]); err != nil {
 		return x.Wrapf(err, "While proposing")
@@ -372,6 +375,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 			tr.LazyPrintf(err.Error())
 		}
 	}
+	x.ProposalMemory.Add(-1 * l)
 	return err
 }
 
@@ -518,6 +522,7 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	}
 
 	pending <- struct{}{} // This will block until we can write to it.
+	x.ActiveMutations.Set(int64(len(pending)))
 	var proposal protos.Proposal
 	x.AssertTrue(len(e.Data) > 0)
 	x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)

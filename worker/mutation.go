@@ -74,7 +74,7 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 		plist, decr := posting.GetOrCreate(key, gid)
 		if dur := time.Since(t); dur > time.Millisecond {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("retreived pl %v", dur)
+				tr.LazyPrintf("GetOrCreate took %v", dur)
 			}
 		}
 		defer decr()
@@ -335,17 +335,9 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 	defer pl.Put(conn)
 
 	c := protos.NewWorkerClient(conn)
-	ch := make(chan error, 1)
-	go func() {
-		_, err = c.Mutate(ctx, m)
-		ch <- err
-	}()
-	select {
-	case <-ctx.Done():
-		che <- ctx.Err()
-	case err := <-ch:
-		che <- err
-	}
+	// TODO: Add back timeout ??
+	_, err = c.Mutate(ctx, m)
+	che <- err
 }
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
@@ -384,10 +376,11 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 
 	// Wait for all the goroutines to reply back.
 	// We return if an error was returned or the parent called ctx.Done()
-	var err error
+	var e error
 	for i := 0; i < len(mutationMap); i++ {
-		err = <-errors
+		err := <-errors
 		if err != nil {
+			e = err
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while running all mutations: %+v", err)
 			}
@@ -395,7 +388,7 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 	}
 	close(errors)
 
-	return err
+	return e
 }
 
 // Mutate is used to apply mutations over the network on other instances.

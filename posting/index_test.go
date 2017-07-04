@@ -20,6 +20,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"testing"
 	"time"
 
@@ -35,6 +36,16 @@ import (
 const schemaStr = `
 name:string @index .
 `
+
+func uids(pl *protos.PostingList) []uint64 {
+	var u []uint64
+	sl := pl.Uids
+	for len(sl) > 0 {
+		u = append(u, binary.BigEndian.Uint64(sl[0:8]))
+		sl = sl[8:]
+	}
+	return u
+}
 
 func TestIndexingInt(t *testing.T) {
 	schema.ParseBytes([]byte("age:int @index ."), 1)
@@ -134,7 +145,7 @@ func TestTokensTable(t *testing.T) {
 		Entity: 157,
 	}
 	addMutationWithIndex(t, l, edge, Set)
-	_, err := l.SyncIfDirty(context.Background())
+	_, err := l.SyncIfDirty(false)
 	x.Check(err)
 	time.Sleep(10 * time.Second)
 
@@ -270,10 +281,13 @@ func TestRebuildIndex(t *testing.T) {
 	require.Len(t, idxVals, 2)
 	require.EqualValues(t, idxKeys[0], x.IndexKey("name", "\x01david"))
 	require.EqualValues(t, idxKeys[1], x.IndexKey("name", "\x01michonne"))
-	require.Len(t, idxVals[0].Uids, 1)
-	require.Len(t, idxVals[1].Uids, 1)
-	require.EqualValues(t, 20, idxVals[0].Uids[0])
-	require.EqualValues(t, 1, idxVals[1].Uids[0])
+
+	uids1 := uids(idxVals[0])
+	uids2 := uids(idxVals[1])
+	require.Len(t, uids1, 1)
+	require.Len(t, uids2, 1)
+	require.EqualValues(t, 20, uids1[0])
+	require.EqualValues(t, 1, uids2[0])
 
 	l1, _ := GetOrCreate(x.DataKey("name", 1), 1)
 	deletePl(t)
@@ -318,9 +332,12 @@ func TestRebuildReverseEdges(t *testing.T) {
 	}
 	require.Len(t, revKeys, 2)
 	require.Len(t, revVals, 2)
-	require.Len(t, revVals[0].Uids, 2)
-	require.Len(t, revVals[1].Uids, 1)
-	require.EqualValues(t, 1, revVals[0].Uids[0])
-	require.EqualValues(t, 2, revVals[0].Uids[1])
-	require.EqualValues(t, 1, revVals[1].Uids[0])
+
+	uids0 := uids(revVals[0])
+	uids1 := uids(revVals[1])
+	require.Len(t, uids0, 2)
+	require.Len(t, uids1, 1)
+	require.EqualValues(t, 1, uids0[0])
+	require.EqualValues(t, 2, uids0[1])
+	require.EqualValues(t, 1, uids1[0])
 }

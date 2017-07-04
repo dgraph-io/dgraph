@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/table"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
@@ -126,6 +127,7 @@ func StartRaftNodes(walDir string) {
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = walDir
 	kvOpt.ValueDir = walDir
+	kvOpt.MapTablesTo = table.Nothing
 	wals, err := badger.NewKV(&kvOpt)
 	x.Checkf(err, "Error while creating badger KV store")
 	gr.wal = raftwal.Init(wals, *raftId)
