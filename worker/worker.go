@@ -46,6 +46,7 @@ var (
 
 func Init(ps *store.Store) {
 	pstore = ps
+	workerServer = grpc.NewServer()
 }
 
 // grpcWorker struct implements the gRPC server interface.
@@ -89,7 +90,6 @@ func RunServer(bindall bool) {
 	}
 	log.Printf("Worker listening at address: %v", ln.Addr())
 
-	workerServer = grpc.NewServer()
 	protos.RegisterWorkerServer(workerServer, &grpcWorker{})
 	workerServer.Serve(ln)
 }
