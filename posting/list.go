@@ -82,7 +82,7 @@ func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
 func (l *List) incr() int32     { return atomic.AddInt32(&l.refcount, 1) }
 func (l *List) decr() {
 	// Locking is just to ensure that anything else has finished working on this
-	// list before we push it to listPool
+	// list before we push it to listPool.
 	l.Lock()
 	l.Unlock()
 	val := atomic.AddInt32(&l.refcount, -1)
@@ -379,12 +379,11 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
 func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
-	t2 := time.Now()
+	t1 := time.Now()
 	l.Lock()
-	t1 := time.Since(t2)
-	if t1.Nanoseconds() > 1000000 {
+	if dur := time.Since(t1); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("acquired lock %v %v", t1, t.Attr)
+			tr.LazyPrintf("acquired lock %v %v", dur, t.Attr)
 		}
 	}
 	defer l.Unlock()
@@ -465,12 +464,11 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
 
-	t2 := time.Now()
+	t1 := time.Now()
 	hasMutated := l.updateMutationLayer(mpost)
-	t1 := time.Since(t2)
-	if t1.Nanoseconds() > 1000000 {
+	if dur := time.Since(t1); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("updated mutation layer %v %v %v", t1, len(l.mlayer), len(l.plist.Postings))
+			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Postings))
 		}
 	}
 

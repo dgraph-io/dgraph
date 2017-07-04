@@ -41,6 +41,8 @@ var (
 		"Port used by worker for internal communication.")
 	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
+	numPendingInternal = flag.Int("internal_pending", 2000,
+		"Number of pending queries and mutations. Useful for rate limiting.")
 	Tracing      = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	pstore       *badger.KV
 	workerServer *grpc.Server
@@ -51,6 +53,7 @@ func Init(ps *badger.KV) {
 	pstore = ps
 	// needs to be initialized after group config
 	leaseGid = group.BelongsTo("_lease_")
+	pendingInternalRequests = make(chan struct{}, numPendingInternal)
 }
 
 // grpcWorker struct implements the gRPC server interface.

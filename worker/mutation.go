@@ -42,9 +42,6 @@ const (
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("In run mutations")
 	}
@@ -75,9 +72,9 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 
 		t := time.Now()
 		plist, decr := posting.GetOrCreate(key, gid)
-		if t1 := time.Since(t); t1 > time.Millisecond {
+		if dur := time.Since(t); dur > time.Millisecond {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("retreived pl %v", t1)
+				tr.LazyPrintf("retreived pl %v", dur)
 			}
 		}
 		defer decr()
@@ -397,6 +394,8 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 
 // Mutate is used to apply mutations over the network on other instances.
 func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.Payload, error) {
+	pendingInternalRequests <- struct{}{}
+	defer func() { <-pendingInternalRequests }()
 	if ctx.Err() != nil {
 		return &protos.Payload{}, ctx.Err()
 	}

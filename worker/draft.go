@@ -340,6 +340,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		x.Fatalf("Unknown proposal")
 	}
 
+	//	we don't timeout on a mutation which has already been proposed.
 	if err = n.Raft().Propose(ctx, slice[:upto+1]); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}

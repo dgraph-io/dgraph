@@ -481,7 +481,7 @@ func batchSync(i int) {
 			start := time.Now()
 			if len(entries) > 0 {
 				loop++
-				if len(entries) > 1000 {
+				if loop%1000 == 0 {
 					elog.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
 				}
 				for _, e := range entries {

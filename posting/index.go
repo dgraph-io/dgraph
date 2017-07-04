@@ -129,9 +129,9 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 
 	t := time.Now()
 	plist, decr := GetOrCreate(key, groupId)
-	if t1 := time.Since(t); t1 > time.Millisecond {
+	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("retreived pl took %v", t1)
+			tr.LazyPrintf("retreived pl took %v", dur)
 		}
 	}
 	defer decr()
@@ -292,11 +292,11 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
 	{
-		t2 := time.Now()
+		t1 := time.Now()
 		l.Lock()
-		if t1 := time.Since(t2); t1 > time.Millisecond {
+		if dur := time.Since(t1); dur > time.Millisecond {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("acquired lock %v %v %v", t1, t.Attr, t.Entity)
+				tr.LazyPrintf("acquired lock %v %v %v", dur, t.Attr, t.Entity)
 			}
 		}
 
@@ -550,7 +550,8 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		x.Check(pl.Unmarshal(iterItem.Value()))
 
 		// Posting list contains only values or only UIDs.
-		if (len(pl.Postings) == 0 && len(pl.Uids) != 0) || postingType(pl.Postings[0]) == x.ValueUid {
+		if (len(pl.Postings) == 0 && len(pl.Uids) != 0) ||
+			postingType(pl.Postings[0]) == x.ValueUid {
 			ch <- item{
 				uid:  pki.Uid,
 				list: &pl,
