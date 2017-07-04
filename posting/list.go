@@ -111,7 +111,6 @@ type PIterator struct {
 func (it *PIterator) Init(pl *protos.PostingList, afterUid uint64) {
 	it.pl = pl
 	it.uidPosting = &protos.Posting{}
-	it.uidx, it.pidx = 0, 0
 	it.ulen, it.plen = len(pl.Uids), len(pl.Postings)
 	it.uidx = sort.Search(it.ulen, func(idx int) bool {
 		return afterUid < pl.Uids[idx]
@@ -327,7 +326,6 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 	var pitr PIterator
 	pitr.Init(l.plist, mpost.Uid-1)
 	if pitr.Valid() {
-		//if uidx < len(pl.Uids) {
 		pp := pitr.Posting()
 		puid := pp.Uid
 		uidFound = mpost.Uid == puid
@@ -665,10 +663,24 @@ func (l *List) Uids(opt ListOptions) *protos.List {
 	// Pre-assign length to make it faster.
 	res := make([]uint64, 0, l.Length(opt.AfterUID))
 
-	l.Postings(opt, func(p *protos.Posting) bool {
-		res = append(res, p.Uid)
-		return true
-	})
+	l.RLock()
+	if len(l.mlayer) == 0 {
+		pl := l.plist
+		uidx := sort.Search(len(pl.Uids), func(idx int) bool {
+			return opt.AfterUID < pl.Uids[idx]
+		})
+		copy(res, pl.Uids[uidx:])
+	} else {
+		l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
+			if postingType(p) != x.ValueUid {
+				return true
+			}
+			res = append(res, p.Uid)
+			return true
+		})
+	}
+	l.RUnlock()
+
 	// Do The intersection here as it's optimized.
 	out := &protos.List{res}
 	if opt.Intersect != nil {
