@@ -661,7 +661,7 @@ func (l *List) LastCompactionTs() time.Time {
 // We have to apply the filtering before applying (offset, count).
 func (l *List) Uids(opt ListOptions) *protos.List {
 	// Pre-assign length to make it faster.
-	res := make([]uint64, 0, l.Length(opt.AfterUID))
+	var res []uint64
 
 	l.RLock()
 	if len(l.mlayer) == 0 {
@@ -669,8 +669,10 @@ func (l *List) Uids(opt ListOptions) *protos.List {
 		uidx := sort.Search(len(pl.Uids), func(idx int) bool {
 			return opt.AfterUID < pl.Uids[idx]
 		})
+		res = make([]uint64, 0, len(pl.Uids)-uidx)
 		copy(res, pl.Uids[uidx:])
 	} else {
+		res = make([]uint64, 0, l.length(opt.AfterUID))
 		l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
 			if postingType(p) != x.ValueUid {
 				return true
