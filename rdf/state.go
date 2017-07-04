@@ -140,7 +140,7 @@ Loop:
 
 		case r == 'u':
 			if l.Depth != atSubject && l.Depth != atObject {
-				return l.Errorf("Unexpected char 'v'")
+				return l.Errorf("Unexpected char 'u'")
 			}
 			l.Backup()
 			l.Emit(itemText)

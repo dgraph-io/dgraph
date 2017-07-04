@@ -1589,7 +1589,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// Run all filters in parallel.
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
-			isUidFunc := len(filter.SrcFunc) > 0 && filter.SrcFunc[0] == "uid" && len(filter.Params.NeedsVar) == 0
+			isUidFunc := len(filter.SrcFunc) > 0 && filter.SrcFunc[0] == "uid" &&
+				len(filter.Params.NeedsVar) == 0
 			// For uid function filter, no need for processing. User already gave us the
 			// list. Lets just update DestUIDs.
 			if isUidFunc {
