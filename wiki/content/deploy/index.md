@@ -61,8 +61,8 @@ gentlecommit: 0.33
 # RAFT ID that this server will use to join RAFT groups.
 idx: 1
 
-# Groups to be served by this instance.
-groups: "0,1"
+# Groups to be served by this instance (comma separated list, ranges are supported).
+groups: "0,1-5"
 
 # Port to run server on. (default 8080)
 port: 8080

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -132,10 +133,11 @@ func StartRaftNodes(walDir string) {
 	gr.wal = raftwal.Init(wals, *raftId)
 
 	var wg sync.WaitGroup
-	for _, id := range strings.Split(*groupIds, ",") {
-		gid, err := strconv.ParseUint(id, 0, 32)
-		x.Checkf(err, "Unable to parse group id: %v", id)
-		node := gr.newNode(uint32(gid), *raftId, *myAddr)
+	gids, err := getGroupIds(*groupIds)
+	x.AssertTruef(err == nil && len(gids) > 0, "Unable to parse 'groups' configuration")
+
+	for _, gid := range gids {
+		node := gr.newNode(gid, *raftId, *myAddr)
 		x.Checkf(schema.LoadFromDb(uint32(gid)), "Error while initilizating schema")
 		wg.Add(1)
 		go func() {
@@ -147,6 +149,54 @@ func StartRaftNodes(walDir string) {
 	atomic.StoreUint32(&healthCheck, 1)
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
 }
+
+func getGroupIds(groups string) ([]uint32, error) {
+	parts := strings.Split(groups, ",")
+	var gids []uint32
+	for _, part := range parts {
+		dashCount := strings.Count(part, "-")
+		switch dashCount {
+		case 0:
+			gid, err := strconv.ParseUint(part, 0, 32)
+			if err != nil {
+				return nil, err
+			}
+			gids = append(gids, uint32(gid))
+		case 1:
+			bounds := strings.Split(part, "-")
+			min, err := strconv.ParseUint(bounds[0], 0, 32)
+			if err != nil {
+				return nil, err
+			}
+			max, err := strconv.ParseUint(bounds[1], 0, 32)
+			if err != nil {
+				return nil, err
+			}
+			for i := uint32(min); i <= uint32(max); i++ {
+				gids = append(gids, i)
+			}
+		default:
+			return nil, x.Errorf("Invalid group configuration item: %v", part)
+		}
+	}
+
+	// check for duplicates
+	sort.Sort(gidSlice(gids))
+	for i := 0; i < len(gids)-1; i++ {
+		if gids[i] == gids[i+1] {
+			return nil, x.Errorf("Duplicated group id: %v", gids[i])
+		}
+	}
+
+	return gids, nil
+}
+
+// just for sorting
+type gidSlice []uint32
+
+func (a gidSlice) Len() int           { return len(a) }
+func (a gidSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a gidSlice) Less(i, j int) bool { return a[i] < a[j] }
 
 // HealthCheck returns whether the server is ready to accept requests or not
 // Load balancer would add the node to the endpoint once health check starts
