@@ -97,8 +97,6 @@ func (l *List) decr() {
 	})
 	l.plist.Uids = l.plist.Uids[:0]
 	l.plist.Postings = l.plist.Postings[:0]
-	l.plist.Checksum = l.plist.Checksum[:0]
-	l.plist.Commit = 0
 	postingListPool.Put(l.plist)
 	listPool.Put(l)
 }
@@ -640,10 +638,6 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	}
 
 	final := postingListPool.Get().(*protos.PostingList)
-	final.Uids = final.Uids[:0]
-	final.Postings = final.Postings[:0]
-	final.Checksum = final.Checksum[:0]
-	final.Commit = 0
 	ubuf := make([]byte, 16)
 	h := md5.New()
 	count := 0
@@ -678,7 +672,9 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		x.Checkf(err, "Unable to marshal posting list")
 	}
 	if l.plist != nil {
-		//postingListPool.Put(l.plist)
+		l.plist.Uids = l.plist.Uids[:0]
+		l.plist.Postings = l.plist.Postings[:0]
+		postingListPool.Put(l.plist)
 	}
 	l.plist = final
 
