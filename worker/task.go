@@ -217,18 +217,18 @@ func addUidToMatrix(key []byte, mu *sync.Mutex, out *protos.Result) {
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
-	var out protos.Result
+	out := new(protos.Result)
 	attr := q.Attr
 
 	if attr == "_predicate_" {
 		predMap := make(map[string]struct{})
 		if q.UidList == nil {
-			return &out, nil
+			return out, nil
 		}
 		for _, uid := range q.UidList.Uids {
 			predicates, err := getPredList(uid, gid)
 			if err != nil {
-				return &out, err
+				return out, err
 			}
 			for _, pred := range predicates {
 				predMap[string(pred.Value.([]byte))] = struct{}{}
@@ -247,7 +247,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				Val:     []byte(pred),
 			})
 		}
-		return &out, nil
+		return out, nil
 	}
 
 	srcFn, err := parseSrcFn(q)
@@ -629,7 +629,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	out.IntersectDest = srcFn.intersectDest
-	return &out, nil
+	return out, nil
 }
 
 func matchRegex(uids *protos.List, values []types.Val, regex *cregexp.Regexp) *protos.List {

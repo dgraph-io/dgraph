@@ -53,7 +53,7 @@ func (s *stateGroup) init(group uint32) {
 }
 
 type state struct {
-	x.SafeMutex
+	sync.RWMutex
 	m    map[uint32]*stateGroup
 	elog trace.EventLog
 }
