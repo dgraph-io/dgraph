@@ -662,7 +662,6 @@ func (l *List) LastCompactionTs() time.Time {
 func (l *List) Uids(opt ListOptions) *protos.List {
 	// Pre-assign length to make it faster.
 	var res []uint64
-
 	l.RLock()
 	if len(l.mlayer) == 0 {
 		pl := l.plist
@@ -674,10 +673,9 @@ func (l *List) Uids(opt ListOptions) *protos.List {
 	} else {
 		res = make([]uint64, 0, l.length(opt.AfterUID))
 		l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
-			if postingType(p) != x.ValueUid {
-				return true
+			if postingType(p) == x.ValueUid {
+				res = append(res, p.Uid)
 			}
-			res = append(res, p.Uid)
 			return true
 		})
 	}
