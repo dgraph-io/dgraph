@@ -684,7 +684,7 @@ func (l *List) ValueFor(langs []string) (rval types.Val, rerr error) {
 	if err != nil {
 		return rval, err
 	}
-	return copyValueToVal(p), nil
+	return valueToTypesVal(p), nil
 }
 
 func (l *List) postingFor(langs []string) (p *protos.Posting, rerr error) {
@@ -700,10 +700,10 @@ func (l *List) ValueForTag(tag string) (rval types.Val, rerr error) {
 	if err != nil {
 		return rval, err
 	}
-	return copyValueToVal(p), nil
+	return valueToTypesVal(p), nil
 }
 
-func copyValueToVal(p *protos.Posting) (rval types.Val) {
+func valueToTypesVal(p *protos.Posting) (rval types.Val) {
 	// This is ok because we dont modify the value of a Posting. We create a newPosting
 	// and add it to the PostingList to do a set.
 	rval.Value = p.Value
@@ -765,17 +765,17 @@ func (l *List) findValue(uid uint64) (rval types.Val, found bool) {
 		return rval, found
 	}
 
-	return copyValueToVal(p), true
+	return valueToTypesVal(p), true
 }
 
 func (l *List) findPosting(uid uint64) (found bool, pos *protos.Posting) {
+	// Iterate starts iterating after the given argument, so we pass uid - 1
 	l.iterate(uid-1, func(p *protos.Posting) bool {
 		if p.Uid == uid {
 			pos = p
 			found = true
-			return false
 		}
-		return true
+		return false
 	})
 
 	return found, pos
