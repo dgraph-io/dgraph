@@ -44,7 +44,8 @@ go build .
 popd &> /dev/null
 
 # Lets wait for stuff to be committed to RocksDB.
-sleep 20
+# wait for index keys to sync to db
+sleep 120
 
 pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/indextest &> /dev/null
 

@@ -134,10 +134,13 @@ func TestTokensTable(t *testing.T) {
 		Entity: 157,
 	}
 	addMutationWithIndex(t, l, edge, Set)
+	_, err := l.SyncIfDirty(context.Background())
+	x.Check(err)
+	time.Sleep(10 * time.Second)
 
 	key = x.IndexKey("name", "david")
 	var item badger.KVItem
-	err := ps.Get(key, &item)
+	err = ps.Get(key, &item)
 	x.Check(err)
 	slice := item.Value()
 

@@ -35,6 +35,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+func (l *List) PostingList() *protos.PostingList {
+	l.RLock()
+	defer l.RUnlock()
+	return l.plist
+}
+
 func listToArray(t *testing.T, afterUid uint64, l *List) []uint64 {
 	out := make([]uint64, 0, 10)
 	l.Iterate(afterUid, func(p *protos.Posting) bool {

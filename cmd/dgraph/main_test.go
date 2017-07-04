@@ -257,7 +257,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	// For gentleCommit to happen and postings to persist to disk. To do * P * we iterate and
 	// get the uids to delete from disk.
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 	output, err := runQuery(q1)
 	require.NoError(t, err)
 	var m map[string]interface{}

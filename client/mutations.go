@@ -64,12 +64,20 @@ type allocator struct {
 func (a *allocator) fetchOne() (uint64, error) {
 	a.AssertLock()
 	if a.startId == 0 || a.endId < a.startId {
-		assignedIds, err := a.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
-		if err != nil {
-			return 0, err
+		factor := time.Second
+		for {
+			assignedIds, err := a.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
+			if err != nil {
+				time.Sleep(factor)
+				if factor < 256*time.Second {
+					factor = factor * 2
+				}
+			} else {
+				a.startId = assignedIds.StartId
+				a.endId = assignedIds.EndId
+				break
+			}
 		}
-		a.startId = assignedIds.StartId
-		a.endId = assignedIds.EndId
 	}
 
 	uid := a.startId
@@ -182,6 +190,7 @@ func (d *Dgraph) printCounters() {
 func (d *Dgraph) request(req *Req) {
 	counter := atomic.AddUint64(&d.mutations, 1)
 RETRY:
+	factor := time.Second
 	_, err := d.dc.Run(context.Background(), &req.gr)
 	if err != nil {
 		errString := err.Error()
@@ -190,7 +199,10 @@ RETRY:
 			log.Fatal(errString)
 		}
 		fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(factor)
+		if factor < 256*time.Second {
+			factor = factor * 2
+		}
 		goto RETRY
 	}
 	req.reset()

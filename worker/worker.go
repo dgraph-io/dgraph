@@ -41,15 +41,20 @@ var (
 		"Port used by worker for internal communication.")
 	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
-	pstore       *badger.KV
-	workerServer *grpc.Server
-	leaseGid     uint32
+	numPendingProposals = flag.Int("pending_proposals", 2000,
+		"Number of pending mutation proposals. Useful for rate limiting.")
+	Tracing          = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
+	pstore           *badger.KV
+	workerServer     *grpc.Server
+	leaseGid         uint32
+	pendingProposals chan struct{}
 )
 
 func Init(ps *badger.KV) {
 	pstore = ps
 	// needs to be initialized after group config
 	leaseGid = group.BelongsTo("_lease_")
+	pendingProposals = make(chan struct{}, *numPendingProposals)
 }
 
 // grpcWorker struct implements the gRPC server interface.

@@ -65,25 +65,38 @@ func (p *peerPool) Set(id uint64, addr string) {
 	p.peers[id] = addr
 }
 
-type proposals struct {
-	sync.RWMutex
-	ids map[uint32]chan error
+type proposalCtx struct {
+	ch  chan error
+	ctx context.Context
 }
 
-func (p *proposals) Store(pid uint32, ch chan error) bool {
+type proposals struct {
+	sync.RWMutex
+	ids map[uint32]*proposalCtx
+}
+
+func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
 	p.Lock()
 	defer p.Unlock()
 	if _, has := p.ids[pid]; has {
 		return false
 	}
-	p.ids[pid] = ch
+	p.ids[pid] = pctx
 	return true
 }
 
+func (p *proposals) Ctx(pid uint32) (context.Context, bool) {
+	p.RLock()
+	defer p.RUnlock()
+	if pd, has := p.ids[pid]; has {
+		return pd.ctx, true
+	}
+	return nil, false
+}
+
 func (p *proposals) Done(pid uint32, err error) {
-	var ch chan error
 	p.Lock()
-	ch, has := p.ids[pid]
+	pd, has := p.ids[pid]
 	if has {
 		delete(p.ids, pid)
 	}
@@ -91,7 +104,7 @@ func (p *proposals) Done(pid uint32, err error) {
 	if !has {
 		return
 	}
-	ch <- err
+	pd.ch <- err
 }
 
 func (p *proposals) Has(pid uint32) bool {
@@ -172,7 +185,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		peers: make(map[uint64]string),
 	}
 	props := proposals{
-		ids: make(map[uint32]chan error),
+		ids: make(map[uint32]*proposalCtx),
 	}
 
 	store := raft.NewMemoryStorage()
@@ -273,7 +286,11 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
 	}
-
+	pendingProposals <- struct{}{}
+	defer func() { <-pendingProposals }()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	// Do a type check here if schema is present
 	// In very rare cases invalid entries might pass through raft, which would
 	// be persisted, we do best effort schema check while writing
@@ -293,19 +310,23 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	}
 
 	che := make(chan error, 1)
+	pctx := &proposalCtx{
+		ch:  che,
+		ctx: ctx,
+	}
 	for {
 		id := rand.Uint32()
-		if n.props.Store(id, che) {
+		if n.props.Store(id, pctx) {
 			proposal.Id = id
 			break
 		}
 	}
 
 	slice := slicePool.Get().([]byte)
+	defer slicePool.Put(slice)
 	if len(slice) < proposal.Size() {
 		slice = make([]byte, proposal.Size()+1)
 	}
-	defer slicePool.Put(slice)
 
 	upto, err := proposal.MarshalTo(slice[1:])
 	if err != nil {
@@ -323,6 +344,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		x.Fatalf("Unknown proposal")
 	}
 
+	//	we don't timeout on a mutation which has already been proposed.
 	if err = n.Raft().Propose(ctx, slice[:upto+1]); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
@@ -344,17 +366,13 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		log.Fatalf("Unknown proposal")
 	}
 
-	select {
-	case err = <-che:
-		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(err.Error())
-			}
+	err = <-che
+	if err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
 		}
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
 	}
+	return err
 }
 
 func (n *node) send(m raftpb.Message) {
@@ -437,12 +455,12 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
-func (n *node) processMutation(e raftpb.Entry, m *protos.Mutations) error {
+func (n *node) processMutation(ctx context.Context, e raftpb.Entry, m *protos.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
-	ctx := context.WithValue(n.ctx, "raft", rv)
+	ctx = context.WithValue(ctx, "raft", rv)
 	if err := runMutations(ctx, m.Edges); err != nil {
-		if tr, ok := trace.FromContext(n.ctx); ok {
+		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
 		return err
@@ -489,7 +507,12 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 
 	var err error
 	if proposal.Mutations != nil {
-		err = n.processMutation(e, proposal.Mutations)
+		var ctx context.Context
+		var has bool
+		if ctx, has = n.props.Ctx(proposal.Id); !has {
+			ctx = n.ctx
+		}
+		err = n.processMutation(ctx, e, proposal.Mutations)
 	} else if proposal.Membership != nil {
 		err = n.processMembership(e, proposal.Membership)
 	}
@@ -540,7 +563,7 @@ func (n *node) processApplyCh() {
 				// Wait for applied watermark to reach till previous index
 				// All mutations before this should use old schema and after this
 				// should use new schema
-				n.waitForAppliedMark(n.ctx, e.Index-1)
+				n.waitForSyncMark(n.ctx, e.Index-1)
 				if err := n.processSchemaMutations(e, proposal.Mutations); err != nil {
 					n.applied.Ch <- mark
 					posting.SyncMarkFor(n.gid).Ch <- mark

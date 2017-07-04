@@ -81,15 +81,35 @@ type List struct {
 func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
 func (l *List) incr() int32     { return atomic.AddInt32(&l.refcount, 1) }
 func (l *List) decr() {
+	// Locking is just to ensure that anything else has finished working on this
+	// list before we push it to listPool.
 	l.Lock()
 	l.Unlock()
-
 	val := atomic.AddInt32(&l.refcount, -1)
 	x.AssertTruef(val >= 0, "List reference should never be less than zero: %v", val)
 	if val > 0 {
 		return
 	}
+
+	for _, p := range l.plist.Postings {
+		postingPool.Put(p)
+	}
+	l.plist.Postings = l.plist.Postings[:0]
+	l.plist.Uids = l.plist.Uids[:0]
+	postingListPool.Put(l.plist)
 	listPool.Put(l)
+}
+
+var postingPool = sync.Pool{
+	New: func() interface{} {
+		return &protos.Posting{}
+	},
+}
+
+var postingListPool = sync.Pool{
+	New: func() interface{} {
+		return &protos.PostingList{}
+	},
 }
 
 var listPool = sync.Pool{
@@ -171,7 +191,7 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	}
 	val := item.Value()
 
-	l.plist = new(protos.PostingList)
+	l.plist = postingListPool.Get().(*protos.PostingList)
 	if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 	}
@@ -245,22 +265,18 @@ func newPosting(t *protos.DirectedEdge) *protos.Posting {
 		postingType = protos.Posting_VALUE
 	}
 
-	return &protos.Posting{
-		Uid:         t.ValueId,
-		Value:       t.Value,
-		ValType:     protos.Posting_ValType(t.ValueType),
-		PostingType: postingType,
-		Metadata:    metadata,
-		Label:       t.Label,
-		Op:          op,
-		Facets:      t.Facets,
-	}
-}
+	p := postingPool.Get().(*protos.Posting)
+	*p = protos.Posting{}
+	p.Uid = t.ValueId
+	p.Value = t.Value
+	p.ValType = protos.Posting_ValType(t.ValueType)
+	p.PostingType = postingType
+	p.Metadata = metadata
+	p.Label = t.Label
+	p.Op = op
+	p.Facets = t.Facets
+	return p
 
-func (l *List) PostingList() *protos.PostingList {
-	l.RLock()
-	defer l.RUnlock()
-	return l.plist
 }
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
@@ -363,7 +379,13 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
 func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
+	t1 := time.Now()
 	l.Lock()
+	if dur := time.Since(t1); dur > time.Millisecond {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("acquired lock %v %v", dur, t.Attr)
+		}
+	}
 	defer l.Unlock()
 	return l.addMutation(ctx, t)
 }
@@ -442,7 +464,14 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
 
+	t1 := time.Now()
 	hasMutated := l.updateMutationLayer(mpost)
+	if dur := time.Since(t1); dur > time.Millisecond {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Postings))
+		}
+	}
+
 	if hasMutated {
 		var gid uint32
 		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
@@ -599,15 +628,15 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 		return false, nil
 	}
 
-	final := &protos.PostingList{}
-	ubuf := make([]byte, 16)
+	final := postingListPool.Get().(*protos.PostingList)
+	var ubuf [16]byte
 	h := md5.New()
 	count := 0
 	l.iterate(0, func(p *protos.Posting) bool {
 		// Checksum code.
-		n := binary.PutVarint(ubuf, int64(count))
+		n := binary.PutVarint(ubuf[:], int64(count))
 		h.Write(ubuf[0:n])
-		n = binary.PutUvarint(ubuf, p.Uid)
+		n = binary.PutUvarint(ubuf[:], p.Uid)
 		h.Write(ubuf[0:n])
 		h.Write(p.Value)
 		h.Write([]byte(p.Label))

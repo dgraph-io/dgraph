@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"time"
 
 	"golang.org/x/net/trace"
 
@@ -94,6 +95,7 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
 	tokens, err := IndexTokens(attr, t.GetLang(), p)
+
 	if err != nil {
 		// This data is not indexable
 		return err
@@ -117,7 +119,6 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	token string) error {
 	key := x.IndexKey(edge.Attr, token)
-
 	var groupId uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 		groupId = rv.Group
@@ -126,11 +127,16 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 		groupId = group.BelongsTo(edge.Attr)
 	}
 
+	t := time.Now()
 	plist, decr := GetOrCreate(key, groupId)
+	if dur := time.Since(t); dur > time.Millisecond {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("retreived pl took %v", dur)
+		}
+	}
 	defer decr()
 
-	x.AssertTruef(plist != nil, "plist is nil [%s] %d %s",
-		token, edge.ValueId, edge.Attr)
+	x.AssertTrue(plist != nil)
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -162,8 +168,7 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	plist, decr := GetOrCreate(key, groupId)
 	defer decr()
 
-	x.AssertTruef(plist != nil, "plist is nil [%s] %d %d",
-		t.Attr, t.Entity, t.ValueId)
+	x.AssertTrue(plist != nil)
 	edge := &protos.DirectedEdge{
 		Entity:  t.ValueId,
 		ValueId: t.Entity,
@@ -287,7 +292,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
 	{
+		t1 := time.Now()
 		l.Lock()
+		if dur := time.Since(t1); dur > time.Millisecond {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("acquired lock %v %v %v", dur, t.Attr, t.Entity)
+			}
+		}
+
 		if doUpdateIndex {
 			// Check original value BEFORE any mutation actually happens.
 			if len(t.Lang) > 0 {
@@ -538,7 +550,8 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		x.Check(pl.Unmarshal(iterItem.Value()))
 
 		// Posting list contains only values or only UIDs.
-		if (len(pl.Postings) == 0 && len(pl.Uids) != 0) || postingType(pl.Postings[0]) == x.ValueUid {
+		if (len(pl.Postings) == 0 && len(pl.Uids) != 0) ||
+			postingType(pl.Postings[0]) == x.ValueUid {
 			ch <- item{
 				uid:  pki.Uid,
 				list: &pl,
