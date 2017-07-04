@@ -286,7 +286,11 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
 	}
-
+	pendingProposals <- struct{}{}
+	defer func() { <-pendingProposals }()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	// Do a type check here if schema is present
 	// In very rare cases invalid entries might pass through raft, which would
 	// be persisted, we do best effort schema check while writing

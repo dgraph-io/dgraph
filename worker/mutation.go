@@ -317,6 +317,7 @@ func validateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che chan error) {
 	if groups().ServesGroup(gid) {
 		node := groups().Node(gid)
+		// we don't timeout after proposing
 		che <- node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m})
 		return
 	}
@@ -334,8 +335,17 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 	defer pl.Put(conn)
 
 	c := protos.NewWorkerClient(conn)
-	_, err = c.Mutate(ctx, m)
-	che <- err
+	ch := make(chan error, 1)
+	go func() {
+		_, err = c.Mutate(ctx, m)
+		ch <- err
+	}()
+	select {
+	case <-ctx.Done():
+		che <- ctx.Err()
+	case err := <-ch:
+		che <- err
+	}
 }
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
@@ -375,16 +385,12 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 	// Wait for all the goroutines to reply back.
 	// We return if an error was returned or the parent called ctx.Done()
 	for i := 0; i < len(mutationMap); i++ {
-		select {
-		case err := <-errors:
-			if err != nil {
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Error while running all mutations: %+v", err)
-				}
-				return err
+		err := <-errors
+		if err != nil {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while running all mutations: %+v", err)
 			}
-		case <-ctx.Done():
-			return ctx.Err()
+			return err
 		}
 	}
 	close(errors)
@@ -394,8 +400,6 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 
 // Mutate is used to apply mutations over the network on other instances.
 func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.Payload, error) {
-	pendingInternalRequests <- struct{}{}
-	defer func() { <-pendingInternalRequests }()
 	if ctx.Err() != nil {
 		return &protos.Payload{}, ctx.Err()
 	}

@@ -828,8 +828,6 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 
 // ServeTask is used to respond to a query.
 func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Result, error) {
-	pendingInternalRequests <- struct{}{}
-	defer func() { <-pendingInternalRequests }()
 	if ctx.Err() != nil {
 		return &emptyResult, ctx.Err()
 	}
