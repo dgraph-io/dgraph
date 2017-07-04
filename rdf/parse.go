@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -223,6 +224,7 @@ func ConvertToNQuads(mutation string) ([]*protos.NQuad, error) {
 		nq, err := Parse(ln)
 		if nq.Predicate != "" && nq.Predicate[0] == '_' &&
 			nq.Predicate[len(nq.Predicate)-1] == '_' {
+			fmt.Println(nq.Predicate)
 			return nil, x.Errorf("Predicates starting and ending with _ are not allowed for users")
 		}
 		if err == ErrEmpty { // special case: comment/empty line

@@ -2191,7 +2191,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				varName, alias = "", ""
 				it.Next()
-				if item.Typ != itemLeftRound {
+				if it.Item().Typ != itemLeftRound {
 					it.Prev()
 					goto Fall
 				}
