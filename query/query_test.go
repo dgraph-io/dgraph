@@ -6377,6 +6377,7 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "dob", Type: "datetime"}, {Predicate: "survival_rate", Type: "float"},
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
 		{Predicate: "noindex_name", Type: "string"},
+		{Predicate: "lossy", Type: "string"},
 		{Predicate: "school", Type: "uid"}}
 	checkSchemaNodes(t, expected, actual)
 }
