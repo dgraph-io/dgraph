@@ -993,6 +993,9 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 						return x.Wrap(err)
 					}
 				}
+				if mu.Set != nil {
+					return x.Errorf("Multiple 'set' blocks not allowed.")
+				}
 				mu.Set = nquads
 			} else if op == "delete" {
 				if len(item.Val) > 0 {
@@ -1000,8 +1003,14 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 						return x.Wrap(err)
 					}
 				}
+				if mu.Del != nil {
+					return x.Errorf("Multiple 'delete' blocks not allowed.")
+				}
 				mu.Del = nquads
 			} else if op == "schema" {
+				if mu.Schema != "" {
+					return x.Errorf("Multiple 'schema' blocks not allowed.")
+				}
 				mu.Schema = item.Val
 			} else {
 				return x.Errorf("Invalid mutation operation.")
