@@ -1522,14 +1522,17 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// when multiple filters replace their sg.DestUIDs
 		sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
 	} else {
-		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "uid" {
-			// If its a uid() filter, we just have to intersect the SrcUIDs with DestUIDs
-			// and return.
-			sg.fillVars(sg.Params.ParentVars)
-			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
-			rch <- nil
-			return
-		}
+		//		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "uid" {
+		//			fmt.Printf("Sg: %+v\n", sg)
+		//			// If its a uid() filter, we just have to intersect the SrcUIDs with DestUIDs
+		//			// and return.
+		//			sg.fillVars(sg.Params.ParentVars)
+		//			fmt.Println("attr", sg.Attr, "dest", sg.DestUIDs)
+		//			fmt.Println("src", sg.DestUIDs)
+		//			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
+		//			rch <- nil
+		//			return
+		//		}
 		if len(sg.SrcFunc) > 0 && isInequalityFn(sg.SrcFunc[0]) && sg.Attr == "val" {
 			// This is a ineq function which uses a value variable.
 			err = sg.ApplyIneqFunc()

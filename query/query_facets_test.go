@@ -98,7 +98,7 @@ func TestRetrieveFacetsSimple(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name @facets
 				gender @facets
 			}
@@ -117,11 +117,11 @@ func TestRetrieveFacetsAsVars(t *testing.T) {
 	// to see how friend @facets are positioned in output.
 	query := `
 		{
-			var(id:0x1) {
+			var(func: uid(0x1)) {
 				friend @facets(a as since)
 			}
 
-			me(id: 23) {
+			me(func: uid( 23)) {
 				name
 				val(a)
 			}
@@ -140,7 +140,7 @@ func TestRetrieveFacetsUidValues(t *testing.T) {
 	// to see how friend @facets are positioned in output.
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				friend @facets {
 					name @facets
 				}
@@ -184,7 +184,7 @@ func TestRetrieveFacetsProtoUnmarshal(t *testing.T) {
 	// to see how friend @facets are positioned in output.
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets {
 					name @facets
@@ -236,7 +236,7 @@ func TestRetrieveFacetsProtoUnmarshalPointer(t *testing.T) {
 	// to see how friend @facets are positioned in output.
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets {
 					name @facets
@@ -263,7 +263,7 @@ func TestRetrieveFacetsAll(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name @facets
 				friend @facets {
 					name @facets
@@ -285,7 +285,7 @@ func TestFacetsNotInQuery(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				gender
 				friend {
@@ -308,7 +308,7 @@ func TestSubjectWithNoFacets(t *testing.T) {
 	// id 33 does not have any facets associated with name and school
 	query := `
 		{
-			me(id:0x21) {
+			me(func: uid(0x21)) {
 				name @facets
 				school @facets {
 					name
@@ -328,7 +328,7 @@ func TestFetchingFewFacets(t *testing.T) {
 	// only 1 friend of 1 has facet : "close" and she/he has no name
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(close) {
 					name
@@ -349,7 +349,7 @@ func TestFacetsSortOrder(t *testing.T) {
 	// order of facets in gql query should not matter.
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(family, close) {
 					name
@@ -370,7 +370,7 @@ func TestUnknownFacets(t *testing.T) {
 	// uknown facets should be ignored.
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(unknownfacets1, unknownfacets2) {
 					name
@@ -393,7 +393,7 @@ func TestFacetsMutation(t *testing.T) {
 	addEdgeToUID(t, "friend", 1, 101, friendFacets) // and 101 is not close friend now.
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets {
 					name
@@ -413,7 +413,7 @@ func TestToProtoFacets(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name @facets
 				friend @facets {
 					name @facets
@@ -677,7 +677,7 @@ func TestFacetsFilterSimple(t *testing.T) {
 	// find close friends of 1
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(eq(close, true)) {
 					name
@@ -700,7 +700,7 @@ func TestFacetsFilterSimple2(t *testing.T) {
 	// find close friends of 1
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(eq(tag, "Domain3")) {
 					name
@@ -722,7 +722,7 @@ func TestFacetsFilterSimple3(t *testing.T) {
 	// find close friends of 1
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(eq(tag, "34")) {
 					name
@@ -744,7 +744,7 @@ func TestFacetsFilterOr(t *testing.T) {
 	// find close or family friends of 1
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(eq(close, true) OR eq(family, true)) {
 					name
@@ -767,7 +767,7 @@ func TestFacetsFilterAnd(t *testing.T) {
 	// unknown filters do not have any effect on results.
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(eq(close, true) AND eq(family, false)) {
 					name
@@ -789,7 +789,7 @@ func TestFacetsFilterle(t *testing.T) {
 	// find friends of 1 below 36 years of age.
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(le(age, 35)) {
 					name
@@ -811,7 +811,7 @@ func TestFacetsFilterge(t *testing.T) {
 	// find friends of 1 above 32 years of age.
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(ge(age, 33)) {
 					name
@@ -833,7 +833,7 @@ func TestFacetsFilterAndOrle(t *testing.T) {
 	// find close or family friends of 1 before 2007-01-10
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(eq(close, true) OR eq(family, true) AND le(since, "2007-01-10")) {
 					name
@@ -856,7 +856,7 @@ func TestFacetsFilterAndOrge2(t *testing.T) {
 	// find close or family friends of 1 after 2007-01-10
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(eq(close, false) OR eq(family, true) AND ge(since, "2007-01-10")) {
 					name
@@ -879,7 +879,7 @@ func TestFacetsFilterNotAndOrgeMutuallyExclusive(t *testing.T) {
 	// Mutually exclusive of above result : TestFacetsFilterNotAndOrge
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(not (eq(close, false) OR eq(family, true) AND ge(since, "2007-01-10"))) {
 					name
@@ -901,7 +901,7 @@ func TestFacetsFilterUnknownFacets(t *testing.T) {
 	// unknown facets should filter out edges.
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(ge(dob, "2007-01-10")) {
 					name
@@ -923,7 +923,7 @@ func TestFacetsFilterUnknownOrKnown(t *testing.T) {
 	// unknown filters with OR do not have any effect on results
 	query := `
 		{
-			me(id:0x1) {
+			me(func: uid(0x1)) {
 				name
 				friend @facets(ge(dob, "2007-01-10") OR eq(family, true)) {
 					name
@@ -944,7 +944,7 @@ func TestFacetsFilterallofterms(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
-			me(id:31) {
+			me(func: uid(31)) {
 				name
 				friend @facets(allofterms(games, "football chess tennis")) {
 					name
@@ -965,7 +965,7 @@ func TestFacetsFilterAllofMultiple(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
-			me(id:31) {
+			me(func: uid(31)) {
 				name
 				friend @facets(allofterms(games, "football basketball")) {
 					name
@@ -987,7 +987,7 @@ func TestFacetsFilterAllofNone(t *testing.T) {
 	// nothing matches in allofterms
 	query := `
 		{
-			me(id:31) {
+			me(func: uid(31)) {
 				name
 				friend @facets(allofterms(games, "football chess tennis cricket")) {
 					name
@@ -1008,7 +1008,7 @@ func TestFacetsFilteranyofterms(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
-			me(id:31) {
+			me(func: uid(31)) {
 				name
 				friend @facets(anyofterms(games, "tennis cricket")) {
 					name
@@ -1029,7 +1029,7 @@ func TestFacetsFilterAnyofNone(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
-			me(id:31) {
+			me(func: uid(31)) {
 				name
 				friend @facets(anyofterms(games, "cricket")) {
 					name
@@ -1050,7 +1050,7 @@ func TestFacetsFilterAllofanyofterms(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
-			me(id:31) {
+			me(func: uid(31)) {
 				name
 				friend @facets(allofterms(games, "basketball hockey") OR anyofterms(games, "chess")) {
 					name
@@ -1071,7 +1071,7 @@ func TestFacetsFilterAllofAndanyofterms(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
-			me(id:31) {
+			me(func: uid(31)) {
 				name
 				friend @facets(allofterms(games, "hockey") AND anyofterms(games, "football basketball")) {
 					name
@@ -1093,7 +1093,7 @@ func TestFacetsFilterAtValueFail(t *testing.T) {
 	// facet filtering is not supported at value level.
 	query := `
 	{
-		me(id:1) {
+		me(func: uid(1)) {
 			friend {
 				name @facets(eq(origin, "french"))
 			}
@@ -1111,7 +1111,7 @@ func TestFacetsFilterAndRetrieval(t *testing.T) {
 	// Close should not be retrieved.. only used for filtering.
 	query := `
 		{
-			me(id:1) {
+			me(func: uid(1)) {
 				name
 				friend @facets(eq(close, true)) @facets(family) {
 					name
@@ -1132,7 +1132,7 @@ func TestFacetWithLang(t *testing.T) {
 	defer teardownGraphWithFacets(t)
 	query := `
 		{
-			me(id:320) {
+			me(func: uid(320)) {
 				name@en @facets
 			}
 		}
