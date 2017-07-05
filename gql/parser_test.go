@@ -3594,3 +3594,40 @@ func TestRemoveDuplicatesWithoutDuplicates(t *testing.T) {
 	set := removeDuplicates([]string{"a", "b", "c", "d"})
 	require.EqualValues(t, []string{"a", "b", "c", "d"}, set)
 }
+
+func TestMultipleSetBlocks(t *testing.T) {
+	query := `
+	mutation {
+      set { <0x01> <name> "Bob"@en . }
+      set { <0x01> <name> "Sam" . }
+    }
+
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+
+}
+
+func TestMultipleDelBlocks(t *testing.T) {
+	query := `
+	mutation {
+      delete { <0x01> <name> "Bob"@en . }
+      delete { <0x01> <name> "Sam" . }
+    }
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+
+}
+
+func TestMultipleSchemaBlocks(t *testing.T) {
+	query := `
+	mutation {
+		schema { name: string @index(term) }
+		schama { tag: string @index(exact) }
+    }
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+
+}
