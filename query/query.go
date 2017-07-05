@@ -1849,7 +1849,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	}
 
 	x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))
-	sg.uidMatrix = result.GetUidMatrix()
+	sg.uidMatrix = result.UidMatrix
 
 	// Update the destUids as we might have removed some UIDs.
 	sg.updateDestUids(ctx)

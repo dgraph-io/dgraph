@@ -63,9 +63,8 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 
 	for _, child := range startChildren {
 		temp := new(SubGraph)
-		*temp = *child
+		temp.copyFiltersRecurse(child)
 		temp.SrcUIDs = start.DestUIDs
-		temp.Children = []*SubGraph{}
 		exec = append(exec, temp)
 		start.Children = append(start.Children, temp)
 	}
@@ -102,24 +101,24 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		}
 
 		for _, sg := range exec {
+			if len(sg.Filters) > 0 {
+				// We need to do this in case we had some filters.
+				sg.updateUidMatrix()
+			}
 			for mIdx, fromUID := range sg.SrcUIDs.Uids {
-				if len(sg.Filters) > 0 {
-					// We need to do this in case we had some filters.
-					algo.IntersectWith(sg.uidMatrix[mIdx], sg.DestUIDs, sg.uidMatrix[mIdx])
-				}
+				// This is for avoiding loops in graph.
 				algo.ApplyFilter(sg.uidMatrix[mIdx], func(uid uint64, i int) bool {
 					key := fmt.Sprintf("%s|%d|%d", sg.Attr, fromUID, uid)
 					_, ok := reachMap[key] // Combine fromUID here.
 					return !ok
 				})
 			}
-			sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
-		}
-
-		if numEdges > 1000000 {
-			// If we've seen too many nodes, stop the query.
-			rch <- ErrTooBig
-			return
+			if sg.Params.Order != "" {
+				// Can't use merge sort if the UIDs are not sorted.
+				sg.updateDestUids(ctx)
+			} else {
+				sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
+			}
 		}
 
 		// modify the exec and attach child nodes.
@@ -130,8 +129,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 			}
 			for _, child := range startChildren {
 				temp := new(SubGraph)
-				*temp = *child
-				temp.Children = []*SubGraph{}
+				temp.copyFiltersRecurse(child)
 				temp.SrcUIDs = sg.DestUIDs
 				sg.Children = append(sg.Children, temp)
 				out = append(out, temp)
@@ -145,7 +143,12 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 					numEdges++
 				}
 			}
+		}
 
+		if numEdges > 1000000 {
+			// If we've seen too many nodes, stop the query.
+			rch <- ErrTooBig
+			return
 		}
 
 		if len(out) == 0 {

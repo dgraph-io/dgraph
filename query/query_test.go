@@ -1306,6 +1306,8 @@ func TestUseVarsMultiCascade(t *testing.T) {
 
 func TestUseVarsMultiOrder(t *testing.T) {
 	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(time.Second)
 	query := `
 		{
 			var(id:0x01) {
@@ -1567,6 +1569,25 @@ func TestRecurseQuery(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes", "friend":[{"name":"Michonne"}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea", "friend":[{"name":"Glenn Rhee"}]}]}]}`, js)
+}
+
+func TestRecurseQueryOrder(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	// TODO: Remove this once we write index keys immediately.
+	time.Sleep(time.Second)
+	query := `
+		{
+			recurse(id:0x01) {
+				friend(orderdesc: dob)
+				dob
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"recurse":[{"dob":"1910-01-01T00:00:00Z","friend":[{"dob":"1910-01-02T00:00:00Z","friend":[{"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1901-01-15T00:00:00Z","friend":[{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"name":"Michonne"}]}`,
+		js)
 }
 
 func TestRecurseQueryLimitDepth(t *testing.T) {
