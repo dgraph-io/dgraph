@@ -32,6 +32,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	syncChCapacity = 10000
+)
+
 var (
 	pstate *state
 	pstore *badger.KV
@@ -265,7 +269,7 @@ func (s *stateGroup) hasCount(pred string) bool {
 
 func Init(ps *badger.KV) {
 	pstore = ps
-	syncCh = make(chan SyncEntry, 10000)
+	syncCh = make(chan SyncEntry, syncChCapacity)
 	reset()
 	go batchSync()
 }
@@ -323,6 +327,10 @@ func batchSync() {
 	slurp_loop:
 		for {
 			entries = append(entries, ent)
+			if len(entries) == syncChCapacity {
+				// Avoid making infinite batch, push back against syncCh.
+				break
+			}
 			select {
 			case ent = <-syncCh:
 			default:
