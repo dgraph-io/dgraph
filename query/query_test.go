@@ -8081,7 +8081,7 @@ func TestUidInFunction1(t *testing.T) {
 	populateGraph(t)
 	query := `
 	{
-		me(func: uid(1, 23, 24)) @filter(uid_in(school, 5000)) {
+		me(func: UID(1, 23, 24)) @filter(uid_in(school, 5000)) {
 			name
 		}
 	}`
