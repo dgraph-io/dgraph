@@ -43,7 +43,7 @@ const (
 	ErrorNoPermission    = "ErrorNoPermission"
 	ErrorInvalidMutation = "ErrorInvalidMutation"
 	ValidHostnameRegex   = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
-	Star                 = "_STAR_"
+	Star                 = "_STAR_ALL"
 	GrpcMaxSize          = 256 << 20
 )
 

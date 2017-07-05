@@ -208,7 +208,6 @@ func ConvertToNQuads(mutation string) ([]*protos.NQuad, error) {
 	var nquads []*protos.NQuad
 	r := strings.NewReader(mutation)
 	reader := bufio.NewReader(r)
-	// x.Trace(ctx, "Converting to NQuad")
 
 	var strBuf bytes.Buffer
 	var err error
@@ -222,6 +221,10 @@ func ConvertToNQuads(mutation string) ([]*protos.NQuad, error) {
 			continue
 		}
 		nq, err := Parse(ln)
+		if len(nq.Predicate) > 0 && nq.Predicate[0] == '_' &&
+			nq.Predicate[len(nq.Predicate)-1] == '_' {
+			return nil, x.Errorf("Predicates starting and ending with _ are reserved internally.")
+		}
 		if err == ErrEmpty { // special case: comment/empty line
 			continue
 		} else if err != nil {

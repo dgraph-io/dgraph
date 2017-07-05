@@ -366,6 +366,19 @@ func TestSchemaMutation3Error(t *testing.T) {
 	require.Error(t, err)
 }
 
+// index on uid type
+func TestMutation4Error(t *testing.T) {
+	var m = `
+	mutation {
+		set {
+      <1> <_age_> "5" .
+		}
+	}
+	`
+	err := runMutation(m)
+	require.Error(t, err)
+}
+
 // add index
 func TestSchemaMutationIndexAdd(t *testing.T) {
 	var q1 = `
