@@ -6346,6 +6346,37 @@ func TestLangLossyIndex2(t *testing.T) {
 		js)
 }
 
+func TestLangLossyIndex3(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	query := `
+		{
+			me(func:eq(lossy@fr, "Blaireau")) {
+				lossy
+				lossy@en
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestLangLossyIndex4(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	query := `
+		{
+			me(func:eq(value, "mission")) {
+				value
+			}
+		}
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
+
 func checkSchemaNodes(t *testing.T, expected []*protos.SchemaNode, actual []*protos.SchemaNode) {
 	sort.Slice(expected, func(i, j int) bool {
 		return expected[i].Predicate >= expected[j].Predicate
