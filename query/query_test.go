@@ -1564,7 +1564,7 @@ func TestRecurseQuery(t *testing.T) {
 func TestRecurseQueryOrder(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	// TODO: Remove this once we write index keys immidiately.
+	// TODO: Remove this once we write index keys immediately.
 	time.Sleep(time.Second)
 	query := `
 		{
