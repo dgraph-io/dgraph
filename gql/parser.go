@@ -127,9 +127,10 @@ type FilterTree struct {
 // Function holds the information about gql functions.
 type Function struct {
 	Attr     string
-	Lang     string       // language of the attribute value
-	Name     string       // Specifies the name of the function.
-	Args     []string     // Contains the arguments of the function.
+	Lang     string   // language of the attribute value
+	Name     string   // Specifies the name of the function.
+	Args     []string // Contains the arguments of the function.
+	UID      []uint64
 	NeedsVar []VarContext // If the function requires some variable
 }
 
@@ -1361,7 +1362,7 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 	return nil
 }
 
-func parseFunction(it *lex.ItemIterator) (*Function, error) {
+func parseFunction(it *lex.ItemIterator, gq *GraphQuery) (*Function, error) {
 	var g *Function
 	var expectArg, seenFuncArg, expectLang, isDollar bool
 L:
@@ -1398,7 +1399,7 @@ L:
 					}
 					it.Prev()
 					it.Prev()
-					f, err := parseFunction(it)
+					f, err := parseFunction(it, gq)
 					if err != nil {
 						return nil, err
 					}
@@ -1486,10 +1487,18 @@ L:
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
+
 				if isDollar {
 					val = "$" + val
 					isDollar = false
+					if g.Name == UID && gq != nil {
+						gq.Args["id"] = val
+					} else {
+						g.Args = append(g.Args, val)
+					}
+					continue
 				}
+
 				// Unlike other functions, uid function has no attribute,
 				// everything is args.
 				if len(g.Attr) == 0 && g.Name != "uid" {
@@ -1502,6 +1511,7 @@ L:
 					g.Lang = val
 					expectLang = false
 				} else if g.Name != UID {
+					// For UID function. we set g.UID
 					g.Args = append(g.Args, val)
 				}
 
@@ -1516,12 +1526,18 @@ L:
 					// uid function could take variables as well as actual uids.
 					// If we can parse the value that means its an uid otherwise a variable.
 					g.Attr = g.Name
-					_, err := strconv.ParseUint(val, 0, 64)
+					uid, err := strconv.ParseUint(val, 0, 64)
 					if err == nil {
-						g.Args = append(g.Args, val)
+						// It could be uid function at root.
+						if gq != nil {
+							gq.UID = append(gq.UID, uid)
+							// Or uid function in filter.
+						} else {
+							g.UID = append(g.UID, uid)
+						}
 						continue
 					}
-					// E.g. @filter(uid(1, 2, 3))
+					// E.g. @filter(uid(a, b, c))
 					g.NeedsVar = append(g.NeedsVar, VarContext{
 						Name: val,
 						Typ:  UID_VAR,
@@ -1700,7 +1716,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			opStack.push(&FilterTree{Op: op}) // Push current operator.
 		} else if item.Typ == itemName { // Value.
 			it.Prev()
-			f, err := parseFunction(it)
+			f, err := parseFunction(it, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -1905,81 +1921,6 @@ func parseLanguageList(it *lex.ItemIterator) []string {
 	return langs
 }
 
-func parseId(it *lex.ItemIterator, gq *GraphQuery) error {
-	if !it.Next() {
-		return x.Errorf("Invalid query")
-	}
-	item := it.Item()
-	if item.Val == UID {
-		// Any number of variables allowed here.
-		_, err := parseVarList(it, gq)
-		return err
-	}
-
-	isDollar := false
-	if item.Typ == itemDollar {
-		isDollar = true
-		if valid := it.Next(); !valid {
-			return x.Errorf("Expected a variable name. Got EOF")
-		}
-		item = it.Item()
-		if item.Typ != itemName {
-			return x.Errorf("Expected a variable name. Got: %v", item.Val)
-		}
-	}
-
-	// Its a list of ids.
-	if item.Typ == itemLeftSquare {
-		if valid := it.Next(); !valid {
-			return x.Errorf("Unexpected EOF while parsing list of ids")
-		}
-		item = it.Item()
-	L:
-		for {
-			switch item.Typ {
-			case itemRightSquare:
-				break L
-			case itemComma:
-				if valid := it.Next(); !valid {
-					return x.Errorf("Unexpected EOF while parsing list of ids")
-				}
-				item = it.Item()
-				continue
-			case itemName:
-				val := collectName(it, item.Val)
-				uid, err := strconv.ParseUint(val, 0, 64)
-				if err != nil {
-					return err
-				}
-				gq.UID = append(gq.UID, uid)
-				if valid := it.Next(); !valid {
-					return x.Errorf("Unexpected EOF while parsing list of ids")
-				}
-				item = it.Item()
-			default:
-				return x.Errorf("Unexpected item: %s while parsing list of ids",
-					item.Val)
-			}
-		}
-		return nil
-	}
-	// Its a single id.
-	val := collectName(it, item.Val)
-	// Its a GraphQL id variable.
-	if isDollar {
-		val = "$" + val
-		gq.Args["id"] = val
-		// We can continue, we will parse the id later when we fill GraphQL variables.
-		return nil
-	}
-	uid, err := strconv.ParseUint(val, 0, 64)
-	if err != nil {
-		return err
-	}
-	gq.UID = append(gq.UID, uid)
-	return nil
-}
-
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
@@ -2046,12 +1987,12 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		}
 
 		if key == "id" {
-			if err := parseId(it, gq); err != nil {
-				return nil, err
-			}
-		} else if key == "func" {
+			return nil, x.Errorf("Invalid syntax using id. Use func: uid().")
+		}
+
+		if key == "func" {
 			// Store the generator function.
-			gen, err := parseFunction(it)
+			gen, err := parseFunction(it, gq)
 			if err != nil {
 				return gq, err
 			}
@@ -2182,7 +2123,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				varName, alias = "", ""
 				it.Prev()
-				if child.Func, err = parseFunction(it); err != nil {
+				if child.Func, err = parseFunction(it, gq); err != nil {
 					return err
 				}
 				child.Func.Args = append(child.Func.Args, child.Func.Attr)
