@@ -191,7 +191,7 @@ func export(gid uint32, bdir string) error {
 		time.Now().Format("2006-01-02-15-04")))
 	fspath := path.Join(bdir, fmt.Sprintf("dgraph-schema-%d-%s.rdf.gz", gid,
 		time.Now().Format("2006-01-02-15-04")))
-	fmt.Printf("Backing up at: %v, schema at %v\n", fpath, fspath)
+	fmt.Printf("Exporting to: %v, schema at %v\n", fpath, fspath)
 	chb := make(chan []byte, 1000)
 	errChan := make(chan error, 2)
 	go func() {

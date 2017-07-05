@@ -431,16 +431,16 @@ func shutdownServer() {
 	}()
 }
 
-func backupHandler(w http.ResponseWriter, r *http.Request) {
+func exportHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r) {
 		return
 	}
 	ctx := context.Background()
-	if err := worker.BackupOverNetwork(ctx); err != nil {
-		x.SetStatus(w, err.Error(), "Backup failed.")
+	if err := worker.ExportOverNetwork(ctx); err != nil {
+		x.SetStatus(w, err.Error(), "Export failed.")
 		return
 	}
-	x.SetStatus(w, x.Success, "Backup completed.")
+	x.SetStatus(w, x.Success, "Export completed.")
 }
 
 func hasGraphOps(mu *protos.Mutation) bool {
@@ -685,7 +685,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/share", shareHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
-	http.HandleFunc("/admin/backup", backupHandler)
+	http.HandleFunc("/admin/export", exportHandler)
 
 	// UI related API's.
 	// Share urls have a hex string as the shareId. So if

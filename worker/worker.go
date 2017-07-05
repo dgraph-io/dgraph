@@ -39,8 +39,8 @@ import (
 var (
 	workerPort = flag.Int("workerport", 12345,
 		"Port used by worker for internal communication.")
-	exportPath = flag.String("backup", "backup",
-		"Folder in which to store backups.")
+	exportPath = flag.String("export", "export",
+		"Folder in which to store exports.")
 	pstore       *badger.KV
 	workerServer *grpc.Server
 	leaseGid     uint32
