@@ -289,6 +289,10 @@ type fingerPrint struct {
 	gid uint32
 }
 
+const (
+	syncChCapacity = 10000
+)
+
 var (
 	pstore    *badger.KV
 	syncCh    chan syncEntry
@@ -304,7 +308,7 @@ func Init(ps *badger.KV) {
 	lhmaps = new(listMaps)
 	dirtyChan = make(chan fingerPrint, 10000)
 	fmt.Println("Starting commit routine.")
-	syncCh = make(chan syncEntry, 10000)
+	syncCh = make(chan syncEntry, syncChCapacity)
 
 	go periodicCommit()
 	go periodicFree()
@@ -476,6 +480,10 @@ func batchSync(i int) {
 	slurp_loop:
 		for {
 			entries = append(entries, ent)
+			if len(entries) == syncChCapacity {
+				// Avoid making infinite batch, push back against syncCh.
+				break
+			}
 			select {
 			case ent = <-syncCh:
 			default:

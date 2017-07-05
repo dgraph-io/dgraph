@@ -386,13 +386,19 @@ func (n *node) send(m raftpb.Message) {
 	case n.messages <- sendmsg{to: m.To, data: data}:
 		// pass
 	default:
+		// TODO: It's bad to fail like this.
 		x.Fatalf("Unable to push messages to channel in send")
 	}
 }
 
+const (
+	messageBatchSoftLimit = 10000000
+)
+
 func (n *node) batchAndSendMessages() {
 	batches := make(map[uint64]*bytes.Buffer)
 	for {
+		totalSize := 0
 		sm := <-n.messages
 	slurp_loop:
 		for {
@@ -403,8 +409,17 @@ func (n *node) batchAndSendMessages() {
 			} else {
 				buf = b
 			}
+			totalSize += 4 + len(sm.data)
 			x.Check(binary.Write(buf, binary.LittleEndian, uint32(len(sm.data))))
 			x.Check2(buf.Write(sm.data))
+
+			if totalSize > messageBatchSoftLimit {
+				// We limit the batch size, but we aren't pushing back on
+				// n.messages, because the loop below spawns a goroutine
+				// to do its dirty work.  This is good because right now
+				// (*node).send fails(!) if the channel is full.
+				break
+			}
 
 			select {
 			case sm = <-n.messages:
