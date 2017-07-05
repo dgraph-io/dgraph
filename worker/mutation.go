@@ -324,8 +324,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 	}
 
 	_, addr := groups().Leader(gid)
-	pl := pools().get(addr)
-	conn, err := pl.Get()
+	pl, err := pools().get(addr)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
@@ -333,7 +332,8 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 		che <- err
 		return
 	}
-	defer pl.Put(conn)
+	defer pools().release(pl)
+	conn := pl.Get()
 
 	c := protos.NewWorkerClient(conn)
 	ch := make(chan error, 1)
