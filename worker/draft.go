@@ -937,11 +937,19 @@ func (n *node) AmLeader() bool {
 	return r.Status().Lead == r.Status().ID
 }
 
+var (
+	errNoNode = fmt.Errorf("No node has been set up yet")
+)
+
 func applyMessage(ctx context.Context, msg raftpb.Message) error {
 	var rc protos.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
 	node := groups().Node(rc.Group)
-	// TODO: Handle the case where node isn't present for this group.
+	if node == nil {
+		// Maybe we went down, went back up, reconnected, and got an RPC
+		// message before we set up Raft?
+		return errNoNode
+	}
 	node.Connect(msg.From, rc.Addr)
 
 	c := make(chan error, 1)
