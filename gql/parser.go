@@ -1896,81 +1896,6 @@ func parseLanguageList(it *lex.ItemIterator) []string {
 	return langs
 }
 
-func parseId(it *lex.ItemIterator, gq *GraphQuery) error {
-	if !it.Next() {
-		return x.Errorf("Invalid query")
-	}
-	item := it.Item()
-	if item.Val == UID {
-		// Any number of variables allowed here.
-		_, err := parseVarList(it, gq)
-		return err
-	}
-
-	isDollar := false
-	if item.Typ == itemDollar {
-		isDollar = true
-		if valid := it.Next(); !valid {
-			return x.Errorf("Expected a variable name. Got EOF")
-		}
-		item = it.Item()
-		if item.Typ != itemName {
-			return x.Errorf("Expected a variable name. Got: %v", item.Val)
-		}
-	}
-
-	// Its a list of ids.
-	if item.Typ == itemLeftSquare {
-		if valid := it.Next(); !valid {
-			return x.Errorf("Unexpected EOF while parsing list of ids")
-		}
-		item = it.Item()
-	L:
-		for {
-			switch item.Typ {
-			case itemRightSquare:
-				break L
-			case itemComma:
-				if valid := it.Next(); !valid {
-					return x.Errorf("Unexpected EOF while parsing list of ids")
-				}
-				item = it.Item()
-				continue
-			case itemName:
-				val := collectName(it, item.Val)
-				uid, err := strconv.ParseUint(val, 0, 64)
-				if err != nil {
-					return err
-				}
-				gq.UID = append(gq.UID, uid)
-				if valid := it.Next(); !valid {
-					return x.Errorf("Unexpected EOF while parsing list of ids")
-				}
-				item = it.Item()
-			default:
-				return x.Errorf("Unexpected item: %s while parsing list of ids",
-					item.Val)
-			}
-		}
-		return nil
-	}
-	// Its a single id.
-	val := collectName(it, item.Val)
-	// Its a GraphQL id variable.
-	if isDollar {
-		val = "$" + val
-		gq.Args["id"] = val
-		// We can continue, we will parse the id later when we fill GraphQL variables.
-		return nil
-	}
-	uid, err := strconv.ParseUint(val, 0, 64)
-	if err != nil {
-		return err
-	}
-	gq.UID = append(gq.UID, uid)
-	return nil
-}
-
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
@@ -2036,11 +1961,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			return nil, x.Errorf("Expecting a colon. Got: %v", item)
 		}
 
-		if key == "id" {
-			if err := parseId(it, gq); err != nil {
-				return nil, err
-			}
-		} else if key == "func" {
+		if key == "func" {
 			// Store the generator function.
 			gen, err := parseFunction(it)
 			if err != nil {
