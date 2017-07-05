@@ -434,6 +434,35 @@ func shutdownServer() {
 	}()
 }
 
+func allowMutationHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r) {
+		return
+	}
+	*nomutations = true
+	x.SetStatus(w, x.Success, "Allowing all mutations.")
+}
+
+func stopMutationHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r) {
+		return
+	}
+	*nomutations = false
+	x.SetStatus(w, x.Success, "Stopping all mutations.")
+}
+
+func backupHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r) {
+		return
+	}
+	ctx := context.Background()
+	// TODO: Return the paths of all the files written.
+	if err := worker.Backup(ctx); err != nil {
+		x.SetStatus(w, err.Error(), "Backup failed.")
+		return
+	}
+	x.SetStatus(w, x.Success, "Backup completed.")
+}
+
 func exportHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r) {
 		return
@@ -696,6 +725,8 @@ func setupServer(che chan error) {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/export", exportHandler)
+	http.HandleFunc("/admin/allowmutation", allowMutationHandler)
+	http.HandleFunc("/admin/stopmutation", stopMutationHandler)
 
 	// UI related API's.
 	// Share urls have a hex string as the shareId. So if
