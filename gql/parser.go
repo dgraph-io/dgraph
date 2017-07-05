@@ -2335,6 +2335,17 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if varName != "" {
 					return x.Errorf("Cannot assign a variable to val()")
 				}
+				if count == seen {
+					return x.Errorf("count of a variable is not allowed")
+				}
+				peekIt, err = it.Peek(1)
+				if err != nil {
+					return err
+				}
+				if peekIt[0].Typ != itemLeftRound {
+					goto Fall
+				}
+
 				child := &GraphQuery{
 					Attr:       val,
 					Args:       make(map[string]string),
@@ -2354,6 +2365,21 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
+			} else if valLower == UID {
+				if varName != "" {
+					return x.Errorf("Cannot assign a variable to uid()")
+				}
+				if count == seen {
+					return x.Errorf("count of a variable is not allowed")
+				}
+				peekIt, err = it.Peek(1)
+				if err != nil {
+					return err
+				}
+				if peekIt[0].Typ != itemLeftRound {
+					goto Fall
+				}
+				return x.Errorf("Cannot do uid() of a variable")
 			}
 		Fall:
 			peekIt, err = it.Peek(1)

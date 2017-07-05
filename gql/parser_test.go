@@ -40,6 +40,37 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
+func TestParseCountVarError(t *testing.T) {
+	query := `
+{
+  me(id: 1) {
+    Upvote {
+       u as Author
+    }
+    count(var(u))
+  }
+}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseVarError(t *testing.T) {
+	query := `
+	{
+		var(id: 0x0a) {
+			a as friends 
+		}
+
+		me(id: uid(a)) {
+			uid(a)
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
 func TestParseQueryListPred1(t *testing.T) {
 	query := `
 	{
