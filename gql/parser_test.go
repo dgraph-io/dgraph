@@ -3548,7 +3548,7 @@ func TestMultipleEqual(t *testing.T) {
 func TestParseEqArg(t *testing.T) {
 	query := `
 	{
-		me(func: uid( 1, 20)) @filter(eq(name, ["And\"rea", "Bob"])) {
+		me(func: uid(1, 20)) @filter(eq(name, ["And\"rea", "Bob"])) {
 		 name
 		}
 	}

@@ -1013,7 +1013,7 @@ func TestGroupByRootProto(t *testing.T) {
 	populateGraph(t)
 	query := `
 	{
-		me(func: uid(1, 23, 24, 25, 31) @groupby(age)) {
+		me(func: uid(1, 23, 24, 25, 31)) @groupby(age) {
 				count(_uid_)
 		}
 	}
@@ -1094,7 +1094,7 @@ func TestGroupByRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
 	{
-		me(func: uid(1, 23, 24, 25, 31) @groupby(age)) {
+		me(func: uid(1, 23, 24, 25, 31)) @groupby(age) {
 				count(_uid_)
 		}
 	}
@@ -1161,7 +1161,7 @@ func TestGroupByCountval(t *testing.T) {
 				}
 			}
 
-			order(id:uid(a), orderdesc: val(a)) {
+			order(func :uid(a), orderdesc: val(a)) {
 				name
 				val(a)
 			}
@@ -1176,19 +1176,19 @@ func TestGroupByAggval(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			var(func: uid( 1)) {
+			var(func: uid(1)) {
 				friend @groupby(school) {
 					a as max(name)
 					b as min(name)
 				}
 			}
 
-			orderMax(id:uid(a), orderdesc: val(a)) {
+			orderMax(func :uid(a), orderdesc: val(a)) {
 				name
 				val(a)
 			}
 
-			orderMin(id:uid(b), orderdesc: val(b)) {
+			orderMin(func :uid(b), orderdesc: val(b)) {
 				name
 				val(b)
 			}
@@ -1296,7 +1296,7 @@ func TestUseVarsMultiCascade(t *testing.T) {
 
 func TestUseVarsMultiOrder(t *testing.T) {
 	populateGraph(t)
-	time.Sleep(time.Second)
+	time.Sleep(2 * time.Second)
 	query := `
 		{
 			var(func: uid(0x01)) {
@@ -1564,7 +1564,7 @@ func TestRecurseQueryLimitDepth(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			recurse(func: uid(0x01), depth: 2)) {
+			recurse(func: uid(0x01), depth: 2) {
 				friend
 				name
 			}
@@ -8010,7 +8010,7 @@ func TestUidFunction(t *testing.T) {
 		}
 	}`
 	js := processToFastJSON(t, query)
-	require.Equal(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`, js)
+	require.Equal(t, `{"me":[{"name":"Rick Grimes"},{"name":"Michonne"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`, js)
 }
 
 func TestUidFunctionInFilter(t *testing.T) {

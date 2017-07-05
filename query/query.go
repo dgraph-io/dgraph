@@ -550,7 +550,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
 		isUidFunc := isUidFnWithoutVar(ft.Func)
 		if isUidFunc {
-			sg.uidsFromArgs(ft.Func.Args)
+			sg.uidsFromArgs(ft.Func.Args, true)
 		} else {
 			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Lang)
 			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
@@ -802,7 +802,7 @@ func isDebug(ctx context.Context) bool {
 	return debug || ctx.Value("debug") == "true"
 }
 
-func (sg *SubGraph) uidsFromArgs(ids []string) error {
+func (sg *SubGraph) uidsFromArgs(ids []string, putSorted bool) error {
 	var uids []uint64
 	for _, id := range ids {
 		uid, err := strconv.ParseUint(id, 0, 64)
@@ -811,11 +811,26 @@ func (sg *SubGraph) uidsFromArgs(ids []string) error {
 		}
 		uids = append(uids, uid)
 	}
-	if len(uids) > 0 {
+	if len(uids) == 0 {
+		return nil
+	}
+
+	if putSorted {
+		// Put sorted entries in matrix.
 		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
 		sg.uidMatrix = []*protos.List{{uids}}
+		// User specified list may not be sorted.
 		sg.SrcUIDs = &protos.List{uids}
+	} else {
+		// Create a copy, put unsorted uids in uidMatrix and sorted uids in SrcUIDs
+		o := make([]uint64, len(uids))
+		copy(o, uids)
+		sg.uidMatrix = []*protos.List{{uids}}
+		// User specified list may not be sorted.
+		sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
+		sg.SrcUIDs = &protos.List{o}
 	}
+
 	return nil
 }
 
@@ -878,18 +893,13 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 
+	// TODO - Maybe move parsing of ids to gql/parser
+	x.AssertTrue(len(gq.UID) == 0)
 	// Root ids can come from uid func or id: [].
 	if isUidFunc && len(gq.Func.NeedsVar) == 0 && len(gq.Func.Args) > 0 {
-		if err := sg.uidsFromArgs(gq.Func.Args); err != nil {
+		if err := sg.uidsFromArgs(gq.Func.Args, false); err != nil {
 			return nil, err
 		}
-	} else if len(gq.UID) > 0 {
-		o := make([]uint64, len(gq.UID))
-		copy(o, gq.UID)
-		sg.uidMatrix = []*protos.List{{gq.UID}}
-		// User specified list may not be sorted.
-		sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
-		sg.SrcUIDs = &protos.List{o}
 	}
 
 	sg.values = createNilValuesList(1)
@@ -1499,7 +1509,7 @@ func (sg *SubGraph) appendDummyValues() {
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-	if parent == nil && len(sg.SrcFunc) == 0 {
+	if parent == nil && len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "uid" {
 		// I'm root and I'm using some variable that has been populated.
 		// Retain the actual order in uidMatrix. But sort the destUids.
 		if sg.SrcUIDs != nil && len(sg.SrcUIDs.Uids) != 0 {
@@ -1522,17 +1532,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// when multiple filters replace their sg.DestUIDs
 		sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
 	} else {
-		//		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "uid" {
-		//			fmt.Printf("Sg: %+v\n", sg)
-		//			// If its a uid() filter, we just have to intersect the SrcUIDs with DestUIDs
-		//			// and return.
-		//			sg.fillVars(sg.Params.ParentVars)
-		//			fmt.Println("attr", sg.Attr, "dest", sg.DestUIDs)
-		//			fmt.Println("src", sg.DestUIDs)
-		//			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
-		//			rch <- nil
-		//			return
-		//		}
+		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "uid" {
+			// If its a uid() filter, we just have to intersect the SrcUIDs with DestUIDs
+			// and return.
+			sg.fillVars(sg.Params.ParentVars)
+			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
+			rch <- nil
+			return
+		}
 		if len(sg.SrcFunc) > 0 && isInequalityFn(sg.SrcFunc[0]) && sg.Attr == "val" {
 			// This is a ineq function which uses a value variable.
 			err = sg.ApplyIneqFunc()
