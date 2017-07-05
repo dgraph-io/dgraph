@@ -393,8 +393,9 @@ func (n *node) send(m raftpb.Message) {
 func (n *node) batchAndSendMessages() {
 	batches := make(map[uint64]*bytes.Buffer)
 	for {
-		select {
-		case sm := <-n.messages:
+		sm := <-n.messages
+	slurp_loop:
+		for {
 			var buf *bytes.Buffer
 			if b, ok := batches[sm.to]; !ok {
 				buf = new(bytes.Buffer)
@@ -405,20 +406,21 @@ func (n *node) batchAndSendMessages() {
 			x.Check(binary.Write(buf, binary.LittleEndian, uint32(len(sm.data))))
 			x.Check2(buf.Write(sm.data))
 
-		default:
-			start := time.Now()
-			for to, buf := range batches {
-				if buf.Len() == 0 {
-					continue
-				}
-				data := make([]byte, buf.Len())
-				copy(data, buf.Bytes())
-				go n.doSendMessage(to, data)
-				buf.Reset()
+			select {
+			case sm = <-n.messages:
+			default:
+				break slurp_loop
 			}
-			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
-			sleepFor := 10*time.Millisecond - time.Since(start)
-			time.Sleep(sleepFor)
+		}
+
+		for to, buf := range batches {
+			if buf.Len() == 0 {
+				continue
+			}
+			data := make([]byte, buf.Len())
+			copy(data, buf.Bytes())
+			go n.doSendMessage(to, data)
+			buf.Reset()
 		}
 	}
 }
