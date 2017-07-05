@@ -1074,9 +1074,8 @@ func TestParseIdList1(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
-	require.Equal(t, 2, len(gq.Func.Args))
-	//	require.Equal(t, []uint64{0x1, 0x34}, gq.UID)
-	//	require.Equal(t, 2, len(gq.UID))
+	require.Equal(t, []uint64{0x1, 0x34}, gq.UID)
+	require.Equal(t, 2, len(gq.UID))
 }
 
 func TestParseIdListError(t *testing.T) {
@@ -3582,8 +3581,8 @@ func TestFilterUid(t *testing.T) {
 	`
 	gql, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	require.Equal(t, []string{"1", "3", "5", "7"}, gql.Query[0].Func.Args)
-	require.Equal(t, []string{"3", "7"}, gql.Query[0].Filter.Func.Args)
+	require.Equal(t, []uint64{1, 3, 5, 7}, gql.Query[0].UID)
+	require.Equal(t, []uint64{3, 7}, gql.Query[0].Filter.Func.UID)
 }
 
 func TestRemoveDuplicates(t *testing.T) {
@@ -3594,4 +3593,16 @@ func TestRemoveDuplicates(t *testing.T) {
 func TestRemoveDuplicatesWithoutDuplicates(t *testing.T) {
 	set := removeDuplicates([]string{"a", "b", "c", "d"})
 	require.EqualValues(t, []string{"a", "b", "c", "d"}, set)
+}
+
+func TestIdErr(t *testing.T) {
+	query := `
+	{
+		me(id: [1, 3 , 5, 7]) @filter(uid(3, 7)) {
+			name
+		}
+	}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
 }

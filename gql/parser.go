@@ -1478,11 +1478,14 @@ L:
 				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
+
 				if isDollar {
 					val = "$" + val
 					isDollar = false
-					if gq != nil {
+					if g.Name == UID && gq != nil {
 						gq.Args["id"] = val
+					} else {
+						g.Args = append(g.Args, val)
 					}
 					continue
 				}
@@ -1499,6 +1502,7 @@ L:
 					g.Lang = val
 					expectLang = false
 				} else if g.Name != UID {
+					// For UID function. we set g.UID
 					g.Args = append(g.Args, val)
 				}
 
@@ -1971,6 +1975,10 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		item = it.Item()
 		if item.Typ != itemColon {
 			return nil, x.Errorf("Expecting a colon. Got: %v", item)
+		}
+
+		if key == "id" {
+			return nil, x.Errorf("Invalid syntax using id. Use func: uid().")
 		}
 
 		if key == "func" {

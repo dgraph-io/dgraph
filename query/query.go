@@ -550,7 +550,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
 		isUidFunc := isUidFnWithoutVar(ft.Func)
 		if isUidFunc {
-			sg.populate(ft.Func.UID, true)
+			sg.populate(ft.Func.UID)
 		} else {
 			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Lang)
 			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
@@ -802,23 +802,12 @@ func isDebug(ctx context.Context) bool {
 	return debug || ctx.Value("debug") == "true"
 }
 
-func (sg *SubGraph) populate(uids []uint64, putSorted bool) error {
-	if putSorted {
-		// Put sorted entries in matrix.
-		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-		sg.uidMatrix = []*protos.List{{uids}}
-		// User specified list may not be sorted.
-		sg.SrcUIDs = &protos.List{uids}
-	} else {
-		// Create a copy, put unsorted uids in uidMatrix and sorted uids in SrcUIDs
-		o := make([]uint64, len(uids))
-		copy(o, uids)
-		sg.uidMatrix = []*protos.List{{uids}}
-		// User specified list may not be sorted.
-		sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
-		sg.SrcUIDs = &protos.List{o}
-	}
-
+func (sg *SubGraph) populate(uids []uint64) error {
+	// Put sorted entries in matrix.
+	sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
+	sg.uidMatrix = []*protos.List{{uids}}
+	// User specified list may not be sorted.
+	sg.SrcUIDs = &protos.List{uids}
 	return nil
 }
 
@@ -882,7 +871,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 
 	if isUidFunc && len(gq.Func.NeedsVar) == 0 && len(gq.UID) > 0 {
-		if err := sg.populate(gq.UID, false); err != nil {
+		if err := sg.populate(gq.UID); err != nil {
 			return nil, err
 		}
 	}
