@@ -951,9 +951,9 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 		sz := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
 		idx += 4
 		msg := raftpb.Message{}
-		if idx+sz-1 > len(query.Data) {
+		if idx+sz > len(query.Data) {
 			return &protos.Payload{}, x.Errorf(
-				"Invalid query. Size specified: %v. Size of array: %v\n", sz, len(query.Data))
+				"Invalid query. Specified size %v overflows slice [%v,%v)\n", sz, idx, len(query.Data))
 		}
 		if err := msg.Unmarshal(query.Data[idx : idx+sz]); err != nil {
 			x.Check(err)
