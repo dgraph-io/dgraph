@@ -472,39 +472,36 @@ func batchSync(i int) {
 	elog := trace.NewEventLog("Batch Sync", fmt.Sprintf("%d", i))
 
 	for {
-		select {
-		case e := <-syncCh:
-			entries = append(entries, e)
-
-		default:
-			// default is executed if no other case is ready.
-			start := time.Now()
-			if len(entries) > 0 {
-				loop++
-				if loop%1000 == 0 {
-					elog.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
-				}
-				for _, e := range entries {
-					if e.val == nil {
-						wb = badger.EntriesDelete(wb, e.key)
-					} else {
-						wb = badger.EntriesSet(wb, e.key, e.val)
-					}
-				}
-				pstore.BatchSet(wb)
-				wb = wb[:0]
-
-				for _, e := range entries {
-					if e.water != nil {
-						e.water.Ch <- x.Mark{Indices: e.pending, Done: true}
-					}
-				}
-				entries = entries[:0]
-			} else {
-				// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
-				sleepFor := time.Millisecond - time.Since(start)
-				time.Sleep(sleepFor)
+		ent := <-syncCh
+	slurp_loop:
+		for {
+			entries = append(entries, ent)
+			select {
+			case ent = <-syncCh:
+			default:
+				break slurp_loop
 			}
 		}
+
+		loop++
+		if loop%1000 == 0 {
+			elog.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
+		}
+		for _, e := range entries {
+			if e.val == nil {
+				wb = badger.EntriesDelete(wb, e.key)
+			} else {
+				wb = badger.EntriesSet(wb, e.key, e.val)
+			}
+		}
+		pstore.BatchSet(wb)
+		wb = wb[:0]
+
+		for _, e := range entries {
+			if e.water != nil {
+				e.water.Ch <- x.Mark{Indices: e.pending, Done: true}
+			}
+		}
+		entries = entries[:0]
 	}
 }

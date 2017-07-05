@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/trace"
@@ -320,34 +319,32 @@ func batchSync() {
 	var loop uint64
 	wb := make([]*badger.Entry, 0, 100)
 	for {
-		select {
-		case e := <-syncCh:
-			entries = append(entries, e)
-
-		default:
-			// default is executed if no other case is ready.
-			start := time.Now()
-			if len(entries) > 0 {
-				loop++
-				State().elog.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
-				for _, e := range entries {
-					val, err := e.Schema.Marshal()
-					x.Checkf(err, "Error while marshalling schema description")
-					wb = badger.EntriesSet(wb, x.SchemaKey(e.Attr), val)
-				}
-				pstore.BatchSet(wb)
-				wb = wb[:0]
-
-				entriesMap := make(map[chan x.Mark][]uint64)
-				addToEntriesMap(entriesMap, entries)
-				for ch, indices := range entriesMap {
-					ch <- x.Mark{Indices: indices, Done: true}
-				}
-				entries = entries[:0]
+		ent := <-syncCh
+	slurp_loop:
+		for {
+			entries = append(entries, ent)
+			select {
+			case ent = <-syncCh:
+			default:
+				break slurp_loop
 			}
-			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
-			sleepFor := 10*time.Millisecond - time.Since(start)
-			time.Sleep(sleepFor)
 		}
+
+		loop++
+		State().elog.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
+		for _, e := range entries {
+			val, err := e.Schema.Marshal()
+			x.Checkf(err, "Error while marshalling schema description")
+			wb = badger.EntriesSet(wb, x.SchemaKey(e.Attr), val)
+		}
+		pstore.BatchSet(wb)
+		wb = wb[:0]
+
+		entriesMap := make(map[chan x.Mark][]uint64)
+		addToEntriesMap(entriesMap, entries)
+		for ch, indices := range entriesMap {
+			ch <- x.Mark{Indices: indices, Done: true}
+		}
+		entries = entries[:0]
 	}
 }
