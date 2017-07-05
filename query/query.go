@@ -550,7 +550,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
 		isUidFunc := isUidFnWithoutVar(ft.Func)
 		if isUidFunc {
-			sg.uidsFromArgs(ft.Func.Args, true)
+			sg.populate(ft.Func.UID, true)
 		} else {
 			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Lang)
 			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
@@ -802,19 +802,7 @@ func isDebug(ctx context.Context) bool {
 	return debug || ctx.Value("debug") == "true"
 }
 
-func (sg *SubGraph) uidsFromArgs(ids []string, putSorted bool) error {
-	var uids []uint64
-	for _, id := range ids {
-		uid, err := strconv.ParseUint(id, 0, 64)
-		if err != nil {
-			return err
-		}
-		uids = append(uids, uid)
-	}
-	if len(uids) == 0 {
-		return nil
-	}
-
+func (sg *SubGraph) populate(uids []uint64, putSorted bool) error {
 	if putSorted {
 		// Put sorted entries in matrix.
 		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
@@ -893,11 +881,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 
-	// TODO - Maybe move parsing of ids to gql/parser
-	x.AssertTrue(len(gq.UID) == 0)
-	// Root ids can come from uid func or id: [].
-	if isUidFunc && len(gq.Func.NeedsVar) == 0 && len(gq.Func.Args) > 0 {
-		if err := sg.uidsFromArgs(gq.Func.Args, false); err != nil {
+	if isUidFunc && len(gq.Func.NeedsVar) == 0 && len(gq.UID) > 0 {
+		if err := sg.populate(gq.UID, false); err != nil {
 			return nil, err
 		}
 	}
