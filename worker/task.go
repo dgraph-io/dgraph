@@ -542,7 +542,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			}
 			for row := 0; row < rowsToFilter; row++ {
 				algo.ApplyFilter(out.UidMatrix[row], func(uid uint64, i int) bool {
-					sv, err := fetchValue(uid, attr, q.Langs, typ)
+					var langs []string
+					if len(srcFn.lang) > 0 {
+						langs = append(langs, srcFn.lang)
+					}
+					sv, err := fetchValue(uid, attr, langs, typ)
 					if sv.Value == nil || err != nil {
 						return false
 					}

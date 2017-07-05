@@ -117,7 +117,7 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 		return nil, "", err
 	}
 	if len(ineqTokens) != 1 {
-		return nil, "", x.Errorf("Attribute %s doest not have a valid tokenizer.", attr)
+		return nil, "", x.Errorf("Attribute %s does not have a valid tokenizer.", attr)
 	}
 	ineqToken := ineqTokens[0]
 
