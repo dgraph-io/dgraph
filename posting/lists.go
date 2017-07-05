@@ -140,7 +140,7 @@ func (c *counters) log() {
 func newCounters() *counters {
 	c := new(counters)
 	c.ticker = time.NewTicker(time.Second)
-	go c.periodicLog()
+	// go c.periodicLog()
 	return c
 }
 
