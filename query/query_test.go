@@ -1296,6 +1296,8 @@ func TestUseVarsMultiCascade(t *testing.T) {
 
 func TestUseVarsMultiOrder(t *testing.T) {
 	populateGraph(t)
+	posting.CommitLists(10, 1)
+	time.Sleep(time.Second)
 	query := `
 		{
 			var(id:0x01) {
