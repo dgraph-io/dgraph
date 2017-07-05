@@ -29,8 +29,8 @@ On its port, a running Dgraph instance exposes a number of service endpoints.
 * `/share`
 * `/health` HTTP status code 200 and "OK" message if worker is running, HTTP 503 otherwise.
 <!-- * `/debug/store` backend storage stats.-->
-* `/admin/shutdown` [shutdown]({{< relref "#shutdown" >}}) a node.
-* `/admin/backup` take a running [backup]({{< relref "#backup">}}).
+* `/admin/shutdown` [shutdown]({{< relref "#shutdown">}}) a node.
+* `/admin/export` take a running [export]({{< relref "#export">}}).
 
 
 ## Running Dgraph
@@ -52,8 +52,8 @@ Whether running standalone or in a cluster, each Dgraph instance relies on the f
 The command-line flags can be stored in a YAML file and provided via the `--config` flag.  For example:
 
 ```sh
-# Folder in which to store backups.
-backup: backup
+# Folder in which to store exports.
+export: export
 
 # Fraction of dirty posting lists to commit every few seconds.
 gentlecommit: 0.33
@@ -330,20 +330,20 @@ $ dgraphloader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph
 $ dgraphloader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -s github.com/dgraph-io/benchmarks/data/goldendata.schema -x
 ```
 
-## Backup
+## Export
 
-A backup of all nodes is started by locally accessing the backup endpoint of any server in the cluster.
+An export of all nodes is started by locally accessing the export endpoint of any server in the cluster.
 
 ```sh
-$ curl localhost:8080/admin/backup
+$ curl localhost:8080/admin/export
 ```
 {{% notice "warning" %}}This won't work if called from outside the server where dgraph is running.  Ensure that the port is set to the port given by `--port` on startup. {{% /notice %}}
 
 This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph instance is running.
 
-This triggers a backup of all the groups spread across the entire cluster. Each server writes output in gzipped rdf to the backup directory specified on startup by `--backup`. If any of the groups fail, the entire backup process is considered failed, and an error is returned.
+This triggers a export of all the groups spread across the entire cluster. Each server writes output in gzipped rdf to the export directory specified on startup by `--export`. If any of the groups fail, the entire export process is considered failed, and an error is returned.
 
-{{% notice "note" %}}It is up to the user to retrieve the right backups files from the servers in the cluster. Dgraph does not copy files  to the server that initiated the backup.{{% /notice %}}
+{{% notice "note" %}}It is up to the user to retrieve the right exports files from the servers in the cluster. Dgraph does not copy files  to the server that initiated the export.{{% /notice %}}
 
 ## Shutdown
 
@@ -363,24 +363,24 @@ Individual triples, patterns of triples and predicates can be deleted as describ
 To drop all data and start from a clean database:
 
 * [stop Dgraph]({{< relref "#shutdown" >}}) and wait for all writes to complete,
-* delete (maybe take a backup first) the `p` and `w` directories, then
+* delete (maybe do an export first) the `p` and `w` directories, then
 * restart Dgraph.
 
 ## Upgrade Dgraph
 
 <!--{{% notice "tip" %}}If you are upgrading from v0.7.3 you can modify the [schema file]({{< relref "query-language/index.md#schema">}}) to use the new syntax and give it to the dgraphloader using the `-s` flag while reloading your data.{{% /notice %}}-->
 
-Doing periodic backups is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely backup and restart.
+Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
 
-- Run a [backup]({{< relref "#backup">}})
+- Start an [export]({{< relref "#export">}})
 - Ensure it's successful
 - Bring down the cluster
 - Upgrade Dgraph binary / specify a new groups.conf
 - Run Dgraph using new data directories.
 - Reload the data via [bulk data loading]({{< relref "#bulk-data-loading" >}}).
-- If all looks good, you can delete the old directories (backup serves as an insurance)
+- If all looks good, you can delete the old directories (export serves as an insurance)
 
-These steps are necessary because Dgraph's underlying data format could have changed, and reloading the backup avoids encoding incompatibilities.
+These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
 
 ## Post Installation
 

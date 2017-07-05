@@ -39,8 +39,8 @@ import (
 var (
 	workerPort = flag.Int("workerport", 12345,
 		"Port used by worker for internal communication.")
-	backupPath = flag.String("backup", "backup",
-		"Folder in which to store backups.")
+	exportPath = flag.String("export", "export",
+		"Folder in which to store exports.")
 	numPendingProposals = flag.Int("pending_proposals", 2000,
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	Tracing          = flag.Float64("trace", 0.0, "The ratio of queries to trace.")

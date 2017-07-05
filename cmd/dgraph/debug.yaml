@@ -1,5 +1,5 @@
 # Folder in which to store backups.
-backup: backup
+export: export
 
 # Fraction of dirty posting lists to commit every few seconds.
 gentlecommit: 0.33

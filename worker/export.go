@@ -43,7 +43,7 @@ import (
 	"golang.org/x/net/trace"
 )
 
-const numBackupRoutines = 10
+const numExportRoutines = 10
 
 type kv struct {
 	prefix string
@@ -56,7 +56,7 @@ type skv struct {
 }
 
 // Map from our types to RDF type. Useful when writing storage types
-// for RDF's in backup. This is the dgraph type name and rdf storage type
+// for RDF's in export. This is the dgraph type name and rdf storage type
 // might not be the same always (e.g. - datetime and bool).
 var rdfTypeMap = map[types.TypeID]string{
 	types.StringID:   "xs:string",
@@ -98,7 +98,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				buf.WriteByte('>')
 			}
 		} else {
-			buf.WriteString("<0x")
+			buf.WriteString("<_:uid")
 			buf.WriteString(strconv.FormatUint(p.Uid, 16))
 			buf.WriteByte('>')
 		}
@@ -183,8 +183,8 @@ func writeToFile(fpath string, ch chan []byte) error {
 	return w.Flush()
 }
 
-// Backup creates a backup of data by exporting it as an RDF gzip.
-func backup(gid uint32, bdir string) error {
+// Export creates a export of data by exporting it as an RDF gzip.
+func export(gid uint32, bdir string) error {
 	// Use a goroutine to write to file.
 	err := os.MkdirAll(bdir, 0700)
 	if err != nil {
@@ -194,7 +194,7 @@ func backup(gid uint32, bdir string) error {
 		time.Now().Format("2006-01-02-15-04")))
 	fspath := path.Join(bdir, fmt.Sprintf("dgraph-schema-%d-%s.rdf.gz", gid,
 		time.Now().Format("2006-01-02-15-04")))
-	fmt.Printf("Backing up at: %v, schema at %v\n", fpath, fspath)
+	fmt.Printf("Exporting to: %v, schema at %v\n", fpath, fspath)
 	chb := make(chan []byte, 1000)
 	errChan := make(chan error, 2)
 	go func() {
@@ -208,8 +208,8 @@ func backup(gid uint32, bdir string) error {
 	// Use a bunch of goroutines to convert to RDF format.
 	chkv := make(chan kv, 1000)
 	var wg sync.WaitGroup
-	wg.Add(numBackupRoutines)
-	for i := 0; i < numBackupRoutines; i++ {
+	wg.Add(numExportRoutines)
+	for i := 0; i < numExportRoutines; i++ {
 		go func(i int) {
 			buf := new(bytes.Buffer)
 			buf.Grow(50000)
@@ -276,7 +276,8 @@ func backup(gid uint32, bdir string) error {
 			it.Seek(pk.SkipRangeOfSameType())
 			continue
 		}
-		if pk.Attr == "_uid_" || pk.Attr == "_predicate_" {
+		if pk.Attr == "_uid_" || pk.Attr == "_predicate_" ||
+			pk.Attr == "_lease_" {
 			// Skip the UID mappings.
 			it.Seek(pk.SkipPredicate())
 			continue
@@ -301,7 +302,7 @@ func backup(gid uint32, bdir string) error {
 			continue
 		}
 
-		prefix.WriteString("<0x")
+		prefix.WriteString("<_:uid")
 		prefix.WriteString(strconv.FormatUint(uid, 16))
 		prefix.WriteString("> <")
 		prefix.WriteString(pred)
@@ -319,7 +320,7 @@ func backup(gid uint32, bdir string) error {
 
 	close(chkv) // We have stopped output to chkv.
 	close(chs)  // we have stopped output to chs (schema)
-	wg.Wait()   // Wait for numBackupRoutines to finish.
+	wg.Wait()   // Wait for numExportRoutines to finish.
 	close(chb)  // We have stopped output to chb.
 	close(chsb) // we have stopped output to chs (schema)
 
@@ -328,27 +329,27 @@ func backup(gid uint32, bdir string) error {
 	return err
 }
 
-func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *protos.BackupPayload {
+func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos.ExportPayload {
 	n := groups().Node(gid)
 	if n.AmLeader() {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Leader of group: %d. Running backup.", gid)
+			tr.LazyPrintf("Leader of group: %d. Running export.", gid)
 		}
-		if err := backup(gid, *backupPath); err != nil {
+		if err := export(gid, *exportPath); err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
 			}
-			return &protos.BackupPayload{
+			return &protos.ExportPayload{
 				ReqId:  reqId,
-				Status: protos.BackupPayload_FAILED,
+				Status: protos.ExportPayload_FAILED,
 			}
 		}
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Backup done for group: %d.", gid)
+			tr.LazyPrintf("Export done for group: %d.", gid)
 		}
-		return &protos.BackupPayload{
+		return &protos.ExportPayload{
 			ReqId:   reqId,
-			Status:  protos.BackupPayload_SUCCESS,
+			Status:  protos.ExportPayload_SUCCESS,
 			GroupId: gid,
 		}
 	}
@@ -371,7 +372,7 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 		conn, err = pl.Get()
 		if err == nil {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Relaying backup request for group %d to %q", gid, pl.Addr)
+				tr.LazyPrintf("Relaying export request for group %d to %q", gid, pl.Addr)
 			}
 			defer pl.Put(conn)
 			break
@@ -382,55 +383,55 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 	}
 
 	// Unable to find any connection to any of these servers. This should be exceedingly rare.
-	// But probably not worthy of crashing the server. We can just skip the backup.
+	// But probably not worthy of crashing the server. We can just skip the export.
 	if conn == nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Unable to find a server to backup group: %d", gid)
+			tr.LazyPrintf("Unable to find a server to export group: %d", gid)
 		}
-		return &protos.BackupPayload{
+		return &protos.ExportPayload{
 			ReqId:   reqId,
-			Status:  protos.BackupPayload_FAILED,
+			Status:  protos.ExportPayload_FAILED,
 			GroupId: gid,
 		}
 	}
 
 	c := protos.NewWorkerClient(conn)
-	nr := &protos.BackupPayload{
+	nr := &protos.ExportPayload{
 		ReqId:   reqId,
 		GroupId: gid,
 	}
-	nrep, err := c.Backup(ctx, nr)
+	nrep, err := c.Export(ctx, nr)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
-		return &protos.BackupPayload{
+		return &protos.ExportPayload{
 			ReqId:   reqId,
-			Status:  protos.BackupPayload_FAILED,
+			Status:  protos.ExportPayload_FAILED,
 			GroupId: gid,
 		}
 	}
 	return nrep
 }
 
-// Backup request is used to trigger backups for the request list of groups.
-// If a server receives request to backup a group that it doesn't handle, it would
+// Export request is used to trigger exports for the request list of groups.
+// If a server receives request to export a group that it doesn't handle, it would
 // automatically relay that request to the server that it thinks should handle the request.
-func (w *grpcWorker) Backup(ctx context.Context, req *protos.BackupPayload) (*protos.BackupPayload, error) {
-	reply := &protos.BackupPayload{ReqId: req.ReqId}
-	reply.Status = protos.BackupPayload_FAILED // Set by default.
+func (w *grpcWorker) Export(ctx context.Context, req *protos.ExportPayload) (*protos.ExportPayload, error) {
+	reply := &protos.ExportPayload{ReqId: req.ReqId}
+	reply.Status = protos.ExportPayload_FAILED // Set by default.
 
 	if ctx.Err() != nil {
 		return reply, ctx.Err()
 	}
 	if !w.addIfNotPresent(req.ReqId) {
-		reply.Status = protos.BackupPayload_DUPLICATE
+		reply.Status = protos.ExportPayload_DUPLICATE
 		return reply, nil
 	}
 
-	chb := make(chan *protos.BackupPayload, 1)
+	chb := make(chan *protos.ExportPayload, 1)
 	go func() {
-		chb <- handleBackupForGroup(ctx, req.ReqId, req.GroupId)
+		chb <- handleExportForGroup(ctx, req.ReqId, req.GroupId)
 	}()
 
 	select {
@@ -441,8 +442,8 @@ func (w *grpcWorker) Backup(ctx context.Context, req *protos.BackupPayload) (*pr
 	}
 }
 
-func BackupOverNetwork(ctx context.Context) error {
-	// If we haven't even had a single membership update, don't run backup.
+func ExportOverNetwork(ctx context.Context) error {
+	// If we haven't even had a single membership update, don't run export.
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
@@ -459,28 +460,28 @@ func BackupOverNetwork(ctx context.Context) error {
 		}
 	}
 
-	ch := make(chan *protos.BackupPayload, len(gids))
+	ch := make(chan *protos.ExportPayload, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
 			reqId := uint64(rand.Int63())
-			ch <- handleBackupForGroup(ctx, reqId, group)
+			ch <- handleExportForGroup(ctx, reqId, group)
 		}(gid)
 	}
 
 	for i := 0; i < len(gids); i++ {
 		bp := <-ch
-		if bp.Status != protos.BackupPayload_SUCCESS {
+		if bp.Status != protos.ExportPayload_SUCCESS {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Backup status: %v for group id: %d", bp.Status, bp.GroupId)
+				tr.LazyPrintf("Export status: %v for group id: %d", bp.Status, bp.GroupId)
 			}
-			return fmt.Errorf("Backup status: %v for group id: %d", bp.Status, bp.GroupId)
+			return fmt.Errorf("Export status: %v for group id: %d", bp.Status, bp.GroupId)
 		}
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Backup successful for group: %v", bp.GroupId)
+			tr.LazyPrintf("Export successful for group: %v", bp.GroupId)
 		}
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("DONE backup")
+		tr.LazyPrintf("DONE export")
 	}
 	return nil
 }
