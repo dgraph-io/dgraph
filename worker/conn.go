@@ -38,8 +38,13 @@ var (
 // Pool is used to manage the grpc client connections for communicating with
 // other worker instances.
 type pool struct {
-	conns chan *grpc.ClientConn
-	Addr  string
+	// A "pool" now consists of one connection.  gRPC uses HTTP2 transport to combine
+	// messages in the same TCP stream.
+	connMutex sync.Mutex
+	conn      *grpc.ClientConn
+
+	// Read-only field
+	Addr string
 }
 
 type poolsi struct {
@@ -118,16 +123,8 @@ func (p *poolsi) connect(addr string) {
 // workers. The pool instance also has a buffered channel,conn with capacity
 // maxCap that stores the connections.
 func newPool(addr string, maxCap int) *pool {
-	p := new(pool)
-	p.Addr = addr
-	p.conns = make(chan *grpc.ClientConn, maxCap)
-	conn, err := p.dialNew()
-	if err != nil {
-		log.Fatal(err)
-		return nil
-	}
-	p.conns <- conn
-	return p
+	// We create the connection the first time we Get().
+	return &pool{Addr: addr}
 }
 
 func (p *pool) dialNew() (*grpc.ClientConn, error) {
@@ -137,25 +134,32 @@ func (p *pool) dialNew() (*grpc.ClientConn, error) {
 // Get returns a connection from the pool of connections or a new connection if
 // the pool is empty.
 func (p *pool) Get() (*grpc.ClientConn, error) {
+	// TODO: Make p never be nil here.
 	if p == nil {
 		return nil, errNoConnection
 	}
 
-	select {
-	case conn := <-p.conns:
-		return conn, nil
-	default:
-		return p.dialNew()
+	p.connMutex.Lock()
+	defer p.connMutex.Unlock()
+
+	// TODO: Do we really want to block other getters connecting?  Well yeah, let's
+	// make one connection attempt at a time.
+	if p.conn == nil {
+		conn, err := p.dialNew()
+		if err != nil {
+			return nil, err
+		}
+		p.conn = conn
 	}
+	return p.conn, nil
 }
 
 // Put returns a connection to the pool or closes and discards the connection
 // incase the pool channel is at capacity.
 func (p *pool) Put(conn *grpc.ClientConn) error {
-	select {
-	case p.conns <- conn:
-		return nil
-	default:
-		return conn.Close()
-	}
+	p.connMutex.Lock()
+	defer p.connMutex.Unlock()
+	// TODO: Get rid of this Put() or not.
+	x.AssertTrue(conn == p.conn)
+	return nil
 }
