@@ -548,8 +548,8 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 		}
 
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
-		isUidFunc := isUidFnWithoutVar(ft.Func)
-		if isUidFunc {
+		isUidFuncWithoutVar := isUidFnWithoutVar(ft.Func)
+		if isUidFuncWithoutVar {
 			sg.populate(ft.Func.UID)
 		} else {
 			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Lang)
@@ -858,10 +858,12 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Params: args,
 	}
 
-	isUidFunc := gq.Func != nil && isUidFnWithoutVar(gq.Func)
+	isUidFuncWithoutVar := gq.Func != nil && isUidFnWithoutVar(gq.Func)
 	// Uid function doesnt have Attr. It just has a list of ids
-	if gq.Func != nil && !isUidFunc {
-		sg.Attr = gq.Func.Attr
+	if gq.Func != nil && !isUidFuncWithoutVar {
+		if gq.Func.Attr != "uid" {
+			sg.Attr = gq.Func.Attr
+		}
 		if !isValidFuncName(gq.Func.Name) {
 			return nil, x.Errorf("Invalid function name : %s", gq.Func.Name)
 		}
@@ -870,7 +872,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 
-	if isUidFunc && len(gq.Func.NeedsVar) == 0 && len(gq.UID) > 0 {
+	if isUidFuncWithoutVar && len(gq.Func.NeedsVar) == 0 && len(gq.UID) > 0 {
 		if err := sg.populate(gq.UID); err != nil {
 			return nil, err
 		}
@@ -1584,11 +1586,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// Run all filters in parallel.
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
-			isUidFunc := len(filter.SrcFunc) > 0 && filter.SrcFunc[0] == "uid" &&
+			isUidFuncWithoutVar := len(filter.SrcFunc) > 0 && filter.SrcFunc[0] == "uid" &&
 				len(filter.Params.NeedsVar) == 0
 			// For uid function filter, no need for processing. User already gave us the
 			// list. Lets just update DestUIDs.
-			if isUidFunc {
+			if isUidFuncWithoutVar {
 				filter.DestUIDs = filter.SrcUIDs
 				filterChan <- nil
 				continue
