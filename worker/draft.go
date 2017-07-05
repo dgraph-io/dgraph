@@ -941,7 +941,7 @@ func (n *node) AmLeader() bool {
 	return r.Status().Lead == r.Status().ID
 }
 
-func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error {
+func applyMessage(ctx context.Context, msg raftpb.Message) error {
 	var rc protos.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
 	node := groups().Node(rc.Group)
@@ -982,7 +982,7 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 		if msg.Type != raftpb.MsgHeartbeat && msg.Type != raftpb.MsgHeartbeatResp {
 			fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
-		if err := w.applyMessage(ctx, msg); err != nil {
+		if err := applyMessage(ctx, msg); err != nil {
 			return &protos.Payload{}, err
 		}
 		idx += sz
