@@ -278,6 +278,16 @@ func populateGraph(t *testing.T) {
 	// data for bug (#945), also used by test for #1010
 	addEdgeToLangValue(t, "name", 0x1004, "Артём Ткаченко", "ru", nil)
 	addEdgeToLangValue(t, "name", 0x1004, "Artem Tkachenko", "en", nil)
+	// data for bug (#1118)
+	addEdgeToLangValue(t, "lossy", 0x1001, "Badger", "", nil)
+	addEdgeToLangValue(t, "lossy", 0x1001, "European badger", "en", nil)
+	addEdgeToLangValue(t, "lossy", 0x1001, "European badger barger European", "xx", nil)
+	addEdgeToLangValue(t, "lossy", 0x1001, "Borsuk europejski", "pl", nil)
+	addEdgeToLangValue(t, "lossy", 0x1001, "Europäischer Dachs", "de", nil)
+	addEdgeToLangValue(t, "lossy", 0x1001, "Барсук", "ru", nil)
+	addEdgeToLangValue(t, "lossy", 0x1001, "Blaireau européen", "fr", nil)
+	addEdgeToLangValue(t, "lossy", 0x1002, "Honey badger", "en", nil)
+	addEdgeToLangValue(t, "lossy", 0x1003, "Honey bee", "en", nil)
 
 	// regex test data
 	// 0x1234 is uid of interest for regex testing
@@ -6302,6 +6312,40 @@ func TestLangFilterMismatch6(t *testing.T) {
 		js)
 }
 
+func TestLangLossyIndex1(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	query := `
+		{
+			me(func:eq(lossy, "Badger")) {
+				lossy
+				lossy@en
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"lossy":"Badger","lossy@en":"European badger"}]}`,
+		js)
+}
+
+func TestLangLossyIndex2(t *testing.T) {
+	populateGraph(t)
+	posting.CommitLists(10, 1)
+	query := `
+		{
+			me(func:eq(lossy@ru, "Барсук")) {
+				lossy
+				lossy@en
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"lossy":"Badger","lossy@en":"European badger"}]}`,
+		js)
+}
+
 func checkSchemaNodes(t *testing.T, expected []*protos.SchemaNode, actual []*protos.SchemaNode) {
 	sort.Slice(expected, func(i, j int) bool {
 		return expected[i].Predicate >= expected[j].Predicate
@@ -6417,6 +6461,7 @@ value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 noindex_name                   : string .
 school		                   : uid @count .
+lossy                          : string @index(term) .
 `
 
 func TestMain(m *testing.M) {
