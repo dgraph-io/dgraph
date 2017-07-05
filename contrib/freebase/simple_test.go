@@ -60,7 +60,7 @@ func TestSimple(t *testing.T) {
 
 	q := `
     {
-    	me(id: 0x999999) {
+		me(func: uid(0x999999)) {
     		type
     		written-in
     		name
