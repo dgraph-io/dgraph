@@ -1307,7 +1307,6 @@ func TestUseVarsMultiCascade(t *testing.T) {
 func TestUseVarsMultiOrder(t *testing.T) {
 	populateGraph(t)
 	posting.CommitLists(10, 1)
-	time.Sleep(time.Second)
 	query := `
 		{
 			var(func: uid(0x01)) {
@@ -1573,9 +1572,6 @@ func TestRecurseQuery(t *testing.T) {
 
 func TestRecurseQueryOrder(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	// TODO: Remove this once we write index keys immediately.
-	time.Sleep(time.Second)
 	query := `
 		{
 			recurse(func: uid(0x01)) {
@@ -2084,7 +2080,6 @@ func TestDebug2(t *testing.T) {
 
 func TestDebug3(t *testing.T) {
 	populateGraph(t)
-	time.Sleep(10 * time.Second)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `

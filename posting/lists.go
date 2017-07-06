@@ -350,6 +350,17 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	// increment its reference counter.
 	lp.incr()
 
+	pk := x.Parse(key)
+	if l == lp && pk.IsIndex() {
+		// Lock before entering goroutine. Otherwise, some tests in query will fail.
+		l.Lock()
+		go func(key []byte) {
+			defer l.Unlock()
+			err := pstore.GetOrTouch(key)
+			x.Check(err)
+		}(key)
+	}
+
 	if lp != l {
 		// Undo the increment in getNew() call above.
 		go l.decr()
