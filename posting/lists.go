@@ -358,10 +358,9 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	return lp, lp.decr
 }
 
-// GetOrUnmarshal takes a key, value and a groupID. It checks if the in-memory map has an
-// updated value and returns it if it exists or it unmarshals the value passed and returns
-// the list.
-func GetOrUnmarshal(key, val []byte, gid uint32) (rlist *List, decr func()) {
+// Get takes a key and a groupID. It checks if the in-memory map has an
+// updated value and returns it if it exists or it gets from the store and DOES NOT ADD to lhmap.
+func Get(key []byte, gid uint32) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
 	lhmap := lhmapFor(gid)
 
@@ -374,11 +373,7 @@ func GetOrUnmarshal(key, val []byte, gid uint32) (rlist *List, decr func()) {
 		return lp, lp.decr
 	}
 
-	var pl protos.PostingList
-	pl.Unmarshal(val)
 	lp = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
-	lp.mlayer = pl.Postings
-
 	return lp, lp.decr
 }
 
