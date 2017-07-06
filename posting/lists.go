@@ -353,6 +353,12 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	if lp != l {
 		// Undo the increment in getNew() call above.
 		go l.decr()
+	} else {
+		pk := x.Parse(key)
+		if pk.IsIndex() {
+			err := pstore.Touch(key)
+			x.Check(err)
+		}
 	}
 
 	return lp, lp.decr
