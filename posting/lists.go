@@ -350,6 +350,12 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	// increment its reference counter.
 	lp.incr()
 
+	pk := x.Parse(key)
+	if l == lp && pk.IsIndex() {
+		err := pstore.Touch(key)
+		x.Check(err)
+	}
+
 	if lp != l {
 		// Undo the increment in getNew() call above.
 		go l.decr()
