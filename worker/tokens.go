@@ -18,7 +18,6 @@
 package worker
 
 import (
-	"bytes"
 	"strings"
 
 	"github.com/dgraph-io/badger"
@@ -131,23 +130,14 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 	itOpt.Reverse = !isgeOrGt
 	it := pstore.NewIterator(itOpt)
 	defer it.Close()
-	it.Seek(x.IndexKey(attr, ineqToken)) // If !isgeOrGt, then this is a SeekForPrev.
-
-	if !it.Valid() {
-		return []string{}, "", nil
-	}
 
 	var out []string
 	indexPrefix := x.IndexKey(attr, string(tokenizer.Identifier()))
-	for it.Valid() {
+	for it.Seek(x.IndexKey(attr, ineqToken)); it.ValidForPrefix(indexPrefix); it.Next() {
 		key := it.Item().Key()
-		if !bytes.HasPrefix(key, indexPrefix) {
-			break
-		}
 		k := x.Parse(key)
 		x.AssertTrue(k != nil)
 		out = append(out, k.Term)
-		it.Next()
 	}
 	return out, ineqToken, nil
 }
