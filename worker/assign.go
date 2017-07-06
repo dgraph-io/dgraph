@@ -71,7 +71,13 @@ func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.Assign
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Not leader of group: %d. Sending to: %d", leaseGid, lid)
 	}
-	p := pools().get(addr)
+	p, err := pools().get(addr)
+	if err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while retrieving connection: %+v", err)
+		}
+		return &emptyAssignedIds, err
+	}
 	conn, err := p.Get()
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {

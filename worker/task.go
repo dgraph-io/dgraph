@@ -66,7 +66,10 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 	// Send this over the network.
 	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
 	addr := groups().AnyServer(gid)
-	pl := pools().get(addr)
+	pl, err := pools().get(addr)
+	if err != nil {
+		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
+	}
 
 	conn, err := pl.Get()
 	if err != nil {

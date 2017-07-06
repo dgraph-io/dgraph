@@ -445,7 +445,9 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	if len(addr) == 0 {
 		return
 	}
-	pool := pools().get(addr)
+	pool, err := pools().get(addr)
+	// TODO: No, don't fail like this?
+	x.Check(err)
 	conn, err := pool.Get()
 	x.Check(err)
 	defer pool.Put(conn)
@@ -636,8 +638,10 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 func (n *node) retrieveSnapshot(rc protos.RaftContext) {
 	addr := n.peers.Get(rc.Id)
 	x.AssertTruef(addr != "", "Should have the address for %d", rc.Id)
-	pool := pools().get(addr)
-	x.AssertTruef(pool != nil, "Pool shouldn't be nil for address: %v for id: %v", addr, rc.Id)
+	pool, err := pools().get(addr)
+	if err != nil {
+		log.Fatalf("Pool shouldn't be nil for address: %v for id: %v, error: %v\n", addr, rc.Id, err)
+	}
 
 	x.AssertTrue(rc.Group == n.gid)
 	// Get index of last committed.
@@ -832,8 +836,10 @@ func (n *node) joinPeers() {
 	n.Connect(pid, paddr)
 	fmt.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
 
-	pool := pools().get(paddr)
-	x.AssertTruef(pool != nil, "Unable to get pool for addr: %q for peer: %d", paddr, pid)
+	pool, err := pools().get(paddr)
+	if err != nil {
+		log.Fatalf("Unable to get pool for addr: %q for peer: %d, error: %v\n", paddr, pid, err)
+	}
 
 	// Bring the instance up to speed first.
 	// Raft would decide whether snapshot needs to fetched or not

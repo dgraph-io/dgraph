@@ -139,7 +139,11 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *protos.SchemaReque
 	}
 
 	_, addr := groups().Leader(gid)
-	pl := pools().get(addr)
+	pl, err := pools().get(addr)
+	if err != nil {
+		ch <- resultErr{err: err}
+		return
+	}
 	conn, e := pl.Get()
 	if e != nil {
 		ch <- resultErr{err: e}

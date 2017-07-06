@@ -437,11 +437,17 @@ func (g *groupi) syncMemberships() {
 
 	// Send an update to peer.
 	var pl *pool
+	var err error
 	addr := g.AnyServer(0)
 
 UPDATEMEMBERSHIP:
 	if len(addr) > 0 {
-		pl = pools().get(addr)
+		pl, err = pools().get(addr)
+		if err == errNoConnection {
+			fmt.Println("Unable to sync memberships. No valid connection")
+			return
+		}
+		x.Check(err)
 	} else {
 		pl = pools().any()
 	}

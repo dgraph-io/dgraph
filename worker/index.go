@@ -217,8 +217,10 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 
 	// Send this over the network.
 	addr := groups().AnyServer(gid)
-	pl := pools().get(addr)
-
+	pl, err := pools().get(addr)
+	if err != nil {
+		return x.Wrapf(err, "RebuildIndexOverNetwork: while retrieving connection.")
+	}
 	conn, err := pl.Get()
 	if err != nil {
 		return x.Wrapf(err, "RebuildIndexOverNetwork: while retrieving connection.")

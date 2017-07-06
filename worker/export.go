@@ -367,19 +367,26 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 
 	var conn *grpc.ClientConn
 	for _, addr := range addrs {
-		pl := pools().get(addr)
-		var err error
-		conn, err = pl.Get()
-		if err == nil {
+		pl, err := pools().get(addr)
+		if err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Relaying export request for group %d to %q", gid, pl.Addr)
+				tr.LazyPrintf(err.Error())
 			}
-			defer pl.Put(conn)
-			break
+			continue
 		}
+		conn, err = pl.Get()
+		if err != nil {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(err.Error())
+			}
+			continue
+		}
+
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
+			tr.LazyPrintf("Relaying export request for group %d to %q", gid, pl.Addr)
 		}
+		defer pl.Put(conn)
+		break
 	}
 
 	// Unable to find any connection to any of these servers. This should be exceedingly rare.

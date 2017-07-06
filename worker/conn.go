@@ -70,11 +70,14 @@ func (p *poolsi) any() *pool {
 	return nil
 }
 
-func (p *poolsi) get(addr string) *pool {
+func (p *poolsi) get(addr string) (*pool, error) {
 	p.RLock()
 	defer p.RUnlock()
-	pool, _ := p.all[addr]
-	return pool
+	pool, ok := p.all[addr]
+	if !ok {
+		return nil, errNoConnection
+	}
+	return pool, nil
 }
 
 func (p *poolsi) connect(addr string) {

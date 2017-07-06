@@ -324,7 +324,14 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 	}
 
 	_, addr := groups().Leader(gid)
-	pl := pools().get(addr)
+	pl, err := pools().get(addr)
+	if err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf(err.Error())
+		}
+		che <- err
+		return
+	}
 	conn, err := pl.Get()
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
