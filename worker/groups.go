@@ -92,7 +92,7 @@ func StartRaftNodes(walDir string) {
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
 	if len(*myAddr) == 0 {
-		*myAddr = fmt.Sprintf("localhost:%d", *workerPort)
+		*myAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
 		// check if address is valid or not
 		ok := x.ValidateAddress(*myAddr)
