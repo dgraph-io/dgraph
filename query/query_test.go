@@ -310,8 +310,6 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "son", 1, 2300, nil)
 
 	addEdgeToValue(t, "name", 2301, `Alice\"`, nil)
-
-	time.Sleep(5 * time.Millisecond)
 }
 
 func TestGetUID(t *testing.T) {
@@ -1306,8 +1304,6 @@ func TestUseVarsMultiCascade(t *testing.T) {
 
 func TestUseVarsMultiOrder(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(time.Second)
 	query := `
 		{
 			var(func: uid(0x01)) {
@@ -1573,9 +1569,6 @@ func TestRecurseQuery(t *testing.T) {
 
 func TestRecurseQueryOrder(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	// TODO: Remove this once we write index keys immediately.
-	time.Sleep(time.Second)
 	query := `
 		{
 			recurse(func: uid(0x01)) {
@@ -2084,7 +2077,6 @@ func TestDebug2(t *testing.T) {
 
 func TestDebug3(t *testing.T) {
 	populateGraph(t)
-	time.Sleep(10 * time.Second)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -6239,7 +6231,6 @@ func TestLangMultipleForcedFallbackNoDefault(t *testing.T) {
 
 func TestLangFilterMatch1(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
 		{
 			me(func:allofterms(name@pl, "Europejski borsuk"))  {
@@ -6255,7 +6246,6 @@ func TestLangFilterMatch1(t *testing.T) {
 
 func TestLangFilterMismatch1(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
 		{
 			me(func:allofterms(name@pl, "European Badger"))  {
@@ -6271,7 +6261,6 @@ func TestLangFilterMismatch1(t *testing.T) {
 
 func TestLangFilterMismatch2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
 		{
 			me(func: uid(0x1, 0x2, 0x3, 0x1001)) @filter(anyofterms(name@pl, "Badger is cool")) {
@@ -6287,7 +6276,6 @@ func TestLangFilterMismatch2(t *testing.T) {
 
 func TestLangFilterMismatch3(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
 		{
 			me(func: uid(0x1, 0x2, 0x3, 0x1001)) @filter(allofterms(name@pl, "European borsuk")) {
@@ -6303,7 +6291,6 @@ func TestLangFilterMismatch3(t *testing.T) {
 
 func TestLangFilterMismatch5(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
 		{
 			me(func:anyofterms(name@en, "european honey")) {
@@ -6319,7 +6306,6 @@ func TestLangFilterMismatch5(t *testing.T) {
 
 func TestLangFilterMismatch6(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
 		{
 			me(func: uid(0x1001, 0x1002, 0x1003)) @filter(lt(name@en, "D"))  {
@@ -6335,7 +6321,6 @@ func TestLangFilterMismatch6(t *testing.T) {
 
 func TestLangLossyIndex1(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
 		{
 			me(func:eq(lossy, "Badger")) {
@@ -6352,7 +6337,6 @@ func TestLangLossyIndex1(t *testing.T) {
 
 func TestLangLossyIndex2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
 		{
 			me(func:eq(lossy@ru, "Барсук")) {
@@ -6369,7 +6353,6 @@ func TestLangLossyIndex2(t *testing.T) {
 
 func TestLangLossyIndex3(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
 		{
 			me(func:eq(lossy@fr, "Blaireau")) {
@@ -6386,7 +6369,6 @@ func TestLangLossyIndex3(t *testing.T) {
 
 func TestLangLossyIndex4(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
 	query := `
 		{
 			me(func:eq(value, "mission")) {
@@ -6531,7 +6513,6 @@ func TestMain(m *testing.M) {
 	ps, err = badger.NewKV(&opt)
 	defer ps.Close()
 	x.Check(err)
-	time.Sleep(time.Second)
 
 	group.ParseGroupConfig("")
 	schema.Init(ps)
@@ -6545,7 +6526,6 @@ func TestMain(m *testing.M) {
 	// Load schema after nodes have started
 	err = schema.ParseBytes([]byte(schemaStr), 1)
 	x.Check(err)
-	time.Sleep(2 * time.Second)
 	defer os.RemoveAll(dir2)
 
 	os.Exit(m.Run())
@@ -7363,8 +7343,6 @@ children: <
 
 func TestCountAtRoot3(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
         {
 		me(func:anyofterms(name, "Michonne Rick Daryl")) {
@@ -7384,8 +7362,6 @@ func TestCountAtRoot3(t *testing.T) {
 
 func TestCountAtRootWithAlias4(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
                 me(func:anyofterms(name, "Michonne Rick Daryl")) @filter(le(count(friend), 2)) {
@@ -7726,8 +7702,6 @@ func TestMathVar3(t *testing.T) {
 
 func TestMultipleEquality(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: eq(name, ["Rick Grimes"])) {
@@ -7746,8 +7720,6 @@ func TestMultipleEquality(t *testing.T) {
 
 func TestMultipleEquality2(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: eq(name, ["Badger", "Bobby", "Matt"])) {
@@ -7765,8 +7737,6 @@ func TestMultipleEquality2(t *testing.T) {
 
 func TestMultipleEquality3(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: eq(dob, ["1910-01-01", "1909-05-05"])) {
@@ -7784,8 +7754,6 @@ func TestMultipleEquality3(t *testing.T) {
 
 func TestMultipleEquality4(t *testing.T) {
 	populateGraph(t)
-	posting.CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
 	query := `
 	{
 		me(func: eq(dob, ["1910-01-01", "1909-05-05"])) {

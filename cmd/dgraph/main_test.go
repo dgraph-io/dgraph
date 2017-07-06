@@ -696,8 +696,12 @@ func TestDeleteAllSP(t *testing.T) {
 	var m2 = `
 	mutation{
 		delete{
-			<0x1> * * .
+			uid(a) * * .
 		}
+	}
+	
+	{
+		a as var(func: uid(1))
 	}
 	`
 	var m1 = `

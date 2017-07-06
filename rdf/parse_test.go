@@ -837,7 +837,14 @@ var testNQuads = []struct {
 		},
 	},
 	{
-		// Quotes inside facet string values.
+		input: `uid(alice) * * .`,
+		nq: protos.NQuad{
+			SubjectVar:  "alice",
+			Predicate:   x.Star,
+			ObjectValue: &protos.Value{&protos.Value_DefaultVal{x.Star}},
+		},
+	},
+	{
 		input: `* <pred> * .`,
 		nq: protos.NQuad{
 			Subject:     x.Star,
@@ -846,7 +853,6 @@ var testNQuads = []struct {
 		},
 	},
 	{
-		// Quotes inside facet string values.
 		input:       `* <pred> "random"^^<int> .`,
 		expectedErr: true,
 	},

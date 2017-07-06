@@ -742,7 +742,6 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 			}
 			fc.tokens = append(fc.tokens, tokens...)
 			fc.eqTokens = append(fc.eqTokens, fc.ineqValue)
-
 		}
 		fc.n = len(fc.tokens)
 		fc.lang = q.SrcFunc[1]
