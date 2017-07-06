@@ -470,6 +470,7 @@ func lexVariable(l *lex.Lexer) lex.StateFn {
 	if r = l.Next(); r != ')' {
 		return l.Errorf("Expected ')' while reading var, found: %c", r)
 	}
+	l.Emit(itemRightRound)
 	l.Depth++
 
 	return lexText
