@@ -19,6 +19,7 @@ package worker
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/trace"
@@ -43,17 +45,17 @@ func backup(gid uint32, bdir string) error {
 	}
 	fpath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.rdf.gz", gid,
 		time.Now().Format("2006-01-02-15-04")))
-	fmt.Printf("Exporting to: %v, schema at %v\n", fpath, fspath)
+	fmt.Printf("Exporting to: %v", fpath)
 	chb := make(chan []byte, 1000)
 	errChan := make(chan error, 2)
 	go func() {
 		errChan <- writeToFile(fpath, chb)
 	}()
 
+	b := make([]byte, 4)
 	// Iterate over the store.
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
-	var lastPred string
 	prefix := new(bytes.Buffer)
 	prefix.Grow(100)
 	var debugCount int
@@ -62,73 +64,29 @@ func backup(gid uint32, bdir string) error {
 		key := item.Key()
 		pk := x.Parse(key)
 
-		// TODO: Find group ID and write it out if it satisfies
+		if group.BelongsTo(pk.Attr) == gid {
+			k := item.Key()
+			v := item.Value()
+			binary.LittleEndian.PutUint32(b, uint32(len(k)))
+			prefix.Write(b)
+			prefix.Write(k)
+			binary.LittleEndian.PutUint32(b, uint32(len(v)))
+			prefix.Write(b)
+			prefix.Write(v)
+		}
 
-		/*
-			if pk.IsIndex() {
-				// Seek to the end of index keys.
-				it.Seek(pk.SkipRangeOfSameType())
-				continue
-			}
-			if pk.IsReverse() {
-				// Seek to the end of reverse keys.
-				it.Seek(pk.SkipRangeOfSameType())
-				continue
-			}
-			if pk.Attr == "_uid_" || pk.Attr == "_predicate_" ||
-				pk.Attr == "_lease_" {
-				// Skip the UID mappings.
-				it.Seek(pk.SkipPredicate())
-				continue
-			}
-			if pk.IsSchema() {
-				if group.BelongsTo(pk.Attr) == gid {
-					s := &protos.SchemaUpdate{}
-					x.Check(s.Unmarshal(item.Value()))
-					chs <- &skv{
-						attr:   pk.Attr,
-						schema: s,
-					}
-				}
-				// skip predicate
-				it.Next()
-				continue
-			}
-			x.AssertTrue(pk.IsData())
-			pred, uid := pk.Attr, pk.Uid
-			if pred != lastPred && group.BelongsTo(pred) != gid {
-				it.Seek(pk.SkipPredicate())
-				continue
-			}
-
-			prefix.WriteString("<_:uid")
-			prefix.WriteString(strconv.FormatUint(uid, 16))
-			prefix.WriteString("> <")
-			prefix.WriteString(pred)
-			prefix.WriteString("> ")
-			pl := &protos.PostingList{}
-			x.Check(pl.Unmarshal(item.Value()))
-			chkv <- kv{
-				prefix: prefix.String(),
-				list:   pl,
-			}
-		*/
-
+		chb <- prefix.Bytes()
 		prefix.Reset()
-		lastPred = pred
 		it.Next()
 	}
 
-	close(chkv) // We have stopped output to chkv.
-	wg.Wait()   // Wait for numExportRoutines to finish.
-	close(chb)  // We have stopped output to chb.
+	close(chb) // We have stopped output to chb.
 
-	err = <-errChan
 	err = <-errChan
 	return err
 }
 
-func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos.ExportPayload {
+func handleExportForGroup1(ctx context.Context, reqId uint64, gid uint32) *protos.ExportPayload {
 	n := groups().Node(gid)
 	if n.AmLeader() {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -225,7 +183,7 @@ func Backup(ctx context.Context) error {
 	gids := groups().KnownGroups()
 
 	for i, gid := range gids {
-		if gid == 0 {
+		if gid == 0 || !groups().ServesGroup(gid) {
 			gids[i] = gids[len(gids)-1]
 			gids = gids[:len(gids)-1]
 		}

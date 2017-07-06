@@ -45,7 +45,7 @@ popd &> /dev/null
 
 # Lets wait for stuff to be committed to RocksDB.
 # wait for index keys to sync to db
-sleep 120
+sleep 1
 
 pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/indextest &> /dev/null
 
