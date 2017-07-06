@@ -23,6 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"sync"
 	"time"
@@ -61,7 +62,8 @@ func Init(ps *badger.KV) {
 	pendingProposals = make(chan struct{}, *numPendingProposals)
 	workerServer = grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
-		grpc.MaxSendMsgSize(x.GrpcMaxSize))
+		grpc.MaxSendMsgSize(x.GrpcMaxSize),
+		grpc.MaxConcurrentStreams(math.MaxInt32))
 }
 
 // grpcWorker struct implements the gRPC server interface.
