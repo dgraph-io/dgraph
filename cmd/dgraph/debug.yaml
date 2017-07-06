@@ -10,8 +10,11 @@ idx: 1
 # Groups to be served by this instance.
 groups: "0,1"
 
-# Port to run server on. (default 8080)
+# Port to run http server on. (default 8080)
 port: 8080
+
+# Port to run grpc server on. (default 9080)
+grpc_port: 9080
 
 # Port used by worker for internal communication.
 workerport: 12345

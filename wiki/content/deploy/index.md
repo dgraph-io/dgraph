@@ -22,7 +22,7 @@ $ sudo tar -C /usr/local/bin -xzf dgraph-darwin-amd64-VERSION.tar.gz
 
 ## Endpoints
 
-On its port, a running Dgraph instance exposes a number of service endpoints.
+On its http port, a running Dgraph instance exposes a number of service endpoints.
 
 * `/` Browser UI and query visualization.
 * `/query` receive queries and respond in JSON.
@@ -42,11 +42,12 @@ Whether running standalone or in a cluster, each Dgraph instance relies on the f
 * A `p` directory.  This is where Dgraph persists the graph data as posting lists. (option `--p`, default: directory `p` where the instance was started)
 * A `w` directory.  This is where Dgraph stores its write ahead logs. (option `--w`, default: directory `w` where the instance was started)
 * The `p` and `w` directories must be different.
-* A port exposing the instance for query, client connections and other [endpoints]({{< relref "#endpoints">}}). (option `--port`, default: `8080` on `localhost`)
+* A port for query, http client connections and other [endpoints]({{< relref "#endpoints">}}). (option `--port`, default: `8080` on `localhost`)
+* A port for gRPC client connections. (option `--grpc_port`, default: `9080` on `localhost`)
 * A port on which to run a worker node, used for Dgraph's communication between nodes. (option `--workerport`, default: `12345`)
 * An address and port at which the node advertises its worker.  (option `--my`, default: `localhost:workerport`)
 
-{{% notice "note" %}}By default `8080` or the port specified by `--port` is bound to `localhost` (the loopback address only accessible from the same machine).  The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections. {{% /notice %}}
+{{% notice "note" %}}By default the server listens on `localhost` (the loopback address only accessible from the same machine).  The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections. {{% /notice %}}
 
 ### Config
 The command-line flags can be stored in a YAML file and provided via the `--config` flag.  For example:
@@ -66,6 +67,9 @@ groups: "0,1-5"
 
 # Port to run server on. (default 8080)
 port: 8080
+
+# GRPC port to run server on. (default 9080)
+grpc_port: 9080
 
 # Port used by worker for internal communication.
 workerport: 12345
@@ -254,7 +258,7 @@ To run a cluster, begin by bringing up a single server that serves at least grou
 ```
 $ dgraph --group_conf groups.conf --groups "0,1" --idx 1 --my "ip-address-others-should-access-me-at" --bindall=true
 
-# This instance with ID 1 will serve groups 0 and 1, using the default 8080 port for clients and 12345 for peers.
+# This instance with ID 1 will serve groups 0 and 1, using the default 8080/9080 ports for clients and 12345 for peers.
 ```
 
 {{% notice "note" %}} The `--bindall=true` option is required when running on multiple machines, otherwise the node's port and workerport will be bound to localhost and not be accessible over a network. {{% /notice %}}
@@ -320,7 +324,7 @@ The `dgraphloader` binary is a small helper program which reads RDF NQuads from 
 ```
 $ dgraphloader --help # To see the available flags.
 
-# Read RDFs from the passed file, and send them to Dgraph on localhost:8080.
+# Read RDFs from the passed file, and send them to Dgraph on localhost:9080.
 $ dgraphloader -r <path-to-rdf-gzipped-file>
 
 # Read RDFs and a schema file and send do Dgraph running at given address

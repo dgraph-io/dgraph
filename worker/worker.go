@@ -37,7 +37,7 @@ import (
 )
 
 var (
-	workerPort = flag.Int("workerport", 12345,
+	baseWorkerPort = flag.Int("workerport", 12345,
 		"Port used by worker for internal communication.")
 	exportPath = flag.String("export", "export",
 		"Folder in which to store exports.")
@@ -49,6 +49,10 @@ var (
 	leaseGid         uint32
 	pendingProposals chan struct{}
 )
+
+func workerPort() int {
+	return *x.PortOffset + *baseWorkerPort
+}
 
 func Init(ps *badger.KV) {
 	pstore = ps
@@ -94,7 +98,7 @@ func RunServer(bindall bool) {
 		laddr = "0.0.0.0"
 	}
 	var err error
-	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, *workerPort))
+	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, workerPort()))
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
 		return

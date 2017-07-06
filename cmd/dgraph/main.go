@@ -60,11 +60,12 @@ import (
 )
 
 var (
-	gconf      = flag.String("group_conf", "", "group configuration file")
-	postingDir = flag.String("p", "p", "Directory to store posting lists.")
-	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
-	port       = flag.Int("port", 8080, "Port to run server on.")
-	bindall    = flag.Bool("bindall", false,
+	gconf        = flag.String("group_conf", "", "group configuration file")
+	postingDir   = flag.String("p", "p", "Directory to store posting lists.")
+	walDir       = flag.String("w", "w", "Directory to store raft write-ahead logs.")
+	baseHttpPort = flag.Int("port", 8080, "Port to run HTTP service on.")
+	baseGrpcPort = flag.Int("grpc_port", 9080, "Port to run gRPC service on.")
+	bindall      = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	exposeTrace = flag.Bool("expose_trace", false,
@@ -89,6 +90,14 @@ var (
 	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min version.")
 	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max version.")
 )
+
+func httpPort() int {
+	return *x.PortOffset + *baseHttpPort
+}
+
+func grpcPort() int {
+	return *x.PortOffset + *baseGrpcPort
+}
 
 func stopProfiling() {
 	// Stop the CPU profiling that was initiated.
@@ -680,15 +689,19 @@ func setupServer(che chan error) {
 		laddr = "0.0.0.0"
 	}
 
-	l, err := setupListener(laddr, *port)
+	httpListener, err := setupListener(laddr, httpPort())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	tcpm := cmux.New(l)
-	grpcl := tcpm.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
-	httpl := tcpm.Match(cmux.HTTP1Fast())
-	http2 := tcpm.Match(cmux.HTTP2())
+	grpcListener, err := setupListener(laddr, grpcPort())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	httpMux := cmux.New(httpListener)
+	httpl := httpMux.Match(cmux.HTTP1Fast())
+	http2 := httpMux.Match(cmux.HTTP2())
 
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/query", queryHandler)
@@ -705,23 +718,23 @@ func setupServer(che chan error) {
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initilize the servers.
-	go serveGRPC(grpcl)
+	go serveGRPC(grpcListener)
 	go serveHTTP(httpl)
 	go serveHTTP(http2)
 
 	go func() {
 		<-shutdownCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
-		l.Close()
+		grpcListener.Close()
+		httpListener.Close()
 	}()
 
-	log.Println("grpc server started.")
-	log.Println("http server started.")
-	log.Println("Server listening on port", *port)
+	log.Println("gRPC server started.  Listening on port", grpcPort())
+	log.Println("HTTP server started.  Listening on port", httpPort())
 
-	err = tcpm.Serve() // Start cmux serving. blocking call
-	<-shutdownCh       // wait for shutdownServer to finish
-	che <- err         // final close for main.
+	err = httpMux.Serve() // Start cmux serving. blocking call
+	<-shutdownCh          // wait for shutdownServer to finish
+	che <- err            // final close for main.
 }
 
 func main() {
