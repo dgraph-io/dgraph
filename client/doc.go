@@ -22,7 +22,7 @@ to upload data concurrently. It communicates with the server using gRPC.
 In this example, we first create a node, add a name (Steven Spielberg) and age
 attribute to it. We then create another node, add a name attribute (William Jones),
 we then add a friend edge between the two nodes.
-	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	dgraphClient := protos.NewDgraphClient(conn)
 	req := client.Req{}
 

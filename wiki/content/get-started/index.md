@@ -48,21 +48,21 @@ dgraph
 
 The `-v` flag lets Docker mount a directory so that dgraph can persist data to disk and access files for loading data.
 
-#### Map to default port (8080 on the local interface)
+#### Map to default ports (8080 and 9080 on the local interface)
 
 ```sh
 mkdir -p ~/dgraph
-docker run -it -p 127.0.0.1:8080:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
+docker run -it -p 127.0.0.1:8080:8080 -p 127.0.0.1:9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
 #### Map to custom port
 ```sh
 mkdir -p ~/dgraph
-# Mapping port 8080 from within the container to 9090 (bound to the local interface) of the instance
-docker run -it -p 127.0.0.1:9090:8080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
+# Mapping port 8080 from within the container to 18080 (bound to the local interface) of the instance, likewise with the gRPC port 9090.
+docker run -it -p 127.0.0.1:18080:8080 -p 127.0.0.1:19090:9090 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
 ```
 
-{{% notice "note" %}}The dgraph server listens on port 8080 (unless mapped to another port above) with log output to the terminal.{{% /notice %}}
+{{% notice "note" %}}The dgraph server listens on ports 8080 and 9090 (unless mapped to another port above) with log output to the terminal.{{% /notice %}}
 
 ## Step 3: Run Queries
 {{% notice "tip" %}}Once Dgraph is running, a user interface is available at [`http://localhost:8080`](http://localhost:8080).  It allows browser-based queries, mutations and visualizations.

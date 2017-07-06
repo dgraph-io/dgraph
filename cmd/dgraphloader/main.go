@@ -36,7 +36,7 @@ import (
 var (
 	files      = flag.String("r", "", "Location of rdf files to load")
 	schemaFile = flag.String("s", "", "Location of schema file")
-	dgraph     = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
+	dgraph     = flag.String("d", "127.0.0.1:9080", "Dgraph gRPC server address")
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
 	storeXid   = flag.Bool("x", false, "Store xids by adding corresponding _xid_ edges")
