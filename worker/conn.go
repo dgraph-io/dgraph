@@ -90,6 +90,16 @@ func (p *poolsi) connect(addr string) {
 
 	pool, err := newPool(addr, 5)
 	x.Checkf(err, "Unable to connect to host %s", addr)
+
+	p.Lock()
+	_, has = p.all[addr]
+	if has {
+		p.Unlock()
+		return
+	}
+	p.all[addr] = pool
+	p.Unlock()
+
 	query := new(protos.Payload)
 	query.Data = make([]byte, 10)
 	x.Check2(rand.Read(query.Data))
@@ -108,14 +118,6 @@ func (p *poolsi) connect(addr string) {
 		x.Check(pool.Put(conn))
 		fmt.Printf("Connection with %q successful.\n", addr)
 	}
-
-	p.Lock()
-	defer p.Unlock()
-	_, has = p.all[addr]
-	if has {
-		return
-	}
-	p.all[addr] = pool
 }
 
 // NewPool creates a new "pool" with one or more gRPC connections.
