@@ -23,15 +23,12 @@ import (
 	"math/rand"
 	"os"
 	"path"
-	"strconv"
-	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/trace"
@@ -46,69 +43,14 @@ func backup(gid uint32, bdir string) error {
 	}
 	fpath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.rdf.gz", gid,
 		time.Now().Format("2006-01-02-15-04")))
-	fspath := path.Join(bdir, fmt.Sprintf("dgraph-schema-%d-%s.rdf.gz", gid,
-		time.Now().Format("2006-01-02-15-04")))
 	fmt.Printf("Exporting to: %v, schema at %v\n", fpath, fspath)
 	chb := make(chan []byte, 1000)
 	errChan := make(chan error, 2)
 	go func() {
 		errChan <- writeToFile(fpath, chb)
 	}()
-	chsb := make(chan []byte, 1000)
-	go func() {
-		errChan <- writeToFile(fspath, chsb)
-	}()
 
-	// Use a bunch of goroutines to convert to RDF format.
-	chkv := make(chan kv, 1000)
-	var wg sync.WaitGroup
-	wg.Add(numExportRoutines)
-	for i := 0; i < numExportRoutines; i++ {
-		go func(i int) {
-			buf := new(bytes.Buffer)
-			buf.Grow(50000)
-			for item := range chkv {
-				toRDF(buf, item)
-				if buf.Len() >= 40000 {
-					tmp := make([]byte, buf.Len())
-					copy(tmp, buf.Bytes())
-					chb <- tmp
-					buf.Reset()
-				}
-			}
-			if buf.Len() > 0 {
-				tmp := make([]byte, buf.Len())
-				copy(tmp, buf.Bytes())
-				chb <- tmp
-			}
-			wg.Done()
-		}(i)
-	}
-
-	// Use a goroutine to convert protos.Schema to string
-	chs := make(chan *skv, 1000)
-	wg.Add(1)
-	go func() {
-		buf := new(bytes.Buffer)
-		buf.Grow(50000)
-		for item := range chs {
-			toSchema(buf, item)
-			if buf.Len() >= 40000 {
-				tmp := make([]byte, buf.Len())
-				copy(tmp, buf.Bytes())
-				chsb <- tmp
-				buf.Reset()
-			}
-		}
-		if buf.Len() > 0 {
-			tmp := make([]byte, buf.Len())
-			copy(tmp, buf.Bytes())
-			chsb <- tmp
-		}
-		wg.Done()
-	}()
-
-	// Iterate over rocksdb.
+	// Iterate over the store.
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 	var lastPred string
@@ -120,63 +62,66 @@ func backup(gid uint32, bdir string) error {
 		key := item.Key()
 		pk := x.Parse(key)
 
-		if pk.IsIndex() {
-			// Seek to the end of index keys.
-			it.Seek(pk.SkipRangeOfSameType())
-			continue
-		}
-		if pk.IsReverse() {
-			// Seek to the end of reverse keys.
-			it.Seek(pk.SkipRangeOfSameType())
-			continue
-		}
-		if pk.Attr == "_uid_" || pk.Attr == "_predicate_" ||
-			pk.Attr == "_lease_" {
-			// Skip the UID mappings.
-			it.Seek(pk.SkipPredicate())
-			continue
-		}
-		if pk.IsSchema() {
-			if group.BelongsTo(pk.Attr) == gid {
-				s := &protos.SchemaUpdate{}
-				x.Check(s.Unmarshal(item.Value()))
-				chs <- &skv{
-					attr:   pk.Attr,
-					schema: s,
-				}
-			}
-			// skip predicate
-			it.Next()
-			continue
-		}
-		x.AssertTrue(pk.IsData())
-		pred, uid := pk.Attr, pk.Uid
-		if pred != lastPred && group.BelongsTo(pred) != gid {
-			it.Seek(pk.SkipPredicate())
-			continue
-		}
+		// TODO: Find group ID and write it out if it satisfies
 
-		prefix.WriteString("<_:uid")
-		prefix.WriteString(strconv.FormatUint(uid, 16))
-		prefix.WriteString("> <")
-		prefix.WriteString(pred)
-		prefix.WriteString("> ")
-		pl := &protos.PostingList{}
-		x.Check(pl.Unmarshal(item.Value()))
-		chkv <- kv{
-			prefix: prefix.String(),
-			list:   pl,
-		}
+		/*
+			if pk.IsIndex() {
+				// Seek to the end of index keys.
+				it.Seek(pk.SkipRangeOfSameType())
+				continue
+			}
+			if pk.IsReverse() {
+				// Seek to the end of reverse keys.
+				it.Seek(pk.SkipRangeOfSameType())
+				continue
+			}
+			if pk.Attr == "_uid_" || pk.Attr == "_predicate_" ||
+				pk.Attr == "_lease_" {
+				// Skip the UID mappings.
+				it.Seek(pk.SkipPredicate())
+				continue
+			}
+			if pk.IsSchema() {
+				if group.BelongsTo(pk.Attr) == gid {
+					s := &protos.SchemaUpdate{}
+					x.Check(s.Unmarshal(item.Value()))
+					chs <- &skv{
+						attr:   pk.Attr,
+						schema: s,
+					}
+				}
+				// skip predicate
+				it.Next()
+				continue
+			}
+			x.AssertTrue(pk.IsData())
+			pred, uid := pk.Attr, pk.Uid
+			if pred != lastPred && group.BelongsTo(pred) != gid {
+				it.Seek(pk.SkipPredicate())
+				continue
+			}
+
+			prefix.WriteString("<_:uid")
+			prefix.WriteString(strconv.FormatUint(uid, 16))
+			prefix.WriteString("> <")
+			prefix.WriteString(pred)
+			prefix.WriteString("> ")
+			pl := &protos.PostingList{}
+			x.Check(pl.Unmarshal(item.Value()))
+			chkv <- kv{
+				prefix: prefix.String(),
+				list:   pl,
+			}
+		*/
+
 		prefix.Reset()
 		lastPred = pred
 		it.Next()
 	}
 
 	close(chkv) // We have stopped output to chkv.
-	close(chs)  // we have stopped output to chs (schema)
 	wg.Wait()   // Wait for numExportRoutines to finish.
 	close(chb)  // We have stopped output to chb.
-	close(chsb) // we have stopped output to chs (schema)
 
 	err = <-errChan
 	err = <-errChan
