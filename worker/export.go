@@ -374,13 +374,7 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 			}
 			continue
 		}
-		conn, err = pl.Get()
-		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf(err.Error())
-			}
-			continue
-		}
+		conn = pl.Get()
 
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Relaying export request for group %d to %q", gid, pl.Addr)

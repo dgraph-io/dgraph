@@ -35,8 +35,8 @@ var (
 	errNoConnection = fmt.Errorf("No connection exists")
 )
 
-// "pool" is used to manage the grpc client connection for communicating with
-// other worker instances.  Right now it just holds one of them.
+// "pool" is used to manage the grpc client connection(s) for communicating with other
+// worker instances.  Right now it just holds one of them.
 type pool struct {
 	// A "pool" now consists of one connection.  gRPC uses HTTP2 transport to combine
 	// messages in the same TCP stream.
@@ -61,13 +61,13 @@ func pools() *poolsi {
 	return pi
 }
 
-func (p *poolsi) any() *pool {
+func (p *poolsi) any() (*pool, bool) {
 	p.RLock()
 	defer p.RUnlock()
 	for _, pool := range p.all {
-		return pool
+		return pool, true
 	}
-	return nil
+	return nil, false
 }
 
 func (p *poolsi) get(addr string) (*pool, error) {
@@ -107,8 +107,7 @@ func (p *poolsi) connect(addr string) {
 	query.Data = make([]byte, 10)
 	x.Check2(rand.Read(query.Data))
 
-	conn, err := pool.Get()
-	x.Checkf(err, "Unable to connect")
+	conn := pool.Get()
 
 	c := protos.NewWorkerClient(conn)
 	resp, err := c.Echo(context.Background(), query)
@@ -133,13 +132,8 @@ func newPool(addr string, maxCap int) (*pool, error) {
 }
 
 // Get returns a connection to use from the pool of connections.
-func (p *pool) Get() (*grpc.ClientConn, error) {
-	// TODO: Make p never be nil here.
-	if p == nil {
-		return nil, errNoConnection
-	}
-
-	return p.conn, nil
+func (p *pool) Get() *grpc.ClientConn {
+	return p.conn
 }
 
 // Put returns a connection to the pool.

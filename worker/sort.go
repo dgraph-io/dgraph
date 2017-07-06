@@ -56,10 +56,7 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 	if err != nil {
 		return &emptySortResult, x.Wrapf(err, "SortOverNetwork: while retrieving connection.")
 	}
-	conn, err := pl.Get()
-	if err != nil {
-		return &emptySortResult, x.Wrapf(err, "SortOverNetwork: while retrieving connection.")
-	}
+	conn := pl.Get()
 	defer pl.Put(conn)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Sending request to %v", addr)

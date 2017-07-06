@@ -78,13 +78,7 @@ func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.Assign
 		}
 		return &emptyAssignedIds, err
 	}
-	conn, err := p.Get()
-	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while retrieving connection: %+v", err)
-		}
-		return &emptyAssignedIds, err
-	}
+	conn := p.Get()
 	defer p.Put(conn)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Calling AssignUids for group: %d, addr: %s", leaseGid, addr)

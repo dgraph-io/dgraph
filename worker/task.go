@@ -71,10 +71,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
 	}
 
-	conn, err := pl.Get()
-	if err != nil {
-		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
-	}
+	conn := pl.Get()
 	defer pl.Put(conn)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Sending request to %v", addr)

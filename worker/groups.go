@@ -449,14 +449,14 @@ UPDATEMEMBERSHIP:
 		}
 		x.Check(err)
 	} else {
-		pl = pools().any()
+		var ok bool
+		pl, ok = pools().any()
+		if !ok {
+			fmt.Println("Unable to sync memberships.  No valid connection")
+			return
+		}
 	}
-	conn, err := pl.Get()
-	if err == errNoConnection {
-		fmt.Println("Unable to sync memberships. No valid connection")
-		return
-	}
-	x.Check(err)
+	conn := pl.Get()
 	defer pl.Put(conn)
 
 	c := protos.NewWorkerClient(conn)

@@ -221,10 +221,7 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 	if err != nil {
 		return x.Wrapf(err, "RebuildIndexOverNetwork: while retrieving connection.")
 	}
-	conn, err := pl.Get()
-	if err != nil {
-		return x.Wrapf(err, "RebuildIndexOverNetwork: while retrieving connection.")
-	}
+	conn := pl.Get()
 	defer pl.Put(conn)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Sending request to %v", addr)

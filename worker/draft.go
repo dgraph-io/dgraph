@@ -448,8 +448,7 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	pool, err := pools().get(addr)
 	// TODO: No, don't fail like this?
 	x.Check(err)
-	conn, err := pool.Get()
-	x.Check(err)
+	conn := pool.Get()
 	defer pool.Put(conn)
 
 	c := protos.NewWorkerClient(conn)
@@ -847,8 +846,7 @@ func (n *node) joinPeers() {
 	// _, err := populateShard(n.ctx, pool, n.gid)
 	// x.Checkf(err, "Error while populating shard")
 
-	conn, err := pool.Get()
-	x.Check(err)
+	conn := pool.Get()
 	defer pool.Put(conn)
 
 	c := protos.NewWorkerClient(conn)

@@ -332,14 +332,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 		che <- err
 		return
 	}
-	conn, err := pl.Get()
-	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
-		}
-		che <- err
-		return
-	}
+	conn := pl.Get()
 	defer pl.Put(conn)
 
 	c := protos.NewWorkerClient(conn)
