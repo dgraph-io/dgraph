@@ -44,7 +44,7 @@ import (
 
 var q0 = `
 	{
-		user(id:0x1) {
+		user(func: uid(0x1)) {
 			name
 		}
 	}
@@ -195,14 +195,14 @@ func TestDeletePredicate(t *testing.T) {
 	`
 	var q2 = `
 	{
-		user(id: [0x1, 0x2, 0x3]) {
+		user(func: uid( [0x1, 0x2, 0x3])) {
 			name
 		}
 	}
 	`
 	var q3 = `
 	{
-		user(id:0x3) {
+		user(func: uid(0x3)) {
 			age
 			~friend {
 				name
@@ -213,7 +213,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	var q4 = `
 		{
-			user(id:0x3) {
+			user(func: uid(0x3)) {
 				_predicate_
 			}
 		}
@@ -221,7 +221,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	var q5 = `
 		{
-			user(id: 0x3) {
+			user(func: uid( 0x3)) {
 				age
 				friend {
 					name
@@ -478,7 +478,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 func TestSchemaMutationReverseAdd(t *testing.T) {
 	var q1 = `
 	{
-		user(id:0x3) {
+		user(func: uid(0x3)) {
 			~friend {
 				name
 			}
@@ -522,7 +522,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 func TestSchemaMutationReverseRemove(t *testing.T) {
 	var q1 = `
 	{
-		user(id:0x3) {
+		user(func: uid(0x3)) {
 			~friend {
 				name
 			}
@@ -579,7 +579,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 func TestDeleteAll(t *testing.T) {
 	var q1 = `
 	{
-		user(id:0x3) {
+		user(func: uid(0x3)) {
 			~friend {
 				name
 			}
@@ -655,7 +655,7 @@ func TestDeleteAll(t *testing.T) {
 func TestDeleteAllSP(t *testing.T) {
 	var q1 = `
 	{
-		user(id:0x3) {
+		user(func: uid(0x3)) {
 			~friend {
 				name
 			}
@@ -673,21 +673,21 @@ func TestDeleteAllSP(t *testing.T) {
 	`
 	var q3 = `
 	{
-		user(id: 0x1) {
+		user(func: uid( 0x1)) {
 			_predicate_
 		}
 	}
 	`
 	var q4 = `
 	{
-		user(id: 0x1) {
+		user(func: uid( 0x1)) {
 			count(_predicate_)
 		}
 	}
 	`
 	var q5 = `
 	{
-		user(id: 0x1) {
+		user(func: uid( 0x1)) {
 			pred_count: count(_predicate_)
 		}
 	}
@@ -793,7 +793,7 @@ var m5 = `
 
 var q5 = `
 	{
-		user(id:<id>) {
+		user(func: uid(<id>)) {
 			name
 		}
 	}
@@ -818,7 +818,7 @@ var m6 = `
 
 var q6 = `
 	{
-		user(id:<id>) {
+		user(func: uid(<id>)) {
 			name2
 		}
 	}
@@ -891,7 +891,7 @@ func TestAssignUid(t *testing.T) {
 
 var q1 = `
 {
-	al(id: 0x1) {
+	al(func: uid( 0x1)) {
 		status
 		follows {
 			status
@@ -1083,7 +1083,7 @@ func TestMutationSubjectVariables(t *testing.T) {
 			}
 		}
 		{
-			me(id: 0x500) {
+			me(func: uid( 0x500)) {
 				myfriend as friend
 			}
 		}`
@@ -1098,7 +1098,7 @@ func TestMutationSubjectVariables(t *testing.T) {
 
 	q1 := `
 		{
-			me(id: 0x500) {
+			me(func: uid( 0x500)) {
 				friend  {
 					nice
 				}
@@ -1121,7 +1121,7 @@ func TestMutationSubjectVariablesSingleMutation(t *testing.T) {
 			}
 		}
 		{
-			me(id: 0x700) {
+			me(func: uid( 0x700)) {
 				myfriend as friend
 			}
 		}
@@ -1137,7 +1137,7 @@ func TestMutationSubjectVariablesSingleMutation(t *testing.T) {
 
 	q1 := `
 		{
-			me(id: 0x700) {
+			me(func: uid( 0x700)) {
 				friend  {
 					nice
 				}
@@ -1160,7 +1160,7 @@ func TestMutationObjectVariables(t *testing.T) {
 			}
 		}
 		{
-			me(id: 0x600) {
+			me(func: uid( 0x600)) {
 				myfriend as friend
 			}
 		}
@@ -1177,7 +1177,7 @@ func TestMutationObjectVariables(t *testing.T) {
 
 	q1 := `
 		{
-			me(id: 0x600) {
+			me(func: uid( 0x600)) {
 				count(likes)
             }
 		}
@@ -1198,7 +1198,7 @@ func TestMutationObjectVariablesError(t *testing.T) {
 			}
 		}
 		{
-			me(id: 0x600) {
+			me(func: uid(0x600)) {
 				myfriend as friend
 			}
 		}
