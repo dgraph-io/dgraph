@@ -144,7 +144,7 @@ type Dgraph struct {
 	nquads chan nquadOp
 	dc     protos.DgraphClient
 	wg     sync.WaitGroup
-	gw     chan bool
+	gw     sync.WaitGroup
 	flush  chan bool
 	alloc  *allocator
 	ticker *time.Ticker
@@ -172,7 +172,6 @@ func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions) *Dgraph {
 	d := &Dgraph{
 		opts:   opts,
 		dc:     client,
-		gw:     make(chan bool),
 		flush:  make(chan bool),
 		start:  time.Now(),
 		nquads: make(chan nquadOp, 2*opts.Size),
@@ -259,7 +258,7 @@ LOOP:
 					d.request(req)
 				}
 				d.wg.Done()
-				<-d.gw
+				d.gw.Wait()
 			}
 		}
 	}
@@ -286,7 +285,7 @@ LOOP:
 					d.request(req)
 				}
 				d.wg.Done()
-				<-d.gw
+				d.gw.Wait()
 			}
 		default:
 			start := time.Now()
@@ -337,15 +336,15 @@ func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 // To flush bbuffers in long running clients.
 func (d *Dgraph) BatchFlush() {
 
+	d.gw.Add(1)
 	for i := 0; i < d.opts.Pending; i++ {
 		d.flush <- true
 	}
 	d.flush <- true // flush schema too
 
 	d.wg.Wait()
+	d.gw.Done()
 	d.refreshWG()
-	close(d.gw)
-	d.gw = make(chan bool)
 
 	// exit the old counters go routine and start another
 	if d.ticker != nil {
