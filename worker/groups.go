@@ -457,7 +457,6 @@ UPDATEMEMBERSHIP:
 		}
 	}
 	conn := pl.Get()
-	defer pl.Put(conn)
 
 	c := protos.NewWorkerClient(conn)
 	update, err := c.UpdateMembership(g.ctx, &mu)

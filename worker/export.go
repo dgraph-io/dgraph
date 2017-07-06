@@ -379,7 +379,6 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Relaying export request for group %d to %q", gid, pl.Addr)
 		}
-		defer pl.Put(conn)
 		break
 	}
 

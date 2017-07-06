@@ -333,7 +333,6 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 		return
 	}
 	conn := pl.Get()
-	defer pl.Put(conn)
 
 	c := protos.NewWorkerClient(conn)
 	ch := make(chan error, 1)

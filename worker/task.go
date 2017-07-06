@@ -72,7 +72,6 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 	}
 
 	conn := pl.Get()
-	defer pl.Put(conn)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Sending request to %v", addr)
 	}

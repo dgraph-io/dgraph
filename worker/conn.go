@@ -117,7 +117,6 @@ func (p *poolsi) connect(addr string) {
 		// have to handle errors later anyway.
 	} else {
 		x.AssertTrue(bytes.Equal(resp.Data, query.Data))
-		x.Check(pool.Put(conn))
 		fmt.Printf("Connection with %q successful.\n", addr)
 	}
 }
@@ -131,14 +130,7 @@ func newPool(addr string, maxCap int) (*pool, error) {
 	return &pool{conn: conn, Addr: addr}, nil
 }
 
-// Get returns a connection to use from the pool of connections.
+// Get returns the connection to use from the pool of connections.
 func (p *pool) Get() *grpc.ClientConn {
 	return p.conn
-}
-
-// Put returns a connection to the pool.
-func (p *pool) Put(conn *grpc.ClientConn) error {
-	// TODO: Get rid of this Put() or not.
-	x.AssertTrue(conn == p.conn)
-	return nil
 }

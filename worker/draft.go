@@ -449,7 +449,6 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	// TODO: No, don't fail like this?
 	x.Check(err)
 	conn := pool.Get()
-	defer pool.Put(conn)
 
 	c := protos.NewWorkerClient(conn)
 	p := &protos.Payload{Data: data}
@@ -847,7 +846,6 @@ func (n *node) joinPeers() {
 	// x.Checkf(err, "Error while populating shard")
 
 	conn := pool.Get()
-	defer pool.Put(conn)
 
 	c := protos.NewWorkerClient(conn)
 	x.Printf("Calling JoinCluster")
