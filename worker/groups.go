@@ -92,6 +92,7 @@ func StartRaftNodes(walDir string) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 	gr.all = make(map[uint32]*servers)
+	gr.local = make(map[uint32]*node)
 
 	if len(*myAddr) == 0 {
 		*myAddr = fmt.Sprintf("localhost:%d", workerPort())
@@ -218,9 +219,6 @@ func (g *groupi) ServesGroup(groupId uint32) bool {
 func (g *groupi) newNode(groupId uint32, nodeId uint64, publicAddr string) *node {
 	g.Lock()
 	defer g.Unlock()
-	if g.local == nil {
-		g.local = make(map[uint32]*node)
-	}
 
 	node := newNode(groupId, nodeId, publicAddr)
 	if _, has := g.local[groupId]; has {
