@@ -120,7 +120,7 @@ func (p *poolsi) connect(addr string) {
 	}
 }
 
-// NewPool creates a new "pool" with one or more gRPC connections.
+// NewPool creates a new "pool" with one gRPC connection.
 func newPool(addr string, maxCap int) (*pool, error) {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
