@@ -61,13 +61,13 @@ func pools() *poolsi {
 	return pi
 }
 
-func (p *poolsi) any() (*pool, bool) {
+func (p *poolsi) any() (*pool, error) {
 	p.RLock()
 	defer p.RUnlock()
 	for _, pool := range p.all {
-		return pool, true
+		return pool, nil
 	}
-	return nil, false
+	return nil, errNoConnection
 }
 
 func (p *poolsi) get(addr string) (*pool, error) {
@@ -80,30 +80,38 @@ func (p *poolsi) get(addr string) (*pool, error) {
 	return pool, nil
 }
 
-func (p *poolsi) connect(addr string) {
+func (p *poolsi) connect(addr string) *pool {
 	if addr == *myAddr {
-		return
+		return nil
 	}
 	p.RLock()
-	_, has := p.all[addr]
+	existingPool, has := p.all[addr]
 	p.RUnlock()
 	if has {
-		return
+		return existingPool
 	}
 
 	pool, err := newPool(addr, 5)
 	x.Checkf(err, "Unable to connect to host %s", addr)
 
 	p.Lock()
-	_, has = p.all[addr]
+	existingPool, has = p.all[addr]
 	if has {
 		p.Unlock()
-		return
+		return existingPool
 	}
 	p.all[addr] = pool
 	p.Unlock()
 
-	TestConnectionAndOutput(pool)
+	err = TestConnection(pool)
+	if err != nil {
+		log.Printf("Connection to %q fails, got error: %v\n", addr, err)
+		// Don't return -- let's still put the empty pool in the map.  Its users
+		// have to handle errors later anyway.
+	} else {
+		fmt.Printf("Connection with %q healthy.\n", addr)
+	}
+	return pool
 }
 
 // TestConnection tests if we can run an Echo query on a connection.
@@ -123,18 +131,6 @@ func TestConnection(p *pool) error {
 	x.AssertTruef(bytes.Equal(resp.Data, query.Data),
 		"non-matching Echo response value from %v", p.Addr)
 	return nil
-}
-
-// TestConnectionAndOutput tests a connection (by sending an Echo request) and logs or fmt's result.
-func TestConnectionAndOutput(p *pool) {
-	err := TestConnection(p)
-	if err != nil {
-		log.Printf("Connection to %q fails, got error: %v\n", p.Addr, err)
-		// Don't return -- let's still put the empty pool in the map.  Its users
-		// have to handle errors later anyway.
-	} else {
-		fmt.Printf("Connection with %q healthy.\n", p.Addr)
-	}
 }
 
 // NewPool creates a new "pool" with one gRPC connection.

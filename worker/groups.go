@@ -436,26 +436,22 @@ func (g *groupi) syncMemberships() {
 	}
 
 	// Send an update to peer.
-	var pl *pool
-	var err error
 	addr := g.AnyServer(0)
 
 UPDATEMEMBERSHIP:
+	var pl *pool
+	var err error
 	if len(addr) > 0 {
 		pl, err = pools().get(addr)
-		if err == errNoConnection {
-			fmt.Println("Unable to sync memberships. No valid connection")
-			return
-		}
-		x.Check(err)
 	} else {
-		var ok bool
-		pl, ok = pools().any()
-		if !ok {
-			fmt.Println("Unable to sync memberships.  No valid connection")
-			return
-		}
+		pl, err = pools().any()
 	}
+	if err == errNoConnection {
+		fmt.Println("Unable to sync memberships. No valid connection")
+		return
+	}
+	x.Check(err)
+
 	conn := pl.Get()
 
 	c := protos.NewWorkerClient(conn)
