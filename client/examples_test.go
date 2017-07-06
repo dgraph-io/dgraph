@@ -22,8 +22,10 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 	"google.golang.org/grpc"
@@ -105,7 +107,7 @@ func ExampleReq_BatchMutation() {
 	e.SetValueFloat(13333.6161)
 	dgraphClient.BatchSet(e)
 
-	dgraphClient.BatchFlush()
+	dgraphClient.BatchEnd()
 }
 
 func ExampleReq_AddMutation_facets() {
@@ -224,6 +226,128 @@ func ExampleReq_SetQuery() {
 	}`)
 	resp, err := dgraphClient.Run(context.Background(), &req)
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+}
+
+func ExampleReq_BatchFlushing() {
+	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	bmOpts := client.BatchMutationOptions{
+		Size:          1000,
+		Pending:       100,
+		PrintCounters: false,
+	}
+	dgraphClient := client.NewDgraphClient(conn, bmOpts)
+
+	queryTXT := `{
+	me(func: eq(_xid_, "http://someexample.com/StevenSpielberg")) {
+		_xid_
+		name @facets
+		friend @facets {
+			_xid_
+			name
+		}
+	}
+}`
+
+	// set schema on _xid_ - Dgraph will do this automatically soon
+	schemaUpdate, err := schema.Parse("_xid_: string @index(exact) .")
+	if err != nil {
+		log.Fatal("Error while parsing schema: ", err)
+	}
+
+	if err = dgraphClient.AddSchema(*schemaUpdate[0]); err != nil {    
+		log.Fatal("While adding schema to batch ", err)
+	}
+
+	// --- request 1 ---
+	req := client.Req{}
+	person1, err := dgraphClient.NodeXid("http://someexample.com/StevenSpielberg", true)		// creates an XID batch in the background
+	if err != nil {
+		log.Fatal(err)
+	}
+	e := person1.Edge("name")
+	e.SetValueString("Steven Spielberg")
+	e.AddFacet("since", "2006-01-02T15:04:05")
+	e.AddFacet("alias", `"Steve"`)
+
+	req.Set(e)
+
+	person2, err := dgraphClient.NodeBlank("person2")
+	if err != nil {
+		log.Fatal(err)
+	}
+	e = person2.Edge("name")
+	e.SetValueString("William Jones")
+	req.Set(e)
+
+	e = person1.ConnectTo("friend", person2)
+	e.AddFacet("close", "true")
+	req.Set(e)
+
+	req.SetQuery(queryTXT)
+
+	dgraphClient.BatchFlush()					// flush the XIDs before query
+	time.Sleep(10 * time.Second)				// workaround until index issue is fixed
+
+	//fmt.Print("running request\n")
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+	fmt.Println("-------- Query 1 --------")
+	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+	fmt.Println()
+	fmt.Println()
+	
+
+	
+	// --- request 2 ---
+	req = client.Req{}
+	dgraphClient.PurgeBlankNodes();		// so can reuse names
+	stevenspielberg, err := dgraphClient.NodeXid("http://someexample.com/StevenSpielberg", true)	// retrieves existing XID
+	stevenspalding, err := dgraphClient.NodeXid("http://someexample.com/StevenSpalding", true)		// creates an XID batch in the background
+	if err != nil {
+		log.Fatal(err)
+	}
+	e = stevenspalding.Edge("name")
+	e.SetValueString("Steven Spalding")
+	e.AddFacet("since", "2016-01-02T15:04:05")
+	e.AddFacet("alias", `"Steve"`)
+
+	req.Set(e)
+	person2, err = dgraphClient.NodeBlank("person2")
+	if err != nil {
+		log.Fatal(err)
+	}
+	e = person2.Edge("name")
+	e.SetValueString("William Jonhnson")
+	req.Set(e)
+
+	e = person1.ConnectTo("friend", person2)
+	e.AddFacet("close", "true")
+	req.Set(e)
+
+	e = stevenspielberg.ConnectTo("friend", stevenspalding)
+	req.Set(e)
+
+	req.SetQuery(queryTXT)
+
+
+	dgraphClient.BatchFlush()					// flush the XIDs before query
+
+
+	time.Sleep(10 * time.Second)
+
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+	fmt.Println("-------- Query 2 --------")
+	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+
+	dgraphClient.BatchEnd()
 }
 
 func ExampleReq_SetQueryWithVariables() {

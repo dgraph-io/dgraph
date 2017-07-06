@@ -54,7 +54,8 @@ type allocator struct {
 	dc protos.DgraphClient
 
 	// TODO: Evict older entries
-	ids map[string]uint64
+	xids   map[string]uint64 // explicitly evict with Dgraph.PurgeBlankNodes()
+	bnodes map[string]uint64 // could also evict here
 
 	startId uint64
 	endId   uint64
@@ -85,10 +86,10 @@ func (a *allocator) fetchOne() (uint64, error) {
 	return uid, nil
 }
 
-func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool,
+func (a *allocator) assignOrGet(id string, ids func() map[string]uint64) (uid uint64, isNew bool,
 	err error) {
 	a.RLock()
-	uid = a.ids[id]
+	uid = ids()[id]
 	a.RUnlock()
 	if uid > 0 {
 		return
@@ -96,7 +97,7 @@ func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool,
 
 	a.Lock()
 	defer a.Unlock()
-	uid = a.ids[id]
+	uid = ids()[id]
 	if uid > 0 {
 		return
 	}
@@ -105,10 +106,25 @@ func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool,
 	if err != nil {
 		return
 	}
-	a.ids[id] = uid
+	ids()[id] = uid
 	isNew = true
 	err = nil
 	return
+}
+
+func (a *allocator) assignOrGetBN(id string) (uid uint64, isNew bool,
+	err error) {
+	return a.assignOrGet(id, func() map[string]uint64 { return a.bnodes })
+}
+
+func (a *allocator) assignOrGetXID(id string) (uid uint64, isNew bool,
+	err error) {
+	return a.assignOrGet(id, func() map[string]uint64 { return a.xids })
+}
+
+func (a *allocator) purgeBlankNodes() {
+	// FIXME : how to clear a map properly??  Just reply on GC?
+	a.bnodes = make(map[string]uint64)
 }
 
 // Counter keeps a track of various parameters about a batch mutation.
@@ -128,6 +144,8 @@ type Dgraph struct {
 	nquads chan nquadOp
 	dc     protos.DgraphClient
 	wg     sync.WaitGroup
+	gw     chan bool
+	flush  chan bool
 	alloc  *allocator
 	ticker *time.Ticker
 
@@ -147,23 +165,26 @@ func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions) *Dgraph {
 	client := protos.NewDgraphClient(conn)
 
 	alloc := &allocator{
-		dc:  client,
-		ids: make(map[string]uint64),
+		dc:     client,
+		xids:   make(map[string]uint64),
+		bnodes: make(map[string]uint64),
 	}
 	d := &Dgraph{
 		opts:   opts,
 		dc:     client,
+		gw:     make(chan bool),
+		flush:  make(chan bool),
 		start:  time.Now(),
 		nquads: make(chan nquadOp, 2*opts.Size),
 		schema: make(chan protos.SchemaUpdate, 2*opts.Size),
 		alloc:  alloc,
 	}
 
+	d.refreshWG()
 	for i := 0; i < opts.Pending; i++ {
-		d.wg.Add(1)
 		go d.makeRequests()
 	}
-	d.wg.Add(1)
+	
 	go d.makeSchemaRequests()
 
 	rand.Seed(time.Now().Unix())
@@ -171,6 +192,10 @@ func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions) *Dgraph {
 		go d.printCounters()
 	}
 	return d
+}
+
+func (d *Dgraph) refreshWG() {
+	d.wg.Add(d.opts.Pending + 1)
 }
 
 func (d *Dgraph) printCounters() {
@@ -211,14 +236,31 @@ RETRY:
 func (d *Dgraph) makeRequests() {
 	req := new(Req)
 
-	for n := range d.nquads {
-		if n.op == SET {
-			req.Set(n.e)
-		} else if n.op == DEL {
-			req.Delete(n.e)
-		}
-		if req.size() == d.opts.Size {
-			d.request(req)
+LOOP:
+	for {
+		select {
+		case n, ok := <-d.nquads:
+
+			if !ok {
+				break LOOP
+			}
+
+			if n.op == SET {
+				req.Set(n.e)
+			} else if n.op == DEL {
+				req.Delete(n.e)
+			}
+			if req.size() == d.opts.Size {
+				d.request(req)
+			}
+		case f := <-d.flush:
+			if f {
+				if req.size() > 0 {
+					d.request(req)
+				}
+				d.wg.Done()
+				<-d.gw
+			}
 		}
 	}
 
@@ -238,6 +280,14 @@ LOOP:
 				break LOOP
 			}
 			req.addSchema(s)
+		case f := <-d.flush:
+			if f {
+				if req.size() > 0 {
+					d.request(req)
+				}
+				d.wg.Done()
+				<-d.gw
+			}
 		default:
 			start := time.Now()
 			if req.size() > 0 {
@@ -282,12 +332,41 @@ func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 	return nil
 }
 
-// Flush waits for all pending requests to complete. It should always be called
-// after adding all the NQuads using batch.AddMutation().
+
+// BatchFlush flushes any currently pending requests, but keeps the channels open so the client can continue.
+// To flush bbuffers in long running clients.
 func (d *Dgraph) BatchFlush() {
+
+	for i := 0; i < d.opts.Pending; i++ {
+		d.flush <- true
+	}
+	d.flush <- true // flush schema too
+
+	d.wg.Wait()
+	d.refreshWG()
+	close(d.gw)
+	d.gw = make(chan bool)
+
+	// exit the old counters go routine and start another
+	if d.ticker != nil {
+		d.ticker.Stop()
+
+		if d.opts.PrintCounters {
+			go d.printCounters()
+		}
+	}
+}
+
+
+// BatchEnd waits for all pending requests to complete. It should always be called
+// when finishing a batch and closing client - after adding all the NQuads using batch.AddMutation().
+func (d *Dgraph) BatchEnd() {
+
 	close(d.nquads)
 	close(d.schema)
+
 	d.wg.Wait()
+
 	if d.ticker != nil {
 		d.ticker.Stop()
 	}
@@ -325,6 +404,10 @@ func (d *Dgraph) NodeUid(uid uint64) Node {
 	return Node(uid)
 }
 
+func (d *Dgraph) PurgeBlankNodes() {
+	d.alloc.purgeBlankNodes()
+}
+
 func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 	if len(varname) == 0 {
 		d.alloc.Lock()
@@ -335,7 +418,7 @@ func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 		}
 		return Node(uid), nil
 	}
-	uid, _, err := d.alloc.assignOrGet("_:" + varname)
+	uid, _, err := d.alloc.assignOrGetBN("_:" + varname)
 	if err != nil {
 		return 0, err
 	}
@@ -346,7 +429,7 @@ func (d *Dgraph) NodeXid(xid string, storeXid bool) (Node, error) {
 	if len(xid) == 0 {
 		return 0, ErrEmptyXid
 	}
-	uid, isNew, err := d.alloc.assignOrGet(xid)
+	uid, isNew, err := d.alloc.assignOrGetXID(xid)
 	if err != nil {
 		return 0, err
 	}
