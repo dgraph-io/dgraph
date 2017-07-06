@@ -35,15 +35,13 @@ var (
 	errNoConnection = fmt.Errorf("No connection exists")
 )
 
-// Pool is used to manage the grpc client connections for communicating with
-// other worker instances.
+// "pool" is used to manage the grpc client connection for communicating with
+// other worker instances.  Right now it just holds one of them.
 type pool struct {
 	// A "pool" now consists of one connection.  gRPC uses HTTP2 transport to combine
 	// messages in the same TCP stream.
-	connMutex sync.Mutex
-	conn      *grpc.ClientConn
+	conn *grpc.ClientConn
 
-	// Read-only field
 	Addr string
 }
 
@@ -90,7 +88,8 @@ func (p *poolsi) connect(addr string) {
 		return
 	}
 
-	pool := newPool(addr, 5)
+	pool, err := newPool(addr, 5)
+	x.Checkf(err, "Unable to connect to host %s", addr)
 	query := new(protos.Payload)
 	query.Data = make([]byte, 10)
 	x.Check2(rand.Read(query.Data))
@@ -119,46 +118,27 @@ func (p *poolsi) connect(addr string) {
 	p.all[addr] = pool
 }
 
-// NewPool initializes an instance of Pool which is used to connect with other
-// workers. The pool instance also has a buffered channel,conn with capacity
-// maxCap that stores the connections.
-func newPool(addr string, maxCap int) *pool {
-	// We create the connection the first time we Get().
-	return &pool{Addr: addr}
+// NewPool creates a new "pool" with one or more gRPC connections.
+func newPool(addr string, maxCap int) (*pool, error) {
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	return &pool{conn: conn, Addr: addr}, nil
 }
 
-func (p *pool) dialNew() (*grpc.ClientConn, error) {
-	return grpc.Dial(p.Addr, grpc.WithInsecure())
-}
-
-// Get returns a connection from the pool of connections or a new connection if
-// the pool is empty.
+// Get returns a connection to use from the pool of connections.
 func (p *pool) Get() (*grpc.ClientConn, error) {
 	// TODO: Make p never be nil here.
 	if p == nil {
 		return nil, errNoConnection
 	}
 
-	p.connMutex.Lock()
-	defer p.connMutex.Unlock()
-
-	// TODO: Do we really want to block other getters connecting?  Well yeah, let's
-	// make one connection attempt at a time.
-	if p.conn == nil {
-		conn, err := p.dialNew()
-		if err != nil {
-			return nil, err
-		}
-		p.conn = conn
-	}
 	return p.conn, nil
 }
 
-// Put returns a connection to the pool or closes and discards the connection
-// incase the pool channel is at capacity.
+// Put returns a connection to the pool.
 func (p *pool) Put(conn *grpc.ClientConn) error {
-	p.connMutex.Lock()
-	defer p.connMutex.Unlock()
 	// TODO: Get rid of this Put() or not.
 	x.AssertTrue(conn == p.conn)
 	return nil
