@@ -103,21 +103,37 @@ func (p *poolsi) connect(addr string) {
 	p.all[addr] = pool
 	p.Unlock()
 
+	TestConnectionAndOutput(pool)
+}
+
+// TestConnection tests if we can run an Echo query on a connection.
+func TestConnection(p *pool) error {
+	conn := p.Get()
+
 	query := new(protos.Payload)
 	query.Data = make([]byte, 10)
 	x.Check2(rand.Read(query.Data))
 
-	conn := pool.Get()
-
 	c := protos.NewWorkerClient(conn)
 	resp, err := c.Echo(context.Background(), query)
 	if err != nil {
-		log.Printf("While trying to connect to %q, got error: %v\n", addr, err)
+		return err
+	}
+	// If a server is sending bad echos, we do want to freak out and die.
+	x.AssertTruef(bytes.Equal(resp.Data, query.Data),
+		"non-matching Echo response value from %v", p.Addr)
+	return nil
+}
+
+// TestConnectionAndOutput tests a connection (by sending an Echo request) and logs or fmt's result.
+func TestConnectionAndOutput(p *pool) {
+	err := TestConnection(p)
+	if err != nil {
+		log.Printf("Connection to %q fails, got error: %v\n", p.Addr, err)
 		// Don't return -- let's still put the empty pool in the map.  Its users
 		// have to handle errors later anyway.
 	} else {
-		x.AssertTrue(bytes.Equal(resp.Data, query.Data))
-		fmt.Printf("Connection with %q successful.\n", addr)
+		fmt.Printf("Connection with %q healthy.\n", p.Addr)
 	}
 }
 
