@@ -420,7 +420,7 @@ func sortByValue(attr string, langs []string, ul *protos.List, typ types.TypeID,
 // fetchValue gets the value for a given UID.
 func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID) (types.Val, error) {
 	// TODO: Maybe use posting.Get
-	pl, decr := posting.GetOrCreate(x.DataKey(attr, uid), group.BelongsTo(attr))
+	pl, decr := posting.Get(x.DataKey(attr, uid), group.BelongsTo(attr))
 	defer decr()
 
 	src, err := pl.ValueFor(langs)
