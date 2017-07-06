@@ -324,7 +324,7 @@ func batchSync() {
 	wb := make([]*badger.Entry, 0, 100)
 	for {
 		ent := <-syncCh
-	slurp_loop:
+	slurpLoop:
 		for {
 			entries = append(entries, ent)
 			if len(entries) == syncChCapacity {
@@ -334,7 +334,7 @@ func batchSync() {
 			select {
 			case ent = <-syncCh:
 			default:
-				break slurp_loop
+				break slurpLoop
 			}
 		}
 
