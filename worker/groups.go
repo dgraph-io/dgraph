@@ -62,7 +62,8 @@ type server struct {
 }
 
 type servers struct {
-	list []server
+	byNodeID map[uint64]int
+	list     []server
 }
 
 type groupi struct {
@@ -82,6 +83,34 @@ var gr *groupi
 
 func groups() *groupi {
 	return gr
+}
+
+func swapServers(sl *servers, i int, j int) {
+	tmp := sl.list[i]
+	sl.list[i] = sl.list[j]
+	sl.list[j] = tmp
+	sl.byNodeID[sl.list[i].NodeId] = i
+	sl.byNodeID[sl.list[j].NodeId] = j
+}
+
+func removeFromServersIfPresent(sl *servers, nodeID uint64) {
+	i, has := sl.byNodeID[nodeID]
+	if !has {
+		return
+	}
+	back := len(sl.list) - 1
+	swapServers(sl, i, back)
+	sl.list = sl.list[:back]
+	delete(sl.byNodeID, nodeID)
+}
+
+func addToServers(sl *servers, update server) {
+	back := len(sl.list)
+	sl.list = append(sl.list, update)
+	if update.Leader && back != 0 {
+		swapServers(sl, 0, back)
+		sl.list[back].Leader = false
+	}
 }
 
 // StartRaftNodes will read the WAL dir, create the RAFT groups,
@@ -235,10 +264,9 @@ func (g *groupi) Server(id uint64, groupId uint32) (rs server, found bool) {
 	if sl == nil {
 		return server{}, false
 	}
-	for _, s := range sl.list {
-		if s.NodeId == id {
-			return s, true
-		}
+	idx, has := sl.byNodeID[id]
+	if has {
+		return sl.list[idx], true
 	}
 	return server{}, false
 }
@@ -263,9 +291,9 @@ func (g *groupi) Servers(group uint32) []string {
 	if all == nil {
 		return nil
 	}
-	out := make([]string, 0, len(all.list))
-	for _, s := range all.list {
-		out = append(out, s.Addr)
+	out := make([]string, len(all.list))
+	for i, s := range all.list {
+		out[i] = s.Addr
 	}
 	return out
 }
@@ -296,7 +324,7 @@ func (g *groupi) HasPeer(group uint32) bool {
 	return len(all.list) > 1 || (len(all.list) == 1 && all.list[0].NodeId != *raftId)
 }
 
-// Leader will try to retrun the leader of a given group, based on membership information.
+// Leader will try to return the leader of a given group, based on membership information.
 // There is currently no guarantee that the returned server is the leader of the group.
 func (g *groupi) Leader(group uint32) (uint64, string) {
 	g.RLock()
@@ -348,12 +376,9 @@ func (g *groupi) duplicate(gid uint32, nid uint64, addr string, leader bool) boo
 	if sl == nil {
 		return false
 	}
-	for _, s := range sl.list {
-		if s.NodeId == nid && s.Addr == addr && s.Leader == leader {
-			return true
-		}
-	}
-	return false
+	idx, has := sl.byNodeID[nid]
+	s := sl.list[idx]
+	return has && s.Addr == addr && s.Leader == leader
 }
 
 func (g *groupi) LastUpdate() uint64 {
@@ -521,32 +546,8 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 		g.all[mm.GroupId] = sl
 	}
 
-	for {
-		// Remove all instances of the provided node. There should only be one.
-		found := false
-		for i, s := range sl.list {
-			if s.NodeId == update.NodeId {
-				found = true
-				sl.list[i] = sl.list[len(sl.list)-1]
-				sl.list = sl.list[:len(sl.list)-1]
-			}
-		}
-		if !found {
-			break
-		}
-	}
-
-	// Append update to the list. If it's a leader, move it to index zero.
-	sl.list = append(sl.list, update)
-	last := len(sl.list) - 1
-	if update.Leader {
-		sl.list[0], sl.list[last] = sl.list[last], sl.list[0]
-	}
-
-	// Update all servers upwards of index zero as followers.
-	for i := 1; i < len(sl.list); i++ {
-		sl.list[i].Leader = false
-	}
+	removeFromServersIfPresent(sl, update.NodeId)
+	addToServers(sl, update)
 
 	// Print out the entire list.
 	for gid, sl := range g.all {
