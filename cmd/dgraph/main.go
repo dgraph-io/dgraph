@@ -591,6 +591,27 @@ func (s *grpcServer) AssignUids(ctx context.Context, num *protos.Num) (*protos.A
 	return worker.AssignUidsOverNetwork(ctx, num)
 }
 
+func bestEffortGopath() (string, bool) {
+	if path, ok := os.LookupEnv("GOPATH"); ok {
+		return path, true
+	}
+	var homevar string
+	switch runtime.GOOS {
+	case "windows":
+		// The Golang issue https://github.com/golang/go/issues/17262 says
+		// USERPROFILE, _not_ HOMEDRIVE + HOMEPATH is used.
+		homevar = "USERPROFILE"
+	case "plan9":
+		homevar = "home"
+	default:
+		homevar = "HOME"
+	}
+	if homepath, ok := os.LookupEnv(homevar); ok {
+		return path.Join(homepath, "go"), true
+	}
+	return "", false
+}
+
 var uiDir string
 
 func init() {
@@ -599,7 +620,8 @@ func init() {
 	// the user. In other cases, it should point to the build directory within the repository.
 	flag.StringVar(&uiDir, "ui", uiDir, "Directory which contains assets for the user interface")
 	if uiDir == "" {
-		uiDir = os.Getenv("GOPATH") + "/src/github.com/dgraph-io/dgraph/dashboard/build"
+		gopath, _ := bestEffortGopath()
+		uiDir = path.Join(gopath, "src/github.com/dgraph-io/dgraph/dashboard/build")
 	}
 }
 
