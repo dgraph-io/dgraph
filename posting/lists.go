@@ -355,7 +355,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		go l.decr()
 	} else {
 		pk := x.Parse(key)
-		if pk.IsIndex() {
+		if pk.IsIndex() || pk.IsCount() {
 			err := pstore.Touch(key)
 			x.Check(err)
 		}
@@ -478,7 +478,7 @@ func batchSync(i int) {
 
 	for {
 		ent := <-syncCh
-	slurp_loop:
+	slurpLoop:
 		for {
 			entries = append(entries, ent)
 			if len(entries) == syncChCapacity {
@@ -488,7 +488,7 @@ func batchSync(i int) {
 			select {
 			case ent = <-syncCh:
 			default:
-				break slurp_loop
+				break slurpLoop
 			}
 		}
 

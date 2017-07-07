@@ -48,7 +48,7 @@ func Node(val string, c *client.Dgraph) string {
 }
 
 func ExampleReq_AddMutation() {
-	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
@@ -81,7 +81,7 @@ func ExampleReq_AddMutation() {
 }
 
 func ExampleReq_BatchMutation() {
-	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
@@ -109,7 +109,7 @@ func ExampleReq_BatchMutation() {
 }
 
 func ExampleReq_AddMutation_facets() {
-	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
@@ -161,7 +161,7 @@ func ExampleReq_AddMutation_facets() {
 }
 
 func ExampleReq_AddMutation_schema() {
-	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
@@ -192,7 +192,7 @@ schema {}
 }
 
 func ExampleReq_SetQuery() {
-	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
@@ -227,7 +227,7 @@ func ExampleReq_SetQuery() {
 }
 
 func ExampleReq_SetQueryWithVariables() {
-	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 

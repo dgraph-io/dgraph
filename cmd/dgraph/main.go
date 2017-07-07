@@ -60,6 +60,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+func httpPort() int {
+	return *x.PortOffset + *server.Config.BaseHttpPort
+}
+
+func grpcPort() int {
+	return *x.PortOffset + *server.Config.BaseGrpcPort
+}
+
 func stopProfiling() {
 	// Stop the CPU profiling that was initiated.
 	if len(*server.Config.Cpuprofile) > 0 {
@@ -475,15 +483,19 @@ func setupServer(che chan error) {
 		laddr = "0.0.0.0"
 	}
 
-	l, err := setupListener(laddr, *server.Config.Port)
+	httpListener, err := setupListener(laddr, httpPort())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	tcpm := cmux.New(l)
-	grpcl := tcpm.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
-	httpl := tcpm.Match(cmux.HTTP1Fast())
-	http2 := tcpm.Match(cmux.HTTP2())
+	grpcListener, err := setupListener(laddr, grpcPort())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	httpMux := cmux.New(httpListener)
+	httpl := httpMux.Match(cmux.HTTP1Fast())
+	http2 := httpMux.Match(cmux.HTTP2())
 
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/query", queryHandler)
@@ -500,21 +512,21 @@ func setupServer(che chan error) {
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initilize the servers.
-	go serveGRPC(grpcl)
+	go serveGRPC(grpcListener)
 	go serveHTTP(httpl)
 	go serveHTTP(http2)
 
 	go func() {
 		<-server.State.ShutdownCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
-		l.Close()
+		grpcListener.Close()
+		httpListener.Close()
 	}()
 
-	log.Println("grpc server started.")
-	log.Println("http server started.")
-	log.Println("Server listening on port", *server.Config.Port)
+	log.Println("gRPC server started.  Listening on port", grpcPort())
+	log.Println("HTTP server started.  Listening on port", httpPort())
 
-	err = tcpm.Serve()        // Start cmux serving. blocking call
+	err = httpMux.Serve()     // Start cmux serving. blocking call
 	<-server.State.ShutdownCh // wait for shutdownServer to finish
 	che <- err                // final close for main.
 }

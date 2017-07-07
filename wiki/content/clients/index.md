@@ -15,7 +15,7 @@ The proto file used by Dgraph is located at [graphresponse.proto](https://github
 
 [![GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client?status.svg)](https://godoc.org/github.com/dgraph-io/dgraph/client)
 
-After you have the followed [Get started]({{< relref "get-started/index.md">}}) and got the server running on `127.0.0.1:8080`, you can use the Go client to run queries and mutations as shown in the example below.
+After you have the followed [Get started]({{< relref "get-started/index.md">}}) and got the server running on `127.0.0.1:8080` and (for gRPC) `127.0.0.1:9080`, you can use the Go client to run queries and mutations as shown in the example below.
 
 {{% notice "note" %}}The example below would store values with the correct types only if the
 correct [schema type]({{< relref "query-language/index.md#schema" >}}) is specified in the mutation, otherwise everything would be converted to schema type and stored. Schema is derived based on first mutation received by the server. If first mutation is of default type then everything would be stored as default type.{{% /notice %}}
@@ -51,7 +51,7 @@ import (
 )
 
 var (
-	dgraph = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
+	dgraph = flag.String("d", "127.0.0.1:9080", "Dgraph server address")
 )
 
 func main() {
@@ -309,7 +309,7 @@ import (
 )
 
 func ExampleBatchMutation() {
-	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
@@ -385,7 +385,7 @@ pip install -U pydgraph
 git clone https://github.com/dgraph-io/pydgraph
 cd pydgraph
 
-# Optional: If you have the dgraph server running on localhost:8080 you can run tests.
+# Optional: If you have the dgraph server running on localhost:8080 and localhost:9080 you can run tests.
 python setup.py test
 
 # Install the python package.
@@ -472,7 +472,7 @@ import io.dgraph.client.DgraphResult;
 
 public class DgraphMain {
     public static void main(final String[] args) {
-        final DgraphClient dgraphClient = GrpcDgraphClient.newInstance("localhost", 8080);
+        final DgraphClient dgraphClient = GrpcDgraphClient.newInstance("localhost", 9080);
         final DgraphResult result = dgraphClient.query("{me(_xid_: alice) { name _xid_ follows { name _xid_ follows {name _xid_ } } }}");
         System.out.println(result.toJsonObject().toString());
     }
@@ -488,7 +488,7 @@ javac -cp dgraph4j/build/libs/dgraph4j-all-0.0.1.jar DgraphMain.java
 ```
 java -cp dgraph4j/build/libs/dgraph4j-all-0.0.1.jar:. DgraphMain
 Jun 29, 2016 12:28:03 AM io.grpc.internal.ManagedChannelImpl <init>
-INFO: [ManagedChannelImpl@5d3411d] Created with target localhost:8080
+INFO: [ManagedChannelImpl@5d3411d] Created with target localhost:9080
 {"_root_":[{"_uid_":"0x8c84811dffd0a905","_xid_":"alice","name":"Alice","follows":[{"_uid_":"0xdd77c65008e3c71","_xid_":"bob","name":"Bob"},{"_uid_":"0x5991e7d8205041b3","_xid_":"greg","name":"Greg"}]}],"server_latency":{"pb":"11.487µs","parsing":"85.504µs","processing":"270.597µs"}}
 ```
 

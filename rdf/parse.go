@@ -83,7 +83,6 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 			}
 			if len(rnq.Subject) > 0 || len(rnq.SubjectVar) > 0 {
 				rnq.ObjectVar = item.Val
-				vend = true
 			} else {
 				rnq.SubjectVar = item.Val
 			}
@@ -97,7 +96,7 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 			rnq.ObjectId = strings.Trim(item.Val, " ")
 
 		case itemStar:
-			if rnq.Subject == "" {
+			if rnq.Subject == "" && rnq.SubjectVar == "" {
 				rnq.Subject = x.Star
 			} else if rnq.Predicate == "" {
 				rnq.Predicate = x.Star

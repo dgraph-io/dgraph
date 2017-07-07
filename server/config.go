@@ -24,7 +24,8 @@ type ConfigOpts struct {
 	Gconf        *string
 	PostingDir   *string
 	WalDir       *string
-	Port         *int
+	BaseHttpPort *int
+	BaseGrpcPort *int
 	Bindall      *bool
 	Nomutations  *bool
 	ExposeTrace  *bool
@@ -52,7 +53,8 @@ func NewConfig() (config ConfigOpts) {
 	config.Gconf = flag.String("group_conf", "", "group configuration file")
 	config.PostingDir = flag.String("p", "p", "Directory to store posting lists.")
 	config.WalDir = flag.String("w", "w", "Directory to store raft write-ahead logs.")
-	config.Port = flag.Int("port", 8080, "Port to run server on.")
+	config.BaseHttpPort = flag.Int("port", 8080, "Port to run HTTP service on.")
+	config.BaseGrpcPort = flag.Int("grpc_port", 9080, "Port to run gRPC service on.")
 	config.Bindall = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	config.Nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")

@@ -4,6 +4,9 @@ idx: 1
 # Port to run server on. (default 8080)
 port: 8080
 
+# Grpc port
+grpc_port: 9080
+
 # Directory to store posting lists.
 p: p1
 

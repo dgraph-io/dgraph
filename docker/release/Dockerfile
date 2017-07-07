@@ -26,6 +26,7 @@ RUN curl https://get.dgraph.io | bash
 RUN mkdir /dgraph && mkdir /data
 
 EXPOSE 8080
+EXPOSE 9080
 WORKDIR /dgraph
 
 CMD ["dgraph"]
