@@ -18,37 +18,72 @@
 package worker
 
 import (
+	"bufio"
 	"bytes"
+	"compress/gzip"
 	"encoding/binary"
 	"fmt"
+	"github.com/dgraph-io/badger"
+	"golang.org/x/net/context"
 	"os"
 	"path"
 	"time"
-
-	"github.com/dgraph-io/badger"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/trace"
 )
 
+func writeBackupToFile(f *os.File, ch chan []byte) error {
+	w := bufio.NewWriterSize(f, 1000000)
+	gw, err := gzip.NewWriterLevel(w, gzip.BestCompression)
+	if err != nil {
+		return err
+	}
+
+	for buf := range ch {
+		if _, err := gw.Write(buf); err != nil {
+			return err
+		}
+	}
+	if err := gw.Flush(); err != nil {
+		return err
+	}
+	if err := gw.Close(); err != nil {
+		return err
+	}
+	return w.Flush()
+}
+
 // Export creates a export of data by exporting it as an RDF gzip.
-func backup(gid uint32, bdir string) error {
+func backup(gids []uint32, bdir string) error {
 	// Use a goroutine to write to file.
 	err := os.MkdirAll(bdir, 0700)
 	fmt.Println(bdir)
 	if err != nil {
 		return err
 	}
-	fpath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.rdf.gz", gid,
-		time.Now().Format("2006-01-02-15-04")))
-	fmt.Printf("Backing up to: %v", fpath)
-	chb := make(chan []byte, 1000)
-	errChan := make(chan error, 2)
-	go func() {
-		errChan <- writeToFile(fpath, chb)
-	}()
+
+	fileMap := make(map[uint32]chan []byte)
+
+	errChan := make(chan error, len(gids))
+	curTime := time.Now().Format("2006-01-02-15-04")
+	var allPaths []string
+	for _, gid := range gids {
+		fpath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.rdf.gz", gid, curTime))
+		fmt.Printf("Backing up to: %v", fpath)
+		chb := make(chan []byte, 1000)
+		f, err := os.Create(fpath)
+		if err != nil {
+			return err
+		}
+		allPaths = append(allPaths, fpath)
+		fileMap[gid] = chb
+		go func(f *os.File, chb chan []byte) {
+			errChan <- writeBackupToFile(f, chb)
+		}(f, chb)
+		defer f.Close()
+	}
 
 	b := make([]byte, 4)
 	// Iterate over the store.
@@ -62,7 +97,7 @@ func backup(gid uint32, bdir string) error {
 		key := item.Key()
 		pk := x.Parse(key)
 
-		if group.BelongsTo(pk.Attr) == gid {
+		if chb, ok := fileMap[group.BelongsTo(pk.Attr)]; ok {
 			k := item.Key()
 			v := item.Value()
 			binary.LittleEndian.PutUint32(b, uint32(len(k)))
@@ -79,10 +114,13 @@ func backup(gid uint32, bdir string) error {
 		it.Next()
 	}
 
-	close(chb) // We have stopped output to chb.
-
-	err = <-errChan
-	return err
+	for _, v := range fileMap {
+		close(v) // We have stopped output to chb.
+		if err := <-errChan; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func Backup(ctx context.Context) error {
@@ -110,10 +148,8 @@ func Backup(ctx context.Context) error {
 	}
 	fmt.Println(gids)
 
-	for i := 0; i < len(gids); i++ {
-		if err := backup(gids[i], *backupPath); err != nil {
-			return err
-		}
+	if err := backup(gids, *backupPath); err != nil {
+		return err
 	}
 	return nil
 }
