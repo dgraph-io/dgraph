@@ -53,13 +53,13 @@ type peerPool struct {
 	peers map[uint64]string
 }
 
-func (p *peerPool) Get(id uint64) string {
+func (p *peerPool) get(id uint64) string {
 	p.RLock()
 	defer p.RUnlock()
 	return p.peers[id]
 }
 
-func (p *peerPool) Set(id uint64, addr string) {
+func (p *peerPool) set(id uint64, addr string) {
 	p.Lock()
 	defer p.Unlock()
 	p.peers[id] = addr
@@ -222,19 +222,27 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	return n
 }
 
+func (n *node) GetPeer(pid uint64) string {
+	return n.peers.get(pid)
+}
+
+func (n *node) SetPeer(pid uint64, addr string) {
+	n.peers.set(pid, addr)
+}
+
 func (n *node) Connect(pid uint64, addr string) {
 	if pid == n.id {
 		return
 	}
-	if paddr := n.peers.Get(pid); paddr == addr {
+	if paddr := n.GetPeer(pid); paddr == addr {
 		return
 	}
 	pools().connect(addr)
-	n.peers.Set(pid, addr)
+	n.SetPeer(pid, addr)
 }
 
 func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
-	addr := n.peers.Get(pid)
+	addr := n.GetPeer(pid)
 	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
 	rc := &protos.RaftContext{
 		Addr:  addr,
@@ -441,7 +449,7 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	addr := n.peers.Get(to)
+	addr := n.GetPeer(to)
 	if len(addr) == 0 {
 		return
 	}
@@ -634,7 +642,7 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 }
 
 func (n *node) retrieveSnapshot(rc protos.RaftContext) {
-	addr := n.peers.Get(rc.Id)
+	addr := n.GetPeer(rc.Id)
 	x.AssertTruef(addr != "", "Should have the address for %d", rc.Id)
 	pool, err := pools().get(addr)
 	if err != nil {
