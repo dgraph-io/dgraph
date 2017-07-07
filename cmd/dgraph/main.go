@@ -39,6 +39,7 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -78,6 +79,7 @@ var (
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries chan struct{}
+	isMutAllowed   uint32
 	// TLS configurations
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections with clients.")
 	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
@@ -118,7 +120,7 @@ func addCorsHeaders(w http.ResponseWriter) {
 }
 
 func isMutationAllowed(ctx context.Context) bool {
-	if !*nomutations {
+	if atomic.LoadUint32(&isMutAllowed) == 0 {
 		return true
 	}
 	shareAllowed, ok := ctx.Value("_share_").(bool)
@@ -192,7 +194,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Lets add the value of the debug query parameter to the context.
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
-	ctx = context.WithValue(ctx, "mutation_allowed", !*nomutations)
+	ctx = context.WithValue(ctx, "mutation_allowed", atomic.LoadUint32(&isMutAllowed) == 1)
 
 	if rand.Float64() < *worker.Tracing {
 		tr := trace.New("Dgraph", "Query")
@@ -438,7 +440,7 @@ func allowMutationHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r) {
 		return
 	}
-	*nomutations = true
+	atomic.StoreUint32(&isMutAllowed, 1)
 	x.SetStatus(w, x.Success, "Allowing all mutations.")
 }
 
@@ -446,7 +448,7 @@ func stopMutationHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r) {
 		return
 	}
-	*nomutations = false
+	atomic.StoreUint32(&isMutAllowed, 0)
 	x.SetStatus(w, x.Success, "Stopping all mutations.")
 }
 
@@ -454,6 +456,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r) {
 		return
 	}
+	atomic.StoreUint32(&isMutAllowed, 0)
 	ctx := context.Background()
 	// TODO: Return the paths of all the files written.
 	if err := worker.Backup(ctx); err != nil {
@@ -461,6 +464,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	x.SetStatus(w, x.Success, "Backup completed.")
+	atomic.StoreUint32(&isMutAllowed, 1)
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
@@ -617,6 +621,9 @@ func init() {
 	flag.StringVar(&uiDir, "ui", uiDir, "Directory which contains assets for the user interface")
 	if uiDir == "" {
 		uiDir = os.Getenv("GOPATH") + "/src/github.com/dgraph-io/dgraph/dashboard/build"
+	}
+	if !*nomutations {
+		atomic.StoreUint32(&isMutAllowed, 1)
 	}
 }
 

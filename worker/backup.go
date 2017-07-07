@@ -71,6 +71,7 @@ func backup(gid uint32, bdir string) error {
 			binary.LittleEndian.PutUint32(b, uint32(len(v)))
 			prefix.Write(b)
 			prefix.Write(v)
+			prefix.WriteRune('\n')
 			chb <- prefix.Bytes()
 			prefix.Reset()
 		}
@@ -86,6 +87,9 @@ func backup(gid uint32, bdir string) error {
 
 func Backup(ctx context.Context) error {
 	// If we haven't even had a single membership update, don't run export.
+	if err := syncAllMarks(ctx); err != nil {
+		return err
+	}
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
