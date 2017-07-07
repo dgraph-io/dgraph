@@ -127,6 +127,8 @@ func (c *listCache) removeOldest() []*entry {
 }
 
 func (c *listCache) delete(key uint64) {
+	c.Lock()
+	defer c.Unlock()
 	if ele, hit := c.cache[key]; hit {
 		delete(c.cache, key)
 		e := ele.Value.(*entry)
