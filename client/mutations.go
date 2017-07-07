@@ -42,6 +42,12 @@ var (
 	emptyEdge      Edge
 )
 
+var DefaultOptions = BatchMutationOptions{
+	Size:          100,
+	Pending:       100,
+	PrintCounters: false,
+}
+
 type BatchMutationOptions struct {
 	Size          int
 	Pending       int
@@ -140,9 +146,6 @@ type Dgraph struct {
 	start time.Time
 }
 
-// NewBatchMutation is used to create a new batch.
-// size is the number of RDF's that are sent as part of one request to Dgraph.
-// pending is the number of concurrent requests to make to Dgraph server.
 func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions) *Dgraph {
 	client := protos.NewDgraphClient(conn)
 

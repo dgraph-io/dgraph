@@ -17,6 +17,7 @@
 package client
 
 import (
+	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -308,6 +309,21 @@ func (e *Edge) SetValueDefault(val string) error {
 	}
 	e.nq.ObjectValue = v
 	e.nq.ObjectType = int32(types.StringID)
+	return nil
+}
+
+func (e *Edge) SetValueBytes(val []byte) error {
+	if len(e.nq.ObjectId) > 0 {
+		return ErrConnected
+	}
+	dst := make([]byte, base64.StdEncoding.EncodedLen(len(val)))
+	base64.StdEncoding.Encode(dst, val)
+	v, err := types.ObjectValue(types.BinaryID, []byte(dst))
+	if err != nil {
+		return err
+	}
+	e.nq.ObjectValue = v
+	e.nq.ObjectType = int32(types.BinaryID)
 	return nil
 }
 
