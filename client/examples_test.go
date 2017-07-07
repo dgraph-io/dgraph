@@ -288,6 +288,9 @@ func ExampleReq_BatchFlushing() {
 
 	req.SetQuery(queryTXT)
 
+	for ; dgraphClient.AwaitingBuffering() > 0; {
+		time.Sleep(10 * time.Millisecond)	
+	}
 	dgraphClient.BatchFlush()					// flush the XIDs before query
 	time.Sleep(10 * time.Second)				// workaround until index issue is fixed
 
@@ -335,6 +338,9 @@ func ExampleReq_BatchFlushing() {
 	req.SetQuery(queryTXT)
 
 
+	for ; dgraphClient.AwaitingBuffering() > 0; {
+		time.Sleep(10 * time.Millisecond)	
+	}
 	dgraphClient.BatchFlush()					// flush the XIDs before query
 
 

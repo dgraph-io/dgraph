@@ -332,6 +332,12 @@ func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 }
 
 
+// AwaitingBuffering returns the number of set and del mutations that have been added with BatchSet() or BatchDelete() and have not yet
+// been added to a buffer for batching.  Can be called before flushing buffers to ensure all pending changes are buffered before flushing.
+func (d *Dgraph) AwaitingBuffering() int {
+	return len(d.nquads)
+}
+
 // BatchFlush flushes any currently pending requests, but keeps the channels open so the client can continue.
 // To flush bbuffers in long running clients.
 func (d *Dgraph) BatchFlush() {
