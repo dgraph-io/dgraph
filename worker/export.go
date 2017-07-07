@@ -66,6 +66,7 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.BoolID:     "xs:boolean",
 	types.GeoID:      "geo:geojson",
 	types.PasswordID: "pwd:password",
+	types.BinaryID:   "xs:base64Binary",
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {
@@ -89,8 +90,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			if p.PostingType == protos.Posting_VALUE_LANG {
 				buf.WriteByte('@')
 				buf.WriteString(string(p.Metadata))
-			} else if vID != types.BinaryID &&
-				vID != types.DefaultID {
+			} else if vID != types.DefaultID {
 				rdfType, ok := rdfTypeMap[vID]
 				x.AssertTruef(ok, "Didn't find RDF type for dgraph type: %+v", vID.Name())
 				buf.WriteString("^^<")

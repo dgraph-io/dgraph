@@ -67,6 +67,7 @@ type Person struct {
 	Salary       float64        `dgraph:"salary"`
 	Age          int            `dgraph:"age"`
 	Married      bool           `dgraph:"married"`
+	ByteDob      []byte         `dgraph:"bytedob"`
 	Friends      []Person       `dgraph:"friend"`
 	FriendFacets []friendFacets `dgraph:"@facets"`
 }
@@ -125,6 +126,12 @@ func main() {
 	err = req.Set(e)
 	x.Check(err)
 
+	e = person1.Edge("bytedob")
+	err = e.SetValueBytes([]byte("01-02-1991"))
+	x.Check(err)
+	err = req.Set(e)
+	x.Check(err)
+
 	person2, err := dgraphClient.NodeBlank("person2")
 	x.Check(err)
 
@@ -144,6 +151,7 @@ func main() {
 	resp, err := dgraphClient.Run(context.Background(), &req)
 	x.Check(err)
 
+	req = client.Req{}
 	req.SetQuery(fmt.Sprintf(`{
 		me(func: uid(%v)) {
 			_uid_
@@ -154,6 +162,7 @@ func main() {
 			salary
 			age
 			married
+			bytedob
 			friend @facets {
 				_uid_
 				name

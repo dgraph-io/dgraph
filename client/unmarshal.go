@@ -135,6 +135,9 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 	case reflect.Slice:
 		switch field.Type {
 		case reflect.TypeOf([]byte{}):
+			if value == nil {
+				return nil
+			}
 			switch value.Val.(type) {
 			case *protos.Value_GeoVal:
 				v := value.GetGeoVal()
