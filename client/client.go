@@ -311,6 +311,19 @@ func (e *Edge) SetValueDefault(val string) error {
 	return nil
 }
 
+func (e *Edge) SetValueBytes(val []byte) error {
+	if len(e.nq.ObjectId) > 0 {
+		return ErrConnected
+	}
+	v, err := types.ObjectValue(types.BinaryID, val)
+	if err != nil {
+		return err
+	}
+	e.nq.ObjectValue = v
+	e.nq.ObjectType = int32(types.BinaryID)
+	return nil
+}
+
 func (e *Edge) AddFacet(key, val string) {
 	e.nq.Facets = append(e.nq.Facets, &protos.Facet{
 		Key: key,

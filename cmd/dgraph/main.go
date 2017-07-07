@@ -526,7 +526,7 @@ func (s *grpcServer) Run(ctx context.Context,
 		return resp, x.Errorf("Multiple schema blocks found")
 	}
 	// Schema Block and Mutation can be part of query string or request
-	if res.Mutation == nil {
+	if res.Mutation == nil && req.Mutation != nil {
 		res.Mutation = &gql.Mutation{Set: req.Mutation.Set, Del: req.Mutation.Del}
 	}
 	if res.Schema == nil {
@@ -534,10 +534,13 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 
 	var queryRequest = query.QueryRequest{
-		Latency:      &l,
-		GqlQuery:     &res,
-		SchemaUpdate: req.Mutation.Schema,
+		Latency:  &l,
+		GqlQuery: &res,
 	}
+	if req.Mutation != nil && len(req.Mutation.Schema) > 0 {
+		queryRequest.SchemaUpdate = req.Mutation.Schema
+	}
+
 	var er query.ExecuteResult
 	if er, err = queryRequest.ProcessWithMutation(ctx); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
