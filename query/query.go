@@ -120,22 +120,26 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	Alias        string
-	Count        int
-	Offset       int
-	AfterUID     uint64
-	DoCount      bool
-	GetUid       bool
-	Order        string
-	OrderDesc    bool
-	Var          string
-	NeedsVar     []gql.VarContext
-	ParentVars   map[string]varValue
-	FacetVar     map[string]string
-	uidToVal     map[uint64]types.Val
-	Langs        []string
-	Normalize    bool
-	Cascade      bool
+	Alias      string
+	Count      int
+	Offset     int
+	AfterUID   uint64
+	DoCount    bool
+	GetUid     bool
+	Order      string
+	OrderDesc  bool
+	Var        string
+	NeedsVar   []gql.VarContext
+	ParentVars map[string]varValue
+	FacetVar   map[string]string
+	uidToVal   map[uint64]types.Val
+	Langs      []string
+
+	// directives.
+	Normalize bool
+	Cascade   bool
+	Reflexive bool
+
 	From         uint64
 	To           uint64
 	Facet        *protos.Param
@@ -148,6 +152,7 @@ type params struct {
 	groupbyAttrs []gql.AttrLang
 	uidCount     string
 	numPaths     int
+	parentIds    []uint64 // These are maintained while preTraverse.
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -290,9 +295,80 @@ func (sg *SubGraph) fieldName() string {
 	return fieldName
 }
 
+func addCount(pc *SubGraph, count uint64, dst outputNode) {
+	c := types.ValueForType(types.IntID)
+	c.Value = int64(count)
+	fieldName := fmt.Sprintf("count(%s)", pc.Attr)
+	if pc.Params.Alias != "" {
+		fieldName = pc.Params.Alias
+	}
+	dst.AddValue(fieldName, c)
+}
+
+func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
+	if pc.Params.uidToVal == nil {
+		return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
+	}
+	fieldName := fmt.Sprintf("val(%v)", pc.Params.Var)
+	if len(pc.Params.NeedsVar) > 0 {
+		fieldName = fmt.Sprintf("val(%v)", pc.Params.NeedsVar[0].Name)
+		if len(pc.SrcFunc) > 0 {
+			fieldName = fmt.Sprintf("%s(%v)", pc.SrcFunc[0], fieldName)
+		}
+	}
+	if pc.Params.Alias != "" {
+		fieldName = pc.Params.Alias
+	}
+	sv, ok := pc.Params.uidToVal[uid]
+	if !ok || sv.Value == nil {
+		return nil
+	}
+	if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
+		sv.Value = ""
+	}
+	dst.AddValue(fieldName, sv)
+	return nil
+}
+
+func addListNode(pc *SubGraph, dst outputNode) error {
+	if pc.Params.DoCount {
+		addCount(pc, uint64(len(pc.values)), dst)
+		return nil
+	}
+
+	fieldName := pc.Attr
+	if pc.Params.Alias != "" {
+		fieldName = pc.Params.Alias
+	}
+	for _, val := range pc.values {
+		v, err := getValue(val)
+		if err != nil {
+			return err
+		}
+		sv, err := types.Convert(v, v.Tid)
+		uc := dst.New(pc.Attr)
+		uc.AddValue("_name_", sv)
+		dst.AddListChild(fieldName, uc)
+	}
+	return nil
+}
+
+func addCheckPwd(pc *SubGraph, val *protos.TaskValue, dst outputNode) {
+	c := types.ValueForType(types.BoolID)
+	c.Value = task.ToBool(val)
+	uc := dst.New(pc.Attr)
+	uc.AddValue("checkpwd", c)
+	dst.AddListChild(pc.Attr, uc)
+}
+
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
+
+	fmt.Println(sg.Params.parentIds, "uid", uid)
+	if sg.Params.Reflexive && algo.IndexOf(&protos.List{sg.Params.parentIds}, uid) >= 0 {
+		return nil
+	}
 
 	if sg.Params.GetUid {
 		// If we are asked for count() and there are no other children,
@@ -304,6 +380,15 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	}
 
 	facetsNode := dst.New("@facets")
+
+	if sg.Params.Reflexive {
+		sg.Params.parentIds = append(sg.Params.parentIds, uid)
+		sort.Slice(sg.Params.parentIds, func(i, j int) bool {
+			return sg.Params.parentIds[i] <
+				sg.Params.parentIds[j]
+		})
+	}
+
 	// We go through all predicate children of the subprotos.
 	for _, pc := range sg.Children {
 		if pc.Params.ignoreResult {
@@ -317,54 +402,15 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if pc.Params.Expand != "" {
 				continue
 			}
-			if pc.Params.uidToVal == nil {
-				return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
+			if err := addInternalNode(pc, uid, dst); err != nil {
+				return err
 			}
-			fieldName := fmt.Sprintf("val(%v)", pc.Params.Var)
-			if len(pc.Params.NeedsVar) > 0 {
-				fieldName = fmt.Sprintf("val(%v)", pc.Params.NeedsVar[0].Name)
-				if len(pc.SrcFunc) > 0 {
-					fieldName = fmt.Sprintf("%s(%v)", pc.SrcFunc[0], fieldName)
-				}
-			}
-			if pc.Params.Alias != "" {
-				fieldName = pc.Params.Alias
-			}
-			sv, ok := pc.Params.uidToVal[uid]
-			if !ok || sv.Value == nil {
-				continue
-			}
-			if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
-				sv.Value = ""
-			}
-			dst.AddValue(fieldName, sv)
 			continue
 		}
 
 		if pc.IsListNode() {
-			if pc.Params.DoCount {
-				c := types.ValueForType(types.IntID)
-				c.Value = int64(len(pc.values))
-				fieldName := fmt.Sprintf("count(%s)", pc.Attr)
-				if pc.Params.Alias != "" {
-					fieldName = pc.Params.Alias
-				}
-				dst.AddValue(fieldName, c)
-				continue
-			}
-			fieldName := pc.Attr
-			if pc.Params.Alias != "" {
-				fieldName = pc.Params.Alias
-			}
-			for _, val := range pc.values {
-				v, err := getValue(val)
-				if err != nil {
-					return err
-				}
-				sv, err := types.Convert(v, v.Tid)
-				uc := dst.New(pc.Attr)
-				uc.AddValue("_name_", sv)
-				dst.AddListChild(fieldName, uc)
+			if err := addListNode(pc, dst); err != nil {
+				return err
 			}
 			continue
 		}
@@ -381,27 +427,23 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 
 		fieldName := pc.fieldName()
 		if len(pc.counts) > 0 {
-			c := types.ValueForType(types.IntID)
-			c.Value = int64(pc.counts[idx])
-			fieldName = fmt.Sprintf("count(%s)", pc.Attr)
-			if pc.Params.Alias != "" {
-				fieldName = pc.Params.Alias
-			}
-			dst.AddValue(fieldName, c)
+			addCount(pc, uint64(pc.counts[idx]), dst)
 		} else if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
-			c := types.ValueForType(types.BoolID)
-			c.Value = task.ToBool(pc.values[idx])
-			uc := dst.New(pc.Attr)
-			uc.AddValue("checkpwd", c)
-			dst.AddListChild(pc.Attr, uc)
+			addCheckPwd(pc, pc.values[idx], dst)
 		} else if len(ul.Uids) > 0 {
-			// We create as many predicate entity children as the length of uids for
-			// this predicate.
 			var fcsList []*protos.Facets
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
 
+			ids := make([]uint64, 0, len(sg.Params.parentIds))
+			for _, id := range sg.Params.parentIds {
+				sg.Params.parentIds = append(sg.Params.parentIds, id)
+			}
+			pc.Params.parentIds = ids
+
+			// We create as many predicate entity children as the length of uids for
+			// this predicate.
 			for childIdx, childUID := range ul.Uids {
 				if invalidUids[childUID] || fieldName == "" {
 					continue
@@ -642,6 +684,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			FacetVar:     gchild.FacetVar,
 			uidCount:     gchild.UidCount,
 			Cascade:      sg.Params.Cascade,
+			Reflexive:    sg.Params.Reflexive,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &protos.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -836,6 +879,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		isGroupBy:    gq.IsGroupby,
 		groupbyAttrs: gq.GroupbyAttrs,
 		uidCount:     gq.UidCount,
+		Reflexive:    gq.Reflexive,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}

@@ -8205,3 +8205,22 @@ func TestBinaryJSON(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"me":[{"bin_data":"YmluLWRhdGE=","name":"Michonne"}]}`, js)
 }
+
+func TestReflexive(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func:anyofterms(name, "Michonne Rick Daryl")) @reflexive {
+			name
+			friend {
+				name
+				friend {
+					name
+				}
+			}
+		}
+	}`
+	js := processToFastJSON(t, query)
+	fmt.Println(string(js))
+	require.JSONEq(t, `{"me":[{"friend": [{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}],"name":"Michonne"},{"friend":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Daryl Dixon"}]}`, js)
+}

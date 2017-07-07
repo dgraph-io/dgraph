@@ -57,6 +57,7 @@ type GraphQuery struct {
 	MathExp      *MathTree
 	Normalize    bool
 	Cascade      bool
+	Reflexive    bool
 	Facets       *Facets
 	FacetsFilter *FilterTree
 	GroupbyAttrs []AttrLang
@@ -781,6 +782,8 @@ L:
 			case "groupby":
 				gq.IsGroupby = true
 				parseGroupby(it, gq)
+			case "reflexive":
+				gq.Reflexive = true
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
