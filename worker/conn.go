@@ -80,6 +80,12 @@ func (p *poolsi) get(addr string) (*pool, error) {
 	return pool, nil
 }
 
+// One of these must be called for each call to get(...).
+// TODO: Make put include information about pool health.
+func (p *poolsi) put(_ *pool) {
+	// nothing to do.
+}
+
 func (p *poolsi) connect(addr string) *pool {
 	if addr == *myAddr {
 		return nil

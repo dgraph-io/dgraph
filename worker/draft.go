@@ -456,6 +456,7 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	pool, err := pools().get(addr)
 	// TODO: No, don't fail like this?
 	x.Check(err)
+	defer pools().put(pool)
 	conn := pool.Get()
 
 	c := protos.NewWorkerClient(conn)
@@ -648,6 +649,7 @@ func (n *node) retrieveSnapshot(rc protos.RaftContext) {
 	if err != nil {
 		log.Fatalf("Pool shouldn't be nil for address: %v for id: %v, error: %v\n", addr, rc.Id, err)
 	}
+	defer pools().put(pool)
 
 	x.AssertTrue(rc.Group == n.gid)
 	// Get index of last committed.
@@ -846,6 +848,7 @@ func (n *node) joinPeers() {
 	if err != nil {
 		log.Fatalf("Unable to get pool for addr: %q for peer: %d, error: %v\n", paddr, pid, err)
 	}
+	defer pools().put(pool)
 
 	// Bring the instance up to speed first.
 	// Raft would decide whether snapshot needs to fetched or not

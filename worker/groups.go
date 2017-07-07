@@ -460,27 +460,36 @@ func (g *groupi) syncMemberships() {
 	addr := g.AnyServer(0)
 
 UPDATEMEMBERSHIP:
-	var pl *pool
-	var err error
-	if len(addr) > 0 {
-		pl, err = pools().get(addr)
-	} else {
-		pl, err = pools().any()
-	}
-	if err == errNoConnection {
-		fmt.Println("Unable to sync memberships. No valid connection")
-		return
-	}
-	x.Check(err)
-
-	conn := pl.Get()
-
-	c := protos.NewWorkerClient(conn)
-	update, err := c.UpdateMembership(g.ctx, &mu)
-	if err != nil {
-		if tr, ok := trace.FromContext(g.ctx); ok {
-			tr.LazyPrintf(err.Error())
+	var update *protos.MembershipUpdate
+	// Run block in func for sake of defer statement in loop.
+	returnNow := func() bool {
+		var pl *pool
+		var err error
+		if len(addr) > 0 {
+			pl, err = pools().get(addr)
+		} else {
+			pl, err = pools().any()
 		}
+		if err == errNoConnection {
+			fmt.Println("Unable to sync memberships. No valid connection")
+			return true
+		}
+		x.Check(err)
+		defer pools().put(pl)
+
+		conn := pl.Get()
+
+		c := protos.NewWorkerClient(conn)
+		update, err = c.UpdateMembership(g.ctx, &mu)
+		if err != nil {
+			if tr, ok := trace.FromContext(g.ctx); ok {
+				tr.LazyPrintf(err.Error())
+			}
+			return true
+		}
+		return false
+	}()
+	if returnNow {
 		return
 	}
 

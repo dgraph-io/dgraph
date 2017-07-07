@@ -365,6 +365,7 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 		addrs = append(addrs, addr)
 	}
 
+	var pl *pool
 	var conn *grpc.ClientConn
 	for _, addr := range addrs {
 		pl, err := pools().get(addr)
@@ -394,6 +395,7 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 			GroupId: gid,
 		}
 	}
+	defer pools().put(pl)
 
 	c := protos.NewWorkerClient(conn)
 	nr := &protos.ExportPayload{

@@ -221,6 +221,7 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 	if err != nil {
 		return x.Wrapf(err, "RebuildIndexOverNetwork: while retrieving connection.")
 	}
+	defer pools().put(pl)
 	conn := pl.Get()
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Sending request to %v", addr)
