@@ -37,13 +37,14 @@ type ServerState struct {
 	ShutdownCh     chan struct{} // channel to signal shutdown.
 }
 
-// TODO(tzdybal) - remove global!
-var State ServerState
+// TODO(tzdybal) - remove global
+var State = NewServerState()
 
-func init() {
-	State.PendingQueries = make(chan struct{}, *Config.NumPending)
-	State.FinishCh = make(chan struct{})
-	State.ShutdownCh = make(chan struct{})
+func NewServerState() (state ServerState) {
+	state.PendingQueries = make(chan struct{}, *Config.NumPending)
+	state.FinishCh = make(chan struct{})
+	state.ShutdownCh = make(chan struct{})
+	return state
 }
 
 // server is used to implement protos.DgraphServer
