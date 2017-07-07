@@ -618,7 +618,7 @@ func init() {
 	flag.StringVar(&uiDir, "ui", uiDir, "Directory which contains assets for the user interface")
 	if uiDir == "" {
 		gopath, _ := bestEffortGopath()
-		uiDir = gopath + "/src/github.com/dgraph-io/dgraph/dashboard/build"
+		uiDir = path.Join(gopath, "src/github.com/dgraph-io/dgraph/dashboard/build")
 	}
 }
 
