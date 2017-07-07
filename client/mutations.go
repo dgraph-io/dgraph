@@ -43,7 +43,7 @@ var (
 )
 
 var DefaultOptions = BatchMutationOptions{
-	Size:          1000,
+	Size:          100,
 	Pending:       100,
 	PrintCounters: false,
 }

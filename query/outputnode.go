@@ -365,7 +365,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 	switch v.Tid {
 	case types.BinaryID:
 		// Encode to base64 and add "" around the value.
-		b := fmt.Sprintf(`"%s"`, v.Value.([]byte))
+		b := fmt.Sprintf("%q", v.Value.([]byte))
 		return []byte(b), nil
 	case types.IntID:
 		return []byte(fmt.Sprintf("%d", v.Value)), nil

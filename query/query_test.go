@@ -310,6 +310,9 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "son", 1, 2300, nil)
 
 	addEdgeToValue(t, "name", 2301, `Alice\"`, nil)
+
+	// Add some base64 encoded data
+	addEdgeToTypedValue(t, "bin_data", 0x1, types.BinaryID, []byte("YmluLWRhdGE="), nil)
 }
 
 func TestGetUID(t *testing.T) {
@@ -7824,10 +7827,11 @@ func TestMultipleEqInt(t *testing.T) {
 
 func TestPBUnmarshalToStruct1(t *testing.T) {
 	type Person struct {
-		Name    string `dgraph:"name"`
-		Age     int    `dgraph:"age"`
-		Birth   string
-		Friends []Person `dgraph:"friend"`
+		Name       string `dgraph:"name"`
+		Age        int    `dgraph:"age"`
+		Birth      string
+		BinaryData []byte   `dgraph:"bin_data"`
+		Friends    []Person `dgraph:"friend"`
 	}
 
 	type res struct {
@@ -7840,6 +7844,7 @@ func TestPBUnmarshalToStruct1(t *testing.T) {
 			me(func: uid(0x01)) {
 				name
 				age
+				bin_data
 				Birth: dob
 				friend {
 					name
@@ -7854,6 +7859,7 @@ func TestPBUnmarshalToStruct1(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Michonne", r.Root.Name)
 	require.Equal(t, 38, r.Root.Age)
+	require.Equal(t, "bin-data", string(r.Root.BinaryData))
 	require.Equal(t, "1910-01-01T00:00:00Z", r.Root.Birth)
 	require.Equal(t, 4, len(r.Root.Friends))
 	require.Equal(t, Person{
@@ -8185,4 +8191,17 @@ func TestUidInFunctioniAtRoot(t *testing.T) {
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
 	err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
+}
+
+func TestBinaryJSON(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(1)) {
+			name
+			bin_data
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"me":[{"bin_data":"YmluLWRhdGE=","name":"Michonne"}]}`, js)
 }
