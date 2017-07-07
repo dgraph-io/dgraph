@@ -64,11 +64,12 @@ func newListCache(maxSize uint64) *listCache {
 // Add adds a value to the cache.
 func (c *listCache) PutIfMissing(key uint64, pl *List) (res *List) {
 	c.Lock()
-	defer c.Unlock()
 
 	if ee, ok := c.cache[key]; ok {
 		c.ll.MoveToFront(ee)
-		return ee.Value.(*entry).pl
+		res = ee.Value.(*entry).pl
+		c.Unlock()
+		return res
 	}
 
 	e := &entry{
@@ -79,8 +80,14 @@ func (c *listCache) PutIfMissing(key uint64, pl *List) (res *List) {
 	c.curSize += e.size
 	ele := c.ll.PushFront(e)
 	c.cache[key] = ele
-	for c.curSize > c.MaxSize {
-		c.removeOldest()
+	removals := c.removeOldest()
+	c.Unlock()
+
+	for _, rem := range removals {
+		rem.pl.SetForDeletion()
+		rem.pl.SyncIfDirty(true)
+		// TODO: Handle race
+		c.delete(rem.key)
 	}
 	return e.pl
 }
@@ -101,32 +108,25 @@ func (c *listCache) Get(key uint64) (pl *List) {
 	return nil
 }
 
-func (c *listCache) removeOldest() {
-	ele := c.ll.Back()
-	if ele != nil {
-		c.evicts++
+func (c *listCache) removeOldest() []*entry {
+	var res []*entry
+	for c.curSize > c.MaxSize {
+		ele := c.ll.Back()
+		if ele == nil {
+			c.curSize = 0
+			break
+		}
+		c.ll.Remove(ele)
 
+		c.evicts++
 		e := ele.Value.(*entry)
 		c.curSize -= e.size
-
-		go func() {
-			e.pl.SetForDeletion()
-			merged, _ := e.pl.SyncIfDirty(true)
-			if !merged {
-				c.Delete(e.key)
-			}
-		}()
-
-		c.ll.Remove(ele)
-	} else {
-		c.curSize = 0
+		res = append(res, e)
 	}
+	return res
 }
 
-func (c *listCache) Delete(key uint64) {
-	c.Lock()
-	defer c.Unlock()
-
+func (c *listCache) delete(key uint64) {
 	if ele, hit := c.cache[key]; hit {
 		delete(c.cache, key)
 		e := ele.Value.(*entry)

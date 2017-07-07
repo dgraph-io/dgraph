@@ -437,9 +437,6 @@ func batchSync(i int) {
 			if e.water != nil {
 				e.water.Ch <- x.Mark{Indices: e.pending, Done: true}
 			}
-			if e.deleteKey != 0 {
-				lcache.Delete(e.deleteKey)
-			}
 		}
 		entries = entries[:0]
 	}
