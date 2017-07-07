@@ -725,6 +725,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/export", exportHandler)
+	http.HandleFunc("/admin/backup", backupHandler)
 	http.HandleFunc("/admin/allowmutation", allowMutationHandler)
 	http.HandleFunc("/admin/stopmutation", stopMutationHandler)
 
