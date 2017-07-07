@@ -30,6 +30,7 @@ import (
 
 // Tokenizer defines what a tokenizer must provide.
 type Tokenizer interface {
+
 	// Name is name of tokenizer. This should be unique.
 	Name() string
 
@@ -61,6 +62,10 @@ func init() {
 	RegisterTokenizer(IntTokenizer{})
 	RegisterTokenizer(FloatTokenizer{})
 	RegisterTokenizer(DateTimeTokenizer{})
+	RegisterTokenizer(HourTokenizer{})
+	RegisterTokenizer(MonthTokenizer{})
+	RegisterTokenizer(DayTokenizer{})
+	RegisterTokenizer(UnixTokenizer{})
 	RegisterTokenizer(TermTokenizer{})
 	RegisterTokenizer(ExactTokenizer{})
 	RegisterTokenizer(BoolTokenizer{})
@@ -165,6 +170,50 @@ func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
 func (t DateTimeTokenizer) Identifier() byte { return 0x4 }
 func (t DateTimeTokenizer) IsSortable() bool { return true }
 func (t DateTimeTokenizer) IsLossy() bool    { return true }
+
+type MonthTokenizer struct{}
+
+func (t MonthTokenizer) Name() string       { return "month" }
+func (t MonthTokenizer) Type() types.TypeID { return types.DateTimeID }
+func (t MonthTokenizer) Tokens(sv types.Val) ([]string, error) {
+	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Month())), t.Identifier())}, nil
+}
+func (t MonthTokenizer) Identifier() byte { return 0x41 }
+func (t MonthTokenizer) IsSortable() bool { return true }
+func (t MonthTokenizer) IsLossy() bool    { return true }
+
+type DayTokenizer struct{}
+
+func (t DayTokenizer) Name() string       { return "day" }
+func (t DayTokenizer) Type() types.TypeID { return types.DateTimeID }
+func (t DayTokenizer) Tokens(sv types.Val) ([]string, error) {
+	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Day())), t.Identifier())}, nil
+}
+func (t DayTokenizer) Identifier() byte { return 0x42 }
+func (t DayTokenizer) IsSortable() bool { return true }
+func (t DayTokenizer) IsLossy() bool    { return true }
+
+type HourTokenizer struct{}
+
+func (t HourTokenizer) Name() string       { return "hour" }
+func (t HourTokenizer) Type() types.TypeID { return types.DateTimeID }
+func (t HourTokenizer) Tokens(sv types.Val) ([]string, error) {
+	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Hour())), t.Identifier())}, nil
+}
+func (t HourTokenizer) Identifier() byte { return 0x43 }
+func (t HourTokenizer) IsSortable() bool { return true }
+func (t HourTokenizer) IsLossy() bool    { return true }
+
+type UnixTokenizer struct{}
+
+func (t UnixTokenizer) Name() string       { return "unix" }
+func (t UnixTokenizer) Type() types.TypeID { return types.DateTimeID }
+func (t UnixTokenizer) Tokens(sv types.Val) ([]string, error) {
+	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Unix())), t.Identifier())}, nil
+}
+func (t UnixTokenizer) Identifier() byte { return 0x44 }
+func (t UnixTokenizer) IsSortable() bool { return true }
+func (t UnixTokenizer) IsLossy() bool    { return true }
 
 type TermTokenizer struct{}
 
