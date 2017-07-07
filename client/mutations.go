@@ -140,12 +140,13 @@ type Dgraph struct {
 	start time.Time
 }
 
-// NewBatchMutation is used to create a new batch.
-// size is the number of RDF's that are sent as part of one request to Dgraph.
-// pending is the number of concurrent requests to make to Dgraph server.
 func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions) *Dgraph {
-	client := protos.NewDgraphClient(conn)
+	grpcClient := protos.NewDgraphClient(conn)
+	return NewGenericClient(grpcClient, opts)
+}
 
+// TODO(tzdybal) - hide this function from users
+func NewGenericClient(client protos.DgraphClient, opts BatchMutationOptions) *Dgraph {
 	alloc := &allocator{
 		dc:  client,
 		ids: make(map[string]uint64),

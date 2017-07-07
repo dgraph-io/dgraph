@@ -27,6 +27,21 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
+/*
+type DgraphClient interface {
+	AddSchema(s protos.SchemaUpdate) error
+	BatchDelete(e Edge) error
+	BatchFlush()
+	BatchSet(e Edge) error
+	CheckVersion(ctx context.Context)
+	Counter() Counter
+	NodeBlank(varname string) (Node, error)
+	NodeUid(uid uint64) Node
+	NodeXid(xid string, storeXid bool) (Node, error)
+	Run(ctx context.Context, req *Req) (*protos.Response, error)
+}
+*/
+
 type Op int
 
 const (
