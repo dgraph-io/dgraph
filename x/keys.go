@@ -132,6 +132,11 @@ func (p ParsedKey) IsReverse() bool {
 	return p.byteType == byteReverse
 }
 
+func (p ParsedKey) IsCount() bool {
+	return p.byteType == byteCount ||
+		p.byteType == byteCountRev
+}
+
 func (p ParsedKey) IsIndex() bool {
 	return p.byteType == byteIndex
 }
