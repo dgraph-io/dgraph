@@ -21,17 +21,12 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/server"
 )
 
-type EmbeddedDgraph interface {
-	protos.DgraphClient
-}
-
 type inmemoryClient struct {
-	srv *server.GrpcServer
+	srv *server.Server
 }
 
 func (i *inmemoryClient) Run(ctx context.Context, in *protos.Request, opts ...grpc.CallOption) (*protos.Response, error) {
@@ -44,18 +39,4 @@ func (i *inmemoryClient) CheckVersion(ctx context.Context, in *protos.Check, opt
 
 func (i *inmemoryClient) AssignUids(ctx context.Context, in *protos.Num, opts ...grpc.CallOption) (*protos.AssignedIds, error) {
 	return i.srv.AssignUids(ctx, in)
-}
-
-func NewEmbeddedDgraph() EmbeddedDgraph {
-	// TODO(tzdybal) - create embedded server backend
-	embedded := inmemoryClient{&server.GrpcServer{}}
-
-	return &embedded
-}
-
-// NewBatchMutation is used to create a new batch.
-// size is the number of RDF's that are sent as part of one request to Dgraph.
-// pending is the number of concurrent requests to make to Dgraph server.
-func NewEmbeddedDgraphClient(embedded EmbeddedDgraph, opts client.BatchMutationOptions) *client.Dgraph {
-	return client.NewGenericClient(embedded, opts)
 }

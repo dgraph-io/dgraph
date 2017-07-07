@@ -440,7 +440,7 @@ func serveGRPC(l net.Listener) {
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}),
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize))
-	protos.RegisterDgraphServer(s, &server.GrpcServer{})
+	protos.RegisterDgraphServer(s, &server.Server{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
 	s.GracefulStop()

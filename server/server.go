@@ -47,12 +47,11 @@ func init() {
 }
 
 // server is used to implement protos.DgraphServer
-type GrpcServer struct{}
+type Server struct{}
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *GrpcServer) Run(ctx context.Context,
-	req *protos.Request) (resp *protos.Response, err error) {
+func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Response, err error) {
 	// we need membership information
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -151,8 +150,7 @@ func (s *GrpcServer) Run(ctx context.Context,
 	return resp, err
 }
 
-func (s *GrpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version,
-	err error) {
+func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version, err error) {
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("request rejected %v", err)
@@ -165,7 +163,7 @@ func (s *GrpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *prot
 	return v, nil
 }
 
-func (s *GrpcServer) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("request rejected %v", err)
