@@ -647,8 +647,8 @@ func RebuildIndex(ctx context.Context, attr string) error {
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
-	gid := group.BelongsTo(attr)
-	EvictGroup(gid)
+	// TODO: Remove later, clearing all would kill us
+	lcache.Clear()
 
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.FetchValues = false

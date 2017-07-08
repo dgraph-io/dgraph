@@ -76,11 +76,8 @@ var (
 	memprofile   = flag.String("mem", "", "write memory profile to file")
 	blockRate    = flag.Int("block", 0, "Block profiling rate")
 	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
-	numPending   = flag.Int("pending", 1000,
-		"Number of pending queries. Useful for rate limiting.")
-	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
-	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
-	pendingQueries chan struct{}
+	finishCh     = make(chan struct{}) // channel to wait for all pending reqs to finish.
+	shutdownCh   = make(chan struct{}) // channel to signal shutdown.
 	// TLS configurations
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections with clients.")
 	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
@@ -188,10 +185,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pendingQueries <- struct{}{}
 	x.PendingQueries.Add(1)
 	x.NumQueries.Add(1)
-	defer func() { <-pendingQueries; x.PendingQueries.Add(-1) }()
+	defer func() { x.PendingQueries.Add(-1) }()
 
 	addCorsHeaders(w)
 	if r.Method == "OPTIONS" {
@@ -477,10 +473,10 @@ func (s *grpcServer) Run(ctx context.Context,
 		}
 		return resp, err
 	}
-	pendingQueries <- struct{}{}
+
 	x.PendingQueries.Add(1)
 	x.NumQueries.Add(1)
-	defer func() { <-pendingQueries; x.PendingQueries.Add(-1) }()
+	defer func() { x.PendingQueries.Add(-1) }()
 	if ctx.Err() != nil {
 		return resp, ctx.Err()
 	}

@@ -61,6 +61,7 @@ func newListCache(maxSize uint64) *listCache {
 	}
 }
 
+// TODO: fingerprint can collide
 // Add adds a value to the cache.
 func (c *listCache) PutIfMissing(key uint64, pl *List) (res *List) {
 	c.Lock()
@@ -154,21 +155,24 @@ func (c *listCache) Reset() {
 	defer c.Unlock()
 	c.ll = list.New()
 	c.cache = make(map[uint64]*list.Element)
+	c.curSize = 0
 }
 
+// TODO: Remove it later
 // Clear purges all stored items from the cache.
-// func (c *listCache) Clear() error {
-// 	c.Lock()
-// 	defer c.Unlock()
-// 	for _, e := range c.cache {
-// 		kv := e.Value.(*entry)
-// 		_, err := kv.pl.SyncIfDirty(c.ctx)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	c.ll = nil
-// 	c.cache = nil
-// 	c.curSize = 0
-// 	return nil
-// }
+func (c *listCache) Clear() error {
+	c.Lock()
+	defer c.Unlock()
+	for key, e := range c.cache {
+		kv := e.Value.(*entry)
+		kv.pl.SetForDeletion()
+		kv.pl.SyncIfDirty()
+		delete(c.cache, key)
+		kv.pl.decr()
+
+	}
+	c.ll = list.New()
+	c.cache = make(map[uint64]*list.Element)
+	c.curSize = 0
+	return nil
+}
