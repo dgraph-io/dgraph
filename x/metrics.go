@@ -40,7 +40,6 @@ var (
 
 	// value at particular point of time
 	PendingQueries   *expvar.Int
-	PendingReads     *expvar.Int
 	PendingProposals *expvar.Int
 	LCacheSize       *expvar.Int
 	LCacheLen        *expvar.Int
@@ -66,7 +65,6 @@ var (
 func init() {
 	PostingReads = expvar.NewInt("postingReads")
 	PostingWrites = expvar.NewInt("postingWrites")
-	PendingReads = expvar.NewInt("pendingReads")
 	PendingProposals = expvar.NewInt("pendingProposals")
 	BytesRead = expvar.NewInt("bytesRead")
 	BytesWrite = expvar.NewInt("bytesWrite")
@@ -149,11 +147,6 @@ func init() {
 		"postingWrites": prometheus.NewDesc(
 			"posting_writes",
 			"cummulative posting writes",
-			nil, nil,
-		),
-		"pendingReads": prometheus.NewDesc(
-			"pending_reads",
-			"cummulative pending reads",
 			nil, nil,
 		),
 		"maxPlLength": prometheus.NewDesc(

@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
-	"github.com/juju/ratelimit"
 	"golang.org/x/net/trace"
 
 	"github.com/dgryski/go-farm"
@@ -49,11 +48,9 @@ var (
 	// In such a case, retry.
 	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue       = fmt.Errorf("No value found")
-	emptyPosting     = &protos.Posting{}
-	emptyList        = &protos.PostingList{}
-	pendingReads     = make(chan struct{}, 1000)
-	bytesReadLimiter = ratelimit.NewBucketWithRate(128*1024*1024.0, 1<<30)
+	ErrNoValue   = fmt.Errorf("No value found")
+	emptyPosting = &protos.Posting{}
+	emptyList    = &protos.PostingList{}
 )
 
 const (
@@ -196,10 +193,6 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	l.Lock()
 	defer l.Unlock()
 
-	pendingReads <- struct{}{}
-	x.PendingReads.Set(int64(len(pendingReads)))
-	defer func() { <-pendingReads }()
-
 	var item badger.KVItem
 	var err error
 	for i := 0; i < 10; i++ {
@@ -213,7 +206,6 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	}
 	val := item.Value()
 	x.BytesRead.Add(int64(len(val)))
-	//	bytesReadLimiter.Wait(int64(len(val)))
 	l.estimatedSize = uint64(len(val))
 
 	// TODO: See if we can avoid Unmarshal here.
