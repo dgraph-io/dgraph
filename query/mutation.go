@@ -26,7 +26,7 @@ func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.Directe
 }
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
-	if expandEdge {
+	if *expandEdge {
 		err := addInternalEdge(ctx, m)
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Added Internal edges")

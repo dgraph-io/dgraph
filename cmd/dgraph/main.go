@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -681,7 +680,7 @@ func serveGRPC(l net.Listener) {
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}),
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
-		grpc.MaxConcurrentStreams(1000)
+		grpc.MaxConcurrentStreams(1000))
 	protos.RegisterDgraphServer(s, &grpcServer{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
