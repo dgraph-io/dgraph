@@ -13,7 +13,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var expandEdge = flag.Bool("expandEdge", true, "Don't store predicates per node.")
+var expandEdge = flag.Bool("expand_edge", true, "Don't store predicates per node.")
 
 type InternalMutation struct {
 	Edges   []*protos.DirectedEdge

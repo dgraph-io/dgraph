@@ -68,8 +68,8 @@ func init() {
 	NumQueries = expvar.NewInt("numQueries")
 	ServerHealth = expvar.NewInt("serverHealth")
 	DirtyMapSize = expvar.NewInt("dirtyMapSize")
-	LCacheSize = expvar.NewInt("lCacheSize")
-	LCacheLen = expvar.NewInt("lCacheLen")
+	LCacheSize = expvar.NewInt("lcacheSize")
+	LCacheLen = expvar.NewInt("lcacheLen")
 	NumGoRoutines = expvar.NewInt("numGoRoutines")
 	MemoryInUse = expvar.NewInt("memoryInUse")
 	HeapIdle = expvar.NewInt("heapIdle")
@@ -168,14 +168,14 @@ func init() {
 			"dirtyMapSize",
 			nil, nil,
 		),
-		"lCacheSize": prometheus.NewDesc(
-			"lCacheSize",
-			"lCacheSize",
+		"lcacheSize": prometheus.NewDesc(
+			"lcacheSize",
+			"lcacheSize",
 			nil, nil,
 		),
-		"lCacheLen": prometheus.NewDesc(
-			"lCacheLen",
-			"lCacheLen",
+		"lcacheLen": prometheus.NewDesc(
+			"lcacheLen",
+			"lcacheLen",
 			nil, nil,
 		),
 		"numGoRoutines": prometheus.NewDesc(
