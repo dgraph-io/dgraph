@@ -713,6 +713,15 @@ func (l *List) SyncIfDirty(delete bool) (committed bool, err error) {
 		log.Fatalf("Unable to record hist: %v", err)
 	}
 	atomic.StoreUint64(&l.estimatedSize, uint64(len(data)))
+	for {
+		pLen := atomic.LoadInt64(&x.MaxPlLen)
+		if len(data) <= pLen {
+			break
+		}
+		if atomic.CompareAndSwapInt64(&x.MaxPlLen, pLen, len(data)) {
+			break
+		}
+	}
 
 	ce := syncEntry{
 		key:     l.key,

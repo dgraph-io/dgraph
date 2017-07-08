@@ -19,6 +19,7 @@ package x
 import (
 	"expvar"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/codahale/hdrhistogram"
@@ -52,11 +53,13 @@ var (
 	ProposalMemory   *expvar.Int
 	ActiveMutations  *expvar.Int
 	ServerHealth     *expvar.Int
+	MaxPlLength      *expvar.Int
 
 	PredicateStats *expvar.Map
 	PlValuesDst    *expvar.Map
 
 	PlValueHist *hdrhistogram.Histogram
+	MaxPlLen    int64
 	// TODO: Request statistics, latencies, 500, timeouts
 
 )
@@ -87,6 +90,7 @@ func init() {
 	CacheHit = expvar.NewInt("cacheHit")
 	CacheMiss = expvar.NewInt("cacheMiss")
 	CacheRace = expvar.NewInt("cacheRace")
+	MaxPlLength = expvar.NewInt("maxPlLength")
 
 	PlValueHist = hdrhistogram.New(1, 1<<40, 4)
 
@@ -118,6 +122,7 @@ func init() {
 				} else {
 					ServerHealth.Set(0)
 				}
+				MaxPlLength.Set(atomic.LoadInt64(&MaxPlLen))
 			}
 		}
 	}()
@@ -151,6 +156,11 @@ func init() {
 		"pendingReads": prometheus.NewDesc(
 			"pending_reads",
 			"cummulative pending reads",
+			nil, nil,
+		),
+		"maxPlLength": prometheus.NewDesc(
+			"maxPlLength",
+			"maxPlLength",
 			nil, nil,
 		),
 		"pendingProposals": prometheus.NewDesc(
