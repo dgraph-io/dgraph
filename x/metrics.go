@@ -115,7 +115,7 @@ func init() {
 				PlValuesDst.Set("99", &val99)
 				val99_99.Set(PlValueHist.ValueAtQuantile(99.99))
 				PlValuesDst.Set("99.99", &val99_99)
-				valMax.Set(PlValueHist.Max())
+				valMax.Set(atomic.LoadInt64(&MaxPlLen))
 				PlValuesDst.Set("Max", &valMax)
 				if err = HealthCheck(); err == nil {
 					ServerHealth.Set(1)

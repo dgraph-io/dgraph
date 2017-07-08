@@ -15,10 +15,6 @@ import (
 
 var noInternalEdge = flag.Bool("nointernal", false, "Don't store predicates per node.")
 
-func init() {
-	flag.Parse()
-}
-
 type InternalMutation struct {
 	Edges   []*protos.DirectedEdge
 	NewUids map[string]uint64
