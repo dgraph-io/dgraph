@@ -19,7 +19,6 @@ package posting
 import (
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/stretchr/testify/require"
@@ -87,7 +86,6 @@ func TestLCacheEviction(t *testing.T) {
 	require.Equal(t, lcache.evicts, uint64(100))
 	require.Equal(t, lcache.ll.Len(), 50)
 
-	time.Sleep(time.Second)
 	for i := 0; i < 100; i++ {
 		require.Nil(t, lcache.Get(uint64(i)))
 	}
