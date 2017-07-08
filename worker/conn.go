@@ -42,8 +42,16 @@ type pool struct {
 	// messages in the same TCP stream.
 	conn *grpc.ClientConn
 
-	Addr string
+	Addr   string
+	health poolHealth
 }
+
+type poolHealth int
+
+const (
+	healthy = iota
+	unhealthy
+)
 
 type poolsi struct {
 	sync.RWMutex
@@ -111,6 +119,7 @@ func (p *poolsi) connect(addr string) *pool {
 
 	err = TestConnection(pool)
 	if err != nil {
+
 		log.Printf("Connection to %q fails, got error: %v\n", addr, err)
 		// Don't return -- let's still put the empty pool in the map.  Its users
 		// have to handle errors later anyway.
@@ -131,11 +140,13 @@ func TestConnection(p *pool) error {
 	c := protos.NewWorkerClient(conn)
 	resp, err := c.Echo(context.Background(), query)
 	if err != nil {
+		p.health = unhealthy
 		return err
 	}
-	// If a server is sending bad echos, we do want to freak out and die.
+	// If a server is sending bad echos, do we have to freak out and die?
 	x.AssertTruef(bytes.Equal(resp.Data, query.Data),
 		"non-matching Echo response value from %v", p.Addr)
+	p.health = healthy
 	return nil
 }
 
@@ -151,4 +162,8 @@ func newPool(addr string, maxCap int) (*pool, error) {
 // Get returns the connection to use from the pool of connections.
 func (p *pool) Get() *grpc.ClientConn {
 	return p.conn
+}
+
+func (p *pool) Health() poolHealth {
+	return p.health
 }
