@@ -42,8 +42,9 @@ type pool struct {
 	// messages in the same TCP stream.
 	conn *grpc.ClientConn
 
-	Addr   string
-	health poolHealth
+	Addr     string
+	refcount int
+	health   poolHealth
 }
 
 type poolHealth int
@@ -73,6 +74,7 @@ func (p *poolsi) any() (*pool, error) {
 	p.RLock()
 	defer p.RUnlock()
 	for _, pool := range p.all {
+		pool.refcount++
 		return pool, nil
 	}
 	return nil, errNoConnection
@@ -85,25 +87,50 @@ func (p *poolsi) get(addr string) (*pool, error) {
 	if !ok {
 		return nil, errNoConnection
 	}
+	pool.refcount++
 	return pool, nil
 }
 
 // One of these must be called for each call to get(...).
-// TODO: Make put include information about pool health.
-func (p *poolsi) put(_ *pool) {
-	// nothing to do.
+func (p *poolsi) put(pl *pool) {
+	p.decrRefcountAndCleanup(pl)
 }
 
+// You must _not_ hold the lock on p.
+func (p *poolsi) decrRefcountAndCleanup(pl *pool) {
+	// We close the conn after unlocking p.
+	p.RLock()
+	pl.refcount--
+	if pl.refcount == 0 {
+		delete(p.all, pl.Addr)
+	}
+	p.RUnlock()
+
+	if pl.refcount == 0 {
+		destroyPool(pl)
+	}
+}
+
+func destroyPool(pl *pool) {
+	err := pl.conn.Close()
+	if err != nil {
+		log.Printf("Error closing cluster connection: %v\n", err.Error())
+	}
+}
+
+// Returns a pool that you should call put() on.
 func (p *poolsi) connect(addr string) *pool {
 	if addr == *myAddr {
 		return nil
 	}
 	p.RLock()
 	existingPool, has := p.all[addr]
-	p.RUnlock()
 	if has {
+		existingPool.refcount++
+		p.RUnlock()
 		return existingPool
 	}
+	p.RUnlock()
 
 	pool, err := newPool(addr, 5)
 	x.Checkf(err, "Unable to connect to host %s", addr)
@@ -112,9 +139,13 @@ func (p *poolsi) connect(addr string) *pool {
 	existingPool, has = p.all[addr]
 	if has {
 		p.Unlock()
+		destroyPool(pool)
+		existingPool.refcount++
 		return existingPool
 	}
 	p.all[addr] = pool
+	// TODO: Callers should decrement this refcount.
+	pool.refcount++
 	p.Unlock()
 
 	err = TestConnection(pool)
@@ -150,13 +181,14 @@ func TestConnection(p *pool) error {
 	return nil
 }
 
-// NewPool creates a new "pool" with one gRPC connection.
+// NewPool creates a new "pool" with one gRPC connection, refcount 0.
 func newPool(addr string, maxCap int) (*pool, error) {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
-	return &pool{conn: conn, Addr: addr}, nil
+	// The pool hasn't been added to poolsi yet, so it gets no refcount.
+	return &pool{conn: conn, Addr: addr, refcount: 0, health: healthy}, nil
 }
 
 // Get returns the connection to use from the pool of connections.
