@@ -64,11 +64,11 @@ func newListCache(maxSize uint64) *listCache {
 // Add adds a value to the cache.
 func (c *listCache) PutIfMissing(key uint64, pl *List) (res *List) {
 	c.Lock()
+	defer c.Unlock()
 
 	if ee, ok := c.cache[key]; ok {
 		c.ll.MoveToFront(ee)
 		res = ee.Value.(*entry).pl
-		c.Unlock()
 		return res
 	}
 
@@ -83,20 +83,12 @@ func (c *listCache) PutIfMissing(key uint64, pl *List) (res *List) {
 	c.curSize += e.size
 	ele := c.ll.PushFront(e)
 	c.cache[key] = ele
-	removals := c.removeOldest()
-	c.Unlock()
+	c.removeOldest()
 
-	for _, rem := range removals {
-		// TODO: handle race condition
-		rem.pl.SetForDeletion()
-		rem.pl.SyncIfDirty(true)
-		c.delete(rem.key)
-	}
 	return e.pl
 }
 
-func (c *listCache) removeOldest() []*entry {
-	var res []*entry
+func (c *listCache) removeOldest() {
 	for c.curSize > c.MaxSize {
 		ele := c.ll.Back()
 		if ele == nil {
@@ -108,18 +100,12 @@ func (c *listCache) removeOldest() []*entry {
 
 		e := ele.Value.(*entry)
 		c.curSize -= e.size
-		res = append(res, e)
-	}
-	return res
-}
 
-func (c *listCache) delete(key uint64) {
-	c.Lock()
-	defer c.Unlock()
-	if ele, hit := c.cache[key]; hit {
-		e := ele.Value.(*entry)
+		// TODO: We should only remove the key after the PL is synced to disk.
+		e.pl.SetForDeletion()
+		e.pl.SyncIfDirty()
+		delete(c.cache, e.key)
 		e.pl.decr()
-		delete(c.cache, key)
 	}
 }
 

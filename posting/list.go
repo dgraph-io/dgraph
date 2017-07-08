@@ -649,7 +649,7 @@ func (l *List) Length(afterUid uint64) int {
 	return l.length(afterUid)
 }
 
-func (l *List) SyncIfDirty(delete bool) (committed bool, err error) {
+func (l *List) SyncIfDirty() (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
 
@@ -728,9 +728,6 @@ func (l *List) SyncIfDirty(delete bool) (committed bool, err error) {
 		val:     data,
 		water:   l.water,
 		pending: l.pending,
-	}
-	if delete {
-		ce.deleteKey = l.ghash
 	}
 	syncCh <- ce
 

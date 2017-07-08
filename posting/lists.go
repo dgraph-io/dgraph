@@ -335,7 +335,7 @@ func commitOne(l *List) {
 	if l == nil {
 		return
 	}
-	if _, err := l.SyncIfDirty(false); err != nil {
+	if _, err := l.SyncIfDirty(); err != nil {
 		log.Printf("Error while committing dirty list: %v\n", err)
 	}
 }
@@ -394,7 +394,7 @@ type syncEntry struct {
 	val       []byte
 	water     *x.WaterMark
 	pending   []uint64
-	deleteKey uint64
+	deleteKey uint64 // TODO: Use this to delete after a sync is done.
 }
 
 func batchSync(i int) {
@@ -430,7 +430,7 @@ func batchSync(i int) {
 				wb = badger.EntriesSet(wb, e.key, e.val)
 			}
 		}
-		pstore.BatchSet(wb)
+		pstore.BatchSet(wb) // TODO: Check for errors here.
 		wb = wb[:0]
 
 		for _, e := range entries {
