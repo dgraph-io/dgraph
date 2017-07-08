@@ -123,6 +123,12 @@
 			"revisionTime": "2017-01-10T19:26:07Z"
 		},
 		{
+			"checksumSHA1": "7gK+lSShSu1NRw83/A95BcgMqsI=",
+			"path": "github.com/codahale/hdrhistogram",
+			"revision": "3a0bb77429bd3a61596f5e8a3172445844342120",
+			"revisionTime": "2016-10-10T02:54:55Z"
+		},
+		{
 			"checksumSHA1": "jw+XDfPJgogfSPCsuebqFZj/GJc=",
 			"path": "github.com/coreos/etcd/raft",
 			"revision": "1ebeef5cbfe69c0dab2bc701ee5307eed7a7d8d2",
@@ -229,6 +235,12 @@
 			"path": "github.com/pmezard/go-difflib/difflib",
 			"revision": "792786c7400a136282c1664665ae0a8db921c6c2",
 			"revisionTime": "2016-01-10T10:55:54Z"
+		},
+		{
+			"checksumSHA1": "TDY/1DFMxN5M6p9BgqR6IqZy6AI=",
+			"path": "github.com/prometheus/client_golang/prometheus",
+			"revision": "310ce84375bb84c5cbbf0d05069c92daa5673740",
+			"revisionTime": "2017-06-30T14:48:34Z"
 		},
 		{
 			"checksumSHA1": "Q2V7Zs3diLmLfmfbiuLpSxETSuY=",
