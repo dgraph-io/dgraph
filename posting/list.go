@@ -701,9 +701,6 @@ func (l *List) SyncIfDirty() (committed bool, err error) {
 		postingListPool.Put(l.plist)
 	}
 	l.plist = final
-	if err = x.PlValueHist.RecordValue(int64(len(data))); err != nil {
-		log.Fatalf("Unable to record hist: %v", err)
-	}
 	atomic.StoreUint64(&l.estimatedSize, uint64(len(data)))
 	for {
 		pLen := atomic.LoadInt64(&x.MaxPlLen)
@@ -711,6 +708,7 @@ func (l *List) SyncIfDirty() (committed bool, err error) {
 			break
 		}
 		if atomic.CompareAndSwapInt64(&x.MaxPlLen, pLen, int64(len(data))) {
+			x.MaxPlLength.Set(int64(len(data)))
 			break
 		}
 	}

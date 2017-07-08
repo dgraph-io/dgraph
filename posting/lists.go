@@ -38,9 +38,10 @@ import (
 )
 
 var (
+	// TODO: Remove this
 	maxmemory = flag.Float64("stw_ram_mb", 4096.0,
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
-	lrumemory = flag.Int64("lru_ram_mb", 1024,
+	lrumemory = flag.Int64("lru_ram_mb", 200,
 		"Maximum size of lru cache used to store postings")
 	commitFraction   = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
 	lhmapNumShards   = runtime.NumCPU() * 4

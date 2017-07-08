@@ -19,10 +19,8 @@ package x
 import (
 	"expvar"
 	"net/http"
-	"sync/atomic"
 	"time"
 
-	"github.com/codahale/hdrhistogram"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -48,16 +46,13 @@ var (
 	MemoryInUse      *expvar.Int
 	HeapIdle         *expvar.Int
 	TotalMemory      *expvar.Int
-	ProposalMemory   *expvar.Int
 	ActiveMutations  *expvar.Int
 	ServerHealth     *expvar.Int
 	MaxPlLength      *expvar.Int
 
 	PredicateStats *expvar.Map
-	PlValuesDst    *expvar.Map
 
-	PlValueHist *hdrhistogram.Histogram
-	MaxPlLen    int64
+	MaxPlLen int64
 	// TODO: Request statistics, latencies, 500, timeouts
 
 )
@@ -79,46 +74,25 @@ func init() {
 	MemoryInUse = expvar.NewInt("memoryInUse")
 	HeapIdle = expvar.NewInt("heapIdle")
 	TotalMemory = expvar.NewInt("totalMemory")
-	ProposalMemory = expvar.NewInt("proposalMemory")
 	ActiveMutations = expvar.NewInt("activeMutations")
 	PredicateStats = expvar.NewMap("predicateStats")
-	PlValuesDst = expvar.NewMap("plValuesDst")
 	CacheHit = expvar.NewInt("cacheHit")
 	CacheMiss = expvar.NewInt("cacheMiss")
 	CacheRace = expvar.NewInt("cacheRace")
 	MaxPlLength = expvar.NewInt("maxPlLength")
 
-	PlValueHist = hdrhistogram.New(1, 1<<40, 4)
-
 	ticker := time.NewTicker(5 * time.Second)
 
-	// # hacky: Find better way later
 	go func() {
-		var val50 expvar.Int
-		var val90 expvar.Int
-		var val99 expvar.Int
-		var val99_99 expvar.Int
-		var valMax expvar.Int
 		var err error
 		for {
 			select {
 			case <-ticker.C:
-				val50.Set(PlValueHist.ValueAtQuantile(50.0))
-				PlValuesDst.Set("50", &val50)
-				val90.Set(PlValueHist.ValueAtQuantile(90.0))
-				PlValuesDst.Set("90", &val90)
-				val99.Set(PlValueHist.ValueAtQuantile(99.0))
-				PlValuesDst.Set("99", &val99)
-				val99_99.Set(PlValueHist.ValueAtQuantile(99.99))
-				PlValuesDst.Set("99.99", &val99_99)
-				valMax.Set(atomic.LoadInt64(&MaxPlLen))
-				PlValuesDst.Set("Max", &valMax)
 				if err = HealthCheck(); err == nil {
 					ServerHealth.Set(1)
 				} else {
 					ServerHealth.Set(0)
 				}
-				MaxPlLength.Set(atomic.LoadInt64(&MaxPlLen))
 			}
 		}
 	}()
@@ -224,11 +198,6 @@ func init() {
 			"totalMemory",
 			nil, nil,
 		),
-		"proposalMemory": prometheus.NewDesc(
-			"proposalMemory",
-			"proposalMemory",
-			nil, nil,
-		),
 		"activeMutations": prometheus.NewDesc(
 			"activeMutations",
 			"activeMutations",
@@ -238,11 +207,6 @@ func init() {
 			"predicateStats",
 			"predicateStats",
 			[]string{"name"}, nil,
-		),
-		"plValuesDst": prometheus.NewDesc(
-			"plValuesDst",
-			"plValuesDst",
-			[]string{"quantile"}, nil,
 		),
 	})
 	prometheus.MustRegister(expvarCollector)

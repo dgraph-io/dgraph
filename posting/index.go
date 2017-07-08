@@ -134,7 +134,7 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 		}
 		return err
 	}
-	x.PredicateStats.Add(fmt.Sprintf("Index.%s", edge.Attr), 1)
+	x.PredicateStats.Add(fmt.Sprintf("i.%s", edge.Attr), 1)
 	return nil
 }
 
@@ -177,7 +177,7 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 		}
 		return err
 	}
-	x.PredicateStats.Add(fmt.Sprintf("Reverse.%s", edge.Attr), 1)
+	x.PredicateStats.Add(fmt.Sprintf("r.%s", edge.Attr), 1)
 
 	if countAfter != countBefore && schema.State().HasCount(t.Attr) {
 		if err := updateCount(ctx, countParams{
@@ -238,7 +238,7 @@ func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 		}
 		return err
 	}
-	x.PredicateStats.Add(fmt.Sprintf("Count.%s", t.Attr), 1)
+	x.PredicateStats.Add(fmt.Sprintf("c.%s", t.Attr), 1)
 	return nil
 
 }
