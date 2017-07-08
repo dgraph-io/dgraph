@@ -77,6 +77,9 @@ func (c *listCache) PutIfMissing(key uint64, pl *List) (res *List) {
 		pl:   pl,
 		size: uint64(pl.plist.Size()),
 	}
+	if e.size < 100 {
+		e.size = 100
+	}
 	c.curSize += e.size
 	ele := c.ll.PushFront(e)
 	c.cache[key] = ele
