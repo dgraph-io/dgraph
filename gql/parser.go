@@ -2212,7 +2212,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 				it.Next() // Consume the '('
 				if it.Item().Typ != itemLeftRound {
-					return x.Errorf("Invalid use of expand()", val)
+					return x.Errorf("Invalid use of expand()")
 				}
 				it.Next()
 				item := it.Item()
