@@ -104,7 +104,7 @@ func (c *listCache) removeOldest() []*entry {
 		c.evicts++
 
 		e := ele.Value.(*entry)
-		c.curSize -= e.siz
+		c.curSize -= e.size
 		res = append(res, e)
 	}
 	return res
@@ -134,23 +134,6 @@ func (c *listCache) Get(key uint64) (pl *List) {
 		return e.pl
 	}
 	return nil
-}
-
-func (c *listCache) removeOldest() {
-	ele := c.ll.Back()
-	if ele != nil {
-		c.evicts++
-
-		e := ele.Value.(*entry)
-		c.curSize -= e.size
-
-		// TODO: Hanlde race later
-		e.pl.SetForDeletion()
-		e.pl.SyncIfDirty(true)
-		e.pl.decr()
-		c.ll.Remove(ele)
-		delete(c.cache, e.key)
-	}
 }
 
 // Len returns the number of items in the cache.

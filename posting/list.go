@@ -715,10 +715,10 @@ func (l *List) SyncIfDirty(delete bool) (committed bool, err error) {
 	atomic.StoreUint64(&l.estimatedSize, uint64(len(data)))
 	for {
 		pLen := atomic.LoadInt64(&x.MaxPlLen)
-		if len(data) <= pLen {
+		if int64(len(data)) <= pLen {
 			break
 		}
-		if atomic.CompareAndSwapInt64(&x.MaxPlLen, pLen, len(data)) {
+		if atomic.CompareAndSwapInt64(&x.MaxPlLen, pLen, int64(len(data))) {
 			break
 		}
 	}
