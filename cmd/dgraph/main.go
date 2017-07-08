@@ -775,7 +775,6 @@ func main() {
 	}
 	checkFlagsAndInitDirs()
 	runtime.SetBlockProfileRate(*blockRate)
-	pendingQueries = make(chan struct{}, *numPending)
 
 	pd, err := filepath.Abs(*postingDir)
 	x.Check(err)
