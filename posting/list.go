@@ -486,7 +486,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		return false, err
 	}
 	mpost := newPosting(t)
-	l.estimatedSize += uint64(mpost.Size())
+	atomic.AddUint64(&l.estimatedSize, uint64(mpost.Size()))
 
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
@@ -712,7 +712,7 @@ func (l *List) SyncIfDirty(delete bool) (committed bool, err error) {
 	if err = x.PlValueHist.RecordValue(int64(len(data))); err != nil {
 		log.Fatalf("Unable to record hist: %v", err)
 	}
-	l.estimatedSize = uint64(len(data))
+	atomic.StoreUint64(&l.estimatedSize, uint64(len(data))
 
 	ce := syncEntry{
 		key:     l.key,

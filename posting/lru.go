@@ -109,7 +109,7 @@ func (c *listCache) removeOldest() {
 		c.evicts++
 
 		e := ele.Value.(*entry)
-		c.curSize -= e.size
+		c.curSize -= e.pl.EstimatedSize()
 
 		// TODO: Hanlde race later
 		e.pl.SetForDeletion()
