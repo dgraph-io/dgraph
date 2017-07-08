@@ -246,8 +246,9 @@ func main() {
 			processFile(file, dgraphClient)
 		}(file)
 	}
-	wg.Wait()
-	dgraphClient.BatchFlush()
+
+	wg.Wait()	
+	dgraphClient.BatchEnd()
 
 	c := dgraphClient.Counter()
 	var rate uint64
