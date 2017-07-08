@@ -57,6 +57,5 @@ message PostingList {
 	repeated Posting postings = 1;
 	bytes checksum = 2;
 	uint64 commit = 3; // More inclination towards smaller values.
-
-	repeated uint64 uids = 4; // This is a list of all uids in this posting list.
+  bytes uids = 4; // Encoded list of uids in this posting list.
 }

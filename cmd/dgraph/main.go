@@ -43,6 +43,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/table"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -74,11 +75,8 @@ var (
 	memprofile   = flag.String("mem", "", "write memory profile to file")
 	blockRate    = flag.Int("block", 0, "Block profiling rate")
 	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
-	numPending   = flag.Int("pending", 1000,
-		"Number of pending queries. Useful for rate limiting.")
-	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
-	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
-	pendingQueries chan struct{}
+	finishCh     = make(chan struct{}) // channel to wait for all pending reqs to finish.
+	shutdownCh   = make(chan struct{}) // channel to signal shutdown.
 	// TLS configurations
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections with clients.")
 	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
@@ -185,9 +183,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	// Add a limit on how many pending queries can be run in the system.
-	pendingQueries <- struct{}{}
-	defer func() { <-pendingQueries }()
+
+	x.PendingQueries.Add(1)
+	x.NumQueries.Add(1)
+	defer x.PendingQueries.Add(-1)
 
 	addCorsHeaders(w)
 	if r.Method == "OPTIONS" {
@@ -473,8 +472,10 @@ func (s *grpcServer) Run(ctx context.Context,
 		}
 		return resp, err
 	}
-	pendingQueries <- struct{}{}
-	defer func() { <-pendingQueries }()
+
+	x.PendingQueries.Add(1)
+	x.NumQueries.Add(1)
+	defer x.PendingQueries.Add(-1)
 	if ctx.Err() != nil {
 		return resp, ctx.Err()
 	}
@@ -678,7 +679,8 @@ func serveGRPC(l net.Listener) {
 	defer func() { finishCh <- struct{}{} }()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}),
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
-		grpc.MaxSendMsgSize(x.GrpcMaxSize))
+		grpc.MaxSendMsgSize(x.GrpcMaxSize),
+		grpc.MaxConcurrentStreams(1000))
 	protos.RegisterDgraphServer(s, &grpcServer{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
@@ -772,7 +774,6 @@ func main() {
 	}
 	checkFlagsAndInitDirs()
 	runtime.SetBlockProfileRate(*blockRate)
-	pendingQueries = make(chan struct{}, *numPending)
 
 	pd, err := filepath.Abs(*postingDir)
 	x.Check(err)
@@ -786,6 +787,7 @@ func main() {
 	opt.SyncWrites = true
 	opt.Dir = *postingDir
 	opt.ValueDir = *postingDir
+	opt.MapTablesTo = table.MemoryMap
 	ps, err := badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	defer ps.Close()

@@ -18,13 +18,11 @@
 package posting
 
 import (
-	"context"
 	"crypto/md5"
 	"flag"
 	"fmt"
 	"log"
 	"math"
-	"math/rand"
 	"runtime"
 	"runtime/debug"
 	"sync"
@@ -40,12 +38,15 @@ import (
 )
 
 var (
+	// TODO: Remove this
 	maxmemory = flag.Float64("stw_ram_mb", 4096.0,
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
-
+	lrumemory = flag.Int64("lru_ram_mb", 200,
+		"Maximum size of lru cache used to store postings")
 	commitFraction   = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
 	lhmapNumShards   = runtime.NumCPU() * 4
 	dummyPostingList []byte // Used for indexing.
+	elog             trace.EventLog
 )
 
 const (
@@ -79,6 +80,7 @@ func init() {
 		dummyPostingList, err = pl.Marshal()
 		x.Check(err)
 	})
+	elog = trace.NewEventLog("Memory", "")
 }
 
 func (g *syncMarks) create(group uint32) *x.WaterMark {
@@ -113,59 +115,12 @@ func SyncMarkFor(group uint32) *x.WaterMark {
 	return marks.Get(group)
 }
 
-type listMaps struct {
-	x.SafeMutex
-	m map[uint32]*listMap
-}
-
-func (l *listMaps) create(group uint32) *listMap {
-	l.Lock()
-	defer l.Unlock()
-	if l.m == nil {
-		l.m = make(map[uint32]*listMap)
-	}
-
-	if prev, present := l.m[group]; present {
-		return prev
-	}
-	lhmap := newShardedListMap(lhmapNumShards)
-	l.m[group] = lhmap
-	return lhmap
-}
-
-func (l *listMaps) get(group uint32) *listMap {
-	// Don't store anything in group zero since we never compact
-	// group 0 logs
-	x.AssertTruef(group != 0, "group id is 0 for lhmap")
-	l.RLock()
-	if lhmap, present := l.m[group]; present {
-		l.RUnlock()
-		return lhmap
-	}
-	l.RUnlock()
-	return l.create(group)
-}
-
-func (l *listMaps) groups() []uint32 {
-	l.RLock()
-	defer l.RUnlock()
-	var groups []uint32
-	for k := range l.m {
-		groups = append(groups, k)
-	}
-	return groups
-}
-
-func lhmapFor(group uint32) *listMap {
-	return lhmaps.get(group)
-}
-
 func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 	commitFraction float64) {
 	select {
 	case pending <- struct{}{}:
 	default:
-		fmt.Printf("Skipping gentleCommit len(syncCh) %v,\n", len(syncCh))
+		elog.Printf("Skipping gentleCommit len(syncCh) %v,\n", len(syncCh))
 		return
 	}
 
@@ -203,7 +158,7 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 			return
 		}
 		for _, key := range keys {
-			l := lhmapFor(key.gid).Get(key.fp)
+			l := lcache.Get(key.fp)
 			if l == nil {
 				continue
 			}
@@ -217,6 +172,10 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 func periodicFree() {
 	ticker := time.NewTicker(5 * time.Second)
 	for range ticker.C {
+		stats := lcache.Stats()
+		x.EvictedPls.Set(int64(stats.NumEvicts))
+		x.LCacheSize.Set(int64(stats.Size))
+		x.LCacheLen.Set(int64(stats.Length))
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
 
@@ -225,7 +184,7 @@ func periodicFree() {
 		idle := float64((ms.HeapIdle - ms.HeapReleased) / MB)
 
 		if inUse+idle > *maxmemory {
-			fmt.Printf("Inuse: %.0f idle: %.0f. Freeing OS memory", inUse, idle)
+			elog.Printf("Inuse: %.0f idle: %.0f. Freeing OS memory\n", inUse, idle)
 			x.UpdateMemoryStatus(false)
 			debug.FreeOSMemory()
 		} else {
@@ -251,7 +210,7 @@ func periodicCommit() {
 		case <-ticker.C:
 			if len(dirtyMap) != dsize {
 				dsize = len(dirtyMap)
-				log.Printf("Dirty map size: %d\n", dsize)
+				x.DirtyMapSize.Set(int64(dsize))
 			}
 
 			var ms runtime.MemStats
@@ -263,6 +222,9 @@ func periodicCommit() {
 
 			fraction := math.Min(1.0, *commitFraction*math.Exp(float64(dsize)/1000000.0))
 			gentleCommit(dirtyMap, pending, fraction)
+			x.MemoryInUse.Set(int64(inUse))
+			x.HeapIdle.Set(int64(idle))
+			x.TotalMemory.Set(int64(inUse + idle))
 
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
 			// are currently being processed to not get stuck on dirtyChan, which won't be
@@ -270,16 +232,10 @@ func periodicCommit() {
 
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
-			if inUse > 0.9*(*maxmemory) {
-				log.Printf("Memory usage really close to threshold. STW. Allocated MB: %v\n", inUse)
-				go evictShards(5)
-			} else if inUse > 0.75*(*maxmemory) {
-				log.Printf("Memory usage close to threshold. STW. Allocated MB: %v\n", inUse)
-				go evictShards(1)
-			} else {
-				log.Printf("Cur: %v. Idle: %v, total: %v, STW: %v, NumGoroutines: %v\n",
-					inUse, idle, inUse+idle, *maxmemory, runtime.NumGoroutine())
-			}
+			x.NumGoRoutines.Set(int64(runtime.NumGoroutine()))
+			// if inUse > 0.75*(*maxmemory) {
+			// 	go evictShards(1)
+			// }
 		}
 	}
 }
@@ -298,23 +254,20 @@ var (
 	syncCh    chan syncEntry
 	dirtyChan chan fingerPrint // All dirty posting list keys are pushed here.
 	marks     *syncMarks
-	lhmaps    *listMaps
+	lcache    *listCache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.KV) {
 	marks = new(syncMarks)
 	pstore = ps
-	lhmaps = new(listMaps)
+	lcache = newListCache((1 << 20) * uint64(*lrumemory))
 	dirtyChan = make(chan fingerPrint, 10000)
-	fmt.Println("Starting commit routine.")
 	syncCh = make(chan syncEntry, syncChCapacity)
 
 	go periodicCommit()
 	go periodicFree()
-	for i := 0; i < runtime.NumCPU(); i++ {
-		go batchSync(i)
-	}
+	go batchSync(0) // Can only run 1 goroutine to do writes.
 }
 
 // GetOrCreate stores the List corresponding to key, if it's not there already.
@@ -330,27 +283,28 @@ func Init(ps *badger.KV) {
 // That way, we don't have a dependency conflict.
 func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
-	lhmap := lhmapFor(group)
-	lhmap.RLockShard(fp)
-	defer lhmap.RUnlockShard(fp)
 
-	lp := lhmap.Get(fp)
+	lp := lcache.Get(fp)
 	if lp != nil {
+		x.CacheHit.Add(1)
 		lp.incr()
 		return lp, lp.decr
 	}
+	x.CacheMiss.Add(1)
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
 	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	l.water = marks.Get(group)
 
-	lp = lhmap.PutIfMissing(fp, l)
+	lp = lcache.PutIfMissing(fp, l)
+
 	// We are always going to return lp to caller, whether it is l or not. So, let's
 	// increment its reference counter.
 	lp.incr()
 
 	if lp != l {
+		x.CacheRace.Add(1)
 		// Undo the increment in getNew() call above.
 		go l.decr()
 	} else {
@@ -368,11 +322,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 // updated value and returns it if it exists or it gets from the store and DOES NOT ADD to lhmap.
 func Get(key []byte, gid uint32) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
-	lhmap := lhmapFor(gid)
-
-	lhmap.RLockShard(fp)
-	lp := lhmap.Get(fp)
-	lhmap.RUnlockShard(fp)
+	lp := lcache.Get(fp)
 
 	if lp != nil {
 		lp.incr()
@@ -387,11 +337,12 @@ func commitOne(l *List) {
 	if l == nil {
 		return
 	}
-	if _, err := l.SyncIfDirty(context.Background()); err != nil {
+	if _, err := l.SyncIfDirty(); err != nil {
 		log.Printf("Error while committing dirty list: %v\n", err)
 	}
 }
 
+// TODO: Remove special group stuff.
 func CommitLists(numRoutines int, group uint32) {
 	if group == 0 {
 		return
@@ -413,7 +364,7 @@ func CommitLists(numRoutines int, group uint32) {
 		}()
 	}
 
-	lhmapFor(group).Each(func(k uint64, l *List) {
+	lcache.Each(func(k uint64, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
@@ -424,50 +375,28 @@ func CommitLists(numRoutines int, group uint32) {
 	wg.Wait()
 }
 
-func evictShard(group uint32, shardNum int) {
-	lhmap := lhmapFor(group)
-	lhmap.DeleteShard(shardNum, func(k uint64, l *List) {
-		l.SetForDeletion()
-		commitOne(l)
-		l.decr()
-	})
-	log.Printf("evicted shard %d from group %d\n", shardNum, group)
-}
-
-func evictShards(numShards int) {
-	var wg sync.WaitGroup
-	for _, gid := range lhmaps.groups() {
-		wg.Add(1)
-		go func(group uint32) {
-			defer wg.Done()
-			for i := 0; i < numShards; i++ {
-				shardNum := rand.Intn(lhmapNumShards)
-				evictShard(group, shardNum)
-			}
-		}(gid)
-	}
-	wg.Wait()
-}
-
 // EvictAll removes all pl's stored in memory for given group
+// TODO: Remove all special group stuff.
 func EvictGroup(group uint32) {
 	// This is serialized by raft so no need to worry about race condition from getOrCreate
 	// request from same group
-	lhmapFor(group).Each(func(k uint64, l *List) {
-		l.SetForDeletion()
-	})
+	// lcache.Each(func(k uint64, l *List) {
+	// 	l.SetForDeletion()
+	// })
 	CommitLists(1, group)
-	lhmapFor(group).EachWithDelete(func(k uint64, l *List) {
-		l.decr()
-	})
+	// TODO: Do we need to do this?
+	// lhmapFor(group).EachWithDelete(func(k uint64, l *List) {
+	// 	l.decr()
+	// })
 }
 
 // The following logic is used to batch up all the writes to RocksDB.
 type syncEntry struct {
-	key     []byte
-	val     []byte
-	water   *x.WaterMark
-	pending []uint64
+	key       []byte
+	val       []byte
+	water     *x.WaterMark
+	pending   []uint64
+	deleteKey uint64 // TODO: Use this to delete after a sync is done.
 }
 
 func batchSync(i int) {
@@ -500,10 +429,12 @@ func batchSync(i int) {
 			if e.val == nil {
 				wb = badger.EntriesDelete(wb, e.key)
 			} else {
+				x.BytesWrite.Add(int64(len(e.val)))
+				x.PostingWrites.Add(1)
 				wb = badger.EntriesSet(wb, e.key, e.val)
 			}
 		}
-		pstore.BatchSet(wb)
+		pstore.BatchSet(wb) // TODO: Check for errors here.
 		wb = wb[:0]
 
 		for _, e := range entries {
