@@ -53,10 +53,11 @@ type peerPool struct {
 	peers map[uint64]string
 }
 
-func (p *peerPool) get(id uint64) string {
+func (p *peerPool) get(id uint64) (string, bool) {
 	p.RLock()
 	defer p.RUnlock()
-	return p.peers[id]
+	ret, ok := p.peers[id]
+	return ret, ok
 }
 
 func (p *peerPool) set(id uint64, addr string) {
@@ -222,7 +223,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	return n
 }
 
-func (n *node) GetPeer(pid uint64) string {
+func (n *node) GetPeer(pid uint64) (string, bool) {
 	return n.peers.get(pid)
 }
 
@@ -234,7 +235,7 @@ func (n *node) Connect(pid uint64, addr string) {
 	if pid == n.id {
 		return
 	}
-	if paddr := n.GetPeer(pid); paddr == addr {
+	if paddr, ok := n.GetPeer(pid); ok && paddr == addr {
 		return
 	}
 	pools().connect(addr)
@@ -242,8 +243,10 @@ func (n *node) Connect(pid uint64, addr string) {
 }
 
 func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
-	addr := n.GetPeer(pid)
-	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
+	addr, ok := n.GetPeer(pid)
+	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
+	// TODO: Make a peerPool invariant that addrs not empty
+	x.AssertTruef(len(addr) > 0, "Conn pool holds empty string for peer: %d", pid)
 	rc := &protos.RaftContext{
 		Addr:  addr,
 		Group: n.raftContext.Group,
@@ -449,10 +452,12 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	addr := n.GetPeer(to)
-	if len(addr) == 0 {
+	addr, ok := n.GetPeer(to)
+	if !ok {
 		return
 	}
+	// TODO: Make this an invariant.
+	x.AssertTruef(addr != "", "Peer pool holds empty addr")
 	pool, err := pools().get(addr)
 	// TODO: No, don't fail like this?
 	x.Check(err)
@@ -643,8 +648,9 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 }
 
 func (n *node) retrieveSnapshot(rc protos.RaftContext) {
-	addr := n.GetPeer(rc.Id)
-	x.AssertTruef(addr != "", "Should have the address for %d", rc.Id)
+	addr,ok  := n.GetPeer(rc.Id)
+	x.AssertTruef(ok, "Should have the address for %d", rc.Id)
+	x.AssertTruef(addr != "", "Should have non-empty address for %d", rc.Id)
 	pool, err := pools().get(addr)
 	if err != nil {
 		log.Fatalf("Pool shouldn't be nil for address: %v for id: %v, error: %v\n", addr, rc.Id, err)
