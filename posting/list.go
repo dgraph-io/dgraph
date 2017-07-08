@@ -712,7 +712,7 @@ func (l *List) SyncIfDirty(delete bool) (committed bool, err error) {
 	if err = x.PlValueHist.RecordValue(int64(len(data))); err != nil {
 		log.Fatalf("Unable to record hist: %v", err)
 	}
-	atomic.StoreUint64(&l.estimatedSize, uint64(len(data))
+	atomic.StoreUint64(&l.estimatedSize, uint64(len(data)))
 
 	ce := syncEntry{
 		key:     l.key,
