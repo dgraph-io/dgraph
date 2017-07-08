@@ -93,11 +93,6 @@ func (p *poolsi) get(addr string) (*pool, error) {
 
 // One of these must be called for each call to get(...).
 func (p *poolsi) put(pl *pool) {
-	p.decrRefcountAndCleanup(pl)
-}
-
-// You must _not_ hold the lock on p.
-func (p *poolsi) decrRefcountAndCleanup(pl *pool) {
 	// We close the conn after unlocking p.
 	p.RLock()
 	pl.refcount--
@@ -119,20 +114,21 @@ func destroyPool(pl *pool) {
 }
 
 // Returns a pool that you should call put() on.
-func (p *poolsi) connect(addr string) *pool {
+func (p *poolsi) connect(addr string) (*pool, bool) {
 	if addr == *myAddr {
-		return nil
+		return nil, false
 	}
 	p.RLock()
 	existingPool, has := p.all[addr]
 	if has {
 		existingPool.refcount++
 		p.RUnlock()
-		return existingPool
+		return existingPool, true
 	}
 	p.RUnlock()
 
 	pool, err := newPool(addr, 5)
+	// TODO: This can get triggered with totally bogus config.
 	x.Checkf(err, "Unable to connect to host %s", addr)
 
 	p.Lock()
@@ -141,7 +137,7 @@ func (p *poolsi) connect(addr string) *pool {
 		p.Unlock()
 		destroyPool(pool)
 		existingPool.refcount++
-		return existingPool
+		return existingPool, true
 	}
 	p.all[addr] = pool
 	// TODO: Callers should decrement this refcount.
@@ -150,14 +146,13 @@ func (p *poolsi) connect(addr string) *pool {
 
 	err = TestConnection(pool)
 	if err != nil {
-
 		log.Printf("Connection to %q fails, got error: %v\n", addr, err)
 		// Don't return -- let's still put the empty pool in the map.  Its users
 		// have to handle errors later anyway.
 	} else {
 		fmt.Printf("Connection with %q healthy.\n", addr)
 	}
-	return pool
+	return pool, true
 }
 
 // TestConnection tests if we can run an Echo query on a connection.

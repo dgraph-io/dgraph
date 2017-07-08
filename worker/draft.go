@@ -46,24 +46,34 @@ const (
 	errorNodeIDExists  = "Error Node ID already exists in the cluster"
 )
 
+type peerPoolEntry struct {
+	peer string
+	pool *pool
+}
+
 // peerPool stores the peers per node and the addresses corresponding to them.
 // We then use pool() to get an active connection to those addresses.
 type peerPool struct {
 	sync.RWMutex
-	peers map[uint64]string
+	peers map[uint64]peerPoolEntry
 }
 
 func (p *peerPool) get(id uint64) (string, bool) {
 	p.RLock()
 	defer p.RUnlock()
 	ret, ok := p.peers[id]
-	return ret, ok
+	return ret.peer, ok
 }
 
-func (p *peerPool) set(id uint64, addr string) {
+func (p *peerPool) set(id uint64, addr string, pl *pool) {
 	p.Lock()
 	defer p.Unlock()
-	p.peers[id] = addr
+	if old, ok := p.peers[id]; ok {
+		if old.pool != nil {
+			pools().put(old.pool)
+		}
+	}
+	p.peers[id] = peerPoolEntry{addr, pl}
 }
 
 type proposalCtx struct {
@@ -183,7 +193,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	fmt.Printf("Node with GroupID: %v, ID: %v\n", gid, id)
 
 	peers := peerPool{
-		peers: make(map[uint64]string),
+		peers: make(map[uint64]peerPoolEntry),
 	}
 	props := proposals{
 		ids: make(map[uint32]*proposalCtx),
@@ -227,8 +237,9 @@ func (n *node) GetPeer(pid uint64) (string, bool) {
 	return n.peers.get(pid)
 }
 
-func (n *node) SetPeer(pid uint64, addr string) {
-	n.peers.set(pid, addr)
+// p can be nil
+func (n *node) SetPeer(pid uint64, addr string, p *pool) {
+	n.peers.set(pid, addr, p)
 }
 
 func (n *node) Connect(pid uint64, addr string) {
@@ -238,8 +249,12 @@ func (n *node) Connect(pid uint64, addr string) {
 	if paddr, ok := n.GetPeer(pid); ok && paddr == addr {
 		return
 	}
-	pools().connect(addr)
-	n.SetPeer(pid, addr)
+	p, ok := pools().connect(addr)
+	if !ok {
+		// TODO: Return an error instead?
+		log.Printf("Peer %d claims same host as me\n", pid)
+	}
+	n.SetPeer(pid, addr, p)
 }
 
 func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
@@ -648,7 +663,7 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 }
 
 func (n *node) retrieveSnapshot(rc protos.RaftContext) {
-	addr,ok  := n.GetPeer(rc.Id)
+	addr, ok := n.GetPeer(rc.Id)
 	x.AssertTruef(ok, "Should have the address for %d", rc.Id)
 	x.AssertTruef(addr != "", "Should have non-empty address for %d", rc.Id)
 	pool, err := pools().get(addr)
