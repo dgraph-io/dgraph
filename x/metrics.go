@@ -33,7 +33,6 @@ var (
 	BytesRead     *expvar.Int
 	BytesWrite    *expvar.Int
 	EvictedPls    *expvar.Int
-	NumMutations  *expvar.Int
 	NumQueries    *expvar.Int
 	CacheHit      *expvar.Int
 	CacheMiss     *expvar.Int
@@ -72,7 +71,6 @@ func init() {
 	BytesRead = expvar.NewInt("bytesRead")
 	BytesWrite = expvar.NewInt("bytesWrite")
 	EvictedPls = expvar.NewInt("evictedPls")
-	NumMutations = expvar.NewInt("numMutations")
 	PendingQueries = expvar.NewInt("pendingQueries")
 	NumQueries = expvar.NewInt("numQueries")
 	ServerHealth = expvar.NewInt("serverHealth")
@@ -181,11 +179,6 @@ func init() {
 		"evictedPls": prometheus.NewDesc(
 			"evictedPls",
 			"cummulative evictedPls",
-			nil, nil,
-		),
-		"numMutations": prometheus.NewDesc(
-			"numMutations",
-			"cummulative numMutations",
 			nil, nil,
 		),
 		"pendingQueries": prometheus.NewDesc(

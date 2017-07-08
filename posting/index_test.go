@@ -145,7 +145,7 @@ func TestTokensTable(t *testing.T) {
 		Entity: 157,
 	}
 	addMutationWithIndex(t, l, edge, Set)
-	_, err := l.SyncIfDirty(false)
+	_, err := l.SyncIfDirty()
 	x.Check(err)
 	time.Sleep(10 * time.Second)
 
