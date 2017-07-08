@@ -427,6 +427,7 @@ func batchSync(i int) {
 			if e.val == nil {
 				wb = badger.EntriesDelete(wb, e.key)
 			} else {
+				x.BytesWrite.Add(int64(len(e.val)))
 				wb = badger.EntriesSet(wb, e.key, e.val)
 			}
 		}

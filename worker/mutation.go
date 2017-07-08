@@ -77,12 +77,13 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 				tr.LazyPrintf("GetOrCreate took %v", dur)
 			}
 		}
-		defer decr()
 
 		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
 			x.Printf("Error while adding mutation: %v %v", edge, err)
+			decr()
 			return err // abort applying the rest of them.
 		}
+		decr()
 	}
 	return nil
 }
