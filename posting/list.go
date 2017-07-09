@@ -206,13 +206,13 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	}
 	val := item.Value()
 	x.BytesRead.Add(int64(len(val)))
-	l.estimatedSize = uint64(len(val))
 
 	// TODO: See if we can avoid Unmarshal here.
 	l.plist = postingListPool.Get().(*protos.PostingList)
 	if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 	}
+	atomic.StoreUint64(&l.estimatedSize, uint64(l.plist.Size()+len(l.key)+32 /* various overhead */))
 	return l
 }
 
@@ -478,7 +478,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		return false, err
 	}
 	mpost := newPosting(t)
-	atomic.AddUint64(&l.estimatedSize, uint64(mpost.Size()))
+	atomic.AddUint64(&l.estimatedSize, uint64(mpost.Size()+16 /* various overhead */))
 
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
@@ -701,7 +701,7 @@ func (l *List) SyncIfDirty() (committed bool, err error) {
 		postingListPool.Put(l.plist)
 	}
 	l.plist = final
-	atomic.StoreUint64(&l.estimatedSize, uint64(len(data)))
+	atomic.StoreUint64(&l.estimatedSize, uint64(l.plist.Size()+len(l.key)+32 /* various overhead */))
 	for {
 		pLen := atomic.LoadInt64(&x.MaxPlLen)
 		if int64(len(data)) <= pLen {
