@@ -199,7 +199,7 @@ func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions,
 
 	alloc := &allocator{
 		dc:     clients[0],
-		ids:    NewCache(10),
+		ids:    NewCache(100000),
 		kv:     kv,
 		syncCh: make(chan entry, 10000),
 	}
@@ -230,6 +230,7 @@ func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions,
 
 func (d *Dgraph) batchSync() {
 	var entries []entry
+	var loop uint64
 	wb := make([]*badger.Entry, 0, 1000)
 
 	for {
@@ -247,6 +248,8 @@ func (d *Dgraph) batchSync() {
 				break slurpLoop
 			}
 		}
+		loop++
+		//fmt.Printf("Writing batch of size: %v\n", len(entries))
 
 		for _, e := range entries {
 			var buf [20]byte
