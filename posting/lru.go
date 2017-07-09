@@ -118,7 +118,7 @@ func (c *listCache) Get(key uint64) (pl *List) {
 	if ele, hit := c.cache[key]; hit {
 		c.ll.MoveToFront(ele)
 		e := ele.Value.(*entry)
-		est := e.pl.EstimatedSize()
+		est := uint64(e.pl.EstimatedSize())
 		c.curSize += est - e.size
 		e.size = est
 		return e.pl
