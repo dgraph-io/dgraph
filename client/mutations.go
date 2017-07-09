@@ -115,14 +115,6 @@ func (a *allocator) getFromKV(id string) (uint64, error) {
 
 func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool,
 	err error) {
-	// Check if present in lru
-	a.RLock()
-	uid, _ = a.ids.Get(id)
-	a.RUnlock()
-	if uid > 0 {
-		return
-	}
-
 	a.Lock()
 	defer a.Unlock()
 	uid, _ = a.ids.Get(id)
@@ -131,6 +123,7 @@ func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool,
 	}
 
 	// check in kv
+	// get in outside lock and do put if missing ???
 	uid, err = a.getFromKV(id)
 	if err != nil {
 		return
@@ -143,6 +136,9 @@ func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool,
 			return
 		}
 		// Entry would be comitted to disc by the time it's evicted
+		// TODO: Better to delete after it's persisted, can cause race
+		// may be persist it during eviction and delete after it's synced
+		// to disk
 		a.syncCh <- entry{key: id, value: uid}
 	}
 	a.ids.Add(id, uid)
