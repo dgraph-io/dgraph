@@ -152,7 +152,7 @@ type params struct {
 	groupbyAttrs []gql.AttrLang
 	uidCount     string
 	numPaths     int
-	parentIds    []uint64 // These are maintained while preTraverse.
+	parentIds    []uint64 // These are maintained during preTraverse
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -361,15 +361,27 @@ func addCheckPwd(pc *SubGraph, val *protos.TaskValue, dst outputNode) {
 	dst.AddListChild(pc.Attr, uc)
 }
 
+func copyParentIds(sg *SubGraph, uid uint64) []uint64 {
+	parentIds := make([]uint64, 0, len(sg.Params.parentIds))
+	for _, id := range sg.Params.parentIds {
+		parentIds = append(parentIds, id)
+	}
+	parentIds = append(parentIds, uid)
+	// Lets sort them so that we can do a binary search later.
+	sort.Slice(parentIds, func(i, j int) bool {
+		return parentIds[i] < parentIds[j]
+	})
+	return parentIds
+}
+
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 
-	fmt.Println(sg.Params.parentIds, "uid", uid)
 	if sg.Params.Reflexive && algo.IndexOf(&protos.List{sg.Params.parentIds}, uid) >= 0 {
+		// A node can't have itself as the child at any level.
 		return nil
 	}
-
 	if sg.Params.GetUid {
 		// If we are asked for count() and there are no other children,
 		// then we dont return the uids at this level so that UI doesn't render
@@ -379,16 +391,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		}
 	}
 
-	facetsNode := dst.New("@facets")
-
+	var parentIds []uint64
 	if sg.Params.Reflexive {
-		sg.Params.parentIds = append(sg.Params.parentIds, uid)
-		sort.Slice(sg.Params.parentIds, func(i, j int) bool {
-			return sg.Params.parentIds[i] <
-				sg.Params.parentIds[j]
-		})
+		parentIds = copyParentIds(sg, uid)
 	}
 
+	facetsNode := dst.New("@facets")
 	// We go through all predicate children of the subprotos.
 	for _, pc := range sg.Children {
 		if pc.Params.ignoreResult {
@@ -436,12 +444,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
 
-			ids := make([]uint64, 0, len(sg.Params.parentIds))
-			for _, id := range sg.Params.parentIds {
-				sg.Params.parentIds = append(sg.Params.parentIds, id)
-			}
-			pc.Params.parentIds = ids
-
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			for childIdx, childUID := range ul.Uids {
@@ -449,6 +451,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					continue
 				}
 				uc := dst.New(fieldName)
+				pc.Params.parentIds = parentIds
 				if rerr := pc.preTraverse(childUID, uc, dst); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						invalidUids[childUID] = true
