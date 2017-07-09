@@ -179,7 +179,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 
 func setupConnection(host string) (*grpc.ClientConn, error) {
 	if !*tlsEnabled {
-		return grpc.Dial(*dgraph, grpc.WithInsecure())
+		return grpc.Dial(host, grpc.WithInsecure())
 	}
 
 	tlsCfg, _, err := x.GenerateTLSConfig(x.TLSHelperConfig{
