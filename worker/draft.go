@@ -324,29 +324,20 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	}
 
 	slice := slicePool.Get().([]byte)
-	defer slicePool.Put(slice)
-	if len(slice) < proposal.Size() {
-		slice = make([]byte, proposal.Size()+1)
+	sz := proposal.Size()
+	if len(slice) < sz {
+		slicePool.Put(slice)
+		slice = make([]byte, sz)
 	}
+	defer slicePool.Put(slice)
 
-	upto, err := proposal.MarshalTo(slice[1:])
+	upto, err := proposal.MarshalTo(slice)
 	if err != nil {
 		return err
 	}
-	// Examining first byte of slice will quickly tell us what kind of
-	// proposal this is.
-	if proposal.RebuildIndex != nil {
-		slice[0] = proposalReindex
-	} else if proposal.Mutations != nil {
-		slice[0] = proposalMutation
-	} else if proposal.Membership != nil {
-		slice[0] = proposalMembership
-	} else {
-		x.Fatalf("Unknown proposal")
-	}
 
 	//	we don't timeout on a mutation which has already been proposed.
-	if err = n.Raft().Propose(ctx, slice[:upto+1]); err != nil {
+	if err = n.Raft().Propose(ctx, slice[:upto]); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
 
@@ -358,10 +349,6 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	} else if proposal.Membership != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Waiting for the proposal: membership update.")
-		}
-	} else if proposal.RebuildIndex != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Waiting for the proposal: RebuildIndex")
 		}
 	} else {
 		log.Fatalf("Unknown proposal")
@@ -473,9 +460,9 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
-func (n *node) processMutation(ctx context.Context, e raftpb.Entry, m *protos.Mutations) error {
+func (n *node) processMutation(ctx context.Context, index uint64, m *protos.Mutations) error {
 	// TODO: Need to pass node and entry index.
-	rv := x.RaftValue{Group: n.gid, Index: e.Index}
+	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
 	if err := runMutations(ctx, m.Edges); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -499,31 +486,24 @@ func (n *node) processSchemaMutations(e raftpb.Entry, m *protos.Mutations) error
 	return nil
 }
 
-func (n *node) processMembership(e raftpb.Entry, mm *protos.Membership) error {
+func (n *node) processMembership(index uint64, mm *protos.Membership) error {
 	x.AssertTrue(n.gid == 0)
 
 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
 		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
-	groups().applyMembershipUpdate(e.Index, mm)
+	groups().applyMembershipUpdate(index, mm)
 	return nil
 }
 
-func (n *node) process(e raftpb.Entry, pending chan struct{}) {
+func (n *node) process(index uint64, proposal *protos.Proposal, pending chan struct{}) {
 	defer func() {
-		n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
-		posting.SyncMarkFor(n.gid).Ch <- x.Mark{Index: e.Index, Done: true}
+		n.applied.Ch <- x.Mark{Index: index, Done: true}
+		posting.SyncMarkFor(n.gid).Ch <- x.Mark{Index: index, Done: true}
 	}()
-
-	if e.Type != raftpb.EntryNormal {
-		return
-	}
 
 	pending <- struct{}{} // This will block until we can write to it.
 	x.ActiveMutations.Add(1)
 	defer x.ActiveMutations.Add(-1)
-	var proposal protos.Proposal
-	x.AssertTrue(len(e.Data) > 0)
-	x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
 
 	var err error
 	if proposal.Mutations != nil {
@@ -532,9 +512,9 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 		if ctx, has = n.props.Ctx(proposal.Id); !has {
 			ctx = n.ctx
 		}
-		err = n.processMutation(ctx, e, proposal.Mutations)
+		err = n.processMutation(ctx, index, proposal.Mutations)
 	} else if proposal.Membership != nil {
-		err = n.processMembership(e, proposal.Membership)
+		err = n.processMembership(index, proposal.Membership)
 	}
 	n.props.Done(proposal.Id, err)
 	<-pending // Release one.
@@ -580,13 +560,13 @@ func (n *node) processApplyCh() {
 		// We derive the schema here if it's not present
 		// Since raft committed logs are serialized, we can derive
 		// schema here without any locking
-		var proposal protos.Proposal
-		if err := proposal.Unmarshal(e.Data[1:]); err != nil {
-			fmt.Printf("Unable to unmarshal proposal: %v %q\n", e.Data[0], e.Data)
+		proposal := &protos.Proposal{}
+		if err := proposal.Unmarshal(e.Data); err != nil {
+			fmt.Printf("Unable to unmarshal proposal: %v %q\n", e.Data)
 			log.Fatal("Remove me later")
 			// continue
 		}
-		// x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
+
 		if proposal.Mutations != nil {
 			// process schema mutations before
 			if proposal.Mutations.Schema != nil {
@@ -621,7 +601,7 @@ func (n *node) processApplyCh() {
 			}
 		}
 
-		go n.process(e, pending)
+		go n.process(e.Index, proposal, pending)
 	}
 }
 
