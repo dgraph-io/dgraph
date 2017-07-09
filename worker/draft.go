@@ -571,13 +571,23 @@ func (n *node) processApplyCh() {
 			continue
 		}
 
+		x.AssertTrue(e.Type == raftpb.EntryNormal)
+
+		// The following effort is only to apply schema in a blocking fashion.
+		// Once we have a scheduler, this should go away.
+		// TODO: Move the following to scheduler.
+
 		// We derive the schema here if it's not present
 		// Since raft committed logs are serialized, we can derive
 		// schema here without any locking
 		var proposal protos.Proposal
-		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
-
-		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {
+		if err := proposal.Unmarshal(e.Data[1:]); err != nil {
+			fmt.Printf("Unable to unmarshal proposal: %v %q\n", e.Data[0], e.Data)
+			log.Fatal("Remove me later")
+			// continue
+		}
+		// x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
+		if proposal.Mutations != nil {
 			// process schema mutations before
 			if proposal.Mutations.Schema != nil {
 				// Wait for applied watermark to reach till previous index
