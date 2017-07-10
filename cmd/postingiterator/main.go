@@ -23,7 +23,6 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/table"
-	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -40,9 +39,11 @@ func main() {
 	opt.Dir = *postingDir
 	opt.ValueDir = *postingDir
 	opt.MapTablesTo = table.MemoryMap
+
 	ps, err := badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	defer ps.Close()
+
 	it := ps.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
@@ -53,9 +54,7 @@ func main() {
 		pk := x.Parse(k)
 
 		if len(val) > 10000000 {
-			var pl protos.PostingList
-			x.Check(pl.Unmarshal(val))
-			fmt.Printf("key: %q, len(val): %v, len(pl): %v, isIndexKey: %v\n", k, len(val), pl.Size(), pk.IsIndex())
+			fmt.Printf("key: %+v, len(val): %v\n", pk, len(val))
 		}
 	}
 }

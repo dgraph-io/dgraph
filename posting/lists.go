@@ -198,6 +198,7 @@ func periodicCommit() {
 			x.MemoryInUse.Set(int64(inUse))
 			x.HeapIdle.Set(int64(idle))
 			x.TotalMemory.Set(int64(inUse + idle))
+
 			stats := lcache.Stats()
 			x.EvictedPls.Set(int64(stats.NumEvicts))
 			x.LCacheSize.Set(int64(stats.Size))

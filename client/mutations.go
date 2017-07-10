@@ -113,8 +113,7 @@ func (a *allocator) getFromKV(id string) (uint64, error) {
 	return 0, nil
 }
 
-func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool,
-	err error) {
+func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool, err error) {
 	a.Lock()
 	defer a.Unlock()
 	uid, _ = a.ids.Get(id)
@@ -176,8 +175,7 @@ type Dgraph struct {
 	start time.Time
 }
 
-func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions,
-	clientDir string) *Dgraph {
+func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
 	var clients []protos.DgraphClient
 	for _, conn := range conns {
 		client := protos.NewDgraphClient(conn)
@@ -248,11 +246,19 @@ func (d *Dgraph) batchSync() {
 		//fmt.Printf("Writing batch of size: %v\n", len(entries))
 
 		for _, e := range entries {
-			var buf [20]byte
+			// Atmost 10 bytes are needed for uvarint encoding
+			buf := make([]byte, 10)
 			n := binary.PutUvarint(buf[:], e.value)
 			wb = badger.EntriesSet(wb, []byte(e.key), buf[:n])
 		}
-		d.alloc.kv.BatchSet(wb) // TODO: Check for errors here.
+		if err := d.alloc.kv.BatchSet(wb); err != nil {
+			fmt.Printf("Error while writing to disc %v\n", err)
+		}
+		for _, wbe := range wb {
+			if err := wbe.Error; err != nil {
+				fmt.Printf("Error while writing to disc %v\n", err)
+			}
+		}
 		wb = wb[:0]
 		entries = entries[:0]
 	}
