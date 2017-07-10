@@ -24,7 +24,6 @@ import (
 	"log"
 	"math"
 	"runtime"
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -38,9 +37,8 @@ import (
 )
 
 var (
-	// TODO: Remove this
-	maxmemory = flag.Float64("stw_ram_mb", 4096.0,
-		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
+	maxmemory = flag.Float64("max_memory_mb", 1024.0,
+		"Estimated max memory the process can take")
 	commitFraction   = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
 	lhmapNumShards   = runtime.NumCPU() * 4
 	dummyPostingList []byte // Used for indexing.
@@ -176,6 +174,7 @@ func periodicCommit() {
 	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
 	pending := make(chan struct{}, 15)
 	dsize := 0 // needed for better reporting.
+	setLruMemory := true
 	for {
 		select {
 		case key := <-dirtyChan:
@@ -203,7 +202,6 @@ func periodicCommit() {
 			x.EvictedPls.Set(int64(stats.NumEvicts))
 			x.LCacheSize.Set(int64(stats.Size))
 			x.LCacheLen.Set(int64(stats.Length))
-			idle := float64((ms.HeapIdle - ms.HeapReleased) / MB)
 
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
 			// are currently being processed to not get stuck on dirtyChan, which won't be
@@ -212,9 +210,10 @@ func periodicCommit() {
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
 			x.NumGoRoutines.Set(int64(runtime.NumGoroutine()))
-			// if inUse > 0.75*(*maxmemory) {
-			// 	go evictShards(1)
-			// }
+			if setLruMemory && inUse > 0.75*(*maxmemory) {
+				go lcache.UpdateMaxSize()
+				setLruMemory = false
+			}
 		}
 	}
 }
@@ -240,7 +239,7 @@ var (
 func Init(ps *badger.KV) {
 	marks = new(syncMarks)
 	pstore = ps
-	lcache = newListCache((1 << 20) * uint64(*maxmemory/40))
+	lcache = newListCache(math.MaxUint64)
 	dirtyChan = make(chan fingerPrint, 10000)
 	syncCh = make(chan syncEntry, syncChCapacity)
 

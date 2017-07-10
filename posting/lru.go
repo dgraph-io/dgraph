@@ -61,6 +61,12 @@ func newListCache(maxSize uint64) *listCache {
 	}
 }
 
+func (c *listCache) UpdateMaxSize() {
+	c.Lock()
+	defer c.Unlock()
+	c.MaxSize = c.curSize
+}
+
 // TODO: fingerprint can collide
 // Add adds a value to the cache.
 func (c *listCache) PutIfMissing(key uint64, pl *List) (res *List) {
