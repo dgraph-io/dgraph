@@ -509,6 +509,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	res, err := parseQueryAndMutation(ctx, gql.Request{
 		Str:       req.Query,
 		Variables: req.Vars,
+		Mutation:  req.Mutation,
 		Http:      false,
 	})
 	if err != nil {
@@ -527,9 +528,6 @@ func (s *grpcServer) Run(ctx context.Context,
 		return resp, x.Errorf("Multiple schema blocks found")
 	}
 	// Schema Block and Mutation can be part of query string or request
-	if res.Mutation == nil && req.Mutation != nil {
-		res.Mutation = &gql.Mutation{Set: req.Mutation.Set, Del: req.Mutation.Del}
-	}
 	if res.Schema == nil {
 		res.Schema = req.Schema
 	}
