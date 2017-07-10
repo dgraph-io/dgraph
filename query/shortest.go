@@ -202,17 +202,24 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				}
 				numHops++
 			}
-
 		}
-		if stopExpansion {
-			if numPaths == 1 {
-				continue
+		select {
+		case <-ctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
 			}
-			// TODO: Check if we can have a better condition to avoid infinite loops in case of
-			// no paths.
-			cycles++
-			if cycles > numPaths {
-				continue
+			return nil, ctx.Err()
+		default:
+			if stopExpansion {
+				if numPaths == 1 {
+					continue
+				}
+				// TODO: Check if we can have a better condition to avoid infinite loops in case of
+				// no paths.
+				cycles++
+				if cycles > numPaths {
+					continue
+				}
 			}
 		}
 		neighbours := adjacencyMap[item.uid]
@@ -345,27 +352,36 @@ func (start *SubGraph) expandOut(ctx context.Context,
 		}
 
 		for _, sg := range exec {
-			// Send the destuids in res chan.
-			for mIdx, fromUID := range sg.SrcUIDs.Uids {
-				for lIdx, toUID := range sg.uidMatrix[mIdx].Uids {
-					if adjacencyMap[fromUID] == nil {
-						adjacencyMap[fromUID] = make(map[uint64]mapItem)
+			select {
+			case <-ctx.Done():
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+				}
+				rch <- ctx.Err()
+				return
+			default:
+				// Send the destuids in res chan.
+				for mIdx, fromUID := range sg.SrcUIDs.Uids {
+					for lIdx, toUID := range sg.uidMatrix[mIdx].Uids {
+						if adjacencyMap[fromUID] == nil {
+							adjacencyMap[fromUID] = make(map[uint64]mapItem)
+						}
+						// The default cost we'd use is 1.
+						cost, facet, err := sg.getCost(mIdx, lIdx)
+						if err == ErrFacet {
+							// Ignore the edge and continue.
+							continue
+						} else if err != nil {
+							rch <- err
+							return
+						}
+						adjacencyMap[fromUID][toUID] = mapItem{
+							cost:  cost,
+							facet: facet,
+							attr:  sg.Attr,
+						}
+						numEdges++
 					}
-					// The default cost we'd use is 1.
-					cost, facet, err := sg.getCost(mIdx, lIdx)
-					if err == ErrFacet {
-						// Ignore the edge and continue.
-						continue
-					} else if err != nil {
-						rch <- err
-						return
-					}
-					adjacencyMap[fromUID][toUID] = mapItem{
-						cost:  cost,
-						facet: facet,
-						attr:  sg.Attr,
-					}
-					numEdges++
 				}
 			}
 		}
@@ -382,22 +398,31 @@ func (start *SubGraph) expandOut(ctx context.Context,
 			if len(sg.DestUIDs.Uids) == 0 {
 				continue
 			}
-			for _, child := range start.Children {
-				temp := new(SubGraph)
-				temp.copyFiltersRecurse(child)
-
-				temp.SrcUIDs = sg.DestUIDs
-				// Remove those nodes which we have already traversed. As this cannot be
-				// in the path again.
-				algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
-					_, ok := adjacencyMap[uid]
-					return !ok
-				})
-				if len(temp.SrcUIDs.Uids) == 0 {
-					continue
+			select {
+			case <-ctx.Done():
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
 				}
-				sg.Children = append(sg.Children, temp)
-				out = append(out, temp)
+				rch <- ctx.Err()
+				return
+			default:
+				for _, child := range start.Children {
+					temp := new(SubGraph)
+					temp.copyFiltersRecurse(child)
+
+					temp.SrcUIDs = sg.DestUIDs
+					// Remove those nodes which we have already traversed. As this cannot be
+					// in the path again.
+					algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
+						_, ok := adjacencyMap[uid]
+						return !ok
+					})
+					if len(temp.SrcUIDs.Uids) == 0 {
+						continue
+					}
+					sg.Children = append(sg.Children, temp)
+					out = append(out, temp)
+				}
 			}
 		}
 
@@ -523,51 +548,58 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 			numHops++
 		}
-		if !stopExpansion {
-			neighbours := adjacencyMap[item.uid]
-			for toUid, info := range neighbours {
-				cost := info.cost
-				d, ok := dist[toUid]
-				if ok && d.cost <= item.cost+cost {
-					continue
+		select {
+		case <-ctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+			}
+			return nil, ctx.Err()
+		default:
+			if !stopExpansion {
+				neighbours := adjacencyMap[item.uid]
+				for toUid, info := range neighbours {
+					cost := info.cost
+					d, ok := dist[toUid]
+					if ok && d.cost <= item.cost+cost {
+						continue
+					}
+					if !ok {
+						// This is the first time we're seeing this node. So
+						// create a new node and add it to the heap and map.
+						node := &Item{
+							uid:  toUid,
+							cost: item.cost + cost,
+							hop:  item.hop + 1,
+						}
+						heap.Push(&pq, node)
+						dist[toUid] = nodeInfo{
+							parent: item.uid,
+							node:   node,
+							mapItem: mapItem{
+								cost:  item.cost + cost,
+								attr:  info.attr,
+								facet: info.facet,
+							},
+						}
+					} else {
+						// We've already seen this node. So, just update the cost
+						// and fix the priority in the heap and map.
+						node := dist[toUid].node
+						node.cost = item.cost + cost
+						node.hop = item.hop + 1
+						heap.Fix(&pq, node.index)
+						// Update the map with new values.
+						dist[toUid] = nodeInfo{
+							parent: item.uid,
+							node:   node,
+							mapItem: mapItem{
+								cost:  item.cost + cost,
+								attr:  info.attr,
+								facet: info.facet,
+							},
+						}
+					}
 				}
-				if !ok {
-					// This is the first time we're seeing this node. So
-					// create a new node and add it to the heap and map.
-					node := &Item{
-						uid:  toUid,
-						cost: item.cost + cost,
-						hop:  item.hop + 1,
-					}
-					heap.Push(&pq, node)
-					dist[toUid] = nodeInfo{
-						parent: item.uid,
-						node:   node,
-						mapItem: mapItem{
-							cost:  item.cost + cost,
-							attr:  info.attr,
-							facet: info.facet,
-						},
-					}
-				} else {
-					// We've already seen this node. So, just update the cost
-					// and fix the priority in the heap and map.
-					node := dist[toUid].node
-					node.cost = item.cost + cost
-					node.hop = item.hop + 1
-					heap.Fix(&pq, node.index)
-					// Update the map with new values.
-					dist[toUid] = nodeInfo{
-						parent: item.uid,
-						node:   node,
-						mapItem: mapItem{
-							cost:  item.cost + cost,
-							attr:  info.attr,
-							facet: info.facet,
-						},
-					}
-				}
-
 			}
 		}
 	}
