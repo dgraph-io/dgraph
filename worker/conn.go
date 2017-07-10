@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -42,8 +43,9 @@ type pool struct {
 	// messages in the same TCP stream.
 	conn *grpc.ClientConn
 
-	Addr     string
-	refcount int
+	Addr string
+	// Requires a lock on poolsi.
+	refcount int64
 }
 
 type poolsi struct {
@@ -66,7 +68,7 @@ func (p *poolsi) any() (*pool, error) {
 	p.RLock()
 	defer p.RUnlock()
 	for _, pool := range p.all {
-		pool.refcount++
+		pool.AddOwner()
 		return pool, nil
 	}
 	return nil, errNoConnection
@@ -79,21 +81,21 @@ func (p *poolsi) get(addr string) (*pool, error) {
 	if !ok {
 		return nil, errNoConnection
 	}
-	pool.refcount++
+	pool.AddOwner()
 	return pool, nil
 }
 
 // One of these must be called for each call to get(...).
 func (p *poolsi) put(pl *pool) {
 	// We close the conn after unlocking p.
-	p.RLock()
-	pl.refcount--
-	if pl.refcount == 0 {
+	newRefcount := atomic.AddInt64(&pl.refcount, -1)
+	if newRefcount == 0 {
+		p.Lock()
 		delete(p.all, pl.Addr)
+		p.Unlock()
 	}
-	p.RUnlock()
 
-	if pl.refcount == 0 {
+	if newRefcount == 0 {
 		destroyPool(pl)
 	}
 }
@@ -113,8 +115,8 @@ func (p *poolsi) connect(addr string) (*pool, bool) {
 	p.RLock()
 	existingPool, has := p.all[addr]
 	if has {
-		existingPool.refcount++
 		p.RUnlock()
+		existingPool.AddOwner()
 		return existingPool, true
 	}
 	p.RUnlock()
@@ -132,12 +134,11 @@ func (p *poolsi) connect(addr string) (*pool, bool) {
 		return existingPool, true
 	}
 	p.all[addr] = pool
-	pool.refcount++
-	// This refcount gets decremented by the goroutine here
-	pool.refcount++
+	pool.AddOwner() // matches p.put() run by caller
 	p.Unlock()
 
 	// No need to block this thread just to print some messages.
+	pool.AddOwner() // matches p.put() in goroutine
 	go func() {
 		defer p.put(pool)
 		err = TestConnection(pool)
@@ -185,4 +186,9 @@ func newPool(addr string, maxCap int) (*pool, error) {
 // Get returns the connection to use from the pool of connections.
 func (p *pool) Get() *grpc.ClientConn {
 	return p.conn
+}
+
+// AddOwner adds 1 to the refcount for the pool (atomically).
+func (p *pool) AddOwner() {
+	atomic.AddInt64(&p.refcount, 1)
 }
