@@ -285,6 +285,7 @@ func convertToVarMap(variables map[string]string) (vm varMap) {
 
 type Request struct {
 	Str       string
+	Mutation  *protos.Mutation
 	Variables map[string]string
 	// We need this so that we don't try to do JSON.Unmarshal for request coming
 	// from Go client, as we directly get the variables in a map.
@@ -537,6 +538,15 @@ func Parse(r Request) (res Result, rerr error) {
 			}
 			res.Query = append(res.Query, qu)
 		}
+	}
+
+	// Clients can pass mutations separately apart from passing it as part of request.
+	if r.Mutation != nil {
+		if res.Mutation == nil {
+			res.Mutation = &Mutation{}
+		}
+		res.Mutation.Set = append(res.Mutation.Set, r.Mutation.Set...)
+		res.Mutation.Del = append(res.Mutation.Del, r.Mutation.Del...)
 	}
 
 	if res.Mutation != nil {

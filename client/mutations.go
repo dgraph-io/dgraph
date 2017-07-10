@@ -39,6 +39,7 @@ var (
 	ErrValue       = errors.New("Edge already has a value.")
 	ErrEmptyXid    = errors.New("Empty XID node.")
 	ErrInvalidType = errors.New("Invalid value type")
+	ErrEmptyVar    = errors.New("Empty variable name.")
 	emptyEdge      Edge
 )
 
@@ -329,7 +330,7 @@ You can get the latest version from https://docs.dgraph.io
 }
 
 func (d *Dgraph) NodeUid(uid uint64) Node {
-	return Node(uid)
+	return Node{uid: uid}
 }
 
 func (d *Dgraph) NodeBlank(varname string) (Node, error) {
@@ -338,30 +339,38 @@ func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 		defer d.alloc.Unlock()
 		uid, err := d.alloc.fetchOne()
 		if err != nil {
-			return 0, err
+			return Node{}, err
 		}
-		return Node(uid), nil
+		return Node{uid: uid}, nil
 	}
 	uid, _, err := d.alloc.assignOrGet("_:" + varname)
 	if err != nil {
-		return 0, err
+		return Node{}, err
 	}
-	return Node(uid), nil
+	return Node{uid: uid}, nil
 }
 
 func (d *Dgraph) NodeXid(xid string, storeXid bool) (Node, error) {
 	if len(xid) == 0 {
-		return 0, ErrEmptyXid
+		return Node{}, ErrEmptyXid
 	}
 	uid, isNew, err := d.alloc.assignOrGet(xid)
 	if err != nil {
-		return 0, err
+		return Node{}, err
 	}
-	n := Node(uid)
+	n := Node{uid: uid}
 	if storeXid && isNew {
 		e := n.Edge("_xid_")
 		x.Check(e.SetValueString(xid))
 		d.BatchSet(e)
 	}
 	return n, nil
+}
+
+func (d *Dgraph) NodeUidVar(name string) (Node, error) {
+	if len(name) == 0 {
+		return Node{}, ErrEmptyVar
+	}
+
+	return Node{varName: name}, nil
 }
