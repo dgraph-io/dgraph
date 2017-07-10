@@ -61,6 +61,7 @@ type GraphQuery struct {
 	FacetsFilter *FilterTree
 	GroupbyAttrs []AttrLang
 	FacetVar     map[string]string
+	FacetOrder   string
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -1851,7 +1852,33 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	item := it.Item()
 	peek, err := it.Peek(1)
 	if err == nil && item.Typ == itemName {
-		if item.Val == "facets" { // because @facets can come w/t '()'
+		if item.Val == "orderbyfacet" {
+			facets, facetsFilter, facetVar, err := parseFacets(it)
+			if err != nil {
+				return err
+			}
+			fmt.Println(facets, facetsFilter, facetVar)
+			if facetsFilter != nil || len(facetVar) != 0 {
+				return x.Errorf("Invalid use of directive orderbyfacet")
+			}
+			if facets == nil || len(facets.Keys) != 1 {
+				return x.Errorf("Expected exactly one argument in orderbyfacet")
+			}
+			curp.FacetOrder = facets.Keys[0]
+			// Add it to facets if not already present
+			if curp.Facets != nil {
+				if !curp.Facets.AllKeys {
+					for _, v := range curp.Facets.Keys {
+						if v == curp.FacetOrder {
+							return nil
+						}
+					}
+					curp.Facets.Keys = append(curp.Facets.Keys, curp.FacetOrder)
+				}
+			} else {
+				curp.Facets = facets
+			}
+		} else if item.Val == "facets" { // because @facets can come w/t '()'
 			facets, facetsFilter, facetVar, err := parseFacets(it)
 			if err != nil {
 				return err

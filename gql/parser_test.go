@@ -3002,6 +3002,25 @@ func TestParseFacets(t *testing.T) {
 	query := `
 	query {
 		me(func: uid(0x1)) {
+			friends @orderbyfacet(closeness) {
+				name 
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, "closeness", res.Query[0].Children[0].FacetOrder)
+}
+
+func TestParseOrderbyFacet(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
 			friends @facets {
 				name @facets(facet1)
 			}
