@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/table"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
@@ -6525,7 +6526,15 @@ func TestMain(m *testing.M) {
 	dir2, err := ioutil.TempDir("", "wal_")
 	x.Check(err)
 
-	worker.StartRaftNodes(dir2)
+	kvOpt := badger.DefaultOptions
+	kvOpt.SyncWrites = true
+	kvOpt.Dir = dir2
+	kvOpt.ValueDir = dir2
+	kvOpt.MapTablesTo = table.Nothing
+	walStore, err := badger.NewKV(&kvOpt)
+	x.Check(err)
+
+	worker.StartRaftNodes(walStore)
 	// Load schema after nodes have started
 	err = schema.ParseBytes([]byte(schemaStr), 1)
 	x.Check(err)

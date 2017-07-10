@@ -18,17 +18,11 @@
 package gql
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -3423,27 +3417,6 @@ func TestParseGraphQLVarId(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	x.Init()
-	dir, err := ioutil.TempDir("", "storetest_")
-	x.Check(err)
-	defer os.RemoveAll(dir)
-
-	opt := badger.DefaultOptions
-	opt.Dir = dir
-	opt.ValueDir = dir
-	ps, err := badger.NewKV(&opt)
-	defer ps.Close()
-	x.Check(err)
-
-	group.ParseGroupConfig("")
-	schema.Init(ps)
-	posting.Init(ps)
-	worker.Init(ps)
-
-	dir2, err := ioutil.TempDir("", "wal_")
-	x.Check(err)
-
-	worker.StartRaftNodes(dir2)
 	os.Exit(m.Run())
 }
 

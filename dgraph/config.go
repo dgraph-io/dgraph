@@ -16,6 +16,11 @@
  */
 package dgraph
 
+import (
+	"github.com/dgraph-io/dgraph/x"
+	"path/filepath"
+)
+
 type Options struct {
 	PostingDir  string
 	WALDir      string
@@ -25,3 +30,11 @@ type Options struct {
 
 // TODO(tzdybal) - remove global
 var Config Options
+
+func (o *Options) validate() {
+	pd, err := filepath.Abs(o.PostingDir)
+	x.Check(err)
+	wd, err := filepath.Abs(o.WALDir)
+	x.Check(err)
+	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same.")
+}

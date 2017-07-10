@@ -33,7 +33,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"runtime/pprof"
@@ -42,8 +41,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/table"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -121,6 +118,15 @@ func httpPort() int {
 
 func grpcPort() int {
 	return *x.PortOffset + baseGrpcPort
+}
+
+func setupProfiling() {
+	if len(cpuprofile) > 0 {
+		f, err := os.Create(cpuprofile)
+		x.Check(err)
+		pprof.StartCPUProfile(f)
+	}
+	runtime.SetBlockProfileRate(blockRate)
 }
 
 func stopProfiling() {
@@ -473,17 +479,6 @@ func init() {
 	}
 }
 
-func checkFlagsAndInitDirs() {
-	if len(cpuprofile) > 0 {
-		f, err := os.Create(cpuprofile)
-		x.Check(err)
-		pprof.StartCPUProfile(f)
-	}
-
-	// Create parent directories for postings, uids and mutations
-	x.Check(os.MkdirAll(dgraph.Config.PostingDir, 0700))
-}
-
 func setupListener(addr string, port int) (listener net.Listener, err error) {
 	var reload func()
 	laddr := fmt.Sprintf("%s:%d", addr, port)
@@ -612,42 +607,28 @@ func setupServer(che chan error) {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+
 	setupConfigOpts(&dgraph.Config)
-	x.Init()
+	x.Init() // flag.Parse is called here
+
+	setupProfiling()
+
 	dgraph.State = dgraph.NewServerState()
+	defer dgraph.State.Dispose()
 
 	if exposeTrace {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}
 	}
-	checkFlagsAndInitDirs()
-	runtime.SetBlockProfileRate(blockRate)
-
-	pd, err := filepath.Abs(dgraph.Config.PostingDir)
-	x.Check(err)
-	wd, err := filepath.Abs(dgraph.Config.WALDir)
-	x.Check(err)
-	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same.")
-
-	// All the writes to posting store should be synchronous. We use batched writers
-	// for posting lists, so the cost of sync writes is amortized.
-	opt := badger.DefaultOptions
-	opt.SyncWrites = true
-	opt.Dir = dgraph.Config.PostingDir
-	opt.ValueDir = dgraph.Config.PostingDir
-	opt.MapTablesTo = table.MemoryMap
-	ps, err := badger.NewKV(&opt)
-	x.Checkf(err, "Error while creating badger KV posting store")
-	defer ps.Close()
 
 	x.Check(group.ParseGroupConfig(gconf))
-	schema.Init(ps)
+	schema.Init(dgraph.State.PStore)
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
-	posting.Init(ps)
-	worker.Init(ps)
+	posting.Init(dgraph.State.PStore)
+	worker.Init(dgraph.State.PStore)
 
 	// setup shutdown os signal handler
 	sdCh := make(chan os.Signal, 1)
@@ -664,7 +645,7 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	go worker.StartRaftNodes(dgraph.Config.WALDir)
+	go worker.StartRaftNodes(dgraph.State.WALStore)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {

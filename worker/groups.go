@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,7 +28,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/table"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
@@ -88,7 +86,7 @@ func groups() *groupi {
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
-func StartRaftNodes(walDir string) {
+func StartRaftNodes(walStore *badger.KV) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
@@ -122,15 +120,7 @@ func StartRaftNodes(walDir string) {
 		fmt.Printf("Last update is now: %d\n", gr.LastUpdate())
 	}
 
-	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.DefaultOptions
-	kvOpt.SyncWrites = true
-	kvOpt.Dir = walDir
-	kvOpt.ValueDir = walDir
-	kvOpt.MapTablesTo = table.Nothing
-	wals, err := badger.NewKV(&kvOpt)
-	x.Checkf(err, "Error while creating badger KV store")
-	gr.wal = raftwal.Init(wals, *raftId)
+	gr.wal = raftwal.Init(walStore, *raftId)
 
 	var wg sync.WaitGroup
 	gids, err := getGroupIds(*groupIds)

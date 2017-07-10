@@ -19,11 +19,14 @@ package dgraph
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
@@ -32,19 +35,56 @@ import (
 )
 
 type ServerState struct {
-	PendingQueries chan struct{}
-	FinishCh       chan struct{} // channel to wait for all pending reqs to finish.
-	ShutdownCh     chan struct{} // channel to signal shutdown.
+	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
+	ShutdownCh chan struct{} // channel to signal shutdown.
+
+	PStore   *badger.KV
+	WALStore *badger.KV
 }
 
 // TODO(tzdybal) - remove global
 var State ServerState
 
 func NewServerState() (state ServerState) {
-	state.PendingQueries = make(chan struct{}, Config.NumPending)
+	Config.validate()
+
 	state.FinishCh = make(chan struct{})
 	state.ShutdownCh = make(chan struct{})
+
+	state.initStorage()
+
 	return state
+}
+
+func (s *ServerState) initStorage() {
+	// Write Ahead Log directory
+	x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
+	kvOpt := badger.DefaultOptions
+	kvOpt.SyncWrites = true
+	kvOpt.Dir = Config.WALDir
+	kvOpt.ValueDir = Config.WALDir
+	kvOpt.MapTablesTo = table.Nothing
+
+	var err error
+	s.WALStore, err = badger.NewKV(&kvOpt)
+	x.Checkf(err, "Error while creating badger KV WAL store")
+
+	// Postings directory
+	// All the writes to posting store should be synchronous. We use batched writers
+	// for posting lists, so the cost of sync writes is amortized.
+	x.Check(os.MkdirAll(Config.PostingDir, 0700))
+	opt := badger.DefaultOptions
+	opt.SyncWrites = true
+	opt.Dir = Config.PostingDir
+	opt.ValueDir = Config.PostingDir
+	opt.MapTablesTo = table.MemoryMap
+	s.PStore, err = badger.NewKV(&opt)
+	x.Checkf(err, "Error while creating badger KV posting store")
+}
+
+func (s *ServerState) Dispose() {
+	s.PStore.Close()
+	s.WALStore.Close()
 }
 
 // Server implements protos.DgraphServer
