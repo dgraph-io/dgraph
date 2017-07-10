@@ -667,7 +667,6 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 func (n *node) retrieveSnapshot(rc protos.RaftContext) {
 	addr, ok := n.GetPeer(rc.Id)
 	x.AssertTruef(ok, "Should have the address for %d", rc.Id)
-	x.AssertTruef(addr != "", "Should have non-empty address for %d", rc.Id)
 	pool, err := pools().get(addr)
 	if err != nil {
 		log.Fatalf("Pool shouldn't be nil for address: %v for id: %v, error: %v\n", addr, rc.Id, err)
