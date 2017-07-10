@@ -24,7 +24,7 @@ popd &> /dev/null
 
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph -gentlecommit 1.0 -p $BUILD/p -w $BUILD/loader/w -stw_ram_mb 6000 > $BUILD/server.log &
+./dgraph -gentlecommit 1.0 -p $BUILD/p -w $BUILD/loader/w -max_memory_mb 6000 > $BUILD/server.log &
 popd &> /dev/null
 
 sleep 15
