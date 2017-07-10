@@ -152,7 +152,7 @@ type params struct {
 	groupbyAttrs []gql.AttrLang
 	uidCount     string
 	numPaths     int
-	parentIds    []uint64 // These are maintained during preTraverse
+	parentIds    *[]uint64 // This is a stack that is maintained and passed down to children.
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -361,26 +361,31 @@ func addCheckPwd(pc *SubGraph, val *protos.TaskValue, dst outputNode) {
 	dst.AddListChild(pc.Attr, uc)
 }
 
-func copyParentIds(sg *SubGraph, uid uint64) []uint64 {
-	parentIds := make([]uint64, 0, len(sg.Params.parentIds))
-	for _, id := range sg.Params.parentIds {
-		parentIds = append(parentIds, id)
+func alreadySeen(parentIds []uint64, uid uint64) bool {
+	for _, id := range parentIds {
+		if id == uid {
+			return true
+		}
 	}
-	parentIds = append(parentIds, uid)
-	// Lets sort them so that we can do a binary search later.
-	sort.Slice(parentIds, func(i, j int) bool {
-		return parentIds[i] < parentIds[j]
-	})
-	return parentIds
+	return false
 }
 
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 
-	if sg.Params.IgnoreReflex && algo.IndexOf(&protos.List{sg.Params.parentIds}, uid) >= 0 {
-		// A node can't have itself as the child at any level.
-		return nil
+	if sg.Params.IgnoreReflex {
+		if sg.Params.parentIds == nil {
+			parentIds := make([]uint64, 0, 10)
+			sg.Params.parentIds = &parentIds
+
+		}
+		if alreadySeen(*sg.Params.parentIds, uid) {
+			// A node can't have itself as the child at any level.
+			return nil
+		}
+		// Push to stack.
+		*sg.Params.parentIds = append(*sg.Params.parentIds, uid)
 	}
 	if sg.Params.GetUid {
 		// If we are asked for count() and there are no other children,
@@ -389,11 +394,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		if sg.Params.uidCount == "" || len(sg.Children) != 0 {
 			dst.SetUID(uid, "_uid_")
 		}
-	}
-
-	var parentIds []uint64
-	if sg.Params.IgnoreReflex {
-		parentIds = copyParentIds(sg, uid)
 	}
 
 	facetsNode := dst.New("@facets")
@@ -444,6 +444,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
 
+			pc.Params.parentIds = sg.Params.parentIds
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			for childIdx, childUID := range ul.Uids {
@@ -451,7 +452,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					continue
 				}
 				uc := dst.New(fieldName)
-				pc.Params.parentIds = parentIds
 				if rerr := pc.preTraverse(childUID, uc, dst); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						invalidUids[childUID] = true
@@ -461,6 +461,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					log.Printf("Error while traversal: %v", rerr)
 					return rerr
 				}
+
 				if pc.Params.Facet != nil && len(fcsList) > childIdx {
 					fs := fcsList[childIdx]
 					fc := dst.New(fieldName)
@@ -528,6 +529,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		}
 	}
 
+	if sg.Params.IgnoreReflex {
+		// Lets pop the stack.
+		*sg.Params.parentIds = (*sg.Params.parentIds)[:len(*sg.Params.parentIds)-1]
+	}
 	if !facetsNode.IsEmpty() {
 		dst.AddMapChild("@facets", facetsNode, false)
 	}
