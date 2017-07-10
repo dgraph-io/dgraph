@@ -55,10 +55,11 @@ var (
 )
 
 type server struct {
-	NodeId  uint64 // Raft Id associated with the raft node.
-	Addr    string // The public address of the server serving this node.
-	Leader  bool   // Set to true if the node is a leader of the group.
-	RaftIdx uint64 // The raft index which applied this membership update in group zero.
+	NodeId    uint64 // Raft Id associated with the raft node.
+	Addr      string // The public address of the server serving this node.
+	Leader    bool   // Set to true if the node is a leader of the group.
+	RaftIdx   uint64 // The raft index which applied this membership update in group zero.
+	PoolOrNil *pool  // An owned reference to the server's Pool entry (nil if self-node).
 }
 
 type servers struct {
@@ -100,8 +101,12 @@ func removeFromServersIfPresent(sl *servers, nodeID uint64) {
 	}
 	back := len(sl.list) - 1
 	swapServers(sl, i, back)
+	pool := sl.list[back].PoolOrNil
 	sl.list = sl.list[:back]
 	delete(sl.byNodeID, nodeID)
+	if pool != nil {
+		pools().put(pool)
+	}
 }
 
 func addToServers(sl *servers, update server) {
@@ -133,24 +138,30 @@ func StartRaftNodes(walDir string) {
 
 	// Successfully connect with the peer, before doing anything else.
 	if len(*peerAddr) > 0 {
-		pools().connect(*peerAddr)
+		func() {
+			p, ok := pools().connect(*peerAddr)
+			if !ok {
+				return
+			}
+			defer pools().put(p)
 
-		// Force run syncMemberships with this peer, so our nodes know if they have other
-		// servers who are serving the same groups. That way, they can talk to them
-		// and try to join their clusters. Otherwise, they'll start off as a single-node
-		// cluster.
-		// IMPORTANT: Don't run any nodes until we have done at least one full sync for membership
-		// information with the cluster. If you start this node too quickly, just
-		// after starting the leader of group zero, that leader might not have updated
-		// itself in the memberships; and hence this node would think that no one is handling
-		// group zero. Therefore, we MUST wait to get pass a last update raft index of zero.
-		gr.syncMemberships()
-		for gr.LastUpdate() == 0 {
-			time.Sleep(time.Second)
-			fmt.Println("Last update raft index for membership information is zero. Syncing...")
+			// Force run syncMemberships with this peer, so our nodes know if they have other
+			// servers who are serving the same groups. That way, they can talk to them
+			// and try to join their clusters. Otherwise, they'll start off as a single-node
+			// cluster.
+			// IMPORTANT: Don't run any nodes until we have done at least one full sync for membership
+			// information with the cluster. If you start this node too quickly, just
+			// after starting the leader of group zero, that leader might not have updated
+			// itself in the memberships; and hence this node would think that no one is handling
+			// group zero. Therefore, we MUST wait to get pass a last update raft index of zero.
 			gr.syncMemberships()
-		}
-		fmt.Printf("Last update is now: %d\n", gr.LastUpdate())
+			for gr.LastUpdate() == 0 {
+				time.Sleep(time.Second)
+				fmt.Println("Last update raft index for membership information is zero. Syncing...")
+				gr.syncMemberships()
+			}
+			fmt.Printf("Last update is now: %d\n", gr.LastUpdate())
+		}()
 	}
 
 	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
@@ -257,18 +268,18 @@ func (g *groupi) newNode(groupId uint32, nodeId uint64, publicAddr string) *node
 	return node
 }
 
-func (g *groupi) Server(id uint64, groupId uint32) (rs server, found bool) {
+func (g *groupi) Server(id uint64, groupId uint32) (rs string, found bool) {
 	g.RLock()
 	defer g.RUnlock()
 	sl := g.all[groupId]
 	if sl == nil {
-		return server{}, false
+		return "", false
 	}
 	idx, has := sl.byNodeID[id]
 	if has {
-		return sl.list[idx], true
+		return sl.list[idx].Addr, true
 	}
-	return server{}, false
+	return "", false
 }
 
 func (g *groupi) AnyServer(group uint32) string {
@@ -459,49 +470,52 @@ func (g *groupi) syncMemberships() {
 	// Send an update to peer.
 	addr := g.AnyServer(0)
 
-UPDATEMEMBERSHIP:
+	var pl *pool
+	var err error
+	if len(addr) > 0 {
+		pl, err = pools().get(addr)
+	} else {
+		pl, err = pools().any()
+	}
+	if err == errNoConnection {
+		fmt.Println("Unable to sync memberships. No valid connection")
+		return
+	}
+	x.Check(err)
+
 	var update *protos.MembershipUpdate
-	// Run block in func for sake of defer statement in loop.
-	returnNow := func() bool {
-		var pl *pool
-		var err error
-		if len(addr) > 0 {
-			pl, err = pools().get(addr)
-		} else {
-			pl, err = pools().any()
-		}
-		if err == errNoConnection {
-			fmt.Println("Unable to sync memberships. No valid connection")
-			return true
-		}
-		x.Check(err)
-		defer pools().put(pl)
+	for {
+		func() {
+			defer pools().put(pl)
 
-		conn := pl.Get()
+			conn := pl.Get()
 
-		c := protos.NewWorkerClient(conn)
-		update, err = c.UpdateMembership(g.ctx, &mu)
+			c := protos.NewWorkerClient(conn)
+			update, err = c.UpdateMembership(g.ctx, &mu)
+		}()
 		if err != nil {
 			if tr, ok := trace.FromContext(g.ctx); ok {
 				tr.LazyPrintf(err.Error())
 			}
-			return true
+			return
 		}
-		return false
-	}()
-	if returnNow {
-		return
-	}
 
-	// Check if we got a redirect.
-	if update.Redirect {
+		// Check if we got a redirect.
+		if !update.Redirect {
+			break
+		}
+
 		addr = update.RedirectAddr
 		if len(addr) == 0 {
 			return
 		}
 		fmt.Printf("Got redirect for: %q\n", addr)
-		pools().connect(addr)
-		goto UPDATEMEMBERSHIP
+		var ok bool
+		pl, ok = pools().connect(addr)
+		if !ok {
+			// We got redirected to ourselves.
+			return
+		}
 	}
 
 	var lu uint64
@@ -530,17 +544,23 @@ func (g *groupi) periodicSyncMemberships() {
 // membership update in group zero.
 func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 	update := server{
-		NodeId:  mm.Id,
-		Addr:    mm.Addr,
-		Leader:  mm.Leader,
-		RaftIdx: raftIdx,
+		NodeId:    mm.Id,
+		Addr:      mm.Addr,
+		Leader:    mm.Leader,
+		RaftIdx:   raftIdx,
+		PoolOrNil: nil,
 	}
 	if n := g.Node(mm.GroupId); n != nil {
 		// update peer address on address change
 		n.Connect(mm.Id, mm.Addr)
-		// TODO: Clean up old pools
+		// Error possible, perhaps, if we're updating our own node's membership.
+		// Ignore it.
+		update.PoolOrNil, _ = pools().get(mm.Addr)
 	} else if update.Addr != *myAddr && mm.Id != *raftId { // ignore previous addr
-		go pools().connect(update.Addr)
+		var ok bool
+		update.PoolOrNil, ok = pools().connect(update.Addr)
+		// Must be ok because update.Addr != *myAddr
+		x.AssertTrue(ok)
 	}
 
 	fmt.Println("----------------------------")

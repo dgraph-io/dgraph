@@ -142,16 +142,23 @@ func (p *poolsi) connect(addr string) (*pool, bool) {
 	p.all[addr] = pool
 	// TODO: Callers should decrement this refcount.
 	pool.refcount++
+	// This refcount gets decremented by the goroutine here
+	pool.refcount++
 	p.Unlock()
 
-	err = TestConnection(pool)
-	if err != nil {
-		log.Printf("Connection to %q fails, got error: %v\n", addr, err)
-		// Don't return -- let's still put the empty pool in the map.  Its users
-		// have to handle errors later anyway.
-	} else {
-		fmt.Printf("Connection with %q healthy.\n", addr)
-	}
+	// No need to block this thread just to print some messages.
+	go func() {
+		defer p.put(pool)
+		err = TestConnection(pool)
+		if err != nil {
+			log.Printf("Connection to %q fails, got error: %v\n", addr, err)
+			// Don't return -- let's still put the empty pool in the map.  Its users
+			// have to handle errors later anyway.
+		} else {
+			fmt.Printf("Connection with %q healthy.\n", addr)
+		}
+	}()
+
 	return pool, true
 }
 
