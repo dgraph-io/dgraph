@@ -57,6 +57,7 @@ type GraphQuery struct {
 	MathExp      *MathTree
 	Normalize    bool
 	Cascade      bool
+	IgnoreReflex bool
 	Facets       *Facets
 	FacetsFilter *FilterTree
 	GroupbyAttrs []AttrLang
@@ -762,7 +763,7 @@ L:
 		it.Next()
 		item := it.Item()
 		if item.Typ == itemName {
-			switch item.Val {
+			switch strings.ToLower(item.Val) {
 			case "filter":
 				if seenFilter {
 					return nil, x.Errorf("Repeated filter at root")
@@ -781,6 +782,8 @@ L:
 			case "groupby":
 				gq.IsGroupby = true
 				parseGroupby(it, gq)
+			case "ignorereflex":
+				gq.IgnoreReflex = true
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
@@ -1513,6 +1516,10 @@ L:
 				} else if g.Name != UID {
 					// For UID function. we set g.UID
 					g.Args = append(g.Args, val)
+				}
+
+				if g.Name == "var" {
+					return nil, x.Errorf("Unexpected var(). Maybe you want to try using uid()")
 				}
 
 				expectArg = false

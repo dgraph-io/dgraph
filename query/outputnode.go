@@ -519,7 +519,6 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	if sg.uidMatrix == nil {
 		return nil
 	}
-	lenList := len(sg.uidMatrix[0].Uids)
 
 	if sg.Params.uidCount != "" {
 		n.addCountAtRoot(sg)
@@ -530,6 +529,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		return nil
 	}
 
+	lenList := len(sg.uidMatrix[0].Uids)
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
 		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
