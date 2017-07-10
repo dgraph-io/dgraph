@@ -89,7 +89,7 @@ func TestHourTokenizer(t *testing.T) {
 	tokens, err := tokenizer.Tokens(val)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tokens))
-	require.Equal(t, 1+8*4, len(tokens[0]))
+	require.Equal(t, 1+4*4, len(tokens[0]))
 }
 
 func TestDayTokenizer(t *testing.T) {
@@ -104,7 +104,7 @@ func TestDayTokenizer(t *testing.T) {
 	tokens, err := tokenizer.Tokens(val)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tokens))
-	require.Equal(t, 1+8*3, len(tokens[0]))
+	require.Equal(t, 1+4*3, len(tokens[0]))
 }
 
 func TestMonthTokenizer(t *testing.T) {
@@ -119,7 +119,7 @@ func TestMonthTokenizer(t *testing.T) {
 	tokens, err := tokenizer.Tokens(val)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tokens))
-	require.Equal(t, 1+8*2, len(tokens[0]))
+	require.Equal(t, 1+4*2, len(tokens[0]))
 }
 
 func TestDateTimeTokenizer(t *testing.T) {
@@ -134,7 +134,7 @@ func TestDateTimeTokenizer(t *testing.T) {
 	tokens, err := tokenizer.Tokens(val)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(tokens))
-	require.Equal(t, 1+8, len(tokens[0]))
+	require.Equal(t, 1+4, len(tokens[0]))
 }
 
 func TestFullTextTokenizerLang(t *testing.T) {
