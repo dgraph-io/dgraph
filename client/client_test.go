@@ -27,64 +27,28 @@ func graphValue(x string) *protos.Value {
 	return &protos.Value{&protos.Value_StrVal{x}}
 }
 
-func TestCheckNQuad(t *testing.T) {
-	s := graphValue("Alice")
-	if err := checkNQuad(protos.NQuad{
-		Predicate:   "name",
-		ObjectValue: s,
-	}); err == nil {
-		t.Fatal(err)
-	}
-	if err := checkNQuad(protos.NQuad{
-		Subject:     "alice",
-		ObjectValue: s,
-	}); err == nil {
-		t.Fatal(err)
-	}
-	if err := checkNQuad(protos.NQuad{
-		Subject:   "alice",
-		Predicate: "name",
-	}); err == nil {
-		t.Fatal(err)
-	}
-	if err := checkNQuad(protos.NQuad{
-		Subject:     "alice",
-		Predicate:   "name",
-		ObjectValue: s,
-		ObjectId:    "id",
-	}); err == nil {
-		t.Fatal(err)
-	}
-}
-
 func TestSetMutation(t *testing.T) {
 	req := Req{}
 
 	s := graphValue("Alice")
-	if err := req.Set(Edge{protos.NQuad{
+	req.Set(Edge{protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "name",
 		ObjectValue: s,
-	}}); err != nil {
-		t.Fatal(err)
-	}
+	}})
 
 	s = graphValue("rabbithole")
-	if err := req.Set(Edge{protos.NQuad{
+	req.Set(Edge{protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
 		ObjectValue: s,
-	}}); err != nil {
-		t.Fatal(err)
-	}
+	}})
 
-	if err := req.Delete(Edge{protos.NQuad{
+	req.Delete(Edge{protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
 		ObjectValue: s,
-	}}); err != nil {
-		t.Fatal(err)
-	}
+	}})
 
 	assert.Equal(t, len(req.gr.Mutation.Set), 2, "Set should have 2 entries")
 	assert.Equal(t, len(req.gr.Mutation.Del), 1, "Del should have 1 entry")
