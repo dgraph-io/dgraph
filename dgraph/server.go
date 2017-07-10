@@ -32,16 +32,14 @@ import (
 )
 
 type ServerState struct {
-	PendingQueries chan struct{}
-	FinishCh       chan struct{} // channel to wait for all pending reqs to finish.
-	ShutdownCh     chan struct{} // channel to signal shutdown.
+	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
+	ShutdownCh chan struct{} // channel to signal shutdown.
 }
 
 // TODO(tzdybal) - remove global
 var State ServerState
 
 func NewServerState() (state ServerState) {
-	state.PendingQueries = make(chan struct{}, Config.NumPending)
 	state.FinishCh = make(chan struct{})
 	state.ShutdownCh = make(chan struct{})
 	return state
