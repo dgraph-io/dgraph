@@ -44,15 +44,7 @@ type pool struct {
 
 	Addr     string
 	refcount int
-	health   poolHealth
 }
-
-type poolHealth int
-
-const (
-	healthy = iota
-	unhealthy
-)
 
 type poolsi struct {
 	sync.RWMutex
@@ -173,13 +165,11 @@ func TestConnection(p *pool) error {
 	c := protos.NewWorkerClient(conn)
 	resp, err := c.Echo(context.Background(), query)
 	if err != nil {
-		p.health = unhealthy
 		return err
 	}
 	// If a server is sending bad echos, do we have to freak out and die?
 	x.AssertTruef(bytes.Equal(resp.Data, query.Data),
 		"non-matching Echo response value from %v", p.Addr)
-	p.health = healthy
 	return nil
 }
 
@@ -190,14 +180,10 @@ func newPool(addr string, maxCap int) (*pool, error) {
 		return nil, err
 	}
 	// The pool hasn't been added to poolsi yet, so it gets no refcount.
-	return &pool{conn: conn, Addr: addr, refcount: 0, health: healthy}, nil
+	return &pool{conn: conn, Addr: addr, refcount: 0}, nil
 }
 
 // Get returns the connection to use from the pool of connections.
 func (p *pool) Get() *grpc.ClientConn {
 	return p.conn
-}
-
-func (p *pool) Health() poolHealth {
-	return p.health
 }
