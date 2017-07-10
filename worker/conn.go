@@ -121,7 +121,7 @@ func (p *poolsi) connect(addr string) (*pool, bool) {
 	}
 	p.RUnlock()
 
-	pool, err := newPool(addr, 5)
+	pool, err := newPool(addr)
 	// TODO: This can get triggered with totally bogus config.
 	x.Checkf(err, "Unable to connect to host %s", addr)
 
@@ -174,7 +174,7 @@ func TestConnection(p *pool) error {
 }
 
 // NewPool creates a new "pool" with one gRPC connection, refcount 0.
-func newPool(addr string, maxCap int) (*pool, error) {
+func newPool(addr string) (*pool, error) {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
