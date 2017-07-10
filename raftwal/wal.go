@@ -92,11 +92,21 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 		if bytes.Compare(key, last) > 0 {
 			break
 		}
-		wb = badger.EntriesDelete(wb, key)
+		newk := make([]byte, len(key))
+		copy(newk, key)
+		wb = badger.EntriesDelete(wb, newk)
 	}
+
 	wb = badger.EntriesSet(wb, w.snapshotKey(gid), data)
 	fmt.Printf("Writing snapshot to WAL: %+v\n", s)
-	w.wals.BatchSet(wb)
+	if err := w.wals.BatchSet(wb); err != nil {
+		return err
+	}
+	for _, wbe := range wb {
+		if err := wbe.Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -135,15 +145,21 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 		itr := w.wals.NewIterator(opt)
 		defer itr.Close()
 
-		for itr.Seek(start); itr.Valid(); itr.Next() {
+		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
 			key := itr.Item().Key()
-			if !bytes.HasPrefix(key, prefix) {
-				break
-			}
-			wb = badger.EntriesDelete(wb, key)
+			newk := make([]byte, len(key))
+			copy(newk, key)
+			wb = badger.EntriesDelete(wb, newk)
 		}
 	}
-	w.wals.BatchSet(wb)
+	if err := w.wals.BatchSet(wb); err != nil {
+		return err
+	}
+	for _, wbe := range wb {
+		if err := wbe.Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -179,12 +195,8 @@ func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry
 	itr := w.wals.NewIterator(badger.DefaultIteratorOptions)
 	defer itr.Close()
 
-	for itr.Seek(start); itr.Valid(); itr.Next() {
+	for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
 		item := itr.Item()
-		key := item.Key()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
 		var e raftpb.Entry
 		if err := e.Unmarshal(item.Value()); err != nil {
 			return es, x.Wrapf(err, "While unmarshal raftpb.Entry")

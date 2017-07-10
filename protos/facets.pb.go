@@ -48,7 +48,6 @@
 		MembershipUpdate
 		DirectedEdge
 		Mutations
-		RebuildIndexMessage
 		Proposal
 		KV
 		KC

@@ -17,6 +17,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,6 +42,8 @@ var (
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
 	storeXid   = flag.Bool("x", false, "Store xids by adding corresponding _xid_ edges")
 	mode       = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
+	clientDir  = flag.String("cd", "c", "Directory to store xid to uid mapping")
+	blockRate  = flag.Int("block", 0, "Block profiling rate")
 	// TLS configuration
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
 	tlsInsecure      = flag.Bool("tls.insecure", false, "Skip certificate validation (insecure)")
@@ -176,7 +179,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 
 func setupConnection(host string) (*grpc.ClientConn, error) {
 	if !*tlsEnabled {
-		return grpc.Dial(*dgraph, grpc.WithInsecure())
+		return grpc.Dial(host, grpc.WithInsecure())
 	}
 
 	tlsCfg, _, err := x.GenerateTLSConfig(x.TLSHelperConfig{
@@ -200,6 +203,7 @@ func setupConnection(host string) (*grpc.ClientConn, error) {
 
 func main() {
 	x.Init()
+	runtime.SetBlockProfileRate(*blockRate)
 	go http.ListenAndServe("localhost:6060", nil)
 	switch *mode {
 	case "cpu":
@@ -229,7 +233,7 @@ func main() {
 		Pending:       *concurrent,
 		PrintCounters: true,
 	}
-	dgraphClient := client.NewDgraphClient(conns, bmOpts)
+	dgraphClient := client.NewDgraphClient(conns, bmOpts, *clientDir)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()

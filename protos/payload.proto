@@ -51,7 +51,6 @@ service Worker {
 	rpc ServeTask (Query)                returns (Result) {}
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                      returns (SortResult) {}
-	rpc RebuildIndex (RebuildIndexMessage)      returns (Payload) {}
 	rpc Schema (SchemaRequest)                  returns (SchemaResult) {}
 
 	// RAFT serving RPCs.
