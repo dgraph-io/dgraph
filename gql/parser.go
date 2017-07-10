@@ -782,7 +782,7 @@ L:
 			case "groupby":
 				gq.IsGroupby = true
 				parseGroupby(it, gq)
-			case "ignore-reflex":
+			case "ignoreReflex":
 				gq.IgnoreReflex = true
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)

@@ -8236,7 +8236,7 @@ func TestReflexive(t *testing.T) {
 	populateGraph(t)
 	query := `
 	{
-		me(func:anyofterms(name, "Michonne Rick Daryl")) @reflexive {
+		me(func:anyofterms(name, "Michonne Rick Daryl")) @ignoreReflex {
 			name
 			friend {
 				name
