@@ -84,36 +84,35 @@ var (
 	tlsMaxVersion    string
 )
 
-func readConfig() (config dgraph.ConfigOpts) {
-	config.PostingDir = *flag.String("p", "p", "Directory to store posting lists.")
-	config.WalDir = *flag.String("w", "w", "Directory to store raft write-ahead logs.")
-	config.Nomutations = *flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	config.NumPending = *flag.Int("pending", 1000,
+func setupConfigOpts(config *dgraph.ConfigOpts) {
+	flag.StringVar(&config.PostingDir, "p", "p", "Directory to store posting lists.")
+	flag.StringVar(&config.WalDir, "w", "w", "Directory to store raft write-ahead logs.")
+	flag.BoolVar(&config.Nomutations, "nomutations", false, "Don't allow mutations on this server.")
+	flag.IntVar(&config.NumPending, "pending", 1000,
 		"Number of pending queries. Useful for rate limiting.")
 
-	gconf = *flag.String("group_conf", "", "group configuration file")
-	baseHttpPort = *flag.Int("port", 8080, "Port to run HTTP service on.")
-	baseGrpcPort = *flag.Int("grpc_port", 9080, "Port to run gRPC service on.")
-	bindall = *flag.Bool("bindall", false,
+	flag.StringVar(&gconf, "group_conf", "", "group configuration file")
+	flag.IntVar(&baseHttpPort, "port", 8080, "Port to run HTTP service on.")
+	flag.IntVar(&baseGrpcPort, "grpc_port", 9080, "Port to run gRPC service on.")
+	flag.BoolVar(&bindall, "bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	exposeTrace = *flag.Bool("expose_trace", false,
+	flag.BoolVar(&exposeTrace, "expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
-	cpuprofile = *flag.String("cpu", "", "write cpu profile to file")
-	memprofile = *flag.String("mem", "", "write memory profile to file")
-	blockRate = *flag.Int("block", 0, "Block profiling rate")
-	dumpSubgraph = *flag.String("dumpsg", "",
+	flag.StringVar(&cpuprofile, "cpu", "", "write cpu profile to file")
+	flag.StringVar(&memprofile, "mem", "", "write memory profile to file")
+	flag.IntVar(&blockRate, "block", 0, "Block profiling rate")
+	flag.StringVar(&dumpSubgraph, "dumpsg", "",
 		"Directory to save subgraph for testing, debugging")
 	// TLS configurations
-	tlsEnabled = *flag.Bool("tls.on", false, "Use TLS connections with clients.")
-	tlsCert = *flag.String("tls.cert", "", "Certificate file path.")
-	tlsKey = *flag.String("tls.cert_key", "", "Certificate key file path.")
-	tlsKeyPass = *flag.String("tls.cert_key_passphrase", "", "Certificate key passphrase.")
-	tlsClientAuth = *flag.String("tls.client_auth", "", "Enable TLS client authentication")
-	tlsClientCACerts = *flag.String("tls.ca_certs", "", "CA Certs file path.")
-	tlsSystemCACerts = *flag.Bool("tls.use_system_ca", false, "Include System CA into CA Certs.")
-	tlsMinVersion = *flag.String("tls.min_version", "TLS11", "TLS min version.")
-	tlsMaxVersion = *flag.String("tls.max_version", "TLS12", "TLS max version.")
-	return config
+	flag.BoolVar(&tlsEnabled, "tls.on", false, "Use TLS connections with clients.")
+	flag.StringVar(&tlsCert, "tls.cert", "", "Certificate file path.")
+	flag.StringVar(&tlsKey, "tls.cert_key", "", "Certificate key file path.")
+	flag.StringVar(&tlsKeyPass, "tls.cert_key_passphrase", "", "Certificate key passphrase.")
+	flag.StringVar(&tlsClientAuth, "tls.client_auth", "", "Enable TLS client authentication")
+	flag.StringVar(&tlsClientCACerts, "tls.ca_certs", "", "CA Certs file path.")
+	flag.BoolVar(&tlsSystemCACerts, "tls.use_system_ca", false, "Include System CA into CA Certs.")
+	flag.StringVar(&tlsMinVersion, "tls.min_version", "TLS11", "TLS min version.")
+	flag.StringVar(&tlsMaxVersion, "tls.max_version", "TLS12", "TLS max version.")
 }
 
 func httpPort() int {
@@ -504,7 +503,7 @@ func serveGRPC(l net.Listener) {
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}),
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize))
-	protos.RegisterDgraphServer(s, &dgraph.Server{})
+	protos.RegisterDgraphServer(s, &dgraph.InternalServer{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
 	s.GracefulStop()
@@ -589,9 +588,9 @@ func setupServer(che chan error) {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	x.Init()                               // check for configuration file, among others
-	dgraph.Config = readConfig()           // config file and cmd arguments handled
-	dgraph.State = dgraph.NewServerState() // create state for given configuration
+	setupConfigOpts(&dgraph.Config)
+	x.Init()
+	dgraph.State = dgraph.NewServerState()
 
 	if exposeTrace {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {

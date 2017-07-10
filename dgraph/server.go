@@ -48,11 +48,11 @@ func NewServerState() (state ServerState) {
 }
 
 // server is used to implement protos.DgraphServer
-type Server struct{}
+type InternalServer struct{}
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Response, err error) {
+func (s *InternalServer) Run(ctx context.Context, req *protos.Request) (resp *protos.Response, err error) {
 	// we need membership information
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -151,7 +151,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	return resp, err
 }
 
-func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version, err error) {
+func (s *InternalServer) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version, err error) {
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("request rejected %v", err)
@@ -164,7 +164,7 @@ func (s *Server) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.V
 	return v, nil
 }
 
-func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+func (s *InternalServer) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("request rejected %v", err)

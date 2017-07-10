@@ -25,7 +25,7 @@ import (
 )
 
 type inmemoryClient struct {
-	srv *Server
+	srv *InternalServer
 }
 
 func (i *inmemoryClient) Run(ctx context.Context, in *protos.Request, opts ...grpc.CallOption) (*protos.Response, error) {
