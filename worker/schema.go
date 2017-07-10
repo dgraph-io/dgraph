@@ -144,7 +144,7 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *protos.SchemaReque
 		ch <- resultErr{err: err}
 		return
 	}
-	defer pools().put(pl)
+	defer pools().release(pl)
 	conn := pl.Get()
 
 	c := protos.NewWorkerClient(conn)

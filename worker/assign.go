@@ -78,7 +78,7 @@ func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.Assign
 		}
 		return &emptyAssignedIds, err
 	}
-	defer pools().put(p)
+	defer pools().release(p)
 	conn := p.Get()
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Calling AssignUids for group: %d, addr: %s", leaseGid, addr)

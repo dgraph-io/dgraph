@@ -106,7 +106,7 @@ func removeFromServersIfPresent(sl *servers, nodeID uint64) {
 	sl.list = sl.list[:back]
 	delete(sl.byNodeID, nodeID)
 	if pool != nil {
-		pools().put(pool)
+		pools().release(pool)
 	}
 }
 
@@ -144,7 +144,7 @@ func StartRaftNodes(walDir string) {
 			if !ok {
 				return
 			}
-			defer pools().put(p)
+			defer pools().release(p)
 
 			// Force run syncMemberships with this peer, so our nodes know if they have other
 			// servers who are serving the same groups. That way, they can talk to them
@@ -487,7 +487,7 @@ func (g *groupi) syncMemberships() {
 	var update *protos.MembershipUpdate
 	for {
 		func() {
-			defer pools().put(pl)
+			defer pools().release(pl)
 
 			conn := pl.Get()
 
