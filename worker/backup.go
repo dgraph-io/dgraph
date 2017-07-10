@@ -94,7 +94,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				buf.WriteByte('>')
 			}
 		} else {
-			buf.WriteString("<0x")
+			buf.WriteString("<_:uid")
 			buf.WriteString(strconv.FormatUint(p.Uid, 16))
 			buf.WriteByte('>')
 		}
@@ -270,7 +270,8 @@ func backup(gid uint32, bdir string) error {
 			it.Seek(pk.SkipRangeOfSameType())
 			continue
 		}
-		if pk.Attr == "_uid_" || pk.Attr == "_predicate_" {
+		if pk.Attr == "_uid_" || pk.Attr == "_predicate_" ||
+			pk.Attr == "_lease_" {
 			// Skip the UID mappings.
 			it.Seek(pk.SkipPredicate())
 			continue
@@ -296,7 +297,7 @@ func backup(gid uint32, bdir string) error {
 			continue
 		}
 
-		prefix.WriteString("<0x")
+		prefix.WriteString("<_:uid")
 		prefix.WriteString(strconv.FormatUint(uid, 16))
 		prefix.WriteString("> <")
 		prefix.WriteString(pred)
