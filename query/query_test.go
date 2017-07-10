@@ -1556,6 +1556,32 @@ func TestNestedFuncRoot2(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Andrea"}]}`, js)
 }
 
+func TestNestedFuncRoot3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: le(count(friend), -1)) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{}`, js)
+}
+
+func TestNestedFuncRoot4(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: le(count(friend), 1)) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Andrea"}]}`, js)
+}
+
 func TestRecurseQuery(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -8204,4 +8230,58 @@ func TestBinaryJSON(t *testing.T) {
 	}`
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"me":[{"bin_data":"YmluLWRhdGE=","name":"Michonne"}]}`, js)
+}
+
+func TestReflexive(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func:anyofterms(name, "Michonne Rick Daryl")) @ignoreReflex {
+			name
+			friend {
+				name
+				friend {
+					name
+				}
+			}
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"name":"Glenn Rhee"}],"name":"Daryl Dixon"},{"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}],"name":"Michonne"},{"friend":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"}],"name":"Rick Grimes"},{"friend":[{"name":"Glenn Rhee"}],"name":"Daryl Dixon"}]}`, js)
+}
+
+func TestReflexive2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func:anyofterms(name, "Michonne Rick Daryl")) @IGNOREREFLEX {
+			name
+			friend {
+				name
+				friend {
+					name
+				}
+			}
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"name":"Glenn Rhee"}],"name":"Daryl Dixon"},{"friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}],"name":"Michonne"},{"friend":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"}],"name":"Rick Grimes"},{"friend":[{"name":"Glenn Rhee"}],"name":"Daryl Dixon"}]}`, js)
+}
+
+func TestReflexive3(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func:anyofterms(name, "Michonne Rick Daryl")) @IGNOREREFLEX @normalize {
+			Me: name
+			friend {
+				Friend: name
+				friend {
+					Cofriend: name
+				}
+			}
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"Friend":"Rick Grimes","Me":"Michonne"},{"Friend":"Glenn Rhee","Me":"Michonne"},{"Cofriend":"Glenn Rhee","Friend":"Daryl Dixon","Me":"Michonne"},{"Cofriend":"Glenn Rhee","Friend":"Andrea","Me":"Michonne"},{"Cofriend":"Glenn Rhee","Friend":"Michonne","Me":"Rick Grimes"},{"Cofriend":"Daryl Dixon","Friend":"Michonne","Me":"Rick Grimes"},{"Cofriend":"Andrea","Friend":"Michonne","Me":"Rick Grimes"},{"Friend":"Glenn Rhee","Me":"Daryl Dixon"}]}`, js)
 }
