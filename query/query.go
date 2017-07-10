@@ -136,9 +136,9 @@ type params struct {
 	Langs      []string
 
 	// directives.
-	Normalize bool
-	Cascade   bool
-	Reflexive bool
+	Normalize    bool
+	Cascade      bool
+	IgnoreReflex bool
 
 	From         uint64
 	To           uint64
@@ -378,7 +378,7 @@ func copyParentIds(sg *SubGraph, uid uint64) []uint64 {
 func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 
-	if sg.Params.Reflexive && algo.IndexOf(&protos.List{sg.Params.parentIds}, uid) >= 0 {
+	if sg.Params.IgnoreReflex && algo.IndexOf(&protos.List{sg.Params.parentIds}, uid) >= 0 {
 		// A node can't have itself as the child at any level.
 		return nil
 	}
@@ -392,7 +392,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	}
 
 	var parentIds []uint64
-	if sg.Params.Reflexive {
+	if sg.Params.IgnoreReflex {
 		parentIds = copyParentIds(sg, uid)
 	}
 
@@ -687,7 +687,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			FacetVar:     gchild.FacetVar,
 			uidCount:     gchild.UidCount,
 			Cascade:      sg.Params.Cascade,
-			Reflexive:    sg.Params.Reflexive,
+			IgnoreReflex: sg.Params.IgnoreReflex,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &protos.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -882,7 +882,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		isGroupBy:    gq.IsGroupby,
 		groupbyAttrs: gq.GroupbyAttrs,
 		uidCount:     gq.UidCount,
-		Reflexive:    gq.Reflexive,
+		IgnoreReflex: gq.IgnoreReflex,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
