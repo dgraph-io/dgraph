@@ -139,6 +139,7 @@ type params struct {
 	From         uint64
 	To           uint64
 	Facet        *protos.Param
+	FacetOrder   string
 	ExploreDepth uint64
 	isInternal   bool   // Determines if processTask has to be called or not.
 	isListNode   bool   // This is for _predicate_ block.
@@ -642,6 +643,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			FacetVar:     gchild.FacetVar,
 			uidCount:     gchild.UidCount,
 			Cascade:      sg.Params.Cascade,
+			FacetOrder:   gchild.FacetOrder,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &protos.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -1643,7 +1645,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if len(sg.Params.Order) == 0 {
+	if len(sg.Params.Order) == 0 && len(sg.Params.FacetOrder) == 0 {
 		// There is no ordering. Just apply pagination and return.
 		if err = sg.applyPagination(ctx); err != nil {
 			rch <- err
@@ -1804,16 +1806,16 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 // applyOrderAndPagination orders each posting list by a given attribute
 // before applying pagination.
 func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
-	if len(sg.Params.Order) == 0 {
+	if len(sg.Params.Order) == 0 && len(sg.Params.FacetOrder) == 0 {
 		return nil
-	}
-	if sg.Params.Count == 0 {
-		// Only retrieve up to 1000 results by default.
-		sg.Params.Count = 1000
 	}
 
 	sg.updateUidMatrix()
 
+	// See if we need to apply order based on facet.
+	if len(sg.Params.FacetOrder) != 0 {
+		return sg.sortUsingFacet(ctx)
+	}
 	for _, it := range sg.Params.NeedsVar {
 		if it.Name == sg.Params.Order {
 			// If the Order name is same as var name, we sort using that variable.
@@ -1821,6 +1823,10 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		}
 	}
 
+	if sg.Params.Count == 0 {
+		// Only retrieve up to 1000 results by default.
+		sg.Params.Count = 1000
+	}
 	sort := &protos.SortMessage{
 		Attr:      sg.Params.Order,
 		Langs:     sg.Params.Langs,
@@ -1858,6 +1864,50 @@ func (sg *SubGraph) updateDestUids(ctx context.Context) {
 	}
 	algo.ApplyFilter(sg.DestUIDs,
 		func(uid uint64, idx int) bool { return included[idx] })
+}
+
+func (sg *SubGraph) sortUsingFacet(ctx context.Context) error {
+	if sg.facetsMatrix == nil {
+		return nil
+	}
+	orderby := sg.Params.FacetOrder
+	for i := 0; i < len(sg.uidMatrix); i++ {
+		ul := sg.uidMatrix[i]
+		fl := sg.facetsMatrix[i]
+		uids := make([]uint64, 0, len(ul.Uids))
+		values := make([]types.Val, 0, len(ul.Uids))
+		facetList := make([]*protos.Facets, 0, len(fl.FacetsList))
+		for j, uid := range ul.Uids {
+			f := fl.FacetsList[j]
+			for _, it := range f.Facets {
+				if it.Key == orderby {
+					values = append(values, facets.ValFor(it))
+					uids = append(uids, uid)
+					facetList = append(facetList, f)
+					break
+				}
+			}
+		}
+		if len(values) == 0 {
+			continue
+		}
+		// For now we only support orderasc with facets.
+		types.SortWithFacet(values, &protos.List{uids}, facetList, false)
+		sg.uidMatrix[i].Uids = uids
+		sg.facetsMatrix[i].FacetsList = facetList
+	}
+
+	if sg.Params.Count != 0 || sg.Params.Offset != 0 {
+		// Apply the pagination.
+		for i := 0; i < len(sg.uidMatrix); i++ {
+			start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
+			sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+		}
+	}
+
+	// Update the destUids as we might have removed some UIDs.
+	sg.updateDestUids(ctx)
+	return nil
 }
 
 func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {

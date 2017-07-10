@@ -28,6 +28,7 @@ import (
 type sortBase struct {
 	values []Val
 	ul     *protos.List
+	o      []*protos.Facets
 }
 
 // Len returns size of vector.
@@ -38,6 +39,9 @@ func (s sortBase) Swap(i, j int) {
 	s.values[i], s.values[j] = s.values[j], s.values[i]
 	data := s.ul.Uids
 	data[i], data[j] = data[j], data[i]
+	if s.o != nil {
+		s.o[i], s.o[j] = s.o[j], s.o[i]
+	}
 }
 
 type byValue struct{ sortBase }
@@ -62,6 +66,29 @@ func (s byValue) Less(i, j int) bool {
 }
 
 // Sort sorts the given array in-place.
+func SortWithFacet(v []Val, ul *protos.List, l []*protos.Facets, desc bool) error {
+	if len(v) == 0 {
+		return nil
+	}
+	typ := v[0].Tid
+	switch typ {
+	case DateTimeID, IntID, FloatID, StringID, DefaultID:
+		// Don't do anything, we can sort values of this type.
+	default:
+		return fmt.Errorf("Value of type: %s isn't sortable.", typ.Name())
+	}
+
+	var toBeSorted sort.Interface
+	b := sortBase{v, ul, l}
+	toBeSorted = byValue{b}
+	if desc {
+		toBeSorted = sort.Reverse(toBeSorted)
+	}
+	sort.Sort(toBeSorted)
+	return nil
+}
+
+// Sort sorts the given array in-place.
 func Sort(v []Val, ul *protos.List, desc bool) error {
 	if len(v) == 0 {
 		return nil
@@ -75,7 +102,10 @@ func Sort(v []Val, ul *protos.List, desc bool) error {
 	}
 
 	var toBeSorted sort.Interface
-	b := sortBase{v, ul}
+	b := sortBase{
+		values: v,
+		ul:     ul,
+	}
 	toBeSorted = byValue{b}
 	if desc {
 		toBeSorted = sort.Reverse(toBeSorted)

@@ -1857,7 +1857,6 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			if err != nil {
 				return err
 			}
-			fmt.Println(facets, facetsFilter, facetVar)
 			if facetsFilter != nil || len(facetVar) != 0 {
 				return x.Errorf("Invalid use of directive orderbyfacet")
 			}
