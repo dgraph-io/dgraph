@@ -444,7 +444,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
 
-			pc.Params.parentIds = sg.Params.parentIds
+			if sg.Params.IgnoreReflex {
+				pc.Params.parentIds = sg.Params.parentIds
+			}
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			for childIdx, childUID := range ul.Uids {
