@@ -570,7 +570,7 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 
 	sl := g.all[mm.GroupId]
 	if sl == nil {
-		sl = new(servers)
+		sl = &servers{byNodeID: make(map[uint64]int)}
 		g.all[mm.GroupId] = sl
 	}
 
