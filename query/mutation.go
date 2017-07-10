@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"flag"
 	"strings"
 
 	"golang.org/x/net/trace"
@@ -11,6 +12,8 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
+
+var expandEdge = flag.Bool("expand_edge", true, "Don't store predicates per node.")
 
 type InternalMutation struct {
 	Edges   []*protos.DirectedEdge
@@ -23,14 +26,16 @@ func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.Directe
 }
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
-	err := addInternalEdge(ctx, m)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Added Internal edges")
+	if *expandEdge {
+		err := addInternalEdge(ctx, m)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Added Internal edges")
+		}
+		if err != nil {
+			return x.Wrapf(err, "While adding internal edges")
+		}
 	}
-	if err != nil {
-		return x.Wrapf(err, "While adding internal edges")
-	}
-	if err = worker.MutateOverNetwork(ctx, m); err != nil {
+	if err := worker.MutateOverNetwork(ctx, m); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while MutateOverNetwork: %+v", err)
 		}

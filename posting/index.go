@@ -20,6 +20,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
 	"time"
 
@@ -37,18 +38,6 @@ import (
 )
 
 const maxBatchSize = 32 * (1 << 20)
-
-var (
-	indexLog   trace.EventLog
-	reverseLog trace.EventLog
-	countLog   trace.EventLog
-)
-
-func init() {
-	indexLog = trace.NewEventLog("index", "Logger")
-	reverseLog = trace.NewEventLog("reverse", "Logger")
-	countLog = trace.NewEventLog("count", "Logger")
-}
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
 func IndexTokens(attr, lang string, src types.Val) ([]string, error) {
@@ -131,7 +120,7 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	plist, decr := GetOrCreate(key, groupId)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("retreived pl took %v", dur)
+			tr.LazyPrintf("GetOrCreate took %v", dur)
 		}
 	}
 	defer decr()
@@ -145,8 +134,7 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 		}
 		return err
 	}
-	indexLog.Printf("%s [%s] [%d] Term [%s]",
-		edge.Op, edge.Attr, edge.Entity, token)
+	x.PredicateStats.Add(fmt.Sprintf("i.%s", edge.Attr), 1)
 	return nil
 }
 
@@ -189,6 +177,7 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 		}
 		return err
 	}
+	x.PredicateStats.Add(fmt.Sprintf("r.%s", edge.Attr), 1)
 
 	if countAfter != countBefore && schema.State().HasCount(t.Attr) {
 		if err := updateCount(ctx, countParams{
@@ -201,7 +190,6 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 			return err
 		}
 	}
-	reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)
 	return nil
 }
 func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) error {
@@ -250,7 +238,7 @@ func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 		}
 		return err
 	}
-	countLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, count, t.ValueId)
+	x.PredicateStats.Add(fmt.Sprintf("c.%s", t.Attr), 1)
 	return nil
 
 }
@@ -316,6 +304,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 		if err != nil {
 			return err
 		}
+		x.PredicateStats.Add(t.Attr, 1)
 		if countAfter != countBefore && schema.State().HasCount(t.Attr) {
 			if err := updateCount(ctx, countParams{
 				attr:        t.Attr,
@@ -658,8 +647,8 @@ func RebuildIndex(ctx context.Context, attr string) error {
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
-	gid := group.BelongsTo(attr)
-	EvictGroup(gid)
+	// TODO: Remove later, clearing all would kill us
+	lcache.Clear()
 
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.FetchValues = false

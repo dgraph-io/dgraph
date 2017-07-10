@@ -60,8 +60,10 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		}
 		return resp, err
 	}
-	State.PendingQueries <- struct{}{}
-	defer func() { <-State.PendingQueries }()
+
+	x.PendingQueries.Add(1)
+	x.NumQueries.Add(1)
+	defer x.PendingQueries.Add(-1)
 	if ctx.Err() != nil {
 		return resp, ctx.Err()
 	}
@@ -113,7 +115,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		return resp, x.Errorf("Multiple schema blocks found")
 	}
 	// Schema Block and Mutation can be part of query string or request
-	if res.Mutation == nil {
+	if res.Mutation == nil && req.Mutation != nil {
 		res.Mutation = &gql.Mutation{Set: req.Mutation.Set, Del: req.Mutation.Del}
 	}
 	if res.Schema == nil {
@@ -121,10 +123,13 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	}
 
 	var queryRequest = query.QueryRequest{
-		Latency:      &l,
-		GqlQuery:     &res,
-		SchemaUpdate: req.Mutation.Schema,
+		Latency:  &l,
+		GqlQuery: &res,
 	}
+	if req.Mutation != nil && len(req.Mutation.Schema) > 0 {
+		queryRequest.SchemaUpdate = req.Mutation.Schema
+	}
+
 	var er query.ExecuteResult
 	if er, err = queryRequest.ProcessWithMutation(ctx); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {

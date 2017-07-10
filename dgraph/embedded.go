@@ -18,6 +18,7 @@ package dgraph
 
 import (
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos"
 )
 
 // TODO(tzdybal) - server configuration
@@ -26,5 +27,5 @@ func NewEmbeddedDgraphClient(opts client.BatchMutationOptions) *client.Dgraph {
 	// TODO(tzdybal) - force exactly one group. And don't open up Grpc conns for worker.
 	embedded := &inmemoryClient{&Server{}}
 
-	return client.NewClient(embedded, opts)
+	return client.NewClient([]protos.DgraphClient{embedded}, opts)
 }

@@ -42,6 +42,12 @@ var (
 	emptyEdge      Edge
 )
 
+var DefaultOptions = BatchMutationOptions{
+	Size:          100,
+	Pending:       100,
+	PrintCounters: false,
+}
+
 type BatchMutationOptions struct {
 	Size          int
 	Pending       int
@@ -126,7 +132,7 @@ type Dgraph struct {
 
 	schema chan protos.SchemaUpdate
 	nquads chan nquadOp
-	dc     protos.DgraphClient
+	dc     []protos.DgraphClient
 	wg     sync.WaitGroup
 	alloc  *allocator
 	ticker *time.Ticker
@@ -140,23 +146,27 @@ type Dgraph struct {
 	start time.Time
 }
 
-func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions) *Dgraph {
-	grpcClient := protos.NewDgraphClient(conn)
-	return NewClient(grpcClient, opts)
+func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions) *Dgraph {
+	var clients []protos.DgraphClient
+	for _, conn := range conns {
+		client := protos.NewDgraphClient(conn)
+		clients = append(clients, client)
+	}
+	return NewClient(clients, opts)
 }
 
 // TODO(tzdybal) - hide this function from users
-func NewClient(client protos.DgraphClient, opts BatchMutationOptions) *Dgraph {
+func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions) *Dgraph {
 	alloc := &allocator{
-		dc:  client,
+		dc:  clients[0],
 		ids: make(map[string]uint64),
 	}
 	d := &Dgraph{
 		opts:   opts,
-		dc:     client,
+		dc:     clients,
 		start:  time.Now(),
-		nquads: make(chan nquadOp, 2*opts.Size),
-		schema: make(chan protos.SchemaUpdate, 2*opts.Size),
+		nquads: make(chan nquadOp, opts.Pending*opts.Size),
+		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
 		alloc:  alloc,
 	}
 
@@ -192,7 +202,7 @@ func (d *Dgraph) request(req *Req) {
 	counter := atomic.AddUint64(&d.mutations, 1)
 RETRY:
 	factor := time.Second
-	_, err := d.dc.Run(context.Background(), &req.gr)
+	_, err := d.dc[rand.Intn(len(d.dc))].Run(context.Background(), &req.gr)
 	if err != nil {
 		errString := err.Error()
 		// Irrecoverable
@@ -295,7 +305,7 @@ func (d *Dgraph) BatchFlush() {
 }
 
 func (d *Dgraph) Run(ctx context.Context, req *Req) (*protos.Response, error) {
-	return d.dc.Run(ctx, &req.gr)
+	return d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr)
 }
 
 // Counter returns the current state of the BatchMutation.
@@ -308,7 +318,7 @@ func (d *Dgraph) Counter() Counter {
 }
 
 func (d *Dgraph) CheckVersion(ctx context.Context) {
-	v, err := d.dc.CheckVersion(ctx, &protos.Check{})
+	v, err := d.dc[rand.Intn(len(d.dc))].CheckVersion(ctx, &protos.Check{})
 	if err != nil {
 		fmt.Printf(`Could not fetch version information from Dgraph. Got err: %v.`, err)
 	} else {

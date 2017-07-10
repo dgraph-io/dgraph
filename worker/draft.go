@@ -287,7 +287,8 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		return x.Errorf("RAFT isn't initialized yet")
 	}
 	pendingProposals <- struct{}{}
-	defer func() { <-pendingProposals }()
+	x.PendingProposals.Add(1)
+	defer func() { <-pendingProposals; x.PendingProposals.Add(-1) }()
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -518,6 +519,8 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	}
 
 	pending <- struct{}{} // This will block until we can write to it.
+	x.ActiveMutations.Add(1)
+	defer x.ActiveMutations.Add(-1)
 	var proposal protos.Proposal
 	x.AssertTrue(len(e.Data) > 0)
 	x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)

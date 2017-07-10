@@ -174,7 +174,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 	}
 }
 
-func setupConnection() (*grpc.ClientConn, error) {
+func setupConnection(host string) (*grpc.ClientConn, error) {
 	if !*tlsEnabled {
 		return grpc.Dial(*dgraph, grpc.WithInsecure())
 	}
@@ -195,7 +195,7 @@ func setupConnection() (*grpc.ClientConn, error) {
 		return nil, err
 	}
 
-	return grpc.Dial(*dgraph, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+	return grpc.Dial(host, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 }
 
 func main() {
@@ -214,16 +214,22 @@ func main() {
 		// do nothing
 	}
 
-	conn, err := setupConnection()
-	x.Checkf(err, "While trying to dial gRPC")
-	defer conn.Close()
+	var conns []*grpc.ClientConn
+	hostList := strings.Split(*dgraph, ",")
+	x.AssertTrue(len(hostList) > 0)
+	for _, host := range hostList {
+		conn, err := setupConnection(host)
+		x.Checkf(err, "While trying to dial gRPC")
+		conns = append(conns, conn)
+		defer conn.Close()
+	}
 
 	bmOpts := client.BatchMutationOptions{
 		Size:          *numRdf,
 		Pending:       *concurrent,
 		PrintCounters: true,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts)
+	dgraphClient := client.NewDgraphClient(conns, bmOpts)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()

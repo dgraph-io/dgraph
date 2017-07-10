@@ -53,7 +53,7 @@ func writePLs(t *testing.T, pred string, count int, vid uint64, ps *badger.KV) {
 			Op:      protos.DirectedEdge_SET,
 		}
 		list.AddMutation(context.TODO(), de)
-		if merged, err := list.SyncIfDirty(context.TODO()); err != nil {
+		if merged, err := list.SyncIfDirty(); err != nil {
 			t.Errorf("While merging: %v", err)
 		} else if !merged {
 			t.Errorf("No merge happened")

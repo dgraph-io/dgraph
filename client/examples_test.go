@@ -57,7 +57,7 @@ func ExampleReq_AddMutation() {
 		Pending:       100,
 		PrintCounters: false,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, bmOpts)
 
 	req := client.Req{}
 	person1, err := dgraphClient.NodeBlank("person1")
@@ -90,7 +90,7 @@ func ExampleReq_BatchMutation() {
 		Pending:       100,
 		PrintCounters: false,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, bmOpts)
 
 	person1, err := dgraphClient.NodeBlank("person1")
 	if err != nil {
@@ -118,7 +118,7 @@ func ExampleReq_AddMutation_facets() {
 		Pending:       100,
 		PrintCounters: false,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, bmOpts)
 
 	req := client.Req{}
 	person1, err := dgraphClient.NodeXid("person1", false)
@@ -170,7 +170,7 @@ func ExampleReq_AddMutation_schema() {
 		Pending:       100,
 		PrintCounters: false,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, bmOpts)
 
 	req := client.Req{}
 	// Doing mutation and setting schema, then getting schema.
@@ -201,7 +201,7 @@ func ExampleReq_SetQuery() {
 		Pending:       100,
 		PrintCounters: false,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, bmOpts)
 
 	req := client.Req{}
 	alice, err := dgraphClient.NodeXid("alice", false)
@@ -236,7 +236,7 @@ func ExampleReq_SetQueryWithVariables() {
 		Pending:       100,
 		PrintCounters: false,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, bmOpts)
 
 	req := client.Req{}
 	variables := make(map[string]string)

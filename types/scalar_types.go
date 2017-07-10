@@ -79,6 +79,8 @@ func (t TypeID) Name() string {
 		return "password"
 	case DefaultID:
 		return "default"
+	case BinaryID:
+		return "binary"
 	}
 	return ""
 }

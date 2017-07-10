@@ -43,6 +43,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/table"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -101,8 +102,7 @@ func setupConfigOpts(config *dgraph.Options) {
 	flag.StringVar(&cpuprofile, "cpu", "", "write cpu profile to file")
 	flag.StringVar(&memprofile, "mem", "", "write memory profile to file")
 	flag.IntVar(&blockRate, "block", 0, "Block profiling rate")
-	flag.StringVar(&dumpSubgraph, "dumpsg", "",
-		"Directory to save subgraph for testing, debugging")
+	flag.StringVar(&dumpSubgraph, "dumpsg", "", "Directory to save subgraph for testing, debugging")
 	// TLS configurations
 	flag.BoolVar(&tlsEnabled, "tls.on", false, "Use TLS connections with clients.")
 	flag.StringVar(&tlsCert, "tls.cert", "", "Certificate file path.")
@@ -164,9 +164,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	// Add a limit on how many pending queries can be run in the system.
-	dgraph.State.PendingQueries <- struct{}{}
-	defer func() { <-dgraph.State.PendingQueries }()
+
+	x.PendingQueries.Add(1)
+	x.NumQueries.Add(1)
+	defer x.PendingQueries.Add(-1)
 
 	addCorsHeaders(w)
 	if r.Method == "OPTIONS" {
@@ -438,6 +439,27 @@ func hasGraphOps(mu *protos.Mutation) bool {
 	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
 }
 
+func bestEffortGopath() (string, bool) {
+	if path, ok := os.LookupEnv("GOPATH"); ok {
+		return path, true
+	}
+	var homevar string
+	switch runtime.GOOS {
+	case "windows":
+		// The Golang issue https://github.com/golang/go/issues/17262 says
+		// USERPROFILE, _not_ HOMEDRIVE + HOMEPATH is used.
+		homevar = "USERPROFILE"
+	case "plan9":
+		homevar = "home"
+	default:
+		homevar = "HOME"
+	}
+	if homepath, ok := os.LookupEnv(homevar); ok {
+		return path.Join(homepath, "go"), true
+	}
+	return "", false
+}
+
 var uiDir string
 
 func init() {
@@ -446,7 +468,8 @@ func init() {
 	// the user. In other cases, it should point to the build directory within the repository.
 	flag.StringVar(&uiDir, "ui", uiDir, "Directory which contains assets for the user interface")
 	if uiDir == "" {
-		uiDir = os.Getenv("GOPATH") + "/src/github.com/dgraph-io/dgraph/dashboard/build"
+		gopath, _ := bestEffortGopath()
+		uiDir = path.Join(gopath, "src/github.com/dgraph-io/dgraph/dashboard/build")
 	}
 }
 
@@ -502,7 +525,8 @@ func serveGRPC(l net.Listener) {
 	defer func() { dgraph.State.FinishCh <- struct{}{} }()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}),
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
-		grpc.MaxSendMsgSize(x.GrpcMaxSize))
+		grpc.MaxSendMsgSize(x.GrpcMaxSize),
+		grpc.MaxConcurrentStreams(1000))
 	protos.RegisterDgraphServer(s, &dgraph.Server{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
@@ -612,6 +636,7 @@ func main() {
 	opt.SyncWrites = true
 	opt.Dir = dgraph.Config.PostingDir
 	opt.ValueDir = dgraph.Config.PostingDir
+	opt.MapTablesTo = table.MemoryMap
 	ps, err := badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	defer ps.Close()
