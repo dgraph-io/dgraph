@@ -1298,9 +1298,17 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	for i, uid := range sg.DestUIDs.Uids {
 		var exclude bool
 		for _, child := range sg.Children {
+			// For _uid_ we dont actually populate the uidMatrix or values. So a node asking for
+			// _uid_ would always be excluded. Therefore we skip it.
+			if child.Attr == "_uid_" {
+				continue
+			}
+
 			// If the length of child UID list is zero and it has no valid value, then the
 			// current UID should be removed from this level.
-			if !child.IsInternal() && (len(child.values) <= i || len(child.values[i].Val) == 0) && (len(child.counts) <= i) &&
+			if !child.IsInternal() &&
+				// Check len before accessing index.
+				(len(child.values) <= i || len(child.values[i].Val) == 0) && (len(child.counts) <= i) &&
 				(len(child.uidMatrix) <= i || len(child.uidMatrix[i].Uids) == 0) {
 				exclude = true
 				break
