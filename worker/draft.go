@@ -234,15 +234,20 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	return n
 }
 
+// Never returns ("", true)
 func (n *node) GetPeer(pid uint64) (string, bool) {
 	return n.peers.get(pid)
 }
 
-// p can be nil
+// addr must not be empty.
 func (n *node) SetPeer(pid uint64, addr string, poolOrNil *pool) {
+	x.AssertTruef(addr != "", "SetPeer for peer %d has empty addr.", pid)
 	n.peers.set(pid, addr, poolOrNil)
 }
 
+// Connects the node and makes its peerPool refer to the constructed pool and address
+// (possibly updating ourselves from the old address.)  (Unless pid is ourselves, in which
+// case this does nothing.)
 func (n *node) Connect(pid uint64, addr string) {
 	if pid == n.id {
 		return
@@ -261,8 +266,6 @@ func (n *node) Connect(pid uint64, addr string) {
 func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
 	addr, ok := n.GetPeer(pid)
 	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
-	// TODO: Make a peerPool invariant that addrs not empty
-	x.AssertTruef(len(addr) > 0, "Conn pool holds empty string for peer: %d", pid)
 	rc := &protos.RaftContext{
 		Addr:  addr,
 		Group: n.raftContext.Group,
@@ -472,8 +475,6 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	if !ok {
 		return
 	}
-	// TODO: Make this an invariant.
-	x.AssertTruef(addr != "", "Peer pool holds empty addr")
 	pool, err := pools().get(addr)
 	// TODO: No, don't fail like this?
 	x.Check(err)
