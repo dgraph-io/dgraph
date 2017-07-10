@@ -152,7 +152,11 @@ func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions) *Dgrap
 		client := protos.NewDgraphClient(conn)
 		clients = append(clients, client)
 	}
+	return NewClient(clients, opts)
+}
 
+// TODO(tzdybal) - hide this function from users
+func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions) *Dgraph {
 	alloc := &allocator{
 		dc:  clients[0],
 		ids: make(map[string]uint64),
