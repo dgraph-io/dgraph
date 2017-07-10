@@ -1518,6 +1518,10 @@ L:
 					g.Args = append(g.Args, val)
 				}
 
+				if g.Name == "var" {
+					return nil, x.Errorf("Unexpected var(). Maybe you want to try using uid()")
+				}
+
 				expectArg = false
 				if g.Name == VALUE {
 					// E.g. @filter(gt(val(a), 10))
