@@ -356,7 +356,9 @@ The following steps are applied during index generation and to process full text
 1. Conversion to lowercase.
 1. Unicode-normalization (to [Normalization Form KC](http://unicode.org/reports/tr15/#Norm_Forms)).
 1. Stemming using language-specific stemmer.
-1. Stop words removal (language-specific).
+1. Stop words removal
+
+Dgraph uses [bleve](https://github.com/blevesearch/bleve) for its full text search indexing.  See also the bleve language specific [stop word lists](https://github.com/blevesearch/bleve/tree/master/analysis/lang).
 
 Following table contains all supported languages and corresponding country-codes.
 

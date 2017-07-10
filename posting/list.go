@@ -182,14 +182,14 @@ func (it *PIterator) Posting() *protos.Posting {
 	i := it.uidx * 8
 	uid := binary.BigEndian.Uint64(it.pl.Uids[i : i+8])
 
-	if it.pidx < it.plen {
-		for it.pl.Postings[it.pidx].Uid < uid {
-			it.pidx++
+	for it.pidx < it.plen {
+		if it.pl.Postings[it.pidx].Uid > uid {
+			break
 		}
-
-		if it.pidx < it.plen && it.pl.Postings[it.pidx].Uid == uid {
+		if it.pl.Postings[it.pidx].Uid == uid {
 			return it.pl.Postings[it.pidx]
 		}
+		it.pidx++
 	}
 	it.uidPosting.Uid = uid
 	return it.uidPosting

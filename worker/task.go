@@ -1067,6 +1067,11 @@ func (cp *countParams) evaluate(out *protos.Result) {
 	} else if cp.fn == "gt" {
 		count += 1
 	}
+
+	if count < 0 && (cp.fn == "lt" || cp.fn == "le") {
+		return
+	}
+
 	if count < 0 {
 		count = 0
 	}
