@@ -167,30 +167,6 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 	}(keysBuffer)
 }
 
-func periodicFree() {
-	ticker := time.NewTicker(5 * time.Second)
-	for range ticker.C {
-		stats := lcache.Stats()
-		x.EvictedPls.Set(int64(stats.NumEvicts))
-		x.LCacheSize.Set(int64(stats.Size))
-		x.LCacheLen.Set(int64(stats.Length))
-		var ms runtime.MemStats
-		runtime.ReadMemStats(&ms)
-
-		megs := (ms.HeapInuse + ms.StackInuse) / MB
-		inUse := float64(megs)
-		idle := float64((ms.HeapIdle - ms.HeapReleased) / MB)
-
-		if inUse+idle > *maxmemory {
-			elog.Printf("Inuse: %.0f idle: %.0f. Freeing OS memory\n", inUse, idle)
-			x.UpdateMemoryStatus(false)
-			debug.FreeOSMemory()
-		} else {
-			x.UpdateMemoryStatus(true)
-		}
-	}
-}
-
 // periodicMerging periodically merges the dirty posting lists. It also checks our memory
 // usage. If it exceeds a certain threshold, it would stop the world, and aggressively
 // merge and evict all posting lists from memory.
@@ -223,6 +199,11 @@ func periodicCommit() {
 			x.MemoryInUse.Set(int64(inUse))
 			x.HeapIdle.Set(int64(idle))
 			x.TotalMemory.Set(int64(inUse + idle))
+			stats := lcache.Stats()
+			x.EvictedPls.Set(int64(stats.NumEvicts))
+			x.LCacheSize.Set(int64(stats.Size))
+			x.LCacheLen.Set(int64(stats.Length))
+			idle := float64((ms.HeapIdle - ms.HeapReleased) / MB)
 
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
 			// are currently being processed to not get stuck on dirtyChan, which won't be
@@ -264,7 +245,6 @@ func Init(ps *badger.KV) {
 	syncCh = make(chan syncEntry, syncChCapacity)
 
 	go periodicCommit()
-	go periodicFree()
 	go batchSync(0) // Can only run 1 goroutine to do writes.
 }
 
