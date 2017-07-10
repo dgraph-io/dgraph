@@ -70,7 +70,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 	if err != nil {
 		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
 	}
-	defer pools().release(pl)
+	defer pools().decrRef(pl)
 
 	conn := pl.Get()
 	if tr, ok := trace.FromContext(ctx); ok {

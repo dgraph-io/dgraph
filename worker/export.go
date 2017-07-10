@@ -395,7 +395,7 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 			GroupId: gid,
 		}
 	}
-	defer pools().release(pl)
+	defer pools().decrRef(pl)
 
 	c := protos.NewWorkerClient(conn)
 	nr := &protos.ExportPayload{

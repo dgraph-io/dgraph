@@ -86,16 +86,14 @@ func (p *poolsi) get(addr string) (*pool, error) {
 }
 
 // One of these must be called for each call to get(...).
-func (p *poolsi) release(pl *pool) {
+func (p *poolsi) decrRef(pl *pool) {
 	// We close the conn after unlocking p.
 	newRefcount := atomic.AddInt64(&pl.refcount, -1)
 	if newRefcount == 0 {
 		p.Lock()
 		delete(p.all, pl.Addr)
 		p.Unlock()
-	}
 
-	if newRefcount == 0 {
 		destroyPool(pl)
 	}
 }
@@ -140,7 +138,7 @@ func (p *poolsi) connect(addr string) (*pool, bool) {
 	// No need to block this thread just to print some messages.
 	pool.AddOwner() // matches p.put() in goroutine
 	go func() {
-		defer p.release(pool)
+		defer p.decrRef(pool)
 		err = TestConnection(pool)
 		if err != nil {
 			log.Printf("Connection to %q fails, got error: %v\n", addr, err)

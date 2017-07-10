@@ -332,7 +332,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 		che <- err
 		return
 	}
-	defer pools().release(pl)
+	defer pools().decrRef(pl)
 	conn := pl.Get()
 
 	c := protos.NewWorkerClient(conn)
