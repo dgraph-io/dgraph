@@ -49,6 +49,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/cockroachdb/cmux"
+	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -61,51 +62,76 @@ import (
 )
 
 var (
-	gconf        = flag.String("group_conf", "", "group configuration file")
-	postingDir   = flag.String("p", "p", "Directory to store posting lists.")
-	walDir       = flag.String("w", "w", "Directory to store raft write-ahead logs.")
-	baseHttpPort = flag.Int("port", 8080, "Port to run HTTP service on.")
-	baseGrpcPort = flag.Int("grpc_port", 9080, "Port to run gRPC service on.")
-	bindall      = flag.Bool("bindall", false,
-		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	exposeTrace = flag.Bool("expose_trace", false,
-		"Allow trace endpoint to be accessible from remote")
-	cpuprofile   = flag.String("cpu", "", "write cpu profile to file")
-	memprofile   = flag.String("mem", "", "write memory profile to file")
-	blockRate    = flag.Int("block", 0, "Block profiling rate")
-	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
-	finishCh     = make(chan struct{}) // channel to wait for all pending reqs to finish.
-	shutdownCh   = make(chan struct{}) // channel to signal shutdown.
-	// TLS configurations
-	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections with clients.")
-	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
-	tlsKey           = flag.String("tls.cert_key", "", "Certificate key file path.")
-	tlsKeyPass       = flag.String("tls.cert_key_passphrase", "", "Certificate key passphrase.")
-	tlsClientAuth    = flag.String("tls.client_auth", "", "Enable TLS client authentication")
-	tlsClientCACerts = flag.String("tls.ca_certs", "", "CA Certs file path.")
-	tlsSystemCACerts = flag.Bool("tls.use_system_ca", false, "Include System CA into CA Certs.")
-	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min version.")
-	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max version.")
+	gconf        string
+	baseHttpPort int
+	baseGrpcPort int
+	bindall      bool
+
+	exposeTrace  bool
+	cpuprofile   string
+	memprofile   string
+	blockRate    int
+	dumpSubgraph string
+
+	// TLS configuration
+	tlsEnabled       bool
+	tlsCert          string
+	tlsKey           string
+	tlsKeyPass       string
+	tlsClientAuth    string
+	tlsClientCACerts string
+	tlsSystemCACerts bool
+	tlsMinVersion    string
+	tlsMaxVersion    string
 )
 
+func setupConfigOpts(config *dgraph.Options) {
+	flag.StringVar(&config.PostingDir, "p", "p", "Directory to store posting lists.")
+	flag.StringVar(&config.WALDir, "w", "w", "Directory to store raft write-ahead logs.")
+	flag.BoolVar(&config.Nomutations, "nomutations", false, "Don't allow mutations on this server.")
+	flag.IntVar(&config.NumPending, "pending", 1000,
+		"Number of pending queries. Useful for rate limiting.")
+
+	flag.StringVar(&gconf, "group_conf", "", "group configuration file")
+	flag.IntVar(&baseHttpPort, "port", 8080, "Port to run HTTP service on.")
+	flag.IntVar(&baseGrpcPort, "grpc_port", 9080, "Port to run gRPC service on.")
+	flag.BoolVar(&bindall, "bindall", false,
+		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
+	flag.BoolVar(&exposeTrace, "expose_trace", false,
+		"Allow trace endpoint to be accessible from remote")
+	flag.StringVar(&cpuprofile, "cpu", "", "write cpu profile to file")
+	flag.StringVar(&memprofile, "mem", "", "write memory profile to file")
+	flag.IntVar(&blockRate, "block", 0, "Block profiling rate")
+	flag.StringVar(&dumpSubgraph, "dumpsg", "", "Directory to save subgraph for testing, debugging")
+	// TLS configurations
+	flag.BoolVar(&tlsEnabled, "tls.on", false, "Use TLS connections with clients.")
+	flag.StringVar(&tlsCert, "tls.cert", "", "Certificate file path.")
+	flag.StringVar(&tlsKey, "tls.cert_key", "", "Certificate key file path.")
+	flag.StringVar(&tlsKeyPass, "tls.cert_key_passphrase", "", "Certificate key passphrase.")
+	flag.StringVar(&tlsClientAuth, "tls.client_auth", "", "Enable TLS client authentication")
+	flag.StringVar(&tlsClientCACerts, "tls.ca_certs", "", "CA Certs file path.")
+	flag.BoolVar(&tlsSystemCACerts, "tls.use_system_ca", false, "Include System CA into CA Certs.")
+	flag.StringVar(&tlsMinVersion, "tls.min_version", "TLS11", "TLS min version.")
+	flag.StringVar(&tlsMaxVersion, "tls.max_version", "TLS12", "TLS max version.")
+}
+
 func httpPort() int {
-	return *x.PortOffset + *baseHttpPort
+	return *x.PortOffset + baseHttpPort
 }
 
 func grpcPort() int {
-	return *x.PortOffset + *baseGrpcPort
+	return *x.PortOffset + baseGrpcPort
 }
 
 func stopProfiling() {
 	// Stop the CPU profiling that was initiated.
-	if len(*cpuprofile) > 0 {
+	if len(cpuprofile) > 0 {
 		pprof.StopCPUProfile()
 	}
 
 	// Write memory profile before exit.
-	if len(*memprofile) > 0 {
-		f, err := os.Create(*memprofile)
+	if len(memprofile) > 0 {
+		f, err := os.Create(memprofile)
 		if err != nil {
 			log.Println(err)
 		}
@@ -124,17 +150,6 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func isMutationAllowed(ctx context.Context) bool {
-	if !*nomutations {
-		return true
-	}
-	shareAllowed, ok := ctx.Value("_share_").(bool)
-	if !ok || !shareAllowed {
-		return false
-	}
-	return true
-}
-
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	if err := x.HealthCheck(); err == nil {
 		w.WriteHeader(http.StatusOK)
@@ -142,40 +157,6 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}
-}
-
-// parseQueryAndMutation handles the cases where the query parsing code can hang indefinitely.
-// We allow 1 second for parsing the query; and then give up.
-func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, err error) {
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Query received: %v", r.Str)
-	}
-	errc := make(chan error, 1)
-
-	go func() {
-		var err error
-		res, err = gql.Parse(r)
-		errc <- err
-	}()
-
-	child, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-
-	select {
-	case <-child.Done():
-		return res, child.Err()
-	case err := <-errc:
-		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while parsing query: %+v", err)
-			}
-			return res, err
-		}
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Query parsed")
-		}
-	}
-	return res, nil
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
@@ -200,7 +181,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Lets add the value of the debug query parameter to the context.
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
-	ctx = context.WithValue(ctx, "mutation_allowed", !*nomutations)
+	ctx = context.WithValue(ctx, "mutation_allowed", !dgraph.Config.Nomutations)
 
 	if rand.Float64() < *worker.Tracing {
 		tr := trace.New("Dgraph", "Query")
@@ -227,7 +208,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parseStart := time.Now()
-	parsed, err := parseQueryAndMutation(ctx, gql.Request{
+	parsed, err := dgraph.ParseQueryAndMutation(ctx, gql.Request{
 		Str:       q,
 		Variables: map[string]string{},
 		Http:      true,
@@ -296,11 +277,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(*dumpSubgraph) > 0 {
+	if len(dumpSubgraph) > 0 {
 		for _, sg := range res.Subgraphs {
-			x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
+			x.Checkf(os.MkdirAll(dumpSubgraph, 0700), dumpSubgraph)
 			s := time.Now().Format("20060102.150405.000000.gob")
-			filename := path.Join(*dumpSubgraph, s)
+			filename := path.Join(dumpSubgraph, s)
 			f, err := os.Create(filename)
 			x.Checkf(err, filename)
 			enc := gob.NewEncoder(f)
@@ -425,18 +406,18 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 
 func shutdownServer() {
 	x.Printf("Got clean exit request")
-	stopProfiling()          // stop profiling
-	shutdownCh <- struct{}{} // exit grpc and http servers.
+	stopProfiling()                       // stop profiling
+	dgraph.State.ShutdownCh <- struct{}{} // exit grpc and http servers.
 
 	// wait for grpc and http servers to finish pending reqs and
 	// then stop all nodes, internal grpc servers and sync all the marks
 	go func() {
-		defer func() { shutdownCh <- struct{}{} }()
+		defer func() { dgraph.State.ShutdownCh <- struct{}{} }()
 
 		// wait for grpc, http and http2 servers to stop
-		<-finishCh
-		<-finishCh
-		<-finishCh
+		<-dgraph.State.FinishCh
+		<-dgraph.State.FinishCh
+		<-dgraph.State.FinishCh
 
 		worker.BlockingStop()
 	}()
@@ -456,140 +437,6 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 
 func hasGraphOps(mu *protos.Mutation) bool {
 	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
-}
-
-// server is used to implement protos.DgraphServer
-type grpcServer struct{}
-
-// This method is used to execute the query and return the response to the
-// client as a protocol buffer message.
-func (s *grpcServer) Run(ctx context.Context,
-	req *protos.Request) (resp *protos.Response, err error) {
-	// we need membership information
-	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Request rejected %v", err)
-		}
-		return resp, err
-	}
-
-	x.PendingQueries.Add(1)
-	x.NumQueries.Add(1)
-	defer x.PendingQueries.Add(-1)
-	if ctx.Err() != nil {
-		return resp, ctx.Err()
-	}
-
-	if rand.Float64() < *worker.Tracing {
-		tr := trace.New("Dgraph", "GrpcQuery")
-		tr.SetMaxEvents(1000)
-		defer tr.Finish()
-		ctx = trace.NewContext(ctx, tr)
-	}
-
-	// Sanitize the context of the keys used for internal purposes only
-	ctx = context.WithValue(ctx, "_share_", nil)
-	ctx = context.WithValue(ctx, "mutation_allowed", isMutationAllowed(ctx))
-
-	resp = new(protos.Response)
-	emptyMutation := len(req.Mutation.GetSet()) == 0 && len(req.Mutation.GetDel()) == 0 &&
-		len(req.Mutation.GetSchema()) == 0
-	if len(req.Query) == 0 && emptyMutation {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Empty query and mutation.")
-		}
-		return resp, fmt.Errorf("empty query and mutation.")
-	}
-
-	var l query.Latency
-	l.Start = time.Now()
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Query received: %v, variables: %v", req.Query, req.Vars)
-	}
-	res, err := parseQueryAndMutation(ctx, gql.Request{
-		Str:       req.Query,
-		Variables: req.Vars,
-		Http:      false,
-	})
-	if err != nil {
-		return resp, err
-	}
-
-	var cancel context.CancelFunc
-	// set timeout if schema mutation not present
-	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
-		// If schema mutation is not present
-		ctx, cancel = context.WithTimeout(ctx, time.Minute)
-		defer cancel()
-	}
-
-	if req.Schema != nil && res.Schema != nil {
-		return resp, x.Errorf("Multiple schema blocks found")
-	}
-	// Schema Block and Mutation can be part of query string or request
-	if res.Mutation == nil && req.Mutation != nil {
-		res.Mutation = &gql.Mutation{Set: req.Mutation.Set, Del: req.Mutation.Del}
-	}
-	if res.Schema == nil {
-		res.Schema = req.Schema
-	}
-
-	var queryRequest = query.QueryRequest{
-		Latency:  &l,
-		GqlQuery: &res,
-	}
-	if req.Mutation != nil && len(req.Mutation.Schema) > 0 {
-		queryRequest.SchemaUpdate = req.Mutation.Schema
-	}
-
-	var er query.ExecuteResult
-	if er, err = queryRequest.ProcessWithMutation(ctx); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while processing query: %+v", err)
-		}
-		return resp, x.Wrap(err)
-	}
-	resp.AssignedUids = er.Allocations
-	resp.Schema = er.SchemaNode
-
-	nodes, err := query.ToProtocolBuf(&l, er.Subgraphs)
-	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while converting to protocol buffer: %+v", err)
-		}
-		return resp, err
-	}
-	resp.N = nodes
-
-	gl := new(protos.Latency)
-	gl.Parsing, gl.Processing, gl.Pb = l.Parsing.String(), l.Processing.String(),
-		l.ProtocolBuffer.String()
-	resp.L = gl
-	return resp, err
-}
-
-func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version,
-	err error) {
-	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("request rejected %v", err)
-		}
-		return v, err
-	}
-
-	v = new(protos.Version)
-	v.Tag = x.Version()
-	return v, nil
-}
-
-func (s *grpcServer) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("request rejected %v", err)
-		}
-		return &protos.AssignedIds{}, err
-	}
-	return worker.AssignUidsOverNetwork(ctx, num)
 }
 
 func bestEffortGopath() (string, bool) {
@@ -627,34 +474,33 @@ func init() {
 }
 
 func checkFlagsAndInitDirs() {
-	if len(*cpuprofile) > 0 {
-		f, err := os.Create(*cpuprofile)
+	if len(cpuprofile) > 0 {
+		f, err := os.Create(cpuprofile)
 		x.Check(err)
 		pprof.StartCPUProfile(f)
 	}
 
 	// Create parent directories for postings, uids and mutations
-	x.Check(os.MkdirAll(*postingDir, 0700))
+	x.Check(os.MkdirAll(dgraph.Config.PostingDir, 0700))
 }
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
 	var reload func()
 	laddr := fmt.Sprintf("%s:%d", addr, port)
-	if !*tlsEnabled {
+	if !tlsEnabled {
 		listener, err = net.Listen("tcp", laddr)
 	} else {
 		var tlsCfg *tls.Config
 		tlsCfg, reload, err = x.GenerateTLSConfig(x.TLSHelperConfig{
-			ConfigType:             x.TLSServerConfig,
-			CertRequired:           *tlsEnabled,
-			Cert:                   *tlsCert,
-			Key:                    *tlsKey,
-			KeyPassphrase:          *tlsKeyPass,
-			ClientAuth:             *tlsClientAuth,
-			ClientCACerts:          *tlsClientCACerts,
-			UseSystemClientCACerts: *tlsSystemCACerts,
-			MinVersion:             *tlsMinVersion,
-			MaxVersion:             *tlsMaxVersion,
+			ConfigType:   x.TLSServerConfig,
+			CertRequired: tlsEnabled,
+			Cert:         tlsCert,
+
+			ClientAuth:             tlsClientAuth,
+			ClientCACerts:          tlsClientCACerts,
+			UseSystemClientCACerts: tlsSystemCACerts,
+			MinVersion:             tlsMinVersion,
+			MaxVersion:             tlsMaxVersion,
 		})
 		if err != nil {
 			return nil, err
@@ -676,19 +522,19 @@ func setupListener(addr string, port int) (listener net.Listener, err error) {
 }
 
 func serveGRPC(l net.Listener) {
-	defer func() { finishCh <- struct{}{} }()
+	defer func() { dgraph.State.FinishCh <- struct{}{} }()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}),
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
-	protos.RegisterDgraphServer(s, &grpcServer{})
+	protos.RegisterDgraphServer(s, &dgraph.Server{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
 	s.GracefulStop()
 }
 
 func serveHTTP(l net.Listener) {
-	defer func() { finishCh <- struct{}{} }()
+	defer func() { dgraph.State.FinishCh <- struct{}{} }()
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
@@ -709,10 +555,10 @@ func serveHTTP(l net.Listener) {
 func setupServer(che chan error) {
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
-	go worker.RunServer(*bindall) // For internal communication.
+	go worker.RunServer(bindall) // For internal communication.
 
 	laddr := "localhost"
-	if *bindall {
+	if bindall {
 		laddr = "0.0.0.0"
 	}
 
@@ -750,7 +596,7 @@ func setupServer(che chan error) {
 	go serveHTTP(http2)
 
 	go func() {
-		<-shutdownCh
+		<-dgraph.State.ShutdownCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		grpcListener.Close()
 		httpListener.Close()
@@ -759,25 +605,28 @@ func setupServer(che chan error) {
 	log.Println("gRPC server started.  Listening on port", grpcPort())
 	log.Println("HTTP server started.  Listening on port", httpPort())
 
-	err = httpMux.Serve() // Start cmux serving. blocking call
-	<-shutdownCh          // wait for shutdownServer to finish
-	che <- err            // final close for main.
+	err = httpMux.Serve()     // Start cmux serving. blocking call
+	<-dgraph.State.ShutdownCh // wait for shutdownServer to finish
+	che <- err                // final close for main.
 }
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+	setupConfigOpts(&dgraph.Config)
 	x.Init()
-	if *exposeTrace {
+	dgraph.State = dgraph.NewServerState()
+
+	if exposeTrace {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}
 	}
 	checkFlagsAndInitDirs()
-	runtime.SetBlockProfileRate(*blockRate)
+	runtime.SetBlockProfileRate(blockRate)
 
-	pd, err := filepath.Abs(*postingDir)
+	pd, err := filepath.Abs(dgraph.Config.PostingDir)
 	x.Check(err)
-	wd, err := filepath.Abs(*walDir)
+	wd, err := filepath.Abs(dgraph.Config.WALDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same.")
 
@@ -785,14 +634,14 @@ func main() {
 	// for posting lists, so the cost of sync writes is amortized.
 	opt := badger.DefaultOptions
 	opt.SyncWrites = true
-	opt.Dir = *postingDir
-	opt.ValueDir = *postingDir
+	opt.Dir = dgraph.Config.PostingDir
+	opt.ValueDir = dgraph.Config.PostingDir
 	opt.MapTablesTo = table.MemoryMap
 	ps, err := badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	defer ps.Close()
 
-	x.Check(group.ParseGroupConfig(*gconf))
+	x.Check(group.ParseGroupConfig(gconf))
 	schema.Init(ps)
 
 	// Posting will initialize index which requires schema. Hence, initialize
@@ -815,7 +664,7 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	go worker.StartRaftNodes(*walDir)
+	go worker.StartRaftNodes(dgraph.Config.WALDir)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {

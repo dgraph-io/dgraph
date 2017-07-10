@@ -57,6 +57,7 @@ type GraphQuery struct {
 	MathExp      *MathTree
 	Normalize    bool
 	Cascade      bool
+	IgnoreReflex bool
 	Facets       *Facets
 	FacetsFilter *FilterTree
 	GroupbyAttrs []AttrLang
@@ -285,6 +286,7 @@ func convertToVarMap(variables map[string]string) (vm varMap) {
 
 type Request struct {
 	Str       string
+	Mutation  *protos.Mutation
 	Variables map[string]string
 	// We need this so that we don't try to do JSON.Unmarshal for request coming
 	// from Go client, as we directly get the variables in a map.
@@ -539,6 +541,15 @@ func Parse(r Request) (res Result, rerr error) {
 		}
 	}
 
+	// Clients can pass mutations separately apart from passing it as part of request.
+	if r.Mutation != nil {
+		if res.Mutation == nil {
+			res.Mutation = &Mutation{}
+		}
+		res.Mutation.Set = append(res.Mutation.Set, r.Mutation.Set...)
+		res.Mutation.Del = append(res.Mutation.Del, r.Mutation.Del...)
+	}
+
 	if res.Mutation != nil {
 		res.MutationVars = res.Mutation.NeededVars()
 		if len(res.MutationVars) > 0 && len(res.Query) == 0 {
@@ -762,7 +773,7 @@ L:
 		it.Next()
 		item := it.Item()
 		if item.Typ == itemName {
-			switch item.Val {
+			switch strings.ToLower(item.Val) {
 			case "filter":
 				if seenFilter {
 					return nil, x.Errorf("Repeated filter at root")
@@ -781,6 +792,8 @@ L:
 			case "groupby":
 				gq.IsGroupby = true
 				parseGroupby(it, gq)
+			case "ignorereflex":
+				gq.IgnoreReflex = true
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
@@ -1513,6 +1526,10 @@ L:
 				} else if g.Name != UID {
 					// For UID function. we set g.UID
 					g.Args = append(g.Args, val)
+				}
+
+				if g.Name == "var" {
+					return nil, x.Errorf("Unexpected var(). Maybe you want to try using uid()")
 				}
 
 				expectArg = false
