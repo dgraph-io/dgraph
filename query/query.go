@@ -378,13 +378,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		if sg.Params.parentIds == nil {
 			parentIds := make([]uint64, 0, 10)
 			sg.Params.parentIds = &parentIds
-
 		}
 		if alreadySeen(*sg.Params.parentIds, uid) {
 			// A node can't have itself as the child at any level.
 			return nil
 		}
-		// Push to stack.
+		// Push myself to stack before sending this to children.
 		*sg.Params.parentIds = append(*sg.Params.parentIds, uid)
 	}
 	if sg.Params.GetUid {
