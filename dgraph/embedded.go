@@ -14,17 +14,17 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package embedded
+package dgraph
 
 import (
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/server"
 )
 
 // TODO(tzdybal) - server configuration
 func NewEmbeddedDgraphClient(opts client.BatchMutationOptions) *client.Dgraph {
 	// TODO(tzdybal) - create and setup embedded server backend
-	embedded := &inmemoryClient{&server.Server{}}
+	// TODO(tzdybal) - force exactly one group. And don't open up Grpc conns for worker.
+	embedded := &inmemoryClient{&Server{}}
 
 	return client.NewGenericClient(embedded, opts)
 }

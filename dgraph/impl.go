@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package embedded
+package dgraph
 
 import (
 	"golang.org/x/net/context"
@@ -22,11 +22,10 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/server"
 )
 
 type inmemoryClient struct {
-	srv *server.Server
+	srv *Server
 }
 
 func (i *inmemoryClient) Run(ctx context.Context, in *protos.Request, opts ...grpc.CallOption) (*protos.Response, error) {
