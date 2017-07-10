@@ -24,8 +24,10 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 )
 
+// inmemoryClient implements of protos.DgraphClient (it's equivalent of default grpc client, but for
+// in-memory communication (without data (un)marshaling)).
 type inmemoryClient struct {
-	srv *InternalServer
+	srv *Server
 }
 
 func (i *inmemoryClient) Run(ctx context.Context, in *protos.Request, opts ...grpc.CallOption) (*protos.Response, error) {

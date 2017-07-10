@@ -16,12 +16,12 @@
  */
 package dgraph
 
-type ConfigOpts struct {
+type Options struct {
 	PostingDir  string
-	WalDir      string
+	WALDir      string
 	Nomutations bool
 	NumPending  int
 }
 
 // TODO(tzdybal) - remove global
-var Config ConfigOpts
+var Config Options

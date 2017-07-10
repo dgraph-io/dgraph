@@ -24,7 +24,7 @@ import (
 func NewEmbeddedDgraphClient(opts client.BatchMutationOptions) *client.Dgraph {
 	// TODO(tzdybal) - create and setup embedded server backend
 	// TODO(tzdybal) - force exactly one group. And don't open up Grpc conns for worker.
-	embedded := &inmemoryClient{&InternalServer{}}
+	embedded := &inmemoryClient{&Server{}}
 
-	return client.NewGenericClient(embedded, opts)
+	return client.NewClient(embedded, opts)
 }

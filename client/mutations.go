@@ -142,11 +142,11 @@ type Dgraph struct {
 
 func NewDgraphClient(conn *grpc.ClientConn, opts BatchMutationOptions) *Dgraph {
 	grpcClient := protos.NewDgraphClient(conn)
-	return NewGenericClient(grpcClient, opts)
+	return NewClient(grpcClient, opts)
 }
 
 // TODO(tzdybal) - hide this function from users
-func NewGenericClient(client protos.DgraphClient, opts BatchMutationOptions) *Dgraph {
+func NewClient(client protos.DgraphClient, opts BatchMutationOptions) *Dgraph {
 	alloc := &allocator{
 		dc:  client,
 		ids: make(map[string]uint64),

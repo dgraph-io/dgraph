@@ -84,9 +84,9 @@ var (
 	tlsMaxVersion    string
 )
 
-func setupConfigOpts(config *dgraph.ConfigOpts) {
+func setupConfigOpts(config *dgraph.Options) {
 	flag.StringVar(&config.PostingDir, "p", "p", "Directory to store posting lists.")
-	flag.StringVar(&config.WalDir, "w", "w", "Directory to store raft write-ahead logs.")
+	flag.StringVar(&config.WALDir, "w", "w", "Directory to store raft write-ahead logs.")
 	flag.BoolVar(&config.Nomutations, "nomutations", false, "Don't allow mutations on this server.")
 	flag.IntVar(&config.NumPending, "pending", 1000,
 		"Number of pending queries. Useful for rate limiting.")
@@ -503,7 +503,7 @@ func serveGRPC(l net.Listener) {
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}),
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize))
-	protos.RegisterDgraphServer(s, &dgraph.InternalServer{})
+	protos.RegisterDgraphServer(s, &dgraph.Server{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
 	s.GracefulStop()
@@ -602,7 +602,7 @@ func main() {
 
 	pd, err := filepath.Abs(dgraph.Config.PostingDir)
 	x.Check(err)
-	wd, err := filepath.Abs(dgraph.Config.WalDir)
+	wd, err := filepath.Abs(dgraph.Config.WALDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same.")
 
@@ -639,7 +639,7 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	go worker.StartRaftNodes(dgraph.Config.WalDir)
+	go worker.StartRaftNodes(dgraph.Config.WALDir)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {
