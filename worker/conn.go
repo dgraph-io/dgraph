@@ -132,7 +132,6 @@ func (p *poolsi) connect(addr string) (*pool, bool) {
 		return existingPool, true
 	}
 	p.all[addr] = pool
-	// TODO: Callers should decrement this refcount.
 	pool.refcount++
 	// This refcount gets decremented by the goroutine here
 	pool.refcount++

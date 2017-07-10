@@ -48,7 +48,8 @@ const (
 
 type peerPoolEntry struct {
 	peer string
-	pool *pool
+	// An owning reference to a pool for this peer (or nil if self-peer).
+	poolOrNil *pool
 }
 
 // peerPool stores the peers per node and the addresses corresponding to them.
@@ -69,8 +70,8 @@ func (p *peerPool) set(id uint64, addr string, pl *pool) {
 	p.Lock()
 	defer p.Unlock()
 	if old, ok := p.peers[id]; ok {
-		if old.pool != nil {
-			pools().put(old.pool)
+		if old.poolOrNil != nil {
+			pools().put(old.poolOrNil)
 		}
 	}
 	p.peers[id] = peerPoolEntry{addr, pl}
@@ -238,8 +239,8 @@ func (n *node) GetPeer(pid uint64) (string, bool) {
 }
 
 // p can be nil
-func (n *node) SetPeer(pid uint64, addr string, p *pool) {
-	n.peers.set(pid, addr, p)
+func (n *node) SetPeer(pid uint64, addr string, poolOrNil *pool) {
+	n.peers.set(pid, addr, poolOrNil)
 }
 
 func (n *node) Connect(pid uint64, addr string) {

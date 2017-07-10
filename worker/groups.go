@@ -59,12 +59,15 @@ type server struct {
 	Addr      string // The public address of the server serving this node.
 	Leader    bool   // Set to true if the node is a leader of the group.
 	RaftIdx   uint64 // The raft index which applied this membership update in group zero.
-	PoolOrNil *pool  // An owned reference to the server's Pool entry (nil if self-node).
+	PoolOrNil *pool  // An owned reference to the server's Pool entry (nil if Addr is our own).
 }
 
 type servers struct {
+	// A map of indices into list, allowing for random access by their NodeId field.
 	byNodeID map[uint64]int
-	list     []server
+	// Servers for the group, as determined by Raft group zero.
+	// list[0] is the (last-known) leader of that group.
+	list []server
 }
 
 type groupi struct {
