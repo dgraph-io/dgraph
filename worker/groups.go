@@ -90,9 +90,7 @@ func groups() *groupi {
 }
 
 func swapServers(sl *servers, i int, j int) {
-	tmp := sl.list[i]
-	sl.list[i] = sl.list[j]
-	sl.list[j] = tmp
+	sl.list[i], sl.list[j] = sl.list[j], sl.list[i]
 	sl.byNodeID[sl.list[i].NodeId] = i
 	sl.byNodeID[sl.list[j].NodeId] = j
 }
