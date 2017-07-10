@@ -38,10 +38,10 @@ type ServerState struct {
 }
 
 // TODO(tzdybal) - remove global
-var State = NewServerState()
+var State ServerState
 
 func NewServerState() (state ServerState) {
-	state.PendingQueries = make(chan struct{}, *Config.NumPending)
+	state.PendingQueries = make(chan struct{}, Config.NumPending)
 	state.FinishCh = make(chan struct{})
 	state.ShutdownCh = make(chan struct{})
 	return state
@@ -178,7 +178,7 @@ func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.Assig
 // HELPER FUNCTIONS
 //-------------------------------------------------------------------------------------------------
 func isMutationAllowed(ctx context.Context) bool {
-	if !*Config.Nomutations {
+	if !Config.Nomutations {
 		return true
 	}
 	shareAllowed, ok := ctx.Value("_share_").(bool)

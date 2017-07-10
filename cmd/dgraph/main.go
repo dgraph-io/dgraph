@@ -60,23 +60,79 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	gconf        string
+	baseHttpPort int
+	baseGrpcPort int
+	bindall      bool
+
+	exposeTrace  bool
+	cpuprofile   string
+	memprofile   string
+	blockRate    int
+	dumpSubgraph string
+
+	// TLS configuration
+	tlsEnabled       bool
+	tlsCert          string
+	tlsKey           string
+	tlsKeyPass       string
+	tlsClientAuth    string
+	tlsClientCACerts string
+	tlsSystemCACerts bool
+	tlsMinVersion    string
+	tlsMaxVersion    string
+)
+
+func readConfig() (config dgraph.ConfigOpts) {
+	config.PostingDir = *flag.String("p", "p", "Directory to store posting lists.")
+	config.WalDir = *flag.String("w", "w", "Directory to store raft write-ahead logs.")
+	config.Nomutations = *flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+	config.NumPending = *flag.Int("pending", 1000,
+		"Number of pending queries. Useful for rate limiting.")
+
+	gconf = *flag.String("group_conf", "", "group configuration file")
+	baseHttpPort = *flag.Int("port", 8080, "Port to run HTTP service on.")
+	baseGrpcPort = *flag.Int("grpc_port", 9080, "Port to run gRPC service on.")
+	bindall = *flag.Bool("bindall", false,
+		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
+	exposeTrace = *flag.Bool("expose_trace", false,
+		"Allow trace endpoint to be accessible from remote")
+	cpuprofile = *flag.String("cpu", "", "write cpu profile to file")
+	memprofile = *flag.String("mem", "", "write memory profile to file")
+	blockRate = *flag.Int("block", 0, "Block profiling rate")
+	dumpSubgraph = *flag.String("dumpsg", "",
+		"Directory to save subgraph for testing, debugging")
+	// TLS configurations
+	tlsEnabled = *flag.Bool("tls.on", false, "Use TLS connections with clients.")
+	tlsCert = *flag.String("tls.cert", "", "Certificate file path.")
+	tlsKey = *flag.String("tls.cert_key", "", "Certificate key file path.")
+	tlsKeyPass = *flag.String("tls.cert_key_passphrase", "", "Certificate key passphrase.")
+	tlsClientAuth = *flag.String("tls.client_auth", "", "Enable TLS client authentication")
+	tlsClientCACerts = *flag.String("tls.ca_certs", "", "CA Certs file path.")
+	tlsSystemCACerts = *flag.Bool("tls.use_system_ca", false, "Include System CA into CA Certs.")
+	tlsMinVersion = *flag.String("tls.min_version", "TLS11", "TLS min version.")
+	tlsMaxVersion = *flag.String("tls.max_version", "TLS12", "TLS max version.")
+	return config
+}
+
 func httpPort() int {
-	return *x.PortOffset + *dgraph.Config.BaseHttpPort
+	return *x.PortOffset + baseHttpPort
 }
 
 func grpcPort() int {
-	return *x.PortOffset + *dgraph.Config.BaseGrpcPort
+	return *x.PortOffset + baseGrpcPort
 }
 
 func stopProfiling() {
 	// Stop the CPU profiling that was initiated.
-	if len(*dgraph.Config.Cpuprofile) > 0 {
+	if len(cpuprofile) > 0 {
 		pprof.StopCPUProfile()
 	}
 
 	// Write memory profile before exit.
-	if len(*dgraph.Config.Memprofile) > 0 {
-		f, err := os.Create(*dgraph.Config.Memprofile)
+	if len(memprofile) > 0 {
+		f, err := os.Create(memprofile)
 		if err != nil {
 			log.Println(err)
 		}
@@ -125,7 +181,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Lets add the value of the debug query parameter to the context.
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
-	ctx = context.WithValue(ctx, "mutation_allowed", !*dgraph.Config.Nomutations)
+	ctx = context.WithValue(ctx, "mutation_allowed", !dgraph.Config.Nomutations)
 
 	if rand.Float64() < *worker.Tracing {
 		tr := trace.New("Dgraph", "Query")
@@ -221,11 +277,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(*dgraph.Config.DumpSubgraph) > 0 {
+	if len(dumpSubgraph) > 0 {
 		for _, sg := range res.Subgraphs {
-			x.Checkf(os.MkdirAll(*dgraph.Config.DumpSubgraph, 0700), *dgraph.Config.DumpSubgraph)
+			x.Checkf(os.MkdirAll(dumpSubgraph, 0700), dumpSubgraph)
 			s := time.Now().Format("20060102.150405.000000.gob")
-			filename := path.Join(*dgraph.Config.DumpSubgraph, s)
+			filename := path.Join(dumpSubgraph, s)
 			f, err := os.Create(filename)
 			x.Checkf(err, filename)
 			enc := gob.NewEncoder(f)
@@ -396,33 +452,33 @@ func init() {
 }
 
 func checkFlagsAndInitDirs() {
-	if len(*dgraph.Config.Cpuprofile) > 0 {
-		f, err := os.Create(*dgraph.Config.Cpuprofile)
+	if len(cpuprofile) > 0 {
+		f, err := os.Create(cpuprofile)
 		x.Check(err)
 		pprof.StartCPUProfile(f)
 	}
 
 	// Create parent directories for postings, uids and mutations
-	x.Check(os.MkdirAll(*dgraph.Config.PostingDir, 0700))
+	x.Check(os.MkdirAll(dgraph.Config.PostingDir, 0700))
 }
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
 	var reload func()
 	laddr := fmt.Sprintf("%s:%d", addr, port)
-	if !*dgraph.Config.TlsEnabled {
+	if !tlsEnabled {
 		listener, err = net.Listen("tcp", laddr)
 	} else {
 		var tlsCfg *tls.Config
 		tlsCfg, reload, err = x.GenerateTLSConfig(x.TLSHelperConfig{
 			ConfigType:   x.TLSServerConfig,
-			CertRequired: *dgraph.Config.TlsEnabled,
-			Cert:         *dgraph.Config.TlsCert,
+			CertRequired: tlsEnabled,
+			Cert:         tlsCert,
 
-			ClientAuth:             *dgraph.Config.TlsClientAuth,
-			ClientCACerts:          *dgraph.Config.TlsClientCACerts,
-			UseSystemClientCACerts: *dgraph.Config.TlsSystemCACerts,
-			MinVersion:             *dgraph.Config.TlsMinVersion,
-			MaxVersion:             *dgraph.Config.TlsMaxVersion,
+			ClientAuth:             tlsClientAuth,
+			ClientCACerts:          tlsClientCACerts,
+			UseSystemClientCACerts: tlsSystemCACerts,
+			MinVersion:             tlsMinVersion,
+			MaxVersion:             tlsMaxVersion,
 		})
 		if err != nil {
 			return nil, err
@@ -476,10 +532,10 @@ func serveHTTP(l net.Listener) {
 func setupServer(che chan error) {
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
-	go worker.RunServer(*dgraph.Config.Bindall) // For internal communication.
+	go worker.RunServer(bindall) // For internal communication.
 
 	laddr := "localhost"
-	if *dgraph.Config.Bindall {
+	if bindall {
 		laddr = "0.0.0.0"
 	}
 
@@ -533,18 +589,21 @@ func setupServer(che chan error) {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	x.Init()
-	if *dgraph.Config.ExposeTrace {
+	x.Init()                               // check for configuration file, among others
+	dgraph.Config = readConfig()           // config file and cmd arguments handled
+	dgraph.State = dgraph.NewServerState() // create state for given configuration
+
+	if exposeTrace {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}
 	}
 	checkFlagsAndInitDirs()
-	runtime.SetBlockProfileRate(*dgraph.Config.BlockRate)
+	runtime.SetBlockProfileRate(blockRate)
 
-	pd, err := filepath.Abs(*dgraph.Config.PostingDir)
+	pd, err := filepath.Abs(dgraph.Config.PostingDir)
 	x.Check(err)
-	wd, err := filepath.Abs(*dgraph.Config.WalDir)
+	wd, err := filepath.Abs(dgraph.Config.WalDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same.")
 
@@ -552,13 +611,13 @@ func main() {
 	// for posting lists, so the cost of sync writes is amortized.
 	opt := badger.DefaultOptions
 	opt.SyncWrites = true
-	opt.Dir = *dgraph.Config.PostingDir
-	opt.ValueDir = *dgraph.Config.PostingDir
+	opt.Dir = dgraph.Config.PostingDir
+	opt.ValueDir = dgraph.Config.PostingDir
 	ps, err := badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 	defer ps.Close()
 
-	x.Check(group.ParseGroupConfig(*dgraph.Config.Gconf))
+	x.Check(group.ParseGroupConfig(gconf))
 	schema.Init(ps)
 
 	// Posting will initialize index which requires schema. Hence, initialize
@@ -581,7 +640,7 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	go worker.StartRaftNodes(*dgraph.Config.WalDir)
+	go worker.StartRaftNodes(dgraph.Config.WalDir)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {
