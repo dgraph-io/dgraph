@@ -65,7 +65,6 @@ func init() {
 	RegisterTokenizer(HourTokenizer{})
 	RegisterTokenizer(MonthTokenizer{})
 	RegisterTokenizer(DayTokenizer{})
-	RegisterTokenizer(UnixTokenizer{})
 	RegisterTokenizer(TermTokenizer{})
 	RegisterTokenizer(ExactTokenizer{})
 	RegisterTokenizer(BoolTokenizer{})
@@ -165,7 +164,10 @@ type DateTimeTokenizer struct{}
 func (t DateTimeTokenizer) Name() string       { return "datetime" }
 func (t DateTimeTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Year())), t.Identifier())}, nil
+	var l []uint64
+	tval := sv.Value.(time.Time)
+	l = append(l, uint64(tval.Year()))
+	return []string{encodeToken(encodeUintList(l), t.Identifier())}, nil
 }
 func (t DateTimeTokenizer) Identifier() byte { return 0x4 }
 func (t DateTimeTokenizer) IsSortable() bool { return true }
@@ -176,7 +178,11 @@ type MonthTokenizer struct{}
 func (t MonthTokenizer) Name() string       { return "month" }
 func (t MonthTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t MonthTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Month())), t.Identifier())}, nil
+	var l []uint64
+	tval := sv.Value.(time.Time)
+	l = append(l, uint64(tval.Year()))
+	l = append(l, uint64(tval.Month()))
+	return []string{encodeToken(encodeUintList(l), t.Identifier())}, nil
 }
 func (t MonthTokenizer) Identifier() byte { return 0x41 }
 func (t MonthTokenizer) IsSortable() bool { return true }
@@ -187,6 +193,12 @@ type DayTokenizer struct{}
 func (t DayTokenizer) Name() string       { return "day" }
 func (t DayTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t DayTokenizer) Tokens(sv types.Val) ([]string, error) {
+	var l []uint64
+	tval := sv.Value.(time.Time)
+	l = append(l, uint64(tval.Year()))
+	l = append(l, uint64(tval.Month()))
+	l = append(l, uint64(tval.Day()))
+	return []string{encodeToken(encodeUintList(l), t.Identifier())}, nil
 	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Day())), t.Identifier())}, nil
 }
 func (t DayTokenizer) Identifier() byte { return 0x42 }
@@ -198,22 +210,18 @@ type HourTokenizer struct{}
 func (t HourTokenizer) Name() string       { return "hour" }
 func (t HourTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t HourTokenizer) Tokens(sv types.Val) ([]string, error) {
+	var l []uint64
+	tval := sv.Value.(time.Time)
+	l = append(l, uint64(tval.Year()))
+	l = append(l, uint64(tval.Month()))
+	l = append(l, uint64(tval.Day()))
+	l = append(l, uint64(tval.Hour()))
+	return []string{encodeToken(encodeUintList(l), t.Identifier())}, nil
 	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Hour())), t.Identifier())}, nil
 }
 func (t HourTokenizer) Identifier() byte { return 0x43 }
 func (t HourTokenizer) IsSortable() bool { return true }
 func (t HourTokenizer) IsLossy() bool    { return true }
-
-type UnixTokenizer struct{}
-
-func (t UnixTokenizer) Name() string       { return "unix" }
-func (t UnixTokenizer) Type() types.TypeID { return types.DateTimeID }
-func (t UnixTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Unix())), t.Identifier())}, nil
-}
-func (t UnixTokenizer) Identifier() byte { return 0x44 }
-func (t UnixTokenizer) IsSortable() bool { return true }
-func (t UnixTokenizer) IsLossy() bool    { return true }
 
 type TermTokenizer struct{}
 
@@ -267,6 +275,15 @@ func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error
 		terms[i] = encodeToken(string(token.Term), identifier)
 	}
 	return terms, nil
+}
+
+func encodeUintList(l []uint64) string {
+	buf := make([]byte, 8*len(l))
+	for i, it := range l {
+		binary.BigEndian.PutUint64(buf[i*8:(i+1)*8], it)
+	}
+	return string(buf)
+
 }
 
 func encodeInt(val int64) string {
