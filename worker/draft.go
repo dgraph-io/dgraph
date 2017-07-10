@@ -47,7 +47,7 @@ const (
 )
 
 type peerPoolEntry struct {
-	peer string
+	addr string
 	// An owning reference to a pool for this peer (or nil if self-peer).
 	poolOrNil *pool
 }
@@ -63,7 +63,7 @@ func (p *peerPool) get(id uint64) (string, bool) {
 	p.RLock()
 	defer p.RUnlock()
 	ret, ok := p.peers[id]
-	return ret.peer, ok
+	return ret.addr, ok
 }
 
 func (p *peerPool) set(id uint64, addr string, pl *pool) {
