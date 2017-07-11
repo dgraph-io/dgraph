@@ -62,6 +62,7 @@ type GraphQuery struct {
 	GroupbyAttrs []AttrLang
 	FacetVar     map[string]string
 	FacetOrder   string
+	FacetDesc    bool
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -1552,10 +1553,12 @@ L:
 	return g, nil
 }
 
-func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string, error) {
+func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string, string,
+	bool, error) {
 	facets := new(Facets)
 	facetVar := make(map[string]string)
-	var varName string
+	var varName, orderkey, orderby string
+	var orderdesc bool
 	peeks, err := it.Peek(1)
 	expectArg := true
 	if err == nil && peeks[0].Typ == itemLeftRound {
@@ -1573,15 +1576,25 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string,
 				break
 			} else if item.Typ == itemName {
 				if !expectArg {
-					return nil, nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
+					return nil, nil, nil, "", false, x.Errorf("Expected a comma but got %v", item.Val)
 				}
 				peekIt, err := it.Peek(1)
 				if err != nil {
-					return nil, nil, nil, err
+					return nil, nil, nil, "", false, err
 				}
 				if peekIt[0].Val == "as" {
 					varName = it.Item().Val
 					it.Next() // Skip the "as"
+					continue
+				} else if peekIt[0].Typ == itemColon {
+					// this is an order key
+					orderby = it.Item().Val
+					if orderby != "orderasc" && orderby != "orderdesc" {
+						return nil, nil, nil, "", false,
+							x.Errorf("Expected orderasc or orderdesc before : in @facets. Got: ", orderby)
+					}
+					orderdesc = orderby == "orderdesc"
+					it.Next()
 					continue
 				}
 				val := collectName(it, item.Val)
@@ -1589,11 +1602,18 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string,
 				if varName != "" {
 					facetVar[val] = varName
 				}
+				if orderby != "" {
+					if orderkey != "" {
+						return nil, nil, nil, "", false, x.Errorf("Only one facet key can be used for ordering.")
+					}
+					orderkey = val
+				}
+				orderby = ""
 				varName = ""
 				expectArg = false
 			} else if item.Typ == itemComma {
 				if expectArg || varName != "" {
-					return nil, nil, nil, x.Errorf("Expected Argument but got comma.")
+					return nil, nil, nil, "", false, x.Errorf("Expected Argument but got comma.")
 				}
 				expectArg = true
 				continue
@@ -1609,7 +1629,7 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string,
 				it.Prev()
 			}
 			filterTree, err := parseFilter(it)
-			return nil, filterTree, facetVar, err
+			return nil, filterTree, facetVar, "", false, err
 		}
 	}
 	if len(facets.Keys) == 0 {
@@ -1630,7 +1650,7 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string,
 		out = append(out, facets.Keys[flen-1])
 		facets.Keys = out
 	}
-	return facets, nil, facetVar, nil
+	return facets, nil, facetVar, orderkey, orderdesc, nil
 }
 
 // parseGroupby parses the groupby directive.
@@ -1852,38 +1872,43 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	item := it.Item()
 	peek, err := it.Peek(1)
 	if err == nil && item.Typ == itemName {
-		if item.Val == "orderbyfacet" {
-			facets, facetsFilter, facetVar, err := parseFacets(it)
-			if err != nil {
-				return err
-			}
-			if facetsFilter != nil || len(facetVar) != 0 {
-				return x.Errorf("Invalid use of directive orderbyfacet")
-			}
-			if facets == nil || len(facets.Keys) != 1 {
-				return x.Errorf("Expected exactly one argument in orderbyfacet")
-			}
-			curp.FacetOrder = facets.Keys[0]
-			// Add it to facets if not already present
-			if curp.Facets != nil {
-				if !curp.Facets.AllKeys {
-					for _, v := range curp.Facets.Keys {
-						if v == curp.FacetOrder {
-							return nil
-						}
-					}
-					curp.Facets.Keys = append(curp.Facets.Keys, curp.FacetOrder)
+		/*
+			if item.Val == "orderbyfacet" {
+				facets, facetsFilter, facetVar, err := parseFacets(it)
+				if err != nil {
+					return err
 				}
-			} else {
-				curp.Facets = facets
-			}
-		} else if item.Val == "facets" { // because @facets can come w/t '()'
-			facets, facetsFilter, facetVar, err := parseFacets(it)
+				if facetsFilter != nil || len(facetVar) != 0 {
+					return x.Errorf("Invalid use of directive orderbyfacet")
+				}
+				if facets == nil || len(facets.Keys) != 1 {
+					return x.Errorf("Expected exactly one argument in orderbyfacet")
+				}
+				curp.FacetOrder = facets.Keys[0]
+				// Add it to facets if not already present
+				if curp.Facets != nil {
+					if !curp.Facets.AllKeys {
+						for _, v := range curp.Facets.Keys {
+							if v == curp.FacetOrder {
+								return nil
+							}
+						}
+						curp.Facets.Keys = append(curp.Facets.Keys, curp.FacetOrder)
+					}
+				} else {
+					curp.Facets = facets
+				}
+			} else
+		*/
+		if item.Val == "facets" { // because @facets can come w/t '()'
+			facets, facetsFilter, facetVar, orderkey, orderdesc, err := parseFacets(it)
 			if err != nil {
 				return err
 			}
 			if facets != nil {
 				curp.FacetVar = facetVar
+				curp.FacetOrder = orderkey
+				curp.FacetDesc = orderdesc
 				if curp.Facets != nil {
 					return x.Errorf("Only one facets allowed")
 				}

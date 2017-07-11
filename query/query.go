@@ -120,35 +120,36 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	Alias        string
-	Count        int
-	Offset       int
-	AfterUID     uint64
-	DoCount      bool
-	GetUid       bool
-	Order        string
-	OrderDesc    bool
-	Var          string
-	NeedsVar     []gql.VarContext
-	ParentVars   map[string]varValue
-	FacetVar     map[string]string
-	uidToVal     map[uint64]types.Val
-	Langs        []string
-	Normalize    bool
-	Cascade      bool
-	From         uint64
-	To           uint64
-	Facet        *protos.Param
-	FacetOrder   string
-	ExploreDepth uint64
-	isInternal   bool   // Determines if processTask has to be called or not.
-	isListNode   bool   // This is for _predicate_ block.
-	ignoreResult bool   // Node results are ignored.
-	Expand       string // Var to use for expand.
-	isGroupBy    bool
-	groupbyAttrs []gql.AttrLang
-	uidCount     string
-	numPaths     int
+	Alias          string
+	Count          int
+	Offset         int
+	AfterUID       uint64
+	DoCount        bool
+	GetUid         bool
+	Order          string
+	OrderDesc      bool
+	FacetOrderDesc bool
+	Var            string
+	NeedsVar       []gql.VarContext
+	ParentVars     map[string]varValue
+	FacetVar       map[string]string
+	uidToVal       map[uint64]types.Val
+	Langs          []string
+	Normalize      bool
+	Cascade        bool
+	From           uint64
+	To             uint64
+	Facet          *protos.Param
+	FacetOrder     string
+	ExploreDepth   uint64
+	isInternal     bool   // Determines if processTask has to be called or not.
+	isListNode     bool   // This is for _predicate_ block.
+	ignoreResult   bool   // Node results are ignored.
+	Expand         string // Var to use for expand.
+	isGroupBy      bool
+	groupbyAttrs   []gql.AttrLang
+	uidCount       string
+	numPaths       int
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -631,19 +632,20 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		attrsSeen[key] = struct{}{}
 
 		args := params{
-			Alias:        gchild.Alias,
-			Langs:        gchild.Langs,
-			GetUid:       sg.Params.GetUid,
-			Var:          gchild.Var,
-			Normalize:    sg.Params.Normalize,
-			isInternal:   gchild.IsInternal,
-			Expand:       gchild.Expand,
-			isGroupBy:    gchild.IsGroupby,
-			groupbyAttrs: gchild.GroupbyAttrs,
-			FacetVar:     gchild.FacetVar,
-			uidCount:     gchild.UidCount,
-			Cascade:      sg.Params.Cascade,
-			FacetOrder:   gchild.FacetOrder,
+			Alias:          gchild.Alias,
+			Langs:          gchild.Langs,
+			GetUid:         sg.Params.GetUid,
+			Var:            gchild.Var,
+			Normalize:      sg.Params.Normalize,
+			isInternal:     gchild.IsInternal,
+			Expand:         gchild.Expand,
+			isGroupBy:      gchild.IsGroupby,
+			groupbyAttrs:   gchild.GroupbyAttrs,
+			FacetVar:       gchild.FacetVar,
+			uidCount:       gchild.UidCount,
+			Cascade:        sg.Params.Cascade,
+			FacetOrder:     gchild.FacetOrder,
+			FacetOrderDesc: gchild.FacetDesc,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &protos.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -1892,7 +1894,7 @@ func (sg *SubGraph) sortUsingFacet(ctx context.Context) error {
 			continue
 		}
 		// For now we only support orderasc with facets.
-		types.SortWithFacet(values, &protos.List{uids}, facetList, false)
+		types.SortWithFacet(values, &protos.List{uids}, facetList, sg.Params.FacetOrderDesc)
 		sg.uidMatrix[i].Uids = uids
 		sg.facetsMatrix[i].FacetsList = facetList
 	}
