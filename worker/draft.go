@@ -682,7 +682,8 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
 	posting.EvictGroup(n.gid)
-	x.Check2(populateShard(n.ctx, pool, n.gid))
+	_, err = populateShard(n.ctx, pool, n.gid)
+	x.Check(err)
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
