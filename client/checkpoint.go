@@ -26,9 +26,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func (d *Dgraph) Checkpoint(file string) uint64 {
-	line, _ := d.alloc.getFromKV(fmt.Sprintf("checkpoint-%s", file))
-	return line
+func (d *Dgraph) Checkpoint(file string) (uint64, error) {
+	return d.alloc.getFromKV(fmt.Sprintf("checkpoint-%s", file))
 }
 
 // Used to store checkpoints for various files.

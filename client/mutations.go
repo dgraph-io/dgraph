@@ -175,8 +175,8 @@ type Dgraph struct {
 	// To get time elapsed.
 	start time.Time
 
-	marks       *syncMarks
-	checkpoints map[string]uint64
+	// Map of filename to x.Watermark. Used for checkpointing.
+	marks *syncMarks
 }
 
 func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
@@ -192,7 +192,7 @@ func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, client
 func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientDir string) *Dgraph {
 	x.Check(os.MkdirAll(clientDir, 0700))
 	opt := badger.DefaultOptions
-	opt.SyncWrites = true
+	opt.SyncWrites = true // So that checkpoints are persisted immediately.
 	opt.MapTablesTo = table.MemoryMap
 	opt.Dir = clientDir
 	opt.ValueDir = clientDir
@@ -308,10 +308,11 @@ RETRY:
 		goto RETRY
 	}
 
-	for _, m := range req.rm {
-		d.marks.Get(m.file).Ch <- x.Mark{Index: m.line, Done: true}
+	for _, entry := range req.entries {
+		// Mark watermarks as done.
+		entry.mark.Ch <- x.Mark{Index: entry.line, Done: true}
 	}
-	req.rm = req.rm[:0]
+	req.entries = req.entries[:0]
 	req.reset()
 }
 
@@ -321,7 +322,7 @@ func (d *Dgraph) makeRequests() {
 	for n := range d.nquads {
 		if n.op == SET {
 			req.Set(n.e)
-			req.rm = append(req.rm, rdfMeta{n.e.file, n.e.line})
+			req.entries = append(req.entries, rdfEntry{n.mark, n.line})
 		} else if n.op == DEL {
 			req.Delete(n.e)
 		}
@@ -369,8 +370,20 @@ func (d *Dgraph) BatchSet(e Edge) error {
 		e:  e,
 		op: SET,
 	}
-	if len(e.file) > 0 && e.line != 0 {
-		d.SyncMarkFor(e.file).Ch <- x.Mark{Index: e.line}
+	atomic.AddUint64(&d.rdfs, 1)
+	return nil
+}
+
+func (d *Dgraph) BatchSetWithMark(e Edge, file string, line uint64) error {
+	sm := d.SyncMarkFor(file)
+	d.nquads <- nquadOp{
+		e:    e,
+		op:   SET,
+		mark: sm,
+		line: line,
+	}
+	if len(file) > 0 && line != 0 {
+		sm.Ch <- x.Mark{Index: line}
 	}
 	atomic.AddUint64(&d.rdfs, 1)
 	return nil

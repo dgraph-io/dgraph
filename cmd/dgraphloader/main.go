@@ -144,7 +144,6 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 	f, err := os.Open(file)
 	x.Check(err)
 	defer f.Close()
-
 	gr, err := gzip.NewReader(f)
 	x.Check(err)
 
@@ -152,10 +151,12 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 	bufReader := bufio.NewReader(gr)
 
 	basePath := filepath.Base(file)
-	c := dgraphClient.Checkpoint(basePath)
-	if c != 0 {
-		fmt.Printf("Found checkpoint for: %s. Skipping: %v lines.\n", basePath, c)
+	checkpoint, err := dgraphClient.Checkpoint(basePath)
+	x.Check(err)
+	if checkpoint != 0 {
+		fmt.Printf("Found checkpoint for: %s. Skipping: %v lines.\n", basePath, checkpoint)
 	}
+
 	var line uint64
 	for {
 		err = readLine(bufReader, &buf)
@@ -163,7 +164,8 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 			break
 		}
 		line++
-		if line <= c {
+		if line <= checkpoint {
+			// No need to parse. We have already sent it to server.
 			continue
 		}
 		nq, err := rdf.Parse(buf.String())
@@ -179,11 +181,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 		if len(nq.ObjectId) > 0 {
 			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
 		}
-		if err = dgraphClient.BatchSet(client.NewEdge(
-			nq,
-			basePath,
-			line,
-		)); err != nil {
+		if err = dgraphClient.BatchSetWithMark(client.NewEdge(nq), basePath, line); err != nil {
 			log.Fatal("While adding mutation to batch: ", err)
 		}
 	}

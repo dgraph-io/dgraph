@@ -37,15 +37,15 @@ const (
 	DEL
 )
 
-type rdfMeta struct {
-	file string
+type rdfEntry struct {
+	mark *x.WaterMark
 	line uint64
 }
 
 // Req wraps the protos.Request so that helper methods can be defined on it.
 type Req struct {
-	gr protos.Request
-	rm []rdfMeta
+	gr      protos.Request
+	entries []rdfEntry
 }
 
 // Request returns the graph request object which is sent to the server to perform
@@ -91,8 +91,6 @@ func (req *Req) addMutation(e Edge, op Op) {
 }
 
 func (req *Req) Set(e Edge) {
-	e.file = ""
-	e.line = 0
 	req.addMutation(e, SET)
 }
 
@@ -124,8 +122,10 @@ func (req *Req) reset() {
 }
 
 type nquadOp struct {
-	e  Edge
-	op Op
+	e    Edge
+	op   Op
+	mark *x.WaterMark
+	line uint64
 }
 
 type Node struct {
@@ -166,13 +166,10 @@ func (n *Node) Edge(pred string) Edge {
 
 type Edge struct {
 	nq protos.NQuad
-	// TODO - This should not be sent to server.
-	file string
-	line uint64
 }
 
-func NewEdge(nq protos.NQuad, file string, line uint64) Edge {
-	return Edge{nq, file, line}
+func NewEdge(nq protos.NQuad) Edge {
+	return Edge{nq}
 }
 
 func (e *Edge) ConnectTo(n Node) error {
