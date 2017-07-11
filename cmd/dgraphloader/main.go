@@ -150,6 +150,12 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 
 	var buf bytes.Buffer
 	bufReader := bufio.NewReader(gr)
+
+	basePath := filepath.Base(file)
+	c := dgraphClient.Checkpoint(basePath)
+	if c != 0 {
+		fmt.Println("Found checkpoint for: %s. Skipping: %v lines", basePath, c)
+	}
 	var line uint64
 	for {
 		err = readLine(bufReader, &buf)
@@ -157,6 +163,9 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 			break
 		}
 		line++
+		if line <= c {
+			continue
+		}
 		nq, err := rdf.Parse(buf.String())
 		if err == rdf.ErrEmpty { // special case: comment/empty line
 			buf.Reset()
@@ -172,7 +181,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 		}
 		if err = dgraphClient.BatchSet(client.NewEdge(
 			nq,
-			filepath.Base(file),
+			basePath,
 			line,
 		)); err != nil {
 			log.Fatal("While adding mutation to batch: ", err)

@@ -175,7 +175,8 @@ type Dgraph struct {
 	// To get time elapsed.
 	start time.Time
 
-	marks *syncMarks
+	marks       *syncMarks
+	checkpoints map[string]uint64
 }
 
 func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
@@ -187,20 +188,11 @@ func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, client
 	return NewClient(clients, opts, clientDir)
 }
 
-func (d *Dgraph) printDoneUntil() {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		fmt.Println(d.marks.Get("21million.rdf.gz").DoneUntil())
-	}
-}
-
 // TODO(tzdybal) - hide this function from users
 func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientDir string) *Dgraph {
 	x.Check(os.MkdirAll(clientDir, 0700))
 	opt := badger.DefaultOptions
-	opt.SyncWrites = false
+	opt.SyncWrites = true
 	opt.MapTablesTo = table.MemoryMap
 	opt.Dir = clientDir
 	opt.ValueDir = clientDir
@@ -237,7 +229,7 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		go d.printCounters()
 	}
 	go d.batchSync()
-	go d.printDoneUntil()
+	go d.storeCheckpoint()
 	return d
 }
 

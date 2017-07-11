@@ -17,10 +17,49 @@
 package client
 
 import (
+	"encoding/binary"
+	"fmt"
 	"sync"
+	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/x"
 )
+
+func (d *Dgraph) Checkpoint(file string) uint64 {
+	line, _ := d.alloc.getFromKV(fmt.Sprintf("checkpoint-%s", file))
+	return line
+}
+
+// Used to store checkpoints for various files.
+func (d *Dgraph) storeCheckpoint() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	wb := make([]*badger.Entry, 0, 5)
+	for range ticker.C {
+		m := d.marks.watermarks()
+		if m == nil {
+			return
+		}
+
+		for file, w := range m {
+			fmt.Println("Storing checkpoint for", file, w)
+			buf := make([]byte, 10)
+			n := binary.PutUvarint(buf, w)
+			wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
+			if err := d.alloc.kv.BatchSet(wb); err != nil {
+				fmt.Printf("Error while writing to disk %v\n", err)
+			}
+			for _, wbe := range wb {
+				if err := wbe.Error; err != nil {
+					fmt.Printf("Error while writing to disk %v\n", err)
+				}
+			}
+		}
+		wb = wb[:0]
+	}
+}
 
 type syncMarks struct {
 	sync.RWMutex
@@ -56,4 +95,19 @@ func (g *syncMarks) Get(file string) *x.WaterMark {
 
 func (d *Dgraph) SyncMarkFor(file string) *x.WaterMark {
 	return d.marks.Get(file)
+}
+
+func (g *syncMarks) watermarks() map[string]uint64 {
+	g.RLock()
+	defer g.RUnlock()
+
+	if len(g.m) == 0 {
+		return nil
+	}
+
+	m := make(map[string]uint64)
+	for f, w := range g.m {
+		m[f] = w.DoneUntil()
+	}
+	return m
 }

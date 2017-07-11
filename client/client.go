@@ -91,6 +91,8 @@ func (req *Req) addMutation(e Edge, op Op) {
 }
 
 func (req *Req) Set(e Edge) {
+	e.file = ""
+	e.line = 0
 	req.addMutation(e, SET)
 }
 
