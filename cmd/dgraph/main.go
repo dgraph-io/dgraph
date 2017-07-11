@@ -349,7 +349,7 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.Error, err.Error())
 	}
 	nquads := gql.WrapNQ(NewSharedQueryNQuads(rawQuery), protos.DirectedEdge_SET)
-	if mr, err = query.ToInternal(ctx, nquads, nil); err != nil {
+	if mr, err = query.ToInternal(ctx, nquads, nil, nil); err != nil {
 		fail()
 		return
 	}

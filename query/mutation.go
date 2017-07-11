@@ -178,13 +178,12 @@ func expandVariables(nq *gql.NQuad,
 
 func ToInternal(ctx context.Context,
 	nquads gql.NQuads,
-	vars map[string]varValue) (InternalMutation, error) {
+	vars map[string]varValue, newUids map[string]uint64) (InternalMutation, error) {
 	var mr InternalMutation
 	var err error
-	var newUids map[string]uint64
 
-	if newUids, err = AssignUids(ctx, nquads); err != nil {
-		return mr, err
+	if newUids == nil {
+		newUids = make(map[string]uint64)
 	}
 
 	// Wrapper for a pointer to protos.Nquad
@@ -238,25 +237,4 @@ func ToInternal(ctx context.Context,
 		}
 	}
 	return mr, nil
-}
-
-// ConvertAndApply materializes edges defined by the mutation
-// and adds them to the database.
-func ConvertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string]uint64, error) {
-	var err error
-	var mr InternalMutation
-
-	set := gql.WrapNQ(mutation.Set, protos.DirectedEdge_SET)
-	del := gql.WrapNQ(mutation.Del, protos.DirectedEdge_DEL)
-	all := set.Add(del)
-
-	if mr, err = ToInternal(ctx, all, nil); err != nil {
-		return nil, err
-	}
-	var m = protos.Mutations{Edges: mr.Edges, Schema: mutation.Schema}
-
-	if err := ApplyMutations(ctx, &m); err != nil {
-		return nil, x.Wrap(err)
-	}
-	return mr.NewUids, nil
 }
