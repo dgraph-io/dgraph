@@ -154,7 +154,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 	basePath := filepath.Base(file)
 	c := dgraphClient.Checkpoint(basePath)
 	if c != 0 {
-		fmt.Println("Found checkpoint for: %s. Skipping: %v lines", basePath, c)
+		fmt.Printf("Found checkpoint for: %s. Skipping: %v lines.\n", basePath, c)
 	}
 	var line uint64
 	for {

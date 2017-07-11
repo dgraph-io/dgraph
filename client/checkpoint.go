@@ -33,7 +33,7 @@ func (d *Dgraph) Checkpoint(file string) uint64 {
 
 // Used to store checkpoints for various files.
 func (d *Dgraph) storeCheckpoint() {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
 	wb := make([]*badger.Entry, 0, 5)
@@ -44,7 +44,6 @@ func (d *Dgraph) storeCheckpoint() {
 		}
 
 		for file, w := range m {
-			fmt.Println("Storing checkpoint for", file, w)
 			buf := make([]byte, 10)
 			n := binary.PutUvarint(buf, w)
 			wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
