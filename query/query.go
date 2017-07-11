@@ -2330,7 +2330,14 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 			return er, err
 		}
 
-		er.Allocations = newUids
+		er.Allocations = make(map[string]uint64)
+		// Strip out _: prefix from the blank node keys.
+		for k, v := range newUids {
+			if strings.HasPrefix(k, "_:") {
+				er.Allocations[k[2:]] = v
+			}
+		}
+
 		err = qr.processNquads(ctx, nquads, newUids)
 		if err != nil {
 			return er, err
@@ -2352,12 +2359,6 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 		if err = qr.processNquads(ctx, nquads, newUids); err != nil {
 			return er, err
 		}
-		/*
-			if len(allocations) > 0 {
-				return er, x.Wrapf(&InvalidRequestError{err: err},
-					"adding nodes when using variables is currently not supported")
-			}
-		*/
 	}
 
 	if qr.GqlQuery.Schema != nil {

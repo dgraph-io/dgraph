@@ -16,8 +16,7 @@ import (
 var expandEdge = flag.Bool("expand_edge", true, "Don't store predicates per node.")
 
 type InternalMutation struct {
-	Edges   []*protos.DirectedEdge
-	NewUids map[string]uint64
+	Edges []*protos.DirectedEdge
 }
 
 func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.DirectedEdge_Op) {
@@ -175,7 +174,6 @@ func expandVariables(nq *gql.NQuad,
 	}
 	return nq.ExpandVariables(newUids, subjectUids, objectUids)
 }
-
 func ToInternal(ctx context.Context,
 	nquads gql.NQuads,
 	vars map[string]varValue, newUids map[string]uint64) (InternalMutation, error) {
@@ -229,12 +227,5 @@ func ToInternal(ctx context.Context,
 		mr.AddEdge(edge, nquads.Types[i])
 	}
 
-	mr.NewUids = make(map[string]uint64)
-	// Strip out _: prefix from the blank node keys.
-	for k, v := range newUids {
-		if strings.HasPrefix(k, "_:") {
-			mr.NewUids[k[2:]] = v
-		}
-	}
 	return mr, nil
 }
