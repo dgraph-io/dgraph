@@ -41,6 +41,7 @@ var (
 	PendingProposals *expvar.Int
 	LCacheSize       *expvar.Int
 	LCacheLen        *expvar.Int
+	LCacheCapacity   *expvar.Int
 	DirtyMapSize     *expvar.Int
 	NumGoRoutines    *expvar.Int
 	MemoryInUse      *expvar.Int
@@ -70,6 +71,7 @@ func init() {
 	DirtyMapSize = expvar.NewInt("dirtyMapSize")
 	LCacheSize = expvar.NewInt("lcacheSize")
 	LCacheLen = expvar.NewInt("lcacheLen")
+	lCacheCapacity = expvar.NewInt("lCacheCapacity")
 	NumGoRoutines = expvar.NewInt("numGoRoutines")
 	MemoryInUse = expvar.NewInt("memoryInUse")
 	HeapIdle = expvar.NewInt("heapIdle")
@@ -176,6 +178,11 @@ func init() {
 		"lcacheLen": prometheus.NewDesc(
 			"lcacheLen",
 			"lcacheLen",
+			nil, nil,
+		),
+		"lCacheCapacity": prometheus.NewDesc(
+			"lCacheCapacity",
+			"lCacheCapacity",
 			nil, nil,
 		),
 		"numGoRoutines": prometheus.NewDesc(
