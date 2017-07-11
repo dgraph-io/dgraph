@@ -1965,6 +1965,8 @@ func (sg *SubGraph) sortUsingFacet(ctx context.Context) error {
 		for i := 0; i < len(sg.uidMatrix); i++ {
 			start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
 			sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+			// We also have to paginate the facetsMatrix for safety.
+			sg.facetsMatrix[i].FacetsList = sg.facetsMatrix[i].FacetsList[start:end]
 		}
 	}
 
