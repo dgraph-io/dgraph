@@ -60,7 +60,30 @@ type peerPool struct {
 	peers map[uint64]peerPoolEntry
 }
 
-// TODO: Return *pool instead, where appropriate.
+var (
+	errNoPeerPoolEntry = fmt.Errorf("no peerPool entry")
+	errNoPeerPoolPool  = fmt.Errorf("no peerPool pool, could not connect")
+)
+
+// getPool returns the non-nil pool for a peer.  This might error even if get(id)
+// succeeds, if the pool is nil.  This happens if the peer was configured so badly (it had
+// a totally bogus addr) we can't make a pool.  (A reasonable refactoring would have us
+// make a pool, one that has a nil gRPC connection.)
+//
+// You must call pools().release on the pool.
+func (p *peerPool) getPool(id uint64) (*pool, error) {
+	p.RLock()
+	defer p.RUnlock()
+	ent, ok := p.peers[id]
+	if !ok {
+		return nil, errNoPeerPoolEntry
+	}
+	if ent.poolOrNil == nil {
+		return nil, errNoPeerPoolPool
+	}
+	return ent.poolOrNil, nil
+}
+
 func (p *peerPool) get(id uint64) (string, bool) {
 	p.RLock()
 	defer p.RUnlock()
@@ -239,6 +262,12 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 // Never returns ("", true)
 func (n *node) GetPeer(pid uint64) (string, bool) {
 	return n.peers.get(pid)
+}
+
+// You must call release on the pool.  Can error for some pid's for which GetPeer
+// succeeds.
+func (n *node) GetPeerPool(pid uint64) (*pool, error) {
+	return n.peers.getPool(pid)
 }
 
 // addr must not be empty.
@@ -464,15 +493,10 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	addr, ok := n.GetPeer(to)
-	if !ok {
-		// As far as we know, there is no such peer anymore (or it's ourselves)
-		return
-	}
-	pool, err := pools().get(addr)
+	pool, err := n.GetPeerPool(to)
 	if err != nil {
-		// Because we got handed a bogus config (bad addr), we can't send messages
-		// to this peer.
+		// No such peer exists or we got handed a bogus config (bad addr), so we
+		// can't send messages to this peer.
 		return
 	}
 	defer pools().release(pool)
@@ -663,13 +687,11 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 }
 
 func (n *node) retrieveSnapshot(peerID uint64) {
-	addr, ok := n.GetPeer(peerID)
-	x.AssertTruef(ok, "Should have the address for %d", peerID)
-	pool, err := pools().get(addr)
+	pool, err := n.GetPeerPool(peerID)
 	if err != nil {
 		// err is just going to be errNoConnection
-		log.Fatalf("Cannot retrieve snapshot from peer %v, no pool for address: %v: %v\n",
-			peerID, addr, err)
+		log.Fatalf("Cannot retrieve snapshot from peer %v, no connection.  Error: %v\n",
+			peerID, err)
 	}
 	defer pools().release(pool)
 
