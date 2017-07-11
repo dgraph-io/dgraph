@@ -1954,9 +1954,9 @@ func (sg *SubGraph) sortUsingFacet(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		// For now we only support orderasc with facets.
 		types.SortWithFacet(values, &protos.List{uids}, facetList, sg.Params.FacetOrderDesc)
 		sg.uidMatrix[i].Uids = uids
+		// We need to update the facetmarix corresponding to changes to uidmatrix.
 		sg.facetsMatrix[i].FacetsList = facetList
 	}
 
