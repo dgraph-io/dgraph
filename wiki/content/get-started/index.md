@@ -9,6 +9,8 @@ This is a quick-start guide to running Dgraph, for a walk through, take the [tou
 
 Dgraph can be installed from the install scripts, or deployed in Docker.
 
+{{% notice "note" %}}These instructions will install the latest release version.  To instead install our nightly build see [these instructions]({{< relref "deploy/index.md#nightly" >}}).{{% /notice %}}
+
 ### From Install Scripts
 
 Install the binaries with

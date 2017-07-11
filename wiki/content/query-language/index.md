@@ -412,7 +412,7 @@ Index Required: An index is required for the `eq(predicate, ...)` forms (see tab
 | `int`      | `int`         |
 | `float`    | `float`       |
 | `bool`     | `bool`        |
-| `string`   | `exact`, `hash`, `term`, `fulltext` |
+| `string`   | `exact`, `hash` |
 | `dateTime` | `dateTime`    |
 
 Test for equality of a predicate or variable to a value or find in a list of values.
@@ -441,9 +441,9 @@ Query Example: Directors called Steven who have directed 1,2 or 3 movies.
     films as count(director.film)
   }
 
-  stevens(id: var(steve)) @filter(eq(var(films), [1,2,3])) {
+  stevens(func: uid(steve)) @filter(eq(val(films), [1,2,3])) {
     name@en
-    numFilms : var(films)
+    numFilms : val(films)
   }
 }
 {{< /runnable >}}
@@ -499,12 +499,12 @@ Query Example: Movies with directors with `Steven` in `name` and have directed m
     director.film {
       num_actors as count(starring)
     }
-    total as sum(var(num_actors))
+    total as sum(val(num_actors))
   }
 
-  dirs(id: var(ID)) @filter(gt(var(total), 100)) {
+  dirs(func: uid(ID)) @filter(gt(val(total), 100)) {
     name@en
-    total_actors : var(total)
+    total_actors : val(total)
   }
 }
 {{< /runnable >}}
@@ -681,13 +681,13 @@ Query Example: Directors with `name` matching term `Steven`, their UID, english 
     director.film {
       num_actors as count(starring)
     }
-    average as avg(var(num_actors))
+    average as avg(val(num_actors))
   }
 
-  films(id: var(ID)) {
+  films(func: uid(ID)) {
     director_id : _uid_
     english_name : name@en
-    average_actors : var(average)
+    average_actors : val(average)
     num_films : count(director.film)
 
     films : director.film {
@@ -739,20 +739,20 @@ Query Example: Last two films, by UID order, directed by Steven Spielberg and th
 
 
 
-Query Example: The three directors with name Steven who have directed the least actors of all directors named Steven.
+Query Example: The three directors with name Steven who have directed the most actors of all directors named Steven.
 
 {{< runnable >}}
 {
-  ID as var(func: allofterms(name@en, "Steven")) {
+  ID as var(func: allofterms(name@en, "Steven")) @filter(has(director.film)) {
     director.film {
       stars as count(starring)
     }
-    totalActors as sum(var(stars))
+    totalActors as sum(val(stars))
   }
 
-  leastStars(id: var(ID), orderasc: var(totalActors), first: 3) {
+  mostStars(func: uid(ID), orderdesc: val(totalActors), first: 3) {
     name@en
-    stars : var(totalActors)
+    stars : val(totalActors)
 
     director.film {
       name@en
@@ -880,10 +880,10 @@ Query Example: The actors of Ang Lee's "Eat Drink Man Woman" ordered by the numb
     }
   }
 
-  edmw(id: var(actors), orderdesc: var(totalRoles)) {
+  edmw(func: uid(actors), orderdesc: val(totalRoles)) {
     name@en
     name@zh
-    totalRoles : var(totalRoles)
+    totalRoles : val(totalRoles)
   }
 }
 {{< /runnable >}}
@@ -932,11 +932,11 @@ Query Example: All genres sorted alphabetically and the five movies in each genr
     }
   }
 
-  blaa(id: var(genres), orderasc: name@en) {
+  genres(func: uid(genres), orderasc: name@en) {
     name@en
-    ~genre (orderdesc: var(numGenres), first: 5) {
+    ~genre (orderdesc: val(numGenres), first: 5) {
       name@en
-    	genres : var(numGenres)
+    	genres : val(numGenres)
     }
   }
 }
@@ -1030,9 +1030,9 @@ Query Example: Angelina Jolie's movies ordered by genre.
     }
   }
 
-  films(id: var(B), orderasc: name@en) {
+  films(func: uid(B), orderasc: name@en) {
     name@en
-    ~genre @filter(var(A)) {
+    ~genre @filter(uid(A)) {
       name@en
     }
   }
@@ -1057,9 +1057,11 @@ Query variables do not affect the semantics of the query at the point of definit
 
 In general, query blocks are executed in parallel, but variables impose an evaluation order on some blocks.  Cycles induced by variable dependence are not permitted.
 
-If a variable is defined, it must be used elsewhere in the query.
+If a variable is defined, it must be used elsewhere in the query.  
 
-The syntax `id: var(A,B)` or `@filter(var(A,B))` means the union of UIDs for variables `A` and `B`.
+A query variable is used by extracting the UIDs in it with `uid(var-name)`.
+
+The syntax `func: uid(A,B)` or `@filter(uid(A,B))` means the union of UIDs for variables `A` and `B`.
 
 Query Example: The movies of Angelia Jolie and Brad Pitt where both have acted on movies in the same genre.  Note that `B` and `D` match all genres for all movies, not genres per movie.
 {{< runnable >}}
@@ -1080,9 +1082,9 @@ Query Example: The movies of Angelia Jolie and Brad Pitt where both have acted o
    }
   }
 
- films(id: var(D)) @filter(var(B)) {   # Genres from both Angelina and Brad
+ films(func: uid(D)) @filter(uid(B)) {   # Genres from both Angelina and Brad
   name@en
-   ~genre @filter(var(A, C)) {  # Movies in either A or C.
+   ~genre @filter(uid(A, C)) {  # Movies in either A or C.
      name@en
    }
  }
@@ -1103,9 +1105,11 @@ Types : `int`, `float`, `String`, `dateTime`, `id`, `default`, `geo`, `bool`
 
 Value variables store scalar values.  Value variables are a map from the UIDs of the enclosing block to the corresponding values.
 
-It therefor only makes sense to use a value variable in a context that matches the same UIDs - if used in a block matching different UIDs the value variable is undefined.
+It therefor only makes sense to use the values from a value variable in a context that matches the same UIDs - if used in a block matching different UIDs the value variable is undefined.
 
 It is an error to define a value variable but not use it elsewhere in the query.
+
+Value variables are used by extracting the values with `val(var-name)`, or by extracting the UIDs with `uid(var-name)`.
 
 [Facet]({{< relref "#facets-edge-attributes">}}) values can be stored in value variables.
 
@@ -1120,15 +1124,15 @@ Query Example: The number of movie roles played by the actors of the 80's classi
       }
     }
   }
-  totalRoles(id: var(pbActors), orderasc: var(roles)) {
+  totalRoles(func: uid(pbActors), orderasc: val(roles)) {
     name@en
-    numRoles : var(roles)
+    numRoles : val(roles)
   }
 }
 {{< /runnable >}}
 
 
-Value variables can be used in place of UID variables, in which case they are treated as the UID list from the map.
+Value variables can be used in place of UID variables by extracting the UID list from the map.
 
 Query Example: The same query as the previous example, but using value variable `roles` for matching UIDs in the `totalRoles` query block.
 
@@ -1141,9 +1145,9 @@ Query Example: The same query as the previous example, but using value variable 
       }
     }
   }
-  totalRoles(id: var(roles), orderasc: var(roles)) {
+  totalRoles(func: uid(roles), orderasc: val(roles)) {
     name@en
-    numRoles : var(roles)
+    numRoles : val(roles)
   }
 }
 {{< /runnable >}}
@@ -1156,7 +1160,7 @@ Like query variables, value variables can be used in other query blocks and in b
 For example:
 ```
 {
-  q(id: 0x01) {
+  q(func: uid(0x01)) {
     myscore as math(1)          # A
     friends {                   # B
       friends {                 # C
@@ -1177,16 +1181,16 @@ This propagation is useful, for example, in normalizing a sum across users, find
 Query Example: For each Harry Potter movie, the number of roles played by actor Warwick Davis.
 {{< runnable >}}
 {
-	num_roles(func:eq(name, "Warwick Davis")) @cascade @normalize {
+	num_roles(func: eq(name, "Warwick Davis")) @cascade @normalize {
 
     paths as math(1)  # records number of paths to each character
 
-    actor: name@en
+    actor : name@en
 
     actor.film {
       performance.film @filter(allofterms(name, "Harry Potter")) {
         film_name : name@en
-        characters : var(paths)  # how many paths (i.e. characters) reach this film
+        characters : math(paths)  # how many paths (i.e. characters) reach this film
       }
     }
   }
@@ -1244,7 +1248,7 @@ A as predicateA {
   B as predicateB {
     x as ...some value...
   }
-  min(var(x))
+  min(val(x))
 }
 ```
 Here, `A` and `B` are the lists of all UIDs that match these blocks.  Value variable `x` is a mapping from UIDs in `B` to values.  The aggregation `min(var(x))`, however, is computed for each UID in `A`.  That is, it has a semantics of: for each UID in `A`, take the slice of `x` that corresponds to `A`'s outgoing `predicateB` edges and compute the aggregation for those values.
@@ -1263,13 +1267,13 @@ Query Example:  Directors called Steven and the date of release of their first m
       ird as initial_release_date  
       # ird is a value variable mapping a film UID to its release date
     }
-    minIRD as min(var(ird))
+    minIRD as min(val(ird))
     # minIRD is a value variable mapping a director UID to their first release date
   }
 
-  byIRD(id: var(stevens), orderasc: var(minIRD)) {
+  byIRD(func: uid(stevens), orderasc: val(minIRD)) {
     name@en
-    firstRelease: var(minIRD)
+    firstRelease: val(minIRD)
   }
 }
 {{< /runnable >}}
@@ -1285,7 +1289,7 @@ Query Example: Quentin Tarantino's movies and date of release of the most recent
       name@en
       x as initial_release_date
     }
-    max(var(x))
+    max(val(x))
   }
 }
 {{< /runnable >}}
@@ -1302,8 +1306,8 @@ Query Example: Steven Spielberg's movies, with the number of recorded genres per
       name@en
       numGenres : g as count(genre)
     }
-    totalGenres : sum(var(g))
-    genresPerMovie : avg(var(g))
+    totalGenres : sum(val(g))
+    genresPerMovie : avg(val(g))
   }
 }
 {{< /runnable >}}
@@ -1324,21 +1328,21 @@ Query Example: For each actor in a Peter Jackson film, find the number of roles 
           movies as count(actor.film)  
           # number of roles for this actor
         }
-        perf_total as sum(var(movies))       
+        perf_total as sum(val(movies))       
       }
-      movie_total as sum(var(perf_total))
+      movie_total as sum(val(perf_total))
       # total roles for all actors in this movie
     }
-    gt as sum(var(movie_total))
+    gt as sum(val(movie_total))
   }
 
-  PJmovies(id: var(PJ)) {
+  PJmovies(func: uid(PJ)) {
     name@en
-  	director.film (orderdesc: var(movie_total), first: 5) {
+  	director.film (orderdesc: val(movie_total), first: 5) {
     	name@en
-    	totalRoles : var(movie_total)
+    	totalRoles : val(movie_total)
   	}
-    grandTotal : var(gt)
+    grandTotal : val(gt)
   }
 }
 {{< /runnable >}}
@@ -1377,9 +1381,9 @@ Query Example:  Form a score for each of Steven Spielberg's movies as the sum of
 		}
 	}
 
-	TopMovies(id: var(films), orderdesc: var(score), first: 5){
+	TopMovies(func: uid(films), orderdesc: val(score), first: 5){
 		name@en
-		var(score)
+		val(score)
 	}
 }
 {{< /runnable >}}
@@ -1400,10 +1404,10 @@ Query Example: Calculate a score for each Steven Spielberg movie with a conditio
     }
   }
 
-  TopMovies(id: var(films), orderdesc: var(score)) @filter(gt(var(score), 2)){
+  TopMovies(func: uid(films), orderdesc: val(score)) @filter(gt(val(score), 2)){
     name@en
-    var(score)
-    var(date)
+    val(score)
+    val(date)
   }
 }
 {{< /runnable >}}
@@ -1422,12 +1426,12 @@ Query Example: Compute a score for each Steven Spielberg movie and then aggregat
 			r as count(country)
 			score as math(p + q + r)
 		}
-		directorScore as sum(var(score))
+		directorScore as sum(val(score))
 	}
 
-	score(id: var(steven)){
+	score(func: uid(steven)){
 		name@en
-		var(directorScore)
+		val(directorScore)
 	}
 }
 {{< /runnable >}}
@@ -1447,7 +1451,7 @@ Inside a `groupby` block, only aggregations are allowed and `count` may only be 
 
 If the `groupby` is applied to a `uid` predicate, the resulting aggregations can be saved in a variable (mapping the grouped UIDs to aggregate values) and used elsewhere in the query to extract information other than the grouped or aggregated edges.
 
-Query Example: For Steven Spielberg movies, count the number of movies in each genre and for each of those genres return the genre name and the count.  The name can't be extracted in the `groupby` because it is not an aggregate, but `var(a)` can be used in its function as a UID to value map to organize the `byGenre` query by genre UID.  
+Query Example: For Steven Spielberg movies, count the number of movies in each genre and for each of those genres return the genre name and the count.  The name can't be extracted in the `groupby` because it is not an aggregate, but `uid(a)` can be used to extract the UIDs from the UID to value map and thus organize the `byGenre` query by genre UID.  
 
 
 {{< runnable >}}
@@ -1459,9 +1463,9 @@ Query Example: For Steven Spielberg movies, count the number of movies in each g
     }
   }
 
-  byGenre(id: var(a), orderdesc: var(a)) {
+  byGenre(func: uid(a), orderdesc: val(a)) {
     name@en
-    total_movies : var(a)
+    total_movies : val(a)
   }
 }
 {{< /runnable >}}
@@ -1478,9 +1482,9 @@ Query Example: Actors from Tim Burton movies and how many roles they have played
     }
   }
 
-  byActor(id: var(a), orderdesc: var(a)) {
+  byActor(func: uid(a), orderdesc: val(a)) {
     name@en
-    var(a)
+    val(a)
   }
 }
 {{< /runnable >}}
@@ -1526,7 +1530,7 @@ Query Example: Predicates saved to a variable and queried with `expand()`.
 
   director(func: eq(name, "Lost in Translation")) {
     name@.
-    expand(var(pred)) {
+    expand(val(pred)) {
       expand(_all_) {
         name@.
         _uid_
@@ -1951,7 +1955,7 @@ mutation {
 A query can also directly use UID.
 ```
 {
- class(id: 0x6bc818dc89e78754) {
+ class(func: uid(0x6bc818dc89e78754)) {
   name
   student {
    name
@@ -1975,16 +1979,16 @@ _:userA <http://schema.org/name> "FirstName LastName" .
 <https://www.themoviedb.org/person/32-robin-wright> <http://schema.org/name> "Robin Wright" .
 ```
 
-As of version 0.8 Dgraph doesn't natively support such external IDs as node identifiers.  Instead, external IDs can be stored as properties of a node with an `_xid_` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
+As of version 0.8 Dgraph doesn't natively support such external IDs as node identifiers.  Instead, external IDs can be stored as properties of a node with an `xid` edge.  For example, from the above, the predicate names are valid in Dgraph, but the node identified with `<http://schema.org/Person>` could be identified in Dgraph with a UID, say `0x123`, and an edge
 
 ```
-<0x123> <_xid_> "http://schema.org/Person" .
+<0x123> <xid> "http://schema.org/Person" .
 ```
 
 While Robin Wright might get UID `0x321` and triples
 
 ```
-<0x321> <_xid_> "https://www.themoviedb.org/person/32-robin-wright" .
+<0x321> <xid> "https://www.themoviedb.org/person/32-robin-wright" .
 <0x321> <http://schema.org/type> <0x123> .
 <0x321> <http://schema.org/name> "Robin Wright" .
 ```
@@ -1993,7 +1997,7 @@ An appropriate schema might be as follows.
 ```
 mutation {
   schema {
-    _xid_: string @index(exact) .
+    xid: string @index(exact) .
     <http://schema.org/type>: uid @reverse .
   }
 }
@@ -2003,7 +2007,7 @@ Query Example: All people.
 
 ```
 {
-  var(func: eq(_xid_, "http://schema.org/Person")) {
+  var(func: eq(xid, "http://schema.org/Person")) {
     allPeople as <~http://schema.org/type>
   }
 
@@ -2017,14 +2021,14 @@ Query Example: Robin Wright by external ID.
 
 ```
 {
-  robin(func: eq(_xid_, "https://www.themoviedb.org/person/32-robin-wright")) {
+  robin(func: eq(xid, "https://www.themoviedb.org/person/32-robin-wright")) {
     expand(_all_) { expand(_all_) }
   }
 }
 
 ```
 
-{{% notice "note" %}} `_xid_` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `_xid_`'s and add nodes and `_xid_` edges if necessary.  `dgraphloader` adds `_xid_` edges for bulk uploads with `-x`, see [Bulk Data Loading]({{< relref "deploy/index.md#bulk-data-loading" >}}).  Dgraph leaves all checking of uniqueness of such `_xid_`'s to external processes. {{% /notice %}}
+{{% notice "note" %}} `xid` edges are not added automatically in mutations.  In general it is a user's responsibility to check for existing `xid`'s and add nodes and `xid` edges if necessary.  `dgraphloader` adds `xid` edges for bulk uploads with `-x`, see [Bulk Data Loading]({{< relref "deploy/index.md#bulk-data-loading" >}}).  Dgraph leaves all checking of uniqueness of such `xid`'s to external processes. {{% /notice %}}
 
 
 
@@ -2605,14 +2609,14 @@ curl localhost:8081/query -XPOST -d $'{
     friend @facets(a as close, b as relative)
   }
 
-  friend(id: var(a)) {
+  friend(func: uid(a)) {
     name
-    var(a)
+    val(a)
   }
 
-  relative(id: var(b)) {
+  relative(func: uid(b)) {
     name
-    var(b)
+    val(b)
   }
 }' | python -m json.tool | less
 ```
@@ -2666,10 +2670,10 @@ curl localhost:8080/query -XPOST -d $'{
       average_rating as math(total_rating / num_raters)
     }
   }
-  data(id: var(total_rating)) {
+  data(func: uid(total_rating)) {
     name
-    var(total_rating)
-    var(average_rating)
+    val(total_rating)
+    val(average_rating)
   }
 
 }' | python -m json.tool | less
@@ -2710,7 +2714,7 @@ curl localhost:8080/query -XPOST -d $'{
     rated @facets(r as rating) {
       name
     }
-    avg(var(r))
+    avg(val(r))
   }
 }' | python -m json.tool | less
 ```
@@ -2762,7 +2766,7 @@ curl localhost:8080/query -XPOST -d $'{
     rated @facets(r as rating) {
       name
     }
-    avg(var(r))
+    avg(val(r))
   }
 }' | python -m json.tool | less
 ```
@@ -2846,9 +2850,9 @@ curl localhost:8081/query -XPOST -d $'{
     }
   }
 
-  data(id: var(avg_rating)) {
+  data(func: uid(avg_rating)) {
     name
-    var(avg_rating)
+    val(avg_rating)
   }
 }' | python -m json.tool | less
 ```
