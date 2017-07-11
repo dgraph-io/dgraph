@@ -71,7 +71,7 @@ func init() {
 	DirtyMapSize = expvar.NewInt("dirtyMapSize")
 	LCacheSize = expvar.NewInt("lcacheSize")
 	LCacheLen = expvar.NewInt("lcacheLen")
-	lCacheCapacity = expvar.NewInt("lCacheCapacity")
+	LCacheCapacity = expvar.NewInt("lCacheCapacity")
 	NumGoRoutines = expvar.NewInt("numGoRoutines")
 	MemoryInUse = expvar.NewInt("memoryInUse")
 	HeapIdle = expvar.NewInt("heapIdle")

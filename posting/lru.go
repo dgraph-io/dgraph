@@ -76,6 +76,7 @@ func (c *listCache) PutIfMissing(key uint64, pl *List) (res *List) {
 	if ee, ok := c.cache[key]; ok {
 		c.ll.MoveToFront(ee)
 		res = ee.Value.(*entry).pl
+		res.incr()
 		return res
 	}
 
@@ -92,6 +93,7 @@ func (c *listCache) PutIfMissing(key uint64, pl *List) (res *List) {
 	c.cache[key] = ele
 	c.removeOldest()
 
+	e.pl.incr()
 	return e.pl
 }
 
@@ -127,6 +129,7 @@ func (c *listCache) Get(key uint64) (pl *List) {
 		est := uint64(e.pl.EstimatedSize())
 		c.curSize += est - e.size
 		e.size = est
+		e.pl.incr()
 		return e.pl
 	}
 	return nil

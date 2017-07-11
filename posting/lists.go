@@ -265,7 +265,6 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	lp := lcache.Get(fp)
 	if lp != nil {
 		x.CacheHit.Add(1)
-		lp.incr()
 		return lp, lp.decr
 	}
 	x.CacheMiss.Add(1)
@@ -275,11 +274,9 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	l.water = marks.Get(group)
 
+	// We are always going to return lp to caller, whether it is l or not
+	// lcache increments the ref counter
 	lp = lcache.PutIfMissing(fp, l)
-
-	// We are always going to return lp to caller, whether it is l or not. So, let's
-	// increment its reference counter.
-	lp.incr()
 
 	if lp != l {
 		x.CacheRace.Add(1)
@@ -303,7 +300,6 @@ func Get(key []byte, gid uint32) (rlist *List, decr func()) {
 	lp := lcache.Get(fp)
 
 	if lp != nil {
-		lp.incr()
 		return lp, lp.decr
 	}
 
