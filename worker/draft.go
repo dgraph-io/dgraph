@@ -667,7 +667,9 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	x.AssertTruef(ok, "Should have the address for %d", peerID)
 	pool, err := pools().get(addr)
 	if err != nil {
-		log.Fatalf("Pool shouldn't be nil for address: %v for id: %v, error: %v\n", addr, peerID, err)
+		// err is just going to be errNoConnection
+		log.Fatalf("Cannot retrieve snapshot from peer %v, no pool for address: %v: %v\n",
+			peerID, addr, err)
 	}
 	defer pools().release(pool)
 
@@ -683,7 +685,12 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// Should invalidate/remove pl's to this group only ideally
 	posting.EvictGroup(n.gid)
 	_, err = populateShard(n.ctx, pool, n.gid)
-	x.Check(err)
+	if err != nil {
+		// TODO: We definitely don't want to just fall flat on our face if we can't
+		// retrieve a simple snapshot.
+		log.Fatalf("Cannot retrieve snapshot from peer %v, error: %v\n",
+			peerID, err)
+	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
