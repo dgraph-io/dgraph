@@ -26,6 +26,7 @@ type Options struct {
 	PeerAddr            string
 	RaftId              uint64
 	MaxPendingCount     uint64
+	ExpandEdge          bool
 }
 
 var Config Options

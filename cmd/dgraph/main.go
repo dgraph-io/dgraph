@@ -102,6 +102,7 @@ func setupConfigOpts() {
 	flag.StringVar(&worker.Config.PeerAddr, "peer", "", "IP_ADDRESS:PORT of any healthy peer.")
 	flag.Uint64Var(&worker.Config.RaftId, "idx", 1, "RAFT ID that this server will use to join RAFT groups.")
 	flag.Uint64Var(&worker.Config.MaxPendingCount, "sc", 1000, "Max number of pending entries in wal after which snapshot is taken")
+	flag.BoolVar(&worker.Config.ExpandEdge, "expand_edge", true, "Don't store predicates per node.")
 
 	flag.Float64Var(&posting.Config.MaxMemory, "max_memory_mb", 1024.0,
 		"Estimated max memory the process can take")
