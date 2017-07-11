@@ -27,8 +27,10 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/pkg/profile"
@@ -242,6 +244,16 @@ func main() {
 
 	filesList := strings.Split(*files, ",")
 	x.AssertTrue(len(filesList) > 0)
+	if *storeXid {
+		if err := dgraphClient.AddSchema(protos.SchemaUpdate{
+			Predicate: "_xid_",
+			ValueType: uint32(types.StringID),
+			Tokenizer: []string{"hash"},
+			Directive: protos.SchemaUpdate_INDEX,
+		}); err != nil {
+			log.Fatal("While adding schema to batch ", err)
+		}
+	}
 	if len(*schemaFile) > 0 {
 		processSchemaFile(*schemaFile, dgraphClient)
 	}

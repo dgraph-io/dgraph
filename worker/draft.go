@@ -40,10 +40,7 @@ import (
 )
 
 const (
-	proposalMutation   = 0
-	proposalReindex    = 1
-	proposalMembership = 2
-	ErrorNodeIDExists  = "Error Node ID already exists in the cluster"
+	ErrorNodeIDExists = "Error Node ID already exists in the cluster"
 )
 
 // peerPool stores the peers per node and the addresses corresponding to them.
@@ -562,9 +559,7 @@ func (n *node) processApplyCh() {
 		// schema here without any locking
 		proposal := &protos.Proposal{}
 		if err := proposal.Unmarshal(e.Data); err != nil {
-			fmt.Printf("Unable to unmarshal proposal: %v %q\n", e.Data)
-			log.Fatal("Remove me later")
-			// continue
+			log.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
 
 		if proposal.Mutations != nil {
