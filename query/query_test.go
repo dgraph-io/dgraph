@@ -3561,7 +3561,7 @@ func TestToFastJSONFilteLtAlias(t *testing.T) {
 		js)
 }
 
-func TestToFastJSONFilterge(t *testing.T) {
+func TestToFastJSONFilterge1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
@@ -3569,6 +3569,26 @@ func TestToFastJSONFilterge(t *testing.T) {
 				name
 				gender
 				friend @filter(ge(dob, "1909-05-05")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestToFastJSONFilterge2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(0x01)) {
+				name
+				gender
+				friend @filter(ge(dob_day, "1909-05-05")) {
 					name
 				}
 			}
