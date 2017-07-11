@@ -111,3 +111,7 @@ func (h *Histogram) RecordValue(v int64) {
 		_ = h.cumulative.RecordValue(h.maxVal)
 	}
 }
+
+func (h *Histogram) Stats() {
+
+}
