@@ -482,11 +482,11 @@ func Parse(r Request) (res Result, rerr error) {
 		return res, err
 	}
 
-	l := lex.Lexer{Input: query}
-	l.Run(lexTopLevel)
+	lexer := lex.Lexer{Input: query}
+	lexer.Run(lexTopLevel)
 
 	var qu *GraphQuery
-	it := l.NewIterator()
+	it := lexer.NewIterator()
 	fmap := make(fragmentMap)
 	for it.Next() {
 		item := it.Item()
