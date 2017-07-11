@@ -165,8 +165,9 @@ func (t DateTimeTokenizer) Name() string       { return "datetime" }
 func (t DateTimeTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
 	tval := sv.Value.(time.Time)
-	l := []uint16{uint16(tval.Year())}
-	return []string{encodeToken(encodeUintList(l), t.Identifier())}, nil
+	buf := make([]byte, 2)
+	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
+	return []string{encodeToken(string(buf), t.Identifier())}, nil
 }
 func (t DateTimeTokenizer) Identifier() byte { return 0x4 }
 func (t DateTimeTokenizer) IsSortable() bool { return true }
@@ -177,11 +178,11 @@ type MonthTokenizer struct{}
 func (t MonthTokenizer) Name() string       { return "month" }
 func (t MonthTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t MonthTokenizer) Tokens(sv types.Val) ([]string, error) {
-	var l []uint16
 	tval := sv.Value.(time.Time)
-	l = append(l, uint16(tval.Year()))
-	l = append(l, uint16(tval.Month()))
-	return []string{encodeToken(encodeUintList(l), t.Identifier())}, nil
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
+	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
+	return []string{encodeToken(string(buf), t.Identifier())}, nil
 }
 func (t MonthTokenizer) Identifier() byte { return 0x41 }
 func (t MonthTokenizer) IsSortable() bool { return true }
@@ -192,12 +193,12 @@ type DayTokenizer struct{}
 func (t DayTokenizer) Name() string       { return "day" }
 func (t DayTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t DayTokenizer) Tokens(sv types.Val) ([]string, error) {
-	var l []uint16
 	tval := sv.Value.(time.Time)
-	l = append(l, uint16(tval.Year()))
-	l = append(l, uint16(tval.Month()))
-	l = append(l, uint16(tval.Day()))
-	return []string{encodeToken(encodeUintList(l), t.Identifier())}, nil
+	buf := make([]byte, 6)
+	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
+	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
+	binary.BigEndian.PutUint16(buf[4:6], uint16(tval.Day()))
+	return []string{encodeToken(string(buf), t.Identifier())}, nil
 }
 func (t DayTokenizer) Identifier() byte { return 0x42 }
 func (t DayTokenizer) IsSortable() bool { return true }
@@ -208,13 +209,13 @@ type HourTokenizer struct{}
 func (t HourTokenizer) Name() string       { return "hour" }
 func (t HourTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t HourTokenizer) Tokens(sv types.Val) ([]string, error) {
-	var l []uint16
 	tval := sv.Value.(time.Time)
-	l = append(l, uint16(tval.Year()))
-	l = append(l, uint16(tval.Month()))
-	l = append(l, uint16(tval.Day()))
-	l = append(l, uint16(tval.Hour()))
-	return []string{encodeToken(encodeUintList(l), t.Identifier())}, nil
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
+	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
+	binary.BigEndian.PutUint16(buf[4:6], uint16(tval.Day()))
+	binary.BigEndian.PutUint16(buf[6:8], uint16(tval.Hour()))
+	return []string{encodeToken(string(buf), t.Identifier())}, nil
 }
 func (t HourTokenizer) Identifier() byte { return 0x43 }
 func (t HourTokenizer) IsSortable() bool { return true }
