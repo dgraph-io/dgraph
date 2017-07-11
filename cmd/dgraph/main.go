@@ -48,11 +48,9 @@ import (
 	"github.com/cockroachdb/cmux"
 	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -607,7 +605,6 @@ func setupServer(che chan error) {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-
 	setupConfigOpts(&dgraph.Config)
 	x.Init() // flag.Parse is called here
 
@@ -621,9 +618,6 @@ func main() {
 			return true, true
 		}
 	}
-
-	x.Check(group.ParseGroupConfig(gconf))
-	schema.Init(dgraph.State.PStore)
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

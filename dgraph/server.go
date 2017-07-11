@@ -136,6 +136,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	}
 	res, err := ParseQueryAndMutation(ctx, gql.Request{
 		Str:       req.Query,
+		Mutation:  req.Mutation,
 		Variables: req.Vars,
 		Http:      false,
 	})
@@ -155,9 +156,6 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		return resp, x.Errorf("Multiple schema blocks found")
 	}
 	// Schema Block and Mutation can be part of query string or request
-	if res.Mutation == nil && req.Mutation != nil {
-		res.Mutation = &gql.Mutation{Set: req.Mutation.Set, Del: req.Mutation.Del}
-	}
 	if res.Schema == nil {
 		res.Schema = req.Schema
 	}
