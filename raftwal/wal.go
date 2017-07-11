@@ -79,6 +79,7 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	if err != nil {
 		return x.Wrapf(err, "wal.Store: While marshal snapshot")
 	}
+	wb = badger.EntriesSet(wb, w.snapshotKey(gid), data)
 
 	// Delete all entries before this snapshot to save disk space.
 	start := w.entryKey(gid, 0, 0)
@@ -97,7 +98,6 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 		wb = badger.EntriesDelete(wb, newk)
 	}
 
-	wb = badger.EntriesSet(wb, w.snapshotKey(gid), data)
 	fmt.Printf("Writing snapshot to WAL: %+v\n", s)
 	if err := w.wals.BatchSet(wb); err != nil {
 		return err
