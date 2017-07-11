@@ -1884,6 +1884,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return gq, err
 			}
 			gq.Func = gen
+			if gq.Func.Name == "var" {
+				return nil, x.Errorf("func: var() not allowed at root. Use id: var() instead")
+			}
 			gq.NeedsVar = append(gq.NeedsVar, gen.NeedsVar...)
 		} else {
 			var val string
