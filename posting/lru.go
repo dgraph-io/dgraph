@@ -64,6 +64,10 @@ func newListCache(maxSize uint64) *listCache {
 func (c *listCache) UpdateMaxSize() {
 	c.Lock()
 	defer c.Unlock()
+	if c.curSize < (50 << 20) {
+		c.MaxSize = 50 << 20
+		return
+	}
 	c.MaxSize = c.curSize
 }
 
