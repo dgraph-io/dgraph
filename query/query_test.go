@@ -6544,6 +6544,8 @@ func TestMain(m *testing.M) {
 	defer ps.Close()
 	x.Check(err)
 
+	worker.Config.GroupIds = "0,1"
+	worker.Config.RaftId = 1
 	group.ParseGroupConfig("")
 	schema.Init(ps)
 	posting.Init(ps)

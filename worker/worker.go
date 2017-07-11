@@ -20,7 +20,6 @@
 package worker
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -36,29 +35,15 @@ import (
 	"google.golang.org/grpc"
 )
 
-var (
-	baseWorkerPort = flag.Int("workerport", 12345,
-		"Port used by worker for internal communication.")
-	exportPath = flag.String("export", "export",
-		"Folder in which to store exports.")
-	numPendingProposals = flag.Int("pending_proposals", 2000,
-		"Number of pending mutation proposals. Useful for rate limiting.")
-	Tracing          = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
-	pstore           *badger.KV
-	workerServer     *grpc.Server
-	leaseGid         uint32
-	pendingProposals chan struct{}
-)
-
 func workerPort() int {
-	return *x.PortOffset + *baseWorkerPort
+	return *x.PortOffset + Config.BaseWorkerPort
 }
 
 func Init(ps *badger.KV) {
 	pstore = ps
 	// needs to be initialized after group config
 	leaseGid = group.BelongsTo("_lease_")
-	pendingProposals = make(chan struct{}, *numPendingProposals)
+	pendingProposals = make(chan struct{}, Config.NumPendingProposals)
 	workerServer = grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize))

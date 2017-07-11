@@ -108,7 +108,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		return resp, ctx.Err()
 	}
 
-	if rand.Float64() < *worker.Tracing {
+	if rand.Float64() < worker.Config.Tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		tr.SetMaxEvents(1000)
 		defer tr.Finish()

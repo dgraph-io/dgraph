@@ -87,6 +87,20 @@ func setupConfigOpts(config *dgraph.Options) {
 	flag.IntVar(&config.NumPending, "pending", 1000,
 		"Number of pending queries. Useful for rate limiting.")
 
+	flag.IntVar(&worker.Config.BaseWorkerPort, "workerport", 12345,
+		"Port used by worker for internal communication.")
+	flag.StringVar(&worker.Config.ExportPath, "export", "export",
+		"Folder in which to store exports.")
+	flag.IntVar(&worker.Config.NumPendingProposals, "pending_proposals", 2000,
+		"Number of pending mutation proposals. Useful for rate limiting.")
+	flag.Float64Var(&worker.Config.Tracing, "trace", 0.0, "The ratio of queries to trace.")
+	flag.StringVar(&worker.Config.GroupIds, "groups", "0,1", "RAFT groups handled by this server.")
+	flag.StringVar(&worker.Config.MyAddr, "my", "",
+		"addr:port of this server, so other Dgraph servers can talk to this.")
+	flag.StringVar(&worker.Config.PeerAddr, "peer", "", "IP_ADDRESS:PORT of any healthy peer.")
+	flag.Uint64Var(&worker.Config.RaftId, "idx", 1, "RAFT ID that this server will use to join RAFT groups.")
+	flag.Uint64Var(&worker.Config.MaxPendingCount, "sc", 1000, "Max number of pending entries in wal after which snapshot is taken")
+
 	flag.StringVar(&gconf, "group_conf", "", "group configuration file")
 	flag.IntVar(&baseHttpPort, "port", 8080, "Port to run HTTP service on.")
 	flag.IntVar(&baseGrpcPort, "grpc_port", 9080, "Port to run gRPC service on.")
@@ -187,7 +201,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
 	ctx = context.WithValue(ctx, "mutation_allowed", !dgraph.Config.Nomutations)
 
-	if rand.Float64() < *worker.Tracing {
+	if rand.Float64() < worker.Config.Tracing {
 		tr := trace.New("Dgraph", "Query")
 		tr.SetMaxEvents(1000)
 		defer tr.Finish()

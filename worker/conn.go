@@ -75,7 +75,7 @@ func (p *poolsi) get(addr string) *pool {
 }
 
 func (p *poolsi) connect(addr string) {
-	if addr == *myAddr {
+	if addr == Config.MyAddr {
 		return
 	}
 	p.RLock()
