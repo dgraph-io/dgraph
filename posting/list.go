@@ -29,6 +29,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/trace"
@@ -73,7 +74,7 @@ type List struct {
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount      int32
 	deleteAll     int32
-	estimatedSize uint64
+	estimatedSize uint32
 
 	water   *x.WaterMark
 	pending []uint64
@@ -101,6 +102,17 @@ func (l *List) decr() {
 		postingListPool.Put(l.plist)
 	}
 	listPool.Put(l)
+}
+
+// calculateSize would give you the size estimate. Does not consider elements in mutation layer.
+// Expensive, so don't run it carefully.
+func (l *List) calculateSize() uint32 {
+	sz := int(unsafe.Sizeof(l))
+	sz += l.plist.Size()
+	sz += cap(l.key)
+	sz += cap(l.mlayer) * 8
+	sz += cap(l.pending) * 8
+	return uint32(sz)
 }
 
 var postingPool = sync.Pool{
@@ -170,14 +182,14 @@ func (it *PIterator) Posting() *protos.Posting {
 	i := it.uidx * 8
 	uid := binary.BigEndian.Uint64(it.pl.Uids[i : i+8])
 
-	if it.pidx < it.plen {
-		for it.pl.Postings[it.pidx].Uid < uid {
-			it.pidx++
+	for it.pidx < it.plen {
+		if it.pl.Postings[it.pidx].Uid > uid {
+			break
 		}
-
-		if it.pidx < it.plen && it.pl.Postings[it.pidx].Uid == uid {
+		if it.pl.Postings[it.pidx].Uid == uid {
 			return it.pl.Postings[it.pidx]
 		}
+		it.pidx++
 	}
 	it.uidPosting.Uid = uid
 	return it.uidPosting
@@ -206,13 +218,13 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	}
 	val := item.Value()
 	x.BytesRead.Add(int64(len(val)))
-	l.estimatedSize = uint64(len(val))
 
 	// TODO: See if we can avoid Unmarshal here.
 	l.plist = postingListPool.Get().(*protos.PostingList)
 	if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 	}
+	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 	return l
 }
 
@@ -297,8 +309,8 @@ func newPosting(t *protos.DirectedEdge) *protos.Posting {
 
 }
 
-func (l *List) EstimatedSize() uint64 {
-	return atomic.LoadUint64(&l.estimatedSize)
+func (l *List) EstimatedSize() uint32 {
+	return atomic.LoadUint32(&l.estimatedSize)
 }
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
@@ -478,7 +490,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		return false, err
 	}
 	mpost := newPosting(t)
-	atomic.AddUint64(&l.estimatedSize, uint64(mpost.Size()))
+	atomic.AddUint32(&l.estimatedSize, uint32(mpost.Size()+16 /* various overhead */))
 
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
@@ -701,7 +713,8 @@ func (l *List) SyncIfDirty() (committed bool, err error) {
 		postingListPool.Put(l.plist)
 	}
 	l.plist = final
-	atomic.StoreUint64(&l.estimatedSize, uint64(len(data)))
+	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
+
 	for {
 		pLen := atomic.LoadInt64(&x.MaxPlLen)
 		if int64(len(data)) <= pLen {

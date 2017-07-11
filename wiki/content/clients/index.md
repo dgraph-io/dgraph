@@ -81,7 +81,7 @@ func main() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	dgraphClient := client.NewDgraphClient(conn, client.DefaultOptions)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions)
 
 	req := client.Req{}
 	person1, err := dgraphClient.NodeBlank("person1")
@@ -93,44 +93,37 @@ func main() {
 	x.Check(err)
 	e.AddFacet("since", "2006-01-02T15:04:05")
 	e.AddFacet("alias", `"Steve"`)
-	err = req.Set(e)
-	x.Check(err)
+	req.Set(e)
 
 	e = person1.Edge("birthday")
 	err = e.SetValueDatetime(time.Date(1991, 2, 1, 0, 0, 0, 0, time.UTC))
 	x.Check(err)
-	err = req.Set(e)
-	x.Check(err)
+	req.Set(e)
 
 	e = person1.Edge("loc")
 	err = e.SetValueGeoJson(`{"type":"Point","coordinates":[-122.2207184,37.72129059]}`)
 	x.Check(err)
-	err = req.Set(e)
-	x.Check(err)
+	req.Set(e)
 
 	e = person1.Edge("salary")
 	err = e.SetValueFloat(13333.6161)
 	x.Check(err)
-	err = req.Set(e)
-	x.Check(err)
+	req.Set(e)
 
 	e = person1.Edge("age")
 	err = e.SetValueInt(25)
 	x.Check(err)
-	err = req.Set(e)
-	x.Check(err)
+	req.Set(e)
 
 	e = person1.Edge("married")
 	err = e.SetValueBool(true)
 	x.Check(err)
-	err = req.Set(e)
-	x.Check(err)
+	req.Set(e)
 
 	e = person1.Edge("bytedob")
 	err = e.SetValueBytes([]byte("01-02-1991"))
 	x.Check(err)
-	err = req.Set(e)
-	x.Check(err)
+	req.Set(e)
 
 	person2, err := dgraphClient.NodeBlank("person2")
 	x.Check(err)
@@ -138,15 +131,13 @@ func main() {
 	e = person2.Edge("name")
 	err = e.SetValueString("William Jones")
 	x.Check(err)
-	err = req.Set(e)
-	x.Check(err)
+	req.Set(e)
 
 	e = person1.Edge("friend")
 	err = e.ConnectTo(person2)
 	x.Check(err)
 	e.AddFacet("close", "true")
-	err = req.Set(e)
-	x.Check(err)
+	req.Set(e)
 
 	resp, err := dgraphClient.Run(context.Background(), &req)
 	x.Check(err)
@@ -182,8 +173,7 @@ func main() {
 	e = person1.Edge("friend")
 	err = e.ConnectTo(person2)
 	x.Check(err)
-	err = req.Delete(e)
-	x.Check(err)
+	req.Delete(e)
 	resp, err = dgraphClient.Run(context.Background(), &req)
 	x.Check(err)
 }

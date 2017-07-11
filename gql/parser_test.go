@@ -3693,3 +3693,18 @@ func TestIdErr(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 }
+
+func TestFilterVarErr(t *testing.T) {
+	query := `
+	{
+		x as m(func: allofterms(name, "Pawan Rawal"))
+	}
+	{
+		me(func: uid(1, 3 , 5, 7)) @filter(var(x)) {
+			name
+		}
+	}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}

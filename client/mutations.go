@@ -18,10 +18,12 @@ package client
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,6 +32,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 
+	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -39,6 +43,7 @@ var (
 	ErrValue       = errors.New("Edge already has a value.")
 	ErrEmptyXid    = errors.New("Empty XID node.")
 	ErrInvalidType = errors.New("Invalid value type")
+	ErrEmptyVar    = errors.New("Empty variable name.")
 	emptyEdge      Edge
 )
 
@@ -59,8 +64,10 @@ type allocator struct {
 
 	dc protos.DgraphClient
 
-	// TODO: Evict older entries
-	ids map[string]uint64
+	kv  *badger.KV
+	ids *Cache
+
+	syncCh chan entry
 
 	startId uint64
 	endId   uint64
@@ -91,27 +98,50 @@ func (a *allocator) fetchOne() (uint64, error) {
 	return uid, nil
 }
 
-func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool,
-	err error) {
-	a.RLock()
-	uid = a.ids[id]
-	a.RUnlock()
-	if uid > 0 {
-		return
+func (a *allocator) getFromKV(id string) (uint64, error) {
+	var item badger.KVItem
+	if err := a.kv.Get([]byte(id), &item); err != nil {
+		return 0, err
 	}
+	val := item.Value()
+	if len(val) > 0 {
+		uid, n := binary.Uvarint(val)
+		if n <= 0 {
+			return 0, fmt.Errorf("Unable to parse val %q to uint64 for %q", val, id)
+		}
+		return uid, nil
+	}
+	return 0, nil
+}
 
+func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool, err error) {
 	a.Lock()
 	defer a.Unlock()
-	uid = a.ids[id]
+	uid, _ = a.ids.Get(id)
 	if uid > 0 {
 		return
 	}
 
-	uid, err = a.fetchOne()
+	// check in kv
+	// get in outside lock and do put if missing ???
+	uid, err = a.getFromKV(id)
 	if err != nil {
 		return
 	}
-	a.ids[id] = uid
+	// if not found in kv
+	if uid == 0 {
+		// assign one
+		uid, err = a.fetchOne()
+		if err != nil {
+			return
+		}
+		// Entry would be comitted to disc by the time it's evicted
+		// TODO: Better to delete after it's persisted, can cause race
+		// may be persist it during eviction and delete after it's synced
+		// to disk
+		a.syncCh <- entry{key: id, value: uid}
+	}
+	a.ids.Add(id, uid)
 	isNew = true
 	err = nil
 	return
@@ -146,21 +176,34 @@ type Dgraph struct {
 	start time.Time
 }
 
-func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions) *Dgraph {
+func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
 	var clients []protos.DgraphClient
 	for _, conn := range conns {
 		client := protos.NewDgraphClient(conn)
 		clients = append(clients, client)
 	}
-	return NewClient(clients, opts)
+	return NewClient(clients, opts, clientDir)
 }
 
 // TODO(tzdybal) - hide this function from users
-func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions) *Dgraph {
+func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientDir string) *Dgraph {
+	x.Check(os.MkdirAll(clientDir, 0700))
+	opt := badger.DefaultOptions
+	opt.SyncWrites = false
+	opt.MapTablesTo = table.MemoryMap
+	opt.Dir = clientDir
+	opt.ValueDir = clientDir
+
+	kv, err := badger.NewKV(&opt)
+	x.Checkf(err, "Error while creating badger KV posting store")
+
 	alloc := &allocator{
-		dc:  clients[0],
-		ids: make(map[string]uint64),
+		dc:     clients[0],
+		ids:    NewCache(100000),
+		kv:     kv,
+		syncCh: make(chan entry, 10000),
 	}
+
 	d := &Dgraph{
 		opts:   opts,
 		dc:     clients,
@@ -181,7 +224,50 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions) *Dgraph
 	if opts.PrintCounters {
 		go d.printCounters()
 	}
+	go d.batchSync()
 	return d
+}
+
+func (d *Dgraph) batchSync() {
+	var entries []entry
+	var loop uint64
+	wb := make([]*badger.Entry, 0, 1000)
+
+	for {
+		ent := <-d.alloc.syncCh
+	slurpLoop:
+		for {
+			entries = append(entries, ent)
+			if len(entries) == 1000 {
+				// Avoid making infinite batch, push back against syncCh.
+				break
+			}
+			select {
+			case ent = <-d.alloc.syncCh:
+			default:
+				break slurpLoop
+			}
+		}
+		loop++
+		//fmt.Printf("Writing batch of size: %v\n", len(entries))
+
+		for _, e := range entries {
+			// Atmost 10 bytes are needed for uvarint encoding
+			buf := make([]byte, 10)
+			n := binary.PutUvarint(buf[:], e.value)
+			wb = badger.EntriesSet(wb, []byte(e.key), buf[:n])
+		}
+		if err := d.alloc.kv.BatchSet(wb); err != nil {
+			fmt.Printf("Error while writing to disc %v\n", err)
+		}
+		for _, wbe := range wb {
+			if err := wbe.Error; err != nil {
+				fmt.Printf("Error while writing to disc %v\n", err)
+			}
+		}
+		wb = wb[:0]
+		entries = entries[:0]
+	}
 }
 
 func (d *Dgraph) printCounters() {
@@ -333,7 +419,7 @@ You can get the latest version from https://docs.dgraph.io
 }
 
 func (d *Dgraph) NodeUid(uid uint64) Node {
-	return Node(uid)
+	return Node{uid: uid}
 }
 
 func (d *Dgraph) NodeBlank(varname string) (Node, error) {
@@ -342,30 +428,38 @@ func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 		defer d.alloc.Unlock()
 		uid, err := d.alloc.fetchOne()
 		if err != nil {
-			return 0, err
+			return Node{}, err
 		}
-		return Node(uid), nil
+		return Node{uid: uid}, nil
 	}
 	uid, _, err := d.alloc.assignOrGet("_:" + varname)
 	if err != nil {
-		return 0, err
+		return Node{}, err
 	}
-	return Node(uid), nil
+	return Node{uid: uid}, nil
 }
 
 func (d *Dgraph) NodeXid(xid string, storeXid bool) (Node, error) {
 	if len(xid) == 0 {
-		return 0, ErrEmptyXid
+		return Node{}, ErrEmptyXid
 	}
 	uid, isNew, err := d.alloc.assignOrGet(xid)
 	if err != nil {
-		return 0, err
+		return Node{}, err
 	}
-	n := Node(uid)
+	n := Node{uid: uid}
 	if storeXid && isNew {
 		e := n.Edge("_xid_")
 		x.Check(e.SetValueString(xid))
 		d.BatchSet(e)
 	}
 	return n, nil
+}
+
+func (d *Dgraph) NodeUidVar(name string) (Node, error) {
+	if len(name) == 0 {
+		return Node{}, ErrEmptyVar
+	}
+
+	return Node{varName: name}, nil
 }

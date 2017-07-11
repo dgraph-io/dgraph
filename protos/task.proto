@@ -121,16 +121,10 @@ message Mutations {
 	repeated SchemaUpdate schema = 3;
 }
 
-message RebuildIndexMessage {
-	uint32 group_id = 1;
-	string attr = 2;  // For simplicity, just do one attribute per request.
-}
-
 message Proposal {
 	uint32 id = 1;
 	Mutations mutations = 2;
 	Membership membership = 3;
-	RebuildIndexMessage rebuild_index = 4;
 }
 
 message KV {

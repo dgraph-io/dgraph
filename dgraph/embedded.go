@@ -22,10 +22,10 @@ import (
 )
 
 // TODO(tzdybal) - server configuration
-func NewEmbeddedDgraphClient(opts client.BatchMutationOptions) *client.Dgraph {
+func NewEmbeddedDgraphClient(opts client.BatchMutationOptions, clientDir string) *client.Dgraph {
 	// TODO(tzdybal) - create and setup embedded server backend
 	// TODO(tzdybal) - force exactly one group. And don't open up Grpc conns for worker.
 	embedded := &inmemoryClient{&Server{}}
 
-	return client.NewClient([]protos.DgraphClient{embedded}, opts)
+	return client.NewClient([]protos.DgraphClient{embedded}, opts, clientDir)
 }

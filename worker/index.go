@@ -23,9 +23,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -94,40 +92,6 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 	return nil
 }
 
-// rebuildIndex is called by node.Run to rebuild index.
-func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
-	x.AssertTrue(proposalData[0] == proposalReindex)
-	var proposal protos.Proposal
-	x.Check(proposal.Unmarshal(proposalData[1:]))
-	x.AssertTrue(proposal.RebuildIndex != nil)
-
-	gid := n.gid
-	x.AssertTrue(gid == proposal.RebuildIndex.GroupId)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Processing proposal to rebuild index: %v", proposal.RebuildIndex)
-	}
-
-	// Get index of last committed.
-	lastIndex, err := n.store.LastIndex()
-	if err != nil {
-		return err
-	}
-	if err := n.syncAllMarks(ctx, lastIndex); err != nil {
-		n.props.Done(proposal.Id, err)
-		return err
-	}
-
-	// Do actual index work.
-	attr := proposal.RebuildIndex.Attr
-	x.AssertTrue(group.BelongsTo(attr) == gid)
-	if err := posting.RebuildIndex(ctx, attr); err != nil {
-		n.props.Done(proposal.Id, err)
-		return err
-	}
-	n.props.Done(proposal.Id, nil)
-	return nil
-}
-
 func (n *node) syncAllMarks(ctx context.Context, lastIndex uint64) error {
 	n.waitForAppliedMark(ctx, lastIndex)
 	waitForSyncMark(ctx, n.gid, lastIndex)
@@ -172,72 +136,4 @@ func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-}
-
-// RebuildIndex request is used to trigger rebuilding of index for the requested
-// attribute. Payload is not really used.
-func (w *grpcWorker) RebuildIndex(ctx context.Context, req *protos.RebuildIndexMessage) (*protos.Payload, error) {
-	if ctx.Err() != nil {
-		return &protos.Payload{}, ctx.Err()
-	}
-	if !schema.State().IsIndexed(req.Attr) {
-		return &protos.Payload{}, x.Errorf("Attribute %s is not indexed", req.Attr)
-	}
-	if err := proposeRebuildIndex(ctx, req); err != nil {
-		return &protos.Payload{}, err
-	}
-	return &protos.Payload{}, nil
-}
-
-func proposeRebuildIndex(ctx context.Context, ri *protos.RebuildIndexMessage) error {
-	gid := ri.GroupId
-	n := groups().Node(gid)
-	proposal := &protos.Proposal{RebuildIndex: ri}
-	if err := n.ProposeAndWait(ctx, proposal); err != nil {
-		return err
-	}
-	return nil
-}
-
-// RebuildIndexOverNetwork rebuilds index for attr. If it serves the attr, then
-// it will rebuild index. Otherwise, it will send a request to a server that
-// serves the attr.
-func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
-	gid := group.BelongsTo(attr)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("RebuildIndex attr: %v groupId: %v", attr, gid)
-	}
-
-	if groups().ServesGroup(gid) && !schema.State().IsIndexed(attr) {
-		return x.Errorf("Attribute %s is not indexed", attr)
-	} else if groups().ServesGroup(gid) {
-		// No need for a network call, as this should be run from within this instance.
-		return proposeRebuildIndex(ctx, &protos.RebuildIndexMessage{GroupId: gid, Attr: attr})
-	}
-
-	// Send this over the network.
-	addr := groups().AnyServer(gid)
-	pl := pools().get(addr)
-
-	conn, err := pl.Get()
-	if err != nil {
-		return x.Wrapf(err, "RebuildIndexOverNetwork: while retrieving connection.")
-	}
-	defer pl.Put(conn)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Sending request to %v", addr)
-	}
-
-	c := protos.NewWorkerClient(conn)
-	_, err = c.RebuildIndex(ctx, &protos.RebuildIndexMessage{Attr: attr, GroupId: gid})
-	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while calling Worker.RebuildIndex: %+v", err)
-		}
-		return err
-	}
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("RebuildIndex reply from server. Addr: %v Attr: %v", addr, attr)
-	}
-	return nil
 }
