@@ -6435,7 +6435,7 @@ func checkSchemaNodes(t *testing.T, expected []*protos.SchemaNode, actual []*pro
 		return actual[i].Predicate >= actual[j].Predicate
 	})
 	require.True(t, reflect.DeepEqual(expected, actual),
-		fmt.Sprintf("Expected: %+v, Received: %+v \n", expected, actual))
+		fmt.Sprintf("Expected: %+v \nReceived: %+v \n", expected, actual))
 }
 
 func TestSchemaBlock1(t *testing.T) {
@@ -6459,7 +6459,9 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
 		{Predicate: "noindex_name", Type: "string"},
 		{Predicate: "lossy", Type: "string"},
-		{Predicate: "school", Type: "uid"}}
+		{Predicate: "school", Type: "uid"},
+		{Predicate: "dob_day", Type: "datetime"},
+	}
 	checkSchemaNodes(t, expected, actual)
 }
 
