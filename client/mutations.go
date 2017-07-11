@@ -174,6 +174,8 @@ type Dgraph struct {
 	mutations uint64
 	// To get time elapsed.
 	start time.Time
+
+	marks *syncMarks
 }
 
 func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
@@ -183,6 +185,15 @@ func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, client
 		clients = append(clients, client)
 	}
 	return NewClient(clients, opts, clientDir)
+}
+
+func (d *Dgraph) printDoneUntil() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		fmt.Println(d.marks.Get("21million.rdf.gz").DoneUntil())
+	}
 }
 
 // TODO(tzdybal) - hide this function from users
@@ -211,6 +222,7 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		nquads: make(chan nquadOp, opts.Pending*opts.Size),
 		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
 		alloc:  alloc,
+		marks:  new(syncMarks),
 	}
 
 	for i := 0; i < opts.Pending; i++ {
@@ -225,6 +237,7 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		go d.printCounters()
 	}
 	go d.batchSync()
+	go d.printDoneUntil()
 	return d
 }
 
@@ -286,8 +299,8 @@ func (d *Dgraph) printCounters() {
 
 func (d *Dgraph) request(req *Req) {
 	counter := atomic.AddUint64(&d.mutations, 1)
-RETRY:
 	factor := time.Second
+RETRY:
 	_, err := d.dc[rand.Intn(len(d.dc))].Run(context.Background(), &req.gr)
 	if err != nil {
 		errString := err.Error()
@@ -302,6 +315,11 @@ RETRY:
 		}
 		goto RETRY
 	}
+
+	for _, m := range req.rm {
+		d.marks.Get(m.file).Ch <- x.Mark{Index: m.line, Done: true}
+	}
+	req.rm = req.rm[:0]
 	req.reset()
 }
 
@@ -311,6 +329,7 @@ func (d *Dgraph) makeRequests() {
 	for n := range d.nquads {
 		if n.op == SET {
 			req.Set(n.e)
+			req.rm = append(req.rm, rdfMeta{n.e.file, n.e.line})
 		} else if n.op == DEL {
 			req.Delete(n.e)
 		}
@@ -357,6 +376,9 @@ func (d *Dgraph) BatchSet(e Edge) error {
 	d.nquads <- nquadOp{
 		e:  e,
 		op: SET,
+	}
+	if len(e.file) > 0 && e.line != 0 {
+		d.SyncMarkFor(e.file).Ch <- x.Mark{Index: e.line}
 	}
 	atomic.AddUint64(&d.rdfs, 1)
 	return nil

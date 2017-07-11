@@ -17,6 +17,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -143,12 +144,13 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 	f, err := os.Open(file)
 	x.Check(err)
 	defer f.Close()
+
 	gr, err := gzip.NewReader(f)
 	x.Check(err)
 
 	var buf bytes.Buffer
 	bufReader := bufio.NewReader(gr)
-	var line int
+	var line uint64
 	for {
 		err = readLine(bufReader, &buf)
 		if err != nil {
@@ -168,7 +170,11 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 		if len(nq.ObjectId) > 0 {
 			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
 		}
-		if err = dgraphClient.BatchSet(client.NewEdge(nq)); err != nil {
+		if err = dgraphClient.BatchSet(client.NewEdge(
+			nq,
+			filepath.Base(file),
+			line,
+		)); err != nil {
 			log.Fatal("While adding mutation to batch: ", err)
 		}
 	}

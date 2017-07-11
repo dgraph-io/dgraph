@@ -37,9 +37,15 @@ const (
 	DEL
 )
 
+type rdfMeta struct {
+	file string
+	line uint64
+}
+
 // Req wraps the protos.Request so that helper methods can be defined on it.
 type Req struct {
 	gr protos.Request
+	rm []rdfMeta
 }
 
 // Request returns the graph request object which is sent to the server to perform
@@ -158,10 +164,13 @@ func (n *Node) Edge(pred string) Edge {
 
 type Edge struct {
 	nq protos.NQuad
+	// TODO - This should not be sent to server.
+	file string
+	line uint64
 }
 
-func NewEdge(nq protos.NQuad) Edge {
-	return Edge{nq}
+func NewEdge(nq protos.NQuad, file string, line uint64) Edge {
+	return Edge{nq, file, line}
 }
 
 func (e *Edge) ConnectTo(n Node) error {
