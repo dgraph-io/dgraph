@@ -204,6 +204,7 @@ func setupConnection(host string) (*grpc.ClientConn, error) {
 }
 
 func main() {
+	flag.Parse()
 	x.Init()
 	runtime.SetBlockProfileRate(*blockRate)
 	go http.ListenAndServe("localhost:6060", nil)

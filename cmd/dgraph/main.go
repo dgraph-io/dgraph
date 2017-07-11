@@ -52,6 +52,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -656,6 +657,7 @@ func main() {
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
+	schema.Init(dgraph.State.PStore)
 	posting.Init(dgraph.State.PStore)
 	worker.Init(dgraph.State.PStore)
 
