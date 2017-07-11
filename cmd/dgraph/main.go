@@ -80,11 +80,11 @@ var (
 	tlsMaxVersion    string
 )
 
-func setupConfigOpts(config *dgraph.Options) {
-	flag.StringVar(&config.PostingDir, "p", "p", "Directory to store posting lists.")
-	flag.StringVar(&config.WALDir, "w", "w", "Directory to store raft write-ahead logs.")
-	flag.BoolVar(&config.Nomutations, "nomutations", false, "Don't allow mutations on this server.")
-	flag.IntVar(&config.NumPending, "pending", 1000,
+func setupConfigOpts() {
+	flag.StringVar(&dgraph.Config.PostingDir, "p", "p", "Directory to store posting lists.")
+	flag.StringVar(&dgraph.Config.WALDir, "w", "w", "Directory to store raft write-ahead logs.")
+	flag.BoolVar(&dgraph.Config.Nomutations, "nomutations", false, "Don't allow mutations on this server.")
+	flag.IntVar(&dgraph.Config.NumPending, "pending", 1000,
 		"Number of pending queries. Useful for rate limiting.")
 
 	flag.IntVar(&worker.Config.BaseWorkerPort, "workerport", 12345,
@@ -100,6 +100,10 @@ func setupConfigOpts(config *dgraph.Options) {
 	flag.StringVar(&worker.Config.PeerAddr, "peer", "", "IP_ADDRESS:PORT of any healthy peer.")
 	flag.Uint64Var(&worker.Config.RaftId, "idx", 1, "RAFT ID that this server will use to join RAFT groups.")
 	flag.Uint64Var(&worker.Config.MaxPendingCount, "sc", 1000, "Max number of pending entries in wal after which snapshot is taken")
+
+	flag.Float64Var(&posting.Config.MaxMemory, "max_memory_mb", 1024.0,
+		"Estimated max memory the process can take")
+	flag.Float64Var(&posting.Config.CommitFraction, "gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
 
 	flag.StringVar(&gconf, "group_conf", "", "group configuration file")
 	flag.IntVar(&baseHttpPort, "port", 8080, "Port to run HTTP service on.")
@@ -619,7 +623,8 @@ func setupServer(che chan error) {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	setupConfigOpts(&dgraph.Config)
+
+	setupConfigOpts()
 	x.Init() // flag.Parse is called here
 
 	setupProfiling()
