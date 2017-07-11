@@ -275,14 +275,6 @@ func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error
 	return terms, nil
 }
 
-func encodeUintList(l []uint16) string {
-	buf := make([]byte, 2*len(l))
-	for i, it := range l {
-		binary.BigEndian.PutUint16(buf[i*2:(i+1)*2], it)
-	}
-	return string(buf)
-}
-
 func encodeInt(val int64) string {
 	buf := make([]byte, 9)
 	binary.BigEndian.PutUint64(buf[1:], uint64(val))
