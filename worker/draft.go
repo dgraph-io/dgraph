@@ -44,13 +44,17 @@ const (
 )
 
 type peerPoolEntry struct {
+	// Never the empty string.  Possibly a bogus address -- bad port number, the value
+	// of *myAddr, or some screwed up Raft config.
 	addr string
-	// An owning reference to a pool for this peer (or nil if self-peer).
+	// An owning reference to a pool for this peer (or nil if addr is sufficiently
+	// bogus).
 	poolOrNil *pool
 }
 
-// peerPool stores the peers per node and the addresses corresponding to them.
-// We then use pool() to get an active connection to those addresses.
+// peerPool stores the peers' addresses and our connections to them.  It has exactly one
+// entry for every peer other than ourselves.  Some of these peers might be unreachable or
+// have bogus (but never empty) addresses.
 type peerPool struct {
 	sync.RWMutex
 	peers map[uint64]peerPoolEntry
@@ -251,11 +255,15 @@ func (n *node) Connect(pid uint64, addr string) {
 		return
 	}
 	if paddr, ok := n.GetPeer(pid); ok && paddr == addr {
+		// Already connected.
 		return
 	}
+	// Here's what we do.  Right now peerPool maps peer node id's to addr values.  If
+	// a *pool can be created, good, but if not, we still create a peerPoolEntry with
+	// a nil *pool.
 	p, ok := pools().connect(addr)
 	if !ok {
-		// TODO: Return an error instead?
+		// TODO: Note this fact in more general peer health info somehow.
 		log.Printf("Peer %d claims same host as me\n", pid)
 	}
 	n.SetPeer(pid, addr, p)
@@ -458,11 +466,15 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 
 	addr, ok := n.GetPeer(to)
 	if !ok {
+		// As far as we know, there is no such peer anymore (or it's ourselves)
 		return
 	}
 	pool, err := pools().get(addr)
-	// TODO: No, don't fail like this?
-	x.Check(err)
+	if err != nil {
+		// Because we got handed a bogus config (bad addr), we can't send messages
+		// to this peer.
+		return
+	}
 	defer pools().release(pool)
 	conn := pool.Get()
 
@@ -650,16 +662,15 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 	n.store.Append(es)
 }
 
-func (n *node) retrieveSnapshot(rc protos.RaftContext) {
-	addr, ok := n.GetPeer(rc.Id)
-	x.AssertTruef(ok, "Should have the address for %d", rc.Id)
+func (n *node) retrieveSnapshot(peerID uint64) {
+	addr, ok := n.GetPeer(peerID)
+	x.AssertTruef(ok, "Should have the address for %d", peerID)
 	pool, err := pools().get(addr)
 	if err != nil {
-		log.Fatalf("Pool shouldn't be nil for address: %v for id: %v, error: %v\n", addr, rc.Id, err)
+		log.Fatalf("Pool shouldn't be nil for address: %v for id: %v, error: %v\n", addr, peerID, err)
 	}
 	defer pools().release(pool)
 
-	x.AssertTrue(rc.Group == n.gid)
 	// Get index of last committed.
 	lastIndex, err := n.store.LastIndex()
 	x.Checkf(err, "Error while getting last index")
@@ -718,9 +729,10 @@ func (n *node) Run() {
 				// snapshot that I created. Only the former case should be handled.
 				var rc protos.RaftContext
 				x.Check(rc.Unmarshal(rd.Snapshot.Data))
+				x.AssertTrue(rc.Group == n.gid)
 				if rc.Id != n.id {
 					fmt.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
-					n.retrieveSnapshot(rc)
+					n.retrieveSnapshot(rc.Id)
 					fmt.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
 				} else {
 					fmt.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
