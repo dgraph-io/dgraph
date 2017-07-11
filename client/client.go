@@ -22,12 +22,12 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
-
 
 type opType int
 
@@ -39,7 +39,7 @@ const (
 )
 
 // A Req represents a single request to the backend Dgraph instance.  Each request may contain multiple set, delete and
-// schema mutations, and a single GraphQL+- query.  IF the query contains GraphQL variables, then the map giving values to these 
+// schema mutations, and a single GraphQL+- query.  IF the query contains GraphQL variables, then the map giving values to these
 // must be stored in the request with the query.
 type Req struct {
 	gr protos.Request
@@ -63,16 +63,16 @@ func checkSchema(schema protos.SchemaUpdate) error {
 	return nil
 }
 
-// SetQuery sets the query in req to the given string.  
-// The query string is not checked until the request is 
+// SetQuery sets the query in req to the given string.
+// The query string is not checked until the request is
 // run, when it is parsed and checked server-side.
 func (req *Req) SetQuery(q string) {
 	req.gr.Query = q
 }
 
-// SetQueryWithVariables sets query q (which contains graphQL variables mapped 
+// SetQueryWithVariables sets query q (which contains graphQL variables mapped
 // in vars) as the query in req and sets vars as the corresponding query variables.
-// Neither the query string nor the variables are checked until the request is run, 
+// Neither the query string nor the variables are checked until the request is run,
 // when it is parsed and checked server-side.
 func (req *Req) SetQueryWithVariables(q string, vars map[string]string) {
 	req.gr.Query = q
@@ -91,28 +91,53 @@ func (req *Req) addMutation(e Edge, op opType) {
 	}
 }
 
-// Set adds edge e to the set mutation of request req, thus scheduling the edge to be added to the graph when the request is run.  
-// The edge must be syntatically valid: have a valid source (a Node), predicate and target (a Node or value), otherwise an error is returned.  
+// Set adds edge e to the set mutation of request req, thus scheduling the edge to be added to the graph when the request is run.
+// The edge must be syntatically valid: have a valid source (a Node), predicate and target (a Node or value), otherwise an error is returned.
 // The edge is not checked agaist the schema until the request is run --- so setting a UID edge to a value, for example, doesn't result in an
 // error until the request is run.
 func (req *Req) Set(e Edge) {
 	req.addMutation(e, SET)
 }
 
-
-// Delete adds edge e to the delete mutation of request req, thus scheduling the edge to be removed from the graph when the request is run.  
+// Delete adds edge e to the delete mutation of request req, thus scheduling the edge to be removed from the graph when the request is run.
 // The edge must have a valid source (a Node), predicate and target (a Node or value), otherwise an error is returned.  The edge need not represent
 // an edge in the graph --- applying such a mutation simply has no effect.
 func (req *Req) Delete(e Edge) {
 	req.addMutation(e, DEL)
 }
 
-// AddSchema sets the schema mutations
-func (req *Req) addSchema(s protos.SchemaUpdate) error {
+// AddSchema adds the single schema mutation s to the request.
+func (req *Req) AddSchema(s protos.SchemaUpdate) error {
 	if req.gr.Mutation == nil {
 		req.gr.Mutation = new(protos.Mutation)
 	}
 	req.gr.Mutation.Schema = append(req.gr.Mutation.Schema, &s)
+	return nil
+}
+
+// AddSchemaFromString parses s for schema mutations and adds each update in s
+// to the request using AddSchema.  The given string should be of the form:
+// edgename: uid @reverse .
+// edge2: string @index(exact) .
+// etc.
+// to use the form "mutuation { schema { ... }}" issue the mutation through 
+// SetQuery.
+func (req *Req) AddSchemaFromString(s string) error {
+	schemaUpdate, err := schema.Parse(s)
+	if err != nil {
+		return err
+	}
+
+	if len(schemaUpdate) == 0 {
+		return nil
+	}
+
+	for _, smut := range schemaUpdate {
+		if err = req.AddSchema(*smut); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -135,7 +160,7 @@ type nquadOp struct {
 	op opType
 }
 
-// Node representes a single node in the graph. 
+// Node representes a single node in the graph.
 type Node struct {
 	uid uint64
 	// We can do variables in mutations.
@@ -163,10 +188,10 @@ func (n *Node) ConnectTo(pred string, n1 Node) Edge {
 	return e
 }
 
-// Edge create an edge with source Node n and predicate pred, but without a target.  
-// The edge needs to be completed by calling Edge.ConnectTo() if the edge is a 
+// Edge create an edge with source Node n and predicate pred, but without a target.
+// The edge needs to be completed by calling Edge.ConnectTo() if the edge is a
 // UID edge, or one of the Edge.SetValue...() functions if the edge is of a scalar type.
-// The edge can't be commited to the store --- calling Req.Set() to add the edge to 
+// The edge can't be commited to the store --- calling Req.Set() to add the edge to
 // a request will result in an error --- until it is completed.
 func (n *Node) Edge(pred string) Edge {
 	e := Edge{}
@@ -180,21 +205,19 @@ func (n *Node) Edge(pred string) Edge {
 }
 
 // An Edge represents an edge between a source node and a target (either a node or a value.)
-// Facets are stored in the edge.  See Node.Edge(), Node.ConnectTo(), Edge.ConnecTo(), 
-// Edge.AddFacet and the Edge.SetValue...() functions to 
+// Facets are stored in the edge.  See Node.Edge(), Node.ConnectTo(), Edge.ConnecTo(),
+// Edge.AddFacet and the Edge.SetValue...() functions to
 // make a valid edge for a set or delete mutation.
 type Edge struct {
 	nq protos.NQuad
 }
-
 
 // NewEdge creates and Edge from an NQuad.
 func NewEdge(nq protos.NQuad) Edge {
 	return Edge{nq}
 }
 
-
-// ConnectTo adds Node n as the target of the edge.  If the edge already has a known scalar type, 
+// ConnectTo adds Node n as the target of the edge.  If the edge already has a known scalar type,
 // for example if Edge.SetValue...() had been called on the edge, then an error is returned.
 func (e *Edge) ConnectTo(n Node) error {
 	if e.nq.ObjectType > 0 {
@@ -217,11 +240,10 @@ func validateStr(val string) error {
 	return nil
 }
 
-
-// SetValueString sets the value of Edge e as string val and sets the type of the edge to types.StringID.  
+// SetValueString sets the value of Edge e as string val and sets the type of the edge to types.StringID.
 // If the edge had previous been assigned another value (even of another type), the value and type are overwritten.
 // If the edge has previously been connected to a node, the edge and type are left unchanged and ErrConnected is returned.
-// The string must escape " with \, otherwise the edge and type are left unchanged and an error returned.  
+// The string must escape " with \, otherwise the edge and type are left unchanged and an error returned.
 func (e *Edge) SetValueString(val string) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected
@@ -239,8 +261,7 @@ func (e *Edge) SetValueString(val string) error {
 	return nil
 }
 
-
-// SetValueInt sets the value of Edge e as int64 val and sets the type of the edge to types.IntID.  
+// SetValueInt sets the value of Edge e as int64 val and sets the type of the edge to types.IntID.
 // If the edge had previous been assigned another value (even of another type), the value and type are overwritten.
 // If the edge has previously been connected to a node, the edge and type are left unchanged and ErrConnected is returned.
 func (e *Edge) SetValueInt(val int64) error {
@@ -256,7 +277,7 @@ func (e *Edge) SetValueInt(val int64) error {
 	return nil
 }
 
-// SetValueFloat sets the value of Edge e as float64 val and sets the type of the edge to types.FloatID.  
+// SetValueFloat sets the value of Edge e as float64 val and sets the type of the edge to types.FloatID.
 // If the edge had previous been assigned another value (even of another type), the value and type are overwritten.
 // If the edge has previously been connected to a node, the edge and type are left unchanged and ErrConnected is returned.
 func (e *Edge) SetValueFloat(val float64) error {
@@ -272,8 +293,7 @@ func (e *Edge) SetValueFloat(val float64) error {
 	return nil
 }
 
-
-// SetValueBool sets the value of Edge e as bool val and sets the type of the edge to types.BoolID.  
+// SetValueBool sets the value of Edge e as bool val and sets the type of the edge to types.BoolID.
 // If the edge had previous been assigned another value (even of another type), the value and type are overwritten.
 // If the edge has previously been connected to a node, the edge and type are left unchanged and ErrConnected is returned.
 func (e *Edge) SetValueBool(val bool) error {
@@ -289,8 +309,7 @@ func (e *Edge) SetValueBool(val bool) error {
 	return nil
 }
 
-
-// SetValuePassword sets the value of Edge e as password string val and sets the type of the edge to types.PasswordID.  
+// SetValuePassword sets the value of Edge e as password string val and sets the type of the edge to types.PasswordID.
 // If the edge had previous been assigned another value (even of another type), the value and type are overwritten.
 // If the edge has previously been connected to a node, the edge and type are left unchanged and ErrConnected is returned.
 func (e *Edge) SetValuePassword(val string) error {
@@ -306,8 +325,7 @@ func (e *Edge) SetValuePassword(val string) error {
 	return nil
 }
 
-
-// SetValueDatetime sets the value of Edge e as time.Time dateTime and sets the type of the edge to types.DateTimeID.  
+// SetValueDatetime sets the value of Edge e as time.Time dateTime and sets the type of the edge to types.DateTimeID.
 // If the edge had previous been assigned another value (even of another type), the value and type are overwritten.
 // If the edge has previously been connected to a node, the edge and type are left unchanged and ErrConnected is returned.
 func (e *Edge) SetValueDatetime(dateTime time.Time) error {
@@ -323,9 +341,7 @@ func (e *Edge) SetValueDatetime(dateTime time.Time) error {
 	return nil
 }
 
-
-
-// SetValueGeoJson sets the value of Edge e as the GeoJSON object parsed from json string and sets the type of the edge to types.GeoID.  
+// SetValueGeoJson sets the value of Edge e as the GeoJSON object parsed from json string and sets the type of the edge to types.GeoID.
 // If the edge had previous been assigned another value (even of another type), the value and type are overwritten.
 // If the edge has previously been connected to a node, the edge and type are left unchanged and ErrConnected is returned.
 // If the string fails to parse with geojson.Unmarshal() the edge is left unchanged and an error returned.
@@ -350,12 +366,10 @@ func (e *Edge) SetValueGeoJson(json string) error {
 	return nil
 }
 
-
-
-// SetValueDefault sets the value of Edge e as string val and sets the type of the edge to types.DefaultID.  
+// SetValueDefault sets the value of Edge e as string val and sets the type of the edge to types.DefaultID.
 // If the edge had previous been assigned another value (even of another type), the value and type are overwritten.
 // If the edge has previously been connected to a node, the edge and type are left unchanged and ErrConnected is returned.
-// The string must escape " with \, otherwise the edge and type are left unchanged and an error returned.  
+// The string must escape " with \, otherwise the edge and type are left unchanged and an error returned.
 func (e *Edge) SetValueDefault(val string) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected
@@ -373,11 +387,10 @@ func (e *Edge) SetValueDefault(val string) error {
 	return nil
 }
 
-
 // SetValueBytes allows setting the value of an edge to raw bytes and sets the type of the edge to types.BinaryID.
 // If the edge had previous been assigned another value (even of another type), the value and type are overwritten.
 // If the edge has previously been connected to a node, the edge and type are left unchanged and ErrConnected is returned.
-// the bytes are encoded as base64.  
+// the bytes are encoded as base64.
 func (e *Edge) SetValueBytes(val []byte) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected

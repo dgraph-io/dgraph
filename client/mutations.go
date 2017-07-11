@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -47,10 +48,9 @@ var (
 	emptyEdge      Edge
 )
 
-
-// BatchMutationOptions sets the clients batch mode to Pending number of buffers 
+// BatchMutationOptions sets the clients batch mode to Pending number of buffers
 // each of Size.  Running counters of number of rdfs procesessed, total time and
-// mutations per second are printed if PrintCounters is set true.  
+// mutations per second are printed if PrintCounters is set true.
 // See Counter.
 type BatchMutationOptions struct {
 	Size          int
@@ -164,7 +164,7 @@ type Counter struct {
 	Elapsed time.Duration
 }
 
-// A Dgraph is the data structure held by the user program for all 
+// A Dgraph is the data structure held by the user program for all
 // interactions with the Dgraph server.  After making grpc
 // connection a new Dgraph is created by function NewDgraphClient.
 type Dgraph struct {
@@ -186,8 +186,7 @@ type Dgraph struct {
 	start time.Time
 }
 
-
-// NewDgraphClient creates a new Dgraph for interacting with 
+// NewDgraphClient creates a new Dgraph for interacting with
 // the Dgraph store connected to in conns.  The Dgraph
 // client stores blanknode to uid, and XIDnode to uid
 // mappings on disk in clientDir.
@@ -349,7 +348,7 @@ LOOP:
 			if !ok {
 				break LOOP
 			}
-			req.addSchema(s)
+			req.AddSchema(s)
 		default:
 			start := time.Now()
 			if req.size() > 0 {
@@ -368,11 +367,10 @@ LOOP:
 	d.wg.Done()
 }
 
-
-// BatchSet adds Edge e as a set to the current batch mutation.  Once added, 
+// BatchSet adds Edge e as a set to the current batch mutation.  Once added,
 // the client will apply the mutation to the Dgraph server when it is ready
-// to flush its buffers.  The edge will be added to one of the batches as 
-// specified in d's BatchMutationOptions.  If that batch fills, it eventually 
+// to flush its buffers.  The edge will be added to one of the batches as
+// specified in d's BatchMutationOptions.  If that batch fills, it eventually
 // flushes.  But there is no guarantee of delivery before BatchFlush() is
 // called.
 func (d *Dgraph) BatchSet(e Edge) error {
@@ -384,11 +382,10 @@ func (d *Dgraph) BatchSet(e Edge) error {
 	return nil
 }
 
-
-// BatchDelete adds Edge e as a delete to the current batch mutation.  Once added, 
+// BatchDelete adds Edge e as a delete to the current batch mutation.  Once added,
 // the client will apply the mutation to the dgraph server when it is ready
-// to flush its buffers.  The edge will be added to one of the batches as 
-// specified in d's BatchMutationOptions.  If that batch fills, it eventually 
+// to flush its buffers.  The edge will be added to one of the batches as
+// specified in d's BatchMutationOptions.  If that batch fills, it eventually
 // flushes.  But there is no guarantee of delivery before BatchFlush() is
 // called.
 func (d *Dgraph) BatchDelete(e Edge) error {
@@ -400,17 +397,42 @@ func (d *Dgraph) BatchDelete(e Edge) error {
 	return nil
 }
 
-
-// AddSchema adds the given schema mutatation to the batch of schema mutations.  
+// AddSchema adds the given schema mutatation to the batch of schema mutations.
 // If the schema mutation applies an index to a UID edge, or if it adds
-// reverse to a scalar edge, then the mutation is not added to the batch and an 
-// error is returned. Once added, the client will apply the schema mutation when 
+// reverse to a scalar edge, then the mutation is not added to the batch and an
+// error is returned. Once added, the client will apply the schema mutation when
 // it is ready to flush its buffers.
 func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 	if err := checkSchema(s); err != nil {
 		return err
 	}
 	d.schema <- s
+	return nil
+}
+
+// AddSchemaFromString parses s for schema mutations and adds each update in s
+// to the batch using AddSchema.  The given string should be of the form:
+// edgename: uid @reverse .
+// edge2: string @index(exact) .
+// etc.
+// to use the form "mutuation { schema { ... }}" issue the mutation through 
+// SetQuery rather than as a batch.
+func (d *Dgraph) AddSchemaFromString(s string) error {
+	schemaUpdate, err := schema.Parse(s)
+	if err != nil {
+		return err
+	}
+
+	if len(schemaUpdate) == 0 {
+		return nil
+	}
+
+	for _, su := range schemaUpdate {
+		if err = d.AddSchema(*su); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -427,7 +449,6 @@ func (d *Dgraph) BatchFlush() {
 	}
 }
 
-
 // Run runs the request in req and returns with the completed response from
 // the server.  Calling Run has no effect on batched mutations.
 func (d *Dgraph) Run(ctx context.Context, req *Req) (*protos.Response, error) {
@@ -443,9 +464,8 @@ func (d *Dgraph) Counter() Counter {
 	}
 }
 
-
-// CheckVersion checks if the version of dgraph and dgraphloader are the same.  
-// If either the versions don't match or the version information could not be 
+// CheckVersion checks if the version of dgraph and dgraphloader are the same.
+// If either the versions don't match or the version information could not be
 // obtained an error message is printed.
 func (d *Dgraph) CheckVersion(ctx context.Context) {
 	v, err := d.dc[rand.Intn(len(d.dc))].CheckVersion(ctx, &protos.Check{})
@@ -462,19 +482,17 @@ You can get the latest version from https://docs.dgraph.io
 	}
 }
 
-
 // NodeUid creates a Node from the given uint64.
 func (d *Dgraph) NodeUid(uid uint64) Node {
 	return Node{uid: uid}
 }
 
-
-// NodeBlank creates or returns a Node given a string name for the blank node.  
-// Blank nodes do not exist as labelled nodes in dgraph. Blank nodes are used 
-// as labels client side for loading and linking nodes correctly.  If the 
+// NodeBlank creates or returns a Node given a string name for the blank node.
+// Blank nodes do not exist as labelled nodes in dgraph. Blank nodes are used
+// as labels client side for loading and linking nodes correctly.  If the
 // label is new in this session a new UID is allocated and assigned to the
 // label.  If the label has already been assigned, the corresponding Node
-// is returned.  
+// is returned.
 func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 	if len(varname) == 0 {
 		d.alloc.Lock()
@@ -515,7 +533,6 @@ func (d *Dgraph) NodeXid(xid string, storeXid bool) (Node, error) {
 	}
 	return n, nil
 }
-
 
 // NodeUidVar creates a Node from a variable name.  When building a request,
 // set and delete mutations may depend on the request's query, as in:
