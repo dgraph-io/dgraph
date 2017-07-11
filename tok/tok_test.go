@@ -21,6 +21,7 @@ import (
 	"math"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
@@ -74,6 +75,66 @@ func TestFullTextTokenizer(t *testing.T) {
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
 	require.Equal(t, []string{encodeToken("stem", id), encodeToken("work", id)}, tokens)
+}
+
+func TestHourTokenizer(t *testing.T) {
+	var err error
+	tokenizer, has := GetTokenizer("hour")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.DateTimeID)
+	val.Value, err = time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
+	require.NoError(t, err)
+
+	tokens, err := tokenizer.Tokens(val)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(tokens))
+	require.Equal(t, 1+2*4, len(tokens[0]))
+}
+
+func TestDayTokenizer(t *testing.T) {
+	var err error
+	tokenizer, has := GetTokenizer("day")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.DateTimeID)
+	val.Value, err = time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
+	require.NoError(t, err)
+
+	tokens, err := tokenizer.Tokens(val)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(tokens))
+	require.Equal(t, 1+2*3, len(tokens[0]))
+}
+
+func TestMonthTokenizer(t *testing.T) {
+	var err error
+	tokenizer, has := GetTokenizer("month")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.DateTimeID)
+	val.Value, err = time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
+	require.NoError(t, err)
+
+	tokens, err := tokenizer.Tokens(val)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(tokens))
+	require.Equal(t, 1+2*2, len(tokens[0]))
+}
+
+func TestDateTimeTokenizer(t *testing.T) {
+	var err error
+	tokenizer, has := GetTokenizer("datetime")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.DateTimeID)
+	val.Value, err = time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
+	require.NoError(t, err)
+
+	tokens, err := tokenizer.Tokens(val)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(tokens))
+	require.Equal(t, 1+2, len(tokens[0]))
 }
 
 func TestFullTextTokenizerLang(t *testing.T) {

@@ -198,6 +198,12 @@ func populateGraph(t *testing.T) {
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "loc", 31, types.GeoID, gData.Value.([]byte), nil)
 
+	addEdgeToValue(t, "dob_day", 1, "1910-01-01", nil)
+	addEdgeToValue(t, "dob_day", 23, "1910-01-02", nil)
+	addEdgeToValue(t, "dob_day", 24, "1909-05-05", nil)
+	addEdgeToValue(t, "dob_day", 25, "1909-01-10", nil)
+	addEdgeToValue(t, "dob_day", 31, "1901-01-15", nil)
+
 	addEdgeToValue(t, "dob", 1, "1910-01-01", nil)
 	addEdgeToValue(t, "dob", 23, "1910-01-02", nil)
 	addEdgeToValue(t, "dob", 24, "1909-05-05", nil)
@@ -3584,7 +3590,7 @@ func TestToFastJSONFilteLtAlias(t *testing.T) {
 		js)
 }
 
-func TestToFastJSONFilterge(t *testing.T) {
+func TestToFastJSONFilterge1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
@@ -3592,6 +3598,26 @@ func TestToFastJSONFilterge(t *testing.T) {
 				name
 				gender
 				friend @filter(ge(dob, "1909-05-05")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestToFastJSONFilterge2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(0x01)) {
+				name
+				gender
+				friend @filter(ge(dob_day, "1909-05-05")) {
 					name
 				}
 			}
@@ -4534,7 +4560,7 @@ func TestToFastJSONOrder(t *testing.T) {
 }
 
 // Test sorting / ordering by dob.
-func TestToFastJSONOrderDesc(t *testing.T) {
+func TestToFastJSONOrderDesc1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
@@ -4542,6 +4568,27 @@ func TestToFastJSONOrderDesc(t *testing.T) {
 				name
 				gender
 				friend(orderdesc: dob) {
+					name
+					dob
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1901-01-15T00:00:00Z","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestToFastJSONOrderDesc2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(0x01)) {
+				name
+				gender
+				friend(orderdesc: dob_day) {
 					name
 					dob
 				}
@@ -6417,7 +6464,7 @@ func checkSchemaNodes(t *testing.T, expected []*protos.SchemaNode, actual []*pro
 		return actual[i].Predicate >= actual[j].Predicate
 	})
 	require.True(t, reflect.DeepEqual(expected, actual),
-		fmt.Sprintf("Expected: %+v, Received: %+v \n", expected, actual))
+		fmt.Sprintf("Expected: %+v \nReceived: %+v \n", expected, actual))
 }
 
 func TestSchemaBlock1(t *testing.T) {
@@ -6441,7 +6488,9 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
 		{Predicate: "noindex_name", Type: "string"},
 		{Predicate: "lossy", Type: "string"},
-		{Predicate: "school", Type: "uid"}}
+		{Predicate: "school", Type: "uid"},
+		{Predicate: "dob_day", Type: "datetime"},
+	}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6512,6 +6561,7 @@ const schemaStr = `
 name                           : string @index(term, exact, trigram) @count .
 alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index .
+dob_day                        : dateTime @index(day) .
 film.film.initial_release_date : dateTime @index .
 loc                            : geo @index .
 genre                          : uid @reverse .
