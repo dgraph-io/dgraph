@@ -449,7 +449,7 @@ func (d *Dgraph) NodeXid(xid string, storeXid bool) (Node, error) {
 	}
 	n := Node{uid: uid}
 	if storeXid && isNew {
-		e := n.Edge("_xid_")
+		e := n.Edge("xid")
 		x.Check(e.SetValueString(xid))
 		d.BatchSet(e)
 	}
