@@ -27,8 +27,10 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/pkg/profile"
@@ -40,7 +42,7 @@ var (
 	dgraph     = flag.String("d", "127.0.0.1:9080", "Dgraph gRPC server address")
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
-	storeXid   = flag.Bool("x", false, "Store xids by adding corresponding _xid_ edges")
+	storeXid   = flag.Bool("x", false, "Store xids by adding corresponding xid edges")
 	mode       = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
 	clientDir  = flag.String("cd", "c", "Directory to store xid to uid mapping")
 	blockRate  = flag.Int("block", 0, "Block profiling rate")
@@ -242,6 +244,16 @@ func main() {
 
 	filesList := strings.Split(*files, ",")
 	x.AssertTrue(len(filesList) > 0)
+	if *storeXid {
+		if err := dgraphClient.AddSchema(protos.SchemaUpdate{
+			Predicate: "xid",
+			ValueType: uint32(types.StringID),
+			Tokenizer: []string{"hash"},
+			Directive: protos.SchemaUpdate_INDEX,
+		}); err != nil {
+			log.Fatal("While adding schema to batch ", err)
+		}
+	}
 	if len(*schemaFile) > 0 {
 		processSchemaFile(*schemaFile, dgraphClient)
 	}

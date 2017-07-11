@@ -40,29 +40,39 @@ import (
 )
 
 const (
-	proposalMutation   = 0
-	proposalReindex    = 1
-	proposalMembership = 2
-	ErrorNodeIDExists  = "Error Node ID already exists in the cluster"
+	errorNodeIDExists = "Error Node ID already exists in the cluster"
 )
+
+type peerPoolEntry struct {
+	addr string
+	// An owning reference to a pool for this peer (or nil if self-peer).
+	poolOrNil *pool
+}
 
 // peerPool stores the peers per node and the addresses corresponding to them.
 // We then use pool() to get an active connection to those addresses.
 type peerPool struct {
 	sync.RWMutex
-	peers map[uint64]string
+	peers map[uint64]peerPoolEntry
 }
 
-func (p *peerPool) Get(id uint64) string {
+// TODO: Return *pool instead, where appropriate.
+func (p *peerPool) get(id uint64) (string, bool) {
 	p.RLock()
 	defer p.RUnlock()
-	return p.peers[id]
+	ret, ok := p.peers[id]
+	return ret.addr, ok
 }
 
-func (p *peerPool) Set(id uint64, addr string) {
+func (p *peerPool) set(id uint64, addr string, pl *pool) {
 	p.Lock()
 	defer p.Unlock()
-	p.peers[id] = addr
+	if old, ok := p.peers[id]; ok {
+		if old.poolOrNil != nil {
+			pools().release(old.poolOrNil)
+		}
+	}
+	p.peers[id] = peerPoolEntry{addr, pl}
 }
 
 type proposalCtx struct {
@@ -182,7 +192,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	fmt.Printf("Node with GroupID: %v, ID: %v\n", gid, id)
 
 	peers := peerPool{
-		peers: make(map[uint64]string),
+		peers: make(map[uint64]peerPoolEntry),
 	}
 	props := proposals{
 		ids: make(map[uint32]*proposalCtx),
@@ -222,24 +232,38 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	return n
 }
 
+// Never returns ("", true)
+func (n *node) GetPeer(pid uint64) (string, bool) {
+	return n.peers.get(pid)
+}
+
+// addr must not be empty.
+func (n *node) SetPeer(pid uint64, addr string, poolOrNil *pool) {
+	x.AssertTruef(addr != "", "SetPeer for peer %d has empty addr.", pid)
+	n.peers.set(pid, addr, poolOrNil)
+}
+
+// Connects the node and makes its peerPool refer to the constructed pool and address
+// (possibly updating ourselves from the old address.)  (Unless pid is ourselves, in which
+// case this does nothing.)
 func (n *node) Connect(pid uint64, addr string) {
-	for n == nil {
-		// Sometimes this function causes a panic. My guess is that n is sometimes still uninitialized.
-		time.Sleep(time.Second)
-	}
 	if pid == n.id {
 		return
 	}
-	if paddr := n.peers.Get(pid); paddr == addr {
+	if paddr, ok := n.GetPeer(pid); ok && paddr == addr {
 		return
 	}
-	pools().connect(addr)
-	n.peers.Set(pid, addr)
+	p, ok := pools().connect(addr)
+	if !ok {
+		// TODO: Return an error instead?
+		log.Printf("Peer %d claims same host as me\n", pid)
+	}
+	n.SetPeer(pid, addr, p)
 }
 
 func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
-	addr := n.peers.Get(pid)
-	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
+	addr, ok := n.GetPeer(pid)
+	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
 	rc := &protos.RaftContext{
 		Addr:  addr,
 		Group: n.raftContext.Group,
@@ -432,14 +456,15 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	addr := n.peers.Get(to)
-	if len(addr) == 0 {
+	addr, ok := n.GetPeer(to)
+	if !ok {
 		return
 	}
-	pool := pools().get(addr)
-	conn, err := pool.Get()
+	pool, err := pools().get(addr)
+	// TODO: No, don't fail like this?
 	x.Check(err)
-	defer pool.Put(conn)
+	defer pools().release(pool)
+	conn := pool.Get()
 
 	c := protos.NewWorkerClient(conn)
 	p := &protos.Payload{Data: data}
@@ -562,9 +587,7 @@ func (n *node) processApplyCh() {
 		// schema here without any locking
 		proposal := &protos.Proposal{}
 		if err := proposal.Unmarshal(e.Data); err != nil {
-			fmt.Printf("Unable to unmarshal proposal: %v %q\n", e.Data)
-			log.Fatal("Remove me later")
-			// continue
+			log.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
 
 		if proposal.Mutations != nil {
@@ -628,10 +651,13 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 }
 
 func (n *node) retrieveSnapshot(rc protos.RaftContext) {
-	addr := n.peers.Get(rc.Id)
-	x.AssertTruef(addr != "", "Should have the address for %d", rc.Id)
-	pool := pools().get(addr)
-	x.AssertTruef(pool != nil, "Pool shouldn't be nil for address: %v for id: %v", addr, rc.Id)
+	addr, ok := n.GetPeer(rc.Id)
+	x.AssertTruef(ok, "Should have the address for %d", rc.Id)
+	pool, err := pools().get(addr)
+	if err != nil {
+		log.Fatalf("Pool shouldn't be nil for address: %v for id: %v, error: %v\n", addr, rc.Id, err)
+	}
+	defer pools().release(pool)
 
 	x.AssertTrue(rc.Group == n.gid)
 	// Get index of last committed.
@@ -826,8 +852,11 @@ func (n *node) joinPeers() {
 	n.Connect(pid, paddr)
 	fmt.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
 
-	pool := pools().get(paddr)
-	x.AssertTruef(pool != nil, "Unable to get pool for addr: %q for peer: %d", paddr, pid)
+	pool, err := pools().get(paddr)
+	if err != nil {
+		log.Fatalf("Unable to get pool for addr: %q for peer: %d, error: %v\n", paddr, pid, err)
+	}
+	defer pools().release(pool)
 
 	// Bring the instance up to speed first.
 	// Raft would decide whether snapshot needs to fetched or not
@@ -835,9 +864,7 @@ func (n *node) joinPeers() {
 	// _, err := populateShard(n.ctx, pool, n.gid)
 	// x.Checkf(err, "Error while populating shard")
 
-	conn, err := pool.Get()
-	x.Check(err)
-	defer pool.Put(conn)
+	conn := pool.Get()
 
 	c := protos.NewWorkerClient(conn)
 	x.Printf("Calling JoinCluster")
@@ -931,11 +958,19 @@ func (n *node) AmLeader() bool {
 	return r.Status().Lead == r.Status().ID
 }
 
-func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error {
+var (
+	errNoNode = fmt.Errorf("No node has been set up yet")
+)
+
+func applyMessage(ctx context.Context, msg raftpb.Message) error {
 	var rc protos.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
 	node := groups().Node(rc.Group)
-	// TODO: Handle the case where node isn't present for this group.
+	if node == nil {
+		// Maybe we went down, went back up, reconnected, and got an RPC
+		// message before we set up Raft?
+		return errNoNode
+	}
 	node.Connect(msg.From, rc.Addr)
 
 	c := make(chan error, 1)
@@ -972,7 +1007,7 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 		if msg.Type != raftpb.MsgHeartbeat && msg.Type != raftpb.MsgHeartbeatResp {
 			fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
-		if err := w.applyMessage(ctx, msg); err != nil {
+		if err := applyMessage(ctx, msg); err != nil {
 			return &protos.Payload{}, err
 		}
 		idx += sz
@@ -988,7 +1023,7 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*
 
 	// Best effor reject
 	if _, found := groups().Server(rc.Id, rc.Group); found || rc.Id == Config.RaftId {
-		return &protos.Payload{}, x.Errorf(ErrorNodeIDExists)
+		return &protos.Payload{}, x.Errorf(errorNodeIDExists)
 	}
 
 	node := groups().Node(rc.Group)

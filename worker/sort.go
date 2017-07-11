@@ -52,13 +52,12 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 	// Send this over the network.
 	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
 	addr := groups().AnyServer(gid)
-	pl := pools().get(addr)
-
-	conn, err := pl.Get()
+	pl, err := pools().get(addr)
 	if err != nil {
 		return &emptySortResult, x.Wrapf(err, "SortOverNetwork: while retrieving connection.")
 	}
-	defer pl.Put(conn)
+	defer pools().release(pl)
+	conn := pl.Get()
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Sending request to %v", addr)
 	}
