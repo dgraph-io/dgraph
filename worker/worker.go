@@ -36,7 +36,7 @@ import (
 )
 
 func workerPort() int {
-	return *x.PortOffset + Config.BaseWorkerPort
+	return x.Config.PortOffset + Config.BaseWorkerPort
 }
 
 func Init(ps *badger.KV) {

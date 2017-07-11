@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -48,10 +47,7 @@ const (
 )
 
 var (
-	debugMode = flag.Bool("debugmode", false,
-		"enable debug mode for more debug information")
 	// Useful for running multiple servers on the same machine.
-	PortOffset     = flag.Int("port_offset", 0, "Value added to all listening port numbers.")
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 )
 

@@ -48,6 +48,7 @@ import (
 	"github.com/cockroachdb/cmux"
 	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
@@ -105,6 +106,14 @@ func setupConfigOpts() {
 		"Estimated max memory the process can take")
 	flag.Float64Var(&posting.Config.CommitFraction, "gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
 
+	flag.StringVar(&x.Config.ConfigFile, "config", "",
+		"YAML configuration file containing dgraph settings.")
+	flag.BoolVar(&x.Config.Version, "version", false, "Prints the version of Dgraph")
+	flag.BoolVar(&x.Config.DebugMode, "debugmode", false,
+		"enable debug mode for more debug information")
+	// Useful for running multiple servers on the same machine.
+	flag.IntVar(&x.Config.PortOffset, "port_offset", 0, "Value added to all listening port numbers.")
+
 	flag.StringVar(&gconf, "group_conf", "", "group configuration file")
 	flag.IntVar(&baseHttpPort, "port", 8080, "Port to run HTTP service on.")
 	flag.IntVar(&baseGrpcPort, "grpc_port", 9080, "Port to run gRPC service on.")
@@ -126,14 +135,19 @@ func setupConfigOpts() {
 	flag.BoolVar(&tlsSystemCACerts, "tls.use_system_ca", false, "Include System CA into CA Certs.")
 	flag.StringVar(&tlsMinVersion, "tls.min_version", "TLS11", "TLS min version.")
 	flag.StringVar(&tlsMaxVersion, "tls.max_version", "TLS12", "TLS max version.")
+
+	flag.Parse()
+	if !flag.Parsed() {
+		log.Fatal("Unable to parse flags")
+	}
 }
 
 func httpPort() int {
-	return *x.PortOffset + baseHttpPort
+	return x.Config.PortOffset + baseHttpPort
 }
 
 func grpcPort() int {
-	return *x.PortOffset + baseGrpcPort
+	return x.Config.PortOffset + baseGrpcPort
 }
 
 func setupProfiling() {
@@ -637,6 +651,8 @@ func main() {
 			return true, true
 		}
 	}
+
+	group.ParseGroupConfig(gconf)
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

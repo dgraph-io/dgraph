@@ -27,9 +27,6 @@ import (
 )
 
 var (
-	configFile = flag.String("config", "",
-		"YAML configuration file containing dgraph settings.")
-	version  = flag.Bool("version", false, "Prints the version of Dgraph")
 	initFunc []func()
 	logger   *log.Logger
 	isTest   bool
@@ -58,18 +55,14 @@ func AddInit(f func()) {
 // Init initializes flags and run all functions in initFunc.
 func Init() {
 	log.SetFlags(log.Lshortfile | log.Flags())
-	flag.Parse()
-	if !flag.Parsed() {
-		log.Fatal("Unable to parse flags")
-	}
 
 	printVersionOnly()
 
 	// Lets print the details of the current build on startup.
 	printBuildDetails()
 
-	if *configFile != "" {
-		log.Println("Loading configuration from file:", *configFile)
+	if Config.ConfigFile != "" {
+		log.Println("Loading configuration from file:", Config.ConfigFile)
 		loadConfigFromYAML()
 	}
 
@@ -84,11 +77,11 @@ func Init() {
 
 // loadConfigFromYAML reads configurations from specified YAML file.
 func loadConfigFromYAML() {
-	bs, err := ioutil.ReadFile(*configFile)
-	Checkf(err, "Cannot open specified config file: %v", *configFile)
+	bs, err := ioutil.ReadFile(Config.ConfigFile)
+	Checkf(err, "Cannot open specified config file: %v", Config.ConfigFile)
 
 	m := make(map[string]string)
-	Checkf(yaml.Unmarshal(bs, &m), "Error while parsing config file: %v", *configFile)
+	Checkf(yaml.Unmarshal(bs, &m), "Error while parsing config file: %v", Config.ConfigFile)
 
 	for k, v := range m {
 		fmt.Printf("Picked flag from config: [%q = %v]\n", k, v)
@@ -111,7 +104,7 @@ Branch           : %v`,
 
 // printVersionOnly prints version and other helpful information if --version.
 func printVersionOnly() {
-	if *version {
+	if Config.Version {
 		printBuildDetails()
 		fmt.Println("Copyright 2017 Dgraph Labs, Inc.")
 		fmt.Println(`
