@@ -46,13 +46,13 @@ func (d *Dgraph) storeCheckpoint() {
 			buf := make([]byte, 10)
 			n := binary.PutUvarint(buf, w)
 			wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
-			if err := d.alloc.kv.BatchSet(wb); err != nil {
+		}
+		if err := d.alloc.kv.BatchSet(wb); err != nil {
+			fmt.Printf("Error while writing to disk %v\n", err)
+		}
+		for _, wbe := range wb {
+			if err := wbe.Error; err != nil {
 				fmt.Printf("Error while writing to disk %v\n", err)
-			}
-			for _, wbe := range wb {
-				if err := wbe.Error; err != nil {
-					fmt.Printf("Error while writing to disk %v\n", err)
-				}
 			}
 		}
 		wb = wb[:0]
