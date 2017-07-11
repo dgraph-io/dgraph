@@ -312,7 +312,6 @@ RETRY:
 		// Mark watermarks as done.
 		entry.mark.Ch <- x.Mark{Index: entry.line, Done: true}
 	}
-	req.entries = req.entries[:0]
 	req.reset()
 }
 

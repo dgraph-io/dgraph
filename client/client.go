@@ -119,6 +119,7 @@ func (req *Req) reset() {
 	req.gr.Mutation.Set = req.gr.Mutation.Set[:0]
 	req.gr.Mutation.Del = req.gr.Mutation.Del[:0]
 	req.gr.Mutation.Schema = req.gr.Mutation.Schema[:0]
+	req.entries = req.entries[:0]
 }
 
 type nquadOp struct {
