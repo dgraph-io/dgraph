@@ -727,13 +727,17 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	}
 
 	f := func() {
-		lcache.Lock()
-		delete(lcache.cache, l.ghash)
-		lcache.Unlock()
+		if delFromCache {
+			lcache.Lock()
+			delete(lcache.cache, l.ghash)
+			lcache.Unlock()
+		}
 		if l.water != nil {
 			l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
+			l.pending = make([]uint64, 0, 3)
 		}
 		l.decr()
+
 	}
 
 	wb := make([]*badger.Entry, 0, 1)
@@ -742,7 +746,6 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	l.incr()
 
 	// Now reset the mutation variables.
-	l.pending = make([]uint64, 0, 3)
 	l.mlayer = l.mlayer[:0]
 	l.lastCompact = time.Now()
 	atomic.StoreInt32(&l.deleteAll, 0) // Unset deleteAll
