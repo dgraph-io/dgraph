@@ -362,10 +362,7 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
-	tempMap := make(map[string]uint64)
-	for k, v := range newUids {
-		tempMap[k[2:]] = v
-	}
+	tempMap := query.StripBlankNode(newUids)
 	allocIdsStr := query.ConvertUidsToHex(tempMap)
 	payload := map[string]interface{}{
 		"code":    x.Success,

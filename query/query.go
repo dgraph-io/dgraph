@@ -2330,13 +2330,7 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 			return er, err
 		}
 
-		er.Allocations = make(map[string]uint64)
-		// Strip out _: prefix from the blank node keys.
-		for k, v := range newUids {
-			if strings.HasPrefix(k, "_:") {
-				er.Allocations[k[2:]] = v
-			}
-		}
+		er.Allocations = StripBlankNode(newUids)
 
 		err = qr.processNquads(ctx, nquads, newUids)
 		if err != nil {
@@ -2367,4 +2361,14 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 		}
 	}
 	return er, nil
+}
+
+func StripBlankNode(mp map[string]uint64) map[string]uint64 {
+	temp := make(map[string]uint64)
+	for k, v := range mp {
+		if strings.HasPrefix(k, "_:") {
+			temp[k[2:]] = v
+		}
+	}
+	return temp
 }
