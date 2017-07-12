@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"sort"
 	"sync"
 	"time"
 
@@ -130,11 +129,6 @@ type sendmsg struct {
 	data []byte
 }
 
-type propSlices struct {
-	idx  uint64
-	data []byte
-}
-
 type node struct {
 	x.SafeMutex
 
@@ -156,7 +150,6 @@ type node struct {
 	raftContext *protos.RaftContext
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
-	pslices     []propSlices
 
 	canCampaign bool
 	// applied is used to keep track of the applied RAFT proposals.
@@ -307,12 +300,6 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-var slicePool = sync.Pool{
-	New: func() interface{} {
-		return make([]byte, 256<<10)
-	},
-}
-
 func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
@@ -354,13 +341,8 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		}
 	}
 
-	slice := slicePool.Get().([]byte)
 	sz := proposal.Size()
-	if len(slice) < sz {
-		slicePool.Put(slice)
-		slice = make([]byte, sz)
-	}
-	defer slicePool.Put(slice)
+	slice := make([]byte, sz)
 
 	upto, err := proposal.MarshalTo(slice)
 	if err != nil {
@@ -584,12 +566,6 @@ func (n *node) processApplyCh() {
 		}
 
 		x.AssertTrue(e.Type == raftpb.EntryNormal)
-		n.Lock()
-		n.pslices = append(n.pslices, propSlices{
-			idx:  e.Index,
-			data: e.Data,
-		})
-		n.Unlock()
 
 		// The following effort is only to apply schema in a blocking fashion.
 		// Once we have a scheduler, this should go away.
@@ -857,16 +833,6 @@ func (n *node) snapshot(skip uint64) {
 	x.Checkf(err, "While creating snapshot")
 	x.Checkf(n.store.Compact(snapshotIdx), "While compacting snapshot")
 	x.Check(n.wal.StoreSnapshot(n.gid, s))
-	n.Lock()
-	defer n.Unlock()
-	idx := sort.Search(len(n.pslices), func(i int) bool {
-		return n.pslices[i].idx > snapshotIdx
-	})
-	for i := 0; i < idx && i < len(n.pslices); i++ {
-		slicePool.Put(n.pslices[i].data)
-	}
-	n.pslices = n.pslices[idx:]
-
 }
 
 func (n *node) joinPeers() {
