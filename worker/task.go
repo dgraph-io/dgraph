@@ -18,10 +18,12 @@
 package worker
 
 import (
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/context"
@@ -49,6 +51,84 @@ var (
 	emptyValueList = protos.ValueList{Values: []*protos.TaskValue{&protos.TaskValue{Val: x.Nilbyte}}}
 )
 
+func invokeNetworkRequest(
+	ctx context.Context, addr string, f func(context.Context, protos.WorkerClient) (interface{}, error)) (interface{}, error) {
+	pl, err := pools().get(addr)
+	if err != nil {
+		return &emptyResult, x.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
+	}
+	defer pools().release(pl)
+
+	conn := pl.Get()
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sending request to %v", addr)
+	}
+	c := protos.NewWorkerClient(conn)
+	return f(ctx, c)
+}
+
+const backupRequestGracePeriod = 10 * time.Millisecond
+
+// TODO: Cross-server cancellation as described in Jeff Dean's talk.
+func processWithBackupRequest(
+	ctx context.Context,
+	gid uint32,
+	f func(context.Context, protos.WorkerClient) (interface{}, error)) (interface{}, error) {
+	addrs := groups().AnyTwoServers(gid)
+	if len(addrs) == 0 {
+		return nil, errors.New("no network connection")
+	}
+	if len(addrs) == 1 {
+		reply, err := invokeNetworkRequest(ctx, addrs[0], f)
+		return reply, err
+	}
+	type taskresult struct {
+		reply interface{}
+		err   error
+	}
+
+	chResults := make(chan taskresult, len(addrs))
+	ctx0, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		reply, err := invokeNetworkRequest(ctx0, addrs[0], f)
+		chResults <- taskresult{reply, err}
+	}()
+	timer := time.NewTimer(backupRequestGracePeriod)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-timer.C:
+		go func() {
+			reply, err := invokeNetworkRequest(ctx0, addrs[1], f)
+			chResults <- taskresult{reply, err}
+		}()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case result := <-chResults:
+			if result.err != nil {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case result := <-chResults:
+					return result.reply, result.err
+				}
+			} else {
+				return result.reply, nil
+			}
+		}
+	case result := <-chResults:
+		if result.err != nil {
+			cancel() // Might as well cleanup resources ASAP
+			timer.Stop()
+			return invokeNetworkRequest(ctx, addrs[1], f)
+		}
+		return result.reply, nil
+	}
+}
+
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
@@ -64,32 +144,18 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return processTask(ctx, q, gid)
 	}
 
-	// Send this over the network.
-	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
-	addr := groups().AnyServer(gid)
-	pl, err := pools().get(addr)
-	if err != nil {
-		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
-	}
-	defer pools().release(pl)
-
-	conn := pl.Get()
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Sending request to %v", addr)
-	}
-
-	c := protos.NewWorkerClient(conn)
-	reply, err := c.ServeTask(ctx, q)
+	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c protos.WorkerClient) (interface{}, error) {
+		return c.ServeTask(ctx, q)
+	})
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while calling Worker.ServeTask: %v", err)
+			tr.LazyPrintf("Error while worker.ServeTask: %v", err)
 		}
-		return &emptyResult, err
+		return nil, err
 	}
-
+	reply := result.(*protos.Result)
 	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Reply from server. length: %v Addr: %v Attr: %v",
-			len(reply.UidMatrix), addr, attr)
+		tr.LazyPrintf("Reply from server. length: %v Group: %v Attr: %v", len(reply.UidMatrix), gid, attr)
 	}
 	return reply, nil
 }

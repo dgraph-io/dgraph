@@ -114,7 +114,7 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	return nil
 }
 
-// Store stores the snapshot, hardstate and entries for a given RAFT group.
+// Store stores the hardstate and entries for a given RAFT group.
 func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 	wb := make([]*badger.Entry, 0, 100)
 

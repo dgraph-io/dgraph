@@ -205,6 +205,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 	gkeys := &protos.GroupKeys{}
 
 	// Receive all keys from client first.
+	// TODO: Weird that we batch keys in batches of 1000 on the client, but but not here.
 	for {
 		keys, err := stream.Recv()
 		if err == io.EOF {
@@ -247,12 +248,13 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 			it.Next()
 			continue
 		}
-		if group.BelongsTo(pk.Attr) != gkeys.GroupId && !pk.IsSchema() {
-			it.Seek(pk.SkipPredicate())
-			// Do not go next.
-			continue
-		} else if group.BelongsTo(pk.Attr) != gkeys.GroupId {
-			it.Next()
+		if group.BelongsTo(pk.Attr) != gkeys.GroupId {
+			if !pk.IsSchema() {
+				// Do not go next.
+				it.Seek(pk.SkipPredicate())
+			} else {
+				it.Next()
+			}
 			continue
 		}
 

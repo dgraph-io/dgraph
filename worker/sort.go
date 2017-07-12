@@ -38,6 +38,11 @@ import (
 
 var emptySortResult protos.SortResult
 
+type sortresult struct {
+	reply *protos.SortResult
+	err   error
+}
+
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
 	gid := group.BelongsTo(q.Attr)
@@ -50,39 +55,16 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 		return processSort(ctx, q)
 	}
 
-	// Send this over the network.
-	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
-	addr := groups().AnyServer(gid)
-	pl, err := pools().get(addr)
+	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c protos.WorkerClient) (interface{}, error) {
+		return c.Sort(ctx, q)
+	})
 	if err != nil {
-		return &emptySortResult, x.Wrapf(err, "SortOverNetwork: while retrieving connection.")
-	}
-	defer pools().release(pl)
-	conn := pl.Get()
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Sending request to %v", addr)
-	}
-
-	c := protos.NewWorkerClient(conn)
-	var reply *protos.SortResult
-	cerr := make(chan error, 1)
-	go func() {
-		var err error
-		reply, err = c.Sort(ctx, q)
-		cerr <- err
-	}()
-
-	select {
-	case <-ctx.Done():
-		return &emptySortResult, ctx.Err()
-	case err := <-cerr:
-		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while calling Worker.Sort: %+v", err)
-			}
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while calling worker.Sort: %v", err)
 		}
-		return reply, err
+		return nil, err
 	}
+	return result.(*protos.SortResult), nil
 }
 
 // Sort is used to sort given UID matrix.
