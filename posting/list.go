@@ -67,7 +67,7 @@ type List struct {
 	x.SafeMutex
 	index         x.SafeMutex
 	key           []byte
-	ghash         uint64
+	ghash         string
 	plist         *protos.PostingList
 	mlayer        []*protos.Posting // mutations
 	lastCompact   time.Time
@@ -199,7 +199,7 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
 	l.key = key
-	l.ghash = farm.Fingerprint64(key)
+	l.ghash = string(key)
 	l.refcount = 1
 
 	l.Lock()

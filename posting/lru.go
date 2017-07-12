@@ -36,7 +36,7 @@ type listCache struct {
 	curSize uint64
 	evicts  uint64
 	ll      *list.List
-	cache   map[uint64]*list.Element
+	cache   map[string]*list.Element
 }
 
 type CacheStats struct {
@@ -46,7 +46,7 @@ type CacheStats struct {
 }
 
 type entry struct {
-	key  uint64
+	key  string
 	pl   *List
 	size uint64
 }
@@ -57,7 +57,7 @@ func newListCache(maxSize uint64) *listCache {
 		ctx:     context.Background(),
 		MaxSize: maxSize,
 		ll:      list.New(),
-		cache:   make(map[uint64]*list.Element),
+		cache:   make(map[string]*list.Element),
 	}
 }
 
@@ -69,7 +69,7 @@ func (c *listCache) UpdateMaxSize() {
 
 // TODO: fingerprint can collide
 // Add adds a value to the cache.
-func (c *listCache) PutIfMissing(key uint64, pl *List) (res *List) {
+func (c *listCache) PutIfMissing(key string, pl *List) (res *List) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -117,7 +117,7 @@ func (c *listCache) removeOldest() {
 }
 
 // Get looks up a key's value from the cache.
-func (c *listCache) Get(key uint64) (pl *List) {
+func (c *listCache) Get(key string) (pl *List) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -144,7 +144,7 @@ func (c *listCache) Stats() CacheStats {
 	}
 }
 
-func (c *listCache) Each(f func(key uint64, val *List)) {
+func (c *listCache) Each(f func(key string, val *List)) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -160,7 +160,7 @@ func (c *listCache) Reset() {
 	c.Lock()
 	defer c.Unlock()
 	c.ll = list.New()
-	c.cache = make(map[uint64]*list.Element)
+	c.cache = make(map[string]*list.Element)
 	c.curSize = 0
 }
 
@@ -178,7 +178,7 @@ func (c *listCache) Clear() error {
 
 	}
 	c.ll = list.New()
-	c.cache = make(map[uint64]*list.Element)
+	c.cache = make(map[string]*list.Element)
 	c.curSize = 0
 	return nil
 }

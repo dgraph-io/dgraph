@@ -30,7 +30,6 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -220,7 +219,7 @@ func periodicCommit() {
 }
 
 type fingerPrint struct {
-	fp  uint64
+	fp  string
 	gid uint32
 }
 
@@ -260,7 +259,7 @@ func Init(ps *badger.KV) {
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
 func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
-	fp := farm.Fingerprint64(key)
+	fp := string(key)
 
 	lp := lcache.Get(fp)
 	if lp != nil {
@@ -299,7 +298,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 // Get takes a key and a groupID. It checks if the in-memory map has an
 // updated value and returns it if it exists or it gets from the store and DOES NOT ADD to lhmap.
 func Get(key []byte, gid uint32) (rlist *List, decr func()) {
-	fp := farm.Fingerprint64(key)
+	fp := string(key)
 	lp := lcache.Get(fp)
 
 	if lp != nil {
@@ -342,7 +341,7 @@ func CommitLists(numRoutines int, group uint32) {
 		}()
 	}
 
-	lcache.Each(func(k uint64, l *List) {
+	lcache.Each(func(k string, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
