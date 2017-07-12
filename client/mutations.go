@@ -310,6 +310,7 @@ RETRY:
 		if factor < 256*time.Second {
 			factor = factor * 2
 		}
+		atomic.AddUint64(&d.retries, 1)
 		goto RETRY
 	}
 	req.reset()
