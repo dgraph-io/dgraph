@@ -115,8 +115,8 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 	commitFraction float64) {
 	select {
 	case pending <- struct{}{}:
-		elog.Printf("Skipping gentleCommit")
 	default:
+		elog.Printf("Skipping gentleCommit")
 		return
 	}
 
