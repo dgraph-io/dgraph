@@ -90,28 +90,7 @@ func SortWithFacet(v []Val, ul *protos.List, l []*protos.Facets, desc bool) erro
 
 // Sort sorts the given array in-place.
 func Sort(v []Val, ul *protos.List, desc bool) error {
-	if len(v) == 0 {
-		return nil
-	}
-	typ := v[0].Tid
-	switch typ {
-	case DateTimeID, IntID, FloatID, StringID, DefaultID:
-		// Don't do anything, we can sort values of this type.
-	default:
-		return fmt.Errorf("Value of type: %s isn't sortable.", typ.Name())
-	}
-
-	var toBeSorted sort.Interface
-	b := sortBase{
-		values: v,
-		ul:     ul,
-	}
-	toBeSorted = byValue{b}
-	if desc {
-		toBeSorted = sort.Reverse(toBeSorted)
-	}
-	sort.Sort(toBeSorted)
-	return nil
+	return SortWithFacet(v, ul, nil, desc)
 }
 
 // Less returns true if a is strictly less than b.

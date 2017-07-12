@@ -1877,7 +1877,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	// See if we need to apply order based on facet.
 	if len(sg.Params.FacetOrder) != 0 {
-		return sg.sortUsingFacet(ctx)
+		return sg.sortAndPaginateUsingFacet(ctx)
 	}
 	for _, it := range sg.Params.NeedsVar {
 		if it.Name == sg.Params.Order {
@@ -1929,7 +1929,7 @@ func (sg *SubGraph) updateDestUids(ctx context.Context) {
 		func(uid uint64, idx int) bool { return included[idx] })
 }
 
-func (sg *SubGraph) sortUsingFacet(ctx context.Context) error {
+func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 	if sg.facetsMatrix == nil {
 		return nil
 	}
@@ -1937,10 +1937,11 @@ func (sg *SubGraph) sortUsingFacet(ctx context.Context) error {
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
 		fl := sg.facetsMatrix[i]
-		uids := make([]uint64, 0, len(ul.Uids))
+		uids := ul.Uids[:0]
 		values := make([]types.Val, 0, len(ul.Uids))
-		facetList := make([]*protos.Facets, 0, len(fl.FacetsList))
-		for j, uid := range ul.Uids {
+		facetList := fl.FacetsList[:0]
+		for j := 0; j < len(ul.Uids); j++ {
+			uid := ul.Uids[j]
 			f := fl.FacetsList[j]
 			for _, it := range f.Facets {
 				if it.Key == orderby {
