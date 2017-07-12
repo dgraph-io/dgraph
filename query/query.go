@@ -2276,12 +2276,12 @@ func (qr *QueryRequest) prepareMutation() (err error) {
 	return
 }
 
-func (qr *QueryRequest) processNquads(ctx context.Context, nquads gql.NQuads) (map[string]uint64, error) {
+func (qr *QueryRequest) processNquads(ctx context.Context, nquads gql.NQuads, newUids map[string]uint64) error {
 	var err error
 	var mr InternalMutation
 	if !nquads.IsEmpty() {
-		if mr, err = ToInternal(ctx, nquads, qr.vars); err != nil {
-			return mr.NewUids, x.Wrapf(&InternalError{err: err}, "failed to convert NQuads to edges")
+		if mr, err = ToInternal(ctx, nquads, qr.vars, newUids); err != nil {
+			return x.Wrapf(&InternalError{err: err}, "failed to convert NQuads to edges")
 		}
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
@@ -2289,9 +2289,9 @@ func (qr *QueryRequest) processNquads(ctx context.Context, nquads gql.NQuads) (m
 	}
 	m := protos.Mutations{Edges: mr.Edges, Schema: qr.SchemaUpdate}
 	if err = ApplyMutations(ctx, &m); err != nil {
-		return mr.NewUids, x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
+		return x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
 	}
-	return mr.NewUids, nil
+	return nil
 }
 
 type ExecuteResult struct {
@@ -2308,6 +2308,7 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 	}
 
 	var depSet, indepSet, depDel, indepDel gql.NQuads
+	var newUids map[string]uint64
 	if qr.GqlQuery.Mutation != nil {
 		if qr.GqlQuery.Mutation.HasOps() && !mutationAllowed {
 			return er, x.Wrap(&InvalidRequestError{err: MutationNotAllowedErr})
@@ -2324,7 +2325,14 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 			Partition(gql.HasVariables)
 
 		nquads := indepSet.Add(indepDel)
-		er.Allocations, err = qr.processNquads(ctx, nquads)
+		nquadsTemp := nquads.Add(depDel).Add(depSet)
+		if newUids, err = AssignUids(ctx, nquadsTemp); err != nil {
+			return er, err
+		}
+
+		er.Allocations = StripBlankNode(newUids)
+
+		err = qr.processNquads(ctx, nquads, newUids)
 		if err != nil {
 			return er, err
 		}
@@ -2342,13 +2350,8 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 
 	nquads := depSet.Add(depDel)
 	if !nquads.IsEmpty() {
-		allocations, err := qr.processNquads(ctx, nquads)
-		if err != nil {
+		if err = qr.processNquads(ctx, nquads, newUids); err != nil {
 			return er, err
-		}
-		if len(allocations) > 0 {
-			return er, x.Wrapf(&InvalidRequestError{err: err},
-				"adding nodes when using variables is currently not supported")
 		}
 	}
 
@@ -2358,4 +2361,14 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 		}
 	}
 	return er, nil
+}
+
+func StripBlankNode(mp map[string]uint64) map[string]uint64 {
+	temp := make(map[string]uint64)
+	for k, v := range mp {
+		if strings.HasPrefix(k, "_:") {
+			temp[k[2:]] = v
+		}
+	}
+	return temp
 }
