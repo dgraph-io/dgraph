@@ -257,7 +257,9 @@ func main() {
 		}(file)
 	}
 	wg.Wait()
-	dgraphClient.BatchFlush()
+	if err := dgraphClient.BatchFlush(); err != nil {
+		log.Fatal(err)
+	}
 
 	c := dgraphClient.Counter()
 	var rate uint64

@@ -22,10 +22,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -44,6 +44,7 @@ var (
 	ErrEmptyXid    = errors.New("Empty XID node.")
 	ErrInvalidType = errors.New("Invalid value type")
 	ErrEmptyVar    = errors.New("Empty variable name.")
+	ErrMaxTries    = errors.New("Max retry exceeded for batch mutations.")
 	emptyEdge      Edge
 )
 
@@ -51,12 +52,14 @@ var DefaultOptions = BatchMutationOptions{
 	Size:          100,
 	Pending:       100,
 	PrintCounters: false,
+	MaxRetry:      math.MaxUint64,
 }
 
 type BatchMutationOptions struct {
 	Size          int
 	Pending       int
 	PrintCounters bool
+	MaxRetry      uint64
 }
 
 type allocator struct {
@@ -163,7 +166,6 @@ type Dgraph struct {
 	schema chan protos.SchemaUpdate
 	nquads chan nquadOp
 	dc     []protos.DgraphClient
-	wg     sync.WaitGroup
 	alloc  *allocator
 	ticker *time.Ticker
 
@@ -173,7 +175,9 @@ type Dgraph struct {
 	// Num of mutations sent
 	mutations uint64
 	// To get time elapsed.
-	start time.Time
+	start   time.Time
+	retries uint64
+	che     chan error
 }
 
 func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
@@ -208,17 +212,21 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		opts:   opts,
 		dc:     clients,
 		start:  time.Now(),
-		nquads: make(chan nquadOp, opts.Pending*opts.Size),
+		nquads: make(chan nquadOp, opts.Pending*opts.Size*2),
 		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
 		alloc:  alloc,
+		// Size equals no goroutines we start for requests + 1 for schema mutations.
+		che: make(chan error, opts.Pending+1),
+	}
+
+	if opts.MaxRetry == 0 {
+		d.opts.MaxRetry = math.MaxUint64
 	}
 
 	for i := 0; i < opts.Pending; i++ {
-		d.wg.Add(1)
-		go d.makeRequests()
+		go d.makeRequests(d.che)
 	}
-	d.wg.Add(1)
-	go d.makeSchemaRequests()
+	go d.makeSchemaRequests(d.che)
 
 	rand.Seed(time.Now().Unix())
 	if opts.PrintCounters {
@@ -249,7 +257,6 @@ func (d *Dgraph) batchSync() {
 			}
 		}
 		loop++
-		//fmt.Printf("Writing batch of size: %v\n", len(entries))
 
 		for _, e := range entries {
 			// Atmost 10 bytes are needed for uvarint encoding
@@ -284,9 +291,12 @@ func (d *Dgraph) printCounters() {
 	}
 }
 
-func (d *Dgraph) request(req *Req) {
-	counter := atomic.AddUint64(&d.mutations, 1)
+func (d *Dgraph) request(req *Req) error {
+	counter := atomic.LoadUint64(&d.mutations)
 RETRY:
+	if atomic.LoadUint64(&d.retries) > d.opts.MaxRetry {
+		return ErrMaxTries
+	}
 	factor := time.Second
 	_, err := d.dc[rand.Intn(len(d.dc))].Run(context.Background(), &req.gr)
 	if err != nil {
@@ -303,9 +313,12 @@ RETRY:
 		goto RETRY
 	}
 	req.reset()
+	// Mutation succeeded.
+	atomic.AddUint64(&d.mutations, 1)
+	return nil
 }
 
-func (d *Dgraph) makeRequests() {
+func (d *Dgraph) makeRequests(che chan error) {
 	req := new(Req)
 
 	for n := range d.nquads {
@@ -315,17 +328,23 @@ func (d *Dgraph) makeRequests() {
 			req.Delete(n.e)
 		}
 		if req.size() == d.opts.Size {
-			d.request(req)
+			if err := d.request(req); err != nil {
+				che <- err
+				return
+			}
 		}
 	}
 
 	if req.size() > 0 {
-		d.request(req)
+		if err := d.request(req); err != nil {
+			che <- err
+			return
+		}
 	}
-	d.wg.Done()
+	che <- nil
 }
 
-func (d *Dgraph) makeSchemaRequests() {
+func (d *Dgraph) makeSchemaRequests(che chan error) {
 	req := new(Req)
 LOOP:
 	for {
@@ -335,10 +354,12 @@ LOOP:
 				break LOOP
 			}
 			req.addSchema(s)
-		default:
 			start := time.Now()
 			if req.size() > 0 {
-				d.request(req)
+				if err := d.request(req); err != nil {
+					che <- err
+					return
+				}
 			}
 			elapsedMillis := time.Since(start).Seconds() * 1e3
 			if elapsedMillis < 10 {
@@ -348,24 +369,53 @@ LOOP:
 	}
 
 	if req.size() > 0 {
-		d.request(req)
+		if err := d.request(req); err != nil {
+			che <- err
+			return
+		}
 	}
-	d.wg.Done()
+	che <- nil
 }
 
 func (d *Dgraph) BatchSet(e Edge) error {
-	d.nquads <- nquadOp{
+	nq := nquadOp{
 		e:  e,
 		op: SET,
+	}
+L:
+	for {
+		select {
+		// Channel could be at max capacity and this might block.
+		case d.nquads <- nq:
+			break L
+		default:
+			if atomic.LoadUint64(&d.retries) > d.opts.MaxRetry {
+				return ErrMaxTries
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
 	atomic.AddUint64(&d.rdfs, 1)
 	return nil
 }
 
 func (d *Dgraph) BatchDelete(e Edge) error {
-	d.nquads <- nquadOp{
+	nq := nquadOp{
 		e:  e,
 		op: DEL,
+	}
+L:
+	for {
+		select {
+		// Channel could be at max capacity and this might block.
+		case d.nquads <- nq:
+			break L
+		default:
+			if atomic.LoadUint64(&d.retries) > d.opts.MaxRetry {
+				return ErrMaxTries
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
 	atomic.AddUint64(&d.rdfs, 1)
 	return nil
@@ -381,13 +431,21 @@ func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 
 // Flush waits for all pending requests to complete. It should always be called
 // after adding all the NQuads using batch.AddMutation().
-func (d *Dgraph) BatchFlush() {
+func (d *Dgraph) BatchFlush() error {
 	close(d.nquads)
 	close(d.schema)
-	d.wg.Wait()
 	if d.ticker != nil {
 		d.ticker.Stop()
 	}
+	for i := 0; i < d.opts.Pending+1; i++ {
+		select {
+		case err := <-d.che:
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (d *Dgraph) Run(ctx context.Context, req *Req) (*protos.Response, error) {
