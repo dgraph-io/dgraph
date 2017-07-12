@@ -175,9 +175,11 @@ type Dgraph struct {
 	// Num of mutations sent
 	mutations uint64
 	// To get time elapsed.
-	start   time.Time
+	start time.Time
+	// No of retries done.
 	retries uint64
-	che     chan error
+	// Goroutines which make requests to server send error on this channel.
+	che chan error
 }
 
 func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
@@ -215,10 +217,11 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		nquads: make(chan nquadOp, opts.Pending*opts.Size*2),
 		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
 		alloc:  alloc,
-		// Size equals no goroutines we start for requests + 1 for schema mutations.
+		// Size equals no. of goroutines we start for requests + 1 (for schema mutations).
 		che: make(chan error, opts.Pending+1),
 	}
 
+	// If user doesn't give a value, we set it to math.MaxUint64.
 	if opts.MaxRetry == 0 {
 		d.opts.MaxRetry = math.MaxUint64
 	}
@@ -292,7 +295,7 @@ func (d *Dgraph) printCounters() {
 }
 
 func (d *Dgraph) request(req *Req) error {
-	counter := atomic.LoadUint64(&d.mutations)
+	counter := atomic.AddUint64(&d.mutations, 1)
 RETRY:
 	if atomic.LoadUint64(&d.retries) > d.opts.MaxRetry {
 		return ErrMaxTries
@@ -314,8 +317,6 @@ RETRY:
 		goto RETRY
 	}
 	req.reset()
-	// Mutation succeeded.
-	atomic.AddUint64(&d.mutations, 1)
 	return nil
 }
 
@@ -355,6 +356,7 @@ LOOP:
 				break LOOP
 			}
 			req.addSchema(s)
+		default:
 			start := time.Now()
 			if req.size() > 0 {
 				if err := d.request(req); err != nil {
@@ -442,6 +444,8 @@ func (d *Dgraph) BatchFlush() error {
 		select {
 		case err := <-d.che:
 			if err != nil {
+				// Safe to return as other goroutines are not using any resources which would be
+				// released after returning.
 				return err
 			}
 		}
