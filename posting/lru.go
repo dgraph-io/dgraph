@@ -111,7 +111,6 @@ func (c *listCache) removeOldest() {
 		// TODO: We should only remove the key after the PL is synced to disk.
 		e.pl.SetForDeletion()
 		e.pl.SyncIfDirty(true)
-		e.pl.decr()
 	}
 }
 

@@ -726,26 +726,25 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
+	pending := l.pending
 	f := func() {
+		if l.water != nil {
+			l.water.Ch <- x.Mark{Indices: pending, Done: true}
+		}
 		if delFromCache {
 			lcache.Lock()
 			delete(lcache.cache, l.ghash)
 			lcache.Unlock()
+			l.decr()
 		}
-		if l.water != nil {
-			l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
-			l.pending = make([]uint64, 0, 3)
-		}
-		l.decr()
-
 	}
 
 	wb := make([]*badger.Entry, 0, 1)
 	wb = badger.EntriesSet(wb, l.key, data)
 	pstore.BatchSetAsync(wb, f)
-	l.incr()
 
 	// Now reset the mutation variables.
+	l.pending = make([]uint64, 0, 3)
 	l.mlayer = l.mlayer[:0]
 	l.lastCompact = time.Now()
 	atomic.StoreInt32(&l.deleteAll, 0) // Unset deleteAll
