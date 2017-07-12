@@ -116,7 +116,6 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 	select {
 	case pending <- struct{}{}:
 	default:
-		elog.Printf("Skipping gentleCommit len(syncCh) %v,\n", len(syncCh))
 		return
 	}
 
@@ -230,7 +229,6 @@ const (
 
 var (
 	pstore    *badger.KV
-	syncCh    chan syncEntry
 	dirtyChan chan fingerPrint // All dirty posting list keys are pushed here.
 	marks     *syncMarks
 	lcache    *listCache
@@ -242,10 +240,8 @@ func Init(ps *badger.KV) {
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
 	dirtyChan = make(chan fingerPrint, 10000)
-	syncCh = make(chan syncEntry, syncChCapacity)
 
 	go periodicCommit()
-	go batchSync(0) // Can only run 1 goroutine to do writes.
 }
 
 // GetOrCreate stores the List corresponding to key, if it's not there already.
@@ -315,7 +311,7 @@ func commitOne(l *List) {
 	if l == nil {
 		return
 	}
-	if _, err := l.SyncIfDirty(); err != nil {
+	if _, err := l.SyncIfDirty(false); err != nil {
 		log.Printf("Error while committing dirty list: %v\n", err)
 	}
 }
@@ -366,60 +362,4 @@ func EvictGroup(group uint32) {
 	// lhmapFor(group).EachWithDelete(func(k uint64, l *List) {
 	// 	l.decr()
 	// })
-}
-
-// The following logic is used to batch up all the writes to RocksDB.
-type syncEntry struct {
-	key       []byte
-	val       []byte
-	water     *x.WaterMark
-	pending   []uint64
-	deleteKey uint64 // TODO: Use this to delete after a sync is done.
-}
-
-func batchSync(i int) {
-	var entries []syncEntry
-	var loop uint64
-	wb := make([]*badger.Entry, 0, 100)
-	elog := trace.NewEventLog("Batch Sync", fmt.Sprintf("%d", i))
-
-	for {
-		ent := <-syncCh
-	slurpLoop:
-		for {
-			entries = append(entries, ent)
-			if len(entries) == syncChCapacity {
-				// Avoid making infinite batch, push back against syncCh.
-				break
-			}
-			select {
-			case ent = <-syncCh:
-			default:
-				break slurpLoop
-			}
-		}
-
-		loop++
-		if loop%1000 == 0 {
-			elog.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
-		}
-		for _, e := range entries {
-			if e.val == nil {
-				wb = badger.EntriesDelete(wb, e.key)
-			} else {
-				x.BytesWrite.Add(int64(len(e.val)))
-				x.PostingWrites.Add(1)
-				wb = badger.EntriesSet(wb, e.key, e.val)
-			}
-		}
-		pstore.BatchSet(wb) // TODO: Check for errors here.
-		wb = wb[:0]
-
-		for _, e := range entries {
-			if e.water != nil {
-				e.water.Ch <- x.Mark{Indices: e.pending, Done: true}
-			}
-		}
-		entries = entries[:0]
-	}
 }

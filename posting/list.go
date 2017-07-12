@@ -653,7 +653,7 @@ func (l *List) Length(afterUid uint64) int {
 	return l.length(afterUid)
 }
 
-func (l *List) SyncIfDirty() (committed bool, err error) {
+func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
 
@@ -726,13 +726,20 @@ func (l *List) SyncIfDirty() (committed bool, err error) {
 		}
 	}
 
-	ce := syncEntry{
-		key:     l.key,
-		val:     data,
-		water:   l.water,
-		pending: l.pending,
+	f := func() {
+		lcache.Lock()
+		delete(lcache.cache, l.ghash)
+		lcache.Unlock()
+		if l.water != nil {
+			l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
+		}
+		l.decr()
 	}
-	syncCh <- ce
+
+	wb := make([]*badger.Entry, 0, 1)
+	wb = badger.EntriesSet(wb, l.key, data)
+	pstore.BatchSetAsync(wb, f)
+	l.incr()
 
 	// Now reset the mutation variables.
 	l.pending = make([]uint64, 0, 3)

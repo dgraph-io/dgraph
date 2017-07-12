@@ -110,8 +110,7 @@ func (c *listCache) removeOldest() {
 
 		// TODO: We should only remove the key after the PL is synced to disk.
 		e.pl.SetForDeletion()
-		e.pl.SyncIfDirty()
-		delete(c.cache, e.key)
+		e.pl.SyncIfDirty(true)
 		e.pl.decr()
 	}
 }
@@ -169,11 +168,10 @@ func (c *listCache) Reset() {
 func (c *listCache) Clear() error {
 	c.Lock()
 	defer c.Unlock()
-	for key, e := range c.cache {
+	for _, e := range c.cache {
 		kv := e.Value.(*entry)
 		kv.pl.SetForDeletion()
-		kv.pl.SyncIfDirty()
-		delete(c.cache, key)
+		kv.pl.SyncIfDirty(true)
 		kv.pl.decr()
 
 	}
