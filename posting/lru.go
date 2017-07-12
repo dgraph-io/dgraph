@@ -108,7 +108,6 @@ func (c *listCache) removeOldest() {
 		e := ele.Value.(*entry)
 		c.curSize -= e.size
 
-		// TODO: We should only remove the key after the PL is synced to disk.
 		e.pl.SetForDeletion()
 		e.pl.SyncIfDirty(true)
 	}
