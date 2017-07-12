@@ -29,26 +29,11 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
-	"google.golang.org/grpc"
-
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-)
-
-var (
-	pstore           *badger.KV
-	workerServer     *grpc.Server
-	leaseGid         uint32
-	pendingProposals chan struct{}
-	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
-	// so that the nodes which have lagged behind leader can just replay entries instead of
-	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
-	// are taken
-
-	emptyMembershipUpdate protos.MembershipUpdate
 )
 
 type server struct {

@@ -36,6 +36,19 @@ import (
 	"google.golang.org/grpc"
 )
 
+var (
+	pstore           *badger.KV
+	workerServer     *grpc.Server
+	leaseGid         uint32
+	pendingProposals chan struct{}
+	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
+	// so that the nodes which have lagged behind leader can just replay entries instead of
+	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
+	// are taken
+
+	emptyMembershipUpdate protos.MembershipUpdate
+)
+
 func workerPort() int {
 	return x.Config.PortOffset + Config.BaseWorkerPort
 }
