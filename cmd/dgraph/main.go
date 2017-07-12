@@ -83,40 +83,50 @@ var (
 )
 
 func setupConfigOpts() {
-	flag.StringVar(&dgraph.Config.PostingDir, "p", "p", "Directory to store posting lists.")
-	flag.StringVar(&dgraph.Config.WALDir, "w", "w", "Directory to store raft write-ahead logs.")
-	flag.BoolVar(&dgraph.Config.Nomutations, "nomutations", false,
+	var config dgraph.Options
+	defaults := dgraph.DefaultConfig
+	flag.StringVar(&config.PostingDir, "p", defaults.PostingDir,
+		"Directory to store posting lists.")
+	flag.StringVar(&config.WALDir, "w", defaults.WALDir,
+		"Directory to store raft write-ahead logs.")
+	flag.BoolVar(&config.Nomutations, "nomutations", defaults.Nomutations,
 		"Don't allow mutations on this server.")
-	flag.IntVar(&dgraph.Config.NumPending, "pending", 1000,
+	flag.IntVar(&config.NumPending, "pending", defaults.NumPending,
 		"Number of pending queries. Useful for rate limiting.")
 
-	flag.IntVar(&worker.Config.BaseWorkerPort, "workerport", 12345,
+	flag.IntVar(&config.BaseWorkerPort, "workerport", defaults.BaseWorkerPort,
 		"Port used by worker for internal communication.")
-	flag.StringVar(&worker.Config.ExportPath, "export", "export",
+	flag.StringVar(&config.ExportPath, "export", defaults.ExportPath,
 		"Folder in which to store exports.")
-	flag.IntVar(&worker.Config.NumPendingProposals, "pending_proposals", 2000,
+	flag.IntVar(&config.NumPendingProposals, "pending_proposals", defaults.NumPendingProposals,
 		"Number of pending mutation proposals. Useful for rate limiting.")
-	flag.Float64Var(&worker.Config.Tracing, "trace", 0.0, "The ratio of queries to trace.")
-	flag.StringVar(&worker.Config.GroupIds, "groups", "0,1", "RAFT groups handled by this server.")
-	flag.StringVar(&worker.Config.MyAddr, "my", "",
+	flag.Float64Var(&config.Tracing, "trace", defaults.Tracing,
+		"The ratio of queries to trace.")
+	flag.StringVar(&config.GroupIds, "groups", defaults.GroupIds,
+		"RAFT groups handled by this server.")
+	flag.StringVar(&config.MyAddr, "my", defaults.MyAddr,
 		"addr:port of this server, so other Dgraph servers can talk to this.")
-	flag.StringVar(&worker.Config.PeerAddr, "peer", "", "IP_ADDRESS:PORT of any healthy peer.")
-	flag.Uint64Var(&worker.Config.RaftId, "idx", 1,
+	flag.StringVar(&config.PeerAddr, "peer", defaults.PeerAddr,
+		"IP_ADDRESS:PORT of any healthy peer.")
+	flag.Uint64Var(&config.RaftId, "idx", defaults.RaftId,
 		"RAFT ID that this server will use to join RAFT groups.")
-	flag.Uint64Var(&worker.Config.MaxPendingCount, "sc", 1000,
+	flag.Uint64Var(&config.MaxPendingCount, "sc", defaults.MaxPendingCount,
 		"Max number of pending entries in wal after which snapshot is taken")
-	flag.BoolVar(&worker.Config.ExpandEdge, "expand_edge", true, "Don't store predicates per node.")
+	flag.BoolVar(&config.ExpandEdge, "expand_edge", defaults.ExpandEdge,
+		"Don't store predicates per node.")
 
-	flag.Float64Var(&posting.Config.MaxMemory, "max_memory_mb", 1024.0,
+	flag.Float64Var(&config.MaxMemory, "max_memory_mb", defaults.MaxMemory,
 		"Estimated max memory the process can take")
-	flag.Float64Var(&posting.Config.CommitFraction, "gentlecommit", 0.10,
+	flag.Float64Var(&config.CommitFraction, "gentlecommit",
+		defaults.CommitFraction,
 		"Fraction of dirty posting lists to commit every few seconds.")
 
-	flag.StringVar(&x.Config.ConfigFile, "config", "",
+	flag.StringVar(&config.ConfigFile, "config", defaults.ConfigFile,
 		"YAML configuration file containing dgraph settings.")
-	flag.BoolVar(&x.Config.Version, "version", false, "Prints the version of Dgraph")
-	flag.BoolVar(&x.Config.DebugMode, "debugmode", false,
+	flag.BoolVar(&config.DebugMode, "debugmode", defaults.DebugMode,
 		"enable debug mode for more debug information")
+
+	flag.BoolVar(&x.Config.Version, "version", false, "Prints the version of Dgraph")
 	// Useful for running multiple servers on the same machine.
 	flag.IntVar(&x.Config.PortOffset, "port_offset", 0,
 		"Value added to all listening port numbers.")
@@ -665,6 +675,7 @@ func main() {
 	// schema before calling posting.Init().
 	schema.Init(dgraph.State.PStore)
 	posting.Init(dgraph.State.PStore)
+	worker.Config.InMemoryComm = false
 	worker.Init(dgraph.State.PStore)
 
 	// setup shutdown os signal handler

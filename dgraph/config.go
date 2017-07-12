@@ -17,6 +17,8 @@
 package dgraph
 
 import (
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"path/filepath"
 )
@@ -26,10 +28,77 @@ type Options struct {
 	WALDir      string
 	Nomutations bool
 	NumPending  int
+
+	MaxMemory      float64
+	CommitFraction float64
+
+	BaseWorkerPort      int
+	ExportPath          string
+	NumPendingProposals int
+	Tracing             float64
+	GroupIds            string
+	MyAddr              string
+	PeerAddr            string
+	RaftId              uint64
+	MaxPendingCount     uint64
+	ExpandEdge          bool
+	InMemoryComm        bool
+
+	ConfigFile string
+	DebugMode  bool
 }
 
 // TODO(tzdybal) - remove global
 var Config Options
+
+var DefaultConfig = Options{
+	PostingDir:  "p",
+	WALDir:      "w",
+	Nomutations: false,
+	NumPending:  1000,
+
+	MaxMemory:      1024.0,
+	CommitFraction: 0.10,
+
+	BaseWorkerPort:      12345,
+	ExportPath:          "export",
+	NumPendingProposals: 2000,
+	Tracing:             0.0,
+	GroupIds:            "0,1",
+	MyAddr:              "",
+	PeerAddr:            "",
+	RaftId:              1,
+	MaxPendingCount:     1000,
+	ExpandEdge:          true,
+	InMemoryComm:        false,
+
+	ConfigFile: "",
+	DebugMode:  false,
+}
+
+func SetConfiguration(newConfig Options) {
+	newConfig.validate()
+
+	Config = newConfig
+
+	posting.Config.MaxMemory = Config.MaxMemory
+	posting.Config.CommitFraction = Config.CommitFraction
+
+	worker.Config.BaseWorkerPort = Config.BaseWorkerPort
+	worker.Config.ExportPath = Config.ExportPath
+	worker.Config.NumPendingProposals = Config.NumPendingProposals
+	worker.Config.Tracing = Config.Tracing
+	worker.Config.GroupIds = Config.GroupIds
+	worker.Config.MyAddr = Config.MyAddr
+	worker.Config.PeerAddr = Config.PeerAddr
+	worker.Config.RaftId = Config.RaftId
+	worker.Config.MaxPendingCount = Config.MaxPendingCount
+	worker.Config.ExpandEdge = Config.ExpandEdge
+	worker.Config.InMemoryComm = Config.InMemoryComm
+
+	x.Config.ConfigFile = Config.ConfigFile
+	x.Config.DebugMode = Config.DebugMode
+}
 
 func (o *Options) validate() {
 	pd, err := filepath.Abs(o.PostingDir)
@@ -37,4 +106,8 @@ func (o *Options) validate() {
 	wd, err := filepath.Abs(o.WALDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same.")
+
+	if o.InMemoryComm {
+		// TODO(tzdybal) - force exactly one group. And don't open up Grpc conns for worker.
+	}
 }
