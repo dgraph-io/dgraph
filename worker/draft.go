@@ -61,7 +61,7 @@ type peerPool struct {
 
 var (
 	errNoPeerPoolEntry = fmt.Errorf("no peerPool entry")
-	errNoPeerPoolPool  = fmt.Errorf("no peerPool pool, could not connect")
+	errNoPeerPool      = fmt.Errorf("no peerPool pool, could not connect")
 )
 
 // getPool returns the non-nil pool for a peer.  This might error even if get(id)
@@ -78,7 +78,7 @@ func (p *peerPool) getPool(id uint64) (*pool, error) {
 		return nil, errNoPeerPoolEntry
 	}
 	if ent.poolOrNil == nil {
-		return nil, errNoPeerPoolPool
+		return nil, errNoPeerPool
 	}
 	return ent.poolOrNil, nil
 }
@@ -705,12 +705,10 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
 	posting.EvictGroup(n.gid)
-	_, err = populateShard(n.ctx, pool, n.gid)
-	if err != nil {
+	if _, err := populateShard(n.ctx, pool, n.gid); err != nil {
 		// TODO: We definitely don't want to just fall flat on our face if we can't
 		// retrieve a simple snapshot.
-		log.Fatalf("Cannot retrieve snapshot from peer %v, error: %v\n",
-			peerID, err)
+		log.Fatalf("Cannot retrieve snapshot from peer %v, error: %v\n", peerID, err)
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
