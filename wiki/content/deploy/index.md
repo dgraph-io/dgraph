@@ -20,6 +20,24 @@ $ sudo tar -C /usr/local/bin -xzf dgraph-linux-amd64-VERSION.tar.gz
 $ sudo tar -C /usr/local/bin -xzf dgraph-darwin-amd64-VERSION.tar.gz
 ```
 
+### Nightly
+
+Nightly builds from Dgraph master branch at https://github.com/dgraph-io/dgraph are available from https://nightly.dgraph.io.  To install run:
+
+```sh
+curl https://nightly.dgraph.io -sSf | bash
+```
+
+The Docker version is available as _master_.  Pull and run with:
+
+```sh
+docker pull dgraph/dgraph:master
+mkdir -p ~/dgraph
+docker run -it -p 127.0.0.1:8080:8080 -p 127.0.0.1:9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph:master dgraph --bindall=true
+```
+
+{{% notice "note" %}}All the usual cautions about nightly builds apply: the feature set is not stable and may change (even daily) and the nightly build may contain bugs. {{% /notice %}}
+
 ## Endpoints
 
 On its http port, a running Dgraph instance exposes a number of service endpoints.
@@ -315,7 +333,7 @@ p w ip worker groups.conf groups heathy-peer
 ## Bulk Data Loading
 The `dgraphloader` binary is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph. It's not the only way to run mutations.  Mutations could also be run from the command line, e.g. with `curl`, from the UI, by sending to `/query` or by a program using a [Dgraph client]({{< relref "clients/index.md" >}}).
 
-`dgraphloader` correctly handles splitting blank nodes across multiple batches and creating `_xid_` [edges for RDF URIs]({{< relref "query-language/index.md#external-ids" >}}) (option `-x`).
+`dgraphloader` correctly handles splitting blank nodes across multiple batches and creating `xid` [edges for RDF URIs]({{< relref "query-language/index.md#external-ids" >}}) (option `-x`).
 
 {{% notice "note" %}} `dgraphloader` only accepts gzipped, RDF NQuad/Triple data. Data in other formats must be converted [to this](https://www.w3.org/TR/n-quads/).{{% /notice %}}
 
@@ -330,7 +348,7 @@ $ dgraphloader -r <path-to-rdf-gzipped-file>
 # Read RDFs and a schema file and send do Dgraph running at given address
 $ dgraphloader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:port>
 
-# For example to load goldendata with the corresponding schema and convert URI to _xid_.
+# For example to load goldendata with the corresponding schema and convert URI to xid.
 $ dgraphloader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -s github.com/dgraph-io/benchmarks/data/goldendata.schema -x
 ```
 
@@ -347,7 +365,7 @@ This also works from a browser, provided the HTTP GET is being run from the same
 
 This triggers a export of all the groups spread across the entire cluster. Each server writes output in gzipped rdf to the export directory specified on startup by `--export`. If any of the groups fail, the entire export process is considered failed, and an error is returned.
 
-{{% notice "note" %}}It is up to the user to retrieve the right exports files from the servers in the cluster. Dgraph does not copy files  to the server that initiated the export.{{% /notice %}}
+{{% notice "note" %}}It is up to the user to retrieve the right export files from the servers in the cluster. Dgraph does not copy files  to the server that initiated the export.{{% /notice %}}
 
 ## Shutdown
 
