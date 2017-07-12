@@ -47,8 +47,7 @@ type peerPoolEntry struct {
 	// Never the empty string.  Possibly a bogus address -- bad port number, the value
 	// of *myAddr, or some screwed up Raft config.
 	addr string
-	// An owning reference to a pool for this peer (or nil if addr is sufficiently
-	// bogus).
+	// An owning reference to a pool for this peer (or nil if addr is sufficiently bogus).
 	poolOrNil *pool
 }
 
