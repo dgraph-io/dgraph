@@ -77,7 +77,16 @@ func (s *ServerState) initStorage() {
 	opt.SyncWrites = true
 	opt.Dir = Config.PostingDir
 	opt.ValueDir = Config.PostingDir
-	opt.MapTablesTo = table.MemoryMap
+	switch Config.PMapTablesTo {
+	case "memorymap":
+		opt.MapTablesTo = table.MemoryMap
+	case "loadtoram":
+		opt.MapTablesTo = table.LoadToRAM
+	case "nothing":
+		opt.MapTablesTo = table.Nothing
+	default:
+		x.Fatalf("Invalid map_tables options")
+	}
 	s.Pstore, err = badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 }

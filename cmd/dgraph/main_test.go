@@ -80,6 +80,7 @@ func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
 	}
 
 	dgraph.Config.PostingDir = dir1
+	dgraph.Config.PMapTablesTo = "loadtoram"
 	dgraph.Config.WALDir = dir2
 	dgraph.State = dgraph.NewServerState()
 
