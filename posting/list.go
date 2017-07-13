@@ -734,14 +734,15 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
-	maxRetries := 5
 	retries := 0
+	// l.pending would have been modified by the time the callback is called hence we hold a
+	// reference to pending.
 	pending := l.pending
 	var f func(error)
 	f = func(err error) {
 		if err != nil {
 			elog.Printf("Got err in while doing async writes in SyncIfDirty: %+v", err)
-			if retries > maxRetries {
+			if retries > 5 {
 				x.Fatalf("Max retries exceeded while doing async write for key: %s, err: %+v",
 					l.key, err)
 			}
@@ -755,6 +756,10 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 		if delFromCache {
 			lcache.Lock()
+			ele := lcache.cache[l.ghash]
+			// We delete it from link list but if someone calls Get before callback is called it
+			// would be put back in the list. So safe to delete it here.
+			lcache.ll.Remove(ele)
 			delete(lcache.cache, l.ghash)
 			lcache.Unlock()
 			l.decr()

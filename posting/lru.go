@@ -170,8 +170,6 @@ func (c *listCache) Clear() error {
 		kv := e.Value.(*entry)
 		kv.pl.SetForDeletion()
 		kv.pl.SyncIfDirty(true)
-		kv.pl.decr()
-
 	}
 	c.ll = list.New()
 	c.cache = make(map[uint64]*list.Element)
