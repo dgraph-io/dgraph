@@ -380,11 +380,7 @@ LOOP:
 	che <- nil
 }
 
-func (d *Dgraph) BatchSet(e Edge) error {
-	nq := nquadOp{
-		e:  e,
-		op: SET,
-	}
+func (d *Dgraph) addNquad(nq nquadOp) error {
 L:
 	for {
 		select {
@@ -402,26 +398,20 @@ L:
 	return nil
 }
 
+func (d *Dgraph) BatchSet(e Edge) error {
+	nq := nquadOp{
+		e:  e,
+		op: SET,
+	}
+	return d.addNquad(nq)
+}
+
 func (d *Dgraph) BatchDelete(e Edge) error {
 	nq := nquadOp{
 		e:  e,
 		op: DEL,
 	}
-L:
-	for {
-		select {
-		// Channel could be at max capacity and this might block.
-		case d.nquads <- nq:
-			break L
-		default:
-			if atomic.LoadUint64(&d.retries) > d.opts.MaxRetry {
-				return ErrMaxTries
-			}
-			time.Sleep(5 * time.Millisecond)
-		}
-	}
-	atomic.AddUint64(&d.rdfs, 1)
-	return nil
+	return d.addNquad(nq)
 }
 
 func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
