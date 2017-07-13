@@ -207,8 +207,8 @@ func periodicCommit() {
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
 			x.NumGoRoutines.Set(int64(runtime.NumGoroutine()))
-			if setLruMemory && inUse > 0.75*(Config.MaxMemory) {
-				go lcache.UpdateMaxSize()
+			if setLruMemory && inUse > 0.75*(Config.AllottedMemory) {
+				lcache.UpdateMaxSize()
 				setLruMemory = false
 			}
 		}

@@ -38,8 +38,8 @@ type ServerState struct {
 	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
 	ShutdownCh chan struct{} // channel to signal shutdown.
 
-	PStore   *badger.KV
-	WALStore *badger.KV
+	Pstore   *badger.KV
+	WALstore *badger.KV
 }
 
 // TODO(tzdybal) - remove global
@@ -66,7 +66,7 @@ func (s *ServerState) initStorage() {
 	kvOpt.MapTablesTo = table.Nothing
 
 	var err error
-	s.WALStore, err = badger.NewKV(&kvOpt)
+	s.WALstore, err = badger.NewKV(&kvOpt)
 	x.Checkf(err, "Error while creating badger KV WAL store")
 
 	// Postings directory
@@ -78,13 +78,13 @@ func (s *ServerState) initStorage() {
 	opt.Dir = Config.PostingDir
 	opt.ValueDir = Config.PostingDir
 	opt.MapTablesTo = table.MemoryMap
-	s.PStore, err = badger.NewKV(&opt)
+	s.Pstore, err = badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
 }
 
 func (s *ServerState) Dispose() {
-	s.PStore.Close()
-	s.WALStore.Close()
+	s.Pstore.Close()
+	s.WALstore.Close()
 }
 
 // Server implements protos.DgraphServer

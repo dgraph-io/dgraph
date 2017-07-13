@@ -17,7 +17,7 @@
 package posting
 
 type Options struct {
-	MaxMemory      float64
+	AllottedMemory float64
 	CommitFraction float64
 }
 

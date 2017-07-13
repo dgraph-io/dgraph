@@ -29,7 +29,7 @@ type Options struct {
 	Nomutations bool
 	NumPending  int
 
-	MaxMemory      float64
+	AllottedMemory float64
 	CommitFraction float64
 
 	BaseWorkerPort      int
@@ -57,7 +57,7 @@ var DefaultConfig = Options{
 	Nomutations: false,
 	NumPending:  1000,
 
-	MaxMemory:      1024.0,
+	AllottedMemory: 1024.0,
 	CommitFraction: 0.10,
 
 	BaseWorkerPort:      12345,
@@ -81,7 +81,7 @@ func SetConfiguration(newConfig Options) {
 
 	Config = newConfig
 
-	posting.Config.MaxMemory = Config.MaxMemory
+	posting.Config.AllottedMemory = Config.AllottedMemory
 	posting.Config.CommitFraction = Config.CommitFraction
 
 	worker.Config.BaseWorkerPort = Config.BaseWorkerPort

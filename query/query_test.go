@@ -6596,7 +6596,7 @@ func TestMain(m *testing.M) {
 
 	worker.Config.GroupIds = "0,1"
 	worker.Config.RaftId = 1
-	posting.Config.MaxMemory = 1024.0
+	posting.Config.AllottedMemory = 1024.0
 	posting.Config.CommitFraction = 0.10
 	group.ParseGroupConfig("")
 	schema.Init(ps)

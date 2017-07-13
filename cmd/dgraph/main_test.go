@@ -83,11 +83,11 @@ func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
 	dgraph.Config.WALDir = dir2
 	dgraph.State = dgraph.NewServerState()
 
-	posting.Init(dgraph.State.PStore)
+	posting.Init(dgraph.State.Pstore)
 	group.ParseGroupConfig("groups.conf")
-	schema.Init(dgraph.State.PStore)
-	worker.Init(dgraph.State.PStore)
-	worker.StartRaftNodes(dgraph.State.WALStore)
+	schema.Init(dgraph.State.Pstore)
+	worker.Init(dgraph.State.Pstore)
+	worker.StartRaftNodes(dgraph.State.WALstore)
 
 	return dir1, dir2, ps, nil
 }
@@ -1291,10 +1291,9 @@ func TestSchemaMutation5Error(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	x.Init()
-	worker.Config.GroupIds = "0,1"
-	worker.Config.RaftId = 1
-	posting.Config.MaxMemory = 1024.0
-	posting.Config.CommitFraction = 0.10
+
+	dgraph.SetConfiguration(dgraph.DefaultConfig)
+
 	dir1, dir2, ps, _ := prepare()
 	defer ps.Close()
 	defer closeAll(dir1, dir2)

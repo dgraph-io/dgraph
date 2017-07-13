@@ -115,7 +115,7 @@ func setupConfigOpts() {
 	flag.BoolVar(&config.ExpandEdge, "expand_edge", defaults.ExpandEdge,
 		"Don't store predicates per node.")
 
-	flag.Float64Var(&config.MaxMemory, "max_memory_mb", defaults.MaxMemory,
+	flag.Float64Var(&config.AllottedMemory, "max_memory_mb", defaults.AllottedMemory,
 		"Estimated max memory the process can take")
 	flag.Float64Var(&config.CommitFraction, "gentlecommit",
 		defaults.CommitFraction,
@@ -673,10 +673,10 @@ func main() {
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
-	schema.Init(dgraph.State.PStore)
-	posting.Init(dgraph.State.PStore)
+	schema.Init(dgraph.State.Pstore)
+	posting.Init(dgraph.State.Pstore)
 	worker.Config.InMemoryComm = false
-	worker.Init(dgraph.State.PStore)
+	worker.Init(dgraph.State.Pstore)
 
 	// setup shutdown os signal handler
 	sdCh := make(chan os.Signal, 1)
@@ -693,7 +693,7 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	go worker.StartRaftNodes(dgraph.State.WALStore)
+	go worker.StartRaftNodes(dgraph.State.WALstore)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {
