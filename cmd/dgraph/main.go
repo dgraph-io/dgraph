@@ -401,7 +401,12 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.Error, err.Error())
 	}
 	nquads := gql.WrapNQ(NewSharedQueryNQuads(rawQuery), protos.DirectedEdge_SET)
-	if mr, err = query.ToInternal(ctx, nquads, nil); err != nil {
+	newUids, err := query.AssignUids(ctx, nquads)
+	if err != nil {
+		fail()
+		return
+	}
+	if mr, err = query.ToInternal(ctx, nquads, nil, newUids); err != nil {
 		fail()
 		return
 	}
@@ -409,7 +414,8 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
-	allocIdsStr := query.ConvertUidsToHex(mr.NewUids)
+	tempMap := query.StripBlankNode(newUids)
+	allocIdsStr := query.ConvertUidsToHex(tempMap)
 	payload := map[string]interface{}{
 		"code":    x.Success,
 		"message": "Done",
