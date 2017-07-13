@@ -23,6 +23,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -3590,12 +3591,12 @@ func TestFilterUid(t *testing.T) {
 }
 
 func TestRemoveDuplicates(t *testing.T) {
-	set := removeDuplicates([]string{"a", "a", "a", "b", "b", "c", "c"})
+	set := x.RemoveDuplicates([]string{"a", "a", "a", "b", "b", "c", "c"})
 	require.EqualValues(t, []string{"a", "b", "c"}, set)
 }
 
 func TestRemoveDuplicatesWithoutDuplicates(t *testing.T) {
-	set := removeDuplicates([]string{"a", "b", "c", "d"})
+	set := x.RemoveDuplicates([]string{"a", "b", "c", "d"})
 	require.EqualValues(t, []string{"a", "b", "c", "d"}, set)
 }
 

@@ -583,7 +583,7 @@ func Parse(r Request) (res Result, rerr error) {
 				varNames = append(varNames, v)
 			}
 			sort.Strings(varNames)
-			varNames = removeDuplicates(varNames)
+			varNames = x.RemoveDuplicates(varNames)
 
 			allVars = append(allVars, &Vars{Needs: varNames})
 		}
@@ -605,27 +605,15 @@ func flatten(vl []*Vars) (needs []string, defines []string) {
 	return
 }
 
-// removes duplicates from a sorted slice of strings. Changes underylying array.
-func removeDuplicates(s []string) (out []string) {
-	out = s[:0]
-	for i := range s {
-		if i > 0 && s[i] == s[i-1] {
-			continue
-		}
-		out = append(out, s[i])
-	}
-	return
-}
-
 func checkDependency(vl []*Vars) error {
 	needs, defines := flatten(vl)
 
 	sort.Strings(needs)
 	sort.Strings(defines)
 
-	needs = removeDuplicates(needs)
+	needs = x.RemoveDuplicates(needs)
 
-	if len(defines) != len(removeDuplicates(defines)) {
+	if len(defines) != len(x.RemoveDuplicates(defines)) {
 		return x.Errorf("Some variables are declared multiple times.")
 	}
 
