@@ -201,8 +201,8 @@ func periodicCommit() {
 
 			stats := lcache.Stats()
 			x.EvictedPls.Set(int64(stats.NumEvicts))
-			x.LCacheSize.Set(int64(stats.Size))
-			x.LCacheLen.Set(int64(stats.Length))
+			x.LcacheSize.Set(int64(stats.Size))
+			x.LcacheLen.Set(int64(stats.Length))
 
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
 			// are currently being processed to not get stuck on dirtyChan, which won't be
@@ -241,6 +241,7 @@ func Init(ps *badger.KV) {
 	marks = new(syncMarks)
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
+	x.LcacheCapacity.Set(math.MaxInt64)
 	dirtyChan = make(chan fingerPrint, 10000)
 	syncCh = make(chan syncEntry, syncChCapacity)
 

@@ -22,7 +22,10 @@ package posting
 import (
 	"container/list"
 	"context"
+	"fmt"
 	"sync"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // listCache is an LRU cache.
@@ -66,8 +69,10 @@ func (c *listCache) UpdateMaxSize() {
 	defer c.Unlock()
 	if c.curSize < (50 << 20) {
 		c.MaxSize = 50 << 20
+		fmt.Println("LRU cache max size is being set to 50 MB")
 		return
 	}
+	x.LcacheCapacity.Set(int64(50 << 0))
 	c.MaxSize = c.curSize
 }
 

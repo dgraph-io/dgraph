@@ -39,9 +39,9 @@ var (
 	// value at particular point of time
 	PendingQueries   *expvar.Int
 	PendingProposals *expvar.Int
-	LCacheSize       *expvar.Int
-	LCacheLen        *expvar.Int
-	LCacheCapacity   *expvar.Int
+	LcacheSize       *expvar.Int
+	LcacheLen        *expvar.Int
+	LcacheCapacity   *expvar.Int
 	DirtyMapSize     *expvar.Int
 	NumGoRoutines    *expvar.Int
 	MemoryInUse      *expvar.Int
@@ -69,9 +69,9 @@ func init() {
 	NumQueries = expvar.NewInt("numQueries")
 	ServerHealth = expvar.NewInt("serverHealth")
 	DirtyMapSize = expvar.NewInt("dirtyMapSize")
-	LCacheSize = expvar.NewInt("lcacheSize")
-	LCacheLen = expvar.NewInt("lcacheLen")
-	LCacheCapacity = expvar.NewInt("lCacheCapacity")
+	LcacheSize = expvar.NewInt("lcacheSize")
+	LcacheLen = expvar.NewInt("lcacheLen")
+	LcacheCapacity = expvar.NewInt("lcacheCapacity")
 	NumGoRoutines = expvar.NewInt("numGoRoutines")
 	MemoryInUse = expvar.NewInt("memoryInUse")
 	HeapIdle = expvar.NewInt("heapIdle")
@@ -180,9 +180,9 @@ func init() {
 			"lcacheLen",
 			nil, nil,
 		),
-		"lCacheCapacity": prometheus.NewDesc(
-			"lCacheCapacity",
-			"lCacheCapacity",
+		"lcacheCapacity": prometheus.NewDesc(
+			"lcacheCapacity",
+			"lcacheCapacity",
 			nil, nil,
 		),
 		"numGoRoutines": prometheus.NewDesc(

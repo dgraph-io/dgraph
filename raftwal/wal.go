@@ -79,34 +79,40 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	if err != nil {
 		return x.Wrapf(err, "wal.Store: While marshal snapshot")
 	}
-	wb = badger.EntriesSet(wb, w.snapshotKey(gid), data)
-
-	// Delete all entries before this snapshot to save disk space.
-	start := w.entryKey(gid, 0, 0)
-	last := w.entryKey(gid, s.Metadata.Term, s.Metadata.Index)
-	opt := badger.DefaultIteratorOptions
-	opt.FetchValues = false
-	itr := w.wals.NewIterator(opt)
-	defer itr.Close()
-	for itr.Seek(start); itr.Valid(); itr.Next() {
-		key := itr.Item().Key()
-		if bytes.Compare(key, last) > 0 {
-			break
-		}
-		newk := make([]byte, len(key))
-		copy(newk, key)
-		wb = badger.EntriesDelete(wb, newk)
-	}
-
-	fmt.Printf("Writing snapshot to WAL: %+v\n", s)
-	if err := w.wals.BatchSet(wb); err != nil {
+	if err := w.wals.Set(w.snapshotKey(gid), data); err != nil {
 		return err
 	}
-	for _, wbe := range wb {
-		if err := wbe.Error; err != nil {
-			return err
+	fmt.Printf("Writing snapshot to WAL: %+v\n", s)
+
+	go func() {
+		// Delete all entries before this snapshot to save disk space.
+		start := w.entryKey(gid, 0, 0)
+		last := w.entryKey(gid, s.Metadata.Term, s.Metadata.Index)
+		opt := badger.DefaultIteratorOptions
+		opt.FetchValues = false
+		itr := w.wals.NewIterator(opt)
+		defer itr.Close()
+		for itr.Seek(start); itr.Valid(); itr.Next() {
+			key := itr.Item().Key()
+			if bytes.Compare(key, last) > 0 {
+				break
+			}
+			newk := make([]byte, len(key))
+			copy(newk, key)
+			wb = badger.EntriesDelete(wb, newk)
 		}
-	}
+
+		// Failure to delete entries is not a fatal error, so should be
+		// ok to ignore
+		if err := w.wals.BatchSet(wb); err != nil {
+			fmt.Printf("Error while deleting entries %v\n", err)
+		}
+		for _, wbe := range wb {
+			if err := wbe.Error; err != nil {
+				fmt.Printf("Error while deleting entries %v\n", err)
+			}
+		}
+	}()
 	return nil
 }
 
