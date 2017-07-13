@@ -23,7 +23,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -3588,16 +3587,6 @@ func TestFilterUid(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []uint64{1, 3, 5, 7}, gql.Query[0].UID)
 	require.Equal(t, []uint64{3, 7}, gql.Query[0].Filter.Func.UID)
-}
-
-func TestRemoveDuplicates(t *testing.T) {
-	set := x.RemoveDuplicates([]string{"a", "a", "a", "b", "b", "c", "c"})
-	require.EqualValues(t, []string{"a", "b", "c"}, set)
-}
-
-func TestRemoveDuplicatesWithoutDuplicates(t *testing.T) {
-	set := x.RemoveDuplicates([]string{"a", "b", "c", "d"})
-	require.EqualValues(t, []string{"a", "b", "c", "d"}, set)
 }
 
 func TestMultipleSetBlocks(t *testing.T) {

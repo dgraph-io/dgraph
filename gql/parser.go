@@ -582,7 +582,6 @@ func Parse(r Request) (res Result, rerr error) {
 			for _, v := range res.MutationVars {
 				varNames = append(varNames, v)
 			}
-			sort.Strings(varNames)
 			varNames = x.RemoveDuplicates(varNames)
 
 			allVars = append(allVars, &Vars{Needs: varNames})
@@ -607,9 +606,6 @@ func flatten(vl []*Vars) (needs []string, defines []string) {
 
 func checkDependency(vl []*Vars) error {
 	needs, defines := flatten(vl)
-
-	sort.Strings(needs)
-	sort.Strings(defines)
 
 	needs = x.RemoveDuplicates(needs)
 

@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -194,8 +195,9 @@ func ValidateAddress(addr string) bool {
 	return regExpHostName.MatchString(host)
 }
 
-// removes duplicates from a sorted slice of strings. Changes underylying array.
+// sorts the slice of strings and removes duplicates. Changes underylying array.
 func RemoveDuplicates(s []string) (out []string) {
+	sort.Strings(s)
 	out = s[:0]
 	for i := range s {
 		if i > 0 && s[i] == s[i-1] {
