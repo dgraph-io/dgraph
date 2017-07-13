@@ -156,6 +156,8 @@ func setupConfigOpts() {
 	if !flag.Parsed() {
 		log.Fatal("Unable to parse flags")
 	}
+
+	dgraph.SetConfiguration(config)
 }
 
 func httpPort() int {
