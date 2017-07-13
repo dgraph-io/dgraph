@@ -97,7 +97,7 @@ func RunServer(bindall bool) {
 	if bindall {
 		laddr = "0.0.0.0"
 	} else if len(Config.MyAddr) > 0 {
-		fmt.Printf("--my flag is provided without bindall, Did you forget to specify bindall?\n")
+		x.Printf("--my flag is provided without bindall, Did you forget to specify bindall?\n")
 	}
 	var err error
 	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, workerPort()))
@@ -105,7 +105,7 @@ func RunServer(bindall bool) {
 		log.Fatalf("While running server: %v", err)
 		return
 	}
-	log.Printf("Worker listening at address: %v", ln.Addr())
+	x.Printf("Worker listening at address: %v", ln.Addr())
 
 	protos.RegisterWorkerServer(workerServer, &grpcWorker{})
 	workerServer.Serve(ln)
