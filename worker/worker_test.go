@@ -623,6 +623,8 @@ func TestProcessSortOffsetCount(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	x.Init()
+	posting.Config.AllottedMemory = 1024.0
+	posting.Config.CommitFraction = 0.10
 	x.AssertTruef(!x.IsTestRun(), "We use watermarks for syncing.")
 	os.Exit(m.Run())
 }

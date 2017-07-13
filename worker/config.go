@@ -14,30 +14,20 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package dgraph
+package worker
 
-import (
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
-)
-
-func GetDefaultEmbeddeConfig() Options {
-	config := DefaultConfig
-	config.InMemoryComm = true
-	config.BaseWorkerPort = 0
-	config.MyAddr = ""
-	config.PeerAddr = ""
-
-	return config
+type Options struct {
+	BaseWorkerPort      int
+	ExportPath          string
+	NumPendingProposals int
+	Tracing             float64
+	GroupIds            string
+	MyAddr              string
+	PeerAddr            string
+	RaftId              uint64
+	MaxPendingCount     uint64
+	ExpandEdge          bool
+	InMemoryComm        bool
 }
 
-func NewEmbeddedDgraphClient(config Options, opts client.BatchMutationOptions,
-	clientDir string) *client.Dgraph {
-
-	embedded := &inmemoryClient{&Server{}}
-	return client.NewClient([]protos.DgraphClient{embedded}, opts, clientDir)
-}
-
-func DisposeEmbeddedClient(_ *client.Dgraph) {
-	defer State.Dispose()
-}
+var Config Options

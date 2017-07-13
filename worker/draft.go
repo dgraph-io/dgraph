@@ -782,8 +782,8 @@ func (n *node) Run() {
 			}
 
 		case <-n.stop:
-			if peerId, has := groups().Peer(n.gid, *raftId); has && n.AmLeader() {
-				n.Raft().TransferLeadership(n.ctx, *raftId, peerId)
+			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
+				n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 				go func() {
 					select {
 					case <-n.ctx.Done(): // time out
@@ -836,7 +836,7 @@ func (n *node) snapshotPeriodically() {
 	for {
 		select {
 		case <-ticker.C:
-			n.snapshot(*maxPendingCount)
+			n.snapshot(Config.MaxPendingCount)
 
 		case <-n.done:
 			return
@@ -1050,7 +1050,7 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*
 	}
 
 	// Best effor reject
-	if _, found := groups().Server(rc.Id, rc.Group); found || rc.Id == *raftId {
+	if _, found := groups().Server(rc.Id, rc.Group); found || rc.Id == Config.RaftId {
 		return &protos.Payload{}, x.Errorf(errorNodeIDExists)
 	}
 

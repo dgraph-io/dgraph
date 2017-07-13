@@ -335,7 +335,7 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Leader of group: %d. Running export.", gid)
 		}
-		if err := export(gid, *exportPath); err != nil {
+		if err := export(gid, Config.ExportPath); err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
 			}

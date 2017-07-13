@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"flag"
 	"strings"
 
 	"golang.org/x/net/trace"
@@ -12,8 +11,6 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
-
-var expandEdge = flag.Bool("expand_edge", true, "Don't store predicates per node.")
 
 type InternalMutation struct {
 	Edges []*protos.DirectedEdge
@@ -25,7 +22,7 @@ func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.Directe
 }
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
-	if *expandEdge {
+	if worker.Config.ExpandEdge {
 		err := addInternalEdge(ctx, m)
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Added Internal edges")

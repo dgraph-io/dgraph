@@ -107,7 +107,7 @@ func destroyPool(pl *pool) {
 
 // Returns a pool that you should call put() on.
 func (p *poolsi) connect(addr string) (*pool, bool) {
-	if addr == *myAddr {
+	if addr == Config.MyAddr {
 		return nil, false
 	}
 	p.RLock()

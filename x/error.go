@@ -70,7 +70,7 @@ func AssertTruef(b bool, format string, args ...interface{}) {
 
 // Wrap wraps errors from external lib.
 func Wrap(err error) error {
-	if !*debugMode {
+	if !Config.DebugMode {
 		return err
 	}
 	return errors.Wrap(err, "")
@@ -78,7 +78,7 @@ func Wrap(err error) error {
 
 // Wrapf is Wrap with extra info.
 func Wrapf(err error, format string, args ...interface{}) error {
-	if !*debugMode {
+	if !Config.DebugMode {
 		if err == nil {
 			return nil
 		}
@@ -89,7 +89,7 @@ func Wrapf(err error, format string, args ...interface{}) error {
 
 // Errorf creates a new error with stack trace, etc.
 func Errorf(format string, args ...interface{}) error {
-	if !*debugMode {
+	if !Config.DebugMode {
 		return fmt.Errorf(format, args...)
 	}
 	return errors.Errorf(format, args...)

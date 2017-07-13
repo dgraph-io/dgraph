@@ -19,11 +19,14 @@ package dgraph
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
@@ -34,15 +37,54 @@ import (
 type ServerState struct {
 	FinishCh   chan struct{} // channel to wait for all pending reqs to finish.
 	ShutdownCh chan struct{} // channel to signal shutdown.
+
+	Pstore   *badger.KV
+	WALstore *badger.KV
 }
 
 // TODO(tzdybal) - remove global
 var State ServerState
 
 func NewServerState() (state ServerState) {
+	Config.validate()
+
 	state.FinishCh = make(chan struct{})
 	state.ShutdownCh = make(chan struct{})
+
+	state.initStorage()
+
 	return state
+}
+
+func (s *ServerState) initStorage() {
+	// Write Ahead Log directory
+	x.Checkf(os.MkdirAll(Config.WALDir, 0700), "Error while creating WAL dir.")
+	kvOpt := badger.DefaultOptions
+	kvOpt.SyncWrites = true
+	kvOpt.Dir = Config.WALDir
+	kvOpt.ValueDir = Config.WALDir
+	kvOpt.MapTablesTo = table.Nothing
+
+	var err error
+	s.WALstore, err = badger.NewKV(&kvOpt)
+	x.Checkf(err, "Error while creating badger KV WAL store")
+
+	// Postings directory
+	// All the writes to posting store should be synchronous. We use batched writers
+	// for posting lists, so the cost of sync writes is amortized.
+	x.Check(os.MkdirAll(Config.PostingDir, 0700))
+	opt := badger.DefaultOptions
+	opt.SyncWrites = true
+	opt.Dir = Config.PostingDir
+	opt.ValueDir = Config.PostingDir
+	opt.MapTablesTo = table.MemoryMap
+	s.Pstore, err = badger.NewKV(&opt)
+	x.Checkf(err, "Error while creating badger KV posting store")
+}
+
+func (s *ServerState) Dispose() {
+	s.Pstore.Close()
+	s.WALstore.Close()
 }
 
 // Server implements protos.DgraphServer
@@ -66,7 +108,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		return resp, ctx.Err()
 	}
 
-	if rand.Float64() < *worker.Tracing {
+	if rand.Float64() < worker.Config.Tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		tr.SetMaxEvents(1000)
 		defer tr.Finish()

@@ -411,7 +411,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 	}
 	node := groups().Node(m.GroupId)
 	var tr trace.Trace
-	if rand.Float64() < *Tracing {
+	if rand.Float64() < Config.Tracing {
 		tr = trace.New("Dgraph", "GrpcMutate")
 		defer tr.Finish()
 		tr.SetMaxEvents(1000)

@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -60,6 +61,7 @@ var m = `
 `
 
 func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
+	setupConfigOpts() // load defaults
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -77,11 +79,15 @@ func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
 		return dir1, "", nil, err
 	}
 
-	posting.Init(ps)
+	dgraph.Config.PostingDir = dir1
+	dgraph.Config.WALDir = dir2
+	dgraph.State = dgraph.NewServerState()
+
+	posting.Init(dgraph.State.Pstore)
 	group.ParseGroupConfig("groups.conf")
-	schema.Init(ps)
-	worker.Init(ps)
-	worker.StartRaftNodes(dir2)
+	schema.Init(dgraph.State.Pstore)
+	worker.Init(dgraph.State.Pstore)
+	worker.StartRaftNodes(dgraph.State.WALstore)
 
 	return dir1, dir2, ps, nil
 }
@@ -1285,6 +1291,9 @@ func TestSchemaMutation5Error(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	x.Init()
+
+	dgraph.SetConfiguration(dgraph.DefaultConfig)
+
 	dir1, dir2, ps, _ := prepare()
 	defer ps.Close()
 	defer closeAll(dir1, dir2)

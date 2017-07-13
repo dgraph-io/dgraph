@@ -20,7 +20,6 @@
 package worker
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -38,28 +37,27 @@ import (
 )
 
 var (
-	baseWorkerPort = flag.Int("workerport", 12345,
-		"Port used by worker for internal communication.")
-	exportPath = flag.String("export", "export",
-		"Folder in which to store exports.")
-	numPendingProposals = flag.Int("pending_proposals", 2000,
-		"Number of pending mutation proposals. Useful for rate limiting.")
-	Tracing          = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	pstore           *badger.KV
 	workerServer     *grpc.Server
 	leaseGid         uint32
 	pendingProposals chan struct{}
+	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
+	// so that the nodes which have lagged behind leader can just replay entries instead of
+	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
+	// are taken
+
+	emptyMembershipUpdate protos.MembershipUpdate
 )
 
 func workerPort() int {
-	return *x.PortOffset + *baseWorkerPort
+	return x.Config.PortOffset + Config.BaseWorkerPort
 }
 
 func Init(ps *badger.KV) {
 	pstore = ps
 	// needs to be initialized after group config
 	leaseGid = group.BelongsTo("_lease_")
-	pendingProposals = make(chan struct{}, *numPendingProposals)
+	pendingProposals = make(chan struct{}, Config.NumPendingProposals)
 	workerServer = grpc.NewServer(
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
@@ -98,7 +96,7 @@ func RunServer(bindall bool) {
 	laddr := "localhost"
 	if bindall {
 		laddr = "0.0.0.0"
-	} else if len(*myAddr) > 0 {
+	} else if len(Config.MyAddr) > 0 {
 		fmt.Printf("--my flag is provided without bindall, Did you forget to specify bindall?\n")
 	}
 	var err error

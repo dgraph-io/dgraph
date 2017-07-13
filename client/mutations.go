@@ -196,7 +196,6 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 
 	kv, err := badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
-
 	alloc := &allocator{
 		dc:     clients[0],
 		ids:    NewCache(100000),

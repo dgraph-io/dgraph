@@ -24,20 +24,23 @@ import (
 	"github.com/dgraph-io/dgraph/protos"
 )
 
-// inmemoryClient implements of protos.DgraphClient (it's equivalent of default grpc client, but for
+// inmemoryClient implements protos.DgraphClient (it's equivalent of default grpc client, but for
 // in-memory communication (without data (un)marshaling)).
 type inmemoryClient struct {
 	srv *Server
 }
 
-func (i *inmemoryClient) Run(ctx context.Context, in *protos.Request, opts ...grpc.CallOption) (*protos.Response, error) {
+func (i *inmemoryClient) Run(ctx context.Context, in *protos.Request,
+	_ ...grpc.CallOption) (*protos.Response, error) {
 	return i.srv.Run(ctx, in)
 }
 
-func (i *inmemoryClient) CheckVersion(ctx context.Context, in *protos.Check, opts ...grpc.CallOption) (*protos.Version, error) {
+func (i *inmemoryClient) CheckVersion(ctx context.Context, in *protos.Check,
+	_ ...grpc.CallOption) (*protos.Version, error) {
 	return i.srv.CheckVersion(ctx, in)
 }
 
-func (i *inmemoryClient) AssignUids(ctx context.Context, in *protos.Num, opts ...grpc.CallOption) (*protos.AssignedIds, error) {
+func (i *inmemoryClient) AssignUids(ctx context.Context, in *protos.Num,
+	_ ...grpc.CallOption) (*protos.AssignedIds, error) {
 	return i.srv.AssignUids(ctx, in)
 }
