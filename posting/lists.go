@@ -197,8 +197,8 @@ func periodicCommit() {
 
 			stats := lcache.Stats()
 			x.EvictedPls.Set(int64(stats.NumEvicts))
-			x.LCacheSize.Set(int64(stats.Size))
-			x.LCacheLen.Set(int64(stats.Length))
+			x.LcacheSize.Set(int64(stats.Size))
+			x.LcacheLen.Set(int64(stats.Length))
 
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
 			// are currently being processed to not get stuck on dirtyChan, which won't be
@@ -237,6 +237,7 @@ func Init(ps *badger.KV) {
 	marks = new(syncMarks)
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
+	x.LcacheCapacity.Set(math.MaxInt64)
 	dirtyChan = make(chan fingerPrint, 10000)
 	syncCh = make(chan syncEntry, syncChCapacity)
 
@@ -261,7 +262,6 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	lp := lcache.Get(fp)
 	if lp != nil {
 		x.CacheHit.Add(1)
-		lp.incr()
 		return lp, lp.decr
 	}
 	x.CacheMiss.Add(1)
@@ -271,11 +271,9 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	l.water = marks.Get(group)
 
+	// We are always going to return lp to caller, whether it is l or not
+	// lcache increments the ref counter
 	lp = lcache.PutIfMissing(fp, l)
-
-	// We are always going to return lp to caller, whether it is l or not. So, let's
-	// increment its reference counter.
-	lp.incr()
 
 	if lp != l {
 		x.CacheRace.Add(1)
@@ -299,7 +297,6 @@ func Get(key []byte, gid uint32) (rlist *List, decr func()) {
 	lp := lcache.Get(fp)
 
 	if lp != nil {
-		lp.incr()
 		return lp, lp.decr
 	}
 

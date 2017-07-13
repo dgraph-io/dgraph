@@ -528,6 +528,9 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 func (l *List) delete(ctx context.Context, attr string) error {
 	l.AssertLock()
 	if l.plist != emptyList {
+		for _, p := range l.plist.Postings {
+			postingPool.Put(p)
+		}
 		l.plist.Uids = l.plist.Uids[:0]
 		l.plist.Postings = l.plist.Postings[:0]
 		postingListPool.Put(l.plist)
