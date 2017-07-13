@@ -653,6 +653,14 @@ func (l *List) Length(afterUid uint64) int {
 	return l.length(afterUid)
 }
 
+func doAsyncWrite(key []byte, data []byte, f func(error)) {
+	if data == nil {
+		pstore.DeleteAsync(key, f)
+	} else {
+		pstore.SetAsync(key, data, f)
+	}
+}
+
 func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
@@ -726,8 +734,22 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
+	maxRetries := 5
+	retries := 0
 	pending := l.pending
-	f := func() {
+	var f func(error)
+	f = func(err error) {
+		if err != nil {
+			elog.Printf("Got err in while doing async writes in SyncIfDirty: %+v", err)
+			if retries > maxRetries {
+				x.Fatalf("Max retries exceeded while doing async write for key: %s, err: %+v",
+					l.key, err)
+			}
+			// Error from badger should be temporary, so we can retry.
+			retries += 1
+			doAsyncWrite(l.key, data, f)
+			return
+		}
 		if l.water != nil {
 			l.water.Ch <- x.Mark{Indices: pending, Done: true}
 		}
@@ -739,10 +761,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
-	wb := make([]*badger.Entry, 0, 1)
-	wb = badger.EntriesSet(wb, l.key, data)
-	pstore.BatchSetAsync(wb, f)
-
+	doAsyncWrite(l.key, data, f)
 	// Now reset the mutation variables.
 	l.pending = make([]uint64, 0, 3)
 	l.mlayer = l.mlayer[:0]
