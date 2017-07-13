@@ -113,6 +113,7 @@ func (c *listCache) removeOldest() {
 		// key wont be deleted from cache. So lets delete it now if SyncIfDirty returns false.
 		if committed, _ := e.pl.SyncIfDirty(true); !committed {
 			delete(c.cache, e.key)
+			e.pl.decr()
 		}
 	}
 }
@@ -173,7 +174,10 @@ func (c *listCache) Clear() error {
 	for _, e := range c.cache {
 		kv := e.Value.(*entry)
 		kv.pl.SetForDeletion()
-		kv.pl.SyncIfDirty(true)
+		if committed, _ := kv.pl.SyncIfDirty(true); !committed {
+			delete(c.cache, kv.pl.ghash)
+			kv.pl.decr()
+		}
 	}
 	c.ll = list.New()
 	c.cache = make(map[uint64]*list.Element)
