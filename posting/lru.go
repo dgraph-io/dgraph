@@ -22,7 +22,10 @@ package posting
 import (
 	"container/list"
 	"context"
+	"fmt"
 	"sync"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // listCache is an LRU cache.
@@ -64,6 +67,12 @@ func newListCache(maxSize uint64) *listCache {
 func (c *listCache) UpdateMaxSize() {
 	c.Lock()
 	defer c.Unlock()
+	if c.curSize < (50 << 20) {
+		c.MaxSize = 50 << 20
+		fmt.Println("LRU cache max size is being set to 50 MB")
+		return
+	}
+	x.LcacheCapacity.Set(int64(50 << 0))
 	c.MaxSize = c.curSize
 }
 
@@ -76,6 +85,7 @@ func (c *listCache) PutIfMissing(key uint64, pl *List) (res *List) {
 	if ee, ok := c.cache[key]; ok {
 		c.ll.MoveToFront(ee)
 		res = ee.Value.(*entry).pl
+		res.incr()
 		return res
 	}
 
@@ -92,6 +102,7 @@ func (c *listCache) PutIfMissing(key uint64, pl *List) (res *List) {
 	c.cache[key] = ele
 	c.removeOldest()
 
+	e.pl.incr()
 	return e.pl
 }
 
@@ -127,6 +138,7 @@ func (c *listCache) Get(key uint64) (pl *List) {
 		est := uint64(e.pl.EstimatedSize())
 		c.curSize += est - e.size
 		e.size = est
+		e.pl.incr()
 		return e.pl
 	}
 	return nil
