@@ -501,7 +501,7 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	defer pools().release(pool)
 	conn := pool.Get()
 
-	c := protos.NewWorkerClient(conn)
+	c := newWorkerClient(conn)
 	p := &protos.Payload{Data: data}
 
 	ch := make(chan error, 1)
@@ -905,7 +905,7 @@ func (n *node) joinPeers() {
 
 	conn := pool.Get()
 
-	c := protos.NewWorkerClient(conn)
+	c := newWorkerClient(conn)
 	x.Printf("Calling JoinCluster")
 	_, err = c.JoinCluster(n.ctx, n.raftContext)
 	x.Checkf(err, "Error while joining cluster")

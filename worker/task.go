@@ -77,7 +77,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		tr.LazyPrintf("Sending request to %v", addr)
 	}
 
-	c := protos.NewWorkerClient(conn)
+	c := newWorkerClient(conn)
 	reply, err := c.ServeTask(ctx, q)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
