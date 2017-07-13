@@ -80,6 +80,7 @@ func (p *peerPool) getPool(id uint64) (*pool, error) {
 	if ent.poolOrNil == nil {
 		return nil, errNoPeerPool
 	}
+	ent.poolOrNil.AddOwner()
 	return ent.poolOrNil, nil
 }
 
