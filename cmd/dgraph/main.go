@@ -117,8 +117,7 @@ func setupConfigOpts() {
 
 	flag.Float64Var(&config.AllottedMemory, "max_memory_mb", defaults.AllottedMemory,
 		"Estimated max memory the process can take")
-	flag.Float64Var(&config.CommitFraction, "gentlecommit",
-		defaults.CommitFraction,
+	flag.Float64Var(&config.CommitFraction, "gentlecommit", defaults.CommitFraction,
 		"Fraction of dirty posting lists to commit every few seconds.")
 
 	flag.StringVar(&config.ConfigFile, "config", defaults.ConfigFile,
