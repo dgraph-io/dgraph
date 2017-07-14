@@ -755,13 +755,9 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 			l.water.Ch <- x.Mark{Indices: pending, Done: true}
 		}
 		if delFromCache {
-			lcache.Lock()
-			ele := lcache.cache[l.ghash]
-			// We delete it from link list but if someone calls Get before callback is called it
-			// would be put back in the list. So safe to delete it here.
-			lcache.ll.Remove(ele)
-			delete(lcache.cache, l.ghash)
-			lcache.Unlock()
+			x.AssertTruef(atomic.LoadInt32(&l.deleteMe) == 1,
+				"List should have been SetForDeletion before deleting from cache.")
+			lcache.delete(l.ghash)
 			l.decr()
 		}
 	}

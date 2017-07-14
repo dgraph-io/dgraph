@@ -184,3 +184,13 @@ func (c *listCache) Clear() error {
 	c.curSize = 0
 	return nil
 }
+
+// delete removes a key from cache
+func (c *listCache) delete(key uint64) {
+	c.Lock()
+	defer c.Unlock()
+
+	ele := c.cache[key]
+	c.ll.Remove(ele)
+	delete(c.cache, key)
+}
