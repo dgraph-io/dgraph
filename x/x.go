@@ -195,7 +195,8 @@ func ValidateAddress(addr string) bool {
 	return regExpHostName.MatchString(host)
 }
 
-// sorts the slice of strings and removes duplicates. Changes underylying array.
+// sorts the slice of strings and removes duplicates. changes the input slice.
+// this function should be called like: someSlice = x.RemoveDuplicates(someSlice)
 func RemoveDuplicates(s []string) (out []string) {
 	sort.Strings(s)
 	out = s[:0]

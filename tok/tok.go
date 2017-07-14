@@ -334,7 +334,7 @@ func (t TrigramTokenizer) Tokens(sv types.Val) ([]string, error) {
 			trigram := value[i : i+3]
 			tokens[i] = encodeToken(trigram, t.Identifier())
 		}
-		x.RemoveDuplicates(tokens)
+		tokens = x.RemoveDuplicates(tokens)
 		return tokens, nil
 	}
 	return nil, nil

@@ -608,8 +608,10 @@ func checkDependency(vl []*Vars) error {
 	needs, defines := flatten(vl)
 
 	needs = x.RemoveDuplicates(needs)
+	lenBefore := len(defines)
+	defines = x.RemoveDuplicates(defines)
 
-	if len(defines) != len(x.RemoveDuplicates(defines)) {
+	if len(defines) != lenBefore {
 		return x.Errorf("Some variables are declared multiple times.")
 	}
 
