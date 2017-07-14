@@ -582,8 +582,7 @@ func Parse(r Request) (res Result, rerr error) {
 			for _, v := range res.MutationVars {
 				varNames = append(varNames, v)
 			}
-			sort.Strings(varNames)
-			varNames = removeDuplicates(varNames)
+			varNames = x.RemoveDuplicates(varNames)
 
 			allVars = append(allVars, &Vars{Needs: varNames})
 		}
@@ -605,27 +604,14 @@ func flatten(vl []*Vars) (needs []string, defines []string) {
 	return
 }
 
-// removes duplicates from a sorted slice of strings. Changes underylying array.
-func removeDuplicates(s []string) (out []string) {
-	out = s[:0]
-	for i := range s {
-		if i > 0 && s[i] == s[i-1] {
-			continue
-		}
-		out = append(out, s[i])
-	}
-	return
-}
-
 func checkDependency(vl []*Vars) error {
 	needs, defines := flatten(vl)
 
-	sort.Strings(needs)
-	sort.Strings(defines)
+	needs = x.RemoveDuplicates(needs)
+	lenBefore := len(defines)
+	defines = x.RemoveDuplicates(defines)
 
-	needs = removeDuplicates(needs)
-
-	if len(defines) != len(removeDuplicates(defines)) {
+	if len(defines) != lenBefore {
 		return x.Errorf("Some variables are declared multiple times.")
 	}
 

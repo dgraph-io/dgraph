@@ -272,6 +272,7 @@ func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error
 	for i, token := range tokenStream {
 		terms[i] = encodeToken(string(token.Term), identifier)
 	}
+	terms = x.RemoveDuplicates(terms)
 	return terms, nil
 }
 
@@ -333,6 +334,7 @@ func (t TrigramTokenizer) Tokens(sv types.Val) ([]string, error) {
 			trigram := value[i : i+3]
 			tokens[i] = encodeToken(trigram, t.Identifier())
 		}
+		tokens = x.RemoveDuplicates(tokens)
 		return tokens, nil
 	}
 	return nil, nil

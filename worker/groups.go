@@ -95,6 +95,7 @@ func removeFromServersIfPresent(sl *servers, nodeID uint64) {
 func addToServers(sl *servers, update server) {
 	back := len(sl.list)
 	sl.list = append(sl.list, update)
+	sl.byNodeID[update.NodeId] = back
 	if update.Leader && back != 0 {
 		swapServers(sl, 0, back)
 		sl.list[back].Leader = false

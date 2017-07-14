@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -192,4 +193,18 @@ func ValidateAddress(addr string) bool {
 		return false
 	}
 	return regExpHostName.MatchString(host)
+}
+
+// sorts the slice of strings and removes duplicates. changes the input slice.
+// this function should be called like: someSlice = x.RemoveDuplicates(someSlice)
+func RemoveDuplicates(s []string) (out []string) {
+	sort.Strings(s)
+	out = s[:0]
+	for i := range s {
+		if i > 0 && s[i] == s[i-1] {
+			continue
+		}
+		out = append(out, s[i])
+	}
+	return
 }

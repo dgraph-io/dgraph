@@ -291,7 +291,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 
 // Get takes a key and a groupID. It checks if the in-memory map has an
 // updated value and returns it if it exists or it gets from the store and DOES NOT ADD to lhmap.
-func Get(key []byte, gid uint32) (rlist *List, decr func()) {
+func Get(key []byte) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
 	lp := lcache.Get(fp)
 
