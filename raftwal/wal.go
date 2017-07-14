@@ -83,14 +83,15 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	}
 	x.Printf("Writing snapshot to WAL: %+v\n", s)
 
-	go func() {
+	go func(term uint64, index uint64) {
 		// Delete all entries before this snapshot to save disk space.
 		start := w.entryKey(gid, 0, 0)
-		last := w.entryKey(gid, s.Metadata.Term, s.Metadata.Index)
+		last := w.entryKey(gid, term, index)
 		opt := badger.DefaultIteratorOptions
 		opt.FetchValues = false
 		itr := w.wals.NewIterator(opt)
 		defer itr.Close()
+
 		for itr.Seek(start); itr.Valid(); itr.Next() {
 			key := itr.Item().Key()
 			if bytes.Compare(key, last) > 0 {
@@ -111,7 +112,7 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 				x.Printf("Error while deleting entries %v\n", err)
 			}
 		}
-	}()
+	}(s.Metadata.Term, s.Metadata.Index)
 	return nil
 }
 
