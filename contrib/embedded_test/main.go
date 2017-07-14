@@ -14,6 +14,8 @@ import (
 )
 
 func main() {
+	x.Logger = log.New(ioutil.Discard, "", 0)
+
 	bmOpts := client.BatchMutationOptions{
 		Size:          1000,
 		Pending:       100,
@@ -21,6 +23,7 @@ func main() {
 	}
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
+
 	config := dgraph.GetDefaultEmbeddeConfig()
 	dgraphClient := dgraph.NewEmbeddedDgraphClient(config, bmOpts, clientDir)
 	defer dgraph.DisposeEmbeddedDgraph()
