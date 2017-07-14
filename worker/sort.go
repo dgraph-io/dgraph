@@ -278,17 +278,16 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 	cctx, cancel := context.WithCancel(ctx)
 	resCh := make(chan result, 2)
 	go func() {
-		// Wait for 3ms before starting
-		time.Sleep(3 * time.Millisecond)
 		select {
+		case <-time.After(3 * time.Millisecond):
+			// Wait between ctx chan and time chan.
 		case <-ctx.Done():
 			resCh <- result{err: ctx.Err()}
-		default:
-			r, err := sortWithoutIndex(cctx, ts)
-			resCh <- result{
-				res: r,
-				err: err,
-			}
+		}
+		r, err := sortWithoutIndex(cctx, ts)
+		resCh <- result{
+			res: r,
+			err: err,
 		}
 	}()
 
