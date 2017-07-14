@@ -23,7 +23,7 @@ func main() {
 	x.Check(err)
 	config := dgraph.GetDefaultEmbeddeConfig()
 	dgraphClient := dgraph.NewEmbeddedDgraphClient(config, bmOpts, clientDir)
-	defer dgraph.DisposeEmbeddedClient(dgraphClient)
+	defer dgraph.DisposeEmbeddedDgraph()
 
 	req := client.Req{}
 	alice, err := dgraphClient.NodeXid("alice", false)
