@@ -17,17 +17,19 @@
 package dgraph
 
 import (
+	"path/filepath"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"path/filepath"
 )
 
 type Options struct {
-	PostingDir  string
-	WALDir      string
-	Nomutations bool
-	NumPending  int
+	PostingDir    string
+	PostingTables string
+	WALDir        string
+	Nomutations   bool
+	NumPending    int
 
 	AllottedMemory float64
 	CommitFraction float64
@@ -52,10 +54,11 @@ type Options struct {
 var Config Options
 
 var DefaultConfig = Options{
-	PostingDir:  "p",
-	WALDir:      "w",
-	Nomutations: false,
-	NumPending:  1000,
+	PostingDir:    "p",
+	PostingTables: "loadtoram",
+	WALDir:        "w",
+	Nomutations:   false,
+	NumPending:    1000,
 
 	AllottedMemory: 1024.0,
 	CommitFraction: 0.10,

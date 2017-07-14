@@ -3589,16 +3589,6 @@ func TestFilterUid(t *testing.T) {
 	require.Equal(t, []uint64{3, 7}, gql.Query[0].Filter.Func.UID)
 }
 
-func TestRemoveDuplicates(t *testing.T) {
-	set := removeDuplicates([]string{"a", "a", "a", "b", "b", "c", "c"})
-	require.EqualValues(t, []string{"a", "b", "c"}, set)
-}
-
-func TestRemoveDuplicatesWithoutDuplicates(t *testing.T) {
-	set := removeDuplicates([]string{"a", "b", "c", "d"})
-	require.EqualValues(t, []string{"a", "b", "c", "d"}, set)
-}
-
 func TestMultipleSetBlocks(t *testing.T) {
 	query := `
 	mutation {

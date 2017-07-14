@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -459,7 +458,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 						continue // next UID.
 					}
 					// Some other error.
-					log.Printf("Error while traversal: %v", rerr)
+					x.Printf("Error while traversal: %v", rerr)
 					return rerr
 				}
 
