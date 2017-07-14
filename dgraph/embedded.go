@@ -18,7 +18,12 @@ package dgraph
 
 import (
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func GetDefaultEmbeddeConfig() Options {
@@ -34,10 +39,21 @@ func GetDefaultEmbeddeConfig() Options {
 func NewEmbeddedDgraphClient(config Options, opts client.BatchMutationOptions,
 	clientDir string) *client.Dgraph {
 
+	SetConfiguration(config)
+
+	x.Init()
+	State = NewServerState()
+	group.ParseGroupConfig("") // this ensures that only one group is used
+	schema.Init(State.Pstore)
+	posting.Init(State.Pstore)
+	worker.Init(State.Pstore)
+	go worker.StartRaftNodes(State.WALstore)
+
 	embedded := &inmemoryClient{&Server{}}
 	return client.NewClient([]protos.DgraphClient{embedded}, opts, clientDir)
 }
 
-func DisposeEmbeddedClient(_ *client.Dgraph) {
+func DisposeEmbeddedDgraph() {
 	defer State.Dispose()
+	worker.BlockingStop()
 }

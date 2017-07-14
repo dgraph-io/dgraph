@@ -58,10 +58,12 @@ func Init(ps *badger.KV) {
 	// needs to be initialized after group config
 	leaseGid = group.BelongsTo("_lease_")
 	pendingProposals = make(chan struct{}, Config.NumPendingProposals)
-	workerServer = grpc.NewServer(
-		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
-		grpc.MaxSendMsgSize(x.GrpcMaxSize),
-		grpc.MaxConcurrentStreams(math.MaxInt32))
+	if !Config.InMemoryComm {
+		workerServer = grpc.NewServer(
+			grpc.MaxRecvMsgSize(x.GrpcMaxSize),
+			grpc.MaxSendMsgSize(x.GrpcMaxSize),
+			grpc.MaxConcurrentStreams(math.MaxInt32))
+	}
 }
 
 // grpcWorker struct implements the gRPC server interface.
@@ -93,6 +95,10 @@ func (w *grpcWorker) Echo(ctx context.Context, in *protos.Payload) (*protos.Payl
 // RunServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
 func RunServer(bindall bool) {
+	if Config.InMemoryComm {
+		return
+	}
+
 	laddr := "localhost"
 	if bindall {
 		laddr = "0.0.0.0"
@@ -118,8 +124,10 @@ func StoreStats() string {
 
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
 func BlockingStop() {
-	stopAllNodes()              // blocking stop all nodes
-	workerServer.GracefulStop() // blocking stop server
+	stopAllNodes()           // blocking stop all nodes
+	if workerServer != nil { // possible if Config.InMemoryComm == true
+		workerServer.GracefulStop() // blocking stop server
+	}
 	// blocking sync all marks
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()

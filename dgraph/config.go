@@ -106,8 +106,4 @@ func (o *Options) validate() {
 	wd, err := filepath.Abs(o.WALDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", o.PostingDir)
-
-	if o.InMemoryComm {
-		// TODO(tzdybal) - force exactly one group. And don't open up Grpc conns for worker.
-	}
 }
