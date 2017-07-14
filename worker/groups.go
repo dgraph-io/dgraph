@@ -112,9 +112,13 @@ func StartRaftNodes(walStore *badger.KV) {
 	gr.all = make(map[uint32]*servers)
 	gr.local = make(map[uint32]*node)
 
+	if Config.InMemoryComm {
+		Config.MyAddr = "inmemory"
+	}
+
 	if len(Config.MyAddr) == 0 {
 		Config.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
-	} else {
+	} else if !Config.InMemoryComm {
 		// check if address is valid or not
 		ok := x.ValidateAddress(Config.MyAddr)
 		x.AssertTruef(ok, "%s is not valid address", Config.MyAddr)
@@ -462,7 +466,6 @@ func (g *groupi) syncMemberships() {
 	var update *protos.MembershipUpdate
 	for {
 		conn := pl.Get()
-
 		c := protos.NewWorkerClient(conn)
 		update, err = c.UpdateMembership(g.ctx, &mu)
 		pools().release(pl)

@@ -139,7 +139,7 @@ func (p *poolsi) connect(addr string) (*pool, bool) {
 	pool.AddOwner() // matches p.put() in goroutine
 	go func() {
 		defer p.release(pool)
-		err = TestConnection(pool)
+		err = testConnection(pool)
 		if err != nil {
 			x.Printf("Connection to %q fails, got error: %v\n", addr, err)
 			// Don't return -- let's still put the empty pool in the map.  Its users
@@ -152,8 +152,8 @@ func (p *poolsi) connect(addr string) (*pool, bool) {
 	return pool, true
 }
 
-// TestConnection tests if we can run an Echo query on a connection.
-func TestConnection(p *pool) error {
+// testConnection tests if we can run an Echo query on a connection.
+func testConnection(p *pool) error {
 	conn := p.Get()
 
 	query := new(protos.Payload)
