@@ -20,7 +20,6 @@ package posting
 import (
 	"crypto/md5"
 	"fmt"
-	"log"
 	"math"
 	"runtime"
 	"sync"
@@ -309,7 +308,7 @@ func commitOne(l *List) {
 		return
 	}
 	if _, err := l.SyncIfDirty(); err != nil {
-		log.Printf("Error while committing dirty list: %v\n", err)
+		x.Printf("Error while committing dirty list: %v\n", err)
 	}
 }
 

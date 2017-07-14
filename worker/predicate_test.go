@@ -69,7 +69,7 @@ func newServer(port string) (*grpc.Server, net.Listener, error) {
 		log.Fatalf("While running server: %v", err)
 		return nil, nil, err
 	}
-	log.Printf("Worker listening at address: %v", ln.Addr())
+	x.Printf("Worker listening at address: %v", ln.Addr())
 
 	s := grpc.NewServer()
 	return s, ln, nil
