@@ -285,8 +285,8 @@ func (d *Dgraph) printCounters() {
 
 func (d *Dgraph) request(req *Req) {
 	counter := atomic.AddUint64(&d.mutations, 1)
-RETRY:
 	factor := time.Second
+RETRY:
 	_, err := d.dc[rand.Intn(len(d.dc))].Run(context.Background(), &req.gr)
 	if err != nil {
 		errString := err.Error()
