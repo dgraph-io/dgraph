@@ -137,7 +137,7 @@ func sortWithoutIndex(ctx context.Context, ts *protos.SortMessage) (*protos.Sort
 		default:
 			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
 			tempList := &protos.List{ts.UidMatrix[i].Uids}
-			if err := sortByValue(ctx, ts.Attr, ts.Langs, tempList, sType, ts.Desc); err != nil {
+			if err := sortByValue(ctx, ts, tempList, sType); err != nil {
 				return r, err
 			}
 			paginate(int(ts.Offset), int(ts.Count), tempList)
@@ -229,7 +229,7 @@ BUCKETS:
 			}
 			// Intersect every UID list with the index bucket, and update their
 			// results (in out).
-			err := intersectBucket(ctx, ts, ts.Attr, token, out)
+			err := intersectBucket(ctx, ts, token, out)
 			switch err {
 			case errDone:
 				break BUCKETS
@@ -280,10 +280,15 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 	go func() {
 		// Wait for 3ms before starting
 		time.Sleep(3 * time.Millisecond)
-		r, err := sortWithoutIndex(cctx, ts)
-		resCh <- result{
-			res: r,
-			err: err,
+		select {
+		case <-ctx.Done():
+			resCh <- result{err: ctx.Err()}
+		default:
+			r, err := sortWithoutIndex(cctx, ts)
+			resCh <- result{
+				res: r,
+				err: err,
+			}
 		}
 	}()
 
@@ -316,8 +321,9 @@ type intersectedList struct {
 
 // intersectBucket intersects every UID list in the UID matrix with the
 // indexed bucket.
-func intersectBucket(ctx context.Context, ts *protos.SortMessage, attr, token string, out []intersectedList) error {
+func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string, out []intersectedList) error {
 	count := int(ts.Count)
+	attr := ts.Attr
 	sType, err := schema.State().TypeOf(attr)
 	if err != nil || !sType.IsScalar() {
 		return x.Errorf("Cannot sort attribute %s of type object.", attr)
@@ -353,7 +359,7 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, attr, token st
 
 		// We are within the page. We need to apply sorting.
 		// Sort results by value before applying offset.
-		if err := sortByValue(ctx, attr, ts.Langs, result, scalar, ts.Desc); err != nil {
+		if err := sortByValue(ctx, ts, result, scalar); err != nil {
 			return err
 		}
 
@@ -401,7 +407,8 @@ func paginate(offset, count int, dest *protos.List) {
 }
 
 // sortByValue fetches values and sort UIDList.
-func sortByValue(ctx context.Context, attr string, langs []string, ul *protos.List, typ types.TypeID, desc bool) error {
+func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
+	typ types.TypeID) error {
 	lenList := len(ul.Uids)
 	uids := make([]uint64, 0, lenList)
 	values := make([]types.Val, 0, lenList)
@@ -411,7 +418,7 @@ func sortByValue(ctx context.Context, attr string, langs []string, ul *protos.Li
 			return ctx.Err()
 		default:
 			uid := ul.Uids[i]
-			val, err := fetchValue(uid, attr, langs, typ)
+			val, err := fetchValue(uid, ts.Attr, ts.Langs, typ)
 			if err != nil {
 				// If a value is missing, skip that UID in the result.
 				continue
@@ -420,7 +427,7 @@ func sortByValue(ctx context.Context, attr string, langs []string, ul *protos.Li
 			values = append(values, val)
 		}
 	}
-	err := types.Sort(values, &protos.List{uids}, desc)
+	err := types.Sort(values, &protos.List{uids}, ts.Desc)
 	ul.Uids = uids
 	return err
 }
