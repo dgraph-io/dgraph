@@ -25,11 +25,11 @@ import (
 )
 
 type Options struct {
-	PostingDir   string
-	PMapTablesTo string
-	WALDir       string
-	Nomutations  bool
-	NumPending   int
+	PostingDir    string
+	PostingTables string
+	WALDir        string
+	Nomutations   bool
+	NumPending    int
 
 	AllottedMemory float64
 	CommitFraction float64
@@ -54,11 +54,11 @@ type Options struct {
 var Config Options
 
 var DefaultConfig = Options{
-	PostingDir:   "p",
-	PMapTablesTo: "loadtoram",
-	WALDir:       "w",
-	Nomutations:  false,
-	NumPending:   1000,
+	PostingDir:    "p",
+	PostingTables: "loadtoram",
+	WALDir:        "w",
+	Nomutations:   false,
+	NumPending:    1000,
 
 	AllottedMemory: 1024.0,
 	CommitFraction: 0.10,
