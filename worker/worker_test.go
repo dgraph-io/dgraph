@@ -191,9 +191,9 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	require.EqualValues(t, [][]uint64{
 		nil,
-		{10},
 		{12},
 		nil,
+		{10},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Try deleting.
@@ -221,9 +221,9 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		nil,
-		nil,
 		{12},
+		nil,
+		nil,
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Final touch: Merge everything to RocksDB.
@@ -235,9 +235,9 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		nil,
-		nil,
 		{12},
+		nil,
+		nil,
 	}, algo.ToUintsListForTest(r.UidMatrix))
 }
 
@@ -281,9 +281,9 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	require.EqualValues(t, [][]uint64{
 		nil,
-		{10},
 		{12},
 		nil,
+		{10},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	posting.CommitLists(10, 1)
@@ -314,9 +314,9 @@ func TestProcessTaskIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
-		nil,
-		nil,
 		{12},
+		nil,
+		nil,
 	}, algo.ToUintsListForTest(r.UidMatrix))
 }
 
