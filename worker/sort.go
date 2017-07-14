@@ -283,6 +283,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 			// Wait between ctx chan and time chan.
 		case <-ctx.Done():
 			resCh <- result{err: ctx.Err()}
+			return
 		}
 		r, err := sortWithoutIndex(cctx, ts)
 		resCh <- result{
