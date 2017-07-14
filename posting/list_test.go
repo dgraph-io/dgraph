@@ -121,7 +121,7 @@ func TestAddMutation(t *testing.T) {
 	p = getFirst(l)
 	require.NotNil(t, p, "Unable to retrieve posting")
 	require.EqualValues(t, "anti-testing", p.Label)
-	l.SyncIfDirty()
+	l.SyncIfDirty(false)
 	time.Sleep(time.Second)
 
 	// Try reading the same data in another PostingList.
@@ -156,7 +156,7 @@ func TestAddMutation_Value(t *testing.T) {
 	checkValue(t, ol, "oh hey there")
 
 	// Run the same check after committing.
-	_, err := ol.SyncIfDirty()
+	_, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	checkValue(t, ol, "oh hey there")
 	time.Sleep(time.Second)
@@ -180,7 +180,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 		Label: "jchiu",
 	}
 	addMutation(t, ol, edge, Set)
-	merged, err := ol.SyncIfDirty()
+	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
 	time.Sleep(time.Second)
@@ -261,7 +261,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	}
 	addMutation(t, ol, edge, Set)
 	require.Equal(t, 1, ol.Length(0))
-	merged, err := ol.SyncIfDirty()
+	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
 	require.EqualValues(t, 1, ol.Length(0))
@@ -316,7 +316,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Label: "jchiu",
 	}
 	addMutation(t, ol, edge, Set)
-	merged, err := ol.SyncIfDirty()
+	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
 	time.Sleep(time.Second)
@@ -386,7 +386,7 @@ func TestAddMutation_checksum(t *testing.T) {
 		}
 		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
 		time.Sleep(time.Second)
@@ -414,7 +414,7 @@ func TestAddMutation_checksum(t *testing.T) {
 		}
 		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
 		time.Sleep(time.Second)
@@ -449,7 +449,7 @@ func TestAddMutation_checksum(t *testing.T) {
 		}
 		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
 		time.Sleep(time.Second)
@@ -478,7 +478,7 @@ func TestAddMutation_gru(t *testing.T) {
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
 		time.Sleep(time.Second)
@@ -495,7 +495,7 @@ func TestAddMutation_gru(t *testing.T) {
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Del)
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
 		time.Sleep(time.Second)
@@ -521,7 +521,7 @@ func TestAddMutation_gru2(t *testing.T) {
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
 		time.Sleep(time.Second)
@@ -546,7 +546,7 @@ func TestAddMutation_gru2(t *testing.T) {
 		}
 		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
 		time.Sleep(time.Second)
@@ -681,7 +681,7 @@ func TestDelete(t *testing.T) {
 	ol.delete(context.Background(), "value")
 	ol.Unlock()
 	require.EqualValues(t, 0, ol.Length(0))
-	commited, err := ol.SyncIfDirty()
+	commited, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, commited)
 	time.Sleep(time.Second)
@@ -707,7 +707,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(300))
 
 	// Commit to database.
-	merged, err := ol.SyncIfDirty()
+	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
 	time.Sleep(time.Second)
