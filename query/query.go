@@ -372,8 +372,6 @@ func alreadySeen(parentIds []uint64, uid uint64) bool {
 
 // This method gets the values and children for a subprotos.
 func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
-	invalidUids := make(map[uint64]bool)
-
 	if sg.Params.IgnoreReflex {
 		if sg.Params.parentIds == nil {
 			parentIds := make([]uint64, 0, 10)
@@ -395,7 +393,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		}
 	}
 
-	facetsNode := dst.New("@facets")
+	var invalidUids map[uint64]bool
+	var facetsNode outputNode
 	// We go through all predicate children of the subprotos.
 	for _, pc := range sg.Children {
 		if pc.Params.ignoreResult {
@@ -449,12 +448,16 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			for childIdx, childUID := range ul.Uids {
-				if invalidUids[childUID] || fieldName == "" {
+				if fieldName == "" || (invalidUids != nil && invalidUids[childUID]) {
 					continue
 				}
 				uc := dst.New(fieldName)
 				if rerr := pc.preTraverse(childUID, uc, dst); rerr != nil {
 					if rerr.Error() == "_INV_" {
+						if invalidUids == nil {
+							invalidUids = make(map[uint64]bool)
+						}
+
 						invalidUids[childUID] = true
 						continue // next UID.
 					}
@@ -499,6 +502,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					fc.AddValue(f.Key, facets.ValFor(f))
 				}
 				if !fc.IsEmpty() {
+					if facetsNode == nil {
+						facetsNode = dst.New("@facets")
+					}
 					facetsNode.AddMapChild(fieldName, fc, false)
 				}
 			}
@@ -534,7 +540,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		// Lets pop the stack.
 		sg.Params.parentIds = (sg.Params.parentIds)[:len(sg.Params.parentIds)-1]
 	}
-	if !facetsNode.IsEmpty() {
+	if facetsNode != nil && !facetsNode.IsEmpty() {
 		dst.AddMapChild("@facets", facetsNode, false)
 	}
 	return nil
