@@ -335,7 +335,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 	defer pools().release(pl)
 	conn := pl.Get()
 
-	c := newWorkerClient(conn)
+	c := protos.NewWorkerClient(conn)
 	ch := make(chan error, 1)
 	go func() {
 		_, err = c.Mutate(ctx, m)

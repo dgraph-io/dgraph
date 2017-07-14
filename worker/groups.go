@@ -465,7 +465,7 @@ func (g *groupi) syncMemberships() {
 	var update *protos.MembershipUpdate
 	for {
 		conn := pl.Get()
-		c := newWorkerClient(conn)
+		c := protos.NewWorkerClient(conn)
 		update, err = c.UpdateMembership(g.ctx, &mu)
 		pools().release(pl)
 

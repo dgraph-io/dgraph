@@ -161,7 +161,7 @@ func testConnection(p *pool) error {
 	query.Data = make([]byte, 10)
 	x.Check2(rand.Read(query.Data))
 
-	c := newWorkerClient(conn)
+	c := protos.NewWorkerClient(conn)
 	resp, err := c.Echo(context.Background(), query)
 	if err != nil {
 		return err

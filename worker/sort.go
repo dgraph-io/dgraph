@@ -62,7 +62,7 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 		tr.LazyPrintf("Sending request to %v", addr)
 	}
 
-	c := newWorkerClient(conn)
+	c := protos.NewWorkerClient(conn)
 	var reply *protos.SortResult
 	cerr := make(chan error, 1)
 	go func() {

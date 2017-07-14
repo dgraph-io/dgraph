@@ -84,7 +84,7 @@ func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.Assign
 	}
 
 	conn := p.Get()
-	c := newWorkerClient(conn)
+	c := protos.NewWorkerClient(conn)
 	return c.AssignUids(ctx, num)
 }
 

@@ -397,7 +397,7 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 	}
 	defer pools().release(pl)
 
-	c := newWorkerClient(conn)
+	c := protos.NewWorkerClient(conn)
 	nr := &protos.ExportPayload{
 		ReqId:   reqId,
 		GroupId: gid,

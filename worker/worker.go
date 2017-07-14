@@ -53,31 +53,12 @@ func workerPort() int {
 	return x.Config.PortOffset + Config.BaseWorkerPort
 }
 
-var (
-	localWorker   *inmemoryWorker
-	workerFactory = defaultWorkerFactory
-)
-
-func defaultWorkerFactory(conn *grpc.ClientConn) protos.WorkerClient {
-	return protos.NewWorkerClient(conn)
-}
-
-func inmemoryWorkerFactory(_ *grpc.ClientConn) protos.WorkerClient {
-	return localWorker
-}
-
-func newWorkerClient(conn *grpc.ClientConn) protos.WorkerClient {
-	return workerFactory(conn)
-}
-
 func Init(ps *badger.KV) {
 	pstore = ps
 	// needs to be initialized after group config
 	leaseGid = group.BelongsTo("_lease_")
 	pendingProposals = make(chan struct{}, Config.NumPendingProposals)
-	if Config.InMemoryComm {
-		localWorker = newInmemoryWorker()
-	} else {
+	if !Config.InMemoryComm {
 		workerServer = grpc.NewServer(
 			grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 			grpc.MaxSendMsgSize(x.GrpcMaxSize),
