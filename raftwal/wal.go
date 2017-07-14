@@ -20,7 +20,6 @@ package raftwal
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
@@ -82,7 +81,7 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	if err := w.wals.Set(w.snapshotKey(gid), data); err != nil {
 		return err
 	}
-	fmt.Printf("Writing snapshot to WAL: %+v\n", s)
+	x.Printf("Writing snapshot to WAL: %+v\n", s)
 
 	go func() {
 		// Delete all entries before this snapshot to save disk space.
@@ -105,11 +104,11 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 		// Failure to delete entries is not a fatal error, so should be
 		// ok to ignore
 		if err := w.wals.BatchSet(wb); err != nil {
-			fmt.Printf("Error while deleting entries %v\n", err)
+			x.Printf("Error while deleting entries %v\n", err)
 		}
 		for _, wbe := range wb {
 			if err := wbe.Error; err != nil {
-				fmt.Printf("Error while deleting entries %v\n", err)
+				x.Printf("Error while deleting entries %v\n", err)
 			}
 		}
 	}()

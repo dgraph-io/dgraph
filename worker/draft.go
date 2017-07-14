@@ -216,7 +216,7 @@ func (n *node) ConfState() *raftpb.ConfState {
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
-	fmt.Printf("Node with GroupID: %v, ID: %v\n", gid, id)
+	x.Printf("Node with GroupID: %v, ID: %v\n", gid, id)
 
 	peers := peerPool{
 		peers: make(map[uint64]peerPoolEntry),
@@ -244,6 +244,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 			Storage:         store,
 			MaxSizePerMsg:   4096,
 			MaxInflightMsgs: 256,
+			Logger:          &raft.DefaultLogger{Logger: x.Logger},
 		},
 		applyCh:     make(chan raftpb.Entry, numPendingMutations),
 		peers:       peers,
@@ -293,7 +294,7 @@ func (n *node) Connect(pid uint64, addr string) {
 	p, ok := pools().connect(addr)
 	if !ok {
 		// TODO: Note this fact in more general peer health info somehow.
-		log.Printf("Peer %d claims same host as me\n", pid)
+		x.Printf("Peer %d claims same host as me\n", pid)
 	}
 	n.SetPeer(pid, addr, p)
 }
@@ -418,7 +419,7 @@ func (n *node) send(m raftpb.Message) {
 	data, err := m.Marshal()
 	x.Check(err)
 	if m.Type != raftpb.MsgHeartbeat && m.Type != raftpb.MsgHeartbeatResp {
-		fmt.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
+		x.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
 	}
 	select {
 	case n.messages <- sendmsg{to: m.To, data: data}:
@@ -748,11 +749,11 @@ func (n *node) Run() {
 				x.Check(rc.Unmarshal(rd.Snapshot.Data))
 				x.AssertTrue(rc.Group == n.gid)
 				if rc.Id != n.id {
-					fmt.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
+					x.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
 					n.retrieveSnapshot(rc.Id)
-					fmt.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
+					x.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
 				} else {
-					fmt.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
+					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
 				}
 			}
 			if len(rd.CommittedEntries) > 0 {
@@ -879,7 +880,7 @@ func (n *node) joinPeers() {
 	// Get leader information for MY group.
 	pid, paddr := groups().Leader(n.gid)
 	n.Connect(pid, paddr)
-	fmt.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
+	x.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
 
 	pool, err := pools().get(paddr)
 	if err != nil {
@@ -912,7 +913,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	}
 	var term, idx uint64
 	if !raft.IsEmptySnap(sp) {
-		fmt.Printf("Found Snapshot: %+v\n", sp)
+		x.Printf("Found Snapshot: %+v\n", sp)
 		restart = true
 		if rerr = n.store.ApplySnapshot(sp); rerr != nil {
 			return
@@ -929,7 +930,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 		return
 	}
 	if !raft.IsEmptyHardState(hd) {
-		fmt.Printf("Found hardstate: %+v\n", sp)
+		x.Printf("Found hardstate: %+v\n", sp)
 		restart = true
 		if rerr = n.store.SetHardState(hd); rerr != nil {
 			return
@@ -941,7 +942,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	if rerr != nil {
 		return
 	}
-	fmt.Printf("Group %d found %d entries\n", n.gid, len(es))
+	x.Printf("Group %d found %d entries\n", n.gid, len(es))
 	if len(es) > 0 {
 		restart = true
 	}
@@ -955,11 +956,11 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	x.Check(err)
 
 	if restart {
-		fmt.Printf("Restarting node for group: %d\n", n.gid)
+		x.Printf("Restarting node for group: %d\n", n.gid)
 		n.SetRaft(raft.RestartNode(n.cfg))
 
 	} else {
-		fmt.Printf("New Node for group: %d\n", n.gid)
+		x.Printf("New Node for group: %d\n", n.gid)
 		if groups().HasPeer(n.gid) {
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.cfg, nil))
@@ -1034,7 +1035,7 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 			x.Check(err)
 		}
 		if msg.Type != raftpb.MsgHeartbeat && msg.Type != raftpb.MsgHeartbeatResp {
-			fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
+			x.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
 		if err := applyMessage(ctx, msg); err != nil {
 			return &protos.Payload{}, err

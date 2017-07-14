@@ -141,10 +141,10 @@ func StartRaftNodes(walStore *badger.KV) {
 			gr.syncMemberships()
 			for gr.LastUpdate() == 0 {
 				time.Sleep(time.Second)
-				fmt.Println("Last update raft index for membership information is zero. Syncing...")
+				x.Println("Last update raft index for membership information is zero. Syncing...")
 				gr.syncMemberships()
 			}
-			fmt.Printf("Last update is now: %d\n", gr.LastUpdate())
+			x.Printf("Last update is now: %d\n", gr.LastUpdate())
 		}()
 	}
 
@@ -454,7 +454,7 @@ func (g *groupi) syncMemberships() {
 		pl, err = pools().any()
 	}
 	if err == errNoConnection {
-		fmt.Println("Unable to sync memberships. No valid connection")
+		x.Println("Unable to sync memberships. No valid connection")
 		return
 	}
 	x.Check(err)
@@ -483,7 +483,7 @@ func (g *groupi) syncMemberships() {
 		if len(addr) == 0 {
 			return
 		}
-		fmt.Printf("Got redirect for: %q\n", addr)
+		x.Printf("Got redirect for: %q\n", addr)
 		var ok bool
 		pl, ok = pools().connect(addr)
 		if !ok {
@@ -537,9 +537,9 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 		x.AssertTrue(ok)
 	}
 
-	fmt.Println("----------------------------")
-	fmt.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", update)
-	fmt.Println("----------------------------")
+	x.Println("----------------------------")
+	x.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", update)
+	x.Println("----------------------------")
 	g.Lock()
 	defer g.Unlock()
 
@@ -554,7 +554,7 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 
 	// Print out the entire list.
 	for gid, sl := range g.all {
-		fmt.Printf("Group: %v. List: %+v\n", gid, sl.list)
+		x.Printf("Group: %v. List: %+v\n", gid, sl.list)
 	}
 }
 

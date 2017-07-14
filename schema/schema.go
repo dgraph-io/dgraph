@@ -107,7 +107,7 @@ func (s *stateGroup) update(se SyncEntry) {
 	syncCh <- se
 	s.elog.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v\n", se.Attr,
 		types.TypeID(se.Schema.ValueType).Name(), se.Schema.Tokenizer, se.Schema.Directive)
-	fmt.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v\n", se.Attr,
+	x.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v\n", se.Attr,
 		types.TypeID(se.Schema.ValueType).Name(), se.Schema.Tokenizer, se.Schema.Directive)
 }
 
