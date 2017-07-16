@@ -224,7 +224,7 @@ func fieldMap(typ reflect.Type) map[string]reflect.StructField {
 // will try to match named query blocks with tags in s and then unmarshall the
 // the matched block into the matched fields of s.
 // 
-// Unmarshal does have to be called at resp.N.  Clients can navigate to a 
+// Unmarshal does not have to be called at resp.N.  Clients can navigate to a 
 // particular part of the response and unmarshal the children.
 func Unmarshal(n []*protos.Node, v interface{}) error {
 	rv := reflect.ValueOf(v)

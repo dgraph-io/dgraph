@@ -41,7 +41,7 @@ Submitted mutations are nondeterministically added to batches and there are
 no guarantees about which batch a mutation will be scheduled for (e.g. two
 successive calls to BatchSet won't guarantee the edges to be in the same batch).
 
-Finishing and interaction with BatchFlush flushes all buffers and ends the
+Finishing an interaction with BatchFlush flushes all buffers and ends the
 client interaction.
 
 For more details checkout https://docs.dgraph.io/clients/#go.
