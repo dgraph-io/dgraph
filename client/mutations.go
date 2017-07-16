@@ -49,7 +49,7 @@ var (
 )
 
 // BatchMutationOptions sets the clients batch mode to Pending number of buffers
-// each of Size.  Running counters of number of rdfs procesessed, total time and
+// each of Size.  Running counters of number of rdfs processed, total time and
 // mutations per second are printed if PrintCounters is set true.
 // See Counter.
 type BatchMutationOptions struct {
@@ -383,7 +383,7 @@ func (d *Dgraph) BatchSet(e Edge) error {
 }
 
 // BatchDelete adds Edge e as a delete to the current batch mutation.  Once added,
-// the client will apply the mutation to the dgraph server when it is ready
+// the client will apply the mutation to the Dgraph server when it is ready
 // to flush its buffers.  The edge will be added to one of the batches as
 // specified in d's BatchMutationOptions.  If that batch fills, it eventually
 // flushes.  But there is no guarantee of delivery before BatchFlush() is
@@ -397,7 +397,7 @@ func (d *Dgraph) BatchDelete(e Edge) error {
 	return nil
 }
 
-// AddSchema adds the given schema mutatation to the batch of schema mutations.
+// AddSchema adds the given schema mutation to the batch of schema mutations.
 // If the schema mutation applies an index to a UID edge, or if it adds
 // reverse to a scalar edge, then the mutation is not added to the batch and an
 // error is returned. Once added, the client will apply the schema mutation when
@@ -415,7 +415,7 @@ func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 // edgename: uid @reverse .
 // edge2: string @index(exact) .
 // etc.
-// to use the form "mutuation { schema { ... }}" issue the mutation through 
+// to use the form "mutation { schema { ... }}" issue the mutation through 
 // SetQuery rather than as a batch.
 func (d *Dgraph) AddSchemaFromString(s string) error {
 	schemaUpdate, err := schema.Parse(s)
@@ -488,7 +488,7 @@ func (d *Dgraph) NodeUid(uid uint64) Node {
 }
 
 // NodeBlank creates or returns a Node given a string name for the blank node.
-// Blank nodes do not exist as labelled nodes in dgraph. Blank nodes are used
+// Blank nodes do not exist as labelled nodes in Dgraph. Blank nodes are used
 // as labels client side for loading and linking nodes correctly.  If the
 // label is new in this session a new UID is allocated and assigned to the
 // label.  If the label has already been assigned, the corresponding Node

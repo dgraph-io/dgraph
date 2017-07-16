@@ -92,7 +92,7 @@ func (req *Req) addMutation(e Edge, op opType) {
 }
 
 // Set adds edge e to the set mutation of request req, thus scheduling the edge to be added to the graph when the request is run.
-// The edge must be syntatically valid: have a valid source (a Node), predicate and target (a Node or value), otherwise an error is returned.
+// The edge must be syntactically valid: have a valid source (a Node), predicate and target (a Node or value), otherwise an error is returned.
 // The edge is not checked agaist the schema until the request is run --- so setting a UID edge to a value, for example, doesn't result in an
 // error until the request is run.
 func (req *Req) Set(e Edge) {
@@ -160,7 +160,7 @@ type nquadOp struct {
 	op opType
 }
 
-// Node representes a single node in the graph.
+// Node represents a single node in the graph.
 type Node struct {
 	uid uint64
 	// We can do variables in mutations.
@@ -191,7 +191,7 @@ func (n *Node) ConnectTo(pred string, n1 Node) Edge {
 // Edge create an edge with source Node n and predicate pred, but without a target.
 // The edge needs to be completed by calling Edge.ConnectTo() if the edge is a
 // UID edge, or one of the Edge.SetValue...() functions if the edge is of a scalar type.
-// The edge can't be commited to the store --- calling Req.Set() to add the edge to
+// The edge can't be committed to the store --- calling Req.Set() to add the edge to
 // a request will result in an error --- until it is completed.
 func (n *Node) Edge(pred string) Edge {
 	e := Edge{}

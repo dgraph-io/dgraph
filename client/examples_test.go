@@ -87,7 +87,7 @@ func ExampleReq_Set() {
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 }
 
-func ExampleReq_BatchSet() {
+func ExampleDgraph_BatchSet() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
@@ -120,7 +120,7 @@ func ExampleReq_BatchSet() {
 	dgraphClient.BatchFlush() // Must be called to flush buffers after all mutations are added.
 }
 
-func ExampleReq_AddFacet() {
+func ExampleEdge_AddFacet() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
@@ -159,8 +159,12 @@ func ExampleReq_AddFacet() {
 	e.AddFacet("close", "true")
 	req.Set(e)
 
+	req.AddSchemaFromString(`
+name: string @index(exact) .
+`)
+
 	req.SetQuery(`{
-		me(id: person1) {
+		me(func: eq(name,"Steven Spielberg")) {
 			name @facets
 			friend @facets {
 				name
@@ -194,10 +198,13 @@ func ExampleReq_AddSchemaFromString() {
 	req := client.Req{}
 
 	// Add a schema mutation to the request
-	req.AddSchemaFromString(`
-name: string @index .
-release_date: date @index .
+	err = req.AddSchemaFromString(`
+name: string @index(term) .
+release_date: dateTime @index .
 `)
+	if err != nil {
+		log.Fatalf("Error setting schema, %s", err)
+	}
 
 	// Query the changed schema
 	req.SetQuery(`schema {}`)
@@ -236,6 +243,9 @@ func ExampleReq_SetQuery() {
 	req.Set(e)
 
 	req.AddSchemaFromString(`name: string @index(exact) .`)
+	if err != nil {
+		log.Fatalf("Error setting schema, %s", err)
+	}
 
 	req.SetQuery(`{
 		me(func: eq(name, "Alice")) {
@@ -244,8 +254,12 @@ func ExampleReq_SetQuery() {
 		}
 	}`)
 	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 }
+
 
 func ExampleReq_SetQueryWithVariables() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
@@ -293,7 +307,7 @@ func ExampleReq_SetQueryWithVariables() {
 
 
 
-func ExampleReq_NodeUidVar() {
+func ExampleDgraph_NodeUidVar() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
@@ -336,13 +350,15 @@ func ExampleReq_NodeUidVar() {
 
 	// Get a node for the variable a in the query above.
     n, _ := dgraphClient.NodeUidVar("a")
-    e := n.Edge("falls.in")
+    e = n.Edge("falls.in")
 	e.SetValueString("Rabbit hole")
 	req.Set(e)
 
-    resp, err := dgraphClient.Run(context.Background(), &req)
-    x.Check(err)
-    fmt.Printf("Resp: %+v\n", resp)
+    resp, err = dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 
 
 	// This is equivalent to the single query and mutation 
@@ -359,4 +375,117 @@ func ExampleReq_NodeUidVar() {
 	//
 	// It's often easier to construct such things with client functions that
 	// by manipulating raw strings.
+}
+
+
+func ExampleEdge_SetValueBytes() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Check(err)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+
+	req := client.Req{}
+
+	alice, err := dgraphClient.NodeBlank("alice")
+	if err != nil {
+		log.Fatal(err)
+	}
+	e := alice.Edge("name")
+	e.SetValueString("Alice")
+	req.Set(e)
+
+	e = alice.Edge("somestoredbytes")
+	err = e.SetValueBytes([]byte(`\xbd\xb2\x3d\xbc\x20\xe2\x8c\x98`))
+	x.Check(err)
+	req.Set(e)
+
+	req.AddSchemaFromString(`name: string @index(exact) .`)
+
+	req.SetQuery(`{
+	q(func: eq(name, "Alice")) {
+		name
+		somestoredbytes
+	}
+}`)
+
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+}
+
+
+func ExampleUnmarshal() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Check(err)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+
+	req := client.Req{}
+
+	// A mutation as a string, see ExampleReq_NodeUidVar, ExampleReq_SetQuery,
+	// etc for examples of mutations using client functions.
+	req.SetQuery(`
+mutation {
+	schema {
+		name: string @index .
+	}
+	set {
+		_:person1 <name> "Alex" .
+		_:person2 <name> "Beatie" .
+		_:person3 <name> "Chris" .
+
+		_:person1 <friend> _:person2 .
+		_:person1 <friend> _:person3 .
+	}
+}
+{
+	friends(func: eq(name, "Alex")) {
+		name
+		friend {
+			name
+		}
+	}	
+}`)	
+
+	// Run the request in the Dgraph server.  The mutations are added, then
+	// the query is exectuted.
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+	
+	// Unmarshal the response into a custom struct
+
+	// A type representing information in the graph.
+	type person struct {
+		Name string `dgraph:"name"`
+		Friends []person `dgraph:"friend"`
+	}
+
+	// A helper type matching the query root.
+	type friends struct {
+		Root person `dgraph:"friends"`
+	} 
+
+	var f friends
+	err = client.Unmarshal(resp.N, &f)
+	if err != nil {
+		log.Fatal("Couldn't unmarshal response : ", err)
+	}
+
+	fmt.Println("Name : ", f.Root.Name)
+	fmt.Print("Friends : ")
+	for _, p := range f.Root.Friends {
+		fmt.Print(p.Name, " ")
+	} 
+	fmt.Println()
+
 }

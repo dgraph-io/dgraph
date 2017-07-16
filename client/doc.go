@@ -21,7 +21,7 @@ mutations can be run from the client.  There are essentially two modes
 of client interaction:
 
 - Request based interaction mode where the user program builds requests 
-and recieves responses immediately after running, and
+and receives responses immediately after running, and
 
 - Batch mode where clients submit many requests and let the client package
 batch those requests to the server.
