@@ -52,7 +52,7 @@ func getSchema(ctx context.Context, s *protos.SchemaRequest) (*protos.SchemaResu
 	if len(s.Fields) > 0 {
 		fields = s.Fields
 	} else {
-		fields = []string{"type", "index", "tokenizer", "reverse"}
+		fields = []string{"type", "index", "tokenizer", "reverse", "count"}
 	}
 
 	for _, attr := range predicates {
@@ -89,6 +89,8 @@ func populateSchema(attr string, fields []string) *protos.SchemaNode {
 			}
 		case "reverse":
 			schemaNode.Reverse = schema.State().IsReversed(attr)
+		case "count":
+			schemaNode.Count = schema.State().HasCount(attr)
 		default:
 			//pass
 		}
