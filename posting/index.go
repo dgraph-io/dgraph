@@ -349,8 +349,10 @@ func deleteEntries(prefix []byte) error {
 	var batchSize int
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
 		key := idxIt.Item().Key()
+		data := make([]byte, len(key))
+		copy(data, key)
 		batchSize += len(key)
-		wb = badger.EntriesDelete(wb, key)
+		wb = badger.EntriesDelete(wb, data)
 
 		if batchSize >= maxBatchSize {
 			if err := pstore.BatchSet(wb); err != nil {
@@ -649,11 +651,6 @@ func RebuildIndex(ctx context.Context, attr string) error {
 func DeletePredicate(ctx context.Context, attr string) error {
 	// TODO: Remove later, clearing all would kill us
 	lcache.Clear()
-
-	iterOpt := badger.DefaultIteratorOptions
-	iterOpt.FetchValues = false
-	it := pstore.NewIterator(iterOpt)
-	defer it.Close()
 	pk := x.ParsedKey{
 		Attr: attr,
 	}
