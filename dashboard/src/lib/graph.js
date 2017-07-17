@@ -406,7 +406,9 @@ export function processGraph(
     }
 
     // If no root node has children , then we add all root level nodes to the view.
-    if (!someNodeHasChildren) {
+    // Or if the count of children at root which don't have children is > than those
+    // which have children we show them.
+    if (!someNodeHasChildren || ignoredChildren.length > nodesQueue.length) {
       nodesQueue.push.apply(nodesQueue, ignoredChildren);
     }
   }
