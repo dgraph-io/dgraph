@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	geom "github.com/twpayne/go-geom"
@@ -125,31 +124,6 @@ func (req *Req) AddSchema(s protos.SchemaUpdate) error {
 	return nil
 }
 
-// AddSchemaFromString parses s for schema mutations and adds each update in s
-// to the request using AddSchema.  The given string should be of the form:
-// edgename: uid @reverse .
-// edge2: string @index(exact) .
-// etc.
-// to use the form "mutuation { schema { ... }}" issue the mutation through
-// SetQuery.
-func (req *Req) AddSchemaFromString(s string) error {
-	schemaUpdate, err := schema.Parse(s)
-	if err != nil {
-		return err
-	}
-
-	if len(schemaUpdate) == 0 {
-		return nil
-	}
-
-	for _, smut := range schemaUpdate {
-		if err = req.AddSchema(*smut); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
 
 func (req *Req) size() int {
 	if req.gr.Mutation == nil {

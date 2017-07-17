@@ -236,7 +236,7 @@ func ExampleEdge_AddFacet() {
 	err = req.Set(e)
 	x.Check(err)
 
-	req.AddSchemaFromString(`name: string @index(exact) .`)
+	req.SetQuery(`mutation { schema { name: string @index(exact) . } }`)
 
 	resp, err := dgraphClient.Run(context.Background(), &req)
 	if err != nil {
@@ -299,53 +299,16 @@ func ExampleEdge_AddFacet() {
 	}
 }
 
-func ExampleReq_AddSchemaFromString() {
-	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
-	defer conn.Close()
 
-	bmOpts := client.BatchMutationOptions{
-		Size:          1000,
-		Pending:       100,
-		PrintCounters: false,
-	}
-	clientDir, err := ioutil.TempDir("", "client_")
-	x.Check(err)
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, bmOpts, clientDir)
-
-	req := client.Req{}
-
-	// Add a schema mutation to the request
-	err = req.AddSchemaFromString(`
-name: string @index(term) .
-release_date: dateTime @index .
-`)
-	if err != nil {
-		log.Fatalf("Error setting schema, %s", err)
-	}
-
-	// Query the changed schema
-	req.SetQuery(`schema {}`)
-	resp, err := dgraphClient.Run(context.Background(), &req)
-	if err != nil {
-		log.Fatalf("Error in getting response from server, %s", err)
-	}
-	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
-}
 
 func ExampleReq_SetQuery() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	bmOpts := client.BatchMutationOptions{
-		Size:          1000,
-		Pending:       100,
-		PrintCounters: false,
-	}
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, bmOpts, clientDir)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 	alice, err := dgraphClient.NodeXid("alice", false)
@@ -362,10 +325,13 @@ func ExampleReq_SetQuery() {
 	err = req.Set(e)
 	x.Check(err)
 
-	req.AddSchemaFromString(`name: string @index(exact) .`)
+	req.SetQuery(`mutation { schema { name: string @index(exact) . } }`)
+	resp, err := dgraphClient.Run(context.Background(), &req)
 	if err != nil {
-		log.Fatalf("Error setting schema, %s", err)
+		log.Fatalf("Error in getting response from server, %s", err)
 	}
+
+	req = client.Req{}
 
 	req.SetQuery(`{
 		me(func: eq(name, "Alice")) {
@@ -373,7 +339,7 @@ func ExampleReq_SetQuery() {
 			falls.in
 		}
 	}`)
-	resp, err := dgraphClient.Run(context.Background(), &req)
+	resp, err = dgraphClient.Run(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
@@ -398,14 +364,10 @@ func ExampleReq_SetQueryWithVariables() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	bmOpts := client.BatchMutationOptions{
-		Size:          1000,
-		Pending:       100,
-		PrintCounters: false,
-	}
+
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, bmOpts, clientDir)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -423,8 +385,13 @@ func ExampleReq_SetQueryWithVariables() {
 	err = req.Set(e)
 	x.Check(err)
 
-	req.AddSchemaFromString(`name: string @index(exact) .`)
+	req.SetQuery(`mutation { schema { name: string @index(exact) . } }`)
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
 
+	req = client.Req{}
 	variables := make(map[string]string)
 	variables["$a"] = "Alice"
 	req.SetQueryWithVariables(`{
@@ -434,8 +401,11 @@ func ExampleReq_SetQueryWithVariables() {
 		}
 	}`, variables)
 
-	resp, err := dgraphClient.Run(context.Background(), &req)
-	
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+
 	type Alice struct {
 		Name string `dgraph:"name"`
 		WhatHappened string `dgraph:"falls.in"`
@@ -456,14 +426,9 @@ func ExampleDgraph_NodeUidVar() {
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	bmOpts := client.BatchMutationOptions{
-		Size:          1000,
-		Pending:       100,
-		PrintCounters: false,
-	}
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, bmOpts, clientDir)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
 
@@ -477,7 +442,7 @@ func ExampleDgraph_NodeUidVar() {
 	err = req.Set(e)
 	x.Check(err)
 
-	req.AddSchemaFromString(`name: string @index(exact) .`)
+	req.SetQuery(`mutation { schema { name: string @index(exact) . } }`)
 
 	resp, err := dgraphClient.Run(context.Background(), &req)
 
@@ -548,9 +513,12 @@ func ExampleEdge_SetValueBytes() {
 	err = req.Set(e)
 	x.Check(err)
 
-	req.AddSchemaFromString(`name: string @index(exact) .`)
-
-	req.SetQuery(`{
+	req.SetQuery(`mutation {
+	schema {
+		name: string @index(exact) .
+	}	
+}	
+{
 	q(func: eq(name, "Alice")) {
 		name
 		somestoredbytes

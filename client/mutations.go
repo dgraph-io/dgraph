@@ -35,7 +35,6 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -402,32 +401,7 @@ func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 	return nil
 }
 
-// AddSchemaFromString parses s for schema mutations and adds each update in s
-// to the batch using AddSchema.  The given string should be of the form:
-//
-// 	edgename: uid @reverse . 
-// 	edge2: string @index(exact) .
-// 
-// to use the form "mutation { schema { ... }}" issue the mutation through
-// SetQuery rather than as a batch.
-func (d *Dgraph) AddSchemaFromString(s string) error {
-	schemaUpdate, err := schema.Parse(s)
-	if err != nil {
-		return err
-	}
 
-	if len(schemaUpdate) == 0 {
-		return nil
-	}
-
-	for _, su := range schemaUpdate {
-		if err = d.AddSchema(*su); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
 
 // BatchFlush waits for all pending requests to complete. It should always be called after all 
 // BatchSet and BatchDeletes have been called.  Calling BatchFlush ends the client session and 
