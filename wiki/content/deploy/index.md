@@ -408,6 +408,25 @@ These steps are necessary because Dgraph's underlying data format could have cha
 
 Now that Dgraph is up and running, to understand how to add and query data to Dgraph, follow [Query Language Spec]({{< relref "query-language/index.md">}}). Also, have a look at [Frequently asked questions]({{< relref "faq/index.md" >}}).
 
+## Monitoring
+
+Dgraph exposes metrics via `/debug/vars` endpoint in json format. Dgraph doesn't store the metrics and only exposes the value of the metrics at that instant. So you might want to scrape and store metrics in systems like prometheus. Prometheus can scrape metrics from `/debug/prometheus_metrics` endpoint. This is a sample prometheus config file.
+
+```sh
+scrape_configs:
+  - job_name: "dgraph"
+    metrics_path: "/debug/prometheus_metrics"
+    scrape_interval: "2s"
+    target_groups:
+    - targets:
+      - 172.31.9.133:8080
+      - 172.31.15.230:8080
+      - 172.31.0.170:8080
+      - 172.31.8.118:8080
+```
+
+You can use graphana to plot the metrics. You can import **[Graphana Dashboard](https://github.com/dgraph-io/benchmarks/blob/master/scripts/dgraphGraphana)**.
+
 ## Troubleshooting
 Here are some problems that you may encounter and some solutions to try.
 
