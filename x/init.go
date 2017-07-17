@@ -87,7 +87,7 @@ func printBuildDetails() {
 		return
 	}
 
-	Printf(fmt.Sprintf(`
+	fmt.Printf(fmt.Sprintf(`
 Dgraph version   : %v
 Commit SHA-1     : %v
 Commit timestamp : %v
@@ -99,8 +99,8 @@ Branch           : %v`,
 func printVersionOnly() {
 	if Config.Version {
 		printBuildDetails()
-		Println("Copyright 2017 Dgraph Labs, Inc.")
-		Println(`
+		fmt.Println("Copyright 2017 Dgraph Labs, Inc.")
+		fmt.Println(`
 Licensed under AGPLv3.
 For Dgraph official documentation, visit https://docs.dgraph.io.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
