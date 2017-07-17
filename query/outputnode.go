@@ -304,8 +304,21 @@ type fastJsonNode struct {
 	attrs    map[string]*fastJsonAttr
 }
 
+func (fj *fastJsonNode) ensureChildrenMap() {
+	if fj.children == nil {
+		fj.children = make(map[string][]*fastJsonNode)
+	}
+}
+
+func (fj *fastJsonNode) ensureAttrsMap() {
+	if fj.attrs == nil {
+		fj.attrs = make(map[string]*fastJsonAttr)
+	}
+}
+
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 	if bs, err := valToBytes(v); err == nil {
+		fj.ensureAttrsMap()
 		_, found := fj.attrs[attr]
 		x.AssertTruef(!found, "Setting value twice for same attribute %v", attr)
 		fj.attrs[attr] = makeScalarAttr(bs)
@@ -313,6 +326,7 @@ func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 }
 
 func (fj *fastJsonNode) AddMapChild(attr string, val outputNode, _ bool) {
+	fj.ensureAttrsMap()
 	nodeAttr, found := fj.attrs[attr]
 	if found {
 		if nodeAttr.isScalar {
@@ -331,6 +345,7 @@ func (fj *fastJsonNode) AddMapChild(attr string, val outputNode, _ bool) {
 }
 
 func (fj *fastJsonNode) AddListChild(attr string, child outputNode) {
+	fj.ensureChildrenMap()
 	children, found := fj.children[attr]
 	if !found {
 		children = make([]*fastJsonNode, 0, 5)
@@ -339,13 +354,11 @@ func (fj *fastJsonNode) AddListChild(attr string, child outputNode) {
 }
 
 func (fj *fastJsonNode) New(attr string) outputNode {
-	return &fastJsonNode{
-		children: make(map[string][]*fastJsonNode),
-		attrs:    make(map[string]*fastJsonAttr),
-	}
+	return &fastJsonNode{}
 }
 
 func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
+	fj.ensureAttrsMap()
 	uidBs, found := fj.attrs[attr]
 	if found {
 		x.AssertTruef(uidBs.isScalar, "Found node value for _uid_. Expected scalar value.")
@@ -392,7 +405,9 @@ func valToBytes(v types.Val) ([]byte, error) {
 }
 
 func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
-	allKeys := make([]string, 0, len(fj.attrs))
+	fj.ensureAttrsMap()
+	fj.ensureChildrenMap()
+	allKeys := make([]string, 0, len(fj.attrs)+len(fj.children))
 	for k := range fj.attrs {
 		allKeys = append(allKeys, k)
 	}
