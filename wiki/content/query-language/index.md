@@ -3018,56 +3018,148 @@ Output:
 }
 ```
 
-## Shortest Path Queries
+## K-Shortest Path Queries
 
-Shortest path between a `src` node and `dst` node can be found using the keyword `shortest` for the query block name. It requires the source node id, destination node id and the predicates (atleast one) that have to be considered for traversing. This query block by itself will not return any results back but the path has to be stored in a variable and used in other query blocks as required.
+The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (atleast one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
+
+By default the shortest path is returned, with `numpaths: k`, the k-shortest paths are returned.
 
 {{% notice "note" %}}If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.{{% /notice %}}
 
 For example:
 ```
-# Insert this via mutation
 curl localhost:8080/query -XPOST -d $'
 mutation{
-set {
- <a> <friend> <b> (weight=0.1) .
- <b> <friend> <c> (weight=0.2) .
- <c> <friend> <d> (weight=0.3) .
- <a> <friend> <d> (weight=1) .
- <a> <name> "alice" .
- <b> <name> "bob" .
- <c> <name> "Tom" .
- <d> <name> "Mallory" .
- }
+  schema {
+    name: string @index(exact) .
+  }
+
+  set {
+    _:a <friend> _:b (weight=0.1) .
+    _:b <friend> _:c (weight=0.2) .
+    _:c <friend> _:d (weight=0.3) .
+    _:a <friend> _:d (weight=1) .
+    _:a <name> "Alice" .
+    _:b <name> "Bob" .
+    _:c <name> "Tom" .
+    _:d <name> "Mallory" .
+  }
 }' | python -m json.tool | less
 ```
 
+The shortest path between Alice and Mallory (assuming UIDs 0x2 and 0x5 respectively) can be found with query:
 ```
 curl localhost:8080/query -XPOST -d $'{
- path as shortest(from:a, to:d) {
+ path as shortest(from: 0x2, to: 0x5) {
   friend
  }
- path(id: var(path)) {
+ path(func: uid(path)) {
    name
  }
 }' | python -m json.tool | less
 ```
-Would return the following results. (Note that each edges' weight is considered as 1)
+
+Which returns the following results. (Note, without considering the `weight` facet, each edges' weight is considered as 1)
  ```
+ {
+     "_path_": [
+         {
+             "_uid_": "0x2",
+             "friend": [
+                 {
+                     "_uid_": "0x5"
+                 }
+             ]
+         }
+     ],
+     "path": [
+         {
+             "name": "Alice"
+         },
+         {
+             "name": "Mallory"
+         }
+     ]
+ }
+```
+
+The shortest two paths are returned with:
+```
+curl localhost:8080/query -XPOST -d $'{
+ path as shortest(from: 0x2, to: 0x5, numpaths: 2) {
+  friend
+ }
+ path(func: uid(path)) {
+   name
+ }
+}' | python -m json.tool | less
+```
+
+
+
+Edges weights are included by using facets on the edges as follows.
+
+{{% notice "note" %}}One facet per predicate in the shortest query block is allowed.{{% /notice %}}
+```
+curl localhost:8080/query -XPOST -d $'{
+ path as shortest(from: 0x2, to: 0x5) {
+  friend @facets(weight)
+ }
+
+ path(func: uid(path)) {
+  name
+ }
+}' | python -m json.tool | less
+```
+
+
+
+```
 {
     "_path_": [
         {
-            "_uid_": "0xb3454265b6df75e3",
+            "_uid_": "0x2",
             "friend": [
                 {
-                    "_uid_": "0x3e0ae463957d9a21"
+                    "@facets": {
+                        "_": {
+                            "weight": 0.1
+                        }
+                    },
+                    "_uid_": "0x3",
+                    "friend": [
+                        {
+                            "@facets": {
+                                "_": {
+                                    "weight": 0.2
+                                }
+                            },
+                            "_uid_": "0x4",
+                            "friend": [
+                                {
+                                    "@facets": {
+                                        "_": {
+                                            "weight": 0.3
+                                        }
+                                    },
+                                    "_uid_": "0x5"
+                                }
+                            ]
+                        }
+                    ]
                 }
             ]
         }
     ],
     "path": [
         {
-            "name": "alice"
+            "name": "Alice"
+        },
+        {
+            "name": "Bob"
+        },
+        {
+            "name": "Tom"
         },
         {
             "name": "Mallory"
@@ -3075,91 +3167,21 @@ Would return the following results. (Note that each edges' weight is considered 
     ]
 }
 ```
-If we want to use edge weights, we'd use facets to specify them as follows.
 
-{{% notice "note" %}}We can specify exactly one facet per predicate in the shortest query block.{{% /notice %}}
+Constraints can be applied to the intermediate nodes as follows.
 ```
 curl localhost:8080/query -XPOST -d $'{
- path as shortest(from:a, to:d) {
-  friend @facets(weight)
- }
-
- path(id: var(path)) {
-  name
- }
-}' | python -m json.tool | less
-```
-
-```
-{
-  "_path_": [
-    {
-      "_uid_": "0xb3454265b6df75e3",
-      "friend": [
-        {
-          "@facets": {
-            "_": {
-              "weight": 0.1
-            }
-          },
-          "_uid_": "0xa3b260215ec8f116",
-          "friend": [
-            {
-              "@facets": {
-                "_": {
-                  "weight": 0.2
-                }
-              },
-              "_uid_": "0x9ea118a9e0cb7b28",
-              "friend": [
-                {
-                  "@facets": {
-                    "_": {
-                      weight": 0.3
-                    }
-                  },
-                  "_uid_": "0x3e0ae463957d9a21"
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "path": [
-    {
-      "name": "alice"
-    },
-    {
-      "name": "bob"
-    },
-    {
-      "name": "Tom"
-    },
-    {
-      "name": "Mallory"
-    }
-  ]
-}
-
-```
-
-Another query which shows how to retrieve paths with some constraints on the intermediate nodes.
-```
-curl localhost:8080/query -XPOST -d $'{
-  path as shortest(from: a, to: d) {
-    friend @filter(not anyofterms(name, "bob")) @facets(weight)
+  path as shortest(from: 0x2, to: 0x5) {
+    friend @filter(not eq(name, "Bob")) @facets(weight)
     relative @facets(liking)
   }
 
-  relationship(id: var(path)) {
+  relationship(func: uid(path)) {
     name
   }
 }' | python -m json.tool | less
 ```
 
-This query would again retrieve the shortest path but using some different parameters for the edge weights which are specified using facets (weight and liking). Also, we'd not like to have any person whose name contains `alice` in the path which is specified by the filter.
 
 ## Recurse Query
 
