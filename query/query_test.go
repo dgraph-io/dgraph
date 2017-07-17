@@ -6614,7 +6614,7 @@ func TestMain(m *testing.M) {
 	walStore, err := badger.NewKV(&kvOpt)
 	x.Check(err)
 
-	worker.StartRaftNodes(walStore)
+	worker.StartRaftNodes(walStore, false)
 	// Load schema after nodes have started
 	err = schema.ParseBytes([]byte(schemaStr), 1)
 	x.Check(err)
