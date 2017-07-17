@@ -413,7 +413,7 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 					Attr:    attr,
 					Op:      protos.DirectedEdge_SET,
 				}
-				if err = addCountMutation(ctx, t, uint32(len(pl.Postings)), reverse); err != nil {
+				if err = addCountMutation(ctx, t, uint32(len(pl.Uids)/8), reverse); err != nil {
 					break
 				}
 			}
