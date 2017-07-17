@@ -315,6 +315,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		var filteredRes []*result
 		if !isValueEdge { // for uid edge.. get postings
 			var perr error
+			filteredRes = make([]*result, pl.Length(opts.AfterUID))
 			pl.Postings(opts, func(p *protos.Posting) bool {
 				res := true
 				res, perr = applyFacetsTree(p.Facets, facetsTree)

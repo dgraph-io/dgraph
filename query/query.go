@@ -1680,12 +1680,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 						tr.LazyPrintf("Error while processing filter task: %+v", err)
 					}
 				}
-
-			case <-ctx.Done():
-				filterErr = ctx.Err()
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Context done before full execution: %+v", err)
-				}
+				/*
+					case <-ctx.Done():
+						filterErr = ctx.Err()
+						if tr, ok := trace.FromContext(ctx); ok {
+							tr.LazyPrintf("Context done before full execution: %+v", err)
+						}
+				*/
 			}
 		}
 
@@ -1838,11 +1839,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 					tr.LazyPrintf("Error while processing child task: %+v", err)
 				}
 			}
-		case <-ctx.Done():
-			childErr = ctx.Err()
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
-			}
+			/*
+				case <-ctx.Done():
+					childErr = ctx.Err()
+					if tr, ok := trace.FromContext(ctx); ok {
+						tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+					}
+			*/
 		}
 	}
 	rch <- childErr
@@ -2203,22 +2206,27 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 			}
 		}
 
+		var err error
 		// Wait for the execution that was started in this iteration.
 		for i := 0; i < len(idxList); i++ {
 			select {
-			case err := <-errChan:
+			case err = <-errChan:
 				if err != nil {
 					if tr, ok := trace.FromContext(ctx); ok {
 						tr.LazyPrintf("Error while processing Query: %+v", err)
 					}
-					return err
 				}
-			case <-ctx.Done():
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Context done before full execution: %+v", err)
-				}
-				return ctx.Err()
+				/*
+					case <-ctx.Done():
+						if tr, ok := trace.FromContext(ctx); ok {
+							tr.LazyPrintf("Context done before full execution: %+v", err)
+						}
+						return ctx.Err()
+				*/
 			}
+		}
+		if err != nil {
+			return err
 		}
 
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
