@@ -201,7 +201,10 @@ func (c *listCache) delete(key uint64) {
 	c.Lock()
 	defer c.Unlock()
 
-	ele := c.cache[key]
-	c.ll.Remove(ele)
-	delete(c.cache, key)
+	if ele, ok := c.cache[key]; ok {
+		c.ll.Remove(ele)
+		delete(c.cache, key)
+		kv := ele.Value.(*entry)
+		kv.pl.decr()
+	}
 }

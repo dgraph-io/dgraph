@@ -760,7 +760,6 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		if delFromCache {
 			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
 			lcache.delete(l.ghash)
-			l.decr()
 		}
 	}
 
