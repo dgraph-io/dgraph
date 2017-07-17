@@ -95,15 +95,23 @@ func (req *Req) addMutation(e Edge, op opType) {
 // The edge must be syntactically valid: have a valid source (a Node), predicate and target (a Node or value), otherwise an error is returned.
 // The edge is not checked agaist the schema until the request is run --- so setting a UID edge to a value, for example, doesn't result in an
 // error until the request is run.
-func (req *Req) Set(e Edge) {
+func (req *Req) Set(e Edge) error {
+	if err := e.validate(); err != nil {
+		return err
+	}
 	req.addMutation(e, SET)
+	return nil
 }
 
 // Delete adds edge e to the delete mutation of request req, thus scheduling the edge to be removed from the graph when the request is run.
 // The edge must have a valid source (a Node), predicate and target (a Node or value), otherwise an error is returned.  The edge need not represent
 // an edge in the graph --- applying such a mutation simply has no effect.
-func (req *Req) Delete(e Edge) {
+func (req *Req) Delete(e Edge) error {
+	if err := e.validate(); err != nil {
+		return err
+	}
 	req.addMutation(e, DEL)
+	return nil
 }
 
 // AddSchema adds the single schema mutation s to the request.
@@ -120,7 +128,7 @@ func (req *Req) AddSchema(s protos.SchemaUpdate) error {
 // edgename: uid @reverse .
 // edge2: string @index(exact) .
 // etc.
-// to use the form "mutuation { schema { ... }}" issue the mutation through 
+// to use the form "mutuation { schema { ... }}" issue the mutation through
 // SetQuery.
 func (req *Req) AddSchemaFromString(s string) error {
 	schemaUpdate, err := schema.Parse(s)
@@ -229,6 +237,15 @@ func (e *Edge) ConnectTo(n Node) error {
 		e.nq.ObjectId = n.String()
 	}
 	return nil
+}
+
+func (e *Edge) validate() error {
+	// Edge should be connected to a value in which case ObjectType would be > 0.
+	// Or it needs to connect to a Node (ObjectId > 0) or it should be connected to a variable.
+	if e.nq.ObjectValue != nil || len(e.nq.ObjectId) > 0 || len(e.nq.ObjectVar) > 0 {
+		return nil
+	}
+	return ErrNotConnected
 }
 
 func validateStr(val string) error {

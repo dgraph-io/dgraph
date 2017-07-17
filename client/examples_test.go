@@ -71,14 +71,16 @@ func ExampleReq_Set() {
 	// Add edges for name and salary to person1
 	e := person1.Edge("name")
 	e.SetValueString("Steven Spielberg")
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
 	// If the old variable was written over or outof scope we can lookup person1 again,
 	// the string->node mapping is remembered by the client for this session.
 	p, err := dgraphClient.NodeBlank("person1")
 	e = p.Edge("salary")
 	e.SetValueFloat(13333.6161)
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
 	resp, err := dgraphClient.Run(context.Background(), &req)
 	if err != nil {
@@ -143,7 +145,8 @@ func ExampleEdge_AddFacet() {
 	e.AddFacet("since", "2006-01-02T15:04:05")
 	e.AddFacet("alias", `"Steve"`)
 
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
 	person2, err := dgraphClient.NodeXid("person2", false)
 	if err != nil {
@@ -151,13 +154,15 @@ func ExampleEdge_AddFacet() {
 	}
 	e = person2.Edge("name")
 	e.SetValueString("William Jones")
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
 	e = person1.ConnectTo("friend", person2)
 
 	// Facet on a node-node edge.
 	e.AddFacet("close", "true")
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
 	req.AddSchemaFromString(`
 name: string @index(exact) .
@@ -236,11 +241,13 @@ func ExampleReq_SetQuery() {
 	}
 	e := alice.Edge("name")
 	e.SetValueString("Alice")
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
 	e = alice.Edge("falls.in")
 	e.SetValueString("Rabbit hole")
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
 	req.AddSchemaFromString(`name: string @index(exact) .`)
 	if err != nil {
@@ -259,7 +266,6 @@ func ExampleReq_SetQuery() {
 	}
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 }
-
 
 func ExampleReq_SetQueryWithVariables() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
@@ -283,11 +289,13 @@ func ExampleReq_SetQueryWithVariables() {
 	}
 	e := alice.Edge("name")
 	e.SetValueString("Alice")
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
 	e = alice.Edge("falls.in")
 	e.SetValueString("Rabbit hole")
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
 	req.AddSchemaFromString(`name: string @index(exact) .`)
 
@@ -300,12 +308,9 @@ func ExampleReq_SetQueryWithVariables() {
 		}
 	}`, variables)
 
-
 	resp, err := dgraphClient.Run(context.Background(), &req)
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 }
-
-
 
 func ExampleDgraph_NodeUidVar() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
@@ -330,7 +335,8 @@ func ExampleDgraph_NodeUidVar() {
 	}
 	e := alice.Edge("name")
 	e.SetValueString("Alice")
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
 	req.AddSchemaFromString(`name: string @index(exact) .`)
 
@@ -341,7 +347,7 @@ func ExampleDgraph_NodeUidVar() {
 
 	// Now issue a query and mutation using client interface
 
-    req.SetQuery(`{
+	req.SetQuery(`{
     a as var(func: eq(name, "Alice"))
     me(func: uid(a)) {
         name
@@ -349,34 +355,33 @@ func ExampleDgraph_NodeUidVar() {
 }`)
 
 	// Get a node for the variable a in the query above.
-    n, _ := dgraphClient.NodeUidVar("a")
-    e = n.Edge("falls.in")
+	n, _ := dgraphClient.NodeUidVar("a")
+	e = n.Edge("falls.in")
 	e.SetValueString("Rabbit hole")
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
-    resp, err = dgraphClient.Run(context.Background(), &req)
+	resp, err = dgraphClient.Run(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 
-
-	// This is equivalent to the single query and mutation 
+	// This is equivalent to the single query and mutation
 	//
 	// {
-    //		a as var(func: eq(name, "Alice"))
-    //		me(func: uid(a)) {
+	//		a as var(func: eq(name, "Alice"))
+	//		me(func: uid(a)) {
 	//			name
-    //		}
+	//		}
 	// }
 	// mutation { set {
 	//		var(a) <falls.in> "Rabbit hole" .
-	// }} 
+	// }}
 	//
 	// It's often easier to construct such things with client functions that
 	// by manipulating raw strings.
 }
-
 
 func ExampleEdge_SetValueBytes() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
@@ -395,12 +400,14 @@ func ExampleEdge_SetValueBytes() {
 	}
 	e := alice.Edge("name")
 	e.SetValueString("Alice")
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
 	e = alice.Edge("somestoredbytes")
 	err = e.SetValueBytes([]byte(`\xbd\xb2\x3d\xbc\x20\xe2\x8c\x98`))
 	x.Check(err)
-	req.Set(e)
+	err = req.Set(e)
+	x.Check(err)
 
 	req.AddSchemaFromString(`name: string @index(exact) .`)
 
@@ -417,7 +424,6 @@ func ExampleEdge_SetValueBytes() {
 	}
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 }
-
 
 func ExampleUnmarshal() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
@@ -453,7 +459,7 @@ mutation {
 			name
 		}
 	}	
-}`)	
+}`)
 
 	// Run the request in the Dgraph server.  The mutations are added, then
 	// the query is exectuted.
@@ -461,19 +467,19 @@ mutation {
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
-	
+
 	// Unmarshal the response into a custom struct
 
 	// A type representing information in the graph.
 	type person struct {
-		Name string `dgraph:"name"`
+		Name    string   `dgraph:"name"`
 		Friends []person `dgraph:"friend"`
 	}
 
 	// A helper type matching the query root.
 	type friends struct {
 		Root person `dgraph:"friends"`
-	} 
+	}
 
 	var f friends
 	err = client.Unmarshal(resp.N, &f)
@@ -485,7 +491,7 @@ mutation {
 	fmt.Print("Friends : ")
 	for _, p := range f.Root.Friends {
 		fmt.Print(p.Name, " ")
-	} 
+	}
 	fmt.Println()
 
 }
