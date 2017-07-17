@@ -23,6 +23,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/x"
@@ -74,7 +75,7 @@ func ExampleReq_Set() {
 	err = req.Set(e)
 	x.Check(err)
 
-	// If the old variable was written over or outof scope we can lookup person1 again,
+	// If the old variable was written over or out of scope we can lookup person1 again,
 	// the string->node mapping is remembered by the client for this session.
 	p, err := dgraphClient.NodeBlank("person1")
 	e = p.Edge("salary")
@@ -86,8 +87,79 @@ func ExampleReq_Set() {
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
+
+	// proto.MarshalTextString(resp) can be used to print the raw response as text.  Client
+	// programs usually use Umarshal to unpack query responses to a struct (or the protocol
+	// buffer can be accessed with resp.N) 
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 }
+
+
+func ExampleReq_Delete() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Check(err)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+
+	// Create new request
+	req := client.Req{}
+
+	// Create a node for person1 (the blank node label "person1" exists
+	// client-side so the mutation can correctly link nodes.  It is not
+	// persisted in the server)
+	person1, err := dgraphClient.NodeBlank("person1")
+	if err != nil {
+		log.Fatal(err)
+	}
+	person2, err := dgraphClient.NodeBlank("person2")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	e := person1.Edge("name")
+	e.SetValueString("Steven Spallding")
+	err = req.Set(e)
+	x.Check(err)
+
+	e = person2.Edge("name")
+	e.SetValueString("Steven Stevenson")
+	err = req.Set(e)
+	x.Check(err)
+
+	e = person1.ConnectTo("friend", person2)
+
+	// Add person1, person2 and friend edge to store
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+
+
+	// Now remove the friend edge
+
+
+	// If the old variable was written over or out of scope we can lookup person1 again,
+	// the string->node mapping is remembered by the client for this session.
+	p1, err := dgraphClient.NodeBlank("person1")
+	p2, err := dgraphClient.NodeBlank("person2")
+
+	e = p1.ConnectTo("friend", p2)
+	req = client.Req{}
+	req.Delete(e)
+	
+	// Run the mutation to delete the edge
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+}
+
+
 
 func ExampleDgraph_BatchSet() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
@@ -139,7 +211,7 @@ func ExampleEdge_AddFacet() {
 		log.Fatal(err)
 	}
 	e := person1.Edge("name")
-	e.SetValueString("Steven Spielberg")
+	e.SetValueString("Steven Stevenson")
 
 	// Add facets since and alias to the edge.
 	e.AddFacet("since", "2006-01-02T15:04:05")
@@ -164,12 +236,16 @@ func ExampleEdge_AddFacet() {
 	err = req.Set(e)
 	x.Check(err)
 
-	req.AddSchemaFromString(`
-name: string @index(exact) .
-`)
+	req.AddSchemaFromString(`name: string @index(exact) .`)
 
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+
+	req = client.Req{}
 	req.SetQuery(`{
-		me(func: eq(name,"Steven Spielberg")) {
+		query(func: eq(name,"Steven Stevenson")) {
 			name @facets
 			friend @facets {
 				name
@@ -177,13 +253,50 @@ name: string @index(exact) .
 		}
 	}`)
 
-	// Run the request in the Dgraph server.  The mutations are added, then
-	// the query is exectuted.
-	resp, err := dgraphClient.Run(context.Background(), &req)
+	resp, err = dgraphClient.Run(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
-	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+
+	// Types representing information in the graph.
+	type nameFacets struct {
+		Since time.Time `dgraph:"since"`
+		Alias string    `dgraph:"alias"`
+	}
+
+	type friendFacets struct {
+		Close bool `dgraph:"close"`
+	}
+
+	type Person struct {
+		Name         string       `dgraph:"name"`
+		NameFacets   nameFacets   `dgraph:"name@facets"`
+		Friends      []Person     `dgraph:"friend"`
+		FriendFacets friendFacets `dgraph:"@facets"`
+	}
+
+	// Helper type to unmarshal query
+	type Res struct {
+		Root Person `dgraph:"query"`
+	}
+
+	var pq Res
+	err = client.Unmarshal(resp.N, &pq)
+	if err != nil {
+		log.Fatal("Couldn't unmarshal response : ", err)
+	}
+
+	fmt.Println("Found : ", pq.Root.Name)
+	fmt.Println("Who likes to be called : ", pq.Root.NameFacets.Alias, " since ", pq.Root.NameFacets.Since)
+	fmt.Println("Friends : ")
+	for i := range pq.Root.Friends {
+		fmt.Print("\t", pq.Root.Friends[i].Name)
+		if pq.Root.Friends[i].FriendFacets.Close {
+			fmt.Println(" who is a close friend.")
+		} else {
+			fmt.Println(" who is not a close friend.")
+		}
+	}
 }
 
 func ExampleReq_AddSchemaFromString() {
@@ -264,7 +377,20 @@ func ExampleReq_SetQuery() {
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
-	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+
+	type Alice struct {
+		Name string `dgraph:"name"`
+		WhatHappened string `dgraph:"falls.in"`
+	}
+
+	type Res struct {
+		Root Alice `dgraph:"me"`
+	}
+
+	var r Res
+	err = client.Unmarshal(resp.N, &r)
+	x.Check(err)
+	fmt.Printf("Alice: %+v\n\n", r.Root)
 }
 
 func ExampleReq_SetQueryWithVariables() {
@@ -309,7 +435,20 @@ func ExampleReq_SetQueryWithVariables() {
 	}`, variables)
 
 	resp, err := dgraphClient.Run(context.Background(), &req)
-	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+	
+	type Alice struct {
+		Name string `dgraph:"name"`
+		WhatHappened string `dgraph:"falls.in"`
+	}
+
+	type Res struct {
+		Root Alice `dgraph:"me"`
+	}
+
+	var r Res
+	err = client.Unmarshal(resp.N, &r)
+	x.Check(err)
+	fmt.Printf("Alice: %+v\n\n", r.Root)
 }
 
 func ExampleDgraph_NodeUidVar() {
@@ -422,7 +561,20 @@ func ExampleEdge_SetValueBytes() {
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
-	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+	
+	type Alice struct {
+		Name string `dgraph:"name"`
+		ByteValue []byte `dgraph:"somestoredbytes"`
+	}
+
+	type Res struct {
+		Root Alice `dgraph:"q"`
+	}
+
+	var r Res
+	err = client.Unmarshal(resp.N, &r)
+	x.Check(err)
+	fmt.Printf("Alice: %+v\n\n", r.Root)
 }
 
 func ExampleUnmarshal() {
