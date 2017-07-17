@@ -1194,6 +1194,25 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		}
 		if sg.MathExp.Val != nil {
 			it := doneVars[sg.Params.Var]
+			var isInt, isFloat bool
+			for _, v := range sg.MathExp.Val {
+				if v.Tid == types.FloatID {
+					isFloat = true
+				}
+				if v.Tid == types.IntID {
+					isInt = true
+				}
+			}
+			if isInt && isFloat {
+				for k, v := range sg.MathExp.Val {
+					if v.Tid == types.IntID {
+						v.Tid = types.FloatID
+						v.Value = float64(v.Value.(int64))
+					}
+					sg.MathExp.Val[k] = v
+				}
+			}
+
 			it.Vals = sg.MathExp.Val
 			// The path of math node is the path of max var node used in it.
 			it.path = path
