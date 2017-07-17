@@ -6522,13 +6522,15 @@ func TestSchemaBlock3(t *testing.T) {
 			reverse
 			type
 			tokenizer
+			count
 		}
 	`
 	actual := processSchemaQuery(t, query)
 	expected := []*protos.SchemaNode{{Predicate: "age",
 		Type:      "int",
 		Index:     true,
-		Tokenizer: []string{"int"}}}
+		Tokenizer: []string{"int"},
+		Count:     false}}
 	checkSchemaNodes(t, expected, actual)
 }
 
