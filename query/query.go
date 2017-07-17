@@ -1670,21 +1670,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		var filterErr error
 		for range sg.Filters {
-			select {
-			case err = <-filterChan:
-				if err != nil {
-					// Store error in a variable and wait for all filters to run
-					// before returning. Else tracing causes crashes.
-					filterErr = err
-					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf("Error while processing filter task: %+v", err)
-					}
-				}
-
-			case <-ctx.Done():
-				filterErr = ctx.Err()
+			if err = <-filterChan; err != nil {
+				// Store error in a variable and wait for all filters to run
+				// before returning. Else tracing causes crashes.
+				filterErr = err
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Context done before full execution: %+v", err)
+					tr.LazyPrintf("Error while processing filter task: %+v", err)
 				}
 			}
 		}
@@ -1830,18 +1821,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if child.IsInternal() || child.Attr == "_uid_" {
 			continue
 		}
-		select {
-		case err = <-childChan:
-			if err != nil {
-				childErr = err
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Error while processing child task: %+v", err)
-				}
-			}
-		case <-ctx.Done():
-			childErr = ctx.Err()
+		if err = <-childChan; err != nil {
+			childErr = err
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+				tr.LazyPrintf("Error while processing child task: %+v", err)
 			}
 		}
 	}
@@ -2203,22 +2186,18 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 			}
 		}
 
+		var ferr error
 		// Wait for the execution that was started in this iteration.
 		for i := 0; i < len(idxList); i++ {
-			select {
-			case err := <-errChan:
-				if err != nil {
-					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf("Error while processing Query: %+v", err)
-					}
-					return err
-				}
-			case <-ctx.Done():
+			if err = <-errChan; err != nil {
+				ferr = err
 				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Context done before full execution: %+v", err)
+					tr.LazyPrintf("Error while processing Query: %+v", err)
 				}
-				return ctx.Err()
 			}
+		}
+		if ferr != nil {
+			return ferr
 		}
 
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
