@@ -6502,11 +6502,16 @@ func TestSchemaBlock2(t *testing.T) {
 			reverse
 			type
 			tokenizer
+			count
 		}
 	`
 	actual := processSchemaQuery(t, query)
 	expected := []*protos.SchemaNode{
-		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact", "trigram"}}}
+		{Predicate: "name",
+			Type:      "string",
+			Index:     true,
+			Tokenizer: []string{"term", "exact", "trigram"},
+			Count:     true}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6517,13 +6522,15 @@ func TestSchemaBlock3(t *testing.T) {
 			reverse
 			type
 			tokenizer
+			count
 		}
 	`
 	actual := processSchemaQuery(t, query)
 	expected := []*protos.SchemaNode{{Predicate: "age",
 		Type:      "int",
 		Index:     true,
-		Tokenizer: []string{"int"}}}
+		Tokenizer: []string{"int"},
+		Count:     false}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6554,7 +6561,11 @@ func TestSchemaBlock5(t *testing.T) {
 	`
 	actual := processSchemaQuery(t, query)
 	expected := []*protos.SchemaNode{
-		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact", "trigram"}}}
+		{Predicate: "name",
+			Type:      "string",
+			Index:     true,
+			Tokenizer: []string{"term", "exact", "trigram"},
+			Count:     true}}
 	checkSchemaNodes(t, expected, actual)
 }
 
