@@ -37,9 +37,15 @@ const (
 	DEL
 )
 
+type rdfEntry struct {
+	mark *x.WaterMark
+	line uint64
+}
+
 // Req wraps the protos.Request so that helper methods can be defined on it.
 type Req struct {
-	gr protos.Request
+	gr      protos.Request
+	entries []rdfEntry
 }
 
 // Request returns the graph request object which is sent to the server to perform
@@ -113,11 +119,14 @@ func (req *Req) reset() {
 	req.gr.Mutation.Set = req.gr.Mutation.Set[:0]
 	req.gr.Mutation.Del = req.gr.Mutation.Del[:0]
 	req.gr.Mutation.Schema = req.gr.Mutation.Schema[:0]
+	req.entries = req.entries[:0]
 }
 
 type nquadOp struct {
-	e  Edge
-	op Op
+	e    Edge
+	op   Op
+	mark *x.WaterMark
+	line uint64
 }
 
 type Node struct {

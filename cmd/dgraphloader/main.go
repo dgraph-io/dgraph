@@ -17,6 +17,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -150,13 +151,25 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 
 	var buf bytes.Buffer
 	bufReader := bufio.NewReader(gr)
-	var line int
+
+	basePath := filepath.Base(file)
+	checkpoint, err := dgraphClient.Checkpoint(basePath)
+	x.Check(err)
+	if checkpoint != 0 {
+		fmt.Printf("Found checkpoint for: %s. Skipping: %v lines.\n", basePath, checkpoint)
+	}
+
+	var line uint64
 	for {
 		err = readLine(bufReader, &buf)
 		if err != nil {
 			break
 		}
 		line++
+		if line <= checkpoint {
+			// No need to parse. We have already sent it to server.
+			continue
+		}
 		nq, err := rdf.Parse(buf.String())
 		if err == rdf.ErrEmpty { // special case: comment/empty line
 			buf.Reset()
@@ -170,7 +183,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 		if len(nq.ObjectId) > 0 {
 			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
 		}
-		if err = dgraphClient.BatchSet(client.NewEdge(nq)); err != nil {
+		if err = dgraphClient.BatchSetWithMark(client.NewEdge(nq), basePath, line); err != nil {
 			log.Fatal("While adding mutation to batch: ", err)
 		}
 	}

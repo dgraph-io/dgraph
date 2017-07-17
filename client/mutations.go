@@ -174,6 +174,9 @@ type Dgraph struct {
 	mutations uint64
 	// To get time elapsed.
 	start time.Time
+
+	// Map of filename to x.Watermark. Used for checkpointing.
+	marks *syncMarks
 }
 
 func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
@@ -189,7 +192,7 @@ func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, client
 func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientDir string) *Dgraph {
 	x.Check(os.MkdirAll(clientDir, 0700))
 	opt := badger.DefaultOptions
-	opt.SyncWrites = false
+	opt.SyncWrites = true // So that checkpoints are persisted immediately.
 	opt.MapTablesTo = table.MemoryMap
 	opt.Dir = clientDir
 	opt.ValueDir = clientDir
@@ -210,6 +213,7 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		nquads: make(chan nquadOp, opts.Pending*opts.Size),
 		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
 		alloc:  alloc,
+		marks:  new(syncMarks),
 	}
 
 	for i := 0; i < opts.Pending; i++ {
@@ -224,6 +228,7 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		go d.printCounters()
 	}
 	go d.batchSync()
+	go d.storeCheckpoint()
 	return d
 }
 
@@ -301,6 +306,11 @@ RETRY:
 		}
 		goto RETRY
 	}
+
+	for _, entry := range req.entries {
+		// Mark watermarks as done.
+		entry.mark.Ch <- x.Mark{Index: entry.line, Done: true}
+	}
 	req.reset()
 }
 
@@ -310,6 +320,7 @@ func (d *Dgraph) makeRequests() {
 	for n := range d.nquads {
 		if n.op == SET {
 			req.Set(n.e)
+			req.entries = append(req.entries, rdfEntry{n.mark, n.line})
 		} else if n.op == DEL {
 			req.Delete(n.e)
 		}
@@ -356,6 +367,21 @@ func (d *Dgraph) BatchSet(e Edge) error {
 	d.nquads <- nquadOp{
 		e:  e,
 		op: SET,
+	}
+	atomic.AddUint64(&d.rdfs, 1)
+	return nil
+}
+
+func (d *Dgraph) BatchSetWithMark(e Edge, file string, line uint64) error {
+	sm := d.SyncMarkFor(file)
+	d.nquads <- nquadOp{
+		e:    e,
+		op:   SET,
+		mark: sm,
+		line: line,
+	}
+	if len(file) > 0 && line != 0 {
+		sm.Ch <- x.Mark{Index: line}
 	}
 	atomic.AddUint64(&d.rdfs, 1)
 	return nil
