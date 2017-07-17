@@ -2186,17 +2186,18 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 			}
 		}
 
-		var err error
+		var ferr error
 		// Wait for the execution that was started in this iteration.
 		for i := 0; i < len(idxList); i++ {
 			if err = <-errChan; err != nil {
+				ferr = err
 				if tr, ok := trace.FromContext(ctx); ok {
 					tr.LazyPrintf("Error while processing Query: %+v", err)
 				}
 			}
 		}
-		if err != nil {
-			return err
+		if ferr != nil {
+			return ferr
 		}
 
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
