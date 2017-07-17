@@ -47,7 +47,7 @@ func NewEmbeddedDgraphClient(config Options, opts client.BatchMutationOptions,
 	schema.Init(State.Pstore)
 	posting.Init(State.Pstore)
 	worker.Init(State.Pstore)
-	go worker.StartRaftNodes(State.WALstore)
+	go worker.StartRaftNodes(State.WALstore, false)
 
 	embedded := &inmemoryClient{&Server{}}
 	return client.NewClient([]protos.DgraphClient{embedded}, opts, clientDir)

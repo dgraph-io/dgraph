@@ -106,7 +106,7 @@ func addToServers(sl *servers, update server) {
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
-func StartRaftNodes(walStore *badger.KV) {
+func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 	gr.all = make(map[uint32]*servers)
@@ -122,6 +122,9 @@ func StartRaftNodes(walStore *badger.KV) {
 		// check if address is valid or not
 		ok := x.ValidateAddress(Config.MyAddr)
 		x.AssertTruef(ok, "%s is not valid address", Config.MyAddr)
+		if !bindall {
+			x.Printf("--my flag is provided without bindall, Did you forget to specify bindall?\n")
+		}
 	}
 
 	// Successfully connect with the peer, before doing anything else.

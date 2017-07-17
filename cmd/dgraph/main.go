@@ -700,7 +700,7 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	go worker.StartRaftNodes(dgraph.State.WALstore)
+	go worker.StartRaftNodes(dgraph.State.WALstore, bindall)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {

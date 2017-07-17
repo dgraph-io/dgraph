@@ -102,8 +102,6 @@ func RunServer(bindall bool) {
 	laddr := "localhost"
 	if bindall {
 		laddr = "0.0.0.0"
-	} else if len(Config.MyAddr) > 0 {
-		x.Printf("--my flag is provided without bindall, Did you forget to specify bindall?\n")
 	}
 	var err error
 	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, workerPort()))
