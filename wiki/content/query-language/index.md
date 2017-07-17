@@ -209,7 +209,7 @@ For functions on string valued predicates, if no language preference is given, t
 ### Term matching
 
 
-#### AllOfTerms
+#### allofterms
 
 Syntax Example: `allofterms(predicate, "space-separated term list")`
 
@@ -251,7 +251,7 @@ Query Example: Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his films that
 {{< /runnable >}}
 
 
-#### AnyOfTerms
+#### anyofterms
 
 
 Syntax Example: `anyofterms(predicate, "space-separated term list")`
@@ -449,7 +449,7 @@ Query Example: Directors called Steven who have directed 1,2 or 3 movies.
 {{< /runnable >}}
 
 
-#### Less than, less than or equal to, greater than and greater than or equal to
+#### less than, less than or equal to, greater than and greater than or equal to
 
 Syntax Examples: for inequality `IE`
 
@@ -524,8 +524,115 @@ Query Example: A movie in each genre that has over 30000 movies.  Because there 
 }
 {{< /runnable >}}
 
+### uid
 
-### Has
+Syntax Examples:
+
+* `q(func: uid(<uid>)) `
+* `predicate @filter(uid(<uid1>, ..., <uidn>))`
+* `predicate @filter(uid(a))` for variable `a`
+* `q(func: uid(a,b))` for variables `a` and `b`
+
+
+Filters nodes at the current query level to only nodes in the given set of UIDs.  
+
+For query variable `a`, `uid(a)` represents the set of UIDs stored in `a`.  For value variable `b`, `uid(b)` represents the UIDs from the UID to value map.  With two or more variables, `uid(a,b,...)` represents the union of all the variables.
+
+
+Query Example: If the UID of a node is known, values for the node can be read directly.  The films of Priyanka Chopra by known UID
+
+{{< runnable >}}
+{
+  films(func: uid(0x936f1885808db5de)) {
+    name@hi
+    actor.film {
+      performance.film {
+        name@hi
+      }
+    }
+  }
+}
+{{< /runnable >}}
+
+
+
+Query Example: The films of Taraji Henson by genre.
+{{< runnable >}}
+{
+  var(func: allofterms(name, "Taraji Henson")) {
+    actor.film {
+      F as performance.film {
+        G as genre
+      }
+    }
+  }
+
+  Taraji_films_by_genre(func: uid(G)) {
+    genre_name : name@en
+    films : ~genre @filter(uid(F)) {
+      film_name : name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+
+Query Example: Taraji Henson films ordered by numer of genres, with genres listed in order of how many films Taraji has made in each genre.
+{{< runnable >}}
+{
+  var(func: allofterms(name, "Taraji Henson")) {
+    actor.film {
+      F as performance.film {
+        G as count(genre)
+        genre {
+          C as count(~genre @filter(uid(F)))
+        }
+      }
+    }
+  }
+
+  Taraji_films_by_genre_count(func: uid(G), orderdesc: val(G)) {
+    film_name : name@en
+    genres : genre (orderdesc: val(C)) {
+      genre_name : name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+### uid_in
+
+
+Syntax Examples:
+
+* `q(func: ...) @filter(uid_in(predicate, <uid>)`
+* `predicate1 @filter(uid_in(predicate2, <uid>)`
+
+Schema Types: UID
+
+Index Required: none
+
+While the `uid` function filters nodes at the current level based on UID, function `uid_in` allows looking ahead along an edge to check that it leads to a particular UID.  This can often save an extra query block and avoids returning the edge.
+
+`uid_in` cannot be used at root, it accepts one UID constant as it's argument (not a variable).
+
+
+Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 597046).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
+{{< runnable >}}
+{
+  caro(func: eq(name, "Marc Caro")) {
+    name@en
+    director.film @filter(uid_in(~director.film, 597046)){
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+### has
 
 Syntax Examples: `has(predicate)`
 
@@ -534,7 +641,6 @@ Schema Types: all
 Index Required: `count` (when used at query root)
 
 Determines if a node has a particular predicate.
-
 
 
 Query Example: First five directors and all their movies that have a release date recorded.  Directors have directed at least one film --- equivalent semantics to `gt(count(director.film), 0)`.
@@ -554,7 +660,7 @@ Query Example: First five directors and all their movies that have a release dat
 
 Note that for geo queries, any polygon with holes is replace with the outer loop, ignoring holes.  Also, as for version 0.7.7 polygon containment checks are approximate.
 
-#### Near
+#### near
 
 Syntax Example: `near(predicate, [long, lat], distance)`
 
@@ -575,7 +681,7 @@ Query Example: Tourist destinations within 1 kilometer of a point in Golden Gate
 {{< /runnable >}}
 
 
-#### Within
+#### within
 
 Syntax Example: `within(predicate, [[long1, lat1], ..., [longN, latN]])`
 
@@ -596,7 +702,7 @@ Query Example: Tourist destinations within the specified area of Golden Gate Par
 {{< /runnable >}}
 
 
-#### Contains
+#### contains
 
 Syntax Examples: `contains(predicate, [long, lat])` or `contains(predicate, [[long1, lat1], ..., [longN, latN]])`
 
@@ -616,7 +722,7 @@ Query Example : All entities that contain a point in the flamingo enclosure of S
 {{< /runnable >}}
 
 
-#### Intersects
+#### intersects
 
 Syntax Example: `intersects(predicate, [[long1, lat1], ..., [longN, latN]])`
 
@@ -1592,6 +1698,29 @@ Query Example: Film name, country and first two actors (by UID order) of every S
 }
 {{< /runnable >}}
 
+
+## Ignorereflex directive
+
+The `@ignorereflex` directive forces the removal of child nodes that are reachable from themselves as a parent, through any path in the query result
+
+Query Example: All the coactors of Rutger Hauer.  Without `@ignorereflex`, the result would also include Rutger Hauer for every movie.
+
+{{< runnable >}}
+{
+  coactors(func: eq(name, "Rutger Hauer")) @ignorereflex {
+    actor.film {
+      performance.film {
+        starring {
+          performance.actor {
+            name@en
+          }
+        }
+      }
+    }
+  }
+}
+{{< /runnable >}}
+
 ## Debug
 
 For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `_uid_` attribute for all the entities along with the `server_latency` information.
@@ -1763,11 +1892,23 @@ The indices available for strings are as follows.
 | `fulltext`   | matching with language specific stemming and stopwords              | `eq`, `alloftext`, `anyoftext`     |
 | `trigram`    | regular expressions matching                                        | `regexp`                     |
 
-<!--
-#### Date Time Indices
 
-**to be added after [issue #971](https://github.com/dgraph-io/dgraph/issues/971)**
--->
+#### DateTime Indices
+
+The indices available for `dateTime` are as follows.
+
+| Index name / Tokenizer   | Part of date indexed                                      |
+| :----------- | :------------------------------------------------------------------ |
+| `dateTime`      | index on year (default)                                        |
+| `month`       | index on year and month                                         |
+| `day`       | index on year, month and day                                      |
+| `hour`       | index on year, month, day and hour                               |
+
+The choices of `dateTime` index allow selecting the precision of the index.  Applications, such as the movies examples in these docs, that require searching over dates but have relatively few nodes per year may prefer the `dateTime` tokenizer; applications that are dependent on fine grained date searches, such as real-time sensor readings, may prefer the `hour` index.
+
+
+All the `dateTime` indices are sortable.
+
 
 #### Sortable Indices
 
