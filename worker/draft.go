@@ -425,8 +425,8 @@ func (n *node) send(m raftpb.Message) {
 	case n.messages <- sendmsg{to: m.To, data: data}:
 		// pass
 	default:
-		// TODO: It's bad to fail like this.
-		x.Fatalf("Unable to push messages to channel in send")
+		// This would be very weird, but it's okay to drop messages.  Raft can deal with it.
+		x.Printf("Unable to push message to channel in send")
 	}
 }
 
@@ -455,8 +455,7 @@ func (n *node) batchAndSendMessages() {
 			if totalSize > messageBatchSoftLimit {
 				// We limit the batch size, but we aren't pushing back on
 				// n.messages, because the loop below spawns a goroutine
-				// to do its dirty work.  This is good because right now
-				// (*node).send fails(!) if the channel is full.
+				// to do its dirty work.
 				break
 			}
 
