@@ -161,13 +161,7 @@ func (p ParsedKey) SkipRangeOfSameType() []byte {
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
-	if p.byteType == byteCountRev {
-		// We need to move to next predicate.
-		k[0] = p.byteType + 1
-	} else {
-		// We need to move to next type of key.
-		k[0] = p.byteType * 2
-	}
+	k[0] = p.byteType + 1
 	return buf
 }
 
