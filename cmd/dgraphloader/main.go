@@ -287,4 +287,7 @@ func main() {
 	fmt.Printf("Time spent                : %v\n", c.Elapsed)
 
 	fmt.Printf("RDFs processed per second : %d\n", rate)
+
+	// Lets call this so that badger is closed properly.
+	dgraphClient.Close()
 }
