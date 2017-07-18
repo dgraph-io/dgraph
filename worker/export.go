@@ -152,6 +152,9 @@ func toSchema(buf *bytes.Buffer, s *skv) {
 		buf.WriteString(strings.Join(s.schema.Tokenizer, ","))
 		buf.WriteByte(')')
 	}
+	if s.schema.Count {
+		buf.WriteString(" @count")
+	}
 	buf.WriteString(" . \n")
 }
 
@@ -266,13 +269,8 @@ func export(gid uint32, bdir string) error {
 		key := item.Key()
 		pk := x.Parse(key)
 
-		if pk.IsIndex() {
-			// Seek to the end of index keys.
-			it.Seek(pk.SkipRangeOfSameType())
-			continue
-		}
-		if pk.IsReverse() || pk.IsCount() {
-			// Seek to the end of reverse keys.
+		if pk.IsIndex() || pk.IsReverse( || pk.IsCount()){
+			// Seek to the end of index, reverse and count keys.
 			it.Seek(pk.SkipRangeOfSameType())
 			continue
 		}
