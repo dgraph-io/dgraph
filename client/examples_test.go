@@ -90,10 +90,11 @@ func ExampleReq_Set() {
 
 	// proto.MarshalTextString(resp) can be used to print the raw response as text.  Client
 	// programs usually use Umarshal to unpack query responses to a struct (or the protocol
-	// buffer can be accessed with resp.N) 
+	// buffer can be accessed with resp.N)
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+	err = dgraphClient.Close()
+	x.Check(err)
 }
-
 
 func ExampleReq_Delete() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
@@ -138,9 +139,7 @@ func ExampleReq_Delete() {
 	}
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 
-
 	// Now remove the friend edge
-
 
 	// If the old variable was written over or out of scope we can lookup person1 again,
 	// the string->node mapping is remembered by the client for this session.
@@ -150,16 +149,16 @@ func ExampleReq_Delete() {
 	e = p1.ConnectTo("friend", p2)
 	req = client.Req{}
 	req.Delete(e)
-	
+
 	// Run the mutation to delete the edge
 	resp, err = dgraphClient.Run(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+	err = dgraphClient.Close()
+	x.Check(err)
 }
-
-
 
 func ExampleDgraph_BatchSet() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
@@ -192,6 +191,8 @@ func ExampleDgraph_BatchSet() {
 	dgraphClient.BatchSet(e)
 
 	dgraphClient.BatchFlush() // Must be called to flush buffers after all mutations are added.
+	err = dgraphClient.Close()
+	x.Check(err)
 }
 
 func ExampleEdge_AddFacet() {
@@ -297,9 +298,9 @@ func ExampleEdge_AddFacet() {
 			fmt.Println(" who is not a close friend.")
 		}
 	}
+	err = dgraphClient.Close()
+	x.Check(err)
 }
-
-
 
 func ExampleReq_SetQuery() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
@@ -345,7 +346,7 @@ func ExampleReq_SetQuery() {
 	}
 
 	type Alice struct {
-		Name string `dgraph:"name"`
+		Name         string `dgraph:"name"`
 		WhatHappened string `dgraph:"falls.in"`
 	}
 
@@ -357,13 +358,14 @@ func ExampleReq_SetQuery() {
 	err = client.Unmarshal(resp.N, &r)
 	x.Check(err)
 	fmt.Printf("Alice: %+v\n\n", r.Root)
+	err = dgraphClient.Close()
+	x.Check(err)
 }
 
 func ExampleReq_SetQueryWithVariables() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
-
 
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
@@ -407,7 +409,7 @@ func ExampleReq_SetQueryWithVariables() {
 	}
 
 	type Alice struct {
-		Name string `dgraph:"name"`
+		Name         string `dgraph:"name"`
 		WhatHappened string `dgraph:"falls.in"`
 	}
 
@@ -419,6 +421,8 @@ func ExampleReq_SetQueryWithVariables() {
 	err = client.Unmarshal(resp.N, &r)
 	x.Check(err)
 	fmt.Printf("Alice: %+v\n\n", r.Root)
+	err = dgraphClient.Close()
+	x.Check(err)
 }
 
 func ExampleDgraph_NodeUidVar() {
@@ -485,6 +489,8 @@ func ExampleDgraph_NodeUidVar() {
 	//
 	// It's often easier to construct such things with client functions that
 	// by manipulating raw strings.
+	err = dgraphClient.Close()
+	x.Check(err)
 }
 
 func ExampleEdge_SetValueBytes() {
@@ -529,9 +535,9 @@ func ExampleEdge_SetValueBytes() {
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
-	
+
 	type Alice struct {
-		Name string `dgraph:"name"`
+		Name      string `dgraph:"name"`
 		ByteValue []byte `dgraph:"somestoredbytes"`
 	}
 
@@ -543,6 +549,8 @@ func ExampleEdge_SetValueBytes() {
 	err = client.Unmarshal(resp.N, &r)
 	x.Check(err)
 	fmt.Printf("Alice: %+v\n\n", r.Root)
+	err = dgraphClient.Close()
+	x.Check(err)
 }
 
 func ExampleUnmarshal() {
@@ -614,4 +622,6 @@ mutation {
 	}
 	fmt.Println()
 
+	err = dgraphClient.Close()
+	x.Check(err)
 }
