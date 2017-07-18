@@ -271,7 +271,7 @@ func export(gid uint32, bdir string) error {
 			it.Seek(pk.SkipRangeOfSameType())
 			continue
 		}
-		if pk.IsReverse() {
+		if pk.IsReverse() || pk.IsCount() {
 			// Seek to the end of reverse keys.
 			it.Seek(pk.SkipRangeOfSameType())
 			continue
