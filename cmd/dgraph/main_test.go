@@ -26,7 +26,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -196,7 +195,7 @@ func TestDeletePredicate(t *testing.T) {
 	`
 	var q2 = `
 	{
-		user(func: uid( [0x1, 0x2, 0x3])) {
+		user(func: uid([0x1, 0x2, 0x3])) {
 			name
 		}
 	}
@@ -241,13 +240,13 @@ func TestDeletePredicate(t *testing.T) {
 	`
 
 	var s2 = `
-	mutation {
-		schema {
-			friend: string @index .
-			name: uid @reverse .
+		mutation {
+			schema {
+				friend: string @index .
+				name: uid @reverse .
+			}
 		}
-	}
-	`
+		`
 
 	schema.ParseBytes([]byte(""), 1)
 	err := runMutation(s1)
@@ -256,9 +255,6 @@ func TestDeletePredicate(t *testing.T) {
 	err = runMutation(m1)
 	require.NoError(t, err)
 
-	// For gentleCommit to happen and postings to persist to disk. To do * P * we iterate and
-	// get the uids to delete from disk.
-	time.Sleep(10 * time.Second)
 	output, err := runQuery(q1)
 	require.NoError(t, err)
 	var m map[string]interface{}
@@ -1272,7 +1268,6 @@ func TestSchemaMutation5Error(t *testing.T) {
 	err = runMutation(m)
 	require.NoError(t, err)
 
-	time.Sleep(5 * time.Second)
 	m = `
 	mutation {
 		schema {
@@ -1292,7 +1287,6 @@ func TestMain(m *testing.M) {
 	dir1, dir2, ps, _ := prepare()
 	defer ps.Close()
 	defer closeAll(dir1, dir2)
-	time.Sleep(5 * time.Second) // Wait for ME to become leader.
 
 	// we need watermarks for reindexing
 	x.AssertTrue(!x.IsTestRun())

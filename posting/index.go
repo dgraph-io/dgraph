@@ -649,8 +649,9 @@ func RebuildIndex(ctx context.Context, attr string) error {
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
-	// TODO: Remove later, clearing all would kill us
-	lcache.Clear()
+	if err := lcache.clear(attr); err != nil {
+		return err
+	}
 	pk := x.ParsedKey{
 		Attr: attr,
 	}

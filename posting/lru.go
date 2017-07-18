@@ -196,6 +196,25 @@ func (c *listCache) Clear() error {
 	return nil
 }
 
+// This is called by DeletePredicate. We don't need to flush PL's to disk and can directly delete
+// them from cache.
+func (c *listCache) clear(attr string) error {
+	c.Lock()
+	defer c.Unlock()
+	for k, e := range c.cache {
+		kv := e.Value.(*entry)
+		pk := x.Parse(kv.pl.key)
+		if pk.Attr != attr {
+			continue
+		}
+		c.ll.Remove(e)
+		delete(c.cache, k)
+		kv.pl.water.Ch <- x.Mark{Indices: kv.pl.pending, Done: true}
+		kv.pl.decr()
+	}
+	return nil
+}
+
 // delete removes a key from cache
 func (c *listCache) delete(key uint64) {
 	c.Lock()
