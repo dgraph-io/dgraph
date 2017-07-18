@@ -495,20 +495,9 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	c := protos.NewWorkerClient(conn)
 	p := &protos.Payload{Data: data}
 
-	ch := make(chan error, 1)
-	go func() {
-		_, err = c.RaftMessage(ctx, p)
-		ch <- err
-	}()
-
-	select {
-	case <-ctx.Done():
-		return
-	case <-ch:
-		// We don't need to do anything if we receive any error while sending message.
-		// RAFT would automatically retry.
-		return
-	}
+	// We don't do anything if we receive any error while sending a message.  Raft would
+	// automatically retry.
+	_, _ = c.RaftMessage(ctx, p)
 }
 
 func (n *node) processMutation(ctx context.Context, index uint64, m *protos.Mutations) error {
