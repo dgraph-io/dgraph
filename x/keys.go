@@ -27,9 +27,9 @@ const (
 	byteData     = byte(0x00)
 	byteSchema   = byte(0x01)
 	byteIndex    = byte(0x02)
-	byteReverse  = byte(0x03)
-	byteCount    = byte(0x04)
-	byteCountRev = byte(0x05)
+	byteReverse  = byte(0x04)
+	byteCount    = byte(0x08)
+	byteCountRev = byteCount | byteReverse
 	// same prefix for data, index and reverse keys so that relative order of data doesn't change
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)
