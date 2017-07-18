@@ -49,10 +49,17 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var passwordCache map[string]string = make(map[string]string, 2)
+
 func addPassword(t *testing.T, uid uint64, attr, password string) {
 	value := types.ValueForType(types.BinaryID)
 	src := types.ValueForType(types.PasswordID)
-	src.Value, _ = types.Encrypt(password)
+	encrypted, ok := passwordCache[password]
+	if !ok {
+		encrypted, _ = types.Encrypt(password)
+		passwordCache[password] = encrypted
+	}
+	src.Value = encrypted
 	err := types.Marshal(src, &value)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, attr, uid, types.PasswordID, value.Value.([]byte), nil)
