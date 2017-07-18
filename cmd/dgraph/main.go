@@ -265,6 +265,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if dgraph.Config.DebugMode {
+		fmt.Printf("Received query: %+v\n", q)
+	}
 	parseStart := time.Now()
 	parsed, err := dgraph.ParseQueryAndMutation(ctx, gql.Request{
 		Str:       q,

@@ -65,4 +65,6 @@ mutation {
 	resp.Descriptor()
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 
+	err = dgraphClient.Close()
+	x.Check(err)
 }

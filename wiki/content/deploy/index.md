@@ -38,6 +38,24 @@ docker run -it -p 127.0.0.1:8080:8080 -p 127.0.0.1:9080:9080 -v ~/dgraph:/dgraph
 
 {{% notice "note" %}}All the usual cautions about nightly builds apply: the feature set is not stable and may change (even daily) and the nightly build may contain bugs. {{% /notice %}}
 
+### Building from Source
+
+Make sure you have [Go](https://golang.org/dl/) (version >= 1.8) installed.
+
+After installing Go, run
+```
+# This should install the following binaries in your $GOPATH/bin: dgraph and dgraphloader.
+go get -u github.com/dgraph-io/dgraph/...
+```
+
+The binaries are located in `cmd/dgraph` and `cmd/dgraphloader`. If you get errors related to `grpc` while building
+them, your `go-grpc` version might be outdated. We don't vendor in `go-grpc`(because it causes issues while using
+the Go client). Update your `go-grpc` by running.
+```
+go get -u google.golang.org/grpc
+```
+
+
 ## Endpoints
 
 On its http port, a running Dgraph instance exposes a number of service endpoints.
@@ -391,6 +409,7 @@ To drop all data and start from a clean database:
 ## Upgrade Dgraph
 
 <!--{{% notice "tip" %}}If you are upgrading from v0.7.3 you can modify the [schema file]({{< relref "query-language/index.md#schema">}}) to use the new syntax and give it to the dgraphloader using the `-s` flag while reloading your data.{{% /notice %}}-->
+{{% notice "note" %}}If you are upgrading from v0.7 please check whether you have the export api or get the latest binary for version v0.7.7 and use the export api. {{% /notice %}}
 
 Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
 

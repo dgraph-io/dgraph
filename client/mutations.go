@@ -237,6 +237,12 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 	return d
 }
 
+// Close makes sure that the kv-store is closed properly. This should be called after using the
+// Dgraph client.
+func (d *Dgraph) Close() error {
+	return d.alloc.kv.Close()
+}
+
 func (d *Dgraph) batchSync() {
 	var entries []entry
 	var loop uint64
