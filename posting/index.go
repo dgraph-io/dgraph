@@ -271,7 +271,13 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	var val types.Val
 	var found bool
 
+	t1 := time.Now()
 	l.index.Lock()
+	if dur := time.Since(t1); dur > time.Millisecond {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("acquired index lock %v %v %v", dur, t.Attr, t.Entity)
+		}
+	}
 	defer l.index.Unlock()
 
 	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.Star {
@@ -280,7 +286,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
 	{
-		t1 := time.Now()
+		t1 = time.Now()
 		l.Lock()
 		if dur := time.Since(t1); dur > time.Millisecond {
 			if tr, ok := trace.FromContext(ctx); ok {
