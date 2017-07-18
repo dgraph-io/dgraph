@@ -301,20 +301,15 @@ func makeNodeAttr(attr string, val *fastJsonNode) *fastJsonAttr {
 }
 
 type fastJsonNode struct {
-	children map[string][]*fastJsonNode
+	attr     string
+	children []*fastJsonNode
 	attrs    []*fastJsonAttr
 }
 
 func (fj *fastJsonNode) ensureChildrenMap() {
-	if fj.children == nil {
-		fj.children = make(map[string][]*fastJsonNode)
-	}
 }
 
 func (fj *fastJsonNode) ensureAttrsMap() {
-	if fj.attrs == nil {
-		fj.attrs = []*fastJsonAttr{} // TODO(tzdybal) - we need to know size upfront
-	}
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
@@ -330,12 +325,8 @@ func (fj *fastJsonNode) AddMapChild(attr string, val outputNode, _ bool) {
 }
 
 func (fj *fastJsonNode) AddListChild(attr string, child outputNode) {
-	fj.ensureChildrenMap()
-	children, found := fj.children[attr]
-	if !found {
-		children = make([]*fastJsonNode, 0, 5)
-	}
-	fj.children[attr] = append(children, child.(*fastJsonNode))
+	child.(*fastJsonNode).attr = attr
+	fj.children = append(fj.children, child.(*fastJsonNode))
 }
 
 func (fj *fastJsonNode) New(attr string) outputNode {
@@ -392,19 +383,39 @@ func valToBytes(v types.Val) ([]byte, error) {
 }
 
 func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
-	fj.ensureChildrenMap()
-	allKeys := make([]string, 0, len(fj.attrs)+len(fj.children))
-	for _, a := range fj.attrs {
-		allKeys = append(allKeys, a.attr)
-	}
-	for k := range fj.children {
-		allKeys = append(allKeys, k)
-	}
-	sort.Strings(allKeys)
+	sort.Slice(fj.attrs, func(i, j int) bool {
+		return fj.attrs[i].attr < fj.attrs[j].attr
+	})
+	sort.Slice(fj.children, func(i, j int) bool {
+		return fj.children[i].attr < fj.children[j].attr
+	})
+
+	ai := 0 // attr iterator
+	ci := 0 // child iterator
 
 	bufw.WriteRune('{')
 	first := true
-	for _, k := range allKeys {
+	for {
+		var k string
+		var isAttr bool
+		if ai < len(fj.attrs) && ci < len(fj.children) {
+			if fj.attrs[ai].attr < fj.children[ci].attr {
+				k = fj.attrs[ai].attr
+				isAttr = true
+			} else {
+				k = fj.children[ci].attr
+				isAttr = false
+			}
+		} else if ai == len(fj.attrs) && ci < len(fj.children) {
+			k = fj.children[ci].attr
+			isAttr = false
+		} else if ci == len(fj.children) && ai < len(fj.attrs) {
+			k = fj.attrs[ai].attr
+			isAttr = true
+		} else {
+			break
+		}
+
 		if !first {
 			bufw.WriteRune(',')
 		}
@@ -414,41 +425,42 @@ func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 		bufw.WriteRune('"')
 		bufw.WriteRune(':')
 
-		if v, ok := fj.children[k]; ok {
+		if isAttr {
+			v := &fastJsonAttr{nodeVal: &fastJsonNode{}}
+			scalar := false
+			for ; ai < len(fj.attrs) && fj.attrs[ai].attr == k; ai++ {
+				a := fj.attrs[ai]
+				if a.isScalar {
+					bufw.Write(a.scalarVal)
+					scalar = true
+					ai++
+					break
+				} else {
+					v.nodeVal.ensureAttrsMap()
+					v.nodeVal.ensureChildrenMap()
+
+					for kk, vv := range a.nodeVal.children {
+						v.nodeVal.children[kk] = vv
+					}
+					v.nodeVal.attrs = append(v.nodeVal.attrs, a.nodeVal.attrs...)
+				}
+			}
+			if !scalar {
+				v.nodeVal.encode(bufw)
+			}
+			// ai incremented in loop
+		} else {
 			first := true
 			bufw.WriteRune('[')
-			for _, vi := range v {
-				if !first { // TODO(tzdybal) - optimize
+			for ; ci < len(fj.children) && fj.children[ci].attr == k; ci++ {
+				vi := fj.children[ci]
+				if !first {
 					bufw.WriteRune(',')
 				}
 				first = false
 				vi.encode(bufw)
 			}
 			bufw.WriteRune(']')
-		} else {
-			v := &fastJsonAttr{nodeVal: &fastJsonNode{}}
-			scalar := false
-			for _, a := range fj.attrs {
-				if a.attr == k {
-					if a.isScalar {
-						bufw.Write(a.scalarVal)
-						scalar = true
-						break
-					} else {
-						v.nodeVal.ensureAttrsMap()
-						v.nodeVal.ensureChildrenMap()
-
-						for kk, vv := range a.nodeVal.children {
-							v.nodeVal.children[kk] = vv
-						}
-						v.nodeVal.attrs = append(v.nodeVal.attrs, a.nodeVal.attrs...)
-					}
-				}
-			}
-			if !scalar {
-				v.nodeVal.encode(bufw)
-			}
-
 		}
 	}
 	bufw.WriteRune('}')
@@ -495,11 +507,12 @@ func (n *fastJsonNode) normalize() [][]*fastJsonAttr {
 	// merged with children later.
 	parentSlice = append(parentSlice, n.attrs)
 
-	for _, childNodes := range n.children {
+	for ci := 0; ci < len(n.children); {
+		childNode := n.children[ci]
 		childSlice := make([][]*fastJsonAttr, 0, 5)
-		// Normalizing children.
-		for _, childNode := range childNodes {
-			childSlice = append(childSlice, childNode.normalize()...)
+		for ci < len(n.children) && childNode.attr == n.children[ci].attr {
+			childSlice = append(childSlice, n.children[ci].normalize()...)
+			ci++
 		}
 		// Merging with parent.
 		parentSlice = merge(parentSlice, childSlice)
