@@ -1846,7 +1846,7 @@ mutation {
 to check a password:
 ```
 {
-  check(id: 0x123) {
+  check(func: uid(0x123)) {
     name
     checkpwd(password, "ThePassword")
   }
@@ -2152,7 +2152,7 @@ Query Example: All people.
     allPeople as <~http://schema.org/type>
   }
 
-  q(id: var(allPeople)) {
+  q(func: uid(var(allPeople))) {
     <http://schema.org/name>
   }
 }
@@ -3226,7 +3226,7 @@ Some points to keep in mind while using recurse queries are:
 ```
 curl localhost:8080/query -XPOST -d $'
 query {
-  debug(id: m.07bwr) {
+  debug(func: uid(1)) {
     name@en
     ...TestFrag
   }
@@ -3246,7 +3246,7 @@ fragment TestFragB {
 
 {{< runnable >}}
 {
- "query": "query test($a: int, $b: int, $id: string){  me(id: $id) {name@en, director.film (first: $a, offset: $b) {name @en, genre(first: $a) { name@en }}}}",
+ "query": "query test($a: int, $b: int, $id: string){  me(func: uid($id)) {name@en, director.film (first: $a, offset: $b) {name @en, genre(first: $a) { name@en }}}}",
  "variables" : {
   "$a": "5",
   "$b": "10",
@@ -3264,7 +3264,7 @@ default value of `2`.
 
 {{< runnable >}}
 {
- "query": "query test($a: int = 2, $b: int!){  me(id: m.06pj8) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
+ "query": "query test($a: int = 2, $b: int!){  me(func: uid(1)) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
  "variables" : {
    "$a": "5",
    "$b": "10"
