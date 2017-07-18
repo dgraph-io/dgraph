@@ -176,6 +176,9 @@ func main() {
 	req.Delete(e)
 	resp, err = dgraphClient.Run(context.Background(), &req)
 	x.Check(err)
+
+	err = dgraphClient.Close()
+	x.Check(err)
 }
 ```
 
@@ -308,6 +311,8 @@ func ExampleBatchMutation() {
 	// Wait for all requests to complete. This is very important, else some
 	// data might not be sent to server.
 	dgraphClient.BatchFlush()
+	err = dgraphClient.Close()
+	x.Check(err)
 }
 ```
 
