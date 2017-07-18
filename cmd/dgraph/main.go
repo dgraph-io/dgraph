@@ -669,6 +669,11 @@ func setupServer(che chan error) {
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
+	// Setting a higher number here allows more disk I/O calls to be scheduled, hence considerably
+	// improving throughput. The extra CPU overhead is almost negligible in comparison. The
+	// benchmark notes are located in badger-bench/randread.
+	runtime.GOMAXPROCS(128)
+
 	setupConfigOpts()
 	x.Init() // flag.Parse is called here
 
