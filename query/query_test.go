@@ -160,12 +160,9 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "sword_present", 1, "true", nil)
 	addEdgeToValue(t, "_xid_", 1, "mich", nil)
 
-	addPassword(t, 1, "password", "123456")
-
 	// Now let's add a name for each of the friends, except 101.
 	addEdgeToTypedValue(t, "name", 23, types.StringID, []byte("Rick Grimes"), nil)
 	addEdgeToValue(t, "age", 23, "15", nil)
-	addPassword(t, 23, "pass", "654321")
 
 	src.Value = []byte(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]}`)
 	coord, err = types.Convert(src, types.GeoID)
@@ -2620,6 +2617,8 @@ func TestSum(t *testing.T) {
 
 func TestQueryPassword(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	// Password is not fetchable
 	query := `
                 {
@@ -2640,6 +2639,8 @@ func TestQueryPassword(t *testing.T) {
 
 func TestCheckPassword(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x01)) {
@@ -2656,6 +2657,8 @@ func TestCheckPassword(t *testing.T) {
 
 func TestCheckPasswordIncorrect(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x01)) {
@@ -2673,6 +2676,8 @@ func TestCheckPasswordIncorrect(t *testing.T) {
 // ensure, that old and deprecated form is not allowed
 func TestCheckPasswordParseError(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x01)) {
@@ -2687,6 +2692,8 @@ func TestCheckPasswordParseError(t *testing.T) {
 
 func TestCheckPasswordDifferentAttr1(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(23)) {
@@ -2701,6 +2708,8 @@ func TestCheckPasswordDifferentAttr1(t *testing.T) {
 
 func TestCheckPasswordDifferentAttr2(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(23)) {
@@ -2715,6 +2724,8 @@ func TestCheckPasswordDifferentAttr2(t *testing.T) {
 
 func TestCheckPasswordInvalidAttr(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x1)) {
@@ -2731,6 +2742,8 @@ func TestCheckPasswordInvalidAttr(t *testing.T) {
 // test for old version of checkpwd with hardcoded attribute name
 func TestCheckPasswordQuery1(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x1)) {
@@ -2747,6 +2760,8 @@ func TestCheckPasswordQuery1(t *testing.T) {
 // test for improved version of checkpwd with custom attribute name
 func TestCheckPasswordQuery2(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(23)) {
