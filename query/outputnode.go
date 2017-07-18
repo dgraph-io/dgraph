@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strconv"
+	//"strconv"
 	"time"
 
 	geom "github.com/twpayne/go-geom"
@@ -32,7 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	//"github.com/dgraph-io/dgraph/x"
 )
 
 // ToProtocolBuf returns the list of protos.Node which would be returned to the go
@@ -287,21 +287,22 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 }
 
 type fastJsonAttr struct {
+	attr      string
 	isScalar  bool
 	scalarVal []byte
 	nodeVal   *fastJsonNode
 }
 
-func makeScalarAttr(val []byte) *fastJsonAttr {
-	return &fastJsonAttr{true, val, nil}
+func makeScalarAttr(attr string, val []byte) *fastJsonAttr {
+	return &fastJsonAttr{attr, true, val, nil}
 }
-func makeNodeAttr(val *fastJsonNode) *fastJsonAttr {
-	return &fastJsonAttr{false, nil, val}
+func makeNodeAttr(attr string, val *fastJsonNode) *fastJsonAttr {
+	return &fastJsonAttr{attr, false, nil, val}
 }
 
 type fastJsonNode struct {
 	children map[string][]*fastJsonNode
-	attrs    map[string]*fastJsonAttr
+	attrs    []*fastJsonAttr
 }
 
 func (fj *fastJsonNode) ensureChildrenMap() {
@@ -312,36 +313,20 @@ func (fj *fastJsonNode) ensureChildrenMap() {
 
 func (fj *fastJsonNode) ensureAttrsMap() {
 	if fj.attrs == nil {
-		fj.attrs = make(map[string]*fastJsonAttr)
+		fj.attrs = []*fastJsonAttr{} // TODO(tzdybal) - we need to know size upfront
 	}
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 	if bs, err := valToBytes(v); err == nil {
 		fj.ensureAttrsMap()
-		_, found := fj.attrs[attr]
-		x.AssertTruef(!found, "Setting value twice for same attribute %v", attr)
-		fj.attrs[attr] = makeScalarAttr(bs)
+		fj.attrs = append(fj.attrs, makeScalarAttr(attr, bs))
 	}
 }
 
 func (fj *fastJsonNode) AddMapChild(attr string, val outputNode, _ bool) {
 	fj.ensureAttrsMap()
-	nodeAttr, found := fj.attrs[attr]
-	if found {
-		if nodeAttr.isScalar {
-			x.Fatalf("Can not merge scalar and node values.")
-		}
-		// merge val and nodeAttr.nodeVal
-		for k, v := range val.(*fastJsonNode).children {
-			nodeAttr.nodeVal.children[k] = v
-		}
-		for k, v := range val.(*fastJsonNode).attrs {
-			nodeAttr.nodeVal.attrs[k] = v
-		}
-	} else {
-		fj.attrs[attr] = makeNodeAttr(val.(*fastJsonNode))
-	}
+	fj.attrs = append(fj.attrs, makeNodeAttr(attr, val.(*fastJsonNode)))
 }
 
 func (fj *fastJsonNode) AddListChild(attr string, child outputNode) {
@@ -359,14 +344,16 @@ func (fj *fastJsonNode) New(attr string) outputNode {
 
 func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
 	fj.ensureAttrsMap()
-	uidBs, found := fj.attrs[attr]
+	found := false // TODO(tzdybal) - merge later!
 	if found {
-		x.AssertTruef(uidBs.isScalar, "Found node value for _uid_. Expected scalar value.")
-		lUidBs := len(uidBs.scalarVal)
-		currUid, err := strconv.ParseUint(string(uidBs.scalarVal[1:lUidBs-1]), 0, 64)
-		x.AssertTruef(err == nil && currUid == uid, "Setting two different uids on same node.")
+		/*
+			x.AssertTruef(uidBs.isScalar, "Found node value for _uid_. Expected scalar value.")
+			lUidBs := len(uidBs.scalarVal)
+			currUid, err := strconv.ParseUint(string(uidBs.scalarVal[1:lUidBs-1]), 0, 64)
+			x.AssertTruef(err == nil && currUid == uid, "Setting two different uids on same node.")
+		*/
 	} else {
-		fj.attrs[attr] = makeScalarAttr([]byte(fmt.Sprintf("\"%#x\"", uid)))
+		fj.attrs = append(fj.attrs, makeScalarAttr(attr, []byte(fmt.Sprintf("\"%#x\"", uid))))
 	}
 }
 
@@ -405,11 +392,10 @@ func valToBytes(v types.Val) ([]byte, error) {
 }
 
 func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
-	fj.ensureAttrsMap()
 	fj.ensureChildrenMap()
 	allKeys := make([]string, 0, len(fj.attrs)+len(fj.children))
-	for k := range fj.attrs {
-		allKeys = append(allKeys, k)
+	for _, a := range fj.attrs {
+		allKeys = append(allKeys, a.attr)
 	}
 	for k := range fj.children {
 		allKeys = append(allKeys, k)
@@ -428,68 +414,89 @@ func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 		bufw.WriteRune('"')
 		bufw.WriteRune(':')
 
-		if v, ok := fj.attrs[k]; ok {
-			if v.isScalar {
-				bufw.Write(v.scalarVal)
-			} else {
-				v.nodeVal.encode(bufw)
-			}
-		} else {
-			v := fj.children[k]
+		if v, ok := fj.children[k]; ok {
 			first := true
 			bufw.WriteRune('[')
 			for _, vi := range v {
-				if !first {
+				if !first { // TODO(tzdybal) - optimize
 					bufw.WriteRune(',')
 				}
 				first = false
 				vi.encode(bufw)
 			}
 			bufw.WriteRune(']')
+		} else {
+			v := &fastJsonAttr{nodeVal: &fastJsonNode{}}
+			scalar := false
+			for _, a := range fj.attrs {
+				if a.attr == k {
+					if a.isScalar {
+						bufw.Write(a.scalarVal)
+						scalar = true
+						break
+					} else {
+						v.nodeVal.ensureAttrsMap()
+						v.nodeVal.ensureChildrenMap()
+
+						for kk, vv := range a.nodeVal.children {
+							v.nodeVal.children[kk] = vv
+						}
+						v.nodeVal.attrs = append(v.nodeVal.attrs, a.nodeVal.attrs...)
+					}
+				}
+			}
+			if !scalar {
+				v.nodeVal.encode(bufw)
+			}
+
 		}
 	}
 	bufw.WriteRune('}')
 }
 
-func merge(parent []map[string]*fastJsonAttr,
-	child []map[string]*fastJsonAttr) []map[string]*fastJsonAttr {
+func merge(parent [][]*fastJsonAttr,
+	child [][]*fastJsonAttr) [][]*fastJsonAttr {
 	if len(parent) == 0 {
 		return child
 	}
 
 	// Here we merge two slices of maps.
-	mergedList := make([]map[string]*fastJsonAttr, 0, len(parent)*len(child))
+	mergedList := make([][]*fastJsonAttr, 0, len(parent)*len(child))
 	for _, pa := range parent {
 		for _, ca := range child {
 			mergeMap := make(map[string]*fastJsonAttr)
-			for k, v := range pa {
-				mergeMap[k] = v
+			for _, v := range pa {
+				mergeMap[v.attr] = v
 			}
 			// Copy over child map entries to mergeMap created above.
-			for k, v := range ca {
-				mergeMap[k] = v
+			for _, v := range ca {
+				mergeMap[v.attr] = v
 			}
 			// Add the map to the list.
-			mergedList = append(mergedList, mergeMap)
+			merged := make([]*fastJsonAttr, 0, len(mergeMap))
+			for _, v := range mergeMap {
+				merged = append(merged, v)
+			}
+			mergedList = append(mergedList, merged)
 		}
 	}
 	return mergedList
 }
 
-func (n *fastJsonNode) normalize() []map[string]*fastJsonAttr {
+func (n *fastJsonNode) normalize() [][]*fastJsonAttr {
 	if len(n.children) == 0 {
 		// Recursion base case
 		// There are no children, we can just return slice with n.attrs map.
-		return []map[string]*fastJsonAttr{n.attrs}
+		return [][]*fastJsonAttr{n.attrs}
 	}
 
-	parentSlice := make([]map[string]*fastJsonAttr, 0, 5)
+	parentSlice := make([][]*fastJsonAttr, 0, 5)
 	// If the parents has attrs, lets add them to the slice so that it can be
 	// merged with children later.
 	parentSlice = append(parentSlice, n.attrs)
 
 	for _, childNodes := range n.children {
-		childSlice := make([]map[string]*fastJsonAttr, 0, 5)
+		childSlice := make([][]*fastJsonAttr, 0, 5)
 		// Normalizing children.
 		for _, childNode := range childNodes {
 			childSlice = append(childSlice, childNode.normalize()...)
