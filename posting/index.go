@@ -165,10 +165,16 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 		Facets:  t.Facets,
 	}
 
+	countBefore, countAfter := 0, 0
+	hasCountIndex := schema.State().HasCount(t.Attr)
 	plist.Lock()
-	countBefore := plist.length(0)
+	if hasCountIndex {
+		countBefore = plist.length(0)
+	}
 	_, err := plist.addMutation(ctx, edge)
-	countAfter := plist.length(0)
+	if hasCountIndex {
+		countAfter = plist.length(0)
+	}
 	plist.Unlock()
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -179,7 +185,7 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	}
 	x.PredicateStats.Add(fmt.Sprintf("r.%s", edge.Attr), 1)
 
-	if countAfter != countBefore && schema.State().HasCount(t.Attr) {
+	if countAfter != countBefore && hasCountIndex {
 		if err := updateCount(ctx, countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,
