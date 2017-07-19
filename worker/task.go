@@ -750,7 +750,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
-		if fc.threshold, err = strconv.ParseInt(q.SrcFunc[3], 10, 64); err != nil {
+		if fc.threshold, err = strconv.ParseInt(q.SrcFunc[3], 0, 64); err != nil {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 				q.SrcFunc[0], q.SrcFunc[2])
 		}
@@ -817,7 +817,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
 		}
-		if fc.uidPresent, err = strconv.ParseUint(q.SrcFunc[2], 10, 64); err != nil {
+		if fc.uidPresent, err = strconv.ParseUint(q.SrcFunc[2], 0, 64); err != nil {
 			return nil, err
 		}
 		checkRoot(q, fc)
