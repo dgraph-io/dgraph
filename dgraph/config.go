@@ -60,7 +60,7 @@ var DefaultConfig = Options{
 	Nomutations:   false,
 	NumPending:    1000,
 
-	AllottedMemory: 1024.0,
+	AllottedMemory: 4096.0,
 	CommitFraction: 0.10,
 
 	BaseWorkerPort:      12345,

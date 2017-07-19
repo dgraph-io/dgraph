@@ -1627,13 +1627,16 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.facetsMatrix = result.FacetMatrix
 			sg.counts = result.Counts
 
-			if sg.Params.DoCount && len(sg.Filters) == 0 {
-				// If there is a filter, we need to do more work to get the actual count.
-				if tr, ok := trace.FromContext(ctx); ok {
-					tr.LazyPrintf("Zero uids. Only count requested")
+			if sg.Params.DoCount {
+				if len(sg.Filters) == 0 {
+					// If there is a filter, we need to do more work to get the actual count.
+					if tr, ok := trace.FromContext(ctx); ok {
+						tr.LazyPrintf("Zero uids. Only count requested")
+					}
+					rch <- nil
+					return
 				}
-				rch <- nil
-				return
+				sg.counts = make([]uint32, len(sg.uidMatrix))
 			}
 
 			if result.IntersectDest {
@@ -1749,10 +1752,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if sg.Params.DoCount {
 		x.AssertTrue(len(sg.Filters) > 0)
 		sg.counts = make([]uint32, len(sg.uidMatrix))
+		sg.updateUidMatrix()
 		for i, ul := range sg.uidMatrix {
 			// A possible optimization is to return the size of the intersection
 			// without forming the intersection.
-			algo.IntersectWith(ul, sg.DestUIDs, ul)
 			sg.counts[i] = uint32(len(ul.Uids))
 		}
 		rch <- nil
