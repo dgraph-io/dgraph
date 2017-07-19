@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
@@ -94,7 +93,6 @@ func initTestExport(t *testing.T, schemaStr string) (string, *badger.KV) {
 	require.NoError(t, err)
 	ps.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
 	populateGraphExport(t)
-	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	return dir, ps
 }
@@ -110,7 +108,6 @@ func TestExport(t *testing.T) {
 	defer os.RemoveAll(bdir)
 
 	posting.CommitLists(10, 1)
-	time.Sleep(time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
 	err = export(group.BelongsTo("friend"), bdir)

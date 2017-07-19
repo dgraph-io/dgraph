@@ -178,22 +178,22 @@ func (c *listCache) Reset() {
 	c.curSize = 0
 }
 
-// TODO: Remove it later
-// Clear purges all stored items from the cache.
-func (c *listCache) Clear() error {
+func (c *listCache) clear(attr string) error {
 	c.Lock()
 	defer c.Unlock()
-	for _, e := range c.cache {
+	for k, e := range c.cache {
 		kv := e.Value.(*entry)
+		keyAttr := x.ParseAttr(kv.pl.key)
+		if keyAttr != attr {
+			continue
+		}
+		c.ll.Remove(e)
 		kv.pl.SetForDeletion()
 		if committed, _ := kv.pl.SyncIfDirty(true); !committed {
-			delete(c.cache, kv.pl.ghash)
+			delete(c.cache, k)
 			kv.pl.decr()
 		}
 	}
-	c.ll = list.New()
-	c.cache = make(map[uint64]*list.Element)
-	c.curSize = 0
 	return nil
 }
 
