@@ -47,8 +47,21 @@ type peerPoolEntry struct {
 	// Never the empty string.  Possibly a bogus address -- bad port number, the value
 	// of *myAddr, or some screwed up Raft config.
 	addr string
+
 	// An owning reference to a pool for this peer (or nil if addr is sufficiently bogus).
 	poolOrNil *pool
+
+	// *** Fields below are only non-nil if poolOrNil is. ***
+
+	// If poolOrNil is non-nil, there's a goroutine running streamMsgApps.
+
+	// Cancellation -- close this to cancel streamMsgApps.
+	cancel chan struct{}
+
+	// Used to send MsgApp messages to the peer.
+	appMessages chan raftpb.Message
+
+	wg *sync.WaitGroup
 }
 
 // peerPool stores the peers' addresses and our connections to them.  It has exactly one
@@ -91,15 +104,30 @@ func (p *peerPool) get(id uint64) (string, bool) {
 	return ret.addr, ok
 }
 
-func (p *peerPool) set(id uint64, addr string, pl *pool) {
+func (p *peerPool) getAppMessages(id uint64) (chan raftpb.Message, error) {
+	p.RLock()
+	defer p.RUnlock()
+	ent, ok := p.peers[id]
+	if !ok {
+		return nil, errNoPeerPoolEntry
+	}
+	if ent.poolOrNil == nil {
+		return nil, errNoPeerPool
+	}
+	return ent.appMessages, nil
+}
+
+func (p *peerPool) set(id uint64, entry peerPoolEntry) {
 	p.Lock()
 	defer p.Unlock()
 	if old, ok := p.peers[id]; ok {
 		if old.poolOrNil != nil {
+			close(old.cancel)
 			pools().release(old.poolOrNil)
 		}
 	}
-	p.peers[id] = peerPoolEntry{addr, pl}
+
+	p.peers[id] = entry
 }
 
 type proposalCtx struct {
@@ -271,10 +299,10 @@ func (n *node) GetPeerPool(pid uint64) (*pool, error) {
 	return n.peers.getPool(pid)
 }
 
-// addr must not be empty.
-func (n *node) SetPeer(pid uint64, addr string, poolOrNil *pool) {
-	x.AssertTruef(addr != "", "SetPeer for peer %d has empty addr.", pid)
-	n.peers.set(pid, addr, poolOrNil)
+// entry.Addr must not be empty.
+func (n *node) SetPeer(pid uint64, entry peerPoolEntry) {
+	x.AssertTruef(entry.addr != "", "SetPeer for peer %d has empty addr.", pid)
+	n.peers.set(pid, entry)
 }
 
 // Connects the node and makes its peerPool refer to the constructed pool and address
@@ -290,13 +318,26 @@ func (n *node) Connect(pid uint64, addr string) {
 	}
 	// Here's what we do.  Right now peerPool maps peer node id's to addr values.  If
 	// a *pool can be created, good, but if not, we still create a peerPoolEntry with
-	// a nil *pool.
+	// a nil *pool, no goroutine.
 	p, ok := pools().connect(n.ctx, addr)
+	var entry peerPoolEntry
 	if !ok {
 		// TODO: Note this fact in more general peer health info somehow.
 		x.Printf("Peer %d claims same host as me\n", pid)
+		entry = peerPoolEntry{addr: addr, cancel: nil, appMessages: nil, poolOrNil: nil}
+	} else {
+		// The goroutine for streamMsgApps owns a refcount on the pool too.
+		p.AddOwner()
+		ch := make(chan raftpb.Message, 100)
+		// TODO: Actually use wg, or get rid of it.
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go streamMsgApps(n.ctx, &wg, ch, p)
+		entry = peerPoolEntry{addr: addr, poolOrNil: p, cancel: make(chan struct{}), appMessages: ch,
+			wg: &wg}
 	}
-	n.SetPeer(pid, addr, p)
+
+	n.SetPeer(pid, entry)
 }
 
 func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
@@ -414,13 +455,78 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	return err
 }
 
-func (n *node) send(m raftpb.Message) {
-	x.AssertTruef(n.id != m.To, "Sending message to itself")
+// appendSize32Data appends data to buf, prefixed with a 4-byte size.  Returns total number of
+// bytes appended.
+func appendSize32Data(buf *bytes.Buffer, data []byte) int {
+	n := len(data)
+	x.Check(binary.Write(buf, binary.LittleEndian, uint32(n)))
+	x.Check2(buf.Write(data))
+	return 4 + n
+}
+
+func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Message,
+	pl *pool) error {
+	defer wg.Done()
+	defer pools().release(pl)
+
+	client := protos.NewWorkerClient(pl.Get())
+	stream, err := client.RaftMessageStream(ctx)
+	if err != nil {
+		// TODO: Actually don't return error from this function, it's in a goroutine.
+		return err
+	}
+
+	for {
+		select {
+		case m := <-msgCh:
+			data := marshalMsgForSending(m)
+
+			var buf bytes.Buffer
+			appendSize32Data(&buf, data)
+			p := &protos.Payload{Data: buf.Bytes()}
+
+			err := stream.Send(p)
+			if err != nil {
+				return err
+			}
+			// TODO: Hey, don't we want to batch the messages before we send them?  Like below?
+
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (n *node) sendMsgApp(m raftpb.Message) {
+	ch, err := n.peers.getAppMessages(m.To)
+	if err != nil {
+		// No such peer.  OK.
+		return
+	}
+	select {
+	case ch <- m:
+	default:
+		x.Printf("Unable to push message to channel in sendMsgApp")
+	}
+}
+
+func marshalMsgForSending(m raftpb.Message) []byte {
 	data, err := m.Marshal()
 	x.Check(err)
 	if m.Type != raftpb.MsgHeartbeat && m.Type != raftpb.MsgHeartbeatResp {
 		x.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
 	}
+	return data
+}
+
+func (n *node) send(m raftpb.Message) {
+	x.AssertTruef(n.id != m.To, "Sending message to itself")
+	if m.Type == raftpb.MsgApp {
+		n.sendMsgApp(m)
+		return
+	}
+
+	data := marshalMsgForSending(m)
 	select {
 	case n.messages <- sendmsg{to: m.To, data: data}:
 		// pass
@@ -448,9 +554,7 @@ func (n *node) batchAndSendMessages() {
 			} else {
 				buf = b
 			}
-			totalSize += 4 + len(sm.data)
-			x.Check(binary.Write(buf, binary.LittleEndian, uint32(len(sm.data))))
-			x.Check2(buf.Write(sm.data))
+			totalSize += appendSize32Data(buf, sm.data)
 
 			if totalSize > messageBatchSoftLimit {
 				// We limit the batch size, but we aren't pushing back on
@@ -1013,11 +1117,7 @@ func applyMessage(ctx context.Context, msg raftpb.Message) error {
 	}
 }
 
-func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*protos.Payload, error) {
-	if ctx.Err() != nil {
-		return &protos.Payload{}, ctx.Err()
-	}
-
+func processRaftMessage(ctx context.Context, query *protos.Payload) error {
 	for idx := 0; idx < len(query.Data); {
 		x.AssertTruef(len(query.Data[idx:]) >= 4,
 			"Slice left of size: %v. Expected at least 4.", len(query.Data[idx:]))
@@ -1026,7 +1126,7 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 		idx += 4
 		msg := raftpb.Message{}
 		if idx+sz > len(query.Data) {
-			return &protos.Payload{}, x.Errorf(
+			return x.Errorf(
 				"Invalid query. Specified size %v overflows slice [%v,%v)\n",
 				sz, idx, len(query.Data))
 		}
@@ -1037,12 +1137,37 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 			x.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
 		if err := applyMessage(ctx, msg); err != nil {
-			return &protos.Payload{}, err
+			return err
 		}
 		idx += sz
 	}
 	// fmt.Printf("Got %d messages\n", count)
-	return &protos.Payload{}, nil
+	return nil
+}
+
+var emptyPayload protos.Payload
+
+func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*protos.Payload, error) {
+	if ctx.Err() != nil {
+		return &emptyPayload, ctx.Err()
+	}
+
+	err := processRaftMessage(ctx, query)
+	return &emptyPayload, err
+}
+
+func (w *grpcWorker) RaftMessageStream(stream protos.Worker_RaftMessageStreamServer) error {
+	for {
+		payload, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+
+		err = processRaftMessage(stream.Context(), payload)
+		if err != nil {
+			x.Printf("RaftMessageStream processRaftMessage error: %v\n", err)
+		}
+	}
 }
 
 func (w *grpcWorker) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*protos.Payload, error) {
