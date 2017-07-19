@@ -388,6 +388,7 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 			heap.Push(&pq, node)
 		}
+		// Return the popped nodes path to pool.
 		pathPool.Put(item.path.route)
 	}
 
