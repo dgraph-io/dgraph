@@ -19,7 +19,6 @@ package client
 import (
 	"encoding/binary"
 	"fmt"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -44,7 +43,7 @@ func (d *Dgraph) storeCheckpoint() {
 		}
 
 		for file, w := range m {
-			var byte [10]buf
+			var buf []byte
 			n := binary.PutUvarint(buf, w)
 			wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
 		}
@@ -60,11 +59,11 @@ func (d *Dgraph) storeCheckpoint() {
 	}
 }
 
-func NewSyncMarks(files []string) {
-	for _, file := range files {
-		bp := filepath.Base(file)
-	}
-}
+//func NewSyncMarks(files []string) {
+//	for _, file := range files {
+//		bp := filepath.Base(file)
+//	}
+//}
 
 type syncMarks struct {
 	sync.RWMutex

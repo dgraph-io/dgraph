@@ -181,7 +181,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 		if len(nq.ObjectId) > 0 {
 			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
 		}
-		if err = dgraphClient.BatchSetWithMark(client.NewEdge(nq), basePath, line); err != nil {
+		if err = dgraphClient.BatchSet(client.NewEdge(nq)); err != nil {
 			log.Fatal("While adding mutation to batch: ", err)
 		}
 	}

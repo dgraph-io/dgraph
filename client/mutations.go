@@ -177,6 +177,7 @@ type Dgraph struct {
 
 	// Map of filename to x.Watermark. Used for checkpointing.
 	marks *syncMarks
+	reqs  chan Req
 }
 
 func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
@@ -215,7 +216,11 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
 		alloc:  alloc,
 		marks:  new(syncMarks),
+		reqs:   make(chan Req, opts.Pending*2),
 	}
+
+	d.wg.Add(1)
+	go d.batchNquads()
 
 	for i := 0; i < opts.Pending; i++ {
 		d.wg.Add(1)
@@ -289,7 +294,7 @@ func (d *Dgraph) printCounters() {
 	}
 }
 
-func (d *Dgraph) request(req *Req) {
+func (d *Dgraph) request(req Req) {
 	counter := atomic.AddUint64(&d.mutations, 1)
 	factor := time.Second
 RETRY:
@@ -312,32 +317,17 @@ RETRY:
 		// Mark watermarks as done.
 		entry.mark.Ch <- x.Mark{Index: entry.line, Done: true}
 	}
-	req.reset()
 }
 
 func (d *Dgraph) makeRequests() {
-	req := new(Req)
-
-	for n := range d.nquads {
-		if n.op == SET {
-			req.Set(n.e)
-			req.entries = append(req.entries, rdfEntry{n.mark, n.line})
-		} else if n.op == DEL {
-			req.Delete(n.e)
-		}
-		if req.size() == d.opts.Size {
-			d.request(req)
-		}
-	}
-
-	if req.size() > 0 {
+	for req := range d.reqs {
 		d.request(req)
 	}
 	d.wg.Done()
 }
 
 func (d *Dgraph) makeSchemaRequests() {
-	req := new(Req)
+	var req Req
 LOOP:
 	for {
 		select {
@@ -350,6 +340,7 @@ LOOP:
 			start := time.Now()
 			if req.size() > 0 {
 				d.request(req)
+				req = Req{}
 			}
 			elapsedMillis := time.Since(start).Seconds() * 1e3
 			if elapsedMillis < 10 {
@@ -361,6 +352,26 @@ LOOP:
 	if req.size() > 0 {
 		d.request(req)
 	}
+	d.wg.Done()
+}
+
+func (d *Dgraph) batchNquads() {
+	var req Req
+	for n := range d.nquads {
+		if n.op == SET {
+			req.Set(n.e)
+		} else if n.op == DEL {
+			req.Delete(n.e)
+		}
+		if req.size() == d.opts.Size {
+			d.reqs <- req
+			req = Req{}
+		}
+	}
+	if req.size() > 0 {
+		d.reqs <- req
+	}
+	close(d.reqs)
 	d.wg.Done()
 }
 
