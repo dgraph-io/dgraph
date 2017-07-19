@@ -30,40 +30,48 @@ func (d *Dgraph) Checkpoint(file string) (uint64, error) {
 	return d.alloc.getFromKV(fmt.Sprintf("checkpoint-%s", file))
 }
 
+func (d *Dgraph) syncAllMarks() {
+	d.marks.Lock()
+	defer d.marks.Unlock()
+	for _, mark := range d.marks.m {
+		for mark.WaitingFor() {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+func (d *Dgraph) writeCheckpoint() {
+	m := d.marks.watermarks()
+	if m == nil {
+		return
+	}
+
+	fmt.Println("m", m)
+	wb := make([]*badger.Entry, 0, 5)
+	for file, w := range m {
+		buf := make([]byte, 10)
+		n := binary.PutUvarint(buf, w)
+		wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
+	}
+	if err := d.alloc.kv.BatchSet(wb); err != nil {
+		fmt.Printf("Error while writing to disk %v\n", err)
+	}
+	for _, wbe := range wb {
+		if err := wbe.Error; err != nil {
+			fmt.Printf("Error while writing to disk %v\n", err)
+		}
+	}
+}
+
 // Used to store checkpoints for various files.
 func (d *Dgraph) storeCheckpoint() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
-	wb := make([]*badger.Entry, 0, 5)
 	for range ticker.C {
-		m := d.marks.watermarks()
-		if m == nil {
-			continue
-		}
-
-		for file, w := range m {
-			buf := make([]byte, 10)
-			n := binary.PutUvarint(buf, w)
-			wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
-		}
-		if err := d.alloc.kv.BatchSet(wb); err != nil {
-			fmt.Printf("Error while writing to disk %v\n", err)
-		}
-		for _, wbe := range wb {
-			if err := wbe.Error; err != nil {
-				fmt.Printf("Error while writing to disk %v\n", err)
-			}
-		}
-		wb = wb[:0]
+		d.writeCheckpoint()
 	}
 }
-
-//func NewSyncMarks(files []string) {
-//	for _, file := range files {
-//		bp := filepath.Base(file)
-//	}
-//}
 
 type syncMarks struct {
 	sync.RWMutex

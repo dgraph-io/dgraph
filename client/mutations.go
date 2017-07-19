@@ -419,6 +419,10 @@ func (d *Dgraph) BatchFlush() {
 	close(d.nquads)
 	close(d.schema)
 	d.wg.Wait()
+	// Sync all marks so that we know final line that was completed.
+	d.syncAllMarks()
+	// Write final checkpoint before stopping.
+	d.writeCheckpoint()
 	if d.ticker != nil {
 		d.ticker.Stop()
 	}
