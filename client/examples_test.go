@@ -625,3 +625,97 @@ mutation {
 	err = dgraphClient.Close()
 	x.Check(err)
 }
+
+func ExampleUnmarshal_FacetsandUpdate() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Check(err)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+
+	req := client.Req{}
+
+	req.SetQuery(`
+mutation {
+	schema {
+		name: string @index .
+	}
+	set {
+		_:person1 <name> "Alex" .
+		_:person2 <name> "Beatie" .
+		_:person3 <name> "Chris" .
+		_:person4 <name> "David" .
+
+		_:person1 <friend> _:person2 (close=true).
+		_:person1 <friend> _:person3 (close=false).
+		_:person1 <friend> _:person4 (close=true).
+	}
+}
+{
+	friends(func: eq(name, "Alex")) {
+		_uid_
+		name
+		friend @facets {
+			_uid_
+			name
+		}
+	}	
+}`)
+
+	// Run the request in the Dgraph server.  The mutations are added, then
+	// the query is exectuted.
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+
+	// Unmarshal the response into a custom struct
+
+	type friendFacets struct {
+		Close bool `dgraph:"close"`
+	}
+
+	// A type representing information in the graph.
+	type person struct {
+		ID           uint64        `dgraph:"_uid_"` // record the UID for our update
+		Name         string        `dgraph:"name"`
+		Friends      []*person     `dgraph:"friend"` // Unmarshal with pointers to structs
+		FriendFacets *friendFacets `dgraph:"@facets"`
+	}
+
+	// A helper type matching the query root.
+	type friends struct {
+		Root person `dgraph:"friends"`
+	}
+
+	var f friends
+	err = client.Unmarshal(resp.N, &f)
+	if err != nil {
+		log.Fatal("Couldn't unmarshal response : ", err)
+	}
+
+	req = client.Req{}
+
+	// Now update the graph.
+	// for the close friends, add the reverse edge and note in a facet when we did this.
+	for _, p := range f.Root.Friends {
+		if p.FriendFacets.Close {
+			n := dgraphClient.NodeUid(p.ID)
+			e := n.ConnectTo("friend", dgraphClient.NodeUid(f.Root.ID))
+			e.AddFacet("since", time.Now().Format(time.RFC3339))
+			fmt.Println(time.Now().Format(time.RFC3339))
+			req.Set(e)
+		}
+	}
+
+
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+
+	err = dgraphClient.Close()
+	x.Check(err)
+}
