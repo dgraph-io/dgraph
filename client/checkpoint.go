@@ -39,11 +39,11 @@ func (d *Dgraph) storeCheckpoint() {
 	for range ticker.C {
 		m := d.marks.watermarks()
 		if m == nil {
-			return
+			continue
 		}
 
 		for file, w := range m {
-			var buf []byte
+			buf := make([]byte, 10)
 			n := binary.PutUvarint(buf, w)
 			wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
 		}

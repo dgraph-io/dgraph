@@ -313,9 +313,9 @@ RETRY:
 		goto RETRY
 	}
 
-	for _, entry := range req.entries {
-		// Mark watermarks as done.
-		entry.mark.Ch <- x.Mark{Index: entry.line, Done: true}
+	// Mark watermarks as done.
+	if req.line != 0 && req.mark != nil {
+		req.mark.Ch <- x.Mark{Index: req.line, Done: true}
 	}
 }
 
@@ -384,18 +384,15 @@ func (d *Dgraph) BatchSet(e Edge) error {
 	return nil
 }
 
-func (d *Dgraph) BatchSetWithMark(e Edge, file string, line uint64) error {
+func (d *Dgraph) BatchSetWithMark(r Req, file string, line uint64) error {
 	sm := d.SyncMarkFor(file)
-	d.nquads <- nquadOp{
-		e:    e,
-		op:   SET,
-		mark: sm,
-		line: line,
-	}
 	if len(file) > 0 && line != 0 {
+		r.mark = sm
+		r.line = line
 		sm.Ch <- x.Mark{Index: line}
 	}
-	atomic.AddUint64(&d.rdfs, 1)
+	d.reqs <- r
+	atomic.AddUint64(&d.rdfs, uint64(r.size()))
 	return nil
 }
 

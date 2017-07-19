@@ -158,6 +158,8 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 	}
 
 	var line uint64
+	var r client.Req
+	var batchSize int
 	for {
 		err = readLine(bufReader, &buf)
 		if err != nil {
@@ -168,6 +170,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 			// No need to parse. We have already sent it to server.
 			continue
 		}
+		batchSize++
 		nq, err := rdf.Parse(buf.String())
 		if err == rdf.ErrEmpty { // special case: comment/empty line
 			buf.Reset()
@@ -181,12 +184,22 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 		if len(nq.ObjectId) > 0 {
 			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
 		}
-		if err = dgraphClient.BatchSet(client.NewEdge(nq)); err != nil {
-			log.Fatal("While adding mutation to batch: ", err)
+		r.Set(client.NewEdge(nq))
+		if batchSize == *numRdf {
+			if err = dgraphClient.BatchSetWithMark(r, basePath, line); err != nil {
+				log.Fatal("While adding mutation to batch: ", err)
+			}
+			batchSize = 0
+			r = client.Req{}
 		}
 	}
 	if err != io.EOF {
 		x.Checkf(err, "Error while reading file")
+	}
+	if batchSize > 0 {
+		if err = dgraphClient.BatchSetWithMark(r, basePath, line); err != nil {
+			log.Fatal("While adding mutation to batch: ", err)
+		}
 	}
 }
 
