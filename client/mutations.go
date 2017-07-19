@@ -319,6 +319,9 @@ RETRY:
 	}
 }
 
+// makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
+// It doesn't need to batch the requests anymore. Batching is already done for it by the
+// caller functions.
 func (d *Dgraph) makeRequests() {
 	for req := range d.reqs {
 		d.request(req)
@@ -355,6 +358,7 @@ LOOP:
 	d.wg.Done()
 }
 
+// Used to batch the nquads into Req of size given by user and send to d.reqs channel.
 func (d *Dgraph) batchNquads() {
 	var req Req
 	for n := range d.nquads {
@@ -384,6 +388,11 @@ func (d *Dgraph) BatchSet(e Edge) error {
 	return nil
 }
 
+// BatchSetWithMark takes a Req which has a batch of edges. It accepts a file to which the edges
+// belong and also the line number of the last line that the batch contains. This is used by the
+// dgraphloader to do checkpointing so that in case the loader crashes, we can skip the lines
+// which the server has already processed. Most users would only need BatchSet which does the
+// batching automatically.
 func (d *Dgraph) BatchSetWithMark(r Req, file string, line uint64) error {
 	sm := d.marks[file]
 	if sm != nil && line != 0 {
