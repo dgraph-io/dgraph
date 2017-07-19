@@ -373,11 +373,11 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 			mpost.Op = Add
 		} else if oldPost.Op == Del {
 			if mpost.Op == Set {
-				l.len += 2
+				l.len++
 			}
 		} else {
 			if mpost.Op == Del {
-				l.len -= 2
+				l.len--
 			}
 		}
 		l.mlayer.Set(mpost.Uid, mpost)
@@ -404,11 +404,13 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 			l.len++
 			mpost.Op = Add
 		}
-	} else if !psame { // mpost.Op==Del
-		// Either we fail to find UID in immutable PL or contents don't match.
-		return false
 	} else {
-		l.len--
+		if psame { // mpost.Op==Del
+			l.len--
+		} else {
+			// Either we fail to find UID in immutable PL or contents don't match.
+			return false
+		}
 	}
 
 	l.mlayer.Set(mpost.Uid, mpost)
