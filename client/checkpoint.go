@@ -26,6 +26,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// A watermark for each file
+type syncMarks map[string]*x.WaterMark
+
+// Create syncmarks for files and store them in dgraphClient.
 func (d *Dgraph) NewSyncMarks(files []string) {
 	for _, file := range files {
 		bp := filepath.Base(file)
@@ -33,10 +37,13 @@ func (d *Dgraph) NewSyncMarks(files []string) {
 	}
 }
 
+// Get checkpoint for file from Badger.
 func (d *Dgraph) Checkpoint(file string) (uint64, error) {
 	return d.alloc.getFromKV(fmt.Sprintf("checkpoint-%s", file))
 }
 
+// This is called to syncAllMarks. It is useful to find the final line that was processed for each
+// file.
 func (d *Dgraph) syncAllMarks() {
 	for _, mark := range d.marks {
 		for mark.WaitingFor() {
@@ -45,17 +52,19 @@ func (d *Dgraph) syncAllMarks() {
 	}
 }
 
+// Used to write checkpoints to Badger.
 func (d *Dgraph) writeCheckpoint() {
-	wb := make([]*badger.Entry, 0, 5)
+	wb := make([]*badger.Entry, 0, len(d.marks))
 	for file, mark := range d.marks {
 		w := mark.DoneUntil()
 		if w == 0 {
 			continue
 		}
-		buf := make([]byte, 10)
-		n := binary.PutUvarint(buf, w)
+		var buf [10]byte
+		n := binary.PutUvarint(buf[:], w)
 		wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
 	}
+
 	if err := d.alloc.kv.BatchSet(wb); err != nil {
 		fmt.Printf("Error while writing to disk %v\n", err)
 	}
@@ -66,7 +75,7 @@ func (d *Dgraph) writeCheckpoint() {
 	}
 }
 
-// Used to store checkpoints for various files.
+// Used to store checkpoints for various files periodically.
 func (d *Dgraph) storeCheckpoint() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -75,9 +84,6 @@ func (d *Dgraph) storeCheckpoint() {
 		d.writeCheckpoint()
 	}
 }
-
-// A watermark for each file
-type syncMarks map[string]*x.WaterMark
 
 func (g syncMarks) create(file string) *x.WaterMark {
 	if g == nil {
@@ -91,8 +97,4 @@ func (g syncMarks) create(file string) *x.WaterMark {
 	w.Init()
 	g[file] = w
 	return w
-}
-
-func (d *Dgraph) SyncMarkFor(file string) *x.WaterMark {
-	return d.marks[file]
 }

@@ -385,8 +385,8 @@ func (d *Dgraph) BatchSet(e Edge) error {
 }
 
 func (d *Dgraph) BatchSetWithMark(r Req, file string, line uint64) error {
-	sm := d.SyncMarkFor(file)
-	if len(file) > 0 && line != 0 {
+	sm := d.marks[file]
+	if sm != nil && line != 0 {
 		r.mark = sm
 		r.line = line
 		sm.Ch <- x.Mark{Index: line}
