@@ -177,8 +177,6 @@ func (c *listCache) Reset() {
 	c.curSize = 0
 }
 
-// This is called by DeletePredicate. We don't need to flush PL's to disk and can directly delete
-// them from cache.
 func (c *listCache) clear(attr string) error {
 	c.Lock()
 	defer c.Unlock()
@@ -189,9 +187,11 @@ func (c *listCache) clear(attr string) error {
 			continue
 		}
 		c.ll.Remove(e)
-		delete(c.cache, k)
-		kv.pl.water.Ch <- x.Mark{Indices: kv.pl.pending, Done: true}
-		kv.pl.decr()
+		kv.pl.SetForDeletion()
+		if committed, _ := kv.pl.SyncIfDirty(true); !committed {
+			delete(c.cache, k)
+			kv.pl.decr()
+		}
 	}
 	return nil
 }

@@ -58,6 +58,7 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
+			waitForSyncMark(ctx, gid, rv.Index-1)
 			if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
 				return err
 			}
