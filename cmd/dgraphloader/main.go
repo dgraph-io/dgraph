@@ -154,7 +154,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 	checkpoint, err := dgraphClient.Checkpoint(basePath)
 	x.Check(err)
 	if checkpoint != 0 {
-		fmt.Printf("Found checkpoint for: %s. Skipping: %v lines.\n", basePath, checkpoint)
+		fmt.Printf("Found checkpoint for: %s. Skipping: %v lines.\n", file, checkpoint)
 	}
 
 	var line uint64
@@ -275,6 +275,7 @@ func main() {
 	// wait for schema changes to be done before starting mutations
 	time.Sleep(1 * time.Second)
 	var wg sync.WaitGroup
+	dgraphClient.NewSyncMarks(filesList)
 	for _, file := range filesList {
 		wg.Add(1)
 		go func(file string) {

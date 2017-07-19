@@ -176,7 +176,7 @@ type Dgraph struct {
 	start time.Time
 
 	// Map of filename to x.Watermark. Used for checkpointing.
-	marks *syncMarks
+	marks syncMarks
 	reqs  chan Req
 }
 
@@ -215,7 +215,7 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		nquads: make(chan nquadOp, opts.Pending*opts.Size),
 		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
 		alloc:  alloc,
-		marks:  new(syncMarks),
+		marks:  make(map[string]*x.WaterMark),
 		reqs:   make(chan Req, opts.Pending*2),
 	}
 

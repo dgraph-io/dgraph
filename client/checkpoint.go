@@ -19,21 +19,26 @@ package client
 import (
 	"encoding/binary"
 	"fmt"
-	"sync"
+	"path/filepath"
 	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/x"
 )
 
+func (d *Dgraph) NewSyncMarks(files []string) {
+	for _, file := range files {
+		bp := filepath.Base(file)
+		d.marks.create(bp)
+	}
+}
+
 func (d *Dgraph) Checkpoint(file string) (uint64, error) {
 	return d.alloc.getFromKV(fmt.Sprintf("checkpoint-%s", file))
 }
 
 func (d *Dgraph) syncAllMarks() {
-	d.marks.Lock()
-	defer d.marks.Unlock()
-	for _, mark := range d.marks.m {
+	for _, mark := range d.marks {
 		for mark.WaitingFor() {
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -41,14 +46,12 @@ func (d *Dgraph) syncAllMarks() {
 }
 
 func (d *Dgraph) writeCheckpoint() {
-	m := d.marks.watermarks()
-	if m == nil {
-		return
-	}
-
-	fmt.Println("m", m)
 	wb := make([]*badger.Entry, 0, 5)
-	for file, w := range m {
+	for file, mark := range d.marks {
+		w := mark.DoneUntil()
+		if w == 0 {
+			continue
+		}
 		buf := make([]byte, 10)
 		n := binary.PutUvarint(buf, w)
 		wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
@@ -73,53 +76,23 @@ func (d *Dgraph) storeCheckpoint() {
 	}
 }
 
-type syncMarks struct {
-	sync.RWMutex
-	// A watermark for each file.
-	m map[string]*x.WaterMark
-}
+// A watermark for each file
+type syncMarks map[string]*x.WaterMark
 
-func (g *syncMarks) create(file string) *x.WaterMark {
-	g.Lock()
-	defer g.Unlock()
-	if g.m == nil {
-		g.m = make(map[string]*x.WaterMark)
+func (g syncMarks) create(file string) *x.WaterMark {
+	if g == nil {
+		g = make(map[string]*x.WaterMark)
 	}
 
-	if prev, present := g.m[file]; present {
+	if prev, present := g[file]; present {
 		return prev
 	}
 	w := &x.WaterMark{Name: file}
 	w.Init()
-	g.m[file] = w
+	g[file] = w
 	return w
 }
 
-func (g *syncMarks) Get(file string) *x.WaterMark {
-	g.RLock()
-	if w, present := g.m[file]; present {
-		g.RUnlock()
-		return w
-	}
-	g.RUnlock()
-	return g.create(file)
-}
-
 func (d *Dgraph) SyncMarkFor(file string) *x.WaterMark {
-	return d.marks.Get(file)
-}
-
-func (g *syncMarks) watermarks() map[string]uint64 {
-	g.RLock()
-	defer g.RUnlock()
-
-	if len(g.m) == 0 {
-		return nil
-	}
-
-	m := make(map[string]uint64)
-	for f, w := range g.m {
-		m[f] = w.DoneUntil()
-	}
-	return m
+	return d.marks[file]
 }
