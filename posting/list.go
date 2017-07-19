@@ -71,6 +71,7 @@ type List struct {
 	ghash         uint64
 	plist         *protos.PostingList
 	mlayer        *skiplist.SkipList //[]*protos.Posting // mutations
+	len           int
 	lastCompact   time.Time
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount      int32
@@ -232,6 +233,7 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 	}
+	l.len = len(l.plist.Uids) / 8
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 	return l
 }
@@ -331,19 +333,11 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 
 	// First check the mutable layer.
-	/*
-		midx := sort.Search(len(l.mlayer), func(idx int) bool {
-			mp := l.mlayer[idx]
-			return mpost.Uid <= mp.Uid
-		})
-	*/
 	oldP, ok := l.mlayer.Get(mpost.Uid)
 
 	// This block handles the case where mpost.UID is found in mutation layer.
-	if ok { //midx < len(l.mlayer) && l.mlayer[midx].Uid == mpost.Uid {
+	if ok {
 		oldPost := oldP.(*protos.Posting)
-		// mp is the posting found in mlayer.
-		//oldPost := l.mlayer[midx]
 
 		// Note that mpost.Op is either Set or Del, whereas oldPost.Op can be
 		// either Set or Del or Add.
@@ -371,16 +365,20 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 		if oldPost.Op == Add {
 			if mpost.Op == Del {
 				// Undo old post.
+				l.len--
 				l.mlayer.Delete(mpost.Uid)
-				/*
-					copy(l.mlayer[midx:], l.mlayer[midx+1:])
-					l.mlayer[len(l.mlayer)-1] = nil
-					l.mlayer = l.mlayer[:len(l.mlayer)-1]
-				*/
 				return true
 			}
 			// Add followed by Set is considered an Add. Hence, mutate mpost.Op.
 			mpost.Op = Add
+		} else if oldPost.Op == Del {
+			if mpost.Op == Set {
+				l.len += 2
+			}
+		} else {
+			if mpost.Op == Del {
+				l.len -= 2
+			}
 		}
 		l.mlayer.Set(mpost.Uid, mpost)
 		return true
@@ -403,27 +401,17 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 		}
 		if !uidFound {
 			// Posting not found in PL. This is considered an Add operation.
+			l.len++
 			mpost.Op = Add
 		}
 	} else if !psame { // mpost.Op==Del
 		// Either we fail to find UID in immutable PL or contents don't match.
 		return false
+	} else {
+		l.len--
 	}
 
 	l.mlayer.Set(mpost.Uid, mpost)
-	/*
-		// Doesn't match what we already have in immutable layer. So, add to mutable layer.
-		if midx >= len(l.mlayer) {
-			// Add it at the end.
-			l.mlayer = append(l.mlayer, mpost)
-			return true
-		}
-
-		// Otherwise, add it where midx is pointing to.
-			l.mlayer = append(l.mlayer, nil)
-			copy(l.mlayer[midx+1:], l.mlayer[midx:])
-			l.mlayer[midx] = mpost
-	*/
 	return true
 }
 
@@ -555,6 +543,7 @@ func (l *List) delete(ctx context.Context, attr string) error {
 	}
 	l.plist = emptyList
 	l.mlayer = getNewSL() // l.mlayer[:0] // Clear the mutation layer.
+	l.len = 0
 	atomic.StoreInt32(&l.deleteAll, 1)
 
 	var gid uint32
@@ -605,9 +594,8 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			pp = emptyPosting
 		}
 
-		if mok { //idx < mlayerLen {
+		if mok {
 			mp = mitr.Value().(*protos.Posting)
-			//mp = l.mlayer[midx]
 		} else {
 			mp = emptyPosting
 		}
@@ -647,6 +635,9 @@ func (l *List) LengthEst() int {
 
 func (l *List) length(afterUid uint64) int {
 	l.AssertRLock()
+	if afterUid == 0 {
+		return l.len
+	}
 
 	uidx := 0
 	pl := l.plist
@@ -729,6 +720,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		return true
 	})
 	final.Uids = final.Uids[:8*count]
+	l.len = count
 
 	var data []byte
 	if len(final.Uids) == 0 {
