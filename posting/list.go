@@ -596,7 +596,6 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	cont := true
 	var pitr PIterator
 	pitr.Init(l.plist, afterUid)
-	fmt.Println(l.mlayer)
 	mitr := l.mlayer.Iterator()
 	mok := mitr.Seek(afterUid + 1)
 	for cont {
