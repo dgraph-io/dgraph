@@ -26,8 +26,9 @@ import (
 
 func getPosting() *List {
 	l := &List{
-		plist: &protos.PostingList{},
-		water: marks.Get(1),
+		plist:  &protos.PostingList{},
+		water:  marks.Get(1),
+		mlayer: getNewSL(),
 	}
 	l.incr()
 	return l

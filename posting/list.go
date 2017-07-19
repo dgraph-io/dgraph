@@ -32,6 +32,7 @@ import (
 	"unsafe"
 
 	"github.com/dgraph-io/badger"
+	"github.com/ryszard/goskiplist/skiplist"
 	"golang.org/x/net/trace"
 
 	"github.com/dgryski/go-farm"
@@ -69,7 +70,7 @@ type List struct {
 	key           []byte
 	ghash         uint64
 	plist         *protos.PostingList
-	mlayer        []*protos.Posting // mutations
+	mlayer        *skiplist.SkipList //[]*protos.Posting // mutations
 	lastCompact   time.Time
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount      int32
@@ -110,7 +111,7 @@ func (l *List) calculateSize() uint32 {
 	sz := int(unsafe.Sizeof(l))
 	sz += l.plist.Size()
 	sz += cap(l.key)
-	sz += cap(l.mlayer) * 8
+	sz += l.mlayer.Len() * 8 //cap(l.mlayer) * 8
 	sz += cap(l.pending) * 8
 	return uint32(sz)
 }
@@ -195,12 +196,19 @@ func (it *PIterator) Posting() *protos.Posting {
 	return it.uidPosting
 }
 
+func getNewSL() *skiplist.SkipList {
+	return skiplist.NewCustomMap(func(l, r interface{}) bool {
+		return l.(uint64) < r.(uint64)
+	})
+}
+
 func getNew(key []byte, pstore *badger.KV) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
 	l.key = key
 	l.ghash = farm.Fingerprint64(key)
 	l.refcount = 1
+	l.mlayer = getNewSL()
 
 	l.Lock()
 	defer l.Unlock()
@@ -323,15 +331,19 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 
 	// First check the mutable layer.
-	midx := sort.Search(len(l.mlayer), func(idx int) bool {
-		mp := l.mlayer[idx]
-		return mpost.Uid <= mp.Uid
-	})
+	/*
+		midx := sort.Search(len(l.mlayer), func(idx int) bool {
+			mp := l.mlayer[idx]
+			return mpost.Uid <= mp.Uid
+		})
+	*/
+	oldP, ok := l.mlayer.Get(mpost.Uid)
 
 	// This block handles the case where mpost.UID is found in mutation layer.
-	if midx < len(l.mlayer) && l.mlayer[midx].Uid == mpost.Uid {
+	if ok { //midx < len(l.mlayer) && l.mlayer[midx].Uid == mpost.Uid {
+		oldPost := oldP.(*protos.Posting)
 		// mp is the posting found in mlayer.
-		oldPost := l.mlayer[midx]
+		//oldPost := l.mlayer[midx]
 
 		// Note that mpost.Op is either Set or Del, whereas oldPost.Op can be
 		// either Set or Del or Add.
@@ -359,15 +371,18 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 		if oldPost.Op == Add {
 			if mpost.Op == Del {
 				// Undo old post.
-				copy(l.mlayer[midx:], l.mlayer[midx+1:])
-				l.mlayer[len(l.mlayer)-1] = nil
-				l.mlayer = l.mlayer[:len(l.mlayer)-1]
+				l.mlayer.Delete(mpost.Uid)
+				/*
+					copy(l.mlayer[midx:], l.mlayer[midx+1:])
+					l.mlayer[len(l.mlayer)-1] = nil
+					l.mlayer = l.mlayer[:len(l.mlayer)-1]
+				*/
 				return true
 			}
 			// Add followed by Set is considered an Add. Hence, mutate mpost.Op.
 			mpost.Op = Add
 		}
-		l.mlayer[midx] = mpost
+		l.mlayer.Set(mpost.Uid, mpost)
 		return true
 	}
 
@@ -395,17 +410,20 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 		return false
 	}
 
-	// Doesn't match what we already have in immutable layer. So, add to mutable layer.
-	if midx >= len(l.mlayer) {
-		// Add it at the end.
-		l.mlayer = append(l.mlayer, mpost)
-		return true
-	}
+	l.mlayer.Set(mpost.Uid, mpost)
+	/*
+		// Doesn't match what we already have in immutable layer. So, add to mutable layer.
+		if midx >= len(l.mlayer) {
+			// Add it at the end.
+			l.mlayer = append(l.mlayer, mpost)
+			return true
+		}
 
-	// Otherwise, add it where midx is pointing to.
-	l.mlayer = append(l.mlayer, nil)
-	copy(l.mlayer[midx+1:], l.mlayer[midx:])
-	l.mlayer[midx] = mpost
+		// Otherwise, add it where midx is pointing to.
+			l.mlayer = append(l.mlayer, nil)
+			copy(l.mlayer[midx+1:], l.mlayer[midx:])
+			l.mlayer[midx] = mpost
+	*/
 	return true
 }
 
@@ -503,7 +521,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	hasMutated := l.updateMutationLayer(mpost)
 	if dur := time.Since(t1); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Postings))
+			tr.LazyPrintf("updated mutation layer %v %v %v", dur, l.mlayer.Len(), len(l.plist.Postings))
 		}
 	}
 
@@ -536,7 +554,7 @@ func (l *List) delete(ctx context.Context, attr string) error {
 		postingListPool.Put(l.plist)
 	}
 	l.plist = emptyList
-	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
+	l.mlayer = getNewSL() // l.mlayer[:0] // Clear the mutation layer.
 	atomic.StoreInt32(&l.deleteAll, 1)
 
 	var gid uint32
@@ -574,20 +592,13 @@ func (l *List) Iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 
 func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	l.AssertRLock()
-	midx := 0
-
-	mlayerLen := len(l.mlayer)
-	if afterUid > 0 {
-		midx = sort.Search(mlayerLen, func(idx int) bool {
-			mp := l.mlayer[idx]
-			return afterUid < mp.Uid
-		})
-	}
-
 	var mp, pp *protos.Posting
 	cont := true
 	var pitr PIterator
 	pitr.Init(l.plist, afterUid)
+	fmt.Println(l.mlayer)
+	mitr := l.mlayer.Iterator()
+	mok := mitr.Seek(afterUid + 1)
 	for cont {
 		if pitr.Valid() {
 			pp = pitr.Posting()
@@ -595,8 +606,9 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			pp = emptyPosting
 		}
 
-		if midx < mlayerLen {
-			mp = l.mlayer[midx]
+		if mok { //idx < mlayerLen {
+			mp = mitr.Value().(*protos.Posting)
+			//mp = l.mlayer[midx]
 		} else {
 			mp = emptyPosting
 		}
@@ -611,13 +623,13 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 			if mp.Op != Del {
 				cont = f(mp)
 			}
-			midx++
+			mok = mitr.Next()
 		case pp.Uid == mp.Uid:
 			if mp.Op != Del {
 				cont = f(mp)
 			}
 			pitr.Next()
-			midx++
+			mok = mitr.Next()
 		default:
 			log.Fatalf("Unhandled case during iteration of posting list.")
 		}
@@ -627,24 +639,24 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 func (l *List) length(afterUid uint64) int {
 	l.AssertRLock()
 
-	uidx, midx := 0, 0
+	uidx := 0
 	pl := l.plist
 
 	if afterUid > 0 {
 		uidx = findUidIndex(pl, afterUid)
-		midx = sort.Search(len(l.mlayer), func(idx int) bool {
-			mp := l.mlayer[idx]
-			return afterUid < mp.Uid
-		})
 	}
 
 	count := len(pl.Uids)/8 - uidx
-	for _, p := range l.mlayer[midx:] {
+	mitr := l.mlayer.Iterator()
+	mok := mitr.Seek(afterUid + 1)
+	for mok { //_, p := range l.mlayer[midx:] {
+		p := mitr.Value().(*protos.Posting)
 		if p.Op == Add {
 			count++
 		} else if p.Op == Del {
 			count--
 		}
+		mok = mitr.Next()
 	}
 	return count
 }
@@ -670,7 +682,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 
 	// deleteAll is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
-	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
+	if l.mlayer.Len() == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
 		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
 		l.pending = make([]uint64, 0, 3)
 		return false, nil
@@ -766,7 +778,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	doAsyncWrite(l.key, data, f)
 	// Now reset the mutation variables.
 	l.pending = make([]uint64, 0, 3)
-	l.mlayer = l.mlayer[:0]
+	l.mlayer = getNewSL() //l.mlayer[:0]
 	l.lastCompact = time.Now()
 	atomic.StoreInt32(&l.deleteAll, 0) // Unset deleteAll
 	return true, nil
