@@ -112,7 +112,7 @@ func (l *List) calculateSize() uint32 {
 	sz := int(unsafe.Sizeof(l))
 	sz += l.plist.Size()
 	sz += cap(l.key)
-	sz += l.mlayer.Len() * 8 //cap(l.mlayer) * 8
+	sz += l.mlayer.Len() * 8
 	sz += cap(l.pending) * 8
 	return uint32(sz)
 }
@@ -405,7 +405,7 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 			mpost.Op = Add
 		}
 	} else {
-		if psame { // mpost.Op==Del
+		if psame {
 			l.len--
 		} else {
 			// Either we fail to find UID in immutable PL or contents don't match.
@@ -544,7 +544,7 @@ func (l *List) delete(ctx context.Context, attr string) error {
 		postingListPool.Put(l.plist)
 	}
 	l.plist = emptyList
-	l.mlayer = getNewSL() // l.mlayer[:0] // Clear the mutation layer.
+	l.mlayer = getNewSL() // Clear the mutation layer.
 	l.len = 0
 	atomic.StoreInt32(&l.deleteAll, 1)
 
@@ -651,7 +651,7 @@ func (l *List) length(afterUid uint64) int {
 	count := len(pl.Uids)/8 - uidx
 	mitr := l.mlayer.Iterator()
 	mok := mitr.Seek(afterUid + 1)
-	for mok { //_, p := range l.mlayer[midx:] {
+	for mok {
 		p := mitr.Value().(*protos.Posting)
 		if p.Op == Add {
 			count++
@@ -782,7 +782,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	doAsyncWrite(l.key, data, f)
 	// Now reset the mutation variables.
 	l.pending = make([]uint64, 0, 3)
-	l.mlayer = getNewSL() //l.mlayer[:0]
+	l.mlayer = getNewSL()
 	l.lastCompact = time.Now()
 	atomic.StoreInt32(&l.deleteAll, 0) // Unset deleteAll
 	return true, nil
