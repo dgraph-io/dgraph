@@ -387,8 +387,7 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 	// We return if an error was returned or the parent called ctx.Done()
 	var e error
 	for i := 0; i < len(mutationMap); i++ {
-		err := <-errors
-		if err != nil {
+		if err := <-errors; err != nil {
 			e = err
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while running all mutations: %+v", err)
@@ -396,7 +395,6 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 		}
 	}
 	close(errors)
-
 	return e
 }
 
