@@ -177,25 +177,6 @@ func (c *listCache) Reset() {
 	c.curSize = 0
 }
 
-// TODO: Remove it later
-// Clear purges all stored items from the cache.
-func (c *listCache) Clear() error {
-	c.Lock()
-	defer c.Unlock()
-	for _, e := range c.cache {
-		kv := e.Value.(*entry)
-		kv.pl.SetForDeletion()
-		if committed, _ := kv.pl.SyncIfDirty(true); !committed {
-			delete(c.cache, kv.pl.ghash)
-			kv.pl.decr()
-		}
-	}
-	c.ll = list.New()
-	c.cache = make(map[uint64]*list.Element)
-	c.curSize = 0
-	return nil
-}
-
 // This is called by DeletePredicate. We don't need to flush PL's to disk and can directly delete
 // them from cache.
 func (c *listCache) clear(attr string) error {
@@ -203,8 +184,8 @@ func (c *listCache) clear(attr string) error {
 	defer c.Unlock()
 	for k, e := range c.cache {
 		kv := e.Value.(*entry)
-		pk := x.Parse(kv.pl.key)
-		if pk.Attr != attr {
+		keyAttr := x.ParseAttr(kv.pl.key)
+		if keyAttr != attr {
 			continue
 		}
 		c.ll.Remove(e)
