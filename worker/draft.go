@@ -415,7 +415,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 }
 
 func (n *node) send(m raftpb.Message) {
-	x.AssertTruef(n.id != m.To, "Seding message to itself")
+	x.AssertTruef(n.id != m.To, "Sending message to itself")
 	data, err := m.Marshal()
 	x.Check(err)
 	if m.Type != raftpb.MsgHeartbeat && m.Type != raftpb.MsgHeartbeatResp {
