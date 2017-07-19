@@ -635,6 +635,16 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	}
 }
 
+func (l *List) lengthEst() int {
+	return len(l.plist.Uids)/8 + l.mlayer.Len()
+}
+
+func (l *List) LengthEst() int {
+	l.RLock()
+	defer l.RUnlock()
+	return l.lengthEst()
+}
+
 func (l *List) length(afterUid uint64) int {
 	l.AssertRLock()
 
@@ -688,7 +698,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	}
 
 	final := postingListPool.Get().(*protos.PostingList)
-	numUids := l.length(0)
+	numUids := l.lengthEst()
 	if cap(final.Uids) < 8*numUids {
 		final.Uids = make([]byte, 8*numUids)
 	}
@@ -718,6 +728,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 		return true
 	})
+	final.Uids = final.Uids[:8*count]
 
 	var data []byte
 	if len(final.Uids) == 0 {
@@ -794,7 +805,7 @@ func (l *List) LastCompactionTs() time.Time {
 func (l *List) Uids(opt ListOptions) *protos.List {
 	// Pre-assign length to make it faster.
 	l.RLock()
-	res := make([]uint64, 0, l.length(opt.AfterUID))
+	res := make([]uint64, 0, l.lengthEst())
 	l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
 		if postingType(p) == x.ValueUid {
 			res = append(res, p.Uid)
