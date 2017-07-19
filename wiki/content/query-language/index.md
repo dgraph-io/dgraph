@@ -51,7 +51,7 @@ Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
-  bladerunner(func: uid(0x3cf6ed367ae4fa80)) {
+  bladerunner(func: uid(0x146a6)) {
     _uid_
     name@en
     initial_release_date
@@ -80,7 +80,7 @@ Multiple IDs can be specified in a list to the `uid` function.
 Query Example:
 {{< runnable >}}
 {
-  movies(func: uid(0x3cf6ed367ae4fa80, 0x949c72529f812b1b)) {
+  movies(func: uid(0x146a6, 0x34a7c)) {
     _uid_
     name@en
     initial_release_date
@@ -237,11 +237,11 @@ Query Example: All nodes that have `name` containing terms `indiana` and `jones`
 
 ##### Usage as Filter
 
-Query Example: Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his films that contain the words `indiana` and `jones`.
+Query Example: All Steven Spielberg films that contain the words `indiana` and `jones`.  The `@filter(has(director.film))` removes nodes with name Steven Spielberg that aren't the director --- the data also contains a character in a film called Steven Spielberg.
 
 {{< runnable >}}
 {
-  me(func: uid(0x3b0de646eaf32b75)) {
+  me(func: eq(name, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
     director.film @filter(allofterms(name@en, "jones indiana"))  {
       name@en
@@ -281,11 +281,11 @@ Query Example: All nodes that have a `name` containing either `poison` or `peaco
 
 ##### Usage as filter
 
-Query Example: Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his movies that contain `war` or `spies`
+Query Example: All Steven Spielberg movies that contain `war` or `spies`.  The `@filter(has(director.film))` removes nodes with name Steven Spielberg that aren't the director --- the data also contains a character in a film called Steven Spielberg.
 
 {{< runnable >}}
 {
-  me(func: uid(0x3b0de646eaf32b75)) {
+  me(func: eq(name, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
     director.film @filter(anyofterms(name, "war spies"))  {
       name@en
@@ -476,13 +476,13 @@ Index required: An index is required for the `IE(predicate, ...)` forms (see tab
 | `dateTime` | `dateTime`    |
 
 
-Query Example: Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his movies released before 1970.
+Query Example: Ridley Scott movies released before 1980.
 
 {{< runnable >}}
 {
-  me(func: uid(0x3b0de646eaf32b75)) {
+  me(func: eq(name, "Ridley Scott")) {
     name@en
-    director.film @filter(lt(initial_release_date, "1970-01-01"))  {
+    director.film @filter(lt(initial_release_date, "1980-01-01"))  {
       initial_release_date
       name@en
     }
@@ -543,7 +543,7 @@ Query Example: If the UID of a node is known, values for the node can be read di
 
 {{< runnable >}}
 {
-  films(func: uid(0x936f1885808db5de)) {
+  films(func: uid(0xcceb)) {
     name@hi
     actor.film {
       performance.film {
@@ -751,11 +751,11 @@ Within `@filter` multiple functions can be used with boolean connectives.
 
 Connectives `AND`, `OR` and `NOT` join filters and can be built into arbitrarily complex filters, such as `(NOT A OR B) AND (C AND NOT (D OR E))`.  Note that, `NOT` binds more tightly than `AND` which binds more tightly than `OR`.
 
-Query Example : Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his movies that contain either both "indiana" and "jones" OR both "jurassic" and "park".
+Query Example : All Steven Spielberg movies that contain either both "indiana" and "jones" OR both "jurassic" and "park".
 
 {{< runnable >}}
 {
-  me(func: uid(0x3b0de646eaf32b75)) {
+  me(func: eq(name, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
     director.film @filter(allofterms(name, "jones indiana") OR allofterms(name, "jurassic park"))  {
       _uid_
@@ -922,13 +922,13 @@ Query Example: The first five of Baz Luhrmann's films, sorted by UID order.
 }
 {{< /runnable >}}
 
-The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0xeda1f2fe766ed92d`.  The results after Strictly Ballroom can now be obtained with `after`.
+The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x52753`.  The results after Strictly Ballroom can now be obtained with `after`.
 
 {{< runnable >}}
 {
   me(func: allofterms(name@en, "Baz Luhrmann")) {
     name@en
-    director.film (first:5, after: 0xeda1f2fe766ed92d) {
+    director.film (first:5, after: 0x52753) {
       _uid_
       name@en
     }
@@ -1058,7 +1058,7 @@ Multiple query blocks are executed in parallel.
 
 The blocks need not be related in any way.
 
-Query Example: All of Angelina Jolie's films, with genres, and Steven Spielberg's (UID `0x3b0de646eaf32b75`) films since 2008.
+Query Example: All of Angelina Jolie's films, with genres, and Peter Jackson's films since 2008.
 
 {{< runnable >}}
 {
@@ -1073,7 +1073,7 @@ Query Example: All of Angelina Jolie's films, with genres, and Steven Spielberg'
    }
   }
 
- DirectorInfo(func: uid(0x3b0de646eaf32b75)) {
+ DirectorInfo(func: eq(name, "Peter Jackson")) {
     name@en
     director.film @filter(ge(initial_release_date, "2008"))  {
         Release_date: initial_release_date

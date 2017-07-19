@@ -186,6 +186,12 @@ type Dgraph struct {
 // NewDgraphClient creates a new Dgraph for interacting with the Dgraph store connected to in
 // conns.  The Dgraph client stores blanknode to uid, and XIDnode to uid mappings on disk
 // in clientDir.
+//
+// The client can be backed by multiple connections (to the same server, or multiple servers in a
+// cluster).  
+//
+// A single client is thread safe for sharing with multiple go routines (though a single Req 
+// should not be shared unless the go routines negotiate exclusive assess to the Req functions).  
 func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
 	var clients []protos.DgraphClient
 	for _, conn := range conns {
@@ -423,6 +429,61 @@ func (d *Dgraph) BatchFlush() {
 //
 // Mutations in the request are run before a query --- except when query variables link the
 // mutation and query (see for example NodeUidVar) when the query is run first.
+//
+// Run returns a protos.Response which has the following fields
+//
+// - L : Latency information
+//
+// - Schema : Result of a schema query
+//
+// - AssignedUids : a map[string]uint64 of blank node name to assigned UID (if the query string
+// contained a mutation with blank nodes)
+//
+// - N : Slice of *protos.Node returned by the query (Note: protos.Node not client.Node).
+//
+// There is an N[i], with Attribute "_root_", for each named query block in the query added to req.
+// The N[i] also have a slice of nodes, N[i].Children each with Attribute equal to the query name, 
+// for every answer to that query block.  From there, the Children represent nested blocks in the 
+// query, the Attribute is the edge followed and the Properties are the scalar edges.
+//
+// Print a response with 
+// 	"github.com/gogo/protobuf/proto"
+// 	...
+// 	req.SetQuery(`{
+// 		friends(func: eq(name, "Alex")) {
+//			name
+//			friend {
+// 				name
+//			}
+//		}	
+//	}`)
+// 	...
+// 	resp, err := dgraphClient.Run(context.Background(), &req)
+// 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+// Outputs
+//	n: <
+//	  attribute: "_root_"
+//	  children: <
+//	    attribute: "friends"
+//	    properties: <
+//	      prop: "name"
+//	      value: <
+//	        str_val: "Alex"
+//	      >
+//	    >
+//	    children: <
+//	      attribute: "friend"
+//	      properties: <
+//	        prop: "name"
+//	        value: <
+//	          str_val: "Chris"
+//	        >
+//	      >
+//	    >
+//	...
+//
+// It's often easier to unpack directly into a struct with Unmarshal, than to
+// step through the response.
 func (d *Dgraph) Run(ctx context.Context, req *Req) (*protos.Response, error) {
 	return d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr)
 }

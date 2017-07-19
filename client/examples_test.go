@@ -705,7 +705,6 @@ mutation {
 			n := dgraphClient.NodeUid(p.ID)
 			e := n.ConnectTo("friend", dgraphClient.NodeUid(f.Root.ID))
 			e.AddFacet("since", time.Now().Format(time.RFC3339))
-			fmt.Println(time.Now().Format(time.RFC3339))
 			req.Set(e)
 		}
 	}
