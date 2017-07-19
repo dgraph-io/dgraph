@@ -626,7 +626,7 @@ mutation {
 	x.Check(err)
 }
 
-func ExampleUnmarshal_FacetsandUpdate() {
+func ExampleUnmarshal_facetsUpdate() {
 	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
