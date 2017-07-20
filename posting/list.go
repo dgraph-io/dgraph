@@ -70,7 +70,7 @@ type List struct {
 	key           []byte
 	ghash         uint64
 	plist         *protos.PostingList
-	mlayer        *skiplist.SkipList //[]*protos.Posting // mutations
+	mlayer        *skiplist.SkipList // mutation layer
 	len           int
 	lastCompact   time.Time
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
