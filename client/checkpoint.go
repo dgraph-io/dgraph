@@ -36,6 +36,10 @@ type syncMarks map[string]waterMark
 
 // Create syncmarks for files and store them in dgraphClient.
 func (d *Dgraph) NewSyncMarks(files []string) error {
+	if d.marks != nil {
+		return fmt.Errof("NewSyncMarks should only be called once.")
+	}
+
 	for _, file := range files {
 		ap, err := filepath.Abs(file)
 		if err != nil {
@@ -79,7 +83,6 @@ func (d *Dgraph) writeCheckpoint() {
 		}
 		wm.last = doneUntil
 		d.marks[file] = wm
-		fmt.Printf("d.marks: %+v\n", d.marks)
 		var buf [10]byte
 		n := binary.PutUvarint(buf[:], doneUntil)
 		wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
