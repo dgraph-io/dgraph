@@ -57,11 +57,6 @@ func Init() {
 	// Lets print the details of the current build on startup.
 	printBuildDetails()
 
-	if Config.ConfigFile != "" {
-		Println("Loading configuration from file:", Config.ConfigFile)
-		loadConfigFromYAML()
-	}
-
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
 		f()
@@ -69,16 +64,17 @@ func Init() {
 }
 
 // loadConfigFromYAML reads configurations from specified YAML file.
-func loadConfigFromYAML() {
-	bs, err := ioutil.ReadFile(Config.ConfigFile)
-	Checkf(err, "Cannot open specified config file: %v", Config.ConfigFile)
+func LoadConfigFromYAML(file string) {
+	bs, err := ioutil.ReadFile(file)
+	Checkf(err, "Cannot open specified config file: %v", file)
 
 	m := make(map[string]string)
 	Checkf(yaml.Unmarshal(bs, &m), "Error while parsing config file: %v", Config.ConfigFile)
 
 	for k, v := range m {
 		Printf("Picked flag from config: [%q = %v]\n", k, v)
-		flag.Set(k, v)
+		err := flag.Set(k, v)
+		Checkf(err, "While setting flag from config.")
 	}
 }
 
