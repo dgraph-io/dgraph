@@ -185,7 +185,7 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	}
 	x.PredicateStats.Add(fmt.Sprintf("r.%s", edge.Attr), 1)
 
-	if countAfter != countBefore && hasCountIndex {
+	if hasCountIndex && countAfter != countBefore {
 		if err := updateCount(ctx, countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,
