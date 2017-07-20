@@ -105,7 +105,7 @@ func destroyPool(pl *pool) {
 }
 
 // Returns a pool that you should call put() on.
-func (p *poolsi) connect(addr string) (*pool, bool) {
+func (p *poolsi) connect(ctx context.Context, addr string) (*pool, bool) {
 	if addr == Config.MyAddr {
 		return nil, false
 	}
@@ -118,7 +118,7 @@ func (p *poolsi) connect(addr string) (*pool, bool) {
 	}
 	p.RUnlock()
 
-	pool, err := newPool(addr)
+	pool, err := newPool(ctx, addr)
 	// TODO: Rename newPool to newConn, rename pool.
 	// TODO: This can get triggered with totally bogus config.
 	x.Checkf(err, "Unable to connect to host %s", addr)
@@ -172,8 +172,8 @@ func testConnection(p *pool) error {
 }
 
 // NewPool creates a new "pool" with one gRPC connection, refcount 0.
-func newPool(addr string) (*pool, error) {
-	conn, err := grpc.Dial(addr,
+func newPool(ctx context.Context, addr string) (*pool, error) {
+	conn, err := grpc.DialContext(ctx, addr,
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
 			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
