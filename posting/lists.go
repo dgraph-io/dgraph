@@ -110,7 +110,7 @@ func SyncMarkFor(group uint32) *x.WaterMark {
 	return marks.Get(group)
 }
 
-func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
+func gentleCommit(dirtyMap map[string]time.Time, pending chan struct{},
 	commitFraction float64) {
 	select {
 	case pending <- struct{}{}:
@@ -126,7 +126,7 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 		// Have a min value of n, so we can merge small number of dirty PLs fast.
 		n = 1000
 	}
-	keysBuffer := make([]fingerPrint, 0, n)
+	keysBuffer := make([]string, 0, n)
 
 	// Convert map to list.
 	var loops int
@@ -147,13 +147,13 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 		}
 	}
 
-	go func(keys []fingerPrint) {
+	go func(keys []string) {
 		defer func() { <-pending }()
 		if len(keys) == 0 {
 			return
 		}
 		for _, key := range keys {
-			l := lcache.Get(key.fp)
+			l := lcache.Get(key)
 			if l == nil {
 				continue
 			}
@@ -169,7 +169,7 @@ func gentleCommit(dirtyMap map[fingerPrint]time.Time, pending chan struct{},
 // merge and evict all posting lists from memory.
 func periodicCommit() {
 	ticker := time.NewTicker(time.Second)
-	dirtyMap := make(map[fingerPrint]time.Time, 1000)
+	dirtyMap := make(map[string]time.Time, 1000)
 	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
 	pending := make(chan struct{}, 15)
 	dsize := 0 // needed for better reporting.
@@ -177,7 +177,7 @@ func periodicCommit() {
 	for {
 		select {
 		case key := <-dirtyChan:
-			dirtyMap[key] = time.Now()
+			dirtyMap[string(key)] = time.Now()
 
 		case <-ticker.C:
 			if len(dirtyMap) != dsize {
@@ -219,7 +219,6 @@ func periodicCommit() {
 }
 
 type fingerPrint struct {
-	fp  string
 	gid uint32
 }
 
@@ -230,7 +229,7 @@ const (
 var (
 	pstore    *badger.KV
 	syncCh    chan syncEntry
-	dirtyChan chan fingerPrint // All dirty posting list keys are pushed here.
+	dirtyChan chan []byte // All dirty posting list keys are pushed here.
 	marks     *syncMarks
 	lcache    *listCache
 )
@@ -240,7 +239,7 @@ func Init(ps *badger.KV) {
 	marks = new(syncMarks)
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
-	dirtyChan = make(chan fingerPrint, 10000)
+	dirtyChan = make(chan []byte, 10000)
 	syncCh = make(chan syncEntry, syncChCapacity)
 
 	go periodicCommit()
@@ -259,9 +258,7 @@ func Init(ps *badger.KV) {
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
 func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
-	fp := string(key)
-
-	lp := lcache.Get(fp)
+	lp := lcache.Get(string(key))
 	if lp != nil {
 		x.CacheHit.Add(1)
 		lp.incr()
@@ -274,7 +271,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	l.water = marks.Get(group)
 
-	lp = lcache.PutIfMissing(fp, l)
+	lp = lcache.PutIfMissing(string(key), l)
 
 	// We are always going to return lp to caller, whether it is l or not. So, let's
 	// increment its reference counter.
@@ -298,8 +295,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 // Get takes a key and a groupID. It checks if the in-memory map has an
 // updated value and returns it if it exists or it gets from the store and DOES NOT ADD to lhmap.
 func Get(key []byte, gid uint32) (rlist *List, decr func()) {
-	fp := string(key)
-	lp := lcache.Get(fp)
+	lp := lcache.Get(string(key))
 
 	if lp != nil {
 		lp.incr()
