@@ -225,6 +225,7 @@ func main() {
 	hostList := strings.Split(*dgraph, ",")
 	x.AssertTrue(len(hostList) > 0)
 	for _, host := range hostList {
+		host = strings.Trim(host, " \t")
 		conn, err := setupConnection(host)
 		x.Checkf(err, "While trying to dial gRPC")
 		conns = append(conns, conn)
@@ -263,6 +264,7 @@ func main() {
 	time.Sleep(1 * time.Second)
 	var wg sync.WaitGroup
 	for _, file := range filesList {
+		file = strings.Trim(file, " \t")
 		wg.Add(1)
 		go func(file string) {
 			defer wg.Done()
