@@ -2992,7 +2992,41 @@ func TestParseFacetsError2(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseFacetsOrderError(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness, order: abc) {
+				name 
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
 func TestParseFacets(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness) {
+				name 
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, "closeness", res.Query[0].Children[0].FacetOrder)
+	require.True(t, res.Query[0].Children[0].FacetDesc)
+}
+
+func TestParseOrderbyFacet(t *testing.T) {
 	query := `
 	query {
 		me(func: uid(0x1)) {
