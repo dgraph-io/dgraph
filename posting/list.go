@@ -71,7 +71,7 @@ type List struct {
 	ghash         uint64
 	plist         *protos.PostingList
 	mlayer        *skiplist.SkipList // mutation layer
-	len           int
+	plen          int
 	lastCompact   time.Time
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount      int32
@@ -233,7 +233,7 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 	}
-	l.len = len(l.plist.Uids) / 8
+	l.plen = len(l.plist.Uids) / 8
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 	return l
 }
@@ -365,7 +365,7 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 		if oldPost.Op == Add {
 			if mpost.Op == Del {
 				// Undo old post.
-				l.len--
+				l.plen--
 				l.mlayer.Delete(mpost.Uid)
 				return true
 			}
@@ -373,11 +373,11 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 			mpost.Op = Add
 		} else if oldPost.Op == Del {
 			if mpost.Op == Set {
-				l.len++
+				l.plen++
 			}
 		} else {
 			if mpost.Op == Del {
-				l.len--
+				l.plen--
 			}
 		}
 		l.mlayer.Set(mpost.Uid, mpost)
@@ -401,12 +401,12 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 		}
 		if !uidFound {
 			// Posting not found in PL. This is considered an Add operation.
-			l.len++
+			l.plen++
 			mpost.Op = Add
 		}
 	} else {
 		if psame {
-			l.len--
+			l.plen--
 		} else {
 			// Either we fail to find UID in immutable PL or contents don't match.
 			return false
@@ -545,7 +545,7 @@ func (l *List) delete(ctx context.Context, attr string) error {
 	}
 	l.plist = emptyList
 	l.mlayer = getNewSL() // Clear the mutation layer.
-	l.len = 0
+	l.plen = 0
 	atomic.StoreInt32(&l.deleteAll, 1)
 
 	var gid uint32
@@ -628,7 +628,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 func (l *List) length(afterUid uint64) int {
 	l.AssertRLock()
 	if afterUid == 0 {
-		return l.len
+		return l.plen
 	}
 
 	uidx := 0
@@ -712,7 +712,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		return true
 	})
 	final.Uids = final.Uids[:8*count]
-	l.len = count
+	l.plen = count
 
 	var data []byte
 	if len(final.Uids) == 0 {
