@@ -130,7 +130,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	// Successfully connect with the peer, before doing anything else.
 	if len(Config.PeerAddr) > 0 {
 		func() {
-			p, ok := pools().connect(Config.PeerAddr)
+			p, ok := pools().connect(gr.ctx, Config.PeerAddr)
 			if !ok {
 				return
 			}
@@ -491,7 +491,7 @@ func (g *groupi) syncMemberships() {
 		}
 		x.Printf("Got redirect for: %q\n", addr)
 		var ok bool
-		pl, ok = pools().connect(addr)
+		pl, ok = pools().connect(g.ctx, addr)
 		if !ok {
 			// We got redirected to ourselves.
 			return
@@ -538,7 +538,7 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 		update.PoolOrNil, _ = pools().get(mm.Addr)
 	} else if update.Addr != Config.MyAddr && mm.Id != Config.RaftId { // ignore previous addr
 		var ok bool
-		update.PoolOrNil, ok = pools().connect(update.Addr)
+		update.PoolOrNil, ok = pools().connect(g.ctx, update.Addr)
 		// Must be ok because update.Addr != *myAddr
 		x.AssertTrue(ok)
 	}
