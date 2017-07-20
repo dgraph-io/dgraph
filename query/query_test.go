@@ -7664,6 +7664,32 @@ func TestGetAllPredicatesFunctions(t *testing.T) {
 	require.Contains(t, predicates, "follow")
 }
 
+// gather predicates from functions and filters
+func TestGetAllPredicatesFunctions2(t *testing.T) {
+	query := `
+	{
+		me(func:anyofterms(name, "Alice")) @filter(le(age, 30)) {
+			alias
+			friend @filter(uid(123, 5000)) {
+				alias
+				follow
+			}
+		}
+	}
+	`
+
+	subGraphs := getSubGraphs(t, query)
+
+	predicates := GetAllPredicates(subGraphs)
+	require.NotNil(t, predicates)
+	require.Equal(t, 5, len(predicates))
+	require.Contains(t, predicates, "name")
+	require.Contains(t, predicates, "age")
+	require.Contains(t, predicates, "alias")
+	require.Contains(t, predicates, "friend")
+	require.Contains(t, predicates, "follow")
+}
+
 // gather predicates from order
 func TestGetAllPredicatesOrdering(t *testing.T) {
 	query := `

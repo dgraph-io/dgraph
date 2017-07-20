@@ -1528,7 +1528,6 @@ L:
 				} else if g.Name == UID {
 					// uid function could take variables as well as actual uids.
 					// If we can parse the value that means its an uid otherwise a variable.
-					g.Attr = g.Name
 					uid, err := strconv.ParseUint(val, 0, 64)
 					if err == nil {
 						// It could be uid function at root.
