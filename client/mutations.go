@@ -176,8 +176,9 @@ type Dgraph struct {
 	start time.Time
 
 	// Map of filename to x.Watermark. Used for checkpointing.
-	marks syncMarks
-	reqs  chan Req
+	marks            syncMarks
+	reqs             chan Req
+	checkpointTicker *time.Ticker // Used to write checkpoints periodically.
 }
 
 func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
@@ -215,7 +216,7 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		nquads: make(chan nquadOp, opts.Pending*opts.Size),
 		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
 		alloc:  alloc,
-		marks:  make(map[string]*x.WaterMark),
+		marks:  make(map[string]waterMark),
 		reqs:   make(chan Req, opts.Pending*2),
 	}
 
@@ -234,7 +235,6 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		go d.printCounters()
 	}
 	go d.batchSync()
-	go d.storeCheckpoint()
 	return d
 }
 
@@ -395,10 +395,10 @@ func (d *Dgraph) BatchSet(e Edge) error {
 // batching automatically.
 func (d *Dgraph) BatchSetWithMark(r Req, file string, line uint64) error {
 	sm := d.marks[file]
-	if sm != nil && line != 0 {
-		r.mark = sm
+	if sm.mark != nil && line != 0 {
+		r.mark = sm.mark
 		r.line = line
-		sm.Ch <- x.Mark{Index: line}
+		sm.mark.Ch <- x.Mark{Index: line}
 	}
 	d.reqs <- r
 	atomic.AddUint64(&d.rdfs, uint64(r.size()))
@@ -434,6 +434,9 @@ func (d *Dgraph) BatchFlush() {
 	d.writeCheckpoint()
 	if d.ticker != nil {
 		d.ticker.Stop()
+	}
+	if d.checkpointTicker != nil {
+		d.checkpointTicker.Stop()
 	}
 }
 

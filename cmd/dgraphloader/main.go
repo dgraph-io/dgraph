@@ -150,8 +150,9 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 	var buf bytes.Buffer
 	bufReader := bufio.NewReader(gr)
 
-	basePath := filepath.Base(file)
-	checkpoint, err := dgraphClient.Checkpoint(basePath)
+	absPath, err := filepath.Abs(file)
+	x.Check(err)
+	checkpoint, err := dgraphClient.Checkpoint(absPath)
 	x.Check(err)
 	if checkpoint != 0 {
 		fmt.Printf("Found checkpoint for: %s. Skipping: %v lines.\n", file, checkpoint)
@@ -186,7 +187,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 		}
 		r.Set(client.NewEdge(nq))
 		if batchSize == *numRdf {
-			if err = dgraphClient.BatchSetWithMark(r, basePath, line); err != nil {
+			if err = dgraphClient.BatchSetWithMark(r, absPath, line); err != nil {
 				log.Fatal("While adding mutation to batch: ", err)
 			}
 			batchSize = 0
@@ -197,7 +198,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 		x.Checkf(err, "Error while reading file")
 	}
 	if batchSize > 0 {
-		if err = dgraphClient.BatchSetWithMark(r, basePath, line); err != nil {
+		if err = dgraphClient.BatchSetWithMark(r, absPath, line); err != nil {
 			log.Fatal("While adding mutation to batch: ", err)
 		}
 	}
@@ -275,7 +276,7 @@ func main() {
 	// wait for schema changes to be done before starting mutations
 	time.Sleep(1 * time.Second)
 	var wg sync.WaitGroup
-	dgraphClient.NewSyncMarks(filesList)
+	x.Check(dgraphClient.NewSyncMarks(filesList))
 	for _, file := range filesList {
 		wg.Add(1)
 		go func(file string) {

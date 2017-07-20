@@ -26,15 +26,32 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// A watermark for each file
-type syncMarks map[string]*x.WaterMark
+type waterMark struct {
+	last uint64 // Last line number that was written to Badger.
+	mark *x.WaterMark
+}
+
+// A watermark for each file.
+type syncMarks map[string]waterMark
 
 // Create syncmarks for files and store them in dgraphClient.
-func (d *Dgraph) NewSyncMarks(files []string) {
+func (d *Dgraph) NewSyncMarks(files []string) error {
 	for _, file := range files {
-		bp := filepath.Base(file)
-		d.marks.create(bp)
+		ap, err := filepath.Abs(file)
+		if err != nil {
+			return err
+		}
+
+		if _, ok := d.marks[ap]; ok {
+			return fmt.Errorf("Found duplicate file: %+v\n", ap)
+		}
+		d.marks.create(ap)
 	}
+
+	t := time.NewTicker(time.Minute)
+	d.checkpointTicker = t
+	go d.storeCheckpoint(t)
+	return nil
 }
 
 // Get checkpoint for file from Badger.
@@ -42,11 +59,11 @@ func (d *Dgraph) Checkpoint(file string) (uint64, error) {
 	return d.alloc.getFromKV(fmt.Sprintf("checkpoint-%s", file))
 }
 
-// This is called to syncAllMarks. It is useful to find the final line that was processed for each
-// file.
+// After we have received response from server and sent the marks for completion,
+// we need to wait for all of them to be processed.
 func (d *Dgraph) syncAllMarks() {
-	for _, mark := range d.marks {
-		for mark.WaitingFor() {
+	for _, wm := range d.marks {
+		for wm.mark.WaitingFor() {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
@@ -55,13 +72,16 @@ func (d *Dgraph) syncAllMarks() {
 // Used to write checkpoints to Badger.
 func (d *Dgraph) writeCheckpoint() {
 	wb := make([]*badger.Entry, 0, len(d.marks))
-	for file, mark := range d.marks {
-		w := mark.DoneUntil()
-		if w == 0 {
+	for file, wm := range d.marks {
+		doneUntil := wm.mark.DoneUntil()
+		if doneUntil == 0 || doneUntil == wm.last {
 			continue
 		}
+		wm.last = doneUntil
+		d.marks[file] = wm
+		fmt.Printf("d.marks: %+v\n", d.marks)
 		var buf [10]byte
-		n := binary.PutUvarint(buf[:], w)
+		n := binary.PutUvarint(buf[:], doneUntil)
 		wb = badger.EntriesSet(wb, []byte(fmt.Sprintf("checkpoint-%s", file)), buf[:n])
 	}
 
@@ -76,25 +96,23 @@ func (d *Dgraph) writeCheckpoint() {
 }
 
 // Used to store checkpoints for various files periodically.
-func (d *Dgraph) storeCheckpoint() {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-
+func (d *Dgraph) storeCheckpoint(ticker *time.Ticker) {
 	for range ticker.C {
 		d.writeCheckpoint()
 	}
 }
 
-func (g syncMarks) create(file string) *x.WaterMark {
+func (g syncMarks) create(file string) waterMark {
 	if g == nil {
-		g = make(map[string]*x.WaterMark)
+		g = make(map[string]waterMark)
 	}
 
 	if prev, present := g[file]; present {
 		return prev
 	}
-	w := &x.WaterMark{Name: file}
-	w.Init()
-	g[file] = w
-	return w
+	m := &x.WaterMark{Name: file}
+	m.Init()
+	wm := waterMark{mark: m}
+	g[file] = wm
+	return wm
 }
