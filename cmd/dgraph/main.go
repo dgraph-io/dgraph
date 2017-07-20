@@ -161,6 +161,12 @@ func setupConfigOpts() {
 		log.Fatal("Unable to parse flags")
 	}
 
+	// Read from config file before setting config.
+	if config.ConfigFile != "" {
+		x.Println("Loading configuration from file:", config.ConfigFile)
+		x.LoadConfigFromYAML(config.ConfigFile)
+	}
+
 	dgraph.SetConfiguration(config)
 }
 
