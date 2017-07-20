@@ -378,23 +378,23 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 	mutationMap := make(map[uint32]*protos.Mutations)
 	addToMutationMap(mutationMap, m)
 
-	errors := make(chan error, len(mutationMap))
+	errorCh := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {
-		go proposeOrSend(ctx, gid, mu, errors)
+		go proposeOrSend(ctx, gid, mu, errorCh)
 	}
 
 	// Wait for all the goroutines to reply back.
 	// We return if an error was returned or the parent called ctx.Done()
 	var e error
 	for i := 0; i < len(mutationMap); i++ {
-		if err := <-errors; err != nil {
+		if err := <-errorCh; err != nil {
 			e = err
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while running all mutations: %+v", err)
 			}
 		}
 	}
-	close(errors)
+	close(errorCh)
 	return e
 }
 
