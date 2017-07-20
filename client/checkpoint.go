@@ -37,7 +37,7 @@ type syncMarks map[string]waterMark
 // Create syncmarks for files and store them in dgraphClient.
 func (d *Dgraph) NewSyncMarks(files []string) error {
 	if d.marks != nil {
-		return fmt.Errof("NewSyncMarks should only be called once.")
+		return fmt.Errorf("NewSyncMarks should only be called once.")
 	}
 
 	for _, file := range files {
