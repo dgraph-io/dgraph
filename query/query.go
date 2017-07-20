@@ -916,9 +916,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Params: args,
 	}
 
-	isUidFuncWithoutVar := gq.Func != nil && isUidFnWithoutVar(gq.Func)
-	// Uid function doesnt have Attr. It just has a list of ids
-	if gq.Func != nil && !isUidFuncWithoutVar {
+	if gq.Func != nil {
+		// Uid function doesnt have Attr. It just has a list of ids
 		if gq.Func.Attr != "uid" {
 			sg.Attr = gq.Func.Attr
 		}
@@ -930,7 +929,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 
-	if isUidFuncWithoutVar && len(gq.Func.NeedsVar) == 0 && len(gq.UID) > 0 {
+	isUidFuncWithoutVar := gq.Func != nil && isUidFnWithoutVar(gq.Func)
+	if isUidFuncWithoutVar && len(gq.UID) > 0 {
 		if err := sg.populate(gq.UID); err != nil {
 			return nil, err
 		}
@@ -1586,13 +1586,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sort.Slice(sg.DestUIDs.Uids, func(i, j int) bool { return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j] })
 		}
 	} else if len(sg.Attr) == 0 {
-		// If we have a filter SubGraph which only contains an operator,
-		// it won't have any attribute to work on.
-		// This is to allow providing SrcUIDs to the filter children.
-		// Each filter use it's own (shallow) copy of SrcUIDs, so there is no race conditions,
-		// when multiple filters replace their sg.DestUIDs
-		sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
-	} else {
+		// This is when we have uid function in children.
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "uid" {
 			// If its a uid() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
@@ -1601,6 +1595,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			rch <- nil
 			return
 		}
+
+		// If we have a filter SubGraph which only contains an operator,
+		// it won't have any attribute to work on.
+		// This is to allow providing SrcUIDs to the filter children.
+		// Each filter use it's own (shallow) copy of SrcUIDs, so there is no race conditions,
+		// when multiple filters replace their sg.DestUIDs
+		sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
+	} else {
+
 		if len(sg.SrcFunc) > 0 && isInequalityFn(sg.SrcFunc[0]) && sg.Attr == "val" {
 			// This is a ineq function which uses a value variable.
 			err = sg.ApplyIneqFunc()

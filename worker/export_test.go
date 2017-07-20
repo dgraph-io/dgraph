@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
@@ -108,6 +109,7 @@ func TestExport(t *testing.T) {
 	defer os.RemoveAll(bdir)
 
 	posting.CommitLists(10, 1)
+	time.Sleep(100 * time.Millisecond)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
 	err = export(group.BelongsTo("friend"), bdir)
