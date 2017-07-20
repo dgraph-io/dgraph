@@ -17,11 +17,12 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
+	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
@@ -81,7 +82,7 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 }
 
 // processSchemaFile process schema for a given gz file.
-func processSchemaFile(file string, dgraphClient *client.Dgraph) {
+func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dgraph) error {
 	fmt.Printf("\nProcessing %s\n", file)
 	f, err := os.Open(file)
 	x.Check(err)
@@ -99,6 +100,11 @@ func processSchemaFile(file string, dgraphClient *client.Dgraph) {
 	bufReader := bufio.NewReader(reader)
 	var line int
 	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		err = readLine(bufReader, &buf)
 		if err != nil {
 			break
@@ -120,6 +126,7 @@ func processSchemaFile(file string, dgraphClient *client.Dgraph) {
 	if err != io.EOF {
 		x.Checkf(err, "Error while reading file")
 	}
+	return nil
 }
 
 func Node(val string, c *client.Dgraph) string {
@@ -141,7 +148,7 @@ func Node(val string, c *client.Dgraph) string {
 }
 
 // processFile sends mutations for a given gz file.
-func processFile(file string, dgraphClient *client.Dgraph) {
+func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) error {
 	fmt.Printf("\nProcessing %s\n", file)
 	f, err := os.Open(file)
 	x.Check(err)
@@ -164,6 +171,11 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 	r := new(client.Req)
 	var batchSize int
 	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		err = readLine(bufReader, &buf)
 		if err != nil {
 			break
@@ -204,6 +216,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 			log.Fatal("While adding mutation to batch: ", err)
 		}
 	}
+	return nil
 }
 
 func setupConnection(host string) (*grpc.ClientConn, error) {
@@ -242,6 +255,15 @@ func main() {
 	flag.Parse()
 	x.Init()
 	runtime.SetBlockProfileRate(*blockRate)
+
+	interruptChan := make(chan os.Signal)
+	signal.Notify(interruptChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-interruptChan
+		cancel()
+	}()
+
 	go http.ListenAndServe("localhost:6060", nil)
 	switch *mode {
 	case "cpu":
@@ -273,11 +295,13 @@ func main() {
 		PrintCounters: true,
 	}
 	dgraphClient := client.NewDgraphClient(conns, bmOpts, *clientDir)
+	defer dgraphClient.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-
-	dgraphClient.CheckVersion(ctx)
+	{
+		ctxTimeout, cancelTimeout := context.WithTimeout(ctx, 1*time.Minute)
+		dgraphClient.CheckVersion(ctxTimeout)
+		cancelTimeout()
+	}
 
 	filesList := strings.Split(*files, ",")
 	x.AssertTrue(len(filesList) > 0)
@@ -292,22 +316,37 @@ func main() {
 		}
 	}
 	if len(*schemaFile) > 0 {
-		processSchemaFile(*schemaFile, dgraphClient)
+		if err := processSchemaFile(ctx, *schemaFile, dgraphClient); err != nil {
+			if err == context.Canceled {
+				log.Println("Interrupted while processing schema file")
+			} else {
+				log.Println(err)
+			}
+			return
+		}
 	}
 
 	// wait for schema changes to be done before starting mutations
 	time.Sleep(1 * time.Second)
-	var wg sync.WaitGroup
+
 	x.Check(dgraphClient.NewSyncMarks(filesList))
+	errCh := make(chan error)
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
-		wg.Add(1)
 		go func(file string) {
-			defer wg.Done()
-			processFile(file, dgraphClient)
+			errCh <- processFile(ctx, file, dgraphClient)
 		}(file)
 	}
-	wg.Wait()
+	interrupted := false
+	for _ = range filesList {
+		if err := <-errCh; err != nil {
+			if err == context.Canceled {
+				interrupted = true
+			} else {
+				log.Fatal("While processing file ", err)
+			}
+		}
+	}
 	dgraphClient.BatchFlush()
 
 	c := dgraphClient.Counter()
@@ -317,15 +356,16 @@ func main() {
 	} else {
 		rate = c.Rdfs / uint64(c.Elapsed.Seconds())
 	}
-	// Lets print an empty line, otherwise Number of Mutations overwrites the previous
-	// printed line.
+	// Lets print an empty line, otherwise Interrupted or Number of Mutations overwrites the
+	// previous printed line.
 	fmt.Printf("%100s\r", "")
+
+	if interrupted {
+		fmt.Println("Interrupted.")
+	}
 	fmt.Printf("Number of mutations run   : %d\n", c.Mutations)
 	fmt.Printf("Number of RDFs processed  : %d\n", c.Rdfs)
 	fmt.Printf("Time spent                : %v\n", c.Elapsed)
 
 	fmt.Printf("RDFs processed per second : %d\n", rate)
-
-	// Lets call this so that badger is closed properly.
-	dgraphClient.Close()
 }
