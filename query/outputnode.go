@@ -25,6 +25,7 @@ import (
 	"io"
 	"sort"
 	//"strconv"
+	"strings"
 	"time"
 
 	geom "github.com/twpayne/go-geom"
@@ -287,61 +288,64 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 	return n.(*protoNode).Node, nil
 }
 
-type fastJsonAttr struct {
-	attr      string
-	isScalar  bool
-	scalarVal []byte
-	nodeVal   *fastJsonNode
+func makeScalarNode(attr string, isChild bool, val []byte) *fastJsonNode {
+	return &fastJsonNode{attr, 0, isChild, val, nil}
 }
 
-func makeScalarAttr(attr string, val []byte) *fastJsonAttr {
-	return &fastJsonAttr{attr, true, val, nil}
-}
-func makeNodeAttr(attr string, val *fastJsonNode) *fastJsonAttr {
-	return &fastJsonAttr{attr, false, nil, val}
+func makeNestedNode(attr string, isChild bool, val *fastJsonNode) *fastJsonNode {
+	return &fastJsonNode{attr, 0, isChild, nil, []*fastJsonNode{val}}
 }
 
 type fastJsonNode struct {
-	attr     string
-	children []*fastJsonNode
-	attrs    []*fastJsonAttr
+	attr      string
+	order     int // relative ordering (for sorted results)
+	isChild   bool
+	scalarVal []byte
+	attrs     nodeSlice
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 	if bs, err := valToBytes(v); err == nil {
-		fj.attrs = append(fj.attrs, makeScalarAttr(attr, bs))
+		fj.attrs = append(fj.attrs, makeScalarNode(attr, false, bs))
 	}
 }
 
-func (fj *fastJsonNode) AddMapChild(attr string, val outputNode, _ bool) {
-	fj.attrs = append(fj.attrs, makeNodeAttr(attr, val.(*fastJsonNode)))
+func (fj *fastJsonNode) AddMapChild(attr string, val outputNode, isRoot bool) {
+	var childNode *fastJsonNode
+	for _, c := range fj.attrs {
+		if c.attr == attr {
+			childNode = c
+			break
+		}
+	}
+
+	if childNode != nil {
+		val.(*fastJsonNode).isChild = true
+		val.(*fastJsonNode).attr = attr
+		childNode.attrs = append(childNode.attrs, val.(*fastJsonNode).attrs...)
+	} else {
+		val.(*fastJsonNode).isChild = false
+		val.(*fastJsonNode).attr = attr
+		fj.attrs = append(fj.attrs, val.(*fastJsonNode))
+	}
 }
 
 func (fj *fastJsonNode) AddListChild(attr string, child outputNode) {
 	child.(*fastJsonNode).attr = attr
-	fj.children = append(fj.children, child.(*fastJsonNode))
+	child.(*fastJsonNode).isChild = true
+	fj.attrs = append(fj.attrs, child.(*fastJsonNode))
 }
 
 func (fj *fastJsonNode) New(attr string) outputNode {
-	return &fastJsonNode{}
+	return &fastJsonNode{attr: attr, isChild: false}
 }
 
 func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
-	found := false // TODO(tzdybal) - merge later!
-	if found {
-		/*
-			x.AssertTruef(uidBs.isScalar, "Found node value for _uid_. Expected scalar value.")
-			lUidBs := len(uidBs.scalarVal)
-			currUid, err := strconv.ParseUint(string(uidBs.scalarVal[1:lUidBs-1]), 0, 64)
-			x.AssertTruef(err == nil && currUid == uid, "Setting two different uids on same node.")
-		*/
-	} else {
-		fj.attrs = append(fj.attrs, makeScalarAttr(attr, []byte(fmt.Sprintf("\"%#x\"", uid))))
-	}
+	fj.attrs = append(fj.attrs, makeScalarNode(attr, false, []byte(fmt.Sprintf("\"%#x\"", uid))))
 }
 
 func (fj *fastJsonNode) IsEmpty() bool {
-	return len(fj.attrs) == 0 && len(fj.children) == 0
+	return len(fj.attrs) == 0
 }
 
 func valToBytes(v types.Val) ([]byte, error) {
@@ -374,156 +378,122 @@ func valToBytes(v types.Val) ([]byte, error) {
 	}
 }
 
-type myInterface interface {
-	sort.Interface
-	get(i int) interface{}
-	put(i int, v interface{})
-}
-
-// implements heap.Interface for slices of 'withAttr' objects
-type attrSorter struct {
-	slice myInterface
-	len   int
-}
-
-type attrSlice []*fastJsonAttr
-
-func (h attrSlice) Len() int                 { return len(h) }
-func (h attrSlice) Less(i, j int) bool       { return h[i].attr < h[j].attr }
-func (h attrSlice) Swap(i, j int)            { h[i], h[j] = h[j], h[i] }
-func (h attrSlice) get(i int) interface{}    { return h[i] }
-func (h attrSlice) put(i int, v interface{}) { h[i] = v.(*fastJsonAttr) }
-
 type nodeSlice []*fastJsonNode
 
-func (h nodeSlice) Len() int                 { return len(h) }
-func (h nodeSlice) Less(i, j int) bool       { return h[i].attr < h[j].attr }
-func (h nodeSlice) Swap(i, j int)            { h[i], h[j] = h[j], h[i] }
-func (h nodeSlice) get(i int) interface{}    { return h[i] }
-func (h nodeSlice) put(i int, v interface{}) { h[i] = v.(*fastJsonNode) }
-
-func (h attrSorter) Len() int           { return h.len }
-func (h attrSorter) Less(i, j int) bool { return h.slice.Less(i, j) }
-func (h attrSorter) Swap(i, j int)      { h.slice.Swap(i, j) }
-
-func (h attrSorter) Push(x interface{}) {
-	// sorter is intended to work on existing slice, no pushing
+func (n nodeSlice) Len() int {
+	return len(n)
 }
 
-func (h attrSorter) Pop() interface{} {
-	x := h.slice.get(h.len - 1)
-	h.len--
+func (n nodeSlice) Less(i, j int) bool {
+	cmp := strings.Compare(n[i].attr, n[j].attr)
+	if cmp == 0 {
+		return n[i].order < n[j].order
+	} else {
+		return cmp < 0
+	}
+}
+func (n nodeSlice) Swap(i, j int) {
+	n[i], n[j] = n[j], n[i]
+}
+
+func (n nodeSlice) Push(x interface{}) {
+	// nodeSlice is intended to work on existing slice, no pushing
+}
+
+func (n *nodeSlice) Pop() interface{} {
+	old := *n
+	l := len(old)
+	x := old[l-1]
+	*n = old[0 : l-1]
 	return x
 }
 
-func heapSort(slice myInterface) {
-	helper := attrSorter{slice, slice.Len()}
-	heap.Init(helper)
-
-	size := helper.Len()
-	for size > 0 {
-		helper.Pop()
-		slice.put(size-1, helper.Pop())
-		size--
-	}
+func (fj *fastJsonNode) writeKey(out *bufio.Writer) {
+	out.WriteRune('"')
+	out.WriteString(fj.attr)
+	out.WriteRune('"')
+	out.WriteRune(':')
 }
 
-func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
-	//heapSort(attrSlice(fj.attrs))
-	//heapSort(nodeSlice(fj.children))
-	sort.Slice(fj.attrs, func(i, j int) bool {
-		return fj.attrs[i].attr < fj.attrs[j].attr
-	})
-	sort.Slice(fj.children, func(i, j int) bool {
-		return fj.children[i].attr < fj.children[j].attr
-	})
+func (fj *fastJsonNode) encode(out *bufio.Writer, _ bool) {
+	// set relative ordering
+	for i, a := range fj.attrs {
+		a.order = i
+	}
+	heap.Init(&fj.attrs)
 
-	ai := 0 // attr iterator
-	ci := 0 // child iterator
-
-	bufw.WriteRune('{')
-	first := true
-	for {
-		var k string
-		var isAttr bool
-		if ai < len(fj.attrs) && ci < len(fj.children) {
-			if fj.attrs[ai].attr < fj.children[ci].attr {
-				k = fj.attrs[ai].attr
-				isAttr = true
+	if fj.attrs.Len() > 0 {
+		out.WriteRune('{')
+		curr := heap.Pop(&fj.attrs).(*fastJsonNode)
+		cnt := 1
+		last := false
+		inArray := false
+		for {
+			var next *fastJsonNode
+			if fj.attrs.Len() > 0 {
+				next = heap.Pop(&fj.attrs).(*fastJsonNode)
 			} else {
-				k = fj.children[ci].attr
-				isAttr = false
+				last = true
 			}
-		} else if ai == len(fj.attrs) && ci < len(fj.children) {
-			k = fj.children[ci].attr
-			isAttr = false
-		} else if ci == len(fj.children) && ai < len(fj.attrs) {
-			k = fj.attrs[ai].attr
-			isAttr = true
-		} else {
-			break
-		}
 
-		if !first {
-			bufw.WriteRune(',')
-		}
-		first = false
-		bufw.WriteRune('"')
-		bufw.WriteString(k)
-		bufw.WriteRune('"')
-		bufw.WriteRune(':')
-
-		if isAttr {
-			var v *fastJsonAttr
-			for ; ai < len(fj.attrs) && fj.attrs[ai].attr == k; ai++ {
-				a := fj.attrs[ai]
-				if a.isScalar {
-					bufw.Write(a.scalarVal)
-					ai++
-					break
+			if !last {
+				if curr.attr == next.attr {
+					if cnt == 1 {
+						curr.writeKey(out)
+						out.WriteRune('[')
+						inArray = true
+					}
+					curr.encode(out, false)
+					cnt++
 				} else {
-					if v == nil {
-						v = &fastJsonAttr{nodeVal: &fastJsonNode{}}
+					if cnt == 1 {
+						curr.writeKey(out)
+						if curr.isChild {
+							out.WriteRune('[')
+							inArray = true
+						}
 					}
+					curr.encode(out, false)
+					if cnt != 1 || curr.isChild {
+						out.WriteRune(']')
+						inArray = false
+					}
+					cnt = 1
+				}
+				out.WriteRune(',')
 
-					for kk, vv := range a.nodeVal.children {
-						v.nodeVal.children[kk] = vv
-					}
-					v.nodeVal.attrs = append(v.nodeVal.attrs, a.nodeVal.attrs...)
+				curr = next
+			} else {
+				if cnt == 1 {
+					curr.writeKey(out)
 				}
-			}
-			if v != nil {
-				v.nodeVal.encode(bufw)
-			}
-			// ai incremented in loop
-		} else {
-			first := true
-			bufw.WriteRune('[')
-			for ; ci < len(fj.children) && fj.children[ci].attr == k; ci++ {
-				vi := fj.children[ci]
-				if !first {
-					bufw.WriteRune(',')
+				if curr.isChild && !inArray {
+					out.WriteRune('[')
 				}
-				first = false
-				vi.encode(bufw)
+				curr.encode(out, false)
+				if cnt != 1 || curr.isChild {
+					out.WriteRune(']')
+					inArray = false
+				}
+				break
 			}
-			bufw.WriteRune(']')
 		}
+		out.WriteRune('}')
+	} else {
+		out.Write(fj.scalarVal)
 	}
-	bufw.WriteRune('}')
 }
 
-func merge(parent [][]*fastJsonAttr,
-	child [][]*fastJsonAttr) [][]*fastJsonAttr {
+func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) [][]*fastJsonNode {
 	if len(parent) == 0 {
 		return child
 	}
 
 	// Here we merge two slices of maps.
-	mergedList := make([][]*fastJsonAttr, 0, len(parent)*len(child))
+	mergedList := make([][]*fastJsonNode, 0, len(parent)*len(child))
 	for _, pa := range parent {
 		for _, ca := range child {
-			mergeMap := make(map[string]*fastJsonAttr)
+			mergeMap := make(map[string]*fastJsonNode)
 			for _, v := range pa {
 				mergeMap[v.attr] = v
 			}
@@ -532,7 +502,7 @@ func merge(parent [][]*fastJsonAttr,
 				mergeMap[v.attr] = v
 			}
 			// Add the map to the list.
-			merged := make([]*fastJsonAttr, 0, len(mergeMap))
+			merged := make([]*fastJsonNode, 0, len(mergeMap))
 			for _, v := range mergeMap {
 				merged = append(merged, v)
 			}
@@ -542,34 +512,51 @@ func merge(parent [][]*fastJsonAttr,
 	return mergedList
 }
 
-func (n *fastJsonNode) normalize() [][]*fastJsonAttr {
-	if len(n.children) == 0 {
-		// Recursion base case
-		// There are no children, we can just return slice with n.attrs map.
-		return [][]*fastJsonAttr{n.attrs}
+func (n *fastJsonNode) normalize() [][]*fastJsonNode {
+	cnt := 0
+	for _, a := range n.attrs {
+		if a.isChild {
+			cnt++
+		}
 	}
 
-	parentSlice := make([][]*fastJsonAttr, 0, 5)
+	if cnt == 0 {
+		// Recursion base case
+		// There are no children, we can just return slice with n.attrs map.
+		return [][]*fastJsonNode{n.attrs}
+	}
+
+	parentSlice := make([][]*fastJsonNode, 0, 5)
 	// If the parents has attrs, lets add them to the slice so that it can be
 	// merged with children later.
-	parentSlice = append(parentSlice, n.attrs)
+	attrs := make([]*fastJsonNode, 0, len(n.attrs)-cnt)
+	for _, a := range n.attrs {
+		if !a.isChild {
+			attrs = append(attrs, a)
+		}
+	}
+	parentSlice = append(parentSlice, attrs)
 
-	for ci := 0; ci < len(n.children); {
-		childNode := n.children[ci]
-		childSlice := make([][]*fastJsonAttr, 0, 5)
-		for ci < len(n.children) && childNode.attr == n.children[ci].attr {
-			childSlice = append(childSlice, n.children[ci].normalize()...)
+	for ci := 0; ci < len(n.attrs); {
+		childNode := n.attrs[ci]
+		//if childNode.isChild {
+		childSlice := make([][]*fastJsonNode, 0, 5)
+		for ci < len(n.attrs) && childNode.attr == n.attrs[ci].attr {
+			childSlice = append(childSlice, n.attrs[ci].normalize()...)
 			ci++
 		}
 		// Merging with parent.
 		parentSlice = merge(parentSlice, childSlice)
+		//} else {
+		//	ci++
+		//}
 	}
 	return parentSlice
 }
 
 type attrVal struct {
 	attr string
-	val  *fastJsonAttr
+	val  *fastJsonNode
 }
 
 func (n *fastJsonNode) addGroupby(sg *SubGraph, fname string) {
@@ -682,6 +669,10 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 	}
 
 	bufw := bufio.NewWriter(w)
-	n.(*fastJsonNode).encode(bufw)
+	if len(n.(*fastJsonNode).attrs) == 0 {
+		bufw.WriteString("{}")
+	} else {
+		n.(*fastJsonNode).encode(bufw, true)
+	}
 	return bufw.Flush()
 }
