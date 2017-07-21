@@ -415,7 +415,7 @@ func (fj *fastJsonNode) writeKey(out *bufio.Writer) {
 	out.WriteRune(':')
 }
 
-func (fj *fastJsonNode) encode(out *bufio.Writer, _ bool) {
+func (fj *fastJsonNode) encode(out *bufio.Writer) {
 	// set relative ordering
 	for i, a := range fj.attrs {
 		a.order = i
@@ -443,7 +443,7 @@ func (fj *fastJsonNode) encode(out *bufio.Writer, _ bool) {
 						out.WriteRune('[')
 						inArray = true
 					}
-					curr.encode(out, false)
+					curr.encode(out)
 					cnt++
 				} else {
 					if cnt == 1 {
@@ -453,7 +453,7 @@ func (fj *fastJsonNode) encode(out *bufio.Writer, _ bool) {
 							inArray = true
 						}
 					}
-					curr.encode(out, false)
+					curr.encode(out)
 					if cnt != 1 || curr.isChild {
 						out.WriteRune(']')
 						inArray = false
@@ -470,7 +470,7 @@ func (fj *fastJsonNode) encode(out *bufio.Writer, _ bool) {
 				if curr.isChild && !inArray {
 					out.WriteRune('[')
 				}
-				curr.encode(out, false)
+				curr.encode(out)
 				if cnt != 1 || curr.isChild {
 					out.WriteRune(']')
 					inArray = false
@@ -672,7 +672,7 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 	if len(n.(*fastJsonNode).attrs) == 0 {
 		bufw.WriteString("{}")
 	} else {
-		n.(*fastJsonNode).encode(bufw, true)
+		n.(*fastJsonNode).encode(bufw)
 	}
 	return bufw.Flush()
 }
