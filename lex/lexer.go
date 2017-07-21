@@ -90,7 +90,7 @@ func (p *ItemIterator) Prev() bool {
 	return false
 }
 
-// Save saves the current position of the iterator.
+// Restore restores the last saved position of the iterator.
 func (p *ItemIterator) Restore() {
 	p.idx = p.savePos
 }
