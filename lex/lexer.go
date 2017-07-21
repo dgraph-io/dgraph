@@ -65,7 +65,7 @@ func (l *Lexer) NewIterator() *ItemIterator {
 	return it
 }
 
-// Valid returns true if we haven't consumed all the items.
+// Next advances the iterator by one.
 func (p *ItemIterator) Next() bool {
 	p.idx++
 	if p.idx >= len(p.l.items) {
@@ -74,7 +74,7 @@ func (p *ItemIterator) Next() bool {
 	return true
 }
 
-// Item returns the current item and advances the index.
+// Item returns the current item.
 func (p *ItemIterator) Item() item {
 	if p.idx < 0 || p.idx >= len(p.l.items) {
 		return item{}
@@ -97,8 +97,8 @@ func (p *ItemIterator) Restore(pos int) {
 	if p.idx > len(p.l.items) {
 		p.idx = len(p.l.items)
 	}
-	if p.idx <= -1 {
-		p.idx = len(p.l.items)
+	if p.idx < -1 {
+		p.idx = -1
 	}
 }
 
