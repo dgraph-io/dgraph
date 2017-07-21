@@ -2992,7 +2992,35 @@ func TestParseFacetsError2(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestParseFacetsOrderError(t *testing.T) {
+func TestParseFacetsOrderError1(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: orderdesc: closeness) {
+				name 
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseFacetsOrderError2(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(a as b as closeness) {
+				name 
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseFacetsOrderError3(t *testing.T) {
 	query := `
 	query {
 		me(func: uid(0x1)) {
