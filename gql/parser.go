@@ -1567,7 +1567,7 @@ func parseFacets(it *lex.ItemIterator) (facetRes, error) {
 	var orderdesc bool
 	peeks, err := it.Peek(1)
 	expectArg := true
-	it.Save()
+	savePos := it.Save()
 	if err == nil && peeks[0].Typ == itemLeftRound {
 		it.Next() // ignore '('
 		// parse comma separated strings (a1,b1,c1)
@@ -1635,7 +1635,7 @@ func parseFacets(it *lex.ItemIterator) (facetRes, error) {
 			// this is not (facet1, facet2, facet3)
 			// try parsing filters. (eq(facet1, val1) AND eq(facet2, val2)...)
 			// revert back tokens
-			it.Restore()
+			it.Restore(savePos)
 			filterTree, err := parseFilter(it)
 			res.ft = filterTree
 			return res, err
