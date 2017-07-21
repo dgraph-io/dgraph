@@ -23,11 +23,12 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"fmt"
-	"github.com/dgraph-io/badger"
-	"golang.org/x/net/context"
 	"os"
 	"path"
 	"time"
+
+	"github.com/dgraph-io/badger"
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/x"
@@ -148,7 +149,7 @@ func Backup(ctx context.Context) error {
 	}
 	fmt.Println(gids)
 
-	if err := backup(gids, *backupPath); err != nil {
+	if err := backup(gids, Config.BackupPath); err != nil {
 		return err
 	}
 	return nil

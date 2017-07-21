@@ -33,7 +33,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"runtime/pprof"
@@ -43,12 +42,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/badger"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
 	"github.com/cockroachdb/cmux"
+	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -61,46 +60,144 @@ import (
 )
 
 var (
-	gconf      = flag.String("group_conf", "", "group configuration file")
-	postingDir = flag.String("p", "p", "Directory to store posting lists.")
-	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
-	port       = flag.Int("port", 8080, "Port to run server on.")
-	bindall    = flag.Bool("bindall", false,
-		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	exposeTrace = flag.Bool("expose_trace", false,
-		"Allow trace endpoint to be accessible from remote")
-	cpuprofile   = flag.String("cpu", "", "write cpu profile to file")
-	memprofile   = flag.String("mem", "", "write memory profile to file")
-	blockRate    = flag.Int("block", 0, "Block profiling rate")
-	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
-	numPending   = flag.Int("pending", 1000,
-		"Number of pending queries. Useful for rate limiting.")
-	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
-	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
-	pendingQueries chan struct{}
-	isMutAllowed   uint32
-	// TLS configurations
-	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections with clients.")
-	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
-	tlsKey           = flag.String("tls.cert_key", "", "Certificate key file path.")
-	tlsKeyPass       = flag.String("tls.cert_key_passphrase", "", "Certificate key passphrase.")
-	tlsClientAuth    = flag.String("tls.client_auth", "", "Enable TLS client authentication")
-	tlsClientCACerts = flag.String("tls.ca_certs", "", "CA Certs file path.")
-	tlsSystemCACerts = flag.Bool("tls.use_system_ca", false, "Include System CA into CA Certs.")
-	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min version.")
-	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max version.")
+	gconf        string
+	baseHttpPort int
+	baseGrpcPort int
+	bindall      bool
+
+	isMutAllowed uint32
+	exposeTrace  bool
+	cpuprofile   string
+	memprofile   string
+	blockRate    int
+	dumpSubgraph string
+
+	// TLS configuration
+	tlsEnabled       bool
+	tlsCert          string
+	tlsKey           string
+	tlsKeyPass       string
+	tlsClientAuth    string
+	tlsClientCACerts string
+	tlsSystemCACerts bool
+	tlsMinVersion    string
+	tlsMaxVersion    string
 )
+
+func setupConfigOpts() {
+	var config dgraph.Options
+	defaults := dgraph.DefaultConfig
+	flag.StringVar(&config.PostingDir, "p", defaults.PostingDir,
+		"Directory to store posting lists.")
+	flag.StringVar(&config.PostingTables, "posting_tables", defaults.PostingTables,
+		"Specifies how Badger LSM tree is stored. Options are loadtoram, memorymap and "+
+			"nothing; which consume most to least RAM while providing best to worst "+
+			"performance respectively.")
+	flag.StringVar(&config.WALDir, "w", defaults.WALDir,
+		"Directory to store raft write-ahead logs.")
+	flag.BoolVar(&config.Nomutations, "nomutations", defaults.Nomutations,
+		"Don't allow mutations on this server.")
+	flag.IntVar(&config.NumPending, "pending", defaults.NumPending,
+		"Number of pending queries. Useful for rate limiting.")
+
+	flag.IntVar(&config.BaseWorkerPort, "workerport", defaults.BaseWorkerPort,
+		"Port used by worker for internal communication.")
+	flag.StringVar(&config.ExportPath, "export", defaults.ExportPath,
+		"Folder in which to store exports.")
+	flag.IntVar(&config.NumPendingProposals, "pending_proposals", defaults.NumPendingProposals,
+		"Number of pending mutation proposals. Useful for rate limiting.")
+	flag.Float64Var(&config.Tracing, "trace", defaults.Tracing,
+		"The ratio of queries to trace.")
+	flag.StringVar(&config.GroupIds, "groups", defaults.GroupIds,
+		"RAFT groups handled by this server.")
+	flag.StringVar(&config.MyAddr, "my", defaults.MyAddr,
+		"addr:port of this server, so other Dgraph servers can talk to this.")
+	flag.StringVar(&config.PeerAddr, "peer", defaults.PeerAddr,
+		"IP_ADDRESS:PORT of any healthy peer.")
+	flag.Uint64Var(&config.RaftId, "idx", defaults.RaftId,
+		"RAFT ID that this server will use to join RAFT groups.")
+	flag.Uint64Var(&config.MaxPendingCount, "sc", defaults.MaxPendingCount,
+		"Max number of pending entries in wal after which snapshot is taken")
+	flag.BoolVar(&config.ExpandEdge, "expand_edge", defaults.ExpandEdge,
+		"Don't store predicates per node.")
+
+	flag.Float64Var(&config.AllottedMemory, "max_memory_mb", defaults.AllottedMemory,
+		"Estimated max memory the process can take")
+	flag.Float64Var(&config.CommitFraction, "gentlecommit", defaults.CommitFraction,
+		"Fraction of dirty posting lists to commit every few seconds.")
+
+	flag.StringVar(&config.ConfigFile, "config", defaults.ConfigFile,
+		"YAML configuration file containing dgraph settings.")
+	flag.BoolVar(&config.DebugMode, "debugmode", defaults.DebugMode,
+		"enable debug mode for more debug information")
+
+	flag.BoolVar(&x.Config.Version, "version", false, "Prints the version of Dgraph")
+	// Useful for running multiple servers on the same machine.
+	flag.IntVar(&x.Config.PortOffset, "port_offset", 0,
+		"Value added to all listening port numbers.")
+
+	flag.StringVar(&gconf, "group_conf", "", "group configuration file")
+	flag.IntVar(&baseHttpPort, "port", 8080, "Port to run HTTP service on.")
+	flag.IntVar(&baseGrpcPort, "grpc_port", 9080, "Port to run gRPC service on.")
+	flag.BoolVar(&bindall, "bindall", false,
+		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
+	flag.BoolVar(&exposeTrace, "expose_trace", false,
+		"Allow trace endpoint to be accessible from remote")
+	flag.StringVar(&cpuprofile, "cpu", "", "write cpu profile to file")
+	flag.StringVar(&memprofile, "mem", "", "write memory profile to file")
+	flag.IntVar(&blockRate, "block", 0, "Block profiling rate")
+	flag.StringVar(&dumpSubgraph, "dumpsg", "", "Directory to save subgraph for testing, debugging")
+	// TLS configurations
+	flag.BoolVar(&tlsEnabled, "tls.on", false, "Use TLS connections with clients.")
+	flag.StringVar(&tlsCert, "tls.cert", "", "Certificate file path.")
+	flag.StringVar(&tlsKey, "tls.cert_key", "", "Certificate key file path.")
+	flag.StringVar(&tlsKeyPass, "tls.cert_key_passphrase", "", "Certificate key passphrase.")
+	flag.StringVar(&tlsClientAuth, "tls.client_auth", "", "Enable TLS client authentication")
+	flag.StringVar(&tlsClientCACerts, "tls.ca_certs", "", "CA Certs file path.")
+	flag.BoolVar(&tlsSystemCACerts, "tls.use_system_ca", false, "Include System CA into CA Certs.")
+	flag.StringVar(&tlsMinVersion, "tls.min_version", "TLS11", "TLS min version.")
+	flag.StringVar(&tlsMaxVersion, "tls.max_version", "TLS12", "TLS max version.")
+
+	flag.Parse()
+	if !flag.Parsed() {
+		log.Fatal("Unable to parse flags")
+	}
+
+	// Read from config file before setting config.
+	if config.ConfigFile != "" {
+		x.Println("Loading configuration from file:", config.ConfigFile)
+		x.LoadConfigFromYAML(config.ConfigFile)
+	}
+
+	dgraph.SetConfiguration(config)
+}
+
+func httpPort() int {
+	return x.Config.PortOffset + baseHttpPort
+}
+
+func grpcPort() int {
+	return x.Config.PortOffset + baseGrpcPort
+}
+
+func setupProfiling() {
+	if len(cpuprofile) > 0 {
+		f, err := os.Create(cpuprofile)
+		x.Check(err)
+		pprof.StartCPUProfile(f)
+	}
+	runtime.SetBlockProfileRate(blockRate)
+}
 
 func stopProfiling() {
 	// Stop the CPU profiling that was initiated.
-	if len(*cpuprofile) > 0 {
+	if len(cpuprofile) > 0 {
 		pprof.StopCPUProfile()
 	}
 
 	// Write memory profile before exit.
-	if len(*memprofile) > 0 {
-		f, err := os.Create(*memprofile)
+	if len(memprofile) > 0 {
+		f, err := os.Create(memprofile)
 		if err != nil {
 			log.Println(err)
 		}
@@ -119,17 +216,6 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func isMutationAllowed(ctx context.Context) bool {
-	if atomic.LoadUint32(&isMutAllowed) == 0 {
-		return true
-	}
-	shareAllowed, ok := ctx.Value("_share_").(bool)
-	if !ok || !shareAllowed {
-		return false
-	}
-	return true
-}
-
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	if err := x.HealthCheck(); err == nil {
 		w.WriteHeader(http.StatusOK)
@@ -139,48 +225,15 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// parseQueryAndMutation handles the cases where the query parsing code can hang indefinitely.
-// We allow 1 second for parsing the query; and then give up.
-func parseQueryAndMutation(ctx context.Context, r gql.Request) (res gql.Result, err error) {
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Query received: %v", r.Str)
-	}
-	errc := make(chan error, 1)
-
-	go func() {
-		var err error
-		res, err = gql.Parse(r)
-		errc <- err
-	}()
-
-	child, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-
-	select {
-	case <-child.Done():
-		return res, child.Err()
-	case err := <-errc:
-		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while parsing query: %+v", err)
-			}
-			return res, err
-		}
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Query parsed")
-		}
-	}
-	return res, nil
-}
-
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if err := x.HealthCheck(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	// Add a limit on how many pending queries can be run in the system.
-	pendingQueries <- struct{}{}
-	defer func() { <-pendingQueries }()
+
+	x.PendingQueries.Add(1)
+	x.NumQueries.Add(1)
+	defer x.PendingQueries.Add(-1)
 
 	addCorsHeaders(w)
 	if r.Method == "OPTIONS" {
@@ -196,7 +249,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
 	ctx = context.WithValue(ctx, "mutation_allowed", atomic.LoadUint32(&isMutAllowed) == 1)
 
-	if rand.Float64() < *worker.Tracing {
+	if rand.Float64() < worker.Config.Tracing {
 		tr := trace.New("Dgraph", "Query")
 		tr.SetMaxEvents(1000)
 		defer tr.Finish()
@@ -220,8 +273,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if dgraph.Config.DebugMode {
+		fmt.Printf("Received query: %+v\n", q)
+	}
 	parseStart := time.Now()
-	parsed, err := parseQueryAndMutation(ctx, gql.Request{
+	parsed, err := dgraph.ParseQueryAndMutation(ctx, gql.Request{
 		Str:       q,
 		Variables: map[string]string{},
 		Http:      true,
@@ -290,11 +346,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(*dumpSubgraph) > 0 {
+	if len(dumpSubgraph) > 0 {
 		for _, sg := range res.Subgraphs {
-			x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
+			x.Checkf(os.MkdirAll(dumpSubgraph, 0700), dumpSubgraph)
 			s := time.Now().Format("20060102.150405.000000.gob")
-			filename := path.Join(*dumpSubgraph, s)
+			filename := path.Join(dumpSubgraph, s)
 			f, err := os.Create(filename)
 			x.Checkf(err, filename)
 			enc := gob.NewEncoder(f)
@@ -362,7 +418,12 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.Error, err.Error())
 	}
 	nquads := gql.WrapNQ(NewSharedQueryNQuads(rawQuery), protos.DirectedEdge_SET)
-	if mr, err = query.ToInternal(ctx, nquads, nil); err != nil {
+	newUids, err := query.AssignUids(ctx, nquads)
+	if err != nil {
+		fail()
+		return
+	}
+	if mr, err = query.ToInternal(ctx, nquads, nil, newUids); err != nil {
 		fail()
 		return
 	}
@@ -370,7 +431,8 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
-	allocIdsStr := query.ConvertUidsToHex(mr.NewUids)
+	tempMap := query.StripBlankNode(newUids)
+	allocIdsStr := query.ConvertUidsToHex(tempMap)
 	payload := map[string]interface{}{
 		"code":    x.Success,
 		"message": "Done",
@@ -419,18 +481,18 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 
 func shutdownServer() {
 	x.Printf("Got clean exit request")
-	stopProfiling()          // stop profiling
-	shutdownCh <- struct{}{} // exit grpc and http servers.
+	stopProfiling()                       // stop profiling
+	dgraph.State.ShutdownCh <- struct{}{} // exit grpc and http servers.
 
 	// wait for grpc and http servers to finish pending reqs and
 	// then stop all nodes, internal grpc servers and sync all the marks
 	go func() {
-		defer func() { shutdownCh <- struct{}{} }()
+		defer func() { dgraph.State.ShutdownCh <- struct{}{} }()
 
 		// wait for grpc, http and http2 servers to stop
-		<-finishCh
-		<-finishCh
-		<-finishCh
+		<-dgraph.State.FinishCh
+		<-dgraph.State.FinishCh
+		<-dgraph.State.FinishCh
 
 		worker.BlockingStop()
 	}()
@@ -483,133 +545,25 @@ func hasGraphOps(mu *protos.Mutation) bool {
 	return len(mu.Set) > 0 || len(mu.Del) > 0 || len(mu.Schema) > 0
 }
 
-// server is used to implement protos.DgraphServer
-type grpcServer struct{}
-
-// This method is used to execute the query and return the response to the
-// client as a protocol buffer message.
-func (s *grpcServer) Run(ctx context.Context,
-	req *protos.Request) (resp *protos.Response, err error) {
-	// we need membership information
-	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Request rejected %v", err)
-		}
-		return resp, err
+func bestEffortGopath() (string, bool) {
+	if path, ok := os.LookupEnv("GOPATH"); ok {
+		return path, true
 	}
-	pendingQueries <- struct{}{}
-	defer func() { <-pendingQueries }()
-	if ctx.Err() != nil {
-		return resp, ctx.Err()
+	var homevar string
+	switch runtime.GOOS {
+	case "windows":
+		// The Golang issue https://github.com/golang/go/issues/17262 says
+		// USERPROFILE, _not_ HOMEDRIVE + HOMEPATH is used.
+		homevar = "USERPROFILE"
+	case "plan9":
+		homevar = "home"
+	default:
+		homevar = "HOME"
 	}
-
-	if rand.Float64() < *worker.Tracing {
-		tr := trace.New("Dgraph", "GrpcQuery")
-		tr.SetMaxEvents(1000)
-		defer tr.Finish()
-		ctx = trace.NewContext(ctx, tr)
+	if homepath, ok := os.LookupEnv(homevar); ok {
+		return path.Join(homepath, "go"), true
 	}
-
-	// Sanitize the context of the keys used for internal purposes only
-	ctx = context.WithValue(ctx, "_share_", nil)
-	ctx = context.WithValue(ctx, "mutation_allowed", isMutationAllowed(ctx))
-
-	resp = new(protos.Response)
-	emptyMutation := len(req.Mutation.GetSet()) == 0 && len(req.Mutation.GetDel()) == 0 &&
-		len(req.Mutation.GetSchema()) == 0
-	if len(req.Query) == 0 && emptyMutation {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Empty query and mutation.")
-		}
-		return resp, fmt.Errorf("empty query and mutation.")
-	}
-
-	var l query.Latency
-	l.Start = time.Now()
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Query received: %v, variables: %v", req.Query, req.Vars)
-	}
-	res, err := parseQueryAndMutation(ctx, gql.Request{
-		Str:       req.Query,
-		Variables: req.Vars,
-		Http:      false,
-	})
-	if err != nil {
-		return resp, err
-	}
-
-	var cancel context.CancelFunc
-	// set timeout if schema mutation not present
-	if res.Mutation == nil || len(res.Mutation.Schema) == 0 {
-		// If schema mutation is not present
-		ctx, cancel = context.WithTimeout(ctx, time.Minute)
-		defer cancel()
-	}
-
-	if req.Schema != nil && res.Schema != nil {
-		return resp, x.Errorf("Multiple schema blocks found")
-	}
-	// Schema Block and Mutation can be part of query string or request
-	if res.Mutation == nil {
-		res.Mutation = &gql.Mutation{Set: req.Mutation.Set, Del: req.Mutation.Del}
-	}
-	if res.Schema == nil {
-		res.Schema = req.Schema
-	}
-
-	var queryRequest = query.QueryRequest{
-		Latency:      &l,
-		GqlQuery:     &res,
-		SchemaUpdate: req.Mutation.Schema,
-	}
-	var er query.ExecuteResult
-	if er, err = queryRequest.ProcessWithMutation(ctx); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while processing query: %+v", err)
-		}
-		return resp, x.Wrap(err)
-	}
-	resp.AssignedUids = er.Allocations
-	resp.Schema = er.SchemaNode
-
-	nodes, err := query.ToProtocolBuf(&l, er.Subgraphs)
-	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while converting to protocol buffer: %+v", err)
-		}
-		return resp, err
-	}
-	resp.N = nodes
-
-	gl := new(protos.Latency)
-	gl.Parsing, gl.Processing, gl.Pb = l.Parsing.String(), l.Processing.String(),
-		l.ProtocolBuffer.String()
-	resp.L = gl
-	return resp, err
-}
-
-func (s *grpcServer) CheckVersion(ctx context.Context, c *protos.Check) (v *protos.Version,
-	err error) {
-	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("request rejected %v", err)
-		}
-		return v, err
-	}
-
-	v = new(protos.Version)
-	v.Tag = x.Version()
-	return v, nil
-}
-
-func (s *grpcServer) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	if err := x.HealthCheck(); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("request rejected %v", err)
-		}
-		return &protos.AssignedIds{}, err
-	}
-	return worker.AssignUidsOverNetwork(ctx, num)
+	return "", false
 }
 
 var uiDir string
@@ -620,42 +574,28 @@ func init() {
 	// the user. In other cases, it should point to the build directory within the repository.
 	flag.StringVar(&uiDir, "ui", uiDir, "Directory which contains assets for the user interface")
 	if uiDir == "" {
-		uiDir = os.Getenv("GOPATH") + "/src/github.com/dgraph-io/dgraph/dashboard/build"
+		gopath, _ := bestEffortGopath()
+		uiDir = path.Join(gopath, "src/github.com/dgraph-io/dgraph/dashboard/build")
 	}
-	if !*nomutations {
-		atomic.StoreUint32(&isMutAllowed, 1)
-	}
-}
-
-func checkFlagsAndInitDirs() {
-	if len(*cpuprofile) > 0 {
-		f, err := os.Create(*cpuprofile)
-		x.Check(err)
-		pprof.StartCPUProfile(f)
-	}
-
-	// Create parent directories for postings, uids and mutations
-	x.Check(os.MkdirAll(*postingDir, 0700))
 }
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
 	var reload func()
 	laddr := fmt.Sprintf("%s:%d", addr, port)
-	if !*tlsEnabled {
+	if !tlsEnabled {
 		listener, err = net.Listen("tcp", laddr)
 	} else {
 		var tlsCfg *tls.Config
 		tlsCfg, reload, err = x.GenerateTLSConfig(x.TLSHelperConfig{
-			ConfigType:             x.TLSServerConfig,
-			CertRequired:           *tlsEnabled,
-			Cert:                   *tlsCert,
-			Key:                    *tlsKey,
-			KeyPassphrase:          *tlsKeyPass,
-			ClientAuth:             *tlsClientAuth,
-			ClientCACerts:          *tlsClientCACerts,
-			UseSystemClientCACerts: *tlsSystemCACerts,
-			MinVersion:             *tlsMinVersion,
-			MaxVersion:             *tlsMaxVersion,
+			ConfigType:   x.TLSServerConfig,
+			CertRequired: tlsEnabled,
+			Cert:         tlsCert,
+
+			ClientAuth:             tlsClientAuth,
+			ClientCACerts:          tlsClientCACerts,
+			UseSystemClientCACerts: tlsSystemCACerts,
+			MinVersion:             tlsMinVersion,
+			MaxVersion:             tlsMaxVersion,
 		})
 		if err != nil {
 			return nil, err
@@ -677,18 +617,19 @@ func setupListener(addr string, port int) (listener net.Listener, err error) {
 }
 
 func serveGRPC(l net.Listener) {
-	defer func() { finishCh <- struct{}{} }()
+	defer func() { dgraph.State.FinishCh <- struct{}{} }()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}),
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
-		grpc.MaxSendMsgSize(x.GrpcMaxSize))
-	protos.RegisterDgraphServer(s, &grpcServer{})
+		grpc.MaxSendMsgSize(x.GrpcMaxSize),
+		grpc.MaxConcurrentStreams(1000))
+	protos.RegisterDgraphServer(s, &dgraph.Server{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
 	s.GracefulStop()
 }
 
 func serveHTTP(l net.Listener) {
-	defer func() { finishCh <- struct{}{} }()
+	defer func() { dgraph.State.FinishCh <- struct{}{} }()
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
@@ -709,22 +650,26 @@ func serveHTTP(l net.Listener) {
 func setupServer(che chan error) {
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
-	go worker.RunServer(*bindall) // For internal communication.
+	go worker.RunServer(bindall) // For internal communication.
 
 	laddr := "localhost"
-	if *bindall {
+	if bindall {
 		laddr = "0.0.0.0"
 	}
 
-	l, err := setupListener(laddr, *port)
+	httpListener, err := setupListener(laddr, httpPort())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	tcpm := cmux.New(l)
-	grpcl := tcpm.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
-	httpl := tcpm.Match(cmux.HTTP1Fast())
-	http2 := tcpm.Match(cmux.HTTP2())
+	grpcListener, err := setupListener(laddr, grpcPort())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	httpMux := cmux.New(httpListener)
+	httpl := httpMux.Match(cmux.HTTP1Fast())
+	http2 := httpMux.Match(cmux.HTTP2())
 
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/query", queryHandler)
@@ -744,60 +689,59 @@ func setupServer(che chan error) {
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initilize the servers.
-	go serveGRPC(grpcl)
+	go serveGRPC(grpcListener)
 	go serveHTTP(httpl)
 	go serveHTTP(http2)
 
 	go func() {
-		<-shutdownCh
+		<-dgraph.State.ShutdownCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
-		l.Close()
+		grpcListener.Close()
+		httpListener.Close()
 	}()
 
-	log.Println("grpc server started.")
-	log.Println("http server started.")
-	log.Println("Server listening on port", *port)
+	log.Println("gRPC server started.  Listening on port", grpcPort())
+	log.Println("HTTP server started.  Listening on port", httpPort())
 
-	err = tcpm.Serve() // Start cmux serving. blocking call
-	<-shutdownCh       // wait for shutdownServer to finish
-	che <- err         // final close for main.
+	err = httpMux.Serve()     // Start cmux serving. blocking call
+	<-dgraph.State.ShutdownCh // wait for shutdownServer to finish
+	che <- err                // final close for main.
 }
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	x.Init()
-	if *exposeTrace {
+
+	// Setting a higher number here allows more disk I/O calls to be scheduled, hence considerably
+	// improving throughput. The extra CPU overhead is almost negligible in comparison. The
+	// benchmark notes are located in badger-bench/randread.
+	runtime.GOMAXPROCS(128)
+
+	setupConfigOpts()
+	x.Init() // flag.Parse is called here
+
+	if !dgraph.Config.Nomutations {
+		atomic.StoreUint32(&isMutAllowed, 1)
+	}
+
+	setupProfiling()
+
+	dgraph.State = dgraph.NewServerState()
+	defer dgraph.State.Dispose()
+
+	if exposeTrace {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}
 	}
-	checkFlagsAndInitDirs()
-	runtime.SetBlockProfileRate(*blockRate)
-	pendingQueries = make(chan struct{}, *numPending)
 
-	pd, err := filepath.Abs(*postingDir)
-	x.Check(err)
-	wd, err := filepath.Abs(*walDir)
-	x.Check(err)
-	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same.")
-
-	// All the writes to posting store should be synchronous. We use batched writers
-	// for posting lists, so the cost of sync writes is amortized.
-	opt := badger.DefaultOptions
-	opt.SyncWrites = true
-	opt.Dir = *postingDir
-	opt.ValueDir = *postingDir
-	ps, err := badger.NewKV(&opt)
-	x.Checkf(err, "Error while creating badger KV posting store")
-	defer ps.Close()
-
-	x.Check(group.ParseGroupConfig(*gconf))
-	schema.Init(ps)
+	group.ParseGroupConfig(gconf)
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
-	posting.Init(ps)
-	worker.Init(ps)
+	schema.Init(dgraph.State.Pstore)
+	posting.Init(dgraph.State.Pstore)
+	worker.Config.InMemoryComm = false
+	worker.Init(dgraph.State.Pstore)
 
 	// setup shutdown os signal handler
 	sdCh := make(chan os.Signal, 1)
@@ -814,7 +758,7 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	go worker.StartRaftNodes(*walDir)
+	go worker.StartRaftNodes(dgraph.State.WALstore, bindall)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {

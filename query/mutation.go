@@ -15,8 +15,7 @@ import (
 )
 
 type InternalMutation struct {
-	Edges   []*protos.DirectedEdge
-	NewUids map[string]uint64
+	Edges []*protos.DirectedEdge
 }
 
 func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.DirectedEdge_Op) {
@@ -25,14 +24,16 @@ func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.Directe
 }
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
-	err := addInternalEdge(ctx, m)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Added Internal edges")
+	if worker.Config.ExpandEdge {
+		err := addInternalEdge(ctx, m)
+		if err != nil {
+			return x.Wrapf(err, "While adding internal edges")
+		}
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Added Internal edges")
+		}
 	}
-	if err != nil {
-		return x.Wrapf(err, "While adding internal edges")
-	}
-	if err = worker.MutateOverNetwork(ctx, m); err != nil {
+	if err := worker.MutateOverNetwork(ctx, m); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while MutateOverNetwork: %+v", err)
 		}
@@ -173,16 +174,14 @@ func expandVariables(nq *gql.NQuad,
 	}
 	return nq.ExpandVariables(newUids, subjectUids, objectUids)
 }
-
 func ToInternal(ctx context.Context,
 	nquads gql.NQuads,
-	vars map[string]varValue) (InternalMutation, error) {
+	vars map[string]varValue, newUids map[string]uint64) (InternalMutation, error) {
 	var mr InternalMutation
 	var err error
-	var newUids map[string]uint64
 
-	if newUids, err = AssignUids(ctx, nquads); err != nil {
-		return mr, err
+	if newUids == nil {
+		newUids = make(map[string]uint64)
 	}
 
 	// Wrapper for a pointer to protos.Nquad
@@ -228,33 +227,5 @@ func ToInternal(ctx context.Context,
 		mr.AddEdge(edge, nquads.Types[i])
 	}
 
-	mr.NewUids = make(map[string]uint64)
-	// Strip out _: prefix from the blank node keys.
-	for k, v := range newUids {
-		if strings.HasPrefix(k, "_:") {
-			mr.NewUids[k[2:]] = v
-		}
-	}
 	return mr, nil
-}
-
-// ConvertAndApply materializes edges defined by the mutation
-// and adds them to the database.
-func ConvertAndApply(ctx context.Context, mutation *protos.Mutation) (map[string]uint64, error) {
-	var err error
-	var mr InternalMutation
-
-	set := gql.WrapNQ(mutation.Set, protos.DirectedEdge_SET)
-	del := gql.WrapNQ(mutation.Del, protos.DirectedEdge_DEL)
-	all := set.Add(del)
-
-	if mr, err = ToInternal(ctx, all, nil); err != nil {
-		return nil, err
-	}
-	var m = protos.Mutations{Edges: mr.Edges, Schema: mutation.Schema}
-
-	if err := ApplyMutations(ctx, &m); err != nil {
-		return nil, x.Wrap(err)
-	}
-	return mr.NewUids, nil
 }

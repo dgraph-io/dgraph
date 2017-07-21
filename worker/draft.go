@@ -40,29 +40,66 @@ import (
 )
 
 const (
-	proposalMutation   = 0
-	proposalReindex    = 1
-	proposalMembership = 2
-	ErrorNodeIDExists  = "Error Node ID already exists in the cluster"
+	errorNodeIDExists = "Error Node ID already exists in the cluster"
 )
 
-// peerPool stores the peers per node and the addresses corresponding to them.
-// We then use pool() to get an active connection to those addresses.
+type peerPoolEntry struct {
+	// Never the empty string.  Possibly a bogus address -- bad port number, the value
+	// of *myAddr, or some screwed up Raft config.
+	addr string
+	// An owning reference to a pool for this peer (or nil if addr is sufficiently bogus).
+	poolOrNil *pool
+}
+
+// peerPool stores the peers' addresses and our connections to them.  It has exactly one
+// entry for every peer other than ourselves.  Some of these peers might be unreachable or
+// have bogus (but never empty) addresses.
 type peerPool struct {
 	sync.RWMutex
-	peers map[uint64]string
+	peers map[uint64]peerPoolEntry
 }
 
-func (p *peerPool) Get(id uint64) string {
+var (
+	errNoPeerPoolEntry = fmt.Errorf("no peerPool entry")
+	errNoPeerPool      = fmt.Errorf("no peerPool pool, could not connect")
+)
+
+// getPool returns the non-nil pool for a peer.  This might error even if get(id)
+// succeeds, if the pool is nil.  This happens if the peer was configured so badly (it had
+// a totally bogus addr) we can't make a pool.  (A reasonable refactoring would have us
+// make a pool, one that has a nil gRPC connection.)
+//
+// You must call pools().release on the pool.
+func (p *peerPool) getPool(id uint64) (*pool, error) {
 	p.RLock()
 	defer p.RUnlock()
-	return p.peers[id]
+	ent, ok := p.peers[id]
+	if !ok {
+		return nil, errNoPeerPoolEntry
+	}
+	if ent.poolOrNil == nil {
+		return nil, errNoPeerPool
+	}
+	ent.poolOrNil.AddOwner()
+	return ent.poolOrNil, nil
 }
 
-func (p *peerPool) Set(id uint64, addr string) {
+func (p *peerPool) get(id uint64) (string, bool) {
+	p.RLock()
+	defer p.RUnlock()
+	ret, ok := p.peers[id]
+	return ret.addr, ok
+}
+
+func (p *peerPool) set(id uint64, addr string, pl *pool) {
 	p.Lock()
 	defer p.Unlock()
-	p.peers[id] = addr
+	if old, ok := p.peers[id]; ok {
+		if old.poolOrNil != nil {
+			pools().release(old.poolOrNil)
+		}
+	}
+	p.peers[id] = peerPoolEntry{addr, pl}
 }
 
 type proposalCtx struct {
@@ -179,10 +216,10 @@ func (n *node) ConfState() *raftpb.ConfState {
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
-	fmt.Printf("Node with GroupID: %v, ID: %v\n", gid, id)
+	x.Printf("Node with GroupID: %v, ID: %v\n", gid, id)
 
 	peers := peerPool{
-		peers: make(map[uint64]string),
+		peers: make(map[uint64]peerPoolEntry),
 	}
 	props := proposals{
 		ids: make(map[uint32]*proposalCtx),
@@ -207,6 +244,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 			Storage:         store,
 			MaxSizePerMsg:   4096,
 			MaxInflightMsgs: 256,
+			Logger:          &raft.DefaultLogger{Logger: x.Logger},
 		},
 		applyCh:     make(chan raftpb.Entry, numPendingMutations),
 		peers:       peers,
@@ -222,24 +260,48 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	return n
 }
 
+// Never returns ("", true)
+func (n *node) GetPeer(pid uint64) (string, bool) {
+	return n.peers.get(pid)
+}
+
+// You must call release on the pool.  Can error for some pid's for which GetPeer
+// succeeds.
+func (n *node) GetPeerPool(pid uint64) (*pool, error) {
+	return n.peers.getPool(pid)
+}
+
+// addr must not be empty.
+func (n *node) SetPeer(pid uint64, addr string, poolOrNil *pool) {
+	x.AssertTruef(addr != "", "SetPeer for peer %d has empty addr.", pid)
+	n.peers.set(pid, addr, poolOrNil)
+}
+
+// Connects the node and makes its peerPool refer to the constructed pool and address
+// (possibly updating ourselves from the old address.)  (Unless pid is ourselves, in which
+// case this does nothing.)
 func (n *node) Connect(pid uint64, addr string) {
-	for n == nil {
-		// Sometimes this function causes a panic. My guess is that n is sometimes still uninitialized.
-		time.Sleep(time.Second)
-	}
 	if pid == n.id {
 		return
 	}
-	if paddr := n.peers.Get(pid); paddr == addr {
+	if paddr, ok := n.GetPeer(pid); ok && paddr == addr {
+		// Already connected.
 		return
 	}
-	pools().connect(addr)
-	n.peers.Set(pid, addr)
+	// Here's what we do.  Right now peerPool maps peer node id's to addr values.  If
+	// a *pool can be created, good, but if not, we still create a peerPoolEntry with
+	// a nil *pool.
+	p, ok := pools().connect(addr)
+	if !ok {
+		// TODO: Note this fact in more general peer health info somehow.
+		x.Printf("Peer %d claims same host as me\n", pid)
+	}
+	n.SetPeer(pid, addr, p)
 }
 
 func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
-	addr := n.peers.Get(pid)
-	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
+	addr, ok := n.GetPeer(pid)
+	x.AssertTruef(ok, "Unable to find conn pool for peer: %d", pid)
 	rc := &protos.RaftContext{
 		Addr:  addr,
 		Group: n.raftContext.Group,
@@ -276,18 +338,13 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-var slicePool = sync.Pool{
-	New: func() interface{} {
-		return make([]byte, 256<<10)
-	},
-}
-
 func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
 	}
 	pendingProposals <- struct{}{}
-	defer func() { <-pendingProposals }()
+	x.PendingProposals.Add(1)
+	defer func() { <-pendingProposals; x.PendingProposals.Add(-1) }()
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -322,30 +379,16 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		}
 	}
 
-	slice := slicePool.Get().([]byte)
-	defer slicePool.Put(slice)
-	if len(slice) < proposal.Size() {
-		slice = make([]byte, proposal.Size()+1)
-	}
+	sz := proposal.Size()
+	slice := make([]byte, sz)
 
-	upto, err := proposal.MarshalTo(slice[1:])
+	upto, err := proposal.MarshalTo(slice)
 	if err != nil {
 		return err
 	}
-	// Examining first byte of slice will quickly tell us what kind of
-	// proposal this is.
-	if proposal.RebuildIndex != nil {
-		slice[0] = proposalReindex
-	} else if proposal.Mutations != nil {
-		slice[0] = proposalMutation
-	} else if proposal.Membership != nil {
-		slice[0] = proposalMembership
-	} else {
-		x.Fatalf("Unknown proposal")
-	}
 
 	//	we don't timeout on a mutation which has already been proposed.
-	if err = n.Raft().Propose(ctx, slice[:upto+1]); err != nil {
+	if err = n.Raft().Propose(ctx, slice[:upto]); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
 
@@ -357,10 +400,6 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	} else if proposal.Membership != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Waiting for the proposal: membership update.")
-		}
-	} else if proposal.RebuildIndex != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Waiting for the proposal: RebuildIndex")
 		}
 	} else {
 		log.Fatalf("Unknown proposal")
@@ -380,7 +419,7 @@ func (n *node) send(m raftpb.Message) {
 	data, err := m.Marshal()
 	x.Check(err)
 	if m.Type != raftpb.MsgHeartbeat && m.Type != raftpb.MsgHeartbeatResp {
-		fmt.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
+		x.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
 	}
 	select {
 	case n.messages <- sendmsg{to: m.To, data: data}:
@@ -444,14 +483,14 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	addr := n.peers.Get(to)
-	if len(addr) == 0 {
+	pool, err := n.GetPeerPool(to)
+	if err != nil {
+		// No such peer exists or we got handed a bogus config (bad addr), so we
+		// can't send messages to this peer.
 		return
 	}
-	pool := pools().get(addr)
-	conn, err := pool.Get()
-	x.Check(err)
-	defer pool.Put(conn)
+	defer pools().release(pool)
+	conn := pool.Get()
 
 	c := protos.NewWorkerClient(conn)
 	p := &protos.Payload{Data: data}
@@ -472,9 +511,9 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
-func (n *node) processMutation(ctx context.Context, e raftpb.Entry, m *protos.Mutations) error {
+func (n *node) processMutation(ctx context.Context, index uint64, m *protos.Mutations) error {
 	// TODO: Need to pass node and entry index.
-	rv := x.RaftValue{Group: n.gid, Index: e.Index}
+	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
 	if err := runMutations(ctx, m.Edges); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -498,29 +537,24 @@ func (n *node) processSchemaMutations(e raftpb.Entry, m *protos.Mutations) error
 	return nil
 }
 
-func (n *node) processMembership(e raftpb.Entry, mm *protos.Membership) error {
+func (n *node) processMembership(index uint64, mm *protos.Membership) error {
 	x.AssertTrue(n.gid == 0)
 
 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
 		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
-	groups().applyMembershipUpdate(e.Index, mm)
+	groups().applyMembershipUpdate(index, mm)
 	return nil
 }
 
-func (n *node) process(e raftpb.Entry, pending chan struct{}) {
+func (n *node) process(index uint64, proposal *protos.Proposal, pending chan struct{}) {
 	defer func() {
-		n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
-		posting.SyncMarkFor(n.gid).Ch <- x.Mark{Index: e.Index, Done: true}
+		n.applied.Ch <- x.Mark{Index: index, Done: true}
+		posting.SyncMarkFor(n.gid).Ch <- x.Mark{Index: index, Done: true}
 	}()
 
-	if e.Type != raftpb.EntryNormal {
-		return
-	}
-
 	pending <- struct{}{} // This will block until we can write to it.
-	var proposal protos.Proposal
-	x.AssertTrue(len(e.Data) > 0)
-	x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
+	x.ActiveMutations.Add(1)
+	defer x.ActiveMutations.Add(-1)
 
 	var err error
 	if proposal.Mutations != nil {
@@ -529,9 +563,9 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 		if ctx, has = n.props.Ctx(proposal.Id); !has {
 			ctx = n.ctx
 		}
-		err = n.processMutation(ctx, e, proposal.Mutations)
+		err = n.processMutation(ctx, index, proposal.Mutations)
 	} else if proposal.Membership != nil {
-		err = n.processMembership(e, proposal.Membership)
+		err = n.processMembership(index, proposal.Membership)
 	}
 	n.props.Done(proposal.Id, err)
 	<-pending // Release one.
@@ -568,13 +602,21 @@ func (n *node) processApplyCh() {
 			continue
 		}
 
+		x.AssertTrue(e.Type == raftpb.EntryNormal)
+
+		// The following effort is only to apply schema in a blocking fashion.
+		// Once we have a scheduler, this should go away.
+		// TODO: Move the following to scheduler.
+
 		// We derive the schema here if it's not present
 		// Since raft committed logs are serialized, we can derive
 		// schema here without any locking
-		var proposal protos.Proposal
-		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
+		proposal := &protos.Proposal{}
+		if err := proposal.Unmarshal(e.Data); err != nil {
+			log.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
+		}
 
-		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {
+		if proposal.Mutations != nil {
 			// process schema mutations before
 			if proposal.Mutations.Schema != nil {
 				// Wait for applied watermark to reach till previous index
@@ -608,7 +650,7 @@ func (n *node) processApplyCh() {
 			}
 		}
 
-		go n.process(e, pending)
+		go n.process(e.Index, proposal, pending)
 	}
 }
 
@@ -634,13 +676,15 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 	n.store.Append(es)
 }
 
-func (n *node) retrieveSnapshot(rc protos.RaftContext) {
-	addr := n.peers.Get(rc.Id)
-	x.AssertTruef(addr != "", "Should have the address for %d", rc.Id)
-	pool := pools().get(addr)
-	x.AssertTruef(pool != nil, "Pool shouldn't be nil for address: %v for id: %v", addr, rc.Id)
+func (n *node) retrieveSnapshot(peerID uint64) {
+	pool, err := n.GetPeerPool(peerID)
+	if err != nil {
+		// err is just going to be errNoConnection
+		log.Fatalf("Cannot retrieve snapshot from peer %v, no connection.  Error: %v\n",
+			peerID, err)
+	}
+	defer pools().release(pool)
 
-	x.AssertTrue(rc.Group == n.gid)
 	// Get index of last committed.
 	lastIndex, err := n.store.LastIndex()
 	x.Checkf(err, "Error while getting last index")
@@ -652,7 +696,11 @@ func (n *node) retrieveSnapshot(rc protos.RaftContext) {
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
 	posting.EvictGroup(n.gid)
-	x.Check2(populateShard(n.ctx, pool, n.gid))
+	if _, err := populateShard(n.ctx, pool, n.gid); err != nil {
+		// TODO: We definitely don't want to just fall flat on our face if we can't
+		// retrieve a simple snapshot.
+		log.Fatalf("Cannot retrieve snapshot from peer %v, error: %v\n", peerID, err)
+	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
@@ -699,12 +747,13 @@ func (n *node) Run() {
 				// snapshot that I created. Only the former case should be handled.
 				var rc protos.RaftContext
 				x.Check(rc.Unmarshal(rd.Snapshot.Data))
+				x.AssertTrue(rc.Group == n.gid)
 				if rc.Id != n.id {
-					fmt.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
-					n.retrieveSnapshot(rc)
-					fmt.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
+					x.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
+					n.retrieveSnapshot(rc.Id)
+					x.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
 				} else {
-					fmt.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
+					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
 				}
 			}
 			if len(rd.CommittedEntries) > 0 {
@@ -735,8 +784,8 @@ func (n *node) Run() {
 			}
 
 		case <-n.stop:
-			if peerId, has := groups().Peer(n.gid, *raftId); has && n.AmLeader() {
-				n.Raft().TransferLeadership(n.ctx, *raftId, peerId)
+			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
+				n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 				go func() {
 					select {
 					case <-n.ctx.Done(): // time out
@@ -789,7 +838,7 @@ func (n *node) snapshotPeriodically() {
 	for {
 		select {
 		case <-ticker.C:
-			n.snapshot(*maxPendingCount)
+			n.snapshot(Config.MaxPendingCount)
 
 		case <-n.done:
 			return
@@ -831,10 +880,13 @@ func (n *node) joinPeers() {
 	// Get leader information for MY group.
 	pid, paddr := groups().Leader(n.gid)
 	n.Connect(pid, paddr)
-	fmt.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
+	x.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
 
-	pool := pools().get(paddr)
-	x.AssertTruef(pool != nil, "Unable to get pool for addr: %q for peer: %d", paddr, pid)
+	pool, err := pools().get(paddr)
+	if err != nil {
+		log.Fatalf("Unable to get pool for addr: %q for peer: %d, error: %v\n", paddr, pid, err)
+	}
+	defer pools().release(pool)
 
 	// Bring the instance up to speed first.
 	// Raft would decide whether snapshot needs to fetched or not
@@ -842,9 +894,7 @@ func (n *node) joinPeers() {
 	// _, err := populateShard(n.ctx, pool, n.gid)
 	// x.Checkf(err, "Error while populating shard")
 
-	conn, err := pool.Get()
-	x.Check(err)
-	defer pool.Put(conn)
+	conn := pool.Get()
 
 	c := protos.NewWorkerClient(conn)
 	x.Printf("Calling JoinCluster")
@@ -863,7 +913,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	}
 	var term, idx uint64
 	if !raft.IsEmptySnap(sp) {
-		fmt.Printf("Found Snapshot: %+v\n", sp)
+		x.Printf("Found Snapshot: %+v\n", sp)
 		restart = true
 		if rerr = n.store.ApplySnapshot(sp); rerr != nil {
 			return
@@ -880,7 +930,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 		return
 	}
 	if !raft.IsEmptyHardState(hd) {
-		fmt.Printf("Found hardstate: %+v\n", sp)
+		x.Printf("Found hardstate: %+v\n", sp)
 		restart = true
 		if rerr = n.store.SetHardState(hd); rerr != nil {
 			return
@@ -892,7 +942,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	if rerr != nil {
 		return
 	}
-	fmt.Printf("Group %d found %d entries\n", n.gid, len(es))
+	x.Printf("Group %d found %d entries\n", n.gid, len(es))
 	if len(es) > 0 {
 		restart = true
 	}
@@ -906,11 +956,11 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	x.Check(err)
 
 	if restart {
-		fmt.Printf("Restarting node for group: %d\n", n.gid)
+		x.Printf("Restarting node for group: %d\n", n.gid)
 		n.SetRaft(raft.RestartNode(n.cfg))
 
 	} else {
-		fmt.Printf("New Node for group: %d\n", n.gid)
+		x.Printf("New Node for group: %d\n", n.gid)
 		if groups().HasPeer(n.gid) {
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.cfg, nil))
@@ -938,11 +988,19 @@ func (n *node) AmLeader() bool {
 	return r.Status().Lead == r.Status().ID
 }
 
-func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error {
+var (
+	errNoNode = fmt.Errorf("No node has been set up yet")
+)
+
+func applyMessage(ctx context.Context, msg raftpb.Message) error {
 	var rc protos.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
 	node := groups().Node(rc.Group)
-	// TODO: Handle the case where node isn't present for this group.
+	if node == nil {
+		// Maybe we went down, went back up, reconnected, and got an RPC
+		// message before we set up Raft?
+		return errNoNode
+	}
 	node.Connect(msg.From, rc.Addr)
 
 	c := make(chan error, 1)
@@ -977,9 +1035,9 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 			x.Check(err)
 		}
 		if msg.Type != raftpb.MsgHeartbeat && msg.Type != raftpb.MsgHeartbeatResp {
-			fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
+			x.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
-		if err := w.applyMessage(ctx, msg); err != nil {
+		if err := applyMessage(ctx, msg); err != nil {
 			return &protos.Payload{}, err
 		}
 		idx += sz
@@ -994,8 +1052,8 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*
 	}
 
 	// Best effor reject
-	if _, found := groups().Server(rc.Id, rc.Group); found || rc.Id == *raftId {
-		return &protos.Payload{}, x.Errorf(ErrorNodeIDExists)
+	if _, found := groups().Server(rc.Id, rc.Group); found || rc.Id == Config.RaftId {
+		return &protos.Payload{}, x.Errorf(errorNodeIDExists)
 	}
 
 	node := groups().Node(rc.Group)

@@ -10,14 +10,17 @@ idx: 1
 # Groups to be served by this instance.
 groups: "0,1"
 
-# Port to run server on. (default 8080)
+# Port to run http server on. (default 8080)
 port: 8080
+
+# Port to run grpc server on. (default 9080)
+grpc_port: 9080
 
 # Port used by worker for internal communication.
 workerport: 12345
 
-# If RAM usage exceeds this, we stop the world, and flush our buffers.
-stw_ram_mb: 4096
+# If RAM usage exceeds this, we evict LRU cache till its below the value.
+max_memory_mb: 1024
 
 # The ratio of queries to trace.
 trace: 1.0

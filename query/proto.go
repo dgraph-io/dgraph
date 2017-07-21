@@ -18,6 +18,7 @@
 package query
 
 import (
+	"encoding/base64"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -46,6 +47,15 @@ func toProtoValue(v types.Val) *protos.Value {
 	case types.DateTimeID:
 		val := v.Value.(time.Time)
 		return &protos.Value{&protos.Value_StrVal{val.Format(time.RFC3339)}}
+
+	case types.BinaryID:
+		val := v.Value.([]byte)
+		dst := make([]byte, base64.StdEncoding.DecodedLen(len(val)))
+		n, _ := base64.StdEncoding.Decode(dst, val)
+		if n < len(dst) {
+			dst = dst[:n]
+		}
+		return &protos.Value{&protos.Value_BytesVal{dst}}
 
 	case types.GeoID:
 		b := types.ValueForType(types.BinaryID)

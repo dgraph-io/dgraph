@@ -21,6 +21,7 @@ import (
 	"math"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
@@ -76,6 +77,66 @@ func TestFullTextTokenizer(t *testing.T) {
 	require.Equal(t, []string{encodeToken("stem", id), encodeToken("work", id)}, tokens)
 }
 
+func TestHourTokenizer(t *testing.T) {
+	var err error
+	tokenizer, has := GetTokenizer("hour")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.DateTimeID)
+	val.Value, err = time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
+	require.NoError(t, err)
+
+	tokens, err := tokenizer.Tokens(val)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(tokens))
+	require.Equal(t, 1+2*4, len(tokens[0]))
+}
+
+func TestDayTokenizer(t *testing.T) {
+	var err error
+	tokenizer, has := GetTokenizer("day")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.DateTimeID)
+	val.Value, err = time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
+	require.NoError(t, err)
+
+	tokens, err := tokenizer.Tokens(val)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(tokens))
+	require.Equal(t, 1+2*3, len(tokens[0]))
+}
+
+func TestMonthTokenizer(t *testing.T) {
+	var err error
+	tokenizer, has := GetTokenizer("month")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.DateTimeID)
+	val.Value, err = time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
+	require.NoError(t, err)
+
+	tokens, err := tokenizer.Tokens(val)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(tokens))
+	require.Equal(t, 1+2*2, len(tokens[0]))
+}
+
+func TestDateTimeTokenizer(t *testing.T) {
+	var err error
+	tokenizer, has := GetTokenizer("datetime")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.DateTimeID)
+	val.Value, err = time.Parse(time.RFC3339, "2017-01-01T12:12:12Z")
+	require.NoError(t, err)
+
+	tokens, err := tokenizer.Tokens(val)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(tokens))
+	require.Equal(t, 1+2, len(tokens[0]))
+}
+
 func TestFullTextTokenizerLang(t *testing.T) {
 	tokenizer, has := GetTokenizer(FtsTokenizerName("de"))
 	require.True(t, has)
@@ -87,7 +148,8 @@ func TestFullTextTokenizerLang(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
-	require.Equal(t, []string{encodeToken("katz", id), encodeToken("auffass", id)}, tokens)
+	// tokens should be sorted and unique
+	require.Equal(t, []string{encodeToken("auffass", id), encodeToken("katz", id)}, tokens)
 }
 
 func TestTermTokenizer(t *testing.T) {
@@ -114,7 +176,7 @@ func TestTrigramTokenizer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 11, len(tokens))
 	id := tokenizer.Identifier()
-	require.Equal(t, []string{
+	expected := []string{
 		encodeToken("Dgr", id),
 		encodeToken("gra", id),
 		encodeToken("rap", id),
@@ -126,5 +188,22 @@ func TestTrigramTokenizer(t *testing.T) {
 		encodeToken("ock", id),
 		encodeToken("cks", id),
 		encodeToken("ks!", id),
-	}, tokens)
+	}
+	sort.Strings(expected)
+	require.Equal(t, expected, tokens)
+}
+
+func TestGetBleveTokens(t *testing.T) {
+	val := types.ValueForType(types.StringID)
+	val.Value = "Our chief weapon is surprise...surprise and fear...fear and surprise...." +
+		"Our two weapons are fear and surprise...and ruthless efficiency.... " +
+		"Our three weapons are fear, surprise, and ruthless efficiency..."
+	tokens, err := getBleveTokens(FTSTokenizerName, 0x20, val) // use space as identifier
+	require.NoError(t, err)
+
+	expected := []string{" chief", " weapon", " surpris", " fear", " ruthless", " effici"}
+	sort.Strings(expected)
+
+	// ensure that tokens are sorted and unique
+	require.Equal(t, expected, tokens)
 }

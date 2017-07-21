@@ -132,6 +132,11 @@ func (p ParsedKey) IsReverse() bool {
 	return p.byteType == byteReverse
 }
 
+func (p ParsedKey) IsCount() bool {
+	return p.byteType == byteCount ||
+		p.byteType == byteCountRev
+}
+
 func (p ParsedKey) IsIndex() bool {
 	return p.byteType == byteIndex
 }
@@ -219,6 +224,12 @@ func SchemaPrefix() []byte {
 	buf := make([]byte, 1)
 	buf[0] = byteSchema
 	return buf
+}
+
+func ParseAttr(key []byte) string {
+	sz := int(binary.BigEndian.Uint16(key[1:3]))
+	k := key[3:]
+	return string(k[:sz])
 }
 
 func Parse(key []byte) *ParsedKey {

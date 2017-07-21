@@ -9,6 +9,12 @@
 			"revisionTime": "2014-07-04T15:26:43Z"
 		},
 		{
+			"checksumSHA1": "spyv5/YFBjYyZLZa1U2LBfDR8PM=",
+			"path": "github.com/beorn7/perks/quantile",
+			"revision": "4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9",
+			"revisionTime": "2016-08-04T10:47:26Z"
+		},
+		{
 			"checksumSHA1": "ywqbUZb6r4Mxq2MBAbv/vaYcmdw=",
 			"path": "github.com/blevesearch/bleve/analysis",
 			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
@@ -123,6 +129,12 @@
 			"revisionTime": "2017-01-10T19:26:07Z"
 		},
 		{
+			"checksumSHA1": "7gK+lSShSu1NRw83/A95BcgMqsI=",
+			"path": "github.com/codahale/hdrhistogram",
+			"revision": "3a0bb77429bd3a61596f5e8a3172445844342120",
+			"revisionTime": "2016-10-10T02:54:55Z"
+		},
+		{
 			"checksumSHA1": "jw+XDfPJgogfSPCsuebqFZj/GJc=",
 			"path": "github.com/coreos/etcd/raft",
 			"revision": "1ebeef5cbfe69c0dab2bc701ee5307eed7a7d8d2",
@@ -213,6 +225,12 @@
 			"revisionTime": "2015-06-17T15:18:51Z"
 		},
 		{
+			"checksumSHA1": "bKMZjd2wPw13VwoE7mBeSv5djFA=",
+			"path": "github.com/matttproud/golang_protobuf_extensions/pbutil",
+			"revision": "c12348ce28de40eed0136aa2b644d0ee0650e56c",
+			"revisionTime": "2016-04-24T11:30:07Z"
+		},
+		{
 			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
 			"path": "github.com/pkg/errors",
 			"revision": "17b591df37844cde689f4d5813e5cea0927d8dd2",
@@ -229,6 +247,48 @@
 			"path": "github.com/pmezard/go-difflib/difflib",
 			"revision": "792786c7400a136282c1664665ae0a8db921c6c2",
 			"revisionTime": "2016-01-10T10:55:54Z"
+		},
+		{
+			"checksumSHA1": "TDY/1DFMxN5M6p9BgqR6IqZy6AI=",
+			"path": "github.com/prometheus/client_golang/prometheus",
+			"revision": "310ce84375bb84c5cbbf0d05069c92daa5673740",
+			"revisionTime": "2017-06-30T14:48:34Z"
+		},
+		{
+			"checksumSHA1": "DvwvOlPNAgRntBzt3b3OSRMS2N4=",
+			"path": "github.com/prometheus/client_model/go",
+			"revision": "6f3806018612930941127f2a7c6c453ba2c527d2",
+			"revisionTime": "2017-02-16T18:52:47Z"
+		},
+		{
+			"checksumSHA1": "Wtpzndm/+bdwwNU5PCTfb4oUhc8=",
+			"path": "github.com/prometheus/common/expfmt",
+			"revision": "0866df4b85a18d652b6965be022d007cdf076822",
+			"revisionTime": "2017-06-21T12:10:01Z"
+		},
+		{
+			"checksumSHA1": "GWlM3d2vPYyNATtTFgftS10/A9w=",
+			"path": "github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg",
+			"revision": "0866df4b85a18d652b6965be022d007cdf076822",
+			"revisionTime": "2017-06-21T12:10:01Z"
+		},
+		{
+			"checksumSHA1": "3VoqH7TFfzA6Ds0zFzIbKCUvBmw=",
+			"path": "github.com/prometheus/common/model",
+			"revision": "0866df4b85a18d652b6965be022d007cdf076822",
+			"revisionTime": "2017-06-21T12:10:01Z"
+		},
+		{
+			"checksumSHA1": "ihxJIjxtbEYdQKwA0D0nRipj95I=",
+			"path": "github.com/prometheus/procfs",
+			"revision": "e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2",
+			"revisionTime": "2017-07-03T10:12:42Z"
+		},
+		{
+			"checksumSHA1": "xCiFAAwVTrjsfZT1BIJQ3DgeNCY=",
+			"path": "github.com/prometheus/procfs/xfs",
+			"revision": "e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2",
+			"revisionTime": "2017-07-03T10:12:42Z"
 		},
 		{
 			"checksumSHA1": "Q2V7Zs3diLmLfmfbiuLpSxETSuY=",

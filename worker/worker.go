@@ -20,9 +20,9 @@
 package worker
 
 import (
-	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"sync"
 	"time"
@@ -37,29 +37,33 @@ import (
 )
 
 var (
-	workerPort = flag.Int("workerport", 12345,
-		"Port used by worker for internal communication.")
-	exportPath = flag.String("export", "export",
-		"Folder in which to store exports.")
-	backupPath = flag.String("backup", "backup",
-		"Folder in which to store backups.")
-	numPendingProposals = flag.Int("pending_proposals", 2000,
-		"Number of pending mutation proposals. Useful for rate limiting.")
-	Tracing          = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	pstore           *badger.KV
 	workerServer     *grpc.Server
 	leaseGid         uint32
 	pendingProposals chan struct{}
+	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
+	// so that the nodes which have lagged behind leader can just replay entries instead of
+	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
+	// are taken
+
+	emptyMembershipUpdate protos.MembershipUpdate
 )
+
+func workerPort() int {
+	return x.Config.PortOffset + Config.BaseWorkerPort
+}
 
 func Init(ps *badger.KV) {
 	pstore = ps
 	// needs to be initialized after group config
 	leaseGid = group.BelongsTo("_lease_")
-	pendingProposals = make(chan struct{}, *numPendingProposals)
-	workerServer = grpc.NewServer(
-		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
-		grpc.MaxSendMsgSize(x.GrpcMaxSize))
+	pendingProposals = make(chan struct{}, Config.NumPendingProposals)
+	if !Config.InMemoryComm {
+		workerServer = grpc.NewServer(
+			grpc.MaxRecvMsgSize(x.GrpcMaxSize),
+			grpc.MaxSendMsgSize(x.GrpcMaxSize),
+			grpc.MaxConcurrentStreams(math.MaxInt32))
+	}
 }
 
 // grpcWorker struct implements the gRPC server interface.
@@ -91,17 +95,21 @@ func (w *grpcWorker) Echo(ctx context.Context, in *protos.Payload) (*protos.Payl
 // RunServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
 func RunServer(bindall bool) {
+	if Config.InMemoryComm {
+		return
+	}
+
 	laddr := "localhost"
 	if bindall {
 		laddr = "0.0.0.0"
 	}
 	var err error
-	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, *workerPort))
+	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, workerPort()))
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
 		return
 	}
-	log.Printf("Worker listening at address: %v", ln.Addr())
+	x.Printf("Worker listening at address: %v", ln.Addr())
 
 	protos.RegisterWorkerServer(workerServer, &grpcWorker{})
 	workerServer.Serve(ln)
@@ -114,8 +122,10 @@ func StoreStats() string {
 
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
 func BlockingStop() {
-	stopAllNodes()              // blocking stop all nodes
-	workerServer.GracefulStop() // blocking stop server
+	stopAllNodes()           // blocking stop all nodes
+	if workerServer != nil { // possible if Config.InMemoryComm == true
+		workerServer.GracefulStop() // blocking stop server
+	}
 	// blocking sync all marks
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()

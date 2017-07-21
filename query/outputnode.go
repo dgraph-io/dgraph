@@ -364,7 +364,9 @@ func (fj *fastJsonNode) IsEmpty() bool {
 func valToBytes(v types.Val) ([]byte, error) {
 	switch v.Tid {
 	case types.BinaryID:
-		return v.Value.([]byte), nil
+		// Encode to base64 and add "" around the value.
+		b := fmt.Sprintf("%q", v.Value.([]byte))
+		return []byte(b), nil
 	case types.IntID:
 		return []byte(fmt.Sprintf("%d", v.Value)), nil
 	case types.FloatID:
@@ -517,7 +519,6 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	if sg.uidMatrix == nil {
 		return nil
 	}
-	lenList := len(sg.uidMatrix[0].Uids)
 
 	if sg.Params.uidCount != "" {
 		n.addCountAtRoot(sg)
@@ -528,6 +529,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		return nil
 	}
 
+	lenList := len(sg.uidMatrix[0].Uids)
 	for i := 0; i < lenList; i++ {
 		uid := sg.uidMatrix[0].Uids[i]
 		if algo.IndexOf(sg.DestUIDs, uid) < 0 {

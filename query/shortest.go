@@ -21,6 +21,7 @@ import (
 	"container/heap"
 	"context"
 	"math"
+	"sync"
 
 	"golang.org/x/net/trace"
 
@@ -47,6 +48,12 @@ type Item struct {
 	hop   int     // number of hops taken to reach this node.
 	index int
 	path  route // used in k shortest path.
+}
+
+var pathPool = sync.Pool{
+	New: func() interface{} {
+		return []pathInfo{}
+	},
 }
 
 var ErrStop = x.Errorf("STOP")
@@ -170,27 +177,36 @@ func (start *SubGraph) expandOut(ctx context.Context,
 		}
 
 		for _, sg := range exec {
-			// Send the destuids in res chan.
-			for mIdx, fromUID := range sg.SrcUIDs.Uids {
-				for lIdx, toUID := range sg.uidMatrix[mIdx].Uids {
-					if adjacencyMap[fromUID] == nil {
-						adjacencyMap[fromUID] = make(map[uint64]mapItem)
+			select {
+			case <-ctx.Done():
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+				}
+				rch <- ctx.Err()
+				return
+			default:
+				// Send the destuids in res chan.
+				for mIdx, fromUID := range sg.SrcUIDs.Uids {
+					for lIdx, toUID := range sg.uidMatrix[mIdx].Uids {
+						if adjacencyMap[fromUID] == nil {
+							adjacencyMap[fromUID] = make(map[uint64]mapItem)
+						}
+						// The default cost we'd use is 1.
+						cost, facet, err := sg.getCost(mIdx, lIdx)
+						if err == ErrFacet {
+							// Ignore the edge and continue.
+							continue
+						} else if err != nil {
+							rch <- err
+							return
+						}
+						adjacencyMap[fromUID][toUID] = mapItem{
+							cost:  cost,
+							facet: facet,
+							attr:  sg.Attr,
+						}
+						numEdges++
 					}
-					// The default cost we'd use is 1.
-					cost, facet, err := sg.getCost(mIdx, lIdx)
-					if err == ErrFacet {
-						// Ignore the edge and continue.
-						continue
-					} else if err != nil {
-						rch <- err
-						return
-					}
-					adjacencyMap[fromUID][toUID] = mapItem{
-						cost:  cost,
-						facet: facet,
-						attr:  sg.Attr,
-					}
-					numEdges++
 				}
 			}
 		}
@@ -207,22 +223,31 @@ func (start *SubGraph) expandOut(ctx context.Context,
 			if len(sg.DestUIDs.Uids) == 0 {
 				continue
 			}
-			for _, child := range start.Children {
-				temp := new(SubGraph)
-				temp.copyFiltersRecurse(child)
-
-				temp.SrcUIDs = sg.DestUIDs
-				// Remove those nodes which we have already traversed. As this cannot be
-				// in the path again.
-				algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
-					_, ok := adjacencyMap[uid]
-					return !ok
-				})
-				if len(temp.SrcUIDs.Uids) == 0 {
-					continue
+			select {
+			case <-ctx.Done():
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
 				}
-				sg.Children = append(sg.Children, temp)
-				out = append(out, temp)
+				rch <- ctx.Err()
+				return
+			default:
+				for _, child := range start.Children {
+					temp := new(SubGraph)
+					temp.copyFiltersRecurse(child)
+
+					temp.SrcUIDs = sg.DestUIDs
+					// Remove those nodes which we have already traversed. As this cannot be
+					// in the path again.
+					algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
+						_, ok := adjacencyMap[uid]
+						return !ok
+					})
+					if len(temp.SrcUIDs.Uids) == 0 {
+						continue
+					}
+					sg.Children = append(sg.Children, temp)
+					out = append(out, temp)
+				}
 			}
 		}
 
@@ -244,6 +269,142 @@ func (temp *SubGraph) copyFiltersRecurse(sg *SubGraph) {
 		tempChild.copyFiltersRecurse(fc)
 		temp.Filters = append(temp.Filters, tempChild)
 	}
+}
+
+func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
+	var err error
+	if sg.Params.Alias != "shortest" {
+		return nil, x.Errorf("Invalid shortest path query")
+	}
+
+	numPaths := sg.Params.numPaths
+	var kroutes []route
+	pq := make(priorityQueue, 0)
+	heap.Init(&pq)
+
+	// Initialize and push the source node.
+	srcNode := &Item{
+		uid:  sg.Params.From,
+		cost: 0,
+		hop:  0,
+		path: route{[]pathInfo{pathInfo{uid: sg.Params.From}}},
+	}
+	heap.Push(&pq, srcNode)
+
+	numHops := -1
+	maxHops := int(sg.Params.ExploreDepth)
+	isPossible := false
+	if maxHops == 0 {
+		maxHops = int(math.MaxInt32)
+	}
+	next := make(chan bool, 2)
+	//cycles := 0
+	expandErr := make(chan error, 2)
+	adjacencyMap := make(map[uint64]map[uint64]mapItem)
+	go sg.expandOut(ctx, adjacencyMap, next, expandErr)
+
+	// In k shortest path we can't have this. We store the path till a node in every
+	// node.
+	// map to store the min cost and parent of nodes.
+	var stopExpansion bool
+	for pq.Len() > 0 {
+		item := heap.Pop(&pq).(*Item)
+		if item.uid == sg.Params.To {
+			// Add path to list.
+			kroutes = append(kroutes, item.path)
+			if len(kroutes) == numPaths {
+				// We found the required number of paths.
+				break
+			}
+		}
+		if item.hop > numHops && numHops < maxHops {
+			// Explore the next level by calling processGraph and add them
+			// to the queue.
+			if !stopExpansion {
+				next <- true
+				select {
+				case err = <-expandErr:
+					if err != nil {
+						if err == ErrTooBig {
+							return nil, err
+						} else if err == ErrStop {
+							stopExpansion = true
+							if tr, ok := trace.FromContext(ctx); ok {
+								tr.LazyPrintf("Error while processing child task: %+v", err)
+							}
+						} else {
+							return nil, err
+						}
+					}
+				case <-ctx.Done():
+					if tr, ok := trace.FromContext(ctx); ok {
+						tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+					}
+					return nil, ctx.Err()
+				}
+				numHops++
+			}
+		}
+		select {
+		case <-ctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+			}
+			return nil, ctx.Err()
+		default:
+			if stopExpansion {
+				// Allow loops once we have found one path.
+				if !isPossible {
+					continue
+				}
+			}
+		}
+		neighbours := adjacencyMap[item.uid]
+		for toUid, info := range neighbours {
+			cost := info.cost
+			curPath := pathPool.Get().([]pathInfo)
+			if cap(curPath) < len(item.path.route)+1 {
+				// We can't use it due to insufficient capacity. Put it back.
+				pathPool.Put(curPath)
+				curPath = make([]pathInfo, len(item.path.route)+1)
+			} else {
+				// Use the curPath from pathPool. Set length appropriately.
+				curPath = curPath[:len(item.path.route)+1]
+			}
+			n := copy(curPath, item.path.route)
+			curPath[n] = pathInfo{
+				uid:   toUid,
+				attr:  info.attr,
+				facet: info.facet,
+			}
+			node := &Item{
+				uid:  toUid,
+				cost: item.cost + cost,
+				hop:  item.hop + 1,
+				path: route{curPath},
+			}
+			if node.uid == sg.Params.To {
+				isPossible = true
+			}
+			heap.Push(&pq, node)
+		}
+		// Return the popped nodes path to pool.
+		pathPool.Put(item.path.route)
+	}
+
+	next <- false
+
+	if len(kroutes) == 0 {
+		sg.DestUIDs = &protos.List{}
+		return nil, nil
+	}
+	var res []uint64
+	for _, it := range kroutes[0].route {
+		res = append(res, it.uid)
+	}
+	sg.DestUIDs.Uids = res
+	shortestSg := createkroutesubgraph(ctx, kroutes)
+	return shortestSg, nil
 }
 
 // Djikstras algorithm pseudocode for reference.
@@ -273,21 +434,20 @@ func (temp *SubGraph) copyFiltersRecurse(sg *SubGraph) {
 // 22
 // 23     return dist[], prev[]
 
-// ShortestPath computes the k shortest paths in ascending
-// order of weights. It returns a maximum of k paths.
 func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
 	if sg.Params.Alias != "shortest" {
 		return nil, x.Errorf("Invalid shortest path query")
 	}
-
 	numPaths := sg.Params.numPaths
 	if numPaths == 0 {
 		// Return 1 path by default.
 		numPaths = 1
 	}
 
-	var kroutes []route
+	if numPaths > 1 {
+		return KShortestPath(ctx, sg)
+	}
 	pq := make(priorityQueue, 0)
 	heap.Init(&pq)
 
@@ -296,7 +456,6 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		uid:  sg.Params.From,
 		cost: 0,
 		hop:  0,
-		path: route{[]pathInfo{pathInfo{uid: sg.Params.From}}},
 	}
 	heap.Push(&pq, srcNode)
 
@@ -305,100 +464,181 @@ func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	if maxHops == 0 {
 		maxHops = int(math.MaxInt32)
 	}
-	cycles := 0
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
 	go sg.expandOut(ctx, adjacencyMap, next, expandErr)
 
-	// In k shortest path we can't have this. We store the path till a node in every
-	// node.
 	// map to store the min cost and parent of nodes.
+	dist := make(map[uint64]nodeInfo)
+	dist[srcNode.uid] = nodeInfo{
+		parent: 0,
+		node:   srcNode,
+		mapItem: mapItem{
+			cost: 0,
+		},
+	}
+
 	var stopExpansion bool
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*Item)
 		if item.uid == sg.Params.To {
-			// Add path to list.
-			kroutes = append(kroutes, item.path)
-			if len(kroutes) == numPaths {
-				// We found the required number of paths.
-				break
-			}
+			break
 		}
 		if item.hop > numHops && numHops < maxHops {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
 			if !stopExpansion {
 				next <- true
-
-				select {
-				case err = <-expandErr:
-					if err != nil {
-						if err == ErrTooBig {
-							return nil, err
-						} else if err == ErrStop {
-							stopExpansion = true
-						} else {
-							if tr, ok := trace.FromContext(ctx); ok {
-								tr.LazyPrintf("Error while processing child task: %+v", err)
-							}
-							return nil, err
+			}
+			select {
+			case err = <-expandErr:
+				if err != nil {
+					if err == ErrTooBig {
+						return nil, err
+					} else if err == ErrStop {
+						stopExpansion = true
+					} else {
+						if tr, ok := trace.FromContext(ctx); ok {
+							tr.LazyPrintf("Error while processing child task: %+v", err)
+						}
+						return nil, err
+					}
+				}
+			case <-ctx.Done():
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+				}
+				return nil, ctx.Err()
+			}
+			numHops++
+		}
+		select {
+		case <-ctx.Done():
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
+			}
+			return nil, ctx.Err()
+		default:
+			if !stopExpansion {
+				neighbours := adjacencyMap[item.uid]
+				for toUid, info := range neighbours {
+					cost := info.cost
+					d, ok := dist[toUid]
+					if ok && d.cost <= item.cost+cost {
+						continue
+					}
+					if !ok {
+						// This is the first time we're seeing this node. So
+						// create a new node and add it to the heap and map.
+						node := &Item{
+							uid:  toUid,
+							cost: item.cost + cost,
+							hop:  item.hop + 1,
+						}
+						heap.Push(&pq, node)
+						dist[toUid] = nodeInfo{
+							parent: item.uid,
+							node:   node,
+							mapItem: mapItem{
+								cost:  item.cost + cost,
+								attr:  info.attr,
+								facet: info.facet,
+							},
+						}
+					} else {
+						// We've already seen this node. So, just update the cost
+						// and fix the priority in the heap and map.
+						node := dist[toUid].node
+						node.cost = item.cost + cost
+						node.hop = item.hop + 1
+						heap.Fix(&pq, node.index)
+						// Update the map with new values.
+						dist[toUid] = nodeInfo{
+							parent: item.uid,
+							node:   node,
+							mapItem: mapItem{
+								cost:  item.cost + cost,
+								attr:  info.attr,
+								facet: info.facet,
+							},
 						}
 					}
-				case <-ctx.Done():
-					if tr, ok := trace.FromContext(ctx); ok {
-						tr.LazyPrintf("Context done before full execution: %+v", ctx.Err())
-					}
-					return nil, ctx.Err()
 				}
-				numHops++
 			}
-
-		}
-		if stopExpansion {
-			if numPaths == 1 {
-				continue
-			}
-			// TODO: Check if we can have a better condition to avoid infinite loops in case of
-			// no paths.
-			cycles++
-			if cycles > numPaths {
-				continue
-			}
-		}
-		neighbours := adjacencyMap[item.uid]
-		for toUid, info := range neighbours {
-			cost := info.cost
-			curPath := make([]pathInfo, len(item.path.route)+1)
-			n := copy(curPath, item.path.route)
-			curPath[n] = pathInfo{
-				uid:   toUid,
-				attr:  info.attr,
-				facet: info.facet,
-			}
-			node := &Item{
-				uid:  toUid,
-				cost: item.cost + cost,
-				hop:  item.hop + 1,
-				path: route{curPath},
-			}
-			heap.Push(&pq, node)
 		}
 	}
 
 	next <- false
-
-	if len(kroutes) == 0 {
+	// Go through the distance map to find the path.
+	var result []uint64
+	cur := sg.Params.To
+	for i := 0; cur != sg.Params.From && i < len(dist); i++ {
+		result = append(result, cur)
+		cur = dist[cur].parent
+	}
+	// Put the path in DestUIDs of the root.
+	if cur != sg.Params.From {
 		sg.DestUIDs = &protos.List{}
 		return nil, nil
 	}
-	var res []uint64
-	for _, it := range kroutes[0].route {
-		res = append(res, it.uid)
+
+	result = append(result, cur)
+	l := len(result)
+	// Reverse the list.
+	for i := 0; i < l/2; i++ {
+		result[i], result[l-i-1] = result[l-i-1], result[i]
 	}
-	sg.DestUIDs.Uids = res
-	shortestSg := createkroutesubgraph(ctx, kroutes)
-	return shortestSg, nil
+	sg.DestUIDs.Uids = result
+
+	shortestSg := createPathSubgraph(ctx, dist, result)
+	return []*SubGraph{shortestSg}, nil
+}
+
+func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, result []uint64) *SubGraph {
+	shortestSg := new(SubGraph)
+	shortestSg.Params = params{
+		Alias:  "_path_",
+		GetUid: true,
+	}
+	curUid := result[0]
+	shortestSg.SrcUIDs = &protos.List{[]uint64{curUid}}
+	shortestSg.DestUIDs = &protos.List{[]uint64{curUid}}
+	shortestSg.uidMatrix = []*protos.List{{[]uint64{curUid}}}
+
+	curNode := shortestSg
+	for i := 0; i < len(result)-1; i++ {
+		curUid := result[i]
+		childUid := result[i+1]
+		node := new(SubGraph)
+		nodeInfo := dist[childUid]
+		node.Params = params{
+			GetUid: true,
+		}
+		if nodeInfo.facet != nil {
+			// For consistent later processing.
+			node.Params.Facet = &protos.Param{}
+		}
+		node.Attr = nodeInfo.attr
+		node.facetsMatrix = []*protos.FacetsList{{[]*protos.Facets{nodeInfo.facet}}}
+		node.SrcUIDs = &protos.List{[]uint64{curUid}}
+		node.DestUIDs = &protos.List{[]uint64{childUid}}
+		node.uidMatrix = []*protos.List{{[]uint64{childUid}}}
+
+		curNode.Children = append(curNode.Children, node)
+		curNode = node
+	}
+
+	node := new(SubGraph)
+	node.Params = params{
+		GetUid: true,
+	}
+	uid := result[len(result)-1]
+	node.SrcUIDs = &protos.List{[]uint64{uid}}
+	node.uidMatrix = []*protos.List{{[]uint64{uid}}}
+	curNode.Children = append(curNode.Children, node)
+
+	return shortestSg
 }
 
 func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {

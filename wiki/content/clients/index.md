@@ -15,7 +15,7 @@ The proto file used by Dgraph is located at [graphresponse.proto](https://github
 
 [![GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client?status.svg)](https://godoc.org/github.com/dgraph-io/dgraph/client)
 
-After you have the followed [Get started]({{< relref "get-started/index.md">}}) and got the server running on `127.0.0.1:8080`, you can use the Go client to run queries and mutations as shown in the example below.
+After you have the followed [Get started]({{< relref "get-started/index.md">}}) and got the server running on `127.0.0.1:8080` and (for gRPC) `127.0.0.1:9080`, you can use the Go client to run queries and mutations as shown in the example below.
 
 {{% notice "note" %}}The example below would store values with the correct types only if the
 correct [schema type]({{< relref "query-language/index.md#schema" >}}) is specified in the mutation, otherwise everything would be converted to schema type and stored. Schema is derived based on first mutation received by the server. If first mutation is of default type then everything would be stored as default type.{{% /notice %}}
@@ -39,134 +39,112 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"time"
 
-	"google.golang.org/grpc"
-
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/protos"
-	"github.com/gogo/protobuf/proto"
-	"github.com/twpayne/go-geom/encoding/wkb"
+	"github.com/dgraph-io/dgraph/x"
+	"google.golang.org/grpc"
 )
 
 var (
-	dgraph = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
+	dgraph = flag.String("d", "127.0.0.1:9080", "Dgraph server address")
 )
+
+type nameFacets struct {
+	Since time.Time `dgraph:"since"`
+	Alias string    `dgraph:"alias"`
+}
+
+type friendFacets struct {
+	Close bool `dgraph:"close"`
+}
+
+type Person struct {
+	Name         string         `dgraph:"name"`
+	NameFacets   nameFacets     `dgraph:"name@facets"`
+	Birthday     time.Time      `dgraph:"birthday"`
+	Location     []byte         `dgraph:"loc"`
+	Salary       float64        `dgraph:"salary"`
+	Age          int            `dgraph:"age"`
+	Married      bool           `dgraph:"married"`
+	ByteDob      []byte         `dgraph:"bytedob"`
+	Friends      []Person       `dgraph:"friend"`
+	FriendFacets []friendFacets `dgraph:"@facets"`
+}
+
+type Res struct {
+	Root Person `dgraph:"me"`
+}
 
 func main() {
 	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
 
-	c := protos.NewDgraphClient(conn)
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions)
+
 	req := client.Req{}
+	person1, err := dgraphClient.NodeBlank("person1")
+	x.Check(err)
 
-	// _:person1 tells Dgraph to assign a new Uid and is the preferred way of creating new nodes.
-	// See https://docs.dgraph.io/master/query-language/#assigning-uid for more details.
-	nq := protos.NQuad{
-		Subject:   "_:person1",
-		Predicate: "name",
-	}
-	client.Str("Steven Spielberg", &nq)
+	// Creating a person node, and adding a name attribute to it.
+	e := person1.Edge("name")
+	err = e.SetValueString("Steven Spielberg")
+	x.Check(err)
+	e.AddFacet("since", "2006-01-02T15:04:05")
+	e.AddFacet("alias", `"Steve"`)
+	req.Set(e)
 
-	if err := client.AddFacet("since", "2006-01-02T15:04:05", &nq); err != nil {
-		log.Fatal(err)
-	}
+	e = person1.Edge("birthday")
+	err = e.SetValueDatetime(time.Date(1991, 2, 1, 0, 0, 0, 0, time.UTC))
+	x.Check(err)
+	req.Set(e)
 
-	// To add a facet of type string, use a raw string literal with "" like below or if
-	// you are using an interpreted string literal then you'd need to add and escape the
-	// double quotes like client.AddFacet("alias","\"Steve\"", &nq)
-	if err := client.AddFacet("alias", `"Steve"`, &nq); err != nil {
-		log.Fatal(err)
-	}
+	e = person1.Edge("loc")
+	err = e.SetValueGeoJson(`{"type":"Point","coordinates":[-122.2207184,37.72129059]}`)
+	x.Check(err)
+	req.Set(e)
 
-	req.AddMutation(nq, client.SET)
+	e = person1.Edge("salary")
+	err = e.SetValueFloat(13333.6161)
+	x.Check(err)
+	req.Set(e)
 
-	nq = protos.NQuad{
-		Subject:   "_:person1",
-		Predicate: "now",
-	}
-	if err = client.Datetime(time.Now(), &nq); err != nil {
-		log.Fatal(err)
-	}
-	req.AddMutation(nq, client.SET)
+	e = person1.Edge("age")
+	err = e.SetValueInt(25)
+	x.Check(err)
+	req.Set(e)
 
-	nq = protos.NQuad{
-		Subject:   "_:person1",
-		Predicate: "birthday",
-	}
-	if err = client.Date(time.Date(1991, 2, 1, 0, 0, 0, 0, time.UTC), &nq); err != nil {
-		log.Fatal(err)
-	}
-	req.AddMutation(nq, client.SET)
+	e = person1.Edge("married")
+	err = e.SetValueBool(true)
+	x.Check(err)
+	req.Set(e)
 
-	nq = protos.NQuad{
-		Subject:   "_:person1",
-		Predicate: "loc",
-	}
-	if err = client.ValueFromGeoJson(`{"type":"Point","coordinates":[-122.2207184,37.72129059]}`, &nq); err != nil {
-		log.Fatal(err)
-	}
-	req.AddMutation(nq, client.SET)
+	e = person1.Edge("bytedob")
+	err = e.SetValueBytes([]byte("01-02-1991"))
+	x.Check(err)
+	req.Set(e)
 
-	nq = protos.NQuad{
-		Subject:   "_:person1",
-		Predicate: "age",
-	}
-	if err = client.Int(25, &nq); err != nil {
-		log.Fatal(err)
-	}
-	req.AddMutation(nq, client.SET)
+	person2, err := dgraphClient.NodeBlank("person2")
+	x.Check(err)
 
-	nq = protos.NQuad{
-		Subject:   "_:person1",
-		Predicate: "salary",
-	}
-	if err = client.Float(13333.6161, &nq); err != nil {
-		log.Fatal(err)
-	}
-	req.AddMutation(nq, client.SET)
+	e = person2.Edge("name")
+	err = e.SetValueString("William Jones")
+	x.Check(err)
+	req.Set(e)
 
-	nq = protos.NQuad{
-		Subject:   "_:person1",
-		Predicate: "married",
-	}
-	if err = client.Bool(false, &nq); err != nil {
-		log.Fatal(err)
-	}
-	req.AddMutation(nq, client.SET)
+	e = person1.Edge("friend")
+	err = e.ConnectTo(person2)
+	x.Check(err)
+	e.AddFacet("close", "true")
+	req.Set(e)
 
-	nq = protos.NQuad{
-		Subject:   "_:person2",
-		Predicate: "name",
-	}
-	client.Str("William Jones", &nq)
-	req.AddMutation(nq, client.SET)
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	x.Check(err)
 
-	// Lets connect the two nodes together.
-	nq = protos.NQuad{
-		Subject:   "_:person1",
-		Predicate: "friend",
-		ObjectId:  "_:person2",
-	}
-
-	if err := client.AddFacet("close", "true", &nq); err != nil {
-		log.Fatal(err)
-	}
-
-	req.AddMutation(nq, client.SET)
-	// Lets run the request with all these mutations.
-	resp, err := c.Run(context.Background(), req.Request())
-	if err != nil {
-		log.Fatalf("Error in getting response from server, %s", err)
-	}
-	person1Uid := resp.AssignedUids["person1"]
-	person2Uid := resp.AssignedUids["person2"]
-
-	// Lets initiate a new request and query for the data.
 	req = client.Req{}
-	// Lets set the starting node id to person1Uid.
 	req.SetQuery(fmt.Sprintf(`{
-		me(id: %v) {
+		me(func: uid(%v)) {
 			_uid_
 			name @facets
 			now
@@ -175,63 +153,32 @@ func main() {
 			salary
 			age
 			married
+			bytedob
 			friend @facets {
 				_uid_
 				name
 			}
 		}
-	}`, client.Uid(person1Uid)))
-	resp, err = c.Run(context.Background(), req.Request())
-	if err != nil {
-		log.Fatalf("Error in getting response from server, %s", err)
-	}
+	}`, person1))
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	x.Check(err)
 
-	fmt.Printf("Raw Response: %+v\n", proto.MarshalTextString(resp))
+	var r Res
+	err = client.Unmarshal(resp.N, &r)
+	fmt.Printf("Steven: %+v\n\n", r.Root)
+	fmt.Printf("William: %+v\n", r.Root.Friends[0])
 
-	person1 := resp.N[0].Children[0]
-	props := person1.Properties
-	name := props[0].Value.GetStrVal()
-	fmt.Println("Name: ", name)
-
-	// We use time.Parse for Date and Datetime values, to get the actual value back.
-	now, err := time.Parse(time.RFC3339, props[1].Value.GetStrVal())
-	if err != nil {
-		log.Fatalf("Error in parsing time, %s", err)
-	}
-	fmt.Println("Now: ", now)
-
-	birthday, err := time.Parse(time.RFC3339, props[2].Value.GetStrVal())
-	if err != nil {
-		log.Fatalf("Error in parsing time, %s", err)
-	}
-	fmt.Println("Birthday: ", birthday)
-
-	// We use wkb.Unmarshal to get the geom object back from Geo val.
-	geom, err := wkb.Unmarshal(props[3].Value.GetGeoVal())
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("Loc: ", geom)
-
-	fmt.Println("Salary: ", props[4].Value.GetDoubleVal())
-	fmt.Println("Age: ", props[5].Value.GetIntVal())
-	fmt.Println("Married: ", props[6].Value.GetBoolVal())
-
-	person2 := person1.Children[0]
-	fmt.Printf("%v name: %v\n", person2.Attribute, person2.Properties[0].Value.GetStrVal())
-
-	// Deleting an edge.
-	nq = protos.NQuad{
-		Subject:   client.Uid(person1Uid),
-		Predicate: "friend",
-		ObjectId:  client.Uid(person2Uid),
-	}
 	req = client.Req{}
-	req.AddMutation(nq, client.DEL)
-	resp, err = c.Run(context.Background(), req.Request())
-	if err != nil {
-		log.Fatalf("Error in getting response from server, %s", err)
-	}
+	// Here is an example of deleting an edge
+	e = person1.Edge("friend")
+	err = e.ConnectTo(person2)
+	x.Check(err)
+	req.Delete(e)
+	resp, err = dgraphClient.Run(context.Background(), &req)
+	x.Check(err)
+
+	err = dgraphClient.Close()
+	x.Check(err)
 }
 ```
 
@@ -309,7 +256,7 @@ import (
 )
 
 func ExampleBatchMutation() {
-	conn, err := grpc.Dial("127.0.0.1:8080", grpc.WithInsecure())
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
@@ -364,6 +311,8 @@ func ExampleBatchMutation() {
 	// Wait for all requests to complete. This is very important, else some
 	// data might not be sent to server.
 	dgraphClient.BatchFlush()
+	err = dgraphClient.Close()
+	x.Check(err)
 }
 ```
 
@@ -385,7 +334,7 @@ pip install -U pydgraph
 git clone https://github.com/dgraph-io/pydgraph
 cd pydgraph
 
-# Optional: If you have the dgraph server running on localhost:8080 you can run tests.
+# Optional: If you have the dgraph server running on localhost:8080 and localhost:9080 you can run tests.
 python setup.py test
 
 # Install the python package.
@@ -472,7 +421,7 @@ import io.dgraph.client.DgraphResult;
 
 public class DgraphMain {
     public static void main(final String[] args) {
-        final DgraphClient dgraphClient = GrpcDgraphClient.newInstance("localhost", 8080);
+        final DgraphClient dgraphClient = GrpcDgraphClient.newInstance("localhost", 9080);
         final DgraphResult result = dgraphClient.query("{me(_xid_: alice) { name _xid_ follows { name _xid_ follows {name _xid_ } } }}");
         System.out.println(result.toJsonObject().toString());
     }
@@ -488,7 +437,7 @@ javac -cp dgraph4j/build/libs/dgraph4j-all-0.0.1.jar DgraphMain.java
 ```
 java -cp dgraph4j/build/libs/dgraph4j-all-0.0.1.jar:. DgraphMain
 Jun 29, 2016 12:28:03 AM io.grpc.internal.ManagedChannelImpl <init>
-INFO: [ManagedChannelImpl@5d3411d] Created with target localhost:8080
+INFO: [ManagedChannelImpl@5d3411d] Created with target localhost:9080
 {"_root_":[{"_uid_":"0x8c84811dffd0a905","_xid_":"alice","name":"Alice","follows":[{"_uid_":"0xdd77c65008e3c71","_xid_":"bob","name":"Bob"},{"_uid_":"0x5991e7d8205041b3","_xid_":"greg","name":"Greg"}]}],"server_latency":{"pb":"11.487µs","parsing":"85.504µs","processing":"270.597µs"}}
 ```
 

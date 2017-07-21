@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,64 +28,31 @@ func graphValue(x string) *protos.Value {
 	return &protos.Value{&protos.Value_StrVal{x}}
 }
 
-func TestCheckNQuad(t *testing.T) {
-	s := graphValue("Alice")
-	if err := checkNQuad(protos.NQuad{
-		Predicate:   "name",
-		ObjectValue: s,
-	}); err == nil {
-		t.Fatal(err)
-	}
-	if err := checkNQuad(protos.NQuad{
-		Subject:     "alice",
-		ObjectValue: s,
-	}); err == nil {
-		t.Fatal(err)
-	}
-	if err := checkNQuad(protos.NQuad{
-		Subject:   "alice",
-		Predicate: "name",
-	}); err == nil {
-		t.Fatal(err)
-	}
-	if err := checkNQuad(protos.NQuad{
-		Subject:     "alice",
-		Predicate:   "name",
-		ObjectValue: s,
-		ObjectId:    "id",
-	}); err == nil {
-		t.Fatal(err)
-	}
-}
-
 func TestSetMutation(t *testing.T) {
 	req := Req{}
 
 	s := graphValue("Alice")
-	if err := req.Set(Edge{protos.NQuad{
+	err := req.Set(Edge{protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "name",
 		ObjectValue: s,
-	}}); err != nil {
-		t.Fatal(err)
-	}
+	}})
+	x.Check(err)
 
 	s = graphValue("rabbithole")
-	if err := req.Set(Edge{protos.NQuad{
+	err = req.Set(Edge{protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
 		ObjectValue: s,
-	}}); err != nil {
-		t.Fatal(err)
-	}
+	}})
+	x.Check(err)
 
-	if err := req.Delete(Edge{protos.NQuad{
+	err = req.Delete(Edge{protos.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
 		ObjectValue: s,
-	}}); err != nil {
-		t.Fatal(err)
-	}
+	}})
+	x.Check(err)
 
 	assert.Equal(t, len(req.gr.Mutation.Set), 2, "Set should have 2 entries")
 	assert.Equal(t, len(req.gr.Mutation.Del), 1, "Del should have 1 entry")
@@ -93,7 +61,7 @@ func TestSetMutation(t *testing.T) {
 func TestAddSchema(t *testing.T) {
 	req := Req{}
 
-	if err := req.addSchema(protos.SchemaUpdate{Predicate: "name"}); err != nil {
+	if err := req.AddSchema(protos.SchemaUpdate{Predicate: "name"}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -54,11 +54,6 @@ func Check2(_ interface{}, err error) {
 	Check(err)
 }
 
-// Check2f acts as convenience wrapper around Checkf, using the 2nd argument as error.
-func Check2f(_ interface{}, err error, format string, args ...interface{}) {
-	Checkf(err, format, args)
-}
-
 // AssertTrue asserts that b is true. Otherwise, it would log fatal.
 func AssertTrue(b bool) {
 	if !b {
@@ -75,7 +70,7 @@ func AssertTruef(b bool, format string, args ...interface{}) {
 
 // Wrap wraps errors from external lib.
 func Wrap(err error) error {
-	if !*debugMode {
+	if !Config.DebugMode {
 		return err
 	}
 	return errors.Wrap(err, "")
@@ -83,7 +78,7 @@ func Wrap(err error) error {
 
 // Wrapf is Wrap with extra info.
 func Wrapf(err error, format string, args ...interface{}) error {
-	if !*debugMode {
+	if !Config.DebugMode {
 		if err == nil {
 			return nil
 		}
@@ -94,7 +89,7 @@ func Wrapf(err error, format string, args ...interface{}) error {
 
 // Errorf creates a new error with stack trace, etc.
 func Errorf(format string, args ...interface{}) error {
-	if !*debugMode {
+	if !Config.DebugMode {
 		return fmt.Errorf(format, args...)
 	}
 	return errors.Errorf(format, args...)

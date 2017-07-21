@@ -52,7 +52,7 @@ func getSchema(ctx context.Context, s *protos.SchemaRequest) (*protos.SchemaResu
 	if len(s.Fields) > 0 {
 		fields = s.Fields
 	} else {
-		fields = []string{"type", "index", "tokenizer", "reverse"}
+		fields = []string{"type", "index", "tokenizer", "reverse", "count"}
 	}
 
 	for _, attr := range predicates {
@@ -89,6 +89,8 @@ func populateSchema(attr string, fields []string) *protos.SchemaNode {
 			}
 		case "reverse":
 			schemaNode.Reverse = schema.State().IsReversed(attr)
+		case "count":
+			schemaNode.Count = schema.State().HasCount(attr)
 		default:
 			//pass
 		}
@@ -139,14 +141,13 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *protos.SchemaReque
 	}
 
 	_, addr := groups().Leader(gid)
-	pl := pools().get(addr)
-	conn, e := pl.Get()
-	if e != nil {
-		ch <- resultErr{err: e}
+	pl, err := pools().get(addr)
+	if err != nil {
+		ch <- resultErr{err: err}
 		return
 	}
-	defer pl.Put(conn)
-
+	defer pools().release(pl)
+	conn := pl.Get()
 	c := protos.NewWorkerClient(conn)
 	schema, e := c.Schema(ctx, s)
 	ch <- resultErr{result: schema, err: e}

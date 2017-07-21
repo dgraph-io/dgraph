@@ -20,9 +20,45 @@ $ sudo tar -C /usr/local/bin -xzf dgraph-linux-amd64-VERSION.tar.gz
 $ sudo tar -C /usr/local/bin -xzf dgraph-darwin-amd64-VERSION.tar.gz
 ```
 
+### Nightly
+
+Nightly builds from Dgraph master branch at https://github.com/dgraph-io/dgraph are available from https://nightly.dgraph.io.  To install run:
+
+```sh
+curl https://nightly.dgraph.io -sSf | bash
+```
+
+The Docker version is available as _master_.  Pull and run with:
+
+```sh
+docker pull dgraph/dgraph:master
+mkdir -p ~/dgraph
+docker run -it -p 127.0.0.1:8080:8080 -p 127.0.0.1:9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph:master dgraph --bindall=true
+```
+
+{{% notice "note" %}}All the usual cautions about nightly builds apply: the feature set is not stable and may change (even daily) and the nightly build may contain bugs. {{% /notice %}}
+
+### Building from Source
+
+Make sure you have [Go](https://golang.org/dl/) (version >= 1.8) installed.
+
+After installing Go, run
+```
+# This should install the following binaries in your $GOPATH/bin: dgraph and dgraphloader.
+go get -u github.com/dgraph-io/dgraph/...
+```
+
+The binaries are located in `cmd/dgraph` and `cmd/dgraphloader`. If you get errors related to `grpc` while building
+them, your `go-grpc` version might be outdated. We don't vendor in `go-grpc`(because it causes issues while using
+the Go client). Update your `go-grpc` by running.
+```
+go get -u google.golang.org/grpc
+```
+
+
 ## Endpoints
 
-On its port, a running Dgraph instance exposes a number of service endpoints.
+On its http port, a running Dgraph instance exposes a number of service endpoints.
 
 * `/` Browser UI and query visualization.
 * `/query` receive queries and respond in JSON.
@@ -42,11 +78,12 @@ Whether running standalone or in a cluster, each Dgraph instance relies on the f
 * A `p` directory.  This is where Dgraph persists the graph data as posting lists. (option `--p`, default: directory `p` where the instance was started)
 * A `w` directory.  This is where Dgraph stores its write ahead logs. (option `--w`, default: directory `w` where the instance was started)
 * The `p` and `w` directories must be different.
-* A port exposing the instance for query, client connections and other [endpoints]({{< relref "#endpoints">}}). (option `--port`, default: `8080` on `localhost`)
+* A port for query, http client connections and other [endpoints]({{< relref "#endpoints">}}). (option `--port`, default: `8080` on `localhost`)
+* A port for gRPC client connections. (option `--grpc_port`, default: `9080` on `localhost`)
 * A port on which to run a worker node, used for Dgraph's communication between nodes. (option `--workerport`, default: `12345`)
 * An address and port at which the node advertises its worker.  (option `--my`, default: `localhost:workerport`)
 
-{{% notice "note" %}}By default `8080` or the port specified by `--port` is bound to `localhost` (the loopback address only accessible from the same machine).  The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections. {{% /notice %}}
+{{% notice "note" %}}By default the server listens on `localhost` (the loopback address only accessible from the same machine).  The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections. {{% /notice %}}
 
 ### Config
 The command-line flags can be stored in a YAML file and provided via the `--config` flag.  For example:
@@ -66,6 +103,9 @@ groups: "0,1-5"
 
 # Port to run server on. (default 8080)
 port: 8080
+
+# GRPC port to run server on. (default 9080)
+grpc_port: 9080
 
 # Port used by worker for internal communication.
 workerport: 12345
@@ -254,7 +294,7 @@ To run a cluster, begin by bringing up a single server that serves at least grou
 ```
 $ dgraph --group_conf groups.conf --groups "0,1" --idx 1 --my "ip-address-others-should-access-me-at" --bindall=true
 
-# This instance with ID 1 will serve groups 0 and 1, using the default 8080 port for clients and 12345 for peers.
+# This instance with ID 1 will serve groups 0 and 1, using the default 8080/9080 ports for clients and 12345 for peers.
 ```
 
 {{% notice "note" %}} The `--bindall=true` option is required when running on multiple machines, otherwise the node's port and workerport will be bound to localhost and not be accessible over a network. {{% /notice %}}
@@ -311,7 +351,7 @@ p w ip worker groups.conf groups heathy-peer
 ## Bulk Data Loading
 The `dgraphloader` binary is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph. It's not the only way to run mutations.  Mutations could also be run from the command line, e.g. with `curl`, from the UI, by sending to `/query` or by a program using a [Dgraph client]({{< relref "clients/index.md" >}}).
 
-`dgraphloader` correctly handles splitting blank nodes across multiple batches and creating `_xid_` [edges for RDF URIs]({{< relref "query-language/index.md#external-ids" >}}) (option `-x`).
+`dgraphloader` correctly handles splitting blank nodes across multiple batches and creating `xid` [edges for RDF URIs]({{< relref "query-language/index.md#external-ids" >}}) (option `-x`).
 
 {{% notice "note" %}} `dgraphloader` only accepts gzipped, RDF NQuad/Triple data. Data in other formats must be converted [to this](https://www.w3.org/TR/n-quads/).{{% /notice %}}
 
@@ -320,13 +360,13 @@ The `dgraphloader` binary is a small helper program which reads RDF NQuads from 
 ```
 $ dgraphloader --help # To see the available flags.
 
-# Read RDFs from the passed file, and send them to Dgraph on localhost:8080.
+# Read RDFs from the passed file, and send them to Dgraph on localhost:9080.
 $ dgraphloader -r <path-to-rdf-gzipped-file>
 
 # Read RDFs and a schema file and send do Dgraph running at given address
 $ dgraphloader -r <path-to-rdf-gzipped-file> -s <path-to-schema-file> -d <dgraph-server-address:port>
 
-# For example to load goldendata with the corresponding schema and convert URI to _xid_.
+# For example to load goldendata with the corresponding schema and convert URI to xid.
 $ dgraphloader -r github.com/dgraph-io/benchmarks/data/goldendata.rdf.gz -s github.com/dgraph-io/benchmarks/data/goldendata.schema -x
 ```
 
@@ -343,7 +383,7 @@ This also works from a browser, provided the HTTP GET is being run from the same
 
 This triggers a export of all the groups spread across the entire cluster. Each server writes output in gzipped rdf to the export directory specified on startup by `--export`. If any of the groups fail, the entire export process is considered failed, and an error is returned.
 
-{{% notice "note" %}}It is up to the user to retrieve the right exports files from the servers in the cluster. Dgraph does not copy files  to the server that initiated the export.{{% /notice %}}
+{{% notice "note" %}}It is up to the user to retrieve the right export files from the servers in the cluster. Dgraph does not copy files  to the server that initiated the export.{{% /notice %}}
 
 ## Shutdown
 
@@ -369,6 +409,7 @@ To drop all data and start from a clean database:
 ## Upgrade Dgraph
 
 <!--{{% notice "tip" %}}If you are upgrading from v0.7.3 you can modify the [schema file]({{< relref "query-language/index.md#schema">}}) to use the new syntax and give it to the dgraphloader using the `-s` flag while reloading your data.{{% /notice %}}-->
+{{% notice "note" %}}If you are upgrading from v0.7 please check whether you have the export api or get the latest binary for version v0.7.7 and use the export api. {{% /notice %}}
 
 Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
 
@@ -385,6 +426,25 @@ These steps are necessary because Dgraph's underlying data format could have cha
 ## Post Installation
 
 Now that Dgraph is up and running, to understand how to add and query data to Dgraph, follow [Query Language Spec]({{< relref "query-language/index.md">}}). Also, have a look at [Frequently asked questions]({{< relref "faq/index.md" >}}).
+
+## Monitoring
+
+Dgraph exposes metrics via `/debug/vars` endpoint in json format. Dgraph doesn't store the metrics and only exposes the value of the metrics at that instant. So you might want to scrape and store metrics in systems like prometheus. Prometheus can scrape metrics from `/debug/prometheus_metrics` endpoint. This is a sample prometheus config file.
+
+```sh
+scrape_configs:
+  - job_name: "dgraph"
+    metrics_path: "/debug/prometheus_metrics"
+    scrape_interval: "2s"
+    target_groups:
+    - targets:
+      - 172.31.9.133:8080
+      - 172.31.15.230:8080
+      - 172.31.0.170:8080
+      - 172.31.8.118:8080
+```
+
+You can use graphana to plot the metrics. You can import **[Graphana Dashboard](https://github.com/dgraph-io/benchmarks/blob/master/scripts/dgraphGraphana)**.
 
 ## Troubleshooting
 Here are some problems that you may encounter and some solutions to try.

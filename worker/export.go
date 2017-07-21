@@ -66,6 +66,7 @@ var rdfTypeMap = map[types.TypeID]string{
 	types.BoolID:     "xs:boolean",
 	types.GeoID:      "geo:geojson",
 	types.PasswordID: "pwd:password",
+	types.BinaryID:   "xs:base64Binary",
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {
@@ -89,8 +90,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			if p.PostingType == protos.Posting_VALUE_LANG {
 				buf.WriteByte('@')
 				buf.WriteString(string(p.Metadata))
-			} else if vID != types.BinaryID &&
-				vID != types.DefaultID {
+			} else if vID != types.DefaultID {
 				rdfType, ok := rdfTypeMap[vID]
 				x.AssertTruef(ok, "Didn't find RDF type for dgraph type: %+v", vID.Name())
 				buf.WriteString("^^<")
@@ -152,6 +152,9 @@ func toSchema(buf *bytes.Buffer, s *skv) {
 		buf.WriteString(strings.Join(s.schema.Tokenizer, ","))
 		buf.WriteByte(')')
 	}
+	if s.schema.Count {
+		buf.WriteString(" @count")
+	}
 	buf.WriteString(" . \n")
 }
 
@@ -194,7 +197,7 @@ func export(gid uint32, bdir string) error {
 		time.Now().Format("2006-01-02-15-04")))
 	fspath := path.Join(bdir, fmt.Sprintf("dgraph-schema-%d-%s.rdf.gz", gid,
 		time.Now().Format("2006-01-02-15-04")))
-	fmt.Printf("Exporting to: %v, schema at %v\n", fpath, fspath)
+	x.Printf("Exporting to: %v, schema at %v\n", fpath, fspath)
 	chb := make(chan []byte, 1000)
 	errChan := make(chan error, 2)
 	go func() {
@@ -266,13 +269,8 @@ func export(gid uint32, bdir string) error {
 		key := item.Key()
 		pk := x.Parse(key)
 
-		if pk.IsIndex() {
-			// Seek to the end of index keys.
-			it.Seek(pk.SkipRangeOfSameType())
-			continue
-		}
-		if pk.IsReverse() {
-			// Seek to the end of reverse keys.
+		if pk.IsIndex() || pk.IsReverse() || pk.IsCount() {
+			// Seek to the end of index, reverse and count keys.
 			it.Seek(pk.SkipRangeOfSameType())
 			continue
 		}
@@ -335,7 +333,7 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Leader of group: %d. Running export.", gid)
 		}
-		if err := export(gid, *exportPath); err != nil {
+		if err := export(gid, Config.ExportPath); err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
 			}
@@ -365,21 +363,22 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 		addrs = append(addrs, addr)
 	}
 
+	var pl *pool
 	var conn *grpc.ClientConn
 	for _, addr := range addrs {
-		pl := pools().get(addr)
-		var err error
-		conn, err = pl.Get()
-		if err == nil {
+		pl, err := pools().get(addr)
+		if err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Relaying export request for group %d to %q", gid, pl.Addr)
+				tr.LazyPrintf(err.Error())
 			}
-			defer pl.Put(conn)
-			break
+			continue
 		}
+		conn = pl.Get()
+
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
+			tr.LazyPrintf("Relaying export request for group %d to %q", gid, pl.Addr)
 		}
+		break
 	}
 
 	// Unable to find any connection to any of these servers. This should be exceedingly rare.
@@ -394,6 +393,7 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 			GroupId: gid,
 		}
 	}
+	defer pools().release(pl)
 
 	c := protos.NewWorkerClient(conn)
 	nr := &protos.ExportPayload{

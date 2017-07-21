@@ -18,49 +18,37 @@
 package worker
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var (
-	groupIds = flag.String("groups", "0,1", "RAFT groups handled by this server.")
-	myAddr   = flag.String("my", "",
-		"addr:port of this server, so other Dgraph servers can talk to this.")
-	peerAddr = flag.String("peer", "", "IP_ADDRESS:PORT of any healthy peer.")
-	raftId   = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
-	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
-	// so that the nodes which have lagged behind leader can just replay entries instead of
-	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
-	// are taken
-	maxPendingCount = flag.Uint64("sc", 1000, "Max number of pending entries in wal after which snapshot is taken")
-
-	emptyMembershipUpdate protos.MembershipUpdate
-)
-
 type server struct {
-	NodeId  uint64 // Raft Id associated with the raft node.
-	Addr    string // The public address of the server serving this node.
-	Leader  bool   // Set to true if the node is a leader of the group.
-	RaftIdx uint64 // The raft index which applied this membership update in group zero.
+	NodeId    uint64 // Raft Id associated with the raft node.
+	Addr      string // The public address of the server serving this node.
+	Leader    bool   // Set to true if the node is a leader of the group.
+	RaftIdx   uint64 // The raft index which applied this membership update in group zero.
+	PoolOrNil *pool  // An owned reference to the server's Pool entry (nil if Addr is our own).
 }
 
 type servers struct {
+	// A map of indices into list, allowing for random access by their NodeId field.
+	byNodeID map[uint64]int
+	// Servers for the group, as determined by Raft group zero.
+	// list[0] is the (last-known) leader of that group.
 	list []server
 }
 
@@ -83,59 +71,98 @@ func groups() *groupi {
 	return gr
 }
 
+func swapServers(sl *servers, i int, j int) {
+	sl.list[i], sl.list[j] = sl.list[j], sl.list[i]
+	sl.byNodeID[sl.list[i].NodeId] = i
+	sl.byNodeID[sl.list[j].NodeId] = j
+}
+
+func removeFromServersIfPresent(sl *servers, nodeID uint64) {
+	i, has := sl.byNodeID[nodeID]
+	if !has {
+		return
+	}
+	back := len(sl.list) - 1
+	swapServers(sl, i, back)
+	pool := sl.list[back].PoolOrNil
+	sl.list = sl.list[:back]
+	delete(sl.byNodeID, nodeID)
+	if pool != nil {
+		pools().release(pool)
+	}
+}
+
+func addToServers(sl *servers, update server) {
+	back := len(sl.list)
+	sl.list = append(sl.list, update)
+	sl.byNodeID[update.NodeId] = back
+	if update.Leader && back != 0 {
+		swapServers(sl, 0, back)
+		sl.list[back].Leader = false
+	}
+}
+
 // StartRaftNodes will read the WAL dir, create the RAFT groups,
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
-func StartRaftNodes(walDir string) {
+func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
+	gr.all = make(map[uint32]*servers)
+	gr.local = make(map[uint32]*node)
 
-	if len(*myAddr) == 0 {
-		*myAddr = fmt.Sprintf("localhost:%d", *workerPort)
-	} else {
+	if Config.InMemoryComm {
+		Config.MyAddr = "inmemory"
+	}
+
+	if len(Config.MyAddr) == 0 {
+		Config.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
+	} else if !Config.InMemoryComm {
 		// check if address is valid or not
-		ok := x.ValidateAddress(*myAddr)
-		x.AssertTruef(ok, "%s is not valid address", *myAddr)
+		ok := x.ValidateAddress(Config.MyAddr)
+		x.AssertTruef(ok, "%s is not valid address", Config.MyAddr)
+		if !bindall {
+			x.Printf("--my flag is provided without bindall, Did you forget to specify bindall?\n")
+		}
 	}
 
 	// Successfully connect with the peer, before doing anything else.
-	if len(*peerAddr) > 0 {
-		pools().connect(*peerAddr)
+	if len(Config.PeerAddr) > 0 {
+		func() {
+			p, ok := pools().connect(Config.PeerAddr)
+			if !ok {
+				return
+			}
+			defer pools().release(p)
 
-		// Force run syncMemberships with this peer, so our nodes know if they have other
-		// servers who are serving the same groups. That way, they can talk to them
-		// and try to join their clusters. Otherwise, they'll start off as a single-node
-		// cluster.
-		// IMPORTANT: Don't run any nodes until we have done at least one full sync for membership
-		// information with the cluster. If you start this node too quickly, just
-		// after starting the leader of group zero, that leader might not have updated
-		// itself in the memberships; and hence this node would think that no one is handling
-		// group zero. Therefore, we MUST wait to get pass a last update raft index of zero.
-		gr.syncMemberships()
-		for gr.LastUpdate() == 0 {
-			time.Sleep(time.Second)
-			fmt.Println("Last update raft index for membership information is zero. Syncing...")
+			// Force run syncMemberships with this peer, so our nodes know if they have other
+			// servers who are serving the same groups. That way, they can talk to them
+			// and try to join their clusters. Otherwise, they'll start off as a single-node
+			// cluster.
+			// IMPORTANT: Don't run any nodes until we have done at least one full sync for membership
+			// information with the cluster. If you start this node too quickly, just
+			// after starting the leader of group zero, that leader might not have updated
+			// itself in the memberships; and hence this node would think that no one is handling
+			// group zero. Therefore, we MUST wait to get pass a last update raft index of zero.
 			gr.syncMemberships()
-		}
-		fmt.Printf("Last update is now: %d\n", gr.LastUpdate())
+			for gr.LastUpdate() == 0 {
+				time.Sleep(time.Second)
+				x.Println("Last update raft index for membership information is zero. Syncing...")
+				gr.syncMemberships()
+			}
+			x.Printf("Last update is now: %d\n", gr.LastUpdate())
+		}()
 	}
 
-	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.DefaultOptions
-	kvOpt.SyncWrites = true
-	kvOpt.Dir = walDir
-	kvOpt.ValueDir = walDir
-	wals, err := badger.NewKV(&kvOpt)
-	x.Checkf(err, "Error while creating badger KV store")
-	gr.wal = raftwal.Init(wals, *raftId)
+	gr.wal = raftwal.Init(walStore, Config.RaftId)
 
 	var wg sync.WaitGroup
-	gids, err := getGroupIds(*groupIds)
+	gids, err := getGroupIds(Config.GroupIds)
 	x.AssertTruef(err == nil && len(gids) > 0, "Unable to parse 'groups' configuration")
 
 	for _, gid := range gids {
-		node := gr.newNode(gid, *raftId, *myAddr)
+		node := gr.newNode(gid, Config.RaftId, Config.MyAddr)
 		x.Checkf(schema.LoadFromDb(uint32(gid)), "Error while initilizating schema")
 		wg.Add(1)
 		go func() {
@@ -215,9 +242,6 @@ func (g *groupi) ServesGroup(groupId uint32) bool {
 func (g *groupi) newNode(groupId uint32, nodeId uint64, publicAddr string) *node {
 	g.Lock()
 	defer g.Unlock()
-	if g.local == nil {
-		g.local = make(map[uint32]*node)
-	}
 
 	node := newNode(groupId, nodeId, publicAddr)
 	if _, has := g.local[groupId]; has {
@@ -227,22 +251,18 @@ func (g *groupi) newNode(groupId uint32, nodeId uint64, publicAddr string) *node
 	return node
 }
 
-func (g *groupi) Server(id uint64, groupId uint32) (rs server, found bool) {
+func (g *groupi) Server(id uint64, groupId uint32) (rs string, found bool) {
 	g.RLock()
 	defer g.RUnlock()
-	if g.all == nil {
-		return server{}, false
-	}
 	sl := g.all[groupId]
 	if sl == nil {
-		return server{}, false
+		return "", false
 	}
-	for _, s := range sl.list {
-		if s.NodeId == id {
-			return s, true
-		}
+	idx, has := sl.byNodeID[id]
+	if has {
+		return sl.list[idx].Addr, true
 	}
-	return server{}, false
+	return "", false
 }
 
 func (g *groupi) AnyServer(group uint32) string {
@@ -265,9 +285,9 @@ func (g *groupi) Servers(group uint32) []string {
 	if all == nil {
 		return nil
 	}
-	out := make([]string, 0, len(all.list))
-	for _, s := range all.list {
-		out = append(out, s.Addr)
+	out := make([]string, len(all.list))
+	for i, s := range all.list {
+		out[i] = s.Addr
 	}
 	return out
 }
@@ -295,10 +315,10 @@ func (g *groupi) HasPeer(group uint32) bool {
 	if all == nil {
 		return false
 	}
-	return len(all.list) > 1 || (len(all.list) == 1 && all.list[0].NodeId != *raftId)
+	return len(all.list) > 1 || (len(all.list) == 1 && all.list[0].NodeId != Config.RaftId)
 }
 
-// Leader will try to retrun the leader of a given group, based on membership information.
+// Leader will try to return the leader of a given group, based on membership information.
 // There is currently no guarantee that the returned server is the leader of the group.
 func (g *groupi) Leader(group uint32) (uint64, string) {
 	g.RLock()
@@ -350,12 +370,9 @@ func (g *groupi) duplicate(gid uint32, nid uint64, addr string, leader bool) boo
 	if sl == nil {
 		return false
 	}
-	for _, s := range sl.list {
-		if s.NodeId == nid && s.Addr == addr && s.Leader == leader {
-			return true
-		}
-	}
-	return false
+	idx, has := sl.byNodeID[nid]
+	s := sl.list[idx]
+	return has && s.Addr == addr && s.Leader == leader
 }
 
 func (g *groupi) LastUpdate() uint64 {
@@ -434,41 +451,51 @@ func (g *groupi) syncMemberships() {
 	}
 
 	// Send an update to peer.
-	var pl *pool
 	addr := g.AnyServer(0)
 
-UPDATEMEMBERSHIP:
+	var pl *pool
+	var err error
 	if len(addr) > 0 {
-		pl = pools().get(addr)
+		pl, err = pools().get(addr)
 	} else {
-		pl = pools().any()
+		pl, err = pools().any()
 	}
-	conn, err := pl.Get()
 	if err == errNoConnection {
-		fmt.Println("Unable to sync memberships. No valid connection")
+		x.Println("Unable to sync memberships. No valid connection")
 		return
 	}
 	x.Check(err)
-	defer pl.Put(conn)
 
-	c := protos.NewWorkerClient(conn)
-	update, err := c.UpdateMembership(g.ctx, &mu)
-	if err != nil {
-		if tr, ok := trace.FromContext(g.ctx); ok {
-			tr.LazyPrintf(err.Error())
+	var update *protos.MembershipUpdate
+	for {
+		conn := pl.Get()
+		c := protos.NewWorkerClient(conn)
+		update, err = c.UpdateMembership(g.ctx, &mu)
+		pools().release(pl)
+
+		if err != nil {
+			if tr, ok := trace.FromContext(g.ctx); ok {
+				tr.LazyPrintf(err.Error())
+			}
+			return
 		}
-		return
-	}
 
-	// Check if we got a redirect.
-	if update.Redirect {
+		// Check if we got a redirect.
+		if !update.Redirect {
+			break
+		}
+
 		addr = update.RedirectAddr
 		if len(addr) == 0 {
 			return
 		}
-		fmt.Printf("Got redirect for: %q\n", addr)
-		pools().connect(addr)
-		goto UPDATEMEMBERSHIP
+		x.Printf("Got redirect for: %q\n", addr)
+		var ok bool
+		pl, ok = pools().connect(addr)
+		if !ok {
+			// We got redirected to ourselves.
+			return
+		}
 	}
 
 	var lu uint64
@@ -497,65 +524,43 @@ func (g *groupi) periodicSyncMemberships() {
 // membership update in group zero.
 func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 	update := server{
-		NodeId:  mm.Id,
-		Addr:    mm.Addr,
-		Leader:  mm.Leader,
-		RaftIdx: raftIdx,
+		NodeId:    mm.Id,
+		Addr:      mm.Addr,
+		Leader:    mm.Leader,
+		RaftIdx:   raftIdx,
+		PoolOrNil: nil,
 	}
 	if n := g.Node(mm.GroupId); n != nil {
 		// update peer address on address change
 		n.Connect(mm.Id, mm.Addr)
-		// TODO: Clean up old pools
-	} else if update.Addr != *myAddr && mm.Id != *raftId { // ignore previous addr
-		go pools().connect(update.Addr)
+		// Error possible, perhaps, if we're updating our own node's membership.
+		// Ignore it.
+		update.PoolOrNil, _ = pools().get(mm.Addr)
+	} else if update.Addr != Config.MyAddr && mm.Id != Config.RaftId { // ignore previous addr
+		var ok bool
+		update.PoolOrNil, ok = pools().connect(update.Addr)
+		// Must be ok because update.Addr != *myAddr
+		x.AssertTrue(ok)
 	}
 
-	fmt.Println("----------------------------")
-	fmt.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", update)
-	fmt.Println("----------------------------")
+	x.Println("----------------------------")
+	x.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", update)
+	x.Println("----------------------------")
 	g.Lock()
 	defer g.Unlock()
 
-	if g.all == nil {
-		g.all = make(map[uint32]*servers)
-	}
-
 	sl := g.all[mm.GroupId]
 	if sl == nil {
-		sl = new(servers)
+		sl = &servers{byNodeID: make(map[uint64]int)}
 		g.all[mm.GroupId] = sl
 	}
 
-	for {
-		// Remove all instances of the provided node. There should only be one.
-		found := false
-		for i, s := range sl.list {
-			if s.NodeId == update.NodeId {
-				found = true
-				sl.list[i] = sl.list[len(sl.list)-1]
-				sl.list = sl.list[:len(sl.list)-1]
-			}
-		}
-		if !found {
-			break
-		}
-	}
-
-	// Append update to the list. If it's a leader, move it to index zero.
-	sl.list = append(sl.list, update)
-	last := len(sl.list) - 1
-	if update.Leader {
-		sl.list[0], sl.list[last] = sl.list[last], sl.list[0]
-	}
-
-	// Update all servers upwards of index zero as followers.
-	for i := 1; i < len(sl.list); i++ {
-		sl.list[i].Leader = false
-	}
+	removeFromServersIfPresent(sl, update.NodeId)
+	addToServers(sl, update)
 
 	// Print out the entire list.
 	for gid, sl := range g.all {
-		fmt.Printf("Group: %v. List: %+v\n", gid, sl.list)
+		x.Printf("Group: %v. List: %+v\n", gid, sl.list)
 	}
 }
 

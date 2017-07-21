@@ -107,7 +107,7 @@ func (s *stateGroup) update(se SyncEntry) {
 	syncCh <- se
 	s.elog.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v\n", se.Attr,
 		types.TypeID(se.Schema.ValueType).Name(), se.Schema.Tokenizer, se.Schema.Directive)
-	fmt.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v\n", se.Attr,
+	x.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v\n", se.Attr,
 		types.TypeID(se.Schema.ValueType).Name(), se.Schema.Tokenizer, se.Schema.Directive)
 }
 
@@ -324,7 +324,7 @@ func batchSync() {
 	wb := make([]*badger.Entry, 0, 100)
 	for {
 		ent := <-syncCh
-	slurp_loop:
+	slurpLoop:
 		for {
 			entries = append(entries, ent)
 			if len(entries) == syncChCapacity {
@@ -334,7 +334,7 @@ func batchSync() {
 			select {
 			case ent = <-syncCh:
 			default:
-				break slurp_loop
+				break slurpLoop
 			}
 		}
 

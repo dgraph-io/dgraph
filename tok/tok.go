@@ -30,6 +30,7 @@ import (
 
 // Tokenizer defines what a tokenizer must provide.
 type Tokenizer interface {
+
 	// Name is name of tokenizer. This should be unique.
 	Name() string
 
@@ -61,6 +62,9 @@ func init() {
 	RegisterTokenizer(IntTokenizer{})
 	RegisterTokenizer(FloatTokenizer{})
 	RegisterTokenizer(DateTimeTokenizer{})
+	RegisterTokenizer(HourTokenizer{})
+	RegisterTokenizer(MonthTokenizer{})
+	RegisterTokenizer(DayTokenizer{})
 	RegisterTokenizer(TermTokenizer{})
 	RegisterTokenizer(ExactTokenizer{})
 	RegisterTokenizer(BoolTokenizer{})
@@ -160,11 +164,62 @@ type DateTimeTokenizer struct{}
 func (t DateTimeTokenizer) Name() string       { return "datetime" }
 func (t DateTimeTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(int64(sv.Value.(time.Time).Year())), t.Identifier())}, nil
+	tval := sv.Value.(time.Time)
+	buf := make([]byte, 2)
+	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
+	return []string{encodeToken(string(buf), t.Identifier())}, nil
 }
 func (t DateTimeTokenizer) Identifier() byte { return 0x4 }
 func (t DateTimeTokenizer) IsSortable() bool { return true }
 func (t DateTimeTokenizer) IsLossy() bool    { return true }
+
+type MonthTokenizer struct{}
+
+func (t MonthTokenizer) Name() string       { return "month" }
+func (t MonthTokenizer) Type() types.TypeID { return types.DateTimeID }
+func (t MonthTokenizer) Tokens(sv types.Val) ([]string, error) {
+	tval := sv.Value.(time.Time)
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
+	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
+	return []string{encodeToken(string(buf), t.Identifier())}, nil
+}
+func (t MonthTokenizer) Identifier() byte { return 0x41 }
+func (t MonthTokenizer) IsSortable() bool { return true }
+func (t MonthTokenizer) IsLossy() bool    { return true }
+
+type DayTokenizer struct{}
+
+func (t DayTokenizer) Name() string       { return "day" }
+func (t DayTokenizer) Type() types.TypeID { return types.DateTimeID }
+func (t DayTokenizer) Tokens(sv types.Val) ([]string, error) {
+	tval := sv.Value.(time.Time)
+	buf := make([]byte, 6)
+	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
+	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
+	binary.BigEndian.PutUint16(buf[4:6], uint16(tval.Day()))
+	return []string{encodeToken(string(buf), t.Identifier())}, nil
+}
+func (t DayTokenizer) Identifier() byte { return 0x42 }
+func (t DayTokenizer) IsSortable() bool { return true }
+func (t DayTokenizer) IsLossy() bool    { return true }
+
+type HourTokenizer struct{}
+
+func (t HourTokenizer) Name() string       { return "hour" }
+func (t HourTokenizer) Type() types.TypeID { return types.DateTimeID }
+func (t HourTokenizer) Tokens(sv types.Val) ([]string, error) {
+	tval := sv.Value.(time.Time)
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
+	binary.BigEndian.PutUint16(buf[2:4], uint16(tval.Month()))
+	binary.BigEndian.PutUint16(buf[4:6], uint16(tval.Day()))
+	binary.BigEndian.PutUint16(buf[6:8], uint16(tval.Hour()))
+	return []string{encodeToken(string(buf), t.Identifier())}, nil
+}
+func (t HourTokenizer) Identifier() byte { return 0x43 }
+func (t HourTokenizer) IsSortable() bool { return true }
+func (t HourTokenizer) IsLossy() bool    { return true }
 
 type TermTokenizer struct{}
 
@@ -217,6 +272,7 @@ func getBleveTokens(name string, identifier byte, sv types.Val) ([]string, error
 	for i, token := range tokenStream {
 		terms[i] = encodeToken(string(token.Term), identifier)
 	}
+	terms = x.RemoveDuplicates(terms)
 	return terms, nil
 }
 
@@ -278,6 +334,7 @@ func (t TrigramTokenizer) Tokens(sv types.Val) ([]string, error) {
 			trigram := value[i : i+3]
 			tokens[i] = encodeToken(trigram, t.Identifier())
 		}
+		tokens = x.RemoveDuplicates(tokens)
 		return tokens, nil
 	}
 	return nil, nil
@@ -295,8 +352,9 @@ func (t HashTokenizer) Tokens(sv types.Val) ([]string, error) {
 	if !ok {
 		return nil, x.Errorf("Hash tokenizer only supported for string types")
 	}
-	var hash int64 = int64(farm.Hash64([]byte(term)))
-	return []string{encodeToken(encodeInt(hash), t.Identifier())}, nil
+	var hash [8]byte
+	binary.BigEndian.PutUint64(hash[:], farm.Hash64([]byte(term)))
+	return []string{encodeToken(string(hash[:]), t.Identifier())}, nil
 }
 func (t HashTokenizer) Identifier() byte { return 0xB }
 func (t HashTokenizer) IsSortable() bool { return false }

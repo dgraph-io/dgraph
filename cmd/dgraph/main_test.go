@@ -26,11 +26,11 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -60,28 +60,28 @@ var m = `
 `
 
 func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
+	setupConfigOpts() // load defaults
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {
 		return "", "", nil, err
 	}
-	opt := badger.DefaultOptions
-	opt.Dir = dir1
-	opt.ValueDir = dir1
-	opt.SyncWrites = true
-	ps, err = badger.NewKV(&opt)
-	x.Check(err)
 
 	dir2, err = ioutil.TempDir("", "wal_")
 	if err != nil {
 		return dir1, "", nil, err
 	}
 
-	posting.Init(ps)
+	dgraph.Config.PostingDir = dir1
+	dgraph.Config.PostingTables = "loadtoram"
+	dgraph.Config.WALDir = dir2
+	dgraph.State = dgraph.NewServerState()
+
+	posting.Init(dgraph.State.Pstore)
 	group.ParseGroupConfig("groups.conf")
-	schema.Init(ps)
-	worker.Init(ps)
-	worker.StartRaftNodes(dir2)
+	schema.Init(dgraph.State.Pstore)
+	worker.Init(dgraph.State.Pstore)
+	worker.StartRaftNodes(dgraph.State.WALstore, false)
 
 	return dir1, dir2, ps, nil
 }
@@ -195,7 +195,7 @@ func TestDeletePredicate(t *testing.T) {
 	`
 	var q2 = `
 	{
-		user(func: uid( [0x1, 0x2, 0x3])) {
+		user(func: uid([0x1, 0x2, 0x3])) {
 			name
 		}
 	}
@@ -240,13 +240,13 @@ func TestDeletePredicate(t *testing.T) {
 	`
 
 	var s2 = `
-	mutation {
-		schema {
-			friend: string @index .
-			name: uid @reverse .
+		mutation {
+			schema {
+				friend: string @index .
+				name: uid @reverse .
+			}
 		}
-	}
-	`
+		`
 
 	schema.ParseBytes([]byte(""), 1)
 	err := runMutation(s1)
@@ -255,9 +255,6 @@ func TestDeletePredicate(t *testing.T) {
 	err = runMutation(m1)
 	require.NoError(t, err)
 
-	// For gentleCommit to happen and postings to persist to disk. To do * P * we iterate and
-	// get the uids to delete from disk.
-	time.Sleep(10 * time.Second)
 	output, err := runQuery(q1)
 	require.NoError(t, err)
 	var m map[string]interface{}
@@ -1191,6 +1188,45 @@ func TestMutationObjectVariables(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"count(likes)":3}]}`, r)
 }
 
+func TestMutationSubjectObjectVariables(t *testing.T) {
+	m1 := `
+		mutation {
+			set {
+				<0x600>    <friend>   <0x501> .
+				<0x600>    <friend>   <0x502> .
+				<0x600>    <friend>   <0x503> .
+				uid(user)    <likes>    uid(myfriend) .
+			}
+		}
+		{
+			user as var(func: uid(0x600))
+			me(func: uid( 0x600)) {
+				myfriend as friend
+			}
+		}
+    `
+
+	parsed, err := gql.Parse(gql.Request{Str: m1, Http: true})
+	require.NoError(t, err)
+
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &parsed}
+	_, err = qr.ProcessWithMutation(defaultContext())
+
+	require.NoError(t, err)
+
+	q1 := `
+		{
+			me(func: uid(0x600)) {
+				count(likes)
+            }
+		}
+    `
+	r, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"me":[{"count(likes)":3}]}`, r)
+}
+
 func TestMutationObjectVariablesError(t *testing.T) {
 	m1 := `
 		mutation {
@@ -1271,7 +1307,6 @@ func TestSchemaMutation5Error(t *testing.T) {
 	err = runMutation(m)
 	require.NoError(t, err)
 
-	time.Sleep(5 * time.Second)
 	m = `
 	mutation {
 		schema {
@@ -1285,10 +1320,12 @@ func TestSchemaMutation5Error(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	x.Init()
+
+	dgraph.SetConfiguration(dgraph.DefaultConfig)
+
 	dir1, dir2, ps, _ := prepare()
 	defer ps.Close()
 	defer closeAll(dir1, dir2)
-	time.Sleep(5 * time.Second) // Wait for ME to become leader.
 
 	// we need watermarks for reindexing
 	x.AssertTrue(!x.IsTestRun())

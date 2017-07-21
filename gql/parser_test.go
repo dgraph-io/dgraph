@@ -18,17 +18,11 @@
 package gql
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -2998,7 +2992,41 @@ func TestParseFacetsError2(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseFacetsOrderError(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness, order: abc) {
+				name 
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
 func TestParseFacets(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness) {
+				name 
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, "closeness", res.Query[0].Children[0].FacetOrder)
+	require.True(t, res.Query[0].Children[0].FacetDesc)
+}
+
+func TestParseOrderbyFacet(t *testing.T) {
 	query := `
 	query {
 		me(func: uid(0x1)) {
@@ -3131,6 +3159,32 @@ func TestParseFacetsFail1(t *testing.T) {
 		}
 	}
 `
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseRepeatArgsError1(t *testing.T) {
+	// key can not be empty..
+	query := `
+	{
+  		me(func: anyoftext(Text, "biology"), func: anyoftext(Text, "science")) {
+			Text
+  		}
+	}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseRepeatArgsError2(t *testing.T) {
+	// key can not be empty..
+	query := `
+	{
+  		me(func: anyoftext(Text, "science")) {
+			Text(first: 1, first: 4)
+  		}
+	}
+	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 }
@@ -3423,27 +3477,6 @@ func TestParseGraphQLVarId(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	x.Init()
-	dir, err := ioutil.TempDir("", "storetest_")
-	x.Check(err)
-	defer os.RemoveAll(dir)
-
-	opt := badger.DefaultOptions
-	opt.Dir = dir
-	opt.ValueDir = dir
-	ps, err := badger.NewKV(&opt)
-	defer ps.Close()
-	x.Check(err)
-
-	group.ParseGroupConfig("")
-	schema.Init(ps)
-	posting.Init(ps)
-	worker.Init(ps)
-
-	dir2, err := ioutil.TempDir("", "wal_")
-	x.Check(err)
-
-	worker.StartRaftNodes(dir2)
 	os.Exit(m.Run())
 }
 
@@ -3541,12 +3574,42 @@ func TestMutationVariables(t *testing.T) {
 
 	require.Equal(t, 1, len(res.MutationVars))
 
-	require.EqualValues(t, "adults", res.MutationVars[res.Mutation.Set[0]])
+	require.EqualValues(t, "adults", res.MutationVars[0])
 
 	expected := protos.NQuad{
 		Predicate:   "isadult",
 		ObjectValue: &protos.Value{&protos.Value_DefaultVal{"true"}},
 		SubjectVar:  "adults",
+	}
+	require.EqualValues(t, expected, *res.Mutation.Set[0])
+}
+
+func TestMutationVariables2(t *testing.T) {
+	query := `
+		mutation {
+			set {
+				uid(adults) <isadult> uid(engineer) .
+				<0x900> <b> <0x901> .
+			}
+		}
+		{
+			me(func: uid( 0x900)) {
+				adults as friends @filter(gt(age, 18))
+			}
+			engineer as me(func: uid(0x1))
+		}
+	`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(res.MutationVars))
+
+	require.EqualValues(t, []string{"adults", "engineer"}, res.MutationVars)
+
+	expected := protos.NQuad{
+		Predicate:  "isadult",
+		ObjectVar:  "engineer",
+		SubjectVar: "adults",
 	}
 	require.EqualValues(t, expected, *res.Mutation.Set[0])
 }
@@ -3616,16 +3679,6 @@ func TestFilterUid(t *testing.T) {
 	require.Equal(t, []uint64{3, 7}, gql.Query[0].Filter.Func.UID)
 }
 
-func TestRemoveDuplicates(t *testing.T) {
-	set := removeDuplicates([]string{"a", "a", "a", "b", "b", "c", "c"})
-	require.EqualValues(t, []string{"a", "b", "c"}, set)
-}
-
-func TestRemoveDuplicatesWithoutDuplicates(t *testing.T) {
-	set := removeDuplicates([]string{"a", "b", "c", "d"})
-	require.EqualValues(t, []string{"a", "b", "c", "d"}, set)
-}
-
 func TestMultipleSetBlocks(t *testing.T) {
 	query := `
 	mutation {
@@ -3666,6 +3719,21 @@ func TestIdErr(t *testing.T) {
 	query := `
 	{
 		me(id: [1, 3 , 5, 7]) @filter(uid(3, 7)) {
+			name
+		}
+	}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestFilterVarErr(t *testing.T) {
+	query := `
+	{
+		x as m(func: allofterms(name, "Pawan Rawal"))
+	}
+	{
+		me(func: uid(1, 3 , 5, 7)) @filter(var(x)) {
 			name
 		}
 	}

@@ -135,6 +135,9 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 	case reflect.Slice:
 		switch field.Type {
 		case reflect.TypeOf([]byte{}):
+			if value == nil {
+				return nil
+			}
 			switch value.Val.(type) {
 			case *protos.Value_GeoVal:
 				v := value.GetGeoVal()
@@ -207,10 +210,22 @@ func fieldMap(typ reflect.Type) map[string]reflect.StructField {
 	return fmap
 }
 
-// Unmarshal is used to convert the query response to a custom struct.
-// Response has 4 fields, L(Latency), Schema, AssignedUids and N(Nodes).
-// This function takes in the nodes part of the response and tries to
-// unmarshal it into the given struct.
+// Unmarshal is used to unpack a query response into a custom struct.  The 
+// response from Dgraph.Run (a *protos.Response) has 4 fields, L(Latency), 
+// Schema, AssignedUids and N(Nodes). This function takes in the nodes part of
+// the response and tries to unmarshal it into the given struct v.
+//
+// protos.Response.N is a slice of Nodes, one for each named query block in the
+// request.  Each node in that slice has attribute "_root_" and a child for 
+// each node returned as a result by that query block.  For a response resp,
+// and struct variable v, with a field tagged with the same name as a query
+// block:
+// Unmarshal(resp.N, s)
+// will try to match named query blocks with tags in s and then unmarshall the
+// the matched block into the matched fields of s.
+// 
+// Unmarshal does not have to be called at resp.N.  Clients can navigate to a 
+// particular part of the response and unmarshal the children.
 func Unmarshal(n []*protos.Node, v interface{}) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {

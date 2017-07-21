@@ -17,6 +17,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,8 +27,10 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/pkg/profile"
@@ -36,11 +39,13 @@ import (
 var (
 	files      = flag.String("r", "", "Location of rdf files to load")
 	schemaFile = flag.String("s", "", "Location of schema file")
-	dgraph     = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
+	dgraph     = flag.String("d", "127.0.0.1:9080", "Dgraph gRPC server address")
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
-	storeXid   = flag.Bool("x", false, "Store xids by adding corresponding _xid_ edges")
+	storeXid   = flag.Bool("x", false, "Store xids by adding corresponding xid edges")
 	mode       = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
+	clientDir  = flag.String("cd", "c", "Directory to store xid to uid mapping")
+	blockRate  = flag.Int("block", 0, "Block profiling rate")
 	// TLS configuration
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
 	tlsInsecure      = flag.Bool("tls.insecure", false, "Skip certificate validation (insecure)")
@@ -174,9 +179,9 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 	}
 }
 
-func setupConnection() (*grpc.ClientConn, error) {
+func setupConnection(host string) (*grpc.ClientConn, error) {
 	if !*tlsEnabled {
-		return grpc.Dial(*dgraph, grpc.WithInsecure())
+		return grpc.Dial(host, grpc.WithInsecure())
 	}
 
 	tlsCfg, _, err := x.GenerateTLSConfig(x.TLSHelperConfig{
@@ -195,11 +200,13 @@ func setupConnection() (*grpc.ClientConn, error) {
 		return nil, err
 	}
 
-	return grpc.Dial(*dgraph, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+	return grpc.Dial(host, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 }
 
 func main() {
+	flag.Parse()
 	x.Init()
+	runtime.SetBlockProfileRate(*blockRate)
 	go http.ListenAndServe("localhost:6060", nil)
 	switch *mode {
 	case "cpu":
@@ -214,16 +221,23 @@ func main() {
 		// do nothing
 	}
 
-	conn, err := setupConnection()
-	x.Checkf(err, "While trying to dial gRPC")
-	defer conn.Close()
+	var conns []*grpc.ClientConn
+	hostList := strings.Split(*dgraph, ",")
+	x.AssertTrue(len(hostList) > 0)
+	for _, host := range hostList {
+		host = strings.Trim(host, " \t")
+		conn, err := setupConnection(host)
+		x.Checkf(err, "While trying to dial gRPC")
+		conns = append(conns, conn)
+		defer conn.Close()
+	}
 
 	bmOpts := client.BatchMutationOptions{
 		Size:          *numRdf,
 		Pending:       *concurrent,
 		PrintCounters: true,
 	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts)
+	dgraphClient := client.NewDgraphClient(conns, bmOpts, *clientDir)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
@@ -232,6 +246,16 @@ func main() {
 
 	filesList := strings.Split(*files, ",")
 	x.AssertTrue(len(filesList) > 0)
+	if *storeXid {
+		if err := dgraphClient.AddSchema(protos.SchemaUpdate{
+			Predicate: "xid",
+			ValueType: uint32(types.StringID),
+			Tokenizer: []string{"hash"},
+			Directive: protos.SchemaUpdate_INDEX,
+		}); err != nil {
+			log.Fatal("While adding schema to batch ", err)
+		}
+	}
 	if len(*schemaFile) > 0 {
 		processSchemaFile(*schemaFile, dgraphClient)
 	}
@@ -240,6 +264,7 @@ func main() {
 	time.Sleep(1 * time.Second)
 	var wg sync.WaitGroup
 	for _, file := range filesList {
+		file = strings.Trim(file, " \t")
 		wg.Add(1)
 		go func(file string) {
 			defer wg.Done()
@@ -264,4 +289,7 @@ func main() {
 	fmt.Printf("Time spent                : %v\n", c.Elapsed)
 
 	fmt.Printf("RDFs processed per second : %d\n", rate)
+
+	// Lets call this so that badger is closed properly.
+	dgraphClient.Close()
 }

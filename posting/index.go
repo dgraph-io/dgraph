@@ -20,6 +20,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
 	"time"
 
@@ -37,18 +38,6 @@ import (
 )
 
 const maxBatchSize = 32 * (1 << 20)
-
-var (
-	indexLog   trace.EventLog
-	reverseLog trace.EventLog
-	countLog   trace.EventLog
-)
-
-func init() {
-	indexLog = trace.NewEventLog("index", "Logger")
-	reverseLog = trace.NewEventLog("reverse", "Logger")
-	countLog = trace.NewEventLog("count", "Logger")
-}
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
 func IndexTokens(attr, lang string, src types.Val) ([]string, error) {
@@ -131,7 +120,7 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	plist, decr := GetOrCreate(key, groupId)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("retreived pl took %v", dur)
+			tr.LazyPrintf("GetOrCreate took %v", dur)
 		}
 	}
 	defer decr()
@@ -145,8 +134,7 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 		}
 		return err
 	}
-	indexLog.Printf("%s [%s] [%d] Term [%s]",
-		edge.Op, edge.Attr, edge.Entity, token)
+	x.PredicateStats.Add(fmt.Sprintf("i.%s", edge.Attr), 1)
 	return nil
 }
 
@@ -177,10 +165,16 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 		Facets:  t.Facets,
 	}
 
+	countBefore, countAfter := 0, 0
+	hasCountIndex := schema.State().HasCount(t.Attr)
 	plist.Lock()
-	countBefore := plist.length(0)
+	if hasCountIndex {
+		countBefore = plist.length(0)
+	}
 	_, err := plist.addMutation(ctx, edge)
-	countAfter := plist.length(0)
+	if hasCountIndex {
+		countAfter = plist.length(0)
+	}
 	plist.Unlock()
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -189,8 +183,9 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 		}
 		return err
 	}
+	x.PredicateStats.Add(fmt.Sprintf("r.%s", edge.Attr), 1)
 
-	if countAfter != countBefore && schema.State().HasCount(t.Attr) {
+	if hasCountIndex && countAfter != countBefore {
 		if err := updateCount(ctx, countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,
@@ -201,7 +196,6 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 			return err
 		}
 	}
-	reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)
 	return nil
 }
 func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) error {
@@ -250,7 +244,7 @@ func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 		}
 		return err
 	}
-	countLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, count, t.ValueId)
+	x.PredicateStats.Add(fmt.Sprintf("c.%s", t.Attr), 1)
 	return nil
 
 }
@@ -283,7 +277,13 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	var val types.Val
 	var found bool
 
+	t1 := time.Now()
 	l.index.Lock()
+	if dur := time.Since(t1); dur > time.Millisecond {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("acquired index lock %v %v %v", dur, t.Attr, t.Entity)
+		}
+	}
 	defer l.index.Unlock()
 
 	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.Star {
@@ -292,7 +292,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
 	{
-		t1 := time.Now()
+		t1 = time.Now()
 		l.Lock()
 		if dur := time.Since(t1); dur > time.Millisecond {
 			if tr, ok := trace.FromContext(ctx); ok {
@@ -316,6 +316,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 		if err != nil {
 			return err
 		}
+		x.PredicateStats.Add(t.Attr, 1)
 		if countAfter != countBefore && schema.State().HasCount(t.Attr) {
 			if err := updateCount(ctx, countParams{
 				attr:        t.Attr,
@@ -360,8 +361,10 @@ func deleteEntries(prefix []byte) error {
 	var batchSize int
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
 		key := idxIt.Item().Key()
+		data := make([]byte, len(key))
+		copy(data, key)
 		batchSize += len(key)
-		wb = badger.EntriesDelete(wb, key)
+		wb = badger.EntriesDelete(wb, data)
 
 		if batchSize >= maxBatchSize {
 			if err := pstore.BatchSet(wb); err != nil {
@@ -422,7 +425,7 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 					Attr:    attr,
 					Op:      protos.DirectedEdge_SET,
 				}
-				if err = addCountMutation(ctx, t, uint32(len(pl.Postings)), reverse); err != nil {
+				if err = addCountMutation(ctx, t, uint32(len(pl.Uids)/8), reverse); err != nil {
 					break
 				}
 			}
@@ -658,13 +661,9 @@ func RebuildIndex(ctx context.Context, attr string) error {
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
-	gid := group.BelongsTo(attr)
-	EvictGroup(gid)
-
-	iterOpt := badger.DefaultIteratorOptions
-	iterOpt.FetchValues = false
-	it := pstore.NewIterator(iterOpt)
-	defer it.Close()
+	if err := lcache.clear(attr); err != nil {
+		return err
+	}
 	pk := x.ParsedKey{
 		Attr: attr,
 	}

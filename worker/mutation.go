@@ -58,6 +58,7 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
+			waitForSyncMark(ctx, gid, rv.Index-1)
 			if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
 				return err
 			}
@@ -74,15 +75,16 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 		plist, decr := posting.GetOrCreate(key, gid)
 		if dur := time.Since(t); dur > time.Millisecond {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("retreived pl %v", dur)
+				tr.LazyPrintf("GetOrCreate took %v", dur)
 			}
 		}
-		defer decr()
 
 		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
 			x.Printf("Error while adding mutation: %v %v", edge, err)
+			decr()
 			return err // abort applying the rest of them.
 		}
+		decr()
 	}
 	return nil
 }
@@ -323,8 +325,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 	}
 
 	_, addr := groups().Leader(gid)
-	pl := pools().get(addr)
-	conn, err := pl.Get()
+	pl, err := pools().get(addr)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
@@ -332,7 +333,8 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 		che <- err
 		return
 	}
-	defer pl.Put(conn)
+	defer pools().release(pl)
+	conn := pl.Get()
 
 	c := protos.NewWorkerClient(conn)
 	ch := make(chan error, 1)
@@ -343,7 +345,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 	select {
 	case <-ctx.Done():
 		che <- ctx.Err()
-	case err := <-ch:
+	case err = <-ch:
 		che <- err
 	}
 }
@@ -377,25 +379,24 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 	mutationMap := make(map[uint32]*protos.Mutations)
 	addToMutationMap(mutationMap, m)
 
-	errors := make(chan error, len(mutationMap))
+	errorCh := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {
-		go proposeOrSend(ctx, gid, mu, errors)
+		go proposeOrSend(ctx, gid, mu, errorCh)
 	}
 
 	// Wait for all the goroutines to reply back.
 	// We return if an error was returned or the parent called ctx.Done()
-	var err error
+	var e error
 	for i := 0; i < len(mutationMap); i++ {
-		err = <-errors
-		if err != nil {
+		if err := <-errorCh; err != nil {
+			e = err
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while running all mutations: %+v", err)
 			}
 		}
 	}
-	close(errors)
-
-	return err
+	close(errorCh)
+	return e
 }
 
 // Mutate is used to apply mutations over the network on other instances.
@@ -409,7 +410,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 	}
 	node := groups().Node(m.GroupId)
 	var tr trace.Trace
-	if rand.Float64() < *Tracing {
+	if rand.Float64() < Config.Tracing {
 		tr = trace.New("Dgraph", "GrpcMutate")
 		defer tr.Finish()
 		tr.SetMaxEvents(1000)

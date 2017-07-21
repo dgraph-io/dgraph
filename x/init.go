@@ -20,18 +20,13 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 
 	yaml "gopkg.in/yaml.v2"
 )
 
 var (
-	configFile = flag.String("config", "",
-		"YAML configuration file containing dgraph settings.")
-	version  = flag.Bool("version", false, "Prints the version of Dgraph")
 	initFunc []func()
-	logger   *log.Logger
 	isTest   bool
 
 	// These variables are set using -ldflags
@@ -57,24 +52,10 @@ func AddInit(f func()) {
 
 // Init initializes flags and run all functions in initFunc.
 func Init() {
-	log.SetFlags(log.Lshortfile | log.Flags())
-	flag.Parse()
-	if !flag.Parsed() {
-		log.Fatal("Unable to parse flags")
-	}
-
 	printVersionOnly()
 
 	// Lets print the details of the current build on startup.
 	printBuildDetails()
-
-	if *configFile != "" {
-		log.Println("Loading configuration from file:", *configFile)
-		loadConfigFromYAML()
-	}
-
-	logger = log.New(os.Stderr, "", log.Lshortfile|log.Flags())
-	AssertTrue(logger != nil)
 
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
@@ -83,16 +64,17 @@ func Init() {
 }
 
 // loadConfigFromYAML reads configurations from specified YAML file.
-func loadConfigFromYAML() {
-	bs, err := ioutil.ReadFile(*configFile)
-	Checkf(err, "Cannot open specified config file: %v", *configFile)
+func LoadConfigFromYAML(file string) {
+	bs, err := ioutil.ReadFile(file)
+	Checkf(err, "Cannot open specified config file: %v", file)
 
 	m := make(map[string]string)
-	Checkf(yaml.Unmarshal(bs, &m), "Error while parsing config file: %v", *configFile)
+	Checkf(yaml.Unmarshal(bs, &m), "Error while parsing config file: %v", Config.ConfigFile)
 
 	for k, v := range m {
-		fmt.Printf("Picked flag from config: [%q = %v]\n", k, v)
-		flag.Set(k, v)
+		Printf("Picked flag from config: [%q = %v]\n", k, v)
+		err := flag.Set(k, v)
+		Checkf(err, "While setting flag from config.")
 	}
 }
 
@@ -111,7 +93,7 @@ Branch           : %v`,
 
 // printVersionOnly prints version and other helpful information if --version.
 func printVersionOnly() {
-	if *version {
+	if Config.Version {
 		printBuildDetails()
 		fmt.Println("Copyright 2017 Dgraph Labs, Inc.")
 		fmt.Println(`
@@ -126,14 +108,4 @@ To say hi to the community       , visit https://dgraph.slack.com.
 
 func Version() string {
 	return dgraphVersion
-}
-
-// Printf does a log.Printf. We often do printf for debugging but has to keep
-// adding import "fmt" or "log" and removing them after we are done.
-// Let's add Printf to "x" and include "x" almost everywhere. Caution: Do remember
-// to call x.Init. For tests, you need a TestMain that calls x.Init.
-func Printf(format string, args ...interface{}) {
-	AssertTruef(logger != nil, "Logger is not defined. Have you called x.Init?")
-	// Call depth is one higher than default.
-	logger.Output(2, fmt.Sprintf(format, args...))
 }

@@ -66,13 +66,13 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 	// Send this over the network.
 	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
 	addr := groups().AnyServer(gid)
-	pl := pools().get(addr)
-
-	conn, err := pl.Get()
+	pl, err := pools().get(addr)
 	if err != nil {
 		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
 	}
-	defer pl.Put(conn)
+	defer pools().release(pl)
+
+	conn := pl.Get()
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Sending request to %v", addr)
 	}
@@ -315,6 +315,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		var filteredRes []*result
 		if !isValueEdge { // for uid edge.. get postings
 			var perr error
+			filteredRes = make([]*result, 0, pl.Length(opts.AfterUID))
 			pl.Postings(opts, func(p *protos.Posting) bool {
 				res := true
 				res, perr = applyFacetsTree(p.Facets, facetsTree)
@@ -749,7 +750,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
-		if fc.threshold, err = strconv.ParseInt(q.SrcFunc[3], 10, 64); err != nil {
+		if fc.threshold, err = strconv.ParseInt(q.SrcFunc[3], 0, 64); err != nil {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 				q.SrcFunc[0], q.SrcFunc[2])
 		}
@@ -816,7 +817,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
 		}
-		if fc.uidPresent, err = strconv.ParseUint(q.SrcFunc[2], 10, 64); err != nil {
+		if fc.uidPresent, err = strconv.ParseUint(q.SrcFunc[2], 0, 64); err != nil {
 			return nil, err
 		}
 		checkRoot(q, fc)
@@ -1067,6 +1068,11 @@ func (cp *countParams) evaluate(out *protos.Result) {
 	} else if cp.fn == "gt" {
 		count += 1
 	}
+
+	if count < 0 && (cp.fn == "lt" || cp.fn == "le") {
+		return
+	}
+
 	if count < 0 {
 		count = 0
 	}
