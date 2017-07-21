@@ -8120,6 +8120,7 @@ func TestPBUnmarshalToStruct3(t *testing.T) {
 	pb := processToPB(t, query, map[string]string{}, false)
 	var r res
 	err := client.Unmarshal(pb, &r)
+	err = client.Unmarshal(pb, &r)
 	require.NoError(t, err)
 	require.NotEmpty(t, r.Root[0].Location)
 	require.Equal(t, 4, len(r.Root))
@@ -8257,6 +8258,7 @@ func TestPBUnmarshalToStruct7(t *testing.T) {
 	var r res
 	err := client.Unmarshal(pb, &r)
 	require.NoError(t, err)
+	// Lets unmarshal again, this should clear r first and then write to it.
 	err = client.Unmarshal(pb, &r)
 	require.NoError(t, err)
 	require.Equal(t, 4, len(r.Me))
