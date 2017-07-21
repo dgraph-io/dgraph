@@ -2022,6 +2022,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 		if key == "func" {
 			// Store the generator function.
+			if gq.Func != nil {
+				return gq, x.Errorf("Only one function allowed at root")
+			}
 			gen, err := parseFunction(it, gq)
 			if err != nil {
 				return gq, err
@@ -2074,6 +2077,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 			}
 
+			if _, ok := gq.Args[key]; ok {
+				return gq, x.Errorf("Repeated key %q at root", key)
+			}
 			if val == "" {
 				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 			}
@@ -2396,6 +2402,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 			// Stores args in GraphQuery, will be used later while retrieving results.
 			for _, p := range args {
+				if _, ok := curp.Args[p.Key]; ok {
+					return x.Errorf("Got repeated key %q at level %q", p.Key, curp.Attr)
+				}
 				if p.Val == "" {
 					return x.Errorf("Got empty argument")
 				}

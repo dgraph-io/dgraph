@@ -725,6 +725,10 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			return err
 		}
 
+		if len(args.Order) != 0 && len(args.FacetOrder) != 0 {
+			return x.Errorf("Cannot specify order at both args and facets")
+		}
+
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
 			Params: args,
