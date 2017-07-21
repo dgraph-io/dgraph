@@ -8227,6 +8227,41 @@ func TestPBUnmarshalToStruct6(t *testing.T) {
 	require.NotZero(t, r.Me[0].Dob)
 }
 
+func TestPBUnmarshalToStruct7(t *testing.T) {
+	populateGraph(t)
+
+	type Person struct {
+		Name string
+		Dob  time.Time
+	}
+
+	type res struct {
+		Me []Person
+	}
+
+	query := `
+		{
+			var(func: uid(1)) {
+				f as friend {
+					n as dob
+				}
+			}
+
+			Me(func: uid(f), orderasc: val(n)) {
+				Name: name
+				Dob: dob
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, true)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	err = client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(r.Me))
+}
+
 func TestPBUnmarshalError1(t *testing.T) {
 	var a int
 	err := client.Unmarshal([]*protos.Node{}, a)

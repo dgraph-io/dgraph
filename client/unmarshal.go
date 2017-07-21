@@ -210,21 +210,42 @@ func fieldMap(typ reflect.Type) map[string]reflect.StructField {
 	return fmap
 }
 
-// Unmarshal is used to unpack a query response into a custom struct.  The 
-// response from Dgraph.Run (a *protos.Response) has 4 fields, L(Latency), 
+func resetStruct(t reflect.Type, v reflect.Value) {
+	for i := 0; i < v.NumField(); i++ {
+		f := v.Field(i)
+		ft := t.Field(i)
+		if !f.CanSet() {
+			continue
+		}
+		switch ft.Type.Kind() {
+		case reflect.Slice:
+			f.Set(reflect.MakeSlice(ft.Type, 0, 0))
+		case reflect.Struct:
+			resetStruct(ft.Type, f)
+		case reflect.Ptr:
+			fv := reflect.New(ft.Type.Elem())
+			resetStruct(ft.Type.Elem(), fv.Elem())
+			f.Set(fv)
+		default:
+		}
+	}
+}
+
+// Unmarshal is used to unpack a query response into a custom struct.  The
+// response from Dgraph.Run (a *protos.Response) has 4 fields, L(Latency),
 // Schema, AssignedUids and N(Nodes). This function takes in the nodes part of
 // the response and tries to unmarshal it into the given struct v.
 //
 // protos.Response.N is a slice of Nodes, one for each named query block in the
-// request.  Each node in that slice has attribute "_root_" and a child for 
+// request.  Each node in that slice has attribute "_root_" and a child for
 // each node returned as a result by that query block.  For a response resp,
 // and struct variable v, with a field tagged with the same name as a query
 // block:
 // Unmarshal(resp.N, s)
 // will try to match named query blocks with tags in s and then unmarshall the
 // the matched block into the matched fields of s.
-// 
-// Unmarshal does not have to be called at resp.N.  Clients can navigate to a 
+//
+// Unmarshal does not have to be called at resp.N.  Clients can navigate to a
 // particular part of the response and unmarshal the children.
 func Unmarshal(n []*protos.Node, v interface{}) error {
 	rv := reflect.ValueOf(v)
@@ -236,6 +257,9 @@ func Unmarshal(n []*protos.Node, v interface{}) error {
 		return fmt.Errorf("Cannot unmarshal into: %v . Require a pointer to a struct",
 			val.Kind())
 	}
+
+	// This is important so that all fields of the struct given by the user are reset.
+	resetStruct(val.Type(), val)
 
 	// Root can have multiple query blocks.
 	for _, node := range n {
