@@ -1192,6 +1192,45 @@ func TestMutationObjectVariables(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"count(likes)":3}]}`, r)
 }
 
+func TestMutationSubjectObjectVariables(t *testing.T) {
+	m1 := `
+		mutation {
+			set {
+				<0x600>    <friend>   <0x501> .
+				<0x600>    <friend>   <0x502> .
+				<0x600>    <friend>   <0x503> .
+				uid(user)    <likes>    uid(myfriend) .
+			}
+		}
+		{
+			user as var(func: uid(0x600))
+			me(func: uid( 0x600)) {
+				myfriend as friend
+			}
+		}
+    `
+
+	parsed, err := gql.Parse(gql.Request{Str: m1, Http: true})
+	require.NoError(t, err)
+
+	var l query.Latency
+	qr := query.QueryRequest{Latency: &l, GqlQuery: &parsed}
+	_, err = qr.ProcessWithMutation(defaultContext())
+
+	require.NoError(t, err)
+
+	q1 := `
+		{
+			me(func: uid(0x600)) {
+				count(likes)
+            }
+		}
+    `
+	r, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"me":[{"count(likes)":3}]}`, r)
+}
+
 func TestMutationObjectVariablesError(t *testing.T) {
 	m1 := `
 		mutation {
