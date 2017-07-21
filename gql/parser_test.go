@@ -3163,6 +3163,32 @@ func TestParseFacetsFail1(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseRepeatArgsError1(t *testing.T) {
+	// key can not be empty..
+	query := `
+	{
+  		me(func: anyoftext(Text, "biology"), func: anyoftext(Text, "science")) {
+			Text
+  		}
+	}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseRepeatArgsError2(t *testing.T) {
+	// key can not be empty..
+	query := `
+	{
+  		me(func: anyoftext(Text, "science")) {
+			Text(first: 1, first: 4)
+  		}
+	}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
 // Test facets parsing for filtering..
 func TestFacetsFilterSimple(t *testing.T) {
 	// all friends of 0x1 who are close to him

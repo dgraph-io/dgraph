@@ -1428,6 +1428,24 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 		js)
 }
 
+func TestDoubleOrder(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+		me(func: uid(1)) {
+			friend(orderdesc: dob) @facets(orderasc: weight) 
+		}
+	}
+  `
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
+	require.Error(t, err)
+}
+
 func TestVarInAggError(t *testing.T) {
 	populateGraph(t)
 	query := `
