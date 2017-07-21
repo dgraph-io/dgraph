@@ -275,6 +275,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	for i := 0; i < srcFn.n; i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
 		var key []byte
 		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
 			srcFn.fnType == HasFn || srcFn.fnType == UidInFn {
@@ -484,6 +489,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 			var values []types.Val
 			for _, uid := range uids.Uids {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
 				key := x.DataKey(attr, uid)
 				pl, decr := posting.GetOrCreate(key, gid)
 
@@ -508,6 +518,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 			filtered := matchRegex(uids, values, srcFn.regex)
 			for i := 0; i < len(out.UidMatrix); i++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
 				algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
 			}
 		} else {
@@ -518,6 +533,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	// We fetch the actual value for the uids, compare them to the value in the
 	// request and filter the uids only if the tokenizer IsLossy.
 	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
 		tokenizer, err := pickTokenizer(attr, srcFn.fname)
 		// We should already have checked this in getInequalityTokens.
 		x.Check(err)
@@ -542,6 +562,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				rowsToFilter = 1
 			}
 			for row := 0; row < rowsToFilter; row++ {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
 				algo.ApplyFilter(out.UidMatrix[row], func(uid uint64, i int) bool {
 					var langs []string
 					if len(srcFn.lang) > 0 {
@@ -629,6 +654,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		}
 
 		for i := 0; i < len(out.UidMatrix); i++ {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+			}
 			algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
 		}
 	}
