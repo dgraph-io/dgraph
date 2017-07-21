@@ -53,14 +53,16 @@ func (i item) String() string {
 }
 
 type ItemIterator struct {
-	l   *Lexer
-	idx int
+	l       *Lexer
+	idx     int
+	savePos int
 }
 
 func (l *Lexer) NewIterator() *ItemIterator {
 	it := &ItemIterator{
-		l:   l,
-		idx: -1,
+		l:       l,
+		idx:     -1,
+		savePos: -1,
 	}
 	return it
 }
@@ -86,6 +88,16 @@ func (p *ItemIterator) Prev() bool {
 		return true
 	}
 	return false
+}
+
+// Save saves the current position of the iterator.
+func (p *ItemIterator) Restore() {
+	p.idx = p.savePos
+}
+
+// Save saves the current position of the iterator.
+func (p *ItemIterator) Save() {
+	p.savePos = p.idx
 }
 
 // Peek returns the next n items without consuming them.

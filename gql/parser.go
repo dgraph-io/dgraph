@@ -1567,13 +1567,12 @@ func parseFacets(it *lex.ItemIterator) (facetRes, error) {
 	var orderdesc bool
 	peeks, err := it.Peek(1)
 	expectArg := true
+	it.Save()
 	if err == nil && peeks[0].Typ == itemLeftRound {
 		it.Next() // ignore '('
 		// parse comma separated strings (a1,b1,c1)
 		done := false
-		numTokens := 0
 		for it.Next() {
-			numTokens++
 			item := it.Item()
 			if item.Typ == itemRightRound { // done
 				if varName == "" {
@@ -1589,11 +1588,17 @@ func parseFacets(it *lex.ItemIterator) (facetRes, error) {
 					return res, err
 				}
 				if peekIt[0].Val == "as" {
+					if varName != "" {
+						return res, x.Errorf("Invalid use of \"as\" in facets")
+					}
 					varName = it.Item().Val
 					it.Next() // Skip the "as"
 					continue
 				} else if peekIt[0].Typ == itemColon {
 					// this is an order key
+					if orderby != "" {
+						return res, x.Errorf("Invalid use of orderasc/oredrdesc in facets")
+					}
 					orderby = it.Item().Val
 					if orderby != "orderasc" && orderby != "orderdesc" {
 						return res, x.Errorf("Expected orderasc or orderdesc before : in @facets. Got: ", orderby)
@@ -1630,9 +1635,7 @@ func parseFacets(it *lex.ItemIterator) (facetRes, error) {
 			// this is not (facet1, facet2, facet3)
 			// try parsing filters. (eq(facet1, val1) AND eq(facet2, val2)...)
 			// revert back tokens
-			for i := 0; i < numTokens+1; i++ { // +1 for starting '('
-				it.Prev()
-			}
+			it.Restore()
 			filterTree, err := parseFilter(it)
 			res.ft = filterTree
 			return res, err
