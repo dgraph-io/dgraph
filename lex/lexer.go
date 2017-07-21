@@ -76,6 +76,9 @@ func (p *ItemIterator) Next() bool {
 
 // Item returns the current item and advances the index.
 func (p *ItemIterator) Item() item {
+	if p.idx < 0 || p.idx >= len(p.l.items) {
+		return item{}
+	}
 	return (p.l.items)[p.idx]
 }
 
@@ -88,12 +91,18 @@ func (p *ItemIterator) Prev() bool {
 	return false
 }
 
-// Restore restores the last saved position of the iterator.
+// Restore restores the the iterator to position specified.
 func (p *ItemIterator) Restore(pos int) {
 	p.idx = pos
+	if p.idx > len(p.l.items) {
+		p.idx = len(p.l.items)
+	}
+	if p.idx <= -1 {
+		p.idx = len(p.l.items)
+	}
 }
 
-// Save saves the current position of the iterator.
+// Save returns the current position of the iterator which we can use for restoring later.
 func (p *ItemIterator) Save() int {
 	return p.idx
 }
