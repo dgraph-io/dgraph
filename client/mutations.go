@@ -177,7 +177,7 @@ type Dgraph struct {
 
 	// Map of filename to x.Watermark. Used for checkpointing.
 	marks            syncMarks
-	reqs             chan Req
+	reqs             chan *Req
 	checkpointTicker *time.Ticker // Used to write checkpoints periodically.
 }
 
@@ -217,7 +217,7 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
 		alloc:  alloc,
 		marks:  make(map[string]waterMark),
-		reqs:   make(chan Req, opts.Pending*2),
+		reqs:   make(chan *Req, opts.Pending*2),
 	}
 
 	d.wg.Add(1)
@@ -294,7 +294,7 @@ func (d *Dgraph) printCounters() {
 	}
 }
 
-func (d *Dgraph) request(req Req) {
+func (d *Dgraph) request(req *Req) {
 	counter := atomic.AddUint64(&d.mutations, 1)
 	factor := time.Second
 RETRY:
@@ -330,7 +330,7 @@ func (d *Dgraph) makeRequests() {
 }
 
 func (d *Dgraph) makeSchemaRequests() {
-	var req Req
+	req := new(Req)
 LOOP:
 	for {
 		select {
@@ -343,7 +343,7 @@ LOOP:
 			start := time.Now()
 			if req.size() > 0 {
 				d.request(req)
-				req = Req{}
+				req = new(Req)
 			}
 			elapsedMillis := time.Since(start).Seconds() * 1e3
 			if elapsedMillis < 10 {
@@ -360,7 +360,7 @@ LOOP:
 
 // Used to batch the nquads into Req of size given by user and send to d.reqs channel.
 func (d *Dgraph) batchNquads() {
-	var req Req
+	req := new(Req)
 	for n := range d.nquads {
 		if n.op == SET {
 			req.Set(n.e)
@@ -369,7 +369,7 @@ func (d *Dgraph) batchNquads() {
 		}
 		if req.size() == d.opts.Size {
 			d.reqs <- req
-			req = Req{}
+			req = new(Req)
 		}
 	}
 	if req.size() > 0 {
@@ -393,7 +393,7 @@ func (d *Dgraph) BatchSet(e Edge) error {
 // dgraphloader to do checkpointing so that in case the loader crashes, we can skip the lines
 // which the server has already processed. Most users would only need BatchSet which does the
 // batching automatically.
-func (d *Dgraph) BatchSetWithMark(r Req, file string, line uint64) error {
+func (d *Dgraph) BatchSetWithMark(r *Req, file string, line uint64) error {
 	sm := d.marks[file]
 	if sm.mark != nil && line != 0 {
 		r.mark = sm.mark
@@ -428,8 +428,13 @@ func (d *Dgraph) BatchFlush() {
 	close(d.nquads)
 	close(d.schema)
 	d.wg.Wait()
-	// Sync all marks so that we know final line that was completed.
-	d.syncAllMarks()
+	// After we have received response from server and sent the marks for completion,
+	// we need to wait for all of them to be processed.
+	for _, wm := range d.marks {
+		for wm.mark.WaitingFor() {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 	// Write final checkpoint before stopping.
 	d.writeCheckpoint()
 	if d.ticker != nil {

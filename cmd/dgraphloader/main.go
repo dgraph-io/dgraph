@@ -159,7 +159,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 	}
 
 	var line uint64
-	var r client.Req
+	r := new(client.Req)
 	var batchSize int
 	for {
 		err = readLine(bufReader, &buf)
@@ -191,7 +191,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 				log.Fatal("While adding mutation to batch: ", err)
 			}
 			batchSize = 0
-			r = client.Req{}
+			r = new(client.Req)
 		}
 	}
 	if err != io.EOF {

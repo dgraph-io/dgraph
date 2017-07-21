@@ -54,23 +54,17 @@ func (d *Dgraph) NewSyncMarks(files []string) error {
 
 	t := time.NewTicker(time.Minute)
 	d.checkpointTicker = t
-	go d.storeCheckpoint(t)
+	go func(t *time.Ticker) {
+		for range t.C {
+			d.writeCheckpoint()
+		}
+	}(t)
 	return nil
 }
 
 // Get checkpoint for file from Badger.
 func (d *Dgraph) Checkpoint(file string) (uint64, error) {
 	return d.alloc.getFromKV(fmt.Sprintf("checkpoint-%s", file))
-}
-
-// After we have received response from server and sent the marks for completion,
-// we need to wait for all of them to be processed.
-func (d *Dgraph) syncAllMarks() {
-	for _, wm := range d.marks {
-		for wm.mark.WaitingFor() {
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
 }
 
 // Used to write checkpoints to Badger.
@@ -95,13 +89,6 @@ func (d *Dgraph) writeCheckpoint() {
 		if err := wbe.Error; err != nil {
 			fmt.Printf("Error while writing to disk %v\n", err)
 		}
-	}
-}
-
-// Used to store checkpoints for various files periodically.
-func (d *Dgraph) storeCheckpoint(ticker *time.Ticker) {
-	for range ticker.C {
-		d.writeCheckpoint()
 	}
 }
 
