@@ -19,6 +19,7 @@ package query
 
 import (
 	"bufio"
+	"container/heap"
 	"errors"
 	"fmt"
 	"io"
@@ -306,21 +307,13 @@ type fastJsonNode struct {
 	attrs    []*fastJsonAttr
 }
 
-func (fj *fastJsonNode) ensureChildrenMap() {
-}
-
-func (fj *fastJsonNode) ensureAttrsMap() {
-}
-
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 	if bs, err := valToBytes(v); err == nil {
-		fj.ensureAttrsMap()
 		fj.attrs = append(fj.attrs, makeScalarAttr(attr, bs))
 	}
 }
 
 func (fj *fastJsonNode) AddMapChild(attr string, val outputNode, _ bool) {
-	fj.ensureAttrsMap()
 	fj.attrs = append(fj.attrs, makeNodeAttr(attr, val.(*fastJsonNode)))
 }
 
@@ -334,7 +327,6 @@ func (fj *fastJsonNode) New(attr string) outputNode {
 }
 
 func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
-	fj.ensureAttrsMap()
 	found := false // TODO(tzdybal) - merge later!
 	if found {
 		/*
@@ -382,7 +374,63 @@ func valToBytes(v types.Val) ([]byte, error) {
 	}
 }
 
+type myInterface interface {
+	sort.Interface
+	get(i int) interface{}
+	put(i int, v interface{})
+}
+
+// implements heap.Interface for slices of 'withAttr' objects
+type attrSorter struct {
+	slice myInterface
+	len   int
+}
+
+type attrSlice []*fastJsonAttr
+
+func (h attrSlice) Len() int                 { return len(h) }
+func (h attrSlice) Less(i, j int) bool       { return h[i].attr < h[j].attr }
+func (h attrSlice) Swap(i, j int)            { h[i], h[j] = h[j], h[i] }
+func (h attrSlice) get(i int) interface{}    { return h[i] }
+func (h attrSlice) put(i int, v interface{}) { h[i] = v.(*fastJsonAttr) }
+
+type nodeSlice []*fastJsonNode
+
+func (h nodeSlice) Len() int                 { return len(h) }
+func (h nodeSlice) Less(i, j int) bool       { return h[i].attr < h[j].attr }
+func (h nodeSlice) Swap(i, j int)            { h[i], h[j] = h[j], h[i] }
+func (h nodeSlice) get(i int) interface{}    { return h[i] }
+func (h nodeSlice) put(i int, v interface{}) { h[i] = v.(*fastJsonNode) }
+
+func (h attrSorter) Len() int           { return h.len }
+func (h attrSorter) Less(i, j int) bool { return h.slice.Less(i, j) }
+func (h attrSorter) Swap(i, j int)      { h.slice.Swap(i, j) }
+
+func (h attrSorter) Push(x interface{}) {
+	// sorter is intended to work on existing slice, no pushing
+}
+
+func (h attrSorter) Pop() interface{} {
+	x := h.slice.get(h.len - 1)
+	h.len--
+	return x
+}
+
+func heapSort(slice myInterface) {
+	helper := attrSorter{slice, slice.Len()}
+	heap.Init(helper)
+
+	size := helper.Len()
+	for size > 0 {
+		helper.Pop()
+		slice.put(size-1, helper.Pop())
+		size--
+	}
+}
+
 func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
+	//heapSort(attrSlice(fj.attrs))
+	//heapSort(nodeSlice(fj.children))
 	sort.Slice(fj.attrs, func(i, j int) bool {
 		return fj.attrs[i].attr < fj.attrs[j].attr
 	})
@@ -426,18 +474,17 @@ func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 		bufw.WriteRune(':')
 
 		if isAttr {
-			v := &fastJsonAttr{nodeVal: &fastJsonNode{}}
-			scalar := false
+			var v *fastJsonAttr
 			for ; ai < len(fj.attrs) && fj.attrs[ai].attr == k; ai++ {
 				a := fj.attrs[ai]
 				if a.isScalar {
 					bufw.Write(a.scalarVal)
-					scalar = true
 					ai++
 					break
 				} else {
-					v.nodeVal.ensureAttrsMap()
-					v.nodeVal.ensureChildrenMap()
+					if v == nil {
+						v = &fastJsonAttr{nodeVal: &fastJsonNode{}}
+					}
 
 					for kk, vv := range a.nodeVal.children {
 						v.nodeVal.children[kk] = vv
@@ -445,7 +492,7 @@ func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 					v.nodeVal.attrs = append(v.nodeVal.attrs, a.nodeVal.attrs...)
 				}
 			}
-			if !scalar {
+			if v != nil {
 				v.nodeVal.encode(bufw)
 			}
 			// ai incremented in loop
