@@ -41,7 +41,9 @@ const (
 // multiple set, delete and schema mutations, and a single GraphQL+- query.  If the query contains 
 // GraphQL variables, then it must be set with SetQueryWithVariables rather than SetQuery.
 type Req struct {
-	gr protos.Request
+	gr   protos.Request
+	mark *x.WaterMark
+	line uint64
 }
 
 // Request returns the protos.Request backing the Req.

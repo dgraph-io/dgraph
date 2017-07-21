@@ -181,6 +181,11 @@ type Dgraph struct {
 	mutations uint64
 	// To get time elapsed.
 	start time.Time
+
+	// Map of filename to x.Watermark. Used for checkpointing.
+	marks            syncMarks
+	reqs             chan *Req
+	checkpointTicker *time.Ticker // Used to write checkpoints periodically.
 }
 
 // NewDgraphClient creates a new Dgraph for interacting with the Dgraph store connected to in
@@ -188,10 +193,10 @@ type Dgraph struct {
 // in clientDir.
 //
 // The client can be backed by multiple connections (to the same server, or multiple servers in a
-// cluster).  
+// cluster).
 //
-// A single client is thread safe for sharing with multiple go routines (though a single Req 
-// should not be shared unless the go routines negotiate exclusive assess to the Req functions).  
+// A single client is thread safe for sharing with multiple go routines (though a single Req
+// should not be shared unless the go routines negotiate exclusive assess to the Req functions).
 func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
 	var clients []protos.DgraphClient
 	for _, conn := range conns {
@@ -205,7 +210,7 @@ func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, client
 func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientDir string) *Dgraph {
 	x.Check(os.MkdirAll(clientDir, 0700))
 	opt := badger.DefaultOptions
-	opt.SyncWrites = false
+	opt.SyncWrites = true // So that checkpoints are persisted immediately.
 	opt.MapTablesTo = table.MemoryMap
 	opt.Dir = clientDir
 	opt.ValueDir = clientDir
@@ -226,7 +231,12 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		nquads: make(chan nquadOp, opts.Pending*opts.Size),
 		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
 		alloc:  alloc,
+		marks:  make(map[string]waterMark),
+		reqs:   make(chan *Req, opts.Pending*2),
 	}
+
+	d.wg.Add(1)
+	go d.batchNquads()
 
 	for i := 0; i < opts.Pending; i++ {
 		d.wg.Add(1)
@@ -323,24 +333,19 @@ RETRY:
 		}
 		goto RETRY
 	}
-	req.reset()
+
+	// Mark watermarks as done.
+	if req.line != 0 && req.mark != nil {
+		atomic.AddUint64(&d.rdfs, uint64(req.size()))
+		req.mark.Ch <- x.Mark{Index: req.line, Done: true}
+	}
 }
 
+// makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
+// It doesn't need to batch the requests anymore. Batching is already done for it by the
+// caller functions.
 func (d *Dgraph) makeRequests() {
-	req := new(Req)
-
-	for n := range d.nquads {
-		if n.op == SET {
-			req.Set(n.e)
-		} else if n.op == DEL {
-			req.Delete(n.e)
-		}
-		if req.size() == d.opts.Size {
-			d.request(req)
-		}
-	}
-
-	if req.size() > 0 {
+	for req := range d.reqs {
 		d.request(req)
 	}
 	d.wg.Done()
@@ -360,6 +365,7 @@ LOOP:
 			start := time.Now()
 			if req.size() > 0 {
 				d.request(req)
+				req = new(Req)
 			}
 			elapsedMillis := time.Since(start).Seconds() * 1e3
 			if elapsedMillis < 10 {
@@ -374,6 +380,27 @@ LOOP:
 	d.wg.Done()
 }
 
+// Used to batch the nquads into Req of size given by user and send to d.reqs channel.
+func (d *Dgraph) batchNquads() {
+	req := new(Req)
+	for n := range d.nquads {
+		if n.op == SET {
+			req.Set(n.e)
+		} else if n.op == DEL {
+			req.Delete(n.e)
+		}
+		if req.size() == d.opts.Size {
+			d.reqs <- req
+			req = new(Req)
+		}
+	}
+	if req.size() > 0 {
+		d.reqs <- req
+	}
+	close(d.reqs)
+	d.wg.Done()
+}
+
 // BatchSet adds Edge e as a set to the current batch mutation.  Once added, the client will apply
 // the mutation to the Dgraph server when it is ready to flush its buffers.  The edge will be added
 // to one of the batches as specified in d's BatchMutationOptions.  If that batch fills, it
@@ -384,6 +411,22 @@ func (d *Dgraph) BatchSet(e Edge) error {
 		op: SET,
 	}
 	atomic.AddUint64(&d.rdfs, 1)
+	return nil
+}
+
+// BatchSetWithMark takes a Req which has a batch of edges. It accepts a file to which the edges
+// belong and also the line number of the last line that the batch contains. This is used by the
+// dgraphloader to do checkpointing so that in case the loader crashes, we can skip the lines
+// which the server has already processed. Most users would only need BatchSet which does the
+// batching automatically.
+func (d *Dgraph) BatchSetWithMark(r *Req, file string, line uint64) error {
+	sm := d.marks[file]
+	if sm.mark != nil && line != 0 {
+		r.mark = sm.mark
+		r.line = line
+		sm.mark.Ch <- x.Mark{Index: line}
+	}
+	d.reqs <- r
 	return nil
 }
 
@@ -419,8 +462,20 @@ func (d *Dgraph) BatchFlush() {
 	close(d.nquads)
 	close(d.schema)
 	d.wg.Wait()
+	// After we have received response from server and sent the marks for completion,
+	// we need to wait for all of them to be processed.
+	for _, wm := range d.marks {
+		for wm.mark.WaitingFor() {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	// Write final checkpoint before stopping.
+	d.writeCheckpoint()
 	if d.ticker != nil {
 		d.ticker.Stop()
+	}
+	if d.checkpointTicker != nil {
+		d.checkpointTicker.Stop()
 	}
 }
 
@@ -442,11 +497,11 @@ func (d *Dgraph) BatchFlush() {
 // - N : Slice of *protos.Node returned by the query (Note: protos.Node not client.Node).
 //
 // There is an N[i], with Attribute "_root_", for each named query block in the query added to req.
-// The N[i] also have a slice of nodes, N[i].Children each with Attribute equal to the query name, 
-// for every answer to that query block.  From there, the Children represent nested blocks in the 
+// The N[i] also have a slice of nodes, N[i].Children each with Attribute equal to the query name,
+// for every answer to that query block.  From there, the Children represent nested blocks in the
 // query, the Attribute is the edge followed and the Properties are the scalar edges.
 //
-// Print a response with 
+// Print a response with
 // 	"github.com/gogo/protobuf/proto"
 // 	...
 // 	req.SetQuery(`{
@@ -455,7 +510,7 @@ func (d *Dgraph) BatchFlush() {
 //			friend {
 // 				name
 //			}
-//		}	
+//		}
 //	}`)
 // 	...
 // 	resp, err := dgraphClient.Run(context.Background(), &req)
