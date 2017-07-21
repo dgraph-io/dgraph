@@ -3548,12 +3548,42 @@ func TestMutationVariables(t *testing.T) {
 
 	require.Equal(t, 1, len(res.MutationVars))
 
-	require.EqualValues(t, "adults", res.MutationVars[res.Mutation.Set[0]])
+	require.EqualValues(t, "adults", res.MutationVars[0])
 
 	expected := protos.NQuad{
 		Predicate:   "isadult",
 		ObjectValue: &protos.Value{&protos.Value_DefaultVal{"true"}},
 		SubjectVar:  "adults",
+	}
+	require.EqualValues(t, expected, *res.Mutation.Set[0])
+}
+
+func TestMutationVariables2(t *testing.T) {
+	query := `
+		mutation {
+			set {
+				uid(adults) <isadult> uid(engineer) .
+				<0x900> <b> <0x901> .
+			}
+		}
+		{
+			me(func: uid( 0x900)) {
+				adults as friends @filter(gt(age, 18))
+			}
+			engineer as me(func: uid(0x1))
+		}
+	`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(res.MutationVars))
+
+	require.EqualValues(t, []string{"adults", "engineer"}, res.MutationVars)
+
+	expected := protos.NQuad{
+		Predicate:  "isadult",
+		ObjectVar:  "engineer",
+		SubjectVar: "adults",
 	}
 	require.EqualValues(t, expected, *res.Mutation.Set[0])
 }

@@ -472,7 +472,7 @@ type Result struct {
 	Query        []*GraphQuery
 	QueryVars    []*Vars
 	Mutation     *Mutation
-	MutationVars map[*protos.NQuad]string
+	MutationVars []string
 	Schema       *protos.SchemaRequest
 }
 
@@ -580,11 +580,7 @@ func Parse(r Request) (res Result, rerr error) {
 
 		allVars := res.QueryVars
 		if len(res.MutationVars) > 0 {
-			var varNames []string
-			for _, v := range res.MutationVars {
-				varNames = append(varNames, v)
-			}
-			varNames = x.RemoveDuplicates(varNames)
+			varNames := x.RemoveDuplicates(res.MutationVars)
 
 			allVars = append(allVars, &Vars{Needs: varNames})
 		}

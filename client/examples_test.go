@@ -709,7 +709,6 @@ mutation {
 		}
 	}
 
-
 	resp, err = dgraphClient.Run(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
