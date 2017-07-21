@@ -1192,15 +1192,15 @@ func TestMutationSubjectObjectVariables(t *testing.T) {
 	m1 := `
 		mutation {
 			set {
-				<0x600>    <friend>   <0x501> .
-				<0x600>    <friend>   <0x502> .
-				<0x600>    <friend>   <0x503> .
+				<0x601>    <friend>   <0x501> .
+				<0x601>    <friend>   <0x502> .
+				<0x601>    <friend>   <0x503> .
 				uid(user)    <likes>    uid(myfriend) .
 			}
 		}
 		{
-			user as var(func: uid(0x600))
-			me(func: uid( 0x600)) {
+			user as var(func: uid(0x601))
+			me(func: uid(0x601)) {
 				myfriend as friend
 			}
 		}
@@ -1217,7 +1217,7 @@ func TestMutationSubjectObjectVariables(t *testing.T) {
 
 	q1 := `
 		{
-			me(func: uid(0x600)) {
+			me(func: uid(0x601)) {
 				count(likes)
             }
 		}
