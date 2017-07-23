@@ -3004,6 +3004,7 @@ func TestParseFacetsOrderError1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid use of order")
 }
 
 func TestParseFacetsOrderError2(t *testing.T) {
@@ -3018,6 +3019,7 @@ func TestParseFacetsOrderError2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid use of \"as\"")
 }
 
 func TestParseFacetsOrderError3(t *testing.T) {
@@ -3032,6 +3034,40 @@ func TestParseFacetsOrderError3(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected orderasc or orderdesc")
+}
+
+func TestParseFacetsOrderVar(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: a as b) {
+				name 
+			}
+		}
+		me(func: uid(a)) { }
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestParseFacetsOrderVar2(t *testing.T) {
+	// TODO: This should fail.
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(a as orderdesc: b) {
+				name 
+			}
+		}
+		me(func: uid(a)) {
+			
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
 }
 
 func TestParseFacets(t *testing.T) {
