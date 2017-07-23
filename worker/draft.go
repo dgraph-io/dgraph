@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"sync"
@@ -56,7 +57,7 @@ type peerPoolEntry struct {
 	// If poolOrNil is non-nil, there's a goroutine running streamMsgApps.
 
 	// Cancellation -- close this to cancel streamMsgApps.
-	cancel chan struct{}
+	cancel func()
 
 	// Used to send MsgApp messages to the peer.
 	appMessages chan raftpb.Message
@@ -117,17 +118,36 @@ func (p *peerPool) getAppMessages(id uint64) (chan raftpb.Message, error) {
 	return ent.appMessages, nil
 }
 
+// TODO: Add waitgroup to node for the goroutines.
+func cleanupEntry(entry *peerPoolEntry) {
+	if entry.poolOrNil != nil {
+		entry.cancel()
+		pools().release(entry.poolOrNil)
+	}
+}
+
 func (p *peerPool) set(id uint64, entry peerPoolEntry) {
 	p.Lock()
-	defer p.Unlock()
-	if old, ok := p.peers[id]; ok {
-		if old.poolOrNil != nil {
-			close(old.cancel)
-			pools().release(old.poolOrNil)
-		}
+	old, ok := p.peers[id]
+	p.peers[id] = entry
+	p.Unlock()
+
+	if ok {
+		cleanupEntry(&old)
+	}
+}
+
+func (p *peerPool) clear() {
+	p.Lock()
+	peers := p.peers
+	p.peers = make(map[uint64]peerPoolEntry)
+	p.Unlock()
+
+	// Now decr its refcount / cleanup its goroutines.
+	for _, entry := range peers {
+		cleanupEntry(&entry)
 	}
 
-	p.peers[id] = entry
 }
 
 type proposalCtx struct {
@@ -332,8 +352,9 @@ func (n *node) Connect(pid uint64, addr string) {
 		// TODO: Actually use wg, or get rid of it.
 		var wg sync.WaitGroup
 		wg.Add(1)
-		go streamMsgApps(n.ctx, &wg, ch, p)
-		entry = peerPoolEntry{addr: addr, poolOrNil: p, cancel: make(chan struct{}), appMessages: ch,
+		ctx, cancel := context.WithCancel(n.ctx)
+		go streamMsgApps(ctx, &wg, ch, p)
+		entry = peerPoolEntry{addr: addr, poolOrNil: p, cancel: cancel, appMessages: ch,
 			wg: &wg}
 	}
 
@@ -492,7 +513,10 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 			// TODO: Hey, don't we want to batch the messages before we send them?  Like below?
 
 		case <-ctx.Done():
-			return nil
+			log.Printf("CloseAndRecv on stream\n")
+			_, err := stream.CloseAndRecv()
+			log.Printf("Finish CloseAndRecv on stream\n")
+			return err
 		}
 	}
 }
@@ -890,6 +914,7 @@ func (n *node) Run() {
 			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
 				n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 				go func() {
+					// TODO: n.ctx is a background context, it can't time out.
 					select {
 					case <-n.ctx.Done(): // time out
 						if tr, ok := trace.FromContext(n.ctx); ok {
@@ -900,17 +925,23 @@ func (n *node) Run() {
 							tr.LazyPrintf("Timed out transfering leadership")
 						}
 					}
-					n.Raft().Stop()
-					close(n.done)
+					n.finishStop()
 				}()
 			} else {
-				n.Raft().Stop()
-				close(n.done)
+				n.finishStop()
 			}
 		case <-n.done:
 			return
 		}
 	}
+}
+
+func (n *node) finishStop() {
+	n.Raft().Stop()
+	// Cleans up peer pool, including stopping streamMsgApp goroutine (and closing its active gRPC
+	// request, which blocks shutdown)
+	n.peers.clear()
+	close(n.done)
 }
 
 func (n *node) Stop() {
@@ -1158,7 +1189,12 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 
 func (w *grpcWorker) RaftMessageStream(stream protos.Worker_RaftMessageStreamServer) error {
 	for {
+		log.Printf("stream.Recv()... %p", stream)
 		payload, err := stream.Recv()
+		log.Printf("stream.Recv finished (%p)", stream)
+		if err == io.EOF {
+			return stream.SendAndClose(&emptyPayload)
+		}
 		if err != nil {
 			return err
 		}
