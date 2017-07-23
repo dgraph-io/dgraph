@@ -110,6 +110,14 @@ func (p *ItemIterator) Peek(num int) ([]Item, error) {
 	return p.l.items[p.idx+1 : p.idx+num+1], nil
 }
 
+// PeekOne returns the next 1 item without consuming it.
+func (p *ItemIterator) PeekOne() (Item, bool) {
+	if p.idx+1 >= len(p.l.items) {
+		return Item{}, false
+	}
+	return p.l.items[p.idx+1], true
+}
+
 type Lexer struct {
 	// NOTE: Using a text scanner wouldn't work because it's designed for parsing
 	// Golang. It won't keep track of Start Position, or allow us to retrieve

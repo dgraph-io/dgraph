@@ -3004,7 +3004,7 @@ func TestParseFacetsOrderError1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Invalid use of order")
+	require.Contains(t, err.Error(), "Expected ( after func name [orderdesc]")
 }
 
 func TestParseFacetsOrderError2(t *testing.T) {
@@ -3019,7 +3019,7 @@ func TestParseFacetsOrderError2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Invalid use of \"as\"")
+	require.Contains(t, err.Error(), "Expected ( after func name [a]")
 }
 
 func TestParseFacetsOrderError3(t *testing.T) {
@@ -3034,7 +3034,7 @@ func TestParseFacetsOrderError3(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected orderasc or orderdesc")
+	require.Contains(t, err.Error(), "Expected ( after func name [orderdesc]")
 }
 
 func TestParseFacetsOrderVar(t *testing.T) {
@@ -3053,7 +3053,6 @@ func TestParseFacetsOrderVar(t *testing.T) {
 }
 
 func TestParseFacetsOrderVar2(t *testing.T) {
-	// TODO: This should fail.
 	query := `
 	query {
 		me(func: uid(0x1)) {
@@ -3067,7 +3066,8 @@ func TestParseFacetsOrderVar2(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected ( after func name [a]")
 }
 
 func TestParseFacets(t *testing.T) {
