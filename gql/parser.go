@@ -1651,21 +1651,17 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	var orderdesc bool
 	var orderkey string
 
-	first := true
-	for {
-		// We're after a '(' or a comma, we expect something.
+	if _, ok := tryParseItemType(it, itemRightRound); ok {
+		// TODO: Pre-existing code did all keys on @facets(), instead of no keys.  Might be a
+		// mistake.
+		facets.AllKeys = true
+		res.f = &facets
+		res.vmap = make(map[string]string)
+		return res, true, nil
+	}
 
-		if first {
-			if _, ok := tryParseItemType(it, itemRightRound); ok {
-				// TODO: Pre-existing code did all keys on @facets(), instead of no keys.  Might be a
-				// mistake.
-				facets.AllKeys = true
-				res.f = &facets
-				res.vmap = make(map[string]string)
-				return res, true, nil
-			}
-		}
-		first = false
+	for {
+		// We've just consumed a leftRound or a comma.
 
 		// Parse a facet item.
 		facetItem, ok, err := tryParseFacetItem(it)
