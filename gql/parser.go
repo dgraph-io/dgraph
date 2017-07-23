@@ -1571,7 +1571,7 @@ func parseFacets(it *lex.ItemIterator) (res facetRes, err error) {
 	return res, err
 }
 
-type facetThing struct {
+type facetItem struct {
 	facetName string
 	varName   string
 	ordered   bool
@@ -1579,8 +1579,8 @@ type facetThing struct {
 }
 
 // Either errors, fails to parse without an error (in which case nothing is consumed), or returns
-// an error.
-func tryParseFacetThing(it *lex.ItemIterator) (res facetThing, parseOk bool, err error) {
+// an error (which means to abort parsing)
+func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err error) {
 	// We parse this:
 	// [{orderdesc|orderasc}:] [varname as] facetName
 
@@ -1667,25 +1667,25 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 		}
 		first = false
 
-		// Parse a thing.
-		thing, ok, err := tryParseFacetThing(it)
+		// Parse a facet item.
+		facetItem, ok, err := tryParseFacetItem(it)
 		if !ok || err != nil {
 			log.Printf("ret B")
 			return res, ok, err
 		}
 
-		// Combine the thing with our result.
+		// Combine the facetitem with our result.
 		{
-			if thing.varName != "" {
-				facetVar[thing.facetName] = thing.varName
+			if facetItem.varName != "" {
+				facetVar[facetItem.facetName] = facetItem.varName
 			}
-			facets.Keys = append(facets.Keys, thing.facetName)
-			if thing.ordered {
+			facets.Keys = append(facets.Keys, facetItem.facetName)
+			if facetItem.ordered {
 				if orderkey != "" {
 					return res, false, x.Errorf("Invalid use of orderasc/orderdesc in facets")
 				}
-				orderdesc = thing.orderdesc
-				orderkey = thing.facetName
+				orderdesc = facetItem.orderdesc
+				orderkey = facetItem.facetName
 			}
 		}
 
