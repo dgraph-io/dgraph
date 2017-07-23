@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -1666,7 +1665,6 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 		// Parse a facet item.
 		facetItem, ok, err := tryParseFacetItem(it)
 		if !ok || err != nil {
-			log.Printf("ret B")
 			return res, ok, err
 		}
 
@@ -1686,12 +1684,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 		}
 
 		// Now what?  Either close-paren or a comma.
-		if !it.Next() {
-			return res, false, x.Errorf("Unexpected EOF in facet list")
-		}
-
-		typ := it.Item().Typ
-		if typ == itemRightRound {
+		if _, ok := tryParseItemType(it, itemRightRound); ok {
 			sort.Slice(facets.Keys, func(i, j int) bool {
 				return facets.Keys[i] < facets.Keys[j]
 			})
@@ -1709,7 +1702,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 			res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
 			return res, true, nil
 		}
-		if typ != itemComma {
+		if _, ok := tryParseItemType(it, itemComma); !ok {
 			return res, false, nil
 		}
 	}
