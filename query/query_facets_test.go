@@ -383,6 +383,27 @@ func TestFetchingFewFacets(t *testing.T) {
 		js)
 }
 
+func TestFetchingNoFacets(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+	// TestFetchingFewFacets but without the facet.  Returns no facets.
+	query := `
+		{
+			me(func: uid(0x1)) {
+				name
+				friend @facets() {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"}]}`,
+		js)
+}
+
 func TestFacetsSortOrder(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)

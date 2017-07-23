@@ -3004,6 +3004,7 @@ func TestParseFacetsOrderError1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected ( after func name [orderdesc]")
 }
 
 func TestParseFacetsOrderError2(t *testing.T) {
@@ -3018,6 +3019,7 @@ func TestParseFacetsOrderError2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected ( after func name [a]")
 }
 
 func TestParseFacetsOrderError3(t *testing.T) {
@@ -3032,6 +3034,55 @@ func TestParseFacetsOrderError3(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected ',' or ')'")
+}
+
+func TestParseFacetsDuplicateVarError(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(a as closeness, b as closeness) {
+				name 
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Duplicate variable mappings")
+}
+
+func TestParseFacetsOrderVar(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: a as b) {
+				name 
+			}
+		}
+		me(func: uid(a)) { }
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestParseFacetsOrderVar2(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(a as orderdesc: b) {
+				name 
+			}
+		}
+		me(func: uid(a)) {
+			
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected ( after func name [a]")
 }
 
 func TestParseFacets(t *testing.T) {
@@ -3172,7 +3223,8 @@ func TestParseFacetsEmpty(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "hometown", "age"}, childAttrs(res.Query[0]))
 	require.NotNil(t, res.Query[0].Children[0].Facets)
-	require.Equal(t, true, res.Query[0].Children[0].Facets.AllKeys)
+	require.Equal(t, false, res.Query[0].Children[0].Facets.AllKeys)
+	require.Equal(t, 0, len(res.Query[0].Children[0].Facets.Keys))
 }
 
 func TestParseFacetsFail1(t *testing.T) {
