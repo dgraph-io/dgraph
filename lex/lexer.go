@@ -39,12 +39,12 @@ const (
 // returns the next state.
 type StateFn func(*Lexer) StateFn
 
-type item struct {
+type Item struct {
 	Typ ItemType
 	Val string
 }
 
-func (i item) String() string {
+func (i Item) String() string {
 	switch i.Typ {
 	case 0:
 		return "EOF"
@@ -75,9 +75,9 @@ func (p *ItemIterator) Next() bool {
 }
 
 // Item returns the current item.
-func (p *ItemIterator) Item() item {
+func (p *ItemIterator) Item() Item {
 	if p.idx < 0 || p.idx >= len(p.l.items) {
-		return item{}
+		return Item{}
 	}
 	return (p.l.items)[p.idx]
 }
@@ -103,7 +103,7 @@ func (p *ItemIterator) Save() int {
 }
 
 // Peek returns the next n items without consuming them.
-func (p *ItemIterator) Peek(num int) ([]item, error) {
+func (p *ItemIterator) Peek(num int) ([]Item, error) {
 	if (p.idx + num + 1) > len(p.l.items) {
 		return nil, x.Errorf("Out of range for peek")
 	}
@@ -118,7 +118,7 @@ type Lexer struct {
 	Start    int     // Start Position of this item.
 	Pos      int     // current Position of this item.
 	Width    int     // Width of last rune read from input.
-	items    []item  // channel of scanned items.
+	items    []Item  // channel of scanned items.
 	Depth    int     // nesting of {}
 	ArgDepth int     // nesting of ()
 	Mode     StateFn // Default state to go back to after reading a token.
@@ -135,7 +135,7 @@ func (l *Lexer) Run(f StateFn) *Lexer {
 
 // Errorf returns the error state function.
 func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
-	l.items = append(l.items, item{
+	l.items = append(l.items, Item{
 		Typ: ItemError,
 		Val: fmt.Sprintf(format, args...),
 	})
@@ -148,7 +148,7 @@ func (l *Lexer) Emit(t ItemType) {
 		// Let ItemEOF go through.
 		return
 	}
-	l.items = append(l.items, item{
+	l.items = append(l.items, Item{
 		Typ: t,
 		Val: l.Input[l.Start:l.Pos],
 	})
