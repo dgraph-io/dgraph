@@ -338,10 +338,10 @@ RETRY:
 			factor = factor * 2
 		}
 		if retries >= d.opts.MaxRetries {
+			atomic.CompareAndSwapInt32(&d.retriesExceeded, 0, 1)
 			return ErrMaxTries
 		}
 		retries++
-		atomic.CompareAndSwapInt32(&d.retriesExceeded, 0, 1)
 		goto RETRY
 	}
 
@@ -408,6 +408,11 @@ LOOP:
 func (d *Dgraph) batchNquads() {
 	req := new(Req)
 	for n := range d.nquads {
+		if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+			d.che <- ErrMaxTries
+			return
+		}
+
 		if n.op == SET {
 			req.Set(n.e)
 		} else if n.op == DEL {
@@ -431,11 +436,22 @@ func (d *Dgraph) batchNquads() {
 // to one of the batches as specified in d's BatchMutationOptions.  If that batch fills, it
 // eventually flushes.  But there is no guarantee of delivery before BatchFlush() is called.
 func (d *Dgraph) BatchSet(e Edge) error {
-	d.nquads <- nquadOp{
+	nq := nquadOp{
 		e:  e,
 		op: SET,
 	}
-	atomic.AddUint64(&d.rdfs, 1)
+L:
+	for {
+		select {
+		case d.nquads <- nq:
+			break L
+		default:
+			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+				return ErrMaxTries
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
 	return nil
 }
 
@@ -461,6 +477,7 @@ L:
 			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
 				return ErrMaxTries
 			}
+			time.Sleep(5 * time.Millisecond)
 		}
 	}
 	return nil
@@ -471,9 +488,21 @@ L:
 // be added to one of the batches as specified in d's BatchMutationOptions.  If that batch fills,
 // it eventually flushes.  But there is no guarantee of delivery before BatchFlush() is called.
 func (d *Dgraph) BatchDelete(e Edge) error {
-	d.nquads <- nquadOp{
+	nq := nquadOp{
 		e:  e,
 		op: DEL,
+	}
+L:
+	for {
+		select {
+		case d.nquads <- nq:
+			break L
+		default:
+			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+				return ErrMaxTries
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
 	atomic.AddUint64(&d.rdfs, 1)
 	return nil
