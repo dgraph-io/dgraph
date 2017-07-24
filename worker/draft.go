@@ -833,6 +833,14 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
 }
 
+func (n *node) sendMessages(rcBytes []byte, messages []raftpb.Message) {
+	for _, msg := range messages {
+		// NOTE: We can do some optimizations here to drop messages.
+		msg.Context = rcBytes
+		n.send(msg)
+	}
+}
+
 func (n *node) Run() {
 	firstRun := true
 	var leader bool
@@ -862,11 +870,7 @@ func (n *node) Run() {
 
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 
-			for _, msg := range rd.Messages {
-				// NOTE: We can do some optimizations here to drop messages.
-				msg.Context = rcBytes
-				n.send(msg)
-			}
+			n.sendMessages(rcBytes, rd.Messages)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				// We don't send snapshots to other nodes. But, if we get one, that means
