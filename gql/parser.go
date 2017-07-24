@@ -1702,8 +1702,13 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 			res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
 			return res, true, nil
 		}
-		if _, ok := tryParseItemType(it, itemComma); !ok {
-			return res, false, nil
+		if item, ok := tryParseItemType(it, itemComma); !ok {
+			if len(facets.Keys) < 2 {
+				return res, false, nil
+			}
+			// We got a comma already, so this is definitely a facet list -- return an error.
+			return res, false, x.Errorf(
+				"Expected ',' or ')' in facet list", item.Val)
 		}
 	}
 }

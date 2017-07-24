@@ -3034,7 +3034,7 @@ func TestParseFacetsOrderError3(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected ( after func name [orderdesc]")
+	require.Contains(t, err.Error(), "Expected ',' or ')'")
 }
 
 func TestParseFacetsOrderVar(t *testing.T) {
