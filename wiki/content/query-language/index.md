@@ -399,7 +399,7 @@ Query Example: All names that have `run`, `running`, etc and `man`.  Stop word r
 Syntax Examples:
 
 * `eq(predicate, value)`
-* `eq(var(varName), value)`
+* `eq(val(varName), value)`
 * `eq(count(predicate), value)`
 * `eq(predicate, [val1, val2, ..., valN])`
 
@@ -454,7 +454,7 @@ Query Example: Directors called Steven who have directed 1,2 or 3 movies.
 Syntax Examples: for inequality `IE`
 
 * `IE(predicate, value)`
-* `IE(var(varName), value)`
+* `IE(val(varName), value)`
 * `IE(count(predicate), value)`
 
 With `IE` replaced by
@@ -774,7 +774,7 @@ Syntax Examples:
 * `aliasName : predicate { ... }`
 * `aliasName : varName as ...`
 * `aliasName : count(predicate)`
-* `aliasName : max(var(varName))`
+* `aliasName : max(val(varName))`
 
 An alias provides an alternate name in results.  Predicates, variables and aggregates can be aliased by prefixing with the alias name and `:`.  Aliases do not have to be different to the original predicate name, but, within a block, an alias must be distinct from predicate names and other aliases returned in the same block.  Aliases can be used to return the same predicate multiple times within a block.  
 
@@ -1000,7 +1000,7 @@ Query Example: The actors of Ang Lee's "Eat Drink Man Woman" ordered by the numb
 Syntax Examples:
 
 * `q(func: ..., orderasc: predicate)`
-* `q(func: ..., orderdesc: var(varName))`
+* `q(func: ..., orderdesc: val(varName))`
 * `predicate (orderdesc: predicate) { ... }`
 * `predicate @filter(...) (orderasc: N) { ... }`
 
@@ -1329,7 +1329,7 @@ More examples can be found in two Dgraph blog posts about using variable propaga
 
 ## Aggregation
 
-Syntax Example: `AG(var(varName))`
+Syntax Example: `AG(val(varName))`
 
 For `AG` replaced with
 
@@ -1357,7 +1357,7 @@ A as predicateA {
   min(val(x))
 }
 ```
-Here, `A` and `B` are the lists of all UIDs that match these blocks.  Value variable `x` is a mapping from UIDs in `B` to values.  The aggregation `min(var(x))`, however, is computed for each UID in `A`.  That is, it has a semantics of: for each UID in `A`, take the slice of `x` that corresponds to `A`'s outgoing `predicateB` edges and compute the aggregation for those values.
+Here, `A` and `B` are the lists of all UIDs that match these blocks.  Value variable `x` is a mapping from UIDs in `B` to values.  The aggregation `min(val(x))`, however, is computed for each UID in `A`.  That is, it has a semantics of: for each UID in `A`, take the slice of `x` that corresponds to `A`'s outgoing `predicateB` edges and compute the aggregation for those values.
 
 Aggregations can themselves be assigned to value variables, making a UID to aggregation map.
 
@@ -2152,7 +2152,7 @@ Query Example: All people.
     allPeople as <~http://schema.org/type>
   }
 
-  q(func: uid(var(allPeople))) {
+  q(func: uid(allPeople)) {
     <http://schema.org/name>
   }
 }
@@ -2290,7 +2290,7 @@ For example, in a graph with people and ages, the following updates all people 1
 }
 mutation {
   set {
-    var(adults) <isadult> "true"^^<xs:boolean> .
+    uid(adults) <isadult> "true"^^<xs:boolean> .
   }
 }
 ```
@@ -2302,13 +2302,13 @@ Variables are also allowed in delete mutations.  The following removes any data 
   minors as var(func: lt(age, 18))
 }
 mutation {
-  set {
-    var(minors) <electoral_registration> * .
+  delete {
+    uid(minors) <electoral_registration> * .
   }
 }
 ```
 
-Internally, such mutations are are expanded to a triple per UID in the variable.  Hence mutations with variables on both sides of the predicate `var(variable1) <edge> var(variable2)` are expanded to the cross product.
+Internally, such mutations are are expanded to a triple per UID in the variable.  Hence mutations with variables on both sides of the predicate `uid(variable1) <edge> uid(variable2)` are expanded to the cross product.
 
 
 ## Facets : Edge attributes
@@ -2767,29 +2767,29 @@ Output:
     "friend": [
         {
             "name": "Bob",
-            "var(a)": true
+            "val(a)": true
         },
         {
             "name": "Charlie",
-            "var(a)": false
+            "val(a)": false
         },
         {
             "name": "Dave",
-            "var(a)": true
+            "val(a)": true
         }
     ],
     "relative": [
         {
             "name": "Bob",
-            "var(b)": false
+            "val(b)": false
         },
         {
             "name": "Charlie",
-            "var(b)": true
+            "val(b)": true
         },
         {
             "name": "Dave",
-            "var(b)": true
+            "val(b)": true
         }
     ]
 }
@@ -2826,18 +2826,18 @@ Output
     "data": [
         {
             "name": "Movie 1",
-            "var(average_rating)": 3.333333,
-            "var(total_rating)": 10
+            "val(average_rating)": 3.333333,
+            "val(total_rating)": 10
         },
         {
             "name": "Movie 2",
-            "var(average_rating)": 4.0,
-            "var(total_rating)": 12
+            "val(average_rating)": 4.0,
+            "val(total_rating)": 12
         },
         {
             "name": "Movie 3",
-            "var(average_rating)": 3.666667,
-            "var(total_rating)": 11
+            "val(average_rating)": 3.666667,
+            "val(total_rating)": 11
         }
     ]
 }
@@ -2866,7 +2866,7 @@ Output:
 {
     "data": [
         {
-            "avg(var(r))": 3.333333,
+            "avg(val(r))": 3.333333,
             "name": "Alice",
             "rated": [
                 {
@@ -2917,7 +2917,7 @@ Output:
 {
     "data": [
         {
-            "avg(var(r))": 8.333333,
+            "avg(val(r))": 8.333333,
             "name": "Alice",
             "rated": [
                 {
@@ -2947,7 +2947,7 @@ Output:
             ]
         },
         {
-            "avg(var(r))": 8.333333,
+            "avg(val(r))": 8.333333,
             "name": "Bob",
             "rated": [
                 {
@@ -3004,15 +3004,15 @@ Output:
     "data": [
         {
             "name": "Alice",
-            "var(avg_rating)": 3.333333
+            "val(avg_rating)": 3.333333
         },
         {
             "name": "Bob",
-            "var(avg_rating)": 5.0
+            "val(avg_rating)": 5.0
         },
         {
             "name": "Charlie",
-            "var(avg_rating)": 2.666667
+            "val(avg_rating)": 2.666667
         }
     ]
 }
