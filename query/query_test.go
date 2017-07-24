@@ -348,6 +348,32 @@ func TestGetUID(t *testing.T) {
 		js)
 }
 
+func TestGetUIDInDebugMode(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(0x01)) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
+					_uid_
+					name
+				}
+			}
+		}
+	`
+	ctx := defaultContext()
+	ctx = context.WithValue(ctx, "debug", "true")
+	js, err := processToFastJsonReqCtx(t, query, ctx)
+	require.NoError(t, err)
+	require.JSONEq(t,
+		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+
+}
+
 func TestReturnUids(t *testing.T) {
 	populateGraph(t)
 	query := `

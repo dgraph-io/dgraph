@@ -347,6 +347,14 @@ func (fj *fastJsonNode) New(attr string) outputNode {
 }
 
 func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
+	// if we're in debug mode, _uid_ may be added second time, skip this
+	if attr == "_uid_" {
+		for _, a := range fj.attrs {
+			if a.attr == attr {
+				return
+			}
+		}
+	}
 	fj.attrs = append(fj.attrs, makeScalarNode(attr, false, []byte(fmt.Sprintf("\"%#x\"", uid))))
 }
 
