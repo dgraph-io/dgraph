@@ -617,7 +617,10 @@ func serveHTTP(l net.Listener) {
 func setupServer(che chan error) {
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
-	go worker.RunServer(bindall) // For internal communication.
+	workerCancel, err := worker.SpawnServer(bindall) // For internal communication.
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	laddr := "localhost"
 	if bindall {
@@ -662,6 +665,7 @@ func setupServer(che chan error) {
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		grpcListener.Close()
 		httpListener.Close()
+		workerCancel()
 	}()
 
 	log.Println("gRPC server started.  Listening on port", grpcPort())

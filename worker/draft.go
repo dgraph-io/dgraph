@@ -1187,22 +1187,36 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 	return &emptyPayload, err
 }
 
-func (w *grpcWorker) RaftMessageStream(stream protos.Worker_RaftMessageStreamServer) error {
+func recvRaftMessages(errCh chan error, stream protos.Worker_RaftMessageStreamServer) {
 	for {
-		log.Printf("stream.Recv()... %p", stream)
 		payload, err := stream.Recv()
-		log.Printf("stream.Recv finished (%p)", stream)
 		if err == io.EOF {
-			return stream.SendAndClose(&emptyPayload)
+			errCh <- stream.SendAndClose(&emptyPayload)
+			return
 		}
 		if err != nil {
-			return err
+			errCh <- err
+			return
 		}
-
 		err = processRaftMessage(stream.Context(), payload)
 		if err != nil {
 			x.Printf("RaftMessageStream processRaftMessage error: %v\n", err)
 		}
+	}
+}
+
+func (w *grpcWorker) RaftMessageStream(stream protos.Worker_RaftMessageStreamServer) error {
+	// The only way to interrupt the stream processing on the server side is for us to call .Recv()
+	// in a goroutine and return from this function.  (Maybe we could kill the TCP connection, but
+	// we want to gracefully shut down.)
+	errCh := make(chan error)
+	go recvRaftMessages(errCh, stream)
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-w.done:
+		return x.Errorf("Raft message stream worker interrupted (server shutting down)")
 	}
 }
 
