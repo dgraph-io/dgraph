@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
+
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"golang.org/x/net/context"
@@ -491,15 +493,22 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 	defer pools().release(pl)
 
 	client := protos.NewWorkerClient(pl.Get())
-	stream, err := client.RaftMessageStream(ctx)
-	if err != nil {
-		// TODO: Actually don't return error from this function, it's in a goroutine.
-		return err
-	}
+
+	var stream protos.Worker_RaftMessageStreamClient
 
 	for {
 		select {
 		case msg := <-msgCh:
+			// (Try to) create or recreate the stream if it's not created.
+			if stream == nil {
+				var err error
+				stream, err = client.RaftMessageStream(ctx, grpc.FailFast(true))
+				if err != nil {
+					// Error opening RaftMessageStream.  Maybe no connection.
+					continue
+				}
+			}
+
 			// TODO: Instead of marshal+copy, use MarshalTo.  (Or put size at end?)
 			var buf bytes.Buffer
 			data := marshalMsgForSending(msg)
@@ -509,14 +518,24 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 
 			err := stream.Send(p)
 			if err != nil {
-				return err
+				wg.Add(1)
+				go func(stream protos.Worker_RaftMessageStreamClient) {
+					stream.CloseAndRecv()
+					wg.Done()
+				}(stream)
+
+				x.Printf("Error sending to RaftMessageStream: %v", err)
+				stream = nil
 			}
 
 		case <-ctx.Done():
-			log.Printf("CloseAndRecv on stream\n")
-			_, err := stream.CloseAndRecv()
-			log.Printf("Finish CloseAndRecv on stream\n")
-			return err
+			if stream != nil {
+				_, err := stream.CloseAndRecv()
+				x.Printf("Error closing RaftMessageStream: %v", err)
+				// TODO: Nobody's looking at this error (and nobody really cares)
+				return err
+			}
+			return nil
 		}
 	}
 }
@@ -530,7 +549,7 @@ func (n *node) sendMsgApp(msg raftpb.Message) {
 	select {
 	case ch <- msg:
 	default:
-		x.Printf("Unable to push message to channel in sendMsgApp")
+		x.Printf("Unable to push message to %v in sendMsgApp", msg.To)
 	}
 }
 
