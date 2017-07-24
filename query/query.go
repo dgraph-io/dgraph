@@ -1897,7 +1897,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		return sg.sortAndPaginateUsingFacet(ctx)
 	}
 	for _, it := range sg.Params.NeedsVar {
-		if it.Name == sg.Params.Order && (it.Typ == gql.VALUE_VAR || it.Typ == gql.ANY_VAR) {
+		if it.Name == sg.Params.Order && (it.Typ == gql.VALUE_VAR) {
 			// If the Order name is same as var name and it's a value variable, we sort using that variable.
 			return sg.sortAndPaginateUsingVar(ctx)
 		}
