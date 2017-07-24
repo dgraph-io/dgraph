@@ -215,39 +215,49 @@ func addUidToMatrix(key []byte, mu *sync.Mutex, out *protos.Result) {
 	mu.Unlock()
 }
 
+func getAllPredicates(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
+	out := new(protos.Result)
+	predMap := make(map[string]struct{})
+	if q.UidList == nil {
+		return out, nil
+	}
+	for _, uid := range q.UidList.Uids {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+		predicates, err := getPredList(uid, gid)
+		if err != nil {
+			return out, err
+		}
+		for _, pred := range predicates {
+			predMap[string(pred.Value.([]byte))] = struct{}{}
+		}
+	}
+	predList := make([]string, 0, len(predMap))
+	for pred := range predMap {
+		predList = append(predList, pred)
+	}
+	sort.Strings(predList)
+	for _, pred := range predList {
+		// Add it to values.
+		out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+		out.Values = append(out.Values, &protos.TaskValue{
+			ValType: int32(types.StringID),
+			Val:     []byte(pred),
+		})
+	}
+	return out, nil
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	out := new(protos.Result)
 	attr := q.Attr
 
 	if attr == "_predicate_" {
-		predMap := make(map[string]struct{})
-		if q.UidList == nil {
-			return out, nil
-		}
-		for _, uid := range q.UidList.Uids {
-			predicates, err := getPredList(uid, gid)
-			if err != nil {
-				return out, err
-			}
-			for _, pred := range predicates {
-				predMap[string(pred.Value.([]byte))] = struct{}{}
-			}
-		}
-		predList := make([]string, 0, len(predMap))
-		for pred := range predMap {
-			predList = append(predList, pred)
-		}
-		sort.Strings(predList)
-		for _, pred := range predList {
-			// Add it to values.
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			out.Values = append(out.Values, &protos.TaskValue{
-				ValType: int32(types.StringID),
-				Val:     []byte(pred),
-			})
-		}
-		return out, nil
+		return getAllPredicates(ctx, q, gid)
 	}
 
 	srcFn, err := parseSrcFn(q)
@@ -281,16 +291,16 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		default:
 		}
 		var key []byte
-		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
-			srcFn.fnType == HasFn || srcFn.fnType == UidInFn {
+		switch srcFn.fnType {
+		case NotAFunction, CompareScalarFn, HasFn, UidInFn:
 			if q.Reverse {
 				key = x.ReverseKey(attr, q.UidList.Uids[i])
 			} else {
 				key = x.DataKey(attr, q.UidList.Uids[i])
 			}
-		} else if srcFn.fnType == AggregatorFn || srcFn.fnType == PasswordFn {
+		case AggregatorFn, PasswordFn:
 			key = x.DataKey(attr, q.UidList.Uids[i])
-		} else {
+		default:
 			key = x.IndexKey(attr, srcFn.tokens[i])
 		}
 		// Get or create the posting list for an entity, attribute combination.
