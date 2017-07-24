@@ -45,7 +45,7 @@ var (
 	ErrInvalidType    = errors.New("Invalid value type")
 	ErrEmptyVar       = errors.New("Empty variable name.")
 	ErrNotConnected   = errors.New("Edge needs to be connected to another node or a value.")
-	ErrInvalidSubject = errors.New("Edge can only have one of Subject/SubjectVar set.")
+	ErrInvalidSubject = errors.New("Edge should have one of Subject/SubjectVar set.")
 	emptyEdge         Edge
 )
 

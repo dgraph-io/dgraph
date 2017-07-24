@@ -151,7 +151,6 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 			}
 		}
 	default:
-		fmt.Println("here")
 	}
 	return nil
 }
