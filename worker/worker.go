@@ -68,18 +68,22 @@ func Init(ps *badger.KV) {
 
 // grpcWorker struct implements the gRPC server interface.
 type grpcWorker struct {
-	sync.Mutex
-	reqids map[uint64]bool
+	done chan struct{}
+
+	reqidsLock sync.Mutex
+	reqids     map[uint64]bool
+}
+
+func makeGrpcWorker(doneCh chan struct{}) *grpcWorker {
+	return &grpcWorker{done: doneCh, reqids: make(map[uint64]bool)}
 }
 
 // addIfNotPresent returns false if it finds the reqid already present.
 // Otherwise, adds the reqid in the list, and returns true.
 func (w *grpcWorker) addIfNotPresent(reqid uint64) bool {
-	w.Lock()
-	defer w.Unlock()
-	if w.reqids == nil {
-		w.reqids = make(map[uint64]bool)
-	} else if _, has := w.reqids[reqid]; has {
+	w.reqidsLock.Lock()
+	defer w.reqidsLock.Unlock()
+	if _, has := w.reqids[reqid]; has {
 		return false
 	}
 	w.reqids[reqid] = true
@@ -92,27 +96,31 @@ func (w *grpcWorker) Echo(ctx context.Context, in *protos.Payload) (*protos.Payl
 	return &protos.Payload{Data: in.Data}, nil
 }
 
-// RunServer initializes a tcp server on port which listens to requests from
+// SpawnServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
-func RunServer(bindall bool) {
+func SpawnServer(bindall bool) (cancel func(), err error) {
 	if Config.InMemoryComm {
-		return
+		return func() {}, nil
 	}
 
-	laddr := "localhost"
+	hostname := "localhost"
 	if bindall {
-		laddr = "0.0.0.0"
+		hostname = "0.0.0.0"
 	}
-	var err error
-	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, workerPort()))
+
+	laddr := fmt.Sprintf("%s:%d", hostname, workerPort())
+	ln, err := net.Listen("tcp", laddr)
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
-		return
+		return nil, x.Wrapf(err, "Trying to listen on %v", laddr)
 	}
 	x.Printf("Worker listening at address: %v", ln.Addr())
 
-	protos.RegisterWorkerServer(workerServer, &grpcWorker{})
-	workerServer.Serve(ln)
+	cancelCh := make(chan struct{})
+
+	protos.RegisterWorkerServer(workerServer, makeGrpcWorker(cancelCh))
+	go workerServer.Serve(ln)
+	return func() { close(cancelCh) }, nil
 }
 
 // StoreStats returns stats for data store.
