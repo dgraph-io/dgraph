@@ -173,8 +173,11 @@ func testConnection(p *pool) error {
 
 // NewPool creates a new "pool" with one gRPC connection, refcount 0.
 func newPool(addr string) (*pool, error) {
-	conn, err := grpc.Dial(addr, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
-		grpc.MaxCallSendMsgSize(x.GrpcMaxSize)), grpc.WithInsecure())
+	conn, err := grpc.Dial(addr,
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
+			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)),
+		grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
