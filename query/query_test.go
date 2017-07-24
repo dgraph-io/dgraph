@@ -991,6 +991,30 @@ func TestQueryVarValOrderDob(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValOrderError(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: uid( 1)) {
+				friend {
+					n as name
+				}
+			}
+
+			me(func: uid(n), orderdesc: n) {
+				name
+			}
+		}
+	`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
+	require.Contains(t, err.Error(), "Cannot sort attribute n of type object.")
+}
+
 func TestQueryVarValOrderDesc(t *testing.T) {
 	populateGraph(t)
 	query := `
