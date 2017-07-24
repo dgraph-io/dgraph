@@ -157,10 +157,12 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 }
 
 func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
-	fmap := fieldMap(typ)
 	var val reflect.Value
+	if typ.Kind() == reflect.Array {
+		return val, fmt.Errorf("Arrays are not supported. Try using a slice.")
+	}
 
-	fmt.Println("typ", typ, "kind", typ.Kind(), "fmap", fmap)
+	fmap := fieldMap(typ)
 	if typ.Kind() == reflect.Ptr {
 		// We got a pointer, lets set val to a settable type.
 		val = reflect.New(typ.Elem()).Elem()
