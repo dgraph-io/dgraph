@@ -300,8 +300,10 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			}
 		case AggregatorFn, PasswordFn:
 			key = x.DataKey(attr, q.UidList.Uids[i])
-		default:
+		case CompareAttrFn, GeoFn, RegexFn, FullTextSearchFn, StandardFn:
 			key = x.IndexKey(attr, srcFn.tokens[i])
+		default:
+			x.Fatalf("Unhandled function in processTask")
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, gid)
@@ -528,11 +530,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 			filtered := matchRegex(uids, values, srcFn.regex)
 			for i := 0; i < len(out.UidMatrix); i++ {
-				select {
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				default:
-				}
 				algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
 			}
 		} else {
@@ -543,11 +540,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	// We fetch the actual value for the uids, compare them to the value in the
 	// request and filter the uids only if the tokenizer IsLossy.
 	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
 		tokenizer, err := pickTokenizer(attr, srcFn.fname)
 		// We should already have checked this in getInequalityTokens.
 		x.Check(err)
@@ -664,11 +656,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		}
 
 		for i := 0; i < len(out.UidMatrix); i++ {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			default:
-			}
 			algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
 		}
 	}
