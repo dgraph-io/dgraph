@@ -176,6 +176,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 		batchSize++
 		nq, err := rdf.Parse(buf.String())
 		if err == rdf.ErrEmpty { // special case: comment/empty line
+			batchSize--
 			buf.Reset()
 			continue
 		} else if err != nil {
@@ -208,7 +209,8 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 
 func setupConnection(host string) (*grpc.ClientConn, error) {
 	if !*tlsEnabled {
-		return grpc.Dial(host, grpc.WithInsecure())
+		return grpc.Dial(host, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
+			grpc.MaxCallSendMsgSize(x.GrpcMaxSize)), grpc.WithInsecure())
 	}
 
 	tlsCfg, _, err := x.GenerateTLSConfig(x.TLSHelperConfig{
