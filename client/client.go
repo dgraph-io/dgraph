@@ -160,14 +160,18 @@ func (n Node) String() string {
 	return n.varName
 }
 
-// ConnectTo creates an edge labelled pred from Node n to Node n1
-func (n *Node) ConnectTo(pred string, n1 Node) Edge {
-	e := Edge{}
+func (e *Edge) setSubject(n *Node) {
 	if len(n.varName) != 0 {
 		e.nq.SubjectVar = n.String()
 	} else {
 		e.nq.Subject = n.String()
 	}
+}
+
+// ConnectTo creates an edge labelled pred from Node n to Node n1
+func (n *Node) ConnectTo(pred string, n1 Node) Edge {
+	e := Edge{}
+	(&e).setSubject(n)
 	e.nq.Predicate = pred
 	e.ConnectTo(n1)
 	return e
@@ -180,11 +184,7 @@ func (n *Node) ConnectTo(pred string, n1 Node) Edge {
 // a request will result in an error --- until it is completed.
 func (n *Node) Edge(pred string) Edge {
 	e := Edge{}
-	if len(n.varName) != 0 {
-		e.nq.SubjectVar = n.String()
-	} else {
-		e.nq.Subject = n.String()
-	}
+	(&e).setSubject(n)
 	e.nq.Predicate = pred
 	return e
 }
@@ -193,11 +193,7 @@ func (n *Node) Edge(pred string) Edge {
 // deletion.
 func (n *Node) Delete() Edge {
 	e := Edge{}
-	if len(n.varName) != 0 {
-		e.nq.SubjectVar = n.String()
-	} else {
-		e.nq.Subject = n.String()
-	}
+	(&e).setSubject(n)
 	e.nq.Predicate = x.Star
 	e.nq.ObjectValue, _ = types.ObjectValue(types.DefaultID, x.Star)
 	return e
@@ -242,6 +238,9 @@ func (e *Edge) Delete() error {
 }
 
 func (e *Edge) validate() error {
+	if len(e.nq.Subject) == 0 && len(e.nq.SubjectVar) == 0 {
+		return ErrInvalidSubject
+	}
 	// Edge should be connected to a value in which case ObjectType would be > 0.
 	// Or it needs to connect to a Node (ObjectId > 0) or it should be connected to a variable.
 	if e.nq.ObjectValue != nil || len(e.nq.ObjectId) > 0 || len(e.nq.ObjectVar) > 0 {

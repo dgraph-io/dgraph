@@ -8094,6 +8094,7 @@ func TestPBUnmarshalToStruct3(t *testing.T) {
 
 	type res struct {
 		Root []*Person `dgraph:"me"`
+		Name string
 	}
 
 	populateGraph(t)
@@ -8262,6 +8263,42 @@ func TestPBUnmarshalToStruct7(t *testing.T) {
 	err = client.Unmarshal(pb, &r)
 	require.NoError(t, err)
 	require.Equal(t, 4, len(r.Me))
+}
+
+func TestPBUnmarshalToStruct8(t *testing.T) {
+	type Person struct {
+		Name  string `dgraph:"name"`
+		Age   int    `dgraph:"age"`
+		Birth string
+	}
+
+	type res struct {
+		Root [2]Person `dgraph:"me"`
+	}
+
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(1, 23, 31)) {
+				name
+				age
+				Birth: dob
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	fmt.Println(len(r.Root))
+	require.Equal(t, "Michonne", r.Root[0].Name)
+	require.Equal(t, 38, r.Root[0].Age)
+	require.Equal(t, "1910-01-01T00:00:00Z", r.Root[0].Birth)
+	//	require.Equal(t, 4, len(r.Root.Friends))
+	//	require.Equal(t, Person{
+	//		Name: "Rick Grimes",
+	//		Age:  15,
+	//	}, r.Root.Friends[0])
 }
 
 func TestPBUnmarshalError1(t *testing.T) {

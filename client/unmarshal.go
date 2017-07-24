@@ -151,6 +151,7 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 			}
 		}
 	default:
+		fmt.Println("here")
 	}
 	return nil
 }
@@ -159,6 +160,7 @@ func unmarshal(n *protos.Node, typ reflect.Type) (reflect.Value, error) {
 	fmap := fieldMap(typ)
 	var val reflect.Value
 
+	fmt.Println("typ", typ, "kind", typ.Kind(), "fmap", fmap)
 	if typ.Kind() == reflect.Ptr {
 		// We got a pointer, lets set val to a settable type.
 		val = reflect.New(typ.Elem()).Elem()
