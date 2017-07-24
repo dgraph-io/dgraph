@@ -499,20 +499,7 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) [][]*fastJsonNode 
 	mergedList := make([][]*fastJsonNode, 0, len(parent)*len(child))
 	for _, pa := range parent {
 		for _, ca := range child {
-			mergeMap := make(map[string]*fastJsonNode)
-			for _, v := range pa {
-				mergeMap[v.attr] = v
-			}
-			// Copy over child map entries to mergeMap created above.
-			for _, v := range ca {
-				mergeMap[v.attr] = v
-			}
-			// Add the map to the list.
-			merged := make([]*fastJsonNode, 0, len(mergeMap))
-			for _, v := range mergeMap {
-				merged = append(merged, v)
-			}
-			mergedList = append(mergedList, merged)
+			mergedList = append(mergedList, append(pa, ca...))
 		}
 	}
 	return mergedList
