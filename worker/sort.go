@@ -218,7 +218,7 @@ BUCKETS:
 		}
 		select {
 		case <-ctx.Done():
-			return nil, nil
+			return nil, ctx.Err()
 		default:
 			k := x.Parse(key)
 			x.AssertTrue(k != nil)
@@ -247,7 +247,7 @@ BUCKETS:
 	}
 	select {
 	case <-ctx.Done():
-		return nil, nil
+		return nil, ctx.Err()
 	default:
 		return r, nil
 	}

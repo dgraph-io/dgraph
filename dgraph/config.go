@@ -60,7 +60,7 @@ var DefaultConfig = Options{
 	Nomutations:   false,
 	NumPending:    1000,
 
-	AllottedMemory: 1024.0,
+	AllottedMemory: 4096.0,
 	CommitFraction: 0.10,
 
 	BaseWorkerPort:      12345,
@@ -109,8 +109,4 @@ func (o *Options) validate() {
 	wd, err := filepath.Abs(o.WALDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", o.PostingDir)
-
-	if o.InMemoryComm {
-		// TODO(tzdybal) - force exactly one group. And don't open up Grpc conns for worker.
-	}
 }

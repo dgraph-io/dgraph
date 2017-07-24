@@ -19,8 +19,8 @@ package client
 
 import "container/list"
 
-// Cache is an LRU cache. It is not safe for concurrent access.
-type Cache struct {
+// cache is an LRU cache. It is not safe for concurrent access.
+type cache struct {
 	// MaxEntries is the maximum number of cache entries before
 	// an item is evicted. Zero means no limit.
 	MaxEntries int
@@ -37,8 +37,8 @@ type entry struct {
 // New creates a new Cache.
 // If maxEntries is zero, the cache has no limit and it's assumed
 // that eviction is done by the caller.
-func NewCache(maxEntries int) *Cache {
-	return &Cache{
+func newCache(maxEntries int) *cache {
+	return &cache{
 		MaxEntries: maxEntries,
 		ll:         list.New(),
 		cache:      make(map[string]*list.Element),
@@ -46,7 +46,7 @@ func NewCache(maxEntries int) *Cache {
 }
 
 // Add adds a value to the cache.
-func (c *Cache) Add(key string, value uint64) {
+func (c *cache) Add(key string, value uint64) {
 	if ee, ok := c.cache[key]; ok {
 		c.ll.MoveToFront(ee)
 		ee.Value.(*entry).value = value
@@ -60,7 +60,7 @@ func (c *Cache) Add(key string, value uint64) {
 }
 
 // Get looks up a key's value from the cache.
-func (c *Cache) Get(key string) (value uint64, ok bool) {
+func (c *cache) Get(key string) (value uint64, ok bool) {
 	if ele, hit := c.cache[key]; hit {
 		c.ll.MoveToFront(ele)
 		return ele.Value.(*entry).value, true
@@ -69,27 +69,27 @@ func (c *Cache) Get(key string) (value uint64, ok bool) {
 }
 
 // Remove removes the provided key from the cache.
-func (c *Cache) Remove(key string) {
+func (c *cache) Remove(key string) {
 	if ele, hit := c.cache[key]; hit {
 		c.removeElement(ele)
 	}
 }
 
 // RemoveOldest removes the oldest item from the cache.
-func (c *Cache) RemoveOldest() {
+func (c *cache) RemoveOldest() {
 	ele := c.ll.Back()
 	if ele != nil {
 		c.removeElement(ele)
 	}
 }
 
-func (c *Cache) removeElement(e *list.Element) {
+func (c *cache) removeElement(e *list.Element) {
 	c.ll.Remove(e)
 	kv := e.Value.(*entry)
 	delete(c.cache, kv.key)
 }
 
 // Len returns the number of items in the cache.
-func (c *Cache) Len() int {
+func (c *cache) Len() int {
 	return c.ll.Len()
 }

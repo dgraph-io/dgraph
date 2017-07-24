@@ -62,6 +62,8 @@ type GraphQuery struct {
 	FacetsFilter *FilterTree
 	GroupbyAttrs []AttrLang
 	FacetVar     map[string]string
+	FacetOrder   string
+	FacetDesc    bool
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -470,7 +472,7 @@ type Result struct {
 	Query        []*GraphQuery
 	QueryVars    []*Vars
 	Mutation     *Mutation
-	MutationVars map[*protos.NQuad]string
+	MutationVars []string
 	Schema       *protos.SchemaRequest
 }
 
@@ -578,11 +580,7 @@ func Parse(r Request) (res Result, rerr error) {
 
 		allVars := res.QueryVars
 		if len(res.MutationVars) > 0 {
-			var varNames []string
-			for _, v := range res.MutationVars {
-				varNames = append(varNames, v)
-			}
-			varNames = x.RemoveDuplicates(varNames)
+			varNames := x.RemoveDuplicates(res.MutationVars)
 
 			allVars = append(allVars, &Vars{Needs: varNames})
 		}
@@ -1528,7 +1526,6 @@ L:
 				} else if g.Name == UID {
 					// uid function could take variables as well as actual uids.
 					// If we can parse the value that means its an uid otherwise a variable.
-					g.Attr = g.Name
 					uid, err := strconv.ParseUint(val, 0, 64)
 					if err == nil {
 						// It could be uid function at root.
@@ -1554,19 +1551,28 @@ L:
 	return g, nil
 }
 
-func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string, error) {
+type facetRes struct {
+	f          *Facets
+	ft         *FilterTree
+	vmap       map[string]string
+	facetOrder string
+	orderdesc  bool
+}
+
+func parseFacets(it *lex.ItemIterator) (facetRes, error) {
+	var res facetRes
 	facets := new(Facets)
 	facetVar := make(map[string]string)
-	var varName string
+	var varName, orderkey, orderby string
+	var orderdesc bool
 	peeks, err := it.Peek(1)
 	expectArg := true
+	savePos := it.Save()
 	if err == nil && peeks[0].Typ == itemLeftRound {
 		it.Next() // ignore '('
 		// parse comma separated strings (a1,b1,c1)
 		done := false
-		numTokens := 0
 		for it.Next() {
-			numTokens++
 			item := it.Item()
 			if item.Typ == itemRightRound { // done
 				if varName == "" {
@@ -1575,15 +1581,30 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string,
 				break
 			} else if item.Typ == itemName {
 				if !expectArg {
-					return nil, nil, nil, x.Errorf("Expected a comma but got %v", item.Val)
+					return res, x.Errorf("Expected a comma but got %v", item.Val)
 				}
 				peekIt, err := it.Peek(1)
 				if err != nil {
-					return nil, nil, nil, err
+					return res, err
 				}
 				if peekIt[0].Val == "as" {
+					if varName != "" {
+						return res, x.Errorf("Invalid use of \"as\" in facets")
+					}
 					varName = it.Item().Val
 					it.Next() // Skip the "as"
+					continue
+				} else if peekIt[0].Typ == itemColon {
+					// this is an order key
+					if orderby != "" {
+						return res, x.Errorf("Invalid use of orderasc/oredrdesc in facets")
+					}
+					orderby = it.Item().Val
+					if orderby != "orderasc" && orderby != "orderdesc" {
+						return res, x.Errorf("Expected orderasc or orderdesc before : in @facets. Got: ", orderby)
+					}
+					orderdesc = orderby == "orderdesc"
+					it.Next()
 					continue
 				}
 				val := collectName(it, item.Val)
@@ -1591,11 +1612,18 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string,
 				if varName != "" {
 					facetVar[val] = varName
 				}
+				if orderby != "" {
+					if orderkey != "" {
+						return res, x.Errorf("Only one facet key can be used for ordering.")
+					}
+					orderkey = val
+				}
+				orderby = ""
 				varName = ""
 				expectArg = false
 			} else if item.Typ == itemComma {
 				if expectArg || varName != "" {
-					return nil, nil, nil, x.Errorf("Expected Argument but got comma.")
+					return res, x.Errorf("Expected Argument but got comma.")
 				}
 				expectArg = true
 				continue
@@ -1607,11 +1635,10 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string,
 			// this is not (facet1, facet2, facet3)
 			// try parsing filters. (eq(facet1, val1) AND eq(facet2, val2)...)
 			// revert back tokens
-			for i := 0; i < numTokens+1; i++ { // +1 for starting '('
-				it.Prev()
-			}
+			it.Restore(savePos)
 			filterTree, err := parseFilter(it)
-			return nil, filterTree, facetVar, err
+			res.ft = filterTree
+			return res, err
 		}
 	}
 	if len(facets.Keys) == 0 {
@@ -1632,7 +1659,8 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, map[string]string,
 		out = append(out, facets.Keys[flen-1])
 		facets.Keys = out
 	}
-	return facets, nil, facetVar, nil
+	res.f, res.vmap, res.facetOrder, res.orderdesc = facets, facetVar, orderkey, orderdesc
+	return res, nil
 }
 
 // parseGroupby parses the groupby directive.
@@ -1855,25 +1883,27 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	peek, err := it.Peek(1)
 	if err == nil && item.Typ == itemName {
 		if item.Val == "facets" { // because @facets can come w/t '()'
-			facets, facetsFilter, facetVar, err := parseFacets(it)
+			res, err := parseFacets(it)
 			if err != nil {
 				return err
 			}
-			if facets != nil {
-				curp.FacetVar = facetVar
+			if res.f != nil {
+				curp.FacetVar = res.vmap
+				curp.FacetOrder = res.facetOrder
+				curp.FacetDesc = res.orderdesc
 				if curp.Facets != nil {
 					return x.Errorf("Only one facets allowed")
 				}
-				curp.Facets = facets
-			} else if facetsFilter != nil {
+				curp.Facets = res.f
+			} else if res.ft != nil {
 				if curp.FacetsFilter != nil {
 					return x.Errorf("Only one facets filter allowed")
 				}
-				if facetsFilter.hasVars() {
+				if res.ft.hasVars() {
 					return x.Errorf(
 						"variables are not allowed in facets filter.")
 				}
-				curp.FacetsFilter = facetsFilter
+				curp.FacetsFilter = res.ft
 			} else {
 				return x.Errorf("Facets parsing failed.")
 			}
@@ -1995,6 +2025,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 		if key == "func" {
 			// Store the generator function.
+			if gq.Func != nil {
+				return gq, x.Errorf("Only one function allowed at root")
+			}
 			gen, err := parseFunction(it, gq)
 			if err != nil {
 				return gq, err
@@ -2047,6 +2080,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 			}
 
+			if _, ok := gq.Args[key]; ok {
+				return gq, x.Errorf("Repeated key %q at root", key)
+			}
 			if val == "" {
 				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 			}
@@ -2369,6 +2405,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 			// Stores args in GraphQuery, will be used later while retrieving results.
 			for _, p := range args {
+				if _, ok := curp.Args[p.Key]; ok {
+					return x.Errorf("Got repeated key %q at level %q", p.Key, curp.Attr)
+				}
 				if p.Val == "" {
 					return x.Errorf("Got empty argument")
 				}

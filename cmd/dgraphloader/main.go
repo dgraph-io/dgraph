@@ -17,6 +17,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -150,13 +151,29 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 
 	var buf bytes.Buffer
 	bufReader := bufio.NewReader(gr)
-	var line int
+
+	absPath, err := filepath.Abs(file)
+	x.Check(err)
+	checkpoint, err := dgraphClient.Checkpoint(absPath)
+	x.Check(err)
+	if checkpoint != 0 {
+		fmt.Printf("\nFound checkpoint for: %s. Skipping: %v lines.\n", file, checkpoint)
+	}
+
+	var line uint64
+	r := new(client.Req)
+	var batchSize int
 	for {
 		err = readLine(bufReader, &buf)
 		if err != nil {
 			break
 		}
 		line++
+		if line <= checkpoint {
+			// No need to parse. We have already sent it to server.
+			continue
+		}
+		batchSize++
 		nq, err := rdf.Parse(buf.String())
 		if err == rdf.ErrEmpty { // special case: comment/empty line
 			buf.Reset()
@@ -170,12 +187,22 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 		if len(nq.ObjectId) > 0 {
 			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
 		}
-		if err = dgraphClient.BatchSet(client.NewEdge(nq)); err != nil {
-			log.Fatal("While adding mutation to batch: ", err)
+		r.Set(client.NewEdge(nq))
+		if batchSize == *numRdf {
+			if err = dgraphClient.BatchSetWithMark(r, absPath, line); err != nil {
+				log.Fatal("While adding mutation to batch: ", err)
+			}
+			batchSize = 0
+			r = new(client.Req)
 		}
 	}
 	if err != io.EOF {
 		x.Checkf(err, "Error while reading file")
+	}
+	if batchSize > 0 {
+		if err = dgraphClient.BatchSetWithMark(r, absPath, line); err != nil {
+			log.Fatal("While adding mutation to batch: ", err)
+		}
 	}
 }
 
@@ -225,6 +252,7 @@ func main() {
 	hostList := strings.Split(*dgraph, ",")
 	x.AssertTrue(len(hostList) > 0)
 	for _, host := range hostList {
+		host = strings.Trim(host, " \t")
 		conn, err := setupConnection(host)
 		x.Checkf(err, "While trying to dial gRPC")
 		conns = append(conns, conn)
@@ -262,7 +290,9 @@ func main() {
 	// wait for schema changes to be done before starting mutations
 	time.Sleep(1 * time.Second)
 	var wg sync.WaitGroup
+	x.Check(dgraphClient.NewSyncMarks(filesList))
 	for _, file := range filesList {
+		file = strings.Trim(file, " \t")
 		wg.Add(1)
 		go func(file string) {
 			defer wg.Done()
@@ -287,4 +317,7 @@ func main() {
 	fmt.Printf("Time spent                : %v\n", c.Elapsed)
 
 	fmt.Printf("RDFs processed per second : %d\n", rate)
+
+	// Lets call this so that badger is closed properly.
+	dgraphClient.Close()
 }

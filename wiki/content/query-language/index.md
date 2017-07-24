@@ -51,7 +51,7 @@ Query Example: "Blade Runner" movie data found by UID.
 
 {{< runnable >}}
 {
-  bladerunner(func: uid(0x3cf6ed367ae4fa80)) {
+  bladerunner(func: uid(0x146a6)) {
     _uid_
     name@en
     initial_release_date
@@ -80,7 +80,7 @@ Multiple IDs can be specified in a list to the `uid` function.
 Query Example:
 {{< runnable >}}
 {
-  movies(func: uid(0x3cf6ed367ae4fa80, 0x949c72529f812b1b)) {
+  movies(func: uid(0x146a6, 0x34a7c)) {
     _uid_
     name@en
     initial_release_date
@@ -209,7 +209,7 @@ For functions on string valued predicates, if no language preference is given, t
 ### Term matching
 
 
-#### AllOfTerms
+#### allofterms
 
 Syntax Example: `allofterms(predicate, "space-separated term list")`
 
@@ -237,11 +237,11 @@ Query Example: All nodes that have `name` containing terms `indiana` and `jones`
 
 ##### Usage as Filter
 
-Query Example: Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his films that contain the words `indiana` and `jones`.
+Query Example: All Steven Spielberg films that contain the words `indiana` and `jones`.  The `@filter(has(director.film))` removes nodes with name Steven Spielberg that aren't the director --- the data also contains a character in a film called Steven Spielberg.
 
 {{< runnable >}}
 {
-  me(func: uid(0x3b0de646eaf32b75)) {
+  me(func: eq(name, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
     director.film @filter(allofterms(name@en, "jones indiana"))  {
       name@en
@@ -251,7 +251,7 @@ Query Example: Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his films that
 {{< /runnable >}}
 
 
-#### AnyOfTerms
+#### anyofterms
 
 
 Syntax Example: `anyofterms(predicate, "space-separated term list")`
@@ -281,11 +281,11 @@ Query Example: All nodes that have a `name` containing either `poison` or `peaco
 
 ##### Usage as filter
 
-Query Example: Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his movies that contain `war` or `spies`
+Query Example: All Steven Spielberg movies that contain `war` or `spies`.  The `@filter(has(director.film))` removes nodes with name Steven Spielberg that aren't the director --- the data also contains a character in a film called Steven Spielberg.
 
 {{< runnable >}}
 {
-  me(func: uid(0x3b0de646eaf32b75)) {
+  me(func: eq(name, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
     director.film @filter(anyofterms(name, "war spies"))  {
       name@en
@@ -449,7 +449,7 @@ Query Example: Directors called Steven who have directed 1,2 or 3 movies.
 {{< /runnable >}}
 
 
-#### Less than, less than or equal to, greater than and greater than or equal to
+#### less than, less than or equal to, greater than and greater than or equal to
 
 Syntax Examples: for inequality `IE`
 
@@ -476,13 +476,13 @@ Index required: An index is required for the `IE(predicate, ...)` forms (see tab
 | `dateTime` | `dateTime`    |
 
 
-Query Example: Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his movies released before 1970.
+Query Example: Ridley Scott movies released before 1980.
 
 {{< runnable >}}
 {
-  me(func: uid(0x3b0de646eaf32b75)) {
+  me(func: eq(name, "Ridley Scott")) {
     name@en
-    director.film @filter(lt(initial_release_date, "1970-01-01"))  {
+    director.film @filter(lt(initial_release_date, "1980-01-01"))  {
       initial_release_date
       name@en
     }
@@ -524,8 +524,115 @@ Query Example: A movie in each genre that has over 30000 movies.  Because there 
 }
 {{< /runnable >}}
 
+### uid
 
-### Has
+Syntax Examples:
+
+* `q(func: uid(<uid>)) `
+* `predicate @filter(uid(<uid1>, ..., <uidn>))`
+* `predicate @filter(uid(a))` for variable `a`
+* `q(func: uid(a,b))` for variables `a` and `b`
+
+
+Filters nodes at the current query level to only nodes in the given set of UIDs.  
+
+For query variable `a`, `uid(a)` represents the set of UIDs stored in `a`.  For value variable `b`, `uid(b)` represents the UIDs from the UID to value map.  With two or more variables, `uid(a,b,...)` represents the union of all the variables.
+
+
+Query Example: If the UID of a node is known, values for the node can be read directly.  The films of Priyanka Chopra by known UID
+
+{{< runnable >}}
+{
+  films(func: uid(0xcceb)) {
+    name@hi
+    actor.film {
+      performance.film {
+        name@hi
+      }
+    }
+  }
+}
+{{< /runnable >}}
+
+
+
+Query Example: The films of Taraji Henson by genre.
+{{< runnable >}}
+{
+  var(func: allofterms(name, "Taraji Henson")) {
+    actor.film {
+      F as performance.film {
+        G as genre
+      }
+    }
+  }
+
+  Taraji_films_by_genre(func: uid(G)) {
+    genre_name : name@en
+    films : ~genre @filter(uid(F)) {
+      film_name : name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+
+Query Example: Taraji Henson films ordered by numer of genres, with genres listed in order of how many films Taraji has made in each genre.
+{{< runnable >}}
+{
+  var(func: allofterms(name, "Taraji Henson")) {
+    actor.film {
+      F as performance.film {
+        G as count(genre)
+        genre {
+          C as count(~genre @filter(uid(F)))
+        }
+      }
+    }
+  }
+
+  Taraji_films_by_genre_count(func: uid(G), orderdesc: val(G)) {
+    film_name : name@en
+    genres : genre (orderdesc: val(C)) {
+      genre_name : name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+### uid_in
+
+
+Syntax Examples:
+
+* `q(func: ...) @filter(uid_in(predicate, <uid>)`
+* `predicate1 @filter(uid_in(predicate2, <uid>)`
+
+Schema Types: UID
+
+Index Required: none
+
+While the `uid` function filters nodes at the current level based on UID, function `uid_in` allows looking ahead along an edge to check that it leads to a particular UID.  This can often save an extra query block and avoids returning the edge.
+
+`uid_in` cannot be used at root, it accepts one UID constant as it's argument (not a variable).
+
+
+Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 597046).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
+{{< runnable >}}
+{
+  caro(func: eq(name, "Marc Caro")) {
+    name@en
+    director.film @filter(uid_in(~director.film, 597046)){
+      name@en
+    }
+  }
+}
+{{< /runnable >}}
+
+
+### has
 
 Syntax Examples: `has(predicate)`
 
@@ -534,7 +641,6 @@ Schema Types: all
 Index Required: `count` (when used at query root)
 
 Determines if a node has a particular predicate.
-
 
 
 Query Example: First five directors and all their movies that have a release date recorded.  Directors have directed at least one film --- equivalent semantics to `gt(count(director.film), 0)`.
@@ -554,7 +660,7 @@ Query Example: First five directors and all their movies that have a release dat
 
 Note that for geo queries, any polygon with holes is replace with the outer loop, ignoring holes.  Also, as for version 0.7.7 polygon containment checks are approximate.
 
-#### Near
+#### near
 
 Syntax Example: `near(predicate, [long, lat], distance)`
 
@@ -575,7 +681,7 @@ Query Example: Tourist destinations within 1 kilometer of a point in Golden Gate
 {{< /runnable >}}
 
 
-#### Within
+#### within
 
 Syntax Example: `within(predicate, [[long1, lat1], ..., [longN, latN]])`
 
@@ -596,7 +702,7 @@ Query Example: Tourist destinations within the specified area of Golden Gate Par
 {{< /runnable >}}
 
 
-#### Contains
+#### contains
 
 Syntax Examples: `contains(predicate, [long, lat])` or `contains(predicate, [[long1, lat1], ..., [longN, latN]])`
 
@@ -616,7 +722,7 @@ Query Example : All entities that contain a point in the flamingo enclosure of S
 {{< /runnable >}}
 
 
-#### Intersects
+#### intersects
 
 Syntax Example: `intersects(predicate, [[long1, lat1], ..., [longN, latN]])`
 
@@ -645,11 +751,11 @@ Within `@filter` multiple functions can be used with boolean connectives.
 
 Connectives `AND`, `OR` and `NOT` join filters and can be built into arbitrarily complex filters, such as `(NOT A OR B) AND (C AND NOT (D OR E))`.  Note that, `NOT` binds more tightly than `AND` which binds more tightly than `OR`.
 
-Query Example : Steven Spielberg is UID `0x3b0de646eaf32b75`.  All his movies that contain either both "indiana" and "jones" OR both "jurassic" and "park".
+Query Example : All Steven Spielberg movies that contain either both "indiana" and "jones" OR both "jurassic" and "park".
 
 {{< runnable >}}
 {
-  me(func: uid(0x3b0de646eaf32b75)) {
+  me(func: eq(name, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
     director.film @filter(allofterms(name, "jones indiana") OR allofterms(name, "jurassic park"))  {
       _uid_
@@ -816,13 +922,13 @@ Query Example: The first five of Baz Luhrmann's films, sorted by UID order.
 }
 {{< /runnable >}}
 
-The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0xeda1f2fe766ed92d`.  The results after Strictly Ballroom can now be obtained with `after`.
+The fifth movie is the Australian movie classic Strictly Ballroom.  It has UID `0x52753`.  The results after Strictly Ballroom can now be obtained with `after`.
 
 {{< runnable >}}
 {
   me(func: allofterms(name@en, "Baz Luhrmann")) {
     name@en
-    director.film (first:5, after: 0xeda1f2fe766ed92d) {
+    director.film (first:5, after: 0x52753) {
       _uid_
       name@en
     }
@@ -952,7 +1058,7 @@ Multiple query blocks are executed in parallel.
 
 The blocks need not be related in any way.
 
-Query Example: All of Angelina Jolie's films, with genres, and Steven Spielberg's (UID `0x3b0de646eaf32b75`) films since 2008.
+Query Example: All of Angelina Jolie's films, with genres, and Peter Jackson's films since 2008.
 
 {{< runnable >}}
 {
@@ -967,7 +1073,7 @@ Query Example: All of Angelina Jolie's films, with genres, and Steven Spielberg'
    }
   }
 
- DirectorInfo(func: uid(0x3b0de646eaf32b75)) {
+ DirectorInfo(func: eq(name, "Peter Jackson")) {
     name@en
     director.film @filter(ge(initial_release_date, "2008"))  {
         Release_date: initial_release_date
@@ -1592,6 +1698,29 @@ Query Example: Film name, country and first two actors (by UID order) of every S
 }
 {{< /runnable >}}
 
+
+## Ignorereflex directive
+
+The `@ignorereflex` directive forces the removal of child nodes that are reachable from themselves as a parent, through any path in the query result
+
+Query Example: All the coactors of Rutger Hauer.  Without `@ignorereflex`, the result would also include Rutger Hauer for every movie.
+
+{{< runnable >}}
+{
+  coactors(func: eq(name, "Rutger Hauer")) @ignorereflex {
+    actor.film {
+      performance.film {
+        starring {
+          performance.actor {
+            name@en
+          }
+        }
+      }
+    }
+  }
+}
+{{< /runnable >}}
+
 ## Debug
 
 For the purposes of debugging, you can attach a query parameter `debug=true` to a query. Attaching this parameter lets you retrieve the `_uid_` attribute for all the entities along with the `server_latency` information.
@@ -1717,7 +1846,7 @@ mutation {
 to check a password:
 ```
 {
-  check(id: 0x123) {
+  check(func: uid(0x123)) {
     name
     checkpwd(password, "ThePassword")
   }
@@ -1763,11 +1892,23 @@ The indices available for strings are as follows.
 | `fulltext`   | matching with language specific stemming and stopwords              | `eq`, `alloftext`, `anyoftext`     |
 | `trigram`    | regular expressions matching                                        | `regexp`                     |
 
-<!--
-#### Date Time Indices
 
-**to be added after [issue #971](https://github.com/dgraph-io/dgraph/issues/971)**
--->
+#### DateTime Indices
+
+The indices available for `dateTime` are as follows.
+
+| Index name / Tokenizer   | Part of date indexed                                      |
+| :----------- | :------------------------------------------------------------------ |
+| `dateTime`      | index on year (default)                                        |
+| `month`       | index on year and month                                         |
+| `day`       | index on year, month and day                                      |
+| `hour`       | index on year, month, day and hour                               |
+
+The choices of `dateTime` index allow selecting the precision of the index.  Applications, such as the movies examples in these docs, that require searching over dates but have relatively few nodes per year may prefer the `dateTime` tokenizer; applications that are dependent on fine grained date searches, such as real-time sensor readings, may prefer the `hour` index.
+
+
+All the `dateTime` indices are sortable.
+
 
 #### Sortable Indices
 
@@ -2011,7 +2152,7 @@ Query Example: All people.
     allPeople as <~http://schema.org/type>
   }
 
-  q(id: var(allPeople)) {
+  q(func: uid(var(allPeople))) {
     <http://schema.org/name>
   }
 }
@@ -2877,56 +3018,148 @@ Output:
 }
 ```
 
-## Shortest Path Queries
+## K-Shortest Path Queries
 
-Shortest path between a `src` node and `dst` node can be found using the keyword `shortest` for the query block name. It requires the source node id, destination node id and the predicates (atleast one) that have to be considered for traversing. This query block by itself will not return any results back but the path has to be stored in a variable and used in other query blocks as required.
+The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (atleast one) that have to be considered for traversal. A `shortest` query block does not return any results and requires the path has to be stored in a variable which is used in other query blocks.
+
+By default the shortest path is returned, with `numpaths: k`, the k-shortest paths are returned.
 
 {{% notice "note" %}}If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.{{% /notice %}}
 
 For example:
 ```
-# Insert this via mutation
 curl localhost:8080/query -XPOST -d $'
 mutation{
-set {
- <a> <friend> <b> (weight=0.1) .
- <b> <friend> <c> (weight=0.2) .
- <c> <friend> <d> (weight=0.3) .
- <a> <friend> <d> (weight=1) .
- <a> <name> "alice" .
- <b> <name> "bob" .
- <c> <name> "Tom" .
- <d> <name> "Mallory" .
- }
+  schema {
+    name: string @index(exact) .
+  }
+
+  set {
+    _:a <friend> _:b (weight=0.1) .
+    _:b <friend> _:c (weight=0.2) .
+    _:c <friend> _:d (weight=0.3) .
+    _:a <friend> _:d (weight=1) .
+    _:a <name> "Alice" .
+    _:b <name> "Bob" .
+    _:c <name> "Tom" .
+    _:d <name> "Mallory" .
+  }
 }' | python -m json.tool | less
 ```
 
+The shortest path between Alice and Mallory (assuming UIDs 0x2 and 0x5 respectively) can be found with query:
 ```
 curl localhost:8080/query -XPOST -d $'{
- path as shortest(from:a, to:d) {
+ path as shortest(from: 0x2, to: 0x5) {
   friend
  }
- path(id: var(path)) {
+ path(func: uid(path)) {
    name
  }
 }' | python -m json.tool | less
 ```
-Would return the following results. (Note that each edges' weight is considered as 1)
+
+Which returns the following results. (Note, without considering the `weight` facet, each edges' weight is considered as 1)
  ```
+ {
+     "_path_": [
+         {
+             "_uid_": "0x2",
+             "friend": [
+                 {
+                     "_uid_": "0x5"
+                 }
+             ]
+         }
+     ],
+     "path": [
+         {
+             "name": "Alice"
+         },
+         {
+             "name": "Mallory"
+         }
+     ]
+ }
+```
+
+The shortest two paths are returned with:
+```
+curl localhost:8080/query -XPOST -d $'{
+ path as shortest(from: 0x2, to: 0x5, numpaths: 2) {
+  friend
+ }
+ path(func: uid(path)) {
+   name
+ }
+}' | python -m json.tool | less
+```
+
+
+
+Edges weights are included by using facets on the edges as follows.
+
+{{% notice "note" %}}One facet per predicate in the shortest query block is allowed.{{% /notice %}}
+```
+curl localhost:8080/query -XPOST -d $'{
+ path as shortest(from: 0x2, to: 0x5) {
+  friend @facets(weight)
+ }
+
+ path(func: uid(path)) {
+  name
+ }
+}' | python -m json.tool | less
+```
+
+
+
+```
 {
     "_path_": [
         {
-            "_uid_": "0xb3454265b6df75e3",
+            "_uid_": "0x2",
             "friend": [
                 {
-                    "_uid_": "0x3e0ae463957d9a21"
+                    "@facets": {
+                        "_": {
+                            "weight": 0.1
+                        }
+                    },
+                    "_uid_": "0x3",
+                    "friend": [
+                        {
+                            "@facets": {
+                                "_": {
+                                    "weight": 0.2
+                                }
+                            },
+                            "_uid_": "0x4",
+                            "friend": [
+                                {
+                                    "@facets": {
+                                        "_": {
+                                            "weight": 0.3
+                                        }
+                                    },
+                                    "_uid_": "0x5"
+                                }
+                            ]
+                        }
+                    ]
                 }
             ]
         }
     ],
     "path": [
         {
-            "name": "alice"
+            "name": "Alice"
+        },
+        {
+            "name": "Bob"
+        },
+        {
+            "name": "Tom"
         },
         {
             "name": "Mallory"
@@ -2934,91 +3167,21 @@ Would return the following results. (Note that each edges' weight is considered 
     ]
 }
 ```
-If we want to use edge weights, we'd use facets to specify them as follows.
 
-{{% notice "note" %}}We can specify exactly one facet per predicate in the shortest query block.{{% /notice %}}
+Constraints can be applied to the intermediate nodes as follows.
 ```
 curl localhost:8080/query -XPOST -d $'{
- path as shortest(from:a, to:d) {
-  friend @facets(weight)
- }
-
- path(id: var(path)) {
-  name
- }
-}' | python -m json.tool | less
-```
-
-```
-{
-  "_path_": [
-    {
-      "_uid_": "0xb3454265b6df75e3",
-      "friend": [
-        {
-          "@facets": {
-            "_": {
-              "weight": 0.1
-            }
-          },
-          "_uid_": "0xa3b260215ec8f116",
-          "friend": [
-            {
-              "@facets": {
-                "_": {
-                  "weight": 0.2
-                }
-              },
-              "_uid_": "0x9ea118a9e0cb7b28",
-              "friend": [
-                {
-                  "@facets": {
-                    "_": {
-                      weight": 0.3
-                    }
-                  },
-                  "_uid_": "0x3e0ae463957d9a21"
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "path": [
-    {
-      "name": "alice"
-    },
-    {
-      "name": "bob"
-    },
-    {
-      "name": "Tom"
-    },
-    {
-      "name": "Mallory"
-    }
-  ]
-}
-
-```
-
-Another query which shows how to retrieve paths with some constraints on the intermediate nodes.
-```
-curl localhost:8080/query -XPOST -d $'{
-  path as shortest(from: a, to: d) {
-    friend @filter(not anyofterms(name, "bob")) @facets(weight)
+  path as shortest(from: 0x2, to: 0x5) {
+    friend @filter(not eq(name, "Bob")) @facets(weight)
     relative @facets(liking)
   }
 
-  relationship(id: var(path)) {
+  relationship(func: uid(path)) {
     name
   }
 }' | python -m json.tool | less
 ```
 
-This query would again retrieve the shortest path but using some different parameters for the edge weights which are specified using facets (weight and liking). Also, we'd not like to have any person whose name contains `alice` in the path which is specified by the filter.
 
 ## Recurse Query
 
@@ -3063,7 +3226,7 @@ Some points to keep in mind while using recurse queries are:
 ```
 curl localhost:8080/query -XPOST -d $'
 query {
-  debug(id: m.07bwr) {
+  debug(func: uid(1)) {
     name@en
     ...TestFrag
   }
@@ -3083,7 +3246,7 @@ fragment TestFragB {
 
 {{< runnable >}}
 {
- "query": "query test($a: int, $b: int, $id: string){  me(id: $id) {name@en, director.film (first: $a, offset: $b) {name @en, genre(first: $a) { name@en }}}}",
+ "query": "query test($a: int, $b: int, $id: string){  me(func: uid($id)) {name@en, director.film (first: $a, offset: $b) {name @en, genre(first: $a) { name@en }}}}",
  "variables" : {
   "$a": "5",
   "$b": "10",
@@ -3101,7 +3264,7 @@ default value of `2`.
 
 {{< runnable >}}
 {
- "query": "query test($a: int = 2, $b: int!){  me(id: m.06pj8) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
+ "query": "query test($a: int = 2, $b: int!){  me(func: uid(1)) {director.film (first: $a, offset: $b) {genre(first: $a) { name@en }}}}",
  "variables" : {
    "$a": "5",
    "$b": "10"

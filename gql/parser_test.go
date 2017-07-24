@@ -2992,7 +2992,69 @@ func TestParseFacetsError2(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseFacetsOrderError1(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: orderdesc: closeness) {
+				name 
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseFacetsOrderError2(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(a as b as closeness) {
+				name 
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseFacetsOrderError3(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness, order: abc) {
+				name 
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
 func TestParseFacets(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness) {
+				name 
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, "closeness", res.Query[0].Children[0].FacetOrder)
+	require.True(t, res.Query[0].Children[0].FacetDesc)
+}
+
+func TestParseOrderbyFacet(t *testing.T) {
 	query := `
 	query {
 		me(func: uid(0x1)) {
@@ -3125,6 +3187,32 @@ func TestParseFacetsFail1(t *testing.T) {
 		}
 	}
 `
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseRepeatArgsError1(t *testing.T) {
+	// key can not be empty..
+	query := `
+	{
+  		me(func: anyoftext(Text, "biology"), func: anyoftext(Text, "science")) {
+			Text
+  		}
+	}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}
+
+func TestParseRepeatArgsError2(t *testing.T) {
+	// key can not be empty..
+	query := `
+	{
+  		me(func: anyoftext(Text, "science")) {
+			Text(first: 1, first: 4)
+  		}
+	}
+	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 }
@@ -3514,12 +3602,42 @@ func TestMutationVariables(t *testing.T) {
 
 	require.Equal(t, 1, len(res.MutationVars))
 
-	require.EqualValues(t, "adults", res.MutationVars[res.Mutation.Set[0]])
+	require.EqualValues(t, "adults", res.MutationVars[0])
 
 	expected := protos.NQuad{
 		Predicate:   "isadult",
 		ObjectValue: &protos.Value{&protos.Value_DefaultVal{"true"}},
 		SubjectVar:  "adults",
+	}
+	require.EqualValues(t, expected, *res.Mutation.Set[0])
+}
+
+func TestMutationVariables2(t *testing.T) {
+	query := `
+		mutation {
+			set {
+				uid(adults) <isadult> uid(engineer) .
+				<0x900> <b> <0x901> .
+			}
+		}
+		{
+			me(func: uid( 0x900)) {
+				adults as friends @filter(gt(age, 18))
+			}
+			engineer as me(func: uid(0x1))
+		}
+	`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(res.MutationVars))
+
+	require.EqualValues(t, []string{"adults", "engineer"}, res.MutationVars)
+
+	expected := protos.NQuad{
+		Predicate:  "isadult",
+		ObjectVar:  "engineer",
+		SubjectVar: "adults",
 	}
 	require.EqualValues(t, expected, *res.Mutation.Set[0])
 }

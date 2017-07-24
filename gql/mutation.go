@@ -59,14 +59,13 @@ func (m Mutation) HasOps() bool {
 }
 
 // NeededVars retrieves NQuads and variable names of NQuads that refer a variable.
-func (m Mutation) NeededVars() (res map[*protos.NQuad]string) {
-	res = make(map[*protos.NQuad]string)
+func (m Mutation) NeededVars() (res []string) {
 	addIfVar := func(nq *protos.NQuad) {
 		if len(nq.SubjectVar) > 0 {
-			res[nq] = nq.SubjectVar
+			res = append(res, nq.SubjectVar)
 		}
 		if len(nq.ObjectVar) > 0 {
-			res[nq] = nq.ObjectVar
+			res = append(res, nq.ObjectVar)
 		}
 	}
 	for _, s := range m.Set {

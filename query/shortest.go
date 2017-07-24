@@ -21,6 +21,7 @@ import (
 	"container/heap"
 	"context"
 	"math"
+	"sync"
 
 	"golang.org/x/net/trace"
 
@@ -47,6 +48,12 @@ type Item struct {
 	hop   int     // number of hops taken to reach this node.
 	index int
 	path  route // used in k shortest path.
+}
+
+var pathPool = sync.Pool{
+	New: func() interface{} {
+		return []pathInfo{}
+	},
 }
 
 var ErrStop = x.Errorf("STOP")
@@ -355,7 +362,15 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		neighbours := adjacencyMap[item.uid]
 		for toUid, info := range neighbours {
 			cost := info.cost
-			curPath := make([]pathInfo, len(item.path.route)+1)
+			curPath := pathPool.Get().([]pathInfo)
+			if cap(curPath) < len(item.path.route)+1 {
+				// We can't use it due to insufficient capacity. Put it back.
+				pathPool.Put(curPath)
+				curPath = make([]pathInfo, len(item.path.route)+1)
+			} else {
+				// Use the curPath from pathPool. Set length appropriately.
+				curPath = curPath[:len(item.path.route)+1]
+			}
 			n := copy(curPath, item.path.route)
 			curPath[n] = pathInfo{
 				uid:   toUid,
@@ -373,6 +388,8 @@ func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 			heap.Push(&pq, node)
 		}
+		// Return the popped nodes path to pool.
+		pathPool.Put(item.path.route)
 	}
 
 	next <- false

@@ -145,9 +145,8 @@ func TestTokensTable(t *testing.T) {
 		Entity: 157,
 	}
 	addMutationWithIndex(t, l, edge, Set)
-	_, err := l.SyncIfDirty()
+	_, err := l.SyncIfDirty(false)
 	x.Check(err)
-	time.Sleep(10 * time.Second)
 
 	key = x.IndexKey("name", "david")
 	var item badger.KVItem
@@ -161,7 +160,6 @@ func TestTokensTable(t *testing.T) {
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 
 	CommitLists(10, 1)
-	time.Sleep(time.Second)
 
 	err = ps.Get(key, &item)
 	x.Check(err)
@@ -246,7 +244,7 @@ func TestRebuildIndex(t *testing.T) {
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// Create some fake wrong entries for data store.
 	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"))
@@ -257,7 +255,7 @@ func TestRebuildIndex(t *testing.T) {
 
 	// Let's force a commit.
 	CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// Check index entries in data store.
 	it := ps.NewIterator(badger.DefaultIteratorOptions)
@@ -304,13 +302,13 @@ func TestRebuildReverseEdges(t *testing.T) {
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	require.NoError(t, RebuildReverseEdges(context.Background(), "friend"))
 
 	// Let's force a commit.
 	CommitLists(10, 1)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// Check index entries in data store.
 	it := ps.NewIterator(badger.DefaultIteratorOptions)

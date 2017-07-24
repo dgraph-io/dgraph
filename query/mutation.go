@@ -24,11 +24,11 @@ func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.Directe
 func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
 	if worker.Config.ExpandEdge {
 		err := addInternalEdge(ctx, m)
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Added Internal edges")
-		}
 		if err != nil {
 			return x.Wrapf(err, "While adding internal edges")
+		}
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Added Internal edges")
 		}
 	}
 	if err := worker.MutateOverNetwork(ctx, m); err != nil {

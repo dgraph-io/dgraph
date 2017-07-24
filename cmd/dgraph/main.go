@@ -161,6 +161,12 @@ func setupConfigOpts() {
 		log.Fatal("Unable to parse flags")
 	}
 
+	// Read from config file before setting config.
+	if config.ConfigFile != "" {
+		x.Println("Loading configuration from file:", config.ConfigFile)
+		x.LoadConfigFromYAML(config.ConfigFile)
+	}
+
 	dgraph.SetConfiguration(config)
 }
 
@@ -265,6 +271,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if dgraph.Config.DebugMode {
+		fmt.Printf("Received query: %+v\n", q)
+	}
 	parseStart := time.Now()
 	parsed, err := dgraph.ParseQueryAndMutation(ctx, gql.Request{
 		Str:       q,
@@ -666,6 +675,11 @@ func setupServer(che chan error) {
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
+	// Setting a higher number here allows more disk I/O calls to be scheduled, hence considerably
+	// improving throughput. The extra CPU overhead is almost negligible in comparison. The
+	// benchmark notes are located in badger-bench/randread.
+	runtime.GOMAXPROCS(128)
+
 	setupConfigOpts()
 	x.Init() // flag.Parse is called here
 
@@ -704,7 +718,7 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	go worker.StartRaftNodes(dgraph.State.WALstore)
+	go worker.StartRaftNodes(dgraph.State.WALstore, bindall)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {

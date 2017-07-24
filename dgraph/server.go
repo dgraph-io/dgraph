@@ -138,6 +138,9 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 		return resp, fmt.Errorf("empty query and mutation.")
 	}
 
+	if Config.DebugMode {
+		x.Printf("Received query: %+v, mutation: %+v\n", req.Query, req.Mutation)
+	}
 	var l query.Latency
 	l.Start = time.Now()
 	if tr, ok := trace.FromContext(ctx); ok {
