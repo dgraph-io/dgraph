@@ -188,7 +188,7 @@ func processFile(file string, dgraphClient *client.Dgraph) {
 			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
 		}
 		r.Set(client.NewEdge(nq))
-		if batchSize == *numRdf {
+		if batchSize >= *numRdf {
 			if err = dgraphClient.BatchSetWithMark(r, absPath, line); err != nil {
 				log.Fatal("While adding mutation to batch: ", err)
 			}
@@ -239,6 +239,7 @@ func setupConnection(host string) (*grpc.ClientConn, error) {
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	flag.Parse()
 	x.Init()
 	runtime.SetBlockProfileRate(*blockRate)
@@ -271,6 +272,7 @@ func main() {
 		Size:          *numRdf,
 		Pending:       *concurrent,
 		PrintCounters: true,
+		MaxRetries:    100,
 	}
 	dgraphClient := client.NewDgraphClient(conns, bmOpts, *clientDir)
 
@@ -308,7 +310,7 @@ func main() {
 		}(file)
 	}
 	wg.Wait()
-	dgraphClient.BatchFlush()
+	x.Check(dgraphClient.BatchFlush())
 
 	c := dgraphClient.Counter()
 	var rate uint64
