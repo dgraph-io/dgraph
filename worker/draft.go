@@ -543,23 +543,6 @@ func marshalMsgForSending(m raftpb.Message) []byte {
 	return data
 }
 
-func (n *node) send(m raftpb.Message) {
-	x.AssertTruef(n.id != m.To, "Sending message to itself")
-	if m.Type == raftpb.MsgApp {
-		n.sendMsgApp(m)
-		return
-	}
-
-	data := marshalMsgForSending(m)
-	select {
-	case n.messages <- sendmsg{to: m.To, data: data}:
-		// pass
-	default:
-		// This would be very weird, but it's okay to drop messages.  Raft can deal with it.
-		x.Printf("Unable to push message to channel in send")
-	}
-}
-
 const (
 	messageBatchSoftLimit = 10000000
 )
@@ -837,7 +820,20 @@ func (n *node) sendMessages(rcBytes []byte, messages []raftpb.Message) {
 	for _, msg := range messages {
 		// NOTE: We can do some optimizations here to drop messages.
 		msg.Context = rcBytes
-		n.send(msg)
+		x.AssertTrue(n.id != msg.To)
+		if msg.Type == raftpb.MsgApp {
+			n.sendMsgApp(msg)
+			continue
+		}
+
+		data := marshalMsgForSending(msg)
+		select {
+		case n.messages <- sendmsg{to: msg.To, data: data}:
+			// pass
+		default:
+			// This would be very weird, but it's okay to drop messages.  Raft can deal with it.
+			x.Printf("Unable to push message to channel in send")
+		}
 	}
 }
 
