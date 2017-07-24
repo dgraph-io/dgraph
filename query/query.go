@@ -1505,7 +1505,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.Uids != nil {
 				lists = append(lists, l.Uids)
 			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.Vals) != 0 {
-				// This should happened only once.
+				// This should happen only once.
 				sg.Params.uidToVal = l.Vals
 			} else if len(l.Vals) != 0 && (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) {
 				// Derive the UID list from value var.
@@ -1897,8 +1897,8 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		return sg.sortAndPaginateUsingFacet(ctx)
 	}
 	for _, it := range sg.Params.NeedsVar {
-		if it.Name == sg.Params.Order {
-			// If the Order name is same as var name, we sort using that variable.
+		if it.Name == sg.Params.Order && (it.Typ == gql.VALUE_VAR) {
+			// If the Order name is same as var name and it's a value variable, we sort using that variable.
 			return sg.sortAndPaginateUsingVar(ctx)
 		}
 	}
