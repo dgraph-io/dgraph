@@ -8094,7 +8094,6 @@ func TestPBUnmarshalToStruct3(t *testing.T) {
 
 	type res struct {
 		Root []*Person `dgraph:"me"`
-		Name string
 	}
 
 	populateGraph(t)
