@@ -1668,6 +1668,21 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 			return res, ok, err
 		}
 
+		// Combine the facetitem with our result.
+		{
+			if facetItem.varName != "" {
+				facetVar[facetItem.facetName] = facetItem.varName
+			}
+			facets.Keys = append(facets.Keys, facetItem.facetName)
+			if facetItem.ordered {
+				if orderkey != "" {
+					return res, false, x.Errorf("Invalid use of orderasc/orderdesc in facets")
+				}
+				orderdesc = facetItem.orderdesc
+				orderkey = facetItem.facetName
+			}
+		}
+
 		// Now what?  Either close-paren or a comma.
 		if _, ok := tryParseItemType(it, itemRightRound); ok {
 			sort.Slice(facets.Keys, func(i, j int) bool {
@@ -1687,27 +1702,8 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 			res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
 			return res, true, nil
 		}
-		if item, ok := tryParseItemType(it, itemComma); !ok {
-			if len(facets.Keys) == 0 {
-				return res, false, nil
-			}
-			return res, false, x.Errorf(
-				"Expected ',' or ')' in facet list, got %q", item.Val)
-		}
-
-		// Combine the facetItem with our result.
-		{
-			if facetItem.varName != "" {
-				facetVar[facetItem.facetName] = facetItem.varName
-			}
-			facets.Keys = append(facets.Keys, facetItem.facetName)
-			if facetItem.ordered {
-				if orderkey != "" {
-					return res, false, x.Errorf("Invalid use of orderasc/orderdesc in facets")
-				}
-				orderdesc = facetItem.orderdesc
-				orderkey = facetItem.facetName
-			}
+		if _, ok := tryParseItemType(it, itemComma); !ok {
+			return res, false, nil
 		}
 	}
 }
