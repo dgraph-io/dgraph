@@ -26,7 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func GetDefaultEmbeddeConfig() Options {
+func GetDefaultEmbeddedConfig() Options {
 	config := DefaultConfig
 	config.InMemoryComm = true
 	config.BaseWorkerPort = 0
