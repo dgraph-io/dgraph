@@ -30,15 +30,10 @@ import (
 )
 
 func makeFastJsonNode() *fastJsonNode {
-	return &fastJsonNode{
-	// uncoment for master branch
-	// attrs:    map[string]*fastJsonAttr{},
-	//children: map[string][]*fastJsonNode{},
-	}
+	return &fastJsonNode{}
 }
 
 func TestEncodeMemory(t *testing.T) {
-
 	var wg sync.WaitGroup
 
 	for x := 0; x < runtime.NumCPU(); x++ {

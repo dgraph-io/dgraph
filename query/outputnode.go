@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	//"strconv"
 	"strings"
 	"time"
 
@@ -34,7 +33,6 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
-	//"github.com/dgraph-io/dgraph/x"
 )
 
 // ToProtocolBuf returns the list of protos.Node which would be returned to the go
@@ -289,11 +287,19 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 }
 
 func makeScalarNode(attr string, isChild bool, val []byte) *fastJsonNode {
-	return &fastJsonNode{attr, 0, isChild, val, nil}
+	return &fastJsonNode{
+		attr:      attr,
+		isChild:   isChild,
+		scalarVal: val,
+	}
 }
 
 func makeNestedNode(attr string, isChild bool, val *fastJsonNode) *fastJsonNode {
-	return &fastJsonNode{attr, 0, isChild, nil, []*fastJsonNode{val}}
+	return &fastJsonNode{
+		attr:    attr,
+		isChild: isChild,
+		attrs:   []*fastJsonNode{val},
+	}
 }
 
 type fastJsonNode struct {
@@ -424,7 +430,7 @@ func (fj *fastJsonNode) encode(out *bufio.Writer) {
 
 	if fj.attrs.Len() > 0 {
 		out.WriteRune('{')
-		curr := heap.Pop(&fj.attrs).(*fastJsonNode)
+		cur := heap.Pop(&fj.attrs).(*fastJsonNode)
 		cnt := 1
 		last := false
 		inArray := false
@@ -437,24 +443,24 @@ func (fj *fastJsonNode) encode(out *bufio.Writer) {
 			}
 
 			if !last {
-				if curr.attr == next.attr {
+				if cur.attr == next.attr {
 					if cnt == 1 {
-						curr.writeKey(out)
+						cur.writeKey(out)
 						out.WriteRune('[')
 						inArray = true
 					}
-					curr.encode(out)
+					cur.encode(out)
 					cnt++
 				} else {
 					if cnt == 1 {
-						curr.writeKey(out)
-						if curr.isChild {
+						cur.writeKey(out)
+						if cur.isChild {
 							out.WriteRune('[')
 							inArray = true
 						}
 					}
-					curr.encode(out)
-					if cnt != 1 || curr.isChild {
+					cur.encode(out)
+					if cnt != 1 || cur.isChild {
 						out.WriteRune(']')
 						inArray = false
 					}
@@ -462,16 +468,16 @@ func (fj *fastJsonNode) encode(out *bufio.Writer) {
 				}
 				out.WriteRune(',')
 
-				curr = next
+				cur = next
 			} else {
 				if cnt == 1 {
-					curr.writeKey(out)
+					cur.writeKey(out)
 				}
-				if curr.isChild && !inArray {
+				if cur.isChild && !inArray {
 					out.WriteRune('[')
 				}
-				curr.encode(out)
-				if cnt != 1 || curr.isChild {
+				cur.encode(out)
+				if cnt != 1 || cur.isChild {
 					out.WriteRune(']')
 					inArray = false
 				}
@@ -539,7 +545,6 @@ func (n *fastJsonNode) normalize() [][]*fastJsonNode {
 
 	for ci := 0; ci < len(n.attrs); {
 		childNode := n.attrs[ci]
-		//if childNode.isChild {
 		childSlice := make([][]*fastJsonNode, 0, 5)
 		for ci < len(n.attrs) && childNode.attr == n.attrs[ci].attr {
 			childSlice = append(childSlice, n.attrs[ci].normalize()...)
@@ -547,9 +552,6 @@ func (n *fastJsonNode) normalize() [][]*fastJsonNode {
 		}
 		// Merging with parent.
 		parentSlice = merge(parentSlice, childSlice)
-		//} else {
-		//	ci++
-		//}
 	}
 	return parentSlice
 }
