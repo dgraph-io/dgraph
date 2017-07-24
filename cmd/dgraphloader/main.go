@@ -227,7 +227,8 @@ func setupConnection(host string) (*grpc.ClientConn, error) {
 		return nil, err
 	}
 
-	return grpc.Dial(host, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+	return grpc.Dial(host, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
+		grpc.MaxCallSendMsgSize(x.GrpcMaxSize)), grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 }
 
 func main() {
