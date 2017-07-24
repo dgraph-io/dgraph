@@ -499,18 +499,18 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 
 	for {
 		select {
-		case m := <-msgCh:
-			data := marshalMsgForSending(m)
-
+		case msg := <-msgCh:
+			// TODO: Instead of marshal+copy, use MarshalTo.  (Or put size at end?)
 			var buf bytes.Buffer
+			data := marshalMsgForSending(msg)
 			appendSize32Data(&buf, data)
+
 			p := &protos.Payload{Data: buf.Bytes()}
 
 			err := stream.Send(p)
 			if err != nil {
 				return err
 			}
-			// TODO: Hey, don't we want to batch the messages before we send them?  Like below?
 
 		case <-ctx.Done():
 			log.Printf("CloseAndRecv on stream\n")
@@ -521,14 +521,14 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 	}
 }
 
-func (n *node) sendMsgApp(m raftpb.Message) {
-	ch, err := n.peers.getAppMessages(m.To)
+func (n *node) sendMsgApp(msg raftpb.Message) {
+	ch, err := n.peers.getAppMessages(msg.To)
 	if err != nil {
 		// No such peer.  OK.
 		return
 	}
 	select {
-	case ch <- m:
+	case ch <- msg:
 	default:
 		x.Printf("Unable to push message to channel in sendMsgApp")
 	}
@@ -821,6 +821,7 @@ func (n *node) sendMessages(rcBytes []byte, messages []raftpb.Message) {
 		// NOTE: We can do some optimizations here to drop messages.
 		msg.Context = rcBytes
 		x.AssertTrue(n.id != msg.To)
+
 		if msg.Type == raftpb.MsgApp {
 			n.sendMsgApp(msg)
 			continue
