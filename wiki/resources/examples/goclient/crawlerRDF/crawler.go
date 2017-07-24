@@ -572,7 +572,7 @@ func main() {
 	}
 	defer os.RemoveAll(clientDir)
 
-	// A DgraohClient made from a succeful connection.  All calls to the client and thus the backend go through this.
+	// A DgraphClient made from a succesful connection.  All calls to the client and thus the backend go through this.
 	// We won't be doing any batching with this client, just queries, so we can ignore the BatchMutationOptions.
 	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 	defer dgraphClient.Close()

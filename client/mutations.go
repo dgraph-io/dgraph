@@ -579,7 +579,8 @@ func (d *Dgraph) NodeUid(uid uint64) Node {
 // exist as labelled nodes in Dgraph. Blank nodes are used as labels client side for loading and
 // linking nodes correctly.  If the label is new in this session a new UID is allocated and
 // assigned to the label.  If the label has already been assigned, the corresponding Node
-// is returned.
+// is returned.  If the empty string is given as the argument, a new node is allocated and returned
+// but no map is stored, so every call to NodeBlank("") returns a new node.
 func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 	if len(varname) == 0 {
 		d.alloc.Lock()
