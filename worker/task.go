@@ -311,16 +311,14 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 	i := -1
 	var lerr error
-	var lastDecr func()
-BL:
 	// NOTE: Never return inside this loop
 	for it := range plch {
 		i++
-		if lastDecr != nil {
-			lastDecr()
+		if lerr != nil {
+			it.decr()
+			continue
 		}
 		pl := it.pl
-		lastDecr = it.decr
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
@@ -328,7 +326,6 @@ BL:
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
 			lerr = x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
 			stopCh <- struct{}{}
-			break BL
 		}
 		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
 		if isValueEdge {
@@ -364,13 +361,11 @@ BL:
 			if perr != nil {
 				lerr = perr
 				stopCh <- struct{}{}
-				break BL
 			}
 		} else if q.FacetsFilter != nil { // else part means isValueEdge
 			// This is Value edge and we are asked to do facet filtering. Not supported.
 			lerr = x.Errorf("Facet filtering is not supported on values.")
 			stopCh <- struct{}{}
-			break BL
 		}
 
 		// add facets to result.
@@ -456,10 +451,6 @@ BL:
 			uidList.Uids = append(uidList.Uids, fres.uid)
 		}
 		out.UidMatrix = append(out.UidMatrix, uidList)
-	}
-
-	for it := range plch {
-		// Some items might be left after error. decr() their reference.
 		it.decr()
 	}
 
