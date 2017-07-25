@@ -251,6 +251,13 @@ func getAllPredicates(ctx context.Context, q *protos.Query, gid uint32) (*protos
 	return out, nil
 }
 
+type funcArgs struct {
+	q     *protos.Query
+	gid   uint32
+	srcFn *functionContext
+	out   *protos.Result
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	out := new(protos.Result)
@@ -453,13 +460,13 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
-		if err := handleHasFunction(q, gid, srcFn, out); err != nil {
+		if err := handleHasFunction(funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
 
 	if srcFn.fnType == CompareScalarFn && srcFn.isFuncAtRoot {
-		if err := handleCompareScalarFunction(q, gid, srcFn, out); err != nil {
+		if err := handleCompareScalarFunction(funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
@@ -467,7 +474,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	if srcFn.fnType == RegexFn {
 		// Go through the indexkeys for the predicate and match them with
 		// the regex matcher.
-		if err := handleRegexFunction(ctx, q, gid, srcFn, out); err != nil {
+		if err := handleRegexFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
@@ -475,64 +482,64 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	// We fetch the actual value for the uids, compare them to the value in the
 	// request and filter the uids only if the tokenizer IsLossy.
 	if srcFn.fnType == CompareAttrFn && len(srcFn.tokens) > 0 {
-		if err := handleCompareFunction(ctx, q, gid, srcFn, out); err != nil {
+		if err := handleCompareFunction(ctx, funcArgs{q, gid, srcFn, out}); err != nil {
 			return nil, err
 		}
 	}
 
 	// If geo filter, do value check for correctness.
 	if srcFn.geoQuery != nil {
-		filterGeoFunction(attr, gid, srcFn, out)
+		filterGeoFunction(funcArgs{q, gid, srcFn, out})
 	}
 
 	// For string matching functions, check the language.
 	if (srcFn.fnType == StandardFn || srcFn.fnType == HasFn ||
 		srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn) &&
 		len(srcFn.lang) > 0 {
-		filterStringFunction(attr, gid, srcFn, out)
+		filterStringFunction(funcArgs{q, gid, srcFn, out})
 	}
 
 	out.IntersectDest = srcFn.intersectDest
 	return out, nil
 }
 
-func handleHasFunction(q *protos.Query, gid uint32, srcFn *functionContext, out *protos.Result) error {
-	attr := q.Attr
+func handleHasFunction(arg funcArgs) error {
+	attr := arg.q.Attr
 	if ok := schema.State().HasCount(attr); !ok {
 		return x.Errorf("Need @count directive in schema for attr: %s for fn: %s at root.",
-			attr, srcFn.fname)
+			attr, arg.srcFn.fname)
 	}
 	cp := countParams{
 		count:   0,
 		fn:      "gt",
 		attr:    attr,
-		gid:     gid,
-		reverse: q.Reverse,
+		gid:     arg.gid,
+		reverse: arg.q.Reverse,
 	}
-	cp.evaluate(out)
+	cp.evaluate(arg.out)
 	return nil
 }
 
-func handleCompareScalarFunction(q *protos.Query, gid uint32, srcFn *functionContext, out *protos.Result) error {
-	attr := q.Attr
+func handleCompareScalarFunction(arg funcArgs) error {
+	attr := arg.q.Attr
 	if ok := schema.State().HasCount(attr); !ok {
 		return x.Errorf("Need @count directive in schema for attr: %s for fn: %s at root",
-			attr, srcFn.fname)
+			attr, arg.srcFn.fname)
 	}
-	count := srcFn.threshold
+	count := arg.srcFn.threshold
 	cp := countParams{
-		fn:      srcFn.fname,
+		fn:      arg.srcFn.fname,
 		count:   count,
 		attr:    attr,
-		gid:     gid,
-		reverse: q.Reverse,
+		gid:     arg.gid,
+		reverse: arg.q.Reverse,
 	}
-	cp.evaluate(out)
+	cp.evaluate(arg.out)
 	return nil
 }
 
-func handleRegexFunction(ctx context.Context, q *protos.Query, gid uint32, srcFn *functionContext, out *protos.Result) error {
-	attr := q.Attr
+func handleRegexFunction(ctx context.Context, arg funcArgs) error {
+	attr := arg.q.Attr
 	typ, err := schema.State().TypeOf(attr)
 	if err != nil || !typ.IsScalar() {
 		return x.Errorf("Attribute not scalar: %s %v", attr, typ)
@@ -540,7 +547,7 @@ func handleRegexFunction(ctx context.Context, q *protos.Query, gid uint32, srcFn
 	if typ != types.StringID {
 		return x.Errorf("Got non-string type. Regex match is allowed only on string type.")
 	}
-	tokenizers := schema.State().TokenizerNames(q.Attr)
+	tokenizers := schema.State().TokenizerNames(attr)
 	var found bool
 	for _, t := range tokenizers {
 		if t == "trigram" { // TODO(tzdybal) - maybe just rename to 'regex' tokenizer?
@@ -548,14 +555,14 @@ func handleRegexFunction(ctx context.Context, q *protos.Query, gid uint32, srcFn
 		}
 	}
 	if !found {
-		return x.Errorf("Attribute %v does not have trigram index for regex matching.", q.Attr)
+		return x.Errorf("Attribute %v does not have trigram index for regex matching.", attr)
 	}
 
-	query := cindex.RegexpQuery(srcFn.regex.Syntax)
+	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := protos.List{}
-	uids, err := uidsForRegex(attr, gid, query, &empty)
+	uids, err := uidsForRegex(attr, arg.gid, query, &empty)
 	if uids != nil {
-		out.UidMatrix = append(out.UidMatrix, uids)
+		arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
 		var values []types.Val
 		for _, uid := range uids.Uids {
@@ -565,11 +572,11 @@ func handleRegexFunction(ctx context.Context, q *protos.Query, gid uint32, srcFn
 			default:
 			}
 			key := x.DataKey(attr, uid)
-			pl, decr := posting.GetOrCreate(key, gid)
+			pl, decr := posting.GetOrCreate(key, arg.gid)
 
 			var val types.Val
-			if len(srcFn.lang) > 0 {
-				val, err = pl.ValueForTag(srcFn.lang)
+			if len(arg.srcFn.lang) > 0 {
+				val, err = pl.ValueForTag(arg.srcFn.lang)
 			} else {
 				val, err = pl.Value()
 			}
@@ -586,9 +593,9 @@ func handleRegexFunction(ctx context.Context, q *protos.Query, gid uint32, srcFn
 			decr() // Decrement the reference count of the pl.
 		}
 
-		filtered := matchRegex(uids, values, srcFn.regex)
-		for i := 0; i < len(out.UidMatrix); i++ {
-			algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
+		filtered := matchRegex(uids, values, arg.srcFn.regex)
+		for i := 0; i < len(arg.out.UidMatrix); i++ {
+			algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 		}
 	} else {
 		return err
@@ -596,9 +603,9 @@ func handleRegexFunction(ctx context.Context, q *protos.Query, gid uint32, srcFn
 	return nil
 }
 
-func handleCompareFunction(ctx context.Context, q *protos.Query, gid uint32, srcFn *functionContext, out *protos.Result) error {
-	attr := q.Attr
-	tokenizer, err := pickTokenizer(attr, srcFn.fname)
+func handleCompareFunction(ctx context.Context, arg funcArgs) error {
+	attr := arg.q.Attr
+	tokenizer, err := pickTokenizer(attr, arg.srcFn.fname)
 	// We should already have checked this in getInequalityTokens.
 	x.Check(err)
 	// Only if the tokenizer that we used IsLossy, then we need to fetch
@@ -610,13 +617,13 @@ func handleCompareFunction(ctx context.Context, q *protos.Query, gid uint32, src
 			return x.Errorf("Attribute not scalar: %s %v", attr, typ)
 		}
 
-		x.AssertTrue(len(out.UidMatrix) > 0)
+		x.AssertTrue(len(arg.out.UidMatrix) > 0)
 		rowsToFilter := 0
-		if srcFn.fname == eq {
+		if arg.srcFn.fname == eq {
 			// If fn is eq, we could have multiple arguments and hence multiple rows
 			// to filter.
-			rowsToFilter = len(srcFn.tokens)
-		} else if srcFn.tokens[0] == srcFn.ineqValueToken {
+			rowsToFilter = len(arg.srcFn.tokens)
+		} else if arg.srcFn.tokens[0] == arg.srcFn.ineqValueToken {
 			// If operation is not eq and ineqValueToken equals first token,
 			// then we need to filter first row..
 			rowsToFilter = 1
@@ -627,28 +634,29 @@ func handleCompareFunction(ctx context.Context, q *protos.Query, gid uint32, src
 				return ctx.Err()
 			default:
 			}
-			algo.ApplyFilter(out.UidMatrix[row], func(uid uint64, i int) bool {
+			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
 				var langs []string
-				if len(srcFn.lang) > 0 {
-					langs = append(langs, srcFn.lang)
+				if len(arg.srcFn.lang) > 0 {
+					langs = append(langs, arg.srcFn.lang)
 				}
 				sv, err := fetchValue(uid, attr, langs, typ)
 				if sv.Value == nil || err != nil {
 					return false
 				}
-				return types.CompareVals(q.SrcFunc[0], sv, srcFn.eqTokens[row])
+				return types.CompareVals(arg.q.SrcFunc[0], sv, arg.srcFn.eqTokens[row])
 			})
 		}
 	}
 	return nil
 }
 
-func filterGeoFunction(attr string, gid uint32, srcFn *functionContext, out *protos.Result) {
+func filterGeoFunction(arg funcArgs) {
+	attr := arg.q.Attr
 	var values []*protos.TaskValue
-	uids := algo.MergeSorted(out.UidMatrix)
+	uids := algo.MergeSorted(arg.out.UidMatrix)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl, decr := posting.GetOrCreate(key, gid)
+		pl, decr := posting.GetOrCreate(key, arg.gid)
 
 		val, err := pl.Value()
 		newValue := &protos.TaskValue{ValType: int32(val.Tid)}
@@ -661,21 +669,22 @@ func filterGeoFunction(attr string, gid uint32, srcFn *functionContext, out *pro
 		decr() // Decrement the reference count of the pl.
 	}
 
-	filtered := types.FilterGeoUids(uids, values, srcFn.geoQuery)
-	for i := 0; i < len(out.UidMatrix); i++ {
-		algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
+	filtered := types.FilterGeoUids(uids, values, arg.srcFn.geoQuery)
+	for i := 0; i < len(arg.out.UidMatrix); i++ {
+		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 	}
 }
 
-func filterStringFunction(attr string, gid uint32, srcFn *functionContext, out *protos.Result) {
-	uids := algo.MergeSorted(out.UidMatrix)
+func filterStringFunction(arg funcArgs) {
+	attr := arg.q.Attr
+	uids := algo.MergeSorted(arg.out.UidMatrix)
 	var values []types.Val
 	filteredUids := make([]uint64, 0, len(uids.Uids))
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl, decr := posting.GetOrCreate(key, gid)
+		pl, decr := posting.GetOrCreate(key, arg.gid)
 
-		val, err := pl.ValueForTag(srcFn.lang)
+		val, err := pl.ValueForTag(arg.srcFn.lang)
 		if err != nil {
 			decr()
 			continue
@@ -691,27 +700,27 @@ func filterStringFunction(attr string, gid uint32, srcFn *functionContext, out *
 
 	filtered := &protos.List{Uids: filteredUids}
 	filter := stringFilter{
-		funcName: srcFn.fname,
-		funcType: srcFn.fnType,
-		lang:     srcFn.lang,
+		funcName: arg.srcFn.fname,
+		funcType: arg.srcFn.fnType,
+		lang:     arg.srcFn.lang,
 	}
 
-	switch srcFn.fnType {
+	switch arg.srcFn.fnType {
 	case HasFn:
 		// Dont do anything, as filtering based on lang is already
 		// done above.
 	case FullTextSearchFn, StandardFn:
-		filter.tokens = srcFn.tokens
+		filter.tokens = arg.srcFn.tokens
 		filter.match = defaultMatch
 		filtered = matchStrings(filtered, values, filter)
 	case CompareAttrFn:
-		filter.ineqValue = srcFn.ineqValue
+		filter.ineqValue = arg.srcFn.ineqValue
 		filter.match = ineqMatch
 		filtered = matchStrings(uids, values, filter)
 	}
 
-	for i := 0; i < len(out.UidMatrix); i++ {
-		algo.IntersectWith(out.UidMatrix[i], filtered, out.UidMatrix[i])
+	for i := 0; i < len(arg.out.UidMatrix); i++ {
+		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 	}
 }
 
