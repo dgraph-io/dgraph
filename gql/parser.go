@@ -1655,11 +1655,8 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	var orderkey string
 
 	if _, ok := tryParseItemType(it, itemRightRound); ok {
-		// TODO: Pre-existing code did all keys on @facets(), instead of no keys.  Might be a
-		// mistake.
-		facets.AllKeys = true
-		res.f = &facets
-		res.vmap = make(map[string]string)
+		// @facets() just parses to an empty set of facets.
+		res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
 		return res, true, nil
 	}
 

@@ -3208,7 +3208,8 @@ func TestParseFacetsEmpty(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"friends", "hometown", "age"}, childAttrs(res.Query[0]))
 	require.NotNil(t, res.Query[0].Children[0].Facets)
-	require.Equal(t, true, res.Query[0].Children[0].Facets.AllKeys)
+	require.Equal(t, false, res.Query[0].Children[0].Facets.AllKeys)
+	require.Equal(t, 0, len(res.Query[0].Children[0].Facets.Keys))
 }
 
 func TestParseFacetsFail1(t *testing.T) {
