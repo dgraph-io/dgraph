@@ -55,6 +55,9 @@ service Worker {
 
 	// RAFT serving RPCs.
 	rpc RaftMessage (Payload)                     returns (Payload) {}
+	// The stream takes the same sort of Payload values that RaftMessage takes.
+	// Never returns.
+	rpc RaftMessageStream (stream Payload) returns (Payload) {}
 	rpc JoinCluster (RaftContext)            returns (Payload) {}
 	rpc UpdateMembership (MembershipUpdate)  returns (MembershipUpdate) {}
 	rpc Export (ExportPayload)                    returns (ExportPayload) {}
