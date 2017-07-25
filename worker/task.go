@@ -220,7 +220,7 @@ type plf struct {
 	decr func()
 }
 
-func fetchPlConc(keyCh chan []byte, och chan plf, stop chan struct{}, gid uint32) {
+func fetchPl(keyCh chan []byte, och chan plf, stop chan struct{}, gid uint32) {
 L:
 	for key := range keyCh {
 		select {
@@ -295,7 +295,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	plch := make(chan plf, 1000)
 	keyCh := make(chan []byte, 1000)
 	stopCh := make(chan struct{}, 1)
-	go fetchPlConc(keyCh, plch, stopCh, gid)
+	go fetchPl(keyCh, plch, stopCh, gid)
 	go func(q *protos.Query, srcFn *functionContext) {
 		for i := 0; i < srcFn.n; i++ {
 			var key []byte
@@ -313,12 +313,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			}
 
 			keyCh <- key
-			/*
-				// Get or create the posting list for an entity, attribute combination.
-				pl, decr := posting.GetOrCreate(key, gid)
-				plch <- plf{pl, decr}
-			*/
-			//defer decr()
 		}
 		close(keyCh)
 	}(q, srcFn)
@@ -530,13 +524,21 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		empty := protos.List{}
 		uids, err := uidsForRegex(attr, gid, query, &empty)
 		if uids != nil {
+			plch := make(chan plf, 1000)
+			keyCh := make(chan []byte, 1000)
+			stopCh := make(chan struct{}, 1)
+			go fetchPl(keyCh, plch, stopCh, gid)
+			go func(attr string) {
+				for _, uid := range uids.Uids {
+					keyCh <- x.DataKey(attr, uid)
+				}
+				close(keyCh)
+			}(attr)
 			out.UidMatrix = append(out.UidMatrix, uids)
 
 			var values []types.Val
-			for _, uid := range uids.Uids {
-				key := x.DataKey(attr, uid)
-				pl, decr := posting.GetOrCreate(key, gid)
-
+			for it := range plch {
+				pl := it.pl
 				var val types.Val
 				if len(srcFn.lang) > 0 {
 					val, err = pl.ValueForTag(srcFn.lang)
@@ -545,7 +547,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				}
 
 				if err != nil {
-					decr()
+					it.decr()
 					continue
 				}
 				// conver data from binary to appropriate format
@@ -553,7 +555,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				if err == nil {
 					values = append(values, strVal)
 				}
-				decr() // Decrement the reference count of the pl.
+				it.decr() // Decrement the reference count of the pl.
 			}
 
 			filtered := matchRegex(uids, values, srcFn.regex)
@@ -611,11 +613,19 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	var values []*protos.TaskValue
 	if srcFn.geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
-		for _, uid := range uids.Uids {
-			key := x.DataKey(attr, uid)
-			pl, decr := posting.GetOrCreate(key, gid)
+		plch := make(chan plf, 1000)
+		keyCh := make(chan []byte, 1000)
+		stopCh := make(chan struct{}, 1)
+		go fetchPl(keyCh, plch, stopCh, gid)
+		go func(attr string) {
+			for _, uid := range uids.Uids {
+				keyCh <- x.DataKey(attr, uid)
+			}
+			close(keyCh)
+		}(attr)
 
-			val, err := pl.Value()
+		for it := range plch {
+			val, err := it.pl.Value()
 			newValue := &protos.TaskValue{ValType: int32(val.Tid)}
 			if err == nil {
 				newValue.Val = val.Value.([]byte)
@@ -623,7 +633,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				newValue.Val = x.Nilbyte
 			}
 			values = append(values, newValue)
-			decr() // Decrement the reference count of the pl.
+			it.decr() // Decrement the reference count of the pl.
 		}
 
 		filtered := types.FilterGeoUids(uids, values, srcFn.geoQuery)
@@ -639,13 +649,24 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		uids := algo.MergeSorted(out.UidMatrix)
 		var values []types.Val
 		filteredUids := make([]uint64, 0, len(uids.Uids))
-		for _, uid := range uids.Uids {
-			key := x.DataKey(attr, uid)
-			pl, decr := posting.GetOrCreate(key, gid)
 
-			val, err := pl.ValueForTag(srcFn.lang)
+		plch := make(chan plf, 1000)
+		keyCh := make(chan []byte, 1000)
+		stopCh := make(chan struct{}, 1)
+		go fetchPl(keyCh, plch, stopCh, gid)
+		go func(attr string) {
+			for _, uid := range uids.Uids {
+				keyCh <- x.DataKey(attr, uid)
+			}
+			close(keyCh)
+		}(attr)
+
+		i := -1
+		for it := range plch {
+			i++
+			val, err := it.pl.ValueForTag(srcFn.lang)
 			if err != nil {
-				decr()
+				it.decr()
 				continue
 			}
 			// convert data from binary to appropriate format
@@ -653,8 +674,8 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			if err == nil {
 				values = append(values, strVal)
 			}
-			filteredUids = append(filteredUids, uid)
-			decr() // Decrement the reference count of the pl.
+			filteredUids = append(filteredUids, uids.Uids[i])
+			it.decr() // Decrement the reference count of the pl.
 		}
 
 		filtered := &protos.List{Uids: filteredUids}
@@ -1108,8 +1129,8 @@ func (cp *countParams) evaluate(out *protos.Result) {
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
 		pl, decr := posting.GetOrCreate(countKey, cp.gid)
-		defer decr()
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+		decr()
 		return
 	}
 
@@ -1141,7 +1162,7 @@ func (cp *countParams) evaluate(out *protos.Result) {
 	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
 		key := it.Item().Key()
 		pl, decr := posting.GetOrCreate(key, cp.gid)
-		defer decr()
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+		decr()
 	}
 }
