@@ -402,6 +402,9 @@ func deleteCountIndex(ctx context.Context, attr string, reverse bool) error {
 }
 
 func DeleteCountIndex(ctx context.Context, attr string) error {
+	if err := lcache.clear(attr); err != nil {
+		return err
+	}
 	// Delete index entries from data store.
 	if err := deleteCountIndex(ctx, attr, false); err != nil {
 		return err
