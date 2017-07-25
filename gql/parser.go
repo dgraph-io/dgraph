@@ -1577,8 +1577,9 @@ type facetItem struct {
 	orderdesc bool
 }
 
-// Either errors, fails to parse without an error (in which case nothing is consumed), or returns
-// an error (which means to abort parsing)
+// If err != nil, an error happened, abandon parsing.  If err == nil && parseOk == false, the
+// attempt to parse failed, no data was consumed, and there might be a valid alternate parse with a
+// different function.
 func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err error) {
 	// We parse this:
 	// [{orderdesc|orderasc}:] [varname as] facetName
@@ -1627,6 +1628,9 @@ func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err e
 	return res, true, nil
 }
 
+// If err != nil, an error happened, abandon parsing.  If err == nil && parseOk == false, the
+// attempt to parse failed, but there might be a valid alternate parse with a different function,
+// such as parseFilter.
 func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err error) {
 	savePos := it.Save()
 	defer func() {
@@ -1704,9 +1708,12 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 		}
 		if item, ok := tryParseItemType(it, itemComma); !ok {
 			if len(facets.Keys) < 2 {
+				// We have only consumed ``'@facets' '(' <facetItem>`, which means parseFilter might
+				// succeed. Return no-parse, no-error.
 				return res, false, nil
 			}
-			// We got a comma already, so this is definitely a facet list -- return an error.
+			// We've consumed `'@facets' '(' <facetItem> ',' <facetItem>`, so this is definitely
+			// not a filter.  Return an error.
 			return res, false, x.Errorf(
 				"Expected ',' or ')' in facet list", item.Val)
 		}
