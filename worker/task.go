@@ -220,6 +220,9 @@ type plf struct {
 	decr func()
 }
 
+// fetchPl get the PLs for the specified keys and returns them in order.
+// NOTE: when using this function, never break or return from the channel loop
+// as we MUST decr() the reference for each PL fetched.
 func fetchPl(keyCh chan []byte, och chan plf, stop chan struct{}, gid uint32) {
 L:
 	for key := range keyCh {
