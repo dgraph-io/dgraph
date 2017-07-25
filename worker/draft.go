@@ -304,7 +304,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		messages:    make(chan sendmsg, 1000),
 		stop:        make(chan struct{}),
 		done:        make(chan struct{}),
-		kickCh:      make(chan uint64, 100),
+		kickCh:      make(chan uint64, 1000),
 	}
 	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed: Group %d", n.gid)}
 	n.applied.Init()
@@ -530,7 +530,10 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 				x.Printf("Error sending to RaftMessageStream: %v", err)
 				stream = nil
 			} else {
-				kickCh <- to
+				select {
+				case kickCh <- to:
+				default:
+				}
 			}
 
 		case <-ctx.Done():
