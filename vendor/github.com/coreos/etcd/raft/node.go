@@ -229,7 +229,6 @@ func RestartNode(c *Config) Node {
 
 // node is the canonical implementation of the Node interface
 type node struct {
-	kickc      chan uint64
 	propc      chan pb.Message
 	recvc      chan pb.Message
 	confc      chan pb.ConfChange
@@ -237,6 +236,7 @@ type node struct {
 	readyc     chan Ready
 	advancec   chan struct{}
 	tickc      chan struct{}
+	kickc      chan uint64
 	done       chan struct{}
 	stop       chan struct{}
 	status     chan chan Status
@@ -246,8 +246,6 @@ type node struct {
 
 func newNode() node {
 	return node{
-		// TODO: Make one in each progress object.
-		kickc:      make(chan uint64, 10),
 		propc:      make(chan pb.Message),
 		recvc:      make(chan pb.Message),
 		confc:      make(chan pb.ConfChange),
@@ -258,6 +256,7 @@ func newNode() node {
 		// is busy processing raft messages. Raft node will resume process buffered
 		// ticks when it becomes idle.
 		tickc:  make(chan struct{}, 128),
+		kickc:  make(chan uint64, 128),
 		done:   make(chan struct{}),
 		stop:   make(chan struct{}),
 		status: make(chan chan Status),
