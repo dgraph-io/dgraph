@@ -304,7 +304,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		messages:    make(chan sendmsg, 1000),
 		stop:        make(chan struct{}),
 		done:        make(chan struct{}),
-		kickCh:      make(chan uint64, 1000),
+		kickCh:      make(chan uint64, 500),
 	}
 	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed: Group %d", n.gid)}
 	n.applied.Init()
@@ -352,7 +352,7 @@ func (n *node) Connect(pid uint64, addr string) {
 	} else {
 		// The goroutine for streamMsgApps owns a refcount on the pool too.
 		p.AddOwner()
-		ch := make(chan raftpb.Message, 100)
+		ch := make(chan raftpb.Message, 1000)
 		// TODO: Actually use wg, or get rid of it.
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -937,8 +937,25 @@ func (n *node) Run() {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
+
 		case id := <-n.kickCh:
-			n.Raft().Kick(id)
+			// Read as much as possible from kickCh, its purpose is to get us started sending, not
+			// keep a count of how many times to kick.
+			toKick := make(map[uint64]bool)
+			toKick[id] = true
+		slurpKickCh:
+			for {
+				select {
+				case id := <-n.kickCh:
+					toKick[id] = true
+				default:
+					break slurpKickCh
+				}
+			}
+
+			for id := range toKick {
+				n.Raft().Kick(id)
+			}
 
 		case <-n.stop:
 			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
