@@ -63,8 +63,6 @@ type peerPoolEntry struct {
 
 	// Used to send MsgApp messages to the peer.
 	appMessages chan raftpb.Message
-
-	wg *sync.WaitGroup
 }
 
 // peerPool stores the peers' addresses and our connections to them.  It has exactly one
@@ -73,6 +71,8 @@ type peerPoolEntry struct {
 type peerPool struct {
 	sync.RWMutex
 	peers map[uint64]peerPoolEntry
+	// A waitGroup for the peerPoolEntrys' goroutines.
+	wg *sync.WaitGroup
 }
 
 var (
@@ -149,7 +149,12 @@ func (p *peerPool) clear() {
 	for _, entry := range peers {
 		cleanupEntry(&entry)
 	}
+}
 
+func (p *peerPool) finishAndWait() {
+	p.clear()
+	p.wg.Done()
+	p.wg.Wait()
 }
 
 type proposalCtx struct {
@@ -271,7 +276,9 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 
 	peers := peerPool{
 		peers: make(map[uint64]peerPoolEntry),
+		wg:    new(sync.WaitGroup),
 	}
+	peers.wg.Add(1)
 	props := proposals{
 		ids: make(map[uint32]*proposalCtx),
 	}
@@ -353,13 +360,10 @@ func (n *node) Connect(pid uint64, addr string) {
 		// The goroutine for streamMsgApps owns a refcount on the pool too.
 		p.AddOwner()
 		ch := make(chan raftpb.Message, 1000)
-		// TODO: Actually use wg, or get rid of it.
-		var wg sync.WaitGroup
-		wg.Add(1)
+		n.peers.wg.Add(1)
 		ctx, cancel := context.WithCancel(n.ctx)
-		go streamMsgApps(ctx, &wg, ch, p, n.kickCh)
-		entry = peerPoolEntry{addr: addr, poolOrNil: p, cancel: cancel, appMessages: ch,
-			wg: &wg}
+		go streamMsgApps(ctx, n.peers.wg, ch, p, n.kickCh)
+		entry = peerPoolEntry{addr: addr, poolOrNil: p, cancel: cancel, appMessages: ch}
 	}
 
 	n.SetPeer(pid, entry)
@@ -987,7 +991,7 @@ func (n *node) finishStop() {
 	n.Raft().Stop()
 	// Cleans up peer pool, including stopping streamMsgApp goroutine (and closing its active gRPC
 	// request, which blocks shutdown)
-	n.peers.clear()
+	n.peers.finishAndWait()
 	close(n.done)
 }
 
