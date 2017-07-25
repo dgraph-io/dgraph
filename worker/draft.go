@@ -493,7 +493,7 @@ func appendSize32Data(buf *bytes.Buffer, data []byte) int {
 }
 
 func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Message,
-	pl *pool, kickCh chan uint64) error {
+	pl *pool, kickCh chan uint64) {
 	defer wg.Done()
 	defer pools().release(pl)
 
@@ -515,7 +515,6 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 				}
 			}
 
-			// TODO: Instead of marshal+copy, use MarshalTo.
 			var buf bytes.Buffer
 			data := marshalMsgForSending(msg)
 			appendSize32Data(&buf, data)
@@ -543,10 +542,8 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 			if stream != nil {
 				_, err := stream.CloseAndRecv()
 				x.Printf("Error closing RaftMessageStream: %v", err)
-				// TODO: Nobody's looking at this error (and nobody really cares)
-				return err
 			}
-			return nil
+			return
 		}
 	}
 }
