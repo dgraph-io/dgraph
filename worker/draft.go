@@ -120,7 +120,6 @@ func (p *peerPool) getAppMessages(id uint64) (chan raftpb.Message, error) {
 	return ent.appMessages, nil
 }
 
-// TODO: Add waitgroup to node for the goroutines.
 func cleanupEntry(entry *peerPoolEntry) {
 	if entry.poolOrNil != nil {
 		entry.cancel()
