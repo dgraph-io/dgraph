@@ -278,8 +278,9 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	} else {
 		pk := x.Parse(key)
 		if pk.IsIndex() || pk.IsCount() {
-			err := pstore.Touch(key)
-			x.Check(err)
+			if err := pstore.SetIfAbsent(key, nil); err != nil && err != badger.KeyExists {
+				x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
+			}
 		}
 	}
 
