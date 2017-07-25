@@ -56,6 +56,7 @@ message Posting {
 message PostingList {
 	repeated Posting postings = 1;
 	bytes checksum = 2;
-	uint64 commit = 3; // More inclination towards smaller values.
   bytes uids = 4; // Encoded list of uids in this posting list.
+  	bool split = 5;
+  	// storing list of keys requireds more efforts, for now will iterate
 }

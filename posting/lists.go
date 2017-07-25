@@ -226,6 +226,7 @@ var (
 	dirtyChan chan []byte // All dirty posting list keys are pushed here.
 	marks     *syncMarks
 	lcache    *listCache
+	blcache   *listCache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -233,6 +234,7 @@ func Init(ps *badger.KV) {
 	marks = new(syncMarks)
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
+	blcache = newListCache(100 << 20)
 	x.LcacheCapacity.Set(math.MaxInt64)
 	dirtyChan = make(chan []byte, 10000)
 
@@ -258,6 +260,12 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	}
 	x.CacheMiss.Add(1)
 
+	lp = blcache.Get(string(key))
+	if lp != nil {
+		// TODO: Add separate metrics for bigcache
+		return lp, lp.decr
+	}
+
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
 	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
@@ -265,7 +273,11 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 
 	// We are always going to return lp to caller, whether it is l or not
 	// lcache increments the ref counter
-	lp = lcache.PutIfMissing(string(key), l)
+	if l.sharded {
+		lp = blcache.PutIfMissing(string(key), l)
+	} else {
+		lp = lcache.PutIfMissing(string(key), l)
+	}
 
 	if lp != l {
 		x.CacheRace.Add(1)
@@ -289,6 +301,12 @@ func Get(key []byte) (rlist *List, decr func()) {
 	lp := lcache.Get(string(key))
 
 	if lp != nil {
+		return lp, lp.decr
+	}
+
+	lp = blcache.Get(string(key))
+	if lp != nil {
+		// TODO: Add separate metrics for bigcache
 		return lp, lp.decr
 	}
 

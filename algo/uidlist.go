@@ -19,6 +19,7 @@ package algo
 
 import (
 	"container/heap"
+	"encoding/binary"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -35,6 +36,226 @@ func ApplyFilter(u *protos.List, f func(uint64, int) bool) {
 		}
 	}
 	u.Uids = out
+}
+
+// IntersectWith intersects u with v. The update is made to o.
+// u, v should be sorted.
+func IntersectWithByte(u []byte, v, o *protos.List) {
+	n := len(u) / 8
+	m := len(v.Uids)
+
+	if n > m {
+		n, m = m, n
+	}
+	if o.Uids == nil {
+		o.Uids = make([]uint64, 0, n)
+	}
+	dst := o.Uids[:0]
+	if n == 0 {
+		n += 1
+	}
+	// Select appropriate function based on heuristics.
+	ratio := float64(m) / float64(n)
+	if ratio < 100 {
+		IntersectWithLinByte(u, v.Uids, &dst)
+	} else if ratio < 500 {
+		IntersectWithJumpByte(u, v.Uids, &dst)
+	} else {
+		var d PUids
+		d.Init(u)
+		IntersectWithBinByte(d, v.Uids, &dst, false)
+	}
+	o.Uids = dst
+}
+
+func IntersectWithLinByte(u []byte, v []uint64, o *[]uint64) {
+	n := len(u) / 8
+	m := len(v)
+	for i, k := 0, 0; i < n && k < m; {
+		uid := binary.BigEndian.Uint64(u[i : i+8])
+		vid := v[k]
+		if uid > vid {
+			for k = k + 1; k < m && v[k] < uid; k++ {
+			}
+		} else if uid == vid {
+			*o = append(*o, uid)
+			k++
+			i++
+		} else {
+			for i = i + 1; i < n && binary.BigEndian.Uint64(u[i:i+8]) < vid; i++ {
+			}
+		}
+	}
+}
+
+func IntersectWithJumpByte(u []byte, v []uint64, o *[]uint64) {
+	n := len(u) / 8
+	m := len(v)
+	for i, k := 0, 0; i < n && k < m; {
+		uid := binary.BigEndian.Uint64(u[i : i+8])
+		vid := v[k]
+		if uid == vid {
+			*o = append(*o, uid)
+			k++
+			i++
+		} else if k+jump < m && uid > v[k+jump] {
+			k = k + jump
+		} else if i+jump < n && vid > binary.BigEndian.Uint64(u[i+jump:i+jump+8]) {
+			i = i + jump
+		} else if uid > vid {
+			for k = k + 1; k < m && v[k] < uid; k++ {
+			}
+		} else {
+			for i = i + 1; i < n && binary.BigEndian.Uint64(u[i:i+8]) < vid; i++ {
+			}
+		}
+	}
+}
+
+type PUids struct {
+	data []byte
+}
+
+func (p *PUids) Init(data []byte) {
+	p.data = data
+}
+
+func (p *PUids) Len() int {
+	return len(p.data) / 8
+}
+
+func (p *PUids) At(i int) uint64 {
+	return binary.BigEndian.Uint64(p.data[i*8 : i*8+8])
+}
+
+func (p *PUids) Select(min int, max int) PUids {
+	var u PUids
+	if max != -1 {
+		u.Init(p.data[min*8 : max*8])
+	} else {
+		u.Init(p.data[min*8:])
+	}
+	return u
+}
+
+// IntersectWithBin is based on the paper
+// "Fast Intersection Algorithms for Sorted Sequences"
+// https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
+func IntersectWithBinByte(d PUids, q []uint64, o *[]uint64, reorder bool) {
+	if !reorder {
+		ld := d.Len()
+		lq := len(q)
+
+		if ld < lq {
+			IntersectWithBinByte(d, q, o, true)
+		}
+		if ld == 0 || lq == 0 || d.At(ld-1) < q[0] || q[lq-1] < d.At(0) {
+			return
+		}
+
+		val := d.At(0)
+		minq := sort.Search(len(q), func(i int) bool {
+			return q[i] >= val
+		})
+
+		val = d.At(d.Len() - 1)
+		maxq := sort.Search(len(q), func(i int) bool {
+			return q[i] > val
+		})
+		binIntersectByte(d, q[minq:maxq], o, false)
+	} else {
+		ld := d.Len()
+		lq := len(q)
+
+		if ld == 0 || lq == 0 || d.At(ld-1) < q[0] || q[lq-1] < d.At(0) {
+			return
+		}
+
+		val := q[0]
+		mind := sort.Search(d.Len(), func(i int) bool {
+			return d.At(i) >= val
+		})
+
+		val = q[len(q)-1]
+		maxd := sort.Search(d.Len(), func(i int) bool {
+			return d.At(i) > val
+		})
+		binIntersectByte(d.Select(mind, maxd), q, o, true)
+	}
+}
+
+// binIntersect is the recursive function used.
+// NOTE: len(d) >= len(q) (Must hold)
+func binIntersectByte(d PUids, q []uint64, final *[]uint64, reorder bool) {
+	if !reorder {
+		if d.Len() == 0 || len(q) == 0 {
+			return
+		}
+		midq := len(q) / 2
+		qval := q[midq]
+		midd := sort.Search(d.Len(), func(i int) bool {
+			return d.At(i) >= qval
+		})
+
+		dd := d.Select(0, midd)
+		qq := q[0:midq]
+		if dd.Len() > len(qq) { // D > Q
+			binIntersectByte(dd, qq, final, false)
+		} else {
+			binIntersectByte(dd, qq, final, true)
+		}
+
+		if midd >= d.Len() {
+			return
+		}
+		if d.At(midd) == qval {
+			*final = append(*final, qval)
+		} else {
+			midd -= 1
+		}
+
+		dd = d.Select(midd+1, -1)
+		qq = q[midq+1:]
+		if dd.Len() > len(qq) { // D > Q
+			binIntersectByte(dd, qq, final, false)
+		} else {
+			binIntersectByte(dd, qq, final, true)
+		}
+	} else {
+		if d.Len() == 0 || len(q) == 0 {
+			return
+		}
+		midd := d.Len() / 2
+		dval := d.At(midd)
+		midq := sort.Search(len(q), func(i int) bool {
+			return q[i] >= dval
+		})
+
+		dd := d.Select(0, midd)
+		qq := q[0:midq]
+		if dd.Len() > len(qq) { // D > Q
+			binIntersectByte(dd, qq, final, true)
+		} else {
+			binIntersectByte(dd, qq, final, false)
+		}
+
+		if midq >= len(q) {
+			return
+		}
+		if q[midq] == dval {
+			*final = append(*final, dval)
+		} else {
+			midq -= 1
+		}
+
+		dd = d.Select(midd+1, -1)
+		qq = q[midq+1:]
+		if dd.Len() > len(qq) { // D > Q
+			binIntersectByte(dd, qq, final, true)
+		} else {
+			binIntersectByte(dd, qq, final, false)
+		}
+	}
 }
 
 // IntersectWith intersects u with v. The update is made to o.

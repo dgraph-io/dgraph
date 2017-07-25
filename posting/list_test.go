@@ -37,7 +37,7 @@ import (
 func (l *List) PostingList() *protos.PostingList {
 	l.RLock()
 	defer l.RUnlock()
-	return l.plist
+	return l.slists[0].plist
 }
 
 func listToArray(t *testing.T, afterUid uint64, l *List) []uint64 {

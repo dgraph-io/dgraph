@@ -52,6 +52,7 @@ var (
 	ErrNoValue   = fmt.Errorf("No value found")
 	emptyPosting = &protos.Posting{}
 	emptyList    = &protos.PostingList{}
+	splist       []byte
 )
 
 const (
@@ -64,19 +65,33 @@ const (
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
 	bitUidPostings byte = 0x01
+	MaxUidsLen          = 64000
 )
+
+func init() {
+	pl := &protos.PostingList{Split: true}
+	splist, _ = pl.Marshal()
+}
+
+type shardedList struct {
+	key    []byte
+	plist  *protos.PostingList
+	mlayer []*protos.Posting
+}
 
 type List struct {
 	x.SafeMutex
-	index         x.SafeMutex
 	key           []byte
-	plist         *protos.PostingList
-	mlayer        []*protos.Posting // mutations
+	index         x.SafeMutex
 	lastCompact   time.Time
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount      int32
 	deleteAll     int32
 	estimatedSize uint32
+
+	// TODO: Handle crashes
+	sharded bool
+	slists  []*shardedList
 
 	water   *x.WaterMark
 	pending []uint64
@@ -94,14 +109,15 @@ func (l *List) decr() {
 	if val > 0 {
 		return
 	}
-
-	if l.plist != emptyList {
-		for _, p := range l.plist.Postings {
-			postingPool.Put(p)
+	for _, sl := range l.slists {
+		if sl.plist != emptyList && sl.plist != nil {
+			for _, p := range sl.plist.Postings {
+				postingPool.Put(p)
+			}
+			sl.plist.Postings = sl.plist.Postings[:0]
+			sl.plist.Uids = sl.plist.Uids[:0]
+			postingListPool.Put(sl.plist)
 		}
-		l.plist.Postings = l.plist.Postings[:0]
-		l.plist.Uids = l.plist.Uids[:0]
-		postingListPool.Put(l.plist)
 	}
 	listPool.Put(l)
 }
@@ -110,10 +126,15 @@ func (l *List) decr() {
 // Expensive, so don't run it carefully.
 func (l *List) calculateSize() uint32 {
 	sz := int(unsafe.Sizeof(l))
-	sz += l.plist.Size()
-	sz += cap(l.key)
-	sz += cap(l.mlayer) * 8
 	sz += cap(l.pending) * 8
+	sz += cap(l.slists) * 8
+	for _, sl := range l.slists {
+		if sl.plist != nil {
+			sz += sl.plist.Size()
+			sz += cap(sl.mlayer) * 8
+			sz += len(sl.key)
+		}
+	}
 	return uint32(sz)
 }
 
@@ -210,21 +231,41 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	var err error
 	for i := 0; i < 10; i++ {
 		x.PostingReads.Add(1)
-		if err = pstore.Get(l.key, &item); err == nil {
+		if err = pstore.Get(key, &item); err == nil {
 			break
 		}
 	}
 	if err != nil {
-		x.Fatalf("Unable to retrieve val for key: %q. Error: %v", err, l.key)
+		x.Fatalf("Unable to retrieve val for key: %q. Error: %v", err, key)
 	}
 	val := item.Value()
 	x.BytesRead.Add(int64(len(val)))
 
-	l.plist = postingListPool.Get().(*protos.PostingList)
+	plist := postingListPool.Get().(*protos.PostingList)
 	if item.UserMeta() == bitUidPostings {
-		l.plist.Uids = val
+		plist.Uids = val
 	} else if val != nil {
-		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
+		x.Checkf(plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
+	}
+	l.sharded = plist.Split
+	if l.sharded {
+		prefix := x.SplitPrefix(key)
+		itOpt := badger.DefaultIteratorOptions
+		itOpt.FetchValues = false
+		it := pstore.NewIterator(itOpt)
+		defer it.Close()
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			k := it.Item().Key()
+			newk := make([]byte, len(k))
+			copy(newk, k)
+			sl := &shardedList{key: newk}
+			l.slists = append(l.slists, sl)
+		}
+		postingListPool.Put(plist)
+	} else {
+		sl := &shardedList{key: key}
+		sl.plist = plist
+		l.slists = append(l.slists, sl)
 	}
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 	return l
@@ -320,10 +361,54 @@ func (l *List) SetForDeletion() {
 	atomic.StoreInt32(&l.deleteMe, 1)
 }
 
-func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
-	l.AssertLock()
-	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
+func (l *List) get(idx int) {
+	sl := l.slists[idx]
+	if sl.plist != nil {
+		return
+	}
 
+	var item badger.KVItem
+	var err error
+	for i := 0; i < 10; i++ {
+		x.PostingReads.Add(1)
+		if err = pstore.Get(sl.key, &item); err == nil {
+			break
+		}
+	}
+	if err != nil {
+		x.Fatalf("Unable to retrieve val for key: %q. Error: %v", err, sl.key)
+	}
+	val := item.Value()
+	x.BytesRead.Add(int64(len(val)))
+
+	sl.plist = postingListPool.Get().(*protos.PostingList)
+	if val != nil {
+		x.Checkf(sl.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
+	}
+	atomic.AddUint32(&l.estimatedSize, uint32(sl.plist.Size()))
+}
+
+func (l *List) splitListFor(uid uint64) (*shardedList, int) {
+	l.AssertRLock()
+	if !l.sharded {
+		return l.slists[0], 0
+	}
+
+	idx := sort.Search(len(l.slists), func(idx int) bool {
+		keyLen := len(l.slists[idx].key)
+		// last 8 bytes are max uid in each pl
+		id := binary.BigEndian.Uint64(l.slists[idx].key[keyLen-8:])
+		return uid <= id
+	})
+	if l.slists[idx].plist != nil {
+		return l.slists[idx], idx
+	}
+
+	l.get(idx)
+	return l.slists[idx], idx
+}
+
+func (l *shardedList) updateMutationLayer(mpost *protos.Posting) bool {
 	// First check the mutable layer.
 	midx := sort.Search(len(l.mlayer), func(idx int) bool {
 		mp := l.mlayer[idx]
@@ -411,6 +496,59 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 	return true
 }
 
+func (l *List) splitList(idx int) {
+	l.AssertLock()
+	sl := l.slists[idx]
+	pl, _ := sl.mergeMutationLayer(true)
+	wb := make([]*badger.Entry, 0, 2)
+
+	if !l.sharded {
+		// This should happen at last so that we can recover from crash
+		wb = append(wb, &badger.Entry{
+			Key:   sl.key,
+			Value: splist,
+		})
+		sl.key = x.SplitKey(sl.key, math.MaxUint64)
+		l.sharded = true
+		// moving to blcache
+		blcache.PutIfMissing(string(l.key), l)
+		lcache.delete(l.key)
+	}
+	val, err := sl.plist.Marshal()
+	x.Checkf(err, "Error while marshalling pl")
+	// Anything which removes data should be persisted after new data is written
+	wb[1] = &badger.Entry{
+		Key:   sl.key,
+		Value: val,
+	}
+
+	copy(l.slists[idx+1:], l.slists[idx:])
+	maxUid := binary.BigEndian.Uint64(pl.Uids[len(pl.Uids)-8:])
+	key := x.SplitKey(sl.key[:len(sl.key)-8], maxUid)
+	l.slists[idx] = &shardedList{
+		key:   key,
+		plist: pl,
+	}
+	val2, err := pl.Marshal()
+	x.Checkf(err, "Error while marshalling pl")
+	wb[0] = &badger.Entry{
+		Key:   sl.key,
+		Value: val2,
+	}
+
+}
+
+func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
+	l.AssertLock()
+	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
+	sl, i := l.splitListFor(mpost.Uid)
+	if sl.length(0) >= MaxUidsLen {
+		l.splitList(i)
+		sl, _ = l.splitListFor(mpost.Uid)
+	}
+	return sl.updateMutationLayer(mpost)
+}
+
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
@@ -477,10 +615,6 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		index = rv.Index
 		gid = rv.Group
 	}
-	if len(l.mlayer) > 1000 ||
-		(len(l.pending) > 0 && index > l.pending[0]+4000) {
-		l.syncIfDirty(false)
-	}
 
 	// All edges with a value without LANGTAG, have the same uid. In other words,
 	// an (entity, attribute) can only have one untagged value.
@@ -511,14 +645,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	// a)		check if the entity exists in main posting list.
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
-
-	t1 := time.Now()
 	hasMutated := l.updateMutationLayer(mpost)
-	if dur := time.Since(t1); dur > time.Millisecond {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Uids))
-		}
-	}
 
 	if hasMutated {
 		if index != 0 {
@@ -538,16 +665,18 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 
 func (l *List) delete(ctx context.Context, attr string) error {
 	l.AssertLock()
-	if l.plist != emptyList {
-		for _, p := range l.plist.Postings {
-			postingPool.Put(p)
+	for _, sl := range l.slists {
+		if sl.plist != emptyList && sl.plist != nil {
+			for _, p := range sl.plist.Postings {
+				postingPool.Put(p)
+			}
+			sl.plist.Postings = sl.plist.Postings[:0]
+			sl.plist.Uids = sl.plist.Uids[:0]
+			postingListPool.Put(sl.plist)
 		}
-		l.plist.Uids = l.plist.Uids[:0]
-		l.plist.Postings = l.plist.Postings[:0]
-		postingListPool.Put(l.plist)
+		sl.plist = emptyList
+		sl.mlayer = sl.mlayer[:0] // Clear the mutation layer.
 	}
-	l.plist = emptyList
-	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
 	atomic.StoreInt32(&l.deleteAll, 1)
 
 	var gid uint32
@@ -583,8 +712,7 @@ func (l *List) Iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	l.iterate(afterUid, f)
 }
 
-func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
-	l.AssertRLock()
+func (l *shardedList) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	midx := 0
 
 	mlayerLen := len(l.mlayer)
@@ -635,9 +763,20 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	}
 }
 
-func (l *List) length(afterUid uint64) int {
+func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	l.AssertRLock()
+	sl, i := l.splitListFor(afterUid)
+	sl.iterate(afterUid, f)
+	i++
+	for i < len(l.slists) {
+		sl = l.slists[i]
+		l.get(i)
+		sl.iterate(afterUid, f)
+		i++
+	}
+}
 
+func (l *shardedList) length(afterUid uint64) int {
 	uidx, midx := 0, 0
 
 	if afterUid > 0 {
@@ -659,7 +798,21 @@ func (l *List) length(afterUid uint64) int {
 	return count
 }
 
+func (l *List) length(afterUid uint64) int {
+	l.AssertRLock()
+	sl, i := l.splitListFor(afterUid)
+	length := sl.length(afterUid)
+	i++
+	for i < len(l.slists) {
+		l.get(i)
+		length += l.slists[i].length(afterUid)
+		i++
+	}
+	return length
+}
+
 // Length iterates over the mutation layer and counts number of elements.
+// Avoid calling this, it is costly
 func (l *List) Length(afterUid uint64) int {
 	l.RLock()
 	defer l.RUnlock()
@@ -687,10 +840,74 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	// deleteAll is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
-	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
+
+	wb := make([]*badger.Entry, 0, 1)
+	for _, sl := range l.slists {
+		var updated bool
+		if atomic.LoadInt32(&l.deleteAll) == 1 {
+			updated = true
+		} else {
+			_, updated = sl.mergeMutationLayer(false)
+		}
+		if !updated {
+			continue
+		}
+		var data []byte
+		if len(sl.plist.Uids) == 0 {
+			wb = badger.EntriesDelete(wb, sl.key)
+		} else {
+			data, err = sl.plist.Marshal()
+			x.Checkf(err, "Unable to marshal pl")
+			wb = badger.EntriesSet(wb, sl.key, data)
+		}
+	}
+	if len(wb) == 0 {
 		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
 		l.pending = make([]uint64, 0, 3)
 		return false, nil
+	}
+
+	retries := 0
+	// l.pending would have been modified by the time the callback is called hence we hold a
+	// reference to pending.
+	pending := l.pending
+	var f func(error)
+	f = func(err error) {
+		if err != nil {
+			elog.Printf("Got err in while doing async writes in SyncIfDirty: %+v", err)
+			if retries > 5 {
+				x.Fatalf("Max retries exceeded while doing async write for key: %s, err: %+v",
+					l.key, err)
+			}
+			// Error from badger should be temporary, so we can retry.
+			retries += 1
+			pstore.BatchSetAsync(wb, f)
+			return
+		}
+		if l.water != nil {
+			l.water.Ch <- x.Mark{Indices: pending, Done: true}
+		}
+		if delFromCache {
+			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
+			lcache.delete(l.key)
+		}
+	}
+
+	pstore.BatchSetAsync(wb, f)
+	// Now reset the mutation variables.
+	l.pending = make([]uint64, 0, 3)
+	l.lastCompact = time.Now()
+	atomic.StoreInt32(&l.deleteAll, 0) // Unset deleteAll
+	return true, nil
+}
+
+func (l *shardedList) mergeMutationLayer(split bool) (*protos.PostingList, bool) {
+	// deleteAll is used to differentiate when we don't have any updates, v/s
+	// when we have explicitly deleted everything.
+	var newPl *protos.PostingList
+	var firstHalf bool
+	if len(l.mlayer) == 0 && !split {
+		return nil, false
 	}
 
 	final := postingListPool.Get().(*protos.PostingList)
@@ -699,6 +916,10 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		final.Uids = make([]byte, 8*numUids)
 	}
 	final.Uids = final.Uids[:8*numUids]
+	if split {
+		newPl = postingListPool.Get().(*protos.PostingList)
+		firstHalf = true
+	}
 
 	var ubuf [16]byte
 	h := md5.New()
@@ -720,6 +941,15 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			// I think it's okay to take the pointer from the iterator, because we have a lock
 			// over List; which won't be released until final has been marshalled. Thus, the
 			// underlying data wouldn't be changed.
+			if firstHalf && count <= numUids/2 {
+				newPl.Postings = append(newPl.Postings, p)
+				if count == numUids/2 {
+					newPl.Checksum = h.Sum(nil)
+					h = md5.New()
+					firstHalf = false
+					count = 0
+				}
+			}
 			final.Postings = append(final.Postings, p)
 		}
 		return true
@@ -731,12 +961,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		postingListPool.Put(l.plist)
 	}
 
-	var data []byte
-	var uidOnlyPosting bool
-	if len(final.Uids) == 0 {
-		// This means we should delete the key from store during SyncIfDirty.
-		data = nil
-	} else if len(final.Postings) > 0 {
+	if len(final.Postings) > 0 {
 		final.Checksum = h.Sum(nil)
 		data, err = final.Marshal()
 		x.Checkf(err, "Unable to marshal posting list")
@@ -746,52 +971,20 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		uidOnlyPosting = true
 	}
 	l.plist = final
-	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 
 	for {
 		pLen := atomic.LoadInt64(&x.MaxPlLen)
-		if int64(len(data)) <= pLen {
+		sz := final.Size()
+		if int64(sz) <= pLen {
 			break
 		}
-		if atomic.CompareAndSwapInt64(&x.MaxPlLen, pLen, int64(len(data))) {
-			x.MaxPlLength.Set(int64(len(data)))
+		if atomic.CompareAndSwapInt64(&x.MaxPlLen, pLen, int64(sz)) {
+			x.MaxPlLength.Set(int64(sz))
 			break
 		}
 	}
-
-	retries := 0
-	// l.pending would have been modified by the time the callback is called hence we hold a
-	// reference to pending.
-	pending := l.pending
-	var f func(error)
-	f = func(err error) {
-		if err != nil {
-			elog.Printf("Got err in while doing async writes in SyncIfDirty: %+v", err)
-			if retries > 5 {
-				x.Fatalf("Max retries exceeded while doing async write for key: %s, err: %+v",
-					l.key, err)
-			}
-			// Error from badger should be temporary, so we can retry.
-			retries += 1
-			doAsyncWrite(l.key, data, uidOnlyPosting, f)
-			return
-		}
-		if l.water != nil {
-			l.water.Ch <- x.Mark{Indices: pending, Done: true}
-		}
-		if delFromCache {
-			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
-			lcache.delete(l.key)
-		}
-	}
-
-	doAsyncWrite(l.key, data, uidOnlyPosting, f)
-	// Now reset the mutation variables.
-	l.pending = make([]uint64, 0, 3)
 	l.mlayer = l.mlayer[:0]
-	l.lastCompact = time.Now()
-	atomic.StoreInt32(&l.deleteAll, 0) // Unset deleteAll
-	return true, nil
+	return newPl, true
 }
 
 func (l *List) LastCompactionTs() time.Time {
@@ -816,20 +1009,35 @@ func UnmarshalWithCopy(val []byte, metadata byte, pl *protos.PostingList) {
 func (l *List) Uids(opt ListOptions) *protos.List {
 	// Pre-assign length to make it faster.
 	l.RLock()
+	defer l.RUnlock()
 	res := make([]uint64, 0, l.length(opt.AfterUID))
-	l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
-		if postingType(p) == x.ValueUid {
-			res = append(res, p.Uid)
-		}
-		return true
-	})
-	l.RUnlock()
-
 	// Do The intersection here as it's optimized.
 	out := &protos.List{res}
-	if opt.Intersect != nil {
-		algo.IntersectWith(out, opt.Intersect, out)
+	_, i := l.splitListFor(opt.AfterUID)
+
+	for i < len(l.slists) {
+		sl := l.slists[i]
+		if len(sl.mlayer) > 0 {
+			uids := make([]uint64, 0, sl.length(opt.AfterUID))
+			l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
+				if postingType(p) == x.ValueUid {
+					uids = append(uids, p.Uid)
+				}
+				return true
+			})
+
+			if opt.Intersect != nil {
+				// TODO: Make algo intersect with return index so that
+				// we needn't pass the whole opt.intersect again
+				algo.IntersectWith(&protos.List{uids}, opt.Intersect, out)
+			}
+			continue
+		}
+		if opt.Intersect != nil {
+			algo.IntersectWithByte(sl.plist.Uids, opt.Intersect, out)
+		}
 	}
+
 	return out
 }
 
