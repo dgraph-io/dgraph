@@ -219,6 +219,7 @@ type node struct {
 	ctx         context.Context
 	stop        chan struct{} // to send the stop signal to Run
 	done        chan struct{} // to check whether node is running or not
+	kickCh      chan uint64   // to remind etcd Raft to send more MsgApps to a peer
 	gid         uint32
 	id          uint64
 	messages    chan sendmsg
@@ -303,6 +304,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		messages:    make(chan sendmsg, 1000),
 		stop:        make(chan struct{}),
 		done:        make(chan struct{}),
+		kickCh:      make(chan uint64, 100),
 	}
 	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed: Group %d", n.gid)}
 	n.applied.Init()
@@ -355,7 +357,7 @@ func (n *node) Connect(pid uint64, addr string) {
 		var wg sync.WaitGroup
 		wg.Add(1)
 		ctx, cancel := context.WithCancel(n.ctx)
-		go streamMsgApps(ctx, &wg, ch, p)
+		go streamMsgApps(ctx, &wg, ch, p, n.kickCh)
 		entry = peerPoolEntry{addr: addr, poolOrNil: p, cancel: cancel, appMessages: ch,
 			wg: &wg}
 	}
@@ -488,7 +490,7 @@ func appendSize32Data(buf *bytes.Buffer, data []byte) int {
 }
 
 func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Message,
-	pl *pool) error {
+	pl *pool, kickCh chan uint64) error {
 	defer wg.Done()
 	defer pools().release(pl)
 
@@ -499,6 +501,7 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 	for {
 		select {
 		case msg := <-msgCh:
+			to := msg.To
 			// (Try to) create or recreate the stream if it's not created.
 			if stream == nil {
 				var err error
@@ -526,6 +529,8 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 
 				x.Printf("Error sending to RaftMessageStream: %v", err)
 				stream = nil
+			} else {
+				kickCh <- to
 			}
 
 		case <-ctx.Done():
@@ -929,6 +934,8 @@ func (n *node) Run() {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
+		case id := <-n.kickCh:
+			n.Raft().Kick(id)
 
 		case <-n.stop:
 			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
