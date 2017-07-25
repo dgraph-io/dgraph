@@ -509,7 +509,7 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 				}
 			}
 
-			// TODO: Instead of marshal+copy, use MarshalTo.  (Or put size at end?)
+			// TODO: Instead of marshal+copy, use MarshalTo.
 			var buf bytes.Buffer
 			data := marshalMsgForSending(msg)
 			appendSize32Data(&buf, data)
