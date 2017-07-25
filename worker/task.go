@@ -512,6 +512,7 @@ func handleHasFunction(q *protos.Query, gid uint32, srcFn *functionContext, out 
 	cp.evaluate(out)
 	return nil
 }
+
 func handleCompareScalarFunction(q *protos.Query, gid uint32, srcFn *functionContext, out *protos.Result) error {
 	attr := q.Attr
 	if ok := schema.State().HasCount(attr); !ok {
