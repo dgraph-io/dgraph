@@ -1622,7 +1622,7 @@ func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err e
 		return res, false, x.Errorf("Expected name in facet list")
 	}
 
-	res.facetName = collectName(it, it.Item().Val)
+	res.facetName = collectName(it, item.Val)
 	res.varName = name1
 	return res, true, nil
 }
