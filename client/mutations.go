@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"strings"
@@ -55,14 +56,14 @@ type BatchMutationOptions struct {
 	Size          int
 	Pending       int
 	PrintCounters bool
-	MaxRetries    int
+	MaxRetries    uint32
 }
 
 var DefaultOptions = BatchMutationOptions{
 	Size:          100,
 	Pending:       100,
 	PrintCounters: false,
-	MaxRetries:    10,
+	MaxRetries:    math.MaxUint32,
 }
 
 type allocator struct {
@@ -237,7 +238,10 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		alloc:  alloc,
 		marks:  make(map[string]waterMark),
 		reqs:   make(chan *Req, opts.Pending*2),
-		che:    make(chan error, opts.Pending+2),
+
+		// length includes opts.Pending for makeRequests, another two for makeSchemaRequests and
+		// 	batchNquads.
+		che: make(chan error, opts.Pending+2),
 	}
 
 	if opts.MaxRetries == 0 {
@@ -323,7 +327,7 @@ func (d *Dgraph) printCounters() {
 func (d *Dgraph) request(req *Req) error {
 	counter := atomic.AddUint64(&d.mutations, 1)
 	factor := time.Second
-	retries := 0
+	var retries uint32
 RETRY:
 	_, err := d.dc[rand.Intn(len(d.dc))].Run(context.Background(), &req.gr)
 	if err != nil {

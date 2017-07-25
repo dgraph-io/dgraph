@@ -239,7 +239,6 @@ func setupConnection(host string) (*grpc.ClientConn, error) {
 }
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	flag.Parse()
 	x.Init()
 	runtime.SetBlockProfileRate(*blockRate)
@@ -272,7 +271,6 @@ func main() {
 		Size:          *numRdf,
 		Pending:       *concurrent,
 		PrintCounters: true,
-		MaxRetries:    100,
 	}
 	dgraphClient := client.NewDgraphClient(conns, bmOpts, *clientDir)
 
