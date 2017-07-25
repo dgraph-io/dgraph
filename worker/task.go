@@ -274,23 +274,39 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		return nil, err
 	}
 
-	for i := 0; i < srcFn.n; i++ {
-		var key []byte
-		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
-			srcFn.fnType == HasFn || srcFn.fnType == UidInFn {
-			if q.Reverse {
-				key = x.ReverseKey(attr, q.UidList.Uids[i])
-			} else {
+	type plf struct {
+		pl   *posting.List
+		decr func()
+	}
+	plch := make(chan plf, 1000)
+	go func(q *protos.Query, srcFn *functionContext) {
+		for i := 0; i < srcFn.n; i++ {
+			var key []byte
+			if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
+				srcFn.fnType == HasFn || srcFn.fnType == UidInFn {
+				if q.Reverse {
+					key = x.ReverseKey(attr, q.UidList.Uids[i])
+				} else {
+					key = x.DataKey(attr, q.UidList.Uids[i])
+				}
+			} else if srcFn.fnType == AggregatorFn || srcFn.fnType == PasswordFn {
 				key = x.DataKey(attr, q.UidList.Uids[i])
+			} else {
+				key = x.IndexKey(attr, srcFn.tokens[i])
 			}
-		} else if srcFn.fnType == AggregatorFn || srcFn.fnType == PasswordFn {
-			key = x.DataKey(attr, q.UidList.Uids[i])
-		} else {
-			key = x.IndexKey(attr, srcFn.tokens[i])
+			// Get or create the posting list for an entity, attribute combination.
+			pl, decr := posting.GetOrCreate(key, gid)
+			plch <- plf{pl, decr}
+			//defer decr()
 		}
-		// Get or create the posting list for an entity, attribute combination.
-		pl, decr := posting.GetOrCreate(key, gid)
-		defer decr()
+		close(plch)
+	}(q, srcFn)
+
+	i := -1
+	for it := range plch {
+		i++
+		pl := it.pl
+		defer it.decr()
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
