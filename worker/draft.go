@@ -221,9 +221,9 @@ type node struct {
 	cfg         *raft.Config
 	applyCh     chan raftpb.Entry
 	ctx         context.Context
-	stop        chan struct{} // to send the stop signal to Run
-	done        chan struct{} // to check whether node is running or not
-	kickCh      chan uint64   // to remind etcd Raft to send more MsgApps to a peer
+	stop        chan struct{}  // to send the stop signal to Run
+	done        chan struct{}  // to check whether node is running or not
+	kickCh      chan kickValue // to remind etcd Raft to send more MsgApps to a peer
 	gid         uint32
 	id          uint64
 	messages    chan sendmsg
@@ -310,7 +310,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		messages:    make(chan sendmsg, 1000),
 		stop:        make(chan struct{}),
 		done:        make(chan struct{}),
-		kickCh:      make(chan uint64, 500),
+		kickCh:      make(chan kickValue, 500),
 	}
 	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed: Group %d", n.gid)}
 	n.applied.Init()
@@ -492,8 +492,16 @@ func appendSize32Data(buf *bytes.Buffer, data []byte) int {
 	return 4 + n
 }
 
+func lastEntryIndex(entries []raftpb.Entry) (uint64, bool) {
+	n := len(entries)
+	if n == 0 {
+		return 0, false
+	}
+	return entries[n-1].Index, true
+}
+
 func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Message,
-	pl *pool, kickCh chan uint64) {
+	pl *pool, kickCh chan kickValue) {
 	defer wg.Done()
 	defer pools().release(pl)
 
@@ -504,6 +512,8 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 	for {
 		select {
 		case msg := <-msgCh:
+			lastIndex, hasLastIndex := lastEntryIndex(msg.Entries)
+
 			to := msg.To
 			// (Try to) create or recreate the stream if it's not created.
 			if stream == nil {
@@ -533,7 +543,7 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 				stream = nil
 			} else {
 				select {
-				case kickCh <- to:
+				case kickCh <- kickValue{to, hasLastIndex, lastIndex}:
 				default:
 				}
 			}
@@ -546,6 +556,12 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 			return
 		}
 	}
+}
+
+type kickValue struct {
+	to               uint64
+	hasLastIndexSent bool
+	lastIndexSent    uint64
 }
 
 func (n *node) sendMsgApp(msg raftpb.Message) {
@@ -938,16 +954,16 @@ func (n *node) Run() {
 				firstRun = false
 			}
 
-		case id := <-n.kickCh:
+		case kickValue := <-n.kickCh:
 			// Read as much as possible from kickCh, its purpose is to get us started sending, not
 			// keep a count of how many times to kick.
 			toKick := make(map[uint64]bool)
-			toKick[id] = true
+			toKick[kickValue.to] = true
 		slurpKickCh:
 			for {
 				select {
-				case id := <-n.kickCh:
-					toKick[id] = true
+				case kickValue := <-n.kickCh:
+					toKick[kickValue.to] = true
 				default:
 					break slurpKickCh
 				}
