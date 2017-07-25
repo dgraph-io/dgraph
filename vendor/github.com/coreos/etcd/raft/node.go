@@ -277,19 +277,13 @@ func (n *node) Stop() {
 
 // Describes that we sent the Entry with index lastIndexSent over the network.
 type kickValue struct {
-	id            uint64
-	lastIndexSent uint64
+	id              uint64
+	maxIndexDesired uint64
 }
 
-// TODO: Put this in the options struct.  Or move it outside of etcd -- make nextIndexRequested be
-// the Kick parameter.  That's a good idea.
-const (
-	kickMsgLookahead = 5
-)
-
-func (n *node) Kick(id uint64, lastIndexSent uint64) {
+func (n *node) Kick(id uint64, maxIndexDesired uint64) {
 	select {
-	case n.kickc <- kickValue{id, lastIndexSent}:
+	case n.kickc <- kickValue{id, maxIndexDesired}:
 	default:
 	}
 }
@@ -337,7 +331,7 @@ func (n *node) run(r *raft) {
 		select {
 		case kickValue := <-n.kickc:
 			if pr, ok := r.prs[kickValue.id]; ok && pr.Next <= r.raftLog.lastIndex() &&
-				pr.Next <= kickValue.lastIndexSent+kickMsgLookahead {
+				pr.Next <= kickValue.maxIndexDesired {
 				r.sendAppend(kickValue.id)
 			}
 		// TODO: maybe buffer the config propose if there exists one (the way

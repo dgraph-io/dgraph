@@ -44,6 +44,9 @@ import (
 
 const (
 	errorNodeIDExists = "Error Node ID already exists in the cluster"
+	// Tells how many Entries we want our modified etcd to send us without us having run Send() on
+	// the stream successfully.
+	kickBuffering = 5
 )
 
 type peerPoolEntry struct {
@@ -974,7 +977,7 @@ func (n *node) Run() {
 			}
 
 			for id, lastIndexSent := range toKick {
-				n.Raft().Kick(id, lastIndexSent)
+				n.Raft().Kick(id, lastIndexSent+kickBuffering)
 			}
 
 		case <-n.stop:
