@@ -284,10 +284,19 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		return nil, err
 	}
 
+	var lerr error
+	var lastDecr func()
 	for i := 0; i < srcFn.n; i++ {
+		if lastDecr != nil {
+			lastDecr()
+		}
+		if lerr != nil {
+			lastDecr = nil
+			continue
+		}
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			lerr = ctx.Err()
 		default:
 		}
 		var key []byte
@@ -307,13 +316,13 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, gid)
-		defer decr()
+		lastDecr = decr
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+			lerr = x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
 		}
 		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
 		if isValueEdge {
@@ -347,11 +356,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				return true // continue iteration.
 			})
 			if perr != nil {
-				return nil, perr
+				lerr = perr
 			}
 		} else if q.FacetsFilter != nil { // else part means isValueEdge
 			// This is Value edge and we are asked to do facet filtering. Not supported.
-			return nil, x.Errorf("Facet filtering is not supported on values.")
+			lerr = x.Errorf("Facet filtering is not supported on values.")
 		}
 
 		// add facets to result.
@@ -437,6 +446,9 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			uidList.Uids = append(uidList.Uids, fres.uid)
 		}
 		out.UidMatrix = append(out.UidMatrix, uidList)
+	}
+	if lerr != nil {
+		return nil, lerr
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
@@ -1085,8 +1097,8 @@ func (cp *countParams) evaluate(out *protos.Result) {
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
 		pl, decr := posting.GetOrCreate(countKey, cp.gid)
-		defer decr()
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
+		decr()
 		return
 	}
 
