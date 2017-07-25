@@ -39,13 +39,14 @@ import (
 )
 
 var (
-	ErrConnected    = errors.New("Edge already connected to another node.")
-	ErrValue        = errors.New("Edge already has a value.")
-	ErrEmptyXid     = errors.New("Empty XID node.")
-	ErrInvalidType  = errors.New("Invalid value type")
-	ErrEmptyVar     = errors.New("Empty variable name.")
-	ErrNotConnected = errors.New("Edge needs to be connected to another node or a value.")
-	emptyEdge       Edge
+	ErrConnected      = errors.New("Edge already connected to another node.")
+	ErrValue          = errors.New("Edge already has a value.")
+	ErrEmptyXid       = errors.New("Empty XID node.")
+	ErrInvalidType    = errors.New("Invalid value type")
+	ErrEmptyVar       = errors.New("Empty variable name.")
+	ErrNotConnected   = errors.New("Edge needs to be connected to another node or a value.")
+	ErrInvalidSubject = errors.New("Edge should have one of Subject/SubjectVar set.")
+	emptyEdge         Edge
 )
 
 // BatchMutationOptions sets the clients batch mode to Pending number of buffers each of Size.

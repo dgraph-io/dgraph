@@ -8080,6 +8080,7 @@ func TestPBUnmarshalToStruct3(t *testing.T) {
 	pb := processToPB(t, query, map[string]string{}, false)
 	var r res
 	err := client.Unmarshal(pb, &r)
+	err = client.Unmarshal(pb, &r)
 	require.NoError(t, err)
 	require.NotEmpty(t, r.Root[0].Location)
 	require.Equal(t, 4, len(r.Root))
@@ -8185,6 +8186,69 @@ func TestPBUnmarshalToStruct6(t *testing.T) {
 	require.Equal(t, 4, len(r.Me))
 	require.NotZero(t, r.Me[0].Name)
 	require.NotZero(t, r.Me[0].Dob)
+}
+
+func TestPBUnmarshalToStruct7(t *testing.T) {
+	populateGraph(t)
+
+	type Person struct {
+		Name string
+		Dob  time.Time
+	}
+
+	type res struct {
+		Me []Person
+	}
+
+	query := `
+		{
+			var(func: uid(1)) {
+				f as friend {
+					n as dob
+				}
+			}
+
+			Me(func: uid(f), orderasc: val(n)) {
+				Name: name
+				Dob: dob
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, true)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	// Lets unmarshal again, this should clear r first and then write to it.
+	err = client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(r.Me))
+}
+
+func TestPBUnmarshalToStruct8(t *testing.T) {
+	type Person struct {
+		Name  string `dgraph:"name"`
+		Age   int    `dgraph:"age"`
+		Birth string
+	}
+
+	type res struct {
+		Root [2]Person `dgraph:"me"`
+	}
+
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(1, 23, 31)) {
+				name
+				age
+				Birth: dob
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.Error(t, err)
 }
 
 func TestPBUnmarshalError1(t *testing.T) {

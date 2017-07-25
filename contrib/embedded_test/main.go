@@ -15,17 +15,11 @@ import (
 
 func main() {
 	x.Logger = log.New(ioutil.Discard, "", 0)
-
-	bmOpts := client.BatchMutationOptions{
-		Size:          1000,
-		Pending:       100,
-		PrintCounters: false,
-	}
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
 
-	config := dgraph.GetDefaultEmbeddeConfig()
-	dgraphClient := dgraph.NewEmbeddedDgraphClient(config, bmOpts, clientDir)
+	config := dgraph.GetDefaultEmbeddedConfig()
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(config, client.DefaultOptions, clientDir)
 	defer dgraph.DisposeEmbeddedDgraph()
 
 	req := client.Req{}

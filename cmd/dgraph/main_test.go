@@ -83,7 +83,6 @@ func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
 	schema.Init(dgraph.State.Pstore)
 	worker.Init(dgraph.State.Pstore)
 	worker.StartRaftNodes(dgraph.State.WALstore, false)
-
 	return dir1, dir2, ps, nil
 }
 
