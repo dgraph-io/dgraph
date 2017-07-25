@@ -1672,6 +1672,10 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 		// Combine the facetitem with our result.
 		{
 			if facetItem.varName != "" {
+				if _, has := facetVar[facetItem.facetName]; has {
+					return res, false, x.Errorf("Duplicate variable mappings for facet %v",
+						facetItem.facetName)
+				}
 				facetVar[facetItem.facetName] = facetItem.varName
 			}
 			facets.Keys = append(facets.Keys, facetItem.facetName)

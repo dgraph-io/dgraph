@@ -3037,6 +3037,21 @@ func TestParseFacetsOrderError3(t *testing.T) {
 	require.Contains(t, err.Error(), "Expected ',' or ')'")
 }
 
+func TestParseFacetsDuplicateVarError(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(a as closeness, b as closeness) {
+				name 
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Duplicate variable mappings")
+}
+
 func TestParseFacetsOrderVar(t *testing.T) {
 	query := `
 	query {
