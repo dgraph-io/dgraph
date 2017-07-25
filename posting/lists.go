@@ -153,9 +153,12 @@ func gentleCommit(dirtyMap map[string]time.Time, pending chan struct{},
 			return
 		}
 		for _, key := range keys {
-			l := lcache.Get(key)
+			l := lcache.Get(key) // TODO Us blcache
 			if l == nil {
-				continue
+				l = blcache.Get(key)
+			}
+			if l == nil {
+				return
 			}
 			// Not removing the postings list from the map, to avoid a race condition,
 			// where another caller re-creates the posting list before a commit happens.
@@ -289,6 +292,7 @@ var (
 	dirtyChan chan []byte // All dirty posting list keys are pushed here.
 	marks     *syncMarks
 	lcache    *listCache
+	blcache   *listCache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -296,6 +300,7 @@ func Init(ps *badger.KV) {
 	marks = new(syncMarks)
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
+	blcache = newListCache(100 << 20)
 	x.LcacheCapacity.Set(math.MaxInt64)
 	dirtyChan = make(chan []byte, 10000)
 
@@ -321,6 +326,12 @@ func GetOrCreate(key []byte, group uint32) (rlist *List) {
 	}
 	x.CacheMiss.Add(1)
 
+	lp = blcache.Get(string(key))
+	if lp != nil {
+		// TODO: Add separate metrics for bigcache
+		return lp
+	}
+
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
 	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
@@ -328,7 +339,11 @@ func GetOrCreate(key []byte, group uint32) (rlist *List) {
 
 	// We are always going to return lp to caller, whether it is l or not
 	// lcache increments the ref counter
-	lp = lcache.PutIfMissing(string(key), l)
+	if l.sharded {
+		lp = blcache.PutIfMissing(string(key), l)
+	} else {
+		lp = lcache.PutIfMissing(string(key), l)
+	}
 
 	if lp != l {
 		x.CacheRace.Add(1)
@@ -350,6 +365,12 @@ func Get(key []byte) (rlist *List) {
 	lp := lcache.Get(string(key))
 
 	if lp != nil {
+		return lp
+	}
+
+	lp = blcache.Get(string(key))
+	if lp != nil {
+		// TODO: Add separate metrics for bigcache
 		return lp
 	}
 
@@ -388,6 +409,12 @@ func CommitLists(numRoutines int, group uint32) {
 	}
 
 	lcache.Each(func(k string, l *List) {
+		if l == nil { // To be safe. Check might be unnecessary.
+			return
+		}
+		workChan <- l
+	})
+	blcache.Each(func(k string, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}

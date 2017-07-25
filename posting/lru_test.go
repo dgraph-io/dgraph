@@ -27,9 +27,11 @@ import (
 
 func getPosting() *List {
 	l := &List{
-		plist: &protos.PostingList{},
 		water: marks.Get(1),
 	}
+	l.slists = append(l.slists, &shardedList{
+		plist: &protos.PostingList{},
+	})
 	return l
 }
 
