@@ -274,29 +274,61 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		return nil, err
 	}
 
-	for i := 0; i < srcFn.n; i++ {
-		var key []byte
-		if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
-			srcFn.fnType == HasFn || srcFn.fnType == UidInFn {
-			if q.Reverse {
-				key = x.ReverseKey(attr, q.UidList.Uids[i])
-			} else {
-				key = x.DataKey(attr, q.UidList.Uids[i])
+	type plf struct {
+		pl   *posting.List
+		decr func()
+	}
+	plch := make(chan plf, 1000)
+	stopCh := make(chan struct{}, 1)
+	go func(q *protos.Query, srcFn *functionContext) {
+	L:
+		for i := 0; i < srcFn.n; i++ {
+			select {
+			case <-stopCh:
+				break L
+			default:
 			}
-		} else if srcFn.fnType == AggregatorFn || srcFn.fnType == PasswordFn {
-			key = x.DataKey(attr, q.UidList.Uids[i])
-		} else {
-			key = x.IndexKey(attr, srcFn.tokens[i])
+			var key []byte
+			if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
+				srcFn.fnType == HasFn || srcFn.fnType == UidInFn {
+				if q.Reverse {
+					key = x.ReverseKey(attr, q.UidList.Uids[i])
+				} else {
+					key = x.DataKey(attr, q.UidList.Uids[i])
+				}
+			} else if srcFn.fnType == AggregatorFn || srcFn.fnType == PasswordFn {
+				key = x.DataKey(attr, q.UidList.Uids[i])
+			} else {
+				key = x.IndexKey(attr, srcFn.tokens[i])
+			}
+			// Get or create the posting list for an entity, attribute combination.
+			pl, decr := posting.GetOrCreate(key, gid)
+			plch <- plf{pl, decr}
+			//defer decr()
 		}
-		// Get or create the posting list for an entity, attribute combination.
-		pl, decr := posting.GetOrCreate(key, gid)
-		defer decr()
+		close(plch)
+	}(q, srcFn)
+
+	i := -1
+	var lerr error
+	var lastDecr func()
+BL:
+	// NOTE: Never return inside this loop
+	for it := range plch {
+		i++
+		if lastDecr != nil {
+			lastDecr()
+		}
+		pl := it.pl
+		lastDecr = it.decr
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+			lerr = x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+			stopCh <- struct{}{}
+			break BL
 		}
 		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
 		if isValueEdge {
@@ -330,11 +362,15 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				return true // continue iteration.
 			})
 			if perr != nil {
-				return nil, perr
+				lerr = perr
+				stopCh <- struct{}{}
+				break BL
 			}
 		} else if q.FacetsFilter != nil { // else part means isValueEdge
 			// This is Value edge and we are asked to do facet filtering. Not supported.
-			return nil, x.Errorf("Facet filtering is not supported on values.")
+			lerr = x.Errorf("Facet filtering is not supported on values.")
+			stopCh <- struct{}{}
+			break BL
 		}
 
 		// add facets to result.
@@ -420,6 +456,15 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			uidList.Uids = append(uidList.Uids, fres.uid)
 		}
 		out.UidMatrix = append(out.UidMatrix, uidList)
+	}
+
+	for it := range plch {
+		// Some items might be left after error. decr() their reference.
+		it.decr()
+	}
+
+	if lerr != nil {
+		return nil, lerr
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
