@@ -165,7 +165,7 @@ type Node interface {
 	// ReportSnapshot reports the status of the sent snapshot.
 	ReportSnapshot(id uint64, status SnapshotStatus)
 	// Kick tells the node to send more MsgApps to the peer.
-	Kick(id uint64)
+	Kick(id uint64, lastIndexSent uint64)
 	// Stop performs any necessary termination of the Node.
 	Stop()
 }
@@ -236,7 +236,7 @@ type node struct {
 	readyc     chan Ready
 	advancec   chan struct{}
 	tickc      chan struct{}
-	kickc      chan uint64
+	kickc      chan kickValue
 	done       chan struct{}
 	stop       chan struct{}
 	status     chan chan Status
@@ -256,7 +256,7 @@ func newNode() node {
 		// is busy processing raft messages. Raft node will resume process buffered
 		// ticks when it becomes idle.
 		tickc:  make(chan struct{}, 128),
-		kickc:  make(chan uint64, 128),
+		kickc:  make(chan kickValue, 128),
 		done:   make(chan struct{}),
 		stop:   make(chan struct{}),
 		status: make(chan chan Status),
@@ -275,9 +275,21 @@ func (n *node) Stop() {
 	<-n.done
 }
 
-func (n *node) Kick(id uint64) {
+// Describes that we sent the Entry with index lastIndexSent over the network.
+type kickValue struct {
+	id            uint64
+	lastIndexSent uint64
+}
+
+// TODO: Put this in the options struct.  Or move it outside of etcd -- make nextIndexRequested be
+// the Kick parameter.  That's a good idea.
+const (
+	kickMsgLookahead = 5
+)
+
+func (n *node) Kick(id uint64, lastIndexSent uint64) {
 	select {
-	case n.kickc <- id:
+	case n.kickc <- kickValue{id, lastIndexSent}:
 	default:
 	}
 }
@@ -323,9 +335,10 @@ func (n *node) run(r *raft) {
 		}
 
 		select {
-		case id := <-n.kickc:
-			if pr, ok := r.prs[id]; ok && pr.Next <= r.raftLog.lastIndex() {
-				r.sendAppend(id)
+		case kickValue := <-n.kickc:
+			if pr, ok := r.prs[kickValue.id]; ok && pr.Next <= r.raftLog.lastIndex() &&
+				pr.Next <= kickValue.lastIndexSent+kickMsgLookahead {
+				r.sendAppend(kickValue.id)
 			}
 		// TODO: maybe buffer the config propose if there exists one (the way
 		// described in raft dissertation)

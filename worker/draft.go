@@ -493,11 +493,10 @@ func appendSize32Data(buf *bytes.Buffer, data []byte) int {
 }
 
 func lastEntryIndex(entries []raftpb.Entry) (uint64, bool) {
-	n := len(entries)
-	if n == 0 {
-		return 0, false
+	if n := len(entries); n != 0 {
+		return entries[n-1].Index, true
 	}
-	return entries[n-1].Index, true
+	return 0, false
 }
 
 func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Message,
@@ -512,6 +511,8 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 	for {
 		select {
 		case msg := <-msgCh:
+			// I think every MsgApp will have at least one entry, but in principle it's possible
+			// that one wouldn't.
 			lastIndex, hasLastIndex := lastEntryIndex(msg.Entries)
 
 			to := msg.To
@@ -542,9 +543,14 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 				x.Printf("Error sending to RaftMessageStream: %v", err)
 				stream = nil
 			} else {
-				select {
-				case kickCh <- kickValue{to, hasLastIndex, lastIndex}:
-				default:
+				// In principle we could consider msg.Index to be the "last sent index" if
+				// !hasLastIndex.  It's always 1 less than the first entry's index.  But why would
+				// we kick them if they didn't have any entries to send?
+				if hasLastIndex {
+					select {
+					case kickCh <- kickValue{to, lastIndex}:
+					default:
+					}
 				}
 			}
 
@@ -559,9 +565,8 @@ func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Me
 }
 
 type kickValue struct {
-	to               uint64
-	hasLastIndexSent bool
-	lastIndexSent    uint64
+	to            uint64
+	lastIndexSent uint64
 }
 
 func (n *node) sendMsgApp(msg raftpb.Message) {
@@ -957,20 +962,19 @@ func (n *node) Run() {
 		case kickValue := <-n.kickCh:
 			// Read as much as possible from kickCh, its purpose is to get us started sending, not
 			// keep a count of how many times to kick.
-			toKick := make(map[uint64]bool)
-			toKick[kickValue.to] = true
+			toKick := make(map[uint64]uint64) // Maps node id to lastIndex sent.
 		slurpKickCh:
 			for {
+				toKick[kickValue.to] = kickValue.lastIndexSent
 				select {
-				case kickValue := <-n.kickCh:
-					toKick[kickValue.to] = true
+				case kickValue = <-n.kickCh:
 				default:
 					break slurpKickCh
 				}
 			}
 
-			for id := range toKick {
-				n.Raft().Kick(id)
+			for id, lastIndexSent := range toKick {
+				n.Raft().Kick(id, lastIndexSent)
 			}
 
 		case <-n.stop:
