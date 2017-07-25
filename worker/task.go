@@ -215,6 +215,25 @@ func addUidToMatrix(key []byte, mu *sync.Mutex, out *protos.Result) {
 	mu.Unlock()
 }
 
+type plf struct {
+	pl   *posting.List
+	decr func()
+}
+
+func fetchPlConc(keyCh chan []byte, och chan plf, stop chan struct{}, gid uint32) {
+L:
+	for key := range keyCh {
+		select {
+		case <-stop:
+			break L
+		default:
+		}
+		pl, decr := posting.GetOrCreate(key, gid)
+		och <- plf{pl, decr}
+	}
+	close(och)
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	out := new(protos.Result)
@@ -273,21 +292,12 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	if err != nil {
 		return nil, err
 	}
-
-	type plf struct {
-		pl   *posting.List
-		decr func()
-	}
 	plch := make(chan plf, 1000)
+	keyCh := make(chan []byte, 1000)
 	stopCh := make(chan struct{}, 1)
+	go fetchPlConc(keyCh, plch, stopCh, gid)
 	go func(q *protos.Query, srcFn *functionContext) {
-	L:
 		for i := 0; i < srcFn.n; i++ {
-			select {
-			case <-stopCh:
-				break L
-			default:
-			}
 			var key []byte
 			if srcFn.fnType == NotAFunction || srcFn.fnType == CompareScalarFn ||
 				srcFn.fnType == HasFn || srcFn.fnType == UidInFn {
@@ -301,12 +311,16 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			} else {
 				key = x.IndexKey(attr, srcFn.tokens[i])
 			}
-			// Get or create the posting list for an entity, attribute combination.
-			pl, decr := posting.GetOrCreate(key, gid)
-			plch <- plf{pl, decr}
+
+			keyCh <- key
+			/*
+				// Get or create the posting list for an entity, attribute combination.
+				pl, decr := posting.GetOrCreate(key, gid)
+				plch <- plf{pl, decr}
+			*/
 			//defer decr()
 		}
-		close(plch)
+		close(keyCh)
 	}(q, srcFn)
 
 	i := -1
