@@ -22,10 +22,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -46,6 +46,7 @@ var (
 	ErrEmptyVar       = errors.New("Empty variable name.")
 	ErrNotConnected   = errors.New("Edge needs to be connected to another node or a value.")
 	ErrInvalidSubject = errors.New("Edge should have one of Subject/SubjectVar set.")
+	ErrMaxTries       = errors.New("Max retries exceeded for request while doing batch mutations.")
 	emptyEdge         Edge
 )
 
@@ -56,12 +57,14 @@ type BatchMutationOptions struct {
 	Size          int
 	Pending       int
 	PrintCounters bool
+	MaxRetries    uint32
 }
 
 var DefaultOptions = BatchMutationOptions{
 	Size:          100,
 	Pending:       100,
 	PrintCounters: false,
+	MaxRetries:    math.MaxUint32,
 }
 
 type allocator struct {
@@ -171,7 +174,6 @@ type Dgraph struct {
 	schema chan protos.SchemaUpdate
 	nquads chan nquadOp
 	dc     []protos.DgraphClient
-	wg     sync.WaitGroup
 	alloc  *allocator
 	ticker *time.Ticker
 
@@ -187,6 +189,9 @@ type Dgraph struct {
 	marks            syncMarks
 	reqs             chan *Req
 	checkpointTicker *time.Ticker // Used to write checkpoints periodically.
+	che              chan error
+	// In case of max retries exceeded, we set this to 1.
+	retriesExceeded int32
 }
 
 // NewDgraphClient creates a new Dgraph for interacting with the Dgraph store connected to in
@@ -234,16 +239,21 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		alloc:  alloc,
 		marks:  make(map[string]waterMark),
 		reqs:   make(chan *Req, opts.Pending*2),
+
+		// length includes opts.Pending for makeRequests, another two for makeSchemaRequests and
+		// 	batchNquads.
+		che: make(chan error, opts.Pending+2),
 	}
 
-	d.wg.Add(1)
+	if opts.MaxRetries == 0 {
+		d.opts.MaxRetries = DefaultOptions.MaxRetries
+	}
+
 	go d.batchNquads()
 
 	for i := 0; i < opts.Pending; i++ {
-		d.wg.Add(1)
 		go d.makeRequests()
 	}
-	d.wg.Add(1)
 	go d.makeSchemaRequests()
 
 	rand.Seed(time.Now().Unix())
@@ -281,7 +291,6 @@ func (d *Dgraph) batchSync() {
 			}
 		}
 		loop++
-		//fmt.Printf("Writing batch of size: %v\n", len(entries))
 
 		for _, e := range entries {
 			// Atmost 10 bytes are needed for uvarint encoding
@@ -316,9 +325,10 @@ func (d *Dgraph) printCounters() {
 	}
 }
 
-func (d *Dgraph) request(req *Req) {
+func (d *Dgraph) request(req *Req) error {
 	counter := atomic.AddUint64(&d.mutations, 1)
 	factor := time.Second
+	var retries uint32
 RETRY:
 	_, err := d.dc[rand.Intn(len(d.dc))].Run(context.Background(), &req.gr)
 	if err != nil {
@@ -332,6 +342,11 @@ RETRY:
 		if factor < 256*time.Second {
 			factor = factor * 2
 		}
+		if retries >= d.opts.MaxRetries {
+			atomic.CompareAndSwapInt32(&d.retriesExceeded, 0, 1)
+			return ErrMaxTries
+		}
+		retries++
 		goto RETRY
 	}
 
@@ -340,6 +355,7 @@ RETRY:
 		atomic.AddUint64(&d.rdfs, uint64(req.size()))
 		req.mark.Ch <- x.Mark{Index: req.line, Done: true}
 	}
+	return nil
 }
 
 // makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
@@ -347,9 +363,17 @@ RETRY:
 // caller functions.
 func (d *Dgraph) makeRequests() {
 	for req := range d.reqs {
-		d.request(req)
+		if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+			d.che <- ErrMaxTries
+			return
+		}
+
+		if err := d.request(req); err != nil {
+			d.che <- err
+			return
+		}
 	}
-	d.wg.Done()
+	d.che <- nil
 }
 
 func (d *Dgraph) makeSchemaRequests() {
@@ -363,6 +387,10 @@ LOOP:
 			}
 			req.AddSchema(s)
 		default:
+			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+				d.che <- ErrMaxTries
+				return
+			}
 			start := time.Now()
 			if req.size() > 0 {
 				d.request(req)
@@ -378,13 +406,18 @@ LOOP:
 	if req.size() > 0 {
 		d.request(req)
 	}
-	d.wg.Done()
+	d.che <- nil
 }
 
 // Used to batch the nquads into Req of size given by user and send to d.reqs channel.
 func (d *Dgraph) batchNquads() {
 	req := new(Req)
 	for n := range d.nquads {
+		if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+			d.che <- ErrMaxTries
+			return
+		}
+
 		if n.op == SET {
 			req.Set(n.e)
 		} else if n.op == DEL {
@@ -395,11 +428,12 @@ func (d *Dgraph) batchNquads() {
 			req = new(Req)
 		}
 	}
+
 	if req.size() > 0 {
 		d.reqs <- req
 	}
 	close(d.reqs)
-	d.wg.Done()
+	d.che <- nil
 }
 
 // BatchSet adds Edge e as a set to the current batch mutation.  Once added, the client will apply
@@ -407,11 +441,22 @@ func (d *Dgraph) batchNquads() {
 // to one of the batches as specified in d's BatchMutationOptions.  If that batch fills, it
 // eventually flushes.  But there is no guarantee of delivery before BatchFlush() is called.
 func (d *Dgraph) BatchSet(e Edge) error {
-	d.nquads <- nquadOp{
+	nq := nquadOp{
 		e:  e,
 		op: SET,
 	}
-	atomic.AddUint64(&d.rdfs, 1)
+L:
+	for {
+		select {
+		case d.nquads <- nq:
+			break L
+		default:
+			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+				return ErrMaxTries
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
 	return nil
 }
 
@@ -427,7 +472,19 @@ func (d *Dgraph) BatchSetWithMark(r *Req, file string, line uint64) error {
 		r.line = line
 		sm.mark.Ch <- x.Mark{Index: line}
 	}
-	d.reqs <- r
+
+L:
+	for {
+		select {
+		case d.reqs <- r:
+			break L
+		default:
+			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+				return ErrMaxTries
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
 	return nil
 }
 
@@ -436,9 +493,21 @@ func (d *Dgraph) BatchSetWithMark(r *Req, file string, line uint64) error {
 // be added to one of the batches as specified in d's BatchMutationOptions.  If that batch fills,
 // it eventually flushes.  But there is no guarantee of delivery before BatchFlush() is called.
 func (d *Dgraph) BatchDelete(e Edge) error {
-	d.nquads <- nquadOp{
+	nq := nquadOp{
 		e:  e,
 		op: DEL,
+	}
+L:
+	for {
+		select {
+		case d.nquads <- nq:
+			break L
+		default:
+			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+				return ErrMaxTries
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
 	atomic.AddUint64(&d.rdfs, 1)
 	return nil
@@ -456,13 +525,32 @@ func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 	return nil
 }
 
+func (d *Dgraph) stopTickers() {
+	if d.ticker != nil {
+		d.ticker.Stop()
+	}
+	if d.checkpointTicker != nil {
+		d.checkpointTicker.Stop()
+	}
+}
+
 // BatchFlush waits for all pending requests to complete. It should always be called after all
 // BatchSet and BatchDeletes have been called.  Calling BatchFlush ends the client session and
 // will cause a panic if further AddSchema, BatchSet or BatchDelete functions are called.
-func (d *Dgraph) BatchFlush() {
+func (d *Dgraph) BatchFlush() error {
 	close(d.nquads)
 	close(d.schema)
-	d.wg.Wait()
+	for i := 0; i < d.opts.Pending+2; i++ {
+		select {
+		case err := <-d.che:
+			if err != nil {
+				// To signal other go-routines to stop.
+				d.stopTickers()
+				return err
+			}
+		}
+	}
+
 	// After we have received response from server and sent the marks for completion,
 	// we need to wait for all of them to be processed.
 	for _, wm := range d.marks {
@@ -472,12 +560,8 @@ func (d *Dgraph) BatchFlush() {
 	}
 	// Write final checkpoint before stopping.
 	d.writeCheckpoint()
-	if d.ticker != nil {
-		d.ticker.Stop()
-	}
-	if d.checkpointTicker != nil {
-		d.checkpointTicker.Stop()
-	}
+	d.stopTickers()
+	return nil
 }
 
 // Run runs the request in req and returns with the completed response from the server.  Calling
