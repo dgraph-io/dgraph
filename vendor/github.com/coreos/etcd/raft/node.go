@@ -164,6 +164,8 @@ type Node interface {
 	ReportUnreachable(id uint64)
 	// ReportSnapshot reports the status of the sent snapshot.
 	ReportSnapshot(id uint64, status SnapshotStatus)
+	// Kick tells the node to send more MsgApps to the peer.
+	Kick(id uint64)
 	// Stop performs any necessary termination of the Node.
 	Stop()
 }
@@ -234,6 +236,7 @@ type node struct {
 	readyc     chan Ready
 	advancec   chan struct{}
 	tickc      chan struct{}
+	kickc      chan uint64
 	done       chan struct{}
 	stop       chan struct{}
 	status     chan chan Status
@@ -253,6 +256,7 @@ func newNode() node {
 		// is busy processing raft messages. Raft node will resume process buffered
 		// ticks when it becomes idle.
 		tickc:  make(chan struct{}, 128),
+		kickc:  make(chan uint64, 128),
 		done:   make(chan struct{}),
 		stop:   make(chan struct{}),
 		status: make(chan chan Status),
@@ -269,6 +273,13 @@ func (n *node) Stop() {
 	}
 	// Block until the stop has been acknowledged by run()
 	<-n.done
+}
+
+func (n *node) Kick(id uint64) {
+	select {
+	case n.kickc <- id:
+	default:
+	}
 }
 
 func (n *node) run(r *raft) {
@@ -312,6 +323,10 @@ func (n *node) run(r *raft) {
 		}
 
 		select {
+		case id := <-n.kickc:
+			if pr, ok := r.prs[id]; ok && pr.Next <= r.raftLog.lastIndex() {
+				r.sendAppend(id)
+			}
 		// TODO: maybe buffer the config propose if there exists one (the way
 		// described in raft dissertation)
 		// Currently it is dropped in Step silently.

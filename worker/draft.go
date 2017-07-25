@@ -21,10 +21,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
@@ -47,8 +50,19 @@ type peerPoolEntry struct {
 	// Never the empty string.  Possibly a bogus address -- bad port number, the value
 	// of *myAddr, or some screwed up Raft config.
 	addr string
+
 	// An owning reference to a pool for this peer (or nil if addr is sufficiently bogus).
 	poolOrNil *pool
+
+	// *** Fields below are only non-nil if poolOrNil is. ***
+
+	// If poolOrNil is non-nil, there's a goroutine running streamMsgApps.
+
+	// Cancellation -- close this to cancel streamMsgApps.
+	cancel func()
+
+	// Used to send MsgApp messages to the peer.
+	appMessages chan raftpb.Message
 }
 
 // peerPool stores the peers' addresses and our connections to them.  It has exactly one
@@ -57,6 +71,8 @@ type peerPoolEntry struct {
 type peerPool struct {
 	sync.RWMutex
 	peers map[uint64]peerPoolEntry
+	// A waitGroup for the peerPoolEntrys' goroutines.
+	wg *sync.WaitGroup
 }
 
 var (
@@ -91,15 +107,53 @@ func (p *peerPool) get(id uint64) (string, bool) {
 	return ret.addr, ok
 }
 
-func (p *peerPool) set(id uint64, addr string, pl *pool) {
-	p.Lock()
-	defer p.Unlock()
-	if old, ok := p.peers[id]; ok {
-		if old.poolOrNil != nil {
-			pools().release(old.poolOrNil)
-		}
+func (p *peerPool) getAppMessages(id uint64) (chan raftpb.Message, error) {
+	p.RLock()
+	defer p.RUnlock()
+	ent, ok := p.peers[id]
+	if !ok {
+		return nil, errNoPeerPoolEntry
 	}
-	p.peers[id] = peerPoolEntry{addr, pl}
+	if ent.poolOrNil == nil {
+		return nil, errNoPeerPool
+	}
+	return ent.appMessages, nil
+}
+
+func cleanupEntry(entry *peerPoolEntry) {
+	if entry.poolOrNil != nil {
+		entry.cancel()
+		pools().release(entry.poolOrNil)
+	}
+}
+
+func (p *peerPool) set(id uint64, entry peerPoolEntry) {
+	p.Lock()
+	old, ok := p.peers[id]
+	p.peers[id] = entry
+	p.Unlock()
+
+	if ok {
+		cleanupEntry(&old)
+	}
+}
+
+func (p *peerPool) clear() {
+	p.Lock()
+	peers := p.peers
+	p.peers = make(map[uint64]peerPoolEntry)
+	p.Unlock()
+
+	// Now decr its refcount / cleanup its goroutines.
+	for _, entry := range peers {
+		cleanupEntry(&entry)
+	}
+}
+
+func (p *peerPool) finishAndWait() {
+	p.clear()
+	p.wg.Done()
+	p.wg.Wait()
 }
 
 type proposalCtx struct {
@@ -169,6 +223,7 @@ type node struct {
 	ctx         context.Context
 	stop        chan struct{} // to send the stop signal to Run
 	done        chan struct{} // to check whether node is running or not
+	kickCh      chan uint64   // to remind etcd Raft to send more MsgApps to a peer
 	gid         uint32
 	id          uint64
 	messages    chan sendmsg
@@ -220,7 +275,9 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 
 	peers := peerPool{
 		peers: make(map[uint64]peerPoolEntry),
+		wg:    new(sync.WaitGroup),
 	}
+	peers.wg.Add(1)
 	props := proposals{
 		ids: make(map[uint32]*proposalCtx),
 	}
@@ -253,6 +310,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		messages:    make(chan sendmsg, 1000),
 		stop:        make(chan struct{}),
 		done:        make(chan struct{}),
+		kickCh:      make(chan uint64, 500),
 	}
 	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed: Group %d", n.gid)}
 	n.applied.Init()
@@ -271,10 +329,10 @@ func (n *node) GetPeerPool(pid uint64) (*pool, error) {
 	return n.peers.getPool(pid)
 }
 
-// addr must not be empty.
-func (n *node) SetPeer(pid uint64, addr string, poolOrNil *pool) {
-	x.AssertTruef(addr != "", "SetPeer for peer %d has empty addr.", pid)
-	n.peers.set(pid, addr, poolOrNil)
+// entry.Addr must not be empty.
+func (n *node) SetPeer(pid uint64, entry peerPoolEntry) {
+	x.AssertTruef(entry.addr != "", "SetPeer for peer %d has empty addr.", pid)
+	n.peers.set(pid, entry)
 }
 
 // Connects the node and makes its peerPool refer to the constructed pool and address
@@ -290,13 +348,24 @@ func (n *node) Connect(pid uint64, addr string) {
 	}
 	// Here's what we do.  Right now peerPool maps peer node id's to addr values.  If
 	// a *pool can be created, good, but if not, we still create a peerPoolEntry with
-	// a nil *pool.
-	p, ok := pools().connect(addr)
+	// a nil *pool, no goroutine.
+	p, ok := pools().connect(n.ctx, addr)
+	var entry peerPoolEntry
 	if !ok {
 		// TODO: Note this fact in more general peer health info somehow.
 		x.Printf("Peer %d claims same host as me\n", pid)
+		entry = peerPoolEntry{addr: addr, cancel: nil, appMessages: nil, poolOrNil: nil}
+	} else {
+		// The goroutine for streamMsgApps owns a refcount on the pool too.
+		p.AddOwner()
+		ch := make(chan raftpb.Message, 1000)
+		n.peers.wg.Add(1)
+		ctx, cancel := context.WithCancel(n.ctx)
+		go streamMsgApps(ctx, n.peers.wg, ch, p, n.kickCh)
+		entry = peerPoolEntry{addr: addr, poolOrNil: p, cancel: cancel, appMessages: ch}
 	}
-	n.SetPeer(pid, addr, p)
+
+	n.SetPeer(pid, entry)
 }
 
 func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
@@ -414,20 +483,91 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	return err
 }
 
-func (n *node) send(m raftpb.Message) {
-	x.AssertTruef(n.id != m.To, "Seding message to itself")
+// appendSize32Data appends data to buf, prefixed with a 4-byte size.  Returns total number of
+// bytes appended.
+func appendSize32Data(buf *bytes.Buffer, data []byte) int {
+	n := len(data)
+	x.Check(binary.Write(buf, binary.LittleEndian, uint32(n)))
+	x.Check2(buf.Write(data))
+	return 4 + n
+}
+
+func streamMsgApps(ctx context.Context, wg *sync.WaitGroup, msgCh chan raftpb.Message,
+	pl *pool, kickCh chan uint64) {
+	defer wg.Done()
+	defer pools().release(pl)
+
+	client := protos.NewWorkerClient(pl.Get())
+
+	var stream protos.Worker_RaftMessageStreamClient
+
+	for {
+		select {
+		case msg := <-msgCh:
+			to := msg.To
+			// (Try to) create or recreate the stream if it's not created.
+			if stream == nil {
+				var err error
+				stream, err = client.RaftMessageStream(ctx, grpc.FailFast(true))
+				if err != nil {
+					// Error opening RaftMessageStream.  Maybe no connection.
+					continue
+				}
+			}
+
+			var buf bytes.Buffer
+			data := marshalMsgForSending(msg)
+			appendSize32Data(&buf, data)
+
+			p := &protos.Payload{Data: buf.Bytes()}
+
+			err := stream.Send(p)
+			if err != nil {
+				wg.Add(1)
+				go func(stream protos.Worker_RaftMessageStreamClient) {
+					stream.CloseAndRecv()
+					wg.Done()
+				}(stream)
+
+				x.Printf("Error sending to RaftMessageStream: %v", err)
+				stream = nil
+			} else {
+				select {
+				case kickCh <- to:
+				default:
+				}
+			}
+
+		case <-ctx.Done():
+			if stream != nil {
+				_, err := stream.CloseAndRecv()
+				x.Printf("Error closing RaftMessageStream: %v", err)
+			}
+			return
+		}
+	}
+}
+
+func (n *node) sendMsgApp(msg raftpb.Message) {
+	ch, err := n.peers.getAppMessages(msg.To)
+	if err != nil {
+		// No such peer.  OK.
+		return
+	}
+	select {
+	case ch <- msg:
+	default:
+		x.Printf("Unable to push message to %v in sendMsgApp", msg.To)
+	}
+}
+
+func marshalMsgForSending(m raftpb.Message) []byte {
 	data, err := m.Marshal()
 	x.Check(err)
 	if m.Type != raftpb.MsgHeartbeat && m.Type != raftpb.MsgHeartbeatResp {
 		x.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
 	}
-	select {
-	case n.messages <- sendmsg{to: m.To, data: data}:
-		// pass
-	default:
-		// TODO: It's bad to fail like this.
-		x.Fatalf("Unable to push messages to channel in send")
-	}
+	return data
 }
 
 const (
@@ -448,15 +588,12 @@ func (n *node) batchAndSendMessages() {
 			} else {
 				buf = b
 			}
-			totalSize += 4 + len(sm.data)
-			x.Check(binary.Write(buf, binary.LittleEndian, uint32(len(sm.data))))
-			x.Check2(buf.Write(sm.data))
+			totalSize += appendSize32Data(buf, sm.data)
 
 			if totalSize > messageBatchSoftLimit {
 				// We limit the batch size, but we aren't pushing back on
 				// n.messages, because the loop below spawns a goroutine
-				// to do its dirty work.  This is good because right now
-				// (*node).send fails(!) if the channel is full.
+				// to do its dirty work.
 				break
 			}
 
@@ -706,6 +843,28 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
 }
 
+func (n *node) sendMessages(rcBytes []byte, messages []raftpb.Message) {
+	for _, msg := range messages {
+		// NOTE: We can do some optimizations here to drop messages.
+		msg.Context = rcBytes
+		x.AssertTrue(n.id != msg.To)
+
+		if msg.Type == raftpb.MsgApp {
+			n.sendMsgApp(msg)
+			continue
+		}
+
+		data := marshalMsgForSending(msg)
+		select {
+		case n.messages <- sendmsg{to: msg.To, data: data}:
+			// pass
+		default:
+			// This would be very weird, but it's okay to drop messages.  Raft can deal with it.
+			x.Printf("Unable to push message to channel in send")
+		}
+	}
+}
+
 func (n *node) Run() {
 	firstRun := true
 	var leader bool
@@ -735,11 +894,7 @@ func (n *node) Run() {
 
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 
-			for _, msg := range rd.Messages {
-				// NOTE: We can do some optimizations here to drop messages.
-				msg.Context = rcBytes
-				n.send(msg)
-			}
+			n.sendMessages(rcBytes, rd.Messages)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				// We don't send snapshots to other nodes. But, if we get one, that means
@@ -783,10 +938,30 @@ func (n *node) Run() {
 				firstRun = false
 			}
 
+		case id := <-n.kickCh:
+			// Read as much as possible from kickCh, its purpose is to get us started sending, not
+			// keep a count of how many times to kick.
+			toKick := make(map[uint64]bool)
+			toKick[id] = true
+		slurpKickCh:
+			for {
+				select {
+				case id := <-n.kickCh:
+					toKick[id] = true
+				default:
+					break slurpKickCh
+				}
+			}
+
+			for id := range toKick {
+				n.Raft().Kick(id)
+			}
+
 		case <-n.stop:
 			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
 				n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 				go func() {
+					// TODO: n.ctx is a background context, it can't time out.
 					select {
 					case <-n.ctx.Done(): // time out
 						if tr, ok := trace.FromContext(n.ctx); ok {
@@ -797,17 +972,23 @@ func (n *node) Run() {
 							tr.LazyPrintf("Timed out transfering leadership")
 						}
 					}
-					n.Raft().Stop()
-					close(n.done)
+					n.finishStop()
 				}()
 			} else {
-				n.Raft().Stop()
-				close(n.done)
+				n.finishStop()
 			}
 		case <-n.done:
 			return
 		}
 	}
+}
+
+func (n *node) finishStop() {
+	n.Raft().Stop()
+	// Cleans up peer pool, including stopping streamMsgApp goroutine (and closing its active gRPC
+	// request, which blocks shutdown)
+	n.peers.finishAndWait()
+	close(n.done)
 }
 
 func (n *node) Stop() {
@@ -1014,11 +1195,7 @@ func applyMessage(ctx context.Context, msg raftpb.Message) error {
 	}
 }
 
-func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*protos.Payload, error) {
-	if ctx.Err() != nil {
-		return &protos.Payload{}, ctx.Err()
-	}
-
+func processRaftMessage(ctx context.Context, query *protos.Payload) error {
 	for idx := 0; idx < len(query.Data); {
 		x.AssertTruef(len(query.Data[idx:]) >= 4,
 			"Slice left of size: %v. Expected at least 4.", len(query.Data[idx:]))
@@ -1027,7 +1204,7 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 		idx += 4
 		msg := raftpb.Message{}
 		if idx+sz > len(query.Data) {
-			return &protos.Payload{}, x.Errorf(
+			return x.Errorf(
 				"Invalid query. Specified size %v overflows slice [%v,%v)\n",
 				sz, idx, len(query.Data))
 		}
@@ -1038,12 +1215,56 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 			x.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
 		if err := applyMessage(ctx, msg); err != nil {
-			return &protos.Payload{}, err
+			return err
 		}
 		idx += sz
 	}
 	// fmt.Printf("Got %d messages\n", count)
-	return &protos.Payload{}, nil
+	return nil
+}
+
+var emptyPayload protos.Payload
+
+func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*protos.Payload, error) {
+	if ctx.Err() != nil {
+		return &emptyPayload, ctx.Err()
+	}
+
+	err := processRaftMessage(ctx, query)
+	return &emptyPayload, err
+}
+
+func recvRaftMessages(errCh chan error, stream protos.Worker_RaftMessageStreamServer) {
+	for {
+		payload, err := stream.Recv()
+		if err == io.EOF {
+			errCh <- stream.SendAndClose(&emptyPayload)
+			return
+		}
+		if err != nil {
+			errCh <- err
+			return
+		}
+		err = processRaftMessage(stream.Context(), payload)
+		if err != nil {
+			x.Printf("RaftMessageStream processRaftMessage error: %v\n", err)
+		}
+	}
+}
+
+func (w *grpcWorker) RaftMessageStream(stream protos.Worker_RaftMessageStreamServer) error {
+	// The only way to interrupt the stream processing on the server side is for us to call .Recv()
+	// in a goroutine and return from this function.  (Maybe we could kill the TCP connection, but
+	// we want to gracefully shut down.)
+	errCh := make(chan error)
+	go recvRaftMessages(errCh, stream)
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-w.done:
+		return x.Errorf("Raft message stream worker interrupted (server shutting down)")
+	}
 }
 
 func (w *grpcWorker) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*protos.Payload, error) {
