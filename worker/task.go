@@ -318,8 +318,14 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			}
 		case AggregatorFn, PasswordFn:
 			key = x.DataKey(attr, q.UidList.Uids[i])
-		case CompareAttrFn, GeoFn, RegexFn, FullTextSearchFn, StandardFn:
+		case GeoFn, RegexFn, FullTextSearchFn, StandardFn:
 			key = x.IndexKey(attr, srcFn.tokens[i])
+		case CompareAttrFn:
+			if len(srcFn.tokens) > 0 {
+				key = x.IndexKey(attr, srcFn.tokens[i])
+			} else {
+				key = x.DataKey(attr, q.UidList.Uids[i])
+			}
 		default:
 			x.Fatalf("Unhandled function in processTask")
 		}
@@ -330,12 +336,13 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
+		typ := val.Tid
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
 			lerr = x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
 		}
 		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
 		if isValueEdge {
-			if typ, err := schema.State().TypeOf(attr); err == nil {
+			if typ, err = schema.State().TypeOf(attr); err == nil {
 				newValue, err = convertToType(val, typ)
 			} else if err != nil {
 				// Ideally Schema should be present for already inserted mutation
@@ -344,10 +351,27 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				newValue, err = convertToType(val, val.Tid)
 			}
 		}
-		out.Values = append(out.Values, newValue)
 
 		// get filtered uids and facets.
 		var filteredRes []*result
+		// This means we fetched the value directly instead of fetching index key and intersecting.
+		if srcFn.fnType == CompareAttrFn && isValueEdge {
+			// Lets convert the val to its type.
+			if val, err = types.Convert(val, typ); err != nil {
+				lerr = err
+				continue
+			}
+			if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
+				// TODO - Check if we need facets here.
+				// TODO - Check if we can avoid the final filtering step.
+				filteredRes = append(filteredRes, &result{
+					uid: q.UidList.Uids[i],
+				})
+			}
+		} else {
+			out.Values = append(out.Values, newValue)
+		}
+
 		if !isValueEdge { // for uid edge.. get postings
 			var perr error
 			filteredRes = make([]*result, 0, pl.Length(opts.AfterUID))
@@ -836,7 +860,18 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 			fc.tokens = append(fc.tokens, tokens...)
 			fc.eqTokens = append(fc.eqTokens, fc.ineqValue)
 		}
-		fc.n = len(fc.tokens)
+
+		// Number of index keys is more than no. of uids to filter, so its better to fetch data keys
+		// directly and compare. Lets make tokens empty.
+		// We don't do this for eq because eq could have multiple arguments and we would have to
+		// compare the value with all of them. Also eq would usually have less arguments, hence we
+		// won't be fetching many index keys.
+		if q.UidList != nil && len(fc.tokens) > len(q.UidList.Uids) && fc.fname != eq {
+			fc.tokens = fc.tokens[:0]
+			fc.n = len(q.UidList.Uids)
+		} else {
+			fc.n = len(fc.tokens)
+		}
 		fc.lang = q.SrcFunc[1]
 	case CompareScalarFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
