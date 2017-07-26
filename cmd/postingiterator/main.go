@@ -31,6 +31,7 @@ var (
 )
 
 func main() {
+	flag.Parse()
 	x.Init()
 
 	// All the writes to posting store should be synchronous. We use batched writers

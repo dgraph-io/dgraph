@@ -22,10 +22,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -39,13 +39,15 @@ import (
 )
 
 var (
-	ErrConnected    = errors.New("Edge already connected to another node.")
-	ErrValue        = errors.New("Edge already has a value.")
-	ErrEmptyXid     = errors.New("Empty XID node.")
-	ErrInvalidType  = errors.New("Invalid value type")
-	ErrEmptyVar     = errors.New("Empty variable name.")
-	ErrNotConnected = errors.New("Edge needs to be connected to another node or a value.")
-	emptyEdge       Edge
+	ErrConnected      = errors.New("Edge already connected to another node.")
+	ErrValue          = errors.New("Edge already has a value.")
+	ErrEmptyXid       = errors.New("Empty XID node.")
+	ErrInvalidType    = errors.New("Invalid value type")
+	ErrEmptyVar       = errors.New("Empty variable name.")
+	ErrNotConnected   = errors.New("Edge needs to be connected to another node or a value.")
+	ErrInvalidSubject = errors.New("Edge should have one of Subject/SubjectVar set.")
+	ErrMaxTries       = errors.New("Max retries exceeded for request while doing batch mutations.")
+	emptyEdge         Edge
 )
 
 // BatchMutationOptions sets the clients batch mode to Pending number of buffers each of Size.
@@ -55,12 +57,14 @@ type BatchMutationOptions struct {
 	Size          int
 	Pending       int
 	PrintCounters bool
+	MaxRetries    uint32
 }
 
 var DefaultOptions = BatchMutationOptions{
 	Size:          100,
 	Pending:       100,
 	PrintCounters: false,
+	MaxRetries:    math.MaxUint32,
 }
 
 type allocator struct {
@@ -170,7 +174,6 @@ type Dgraph struct {
 	schema chan protos.SchemaUpdate
 	nquads chan nquadOp
 	dc     []protos.DgraphClient
-	wg     sync.WaitGroup
 	alloc  *allocator
 	ticker *time.Ticker
 
@@ -181,6 +184,14 @@ type Dgraph struct {
 	mutations uint64
 	// To get time elapsed.
 	start time.Time
+
+	// Map of filename to x.Watermark. Used for checkpointing.
+	marks            syncMarks
+	reqs             chan *Req
+	checkpointTicker *time.Ticker // Used to write checkpoints periodically.
+	che              chan error
+	// In case of max retries exceeded, we set this to 1.
+	retriesExceeded int32
 }
 
 // NewDgraphClient creates a new Dgraph for interacting with the Dgraph store connected to in
@@ -188,10 +199,10 @@ type Dgraph struct {
 // in clientDir.
 //
 // The client can be backed by multiple connections (to the same server, or multiple servers in a
-// cluster).  
+// cluster).
 //
-// A single client is thread safe for sharing with multiple go routines (though a single Req 
-// should not be shared unless the go routines negotiate exclusive assess to the Req functions).  
+// A single client is thread safe for sharing with multiple go routines (though a single Req
+// should not be shared unless the go routines negotiate exclusive assess to the Req functions).
 func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, clientDir string) *Dgraph {
 	var clients []protos.DgraphClient
 	for _, conn := range conns {
@@ -205,7 +216,7 @@ func NewDgraphClient(conns []*grpc.ClientConn, opts BatchMutationOptions, client
 func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientDir string) *Dgraph {
 	x.Check(os.MkdirAll(clientDir, 0700))
 	opt := badger.DefaultOptions
-	opt.SyncWrites = false
+	opt.SyncWrites = true // So that checkpoints are persisted immediately.
 	opt.MapTablesTo = table.MemoryMap
 	opt.Dir = clientDir
 	opt.ValueDir = clientDir
@@ -226,13 +237,23 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 		nquads: make(chan nquadOp, opts.Pending*opts.Size),
 		schema: make(chan protos.SchemaUpdate, opts.Pending*opts.Size),
 		alloc:  alloc,
+		marks:  make(map[string]waterMark),
+		reqs:   make(chan *Req, opts.Pending*2),
+
+		// length includes opts.Pending for makeRequests, another two for makeSchemaRequests and
+		// 	batchNquads.
+		che: make(chan error, opts.Pending+2),
 	}
 
+	if opts.MaxRetries == 0 {
+		d.opts.MaxRetries = DefaultOptions.MaxRetries
+	}
+
+	go d.batchNquads()
+
 	for i := 0; i < opts.Pending; i++ {
-		d.wg.Add(1)
 		go d.makeRequests()
 	}
-	d.wg.Add(1)
 	go d.makeSchemaRequests()
 
 	rand.Seed(time.Now().Unix())
@@ -270,7 +291,6 @@ func (d *Dgraph) batchSync() {
 			}
 		}
 		loop++
-		//fmt.Printf("Writing batch of size: %v\n", len(entries))
 
 		for _, e := range entries {
 			// Atmost 10 bytes are needed for uvarint encoding
@@ -305,9 +325,10 @@ func (d *Dgraph) printCounters() {
 	}
 }
 
-func (d *Dgraph) request(req *Req) {
+func (d *Dgraph) request(req *Req) error {
 	counter := atomic.AddUint64(&d.mutations, 1)
 	factor := time.Second
+	var retries uint32
 RETRY:
 	_, err := d.dc[rand.Intn(len(d.dc))].Run(context.Background(), &req.gr)
 	if err != nil {
@@ -321,29 +342,38 @@ RETRY:
 		if factor < 256*time.Second {
 			factor = factor * 2
 		}
+		if retries >= d.opts.MaxRetries {
+			atomic.CompareAndSwapInt32(&d.retriesExceeded, 0, 1)
+			return ErrMaxTries
+		}
+		retries++
 		goto RETRY
 	}
-	req.reset()
+
+	// Mark watermarks as done.
+	if req.line != 0 && req.mark != nil {
+		atomic.AddUint64(&d.rdfs, uint64(req.size()))
+		req.mark.Ch <- x.Mark{Index: req.line, Done: true}
+	}
+	return nil
 }
 
+// makeRequests can receive requests from batchNquads or directly from BatchSetWithMark.
+// It doesn't need to batch the requests anymore. Batching is already done for it by the
+// caller functions.
 func (d *Dgraph) makeRequests() {
-	req := new(Req)
-
-	for n := range d.nquads {
-		if n.op == SET {
-			req.Set(n.e)
-		} else if n.op == DEL {
-			req.Delete(n.e)
+	for req := range d.reqs {
+		if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+			d.che <- ErrMaxTries
+			return
 		}
-		if req.size() == d.opts.Size {
-			d.request(req)
+
+		if err := d.request(req); err != nil {
+			d.che <- err
+			return
 		}
 	}
-
-	if req.size() > 0 {
-		d.request(req)
-	}
-	d.wg.Done()
+	d.che <- nil
 }
 
 func (d *Dgraph) makeSchemaRequests() {
@@ -357,9 +387,14 @@ LOOP:
 			}
 			req.AddSchema(s)
 		default:
+			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+				d.che <- ErrMaxTries
+				return
+			}
 			start := time.Now()
 			if req.size() > 0 {
 				d.request(req)
+				req = new(Req)
 			}
 			elapsedMillis := time.Since(start).Seconds() * 1e3
 			if elapsedMillis < 10 {
@@ -371,7 +406,34 @@ LOOP:
 	if req.size() > 0 {
 		d.request(req)
 	}
-	d.wg.Done()
+	d.che <- nil
+}
+
+// Used to batch the nquads into Req of size given by user and send to d.reqs channel.
+func (d *Dgraph) batchNquads() {
+	req := new(Req)
+	for n := range d.nquads {
+		if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+			d.che <- ErrMaxTries
+			return
+		}
+
+		if n.op == SET {
+			req.Set(n.e)
+		} else if n.op == DEL {
+			req.Delete(n.e)
+		}
+		if req.size() == d.opts.Size {
+			d.reqs <- req
+			req = new(Req)
+		}
+	}
+
+	if req.size() > 0 {
+		d.reqs <- req
+	}
+	close(d.reqs)
+	d.che <- nil
 }
 
 // BatchSet adds Edge e as a set to the current batch mutation.  Once added, the client will apply
@@ -379,11 +441,50 @@ LOOP:
 // to one of the batches as specified in d's BatchMutationOptions.  If that batch fills, it
 // eventually flushes.  But there is no guarantee of delivery before BatchFlush() is called.
 func (d *Dgraph) BatchSet(e Edge) error {
-	d.nquads <- nquadOp{
+	nq := nquadOp{
 		e:  e,
 		op: SET,
 	}
-	atomic.AddUint64(&d.rdfs, 1)
+L:
+	for {
+		select {
+		case d.nquads <- nq:
+			break L
+		default:
+			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+				return ErrMaxTries
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	return nil
+}
+
+// BatchSetWithMark takes a Req which has a batch of edges. It accepts a file to which the edges
+// belong and also the line number of the last line that the batch contains. This is used by the
+// dgraphloader to do checkpointing so that in case the loader crashes, we can skip the lines
+// which the server has already processed. Most users would only need BatchSet which does the
+// batching automatically.
+func (d *Dgraph) BatchSetWithMark(r *Req, file string, line uint64) error {
+	sm := d.marks[file]
+	if sm.mark != nil && line != 0 {
+		r.mark = sm.mark
+		r.line = line
+		sm.mark.Ch <- x.Mark{Index: line}
+	}
+
+L:
+	for {
+		select {
+		case d.reqs <- r:
+			break L
+		default:
+			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+				return ErrMaxTries
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
 	return nil
 }
 
@@ -392,9 +493,21 @@ func (d *Dgraph) BatchSet(e Edge) error {
 // be added to one of the batches as specified in d's BatchMutationOptions.  If that batch fills,
 // it eventually flushes.  But there is no guarantee of delivery before BatchFlush() is called.
 func (d *Dgraph) BatchDelete(e Edge) error {
-	d.nquads <- nquadOp{
+	nq := nquadOp{
 		e:  e,
 		op: DEL,
+	}
+L:
+	for {
+		select {
+		case d.nquads <- nq:
+			break L
+		default:
+			if atomic.LoadInt32(&d.retriesExceeded) == 1 {
+				return ErrMaxTries
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
 	atomic.AddUint64(&d.rdfs, 1)
 	return nil
@@ -412,16 +525,43 @@ func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 	return nil
 }
 
-// BatchFlush waits for all pending requests to complete. It should always be called after all
-// BatchSet and BatchDeletes have been called.  Calling BatchFlush ends the client session and
-// will cause a panic if further AddSchema, BatchSet or BatchDelete functions are called.
-func (d *Dgraph) BatchFlush() {
-	close(d.nquads)
-	close(d.schema)
-	d.wg.Wait()
+func (d *Dgraph) stopTickers() {
 	if d.ticker != nil {
 		d.ticker.Stop()
 	}
+	if d.checkpointTicker != nil {
+		d.checkpointTicker.Stop()
+	}
+}
+
+// BatchFlush waits for all pending requests to complete. It should always be called after all
+// BatchSet and BatchDeletes have been called.  Calling BatchFlush ends the client session and
+// will cause a panic if further AddSchema, BatchSet or BatchDelete functions are called.
+func (d *Dgraph) BatchFlush() error {
+	close(d.nquads)
+	close(d.schema)
+	for i := 0; i < d.opts.Pending+2; i++ {
+		select {
+		case err := <-d.che:
+			if err != nil {
+				// To signal other go-routines to stop.
+				d.stopTickers()
+				return err
+			}
+		}
+	}
+
+	// After we have received response from server and sent the marks for completion,
+	// we need to wait for all of them to be processed.
+	for _, wm := range d.marks {
+		for wm.mark.WaitingFor() {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	// Write final checkpoint before stopping.
+	d.writeCheckpoint()
+	d.stopTickers()
+	return nil
 }
 
 // Run runs the request in req and returns with the completed response from the server.  Calling
@@ -442,11 +582,11 @@ func (d *Dgraph) BatchFlush() {
 // - N : Slice of *protos.Node returned by the query (Note: protos.Node not client.Node).
 //
 // There is an N[i], with Attribute "_root_", for each named query block in the query added to req.
-// The N[i] also have a slice of nodes, N[i].Children each with Attribute equal to the query name, 
-// for every answer to that query block.  From there, the Children represent nested blocks in the 
+// The N[i] also have a slice of nodes, N[i].Children each with Attribute equal to the query name,
+// for every answer to that query block.  From there, the Children represent nested blocks in the
 // query, the Attribute is the edge followed and the Properties are the scalar edges.
 //
-// Print a response with 
+// Print a response with
 // 	"github.com/gogo/protobuf/proto"
 // 	...
 // 	req.SetQuery(`{
@@ -455,7 +595,7 @@ func (d *Dgraph) BatchFlush() {
 //			friend {
 // 				name
 //			}
-//		}	
+//		}
 //	}`)
 // 	...
 // 	resp, err := dgraphClient.Run(context.Background(), &req)
@@ -524,7 +664,8 @@ func (d *Dgraph) NodeUid(uid uint64) Node {
 // exist as labelled nodes in Dgraph. Blank nodes are used as labels client side for loading and
 // linking nodes correctly.  If the label is new in this session a new UID is allocated and
 // assigned to the label.  If the label has already been assigned, the corresponding Node
-// is returned.
+// is returned.  If the empty string is given as the argument, a new node is allocated and returned
+// but no map is stored, so every call to NodeBlank("") returns a new node.
 func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 	if len(varname) == 0 {
 		d.alloc.Lock()

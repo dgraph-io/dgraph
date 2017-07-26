@@ -348,6 +348,32 @@ func TestGetUID(t *testing.T) {
 		js)
 }
 
+func TestGetUIDInDebugMode(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(0x01)) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
+					_uid_
+					name
+				}
+			}
+		}
+	`
+	ctx := defaultContext()
+	ctx = context.WithValue(ctx, "debug", "true")
+	js, err := processToFastJsonReqCtx(t, query, ctx)
+	require.NoError(t, err)
+	require.JSONEq(t,
+		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+
+}
+
 func TestReturnUids(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -989,6 +1015,30 @@ func TestQueryVarValOrderDob(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"name":"Andrea", "dob":"1901-01-15T00:00:00Z"},{"name":"Daryl Dixon", "dob":"1909-01-10T00:00:00Z"},{"name":"Glenn Rhee", "dob":"1909-05-05T00:00:00Z"},{"name":"Rick Grimes", "dob":"1910-01-02T00:00:00Z"}]}`,
 		js)
+}
+
+func TestQueryVarValOrderError(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: uid( 1)) {
+				friend {
+					n as name
+				}
+			}
+
+			me(func: uid(n), orderdesc: n) {
+				name
+			}
+		}
+	`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
+	require.Contains(t, err.Error(), "Cannot sort attribute n of type object.")
 }
 
 func TestQueryVarValOrderDesc(t *testing.T) {
@@ -8120,6 +8170,7 @@ func TestPBUnmarshalToStruct3(t *testing.T) {
 	pb := processToPB(t, query, map[string]string{}, false)
 	var r res
 	err := client.Unmarshal(pb, &r)
+	err = client.Unmarshal(pb, &r)
 	require.NoError(t, err)
 	require.NotEmpty(t, r.Root[0].Location)
 	require.Equal(t, 4, len(r.Root))
@@ -8225,6 +8276,69 @@ func TestPBUnmarshalToStruct6(t *testing.T) {
 	require.Equal(t, 4, len(r.Me))
 	require.NotZero(t, r.Me[0].Name)
 	require.NotZero(t, r.Me[0].Dob)
+}
+
+func TestPBUnmarshalToStruct7(t *testing.T) {
+	populateGraph(t)
+
+	type Person struct {
+		Name string
+		Dob  time.Time
+	}
+
+	type res struct {
+		Me []Person
+	}
+
+	query := `
+		{
+			var(func: uid(1)) {
+				f as friend {
+					n as dob
+				}
+			}
+
+			Me(func: uid(f), orderasc: val(n)) {
+				Name: name
+				Dob: dob
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, true)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	// Lets unmarshal again, this should clear r first and then write to it.
+	err = client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(r.Me))
+}
+
+func TestPBUnmarshalToStruct8(t *testing.T) {
+	type Person struct {
+		Name  string `dgraph:"name"`
+		Age   int    `dgraph:"age"`
+		Birth string
+	}
+
+	type res struct {
+		Root [2]Person `dgraph:"me"`
+	}
+
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(1, 23, 31)) {
+				name
+				age
+				Birth: dob
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.Error(t, err)
 }
 
 func TestPBUnmarshalError1(t *testing.T) {

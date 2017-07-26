@@ -1559,105 +1559,166 @@ type facetRes struct {
 	orderdesc  bool
 }
 
-func parseFacets(it *lex.ItemIterator) (facetRes, error) {
-	var res facetRes
-	facets := new(Facets)
-	facetVar := make(map[string]string)
-	var varName, orderkey, orderby string
-	var orderdesc bool
-	peeks, err := it.Peek(1)
-	expectArg := true
-	if err == nil && peeks[0].Typ == itemLeftRound {
-		it.Next() // ignore '('
-		// parse comma separated strings (a1,b1,c1)
-		done := false
-		numTokens := 0
-		for it.Next() {
-			numTokens++
-			item := it.Item()
-			if item.Typ == itemRightRound { // done
-				if varName == "" {
-					done = true
-				}
-				break
-			} else if item.Typ == itemName {
-				if !expectArg {
-					return res, x.Errorf("Expected a comma but got %v", item.Val)
-				}
-				peekIt, err := it.Peek(1)
-				if err != nil {
-					return res, err
-				}
-				if peekIt[0].Val == "as" {
-					varName = it.Item().Val
-					it.Next() // Skip the "as"
-					continue
-				} else if peekIt[0].Typ == itemColon {
-					// this is an order key
-					orderby = it.Item().Val
-					if orderby != "orderasc" && orderby != "orderdesc" {
-						return res, x.Errorf("Expected orderasc or orderdesc before : in @facets. Got: ", orderby)
-					}
-					orderdesc = orderby == "orderdesc"
-					it.Next()
-					continue
-				}
-				val := collectName(it, item.Val)
-				facets.Keys = append(facets.Keys, val)
-				if varName != "" {
-					facetVar[val] = varName
-				}
-				if orderby != "" {
-					if orderkey != "" {
-						return res, x.Errorf("Only one facet key can be used for ordering.")
-					}
-					orderkey = val
-				}
-				orderby = ""
-				varName = ""
-				expectArg = false
-			} else if item.Typ == itemComma {
-				if expectArg || varName != "" {
-					return res, x.Errorf("Expected Argument but got comma.")
-				}
-				expectArg = true
-				continue
-			} else {
-				break
-			}
+func parseFacets(it *lex.ItemIterator) (res facetRes, err error) {
+	res, ok, err := tryParseFacetList(it)
+	if err != nil || ok {
+		return res, err
+	}
+
+	filterTree, err := parseFilter(it)
+	res.ft = filterTree
+	return res, err
+}
+
+type facetItem struct {
+	facetName string
+	varName   string
+	ordered   bool
+	orderdesc bool
+}
+
+// If err != nil, an error happened, abandon parsing.  If err == nil && parseOk == false, the
+// attempt to parse failed, no data was consumed, and there might be a valid alternate parse with a
+// different function.
+func tryParseFacetItem(it *lex.ItemIterator) (res facetItem, parseOk bool, err error) {
+	// We parse this:
+	// [{orderdesc|orderasc}:] [varname as] facetName
+
+	savePos := it.Save()
+	defer func() {
+		if err == nil && !parseOk {
+			it.Restore(savePos)
 		}
-		if !done {
-			// this is not (facet1, facet2, facet3)
-			// try parsing filters. (eq(facet1, val1) AND eq(facet2, val2)...)
-			// revert back tokens
-			for i := 0; i < numTokens+1; i++ { // +1 for starting '('
-				it.Prev()
+	}()
+
+	item, ok := tryParseItemType(it, itemName)
+	if !ok {
+		return res, false, nil
+	}
+	isOrderasc := item.Val == "orderasc"
+	if isOrderasc || item.Val == "orderdesc" {
+		if _, ok := tryParseItemType(it, itemColon); ok {
+			res.ordered = true
+			res.orderdesc = !isOrderasc
+			// Step past colon.
+			item, ok = tryParseItemType(it, itemName)
+			if !ok {
+				return res, false, x.Errorf("Expected name after colon")
 			}
-			filterTree, err := parseFilter(it)
-			res.ft = filterTree
-			return res, err
 		}
 	}
-	if len(facets.Keys) == 0 {
+
+	// We've possibly set ordered, orderdesc, and now we have consumed another item, which is a
+	// name.
+	name1 := item.Val
+
+	// Now try to consume "as".
+	if !trySkipItemVal(it, "as") {
+		name1 = collectName(it, name1)
+		res.facetName = name1
+		return res, true, nil
+	}
+	item, ok = tryParseItemType(it, itemName)
+	if !ok {
+		return res, false, x.Errorf("Expected name in facet list")
+	}
+
+	res.facetName = collectName(it, item.Val)
+	res.varName = name1
+	return res, true, nil
+}
+
+// If err != nil, an error happened, abandon parsing.  If err == nil && parseOk == false, the
+// attempt to parse failed, but there might be a valid alternate parse with a different function,
+// such as parseFilter.
+func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err error) {
+	savePos := it.Save()
+	defer func() {
+		if err == nil && !parseOk {
+			it.Restore(savePos)
+		}
+	}()
+
+	// Skip past '('
+	if _, ok := tryParseItemType(it, itemLeftRound); !ok {
+		it.Restore(savePos)
+		var facets Facets
 		facets.AllKeys = true
-	} else {
-		sort.Slice(facets.Keys, func(i, j int) bool {
-			return facets.Keys[i] < facets.Keys[j]
-		})
-		// deduplicate facets
-		out := facets.Keys[:0]
-		flen := len(facets.Keys)
-		for i := 1; i < flen; i++ {
-			if facets.Keys[i-1] == facets.Keys[i] {
-				continue
-			}
-			out = append(out, facets.Keys[i-1])
-		}
-		out = append(out, facets.Keys[flen-1])
-		facets.Keys = out
+		res.f = &facets
+		res.vmap = make(map[string]string)
+		return res, true, nil
 	}
-	res.f, res.vmap, res.facetOrder, res.orderdesc = facets, facetVar, orderkey, orderdesc
-	return res, nil
+
+	facetVar := make(map[string]string)
+	var facets Facets
+	var orderdesc bool
+	var orderkey string
+
+	if _, ok := tryParseItemType(it, itemRightRound); ok {
+		// @facets() just parses to an empty set of facets.
+		res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
+		return res, true, nil
+	}
+
+	for {
+		// We've just consumed a leftRound or a comma.
+
+		// Parse a facet item.
+		facetItem, ok, err := tryParseFacetItem(it)
+		if !ok || err != nil {
+			return res, ok, err
+		}
+
+		// Combine the facetitem with our result.
+		{
+			if facetItem.varName != "" {
+				if _, has := facetVar[facetItem.facetName]; has {
+					return res, false, x.Errorf("Duplicate variable mappings for facet %v",
+						facetItem.facetName)
+				}
+				facetVar[facetItem.facetName] = facetItem.varName
+			}
+			facets.Keys = append(facets.Keys, facetItem.facetName)
+			if facetItem.ordered {
+				if orderkey != "" {
+					return res, false, x.Errorf("Invalid use of orderasc/orderdesc in facets")
+				}
+				orderdesc = facetItem.orderdesc
+				orderkey = facetItem.facetName
+			}
+		}
+
+		// Now what?  Either close-paren or a comma.
+		if _, ok := tryParseItemType(it, itemRightRound); ok {
+			sort.Slice(facets.Keys, func(i, j int) bool {
+				return facets.Keys[i] < facets.Keys[j]
+			})
+			// deduplicate facets
+			out := facets.Keys[:0]
+			flen := len(facets.Keys)
+			for i := 1; i < flen; i++ {
+				if facets.Keys[i-1] == facets.Keys[i] {
+					continue
+				}
+				out = append(out, facets.Keys[i-1])
+			}
+			out = append(out, facets.Keys[flen-1])
+			facets.Keys = out
+			res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
+			return res, true, nil
+		}
+		if item, ok := tryParseItemType(it, itemComma); !ok {
+			if len(facets.Keys) < 2 {
+				// We have only consumed ``'@facets' '(' <facetItem>`, which means parseFilter might
+				// succeed. Return no-parse, no-error.
+				return res, false, nil
+			}
+			// We've consumed `'@facets' '(' <facetItem> ',' <facetItem>`, so this is definitely
+			// not a filter.  Return an error.
+			return res, false, x.Errorf(
+				"Expected ',' or ')' in facet list", item.Val)
+		}
+	}
 }
 
 // parseGroupby parses the groupby directive.
@@ -2457,4 +2518,23 @@ func collectName(it *lex.ItemIterator, val string) string {
 		}
 	}
 	return val
+}
+
+// Steps the parser.
+func tryParseItemType(it *lex.ItemIterator, typ lex.ItemType) (lex.Item, bool) {
+	item, ok := it.PeekOne()
+	if !ok || item.Typ != typ {
+		return lex.Item{}, false
+	}
+	it.Next()
+	return item, true
+}
+
+func trySkipItemVal(it *lex.ItemIterator, val string) bool {
+	item, ok := it.PeekOne()
+	if !ok || item.Val != val {
+		return false
+	}
+	it.Next()
+	return true
 }

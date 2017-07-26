@@ -84,7 +84,6 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 	}
 	posting.DeleteCountIndex(ctx, attr)
 	if rebuild {
-		// Remove reverse edges
 		if err := posting.RebuildCountIndex(ctx, attr); err != nil {
 			return err
 		}

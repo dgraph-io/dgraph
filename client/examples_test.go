@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"os"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/x"
@@ -56,6 +57,8 @@ func ExampleReq_Set() {
 
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
 	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	// Create new request
@@ -92,8 +95,9 @@ func ExampleReq_Set() {
 	// programs usually use Umarshal to unpack query responses to a struct (or the protocol
 	// buffer can be accessed with resp.N)
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
+
 	err = dgraphClient.Close()
-	x.Check(err)
+	x.Check(err)	
 }
 
 func ExampleReq_Delete() {
@@ -103,6 +107,8 @@ func ExampleReq_Delete() {
 
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
 	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	// Create new request
@@ -172,6 +178,8 @@ func ExampleDgraph_BatchSet() {
 	}
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
 	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, bmOpts, clientDir)
 
 	// Create a node for person1 (the blank node label "person1" exists
@@ -202,6 +210,8 @@ func ExampleEdge_AddFacet() {
 
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
 	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
@@ -309,6 +319,8 @@ func ExampleReq_SetQuery() {
 
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
 	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
@@ -369,6 +381,8 @@ func ExampleReq_SetQueryWithVariables() {
 
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
 	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
@@ -432,6 +446,8 @@ func ExampleDgraph_NodeUidVar() {
 
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
 	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
@@ -500,6 +516,8 @@ func ExampleEdge_SetValueBytes() {
 
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
 	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
@@ -560,6 +578,8 @@ func ExampleUnmarshal() {
 
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
 	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}
@@ -633,6 +653,8 @@ func ExampleUnmarshal_facetsUpdate() {
 
 	clientDir, err := ioutil.TempDir("", "client_")
 	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
 	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
 
 	req := client.Req{}

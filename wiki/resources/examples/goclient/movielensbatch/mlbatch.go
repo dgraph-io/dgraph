@@ -38,7 +38,7 @@ go build mlbatch.go
 
 dgraph 
 
-- run in a director with the movielens data unpacked
+- run in a directory with the movielens data unpacked
 
 ./mlbatch
 
