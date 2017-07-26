@@ -241,12 +241,6 @@ func SchemaPrefix() []byte {
 	return buf
 }
 
-func ParseAttr(key []byte) string {
-	sz := int(binary.BigEndian.Uint16(key[1:3]))
-	k := key[3:]
-	return string(k[:sz])
-}
-
 func Parse(key []byte) *ParsedKey {
 	p := &ParsedKey{}
 
