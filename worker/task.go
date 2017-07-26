@@ -987,22 +987,24 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Re
 		tr.LazyPrintf("Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 	}
 
-	var reply *protos.Result
 	x.AssertTruef(groups().ServesGroup(gid),
 		"attr: %q groupId: %v Request sent to wrong server.", q.Attr, gid)
 
-	c := make(chan error, 1)
+	type reply struct {
+		result *protos.Result
+		err    error
+	}
+	c := make(chan reply, 1)
 	go func() {
-		var err error
-		reply, err = processTask(ctx, q, gid)
-		c <- err
+		result, err := processTask(ctx, q, gid)
+		c <- reply{result, err}
 	}()
 
 	select {
 	case <-ctx.Done():
-		return reply, ctx.Err()
-	case err := <-c:
-		return reply, err
+		return nil, ctx.Err()
+	case reply := <-c:
+		return reply.result, reply.err
 	}
 }
 
