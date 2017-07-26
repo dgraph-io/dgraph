@@ -362,8 +362,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				continue
 			}
 			if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
-				// TODO - Check if we need facets here.
-				// TODO - Check if we can avoid the final filtering step.
 				filteredRes = append(filteredRes, &result{
 					uid: q.UidList.Uids[i],
 				})
