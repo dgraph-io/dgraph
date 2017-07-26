@@ -43,7 +43,7 @@ curl -X POST  -d 'mutation {
 echo -e "\nBuilding and running dgraphloader."
 pushd cmd/dgraphloader &> /dev/null
 # Delete client directory to clear checkpoints.
-rm -r c
+rm -rf c
 go build .
 ./dgraphloader -r $benchmark/goldendata.rdf.gz -x true
 popd &> /dev/null
