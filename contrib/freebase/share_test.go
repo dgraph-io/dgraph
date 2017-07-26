@@ -19,6 +19,7 @@ package testing
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -32,6 +33,15 @@ type Res struct {
 	Code    string            `json:"code"`
 	Message string            `json:"message"`
 	Uids    map[string]string `json:"uids"`
+}
+
+type Share struct {
+	Share     string `json:"_share_"`
+	ShareHash string `json:"_share_hash_"`
+}
+
+type Res2 struct {
+	Root []Share `json:"me"`
 }
 
 func TestShare(t *testing.T) {
@@ -48,4 +58,28 @@ func TestShare(t *testing.T) {
 	var r Res
 	json.Unmarshal(b, &r)
 	require.NotNil(t, r.Uids["share"])
+
+	q2 := fmt.Sprintf(`
+	{
+		me(func: uid(%s)) {
+			_share_
+			_share_hash_
+		}
+	}
+	`, r.Uids["share"])
+
+	dgraphServer = "http://localhost:8080/query"
+	req, err = http.NewRequest("POST", dgraphServer, strings.NewReader(q2))
+	resp, err = client.Do(req)
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var r2 Res2
+	json.Unmarshal(b, &r2)
+	require.Equal(t, 1, len(r2.Root))
+	require.Equal(t, q, r2.Root[0].Share)
+	require.NotNil(t, r2.Root[0].ShareHash)
+
 }
