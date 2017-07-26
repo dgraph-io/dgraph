@@ -277,6 +277,11 @@ func (e *Edge) setValueString(val string) error {
 		return err
 	}
 
+	v, err := types.ObjectValue(types.StringID, val)
+	if err != nil {
+		return err
+	}
+	e.nq.ObjectValue = v
 	e.nq.ObjectType = int32(types.StringID)
 	return nil
 }
@@ -287,15 +292,7 @@ func (e *Edge) setValueString(val string) error {
 // edge and type are left unchanged and ErrConnected is returned.  The string must
 // escape " with \, otherwise the edge and type are left unchanged and an error returned.
 func (e *Edge) SetValueString(val string) error {
-	if err := e.setValueString(val); err != nil {
-		return err
-	}
-	v, err := types.ObjectValue(types.StringID, val)
-	if err != nil {
-		return err
-	}
-	e.nq.ObjectValue = v
-	return nil
+	return e.setValueString(val)
 }
 
 // SetValueStringWithLang has same behavior as SetValueString along with the ability to set the
@@ -304,11 +301,6 @@ func (e *Edge) SetValueStringWithLang(val string, lang string) error {
 	if err := e.setValueString(val); err != nil {
 		return err
 	}
-	v, err := types.ObjectValue(types.DefaultID, val)
-	if err != nil {
-		return err
-	}
-	e.nq.ObjectValue = v
 	e.nq.Lang = lang
 	return nil
 }
