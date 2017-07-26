@@ -287,7 +287,7 @@ export const getSharedQuery = shareId => {
         Accept: "application/json"
       },
       body: `{
-          query(id: ${shareId}) {
+          query(func: uid(${shareId})) {
               _share_
           }
       }`
