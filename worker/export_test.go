@@ -89,10 +89,10 @@ func initTestExport(t *testing.T, schemaStr string) (string, *badger.KV) {
 	Init(ps)
 	val, err := (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
 	require.NoError(t, err)
-	ps.Set(x.SchemaKey("friend"), val)
+	ps.Set(x.SchemaKey("friend"), val, 0x00)
 	val, err = (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
 	require.NoError(t, err)
-	ps.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
+	ps.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val, 0x00)
 	populateGraphExport(t)
 
 	return dir, ps
@@ -257,50 +257,44 @@ func generateBenchValues() []kv {
 	benchItems := []kv{
 		{
 			prefix: "testString",
-			list: &protos.PostingList{
-				Postings: []*protos.Posting{{
-					ValType: protos.Posting_STRING,
-					Value:   []byte("手機裡的眼淚"),
-					Uid:     uint64(65454),
-					Facets:  fac,
-				}},
-			},
+			postings: []*protos.Posting{{
+				ValType: protos.Posting_STRING,
+				Value:   []byte("手機裡的眼淚"),
+				Uid:     uint64(65454),
+				Facets:  fac,
+			}},
 		},
 		{prefix: "testGeo",
-			list: &protos.PostingList{
-				Postings: []*protos.Posting{{
-					ValType: protos.Posting_GEO,
-					Value:   geoData,
-					Uid:     uint64(65454),
-					Facets:  fac,
-				}},
+			postings: []*protos.Posting{{
+				ValType: protos.Posting_GEO,
+				Value:   geoData,
+				Uid:     uint64(65454),
+				Facets:  fac,
 			}},
+		},
 		{prefix: "testPassword",
-			list: &protos.PostingList{
-				Postings: []*protos.Posting{{
-					ValType: protos.Posting_PASSWORD,
-					Value:   []byte("test"),
-					Uid:     uint64(65454),
-					Facets:  fac,
-				}},
+			postings: []*protos.Posting{{
+				ValType: protos.Posting_PASSWORD,
+				Value:   []byte("test"),
+				Uid:     uint64(65454),
+				Facets:  fac,
 			}},
+		},
 		{prefix: "testInt",
-			list: &protos.PostingList{
-				Postings: []*protos.Posting{{
-					ValType: protos.Posting_INT,
-					Value:   byteInt,
-					Uid:     uint64(65454),
-					Facets:  fac,
-				}},
+			postings: []*protos.Posting{{
+				ValType: protos.Posting_INT,
+				Value:   byteInt,
+				Uid:     uint64(65454),
+				Facets:  fac,
 			}},
+		},
 		{prefix: "testUid",
-			list: &protos.PostingList{
-				Postings: []*protos.Posting{{
-					ValType: protos.Posting_INT,
-					Uid:     uint64(65454),
-					Facets:  fac,
-				}},
+			postings: []*protos.Posting{{
+				ValType: protos.Posting_INT,
+				Uid:     uint64(65454),
+				Facets:  fac,
 			}},
+		},
 	}
 
 	return benchItems

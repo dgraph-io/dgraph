@@ -37,9 +37,8 @@ const schemaStr = `
 name:string @index .
 `
 
-func uids(pl *protos.PostingList) []uint64 {
+func uids(sl []byte) []uint64 {
 	var u []uint64
-	sl := pl.Uids
 	for len(sl) > 0 {
 		u = append(u, binary.BigEndian.Uint64(sl[0:8]))
 		sl = sl[8:]
@@ -152,10 +151,8 @@ func TestTokensTable(t *testing.T) {
 	var item badger.KVItem
 	err = ps.Get(key, &item)
 	x.Check(err)
-	slice := item.Value()
 
-	var pl protos.PostingList
-	x.Check(pl.Unmarshal(slice))
+	UnmarshalPostingList(&item)
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 
@@ -163,8 +160,7 @@ func TestTokensTable(t *testing.T) {
 
 	err = ps.Get(key, &item)
 	x.Check(err)
-	slice = item.Value()
-	x.Check(pl.Unmarshal(slice))
+	UnmarshalPostingList(&item)
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 	deletePl(t)
@@ -247,8 +243,8 @@ func TestRebuildIndex(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Create some fake wrong entries for data store.
-	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"))
-	ps.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"))
+	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"), 0x00)
+	ps.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"), 0x00)
 
 	require.NoError(t, DeleteIndex(context.Background(), "name"))
 	require.NoError(t, RebuildIndex(context.Background(), "name"))
@@ -263,7 +259,7 @@ func TestRebuildIndex(t *testing.T) {
 	pk := x.ParsedKey{Attr: "name"}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
-	var idxVals []*protos.PostingList
+	var idxUids [][]byte
 	for it.Seek(prefix); it.Valid(); it.Next() {
 		item := it.Item()
 		key := item.Key()
@@ -271,17 +267,16 @@ func TestRebuildIndex(t *testing.T) {
 			break
 		}
 		idxKeys = append(idxKeys, string(key))
-		pl := new(protos.PostingList)
-		require.NoError(t, pl.Unmarshal(item.Value()))
-		idxVals = append(idxVals, pl)
+		_, uids := UnmarshalPostingList(item)
+		idxUids = append(idxUids, uids)
 	}
 	require.Len(t, idxKeys, 2)
-	require.Len(t, idxVals, 2)
+	require.Len(t, idxUids, 2)
 	require.EqualValues(t, idxKeys[0], x.IndexKey("name", "\x01david"))
 	require.EqualValues(t, idxKeys[1], x.IndexKey("name", "\x01michonne"))
 
-	uids1 := uids(idxVals[0])
-	uids2 := uids(idxVals[1])
+	uids1 := uids(idxUids[0])
+	uids2 := uids(idxUids[1])
 	require.Len(t, uids1, 1)
 	require.Len(t, uids2, 1)
 	require.EqualValues(t, 20, uids1[0])
@@ -316,23 +311,19 @@ func TestRebuildReverseEdges(t *testing.T) {
 	pk := x.ParsedKey{Attr: "friend"}
 	prefix := pk.ReversePrefix()
 	var revKeys []string
-	var revVals []*protos.PostingList
-	for it.Seek(prefix); it.Valid(); it.Next() {
+	var revUids [][]byte
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		item := it.Item()
-		key, value := item.Key(), item.Value()
-		if !bytes.HasPrefix(key, prefix) {
-			break
-		}
+		key := item.Key()
 		revKeys = append(revKeys, string(key))
-		pl := new(protos.PostingList)
-		require.NoError(t, pl.Unmarshal(value))
-		revVals = append(revVals, pl)
+		_, uids := UnmarshalPostingList(item)
+		revUids = append(revUids, uids)
 	}
 	require.Len(t, revKeys, 2)
-	require.Len(t, revVals, 2)
+	require.Len(t, revUids, 2)
 
-	uids0 := uids(revVals[0])
-	uids1 := uids(revVals[1])
+	uids0 := uids(revUids[0])
+	uids1 := uids(revUids[1])
 	require.Len(t, uids0, 2)
 	require.Len(t, uids1, 1)
 	require.EqualValues(t, 1, uids0[0])

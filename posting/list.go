@@ -60,7 +60,8 @@ const (
 	// Del means delete in mutation layer. It contributes -1 in Length.
 	Del uint32 = 0x02
 	// Add means add new element in mutation layer. It contributes 1 in Length.
-	Add uint32 = 0x03
+	Add            uint32 = 0x03
+	BitUidPostings byte   = 0x01
 )
 
 type List struct {
@@ -70,6 +71,7 @@ type List struct {
 	ghash         uint64
 	plist         *protos.PostingList
 	mlayer        []*protos.Posting // mutations
+	uids          []byte
 	lastCompact   time.Time
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount      int32
@@ -78,6 +80,13 @@ type List struct {
 
 	water   *x.WaterMark
 	pending []uint64
+}
+
+func (l *List) immutableLayer() []byte {
+	if len(l.uids) > 0 {
+		return l.uids
+	}
+	return l.plist.Uids
 }
 
 func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
@@ -93,10 +102,10 @@ func (l *List) decr() {
 		return
 	}
 
-	for _, p := range l.plist.Postings {
-		postingPool.Put(p)
-	}
-	if l.plist != emptyList {
+	if l.plist != emptyList && l.plist != nil {
+		for _, p := range l.plist.Postings {
+			postingPool.Put(p)
+		}
 		l.plist.Postings = l.plist.Postings[:0]
 		l.plist.Uids = l.plist.Uids[:0]
 		postingListPool.Put(l.plist)
@@ -108,8 +117,11 @@ func (l *List) decr() {
 // Expensive, so don't run it carefully.
 func (l *List) calculateSize() uint32 {
 	sz := int(unsafe.Sizeof(l))
-	sz += l.plist.Size()
+	if l.plist != nil {
+		sz += l.plist.Size()
+	}
 	sz += cap(l.key)
+	sz += cap(l.uids)
 	sz += cap(l.mlayer) * 8
 	sz += cap(l.pending) * 8
 	return uint32(sz)
@@ -134,7 +146,8 @@ var listPool = sync.Pool{
 }
 
 type PIterator struct {
-	pl         *protos.PostingList // Pointer to PostingList
+	postings   []*protos.Posting
+	uids       []byte
 	uidPosting *protos.Posting
 	uidx       int // index of UIDs
 	pidx       int // index of postings
@@ -143,23 +156,25 @@ type PIterator struct {
 	valid      bool
 }
 
-func findUidIndex(pl *protos.PostingList, afterUid uint64) int {
-	ulen := len(pl.Uids) / 8
+func findUidIndex(uids []byte, afterUid uint64) int {
+	ulen := len(uids) / 8
 	return sort.Search(ulen, func(idx int) bool {
 		i := idx * 8
-		uid := binary.BigEndian.Uint64(pl.Uids[i : i+8])
+		uid := binary.BigEndian.Uint64(uids[i : i+8])
 		return afterUid < uid
 	})
 }
 
-func (it *PIterator) Init(pl *protos.PostingList, afterUid uint64) {
-	it.pl = pl
+// Either one of pl or uids would be empty/nil
+func (it *PIterator) Init(postings []*protos.Posting, uids []byte, afterUid uint64) {
+	it.postings = postings
+	it.uids = uids
 	it.uidPosting = &protos.Posting{}
-	it.ulen = len(pl.Uids) / 8
-	it.plen = len(pl.Postings)
-	it.uidx = findUidIndex(pl, afterUid)
+	it.ulen = len(uids) / 8
+	it.plen = len(postings)
+	it.uidx = findUidIndex(uids, afterUid)
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
-		p := pl.Postings[idx]
+		p := postings[idx]
 		return afterUid < p.Uid
 	})
 	if it.uidx < it.ulen {
@@ -180,14 +195,14 @@ func (it *PIterator) Valid() bool {
 
 func (it *PIterator) Posting() *protos.Posting {
 	i := it.uidx * 8
-	uid := binary.BigEndian.Uint64(it.pl.Uids[i : i+8])
+	uid := binary.BigEndian.Uint64(it.uids[i : i+8])
 
 	for it.pidx < it.plen {
-		if it.pl.Postings[it.pidx].Uid > uid {
+		if it.postings[it.pidx].Uid > uid {
 			break
 		}
-		if it.pl.Postings[it.pidx].Uid == uid {
-			return it.pl.Postings[it.pidx]
+		if it.postings[it.pidx].Uid == uid {
+			return it.postings[it.pidx]
 		}
 		it.pidx++
 	}
@@ -219,7 +234,10 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	val := item.Value()
 	x.BytesRead.Add(int64(len(val)))
 
-	// TODO: See if we can avoid Unmarshal here.
+	if item.UserMeta() == BitUidPostings {
+		l.uids = val
+		return l
+	}
 	l.plist = postingListPool.Get().(*protos.PostingList)
 	if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
@@ -374,7 +392,11 @@ func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
 	// Didn't find it in mutable layer. Now check the immutable layer.
 	var uidFound, psame bool
 	var pitr PIterator
-	pitr.Init(l.plist, mpost.Uid-1)
+	if l.plist != nil {
+		pitr.Init(l.plist.Postings, l.plist.Uids, mpost.Uid-1)
+	} else {
+		pitr.Init(nil, l.uids, mpost.Uid-1)
+	}
 	if pitr.Valid() {
 		pp := pitr.Posting()
 		puid := pp.Uid
@@ -492,6 +514,16 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	mpost := newPosting(t)
 	atomic.AddUint32(&l.estimatedSize, uint32(mpost.Size()+16 /* various overhead */))
 
+	var index uint64
+	var gid uint32
+	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
+		index = rv.Index
+		gid = rv.Group
+	}
+	if len(l.pending) > 0 && index > l.pending[0]+1000 {
+		l.syncIfDirty(false)
+	}
+
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
 	//		- If yes, then replace that mutation. Jump to a)
@@ -503,16 +535,14 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	hasMutated := l.updateMutationLayer(mpost)
 	if dur := time.Since(t1); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Postings))
+			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.immutableLayer()))
 		}
 	}
 
 	if hasMutated {
-		var gid uint32
-		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
-			l.water.Ch <- x.Mark{Index: rv.Index}
-			l.pending = append(l.pending, rv.Index)
-			gid = rv.Group
+		if index != 0 {
+			l.water.Ch <- x.Mark{Index: index}
+			l.pending = append(l.pending, index)
 		}
 		// if mutation doesn't come via raft
 		if gid == 0 {
@@ -527,7 +557,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 
 func (l *List) delete(ctx context.Context, attr string) error {
 	l.AssertLock()
-	if l.plist != emptyList {
+	if l.plist != emptyList && l.plist != nil {
 		for _, p := range l.plist.Postings {
 			postingPool.Put(p)
 		}
@@ -536,6 +566,7 @@ func (l *List) delete(ctx context.Context, attr string) error {
 		postingListPool.Put(l.plist)
 	}
 	l.plist = emptyList
+	l.uids = l.uids[:0]
 	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
 	atomic.StoreInt32(&l.deleteAll, 1)
 
@@ -587,7 +618,11 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	var mp, pp *protos.Posting
 	cont := true
 	var pitr PIterator
-	pitr.Init(l.plist, afterUid)
+	if l.plist != nil {
+		pitr.Init(l.plist.Postings, l.plist.Uids, afterUid)
+	} else {
+		pitr.Init(nil, l.uids, afterUid)
+	}
 	for cont {
 		if pitr.Valid() {
 			pp = pitr.Posting()
@@ -628,17 +663,16 @@ func (l *List) length(afterUid uint64) int {
 	l.AssertRLock()
 
 	uidx, midx := 0, 0
-	pl := l.plist
 
 	if afterUid > 0 {
-		uidx = findUidIndex(pl, afterUid)
+		uidx = findUidIndex(l.immutableLayer(), afterUid)
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {
 			mp := l.mlayer[idx]
 			return afterUid < mp.Uid
 		})
 	}
 
-	count := len(pl.Uids)/8 - uidx
+	count := len(l.immutableLayer())/8 - uidx
 	for _, p := range l.mlayer[midx:] {
 		if p.Op == Add {
 			count++
@@ -656,18 +690,25 @@ func (l *List) Length(afterUid uint64) int {
 	return l.length(afterUid)
 }
 
-func doAsyncWrite(key []byte, data []byte, f func(error)) {
+func doAsyncWrite(key []byte, data []byte, uidOnlyPosting bool, f func(error)) {
+	var meta byte
+	if uidOnlyPosting {
+		meta = BitUidPostings
+	}
 	if data == nil {
 		pstore.DeleteAsync(key, f)
 	} else {
-		pstore.SetAsync(key, data, f)
+		pstore.SetAsync(key, data, meta, f)
 	}
 }
 
 func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
+	return l.syncIfDirty(delFromCache)
+}
 
+func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	// deleteAll is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
 	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
@@ -708,22 +749,29 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		return true
 	})
 
-	var data []byte
-	if len(final.Uids) == 0 {
-		// This means we should delete the key from store during SyncIfDirty.
-		data = nil
-	} else {
-		final.Checksum = h.Sum(nil)
-		data, err = final.Marshal()
-		x.Checkf(err, "Unable to marshal posting list")
-	}
-
-	if l.plist != emptyList {
+	if l.plist != emptyList && l.plist != nil {
 		l.plist.Uids = l.plist.Uids[:0]
 		l.plist.Postings = l.plist.Postings[:0]
 		postingListPool.Put(l.plist)
 	}
-	l.plist = final
+
+	var data []byte
+	var uidOnlyPosting bool
+	if len(final.Uids) == 0 {
+		// This means we should delete the key from store during SyncIfDirty.
+		data = nil
+	} else if len(final.Postings) > 0 {
+		final.Checksum = h.Sum(nil)
+		data, err = final.Marshal()
+		x.Checkf(err, "Unable to marshal posting list")
+		l.plist = final
+		l.uids = make([]byte, 0)
+	} else {
+		data = final.Uids
+		l.plist = nil
+		l.uids = final.Uids
+		uidOnlyPosting = true
+	}
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 
 	for {
@@ -751,7 +799,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 			}
 			// Error from badger should be temporary, so we can retry.
 			retries += 1
-			doAsyncWrite(l.key, data, f)
+			doAsyncWrite(l.key, data, uidOnlyPosting, f)
 			return
 		}
 		if l.water != nil {
@@ -763,7 +811,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
-	doAsyncWrite(l.key, data, f)
+	doAsyncWrite(l.key, data, uidOnlyPosting, f)
 	// Now reset the mutation variables.
 	l.pending = make([]uint64, 0, 3)
 	l.mlayer = l.mlayer[:0]

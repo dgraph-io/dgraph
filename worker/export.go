@@ -46,8 +46,9 @@ import (
 const numExportRoutines = 10
 
 type kv struct {
-	prefix string
-	list   *protos.PostingList
+	prefix   string
+	postings []*protos.Posting
+	uids     []byte
 }
 
 type skv struct {
@@ -70,9 +71,8 @@ var rdfTypeMap = map[types.TypeID]string{
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {
-	pl := item.list
 	var pitr posting.PIterator
-	pitr.Init(pl, 0)
+	pitr.Init(item.postings, item.uids, 0)
 	for ; pitr.Valid(); pitr.Next() {
 		p := pitr.Posting()
 		buf.WriteString(item.prefix)
@@ -305,11 +305,11 @@ func export(gid uint32, bdir string) error {
 		prefix.WriteString("> <")
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
-		pl := &protos.PostingList{}
-		x.Check(pl.Unmarshal(item.Value()))
+		postings, uids := posting.UnmarshalPostingList(item)
 		chkv <- kv{
-			prefix: prefix.String(),
-			list:   pl,
+			prefix:   prefix.String(),
+			postings: postings,
+			uids:     uids,
 		}
 		prefix.Reset()
 		lastPred = pred

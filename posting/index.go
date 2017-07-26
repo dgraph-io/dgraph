@@ -412,6 +412,15 @@ func DeleteCountIndex(ctx context.Context, attr string) error {
 	return nil
 }
 
+func UnmarshalPostingList(item *badger.KVItem) ([]*protos.Posting, []byte) {
+	if item.UserMeta() == BitUidPostings {
+		return nil, item.Value()
+	}
+	pl := new(protos.PostingList)
+	x.Check(pl.Unmarshal(item.Value()))
+	return pl.Postings, pl.Uids
+}
+
 func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh chan error) {
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
@@ -419,13 +428,12 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 		go func() {
 			var err error
 			for it := range ch {
-				pl := it.list
 				t := &protos.DirectedEdge{
 					ValueId: it.uid,
 					Attr:    attr,
 					Op:      protos.DirectedEdge_SET,
 				}
-				if err = addCountMutation(ctx, t, uint32(len(pl.Uids)/8), reverse); err != nil {
+				if err = addCountMutation(ctx, t, uint32(len(it.uids)/8), reverse); err != nil {
 					break
 				}
 			}
@@ -445,12 +453,11 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 		iterItem := it.Item()
 		key := iterItem.Key()
 		pki := x.Parse(key)
-		var pl protos.PostingList
-		x.Check(pl.Unmarshal(iterItem.Value()))
+		_, uids := UnmarshalPostingList(iterItem)
 
 		ch <- item{
 			uid:  pki.Uid,
-			list: &pl,
+			uids: uids,
 		}
 	}
 	close(ch)
@@ -487,8 +494,9 @@ func RebuildCountIndex(ctx context.Context, attr string) error {
 }
 
 type item struct {
-	uid  uint64
-	list *protos.PostingList
+	uid      uint64
+	uids     []byte
+	postings []*protos.Posting
 }
 
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
@@ -502,10 +510,10 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 
 	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add reverse entries for values in posting list
-	addReversePostings := func(uid uint64, pl *protos.PostingList) error {
+	addReversePostings := func(it item) error {
 		var pitr PIterator
-		pitr.Init(pl, 0)
-		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
+		pitr.Init(it.postings, it.uids, 0)
+		edge := protos.DirectedEdge{Attr: attr, Entity: it.uid}
 		for ; pitr.Valid(); pitr.Next() {
 			pp := pitr.Posting()
 			puid := pp.Uid
@@ -533,7 +541,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		go func() {
 			var err error
 			for it := range ch {
-				err = addReversePostings(it.uid, it.list)
+				err = addReversePostings(it)
 				if err != nil {
 					break
 				}
@@ -549,15 +557,15 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 			break
 		}
 		pki := x.Parse(key)
-		var pl protos.PostingList
-		x.Check(pl.Unmarshal(iterItem.Value()))
+		postings, uids := UnmarshalPostingList(iterItem)
 
 		// Posting list contains only values or only UIDs.
-		if (len(pl.Postings) == 0 && len(pl.Uids) != 0) ||
-			postingType(pl.Postings[0]) == x.ValueUid {
+		// Reverses can be added only on uid edges
+		if len(uids) != 0 {
 			ch <- item{
-				uid:  pki.Uid,
-				list: &pl,
+				uid:      pki.Uid,
+				uids:     uids,
+				postings: postings,
 			}
 		}
 	}
@@ -641,6 +649,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		}
 		pki := x.Parse(key)
 		var pl protos.PostingList
+		// RebuildIndex is called only for scalar values and they should have pl
 		x.Check(pl.Unmarshal(iterItem.Value()))
 
 		// Posting list contains only values or only UIDs.
