@@ -24,12 +24,12 @@ import (
 const (
 	// TODO(pawan) - Make this 2 bytes long. Right now ParsedKey has byteType and
 	// bytePrefix. Change it so that it just has one field which has all the information.
-	byteData     = byte(0x00)
+	ByteData     = byte(0x00)
 	byteSchema   = byte(0x01)
-	byteIndex    = byte(0x02)
-	byteReverse  = byte(0x04)
-	byteCount    = byte(0x08)
-	byteCountRev = byteCount | byteReverse
+	ByteIndex    = byte(0x02)
+	ByteReverse  = byte(0x04)
+	ByteCount    = byte(0x08)
+	ByteCountRev = ByteCount | ByteReverse
 	// same prefix for data, index and reverse keys so that relative order of data doesn't change
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)
@@ -65,7 +65,7 @@ func DataKey(attr string, uid uint64) []byte {
 	rest := buf[1:]
 
 	rest = writeAttr(rest, attr)
-	rest[0] = byteData
+	rest[0] = ByteData
 
 	rest = rest[1:]
 	binary.BigEndian.PutUint64(rest, uid)
@@ -78,7 +78,7 @@ func ReverseKey(attr string, uid uint64) []byte {
 	rest := buf[1:]
 
 	rest = writeAttr(rest, attr)
-	rest[0] = byteReverse
+	rest[0] = ByteReverse
 
 	rest = rest[1:]
 	binary.BigEndian.PutUint64(rest, uid)
@@ -91,7 +91,7 @@ func IndexKey(attr, term string) []byte {
 	rest := buf[1:]
 
 	rest = writeAttr(rest, attr)
-	rest[0] = byteIndex
+	rest[0] = ByteIndex
 
 	rest = rest[1:]
 	AssertTrue(len(term) == copy(rest, term[:]))
@@ -105,9 +105,9 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 
 	rest = writeAttr(rest, attr)
 	if reverse {
-		rest[0] = byteCountRev
+		rest[0] = ByteCountRev
 	} else {
-		rest[0] = byteCount
+		rest[0] = ByteCount
 	}
 
 	rest = rest[1:]
@@ -125,24 +125,39 @@ type ParsedKey struct {
 }
 
 func (p ParsedKey) IsData() bool {
-	return p.byteType == byteData
+	return p.byteType == ByteData
 }
 
 func (p ParsedKey) IsReverse() bool {
-	return p.byteType == byteReverse
+	return p.byteType == ByteReverse
 }
 
 func (p ParsedKey) IsCount() bool {
-	return p.byteType == byteCount ||
-		p.byteType == byteCountRev
+	return p.byteType == ByteCount ||
+		p.byteType == ByteCountRev
 }
 
 func (p ParsedKey) IsIndex() bool {
-	return p.byteType == byteIndex
+	return p.byteType == ByteIndex
 }
 
 func (p ParsedKey) IsSchema() bool {
 	return p.byteType == byteSchema
+}
+
+func (p ParsedKey) IsType(typ byte) bool {
+	switch typ {
+	case ByteCount, ByteCountRev:
+		return p.IsCount()
+	case ByteReverse:
+		return p.IsReverse()
+	case ByteIndex:
+		return p.IsIndex()
+	case ByteData:
+		return p.IsData()
+	default:
+	}
+	return false
 }
 
 func (p ParsedKey) SkipPredicate() []byte {
@@ -178,7 +193,7 @@ func (p ParsedKey) DataPrefix() []byte {
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
-	k[0] = byteData
+	k[0] = ByteData
 	return buf
 }
 
@@ -189,7 +204,7 @@ func (p ParsedKey) IndexPrefix() []byte {
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
-	k[0] = byteIndex
+	k[0] = ByteIndex
 	return buf
 }
 
@@ -200,7 +215,7 @@ func (p ParsedKey) ReversePrefix() []byte {
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
-	k[0] = byteReverse
+	k[0] = ByteReverse
 	return buf
 }
 
@@ -212,9 +227,9 @@ func (p ParsedKey) CountPrefix(reverse bool) []byte {
 	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
 	if reverse {
-		k[0] = byteCountRev
+		k[0] = ByteCountRev
 	} else {
-		k[0] = byteCount
+		k[0] = ByteCount
 	}
 	return buf
 }
@@ -246,13 +261,13 @@ func Parse(key []byte) *ParsedKey {
 	k = k[1:]
 
 	switch p.byteType {
-	case byteData:
+	case ByteData:
 		fallthrough
-	case byteReverse:
+	case ByteReverse:
 		p.Uid = binary.BigEndian.Uint64(k)
-	case byteIndex:
+	case ByteIndex:
 		p.Term = string(k)
-	case byteCount, byteCountRev:
+	case ByteCount, ByteCountRev:
 		p.Count = binary.BigEndian.Uint32(k)
 	case byteSchema:
 		break

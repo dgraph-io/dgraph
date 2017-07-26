@@ -178,15 +178,16 @@ func (c *listCache) Reset() {
 	c.curSize = 0
 }
 
-func (c *listCache) clear(attr string) error {
+func (c *listCache) clear(attr string, typ byte) error {
 	c.Lock()
 	defer c.Unlock()
 	for k, e := range c.cache {
 		kv := e.Value.(*entry)
-		keyAttr := x.ParseAttr(kv.pl.key)
-		if keyAttr != attr {
+		pk := x.Parse(kv.pl.key)
+		if pk.Attr != attr || !pk.IsType(typ) {
 			continue
 		}
+
 		c.ll.Remove(e)
 		kv.pl.SetForDeletion()
 		if committed, _ := kv.pl.SyncIfDirty(true); !committed {
