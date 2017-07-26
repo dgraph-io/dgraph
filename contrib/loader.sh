@@ -108,6 +108,7 @@ popd &> /dev/null
 
 echo -e "\nShutting down Dgraph"
 quit 0
+
 # Wait for clean shutdown.
 sleep 15
 
@@ -122,7 +123,11 @@ echo -e "\nExport done."
 
 # This is count of RDF's in goldendata.rdf.gz + xids because we ran dgraphloader with -xid flag.
 dataCount="1475250"
-exportCount=$(zcat $(ls -t export/dgraph-1-* | head -1) | wc -l)
+if [[ $TRAVIS_OS_NAME == "osx" ]]; then
+  exportCount=$(zcat < $(ls -t export/dgraph-1-* | head -1) | wc -l)
+else
+  exportCount=$(zcat $(ls -t export/dgraph-1-* | head -1) | wc -l)
+fi
 
 
 if [[ ! "$exportCount" -eq "$dataCount" ]]; then
