@@ -454,7 +454,8 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		}
 		out.UidMatrix = append(out.UidMatrix, uidList)
 	}
-
+	// For the last PL that was accessed.
+	lastDecr()
 	if lerr != nil {
 		return nil, lerr
 	}
