@@ -237,6 +237,17 @@ func (e *Edge) Delete() error {
 	return nil
 }
 
+// DeletePredicate is used to delete all the data corresponding to a predicate. Indexes/reverses if
+// any are also deleted while deleting a predicate. Schema for the predicate can be changed after
+// deleting the data for it.
+func DeletePredicate(pred string) Edge {
+	e := Edge{}
+	e.nq.Subject = x.Star
+	e.nq.Predicate = pred
+	e.nq.ObjectValue, _ = types.ObjectValue(types.DefaultID, x.Star)
+	return e
+}
+
 func (e *Edge) validate() error {
 	if len(e.nq.Subject) == 0 && len(e.nq.SubjectVar) == 0 {
 		return ErrInvalidSubject
@@ -258,12 +269,7 @@ func validateStr(val string) error {
 	return nil
 }
 
-// SetValueString sets the value of Edge e as string val and sets the type of the edge to
-// types.StringID.  If the edge had previous been assigned another value (even of another type),
-// the value and type are overwritten.  If the edge has previously been connected to a node, the
-// edge and type are left unchanged and ErrConnected is returned.  The string must
-// escape " with \, otherwise the edge and type are left unchanged and an error returned.
-func (e *Edge) SetValueString(val string) error {
+func (e *Edge) setValueString(val string) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected
 	}
@@ -271,12 +277,39 @@ func (e *Edge) SetValueString(val string) error {
 		return err
 	}
 
+	e.nq.ObjectType = int32(types.StringID)
+	return nil
+}
+
+// SetValueString sets the value of Edge e as string val and sets the type of the edge to
+// types.StringID.  If the edge had previous been assigned another value (even of another type),
+// the value and type are overwritten.  If the edge has previously been connected to a node, the
+// edge and type are left unchanged and ErrConnected is returned.  The string must
+// escape " with \, otherwise the edge and type are left unchanged and an error returned.
+func (e *Edge) SetValueString(val string) error {
+	if err := e.setValueString(val); err != nil {
+		return err
+	}
 	v, err := types.ObjectValue(types.StringID, val)
 	if err != nil {
 		return err
 	}
 	e.nq.ObjectValue = v
-	e.nq.ObjectType = int32(types.StringID)
+	return nil
+}
+
+// SetValueStringWithLang has same behavior as SetValueString along with the ability to set the
+// language tag as lang.
+func (e *Edge) SetValueStringWithLang(val string, lang string) error {
+	if err := e.setValueString(val); err != nil {
+		return err
+	}
+	v, err := types.ObjectValue(types.DefaultID, val)
+	if err != nil {
+		return err
+	}
+	e.nq.ObjectValue = v
+	e.nq.Lang = lang
 	return nil
 }
 
