@@ -293,6 +293,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 	var lerr error
 	var lastDecr func()
+	// NOTE: Never return inside this loop.
 	for i := 0; i < srcFn.n; i++ {
 		if lastDecr != nil {
 			lastDecr()
@@ -304,6 +305,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		select {
 		case <-ctx.Done():
 			lerr = ctx.Err()
+			continue
 		default:
 		}
 		var key []byte
