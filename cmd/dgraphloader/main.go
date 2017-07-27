@@ -98,7 +98,7 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 
 	var buf bytes.Buffer
 	bufReader := bufio.NewReader(reader)
-	var line int
+	var line, count int
 	req := new(client.Req)
 	for {
 		select {
@@ -119,15 +119,17 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 		if len(schemaUpdate) == 0 {
 			continue
 		}
+		count++
 		req.AddSchema(*schemaUpdate[0])
-		if req.size() > 100 {
+		if count == 100 {
 			if _, err := dgraphClient.Run(context.Background(), req); err != nil {
 				log.Fatalf("Error while doing schema mutation %v\n", err)
 			}
 			req = new(client.Req)
+			count = 0
 		}
 	}
-	if req.size() > 0 {
+	if count > 0 {
 		if _, err := dgraphClient.Run(context.Background(), req); err != nil {
 			log.Fatalf("Error while doing schema mutation %v\n", err)
 		}
