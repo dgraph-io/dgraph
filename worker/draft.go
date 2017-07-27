@@ -239,9 +239,9 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		store: store,
 		cfg: &raft.Config{
 			ID: id,
-			// 500 ms if we call Tick() every 50 ms.
+			// 200 ms if we call Tick() every 20 ms.
 			ElectionTick: 10,
-			// 50 ms if we call Tick() every 50 ms.
+			// 20 ms if we call Tick() every 20 ms.
 			HeartbeatTick:   1,
 			Storage:         store,
 			MaxSizePerMsg:   4096,
@@ -711,9 +711,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 func (n *node) Run() {
 	firstRun := true
 	var leader bool
-	// See also our configuration of HeartbeatTick and ElectionTick. For whatever reason, when
-	// bring up a node we can only replay one raft index entry every tick.  It would be nice to
-	// figure out why.
+	// See also our configuration of HeartbeatTick and ElectionTick.
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	rcBytes, err := n.raftContext.Marshal()
