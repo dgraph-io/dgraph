@@ -714,7 +714,7 @@ func (n *node) Run() {
 	// See also our configuration of HeartbeatTick and ElectionTick. For whatever reason, when
 	// bring up a node we can only replay one raft index entry every tick.  It would be nice to
 	// figure out why.
-	ticker := time.NewTicker(50 * time.Millisecond)
+	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	rcBytes, err := n.raftContext.Marshal()
 	x.Check(err)
