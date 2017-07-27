@@ -71,6 +71,13 @@ func (req *Req) SetQuery(q string) {
 	req.gr.Query = q
 }
 
+// SetSchema sets schema mutation in req with the given schema
+// The schema is not checked until the request is run, when it is parsed and
+// checked server-side
+func (req *Req) SetSchema(q string) {
+	req.gr.Query = fmt.Sprintf("mutation {\nschema {\n%q\n}\n}", q)
+}
+
 // SetQueryWithVariables sets query q (which contains graphQL variables mapped
 // in vars) as the query in req and sets vars as the corresponding query variables.
 // Neither the query string nor the variables are checked until the request is run,

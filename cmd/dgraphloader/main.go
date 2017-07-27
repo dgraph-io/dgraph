@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -31,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -96,46 +96,26 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 		reader = f
 	}
 
-	var buf bytes.Buffer
-	bufReader := bufio.NewReader(reader)
-	var line, count int
-	req := new(client.Req)
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		err = readLine(bufReader, &buf)
-		if err != nil {
-			break
-		}
-		line++
-		schemaUpdate, err := schema.Parse(buf.String())
-		if err != nil {
-			log.Fatalf("Error while parsing schema: %v, on line:%v %v", err, line, buf.String())
-		}
-		buf.Reset()
-		if len(schemaUpdate) == 0 {
-			continue
-		}
-		count++
-		req.AddSchema(*schemaUpdate[0])
-		if count == 100 {
-			if _, err := dgraphClient.Run(context.Background(), req); err != nil {
-				log.Fatalf("Error while doing schema mutation %v\n", err)
-			}
-			req = new(client.Req)
-			count = 0
-		}
+	b, err := ioutil.ReadAll(reader)
+	if err != io.EOF {
+		x.Checkf(err, "Error while reading file")
 	}
-	if count > 0 {
+
+	req := new(client.Req)
+	che := make(chan error, 1)
+	req.SetSchema(string(b))
+	go func() {
 		if _, err := dgraphClient.Run(context.Background(), req); err != nil {
 			log.Fatalf("Error while doing schema mutation %v\n", err)
 		}
-	}
-	if err != io.EOF {
-		x.Checkf(err, "Error while reading file")
+		che <- nil
+	}()
+
+	// blocking wait until schema is applied
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-che:
 	}
 	return nil
 }

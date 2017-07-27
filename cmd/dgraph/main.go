@@ -712,14 +712,14 @@ func main() {
 	go func() {
 		for {
 			select {
-			case _, ok := <-sdCh:
-				if ok {
-					numShutDownSig++
-					if numShutDownSig == 1 {
-						shutdownServer()
-					} else if numShutDownSig == 3 {
-						os.Exit(1)
-					}
+			case <-sdCh:
+				numShutDownSig++
+				fmt.Printf("Caught Ctrl-C. Terminating now (this may take a few seconds)...\n")
+				if numShutDownSig == 1 {
+					shutdownServer()
+				} else if numShutDownSig == 3 {
+					fmt.Printf("Signaled thrice. Aborting!\n")
+					os.Exit(1)
 				}
 			}
 		}
