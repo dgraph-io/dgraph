@@ -455,7 +455,7 @@ func (e *Edge) SetValueBytes(val []byte) error {
 	return nil
 }
 
-// AddFacet adds the key, value pair as facets on Edge e.  No checking is done.
+// AddFacet adds the key, value pair as facets on Edge e.  No checking is done.  
 func (e *Edge) AddFacet(key, val string) {
 	e.nq.Facets = append(e.nq.Facets, &protos.Facet{
 		Key: key,
