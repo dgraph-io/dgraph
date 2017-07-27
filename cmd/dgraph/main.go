@@ -380,10 +380,10 @@ func NewSharedQueryNQuads(query []byte) []*protos.NQuad {
 	val := func(s string) *protos.Value {
 		return &protos.Value{&protos.Value_DefaultVal{s}}
 	}
-	qHash := fmt.Sprintf("\"%x\"", sha256.Sum256(query))
+	qHash := fmt.Sprintf("%x", sha256.Sum256(query))
 	return []*protos.NQuad{
-		{Subject: "<_:share>", Predicate: "<_share_>", ObjectValue: val(string(query))},
-		{Subject: "<_:share>", Predicate: "<_share_hash_>", ObjectValue: val(qHash)},
+		{Subject: "_:share", Predicate: "_share_", ObjectValue: val(string(query))},
+		{Subject: "_:share", Predicate: "_share_hash_", ObjectValue: val(qHash)},
 	}
 }
 
