@@ -153,7 +153,6 @@ func findUidIndex(pl *protos.PostingList, afterUid uint64) int {
 	})
 }
 
-// Either one of pl or uids would be empty/nil
 func (it *PIterator) Init(pl *protos.PostingList, afterUid uint64) {
 	it.pl = pl
 	it.uidPosting = &protos.Posting{}
@@ -478,7 +477,8 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		index = rv.Index
 		gid = rv.Group
 	}
-	if len(l.pending) > 0 && index > l.pending[0]+1000 {
+	if len(l.mlayer) > 1000 ||
+		(len(l.pending) > 0 && index > l.pending[0]+4000) {
 		l.syncIfDirty(false)
 	}
 
