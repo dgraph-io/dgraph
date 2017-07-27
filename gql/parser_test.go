@@ -34,25 +34,26 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
-func TestParseCountVarError(t *testing.T) {
+func TestParseCountValError(t *testing.T) {
 	query := `
 {
-  me(id: 1) {
+  me(func: uid(1)) {
     Upvote {
        u as Author
     }
-    count(var(u))
+    count(val(u))
   }
 }
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "count of a variable is not allowed")
 }
 
 func TestParseVarError(t *testing.T) {
 	query := `
 	{
-		var(id: 0x0a) {
+		var(func: uid(0x0a)) {
 			a as friends 
 		}
 
@@ -63,6 +64,7 @@ func TestParseVarError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot do uid() of a variable")
 }
 
 func TestParseQueryListPred1(t *testing.T) {
@@ -153,6 +155,7 @@ func TestParseQueryListPred_MultiVarError(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	// Only one variable allowed in expand.
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Exactly one variable expected")
 }
 
 func TestParseQueryWithNoVarValError(t *testing.T) {
@@ -171,6 +174,7 @@ func TestParseQueryWithNoVarValError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: What was this supposed to test?  Now dying on ':'.
 }
 
 func TestParseQueryAggChild(t *testing.T) {
@@ -185,6 +189,7 @@ func TestParseQueryAggChild(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only variables allowed in aggregate functions")
 }
 
 func TestParseQueryWithXIDError(t *testing.T) {
@@ -206,6 +211,7 @@ func TestParseQueryWithXIDError(t *testing.T) {
     }`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: What is this testing?  "written-in" is the error here
 }
 
 func TestParseQueryWithMultiVarValError(t *testing.T) {
@@ -225,6 +231,7 @@ func TestParseQueryWithMultiVarValError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: This is about the colon after orderasc
 }
 
 func TestParseQueryWithVarValAggErr(t *testing.T) {
