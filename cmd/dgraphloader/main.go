@@ -99,6 +99,7 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 	var buf bytes.Buffer
 	bufReader := bufio.NewReader(reader)
 	var line int
+	req := new(client.Req)
 	for {
 		select {
 		case <-ctx.Done():
@@ -118,10 +119,18 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 		if len(schemaUpdate) == 0 {
 			continue
 		}
-		if err = dgraphClient.AddSchema(*schemaUpdate[0]); err != nil {
-			log.Fatal("While adding schema to batch ", err)
+		req.AddSchema(*schemaUpdate[0])
+		if req.size() > 100 {
+			if _, err := dgraphClient.Run(context.Background(), req); err != nil {
+				log.Fatalf("Error while doing schema mutation %v\n", err)
+			}
+			req = new(client.Req)
 		}
-
+	}
+	if req.size() > 0 {
+		if _, err := dgraphClient.Run(context.Background(), req); err != nil {
+			log.Fatalf("Error while doing schema mutation %v\n", err)
+		}
 	}
 	if err != io.EOF {
 		x.Checkf(err, "Error while reading file")
@@ -325,9 +334,6 @@ func main() {
 			return
 		}
 	}
-
-	// wait for schema changes to be done before starting mutations
-	time.Sleep(1 * time.Second)
 
 	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error)

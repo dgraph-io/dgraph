@@ -957,6 +957,9 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 
 	if restart {
 		x.Printf("Restarting node for group: %d\n", n.gid)
+		if groups().HasPeer(n.gid) {
+			n.joinPeers()
+		}
 		n.SetRaft(raft.RestartNode(n.cfg))
 
 	} else {
