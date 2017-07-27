@@ -525,6 +525,27 @@ func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 	return nil
 }
 
+func (d *Dgraph) SetSchemaBlocking(ctx context.Context, q string) error {
+	req := new(Req)
+	che := make(chan error, 1)
+	req.SetSchema(q)
+	go func() {
+		if _, err := d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr); err != nil {
+			che <- err
+			return
+		}
+		che <- nil
+	}()
+
+	// blocking wait until schema is applied
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-che:
+		return err
+	}
+}
+
 func (d *Dgraph) stopTickers() {
 	if d.ticker != nil {
 		d.ticker.Stop()

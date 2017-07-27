@@ -100,24 +100,7 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 	if err != nil {
 		x.Checkf(err, "Error while reading file")
 	}
-
-	req := new(client.Req)
-	che := make(chan error, 1)
-	req.SetSchema(string(b))
-	go func() {
-		if _, err := dgraphClient.Run(context.Background(), req); err != nil {
-			log.Fatalf("Error while doing schema mutation %v\n", err)
-		}
-		che <- nil
-	}()
-
-	// blocking wait until schema is applied
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-che:
-	}
-	return nil
+	return dgraphClient.SetSchemaBlocking(ctx, string(b))
 }
 
 func Node(val string, c *client.Dgraph) string {
