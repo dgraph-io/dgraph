@@ -259,39 +259,39 @@ func TestDeletePredicate(t *testing.T) {
 	var m map[string]interface{}
 	err = json.Unmarshal([]byte(output), &m)
 	require.NoError(t, err)
-	friends := m["user"].([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
+	friends := m["data"].(map[string]interface{})["user"].([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
 	require.Equal(t, 2, len(friends))
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"name":"Alice"},{"name":"Alice1"},{"name":"Alice2"}]}`,
+	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"},{"name":"Alice1"},{"name":"Alice2"}]}}`,
 		output)
 
 	output, err = runQuery(q3)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"age": "13", "~friend" : [{"name":"Alice"}]}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"age": "13", "~friend" : [{"name":"Alice"}]}]}}`, output)
 
 	output, err = runQuery(q4)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}}`, output)
 
 	err = runMutation(m2)
 	require.NoError(t, err)
 
 	output, err = runQuery(q1)
-	require.JSONEq(t, `{}`, output)
+	require.JSONEq(t, `{"data": {}}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{}`, output)
+	require.JSONEq(t, `{"data": {}}`, output)
 
 	output, err = runQuery(q5)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"age": "13"}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"age": "13"}]}}`, output)
 
 	output, err = runQuery(q4)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}}`, output)
 
 	// Lets try to change the type of predicates now.
 	err = runMutation(s2)
@@ -412,7 +412,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"name":"Alice"}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
 
 }
 
@@ -460,7 +460,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"name":"Alice"}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
 
 	// remove index
 	err = runMutation(s2)
@@ -510,7 +510,7 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"~friend" : [{"name":"Alice"}]}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
 }
 
@@ -562,7 +562,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"~friend" : [{"name":"Alice"}]}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
 	// remove reverse edge
 	err = runMutation(s2)
@@ -629,11 +629,11 @@ func TestDeleteAll(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"~friend" : [{"name":"Alice"}]}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}`,
+	require.JSONEq(t, `{"data": {"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}}`,
 		output)
 
 	err = runMutation(m2)
@@ -641,11 +641,11 @@ func TestDeleteAll(t *testing.T) {
 
 	output, err = runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{}`, output)
+	require.JSONEq(t, `{"data": {}}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{}`, output)
+	require.JSONEq(t, `{"data": {}}`, output)
 }
 
 func TestDeleteAllSP(t *testing.T) {
@@ -730,26 +730,26 @@ func TestDeleteAllSP(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"~friend" : [{"name":"Alice"}]}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}`,
+	require.JSONEq(t, `{"data": {"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}}`,
 		output)
 
 	output, err = runQuery(q3)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"_predicate_":[{"_name_":"friend"},{"_name_":"name"}]}]}`,
+	require.JSONEq(t, `{"data": {"user":[{"_predicate_":[{"_name_":"friend"},{"_name_":"name"}]}]}}`,
 		output)
 
 	output, err = runQuery(q4)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"count(_predicate_)":2}]}`,
+	require.JSONEq(t, `{"data": {"user":[{"count(_predicate_)":2}]}}`,
 		output)
 
 	output, err = runQuery(q5)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"user":[{"pred_count":2}]}`,
+	require.JSONEq(t, `{"data": {"user":[{"pred_count":2}]}}`,
 		output)
 
 	err = runMutation(m2)
@@ -757,15 +757,15 @@ func TestDeleteAllSP(t *testing.T) {
 
 	output, err = runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{}`, output)
+	require.JSONEq(t, `{"data": {}}`, output)
 
 	output, err = runQuery(q2)
 	require.NoError(t, err)
-	require.JSONEq(t, `{}`, output)
+	require.JSONEq(t, `{"data": {}}`, output)
 
 	output, err = runQuery(q3)
 	require.NoError(t, err)
-	require.JSONEq(t, `{}`,
+	require.JSONEq(t, `{"data": {}}`,
 		output)
 }
 
@@ -778,7 +778,7 @@ func TestQuery(t *testing.T) {
 	_, err = qr.ProcessWithMutation(defaultContext())
 
 	output := processToFastJSON(q0)
-	require.JSONEq(t, `{"user":[{"name":"Alice"}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
 }
 
 var m5 = `
@@ -803,7 +803,7 @@ func TestSchemaValidationError(t *testing.T) {
 	_, err := gql.Parse(gql.Request{Str: m5, Http: true})
 	require.Error(t, err)
 	output := processToFastJSON(strings.Replace(q5, "<id>", "0x8", -1))
-	require.JSONEq(t, `{}`, output)
+	require.JSONEq(t, `{"data": {}}`, output)
 }
 
 var m6 = `
@@ -834,14 +834,14 @@ func TestSchemaConversion(t *testing.T) {
 
 	require.NoError(t, err)
 	output := processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
-	require.JSONEq(t, `{"user":[{"name2":1}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"name2":1}]}}`, output)
 
 	s, ok := schema.State().Get("name2")
 	require.True(t, ok)
 	s.ValueType = uint32(types.FloatID)
 	schema.State().Set("name2", s)
 	output = processToFastJSON(strings.Replace(q6, "<id>", "0x6", -1))
-	require.JSONEq(t, `{"user":[{"name2":1.5}]}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"name2":1.5}]}}`, output)
 }
 
 var qErr = `
@@ -956,7 +956,7 @@ func TestListPred(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.Equal(t, `{"listpred":[{"_predicate_":[{"_name_":"age"},{"_name_":"friend"},{"_name_":"name"}]}]}`,
+	require.Equal(t, `{"data": {"listpred":[{"_predicate_":[{"_name_":"age"},{"_name_":"friend"},{"_name_":"name"}]}]}}`,
 		output)
 }
 
@@ -1041,26 +1041,28 @@ func TestExpandPred(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"me":[{"age":"13","friend":[{"age":"12","name":"bob"}],"name":"Alice"}]}`,
+	require.JSONEq(t, `{"data": {"me":[{"age":"13","friend":[{"age":"12","name":"bob"}],"name":"Alice"}]}}`,
 		output)
 }
 
 var threeNiceFriends = `{
-  "me": [
-    {
-      "friend": [
-        {
-          "nice": "true"
-        },
-        {
-          "nice": "true"
-        },
-        {
-          "nice": "true"
-        }
-      ]
-    }
-  ]
+	"data": {
+	  "me": [
+	    {
+	      "friend": [
+	        {
+	          "nice": "true"
+	        },
+	        {
+	          "nice": "true"
+	        },
+	        {
+	          "nice": "true"
+	        }
+	      ]
+	    }
+	  ]
+	}
 }`
 
 func TestMutationSubjectVariables(t *testing.T) {
@@ -1184,7 +1186,7 @@ func TestMutationObjectVariables(t *testing.T) {
     `
 	r, err := runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"me":[{"count(likes)":3}]}`, r)
+	require.JSONEq(t, `{"data": {"me":[{"count(likes)":3}]}}`, r)
 }
 
 func TestMutationSubjectObjectVariables(t *testing.T) {
@@ -1223,7 +1225,7 @@ func TestMutationSubjectObjectVariables(t *testing.T) {
     `
 	r, err := runQuery(q1)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"me":[{"count(likes)":3}]}`, r)
+	require.JSONEq(t, `{"data": {"me":[{"count(likes)":3}]}}`, r)
 }
 
 func TestMutationObjectVariablesError(t *testing.T) {
