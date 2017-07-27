@@ -194,7 +194,7 @@ func main() {
 			x.Check(err)
 
 			e := n.Edge("name")
-			e.SetValueString(csv[0])
+			x.Check(e.SetValueString(csv[0]))
 			x.Check(dgraphClient.BatchSet(e))
 		}
 	}()
@@ -224,19 +224,19 @@ func main() {
 			e := n.Edge("age")
 			age, err := strconv.ParseInt(csv[1], 10, 32)
 			x.Check(err)
-			e.SetValueInt(age)
+			x.Check(e.SetValueInt(age))
 			x.Check(dgraphClient.BatchSet(e))
 
 			e = n.Edge("gender")
-			e.SetValueString(csv[2])
+			x.Check(e.SetValueString(csv[2]))
 			x.Check(dgraphClient.BatchSet(e))
 
 			e = n.Edge("occupation")
-			e.SetValueString(csv[3])
+			x.Check(e.SetValueString(csv[3]))
 			x.Check(dgraphClient.BatchSet(e))
 
 			e = n.Edge("zipcode")
-			e.SetValueString(csv[4])
+			x.Check(e.SetValueString(csv[4]))
 			x.Check(dgraphClient.BatchSet(e))
 		}
 	}()
@@ -264,7 +264,7 @@ func main() {
 			x.Check(err)
 
 			e := n.Edge("name")
-			e.SetValueString(csv[1])
+			x.Check(e.SetValueString(csv[1]))
 			x.Check(dgraphClient.BatchSet(e))
 
 			// 1 means the movie has the corresponding genre
