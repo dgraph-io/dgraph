@@ -1,7 +1,12 @@
 import React, { Component } from "react";
 import { connect } from "react-redux";
 
-import { timeout, checkStatus, sortStrings, getEndpointBaseURL } from "../lib/helpers";
+import {
+  timeout,
+  checkStatus,
+  sortStrings,
+  getEndpointBaseURL
+} from "../lib/helpers";
 import "../assets/css/Editor.css";
 
 require("codemirror/addon/hint/show-hint.css");
@@ -91,9 +96,10 @@ class Editor extends Component {
         .then(checkStatus)
         .then(response => response.json())
         .then(function(result) {
-          if (result.schema && result.schema.length !== 0) {
+          var data = result.data;
+          if (data.schema && data.schema.length !== 0) {
             keywords = keywords.concat(
-              result.schema.map(kw => {
+              data.schema.map(kw => {
                 return kw.predicate;
               })
             );
@@ -229,10 +235,8 @@ class Editor extends Component {
   };
 }
 
-const mapStateToProps = state => ({
-});
+const mapStateToProps = state => ({});
 
-const mapDispatchToProps = {
-};
+const mapDispatchToProps = {};
 
 export default connect(mapStateToProps, mapDispatchToProps)(Editor);

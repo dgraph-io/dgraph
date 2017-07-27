@@ -75,7 +75,7 @@ func TestSimple(t *testing.T) {
     	}
     }`
 
-	expectedRes := `{"me":[{"author":[{"born":"1832","died":"1898","name":"Lewis Carroll"}],"character":[{"name":"Alice"}],"name":"Alice in Wonderland","written-in":"1865"}]}`
+	expectedRes := `{"data": "me":[{"author":[{"born":"1832","died":"1898","name":"Lewis Carroll"}],"character":[{"name":"Alice"}],"name":"Alice in Wonderland","written-in":"1865"}]}}`
 	res := decodeResponse(q)
 	require.JSONEq(t, expectedRes, res)
 }

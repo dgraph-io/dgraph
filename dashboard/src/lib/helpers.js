@@ -43,6 +43,9 @@ export function showTreeView(query) {
 }
 
 export function isNotEmpty(response) {
+  if (!response) {
+    return false;
+  }
   let keys = Object.keys(response);
   if (keys.length === 0) {
     return false;

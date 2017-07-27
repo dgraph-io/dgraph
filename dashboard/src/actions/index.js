@@ -41,7 +41,24 @@ function executeQueryAndUpdateFrame(dispatch, { frameId, query }) {
     .then(result => {
       dispatch(updateConnectedState(true));
 
-      if (result.code !== undefined && result.message !== undefined) {
+      if (result.errors) {
+        // Handle query error responses here.
+        dispatch(
+          updateFrame({
+            id: frameId,
+            type: FRAME_TYPE_ERROR,
+            data: {
+              query,
+              message: result.errors[0].message,
+              response: result
+            }
+          })
+        );
+      } else if (
+        result.data &&
+        result.data.code !== undefined &&
+        result.data.message !== undefined
+      ) {
         // This is the case in which user sends a mutation.
         // We display the response from server.
         let frameType;
@@ -57,14 +74,14 @@ function executeQueryAndUpdateFrame(dispatch, { frameId, query }) {
             type: frameType,
             data: {
               query,
-              message: result.message,
+              message: result.data.message,
               response: result
             }
           })
         );
-      } else if (isNotEmpty(result)) {
+      } else if (isNotEmpty(result.data)) {
         const { nodes, edges, labels, nodesIndex, edgesIndex } = processGraph(
-          result,
+          result.data,
           false,
           query
         );

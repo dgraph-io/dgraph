@@ -2412,7 +2412,7 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 
 	err = qr.ProcessQuery(ctx)
 	if err != nil {
-		return er, x.Wrapf(&InternalError{err: err}, "Unable to process query")
+		return er, err
 	}
 	er.Subgraphs = qr.Subgraphs
 
