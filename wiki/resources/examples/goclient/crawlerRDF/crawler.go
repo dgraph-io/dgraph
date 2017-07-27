@@ -51,9 +51,12 @@ crawler has found.
 When the crawl finishes a gzipped RDF file is written.
 
 
-Run with '--help' to see options.
+Run with '--help' to see options.  You may want to run with '> crawl.log 2>&1' to redirect logging
+output to a file.  For example:
 
-This crawler outputs gzipped rdf.  The output file can be loaded into another Dgraph instance with
+./crawler --edges 500000 > crawl.log 2>&1
+
+This crawler outputs gzipped rdf.  The output file can be loaded into a Dgraph instance with
 
 dgraphloader --s <schemafile> --r crawl.rdf.gz
 
@@ -147,7 +150,7 @@ type directQuery struct {
 }
 
 type movieQuery struct {
-	Root []movie `dgraph:"movie"`
+	Root []*movie `dgraph:"movie"`
 }
 
 var (
@@ -342,7 +345,7 @@ func visitDirector(dir uint64, dgraphClient *client.Dgraph) {
 		//  - resp.N is a slice of Nodes for each named query, each labeled _root_
 		//  - directorsMoviesTemplate has only 1 query so resp.N[0] is a Node with one child for
 		//    each answer in the query
-		//  - query movies asked by director UID, so there can only be one child - a node 
+		//  - query movies asked by director UID, so there can only be one child - a node
 		//    representing the director
 		//  - all the directors movies are then children of that node, all labelled 'movie' because
 		//    of the alias
@@ -369,7 +372,7 @@ func visitDirector(dir uint64, dgraphClient *client.Dgraph) {
 				// directors and we've visited one of the other directors.
 				if !visitedMovie(m.ID) {
 
-					movies[m.ID] = &m
+					movies[m.ID] = m
 
 					log.Println("Movie ", m.ID, " ", m.Name)
 
@@ -378,9 +381,9 @@ func visitDirector(dir uint64, dgraphClient *client.Dgraph) {
 					// for each one.  We can't have previously visited any of the
 					// directors (except the one we are currently visiting)
 					// otherwise we would have visited this movie.
-					edgeCount += len(m.Director)
 					for i := range m.Director {
 						enqueueDirector(m.Director[i])
+						edgeCount++
 					}
 
 					// There might be 3 edges for the languages and the release date, but we'd better check.
@@ -410,26 +413,30 @@ func visitDirector(dir uint64, dgraphClient *client.Dgraph) {
 						}
 					}
 
-					// Each movie has a number of performances, which record an actor playing the 
+					// Each movie has a number of performances, which record an actor playing the
 					// role of a particular character in the movie.  There must be a edges
 					// m.ID --- starring ---> p
 					// p --- performance.actor ---> p.Actora.ID
 					// p --- performance.character ---> p.Character.ID
-					// But the actor may or may not have been visited so far.  If they have, 
+					// But the actor may or may not have been visited so far.  If they have,
 					// there's nothing else to do.  If they haven't we'll extract all the directors
 					// they have worked for, add them to the director queue to be crawled and record the
 					// edges we'll add for the actor.
 					for _, p := range m.Starring {
-						edgeCount++ // for m.ID --- starring ---> p
+						if p.Character != nil && p.Actor != nil {
+							edgeCount++ // for m.ID --- starring ---> p
+							edgeCount++ // for p --- perfmance.film ---> m.ID
 
-						edgeCount++ // for p --- performance.character ---> p.Character.ID
-						if _, ok := characters[p.Character.ID]; !ok {
-							characters[p.Character.ID] = p.Character
-							edgeCount++ // for c.ID --- name@en ---> p.Character.Name
+							edgeCount++ // for p --- performance.character ---> p.Character.ID
+							if _, ok := characters[p.Character.ID]; !ok {
+								characters[p.Character.ID] = p.Character
+								edgeCount++ // for c.ID --- name@en ---> p.Character.Name
+							}
+
+							edgeCount++ // for p --- performance.actor ---> p.Actor.ID
+							edgeCount++ // for p.Actor.ID --- actor.film ---> p
+							visitActor(p.Actor, dgraphClient)
 						}
-
-						edgeCount++ // for p --- performance.actor ---> p.Actora.ID
-						visitActor(p.Actor, dgraphClient)
 					}
 
 				}
@@ -466,7 +473,7 @@ func visitActor(a *actor, dgraphClient *client.Dgraph) {
 		// deep into the query to get the result we want, so let's just grab it directly.
 		//
 		// - resp.N should be length 1 because there was only 1 query block
-		// - resp.N[0].Children should be length 1 because the query asked by UID, so only one 
+		// - resp.N[0].Children should be length 1 because the query asked by UID, so only one
 		//   node can be in the answer
 		if len(resp.N) == 1 && len(resp.N[0].Children) == 1 {
 
@@ -479,8 +486,8 @@ func visitActor(a *actor, dgraphClient *client.Dgraph) {
 				for _, actorPerformance := range actorsMovie.Children {
 
 					// At a film.
-					// We've walked the graph response from actor to the films they have acted in. 
-					// If the query had more structure, we'd have to check the Atrribute name of 
+					// We've walked the graph response from actor to the films they have acted in.
+					// If the query had more structure, we'd have to check the Atrribute name of
 					// the children to check which edge we followed to get to the child.
 
 					for _, dir := range actorPerformance.Children {
@@ -544,6 +551,7 @@ func visitedDirector(dirID uint64) bool {
 func enqueueDirector(dir *director) {
 	if !visitedDirector(dir.ID) {
 		directors[dir.ID] = dir
+		edgeCount++ 		// For dir.ID --- name ---> dir.Name 
 		go func() { toVisit <- dir.ID }()
 	}
 }
@@ -625,8 +633,10 @@ func main() {
 	toFile.Write([]byte("\n\t\t# -------- movies --------\n\n"))
 
 	for _, movie := range movies {
-		toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <name> \"%v\"@en .\n", movie.ID, movie.Name)))
-		totalEdges++
+		if movie.Name != "" {
+			toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <name> \"%v\"@en .\n", movie.ID, movie.Name)))
+			totalEdges++
+		}
 		if movie.NameDE != "" {
 			toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <name> \"%v\"@de .\n", movie.ID, movie.NameDE)))
 			totalEdges++
@@ -649,22 +659,24 @@ func main() {
 		toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <initial_release_date> \"%v\" .\n", movie.ID, movie.ReleaseDate.Format(time.RFC3339))))
 		totalEdges++
 
-		for _, p := range movie.Starring {
-			pBlankNode := uuid.NewV4()
+		for _, p := range movie.Starring {	
+			if p.Character != nil && p.Actor != nil {
+				pBlankNode := uuid.NewV4()
 
-			toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <starring> _:BN%v .\n", movie.ID, pBlankNode)))
-			toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <performance.film> _:BN%v .\n", pBlankNode, movie.ID)))
+				toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <starring> _:BN%v .\n", movie.ID, pBlankNode)))
+				toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <performance.film> _:BN%v .\n", pBlankNode, movie.ID)))
 
-			toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <performance.actor> _:BN%v .\n", pBlankNode, p.Actor.ID)))
-			toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <actor.film> _:BN%v .\n", p.Actor.ID, pBlankNode)))
+				toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <performance.actor> _:BN%v .\n", pBlankNode, p.Actor.ID)))
+				toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <actor.film> _:BN%v .\n", p.Actor.ID, pBlankNode)))
 
-			toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <performance.character> _:BN%v .\n", pBlankNode, p.Character.ID)))
-			toFile.Write([]byte(fmt.Sprintf("\t\t_:%v <name> \"%v\"@en .\n", p.Character.ID, p.Character.Name)))
-			totalEdges += 6
+				toFile.Write([]byte(fmt.Sprintf("\t\t_:BN%v <performance.character> _:BN%v .\n", pBlankNode, p.Character.ID)))
+				toFile.Write([]byte(fmt.Sprintf("\t\t_:%v <name> \"%v\"@en .\n", p.Character.ID, p.Character.Name)))
+				totalEdges += 6
+			}
 		}
 		toFile.Write([]byte(fmt.Sprintln()))
 	}
 	log.Printf("Wrote %v movies to %v", len(movies), *outfile)
 
-	log.Printf("Wrote %v tripples in total to %v", totalEdges, *outfile)
+	log.Printf("Wrote %v edges in total to %v", totalEdges, *outfile)
 }

@@ -42,8 +42,8 @@ dataset in our docs here : https://docs.dgraph.io/get-started/.
 Given a loose bound on the number of edges in the output graph (edgeBound), this crawler crawls by
 movies, keeping a queue of unvisited movies.  For each movie it takes off the queue, it
 gets all the info for the movie and then queues all movies for all actors in the movie.  The crawl
-stops when the edge bound is exceeded (though it completes current movies, so it will blow the
-bound by a bit).
+stops when the edge bound is exceeded (though crawlers complete the their current movie, so it will
+blow the bound by a bit).
 
 This crawler crawls one Dgraph instance and stores directly to another instance.  So to run it,
 you'll need a source Dgraph instance (or cluster) loaded with the 21million data and a target
@@ -58,8 +58,9 @@ run with --help to see the options
 
 Depending on where you've started the Dgraph instances, you might run with something like:
 
-./crawler.go --source "<somehost>:9080,<someotherhost>:9080" --target "127.0.0.1:9080" --edges 500000 --crawlers 10
+./crawler.go --source "<somehost>:9080,<someotherhost>:9080" --target "127.0.0.1:9080" --edges 500000 --crawlers 10 > crawl.log 2>&1
 
+The ending '> crawl.log 2>&1' redirects logging output to a file.
 
 *** Check out the blog post about this code : https://open.dgraph.io/post/client0.8.0 ***
 
@@ -266,6 +267,10 @@ func readMovies(movies []string, dgraphClient *client.Dgraph) {
 // ensureNamedNodes makes sure that the given named node (from the source) is created in the
 // target Dgraph instance and ticked off in our source UID -> target node map.  If anything goes
 // wrong, it just returns an error - and hasn't either saved in the target instance or in the map.
+//
+// Some bookkeeping is required in this crawl to ensure that movies are only visited once and
+// that each actor is queried for only once.  Example movielensbatch shows how the client can
+// reduce this burden by associating a label to nodes.
 func ensureNamedNode(n *namedNode, saved *savedNodes, target *client.Dgraph) error {
 
 	saved.RLock()
@@ -303,7 +308,7 @@ func ensureNamedNode(n *namedNode, saved *savedNodes, target *client.Dgraph) err
 	return nil
 }
 
-// Looks like there will be a concerrency safe map in go 1.9.  For now, protect our reads.
+// Protect concurrent reads.
 func getFromSavedNode(saved *savedNodes, ID uint64) (n client.Node, ok bool) {
 	saved.RLock()
 	n, ok = saved.nodes[ID]
@@ -362,28 +367,41 @@ func visitMovie(movieID uint64, source *client.Dgraph, target *client.Dgraph) {
 		}
 
 		if m.Name != "" {
-			e = mnode.Edge("name@en")
-			e.SetValueString(m.Name)
-			req.Set(e)
+			e = mnode.Edge("name")
+			err = e.SetValueStringWithLang(m.Name, "en")
+			if err != nil {
+				log.Println("Failing for movie : ", m.ID, " - ", m.Name)
+				log.Println(err)
+				return
+			}
+			err = req.Set(e)
+			if err != nil {
+				log.Println("Failing for movie : ", m.ID, " - ", m.Name)
+				log.Println(err)
+				return
+			}
 			edgesToAdd++
 		}
 		if m.NameDE != "" {
-			e = mnode.Edge("name@de")
-			e.SetValueString(m.NameDE)
-			req.Set(e)
-			edgesToAdd++
+			e = mnode.Edge("name")
+			if e.SetValueStringWithLang(m.NameDE, "de") == nil {
+				req.Set(e)
+				edgesToAdd++
+			} // ignore this edge if error
 		}
 		if m.NameIT != "" {
 			e = mnode.Edge("name@it")
-			e.SetValueString(m.NameIT)
-			req.Set(e)
-			edgesToAdd++
+			if e.SetValueStringWithLang(m.NameIT, "it") == nil {
+				req.Set(e)
+				edgesToAdd++
+			}
 		}
 		if !m.ReleaseDate.IsZero() {
 			e = mnode.Edge("initial_release_date")
-			e.SetValueDatetime(m.ReleaseDate)
-			req.Set(e)
-			edgesToAdd++
+			if e.SetValueDatetime(m.ReleaseDate) == nil {
+				req.Set(e)
+				edgesToAdd++
+			}
 		}
 
 		// A movie can have a number of directors, so we'll add one edge for each one.
@@ -400,7 +418,7 @@ func visitMovie(movieID uint64, source *client.Dgraph, target *client.Dgraph) {
 
 			dnode, _ := getFromSavedNode(&people, d.ID)
 			e = dnode.ConnectTo("director.film", mnode)
-			req.Set(e)
+			req.Set(e) 
 		}
 
 		// A movie can have a number of genres.  We'll add an edge for each one, but,
@@ -430,50 +448,55 @@ func visitMovie(movieID uint64, source *client.Dgraph, target *client.Dgraph) {
 		// for every character in the movie.  And add the actors and characters, if they haven't
 		// been added yet.
 		for _, p := range m.Starring {
-			edgesToAdd++ // for m.ID --- starring ---> p
-			pnode, err := target.NodeBlank("")
-			if err != nil {
-				log.Println("Failing for movie : ", m.ID, " - ", m.Name)
-				log.Println(err)
-				return
-			}
-			e = mnode.ConnectTo("starring", pnode)
-			req.Set(e)
+			if p.Actor != nil && p.Character != nil {
+				edgesToAdd++ // for m.ID --- starring ---> p
+				pnode, err := target.NodeBlank("")
+				if err != nil {
+					log.Println("Failing for movie : ", m.ID, " - ", m.Name)
+					log.Println(err)
+					return
+				}
+				e = mnode.ConnectTo("starring", pnode)
+				req.Set(e)  
 
-			edgesToAdd++ // for p --- performance.character ---> p.character
-			err = ensureNamedNode(p.Character, &characters, target)
-			if err != nil {
-				log.Println("Failing for movie : ", m.ID, " - ", m.Name)
-				log.Println(err)
-				return
-			}
-			cnode, _ := getFromSavedNode(&characters, p.Character.ID)
-			e = pnode.ConnectTo("performance.character", cnode)
+				edgesToAdd++ // for p --- performance.character ---> p.character
+				err = ensureNamedNode(p.Character, &characters, target)
+				if err != nil {
+					log.Println("Failing for movie : ", m.ID, " - ", m.Name)
+					log.Println(err)
+					return
+				}
+				cnode, _ := getFromSavedNode(&characters, p.Character.ID)
+				e = pnode.ConnectTo("performance.character", cnode)
+				req.Set(e)
 
-			// Only get the movies of this actor if they haven't been seen before.
-			if _, ok := getFromSavedNode(&people, p.Actor.ID); !ok {
-				newMoviesToVisit = append(newMoviesToVisit, visitActor(p.Actor, source)...)
-			}
+				// Only get the movies of this actor if they haven't been seen before.
+				if _, ok := getFromSavedNode(&people, p.Actor.ID); !ok {
+					newMoviesToVisit = append(newMoviesToVisit, visitActor(p.Actor, source)...)
+				}
 
-			edgesToAdd++ // for p --- performance.actor ---> p.Actora.ID
-			err = ensureNamedNode(p.Actor, &people, target)
-			if err != nil {
-				log.Println("Failing for movie : ", m.ID, " - ", m.Name)
-				log.Println(err)
-				return
+				edgesToAdd++ // for p --- performance.actor ---> p.Actora.ID
+				err = ensureNamedNode(p.Actor, &people, target)
+				if err != nil {
+					log.Println("Failing for movie : ", m.ID, " - ", m.Name)
+					log.Println(err)
+					return
+				}
+				anode, _ := getFromSavedNode(&people, p.Actor.ID)
+				e = pnode.ConnectTo("performance.actor", anode)
+				req.Set(e)
 			}
-			anode, _ := getFromSavedNode(&people, p.Actor.ID)
-			e = pnode.ConnectTo("performance.actor", anode)
 		}
 
 		// If we got this far, all the people, genres and characters have been saved to the
 		// store and req contains Set mutations for all the edges in this movie.
-		_, err = target.Run(context.Background(), &req)
+		_, err = target.Run(getContext(), &req)
 		if err != nil {
 			// Not worrying about potential errors here, just ignore this movie if Run fails
 		} else {
 			// If all those edges were saved, safely increase the edge count
 			atomic.AddInt32(&edgeCount, edgesToAdd)
+			log.Print("Committed movie : ", m.ID, " - ", m.Name)
 		}
 
 		for _, id := range newMoviesToVisit {
@@ -697,7 +720,7 @@ func main() {
 	log.Printf("Wrote %v characters.", len(characters.nodes))
 	log.Printf("Wrote %v genres.", len(genres.nodes))
 
-	// More edges than this might end up in the store because of @reverse edges.
+	// More edges than this will end up in the store if the schema has @reverse edges.
 	log.Printf("Wrote %v edges in total.", edgeCount)
 
 }
