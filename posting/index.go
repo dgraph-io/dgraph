@@ -383,6 +383,9 @@ func deleteEntries(prefix []byte) error {
 }
 
 func DeleteReverseEdges(ctx context.Context, attr string) error {
+	if err := lcache.clear(attr, x.ByteReverse); err != nil {
+		return err
+	}
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
@@ -402,7 +405,10 @@ func deleteCountIndex(ctx context.Context, attr string, reverse bool) error {
 }
 
 func DeleteCountIndex(ctx context.Context, attr string) error {
-	if err := lcache.clear(attr); err != nil {
+	if err := lcache.clear(attr, x.ByteCount); err != nil {
+		return err
+	}
+	if err := lcache.clear(attr, x.ByteCountRev); err != nil {
 		return err
 	}
 	// Delete index entries from data store.
@@ -468,8 +474,6 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 
 func RebuildCountIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().HasCount(attr), "Attr %s doesn't have count index", attr)
-	EvictGroup(group.BelongsTo(attr))
-
 	errCh := make(chan error, 2)
 	// Lets rebuild forward and reverse count indexes concurrently.
 	go rebuildCountIndex(ctx, attr, false, errCh)
@@ -503,7 +507,6 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
-	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add reverse entries for values in posting list
 	addReversePostings := func(uid uint64, pl *protos.PostingList) error {
 		var pitr PIterator
@@ -574,6 +577,9 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 }
 
 func DeleteIndex(ctx context.Context, attr string) error {
+	if err := lcache.clear(attr, x.ByteIndex); err != nil {
+		return err
+	}
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
@@ -592,7 +598,6 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
-	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add index entries for values in posting list
 	addPostingsToIndex := func(uid uint64, pl *protos.PostingList) error {
 		postingsLen := len(pl.Postings)
@@ -664,7 +669,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
-	if err := lcache.clear(attr); err != nil {
+	if err := lcache.clear(attr, x.ByteData); err != nil {
 		return err
 	}
 	pk := x.ParsedKey{
