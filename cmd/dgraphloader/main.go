@@ -97,7 +97,7 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 	}
 
 	b, err := ioutil.ReadAll(reader)
-	if err != io.EOF {
+	if err != nil {
 		x.Checkf(err, "Error while reading file")
 	}
 
