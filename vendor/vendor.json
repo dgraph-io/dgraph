@@ -15,6 +15,12 @@
 			"revisionTime": "2016-08-04T10:47:26Z"
 		},
 		{
+			"checksumSHA1": "fgxkKPz4jLzKDSg0Gmx1G0rPOWY=",
+			"path": "github.com/bkaradzic/go-lz4",
+			"revision": "7224d8d8f27ef618c0a95f1ae69dbb0488abc33a",
+			"revisionTime": "2016-09-24T22:28:19Z"
+		},
+		{
 			"checksumSHA1": "ywqbUZb6r4Mxq2MBAbv/vaYcmdw=",
 			"path": "github.com/blevesearch/bleve/analysis",
 			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
@@ -155,6 +161,24 @@
 		{
 			"checksumSHA1": "Wbwn2Gwf+zZhfYbANoEL4AERf18=",
 			"path": "github.com/dgraph-io/badger",
+			"revision": "835ef24ec750d5c912438ee8f4fb3e0e914cee0d",
+			"revisionTime": "2017-07-27T00:19:14Z"
+		},
+		{
+			"checksumSHA1": "BKJoi+ppDvaEkO3s7D+/2NBkV90=",
+			"path": "github.com/dgraph-io/badger/skl",
+			"revision": "835ef24ec750d5c912438ee8f4fb3e0e914cee0d",
+			"revisionTime": "2017-07-27T00:19:14Z"
+		},
+		{
+			"checksumSHA1": "lM1wU2sAObNRQtTWrYySIjoZ0+g=",
+			"path": "github.com/dgraph-io/badger/table",
+			"revision": "835ef24ec750d5c912438ee8f4fb3e0e914cee0d",
+			"revisionTime": "2017-07-27T00:19:14Z"
+		},
+		{
+			"checksumSHA1": "KOJuf3Cy05x3kKkyRyrD9LLu9jE=",
+			"path": "github.com/dgraph-io/badger/y",
 			"revision": "835ef24ec750d5c912438ee8f4fb3e0e914cee0d",
 			"revisionTime": "2017-07-27T00:19:14Z"
 		},
