@@ -119,8 +119,8 @@ func setupConfigOpts() {
 	flag.BoolVar(&config.ExpandEdge, "expand_edge", defaults.ExpandEdge,
 		"Don't store predicates per node.")
 
-	flag.Float64Var(&config.AllottedMemory, "max_memory_mb", defaults.AllottedMemory,
-		"Estimated max memory the process can take")
+	flag.Float64Var(&config.AllottedMemory, "memory_mb", defaults.AllottedMemory,
+		"Estimated memory the process can take. Actual usage would be slightly more than specified here.")
 	flag.Float64Var(&config.CommitFraction, "gentlecommit", defaults.CommitFraction,
 		"Fraction of dirty posting lists to commit every few seconds.")
 
