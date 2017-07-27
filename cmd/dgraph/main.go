@@ -117,7 +117,8 @@ func setupConfigOpts() {
 	flag.Uint64Var(&config.MaxPendingCount, "sc", defaults.MaxPendingCount,
 		"Max number of pending entries in wal after which snapshot is taken")
 	flag.BoolVar(&config.ExpandEdge, "expand_edge", defaults.ExpandEdge,
-		"Don't store predicates per node.")
+		"Enables the expand() feature. This is very expensive for large data loads because it"+
+			" doubles the number of mutations going on in the system.")
 
 	flag.Float64Var(&config.AllottedMemory, "memory_mb", defaults.AllottedMemory,
 		"Estimated memory the process can take. Actual usage would be slightly more than specified here.")
