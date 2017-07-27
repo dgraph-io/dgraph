@@ -667,9 +667,11 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 
 	bufw := bufio.NewWriter(w)
 	if len(n.(*fastJsonNode).attrs) == 0 {
-		bufw.WriteString("{}")
+		bufw.WriteString(`{ "data": {} }`)
 	} else {
+		bufw.WriteString(`{"data": `)
 		n.(*fastJsonNode).encode(bufw)
+		bufw.WriteRune('}')
 	}
 	return bufw.Flush()
 }

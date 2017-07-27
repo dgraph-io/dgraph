@@ -32,19 +32,20 @@ import (
 
 // Error constants representing different types of errors.
 const (
-	Success              = "Success"
-	ErrorUnauthorized    = "ErrorUnauthorized"
-	ErrorInvalidMethod   = "ErrorInvalidMethod"
-	ErrorInvalidRequest  = "ErrorInvalidRequest"
-	ErrorMissingRequired = "ErrorMissingRequired"
-	Error                = "Error"
-	ErrorNoData          = "ErrorNoData"
-	ErrorUptodate        = "ErrorUptodate"
-	ErrorNoPermission    = "ErrorNoPermission"
-	ErrorInvalidMutation = "ErrorInvalidMutation"
-	ValidHostnameRegex   = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
-	Star                 = "_STAR_ALL"
-	GrpcMaxSize          = 256 << 20
+	Success                 = "Success"
+	ErrorUnauthorized       = "ErrorUnauthorized"
+	ErrorInvalidMethod      = "ErrorInvalidMethod"
+	ErrorInvalidRequest     = "ErrorInvalidRequest"
+	ErrorMissingRequired    = "ErrorMissingRequired"
+	Error                   = "Error"
+	ErrorNoData             = "ErrorNoData"
+	ErrorUptodate           = "ErrorUptodate"
+	ErrorNoPermission       = "ErrorNoPermission"
+	ErrorInvalidMutation    = "ErrorInvalidMutation"
+	ErrorServiceUnavailable = "ErrorServiceUnavailable"
+	ValidHostnameRegex      = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$"
+	Star                    = "_STAR_ALL"
+	GrpcMaxSize             = 256 << 20
 )
 
 var (
@@ -55,9 +56,13 @@ var (
 // WhiteSpace Replacer removes spaces and tabs from a string.
 var WhiteSpace = strings.NewReplacer(" ", "", "\t", "")
 
-type Status struct {
+type errRes struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+type queryRes struct {
+	Errors []errRes `json:"errors"`
 }
 
 // SetError sets the error logged in this package.
@@ -70,11 +75,30 @@ func SetError(prev *error, n error) {
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {
-	r := &Status{Code: code, Message: msg}
-	if js, err := json.Marshal(r); err == nil {
+	var qr queryRes
+	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
+	if js, err := json.Marshal(qr); err == nil {
 		w.Write(js)
 	} else {
-		panic(fmt.Sprintf("Unable to marshal: %+v", r))
+		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
+	}
+}
+
+type queryResWithData struct {
+	Errors []errRes `json:"errors"`
+	Data   *string  `json:"data"`
+}
+
+// In case an error was encountered after the query execution started, we have to return data
+// key with null value according to GraphQL spec.
+func SetStatusWithData(w http.ResponseWriter, code, msg string) {
+	var qr queryResWithData
+	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
+	// This would ensure that data key is present with value null.
+	if js, err := json.Marshal(qr); err == nil {
+		w.Write(js)
+	} else {
+		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
 	}
 }
 

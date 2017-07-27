@@ -224,8 +224,12 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
+	addCorsHeaders(w)
+	w.Header().Set("Content-Type", "application/json")
+
 	if err := x.HealthCheck(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
+		x.SetStatus(w, x.ErrorServiceUnavailable, err.Error())
 		return
 	}
 
@@ -233,7 +237,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	x.NumQueries.Add(1)
 	defer x.PendingQueries.Add(-1)
 
-	addCorsHeaders(w)
 	if r.Method == "OPTIONS" {
 		return
 	}
@@ -258,7 +261,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while reading query: %+v", err)
 		}
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
+		x.SetStatus(w, x.ErrorInvalidRequest, msg)
 	}
 
 	var l query.Latency
@@ -282,7 +285,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	})
 	l.Parsing += time.Since(parseStart)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 
@@ -294,17 +297,19 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 	}
 
+	// After execution starts according to the GraphQL spec data key must be returned. It would be
+	// null if any error is encountered, else non-null.
 	var res query.ExecuteResult
 	var queryRequest = query.QueryRequest{Latency: &l, GqlQuery: &parsed}
 	if res, err = queryRequest.ProcessWithMutation(ctx); err != nil {
 		switch errors.Cause(err).(type) {
 		case *query.InvalidRequestError:
-			invalidRequest(err, err.Error())
+			x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
 		default: // internalError or other
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while handling mutations: %+v", err)
 			}
-			x.SetStatus(w, x.Error, err.Error())
+			x.SetStatusWithData(w, x.Error, err.Error())
 		}
 		return
 	}
@@ -318,6 +323,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	newUids := query.ConvertUidsToHex(res.Allocations)
 	if len(parsed.Query) == 0 {
+		schemaRes := map[string]interface{}{}
 		mp := map[string]interface{}{}
 		if parsed.Mutation != nil {
 			mp["code"] = x.Success
@@ -326,20 +332,25 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		// Either Schema or query can be specified
 		if parsed.Schema != nil {
-			js, err := json.Marshal(res.SchemaNode)
-			if err != nil {
-				x.SetStatus(w, "Error", "Unable to marshal schema")
+			if len(res.SchemaNode) == 0 {
+				mp["schema"] = "{}"
+			} else {
+				js, err := json.Marshal(res.SchemaNode)
+				if err != nil {
+					x.SetStatusWithData(w, x.Error, "Unable to marshal schema")
+					return
+				}
+				mp["schema"] = json.RawMessage(string(js))
 			}
-			mp["schema"] = json.RawMessage(string(js))
 			if addLatency {
 				mp["server_latency"] = l.ToMap()
 			}
 		}
-		if js, err := json.Marshal(mp); err == nil {
+		schemaRes["data"] = mp
+		if js, err := json.Marshal(schemaRes); err == nil {
 			w.Write(js)
 		} else {
-			w.WriteHeader(http.StatusBadRequest)
-			x.SetStatus(w, "Error", "Unable to marshal map")
+			x.SetStatusWithData(w, x.Error, "Unable to marshal schema")
 		}
 		return
 	}
@@ -357,7 +368,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	err = query.ToJson(&l, res.Subgraphs, w,
 		query.ConvertUidsToHex(res.Allocations), addLatency)
 	if err != nil {
@@ -366,7 +376,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while converting to JSON: %+v", err)
 		}
-		x.SetStatus(w, x.Error, err.Error())
+		x.SetStatusWithData(w, x.Error, err.Error())
 		return
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
