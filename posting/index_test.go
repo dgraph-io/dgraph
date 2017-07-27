@@ -154,7 +154,7 @@ func TestTokensTable(t *testing.T) {
 	x.Check(err)
 
 	var pl protos.PostingList
-	Unmarshal(item.Value(), item.UserMeta(), &pl)
+	UnmarshalWithCopy(item.Value(), item.UserMeta(), &pl)
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 
@@ -162,7 +162,7 @@ func TestTokensTable(t *testing.T) {
 
 	err = ps.Get(key, &item)
 	x.Check(err)
-	Unmarshal(item.Value(), item.UserMeta(), &pl)
+	UnmarshalWithCopy(item.Value(), item.UserMeta(), &pl)
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 	deletePl(t)
@@ -270,7 +270,7 @@ func TestRebuildIndex(t *testing.T) {
 		}
 		idxKeys = append(idxKeys, string(key))
 		pl := new(protos.PostingList)
-		Unmarshal(item.Value(), item.UserMeta(), pl)
+		UnmarshalWithCopy(item.Value(), item.UserMeta(), pl)
 		idxVals = append(idxVals, pl)
 	}
 	require.Len(t, idxKeys, 2)
@@ -323,7 +323,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 		}
 		revKeys = append(revKeys, string(key))
 		pl := new(protos.PostingList)
-		Unmarshal(value, item.UserMeta(), pl)
+		UnmarshalWithCopy(value, item.UserMeta(), pl)
 		revVals = append(revVals, pl)
 	}
 	require.Len(t, revKeys, 2)

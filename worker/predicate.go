@@ -100,7 +100,7 @@ func streamKeys(stream protos.Worker_PredicateAndSchemaDataClient, groupId uint3
 		}
 
 		var pl protos.PostingList
-		posting.Unmarshal(iterItem.Value(), iterItem.UserMeta(), &pl)
+		posting.UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
 
 		kdup := make([]byte, len(k))
 		copy(kdup, k)
@@ -260,7 +260,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		v := iterItem.Value()
 		if !pk.IsSchema() {
 			var pl protos.PostingList
-			posting.Unmarshal(v, iterItem.UserMeta(), &pl)
+			posting.UnmarshalWithCopy(v, iterItem.UserMeta(), &pl)
 
 			idx := sort.Search(len(gkeys.Keys), func(i int) bool {
 				t := gkeys.Keys[i]

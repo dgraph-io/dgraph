@@ -60,8 +60,10 @@ const (
 	// Del means delete in mutation layer. It contributes -1 in Length.
 	Del uint32 = 0x02
 	// Add means add new element in mutation layer. It contributes 1 in Length.
-	Add            uint32 = 0x03
-	bitUidPostings byte   = 0x01
+	Add uint32 = 0x03
+
+	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
+	bitUidPostings byte = 0x01
 )
 
 type List struct {
@@ -800,7 +802,7 @@ func (l *List) LastCompactionTs() time.Time {
 }
 
 // Copies the val if it's uid only posting, be careful
-func Unmarshal(val []byte, metadata byte, pl *protos.PostingList) {
+func UnmarshalWithCopy(val []byte, metadata byte, pl *protos.PostingList) {
 	if metadata == bitUidPostings {
 		buf := make([]byte, len(val))
 		copy(buf, val)

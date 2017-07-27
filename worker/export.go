@@ -306,7 +306,7 @@ func export(gid uint32, bdir string) error {
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
 		pl := &protos.PostingList{}
-		posting.Unmarshal(item.Value(), item.UserMeta(), pl)
+		posting.UnmarshalWithCopy(item.Value(), item.UserMeta(), pl)
 		chkv <- kv{
 			prefix: prefix.String(),
 			list:   pl,
