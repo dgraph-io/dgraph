@@ -704,16 +704,27 @@ func main() {
 	worker.Init(dgraph.State.Pstore)
 
 	// setup shutdown os signal handler
-	sdCh := make(chan os.Signal, 1)
+	sdCh := make(chan os.Signal, 3)
+	var numShutDownSig int
 	defer close(sdCh)
 	// sigint : Ctrl-C, sigquit : Ctrl-\ (backslash), sigterm : kill command.
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
-		_, ok := <-sdCh
-		if ok {
-			shutdownServer()
+		for {
+			select {
+			case _, ok := <-sdCh:
+				if ok {
+					numShutDownSig++
+					if numShutDownSig == 1 {
+						shutdownServer()
+					} else if numShutDownSig == 3 {
+						os.Exit(1)
+					}
+				}
+			}
 		}
 	}()
+	_ = numShutDownSig
 
 	// Setup external communication.
 	che := make(chan error, 1)
