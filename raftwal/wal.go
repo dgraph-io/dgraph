@@ -78,7 +78,7 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	if err != nil {
 		return x.Wrapf(err, "wal.Store: While marshal snapshot")
 	}
-	if err := w.wals.Set(w.snapshotKey(gid), data); err != nil {
+	if err := w.wals.Set(w.snapshotKey(gid), data, 0x00); err != nil {
 		return err
 	}
 	x.Printf("Writing snapshot to WAL: %+v\n", s)

@@ -152,10 +152,9 @@ func TestTokensTable(t *testing.T) {
 	var item badger.KVItem
 	err = ps.Get(key, &item)
 	x.Check(err)
-	slice := item.Value()
 
 	var pl protos.PostingList
-	x.Check(pl.Unmarshal(slice))
+	UnmarshalWithCopy(item.Value(), item.UserMeta(), &pl)
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 
@@ -163,8 +162,7 @@ func TestTokensTable(t *testing.T) {
 
 	err = ps.Get(key, &item)
 	x.Check(err)
-	slice = item.Value()
-	x.Check(pl.Unmarshal(slice))
+	UnmarshalWithCopy(item.Value(), item.UserMeta(), &pl)
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 	deletePl(t)
@@ -247,8 +245,8 @@ func TestRebuildIndex(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Create some fake wrong entries for data store.
-	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"))
-	ps.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"))
+	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"), 0x00)
+	ps.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"), 0x00)
 
 	require.NoError(t, DeleteIndex(context.Background(), "name"))
 	require.NoError(t, RebuildIndex(context.Background(), "name"))
@@ -272,7 +270,7 @@ func TestRebuildIndex(t *testing.T) {
 		}
 		idxKeys = append(idxKeys, string(key))
 		pl := new(protos.PostingList)
-		require.NoError(t, pl.Unmarshal(item.Value()))
+		UnmarshalWithCopy(item.Value(), item.UserMeta(), pl)
 		idxVals = append(idxVals, pl)
 	}
 	require.Len(t, idxKeys, 2)
@@ -325,7 +323,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 		}
 		revKeys = append(revKeys, string(key))
 		pl := new(protos.PostingList)
-		require.NoError(t, pl.Unmarshal(value))
+		UnmarshalWithCopy(value, item.UserMeta(), pl)
 		revVals = append(revVals, pl)
 	}
 	require.Len(t, revKeys, 2)

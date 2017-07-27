@@ -455,7 +455,7 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 		key := iterItem.Key()
 		pki := x.Parse(key)
 		var pl protos.PostingList
-		x.Check(pl.Unmarshal(iterItem.Value()))
+		UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
 
 		ch <- item{
 			uid:  pki.Uid,
@@ -556,7 +556,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		}
 		pki := x.Parse(key)
 		var pl protos.PostingList
-		x.Check(pl.Unmarshal(iterItem.Value()))
+		UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
 
 		// Posting list contains only values or only UIDs.
 		if (len(pl.Postings) == 0 && len(pl.Uids) != 0) ||
@@ -649,7 +649,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		}
 		pki := x.Parse(key)
 		var pl protos.PostingList
-		x.Check(pl.Unmarshal(iterItem.Value()))
+		UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
 
 		// Posting list contains only values or only UIDs.
 		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) != x.ValueUid {
