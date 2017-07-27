@@ -85,8 +85,10 @@ type List struct {
 func (l *List) immutableLayer() []byte {
 	if len(l.uids) > 0 {
 		return l.uids
+	} else if l.plist != nil {
+		return l.plist.Uids
 	}
-	return l.plist.Uids
+	return x.Nilbyte
 }
 
 func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
@@ -236,6 +238,7 @@ func getNew(key []byte, pstore *badger.KV) *List {
 
 	if item.UserMeta() == BitUidPostings {
 		l.uids = val
+		l.plist = nil
 		return l
 	}
 	l.plist = postingListPool.Get().(*protos.PostingList)
@@ -491,6 +494,16 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	}
 
 	l.AssertLock()
+	var index uint64
+	var gid uint32
+	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
+		index = rv.Index
+		gid = rv.Group
+	}
+	if len(l.pending) > 0 && index > l.pending[0]+1000 {
+		l.syncIfDirty(false)
+	}
+
 	// All edges with a value without LANGTAG, have the same uid. In other words,
 	// an (entity, attribute) can only have one untagged value.
 	if !bytes.Equal(t.Value, nil) {
@@ -513,16 +526,6 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	}
 	mpost := newPosting(t)
 	atomic.AddUint32(&l.estimatedSize, uint32(mpost.Size()+16 /* various overhead */))
-
-	var index uint64
-	var gid uint32
-	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
-		index = rv.Index
-		gid = rv.Group
-	}
-	if len(l.pending) > 0 && index > l.pending[0]+1000 {
-		l.syncIfDirty(false)
-	}
 
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
@@ -565,7 +568,7 @@ func (l *List) delete(ctx context.Context, attr string) error {
 		l.plist.Postings = l.plist.Postings[:0]
 		postingListPool.Put(l.plist)
 	}
-	l.plist = emptyList
+	l.plist = nil
 	l.uids = l.uids[:0]
 	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
 	atomic.StoreInt32(&l.deleteAll, 1)
@@ -760,12 +763,14 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	if len(final.Uids) == 0 {
 		// This means we should delete the key from store during SyncIfDirty.
 		data = nil
+		l.plist = nil
+		l.uids = x.Nilbyte
 	} else if len(final.Postings) > 0 {
 		final.Checksum = h.Sum(nil)
 		data, err = final.Marshal()
 		x.Checkf(err, "Unable to marshal posting list")
 		l.plist = final
-		l.uids = make([]byte, 0)
+		l.uids = x.Nilbyte
 	} else {
 		data = final.Uids
 		l.plist = nil

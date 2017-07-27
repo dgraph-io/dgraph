@@ -561,7 +561,8 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 
 		// Posting list contains only values or only UIDs.
 		// Reverses can be added only on uid edges
-		if len(uids) != 0 {
+		if (len(postings) == 0 && len(uids) != 0) ||
+			postingType(postings[0]) == x.ValueUid {
 			ch <- item{
 				uid:      pki.Uid,
 				uids:     uids,
@@ -599,11 +600,11 @@ func RebuildIndex(ctx context.Context, attr string) error {
 
 	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add index entries for values in posting list
-	addPostingsToIndex := func(uid uint64, pl *protos.PostingList) error {
-		postingsLen := len(pl.Postings)
-		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
+	addPostingsToIndex := func(it item) error {
+		postingsLen := len(it.postings)
+		edge := protos.DirectedEdge{Attr: attr, Entity: it.uid}
 		for idx := 0; idx < postingsLen; idx++ {
-			p := pl.Postings[idx]
+			p := it.postings[idx]
 			// Add index entries based on p.
 			val := types.Val{
 				Value: p.Value,
@@ -622,17 +623,13 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		return nil
 	}
 
-	type item struct {
-		uid  uint64
-		list *protos.PostingList
-	}
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
 	for i := 0; i < 1000; i++ {
 		go func() {
 			var err error
 			for it := range ch {
-				err = addPostingsToIndex(it.uid, it.list)
+				err = addPostingsToIndex(it)
 				if err != nil {
 					break
 				}
@@ -648,15 +645,13 @@ func RebuildIndex(ctx context.Context, attr string) error {
 			break
 		}
 		pki := x.Parse(key)
-		var pl protos.PostingList
-		// RebuildIndex is called only for scalar values and they should have pl
-		x.Check(pl.Unmarshal(iterItem.Value()))
+		postings, _ := UnmarshalPostingList(iterItem)
 
 		// Posting list contains only values or only UIDs.
-		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) != x.ValueUid {
+		if len(postings) != 0 && postingType(postings[0]) != x.ValueUid {
 			ch <- item{
-				uid:  pki.Uid,
-				list: &pl,
+				uid:      pki.Uid,
+				postings: postings,
 			}
 		}
 	}
