@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/table"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
@@ -48,10 +49,17 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var passwordCache map[string]string = make(map[string]string, 2)
+
 func addPassword(t *testing.T, uid uint64, attr, password string) {
 	value := types.ValueForType(types.BinaryID)
 	src := types.ValueForType(types.PasswordID)
-	src.Value, _ = types.Encrypt(password)
+	encrypted, ok := passwordCache[password]
+	if !ok {
+		encrypted, _ = types.Encrypt(password)
+		passwordCache[password] = encrypted
+	}
+	src.Value = encrypted
 	err := types.Marshal(src, &value)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, attr, uid, types.PasswordID, value.Value.([]byte), nil)
@@ -159,12 +167,9 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "sword_present", 1, "true", nil)
 	addEdgeToValue(t, "_xid_", 1, "mich", nil)
 
-	addPassword(t, 1, "password", "123456")
-
 	// Now let's add a name for each of the friends, except 101.
 	addEdgeToTypedValue(t, "name", 23, types.StringID, []byte("Rick Grimes"), nil)
 	addEdgeToValue(t, "age", 23, "15", nil)
-	addPassword(t, 23, "pass", "654321")
 
 	src.Value = []byte(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]}`)
 	coord, err = types.Convert(src, types.GeoID)
@@ -341,6 +346,32 @@ func TestGetUID(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
 		js)
+}
+
+func TestGetUIDInDebugMode(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(0x01)) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
+					_uid_
+					name
+				}
+			}
+		}
+	`
+	ctx := defaultContext()
+	ctx = context.WithValue(ctx, "debug", "true")
+	js, err := processToFastJsonReqCtx(t, query, ctx)
+	require.NoError(t, err)
+	require.JSONEq(t,
+		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+
 }
 
 func TestReturnUids(t *testing.T) {
@@ -986,6 +1017,30 @@ func TestQueryVarValOrderDob(t *testing.T) {
 		js)
 }
 
+func TestQueryVarValOrderError(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: uid( 1)) {
+				friend {
+					n as name
+				}
+			}
+
+			me(func: uid(n), orderdesc: n) {
+				name
+			}
+		}
+	`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
+	require.Contains(t, err.Error(), "Cannot sort attribute n of type object.")
+}
+
 func TestQueryVarValOrderDesc(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1421,6 +1476,24 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 	require.JSONEq(t,
 		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
 		js)
+}
+
+func TestDoubleOrder(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+		me(func: uid(1)) {
+			friend(orderdesc: dob) @facets(orderasc: weight) 
+		}
+	}
+  `
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
+	require.Error(t, err)
 }
 
 func TestVarInAggError(t *testing.T) {
@@ -2619,6 +2692,8 @@ func TestSum(t *testing.T) {
 
 func TestQueryPassword(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	// Password is not fetchable
 	query := `
                 {
@@ -2639,6 +2714,8 @@ func TestQueryPassword(t *testing.T) {
 
 func TestCheckPassword(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x01)) {
@@ -2655,6 +2732,8 @@ func TestCheckPassword(t *testing.T) {
 
 func TestCheckPasswordIncorrect(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x01)) {
@@ -2672,6 +2751,8 @@ func TestCheckPasswordIncorrect(t *testing.T) {
 // ensure, that old and deprecated form is not allowed
 func TestCheckPasswordParseError(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x01)) {
@@ -2686,6 +2767,8 @@ func TestCheckPasswordParseError(t *testing.T) {
 
 func TestCheckPasswordDifferentAttr1(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(23)) {
@@ -2700,6 +2783,8 @@ func TestCheckPasswordDifferentAttr1(t *testing.T) {
 
 func TestCheckPasswordDifferentAttr2(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(23)) {
@@ -2714,6 +2799,8 @@ func TestCheckPasswordDifferentAttr2(t *testing.T) {
 
 func TestCheckPasswordInvalidAttr(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x1)) {
@@ -2730,6 +2817,8 @@ func TestCheckPasswordInvalidAttr(t *testing.T) {
 // test for old version of checkpwd with hardcoded attribute name
 func TestCheckPasswordQuery1(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(0x1)) {
@@ -2746,6 +2835,8 @@ func TestCheckPasswordQuery1(t *testing.T) {
 // test for improved version of checkpwd with custom attribute name
 func TestCheckPasswordQuery2(t *testing.T) {
 	populateGraph(t)
+	addPassword(t, 23, "pass", "654321")
+	addPassword(t, 1, "password", "123456")
 	query := `
                 {
                         me(func: uid(23)) {
@@ -6501,11 +6592,16 @@ func TestSchemaBlock2(t *testing.T) {
 			reverse
 			type
 			tokenizer
+			count
 		}
 	`
 	actual := processSchemaQuery(t, query)
 	expected := []*protos.SchemaNode{
-		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact", "trigram"}}}
+		{Predicate: "name",
+			Type:      "string",
+			Index:     true,
+			Tokenizer: []string{"term", "exact", "trigram"},
+			Count:     true}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6516,13 +6612,15 @@ func TestSchemaBlock3(t *testing.T) {
 			reverse
 			type
 			tokenizer
+			count
 		}
 	`
 	actual := processSchemaQuery(t, query)
 	expected := []*protos.SchemaNode{{Predicate: "age",
 		Type:      "int",
 		Index:     true,
-		Tokenizer: []string{"int"}}}
+		Tokenizer: []string{"int"},
+		Count:     false}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6553,7 +6651,11 @@ func TestSchemaBlock5(t *testing.T) {
 	`
 	actual := processSchemaQuery(t, query)
 	expected := []*protos.SchemaNode{
-		{Predicate: "name", Type: "string", Index: true, Tokenizer: []string{"term", "exact", "trigram"}}}
+		{Predicate: "name",
+			Type:      "string",
+			Index:     true,
+			Tokenizer: []string{"term", "exact", "trigram"},
+			Count:     true}}
 	checkSchemaNodes(t, expected, actual)
 }
 
@@ -6593,6 +6695,10 @@ func TestMain(m *testing.M) {
 	defer ps.Close()
 	x.Check(err)
 
+	worker.Config.GroupIds = "0,1"
+	worker.Config.RaftId = 1
+	posting.Config.AllottedMemory = 1024.0
+	posting.Config.CommitFraction = 0.10
 	group.ParseGroupConfig("")
 	schema.Init(ps)
 	posting.Init(ps)
@@ -6601,7 +6707,15 @@ func TestMain(m *testing.M) {
 	dir2, err := ioutil.TempDir("", "wal_")
 	x.Check(err)
 
-	worker.StartRaftNodes(dir2)
+	kvOpt := badger.DefaultOptions
+	kvOpt.SyncWrites = true
+	kvOpt.Dir = dir2
+	kvOpt.ValueDir = dir2
+	kvOpt.MapTablesTo = table.Nothing
+	walStore, err := badger.NewKV(&kvOpt)
+	x.Check(err)
+
+	worker.StartRaftNodes(walStore, false)
 	// Load schema after nodes have started
 	err = schema.ParseBytes([]byte(schemaStr), 1)
 	x.Check(err)
@@ -7640,6 +7754,32 @@ func TestGetAllPredicatesFunctions(t *testing.T) {
 	require.Contains(t, predicates, "follow")
 }
 
+// gather predicates from functions and filters
+func TestGetAllPredicatesFunctions2(t *testing.T) {
+	query := `
+	{
+		me(func:anyofterms(name, "Alice")) @filter(le(age, 30)) {
+			alias
+			friend @filter(uid(123, 5000)) {
+				alias
+				follow
+			}
+		}
+	}
+	`
+
+	subGraphs := getSubGraphs(t, query)
+
+	predicates := GetAllPredicates(subGraphs)
+	require.NotNil(t, predicates)
+	require.Equal(t, 5, len(predicates))
+	require.Contains(t, predicates, "name")
+	require.Contains(t, predicates, "age")
+	require.Contains(t, predicates, "alias")
+	require.Contains(t, predicates, "friend")
+	require.Contains(t, predicates, "follow")
+}
+
 // gather predicates from order
 func TestGetAllPredicatesOrdering(t *testing.T) {
 	query := `
@@ -8030,6 +8170,7 @@ func TestPBUnmarshalToStruct3(t *testing.T) {
 	pb := processToPB(t, query, map[string]string{}, false)
 	var r res
 	err := client.Unmarshal(pb, &r)
+	err = client.Unmarshal(pb, &r)
 	require.NoError(t, err)
 	require.NotEmpty(t, r.Root[0].Location)
 	require.Equal(t, 4, len(r.Root))
@@ -8135,6 +8276,69 @@ func TestPBUnmarshalToStruct6(t *testing.T) {
 	require.Equal(t, 4, len(r.Me))
 	require.NotZero(t, r.Me[0].Name)
 	require.NotZero(t, r.Me[0].Dob)
+}
+
+func TestPBUnmarshalToStruct7(t *testing.T) {
+	populateGraph(t)
+
+	type Person struct {
+		Name string
+		Dob  time.Time
+	}
+
+	type res struct {
+		Me []Person
+	}
+
+	query := `
+		{
+			var(func: uid(1)) {
+				f as friend {
+					n as dob
+				}
+			}
+
+			Me(func: uid(f), orderasc: val(n)) {
+				Name: name
+				Dob: dob
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, true)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	// Lets unmarshal again, this should clear r first and then write to it.
+	err = client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(r.Me))
+}
+
+func TestPBUnmarshalToStruct8(t *testing.T) {
+	type Person struct {
+		Name  string `dgraph:"name"`
+		Age   int    `dgraph:"age"`
+		Birth string
+	}
+
+	type res struct {
+		Root [2]Person `dgraph:"me"`
+	}
+
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(1, 23, 31)) {
+				name
+				age
+				Birth: dob
+			}
+		}
+	`
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.Error(t, err)
 }
 
 func TestPBUnmarshalError1(t *testing.T) {

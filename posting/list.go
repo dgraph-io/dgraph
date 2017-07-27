@@ -526,6 +526,9 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 func (l *List) delete(ctx context.Context, attr string) error {
 	l.AssertLock()
 	if l.plist != emptyList {
+		for _, p := range l.plist.Postings {
+			postingPool.Put(p)
+		}
 		l.plist.Uids = l.plist.Uids[:0]
 		l.plist.Postings = l.plist.Postings[:0]
 		postingListPool.Put(l.plist)
@@ -651,7 +654,15 @@ func (l *List) Length(afterUid uint64) int {
 	return l.length(afterUid)
 }
 
-func (l *List) SyncIfDirty() (committed bool, err error) {
+func doAsyncWrite(key []byte, data []byte, f func(error)) {
+	if data == nil {
+		pstore.DeleteAsync(key, f)
+	} else {
+		pstore.SetAsync(key, data, f)
+	}
+}
+
+func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
 
@@ -724,14 +735,33 @@ func (l *List) SyncIfDirty() (committed bool, err error) {
 		}
 	}
 
-	ce := syncEntry{
-		key:     l.key,
-		val:     data,
-		water:   l.water,
-		pending: l.pending,
+	retries := 0
+	// l.pending would have been modified by the time the callback is called hence we hold a
+	// reference to pending.
+	pending := l.pending
+	var f func(error)
+	f = func(err error) {
+		if err != nil {
+			elog.Printf("Got err in while doing async writes in SyncIfDirty: %+v", err)
+			if retries > 5 {
+				x.Fatalf("Max retries exceeded while doing async write for key: %s, err: %+v",
+					l.key, err)
+			}
+			// Error from badger should be temporary, so we can retry.
+			retries += 1
+			doAsyncWrite(l.key, data, f)
+			return
+		}
+		if l.water != nil {
+			l.water.Ch <- x.Mark{Indices: pending, Done: true}
+		}
+		if delFromCache {
+			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
+			lcache.delete(l.ghash)
+		}
 	}
-	syncCh <- ce
 
+	doAsyncWrite(l.key, data, f)
 	// Now reset the mutation variables.
 	l.pending = make([]uint64, 0, 3)
 	l.mlayer = l.mlayer[:0]

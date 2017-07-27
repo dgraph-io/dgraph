@@ -53,7 +53,7 @@ func writePLs(t *testing.T, pred string, count int, vid uint64, ps *badger.KV) {
 			Op:      protos.DirectedEdge_SET,
 		}
 		list.AddMutation(context.TODO(), de)
-		if merged, err := list.SyncIfDirty(); err != nil {
+		if merged, err := list.SyncIfDirty(false); err != nil {
 			t.Errorf("While merging: %v", err)
 		} else if !merged {
 			t.Errorf("No merge happened")
@@ -69,7 +69,7 @@ func newServer(port string) (*grpc.Server, net.Listener, error) {
 		log.Fatalf("While running server: %v", err)
 		return nil, nil, err
 	}
-	log.Printf("Worker listening at address: %v", ln.Addr())
+	x.Printf("Worker listening at address: %v", ln.Addr())
 
 	s := grpc.NewServer()
 	return s, ln, nil

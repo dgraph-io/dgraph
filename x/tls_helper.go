@@ -22,7 +22,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -339,7 +338,7 @@ func (c *wrapperTLSConfig) reloadConfig() {
 	// Loading new certificate
 	cert, err := parseCertificate(c.helperConfig.CertRequired, c.helperConfig.Cert, c.helperConfig.Key, c.helperConfig.KeyPassphrase)
 	if err != nil {
-		log.Printf("Error reloading certificate. %s\nUsing current certificate\n", err.Error())
+		Printf("Error reloading certificate. %s\nUsing current certificate\n", err.Error())
 	} else if cert != nil {
 		if c.helperConfig.ConfigType == TLSServerConfig {
 			c.cert.Lock()
@@ -352,7 +351,7 @@ func (c *wrapperTLSConfig) reloadConfig() {
 	if len(c.helperConfig.ClientCACerts) > 0 || c.helperConfig.UseSystemClientCACerts {
 		pool, err := generateCertPool(c.helperConfig.ClientCACerts, c.helperConfig.UseSystemClientCACerts)
 		if err != nil {
-			log.Printf("Error reloading CAs. %s\nUsing current Client CAs\n", err.Error())
+			Printf("Error reloading CAs. %s\nUsing current Client CAs\n", err.Error())
 		} else {
 			c.clientCAPool.Lock()
 			c.clientCAPool.pool = pool

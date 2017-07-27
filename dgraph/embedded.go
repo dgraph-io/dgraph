@@ -18,14 +18,42 @@ package dgraph
 
 import (
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 )
 
-// TODO(tzdybal) - server configuration
-func NewEmbeddedDgraphClient(opts client.BatchMutationOptions, clientDir string) *client.Dgraph {
-	// TODO(tzdybal) - create and setup embedded server backend
-	// TODO(tzdybal) - force exactly one group. And don't open up Grpc conns for worker.
-	embedded := &inmemoryClient{&Server{}}
+func GetDefaultEmbeddedConfig() Options {
+	config := DefaultConfig
+	config.InMemoryComm = true
+	config.BaseWorkerPort = 0
+	config.MyAddr = ""
+	config.PeerAddr = ""
 
+	return config
+}
+
+func NewEmbeddedDgraphClient(config Options, opts client.BatchMutationOptions,
+	clientDir string) *client.Dgraph {
+
+	SetConfiguration(config)
+
+	x.Init()
+	State = NewServerState()
+	group.ParseGroupConfig("") // this ensures that only one group is used
+	schema.Init(State.Pstore)
+	posting.Init(State.Pstore)
+	worker.Init(State.Pstore)
+	go worker.StartRaftNodes(State.WALstore, false)
+
+	embedded := &inmemoryClient{&Server{}}
 	return client.NewClient([]protos.DgraphClient{embedded}, opts, clientDir)
+}
+
+func DisposeEmbeddedDgraph() {
+	defer State.Dispose()
+	worker.BlockingStop()
 }

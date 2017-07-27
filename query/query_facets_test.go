@@ -111,6 +111,46 @@ func TestRetrieveFacetsSimple(t *testing.T) {
 		js)
 }
 
+func TestOrderFacets(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+	// to see how friend @facets are positioned in output.
+	query := `
+		{
+			me(func: uid(1)) {
+				friend @facets(orderasc:since) { 
+					name 
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"@facets":{"_":{"since":"2004-05-02T15:04:05Z"}},"name":"Glenn Rhee"},{"@facets":{"_":{"since":"2005-05-02T15:04:05Z"}}},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Rick Grimes"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Andrea"},{"@facets":{"_":{"since":"2007-05-02T15:04:05Z"}},"name":"Daryl Dixon"}]}]}`,
+		js)
+}
+
+func TestOrderdescFacets(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+	// to see how friend @facets are positioned in output.
+	query := `
+		{
+			me(func: uid(1)) {
+				friend @facets(orderdesc:since) { 
+					name 
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"@facets":{"_":{"since":"2007-05-02T15:04:05Z"}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Rick Grimes"},{"@facets":{"_":{"since":"2006-01-02T15:04:05Z"}},"name":"Andrea"},{"@facets":{"_":{"since":"2005-05-02T15:04:05Z"}}},{"@facets":{"_":{"since":"2004-05-02T15:04:05Z"}},"name":"Glenn Rhee"}]}]}`,
+		js)
+}
+
 func TestRetrieveFacetsAsVars(t *testing.T) {
 	populateGraphWithFacets(t)
 	defer teardownGraphWithFacets(t)
@@ -340,6 +380,27 @@ func TestFetchingFewFacets(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Rick Grimes"},{"@facets":{"_":{"close":true}},"name":"Glenn Rhee"},{"@facets":{"_":{"close":false}},"name":"Daryl Dixon"},{"name":"Andrea"},{"@facets":{"_":{"close":true}}}],"name":"Michonne"}]}`,
+		js)
+}
+
+func TestFetchingNoFacets(t *testing.T) {
+	populateGraphWithFacets(t)
+	defer teardownGraphWithFacets(t)
+	// TestFetchingFewFacets but without the facet.  Returns no facets.
+	query := `
+		{
+			me(func: uid(0x1)) {
+				name
+				friend @facets() {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"}]}`,
 		js)
 }
 

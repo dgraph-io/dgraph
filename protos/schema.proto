@@ -36,6 +36,7 @@ message SchemaNode {
 	bool index = 3;
 	repeated string tokenizer = 4;
 	bool reverse = 5;
+	bool count = 6;
 }
 
 message SchemaUpdate {

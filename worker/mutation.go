@@ -58,6 +58,7 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
+			waitForSyncMark(ctx, gid, rv.Index-1)
 			if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
 				return err
 			}
@@ -378,25 +379,23 @@ func MutateOverNetwork(ctx context.Context, m *protos.Mutations) error {
 	mutationMap := make(map[uint32]*protos.Mutations)
 	addToMutationMap(mutationMap, m)
 
-	errors := make(chan error, len(mutationMap))
+	errorCh := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {
-		go proposeOrSend(ctx, gid, mu, errors)
+		go proposeOrSend(ctx, gid, mu, errorCh)
 	}
 
 	// Wait for all the goroutines to reply back.
 	// We return if an error was returned or the parent called ctx.Done()
 	var e error
 	for i := 0; i < len(mutationMap); i++ {
-		err := <-errors
-		if err != nil {
+		if err := <-errorCh; err != nil {
 			e = err
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while running all mutations: %+v", err)
 			}
 		}
 	}
-	close(errors)
-
+	close(errorCh)
 	return e
 }
 
@@ -411,7 +410,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 	}
 	node := groups().Node(m.GroupId)
 	var tr trace.Trace
-	if rand.Float64() < *Tracing {
+	if rand.Float64() < Config.Tracing {
 		tr = trace.New("Dgraph", "GrpcMutate")
 		defer tr.Finish()
 		tr.SetMaxEvents(1000)

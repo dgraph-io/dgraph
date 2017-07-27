@@ -44,19 +44,46 @@ const (
 )
 
 type peerPoolEntry struct {
+	// Never the empty string.  Possibly a bogus address -- bad port number, the value
+	// of *myAddr, or some screwed up Raft config.
 	addr string
-	// An owning reference to a pool for this peer (or nil if self-peer).
+	// An owning reference to a pool for this peer (or nil if addr is sufficiently bogus).
 	poolOrNil *pool
 }
 
-// peerPool stores the peers per node and the addresses corresponding to them.
-// We then use pool() to get an active connection to those addresses.
+// peerPool stores the peers' addresses and our connections to them.  It has exactly one
+// entry for every peer other than ourselves.  Some of these peers might be unreachable or
+// have bogus (but never empty) addresses.
 type peerPool struct {
 	sync.RWMutex
 	peers map[uint64]peerPoolEntry
 }
 
-// TODO: Return *pool instead, where appropriate.
+var (
+	errNoPeerPoolEntry = fmt.Errorf("no peerPool entry")
+	errNoPeerPool      = fmt.Errorf("no peerPool pool, could not connect")
+)
+
+// getPool returns the non-nil pool for a peer.  This might error even if get(id)
+// succeeds, if the pool is nil.  This happens if the peer was configured so badly (it had
+// a totally bogus addr) we can't make a pool.  (A reasonable refactoring would have us
+// make a pool, one that has a nil gRPC connection.)
+//
+// You must call pools().release on the pool.
+func (p *peerPool) getPool(id uint64) (*pool, error) {
+	p.RLock()
+	defer p.RUnlock()
+	ent, ok := p.peers[id]
+	if !ok {
+		return nil, errNoPeerPoolEntry
+	}
+	if ent.poolOrNil == nil {
+		return nil, errNoPeerPool
+	}
+	ent.poolOrNil.AddOwner()
+	return ent.poolOrNil, nil
+}
+
 func (p *peerPool) get(id uint64) (string, bool) {
 	p.RLock()
 	defer p.RUnlock()
@@ -189,7 +216,7 @@ func (n *node) ConfState() *raftpb.ConfState {
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
-	fmt.Printf("Node with GroupID: %v, ID: %v\n", gid, id)
+	x.Printf("Node with GroupID: %v, ID: %v\n", gid, id)
 
 	peers := peerPool{
 		peers: make(map[uint64]peerPoolEntry),
@@ -217,6 +244,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 			Storage:         store,
 			MaxSizePerMsg:   4096,
 			MaxInflightMsgs: 256,
+			Logger:          &raft.DefaultLogger{Logger: x.Logger},
 		},
 		applyCh:     make(chan raftpb.Entry, numPendingMutations),
 		peers:       peers,
@@ -237,6 +265,12 @@ func (n *node) GetPeer(pid uint64) (string, bool) {
 	return n.peers.get(pid)
 }
 
+// You must call release on the pool.  Can error for some pid's for which GetPeer
+// succeeds.
+func (n *node) GetPeerPool(pid uint64) (*pool, error) {
+	return n.peers.getPool(pid)
+}
+
 // addr must not be empty.
 func (n *node) SetPeer(pid uint64, addr string, poolOrNil *pool) {
 	x.AssertTruef(addr != "", "SetPeer for peer %d has empty addr.", pid)
@@ -251,12 +285,16 @@ func (n *node) Connect(pid uint64, addr string) {
 		return
 	}
 	if paddr, ok := n.GetPeer(pid); ok && paddr == addr {
+		// Already connected.
 		return
 	}
+	// Here's what we do.  Right now peerPool maps peer node id's to addr values.  If
+	// a *pool can be created, good, but if not, we still create a peerPoolEntry with
+	// a nil *pool.
 	p, ok := pools().connect(addr)
 	if !ok {
-		// TODO: Return an error instead?
-		log.Printf("Peer %d claims same host as me\n", pid)
+		// TODO: Note this fact in more general peer health info somehow.
+		x.Printf("Peer %d claims same host as me\n", pid)
 	}
 	n.SetPeer(pid, addr, p)
 }
@@ -300,12 +338,6 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-var slicePool = sync.Pool{
-	New: func() interface{} {
-		return make([]byte, 256<<10)
-	},
-}
-
 func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
@@ -347,13 +379,8 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		}
 	}
 
-	slice := slicePool.Get().([]byte)
 	sz := proposal.Size()
-	if len(slice) < sz {
-		slicePool.Put(slice)
-		slice = make([]byte, sz)
-	}
-	defer slicePool.Put(slice)
+	slice := make([]byte, sz)
 
 	upto, err := proposal.MarshalTo(slice)
 	if err != nil {
@@ -392,7 +419,7 @@ func (n *node) send(m raftpb.Message) {
 	data, err := m.Marshal()
 	x.Check(err)
 	if m.Type != raftpb.MsgHeartbeat && m.Type != raftpb.MsgHeartbeatResp {
-		fmt.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
+		x.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
 	}
 	select {
 	case n.messages <- sendmsg{to: m.To, data: data}:
@@ -456,13 +483,12 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	addr, ok := n.GetPeer(to)
-	if !ok {
+	pool, err := n.GetPeerPool(to)
+	if err != nil {
+		// No such peer exists or we got handed a bogus config (bad addr), so we
+		// can't send messages to this peer.
 		return
 	}
-	pool, err := pools().get(addr)
-	// TODO: No, don't fail like this?
-	x.Check(err)
 	defer pools().release(pool)
 	conn := pool.Get()
 
@@ -650,16 +676,15 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 	n.store.Append(es)
 }
 
-func (n *node) retrieveSnapshot(rc protos.RaftContext) {
-	addr, ok := n.GetPeer(rc.Id)
-	x.AssertTruef(ok, "Should have the address for %d", rc.Id)
-	pool, err := pools().get(addr)
+func (n *node) retrieveSnapshot(peerID uint64) {
+	pool, err := n.GetPeerPool(peerID)
 	if err != nil {
-		log.Fatalf("Pool shouldn't be nil for address: %v for id: %v, error: %v\n", addr, rc.Id, err)
+		// err is just going to be errNoConnection
+		log.Fatalf("Cannot retrieve snapshot from peer %v, no connection.  Error: %v\n",
+			peerID, err)
 	}
 	defer pools().release(pool)
 
-	x.AssertTrue(rc.Group == n.gid)
 	// Get index of last committed.
 	lastIndex, err := n.store.LastIndex()
 	x.Checkf(err, "Error while getting last index")
@@ -671,7 +696,11 @@ func (n *node) retrieveSnapshot(rc protos.RaftContext) {
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
 	posting.EvictGroup(n.gid)
-	x.Check2(populateShard(n.ctx, pool, n.gid))
+	if _, err := populateShard(n.ctx, pool, n.gid); err != nil {
+		// TODO: We definitely don't want to just fall flat on our face if we can't
+		// retrieve a simple snapshot.
+		log.Fatalf("Cannot retrieve snapshot from peer %v, error: %v\n", peerID, err)
+	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
@@ -718,12 +747,13 @@ func (n *node) Run() {
 				// snapshot that I created. Only the former case should be handled.
 				var rc protos.RaftContext
 				x.Check(rc.Unmarshal(rd.Snapshot.Data))
+				x.AssertTrue(rc.Group == n.gid)
 				if rc.Id != n.id {
-					fmt.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
-					n.retrieveSnapshot(rc)
-					fmt.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
+					x.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
+					n.retrieveSnapshot(rc.Id)
+					x.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
 				} else {
-					fmt.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
+					x.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
 				}
 			}
 			if len(rd.CommittedEntries) > 0 {
@@ -754,8 +784,8 @@ func (n *node) Run() {
 			}
 
 		case <-n.stop:
-			if peerId, has := groups().Peer(n.gid, *raftId); has && n.AmLeader() {
-				n.Raft().TransferLeadership(n.ctx, *raftId, peerId)
+			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
+				n.Raft().TransferLeadership(n.ctx, Config.RaftId, peerId)
 				go func() {
 					select {
 					case <-n.ctx.Done(): // time out
@@ -808,7 +838,7 @@ func (n *node) snapshotPeriodically() {
 	for {
 		select {
 		case <-ticker.C:
-			n.snapshot(*maxPendingCount)
+			n.snapshot(Config.MaxPendingCount)
 
 		case <-n.done:
 			return
@@ -850,7 +880,7 @@ func (n *node) joinPeers() {
 	// Get leader information for MY group.
 	pid, paddr := groups().Leader(n.gid)
 	n.Connect(pid, paddr)
-	fmt.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
+	x.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
 
 	pool, err := pools().get(paddr)
 	if err != nil {
@@ -883,7 +913,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	}
 	var term, idx uint64
 	if !raft.IsEmptySnap(sp) {
-		fmt.Printf("Found Snapshot: %+v\n", sp)
+		x.Printf("Found Snapshot: %+v\n", sp)
 		restart = true
 		if rerr = n.store.ApplySnapshot(sp); rerr != nil {
 			return
@@ -900,7 +930,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 		return
 	}
 	if !raft.IsEmptyHardState(hd) {
-		fmt.Printf("Found hardstate: %+v\n", sp)
+		x.Printf("Found hardstate: %+v\n", sp)
 		restart = true
 		if rerr = n.store.SetHardState(hd); rerr != nil {
 			return
@@ -912,7 +942,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	if rerr != nil {
 		return
 	}
-	fmt.Printf("Group %d found %d entries\n", n.gid, len(es))
+	x.Printf("Group %d found %d entries\n", n.gid, len(es))
 	if len(es) > 0 {
 		restart = true
 	}
@@ -926,11 +956,11 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	x.Check(err)
 
 	if restart {
-		fmt.Printf("Restarting node for group: %d\n", n.gid)
+		x.Printf("Restarting node for group: %d\n", n.gid)
 		n.SetRaft(raft.RestartNode(n.cfg))
 
 	} else {
-		fmt.Printf("New Node for group: %d\n", n.gid)
+		x.Printf("New Node for group: %d\n", n.gid)
 		if groups().HasPeer(n.gid) {
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.cfg, nil))
@@ -1005,7 +1035,7 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 			x.Check(err)
 		}
 		if msg.Type != raftpb.MsgHeartbeat && msg.Type != raftpb.MsgHeartbeatResp {
-			fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
+			x.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
 		if err := applyMessage(ctx, msg); err != nil {
 			return &protos.Payload{}, err
@@ -1022,7 +1052,7 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*
 	}
 
 	// Best effor reject
-	if _, found := groups().Server(rc.Id, rc.Group); found || rc.Id == *raftId {
+	if _, found := groups().Server(rc.Id, rc.Group); found || rc.Id == Config.RaftId {
 		return &protos.Payload{}, x.Errorf(errorNodeIDExists)
 	}
 

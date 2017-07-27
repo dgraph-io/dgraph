@@ -25,7 +25,6 @@ import (
 	"os"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
@@ -78,7 +77,8 @@ func deletePl(t *testing.T) {
 func TestAddMutation(t *testing.T) {
 	key := x.DataKey("name", 1)
 
-	l := getNew(key, ps)
+	l, decr := GetOrCreate(key, 1)
+	defer decr()
 
 	edge := &protos.DirectedEdge{
 		ValueId: 9,
@@ -121,11 +121,10 @@ func TestAddMutation(t *testing.T) {
 	p = getFirst(l)
 	require.NotNil(t, p, "Unable to retrieve posting")
 	require.EqualValues(t, "anti-testing", p.Label)
-	l.SyncIfDirty()
-	time.Sleep(time.Second)
 
 	// Try reading the same data in another PostingList.
-	dl := getNew(key, ps)
+	dl, decr := GetOrCreate(key, 1)
+	defer decr()
 	checkUids(t, dl, uids)
 	deletePl(t)
 	ps.Delete(dl.key)
@@ -156,10 +155,9 @@ func TestAddMutation_Value(t *testing.T) {
 	checkValue(t, ol, "oh hey there")
 
 	// Run the same check after committing.
-	_, err := ol.SyncIfDirty()
+	_, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	checkValue(t, ol, "oh hey there")
-	time.Sleep(time.Second)
 
 	// The value made it to the posting list. Changing it now.
 	edge.Value = []byte(strconv.Itoa(119))
@@ -180,10 +178,9 @@ func TestAddMutation_jchiu1(t *testing.T) {
 		Label: "jchiu",
 	}
 	addMutation(t, ol, edge, Set)
-	merged, err := ol.SyncIfDirty()
+	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
-	time.Sleep(time.Second)
 
 	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "cars")
@@ -261,12 +258,11 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	}
 	addMutation(t, ol, edge, Set)
 	require.Equal(t, 1, ol.Length(0))
-	merged, err := ol.SyncIfDirty()
+	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
 	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "cars")
-	time.Sleep(time.Second)
 
 	// Del a value cars and but don't merge.
 	edge = &protos.DirectedEdge{
@@ -316,10 +312,9 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Label: "jchiu",
 	}
 	addMutation(t, ol, edge, Set)
-	merged, err := ol.SyncIfDirty()
+	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
-	time.Sleep(time.Second)
 
 	// Delete a non-existent value newcars. This should have no effect.
 	edge = &protos.DirectedEdge{
@@ -386,10 +381,9 @@ func TestAddMutation_checksum(t *testing.T) {
 		}
 		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
-		time.Sleep(time.Second)
 
 		pl := ol.PostingList()
 		c1 = pl.Checksum
@@ -414,10 +408,9 @@ func TestAddMutation_checksum(t *testing.T) {
 		}
 		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
-		time.Sleep(time.Second)
 
 		pl := ol.PostingList()
 		c2 = pl.Checksum
@@ -449,10 +442,9 @@ func TestAddMutation_checksum(t *testing.T) {
 		}
 		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
-		time.Sleep(time.Second)
 
 		pl := ol.PostingList()
 		c3 = pl.Checksum
@@ -478,10 +470,9 @@ func TestAddMutation_gru(t *testing.T) {
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
-		time.Sleep(time.Second)
 	}
 
 	{
@@ -495,10 +486,9 @@ func TestAddMutation_gru(t *testing.T) {
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Del)
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
-		time.Sleep(time.Second)
 	}
 
 	deletePl(t)
@@ -521,10 +511,9 @@ func TestAddMutation_gru2(t *testing.T) {
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
-		time.Sleep(time.Second)
 	}
 
 	{
@@ -546,10 +535,9 @@ func TestAddMutation_gru2(t *testing.T) {
 		}
 		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.SyncIfDirty()
+		merged, err := ol.SyncIfDirty(false)
 		require.NoError(t, err)
 		require.True(t, merged)
-		time.Sleep(time.Second)
 	}
 
 	// Posting list should just have the new tag.
@@ -681,10 +669,9 @@ func TestDelete(t *testing.T) {
 	ol.delete(context.Background(), "value")
 	ol.Unlock()
 	require.EqualValues(t, 0, ol.Length(0))
-	commited, err := ol.SyncIfDirty()
+	commited, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, commited)
-	time.Sleep(time.Second)
 
 	require.EqualValues(t, 0, ol.Length(0))
 }
@@ -707,10 +694,9 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(300))
 
 	// Commit to database.
-	merged, err := ol.SyncIfDirty()
+	merged, err := ol.SyncIfDirty(false)
 	require.NoError(t, err)
 	require.True(t, merged)
-	time.Sleep(time.Second)
 
 	// Mutation layer starts afresh from here.
 	// Delete half of the edges.
@@ -776,6 +762,8 @@ var ps *badger.KV
 func TestMain(m *testing.M) {
 	x.SetTestRun()
 	x.Init()
+	Config.AllottedMemory = 1024.0
+	Config.CommitFraction = 0.10
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)

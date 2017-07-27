@@ -18,40 +18,22 @@
 package worker
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/table"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
-)
-
-var (
-	groupIds = flag.String("groups", "0,1", "RAFT groups handled by this server.")
-	myAddr   = flag.String("my", "",
-		"addr:port of this server, so other Dgraph servers can talk to this.")
-	peerAddr = flag.String("peer", "", "IP_ADDRESS:PORT of any healthy peer.")
-	raftId   = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
-	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
-	// so that the nodes which have lagged behind leader can just replay entries instead of
-	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
-	// are taken
-	maxPendingCount = flag.Uint64("sc", 1000, "Max number of pending entries in wal after which snapshot is taken")
-
-	emptyMembershipUpdate protos.MembershipUpdate
 )
 
 type server struct {
@@ -113,6 +95,7 @@ func removeFromServersIfPresent(sl *servers, nodeID uint64) {
 func addToServers(sl *servers, update server) {
 	back := len(sl.list)
 	sl.list = append(sl.list, update)
+	sl.byNodeID[update.NodeId] = back
 	if update.Leader && back != 0 {
 		swapServers(sl, 0, back)
 		sl.list[back].Leader = false
@@ -123,24 +106,31 @@ func addToServers(sl *servers, update server) {
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
-func StartRaftNodes(walDir string) {
+func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 	gr.all = make(map[uint32]*servers)
 	gr.local = make(map[uint32]*node)
 
-	if len(*myAddr) == 0 {
-		*myAddr = fmt.Sprintf("localhost:%d", workerPort())
-	} else {
+	if Config.InMemoryComm {
+		Config.MyAddr = "inmemory"
+	}
+
+	if len(Config.MyAddr) == 0 {
+		Config.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
+	} else if !Config.InMemoryComm {
 		// check if address is valid or not
-		ok := x.ValidateAddress(*myAddr)
-		x.AssertTruef(ok, "%s is not valid address", *myAddr)
+		ok := x.ValidateAddress(Config.MyAddr)
+		x.AssertTruef(ok, "%s is not valid address", Config.MyAddr)
+		if !bindall {
+			x.Printf("--my flag is provided without bindall, Did you forget to specify bindall?\n")
+		}
 	}
 
 	// Successfully connect with the peer, before doing anything else.
-	if len(*peerAddr) > 0 {
+	if len(Config.PeerAddr) > 0 {
 		func() {
-			p, ok := pools().connect(*peerAddr)
+			p, ok := pools().connect(Config.PeerAddr)
 			if !ok {
 				return
 			}
@@ -158,29 +148,21 @@ func StartRaftNodes(walDir string) {
 			gr.syncMemberships()
 			for gr.LastUpdate() == 0 {
 				time.Sleep(time.Second)
-				fmt.Println("Last update raft index for membership information is zero. Syncing...")
+				x.Println("Last update raft index for membership information is zero. Syncing...")
 				gr.syncMemberships()
 			}
-			fmt.Printf("Last update is now: %d\n", gr.LastUpdate())
+			x.Printf("Last update is now: %d\n", gr.LastUpdate())
 		}()
 	}
 
-	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
-	kvOpt := badger.DefaultOptions
-	kvOpt.SyncWrites = true
-	kvOpt.Dir = walDir
-	kvOpt.ValueDir = walDir
-	kvOpt.MapTablesTo = table.Nothing
-	wals, err := badger.NewKV(&kvOpt)
-	x.Checkf(err, "Error while creating badger KV store")
-	gr.wal = raftwal.Init(wals, *raftId)
+	gr.wal = raftwal.Init(walStore, Config.RaftId)
 
 	var wg sync.WaitGroup
-	gids, err := getGroupIds(*groupIds)
+	gids, err := getGroupIds(Config.GroupIds)
 	x.AssertTruef(err == nil && len(gids) > 0, "Unable to parse 'groups' configuration")
 
 	for _, gid := range gids {
-		node := gr.newNode(gid, *raftId, *myAddr)
+		node := gr.newNode(gid, Config.RaftId, Config.MyAddr)
 		x.Checkf(schema.LoadFromDb(uint32(gid)), "Error while initilizating schema")
 		wg.Add(1)
 		go func() {
@@ -333,7 +315,7 @@ func (g *groupi) HasPeer(group uint32) bool {
 	if all == nil {
 		return false
 	}
-	return len(all.list) > 1 || (len(all.list) == 1 && all.list[0].NodeId != *raftId)
+	return len(all.list) > 1 || (len(all.list) == 1 && all.list[0].NodeId != Config.RaftId)
 }
 
 // Leader will try to return the leader of a given group, based on membership information.
@@ -479,7 +461,7 @@ func (g *groupi) syncMemberships() {
 		pl, err = pools().any()
 	}
 	if err == errNoConnection {
-		fmt.Println("Unable to sync memberships. No valid connection")
+		x.Println("Unable to sync memberships. No valid connection")
 		return
 	}
 	x.Check(err)
@@ -487,7 +469,6 @@ func (g *groupi) syncMemberships() {
 	var update *protos.MembershipUpdate
 	for {
 		conn := pl.Get()
-
 		c := protos.NewWorkerClient(conn)
 		update, err = c.UpdateMembership(g.ctx, &mu)
 		pools().release(pl)
@@ -508,7 +489,7 @@ func (g *groupi) syncMemberships() {
 		if len(addr) == 0 {
 			return
 		}
-		fmt.Printf("Got redirect for: %q\n", addr)
+		x.Printf("Got redirect for: %q\n", addr)
 		var ok bool
 		pl, ok = pools().connect(addr)
 		if !ok {
@@ -555,16 +536,16 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 		// Error possible, perhaps, if we're updating our own node's membership.
 		// Ignore it.
 		update.PoolOrNil, _ = pools().get(mm.Addr)
-	} else if update.Addr != *myAddr && mm.Id != *raftId { // ignore previous addr
+	} else if update.Addr != Config.MyAddr && mm.Id != Config.RaftId { // ignore previous addr
 		var ok bool
 		update.PoolOrNil, ok = pools().connect(update.Addr)
 		// Must be ok because update.Addr != *myAddr
 		x.AssertTrue(ok)
 	}
 
-	fmt.Println("----------------------------")
-	fmt.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", update)
-	fmt.Println("----------------------------")
+	x.Println("----------------------------")
+	x.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", update)
+	x.Println("----------------------------")
 	g.Lock()
 	defer g.Unlock()
 
@@ -579,7 +560,7 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 
 	// Print out the entire list.
 	for gid, sl := range g.all {
-		fmt.Printf("Group: %v. List: %+v\n", gid, sl.list)
+		x.Printf("Group: %v. List: %+v\n", gid, sl.list)
 	}
 }
 

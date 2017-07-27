@@ -19,9 +19,7 @@ package posting
 
 import (
 	"crypto/md5"
-	"flag"
 	"fmt"
-	"log"
 	"math"
 	"runtime"
 	"sync"
@@ -30,15 +28,13 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
+	farm "github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
-	maxmemory = flag.Float64("max_memory_mb", 1024.0,
-		"Estimated max memory the process can take")
-	commitFraction   = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
 	lhmapNumShards   = runtime.NumCPU() * 4
 	dummyPostingList []byte // Used for indexing.
 	elog             trace.EventLog
@@ -115,7 +111,7 @@ func gentleCommit(dirtyMap map[string]time.Time, pending chan struct{},
 	select {
 	case pending <- struct{}{}:
 	default:
-		elog.Printf("Skipping gentleCommit len(syncCh) %v,\n", len(syncCh))
+		elog.Printf("Skipping gentleCommit")
 		return
 	}
 
@@ -192,7 +188,7 @@ func periodicCommit() {
 			inUse := float64(megs)
 			idle := float64((ms.HeapIdle - ms.HeapReleased) / (1 << 20))
 
-			fraction := math.Min(1.0, *commitFraction*math.Exp(float64(dsize)/1000000.0))
+			fraction := math.Min(1.0, Config.CommitFraction*math.Exp(float64(dsize)/1000000.0))
 			gentleCommit(dirtyMap, pending, fraction)
 			x.MemoryInUse.Set(int64(inUse))
 			x.HeapIdle.Set(int64(idle))
@@ -200,8 +196,8 @@ func periodicCommit() {
 
 			stats := lcache.Stats()
 			x.EvictedPls.Set(int64(stats.NumEvicts))
-			x.LCacheSize.Set(int64(stats.Size))
-			x.LCacheLen.Set(int64(stats.Length))
+			x.LcacheSize.Set(int64(stats.Size))
+			x.LcacheLen.Set(int64(stats.Length))
 
 			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
 			// are currently being processed to not get stuck on dirtyChan, which won't be
@@ -210,8 +206,8 @@ func periodicCommit() {
 			// Okay, we exceed the max memory threshold.
 			// Stop the world, and deal with this first.
 			x.NumGoRoutines.Set(int64(runtime.NumGoroutine()))
-			if setLruMemory && inUse > 0.75*(*maxmemory) {
-				go lcache.UpdateMaxSize()
+			if setLruMemory && inUse > 0.75*(Config.AllottedMemory) {
+				lcache.UpdateMaxSize()
 				setLruMemory = false
 			}
 		}
@@ -228,8 +224,7 @@ const (
 
 var (
 	pstore    *badger.KV
-	syncCh    chan syncEntry
-	dirtyChan chan []byte // All dirty posting list keys are pushed here.
+	dirtyChan chan fingerPrint // All dirty posting list keys are pushed here.
 	marks     *syncMarks
 	lcache    *listCache
 )
@@ -239,11 +234,10 @@ func Init(ps *badger.KV) {
 	marks = new(syncMarks)
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
-	dirtyChan = make(chan []byte, 10000)
-	syncCh = make(chan syncEntry, syncChCapacity)
+	x.LcacheCapacity.Set(math.MaxInt64)
+	dirtyChan = make(chan fingerPrint, 10000)
 
 	go periodicCommit()
-	go batchSync(0) // Can only run 1 goroutine to do writes.
 }
 
 // GetOrCreate stores the List corresponding to key, if it's not there already.
@@ -261,7 +255,6 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
 		x.CacheHit.Add(1)
-		lp.incr()
 		return lp, lp.decr
 	}
 	x.CacheMiss.Add(1)
@@ -271,11 +264,9 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	l.water = marks.Get(group)
 
+	// We are always going to return lp to caller, whether it is l or not
+	// lcache increments the ref counter
 	lp = lcache.PutIfMissing(string(key), l)
-
-	// We are always going to return lp to caller, whether it is l or not. So, let's
-	// increment its reference counter.
-	lp.incr()
 
 	if lp != l {
 		x.CacheRace.Add(1)
@@ -284,8 +275,9 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	} else {
 		pk := x.Parse(key)
 		if pk.IsIndex() || pk.IsCount() {
-			err := pstore.Touch(key)
-			x.Check(err)
+			if err := pstore.SetIfAbsent(key, nil); err != nil && err != badger.KeyExists {
+				x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
+			}
 		}
 	}
 
@@ -294,11 +286,11 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 
 // Get takes a key and a groupID. It checks if the in-memory map has an
 // updated value and returns it if it exists or it gets from the store and DOES NOT ADD to lhmap.
-func Get(key []byte, gid uint32) (rlist *List, decr func()) {
-	lp := lcache.Get(string(key))
+func Get(key []byte) (rlist *List, decr func()) {
+	fp := farm.Fingerprint64(key)
+	lp := lcache.Get(fp)
 
 	if lp != nil {
-		lp.incr()
 		return lp, lp.decr
 	}
 
@@ -310,8 +302,8 @@ func commitOne(l *List) {
 	if l == nil {
 		return
 	}
-	if _, err := l.SyncIfDirty(); err != nil {
-		log.Printf("Error while committing dirty list: %v\n", err)
+	if _, err := l.SyncIfDirty(false); err != nil {
+		x.Printf("Error while committing dirty list: %v\n", err)
 	}
 }
 
@@ -361,60 +353,4 @@ func EvictGroup(group uint32) {
 	// lhmapFor(group).EachWithDelete(func(k uint64, l *List) {
 	// 	l.decr()
 	// })
-}
-
-// The following logic is used to batch up all the writes to RocksDB.
-type syncEntry struct {
-	key       []byte
-	val       []byte
-	water     *x.WaterMark
-	pending   []uint64
-	deleteKey uint64 // TODO: Use this to delete after a sync is done.
-}
-
-func batchSync(i int) {
-	var entries []syncEntry
-	var loop uint64
-	wb := make([]*badger.Entry, 0, 100)
-	elog := trace.NewEventLog("Batch Sync", fmt.Sprintf("%d", i))
-
-	for {
-		ent := <-syncCh
-	slurpLoop:
-		for {
-			entries = append(entries, ent)
-			if len(entries) == syncChCapacity {
-				// Avoid making infinite batch, push back against syncCh.
-				break
-			}
-			select {
-			case ent = <-syncCh:
-			default:
-				break slurpLoop
-			}
-		}
-
-		loop++
-		if loop%1000 == 0 {
-			elog.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
-		}
-		for _, e := range entries {
-			if e.val == nil {
-				wb = badger.EntriesDelete(wb, e.key)
-			} else {
-				x.BytesWrite.Add(int64(len(e.val)))
-				x.PostingWrites.Add(1)
-				wb = badger.EntriesSet(wb, e.key, e.val)
-			}
-		}
-		pstore.BatchSet(wb) // TODO: Check for errors here.
-		wb = wb[:0]
-
-		for _, e := range entries {
-			if e.water != nil {
-				e.water.Ch <- x.Mark{Indices: e.pending, Done: true}
-			}
-		}
-		entries = entries[:0]
-	}
 }

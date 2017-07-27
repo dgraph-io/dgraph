@@ -148,7 +148,8 @@ func TestFullTextTokenizerLang(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, len(tokens))
 	id := tokenizer.Identifier()
-	require.Equal(t, []string{encodeToken("katz", id), encodeToken("auffass", id)}, tokens)
+	// tokens should be sorted and unique
+	require.Equal(t, []string{encodeToken("auffass", id), encodeToken("katz", id)}, tokens)
 }
 
 func TestTermTokenizer(t *testing.T) {
@@ -175,7 +176,7 @@ func TestTrigramTokenizer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 11, len(tokens))
 	id := tokenizer.Identifier()
-	require.Equal(t, []string{
+	expected := []string{
 		encodeToken("Dgr", id),
 		encodeToken("gra", id),
 		encodeToken("rap", id),
@@ -187,5 +188,22 @@ func TestTrigramTokenizer(t *testing.T) {
 		encodeToken("ock", id),
 		encodeToken("cks", id),
 		encodeToken("ks!", id),
-	}, tokens)
+	}
+	sort.Strings(expected)
+	require.Equal(t, expected, tokens)
+}
+
+func TestGetBleveTokens(t *testing.T) {
+	val := types.ValueForType(types.StringID)
+	val.Value = "Our chief weapon is surprise...surprise and fear...fear and surprise...." +
+		"Our two weapons are fear and surprise...and ruthless efficiency.... " +
+		"Our three weapons are fear, surprise, and ruthless efficiency..."
+	tokens, err := getBleveTokens(FTSTokenizerName, 0x20, val) // use space as identifier
+	require.NoError(t, err)
+
+	expected := []string{" chief", " weapon", " surpris", " fear", " ruthless", " effici"}
+	sort.Strings(expected)
+
+	// ensure that tokens are sorted and unique
+	require.Equal(t, expected, tokens)
 }

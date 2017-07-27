@@ -158,11 +158,14 @@ func defaultContext() context.Context {
 }
 
 func processToFastJsonReq(t *testing.T, query string) (string, error) {
+	return processToFastJsonReqCtx(t, query, defaultContext())
+}
+
+func processToFastJsonReqCtx(t *testing.T, query string, ctx context.Context) (string, error) {
 	res, err := gql.Parse(gql.Request{Str: query, Http: true})
 	if err != nil {
 		return "", err
 	}
-	ctx := defaultContext()
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
 	err = queryRequest.ProcessQuery(ctx)
 	if err != nil {

@@ -33,7 +33,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"runtime/pprof"
@@ -42,8 +41,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/table"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -85,12 +82,57 @@ var (
 	tlsMaxVersion    string
 )
 
-func setupConfigOpts(config *dgraph.Options) {
-	flag.StringVar(&config.PostingDir, "p", "p", "Directory to store posting lists.")
-	flag.StringVar(&config.WALDir, "w", "w", "Directory to store raft write-ahead logs.")
-	flag.BoolVar(&config.Nomutations, "nomutations", false, "Don't allow mutations on this server.")
-	flag.IntVar(&config.NumPending, "pending", 1000,
+func setupConfigOpts() {
+	var config dgraph.Options
+	defaults := dgraph.DefaultConfig
+	flag.StringVar(&config.PostingDir, "p", defaults.PostingDir,
+		"Directory to store posting lists.")
+	flag.StringVar(&config.PostingTables, "posting_tables", defaults.PostingTables,
+		"Specifies how Badger LSM tree is stored. Options are loadtoram, memorymap and "+
+			"nothing; which consume most to least RAM while providing best to worst "+
+			"performance respectively.")
+	flag.StringVar(&config.WALDir, "w", defaults.WALDir,
+		"Directory to store raft write-ahead logs.")
+	flag.BoolVar(&config.Nomutations, "nomutations", defaults.Nomutations,
+		"Don't allow mutations on this server.")
+	flag.IntVar(&config.NumPending, "pending", defaults.NumPending,
 		"Number of pending queries. Useful for rate limiting.")
+
+	flag.IntVar(&config.BaseWorkerPort, "workerport", defaults.BaseWorkerPort,
+		"Port used by worker for internal communication.")
+	flag.StringVar(&config.ExportPath, "export", defaults.ExportPath,
+		"Folder in which to store exports.")
+	flag.IntVar(&config.NumPendingProposals, "pending_proposals", defaults.NumPendingProposals,
+		"Number of pending mutation proposals. Useful for rate limiting.")
+	flag.Float64Var(&config.Tracing, "trace", defaults.Tracing,
+		"The ratio of queries to trace.")
+	flag.StringVar(&config.GroupIds, "groups", defaults.GroupIds,
+		"RAFT groups handled by this server.")
+	flag.StringVar(&config.MyAddr, "my", defaults.MyAddr,
+		"addr:port of this server, so other Dgraph servers can talk to this.")
+	flag.StringVar(&config.PeerAddr, "peer", defaults.PeerAddr,
+		"IP_ADDRESS:PORT of any healthy peer.")
+	flag.Uint64Var(&config.RaftId, "idx", defaults.RaftId,
+		"RAFT ID that this server will use to join RAFT groups.")
+	flag.Uint64Var(&config.MaxPendingCount, "sc", defaults.MaxPendingCount,
+		"Max number of pending entries in wal after which snapshot is taken")
+	flag.BoolVar(&config.ExpandEdge, "expand_edge", defaults.ExpandEdge,
+		"Don't store predicates per node.")
+
+	flag.Float64Var(&config.AllottedMemory, "max_memory_mb", defaults.AllottedMemory,
+		"Estimated max memory the process can take")
+	flag.Float64Var(&config.CommitFraction, "gentlecommit", defaults.CommitFraction,
+		"Fraction of dirty posting lists to commit every few seconds.")
+
+	flag.StringVar(&config.ConfigFile, "config", defaults.ConfigFile,
+		"YAML configuration file containing dgraph settings.")
+	flag.BoolVar(&config.DebugMode, "debugmode", defaults.DebugMode,
+		"enable debug mode for more debug information")
+
+	flag.BoolVar(&x.Config.Version, "version", false, "Prints the version of Dgraph")
+	// Useful for running multiple servers on the same machine.
+	flag.IntVar(&x.Config.PortOffset, "port_offset", 0,
+		"Value added to all listening port numbers.")
 
 	flag.StringVar(&gconf, "group_conf", "", "group configuration file")
 	flag.IntVar(&baseHttpPort, "port", 8080, "Port to run HTTP service on.")
@@ -113,14 +155,36 @@ func setupConfigOpts(config *dgraph.Options) {
 	flag.BoolVar(&tlsSystemCACerts, "tls.use_system_ca", false, "Include System CA into CA Certs.")
 	flag.StringVar(&tlsMinVersion, "tls.min_version", "TLS11", "TLS min version.")
 	flag.StringVar(&tlsMaxVersion, "tls.max_version", "TLS12", "TLS max version.")
+
+	flag.Parse()
+	if !flag.Parsed() {
+		log.Fatal("Unable to parse flags")
+	}
+
+	// Read from config file before setting config.
+	if config.ConfigFile != "" {
+		x.Println("Loading configuration from file:", config.ConfigFile)
+		x.LoadConfigFromYAML(config.ConfigFile)
+	}
+
+	dgraph.SetConfiguration(config)
 }
 
 func httpPort() int {
-	return *x.PortOffset + baseHttpPort
+	return x.Config.PortOffset + baseHttpPort
 }
 
 func grpcPort() int {
-	return *x.PortOffset + baseGrpcPort
+	return x.Config.PortOffset + baseGrpcPort
+}
+
+func setupProfiling() {
+	if len(cpuprofile) > 0 {
+		f, err := os.Create(cpuprofile)
+		x.Check(err)
+		pprof.StartCPUProfile(f)
+	}
+	runtime.SetBlockProfileRate(blockRate)
 }
 
 func stopProfiling() {
@@ -183,7 +247,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
 	ctx = context.WithValue(ctx, "mutation_allowed", !dgraph.Config.Nomutations)
 
-	if rand.Float64() < *worker.Tracing {
+	if rand.Float64() < worker.Config.Tracing {
 		tr := trace.New("Dgraph", "Query")
 		tr.SetMaxEvents(1000)
 		defer tr.Finish()
@@ -207,6 +271,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if dgraph.Config.DebugMode {
+		fmt.Printf("Received query: %+v\n", q)
+	}
 	parseStart := time.Now()
 	parsed, err := dgraph.ParseQueryAndMutation(ctx, gql.Request{
 		Str:       q,
@@ -349,7 +416,12 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.Error, err.Error())
 	}
 	nquads := gql.WrapNQ(NewSharedQueryNQuads(rawQuery), protos.DirectedEdge_SET)
-	if mr, err = query.ToInternal(ctx, nquads, nil); err != nil {
+	newUids, err := query.AssignUids(ctx, nquads)
+	if err != nil {
+		fail()
+		return
+	}
+	if mr, err = query.ToInternal(ctx, nquads, nil, newUids); err != nil {
 		fail()
 		return
 	}
@@ -357,7 +429,8 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
-	allocIdsStr := query.ConvertUidsToHex(mr.NewUids)
+	tempMap := query.StripBlankNode(newUids)
+	allocIdsStr := query.ConvertUidsToHex(tempMap)
 	payload := map[string]interface{}{
 		"code":    x.Success,
 		"message": "Done",
@@ -471,17 +544,6 @@ func init() {
 		gopath, _ := bestEffortGopath()
 		uiDir = path.Join(gopath, "src/github.com/dgraph-io/dgraph/dashboard/build")
 	}
-}
-
-func checkFlagsAndInitDirs() {
-	if len(cpuprofile) > 0 {
-		f, err := os.Create(cpuprofile)
-		x.Check(err)
-		pprof.StartCPUProfile(f)
-	}
-
-	// Create parent directories for postings, uids and mutations
-	x.Check(os.MkdirAll(dgraph.Config.PostingDir, 0700))
 }
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
@@ -612,42 +674,34 @@ func setupServer(che chan error) {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	setupConfigOpts(&dgraph.Config)
-	x.Init()
+
+	// Setting a higher number here allows more disk I/O calls to be scheduled, hence considerably
+	// improving throughput. The extra CPU overhead is almost negligible in comparison. The
+	// benchmark notes are located in badger-bench/randread.
+	runtime.GOMAXPROCS(128)
+
+	setupConfigOpts()
+	x.Init() // flag.Parse is called here
+
+	setupProfiling()
+
 	dgraph.State = dgraph.NewServerState()
+	defer dgraph.State.Dispose()
 
 	if exposeTrace {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
 			return true, true
 		}
 	}
-	checkFlagsAndInitDirs()
-	runtime.SetBlockProfileRate(blockRate)
 
-	pd, err := filepath.Abs(dgraph.Config.PostingDir)
-	x.Check(err)
-	wd, err := filepath.Abs(dgraph.Config.WALDir)
-	x.Check(err)
-	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same.")
-
-	// All the writes to posting store should be synchronous. We use batched writers
-	// for posting lists, so the cost of sync writes is amortized.
-	opt := badger.DefaultOptions
-	opt.SyncWrites = true
-	opt.Dir = dgraph.Config.PostingDir
-	opt.ValueDir = dgraph.Config.PostingDir
-	opt.MapTablesTo = table.MemoryMap
-	ps, err := badger.NewKV(&opt)
-	x.Checkf(err, "Error while creating badger KV posting store")
-	defer ps.Close()
-
-	x.Check(group.ParseGroupConfig(gconf))
-	schema.Init(ps)
+	group.ParseGroupConfig(gconf)
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
-	posting.Init(ps)
-	worker.Init(ps)
+	schema.Init(dgraph.State.Pstore)
+	posting.Init(dgraph.State.Pstore)
+	worker.Config.InMemoryComm = false
+	worker.Init(dgraph.State.Pstore)
 
 	// setup shutdown os signal handler
 	sdCh := make(chan os.Signal, 1)
@@ -664,7 +718,7 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	go worker.StartRaftNodes(dgraph.Config.WALDir)
+	go worker.StartRaftNodes(dgraph.State.WALstore, bindall)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {

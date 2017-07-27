@@ -20,11 +20,11 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"net"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -48,10 +48,7 @@ const (
 )
 
 var (
-	debugMode = flag.Bool("debugmode", false,
-		"enable debug mode for more debug information")
 	// Useful for running multiple servers on the same machine.
-	PortOffset     = flag.Int("port_offset", 0, "Value added to all listening port numbers.")
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 )
 
@@ -196,4 +193,18 @@ func ValidateAddress(addr string) bool {
 		return false
 	}
 	return regExpHostName.MatchString(host)
+}
+
+// sorts the slice of strings and removes duplicates. changes the input slice.
+// this function should be called like: someSlice = x.RemoveDuplicates(someSlice)
+func RemoveDuplicates(s []string) (out []string) {
+	sort.Strings(s)
+	out = s[:0]
+	for i := range s {
+		if i > 0 && s[i] == s[i-1] {
+			continue
+		}
+		out = append(out, s[i])
+	}
+	return
 }
