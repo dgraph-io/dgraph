@@ -198,13 +198,13 @@ func (c *listCache) clear(attr string) error {
 }
 
 // delete removes a key from cache
-func (c *listCache) delete(key uint64) {
+func (c *listCache) delete(key []byte) {
 	c.Lock()
 	defer c.Unlock()
 
-	if ele, ok := c.cache[key]; ok {
+	if ele, ok := c.cache[string(key)]; ok {
 		c.ll.Remove(ele)
-		delete(c.cache, key)
+		delete(c.cache, string(key))
 		kv := ele.Value.(*entry)
 		kv.pl.decr()
 	}

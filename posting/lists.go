@@ -28,7 +28,6 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
-	farm "github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -224,7 +223,7 @@ const (
 
 var (
 	pstore    *badger.KV
-	dirtyChan chan fingerPrint // All dirty posting list keys are pushed here.
+	dirtyChan chan []byte // All dirty posting list keys are pushed here.
 	marks     *syncMarks
 	lcache    *listCache
 )
@@ -235,7 +234,7 @@ func Init(ps *badger.KV) {
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
 	x.LcacheCapacity.Set(math.MaxInt64)
-	dirtyChan = make(chan fingerPrint, 10000)
+	dirtyChan = make(chan []byte, 10000)
 
 	go periodicCommit()
 }
@@ -287,8 +286,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 // Get takes a key and a groupID. It checks if the in-memory map has an
 // updated value and returns it if it exists or it gets from the store and DOES NOT ADD to lhmap.
 func Get(key []byte) (rlist *List, decr func()) {
-	fp := farm.Fingerprint64(key)
-	lp := lcache.Get(fp)
+	lp := lcache.Get(string(key))
 
 	if lp != nil {
 		return lp, lp.decr
