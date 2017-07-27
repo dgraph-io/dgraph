@@ -1138,7 +1138,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			expectArg = false
 		} else if item.Typ == itemRightRound {
 			if expectArg {
-				return result, x.Errorf("Unexpected comma before ).")
+				return result, x.Errorf("Expected argument but got ')'.")
 			}
 			break
 		} else if item.Typ == itemComma {
@@ -2213,7 +2213,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			valLower := strings.ToLower(val)
 			if gq.IsGroupby && (!isAggregator(val) && val != "count" && count != seen) {
 				// Only aggregator or count allowed inside the groupby block.
-				return x.Errorf("Only aggrgator/count functions allowed inside @groupby. Got: %v", val)
+				return x.Errorf("Only aggregator/count functions allowed inside @groupby. Got: %v", val)
 			}
 			if valLower == "checkpwd" {
 				child := &GraphQuery{
