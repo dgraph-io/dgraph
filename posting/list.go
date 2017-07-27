@@ -70,7 +70,6 @@ type List struct {
 	x.SafeMutex
 	index         x.SafeMutex
 	key           []byte
-	ghash         uint64
 	plist         *protos.PostingList
 	mlayer        []*protos.Posting // mutations
 	lastCompact   time.Time
@@ -202,7 +201,6 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
 	l.key = key
-	l.ghash = farm.Fingerprint64(key)
 	l.refcount = 1
 
 	l.Lock()
@@ -532,7 +530,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 			gid = group.BelongsTo(t.Attr)
 		}
 		if dirtyChan != nil {
-			dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
+			dirtyChan <- l.key
 		}
 	}
 	return hasMutated, nil
@@ -563,7 +561,7 @@ func (l *List) delete(ctx context.Context, attr string) error {
 		gid = group.BelongsTo(attr)
 	}
 	if dirtyChan != nil {
-		dirtyChan <- fingerPrint{fp: l.ghash, gid: gid}
+		dirtyChan <- l.key
 	}
 	return nil
 }
@@ -782,7 +780,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 		if delFromCache {
 			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
-			lcache.delete(l.ghash)
+			lcache.delete(l.key)
 		}
 	}
 
