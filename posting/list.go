@@ -60,7 +60,8 @@ const (
 	// Del means delete in mutation layer. It contributes -1 in Length.
 	Del uint32 = 0x02
 	// Add means add new element in mutation layer. It contributes 1 in Length.
-	Add uint32 = 0x03
+	Add            uint32 = 0x03
+	bitUidPostings byte   = 0x01
 )
 
 type List struct {
@@ -93,10 +94,10 @@ func (l *List) decr() {
 		return
 	}
 
-	for _, p := range l.plist.Postings {
-		postingPool.Put(p)
-	}
 	if l.plist != emptyList {
+		for _, p := range l.plist.Postings {
+			postingPool.Put(p)
+		}
 		l.plist.Postings = l.plist.Postings[:0]
 		l.plist.Uids = l.plist.Uids[:0]
 		postingListPool.Put(l.plist)
@@ -134,7 +135,7 @@ var listPool = sync.Pool{
 }
 
 type PIterator struct {
-	pl         *protos.PostingList // Pointer to PostingList
+	pl         *protos.PostingList
 	uidPosting *protos.Posting
 	uidx       int // index of UIDs
 	pidx       int // index of postings
@@ -152,6 +153,7 @@ func findUidIndex(pl *protos.PostingList, afterUid uint64) int {
 	})
 }
 
+// Either one of pl or uids would be empty/nil
 func (it *PIterator) Init(pl *protos.PostingList, afterUid uint64) {
 	it.pl = pl
 	it.uidPosting = &protos.Posting{}
@@ -219,9 +221,10 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	val := item.Value()
 	x.BytesRead.Add(int64(len(val)))
 
-	// TODO: See if we can avoid Unmarshal here.
 	l.plist = postingListPool.Get().(*protos.PostingList)
-	if val != nil {
+	if item.UserMeta() == bitUidPostings {
+		l.plist.Uids = val
+	} else if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 	}
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
@@ -469,6 +472,16 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	}
 
 	l.AssertLock()
+	var index uint64
+	var gid uint32
+	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
+		index = rv.Index
+		gid = rv.Group
+	}
+	if len(l.pending) > 0 && index > l.pending[0]+1000 {
+		l.syncIfDirty(false)
+	}
+
 	// All edges with a value without LANGTAG, have the same uid. In other words,
 	// an (entity, attribute) can only have one untagged value.
 	if !bytes.Equal(t.Value, nil) {
@@ -503,16 +516,14 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	hasMutated := l.updateMutationLayer(mpost)
 	if dur := time.Since(t1); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Postings))
+			tr.LazyPrintf("updated mutation layer %v %v %v", dur, len(l.mlayer), len(l.plist.Uids))
 		}
 	}
 
 	if hasMutated {
-		var gid uint32
-		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
-			l.water.Ch <- x.Mark{Index: rv.Index}
-			l.pending = append(l.pending, rv.Index)
-			gid = rv.Group
+		if index != 0 {
+			l.water.Ch <- x.Mark{Index: index}
+			l.pending = append(l.pending, index)
 		}
 		// if mutation doesn't come via raft
 		if gid == 0 {
@@ -628,17 +639,16 @@ func (l *List) length(afterUid uint64) int {
 	l.AssertRLock()
 
 	uidx, midx := 0, 0
-	pl := l.plist
 
 	if afterUid > 0 {
-		uidx = findUidIndex(pl, afterUid)
+		uidx = findUidIndex(l.plist, afterUid)
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {
 			mp := l.mlayer[idx]
 			return afterUid < mp.Uid
 		})
 	}
 
-	count := len(pl.Uids)/8 - uidx
+	count := len(l.plist.Uids)/8 - uidx
 	for _, p := range l.mlayer[midx:] {
 		if p.Op == Add {
 			count++
@@ -656,18 +666,25 @@ func (l *List) Length(afterUid uint64) int {
 	return l.length(afterUid)
 }
 
-func doAsyncWrite(key []byte, data []byte, f func(error)) {
+func doAsyncWrite(key []byte, data []byte, uidOnlyPosting bool, f func(error)) {
+	var meta byte
+	if uidOnlyPosting {
+		meta = bitUidPostings
+	}
 	if data == nil {
 		pstore.DeleteAsync(key, f)
 	} else {
-		pstore.SetAsync(key, data, f)
+		pstore.SetAsync(key, data, meta, f)
 	}
 }
 
 func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
+	return l.syncIfDirty(delFromCache)
+}
 
+func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	// deleteAll is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
 	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
@@ -708,20 +725,24 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		return true
 	})
 
-	var data []byte
-	if len(final.Uids) == 0 {
-		// This means we should delete the key from store during SyncIfDirty.
-		data = nil
-	} else {
-		final.Checksum = h.Sum(nil)
-		data, err = final.Marshal()
-		x.Checkf(err, "Unable to marshal posting list")
-	}
-
 	if l.plist != emptyList {
 		l.plist.Uids = l.plist.Uids[:0]
 		l.plist.Postings = l.plist.Postings[:0]
 		postingListPool.Put(l.plist)
+	}
+
+	var data []byte
+	var uidOnlyPosting bool
+	if len(final.Uids) == 0 {
+		// This means we should delete the key from store during SyncIfDirty.
+		data = nil
+	} else if len(final.Postings) > 0 {
+		final.Checksum = h.Sum(nil)
+		data, err = final.Marshal()
+		x.Checkf(err, "Unable to marshal posting list")
+	} else {
+		data = final.Uids
+		uidOnlyPosting = true
 	}
 	l.plist = final
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
@@ -751,7 +772,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 			}
 			// Error from badger should be temporary, so we can retry.
 			retries += 1
-			doAsyncWrite(l.key, data, f)
+			doAsyncWrite(l.key, data, uidOnlyPosting, f)
 			return
 		}
 		if l.water != nil {
@@ -763,7 +784,7 @@ func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 	}
 
-	doAsyncWrite(l.key, data, f)
+	doAsyncWrite(l.key, data, uidOnlyPosting, f)
 	// Now reset the mutation variables.
 	l.pending = make([]uint64, 0, 3)
 	l.mlayer = l.mlayer[:0]
@@ -776,6 +797,17 @@ func (l *List) LastCompactionTs() time.Time {
 	l.RLock()
 	defer l.RUnlock()
 	return l.lastCompact
+}
+
+// Copies the val if it's uid only posting, be careful
+func Unmarshal(val []byte, metadata byte, pl *protos.PostingList) {
+	if metadata == bitUidPostings {
+		buf := make([]byte, len(val))
+		copy(buf, val)
+		pl.Uids = buf
+	} else if val != nil {
+		x.Checkf(pl.Unmarshal(val), "Unable to Unmarshal PostingList from store")
+	}
 }
 
 // Uids returns the UIDs given some query params.
