@@ -27,6 +27,7 @@ do
 done
 sleep 5
 
+go test ../../contrib/freebase/share_test.go
 go test ../../contrib/freebase/simple_test.go
 
 killall dgraph
