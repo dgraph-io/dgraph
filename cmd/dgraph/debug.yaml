@@ -19,9 +19,6 @@ grpc_port: 9080
 # Port used by worker for internal communication.
 workerport: 12345
 
-# If RAM usage exceeds this, we evict LRU cache till its below the value.
-max_memory_mb: 1024
-
 # The ratio of queries to trace.
 trace: 1.0
 
