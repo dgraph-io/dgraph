@@ -78,6 +78,7 @@ func IndexTokens(attr, lang string, src types.Val) ([]string, error) {
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 // t represents the original uid -> value edge.
+// TODO - See if we need to pass op as argument as t should already have Op.
 func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 	op protos.DirectedEdge_Op) error {
 	attr := t.Attr
@@ -202,14 +203,19 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 	isReversed := schema.State().IsReversed(t.Attr)
 	isIndexed := schema.State().IsIndexed(t.Attr)
 	delEdge := &protos.DirectedEdge{
-		Attr: t.Attr,
-		Op:   t.Op,
+		Attr:   t.Attr,
+		Op:     t.Op,
+		Entity: t.Entity,
 	}
+	var iterErr error
 	l.Iterate(0, func(p *protos.Posting) bool {
 		if isReversed {
 			// Delete reverse edge for each posting.
 			delEdge.ValueId = p.Uid
-			addReverseMutation(ctx, delEdge)
+			if err := addReverseMutation(ctx, delEdge); err != nil {
+				iterErr = err
+				return false
+			}
 			return true
 		} else if isIndexed {
 			// Delete index edge of each posting.
@@ -217,10 +223,16 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			}
-			addIndexMutations(ctx, t, p, protos.DirectedEdge_DEL)
+			if err := addIndexMutations(ctx, t, p, protos.DirectedEdge_DEL); err != nil {
+				iterErr = err
+				return false
+			}
 		}
 		return true
 	})
+	if iterErr != nil {
+		return iterErr
+	}
 	l.Lock()
 	defer l.Unlock()
 	return l.delete(ctx, t.Attr)
