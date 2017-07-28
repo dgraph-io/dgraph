@@ -202,8 +202,9 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 	isReversed := schema.State().IsReversed(t.Attr)
 	isIndexed := schema.State().IsIndexed(t.Attr)
 	delEdge := &protos.DirectedEdge{
-		Attr: t.Attr,
-		Op:   t.Op,
+		Attr:   t.Attr,
+		Op:     t.Op,
+		Entity: t.Entity,
 	}
 	l.Iterate(0, func(p *protos.Posting) bool {
 		if isReversed {
