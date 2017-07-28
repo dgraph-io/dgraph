@@ -106,10 +106,10 @@ func TestSchema3_Error(t *testing.T) {
 }
 
 var schemaIndexVal1 = `
-age:int @index .
+age:int @index(int) .
 
 name: string .
-address: string @index .`
+address: string @index(term) .`
 
 func TestSchemaIndex(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal1), 1))
@@ -248,6 +248,20 @@ func TestParse6_Error(t *testing.T) {
 	require.Nil(t, schemas)
 }
 
+func TestParse7_Error(t *testing.T) {
+	reset()
+	schemas, err := Parse("name:string @index .")
+	require.Error(t, err)
+	require.Nil(t, schemas)
+}
+
+func TestParse8_Error(t *testing.T) {
+	reset()
+	schemas, err := Parse("dob:dateTime @index .")
+	require.Error(t, err)
+	require.Nil(t, schemas)
+}
+
 var ps *badger.KV
 
 func TestMain(m *testing.M) {
@@ -271,6 +285,6 @@ func TestMain(m *testing.M) {
 
 func TestParseUnderscore(t *testing.T) {
 	reset()
-	_, err := Parse("_share_:string @index .")
+	_, err := Parse("_share_:string @index(term) .")
 	require.NoError(t, err)
 }

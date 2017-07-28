@@ -232,7 +232,7 @@ func TestDeletePredicate(t *testing.T) {
 	mutation {
 		schema {
 			friend: uid @reverse .
-			name: string @index .
+			name: string @index(term) .
 		}
 	}
 	`
@@ -240,7 +240,7 @@ func TestDeletePredicate(t *testing.T) {
 	var s2 = `
 		mutation {
 			schema {
-				friend: string @index .
+				friend: string @index(term) .
 				name: uid @reverse .
 			}
 		}
@@ -301,18 +301,18 @@ func TestSchemaMutation(t *testing.T) {
 	var m = `
 	mutation {
 		schema {
-      name:string @index(term, exact) .
+			name:string @index(term, exact) .
 			alias:string @index(exact, term) .
-			dob:dateTime @index .
-			film.film.initial_release_date:dateTime @index .
-			loc:geo @index .
+			dob:dateTime @index(year) .
+			film.film.initial_release_date:dateTime @index(year) .
+			loc:geo @index(geo) .
 			genre:uid @reverse .
 			survival_rate : float .
 			alive         : bool .
 			age           : int .
 			shadow_deep   : int .
 			friend:uid @reverse .
-			geometry:geo @index .
+			geometry:geo @index(geo) .
 		}
 	}
 
@@ -395,7 +395,7 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 	var s = `
 	mutation {
 		schema {
-            name:string @index .
+            name:string @index(term) .
 		}
 	}
 	`
@@ -436,7 +436,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	var s1 = `
 	mutation {
 		schema {
-            name:string @index .
+            name:string @index(term) .
 		}
 	}
 	`
@@ -615,7 +615,7 @@ func TestDeleteAll(t *testing.T) {
 	mutation {
 		schema {
       friend:uid @reverse .
-			name: string @index .
+			name: string @index(term) .
 		}
 	}
 	`
@@ -715,7 +715,7 @@ func TestDeleteAllSP(t *testing.T) {
 	mutation {
 		schema {
 			friend:uid @reverse .
-			name: string @index .
+			name: string @index(term) .
 		}
 	}
 	`
@@ -939,7 +939,7 @@ func TestListPred(t *testing.T) {
 	var s = `
 	mutation {
 		schema {
-			name:string @index .
+			name:string @index(term) .
 		}
 	}
 	`
@@ -983,7 +983,7 @@ func TestExpandPredError(t *testing.T) {
 	var s = `
 	mutation {
 		schema {
-			name:string @index .
+			name:string @index(term) .
 		}
 	}
 	`
@@ -1025,7 +1025,7 @@ func TestExpandPred(t *testing.T) {
 	var s = `
 	mutation {
 		schema {
-			name:string @index .
+			name:string @index(term) .
 		}
 	}
 	`
