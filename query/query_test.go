@@ -2633,13 +2633,13 @@ func TestMinSchema(t *testing.T) {
         `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"gender":"female","min(val(x))":1.600000,"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"min(val(x))":1.600000}]}}`,
 		js)
 
 	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: uint32(types.IntID)})
 	js = processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"data": {"me":[{"alive":true,"friend":[{"survival_rate":1},{"survival_rate":1},{"survival_rate":1},{"survival_rate":1}],"gender":"female","min(val(x))":1,"name":"Michonne"}]}}`,
+		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1},{"survival_rate":1},{"survival_rate":1},{"survival_rate":1}],"min(val(x))":1}]}}`,
 		js)
 	schema.State().Set("survival_rate", protos.SchemaUpdate{ValueType: uint32(types.FloatID)})
 }
@@ -3155,7 +3155,7 @@ func TestToFastJSONFilter(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"data": {"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`,
+		`{"data": {"me":[{"name":"Michonne","gender":"female","friend":[{"name":"Andrea"}]}]}}`,
 		js)
 }
 
@@ -3192,7 +3192,7 @@ func TestToFastJSONFilterallofterms(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"data": {"me":[{"gender":"female","name":"Michonne"}]}}`, js)
+		`{"data": {"me":[{"name":"Michonne","gender":"female"}]}}`, js)
 }
 
 func TestInvalidStringIndex(t *testing.T) {
@@ -3554,7 +3554,7 @@ func TestToFastJSONFilterUID(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x1f"}],"gender":"female","name":"Michonne"}]}}`,
+		`{"data": {"me":[{"name":"Michonne","gender":"female","friend":[{"_uid_":"0x1f"}]}]}}`,
 		js)
 }
 
@@ -3575,7 +3575,7 @@ func TestToFastJSONFilterOrUID(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"data": {"me":[{"friend":[{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x1f","name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`,
+		`{"data": {"me":[{"name":"Michonne","gender":"female","friend":[{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x1f","name":"Andrea"}]}]}}`,
 		js)
 }
 
@@ -4223,7 +4223,7 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"data": {"me":[{"gender":"female","name":"Michonne"}]}}`, js)
+		`{"data": {"me":[{"name":"Michonne","gender":"female"}]}}`, js)
 }
 
 func TestCountReverseFunc(t *testing.T) {
@@ -4642,7 +4642,7 @@ func TestToFastJSONOrder(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"data": {"me":[{"friend":[{"dob":"1901-01-15T00:00:00Z","name":"Andrea"},{"dob":"1909-01-10T00:00:00Z","name":"Daryl Dixon"},{"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"},{"dob":"1910-01-02T00:00:00Z","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}}`,
+		`{"data": {"me":[{"name":"Michonne","gender":"female","friend":[{"name":"Andrea","dob":"1901-01-15T00:00:00Z"},{"name":"Daryl Dixon","dob":"1909-01-10T00:00:00Z"},{"name":"Glenn Rhee","dob":"1909-05-05T00:00:00Z"},{"name":"Rick Grimes","dob":"1910-01-02T00:00:00Z"}]}]}}`,
 		js)
 }
 
@@ -4717,12 +4717,12 @@ func TestToFastJSONOrderDedup(t *testing.T) {
 	query := `
 		{
 			me(func: uid(0x01)) {
-				name
-				gender
 				friend(orderasc: name) {
-					name
 					dob
+					name
 				}
+				gender
+				name
 			}
 		}
 	`
@@ -6157,7 +6157,7 @@ func TestNotExistObject(t *testing.T) {
         `
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"data": {"me":[{"alive":true,"gender":"female","name":"Michonne"}]}}`,
+		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true}]}}`,
 		js)
 }
 
@@ -8385,7 +8385,7 @@ func TestUidFunctionInFilter2(t *testing.T) {
 		}
 	}`
 	js := processToFastJSON(t, query)
-	require.Equal(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"}],"name":"Michonne"},{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
+	require.Equal(t, `{"data": {"me":[{"name":"Michonne","friend":[{"name":"Rick Grimes"}]},{"name":"Rick Grimes","friend":[{"name":"Michonne"}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}}`, js)
 }
 
 func TestUidFunctionInFilter3(t *testing.T) {
@@ -8479,7 +8479,7 @@ func TestBinaryJSON(t *testing.T) {
 		}
 	}`
 	js := processToFastJSON(t, query)
-	require.Equal(t, `{"data": {"me":[{"bin_data":"YmluLWRhdGE=","name":"Michonne"}]}}`, js)
+	require.Equal(t, `{"data": {"me":[{"name":"Michonne","bin_data":"YmluLWRhdGE="}]}}`, js)
 }
 
 func TestReflexive(t *testing.T) {
