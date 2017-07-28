@@ -35,6 +35,6 @@ func TestSpielberg(t *testing.T) {
     }`
 
 	res := decodeResponse(q)
-	expectedRes := `{"data": "me":[{"director.film":[{"name@en":"Firelight"},{"name@en":"Slipstream"},{"name@en":"Amblin"},{"name@en":"Duel"}],"name@en":"Steven Spielberg"}]}}`
+	expectedRes := `{"data": {"me":[{"director.film":[{"name@en":"Firelight"},{"name@en":"Slipstream"},{"name@en":"Amblin"},{"name@en":"Duel"}],"name@en":"Steven Spielberg"}]}}`
 	require.JSONEq(t, expectedRes, res)
 }

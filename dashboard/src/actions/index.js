@@ -24,18 +24,15 @@ import { updateConnectedState } from "./connection";
 function executeQueryAndUpdateFrame(dispatch, { frameId, query }) {
   const endpoint = getEndpoint("query", { debug: true });
 
-  return timeout(
-    60000,
-    fetch(endpoint, {
-      method: "POST",
-      mode: "cors",
-      cache: "no-cache",
-      headers: {
-        "Content-Type": "text/plain"
-      },
-      body: query
-    })
-  )
+  return fetch(endpoint, {
+    method: "POST",
+    mode: "cors",
+    cache: "no-cache",
+    headers: {
+      "Content-Type": "text/plain"
+    },
+    body: query
+  })
     .then(checkStatus)
     .then(response => response.json())
     .then(result => {
@@ -62,7 +59,7 @@ function executeQueryAndUpdateFrame(dispatch, { frameId, query }) {
         // This is the case in which user sends a mutation.
         // We display the response from server.
         let frameType;
-        if (result.code.startsWith("Error")) {
+        if (result.data.code.startsWith("Error")) {
           frameType = FRAME_TYPE_ERROR;
         } else {
           frameType = FRAME_TYPE_SUCCESS;

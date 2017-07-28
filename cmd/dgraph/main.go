@@ -315,7 +315,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	var addLatency bool
 	// If there is an error parsing, then addLatency would remain false.
 	addLatency, _ = strconv.ParseBool(r.URL.Query().Get("latency"))
@@ -485,7 +484,8 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shutdownServer()
-	x.SetStatus(w, x.Success, "Server is shutting down")
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`))
 }
 
 func shutdownServer() {
@@ -516,7 +516,8 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, err.Error(), "Export failed.")
 		return
 	}
-	x.SetStatus(w, x.Success, "Export completed.")
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"code": "Success", "message": "Export completed."}`))
 }
 
 func hasGraphOps(mu *protos.Mutation) bool {

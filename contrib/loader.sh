@@ -26,7 +26,7 @@ popd &> /dev/null
 pushd cmd/dgraph &> /dev/null
 echo -e "\nBuilding and running Dgraph."
 go build .
-./dgraph -gentlecommit 1.0 -p $BUILD/p -w $BUILD/loader/w -max_memory_mb 6000 > $BUILD/server.log &
+./dgraph -gentlecommit 1.0 -p $BUILD/p -w $BUILD/loader/w -memory_mb 6000 > $BUILD/server.log &
 popd &> /dev/null
 
 sleep 15
@@ -114,7 +114,7 @@ sleep 15
 
 echo -e "\nTrying to restart Dgraph and match export count"
 pushd cmd/dgraph &> /dev/null
-./dgraph -p $BUILD/p -w $BUILD/loader/w &
+./dgraph -p $BUILD/p -w $BUILD/loader/w -memory_mb 4000 &
 # Wait to become leader.
 sleep 15
 echo -e "\nTrying to export data."

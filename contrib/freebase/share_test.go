@@ -44,6 +44,10 @@ type Res2 struct {
 	Root []Share `json:"me"`
 }
 
+type Res3 struct {
+	Root Res2 `json:"data"`
+}
+
 func TestShare(t *testing.T) {
 	dgraphServer := "http://localhost:8080/share?debug=true"
 	client := new(http.Client)
@@ -76,8 +80,9 @@ func TestShare(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	var r2 Res2
-	json.Unmarshal(b, &r2)
+	var r3 Res3
+	json.Unmarshal(b, &r3)
+	r2 := r3.Root
 	require.Equal(t, 1, len(r2.Root))
 	require.Equal(t, q, r2.Root[0].Share)
 	require.NotNil(t, r2.Root[0].ShareHash)
