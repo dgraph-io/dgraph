@@ -206,11 +206,15 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 		Op:     t.Op,
 		Entity: t.Entity,
 	}
+	var iterErr error
 	l.Iterate(0, func(p *protos.Posting) bool {
 		if isReversed {
 			// Delete reverse edge for each posting.
 			delEdge.ValueId = p.Uid
-			addReverseMutation(ctx, delEdge)
+			if err := addReverseMutation(ctx, delEdge); err != nil {
+				iterErr = err
+				return false
+			}
 			return true
 		} else if isIndexed {
 			// Delete index edge of each posting.
@@ -218,10 +222,16 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			}
-			addIndexMutations(ctx, t, p, protos.DirectedEdge_DEL)
+			if err := addIndexMutations(ctx, t, p, protos.DirectedEdge_DEL); err != nil {
+				iterErr = err
+				return false
+			}
 		}
 		return true
 	})
+	if iterErr != nil {
+		return iterErr
+	}
 	l.Lock()
 	defer l.Unlock()
 	return l.delete(ctx, t.Attr)
