@@ -741,7 +741,8 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		data, err = final.Marshal()
 		x.Checkf(err, "Unable to marshal posting list")
 	} else {
-		data = final.Uids
+		data = make([]byte, len(final.Uids))
+		copy(data, final.Uids) // Copy Uids, otherwise they may change before write to Badger.
 		uidOnlyPosting = true
 	}
 	l.plist = final
