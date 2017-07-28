@@ -242,7 +242,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 			ElectionTick:    10,
 			HeartbeatTick:   1,
 			Storage:         store,
-			MaxSizePerMsg:   4096,
+			MaxSizePerMsg:   128 << 10,
 			MaxInflightMsgs: 256,
 			Logger:          &raft.DefaultLogger{Logger: x.Logger},
 		},
