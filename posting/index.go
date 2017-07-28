@@ -78,6 +78,7 @@ func IndexTokens(attr, lang string, src types.Val) ([]string, error) {
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 // t represents the original uid -> value edge.
+// TODO - See if we need to pass op as argument as t should already have Op.
 func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 	op protos.DirectedEdge_Op) error {
 	attr := t.Attr
