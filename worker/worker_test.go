@@ -153,7 +153,7 @@ func newQuery(attr string, uids []uint64, srcFunc []string) *protos.Query {
 // at the end. In other words, everything is happening only in mutation layers,
 // and not committed to RocksDB until near the end.
 func TestProcessTaskIndexMLayer(t *testing.T) {
-	dir, ps := initTest(t, `friend:string @index .`)
+	dir, ps := initTest(t, `friend:string @index(term) .`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
@@ -233,7 +233,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 // Index-related test. Similar to TestProcessTaskIndeMLayer except we call
 // MergeLists in between a lot of updates.
 func TestProcessTaskIndex(t *testing.T) {
-	dir, ps := initTest(t, `friend:string @index .`)
+	dir, ps := initTest(t, `friend:string @index(term) .`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 

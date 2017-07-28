@@ -160,7 +160,14 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 	next := it.Item()
 	if next.Typ != itemLeftRound {
 		it.Prev() // Backup.
-		return []string{tok.Default(typ).Name()}, nil
+		def := tok.Default(typ)
+		// For string, datatime we don't have default tokenizer so user should specify one.
+		if def == nil {
+			return []string{},
+				x.Errorf("Require type of tokenizer for pred: %s of type: %s for indexing.",
+					predicate, typ.Name())
+		}
+		return []string{def.Name()}, nil
 	}
 
 	expectArg := true

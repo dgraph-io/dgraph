@@ -6658,9 +6658,9 @@ func TestSchemaBlock5(t *testing.T) {
 const schemaStr = `
 name                           : string @index(term, exact, trigram) @count .
 alias                          : string @index(exact, term, fulltext) .
-dob                            : dateTime @index .
+dob                            : dateTime @index(year) .
 dob_day                        : dateTime @index(day) .
-film.film.initial_release_date : dateTime @index .
+film.film.initial_release_date : dateTime @index(year) .
 loc                            : geo @index .
 genre                          : uid @reverse .
 survival_rate                  : float .
