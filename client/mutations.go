@@ -337,7 +337,9 @@ RETRY:
 		if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
 			log.Fatal(errString)
 		}
-		fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
+		if !strings.Contains(errString, "Temporary Error") {
+			fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
+		}
 		time.Sleep(factor)
 		if factor < 256*time.Second {
 			factor = factor * 2
