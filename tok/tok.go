@@ -19,7 +19,6 @@ package tok
 
 import (
 	"encoding/binary"
-	"fmt"
 	"time"
 
 	farm "github.com/dgryski/go-farm"
@@ -243,9 +242,7 @@ func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
 		return nil, x.Errorf("Exact indices only supported for string types")
 	}
 	if len(term) > 100 {
-		fmt.Printf("*****\n")
-		fmt.Printf("Long text for exact index. Consider switching to hash for better performance\n")
-		fmt.Printf("*****\n")
+		x.Printf("Long text for exact index. Consider switching to hash for better performance\n")
 	}
 	return []string{encodeToken(term, t.Identifier())}, nil
 }
