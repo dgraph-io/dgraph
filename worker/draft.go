@@ -242,7 +242,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 			ElectionTick:    10, // 200 ms if we call Tick() every 20 ms.
 			HeartbeatTick:   1,  // 20 ms if we call Tick() every 20 ms.
 			Storage:         store,
-			MaxSizePerMsg:   4096,
+			MaxSizePerMsg:   256 << 10,
 			MaxInflightMsgs: 256,
 			Logger:          &raft.DefaultLogger{Logger: x.Logger},
 		},
@@ -958,6 +958,10 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 
 	if restart {
 		x.Printf("Restarting node for group: %d\n", n.gid)
+		_, found := groups().Server(Config.RaftId, n.gid)
+		if !found && groups().HasPeer(n.gid) {
+			n.joinPeers()
+		}
 		n.SetRaft(raft.RestartNode(n.cfg))
 
 	} else {
