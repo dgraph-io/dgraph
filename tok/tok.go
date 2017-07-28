@@ -71,10 +71,6 @@ func init() {
 	RegisterTokenizer(BoolTokenizer{})
 	RegisterTokenizer(TrigramTokenizer{})
 	RegisterTokenizer(HashTokenizer{})
-	SetDefault(types.GeoID, "geo")
-	SetDefault(types.IntID, "int")
-	SetDefault(types.FloatID, "float")
-	SetDefault(types.BoolID, "bool")
 
 	// Check for duplicate prefix bytes.
 	usedIds := make(map[byte]struct{})
@@ -93,21 +89,6 @@ func init() {
 func GetTokenizer(name string) (Tokenizer, bool) {
 	t, found := tokenizers[name]
 	return t, found
-}
-
-// Default returns the default tokenizer for a given type.
-func Default(typ types.TypeID) Tokenizer {
-	return defaults[typ]
-}
-
-// SetDefault sets the default tokenizer for given typeID.
-func SetDefault(typ types.TypeID, name string) {
-	if defaults == nil {
-		defaults = make(map[types.TypeID]Tokenizer)
-	}
-	t, has := GetTokenizer(name)
-	x.AssertTruef(has && t.Type() == typ, "Type mismatch %v vs %v", t.Type(), typ)
-	defaults[typ] = t
 }
 
 // RegisterTokenizer adds your tokenizer to our list.

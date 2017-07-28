@@ -48,21 +48,21 @@ func uids(pl *protos.PostingList) []uint64 {
 }
 
 func TestIndexingInt(t *testing.T) {
-	schema.ParseBytes([]byte("age:int @index ."), 1)
+	schema.ParseBytes([]byte("age:int @index(int) ."), 1)
 	a, err := IndexTokens("age", "", types.Val{types.StringID, []byte("10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingIntNegative(t *testing.T) {
-	schema.ParseBytes([]byte("age:int @index ."), 1)
+	schema.ParseBytes([]byte("age:int @index(int) ."), 1)
 	a, err := IndexTokens("age", "", types.Val{types.StringID, []byte("-10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf6}, []byte(a[0]))
 }
 
 func TestIndexingFloat(t *testing.T) {
-	schema.ParseBytes([]byte("age:float @index ."), 1)
+	schema.ParseBytes([]byte("age:float @index(float) ."), 1)
 	a, err := IndexTokens("age", "", types.Val{types.StringID, []byte("10.43")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x7, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))

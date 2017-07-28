@@ -6661,14 +6661,14 @@ alias                          : string @index(exact, term, fulltext) .
 dob                            : dateTime @index(year) .
 dob_day                        : dateTime @index(day) .
 film.film.initial_release_date : dateTime @index(year) .
-loc                            : geo @index .
+loc                            : geo @index(geo) .
 genre                          : uid @reverse .
 survival_rate                  : float .
-alive                          : bool @index .
-age                            : int @index .
+alive                          : bool @index(bool) .
+age                            : int @index(int) .
 shadow_deep                    : int .
 friend                         : uid @reverse @count .
-geometry                       : geo @index .
+geometry                       : geo @index(geo) .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 noindex_name                   : string .

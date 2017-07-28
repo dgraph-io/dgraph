@@ -305,14 +305,14 @@ func TestSchemaMutation(t *testing.T) {
 			alias:string @index(exact, term) .
 			dob:dateTime @index(year) .
 			film.film.initial_release_date:dateTime @index(year) .
-			loc:geo @index .
+			loc:geo @index(geo) .
 			genre:uid @reverse .
 			survival_rate : float .
 			alive         : bool .
 			age           : int .
 			shadow_deep   : int .
 			friend:uid @reverse .
-			geometry:geo @index .
+			geometry:geo @index(geo) .
 		}
 	}
 

@@ -106,7 +106,7 @@ func TestSchema3_Error(t *testing.T) {
 }
 
 var schemaIndexVal1 = `
-age:int @index .
+age:int @index(int) .
 
 name: string .
 address: string @index(term) .`

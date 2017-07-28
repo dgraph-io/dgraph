@@ -160,14 +160,8 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 	next := it.Item()
 	if next.Typ != itemLeftRound {
 		it.Prev() // Backup.
-		def := tok.Default(typ)
-		// For string, datatime we don't have default tokenizer so user should specify one.
-		if def == nil {
-			return []string{},
-				x.Errorf("Require type of tokenizer for pred: %s of type: %s for indexing.",
-					predicate, typ.Name())
-		}
-		return []string{def.Name()}, nil
+		return []string{}, x.Errorf("Require type of tokenizer for pred: %s for indexing.",
+			predicate)
 	}
 
 	expectArg := true
@@ -235,12 +229,8 @@ func resolveTokenizers(updates []*protos.SchemaUpdate) error {
 		}
 
 		if len(schema.Tokenizer) == 0 && schema.Directive == protos.SchemaUpdate_INDEX {
-			def := tok.Default(typ)
-			if def == nil {
-				return x.Errorf("Require type of tokenizer for pred: %s of type: %s for indexing.",
-					schema.Predicate, typ.Name())
-			}
-			schema.Tokenizer = []string{def.Name()}
+			return x.Errorf("Require type of tokenizer for pred: %s of type: %s for indexing.",
+				schema.Predicate, typ.Name())
 		} else if len(schema.Tokenizer) > 0 && schema.Directive != protos.SchemaUpdate_INDEX {
 			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
 		}
