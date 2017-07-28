@@ -49,10 +49,10 @@ var (
 	// In such a case, retry.
 	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
 	// ErrNoValue would be returned if no value was found in the posting list.
-	ErrNoValue   = fmt.Errorf("No value found")
-	emptyPosting = &protos.Posting{}
-	emptyList    = &protos.PostingList{}
-	splist       []byte
+	ErrNoValue    = fmt.Errorf("No value found")
+	emptyPosting  = &protos.Posting{}
+	emptyList     = &protos.PostingList{}
+	redirectPlVal []byte
 )
 
 const (
@@ -65,15 +65,16 @@ const (
 
 	// Metadata Bit which is stored to find out whether the stored value is pl or byte slice.
 	bitUidPostings byte = 0x01
-	MaxUidsLen          = 64000
+	maxUidsLen          = 2
 )
 
 func init() {
-	pl := &protos.PostingList{Split: true}
-	splist, _ = pl.Marshal()
+	pl := &protos.PostingList{Sharded: true}
+	redirectPlVal, _ = pl.Marshal()
 }
 
 type shardedList struct {
+	x.SafeMutex
 	key    []byte
 	plist  *protos.PostingList
 	mlayer []*protos.Posting
@@ -89,9 +90,9 @@ type List struct {
 	deleteAll     int32
 	estimatedSize uint32
 
-	// TODO: Handle crashes
 	sharded bool
-	slists  []*shardedList
+	// If not sharded, slists[0] contains the pl
+	slists []*shardedList
 
 	water   *x.WaterMark
 	pending []uint64
@@ -111,6 +112,8 @@ func (l *List) decr() {
 	}
 	for _, sl := range l.slists {
 		if sl.plist != emptyList && sl.plist != nil {
+			sl.Lock()
+			sl.Unlock()
 			for _, p := range sl.plist.Postings {
 				postingPool.Put(p)
 			}
@@ -242,24 +245,42 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	x.BytesRead.Add(int64(len(val)))
 
 	plist := postingListPool.Get().(*protos.PostingList)
-	if item.UserMeta() == bitUidPostings {
-		plist.Uids = val
-	} else if val != nil {
-		x.Checkf(plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
-	}
-	l.sharded = plist.Split
+	unmarshal(val, item.UserMeta(), plist)
+
+	l.sharded = plist.Sharded
 	if l.sharded {
+		wb := make([]*badger.Entry, 0)
+
 		prefix := x.SplitPrefix(key)
 		itOpt := badger.DefaultIteratorOptions
 		itOpt.FetchValues = false
 		it := pstore.NewIterator(itOpt)
 		defer it.Close()
+
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			k := it.Item().Key()
 			newk := make([]byte, len(k))
 			copy(newk, k)
+			if len(l.slists) > 0 {
+				same, latest := x.CompareSplitCounter(newk, l.slists[len(l.slists)-1].key)
+				if same {
+					if latest {
+						sl := &shardedList{key: newk}
+						l.slists = append(l.slists, sl)
+					} else {
+						wb = badger.EntriesDelete(wb, l.slists[len(l.slists)-1].key)
+					}
+					continue
+				}
+			}
 			sl := &shardedList{key: newk}
 			l.slists = append(l.slists, sl)
+		}
+		if len(wb) > 0 {
+			if err := pstore.BatchSet(wb); err != nil {
+				x.Errorf("Error while deleting stale sharded pl's %v", err)
+			}
+
 		}
 		postingListPool.Put(plist)
 	} else {
@@ -361,12 +382,15 @@ func (l *List) SetForDeletion() {
 	atomic.StoreInt32(&l.deleteMe, 1)
 }
 
-func (l *List) get(idx int) {
+func (l *List) getShardedList(idx int) {
+	l.AssertRLock()
 	sl := l.slists[idx]
 	if sl.plist != nil {
 		return
 	}
 
+	sl.Lock()
+	defer sl.Unlock()
 	var item badger.KVItem
 	var err error
 	for i := 0; i < 10; i++ {
@@ -382,43 +406,38 @@ func (l *List) get(idx int) {
 	x.BytesRead.Add(int64(len(val)))
 
 	sl.plist = postingListPool.Get().(*protos.PostingList)
-	if val != nil {
-		x.Checkf(sl.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
-	}
+	unmarshal(val, item.UserMeta(), sl.plist)
 	atomic.AddUint32(&l.estimatedSize, uint32(sl.plist.Size()))
 }
 
-func (l *List) splitListFor(uid uint64) (*shardedList, int) {
+func (l *List) shardedListForUid(uid uint64) (*shardedList, int) {
 	l.AssertRLock()
 	if !l.sharded {
 		return l.slists[0], 0
 	}
 
 	idx := sort.Search(len(l.slists), func(idx int) bool {
-		keyLen := len(l.slists[idx].key)
-		// last 8 bytes are max uid in each pl
-		id := binary.BigEndian.Uint64(l.slists[idx].key[keyLen-8:])
-		return uid <= id
+		maxuid, _ := x.ParseSplitKey(l.slists[idx].key)
+		return uid <= maxuid
 	})
-	if l.slists[idx].plist != nil {
-		return l.slists[idx], idx
-	}
 
-	l.get(idx)
+	l.getShardedList(idx)
 	return l.slists[idx], idx
 }
 
-func (l *shardedList) updateMutationLayer(mpost *protos.Posting) bool {
+func (sl *shardedList) updateMutationLayer(mpost *protos.Posting) bool {
+	sl.Lock()
+	defer sl.Unlock()
 	// First check the mutable layer.
-	midx := sort.Search(len(l.mlayer), func(idx int) bool {
-		mp := l.mlayer[idx]
+	midx := sort.Search(len(sl.mlayer), func(idx int) bool {
+		mp := sl.mlayer[idx]
 		return mpost.Uid <= mp.Uid
 	})
 
 	// This block handles the case where mpost.UID is found in mutation layer.
-	if midx < len(l.mlayer) && l.mlayer[midx].Uid == mpost.Uid {
+	if midx < len(sl.mlayer) && sl.mlayer[midx].Uid == mpost.Uid {
 		// mp is the posting found in mlayer.
-		oldPost := l.mlayer[midx]
+		oldPost := sl.mlayer[midx]
 
 		// Note that mpost.Op is either Set or Del, whereas oldPost.Op can be
 		// either Set or Del or Add.
@@ -446,22 +465,22 @@ func (l *shardedList) updateMutationLayer(mpost *protos.Posting) bool {
 		if oldPost.Op == Add {
 			if mpost.Op == Del {
 				// Undo old post.
-				copy(l.mlayer[midx:], l.mlayer[midx+1:])
-				l.mlayer[len(l.mlayer)-1] = nil
-				l.mlayer = l.mlayer[:len(l.mlayer)-1]
+				copy(sl.mlayer[midx:], sl.mlayer[midx+1:])
+				sl.mlayer[len(sl.mlayer)-1] = nil
+				sl.mlayer = sl.mlayer[:len(sl.mlayer)-1]
 				return true
 			}
 			// Add followed by Set is considered an Add. Hence, mutate mpost.Op.
 			mpost.Op = Add
 		}
-		l.mlayer[midx] = mpost
+		sl.mlayer[midx] = mpost
 		return true
 	}
 
 	// Didn't find it in mutable layer. Now check the immutable layer.
 	var uidFound, psame bool
 	var pitr PIterator
-	pitr.Init(l.plist, mpost.Uid-1)
+	pitr.Init(sl.plist, mpost.Uid-1)
 	if pitr.Valid() {
 		pp := pitr.Posting()
 		puid := pp.Uid
@@ -483,85 +502,82 @@ func (l *shardedList) updateMutationLayer(mpost *protos.Posting) bool {
 	}
 
 	// Doesn't match what we already have in immutable layer. So, add to mutable layer.
-	if midx >= len(l.mlayer) {
+	if midx >= len(sl.mlayer) {
 		// Add it at the end.
-		l.mlayer = append(l.mlayer, mpost)
+		sl.mlayer = append(sl.mlayer, mpost)
 		return true
 	}
 
 	// Otherwise, add it where midx is pointing to.
-	l.mlayer = append(l.mlayer, nil)
-	copy(l.mlayer[midx+1:], l.mlayer[midx:])
-	l.mlayer[midx] = mpost
+	sl.mlayer = append(sl.mlayer, nil)
+	copy(sl.mlayer[midx+1:], sl.mlayer[midx:])
+	sl.mlayer[midx] = mpost
 	return true
 }
 
+// Always write redirect pl at end if it was not sharded before, else
+// delete data at the end if splitting
 func (l *List) splitList(idx int) {
 	l.AssertLock()
 	sl := l.slists[idx]
 	pl, _ := sl.mergeMutationLayer(true)
-	wb := make([]*badger.Entry, 0, 2)
+	sl.Lock()
+	defer sl.Unlock()
+	wb := make([]*badger.Entry, 3, 3)
 
 	if !l.sharded {
-		// This should happen at last so that we can recover from crash
-		wb = append(wb, &badger.Entry{
+		// Redirect pl should be the last entry
+		wb[2] = &badger.Entry{
 			Key:   sl.key,
-			Value: splist,
-		})
-		sl.key = x.SplitKey(sl.key, math.MaxUint64)
+			Value: redirectPlVal,
+		}
+		// update key
+		sl.key = x.SplitKey(sl.key, math.MaxUint64, 0)
 		l.sharded = true
 		// moving to blcache
 		blcache.PutIfMissing(string(l.key), l)
-		lcache.delete(l.key)
-	}
-	val, err := sl.plist.Marshal()
-	x.Checkf(err, "Error while marshalling pl")
-	// Anything which removes data should be persisted after new data is written
-	wb[1] = &badger.Entry{
-		Key:   sl.key,
-		Value: val,
+		l.incr()
+		go lcache.delete(l.key)
+		wb[1] = badgerEntry(sl.key, sl.plist)
+	} else {
+		wb[2] = &badger.Entry{
+			Key:  sl.key,
+			Meta: badger.BitDelete,
+		}
+		// update key - increase counter
+		sl.key = x.IncrementSplitCounter(sl.key)
+		wb[1] = badgerEntry(sl.key, sl.plist)
 	}
 
+	// Write new pl
+	l.slists = append(l.slists, nil)
 	copy(l.slists[idx+1:], l.slists[idx:])
 	maxUid := binary.BigEndian.Uint64(pl.Uids[len(pl.Uids)-8:])
-	key := x.SplitKey(sl.key[:len(sl.key)-8], maxUid)
+	key := x.SplitKey(l.key, maxUid, 0)
 	l.slists[idx] = &shardedList{
 		key:   key,
 		plist: pl,
 	}
-	val2, err := pl.Marshal()
-	x.Checkf(err, "Error while marshalling pl")
-	wb[0] = &badger.Entry{
-		Key:   sl.key,
-		Value: val2,
-	}
-
+	wb[0] = badgerEntry(key, pl)
+	// doing it in sync so no watermark required
+	err := pstore.BatchSet(wb)
+	x.Check(err)
 }
 
-func (l *List) updateMutationLayer(mpost *protos.Posting) bool {
-	l.AssertLock()
+func (l *List) updateMutationLayer(mpost *protos.Posting, locked bool) bool {
+	if !locked {
+		l.Lock()
+	}
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
-	sl, i := l.splitListFor(mpost.Uid)
-	if sl.length(0) >= MaxUidsLen {
+	sl, i := l.shardedListForUid(mpost.Uid)
+	if sl.Length(0) >= maxUidsLen && mpost.Op == Set {
 		l.splitList(i)
-		sl, _ = l.splitListFor(mpost.Uid)
+		sl, _ = l.shardedListForUid(mpost.Uid)
+	}
+	if !locked {
+		l.Unlock()
 	}
 	return sl.updateMutationLayer(mpost)
-}
-
-// AddMutation adds mutation to mutation layers. Note that it does not write
-// anything to disk. Some other background routine will be responsible for merging
-// changes in mutation layers to RocksDB. Returns whether any mutation happens.
-func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
-	t1 := time.Now()
-	l.Lock()
-	if dur := time.Since(t1); dur > time.Millisecond {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("acquired lock %v %v", dur, t.Attr)
-		}
-	}
-	defer l.Unlock()
-	return l.addMutation(ctx, t)
 }
 
 func edgeType(t *protos.DirectedEdge) x.ValueTypeInfo {
@@ -600,20 +616,52 @@ func TypeID(edge *protos.DirectedEdge) types.TypeID {
 	return types.TypeID(edge.ValueType)
 }
 
+// AddMutation adds mutation to mutation layers. Note that it does not write
+// anything to disk. Some other background routine will be responsible for merging
+// changes in mutation layers to RocksDB. Returns whether any mutation happens.
+func (l *List) AddMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
+	hasMutated, err := l.addMutationHelper(ctx, t, false)
+	if err != nil {
+		return false, err
+	}
+	if hasMutated {
+		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
+			l.water.Ch <- x.Mark{Index: rv.Index}
+			l.Lock()
+			l.pending = append(l.pending, rv.Index)
+			l.Unlock()
+		}
+		if dirtyChan != nil {
+			dirtyChan <- l.key
+		}
+	}
+	return hasMutated, nil
+}
+
 func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, error) {
+	l.AssertLock()
+	hasMutated, err := l.addMutationHelper(ctx, t, true)
+	if err != nil {
+		return false, err
+	}
+	if hasMutated {
+		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
+			l.water.Ch <- x.Mark{Index: rv.Index}
+			l.pending = append(l.pending, rv.Index)
+		}
+		if dirtyChan != nil {
+			dirtyChan <- l.key
+		}
+	}
+	return hasMutated, nil
+}
+
+func (l *List) addMutationHelper(ctx context.Context, t *protos.DirectedEdge, locked bool) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("DELETEME set to true. Temporary error.")
 		}
 		return false, ErrRetry
-	}
-
-	l.AssertLock()
-	var index uint64
-	var gid uint32
-	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
-		index = rv.Index
-		gid = rv.Group
 	}
 
 	// All edges with a value without LANGTAG, have the same uid. In other words,
@@ -645,21 +693,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	// a)		check if the entity exists in main posting list.
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
-	hasMutated := l.updateMutationLayer(mpost)
-
-	if hasMutated {
-		if index != 0 {
-			l.water.Ch <- x.Mark{Index: index}
-			l.pending = append(l.pending, index)
-		}
-		// if mutation doesn't come via raft
-		if gid == 0 {
-			gid = group.BelongsTo(t.Attr)
-		}
-		if dirtyChan != nil {
-			dirtyChan <- l.key
-		}
-	}
+	hasMutated := l.updateMutationLayer(mpost, locked)
 	return hasMutated, nil
 }
 
@@ -712,13 +746,20 @@ func (l *List) Iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	l.iterate(afterUid, f)
 }
 
-func (l *shardedList) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
+func (sl *shardedList) Iterate(afterUid uint64, f func(obj *protos.Posting) bool) bool {
+	sl.RLock()
+	defer sl.RUnlock()
+	return sl.iterate(afterUid, f)
+}
+
+func (sl *shardedList) iterate(afterUid uint64, f func(obj *protos.Posting) bool) bool {
+	sl.AssertRLock()
 	midx := 0
 
-	mlayerLen := len(l.mlayer)
+	mlayerLen := len(sl.mlayer)
 	if afterUid > 0 {
 		midx = sort.Search(mlayerLen, func(idx int) bool {
-			mp := l.mlayer[idx]
+			mp := sl.mlayer[idx]
 			return afterUid < mp.Uid
 		})
 	}
@@ -726,7 +767,7 @@ func (l *shardedList) iterate(afterUid uint64, f func(obj *protos.Posting) bool)
 	var mp, pp *protos.Posting
 	cont := true
 	var pitr PIterator
-	pitr.Init(l.plist, afterUid)
+	pitr.Init(sl.plist, afterUid)
 	for cont {
 		if pitr.Valid() {
 			pp = pitr.Posting()
@@ -735,14 +776,15 @@ func (l *shardedList) iterate(afterUid uint64, f func(obj *protos.Posting) bool)
 		}
 
 		if midx < mlayerLen {
-			mp = l.mlayer[midx]
+			mp = sl.mlayer[midx]
 		} else {
 			mp = emptyPosting
 		}
 
 		switch {
 		case pp.Uid == 0 && mp.Uid == 0:
-			cont = false
+			// iteration will continue over next shard
+			return true
 		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			cont = f(pp)
 			pitr.Next()
@@ -761,34 +803,43 @@ func (l *shardedList) iterate(afterUid uint64, f func(obj *protos.Posting) bool)
 			log.Fatalf("Unhandled case during iteration of posting list.")
 		}
 	}
+	return false
 }
 
 func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	l.AssertRLock()
-	sl, i := l.splitListFor(afterUid)
-	sl.iterate(afterUid, f)
+	sl, i := l.shardedListForUid(afterUid)
+	cont := sl.Iterate(afterUid, f)
 	i++
-	for i < len(l.slists) {
+	for cont && i < len(l.slists) {
 		sl = l.slists[i]
-		l.get(i)
-		sl.iterate(afterUid, f)
+		l.getShardedList(i)
+		cont = sl.Iterate(afterUid, f)
 		i++
 	}
 }
 
-func (l *shardedList) length(afterUid uint64) int {
+func (sl *shardedList) Length(afterUid uint64) int {
+	sl.RLock()
+	defer sl.RUnlock()
+	return sl.length(afterUid)
+}
+
+// TODO: Precompute and store length
+func (sl *shardedList) length(afterUid uint64) int {
+	sl.AssertRLock()
 	uidx, midx := 0, 0
 
 	if afterUid > 0 {
-		uidx = findUidIndex(l.plist, afterUid)
-		midx = sort.Search(len(l.mlayer), func(idx int) bool {
-			mp := l.mlayer[idx]
+		uidx = findUidIndex(sl.plist, afterUid)
+		midx = sort.Search(len(sl.mlayer), func(idx int) bool {
+			mp := sl.mlayer[idx]
 			return afterUid < mp.Uid
 		})
 	}
 
-	count := len(l.plist.Uids)/8 - uidx
-	for _, p := range l.mlayer[midx:] {
+	count := len(sl.plist.Uids)/8 - uidx
+	for _, p := range sl.mlayer[midx:] {
 		if p.Op == Add {
 			count++
 		} else if p.Op == Del {
@@ -800,12 +851,12 @@ func (l *shardedList) length(afterUid uint64) int {
 
 func (l *List) length(afterUid uint64) int {
 	l.AssertRLock()
-	sl, i := l.splitListFor(afterUid)
-	length := sl.length(afterUid)
+	sl, i := l.shardedListForUid(afterUid)
+	length := sl.Length(afterUid)
 	i++
 	for i < len(l.slists) {
-		l.get(i)
-		length += l.slists[i].length(afterUid)
+		l.getShardedList(i)
+		length += l.slists[i].Length(afterUid)
 		i++
 	}
 	return length
@@ -819,47 +870,23 @@ func (l *List) Length(afterUid uint64) int {
 	return l.length(afterUid)
 }
 
-func doAsyncWrite(key []byte, data []byte, uidOnlyPosting bool, f func(error)) {
-	var meta byte
-	if uidOnlyPosting {
-		meta = bitUidPostings
-	}
-	if data == nil {
-		pstore.DeleteAsync(key, f)
-	} else {
-		pstore.SetAsync(key, data, meta, f)
-	}
-}
-
 func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
-	return l.syncIfDirty(delFromCache)
-}
-
-func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	// deleteAll is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
-
 	wb := make([]*badger.Entry, 0, 1)
 	for _, sl := range l.slists {
-		var updated bool
-		if atomic.LoadInt32(&l.deleteAll) == 1 {
-			updated = true
-		} else {
-			_, updated = sl.mergeMutationLayer(false)
-		}
-		if !updated {
+		_, updated := sl.mergeMutationLayer(false)
+		if !updated && atomic.LoadInt32(&l.deleteAll) != 1 {
 			continue
 		}
-		var data []byte
 		if len(sl.plist.Uids) == 0 {
 			wb = badger.EntriesDelete(wb, sl.key)
 		} else {
-			data, err = sl.plist.Marshal()
-			x.Checkf(err, "Unable to marshal pl")
-			wb = badger.EntriesSet(wb, sl.key, data)
+			wb = append(wb, badgerEntry(sl.key, sl.plist))
 		}
+
 	}
 	if len(wb) == 0 {
 		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
@@ -889,7 +916,10 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 		if delFromCache {
 			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)
-			lcache.delete(l.key)
+			newk := make([]byte, len(l.key))
+			copy(newk, l.key)
+			lcache.delete(newk)
+			blcache.delete(newk)
 		}
 	}
 
@@ -901,30 +931,40 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	return true, nil
 }
 
-func (l *shardedList) mergeMutationLayer(split bool) (*protos.PostingList, bool) {
+func (sl *shardedList) mergeMutationLayer(split bool) (*protos.PostingList, bool) {
+	sl.Lock()
+	defer sl.Unlock()
 	// deleteAll is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
 	var newPl *protos.PostingList
 	var firstHalf bool
-	if len(l.mlayer) == 0 && !split {
+	if len(sl.mlayer) == 0 && !split {
 		return nil, false
 	}
 
 	final := postingListPool.Get().(*protos.PostingList)
-	numUids := l.length(0)
-	if cap(final.Uids) < 8*numUids {
-		final.Uids = make([]byte, 8*numUids)
+	numUids := sl.length(0)
+	factor := 8
+	if split {
+		factor = 4
 	}
-	final.Uids = final.Uids[:8*numUids]
+	if cap(final.Uids) < factor*numUids {
+		final.Uids = make([]byte, factor*numUids)
+	}
+	final.Uids = final.Uids[:factor*numUids]
 	if split {
 		newPl = postingListPool.Get().(*protos.PostingList)
+		if cap(newPl.Uids) < factor*numUids {
+			newPl.Uids = make([]byte, factor*numUids) // extra space by 2 + 1
+		}
+		newPl.Uids = newPl.Uids[:factor*numUids]
 		firstHalf = true
 	}
 
 	var ubuf [16]byte
 	h := md5.New()
 	count := 0
-	l.iterate(0, func(p *protos.Posting) bool {
+	sl.iterate(0, func(p *protos.Posting) bool {
 		// Checksum code.
 		n := binary.PutVarint(ubuf[:], int64(count))
 		h.Write(ubuf[0:n])
@@ -934,43 +974,43 @@ func (l *shardedList) mergeMutationLayer(split bool) (*protos.PostingList, bool)
 		h.Write([]byte(p.Label))
 
 		i := 8 * count
-		binary.BigEndian.PutUint64(final.Uids[i:i+8], p.Uid)
-		count++
+		if firstHalf && count <= (numUids-1)/2 {
+			binary.BigEndian.PutUint64(newPl.Uids[i:i+8], p.Uid)
+		} else {
+			binary.BigEndian.PutUint64(final.Uids[i:i+8], p.Uid)
+		}
 
 		if p.Facets != nil || p.Value != nil || len(p.Metadata) != 0 || len(p.Label) != 0 {
 			// I think it's okay to take the pointer from the iterator, because we have a lock
 			// over List; which won't be released until final has been marshalled. Thus, the
 			// underlying data wouldn't be changed.
-			if firstHalf && count <= numUids/2 {
+			if firstHalf && count <= (numUids-1)/2 {
 				newPl.Postings = append(newPl.Postings, p)
-				if count == numUids/2 {
-					newPl.Checksum = h.Sum(nil)
-					h = md5.New()
-					firstHalf = false
-					count = 0
-				}
+			} else {
+				final.Postings = append(final.Postings, p)
 			}
-			final.Postings = append(final.Postings, p)
 		}
+		if firstHalf && count == (numUids-1)/2 {
+			newPl.Checksum = h.Sum(nil)
+			h = md5.New()
+			firstHalf = false
+			count = 0
+			return true
+		}
+		count++
 		return true
 	})
 
-	if l.plist != emptyList {
-		l.plist.Uids = l.plist.Uids[:0]
-		l.plist.Postings = l.plist.Postings[:0]
-		postingListPool.Put(l.plist)
+	if sl.plist != emptyList {
+		sl.plist.Uids = sl.plist.Uids[:0]
+		sl.plist.Postings = sl.plist.Postings[:0]
+		postingListPool.Put(sl.plist)
 	}
 
 	if len(final.Postings) > 0 {
 		final.Checksum = h.Sum(nil)
-		data, err = final.Marshal()
-		x.Checkf(err, "Unable to marshal posting list")
-	} else {
-		data = make([]byte, len(final.Uids))
-		copy(data, final.Uids) // Copy Uids, otherwise they may change before write to Badger.
-		uidOnlyPosting = true
 	}
-	l.plist = final
+	sl.plist = final
 
 	for {
 		pLen := atomic.LoadInt64(&x.MaxPlLen)
@@ -983,7 +1023,7 @@ func (l *shardedList) mergeMutationLayer(split bool) (*protos.PostingList, bool)
 			break
 		}
 	}
-	l.mlayer = l.mlayer[:0]
+	sl.mlayer = sl.mlayer[:0]
 	return newPl, true
 }
 
@@ -1004,43 +1044,80 @@ func UnmarshalWithCopy(val []byte, metadata byte, pl *protos.PostingList) {
 	}
 }
 
+func unmarshal(val []byte, metadata byte, pl *protos.PostingList) {
+	if metadata == bitUidPostings {
+		pl.Uids = val
+	} else if val != nil {
+		x.Checkf(pl.Unmarshal(val), "Unable to Unmarshal PostingList from store")
+	}
+}
+
+func badgerEntry(key []byte, pl *protos.PostingList) *badger.Entry {
+	if len(pl.Postings) > 0 {
+		data, err := pl.Marshal()
+		x.Checkf(err, "Unable to marshal posting list")
+		return &badger.Entry{
+			Key:   key,
+			Value: data,
+		}
+	}
+	data := make([]byte, len(pl.Uids))
+	copy(data, pl.Uids) // Copy Uids, otherwise they may change before write to Badger.
+	return &badger.Entry{
+		Key:      key,
+		Value:    data,
+		UserMeta: bitUidPostings,
+	}
+}
+
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 func (l *List) Uids(opt ListOptions) *protos.List {
-	// Pre-assign length to make it faster.
 	l.RLock()
 	defer l.RUnlock()
-	res := make([]uint64, 0, l.length(opt.AfterUID))
+	var res []uint64
 	// Do The intersection here as it's optimized.
-	out := &protos.List{res}
-	_, i := l.splitListFor(opt.AfterUID)
+	_, i := l.shardedListForUid(opt.AfterUID)
 
+	//var prevMaxId uint64
 	for i < len(l.slists) {
 		sl := l.slists[i]
-		if len(sl.mlayer) > 0 {
-			uids := make([]uint64, 0, sl.length(opt.AfterUID))
-			l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
-				if postingType(p) == x.ValueUid {
-					uids = append(uids, p.Uid)
-				}
-				return true
-			})
-
-			if opt.Intersect != nil {
-				// TODO: Make algo intersect with return index so that
-				// we needn't pass the whole opt.intersect again
-				algo.IntersectWith(&protos.List{uids}, opt.Intersect, out)
-			}
-			i++
-			continue
+		// TODO: Can check if opt.intersect falls between prevmaxid and currmaxid
+		l.getShardedList(i)
+		sl.RLock()
+		if len(sl.mlayer) > 0 && opt.Intersect != nil {
+			// TODO: Directly use byte slice
 		}
+
+		uids := make([]uint64, 0, sl.length(opt.AfterUID))
+		sl.iterate(opt.AfterUID, func(p *protos.Posting) bool {
+			if postingType(p) == x.ValueUid {
+				uids = append(uids, p.Uid)
+			}
+			return true
+		})
+		sl.RUnlock()
+
 		if opt.Intersect != nil {
-			algo.IntersectWithByte(sl.plist.Uids, opt.Intersect, out)
+			out := &protos.List{uids}
+			algo.IntersectWith(out, opt.Intersect, out)
+			res = append(res, out.Uids...)
+		} else {
+			res = append(res, uids...)
 		}
 		i++
+
+		/*if len(res) > 0 && opt.Intersect != nil {
+			idx := sort.Search(len(opt.Intersect.Uids), func(i int) bool {
+				return opt.Intersect.Uids[i] >= res[len(res)-1]
+			})
+			if idx >= len(opt.Intersect.Uids) {
+				return &protos.List{res}
+			}
+		}*/
 	}
 
-	return out
+	return &protos.List{res}
 }
 
 // Postings calls postFn with the postings that are common with
@@ -1176,6 +1253,17 @@ func (l *List) postingForTag(tag string) (p *protos.Posting, rerr error) {
 
 func (l *List) findValue(uid uint64) (rval types.Val, found bool) {
 	l.AssertRLock()
+	found, p := l.findPosting(uid)
+	if !found {
+		return rval, found
+	}
+
+	return valueToTypesVal(p), true
+}
+
+func (l *List) FindValue(uid uint64) (rval types.Val, found bool) {
+	l.RLock()
+	defer l.RUnlock()
 	found, p := l.findPosting(uid)
 	if !found {
 		return rval, found

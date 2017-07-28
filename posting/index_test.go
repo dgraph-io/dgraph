@@ -295,6 +295,7 @@ func TestRebuildIndex(t *testing.T) {
 }
 
 func TestRebuildReverseEdges(t *testing.T) {
+	schema.ParseBytes([]byte(schemaVal), 1)
 	addEdgeToUID(t, "friend", 1, 23)
 	addEdgeToUID(t, "friend", 1, 24)
 	addEdgeToUID(t, "friend", 2, 23)

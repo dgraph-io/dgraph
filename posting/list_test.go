@@ -49,6 +49,15 @@ func listToArray(t *testing.T, afterUid uint64, l *List) []uint64 {
 	return out
 }
 
+func shardedListToArray(t *testing.T, afterUid uint64, l *shardedList) []uint64 {
+	out := make([]uint64, 0, 10)
+	l.Iterate(afterUid, func(p *protos.Posting) bool {
+		out = append(out, p.Uid)
+		return true
+	})
+	return out
+}
+
 func checkUids(t *testing.T, l *List, uids []uint64) {
 	require.Equal(t, uids, listToArray(t, 0, l))
 	if len(uids) >= 3 {
@@ -674,6 +683,7 @@ func TestDelete(t *testing.T) {
 	require.True(t, commited)
 
 	require.EqualValues(t, 0, ol.Length(0))
+	ps.Delete(ol.key)
 }
 
 func TestAfterUIDCountWithCommit(t *testing.T) {

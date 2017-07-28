@@ -148,9 +148,12 @@ func gentleCommit(dirtyMap map[string]time.Time, pending chan struct{},
 			return
 		}
 		for _, key := range keys {
-			l := lcache.Get(key)
+			l := lcache.Get(key) // TODO Us blcache
 			if l == nil {
-				continue
+				l = blcache.Get(key)
+			}
+			if l == nil {
+				return
 			}
 			// Not removing the postings list from the map, to avoid a race condition,
 			// where another caller re-creates the posting list before a commit happens.
@@ -346,6 +349,13 @@ func CommitLists(numRoutines int, group uint32) {
 	}
 
 	lcache.Each(func(k string, l *List) {
+		if l == nil { // To be safe. Check might be unnecessary.
+			return
+		}
+		l.incr()
+		workChan <- l
+	})
+	blcache.Each(func(k string, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
