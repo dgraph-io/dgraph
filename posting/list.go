@@ -1031,11 +1031,13 @@ func (l *List) Uids(opt ListOptions) *protos.List {
 				// we needn't pass the whole opt.intersect again
 				algo.IntersectWith(&protos.List{uids}, opt.Intersect, out)
 			}
+			i++
 			continue
 		}
 		if opt.Intersect != nil {
 			algo.IntersectWithByte(sl.plist.Uids, opt.Intersect, out)
 		}
+		i++
 	}
 
 	return out
