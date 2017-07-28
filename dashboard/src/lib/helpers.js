@@ -134,7 +134,8 @@ export function eraseCookie(name, options) {
 
 export function humanizeTime(time) {
   if (time > 1000) {
-    return time.toFixed(1) + "s";
+    // Time is in ms, lets convert it to seconds for displaying.
+    return (time / 1000).toFixed(1) + "s";
   }
   return time.toFixed(0) + "ms";
 }

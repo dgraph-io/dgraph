@@ -37,7 +37,8 @@ const SessionFooterResult = ({
       </div>
       <div className="col-12 col-sm-4">
         <div className="latency stats">
-          {session.response.data.data.server_latency
+          {session.response.data.data &&
+            session.response.data.data.server_latency
             ? <div className="stat">
                 Server latency:
                 {" "}
@@ -57,7 +58,9 @@ const SessionFooterResult = ({
             ? <div className="stat">
                 Rendering latency:
                 {" "}
-                <span className="value">{humanizeTime(treeRenderTime)}</span>
+                <span className="value">
+                  {humanizeTime(treeRenderTime)}
+                </span>
               </div>
             : null}
         </div>
