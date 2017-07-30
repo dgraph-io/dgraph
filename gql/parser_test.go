@@ -57,14 +57,14 @@ func TestParseVarError(t *testing.T) {
 			a as friends 
 		}
 
-		me(id: uid(a)) {
+		me(func: uid(a)) {
 			uid(a)
 		}
 	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot do uid() of a variable")
+	require.Contains(t, err.Error(), "Cannot do uid() of a variable")
 }
 
 func TestParseQueryListPred1(t *testing.T) {
@@ -232,6 +232,7 @@ func TestParseQueryWithMultiVarValError(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	// TODO: This is about the colon after orderasc
+	require.Contains(t, err.Error(), "blah")
 }
 
 func TestParseQueryWithVarValAggErr(t *testing.T) {
@@ -251,6 +252,7 @@ func TestParseQueryWithVarValAggErr(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: This is about the colon after orderasc
 }
 
 func TestParseQueryWithVarValAgg_Error1(t *testing.T) {
@@ -272,6 +274,7 @@ func TestParseQueryWithVarValAgg_Error1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: This is about the colon after orderasc
 }
 
 func TestParseQueryWithVarValAgg_Error2(t *testing.T) {
@@ -293,6 +296,7 @@ func TestParseQueryWithVarValAgg_Error2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: This is about the colon after orderasc
 }
 
 func TestParseQueryWithVarValAgg_Error3(t *testing.T) {
@@ -316,6 +320,7 @@ func TestParseQueryWithVarValAgg_Error3(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: This is about the colon after orderasc
 }
 func TestParseQueryWithVarValAggNested(t *testing.T) {
 	query := `
