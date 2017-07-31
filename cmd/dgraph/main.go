@@ -413,6 +413,10 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := context.Background()
+	if atomic.LoadInt64(&dgraph.Config.MutationAllowed) != 1 {
+		x.SetStatus(w, x.Error, "Mutations are not allowed on this server.")
+		return
+	}
 	defer r.Body.Close()
 	if rawQuery, err = ioutil.ReadAll(r.Body); err != nil || len(rawQuery) == 0 {
 		if tr, ok := trace.FromContext(ctx); ok {
