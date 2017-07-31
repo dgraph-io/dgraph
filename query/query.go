@@ -372,7 +372,7 @@ func alreadySeen(parentIds []uint64, uid uint64) bool {
 }
 
 // This method gets the values and children for a subprotos.
-func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
+func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	if sg.Params.IgnoreReflex {
 		if sg.Params.parentIds == nil {
 			parentIds := make([]uint64, 0, 10)
@@ -453,7 +453,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					continue
 				}
 				uc := dst.New(fieldName)
-				if rerr := pc.preTraverse(childUID, uc, dst); rerr != nil {
+				if rerr := pc.preTraverse(childUID, uc); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						if invalidUids == nil {
 							invalidUids = make(map[uint64]bool)

@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // ToProtocolBuf returns the list of protos.Node which would be returned to the go
@@ -155,13 +156,19 @@ func (p *protoNode) IsEmpty() bool {
 	return true
 }
 
-func mergeProto(parent [][]*protos.Property, child [][]*protos.Property) [][]*protos.Property {
+func mergeProto(parent [][]*protos.Property,
+	child [][]*protos.Property) ([][]*protos.Property, error) {
 	if len(parent) == 0 {
-		return child
+		return child, nil
 	}
 
 	mergedLists := make([][]*protos.Property, 0, len(parent)*len(child))
+	cnt := 0
 	for _, pa := range parent {
+		cnt += len(child)
+		if cnt > 10000 {
+			return nil, x.Errorf("Couldn't evaluate @normalize directive - to many results")
+		}
 		for _, ca := range child {
 			mergeList := make([]*protos.Property, 0, len(parent))
 			mergeList = append(mergeList, pa...)
@@ -169,12 +176,12 @@ func mergeProto(parent [][]*protos.Property, child [][]*protos.Property) [][]*pr
 			mergedLists = append(mergedLists, mergeList)
 		}
 	}
-	return mergedLists
+	return mergedLists, nil
 }
 
-func (n *protoNode) normalize() [][]*protos.Property {
+func (n *protoNode) normalize() ([][]*protos.Property, error) {
 	if len(n.Children) == 0 {
-		return [][]*protos.Property{n.Properties}
+		return [][]*protos.Property{n.Properties}, nil
 	}
 
 	parentSlice := make([][]*protos.Property, 0, len(n.Properties))
@@ -204,12 +211,20 @@ func (n *protoNode) normalize() [][]*protos.Property {
 		childSlice := make([][]*protos.Property, 0, 5)
 
 		for _, child := range attrChildren {
-			childSlice = append(childSlice, (&protoNode{child}).normalize()...)
+			normalized, err := (&protoNode{child}).normalize()
+			if err != nil {
+				return nil, err
+			}
+			childSlice = append(childSlice, normalized...)
 		}
-		parentSlice = mergeProto(parentSlice, childSlice)
+		var err error
+		parentSlice, err = mergeProto(parentSlice, childSlice)
+		if err != nil {
+			return nil, err
+		}
 
 	}
-	return parentSlice
+	return parentSlice, nil
 }
 
 func (n *protoNode) addCountAtRoot(sg *SubGraph) {
@@ -261,7 +276,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 			}
 			n1 := seedNode.New(sg.Params.Alias)
 
-			if rerr := sg.preTraverse(uid, n1, n1); rerr != nil {
+			if rerr := sg.preTraverse(uid, n1); rerr != nil {
 				if rerr.Error() == "_INV_" {
 					continue
 				}
@@ -276,7 +291,11 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 			}
 
 			// Lets normalize the response now.
-			for _, c := range n1.(*protoNode).normalize() {
+			normalized, err := n1.(*protoNode).normalize()
+			if err != nil {
+				return nil, err
+			}
+			for _, c := range normalized {
 				n.AddListChild(sg.Params.Alias, &protoNode{&protos.Node{Properties: c}})
 			}
 		}
@@ -537,9 +556,28 @@ func (n *fastJsonNode) normalize() [][]*fastJsonNode {
 		// Merging with parent.
 		parentSlice = merge(parentSlice, childSlice)
 	}
-	for _, slice := range parentSlice {
+	for i, slice := range parentSlice {
 		sort.Sort(nodeSlice(slice))
+
+		first := -1
+		last := 0
+		for i := range slice {
+			if slice[i].attr == "_uid_" {
+				if first == -1 {
+					first = i
+				}
+				last = i
+			}
+		}
+		if first != -1 && first != last {
+			if first == 0 {
+				parentSlice[i] = slice[last:]
+			} else {
+				parentSlice[i] = append(slice[:first-1], slice[last:]...)
+			}
+		}
 	}
+
 	return parentSlice
 }
 
@@ -596,7 +634,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		}
 
 		n1 := seedNode.New(sg.Params.Alias)
-		if err := sg.preTraverse(uid, n1, n1); err != nil {
+		if err := sg.preTraverse(uid, n1); err != nil {
 			if err.Error() == "_INV_" {
 				continue
 			}
