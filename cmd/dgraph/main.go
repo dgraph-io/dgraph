@@ -692,8 +692,8 @@ func main() {
 	// benchmark notes are located in badger-bench/randread.
 	runtime.GOMAXPROCS(128)
 
-	setupConfigOpts()
-	x.Init() // flag.Parse is called here
+	setupConfigOpts() // flag.Parse is called here.
+	x.Init()
 
 	setupProfiling()
 
