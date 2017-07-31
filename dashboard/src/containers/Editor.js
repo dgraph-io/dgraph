@@ -1,7 +1,12 @@
 import React, { Component } from "react";
 import { connect } from "react-redux";
 
-import { timeout, checkStatus, sortStrings, getEndpointBaseURL } from "../lib/helpers";
+import {
+  timeout,
+  checkStatus,
+  sortStrings,
+  getEndpointBaseURL
+} from "../lib/helpers";
 import "../assets/css/Editor.css";
 
 require("codemirror/addon/hint/show-hint.css");
@@ -48,6 +53,7 @@ class Editor extends Component {
     require("codemirror-graphql/mode");
 
     let keywords = [];
+    var that = this;
     timeout(
       1000,
       fetch(getEndpointBaseURL() + "/ui/keywords", {
@@ -62,6 +68,7 @@ class Editor extends Component {
               return kw.name;
             })
           );
+          CodeMirror.commands.autocomplete(that.editor);
         })
     )
       .catch(function(error) {
@@ -91,12 +98,14 @@ class Editor extends Component {
         .then(checkStatus)
         .then(response => response.json())
         .then(function(result) {
-          if (result.schema && result.schema.length !== 0) {
+          var data = result.data;
+          if (data.schema && data.schema.length !== 0) {
             keywords = keywords.concat(
-              result.schema.map(kw => {
+              data.schema.map(kw => {
                 return kw.predicate;
               })
             );
+            CodeMirror.commands.autocomplete(that.editor);
           }
         })
     )
@@ -125,12 +134,6 @@ class Editor extends Component {
       foldGutter: true,
       gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
       extraKeys: {
-        "Ctrl-Space": cm => {
-          CodeMirror.commands.autocomplete(cm);
-        },
-        "Cmd-Space": cm => {
-          CodeMirror.commands.autocomplete(cm);
-        },
         "Cmd-Enter": () => {
           this.props.onRunQuery(this.getValue());
         },
@@ -180,6 +183,13 @@ class Editor extends Component {
       }
 
       term = term.toLowerCase();
+      if (term.trim().length === 0) {
+        return {
+          list: options.words.sort(sortStrings),
+          from: to,
+          to: to
+        };
+      }
 
       var found = [];
       for (var i = 0; i < options.words.length; i++) {
@@ -206,6 +216,7 @@ class Editor extends Component {
     };
 
     this.editor.on("change", cm => {
+      CodeMirror.commands.autocomplete(cm);
       const { onUpdateQuery } = this.props;
       if (!onUpdateQuery) {
         return;
@@ -215,12 +226,8 @@ class Editor extends Component {
       onUpdateQuery(val);
     });
 
-    this.editor.on("keydown", function(cm, event) {
-      const code = event.keyCode;
-
-      if (!event.ctrlKey && code >= 65 && code <= 90) {
-        CodeMirror.commands.autocomplete(cm);
-      }
+    this.editor.on("focus", cm => {
+      CodeMirror.commands.autocomplete(cm);
     });
 
     if (saveCodeMirrorInstance) {
@@ -229,10 +236,8 @@ class Editor extends Component {
   };
 }
 
-const mapStateToProps = state => ({
-});
+const mapStateToProps = state => ({});
 
-const mapDispatchToProps = {
-};
+const mapDispatchToProps = {};
 
 export default connect(mapStateToProps, mapDispatchToProps)(Editor);

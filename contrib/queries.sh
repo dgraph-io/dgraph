@@ -6,7 +6,7 @@ BUILD=$1
 pushd cmd/dgraph &> /dev/null
 go build .
 # Start dgraph in the background.
-./dgraph -w ~/dgraph/w2 -p $BUILD/p &
+./dgraph -w $BUILD/w2 -p $BUILD/p --memory_mb 4000 &
 
 # Wait for server to start in the background.
 until nc -z 127.0.0.1 8080;

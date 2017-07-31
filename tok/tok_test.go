@@ -124,7 +124,7 @@ func TestMonthTokenizer(t *testing.T) {
 
 func TestDateTimeTokenizer(t *testing.T) {
 	var err error
-	tokenizer, has := GetTokenizer("datetime")
+	tokenizer, has := GetTokenizer("year")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 	val := types.ValueForType(types.DateTimeID)

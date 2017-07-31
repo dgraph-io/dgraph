@@ -89,10 +89,10 @@ func initTestExport(t *testing.T, schemaStr string) (string, *badger.KV) {
 	Init(ps)
 	val, err := (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
 	require.NoError(t, err)
-	ps.Set(x.SchemaKey("friend"), val)
+	ps.Set(x.SchemaKey("friend"), val, 0x00)
 	val, err = (&protos.SchemaUpdate{ValueType: uint32(protos.Posting_UID)}).Marshal()
 	require.NoError(t, err)
-	ps.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
+	ps.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val, 0x00)
 	populateGraphExport(t)
 
 	return dir, ps

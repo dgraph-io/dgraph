@@ -5,9 +5,10 @@ title = "Clients"
 
 ## Implementation
 
-Clients communicate with the server using [Protocol Buffers](https://developers.google.com/protocol-buffers) over [gRPC](http://www.grpc.io/). This requires [defining services](http://www.grpc.io/docs/#defining-a-service) and data types in a ''proto'' file and then generating client and server side code using the [protoc compiler](https://github.com/google/protobuf).
+All clients can communicate with the server via the HTTP endpoint (set with option `--port` when starting Dgraph).  Queries and mutations can be submitted and JSON is returned.
 
-The proto file used by Dgraph is located at [graphresponse.proto](https://github.com/dgraph-io/dgraph/blob/master/protos/graphp/graphresponse.proto).
+Go clients can use the clients package and communicate with the server over [gRPC](http://www.grpc.io/).  Internally this uses [Protocol Buffers](https://developers.google.com/protocol-buffers) and the proto file used by Dgraph is located at [graphresponse.proto](https://github.com/dgraph-io/dgraph/blob/master/protos/graphresponse.proto).
+
 
 ## Languages
 
@@ -15,306 +16,25 @@ The proto file used by Dgraph is located at [graphresponse.proto](https://github
 
 [![GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client?status.svg)](https://godoc.org/github.com/dgraph-io/dgraph/client)
 
-After you have the followed [Get started]({{< relref "get-started/index.md">}}) and got the server running on `127.0.0.1:8080` and (for gRPC) `127.0.0.1:9080`, you can use the Go client to run queries and mutations as shown in the example below.
-
-{{% notice "note" %}}The example below would store values with the correct types only if the
-correct [schema type]({{< relref "query-language/index.md#schema" >}}) is specified in the mutation, otherwise everything would be converted to schema type and stored. Schema is derived based on first mutation received by the server. If first mutation is of default type then everything would be stored as default type.{{% /notice %}}
+The go client communicates with the server on the grpc port (set with option `--grpc_port` when starting Dgraph).
 
 
 #### Installation
 
-To get the Go client, you can run
+Go get the client:
 ```
-go get -u -v github.com/dgraph-io/dgraph/client github.com/dgraph-io/dgraph/protos
-```
-
-#### Example
-
-The working example below shows the common operations that one would perform on a graph.
-
-```
-package main
-
-import (
-	"context"
-	"flag"
-	"fmt"
-	"time"
-
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/x"
-	"google.golang.org/grpc"
-)
-
-var (
-	dgraph = flag.String("d", "127.0.0.1:9080", "Dgraph server address")
-)
-
-type nameFacets struct {
-	Since time.Time `dgraph:"since"`
-	Alias string    `dgraph:"alias"`
-}
-
-type friendFacets struct {
-	Close bool `dgraph:"close"`
-}
-
-type Person struct {
-	Name         string         `dgraph:"name"`
-	NameFacets   nameFacets     `dgraph:"name@facets"`
-	Birthday     time.Time      `dgraph:"birthday"`
-	Location     []byte         `dgraph:"loc"`
-	Salary       float64        `dgraph:"salary"`
-	Age          int            `dgraph:"age"`
-	Married      bool           `dgraph:"married"`
-	ByteDob      []byte         `dgraph:"bytedob"`
-	Friends      []Person       `dgraph:"friend"`
-	FriendFacets []friendFacets `dgraph:"@facets"`
-}
-
-type Res struct {
-	Root Person `dgraph:"me"`
-}
-
-func main() {
-	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
-	defer conn.Close()
-
-	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions)
-
-	req := client.Req{}
-	person1, err := dgraphClient.NodeBlank("person1")
-	x.Check(err)
-
-	// Creating a person node, and adding a name attribute to it.
-	e := person1.Edge("name")
-	err = e.SetValueString("Steven Spielberg")
-	x.Check(err)
-	e.AddFacet("since", "2006-01-02T15:04:05")
-	e.AddFacet("alias", `"Steve"`)
-	req.Set(e)
-
-	e = person1.Edge("birthday")
-	err = e.SetValueDatetime(time.Date(1991, 2, 1, 0, 0, 0, 0, time.UTC))
-	x.Check(err)
-	req.Set(e)
-
-	e = person1.Edge("loc")
-	err = e.SetValueGeoJson(`{"type":"Point","coordinates":[-122.2207184,37.72129059]}`)
-	x.Check(err)
-	req.Set(e)
-
-	e = person1.Edge("salary")
-	err = e.SetValueFloat(13333.6161)
-	x.Check(err)
-	req.Set(e)
-
-	e = person1.Edge("age")
-	err = e.SetValueInt(25)
-	x.Check(err)
-	req.Set(e)
-
-	e = person1.Edge("married")
-	err = e.SetValueBool(true)
-	x.Check(err)
-	req.Set(e)
-
-	e = person1.Edge("bytedob")
-	err = e.SetValueBytes([]byte("01-02-1991"))
-	x.Check(err)
-	req.Set(e)
-
-	person2, err := dgraphClient.NodeBlank("person2")
-	x.Check(err)
-
-	e = person2.Edge("name")
-	err = e.SetValueString("William Jones")
-	x.Check(err)
-	req.Set(e)
-
-	e = person1.Edge("friend")
-	err = e.ConnectTo(person2)
-	x.Check(err)
-	e.AddFacet("close", "true")
-	req.Set(e)
-
-	resp, err := dgraphClient.Run(context.Background(), &req)
-	x.Check(err)
-
-	req = client.Req{}
-	req.SetQuery(fmt.Sprintf(`{
-		me(func: uid(%v)) {
-			_uid_
-			name @facets
-			now
-			birthday
-			loc
-			salary
-			age
-			married
-			bytedob
-			friend @facets {
-				_uid_
-				name
-			}
-		}
-	}`, person1))
-	resp, err = dgraphClient.Run(context.Background(), &req)
-	x.Check(err)
-
-	var r Res
-	err = client.Unmarshal(resp.N, &r)
-	fmt.Printf("Steven: %+v\n\n", r.Root)
-	fmt.Printf("William: %+v\n", r.Root.Friends[0])
-
-	req = client.Req{}
-	// Here is an example of deleting an edge
-	e = person1.Edge("friend")
-	err = e.ConnectTo(person2)
-	x.Check(err)
-	req.Delete(e)
-	resp, err = dgraphClient.Run(context.Background(), &req)
-	x.Check(err)
-
-	err = dgraphClient.Close()
-	x.Check(err)
-}
+go get -u -v github.com/dgraph-io/dgraph/client
 ```
 
-{{% notice "note" %}}Type for the facets are automatically interpreted from the value. If you want it to
-be interpreted as string, it has to be a raw string literal with `""` as shown above for `alias` facet.{{% /notice %}}
+#### Examples
 
-An appropriate schema for the above example would be
-```
-curl localhost:8080/query -XPOST -d $'
-mutation {
-  schema {
-	now: dateTime .
-	birthday: date .
-	age: int .
-	salary: float .
-	name: string .
-	loc: geo .
-	married: bool .
-  }
-}' | python -m json.tool | less
-```
+The client [GoDoc](https://godoc.org/github.com/dgraph-io/dgraph/client) has specifications of all functions and examples.
 
-Apart from the above syntax, you could perform all the queries and mutations listed on [Query Language]({{< relref "query-language/index.md" >}}). For example you could do this.
+Larger examples can be found [here](https://github.com/dgraph-io/dgraph/tree/master/wiki/resources/examples/goclient).  And [this](https://open.dgraph.io/post/client0.8.0) blog post explores the examples further.
 
-```
-req := client.Req{}
-req.SetQuery(`
-mutation {
- set {
-   <class1> <student> _:x .
-   <class1> <name> "awesome class" .
-   _:x <name> "alice" .
-   _:x <planet> "Mars" .
-   _:x <friend> _:y .
-   _:y <name> "bob" .
- }
-}
-{
- class(id:class1) {
-  name
-  student {
-   name
-   planet
-   friend {
-    name
-   }
-  }
- }
-}`)
-resp, err := c.Run(context.Background(), req.Request())
-if err != nil {
-	log.Fatalf("Error in getting response from server, %s", err)
-}
-fmt.Printf("%+v\n", resp)
-```
+The app [dgraphloader](https://github.com/dgraph-io/dgraph/tree/master/cmd/dgraphloader) uses the client interface to batch concurrent mutations.
 
-Here is an example of how you could use the Dgraph client to do batch mutations concurrently.
-This is what the **dgraphloader** uses internally.
-```
-package main
-
-import (
-	"bufio"
-	"bytes"
-	"compress/gzip"
-	"io"
-	"log"
-	"os"
-
-	"google.golang.org/grpc"
-
-	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/rdf"
-	"github.com/dgraph-io/dgraph/x"
-)
-
-func ExampleBatchMutation() {
-	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
-	x.Checkf(err, "While trying to dial gRPC")
-	defer conn.Close()
-
-	// Start a new batch with batch size 1000 and 100 concurrent requests.
-	bmOpts := client.BatchMutationOptions{
-		Size:          1000,
-		Pending:       100,
-		PrintCounters: false,
-	}
-	dgraphClient := client.NewDgraphClient(conn, bmOpts)
-
-	// Process your file, convert data to a protos.NQuad and add it to the batch.
-	// For each edge, do a BatchSet (this would typically be done in a loop
-	// after processing the data into edges). Here we show example of reading a
-	// file with RDF data, converting it to edges and adding it to the batch.
-
-	f, err := os.Open("goldendata.rdf.gz")
-	x.Check(err)
-	defer f.Close()
-	gr, err := gzip.NewReader(f)
-	x.Check(err)
-
-	var buf bytes.Buffer
-	bufReader := bufio.NewReader(gr)
-	var line int
-	for {
-		err = x.ReadLine(bufReader, &buf)
-		if err != nil {
-			break
-		}
-		line++
-		nq, err := rdf.Parse(buf.String())
-		if err == rdf.ErrEmpty { // special case: comment/empty line
-			buf.Reset()
-			continue
-		} else if err != nil {
-			log.Fatalf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
-		}
-		buf.Reset()
-
-		nq.Subject = Node(nq.Subject, dgraphClient)
-		if len(nq.ObjectId) > 0 {
-			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
-		}
-		if err = dgraphClient.BatchSet(client.NewEdge(nq)); err != nil {
-			log.Fatal("While adding mutation to batch: ", err)
-		}
-	}
-	if err != io.EOF {
-		x.Checkf(err, "Error while reading file")
-	}
-	// Wait for all requests to complete. This is very important, else some
-	// data might not be sent to server.
-	dgraphClient.BatchFlush()
-	err = dgraphClient.Close()
-	x.Check(err)
-}
-```
+{{% notice "note" %}}As with mutations through a mutation block, [schema type]({{< relref "query-language/index.md#schema" >}}) needs to be set for the edges, or schema is derived based on first mutation received by the server. {{% /notice %}}
 
 ### Python
 {{% notice "incomplete" %}}A lot of development has gone into the Go client and the Python client is not up to date with it. We are looking for help from contributors to bring it up to date.{{% /notice %}}

@@ -17,6 +17,7 @@ limitations under the License.
 package posting
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
@@ -39,7 +40,7 @@ func TestLCacheSize(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		// Put a posting list of size 2
 		l := getPosting()
-		lcache.PutIfMissing(uint64(i), l)
+		lcache.PutIfMissing(fmt.Sprintf("%d", i), l)
 		if i < 5 {
 			require.Equal(t, lcache.curSize, uint64((i+1)*100))
 		} else {
@@ -60,7 +61,7 @@ func TestLCacheSizeParallel(t *testing.T) {
 		// Put a posting list of size 2
 		go func(i int) {
 			l := getPosting()
-			lcache.PutIfMissing(uint64(i), l)
+			lcache.PutIfMissing(fmt.Sprintf("%d", i), l)
 			wg.Done()
 		}(i)
 	}
@@ -77,7 +78,7 @@ func TestLCacheEviction(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		l := getPosting()
 		// Put a posting list of size 2
-		lcache.PutIfMissing(uint64(i), l)
+		lcache.PutIfMissing(fmt.Sprintf("%d", i), l)
 	}
 
 	require.Equal(t, lcache.curSize, uint64(5000))
@@ -85,15 +86,15 @@ func TestLCacheEviction(t *testing.T) {
 	require.Equal(t, lcache.ll.Len(), 50)
 
 	for i := 0; i < 50; i++ {
-		require.Nil(t, lcache.Get(uint64(i)))
+		require.Nil(t, lcache.Get(fmt.Sprintf("%d", i)))
 	}
 }
 
 func TestLCachePutIfMissing(t *testing.T) {
 	l := getPosting()
-	lcache.PutIfMissing(1, l)
-	require.Equal(t, l, lcache.Get(1))
+	lcache.PutIfMissing("1", l)
+	require.Equal(t, l, lcache.Get("1"))
 	l2 := getPosting()
-	lcache.PutIfMissing(1, l2)
-	require.Equal(t, l, lcache.Get(1))
+	lcache.PutIfMissing("1", l2)
+	require.Equal(t, l, lcache.Get("1"))
 }

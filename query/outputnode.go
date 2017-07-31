@@ -19,7 +19,6 @@ package query
 
 import (
 	"bufio"
-	"container/heap"
 	"errors"
 	"fmt"
 	"io"
@@ -307,7 +306,7 @@ type fastJsonNode struct {
 	order     int // relative ordering (for sorted results)
 	isChild   bool
 	scalarVal []byte
-	attrs     nodeSlice
+	attrs     []*fastJsonNode
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
@@ -410,18 +409,6 @@ func (n nodeSlice) Swap(i, j int) {
 	n[i], n[j] = n[j], n[i]
 }
 
-func (n nodeSlice) Push(x interface{}) {
-	// nodeSlice is intended to work on existing slice, no pushing
-}
-
-func (n *nodeSlice) Pop() interface{} {
-	old := *n
-	l := len(old)
-	x := old[l-1]
-	*n = old[0 : l-1]
-	return x
-}
-
 func (fj *fastJsonNode) writeKey(out *bufio.Writer) {
 	out.WriteRune('"')
 	out.WriteString(fj.attr)
@@ -434,18 +421,20 @@ func (fj *fastJsonNode) encode(out *bufio.Writer) {
 	for i, a := range fj.attrs {
 		a.order = i
 	}
-	heap.Init(&fj.attrs)
 
-	if fj.attrs.Len() > 0 {
+	i := 0
+	if i < len(fj.attrs) {
 		out.WriteRune('{')
-		cur := heap.Pop(&fj.attrs).(*fastJsonNode)
+		cur := fj.attrs[i]
+		i++
 		cnt := 1
 		last := false
 		inArray := false
 		for {
 			var next *fastJsonNode
-			if fj.attrs.Len() > 0 {
-				next = heap.Pop(&fj.attrs).(*fastJsonNode)
+			if i < len(fj.attrs) {
+				next = fj.attrs[i]
+				i++
 			} else {
 				last = true
 			}
@@ -547,6 +536,9 @@ func (n *fastJsonNode) normalize() [][]*fastJsonNode {
 		}
 		// Merging with parent.
 		parentSlice = merge(parentSlice, childSlice)
+	}
+	for _, slice := range parentSlice {
+		sort.Sort(nodeSlice(slice))
 	}
 	return parentSlice
 }
@@ -667,9 +659,11 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 
 	bufw := bufio.NewWriter(w)
 	if len(n.(*fastJsonNode).attrs) == 0 {
-		bufw.WriteString("{}")
+		bufw.WriteString(`{ "data": {} }`)
 	} else {
+		bufw.WriteString(`{"data": `)
 		n.(*fastJsonNode).encode(bufw)
+		bufw.WriteRune('}')
 	}
 	return bufw.Flush()
 }

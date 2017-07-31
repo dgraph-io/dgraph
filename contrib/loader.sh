@@ -13,7 +13,8 @@ set -e
 pushd $BUILD &> /dev/null
 
 if [ ! -f "goldendata.rdf.gz" ]; then
-  wget https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz
+  echo -e "\nDownloading goldendata."
+  wget -q https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz
 fi
 
 # log file size.
@@ -23,8 +24,9 @@ benchmark=$(pwd)
 popd &> /dev/null
 
 pushd cmd/dgraph &> /dev/null
+echo -e "\nBuilding and running Dgraph."
 go build .
-./dgraph -gentlecommit 1.0 -p $BUILD/p -w $BUILD/loader/w -max_memory_mb 6000 > $BUILD/server.log &
+./dgraph -gentlecommit 1.0 -p $BUILD/p -w $BUILD/loader/w -memory_mb 6000 > $BUILD/server.log &
 popd &> /dev/null
 
 sleep 15
@@ -32,13 +34,16 @@ sleep 15
 #Set Schema
 curl -X POST  -d 'mutation {
   schema {
-	  name: string @index .
+    name: string @index(term) .
 		_xid_: string @index(exact,term) .
-	  initial_release_date: datetime @index .
+    initial_release_date: datetime @index(year) .
 	}
 }' "http://localhost:8080/query"
 
+echo -e "\nBuilding and running dgraphloader."
 pushd cmd/dgraphloader &> /dev/null
+# Delete client directory to clear checkpoints.
+rm -rf c
 go build .
 ./dgraphloader -r $benchmark/goldendata.rdf.gz -x true
 popd &> /dev/null
@@ -65,6 +70,7 @@ function run_index_test {
     set +e
     N=`curl -s localhost:8080/query -XPOST -d @${X}.in`
     exitCode=$?
+
     set -e
 
     if [[ $exitCode == 0 ]]
@@ -87,6 +93,7 @@ function run_index_test {
   fi
 }
 
+echo -e "\nRunning some queries and checking count of results returned."
 run_index_test basic name 138676
 run_index_test allof_the name 25431
 run_index_test allof_the_a name 367
@@ -98,6 +105,35 @@ run_index_test releasedate_geq release_date 60991
 run_index_test gen_anyof_good_bad name 1103
 
 popd &> /dev/null
+
+echo -e "\nShutting down Dgraph"
+quit 0
+
+# Wait for clean shutdown.
+sleep 15
+
+echo -e "\nTrying to restart Dgraph and match export count"
+pushd cmd/dgraph &> /dev/null
+./dgraph -p $BUILD/p -w $BUILD/loader/w -memory_mb 4000 &
+# Wait to become leader.
+sleep 15
+echo -e "\nTrying to export data."
+curl http://localhost:8080/admin/export
+echo -e "\nExport done."
+
+# This is count of RDF's in goldendata.rdf.gz + xids because we ran dgraphloader with -xid flag.
+dataCount="1475250"
+if [[ $TRAVIS_OS_NAME == "osx" ]]; then
+  exportCount=$(zcat < $(ls -t export/dgraph-1-* | head -1) | wc -l)
+else
+  exportCount=$(zcat $(ls -t export/dgraph-1-* | head -1) | wc -l)
+fi
+
+
+if [[ ! "$exportCount" -eq "$dataCount" ]]; then
+  echo "Export test failed. Expected: $dataCount Got: $exportCount"
+  quit 1
+fi
 
 echo -e "All tests ran fine. Exiting"
 quit 0

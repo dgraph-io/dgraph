@@ -61,7 +61,8 @@ var DefaultConfig = Options{
 	Nomutations:   false,
 	NumPending:    1000,
 
-	AllottedMemory: 4096.0,
+	// User must specify this.
+	AllottedMemory: -1.0,
 	CommitFraction: 0.10,
 
 	BaseWorkerPort:      12345,
@@ -112,4 +113,5 @@ func (o *Options) validate() {
 	wd, err := filepath.Abs(o.WALDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", o.PostingDir)
+	x.AssertTruef(o.AllottedMemory > 1024.0, "Allotted memory for Dgraph should be at least 1GB. Current set to: %f", o.AllottedMemory)
 }

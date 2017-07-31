@@ -52,6 +52,7 @@ func prepare() (res []string, options dgraph.Options) {
 	x.Check(err)
 	res = append(res, walDir)
 	options.WALDir = walDir
+	options.AllottedMemory = 2048
 
 	return res, options
 }

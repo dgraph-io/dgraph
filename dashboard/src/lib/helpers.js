@@ -43,6 +43,9 @@ export function showTreeView(query) {
 }
 
 export function isNotEmpty(response) {
+  if (!response) {
+    return false;
+  }
   let keys = Object.keys(response);
   if (keys.length === 0) {
     return false;
@@ -131,7 +134,8 @@ export function eraseCookie(name, options) {
 
 export function humanizeTime(time) {
   if (time > 1000) {
-    return time.toFixed(1) + "s";
+    // Time is in ms, lets convert it to seconds for displaying.
+    return (time / 1000).toFixed(1) + "s";
   }
   return time.toFixed(0) + "ms";
 }

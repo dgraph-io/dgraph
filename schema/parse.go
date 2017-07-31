@@ -155,12 +155,13 @@ func parseIndexDirective(it *lex.ItemIterator, predicate string,
 	}
 	if !it.Next() {
 		// Nothing to read.
-		return []string{tok.Default(typ).Name()}, nil
+		return []string{}, x.Errorf("Invalid ending.")
 	}
 	next := it.Item()
 	if next.Typ != itemLeftRound {
 		it.Prev() // Backup.
-		return []string{tok.Default(typ).Name()}, nil
+		return []string{}, x.Errorf("Require type of tokenizer for pred: %s for indexing.",
+			predicate)
 	}
 
 	expectArg := true
@@ -228,7 +229,8 @@ func resolveTokenizers(updates []*protos.SchemaUpdate) error {
 		}
 
 		if len(schema.Tokenizer) == 0 && schema.Directive == protos.SchemaUpdate_INDEX {
-			schema.Tokenizer = []string{tok.Default(typ).Name()}
+			return x.Errorf("Require type of tokenizer for pred: %s of type: %s for indexing.",
+				schema.Predicate, typ.Name())
 		} else if len(schema.Tokenizer) > 0 && schema.Directive != protos.SchemaUpdate_INDEX {
 			return x.Errorf("Tokenizers present without indexing on attr %s", schema.Predicate)
 		}

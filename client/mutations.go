@@ -337,7 +337,9 @@ RETRY:
 		if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
 			log.Fatal(errString)
 		}
-		fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
+		if !strings.Contains(errString, "Temporary Error") {
+			fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
+		}
 		time.Sleep(factor)
 		if factor < 256*time.Second {
 			factor = factor * 2
@@ -523,6 +525,27 @@ func (d *Dgraph) AddSchema(s protos.SchemaUpdate) error {
 	}
 	d.schema <- s
 	return nil
+}
+
+func (d *Dgraph) SetSchemaBlocking(ctx context.Context, q string) error {
+	req := new(Req)
+	che := make(chan error, 1)
+	req.SetSchema(q)
+	go func() {
+		if _, err := d.dc[rand.Intn(len(d.dc))].Run(ctx, &req.gr); err != nil {
+			che <- err
+			return
+		}
+		che <- nil
+	}()
+
+	// blocking wait until schema is applied
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-che:
+		return err
+	}
 }
 
 func (d *Dgraph) stopTickers() {

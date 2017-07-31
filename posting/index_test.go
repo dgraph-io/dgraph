@@ -34,7 +34,7 @@ import (
 )
 
 const schemaStr = `
-name:string @index .
+name:string @index(term) .
 `
 
 func uids(pl *protos.PostingList) []uint64 {
@@ -48,35 +48,35 @@ func uids(pl *protos.PostingList) []uint64 {
 }
 
 func TestIndexingInt(t *testing.T) {
-	schema.ParseBytes([]byte("age:int @index ."), 1)
+	schema.ParseBytes([]byte("age:int @index(int) ."), 1)
 	a, err := IndexTokens("age", "", types.Val{types.StringID, []byte("10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingIntNegative(t *testing.T) {
-	schema.ParseBytes([]byte("age:int @index ."), 1)
+	schema.ParseBytes([]byte("age:int @index(int) ."), 1)
 	a, err := IndexTokens("age", "", types.Val{types.StringID, []byte("-10")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x6, 0x0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf6}, []byte(a[0]))
 }
 
 func TestIndexingFloat(t *testing.T) {
-	schema.ParseBytes([]byte("age:float @index ."), 1)
+	schema.ParseBytes([]byte("age:float @index(float) ."), 1)
 	a, err := IndexTokens("age", "", types.Val{types.StringID, []byte("10.43")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x7, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingTime(t *testing.T) {
-	schema.ParseBytes([]byte("age:dateTime @index ."), 1)
+	schema.ParseBytes([]byte("age:dateTime @index(year) ."), 1)
 	a, err := IndexTokens("age", "", types.Val{types.StringID, []byte("0010-01-01T01:01:01.000000001")})
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x4, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexing(t *testing.T) {
-	schema.ParseBytes([]byte("name:string @index ."), 1)
+	schema.ParseBytes([]byte("name:string @index(term) ."), 1)
 	a, err := IndexTokens("name", "", types.Val{types.StringID, []byte("abc")})
 	require.NoError(t, err)
 	require.EqualValues(t, "\x01abc", string(a[0]))
@@ -126,13 +126,14 @@ func addMutationWithIndex(t *testing.T, l *List, edge *protos.DirectedEdge, op u
 }
 
 const schemaVal = `
-name:string @index .
-dob:dateTime @index .
+name:string @index(term) .
+dob:dateTime @index(year) .
 friend:uid @reverse .
 	`
 
 func TestTokensTable(t *testing.T) {
-	schema.ParseBytes([]byte(schemaVal), 1)
+	err := schema.ParseBytes([]byte(schemaVal), 1)
+	require.NoError(t, err)
 
 	key := x.DataKey("name", 1)
 	l := getNew(key, ps)
@@ -145,17 +146,16 @@ func TestTokensTable(t *testing.T) {
 		Entity: 157,
 	}
 	addMutationWithIndex(t, l, edge, Set)
-	_, err := l.SyncIfDirty(false)
+	_, err = l.SyncIfDirty(false)
 	x.Check(err)
 
 	key = x.IndexKey("name", "david")
 	var item badger.KVItem
 	err = ps.Get(key, &item)
 	x.Check(err)
-	slice := item.Value()
 
 	var pl protos.PostingList
-	x.Check(pl.Unmarshal(slice))
+	UnmarshalWithCopy(item.Value(), item.UserMeta(), &pl)
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 
@@ -163,8 +163,7 @@ func TestTokensTable(t *testing.T) {
 
 	err = ps.Get(key, &item)
 	x.Check(err)
-	slice = item.Value()
-	x.Check(pl.Unmarshal(slice))
+	UnmarshalWithCopy(item.Value(), item.UserMeta(), &pl)
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 	deletePl(t)
@@ -247,8 +246,8 @@ func TestRebuildIndex(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Create some fake wrong entries for data store.
-	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"))
-	ps.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"))
+	ps.Set(x.IndexKey("name", "wrongname1"), []byte("nothing"), 0x00)
+	ps.Set(x.IndexKey("name", "wrongname2"), []byte("nothing"), 0x00)
 
 	require.NoError(t, DeleteIndex(context.Background(), "name"))
 	require.NoError(t, RebuildIndex(context.Background(), "name"))
@@ -272,7 +271,7 @@ func TestRebuildIndex(t *testing.T) {
 		}
 		idxKeys = append(idxKeys, string(key))
 		pl := new(protos.PostingList)
-		require.NoError(t, pl.Unmarshal(item.Value()))
+		UnmarshalWithCopy(item.Value(), item.UserMeta(), pl)
 		idxVals = append(idxVals, pl)
 	}
 	require.Len(t, idxKeys, 2)
@@ -325,7 +324,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 		}
 		revKeys = append(revKeys, string(key))
 		pl := new(protos.PostingList)
-		require.NoError(t, pl.Unmarshal(value))
+		UnmarshalWithCopy(value, item.UserMeta(), pl)
 		revVals = append(revVals, pl)
 	}
 	require.Len(t, revKeys, 2)

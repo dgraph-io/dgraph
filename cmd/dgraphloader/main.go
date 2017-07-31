@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -31,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/rdf"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -96,37 +96,11 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 		reader = f
 	}
 
-	var buf bytes.Buffer
-	bufReader := bufio.NewReader(reader)
-	var line int
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		err = readLine(bufReader, &buf)
-		if err != nil {
-			break
-		}
-		line++
-		schemaUpdate, err := schema.Parse(buf.String())
-		if err != nil {
-			log.Fatalf("Error while parsing schema: %v, on line:%v %v", err, line, buf.String())
-		}
-		buf.Reset()
-		if len(schemaUpdate) == 0 {
-			continue
-		}
-		if err = dgraphClient.AddSchema(*schemaUpdate[0]); err != nil {
-			log.Fatal("While adding schema to batch ", err)
-		}
-
-	}
-	if err != io.EOF {
+	b, err := ioutil.ReadAll(reader)
+	if err != nil {
 		x.Checkf(err, "Error while reading file")
 	}
-	return nil
+	return dgraphClient.SetSchemaBlocking(ctx, string(b))
 }
 
 func Node(val string, c *client.Dgraph) string {
@@ -325,9 +299,6 @@ func main() {
 			return
 		}
 	}
-
-	// wait for schema changes to be done before starting mutations
-	time.Sleep(1 * time.Second)
 
 	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error)

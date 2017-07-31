@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "+Bo3QheGAtKFk7QPb+pdIEZNiYI=",
+			"path": "github.com/AndreasBriese/bbloom",
+			"revision": "28f7e881ca57bc00e028f9ede9f0d9104cfeef5e",
+			"revisionTime": "2017-07-02T08:40:17Z"
+		},
+		{
 			"checksumSHA1": "XU5C0RvW/71AFqNVdmkzg4ByWB0=",
 			"path": "github.com/MakeNowJust/heredoc",
 			"revision": "1d91351acdc1cb2f2c995864674b754134b86ca7",
@@ -13,6 +19,12 @@
 			"path": "github.com/beorn7/perks/quantile",
 			"revision": "4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9",
 			"revisionTime": "2016-08-04T10:47:26Z"
+		},
+		{
+			"checksumSHA1": "fgxkKPz4jLzKDSg0Gmx1G0rPOWY=",
+			"path": "github.com/bkaradzic/go-lz4",
+			"revision": "7224d8d8f27ef618c0a95f1ae69dbb0488abc33a",
+			"revisionTime": "2016-09-24T22:28:19Z"
 		},
 		{
 			"checksumSHA1": "ywqbUZb6r4Mxq2MBAbv/vaYcmdw=",
@@ -151,6 +163,30 @@
 			"path": "github.com/davecgh/go-spew/spew",
 			"revision": "6d212800a42e8ab5c146b8ace3490ee17e5225f9",
 			"revisionTime": "2016-09-07T16:21:46Z"
+		},
+		{
+			"checksumSHA1": "ILI8L5ndisc5Ciwpu5WH5roceI8=",
+			"path": "github.com/dgraph-io/badger",
+			"revision": "ac92b6051ef06e4004766d719e74d1ba0734a383",
+			"revisionTime": "2017-07-31T01:46:36Z"
+		},
+		{
+			"checksumSHA1": "JAELj4K08kz25czSWp1FHOAneUQ=",
+			"path": "github.com/dgraph-io/badger/skl",
+			"revision": "ac92b6051ef06e4004766d719e74d1ba0734a383",
+			"revisionTime": "2017-07-31T01:46:36Z"
+		},
+		{
+			"checksumSHA1": "ktuJodGqu0s91AL8GL0VqwOnROk=",
+			"path": "github.com/dgraph-io/badger/table",
+			"revision": "ac92b6051ef06e4004766d719e74d1ba0734a383",
+			"revisionTime": "2017-07-31T01:46:36Z"
+		},
+		{
+			"checksumSHA1": "e3uHd4Og6NQutP3vf/PztANSI2c=",
+			"path": "github.com/dgraph-io/badger/y",
+			"revision": "ac92b6051ef06e4004766d719e74d1ba0734a383",
+			"revisionTime": "2017-07-31T01:46:36Z"
 		},
 		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
@@ -355,6 +391,12 @@
 			"path": "golang.org/x/net/http2/hpack",
 			"revision": "d1e1b351919c6738fdeb9893d5c998b161464f0c",
 			"revisionTime": "2016-12-29T22:47:41Z"
+		},
+		{
+			"checksumSHA1": "nf+CWRQfmxmZkdYRpxEuA8u+qwI=",
+			"path": "golang.org/x/sys/unix",
+			"revision": "abf9c25f54453410d0c6668e519582a9e1115027",
+			"revisionTime": "2017-07-10T15:57:01Z"
 		},
 		{
 			"checksumSHA1": "12GqsW8PiRPnezDDy0v4brZrndM=",

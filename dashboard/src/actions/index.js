@@ -24,28 +24,42 @@ import { updateConnectedState } from "./connection";
 function executeQueryAndUpdateFrame(dispatch, { frameId, query }) {
   const endpoint = getEndpoint("query", { debug: true });
 
-  return timeout(
-    60000,
-    fetch(endpoint, {
-      method: "POST",
-      mode: "cors",
-      cache: "no-cache",
-      headers: {
-        "Content-Type": "text/plain"
-      },
-      body: query
-    })
-  )
+  return fetch(endpoint, {
+    method: "POST",
+    mode: "cors",
+    cache: "no-cache",
+    headers: {
+      "Content-Type": "text/plain"
+    },
+    body: query
+  })
     .then(checkStatus)
     .then(response => response.json())
     .then(result => {
       dispatch(updateConnectedState(true));
 
-      if (result.code !== undefined && result.message !== undefined) {
+      if (result.errors) {
+        // Handle query error responses here.
+        dispatch(
+          updateFrame({
+            id: frameId,
+            type: FRAME_TYPE_ERROR,
+            data: {
+              query,
+              message: result.errors[0].message,
+              response: result
+            }
+          })
+        );
+      } else if (
+        result.data &&
+        result.data.code !== undefined &&
+        result.data.message !== undefined
+      ) {
         // This is the case in which user sends a mutation.
         // We display the response from server.
         let frameType;
-        if (result.code.startsWith("Error")) {
+        if (result.data.code.startsWith("Error")) {
           frameType = FRAME_TYPE_ERROR;
         } else {
           frameType = FRAME_TYPE_SUCCESS;
@@ -57,14 +71,14 @@ function executeQueryAndUpdateFrame(dispatch, { frameId, query }) {
             type: frameType,
             data: {
               query,
-              message: result.message,
+              message: result.data.message,
               response: result
             }
           })
         );
-      } else if (isNotEmpty(result)) {
+      } else if (isNotEmpty(result.data)) {
         const { nodes, edges, labels, nodesIndex, edgesIndex } = processGraph(
-          result,
+          result.data,
           false,
           query
         );
@@ -287,7 +301,7 @@ export const getSharedQuery = shareId => {
         Accept: "application/json"
       },
       body: `{
-          query(id: ${shareId}) {
+          query(func: uid(${shareId})) {
               _share_
           }
       }`

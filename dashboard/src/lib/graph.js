@@ -409,7 +409,11 @@ export function processGraph(
     // Or if the count of children at root which don't have children is > than those
     // which have children we show them.
     if (!someNodeHasChildren || ignoredChildren.length > nodesQueue.length) {
-      nodesQueue.push.apply(nodesQueue, ignoredChildren);
+      // Push one by one else we get Maximum call stack size exceeded error.
+      // https://stackoverflow.com/questions/22123769/rangeerror-maximum-call-stack-size-exceeded-why
+      for (var i = 0; i < ignoredChildren.length; i++) {
+        nodesQueue.push(ignoredChildren[i]);
+      }
     }
   }
 

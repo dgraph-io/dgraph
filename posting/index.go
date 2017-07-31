@@ -78,6 +78,7 @@ func IndexTokens(attr, lang string, src types.Val) ([]string, error) {
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 // t represents the original uid -> value edge.
+// TODO - See if we need to pass op as argument as t should already have Op.
 func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 	op protos.DirectedEdge_Op) error {
 	attr := t.Attr
@@ -202,14 +203,19 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 	isReversed := schema.State().IsReversed(t.Attr)
 	isIndexed := schema.State().IsIndexed(t.Attr)
 	delEdge := &protos.DirectedEdge{
-		Attr: t.Attr,
-		Op:   t.Op,
+		Attr:   t.Attr,
+		Op:     t.Op,
+		Entity: t.Entity,
 	}
+	var iterErr error
 	l.Iterate(0, func(p *protos.Posting) bool {
 		if isReversed {
 			// Delete reverse edge for each posting.
 			delEdge.ValueId = p.Uid
-			addReverseMutation(ctx, delEdge)
+			if err := addReverseMutation(ctx, delEdge); err != nil {
+				iterErr = err
+				return false
+			}
 			return true
 		} else if isIndexed {
 			// Delete index edge of each posting.
@@ -217,10 +223,16 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 				Tid:   types.TypeID(p.ValType),
 				Value: p.Value,
 			}
-			addIndexMutations(ctx, t, p, protos.DirectedEdge_DEL)
+			if err := addIndexMutations(ctx, t, p, protos.DirectedEdge_DEL); err != nil {
+				iterErr = err
+				return false
+			}
 		}
 		return true
 	})
+	if iterErr != nil {
+		return iterErr
+	}
 	l.Lock()
 	defer l.Unlock()
 	return l.delete(ctx, t.Attr)
@@ -383,6 +395,9 @@ func deleteEntries(prefix []byte) error {
 }
 
 func DeleteReverseEdges(ctx context.Context, attr string) error {
+	if err := lcache.clear(attr, x.ByteReverse); err != nil {
+		return err
+	}
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
@@ -402,7 +417,10 @@ func deleteCountIndex(ctx context.Context, attr string, reverse bool) error {
 }
 
 func DeleteCountIndex(ctx context.Context, attr string) error {
-	if err := lcache.clear(attr); err != nil {
+	if err := lcache.clear(attr, x.ByteCount); err != nil {
+		return err
+	}
+	if err := lcache.clear(attr, x.ByteCountRev); err != nil {
 		return err
 	}
 	// Delete index entries from data store.
@@ -449,7 +467,7 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 		key := iterItem.Key()
 		pki := x.Parse(key)
 		var pl protos.PostingList
-		x.Check(pl.Unmarshal(iterItem.Value()))
+		UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
 
 		ch <- item{
 			uid:  pki.Uid,
@@ -468,8 +486,6 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 
 func RebuildCountIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.State().HasCount(attr), "Attr %s doesn't have count index", attr)
-	EvictGroup(group.BelongsTo(attr))
-
 	errCh := make(chan error, 2)
 	// Lets rebuild forward and reverse count indexes concurrently.
 	go rebuildCountIndex(ctx, attr, false, errCh)
@@ -503,7 +519,6 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
-	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add reverse entries for values in posting list
 	addReversePostings := func(uid uint64, pl *protos.PostingList) error {
 		var pitr PIterator
@@ -553,7 +568,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		}
 		pki := x.Parse(key)
 		var pl protos.PostingList
-		x.Check(pl.Unmarshal(iterItem.Value()))
+		UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
 
 		// Posting list contains only values or only UIDs.
 		if (len(pl.Postings) == 0 && len(pl.Uids) != 0) ||
@@ -574,6 +589,9 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 }
 
 func DeleteIndex(ctx context.Context, attr string) error {
+	if err := lcache.clear(attr, x.ByteIndex); err != nil {
+		return err
+	}
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
@@ -592,7 +610,6 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
-	EvictGroup(group.BelongsTo(attr))
 	// Helper function - Add index entries for values in posting list
 	addPostingsToIndex := func(uid uint64, pl *protos.PostingList) error {
 		postingsLen := len(pl.Postings)
@@ -644,7 +661,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		}
 		pki := x.Parse(key)
 		var pl protos.PostingList
-		x.Check(pl.Unmarshal(iterItem.Value()))
+		UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
 
 		// Posting list contains only values or only UIDs.
 		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) != x.ValueUid {
@@ -664,7 +681,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
-	if err := lcache.clear(attr); err != nil {
+	if err := lcache.clear(attr, x.ByteData); err != nil {
 		return err
 	}
 	pk := x.ParsedKey{

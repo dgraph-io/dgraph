@@ -39,7 +39,7 @@ func TestEncodeMemory(t *testing.T) {
 	for x := 0; x < runtime.NumCPU(); x++ {
 		n := makeFastJsonNode()
 		require.NotNil(t, n)
-		for i := 0; i < 30000; i++ {
+		for i := 0; i < 15000; i++ {
 			n.AddValue(fmt.Sprintf("very long attr name %06d", i), types.ValueForType(types.StringID))
 			n.AddListChild(fmt.Sprintf("another long child %06d", i), &fastJsonNode{})
 		}
