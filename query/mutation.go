@@ -2,13 +2,11 @@ package query
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -45,7 +43,6 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
 func addInternalEdge(ctx context.Context, m *protos.Mutations) error {
 	newEdges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
 	for _, mu := range m.Edges {
-		fmt.Println(group.BelongsTo(mu.Attr))
 		x.AssertTrue(mu.Op == protos.DirectedEdge_DEL || mu.Op == protos.DirectedEdge_SET)
 		if mu.Op == protos.DirectedEdge_SET {
 			edge := &protos.DirectedEdge{

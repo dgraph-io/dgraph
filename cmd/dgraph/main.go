@@ -515,8 +515,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	atomic.StoreInt64(&dgraph.Config.MutationAllowed, 0)
-	ctx := context.Background()
-	if err := worker.Backup(ctx); err != nil {
+	if err := worker.Backup(context.Background()); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 		return
 	}

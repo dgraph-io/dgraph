@@ -54,7 +54,6 @@ func handleBackupForGroup(ctx context.Context, gid uint32, bdir string) error {
 
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
-	count := 0
 	for it.Rewind(); it.Valid(); it.Next() {
 		item := it.Item()
 		key := item.Key()
@@ -62,12 +61,10 @@ func handleBackupForGroup(ctx context.Context, gid uint32, bdir string) error {
 		if g := group.BelongsTo(pk.Attr); g != gid {
 			continue
 		}
-		count++
-		k := item.Key()
 		v := item.Value()
-		binary.LittleEndian.PutUint32(blen, uint32(len(k)))
+		binary.LittleEndian.PutUint32(blen, uint32(len(key)))
 		buf.Write(blen)
-		buf.Write(k)
+		buf.Write(key)
 		binary.LittleEndian.PutUint32(blen, uint32(len(v)))
 		buf.Write(blen)
 		buf.Write(v)
@@ -82,7 +79,6 @@ func handleBackupForGroup(ctx context.Context, gid uint32, bdir string) error {
 		// No need to copy as we are not going to use the buffer anymore.
 		chb <- buf.Bytes()
 	}
-	fmt.Println("Count", count)
 	close(chb)
 	return <-che
 }
