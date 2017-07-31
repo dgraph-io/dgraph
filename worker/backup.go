@@ -18,9 +18,7 @@
 package worker
 
 import (
-	"bufio"
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -31,111 +29,73 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/trace"
 )
 
-func writeBackupToFile(f *os.File, ch chan []byte) error {
-	w := bufio.NewWriterSize(f, 1000000)
-	gw, err := gzip.NewWriterLevel(w, gzip.BestCompression)
-	if err != nil {
-		return err
-	}
-
-	for buf := range ch {
-		if _, err := gw.Write(buf); err != nil {
-			return err
-		}
-	}
-	if err := gw.Flush(); err != nil {
-		return err
-	}
-	if err := gw.Close(); err != nil {
-		return err
-	}
-	return w.Flush()
-}
-
-func handleBackupForGroup(ctx context.Context, gid uint32, bdir string) *protos.ExportPayload {
-	reply := &protos.ExportPayload{
-		Status: protos.ExportPayload_FAILED,
-	}
-
-	if ctx.Err() != nil {
-		return reply, ctx.Err()
-	}
-
-	// Use a goroutine to write to file.
+func handleBackupForGroup(ctx context.Context, gid uint32, bdir string) error {
 	if err := os.MkdirAll(bdir, 0700); err != nil {
 		return err
 	}
-	fmt.Println(bdir)
 
 	curTime := time.Now().Format("2006-01-02-15-04")
-	fpath := path.Join(bdir, fmt.Sprintf("dgraph-backup-%d-%s.rdf.gz", gid, curTime))
-	var allPaths []string
-	for _, gid := range gids {
-		fmt.Printf("Backing up to: %v", fpath)
-		chb := make(chan []byte, 1000)
-		f, err := os.Create(fpath)
-		if err != nil {
-			return err
-		}
-		allPaths = append(allPaths, fpath)
-		fileMap[gid] = chb
-		go func(f *os.File, chb chan []byte) {
-			errChan <- writeBackupToFile(f, chb)
-		}(f, chb)
-		defer f.Close()
-	}
+	fpath := path.Join(bdir, fmt.Sprintf("dgraph-backup-%d-%s.bin.gz", gid, curTime))
+	x.Printf("Backing up to: %v\n", fpath)
 
-	b := make([]byte, 4)
-	// Iterate over the store.
+	chb := make(chan []byte, 1000)
+	che := make(chan error, 1)
+	go func(fpath string, chb chan []byte) {
+		che <- writeToFile(fpath, chb)
+	}(fpath, chb)
+
+	blen := make([]byte, 4)
+	buf := new(bytes.Buffer)
+	buf.Grow(50000)
+
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
-	prefix := new(bytes.Buffer)
-	prefix.Grow(100)
-	var debugCount int
-	for it.Rewind(); it.Valid(); debugCount++; it.Next() {
+	count := 0
+	for it.Rewind(); it.Valid(); it.Next() {
 		item := it.Item()
 		key := item.Key()
 		pk := x.Parse(key)
-
 		if g := group.BelongsTo(pk.Attr); g != gid {
 			continue
 		}
-			k := item.Key()
-			v := item.Value()
-			binary.LittleEndian.PutUint32(b, uint32(len(k)))
-			prefix.Write(b)
-			prefix.Write(k)
-			binary.LittleEndian.PutUint32(b, uint32(len(v)))
-			prefix.Write(b)
-			prefix.Write(v)
-			prefix.WriteRune('\n')
-			chb <- prefix.Bytes()
-			prefix.Reset()
-	}
-
-	for _, v := range fileMap {
-		close(v) // We have stopped output to chb.
-		if err := <-errChan; err != nil {
-			return err
+		count++
+		k := item.Key()
+		v := item.Value()
+		binary.LittleEndian.PutUint32(blen, uint32(len(k)))
+		buf.Write(blen)
+		buf.Write(k)
+		binary.LittleEndian.PutUint32(blen, uint32(len(v)))
+		buf.Write(blen)
+		buf.Write(v)
+		buf.WriteRune('\n')
+		if buf.Len() >= 40000 {
+			tmp := make([]byte, buf.Len())
+			copy(tmp, buf.Bytes())
+			chb <- tmp
+			buf.Reset()
 		}
 	}
-	return nil
+	if buf.Len() > 0 {
+		// No need to copy as we are not going to use the buffer anymore.
+		chb <- buf.Bytes()
+	}
+	fmt.Println("Count", count)
+	close(chb)
+	return <-che
 }
 
 func Backup(ctx context.Context) error {
-	// If we haven't even had a single membership update, don't run export.
-	if err := syncAllMarks(ctx); err != nil {
-		return err
-	}
 	if err := x.HealthCheck(); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Request rejected %v", err)
 		}
+		return err
+	}
+	if err := syncAllMarks(ctx); err != nil {
 		return err
 	}
 	// Let's first collect all groups.
@@ -150,30 +110,28 @@ func Backup(ctx context.Context) error {
 			i--
 		}
 	}
-	fmt.Println(gids)
 
-	// TODO - Maybe later change to BackupPayload
-	ch := make(chan *protos.ExportPayload, len(gids))
+	che := make(chan error, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
-			ch <- handleBackupForGroup(ctx, group)
+			che <- handleBackupForGroup(ctx, group, Config.BackupPath)
 		}(gid)
 	}
 
 	for i := 0; i < len(gids); i++ {
-		bp := <-ch
-		if bp.Status != protos.ExportPayload_SUCCESS {
+		err := <-che
+		if err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Backup status: %v for group id: %d", bp.Status, bp.GroupId)
+				tr.LazyPrintf("Backup error: %v for group id: %d", err, gids[i])
 			}
-			return fmt.Errorf("Backup status: %v for group id: %d", bp.Status, bp.GroupId)
+			return fmt.Errorf("Backup error: %v for group id: %d", err, gids[i])
 		}
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Backup successful for group: %v", bp.GroupId)
+			tr.LazyPrintf("Backup successful for group: %v", gids[i])
 		}
 	}
 	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("DONE export")
+		tr.LazyPrintf("DONE backup")
 	}
 	return nil
 }

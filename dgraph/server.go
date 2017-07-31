@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -126,7 +127,7 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 
 	// Sanitize the context of the keys used for internal purposes only
 	ctx = context.WithValue(ctx, "_share_", nil)
-	ctx = context.WithValue(ctx, "mutation_allowed", isMutationAllowed(ctx))
+	ctx = context.WithValue(ctx, "mutation_allowed", IsMutationAllowed(ctx))
 
 	resp = new(protos.Response)
 	emptyMutation := len(req.Mutation.GetSet()) == 0 && len(req.Mutation.GetDel()) == 0 &&
@@ -232,8 +233,8 @@ func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.Assig
 //-------------------------------------------------------------------------------------------------
 // HELPER FUNCTIONS
 //-------------------------------------------------------------------------------------------------
-func isMutationAllowed(ctx context.Context) bool {
-	if !Config.Nomutations {
+func IsMutationAllowed(ctx context.Context) bool {
+	if atomic.LoadInt64(&Config.MutationAllowed) == 1 {
 		return true
 	}
 	shareAllowed, ok := ctx.Value("_share_").(bool)

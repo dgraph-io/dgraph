@@ -65,7 +65,6 @@ var (
 	baseGrpcPort int
 	bindall      bool
 
-	isMutAllowed uint32
 	exposeTrace  bool
 	cpuprofile   string
 	memprofile   string
@@ -95,8 +94,8 @@ func setupConfigOpts() {
 			"performance respectively.")
 	flag.StringVar(&config.WALDir, "w", defaults.WALDir,
 		"Directory to store raft write-ahead logs.")
-	flag.BoolVar(&config.Nomutations, "nomutations", defaults.Nomutations,
-		"Don't allow mutations on this server.")
+	flag.Int64Var(&config.MutationAllowed, "mallowed", defaults.MutationAllowed,
+		"Whether mutations are allowed. 0 is false, 1 is true.")
 	flag.IntVar(&config.NumPending, "pending", defaults.NumPending,
 		"Number of pending queries. Useful for rate limiting.")
 
@@ -104,6 +103,8 @@ func setupConfigOpts() {
 		"Port used by worker for internal communication.")
 	flag.StringVar(&config.ExportPath, "export", defaults.ExportPath,
 		"Folder in which to store exports.")
+	flag.StringVar(&config.BackupPath, "backup", defaults.BackupPath,
+		"Folder in which to store backups.")
 	flag.IntVar(&config.NumPendingProposals, "pending_proposals", defaults.NumPendingProposals,
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.Float64Var(&config.Tracing, "trace", defaults.Tracing,
@@ -251,7 +252,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Lets add the value of the debug query parameter to the context.
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
-	ctx = context.WithValue(ctx, "mutation_allowed", atomic.LoadUint32(&isMutAllowed) == 1)
+	ctx = context.WithValue(ctx, "mutation_allowed", dgraph.IsMutationAllowed(ctx))
 
 	if rand.Float64() < worker.Config.Tracing {
 		tr := trace.New("Dgraph", "Query")
@@ -509,35 +510,19 @@ func shutdownServer() {
 	}()
 }
 
-func allowMutationHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
-		return
-	}
-	atomic.StoreUint32(&isMutAllowed, 1)
-	x.SetStatus(w, x.Success, "Allowing all mutations.")
-}
-
-func stopMutationHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
-		return
-	}
-	atomic.StoreUint32(&isMutAllowed, 0)
-	x.SetStatus(w, x.Success, "Stopping all mutations.")
-}
-
 func backupHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r) {
 		return
 	}
-	atomic.StoreUint32(&isMutAllowed, 0)
+	atomic.StoreInt64(&dgraph.Config.MutationAllowed, 0)
 	ctx := context.Background()
-	// TODO: Return the paths of all the files written.
 	if err := worker.Backup(ctx); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 		return
 	}
-	x.SetStatus(w, x.Success, "Backup completed.")
-	atomic.StoreUint32(&isMutAllowed, 1)
+	atomic.StoreInt64(&dgraph.Config.MutationAllowed, 1)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"code": "Success", "message": "Backup completed."}`))
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
@@ -690,8 +675,6 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/export", exportHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
-	http.HandleFunc("/admin/allowmutation", allowMutationHandler)
-	http.HandleFunc("/admin/stopmutation", stopMutationHandler)
 
 	// UI related API's.
 	// Share urls have a hex string as the shareId. So if
@@ -730,10 +713,6 @@ func main() {
 
 	setupConfigOpts()
 	x.Init() // flag.Parse is called here
-
-	if !dgraph.Config.Nomutations {
-		atomic.StoreUint32(&isMutAllowed, 1)
-	}
 
 	setupProfiling()
 
