@@ -71,7 +71,6 @@ func handleBackupForGroup(ctx context.Context, gid uint32, bdir string) error {
 		binary.LittleEndian.PutUint32(blen, uint32(len(v)))
 		buf.Write(blen)
 		buf.Write(v)
-		buf.WriteRune('\n')
 		if buf.Len() >= 40000 {
 			tmp := make([]byte, buf.Len())
 			copy(tmp, buf.Bytes())
