@@ -38,6 +38,7 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -93,8 +94,8 @@ func setupConfigOpts() {
 			"performance respectively.")
 	flag.StringVar(&config.WALDir, "w", defaults.WALDir,
 		"Directory to store raft write-ahead logs.")
-	flag.BoolVar(&config.Nomutations, "nomutations", defaults.Nomutations,
-		"Don't allow mutations on this server.")
+	flag.Int64Var(&config.MutationAllowed, "mallowed", defaults.MutationAllowed,
+		"Whether mutations are allowed. 0 is false, 1 is true.")
 	flag.IntVar(&config.NumPending, "pending", defaults.NumPending,
 		"Number of pending queries. Useful for rate limiting.")
 
@@ -102,6 +103,8 @@ func setupConfigOpts() {
 		"Port used by worker for internal communication.")
 	flag.StringVar(&config.ExportPath, "export", defaults.ExportPath,
 		"Folder in which to store exports.")
+	flag.StringVar(&config.BackupPath, "backup", defaults.BackupPath,
+		"Folder in which to store backups.")
 	flag.IntVar(&config.NumPendingProposals, "pending_proposals", defaults.NumPendingProposals,
 		"Number of pending mutation proposals. Useful for rate limiting.")
 	flag.Float64Var(&config.Tracing, "trace", defaults.Tracing,
@@ -249,7 +252,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Lets add the value of the debug query parameter to the context.
 	ctx := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
-	ctx = context.WithValue(ctx, "mutation_allowed", !dgraph.Config.Nomutations)
+	ctx = context.WithValue(ctx, "mutation_allowed", dgraph.IsMutationAllowed(ctx))
 
 	if rand.Float64() < worker.Config.Tracing {
 		tr := trace.New("Dgraph", "Query")
@@ -410,6 +413,10 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := context.Background()
+	if atomic.LoadInt64(&dgraph.Config.MutationAllowed) != 1 {
+		x.SetStatus(w, x.Error, "Mutations are not allowed on this server.")
+		return
+	}
 	defer r.Body.Close()
 	if rawQuery, err = ioutil.ReadAll(r.Body); err != nil || len(rawQuery) == 0 {
 		if tr, ok := trace.FromContext(ctx); ok {
@@ -505,6 +512,20 @@ func shutdownServer() {
 
 		worker.BlockingStop()
 	}()
+}
+
+func backupHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r) {
+		return
+	}
+	atomic.StoreInt64(&dgraph.Config.MutationAllowed, 0)
+	if err := worker.Backup(context.Background()); err != nil {
+		x.SetStatus(w, err.Error(), "Backup failed.")
+		return
+	}
+	atomic.StoreInt64(&dgraph.Config.MutationAllowed, 1)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"code": "Success", "message": "Backup completed."}`))
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
@@ -656,6 +677,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/export", exportHandler)
+	http.HandleFunc("/admin/backup", backupHandler)
 
 	// UI related API's.
 	// Share urls have a hex string as the shareId. So if

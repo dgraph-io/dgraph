@@ -19,6 +19,7 @@ package worker
 type Options struct {
 	BaseWorkerPort      int
 	ExportPath          string
+	BackupPath          string
 	NumPendingProposals int
 	Tracing             float64
 	GroupIds            string

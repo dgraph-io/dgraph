@@ -25,17 +25,18 @@ import (
 )
 
 type Options struct {
-	PostingDir    string
-	PostingTables string
-	WALDir        string
-	Nomutations   bool
-	NumPending    int
+	PostingDir      string
+	PostingTables   string
+	WALDir          string
+	MutationAllowed int64
+	NumPending      int
 
 	AllottedMemory float64
 	CommitFraction float64
 
 	BaseWorkerPort      int
 	ExportPath          string
+	BackupPath          string
 	NumPendingProposals int
 	Tracing             float64
 	GroupIds            string
@@ -54,11 +55,11 @@ type Options struct {
 var Config Options
 
 var DefaultConfig = Options{
-	PostingDir:    "p",
-	PostingTables: "loadtoram",
-	WALDir:        "w",
-	Nomutations:   false,
-	NumPending:    1000,
+	PostingDir:      "p",
+	PostingTables:   "loadtoram",
+	WALDir:          "w",
+	MutationAllowed: 1,
+	NumPending:      1000,
 
 	// User must specify this.
 	AllottedMemory: -1.0,
@@ -66,6 +67,7 @@ var DefaultConfig = Options{
 
 	BaseWorkerPort:      12345,
 	ExportPath:          "export",
+	BackupPath:          "backup",
 	NumPendingProposals: 2000,
 	Tracing:             0.0,
 	GroupIds:            "0,1",
@@ -90,6 +92,7 @@ func SetConfiguration(newConfig Options) {
 
 	worker.Config.BaseWorkerPort = Config.BaseWorkerPort
 	worker.Config.ExportPath = Config.ExportPath
+	worker.Config.BackupPath = Config.BackupPath
 	worker.Config.NumPendingProposals = Config.NumPendingProposals
 	worker.Config.Tracing = Config.Tracing
 	worker.Config.GroupIds = Config.GroupIds

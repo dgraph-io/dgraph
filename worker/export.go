@@ -257,7 +257,7 @@ func export(gid uint32, bdir string) error {
 		wg.Done()
 	}()
 
-	// Iterate over rocksdb.
+	// Iterate over badger.
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 	var lastPred string
