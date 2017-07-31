@@ -23,6 +23,13 @@ import (
 	"sync/atomic"
 )
 
+// Constants used in serialization sizes, and in ValueStruct serialization
+const (
+	MetaSize     = 1
+	UserMetaSize = 1
+	CasSize      = 8
+)
+
 var (
 	// This is O_DSYNC (datasync) on platforms that support it -- see file_unix.go
 	datasyncFileFlag = 0x0

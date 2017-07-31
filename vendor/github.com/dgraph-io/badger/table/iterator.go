@@ -18,7 +18,6 @@ package table
 
 import (
 	"bytes"
-	"encoding/binary"
 	"io"
 	"math"
 	"sort"
@@ -391,14 +390,9 @@ func (itr *TableIterator) Key() []byte {
 	return itr.bi.Key()
 }
 
-func (itr *TableIterator) Value() y.ValueStruct {
-	v := itr.bi.Value()
-	return y.ValueStruct{
-		Value:      v[4:],
-		Meta:       v[0],
-		UserMeta:   v[1],
-		CASCounter: binary.BigEndian.Uint16(v[2:4]),
-	}
+func (itr *TableIterator) Value() (ret y.ValueStruct) {
+	ret.DecodeEntireSlice(itr.bi.Value())
+	return
 }
 
 func (s *TableIterator) Next() {
