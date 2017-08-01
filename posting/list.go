@@ -724,6 +724,8 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 			doAsyncWrite(l.key, data, uidOnlyPosting, f)
 			return
 		}
+		x.BytesWrite.Add(int64(len(data)))
+		x.PostingWrites.Add(1)
 		if l.water != nil {
 			l.water.Ch <- x.Mark{Indices: pending, Done: true}
 		}
