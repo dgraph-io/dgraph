@@ -394,9 +394,6 @@ func EvictGroup(group uint32) {
 	// lcache.Each(func(k uint64, l *List) {
 	// 	l.SetForDeletion()
 	// })
-	CommitLists(1, group)
 	// TODO: Do we need to do this?
-	// lhmapFor(group).EachWithDelete(func(k uint64, l *List) {
-	// 	l.decr()
-	// })
+	CommitLists(1, group)
 }

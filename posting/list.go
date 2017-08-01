@@ -677,7 +677,6 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	if l.plist != emptyList {
 		l.plist.Uids = l.plist.Uids[:0]
 		l.plist.Postings = l.plist.Postings[:0]
-		//		postingListPool.Put(l.plist)
 	}
 
 	var data []byte
