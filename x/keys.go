@@ -17,6 +17,7 @@
 package x
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math"
 )
@@ -25,14 +26,16 @@ const (
 	// TODO(pawan) - Make this 2 bytes long. Right now ParsedKey has byteType and
 	// bytePrefix. Change it so that it just has one field which has all the information.
 	ByteData     = byte(0x00)
-	byteSchema   = byte(0x01)
 	ByteIndex    = byte(0x02)
 	ByteReverse  = byte(0x04)
 	ByteCount    = byte(0x08)
 	ByteCountRev = ByteCount | ByteReverse
+	// We don't be iterating specifically on split pl's
+	ByteSplit = byte(0x10)
 	// same prefix for data, index and reverse keys so that relative order of data doesn't change
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)
+	schemaPrefix  = byte(0x01)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -50,11 +53,12 @@ func writeAttr(buf []byte, attr string) []byte {
 // since we need to iterate over all schema keys
 func SchemaKey(attr string) []byte {
 	buf := make([]byte, 2+len(attr)+2)
-	buf[0] = byteSchema
+	buf[0] = schemaPrefix
 	rest := buf[1:]
 
 	rest = writeAttr(rest, attr)
-	rest[0] = byteSchema
+	// TODO: This is not necessary, remove ?
+	rest[0] = schemaPrefix
 
 	return buf
 }
@@ -115,6 +119,38 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 	return buf
 }
 
+// SplitKey takes data, index, reverse or count key as input and returns the
+// corresponding split key.
+// Given key is appened with maxuid and counter and byte type is changed to
+// split byte
+func SplitKey(key []byte, maxuid uint64, counter uint8) []byte {
+	buf := make([]byte, len(key)+8+1)
+	sz := int(binary.BigEndian.Uint16(key[1:3]))
+	copy(buf, key)
+	buf[3+sz] = ByteSplit | buf[3+sz] // 1 + 2(len of attribute)
+	binary.BigEndian.PutUint64(buf[len(buf)-9:], maxuid)
+	buf[len(buf)-1] = byte(counter)
+	return buf
+}
+
+// CompareSplitCounter returns whether the split keys point
+// to the same split and if they point to same split returns whether
+// key1 is latest or not
+func CompareSplitCounter(key1 []byte, key2 []byte) (same bool, latest bool) {
+	// compare ignoring the counter
+	if bytes.Compare(key1[:len(key1)-1], key2[:len(key2)-1]) == 0 {
+		counter1 := uint(key1[len(key1)-1])
+		counter2 := uint(key2[len(key2)-1])
+		if counter1 == 0 && counter2 != 1 {
+			return true, true
+		} else if counter1 < counter2 {
+			return true, false
+		}
+		return true, true
+	}
+	return false, false
+}
+
 type ParsedKey struct {
 	byteType   byte
 	Attr       string
@@ -142,7 +178,11 @@ func (p ParsedKey) IsIndex() bool {
 }
 
 func (p ParsedKey) IsSchema() bool {
-	return p.byteType == byteSchema
+	return p.byteType == schemaPrefix
+}
+
+func (p ParsedKey) IsSplit() bool {
+	return p.byteType&ByteSplit != 0
 }
 
 func (p ParsedKey) IsType(typ byte) bool {
@@ -182,7 +222,7 @@ func (p ParsedKey) SkipRangeOfSameType() []byte {
 
 func (p ParsedKey) SkipSchema() []byte {
 	buf := make([]byte, 1)
-	buf[0] = byteSchema + 1
+	buf[0] = schemaPrefix + 1
 	return buf
 }
 
@@ -234,10 +274,37 @@ func (p ParsedKey) CountPrefix(reverse bool) []byte {
 	return buf
 }
 
+// SplitPrefix returns the prefix of split keys for a given data/index/reverse/count key
+// We want to store the split pl's together with the normal pl's for same predicate
+// and uid/term
+func SplitPrefix(key []byte) []byte {
+	buf := make([]byte, len(key))
+	sz := int(binary.BigEndian.Uint16(key[1:3]))
+	copy(buf, key)
+	// update byte type
+	buf[3+sz] = ByteSplit | buf[3+sz] // 1 + 2(len of attribute)
+	return buf
+}
+
+// ParseSplitKey returns the maxUid and counter
+func ParseSplitKey(key []byte) (uint64, uint8) {
+	maxUid := binary.BigEndian.Uint64(key[len(key)-9 : len(key)-1])
+	counter := uint8(key[len(key)-1])
+	return maxUid, counter
+}
+
+func IncrementSplitCounter(key []byte) []byte {
+	buf := make([]byte, len(key))
+	copy(buf, key)
+	counter := uint8(key[len(key)-1]) + 1
+	buf[len(key)-1] = byte(counter)
+	return buf
+}
+
 // SchemaPrefix returns the prefix for Schema keys.
 func SchemaPrefix() []byte {
 	buf := make([]byte, 1)
-	buf[0] = byteSchema
+	buf[0] = schemaPrefix
 	return buf
 }
 
@@ -263,7 +330,7 @@ func Parse(key []byte) *ParsedKey {
 		p.Term = string(k)
 	case ByteCount, ByteCountRev:
 		p.Count = binary.BigEndian.Uint32(k)
-	case byteSchema:
+	case schemaPrefix, ByteSplit:
 		break
 	default:
 		// Some other data type.

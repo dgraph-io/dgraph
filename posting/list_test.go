@@ -37,10 +37,19 @@ import (
 func (l *List) PostingList() *protos.PostingList {
 	l.RLock()
 	defer l.RUnlock()
-	return l.plist
+	return l.slists[0].plist
 }
 
 func listToArray(t *testing.T, afterUid uint64, l *List) []uint64 {
+	out := make([]uint64, 0, 10)
+	l.Iterate(afterUid, func(p *protos.Posting) bool {
+		out = append(out, p.Uid)
+		return true
+	})
+	return out
+}
+
+func shardedListToArray(t *testing.T, afterUid uint64, l *shardedList) []uint64 {
 	out := make([]uint64, 0, 10)
 	l.Iterate(afterUid, func(p *protos.Posting) bool {
 		out = append(out, p.Uid)
@@ -674,6 +683,7 @@ func TestDelete(t *testing.T) {
 	require.True(t, commited)
 
 	require.EqualValues(t, 0, ol.Length(0))
+	ps.Delete(ol.key)
 }
 
 func TestAfterUIDCountWithCommit(t *testing.T) {

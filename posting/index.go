@@ -168,6 +168,10 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 
 	countBefore, countAfter := 0, 0
 	hasCountIndex := schema.State().HasCount(t.Attr)
+	if hasCountIndex {
+		plist.index.Lock()
+		defer plist.index.Unlock()
+	}
 	plist.Lock()
 	if hasCountIndex {
 		countBefore = plist.length(0)
@@ -289,20 +293,23 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	var val types.Val
 	var found bool
 
+	isIndexed := schema.State().IsIndexed(t.Attr)
 	t1 := time.Now()
-	l.index.Lock()
-	if dur := time.Since(t1); dur > time.Millisecond {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("acquired index lock %v %v %v", dur, t.Attr, t.Entity)
+	if isIndexed {
+		l.index.Lock()
+		if dur := time.Since(t1); dur > time.Millisecond {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("acquired index lock %v %v %v", dur, t.Attr, t.Entity)
+			}
 		}
+		defer l.index.Unlock()
 	}
-	defer l.index.Unlock()
 
 	if t.Op == protos.DirectedEdge_DEL && string(t.Value) == x.Star {
 		return l.handleDeleteAll(ctx, t)
 	}
 
-	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
+	doUpdateIndex := pstore != nil && (t.Value != nil) && isIndexed
 	{
 		t1 = time.Now()
 		l.Lock()
@@ -364,6 +371,16 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 }
 
 func deleteEntries(prefix []byte) error {
+	if err := deleteEntriesHelper(prefix); err != nil {
+		return err
+	}
+	sprefix := make([]byte, len(prefix))
+	copy(sprefix, prefix)
+	sprefix[len(sprefix)-1] |= x.ByteSplit
+	return deleteEntriesHelper(sprefix)
+}
+
+func deleteEntriesHelper(prefix []byte) error {
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.FetchValues = false
 	idxIt := pstore.NewIterator(iterOpt)
@@ -398,6 +415,9 @@ func DeleteReverseEdges(ctx context.Context, attr string) error {
 	if err := lcache.clear(attr, x.ByteReverse); err != nil {
 		return err
 	}
+	if err := blcache.clear(attr, x.ByteReverse); err != nil {
+		return err
+	}
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.ReversePrefix()
@@ -423,6 +443,12 @@ func DeleteCountIndex(ctx context.Context, attr string) error {
 	if err := lcache.clear(attr, x.ByteCountRev); err != nil {
 		return err
 	}
+	if err := blcache.clear(attr, x.ByteCount); err != nil {
+		return err
+	}
+	if err := blcache.clear(attr, x.ByteCountRev); err != nil {
+		return err
+	}
 	// Delete index entries from data store.
 	if err := deleteCountIndex(ctx, attr, false); err != nil {
 		return err
@@ -440,15 +466,17 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 		go func() {
 			var err error
 			for it := range ch {
-				pl := it.list
+				l, decr := Get(it.key)
 				t := &protos.DirectedEdge{
 					ValueId: it.uid,
 					Attr:    attr,
 					Op:      protos.DirectedEdge_SET,
 				}
-				if err = addCountMutation(ctx, t, uint32(len(pl.Uids)/8), reverse); err != nil {
+				if err = addCountMutation(ctx, t, uint32(l.Length(0)), reverse); err != nil {
+					decr()
 					break
 				}
+				decr()
 			}
 			che <- err
 		}()
@@ -460,18 +488,20 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 		prefix = pk.ReversePrefix()
 	}
 
-	it := pstore.NewIterator(badger.DefaultIteratorOptions)
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.FetchValues = false
+	it := pstore.NewIterator(itOpt)
 	defer it.Close()
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		iterItem := it.Item()
 		key := iterItem.Key()
 		pki := x.Parse(key)
-		var pl protos.PostingList
-		UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
+		newk := make([]byte, len(key))
+		copy(newk, key)
 
 		ch <- item{
-			uid:  pki.Uid,
-			list: &pl,
+			uid: pki.Uid,
+			key: newk,
 		}
 	}
 	close(ch)
@@ -506,8 +536,8 @@ func RebuildCountIndex(ctx context.Context, attr string) error {
 }
 
 type item struct {
-	uid  uint64
-	list *protos.PostingList
+	uid uint64
+	key []byte
 }
 
 // RebuildReverseEdges rebuilds the reverse edges for a given attribute.
@@ -516,33 +546,34 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.DataPrefix()
-	it := pstore.NewIterator(badger.DefaultIteratorOptions)
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.FetchValues = false
+	it := pstore.NewIterator(itOpt)
 	defer it.Close()
 
 	// Helper function - Add reverse entries for values in posting list
-	addReversePostings := func(uid uint64, pl *protos.PostingList) error {
-		var pitr PIterator
-		pitr.Init(pl, 0)
+	addReversePostings := func(uid uint64, l *List) error {
 		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
-		for ; pitr.Valid(); pitr.Next() {
-			pp := pitr.Posting()
+		var err error
+		l.Iterate(0, func(pp *protos.Posting) bool {
 			puid := pp.Uid
 			// Add reverse entries based on p.
 			edge.ValueId = puid
 			edge.Op = protos.DirectedEdge_SET
 			edge.Facets = pp.Facets
 			edge.Label = pp.Label
-			err := addReverseMutation(ctx, &edge)
+			err = addReverseMutation(ctx, &edge)
 			// We retry once in case we do GetOrCreate and stop the world happens
 			// before we do addmutation
 			if err == ErrRetry {
 				err = addReverseMutation(ctx, &edge)
 			}
 			if err != nil {
-				return err
+				return false
 			}
-		}
-		return nil
+			return true
+		})
+		return err
 	}
 
 	ch := make(chan item, 10000)
@@ -551,10 +582,13 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		go func() {
 			var err error
 			for it := range ch {
-				err = addReversePostings(it.uid, it.list)
+				l, decr := Get(it.key)
+				err = addReversePostings(it.uid, l)
 				if err != nil {
+					decr()
 					break
 				}
+				decr()
 			}
 			che <- err
 		}()
@@ -567,17 +601,14 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 			break
 		}
 		pki := x.Parse(key)
-		var pl protos.PostingList
-		UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
+		newk := make([]byte, len(key))
+		copy(newk, key)
 
-		// Posting list contains only values or only UIDs.
-		if (len(pl.Postings) == 0 && len(pl.Uids) != 0) ||
-			postingType(pl.Postings[0]) == x.ValueUid {
-			ch <- item{
-				uid:  pki.Uid,
-				list: &pl,
-			}
+		ch <- item{
+			uid: pki.Uid,
+			key: newk,
 		}
+
 	}
 	close(ch)
 	for i := 0; i < 1000; i++ {
@@ -590,6 +621,9 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 
 func DeleteIndex(ctx context.Context, attr string) error {
 	if err := lcache.clear(attr, x.ByteIndex); err != nil {
+		return err
+	}
+	if err := blcache.clear(attr, x.ByteIndex); err != nil {
 		return err
 	}
 	// Delete index entries from data store.
@@ -607,36 +641,38 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	// Add index entries to data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.DataPrefix()
-	it := pstore.NewIterator(badger.DefaultIteratorOptions)
+	itOpt := badger.DefaultIteratorOptions
+	itOpt.FetchValues = false
+	it := pstore.NewIterator(itOpt)
 	defer it.Close()
 
 	// Helper function - Add index entries for values in posting list
-	addPostingsToIndex := func(uid uint64, pl *protos.PostingList) error {
-		postingsLen := len(pl.Postings)
+	addPostingsToIndex := func(uid uint64, l *List) error {
 		edge := protos.DirectedEdge{Attr: attr, Entity: uid}
-		for idx := 0; idx < postingsLen; idx++ {
-			p := pl.Postings[idx]
+		var err error
+		l.Iterate(0, func(p *protos.Posting) bool {
 			// Add index entries based on p.
 			val := types.Val{
 				Value: p.Value,
 				Tid:   types.TypeID(p.ValType),
 			}
-			err := addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)
+			err = addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)
 			// We retry once in case we do GetOrCreate and stop the world happens
 			// before we do addmutation
 			if err == ErrRetry {
 				err = addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)
 			}
 			if err != nil {
-				return err
+				return false
 			}
-		}
-		return nil
+			return true
+		})
+		return err
 	}
 
 	type item struct {
-		uid  uint64
-		list *protos.PostingList
+		uid uint64
+		key []byte
 	}
 	ch := make(chan item, 10000)
 	che := make(chan error, 1000)
@@ -644,10 +680,13 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		go func() {
 			var err error
 			for it := range ch {
-				err = addPostingsToIndex(it.uid, it.list)
+				l, decr := Get(it.key)
+				err = addPostingsToIndex(it.uid, l)
 				if err != nil {
+					decr()
 					break
 				}
+				decr()
 			}
 			che <- err
 		}()
@@ -660,15 +699,12 @@ func RebuildIndex(ctx context.Context, attr string) error {
 			break
 		}
 		pki := x.Parse(key)
-		var pl protos.PostingList
-		UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
+		newk := make([]byte, len(key))
+		copy(newk, key)
 
-		// Posting list contains only values or only UIDs.
-		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) != x.ValueUid {
-			ch <- item{
-				uid:  pki.Uid,
-				list: &pl,
-			}
+		ch <- item{
+			uid: pki.Uid,
+			key: newk,
 		}
 	}
 	close(ch)
@@ -682,6 +718,9 @@ func RebuildIndex(ctx context.Context, attr string) error {
 
 func DeletePredicate(ctx context.Context, attr string) error {
 	if err := lcache.clear(attr, x.ByteData); err != nil {
+		return err
+	}
+	if err := blcache.clear(attr, x.ByteData); err != nil {
 		return err
 	}
 	pk := x.ParsedKey{
