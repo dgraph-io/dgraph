@@ -218,7 +218,7 @@ func (itr *TableIterator) reset() {
 }
 
 func (itr *TableIterator) Valid() bool {
-	return itr != nil && itr.err == nil
+	return itr.err == nil
 }
 
 func (itr *TableIterator) Error() error {
@@ -464,7 +464,7 @@ func (s *ConcatIterator) Rewind() {
 }
 
 func (s *ConcatIterator) Valid() bool {
-	return s.cur.Valid()
+	return s.cur != nil && s.cur.Valid()
 }
 
 func (s *ConcatIterator) Name() string { return "ConcatIterator" }

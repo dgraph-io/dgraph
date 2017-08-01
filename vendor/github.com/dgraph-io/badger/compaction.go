@@ -133,6 +133,9 @@ func (cs *compactStatus) delSize(l int) int64 {
 // compareAndAdd will check whether we can run this compactDef. That it doesn't overlap with any
 // other running compaction. If it can be run, it would store this run in the compactStatus state.
 func (cs *compactStatus) compareAndAdd(cd compactDef) bool {
+	cd.thisLevel.AssertRLock()
+	cd.nextLevel.AssertRLock()
+
 	cs.Lock()
 	defer cs.Unlock()
 
@@ -150,7 +153,9 @@ func (cs *compactStatus) compareAndAdd(cd compactDef) bool {
 	}
 	// Check whether this level really needs compaction or not. Otherwise, we'll end up
 	// running parallel compactions for the same level.
-	if cd.thisLevel.getTotalSize()-thisLevel.delSize < cd.thisLevel.maxTotalSize {
+	// NOTE: We can directly call thisLevel.totalSize, because we already have acquire a read lock
+	// over this and the next level.
+	if cd.thisLevel.totalSize-thisLevel.delSize < cd.thisLevel.maxTotalSize {
 		return false
 	}
 

@@ -129,12 +129,12 @@ type KV struct {
 
 	closer    *y.Closer
 	elog      trace.EventLog
-	mt        *skl.Skiplist
+	mt        *skl.Skiplist   // Our latest (actively written) in-memory table
 	imm       []*skl.Skiplist // Add here only AFTER pushing to flushChan.
 	opt       Options
 	lc        *levelsController
 	vlog      valueLog
-	vptr      valuePointer
+	vptr      valuePointer // less than or equal to a pointer to the last vlog value put into mt
 	writeCh   chan *request
 	flushChan chan flushTask // For flushing memtables.
 
@@ -538,12 +538,14 @@ func (s *KV) updateOffset(ptrs []valuePointer) {
 			break
 		}
 	}
+	if ptr.IsZero() {
+		return
+	}
 
 	s.Lock()
 	defer s.Unlock()
-	if s.vptr.Less(ptr) {
-		s.vptr = ptr
-	}
+	y.AssertTrue(!ptr.Less(s.vptr))
+	s.vptr = ptr
 }
 
 var requestPool = sync.Pool{
@@ -1021,12 +1023,10 @@ func (s *KV) flushMemtable(lc *y.LevelCloser) error {
 			return nil
 		}
 
-		if ft.vptr.Fid > 0 || ft.vptr.Offset > 0 || ft.vptr.Len > 0 {
+		if !ft.vptr.IsZero() {
 			s.elog.Printf("Storing offset: %+v\n", ft.vptr)
 			offset := make([]byte, 10)
-			s.Lock() // For vptr and casAsOfVptr.
-			s.vptr.Encode(offset)
-			s.Unlock()
+			ft.vptr.Encode(offset)
 			// CAS counter is needed and is desirable -- it's the first value log entry
 			// we replay, so to speak, perhaps the only, and we use it to re-initialize
 			// the CAS counter.
@@ -1064,8 +1064,9 @@ func (s *KV) flushMemtable(lc *y.LevelCloser) error {
 			s.elog.Printf("ERROR while opening table: %v", err)
 			return err
 		}
-		defer tbl.DecrRef()
-		s.lc.addLevel0Table(tbl) // This will incrRef again.
+		// We own a ref on tbl.
+		s.lc.addLevel0Table(tbl) // This will incrRef.
+		tbl.DecrRef()            // Releases our ref.
 
 		// Update s.imm. Need a lock.
 		s.Lock()
