@@ -35,6 +35,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	normalizeLimit = 10000
+)
+
 // ToProtocolBuf returns the list of protos.Node which would be returned to the go
 // client.
 func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*protos.Node, error) {
@@ -165,15 +169,15 @@ func mergeProto(parent [][]*protos.Property,
 	mergedLists := make([][]*protos.Property, 0, len(parent)*len(child))
 	cnt := 0
 	for _, pa := range parent {
-		cnt += len(child)
-		if cnt > 10000 {
-			return nil, x.Errorf("Couldn't evaluate @normalize directive - to many results")
-		}
 		for _, ca := range child {
-			mergeList := make([]*protos.Property, 0, len(parent))
-			mergeList = append(mergeList, pa...)
-			mergeList = append(mergeList, ca...)
-			mergedLists = append(mergedLists, mergeList)
+			cnt += len(pa) + len(ca)
+			if cnt > normalizeLimit {
+				return nil, x.Errorf("Couldn't evaluate @normalize directive - to many results")
+			}
+			list := make([]*protos.Property, 0, len(pa)+len(ca))
+			list = append(list, pa...)
+			list = append(list, ca...)
+			mergedLists = append(mergedLists, list)
 		}
 	}
 	return mergedLists, nil
@@ -506,25 +510,30 @@ func (fj *fastJsonNode) encode(out *bufio.Writer) {
 	}
 }
 
-func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) [][]*fastJsonNode {
+func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode, error) {
 	if len(parent) == 0 {
-		return child
+		return child, nil
 	}
 
 	// Here we merge two slices of maps.
 	mergedList := make([][]*fastJsonNode, 0, len(parent)*len(child))
+	cnt := 0
 	for _, pa := range parent {
 		for _, ca := range child {
+			cnt += len(pa) + len(ca)
+			if cnt > normalizeLimit {
+				return nil, x.Errorf("Couldn't evaluate @normalize directive - to many results")
+			}
 			list := make([]*fastJsonNode, 0, len(pa)+len(ca))
 			list = append(list, pa...)
 			list = append(list, ca...)
 			mergedList = append(mergedList, list)
 		}
 	}
-	return mergedList
+	return mergedList, nil
 }
 
-func (n *fastJsonNode) normalize() [][]*fastJsonNode {
+func (n *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	cnt := 0
 	for _, a := range n.attrs {
 		if a.isChild {
@@ -535,7 +544,7 @@ func (n *fastJsonNode) normalize() [][]*fastJsonNode {
 	if cnt == 0 {
 		// Recursion base case
 		// There are no children, we can just return slice with n.attrs map.
-		return [][]*fastJsonNode{n.attrs}
+		return [][]*fastJsonNode{n.attrs}, nil
 	}
 
 	parentSlice := make([][]*fastJsonNode, 0, 5)
@@ -557,11 +566,19 @@ func (n *fastJsonNode) normalize() [][]*fastJsonNode {
 		}
 		childSlice := make([][]*fastJsonNode, 0, 5)
 		for ci < len(n.attrs) && childNode.attr == n.attrs[ci].attr {
-			childSlice = append(childSlice, n.attrs[ci].normalize()...)
+			normalized, err := n.attrs[ci].normalize()
+			if err != nil {
+				return nil, err
+			}
+			childSlice = append(childSlice, normalized...)
 			ci++
 		}
 		// Merging with parent.
-		parentSlice = merge(parentSlice, childSlice)
+		var err error
+		parentSlice, err = merge(parentSlice, childSlice)
+		if err != nil {
+			return nil, err
+		}
 	}
 	for i, slice := range parentSlice {
 		sort.Sort(nodeSlice(slice))
@@ -585,7 +602,7 @@ func (n *fastJsonNode) normalize() [][]*fastJsonNode {
 		}
 	}
 
-	return parentSlice
+	return parentSlice, nil
 }
 
 type attrVal struct {
@@ -658,7 +675,11 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		}
 
 		// Lets normalize the response now.
-		for _, c := range n1.(*fastJsonNode).normalize() {
+		normalized, err := n1.(*fastJsonNode).normalize()
+		if err != nil {
+			return err
+		}
+		for _, c := range normalized {
 			n.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c})
 		}
 	}

@@ -60,7 +60,7 @@ func TestEncodeMemory(t *testing.T) {
 
 func TestNormalizePBLimit(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping TestEncodeMemory")
+		t.Skip("Skipping TestNormalizePBLimit")
 	}
 
 	n := (&protoNode{}).New("root")
@@ -88,5 +88,38 @@ func TestNormalizePBLimit(t *testing.T) {
 		}
 	}
 	_, err := n.(*protoNode).normalize()
+	require.Error(t, err, "Couldn't evaluate @normalize directive - to many results")
+}
+
+func TestNormalizeJSONLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping TestNormalizeJSONLimit")
+	}
+
+	n := (&fastJsonNode{}).New("root")
+	require.NotNil(t, n)
+	for i := 0; i < 1000; i++ {
+		n.AddValue(fmt.Sprintf("very long attr name %06d", i),
+			types.ValueForType(types.StringID))
+		child1 := n.New("child1")
+		n.AddListChild("child1", child1)
+		for j := 0; j < 100; j++ {
+			child1.AddValue(fmt.Sprintf("long child1 attr %06d", j),
+				types.ValueForType(types.StringID))
+		}
+		child2 := n.New("child2")
+		n.AddListChild("child2", child2)
+		for j := 0; j < 100; j++ {
+			child2.AddValue(fmt.Sprintf("long child2 attr %06d", j),
+				types.ValueForType(types.StringID))
+		}
+		child3 := n.New("child3")
+		n.AddListChild("child3", child3)
+		for j := 0; j < 100; j++ {
+			child3.AddValue(fmt.Sprintf("long child3 attr %06d", j),
+				types.ValueForType(types.StringID))
+		}
+	}
+	_, err := n.(*fastJsonNode).normalize()
 	require.Error(t, err, "Couldn't evaluate @normalize directive - to many results")
 }
