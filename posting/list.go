@@ -26,7 +26,6 @@ import (
 	"log"
 	"math"
 	"sort"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -96,14 +95,9 @@ func (l *List) decr() {
 	}
 
 	if l.plist != emptyList {
-		for _, p := range l.plist.Postings {
-			postingPool.Put(p)
-		}
 		l.plist.Postings = l.plist.Postings[:0]
 		l.plist.Uids = l.plist.Uids[:0]
-		//	postingListPool.Put(l.plist)
 	}
-	listPool.Put(l)
 }
 
 // calculateSize would give you the size estimate. Does not consider elements in mutation layer.
@@ -115,24 +109,6 @@ func (l *List) calculateSize() uint32 {
 	sz += cap(l.mlayer) * 8
 	sz += cap(l.pending) * 8
 	return uint32(sz)
-}
-
-var postingPool = sync.Pool{
-	New: func() interface{} {
-		return &protos.Posting{}
-	},
-}
-
-//var postingListPool = sync.Pool{
-//	New: func() interface{} {
-//		return &protos.PostingList{}
-//	},
-//}
-
-var listPool = sync.Pool{
-	New: func() interface{} {
-		return &List{}
-	},
 }
 
 type PIterator struct {
@@ -198,8 +174,7 @@ func (it *PIterator) Posting() *protos.Posting {
 }
 
 func getNew(key []byte, pstore *badger.KV) *List {
-	l := listPool.Get().(*List)
-	*l = List{}
+	l := new(List)
 	l.key = key
 	l.refcount = 1
 
@@ -297,8 +272,7 @@ func newPosting(t *protos.DirectedEdge) *protos.Posting {
 		postingType = protos.Posting_VALUE
 	}
 
-	p := postingPool.Get().(*protos.Posting)
-	*p = protos.Posting{}
+	p := new(protos.Posting)
 	p.Uid = t.ValueId
 	p.Value = t.Value
 	p.ValType = protos.Posting_ValType(t.ValueType)
@@ -539,12 +513,8 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 func (l *List) delete(ctx context.Context, attr string) error {
 	l.AssertLock()
 	if l.plist != emptyList {
-		for _, p := range l.plist.Postings {
-			postingPool.Put(p)
-		}
 		l.plist.Uids = l.plist.Uids[:0]
 		l.plist.Postings = l.plist.Postings[:0]
-		//	postingListPool.Put(l.plist)
 	}
 	l.plist = emptyList
 	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
