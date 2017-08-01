@@ -47,6 +47,7 @@ var (
 	MemoryInUse      *expvar.Int
 	HeapIdle         *expvar.Int
 	TotalMemory      *expvar.Int
+	TotalOSMemory    *expvar.Int
 	ActiveMutations  *expvar.Int
 	ServerHealth     *expvar.Int
 	MaxPlLength      *expvar.Int
@@ -76,6 +77,7 @@ func init() {
 	MemoryInUse = expvar.NewInt("memoryInUse")
 	HeapIdle = expvar.NewInt("heapIdle")
 	TotalMemory = expvar.NewInt("totalMemory")
+	TotalOSMemory = expvar.NewInt("totalOSMemory")
 	ActiveMutations = expvar.NewInt("activeMutations")
 	PredicateStats = expvar.NewMap("predicateStats")
 	CacheHit = expvar.NewInt("cacheHit")
@@ -203,6 +205,11 @@ func init() {
 		"totalMemory": prometheus.NewDesc(
 			"totalMemory",
 			"totalMemory",
+			nil, nil,
+		),
+		"totalOSMemory": prometheus.NewDesc(
+			"totalOSMemory",
+			"totalOSMemory",
 			nil, nil,
 		),
 		"activeMutations": prometheus.NewDesc(

@@ -20,8 +20,14 @@ package posting
 import (
 	"crypto/md5"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"math"
+	"os"
+	"os/exec"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -159,6 +165,52 @@ func gentleCommit(dirtyMap map[string]time.Time, pending chan struct{},
 	}(keysBuffer)
 }
 
+func getMemUsage() int {
+	if runtime.GOOS != "linux" {
+		pid := os.Getpid()
+		cmd := fmt.Sprintf("ps -ao rss,pid | grep %v", pid)
+		c1, err := exec.Command("bash", "-c", cmd).Output()
+		if err != nil {
+			// In case of error running the command, resort to go way
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			megs := ms.Alloc / (1 << 20)
+			return int(megs)
+		}
+
+		rss := strings.Split(string(c1), " ")[0]
+		kbs, err := strconv.Atoi(rss)
+		if err != nil {
+			return 0
+		}
+
+		megs := kbs / (1 << 10)
+		return megs
+	}
+
+	contents, err := ioutil.ReadFile("/proc/self/stat")
+	if err != nil {
+		log.Println("Can't read the proc file", err)
+		return 0
+	}
+
+	cont := strings.Split(string(contents), " ")
+	// 24th entry of the file is the RSS which denotes the number of pages
+	// used by the process.
+	if len(cont) < 24 {
+		log.Println("Error in RSS from stat")
+		return 0
+	}
+
+	rss, err := strconv.Atoi(cont[23])
+	if err != nil {
+		log.Println(err)
+		return 0
+	}
+
+	return rss * os.Getpagesize() / (1 << 20)
+}
+
 // periodicMerging periodically merges the dirty posting lists. It also checks our memory
 // usage. If it exceeds a certain threshold, it would stop the world, and aggressively
 // merge and evict all posting lists from memory.
@@ -192,6 +244,7 @@ func periodicCommit() {
 			x.MemoryInUse.Set(int64(inUse))
 			x.HeapIdle.Set(int64(idle))
 			x.TotalMemory.Set(int64(inUse + idle))
+			x.TotalOSMemory.Set(int64(getMemUsage()))
 
 			stats := lcache.Stats()
 			x.EvictedPls.Set(int64(stats.NumEvicts))
