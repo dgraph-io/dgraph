@@ -110,7 +110,7 @@ type logEntry func(e Entry, vp valuePointer) error
 // iterate iterates over log file. It doesn't not allocate new memory for every kv pair.
 // Therefore, the kv pair is only valid for the duration of fn call.
 func (f *logFile) iterate(offset uint32, fn logEntry) error {
-	_, err := f.fd.Seek(int64(offset), 0)
+	_, err := f.fd.Seek(int64(offset), io.SeekStart)
 	if err != nil {
 		return y.Wrap(err)
 	}
@@ -129,7 +129,7 @@ func (f *logFile) iterate(offset uint32, fn logEntry) error {
 	}
 
 	reader := bufio.NewReader(f.fd)
-	var hbuf [14]byte
+	var hbuf [headerBufSize]byte
 	var h header
 	var count int
 	k := make([]byte, 1<<10)
@@ -324,12 +324,12 @@ type Entry struct {
 	Meta            byte
 	UserMeta        byte
 	Value           []byte
-	CASCounterCheck uint16 // If nonzero, we will check if existing casCounter matches.
+	CASCounterCheck uint64 // If nonzero, we will check if existing casCounter matches.
 	Error           error  // Error if any.
 
 	// Fields maintained internally.
 	offset     uint32
-	casCounter uint16
+	casCounter uint64
 }
 
 type entryEncoder struct {
@@ -341,7 +341,7 @@ type entryEncoder struct {
 // Encodes e to buf either plain or compressed.
 // Returns number of bytes written.
 func (enc *entryEncoder) Encode(e *Entry, buf *bytes.Buffer) (int, error) {
-	var headerEnc [14]byte
+	var headerEnc [headerBufSize]byte
 	var h header
 
 	if int32(len(e.Key)+len(e.Value)) > enc.opt.ValueCompressionMinSize {
@@ -396,18 +396,22 @@ type header struct {
 	vlen            uint32 // len of value or length of compressed kv if entry stored compressed
 	meta            byte
 	userMeta        byte
-	casCounter      uint16
-	casCounterCheck uint16
+	casCounter      uint64
+	casCounterCheck uint64
 }
 
+const (
+	headerBufSize = 26
+)
+
 func (h header) Encode(out []byte) {
-	y.AssertTrue(len(out) >= 14)
+	y.AssertTrue(len(out) >= headerBufSize)
 	binary.BigEndian.PutUint32(out[0:4], h.klen)
 	binary.BigEndian.PutUint32(out[4:8], h.vlen)
 	out[8] = h.meta
 	out[9] = h.userMeta
-	binary.BigEndian.PutUint16(out[10:12], h.casCounter)
-	binary.BigEndian.PutUint16(out[12:14], h.casCounterCheck)
+	binary.BigEndian.PutUint64(out[10:18], h.casCounter)
+	binary.BigEndian.PutUint64(out[18:26], h.casCounterCheck)
 }
 
 // Decodes h from buf. Returns buf without header and number of bytes read.
@@ -416,15 +420,29 @@ func (h *header) Decode(buf []byte) ([]byte, int) {
 	h.vlen = binary.BigEndian.Uint32(buf[4:8])
 	h.meta = buf[8]
 	h.userMeta = buf[9]
-	h.casCounter = binary.BigEndian.Uint16(buf[10:12])
-	h.casCounterCheck = binary.BigEndian.Uint16(buf[12:14])
-	return buf[14:], 14
+	h.casCounter = binary.BigEndian.Uint64(buf[10:18])
+	h.casCounterCheck = binary.BigEndian.Uint64(buf[18:26])
+	return buf[26:], 26
 }
 
 type valuePointer struct {
 	Fid    uint16
 	Len    uint32
 	Offset uint32
+}
+
+func (p valuePointer) Less(o valuePointer) bool {
+	if p.Fid != o.Fid {
+		return p.Fid < o.Fid
+	}
+	if p.Offset != o.Offset {
+		return p.Offset < o.Offset
+	}
+	return p.Len < o.Len
+}
+
+func (p valuePointer) IsZero() bool {
+	return p.Fid == 0 && p.Offset == 0 && p.Len == 0
 }
 
 // Encode encodes Pointer into byte buffer.
@@ -585,10 +603,12 @@ func (l *valueLog) Replay(ptr valuePointer, fn logEntry) error {
 }
 
 type request struct {
+	// Input values
 	Entries []*Entry
-	Ptrs    []valuePointer
-	Wg      sync.WaitGroup
-	Err     error
+	// Output values and wait group stuff below
+	Ptrs []valuePointer
+	Wg   sync.WaitGroup
+	Err  error
 }
 
 // sync is thread-unsafe and should not be called concurrently with write.

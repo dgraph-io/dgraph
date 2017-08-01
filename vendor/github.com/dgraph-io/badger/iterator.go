@@ -32,7 +32,7 @@ type KVItem struct {
 	meta       byte
 	userMeta   byte
 	val        []byte
-	casCounter uint16
+	casCounter uint64
 	slice      *y.Slice
 	next       *KVItem
 }
@@ -51,7 +51,7 @@ func (item *KVItem) Value() []byte {
 }
 
 // Counter returns the CAS counter associated with the value.
-func (item *KVItem) Counter() uint16 {
+func (item *KVItem) Counter() uint64 {
 	return item.casCounter
 }
 

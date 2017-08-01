@@ -19,7 +19,6 @@ package tok
 
 import (
 	"encoding/binary"
-	"fmt"
 	"time"
 
 	farm "github.com/dgryski/go-farm"
@@ -62,7 +61,7 @@ func init() {
 	RegisterTokenizer(GeoTokenizer{})
 	RegisterTokenizer(IntTokenizer{})
 	RegisterTokenizer(FloatTokenizer{})
-	RegisterTokenizer(DateTimeTokenizer{})
+	RegisterTokenizer(YearTokenizer{})
 	RegisterTokenizer(HourTokenizer{})
 	RegisterTokenizer(MonthTokenizer{})
 	RegisterTokenizer(DayTokenizer{})
@@ -71,12 +70,6 @@ func init() {
 	RegisterTokenizer(BoolTokenizer{})
 	RegisterTokenizer(TrigramTokenizer{})
 	RegisterTokenizer(HashTokenizer{})
-	SetDefault(types.GeoID, "geo")
-	SetDefault(types.IntID, "int")
-	SetDefault(types.FloatID, "float")
-	SetDefault(types.DateTimeID, "datetime")
-	SetDefault(types.StringID, "term")
-	SetDefault(types.BoolID, "bool")
 
 	// Check for duplicate prefix bytes.
 	usedIds := make(map[byte]struct{})
@@ -95,23 +88,6 @@ func init() {
 func GetTokenizer(name string) (Tokenizer, bool) {
 	t, found := tokenizers[name]
 	return t, found
-}
-
-// Default returns the default tokenizer for a given type.
-func Default(typ types.TypeID) Tokenizer {
-	t, found := defaults[typ]
-	x.AssertTruef(found, "No default tokenizer set for type %v", typ)
-	return t
-}
-
-// SetDefault sets the default tokenizer for given typeID.
-func SetDefault(typ types.TypeID, name string) {
-	if defaults == nil {
-		defaults = make(map[types.TypeID]Tokenizer)
-	}
-	t, has := GetTokenizer(name)
-	x.AssertTruef(has && t.Type() == typ, "Type mismatch %v vs %v", t.Type(), typ)
-	defaults[typ] = t
 }
 
 // RegisterTokenizer adds your tokenizer to our list.
@@ -160,19 +136,19 @@ func (t FloatTokenizer) Identifier() byte { return 0x7 }
 func (t FloatTokenizer) IsSortable() bool { return true }
 func (t FloatTokenizer) IsLossy() bool    { return true }
 
-type DateTimeTokenizer struct{}
+type YearTokenizer struct{}
 
-func (t DateTimeTokenizer) Name() string       { return "datetime" }
-func (t DateTimeTokenizer) Type() types.TypeID { return types.DateTimeID }
-func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
+func (t YearTokenizer) Name() string       { return "year" }
+func (t YearTokenizer) Type() types.TypeID { return types.DateTimeID }
+func (t YearTokenizer) Tokens(sv types.Val) ([]string, error) {
 	tval := sv.Value.(time.Time)
 	buf := make([]byte, 2)
 	binary.BigEndian.PutUint16(buf[0:2], uint16(tval.Year()))
 	return []string{encodeToken(string(buf), t.Identifier())}, nil
 }
-func (t DateTimeTokenizer) Identifier() byte { return 0x4 }
-func (t DateTimeTokenizer) IsSortable() bool { return true }
-func (t DateTimeTokenizer) IsLossy() bool    { return true }
+func (t YearTokenizer) Identifier() byte { return 0x4 }
+func (t YearTokenizer) IsSortable() bool { return true }
+func (t YearTokenizer) IsLossy() bool    { return true }
 
 type MonthTokenizer struct{}
 
@@ -243,9 +219,7 @@ func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
 		return nil, x.Errorf("Exact indices only supported for string types")
 	}
 	if len(term) > 100 {
-		fmt.Printf("*****\n")
-		fmt.Printf("Long text for exact index. Consider switching to hash for better performance\n")
-		fmt.Printf("*****\n")
+		x.Printf("Long text for exact index. Consider switching to hash for better performance\n")
 	}
 	return []string{encodeToken(term, t.Identifier())}, nil
 }

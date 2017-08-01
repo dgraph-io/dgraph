@@ -27,18 +27,25 @@ Another thing is, if your data doesn't have graph structure, i.e., there's only 
 We recommend Dgraph to be used in internal projects at companies. Minor releases at this stage might not be backward compatible; so we highly recommend using [frequent exports]({{< relref "deploy/index.md#export" >}}).
 
 ### Is Dgraph fast?
-Every other graph system that I've run it against, Dgraph has been at least a 10x factor faster. It only goes up from there. But, that's my own observations. We have a couple of folks doing a thorough benchmarking of Dgraph against Cayley and Neo4J, which we'll publish blog posts for soon. See relevant Github [issues here](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+label%3Abenchmark).
+Every other graph system that we've run it against, Dgraph has been at least a 10x factor faster. It only goes up from there. But, that's anecdotal observations.
+
+Here are some actual benchmarks:
+
+* Dgraph against Neo4J – check [this blog post](https://open.dgraph.io/post/benchmark-neo4j/)
+* Dgraph against Cayley – check [this github repo](https://github.com/ankurayadav/graphdb-benchmarks#results-of-queries-benchmark) (credit to Ankur Yadav)
 
 ## Internals
 
-### Why does Dgraph use RocksDB?
-RocksDB, as opposed to the name, isn't a database. It's an application library which helps with key-value storage on disk. Dgraph uses RocksDB to store <code>posting lists</code> on disk. It, however, doesn't rely upon RocksDB for anything else. All the data handling happens at Dgraph level. RocksDB is only an interface to disk (sort of how a file library is).
+### What does Dgraph use for its persistent storage?
+Dgraph v0.8 and above uses [Badger](https://github.com/dgraph-io/badger), a persistent key-value store written in pure Go.
+
+Dgraph v0.7.x and below used RocksDB for the key-value store. RocksDB is written in C++ and requires [cgo](https://golang.org/cmd/cgo/) to work with Dgraph, which caused several problems. You can read more about it in [this blog post](https://open.dgraph.io/post/badger/).
 
 ### Why doesn't Dgraph use BoltDB?
 BoltDB depends on a single global <code>RWMutex</code> lock for all reads and writes; this negatively affects concurrency of iteration and modification of posting lists for Dgraph. For this reason, we decided not to use it and instead use RocksDB. On the other hand, RocksDB supports concurrent writes and is being used in production both at Google and Facebook.
 
 ### Can Dgraph run on other databases, like Cassandra, MySQL, etc.?
-No. Dgraph stores and handles data natively to ensure it has complete control over performance and latency. The only thing between Dgraph and disk is the key-value application library, RocksDB.
+No. Dgraph stores and handles data natively to ensure it has complete control over performance and latency. The only thing between Dgraph and disk is the key-value application library, [Badger](https://github.com/dgraph-io/badger).
 
 ## Languages and Features
 

@@ -2,9 +2,11 @@
 title = "Get Started"
 +++
 
-**New to Dgraph? Here's a 5 step tutorial to get you up and running.**
+**New to Dgraph? Here's a 3 step tutorial to get you up and running.**
 
-This is a quick-start guide to running Dgraph, for a walk through, take the [tour](https://tour.dgraph.io)
+This is a quick-start guide to running Dgraph. For an interactive walk through, take the [tour](https://tour.dgraph.io).
+
+You can see the accompanying [video here](https://www.youtube.com/watch?v=QIIdSp2zLcs).
 ## Step 1: Install Dgraph
 
 Dgraph can be installed from the install scripts, or deployed in Docker.
@@ -215,7 +217,7 @@ Output
 
 
 
-## Step 4: Load a bigger dataset
+## (Optional) Step 4: Load a bigger dataset
 
 Step 3 showed how to add data with a small mutation.  Bigger datasets can be loaded with dgraphloader.
 
@@ -273,7 +275,7 @@ RDFs processed per second : XXXXX
 
 Your counts should be the same, but your statistics will vary.
 
-## Step 5: Query Dataset
+## (Optional) Step 5: Query Dataset
 
 {{% notice "note" %}} By default, so anyone can run them, these queries run at http://play.dgraph.io, but, if you have followed the above instructions, then the queries can be run and visualized locally by copying to [`http://localhost:8080`](http://localhost:8080).{{% /notice %}}
 
