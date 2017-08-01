@@ -101,7 +101,7 @@ func (l *List) decr() {
 		}
 		l.plist.Postings = l.plist.Postings[:0]
 		l.plist.Uids = l.plist.Uids[:0]
-		postingListPool.Put(l.plist)
+		//	postingListPool.Put(l.plist)
 	}
 	listPool.Put(l)
 }
@@ -123,11 +123,11 @@ var postingPool = sync.Pool{
 	},
 }
 
-var postingListPool = sync.Pool{
-	New: func() interface{} {
-		return &protos.PostingList{}
-	},
-}
+//var postingListPool = sync.Pool{
+//	New: func() interface{} {
+//		return &protos.PostingList{}
+//	},
+//}
 
 var listPool = sync.Pool{
 	New: func() interface{} {
@@ -220,7 +220,7 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	val := item.Value()
 	x.BytesRead.Add(int64(len(val)))
 
-	l.plist = postingListPool.Get().(*protos.PostingList)
+	l.plist = new(protos.PostingList)
 	if item.UserMeta() == bitUidPostings {
 		l.plist.Uids = val
 	} else if val != nil {
@@ -544,7 +544,7 @@ func (l *List) delete(ctx context.Context, attr string) error {
 		}
 		l.plist.Uids = l.plist.Uids[:0]
 		l.plist.Postings = l.plist.Postings[:0]
-		postingListPool.Put(l.plist)
+		//	postingListPool.Put(l.plist)
 	}
 	l.plist = emptyList
 	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
@@ -693,7 +693,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		return false, nil
 	}
 
-	final := postingListPool.Get().(*protos.PostingList)
+	final := new(protos.PostingList)
 	numUids := l.length(0)
 	if cap(final.Uids) < 8*numUids {
 		final.Uids = make([]byte, 8*numUids)
@@ -728,7 +728,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	if l.plist != emptyList {
 		l.plist.Uids = l.plist.Uids[:0]
 		l.plist.Postings = l.plist.Postings[:0]
-		postingListPool.Put(l.plist)
+		//		postingListPool.Put(l.plist)
 	}
 
 	var data []byte
