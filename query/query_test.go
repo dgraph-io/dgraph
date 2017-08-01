@@ -195,6 +195,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "name", 25, "Daryl Dixon", nil)
 	addEdgeToValue(t, "name", 31, "Andrea", nil)
 	addEdgeToValue(t, "name", 2300, "Andre", nil)
+	addEdgeToValue(t, "name", 2333, "Helmut", nil)
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[2.0, 2.0]}`)
 	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
@@ -319,6 +320,7 @@ func populateGraph(t *testing.T) {
 
 	addEdgeToValue(t, "name", 240, "Andrea With no friends", nil)
 	addEdgeToUID(t, "son", 1, 2300, nil)
+	addEdgeToUID(t, "son", 1, 2333, nil)
 
 	addEdgeToValue(t, "name", 2301, `Alice\"`, nil)
 
@@ -5687,6 +5689,8 @@ func TestIntersectsGenerator(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}, {"name":"Glenn Rhee"}]}}`, js)
 }
 
+// This test depends on other tests - don't run it alone.
+// TODO: find and remove dependency
 func TestToProtoNormalizeDirective(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -5751,6 +5755,38 @@ children: <
   properties: <
     prop: "n"
     value: <
+      str_val: "Rick Grimes"
+    >
+  >
+  properties: <
+    prop: "d"
+    value: <
+      str_val: "1910-01-02T00:00:00Z"
+    >
+  >
+  properties: <
+    prop: "fn"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "sn"
+    value: <
+      str_val: "Helmut"
+    >
+  >
+>
+children: <
+  properties: <
+    prop: "mn"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "n"
+    value: <
       str_val: "Glenn Rhee"
     >
   >
@@ -5764,6 +5800,32 @@ children: <
     prop: "sn"
     value: <
       str_val: "Andre"
+    >
+  >
+>
+children: <
+  properties: <
+    prop: "mn"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "n"
+    value: <
+      str_val: "Glenn Rhee"
+    >
+  >
+  properties: <
+    prop: "d"
+    value: <
+      str_val: "1909-05-05T00:00:00Z"
+    >
+  >
+  properties: <
+    prop: "sn"
+    value: <
+      str_val: "Helmut"
     >
   >
 >
@@ -5809,6 +5871,38 @@ children: <
   properties: <
     prop: "n"
     value: <
+      str_val: "Daryl Dixon"
+    >
+  >
+  properties: <
+    prop: "d"
+    value: <
+      str_val: "1909-01-10T00:00:00Z"
+    >
+  >
+  properties: <
+    prop: "fn"
+    value: <
+      str_val: "Glenn Rhee"
+    >
+  >
+  properties: <
+    prop: "sn"
+    value: <
+      str_val: "Helmut"
+    >
+  >
+>
+children: <
+  properties: <
+    prop: "mn"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "n"
+    value: <
       str_val: "Andrea"
     >
   >
@@ -5831,12 +5925,46 @@ children: <
     >
   >
 >
+children: <
+  properties: <
+    prop: "mn"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "n"
+    value: <
+      str_val: "Andrea"
+    >
+  >
+  properties: <
+    prop: "d"
+    value: <
+      str_val: "1901-01-15T00:00:00Z"
+    >
+  >
+  properties: <
+    prop: "fn"
+    value: <
+      str_val: "Glenn Rhee"
+    >
+  >
+  properties: <
+    prop: "sn"
+    value: <
+      str_val: "Helmut"
+    >
+  >
+>
 `
 	require.EqualValues(t,
 		expectedPb,
 		proto.MarshalTextString(pb[0]))
 }
 
+// this test is failing when executed alone, but pass when executed after other tests
+// TODO: find and remove the dependency
 func TestNormalizeDirective(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -5860,7 +5988,7 @@ func TestNormalizeDirective(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"data": {"me":[{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-01-10T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"}]}}`,
+		`{"data": {"me":[{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Helmut"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Helmut"},{"d":"1909-01-10T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1909-01-10T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Daryl Dixon","sn":"Helmut"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Helmut"}]}}`,
 		js)
 }
 
