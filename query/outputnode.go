@@ -515,7 +515,10 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) [][]*fastJsonNode 
 	mergedList := make([][]*fastJsonNode, 0, len(parent)*len(child))
 	for _, pa := range parent {
 		for _, ca := range child {
-			mergedList = append(mergedList, append(pa, ca...))
+			list := make([]*fastJsonNode, 0, len(pa)+len(ca))
+			list = append(list, pa...)
+			list = append(list, ca...)
+			mergedList = append(mergedList, list)
 		}
 	}
 	return mergedList
@@ -548,6 +551,10 @@ func (n *fastJsonNode) normalize() [][]*fastJsonNode {
 
 	for ci := 0; ci < len(n.attrs); {
 		childNode := n.attrs[ci]
+		if !childNode.isChild {
+			ci++
+			continue
+		}
 		childSlice := make([][]*fastJsonNode, 0, 5)
 		for ci < len(n.attrs) && childNode.attr == n.attrs[ci].attr {
 			childSlice = append(childSlice, n.attrs[ci].normalize()...)
