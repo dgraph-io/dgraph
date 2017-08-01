@@ -234,16 +234,10 @@ func periodicCommit() {
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
 			megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
-
 			inUse := float64(megs)
-			idle := float64((ms.HeapIdle - ms.HeapReleased) / (1 << 20))
 
 			fraction := math.Min(1.0, Config.CommitFraction*math.Exp(float64(dsize)/1000000.0))
 			gentleCommit(dirtyMap, pending, fraction)
-			x.MemoryInUse.Set(int64(inUse))
-			x.HeapIdle.Set(int64(idle))
-			x.TotalMemory.Set(int64(inUse + idle))
-			x.TotalOSMemory.Set(int64(getMemUsage()))
 
 			stats := lcache.Stats()
 			x.EvictedPls.Set(int64(stats.NumEvicts))
@@ -262,6 +256,23 @@ func periodicCommit() {
 				setLruMemory = false
 			}
 		}
+	}
+}
+
+func updateMemoryMetrics() {
+	ticker := time.NewTicker(time.Minute)
+	for range ticker.C {
+		var ms runtime.MemStats
+		runtime.ReadMemStats(&ms)
+		megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
+
+		inUse := float64(megs)
+		idle := float64((ms.HeapIdle - ms.HeapReleased) / (1 << 20))
+
+		x.MemoryInUse.Set(int64(inUse))
+		x.HeapIdle.Set(int64(idle))
+		x.TotalMemory.Set(int64(inUse + idle))
+		x.TotalOSMemory.Set(int64(getMemUsage()))
 	}
 }
 
@@ -289,6 +300,7 @@ func Init(ps *badger.KV) {
 	dirtyChan = make(chan []byte, 10000)
 
 	go periodicCommit()
+	go updateMemoryMetrics()
 }
 
 // GetOrCreate stores the List corresponding to key, if it's not there already.

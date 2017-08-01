@@ -293,7 +293,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	for i := 0; i < srcFn.n; i++ {
 		select {
 		case <-ctx.Done():
-			return out, ctx.Err()
+			return nil, ctx.Err()
 		default:
 		}
 		var key []byte
@@ -325,7 +325,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		isValueEdge := err == nil
 		typ := val.Tid
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-			return out, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
 		}
 		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
 		if isValueEdge {
@@ -345,7 +345,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		if srcFn.fnType == CompareAttrFn && isValueEdge {
 			// Lets convert the val to its type.
 			if val, err = types.Convert(val, typ); err != nil {
-				return out, err
+				return nil, err
 			}
 			if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
 				filteredRes = append(filteredRes, &result{
@@ -373,11 +373,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				return true // continue iteration.
 			})
 			if perr != nil {
-				return out, perr
+				return nil, perr
 			}
 		} else if q.FacetsFilter != nil { // else part means isValueEdge
 			// This is Value edge and we are asked to do facet filtering. Not supported.
-			return out, x.Errorf("Facet filtering is not supported on values.")
+			return nil, x.Errorf("Facet filtering is not supported on values.")
 		}
 
 		// add facets to result.
