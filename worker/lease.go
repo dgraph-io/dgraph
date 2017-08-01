@@ -60,8 +60,7 @@ func (l *leaseManager) resetLease(group uint32) {
 	}
 	l.Lock()
 	defer l.Unlock()
-	plist, decr := posting.GetOrCreate(leaseKey, leaseGid)
-	defer decr()
+	plist := posting.GetOrCreate(leaseKey, leaseGid)
 	val, err := plist.Value()
 	if err == posting.ErrNoValue {
 		// starts from two, 1 is used for storing lease data

@@ -20,8 +20,13 @@ package posting
 import (
 	"crypto/md5"
 	"fmt"
+	"io/ioutil"
 	"math"
+	"os"
+	"os/exec"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -159,6 +164,52 @@ func gentleCommit(dirtyMap map[string]time.Time, pending chan struct{},
 	}(keysBuffer)
 }
 
+func getMemUsage() int {
+	if runtime.GOOS != "linux" {
+		pid := os.Getpid()
+		cmd := fmt.Sprintf("ps -ao rss,pid | grep %v", pid)
+		c1, err := exec.Command("bash", "-c", cmd).Output()
+		if err != nil {
+			// In case of error running the command, resort to go way
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			megs := ms.Alloc / (1 << 20)
+			return int(megs)
+		}
+
+		rss := strings.Split(string(c1), " ")[0]
+		kbs, err := strconv.Atoi(rss)
+		if err != nil {
+			return 0
+		}
+
+		megs := kbs / (1 << 10)
+		return megs
+	}
+
+	contents, err := ioutil.ReadFile("/proc/self/stat")
+	if err != nil {
+		x.Println("Can't read the proc file", err)
+		return 0
+	}
+
+	cont := strings.Split(string(contents), " ")
+	// 24th entry of the file is the RSS which denotes the number of pages
+	// used by the process.
+	if len(cont) < 24 {
+		x.Println("Error in RSS from stat")
+		return 0
+	}
+
+	rss, err := strconv.Atoi(cont[23])
+	if err != nil {
+		x.Println(err)
+		return 0
+	}
+
+	return rss * os.Getpagesize() / (1 << 20)
+}
+
 // periodicMerging periodically merges the dirty posting lists. It also checks our memory
 // usage. If it exceeds a certain threshold, it would stop the world, and aggressively
 // merge and evict all posting lists from memory.
@@ -183,15 +234,10 @@ func periodicCommit() {
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
 			megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
-
 			inUse := float64(megs)
-			idle := float64((ms.HeapIdle - ms.HeapReleased) / (1 << 20))
 
 			fraction := math.Min(1.0, Config.CommitFraction*math.Exp(float64(dsize)/1000000.0))
 			gentleCommit(dirtyMap, pending, fraction)
-			x.MemoryInUse.Set(int64(inUse))
-			x.HeapIdle.Set(int64(idle))
-			x.TotalMemory.Set(int64(inUse + idle))
 
 			stats := lcache.Stats()
 			x.EvictedPls.Set(int64(stats.NumEvicts))
@@ -210,6 +256,23 @@ func periodicCommit() {
 				setLruMemory = false
 			}
 		}
+	}
+}
+
+func updateMemoryMetrics() {
+	ticker := time.NewTicker(time.Minute)
+	for range ticker.C {
+		var ms runtime.MemStats
+		runtime.ReadMemStats(&ms)
+		megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
+
+		inUse := float64(megs)
+		idle := float64((ms.HeapIdle - ms.HeapReleased) / (1 << 20))
+
+		x.MemoryInUse.Set(int64(inUse))
+		x.HeapIdle.Set(int64(idle))
+		x.TotalMemory.Set(int64(inUse + idle))
+		x.TotalOSMemory.Set(int64(getMemUsage()))
 	}
 }
 
@@ -237,24 +300,24 @@ func Init(ps *badger.KV) {
 	dirtyChan = make(chan []byte, 10000)
 
 	go periodicCommit()
+	go updateMemoryMetrics()
 }
 
 // GetOrCreate stores the List corresponding to key, if it's not there already.
-// to lhmap and returns it. It also returns a reference decrement function to be called by caller.
+// to lru cache and returns it.
 //
-// plist, decr := GetOrCreate(key, store)
-// defer decr()
+// plist := GetOrCreate(key, store)
 // ... // Use plist
 // TODO: This should take a node id and index. And just append all indices to a list.
 // When doing a commit, it should update all the sync index watermarks.
 // worker pkg would push the indices to the watermarks held by lists.
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
-func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
+func GetOrCreate(key []byte, group uint32) (rlist *List) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
 		x.CacheHit.Add(1)
-		return lp, lp.decr
+		return lp
 	}
 	x.CacheMiss.Add(1)
 
@@ -269,8 +332,6 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 
 	if lp != l {
 		x.CacheRace.Add(1)
-		// Undo the increment in getNew() call above.
-		go l.decr()
 	} else {
 		pk := x.Parse(key)
 		if pk.IsIndex() || pk.IsCount() {
@@ -280,20 +341,20 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		}
 	}
 
-	return lp, lp.decr
+	return lp
 }
 
 // Get takes a key and a groupID. It checks if the in-memory map has an
 // updated value and returns it if it exists or it gets from the store and DOES NOT ADD to lhmap.
-func Get(key []byte) (rlist *List, decr func()) {
+func Get(key []byte) (rlist *List) {
 	lp := lcache.Get(string(key))
 
 	if lp != nil {
-		return lp, lp.decr
+		return lp
 	}
 
 	lp = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
-	return lp, lp.decr
+	return lp
 }
 
 func commitOne(l *List) {
@@ -322,7 +383,6 @@ func CommitLists(numRoutines int, group uint32) {
 			defer wg.Done()
 			for l := range workChan {
 				commitOne(l)
-				l.decr()
 			}
 		}()
 	}
@@ -331,7 +391,6 @@ func CommitLists(numRoutines int, group uint32) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
-		l.incr()
 		workChan <- l
 	})
 	close(workChan)
@@ -346,9 +405,6 @@ func EvictGroup(group uint32) {
 	// lcache.Each(func(k uint64, l *List) {
 	// 	l.SetForDeletion()
 	// })
-	CommitLists(1, group)
 	// TODO: Do we need to do this?
-	// lhmapFor(group).EachWithDelete(func(k uint64, l *List) {
-	// 	l.decr()
-	// })
+	CommitLists(1, group)
 }

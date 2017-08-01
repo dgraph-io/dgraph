@@ -118,13 +118,12 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	}
 
 	t := time.Now()
-	plist, decr := GetOrCreate(key, groupId)
+	plist := GetOrCreate(key, groupId)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("GetOrCreate took %v", dur)
 		}
 	}
-	defer decr()
 
 	x.AssertTrue(plist != nil)
 	_, err := plist.AddMutation(ctx, edge)
@@ -154,8 +153,7 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
 	groupId := group.BelongsTo(t.Attr)
 
-	plist, decr := GetOrCreate(key, groupId)
-	defer decr()
+	plist := GetOrCreate(key, groupId)
 
 	x.AssertTrue(plist != nil)
 	edge := &protos.DirectedEdge{
@@ -243,8 +241,7 @@ func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 	key := x.CountKey(t.Attr, count, reverse)
 	groupId := group.BelongsTo(t.Attr)
 
-	plist, decr := GetOrCreate(key, groupId)
-	defer decr()
+	plist := GetOrCreate(key, groupId)
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)

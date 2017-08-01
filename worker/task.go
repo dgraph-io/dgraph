@@ -197,8 +197,7 @@ func needsIndex(fnType FuncType) bool {
 func getPredList(uid uint64, gid uint32) ([]types.Val, error) {
 	key := x.DataKey("_predicate_", uid)
 	// Get or create the posting list for an entity, attribute combination.
-	pl, decr := posting.GetOrCreate(key, gid)
-	defer decr()
+	pl := posting.GetOrCreate(key, gid)
 	return pl.AllValues()
 }
 
@@ -291,21 +290,10 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		return nil, err
 	}
 
-	var lerr error
-	var lastDecr func()
-	// NOTE: Never return inside this loop.
 	for i := 0; i < srcFn.n; i++ {
-		if lastDecr != nil {
-			lastDecr()
-		}
-		if lerr != nil {
-			lastDecr = nil
-			continue
-		}
 		select {
 		case <-ctx.Done():
-			lerr = ctx.Err()
-			continue
+			return nil, ctx.Err()
 		default:
 		}
 		var key []byte
@@ -330,15 +318,14 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			x.Fatalf("Unhandled function in processTask")
 		}
 		// Get or create the posting list for an entity, attribute combination.
-		pl, decr := posting.GetOrCreate(key, gid)
-		lastDecr = decr
+		pl := posting.GetOrCreate(key, gid)
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
 		typ := val.Tid
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-			lerr = x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
 		}
 		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
 		if isValueEdge {
@@ -358,8 +345,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		if srcFn.fnType == CompareAttrFn && isValueEdge {
 			// Lets convert the val to its type.
 			if val, err = types.Convert(val, typ); err != nil {
-				lerr = err
-				continue
+				return nil, err
 			}
 			if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
 				filteredRes = append(filteredRes, &result{
@@ -387,11 +373,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				return true // continue iteration.
 			})
 			if perr != nil {
-				lerr = perr
+				return nil, perr
 			}
 		} else if q.FacetsFilter != nil { // else part means isValueEdge
 			// This is Value edge and we are asked to do facet filtering. Not supported.
-			lerr = x.Errorf("Facet filtering is not supported on values.")
+			return nil, x.Errorf("Facet filtering is not supported on values.")
 		}
 
 		// add facets to result.
@@ -477,13 +463,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			uidList.Uids = append(uidList.Uids, fres.uid)
 		}
 		out.UidMatrix = append(out.UidMatrix, uidList)
-	}
-	// For the last PL that was accessed.
-	if lastDecr != nil {
-		lastDecr()
-	}
-	if lerr != nil {
-		return nil, lerr
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
@@ -599,7 +578,7 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			default:
 			}
 			key := x.DataKey(attr, uid)
-			pl, decr := posting.GetOrCreate(key, arg.gid)
+			pl := posting.GetOrCreate(key, arg.gid)
 
 			var val types.Val
 			if len(arg.srcFn.lang) > 0 {
@@ -609,7 +588,6 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			}
 
 			if err != nil {
-				decr()
 				continue
 			}
 			// conver data from binary to appropriate format
@@ -617,7 +595,6 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			if err == nil {
 				values = append(values, strVal)
 			}
-			decr() // Decrement the reference count of the pl.
 		}
 
 		filtered := matchRegex(uids, values, arg.srcFn.regex)
@@ -683,7 +660,7 @@ func filterGeoFunction(arg funcArgs) {
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl, decr := posting.GetOrCreate(key, arg.gid)
+		pl := posting.GetOrCreate(key, arg.gid)
 
 		val, err := pl.Value()
 		newValue := &protos.TaskValue{ValType: int32(val.Tid)}
@@ -693,7 +670,6 @@ func filterGeoFunction(arg funcArgs) {
 			newValue.Val = x.Nilbyte
 		}
 		values = append(values, newValue)
-		decr() // Decrement the reference count of the pl.
 	}
 
 	filtered := types.FilterGeoUids(uids, values, arg.srcFn.geoQuery)
@@ -709,11 +685,10 @@ func filterStringFunction(arg funcArgs) {
 	filteredUids := make([]uint64, 0, len(uids.Uids))
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl, decr := posting.GetOrCreate(key, arg.gid)
+		pl := posting.GetOrCreate(key, arg.gid)
 
 		val, err := pl.ValueForTag(arg.srcFn.lang)
 		if err != nil {
-			decr()
 			continue
 		}
 		// convert data from binary to appropriate format
@@ -722,7 +697,6 @@ func filterStringFunction(arg funcArgs) {
 			values = append(values, strVal)
 		}
 		filteredUids = append(filteredUids, uid)
-		decr() // Decrement the reference count of the pl.
 	}
 
 	filtered := &protos.List{Uids: filteredUids}
@@ -1182,9 +1156,8 @@ func (cp *countParams) evaluate(out *protos.Result) {
 	count := cp.count
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
-		pl, decr := posting.GetOrCreate(countKey, cp.gid)
+		pl := posting.GetOrCreate(countKey, cp.gid)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
-		decr()
 		return
 	}
 
@@ -1215,8 +1188,7 @@ func (cp *countParams) evaluate(out *protos.Result) {
 
 	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
 		key := it.Item().Key()
-		pl, decr := posting.GetOrCreate(key, cp.gid)
-		defer decr()
+		pl := posting.GetOrCreate(key, cp.gid)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 	}
 }
