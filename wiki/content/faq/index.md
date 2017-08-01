@@ -27,7 +27,12 @@ Another thing is, if your data doesn't have graph structure, i.e., there's only 
 We recommend Dgraph to be used in internal projects at companies. Minor releases at this stage might not be backward compatible; so we highly recommend using [frequent exports]({{< relref "deploy/index.md#export" >}}).
 
 ### Is Dgraph fast?
-Every other graph system that I've run it against, Dgraph has been at least a 10x factor faster. It only goes up from there. But, that's my own observations. We have a couple of folks doing a thorough benchmarking of Dgraph against Cayley and Neo4J, which we'll publish blog posts for soon. See relevant Github [issues here](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+label%3Abenchmark).
+Every other graph system that we've run it against, Dgraph has been at least a 10x factor faster. It only goes up from there. But, that's anecdotal observations.
+
+Here are some actual benchmarks:
+
+* Dgraph against Neo4J – check [this blog post](https://open.dgraph.io/post/benchmark-neo4j/)
+* Dgraph against Cayley – check [this github repo](https://github.com/ankurayadav/graphdb-benchmarks#results-of-queries-benchmark) (credit to Ankur Yadav)
 
 ## Internals
 
