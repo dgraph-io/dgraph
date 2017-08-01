@@ -21,7 +21,6 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math"
 	"os"
 	"os/exec"
@@ -190,7 +189,7 @@ func getMemUsage() int {
 
 	contents, err := ioutil.ReadFile("/proc/self/stat")
 	if err != nil {
-		log.Println("Can't read the proc file", err)
+		x.Println("Can't read the proc file", err)
 		return 0
 	}
 
@@ -198,13 +197,13 @@ func getMemUsage() int {
 	// 24th entry of the file is the RSS which denotes the number of pages
 	// used by the process.
 	if len(cont) < 24 {
-		log.Println("Error in RSS from stat")
+		x.Println("Error in RSS from stat")
 		return 0
 	}
 
 	rss, err := strconv.Atoi(cont[23])
 	if err != nil {
-		log.Println(err)
+		x.Println(err)
 		return 0
 	}
 
