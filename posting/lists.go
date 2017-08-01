@@ -293,21 +293,20 @@ func Init(ps *badger.KV) {
 }
 
 // GetOrCreate stores the List corresponding to key, if it's not there already.
-// to lhmap and returns it. It also returns a reference decrement function to be called by caller.
+// to lru cache and returns it.
 //
-// plist, decr := GetOrCreate(key, store)
-// defer decr()
+// plist := GetOrCreate(key, store)
 // ... // Use plist
 // TODO: This should take a node id and index. And just append all indices to a list.
 // When doing a commit, it should update all the sync index watermarks.
 // worker pkg would push the indices to the watermarks held by lists.
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
-func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
+func GetOrCreate(key []byte, group uint32) (rlist *List) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
 		x.CacheHit.Add(1)
-		return lp, lp.decr
+		return lp
 	}
 	x.CacheMiss.Add(1)
 
@@ -322,8 +321,6 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 
 	if lp != l {
 		x.CacheRace.Add(1)
-		// Undo the increment in getNew() call above.
-		go l.decr()
 	} else {
 		pk := x.Parse(key)
 		if pk.IsIndex() || pk.IsCount() {
@@ -333,20 +330,20 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		}
 	}
 
-	return lp, lp.decr
+	return lp
 }
 
 // Get takes a key and a groupID. It checks if the in-memory map has an
 // updated value and returns it if it exists or it gets from the store and DOES NOT ADD to lhmap.
-func Get(key []byte) (rlist *List, decr func()) {
+func Get(key []byte) (rlist *List) {
 	lp := lcache.Get(string(key))
 
 	if lp != nil {
-		return lp, lp.decr
+		return lp
 	}
 
 	lp = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
-	return lp, lp.decr
+	return lp
 }
 
 func commitOne(l *List) {
@@ -375,7 +372,6 @@ func CommitLists(numRoutines int, group uint32) {
 			defer wg.Done()
 			for l := range workChan {
 				commitOne(l)
-				l.decr()
 			}
 		}()
 	}
@@ -384,7 +380,6 @@ func CommitLists(numRoutines int, group uint32) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
-		l.incr()
 		workChan <- l
 	})
 	close(workChan)

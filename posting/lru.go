@@ -85,7 +85,6 @@ func (c *listCache) PutIfMissing(key string, pl *List) (res *List) {
 	if ee, ok := c.cache[key]; ok {
 		c.ll.MoveToFront(ee)
 		res = ee.Value.(*entry).pl
-		res.incr()
 		return res
 	}
 
@@ -102,7 +101,6 @@ func (c *listCache) PutIfMissing(key string, pl *List) (res *List) {
 	c.cache[key] = ele
 	c.removeOldest()
 
-	e.pl.incr()
 	return e.pl
 }
 
@@ -124,7 +122,6 @@ func (c *listCache) removeOldest() {
 		// key wont be deleted from cache. So lets delete it now if SyncIfDirty returns false.
 		if committed, _ := e.pl.SyncIfDirty(true); !committed {
 			delete(c.cache, e.key)
-			e.pl.decr()
 		}
 	}
 }
@@ -140,7 +137,6 @@ func (c *listCache) Get(key string) (pl *List) {
 		est := uint64(e.pl.EstimatedSize())
 		c.curSize += est - e.size
 		e.size = est
-		e.pl.incr()
 		return e.pl
 	}
 	return nil
@@ -192,7 +188,6 @@ func (c *listCache) clear(attr string, typ byte) error {
 		kv.pl.SetForDeletion()
 		if committed, _ := kv.pl.SyncIfDirty(true); !committed {
 			delete(c.cache, k)
-			kv.pl.decr()
 		}
 	}
 	return nil
@@ -206,7 +201,5 @@ func (c *listCache) delete(key []byte) {
 	if ele, ok := c.cache[string(key)]; ok {
 		c.ll.Remove(ele)
 		delete(c.cache, string(key))
-		kv := ele.Value.(*entry)
-		kv.pl.decr()
 	}
 }

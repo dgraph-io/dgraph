@@ -30,7 +30,6 @@ func getPosting() *List {
 		plist: &protos.PostingList{},
 		water: marks.Get(1),
 	}
-	l.incr()
 	return l
 }
 

@@ -73,31 +73,11 @@ type List struct {
 	mlayer        []*protos.Posting // mutations
 	lastCompact   time.Time
 	deleteMe      int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
-	refcount      int32
 	deleteAll     int32
 	estimatedSize uint32
 
 	water   *x.WaterMark
 	pending []uint64
-}
-
-func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
-func (l *List) incr() int32     { return atomic.AddInt32(&l.refcount, 1) }
-func (l *List) decr() {
-	// Locking is just to ensure that anything else has finished working on this
-	// list before we push it to listPool.
-	l.Lock()
-	l.Unlock()
-	val := atomic.AddInt32(&l.refcount, -1)
-	x.AssertTruef(val >= 0, "List reference should never be less than zero: %v", val)
-	if val > 0 {
-		return
-	}
-
-	if l.plist != emptyList {
-		l.plist.Postings = l.plist.Postings[:0]
-		l.plist.Uids = l.plist.Uids[:0]
-	}
 }
 
 // calculateSize would give you the size estimate. Does not consider elements in mutation layer.
@@ -176,7 +156,6 @@ func (it *PIterator) Posting() *protos.Posting {
 func getNew(key []byte, pstore *badger.KV) *List {
 	l := new(List)
 	l.key = key
-	l.refcount = 1
 
 	l.Lock()
 	defer l.Unlock()

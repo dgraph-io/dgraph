@@ -72,7 +72,7 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 		key := x.DataKey(edge.Attr, edge.Entity)
 
 		t := time.Now()
-		plist, decr := posting.GetOrCreate(key, gid)
+		plist := posting.GetOrCreate(key, gid)
 		if dur := time.Since(t); dur > time.Millisecond {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("GetOrCreate took %v", dur)
@@ -80,10 +80,8 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 		}
 
 		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
-			decr()
 			return err // abort applying the rest of them.
 		}
-		decr()
 	}
 	return nil
 }

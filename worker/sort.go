@@ -333,8 +333,7 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 
 	key := x.IndexKey(attr, token)
 	// Don't put the Index keys in memory.
-	pl, decr := posting.Get(key)
-	defer decr()
+	pl := posting.Get(key)
 
 	// For each UID list, we need to intersect with the index bucket.
 	for i, ul := range ts.UidMatrix {
@@ -436,8 +435,7 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 // fetchValue gets the value for a given UID.
 func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID) (types.Val, error) {
 	// Don't put the values in memory
-	pl, decr := posting.Get(x.DataKey(attr, uid))
-	defer decr()
+	pl := posting.Get(x.DataKey(attr, uid))
 
 	src, err := pl.ValueFor(langs)
 	if err != nil {

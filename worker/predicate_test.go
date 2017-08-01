@@ -45,7 +45,7 @@ func checkShard(ps *badger.KV) (int, []byte) {
 func writePLs(t *testing.T, pred string, count int, vid uint64, ps *badger.KV) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i))
-		list, _ := posting.GetOrCreate(k, 0)
+		list := posting.GetOrCreate(k, 0)
 
 		de := &protos.DirectedEdge{
 			ValueId: vid,
