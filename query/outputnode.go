@@ -597,7 +597,7 @@ func (n *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 			if first == 0 {
 				parentSlice[i] = slice[last:]
 			} else {
-				parentSlice[i] = append(slice[:first-1], slice[last:]...)
+				parentSlice[i] = append(slice[:first], slice[last:]...)
 			}
 		}
 	}

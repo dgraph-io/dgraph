@@ -18,6 +18,7 @@ package query
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"runtime"
@@ -122,4 +123,70 @@ func TestNormalizeJSONLimit(t *testing.T) {
 	}
 	_, err := n.(*fastJsonNode).normalize()
 	require.Error(t, err, "Couldn't evaluate @normalize directive - to many results")
+}
+
+func TestNormalizeJSONUid1(t *testing.T) {
+	n := (&fastJsonNode{}).New("root")
+	require.NotNil(t, n)
+	child1 := n.New("child1")
+	child1.SetUID(uint64(1), "_uid_")
+	child1.AddValue("attr1", types.ValueForType(types.StringID))
+	n.AddListChild("child1", child1)
+
+	child2 := n.New("child2")
+	child2.SetUID(uint64(2), "_uid_")
+	child2.AddValue("attr2", types.ValueForType(types.StringID))
+	child1.AddListChild("child2", child2)
+
+	child3 := n.New("child3")
+	child3.SetUID(uint64(3), "_uid_")
+	child3.AddValue("attr3", types.ValueForType(types.StringID))
+	child2.AddListChild("child3", child3)
+
+	normalized, err := n.(*fastJsonNode).normalize()
+	require.NoError(t, err)
+	require.NotNil(t, normalized)
+	nn := (&fastJsonNode{}).New("root")
+	for _, c := range normalized {
+		nn.AddListChild("alias", &fastJsonNode{attrs: c})
+	}
+
+	var b bytes.Buffer
+	buf := bufio.NewWriter(&b)
+	nn.(*fastJsonNode).encode(buf)
+	buf.Flush()
+	require.Equal(t, `{"alias":[{"_uid_":"0x3","attr1":"","attr2":"","attr3":""}]}`, b.String())
+}
+
+func TestNormalizeJSONUid2(t *testing.T) {
+	n := (&fastJsonNode{}).New("root")
+	require.NotNil(t, n)
+	child1 := n.New("child1")
+	child1.SetUID(uint64(1), "_uid_")
+	child1.AddValue("___attr1", types.ValueForType(types.StringID))
+	n.AddListChild("child1", child1)
+
+	child2 := n.New("child2")
+	child2.SetUID(uint64(2), "_uid_")
+	child2.AddValue("___attr2", types.ValueForType(types.StringID))
+	child1.AddListChild("child2", child2)
+
+	child3 := n.New("child3")
+	child3.SetUID(uint64(3), "_uid_")
+	child3.AddValue(fmt.Sprintf("attr3"), types.ValueForType(types.StringID))
+	child2.AddListChild("child3", child3)
+
+	normalized, err := n.(*fastJsonNode).normalize()
+	require.NoError(t, err)
+	require.NotNil(t, normalized)
+	nn := (&fastJsonNode{}).New("root")
+	for _, c := range normalized {
+		nn.AddListChild("alias", &fastJsonNode{attrs: c})
+	}
+
+	var b bytes.Buffer
+	buf := bufio.NewWriter(&b)
+	nn.(*fastJsonNode).encode(buf)
+	buf.Flush()
+	require.Equal(t, `{"alias":[{"___attr1":"","___attr2":"","_uid_":"0x3","attr3":""}]}`, b.String())
 }
