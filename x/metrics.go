@@ -101,124 +101,119 @@ func init() {
 	}()
 
 	expvarCollector := prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
-		"cacheHit": prometheus.NewDesc(
-			"cacheHit",
-			"cacheHit",
+		"dgraph_cache_hits_total": prometheus.NewDesc(
+			"dgraph_cache_hits_total",
+			"dgraph_cache_hits_total",
 			nil, nil,
 		),
-		"cacheMiss": prometheus.NewDesc(
-			"cacheMiss",
-			"cacheMiss",
+		"dgraph_cache_miss_total": prometheus.NewDesc(
+			"dgraph_cache_miss_total",
+			"dgraph_cache_miss_total",
 			nil, nil,
 		),
-		"cacheRace": prometheus.NewDesc(
-			"cacheRace",
-			"cacheRace",
+		"dgraph_cache_race_total": prometheus.NewDesc(
+			"dgraph_cache_race_total",
+			"dgraph_cache_race_total",
 			nil, nil,
 		),
-		"postingReads": prometheus.NewDesc(
-			"posting_reads",
-			"cummulative posting reads",
+		"dgraph_posting_reads_total": prometheus.NewDesc(
+			"dgraph_posting_reads_total",
+			"dgraph_posting_reads_total",
 			nil, nil,
 		),
-		"postingWrites": prometheus.NewDesc(
-			"posting_writes",
-			"cummulative posting writes",
+		"dgraph_posting_writes_total": prometheus.NewDesc(
+			"dgraph_posting_writes_total",
+			"dgraph_posting_writes_total",
 			nil, nil,
 		),
-		"maxPlLength": prometheus.NewDesc(
-			"maxPlLength",
-			"maxPlLength",
+		"dgraph_max_list_bytes": prometheus.NewDesc(
+			"dgraph_max_list_bytes",
+			"dgraph_max_list_bytes",
 			nil, nil,
 		),
-		"pendingProposals": prometheus.NewDesc(
-			"pending_proposals",
-			"cummulative pending proposals",
+		"dgraph_pending_proposals_total": prometheus.NewDesc(
+			"dgraph_pending_proposals_total",
+			"dgraph_pending_proposals_total",
 			nil, nil,
 		),
-		"bytesRead": prometheus.NewDesc(
-			"bytes_read",
-			"cummulative bytes Read",
+		"dgraph_read_bytes_total": prometheus.NewDesc(
+			"dgraph_read_bytes_total",
+			"dgraph_read_bytes_total",
 			nil, nil,
 		),
-		"bytesWrite": prometheus.NewDesc(
-			"bytes_write",
-			"cummulative bytes Written",
+		"dgraph_written_bytes_total": prometheus.NewDesc(
+			"dgraph_written_bytes_total",
+			"dgraph_written_bytes_total",
 			nil, nil,
 		),
-		"evictedPls": prometheus.NewDesc(
-			"evictedPls",
-			"cummulative evictedPls",
+		"dgraph_evicted_lists_total": prometheus.NewDesc(
+			"dgraph_evicted_lists_total",
+			"dgraph_evicted_lists_total",
 			nil, nil,
 		),
-		"pendingQueries": prometheus.NewDesc(
-			"pending_queries",
-			"pendingQueries",
+		"dgraph_pending_queries_total": prometheus.NewDesc(
+			"dgraph_pending_queries_total",
+			"dgraph_pending_queries_total",
 			nil, nil,
 		),
-		"numQueries": prometheus.NewDesc(
-			"numQueries",
-			"numQueries",
+		"dgraph_num_queries_total": prometheus.NewDesc(
+			"dgraph_num_queries_total",
+			"dgraph_num_queries_total",
 			nil, nil,
 		),
-		"serverHealth": prometheus.NewDesc(
-			"serverHealth",
-			"serverHealth",
+		"dgraph_server_health_status": prometheus.NewDesc(
+			"dgraph_server_health_status",
+			"dgraph_server_health_status",
 			nil, nil,
 		),
-		"dirtyMapSize": prometheus.NewDesc(
-			"dirtyMapSize",
-			"dirtyMapSize",
+		"dgraph_dirtymap_keys_total": prometheus.NewDesc(
+			"dgraph_dirtymap_keys_total",
+			"dgraph_dirtymap_keys_total",
 			nil, nil,
 		),
-		"lcacheSize": prometheus.NewDesc(
-			"lcacheSize",
-			"lcacheSize",
+		"dgraph_lcache_size_bytes": prometheus.NewDesc(
+			"dgraph_lcache_size_bytes",
+			"dgraph_lcache_size_bytes",
 			nil, nil,
 		),
-		"lcacheLen": prometheus.NewDesc(
-			"lcacheLen",
-			"lcacheLen",
+		"dgraph_lcache_keys_total": prometheus.NewDesc(
+			"dgraph_lcache_keys_total",
+			"dgraph_lcache_keys_total",
 			nil, nil,
 		),
-		"lcacheCapacity": prometheus.NewDesc(
-			"lcacheCapacity",
-			"lcacheCapacity",
+		"dgraph_lcache_capacity_bytes": prometheus.NewDesc(
+			"dgraph_lcache_capacity_bytes",
+			"dgraph_lcache_capacity_bytes",
 			nil, nil,
 		),
-		"numGoRoutines": prometheus.NewDesc(
-			"numGoRoutines",
-			"numGoRoutines",
+		"dgraph_goroutines_total": prometheus.NewDesc(
+			"dgraph_goroutines_total",
+			"dgraph_goroutines_total",
 			nil, nil,
 		),
-		"memoryInUse": prometheus.NewDesc(
-			"memoryInUse",
-			"memoryInUse",
+		"dgraph_memory_inuse_bytes": prometheus.NewDesc(
+			"dgraph_memory_inuse_bytes",
+			"dgraph_memory_inuse_bytes",
 			nil, nil,
 		),
-		"heapIdle": prometheus.NewDesc(
-			"heapIdle",
-			"heapIdle",
+		"dgraph_heap_idle_bytes": prometheus.NewDesc(
+			"dgraph_heap_idle_bytes",
+			"dgraph_heap_idle_bytes",
 			nil, nil,
 		),
-		"totalMemory": prometheus.NewDesc(
-			"totalMemory",
-			"totalMemory",
+		"dgraph_proc_memory_bytes": prometheus.NewDesc(
+			"dgraph_proc_memory_bytes",
+			"dgraph_proc_memory_bytes",
 			nil, nil,
 		),
-		"totalOSMemory": prometheus.NewDesc(
-			"totalOSMemory",
-			"totalOSMemory",
+		"dgraph_active_mutations_total": prometheus.NewDesc(
+			"dgraph_active_mutations_total",
+			"dgraph_active_mutations_total",
 			nil, nil,
 		),
-		"activeMutations": prometheus.NewDesc(
-			"activeMutations",
-			"activeMutations",
-			nil, nil,
-		),
-		"predicateStats": prometheus.NewDesc(
-			"predicateStats",
-			"predicateStats",
+		"dgraph_predicate_stats": prometheus.NewDesc(
+			"dgraph_predicate_stats",
+			"dgraph_predicate_stats",
 			[]string{"name"}, nil,
 		),
 	})

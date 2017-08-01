@@ -264,14 +264,13 @@ func updateMemoryMetrics() {
 	for range ticker.C {
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
-		megs := (ms.HeapInuse + ms.StackInuse) / (1 << 20)
+		megs := (ms.HeapInuse + ms.StackInuse)
 
 		inUse := float64(megs)
-		idle := float64((ms.HeapIdle - ms.HeapReleased) / (1 << 20))
+		idle := float64(ms.HeapIdle - ms.HeapReleased)
 
 		x.MemoryInUse.Set(int64(inUse))
 		x.HeapIdle.Set(int64(idle))
-		x.TotalMemory.Set(int64(inUse + idle))
 		x.TotalOSMemory.Set(int64(getMemUsage()))
 	}
 }
