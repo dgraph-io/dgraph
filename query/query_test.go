@@ -301,6 +301,9 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "lossy", 0x1002, "Honey badger", "en", nil)
 	addEdgeToLangValue(t, "lossy", 0x1003, "Honey bee", "en", nil)
 
+	// full_name has hash index, we need following data for bug with eq (#1295)
+	addEdgeToLangValue(t, "full_name", 0x10000, "Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith", "en", nil)
+
 	// regex test data
 	// 0x1234 is uid of interest for regex testing
 	addEdgeToValue(t, "name", 0x1234, "Regex Master", nil)
@@ -6669,6 +6672,24 @@ func TestLangLossyIndex4(t *testing.T) {
 	`
 	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
+}
+
+// Test for bug #1295
+func TestLangHashEq(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			q(func:eq(full_name, "Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith")) {
+				full_name@en
+			}
+		}
+	`
+
+	json, err := processToFastJsonReq(t, query)
+	require.NoError(t, err)
+	require.JSONEq(t,
+		`{"data": {"q":[{"full_name@en":"Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith"}]}}`,
+		json)
 }
 
 func checkSchemaNodes(t *testing.T, expected []*protos.SchemaNode, actual []*protos.SchemaNode) {
