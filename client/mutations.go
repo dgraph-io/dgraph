@@ -57,7 +57,7 @@ type BatchMutationOptions struct {
 	Pending       int
 	PrintCounters bool
 	MaxRetries    uint32
-	// User could pass a context. We should stop retrying requests after ctx.Done()
+	// User could pass a context so that we can stop retrying requests once context is done.
 	Ctx context.Context
 }
 
