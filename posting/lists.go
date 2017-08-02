@@ -173,7 +173,7 @@ func getMemUsage() int {
 			// In case of error running the command, resort to go way
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
-			megs := ms.Alloc / (1 << 20)
+			megs := ms.Alloc
 			return int(megs)
 		}
 
@@ -183,7 +183,7 @@ func getMemUsage() int {
 			return 0
 		}
 
-		megs := kbs / (1 << 10)
+		megs := kbs << 10
 		return megs
 	}
 
@@ -207,7 +207,7 @@ func getMemUsage() int {
 		return 0
 	}
 
-	return rss * os.Getpagesize() / (1 << 20)
+	return rss * os.Getpagesize()
 }
 
 // periodicMerging periodically merges the dirty posting lists. It also checks our memory
