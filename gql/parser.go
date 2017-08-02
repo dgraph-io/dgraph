@@ -1410,6 +1410,10 @@ L:
 						g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
 						g.NeedsVar[0].Typ = VALUE_VAR
 					} else {
+						if f.Name != "count" {
+							return nil,
+								x.Errorf("Only val/count allowed as function within another. Got: %s", f.Name)
+						}
 						g.Attr = f.Attr
 						g.Args = append(g.Args, f.Name)
 					}
@@ -1496,8 +1500,7 @@ L:
 					continue
 				}
 
-				// Unlike other functions, uid function has no attribute,
-				// everything is args.
+				// Unlike other functions, uid function has no attribute, everything is args.
 				if len(g.Attr) == 0 && g.Name != "uid" {
 					if strings.ContainsRune(itemInFunc.Val, '"') {
 						return nil, x.Errorf("Attribute in function must not be quoted with \": %s",

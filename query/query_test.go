@@ -1594,7 +1594,7 @@ func TestVarInIneq2(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			var(func: uid( 1)) {
+			var(func: uid(1)) {
 				friend {
 					a as age
 				}
@@ -8558,4 +8558,18 @@ func TestCascadeUid(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"_uid_":"0x17","friend":[{"age":38,"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"_uid_":"0x19","friend":[{"age":15,"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Daryl Dixon"},{"_uid_":"0x1f","friend":[{"age":15,"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`, js)
+}
+
+func TestEqUidFunctionErr(t *testing.T) {
+	query := `
+		{
+			me(func: eq(path_id, uid(x))) {
+				name
+			}
+		}
+	`
+	ctx := defaultContext()
+	ctx = context.WithValue(ctx, "debug", "true")
+	_, err := processToFastJsonReqCtx(t, query, ctx)
+	require.Error(t, err)
 }
