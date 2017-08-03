@@ -4,6 +4,8 @@ import { connect } from "react-redux";
 import Sidebar from "../components/Sidebar";
 import EditorPanel from "../components/EditorPanel";
 import FrameList from "../components/FrameList";
+
+import { createCookie, readCookie, eraseCookie } from "../lib/helpers";
 import { runQuery, runQueryByShareId } from "../actions";
 import {
   refreshConnectedState,
@@ -14,7 +16,7 @@ import {
   discardAllFrames,
   toggleCollapseFrame
 } from "../actions/frames";
-import { createCookie, readCookie, eraseCookie } from "../lib/helpers";
+import { updateQuery } from "../actions/query";
 
 import "../assets/css/App.css";
 
@@ -23,8 +25,7 @@ class App extends React.Component {
     super(props);
 
     this.state = {
-      query: "",
-      isQueryDirty: false,
+      // IDEA: Make this state a part of <Sidebar /> to avoid rerendering whole <App />
       currentSidebarMenu: "",
       // queryExecutionCounter is used to determine when the NPS score survey
       // should be shown
@@ -74,9 +75,10 @@ class App extends React.Component {
   };
 
   handleUpdateQuery = (val, done = () => {}) => {
-    const isQueryDirty = val.trim() !== "";
+    const { _handleUpdateQuery } = this.props;
 
-    this.setState({ query: val, isQueryDirty }, done);
+    _handleUpdateQuery(val);
+    done();
   };
 
   // focusCodemirror sets focus on codemirror and moves the cursor to the end
@@ -141,7 +143,7 @@ class App extends React.Component {
   };
 
   render = () => {
-    const { query, isQueryDirty, currentSidebarMenu } = this.state;
+    const { currentSidebarMenu } = this.state;
     const {
       handleDiscardFrame,
       handleUpdateConnectedState,
@@ -173,15 +175,13 @@ class App extends React.Component {
             <div className="row justify-content-md-center">
               <div className="col-sm-12">
                 <EditorPanel
-                  query={query}
-                  isQueryDirty={isQueryDirty}
                   canDiscardAll={canDiscardAll}
                   onDiscardAllFrames={this.handleDiscardAllFrames}
                   onRunQuery={this.handleRunQuery}
-                  onUpdateQuery={this.handleUpdateQuery}
                   onClearQuery={this.handleClearQuery}
                   saveCodeMirrorInstance={this.saveCodeMirrorInstance}
                   connected={connected}
+                  onUpdateQuery={this.handleUpdateQuery}
                 />
               </div>
 
@@ -232,6 +232,9 @@ const mapDispatchToProps = dispatch => ({
   },
   handleUpdateConnectedState(nextState) {
     dispatch(updateConnectedState(nextState));
+  },
+  _handleUpdateQuery(query) {
+    dispatch(updateQuery(query));
   }
 });
 
