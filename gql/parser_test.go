@@ -791,28 +791,43 @@ func TestParseQueryWithVarError2(t *testing.T) {
 	require.Contains(t, err.Error(), "Some variables are used but not defined")
 }
 
-func TestParseQueryFilterError1(t *testing.T) {
+func TestParseQueryFilterError1A(t *testing.T) {
 	query := `
 	{
-		me(func: uid( abc) @filter(anyof(name"alice"))) {
+		me(func: uid(1) @filter(anyof(name, "alice"))) {
 		 name
 		}
 	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "\"@\"")
+}
+
+func TestParseQueryFilterError1B(t *testing.T) {
+	query := `
+	{
+		me(func: uid(1)) @filter(anyof(name"alice")) {
+		 name
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected comma or language but got: \"alice\"")
 }
 
 func TestParseQueryFilterError2(t *testing.T) {
 	query := `
 	{
-		me(func: uid( abc) @filter(anyof(name "alice"))) {
+		me(func: uid(1)) @filter(anyof(name "alice")) {
 		 name
 		}
 	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected comma or language but got: \"alice\"")
 }
 
 func TestParseQueryWithVarAtRootFilterID(t *testing.T) {
@@ -868,7 +883,7 @@ func TestParseQueryWithVarInIneqError(t *testing.T) {
 			}
 		}
 
-		me(func: uid( uid(fr)) @filter(gt(val(a, b), 10))) {
+		me(func: uid(fr)) @filter(gt(val(a, b), 10)) {
 		 name
 		}
 	}
@@ -876,6 +891,7 @@ func TestParseQueryWithVarInIneqError(t *testing.T) {
 	// Multiple vars not allowed.
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multiple variables not allowed in a function")
 }
 
 func TestParseQueryWithVarInIneq(t *testing.T) {
