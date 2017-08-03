@@ -217,7 +217,7 @@ func TestParseQueryWithXIDError(t *testing.T) {
 func TestParseQueryWithMultiVarValError(t *testing.T) {
 	query := `
 	{
-		me(func: uid( uid(L), orderasc: val(n, d) )) {
+		me(func: uid(L), orderasc: val(n, d)) {
 			name
 		}
 
@@ -231,14 +231,13 @@ func TestParseQueryWithMultiVarValError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: This is about the colon after orderasc
-	require.Contains(t, err.Error(), "blah")
+	require.Contains(t, err.Error(), "Expected only one variable but got: 2")
 }
 
 func TestParseQueryWithVarValAggErr(t *testing.T) {
 	query := `
 	{
-		me(func: uid( uid(L), orderasc: val(c) )) {
+		me(func: uid(L), orderasc: val(c)) {
 			name
 		}
 
@@ -252,13 +251,13 @@ func TestParseQueryWithVarValAggErr(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: This is about the colon after orderasc
+	// TODO: This now says, "Unexpected comma before )."
 }
 
 func TestParseQueryWithVarValAgg_Error1(t *testing.T) {
 	query := `
 	{
-		me(func: uid( uid(L), orderasc: val(d) )) {
+		me(func: uid(L), orderasc: val(d)) {
 			name
 		}
 
@@ -274,13 +273,14 @@ func TestParseQueryWithVarValAgg_Error1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: This is about the colon after orderasc
+	require.Contains(t, err.Error(), "Empty () not allowed in math block")
+	// TODO: ^^ more like, exp() requires a parameter.  That's a weird way to fail at parsing.
 }
 
 func TestParseQueryWithVarValAgg_Error2(t *testing.T) {
 	query := `
 	{
-		me(func: uid( uid(L), orderasc: val(d) )) {
+		me(func: uid(L), orderasc: val(d)) {
 			name
 		}
 
@@ -296,13 +296,13 @@ func TestParseQueryWithVarValAgg_Error2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: This is about the colon after orderasc
+	require.Contains(t, err.Error(), "Unknown math function: log")
 }
 
 func TestParseQueryWithVarValAgg_Error3(t *testing.T) {
 	query := `
 	{
-		me(func: uid( uid(L), orderasc: val(d) )) {
+		me(func: uid(L), orderasc: val(d)) {
 			name
 			val(f)
 		}
@@ -320,7 +320,8 @@ func TestParseQueryWithVarValAgg_Error3(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: This is about the colon after orderasc
+	require.Contains(t, err.Error(), "Empty () not allowed in math block")
+	// TODO: ^^ Possibly a bad way to fail at parsing.
 }
 func TestParseQueryWithVarValAggNested(t *testing.T) {
 	query := `
