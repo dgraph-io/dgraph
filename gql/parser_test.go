@@ -1091,6 +1091,7 @@ func TestParseError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid operation type: me")
 }
 
 func TestParseXid(t *testing.T) {
@@ -1147,6 +1148,8 @@ func TestParseIdListError(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: This one complains about "Unrecognized character in lexText: U+005D ']'" which is a
+	// weird place to fail
 }
 
 func TestParseFirst(t *testing.T) {
@@ -1176,6 +1179,8 @@ func TestParseFirst_error(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expecting argument value")
+	require.Contains(t, err.Error(), "\")\"")
 }
 
 func TestParseAfter(t *testing.T) {
@@ -1223,6 +1228,8 @@ func TestParseOffset_error(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expecting argument value")
+	require.Contains(t, err.Error(), "\")\"")
 }
 
 func TestParse_error2(t *testing.T) {
@@ -1235,6 +1242,9 @@ func TestParse_error2(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected Left round brackets") // TODO capitalization
+	require.Contains(t, err.Error(), "\"{\"")
+
 }
 
 func TestParse_pass1(t *testing.T) {
@@ -1464,6 +1474,7 @@ func TestParseSchemaAndQuery(t *testing.T) {
 
 	_, err = Parse(Request{Str: query2, Http: true})
 	require.Error(t, err)
+	// TODO: Continue adding Contains to parser tests from here
 
 }
 
