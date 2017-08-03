@@ -1604,6 +1604,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
+		x.AssertTruef(sg.SrcUIDs != nil, "SrcUIDs shouldn't be nil.")
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.

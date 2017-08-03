@@ -92,6 +92,7 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 		"set",
 		"term",
 		"tokenizer",
+		"uid",
 		"within",
 	}
 

@@ -32,8 +32,8 @@ import (
 )
 
 const (
-	UID   = "uid"
-	VALUE = "val"
+	uid   = "uid"
+	value = "val"
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
@@ -1161,7 +1161,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		it.Next()
 		item = it.Item()
 		var val string
-		if item.Val == VALUE {
+		if item.Val == value {
 			count, err := parseVarList(it, gq)
 			if err != nil {
 				return result, err
@@ -1401,15 +1401,19 @@ L:
 						return nil, err
 					}
 					seenFuncArg = true
-					if f.Name == VALUE {
+					if f.Name == value {
 						if len(f.NeedsVar) > 1 {
 							return nil, x.Errorf("Multiple variables not allowed in a function")
 						}
-						g.Attr = VALUE
+						g.Attr = value
 						g.Args = append(g.Args, f.NeedsVar[0].Name)
 						g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
 						g.NeedsVar[0].Typ = VALUE_VAR
 					} else {
+						if f.Name != "count" {
+							return nil,
+								x.Errorf("Only val/count allowed as function within another. Got: %s", f.Name)
+						}
 						g.Attr = f.Attr
 						g.Args = append(g.Args, f.Name)
 					}
@@ -1488,7 +1492,7 @@ L:
 				if isDollar {
 					val = "$" + val
 					isDollar = false
-					if g.Name == UID && gq != nil {
+					if g.Name == uid && gq != nil {
 						gq.Args["id"] = val
 					} else {
 						g.Args = append(g.Args, val)
@@ -1496,8 +1500,7 @@ L:
 					continue
 				}
 
-				// Unlike other functions, uid function has no attribute,
-				// everything is args.
+				// Unlike other functions, uid function has no attribute, everything is args.
 				if len(g.Attr) == 0 && g.Name != "uid" {
 					if strings.ContainsRune(itemInFunc.Val, '"') {
 						return nil, x.Errorf("Attribute in function must not be quoted with \": %s",
@@ -1507,7 +1510,7 @@ L:
 				} else if expectLang {
 					g.Lang = val
 					expectLang = false
-				} else if g.Name != UID {
+				} else if g.Name != uid {
 					// For UID function. we set g.UID
 					g.Args = append(g.Args, val)
 				}
@@ -1517,13 +1520,13 @@ L:
 				}
 
 				expectArg = false
-				if g.Name == VALUE {
+				if g.Name == value {
 					// E.g. @filter(gt(val(a), 10))
 					g.NeedsVar = append(g.NeedsVar, VarContext{
 						Name: val,
 						Typ:  VALUE_VAR,
 					})
-				} else if g.Name == UID {
+				} else if g.Name == uid {
 					// uid function could take variables as well as actual uids.
 					// If we can parse the value that means its an uid otherwise a variable.
 					uid, err := strconv.ParseUint(val, 0, 64)
@@ -2110,7 +2113,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				item = it.Item()
 			}
 
-			if val == "" && item.Val == VALUE {
+			if val == "" && item.Val == value {
 				count, err := parseVarList(it, gq)
 				if err != nil {
 					return nil, err
@@ -2125,7 +2128,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				// Get language list, if present
 				items, err := it.Peek(1)
 				if err == nil && items[0].Typ == itemLeftRound {
-					if (key == "orderasc" || key == "orderdesc") && val != VALUE {
+					if (key == "orderasc" || key == "orderdesc") && val != value {
 						return nil, x.Errorf("Expected val(). Got %s() with order.", val)
 					}
 				}
@@ -2230,7 +2233,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			} else if isAggregator(valLower) {
 				child := &GraphQuery{
-					Attr:       VALUE,
+					Attr:       value,
 					Args:       make(map[string]string),
 					Var:        varName,
 					IsInternal: true,
@@ -2256,7 +2259,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					child.Attr = attr
 					child.IsInternal = false
 				} else {
-					if it.Item().Val != VALUE {
+					if it.Item().Val != value {
 						return x.Errorf("Only variables allowed in aggregate functions. Got: %v",
 							it.Item().Val)
 					}
@@ -2318,7 +2321,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					Args:       make(map[string]string),
 					IsInternal: true,
 				}
-				if item.Val == VALUE {
+				if item.Val == value {
 					count, err := parseVarList(it, child)
 					if err != nil {
 						return err
@@ -2369,7 +2372,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					it.Next()
 				}
 				continue
-			} else if valLower == VALUE {
+			} else if valLower == value {
 				if varName != "" {
 					return x.Errorf("Cannot assign a variable to val()")
 				}
@@ -2403,7 +2406,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				gq.Children = append(gq.Children, child)
 				curp = nil
 				continue
-			} else if valLower == UID {
+			} else if valLower == uid {
 				if varName != "" {
 					return x.Errorf("Cannot assign a variable to uid()")
 				}
