@@ -210,8 +210,8 @@ func TestParseQueryWithXIDError(t *testing.T) {
       }
     }`
 	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	// TODO: What is this testing?  "written-in" is the error here
+	require.NoError(t, err)
+	// TODO: What is this testing?  "alice-in-wonderland" having "-in" is the source of error here
 }
 
 func TestParseQueryWithMultiVarValError(t *testing.T) {
