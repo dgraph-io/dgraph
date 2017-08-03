@@ -325,11 +325,12 @@ func main() {
 	}
 
 	{
-		err := dgraphClient.BatchFlush()
-		if err == context.Canceled {
-			interrupted = true
-		} else {
-			log.Fatalf("While doing BatchFlush: %+v\n", err)
+		if err := dgraphClient.BatchFlush(); err != nil {
+			if err == context.Canceled {
+				interrupted = true
+			} else {
+				log.Fatalf("While doing BatchFlush: %+v\n", err)
+			}
 		}
 	}
 
