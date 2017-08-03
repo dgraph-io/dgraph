@@ -1471,11 +1471,11 @@ func TestParseSchemaAndQuery(t *testing.T) {
 
 	_, err := Parse(Request{Str: query1, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "schema block is not allowed with query block")
 
 	_, err = Parse(Request{Str: query2, Http: true})
 	require.Error(t, err)
-	// TODO: Continue adding Contains to parser tests from here
-
+	require.Contains(t, err.Error(), "schema block is not allowed with query block")
 }
 
 func TestParseSchemaError(t *testing.T) {
@@ -1487,6 +1487,7 @@ func TestParseSchemaError(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid schema block")
 }
 
 func TestParseSchemaErrorMulti(t *testing.T) {
@@ -1502,6 +1503,7 @@ func TestParseSchemaErrorMulti(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only one schema block allowed")
 }
 
 func TestParseMutation(t *testing.T) {
@@ -1529,7 +1531,7 @@ func TestParseMutation(t *testing.T) {
 		*res.Mutation.Del[0])
 }
 
-func TestParseMutation_error(t *testing.T) {
+func TestParseMutation_error1A(t *testing.T) {
 	query := `
 		mutation {
 			set {
@@ -1538,10 +1540,43 @@ func TestParseMutation_error(t *testing.T) {
 			}
 			delete {
 				<name> <is> <something-else> .
+			}
 		}
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unexpected character ' ' while parsing IRI")
+}
+
+func TestParseMutation_error1B(t *testing.T) {
+	query := `
+		mutation {
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san-francisco> .
+			}
+			delete {
+				<name> <is> <something-else> .
+		}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid mutation")
+}
+func TestParseMutation_error1C(t *testing.T) {
+	query := `
+		mutation {
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san-francisco> .
+			}
+			delete {
+				<name> <is> <something-else> .
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
 }
 
 func TestParseMutation_error2(t *testing.T) {
@@ -1549,7 +1584,7 @@ func TestParseMutation_error2(t *testing.T) {
 		mutation {
 			set {
 				<name> <is> <something> .
-				<hometown> <is> <san francisco> .
+				<hometown> <is> <san-francisco> .
 			}
 			delete {
 				<name> <is> <something-else> .
@@ -1564,6 +1599,7 @@ func TestParseMutation_error2(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only one mutation block allowed.")
 }
 
 func TestParseMutationAndQueryWithComments(t *testing.T) {
@@ -1791,6 +1827,7 @@ func TestParseFragmentCycle(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected error with cycle")
+	require.Contains(t, err.Error(), "Cycle detected")
 }
 
 func TestParseFragmentMissing(t *testing.T) {
@@ -1810,6 +1847,7 @@ func TestParseFragmentMissing(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected error with missing fragment")
+	require.Contains(t, err.Error(), "Missing fragment: fragmenta")
 }
 
 func TestParseVarInFunc(t *testing.T) {
@@ -1930,6 +1968,8 @@ func TestParseVariablesError1(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Variable $")
+	require.Contains(t, err.Error(), "should be initialised")
 }
 
 func TestParseVariablesError2(t *testing.T) {
@@ -1941,6 +1981,7 @@ func TestParseVariablesError2(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected value for variable $c")
+	// TODO: Continue adding code to check for the right error message from this point onward.
 }
 
 func TestParseVariablesError3(t *testing.T) {
