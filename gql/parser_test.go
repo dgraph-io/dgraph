@@ -2144,6 +2144,7 @@ func TestParseFilter_root_Error2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multiple functions as arguments not allowed")
 }
 
 func TestParseFilter_simplest(t *testing.T) {
@@ -2191,12 +2192,11 @@ func TestParseFilter_op(t *testing.T) {
 	require.Equal(t, `(OR (a aa "aaa") (AND (b bb "bbb") (c cc "ccc")))`, res.Query[0].Children[0].Filter.debugString())
 }
 
-func TestParseFilter_opError(t *testing.T) {
+func TestParseFilter_opError1(t *testing.T) {
 	query := `
 	query {
 		me(func: uid(0x0a)) {
-			friends @filter(a(aa "aaa") or b(b "bbb")
-			and ) {
+			friends @filter(a(aa "aaa") or b(b "bbb")) {
 				name
 			}
 			gender,age
@@ -2206,6 +2206,41 @@ func TestParseFilter_opError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected comma or language but got: \"aaa\"")
+}
+
+func TestParseFilter_opNoError2(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x0a)) {
+			friends @filter(a(aa, "aaa") or b(b, "bbb")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	// It's valid.  Makes sure TestParseFilter_opError3 fails for the expected reason.
+}
+
+func TestParseFilter_opError3(t *testing.T) {
+	query := `
+		query {
+		me(func: uid(0x0a)) {
+			friends @filter(a(aa, "aaa") or b(b, "bbb") and) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid filter statement")
 }
 
 func TestParseFilter_opNot1(t *testing.T) {
@@ -2308,6 +2343,8 @@ func TestParseFilter_unbalancedbrac(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unexpected item while parsing @filter")
+	require.Contains(t, err.Error(), "'{'")
 }
 
 func TestParseFilter_Geo1(t *testing.T) {
@@ -2358,6 +2395,7 @@ func TestParseFilter_Geo3(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid bracket sequence")
 }
 
 func TestParseFilter_Geo4(t *testing.T) {
@@ -2374,6 +2412,8 @@ func TestParseFilter_Geo4(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected right round or comma")
+	require.Contains(t, err.Error(), "\"]\"")
 }
 
 // Test if empty brackets will lead to errors.
@@ -2391,6 +2431,8 @@ func TestParseFilter_emptyargument(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Consecutive commas not allowed")
+
 }
 func TestParseFilter_unknowndirective(t *testing.T) {
 	query := `
@@ -2404,6 +2446,8 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 		}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unclosed action")
+	// TODO: What's an unclosed action?
 }
 
 func TestParseGeneratorError(t *testing.T) {
@@ -2420,6 +2464,7 @@ func TestParseGeneratorError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: Says "expecting a colon", I don't know what the error really is.  Should be me(func: ...) I guess.
 }
 
 func TestParseCountAsFuncMultiple(t *testing.T) {
@@ -2455,6 +2500,7 @@ func TestParseCountAsFuncMultipleError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multiple predicates not allowed in single count")
 }
 
 func TestParseCountAsFunc(t *testing.T) {
@@ -2484,6 +2530,7 @@ func TestParseCountError1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multiple predicates not allowed in single count")
 }
 
 func TestParseCountError2(t *testing.T) {
@@ -2497,6 +2544,8 @@ func TestParseCountError2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Predicate name cannot be empty")
+	// TODO: that's a bad error message
 }
 
 func TestParseCheckPwd(t *testing.T) {
@@ -2612,6 +2661,7 @@ func TestParseIRIRefSpace(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err) // because of space.
+	require.Contains(t, err.Error(), "Unexpected character ' ' while parsing IRI")
 }
 
 func TestParseIRIRefInvalidChar(t *testing.T) {
@@ -2622,6 +2672,7 @@ func TestParseIRIRefInvalidChar(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err) // because of ^
+	require.Contains(t, err.Error(), "Unexpected character '^' while parsing IRI")
 }
 
 func TestMutationOpenBrace(t *testing.T) {
@@ -2676,12 +2727,25 @@ func TestMutationSingleQuote(t *testing.T) {
 	query := `
 	mutation {
 		set {
-			_:gabe <name> "Gabe'
+			_:gabe <name> "Gabe' .
 		}
 	}
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid mutation formatting")
+}
+
+func TestMutationDoubleQuote(t *testing.T) {
+	query := `
+	mutation {
+		set {
+			_:gabe <name> "Gabe" .
+		}
+	}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
 }
 
 func TestMutationPassword(t *testing.T) {
@@ -2741,6 +2805,7 @@ func TestLangsInvalid1(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected directive or language list, got @ru")
 }
 
 func TestLangsInvalid2(t *testing.T) {
@@ -2754,6 +2819,7 @@ func TestLangsInvalid2(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected directive or language list, got @en")
 }
 
 func TestLangsInvalid3(t *testing.T) {
@@ -2767,6 +2833,7 @@ func TestLangsInvalid3(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected directive or language list, got @en")
 }
 
 func TestLangsInvalid4(t *testing.T) {
@@ -2780,6 +2847,7 @@ func TestLangsInvalid4(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected directive or language list")
 }
 
 func TestLangsInvalid5(t *testing.T) {
@@ -2793,6 +2861,7 @@ func TestLangsInvalid5(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected directive or language list")
 }
 
 func TestLangsInvalid6(t *testing.T) {
@@ -2806,6 +2875,7 @@ func TestLangsInvalid6(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: We get 'Expected 3 periods ("..."), got 2.', which is bonkers.
 }
 
 func TestLangsInvalid7(t *testing.T) {
@@ -2819,6 +2889,7 @@ func TestLangsInvalid7(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: We get 'Expected 3 periods ("..."), got 2.', which is bonkers.
 }
 
 func TestLangsFilter(t *testing.T) {
@@ -2858,6 +2929,7 @@ func TestLangsFilter_error1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid usage of '@' in function argument")
 }
 
 func TestLangsFilter_error2(t *testing.T) {
@@ -2875,6 +2947,10 @@ func TestLangsFilter_error2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected arg after func [alloftext]")
+	require.Contains(t, err.Error(), "','")
+	// TODO: That's a bad error message
+
 }
 
 func TestLangsFunction(t *testing.T) {
@@ -2898,6 +2974,7 @@ func TestLangsFunction(t *testing.T) {
 }
 
 func TestLangsFunctionMultipleLangs(t *testing.T) {
+	// TODO: vvv What?  Touches global variables??
 	schema.ParseBytes([]byte("scalar descr: string @index(fulltext) ."), 0)
 	query := `
 	query {
@@ -2912,6 +2989,8 @@ func TestLangsFunctionMultipleLangs(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected arg after func [alloftext]")
+	require.Contains(t, err.Error(), "\":\"")
 }
 
 func TestParseNormalize(t *testing.T) {
@@ -3035,6 +3114,7 @@ func TestParseGroupbyError(t *testing.T) {
 		}
 	}
 `
+	// TODO: Add assertions of error messages after this point
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 }
