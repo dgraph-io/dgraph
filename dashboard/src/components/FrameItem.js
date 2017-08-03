@@ -15,7 +15,7 @@ import FrameLoading from "./FrameLoading";
 // getFrameContent returns React Component for a given frame depending on its type
 function getFrameContent(frame) {
   if (frame.type === FRAME_TYPE_SESSION) {
-    return <FrameSession session={frame.data} />;
+    return <FrameSession frame={frame} />;
   } else if (frame.type === FRAME_TYPE_ERROR) {
     return <FrameError data={frame.data} />;
   } else if (frame.type === FRAME_TYPE_SUCCESS) {

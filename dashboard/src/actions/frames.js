@@ -28,7 +28,7 @@ export function discardAllFrames() {
   };
 }
 
-// IDEA: the schema for frame object is getting complext. maybe use class optionally
+// IDEA: the schema for frame object is getting complex. maybe use class optionally
 // with flow?
 export function updateFrame({ id, type, meta, data }) {
   return {

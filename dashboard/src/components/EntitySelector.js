@@ -7,7 +7,7 @@ const EntitySelector = ({
   response,
   onInitNodeTypeConfig,
   onUpdateLabelRegex,
-  labelRegex,
+  labelRegexStr,
   onUpdateLabels
 }) => {
   return (
@@ -32,7 +32,7 @@ const EntitySelector = ({
               type="text"
               className="form-control"
               placeholder="Enter regex for labels"
-              value={labelRegex}
+              value={labelRegexStr}
               onChange={e => {
                 onUpdateLabelRegex(e.target.value);
               }}
