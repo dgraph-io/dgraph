@@ -122,7 +122,7 @@ def max_bits128(func_name, int_size, diff_code):
 
     array_ptr = Argument(ptr(size_t), name='in')
     offset = Argument(ptrdiff_t, name='offset')
-    seed_ptr = Argument(ptr(uint8_t), name='seed')
+    seed_ptr = Argument(ptr(uint64_t), name='seed')
 
     with Function(func_name, (array_ptr, offset, seed_ptr), uint8_t):
         MM.CLEAR()

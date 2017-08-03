@@ -142,37 +142,31 @@ class MM:
     def Register():
         return MM.gen_reg.pop(0)
 
-def unpack(func_name, int_size, diff_code, bit_size):
+def unpack(func_name, int_size, bit_size):
 
     in_ptr = Argument(ptr(uint8_t), name='in')
-    out_ptr = Argument(ptr(size_t), name='out')
-    out_offset = Argument(ptrdiff_t, name='offset')
-    seed_ptr = Argument(ptr(uint8_t), name='seed')
+    out_ptr = Argument(ptr(uint64_t), name='out')
+    seed_ptr = Argument(ptr(uint64_t), name='seed')
 
-    with Function(func_name, (in_ptr, out_ptr, out_offset, seed_ptr)):
+    with Function(func_name, (in_ptr, out_ptr, seed_ptr)):
         MM.CLEAR()
 
         inp = MM.Register()
         outp = MM.Register()
-        outp_offset = MM.Register()
 
         LOAD.ARGUMENT(inp, in_ptr)
         LOAD.ARGUMENT(outp, out_ptr)
-        LOAD.ARGUMENT(outp_offset, out_offset)
-        outp = add_offset(int_size, outp, outp_offset)
 
-        seedp = None
-        prefix_sum = None
-        if diff_code:
-            seedp = MM.Register()
-            prefix_sum = MM.XMMRegister()
+        seedp = MM.Register()
+        prefix_sum = MM.XMMRegister()
 
-            LOAD.ARGUMENT(seedp, seed_ptr)
-            MOVDQA(prefix_sum, [seedp])
+        LOAD.ARGUMENT(seedp, seed_ptr)
+        MOVDQA(prefix_sum, [seedp])
 
         i = 0
-        mm = MM(int_size, diff_code, inp, outp)
+        mm = MM(int_size, True, inp, outp)
         mask = mm.MASK((1 << bit_size)-1)
+        diff_code = True
 
         in_copies = []
         in_reg = mm.LOAD()
@@ -221,12 +215,5 @@ def unpack(func_name, int_size, diff_code, bit_size):
         RETURN()
 
 # Generate code
-for bs in range(1, 33):
-    unpack('unpack32_'+str(bs), 32, False, bs)
 for bs in range(1, 65):
-    unpack('unpack64_'+str(bs), 64, False, bs)
-
-for bs in range(1, 33):
-    unpack('dunpack32_'+str(bs), 32, True, bs)
-for bs in range(1, 65):
-    unpack('dunpack64_'+str(bs), 64, True, bs)
+    unpack('dunpack64_'+str(bs), 64, bs)

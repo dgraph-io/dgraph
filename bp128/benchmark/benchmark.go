@@ -4,12 +4,13 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
-	"reflect"
 	"sort"
 	"time"
 
-	"github.com/robskie/bp128"
+	"github.com/dgraph-io/dgraph/bp128"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -33,7 +34,7 @@ func read(filename string) []int {
 
 	buf := make([]byte, 4)
 	_, err = fgzip.Read(buf)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		panic(err)
 	}
 	ndata := binary.LittleEndian.Uint32(buf)
@@ -41,7 +42,7 @@ func read(filename string) []int {
 	data := make([]int, ndata)
 	for i := range data {
 		_, err = fgzip.Read(buf)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			panic(err)
 		}
 
@@ -54,40 +55,19 @@ func read(filename string) []int {
 type chunks struct {
 	intSize int
 
-	data   []interface{}
+	data   [][]uint64
 	length int
-}
-
-func chunkify32(data []int) *chunks {
-	const chunkLen = chunkByteSize / 4
-
-	nchunks := len(data) / chunkLen
-	cdata := make([]interface{}, nchunks)
-
-	n := 0
-	for i := range cdata {
-		chunk := []uint32{}
-		bp128.MakeAlignedSlice(chunkLen, &chunk)
-		for j := range chunk {
-			chunk[j] = uint32(data[n])
-			n++
-		}
-		cdata[i] = chunk
-	}
-
-	return &chunks{32, cdata, n}
 }
 
 func chunkify64(data []int) *chunks {
 	const chunkLen = chunkByteSize / 8
 
 	nchunks := len(data) / chunkLen
-	cdata := make([]interface{}, nchunks)
+	cdata := make([][]uint64, nchunks)
 
 	n := 0
 	for i := range cdata {
-		chunk := []uint64{}
-		bp128.MakeAlignedSlice(chunkLen, &chunk)
+		chunk := make([]uint64, chunkLen)
 		for j := range chunk {
 			chunk[j] = uint64(data[n])
 			n++
@@ -100,7 +80,7 @@ func chunkify64(data []int) *chunks {
 
 func benchmarkPack(trials int,
 	chunks *chunks,
-	fpack func(interface{}) *bp128.PackedInts) int {
+	fpack func([]uint64) *bp128.PackedInts) int {
 
 	times := make([]int, trials)
 	for i := range times {
@@ -120,22 +100,15 @@ func benchmarkPack(trials int,
 
 func benchmarkUnpack(trials int,
 	chunks *chunks,
-	fpack func(interface{}) *bp128.PackedInts,
-	funpack func(*bp128.PackedInts, interface{})) int {
+	fpack func([]uint64) *bp128.PackedInts,
+	funpack func(*bp128.PackedInts, []uint64)) int {
 
 	packed := make([]*bp128.PackedInts, len(chunks.data))
 	for i, c := range chunks.data {
 		packed[i] = fpack(c)
 	}
 
-	var out interface{}
-	if chunks.intSize == 32 {
-		out = &[]uint32{}
-		bp128.MakeAlignedSlice(chunkByteSize/4, out)
-	} else if chunks.intSize == 64 {
-		out = &[]uint64{}
-		bp128.MakeAlignedSlice(chunkByteSize/8, out)
-	}
+	out := make([]uint64, chunkByteSize/8)
 
 	times := make([]int, trials)
 	for i := range times {
@@ -150,11 +123,9 @@ func benchmarkUnpack(trials int,
 	for i, c := range chunks.data {
 		funpack(packed[i], out)
 
-		vc := reflect.ValueOf(c)
-		vo := reflect.ValueOf(out).Elem()
-		for j := 0; j < vc.Len(); j++ {
-			if vc.Index(j).Uint() != vo.Index(j).Uint() {
-				panic("whoops! something went wrong")
+		for j := 0; j < len(c); j++ {
+			if c[j] != out[j] {
+				x.Fatalf("Something wrong %+v %+v %+v\n", len(c), len(out), j)
 			}
 		}
 	}
@@ -177,34 +148,15 @@ func main() {
 		panic("test data must be sorted")
 	}
 
-	chunks32 := chunkify32(data)
 	chunks64 := chunkify64(data)
 	data = nil
 
 	mis := 0
 	const ntrials = 1000
 
-	mis = benchmarkPack(ntrials, chunks32, bp128.Pack)
-	fmtBenchmark("BenchmarkPack32", mis)
-
-	mis = benchmarkUnpack(ntrials, chunks32, bp128.Pack, bp128.Unpack)
-	fmtBenchmark("BenchmarkUnPack32", mis)
-
-	mis = benchmarkPack(ntrials, chunks32, bp128.DeltaPack)
-	fmtBenchmark("BenchmarkDeltaPack32", mis)
-
-	mis = benchmarkUnpack(ntrials, chunks32, bp128.DeltaPack, bp128.Unpack)
-	fmtBenchmark("BenchmarkDeltaUnPack32", mis)
-
-	mis = benchmarkPack(ntrials, chunks64, bp128.Pack)
-	fmtBenchmark("BenchmarkPack64", mis)
-
-	mis = benchmarkUnpack(ntrials, chunks64, bp128.Pack, bp128.Unpack)
-	fmtBenchmark("BenchmarkUnPack64", mis)
-
 	mis = benchmarkPack(ntrials, chunks64, bp128.DeltaPack)
 	fmtBenchmark("BenchmarkDeltaPack64", mis)
 
-	mis = benchmarkUnpack(ntrials, chunks64, bp128.DeltaPack, bp128.Unpack)
+	mis = benchmarkUnpack(ntrials, chunks64, bp128.DeltaPack, bp128.DeltaUnpack)
 	fmtBenchmark("BenchmarkDeltaUnPack64", mis)
 }
