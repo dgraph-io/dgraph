@@ -138,7 +138,7 @@ func TestParseQueryListPred_MultiVarError(t *testing.T) {
 			f as friends
 		}
 
-		var(func: uid( uid(f))) {
+		var(func: uid(f)) {
 			l as _predicate_
 			friend {
 				g as _predicate_
