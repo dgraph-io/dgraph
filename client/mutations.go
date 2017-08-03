@@ -89,6 +89,11 @@ func (a *allocator) fetchOne() (uint64, error) {
 	if a.startId == 0 || a.endId < a.startId {
 		factor := time.Second
 		for {
+			select {
+			case <-a.ctx.Done():
+				return 0, a.ctx.Err()
+			default:
+			}
 			assignedIds, err := a.dc.AssignUids(context.Background(), &protos.Num{Val: 1000})
 			if err != nil {
 				time.Sleep(factor)
