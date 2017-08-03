@@ -36,6 +36,16 @@ class FrameItem extends React.Component {
     }
   }
 
+  cleanFrameData = () => {
+    this.setState({
+      data: null,
+      response: null,
+      executed: false,
+      errorMessage: null,
+      successMessage: null
+    });
+  };
+
   executeFrameQuery = query => {
     const { frame: { meta }, onUpdateConnectedState } = this.props;
 
@@ -167,6 +177,8 @@ class FrameItem extends React.Component {
         onSelectQuery={onSelectQuery}
         collapseAllFrames={collapseAllFrames}
         responseFetched={Boolean(response)}
+        onAfterExpandFrame={this.executeFrameQuery}
+        onAfterCollapseFrame={this.cleanFrameData}
       >
         {content}
       </FrameLayout>

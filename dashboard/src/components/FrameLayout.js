@@ -5,12 +5,6 @@ import screenfull from "screenfull";
 import classnames from "classnames";
 
 import FrameHeader from "./FrameHeader";
-import {
-  FRAME_TYPE_SESSION,
-  FRAME_TYPE_ERROR,
-  FRAME_TYPE_LOADING,
-  FRAME_TYPE_SUCCESS
-} from "../lib/const";
 import { getShareId } from "../actions";
 import { updateFrame } from "../actions/frames";
 
@@ -98,7 +92,7 @@ class FrameLayout extends React.Component {
       return;
     }
 
-    const { query } = frame.data;
+    const { query } = frame;
     getShareId(query)
       .then(shareId => {
         this.setState({ shareId });
@@ -193,9 +187,11 @@ class FrameLayout extends React.Component {
 
 const mapStateToProps = state => ({});
 
-const mapDispatchToProps = dispatch => ({
+const mapDispatchToProps = (dispatch, ownProps) => ({
   changeCollapseState(frame, nextCollapseState) {
-    return dispatch(
+    const { onAfterExpandFrame, onAfterCollapseFrame } = ownProps;
+
+    dispatch(
       updateFrame({
         id: frame.id,
         type: frame.type,
@@ -203,6 +199,17 @@ const mapDispatchToProps = dispatch => ({
         meta: Object.assign({}, frame.meta, { collapsed: nextCollapseState })
       })
     );
+
+    // Execute callbacks
+    if (nextCollapseState) {
+      if (onAfterCollapseFrame) {
+        onAfterCollapseFrame();
+      }
+    } else {
+      if (onAfterExpandFrame) {
+        onAfterExpandFrame(frame.query);
+      }
+    }
   }
 });
 
