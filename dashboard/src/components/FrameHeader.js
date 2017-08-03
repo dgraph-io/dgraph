@@ -23,11 +23,8 @@ const FrameHeader = ({
 
   return (
     <div className="header">
-      {frame.data.query
-        ? <QueryPreview
-            query={frame.data.query}
-            onSelectQuery={onSelectQuery}
-          />
+      {frame.query
+        ? <QueryPreview query={frame.query} onSelectQuery={onSelectQuery} />
         : null}
 
       <div className="actions">
@@ -82,7 +79,6 @@ const FrameHeader = ({
           {isFullscreen
             ? <i className="fa fa-compress" />
             : <i className="fa fa-expand" />}
-
         </a>
 
         {!isFullscreen

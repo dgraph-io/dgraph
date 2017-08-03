@@ -1,4 +1,5 @@
 import React from "react";
+import { connect } from "react-redux";
 import classnames from "classnames";
 
 import Editor from "../containers/Editor";
@@ -8,16 +9,17 @@ import "../assets/css/EditorPanel.css";
 class EditorPanel extends React.Component {
   render() {
     const {
-      isQueryDirty,
       canDiscardAll,
       query,
       onRunQuery,
-      onUpdateQuery,
+      handleUpdateQuery,
       onClearQuery,
       onDiscardAllFrames,
       saveCodeMirrorInstance,
       connected
     } = this.props;
+
+    const isQueryDirty = query.trim() !== "";
 
     return (
       <div className="editor-panel">
@@ -85,7 +87,7 @@ class EditorPanel extends React.Component {
         </div>
 
         <Editor
-          onUpdateQuery={onUpdateQuery}
+          onUpdateQuery={handleUpdateQuery}
           onRunQuery={onRunQuery}
           query={query}
           saveCodeMirrorInstance={saveCodeMirrorInstance}
@@ -95,4 +97,10 @@ class EditorPanel extends React.Component {
   }
 }
 
-export default EditorPanel;
+function mapStateToProps(state) {
+  return {
+    query: state.query.query
+  };
+}
+
+export default connect(mapStateToProps)(EditorPanel);

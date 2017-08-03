@@ -5,12 +5,6 @@ import screenfull from "screenfull";
 import classnames from "classnames";
 
 import FrameHeader from "./FrameHeader";
-import {
-  FRAME_TYPE_SESSION,
-  FRAME_TYPE_ERROR,
-  FRAME_TYPE_LOADING,
-  FRAME_TYPE_SUCCESS
-} from "../lib/const";
 import { getShareId } from "../actions";
 import { updateFrame } from "../actions/frames";
 
@@ -98,7 +92,7 @@ class FrameLayout extends React.Component {
       return;
     }
 
-    const { query } = frame.data;
+    const { query } = frame;
     getShareId(query)
       .then(shareId => {
         this.setState({ shareId });
@@ -142,7 +136,13 @@ class FrameLayout extends React.Component {
   };
 
   render() {
-    const { children, onDiscardFrame, onSelectQuery, frame } = this.props;
+    const {
+      children,
+      onDiscardFrame,
+      onSelectQuery,
+      frame,
+      responseFetched
+    } = this.props;
     const { isFullscreen, shareId, shareHidden, editingQuery } = this.state;
     const isCollapsed = frame.meta && frame.meta.collapsed;
 
@@ -151,10 +151,7 @@ class FrameLayout extends React.Component {
         className={classnames("frame-item", {
           fullscreen: isFullscreen,
           collapsed: isCollapsed,
-          "frame-error": frame.type === FRAME_TYPE_ERROR,
-          "frame-session": frame.type === FRAME_TYPE_SESSION,
-          "frame-loading": frame.type === FRAME_TYPE_LOADING,
-          "frame-system": frame.type === FRAME_TYPE_SUCCESS
+          "frame-session": responseFetched
         })}
         ref="frame"
       >
@@ -190,16 +187,29 @@ class FrameLayout extends React.Component {
 
 const mapStateToProps = state => ({});
 
-const mapDispatchToProps = dispatch => ({
+const mapDispatchToProps = (dispatch, ownProps) => ({
   changeCollapseState(frame, nextCollapseState) {
-    return dispatch(
+    const { onAfterExpandFrame, onAfterCollapseFrame } = ownProps;
+
+    dispatch(
       updateFrame({
         id: frame.id,
         type: frame.type,
-        data: frame.data,
+        query: frame.query,
         meta: Object.assign({}, frame.meta, { collapsed: nextCollapseState })
       })
     );
+
+    // Execute callbacks
+    if (nextCollapseState) {
+      if (onAfterCollapseFrame) {
+        onAfterCollapseFrame();
+      }
+    } else {
+      if (onAfterExpandFrame) {
+        onAfterExpandFrame(frame.query);
+      }
+    }
   }
 });
 

@@ -17,7 +17,7 @@ import { updateFrame } from "../actions/frames";
 class FrameSession extends React.Component {
   constructor(props) {
     super(props);
-    const { frame: { data } } = props;
+    const { response } = props;
 
     this.state = {
       // tabs: query, graph, tree, json
@@ -32,7 +32,6 @@ class FrameSession extends React.Component {
       configuringNodeType: null
     };
 
-    const { response } = data;
     this.nodes = new vis.DataSet(response.nodes);
     this.edges = new vis.DataSet(response.edges);
   }
@@ -132,7 +131,7 @@ class FrameSession extends React.Component {
   };
 
   render() {
-    const { frame: { data, meta } } = this.props;
+    const { frame, response, data } = this.props;
     const {
       currentTab,
       selectedNode,
@@ -195,7 +194,7 @@ class FrameSession extends React.Component {
           <div className="main">
             {currentTab === "graph"
               ? <SessionGraphTab
-                  session={data}
+                  response={response}
                   onBeforeGraphRender={this.handleBeforeGraphRender}
                   onGraphRendered={this.handleGraphRendered}
                   onNodeSelected={this.handleNodeSelected}
@@ -207,7 +206,7 @@ class FrameSession extends React.Component {
 
             {currentTab === "tree"
               ? <SessionTreeTab
-                  session={data}
+                  response={response}
                   onBeforeTreeRender={this.handleBeforeTreeRender}
                   onTreeRendered={this.handleTreeRendered}
                   onNodeSelected={this.handleNodeSelected}
@@ -219,24 +218,21 @@ class FrameSession extends React.Component {
               : null}
 
             {currentTab === "code"
-              ? <FrameCodeTab
-                  query={data.query}
-                  response={data.response.data}
-                />
+              ? <FrameCodeTab query={frame.query} data={data} />
               : null}
 
             {currentTab === "graph" || currentTab === "tree"
               ? <EntitySelector
-                  response={data.response}
+                  response={response}
                   onInitNodeTypeConfig={this.handleInitNodeTypeConfig}
-                  labelRegexStr={meta.regexStr}
+                  labelRegexStr={frame.meta.regexStr}
                   onUpdateLabelRegex={this.handleUpdateLabelRegex}
                   onUpdateLabels={this.handleUpdateLabels}
                 />
               : null}
 
             <SessionFooter
-              session={data}
+              response={response}
               currentTab={currentTab}
               selectedNode={selectedNode}
               hoveredNode={hoveredNode}

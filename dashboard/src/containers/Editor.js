@@ -147,10 +147,12 @@ class Editor extends Component {
     this.editor.setCursor(this.editor.lineCount(), 0);
 
     CodeMirror.registerHelper("hint", "fromList", function(cm, options) {
-      var cur = cm.getCursor(), token = cm.getTokenAt(cur);
+      var cur = cm.getCursor(),
+        token = cm.getTokenAt(cur);
 
       var to = CodeMirror.Pos(cur.line, token.end);
-      let from = "", term = "";
+      let from = "",
+        term = "";
       if (token.string) {
         term = token.string;
         from = CodeMirror.Pos(cur.line, token.start);
