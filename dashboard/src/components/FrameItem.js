@@ -37,10 +37,12 @@ class FrameItem extends React.Component {
   }
 
   executeFrameQuery = query => {
-    const { frame: { meta } } = this.props;
+    const { frame: { meta }, onUpdateConnectedState } = this.props;
 
     executeQuery(query)
       .then(res => {
+        onUpdateConnectedState(true);
+
         if (res.errors) {
           // Handle query error responses here.
           this.setState({
@@ -105,6 +107,8 @@ class FrameItem extends React.Component {
           // Capture client side error not query execution error from server
           // FIXME: This captures 404
           Raven.captureException(error);
+          onUpdateConnectedState(false);
+
           this.setState({
             errorMessage: `${error.message}: Could not connect to the server`,
             executed: true,

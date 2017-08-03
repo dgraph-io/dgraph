@@ -5,7 +5,10 @@ import Sidebar from "../components/Sidebar";
 import EditorPanel from "../components/EditorPanel";
 import FrameList from "../components/FrameList";
 import { runQuery, runQueryByShareId } from "../actions";
-import { refreshConnectedState } from "../actions/connection";
+import {
+  refreshConnectedState,
+  updateConnectedState
+} from "../actions/connection";
 import {
   discardFrame,
   discardAllFrames,
@@ -139,7 +142,12 @@ class App extends React.Component {
 
   render = () => {
     const { query, isQueryDirty, currentSidebarMenu } = this.state;
-    const { handleDiscardFrame, frames, connected } = this.props;
+    const {
+      handleDiscardFrame,
+      handleUpdateConnectedState,
+      frames,
+      connected
+    } = this.props;
 
     const canDiscardAll = frames.length > 0;
 
@@ -182,6 +190,7 @@ class App extends React.Component {
                   frames={frames}
                   onDiscardFrame={handleDiscardFrame}
                   onSelectQuery={this.handleSelectQuery}
+                  onUpdateConnectedState={handleUpdateConnectedState}
                   collapseAllFrames={this.collapseAllFrames}
                 />
               </div>
@@ -220,6 +229,9 @@ const mapDispatchToProps = dispatch => ({
   },
   handleCollapseFrame(frame) {
     dispatch(toggleCollapseFrame(frame, true));
+  },
+  handleUpdateConnectedState(nextState) {
+    dispatch(updateConnectedState(nextState));
   }
 });
 
