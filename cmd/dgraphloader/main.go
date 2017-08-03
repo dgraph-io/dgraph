@@ -103,22 +103,22 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *client.Dg
 	return dgraphClient.SetSchemaBlocking(ctx, string(b))
 }
 
-func Node(val string, c *client.Dgraph) string {
+func Node(val string, c *client.Dgraph) (string, error) {
 	if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
-		return c.NodeUid(uid).String()
+		return c.NodeUid(uid).String(), nil
 	}
 	if strings.HasPrefix(val, "_:") {
 		n, err := c.NodeBlank(val[2:])
 		if err != nil {
-			log.Fatal("Error while converting to node: %v", err)
+			return "", err
 		}
-		return n.String()
+		return n.String(), nil
 	}
 	n, err := c.NodeXid(val, *storeXid)
 	if err != nil {
-		log.Fatal("Error while converting to node: %v", err)
+		return "", err
 	}
-	return n.String()
+	return n.String(), nil
 }
 
 // processFile sends mutations for a given gz file.
@@ -169,9 +169,13 @@ func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) 
 		batchSize++
 		buf.Reset()
 
-		nq.Subject = Node(nq.Subject, dgraphClient)
+		if nq.Subject, err = Node(nq.Subject, dgraphClient); err != nil {
+			return err
+		}
 		if len(nq.ObjectId) > 0 {
-			nq.ObjectId = Node(nq.ObjectId, dgraphClient)
+			if nq.ObjectId, err = Node(nq.ObjectId, dgraphClient); err != nil {
+				return err
+			}
 		}
 		r.Set(client.NewEdge(nq))
 		if batchSize >= *numRdf {
@@ -267,6 +271,7 @@ func main() {
 		Size:          *numRdf,
 		Pending:       *concurrent,
 		PrintCounters: true,
+		Ctx:           ctx,
 	}
 	dgraphClient := client.NewDgraphClient(conns, bmOpts, *clientDir)
 	defer dgraphClient.Close()
@@ -318,7 +323,16 @@ func main() {
 			}
 		}
 	}
-	x.Check(dgraphClient.BatchFlush())
+
+	{
+		if err := dgraphClient.BatchFlush(); err != nil {
+			if err == context.Canceled {
+				interrupted = true
+			} else {
+				log.Fatalf("While doing BatchFlush: %+v\n", err)
+			}
+		}
+	}
 
 	c := dgraphClient.Counter()
 	var rate uint64

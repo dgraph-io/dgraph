@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -58,6 +57,8 @@ type BatchMutationOptions struct {
 	Pending       int
 	PrintCounters bool
 	MaxRetries    uint32
+	// User could pass a context so that we can stop retrying requests once context is done
+	Ctx context.Context
 }
 
 var DefaultOptions = BatchMutationOptions{
@@ -79,6 +80,7 @@ type allocator struct {
 
 	startId uint64
 	endId   uint64
+	ctx     context.Context // passed from dgraphClient.
 }
 
 // TODO: Add for n later
@@ -97,6 +99,11 @@ func (a *allocator) fetchOne() (uint64, error) {
 				a.startId = assignedIds.StartId
 				a.endId = assignedIds.EndId
 				break
+			}
+			select {
+			case <-a.ctx.Done():
+				return 0, a.ctx.Err()
+			default:
 			}
 		}
 	}
@@ -223,11 +230,16 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 
 	kv, err := badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
+	if opts.Ctx == nil {
+		// If the user doesn't give a context we supply one because we check ctx.Done().
+		opts.Ctx = context.TODO()
+	}
 	alloc := &allocator{
 		dc:     clients[0],
 		ids:    newCache(100000),
 		kv:     kv,
 		syncCh: make(chan entry, 10000),
+		ctx:    opts.Ctx,
 	}
 
 	d := &Dgraph{
@@ -330,12 +342,17 @@ func (d *Dgraph) request(req *Req) error {
 	factor := time.Second
 	var retries uint32
 RETRY:
+	select {
+	case <-d.opts.Ctx.Done():
+		return d.opts.Ctx.Err()
+	default:
+	}
 	_, err := d.dc[rand.Intn(len(d.dc))].Run(context.Background(), &req.gr)
 	if err != nil {
 		errString := err.Error()
 		// Irrecoverable
 		if strings.Contains(errString, "x509") || grpc.Code(err) == codes.Internal {
-			log.Fatal(errString)
+			return err
 		}
 		if !strings.Contains(errString, "Temporary Error") {
 			fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
@@ -478,6 +495,8 @@ func (d *Dgraph) BatchSetWithMark(r *Req, file string, line uint64) error {
 L:
 	for {
 		select {
+		case <-d.opts.Ctx.Done():
+			return d.opts.Ctx.Err()
 		case d.reqs <- r:
 			break L
 		default:
