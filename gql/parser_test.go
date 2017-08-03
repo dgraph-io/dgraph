@@ -478,7 +478,7 @@ func TestParseQueryWithVarValAggNested_Error1(t *testing.T) {
 	// No args to mulvar.
 	query := `
 	{
-		me(func: uid( uid(L), orderasc: val(d) )) {
+		me(func: uid(L), orderasc: val(d)) {
 			name
 		}
 
@@ -492,12 +492,13 @@ func TestParseQueryWithVarValAggNested_Error1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected 2 operands")
 }
 
 func TestParseQueryWithVarValAggNested_Error2(t *testing.T) {
 	query := `
 	{
-		me(func: uid( uid(L), orderasc: val(d) )) {
+		me(func: uid(L), orderasc: val(d)) {
 			name
 		}
 
@@ -513,6 +514,7 @@ func TestParseQueryWithVarValAggNested_Error2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected 2 operands")
 }
 
 func TestParseQueryWithLevelAgg(t *testing.T) {
@@ -616,7 +618,7 @@ func TestParseQueryWithVarValAgg(t *testing.T) {
 func TestParseQueryWithVarValAggError(t *testing.T) {
 	query := `
 	{
-		me(func: uid( uid(L), orderasc: uid(n))) {
+		me(func: uid(L), orderasc: uid(n)) {
 			name
 		}
 
@@ -630,6 +632,7 @@ func TestParseQueryWithVarValAggError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected val(). Got uid() with order.")
 }
 
 func TestParseQueryWithVarValAggError2(t *testing.T) {
@@ -649,6 +652,7 @@ func TestParseQueryWithVarValAggError2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: When I fix this test, it passes!  No error.
 }
 
 func TestParseQueryWithVarValCount(t *testing.T) {
@@ -760,8 +764,8 @@ func TestParseQueryWithVar(t *testing.T) {
 func TestParseQueryWithVarError1(t *testing.T) {
 	query := `
 	{
-		him(func: uid( uid(J))) {name}
-		you(func: uid( uid(K))) {name}
+		him(func: uid(J)) {name}
+		you(func: uid(K)) {name}
 		var(func: uid(0x0a)) {L AS friends}
 		var(func: uid(0x0a)) {J AS friends}
 		var(func: uid(0x0a)) {K AS friends}
@@ -769,20 +773,22 @@ func TestParseQueryWithVarError1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Some variables are defined but not used")
 }
 
 func TestParseQueryWithVarError2(t *testing.T) {
 	query := `
 	{
-		me(func: uid( uid(L))) {name}
-		him(func: uid( uid(J))) {name}
-		you(func: uid( uid(K))) {name}
+		me(func: uid(L)) {name}
+		him(func: uid(J)) {name}
+		you(func: uid(K)) {name}
 		var(func: uid(0x0a)) {L AS friends}
 		var(func: uid(0x0a)) {K AS friends}
 	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Some variables are used but not defined")
 }
 
 func TestParseQueryFilterError1(t *testing.T) {
