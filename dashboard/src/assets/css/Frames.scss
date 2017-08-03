@@ -8,29 +8,28 @@
 .frame-item-enter {
   opacity: 0.01;
   transform: translate(1200px, 0);
-	transform: translate3d(1200px, 0, 0);
-
+  transform: translate3d(1200px, 0, 0);
 }
 .frame-item-enter.frame-item-enter-active {
   opacity: 1;
-  transform: translate(0,0,0);
-  transform: translate3d(0,0,0);
+  transform: translate(0, 0, 0);
+  transform: translate3d(0, 0, 0);
   transition-property: transform, opacity;
   transition-duration: 300ms;
   transition-timing-function: cubic-bezier(0.175, 0.665, 0.320, 1), linear;
 }
 .frame-item-leave {
   opacity: 1;
-	transform: translate(0,0,0);
-	transform: translate3d(0,0,0);
+  transform: translate(0, 0, 0);
+  transform: translate3d(0, 0, 0);
   transition-property: transform, opacity;
-	transition-duration: 300ms;
-	transition-timing-function: cubic-bezier(0.175, 0.665, 0.320, 1), linear;
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.175, 0.665, 0.320, 1), linear;
 }
 .frame-item-leave.frame-item-leave-active {
   opacity: 0.01;
   transform: translate(1200px, 0);
-	transform: translate3d(1200px, 0, 0);
+  transform: translate3d(1200px, 0, 0);
 }
 // END: CSS Transition of items
 
@@ -46,17 +45,11 @@
     transition: height, min-height 200ms ease-in;
   }
 
+  & .body-container {
+    min-height: 355px;
+  }
   &.frame-session .body-container {
     min-height: 650px;
-  }
-  &.frame-error .body-container {
-    min-height: 355px;
-  }
-  &.frame-loading .body-container {
-    min-height: 355px;
-  }
-  &.frame-system .body-container {
-    min-height: 355px;
   }
   &.collapsed .body-container {
     height: 0;
@@ -234,7 +227,7 @@
     }
 
     .main {
-      flex:1;
+      flex: 1;
       display: flex;
       flex-direction: column;
       min-width: 0;

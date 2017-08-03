@@ -142,7 +142,13 @@ class FrameLayout extends React.Component {
   };
 
   render() {
-    const { children, onDiscardFrame, onSelectQuery, frame } = this.props;
+    const {
+      children,
+      onDiscardFrame,
+      onSelectQuery,
+      frame,
+      responseFetched
+    } = this.props;
     const { isFullscreen, shareId, shareHidden, editingQuery } = this.state;
     const isCollapsed = frame.meta && frame.meta.collapsed;
 
@@ -151,10 +157,7 @@ class FrameLayout extends React.Component {
         className={classnames("frame-item", {
           fullscreen: isFullscreen,
           collapsed: isCollapsed,
-          "frame-error": frame.type === FRAME_TYPE_ERROR,
-          "frame-session": frame.type === FRAME_TYPE_SESSION,
-          "frame-loading": frame.type === FRAME_TYPE_LOADING,
-          "frame-system": frame.type === FRAME_TYPE_SUCCESS
+          "frame-session": responseFetched
         })}
         ref="frame"
       >

@@ -88,6 +88,7 @@ class FrameItem extends React.Component {
         onDiscardFrame={onDiscardFrame}
         onSelectQuery={onSelectQuery}
         collapseAllFrames={collapseAllFrames}
+        responseFetched={Boolean(response)}
       >
         {content}
       </FrameLayout>
