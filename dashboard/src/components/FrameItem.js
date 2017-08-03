@@ -90,7 +90,7 @@ class FrameItem extends React.Component {
             data: res.data
           };
 
-          this.setState({ response, executed: true });
+          this.setState({ response, data: res.data, executed: true });
         } else {
           this.setState({
             successMessage: "Your query did not return any results",
@@ -141,7 +141,7 @@ class FrameItem extends React.Component {
     if (!executed) {
       content = <FrameLoading />;
     } else if (response) {
-      content = <FrameSession frame={frame} response={response} />;
+      content = <FrameSession frame={frame} response={response} data={data} />;
     } else if (successMessage) {
       content = (
         <FrameSuccess

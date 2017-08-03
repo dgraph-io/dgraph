@@ -131,7 +131,7 @@ class FrameSession extends React.Component {
   };
 
   render() {
-    const { frame, response } = this.props;
+    const { frame, response, data } = this.props;
     const {
       currentTab,
       selectedNode,
@@ -218,7 +218,7 @@ class FrameSession extends React.Component {
               : null}
 
             {currentTab === "code"
-              ? <FrameCodeTab query={frame.query} response={response.data} />
+              ? <FrameCodeTab query={frame.query} data={data} />
               : null}
 
             {currentTab === "graph" || currentTab === "tree"
