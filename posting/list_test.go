@@ -683,13 +683,13 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 		Label: "jchiu",
 	}
 
-	for i := 100; i < 300; i++ {
+	for i := 100; i < 400; i++ {
 		edge.ValueId = uint64(i)
 		addMutation(t, ol, edge, Set)
 	}
-	require.EqualValues(t, 200, ol.Length(0))
-	require.EqualValues(t, 100, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 300, ol.Length(0))
+	require.EqualValues(t, 200, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(400))
 
 	// Commit to database.
 	merged, err := ol.SyncIfDirty(false)
@@ -698,31 +698,31 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 
 	// Mutation layer starts afresh from here.
 	// Delete half of the edges.
-	for i := 100; i < 300; i += 2 {
+	for i := 100; i < 400; i += 2 {
 		edge.ValueId = uint64(i)
 		addMutation(t, ol, edge, Del)
 	}
-	require.EqualValues(t, 100, ol.Length(0))
-	require.EqualValues(t, 50, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 150, ol.Length(0))
+	require.EqualValues(t, 100, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(400))
 
 	// Try to delete half of the edges. Redundant deletes.
-	for i := 100; i < 300; i += 2 {
+	for i := 100; i < 400; i += 2 {
 		edge.ValueId = uint64(i)
 		addMutation(t, ol, edge, Del)
 	}
-	require.EqualValues(t, 100, ol.Length(0))
-	require.EqualValues(t, 50, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 150, ol.Length(0))
+	require.EqualValues(t, 100, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(400))
 
 	// Delete everything.
-	for i := 100; i < 300; i++ {
+	for i := 100; i < 400; i++ {
 		edge.ValueId = uint64(i)
 		addMutation(t, ol, edge, Del)
 	}
 	require.EqualValues(t, 0, ol.Length(0))
 	require.EqualValues(t, 0, ol.Length(199))
-	require.EqualValues(t, 0, ol.Length(300))
+	require.EqualValues(t, 0, ol.Length(400))
 
 	// Insert 1/4 of the edges.
 	for i := 100; i < 300; i += 4 {
