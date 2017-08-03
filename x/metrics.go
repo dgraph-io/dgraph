@@ -249,17 +249,17 @@ func init() {
 		"badger_gets_total": prometheus.NewDesc(
 			"badger_gets_total",
 			"badger_gets_total",
-			[]string{"dir"}, nil,
+			nil, nil,
 		),
 		"badger_puts_total": prometheus.NewDesc(
 			"badger_puts_total",
 			"badger_puts_total",
-			[]string{"dir"}, nil,
+			nil, nil,
 		),
 		"badger_memtable_gets_total": prometheus.NewDesc(
 			"badger_memtable_gets_total",
 			"badger_memtable_gets_total",
-			[]string{"dir"}, nil,
+			nil, nil,
 		),
 		"badger_lsm_size": prometheus.NewDesc(
 			"badger_lsm_size",
