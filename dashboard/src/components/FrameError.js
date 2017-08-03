@@ -23,7 +23,7 @@ class FrameError extends React.Component {
   };
 
   render() {
-    const { data: { message, response, query } } = this.props;
+    const { errorMessage, data, query } = this.props;
     const { currentTab } = this.state;
 
     return (
@@ -43,7 +43,6 @@ class FrameError extends React.Component {
                     <i className="icon fa fa-warning" />
                   </div>
                   <span className="menu-label">Error</span>
-
                 </a>
               </li>
               <li>
@@ -59,7 +58,6 @@ class FrameError extends React.Component {
                   </div>
 
                   <span className="menu-label">JSON</span>
-
                 </a>
               </li>
             </ul>
@@ -67,15 +65,14 @@ class FrameError extends React.Component {
 
           <div className="main">
             {currentTab === "error"
-              ? <FrameMessageTab message={message} />
+              ? <FrameMessageTab message={errorMessage} />
               : null}
             {currentTab === "response"
-              ? <FrameCodeTab query={query} response={response} />
+              ? <FrameCodeTab query={query} data={data} />
               : null}
 
             <div className="footer error-footer">
-              <i className="fa fa-warning error-mark" />
-              {" "}
+              <i className="fa fa-warning error-mark" />{" "}
               <span className="result-message">Error occurred</span>
             </div>
           </div>
