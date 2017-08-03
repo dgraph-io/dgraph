@@ -77,10 +77,14 @@ function executeQueryAndUpdateFrame(dispatch, { frameId, query }) {
           })
         );
       } else if (isNotEmpty(result.data)) {
+        // default regex for displaying labels for node
+        const regexStr = "Name";
+
         const { nodes, edges, labels, nodesIndex, edgesIndex } = processGraph(
           result.data,
           false,
-          query
+          query,
+          regexStr
         );
 
         dispatch(
@@ -100,6 +104,9 @@ function executeQueryAndUpdateFrame(dispatch, { frameId, query }) {
                 treeView: false,
                 data: result
               }
+            },
+            meta: {
+              regexStr
             }
           })
         );
