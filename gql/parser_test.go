@@ -210,7 +210,7 @@ func TestParseQueryWithXIDError(t *testing.T) {
       }
     }`
 	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
+	require.Error(t, err)
 	// TODO: What is this testing?  "alice-in-wonderland" having "-in" is the source of error here
 }
 
@@ -1981,7 +1981,7 @@ func TestParseVariablesError2(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected value for variable $c")
-	// TODO: Continue adding code to check for the right error message from this point onward.
+	// TODO: Complains about '\"'.
 }
 
 func TestParseVariablesError3(t *testing.T) {
@@ -1993,6 +1993,7 @@ func TestParseVariablesError3(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected type for variable $b")
+	// TODO: Complains about '\"'.
 }
 
 func TestParseVariablesError4(t *testing.T) {
@@ -2002,6 +2003,7 @@ func TestParseVariablesError4(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected type error")
+	// TODO: Complains about '\"'.
 }
 
 func TestParseVariablesError5(t *testing.T) {
@@ -2011,15 +2013,17 @@ func TestParseVariablesError5(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected error: Query with variables should be named")
+	require.Contains(t, err.Error(), "Variables can be defined only in named queries")
 }
 
 func TestParseVariablesError6(t *testing.T) {
 	query := `{
-		"query": "query ($a: int, $b: random){root(func: uid( 0x0a) {name(first: $b, after: $a)){english}}}",
+		"query": "query testQuery($a: int, $b: random){root(func: uid( 0x0a) {name(first: $b, after: $a)){english}}}",
 		"variables": {"$a": "6", "$b": "5" }
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected error: Type random not supported")
+	require.Contains(t, err.Error(), "Type random not supported")
 }
 
 func TestParseVariablesError7(t *testing.T) {
@@ -2031,6 +2035,7 @@ func TestParseVariablesError7(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected type for variable $d")
+	// TODO: Complains about '\"'
 }
 
 func TestParseVariablesiError8(t *testing.T) {
@@ -2039,7 +2044,8 @@ func TestParseVariablesiError8(t *testing.T) {
 		"variables": {"$b": "5" }
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err, "Variables type ending with ! cant have default value")
+	require.Error(t, err, "Variables type ending with ! can't have default value")
+	require.Contains(t, err.Error(), "Type ending with ! can't have default value")
 }
 
 func TestParseFilter_root(t *testing.T) {
@@ -2121,6 +2127,7 @@ func TestParseFilter_root_Error(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: Add Contains checks after this point.
 }
 
 func TestParseFilter_root_Error2(t *testing.T) {
