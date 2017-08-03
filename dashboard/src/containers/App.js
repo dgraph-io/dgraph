@@ -200,7 +200,11 @@ const mapStateToProps = state => ({
 
 const mapDispatchToProps = dispatch => ({
   _handleRunQuery(query, done = () => {}) {
-    return dispatch(runQuery(query)).then(done);
+    dispatch(runQuery(query));
+
+    // FIXME: this callback is a remnant from previous implementation in which
+    // `runQuery` returned a thunk. Remove if no longer relevant
+    done();
   },
   _handleDiscardAllFrames() {
     return dispatch(discardAllFrames());

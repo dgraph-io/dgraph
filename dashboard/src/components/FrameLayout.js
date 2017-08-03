@@ -196,7 +196,7 @@ const mapDispatchToProps = dispatch => ({
       updateFrame({
         id: frame.id,
         type: frame.type,
-        data: frame.data,
+        query: frame.query,
         meta: Object.assign({}, frame.meta, { collapsed: nextCollapseState })
       })
     );

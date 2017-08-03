@@ -1,50 +1,98 @@
 import React from "react";
 
-import {
-  FRAME_TYPE_SESSION,
-  FRAME_TYPE_SUCCESS,
-  FRAME_TYPE_ERROR,
-  FRAME_TYPE_LOADING
-} from "../lib/const";
 import FrameLayout from "./FrameLayout";
 import FrameSession from "./FrameSession";
 import FrameError from "./FrameError";
 import FrameSuccess from "./FrameSuccess";
 import FrameLoading from "./FrameLoading";
 
-// getFrameContent returns React Component for a given frame depending on its type
-function getFrameContent(frame) {
-  if (frame.type === FRAME_TYPE_SESSION) {
-    return <FrameSession frame={frame} />;
-  } else if (frame.type === FRAME_TYPE_ERROR) {
-    return <FrameError data={frame.data} />;
-  } else if (frame.type === FRAME_TYPE_SUCCESS) {
-    return <FrameSuccess data={frame.data} />;
-  } else if (frame.type === FRAME_TYPE_LOADING) {
-    return <FrameLoading />;
+import { executeQuery } from "../lib/helpers";
+import { processGraph } from "../lib/graph";
+
+class FrameItem extends React.Component {
+  constructor(props) {
+    super(props);
+
+    this.state = {
+      response: null,
+      error: null,
+      executed: false
+    };
   }
 
-  return <FrameError message={`Unknown frame type: ${frame.type}`} />;
+  componentDidMount() {
+    const { frame } = this.props;
+    const { query, meta } = frame;
+
+    if (!meta.collapsed) {
+      console.log("running");
+      this.executeFrameQuery(query);
+    }
+  }
+
+  executeFrameQuery = query => {
+    const { frame: { meta } } = this.props;
+    executeQuery(query)
+      .then(res => {
+        const regexStr = meta.regexStr || "Name";
+        const { nodes, edges, labels, nodesIndex, edgesIndex } = processGraph(
+          res.data,
+          false,
+          query,
+          regexStr
+        );
+
+        const response = {
+          plotAxis: labels,
+          allNodes: nodes,
+          allEdges: edges,
+          numNodes: nodes.length,
+          numEdges: edges.length,
+          nodes: nodes.slice(0, nodesIndex),
+          edges: edges.slice(0, edgesIndex),
+          treeView: false,
+          data: res.data
+        };
+
+        console.log(response);
+
+        this.setState({ response, executed: true });
+      })
+      .catch(error => {
+        console.log(error);
+        this.setState({ error, executed: true });
+      });
+  };
+
+  render() {
+    const {
+      frame,
+      onDiscardFrame,
+      onSelectQuery,
+      collapseAllFrames
+    } = this.props;
+    const { response, error, executed } = this.state;
+
+    let content;
+    if (!executed) {
+      content = <FrameLoading />;
+    } else if (response) {
+      content = <FrameSession frame={frame} response={response} />;
+    } else if (error) {
+      // content = <FrameError data={error} />;
+    }
+
+    return (
+      <FrameLayout
+        frame={frame}
+        onDiscardFrame={onDiscardFrame}
+        onSelectQuery={onSelectQuery}
+        collapseAllFrames={collapseAllFrames}
+      >
+        {content}
+      </FrameLayout>
+    );
+  }
 }
-
-const FrameItem = ({
-  frame,
-  onDiscardFrame,
-  onSelectQuery,
-  collapseAllFrames
-}) => {
-  const content = getFrameContent(frame);
-
-  return (
-    <FrameLayout
-      frame={frame}
-      onDiscardFrame={onDiscardFrame}
-      onSelectQuery={onSelectQuery}
-      collapseAllFrames={collapseAllFrames}
-    >
-      {content}
-    </FrameLayout>
-  );
-};
 
 export default FrameItem;

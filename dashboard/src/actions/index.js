@@ -168,36 +168,12 @@ function executeQueryAndUpdateFrame(dispatch, { frameId, query }) {
  * @params query {String}
  * @params [frameId] {String}
  *
- * If frameId is not given, It inserts a new frame. Otherwise, it updates the
- * frame with the id equal to frameId
- *
  */
-export const runQuery = (query, frameId) => {
+export const runQuery = query => {
   return dispatch => {
-    // Either insert a new frame or update
-    let targetFrameId;
-    if (frameId) {
-      dispatch(
-        updateFrame({
-          id: frameId,
-          type: FRAME_TYPE_LOADING,
-          data: {}
-        })
-      );
-      targetFrameId = frameId;
-    } else {
-      const frame = makeFrame({
-        type: FRAME_TYPE_LOADING,
-        data: {}
-      });
-      dispatch(receiveFrame(frame));
-      targetFrameId = frame.id;
-    }
+    const frame = makeFrame({ query });
 
-    return executeQueryAndUpdateFrame(dispatch, {
-      frameId: targetFrameId,
-      query
-    });
+    dispatch(receiveFrame(frame));
   };
 };
 
