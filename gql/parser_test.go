@@ -161,7 +161,7 @@ func TestParseQueryListPred_MultiVarError(t *testing.T) {
 func TestParseQueryWithNoVarValError(t *testing.T) {
 	query := `
 	{
-		me(func: uid( uid(), orderasc: val(n) )) {
+		me(func: uid(), orderasc: val(n)) {
 			name
 		}
 
@@ -173,8 +173,8 @@ func TestParseQueryWithNoVarValError(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	// TODO: What was this supposed to test?  Now dying on ':'.
+	require.NoError(t, err)
+	// TODO: What was this supposed to test?
 }
 
 func TestParseQueryAggChild(t *testing.T) {
