@@ -1,4 +1,5 @@
 import React from "react";
+import Raven from "raven-js";
 
 import FrameLayout from "./FrameLayout";
 import FrameSession from "./FrameSession";
@@ -97,8 +98,23 @@ class FrameItem extends React.Component {
         }
       })
       .catch(error => {
-        console.log(error);
-        this.setState({ error, executed: true });
+        // FIXME: make it DRY. but error.response.text() is async and error.message is sync
+
+        // if no response, it's a network error or client side runtime error
+        if (!error.response) {
+          // Capture client side error not query execution error from server
+          // FIXME: This captures 404
+          Raven.captureException(error);
+          this.setState({
+            errorMessage: `${error.message}: Could not connect to the server`,
+            executed: true,
+            data: error
+          });
+        } else {
+          error.response.text().then(text => {
+            this.setState({ errorMessage: text, executed: true });
+          });
+        }
       });
   };
 
