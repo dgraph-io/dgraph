@@ -271,7 +271,6 @@ func main() {
 		Size:          *numRdf,
 		Pending:       *concurrent,
 		PrintCounters: true,
-		Ctx:           ctx,
 	}
 	dgraphClient := client.NewDgraphClient(conns, bmOpts, *clientDir)
 	defer dgraphClient.Close()

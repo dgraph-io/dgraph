@@ -57,7 +57,7 @@ type BatchMutationOptions struct {
 	Pending       int
 	PrintCounters bool
 	MaxRetries    uint32
-	// User could pass a context so that we can stop retrying requests once context is done.
+	// User could pass a context so that we can stop retrying requests once context is done
 	Ctx context.Context
 }
 
@@ -232,7 +232,7 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 	x.Checkf(err, "Error while creating badger KV posting store")
 	if opts.Ctx == nil {
 		// If the user doesn't give a context we supply one because we check ctx.Done().
-		opts.Ctx, _ = context.WithCancel(context.Background())
+		opts.Ctx = context.TODO()
 	}
 	alloc := &allocator{
 		dc:     clients[0],
@@ -341,11 +341,10 @@ func (d *Dgraph) request(req *Req) error {
 	counter := atomic.AddUint64(&d.mutations, 1)
 	factor := time.Second
 	var retries uint32
-	ctx := d.opts.Ctx
 RETRY:
 	select {
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-d.opts.Ctx.Done():
+		return d.opts.Ctx.Err()
 	default:
 	}
 	_, err := d.dc[rand.Intn(len(d.dc))].Run(context.Background(), &req.gr)
