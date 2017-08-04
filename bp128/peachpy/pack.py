@@ -44,39 +44,40 @@ def pack(func_name, int_size, bit_size):
         in2  = XMMRegister()
         read(in1, inp, cin, seedp)
         cin += 16
+        in_regs = [in1, in2]
         start = True
 
         for _ in range(0, bit_size):
             while i <= int_size:
-                read(in2,inp, cin, seedp)
+                read(in_regs[1],inp,cin,seedp)
                 cin += 16
-                PSUBQ(in1, in2)
-                PSLLQ(in1, int_size-i)
+                PSUBQ(in_regs[0],in_regs[1])
+                PSLLQ(in_regs[0], int_size-i)
                 if start:
-                    MOVDQA(out_reg, in1)
+                    MOVDQA(out_reg, in_regs[0])
                     start = False
                 else:
-                    POR(out_reg, in1)
-                MOVDQA(in1,in2)
+                    POR(out_reg, in_regs[0])
                 i += bit_size
+                in_regs.reverse()
 
             if i-bit_size < int_size:
-                read(in2, inp, cin, seedp)
+                read(in_regs[1], inp, cin, seedp)
                 cin += 16
-                PSUBQ(in1, in2)
+                PSUBQ(in_regs[0],in_regs[1])
                 out_copy = XMMRegister()
-                MOVDQU(out_copy,in1)
+                MOVDQU(out_copy,in_regs[0])
 
-                PSRLQ(in1, i-int_size)
-                POR(out_reg, in1)
+                PSRLQ(in_regs[0], i-int_size)
+                POR(out_reg, in_regs[0])
                 MOVDQU([outp-cout], out_reg)
                 cout += 16
 
                 i -= int_size
                 PSLLQ(out_copy, int_size-i)
                 out_reg = out_copy
-                MOVDQA(in1,in2)
                 i += bit_size
+                in_regs.reverse()
 
             else:
                 MOVDQU([outp-cout], out_reg)
