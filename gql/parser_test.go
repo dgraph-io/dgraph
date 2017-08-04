@@ -2112,24 +2112,6 @@ func TestParseFilter_root2(t *testing.T) {
 	require.Nil(t, res.Query[0].Children[0].Filter)
 }
 
-func TestParseFilter_root_Error(t *testing.T) {
-	query := `
-	query {
-		me(func: uid(0x0a)) @filter(allofterms(name, "alice")) {
-			friends @filter() {
-				name @filter(namefilter(name, "a"))
-			}
-			gender @filter(eq(g, "a")),age @filter(neq(a, "b"))
-			hometown
-		}
-	}
-`
-	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	// TODO: This was an error, but I don't think it was supposed to be a lexing-on-@ error.  Now
-	// there's no error.
-}
-
 func TestParseFilter_root_Error2(t *testing.T) {
 	// filter-by-count only support first argument as function
 	query := `
