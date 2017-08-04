@@ -174,7 +174,7 @@ func TestParseQueryWithNoVarValError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	// TODO: What was this supposed to test?
+	// TODO: This used to error.  What was this supposed to test?
 }
 
 func TestParseQueryAggChild(t *testing.T) {
@@ -274,7 +274,6 @@ func TestParseQueryWithVarValAgg_Error1(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Empty () not allowed in math block")
-	// TODO: ^^ more like, exp() requires a parameter.  That's a weird way to fail at parsing.
 }
 
 func TestParseQueryWithVarValAgg_Error2(t *testing.T) {
@@ -321,7 +320,6 @@ func TestParseQueryWithVarValAgg_Error3(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Empty () not allowed in math block")
-	// TODO: ^^ Possibly a bad way to fail at parsing.
 }
 func TestParseQueryWithVarValAggNested(t *testing.T) {
 	query := `
@@ -1242,7 +1240,7 @@ func TestParse_error2(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected Left round brackets") // TODO capitalization
+	require.Contains(t, err.Error(), "Expected Left round brackets")
 	require.Contains(t, err.Error(), "\"{\"")
 
 }
@@ -2116,7 +2114,7 @@ func TestParseFilter_root2(t *testing.T) {
 func TestParseFilter_root_Error(t *testing.T) {
 	query := `
 	query {
-		me(func: uid(0x0a) @filter(allofterms(name, "alice")) {
+		me(func: uid(0x0a)) @filter(allofterms(name, "alice")) {
 			friends @filter() {
 				name @filter(namefilter(name, "a"))
 			}
@@ -2126,8 +2124,9 @@ func TestParseFilter_root_Error(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	// TODO: Add Contains checks after this point.
+	require.NoError(t, err)
+	// TODO: This was an error, but I don't think it was supposed to be a lexing-on-@ error.  Now
+	// there's no error.
 }
 
 func TestParseFilter_root_Error2(t *testing.T) {
@@ -2464,7 +2463,8 @@ func TestParseGeneratorError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: Says "expecting a colon", I don't know what the error really is.  Should be me(func: ...) I guess.
+	// TODO: Says "expecting a colon".  Should be me(func: ...).  Then it complains about "name"
+	// being quoted.  What's this supposed to test?
 }
 
 func TestParseCountAsFuncMultiple(t *testing.T) {
@@ -2545,7 +2545,6 @@ func TestParseCountError2(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Predicate name cannot be empty")
-	// TODO: that's a bad error message
 }
 
 func TestParseCheckPwd(t *testing.T) {
@@ -2875,7 +2874,7 @@ func TestLangsInvalid6(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: We get 'Expected 3 periods ("..."), got 2.', which is bonkers.
+	// TODO: We get 'Expected 3 periods ("..."), got 2.'.
 }
 
 func TestLangsInvalid7(t *testing.T) {
@@ -2889,7 +2888,7 @@ func TestLangsInvalid7(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: We get 'Expected 3 periods ("..."), got 2.', which is bonkers.
+	// TODO: We get 'Expected 3 periods ("..."), got 2.'.
 }
 
 func TestLangsFilter(t *testing.T) {
@@ -2949,8 +2948,6 @@ func TestLangsFilter_error2(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Expected arg after func [alloftext]")
 	require.Contains(t, err.Error(), "','")
-	// TODO: That's a bad error message
-
 }
 
 func TestLangsFunction(t *testing.T) {
