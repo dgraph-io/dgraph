@@ -501,7 +501,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	// For string matching functions, check the language.
 	if (srcFn.fnType == StandardFn || srcFn.fnType == HasFn ||
 		srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn) &&
-		len(srcFn.lang) > 0 {
+		srcFn.isStringFn && srcFn.lang != "." {
 		filterStringFunction(funcArgs{q, gid, srcFn, out})
 	}
 
@@ -639,14 +639,17 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 			default:
 			}
 			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
-				if len(arg.srcFn.lang) > 0 {
-					langs := []string{arg.srcFn.lang}
-					sv, err := fetchValue(uid, attr, langs, typ)
-					if sv.Value == nil || err != nil {
-						return false
+				switch arg.srcFn.lang {
+				case "":
+					pl := posting.Get(x.DataKey(attr, uid))
+					sv, err := pl.Value()
+					if err == nil {
+						dst, err := types.Convert(sv, typ)
+						return err == nil &&
+							types.CompareVals(arg.q.SrcFunc[0], dst, arg.srcFn.eqTokens[row])
 					}
-					return types.CompareVals(arg.q.SrcFunc[0], sv, arg.srcFn.eqTokens[row])
-				} else {
+					return false
+				case ".":
 					pl := posting.Get(x.DataKey(attr, uid))
 					values, _ := pl.AllValues()
 					for _, sv := range values {
@@ -657,6 +660,13 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 						}
 					}
 					return false
+				default:
+					langs := []string{arg.srcFn.lang}
+					sv, err := fetchValue(uid, attr, langs, typ)
+					if sv.Value == nil || err != nil {
+						return false
+					}
+					return types.CompareVals(arg.q.SrcFunc[0], sv, arg.srcFn.eqTokens[row])
 				}
 			})
 		}
@@ -697,7 +707,13 @@ func filterStringFunction(arg funcArgs) {
 		key := x.DataKey(attr, uid)
 		pl := posting.GetOrCreate(key, arg.gid)
 
-		val, err := pl.ValueForTag(arg.srcFn.lang)
+		var val types.Val
+		var err error
+		if arg.srcFn.lang == "" {
+			val, err = pl.Value()
+		} else {
+			val, err = pl.ValueForTag(arg.srcFn.lang)
+		}
 		if err != nil {
 			continue
 		}
@@ -726,6 +742,7 @@ func filterStringFunction(arg funcArgs) {
 		filtered = matchStrings(filtered, values, filter)
 	case CompareAttrFn:
 		filter.ineqValue = arg.srcFn.ineqValue
+		filter.eqVals = arg.srcFn.eqTokens
 		filter.match = ineqMatch
 		filtered = matchStrings(uids, values, filter)
 	}
@@ -765,6 +782,7 @@ type functionContext struct {
 	fnType         FuncType
 	regex          *cregexp.Regexp
 	isFuncAtRoot   bool
+	isStringFn     bool
 }
 
 const (
@@ -795,6 +813,11 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 	attr := q.Attr
 	fc := &functionContext{fnType: fnType, fname: f}
 	var err error
+
+	t, err := schema.State().TypeOf(attr)
+	if err == nil && fnType != NotAFunction && t.Name() == types.StringID.Name() {
+		fc.isStringFn = true
+	}
 
 	switch fnType {
 	case NotAFunction:
@@ -841,6 +864,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 			}
 			fc.tokens = append(fc.tokens, tokens...)
 			fc.eqTokens = append(fc.eqTokens, fc.ineqValue)
+
 		}
 
 		// Number of index keys is more than no. of uids to filter, so its better to fetch data keys

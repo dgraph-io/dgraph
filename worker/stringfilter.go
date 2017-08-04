@@ -35,6 +35,7 @@ type stringFilter struct {
 	tokens    []string
 	match     matchFn
 	ineqValue types.Val
+	eqVals    []types.Val
 }
 
 func matchStrings(uids *protos.List, values []types.Val, filter stringFilter) *protos.List {
@@ -80,7 +81,16 @@ func defaultMatch(value types.Val, filter stringFilter) bool {
 }
 
 func ineqMatch(value types.Val, filter stringFilter) bool {
-	return types.CompareVals(filter.funcName, value, filter.ineqValue)
+	if len(filter.eqVals) > 0 {
+		for _, v := range filter.eqVals {
+			if types.CompareVals(filter.funcName, value, v) {
+				return true
+			}
+		}
+		return false
+	} else {
+		return types.CompareVals(filter.funcName, value, filter.ineqValue)
+	}
 }
 
 func tokenizeValue(value types.Val, filter stringFilter) []string {

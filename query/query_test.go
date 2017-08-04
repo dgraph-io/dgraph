@@ -6686,22 +6686,31 @@ func TestLangBug1295(t *testing.T) {
 	// while index contains tokens generated with French tokenizer
 
 	functions := []string{"eq", "allofterms" /*, "alloftext" */}
+	langs := []string{"", "@."}
 
-	for _, f := range functions {
-		t.Run(f, func(t *testing.T) {
-			query := `
+	for _, l := range langs {
+		for _, f := range functions {
+			t.Run(f+l, func(t *testing.T) {
+				query := `
 			{
-				q(func:` + f + `(royal_title, "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi")) {
+				q(func:` + f + "(royal_title" + l + `, "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi")) {
 					royal_title@en 
 				}
 			}`
 
-			json, err := processToFastJsonReq(t, query)
-			require.NoError(t, err)
-			require.JSONEq(t,
-				`{"data": {"q":[{"royal_title@en":"Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith"}]}}`,
-				json)
-		})
+				json, err := processToFastJsonReq(t, query)
+				require.NoError(t, err)
+				if l == "" {
+					require.JSONEq(t,
+						`{"data": {}}`,
+						json)
+				} else {
+					require.JSONEq(t,
+						`{"data": {"q":[{"royal_title@en":"Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith"}]}}`,
+						json)
+				}
+			})
+		}
 	}
 
 }
