@@ -7,7 +7,7 @@ import FrameError from "./FrameError";
 import FrameSuccess from "./FrameSuccess";
 import FrameLoading from "./FrameLoading";
 
-import { executeQuery, isNotEmpty } from "../lib/helpers";
+import { executeQuery, isNotEmpty, getSharedQuery } from "../lib/helpers";
 import { processGraph } from "../lib/graph";
 
 class FrameItem extends React.Component {
@@ -29,10 +29,12 @@ class FrameItem extends React.Component {
 
   componentDidMount() {
     const { frame } = this.props;
-    const { query, meta } = frame;
+    const { query, share, meta } = frame;
 
-    if (!meta.collapsed) {
+    if (!meta.collapsed && query && query.length > 0) {
       this.executeFrameQuery(query);
+    } else if (share.length > 0 && !query) {
+      this.getAndExecuteSharedQuery(share);
     }
   }
 
@@ -44,6 +46,33 @@ class FrameItem extends React.Component {
       errorMessage: null,
       successMessage: null
     });
+  };
+
+  getAndExecuteSharedQuery = shareId => {
+    return getSharedQuery(shareId)
+      .then(query => {
+        if (!query) {
+          this.setState({
+            errorMessage: `No query found for the shareId: ${shareId}`,
+            executed: true
+          });
+        } else {
+          this.executeFrameQuery(query);
+          const { frame, updateFrame } = this.props;
+          updateFrame({
+            query: query,
+            id: frame.id
+          })();
+        }
+      })
+      .catch(error => {
+        Raven.captureException(error);
+        this.setState({
+          executed: true,
+          data: error,
+          errorMessage: error.message
+        });
+      });
   };
 
   executeFrameQuery = query => {

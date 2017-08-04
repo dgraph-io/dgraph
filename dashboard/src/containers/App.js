@@ -14,7 +14,8 @@ import {
 import {
   discardFrame,
   discardAllFrames,
-  toggleCollapseFrame
+  toggleCollapseFrame,
+  updateFrame
 } from "../actions/frames";
 import { updateQuery } from "../actions/query";
 
@@ -137,9 +138,7 @@ class App extends React.Component {
   onRunSharedQuery = shareId => {
     const { handleRunSharedQuery } = this.props;
 
-    handleRunSharedQuery(shareId).catch(e => {
-      console.log(e);
-    });
+    handleRunSharedQuery(shareId);
   };
 
   render = () => {
@@ -148,7 +147,8 @@ class App extends React.Component {
       handleDiscardFrame,
       handleUpdateConnectedState,
       frames,
-      connected
+      connected,
+      updateFrame
     } = this.props;
 
     const canDiscardAll = frames.length > 0;
@@ -192,6 +192,7 @@ class App extends React.Component {
                   onSelectQuery={this.handleSelectQuery}
                   onUpdateConnectedState={handleUpdateConnectedState}
                   collapseAllFrames={this.collapseAllFrames}
+                  updateFrame={updateFrame}
                 />
               </div>
             </div>
@@ -235,6 +236,9 @@ const mapDispatchToProps = dispatch => ({
   },
   _handleUpdateQuery(query) {
     dispatch(updateQuery(query));
+  },
+  updateFrame(frame) {
+    dispatch(updateFrame(frame));
   }
 });
 

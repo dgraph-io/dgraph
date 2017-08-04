@@ -3,14 +3,15 @@ export const DISCARD_FRAME = "frames/DISCARD_FRAME";
 export const DISCARD_ALL_FRAMES = "frames/DISCARD_ALL_FRAMES";
 export const UPDATE_FRAME = "frames/UPDATE_FRAME";
 
-export function receiveFrame({ id, type, meta, query }) {
+export function receiveFrame({ id, type, meta, query, share }) {
   return {
     type: RECEIVE_FRAME,
     frame: {
       id,
       type,
       meta,
-      query
+      query,
+      share
     }
   };
 }
@@ -30,14 +31,15 @@ export function discardAllFrames() {
 
 // IDEA: the schema for frame object is getting complex. maybe use class optionally
 // with flow?
-export function updateFrame({ id, type, meta, data }) {
+export function updateFrame({ id, type, meta, data, query }) {
   return {
     type: UPDATE_FRAME,
     id,
     frame: {
       type,
       meta: meta || {}, // Default argument for meta
-      data
+      data,
+      query
     }
   };
 }

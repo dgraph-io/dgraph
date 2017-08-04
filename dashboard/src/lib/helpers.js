@@ -1,5 +1,6 @@
 import uuid from "uuid";
 import _ from "lodash";
+import Raven from "raven-js";
 
 export function checkStatus(response) {
   if (response.status >= 200 && response.status < 300) {
@@ -60,8 +61,7 @@ export function isNotEmpty(response) {
 }
 
 export function sortStrings(a, b) {
-  var nameA = a.toLowerCase(),
-    nameB = b.toLowerCase();
+  var nameA = a.toLowerCase(), nameB = b.toLowerCase();
   if (
     nameA < nameB //sort string ascending
   )
@@ -121,7 +121,8 @@ export function readCookie(name) {
   let ca = document.cookie.split(";");
   for (let i = 0; i < ca.length; i++) {
     var c = ca[i];
-    while (c.charAt(0) === " ") c = c.substring(1, c.length);
+    while (c.charAt(0) === " ")
+      c = c.substring(1, c.length);
     if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
   }
 
@@ -154,11 +155,12 @@ export function childNodes(edges) {
  * @params type {String} - type of the frame as defined in the const
  * @params data {Objecg} - data for the frame
  */
-export function makeFrame({ query }) {
+export function makeFrame({ query, share }) {
   return {
     id: uuid(),
     meta: { collapsed: false },
-    query
+    query,
+    share
   };
 }
 
@@ -208,3 +210,52 @@ export function executeQuery(query) {
     .then(checkStatus)
     .then(response => response.json());
 }
+
+/**
+ * getSharedQuery returns a promise that resolves with the query string corresponding
+ * to the given shareId. Concretely, it fetches from the database the query
+ * stored with the shareId. If not found, the promise resolves with an empty string.
+ *
+ * @params shareId {String}
+ * @returns {Promise}
+ *
+ */
+export const getSharedQuery = shareId => {
+  return timeout(
+    6000,
+    fetch(getEndpoint("query"), {
+      method: "POST",
+      mode: "cors",
+      headers: {
+        Accept: "application/json"
+      },
+      body: `{
+          query(func: uid(${shareId})) {
+              _share_
+          }
+      }`
+    })
+  )
+    .then(checkStatus)
+    .then(response => response.json())
+    .then(function(result) {
+      if (
+        result.data &&
+        result.data.query &&
+        result.data.query.length > 0 &&
+        result.data.query[0]._share_
+      ) {
+        const query = decodeURI(result.data.query[0]._share_);
+        return query;
+      } else {
+        return "";
+      }
+    })
+    .catch(function(error) {
+      Raven.captureException(error);
+
+      console.log(
+        `Got error while getting query for id: ${shareId}, err: ${error.message}`
+      );
+    });
+};

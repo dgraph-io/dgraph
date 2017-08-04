@@ -9,7 +9,8 @@ const FrameList = ({
   onDiscardFrame,
   onSelectQuery,
   onUpdateConnectedState,
-  collapseAllFrames
+  collapseAllFrames,
+  updateFrame
 }) => {
   return (
     <CSSTransitionGroup
@@ -28,6 +29,7 @@ const FrameList = ({
             onSelectQuery={onSelectQuery}
             onUpdateConnectedState={onUpdateConnectedState}
             collapseAllFrames={collapseAllFrames}
+            updateFrame={updateFrame}
           />
         );
       })}
