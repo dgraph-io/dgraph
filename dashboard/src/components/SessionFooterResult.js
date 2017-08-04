@@ -31,11 +31,11 @@ const SessionFooterResult = ({
       </div>
       <div className="col-12 col-sm-4">
         <div className="latency stats">
-          {response.data.data && response.data.data.server_latency
+          {response.data && response.data.server_latency
             ? <div className="stat">
                 Server latency:{" "}
                 <span className="value">
-                  {response.data.data.server_latency.total}
+                  {response.data.server_latency.total}
                 </span>
               </div>
             : null}

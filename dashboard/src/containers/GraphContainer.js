@@ -221,7 +221,7 @@ class GraphContainer extends Component {
           // We don't want to delete the clicked node from the Graph.
           _.remove(delNodes, clickedNodeUid);
 
-          console.log("Removed", data.nodes.remove(delNodes));
+          data.nodes.remove(delNodes);
           data.edges.remove(delEdges);
         } else {
           multiLevelExpand(clickedNodeUid);

@@ -12,7 +12,7 @@ class EditorPanel extends React.Component {
       canDiscardAll,
       query,
       onRunQuery,
-      handleUpdateQuery,
+      onUpdateQuery,
       onClearQuery,
       onDiscardAllFrames,
       saveCodeMirrorInstance,
@@ -87,7 +87,7 @@ class EditorPanel extends React.Component {
         </div>
 
         <Editor
-          onUpdateQuery={handleUpdateQuery}
+          onUpdateQuery={onUpdateQuery}
           onRunQuery={onRunQuery}
           query={query}
           saveCodeMirrorInstance={saveCodeMirrorInstance}
