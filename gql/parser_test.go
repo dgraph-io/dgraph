@@ -3821,3 +3821,15 @@ func TestFilterVarErr(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 }
+
+func TestEqUidFunctionErr(t *testing.T) {
+	query := `
+		{
+			me(func: eq(path_id, uid(x))) {
+				name
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+}

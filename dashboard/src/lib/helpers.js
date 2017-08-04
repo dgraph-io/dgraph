@@ -60,7 +60,8 @@ export function isNotEmpty(response) {
 }
 
 export function sortStrings(a, b) {
-  var nameA = a.toLowerCase(), nameB = b.toLowerCase();
+  var nameA = a.toLowerCase(),
+    nameB = b.toLowerCase();
   if (
     nameA < nameB //sort string ascending
   )
@@ -120,8 +121,7 @@ export function readCookie(name) {
   let ca = document.cookie.split(";");
   for (let i = 0; i < ca.length; i++) {
     var c = ca[i];
-    while (c.charAt(0) === " ")
-      c = c.substring(1, c.length);
+    while (c.charAt(0) === " ") c = c.substring(1, c.length);
     if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
   }
 
@@ -154,11 +154,11 @@ export function childNodes(edges) {
  * @params type {String} - type of the frame as defined in the const
  * @params data {Objecg} - data for the frame
  */
-export function makeFrame({ type, data }) {
+export function makeFrame({ query }) {
   return {
     id: uuid(),
-    type,
-    data
+    meta: { collapsed: false },
+    query
   };
 }
 
@@ -191,4 +191,20 @@ export function collapseQuery(query) {
   }
 
   return ret;
+}
+
+export function executeQuery(query) {
+  const endpoint = getEndpoint("query", { debug: true });
+
+  return fetch(endpoint, {
+    method: "POST",
+    mode: "cors",
+    cache: "no-cache",
+    headers: {
+      "Content-Type": "text/plain"
+    },
+    body: query
+  })
+    .then(checkStatus)
+    .then(response => response.json());
 }

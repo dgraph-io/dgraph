@@ -3,7 +3,6 @@ import React from "react";
 import GraphContainer from "../containers/GraphContainer";
 
 const SessionGraphTab = ({
-  session,
   active,
   onBeforeGraphRender,
   onGraphRendered,
@@ -12,12 +11,13 @@ const SessionGraphTab = ({
   selectedNode,
   hoveredNode,
   nodesDataset,
-  edgesDataset
+  edgesDataset,
+  response
 }) => {
   return (
     <div className="content-container">
       <GraphContainer
-        response={session.response}
+        response={response}
         onBeforeRender={onBeforeGraphRender}
         onRendered={onGraphRendered}
         onNodeSelected={onNodeSelected}

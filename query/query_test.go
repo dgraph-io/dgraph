@@ -1600,7 +1600,7 @@ func TestVarInIneq2(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			var(func: uid( 1)) {
+			var(func: uid(1)) {
 				friend {
 					a as age
 				}

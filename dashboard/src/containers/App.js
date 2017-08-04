@@ -4,14 +4,19 @@ import { connect } from "react-redux";
 import Sidebar from "../components/Sidebar";
 import EditorPanel from "../components/EditorPanel";
 import FrameList from "../components/FrameList";
+
+import { createCookie, readCookie, eraseCookie } from "../lib/helpers";
 import { runQuery, runQueryByShareId } from "../actions";
-import { refreshConnectedState } from "../actions/connection";
+import {
+  refreshConnectedState,
+  updateConnectedState
+} from "../actions/connection";
 import {
   discardFrame,
   discardAllFrames,
   toggleCollapseFrame
 } from "../actions/frames";
-import { createCookie, readCookie, eraseCookie } from "../lib/helpers";
+import { updateQuery } from "../actions/query";
 
 import "../assets/css/App.css";
 
@@ -20,8 +25,7 @@ class App extends React.Component {
     super(props);
 
     this.state = {
-      query: "",
-      isQueryDirty: false,
+      // IDEA: Make this state a part of <Sidebar /> to avoid rerendering whole <App />
       currentSidebarMenu: "",
       // queryExecutionCounter is used to determine when the NPS score survey
       // should be shown
@@ -71,9 +75,10 @@ class App extends React.Component {
   };
 
   handleUpdateQuery = (val, done = () => {}) => {
-    const isQueryDirty = val.trim() !== "";
+    const { _handleUpdateQuery } = this.props;
 
-    this.setState({ query: val, isQueryDirty }, done);
+    _handleUpdateQuery(val);
+    done();
   };
 
   // focusCodemirror sets focus on codemirror and moves the cursor to the end
@@ -111,13 +116,13 @@ class App extends React.Component {
     _handleRunQuery(query, () => {
       const { queryExecutionCounter } = this.state;
 
-      if (queryExecutionCounter === 5) {
+      if (queryExecutionCounter === 7) {
         if (!readCookie("nps-survery-done")) {
           /* global delighted */
           delighted.survey();
           createCookie("nps-survery-done", true, 180);
         }
-      } else {
+      } else if (queryExecutionCounter < 7) {
         this.setState({ queryExecutionCounter: queryExecutionCounter + 1 });
       }
     });
@@ -138,8 +143,13 @@ class App extends React.Component {
   };
 
   render = () => {
-    const { query, isQueryDirty, currentSidebarMenu } = this.state;
-    const { handleDiscardFrame, frames, connected } = this.props;
+    const { currentSidebarMenu } = this.state;
+    const {
+      handleDiscardFrame,
+      handleUpdateConnectedState,
+      frames,
+      connected
+    } = this.props;
 
     const canDiscardAll = frames.length > 0;
 
@@ -165,15 +175,13 @@ class App extends React.Component {
             <div className="row justify-content-md-center">
               <div className="col-sm-12">
                 <EditorPanel
-                  query={query}
-                  isQueryDirty={isQueryDirty}
                   canDiscardAll={canDiscardAll}
                   onDiscardAllFrames={this.handleDiscardAllFrames}
                   onRunQuery={this.handleRunQuery}
-                  onUpdateQuery={this.handleUpdateQuery}
                   onClearQuery={this.handleClearQuery}
                   saveCodeMirrorInstance={this.saveCodeMirrorInstance}
                   connected={connected}
+                  onUpdateQuery={this.handleUpdateQuery}
                 />
               </div>
 
@@ -182,6 +190,7 @@ class App extends React.Component {
                   frames={frames}
                   onDiscardFrame={handleDiscardFrame}
                   onSelectQuery={this.handleSelectQuery}
+                  onUpdateConnectedState={handleUpdateConnectedState}
                   collapseAllFrames={this.collapseAllFrames}
                 />
               </div>
@@ -200,7 +209,11 @@ const mapStateToProps = state => ({
 
 const mapDispatchToProps = dispatch => ({
   _handleRunQuery(query, done = () => {}) {
-    return dispatch(runQuery(query)).then(done);
+    dispatch(runQuery(query));
+
+    // FIXME: this callback is a remnant from previous implementation in which
+    // `runQuery` returned a thunk. Remove if no longer relevant
+    done();
   },
   _handleDiscardAllFrames() {
     return dispatch(discardAllFrames());
@@ -216,6 +229,12 @@ const mapDispatchToProps = dispatch => ({
   },
   handleCollapseFrame(frame) {
     dispatch(toggleCollapseFrame(frame, true));
+  },
+  handleUpdateConnectedState(nextState) {
+    dispatch(updateConnectedState(nextState));
+  },
+  _handleUpdateQuery(query) {
+    dispatch(updateQuery(query));
   }
 });
 

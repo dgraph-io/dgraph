@@ -5,7 +5,7 @@ import SessionFooterProperties from "./SessionFooterProperties";
 import SessionFooterConfig from "./SessionFooterConfig";
 
 const SessionFooter = ({
-  session,
+  response,
   currentTab,
   graphRenderTime,
   treeRenderTime,
@@ -23,7 +23,7 @@ const SessionFooter = ({
     child = (
       <SessionFooterResult
         currentTab={currentTab}
-        session={session}
+        response={response}
         graphRenderTime={graphRenderTime}
         treeRenderTime={treeRenderTime}
       />

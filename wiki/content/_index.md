@@ -95,6 +95,25 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
   </div>
 </section>
 
+## Contribute
+<section class="toc">
+  <div class="container">
+    <div class="row row-no-padding">
+      <div class="col-12 col-sm-6">
+        <div class="section-item">
+          <div class="section-name">
+            <a href="{{< relref "contribute/index.md">}}">
+              Contribute to Dgraph
+            </a>
+          </div>
+          <p class="section-desc">
+            Get started with contributing fixes and enhancements to Dgraph and related software.
+          </p>
+        </div>
+      </div>
+      </div>
+  </div>
+</section>
 
 ## Our Community
 

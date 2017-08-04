@@ -8,6 +8,7 @@ const FrameList = ({
   frames,
   onDiscardFrame,
   onSelectQuery,
+  onUpdateConnectedState,
   collapseAllFrames
 }) => {
   return (
@@ -25,6 +26,7 @@ const FrameList = ({
             frame={frame}
             onDiscardFrame={onDiscardFrame}
             onSelectQuery={onSelectQuery}
+            onUpdateConnectedState={onUpdateConnectedState}
             collapseAllFrames={collapseAllFrames}
           />
         );

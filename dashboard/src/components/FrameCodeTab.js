@@ -1,15 +1,13 @@
-import React from 'react';
+import React from "react";
 
-import Highlight from './Highlight';
+import Highlight from "./Highlight";
 
-const FrameCodeTab = ({ query, response }) => {
+const FrameCodeTab = ({ query, data }) => {
   return (
     <div className="content-container">
       <div className="code-container">
         <div className="code-header">
-          <span className="label label-info">
-            Query
-          </span>
+          <span className="label label-info">Query</span>
         </div>
         <Highlight preClass="content">
           {query}
@@ -18,12 +16,10 @@ const FrameCodeTab = ({ query, response }) => {
 
       <div className="code-container">
         <div className="code-header">
-          <span className="label label-info">
-            Response
-          </span>
+          <span className="label label-info">Response</span>
         </div>
         <Highlight preClass="content">
-          {JSON.stringify(response, null, 2)}
+          {JSON.stringify(data, null, 2)}
         </Highlight>
       </div>
     </div>

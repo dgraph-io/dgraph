@@ -26,7 +26,9 @@ export default class AppProvider extends React.Component {
   constructor() {
     super();
     this.state = {
-      rehydrated: false
+      rehydrated: false,
+      // ready is a boolean denoting if the app is ready to render
+      ready: false
     };
   }
 
@@ -41,27 +43,22 @@ export default class AppProvider extends React.Component {
     const currentState = store.getState();
     const frameItems = currentState.frames.items;
 
-    // Collapse all except the first one to avoid slow render
-    const firstFrame = frameItems[0];
-    store.dispatch(toggleCollapseFrame(firstFrame, false));
-
-    for (let i = 1; i < frameItems.length; i++) {
+    // Collapse all frames to avoid slow render
+    for (let i = 0; i < frameItems.length; i++) {
       const targetFrame = frameItems[i];
 
       store.dispatch(toggleCollapseFrame(targetFrame, true));
     }
+
+    this.setState({ ready: true });
   };
 
   render() {
     const { component } = this.props;
-    const { rehydrated } = this.state;
+    const { rehydrated, ready } = this.state;
 
-    if (!rehydrated) {
-      return (
-        <div>
-          Loading
-        </div>
-      );
+    if (!rehydrated || !ready) {
+      return <div>Loading</div>;
     }
 
     return (

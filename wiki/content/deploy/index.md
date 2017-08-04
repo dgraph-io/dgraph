@@ -110,8 +110,8 @@ grpc_port: 9080
 # Port used by worker for internal communication.
 workerport: 12345
 
-# If RAM usage exceeds this, we stop the world, and flush our buffers.
-stw_ram_mb: 4096
+# Estimated memory the process can take. Actual usage would be slightly more
+memory_mb: 4096
 
 # The ratio of queries to trace.
 trace: 0.33

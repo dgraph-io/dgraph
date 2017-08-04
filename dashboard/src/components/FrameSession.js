@@ -1,6 +1,7 @@
 import React from "react";
 import classnames from "classnames";
 import vis from "vis";
+import { connect } from "react-redux";
 
 import SessionGraphTab from "./SessionGraphTab";
 import FrameCodeTab from "./FrameCodeTab";
@@ -9,11 +10,14 @@ import SessionFooter from "./SessionFooter";
 import EntitySelector from "./EntitySelector";
 import GraphIcon from "./GraphIcon";
 import TreeIcon from "./TreeIcon";
+
 import { getNodeLabel, shortenName } from "../lib/graph";
+import { updateFrame } from "../actions/frames";
 
 class FrameSession extends React.Component {
   constructor(props) {
     super(props);
+    const { response } = props;
 
     this.state = {
       // tabs: query, graph, tree, json
@@ -25,17 +29,16 @@ class FrameSession extends React.Component {
       selectedNode: null,
       hoveredNode: null,
       isTreePartial: false,
-      configuringNodeType: null,
-      labelRegex: ""
+      configuringNodeType: null
     };
 
-    const { session: { response } } = props;
     this.nodes = new vis.DataSet(response.nodes);
     this.edges = new vis.DataSet(response.edges);
   }
 
   handleUpdateLabelRegex = val => {
-    this.setState({ labelRegex: val });
+    const { frame, changeRegexStr } = this.props;
+    changeRegexStr(frame, val);
   };
 
   handleBeforeGraphRender = () => {
@@ -110,8 +113,8 @@ class FrameSession extends React.Component {
   };
 
   handleUpdateLabels = () => {
-    const { labelRegex } = this.state;
-    const re = new RegExp(labelRegex);
+    const { frame: { meta: { regexStr } } } = this.props;
+    const re = new RegExp(regexStr, "i");
 
     const allNodes = this.nodes.get();
     const updatedNodes = allNodes.map(node => {
@@ -128,14 +131,13 @@ class FrameSession extends React.Component {
   };
 
   render() {
-    const { session } = this.props;
+    const { frame, response, data } = this.props;
     const {
       currentTab,
       selectedNode,
       hoveredNode,
       configuringNodeType,
-      isConfiguringLabel,
-      labelRegex
+      isConfiguringLabel
     } = this.state;
 
     return (
@@ -154,9 +156,7 @@ class FrameSession extends React.Component {
                   <div className="icon-container">
                     <GraphIcon />
                   </div>
-                  <span className="menu-label">
-                    Graph
-                  </span>
+                  <span className="menu-label">Graph</span>
                 </a>
               </li>
               <li>
@@ -171,7 +171,6 @@ class FrameSession extends React.Component {
                     <TreeIcon />
                   </div>
                   <span className="menu-label">Tree</span>
-
                 </a>
               </li>
               <li>
@@ -187,7 +186,6 @@ class FrameSession extends React.Component {
                   </div>
 
                   <span className="menu-label">JSON</span>
-
                 </a>
               </li>
             </ul>
@@ -196,7 +194,7 @@ class FrameSession extends React.Component {
           <div className="main">
             {currentTab === "graph"
               ? <SessionGraphTab
-                  session={session}
+                  response={response}
                   onBeforeGraphRender={this.handleBeforeGraphRender}
                   onGraphRendered={this.handleGraphRendered}
                   onNodeSelected={this.handleNodeSelected}
@@ -208,7 +206,7 @@ class FrameSession extends React.Component {
 
             {currentTab === "tree"
               ? <SessionTreeTab
-                  session={session}
+                  response={response}
                   onBeforeTreeRender={this.handleBeforeTreeRender}
                   onTreeRendered={this.handleTreeRendered}
                   onNodeSelected={this.handleNodeSelected}
@@ -220,24 +218,21 @@ class FrameSession extends React.Component {
               : null}
 
             {currentTab === "code"
-              ? <FrameCodeTab
-                  query={session.query}
-                  response={session.response.data}
-                />
+              ? <FrameCodeTab query={frame.query} data={data} />
               : null}
 
             {currentTab === "graph" || currentTab === "tree"
               ? <EntitySelector
-                  response={session.response}
+                  response={response}
                   onInitNodeTypeConfig={this.handleInitNodeTypeConfig}
-                  labelRegex={labelRegex}
+                  labelRegexStr={frame.meta.regexStr}
                   onUpdateLabelRegex={this.handleUpdateLabelRegex}
                   onUpdateLabels={this.handleUpdateLabels}
                 />
               : null}
 
             <SessionFooter
-              session={session}
+              response={response}
               currentTab={currentTab}
               selectedNode={selectedNode}
               hoveredNode={hoveredNode}
@@ -253,4 +248,21 @@ class FrameSession extends React.Component {
   }
 }
 
-export default FrameSession;
+function mapStateToProps() {
+  return {};
+}
+
+const mapDispatchToProps = dispatch => ({
+  changeRegexStr(frame, regexStr) {
+    return dispatch(
+      updateFrame({
+        id: frame.id,
+        type: frame.type,
+        data: frame.data,
+        meta: Object.assign({}, frame.meta, { regexStr })
+      })
+    );
+  }
+});
+
+export default connect(mapStateToProps, mapDispatchToProps)(FrameSession);
