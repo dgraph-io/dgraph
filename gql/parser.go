@@ -1138,7 +1138,7 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 			expectArg = false
 		} else if item.Typ == itemRightRound {
 			if expectArg {
-				return result, x.Errorf("Unexpected comma before ).")
+				return result, x.Errorf("Expected argument but got ')'.")
 			}
 			break
 		} else if item.Typ == itemComma {

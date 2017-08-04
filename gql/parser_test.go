@@ -195,9 +195,9 @@ func TestParseQueryAggChild(t *testing.T) {
 func TestParseQueryWithXIDError(t *testing.T) {
 	query := `
 {
-      me(func: uid( alice-in-wonderland)) {
+      me(func: uid(aliceInWonderland)) {
         type
-        written-in
+        writtenIn
         name
         character {
                 name
@@ -211,7 +211,8 @@ func TestParseQueryWithXIDError(t *testing.T) {
     }`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: What is this testing?  "alice-in-wonderland" having "-in" is the source of error here
+	require.Contains(t, err.Error(), "Some variables are used but not defined")
+	require.Contains(t, err.Error(), "Used:[aliceInWonderland]")
 }
 
 func TestParseQueryWithMultiVarValError(t *testing.T) {
@@ -251,7 +252,7 @@ func TestParseQueryWithVarValAggErr(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: This now says, "Unexpected comma before )."
+	require.Contains(t, err.Error(), "Expected argument but got ')'")
 }
 
 func TestParseQueryWithVarValAgg_Error1(t *testing.T) {
@@ -1972,26 +1973,25 @@ func TestParseVariablesError1(t *testing.T) {
 
 func TestParseVariablesError2(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int, $b: int, $c: int!){
-			root(func: uid( 0x0a) {name(first: $b, after: $a)){english}}
-		}",
+		"query": "query testQuery($a: int, $b: int, $c: int!){` +
+		`   root(func: uid( 0x0a) {name(first: $b, after: $a)){english}}` +
+		`}",
 		"variables": {"$a": "6", "$b": "5" }
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected value for variable $c")
-	// TODO: Complains about '\"'.
+	require.Contains(t, err.Error(), "Variable $c should be initialised")
 }
 
 func TestParseVariablesError3(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int, $b: , $c: int!){
-			root(func: uid( 0x0a) {name(first: $b, after: $a)){english}}
-		}",
+		"query": "query testQuery($a: int, $b: , $c: int!){` +
+		`   root(func: uid( 0x0a) {name(first: $b, after: $a)){english}}` +
+		`}",
 		"variables": {"$a": "6", "$b": "5" }
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected type for variable $b")
-	// TODO: Complains about '\"'.
 }
 
 func TestParseVariablesError4(t *testing.T) {
@@ -2001,7 +2001,7 @@ func TestParseVariablesError4(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected type error")
-	// TODO: Complains about '\"'.
+	require.Contains(t, err.Error(), "Type ending with ! can't have default value")
 }
 
 func TestParseVariablesError5(t *testing.T) {
@@ -2026,14 +2026,15 @@ func TestParseVariablesError6(t *testing.T) {
 
 func TestParseVariablesError7(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int, $b: int, $c: int!){
-			root(func: uid( 0x0a) {name(first: $b, after: $a)){english}}
-		}",
+		"query": "query testQuery($a: int, $b: int, $c: int!){` +
+		`    root(func: uid( 0x0a) {name(first: $b, after: $a)){english}}` +
+		`}",
 		"variables": {"$a": "6", "$b": "5", "$d": "abc" }
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected type for variable $d")
-	// TODO: Complains about '\"'
+	require.Contains(t, err.Error(), "Type of variable $d not specified")
+	// TODO: We're intermittently getting "Variable $c should be initialised" here.
 }
 
 func TestParseVariablesiError8(t *testing.T) {
