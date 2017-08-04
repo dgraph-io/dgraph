@@ -1,7 +1,7 @@
 import React, { Component } from "react";
 import vis from "vis";
 import { connect } from "react-redux";
-import _ from "lodash/object";
+import _ from "lodash";
 import classnames from "classnames";
 
 import { renderNetwork } from "../lib/graph";
@@ -102,9 +102,13 @@ class GraphContainer extends Component {
 
     // multiLevelExpand recursively expands all edges outgoing from the node
     function multiLevelExpand(nodeId) {
-      let nodes = [nodeId], nodeStack = [nodeId], adjEdges = [];
+      let nodes = [nodeId], nodeStack = [nodeId], adjEdges = [], seen = {};
       while (nodeStack.length !== 0) {
         let nodeId = nodeStack.pop();
+        if (seen[nodeId]) {
+          continue;
+        }
+        seen[nodeId] = true;
 
         let outgoing = outgoingEdges(nodeId, allEdgeSet),
           adjNodeIds = outgoing.map(function(edge) {
@@ -182,33 +186,43 @@ class GraphContainer extends Component {
           return edge.to;
         });
 
-        let adjacentNodes = allNodeSet.get(adjacentNodeIds);
-
         // TODO -See if we can set a meta property to a node to know that its
         // expanded or closed and avoid this computation.
         if (expanded) {
           // Collapse all child nodes recursively.
-          let allEdges = outgoing.map(function(edge) {
+          let delEdges = outgoing.map(function(edge) {
             return edge.id;
           });
 
-          let allNodes = adjacentNodes.slice();
+          // These are the nodes we would delete from the Graph.
+          let delNodes = [];
 
+          // To avoid cyclic dependency.
+          let seen = {};
+          seen[clickedNodeUid] = true;
           while (adjacentNodeIds.length > 0) {
             let node = adjacentNodeIds.pop();
+            if (seen[node]) {
+              continue;
+            }
+            seen[node] = true;
+            // Push this node and the nodes connected to it for deletion below.
+            delNodes.push(node);
             let connectedEdges = outgoingEdges(node, data.edges);
+            delEdges = delEdges.concat(connectedEdges);
 
             let connectedNodes = connectedEdges.map(function(edge) {
               return edge.to;
             });
-
-            allNodes = allNodes.concat(connectedNodes);
-            allEdges = allEdges.concat(connectedEdges);
             adjacentNodeIds = adjacentNodeIds.concat(connectedNodes);
           }
 
-          data.nodes.remove(allNodes);
-          data.edges.remove(allEdges);
+          delNodes = _.uniq(delNodes);
+          // We don't want to delete the clicked node from the Graph.
+          _.remove(delNodes, clickedNodeUid);
+
+          console.log("Removed", data.nodes.remove(delNodes));
+          data.edges.remove(delEdges);
         } else {
           multiLevelExpand(clickedNodeUid);
           if (data.nodes.length === allNodeSet.length) {
