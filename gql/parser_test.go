@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/stretchr/testify/require"
 )
 
@@ -174,7 +173,6 @@ func TestParseQueryWithNoVarValError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	// TODO: This used to error.  What was this supposed to test?
 }
 
 func TestParseQueryAggChild(t *testing.T) {
@@ -2425,16 +2423,17 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 			}
 			gender,age
 			hometown
-		}`
+		}
+	}`
 	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Unclosed action")
-	// TODO: What's an unclosed action?
+	require.NoError(t, err)
+	// require.Contains(t, err.Error(), "Unclosed action")
+	// TODO: Should this fail to parse?
 }
 
 func TestParseGeneratorError(t *testing.T) {
 	query := `{
-		me(allofterms("name", "barack")) {
+		me(allofterms(name, "barack")) {
 			friends {
 				name
 			}
@@ -2446,8 +2445,24 @@ func TestParseGeneratorError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: Says "expecting a colon".  Should be me(func: ...).  Then it complains about "name"
-	// being quoted.  What's this supposed to test?
+	require.Contains(t, err.Error(), "expecting a colon")
+}
+
+func TestParseQuotedFunctionAttributeError(t *testing.T) {
+	query := `{
+		me(func: allofterms("name", "barack")) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+			count(friends)
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Contains(t, err.Error(), "Attribute in function must not be quoted")
 }
 
 func TestParseCountAsFuncMultiple(t *testing.T) {
@@ -2954,8 +2969,6 @@ func TestLangsFunction(t *testing.T) {
 }
 
 func TestLangsFunctionMultipleLangs(t *testing.T) {
-	// TODO: vvv What?  Touches global variables??
-	schema.ParseBytes([]byte("scalar descr: string @index(fulltext) ."), 0)
 	query := `
 	query {
 		me(func:alloftext(descr@hi:en, "something")) {
@@ -3547,7 +3560,6 @@ func TestFacetsFilterFail3(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "variables are not allowed in facets filter")
-	// TODO: This used "id(L)" before.  What is that?
 }
 
 func TestFacetsFilterFailRoot(t *testing.T) {
@@ -3717,12 +3729,13 @@ func TestParseRegexp6(t *testing.T) {
 
 func TestParseGraphQLVarId(t *testing.T) {
 	query := `{
-		"query" : "query versions($a: string){versions(func: uid( $var(a,b,c))){versions{ version_number}}}",
-		"variables" : {"$a": "3"}
+		"query" : "query versions($a: string, $b: string, $c: string){versions(func: uid($a,$b,$c)){versions{ version_number}}}",
+		"variables" : {"$a": "3", "$b": "3", "$c": "3"}
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	// TODO: I'm not sure what this test is supposed to be testing.
+	require.NoError(t, err)
+	require.Contains(t, err.Error(), "Invalid use of comma")
+	// TODO: What should this be here?
 }
 
 func TestMain(m *testing.M) {
