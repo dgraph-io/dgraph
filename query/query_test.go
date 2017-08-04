@@ -302,7 +302,8 @@ func populateGraph(t *testing.T) {
 	addEdgeToLangValue(t, "lossy", 0x1003, "Honey bee", "en", nil)
 
 	// full_name has hash index, we need following data for bug with eq (#1295)
-	addEdgeToLangValue(t, "full_name", 0x10000, "Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith", "en", nil)
+	addEdgeToLangValue(t, "royal_title", 0x10000, "Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith", "en", nil)
+	addEdgeToLangValue(t, "royal_title", 0x10000, "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi", "fr", nil)
 
 	// regex test data
 	// 0x1234 is uid of interest for regex testing
@@ -2216,6 +2217,7 @@ func TestDebug3(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
 
 	resp := mp["data"].(map[string]interface{})["me"]
+	require.NotNil(t, resp)
 	require.EqualValues(t, 1, len(resp.([]interface{})))
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.EqualValues(t, "0x1", uid)
@@ -6675,21 +6677,33 @@ func TestLangLossyIndex4(t *testing.T) {
 }
 
 // Test for bug #1295
-func TestLangHashEq(t *testing.T) {
+func TestLangBug1295(t *testing.T) {
 	populateGraph(t)
-	query := `
-		{
-			q(func:eq(full_name, "Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith")) {
-				full_name@en
-			}
-		}
-	`
+	// query for Canadian (French) version of the royal_title, then show English one
+	// this case is not trivial, because farmhash of "en" is less than farmhash of "fr"
+	// so we need to iterate over values in all languages to find a match
+	// for alloftext, this won't work - we use default/English tokenizer for function parameters,
+	// while index contains tokens generated with French tokenizer
 
-	json, err := processToFastJsonReq(t, query)
-	require.NoError(t, err)
-	require.JSONEq(t,
-		`{"data": {"q":[{"full_name@en":"Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith"}]}}`,
-		json)
+	functions := []string{"eq", "allofterms" /*, "alloftext" */}
+
+	for _, f := range functions {
+		t.Run(f, func(t *testing.T) {
+			query := `
+			{
+				q(func:` + f + `(royal_title, "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi")) {
+					royal_title@en 
+				}
+			}`
+
+			json, err := processToFastJsonReq(t, query)
+			require.NoError(t, err)
+			require.JSONEq(t,
+				`{"data": {"q":[{"royal_title@en":"Her Majesty Elizabeth the Second, by the Grace of God of the United Kingdom of Great Britain and Northern Ireland and of Her other Realms and Territories Queen, Head of the Commonwealth, Defender of the Faith"}]}}`,
+				json)
+		})
+	}
+
 }
 
 func checkSchemaNodes(t *testing.T, expected []*protos.SchemaNode, actual []*protos.SchemaNode) {
@@ -6722,6 +6736,7 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "geometry", Type: "geo"}, {Predicate: "alias", Type: "string"},
 		{Predicate: "dob", Type: "datetime"}, {Predicate: "survival_rate", Type: "float"},
 		{Predicate: "value", Type: "string"}, {Predicate: "full_name", Type: "string"},
+		{Predicate: "royal_title", Type: "string"},
 		{Predicate: "noindex_name", Type: "string"},
 		{Predicate: "lossy", Type: "string"},
 		{Predicate: "school", Type: "uid"},
@@ -6820,6 +6835,7 @@ friend                         : uid @reverse @count .
 geometry                       : geo @index(geo) .
 value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
+royal_title                    : string @index(hash, term, fulltext) .
 noindex_name                   : string .
 school		                   : uid @count .
 lossy                          : string @index(term) .

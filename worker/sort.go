@@ -437,11 +437,6 @@ func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID) (t
 	// Don't put the values in memory
 	pl := posting.Get(x.DataKey(attr, uid))
 
-	// functions handle language in special way
-	if len(langs) == 0 {
-		langs = append(langs, ".")
-	}
-
 	src, err := pl.ValueFor(langs)
 
 	if err != nil {

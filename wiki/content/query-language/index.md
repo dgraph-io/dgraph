@@ -175,6 +175,8 @@ For example:
 
 {{% notice "note" %}}In functions, language lists and `.` notation are not allowed.  In functions, a string edge without a language tag means apply function to all languages, while a single language tag means apply to only the given language.{{% /notice %}}
 
+{{% notice "note" %}}In case of full text search functions (`alloftext`, `anyoftext`), when no language is specified default (English) Full Text Search tokenizer is used.{{% /notice %}}
+
 
 Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
 

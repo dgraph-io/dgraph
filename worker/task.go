@@ -639,15 +639,25 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 			default:
 			}
 			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
-				var langs []string
 				if len(arg.srcFn.lang) > 0 {
-					langs = append(langs, arg.srcFn.lang)
-				}
-				sv, err := fetchValue(uid, attr, langs, typ)
-				if sv.Value == nil || err != nil {
+					langs := []string{arg.srcFn.lang}
+					sv, err := fetchValue(uid, attr, langs, typ)
+					if sv.Value == nil || err != nil {
+						return false
+					}
+					return types.CompareVals(arg.q.SrcFunc[0], sv, arg.srcFn.eqTokens[row])
+				} else {
+					pl := posting.Get(x.DataKey(attr, uid))
+					values, _ := pl.AllValues()
+					for _, sv := range values {
+						dst, err := types.Convert(sv, typ)
+						if err == nil &&
+							types.CompareVals(arg.q.SrcFunc[0], dst, arg.srcFn.eqTokens[row]) {
+							return true
+						}
+					}
 					return false
 				}
-				return types.CompareVals(arg.q.SrcFunc[0], sv, arg.srcFn.eqTokens[row])
 			})
 		}
 	}
