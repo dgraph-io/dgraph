@@ -632,10 +632,10 @@ func TestParseQueryWithVarValAggError(t *testing.T) {
 	require.Contains(t, err.Error(), "Expected val(). Got uid() with order.")
 }
 
-func TestParseQueryWithVarValAggError2(t *testing.T) {
+func TestParseQueryWithVarValAggBad(t *testing.T) {
 	query := `
 	{
-		me(func: uid( val(L), orderasc: val(n)) {
+		me(func: val(L), orderasc: val(n)) {
 			name
 		}
 
@@ -648,8 +648,8 @@ func TestParseQueryWithVarValAggError2(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
-	require.Error(t, err)
-	// TODO: When I fix this test, it passes!  No error.
+	require.NoError(t, err)
+	// TODO: This test should error.  (Accepting val(L) is a bug.)
 }
 
 func TestParseQueryWithVarValCount(t *testing.T) {
@@ -1147,6 +1147,19 @@ func TestParseIdListError(t *testing.T) {
 	require.Error(t, err)
 	// TODO: This one complains about "Unrecognized character in lexText: U+005D ']'" which is a
 	// weird place to fail
+}
+
+func TestParseIdListBad(t *testing.T) {
+	query := `
+	query {
+		user(func: uid( [0x1, 0x1, 2, 3, 0x34])) {
+			type.object.name
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	// TODO: This test, I'm told, should fail.  We used to support `user(id: [1,2,3])` and the
+	// parsing code is warty.
 }
 
 func TestParseFirst(t *testing.T) {
@@ -2414,7 +2427,7 @@ func TestParseFilter_emptyargument(t *testing.T) {
 	require.Contains(t, err.Error(), "Consecutive commas not allowed")
 
 }
-func TestParseFilter_unknowndirective(t *testing.T) {
+func TestParseFilter_unknowndirectiveBad(t *testing.T) {
 	query := `
 	query {
 		me(func: uid(0x0a)) {
@@ -2427,11 +2440,10 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	// require.Contains(t, err.Error(), "Unclosed action")
-	// TODO: Should this fail to parse?
+	// TODO: This should fail to parse, because @filtererr.
 }
 
-func TestParseGeneratorError(t *testing.T) {
+func TestParseGeneratorErrorBad(t *testing.T) {
 	query := `{
 		me(allofterms(name, "barack")) {
 			friends {
@@ -2446,6 +2458,8 @@ func TestParseGeneratorError(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Expecting a colon")
+	// TODO: Improve the error message a bit -- check that the key is one of func, orderasc, etc
+	// before expecting a colon.
 }
 
 func TestParseQuotedFunctionAttributeError(t *testing.T) {
@@ -3727,7 +3741,7 @@ func TestParseRegexp6(t *testing.T) {
 	require.Contains(t, err.Error(), "Unclosed Brackets")
 }
 
-func TestParseGraphQLVarId(t *testing.T) {
+func TestParseGraphQLVarIdBad(t *testing.T) {
 	query := `{
 		"query" : "query versions($a: string, $b: string, $c: string){versions(func: uid($a,$b,$c)){versions{ version_number}}}",
 		"variables" : {"$a": "3", "$b": "3", "$c": "3"}
@@ -3735,7 +3749,7 @@ func TestParseGraphQLVarId(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Invalid use of comma")
-	// TODO: What should this be here?
+	// TODO: See what's going on with the parsing here.
 }
 
 func TestMain(m *testing.M) {
