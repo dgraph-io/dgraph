@@ -2445,7 +2445,7 @@ func TestParseGeneratorError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "expecting a colon")
+	require.Contains(t, err.Error(), "Expecting a colon")
 }
 
 func TestParseQuotedFunctionAttributeError(t *testing.T) {
@@ -2461,7 +2461,7 @@ func TestParseQuotedFunctionAttributeError(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
+	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute in function must not be quoted")
 }
 
@@ -3733,7 +3733,7 @@ func TestParseGraphQLVarId(t *testing.T) {
 		"variables" : {"$a": "3", "$b": "3", "$c": "3"}
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
+	require.Error(t, err)
 	require.Contains(t, err.Error(), "Invalid use of comma")
 	// TODO: What should this be here?
 }
