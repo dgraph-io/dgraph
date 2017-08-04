@@ -3114,9 +3114,9 @@ func TestParseGroupbyError(t *testing.T) {
 		}
 	}
 `
-	// TODO: Add assertions of error messages after this point
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only aggregator/count functions allowed inside @groupby")
 }
 
 func TestParseFacetsError1(t *testing.T) {
@@ -3133,6 +3133,7 @@ func TestParseFacetsError1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected ( after func name [facet1]")
 }
 
 func TestParseFacetsVarError(t *testing.T) {
@@ -3149,6 +3150,7 @@ func TestParseFacetsVarError(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected name in facet list")
 }
 func TestParseFacetsError2(t *testing.T) {
 	query := `
@@ -3164,6 +3166,7 @@ func TestParseFacetsError2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected ( after func name [facet1]")
 }
 
 func TestParseFacetsOrderError1(t *testing.T) {
@@ -3415,6 +3418,7 @@ func TestParseFacetsFail1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected ( after func name [key1]")
 }
 
 func TestParseRepeatArgsError1(t *testing.T) {
@@ -3428,6 +3432,7 @@ func TestParseRepeatArgsError1(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only one function allowed at root")
 }
 
 func TestParseRepeatArgsError2(t *testing.T) {
@@ -3441,6 +3446,7 @@ func TestParseRepeatArgsError2(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Got repeated key \"first\"")
 }
 
 // Test facets parsing for filtering..
@@ -3521,6 +3527,7 @@ func TestFacetsFilterFail(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only one facets allowed")
 }
 
 func TestFacetsFilterFail2(t *testing.T) {
@@ -3539,6 +3546,7 @@ func TestFacetsFilterFail2(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only one facets filter allowed")
 }
 
 func TestFacetsFilterFail3(t *testing.T) {
@@ -3548,8 +3556,8 @@ func TestFacetsFilterFail3(t *testing.T) {
 		K as var(func: uid(0x0a)) {
 			L AS friends
 		}
-		me(func: uid( uid(K))) {
-			friend @facets(id(L)) {
+		me(func: uid(K)) {
+			friend @facets(uid(L)) {
 				name
 			}
 		}
@@ -3558,13 +3566,14 @@ func TestFacetsFilterFail3(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "variables are not allowed in facets filter")
+	// TODO: This used "id(L)" before.  What is that?
 }
 
 func TestFacetsFilterFailRoot(t *testing.T) {
-	// vars are not allowed in facets filtering.
 	query := `
 	{
-		me(func: uid(0x1) @facets(eq(some-facet, true))) {
+		me(func: uid(0x1)) @facets(eq(some-facet, true)) {
 			friend	{
 				name
 			}
@@ -3574,6 +3583,7 @@ func TestFacetsFilterFailRoot(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unknown directive [facets]")
 }
 
 func TestFacetsFilterAtValue(t *testing.T) {
@@ -3694,6 +3704,7 @@ func TestParseRegexp4(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	// only [a-zA-Z] characters can be used as flags
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected comma or language but got: 123")
 }
 
 func TestParseRegexp5(t *testing.T) {
@@ -3707,6 +3718,7 @@ func TestParseRegexp5(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	// only [a-zA-Z] characters can be used as flags
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected comma or language but got: 123")
 }
 
 func TestParseRegexp6(t *testing.T) {
@@ -3719,6 +3731,8 @@ func TestParseRegexp6(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected arg after func [regexp]")
+	require.Contains(t, err.Error(), "Unclosed Brackets")
 }
 
 func TestParseGraphQLVarId(t *testing.T) {
@@ -3728,6 +3742,7 @@ func TestParseGraphQLVarId(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	// TODO: I'm not sure what this test is supposed to be testing.
 }
 
 func TestMain(m *testing.M) {
@@ -3755,6 +3770,7 @@ func TestCountAtRootErr(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot have children attributes when asking for count")
 }
 
 func TestCountAtRootErr2(t *testing.T) {
@@ -3765,6 +3781,7 @@ func TestCountAtRootErr2(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot assign variable to count()")
 }
 
 func TestHasFuncAtRoot(t *testing.T) {
@@ -3807,6 +3824,7 @@ func TestDotsEOF(t *testing.T) {
 			..`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected 3 periods")
 }
 
 func TestMutationVariables(t *testing.T) {
@@ -3877,6 +3895,7 @@ func TestMathWithoutVarAlias(t *testing.T) {
 		}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Function math should be used with a variable or have an alias")
 }
 
 func TestMultipleEqual(t *testing.T) {
@@ -3943,7 +3962,7 @@ func TestMultipleSetBlocks(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-
+	require.Contains(t, err.Error(), "Multiple 'set' blocks not allowed")
 }
 
 func TestMultipleDelBlocks(t *testing.T) {
@@ -3955,6 +3974,7 @@ func TestMultipleDelBlocks(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multiple 'delete' blocks not allowed")
 
 }
 
@@ -3962,11 +3982,12 @@ func TestMultipleSchemaBlocks(t *testing.T) {
 	query := `
 	mutation {
 		schema { name: string @index(term) }
-		schama { tag: string @index(exact) }
+		schema { tag: string @index(exact) }
     }
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multiple 'schema' blocks not allowed")
 }
 
 func TestIdErr(t *testing.T) {
@@ -3979,6 +4000,7 @@ func TestIdErr(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid syntax using id. Use func: uid()")
 }
 
 func TestFilterVarErr(t *testing.T) {
@@ -3994,6 +4016,7 @@ func TestFilterVarErr(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unexpected var()")
 }
 
 func TestEqUidFunctionErr(t *testing.T) {
@@ -4006,4 +4029,5 @@ func TestEqUidFunctionErr(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only val/count allowed as function within another. Got: uid")
 }
