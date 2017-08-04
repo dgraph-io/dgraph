@@ -8158,6 +8158,20 @@ func TestMultipleEquality4(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}],"name":"Michonne"},{"name":"Glenn Rhee"}]}}`, js)
 }
 
+func TestMultipleEquality5(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: eq(name@en, ["Honey badger", "Honey bee"])) {
+			name@en
+		}
+	}
+
+        `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name@en":"Honey badger"},{"name@en":"Honey bee"}]}}`, js)
+}
+
 func TestMultipleGtError(t *testing.T) {
 	populateGraph(t)
 	query := `
