@@ -277,21 +277,6 @@ func (g *groupi) AnyServer(group uint32) string {
 	return all.list[idx].Addr
 }
 
-// Servers return addresses of all servers in group.
-func (g *groupi) Servers(group uint32) []string {
-	g.RLock()
-	defer g.RUnlock()
-	all := g.all[group]
-	if all == nil {
-		return nil
-	}
-	out := make([]string, len(all.list))
-	for i, s := range all.list {
-		out[i] = s.Addr
-	}
-	return out
-}
-
 // Peer returns node(raft) id of the peer of given nodeid of given group
 func (g *groupi) Peer(group uint32, nodeId uint64) (uint64, bool) {
 	g.RLock()
