@@ -3,7 +3,6 @@ import React from "react";
 import Highlight from "./Highlight";
 
 const FrameCodeTab = ({ query, response }) => {
-  console.log("query", response);
   return (
     <div className="content-container">
       <div className="code-container">
