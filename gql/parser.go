@@ -2044,7 +2044,7 @@ func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 			break
 		}
 	}
-	if item.Typ == itemPeriod {
+	if it.Item().Typ == itemPeriod {
 		peekIt, err := it.Peek(1)
 		if err != nil {
 			return nil, err
