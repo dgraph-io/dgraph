@@ -6682,8 +6682,8 @@ func TestLangBug1295(t *testing.T) {
 	// query for Canadian (French) version of the royal_title, then show English one
 	// this case is not trivial, because farmhash of "en" is less than farmhash of "fr"
 	// so we need to iterate over values in all languages to find a match
-	// for alloftext, this won't work - we use default/English tokenizer for function parameters,
-	// while index contains tokens generated with French tokenizer
+	// for alloftext, this won't work - we use default/English tokenizer for function parameters
+	// when no language is specified, while index contains tokens generated with French tokenizer
 
 	functions := []string{"eq", "allofterms" /*, "alloftext" */}
 	langs := []string{"", "@."}

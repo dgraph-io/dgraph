@@ -499,14 +499,18 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	// For string matching functions, check the language.
-	if (srcFn.fnType == StandardFn || srcFn.fnType == HasFn ||
-		srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn) &&
-		srcFn.isStringFn && srcFn.lang != "." {
+	if needsStringFiltering(srcFn) {
 		filterStringFunction(funcArgs{q, gid, srcFn, out})
 	}
 
 	out.IntersectDest = srcFn.intersectDest
 	return out, nil
+}
+
+func needsStringFiltering(srcFn *functionContext) bool {
+	return srcFn.isStringFn && srcFn.lang != "." &&
+		(srcFn.fnType == StandardFn || srcFn.fnType == HasFn ||
+			srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn)
 }
 
 func handleHasFunction(arg funcArgs) error {
