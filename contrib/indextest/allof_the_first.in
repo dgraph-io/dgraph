@@ -2,7 +2,7 @@
  me(func:eq(xid,"m.07mv_h")) {
   director.film {
    directed_by {
-    director.film(first: 10) @filter(allofterms(name, "the")) {
+    director.film(first: 10) @filter(allofterms(name@en, "the")) {
      _uid_
      name@en
     }
