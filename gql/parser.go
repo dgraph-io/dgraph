@@ -1359,196 +1359,217 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 	return nil
 }
 
+func validFuncName(name string) bool {
+	if isGeoFunc(name) || isInequalityFn(name) {
+		return true
+	}
+
+	switch name {
+	case "regexp", "anyofterms", "allofterms", "alloftext", "anyoftext", "has", "uid":
+		return true
+	}
+	return false
+}
+
 func parseFunction(it *lex.ItemIterator, gq *GraphQuery) (*Function, error) {
 	var g *Function
 	var expectArg, seenFuncArg, expectLang, isDollar bool
 L:
 	for it.Next() {
 		item := it.Item()
-		if item.Typ == itemName { // Value.
-			val := collectName(it, item.Val)
-			g = &Function{Name: strings.ToLower(val)}
-			it.Next()
+		if item.Typ != itemName {
+			return nil, x.Errorf("Expected a function but got %q", item.Val)
+
+		}
+
+		val := collectName(it, item.Val)
+		g = &Function{
+			Name: strings.ToLower(val),
+		}
+		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
+			return nil, x.Errorf("Expected ( after func name [%s]", g.Name)
+		}
+
+		expectArg = true
+		for it.Next() {
 			itemInFunc := it.Item()
-			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s] but got %v",
-					g.Name, itemInFunc.Val)
-			}
-			expectArg = true
-			for it.Next() {
-				itemInFunc := it.Item()
-				var val string
-				if itemInFunc.Typ == itemRightRound {
-					break L
-				} else if itemInFunc.Typ == itemComma {
-					if expectArg {
-						return nil, x.Errorf("Invalid use of comma.")
+			var val string
+			if itemInFunc.Typ == itemRightRound {
+				break L
+			} else if itemInFunc.Typ == itemComma {
+				if expectArg {
+					return nil, x.Errorf("Invalid use of comma.")
+				}
+				if isDollar {
+					return nil, x.Errorf("Invalid use of comma after dollar.")
+				}
+				expectArg = true
+				continue
+			} else if itemInFunc.Typ == itemLeftRound {
+				// Function inside a function.
+				if seenFuncArg {
+					return nil, x.Errorf("Multiple functions as arguments not allowed")
+				}
+				it.Prev()
+				it.Prev()
+				f, err := parseFunction(it, gq)
+				if err != nil {
+					return nil, err
+				}
+				seenFuncArg = true
+				if f.Name == value {
+					if len(f.NeedsVar) > 1 {
+						return nil, x.Errorf("Multiple variables not allowed in a function")
 					}
-					if isDollar {
-						return nil, x.Errorf("Invalid use of comma after dollar.")
+					g.Attr = value
+					g.Args = append(g.Args, f.NeedsVar[0].Name)
+					g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
+					g.NeedsVar[0].Typ = VALUE_VAR
+				} else {
+					if f.Name != "count" {
+						return nil,
+							x.Errorf("Only val/count allowed as function within another. Got: %s", f.Name)
 					}
-					expectArg = true
+					g.Attr = f.Attr
+					g.Args = append(g.Args, f.Name)
+				}
+				expectArg = false
+				continue
+			} else if itemInFunc.Typ == itemAt {
+				if len(g.Attr) > 0 && len(g.Lang) == 0 {
+					itNext, err := it.Peek(1)
+					if err == nil && itNext[0].Val == "filter" {
+						return nil, x.Errorf("Filter cannot be used inside a function.")
+					}
+					expectLang = true
 					continue
-				} else if itemInFunc.Typ == itemLeftRound {
-					// Function inside a function.
-					if seenFuncArg {
-						return nil, x.Errorf("Multiple functions as arguments not allowed")
-					}
-					it.Prev()
-					it.Prev()
-					f, err := parseFunction(it, gq)
-					if err != nil {
+				} else {
+					return nil, x.Errorf("Invalid usage of '@' in function argument")
+				}
+			} else if itemInFunc.Typ == itemMathOp {
+				val = itemInFunc.Val
+				it.Next()
+				itemInFunc = it.Item()
+			} else if itemInFunc.Typ == itemDollar {
+				if isDollar {
+					return nil, x.Errorf("Invalid use of $ in func args")
+				}
+				isDollar = true
+				continue
+			} else if itemInFunc.Typ == itemRegex {
+				end := strings.LastIndex(itemInFunc.Val, "/")
+				x.AssertTrue(end >= 0)
+				expr := strings.Replace(itemInFunc.Val[1:end], "\\/", "/", -1)
+				flags := ""
+				if end+1 < len(itemInFunc.Val) {
+					flags = itemInFunc.Val[end+1:]
+				}
+
+				g.Args = append(g.Args, expr, flags)
+				expectArg = false
+				continue
+				// Lets reassemble the geo tokens.
+			} else if itemInFunc.Typ == itemLeftSquare {
+				isGeo := isGeoFunc(g.Name)
+				if !isGeo && g.Name != "eq" {
+					return nil, x.Errorf("Unexpected character [ while parsing request.")
+				}
+
+				if isGeo {
+					if err := parseGeoArgs(it, g); err != nil {
 						return nil, err
 					}
-					seenFuncArg = true
-					if f.Name == value {
-						if len(f.NeedsVar) > 1 {
-							return nil, x.Errorf("Multiple variables not allowed in a function")
-						}
-						g.Attr = value
-						g.Args = append(g.Args, f.NeedsVar[0].Name)
-						g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
-						g.NeedsVar[0].Typ = VALUE_VAR
-					} else {
-						if f.Name != "count" {
-							return nil,
-								x.Errorf("Only val/count allowed as function within another. Got: %s", f.Name)
-						}
-						g.Attr = f.Attr
-						g.Args = append(g.Args, f.Name)
-					}
 					expectArg = false
 					continue
-				} else if itemInFunc.Typ == itemAt {
-					if len(g.Attr) > 0 && len(g.Lang) == 0 {
-						itNext, err := it.Peek(1)
-						if err == nil && itNext[0].Val == "filter" {
-							return nil, x.Errorf("Filter cannot be used inside a function.")
-						}
-						expectLang = true
-						continue
-					} else {
-						return nil, x.Errorf("Invalid usage of '@' in function argument")
-					}
-				} else if itemInFunc.Typ == itemMathOp {
-					val = itemInFunc.Val
-					it.Next()
-					itemInFunc = it.Item()
-				} else if itemInFunc.Typ == itemDollar {
-					if isDollar {
-						return nil, x.Errorf("Invalid use of $ in func args")
-					}
-					isDollar = true
-					continue
-				} else if itemInFunc.Typ == itemRegex {
-					end := strings.LastIndex(itemInFunc.Val, "/")
-					x.AssertTrue(end >= 0)
-					expr := strings.Replace(itemInFunc.Val[1:end], "\\/", "/", -1)
-					flags := ""
-					if end+1 < len(itemInFunc.Val) {
-						flags = itemInFunc.Val[end+1:]
-					}
-
-					g.Args = append(g.Args, expr, flags)
-					expectArg = false
-					continue
-					// Lets reassemble the geo tokens.
-				} else if itemInFunc.Typ == itemLeftSquare {
-					if isGeoFunc(g.Name) {
-						if err := parseGeoArgs(it, g); err != nil {
-							return nil, err
-						}
-						expectArg = false
-						continue
-					}
-
-					if valid := it.Next(); !valid {
-						return nil,
-							x.Errorf("Unexpected EOF while parsing args")
-					}
-					itemInFunc = it.Item()
-				} else if itemInFunc.Typ == itemRightSquare {
-					if _, err := it.Peek(1); err != nil {
-						return nil,
-							x.Errorf("Unexpected EOF while parsing args")
-					}
-					expectArg = false
-					continue
-				} else if itemInFunc.Typ != itemName {
-					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
-						g.Name, itemInFunc)
-				}
-				if !expectArg && !expectLang {
-					return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
-				}
-				v := strings.Trim(itemInFunc.Val, " \t")
-				// Trim just one leading and trailing "
-				v = strings.TrimPrefix(v, "\"")
-				val += strings.TrimSuffix(v, "\"")
-				if val == "" {
-					return nil, x.Errorf("Empty argument received")
 				}
 
-				if isDollar {
-					val = "$" + val
-					isDollar = false
-					if g.Name == uid && gq != nil {
-						gq.Args["id"] = val
-					} else {
-						g.Args = append(g.Args, val)
-					}
-					continue
+				if valid := it.Next(); !valid {
+					return nil,
+						x.Errorf("Unexpected EOF while parsing args")
 				}
+				itemInFunc = it.Item()
+			} else if itemInFunc.Typ == itemRightSquare {
+				if _, err := it.Peek(1); err != nil {
+					return nil,
+						x.Errorf("Unexpected EOF while parsing args")
+				}
+				expectArg = false
+				continue
+			} else if itemInFunc.Typ != itemName {
+				return nil, x.Errorf("Expected arg after func [%s], but got item %v",
+					g.Name, itemInFunc)
+			}
 
-				// Unlike other functions, uid function has no attribute, everything is args.
-				if len(g.Attr) == 0 && g.Name != "uid" {
-					if strings.ContainsRune(itemInFunc.Val, '"') {
-						return nil, x.Errorf("Attribute in function must not be quoted with \": %s",
-							itemInFunc.Val)
-					}
-					g.Attr = val
-				} else if expectLang {
-					g.Lang = val
-					expectLang = false
-				} else if g.Name != uid {
-					// For UID function. we set g.UID
+			if !expectArg && !expectLang {
+				return nil, x.Errorf("Expected comma or language but got: %s", itemInFunc.Val)
+			}
+
+			// TODO - Move this to a function.
+			v := strings.Trim(itemInFunc.Val, " \t")
+			// Trim just one leading and trailing "
+			v = strings.TrimPrefix(v, "\"")
+			val += strings.TrimSuffix(v, "\"")
+			if val == "" {
+				return nil, x.Errorf("Empty argument received")
+			}
+
+			if isDollar {
+				val = "$" + val
+				isDollar = false
+				if g.Name == uid && gq != nil {
+					gq.Args["id"] = val
+				} else {
 					g.Args = append(g.Args, val)
 				}
-
-				if g.Name == "var" {
-					return nil, x.Errorf("Unexpected var(). Maybe you want to try using uid()")
-				}
-
-				expectArg = false
-				if g.Name == value {
-					// E.g. @filter(gt(val(a), 10))
-					g.NeedsVar = append(g.NeedsVar, VarContext{
-						Name: val,
-						Typ:  VALUE_VAR,
-					})
-				} else if g.Name == uid {
-					// uid function could take variables as well as actual uids.
-					// If we can parse the value that means its an uid otherwise a variable.
-					uid, err := strconv.ParseUint(val, 0, 64)
-					if err == nil {
-						// It could be uid function at root.
-						if gq != nil {
-							gq.UID = append(gq.UID, uid)
-							// Or uid function in filter.
-						} else {
-							g.UID = append(g.UID, uid)
-						}
-						continue
-					}
-					// E.g. @filter(uid(a, b, c))
-					g.NeedsVar = append(g.NeedsVar, VarContext{
-						Name: val,
-						Typ:  UID_VAR,
-					})
-				}
+				continue
 			}
-		} else {
-			return nil, x.Errorf("Expected a function but got %q", item.Val)
+
+			// Unlike other functions, uid function has no attribute, everything is args.
+			if len(g.Attr) == 0 && g.Name != "uid" {
+				if strings.ContainsRune(itemInFunc.Val, '"') {
+					return nil, x.Errorf("Attribute in function must not be quoted with \": %s",
+						itemInFunc.Val)
+				}
+				g.Attr = val
+			} else if expectLang {
+				g.Lang = val
+				expectLang = false
+			} else if g.Name != uid {
+				// For UID function. we set g.UID
+				g.Args = append(g.Args, val)
+			}
+
+			if g.Name == "var" {
+				return nil, x.Errorf("Unexpected var(). Maybe you want to try using uid()")
+			}
+
+			expectArg = false
+			if g.Name == value {
+				// E.g. @filter(gt(val(a), 10))
+				g.NeedsVar = append(g.NeedsVar, VarContext{
+					Name: val,
+					Typ:  VALUE_VAR,
+				})
+			} else if g.Name == uid {
+				// uid function could take variables as well as actual uids.
+				// If we can parse the value that means its an uid otherwise a variable.
+				uid, err := strconv.ParseUint(val, 0, 64)
+				if err == nil {
+					// It could be uid function at root.
+					if gq != nil {
+						gq.UID = append(gq.UID, uid)
+						// Or uid function in filter.
+					} else {
+						g.UID = append(g.UID, uid)
+					}
+					continue
+				}
+				// E.g. @filter(uid(a, b, c))
+				g.NeedsVar = append(g.NeedsVar, VarContext{
+					Name: val,
+					Typ:  UID_VAR,
+				})
+			}
 		}
 	}
 	return g, nil
@@ -1942,58 +1963,58 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	it.Next()
 	item := it.Item()
 	peek, err := it.Peek(1)
-	if err == nil && item.Typ == itemName {
-		if item.Val == "facets" { // because @facets can come w/t '()'
-			res, err := parseFacets(it)
+	if err != nil || item.Typ != itemName {
+		return x.Errorf("Expected directive or language list")
+	}
+
+	if item.Val == "facets" { // because @facets can come w/t '()'
+		res, err := parseFacets(it)
+		if err != nil {
+			return err
+		}
+		if res.f != nil {
+			curp.FacetVar = res.vmap
+			curp.FacetOrder = res.facetOrder
+			curp.FacetDesc = res.orderdesc
+			if curp.Facets != nil {
+				return x.Errorf("Only one facets allowed")
+			}
+			curp.Facets = res.f
+		} else if res.ft != nil {
+			if curp.FacetsFilter != nil {
+				return x.Errorf("Only one facets filter allowed")
+			}
+			if res.ft.hasVars() {
+				return x.Errorf(
+					"variables are not allowed in facets filter.")
+			}
+			curp.FacetsFilter = res.ft
+		} else {
+			return x.Errorf("Facets parsing failed.")
+		}
+	} else if peek[0].Typ == itemLeftRound {
+		// this is directive
+		switch item.Val {
+		case "filter":
+			filter, err := parseFilter(it)
 			if err != nil {
 				return err
 			}
-			if res.f != nil {
-				curp.FacetVar = res.vmap
-				curp.FacetOrder = res.facetOrder
-				curp.FacetDesc = res.orderdesc
-				if curp.Facets != nil {
-					return x.Errorf("Only one facets allowed")
-				}
-				curp.Facets = res.f
-			} else if res.ft != nil {
-				if curp.FacetsFilter != nil {
-					return x.Errorf("Only one facets filter allowed")
-				}
-				if res.ft.hasVars() {
-					return x.Errorf(
-						"variables are not allowed in facets filter.")
-				}
-				curp.FacetsFilter = res.ft
-			} else {
-				return x.Errorf("Facets parsing failed.")
-			}
-		} else if peek[0].Typ == itemLeftRound {
-			// this is directive
-			switch item.Val {
-			case "filter":
-				filter, err := parseFilter(it)
-				if err != nil {
-					return err
-				}
-				curp.Filter = filter
-			case "groupby":
-				curp.IsGroupby = true
-				parseGroupby(it, curp)
-			default:
-				return x.Errorf("Unknown directive [%s]", item.Val)
-			}
-		} else if len(curp.Attr) > 0 && len(curp.Langs) == 0 {
-			// this is language list
-			curp.Langs = parseLanguageList(it)
-			if len(curp.Langs) == 0 {
-				return x.Errorf("Expected at least 1 language in list for %s", curp.Attr)
-			}
-		} else {
-			return x.Errorf("Expected directive or language list, got @%s", item.Val)
+			curp.Filter = filter
+		case "groupby":
+			curp.IsGroupby = true
+			parseGroupby(it, curp)
+		default:
+			return x.Errorf("Unknown directive [%s]", item.Val)
+		}
+	} else if len(curp.Attr) > 0 && len(curp.Langs) == 0 {
+		// this is language list
+		curp.Langs = parseLanguageList(it)
+		if len(curp.Langs) == 0 {
+			return x.Errorf("Expected at least 1 language in list for %s", curp.Attr)
 		}
 	} else {
-		return x.Errorf("Expected directive or language list")
+		return x.Errorf("Expected directive or language list, got @%s", item.Val)
 	}
 	return nil
 }
@@ -2092,6 +2113,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			gen, err := parseFunction(it, gq)
 			if err != nil {
 				return gq, err
+			}
+			if !validFuncName(gen.Name) {
+				return nil, x.Errorf("Function name: %s is not valid.", gen.Name)
 			}
 			gq.Func = gen
 			gq.NeedsVar = append(gq.NeedsVar, gen.NeedsVar...)
@@ -2453,6 +2477,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				count = seenWithPred
 			}
 		case itemLeftCurl:
+			if len(curp.Langs) > 0 {
+				return x.Errorf("Cannot have children for attr: %s with lang tags: %v", curp.Attr,
+					curp.Langs)
+			}
 			if err := godeep(it, curp); err != nil {
 				return err
 			}
@@ -2479,6 +2507,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			if err != nil {
 				return err
 			}
+
 		case itemRightRound:
 			if count != seenWithPred {
 				return x.Errorf("Invalid mention of brackets")
@@ -2503,6 +2532,14 @@ func isMathBlock(name string) bool {
 
 func isGeoFunc(name string) bool {
 	return name == "near" || name == "contains" || name == "within" || name == "intersects"
+}
+
+func isInequalityFn(name string) bool {
+	switch name {
+	case "eq", "le", "ge", "gt", "lt":
+		return true
+	}
+	return false
 }
 
 // Name can have dashes or alphanumeric characters. Lexer lexes them as separate items.

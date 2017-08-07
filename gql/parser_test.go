@@ -632,7 +632,7 @@ func TestParseQueryWithVarValAggError(t *testing.T) {
 	require.Contains(t, err.Error(), "Expected val(). Got uid() with order.")
 }
 
-func TestParseQueryWithVarValAggBad(t *testing.T) {
+func TestParseQueryWithVarValAggError2(t *testing.T) {
 	query := `
 	{
 		me(func: val(L), orderasc: val(n)) {
@@ -648,8 +648,8 @@ func TestParseQueryWithVarValAggBad(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	// TODO: This test should error.  (Accepting val(L) is a bug.)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Function name: val is not valid.")
 }
 
 func TestParseQueryWithVarValCount(t *testing.T) {
@@ -804,7 +804,7 @@ func TestParseQueryFilterError1A(t *testing.T) {
 func TestParseQueryFilterError1B(t *testing.T) {
 	query := `
 	{
-		me(func: uid(1)) @filter(anyof(name"alice")) {
+		me(func: uid(1)) @filter(anyofterms(name"alice")) {
 		 name
 		}
 	}
@@ -817,7 +817,7 @@ func TestParseQueryFilterError1B(t *testing.T) {
 func TestParseQueryFilterError2(t *testing.T) {
 	query := `
 	{
-		me(func: uid(1)) @filter(anyof(name "alice")) {
+		me(func: uid(1)) @filter(anyofterms(name "alice")) {
 		 name
 		}
 	}
@@ -1149,7 +1149,7 @@ func TestParseIdListError(t *testing.T) {
 	// weird place to fail
 }
 
-func TestParseIdListBad(t *testing.T) {
+func TestParseIdListError2(t *testing.T) {
 	query := `
 	query {
 		user(func: uid( [0x1, 0x1, 2, 3, 0x34])) {
@@ -1157,9 +1157,8 @@ func TestParseIdListBad(t *testing.T) {
 		}
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	// TODO: This test, I'm told, should fail.  We used to support `user(id: [1,2,3])` and the
-	// parsing code is warty.
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unexpected character [ while parsing request.")
 }
 
 func TestParseFirst(t *testing.T) {
@@ -2060,7 +2059,7 @@ func TestParseVariablesiError8(t *testing.T) {
 func TestParseFilter_root(t *testing.T) {
 	query := `
 	query {
-		me(func:abc(abc)) @filter(allofterms(name, "alice")) {
+		me(func:anyofterms(abc, "Abc")) @filter(allofterms(name, "alice")) {
 			friends @filter() {
 				name @filter(namefilter(name, "a"))
 			}
@@ -2104,7 +2103,7 @@ func TestParseFuncNested(t *testing.T) {
 func TestParseFilter_root2(t *testing.T) {
 	query := `
 	query {
-		me(func:abc(abc)) @filter(gt(count(friends), 10)) {
+		me(func:anyofterms(abc, "Abc")) @filter(gt(count(friends), 10)) {
 			friends @filter() {
 				name
 			}
@@ -2126,7 +2125,7 @@ func TestParseFilter_root_Error2(t *testing.T) {
 	// filter-by-count only support first argument as function
 	query := `
 	query {
-		me(func:abc(abc)) @filter(gt(count(friends), sum(friends))) {
+		me(func:anyofterms(abc, "Abc")) @filter(gt(count(friends), sum(friends))) {
 			friends @filter() {
 				name
 			}
@@ -2426,7 +2425,8 @@ func TestParseFilter_emptyargument(t *testing.T) {
 	require.Contains(t, err.Error(), "Consecutive commas not allowed")
 
 }
-func TestParseFilter_unknowndirectiveBad(t *testing.T) {
+
+func TestParseFilter_unknowndirectiveError1(t *testing.T) {
 	query := `
 	query {
 		me(func: uid(0x0a)) {
@@ -2438,8 +2438,26 @@ func TestParseFilter_unknowndirectiveBad(t *testing.T) {
 		}
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	// TODO: This should fail to parse, because @filtererr.
+	require.Error(t, err)
+	// We can't differentiate between @filtererr being a directive or a language. As we don't
+	// see a () after it we assume its a language but attr which specify a language can't have
+	// children.
+	// The test below tests for unknown directive.
+	require.Contains(t, err.Error(), "Cannot have children for attr: friends with lang tags:")
+}
+
+func TestParseFilter_unknowndirectiveError2(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x0a)) {
+			friends @filtererr ()
+			gender,age
+			hometown
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unknown directive [filtererr]")
 }
 
 func TestParseGeneratorErrorBad(t *testing.T) {
