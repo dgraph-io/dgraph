@@ -232,6 +232,7 @@ class FrameSession extends React.Component {
               : null}
 
             <SessionFooter
+              data={data}
               response={response}
               currentTab={currentTab}
               selectedNode={selectedNode}

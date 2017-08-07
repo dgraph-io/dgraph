@@ -12,7 +12,8 @@ const SessionFooter = ({
   hoveredNode,
   selectedNode,
   configuringNodeType,
-  isConfiguringLabel
+  isConfiguringLabel,
+  data
 }) => {
   let child;
   if (isConfiguringLabel) {
@@ -24,6 +25,7 @@ const SessionFooter = ({
       <SessionFooterResult
         currentTab={currentTab}
         response={response}
+        data={data}
         graphRenderTime={graphRenderTime}
         treeRenderTime={treeRenderTime}
       />

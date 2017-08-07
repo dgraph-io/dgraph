@@ -7,7 +7,8 @@ const SessionFooterResult = ({
   graphRenderTime,
   treeRenderTime,
   currentTab,
-  response
+  response,
+  data
 }) => {
   let currentAction;
   if (currentTab === "graph" || currentTab === "tree") {
@@ -31,11 +32,11 @@ const SessionFooterResult = ({
       </div>
       <div className="col-12 col-sm-4">
         <div className="latency stats">
-          {response.data && response.data.server_latency
+          {data.data && data.data.server_latency
             ? <div className="stat">
                 Server latency:{" "}
                 <span className="value">
-                  {response.data.server_latency.total}
+                  {data.data.server_latency.total}
                 </span>
               </div>
             : null}
