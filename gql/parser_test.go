@@ -1092,7 +1092,6 @@ func TestParseError(t *testing.T) {
 }
 
 func TestParseXid(t *testing.T) {
-	// TODO: Why does the query not have _xid_ attribute?
 	query := `
 	query {
 		user(func: uid( 0x11)) {
@@ -1145,8 +1144,7 @@ func TestParseIdListError(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: This one complains about "Unrecognized character in lexText: U+005D ']'" which is a
-	// weird place to fail
+	require.Contains(t, err.Error(), "Unexpected character [ while parsing request")
 }
 
 func TestParseIdListError2(t *testing.T) {
@@ -2916,7 +2914,7 @@ func TestLangsInvalid6(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: We get 'Expected 3 periods ("..."), got 2.'.
+	require.Contains(t, err.Error(), "Expected only one dot(.) while parsing language list.")
 }
 
 func TestLangsInvalid7(t *testing.T) {
@@ -2930,7 +2928,7 @@ func TestLangsInvalid7(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: We get 'Expected 3 periods ("..."), got 2.'.
+	require.Contains(t, err.Error(), "Expected only one dot(.) while parsing language list.")
 }
 
 func TestLangsFilter(t *testing.T) {
@@ -3771,15 +3769,14 @@ func TestParseRegexp6(t *testing.T) {
 	require.Contains(t, err.Error(), "Unclosed Brackets")
 }
 
-func TestParseGraphQLVarIdBad(t *testing.T) {
+func TestParseGraphQLVarId(t *testing.T) {
 	query := `{
 		"query" : "query versions($a: string, $b: string, $c: string){versions(func: uid($a,$b,$c)){versions{ version_number}}}",
 		"variables" : {"$a": "3", "$b": "3", "$c": "3"}
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Invalid use of comma")
-	// TODO: See what's going on with the parsing here.
+	require.Contains(t, err.Error(), "Only one GraphQL variable allowed inside uid function.")
 }
 
 func TestMain(m *testing.M) {

@@ -1200,7 +1200,10 @@ func parseArguments(it *lex.ItemIterator, gq *GraphQuery) (result []pair, rerr e
 		if err == nil && items[0].Typ == itemAt {
 			it.Next() // consume '@'
 			it.Next() // move forward
-			langs := parseLanguageList(it)
+			langs, err := parseLanguageList(it)
+			if err != nil {
+				return nil, err
+			}
 			p.Val = p.Val + "@" + strings.Join(langs, ":")
 		}
 
@@ -1517,10 +1520,15 @@ L:
 				val = "$" + val
 				isDollar = false
 				if g.Name == uid && gq != nil {
+					if len(gq.Args["id"]) > 0 {
+						return nil,
+							x.Errorf("Only one GraphQL variable allowed inside uid function.")
+					}
 					gq.Args["id"] = val
 				} else {
 					g.Args = append(g.Args, val)
 				}
+				expectArg = false
 				continue
 			}
 
@@ -1774,7 +1782,10 @@ func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 			if err == nil && items[0].Typ == itemAt {
 				it.Next() // consume '@'
 				it.Next() // move forward
-				langs = parseLanguageList(it)
+				langs, err = parseLanguageList(it)
+				if err != nil {
+					return err
+				}
 			}
 			attrLang := AttrLang{
 				Attr:  attr,
@@ -2009,7 +2020,9 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		}
 	} else if len(curp.Attr) > 0 && len(curp.Langs) == 0 {
 		// this is language list
-		curp.Langs = parseLanguageList(it)
+		if curp.Langs, err = parseLanguageList(it); err != nil {
+			return err
+		}
 		if len(curp.Langs) == 0 {
 			return x.Errorf("Expected at least 1 language in list for %s", curp.Attr)
 		}
@@ -2019,7 +2032,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	return nil
 }
 
-func parseLanguageList(it *lex.ItemIterator) []string {
+func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 	item := it.Item()
 	var langs []string
 	for ; item.Typ == itemName || item.Typ == itemPeriod; item = it.Item() {
@@ -2031,9 +2044,18 @@ func parseLanguageList(it *lex.ItemIterator) []string {
 			break
 		}
 	}
+	if item.Typ == itemPeriod {
+		peekIt, err := it.Peek(1)
+		if err != nil {
+			return nil, err
+		}
+		if peekIt[0].Typ == itemPeriod {
+			return nil, x.Errorf("Expected only one dot(.) while parsing language list.")
+		}
+	}
 	it.Prev()
 
-	return langs
+	return langs, nil
 }
 
 func validKeyAtRoot(k string) bool {
@@ -2181,7 +2203,10 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				if err == nil && items[0].Typ == itemAt {
 					it.Next() // consume '@'
 					it.Next() // move forward
-					langs := parseLanguageList(it)
+					langs, err := parseLanguageList(it)
+					if err != nil {
+						return nil, err
+					}
 					val = val + "@" + strings.Join(langs, ":")
 				}
 
@@ -2300,7 +2325,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					if err == nil && items[0].Typ == itemAt {
 						it.Next() // consume '@'
 						it.Next() // move forward
-						child.Langs = parseLanguageList(it)
+						if child.Langs, err = parseLanguageList(it); err != nil {
+							return err
+						}
 					}
 					child.Attr = attr
 					child.IsInternal = false
