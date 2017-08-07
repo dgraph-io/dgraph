@@ -227,10 +227,6 @@ class Editor extends Component {
       onUpdateQuery(val);
     });
 
-    this.editor.on("focus", cm => {
-      CodeMirror.commands.autocomplete(cm);
-    });
-
     if (saveCodeMirrorInstance) {
       saveCodeMirrorInstance(this.editor);
     }

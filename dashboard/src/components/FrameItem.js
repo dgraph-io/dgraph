@@ -33,7 +33,7 @@ class FrameItem extends React.Component {
 
     if (!meta.collapsed && query && query.length > 0) {
       this.executeFrameQuery(query);
-    } else if (share.length > 0 && !query) {
+    } else if (share && share.length > 0 && !query) {
       this.getAndExecuteSharedQuery(share);
     }
   }
@@ -61,7 +61,9 @@ class FrameItem extends React.Component {
           const { frame, updateFrame } = this.props;
           updateFrame({
             query: query,
-            id: frame.id
+            id: frame.id,
+            // Lets update share back to empty, because we now have the query.
+            share: ""
           })();
         }
       })
@@ -86,6 +88,7 @@ class FrameItem extends React.Component {
           // Handle query error responses here.
           this.setState({
             errorMessage: res.errors[0].message,
+            data: res,
             executed: true
           });
         } else if (
@@ -98,13 +101,13 @@ class FrameItem extends React.Component {
           if (res.data.code.startsWith("Error")) {
             this.setState({
               errorMessage: res.data.message,
-              data: res.data,
+              data: res,
               executed: true
             });
           } else {
             this.setState({
               successMessage: res.data.message,
-              data: res.data,
+              data: res,
               executed: true
             });
           }
@@ -126,15 +129,15 @@ class FrameItem extends React.Component {
             nodes: nodes.slice(0, nodesIndex),
             edges: edges.slice(0, edgesIndex),
             treeView: false,
-            data: res.data
+            data: res
           };
 
-          this.setState({ response, data: res.data, executed: true });
+          this.setState({ response, executed: true, data: res });
         } else {
           this.setState({
             successMessage: "Your query did not return any results",
             executed: true,
-            data: res.data
+            data: res
           });
         }
       })

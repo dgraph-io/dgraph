@@ -38,7 +38,6 @@ export function updateFrame({ id, type, meta, data, query }) {
     frame: {
       type,
       meta: meta || {}, // Default argument for meta
-      data,
       query
     }
   };
@@ -65,7 +64,7 @@ export function toggleCollapseFrame(frame, nextState) {
   return updateFrame({
     id: frame.id,
     type: frame.type,
-    data: frame.data,
-    meta: Object.assign({}, frame.meta, { collapsed: shouldCollapse })
+    meta: Object.assign({}, frame.meta, { collapsed: shouldCollapse }),
+    query: frame.query
   });
 }
