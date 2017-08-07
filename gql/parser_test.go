@@ -1266,11 +1266,9 @@ func TestParse_pass1(t *testing.T) {
 			}
 		}
 	`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	require.NotNil(t, res.Query[0])
-	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "friends"})
-	require.Empty(t, childAttrs(res.Query[0].Children[1]))
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Got invalid keyword: xid")
 }
 
 func TestParse_alias_count(t *testing.T) {

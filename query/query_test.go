@@ -1518,13 +1518,9 @@ func TestVarInAggError(t *testing.T) {
 			}
 		}
   `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := defaultContext()
-	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Function name: min is not valid.")
 }
 
 func TestVarInIneqError(t *testing.T) {
@@ -2863,12 +2859,9 @@ func TestToSubgraphInvalidFnName(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	_, err = ToSubGraph(ctx, res.Query[0])
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Function name: invalidfn1 is not valid.")
 }
 
 func TestToSubgraphInvalidFnName2(t *testing.T) {
@@ -2923,12 +2916,9 @@ func TestToSubgraphInvalidFnName4(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	_, err = ToSubGraph(ctx, res.Query[0])
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Function name: invalidfn4 is not valid.")
 }
 
 func TestToSubgraphInvalidArgs1(t *testing.T) {
@@ -2943,12 +2933,9 @@ func TestToSubgraphInvalidArgs1(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	_, err = ToSubGraph(ctx, res.Query[0])
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Got invalid keyword: disorderasc")
 }
 
 func TestToSubgraphInvalidArgs2(t *testing.T) {
@@ -2963,12 +2950,9 @@ func TestToSubgraphInvalidArgs2(t *testing.T) {
                         }
                 }
         `
-	res, err := gql.Parse(gql.Request{Str: query})
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	_, err = ToSubGraph(ctx, res.Query[0])
+	_, err := gql.Parse(gql.Request{Str: query})
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "Got invalid keyword: invalidorderasc")
 }
 
 func TestProcessGraph(t *testing.T) {

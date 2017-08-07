@@ -1365,7 +1365,7 @@ func validFuncName(name string) bool {
 	}
 
 	switch name {
-	case "regexp", "anyofterms", "allofterms", "alloftext", "anyoftext", "has", "uid":
+	case "regexp", "anyofterms", "allofterms", "alloftext", "anyoftext", "has", "uid", "uid_in":
 		return true
 	}
 	return false
@@ -1471,7 +1471,7 @@ L:
 				// Lets reassemble the geo tokens.
 			} else if itemInFunc.Typ == itemLeftSquare {
 				isGeo := isGeoFunc(g.Name)
-				if !isGeo && g.Name != "eq" {
+				if !isGeo && !isInequalityFn(g.Name) {
 					return nil, x.Errorf("Unexpected character [ while parsing request.")
 				}
 
@@ -2038,10 +2038,12 @@ func parseLanguageList(it *lex.ItemIterator) []string {
 
 func validKeyAtRoot(k string) bool {
 	switch k {
-	case "func", "orderasc", "orderdesc", "first", "offset":
+	case "func", "orderasc", "orderdesc", "first", "offset", "after":
 		return true
 	case "from", "to", "numpaths":
 		// Specific to shortest path
+		return true
+	case "depth":
 		return true
 	}
 	return false
@@ -2050,7 +2052,7 @@ func validKeyAtRoot(k string) bool {
 // Check for validity of key at non-root nodes.
 func validKey(k string) bool {
 	switch k {
-	case "orderasc", "orderdesc", "first", "offset":
+	case "orderasc", "orderdesc", "first", "offset", "after":
 		return true
 	}
 	return false
