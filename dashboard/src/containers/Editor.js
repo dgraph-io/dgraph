@@ -1,5 +1,6 @@
 import React, { Component } from "react";
 import { connect } from "react-redux";
+import _ from "lodash";
 
 import {
   timeout,
@@ -99,7 +100,7 @@ class Editor extends Component {
         .then(response => response.json())
         .then(function(result) {
           var data = result.data;
-          if (data.schema && data.schema.length !== 0) {
+          if (data.schema && !_.isEmpty(data.schema)) {
             keywords = keywords.concat(
               data.schema.map(kw => {
                 return kw.predicate;
@@ -147,12 +148,10 @@ class Editor extends Component {
     this.editor.setCursor(this.editor.lineCount(), 0);
 
     CodeMirror.registerHelper("hint", "fromList", function(cm, options) {
-      var cur = cm.getCursor(),
-        token = cm.getTokenAt(cur);
+      var cur = cm.getCursor(), token = cm.getTokenAt(cur);
 
       var to = CodeMirror.Pos(cur.line, token.end);
-      let from = "",
-        term = "";
+      let from = "", term = "";
       if (token.string) {
         term = token.string;
         from = CodeMirror.Pos(cur.line, token.start);
@@ -226,10 +225,6 @@ class Editor extends Component {
 
       const val = this.editor.getValue();
       onUpdateQuery(val);
-    });
-
-    this.editor.on("focus", cm => {
-      CodeMirror.commands.autocomplete(cm);
     });
 
     if (saveCodeMirrorInstance) {

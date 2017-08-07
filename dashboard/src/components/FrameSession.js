@@ -218,7 +218,7 @@ class FrameSession extends React.Component {
               : null}
 
             {currentTab === "code"
-              ? <FrameCodeTab query={frame.query} data={data} />
+              ? <FrameCodeTab query={frame.query} response={data} />
               : null}
 
             {currentTab === "graph" || currentTab === "tree"
@@ -232,6 +232,7 @@ class FrameSession extends React.Component {
               : null}
 
             <SessionFooter
+              data={data}
               response={response}
               currentTab={currentTab}
               selectedNode={selectedNode}

@@ -216,6 +216,7 @@ func addCorsHeaders(w http.ResponseWriter) {
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
+	addCorsHeaders(w)
 	if err := x.HealthCheck(); err == nil {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
@@ -333,7 +334,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		// Either Schema or query can be specified
 		if parsed.Schema != nil {
 			if len(res.SchemaNode) == 0 {
-				mp["schema"] = "{}"
+				mp["schema"] = json.RawMessage("{}")
 			} else {
 				js, err := json.Marshal(res.SchemaNode)
 				if err != nil {

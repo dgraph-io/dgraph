@@ -2,7 +2,7 @@ import React from "react";
 
 import Highlight from "./Highlight";
 
-const FrameCodeTab = ({ query, data }) => {
+const FrameCodeTab = ({ query, response }) => {
   return (
     <div className="content-container">
       <div className="code-container">
@@ -19,7 +19,7 @@ const FrameCodeTab = ({ query, data }) => {
           <span className="label label-info">Response</span>
         </div>
         <Highlight preClass="content">
-          {JSON.stringify(data, null, 2)}
+          {JSON.stringify(response, null, 2)}
         </Highlight>
       </div>
     </div>

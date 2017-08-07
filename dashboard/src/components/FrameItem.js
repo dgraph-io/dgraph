@@ -7,7 +7,7 @@ import FrameError from "./FrameError";
 import FrameSuccess from "./FrameSuccess";
 import FrameLoading from "./FrameLoading";
 
-import { executeQuery, isNotEmpty } from "../lib/helpers";
+import { executeQuery, isNotEmpty, getSharedQuery } from "../lib/helpers";
 import { processGraph } from "../lib/graph";
 
 class FrameItem extends React.Component {
@@ -29,10 +29,12 @@ class FrameItem extends React.Component {
 
   componentDidMount() {
     const { frame } = this.props;
-    const { query, meta } = frame;
+    const { query, share, meta } = frame;
 
-    if (!meta.collapsed) {
+    if (!meta.collapsed && query && query.length > 0) {
       this.executeFrameQuery(query);
+    } else if (share && share.length > 0 && !query) {
+      this.getAndExecuteSharedQuery(share);
     }
   }
 
@@ -46,6 +48,35 @@ class FrameItem extends React.Component {
     });
   };
 
+  getAndExecuteSharedQuery = shareId => {
+    return getSharedQuery(shareId)
+      .then(query => {
+        if (!query) {
+          this.setState({
+            errorMessage: `No query found for the shareId: ${shareId}`,
+            executed: true
+          });
+        } else {
+          this.executeFrameQuery(query);
+          const { frame, updateFrame } = this.props;
+          updateFrame({
+            query: query,
+            id: frame.id,
+            // Lets update share back to empty, because we now have the query.
+            share: ""
+          })();
+        }
+      })
+      .catch(error => {
+        Raven.captureException(error);
+        this.setState({
+          executed: true,
+          data: error,
+          errorMessage: error.message
+        });
+      });
+  };
+
   executeFrameQuery = query => {
     const { frame: { meta }, onUpdateConnectedState } = this.props;
 
@@ -57,6 +88,7 @@ class FrameItem extends React.Component {
           // Handle query error responses here.
           this.setState({
             errorMessage: res.errors[0].message,
+            data: res,
             executed: true
           });
         } else if (
@@ -69,13 +101,13 @@ class FrameItem extends React.Component {
           if (res.data.code.startsWith("Error")) {
             this.setState({
               errorMessage: res.data.message,
-              data: res.data,
+              data: res,
               executed: true
             });
           } else {
             this.setState({
               successMessage: res.data.message,
-              data: res.data,
+              data: res,
               executed: true
             });
           }
@@ -97,15 +129,15 @@ class FrameItem extends React.Component {
             nodes: nodes.slice(0, nodesIndex),
             edges: edges.slice(0, edgesIndex),
             treeView: false,
-            data: res.data
+            data: res
           };
 
-          this.setState({ response, data: res.data, executed: true });
+          this.setState({ response, executed: true, data: res });
         } else {
           this.setState({
             successMessage: "Your query did not return any results",
             executed: true,
-            data: res.data
+            data: res
           });
         }
       })
