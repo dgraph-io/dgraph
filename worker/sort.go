@@ -438,6 +438,7 @@ func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID) (t
 	pl := posting.Get(x.DataKey(attr, uid))
 
 	src, err := pl.ValueFor(langs)
+
 	if err != nil {
 		return types.Val{}, err
 	}
