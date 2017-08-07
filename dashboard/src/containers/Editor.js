@@ -1,5 +1,6 @@
 import React, { Component } from "react";
 import { connect } from "react-redux";
+import _ from "lodash";
 
 import {
   timeout,
@@ -53,7 +54,6 @@ class Editor extends Component {
     require("codemirror-graphql/mode");
 
     let keywords = [];
-    var that = this;
     timeout(
       1000,
       fetch(getEndpointBaseURL() + "/ui/keywords", {
@@ -68,7 +68,6 @@ class Editor extends Component {
               return kw.name;
             })
           );
-          CodeMirror.commands.autocomplete(that.editor);
         })
     )
       .catch(function(error) {
@@ -99,13 +98,12 @@ class Editor extends Component {
         .then(response => response.json())
         .then(function(result) {
           var data = result.data;
-          if (data.schema && data.schema.length !== 0) {
+          if (data.schema && !_.isEmpty(data.schema)) {
             keywords = keywords.concat(
               data.schema.map(kw => {
                 return kw.predicate;
               })
             );
-            CodeMirror.commands.autocomplete(that.editor);
           }
         })
     )
@@ -134,6 +132,12 @@ class Editor extends Component {
       foldGutter: true,
       gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
       extraKeys: {
+        "Ctrl-Space": cm => {
+          CodeMirror.commands.autocomplete(cm);
+        },
+        "Cmd-Space": cm => {
+          CodeMirror.commands.autocomplete(cm);
+        },
         "Cmd-Enter": () => {
           this.props.onRunQuery(this.getValue());
         },
@@ -147,12 +151,10 @@ class Editor extends Component {
     this.editor.setCursor(this.editor.lineCount(), 0);
 
     CodeMirror.registerHelper("hint", "fromList", function(cm, options) {
-      var cur = cm.getCursor(),
-        token = cm.getTokenAt(cur);
+      var cur = cm.getCursor(), token = cm.getTokenAt(cur);
 
       var to = CodeMirror.Pos(cur.line, token.end);
-      let from = "",
-        term = "";
+      let from = "", term = "";
       if (token.string) {
         term = token.string;
         from = CodeMirror.Pos(cur.line, token.start);
@@ -192,7 +194,6 @@ class Editor extends Component {
           to: to
         };
       }
-
       var found = [];
       for (var i = 0; i < options.words.length; i++) {
         var word = options.words[i];
@@ -218,7 +219,6 @@ class Editor extends Component {
     };
 
     this.editor.on("change", cm => {
-      CodeMirror.commands.autocomplete(cm);
       const { onUpdateQuery } = this.props;
       if (!onUpdateQuery) {
         return;
@@ -228,8 +228,12 @@ class Editor extends Component {
       onUpdateQuery(val);
     });
 
-    this.editor.on("focus", cm => {
-      CodeMirror.commands.autocomplete(cm);
+    this.editor.on("keydown", function(cm, event) {
+      const code = event.keyCode;
+
+      if (!event.ctrlKey && code >= 65 && code <= 90) {
+        CodeMirror.commands.autocomplete(cm);
+      }
     });
 
     if (saveCodeMirrorInstance) {
