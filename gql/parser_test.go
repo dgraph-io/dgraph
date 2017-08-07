@@ -2460,7 +2460,7 @@ func TestParseFilter_unknowndirectiveError2(t *testing.T) {
 	require.Contains(t, err.Error(), "Unknown directive [filtererr]")
 }
 
-func TestParseGeneratorErrorBad(t *testing.T) {
+func TestParseGeneratorError1(t *testing.T) {
 	query := `{
 		me(allofterms(name, "barack")) {
 			friends {
@@ -2474,9 +2474,24 @@ func TestParseGeneratorErrorBad(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expecting a colon")
-	// TODO: Improve the error message a bit -- check that the key is one of func, orderasc, etc
-	// before expecting a colon.
+	require.Contains(t, err.Error(), "Got invalid keyword: allofterms")
+}
+
+func TestParseGeneratorError2(t *testing.T) {
+	query := `{
+		me(func: allofterms(name, "barack")) {
+			friends(all: 5) {
+				name
+			}
+			gender,age
+			hometown
+			count(friends)
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Got invalid keyword: all")
 }
 
 func TestParseQuotedFunctionAttributeError(t *testing.T) {
@@ -3668,7 +3683,7 @@ func TestParseQueryWithAttrLang2(t *testing.T) {
 func TestParseRegexp1(t *testing.T) {
 	query := `
 	{
-	  me(ix:0x1) {
+	  me(func: uid(0x1)) {
 	    name
 		friend @filter(regexp(name@en, /case INSENSITIVE regexp with \/ escaped value/i)) {
 	      name@en
@@ -4024,7 +4039,7 @@ func TestIdErr(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Invalid syntax using id. Use func: uid()")
+	require.Contains(t, err.Error(), "Got invalid keyword: id")
 }
 
 func TestFilterVarErr(t *testing.T) {

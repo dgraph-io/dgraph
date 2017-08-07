@@ -2036,6 +2036,26 @@ func parseLanguageList(it *lex.ItemIterator) []string {
 	return langs
 }
 
+func validKeyAtRoot(k string) bool {
+	switch k {
+	case "func", "orderasc", "orderdesc", "first", "offset":
+		return true
+	case "from", "to", "numpaths":
+		// Specific to shortest path
+		return true
+	}
+	return false
+}
+
+// Check for validity of key at non-root nodes.
+func validKey(k string) bool {
+	switch k {
+	case "orderasc", "orderdesc", "first", "offset":
+		return true
+	}
+	return false
+}
+
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
@@ -2093,16 +2113,16 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			return nil, x.Errorf("Expecting argument name. Got: %v", item)
 		}
 
+		if !validKeyAtRoot(key) {
+			return nil, x.Errorf("Got invalid keyword: %s at root", key)
+		}
+
 		if !it.Next() {
 			return nil, x.Errorf("Invalid query")
 		}
 		item = it.Item()
 		if item.Typ != itemColon {
 			return nil, x.Errorf("Expecting a colon. Got: %v", item)
-		}
-
-		if key == "id" {
-			return nil, x.Errorf("Invalid syntax using id. Use func: uid().")
 		}
 
 		if key == "func" {
@@ -2494,6 +2514,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 			// Stores args in GraphQuery, will be used later while retrieving results.
 			for _, p := range args {
+				if !validKey(p.Key) {
+					return x.Errorf("Got invalid keyword: %s", p.Key)
+				}
 				if _, ok := curp.Args[p.Key]; ok {
 					return x.Errorf("Got repeated key %q at level %q", p.Key, curp.Attr)
 				}
