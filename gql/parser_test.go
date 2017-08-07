@@ -2040,12 +2040,11 @@ func TestParseVariablesError7(t *testing.T) {
 		"query": "query testQuery($a: int, $b: int, $c: int!){` +
 		`    root(func: uid( 0x0a) {name(first: $b, after: $a)){english}}` +
 		`}",
-		"variables": {"$a": "6", "$b": "5", "$d": "abc" }
+		"variables": {"$a": "6", "$b": "5", "$c": "321", "$d": "abc" }
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err, "Expected type for variable $d")
 	require.Contains(t, err.Error(), "Type of variable $d not specified")
-	// TODO: We're intermittently getting "Variable $c should be initialised" here.
 }
 
 func TestParseVariablesiError8(t *testing.T) {
