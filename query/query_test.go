@@ -4325,6 +4325,10 @@ func TestToFastJSONReverseDelSet(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Glenn Rhee","~friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`,
 		js)
+
+	addEdgeToUID(t, "friend", 1, 24, nil)  // Delete Michonne.
+	addEdgeToUID(t, "friend", 23, 24, nil) // Ignored.
+	delEdgeToUID(t, "friend", 25, 24)      // Add Daryl.
 }
 
 func TestToFastJSONReverseDelSetCount(t *testing.T) {
@@ -4345,6 +4349,10 @@ func TestToFastJSONReverseDelSetCount(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"me":[{"name":"Glenn Rhee","count(~friend)":2}]}}`,
 		js)
+
+	addEdgeToUID(t, "friend", 1, 24, nil)  // Delete Michonne.
+	addEdgeToUID(t, "friend", 23, 24, nil) // Ignored.
+	delEdgeToUID(t, "friend", 25, 24)      // Add Daryl.
 }
 
 func getProperty(properties []*protos.Property, prop string) *protos.Value {
@@ -5838,12 +5846,6 @@ children: <
     >
   >
   properties: <
-    prop: "fn"
-    value: <
-      str_val: "Glenn Rhee"
-    >
-  >
-  properties: <
     prop: "sn"
     value: <
       str_val: "Andre"
@@ -5867,12 +5869,6 @@ children: <
     prop: "d"
     value: <
       str_val: "1909-01-10T00:00:00Z"
-    >
-  >
-  properties: <
-    prop: "fn"
-    value: <
-      str_val: "Glenn Rhee"
     >
   >
   properties: <
@@ -5977,7 +5973,7 @@ func TestNormalizeDirective(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"data": {"me":[{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Helmut"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Helmut"},{"d":"1909-01-10T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1909-01-10T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Daryl Dixon","sn":"Helmut"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Helmut"}]}}`,
+		`{"data": {"me":[{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Andre"},{"d":"1910-01-02T00:00:00Z","fn":"Michonne","mn":"Michonne","n":"Rick Grimes","sn":"Helmut"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Andre"},{"d":"1909-05-05T00:00:00Z","mn":"Michonne","n":"Glenn Rhee","sn":"Helmut"},{"d":"1909-01-10T00:00:00Z","mn":"Michonne","n":"Daryl Dixon","sn":"Andre"},{"d":"1909-01-10T00:00:00Z","mn":"Michonne","n":"Daryl Dixon","sn":"Helmut"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Andre"},{"d":"1901-01-15T00:00:00Z","fn":"Glenn Rhee","mn":"Michonne","n":"Andrea","sn":"Helmut"}]}}`,
 		js)
 }
 
@@ -7478,7 +7474,7 @@ func TestDebugUid(t *testing.T) {
 	resp := mp["data"].(map[string]interface{})["me"]
 	body, err := json.Marshal(resp)
 	require.NoError(t, err)
-	require.Equal(t, `[{"_uid_":"0x1","friend":[{"_uid_":"0x17","friend":[{"_uid_":"0x1"}]},{"_uid_":"0x18"},{"_uid_":"0x19","friend":[{"_uid_":"0x18"}]},{"_uid_":"0x1f","friend":[{"_uid_":"0x18"}]},{"_uid_":"0x65"}],"name":"Michonne"}]`, string(body))
+	require.Equal(t, `[{"_uid_":"0x1","friend":[{"_uid_":"0x17","friend":[{"_uid_":"0x1"}]},{"_uid_":"0x18"},{"_uid_":"0x19"},{"_uid_":"0x1f","friend":[{"_uid_":"0x18"}]},{"_uid_":"0x65"}],"name":"Michonne"}]`, string(body))
 }
 
 func TestUidAlias(t *testing.T) {
@@ -7614,7 +7610,7 @@ func TestCountAtRoot(t *testing.T) {
         }
         `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"count": 4}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"count": 3}]}}`, js)
 }
 
 func TestCountAtRoot2(t *testing.T) {
@@ -7706,7 +7702,7 @@ func TestCountAtRoot3(t *testing.T) {
         }
         `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"count":3},{"count(friend)":5,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"},{"count":5}],"name":"Michonne"},{"count(friend)":1,"friend":[{"name":"Michonne"},{"count":1}],"name":"Rick Grimes"},{"count(friend)":1,"friend":[{"name":"Glenn Rhee"},{"count":1}],"name":"Daryl Dixon"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"count":3},{"count(friend)":5,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"},{"count":5}],"name":"Michonne"},{"count(friend)":1,"friend":[{"name":"Michonne"},{"count":1}],"name":"Rick Grimes"},{"count(friend)":0,"name":"Daryl Dixon"}]}}`, js)
 }
 
 func TestCountAtRootWithAlias4(t *testing.T) {
@@ -7756,7 +7752,7 @@ func TestHasFuncAtRoot(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Daryl Dixon"},{"friend":[{"count":1}],"name":"Andrea"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Andrea"}]}}`, js)
 }
 
 func TestHasFuncAtRootFilter(t *testing.T) {
@@ -7773,7 +7769,7 @@ func TestHasFuncAtRootFilter(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"},{"friend":[{"count":1}],"name":"Daryl Dixon"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"friend":[{"count":5}],"name":"Michonne"},{"friend":[{"count":1}],"name":"Rick Grimes"}]}}`, js)
 }
 
 func TestHasFuncAtChild1(t *testing.T) {
@@ -7808,7 +7804,7 @@ func TestHasFuncAtChild2(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"friend":[{"alias":"Zambo Alice","name":"Rick Grimes"},{"alias":"John Alice","name":"Glenn Rhee"},{"alias":"Bob Joe","name":"Daryl Dixon"},{"alias":"Allan Matt","name":"Andrea"},{"alias":"John Oliver"}],"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Daryl Dixon"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Andrea"}]}}`, js)
+	require.Equal(t, `{"data": {"me":[{"friend":[{"alias":"Zambo Alice","name":"Rick Grimes"},{"alias":"John Alice","name":"Glenn Rhee"},{"alias":"Bob Joe","name":"Daryl Dixon"},{"alias":"Allan Matt","name":"Andrea"},{"alias":"John Oliver"}],"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"friend":[{"alias":"John Alice","name":"Glenn Rhee"}],"name":"Andrea"}]}}`, js)
 }
 
 func TestHasFuncAtRoot2(t *testing.T) {
@@ -8731,5 +8727,5 @@ func TestCascadeUid(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"friend":[{"_uid_":"0x17","friend":[{"age":38,"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"_uid_":"0x19","friend":[{"age":15,"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Daryl Dixon"},{"_uid_":"0x1f","friend":[{"age":15,"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"friend":[{"_uid_":"0x17","friend":[{"age":38,"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"_uid_":"0x1f","friend":[{"age":15,"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`, js)
 }
