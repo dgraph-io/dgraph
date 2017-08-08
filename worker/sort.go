@@ -53,8 +53,8 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 	// Send this over the network.
 	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
 	// TODO: Actually use addr2 to do above ^^
-	addr1, ok, _, _ := groups().AnyTwoServers(gid)
-	if !ok {
+	addr1, _, numAddrs := groups().AnyTwoServers(gid)
+	if numAddrs == 0 {
 		return &emptySortResult, fmt.Errorf("SortOverNetwork: while retrieving connection")
 	}
 	addr := addr1
