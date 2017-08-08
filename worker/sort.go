@@ -52,42 +52,49 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 
 	// Send this over the network.
 	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
-	// TODO: Actually use addr2 to do above ^^
-	addr1, _, numAddrs := groups().AnyTwoServers(gid)
-	if numAddrs == 0 {
+	// TODO: We do send the request to multiple servers -- now implement cancellation.
+	addrs := groups().AnyTwoServers(gid)
+	if len(addrs) == 0 {
 		return &emptySortResult, fmt.Errorf("SortOverNetwork: while retrieving connection")
 	}
-	addr := addr1
-
-	pl, err := pools().get(addr1)
-	if err != nil {
-		return &emptySortResult, x.Wrapf(err, "SortOverNetwork: while retrieving connection.")
+	type sortresult struct {
+		reply *protos.SortResult
+		err   error
 	}
-	defer pools().release(pl)
-	conn := pl.Get()
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Sending request to %v", addr)
-	}
+	chResults := make(chan sortresult, len(addrs))
+	for _, addr := range addrs {
+		go func(addr string) {
+			pl, err := pools().get(addr)
+			if err != nil {
+				chResults <- sortresult{
+					&emptySortResult,
+					x.Wrapf(err, "SortOverNetwork: while retrieving connection.")}
+				return
+			}
+			defer pools().release(pl)
 
-	c := protos.NewWorkerClient(conn)
-	var reply *protos.SortResult
-	cerr := make(chan error, 1)
-	go func() {
-		var err error
-		reply, err = c.Sort(ctx, q)
-		cerr <- err
-	}()
+			conn := pl.Get()
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Sending request to %v", addr)
+			}
+			c := protos.NewWorkerClient(conn)
+
+			reply, err := c.Sort(ctx, q)
+			chResults <- sortresult{reply, err}
+		}(addr)
+	}
 
 	select {
 	case <-ctx.Done():
 		return &emptySortResult, ctx.Err()
-	case err := <-cerr:
-		if err != nil {
+	case result := <-chResults:
+		// Returns upon the first result.
+		if result.err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while calling Worker.Sort: %+v", err)
+				tr.LazyPrintf("Error while calling Worker.Sort: %+v", result.err)
 			}
 		}
-		return reply, err
+		return result.reply, result.err
 	}
 }
 
