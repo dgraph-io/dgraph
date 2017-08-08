@@ -864,10 +864,9 @@ func valueToTypesVal(p *protos.Posting) (rval types.Val) {
 
 func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error) {
 	l.AssertRLock()
-	var found bool
 
 	any := false
-	// look for language in preffered order
+	// look for language in preferred order
 	for _, lang := range langs {
 		if lang == "." {
 			any = true
@@ -880,12 +879,15 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 	}
 
 	// look for value without language
-	if !found && (any || len(langs) == 0) {
-		found, pos = l.findPosting(math.MaxUint64)
+	if any || len(langs) == 0 {
+		if found, pos := l.findPosting(math.MaxUint64); found {
+			return pos, nil
+		}
 	}
 
+	var found bool
 	// last resort - return value with smallest lang Uid
-	if !found && any {
+	if any {
 		l.iterate(0, func(p *protos.Posting) bool {
 			if postingType(p) == x.ValueMulti {
 				pos = p
@@ -896,11 +898,11 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 		})
 	}
 
-	if !found {
-		return pos, ErrNoValue
+	if found {
+		return pos, nil
 	}
 
-	return pos, nil
+	return pos, ErrNoValue
 }
 
 func (l *List) postingForTag(tag string) (p *protos.Posting, rerr error) {

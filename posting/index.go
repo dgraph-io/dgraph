@@ -317,16 +317,22 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 				val, found = l.findValue(math.MaxUint64)
 			}
 		}
-		countBefore := l.length(0)
+		countBefore, countAfter := 0, 0
+		hasCountIndex := schema.State().HasCount(t.Attr)
+		if hasCountIndex {
+			countBefore = l.length(0)
+		}
 		_, err := l.addMutation(ctx, t)
-		countAfter := l.length(0)
+		if hasCountIndex {
+			countAfter = l.length(0)
+		}
 		l.Unlock()
 
 		if err != nil {
 			return err
 		}
 		x.PredicateStats.Add(t.Attr, 1)
-		if countAfter != countBefore && schema.State().HasCount(t.Attr) {
+		if hasCountIndex && countAfter != countBefore {
 			if err := updateCount(ctx, countParams{
 				attr:        t.Attr,
 				countBefore: countBefore,
