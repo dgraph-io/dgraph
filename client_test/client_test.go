@@ -59,7 +59,7 @@ func prepare() (res []string, options dgraph.Options) {
 
 func removeDirs(dirs []string) {
 	for _, dir := range dirs {
-		os.Remove(dir)
+		os.RemoveAll(dir)
 	}
 }
 

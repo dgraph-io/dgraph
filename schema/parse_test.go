@@ -277,10 +277,12 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	x.Check(group.ParseGroupConfig("groups.conf"))
 	Init(ps)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
 
-	os.Exit(m.Run())
+	r := m.Run()
+
+	ps.Close()
+	os.RemoveAll(dir)
+	os.Exit(r)
 }
 
 func TestParseUnderscore(t *testing.T) {
