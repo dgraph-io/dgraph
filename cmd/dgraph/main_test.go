@@ -29,7 +29,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
@@ -59,16 +58,16 @@ var m = `
 	}
 `
 
-func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
+func prepare() (dir1, dir2 string, rerr error) {
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {
-		return "", "", nil, err
+		return "", "", err
 	}
 
 	dir2, err = ioutil.TempDir("", "wal_")
 	if err != nil {
-		return dir1, "", nil, err
+		return dir1, "", err
 	}
 
 	dgraph.Config.PostingDir = dir1
@@ -81,12 +80,12 @@ func prepare() (dir1, dir2 string, ps *badger.KV, rerr error) {
 	schema.Init(dgraph.State.Pstore)
 	worker.Init(dgraph.State.Pstore)
 	worker.StartRaftNodes(dgraph.State.WALstore, false)
-	return dir1, dir2, ps, nil
+	return dir1, dir2, nil
 }
 
 func closeAll(dir1, dir2 string) {
-	os.RemoveAll(dir2)
 	os.RemoveAll(dir1)
+	os.RemoveAll(dir2)
 }
 
 func childAttrs(sg *query.SubGraph) []string {
@@ -906,7 +905,7 @@ var q1 = `
 `
 
 func BenchmarkQuery(b *testing.B) {
-	dir1, dir2, _, err := prepare()
+	dir1, dir2, err := prepare()
 	if err != nil {
 		b.Error(err)
 		return
@@ -1324,12 +1323,12 @@ func TestMain(m *testing.M) {
 	dgraph.SetConfiguration(dc)
 	x.Init()
 
-	dir1, dir2, ps, _ := prepare()
-	defer ps.Close()
-	defer closeAll(dir1, dir2)
+	dir1, dir2, _ := prepare()
 
 	// we need watermarks for reindexing
 	x.AssertTrue(!x.IsTestRun())
 	// Parse GQL into internal query representation.
-	os.Exit(m.Run())
+	r := m.Run()
+	closeAll(dir1, dir2)
+	os.Exit(r)
 }

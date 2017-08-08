@@ -774,7 +774,10 @@ func TestMain(m *testing.M) {
 	Init(ps)
 
 	group.ParseGroupConfig("")
-	os.Exit(m.Run())
+	r := m.Run()
+
+	os.RemoveAll(dir)
+	os.Exit(r)
 }
 
 func BenchmarkAddMutations(b *testing.B) {

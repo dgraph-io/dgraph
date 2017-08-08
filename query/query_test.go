@@ -6840,7 +6840,6 @@ func TestMain(m *testing.M) {
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
-	defer os.RemoveAll(dir)
 
 	opt := badger.DefaultOptions
 	opt.Dir = dir
@@ -6873,9 +6872,12 @@ func TestMain(m *testing.M) {
 	// Load schema after nodes have started
 	err = schema.ParseBytes([]byte(schemaStr), 1)
 	x.Check(err)
-	defer os.RemoveAll(dir2)
 
-	os.Exit(m.Run())
+	r := m.Run()
+
+	os.RemoveAll(dir)
+	os.RemoveAll(dir2)
+	os.Exit(r)
 }
 
 func TestFilterNonIndexedPredicateFail(t *testing.T) {
