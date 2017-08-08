@@ -193,7 +193,7 @@ func TestDeletePredicate(t *testing.T) {
 	`
 	var q2 = `
 	{
-		user(func: uid([0x1, 0x2, 0x3])) {
+		user(func: uid(0x1, 0x2, 0x3)) {
 			name
 		}
 	}

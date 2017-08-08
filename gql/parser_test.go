@@ -632,7 +632,7 @@ func TestParseQueryWithVarValAggError(t *testing.T) {
 	require.Contains(t, err.Error(), "Expected val(). Got uid() with order.")
 }
 
-func TestParseQueryWithVarValAggBad(t *testing.T) {
+func TestParseQueryWithVarValAggError2(t *testing.T) {
 	query := `
 	{
 		me(func: val(L), orderasc: val(n)) {
@@ -648,8 +648,8 @@ func TestParseQueryWithVarValAggBad(t *testing.T) {
 	}
 `
 	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	// TODO: This test should error.  (Accepting val(L) is a bug.)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Function name: val is not valid.")
 }
 
 func TestParseQueryWithVarValCount(t *testing.T) {
@@ -804,7 +804,7 @@ func TestParseQueryFilterError1A(t *testing.T) {
 func TestParseQueryFilterError1B(t *testing.T) {
 	query := `
 	{
-		me(func: uid(1)) @filter(anyof(name"alice")) {
+		me(func: uid(1)) @filter(anyofterms(name"alice")) {
 		 name
 		}
 	}
@@ -817,7 +817,7 @@ func TestParseQueryFilterError1B(t *testing.T) {
 func TestParseQueryFilterError2(t *testing.T) {
 	query := `
 	{
-		me(func: uid(1)) @filter(anyof(name "alice")) {
+		me(func: uid(1)) @filter(anyofterms(name "alice")) {
 		 name
 		}
 	}
@@ -1092,7 +1092,6 @@ func TestParseError(t *testing.T) {
 }
 
 func TestParseXid(t *testing.T) {
-	// TODO: Why does the query not have _xid_ attribute?
 	query := `
 	query {
 		user(func: uid( 0x11)) {
@@ -1145,11 +1144,10 @@ func TestParseIdListError(t *testing.T) {
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: This one complains about "Unrecognized character in lexText: U+005D ']'" which is a
-	// weird place to fail
+	require.Contains(t, err.Error(), "Unexpected character [ while parsing request")
 }
 
-func TestParseIdListBad(t *testing.T) {
+func TestParseIdListError2(t *testing.T) {
 	query := `
 	query {
 		user(func: uid( [0x1, 0x1, 2, 3, 0x34])) {
@@ -1157,9 +1155,8 @@ func TestParseIdListBad(t *testing.T) {
 		}
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	// TODO: This test, I'm told, should fail.  We used to support `user(id: [1,2,3])` and the
-	// parsing code is warty.
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unexpected character [ while parsing request.")
 }
 
 func TestParseFirst(t *testing.T) {
@@ -1267,11 +1264,9 @@ func TestParse_pass1(t *testing.T) {
 			}
 		}
 	`
-	res, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	require.NotNil(t, res.Query[0])
-	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "friends"})
-	require.Empty(t, childAttrs(res.Query[0].Children[1]))
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Got invalid keyword: xid")
 }
 
 func TestParse_alias_count(t *testing.T) {
@@ -2060,7 +2055,7 @@ func TestParseVariablesiError8(t *testing.T) {
 func TestParseFilter_root(t *testing.T) {
 	query := `
 	query {
-		me(func:abc(abc)) @filter(allofterms(name, "alice")) {
+		me(func:anyofterms(abc, "Abc")) @filter(allofterms(name, "alice")) {
 			friends @filter() {
 				name @filter(namefilter(name, "a"))
 			}
@@ -2104,7 +2099,7 @@ func TestParseFuncNested(t *testing.T) {
 func TestParseFilter_root2(t *testing.T) {
 	query := `
 	query {
-		me(func:abc(abc)) @filter(gt(count(friends), 10)) {
+		me(func:anyofterms(abc, "Abc")) @filter(gt(count(friends), 10)) {
 			friends @filter() {
 				name
 			}
@@ -2126,7 +2121,7 @@ func TestParseFilter_root_Error2(t *testing.T) {
 	// filter-by-count only support first argument as function
 	query := `
 	query {
-		me(func:abc(abc)) @filter(gt(count(friends), sum(friends))) {
+		me(func:anyofterms(abc, "Abc")) @filter(gt(count(friends), sum(friends))) {
 			friends @filter() {
 				name
 			}
@@ -2426,7 +2421,8 @@ func TestParseFilter_emptyargument(t *testing.T) {
 	require.Contains(t, err.Error(), "Consecutive commas not allowed")
 
 }
-func TestParseFilter_unknowndirectiveBad(t *testing.T) {
+
+func TestParseFilter_unknowndirectiveError1(t *testing.T) {
 	query := `
 	query {
 		me(func: uid(0x0a)) {
@@ -2438,11 +2434,29 @@ func TestParseFilter_unknowndirectiveBad(t *testing.T) {
 		}
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
-	require.NoError(t, err)
-	// TODO: This should fail to parse, because @filtererr.
+	require.Error(t, err)
+	// We can't differentiate between @filtererr being a directive or a language. As we don't
+	// see a () after it we assume its a language but attr which specify a language can't have
+	// children.
+	// The test below tests for unknown directive.
+	require.Contains(t, err.Error(), "Cannot have children for attr: friends with lang tags:")
 }
 
-func TestParseGeneratorErrorBad(t *testing.T) {
+func TestParseFilter_unknowndirectiveError2(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x0a)) {
+			friends @filtererr ()
+			gender,age
+			hometown
+		}
+	}`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unknown directive [filtererr]")
+}
+
+func TestParseGeneratorError1(t *testing.T) {
 	query := `{
 		me(allofterms(name, "barack")) {
 			friends {
@@ -2456,9 +2470,24 @@ func TestParseGeneratorErrorBad(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expecting a colon")
-	// TODO: Improve the error message a bit -- check that the key is one of func, orderasc, etc
-	// before expecting a colon.
+	require.Contains(t, err.Error(), "Got invalid keyword: allofterms")
+}
+
+func TestParseGeneratorError2(t *testing.T) {
+	query := `{
+		me(func: allofterms(name, "barack")) {
+			friends(all: 5) {
+				name
+			}
+			gender,age
+			hometown
+			count(friends)
+		}
+	}
+`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Got invalid keyword: all")
 }
 
 func TestParseQuotedFunctionAttributeError(t *testing.T) {
@@ -2885,7 +2914,7 @@ func TestLangsInvalid6(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: We get 'Expected 3 periods ("..."), got 2.'.
+	require.Contains(t, err.Error(), "Expected only one dot(.) while parsing language list.")
 }
 
 func TestLangsInvalid7(t *testing.T) {
@@ -2899,7 +2928,7 @@ func TestLangsInvalid7(t *testing.T) {
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	// TODO: We get 'Expected 3 periods ("..."), got 2.'.
+	require.Contains(t, err.Error(), "Expected only one dot(.) while parsing language list.")
 }
 
 func TestLangsFilter(t *testing.T) {
@@ -3650,7 +3679,7 @@ func TestParseQueryWithAttrLang2(t *testing.T) {
 func TestParseRegexp1(t *testing.T) {
 	query := `
 	{
-	  me(ix:0x1) {
+	  me(func: uid(0x1)) {
 	    name
 		friend @filter(regexp(name@en, /case INSENSITIVE regexp with \/ escaped value/i)) {
 	      name@en
@@ -3740,15 +3769,14 @@ func TestParseRegexp6(t *testing.T) {
 	require.Contains(t, err.Error(), "Unclosed Brackets")
 }
 
-func TestParseGraphQLVarIdBad(t *testing.T) {
+func TestParseGraphQLVarId(t *testing.T) {
 	query := `{
 		"query" : "query versions($a: string, $b: string, $c: string){versions(func: uid($a,$b,$c)){versions{ version_number}}}",
 		"variables" : {"$a": "3", "$b": "3", "$c": "3"}
 	}`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Invalid use of comma")
-	// TODO: See what's going on with the parsing here.
+	require.Contains(t, err.Error(), "Only one GraphQL variable allowed inside uid function.")
 }
 
 func TestMain(m *testing.M) {
@@ -4006,7 +4034,7 @@ func TestIdErr(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Invalid syntax using id. Use func: uid()")
+	require.Contains(t, err.Error(), "Got invalid keyword: id")
 }
 
 func TestFilterVarErr(t *testing.T) {
