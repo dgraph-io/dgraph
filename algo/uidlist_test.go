@@ -23,7 +23,9 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -286,37 +288,39 @@ func TestApplyFilterUint(t *testing.T) {
 }
 
 // Benchmarks for IntersectWith
-// random data : u and v having data within range [0, limit)
-// where limit = N * sizeof-list ; for different N
-func runIntersectRandom(arrSz int, limit int64, b *testing.B) {
-	u1, v1 := make([]uint64, arrSz, arrSz), make([]uint64, arrSz, arrSz)
-	for i := 0; i < arrSz; i++ {
-		u1[i] = uint64(rand.Int63n(limit))
-		v1[i] = uint64(rand.Int63n(limit))
-	}
-	sort.Slice(u1, func(i, j int) bool { return u1[i] < u1[j] })
-	sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
-
-	u := newList(u1)
-	v := newList(v1)
-	ucopy := make([]uint64, len(u1), len(u1))
-	copy(ucopy, u1)
-
-	b.ResetTimer()
-	for k := 0; k < b.N; k++ {
-		IntersectWith(u, v, u)
-		u.Uids = u.Uids[:arrSz]
-		copy(u.Uids, ucopy)
-	}
-
-}
-
 func BenchmarkListIntersectRandom(b *testing.B) {
-	randomTests := func(sz int, overlap float64) {
-		b.Run(fmt.Sprintf(":random:size=%d:overlap=%.2f:", sz, overlap),
+	randomTests := func(arrSz int, overlap float64) {
+		limit := int64(float64(arrSz) / overlap)
+		u1, v1 := make([]uint64, arrSz, arrSz), make([]uint64, arrSz, arrSz)
+		for i := 0; i < arrSz; i++ {
+			u1[i] = uint64(rand.Int63n(limit))
+			v1[i] = uint64(rand.Int63n(limit))
+		}
+		sort.Slice(u1, func(i, j int) bool { return u1[i] < u1[j] })
+		sort.Slice(v1, func(i, j int) bool { return v1[i] < v1[j] })
+
+		u := newList(u1)
+		v := newList(v1)
+		dst1 := &protos.List{}
+		dst2 := &protos.List{}
+		compressedUids := bp128.DeltaPack(u1)
+
+		b.Run(fmt.Sprintf(":random:size=%d:overlap=%.2f:", arrSz, overlap),
 			func(b *testing.B) {
-				runIntersectRandom(sz, int64(float64(sz)/overlap), b)
+				for k := 0; k < b.N; k++ {
+					IntersectWith(u, v, dst1)
+				}
 			})
+		b.Run(fmt.Sprintf(":compressed:random:size=%d:overlap=%.2f:", arrSz, overlap),
+			func(b *testing.B) {
+				for k := 0; k < b.N; k++ {
+					IntersectCompressedWith(compressedUids, 0, v, dst2)
+				}
+			})
+		x.AssertTruef(len(dst1.Uids) == len(dst2.Uids), "lengths are %v %v", len(dst1.Uids), len(dst2.Uids))
+		for i := 0; i < len(dst1.Uids); i++ {
+			x.AssertTrue(dst1.Uids[i] == dst2.Uids[i])
+		}
 	}
 
 	randomTests(500, 0.3)
@@ -355,17 +359,26 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 
 			u := &protos.List{u1}
 			v := &protos.List{v1}
-			ucopy := make([]uint64, len(u1), len(u1))
-			copy(ucopy, u1)
+			dst := &protos.List{}
+			compressedUids := bp128.DeltaPack(v1)
 
 			b.Run(fmt.Sprintf(":IntersectWith:ratio=%d:size=%d:overlap=%.2f:", r, sz, overlap),
 				func(b *testing.B) {
 					for k := 0; k < b.N; k++ {
-						u.Uids = u.Uids[:sz1]
-						copy(u.Uids, ucopy)
-						IntersectWith(u, v, u)
+						IntersectWith(u, v, dst)
 					}
 				})
+			b.Run(fmt.Sprintf("compressed:IntersectWith:ratio=%d:size=%d:overlap=%.2f:", r, sz, overlap),
+				func(b *testing.B) {
+					for k := 0; k < b.N; k++ {
+						IntersectCompressedWith(compressedUids, 0, u, dst)
+					}
+				})
+			//x.AssertTruef(len(dst1.Uids) == len(dst2.Uids), "lengths are %v %v", len(dst1.Uids), len(dst2.Uids))
+			//for i := 0; i < len(dst1.Uids); i++ {
+			//x.AssertTrue(dst1.Uids[i] == dst2.Uids[i])
+			//}
+
 		}
 	}
 

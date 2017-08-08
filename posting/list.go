@@ -20,8 +20,6 @@ package posting
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
-	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
@@ -652,18 +650,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	var bp bp128.BPackEncoder
 	out := make([]uint64, 0, bp128.BlockSize)
 
-	var ubuf [16]byte
-	h := md5.New()
-	count := 0
 	l.iterate(0, func(p *protos.Posting) bool {
-		// Checksum code.
-		n := binary.PutVarint(ubuf[:], int64(count))
-		h.Write(ubuf[0:n])
-		n = binary.PutUvarint(ubuf[:], p.Uid)
-		h.Write(ubuf[0:n])
-		h.Write(p.Value)
-		h.Write([]byte(p.Label))
-
 		out = append(out, p.Uid)
 		if len(out) == bp128.BlockSize {
 			bp.Pack(out)
@@ -694,7 +681,6 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		// This means we should delete the key from store during SyncIfDirty.
 		data = nil
 	} else if len(final.Postings) > 0 {
-		final.Checksum = h.Sum(nil)
 		data, err = final.Marshal()
 		x.Checkf(err, "Unable to marshal posting list")
 	} else {
@@ -776,6 +762,13 @@ func (l *List) Uids(opt ListOptions) *protos.List {
 	// Pre-assign length to make it faster.
 	l.RLock()
 	res := make([]uint64, 0, l.length(opt.AfterUID))
+	out := &protos.List{}
+	// TODO: Avoid complete decompression when dirty
+	if len(l.mlayer) == 0 && opt.Intersect != nil {
+		algo.IntersectCompressedWith(l.plist.Uids, opt.AfterUID, opt.Intersect, out)
+		l.RUnlock()
+		return out
+	}
 	l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
 		if postingType(p) == x.ValueUid {
 			res = append(res, p.Uid)
@@ -785,7 +778,7 @@ func (l *List) Uids(opt ListOptions) *protos.List {
 	l.RUnlock()
 
 	// Do The intersection here as it's optimized.
-	out := &protos.List{res}
+	out.Uids = res
 	if opt.Intersect != nil {
 		// TODO: How to handle binary search without unpacking ??
 		algo.IntersectWith(out, opt.Intersect, out)

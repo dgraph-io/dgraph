@@ -21,6 +21,7 @@ const (
 	// block address must be aligned at 16-byte boundaries.
 	BlockSize = 256
 	intSize   = 64
+	bitVarint = 0x80
 )
 
 var (
@@ -112,7 +113,6 @@ type BPackEncoder struct {
 	offset   int
 }
 
-// Takes only blockSize ints
 // TODO: Don't compress for small lengths
 func (bp *BPackEncoder) Pack(in []uint64) {
 	if len(in) == 0 {
@@ -137,7 +137,7 @@ func (bp *BPackEncoder) Pack(in []uint64) {
 	// This should be the last block
 	if len(in) < BlockSize {
 		b = bp.data.BytesFor(1 + 10*len(in))
-		b[0] = 0
+		b[0] = 0 | bitVarint
 		off := 1
 		for _, num := range in {
 			off += binary.PutUvarint(b[off:], num)
@@ -150,7 +150,9 @@ func (bp *BPackEncoder) Pack(in []uint64) {
 	nBytes := int(bs)*BlockSize/8 + 1
 	b = bp.data.BytesFor(nBytes)
 	b[0] = bs
-	fpack[bs](&in[0], &b[1], &bp.lastSeed[0])
+	if bs > 0 {
+		fpack[bs](&in[0], &b[1], &bp.lastSeed[0])
+	}
 	bp.offset += nBytes
 }
 
@@ -170,12 +172,14 @@ func (bp *BPackEncoder) Size() int {
 
 type BPackIterator struct {
 	data      []byte
+	metadata  []byte
 	in_offset int
 	length    int
 	count     int
 	valid     bool
 	lastSeed  []uint64
 	out       []uint64
+	buf       []uint64
 }
 
 func numBlocks(len int) int {
@@ -189,10 +193,12 @@ func (pi *BPackIterator) Init(data []byte, afterUid uint64) {
 	if len(data) == 0 {
 		return
 	}
-	pi.data = data
 	pi.length = int(binary.BigEndian.Uint64(data[0:8]))
 	nBlocks := numBlocks(pi.length)
+	pi.data = data[8+nBlocks*20:]
+	pi.metadata = data[8 : 8+nBlocks*20]
 	pi.out = make([]uint64, BlockSize, BlockSize)
+	pi.buf = pi.out
 	pi.lastSeed = make([]uint64, 2)
 	pi.valid = true
 	if afterUid > 0 {
@@ -203,16 +209,16 @@ func (pi *BPackIterator) Init(data []byte, afterUid uint64) {
 		pi.out = pi.out[uidx:]
 		return
 	}
-	pi.lastSeed[0] = binary.BigEndian.Uint64(data[8:16])
-	pi.lastSeed[1] = binary.BigEndian.Uint64(data[16:24])
-	pi.data = data[8+nBlocks*20:]
+	pi.lastSeed[0] = binary.BigEndian.Uint64(pi.metadata[0:8])
+	pi.lastSeed[1] = binary.BigEndian.Uint64(pi.metadata[8:16])
 	pi.Next()
+	return
 }
 
 func (pi *BPackIterator) search(afterUid uint64, numBlocks int) {
 	idx := sort.Search(numBlocks, func(idx int) bool {
-		i := 8 + idx*20
-		return afterUid < binary.BigEndian.Uint64(pi.data[i+8:i+16])
+		i := idx * 20
+		return afterUid < binary.BigEndian.Uint64(pi.metadata[i+8:i+16])
 	})
 	// seed is stored for previous block, so search there. If not found
 	// then search in last block.
@@ -222,12 +228,32 @@ func (pi *BPackIterator) search(afterUid uint64, numBlocks int) {
 		idx -= 1
 	}
 	pi.count = idx * BlockSize
-	i := 8 + idx*20
-	pi.in_offset = int(binary.BigEndian.Uint32(pi.data[i+16 : i+20]))
-	pi.lastSeed[0] = binary.BigEndian.Uint64(pi.data[i : i+8])
-	pi.lastSeed[1] = binary.BigEndian.Uint64(pi.data[i+8 : i+16])
-	pi.data = pi.data[8+numBlocks*20:]
+	i := idx * 20
+	pi.in_offset = int(binary.BigEndian.Uint32(pi.metadata[i+16 : i+20]))
+	pi.lastSeed[0] = binary.BigEndian.Uint64(pi.metadata[i : i+8])
+	pi.lastSeed[1] = binary.BigEndian.Uint64(pi.metadata[i+8 : i+16])
 	pi.Next()
+}
+
+func (pi *BPackIterator) Advance(uid uint64) (found bool) {
+	// Current uncompressed block doesn't have uid
+	if pi.out[len(pi.out)-1] < uid {
+		nBlocks := numBlocks(pi.length)
+		pi.search(uid-1, nBlocks)
+	}
+	uidx := sort.Search(len(pi.out), func(idx int) bool {
+		return pi.out[idx] >= uid
+	})
+	if uidx < len(pi.out) && pi.out[uidx] == uid {
+		found = true
+		uidx++
+	}
+	if uidx < len(pi.out) {
+		pi.out = pi.out[uidx:]
+		return
+	}
+	pi.Next()
+	return
 }
 
 func (pi *BPackIterator) Valid() bool {
@@ -238,6 +264,11 @@ func (pi *BPackIterator) Length() int {
 	return pi.length
 }
 
+// Returns number of uids to be read including the current out slice
+func (pi *BPackIterator) Cnt() int {
+	return pi.length - pi.count + len(pi.out)
+}
+
 func (pi *BPackIterator) Uids() (int, []uint64) {
 	return pi.count - len(pi.out), pi.out
 }
@@ -245,15 +276,15 @@ func (pi *BPackIterator) Uids() (int, []uint64) {
 func (pi *BPackIterator) Next() {
 	if pi.count >= pi.length {
 		pi.valid = false
+		pi.out = pi.buf[:0]
 		return
 	}
 
-	// TODO: Metadata which tells whether we can use 16,32 or 64 bits
 	sz := uint8(pi.data[pi.in_offset])
 	pi.in_offset++
-	if sz == 0 {
+	if sz&bitVarint != 0 {
 		//varint is the last block and has less than blockSize integers
-		pi.out = pi.out[:0]
+		pi.out = pi.buf[:0]
 		for pi.count < pi.length {
 			i, n := binary.Uvarint(pi.data[pi.in_offset:])
 			pi.out = append(pi.out, i)
@@ -262,6 +293,7 @@ func (pi *BPackIterator) Next() {
 		}
 		return
 	}
+	pi.out = pi.buf[:BlockSize]
 	funpack[sz](&pi.data[pi.in_offset], &pi.out[0], &pi.lastSeed[0])
 	pi.in_offset += (int(sz) * BlockSize) / 8
 	pi.count += BlockSize
