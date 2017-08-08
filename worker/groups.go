@@ -265,25 +265,25 @@ func (g *groupi) Server(id uint64, groupId uint32) (rs string, found bool) {
 	return "", false
 }
 
-// Returns 0, 1, or 2 valid servers.
-func (g *groupi) AnyTwoServers(group uint32) (s1 string, s2 string, numReturned int) {
+// Returns 0, 1, or 2 valid server addrs.
+func (g *groupi) AnyTwoServers(group uint32) []string {
 	g.RLock()
 	defer g.RUnlock()
 	all := g.all[group]
 	if all == nil {
-		return "", "", 0
+		return []string{}
 	}
 	sz := len(all.list)
 	// TODO: Why can't sz be zero?
 	if sz == 1 {
-		return all.list[0].Addr, "", 1
+		return []string{all.list[0].Addr}
 	}
 	idx1 := rand.Intn(sz)
 	idx2 := rand.Intn(sz - 1)
 	if idx2 >= idx1 {
 		idx2++
 	}
-	return all.list[idx1].Addr, all.list[idx2].Addr, 2
+	return []string{all.list[idx1].Addr, all.list[idx2].Addr}
 }
 
 // TODO: Make this return (string, bool)?
