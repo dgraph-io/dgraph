@@ -81,6 +81,9 @@ func leaseMgr() *leaseManager {
 // and returns the starting number of the sequence
 func (l *leaseManager) assignNewUids(ctx context.Context, N uint64) (uint64, error) {
 	x.AssertTrue(N > 0)
+	if l.maxLeaseId == 0 {
+		return 0, x.Errorf("Lease manager not initialized!")
+	}
 	l.Lock()
 	defer l.Unlock()
 	available := l.maxLeaseId - l.minLeaseId + 1
