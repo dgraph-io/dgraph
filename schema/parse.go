@@ -98,8 +98,20 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*protos.SchemaUpda
 		return nil, x.Errorf("Missing colon")
 	}
 
-	it.Next()
+	if !it.Next() {
+		return nil, x.Errorf("Invalid ending while trying to parse schema.")
+	}
 	next := it.Item()
+	schema := &protos.SchemaUpdate{Predicate: predicate}
+	// Could be list type.
+	if next.Typ == itemLeftSquare {
+		schema.List = true
+		if !it.Next() {
+			return nil, x.Errorf("Invalid ending while trying to parse schema.")
+		}
+		next = it.Item()
+	}
+
 	if next.Typ != itemText {
 		return nil, x.Errorf("Missing Type")
 	}
@@ -109,11 +121,22 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*protos.SchemaUpda
 	if !ok {
 		return nil, x.Errorf("Undefined Type")
 	}
+	if schema.List && !t.IsScalar() {
+		return nil, x.Errorf("Expected scalar type inside []. Got: [%s] for attr: [%s].",
+			t.Name(), predicate)
+	}
+	schema.ValueType = uint32(t)
 
 	// Check for index / reverse.
-	schema := &protos.SchemaUpdate{Predicate: predicate, ValueType: uint32(t)}
 	it.Next()
 	next = it.Item()
+	if schema.List {
+		if next.Typ != itemRightSquare {
+			return nil, x.Errorf("Unclosed [ while parsing schema for: %s", predicate)
+		}
+		it.Next()
+		next = it.Item()
+	}
 	if next.Typ == itemAt {
 		if err := parseDirective(it, schema, t); err != nil {
 			return nil, err

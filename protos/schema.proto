@@ -50,6 +50,7 @@ message SchemaUpdate {
 	Directive directive = 3;
   repeated string tokenizer = 4;
 	bool count = 5;
+  bool list = 6;
 }
 
 
