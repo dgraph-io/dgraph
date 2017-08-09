@@ -143,6 +143,18 @@ func delEdgeToUID(t *testing.T, attr string, src uint64, dst uint64) {
 	addEdge(t, attr, src, edge)
 }
 
+func delEdgeToLangValue(t *testing.T, attr string, src uint64, value, lang string) {
+	edge := &protos.DirectedEdge{
+		Value:  []byte(value),
+		Lang:   lang,
+		Label:  "testing",
+		Attr:   attr,
+		Entity: src,
+		Op:     protos.DirectedEdge_DEL,
+	}
+	addEdge(t, attr, src, edge)
+}
+
 func addGeoData(t *testing.T, ps *badger.KV, uid uint64, p geom.T, name string) {
 	value := types.ValueForType(types.BinaryID)
 	src := types.ValueForType(types.GeoID)
