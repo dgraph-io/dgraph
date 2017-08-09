@@ -50,7 +50,7 @@ message Query {
 }
 
 message ValuesList {
-  repeated TaskValue values = 1;
+	repeated TaskValue values = 1;
 }
 
 message Result {

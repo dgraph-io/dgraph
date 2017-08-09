@@ -48,9 +48,9 @@ message SchemaUpdate {
 	   REVERSE = 2;
   }
 	Directive directive = 3;
-  repeated string tokenizer = 4;
+	repeated string tokenizer = 4;
 	bool count = 5;
-  bool list = 6;
+	bool list = 6;
 }
 
 
