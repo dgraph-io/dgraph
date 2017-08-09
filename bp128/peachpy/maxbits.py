@@ -132,5 +132,5 @@ def max_bits(func_name, block_size):
 
         RETURN(result.as_low_byte)
 
-max_bits('dmaxBits128', 128)
-max_bits('dmaxBits256', 256)
+max_bits('maxBits128', 128)
+max_bits('maxBits256', 256)

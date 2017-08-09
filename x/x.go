@@ -264,7 +264,7 @@ func (b *BytesBuffer) grow(n int) {
 }
 
 // returns a slice of lenght n to be used to writing
-func (b *BytesBuffer) BytesFor(n int) []byte {
+func (b *BytesBuffer) TouchBytes(n int) []byte {
 	b.grow(n)
 	last := len(b.data) - 1
 	b.off += n
@@ -298,6 +298,7 @@ func (b *BytesBuffer) CopyTo(o []byte) int {
 	return offset
 }
 
-func (b *BytesBuffer) Truncate(n int) {
+// Always give back <= touched bytes
+func (b *BytesBuffer) TruncateBy(n int) {
 	b.off -= n
 }

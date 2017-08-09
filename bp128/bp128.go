@@ -33,11 +33,11 @@ var (
 func init() {
 	if BlockSize == 128 {
 		fpack = fdpack128
-		maxBits = dmaxBits128
+		maxBits = maxBits128
 		funpack = fdunpack128
 	} else if BlockSize == 256 {
 		fpack = fdpack256
-		maxBits = dmaxBits256
+		maxBits = maxBits256
 		funpack = fdunpack256
 	} else {
 		x.Fatalf("Unknown block size")
@@ -110,11 +110,11 @@ type BPackEncoder struct {
 	length   int
 	// Used to store seed of last block
 	lastSeed []uint64
-	offset   int
+	// Offset into data
+	offset int
 }
 
-// TODO: Don't compress for small lengths
-func (bp *BPackEncoder) Pack(in []uint64) {
+func (bp *BPackEncoder) PackAppend(in []uint64) {
 	if len(in) == 0 {
 		return
 	}
@@ -124,31 +124,32 @@ func (bp *BPackEncoder) Pack(in []uint64) {
 		bp.lastSeed[0] = in[0]
 		bp.lastSeed[1] = in[1]
 	} else if len(bp.lastSeed) == 0 && len(in) == 1 {
+		// We won't use seed value for varint, writing it in metadata
+		// to have uniform length for metadata
 		bp.lastSeed = make([]uint64, 2)
 	}
 
 	bp.length += len(in)
-	// TODO: call it touch
-	b := bp.metadata.BytesFor(20)
+	b := bp.metadata.TouchBytes(20)
 	binary.BigEndian.PutUint64(b[0:8], bp.lastSeed[0])
 	binary.BigEndian.PutUint64(b[8:16], bp.lastSeed[1])
 	binary.BigEndian.PutUint32(b[16:20], uint32(bp.offset))
 
 	// This should be the last block
 	if len(in) < BlockSize {
-		b = bp.data.BytesFor(1 + 10*len(in))
+		b = bp.data.TouchBytes(1 + 10*len(in))
 		b[0] = 0 | bitVarint
 		off := 1
 		for _, num := range in {
 			off += binary.PutUvarint(b[off:], num)
 		}
-		bp.data.Truncate(len(b) - off)
+		bp.data.TruncateBy(len(b) - off)
 		return
 	}
 
 	bs := maxBits(&in[0], &bp.lastSeed[0])
 	nBytes := int(bs)*BlockSize/8 + 1
-	b = bp.data.BytesFor(nBytes)
+	b = bp.data.TouchBytes(nBytes)
 	b[0] = bs
 	if bs > 0 {
 		fpack[bs](&in[0], &b[1], &bp.lastSeed[0])
@@ -171,15 +172,16 @@ func (bp *BPackEncoder) Size() int {
 }
 
 type BPackIterator struct {
-	data      []byte
-	metadata  []byte
+	data     []byte
+	metadata []byte
+	length   int
+
 	in_offset int
-	length    int
 	count     int
 	valid     bool
 	lastSeed  []uint64
-	out       []uint64
 	buf       []uint64
+	out       []uint64
 }
 
 func numBlocks(len int) int {
@@ -193,6 +195,7 @@ func (pi *BPackIterator) Init(data []byte, afterUid uint64) {
 	if len(data) == 0 {
 		return
 	}
+
 	pi.length = int(binary.BigEndian.Uint64(data[0:8]))
 	nBlocks := numBlocks(pi.length)
 	pi.data = data[8+nBlocks*20:]
@@ -201,6 +204,7 @@ func (pi *BPackIterator) Init(data []byte, afterUid uint64) {
 	pi.buf = pi.out
 	pi.lastSeed = make([]uint64, 2)
 	pi.valid = true
+
 	if afterUid > 0 {
 		pi.search(afterUid, nBlocks)
 		uidx := sort.Search(len(pi.out), func(idx int) bool {
@@ -209,6 +213,7 @@ func (pi *BPackIterator) Init(data []byte, afterUid uint64) {
 		pi.out = pi.out[uidx:]
 		return
 	}
+
 	pi.lastSeed[0] = binary.BigEndian.Uint64(pi.metadata[0:8])
 	pi.lastSeed[1] = binary.BigEndian.Uint64(pi.metadata[8:16])
 	pi.Next()
@@ -227,6 +232,7 @@ func (pi *BPackIterator) search(afterUid uint64, numBlocks int) {
 	} else if idx > 0 {
 		idx -= 1
 	}
+
 	pi.count = idx * BlockSize
 	i := idx * 20
 	pi.in_offset = int(binary.BigEndian.Uint32(pi.metadata[i+16 : i+20]))
@@ -235,12 +241,13 @@ func (pi *BPackIterator) search(afterUid uint64, numBlocks int) {
 	pi.Next()
 }
 
-func (pi *BPackIterator) Advance(uid uint64) (found bool) {
+func (pi *BPackIterator) AfterUid(uid uint64) (found bool) {
 	// Current uncompressed block doesn't have uid
 	if pi.out[len(pi.out)-1] < uid {
 		nBlocks := numBlocks(pi.length)
 		pi.search(uid-1, nBlocks)
 	}
+	// Search for uid in the current block
 	uidx := sort.Search(len(pi.out), func(idx int) bool {
 		return pi.out[idx] >= uid
 	})
@@ -264,13 +271,13 @@ func (pi *BPackIterator) Length() int {
 	return pi.length
 }
 
-// Returns number of uids to be read including the current out slice
-func (pi *BPackIterator) Cnt() int {
-	return pi.length - pi.count + len(pi.out)
+// Returns the startIndex
+func (pi *BPackIterator) StartIdx() int {
+	return pi.count - len(pi.out)
 }
 
-func (pi *BPackIterator) Uids() (int, []uint64) {
-	return pi.count - len(pi.out), pi.out
+func (pi *BPackIterator) Uids() []uint64 {
+	return pi.out
 }
 
 func (pi *BPackIterator) Next() {
@@ -306,7 +313,7 @@ func DeltaUnpack(in []byte, out []uint64) {
 	x.AssertTrue(len(out) == bi.Length())
 
 	for bi.Valid() {
-		_, uids := bi.Uids()
+		uids := bi.Uids()
 		// Benchmarks would be slower due to this copy
 		copy(out[offset:], uids)
 		offset += len(uids)
@@ -318,11 +325,11 @@ func DeltaPack(in []uint64) []byte {
 	var bp BPackEncoder
 	offset := 0
 	for offset+BlockSize <= len(in) {
-		bp.Pack(in[offset : offset+BlockSize])
+		bp.PackAppend(in[offset : offset+BlockSize])
 		offset += BlockSize
 	}
 	if offset < len(in) {
-		bp.Pack(in[offset:])
+		bp.PackAppend(in[offset:])
 	}
 	x := make([]byte, bp.Size())
 	bp.WriteTo(x)

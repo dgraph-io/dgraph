@@ -96,11 +96,12 @@ type PIterator struct {
 	uidx       int // index of UIDs
 	pidx       int // index of postings
 	// Redudant TODO
-	ulen   int
-	plen   int
-	valid  bool
-	bi     bp128.BPackIterator
-	uids   []uint64
+	ulen  int
+	plen  int
+	valid bool
+	bi    bp128.BPackIterator
+	uids  []uint64
+	// Offset into the uids slice
 	offset int
 }
 
@@ -110,7 +111,8 @@ func (it *PIterator) Init(pl *protos.PostingList, afterUid uint64) {
 	it.bi.Init(pl.Uids, afterUid)
 	it.ulen = it.bi.Length()
 	it.plen = len(pl.Postings)
-	it.uidx, it.uids = it.bi.Uids()
+	it.uids = it.bi.Uids()
+	it.uidx = it.bi.StartIdx()
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
 		p := pl.Postings[idx]
 		return afterUid < p.Uid
@@ -131,7 +133,7 @@ func (it *PIterator) Next() {
 		return
 	}
 	it.bi.Next()
-	it.uidx, it.uids = it.bi.Uids()
+	it.uidx, it.uids = it.bi.StartIdx(), it.bi.Uids()
 	it.offset = 0
 }
 
@@ -595,7 +597,7 @@ func (l *List) length(afterUid uint64) int {
 	var bi bp128.BPackIterator
 	bi.Init(l.plist.Uids, afterUid)
 	if afterUid > 0 {
-		uidx, _ = bi.Uids()
+		uidx = bi.StartIdx()
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {
 			mp := l.mlayer[idx]
 			return afterUid < mp.Uid
@@ -648,13 +650,13 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 
 	final := new(protos.PostingList)
 	var bp bp128.BPackEncoder
-	out := make([]uint64, 0, bp128.BlockSize)
+	buf := make([]uint64, 0, bp128.BlockSize)
 
 	l.iterate(0, func(p *protos.Posting) bool {
-		out = append(out, p.Uid)
-		if len(out) == bp128.BlockSize {
-			bp.Pack(out)
-			out = out[:0]
+		buf = append(buf, p.Uid)
+		if len(buf) == bp128.BlockSize {
+			bp.PackAppend(buf)
+			buf = buf[:0]
 		}
 
 		if p.Facets != nil || p.Value != nil || len(p.Metadata) != 0 || len(p.Label) != 0 {
@@ -665,8 +667,8 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 		return true
 	})
-	if len(out) > 0 {
-		bp.Pack(out)
+	if len(buf) > 0 {
+		bp.PackAppend(buf)
 	}
 	sz := bp.Size()
 	if sz > 0 {
@@ -761,15 +763,20 @@ func UnmarshalWithCopy(val []byte, metadata byte, pl *protos.PostingList) {
 func (l *List) Uids(opt ListOptions) *protos.List {
 	// Pre-assign length to make it faster.
 	l.RLock()
+	if len(l.mlayer) > 0 {
+		l.RUnlock()
+		l.SyncIfDirty(false)
+		l.RLock()
+	}
+
 	res := make([]uint64, 0, l.length(opt.AfterUID))
-	out := &protos.List{}
-	// TODO: Avoid complete decompression when dirty
-	// SyncifDirty
-	if len(l.mlayer) == 0 && opt.Intersect != nil {
+	out := &protos.List{res}
+	if opt.Intersect != nil {
 		algo.IntersectCompressedWith(l.plist.Uids, opt.AfterUID, opt.Intersect, out)
 		l.RUnlock()
 		return out
 	}
+
 	l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
 		if postingType(p) == x.ValueUid {
 			res = append(res, p.Uid)
@@ -777,13 +784,7 @@ func (l *List) Uids(opt ListOptions) *protos.List {
 		return true
 	})
 	l.RUnlock()
-
-	// Do The intersection here as it's optimized.
 	out.Uids = res
-	if opt.Intersect != nil {
-		// TODO: How to handle binary search without unpacking ??
-		algo.IntersectWith(out, opt.Intersect, out)
-	}
 	return out
 }
 

@@ -41,7 +41,7 @@ func ApplyFilter(u *protos.List, f func(uint64, int) bool) {
 func IntersectCompressedWith(u []byte, afterUID uint64, v, o *protos.List) {
 	var bi bp128.BPackIterator
 	bi.Init(u, afterUID)
-	n := bi.Cnt()
+	n := bi.Length() - bi.StartIdx()
 	m := len(v.Uids)
 
 	if o.Uids == nil {
@@ -73,7 +73,7 @@ func IntersectCompressedWith(u []byte, afterUID uint64, v, o *protos.List) {
 }
 
 func IntersectCompressedWithLin(bi *bp128.BPackIterator, v []uint64, o *[]uint64) {
-	_, u := bi.Uids()
+	u := bi.Uids()
 	n := len(u)
 	m := len(v)
 	for i, k := 0, 0; i < n && k < m; {
@@ -92,7 +92,7 @@ func IntersectCompressedWithLin(bi *bp128.BPackIterator, v []uint64, o *[]uint64
 		}
 		if i == n && bi.Valid() {
 			bi.Next()
-			_, u = bi.Uids()
+			u = bi.Uids()
 			n = len(u)
 			i = 0
 		}
@@ -100,7 +100,7 @@ func IntersectCompressedWithLin(bi *bp128.BPackIterator, v []uint64, o *[]uint64
 }
 
 func IntersectCompressedWithJump(bi *bp128.BPackIterator, v []uint64, o *[]uint64) {
-	_, u := bi.Uids()
+	u := bi.Uids()
 	n := len(u)
 	m := len(v)
 	for i, k := 0, 0; i < n && k < m; {
@@ -123,7 +123,7 @@ func IntersectCompressedWithJump(bi *bp128.BPackIterator, v []uint64, o *[]uint6
 		}
 		if i == n && bi.Valid() {
 			bi.Next()
-			_, u = bi.Uids()
+			u = bi.Uids()
 			n = len(u)
 			i = 0
 		}
@@ -134,17 +134,18 @@ func IntersectCompressedWithJump(bi *bp128.BPackIterator, v []uint64, o *[]uint6
 // "Fast Intersection Algorithms for Sorted Sequences"
 // https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
 func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64) {
-	ld := bi.Cnt()
+	ld := bi.Length() - bi.StartIdx()
 	lq := len(q)
 
-	// TODO: Add special case when no overlap
+	// TODO: Try SIMD
 	if ld == 0 || lq == 0 {
 		return
 	}
+	// Pick the shorter list and do binary search
 	if ld < lq {
-		bi.Advance(q[0] - 1)
+		bi.AfterUid(q[0] - 1)
 		for bi.Valid() {
-			_, uids := bi.Uids()
+			uids := bi.Uids()
 			for _, u := range uids {
 				qidx := sort.Search(len(q), func(idx int) bool {
 					return q[idx] >= u
@@ -162,18 +163,11 @@ func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64
 		return
 	}
 
-	if bi.Valid() {
-		_, uids := bi.Uids()
-		minq := sort.Search(len(q), func(i int) bool {
-			return q[i] >= uids[0]
-		})
-		q = q[minq:]
-	}
 	for _, u := range q {
 		if !bi.Valid() {
 			return
 		}
-		found := bi.Advance(u)
+		found := bi.AfterUid(u)
 		if found {
 			*o = append(*o, u)
 		}
