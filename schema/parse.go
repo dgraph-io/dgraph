@@ -38,9 +38,11 @@ func From(s *protos.SchemaUpdate) protos.SchemaUpdate {
 			ValueType: s.ValueType,
 			Directive: protos.SchemaUpdate_INDEX,
 			Tokenizer: s.Tokenizer,
-			Count:     s.Count}
+			Count:     s.Count,
+			List:      s.List,
+		}
 	}
-	return protos.SchemaUpdate{ValueType: s.ValueType, Count: s.Count}
+	return protos.SchemaUpdate{ValueType: s.ValueType, Count: s.Count, List: s.List}
 }
 
 // ParseBytes parses the byte array which holds the schema. We will reset

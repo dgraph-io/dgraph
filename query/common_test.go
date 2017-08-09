@@ -46,10 +46,10 @@ func childAttrs(sg *SubGraph) []string {
 	return out
 }
 
-func taskValues(t *testing.T, v []*protos.TaskValue) []string {
+func taskValues(t *testing.T, v []*protos.ValuesList) []string {
 	out := make([]string, len(v))
 	for i, tv := range v {
-		out[i] = string(tv.Val)
+		out[i] = string(tv.Values[0].Val)
 	}
 	return out
 }

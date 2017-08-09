@@ -1317,6 +1317,42 @@ func TestSchemaMutation5Error(t *testing.T) {
 	require.Error(t, err)
 }
 
+// A basic sanity check. We will do more extensive testing for multiple values in query.
+func TestMultipleValues(t *testing.T) {
+	t.Skip()
+	schema.ParseBytes([]byte(""), 1)
+	m := `
+	mutation {
+		schema {
+			occupations: [string] .
+		}
+	}`
+
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	m = `
+		mutation {
+			set {
+				<0x88> <occupations> "Pianist" .
+				<0x88> <occupations> "Software Engineer" .
+			}
+		}
+	`
+
+	err = runMutation(m)
+	require.NoError(t, err)
+
+	q := `{
+			me(func: uid(0x88)) {
+				occupations
+			}
+		}`
+	res, err := runQuery(q)
+	require.NoError(t, err)
+	require.Equal(t, `{"data": {"me":[{"occupations":["Pianist", "Software Engineer"]}]}}`, res)
+}
+
 func TestMain(m *testing.M) {
 	dc := dgraph.DefaultConfig
 	dc.AllottedMemory = 2048.0

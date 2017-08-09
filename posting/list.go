@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -438,12 +439,22 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	// All edges with a value without LANGTAG, have the same uid. In other words,
 	// an (entity, attribute) can only have one untagged value.
 	if !bytes.Equal(t.Value, nil) {
+		// There could be a collision if the user gives us a value with Lang = "en" and later gives
+		// us a value = "en" for the same predicate. We would end up overwritting his older lang
+		// value.
+
+		// Value with a lang type.
 		if len(t.Lang) > 0 {
 			t.ValueId = farm.Fingerprint64([]byte(t.Lang))
+		} else if schema.State().IsList(t.Attr) {
+			// Value for list type.
+			t.ValueId = farm.Fingerprint64(t.Value)
 		} else {
+			// Plain value for non-list type and without a language.
 			t.ValueId = math.MaxUint64
 		}
 
+		// TODO - Get rid of this handling here once we support multiple values for a predicate.
 		if t.Attr == "_predicate_" {
 			t.ValueId = farm.Fingerprint64(t.Value)
 		}

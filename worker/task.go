@@ -241,11 +241,15 @@ func getAllPredicates(ctx context.Context, q *protos.Query, gid uint32) (*protos
 	sort.Strings(predList)
 	for _, pred := range predList {
 		// Add it to values.
-		out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-		out.Values = append(out.Values, &protos.TaskValue{
+		val := &protos.TaskValue{
 			ValType: int32(types.StringID),
 			Val:     []byte(pred),
-		})
+		}
+		vl := &protos.ValuesList{
+			Values: []*protos.TaskValue{val},
+		}
+		out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+		out.ValueMatrix = append(out.ValueMatrix, vl)
 	}
 	return out, nil
 }
@@ -319,14 +323,14 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, gid)
-		// If a posting list contains a value, we store that or else we store a nil
-		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
 		typ := val.Tid
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
 			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
 		}
+		// If a posting list contains a value, we store that or else we store a nil
+		// byte so that processing is consistent later.
 		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
 		if isValueEdge {
 			if typ, err = schema.State().TypeOf(attr); err == nil {
@@ -353,7 +357,10 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				})
 			}
 		} else {
-			out.Values = append(out.Values, newValue)
+			vl := &protos.ValuesList{
+				Values: []*protos.TaskValue{newValue},
+			}
+			out.ValueMatrix = append(out.ValueMatrix, vl)
 		}
 
 		if !isValueEdge { // for uid edge.. get postings
@@ -409,16 +416,17 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		}
 
 		if srcFn.fnType == PasswordFn {
-			lastPos := len(out.Values) - 1
+			lastPos := len(out.ValueMatrix) - 1
 			if len(newValue.Val) == 0 {
-				out.Values[lastPos] = task.FalseVal
+				// TODO - Check that this is safe.
+				out.ValueMatrix[lastPos].Values[0] = task.FalseVal
 			}
 			pwd := q.SrcFunc[2]
 			err = types.VerifyPassword(pwd, string(newValue.Val))
 			if err != nil {
-				out.Values[lastPos] = task.FalseVal
+				out.ValueMatrix[lastPos].Values[0] = task.FalseVal
 			} else {
-				out.Values[lastPos] = task.TrueVal
+				out.ValueMatrix[lastPos].Values[0] = task.TrueVal
 			}
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)

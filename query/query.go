@@ -163,10 +163,10 @@ type SubGraph struct {
 	Attr         string
 	Params       params
 	counts       []uint32
-	values       []*protos.TaskValue
+	valueMatrix  []*protos.ValuesList
 	uidMatrix    []*protos.List
 	facetsMatrix []*protos.FacetsList
-	ExpandPreds  []*protos.TaskValue
+	ExpandPreds  []*protos.ValuesList
 	GroupbyRes   *groupResults
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
@@ -207,7 +207,7 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 	}
 	x.Printf("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v IsCount: %v ValueSz:%v]\n",
 		prefix, sg.Attr, sg.Params.Alias, sg.SrcFunc, src, sg.FilterOp,
-		dst, sg.Params.DoCount, len(sg.values))
+		dst, sg.Params.DoCount, len(sg.valueMatrix))
 	for _, f := range sg.Filters {
 		f.DebugPrint(prefix + "|-f->")
 	}
@@ -333,7 +333,7 @@ func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 
 func addListNode(pc *SubGraph, dst outputNode) error {
 	if pc.Params.DoCount {
-		addCount(pc, uint64(len(pc.values)), dst)
+		addCount(pc, uint64(len(pc.valueMatrix)), dst)
 		return nil
 	}
 
@@ -341,8 +341,8 @@ func addListNode(pc *SubGraph, dst outputNode) error {
 	if pc.Params.Alias != "" {
 		fieldName = pc.Params.Alias
 	}
-	for _, val := range pc.values {
-		v, err := getValue(val)
+	for _, val := range pc.valueMatrix {
+		v, err := getValue(val.Values[0])
 		if err != nil {
 			return err
 		}
@@ -436,7 +436,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		if len(pc.counts) > 0 {
 			addCount(pc, uint64(pc.counts[idx]), dst)
 		} else if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
-			addCheckPwd(pc, pc.values[idx], dst)
+			addCheckPwd(pc, pc.valueMatrix[idx].Values[0], dst)
 		} else if len(ul.Uids) > 0 {
 			var fcsList []*protos.Facets
 			if pc.Params.Facet != nil {
@@ -495,7 +495,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				fieldName += "@"
 				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
-			tv := pc.values[idx]
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
@@ -513,6 +512,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if pc.Attr == "_uid_" {
 				dst.SetUID(uid, pc.fieldName())
 			} else {
+				tv := pc.valueMatrix[idx].Values[0]
 				// if conversion not possible, we ignore it in the result.
 				sv, convErr := convertWithBestEffort(tv, pc.Attr)
 				if convErr == ErrEmptyVal {
@@ -944,7 +944,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 	}
 
-	sg.values = createNilValuesList(1)
+	sg.valueMatrix = createNilValuesList(1)
 	// Copy roots filter.
 	if gq.Filter != nil {
 		sgf := &SubGraph{}
@@ -963,12 +963,13 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	return sg, nil
 }
 
-func createNilValuesList(count int) []*protos.TaskValue {
-	out := make([]*protos.TaskValue, count)
+func createNilValuesList(count int) []*protos.ValuesList {
+	out := make([]*protos.ValuesList, count)
+	emptyList := &protos.ValuesList{
+		Values: []*protos.TaskValue{&protos.TaskValue{Val: x.Nilbyte}},
+	}
 	for i := 0; i < count; i++ {
-		out[i] = &protos.TaskValue{
-			Val: x.Nilbyte,
-		}
+		out[i] = emptyList
 	}
 	return out
 }
@@ -1029,7 +1030,7 @@ type varValue struct {
 	Vals map[uint64]types.Val
 	path []*SubGraph // This stores the subgraph path from root to var definition.
 	// TODO: Check if we can do without this field.
-	strList []*protos.TaskValue
+	strList []*protos.ValuesList
 }
 
 func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[uint64]types.Val,
@@ -1340,7 +1341,8 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 			// current UID should be removed from this level.
 			if !child.IsInternal() &&
 				// Check len before accessing index.
-				(len(child.values) <= i || len(child.values[i].Val) == 0) && (len(child.counts) <= i) &&
+				(len(child.valueMatrix) <= i || len(child.valueMatrix[i].Values[0].Val) == 0) &&
+				(len(child.counts) <= i) &&
 				(len(child.uidMatrix) <= i || len(child.uidMatrix[i].Uids) == 0) {
 				exclude = true
 				break
@@ -1377,7 +1379,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		if sg.IsListNode() {
 			// This is a predicates list.
 			doneVars[sg.Params.Var] = varValue{
-				strList: sg.values,
+				strList: sg.valueMatrix,
 				path:    sgPath,
 			}
 		} else if len(sg.counts) != 0 {
@@ -1399,7 +1401,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 				Uids: sg.DestUIDs,
 				path: sgPath,
 			}
-		} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
+		} else if len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
 			// This implies it is a value variable.
 			// NOTE: Value variables cannot be defined and used in the same query block. so
 			// checking len(sgPath) is okay.
@@ -1408,7 +1410,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 				path: sgPath,
 			}
 			for idx, uid := range sg.SrcUIDs.Uids {
-				val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
+				val, err := convertWithBestEffort(sg.valueMatrix[idx].Values[0], sg.Attr)
 				if err != nil {
 					continue
 				}
@@ -1566,11 +1568,11 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 
 func (sg *SubGraph) appendDummyValues() {
 	var l protos.List
-	var val protos.TaskValue
+	var val protos.ValuesList
 	for i := 0; i < len(sg.SrcUIDs.Uids); i++ {
 		// This is necessary so that preTraverse can be processed smoothly.
 		sg.uidMatrix = append(sg.uidMatrix, &l)
-		sg.values = append(sg.values, &val)
+		sg.valueMatrix = append(sg.valueMatrix, &val)
 	}
 }
 
@@ -1635,7 +1637,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				sg.Params.isListNode = true
 			}
 			sg.uidMatrix = result.UidMatrix
-			sg.values = result.Values
+			sg.valueMatrix = result.ValueMatrix
 			sg.facetsMatrix = result.FacetMatrix
 			sg.counts = result.Counts
 
@@ -1794,11 +1796,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				*temp = *child
 				temp.Params.isInternal = false
 				temp.Params.Expand = ""
-				if v.ValType != int32(types.StringID) {
+				if v.Values[0].ValType != int32(types.StringID) {
 					rch <- x.Errorf("Expected a string type")
 					return
 				}
-				temp.Attr = string(v.Val)
+				temp.Attr = string(v.Values[0].Val)
 				for _, ch := range sg.Children {
 					if ch.isSimilar(temp) {
 						rch <- x.Errorf("Repeated subgraph while using expand()")
@@ -2078,7 +2080,7 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 	return f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
-func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.TaskValue, error) {
+func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.ValuesList, error) {
 	temp := new(SubGraph)
 	temp.Attr = "_predicate_"
 	temp.SrcUIDs = uids
@@ -2088,7 +2090,7 @@ func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.TaskVa
 	if err != nil {
 		return nil, err
 	}
-	return result.Values, nil
+	return result.ValueMatrix, nil
 }
 
 func GetAllPredicates(subGraphs []*SubGraph) (predicates []string) {

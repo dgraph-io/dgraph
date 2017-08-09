@@ -2996,12 +2996,12 @@ func TestProcessGraph(t *testing.T) {
 	child = child.Children[0]
 	require.EqualValues(t,
 		[]string{"Rick Grimes", "Glenn Rhee", "Daryl Dixon", "Andrea", ""},
-		taskValues(t, child.values))
+		taskValues(t, child.valueMatrix))
 
 	require.EqualValues(t, []string{"Michonne"},
-		taskValues(t, sg.Children[1].values))
+		taskValues(t, sg.Children[1].valueMatrix))
 	require.EqualValues(t, []string{"female"},
-		taskValues(t, sg.Children[2].values))
+		taskValues(t, sg.Children[2].valueMatrix))
 }
 
 func TestToFastJSON(t *testing.T) {
@@ -4787,32 +4787,36 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 
 // Mocking Subgraph and Testing fast-json with it.
 func ageSg(uidMatrix []*protos.List, srcUids *protos.List, ages []uint64) *SubGraph {
-	var as []*protos.TaskValue
+	var as []*protos.ValuesList
 	for _, a := range ages {
 		bs := make([]byte, 4)
 		binary.LittleEndian.PutUint64(bs, a)
-		as = append(as, &protos.TaskValue{[]byte(bs), 2})
+		as = append(as, &protos.ValuesList{
+			Values: []*protos.TaskValue{
+				&protos.TaskValue{[]byte(bs), 2},
+			},
+		})
 	}
 
 	return &SubGraph{
-		Attr:      "age",
-		uidMatrix: uidMatrix,
-		SrcUIDs:   srcUids,
-		values:    as,
-		Params:    params{GetUid: true},
+		Attr:        "age",
+		uidMatrix:   uidMatrix,
+		SrcUIDs:     srcUids,
+		valueMatrix: as,
+		Params:      params{GetUid: true},
 	}
 }
 func nameSg(uidMatrix []*protos.List, srcUids *protos.List, names []string) *SubGraph {
-	var ns []*protos.TaskValue
+	var ns []*protos.ValuesList
 	for _, n := range names {
-		ns = append(ns, &protos.TaskValue{[]byte(n), 0})
+		ns = append(ns, &protos.ValuesList{Values: []*protos.TaskValue{{[]byte(n), 0}}})
 	}
 	return &SubGraph{
-		Attr:      "name",
-		uidMatrix: uidMatrix,
-		SrcUIDs:   srcUids,
-		values:    ns,
-		Params:    params{GetUid: true},
+		Attr:        "name",
+		uidMatrix:   uidMatrix,
+		SrcUIDs:     srcUids,
+		valueMatrix: ns,
+		Params:      params{GetUid: true},
 	}
 
 }
@@ -6734,6 +6738,8 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "lossy", Type: "string"},
 		{Predicate: "school", Type: "uid"},
 		{Predicate: "dob_day", Type: "datetime"},
+		{Predicate: "graduation", Type: "datetime"},
+		{Predicate: "occupations", Type: "string"},
 	}
 	checkSchemaNodes(t, expected, actual)
 }
@@ -6832,6 +6838,8 @@ royal_title                    : string @index(hash, term, fulltext) .
 noindex_name                   : string .
 school		                   : uid @count .
 lossy                          : string @index(term) .
+occupations					   : [string] @index(term) .
+graduation					   : [dateTime] @index(year) .
 `
 
 func TestMain(m *testing.M) {

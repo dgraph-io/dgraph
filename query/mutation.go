@@ -66,7 +66,7 @@ func addInternalEdge(ctx context.Context, m *protos.Mutations) error {
 					edge := &protos.DirectedEdge{
 						Op:     protos.DirectedEdge_DEL,
 						Entity: mu.GetEntity(),
-						Attr:   string(pred.Val),
+						Attr:   string(pred.Values[0].Val),
 						Value:  val,
 					}
 					newEdges = append(newEdges, edge)
