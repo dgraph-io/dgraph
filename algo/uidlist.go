@@ -65,60 +65,25 @@ func IntersectCompressedWith(u []byte, afterUID uint64, v, o *protos.List) {
 }
 
 func IntersectCompressedWithLin(bi *bp128.BPackIterator, v []uint64, o *[]uint64) {
-	u := bi.Uids()
-	n := len(u)
 	m := len(v)
-	for i, k := 0, 0; i < n && k < m; {
-		uid := u[i]
-		vid := v[k]
-		if uid > vid {
-			for k = k + 1; k < m && v[k] < uid; k++ {
-			}
-		} else if uid == vid {
-			*o = append(*o, uid)
-			k++
-			i++
-		} else {
-			for i = i + 1; i < n && u[i] < vid; i++ {
-			}
-		}
-		if i == n && bi.Valid() {
-			bi.Next()
-			u = bi.Uids()
-			n = len(u)
-			i = 0
-		}
+	k := 0
+	for k < m && bi.Valid() {
+		u := bi.Uids()
+		_, off := IntersectWithLin(u, v[k:], o)
+		k += off
+		bi.Next()
 	}
 }
 
 func IntersectCompressedWithJump(bi *bp128.BPackIterator, v []uint64, o *[]uint64) {
-	u := bi.Uids()
-	n := len(u)
 	m := len(v)
-	for i, k := 0, 0; i < n && k < m; {
-		uid := u[i]
-		vid := v[k]
-		if uid == vid {
-			*o = append(*o, uid)
-			k++
-			i++
-		} else if k+jump < m && uid > v[k+jump] {
-			k = k + jump
-		} else if i+jump < n && vid > u[i+jump] {
-			i = i + jump
-		} else if uid > vid {
-			for k = k + 1; k < m && v[k] < uid; k++ {
-			}
-		} else {
-			for i = i + 1; i < n && u[i] < vid; i++ {
-			}
-		}
-		if i == n && bi.Valid() {
-			bi.Next()
-			u = bi.Uids()
-			n = len(u)
-			i = 0
-		}
+	k := 0
+	for k < m && bi.Valid() {
+		u := bi.Uids()
+		// Jumps only within a block
+		_, off := IntersectWithJump(u, v[k:], o)
+		k += off
+		bi.Next()
 	}
 }
 
@@ -194,10 +159,11 @@ func IntersectWith(u, v, o *protos.List) {
 	o.Uids = dst
 }
 
-func IntersectWithLin(u, v []uint64, o *[]uint64) {
+func IntersectWithLin(u, v []uint64, o *[]uint64) (int, int) {
 	n := len(u)
 	m := len(v)
-	for i, k := 0, 0; i < n && k < m; {
+	i, k := 0, 0
+	for i < n && k < m {
 		uid := u[i]
 		vid := v[k]
 		if uid > vid {
@@ -212,12 +178,14 @@ func IntersectWithLin(u, v []uint64, o *[]uint64) {
 			}
 		}
 	}
+	return i, k
 }
 
-func IntersectWithJump(u, v []uint64, o *[]uint64) {
+func IntersectWithJump(u, v []uint64, o *[]uint64) (int, int) {
 	n := len(u)
 	m := len(v)
-	for i, k := 0, 0; i < n && k < m; {
+	i, k := 0, 0
+	for i < n && k < m {
 		uid := u[i]
 		vid := v[k]
 		if uid == vid {
@@ -236,6 +204,7 @@ func IntersectWithJump(u, v []uint64, o *[]uint64) {
 			}
 		}
 	}
+	return i, k
 }
 
 // IntersectWithBin is based on the paper
