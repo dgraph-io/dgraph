@@ -142,6 +142,7 @@ func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64
 		return
 	}
 	if ld < lq {
+		bi.Advance(q[0] - 1)
 		for bi.Valid() {
 			_, uids := bi.Uids()
 			for _, u := range uids {
@@ -161,6 +162,13 @@ func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64
 		return
 	}
 
+	if bi.Valid() {
+		_, uids := bi.Uids()
+		minq := sort.Search(len(q), func(i int) bool {
+			return q[i] >= uids[0]
+		})
+		q = q[minq:]
+	}
 	for _, u := range q {
 		if !bi.Valid() {
 			return
@@ -171,6 +179,40 @@ func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64
 		}
 	}
 }
+
+/*
+func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64) {
+	// TODO: Add special case when no overlap
+	_, uids := bi.Uids()
+	for len(uids) > 0 && len(q) > 0 {
+		if uids[0] < q[0] {
+			qidx := sort.Search(len(q), func(idx int) bool {
+				return q[idx] >= uids[0]
+			})
+			if qidx >= len(q) {
+				return
+			} else if q[qidx] == uids[0] {
+				*o = append(*o, uids[0])
+				qidx++
+			}
+			q = q[qidx:]
+			if len(uids) == 1 {
+				bi.Next()
+				_, uids = bi.Uids()
+			} else {
+				uids = uids[1:]
+			}
+			continue
+		}
+		found := bi.Advance(q[0])
+		if found {
+			*o = append(*o, q[0])
+		}
+		_, uids = bi.Uids()
+		q = q[1:]
+	}
+}
+*/
 
 // IntersectWith intersects u with v. The update is made to o.
 // u, v should be sorted.

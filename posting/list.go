@@ -764,6 +764,7 @@ func (l *List) Uids(opt ListOptions) *protos.List {
 	res := make([]uint64, 0, l.length(opt.AfterUID))
 	out := &protos.List{}
 	// TODO: Avoid complete decompression when dirty
+	// SyncifDirty
 	if len(l.mlayer) == 0 && opt.Intersect != nil {
 		algo.IntersectCompressedWith(l.plist.Uids, opt.AfterUID, opt.Intersect, out)
 		l.RUnlock()

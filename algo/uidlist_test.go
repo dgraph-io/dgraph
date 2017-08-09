@@ -25,7 +25,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -305,33 +304,40 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 		dst2 := &protos.List{}
 		compressedUids := bp128.DeltaPack(u1)
 
-		b.Run(fmt.Sprintf(":random:size=%d:overlap=%.2f:", arrSz, overlap),
+		b.Run(fmt.Sprintf(":size=%d:overlap=%.2f:", arrSz, overlap),
 			func(b *testing.B) {
 				for k := 0; k < b.N; k++ {
 					IntersectWith(u, v, dst1)
 				}
 			})
-		b.Run(fmt.Sprintf(":compressed:random:size=%d:overlap=%.2f:", arrSz, overlap),
+
+		b.Run(fmt.Sprintf(":compressed:size=%d:overlap=%.2f:", arrSz, overlap),
 			func(b *testing.B) {
 				for k := 0; k < b.N; k++ {
 					IntersectCompressedWith(compressedUids, 0, v, dst2)
 				}
 			})
-		x.AssertTruef(len(dst1.Uids) == len(dst2.Uids), "lengths are %v %v", len(dst1.Uids), len(dst2.Uids))
-		for i := 0; i < len(dst1.Uids); i++ {
-			x.AssertTrue(dst1.Uids[i] == dst2.Uids[i])
+		i := 0
+		j := 0
+		for i < len(dst1.Uids) {
+			if dst1.Uids[i] != dst2.Uids[j] {
+				b.Errorf("Unexpected error in intersection")
+			}
+			// Behaviour of bin intersect is not defined when duplicates are present
+			i = skipDuplicate(dst1.Uids, i)
+			j = skipDuplicate(dst2.Uids, j)
+		}
+		if j < len(dst2.Uids) {
+			b.Errorf("Unexpected error in intersection")
 		}
 	}
 
-	randomTests(500, 0.3)
-	randomTests(10000, 0.3)
-	randomTests(1000000, 0.3)
-	randomTests(500, 0.1)
-	randomTests(10000, 0.1)
-	randomTests(1000000, 0.1)
-	randomTests(500, 0.01)
-	randomTests(10000, 0.01)
-	randomTests(1000000, 0.01)
+	randomTests(10240, 0.3)
+	randomTests(1024000, 0.3)
+	randomTests(10240, 0.1)
+	randomTests(1024000, 0.1)
+	randomTests(10240, 0.01)
+	randomTests(1024000, 0.01)
 }
 
 func BenchmarkListIntersectRatio(b *testing.B) {
@@ -363,6 +369,8 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			dst2 := &protos.List{}
 			compressedUids := bp128.DeltaPack(v1)
 
+			fmt.Printf("len: %d, compressed: %d, bytes/int: %f\n",
+				len(v1), len(compressedUids), float64(len(compressedUids))/float64(len(v1)))
 			b.Run(fmt.Sprintf(":IntersectWith:ratio=%d:size=%d:overlap=%.2f:", r, sz, overlap),
 				func(b *testing.B) {
 					for k := 0; k < b.N; k++ {
@@ -375,10 +383,13 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 						IntersectCompressedWith(compressedUids, 0, u, dst2)
 					}
 				})
+			fmt.Println()
 			i := 0
 			j := 0
 			for i < len(dst1.Uids) {
-				x.AssertTrue(dst1.Uids[i] == dst2.Uids[j])
+				if dst1.Uids[i] != dst2.Uids[j] {
+					b.Errorf("Unexpected error in intersection")
+				}
 				// Behaviour of bin intersect is not defined when duplicates are present
 				i = skipDuplicate(dst1.Uids, i)
 				j = skipDuplicate(dst2.Uids, j)
@@ -395,27 +406,6 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 	randomTests(10000, 0.01)
 	randomTests(100000, 0.01)
 	randomTests(1000000, 0.01)
-
-	randomTests(10, 0.1)
-	randomTests(100, 0.1)
-	randomTests(1000, 0.1)
-	randomTests(10000, 0.1)
-	randomTests(100000, 0.1)
-	randomTests(1000000, 0.1)
-
-	randomTests(10, 0.4)
-	randomTests(100, 0.4)
-	randomTests(1000, 0.4)
-	randomTests(10000, 0.4)
-	randomTests(100000, 0.4)
-	randomTests(1000000, 0.4)
-
-	randomTests(10, 0.8)
-	randomTests(100, 0.8)
-	randomTests(1000, 0.8)
-	randomTests(10000, 0.8)
-	randomTests(100000, 0.8)
-	randomTests(1000000, 0.8)
 }
 
 func skipDuplicate(in []uint64, idx int) int {
