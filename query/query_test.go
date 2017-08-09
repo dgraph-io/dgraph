@@ -4304,59 +4304,6 @@ func TestToFastJSONReverseFilter(t *testing.T) {
 		js)
 }
 
-func TestToFastJSONReverseDelSet(t *testing.T) {
-	return
-	populateGraph(t)
-	delEdgeToUID(t, "friend", 1, 24)       // Delete Michonne.
-	delEdgeToUID(t, "friend", 23, 24)      // Ignored.
-	addEdgeToUID(t, "friend", 25, 24, nil) // Add Daryl.
-
-	query := `
-		{
-			me(func: uid(0x18)) {
-				name
-				~friend {
-					name
-					gender
-				}
-			}
-		}
-	`
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {"me":[{"name":"Glenn Rhee","~friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`,
-		js)
-
-	addEdgeToUID(t, "friend", 1, 24, nil)  // Delete Michonne.
-	addEdgeToUID(t, "friend", 23, 24, nil) // Ignored.
-	delEdgeToUID(t, "friend", 25, 24)      // Add Daryl.
-}
-
-func TestToFastJSONReverseDelSetCount(t *testing.T) {
-	return
-	populateGraph(t)
-	delEdgeToUID(t, "friend", 1, 24)       // Delete Michonne.
-	delEdgeToUID(t, "friend", 23, 24)      // Ignored.
-	addEdgeToUID(t, "friend", 25, 24, nil) // Add Daryl.
-
-	query := `
-		{
-			me(func: uid(0x18)) {
-				name
-				count(~friend)
-			}
-		}
-	`
-	js := processToFastJSON(t, query)
-	require.JSONEq(t,
-		`{"data": {"me":[{"name":"Glenn Rhee","count(~friend)":2}]}}`,
-		js)
-
-	addEdgeToUID(t, "friend", 1, 24, nil)  // Delete Michonne.
-	addEdgeToUID(t, "friend", 23, 24, nil) // Ignored.
-	delEdgeToUID(t, "friend", 25, 24)      // Add Daryl.
-}
-
 func getProperty(properties []*protos.Property, prop string) *protos.Value {
 	for _, p := range properties {
 		if p.Prop == prop {
