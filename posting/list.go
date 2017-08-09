@@ -93,14 +93,11 @@ func (l *List) calculateSize() uint32 {
 type PIterator struct {
 	pl         *protos.PostingList
 	uidPosting *protos.Posting
-	uidx       int // index of UIDs
 	pidx       int // index of postings
-	// Redudant TODO
-	ulen  int
-	plen  int
-	valid bool
-	bi    bp128.BPackIterator
-	uids  []uint64
+	plen       int
+	valid      bool
+	bi         bp128.BPackIterator
+	uids       []uint64
 	// Offset into the uids slice
 	offset int
 }
@@ -109,31 +106,28 @@ func (it *PIterator) Init(pl *protos.PostingList, afterUid uint64) {
 	it.pl = pl
 	it.uidPosting = &protos.Posting{}
 	it.bi.Init(pl.Uids, afterUid)
-	it.ulen = it.bi.Length()
 	it.plen = len(pl.Postings)
 	it.uids = it.bi.Uids()
-	it.uidx = it.bi.StartIdx()
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
 		p := pl.Postings[idx]
 		return afterUid < p.Uid
 	})
-	if it.uidx < it.ulen {
+	if it.bi.StartIdx() < it.bi.Length() {
 		it.valid = true
 	}
 }
 
 func (it *PIterator) Next() {
-	it.uidx++
 	it.offset++
 	if it.offset < len(it.uids) {
 		return
 	}
-	if it.uidx >= it.ulen {
+	it.bi.Next()
+	if !it.bi.Valid() {
 		it.valid = false
 		return
 	}
-	it.bi.Next()
-	it.uidx, it.uids = it.bi.StartIdx(), it.bi.Uids()
+	it.uids = it.bi.Uids()
 	it.offset = 0
 }
 
@@ -592,18 +586,17 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 func (l *List) length(afterUid uint64) int {
 	l.AssertRLock()
 
-	uidx, midx := 0, 0
+	midx := 0
 
 	var bi bp128.BPackIterator
 	bi.Init(l.plist.Uids, afterUid)
 	if afterUid > 0 {
-		uidx = bi.StartIdx()
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {
 			mp := l.mlayer[idx]
 			return afterUid < mp.Uid
 		})
 	}
-	count := bi.Length() - uidx
+	count := bi.Length() - bi.StartIdx()
 	for _, p := range l.mlayer[midx:] {
 		if p.Op == Add {
 			count++
@@ -760,18 +753,13 @@ func UnmarshalWithCopy(val []byte, metadata byte, pl *protos.PostingList) {
 
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
+// WARNING: Calling this function just to get Uids is expensive
 func (l *List) Uids(opt ListOptions) *protos.List {
 	// Pre-assign length to make it faster.
 	l.RLock()
-	if len(l.mlayer) > 0 {
-		l.RUnlock()
-		l.SyncIfDirty(false)
-		l.RLock()
-	}
-
 	res := make([]uint64, 0, l.length(opt.AfterUID))
-	out := &protos.List{res}
-	if opt.Intersect != nil {
+	out := &protos.List{}
+	if len(l.mlayer) == 0 && opt.Intersect != nil {
 		algo.IntersectCompressedWith(l.plist.Uids, opt.AfterUID, opt.Intersect, out)
 		l.RUnlock()
 		return out
@@ -784,7 +772,12 @@ func (l *List) Uids(opt ListOptions) *protos.List {
 		return true
 	})
 	l.RUnlock()
+
+	// Do The intersection here as it's optimized.
 	out.Uids = res
+	if opt.Intersect != nil {
+		algo.IntersectWith(out, opt.Intersect, out)
+	}
 	return out
 }
 

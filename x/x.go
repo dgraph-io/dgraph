@@ -236,6 +236,7 @@ func RemoveDuplicates(s []string) (out []string) {
 type BytesBuffer struct {
 	data [][]byte
 	off  int
+	sz   int
 }
 
 func (b *BytesBuffer) grow(n int) {
@@ -259,28 +260,22 @@ func (b *BytesBuffer) grow(n int) {
 		sz = n
 	}
 	b.data[last] = b.data[last][:b.off]
+	b.sz += len(b.data[last])
 	b.data = append(b.data, make([]byte, sz, sz))
 	b.off = 0
 }
 
 // returns a slice of lenght n to be used to writing
-func (b *BytesBuffer) TouchBytes(n int) []byte {
+func (b *BytesBuffer) Slice(n int) []byte {
 	b.grow(n)
 	last := len(b.data) - 1
 	b.off += n
+	b.sz += n
 	return b.data[last][b.off-n : b.off]
 }
 
 func (b *BytesBuffer) Length() int {
-	length := 0
-	for i, d := range b.data {
-		if i == len(b.data)-1 {
-			length += b.off
-		} else {
-			length += len(d)
-		}
-	}
-	return length
+	return b.sz
 }
 
 // Caller should ensure that o is of appropriate length
@@ -301,4 +296,6 @@ func (b *BytesBuffer) CopyTo(o []byte) int {
 // Always give back <= touched bytes
 func (b *BytesBuffer) TruncateBy(n int) {
 	b.off -= n
+	b.sz -= n
+	AssertTrue(b.off >= 0 && b.sz >= 0)
 }

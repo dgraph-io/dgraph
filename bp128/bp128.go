@@ -114,6 +114,7 @@ type BPackEncoder struct {
 	offset int
 }
 
+// TODO: Optimise for use case
 func (bp *BPackEncoder) PackAppend(in []uint64) {
 	if len(in) == 0 {
 		return
@@ -130,14 +131,14 @@ func (bp *BPackEncoder) PackAppend(in []uint64) {
 	}
 
 	bp.length += len(in)
-	b := bp.metadata.TouchBytes(20)
+	b := bp.metadata.Slice(20)
 	binary.BigEndian.PutUint64(b[0:8], bp.lastSeed[0])
 	binary.BigEndian.PutUint64(b[8:16], bp.lastSeed[1])
 	binary.BigEndian.PutUint32(b[16:20], uint32(bp.offset))
 
 	// This should be the last block
 	if len(in) < BlockSize {
-		b = bp.data.TouchBytes(1 + 10*len(in))
+		b = bp.data.Slice(1 + 10*len(in))
 		b[0] = 0 | bitVarint
 		off := 1
 		for _, num := range in {
@@ -149,7 +150,7 @@ func (bp *BPackEncoder) PackAppend(in []uint64) {
 
 	bs := maxBits(&in[0], &bp.lastSeed[0])
 	nBytes := int(bs)*BlockSize/8 + 1
-	b = bp.data.TouchBytes(nBytes)
+	b = bp.data.Slice(nBytes)
 	b[0] = bs
 	if bs > 0 {
 		fpack[bs](&in[0], &b[1], &bp.lastSeed[0])
@@ -159,16 +160,16 @@ func (bp *BPackEncoder) PackAppend(in []uint64) {
 
 func (bp *BPackEncoder) WriteTo(in []byte) {
 	x.AssertTrue(bp.length > 0)
-	binary.BigEndian.PutUint64(in[:8], uint64(bp.length))
-	offset := bp.metadata.CopyTo(in[8:])
-	bp.data.CopyTo(in[8+offset:])
+	binary.BigEndian.PutUint32(in[:4], uint32(bp.length))
+	offset := bp.metadata.CopyTo(in[4:])
+	bp.data.CopyTo(in[4+offset:])
 }
 
 func (bp *BPackEncoder) Size() int {
 	if bp.length == 0 {
 		return 0
 	}
-	return 8 + bp.data.Length() + bp.metadata.Length()
+	return 4 + bp.data.Length() + bp.metadata.Length()
 }
 
 type BPackIterator struct {
@@ -180,8 +181,11 @@ type BPackIterator struct {
 	count     int
 	valid     bool
 	lastSeed  []uint64
-	buf       []uint64
-	out       []uint64
+	// Byte slice which would be reused for decompression
+	buf []uint64
+	// out is the slice ready to be read by the user, would
+	// point to some offset in buf
+	out []uint64
 }
 
 func numBlocks(len int) int {
@@ -196,10 +200,10 @@ func (pi *BPackIterator) Init(data []byte, afterUid uint64) {
 		return
 	}
 
-	pi.length = int(binary.BigEndian.Uint64(data[0:8]))
+	pi.length = int(binary.BigEndian.Uint32(data[0:4]))
 	nBlocks := numBlocks(pi.length)
-	pi.data = data[8+nBlocks*20:]
-	pi.metadata = data[8 : 8+nBlocks*20]
+	pi.data = data[4+nBlocks*20:]
+	pi.metadata = data[4 : 4+nBlocks*20]
 	pi.out = make([]uint64, BlockSize, BlockSize)
 	pi.buf = pi.out
 	pi.lastSeed = make([]uint64, 2)
@@ -221,6 +225,7 @@ func (pi *BPackIterator) Init(data []byte, afterUid uint64) {
 }
 
 func (pi *BPackIterator) search(afterUid uint64, numBlocks int) {
+	// Search in metadata whose seed[1] > afterUid
 	idx := sort.Search(numBlocks, func(idx int) bool {
 		i := idx * 20
 		return afterUid < binary.BigEndian.Uint64(pi.metadata[i+8:i+16])
@@ -242,7 +247,8 @@ func (pi *BPackIterator) search(afterUid uint64, numBlocks int) {
 }
 
 func (pi *BPackIterator) AfterUid(uid uint64) (found bool) {
-	// Current uncompressed block doesn't have uid
+	// Current uncompressed block doesn't have uid, search for appropriate
+	// block, uncompress it and store it in pi.out
 	if pi.out[len(pi.out)-1] < uid {
 		nBlocks := numBlocks(pi.length)
 		pi.search(uid-1, nBlocks)
@@ -255,6 +261,7 @@ func (pi *BPackIterator) AfterUid(uid uint64) (found bool) {
 		found = true
 		uidx++
 	}
+	// Expose slice whose startId > uid to the user
 	if uidx < len(pi.out) {
 		pi.out = pi.out[uidx:]
 		return

@@ -44,23 +44,15 @@ func IntersectCompressedWith(u []byte, afterUID uint64, v, o *protos.List) {
 	n := bi.Length() - bi.StartIdx()
 	m := len(v.Uids)
 
-	if o.Uids == nil {
-		o.Uids = make([]uint64, 0, n)
+	if n > m {
+		n, m = m, n
 	}
 	dst := o.Uids[:0]
-	var ratio float64
-	if n < m {
-		if n == 0 {
-			n += 1
-		}
-		// Select appropriate function based on heuristics.
-		ratio = float64(m) / float64(n)
-	} else {
-		if m == 0 {
-			m += 1
-		}
-		ratio = float64(n) / float64(m)
+	if n == 0 {
+		n = 1
 	}
+	// Select appropriate function based on heuristics.
+	ratio := float64(m) / float64(n)
 
 	if ratio < 100 {
 		IntersectCompressedWithLin(&bi, v.Uids, &dst)
@@ -174,40 +166,6 @@ func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64
 	}
 }
 
-/*
-func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64) {
-	// TODO: Add special case when no overlap
-	_, uids := bi.Uids()
-	for len(uids) > 0 && len(q) > 0 {
-		if uids[0] < q[0] {
-			qidx := sort.Search(len(q), func(idx int) bool {
-				return q[idx] >= uids[0]
-			})
-			if qidx >= len(q) {
-				return
-			} else if q[qidx] == uids[0] {
-				*o = append(*o, uids[0])
-				qidx++
-			}
-			q = q[qidx:]
-			if len(uids) == 1 {
-				bi.Next()
-				_, uids = bi.Uids()
-			} else {
-				uids = uids[1:]
-			}
-			continue
-		}
-		found := bi.Advance(q[0])
-		if found {
-			*o = append(*o, q[0])
-		}
-		_, uids = bi.Uids()
-		q = q[1:]
-	}
-}
-*/
-
 // IntersectWith intersects u with v. The update is made to o.
 // u, v should be sorted.
 func IntersectWith(u, v, o *protos.List) {
@@ -222,7 +180,7 @@ func IntersectWith(u, v, o *protos.List) {
 	}
 	dst := o.Uids[:0]
 	if n == 0 {
-		n += 1
+		n = 1
 	}
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)

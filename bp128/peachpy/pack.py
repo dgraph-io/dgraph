@@ -17,24 +17,34 @@ def pack(func_name, block_size, bit_size):
     int_size = 64
 
     with Function(func_name, (in_ptr, out_ptr, seed_ptr)):
+        # Stores the pointer to the end of input slice
         inp = GeneralPurposeRegister64()
+        # Stores the pointer to the end of output slice
         outp = GeneralPurposeRegister64()
-        seedp = GeneralPurposeRegister64()
+        # The max integers from the last block
+        prevp = GeneralPurposeRegister64()
 
+        # This would load the pointer address in the register
         LOAD.ARGUMENT(inp, in_ptr)
         LOAD.ARGUMENT(outp, out_ptr)
-        LOAD.ARGUMENT(seedp, seed_ptr)
+        LOAD.ARGUMENT(prevp, seed_ptr)
 
         # Move input array to the end of the block
         # We can do inplace delta calculations with copying if we
         # iterate from back,i.e. we point to the last 16bytes(128bits)
+        # Everything is in bytes. We have block_size integers, consuming 
+        # block_size * int_size / 8 bytes. We are moving the pointer to
+        # get the last 16 bytes
         ADD(inp, (block_size * int_size)/8 - 16)
+        # Similar to above calculation
         ADD(outp, (block_size*bit_size)/8 - 16)
 
-        # Store the last vector
-        last = XMMRegister()
+        # Store the last vector, 128 bit register
+        tail = XMMRegister()
         # MOV unaligned
-        MOVDQU(last, [inp])
+        # We store the last 16 bytes of input slice, inp is pointing to
+        # end of input slice
+        MOVDQU(tail, [inp])
 
         cin = 0
         cout = 0
@@ -43,7 +53,7 @@ def pack(func_name, block_size, bit_size):
         out_reg = XMMRegister()
         in1 = XMMRegister()
         in2  = XMMRegister()
-        read(in1, inp, cin, seedp, block_size)
+        read(in1, inp, cin, prevp, block_size)
         cin += 16
         in_regs = [in1, in2]
         start = True
@@ -51,7 +61,7 @@ def pack(func_name, block_size, bit_size):
         for _ in range(0, (block_size* bit_size)/128):
             while i <= int_size:
                 # Read the next 16 bytes into register
-                read(in_regs[1],inp,cin,seedp, block_size)
+                read(in_regs[1],inp,cin,prevp, block_size)
                 cin += 16
                 # Find the delta
                 PSUBQ(in_regs[0],in_regs[1])
@@ -68,7 +78,7 @@ def pack(func_name, block_size, bit_size):
 
             if i-bit_size < int_size:
                 # Read the next 16 bytes into register
-                read(in_regs[1], inp, cin, seedp, block_size)
+                read(in_regs[1], inp, cin, prevp, block_size)
                 cin += 16
                 # Find the delta
                 PSUBQ(in_regs[0],in_regs[1])
@@ -101,7 +111,7 @@ def pack(func_name, block_size, bit_size):
                 start = True
 
         # Modifies the passed seed slice
-        MOVDQU([seedp], last)
+        MOVDQU([prevp], tail)
 
         RETURN()
 
