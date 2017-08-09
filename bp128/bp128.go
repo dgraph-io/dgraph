@@ -114,7 +114,6 @@ type BPackEncoder struct {
 	offset int
 }
 
-// TODO: Optimise for use case
 func (bp *BPackEncoder) PackAppend(in []uint64) {
 	if len(in) == 0 {
 		return
@@ -161,6 +160,13 @@ func (bp *BPackEncoder) PackAppend(in []uint64) {
 func (bp *BPackEncoder) WriteTo(in []byte) {
 	x.AssertTrue(bp.length > 0)
 	binary.BigEndian.PutUint32(in[:4], uint32(bp.length))
+
+	if bp.length < BlockSize {
+		// If number of integers are less all are stored as varint
+		// and without metadata.
+		bp.data.CopyTo(in[4:])
+		return
+	}
 	offset := bp.metadata.CopyTo(in[4:])
 	bp.data.CopyTo(in[4+offset:])
 }
@@ -170,6 +176,10 @@ func (bp *BPackEncoder) Size() int {
 		return 0
 	}
 	return 4 + bp.data.Length() + bp.metadata.Length()
+}
+
+func (bp *BPackEncoder) Length() int {
+	return bp.length
 }
 
 type BPackIterator struct {
@@ -189,6 +199,9 @@ type BPackIterator struct {
 }
 
 func numBlocks(len int) int {
+	if len < BlockSize {
+		return 0
+	}
 	if len%BlockSize == 0 {
 		return len / BlockSize
 	}
@@ -218,13 +231,19 @@ func (pi *BPackIterator) Init(data []byte, afterUid uint64) {
 		return
 	}
 
-	pi.lastSeed[0] = binary.BigEndian.Uint64(pi.metadata[0:8])
-	pi.lastSeed[1] = binary.BigEndian.Uint64(pi.metadata[8:16])
+	if len(pi.metadata) > 0 {
+		pi.lastSeed[0] = binary.BigEndian.Uint64(pi.metadata[0:8])
+		pi.lastSeed[1] = binary.BigEndian.Uint64(pi.metadata[8:16])
+	}
 	pi.Next()
 	return
 }
 
 func (pi *BPackIterator) search(afterUid uint64, numBlocks int) {
+	if len(pi.metadata) == 0 {
+		pi.Next()
+		return
+	}
 	// Search in metadata whose seed[1] > afterUid
 	idx := sort.Search(numBlocks, func(idx int) bool {
 		i := idx * 20

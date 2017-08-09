@@ -50,11 +50,12 @@ var (
 	TotalOSMemory    *expvar.Int
 	ActiveMutations  *expvar.Int
 	ServerHealth     *expvar.Int
+	MaxPlSize        *expvar.Int
 	MaxPlLength      *expvar.Int
 
 	PredicateStats *expvar.Map
 
-	MaxPlLen int64
+	MaxPlSz int64
 	// TODO: Request statistics, latencies, 500, timeouts
 
 )
@@ -82,7 +83,8 @@ func init() {
 	CacheHit = expvar.NewInt("dgraph_cache_hits_total")
 	CacheMiss = expvar.NewInt("dgraph_cache_miss_total")
 	CacheRace = expvar.NewInt("dgraph_cache_race_total")
-	MaxPlLength = expvar.NewInt("dgraph_max_list_bytes")
+	MaxPlSize = expvar.NewInt("dgraph_max_list_bytes")
+	MaxPlLength = expvar.NewInt("dgraph_max_list_length")
 
 	ticker := time.NewTicker(5 * time.Second)
 
@@ -129,6 +131,11 @@ func init() {
 		"dgraph_max_list_bytes": prometheus.NewDesc(
 			"dgraph_max_list_bytes",
 			"dgraph_max_list_bytes",
+			nil, nil,
+		),
+		"dgraph_max_list_length": prometheus.NewDesc(
+			"dgraph_max_list_length",
+			"dgraph_max_list_length",
 			nil, nil,
 		),
 		"dgraph_pending_proposals_total": prometheus.NewDesc(

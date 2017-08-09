@@ -687,12 +687,13 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 
 	for {
-		pLen := atomic.LoadInt64(&x.MaxPlLen)
+		pLen := atomic.LoadInt64(&x.MaxPlSz)
 		if int64(len(data)) <= pLen {
 			break
 		}
-		if atomic.CompareAndSwapInt64(&x.MaxPlLen, pLen, int64(len(data))) {
-			x.MaxPlLength.Set(int64(len(data)))
+		if atomic.CompareAndSwapInt64(&x.MaxPlSz, pLen, int64(len(data))) {
+			x.MaxPlSize.Set(int64(len(data)))
+			x.MaxPlLength.Set(int64(bp.Length()))
 			break
 		}
 	}
