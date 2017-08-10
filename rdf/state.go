@@ -136,7 +136,6 @@ Loop:
 			if l.Depth > atObject {
 				l.Emit(itemValidEnd)
 			}
-			break Loop
 
 		case r == 'u':
 			if l.Depth != atSubject && l.Depth != atObject {

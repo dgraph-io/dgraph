@@ -165,6 +165,16 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 
 		case itemValidEnd:
 			vend = true
+			if !it.Next() {
+				return rnq, x.Errorf("Invalid end of input. Input: [%s]", line)
+			}
+			// RDF spec says NQuad's should be terminated with a newline. Since we break the input
+			// by newline already. We should get EOF after dot(.)
+			if it.Item().Typ != lex.ItemEOF {
+				return rnq, x.Errorf("Invalid end of input. Expected newline after . Input: [%s]",
+					line)
+			}
+			break
 
 		case itemLabel:
 			rnq.Label = strings.Trim(item.Val, " ")
