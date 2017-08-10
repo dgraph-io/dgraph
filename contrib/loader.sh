@@ -118,7 +118,7 @@ echo -e "\nShutting down Dgraph"
 quit 0
 
 # Wait for clean shutdown.
-sleep 15
+sleep 20
 
 echo -e "\nTrying to restart Dgraph and match export count"
 pushd cmd/dgraph &> /dev/null
