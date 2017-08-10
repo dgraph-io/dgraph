@@ -52,8 +52,6 @@ func AddInit(f func()) {
 
 // Init initializes flags and run all functions in initFunc.
 func Init() {
-	printVersionOnly()
-
 	// Lets print the details of the current build on startup.
 	printBuildDetails()
 
@@ -91,8 +89,8 @@ Branch           : %v`,
 		dgraphVersion, lastCommitSHA, lastCommitTime, gitBranch) + "\n\n")
 }
 
-// printVersionOnly prints version and other helpful information if --version.
-func printVersionOnly() {
+// PrintVersionOnly prints version and other helpful information if --version.
+func PrintVersionOnly() {
 	if Config.Version {
 		printBuildDetails()
 		fmt.Println("Copyright 2017 Dgraph Labs, Inc.")

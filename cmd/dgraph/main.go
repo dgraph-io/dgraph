@@ -167,6 +167,9 @@ func setupConfigOpts() {
 		x.Println("Loading configuration from file:", config.ConfigFile)
 		x.LoadConfigFromYAML(config.ConfigFile)
 	}
+	// Lets check version flag before we SetConfiguration because we validate AllottedMemory in
+	// SetConfiguration.
+	x.PrintVersionOnly()
 
 	dgraph.SetConfiguration(config)
 }

@@ -21,9 +21,8 @@ RUN apt-get install -y --force-yes g++-4.9
 # Get embedded binaries from Dgraph.
 RUN curl https://get.dgraph.io | bash
 
-# Create the dgraph and data directory. These directories should be mapped
-# to host machine for persistence.
-RUN mkdir /dgraph && mkdir /data
+# Create the dgraph directory. This directory should be mapped to the host machine for persistence.
+RUN mkdir /dgraph
 
 EXPOSE 8080
 EXPOSE 9080
