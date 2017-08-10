@@ -20,7 +20,6 @@ package posting
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"testing"
 	"time"
 
@@ -38,13 +37,10 @@ name:string @index(term) .
 `
 
 func uids(pl *protos.PostingList) []uint64 {
-	var u []uint64
-	sl := pl.Uids
-	for len(sl) > 0 {
-		u = append(u, binary.BigEndian.Uint64(sl[0:8]))
-		sl = sl[8:]
-	}
-	return u
+	l := &List{}
+	l.plist = pl
+	r := l.Uids(ListOptions{})
+	return r.Uids
 }
 
 func TestIndexingInt(t *testing.T) {
