@@ -1,13 +1,13 @@
-# Badger [![GoDoc](https://godoc.org/github.com/dgraph-io/badger?status.svg)](https://godoc.org/github.com/dgraph-io/badger) [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/badger)](https://goreportcard.com/report/github.com/dgraph-io/badger)
+# Badger [![GoDoc](https://godoc.org/github.com/dgraph-io/badger?status.svg)](https://godoc.org/github.com/dgraph-io/badger) [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/badger)](https://goreportcard.com/report/github.com/dgraph-io/badger) [![Build Status](https://travis-ci.org/dgraph-io/badger.svg?branch=master)](https://travis-ci.org/dgraph-io/badger) ![Appveyor](https://ci.appveyor.com/api/projects/status/github/dgraph-io/badger?branch=master&svg=true)
 
-An embeddable, persistent, simple and fast key-value (KV) store, written natively in Go.
+An embeddable, persistent, simple and fast key-value (KV) store, written purely in Go. It's meant to be an alternative to [RocksDB](https://github.com/facebook/rocksdb).
 
 ![Badger sketch](/images/sketch.jpg)
 
 ## About
 
-Badger is written out of frustration with existing KV stores which are either natively written in Go and slow, or fast but require usage of Cgo.
-Badger aims to provide an equal or better speed compared to industry leading KV stores (like RocksDB), while maintaining the entire code base in Go natively.
+Badger is written out of frustration with existing KV stores which are either purely written in Go and slow, or fast but require usage of Cgo.
+Badger aims to provide an equal or better speed compared to industry leading KV stores (like RocksDB), while maintaining the entire code base in pure Go.
 
 **You can read more about Badger in [our blog post](https://open.dgraph.io/post/badger/).**
 
@@ -25,7 +25,7 @@ From here, follow [docs](https://godoc.org/github.com/dgraph-io/badger) for usag
 
 Badger has these design goals in mind:
 
-- Write it natively in Go.
+- Write it purely in Go.
 - Use latest research to build the fastest KV store for data sets spanning terabytes.
 - Keep it simple, stupid. No support for transactions, versioning or snapshots -- anything that can be done outside of the store should be done outside.
 - Optimize for SSDs (more below).
@@ -41,6 +41,8 @@ Badger has these design goals in mind:
 ## Users
 
 Badger is currently being used by [Dgraph](https://github.com/dgraph-io/dgraph).
+
+*If you're using Badger in a project, let us know.*
 
 ## Design
 
@@ -71,16 +73,16 @@ This improves random get performance significantly compared to traditional LSM t
 
 ## Comparisons
 
-| Feature             | Badger                                       | RocksDB            | BoltDB    |
-| -------             | ------                                       | -------            | ------    |
-| Design              | LSM tree with value log                      | LSM tree only      | B+ tree   |
-| High RW Performance | Yes                                          | Yes                | No        |
-| Designed for SSDs   | Yes (with latest research <sup>1</sup>)                  | Not specifically <sup>2</sup> | No        |
-| Embeddable          | Yes                                          | Yes                | Yes       |
-| Sorted KV access    | Yes                                          | Yes                | Yes       |
-| Go Native (no Cgo)  | Yes                                          | No                 | Yes       |
-| Transactions        | No (but provides compare and set operations) | Yes (but non-ACID) | Yes, ACID |
-| Snapshots           | No                                           | Yes                | Yes       |
+| Feature             | Badger                                       | RocksDB                       | BoltDB    |
+| -------             | ------                                       | -------                       | ------    |
+| Design              | LSM tree with value log                      | LSM tree only                 | B+ tree   |
+| High RW Performance | Yes                                          | Yes                           | No        |
+| Designed for SSDs   | Yes (with latest research <sup>1</sup>)      | Not specifically <sup>2</sup> | No        |
+| Embeddable          | Yes                                          | Yes                           | Yes       |
+| Sorted KV access    | Yes                                          | Yes                           | Yes       |
+| Pure Go (no Cgo)    | Yes                                          | No                            | Yes       |
+| Transactions        | No (but provides compare and set operations) | Yes (but non-ACID)            | Yes, ACID |
+| Snapshots           | No                                           | Yes                           | Yes       |
 
 <sup>1</sup> Badger is based on a paper called [WiscKey by University of Wisconsin, Madison](https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf), which saw big wins with separating values from keys, significantly reducing the write amplification compared to a typical LSM tree.
 
@@ -115,3 +117,9 @@ and won't get synced to disk immediately. Writes to LSM tree are done inmemory f
 get compacted to disk. The compaction would only happen once `MaxTableSize` has been reached. So, if
 you're doing a few writes and then checking, you might not see anything on disk. Once you `Close`
 the store, you'll see these writes on disk.
+
+## Contact
+- Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.
+- Please use [Github issue tracker](https://github.com/dgraph-io/badger/issues) for filing bugs or feature requests.
+- Join [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io).
+- Follow us on Twitter [@dgraphlabs](https://twitter.com/dgraphlabs).

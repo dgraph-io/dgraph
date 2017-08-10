@@ -17,8 +17,8 @@
 package badger
 
 import (
+	"expvar"
 	"log"
-	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -70,11 +70,6 @@ type Options struct {
 	// Size of single value log file.
 	ValueLogFileSize int64
 
-	// The following affect value compression in value log. Note that compression
-	// can significantly slow down the loading and lookup time.
-	ValueCompressionMinSize  int32   // Minimal size in bytes of KV pair to be compressed.
-	ValueCompressionMinRatio float64 // Minimal compression ratio of KV pair to be compressed.
-
 	// Sync all writes to disk. Setting this to true would slow down data loading significantly.
 	SyncWrites bool
 
@@ -96,19 +91,17 @@ var DefaultOptions = Options{
 	MapTablesTo:         table.LoadToRAM,
 	// table.MemoryMap to mmap() the tables.
 	// table.Nothing to not preload the tables.
-	MaxLevels:                7,
-	MaxTableSize:             64 << 20,
-	NumCompactors:            3,
-	NumLevelZeroTables:       5,
-	NumLevelZeroTablesStall:  10,
-	NumMemtables:             5,
-	SyncWrites:               false,
-	ValueCompressionMinRatio: 2.0,
-	ValueCompressionMinSize:  math.MaxInt32, // Turn off by default.
-	ValueGCRunInterval:       10 * time.Minute,
-	ValueGCThreshold:         0.5, // Set to zero to not run GC.
-	ValueLogFileSize:         1 << 30,
-	ValueThreshold:           20,
+	MaxLevels:               7,
+	MaxTableSize:            64 << 20,
+	NumCompactors:           3,
+	NumLevelZeroTables:      5,
+	NumLevelZeroTablesStall: 10,
+	NumMemtables:            5,
+	SyncWrites:              false,
+	ValueGCRunInterval:      10 * time.Minute,
+	ValueGCThreshold:        0.5, // Set to zero to not run GC.
+	ValueLogFileSize:        1 << 30,
+	ValueThreshold:          20,
 }
 
 func (opt *Options) estimateSize(entry *Entry) int {
@@ -123,15 +116,16 @@ func (opt *Options) estimateSize(entry *Entry) int {
 type KV struct {
 	sync.RWMutex // Guards list of inmemory tables, not individual reads and writes.
 
-	dirLockGuard *y.DirectoryLockGuard
+	dirLockGuard *DirectoryLockGuard
 	// nil if Dir and ValueDir are the same
-	valueDirGuard *y.DirectoryLockGuard
+	valueDirGuard *DirectoryLockGuard
 
 	closer    *y.Closer
 	elog      trace.EventLog
 	mt        *skl.Skiplist   // Our latest (actively written) in-memory table
 	imm       []*skl.Skiplist // Add here only AFTER pushing to flushChan.
 	opt       Options
+	manifest  *manifestFile
 	lc        *levelsController
 	vlog      valueLog
 	vptr      valuePointer // less than or equal to a pointer to the last vlog value put into mt
@@ -141,6 +135,7 @@ type KV struct {
 	// Incremented in the non-concurrently accessed write loop.  But also accessed outside. So
 	// we use an atomic op.
 	lastUsedCasCounter uint64
+	metricsTicker      *time.Ticker
 }
 
 var ErrInvalidDir error = errors.New("Invalid Dir, directory does not exist")
@@ -174,7 +169,7 @@ func NewKV(optParam *Options) (out *KV, err error) {
 		return nil, err
 	}
 
-	dirLockGuard, err := y.AcquireDirectoryLock(opt.Dir, lockFile)
+	dirLockGuard, err := AcquireDirectoryLock(opt.Dir, lockFile)
 	if err != nil {
 		return nil, err
 	}
@@ -183,9 +178,9 @@ func NewKV(optParam *Options) (out *KV, err error) {
 			_ = dirLockGuard.Release()
 		}
 	}()
-	var valueDirLockGuard *y.DirectoryLockGuard
+	var valueDirLockGuard *DirectoryLockGuard
 	if absValueDir != absDir {
-		valueDirLockGuard, err = y.AcquireDirectoryLock(opt.ValueDir, lockFile)
+		valueDirLockGuard, err = AcquireDirectoryLock(opt.ValueDir, lockFile)
 		if err != nil {
 			return nil, err
 		}
@@ -198,20 +193,33 @@ func NewKV(optParam *Options) (out *KV, err error) {
 	if !(opt.ValueLogFileSize <= 2<<30 && opt.ValueLogFileSize >= 1<<20) {
 		return nil, ErrValueLogSize
 	}
+	manifestFile, manifest, err := OpenOrCreateManifestFile(opt.Dir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if manifestFile != nil {
+			_ = manifestFile.close()
+		}
+	}()
+
 	out = &KV{
 		imm:           make([]*skl.Skiplist, 0, opt.NumMemtables),
 		flushChan:     make(chan flushTask, opt.NumMemtables),
 		writeCh:       make(chan *request, kvWriteChCapacity),
 		opt:           opt,
 		closer:        y.NewCloser(),
+		manifest:      manifestFile,
 		elog:          trace.NewEventLog("Badger", "KV"),
 		dirLockGuard:  dirLockGuard,
 		valueDirGuard: valueDirLockGuard,
+		metricsTicker: time.NewTicker(5 * time.Minute),
 	}
+	go out.updateSize()
 	out.mt = skl.NewSkiplist(arenaSize(&opt))
 
 	// newLevelsController potentially loads files in directory.
-	if out.lc, err = newLevelsController(out); err != nil {
+	if out.lc, err = newLevelsController(out, &manifest); err != nil {
 		return nil, err
 	}
 
@@ -303,6 +311,7 @@ func NewKV(optParam *Options) (out *KV, err error) {
 
 	valueDirLockGuard = nil
 	dirLockGuard = nil
+	manifestFile = nil
 	return out, nil
 }
 
@@ -318,6 +327,10 @@ func (s *KV) Close() (err error) {
 				err = errors.Wrap(guardErr, "KV.Close")
 			}
 		}
+		if manifestErr := s.manifest.close(); err == nil {
+			err = errors.Wrap(manifestErr, "KV.Close")
+		}
+
 		// Fsync directories to ensure that lock file, and any other removed files whose directory
 		// we haven't specifically fsynced, are guaranteed to have their directory entry removal
 		// persisted to disk.
@@ -387,6 +400,7 @@ func (s *KV) Close() (err error) {
 	if err := s.lc.close(); err != nil {
 		return errors.Wrap(err, "KV.Close")
 	}
+	s.metricsTicker.Stop()
 	s.elog.Printf("Waiting for closer")
 	s.closer.SignalAll()
 	s.closer.WaitForAll()
@@ -403,7 +417,7 @@ const (
 // in order to guarantee the file is visible (if the system crashes).  (See the man page for fsync,
 // or see https://github.com/coreos/etcd/issues/6368 for an example.)
 func syncDir(dir string) error {
-	f, err := os.Open(dir)
+	f, err := OpenDir(dir)
 	if err != nil {
 		return err
 	}
@@ -1005,8 +1019,7 @@ func writeLevel0Table(s *skl.Skiplist, f *os.File) error {
 			return err
 		}
 	}
-	var buf [2]byte // Level 0. Leave it initialized as 0.
-	_, err := f.Write(b.Finish(buf[:]))
+	_, err := f.Write(b.Finish())
 	return err
 }
 
@@ -1037,8 +1050,8 @@ func (s *KV) flushMemtable(lc *y.LevelCloser) error {
 			// before vptr (because they don't get replayed).
 			ft.mt.Put(head, y.ValueStruct{Value: offset, CASCounter: s.lastCASCounter()})
 		}
-		fileID, _ := s.lc.reserveFileIDs(1)
-		fd, err := y.OpenSyncedFile(table.NewFilename(fileID, s.opt.Dir), true)
+		fileID := s.lc.reserveFileID()
+		fd, err := y.CreateSyncedFile(table.NewFilename(fileID, s.opt.Dir), true)
 		if err != nil {
 			return y.Wrap(err)
 		}
@@ -1065,8 +1078,11 @@ func (s *KV) flushMemtable(lc *y.LevelCloser) error {
 			return err
 		}
 		// We own a ref on tbl.
-		s.lc.addLevel0Table(tbl) // This will incrRef.
-		tbl.DecrRef()            // Releases our ref.
+		err = s.lc.addLevel0Table(tbl) // This will incrRef (if we don't error, sure)
+		tbl.DecrRef()                  // Releases our ref.
+		if err != nil {
+			return err
+		}
 
 		// Update s.imm. Need a lock.
 		s.Lock()
@@ -1087,4 +1103,43 @@ func exists(path string) (bool, error) {
 		return false, nil
 	}
 	return true, err
+}
+
+func (s *KV) updateSize() {
+	getNewInt := func(val int64) *expvar.Int {
+		v := new(expvar.Int)
+		v.Add(val)
+		return v
+	}
+
+	totalSize := func(dir string) (int64, int64) {
+		var lsmSize, vlogSize int64
+		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			ext := filepath.Ext(path)
+			if ext == ".sst" {
+				lsmSize += info.Size()
+			} else if ext == ".vlog" {
+				vlogSize += info.Size()
+			}
+			return nil
+		})
+		if err != nil {
+			s.elog.Printf("Got error while calculating total size of directory: %s", dir)
+		}
+		return lsmSize, vlogSize
+	}
+
+	for range s.metricsTicker.C {
+		lsmSize, vlogSize := totalSize(s.opt.Dir)
+		y.LSMSize.Set(s.opt.Dir, getNewInt(lsmSize))
+		// If valueDir is different from dir, we'd have to do another walk.
+		if s.opt.ValueDir != s.opt.Dir {
+			_, vlogSize = totalSize(s.opt.ValueDir)
+		}
+		y.VlogSize.Set(s.opt.Dir, getNewInt(vlogSize))
+	}
+
 }

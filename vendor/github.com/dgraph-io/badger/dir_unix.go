@@ -1,4 +1,4 @@
-// +build darwin dragonfly freebsd linux netbsd openbsd solaris
+// +build !windows
 
 /*
  * Copyright 2017 Dgraph Labs, Inc. and Contributors
@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package y
+package badger
 
 import (
 	"fmt"
@@ -82,3 +82,6 @@ func (guard *DirectoryLockGuard) Release() error {
 
 	return err
 }
+
+// OpenDir opens a directory for syncing.
+func OpenDir(path string) (*os.File, error) { return os.Open(path) }
