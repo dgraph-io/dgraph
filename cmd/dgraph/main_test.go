@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -146,16 +147,15 @@ func runQuery(q string) (string, error) {
 	return string(buf.Bytes()), nil
 }
 
-func runMutation(m string) error {
+func runMutation(m string) (query.ExecuteResult, error) {
 	res, err := gql.Parse(gql.Request{Str: m, Http: true})
 	if err != nil {
-		return err
+		return query.ExecuteResult{}, err
 	}
 
 	var l query.Latency
 	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-	_, err = qr.ProcessWithMutation(defaultContext())
-	return err
+	return qr.ProcessWithMutation(defaultContext())
 }
 
 func TestDeletePredicate(t *testing.T) {
@@ -246,10 +246,10 @@ func TestDeletePredicate(t *testing.T) {
 		`
 
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(s1)
+	_, err := runMutation(s1)
 	require.NoError(t, err)
 
-	err = runMutation(m1)
+	_, err = runMutation(m1)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -273,7 +273,7 @@ func TestDeletePredicate(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}}`, output)
 
-	err = runMutation(m2)
+	_, err = runMutation(m2)
 	require.NoError(t, err)
 
 	output, err = runQuery(q1)
@@ -292,7 +292,7 @@ func TestDeletePredicate(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}}`, output)
 
 	// Lets try to change the type of predicates now.
-	err = runMutation(s2)
+	_, err = runMutation(s2)
 	require.NoError(t, err)
 }
 
@@ -324,7 +324,7 @@ func TestSchemaMutation(t *testing.T) {
 			Directive: protos.SchemaUpdate_INDEX},
 	}
 
-	err := runMutation(m)
+	_, err := runMutation(m)
 	require.NoError(t, err)
 	for k, v := range expected {
 		s, ok := schema.State().Get(k)
@@ -343,7 +343,7 @@ func TestSchemaMutation2Error(t *testing.T) {
 	}
 	`
 
-	err := runMutation(m)
+	_, err := runMutation(m)
 	require.Error(t, err)
 }
 
@@ -356,7 +356,7 @@ func TestSchemaMutation3Error(t *testing.T) {
 		}
 	}
 	`
-	err := runMutation(m)
+	_, err := runMutation(m)
 	require.Error(t, err)
 }
 
@@ -369,7 +369,7 @@ func TestMutation4Error(t *testing.T) {
 		}
 	}
 	`
-	err := runMutation(m)
+	_, err := runMutation(m)
 	require.Error(t, err)
 }
 
@@ -401,11 +401,11 @@ func TestSchemaMutationIndexAdd(t *testing.T) {
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	_, err := runMutation(m)
 	require.NoError(t, err)
 
 	// add index to name
-	err = runMutation(s)
+	_, err = runMutation(s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -450,10 +450,10 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
 	// add index to name
-	err := runMutation(s1)
+	_, err := runMutation(s1)
 	require.NoError(t, err)
 
-	err = runMutation(m)
+	_, err = runMutation(m)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -461,7 +461,7 @@ func TestSchemaMutationIndexRemove(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
 
 	// remove index
-	err = runMutation(s2)
+	_, err = runMutation(s2)
 	require.NoError(t, err)
 
 	output, err = runQuery(q1)
@@ -499,11 +499,11 @@ func TestSchemaMutationReverseAdd(t *testing.T) {
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	_, err := runMutation(m)
 	require.NoError(t, err)
 
 	// add index to name
-	err = runMutation(s)
+	_, err = runMutation(s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -551,11 +551,11 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	_, err := runMutation(m)
 	require.NoError(t, err)
 
 	// add reverse edge to name
-	err = runMutation(s1)
+	_, err = runMutation(s1)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -563,7 +563,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user":[{"~friend" : [{"name":"Alice"}]}]}}`, output)
 
 	// remove reverse edge
-	err = runMutation(s2)
+	_, err = runMutation(s2)
 	require.NoError(t, err)
 
 	output, err = runQuery(q1)
@@ -619,10 +619,10 @@ func TestDeleteAll(t *testing.T) {
 	}
 	`
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(s1)
+	_, err := runMutation(s1)
 	require.NoError(t, err)
 
-	err = runMutation(m1)
+	_, err = runMutation(m1)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -634,7 +634,7 @@ func TestDeleteAll(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user":[{"friend":[{"name":"Alice1"},{"name":"Alice2"}]}]}}`,
 		output)
 
-	err = runMutation(m2)
+	_, err = runMutation(m2)
 	require.NoError(t, err)
 
 	output, err = runQuery(q1)
@@ -720,10 +720,10 @@ func TestDeleteAllSP(t *testing.T) {
 	`
 
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(s1)
+	_, err := runMutation(s1)
 	require.NoError(t, err)
 
-	err = runMutation(m1)
+	_, err = runMutation(m1)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -750,7 +750,7 @@ func TestDeleteAllSP(t *testing.T) {
 	require.JSONEq(t, `{"data": {"user":[{"pred_count":2}]}}`,
 		output)
 
-	err = runMutation(m2)
+	_, err = runMutation(m2)
 	require.NoError(t, err)
 
 	output, err = runQuery(q1)
@@ -945,11 +945,11 @@ func TestListPred(t *testing.T) {
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	_, err := runMutation(m)
 	require.NoError(t, err)
 
 	// add index to name
-	err = runMutation(s)
+	_, err = runMutation(s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -989,11 +989,11 @@ func TestExpandPredError(t *testing.T) {
 
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	_, err := runMutation(m)
 	require.NoError(t, err)
 
 	// add index to name
-	err = runMutation(s)
+	_, err = runMutation(s)
 	require.NoError(t, err)
 
 	_, err = runQuery(q1)
@@ -1030,11 +1030,11 @@ func TestExpandPred(t *testing.T) {
 	`
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	_, err := runMutation(m)
 	require.NoError(t, err)
 
 	// add index to name
-	err = runMutation(s)
+	_, err = runMutation(s)
 	require.NoError(t, err)
 
 	output, err := runQuery(q1)
@@ -1073,7 +1073,7 @@ func TestMutationSubjectVariables(t *testing.T) {
 			}
 		}
     `
-	err := runMutation(m1)
+	_, err := runMutation(m1)
 	require.NoError(t, err)
 
 	m2 := `
@@ -1258,7 +1258,7 @@ func TestSchemaMutation4Error(t *testing.T) {
 	`
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	_, err := runMutation(m)
 	require.NoError(t, err)
 
 	m = `
@@ -1268,7 +1268,7 @@ func TestSchemaMutation4Error(t *testing.T) {
 		}
 	}
 	`
-	err = runMutation(m)
+	_, err = runMutation(m)
 	require.NoError(t, err)
 
 	m = `
@@ -1278,7 +1278,7 @@ func TestSchemaMutation4Error(t *testing.T) {
 		}
 	}
 	`
-	err = runMutation(m)
+	_, err = runMutation(m)
 	require.Error(t, err)
 }
 
@@ -1293,7 +1293,7 @@ func TestSchemaMutation5Error(t *testing.T) {
 	`
 	// reset Schema
 	schema.ParseBytes([]byte(""), 1)
-	err := runMutation(m)
+	_, err := runMutation(m)
 	require.NoError(t, err)
 
 	m = `
@@ -1303,7 +1303,7 @@ func TestSchemaMutation5Error(t *testing.T) {
 		}
 	}
 	`
-	err = runMutation(m)
+	_, err = runMutation(m)
 	require.NoError(t, err)
 
 	m = `
@@ -1313,8 +1313,21 @@ func TestSchemaMutation5Error(t *testing.T) {
 		}
 	}
 	`
-	err = runMutation(m)
+	_, err = runMutation(m)
 	require.Error(t, err)
+}
+
+func TestMutationsWithoutNewline(t *testing.T) {
+	m := `
+	mutation {
+		set {
+			_:company <name> "TurfBytes" . _:company <owner> _:owner . _:owner <name> "Jason" .
+		}
+	}
+	`
+	er, err := runMutation(m)
+	require.NoError(t, err)
+	fmt.Println("er", er)
 }
 
 func TestMain(m *testing.M) {

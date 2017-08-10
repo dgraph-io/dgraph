@@ -26,6 +26,14 @@ popd &> /dev/null
 pushd cmd/dgraph &> /dev/null
 echo -e "\nBuilding and running Dgraph."
 go build .
+
+./dgraph --version
+if [ $? -eq 0 ]; then
+    echo -e "dgraph --version succeeded.\n"
+else
+    echo "dgraph --version command failed."
+fi
+
 ./dgraph -gentlecommit 1.0 -p $BUILD/p -w $BUILD/loader/w -memory_mb 6000 > $BUILD/server.log &
 popd &> /dev/null
 
