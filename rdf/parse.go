@@ -67,6 +67,7 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 	var vend bool
 	isCommentLine := false
 	// We read items from the l.Items channel to which the lexer sends items.
+L:
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
@@ -175,7 +176,7 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 				return rnq, x.Errorf("Invalid end of input. Expected newline or # after ."+
 					" Input: [%s]", line)
 			}
-			break
+			break L
 
 		case itemLabel:
 			rnq.Label = strings.Trim(item.Val, " ")
