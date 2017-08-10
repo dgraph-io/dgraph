@@ -1317,19 +1317,6 @@ func TestSchemaMutation5Error(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestMutationsWithoutNewline(t *testing.T) {
-	m := `
-	mutation {
-		set {
-			_:company <name> "TurfBytes" . _:company <owner> _:owner . _:owner <name> "Jason" .
-		}
-	}
-`
-	err := runMutation(m)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Expected newline after .")
-}
-
 func TestMain(m *testing.M) {
 	dc := dgraph.DefaultConfig
 	dc.AllottedMemory = 2048.0

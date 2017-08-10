@@ -135,6 +135,7 @@ Loop:
 		case r == dot:
 			if l.Depth > atObject {
 				l.Emit(itemValidEnd)
+				l.Depth = atSubject
 			}
 
 		case r == 'u':
