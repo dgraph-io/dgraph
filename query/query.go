@@ -1529,7 +1529,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 
 func (sg *SubGraph) ApplyIneqFunc() error {
 	if sg.Params.uidToVal == nil {
-		return x.Errorf("Expected a vaild value map. But Empty.")
+		return x.Errorf("Expected a valid value map. But got empty.")
 	}
 	var typ types.TypeID
 	for _, v := range sg.Params.uidToVal {
@@ -1996,7 +1996,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 
 func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 	if sg.Params.uidToVal == nil {
-		return nil
+		return x.Errorf("Variable: [%s] used before definition.", sg.Params.Order)
 	}
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]

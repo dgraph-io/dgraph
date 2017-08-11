@@ -200,13 +200,17 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) error {
 	isReversed := schema.State().IsReversed(t.Attr)
 	isIndexed := schema.State().IsIndexed(t.Attr)
+	hasCount := schema.State().HasCount(t.Attr)
 	delEdge := &protos.DirectedEdge{
 		Attr:   t.Attr,
 		Op:     t.Op,
 		Entity: t.Entity,
 	}
+	// To calculate length of posting list. Used for deletion of count index.
+	var plen int
 	var iterErr error
 	l.Iterate(0, func(p *protos.Posting) bool {
+		plen++
 		if isReversed {
 			// Delete reverse edge for each posting.
 			delEdge.ValueId = p.Uid
@@ -231,6 +235,19 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 	if iterErr != nil {
 		return iterErr
 	}
+	if hasCount {
+		// Delete uid from count index. Deletion of reverses is taken care by addReverseMutation
+		// above.
+		if err := updateCount(ctx, countParams{
+			attr:        t.Attr,
+			countBefore: plen,
+			countAfter:  0,
+			entity:      t.Entity,
+		}); err != nil {
+			return err
+		}
+	}
+
 	l.Lock()
 	defer l.Unlock()
 	return l.delete(ctx, t.Attr)
