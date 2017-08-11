@@ -8678,3 +8678,25 @@ func TestCascadeUid(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"friend":[{"_uid_":"0x17","friend":[{"age":38,"dob":"1910-01-01T00:00:00Z","name":"Michonne"}],"name":"Rick Grimes"},{"_uid_":"0x1f","friend":[{"age":15,"dob":"1909-05-05T00:00:00Z","name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}}`, js)
 }
+
+func TestUseVariableBeforeDefinitionError(t *testing.T) {
+	populateGraph(t)
+	query := `
+{
+	me(func: anyofterms(name, "Michonne Daryl Andrea"), orderasc: val(avgAge)) {
+		name
+		friend {
+			x as age
+		}
+		avgAge as avg(val(x))
+	}
+}`
+	res, err := gql.Parse(gql.Request{Str: query})
+	require.NoError(t, err)
+
+	ctx := defaultContext()
+	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
+	err = qr.ProcessQuery(ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Variable: [avgAge] used before definition.")
+}
