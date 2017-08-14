@@ -2289,6 +2289,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 			hasExecuted[idx] = true
 			numQueriesDone++
 			idxList = append(idxList, idx)
+			// Doesn't need to be executed as it just does aggregation and math functions.
 			if sg.Params.IsEmpty {
 				errChan <- nil
 				continue

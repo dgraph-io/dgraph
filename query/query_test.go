@@ -8842,3 +8842,26 @@ children: <
 	pb := processToPB(t, query, map[string]string{}, false)
 	require.Equal(t, expected, proto.MarshalTextString(pb[0]))
 }
+
+func TestAggregateRootError(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			var(func: anyofterms(name, "Rick Michonne")) {
+				a2 as age
+			}
+
+			me() {
+				Sum: math(a + a2)
+			}
+		}
+	`
+	ctx := defaultContext()
+	_, err := processToFastJsonReqCtx(t, query, ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only aggregated variables allowed within empty block.")
+}

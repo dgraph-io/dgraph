@@ -85,7 +85,7 @@ type outputNode interface {
 
 	addCountAtRoot(*SubGraph)
 	addGroupby(*SubGraph, string)
-	addAggregations(*SubGraph)
+	addAggregations(*SubGraph) error
 }
 
 // protoNode is the proto output for preTraverse.
@@ -256,15 +256,18 @@ func (n *protoNode) addGroupby(sg *SubGraph, fname string) {
 	n.AddListChild(fname, g)
 }
 
-func (n *protoNode) addAggregations(sg *SubGraph) {
+func (n *protoNode) addAggregations(sg *SubGraph) error {
 	for _, child := range sg.Children {
 		aggVal, ok := child.Params.uidToVal[0]
-		x.AssertTruef(ok, "Could not find val while doing aggregations.")
+		if !ok {
+			return x.Errorf("Only aggregated variables allowed within empty block.")
+		}
 		fieldName := aggWithVarFieldName(child)
 		n1 := n.New(fieldName)
 		n1.AddValue(fieldName, aggVal)
 		n.AddMapChild(sg.Params.Alias, n1, true)
 	}
+	return nil
 }
 
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
@@ -274,7 +277,9 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 	var seedNode *protoNode
 	n := seedNode.New("_root_")
 	if sg.Params.IsEmpty {
-		n.addAggregations(sg)
+		if err := n.addAggregations(sg); err != nil {
+			return n.(*protoNode).Node, err
+		}
 		return n.(*protoNode).Node, nil
 	}
 
@@ -651,22 +656,24 @@ func (n *fastJsonNode) addCountAtRoot(sg *SubGraph) {
 	n.AddListChild(sg.Params.Alias, n1)
 }
 
-func (n *fastJsonNode) addAggregations(sg *SubGraph) {
+func (n *fastJsonNode) addAggregations(sg *SubGraph) error {
 	for _, child := range sg.Children {
 		aggVal, ok := child.Params.uidToVal[0]
-		x.AssertTruef(ok, "Could not find val while doing aggregations.")
+		if !ok {
+			return x.Errorf("Only aggregated variables allowed within empty block.")
+		}
 		fieldName := aggWithVarFieldName(child)
 		n1 := n.New(fieldName)
 		n1.AddValue(fieldName, aggVal)
 		n.AddMapChild(sg.Params.Alias, n1, true)
 	}
+	return nil
 }
 
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
 	if sg.Params.IsEmpty {
-		n.addAggregations(sg)
-		return nil
+		return n.addAggregations(sg)
 	}
 
 	if sg.uidMatrix == nil {
