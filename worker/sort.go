@@ -38,6 +38,28 @@ import (
 
 var emptySortResult protos.SortResult
 
+type sortresult struct {
+	reply *protos.SortResult
+	err   error
+}
+
+func dispatchSortOverNetwork(
+	ctx context.Context, addr string, q *protos.SortMessage) (*protos.SortResult, error) {
+	pl, err := pools().get(addr)
+	if err != nil {
+		return &emptySortResult, x.Wrapf(err, "SortOverNetwork: while retrieving connection.")
+	}
+	defer pools().release(pl)
+
+	conn := pl.Get()
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sending request to %v", addr)
+	}
+	c := protos.NewWorkerClient(conn)
+
+	return c.Sort(ctx, q)
+}
+
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
 	gid := group.BelongsTo(q.Attr)
@@ -57,29 +79,10 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 	if len(addrs) == 0 {
 		return &emptySortResult, fmt.Errorf("SortOverNetwork: while retrieving connection")
 	}
-	type sortresult struct {
-		reply *protos.SortResult
-		err   error
-	}
 	chResults := make(chan sortresult, len(addrs))
 	for _, addr := range addrs {
 		go func(addr string) {
-			pl, err := pools().get(addr)
-			if err != nil {
-				chResults <- sortresult{
-					&emptySortResult,
-					x.Wrapf(err, "SortOverNetwork: while retrieving connection.")}
-				return
-			}
-			defer pools().release(pl)
-
-			conn := pl.Get()
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Sending request to %v", addr)
-			}
-			c := protos.NewWorkerClient(conn)
-
-			reply, err := c.Sort(ctx, q)
+			reply, err := dispatchSortOverNetwork(ctx, addr, q)
 			chResults <- sortresult{reply, err}
 		}(addr)
 	}
