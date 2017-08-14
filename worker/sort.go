@@ -74,24 +74,38 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 
 	// Send this over the network.
 	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
-	// TODO: We do send the request to multiple servers -- now implement cancellation.
 	addrs := groups().AnyTwoServers(gid)
 	if len(addrs) == 0 {
 		return &emptySortResult, fmt.Errorf("SortOverNetwork: while retrieving connection")
 	}
-	chResults := make(chan sortresult, len(addrs))
-	for _, addr := range addrs {
-		go func(addr string) {
-			reply, err := dispatchSortOverNetwork(ctx, addr, q)
-			chResults <- sortresult{reply, err}
-		}(addr)
+	if len(addrs) == 1 {
+		reply, err := dispatchSortOverNetwork(ctx, addrs[0], q)
+		// Returns upon the first result.
+		if err != nil {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while calling Worker.Sort: %+v", err)
+			}
+		}
+		return reply, err
 	}
+
+	chResults := make(chan sortresult, len(addrs))
+	ctx0, cancel := context.WithCancel(ctx)
+	go func() {
+		reply, err := dispatchSortOverNetwork(ctx0, addrs[0], q)
+		chResults <- sortresult{reply, err}
+	}()
+	go func() {
+		reply, err := dispatchSortOverNetwork(ctx0, addrs[1], q)
+		chResults <- sortresult{reply, err}
+	}()
 
 	select {
 	case <-ctx.Done():
 		return &emptySortResult, ctx.Err()
 	case result := <-chResults:
 		// Returns upon the first result.
+		cancel()
 		if result.err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while calling Worker.Sort: %+v", result.err)
