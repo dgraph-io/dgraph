@@ -18,7 +18,6 @@
 package gql
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
@@ -4076,11 +4075,13 @@ func TestAggRoot1(t *testing.T) {
 
 			me() {
 				sum(val(a))
-				agg(val(a))
+				avg(val(a))
 			}
 		}
 	`
 	gql, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	fmt.Printf("gql: %+v\n", gql.Query[1].Children[0].Func)
+	require.Equal(t, gql.Query[1].Alias, "me")
+	require.Equal(t, gql.Query[1].IsInternal, true)
+	require.Equal(t, gql.Query[1].Children[0].IsInternal, true)
 }

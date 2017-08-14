@@ -1737,7 +1737,7 @@ func TestShortestPath_NoPath(t *testing.T) {
 				follow
 			}
 
-			me(func: uid( A)) {
+			me(func: uid(A)) {
 				name
 			}
 		}`
@@ -1756,7 +1756,7 @@ func TestKShortestPath_NoPath(t *testing.T) {
 				follow
 			}
 
-			me(func: uid( A)) {
+			me(func: uid(A)) {
 				name
 			}
 		}`
@@ -8771,4 +8771,23 @@ func TestAggregateRoot3(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"data": {"me1":[{"age":38},{"age":15},{"age":19}],"me":{"sum(val(a))":72}}}`, js)
+}
+
+func TestAggregateRoot4(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				minVal as min(val(a))
+				maxVal as max(val(a))
+				Sum: math(minVal + maxVal)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":{"min(val(a))":15,"max(val(a))":38,"Sum":53.000000}}}`, js)
 }

@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"sort"
 	"strings"
 	"time"
@@ -86,6 +85,7 @@ type outputNode interface {
 
 	addCountAtRoot(*SubGraph)
 	addGroupby(*SubGraph, string)
+	addAggregations(*SubGraph)
 }
 
 // protoNode is the proto output for preTraverse.
@@ -256,24 +256,30 @@ func (n *protoNode) addGroupby(sg *SubGraph, fname string) {
 	n.AddListChild(fname, g)
 }
 
+func (n *protoNode) addAggregations(sg *SubGraph) {
+}
+
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
 // used postorder traversal before, but preorder seems simpler and faster for
 // most cases.
 func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 	var seedNode *protoNode
+	n := seedNode.New("_root_")
+	if sg.Params.IsEmpty {
+		n.addAggregations(sg)
+		return n.(*protoNode).Node, nil
+	}
+
 	if sg.uidMatrix == nil {
 		return seedNode.New(sg.Params.Alias).(*protoNode).Node, nil
 	}
 
-	n := seedNode.New("_root_")
 	if sg.Params.uidCount != "" {
 		n.addCountAtRoot(sg)
 	}
 
 	if sg.Params.isGroupBy {
 		n.addGroupby(sg, sg.Params.Alias)
-	} else if sg.Params.isInternal {
-		//n.addAggregations(sg)
 	} else {
 		for _, uid := range sg.uidMatrix[0].Uids {
 			// For the root, the name is stored in Alias, not Attr.
@@ -650,7 +656,7 @@ func (n *fastJsonNode) addAggregations(sg *SubGraph) {
 
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
-	if sg.Params.isInternal {
+	if sg.Params.IsEmpty {
 		n.addAggregations(sg)
 		return nil
 	}
@@ -661,7 +667,6 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 
 	if sg.Params.uidCount != "" {
 		n.addCountAtRoot(sg)
-		return nil
 	}
 
 	if sg.Params.isGroupBy {
@@ -717,7 +722,6 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 			}
 		}
 	} else {
-		log.Fatal("here")
 		err := processNodeUids(n.(*fastJsonNode), sg)
 		if err != nil {
 			return err

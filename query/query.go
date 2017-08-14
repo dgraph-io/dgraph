@@ -154,6 +154,7 @@ type params struct {
 	uidCount       string
 	numPaths       int
 	parentIds      []uint64 // This is a stack that is maintained and passed down to children.
+	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -900,7 +901,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		groupbyAttrs: gq.GroupbyAttrs,
 		uidCount:     gq.UidCount,
 		IgnoreReflex: gq.IgnoreReflex,
-		isInternal:   gq.IsInternal,
+		IsEmpty:      gq.IsEmpty,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -1038,7 +1039,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 	}
 
 	needsVar := sg.Params.NeedsVar[0].Name
-	if parent.IsInternal() {
+	if parent.Params.IsEmpty {
 		vals := doneVars[needsVar].Vals
 		mp = make(map[uint64]types.Val)
 		if len(vals) == 0 {
@@ -1190,7 +1191,12 @@ func (sg *SubGraph) transformVars(doneVars map[string]varValue,
 
 func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*SubGraph,
 	parent *SubGraph) error {
-	if parent == nil || (!sg.IsInternal() && !sg.IsGroupBy()) {
+	if !sg.IsInternal() && !sg.IsGroupBy() && !sg.Params.IsEmpty {
+		return nil
+	}
+
+	// Aggregation function won't be present at root.
+	if sg.Params.IsEmpty && parent == nil {
 		return nil
 	}
 
@@ -1626,17 +1632,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		// Internal block doesn't have SrcUIDs as its job is to retrieve aggregation on variables
-		// defined in other blocks.
-		if !sg.IsInternal() {
-			x.AssertTruef(sg.SrcUIDs != nil, "SrcUIDs shouldn't be nil.")
-			// If we have a filter SubGraph which only contains an operator,
-			// it won't have any attribute to work on.
-			// This is to allow providing SrcUIDs to the filter children.
-			// Each filter use it's own (shallow) copy of SrcUIDs, so there is no race conditions,
-			// when multiple filters replace their sg.DestUIDs
-			sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
-		}
+		x.AssertTruef(sg.SrcUIDs != nil, "SrcUIDs shouldn't be nil.")
+		// If we have a filter SubGraph which only contains an operator,
+		// it won't have any attribute to work on.
+		// This is to allow providing SrcUIDs to the filter children.
+		// Each filter use it's own (shallow) copy of SrcUIDs, so there is no race conditions,
+		// when multiple filters replace their sg.DestUIDs
+		sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
 	} else {
 
 		if len(sg.SrcFunc) > 0 && isInequalityFn(sg.SrcFunc[0]) && sg.Attr == "val" {
@@ -1690,7 +1692,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if (sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0) && !sg.IsInternal() {
+	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
@@ -2217,7 +2219,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 		gq := queries[i]
 
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 &&
-			gq.Alias != "shortest" && !gq.IsInternal) {
+			gq.Alias != "shortest" && !gq.IsEmpty) {
 			err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
@@ -2284,6 +2286,11 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 			hasExecuted[idx] = true
 			numQueriesDone++
 			idxList = append(idxList, idx)
+			if sg.Params.IsEmpty {
+				errChan <- nil
+				continue
+			}
+
 			if sg.Params.Alias == "shortest" {
 				// We allow only one shortest path block per query.
 				go func() {

@@ -73,6 +73,9 @@ type GraphQuery struct {
 	// there is a child with count() attr, then this is not empty for the parent.
 	// If there is an alias, this has the alias value, else its value is count.
 	UidCount string
+	// These are block that don't have a starting function and hence no starting nodes. They are
+	// used to aggregate and get variables defined in another block.
+	IsEmpty bool
 }
 
 type AttrLang struct {
@@ -2126,10 +2129,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			key = item.Val
 			expectArg = false
 		} else if item.Typ == itemRightRound {
-			if gq.Func == nil && len(gq.NeedsVar) == 0 {
-				// Aggregation at root would be fetched in another variable which won't have a
-				// function or variable at root.
-				gq.IsInternal = true
+			if gq.Func == nil && len(gq.NeedsVar) == 0 && len(gq.Args) == 0 {
+				// Used to do aggregation at root would be fetched in another block.
+				gq.IsEmpty = true
 			}
 			break
 		} else if item.Typ == itemComma {
