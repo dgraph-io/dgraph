@@ -73,7 +73,7 @@ type GraphQuery struct {
 	// there is a child with count() attr, then this is not empty for the parent.
 	// If there is an alias, this has the alias value, else its value is count.
 	UidCount string
-	// True for blockss that don't have a starting function and hence no starting nodes. They are
+	// True for blocks that don't have a starting function and hence no starting nodes. They are
 	// used to aggregate and get variables defined in another block.
 	IsEmpty bool
 }
