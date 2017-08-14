@@ -8701,25 +8701,6 @@ func TestUseVariableBeforeDefinitionError(t *testing.T) {
 	require.Contains(t, err.Error(), "Variable: [avgAge] used before definition.")
 }
 
-func TestGetUidVariable(t *testing.T) {
-	populateGraph(t)
-	query := `
-		{
-			f as var(func: anyofterms(name, "Rick Michonne Andrea")) {
-				a as math(24/8 * 3)
-			}
-
-			AgeOrder(func: uid(f)) {
-				name
-				uid(f)
-				val(a)
-			}
-		}`
-
-	js := processToFastJSON(t, query)
-	fmt.Println(js)
-}
-
 func TestAggregateRoot1(t *testing.T) {
 	populateGraph(t)
 	query := `
