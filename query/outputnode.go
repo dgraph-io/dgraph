@@ -59,9 +59,7 @@ func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*protos.Node, error) {
 // ToJson converts the list of subgraph into a JSON response by calling ToFastJSON.
 func ToJson(l *Latency, sgl []*SubGraph, w io.Writer, allocIds map[string]string,
 	addLatency bool) error {
-	sgr := &SubGraph{
-		Attr: "__",
-	}
+	sgr := &SubGraph{}
 	for _, sg := range sgl {
 		if sg.Params.Alias == "var" || sg.Params.Alias == "shortest" {
 			continue
