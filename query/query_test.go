@@ -8791,3 +8791,55 @@ func TestAggregateRoot4(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"data": {"me":{"min(val(a))":15,"max(val(a))":38,"Sum":53.000000}}}`, js)
 }
+
+func TestAggregateRootProto(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				minVal as min(val(a))
+				maxVal as max(val(a))
+				Sum: math(minVal + maxVal)
+			}
+		}
+	`
+
+	expected := `attribute: "_root_"
+children: <
+  attribute: "me"
+  children: <
+    attribute: "min(val(a))"
+    properties: <
+      prop: "min(val(a))"
+      value: <
+        int_val: 15
+      >
+    >
+  >
+  children: <
+    attribute: "max(val(a))"
+    properties: <
+      prop: "max(val(a))"
+      value: <
+        int_val: 38
+      >
+    >
+  >
+  children: <
+    attribute: "Sum"
+    properties: <
+      prop: "Sum"
+      value: <
+        double_val: 53
+      >
+    >
+  >
+>
+`
+	pb := processToPB(t, query, map[string]string{}, false)
+	require.Equal(t, expected, proto.MarshalTextString(pb[0]))
+}

@@ -257,6 +257,14 @@ func (n *protoNode) addGroupby(sg *SubGraph, fname string) {
 }
 
 func (n *protoNode) addAggregations(sg *SubGraph) {
+	for _, child := range sg.Children {
+		aggVal, ok := child.Params.uidToVal[0]
+		x.AssertTruef(ok, "Could not find val while doing aggregations.")
+		fieldName := aggWithVarFieldName(child)
+		n1 := n.New(fieldName)
+		n1.AddValue(fieldName, aggVal)
+		n.AddMapChild(sg.Params.Alias, n1, true)
+	}
 }
 
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
