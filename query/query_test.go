@@ -6080,128 +6080,84 @@ children: <
 `, proto.MarshalTextString(gr[0]))
 }
 
-func runQuery(t *testing.T, gq *gql.GraphQuery) string {
-	ctx := defaultContext()
-	ch := make(chan error)
-
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var buf bytes.Buffer
-	var l Latency
-	err = sg.ToFastJSON(&l, &buf, nil, false)
-	require.NoError(t, err)
-	return string(buf.Bytes())
-}
-
-func TestWithinPoint(t *testing.T) {
+func TestNearPoint(t *testing.T) {
 	populateGraph(t)
-	gq := &gql.GraphQuery{
-		Alias: "me",
-		Func: &gql.Function{
-			Attr: "geometry",
-			Name: "near",
-			Args: []string{`[-122.082506, 37.4249518]`, "1"},
-		},
-		Children: []*gql.GraphQuery{{Attr: "name"}},
-	}
+	query := `{
+		me(func: near(geometry, [-122.082506, 37.4249518], 1)) {
+			name
+		}
+	}`
 
-	mp := runQuery(t, gq)
+	js := processToFastJSON(t, query)
 	expected := `{"data": {"me":[{"name":"Googleplex"}]}}`
-	require.JSONEq(t, expected, mp)
+	require.JSONEq(t, expected, js)
 }
 
 func TestWithinPolygon(t *testing.T) {
 	populateGraph(t)
-	gq := &gql.GraphQuery{
-		Alias: "me",
-		Func: &gql.Function{Attr: "geometry", Name: "within", Args: []string{
-			`[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]`},
-		},
-		Children: []*gql.GraphQuery{{Attr: "name"}},
-	}
-
-	mp := runQuery(t, gq)
+	query := `{
+		me(func: within(geometry, [[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]])) {
+			name
+		}
+	}`
+	js := processToFastJSON(t, query)
 	expected := `{"data": {"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"}]}}`
-	require.JSONEq(t, expected, mp)
+	require.JSONEq(t, expected, js)
 }
 
 func TestContainsPoint(t *testing.T) {
 	populateGraph(t)
-	gq := &gql.GraphQuery{
-		Alias: "me",
-		Func: &gql.Function{Attr: "geometry", Name: "contains", Args: []string{
-			`[-122.082506, 37.4249518]`},
-		},
-		Children: []*gql.GraphQuery{{Attr: "name"}},
-	}
+	query := `{
+		me(func: contains(geometry, [-122.082506, 37.4249518])) {
+			name
+		}
+	}`
 
-	mp := runQuery(t, gq)
+	js := processToFastJSON(t, query)
 	expected := `{"data": {"me":[{"name":"SF Bay area"},{"name":"Mountain View"}]}}`
-	require.JSONEq(t, expected, mp)
+	require.JSONEq(t, expected, js)
 }
 
-func TestNearPoint(t *testing.T) {
+func TestNearPoint2(t *testing.T) {
 	populateGraph(t)
-	gq := &gql.GraphQuery{
-		Alias: "me",
-		Func: &gql.Function{
-			Attr: "geometry",
-			Name: "near",
-			Args: []string{`[-122.082506, 37.4249518]`, "1000"},
-		},
-		Children: []*gql.GraphQuery{{Attr: "name"}},
-	}
+	query := `{
+		me(func: near(geometry, [-122.082506, 37.4249518], 1000)) {
+			name
+		}
+	}`
 
-	mp := runQuery(t, gq)
+	js := processToFastJSON(t, query)
 	expected := `{"data": {"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"}]}}`
-	require.JSONEq(t, expected, mp)
+	require.JSONEq(t, expected, js)
 }
 
 func TestIntersectsPolygon1(t *testing.T) {
 	populateGraph(t)
-	gq := &gql.GraphQuery{
-		Alias: "me",
-		Func: &gql.Function{
-			Attr: "geometry",
-			Name: "intersects",
-			Args: []string{
-				`[[-122.06, 37.37], [-122.1, 37.36],
-					[-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]`,
-			},
-		},
-		Children: []*gql.GraphQuery{{Attr: "name"}},
-	}
+	query := `{
+		me(func: intersects(geometry, [[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]])) {
+			name
+		}
+	}`
 
-	mp := runQuery(t, gq)
+	js := processToFastJSON(t, query)
 	expected := `{"data" : {"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"},
 		{"name":"SF Bay area"},{"name":"Mountain View"}]}}`
-	require.JSONEq(t, expected, mp)
+	require.JSONEq(t, expected, js)
 }
 
 func TestIntersectsPolygon2(t *testing.T) {
 	populateGraph(t)
-	gq := &gql.GraphQuery{
-		Alias: "me",
-		Func: &gql.Function{
-			Attr: "geometry",
-			Name: "intersects",
-			Args: []string{
-				`[[-121.6, 37.1], [-122.4, 37.3],
-					[-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]`,
-			},
-		},
-		Children: []*gql.GraphQuery{{Attr: "name"}},
-	}
+	query := `{
+		me(func: intersects(geometry,[[-121.6, 37.1], [-122.4, 37.3], [-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]])) {
+			name
+		}
+	}`
 
-	mp := runQuery(t, gq)
+	js := processToFastJSON(t, query)
 	expected := `{"data": {"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"},
 			{"name":"San Carlos Airport"},{"name":"SF Bay area"},
 			{"name":"Mountain View"},{"name":"San Carlos"}]}}`
-	require.JSONEq(t, expected, mp)
+	require.JSONEq(t, expected, js)
 }
 
 func TestNotExistObject(t *testing.T) {

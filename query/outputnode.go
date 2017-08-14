@@ -689,14 +689,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]string, addLatency bool) error {
 	var seedNode *fastJsonNode
 	n := seedNode.New("_root_")
-	if sg.Attr == "__" {
-		for _, sg := range sg.Children {
-			err := processNodeUids(n.(*fastJsonNode), sg)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
+	for _, sg := range sg.Children {
 		err := processNodeUids(n.(*fastJsonNode), sg)
 		if err != nil {
 			return err
