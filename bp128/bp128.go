@@ -11,6 +11,7 @@ package bp128
 
 import (
 	"encoding/binary"
+	"math"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -161,7 +162,7 @@ func (bp *BPackEncoder) WriteTo(in []byte) {
 	x.AssertTrue(bp.length > 0)
 	binary.BigEndian.PutUint32(in[:4], uint32(bp.length))
 
-	if bp.length < BlockSize {
+	if bp.length <= BlockSize {
 		// If number of integers are less all are stored as varint
 		// and without metadata.
 		bp.data.CopyTo(in[4:])
@@ -330,6 +331,43 @@ func (pi *BPackIterator) Next() {
 	funpack[sz](&pi.data[pi.in_offset], &pi.out[0], &pi.lastSeed[0])
 	pi.in_offset += (int(sz) * BlockSize) / 8
 	pi.count += BlockSize
+}
+
+func (pi *BPackIterator) SkipNext() {
+	if pi.count >= pi.length {
+		pi.valid = false
+		pi.out = pi.buf[:0]
+		return
+	}
+
+	// Find the bit size of the block
+	sz := uint8(pi.data[pi.in_offset])
+	// If it's varint block,(The last one)
+	if sz&bitVarint != 0 {
+		pi.in_offset = len(pi.data)
+		pi.count = pi.length
+		return
+	}
+	// Calculate size of the block based on bitsize
+	pi.in_offset += (int(sz)*BlockSize)/8 + 1
+	pi.count += BlockSize
+	// Update seed
+	i := (pi.count / BlockSize) * 20
+	pi.lastSeed[0] = binary.BigEndian.Uint64(pi.metadata[i : i+8])
+	pi.lastSeed[1] = binary.BigEndian.Uint64(pi.metadata[i+8 : i+16])
+}
+
+func (pi *BPackIterator) MaxIntInBlock() uint64 {
+	nBlocks := numBlocks(pi.length)
+	currBlock := pi.count / BlockSize
+	// We find max value through seed value stored in next meta block, so
+	// if it's a last block, we don't know the max so we return maxuint64
+	if currBlock >= nBlocks-1 {
+		return math.MaxUint64
+	}
+	// MaxInt in current block can be found by seed value of next block
+	midx := (currBlock + 1) * 20
+	return binary.BigEndian.Uint64(pi.metadata[midx+8 : midx+16])
 }
 
 func DeltaUnpack(in []byte, out []uint64) {

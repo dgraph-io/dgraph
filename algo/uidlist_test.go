@@ -332,12 +332,11 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 		}
 	}
 
-	randomTests(10240, 0.3)
-	randomTests(1024000, 0.3)
-	randomTests(10240, 0.1)
-	randomTests(1024000, 0.1)
-	randomTests(10240, 0.01)
-	randomTests(1024000, 0.01)
+	randomTests(10, 0.3)
+	randomTests(100, 0.3)
+	randomTests(1000, 0.3)
+	randomTests(10000, 0.3)
+	randomTests(1000000, 0.3)
 }
 
 func BenchmarkListIntersectRatio(b *testing.B) {
