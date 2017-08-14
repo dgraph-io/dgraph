@@ -4103,7 +4103,7 @@ func TestAggRootError(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Only aggregation/math functions allowed inside empty blocks.")
+	require.Contains(t, err.Error(), "Only aggregation/math functions allowed inside empty blocks. Got: friend")
 }
 
 func TestAggRootError2(t *testing.T) {
@@ -4121,5 +4121,22 @@ func TestAggRootError2(t *testing.T) {
 	`
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Only aggregation/math functions allowed inside empty blocks.")
+	require.Contains(t, err.Error(), "Only aggregation/math functions allowed inside empty blocks. Got: name")
+}
+
+func TestAggRootError3(t *testing.T) {
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				avg
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only aggregation/math functions allowed inside empty blocks. Got: avg")
 }
