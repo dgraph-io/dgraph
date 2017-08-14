@@ -8773,6 +8773,24 @@ func TestAggregateRoot4(t *testing.T) {
 	require.Equal(t, `{"data": {"me":{"min(val(a))":15,"max(val(a))":38,"Sum":53.000000}}}`, js)
 }
 
+func TestAggregateRoot5(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				# money edge doesn't exist
+				m as money
+			}
+
+			me() {
+				sum(val(m))
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":{"sum(val(m))":0.000000}}}`, js)
+}
+
 func TestAggregateRootProto(t *testing.T) {
 	populateGraph(t)
 	query := `

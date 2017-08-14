@@ -2546,7 +2546,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			if count == seen {
 				count = seenWithPred
 			}
-
 		case itemLeftCurl:
 			if len(curp.Langs) > 0 {
 				return x.Errorf("Cannot have children for attr: %s with lang tags: %v", curp.Attr,

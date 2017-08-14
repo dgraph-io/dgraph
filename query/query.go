@@ -1040,12 +1040,15 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 
 	needsVar := sg.Params.NeedsVar[0].Name
 	if parent.Params.IsEmpty {
+		// The aggregated value doesn't really belong to a uid, we put it in uidToVal map
+		// corresponding to uid 0 to avoid defining another field in SubGraph.
 		vals := doneVars[needsVar].Vals
 		mp = make(map[uint64]types.Val)
 		if len(vals) == 0 {
-			// TODO - Add test case.
 			mp[0] = types.Val{Tid: types.FloatID, Value: 0.0}
+			return mp, nil
 		}
+
 		ag := aggregator{
 			name: sg.SrcFunc[0],
 		}
