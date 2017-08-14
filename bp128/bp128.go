@@ -162,7 +162,7 @@ func (bp *BPackEncoder) WriteTo(in []byte) {
 	x.AssertTrue(bp.length > 0)
 	binary.BigEndian.PutUint32(in[:4], uint32(bp.length))
 
-	if bp.length <= BlockSize {
+	if bp.length < BlockSize {
 		// If number of integers are less all are stored as varint
 		// and without metadata.
 		bp.data.CopyTo(in[4:])
