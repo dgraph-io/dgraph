@@ -60,6 +60,17 @@ func dispatchSortOverNetwork(
 	return c.Sort(ctx, q)
 }
 
+func contextSleep(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	select {
+	case <-ctx.Done():
+		timer.Stop()
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
 	gid := group.BelongsTo(q.Attr)
@@ -96,6 +107,10 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 		chResults <- sortresult{reply, err}
 	}()
 	go func() {
+		if err := contextSleep(ctx0, 2*time.Millisecond); err != nil {
+			// We got interrupted before we could even start.
+			return
+		}
 		reply, err := dispatchSortOverNetwork(ctx0, addrs[1], q)
 		chResults <- sortresult{reply, err}
 	}()
