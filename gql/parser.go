@@ -2126,6 +2126,11 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			key = item.Val
 			expectArg = false
 		} else if item.Typ == itemRightRound {
+			if gq.Func == nil && len(gq.NeedsVar) == 0 {
+				// Aggregation at root would be fetched in another variable which won't have a
+				// function or variable at root.
+				gq.IsInternal = true
+			}
 			break
 		} else if item.Typ == itemComma {
 			if expectArg {

@@ -880,13 +880,6 @@ func (sg *SubGraph) populate(uids []uint64) error {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
-		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf(err.Error())
-		}
-		return nil, err
-	}
 
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
@@ -902,6 +895,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		groupbyAttrs: gq.GroupbyAttrs,
 		uidCount:     gq.UidCount,
 		IgnoreReflex: gq.IgnoreReflex,
+		isInternal:   gq.IsInternal,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -1037,8 +1031,32 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 	if parent == nil {
 		return mp, ErrWrongAgg
 	}
-	var relSG *SubGraph
+
 	needsVar := sg.Params.NeedsVar[0].Name
+	if parent.IsInternal() {
+		vals := doneVars[needsVar].Vals
+		mp = make(map[uint64]types.Val)
+		if len(vals) == 0 {
+			// TODO - Add test case.
+			mp[0] = types.Val{Tid: types.FloatID, Value: 0.0}
+		}
+		ag := aggregator{
+			name: sg.SrcFunc[0],
+		}
+		for _, val := range vals {
+			ag.Apply(val)
+		}
+		v, err := ag.Value()
+		if err != nil && err != ErrEmptyVal {
+			return mp, err
+		}
+		if v.Value != nil {
+			mp[0] = v
+		}
+		return mp, nil
+	}
+
+	var relSG *SubGraph
 	for _, ch := range parent.Children {
 		if sg == ch {
 			continue
@@ -1065,7 +1083,6 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 	mp = make(map[uint64]types.Val)
 	// Go over the sibling node and aggregate.
 	for i, list := range relSG.uidMatrix {
-
 		ag := aggregator{
 			name: sg.SrcFunc[0],
 		}
@@ -1168,7 +1185,7 @@ func (sg *SubGraph) transformVars(doneVars map[string]varValue,
 
 func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*SubGraph,
 	parent *SubGraph) error {
-	if !sg.IsInternal() && !sg.IsGroupBy() {
+	if parent == nil || (!sg.IsInternal() && !sg.IsGroupBy()) {
 		return nil
 	}
 
@@ -1183,6 +1200,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		if err != nil {
 			return err
 		}
+		fmt.Println("mp", mp)
 		if sg.Params.Var != "" {
 			it := doneVars[sg.Params.Var]
 			it.Vals = mp
@@ -1604,13 +1622,17 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		x.AssertTruef(sg.SrcUIDs != nil, "SrcUIDs shouldn't be nil.")
-		// If we have a filter SubGraph which only contains an operator,
-		// it won't have any attribute to work on.
-		// This is to allow providing SrcUIDs to the filter children.
-		// Each filter use it's own (shallow) copy of SrcUIDs, so there is no race conditions,
-		// when multiple filters replace their sg.DestUIDs
-		sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
+		// Internal block doesn't have SrcUIDs as its job is to retrieve aggregation on variables
+		// defined in other blocks.
+		if !sg.IsInternal() {
+			x.AssertTruef(sg.SrcUIDs != nil, "SrcUIDs shouldn't be nil.")
+			// If we have a filter SubGraph which only contains an operator,
+			// it won't have any attribute to work on.
+			// This is to allow providing SrcUIDs to the filter children.
+			// Each filter use it's own (shallow) copy of SrcUIDs, so there is no race conditions,
+			// when multiple filters replace their sg.DestUIDs
+			sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
+		}
 	} else {
 
 		if len(sg.SrcFunc) > 0 && isInequalityFn(sg.SrcFunc[0]) && sg.Attr == "val" {
@@ -1664,7 +1686,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
+	if (sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0) && !sg.IsInternal() {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
@@ -2189,9 +2211,14 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 	queries := req.GqlQuery.Query
 	for i := 0; i < len(queries); i++ {
 		gq := queries[i]
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil &&
-			len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
-			continue
+
+		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 &&
+			gq.Alias != "shortest" && !gq.IsInternal) {
+			err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf(err.Error())
+			}
+			return err
 		}
 		sg, err := ToSubGraph(ctx, gq)
 		if err != nil {
@@ -2231,6 +2258,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 	}
 
 	var shortestSg []*SubGraph
+	fmt.Println("len", len(req.Subgraphs))
 	for i := 0; i < len(req.Subgraphs) && numQueriesDone < len(req.Subgraphs); i++ {
 		errChan := make(chan error, len(req.Subgraphs))
 		var idxList []int
@@ -2293,6 +2321,7 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			fmt.Println("vars", req.vars)
 			err = sg.populatePostAggregation(req.vars, []*SubGraph{}, nil)
 			if err != nil {
 				return err

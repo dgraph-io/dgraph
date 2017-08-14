@@ -18,6 +18,7 @@
 package gql
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -4064,4 +4065,22 @@ func TestEqUidFunctionErr(t *testing.T) {
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only val/count allowed as function within another. Got: uid")
+}
+
+func TestAggRoot1(t *testing.T) {
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				sum(val(a))
+				agg(val(a))
+			}
+		}
+	`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	fmt.Printf("gql: %+v\n", gql.Query[1].Children[0].Func)
 }

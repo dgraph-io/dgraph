@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -271,6 +272,8 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 
 	if sg.Params.isGroupBy {
 		n.addGroupby(sg, sg.Params.Alias)
+	} else if sg.Params.isInternal {
+		//n.addAggregations(sg)
 	} else {
 		for _, uid := range sg.uidMatrix[0].Uids {
 			// For the root, the name is stored in Alias, not Attr.
@@ -634,14 +637,32 @@ func (n *fastJsonNode) addCountAtRoot(sg *SubGraph) {
 	n.AddListChild(sg.Params.Alias, n1)
 }
 
+func (n *fastJsonNode) addAggregations(sg *SubGraph) {
+	fmt.Println("here", sg.Params.uidToVal)
+	c := types.ValueForType(types.FloatID)
+	aggVal, ok := sg.Params.uidToVal[0]
+	x.AssertTrue(ok)
+	c.Value = aggVal.Value.(float64)
+	n1 := n.New(sg.Params.Alias)
+	n1.AddValue("sum(x)", c)
+	n.AddListChild(sg.Params.Alias, n1)
+}
+
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
+	fmt.Println("Sg", sg.Params.Alias, "attr", sg.Attr, "internal", sg.Params.isInternal)
+	if sg.Params.isInternal {
+		n.addAggregations(sg)
+		return nil
+	}
+
 	if sg.uidMatrix == nil {
 		return nil
 	}
 
 	if sg.Params.uidCount != "" {
 		n.addCountAtRoot(sg)
+		return nil
 	}
 
 	if sg.Params.isGroupBy {
@@ -697,6 +718,7 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 			}
 		}
 	} else {
+		log.Fatal("here")
 		err := processNodeUids(n.(*fastJsonNode), sg)
 		if err != nil {
 			return err
