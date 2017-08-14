@@ -1,0 +1,169 @@
+len: 10, compressed: 43, bytes/int: 4.300000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1:size=10:overlap=0.01:-4         	50000000	        38.2 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=1:size=10:overlap=0.01:-4         	 2000000	       693 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=1:size=10:overlap=0.01:-4     	 2000000	       730 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=1:size=10:overlap=0.01:-4         	 2000000	       937 ns/op
+
+len: 100, compressed: 208, bytes/int: 2.080000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10:size=10:overlap=0.01:-4                     	20000000	        92.3 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=10:size=10:overlap=0.01:-4        	 1000000	      1415 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=10:size=10:overlap=0.01:-4    	 1000000	      1403 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=10:size=10:overlap=0.01:-4        	 1000000	      1578 ns/op
+
+len: 500, compressed: 875, bytes/int: 1.750000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=50:size=10:overlap=0.01:-4                     	 5000000	       319 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=50:size=10:overlap=0.01:-4        	  500000	      2703 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=50:size=10:overlap=0.01:-4    	  500000	      2545 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=50:size=10:overlap=0.01:-4        	  500000	      2699 ns/op
+
+len: 1000, compressed: 1279, bytes/int: 1.279000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=100:size=10:overlap=0.01:-4                    	10000000	       208 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=100:size=10:overlap=0.01:-4       	  500000	      3044 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=100:size=10:overlap=0.01:-4   	  500000	      2721 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=100:size=10:overlap=0.01:-4       	  500000	      2842 ns/op
+
+len: 5000, compressed: 3115, bytes/int: 0.623000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=500:size=10:overlap=0.01:-4                    	 3000000	       483 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=500:size=10:overlap=0.01:-4       	  300000	      4249 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=500:size=10:overlap=0.01:-4   	 1000000	      1739 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=500:size=10:overlap=0.01:-4       	 1000000	      1616 ns/op
+
+len: 10000, compressed: 3276, bytes/int: 0.327600
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1000:size=10:overlap=0.01:-4                   	 3000000	       528 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=1000:size=10:overlap=0.01:-4      	  200000	      8267 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=1000:size=10:overlap=0.01:-4  	 1000000	      2156 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=1000:size=10:overlap=0.01:-4      	 1000000	      2063 ns/op
+
+len: 100000, compressed: 35820, bytes/int: 0.358200
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10000:size=10:overlap=0.01:-4                  	 2000000	       639 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=10000:size=10:overlap=0.01:-4     	   20000	     66415 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=10000:size=10:overlap=0.01:-4 	  300000	      5724 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=10000:size=10:overlap=0.01:-4     	 1000000	      2365 ns/op
+
+len: 1000000, compressed: 210344, bytes/int: 0.210344
+BenchmarkListIntersectRatio/:IntersectWith:ratio=100000:size=10:overlap=0.01:-4                 	 2000000	       751 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=100000:size=10:overlap=0.01:-4    	    2000	    624240 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=100000:size=10:overlap=0.01:-4         	   30000	     45601 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=100000:size=10:overlap=0.01:-4             	 1000000	      2471 ns/op
+
+len: 100, compressed: 224, bytes/int: 2.240000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1:size=100:overlap=0.01:-4                              	 5000000	       267 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=1:size=100:overlap=0.01:-4                 	 1000000	      1580 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=1:size=100:overlap=0.01:-4             	 1000000	      1842 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=1:size=100:overlap=0.01:-4                 	  300000	      4594 ns/op
+
+len: 1000, compressed: 1919, bytes/int: 1.919000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10:size=100:overlap=0.01:-4                             	 2000000	       898 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=10:size=100:overlap=0.01:-4                	  500000	      3332 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=10:size=100:overlap=0.01:-4            	  500000	      3718 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=10:size=100:overlap=0.01:-4                	  300000	      5820 ns/op
+
+len: 5000, compressed: 6507, bytes/int: 1.301400
+BenchmarkListIntersectRatio/:IntersectWith:ratio=50:size=100:overlap=0.01:-4                             	  500000	      3563 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=50:size=100:overlap=0.01:-4                	  200000	      6757 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=50:size=100:overlap=0.01:-4            	  300000	      5286 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=50:size=100:overlap=0.01:-4                	  200000	      7003 ns/op
+
+len: 10000, compressed: 9789, bytes/int: 0.978900
+BenchmarkListIntersectRatio/:IntersectWith:ratio=100:size=100:overlap=0.01:-4                            	  500000	      2568 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=100:size=100:overlap=0.01:-4               	  200000	     10306 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=100:size=100:overlap=0.01:-4           	  200000	      6471 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=100:size=100:overlap=0.01:-4               	  200000	      8371 ns/op
+
+len: 50000, compressed: 27064, bytes/int: 0.541280
+BenchmarkListIntersectRatio/:IntersectWith:ratio=500:size=100:overlap=0.01:-4                            	  300000	      5190 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=500:size=100:overlap=0.01:-4               	   30000	     41431 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=500:size=100:overlap=0.01:-4           	  200000	     14008 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=500:size=100:overlap=0.01:-4               	  100000	     12258 ns/op
+
+len: 100000, compressed: 36011, bytes/int: 0.360110
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1000:size=100:overlap=0.01:-4                           	  200000	      5965 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=1000:size=100:overlap=0.01:-4              	   20000	     78174 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=1000:size=100:overlap=0.01:-4          	  100000	     16249 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=1000:size=100:overlap=0.01:-4              	  100000	     16061 ns/op
+
+len: 1000000, compressed: 336000, bytes/int: 0.336000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10000:size=100:overlap=0.01:-4                          	  200000	      8805 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=10000:size=100:overlap=0.01:-4             	    2000	    773108 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=10000:size=100:overlap=0.01:-4         	   30000	     57974 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=10000:size=100:overlap=0.01:-4             	  100000	     22268 ns/op
+
+len: 1000, compressed: 2727, bytes/int: 2.727000
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1:size=1000:overlap=0.01:-4                             	  500000	      2657 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=1:size=1000:overlap=0.01:-4                	  300000	      5421 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=1:size=1000:overlap=0.01:-4            	  200000	      8803 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=1:size=1000:overlap=0.01:-4                	   30000	     38810 ns/op
+
+len: 10000, compressed: 16971, bytes/int: 1.697100
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10:size=1000:overlap=0.01:-4                            	  100000	     14257 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=10:size=1000:overlap=0.01:-4               	  100000	     17924 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=10:size=1000:overlap=0.01:-4           	  100000	     22557 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=10:size=1000:overlap=0.01:-4               	   30000	     55971 ns/op
+
+len: 50000, compressed: 56091, bytes/int: 1.121820
+BenchmarkListIntersectRatio/:IntersectWith:ratio=50:size=1000:overlap=0.01:-4                            	   50000	     39565 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=50:size=1000:overlap=0.01:-4               	   30000	     58760 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=50:size=1000:overlap=0.01:-4           	   30000	     56417 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=50:size=1000:overlap=0.01:-4               	   20000	     97653 ns/op
+
+len: 100000, compressed: 93473, bytes/int: 0.934730
+BenchmarkListIntersectRatio/:IntersectWith:ratio=100:size=1000:overlap=0.01:-4                           	   30000	     46514 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=100:size=1000:overlap=0.01:-4              	   10000	    100440 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=100:size=1000:overlap=0.01:-4          	   20000	     78881 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=100:size=1000:overlap=0.01:-4              	   10000	    132236 ns/op
+
+len: 500000, compressed: 254331, bytes/int: 0.508662
+BenchmarkListIntersectRatio/:IntersectWith:ratio=500:size=1000:overlap=0.01:-4                           	   10000	    133418 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=500:size=1000:overlap=0.01:-4              	    3000	    414828 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=500:size=1000:overlap=0.01:-4          	   10000	    222872 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=500:size=1000:overlap=0.01:-4              	   10000	    150832 ns/op
+
+len: 1000000, compressed: 402898, bytes/int: 0.402898
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1000:size=1000:overlap=0.01:-4                          	   10000	    152759 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=1000:size=1000:overlap=0.01:-4             	    2000	    800029 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=1000:size=1000:overlap=0.01:-4         	   10000	    249165 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=1000:size=1000:overlap=0.01:-4             	    5000	    182566 ns/op
+
+len: 10000, compressed: 23144, bytes/int: 2.314400
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1:size=10000:overlap=0.01:-4                            	   20000	     95811 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=1:size=10000:overlap=0.01:-4               	   10000	    102026 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=1:size=10000:overlap=0.01:-4           	   10000	    125210 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=1:size=10000:overlap=0.01:-4               	    5000	    397266 ns/op
+
+len: 100000, compressed: 150981, bytes/int: 1.509810
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10:size=10000:overlap=0.01:-4                           	   10000	    189674 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=10:size=10000:overlap=0.01:-4              	   10000	    224161 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=10:size=10000:overlap=0.01:-4          	    5000	    264780 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=10:size=10000:overlap=0.01:-4              	    2000	    631934 ns/op
+
+len: 500000, compressed: 520695, bytes/int: 1.041390
+BenchmarkListIntersectRatio/:IntersectWith:ratio=50:size=10000:overlap=0.01:-4                           	    3000	    466452 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=50:size=10000:overlap=0.01:-4              	    2000	    596552 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=50:size=10000:overlap=0.01:-4          	    3000	    603761 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=50:size=10000:overlap=0.01:-4              	    2000	   1077584 ns/op
+
+len: 1000000, compressed: 859680, bytes/int: 0.859680
+BenchmarkListIntersectRatio/:IntersectWith:ratio=100:size=10000:overlap=0.01:-4                          	    2000	    664225 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=100:size=10000:overlap=0.01:-4             	    2000	    998077 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=100:size=10000:overlap=0.01:-4         	    2000	    823358 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=100:size=10000:overlap=0.01:-4             	    1000	   1464656 ns/op
+
+len: 100000, compressed: 223045, bytes/int: 2.230450
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1:size=100000:overlap=0.01:-4                           	    2000	    985930 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=1:size=100000:overlap=0.01:-4              	    2000	   1030282 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=1:size=100000:overlap=0.01:-4          	    1000	   1277557 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=1:size=100000:overlap=0.01:-4              	     500	   3849141 ns/op
+
+len: 1000000, compressed: 1472656, bytes/int: 1.472656
+BenchmarkListIntersectRatio/:IntersectWith:ratio=10:size=100000:overlap=0.01:-4                          	    1000	   2029417 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=10:size=100000:overlap=0.01:-4             	    1000	   2219604 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=10:size=100000:overlap=0.01:-4         	     500	   2613336 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=10:size=100000:overlap=0.01:-4             	     200	   6224968 ns/op
+
+len: 1000000, compressed: 2585277, bytes/int: 2.585277
+BenchmarkListIntersectRatio/:IntersectWith:ratio=1:size=1000000:overlap=0.01:-4                          	     100	  10204674 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLin:ratio=1:size=1000000:overlap=0.01:-4             	     100	  10511638 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithLinJump:ratio=1:size=1000000:overlap=0.01:-4         	     100	  12860821 ns/op
+BenchmarkListIntersectRatio/compressed:IntersectWithBin:ratio=1:size=1000000:overlap=0.01:-4             	      30	  38617537 ns/op
+PASS
+ok  	github.com/dgraph-io/dgraph/algo	203.430s
