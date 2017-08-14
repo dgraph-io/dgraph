@@ -4105,3 +4105,21 @@ func TestAggRootError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only aggregation/math functions allowed inside empty blocks.")
 }
+
+func TestAggRootError2(t *testing.T) {
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				avg(val(a))
+				name
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only aggregation/math functions allowed inside empty blocks.")
+}

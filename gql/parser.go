@@ -2240,6 +2240,30 @@ const (
 	seenWithPred              // when we see a predicate within count.
 )
 
+func validateEmptyBlockItem(it *lex.ItemIterator, val string) error {
+	savePos := it.Save()
+	defer func() {
+		it.Restore(savePos)
+	}()
+
+	fname := val
+	// Could have alias so peek forward to get actual function name.
+	skipped := trySkipItemTyp(it, itemColon)
+	if skipped {
+		item, ok := tryParseItemType(it, itemName)
+		if !ok {
+			return x.Errorf("Expected name. Got: %s", item.Val)
+		}
+		fname = item.Val
+	}
+	ok := trySkipItemTyp(it, itemLeftRound)
+	if !ok || (!isMathBlock(fname) && !isAggregator(fname)) {
+		return x.Errorf("Only aggregation/math functions allowed inside empty blocks."+
+			" Got: %v", fname)
+	}
+	return nil
+}
+
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	if gq == nil {
@@ -2295,15 +2319,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 
 			if gq.IsEmpty {
-				funcName := val
-				// Could have alias so peek forward to get actual function name.
-				peekIt, err := it.Peek(2)
-				if err == nil && peekIt[0].Typ == itemColon && peekIt[1].Typ == itemName {
-					funcName = peekIt[1].Val
-				}
-				if !isMathBlock(funcName) && !isAggregator(funcName) {
-					return x.Errorf("Only aggregation/math functions allowed inside empty blocks."+
-						" Got: %v", val)
+				if err := validateEmptyBlockItem(it, valLower); err != nil {
+					return err
 				}
 			}
 
@@ -2646,6 +2663,15 @@ func tryParseItemType(it *lex.ItemIterator, typ lex.ItemType) (lex.Item, bool) {
 func trySkipItemVal(it *lex.ItemIterator, val string) bool {
 	item, ok := it.PeekOne()
 	if !ok || item.Val != val {
+		return false
+	}
+	it.Next()
+	return true
+}
+
+func trySkipItemTyp(it *lex.ItemIterator, typ lex.ItemType) bool {
+	item, ok := it.PeekOne()
+	if !ok || item.Typ != typ {
 		return false
 	}
 	it.Next()
