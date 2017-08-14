@@ -4065,3 +4065,78 @@ func TestEqUidFunctionErr(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only val/count allowed as function within another. Got: uid")
 }
+
+func TestAggRoot1(t *testing.T) {
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				sum(val(a))
+				avg(val(a))
+			}
+		}
+	`
+	gql, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, "me", gql.Query[1].Alias)
+	require.Equal(t, true, gql.Query[1].IsEmpty)
+}
+
+func TestAggRootError(t *testing.T) {
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				sum(val(a))
+				avg(val(a))
+				friend @filter(anyofterms(name, "Hey")) {
+					name
+				}
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only aggregation/math functions allowed inside empty blocks. Got: friend")
+}
+
+func TestAggRootError2(t *testing.T) {
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				avg(val(a))
+				name
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only aggregation/math functions allowed inside empty blocks. Got: name")
+}
+
+func TestAggRootError3(t *testing.T) {
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				avg
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only aggregation/math functions allowed inside empty blocks. Got: avg")
+}

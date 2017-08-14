@@ -1737,7 +1737,7 @@ func TestShortestPath_NoPath(t *testing.T) {
 				follow
 			}
 
-			me(func: uid( A)) {
+			me(func: uid(A)) {
 				name
 			}
 		}`
@@ -1756,7 +1756,7 @@ func TestKShortestPath_NoPath(t *testing.T) {
 				follow
 			}
 
-			me(func: uid( A)) {
+			me(func: uid(A)) {
 				name
 			}
 		}`
@@ -8655,4 +8655,169 @@ func TestUseVariableBeforeDefinitionError(t *testing.T) {
 	err = qr.ProcessQuery(ctx)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Variable: [avgAge] used before definition.")
+}
+
+func TestAggregateRoot1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				sum(val(a))
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":{"sum(val(a))":72}}}`, js)
+}
+
+func TestAggregateRoot2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				avg(val(a))
+				min(val(a))
+				max(val(a))
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":{"avg(val(a))":24.000000,"min(val(a))":15,"max(val(a))":38}}}`, js)
+}
+
+func TestAggregateRoot3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me1(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				sum(val(a))
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me1":[{"age":38},{"age":15},{"age":19}],"me":{"sum(val(a))":72}}}`, js)
+}
+
+func TestAggregateRoot4(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				minVal as min(val(a))
+				maxVal as max(val(a))
+				Sum: math(minVal + maxVal)
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":{"min(val(a))":15,"max(val(a))":38,"Sum":53.000000}}}`, js)
+}
+
+func TestAggregateRoot5(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				# money edge doesn't exist
+				m as money
+			}
+
+			me() {
+				sum(val(m))
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":{"sum(val(m))":0.000000}}}`, js)
+}
+
+func TestAggregateRootProto(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				minVal as min(val(a))
+				maxVal as max(val(a))
+				Sum: math(minVal + maxVal)
+			}
+		}
+	`
+
+	expected := `attribute: "_root_"
+children: <
+  attribute: "me"
+  children: <
+    attribute: "min(val(a))"
+    properties: <
+      prop: "min(val(a))"
+      value: <
+        int_val: 15
+      >
+    >
+  >
+  children: <
+    attribute: "max(val(a))"
+    properties: <
+      prop: "max(val(a))"
+      value: <
+        int_val: 38
+      >
+    >
+  >
+  children: <
+    attribute: "Sum"
+    properties: <
+      prop: "Sum"
+      value: <
+        double_val: 53
+      >
+    >
+  >
+>
+`
+	pb := processToPB(t, query, map[string]string{}, false)
+	require.Equal(t, expected, proto.MarshalTextString(pb[0]))
+}
+
+func TestAggregateRootError(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			var(func: anyofterms(name, "Rick Michonne")) {
+				a2 as age
+			}
+
+			me() {
+				Sum: math(a + a2)
+			}
+		}
+	`
+	ctx := defaultContext()
+	_, err := processToFastJsonReqCtx(t, query, ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only aggregated variables allowed within empty block.")
 }
