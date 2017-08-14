@@ -646,7 +646,7 @@ func (n *fastJsonNode) addCountAtRoot(sg *SubGraph) {
 func (n *fastJsonNode) addAggregations(sg *SubGraph) {
 	for _, child := range sg.Children {
 		aggVal, ok := child.Params.uidToVal[0]
-		x.AssertTrue(ok)
+		x.AssertTruef(ok, "Could not find val while doing aggregations.")
 		fieldName := aggWithVarFieldName(child)
 		n1 := n.New(fieldName)
 		n1.AddValue(fieldName, aggVal)

@@ -73,7 +73,7 @@ type GraphQuery struct {
 	// there is a child with count() attr, then this is not empty for the parent.
 	// If there is an alias, this has the alias value, else its value is count.
 	UidCount string
-	// These are block that don't have a starting function and hence no starting nodes. They are
+	// True for blockss that don't have a starting function and hence no starting nodes. They are
 	// used to aggregate and get variables defined in another block.
 	IsEmpty bool
 }
@@ -2130,7 +2130,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			expectArg = false
 		} else if item.Typ == itemRightRound {
 			if gq.Func == nil && len(gq.NeedsVar) == 0 && len(gq.Args) == 0 {
-				// Used to do aggregation at root would be fetched in another block.
+				// Used to do aggregation at root which would be fetched in another block.
 				gq.IsEmpty = true
 			}
 			break
@@ -2293,6 +2293,20 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				// Only aggregator or count allowed inside the groupby block.
 				return x.Errorf("Only aggregator/count functions allowed inside @groupby. Got: %v", val)
 			}
+
+			if gq.IsEmpty {
+				funcName := val
+				// Could have alias so peek forward to get actual function name.
+				peekIt, err := it.Peek(2)
+				if err == nil && peekIt[0].Typ == itemColon && peekIt[1].Typ == itemName {
+					funcName = peekIt[1].Val
+				}
+				if !isMathBlock(funcName) && !isAggregator(funcName) {
+					return x.Errorf("Only aggregation/math functions allowed inside empty blocks."+
+						" Got: %v", val)
+				}
+			}
+
 			if valLower == "checkpwd" {
 				child := &GraphQuery{
 					Args:  make(map[string]string),
@@ -2532,6 +2546,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			if count == seen {
 				count = seenWithPred
 			}
+
 		case itemLeftCurl:
 			if len(curp.Langs) > 0 {
 				return x.Errorf("Cannot have children for attr: %s with lang tags: %v", curp.Attr,

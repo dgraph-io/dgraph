@@ -4081,7 +4081,27 @@ func TestAggRoot1(t *testing.T) {
 	`
 	gql, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	require.Equal(t, gql.Query[1].Alias, "me")
-	require.Equal(t, gql.Query[1].IsInternal, true)
-	require.Equal(t, gql.Query[1].Children[0].IsInternal, true)
+	require.Equal(t, "me", gql.Query[1].Alias)
+	require.Equal(t, true, gql.Query[1].IsEmpty)
+}
+
+func TestAggRootError(t *testing.T) {
+	query := `
+		{
+			var(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
+				sum(val(a))
+				avg(val(a))
+				friend @filter(anyofterms(name, "Hey")) {
+					name
+				}
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Only aggregation/math functions allowed inside empty blocks.")
 }
