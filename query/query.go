@@ -306,10 +306,7 @@ func addCount(pc *SubGraph, count uint64, dst outputNode) {
 	dst.AddValue(fieldName, c)
 }
 
-func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
-	if pc.Params.uidToVal == nil {
-		return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
-	}
+func aggWithVarFieldName(pc *SubGraph) string {
 	fieldName := fmt.Sprintf("val(%v)", pc.Params.Var)
 	if len(pc.Params.NeedsVar) > 0 {
 		fieldName = fmt.Sprintf("val(%v)", pc.Params.NeedsVar[0].Name)
@@ -320,6 +317,14 @@ func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 	if pc.Params.Alias != "" {
 		fieldName = pc.Params.Alias
 	}
+	return fieldName
+}
+
+func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
+	if pc.Params.uidToVal == nil {
+		return x.Errorf("Wrong use of var() with %v.", pc.Params.NeedsVar)
+	}
+	fieldName := aggWithVarFieldName(pc)
 	sv, ok := pc.Params.uidToVal[uid]
 	if !ok || sv.Value == nil {
 		return nil
@@ -1200,7 +1205,6 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		if err != nil {
 			return err
 		}
-		fmt.Println("mp", mp)
 		if sg.Params.Var != "" {
 			it := doneVars[sg.Params.Var]
 			it.Vals = mp
@@ -2258,7 +2262,6 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 	}
 
 	var shortestSg []*SubGraph
-	fmt.Println("len", len(req.Subgraphs))
 	for i := 0; i < len(req.Subgraphs) && numQueriesDone < len(req.Subgraphs); i++ {
 		errChan := make(chan error, len(req.Subgraphs))
 		var idxList []int
@@ -2321,7 +2324,6 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			fmt.Println("vars", req.vars)
 			err = sg.populatePostAggregation(req.vars, []*SubGraph{}, nil)
 			if err != nil {
 				return err

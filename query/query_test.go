@@ -8734,7 +8734,7 @@ func TestAggregateRoot1(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
-	fmt.Println(string(js))
+	require.Equal(t, `{"data": {"me":{"sum(val(a))":72}}}`, js)
 }
 
 func TestAggregateRoot2(t *testing.T) {
@@ -8746,10 +8746,29 @@ func TestAggregateRoot2(t *testing.T) {
 			}
 
 			me() {
+				avg(val(a))
+				min(val(a))
+				max(val(a))
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":{"avg(val(a))":24.000000,"min(val(a))":15,"max(val(a))":38}}}`, js)
+}
+
+func TestAggregateRoot3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me1(func: anyofterms(name, "Rick Michonne Andrea")) {
+				a as age
+			}
+
+			me() {
 				sum(val(a))
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
-	fmt.Println(string(js))
+	require.Equal(t, `{"data": {"me1":[{"age":38},{"age":15},{"age":19}],"me":{"sum(val(a))":72}}}`, js)
 }

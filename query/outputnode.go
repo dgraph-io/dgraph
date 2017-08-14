@@ -638,19 +638,18 @@ func (n *fastJsonNode) addCountAtRoot(sg *SubGraph) {
 }
 
 func (n *fastJsonNode) addAggregations(sg *SubGraph) {
-	fmt.Println("here", sg.Params.uidToVal)
-	c := types.ValueForType(types.FloatID)
-	aggVal, ok := sg.Params.uidToVal[0]
-	x.AssertTrue(ok)
-	c.Value = aggVal.Value.(float64)
-	n1 := n.New(sg.Params.Alias)
-	n1.AddValue("sum(x)", c)
-	n.AddListChild(sg.Params.Alias, n1)
+	for _, child := range sg.Children {
+		aggVal, ok := child.Params.uidToVal[0]
+		x.AssertTrue(ok)
+		fieldName := aggWithVarFieldName(child)
+		n1 := n.New(fieldName)
+		n1.AddValue(fieldName, aggVal)
+		n.AddMapChild(sg.Params.Alias, n1, true)
+	}
 }
 
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
-	fmt.Println("Sg", sg.Params.Alias, "attr", sg.Attr, "internal", sg.Params.isInternal)
 	if sg.Params.isInternal {
 		n.addAggregations(sg)
 		return nil
