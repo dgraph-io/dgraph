@@ -56,7 +56,7 @@ func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*protos.Node, error) {
 	return resNode, nil
 }
 
-// ToJson converts the list of subgraph into a JSON response by calling ToFastJSON.
+// ToJson converts the list of subgraph into a JSON response by calling toFastJSON.
 func ToJson(l *Latency, sgl []*SubGraph, w io.Writer, allocIds map[string]string,
 	addLatency bool) error {
 	sgr := &SubGraph{}
@@ -69,7 +69,7 @@ func ToJson(l *Latency, sgl []*SubGraph, w io.Writer, allocIds map[string]string
 		}
 		sgr.Children = append(sgr.Children, sg)
 	}
-	return sgr.ToFastJSON(l, w, allocIds, addLatency)
+	return sgr.toFastJSON(l, w, allocIds, addLatency)
 }
 
 // outputNode is the generic output / writer for preTraverse.
@@ -684,7 +684,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	return nil
 }
 
-func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]string, addLatency bool) error {
+func (sg *SubGraph) toFastJSON(l *Latency, w io.Writer, allocIds map[string]string, addLatency bool) error {
 	var seedNode *fastJsonNode
 	n := seedNode.New("_root_")
 	for _, sg := range sg.Children {
