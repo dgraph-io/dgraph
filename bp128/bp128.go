@@ -183,6 +183,13 @@ func (bp *BPackEncoder) Length() int {
 	return bp.length
 }
 
+func NumInteges(data []byte) int {
+	if len(data) == 0 {
+		return 0
+	}
+	return int(binary.BigEndian.Uint32(data[0:4]))
+}
+
 type BPackIterator struct {
 	data     []byte
 	metadata []byte

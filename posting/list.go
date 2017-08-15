@@ -428,8 +428,16 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		index = rv.Index
 		gid = rv.Group
 	}
-	if len(l.mlayer) > 1000 ||
-		(len(l.pending) > 0 && index > l.pending[0]+4000) {
+	// Calculate 5% of immutable layer
+	numUids := (bp128.NumInteges(l.plist.Uids) * 5) / 100
+	if numUids < 3000 {
+		numUids = 3000
+	}
+	if len(l.mlayer) > numUids ||
+		// All proposals are kept in before until they are snapshotted, this ensures that
+		// we don't have too many pending proposals.
+		// TODO: Come up with a good limit, based on size of proposals
+		(len(l.pending) > 0 && index > l.pending[0]+10000) {
 		l.syncIfDirty(false)
 	}
 
