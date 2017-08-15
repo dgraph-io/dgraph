@@ -1,5 +1,5 @@
 /*
- Package badger implements an embeddable, simple and fast key-value store, written natively in Go.
+ Package badger implements an embeddable, simple and fast key-value store, written in pure Go.
  It is designed to be highly performant for both reads and writes simultaneously.
  Badger uses LSM tree, along with a value log, to separate keys from values, hence reducing
  both write amplification and the size of the LSM tree.

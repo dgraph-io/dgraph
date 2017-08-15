@@ -6,7 +6,7 @@ An embeddable, persistent, simple and fast key-value (KV) store, written purely 
 
 ## About
 
-Badger is written out of frustration with existing KV stores which are either purely written in Go and slow, or fast but require usage of Cgo.
+Badger is written out of frustration with existing KV stores which are either written in pure Go and slow, or fast but require usage of Cgo.
 Badger aims to provide an equal or better speed compared to industry leading KV stores (like RocksDB), while maintaining the entire code base in pure Go.
 
 **You can read more about Badger in [our blog post](https://open.dgraph.io/post/badger/).**
@@ -62,6 +62,9 @@ Values (which tend to be larger in size) are stored in value logs, which also do
 Only a pointer to the value is stored along with the key, which significantly reduces the size of each KV pair in LSM tree.
 This allows storing lot more KV pairs per table. For e.g., a table of size 64MB can store 2 million KV pairs assuming an average key size of 16 bytes, and a value pointer of 16 bytes (with prefix diffing in Badger, the average key sizes stored in a table would be lower).
 Thus, lesser compactions are required to achieve stability for the LSM tree, which results in fewer writes (all writes being serial).
+
+It might be a good idea on ext4 to periodically invoke `fstrim` in case the file system [does not quickly reuse space from deleted files](http://www.ogris.de/blkalloc/).
+We're currently investigating the situation.
 
 ### Nature of LSM trees
 

@@ -345,6 +345,11 @@ func (s *Skiplist) Put(key []byte, v y.ValueStruct) {
 	}
 }
 
+// Empty returns if the Skiplist is empty.
+func (s *Skiplist) Empty() bool {
+	return s.findLast() == nil
+}
+
 // findLast returns the last element. If head (empty list), we return nil. All the find functions
 // will NEVER return the head nodes.
 func (s *Skiplist) findLast() *node {
@@ -380,7 +385,9 @@ func (s *Skiplist) NewIterator() *Iterator {
 	return &Iterator{list: s}
 }
 
-func (s *Skiplist) Size() int64 { return s.arena.Size() }
+// MemSize returns the size of the Skiplist in terms of how much memory is used within its internal
+// arena.
+func (s *Skiplist) MemSize() int64 { return s.arena.Size() }
 
 // Iterator is an iterator over skiplist object. For new objects, you just
 // need to initialize Iterator.list.

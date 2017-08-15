@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"path/filepath"
@@ -160,9 +161,10 @@ func (mf *manifestFile) addChanges(changes protos.ManifestChangeSet) error {
 			return err
 		}
 	} else {
-		var lenbuf [4]byte
-		binary.BigEndian.PutUint32(lenbuf[:], uint32(len(buf)))
-		buf = append(lenbuf[:], buf...)
+		var lenCrcBuf [8]byte
+		binary.BigEndian.PutUint32(lenCrcBuf[0:4], uint32(len(buf)))
+		binary.BigEndian.PutUint32(lenCrcBuf[4:8], crc32.Checksum(buf, y.CastagnoliCrcTable))
+		buf = append(lenCrcBuf[:], buf...)
 		if _, err := mf.fp.Write(buf); err != nil {
 			mf.appendLock.Unlock()
 			return err
@@ -190,9 +192,10 @@ func (mf *manifestFile) rewrite() error {
 		fp.Close()
 		return err
 	}
-	var lenbuf [4]byte
-	binary.BigEndian.PutUint32(lenbuf[:], uint32(len(buf)))
-	if _, err := fp.Write(append(lenbuf[:], buf...)); err != nil {
+	var lenCrcBuf [8]byte
+	binary.BigEndian.PutUint32(lenCrcBuf[0:4], uint32(len(buf)))
+	binary.BigEndian.PutUint32(lenCrcBuf[4:8], crc32.Checksum(buf, y.CastagnoliCrcTable))
+	if _, err := fp.Write(append(lenCrcBuf[:], buf...)); err != nil {
 		fp.Close()
 		return err
 	}
@@ -260,21 +263,24 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 	build := createManifest()
 	for {
 		offset = r.count
-		var lenbuf [4]byte
-		_, err := io.ReadFull(&r, lenbuf[:])
+		var lenCrcBuf [8]byte
+		_, err := io.ReadFull(&r, lenCrcBuf[:])
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				break
 			}
 			return Manifest{}, 0, err
 		}
-		length := binary.BigEndian.Uint32(lenbuf[:])
+		length := binary.BigEndian.Uint32(lenCrcBuf[0:4])
 		var buf = make([]byte, length)
 		if _, err := io.ReadFull(&r, buf); err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				break
 			}
 			return Manifest{}, 0, err
+		}
+		if crc32.Checksum(buf, y.CastagnoliCrcTable) != binary.BigEndian.Uint32(lenCrcBuf[4:8]) {
+			break
 		}
 
 		var changeSet protos.ManifestChangeSet
