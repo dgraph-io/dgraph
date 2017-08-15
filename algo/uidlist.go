@@ -97,6 +97,7 @@ func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64
 	}
 	// Pick the shorter list and do binary search
 	if ld < lq {
+		bi.AfterUid(q[0] - 1)
 		for bi.Valid() {
 			uids := bi.Uids()
 			for _, u := range uids {
