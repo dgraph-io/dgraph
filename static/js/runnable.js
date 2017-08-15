@@ -210,7 +210,7 @@ function eraseCookie(name) {
   function updateQueryContents($runnables, newQuery) {
     var cleanValue = newQuery.trim().replace(/\n$/g, "");
 
-    $runnables.find('.query-content').text(cleanValue);
+    $runnables.find(".query-content").text(cleanValue);
   }
 
   function getLatencyTooltipHTML(serverLatencyInfo, networkLatency) {
@@ -317,8 +317,8 @@ function eraseCookie(name) {
       .done(function(res) {
         var now = new Date().getTime();
         var networkLatency = now - startTime;
-        var serverLatencyInfo = res.server_latency;
-        delete res.server_latency;
+        var serverLatencyInfo = res.data && res.data.server_latency;
+        res.data && delete res.data.server_latency;
 
         // In some cases, the server does not return latency information
         // TODO: Remove special handling from next version as Dgraph would
