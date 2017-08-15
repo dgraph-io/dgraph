@@ -73,8 +73,8 @@ func contextSleep(ctx context.Context, d time.Duration) error {
 
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
-	// NOTE: This function is _very_ similar to SortOverNetwork and you might want to de-duplicate
-	// their backup-request logic before modifying further.
+	// NOTE: This function is _very_ similar to ProcessTaskOverNetwork and you might want to
+	// de-duplicate their backup-request logic before modifying further.
 
 	gid := group.BelongsTo(q.Attr)
 	if tr, ok := trace.FromContext(ctx); ok {
