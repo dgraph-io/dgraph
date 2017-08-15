@@ -84,7 +84,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return processTask(ctx, q, gid)
 	}
 
-	// Send this over the network.
+	// Send this over the network.  We send a backup request if the first hasn't responded in 2ms.
 	// TODO: Cross-server cancellation as described in Jeff Dean's talk.
 	addrs := groups().AnyTwoServers(gid)
 	if len(addrs) == 0 {

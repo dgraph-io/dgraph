@@ -86,7 +86,7 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 		return processSort(ctx, q)
 	}
 
-	// Send this over the network.
+	// Send this over the network.  We send a backup request if the first hasn't responded in 2ms.
 	// TODO: Cross-server cancellation as described in Jeff Dean's talk.
 	addrs := groups().AnyTwoServers(gid)
 	if len(addrs) == 0 {
