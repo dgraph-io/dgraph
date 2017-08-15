@@ -85,6 +85,7 @@ Whether running standalone or in a cluster, each Dgraph instance relies on the f
 
 {{% notice "note" %}}By default the server listens on `localhost` (the loopback address only accessible from the same machine).  The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections. {{% /notice %}}
 
+{{% notice "note" %}}You need to set the estimated memory dgraph can take through memory_mb flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the size of RAM.{{% /notice %}}
 ### Config
 The command-line flags can be stored in a YAML file and provided via the `--config` flag.  For example:
 
@@ -352,6 +353,8 @@ p w ip worker groups.conf groups heathy-peer
 The `dgraphloader` binary is a small helper program which reads RDF NQuads from a gzipped file, batches them up, creates mutations (using the go client) and shoots off to Dgraph. It's not the only way to run mutations.  Mutations could also be run from the command line, e.g. with `curl`, from the UI, by sending to `/query` or by a program using a [Dgraph client]({{< relref "clients/index.md" >}}).
 
 `dgraphloader` correctly handles splitting blank nodes across multiple batches and creating `xid` [edges for RDF URIs]({{< relref "query-language/index.md#external-ids" >}}) (option `-x`).
+
+`dgraphloader` checkpoints the loaded rdfs in the c directory by default. On restart it would automatically resume from the last checkpoint. If you want to load the whole data again, you need to delete the checkpoint directory.
 
 {{% notice "note" %}} `dgraphloader` only accepts gzipped, RDF NQuad/Triple data. Data in other formats must be converted [to this](https://www.w3.org/TR/n-quads/).{{% /notice %}}
 

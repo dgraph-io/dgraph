@@ -40,12 +40,13 @@ docker pull dgraph/dgraph
 ```
 
 ## Step 2: Run Dgraph
+{{% notice "note" %}}You need to set the estimated memory dgraph can take through memory_mb flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the size of RAM.{{% /notice %}}
 
 ### From Installed Binary
 If Dgraph was installed with the install script, run Dgraph with:
 
 ```sh
-dgraph
+dgraph --memory_mb 2048
 ```
 
 ### Using Docker
@@ -56,7 +57,7 @@ The `-v` flag lets Docker mount a directory so that dgraph can persist data to d
 
 ```sh
 mkdir -p ~/dgraph
-docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
+docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true --memory_mb 2048
 ```
 
 #### Map to custom port
