@@ -70,6 +70,9 @@ func dispatchTaskOverNetwork(
 // the instance which stores posting list corresponding to the predicate in the
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Result, error) {
+	// NOTE: This function is _very_ similar to SortOverNetwork and you might want to de-duplicate
+	// their backup-request logic before modifying further.
+
 	attr := q.Attr
 	gid := group.BelongsTo(attr)
 	if tr, ok := trace.FromContext(ctx); ok {
@@ -82,7 +85,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 	}
 
 	// Send this over the network.
-	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
+	// TODO: Cross-server cancellation as described in Jeff Dean's talk.
 	addrs := groups().AnyTwoServers(gid)
 	if len(addrs) == 0 {
 		return &emptyResult, fmt.Errorf("ProcessTaskOverNetwork: while retrieving connection.")

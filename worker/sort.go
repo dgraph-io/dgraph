@@ -73,6 +73,9 @@ func contextSleep(ctx context.Context, d time.Duration) error {
 
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
+	// NOTE: This function is _very_ similar to SortOverNetwork and you might want to de-duplicate
+	// their backup-request logic before modifying further.
+
 	gid := group.BelongsTo(q.Attr)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("worker.Sort attr: %v groupId: %v", q.Attr, gid)
@@ -84,7 +87,7 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 	}
 
 	// Send this over the network.
-	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
+	// TODO: Cross-server cancellation as described in Jeff Dean's talk.
 	addrs := groups().AnyTwoServers(gid)
 	if len(addrs) == 0 {
 		return &emptySortResult, fmt.Errorf("SortOverNetwork: while retrieving connection")
