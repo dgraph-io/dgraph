@@ -17,6 +17,7 @@
 package y
 
 import (
+	"hash/crc32"
 	"log"
 	"os"
 	"sync"
@@ -33,6 +34,9 @@ const (
 var (
 	// This is O_DSYNC (datasync) on platforms that support it -- see file_unix.go
 	datasyncFileFlag = 0x0
+
+	// CastagnoliCrcTable is a CRC32 polynomial table
+	CastagnoliCrcTable = crc32.MakeTable(crc32.Castagnoli)
 )
 
 // OpenExistingSyncedFile opens an existing file, errors if it doesn't exist.

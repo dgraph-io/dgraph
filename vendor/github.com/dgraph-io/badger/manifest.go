@@ -18,8 +18,10 @@ package badger
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"path/filepath"
@@ -27,6 +29,7 @@ import (
 
 	"github.com/dgraph-io/badger/protos"
 	"github.com/dgraph-io/badger/y"
+	"github.com/pkg/errors"
 )
 
 // The MANIFEST file describes the startup state of the db -- all LSM files and what level they're
@@ -80,7 +83,7 @@ type manifestFile struct {
 const (
 	ManifestFilename                  = "MANIFEST"
 	manifestRewriteFilename           = "MANIFEST-REWRITE"
-	manifestDeletionsRewriteThreshold = 100000
+	manifestDeletionsRewriteThreshold = 10000
 	manifestDeletionsRatio            = 10
 )
 
@@ -107,9 +110,24 @@ func OpenOrCreateManifestFile(dir string) (ret *manifestFile, result Manifest, e
 
 func helpOpenOrCreateManifestFile(dir string, deletionsThreshold int) (ret *manifestFile, result Manifest, err error) {
 	path := filepath.Join(dir, ManifestFilename)
-	fp, err := y.OpenSyncedFile(path, false) // We explicitly sync in addChanges, outside the lock.
+	fp, err := y.OpenExistingSyncedFile(path, false) // We explicitly sync in addChanges, outside the lock.
 	if err != nil {
-		return nil, Manifest{}, err
+		if !os.IsNotExist(err) {
+			return nil, Manifest{}, err
+		}
+		m := createManifest()
+		fp, netCreations, err := helpRewrite(dir, &m)
+		if err != nil {
+			return nil, Manifest{}, err
+		}
+		y.AssertTrue(netCreations == 0)
+		mf := &manifestFile{
+			fp:                        fp,
+			directory:                 dir,
+			manifest:                  m.clone(),
+			deletionsRewriteThreshold: deletionsThreshold,
+		}
+		return mf, m, nil
 	}
 
 	manifest, truncOffset, err := ReplayManifestFile(fp)
@@ -129,7 +147,13 @@ func helpOpenOrCreateManifestFile(dir string, deletionsThreshold int) (ret *mani
 		return nil, Manifest{}, err
 	}
 
-	return &manifestFile{fp: fp, directory: dir, manifest: manifest.clone()}, manifest, nil
+	mf := &manifestFile{
+		fp:                        fp,
+		directory:                 dir,
+		manifest:                  manifest.clone(),
+		deletionsRewriteThreshold: deletionsThreshold,
+	}
+	return mf, manifest, nil
 }
 
 func (mf *manifestFile) close() error {
@@ -160,9 +184,10 @@ func (mf *manifestFile) addChanges(changes protos.ManifestChangeSet) error {
 			return err
 		}
 	} else {
-		var lenbuf [4]byte
-		binary.BigEndian.PutUint32(lenbuf[:], uint32(len(buf)))
-		buf = append(lenbuf[:], buf...)
+		var lenCrcBuf [8]byte
+		binary.BigEndian.PutUint32(lenCrcBuf[0:4], uint32(len(buf)))
+		binary.BigEndian.PutUint32(lenCrcBuf[4:8], crc32.Checksum(buf, y.CastagnoliCrcTable))
+		buf = append(lenCrcBuf[:], buf...)
 		if _, err := mf.fp.Write(buf); err != nil {
 			mf.appendLock.Unlock()
 			return err
@@ -173,58 +198,84 @@ func (mf *manifestFile) addChanges(changes protos.ManifestChangeSet) error {
 	return mf.fp.Sync()
 }
 
-// Must be called while appendLock is held.
-func (mf *manifestFile) rewrite() error {
+// Has to be 4 bytes.  The value can never change, ever, anyway.
+var magicText = [4]byte{'B', 'd', 'g', 'r'}
+
+const magicVersion = 1
+
+func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
+	rewritePath := filepath.Join(dir, manifestRewriteFilename)
 	// We explicitly sync.
-	rewritePath := filepath.Join(mf.directory, manifestRewriteFilename)
 	fp, err := y.OpenTruncFile(rewritePath, false)
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
-	netCreations := len(mf.manifest.Tables)
-	changes := mf.manifest.asChanges()
+
+	buf := make([]byte, 8)
+	copy(buf[0:4], magicText[:])
+	binary.BigEndian.PutUint32(buf[4:8], magicVersion)
+
+	netCreations := len(m.Tables)
+	changes := m.asChanges()
 	set := protos.ManifestChangeSet{Changes: changes}
 
-	buf, err := set.Marshal()
+	changeBuf, err := set.Marshal()
 	if err != nil {
 		fp.Close()
-		return err
+		return nil, 0, err
 	}
-	var lenbuf [4]byte
-	binary.BigEndian.PutUint32(lenbuf[:], uint32(len(buf)))
-	if _, err := fp.Write(append(lenbuf[:], buf...)); err != nil {
+	var lenCrcBuf [8]byte
+	binary.BigEndian.PutUint32(lenCrcBuf[0:4], uint32(len(changeBuf)))
+	binary.BigEndian.PutUint32(lenCrcBuf[4:8], crc32.Checksum(changeBuf, y.CastagnoliCrcTable))
+	buf = append(buf, lenCrcBuf[:]...)
+	buf = append(buf, changeBuf...)
+	if _, err := fp.Write(buf); err != nil {
 		fp.Close()
-		return err
+		return nil, 0, err
 	}
 	if err := fp.Sync(); err != nil {
 		fp.Close()
-		return err
+		return nil, 0, err
 	}
-	mf.manifest.Creations = netCreations
-	mf.manifest.Deletions = 0
 
 	// In Windows the files should be closed before doing a Rename.
 	if err = fp.Close(); err != nil {
+		return nil, 0, err
+	}
+	manifestPath := filepath.Join(dir, ManifestFilename)
+	if err := os.Rename(rewritePath, manifestPath); err != nil {
+		return nil, 0, err
+	}
+	fp, err = y.OpenExistingSyncedFile(manifestPath, false)
+	if err != nil {
+		return nil, 0, err
+	}
+	if _, err := fp.Seek(0, os.SEEK_END); err != nil {
+		fp.Close()
+		return nil, 0, err
+	}
+	if err := syncDir(dir); err != nil {
+		fp.Close()
+		return nil, 0, err
+	}
+
+	return fp, netCreations, nil
+}
+
+// Must be called while appendLock is held.
+func (mf *manifestFile) rewrite() error {
+	// In Windows the files should be closed before doing a Rename.
+	if err := mf.fp.Close(); err != nil {
 		return err
 	}
-	if err = mf.fp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(rewritePath, filepath.Join(mf.directory, ManifestFilename)); err != nil {
-		return err
-	}
-	newFp, err := y.OpenExistingSyncedFile(filepath.Join(mf.directory, ManifestFilename), false)
+	fp, netCreations, err := helpRewrite(mf.directory, &mf.manifest)
 	if err != nil {
 		return err
 	}
-	if _, err := newFp.Seek(0, os.SEEK_END); err != nil {
-		newFp.Close()
-		return err
-	}
-	mf.fp = newFp
-	if err := syncDir(mf.directory); err != nil {
-		return err
-	}
+	mf.fp = fp
+	mf.manifest.Creations = netCreations
+	mf.manifest.Deletions = 0
+
 	return nil
 }
 
@@ -247,6 +298,11 @@ func (r *countingReader) ReadByte() (b byte, err error) {
 	return
 }
 
+var (
+	errBadMagic        = errors.New("manifest has bad magic")
+	errBadMagicVersion = errors.New("manifest has unsupported version")
+)
+
 // ReplayManifestFile reads the manifest file and constructs two manifest objects.  (We need one
 // immutable copy and one mutable copy of the manifest.  Easiest way is to construct two of them.)
 // Also, returns the last offset after a completely read manifest entry -- the file must be
@@ -255,26 +311,41 @@ func (r *countingReader) ReadByte() (b byte, err error) {
 func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error) {
 	r := countingReader{wrapped: bufio.NewReader(fp)}
 
+	var magicBuf [8]byte
+	if _, err := io.ReadFull(&r, magicBuf[:]); err != nil {
+		return Manifest{}, 0, errBadMagic
+	}
+	if bytes.Compare(magicBuf[0:4], magicText[:]) != 0 {
+		return Manifest{}, 0, errBadMagic
+	}
+	version := binary.BigEndian.Uint32(magicBuf[4:8])
+	if version != magicVersion {
+		return Manifest{}, 0, errBadMagicVersion
+	}
+
 	offset := r.count
 
 	build := createManifest()
 	for {
 		offset = r.count
-		var lenbuf [4]byte
-		_, err := io.ReadFull(&r, lenbuf[:])
+		var lenCrcBuf [8]byte
+		_, err := io.ReadFull(&r, lenCrcBuf[:])
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				break
 			}
 			return Manifest{}, 0, err
 		}
-		length := binary.BigEndian.Uint32(lenbuf[:])
+		length := binary.BigEndian.Uint32(lenCrcBuf[0:4])
 		var buf = make([]byte, length)
 		if _, err := io.ReadFull(&r, buf); err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				break
 			}
 			return Manifest{}, 0, err
+		}
+		if crc32.Checksum(buf, y.CastagnoliCrcTable) != binary.BigEndian.Uint32(lenCrcBuf[4:8]) {
+			break
 		}
 
 		var changeSet protos.ManifestChangeSet

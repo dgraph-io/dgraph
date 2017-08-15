@@ -52,6 +52,11 @@ var Corrupt error = errors.New("Unable to find log. Potential data corruption.")
 var CasMismatch error = errors.New("CompareAndSet failed due to counter mismatch.")
 var KeyExists error = errors.New("SetIfAbsent failed since key already exists.")
 
+const (
+	maxKeySize   = 1 << 20
+	maxValueSize = 1 << 30
+)
+
 type logFile struct {
 	sync.RWMutex
 	path   string
@@ -90,6 +95,9 @@ func (lf *logFile) read(buf []byte, offset int64) error {
 func (lf *logFile) doneWriting() error {
 	lf.Lock()
 	defer lf.Unlock()
+	if err := lf.fd.Sync(); err != nil {
+		return errors.Wrapf(err, "Unable to sync value log: %q", lf.path)
+	}
 	if err := lf.fd.Close(); err != nil {
 		return errors.Wrapf(err, "Unable to close value log: %q", lf.path)
 	}
@@ -104,9 +112,6 @@ func (lf *logFile) sync() error {
 }
 
 var errStop = errors.New("Stop iteration")
-var entryHashTable = crc32.MakeTable(crc32.Castagnoli)
-
-const entryHashSize = 4
 
 type logEntry func(e Entry, vp valuePointer) error
 
@@ -127,7 +132,7 @@ func (f *logFile) iterate(offset uint32, fn logEntry) error {
 	truncate := false
 	recordOffset := offset
 	for {
-		hash := crc32.New(entryHashTable)
+		hash := crc32.New(y.CastagnoliCrcTable)
 		tee := io.TeeReader(reader, hash)
 
 		if _, err = io.ReadFull(tee, hbuf[:]); err != nil {
@@ -143,6 +148,10 @@ func (f *logFile) iterate(offset uint32, fn logEntry) error {
 		var e Entry
 		e.offset = recordOffset
 		h.Decode(hbuf[:])
+		if h.klen > maxKeySize || h.vlen > maxValueSize {
+			truncate = true
+			break
+		}
 		vl := int(h.vlen)
 		if cap(v) < vl {
 			v = make([]byte, 2*vl)
@@ -174,7 +183,7 @@ func (f *logFile) iterate(offset uint32, fn logEntry) error {
 			return err
 		}
 
-		var crcBuf [entryHashSize]byte
+		var crcBuf [4]byte
 		if _, err = io.ReadFull(reader, crcBuf[:]); err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				truncate = true
@@ -190,7 +199,7 @@ func (f *logFile) iterate(offset uint32, fn logEntry) error {
 
 		var vp valuePointer
 
-		vp.Len = headerBufSize + h.klen + h.vlen + entryHashSize
+		vp.Len = headerBufSize + h.klen + h.vlen + uint32(len(crcBuf))
 		recordOffset += vp.Len
 
 		vp.Offset = e.offset
@@ -350,14 +359,22 @@ func encodeEntry(e *Entry, buf *bytes.Buffer) (int, error) {
 	var headerEnc [headerBufSize]byte
 	h.Encode(headerEnc[:])
 
-	hash := crc32.New(entryHashTable)
-	w := io.MultiWriter(hash, buf)
+	hash := crc32.New(y.CastagnoliCrcTable)
 
-	w.Write(headerEnc[:])
-	w.Write(e.Key)
-	w.Write(e.Value)
-	binary.Write(buf, binary.BigEndian, hash.Sum32())
-	return len(headerEnc) + len(e.Key) + len(e.Value) + entryHashSize, nil
+	buf.Write(headerEnc[:])
+	hash.Write(headerEnc[:])
+
+	buf.Write(e.Key)
+	hash.Write(e.Key)
+
+	buf.Write(e.Value)
+	hash.Write(e.Value)
+
+	var crcBuf [4]byte
+	binary.BigEndian.PutUint32(crcBuf[:], hash.Sum32())
+	buf.Write(crcBuf[:])
+
+	return len(headerEnc) + len(e.Key) + len(e.Value) + len(crcBuf), nil
 }
 
 func (e Entry) print(prefix string) {
@@ -727,7 +744,7 @@ func (l *valueLog) Read(p valuePointer, s *y.Slice) (e Entry, err error) {
 	n += h.vlen
 
 	storedCRC := binary.BigEndian.Uint32(buf[n:])
-	calculatedCRC := crc32.Checksum(buf[:n], entryHashTable)
+	calculatedCRC := crc32.Checksum(buf[:n], y.CastagnoliCrcTable)
 	if storedCRC != calculatedCRC {
 		return e, errors.New("CRC checksum mismatch")
 	}
@@ -864,7 +881,7 @@ func (vlog *valueLog) doRunGC() error {
 	}
 	vlog.elog.Printf("Fid: %d Data status=%+v\n", lf.fid, r)
 
-	if r.total < 10.0 || r.keep >= vlog.opt.ValueGCThreshold*r.total {
+	if r.total < 10.0 || r.discard < vlog.opt.ValueGCThreshold*r.total {
 		vlog.elog.Printf("Skipping GC on fid: %d\n\n", lf.fid)
 		return nil
 	}
