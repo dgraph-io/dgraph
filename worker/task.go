@@ -18,10 +18,12 @@
 package worker
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/context"
@@ -48,6 +50,22 @@ var (
 	regexTok     tok.ExactTokenizer
 )
 
+func dispatchTaskOverNetwork(
+	ctx context.Context, addr string, q *protos.Query) (*protos.Result, error) {
+	pl, err := pools().get(addr)
+	if err != nil {
+		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
+	}
+	defer pools().release(pl)
+
+	conn := pl.Get()
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sending request to %v", addr)
+	}
+	c := protos.NewWorkerClient(conn)
+	return c.ServeTask(ctx, q)
+}
+
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
@@ -65,32 +83,51 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 
 	// Send this over the network.
 	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
-	addr := groups().AnyServer(gid)
-	pl, err := pools().get(addr)
-	if err != nil {
-		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
+	addrs := groups().AnyTwoServers(gid)
+	if len(addrs) == 0 {
+		return &emptyResult, fmt.Errorf("ProcessTaskOverNetwork: while retrieving connection.")
 	}
-	defer pools().release(pl)
-
-	conn := pl.Get()
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Sending request to %v", addr)
-	}
-
-	c := protos.NewWorkerClient(conn)
-	reply, err := c.ServeTask(ctx, q)
-	if err != nil {
+	if len(addrs) == 1 {
+		reply, err := dispatchTaskOverNetwork(ctx, addrs[0], q)
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Error while calling Worker.ServeTask: %v", err)
 		}
-		return &emptyResult, err
+		return reply, err
 	}
 
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Reply from server. length: %v Addr: %v Attr: %v",
-			len(reply.UidMatrix), addr, attr)
+	type taskresult struct {
+		reply *protos.Result
+		err   error
 	}
-	return reply, nil
+
+	chResults := make(chan taskresult, len(addrs))
+	ctx0, cancel := context.WithCancel(ctx)
+	go func() {
+		reply, err := dispatchTaskOverNetwork(ctx0, addrs[0], q)
+		chResults <- taskresult{reply, err}
+	}()
+	go func() {
+		if err := contextSleep(ctx0, 2*time.Millisecond); err != nil {
+			// We got interrupted before we could even start.
+			return
+		}
+		reply, err := dispatchTaskOverNetwork(ctx0, addrs[1], q)
+		chResults <- taskresult{reply, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return &emptyResult, ctx.Err()
+	case result := <-chResults:
+		// Returns upon the first result.
+		cancel()
+		if result.err != nil {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while calling Worker.Sort: %+v", result.err)
+			}
+		}
+		return result.reply, result.err
+	}
 }
 
 // convertValue converts the data to the schema.State() type of predicate.
