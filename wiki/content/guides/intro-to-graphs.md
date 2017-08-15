@@ -118,7 +118,7 @@ query you give.  Let's have a look at an example:
 
 ```
 {
-  cats(func:anyofterms(name, "Millhouse")) {
+  cats(func:anyofterms(name@en, "Millhouse")) {
     name
     age
     color
@@ -143,7 +143,7 @@ This will return:
 
 This returns a list of all cats with the name Millhouse. More accurately,
 it returns all nodes that return true for the function
-`anyofterms(name, "Millhouse")`. That function returns true if a node
+`anyofterms(name@en, "Millhouse")`. That function returns true if a node
 has an edge called "name", and that has any of the terms "Millhouse".
 Based on the data we added before, this will return one node.
 
@@ -158,7 +158,7 @@ Now to pull in the relation between the human and the cat:
 
 ```
 {
-  human(func:allofterms(name, "Kaley")) {
+  human(func:allofterms(name@en, "Kaley")) {
     name
     age
     favourite_food

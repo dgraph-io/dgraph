@@ -145,7 +145,7 @@ Run this query to get "Star Wars" movies released after "1980".  Try it in the u
 ```sh
 curl localhost:8080/query -XPOST -d $'
 {
-  me(func:allofterms(name, "Star Wars")) @filter(ge(release_date, "1980")) {
+  me(func:allofterms(name@en, "Star Wars")) @filter(ge(release_date, "1980")) {
     name
     release_date
     revenue
@@ -285,7 +285,7 @@ This query finds director "Steven Spielberg" and the movies directed by him.  Th
 
 {{< runnable >}}
 {
-  director(func:allofterms(name, "steven spielberg")) @cascade {
+  director(func:allofterms(name@en, "steven spielberg")) @cascade {
     name@en
     director.film (orderdesc: initial_release_date) {
       name@en
@@ -304,7 +304,7 @@ We'll sort in increasing order this time by using `orderasc`, instead of `orderd
 
 {{< runnable >}}
 {
-  director(func:allofterms(name, "steven spielberg")) @cascade {
+  director(func:allofterms(name@en, "steven spielberg")) @cascade {
     name@en
     director.film (orderasc: initial_release_date) @filter(ge(initial_release_date, "1984-08")) {
       name@en
@@ -320,7 +320,7 @@ Using `AND` two filters can be joined.
 
 {{< runnable >}}
 {
-  director(func:allofterms(name, "steven spielberg")) {
+  director(func:allofterms(name@en, "steven spielberg")) {
     name@en
     director.film (orderasc: initial_release_date) @filter(ge(initial_release_date, "1990") AND le(initial_release_date, "2000")) {
       name@en

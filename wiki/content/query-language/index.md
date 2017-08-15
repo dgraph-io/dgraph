@@ -34,7 +34,7 @@ Query Example: In the example dataset, as well as edges that link movies to dire
 
 {{< runnable >}}
 {
-  bladerunner(func: eq(name, "Blade Runner")) {
+  bladerunner(func: eq(name@en, "Blade Runner")) {
     _uid_
     name@en
     initial_release_date
@@ -66,7 +66,7 @@ Query Example: All nodes that have either "Blade" or "Runner" in the name.
 
 {{< runnable >}}
 {
-  bladerunner(func: anyofterms(name, "Blade Runner")) {
+  bladerunner(func: anyofterms(name@en, "Blade Runner")) {
     _uid_
     name@en
     initial_release_date
@@ -97,7 +97,7 @@ A query expands edges from node to node by nesting query blocks with `{ }`.
 Query Example: The actors and characters played in "Blade Runner".  The query first finds the node with name "Blade Runner", then follows  outgoing `starring` edges to nodes representing an actor's performance as a character.  From there the `performance.actor` and `performance,character` edges are expanded to find the actor names and roles for every actor in the movie.
 {{< runnable >}}
 {
-  brCharacters(func: eq(name, "Blade Runner")) {
+  brCharacters(func: eq(name@en, "Blade Runner")) {
     name@en
     initial_release_date
     starring {
@@ -124,7 +124,7 @@ The query root finds an initial set of nodes and the query proceeds by returning
 Query Example: "Blade Runner" director Ridley Scott's movies released before the year 2000.
 {{< runnable >}}
 {
-  scott(func: eq(name, "Ridley Scott")) {
+  scott(func: eq(name@en, "Ridley Scott")) {
     name@en
     initial_release_date
     director.film @filter(le(initial_release_date, "2000")) {
@@ -139,7 +139,7 @@ Query Example: Movies with either "Blade" or "Runner" in the title and released 
 
 {{< runnable >}}
 {
-  bladerunner(func: anyofterms(name, "Blade Runner")) @filter(le(initial_release_date, "2000")) {
+  bladerunner(func: anyofterms(name@en, "Blade Runner")) @filter(le(initial_release_date, "2000")) {
     _uid_
     name@en
     initial_release_date
@@ -182,7 +182,7 @@ Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have 
 
 {{< runnable >}}
 {
-  q(func: allofterms(name, "Farhan Akhtar")) {
+  q(func: allofterms(name@en, "Farhan Akhtar")) {
     name@hi
     name@en
 
@@ -243,7 +243,7 @@ Query Example: All Steven Spielberg films that contain the words `indiana` and `
 
 {{< runnable >}}
 {
-  me(func: eq(name, "Steven Spielberg")) @filter(has(director.film)) {
+  me(func: eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
     director.film @filter(allofterms(name@en, "jones indiana"))  {
       name@en
@@ -287,9 +287,9 @@ Query Example: All Steven Spielberg movies that contain `war` or `spies`.  The `
 
 {{< runnable >}}
 {
-  me(func: eq(name, "Steven Spielberg")) @filter(has(director.film)) {
+  me(func: eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
-    director.film @filter(anyofterms(name, "war spies"))  {
+    director.film @filter(anyofterms(name@en, "war spies"))  {
       name@en
     }
   }
@@ -482,7 +482,7 @@ Query Example: Ridley Scott movies released before 1980.
 
 {{< runnable >}}
 {
-  me(func: eq(name, "Ridley Scott")) {
+  me(func: eq(name@en, "Ridley Scott")) {
     name@en
     director.film @filter(lt(initial_release_date, "1980-01-01"))  {
       initial_release_date
@@ -561,7 +561,7 @@ Query Example: If the UID of a node is known, values for the node can be read di
 Query Example: The films of Taraji Henson by genre.
 {{< runnable >}}
 {
-  var(func: allofterms(name, "Taraji Henson")) {
+  var(func: allofterms(name@en, "Taraji Henson")) {
     actor.film {
       F as performance.film {
         G as genre
@@ -583,7 +583,7 @@ Query Example: The films of Taraji Henson by genre.
 Query Example: Taraji Henson films ordered by numer of genres, with genres listed in order of how many films Taraji has made in each genre.
 {{< runnable >}}
 {
-  var(func: allofterms(name, "Taraji Henson")) {
+  var(func: allofterms(name@en, "Taraji Henson")) {
     actor.film {
       F as performance.film {
         G as count(genre)
@@ -624,7 +624,7 @@ While the `uid` function filters nodes at the current level based on UID, functi
 Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 597046).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
 {{< runnable >}}
 {
-  caro(func: eq(name, "Marc Caro")) {
+  caro(func: eq(name@en, "Marc Caro")) {
     name@en
     director.film @filter(uid_in(~director.film, 597046)){
       name@en
@@ -757,9 +757,9 @@ Query Example : All Steven Spielberg movies that contain either both "indiana" a
 
 {{< runnable >}}
 {
-  me(func: eq(name, "Steven Spielberg")) @filter(has(director.film)) {
+  me(func: eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
-    director.film @filter(allofterms(name, "jones indiana") OR allofterms(name, "jurassic park"))  {
+    director.film @filter(allofterms(name@en, "jones indiana") OR allofterms(name@en, "jurassic park"))  {
       _uid_
       name@en
     }
@@ -1017,7 +1017,7 @@ Query Example: French director Jean-Pierre Jeunet's movies sorted by release dat
 
 {{< runnable >}}
 {
-  me(func: allofterms(name, "Jean-Pierre Jeunet")) {
+  me(func: allofterms(name@en, "Jean-Pierre Jeunet")) {
     name@fr
     director.film(orderasc: initial_release_date) {
       name@fr
@@ -1064,7 +1064,7 @@ Query Example: All of Angelina Jolie's films, with genres, and Peter Jackson's f
 
 {{< runnable >}}
 {
- AngelinaInfo(func:allofterms(name, "angelina jolie")) {
+ AngelinaInfo(func:allofterms(name@en, "angelina jolie")) {
   name@en
    actor.film {
     performance.film {
@@ -1075,7 +1075,7 @@ Query Example: All of Angelina Jolie's films, with genres, and Peter Jackson's f
    }
   }
 
- DirectorInfo(func: eq(name, "Peter Jackson")) {
+ DirectorInfo(func: eq(name@en, "Peter Jackson")) {
     name@en
     director.film @filter(ge(initial_release_date, "2008"))  {
         Release_date: initial_release_date
@@ -1092,7 +1092,7 @@ Query Example: The movies Mackenzie Crook has acted in and the movies Jack Daven
 
 {{< runnable >}}
 {
-  Mackenzie(func:allofterms(name, "Mackenzie Crook")) {
+  Mackenzie(func:allofterms(name@en, "Mackenzie Crook")) {
     name@en
     actor.film {
       performance.film {
@@ -1105,7 +1105,7 @@ Query Example: The movies Mackenzie Crook has acted in and the movies Jack Daven
     }
   }
 
-  Jack(func:allofterms(name, "Jack Davenport")) {
+  Jack(func:allofterms(name@en, "Jack Davenport")) {
     name@en
     actor.film {
       performance.film {
@@ -1129,7 +1129,7 @@ Query Example: Angelina Jolie's movies ordered by genre.
 
 {{< runnable >}}
 {
-  var(func:allofterms(name, "angelina jolie")) {
+  var(func:allofterms(name@en, "angelina jolie")) {
     name@en
     actor.film {
       A AS performance.film {
@@ -1174,7 +1174,7 @@ The syntax `func: uid(A,B)` or `@filter(uid(A,B))` means the union of UIDs for v
 Query Example: The movies of Angelia Jolie and Brad Pitt where both have acted on movies in the same genre.  Note that `B` and `D` match all genres for all movies, not genres per movie.
 {{< runnable >}}
 {
- var(func:allofterms(name, "angelina jolie")) {
+ var(func:allofterms(name@en, "angelina jolie")) {
    actor.film {
     A AS performance.film {  # All films acted in by Angelina Jolie
      B As genre  # Genres of all the films acted in by Angelina Jolie
@@ -1182,7 +1182,7 @@ Query Example: The movies of Angelia Jolie and Brad Pitt where both have acted o
    }
   }
 
- var(func:allofterms(name, "brad pitt")) {
+ var(func:allofterms(name@en, "brad pitt")) {
    actor.film {
     C AS performance.film {  # All films acted in by Brad Pitt
      D as genre  # Genres of all the films acted in by Brad Pitt
@@ -1225,7 +1225,7 @@ Query Example: The number of movie roles played by the actors of the 80's classi
 
 {{< runnable >}}
 {
-  var(func:allofterms(name, "The Princess Bride")) {
+  var(func:allofterms(name@en, "The Princess Bride")) {
     starring {
       pbActors as performance.actor {
         roles as count(actor.film)
@@ -1246,7 +1246,7 @@ Query Example: The same query as the previous example, but using value variable 
 
 {{< runnable >}}
 {
-  var(func:allofterms(name, "The Princess Bride")) {
+  var(func:allofterms(name@en, "The Princess Bride")) {
     starring {
       performance.actor {
         roles as count(actor.film)
@@ -1289,14 +1289,14 @@ This propagation is useful, for example, in normalizing a sum across users, find
 Query Example: For each Harry Potter movie, the number of roles played by actor Warwick Davis.
 {{< runnable >}}
 {
-	num_roles(func: eq(name, "Warwick Davis")) @cascade @normalize {
+	num_roles(func: eq(name@en, "Warwick Davis")) @cascade @normalize {
 
     paths as math(1)  # records number of paths to each character
 
     actor : name@en
 
     actor.film {
-      performance.film @filter(allofterms(name, "Harry Potter")) {
+      performance.film @filter(allofterms(name@en, "Harry Potter")) {
         film_name : name@en
         characters : math(paths)  # how many paths (i.e. characters) reach this film
       }
@@ -1309,7 +1309,7 @@ Query Example: For each Harry Potter movie, the number of roles played by actor 
 Query Example: Each actor who has been in a Peter Jackson movie and the fraction of Peter Jackson movies they have appeared in.  
 {{< runnable >}}
 {
-	movie_fraction(func:eq(name, "Peter Jackson")) @normalize {
+	movie_fraction(func:eq(name@en, "Peter Jackson")) @normalize {
 
     paths as math(1)
     total_films : num_films as count(director.film)
@@ -1429,7 +1429,7 @@ Query Example: For each actor in a Peter Jackson film, find the number of roles 
 
 {{< runnable >}}
 {
-  PJ as var(func:allofterms(name, "Peter Jackson")) {
+  PJ as var(func:allofterms(name@en, "Peter Jackson")) {
     director.film {
       starring {  # starring an actor
         performance.actor {
@@ -1480,7 +1480,7 @@ Query Example:  Form a score for each of Steven Spielberg's movies as the sum of
 
 {{< runnable >}}
 {
-	var(func:allofterms(name, "steven spielberg")) {
+	var(func:allofterms(name@en, "steven spielberg")) {
 		films as director.film {
 			p as count(starring)
 			q as count(genre)
@@ -1502,7 +1502,7 @@ Query Example: Calculate a score for each Steven Spielberg movie with a conditio
 
 {{< runnable >}}
 {
-  var(func:allofterms(name, "steven spielberg")) {
+  var(func:allofterms(name@en, "steven spielberg")) {
     films as director.film {
       p as count(starring)
       q as count(genre)
@@ -1527,7 +1527,7 @@ Query Example: Compute a score for each Steven Spielberg movie and then aggregat
 
 {{< runnable >}}
 {
-	steven as var(func:eq(name, "Steven Spielberg")) @filter(has(director.film)) {
+	steven as var(func:eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
 		director.film {
 			p as count(starring)
 			q as count(genre)
@@ -1564,7 +1564,7 @@ Query Example: For Steven Spielberg movies, count the number of movies in each g
 
 {{< runnable >}}
 {
-  var(func:allofterms(name, "steven spielberg")) {
+  var(func:allofterms(name@en, "steven spielberg")) {
     director.film @groupby(genre) {
       a as count(_uid_)
       # a is a genre UID to count value variable
@@ -1581,7 +1581,7 @@ Query Example: For Steven Spielberg movies, count the number of movies in each g
 Query Example: Actors from Tim Burton movies and how many roles they have played in Tim Burton movies.
 {{< runnable >}}
 {
-  var(func:allofterms(name, "Tim Burton")) {
+  var(func:allofterms(name@en, "Tim Burton")) {
     director.film {
       starring @groupby(performance.actor) {
         a as count(_uid_)
@@ -1606,7 +1606,7 @@ Keyword `_predicate_` retrieves all predicates out of nodes at the level used.
 Query Example: All predicates from actor Geoffrey Rush.
 {{< runnable >}}
 {
-  director(func: eq(name, "Geoffrey Rush")) {
+  director(func: eq(name@en, "Geoffrey Rush")) {
     _predicate_
   }
 }
@@ -1617,7 +1617,7 @@ The number of predicates from a node can be counted and be aliased.
 Query Example: All predicates from actor Geoffrey Rush and the count of such predicates.
 {{< runnable >}}
 {
-  director(func: eq(name, "Geoffrey Rush")) {
+  director(func: eq(name@en, "Geoffrey Rush")) {
     num_predicates: count(_predicate_)
     my_predicates: _predicate_
   }
@@ -1631,12 +1631,12 @@ If `_all_` is passed as an argument to `expand()`, all the predicates at that le
 Query Example: Predicates saved to a variable and queried with `expand()`.
 {{< runnable >}}
 {
-  var(func: eq(name, "Lost in Translation")) {
+  var(func: eq(name@en, "Lost in Translation")) {
     pred as _predicate_
     # expand(_all_) { expand(_all_)}
   }
 
-  director(func: eq(name, "Lost in Translation")) {
+  director(func: eq(name@en, "Lost in Translation")) {
     name@.
     expand(val(pred)) {
       expand(_all_) {
@@ -1658,13 +1658,13 @@ With the `@cascade` directive, nodes that don't have all predicates specified in
 Query Example: Harry Potter movies, with each actor and characters played.  With `@cascade`, any character not played by an actor called Warwick is removed, as is any Harry Potter movie without any actors called Warwick.  Without `@cascade`, every character is returned, but only those played by actors called Warwick also have the actor name.
 {{< runnable >}}
 {
-  HP(func: allofterms(name, "Harry Potter")) @cascade {
+  HP(func: allofterms(name@en, "Harry Potter")) @cascade {
     name@en
     starring{
         performance.character {
           name@en
         }
-        performance.actor @filter(allofterms(name, "Warwick")){
+        performance.actor @filter(allofterms(name@en, "Warwick")){
             name@en
          }
     }
@@ -1709,7 +1709,7 @@ Query Example: All the coactors of Rutger Hauer.  Without `@ignorereflex`, the r
 
 {{< runnable >}}
 {
-  coactors(func: eq(name, "Rutger Hauer")) @ignorereflex {
+  coactors(func: eq(name@en, "Rutger Hauer")) @ignorereflex {
     actor.film {
       performance.film {
         starring {
@@ -1730,7 +1730,7 @@ For the purposes of debugging, you can attach a query parameter `debug=true` to 
 Query with debug as a query parameter
 ```
 curl "http://localhost:8080/query?debug=true" -XPOST -d $'{
-  tbl(func: allofterms(name, "The Big Lebowski")) {
+  tbl(func: allofterms(name@en, "The Big Lebowski")) {
     name@en
   }
 }' | python -m json.tool | less
@@ -2380,7 +2380,7 @@ Querying `name`, `mobile` and `car` of Alice gives the same result as without fa
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name, "Alice")) {
+  data(func: eq(name@en, "Alice")) {
      name
      mobile
      car
@@ -2407,7 +2407,7 @@ The syntax `@facets(facet-name)` is used to query facet data. For Alice the `sin
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name, "Alice")) {
+  data(func: eq(name@en, "Alice")) {
      name
      mobile @facets(since)
      car @facets(since)
@@ -2442,7 +2442,7 @@ All facets on an edge are queried with `@facets`.
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name, "Alice")) {
+  data(func: eq(name@en, "Alice")) {
      name
      mobile @facets
      car @facets
@@ -2486,7 +2486,7 @@ A query for friends of Alice.
 ```
 curl localhost:8080/query -XPOST -d $'
 {
-  data(func: eq(name, "Alice")) {
+  data(func: eq(name@en, "Alice")) {
     name
     friend {
       name
@@ -2521,7 +2521,7 @@ A query for friends and the facet `close` with `@facets(close)`.
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-   data(func: eq(name, "Alice")) {
+   data(func: eq(name@en, "Alice")) {
      name
      friend @facets(close) {
        name
@@ -2575,7 +2575,7 @@ For uid edges like `friend`, facets go to the corresponding child's `@facets` un
 
 ```
 curl localhost:8081/query -XPOST -d $'{
-  data(func: eq(name, "Alice")) {
+  data(func: eq(name@en, "Alice")) {
     name
     friend @facets {
       name
@@ -2643,7 +2643,7 @@ Filtering works similarly to how it works on edges without facets and has the sa
 Find Alice's close friends
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name, "Alice")) {
+  data(func: eq(name@en, "Alice")) {
     friend @facets(eq(close, true)) {
       name
     }
@@ -2674,7 +2674,7 @@ To return facets as well as filter, add another `@facets(<facetname>)` to the qu
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name, "Alice")) {
+  data(func: eq(name@en, "Alice")) {
     friend @facets(eq(close, true)) @facets(relative) { # filter close friends and give relative status
       name
     }
@@ -2713,7 +2713,7 @@ Facet queries can be composed with `AND`, `OR` and `NOT`.
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name, "Alice")) {
+  data(func: eq(name@en, "Alice")) {
     friend @facets(eq(close, true) AND eq(relative, true)) @facets(relative) { # filter close friends in my relation
       name
     }
@@ -2748,7 +2748,7 @@ Facets on UID edges can be stored in [value variables]({{< relref "#value-variab
 Alice's friends reported by variables for `close` and `relative`.
 ```
 curl localhost:8081/query -XPOST -d $'{
-  var(func: eq(name, "Alice")) {
+  var(func: eq(name@en, "Alice")) {
     friend @facets(a as close, b as relative)
   }
 
@@ -2806,7 +2806,7 @@ Alice, Bob and Charlie each rated every movie.  A value variable on facet `ratin
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  var(func: anyofterms(name, "Alice Bob Charlie")) {
+  var(func: anyofterms(name@en, "Alice Bob Charlie")) {
     num_raters as math(1)
     rated @facets(r as rating) {
       total_rating as math(r) # sum of the 3 ratings
@@ -2852,7 +2852,7 @@ Facet values assigned to value variables can be aggregated.
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name, "Alice")) {
+  data(func: eq(name@en, "Alice")) {
     name
     rated @facets(r as rating) {
       name
@@ -2904,7 +2904,7 @@ Output:
 Note though that `r` is a map from movies to the sum of ratings on edges in the query reaching the movie.  Hence, the following does not correctly calculate the average ratings for Alice and Bob individually --- it calculates 2 times the average of both Alice and Bob's ratings.
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: anyofterms(name, "Alice Bob")) {
+  data(func: anyofterms(name@en, "Alice Bob")) {
     name
     rated @facets(r as rating) {
       name
@@ -3174,7 +3174,7 @@ Constraints can be applied to the intermediate nodes as follows.
 ```
 curl localhost:8080/query -XPOST -d $'{
   path as shortest(from: 0x2, to: 0x5) {
-    friend @filter(not eq(name, "Bob")) @facets(weight)
+    friend @filter(not eq(name@en, "Bob")) @facets(weight)
     relative @facets(liking)
   }
 
