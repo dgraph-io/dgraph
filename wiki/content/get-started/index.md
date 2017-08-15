@@ -131,8 +131,8 @@ Running this next mutation adds a schema and indexes some of the data so queries
 curl localhost:8080/query -XPOST -d $'
 mutation {
   schema {
-    name: string @index .
-    release_date: datetime @index .
+    name: string @index(term) .
+    release_date: datetime @index(year) .
     revenue: float .
     running_time: int .
   }
@@ -166,52 +166,54 @@ Output
 
 ```json
 {
-    "me": [
-        {
-            "director": [
-                {
-                    "name": "Irvin Kernshner"
-                }
-            ],
-            "name": "Star Wars: Episode V - The Empire Strikes Back",
-            "release_date": "1980-05-21",
-            "revenue": 534000000.0,
-            "running_time": 124,
-            "starring": [
-                {
-                    "name": "Han Solo"
-                },
-                {
-                    "name": "Princess Leia"
-                },
-                {
-                    "name": "Luke Skywalker"
-                }
-            ]
-        },
-        {
-            "director": [
-                {
-                    "name": "Richard Marquand"
-                }
-            ],
-            "name": "Star Wars: Episode VI - Return of the Jedi",
-            "release_date": "1983-05-25",
-            "revenue": 572000000.0,
-            "running_time": 131,
-            "starring": [
-                {
-                    "name": "Han Solo"
-                },
-                {
-                    "name": "Princess Leia"
-                },
-                {
-                    "name": "Luke Skywalker"
-                }
-            ]
-        }
+  "data":{
+    "me":[
+      {
+        "name":"Star Wars: Episode V - The Empire Strikes Back",
+        "release_date":"1980-05-21T00:00:00Z",
+        "revenue":534000000.0,
+        "running_time":124,
+        "director":[
+          {
+            "name":"Irvin Kernshner"
+          }
+        ],
+        "starring":[
+          {
+            "name":"Han Solo"
+          },
+          {
+            "name":"Luke Skywalker"
+          },
+          {
+            "name":"Princess Leia"
+          }
+        ]
+      },
+      {
+        "name":"Star Wars: Episode VI - Return of the Jedi",
+        "release_date":"1983-05-25T00:00:00Z",
+        "revenue":572000000.0,
+        "running_time":131,
+        "director":[
+          {
+            "name":"Richard Marquand"
+          }
+        ],
+        "starring":[
+          {
+            "name":"Han Solo"
+          },
+          {
+            "name":"Luke Skywalker"
+          },
+          {
+            "name":"Princess Leia"
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
@@ -239,7 +241,7 @@ The schema needs updating to index new predicates in the dataset.  The new datas
 curl localhost:8080/query -XPOST -d '
 mutation {
   schema {
-    initial_release_date: datetime @index .
+    initial_release_date: datetime @index(year) .
   }
 }
 '| python -m json.tool | less
@@ -376,11 +378,11 @@ mutation {
   schema {
     director.film: uid @reverse .
     genre: uid @reverse .
-    initial_release_date: datetime @index .
+    initial_release_date: datetime @index(year) .
     rating: uid @reverse .
     country: uid @reverse .
-    loc: geo @index .
-    name: string @index .
+    loc: geo @index(geo) .
+    name: string @index(term) .
   }
 }
 ```

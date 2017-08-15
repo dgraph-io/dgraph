@@ -1366,13 +1366,31 @@ Aggregations can themselves be assigned to value variables, making a UID to aggr
 
 ### Min
 
+#### Usage at Root
+
+Query Example: Get the min initial release date for any Harry Potter movie.
+
+The release date is assigned to a variable, then it is aggregated and fetched in an empty block.
+{{< runnable >}}
+{
+  var(func: allofterms(name@en, "Harry Potter")) {
+    d as initial_release_date
+  }
+  me() {
+    min(val(d))
+  }
+}
+{{< /runnable >}}
+
+#### Usage at other levels.
+
 Query Example:  Directors called Steven and the date of release of their first movie, in ascending order of first movie.
 
 {{< runnable >}}
 {
   stevens as var(func: allofterms(name@en, "steven")) {
     director.film {
-      ird as initial_release_date  
+      ird as initial_release_date
       # ird is a value variable mapping a film UID to its release date
     }
     minIRD as min(val(ird))
@@ -1387,6 +1405,24 @@ Query Example:  Directors called Steven and the date of release of their first m
 {{< /runnable >}}
 
 ### Max
+
+#### Usage at Root
+
+Query Example: Get the max initial release date for any Harry Potter movie.
+
+The release date is assigned to a variable, then it is aggregated and fetched in an empty block.
+{{< runnable >}}
+{
+  var(func: allofterms(name@en, "Harry Potter")) {
+    d as initial_release_date
+  }
+  me() {
+    max(val(d))
+  }
+}
+{{< /runnable >}}
+
+#### Usage at other levels.
 
 Query Example: Quentin Tarantino's movies and date of release of the most recent movie.
 
@@ -1403,6 +1439,26 @@ Query Example: Quentin Tarantino's movies and date of release of the most recent
 {{< /runnable >}}
 
 ### Sum and Avg
+
+#### Usage at Root
+
+Query Example: Get the sum and average of number of count of movies directed by people who have
+Steven or Tom in their name.
+
+{{< runnable >}}
+{
+  var(func: anyofterms(name@en, "Steven Tom")) {
+    a as count(director.film)
+  }
+
+  me() {
+    avg(val(a))
+    sum(val(a))
+  }
+}
+{{< /runnable >}}
+
+#### Usage at other levels.
 
 Query Example: Steven Spielberg's movies, with the number of recorded genres per movie, and the total number of genres and average genres per movie.
 
@@ -1739,17 +1795,31 @@ curl "http://localhost:8080/query?debug=true" -XPOST -d $'{
 Returns `_uid_` and `server_latency`
 ```
 {
-  "tbl": [
-    {
-      "_uid_": "0xff4c6752867d137d",
-      "name@en": "The Big Lebowski"
+  "data": {
+    "tbl": [
+      {
+        "_uid_": "0x41434",
+        "name@en": "The Big Lebowski"
+      },
+      {
+        "_uid_": "0x145834",
+        "name@en": "The Big Lebowski 2"
+      },
+      {
+        "_uid_": "0x2c8a40",
+        "name@en": "Jeffrey \"The Big\" Lebowski"
+      },
+      {
+        "_uid_": "0x3454c4",
+        "name@en": "The Big Lebowski"
+      }
+    ],
+    "server_latency": {
+      "parsing": "101µs",
+      "processing": "802ms",
+      "json": "115µs",
+      "total": "802ms"
     }
-  ],
-  "server_latency": {
-    "json": "29.149µs",
-    "parsing": "129.713µs",
-    "processing": "500.276µs",
-    "total": "661.374µs"
   }
 }
 ```
@@ -1901,12 +1971,12 @@ The indices available for `dateTime` are as follows.
 
 | Index name / Tokenizer   | Part of date indexed                                      |
 | :----------- | :------------------------------------------------------------------ |
-| `dateTime`      | index on year (default)                                        |
+| `year`      | index on year (default)                                        |
 | `month`       | index on year and month                                         |
 | `day`       | index on year, month and day                                      |
 | `hour`       | index on year, month, day and hour                               |
 
-The choices of `dateTime` index allow selecting the precision of the index.  Applications, such as the movies examples in these docs, that require searching over dates but have relatively few nodes per year may prefer the `dateTime` tokenizer; applications that are dependent on fine grained date searches, such as real-time sensor readings, may prefer the `hour` index.
+The choices of `dateTime` index allow selecting the precision of the index.  Applications, such as the movies examples in these docs, that require searching over dates but have relatively few nodes per year may prefer the `year` tokenizer; applications that are dependent on fine grained date searches, such as real-time sensor readings, may prefer the `hour` index.
 
 
 All the `dateTime` indices are sortable.
@@ -1948,16 +2018,17 @@ For predicates with the `@count` Dgraph indexes the number of edges out of each 
 
 Schema mutations add or modify schema.
 
-An index is specified with `@index`, with arguments to specify the tokenizer.  For example:
+An index is specified with `@index`, with arguments to specify the tokenizer. When specifying an
+index for a predicate it is mandatory to specify the type of the index. For example:
 
 ```
 mutation {
   schema {
     name: string @index(exact, fulltext) @count .
-    age: int @index .
+    age: int @index(int) .
     friend: uid @count .
     dob: dateTime .
-    location: geo @index .
+    location: geo @index(geo) .
   }
 }
 ```
@@ -2064,12 +2135,14 @@ mutation {
 results in output (the actual UIDs will be different on any run of this mutation)
 ```
 {
-  "code": "Success",
-  "message": "Done",
-  "uids": {
-    "class": "0x6bc818dc89e78754",
-    "x": "0xc3bcc578868b719d",
-    "y": "0xb294fb8464357b0a"
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "class": "0x2712",
+      "x": "0x2713",
+      "y": "0x2714"
+    }
   }
 }
 ```
@@ -2380,7 +2453,7 @@ Querying `name`, `mobile` and `car` of Alice gives the same result as without fa
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name@en, "Alice")) {
+  data(func: eq(name, "Alice")) {
      name
      mobile
      car
@@ -2392,13 +2465,15 @@ Output:
 
 ```
 {
+  "data": {
     "data": [
-        {
-            "car": "MA0123",
-            "mobile": "040123456",
-            "name": "Alice"
-        }
+      {
+        "name": "Alice",
+        "mobile": "040123456",
+        "car": "MA0123"
+      }
     ]
+  }
 }
 ```
 
@@ -2407,7 +2482,7 @@ The syntax `@facets(facet-name)` is used to query facet data. For Alice the `sin
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name@en, "Alice")) {
+  data(func: eq(name, "Alice")) {
      name
      mobile @facets(since)
      car @facets(since)
@@ -2419,30 +2494,31 @@ Facets are retuned at the same level as the corresponding edge and have keys of 
 
 ```
 {
+  "data": {
     "data": [
-        {
-            "@facets": {
-                "car": {
-                    "since": "2006-02-02T13:01:09Z"
-                },
-                "mobile": {
-                    "since": "2006-01-02T15:04:05Z"
-                }
-            },
-            "car": "MA0123",
-            "mobile": "040123456",
-            "name": "Alice"
+      {
+        "name": "Alice",
+        "mobile": "040123456",
+        "car": "MA0123",
+        "@facets": {
+          "mobile": {
+            "since": "2006-01-02T15:04:05Z"
+          },
+          "car": {
+            "since": "2006-02-02T13:01:09Z"
+          }
         }
+      }
     ]
+  }
 }
-
 ```
 
 All facets on an edge are queried with `@facets`.
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name@en, "Alice")) {
+  data(func: eq(name, "Alice")) {
      name
      mobile @facets
      car @facets
@@ -2454,22 +2530,24 @@ Ouput:
 
 ```
 {
+  "data": {
     "data": [
-        {
-            "@facets": {
-                "car": {
-                    "first": true,
-                    "since": "2006-02-02T13:01:09Z"
-                },
-                "mobile": {
-                    "since": "2006-01-02T15:04:05Z"
-                }
-            },
-            "car": "MA0123",
-            "mobile": "040123456",
-            "name": "Alice"
+      {
+        "name": "Alice",
+        "mobile": "040123456",
+        "car": "MA0123",
+        "@facets": {
+          "mobile": {
+            "since": "2006-01-02T15:04:05Z"
+          },
+          "car": {
+            "first": true,
+            "since": "2006-02-02T13:01:09Z"
+          }
         }
+      }
     ]
+  }
 }
 ```
 
@@ -2486,7 +2564,7 @@ A query for friends of Alice.
 ```
 curl localhost:8080/query -XPOST -d $'
 {
-  data(func: eq(name@en, "Alice")) {
+  data(func: eq(name, "Alice")) {
     name
     friend {
       name
@@ -2498,22 +2576,24 @@ curl localhost:8080/query -XPOST -d $'
 Output :
 ```
 {
+  "data": {
     "data": [
-        {
-            "friend": [
-                {
-                    "name": "Bob"
-                },
-                {
-                    "name": "Charlie"
-                },
-                {
-                    "name": "Dave"
-                }
-            ],
-            "name": "Alice"
-        }
+      {
+        "name": "Alice",
+        "friend": [
+          {
+            "name": "Dave"
+          },
+          {
+            "name": "Bob"
+          },
+          {
+            "name": "Charlie"
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
@@ -2521,7 +2601,7 @@ A query for friends and the facet `close` with `@facets(close)`.
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-   data(func: eq(name@en, "Alice")) {
+   data(func: eq(name, "Alice")) {
      name
      friend @facets(close) {
        name
@@ -2537,45 +2617,47 @@ Since these facets come from parent, Dgraph uses key `_` to distinguish them fro
 
 ```
 {
+  "data": {
     "data": [
-        {
-            "friend": [
-                {
-                    "@facets": {
-                        "_": {
-                            "close": true
-                        }
-                    },
-                    "name": "Bob"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "close": false
-                        }
-                    },
-                    "name": "Charlie"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "close": true
-                        }
-                    },
-                    "name": "Dave"
-                }
-            ],
-            "name": "Alice"
-        }
+      {
+        "name": "Alice",
+        "friend": [
+          {
+            "name": "Dave",
+            "@facets": {
+              "_": {
+                "close": true
+              }
+            }
+          },
+          {
+            "name": "Bob",
+            "@facets": {
+              "_": {
+                "close": true
+              }
+            }
+          },
+          {
+            "name": "Charlie",
+            "@facets": {
+              "_": {
+                "close": false
+              }
+            }
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
 For uid edges like `friend`, facets go to the corresponding child's `@facets` under key `_`.  Hence, the facets can be distinguished when the output contains both facets on uid-edges (like `friend`) and value-edges (like `car`).
 
 ```
-curl localhost:8081/query -XPOST -d $'{
-  data(func: eq(name@en, "Alice")) {
+curl localhost:8080/query -XPOST -d $'{
+  data(func: eq(name, "Alice")) {
     name
     friend @facets {
       name
@@ -2589,44 +2671,46 @@ Output:
 
 ```
 {
+  "data": {
     "data": [
-        {
-            "friend": [
-                {
-                    "@facets": {
-                        "_": {
-                            "close": true,
-                            "relative": false
-                        },
-                        "car": {
-                            "since": "2006-02-02T13:01:09Z"
-                        }
-                    },
-                    "car": "MA0134",
-                    "name": "Bob"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "close": false,
-                            "relative": true
-                        }
-                    },
-                    "name": "Charlie"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "close": true,
-                            "relative": true
-                        }
-                    },
-                    "name": "Dave"
-                }
-            ],
-            "name": "Alice"
-        }
+      {
+        "name": "Alice",
+        "friend": [
+          {
+            "name": "Dave",
+            "@facets": {
+              "_": {
+                "close": true,
+                "relative": true
+              }
+            }
+          },
+          {
+            "name": "Bob",
+            "car": "MA0134",
+            "@facets": {
+              "car": {
+                "since": "2006-02-02T13:01:09Z"
+              },
+              "_": {
+                "close": true,
+                "relative": false
+              }
+            }
+          },
+          {
+            "name": "Charlie",
+            "@facets": {
+              "_": {
+                "close": false,
+                "relative": true
+              }
+            }
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
@@ -2643,7 +2727,7 @@ Filtering works similarly to how it works on edges without facets and has the sa
 Find Alice's close friends
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name@en, "Alice")) {
+  data(func: eq(name, "Alice")) {
     friend @facets(eq(close, true)) {
       name
     }
@@ -2655,18 +2739,20 @@ curl localhost:8080/query -XPOST -d $'{
 Output :
 ```
 {
+  "data": {
     "data": [
-        {
-            "friend": [
-                {
-                    "name": "Bob"
-                },
-                {
-                    "name": "Dave"
-                }
-            ]
-        }
+      {
+        "friend": [
+          {
+            "name": "Dave"
+          },
+          {
+            "name": "Bob"
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
@@ -2674,7 +2760,7 @@ To return facets as well as filter, add another `@facets(<facetname>)` to the qu
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name@en, "Alice")) {
+  data(func: eq(name, "Alice")) {
     friend @facets(eq(close, true)) @facets(relative) { # filter close friends and give relative status
       name
     }
@@ -2684,28 +2770,30 @@ curl localhost:8080/query -XPOST -d $'{
 Output :
 ```
 {
+  "data": {
     "data": [
-        {
-            "friend": [
-                {
-                    "@facets": {
-                        "_": {
-                            "relative": false
-                        }
-                    },
-                    "name": "Bob"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "relative": true
-                        }
-                    },
-                    "name": "Dave"
-                }
-            ]
-        }
+      {
+        "friend": [
+          {
+            "name": "Dave",
+            "@facets": {
+              "_": {
+                "relative": true
+              }
+            }
+          },
+          {
+            "name": "Bob",
+            "@facets": {
+              "_": {
+                "relative": false
+              }
+            }
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
@@ -2713,7 +2801,7 @@ Facet queries can be composed with `AND`, `OR` and `NOT`.
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name@en, "Alice")) {
+  data(func: eq(name, "Alice")) {
     friend @facets(eq(close, true) AND eq(relative, true)) @facets(relative) { # filter close friends in my relation
       name
     }
@@ -2723,20 +2811,135 @@ curl localhost:8080/query -XPOST -d $'{
 Output :
 ```
 {
+  "data": {
     "data": [
-        {
-            "friend": [
-                {
-                    "@facets": {
-                        "_": {
-                            "relative": true
-                        }
-                    },
-                    "name": "Dave"
-                }
-            ]
-        }
+      {
+        "friend": [
+          {
+            "name": "Dave",
+            "@facets": {
+              "_": {
+                "relative": true
+              }
+            }
+          }
+        ]
+      }
     ]
+  }
+}
+```
+
+### Sorting using facets
+
+Sorting is possible for a facet on a uid edge. Here we sort the movies rated by Alice, Bob and
+Charlie by their `rating` which is a facet.
+```
+curl localhost:8080/query -XPOST -d $'{
+  me(func: anyofterms(name, "Alice Bob Charlie")) {
+    name
+    rated @facets(orderdesc: rating) {
+      name
+    }
+  }
+
+}' | python -m json.tool | less
+```
+
+Output:
+```
+{
+  "data": {
+    "me": [
+      {
+        "name": "Alice",
+        "rated": [
+          {
+            "name": "Movie 3",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          },
+          {
+            "name": "Movie 1",
+            "@facets": {
+              "_": {
+                "rating": 3
+              }
+            }
+          },
+          {
+            "name": "Movie 2",
+            "@facets": {
+              "_": {
+                "rating": 2
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Bob",
+        "rated": [
+          {
+            "name": "Movie 1",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          },
+          {
+            "name": "Movie 2",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          },
+          {
+            "name": "Movie 3",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Charlie",
+        "rated": [
+          {
+            "name": "Movie 2",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          },
+          {
+            "name": "Movie 1",
+            "@facets": {
+              "_": {
+                "rating": 2
+              }
+            }
+          },
+          {
+            "name": "Movie 3",
+            "@facets": {
+              "_": {
+                "rating": 1
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
 }
 ```
 
@@ -2747,8 +2950,8 @@ Facets on UID edges can be stored in [value variables]({{< relref "#value-variab
 
 Alice's friends reported by variables for `close` and `relative`.
 ```
-curl localhost:8081/query -XPOST -d $'{
-  var(func: eq(name@en, "Alice")) {
+curl localhost:8080/query -XPOST -d $'{
+  var(func: eq(name, "Alice")) {
     friend @facets(a as close, b as relative)
   }
 
@@ -2766,34 +2969,36 @@ curl localhost:8081/query -XPOST -d $'{
 Output:
 ```
 {
+  "data": {
     "friend": [
-        {
-            "name": "Bob",
-            "val(a)": true
-        },
-        {
-            "name": "Charlie",
-            "val(a)": false
-        },
-        {
-            "name": "Dave",
-            "val(a)": true
-        }
+      {
+        "name": "Dave",
+        "val(a)": true
+      },
+      {
+        "name": "Bob",
+        "val(a)": true
+      },
+      {
+        "name": "Charlie",
+        "val(a)": false
+      }
     ],
     "relative": [
-        {
-            "name": "Bob",
-            "val(b)": false
-        },
-        {
-            "name": "Charlie",
-            "val(b)": true
-        },
-        {
-            "name": "Dave",
-            "val(b)": true
-        }
+      {
+        "name": "Dave",
+        "val(b)": true
+      },
+      {
+        "name": "Bob",
+        "val(b)": false
+      },
+      {
+        "name": "Charlie",
+        "val(b)": true
+      }
     ]
+  }
 }
 ```
 
@@ -2806,7 +3011,7 @@ Alice, Bob and Charlie each rated every movie.  A value variable on facet `ratin
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  var(func: anyofterms(name@en, "Alice Bob Charlie")) {
+  var(func: anyofterms(name, "Alice Bob Charlie")) {
     num_raters as math(1)
     rated @facets(r as rating) {
       total_rating as math(r) # sum of the 3 ratings
@@ -2825,23 +3030,25 @@ curl localhost:8080/query -XPOST -d $'{
 Output
 ```
 {
+  "data": {
     "data": [
-        {
-            "name": "Movie 1",
-            "val(average_rating)": 3.333333,
-            "val(total_rating)": 10
-        },
-        {
-            "name": "Movie 2",
-            "val(average_rating)": 4.0,
-            "val(total_rating)": 12
-        },
-        {
-            "name": "Movie 3",
-            "val(average_rating)": 3.666667,
-            "val(total_rating)": 11
-        }
+      {
+        "name": "Movie 1",
+        "val(total_rating)": 10,
+        "val(average_rating)": 3.333333
+      },
+      {
+        "name": "Movie 2",
+        "val(total_rating)": 12,
+        "val(average_rating)": 4
+      },
+      {
+        "name": "Movie 3",
+        "val(total_rating)": 11,
+        "val(average_rating)": 3.666667
+      }
     ]
+  }
 }
 ```
 
@@ -2852,7 +3059,7 @@ Facet values assigned to value variables can be aggregated.
 
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: eq(name@en, "Alice")) {
+  data(func: eq(name, "Alice")) {
     name
     rated @facets(r as rating) {
       name
@@ -2866,45 +3073,47 @@ Output:
 
 ```
 {
+  "data": {
     "data": [
-        {
-            "avg(val(r))": 3.333333,
-            "name": "Alice",
-            "rated": [
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 3
-                        }
-                    },
-                    "name": "Movie 1"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 2
-                        }
-                    },
-                    "name": "Movie 2"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 5
-                        }
-                    },
-                    "name": "Movie 3"
-                }
-            ]
-        }
+      {
+        "name": "Alice",
+        "rated": [
+          {
+            "name": "Movie 1",
+            "@facets": {
+              "_": {
+                "rating": 3
+              }
+            }
+          },
+          {
+            "name": "Movie 2",
+            "@facets": {
+              "_": {
+                "rating": 2
+              }
+            }
+          },
+          {
+            "name": "Movie 3",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          }
+        ],
+        "avg(val(r))": 3.333333
+      }
     ]
+  }
 }
 ```
 
 Note though that `r` is a map from movies to the sum of ratings on edges in the query reaching the movie.  Hence, the following does not correctly calculate the average ratings for Alice and Bob individually --- it calculates 2 times the average of both Alice and Bob's ratings.
 ```
 curl localhost:8080/query -XPOST -d $'{
-  data(func: anyofterms(name@en, "Alice Bob")) {
+  data(func: anyofterms(name, "Alice Bob")) {
     name
     rated @facets(r as rating) {
       name
@@ -2917,75 +3126,77 @@ curl localhost:8080/query -XPOST -d $'{
 Output:
 ```
 {
+  "data": {
     "data": [
-        {
-            "avg(val(r))": 8.333333,
-            "name": "Alice",
-            "rated": [
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 3
-                        }
-                    },
-                    "name": "Movie 1"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 2
-                        }
-                    },
-                    "name": "Movie 2"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 5
-                        }
-                    },
-                    "name": "Movie 3"
-                }
-            ]
-        },
-        {
-            "avg(val(r))": 8.333333,
-            "name": "Bob",
-            "rated": [
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 5
-                        }
-                    },
-                    "name": "Movie 1"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 5
-                        }
-                    },
-                    "name": "Movie 2"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 5
-                        }
-                    },
-                    "name": "Movie 3"
-                }
-            ]
-        }
+      {
+        "name": "Alice",
+        "rated": [
+          {
+            "name": "Movie 1",
+            "@facets": {
+              "_": {
+                "rating": 3
+              }
+            }
+          },
+          {
+            "name": "Movie 2",
+            "@facets": {
+              "_": {
+                "rating": 2
+              }
+            }
+          },
+          {
+            "name": "Movie 3",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          }
+        ],
+        "avg(val(r))": 8.333333
+      },
+      {
+        "name": "Bob",
+        "rated": [
+          {
+            "name": "Movie 1",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          },
+          {
+            "name": "Movie 2",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          },
+          {
+            "name": "Movie 3",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          }
+        ],
+        "avg(val(r))": 8.333333
+      }
     ]
+  }
 }
 ```
 
 Calculating the average ratings of users requires a variable that maps users to the sum of their ratings.
 
 ```
-curl localhost:8081/query -XPOST -d $'{
+curl localhost:8080/query -XPOST -d $'{
   var(func: has(~rated)) {
     num_rated as math(1)
     ~rated @facets(r as rating) {
@@ -3003,20 +3214,22 @@ curl localhost:8081/query -XPOST -d $'{
 Output:
 ```
 {
+  "data": {
     "data": [
-        {
-            "name": "Alice",
-            "val(avg_rating)": 3.333333
-        },
-        {
-            "name": "Bob",
-            "val(avg_rating)": 5.0
-        },
-        {
-            "name": "Charlie",
-            "val(avg_rating)": 2.666667
-        }
+      {
+        "name": "Alice",
+        "val(avg_rating)": 3.333333
+      },
+      {
+        "name": "Bob",
+        "val(avg_rating)": 5
+      },
+      {
+        "name": "Charlie",
+        "val(avg_rating)": 2.666667
+      }
     ]
+  }
 }
 ```
 
@@ -3062,27 +3275,29 @@ curl localhost:8080/query -XPOST -d $'{
 ```
 
 Which returns the following results. (Note, without considering the `weight` facet, each edges' weight is considered as 1)
- ```
- {
-     "_path_": [
-         {
-             "_uid_": "0x2",
-             "friend": [
-                 {
-                     "_uid_": "0x5"
-                 }
-             ]
-         }
-     ],
-     "path": [
-         {
-             "name": "Alice"
-         },
-         {
-             "name": "Mallory"
-         }
-     ]
- }
+```
+{
+  "data": {
+    "path": [
+      {
+        "name": "Alice"
+      },
+      {
+        "name": "Mallory"
+      }
+    ],
+    "_path_": [
+      {
+        "_uid_": "0x2",
+        "friend": [
+          {
+            "_uid_": "0x5"
+          }
+        ]
+      }
+    ]
+  }
+}
 ```
 
 The shortest two paths are returned with:
@@ -3118,55 +3333,57 @@ curl localhost:8080/query -XPOST -d $'{
 
 ```
 {
-    "_path_": [
-        {
-            "_uid_": "0x2",
-            "friend": [
-                {
-                    "@facets": {
-                        "_": {
-                            "weight": 0.1
-                        }
-                    },
-                    "_uid_": "0x3",
-                    "friend": [
-                        {
-                            "@facets": {
-                                "_": {
-                                    "weight": 0.2
-                                }
-                            },
-                            "_uid_": "0x4",
-                            "friend": [
-                                {
-                                    "@facets": {
-                                        "_": {
-                                            "weight": 0.3
-                                        }
-                                    },
-                                    "_uid_": "0x5"
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ]
-        }
-    ],
+  "data": {
     "path": [
-        {
-            "name": "Alice"
-        },
-        {
-            "name": "Bob"
-        },
-        {
-            "name": "Tom"
-        },
-        {
-            "name": "Mallory"
-        }
+      {
+        "name": "Alice"
+      },
+      {
+        "name": "Bob"
+      },
+      {
+        "name": "Tom"
+      },
+      {
+        "name": "Mallory"
+      }
+    ],
+    "_path_": [
+      {
+        "_uid_": "0x2",
+        "friend": [
+          {
+            "_uid_": "0x3",
+            "friend": [
+              {
+                "_uid_": "0x4",
+                "friend": [
+                  {
+                    "_uid_": "0x5",
+                    "@facets": {
+                      "_": {
+                        "weight": 0.3
+                      }
+                    }
+                  }
+                ],
+                "@facets": {
+                  "_": {
+                    "weight": 0.2
+                  }
+                }
+              }
+            ],
+            "@facets": {
+              "_": {
+                "weight": 0.1
+              }
+            }
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
@@ -3174,7 +3391,7 @@ Constraints can be applied to the intermediate nodes as follows.
 ```
 curl localhost:8080/query -XPOST -d $'{
   path as shortest(from: 0x2, to: 0x5) {
-    friend @filter(not eq(name@en, "Bob")) @facets(weight)
+    friend @filter(not eq(name, "Bob")) @facets(weight)
     relative @facets(liking)
   }
 
