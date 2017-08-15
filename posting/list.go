@@ -429,7 +429,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		gid = rv.Group
 	}
 	// Calculate 5% of immutable layer
-	numUids := (bp128.NumInteges(l.plist.Uids) * 5) / 100
+	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
 	if numUids < 3000 {
 		numUids = 3000
 	}

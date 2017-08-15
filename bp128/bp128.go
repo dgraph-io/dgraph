@@ -183,7 +183,7 @@ func (bp *BPackEncoder) Length() int {
 	return bp.length
 }
 
-func NumInteges(data []byte) int {
+func NumIntegers(data []byte) int {
 	if len(data) == 0 {
 		return 0
 	}

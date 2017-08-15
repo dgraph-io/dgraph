@@ -86,6 +86,8 @@ Whether running standalone or in a cluster, each Dgraph instance relies on the f
 {{% notice "note" %}}By default the server listens on `localhost` (the loopback address only accessible from the same machine).  The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections. {{% /notice %}}
 
 {{% notice "note" %}}You need to set the estimated memory dgraph can take through memory_mb flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the size of RAM.{{% /notice %}}
+
+{{% notice "note" %}}Set max file descriptors to a high value like 10000 if you are going to load a lot of data.{{% /notice %}}
 ### Config
 The command-line flags can be stored in a YAML file and provided via the `--config` flag.  For example:
 
@@ -456,9 +458,9 @@ Here are some problems that you may encounter and some solutions to try.
 
 During bulk loading of data, Dgraph can consume more memory than usual, due to high volume of writes. That's generally when you see the OOM crashes.
 
-The recommended minimum RAM to run on desktops and laptops is 16GB. Dgraph can take up to 7-8 GB with the default setting `-stw_ram_mb` set to 4096; so having the rest 8GB for desktop applications should keep your machine humming along.
+The recommended minimum RAM to run on desktops and laptops is 16GB. Dgraph can take up to 7-8 GB with the default setting `-memory_mb` set to 4096; so having the rest 8GB for desktop applications should keep your machine humming along.
 
-On EC2/GCE instances, the recommended minimum is 8GB. If you still continue to have Dgraph crash because of OOM, reduce the number of cores using `-cores`. This would decrease the performance of Dgraph and in-turn reduce the pace of memory growth. You can see the default numbers of cores used by running `dgraph -help`, next to `-cores` flag.
+On EC2/GCE instances, the recommended minimum is 8GB. If you still continue to have Dgraph crash because of OOM, reduce the number of cores using `-cores`. This would decrease the performance of Dgraph and in-turn reduce the pace of memory growth. You can see the default numbers of cores used by running `dgraph -help`, next to `-cores` flag. It's recommended to set `-memory_mb` to half of RAM size.
 
 ## See Also
 

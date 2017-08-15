@@ -570,6 +570,51 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 	require.Error(t, err)
 }
 
+// add count edges
+func TestSchemaMutationCountAdd(t *testing.T) {
+	var q1 = `
+	{
+		user(func:ge(count(friend),4)) {
+			name
+		}
+	}
+	`
+	var m = `
+	mutation {
+		set {
+                        # comment line should be ignored
+			<0x1> <name> "Alice" .
+			<0x01> <friend> <0x02> .
+			<0x01> <friend> <0x03> .
+			<0x01> <friend> <0x04> .
+			<0x01> <friend> <0x05> .
+		}
+	}
+	`
+
+	var s = `
+	mutation {
+		schema {
+			friend:uid @count .
+		}
+	}
+	`
+
+	// reset Schema
+	schema.ParseBytes([]byte(""), 1)
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	// add index to name
+	err = runMutation(s)
+	require.NoError(t, err)
+
+	output, err := runQuery(q1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
+
+}
+
 func TestDeleteAll(t *testing.T) {
 	var q1 = `
 	{
