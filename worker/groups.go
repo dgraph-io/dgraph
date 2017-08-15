@@ -274,7 +274,6 @@ func (g *groupi) AnyTwoServers(group uint32) []string {
 		return []string{}
 	}
 	sz := len(all.list)
-	// TODO: Why can't sz be zero?
 	if sz == 1 {
 		return []string{all.list[0].Addr}
 	}
@@ -286,7 +285,6 @@ func (g *groupi) AnyTwoServers(group uint32) []string {
 	return []string{all.list[idx1].Addr, all.list[idx2].Addr}
 }
 
-// TODO: Make this return (string, bool)?
 func (g *groupi) AnyServer(group uint32) string {
 	g.RLock()
 	defer g.RUnlock()
