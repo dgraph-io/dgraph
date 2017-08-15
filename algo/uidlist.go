@@ -51,39 +51,36 @@ func IntersectCompressedWith(u []byte, afterUID uint64, v, o *protos.List) {
 	if n == 0 {
 		n = 1
 	}
+
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
 
-	if ratio < 100 {
-		IntersectCompressedWithLin(&bi, v.Uids, &dst)
-	} else if ratio < 500 {
-		IntersectCompressedWithJump(&bi, v.Uids, &dst)
+	if ratio < 500 {
+		IntersectCompressedWithLinJump(&bi, v.Uids, &dst)
 	} else {
 		IntersectCompressedWithBin(&bi, v.Uids, &dst)
 	}
 	o.Uids = dst
 }
 
-func IntersectCompressedWithLin(bi *bp128.BPackIterator, v []uint64, o *[]uint64) {
+func IntersectCompressedWithLinJump(bi *bp128.BPackIterator, v []uint64, o *[]uint64) {
 	m := len(v)
 	k := 0
+	u := bi.Uids()
+	_, off := IntersectWithLin(u, v[k:], o)
+	k += off
+
 	for k < m && bi.Valid() {
+		maxId := bi.MaxIntInBlock()
+		if v[k] > maxId {
+			bi.SkipNext()
+			continue
+		} else {
+			bi.Next()
+		}
 		u := bi.Uids()
 		_, off := IntersectWithLin(u, v[k:], o)
 		k += off
-		bi.Next()
-	}
-}
-
-func IntersectCompressedWithJump(bi *bp128.BPackIterator, v []uint64, o *[]uint64) {
-	m := len(v)
-	k := 0
-	for k < m && bi.Valid() {
-		u := bi.Uids()
-		// Jumps only within a block
-		_, off := IntersectWithJump(u, v[k:], o)
-		k += off
-		bi.Next()
 	}
 }
 
