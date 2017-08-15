@@ -38,8 +38,44 @@ import (
 
 var emptySortResult protos.SortResult
 
+type sortresult struct {
+	reply *protos.SortResult
+	err   error
+}
+
+func dispatchSortOverNetwork(
+	ctx context.Context, addr string, q *protos.SortMessage) (*protos.SortResult, error) {
+	pl, err := pools().get(addr)
+	if err != nil {
+		return &emptySortResult, x.Wrapf(err, "SortOverNetwork: while retrieving connection.")
+	}
+	defer pools().release(pl)
+
+	conn := pl.Get()
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Sending request to %v", addr)
+	}
+	c := protos.NewWorkerClient(conn)
+
+	return c.Sort(ctx, q)
+}
+
+func contextSleep(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	select {
+	case <-ctx.Done():
+		timer.Stop()
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
+	// NOTE: This function is _very_ similar to ProcessTaskOverNetwork and you might want to
+	// de-duplicate their backup-request logic before modifying further.
+
 	gid := group.BelongsTo(q.Attr)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("worker.Sort attr: %v groupId: %v", q.Attr, gid)
@@ -50,38 +86,50 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 		return processSort(ctx, q)
 	}
 
-	// Send this over the network.
-	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
-	addr := groups().AnyServer(gid)
-	pl, err := pools().get(addr)
-	if err != nil {
-		return &emptySortResult, x.Wrapf(err, "SortOverNetwork: while retrieving connection.")
+	// Send this over the network.  We send a backup request if the first hasn't responded in 2ms.
+	// TODO: Cross-server cancellation as described in Jeff Dean's talk.
+	addrs := groups().AnyTwoServers(gid)
+	if len(addrs) == 0 {
+		return &emptySortResult, fmt.Errorf("SortOverNetwork: while retrieving connection")
 	}
-	defer pools().release(pl)
-	conn := pl.Get()
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Sending request to %v", addr)
-	}
-
-	c := protos.NewWorkerClient(conn)
-	var reply *protos.SortResult
-	cerr := make(chan error, 1)
-	go func() {
-		var err error
-		reply, err = c.Sort(ctx, q)
-		cerr <- err
-	}()
-
-	select {
-	case <-ctx.Done():
-		return &emptySortResult, ctx.Err()
-	case err := <-cerr:
+	if len(addrs) == 1 {
+		reply, err := dispatchSortOverNetwork(ctx, addrs[0], q)
+		// Returns upon the first result.
 		if err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while calling Worker.Sort: %+v", err)
 			}
 		}
 		return reply, err
+	}
+
+	chResults := make(chan sortresult, len(addrs))
+	ctx0, cancel := context.WithCancel(ctx)
+	go func() {
+		reply, err := dispatchSortOverNetwork(ctx0, addrs[0], q)
+		chResults <- sortresult{reply, err}
+	}()
+	go func() {
+		if err := contextSleep(ctx0, 2*time.Millisecond); err != nil {
+			// We got interrupted before we could even start.
+			return
+		}
+		reply, err := dispatchSortOverNetwork(ctx0, addrs[1], q)
+		chResults <- sortresult{reply, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return &emptySortResult, ctx.Err()
+	case result := <-chResults:
+		// Returns upon the first result.
+		cancel()
+		if result.err != nil {
+			if tr, ok := trace.FromContext(ctx); ok {
+				tr.LazyPrintf("Error while calling Worker.Sort: %+v", result.err)
+			}
+		}
+		return result.reply, result.err
 	}
 }
 

@@ -265,6 +265,26 @@ func (g *groupi) Server(id uint64, groupId uint32) (rs string, found bool) {
 	return "", false
 }
 
+// Returns 0, 1, or 2 valid server addrs.
+func (g *groupi) AnyTwoServers(group uint32) []string {
+	g.RLock()
+	defer g.RUnlock()
+	all := g.all[group]
+	if all == nil {
+		return []string{}
+	}
+	sz := len(all.list)
+	if sz == 1 {
+		return []string{all.list[0].Addr}
+	}
+	idx1 := rand.Intn(sz)
+	idx2 := rand.Intn(sz - 1)
+	if idx2 >= idx1 {
+		idx2++
+	}
+	return []string{all.list[idx1].Addr, all.list[idx2].Addr}
+}
+
 func (g *groupi) AnyServer(group uint32) string {
 	g.RLock()
 	defer g.RUnlock()
@@ -275,21 +295,6 @@ func (g *groupi) AnyServer(group uint32) string {
 	sz := len(all.list)
 	idx := rand.Intn(sz)
 	return all.list[idx].Addr
-}
-
-// Servers return addresses of all servers in group.
-func (g *groupi) Servers(group uint32) []string {
-	g.RLock()
-	defer g.RUnlock()
-	all := g.all[group]
-	if all == nil {
-		return nil
-	}
-	out := make([]string, len(all.list))
-	for i, s := range all.list {
-		out[i] = s.Addr
-	}
-	return out
 }
 
 // Peer returns node(raft) id of the peer of given nodeid of given group
