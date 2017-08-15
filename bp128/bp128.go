@@ -269,7 +269,7 @@ func (pi *BPackIterator) search(afterUid uint64, numBlocks int) {
 func (pi *BPackIterator) AfterUid(uid uint64) (found bool) {
 	// Current uncompressed block doesn't have uid, search for appropriate
 	// block, uncompress it and store it in pi.out
-	if pi.out[len(pi.out)-1] < uid {
+	if len(pi.out) > 0 && pi.out[len(pi.out)-1] < uid {
 		nBlocks := numBlocks(pi.length)
 		pi.search(uid-1, nBlocks)
 	}

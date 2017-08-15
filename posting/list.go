@@ -489,10 +489,6 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 
 func (l *List) delete(ctx context.Context, attr string) error {
 	l.AssertLock()
-	if l.plist != emptyList {
-		l.plist.Uids = l.plist.Uids[:0]
-		l.plist.Postings = l.plist.Postings[:0]
-	}
 	l.plist = emptyList
 	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
 	atomic.StoreInt32(&l.deleteAll, 1)
@@ -679,8 +675,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		data, err = final.Marshal()
 		x.Checkf(err, "Unable to marshal posting list")
 	} else {
-		data = make([]byte, len(final.Uids))
-		copy(data, final.Uids) // Copy Uids, otherwise they may change before write to Badger.
+		data = final.Uids
 		uidOnlyPosting = true
 	}
 	l.plist = final
