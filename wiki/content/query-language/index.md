@@ -34,7 +34,7 @@ Query Example: In the example dataset, as well as edges that link movies to dire
 
 {{< runnable >}}
 {
-  bladerunner(func: eq(name, "Blade Runner")) {
+  bladerunner(func: eq(name@en, "Blade Runner")) {
     _uid_
     name@en
     initial_release_date
@@ -66,7 +66,7 @@ Query Example: All nodes that have either "Blade" or "Runner" in the name.
 
 {{< runnable >}}
 {
-  bladerunner(func: anyofterms(name, "Blade Runner")) {
+  bladerunner(func: anyofterms(name@en, "Blade Runner")) {
     _uid_
     name@en
     initial_release_date
@@ -97,7 +97,7 @@ A query expands edges from node to node by nesting query blocks with `{ }`.
 Query Example: The actors and characters played in "Blade Runner".  The query first finds the node with name "Blade Runner", then follows  outgoing `starring` edges to nodes representing an actor's performance as a character.  From there the `performance.actor` and `performance,character` edges are expanded to find the actor names and roles for every actor in the movie.
 {{< runnable >}}
 {
-  brCharacters(func: eq(name, "Blade Runner")) {
+  brCharacters(func: eq(name@en, "Blade Runner")) {
     name@en
     initial_release_date
     starring {
@@ -124,7 +124,7 @@ The query root finds an initial set of nodes and the query proceeds by returning
 Query Example: "Blade Runner" director Ridley Scott's movies released before the year 2000.
 {{< runnable >}}
 {
-  scott(func: eq(name, "Ridley Scott")) {
+  scott(func: eq(name@en, "Ridley Scott")) {
     name@en
     initial_release_date
     director.film @filter(le(initial_release_date, "2000")) {
@@ -139,7 +139,7 @@ Query Example: Movies with either "Blade" or "Runner" in the title and released 
 
 {{< runnable >}}
 {
-  bladerunner(func: anyofterms(name, "Blade Runner")) @filter(le(initial_release_date, "2000")) {
+  bladerunner(func: anyofterms(name@en, "Blade Runner")) @filter(le(initial_release_date, "2000")) {
     _uid_
     name@en
     initial_release_date
@@ -182,7 +182,7 @@ Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have 
 
 {{< runnable >}}
 {
-  q(func: allofterms(name, "Farhan Akhtar")) {
+  q(func: allofterms(name@en, "Farhan Akhtar")) {
     name@hi
     name@en
 
@@ -243,7 +243,7 @@ Query Example: All Steven Spielberg films that contain the words `indiana` and `
 
 {{< runnable >}}
 {
-  me(func: eq(name, "Steven Spielberg")) @filter(has(director.film)) {
+  me(func: eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
     director.film @filter(allofterms(name@en, "jones indiana"))  {
       name@en
@@ -287,9 +287,9 @@ Query Example: All Steven Spielberg movies that contain `war` or `spies`.  The `
 
 {{< runnable >}}
 {
-  me(func: eq(name, "Steven Spielberg")) @filter(has(director.film)) {
+  me(func: eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
-    director.film @filter(anyofterms(name, "war spies"))  {
+    director.film @filter(anyofterms(name@en, "war spies"))  {
       name@en
     }
   }
@@ -482,7 +482,7 @@ Query Example: Ridley Scott movies released before 1980.
 
 {{< runnable >}}
 {
-  me(func: eq(name, "Ridley Scott")) {
+  me(func: eq(name@en, "Ridley Scott")) {
     name@en
     director.film @filter(lt(initial_release_date, "1980-01-01"))  {
       initial_release_date
@@ -561,7 +561,7 @@ Query Example: If the UID of a node is known, values for the node can be read di
 Query Example: The films of Taraji Henson by genre.
 {{< runnable >}}
 {
-  var(func: allofterms(name, "Taraji Henson")) {
+  var(func: allofterms(name@en, "Taraji Henson")) {
     actor.film {
       F as performance.film {
         G as genre
@@ -583,7 +583,7 @@ Query Example: The films of Taraji Henson by genre.
 Query Example: Taraji Henson films ordered by numer of genres, with genres listed in order of how many films Taraji has made in each genre.
 {{< runnable >}}
 {
-  var(func: allofterms(name, "Taraji Henson")) {
+  var(func: allofterms(name@en, "Taraji Henson")) {
     actor.film {
       F as performance.film {
         G as count(genre)
@@ -624,7 +624,7 @@ While the `uid` function filters nodes at the current level based on UID, functi
 Query Example: The collaborations of Marc Caro and Jean-Pierre Jeunet (UID 597046).  If the UID of Jean-Pierre Jeunet is known, querying this way removes the need to have a block extracting his UID into a variable and the extra edge traversal and filter for `~director.film`.
 {{< runnable >}}
 {
-  caro(func: eq(name, "Marc Caro")) {
+  caro(func: eq(name@en, "Marc Caro")) {
     name@en
     director.film @filter(uid_in(~director.film, 597046)){
       name@en
@@ -757,9 +757,9 @@ Query Example : All Steven Spielberg movies that contain either both "indiana" a
 
 {{< runnable >}}
 {
-  me(func: eq(name, "Steven Spielberg")) @filter(has(director.film)) {
+  me(func: eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
     name@en
-    director.film @filter(allofterms(name, "jones indiana") OR allofterms(name, "jurassic park"))  {
+    director.film @filter(allofterms(name@en, "jones indiana") OR allofterms(name@en, "jurassic park"))  {
       _uid_
       name@en
     }
@@ -1017,7 +1017,7 @@ Query Example: French director Jean-Pierre Jeunet's movies sorted by release dat
 
 {{< runnable >}}
 {
-  me(func: allofterms(name, "Jean-Pierre Jeunet")) {
+  me(func: allofterms(name@en, "Jean-Pierre Jeunet")) {
     name@fr
     director.film(orderasc: initial_release_date) {
       name@fr
@@ -1064,7 +1064,7 @@ Query Example: All of Angelina Jolie's films, with genres, and Peter Jackson's f
 
 {{< runnable >}}
 {
- AngelinaInfo(func:allofterms(name, "angelina jolie")) {
+ AngelinaInfo(func:allofterms(name@en, "angelina jolie")) {
   name@en
    actor.film {
     performance.film {
@@ -1075,7 +1075,7 @@ Query Example: All of Angelina Jolie's films, with genres, and Peter Jackson's f
    }
   }
 
- DirectorInfo(func: eq(name, "Peter Jackson")) {
+ DirectorInfo(func: eq(name@en, "Peter Jackson")) {
     name@en
     director.film @filter(ge(initial_release_date, "2008"))  {
         Release_date: initial_release_date
@@ -1092,7 +1092,7 @@ Query Example: The movies Mackenzie Crook has acted in and the movies Jack Daven
 
 {{< runnable >}}
 {
-  Mackenzie(func:allofterms(name, "Mackenzie Crook")) {
+  Mackenzie(func:allofterms(name@en, "Mackenzie Crook")) {
     name@en
     actor.film {
       performance.film {
@@ -1105,7 +1105,7 @@ Query Example: The movies Mackenzie Crook has acted in and the movies Jack Daven
     }
   }
 
-  Jack(func:allofterms(name, "Jack Davenport")) {
+  Jack(func:allofterms(name@en, "Jack Davenport")) {
     name@en
     actor.film {
       performance.film {
@@ -1129,7 +1129,7 @@ Query Example: Angelina Jolie's movies ordered by genre.
 
 {{< runnable >}}
 {
-  var(func:allofterms(name, "angelina jolie")) {
+  var(func:allofterms(name@en, "angelina jolie")) {
     name@en
     actor.film {
       A AS performance.film {
@@ -1174,7 +1174,7 @@ The syntax `func: uid(A,B)` or `@filter(uid(A,B))` means the union of UIDs for v
 Query Example: The movies of Angelia Jolie and Brad Pitt where both have acted on movies in the same genre.  Note that `B` and `D` match all genres for all movies, not genres per movie.
 {{< runnable >}}
 {
- var(func:allofterms(name, "angelina jolie")) {
+ var(func:allofterms(name@en, "angelina jolie")) {
    actor.film {
     A AS performance.film {  # All films acted in by Angelina Jolie
      B As genre  # Genres of all the films acted in by Angelina Jolie
@@ -1182,7 +1182,7 @@ Query Example: The movies of Angelia Jolie and Brad Pitt where both have acted o
    }
   }
 
- var(func:allofterms(name, "brad pitt")) {
+ var(func:allofterms(name@en, "brad pitt")) {
    actor.film {
     C AS performance.film {  # All films acted in by Brad Pitt
      D as genre  # Genres of all the films acted in by Brad Pitt
@@ -1225,7 +1225,7 @@ Query Example: The number of movie roles played by the actors of the 80's classi
 
 {{< runnable >}}
 {
-  var(func:allofterms(name, "The Princess Bride")) {
+  var(func:allofterms(name@en, "The Princess Bride")) {
     starring {
       pbActors as performance.actor {
         roles as count(actor.film)
@@ -1246,7 +1246,7 @@ Query Example: The same query as the previous example, but using value variable 
 
 {{< runnable >}}
 {
-  var(func:allofterms(name, "The Princess Bride")) {
+  var(func:allofterms(name@en, "The Princess Bride")) {
     starring {
       performance.actor {
         roles as count(actor.film)
@@ -1289,14 +1289,14 @@ This propagation is useful, for example, in normalizing a sum across users, find
 Query Example: For each Harry Potter movie, the number of roles played by actor Warwick Davis.
 {{< runnable >}}
 {
-	num_roles(func: eq(name, "Warwick Davis")) @cascade @normalize {
+	num_roles(func: eq(name@en, "Warwick Davis")) @cascade @normalize {
 
     paths as math(1)  # records number of paths to each character
 
     actor : name@en
 
     actor.film {
-      performance.film @filter(allofterms(name, "Harry Potter")) {
+      performance.film @filter(allofterms(name@en, "Harry Potter")) {
         film_name : name@en
         characters : math(paths)  # how many paths (i.e. characters) reach this film
       }
@@ -1309,7 +1309,7 @@ Query Example: For each Harry Potter movie, the number of roles played by actor 
 Query Example: Each actor who has been in a Peter Jackson movie and the fraction of Peter Jackson movies they have appeared in.  
 {{< runnable >}}
 {
-	movie_fraction(func:eq(name, "Peter Jackson")) @normalize {
+	movie_fraction(func:eq(name@en, "Peter Jackson")) @normalize {
 
     paths as math(1)
     total_films : num_films as count(director.film)
@@ -1366,13 +1366,31 @@ Aggregations can themselves be assigned to value variables, making a UID to aggr
 
 ### Min
 
+#### Usage at Root
+
+Query Example: Get the min initial release date for any Harry Potter movie.
+
+The release date is assigned to a variable, then it is aggregated and fetched in an empty block.
+{{< runnable >}}
+{
+  var(func: allofterms(name@en, "Harry Potter")) {
+    d as initial_release_date
+  }
+  me() {
+    min(val(d))
+  }
+}
+{{< /runnable >}}
+
+#### Usage at other levels.
+
 Query Example:  Directors called Steven and the date of release of their first movie, in ascending order of first movie.
 
 {{< runnable >}}
 {
   stevens as var(func: allofterms(name@en, "steven")) {
     director.film {
-      ird as initial_release_date  
+      ird as initial_release_date
       # ird is a value variable mapping a film UID to its release date
     }
     minIRD as min(val(ird))
@@ -1387,6 +1405,24 @@ Query Example:  Directors called Steven and the date of release of their first m
 {{< /runnable >}}
 
 ### Max
+
+#### Usage at Root
+
+Query Example: Get the max initial release date for any Harry Potter movie.
+
+The release date is assigned to a variable, then it is aggregated and fetched in an empty block.
+{{< runnable >}}
+{
+  var(func: allofterms(name@en, "Harry Potter")) {
+    d as initial_release_date
+  }
+  me() {
+    max(val(d))
+  }
+}
+{{< /runnable >}}
+
+#### Usage at other levels.
 
 Query Example: Quentin Tarantino's movies and date of release of the most recent movie.
 
@@ -1403,6 +1439,26 @@ Query Example: Quentin Tarantino's movies and date of release of the most recent
 {{< /runnable >}}
 
 ### Sum and Avg
+
+#### Usage at Root
+
+Query Example: Get the sum and average of number of count of movies directed by people who have
+Steven or Tom in their name.
+
+{{< runnable >}}
+{
+  var(func: anyofterms(name@en, "Steven Tom")) {
+    a as count(director.film)
+  }
+
+  me() {
+    avg(val(a))
+    sum(val(a))
+  }
+}
+{{< /runnable >}}
+
+#### Usage at other levels.
 
 Query Example: Steven Spielberg's movies, with the number of recorded genres per movie, and the total number of genres and average genres per movie.
 
@@ -1429,7 +1485,7 @@ Query Example: For each actor in a Peter Jackson film, find the number of roles 
 
 {{< runnable >}}
 {
-  PJ as var(func:allofterms(name, "Peter Jackson")) {
+  PJ as var(func:allofterms(name@en, "Peter Jackson")) {
     director.film {
       starring {  # starring an actor
         performance.actor {
@@ -1480,7 +1536,7 @@ Query Example:  Form a score for each of Steven Spielberg's movies as the sum of
 
 {{< runnable >}}
 {
-	var(func:allofterms(name, "steven spielberg")) {
+	var(func:allofterms(name@en, "steven spielberg")) {
 		films as director.film {
 			p as count(starring)
 			q as count(genre)
@@ -1502,7 +1558,7 @@ Query Example: Calculate a score for each Steven Spielberg movie with a conditio
 
 {{< runnable >}}
 {
-  var(func:allofterms(name, "steven spielberg")) {
+  var(func:allofterms(name@en, "steven spielberg")) {
     films as director.film {
       p as count(starring)
       q as count(genre)
@@ -1527,7 +1583,7 @@ Query Example: Compute a score for each Steven Spielberg movie and then aggregat
 
 {{< runnable >}}
 {
-	steven as var(func:eq(name, "Steven Spielberg")) @filter(has(director.film)) {
+	steven as var(func:eq(name@en, "Steven Spielberg")) @filter(has(director.film)) {
 		director.film {
 			p as count(starring)
 			q as count(genre)
@@ -1564,7 +1620,7 @@ Query Example: For Steven Spielberg movies, count the number of movies in each g
 
 {{< runnable >}}
 {
-  var(func:allofterms(name, "steven spielberg")) {
+  var(func:allofterms(name@en, "steven spielberg")) {
     director.film @groupby(genre) {
       a as count(_uid_)
       # a is a genre UID to count value variable
@@ -1581,7 +1637,7 @@ Query Example: For Steven Spielberg movies, count the number of movies in each g
 Query Example: Actors from Tim Burton movies and how many roles they have played in Tim Burton movies.
 {{< runnable >}}
 {
-  var(func:allofterms(name, "Tim Burton")) {
+  var(func:allofterms(name@en, "Tim Burton")) {
     director.film {
       starring @groupby(performance.actor) {
         a as count(_uid_)
@@ -1606,7 +1662,7 @@ Keyword `_predicate_` retrieves all predicates out of nodes at the level used.
 Query Example: All predicates from actor Geoffrey Rush.
 {{< runnable >}}
 {
-  director(func: eq(name, "Geoffrey Rush")) {
+  director(func: eq(name@en, "Geoffrey Rush")) {
     _predicate_
   }
 }
@@ -1617,7 +1673,7 @@ The number of predicates from a node can be counted and be aliased.
 Query Example: All predicates from actor Geoffrey Rush and the count of such predicates.
 {{< runnable >}}
 {
-  director(func: eq(name, "Geoffrey Rush")) {
+  director(func: eq(name@en, "Geoffrey Rush")) {
     num_predicates: count(_predicate_)
     my_predicates: _predicate_
   }
@@ -1631,12 +1687,12 @@ If `_all_` is passed as an argument to `expand()`, all the predicates at that le
 Query Example: Predicates saved to a variable and queried with `expand()`.
 {{< runnable >}}
 {
-  var(func: eq(name, "Lost in Translation")) {
+  var(func: eq(name@en, "Lost in Translation")) {
     pred as _predicate_
     # expand(_all_) { expand(_all_)}
   }
 
-  director(func: eq(name, "Lost in Translation")) {
+  director(func: eq(name@en, "Lost in Translation")) {
     name@.
     expand(val(pred)) {
       expand(_all_) {
@@ -1658,13 +1714,13 @@ With the `@cascade` directive, nodes that don't have all predicates specified in
 Query Example: Harry Potter movies, with each actor and characters played.  With `@cascade`, any character not played by an actor called Warwick is removed, as is any Harry Potter movie without any actors called Warwick.  Without `@cascade`, every character is returned, but only those played by actors called Warwick also have the actor name.
 {{< runnable >}}
 {
-  HP(func: allofterms(name, "Harry Potter")) @cascade {
+  HP(func: allofterms(name@en, "Harry Potter")) @cascade {
     name@en
     starring{
         performance.character {
           name@en
         }
-        performance.actor @filter(allofterms(name, "Warwick")){
+        performance.actor @filter(allofterms(name@en, "Warwick")){
             name@en
          }
     }
@@ -1709,7 +1765,7 @@ Query Example: All the coactors of Rutger Hauer.  Without `@ignorereflex`, the r
 
 {{< runnable >}}
 {
-  coactors(func: eq(name, "Rutger Hauer")) @ignorereflex {
+  coactors(func: eq(name@en, "Rutger Hauer")) @ignorereflex {
     actor.film {
       performance.film {
         starring {
@@ -1730,7 +1786,7 @@ For the purposes of debugging, you can attach a query parameter `debug=true` to 
 Query with debug as a query parameter
 ```
 curl "http://localhost:8080/query?debug=true" -XPOST -d $'{
-  tbl(func: allofterms(name, "The Big Lebowski")) {
+  tbl(func: allofterms(name@en, "The Big Lebowski")) {
     name@en
   }
 }' | python -m json.tool | less
@@ -1739,17 +1795,31 @@ curl "http://localhost:8080/query?debug=true" -XPOST -d $'{
 Returns `_uid_` and `server_latency`
 ```
 {
-  "tbl": [
-    {
-      "_uid_": "0xff4c6752867d137d",
-      "name@en": "The Big Lebowski"
+  "data": {
+    "tbl": [
+      {
+        "_uid_": "0x41434",
+        "name@en": "The Big Lebowski"
+      },
+      {
+        "_uid_": "0x145834",
+        "name@en": "The Big Lebowski 2"
+      },
+      {
+        "_uid_": "0x2c8a40",
+        "name@en": "Jeffrey \"The Big\" Lebowski"
+      },
+      {
+        "_uid_": "0x3454c4",
+        "name@en": "The Big Lebowski"
+      }
+    ],
+    "server_latency": {
+      "parsing": "101µs",
+      "processing": "802ms",
+      "json": "115µs",
+      "total": "802ms"
     }
-  ],
-  "server_latency": {
-    "json": "29.149µs",
-    "parsing": "129.713µs",
-    "processing": "500.276µs",
-    "total": "661.374µs"
   }
 }
 ```
@@ -1901,12 +1971,12 @@ The indices available for `dateTime` are as follows.
 
 | Index name / Tokenizer   | Part of date indexed                                      |
 | :----------- | :------------------------------------------------------------------ |
-| `dateTime`      | index on year (default)                                        |
+| `year`      | index on year (default)                                        |
 | `month`       | index on year and month                                         |
 | `day`       | index on year, month and day                                      |
 | `hour`       | index on year, month, day and hour                               |
 
-The choices of `dateTime` index allow selecting the precision of the index.  Applications, such as the movies examples in these docs, that require searching over dates but have relatively few nodes per year may prefer the `dateTime` tokenizer; applications that are dependent on fine grained date searches, such as real-time sensor readings, may prefer the `hour` index.
+The choices of `dateTime` index allow selecting the precision of the index.  Applications, such as the movies examples in these docs, that require searching over dates but have relatively few nodes per year may prefer the `year` tokenizer; applications that are dependent on fine grained date searches, such as real-time sensor readings, may prefer the `hour` index.
 
 
 All the `dateTime` indices are sortable.
@@ -1948,16 +2018,17 @@ For predicates with the `@count` Dgraph indexes the number of edges out of each 
 
 Schema mutations add or modify schema.
 
-An index is specified with `@index`, with arguments to specify the tokenizer.  For example:
+An index is specified with `@index`, with arguments to specify the tokenizer. When specifying an
+index for a predicate it is mandatory to specify the type of the index. For example:
 
 ```
 mutation {
   schema {
     name: string @index(exact, fulltext) @count .
-    age: int @index .
+    age: int @index(int) .
     friend: uid @count .
     dob: dateTime .
-    location: geo @index .
+    location: geo @index(geo) .
   }
 }
 ```
@@ -2064,12 +2135,14 @@ mutation {
 results in output (the actual UIDs will be different on any run of this mutation)
 ```
 {
-  "code": "Success",
-  "message": "Done",
-  "uids": {
-    "class": "0x6bc818dc89e78754",
-    "x": "0xc3bcc578868b719d",
-    "y": "0xb294fb8464357b0a"
+  "data": {
+    "code": "Success",
+    "message": "Done",
+    "uids": {
+      "class": "0x2712",
+      "x": "0x2713",
+      "y": "0x2714"
+    }
   }
 }
 ```
@@ -2392,13 +2465,15 @@ Output:
 
 ```
 {
+  "data": {
     "data": [
-        {
-            "car": "MA0123",
-            "mobile": "040123456",
-            "name": "Alice"
-        }
+      {
+        "name": "Alice",
+        "mobile": "040123456",
+        "car": "MA0123"
+      }
     ]
+  }
 }
 ```
 
@@ -2419,23 +2494,24 @@ Facets are retuned at the same level as the corresponding edge and have keys of 
 
 ```
 {
+  "data": {
     "data": [
-        {
-            "@facets": {
-                "car": {
-                    "since": "2006-02-02T13:01:09Z"
-                },
-                "mobile": {
-                    "since": "2006-01-02T15:04:05Z"
-                }
-            },
-            "car": "MA0123",
-            "mobile": "040123456",
-            "name": "Alice"
+      {
+        "name": "Alice",
+        "mobile": "040123456",
+        "car": "MA0123",
+        "@facets": {
+          "mobile": {
+            "since": "2006-01-02T15:04:05Z"
+          },
+          "car": {
+            "since": "2006-02-02T13:01:09Z"
+          }
         }
+      }
     ]
+  }
 }
-
 ```
 
 All facets on an edge are queried with `@facets`.
@@ -2454,22 +2530,24 @@ Ouput:
 
 ```
 {
+  "data": {
     "data": [
-        {
-            "@facets": {
-                "car": {
-                    "first": true,
-                    "since": "2006-02-02T13:01:09Z"
-                },
-                "mobile": {
-                    "since": "2006-01-02T15:04:05Z"
-                }
-            },
-            "car": "MA0123",
-            "mobile": "040123456",
-            "name": "Alice"
+      {
+        "name": "Alice",
+        "mobile": "040123456",
+        "car": "MA0123",
+        "@facets": {
+          "mobile": {
+            "since": "2006-01-02T15:04:05Z"
+          },
+          "car": {
+            "first": true,
+            "since": "2006-02-02T13:01:09Z"
+          }
         }
+      }
     ]
+  }
 }
 ```
 
@@ -2498,22 +2576,24 @@ curl localhost:8080/query -XPOST -d $'
 Output :
 ```
 {
+  "data": {
     "data": [
-        {
-            "friend": [
-                {
-                    "name": "Bob"
-                },
-                {
-                    "name": "Charlie"
-                },
-                {
-                    "name": "Dave"
-                }
-            ],
-            "name": "Alice"
-        }
+      {
+        "name": "Alice",
+        "friend": [
+          {
+            "name": "Dave"
+          },
+          {
+            "name": "Bob"
+          },
+          {
+            "name": "Charlie"
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
@@ -2537,44 +2617,46 @@ Since these facets come from parent, Dgraph uses key `_` to distinguish them fro
 
 ```
 {
+  "data": {
     "data": [
-        {
-            "friend": [
-                {
-                    "@facets": {
-                        "_": {
-                            "close": true
-                        }
-                    },
-                    "name": "Bob"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "close": false
-                        }
-                    },
-                    "name": "Charlie"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "close": true
-                        }
-                    },
-                    "name": "Dave"
-                }
-            ],
-            "name": "Alice"
-        }
+      {
+        "name": "Alice",
+        "friend": [
+          {
+            "name": "Dave",
+            "@facets": {
+              "_": {
+                "close": true
+              }
+            }
+          },
+          {
+            "name": "Bob",
+            "@facets": {
+              "_": {
+                "close": true
+              }
+            }
+          },
+          {
+            "name": "Charlie",
+            "@facets": {
+              "_": {
+                "close": false
+              }
+            }
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
 For uid edges like `friend`, facets go to the corresponding child's `@facets` under key `_`.  Hence, the facets can be distinguished when the output contains both facets on uid-edges (like `friend`) and value-edges (like `car`).
 
 ```
-curl localhost:8081/query -XPOST -d $'{
+curl localhost:8080/query -XPOST -d $'{
   data(func: eq(name, "Alice")) {
     name
     friend @facets {
@@ -2589,44 +2671,46 @@ Output:
 
 ```
 {
+  "data": {
     "data": [
-        {
-            "friend": [
-                {
-                    "@facets": {
-                        "_": {
-                            "close": true,
-                            "relative": false
-                        },
-                        "car": {
-                            "since": "2006-02-02T13:01:09Z"
-                        }
-                    },
-                    "car": "MA0134",
-                    "name": "Bob"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "close": false,
-                            "relative": true
-                        }
-                    },
-                    "name": "Charlie"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "close": true,
-                            "relative": true
-                        }
-                    },
-                    "name": "Dave"
-                }
-            ],
-            "name": "Alice"
-        }
+      {
+        "name": "Alice",
+        "friend": [
+          {
+            "name": "Dave",
+            "@facets": {
+              "_": {
+                "close": true,
+                "relative": true
+              }
+            }
+          },
+          {
+            "name": "Bob",
+            "car": "MA0134",
+            "@facets": {
+              "car": {
+                "since": "2006-02-02T13:01:09Z"
+              },
+              "_": {
+                "close": true,
+                "relative": false
+              }
+            }
+          },
+          {
+            "name": "Charlie",
+            "@facets": {
+              "_": {
+                "close": false,
+                "relative": true
+              }
+            }
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
@@ -2655,18 +2739,20 @@ curl localhost:8080/query -XPOST -d $'{
 Output :
 ```
 {
+  "data": {
     "data": [
-        {
-            "friend": [
-                {
-                    "name": "Bob"
-                },
-                {
-                    "name": "Dave"
-                }
-            ]
-        }
+      {
+        "friend": [
+          {
+            "name": "Dave"
+          },
+          {
+            "name": "Bob"
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
@@ -2684,28 +2770,30 @@ curl localhost:8080/query -XPOST -d $'{
 Output :
 ```
 {
+  "data": {
     "data": [
-        {
-            "friend": [
-                {
-                    "@facets": {
-                        "_": {
-                            "relative": false
-                        }
-                    },
-                    "name": "Bob"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "relative": true
-                        }
-                    },
-                    "name": "Dave"
-                }
-            ]
-        }
+      {
+        "friend": [
+          {
+            "name": "Dave",
+            "@facets": {
+              "_": {
+                "relative": true
+              }
+            }
+          },
+          {
+            "name": "Bob",
+            "@facets": {
+              "_": {
+                "relative": false
+              }
+            }
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
@@ -2723,20 +2811,135 @@ curl localhost:8080/query -XPOST -d $'{
 Output :
 ```
 {
+  "data": {
     "data": [
-        {
-            "friend": [
-                {
-                    "@facets": {
-                        "_": {
-                            "relative": true
-                        }
-                    },
-                    "name": "Dave"
-                }
-            ]
-        }
+      {
+        "friend": [
+          {
+            "name": "Dave",
+            "@facets": {
+              "_": {
+                "relative": true
+              }
+            }
+          }
+        ]
+      }
     ]
+  }
+}
+```
+
+### Sorting using facets
+
+Sorting is possible for a facet on a uid edge. Here we sort the movies rated by Alice, Bob and
+Charlie by their `rating` which is a facet.
+```
+curl localhost:8080/query -XPOST -d $'{
+  me(func: anyofterms(name, "Alice Bob Charlie")) {
+    name
+    rated @facets(orderdesc: rating) {
+      name
+    }
+  }
+
+}' | python -m json.tool | less
+```
+
+Output:
+```
+{
+  "data": {
+    "me": [
+      {
+        "name": "Alice",
+        "rated": [
+          {
+            "name": "Movie 3",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          },
+          {
+            "name": "Movie 1",
+            "@facets": {
+              "_": {
+                "rating": 3
+              }
+            }
+          },
+          {
+            "name": "Movie 2",
+            "@facets": {
+              "_": {
+                "rating": 2
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Bob",
+        "rated": [
+          {
+            "name": "Movie 1",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          },
+          {
+            "name": "Movie 2",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          },
+          {
+            "name": "Movie 3",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Charlie",
+        "rated": [
+          {
+            "name": "Movie 2",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          },
+          {
+            "name": "Movie 1",
+            "@facets": {
+              "_": {
+                "rating": 2
+              }
+            }
+          },
+          {
+            "name": "Movie 3",
+            "@facets": {
+              "_": {
+                "rating": 1
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
 }
 ```
 
@@ -2747,7 +2950,7 @@ Facets on UID edges can be stored in [value variables]({{< relref "#value-variab
 
 Alice's friends reported by variables for `close` and `relative`.
 ```
-curl localhost:8081/query -XPOST -d $'{
+curl localhost:8080/query -XPOST -d $'{
   var(func: eq(name, "Alice")) {
     friend @facets(a as close, b as relative)
   }
@@ -2766,34 +2969,36 @@ curl localhost:8081/query -XPOST -d $'{
 Output:
 ```
 {
+  "data": {
     "friend": [
-        {
-            "name": "Bob",
-            "val(a)": true
-        },
-        {
-            "name": "Charlie",
-            "val(a)": false
-        },
-        {
-            "name": "Dave",
-            "val(a)": true
-        }
+      {
+        "name": "Dave",
+        "val(a)": true
+      },
+      {
+        "name": "Bob",
+        "val(a)": true
+      },
+      {
+        "name": "Charlie",
+        "val(a)": false
+      }
     ],
     "relative": [
-        {
-            "name": "Bob",
-            "val(b)": false
-        },
-        {
-            "name": "Charlie",
-            "val(b)": true
-        },
-        {
-            "name": "Dave",
-            "val(b)": true
-        }
+      {
+        "name": "Dave",
+        "val(b)": true
+      },
+      {
+        "name": "Bob",
+        "val(b)": false
+      },
+      {
+        "name": "Charlie",
+        "val(b)": true
+      }
     ]
+  }
 }
 ```
 
@@ -2825,23 +3030,25 @@ curl localhost:8080/query -XPOST -d $'{
 Output
 ```
 {
+  "data": {
     "data": [
-        {
-            "name": "Movie 1",
-            "val(average_rating)": 3.333333,
-            "val(total_rating)": 10
-        },
-        {
-            "name": "Movie 2",
-            "val(average_rating)": 4.0,
-            "val(total_rating)": 12
-        },
-        {
-            "name": "Movie 3",
-            "val(average_rating)": 3.666667,
-            "val(total_rating)": 11
-        }
+      {
+        "name": "Movie 1",
+        "val(total_rating)": 10,
+        "val(average_rating)": 3.333333
+      },
+      {
+        "name": "Movie 2",
+        "val(total_rating)": 12,
+        "val(average_rating)": 4
+      },
+      {
+        "name": "Movie 3",
+        "val(total_rating)": 11,
+        "val(average_rating)": 3.666667
+      }
     ]
+  }
 }
 ```
 
@@ -2866,38 +3073,40 @@ Output:
 
 ```
 {
+  "data": {
     "data": [
-        {
-            "avg(val(r))": 3.333333,
-            "name": "Alice",
-            "rated": [
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 3
-                        }
-                    },
-                    "name": "Movie 1"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 2
-                        }
-                    },
-                    "name": "Movie 2"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 5
-                        }
-                    },
-                    "name": "Movie 3"
-                }
-            ]
-        }
+      {
+        "name": "Alice",
+        "rated": [
+          {
+            "name": "Movie 1",
+            "@facets": {
+              "_": {
+                "rating": 3
+              }
+            }
+          },
+          {
+            "name": "Movie 2",
+            "@facets": {
+              "_": {
+                "rating": 2
+              }
+            }
+          },
+          {
+            "name": "Movie 3",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          }
+        ],
+        "avg(val(r))": 3.333333
+      }
     ]
+  }
 }
 ```
 
@@ -2917,75 +3126,77 @@ curl localhost:8080/query -XPOST -d $'{
 Output:
 ```
 {
+  "data": {
     "data": [
-        {
-            "avg(val(r))": 8.333333,
-            "name": "Alice",
-            "rated": [
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 3
-                        }
-                    },
-                    "name": "Movie 1"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 2
-                        }
-                    },
-                    "name": "Movie 2"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 5
-                        }
-                    },
-                    "name": "Movie 3"
-                }
-            ]
-        },
-        {
-            "avg(val(r))": 8.333333,
-            "name": "Bob",
-            "rated": [
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 5
-                        }
-                    },
-                    "name": "Movie 1"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 5
-                        }
-                    },
-                    "name": "Movie 2"
-                },
-                {
-                    "@facets": {
-                        "_": {
-                            "rating": 5
-                        }
-                    },
-                    "name": "Movie 3"
-                }
-            ]
-        }
+      {
+        "name": "Alice",
+        "rated": [
+          {
+            "name": "Movie 1",
+            "@facets": {
+              "_": {
+                "rating": 3
+              }
+            }
+          },
+          {
+            "name": "Movie 2",
+            "@facets": {
+              "_": {
+                "rating": 2
+              }
+            }
+          },
+          {
+            "name": "Movie 3",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          }
+        ],
+        "avg(val(r))": 8.333333
+      },
+      {
+        "name": "Bob",
+        "rated": [
+          {
+            "name": "Movie 1",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          },
+          {
+            "name": "Movie 2",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          },
+          {
+            "name": "Movie 3",
+            "@facets": {
+              "_": {
+                "rating": 5
+              }
+            }
+          }
+        ],
+        "avg(val(r))": 8.333333
+      }
     ]
+  }
 }
 ```
 
 Calculating the average ratings of users requires a variable that maps users to the sum of their ratings.
 
 ```
-curl localhost:8081/query -XPOST -d $'{
+curl localhost:8080/query -XPOST -d $'{
   var(func: has(~rated)) {
     num_rated as math(1)
     ~rated @facets(r as rating) {
@@ -3003,20 +3214,22 @@ curl localhost:8081/query -XPOST -d $'{
 Output:
 ```
 {
+  "data": {
     "data": [
-        {
-            "name": "Alice",
-            "val(avg_rating)": 3.333333
-        },
-        {
-            "name": "Bob",
-            "val(avg_rating)": 5.0
-        },
-        {
-            "name": "Charlie",
-            "val(avg_rating)": 2.666667
-        }
+      {
+        "name": "Alice",
+        "val(avg_rating)": 3.333333
+      },
+      {
+        "name": "Bob",
+        "val(avg_rating)": 5
+      },
+      {
+        "name": "Charlie",
+        "val(avg_rating)": 2.666667
+      }
     ]
+  }
 }
 ```
 
@@ -3062,27 +3275,29 @@ curl localhost:8080/query -XPOST -d $'{
 ```
 
 Which returns the following results. (Note, without considering the `weight` facet, each edges' weight is considered as 1)
- ```
- {
-     "_path_": [
-         {
-             "_uid_": "0x2",
-             "friend": [
-                 {
-                     "_uid_": "0x5"
-                 }
-             ]
-         }
-     ],
-     "path": [
-         {
-             "name": "Alice"
-         },
-         {
-             "name": "Mallory"
-         }
-     ]
- }
+```
+{
+  "data": {
+    "path": [
+      {
+        "name": "Alice"
+      },
+      {
+        "name": "Mallory"
+      }
+    ],
+    "_path_": [
+      {
+        "_uid_": "0x2",
+        "friend": [
+          {
+            "_uid_": "0x5"
+          }
+        ]
+      }
+    ]
+  }
+}
 ```
 
 The shortest two paths are returned with:
@@ -3118,55 +3333,57 @@ curl localhost:8080/query -XPOST -d $'{
 
 ```
 {
-    "_path_": [
-        {
-            "_uid_": "0x2",
-            "friend": [
-                {
-                    "@facets": {
-                        "_": {
-                            "weight": 0.1
-                        }
-                    },
-                    "_uid_": "0x3",
-                    "friend": [
-                        {
-                            "@facets": {
-                                "_": {
-                                    "weight": 0.2
-                                }
-                            },
-                            "_uid_": "0x4",
-                            "friend": [
-                                {
-                                    "@facets": {
-                                        "_": {
-                                            "weight": 0.3
-                                        }
-                                    },
-                                    "_uid_": "0x5"
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ]
-        }
-    ],
+  "data": {
     "path": [
-        {
-            "name": "Alice"
-        },
-        {
-            "name": "Bob"
-        },
-        {
-            "name": "Tom"
-        },
-        {
-            "name": "Mallory"
-        }
+      {
+        "name": "Alice"
+      },
+      {
+        "name": "Bob"
+      },
+      {
+        "name": "Tom"
+      },
+      {
+        "name": "Mallory"
+      }
+    ],
+    "_path_": [
+      {
+        "_uid_": "0x2",
+        "friend": [
+          {
+            "_uid_": "0x3",
+            "friend": [
+              {
+                "_uid_": "0x4",
+                "friend": [
+                  {
+                    "_uid_": "0x5",
+                    "@facets": {
+                      "_": {
+                        "weight": 0.3
+                      }
+                    }
+                  }
+                ],
+                "@facets": {
+                  "_": {
+                    "weight": 0.2
+                  }
+                }
+              }
+            ],
+            "@facets": {
+              "_": {
+                "weight": 0.1
+              }
+            }
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 

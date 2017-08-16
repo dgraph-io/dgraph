@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -460,7 +461,7 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 					Attr:    attr,
 					Op:      protos.DirectedEdge_SET,
 				}
-				if err = addCountMutation(ctx, t, uint32(len(pl.Uids)/8), reverse); err != nil {
+				if err = addCountMutation(ctx, t, uint32(bp128.NumIntegers(pl.Uids)), reverse); err != nil {
 					break
 				}
 			}

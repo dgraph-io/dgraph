@@ -883,6 +883,11 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 			fc.n = len(fc.tokens)
 		}
 		fc.lang = q.SrcFunc[1]
+		// TODO - See if we can get rid of passing language as part of the SrcFunc
+		// since we already have Lang field in q.
+		if len(q.Langs) == 0 && fc.lang != "" {
+			q.Langs = []string{fc.lang}
+		}
 	case CompareScalarFn:
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err

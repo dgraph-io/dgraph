@@ -428,8 +428,16 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		index = rv.Index
 		gid = rv.Group
 	}
-	if len(l.mlayer) > 1000 ||
-		(len(l.pending) > 0 && index > l.pending[0]+4000) {
+	// Calculate 5% of immutable layer
+	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
+	if numUids < 3000 {
+		numUids = 3000
+	}
+	if len(l.mlayer) > numUids ||
+		// All proposals are kept in before until they are snapshotted, this ensures that
+		// we don't have too many pending proposals.
+		// TODO: Come up with a good limit, based on size of proposals
+		(len(l.pending) > 0 && index > l.pending[0]+10000) {
 		l.syncIfDirty(false)
 	}
 
@@ -489,10 +497,6 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 
 func (l *List) delete(ctx context.Context, attr string) error {
 	l.AssertLock()
-	if l.plist != emptyList {
-		l.plist.Uids = l.plist.Uids[:0]
-		l.plist.Postings = l.plist.Postings[:0]
-	}
 	l.plist = emptyList
 	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
 	atomic.StoreInt32(&l.deleteAll, 1)
@@ -679,8 +683,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		data, err = final.Marshal()
 		x.Checkf(err, "Unable to marshal posting list")
 	} else {
-		data = make([]byte, len(final.Uids))
-		copy(data, final.Uids) // Copy Uids, otherwise they may change before write to Badger.
+		data = final.Uids
 		uidOnlyPosting = true
 	}
 	l.plist = final

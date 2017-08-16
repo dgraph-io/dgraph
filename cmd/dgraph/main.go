@@ -95,8 +95,6 @@ func setupConfigOpts() {
 		"Directory to store raft write-ahead logs.")
 	flag.BoolVar(&config.Nomutations, "nomutations", defaults.Nomutations,
 		"Don't allow mutations on this server.")
-	flag.IntVar(&config.NumPending, "pending", defaults.NumPending,
-		"Number of pending queries. Useful for rate limiting.")
 
 	flag.IntVar(&config.BaseWorkerPort, "workerport", defaults.BaseWorkerPort,
 		"Port used by worker for internal communication.")

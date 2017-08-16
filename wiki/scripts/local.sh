@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-VERSIONS=(
+VERSIONS_ARRAY=(
   'v0.7.7'
   'v0.7.6'
   'master'
@@ -10,7 +10,7 @@ VERSIONS=(
 )
 
 joinVersions() {
-	versions=$(printf ",%s" "${VERSIONS[@]}")
+	versions=$(printf ",%s" "${VERSIONS_ARRAY[@]}")
 	echo ${versions:1}
 }
 
@@ -18,7 +18,7 @@ VERSION_STRING=$(joinVersions)
 
 run() {
   export CURRENT_BRANCH=${CURRENT_BRANCH}
-  export CURRENT_VERSION=${VERSIONS[0]}
+  export CURRENT_VERSION=${VERSIONS_ARRAY[0]}
   export VERSIONS=${VERSION_STRING}
 
 
