@@ -52,8 +52,7 @@ function findAndMerge(nodes, n) {
     return;
   }
 
-  let node = nodes[idx],
-    props = JSON.parse(node.title);
+  let node = nodes[idx], props = JSON.parse(node.title);
   _.merge(props, properties);
   node.title = JSON.stringify(props);
   // For shortest path, this would overwrite the color and this is fine
@@ -88,8 +87,7 @@ function aggregationPrefix(properties) {
 }
 
 export function shortenName(label) {
-  let words = label.split(" "),
-    firstWord = words[0];
+  let words = label.split(" "), firstWord = words[0];
   if (firstWord.length > 20) {
     label = [firstWord.substr(0, 9), firstWord.substr(9, 7) + "..."].join(
       "-\n"
@@ -382,7 +380,7 @@ export function processGraph(
     someNodeHasChildren = false;
     ignoredChildren = [];
 
-    if (k === "server_latency" || k === "uids") {
+    if (k === "extensions" || k === "uids") {
       continue;
     }
     // For schema, we should should display all predicates, irrespective of
@@ -448,9 +446,9 @@ export function processGraph(
     }
 
     let properties: MapOfStrings = {
-        attrs: {},
-        facets: {}
-      },
+      attrs: {},
+      facets: {}
+    },
       id: string,
       edgeAttributes = {
         facets: {}
@@ -479,8 +477,7 @@ export function processGraph(
         properties["attrs"][prop] = JSON.stringify(val);
       } else if (Array.isArray(val)) {
         // These are child nodes, lets add them to the queue.
-        let arr = val,
-          xposition = 1;
+        let arr = val, xposition = 1;
         for (let j = 0; j < arr.length; j++) {
           // X position makes sure that nodes are rendered in the order they are received
           // in the response.
@@ -566,8 +563,7 @@ export function processGraph(
         continue;
       }
 
-      let oldEdge = edges[edgeIdx],
-        edgeTitle = JSON.parse(oldEdge.title);
+      let oldEdge = edges[edgeIdx], edgeTitle = JSON.parse(oldEdge.title);
       // This is helpful in case of shortest path results so that we can get
       // the edge weights.
       _.merge(edgeAttributes, edgeTitle);
