@@ -45,7 +45,7 @@ Query Example: In the example dataset, as well as edges that link movies to dire
 
 The query first searches the graph, using indexes to make the search efficient, for all nodes with a `name` edge equalling "Blade Runner".  For the found node the query then returns the listed outgoing edges.
 
-Every node had a unique 64 bit identifier.  The `_uid_` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.  
+Every node had a unique 64 bit identifier.  The `_uid_` edge in the query above returns that identifier.  If the required node is already known, then the function `uid` finds the node.
 
 Query Example: "Blade Runner" movie data found by UID.
 
@@ -1886,7 +1886,7 @@ mutation {
   _:b <age> "13" .
   _:c <age> "14"^^<xs:string> .
   _:d <age> "14.5"^^<xs:string> .
-  _:e <age> "14.5"
+  _:e <age> "14.5" .
  }
 }
 ```

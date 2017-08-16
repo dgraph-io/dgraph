@@ -344,11 +344,14 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				mp["schema"] = json.RawMessage(string(js))
 			}
-			if addLatency {
-				mp["server_latency"] = l.ToMap()
-			}
 		}
 		schemaRes["data"] = mp
+		if addLatency {
+			e := query.Extensions{
+				Latency: l.ToMap(),
+			}
+			schemaRes["extensions"] = e
+		}
 		if js, err := json.Marshal(schemaRes); err == nil {
 			w.Write(js)
 		} else {
