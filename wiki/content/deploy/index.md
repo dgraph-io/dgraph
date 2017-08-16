@@ -33,7 +33,7 @@ The Docker version is available as _master_.  Pull and run with:
 ```sh
 docker pull dgraph/dgraph:master
 mkdir -p ~/dgraph
-docker run -it -p 127.0.0.1:8080:8080 -p 127.0.0.1:9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph:master dgraph --bindall=true
+docker run -it -p 127.0.0.1:8080:8080 -p 127.0.0.1:9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph:master dgraph --bindall=true --memory_mb 2048
 ```
 
 {{% notice "note" %}}All the usual cautions about nightly builds apply: the feature set is not stable and may change (even daily) and the nightly build may contain bugs. {{% /notice %}}
@@ -82,10 +82,9 @@ Whether running standalone or in a cluster, each Dgraph instance relies on the f
 * A port for gRPC client connections. (option `--grpc_port`, default: `9080` on `localhost`)
 * A port on which to run a worker node, used for Dgraph's communication between nodes. (option `--workerport`, default: `12345`)
 * An address and port at which the node advertises its worker.  (option `--my`, default: `localhost:workerport`)
+* Estimated memory dgraph can take. (option `--memory_mb, mandatory to specify, recommended value half of RAM size`)
 
 {{% notice "note" %}}By default the server listens on `localhost` (the loopback address only accessible from the same machine).  The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections. {{% /notice %}}
-
-{{% notice "note" %}}You need to set the estimated memory dgraph can take through memory_mb flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the size of RAM.{{% /notice %}}
 
 {{% notice "note" %}}Set max file descriptors to a high value like 10000 if you are going to load a lot of data.{{% /notice %}}
 ### Config
@@ -295,7 +294,7 @@ Each machine in the cluster must be started with a unique ID (option `--idx`) an
 To run a cluster, begin by bringing up a single server that serves at least group 0.  
 
 ```
-$ dgraph --group_conf groups.conf --groups "0,1" --idx 1 --my "ip-address-others-should-access-me-at" --bindall=true
+$ dgraph --group_conf groups.conf --groups "0,1" --idx 1 --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb 2048
 
 # This instance with ID 1 will serve groups 0 and 1, using the default 8080/9080 ports for clients and 12345 for peers.
 ```
@@ -307,10 +306,10 @@ New nodes are added to a cluster by specifying any known healthy node on startup
 
 ```
 # Server handling only group 2.
-$ dgraph --group_conf groups.conf --groups "2" --idx 3 --peer "<ip address>:<workerport>" --my "ip-address-others-should-access-me-at" --bindall=true
+$ dgraph --group_conf groups.conf --groups "2" --idx 3 --peer "<ip address>:<workerport>" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
 
 # Server handling groups 0, 1 and 2.
-$ dgraph --group_conf groups.conf --groups "0,1,2" --idx 4 --peer "<ip address>:<workerport>" --my "ip-address-others-should-access-me-at" --bindall=true
+$ dgraph --group_conf groups.conf --groups "0,1,2" --idx 4 --peer "<ip address>:<workerport>" --my "ip-address-others-should-access-me-at" --bindall=true --memory_mb=2048
 ```
 
 The new servers will automatically detect each other by communicating with the provided peer and establish connections to each other.
@@ -434,14 +433,13 @@ Now that Dgraph is up and running, to understand how to add and query data to Dg
 
 ## Monitoring
 
-Dgraph exposes metrics via `/debug/vars` endpoint in json format. Dgraph doesn't store the metrics and only exposes the value of the metrics at that instant. So you might want to scrape and store metrics in systems like prometheus. Prometheus can scrape metrics from `/debug/prometheus_metrics` endpoint. This is a sample prometheus config file.
-
+Dgraph exposes metrics via `/debug/vars` endpoint in json format. Dgraph doesn't store the metrics and only exposes the value of the metrics at that instant. You can either poll this endpoint to get the data in your monitoring systems or install **[Prometheus](https://prometheus.io/docs/introduction/install/)**. Replace targets in the below config file with the ip of your dgraph instances and run prometheus using the command `prometheus -config.file my_config.yaml`.
 ```sh
 scrape_configs:
   - job_name: "dgraph"
     metrics_path: "/debug/prometheus_metrics"
     scrape_interval: "2s"
-    target_groups:
+    static_configs:
     - targets:
       - 172.31.9.133:8080
       - 172.31.15.230:8080
@@ -449,7 +447,7 @@ scrape_configs:
       - 172.31.8.118:8080
 ```
 
-You can use graphana to plot the metrics. You can import **[Graphana Dashboard](https://github.com/dgraph-io/benchmarks/blob/master/scripts/dgraphGraphana)**.
+Install **[Grafana](http://docs.grafana.org/installation/)** to plot the metrics. Grafana runs at port 3000 in default settings. Create a prometheus datasource by following these **[steps](https://prometheus.io/docs/visualization/grafana/#creating-a-prometheus-data-source)**. Import **[grafana_dashboard.json](https://github.com/dgraph-io/benchmarks/blob/master/scripts/grafana_dashboard.json)** by following this **[link](http://docs.grafana.org/reference/export_import/#importing-a-dashboard)**. 
 
 ## Troubleshooting
 Here are some problems that you may encounter and some solutions to try.

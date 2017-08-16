@@ -64,7 +64,7 @@ docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgrap
 ```sh
 mkdir -p ~/dgraph
 # Mapping port 8080 from within the container to 18080 of the instance, likewise with the gRPC port 9090.
-docker run -it -p 18080:8080 -p 19090:9090 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
+docker run -it -p 18080:8080 -p 19090:9090 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true --memory_mb 2048
 ```
 
 {{% notice "note" %}}The dgraph server listens on ports 8080 and 9090 (unless mapped to another port above) with log output to the terminal.{{% /notice %}}
@@ -405,7 +405,7 @@ One of the things to try would be to open bash in the container and try to run D
 ```sh
 docker run -it dgraph/dgraph bash
 # Now that you are within the container, run Dgraph.
-dgraph
+dgraph --memory_mb 2048
 ```
 
 If Dgraph runs for you that indicates there could be something wrong with mounting volumes.
