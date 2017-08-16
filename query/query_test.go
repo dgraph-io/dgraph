@@ -8821,3 +8821,20 @@ func TestAggregateRootError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only aggregated variables allowed within empty block.")
 }
+
+func TestFilterLang(t *testing.T) {
+	// This tests the fix for #1334. While getting uids for filter, we fetch data keys when number
+	// of uids is less than number of tokens. Lang tag was not passed correctly while fetching these
+	// data keys.
+	populateGraph(t)
+	query := `
+		{
+			me(func: uid(0x1001, 0x1002, 0x1003)) @filter(ge(name@en, "D"))  {
+				name@en
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"}]}}`, js)
+}

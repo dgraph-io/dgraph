@@ -29,7 +29,6 @@ type Options struct {
 	PostingTables string
 	WALDir        string
 	Nomutations   bool
-	NumPending    int
 
 	AllottedMemory float64
 	CommitFraction float64
@@ -58,7 +57,6 @@ var DefaultConfig = Options{
 	PostingTables: "loadtoram",
 	WALDir:        "w",
 	Nomutations:   false,
-	NumPending:    1000,
 
 	// User must specify this.
 	AllottedMemory: -1.0,
