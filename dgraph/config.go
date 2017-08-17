@@ -83,7 +83,10 @@ func SetConfiguration(newConfig Options) {
 
 	Config = newConfig
 
+	posting.Config.Mu.Lock()
 	posting.Config.AllottedMemory = Config.AllottedMemory
+	posting.Config.Mu.Unlock()
+
 	posting.Config.CommitFraction = Config.CommitFraction
 
 	worker.Config.BaseWorkerPort = Config.BaseWorkerPort
