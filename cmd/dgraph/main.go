@@ -466,8 +466,8 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlerInit does some standard checks. Returns false if something is wrong.
-func handlerInit(w http.ResponseWriter, r *http.Request) bool {
-	if r.Method != "GET" {
+func handlerInit(w http.ResponseWriter, r *http.Request, allowedMethod string) bool {
+	if r.Method != allowedMethod {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return false
 	}
@@ -481,7 +481,7 @@ func handlerInit(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
+	if !handlerInit(w, r, http.MethodGet) {
 		return
 	}
 
@@ -510,7 +510,7 @@ func shutdownServer() {
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
+	if !handlerInit(w, r, http.MethodGet) {
 		return
 	}
 	ctx := context.Background()
@@ -520,6 +520,43 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"code": "Success", "message": "Export completed."}`))
+}
+
+func requestHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r, http.MethodPut) {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Could not parse form: "+err.Error())
+		return
+	}
+	var res x.QueryRes
+	for k, v := range r.PostForm {
+		if len(v) == 0 {
+			continue
+		}
+		switch k {
+		case "memory_mb":
+			memStr := v[0]
+			memFlt, err := strconv.ParseFloat(memStr, 64)
+			if err != nil {
+				res.AddStatus(x.ErrorInvalidRequest, "Invalid for memory_mb: "+memStr)
+				continue
+			}
+			if memFlt < dgraph.MinAllottedMemory {
+				res.AddStatus(x.ErrorInvalidRequest,
+					fmt.Sprintf("memory_mb must be at least %.0f", dgraph.MinAllottedMemory))
+				continue
+			}
+			posting.Config.Mu.Lock()
+			posting.Config.AllottedMemory = memFlt
+			posting.Config.Mu.Unlock()
+			res.AddStatus("Success", fmt.Sprintf("memory_mb set to %f", memFlt))
+		default:
+			res.AddStatus(x.ErrorInvalidRequest, "Unknown parameter name: "+k)
+		}
+	}
+	x.Reply(w, res)
 }
 
 func hasGraphOps(mu *protos.Mutation) bool {
@@ -658,6 +695,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/export", exportHandler)
+	http.HandleFunc("/admin/request", requestHandler)
 
 	// UI related API's.
 	// Share urls have a hex string as the shareId. So if
