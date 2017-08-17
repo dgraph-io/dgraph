@@ -55,6 +55,9 @@ func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
 // Return string tokens from function arguments. It maps function type to correct tokenizer.
 // Note: regexp functions require regexp compilation of argument, not tokenization.
 func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]string, error) {
+	if lang == "." {
+		lang = "en"
+	}
 	switch funcType {
 	case FullTextSearchFn:
 		return tok.GetTextTokens(funcArgs, lang)

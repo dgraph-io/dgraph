@@ -207,3 +207,16 @@ func TestGetBleveTokens(t *testing.T) {
 	// ensure that tokens are sorted and unique
 	require.Equal(t, expected, tokens)
 }
+
+func TestGetTextTokens1(t *testing.T) {
+	tokens, err := GetTextTokens([]string{"Quick brown fox"}, "en")
+	require.NoError(t, err)
+	require.NotNil(t, tokens)
+	require.Equal(t, 3, len(tokens))
+}
+
+func TestGetTextTokensInvalidLang(t *testing.T) {
+	tokens, err := GetTextTokens([]string{"Quick brown fox"}, "no_such_language")
+	require.Error(t, err)
+	require.Nil(t, tokens)
+}
