@@ -54,7 +54,7 @@ func dispatchTaskOverNetwork(
 	ctx context.Context, addr string, f func(context.Context, protos.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := pools().get(addr)
 	if err != nil {
-		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
+		return &emptyResult, x.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
 	}
 	defer pools().release(pl)
 
@@ -79,9 +79,6 @@ func processWithBackupRequest(
 	}
 	if len(addrs) == 1 {
 		reply, err := dispatchTaskOverNetwork(ctx, addrs[0], f)
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while TODO: %v", err)
-		}
 		return reply, err
 	}
 	type taskresult struct {
@@ -150,9 +147,16 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return c.ServeTask(ctx, q)
 	})
 	if err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while worker.ServeTask: %v", err)
+		}
 		return nil, err
 	}
-	return result.(*protos.Result), nil
+	reply := result.(*protos.Result)
+	if tr, ok := trace.FromContext(ctx); ok {
+		tr.LazyPrintf("Reply from server. length: %v Group: %v Attr: %v", len(reply.UidMatrix), gid, attr)
+	}
+	return reply, nil
 }
 
 // convertValue converts the data to the schema.State() type of predicate.

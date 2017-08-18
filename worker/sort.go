@@ -87,6 +87,9 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 		return c.Sort(ctx, q)
 	})
 	if err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while calling worker.Sort: %v", err)
+		}
 		return nil, err
 	}
 	return result.(*protos.SortResult), nil
