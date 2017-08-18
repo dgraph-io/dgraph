@@ -112,30 +112,36 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		reply, err := dispatchTaskOverNetwork(ctx0, addrs[0], q)
 		chResults <- taskresult{reply, err}
 	}()
-	go func() {
-		if err := contextSleep(ctx0, taskRetryGracePeriod); err != nil {
-			// We got interrupted before we could even start.
-			return
-		}
-		reply, err := dispatchTaskOverNetwork(ctx0, addrs[1], q)
-		chResults <- taskresult{reply, err}
-	}()
-
+	timer := time.NewTimer(taskRetryGracePeriod)
+	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return &emptyResult, ctx.Err()
+	case <-timer.C:
+		go func() {
+			reply, err := dispatchTaskOverNetwork(ctx0, addrs[1], q)
+			chResults <- taskresult{reply, err}
+		}()
+		select {
+		case <-ctx.Done():
+			return &emptyResult, ctx.Err()
+		case result := <-chResults:
+			if result.err != nil {
+				select {
+				case <-ctx.Done():
+					return &emptyResult, ctx.Err()
+				case result := <-chResults:
+					return result.reply, result.err
+				}
+			} else {
+				return result.reply, nil
+			}
+		}
 	case result := <-chResults:
-		// Returns upon the first successful result.
+		// TODO: Are there certain kinds of errors that don't cause us to dispatch the backup read?
 		if result.err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while calling Worker.Sort: %+v", result.err)
-			}
-			select {
-			case <-ctx.Done():
-				return &emptyResult, ctx.Err()
-			case result := <-chResults:
-				return result.reply, result.err
-			}
+			reply, err := dispatchTaskOverNetwork(ctx0, addrs[1], q)
+			return reply, err
 		} else {
 			return result.reply, nil
 		}
