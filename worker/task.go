@@ -107,6 +107,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 
 	chResults := make(chan taskresult, len(addrs))
 	ctx0, cancel := context.WithCancel(ctx)
+	defer cancel()
 	go func() {
 		reply, err := dispatchTaskOverNetwork(ctx0, addrs[0], q)
 		chResults <- taskresult{reply, err}
@@ -124,14 +125,20 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 	case <-ctx.Done():
 		return &emptyResult, ctx.Err()
 	case result := <-chResults:
-		// Returns upon the first result.
-		cancel()
+		// Returns upon the first successful result.
 		if result.err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while calling Worker.Sort: %+v", result.err)
 			}
+			select {
+			case <-ctx.Done():
+				return &emptyResult, ctx.Err()
+			case result := <-chResults:
+				return result.reply, result.err
+			}
+		} else {
+			return result.reply, nil
 		}
-		return result.reply, result.err
 	}
 }
 

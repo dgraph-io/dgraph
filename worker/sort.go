@@ -107,6 +107,7 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 
 	chResults := make(chan sortresult, len(addrs))
 	ctx0, cancel := context.WithCancel(ctx)
+	defer cancel()
 	go func() {
 		reply, err := dispatchSortOverNetwork(ctx0, addrs[0], q)
 		chResults <- sortresult{reply, err}
@@ -124,14 +125,20 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 	case <-ctx.Done():
 		return &emptySortResult, ctx.Err()
 	case result := <-chResults:
-		// Returns upon the first result.
-		cancel()
+		// Returns upon the first successful result.
 		if result.err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while calling Worker.Sort: %+v", result.err)
 			}
+			select {
+			case <-ctx.Done():
+				return &emptySortResult, ctx.Err()
+			case result := <-chResults:
+				return result.reply, result.err
+			}
+		} else {
+			return result.reply, nil
 		}
-		return result.reply, result.err
 	}
 }
 
