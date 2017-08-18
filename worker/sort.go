@@ -43,34 +43,6 @@ type sortresult struct {
 	err   error
 }
 
-func dispatchSortOverNetwork(
-	ctx context.Context, addr string, q *protos.SortMessage) (*protos.SortResult, error) {
-	pl, err := pools().get(addr)
-	if err != nil {
-		return &emptySortResult, x.Wrapf(err, "SortOverNetwork: while retrieving connection.")
-	}
-	defer pools().release(pl)
-
-	conn := pl.Get()
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Sending request to %v", addr)
-	}
-	c := protos.NewWorkerClient(conn)
-
-	return c.Sort(ctx, q)
-}
-
-func contextSleep(ctx context.Context, d time.Duration) error {
-	timer := time.NewTimer(d)
-	select {
-	case <-ctx.Done():
-		timer.Stop()
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
-}
-
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
 	gid := group.BelongsTo(q.Attr)
