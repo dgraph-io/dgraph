@@ -31,12 +31,10 @@ func toMutations(f *geojson.Feature, c *client.Dgraph) {
 		log.Fatal("While adding mutation to batch: ", err)
 	}
 
-	fmt.Println("here")
 	g, err := wkb.Marshal(f.Geometry, binary.LittleEndian)
 	x.Check(err)
 	e = n.Edge("geometry")
 	x.Check(e.SetValueGeoBytes(g))
-	fmt.Println("set geo val")
 	if err = c.BatchSet(e); err != nil {
 		log.Fatal("While adding mutation to batch: ", err)
 	}
@@ -105,7 +103,7 @@ func findFeatureArray(dec *json.Decoder) error {
 func processGeoFile(ctx context.Context, file string, dgraphClient *client.Dgraph) error {
 	r, f := gzipReader(file)
 	defer f.Close()
-	dec := json.NewDecoder(&r)
+	dec := json.NewDecoder(r)
 	err := findFeatureArray(dec)
 	if err != nil {
 		return err

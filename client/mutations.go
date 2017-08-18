@@ -371,9 +371,9 @@ RETRY:
 
 	// Mark watermarks as done.
 	if req.line != 0 && req.mark != nil {
-		atomic.AddUint64(&d.rdfs, uint64(req.size()))
 		req.mark.Ch <- x.Mark{Index: req.line, Done: true}
 	}
+	atomic.AddUint64(&d.rdfs, uint64(req.size()))
 	return nil
 }
 

@@ -135,6 +135,8 @@ func gzipReader(file string) (io.Reader, *os.File) {
 func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) error {
 	fmt.Printf("\nProcessing %s\n", file)
 	gr, f := gzipReader(file)
+	var buf bytes.Buffer
+	bufReader := bufio.NewReader(gr)
 	defer f.Close()
 
 	absPath, err := filepath.Abs(file)
@@ -233,6 +235,13 @@ func setupConnection(host string) (*grpc.ClientConn, error) {
 		grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 }
 
+func fileList(files string) []string {
+	if len(files) == 0 {
+		return []string{}
+	}
+	return strings.Split(files, ",")
+}
+
 func main() {
 	flag.Parse()
 	x.Init()
@@ -287,9 +296,10 @@ func main() {
 		cancelTimeout()
 	}
 
-	filesList := strings.Split(*files, ",")
-	x.AssertTrue(len(filesList) > 0)
-	geoFilesList := strings.Split(*geoFiles, ",")
+	filesList := fileList(*files)
+	geoFilesList := fileList(*geoFiles)
+	totalFiles := len(filesList) + len(geoFilesList)
+	x.AssertTrue(totalFiles > 0)
 	if *storeXid {
 		if err := dgraphClient.AddSchema(protos.SchemaUpdate{
 			Predicate: "xid",
@@ -313,7 +323,6 @@ func main() {
 
 	x.Check(dgraphClient.NewSyncMarks(filesList))
 
-	totalFiles := len(filesList) + len(geoFilesList)
 	errCh := make(chan error, totalFiles)
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
@@ -321,8 +330,14 @@ func main() {
 			errCh <- processFile(ctx, file, dgraphClient)
 		}(file)
 	}
+	for _, file := range geoFilesList {
+		file = strings.Trim(file, " \t")
+		go func(file string) {
+			errCh <- processGeoFile(ctx, file, dgraphClient)
+		}(file)
+	}
 	interrupted := false
-	for _ = range filesList {
+	for i := 0; i < totalFiles; i++ {
 		if err := <-errCh; err != nil {
 			if err == context.Canceled {
 				interrupted = true
