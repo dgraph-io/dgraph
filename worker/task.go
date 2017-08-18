@@ -122,9 +122,9 @@ func processWithBackupRequest(
 			}
 		}
 	case result := <-chResults:
-		// TODO: Are there certain kinds of errors that don't cause us to dispatch the backup read?
 		if result.err != nil {
-			cancel()
+			cancel() // Might as well cleanup resources ASAP
+			timer.Stop()
 			return dispatchTaskOverNetwork(ctx, addrs[1], f)
 		}
 		return result.reply, nil
