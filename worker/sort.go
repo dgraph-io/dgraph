@@ -71,13 +71,8 @@ func contextSleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-const sortRetryGracePeriod = 10 * time.Millisecond
-
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
-	// NOTE: This function is _very_ similar to ProcessTaskOverNetwork and you might want to
-	// de-duplicate their backup-request logic before modifying further.
-
 	gid := group.BelongsTo(q.Attr)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("worker.Sort attr: %v groupId: %v", q.Attr, gid)
@@ -88,58 +83,13 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 		return processSort(ctx, q)
 	}
 
-	// Send this over the network.  We send a backup request if the first hasn't responded in 2ms.
-	// TODO: Cross-server cancellation as described in Jeff Dean's talk.
-	addrs := groups().AnyTwoServers(gid)
-	if len(addrs) == 0 {
-		return &emptySortResult, fmt.Errorf("SortOverNetwork: while retrieving connection")
+	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c protos.WorkerClient) (interface{}, error) {
+		return c.Sort(ctx, q)
+	})
+	if err != nil {
+		return nil, err
 	}
-	if len(addrs) == 1 {
-		reply, err := dispatchSortOverNetwork(ctx, addrs[0], q)
-		// Returns upon the first result.
-		if err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while calling Worker.Sort: %+v", err)
-			}
-		}
-		return reply, err
-	}
-
-	chResults := make(chan sortresult, len(addrs))
-	ctx0, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go func() {
-		reply, err := dispatchSortOverNetwork(ctx0, addrs[0], q)
-		chResults <- sortresult{reply, err}
-	}()
-	go func() {
-		if err := contextSleep(ctx0, sortRetryGracePeriod); err != nil {
-			// We got interrupted before we could even start.
-			return
-		}
-		reply, err := dispatchSortOverNetwork(ctx0, addrs[1], q)
-		chResults <- sortresult{reply, err}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return &emptySortResult, ctx.Err()
-	case result := <-chResults:
-		// Returns upon the first successful result.
-		if result.err != nil {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("Error while calling Worker.Sort: %+v", result.err)
-			}
-			select {
-			case <-ctx.Done():
-				return &emptySortResult, ctx.Err()
-			case result := <-chResults:
-				return result.reply, result.err
-			}
-		} else {
-			return result.reply, nil
-		}
-	}
+	return result.(*protos.SortResult), nil
 }
 
 // Sort is used to sort given UID matrix.

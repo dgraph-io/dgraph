@@ -18,7 +18,7 @@
 package worker
 
 import (
-	"fmt"
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
@@ -51,7 +51,7 @@ var (
 )
 
 func dispatchTaskOverNetwork(
-	ctx context.Context, addr string, q *protos.Query) (*protos.Result, error) {
+	ctx context.Context, addr string, f func(context.Context, protos.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := pools().get(addr)
 	if err != nil {
 		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
@@ -63,18 +63,78 @@ func dispatchTaskOverNetwork(
 		tr.LazyPrintf("Sending request to %v", addr)
 	}
 	c := protos.NewWorkerClient(conn)
-	return c.ServeTask(ctx, q)
+	return f(ctx, c)
 }
 
-const taskRetryGracePeriod = 10 * time.Millisecond
+const backupRequestGracePeriod = 10 * time.Millisecond
+
+// TODO: Cross-server cancellation as described in Jeff Dean's talk.
+func processWithBackupRequest(
+	ctx context.Context,
+	gid uint32,
+	f func(context.Context, protos.WorkerClient) (interface{}, error)) (interface{}, error) {
+	addrs := groups().AnyTwoServers(gid)
+	if len(addrs) == 0 {
+		return nil, errors.New("no network connection")
+	}
+	if len(addrs) == 1 {
+		reply, err := dispatchTaskOverNetwork(ctx, addrs[0], f)
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("Error while TODO: %v", err)
+		}
+		return reply, err
+	}
+	type taskresult struct {
+		reply interface{}
+		err   error
+	}
+
+	chResults := make(chan taskresult, len(addrs))
+	ctx0, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		reply, err := dispatchTaskOverNetwork(ctx0, addrs[0], f)
+		chResults <- taskresult{reply, err}
+	}()
+	timer := time.NewTimer(backupRequestGracePeriod)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-timer.C:
+		go func() {
+			reply, err := dispatchTaskOverNetwork(ctx0, addrs[1], f)
+			chResults <- taskresult{reply, err}
+		}()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case result := <-chResults:
+			if result.err != nil {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case result := <-chResults:
+					return result.reply, result.err
+				}
+			} else {
+				return result.reply, nil
+			}
+		}
+	case result := <-chResults:
+		// TODO: Are there certain kinds of errors that don't cause us to dispatch the backup read?
+		if result.err != nil {
+			cancel()
+			return dispatchTaskOverNetwork(ctx, addrs[1], f)
+		}
+		return result.reply, nil
+	}
+}
 
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Result, error) {
-	// NOTE: This function is _very_ similar to SortOverNetwork and you might want to de-duplicate
-	// their backup-request logic before modifying further.
-
 	attr := q.Attr
 	gid := group.BelongsTo(attr)
 	if tr, ok := trace.FromContext(ctx); ok {
@@ -86,66 +146,13 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		return processTask(ctx, q, gid)
 	}
 
-	// Send this over the network.  We send a backup request if the first hasn't responded in 2ms.
-	// TODO: Cross-server cancellation as described in Jeff Dean's talk.
-	addrs := groups().AnyTwoServers(gid)
-	if len(addrs) == 0 {
-		return &emptyResult, fmt.Errorf("ProcessTaskOverNetwork: while retrieving connection.")
+	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c protos.WorkerClient) (interface{}, error) {
+		return c.ServeTask(ctx, q)
+	})
+	if err != nil {
+		return nil, err
 	}
-	if len(addrs) == 1 {
-		reply, err := dispatchTaskOverNetwork(ctx, addrs[0], q)
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while calling Worker.ServeTask: %v", err)
-		}
-		return reply, err
-	}
-
-	type taskresult struct {
-		reply *protos.Result
-		err   error
-	}
-
-	chResults := make(chan taskresult, len(addrs))
-	ctx0, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go func() {
-		reply, err := dispatchTaskOverNetwork(ctx0, addrs[0], q)
-		chResults <- taskresult{reply, err}
-	}()
-	timer := time.NewTimer(taskRetryGracePeriod)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return &emptyResult, ctx.Err()
-	case <-timer.C:
-		go func() {
-			reply, err := dispatchTaskOverNetwork(ctx0, addrs[1], q)
-			chResults <- taskresult{reply, err}
-		}()
-		select {
-		case <-ctx.Done():
-			return &emptyResult, ctx.Err()
-		case result := <-chResults:
-			if result.err != nil {
-				select {
-				case <-ctx.Done():
-					return &emptyResult, ctx.Err()
-				case result := <-chResults:
-					return result.reply, result.err
-				}
-			} else {
-				return result.reply, nil
-			}
-		}
-	case result := <-chResults:
-		// TODO: Are there certain kinds of errors that don't cause us to dispatch the backup read?
-		if result.err != nil {
-			reply, err := dispatchTaskOverNetwork(ctx0, addrs[1], q)
-			return reply, err
-		} else {
-			return result.reply, nil
-		}
-	}
+	return result.(*protos.Result), nil
 }
 
 // convertValue converts the data to the schema.State() type of predicate.
