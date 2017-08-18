@@ -50,7 +50,7 @@ var (
 	regexTok     tok.ExactTokenizer
 )
 
-func dispatchTaskOverNetwork(
+func invokeNetworkRequest(
 	ctx context.Context, addr string, f func(context.Context, protos.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := pools().get(addr)
 	if err != nil {
@@ -78,7 +78,7 @@ func processWithBackupRequest(
 		return nil, errors.New("no network connection")
 	}
 	if len(addrs) == 1 {
-		reply, err := dispatchTaskOverNetwork(ctx, addrs[0], f)
+		reply, err := invokeNetworkRequest(ctx, addrs[0], f)
 		return reply, err
 	}
 	type taskresult struct {
@@ -90,7 +90,7 @@ func processWithBackupRequest(
 	ctx0, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go func() {
-		reply, err := dispatchTaskOverNetwork(ctx0, addrs[0], f)
+		reply, err := invokeNetworkRequest(ctx0, addrs[0], f)
 		chResults <- taskresult{reply, err}
 	}()
 	timer := time.NewTimer(backupRequestGracePeriod)
@@ -100,7 +100,7 @@ func processWithBackupRequest(
 		return nil, ctx.Err()
 	case <-timer.C:
 		go func() {
-			reply, err := dispatchTaskOverNetwork(ctx0, addrs[1], f)
+			reply, err := invokeNetworkRequest(ctx0, addrs[1], f)
 			chResults <- taskresult{reply, err}
 		}()
 		select {
@@ -122,7 +122,7 @@ func processWithBackupRequest(
 		if result.err != nil {
 			cancel() // Might as well cleanup resources ASAP
 			timer.Stop()
-			return dispatchTaskOverNetwork(ctx, addrs[1], f)
+			return invokeNetworkRequest(ctx, addrs[1], f)
 		}
 		return result.reply, nil
 	}
