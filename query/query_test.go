@@ -6600,6 +6600,22 @@ func TestLangBug1295(t *testing.T) {
 
 }
 
+func TestLangDotInFunction(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(func:anyofterms(name@., "europejski honey")) {
+				name@pl
+				name@en
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"data": {"me":[{"name@pl":"Borsuk europejski","name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"}]}}`,
+		js)
+}
+
 func checkSchemaNodes(t *testing.T, expected []*protos.SchemaNode, actual []*protos.SchemaNode) {
 	sort.Slice(expected, func(i, j int) bool {
 		return expected[i].Predicate >= expected[j].Predicate
