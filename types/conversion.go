@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -426,6 +427,7 @@ func Marshal(from Val, to *Val) error {
 			if err != nil {
 				return err
 			}
+			fmt.Println("r", r)
 			*res = r
 		case StringID, DefaultID:
 			val, err := geojson.Marshal(vc)

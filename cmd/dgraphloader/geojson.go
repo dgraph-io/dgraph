@@ -1,42 +1,21 @@
 package main
 
 import (
+	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"strconv"
-	"strings"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/twpayne/go-geom/encoding/wkb"
 )
 
-func batchEdges(ech chan client.Edge, dgraphClient *client.Dgraph, che chan error) {
-	var batchSize int
-	var err error
-	for e := range ech {
-		// TODO - Handle context.
-		//		select {
-		//		case <-ctx.Done():
-		//			return ctx.Err()
-		//		default:
-		//		}
-		if batchSize >= *numRdf {
-			if err = dgraphClient.BatchSet(e); err != nil {
-				log.Fatal("While adding mutation to batch: ", err)
-			}
-			batchSize = 0
-		}
-	}
-	if err != io.EOF {
-		x.Checkf(err, "Error while reading file")
-	}
-	che <- nil
-}
-
-func toMutations(f *geojson.Feature, ech chan client.Edge, c *client.Dgraph) {
+func toMutations(f *geojson.Feature, c *client.Dgraph) {
 	id, ok := getID(f)
 	if !ok {
 		//	log.Println("Skipping feature, cannot find id.")
@@ -48,53 +27,19 @@ func toMutations(f *geojson.Feature, ech chan client.Edge, c *client.Dgraph) {
 	e := n.Edge("xid")
 	err = e.SetValueString(id)
 	x.Check(err)
-	ech <- e
+	if err = c.BatchSet(e); err != nil {
+		log.Fatal("While adding mutation to batch: ", err)
+	}
 
 	fmt.Println("here")
-	for k, v := range f.Properties {
-		k := strings.Replace(k, " ", "_", -1)
-		e = n.Edge(k)
-
-		switch v.(type) {
-		case int, int32, int64:
-			x.Check(e.SetValueInt(v.(int64)))
-		case float32, float64:
-			x.Check(e.SetValueFloat(v.(float64)))
-		case string:
-			x.Check(e.SetValueString(v.(string)))
-		case bool:
-			x.Check(e.SetValueBool(v.(bool)))
-		default:
-			continue
-		}
-		ech <- e
-	}
-
-	gf := geojson.Feature{
-		ID:         f.ID,
-		Geometry:   f.Geometry,
-		Properties: make(map[string]interface{}),
-	}
-	b, err := gf.MarshalJSON()
+	g, err := wkb.Marshal(f.Geometry, binary.LittleEndian)
 	x.Check(err)
-	gj := string(b)
-	// parse the geometry object to WKB
-	//	b, err := wkb.Marshal(f.Geometry, binary.LittleEndian)
-	//	if err != nil {
-	//		log.Printf("Error converting geometry to wkb: %s", err)
-	//		return
-	//	}
-	//
-	//	fmt.Println("b", b, "geometry", f.Geometry)
 	e = n.Edge("geometry")
-	x.Check(e.SetValueGeoJson(gj))
+	x.Check(e.SetValueGeoBytes(g))
 	fmt.Println("set geo val")
-	ech <- e
-	//	if req.SetMutation(id, "geometry", "", client.Geo(b), ""); err != nil {
-	//		log.Fatalf("Error creating to geometry mutation: %v\n", err)
-	//	}
-	//	out <- req
-	//	atomic.AddUint64(&ctr.parsed, 1)
+	if err = c.BatchSet(e); err != nil {
+		log.Fatal("While adding mutation to batch: ", err)
+	}
 }
 
 func getID(f *geojson.Feature) (string, bool) {
@@ -157,30 +102,23 @@ func findFeatureArray(dec *json.Decoder) error {
 	return nil
 }
 
-func uploadGeo(r io.Reader, dgraphClient *client.Dgraph) error {
-	ech := make(chan client.Edge, 1000)
-	che := make(chan error, 1)
-	go batchEdges(ech, dgraphClient, che)
-	dec := json.NewDecoder(r)
+func processGeoFile(ctx context.Context, file string, dgraphClient *client.Dgraph) error {
+	r, f := gzipReader(file)
+	defer f.Close()
+	dec := json.NewDecoder(&r)
 	err := findFeatureArray(dec)
 	if err != nil {
 		return err
 	}
 
-	count := 0
 	// Read the features one at a time.
 	for dec.More() {
-		if count >= 10 {
-			break
-		}
-		count++
 		var f geojson.Feature
 		err := dec.Decode(&f)
 		if err != nil {
 			return err
 		}
-		toMutations(&f, ech, dgraphClient)
-		//	atomic.AddUint64(&ctr.read, 1)
+		toMutations(&f, dgraphClient)
 	}
-	return <-che
+	return nil
 }

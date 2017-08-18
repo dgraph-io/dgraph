@@ -48,6 +48,7 @@ var (
 	mode       = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
 	clientDir  = flag.String("cd", "c", "Directory to store xid to uid mapping")
 	blockRate  = flag.Int("block", 0, "Block profiling rate")
+	geoFiles   = flag.String("geo", "", "Location of geo files to load")
 	geoId      = flag.String("geoid", "", "The name of property to use as the xid")
 	// TLS configuration
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
@@ -122,21 +123,19 @@ func Node(val string, c *client.Dgraph) (string, error) {
 	return n.String(), nil
 }
 
+func gzipReader(file string) (io.Reader, *os.File) {
+	f, err := os.Open(file)
+	x.Check(err)
+	gr, err := gzip.NewReader(f)
+	x.Check(err)
+	return gr, f
+}
+
 // processFile sends mutations for a given gz file.
 func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) error {
 	fmt.Printf("\nProcessing %s\n", file)
-	f, err := os.Open(file)
-	x.Check(err)
+	gr, f := gzipReader(file)
 	defer f.Close()
-	gr, err := gzip.NewReader(f)
-	x.Check(err)
-
-	if *geoId != "" {
-		return uploadGeo(gr, dgraphClient)
-	}
-
-	var buf bytes.Buffer
-	bufReader := bufio.NewReader(gr)
 
 	absPath, err := filepath.Abs(file)
 	x.Check(err)
@@ -290,6 +289,7 @@ func main() {
 
 	filesList := strings.Split(*files, ",")
 	x.AssertTrue(len(filesList) > 0)
+	geoFilesList := strings.Split(*geoFiles, ",")
 	if *storeXid {
 		if err := dgraphClient.AddSchema(protos.SchemaUpdate{
 			Predicate: "xid",
@@ -312,7 +312,9 @@ func main() {
 	}
 
 	x.Check(dgraphClient.NewSyncMarks(filesList))
-	errCh := make(chan error)
+
+	totalFiles := len(filesList) + len(geoFilesList)
+	errCh := make(chan error, totalFiles)
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
 		go func(file string) {

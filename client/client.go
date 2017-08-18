@@ -420,6 +420,18 @@ func (e *Edge) SetValueGeoJson(json string) error {
 
 	e.nq.ObjectValue = geo
 	e.nq.ObjectType = int32(types.GeoID)
+
+	return nil
+}
+
+func (e *Edge) SetValueGeoBytes(b []byte) error {
+	if len(e.nq.ObjectId) > 0 {
+		return ErrConnected
+	}
+
+	geo := &protos.Value{&protos.Value_GeoVal{b}}
+	e.nq.ObjectValue = geo
+	e.nq.ObjectType = int32(types.GeoID)
 	return nil
 }
 
