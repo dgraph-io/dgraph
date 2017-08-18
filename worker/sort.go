@@ -71,6 +71,8 @@ func contextSleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
+const sortRetryGracePeriod = 10 * time.Millisecond
+
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
 	// NOTE: This function is _very_ similar to ProcessTaskOverNetwork and you might want to
@@ -110,7 +112,7 @@ func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortRe
 		chResults <- sortresult{reply, err}
 	}()
 	go func() {
-		if err := contextSleep(ctx0, 2*time.Millisecond); err != nil {
+		if err := contextSleep(ctx0, sortRetryGracePeriod); err != nil {
 			// We got interrupted before we could even start.
 			return
 		}

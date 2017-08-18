@@ -66,6 +66,8 @@ func dispatchTaskOverNetwork(
 	return c.ServeTask(ctx, q)
 }
 
+const taskRetryGracePeriod = 10 * time.Millisecond
+
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
@@ -110,7 +112,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 		chResults <- taskresult{reply, err}
 	}()
 	go func() {
-		if err := contextSleep(ctx0, 2*time.Millisecond); err != nil {
+		if err := contextSleep(ctx0, taskRetryGracePeriod); err != nil {
 			// We got interrupted before we could even start.
 			return
 		}
