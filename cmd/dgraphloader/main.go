@@ -48,6 +48,7 @@ var (
 	mode       = flag.String("profile.mode", "", "enable profiling mode, one of [cpu, mem, mutex, block]")
 	clientDir  = flag.String("cd", "c", "Directory to store xid to uid mapping")
 	blockRate  = flag.Int("block", 0, "Block profiling rate")
+	geoId      = flag.String("geoid", "", "The name of property to use as the xid")
 	// TLS configuration
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
 	tlsInsecure      = flag.Bool("tls.insecure", false, "Skip certificate validation (insecure)")
@@ -129,6 +130,10 @@ func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) 
 	defer f.Close()
 	gr, err := gzip.NewReader(f)
 	x.Check(err)
+
+	if *geoId != "" {
+		return uploadGeo(gr, dgraphClient)
+	}
 
 	var buf bytes.Buffer
 	bufReader := bufio.NewReader(gr)
@@ -232,6 +237,7 @@ func setupConnection(host string) (*grpc.ClientConn, error) {
 func main() {
 	flag.Parse()
 	x.Init()
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	runtime.SetBlockProfileRate(*blockRate)
 
 	interruptChan := make(chan os.Signal)
