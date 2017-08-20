@@ -4140,3 +4140,20 @@ func TestAggRootError3(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Only aggregation/math functions allowed inside empty blocks. Got: avg")
 }
+
+func TestEmptyFunction(t *testing.T) {
+	query := `
+{
+  director(func:allofterms()) {
+    name@en
+    director.film (orderdesc: initial_release_date) {
+      name@en
+      initial_release_date
+    }
+  }
+}`
+
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Got empty attr for function: [allofterms]")
+}
