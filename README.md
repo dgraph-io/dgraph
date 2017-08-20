@@ -22,9 +22,10 @@ presentation videos on [YouTube channel](https://www.youtube.com/channel/UCghE41
 
 ## Current Status
 
-Dgraph is currently at version 0.8.x.  We have largely frozen the feature set at
-this point, and focusing solely on stability, performance and robustness.  We
-recommend using it in your projects. If you plan to use Dgraph
+Dgraph is [currently at version
+0.8.x](https://github.com/dgraph-io/dgraph/releases).  We have largely frozen
+the feature set at this point, and focusing solely on stability, performance and
+robustness.  We recommend using it in your projects. If you plan to use Dgraph
 for user-facing production environment, [come talk to
 us](mailto:manish@dgraph.io).
 
