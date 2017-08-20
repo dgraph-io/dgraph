@@ -1583,6 +1583,11 @@ L:
 			}
 		}
 	}
+
+	if g.Name != uid && len(g.Attr) == 0 {
+		return nil, x.Errorf("Got empty attr for function: [%s]", g.Name)
+	}
+
 	return g, nil
 }
 
