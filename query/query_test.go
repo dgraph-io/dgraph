@@ -2713,7 +2713,6 @@ func TestQueryPassword(t *testing.T) {
 
 func TestCheckPassword(t *testing.T) {
 	populateGraph(t)
-	addPassword(t, 23, "pass", "654321")
 	addPassword(t, 1, "password", "123456")
 	query := `
                 {

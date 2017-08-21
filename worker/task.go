@@ -117,7 +117,7 @@ func convertToType(v types.Val, typ types.TypeID) (*protos.TaskValue, error) {
 		return result, nil
 	}
 
-	// conver data from binary to appropriate format
+	// convert data from binary to appropriate format
 	val, err := types.Convert(v, typ)
 	if err != nil {
 		return result, err
@@ -338,46 +338,51 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
 				return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
 			}
-			vals = append(vals, val)
-		}
-
-		typ, err := schema.State().TypeOf(attr)
-		if err != nil {
-			return nil, err
-		}
-		newValue = &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
-		for _, val := range vals {
-			// If a posting list contains a value, we store that or else we store a nil
-			// byte so that processing is consistent later.
-			if typ, err = schema.State().TypeOf(attr); err == nil {
-				newValue, err = convertToType(val, typ)
-			} else if err != nil {
-				// Ideally Schema should be present for already inserted mutation
-				// x.Checkf(err, "Schema not defined for attribute %s", attr)
-				// Converting to stored type for backward compatiblity of old inserted data
-				newValue, err = convertToType(val, val.Tid)
+			if err == nil {
+				vals = append(vals, val)
 			}
 		}
 
 		// get filtered uids and facets.
 		var filteredRes []*result
-		// This means we fetched the value directly instead of fetching index key and intersecting.
-		if srcFn.fnType == CompareAttrFn && isValueEdge {
-			// Lets convert the val to its type.
-			if val, err = types.Convert(val, typ); err != nil {
-				return nil, err
-			}
-			if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
-				filteredRes = append(filteredRes, &result{
-					uid: q.UidList.Uids[i],
-				})
+		vl := &protos.ValuesList{}
+		var tid types.TypeID
+		if len(vals) > 0 {
+			tid = vals[0].Tid
+		}
+		newValue := &protos.TaskValue{ValType: int32(tid), Val: x.Nilbyte}
+		if isValueEdge {
+			// The predicate could have not been inserted, in that case error would be non-nil.
+			var typ types.TypeID
+			for _, val := range vals {
+				if typ, err = schema.State().TypeOf(attr); err == nil {
+					newValue, err = convertToType(val, typ)
+				} else if err != nil {
+					newValue, err = convertToType(val, tid)
+				}
+
+				if srcFn.fnType == CompareAttrFn {
+					// Lets convert the val to its type.
+					if val, err = types.Convert(val, typ); err != nil {
+						return nil, err
+					} // This means we fetched the value directly instead of fetching index key and
+					// intersecting.
+					if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
+						filteredRes = append(filteredRes, &result{
+							uid: q.UidList.Uids[i],
+						})
+						break
+					}
+				} else {
+					vl.Values = append(vl.Values, newValue)
+				}
 			}
 		} else {
-			vl := &protos.ValuesList{
-				Values: []*protos.TaskValue{newValue},
-			}
-			out.ValueMatrix = append(out.ValueMatrix, vl)
+			// If a posting list contains a value, we store that or else we store a nil
+			// byte so that processing is consistent later.
+			vl.Values = append(vl.Values, newValue)
 		}
+		out.ValueMatrix = append(out.ValueMatrix, vl)
 
 		if !isValueEdge { // for uid edge.. get postings
 			var perr error
@@ -433,6 +438,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 		if srcFn.fnType == PasswordFn {
 			lastPos := len(out.ValueMatrix) - 1
+			newValue := out.ValueMatrix[lastPos].Values[0]
 			if len(newValue.Val) == 0 {
 				// TODO - Check that this is safe.
 				out.ValueMatrix[lastPos].Values[0] = task.FalseVal
