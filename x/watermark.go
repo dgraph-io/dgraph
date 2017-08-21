@@ -219,12 +219,6 @@ func (w *WaterMark) process() {
 	}
 
 	for mark := range w.markCh {
-		// TODO: Why don't we run this during testing?
-		if IsTestRun() {
-			// Don't run this during testing.
-			continue
-		}
-
 		if mark.Wait != nil {
 			doneUntil := atomic.LoadUint64(&w.doneUntil)
 			if doneUntil >= mark.Index {
