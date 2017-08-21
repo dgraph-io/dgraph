@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
@@ -55,6 +56,14 @@ func taskValues(t *testing.T, v []*protos.TaskValue) []string {
 }
 
 func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
+	// Mutations don't go through normal flow, so default schema for predicate won't be present.
+	// Lets add it.
+	if _, ok := schema.State().Get(attr); !ok {
+		schema.State().Set(attr, protos.SchemaUpdate{
+			Predicate: attr,
+			ValueType: edge.ValueType,
+		})
+	}
 	l := posting.GetOrCreate(x.DataKey(attr, src), 1)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))

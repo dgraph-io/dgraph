@@ -261,6 +261,9 @@ type funcArgs struct {
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	out := new(protos.Result)
 	attr := q.Attr
+	if _, err := schema.State().TypeOf(attr); err != nil {
+		return out, nil
+	}
 
 	if attr == "_predicate_" {
 		return getAllPredicates(ctx, q, gid)
