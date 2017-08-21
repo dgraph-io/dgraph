@@ -327,7 +327,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		isValueEdge := false
 		var vals []types.Val
 		if schema.State().IsList(attr) {
-			vals, err := pl.AllValues()
+			vals, err = pl.AllValues()
 			if err != nil {
 				return out, err
 			}

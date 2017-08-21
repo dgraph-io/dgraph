@@ -1319,7 +1319,6 @@ func TestSchemaMutation5Error(t *testing.T) {
 
 // A basic sanity check. We will do more extensive testing for multiple values in query.
 func TestMultipleValues(t *testing.T) {
-	t.SkipNow()
 	schema.ParseBytes([]byte(""), 1)
 	m := `
 	mutation {
@@ -1350,7 +1349,7 @@ func TestMultipleValues(t *testing.T) {
 		}`
 	res, err := runQuery(q)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"me":[{"occupations":["Pianist", "Software Engineer"]}]}}`, res)
+	require.Equal(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
 }
 
 func TestMain(m *testing.M) {

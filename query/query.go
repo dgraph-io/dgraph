@@ -511,8 +511,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 			if pc.Attr == "_uid_" {
 				dst.SetUID(uid, pc.fieldName())
-			} else {
-				tv := pc.valueMatrix[idx].Values[0]
+				continue
+			}
+
+			for _, tv := range pc.valueMatrix[idx].Values {
 				// if conversion not possible, we ignore it in the result.
 				sv, convErr := convertWithBestEffort(tv, pc.Attr)
 				if convErr == ErrEmptyVal {
