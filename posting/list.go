@@ -481,7 +481,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 
 	if hasMutated {
 		if index != 0 {
-			l.water.Ch <- x.Mark{Index: index}
+			l.water.Begin(index)
 			l.pending = append(l.pending, index)
 		}
 		// if mutation doesn't come via raft
@@ -503,7 +503,7 @@ func (l *List) delete(ctx context.Context, attr string) error {
 
 	var gid uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
-		l.water.Ch <- x.Mark{Index: rv.Index}
+		l.water.Begin(rv.Index)
 		l.pending = append(l.pending, rv.Index)
 		gid = rv.Group
 	}
@@ -640,7 +640,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	// deleteAll is used to differentiate when we don't have any updates, v/s
 	// when we have explicitly deleted everything.
 	if len(l.mlayer) == 0 && atomic.LoadInt32(&l.deleteAll) == 0 {
-		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
+		l.water.DoneMany(l.pending)
 		l.pending = make([]uint64, 0, 3)
 		return false, nil
 	}
@@ -721,7 +721,7 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		x.BytesWrite.Add(int64(len(data)))
 		x.PostingWrites.Add(1)
 		if l.water != nil {
-			l.water.Ch <- x.Mark{Indices: pending, Done: true}
+			l.water.DoneMany(pending)
 		}
 		if delFromCache {
 			x.AssertTrue(atomic.LoadInt32(&l.deleteMe) == 1)

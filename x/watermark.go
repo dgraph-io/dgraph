@@ -53,6 +53,7 @@ type Mark struct {
 	Done    bool // Set to true if the pending mutation is done.
 }
 
+// TODO: Adjust this comment.
 // WaterMark is used to keep track of the maximum done index. The right way to use
 // this is to send a Mark with Done set to false, as soon as an index is known.
 // WaterMark will store the index in a min-heap. It would only advance, if the minimum
@@ -63,15 +64,29 @@ type Mark struct {
 // now advance and update the maximum done water mark.
 type WaterMark struct {
 	Name       string
-	Ch         chan Mark
+	markCh     chan Mark
 	doneUntil  uint64
 	elog       trace.EventLog
 	waitingFor uint32 // Are we waiting for some index?
 }
 
+func (w *WaterMark) Begin(index uint64) {
+	w.markCh <- Mark{Index: index, Done: false}
+}
+func (w *WaterMark) BeginMany(indices []uint64) {
+	w.markCh <- Mark{Index: 0, Indices: indices, Done: false}
+}
+
+func (w *WaterMark) Done(index uint64) {
+	w.markCh <- Mark{Index: index, Done: true}
+}
+func (w *WaterMark) DoneMany(indices []uint64) {
+	w.markCh <- Mark{Index: 0, Indices: indices, Done: true}
+}
+
 // Init initializes a WaterMark struct. MUST be called before using it.
 func (w *WaterMark) Init() {
-	w.Ch = make(chan Mark, 10000)
+	w.markCh = make(chan Mark, 10000)
 	w.elog = trace.NewEventLog("Watermark", w.Name)
 	go w.process()
 }
@@ -153,7 +168,7 @@ func (w *WaterMark) process() {
 		}
 	}
 
-	for mark := range w.Ch {
+	for mark := range w.markCh {
 		if IsTestRun() {
 			// Don't run this during testing.
 			continue

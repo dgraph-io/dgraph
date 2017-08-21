@@ -103,7 +103,7 @@ func (s *stateGroup) update(se SyncEntry) {
 	defer s.Unlock()
 
 	s.predicate[se.Attr] = &se.Schema
-	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
+	se.Water.Begin(se.Index)
 	syncCh <- se
 	s.elog.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v, count: %v\n",
 		se.Attr, types.TypeID(se.Schema.ValueType).Name(), se.Schema.Tokenizer, se.Schema.Directive,
@@ -353,7 +353,7 @@ func batchSync() {
 		entriesMap := make(map[*x.WaterMark][]uint64)
 		addToEntriesMap(entriesMap, entries)
 		for wm, indices := range entriesMap {
-			wm.Ch <- x.Mark{Indices: indices, Done: true}
+			wm.DoneMany(indices)
 		}
 		entries = entries[:0]
 	}
