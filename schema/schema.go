@@ -312,10 +312,10 @@ type SyncEntry struct {
 	Index  uint64
 }
 
-func addToEntriesMap(entriesMap map[chan x.Mark][]uint64, entries []SyncEntry) {
+func addToEntriesMap(entriesMap map[*x.WaterMark][]uint64, entries []SyncEntry) {
 	for _, entry := range entries {
 		if entry.Water != nil {
-			entriesMap[entry.Water.Ch] = append(entriesMap[entry.Water.Ch], entry.Index)
+			entriesMap[entry.Water] = append(entriesMap[entry.Water], entry.Index)
 		}
 	}
 }
@@ -350,10 +350,10 @@ func batchSync() {
 		pstore.BatchSet(wb)
 		wb = wb[:0]
 
-		entriesMap := make(map[chan x.Mark][]uint64)
+		entriesMap := make(map[*x.WaterMark][]uint64)
 		addToEntriesMap(entriesMap, entries)
-		for ch, indices := range entriesMap {
-			ch <- x.Mark{Indices: indices, Done: true}
+		for wm, indices := range entriesMap {
+			wm.Ch <- x.Mark{Indices: indices, Done: true}
 		}
 		entries = entries[:0]
 	}
