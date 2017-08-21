@@ -19,7 +19,6 @@ package x
 import (
 	"container/heap"
 	"sync/atomic"
-	"time"
 
 	"golang.org/x/net/trace"
 )
@@ -46,10 +45,18 @@ type RaftValue struct {
 	Index uint64
 }
 
+// TODO: make private
 // Mark contains raft proposal id and a done boolean. It is used to
 // update the WaterMark struct about the status of a proposal.
 type Mark struct {
-	Index   uint64
+	Index uint64
+	// Either this is an (Index, Wait) pair or (Index, Done) or (Indices, Done). Wait has to be
+	// passed in the same channel because of strange logic where we notify waiters if WaitingFor()
+	// becomes false
+
+	// TODO: I think we have a bug where if we wait for syncs, but if the watermark was slow
+	// getting sent over the markCh, we'll successfully return that a sync happened right away.
+	Wait    chan struct{}
 	Indices []uint64
 	Done    bool // Set to true if the pending mutation is done.
 }
@@ -71,6 +78,13 @@ type WaterMark struct {
 	waitingFor uint32 // Are we waiting for some index?
 }
 
+// Init initializes a WaterMark struct. MUST be called before using it.
+func (w *WaterMark) Init() {
+	w.markCh = make(chan Mark, 10000)
+	w.elog = trace.NewEventLog("Watermark", w.Name)
+	go w.process()
+}
+
 func (w *WaterMark) Begin(index uint64) {
 	w.markCh <- Mark{Index: index, Done: false}
 }
@@ -83,13 +97,6 @@ func (w *WaterMark) Done(index uint64) {
 }
 func (w *WaterMark) DoneMany(indices []uint64) {
 	w.markCh <- Mark{Index: 0, Indices: indices, Done: true}
-}
-
-// Init initializes a WaterMark struct. MUST be called before using it.
-func (w *WaterMark) Init() {
-	w.markCh = make(chan Mark, 10000)
-	w.elog = trace.NewEventLog("Watermark", w.Name)
-	go w.process()
 }
 
 // DoneUntil returns the maximum index until which all tasks are done.
@@ -107,15 +114,18 @@ func (w *WaterMark) WaitingFor() bool {
 }
 
 func (w *WaterMark) WaitForMark(index uint64) {
-	// TODO: Don't use time.Sleep.
-	// TODO: Why would we use w.WaitingFor at all?
-	for w.WaitingFor() {
-		doneUntil := w.DoneUntil()
-		if doneUntil >= index {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
+	// TODO: Why would we use w.WaitingFor at all?  Very questionable.
+	if !w.WaitingFor() {
+		return
 	}
+
+	doneUntil := w.DoneUntil()
+	if doneUntil >= index {
+		return
+	}
+	waitCh := make(chan struct{})
+	w.markCh <- Mark{Index: index, Wait: waitCh}
+	<-waitCh
 	return
 }
 
@@ -123,11 +133,13 @@ func (w *WaterMark) WaitForMark(index uint64) {
 // so only run one goroutine for process. One is sufficient, because
 // all goroutine ops use purely memory and cpu.
 func (w *WaterMark) process() {
-	var indices uint64Heap
+	var indices, waiterIndices uint64Heap
 	// pending maps raft proposal index to the number of pending mutations for this proposal.
 	pending := make(map[uint64]int)
+	waiters := make(map[uint64][]chan struct{})
 
 	heap.Init(&indices)
+	heap.Init(&waiterIndices)
 	var loop uint64
 
 	processOne := func(index uint64, done bool) {
@@ -174,24 +186,65 @@ func (w *WaterMark) process() {
 		}
 		if !doWait {
 			atomic.StoreUint32(&w.waitingFor, 0)
+			// TODO: Some super-gross duplicated code, yes.
+			for len(waiterIndices) > 0 {
+				min := waiterIndices[0]
+				heap.Pop(&waiterIndices)
+				toNotify := waiters[min]
+				for _, ch := range toNotify {
+					close(ch)
+				}
+				delete(waiters, min)
+			}
 		}
 
 		if until != doneUntil {
+			for len(waiterIndices) > 0 {
+				min := waiterIndices[0]
+				if min > until {
+					break
+				}
+				heap.Pop(&waiterIndices)
+				toNotify := waiters[min]
+				for _, ch := range toNotify {
+					close(ch)
+				}
+				delete(waiters, min)
+			}
+			// TODO: To be consistent with what we had before, we should also notify ALL waiters if !doWait.
+
 			AssertTrue(atomic.CompareAndSwapUint64(&w.doneUntil, doneUntil, until))
 			w.elog.Printf("%s: Done until %d. Loops: %d\n", w.Name, until, loops)
 		}
 	}
 
 	for mark := range w.markCh {
+		// TODO: Why don't we run this during testing?
 		if IsTestRun() {
 			// Don't run this during testing.
 			continue
 		}
-		if mark.Index > 0 {
-			processOne(mark.Index, mark.Done)
-		}
-		for _, index := range mark.Indices {
-			processOne(index, mark.Done)
+
+		if mark.Wait != nil {
+			doneUntil := atomic.LoadUint64(&w.doneUntil)
+			if doneUntil >= mark.Index {
+				close(mark.Wait)
+			} else {
+				ws, ok := waiters[mark.Index]
+				if !ok {
+					heap.Push(&waiterIndices, mark.Index)
+					waiters[mark.Index] = []chan struct{}{mark.Wait}
+				} else {
+					waiters[mark.Index] = append(ws, mark.Wait)
+				}
+			}
+		} else {
+			if mark.Index > 0 {
+				processOne(mark.Index, mark.Done)
+			}
+			for _, index := range mark.Indices {
+				processOne(index, mark.Done)
+			}
 		}
 	}
 }
