@@ -813,8 +813,9 @@ func (l *List) AllValues() (vals []types.Val, rerr error) {
 	defer l.RUnlock()
 
 	l.iterate(0, func(p *protos.Posting) bool {
-		// x.AssertTruef(postingType(p) == x.ValueMulti,
-		//	"Expected a value posting.")
+		if len(p.Value) == 0 {
+			return true
+		}
 		vals = append(vals, types.Val{
 			Tid:   types.TypeID(p.ValType),
 			Value: p.Value,

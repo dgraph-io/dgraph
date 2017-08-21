@@ -344,7 +344,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		}
 
 		// get filtered uids and facets.
-		var filteredRes []*result
+		filteredRes := make([]*result, 0, pl.Length(opts.AfterUID))
 		vl := &protos.ValuesList{}
 		var tid types.TypeID
 		if len(vals) > 0 {
@@ -386,7 +386,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 
 		if !isValueEdge { // for uid edge.. get postings
 			var perr error
-			filteredRes = make([]*result, 0, pl.Length(opts.AfterUID))
 			pl.Postings(opts, func(p *protos.Posting) bool {
 				res := true
 				res, perr = applyFacetsTree(p.Facets, facetsTree)
@@ -734,6 +733,11 @@ func filterGeoFunction(arg funcArgs) {
 
 func filterStringFunction(arg funcArgs) {
 	attr := arg.q.Attr
+	if schema.State().IsList(attr) {
+		// TODO - Handle list type with langs later.
+		return
+	}
+
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	var values []types.Val
 	filteredUids := make([]uint64, 0, len(uids.Uids))
