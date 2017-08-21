@@ -1319,6 +1319,7 @@ func TestSchemaMutation5Error(t *testing.T) {
 
 // A basic sanity check. We will do more extensive testing for multiple values in query.
 func TestMultipleValues(t *testing.T) {
+	t.SkipNow()
 	schema.ParseBytes([]byte(""), 1)
 	m := `
 	mutation {
