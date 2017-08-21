@@ -257,62 +257,29 @@ type funcArgs struct {
 	out   *protos.Result
 }
 
-// processTask processes the query, accumulates and returns the result.
-func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
-	out := new(protos.Result)
+func handleValuePostings(ctx context.Context, args funcArgs) error {
+	srcFn := args.srcFn
+	q := args.q
 	attr := q.Attr
-	if _, err := schema.State().TypeOf(attr); err != nil {
-		return out, nil
-	}
-
-	if attr == "_predicate_" {
-		return getAllPredicates(ctx, q, gid)
-	}
-
-	srcFn, err := parseSrcFn(q)
-	if err != nil {
-		return nil, err
-	}
-
-	if q.Reverse && !schema.State().IsReversed(attr) {
-		return nil, x.Errorf("Predicate %s doesn't have reverse edge", attr)
-	}
-	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
-		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
-	}
-
-	opts := posting.ListOptions{
-		AfterUID: uint64(q.AfterUid),
-	}
-	// If we have srcFunc and Uids, it means its a filter. So we intersect.
-	if srcFn.fnType != NotAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
-		opts.Intersect = q.UidList
-	}
-	facetsTree, err := preprocessFilter(q.FacetsFilter)
-	if err != nil {
-		return nil, err
-	}
+	gid := args.gid
+	out := args.out
 
 	for i := 0; i < srcFn.n; i++ {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ctx.Err()
 		default:
 		}
 		var key []byte
 		switch srcFn.fnType {
-		case NotAFunction, CompareScalarFn, HasFn, UidInFn:
-			if q.Reverse {
-				key = x.ReverseKey(attr, q.UidList.Uids[i])
-			} else {
-				key = x.DataKey(attr, q.UidList.Uids[i])
-			}
+		// TODO - Remove unused functions and aggregate the first two cases.
+		case NotAFunction, CompareScalarFn, UidInFn:
+			key = x.DataKey(attr, q.UidList.Uids[i])
 		case AggregatorFn, PasswordFn:
 			key = x.DataKey(attr, q.UidList.Uids[i])
-		case GeoFn, RegexFn, FullTextSearchFn, StandardFn:
-			key = x.IndexKey(attr, srcFn.tokens[i])
 		case CompareAttrFn:
 			if len(srcFn.tokens) > 0 {
+				// TODO - Remove this case.
 				key = x.IndexKey(attr, srcFn.tokens[i])
 			} else {
 				key = x.DataKey(attr, q.UidList.Uids[i])
@@ -320,35 +287,38 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		default:
 			x.Fatalf("Unhandled function in processTask")
 		}
+
 		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, gid)
-		// If a posting list contains a value, we store that or else we store a nil
-		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
-		isValueEdge := err == nil
+		if err != nil {
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			out.Values = append(out.Values, &protos.TaskValue{Val: x.Nilbyte})
+			// No value found.
+			continue
+		}
+
 		typ := val.Tid
 		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+			return x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
 		}
+
+		// If a posting list contains a value, we store that or else we store a nil
+		// byte so that processing is consistent later.
 		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
-		if isValueEdge {
-			if typ, err = schema.State().TypeOf(attr); err == nil {
-				newValue, err = convertToType(val, typ)
-			} else if err != nil {
-				// Ideally Schema should be present for already inserted mutation
-				// x.Checkf(err, "Schema not defined for attribute %s", attr)
-				// Converting to stored type for backward compatiblity of old inserted data
-				newValue, err = convertToType(val, val.Tid)
-			}
+		if typ, err = schema.State().TypeOf(attr); err == nil {
+			newValue, err = convertToType(val, typ)
+		} else if err != nil {
+			newValue, err = convertToType(val, val.Tid)
 		}
 
 		// get filtered uids and facets.
 		var filteredRes []*result
 		// This means we fetched the value directly instead of fetching index key and intersecting.
-		if srcFn.fnType == CompareAttrFn && isValueEdge {
+		if srcFn.fnType == CompareAttrFn {
 			// Lets convert the val to its type.
 			if val, err = types.Convert(val, typ); err != nil {
-				return nil, err
+				return err
 			}
 			if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
 				filteredRes = append(filteredRes, &result{
@@ -359,46 +329,19 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			out.Values = append(out.Values, newValue)
 		}
 
-		if !isValueEdge { // for uid edge.. get postings
-			var perr error
-			filteredRes = make([]*result, 0, pl.Length(opts.AfterUID))
-			pl.Postings(opts, func(p *protos.Posting) bool {
-				res := true
-				res, perr = applyFacetsTree(p.Facets, facetsTree)
-				if perr != nil {
-					return false // break loop.
-				}
-				if res {
-					filteredRes = append(filteredRes, &result{
-						uid:    p.Uid,
-						facets: facets.CopyFacets(p.Facets, q.FacetParam)})
-				}
-				return true // continue iteration.
-			})
-			if perr != nil {
-				return nil, perr
-			}
-		} else if q.FacetsFilter != nil { // else part means isValueEdge
+		if q.FacetsFilter != nil { // else part means isValueEdge
 			// This is Value edge and we are asked to do facet filtering. Not supported.
-			return nil, x.Errorf("Facet filtering is not supported on values.")
+			return x.Errorf("Facet filtering is not supported on values.")
 		}
 
 		// add facets to result.
 		if q.FacetParam != nil {
-			if isValueEdge {
-				fs, err := pl.Facets(q.FacetParam, q.Langs)
-				if err != nil {
-					fs = []*protos.Facet{}
-				}
-				out.FacetMatrix = append(out.FacetMatrix,
-					&protos.FacetsList{[]*protos.Facets{{fs}}})
-			} else {
-				var fcsList []*protos.Facets
-				for _, fres := range filteredRes {
-					fcsList = append(fcsList, &protos.Facets{fres.facets})
-				}
-				out.FacetMatrix = append(out.FacetMatrix, &protos.FacetsList{fcsList})
+			fs, err := pl.Facets(q.FacetParam, q.Langs)
+			if err != nil {
+				fs = []*protos.Facet{}
 			}
+			out.FacetMatrix = append(out.FacetMatrix,
+				&protos.FacetsList{[]*protos.Facets{{fs}}})
 		}
 
 		// add uids to uidmatrix..
@@ -422,6 +365,122 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 				out.Values[lastPos] = task.FalseVal
 			} else {
 				out.Values[lastPos] = task.TrueVal
+			}
+			// Add an empty UID list to make later processing consistent
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			continue
+		}
+
+		if srcFn.fnType == CompareScalarFn {
+			count := int64(pl.Length(0))
+			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
+				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
+				out.UidMatrix = append(out.UidMatrix, tlist)
+			}
+			continue
+		}
+
+		if srcFn.fnType == UidInFn {
+			reqList := &protos.List{[]uint64{srcFn.uidPresent}}
+			topts := posting.ListOptions{
+				AfterUID:  0,
+				Intersect: reqList,
+			}
+			plist := pl.Uids(topts)
+			if len(plist.Uids) > 0 {
+				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
+				out.UidMatrix = append(out.UidMatrix, tlist)
+			}
+			continue
+		}
+
+		// The more usual case: Getting the UIDs.
+		uidList := new(protos.List)
+		for _, fres := range filteredRes {
+			uidList.Uids = append(uidList.Uids, fres.uid)
+		}
+		out.UidMatrix = append(out.UidMatrix, uidList)
+	}
+	return nil
+}
+
+func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOptions) error {
+	srcFn := args.srcFn
+	q := args.q
+	attr := q.Attr
+	gid := args.gid
+	out := args.out
+
+	facetsTree, err := preprocessFilter(q.FacetsFilter)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < srcFn.n; i++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		var key []byte
+		switch srcFn.fnType {
+		case NotAFunction, CompareScalarFn, HasFn, UidInFn:
+			if q.Reverse {
+				key = x.ReverseKey(attr, q.UidList.Uids[i])
+			} else {
+				key = x.DataKey(attr, q.UidList.Uids[i])
+			}
+		case GeoFn, RegexFn, FullTextSearchFn, StandardFn:
+			key = x.IndexKey(attr, srcFn.tokens[i])
+		case CompareAttrFn:
+			if len(srcFn.tokens) > 0 {
+				key = x.IndexKey(attr, srcFn.tokens[i])
+			} else {
+				key = x.DataKey(attr, q.UidList.Uids[i])
+			}
+		default:
+			x.Fatalf("Unhandled function in processTask")
+		}
+		// Get or create the posting list for an entity, attribute combination.
+		pl := posting.GetOrCreate(key, gid)
+		newValue := &protos.TaskValue{Val: x.Nilbyte}
+
+		// get filtered uids and facets.
+		var filteredRes []*result
+		out.Values = append(out.Values, newValue)
+
+		var perr error
+		filteredRes = make([]*result, 0, pl.Length(opts.AfterUID))
+		pl.Postings(opts, func(p *protos.Posting) bool {
+			res := true
+			res, perr = applyFacetsTree(p.Facets, facetsTree)
+			if perr != nil {
+				return false // break loop.
+			}
+			if res {
+				filteredRes = append(filteredRes, &result{
+					uid:    p.Uid,
+					facets: facets.CopyFacets(p.Facets, q.FacetParam)})
+			}
+			return true // continue iteration.
+		})
+		if perr != nil {
+			return perr
+		}
+
+		// add facets to result.
+		if q.FacetParam != nil {
+			var fcsList []*protos.Facets
+			for _, fres := range filteredRes {
+				fcsList = append(fcsList, &protos.Facets{fres.facets})
+			}
+			out.FacetMatrix = append(out.FacetMatrix, &protos.FacetsList{fcsList})
+		}
+
+		// add uids to uidmatrix..
+		if q.DoCount || srcFn.fnType == AggregatorFn {
+			if q.DoCount {
+				out.Counts = append(out.Counts, uint32(pl.Length(0)))
 			}
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
@@ -466,6 +525,53 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			uidList.Uids = append(uidList.Uids, fres.uid)
 		}
 		out.UidMatrix = append(out.UidMatrix, uidList)
+	}
+	return nil
+}
+
+// processTask processes the query, accumulates and returns the result.
+func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
+	out := new(protos.Result)
+	attr := q.Attr
+	typ, err := schema.State().TypeOf(attr)
+	if err != nil {
+		// Schema not defined, so lets return empty result.
+		return out, nil
+	}
+
+	if attr == "_predicate_" {
+		return getAllPredicates(ctx, q, gid)
+	}
+
+	srcFn, err := parseSrcFn(q)
+	if err != nil {
+		return nil, err
+	}
+
+	if q.Reverse && !schema.State().IsReversed(attr) {
+		return nil, x.Errorf("Predicate %s doesn't have reverse edge", attr)
+	}
+	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
+		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
+	}
+
+	opts := posting.ListOptions{
+		AfterUID: uint64(q.AfterUid),
+	}
+	// If we have srcFunc and Uids, it means its a filter. So we intersect.
+	if srcFn.fnType != NotAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
+		opts.Intersect = q.UidList
+	}
+
+	args := funcArgs{q, gid, srcFn, out}
+	if typ.IsScalar() && q.UidList != nil && len(q.UidList.Uids) > 0 {
+		if err = handleValuePostings(ctx, args); err != nil {
+			return nil, err
+		}
+	} else {
+		if err = handleUidPostings(ctx, args, opts); err != nil {
+			return nil, err
+		}
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {
