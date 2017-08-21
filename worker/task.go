@@ -325,32 +325,37 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		pl := posting.GetOrCreate(key, gid)
 
 		isValueEdge := false
+		var vals []types.Val
 		if schema.State().IsList(attr) {
 			vals, err := pl.AllValues()
 			if err != nil {
 				return out, err
 			}
 			isValueEdge = len(vals) > 0
-			typ := vals[0].Tid
 		} else {
 			val, err := pl.ValueFor(q.Langs)
 			isValueEdge = err == nil
-			typ := val.Tid
 			if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
 				return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
 			}
+			vals = append(vals, val)
+		}
+
+		typ, err := schema.State().TypeOf(attr)
+		if err != nil {
+			return nil, err
+		}
+		newValue = &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
+		for _, val := range vals {
 			// If a posting list contains a value, we store that or else we store a nil
 			// byte so that processing is consistent later.
-			newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
-			if isValueEdge {
-				if typ, err = schema.State().TypeOf(attr); err == nil {
-					newValue, err = convertToType(val, typ)
-				} else if err != nil {
-					// Ideally Schema should be present for already inserted mutation
-					// x.Checkf(err, "Schema not defined for attribute %s", attr)
-					// Converting to stored type for backward compatiblity of old inserted data
-					newValue, err = convertToType(val, val.Tid)
-				}
+			if typ, err = schema.State().TypeOf(attr); err == nil {
+				newValue, err = convertToType(val, typ)
+			} else if err != nil {
+				// Ideally Schema should be present for already inserted mutation
+				// x.Checkf(err, "Schema not defined for attribute %s", attr)
+				// Converting to stored type for backward compatiblity of old inserted data
+				newValue, err = convertToType(val, val.Tid)
 			}
 		}
 
