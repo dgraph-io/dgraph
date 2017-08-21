@@ -285,16 +285,18 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				key = x.DataKey(attr, q.UidList.Uids[i])
 			}
 		default:
-			x.Fatalf("Unhandled function in processTask")
+			x.Fatalf("Unhandled function in handleValuePostings: %s", srcFn.fname)
 		}
 
 		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, gid)
 		val, err := pl.ValueFor(q.Langs)
 		if err != nil {
+			//	fmt.Println("Here", q.UidList.Uids[i], q.Attr)
+			// No value found.
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			out.Values = append(out.Values, &protos.TaskValue{Val: x.Nilbyte})
-			// No value found.
+			//		fmt.Println("Vals", len(out.Values))
 			continue
 		}
 
@@ -356,9 +358,6 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 
 		if srcFn.fnType == PasswordFn {
 			lastPos := len(out.Values) - 1
-			if len(newValue.Val) == 0 {
-				out.Values[lastPos] = task.FalseVal
-			}
 			pwd := q.SrcFunc[2]
 			err = types.VerifyPassword(pwd, string(newValue.Val))
 			if err != nil {
@@ -439,7 +438,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				key = x.DataKey(attr, q.UidList.Uids[i])
 			}
 		default:
-			x.Fatalf("Unhandled function in processTask")
+			x.Fatalf("Unhandled function in handleUidPostings: %s", srcFn.fname)
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, gid)
@@ -564,7 +563,8 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	args := funcArgs{q, gid, srcFn, out}
-	if typ.IsScalar() && q.UidList != nil && len(q.UidList.Uids) > 0 {
+	// TODO - What if its actually zero?
+	if typ.IsScalar() && len(srcFn.tokens) == 0 && srcFn.fnType != HasFn {
 		if err = handleValuePostings(ctx, args); err != nil {
 			return nil, err
 		}

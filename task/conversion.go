@@ -47,6 +47,9 @@ func FromBool(val bool) *protos.TaskValue {
 }
 
 func ToBool(val *protos.TaskValue) bool {
+	if len(val.Val) == 0 {
+		return false
+	}
 	result := ToInt(val)
 	if result != 0 {
 		return true

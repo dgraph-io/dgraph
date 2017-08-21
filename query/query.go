@@ -436,6 +436,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		if idx < 0 {
 			continue
 		}
+		//	fmt.Println("Attr", pc.Attr, "uid", uid, "src", pc.SrcUIDs, "matrix", pc.uidMatrix)
 		ul := pc.uidMatrix[idx]
 
 		fieldName := pc.fieldName()
@@ -501,7 +502,16 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				fieldName += "@"
 				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
+			if pc.Attr == "_uid_" {
+				dst.SetUID(uid, pc.fieldName())
+				continue
+			}
+
 			tv := pc.values[idx]
+			if bytes.Equal(tv.Val, x.Nilbyte) && pc.Attr != "_uid_" {
+				continue
+			}
+
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
@@ -516,29 +526,25 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				}
 			}
 
-			if pc.Attr == "_uid_" {
-				dst.SetUID(uid, pc.fieldName())
-			} else {
-				// if conversion not possible, we ignore it in the result.
-				sv, convErr := convertWithBestEffort(tv, pc.Attr)
-				if convErr == ErrEmptyVal {
-					continue
-				} else if convErr != nil {
-					return convErr
-				}
-				// Only strings can have empty values.
-				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
-					sv.Value = ""
-				}
-				if !pc.Params.Normalize {
-					dst.AddValue(fieldName, sv)
-					continue
-				}
-				// If the query had the normalize directive, then we only add nodes
-				// with an Alias.
-				if pc.Params.Alias != "" {
-					dst.AddValue(fieldName, sv)
-				}
+			// if conversion not possible, we ignore it in the result.
+			sv, convErr := convertWithBestEffort(tv, pc.Attr)
+			if convErr == ErrEmptyVal {
+				continue
+			} else if convErr != nil {
+				return convErr
+			}
+			// Only strings can have empty values.
+			if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
+				sv.Value = ""
+			}
+			if !pc.Params.Normalize {
+				dst.AddValue(fieldName, sv)
+				continue
+			}
+			// If the query had the normalize directive, then we only add nodes
+			// with an Alias.
+			if pc.Params.Alias != "" {
+				dst.AddValue(fieldName, sv)
 			}
 		}
 	}
