@@ -19,6 +19,7 @@ package x
 import (
 	"container/heap"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/net/trace"
 )
@@ -103,6 +104,19 @@ func (w *WaterMark) SetDoneUntil(val uint64) {
 // WaitingFor returns whether we are waiting for a task to be done.
 func (w *WaterMark) WaitingFor() bool {
 	return atomic.LoadUint32(&w.waitingFor) != 0
+}
+
+func (w *WaterMark) WaitForMark(index uint64) {
+	// TODO: Don't use time.Sleep.
+	// TODO: Why would we use w.WaitingFor at all?
+	for w.WaitingFor() {
+		doneUntil := w.DoneUntil()
+		if doneUntil >= index {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return
 }
 
 // process is used to process the Mark channel. This is not thread-safe,
