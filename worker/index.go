@@ -31,9 +31,7 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool)
 
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
-	if err := n.syncAllMarks(ctx, rv.Index-1); err != nil {
-		return err
-	}
+	n.syncAllMarks(ctx, rv.Index-1)
 
 	x.AssertTruef(schema.State().IsIndexed(attr) == rebuild, "Attr %s index mismatch", attr)
 	// Remove index edges
@@ -55,9 +53,7 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
-	if err := n.syncAllMarks(ctx, rv.Index-1); err != nil {
-		return err
-	}
+	n.syncAllMarks(ctx, rv.Index-1)
 
 	x.AssertTruef(schema.State().IsReversed(attr) == rebuild, "Attr %s reverse mismatch", attr)
 	posting.DeleteReverseEdges(ctx, attr)
@@ -76,9 +72,7 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
-	if err := n.syncAllMarks(ctx, rv.Index-1); err != nil {
-		return err
-	}
+	n.syncAllMarks(ctx, rv.Index-1)
 	posting.DeleteCountIndex(ctx, attr)
 	if rebuild {
 		if err := posting.RebuildCountIndex(ctx, attr); err != nil {
@@ -88,17 +82,13 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 	return nil
 }
 
-// TODO: Remove unused return value
-func (n *node) syncAllMarks(ctx context.Context, lastIndex uint64) error {
+func (n *node) syncAllMarks(ctx context.Context, lastIndex uint64) {
 	n.waitForAppliedMark(ctx, lastIndex)
 	waitForSyncMark(ctx, n.gid, lastIndex)
-	return nil
 }
 
-// TODO: Remove unused return value
-func (n *node) waitForAppliedMark(ctx context.Context, lastIndex uint64) error {
+func (n *node) waitForAppliedMark(ctx context.Context, lastIndex uint64) {
 	n.applied.WaitForMark(lastIndex)
-	return nil
 }
 
 func (n *node) waitForSyncMark(ctx context.Context, lastIndex uint64) {
