@@ -19,6 +19,7 @@ package query
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -725,24 +726,19 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	return nil
 }
 
+type Extensions struct {
+	Latency map[string]string `json:"server_latency"`
+}
+
 func (sg *SubGraph) toFastJSON(l *Latency, w io.Writer, allocIds map[string]string, addLatency bool) error {
 	var seedNode *fastJsonNode
+	var err error
 	n := seedNode.New("_root_")
 	for _, sg := range sg.Children {
-		err := processNodeUids(n.(*fastJsonNode), sg)
+		err = processNodeUids(n.(*fastJsonNode), sg)
 		if err != nil {
 			return err
 		}
-	}
-
-	if addLatency {
-		sl := seedNode.New("serverLatency").(*fastJsonNode)
-		for k, v := range l.ToMap() {
-			val := types.ValueForType(types.StringID)
-			val.Value = v
-			sl.AddValue(k, val)
-		}
-		n.AddMapChild("server_latency", sl, false)
 	}
 
 	if allocIds != nil && len(allocIds) > 0 {
@@ -755,13 +751,33 @@ func (sg *SubGraph) toFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 		n.AddMapChild("uids", sl, false)
 	}
 
-	bufw := bufio.NewWriter(w)
-	if len(n.(*fastJsonNode).attrs) == 0 {
-		bufw.WriteString(`{ "data": {} }`)
-	} else {
-		bufw.WriteString(`{"data": `)
-		n.(*fastJsonNode).encode(bufw)
-		bufw.WriteRune('}')
+	var lb []byte
+	if addLatency {
+		e := Extensions{
+			Latency: l.ToMap(),
+		}
+		if lb, err = json.Marshal(e); err != nil {
+			return err
+		}
 	}
+
+	// According to GraphQL spec response should only contain data, errors and extensions as top
+	// level keys. Hence we send server_latency under extensions key.
+	// https://facebook.github.io/graphql/#sec-Response-Format
+
+	bufw := bufio.NewWriter(w)
+	bufw.WriteString(`{`)
+	if len(lb) > 0 {
+		bufw.WriteString(`"extensions": `)
+		bufw.Write(lb)
+		bufw.WriteRune(',')
+	}
+	bufw.WriteString(`"data": `)
+	if len(n.(*fastJsonNode).attrs) == 0 {
+		bufw.WriteString(`{}`)
+	} else {
+		n.(*fastJsonNode).encode(bufw)
+	}
+	bufw.WriteString(`}`)
 	return bufw.Flush()
 }

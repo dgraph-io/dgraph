@@ -2157,10 +2157,15 @@ func TestDebug1(t *testing.T) {
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.EqualValues(t, "0x1", uid)
 
-	latency := data["server_latency"]
-	require.NotNil(t, latency)
-	_, ok := latency.(map[string]interface{})
+	extensions := mp["extensions"]
+	require.NotNil(t, extensions)
+	ext, ok := extensions.(map[string]interface{})
 	require.True(t, ok)
+	latency := ext["server_latency"]
+	require.NotNil(t, latency)
+	lat, ok := latency.(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, 4, len(lat))
 }
 
 func TestDebug2(t *testing.T) {
