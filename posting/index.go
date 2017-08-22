@@ -360,20 +360,26 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {
-			addIndexMutations(ctx, t, val, protos.DirectedEdge_DEL)
+			if err := addIndexMutations(ctx, t, val, protos.DirectedEdge_DEL); err != nil {
+				return err
+			}
 		}
 		if t.Op == protos.DirectedEdge_SET {
 			p := types.Val{
 				Tid:   types.TypeID(t.ValueType),
 				Value: t.Value,
 			}
-			addIndexMutations(ctx, t, p, protos.DirectedEdge_SET)
+			if err := addIndexMutations(ctx, t, p, protos.DirectedEdge_SET); err != nil {
+				return err
+			}
 		}
 	}
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
 	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
-		addReverseMutation(ctx, t)
+		if err := addReverseMutation(ctx, t); err != nil {
+			return err
+		}
 	}
 	return nil
 }
