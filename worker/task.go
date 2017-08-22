@@ -257,6 +257,31 @@ type funcArgs struct {
 	out   *protos.Result
 }
 
+// The function tells us whether we want to fetch value posting lists or uid posting lists.
+func fetchValuePostings(srcFn *functionContext, typ types.TypeID) bool {
+	switch srcFn.fnType {
+	case AggregatorFn, PasswordFn:
+		return true
+	case CompareAttrFn:
+		if len(srcFn.tokens) > 0 {
+			return false
+		}
+		return true
+	case GeoFn, RegexFn, FullTextSearchFn, StandardFn, HasFn:
+		// All of these require index, hence would require fetching uid postings.
+		return false
+	case UidInFn, CompareScalarFn:
+		// Operate on uid postings
+		return false
+	case NotAFunction:
+		return typ.IsScalar()
+	default:
+		x.Fatalf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
+	}
+	return true
+}
+
+// Handles fetching of value posting lists and filtering of uids based on that.
 func handleValuePostings(ctx context.Context, args funcArgs) error {
 	srcFn := args.srcFn
 	q := args.q
@@ -282,7 +307,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		pl := posting.GetOrCreate(key, gid)
 		val, err := pl.ValueFor(q.Langs)
 		if err != nil {
-			// No value found.
+			// No value found. Lets add empty values and move on.
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			out.Values = append(out.Values, &protos.TaskValue{Val: x.Nilbyte})
 			continue
@@ -299,11 +324,13 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		if typ, err = schema.State().TypeOf(attr); err == nil {
 			newValue, err = convertToType(val, typ)
 		} else if err != nil {
+			// TODO - Check when is this needed.
 			newValue, err = convertToType(val, val.Tid)
 		}
 
 		uidList := new(protos.List)
 		// This means we fetched the value directly instead of fetching index key and intersecting.
+		// Lets compare the value and add filter the uid.
 		if srcFn.fnType == CompareAttrFn {
 			// Lets convert the val to its type.
 			if val, err = types.Convert(val, typ); err != nil {
@@ -353,6 +380,8 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 	return nil
 }
 
+// This function handles operations on uid posting lists. Index keys, reverse keys and some data
+// keys store uid posting lists.
 func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOptions) error {
 	srcFn := args.srcFn
 	q := args.q
@@ -386,6 +415,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		default:
 			x.Fatalf("Unhandled function in handleUidPostings: %s", srcFn.fname)
 		}
+
 		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, gid)
 		newValue := &protos.TaskValue{Val: x.Nilbyte}
@@ -497,8 +527,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	args := funcArgs{q, gid, srcFn, out}
-	// TODO - What if its actually zero?
-	if typ.IsScalar() && len(srcFn.tokens) == 0 && srcFn.fnType != HasFn {
+	if fetchValuePostings(srcFn, typ) {
 		if err = handleValuePostings(ctx, args); err != nil {
 			return nil, err
 		}
