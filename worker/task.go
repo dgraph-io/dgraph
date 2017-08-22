@@ -272,18 +272,8 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		}
 		var key []byte
 		switch srcFn.fnType {
-		// TODO - Remove unused functions and aggregate the first two cases.
-		case NotAFunction, CompareScalarFn, UidInFn:
+		case NotAFunction, AggregatorFn, PasswordFn, CompareAttrFn:
 			key = x.DataKey(attr, q.UidList.Uids[i])
-		case AggregatorFn, PasswordFn:
-			key = x.DataKey(attr, q.UidList.Uids[i])
-		case CompareAttrFn:
-			if len(srcFn.tokens) > 0 {
-				// TODO - Remove this case.
-				key = x.IndexKey(attr, srcFn.tokens[i])
-			} else {
-				key = x.DataKey(attr, q.UidList.Uids[i])
-			}
 		default:
 			x.Fatalf("Unhandled function in handleValuePostings: %s", srcFn.fname)
 		}
@@ -292,11 +282,9 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		pl := posting.GetOrCreate(key, gid)
 		val, err := pl.ValueFor(q.Langs)
 		if err != nil {
-			//	fmt.Println("Here", q.UidList.Uids[i], q.Attr)
 			// No value found.
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			out.Values = append(out.Values, &protos.TaskValue{Val: x.Nilbyte})
-			//		fmt.Println("Vals", len(out.Values))
 			continue
 		}
 
@@ -314,8 +302,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			newValue, err = convertToType(val, val.Tid)
 		}
 
-		// get filtered uids and facets.
-		var filteredRes []*result
+		uidList := new(protos.List)
 		// This means we fetched the value directly instead of fetching index key and intersecting.
 		if srcFn.fnType == CompareAttrFn {
 			// Lets convert the val to its type.
@@ -323,9 +310,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				return err
 			}
 			if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
-				filteredRes = append(filteredRes, &result{
-					uid: q.UidList.Uids[i],
-				})
+				uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
 			}
 		} else {
 			out.Values = append(out.Values, newValue)
@@ -346,17 +331,11 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				&protos.FacetsList{[]*protos.Facets{{fs}}})
 		}
 
-		// add uids to uidmatrix..
-		if q.DoCount || srcFn.fnType == AggregatorFn {
-			if q.DoCount {
-				out.Counts = append(out.Counts, uint32(pl.Length(0)))
-			}
+		switch srcFn.fnType {
+		case AggregatorFn:
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			continue
-		}
-
-		if srcFn.fnType == PasswordFn {
+		case PasswordFn:
 			lastPos := len(out.Values) - 1
 			pwd := q.SrcFunc[2]
 			err = types.VerifyPassword(pwd, string(newValue.Val))
@@ -367,38 +346,9 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			}
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			continue
+		default:
+			out.UidMatrix = append(out.UidMatrix, uidList)
 		}
-
-		if srcFn.fnType == CompareScalarFn {
-			count := int64(pl.Length(0))
-			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
-				out.UidMatrix = append(out.UidMatrix, tlist)
-			}
-			continue
-		}
-
-		if srcFn.fnType == UidInFn {
-			reqList := &protos.List{[]uint64{srcFn.uidPresent}}
-			topts := posting.ListOptions{
-				AfterUID:  0,
-				Intersect: reqList,
-			}
-			plist := pl.Uids(topts)
-			if len(plist.Uids) > 0 {
-				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
-				out.UidMatrix = append(out.UidMatrix, tlist)
-			}
-			continue
-		}
-
-		// The more usual case: Getting the UIDs.
-		uidList := new(protos.List)
-		for _, fres := range filteredRes {
-			uidList.Uids = append(uidList.Uids, fres.uid)
-		}
-		out.UidMatrix = append(out.UidMatrix, uidList)
 	}
 	return nil
 }
@@ -432,11 +382,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		case GeoFn, RegexFn, FullTextSearchFn, StandardFn:
 			key = x.IndexKey(attr, srcFn.tokens[i])
 		case CompareAttrFn:
-			if len(srcFn.tokens) > 0 {
-				key = x.IndexKey(attr, srcFn.tokens[i])
-			} else {
-				key = x.DataKey(attr, q.UidList.Uids[i])
-			}
+			key = x.IndexKey(attr, srcFn.tokens[i])
 		default:
 			x.Fatalf("Unhandled function in handleUidPostings: %s", srcFn.fname)
 		}
@@ -476,35 +422,24 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			out.FacetMatrix = append(out.FacetMatrix, &protos.FacetsList{fcsList})
 		}
 
-		// add uids to uidmatrix..
-		if q.DoCount || srcFn.fnType == AggregatorFn {
-			if q.DoCount {
-				out.Counts = append(out.Counts, uint32(pl.Length(0)))
-			}
+		switch {
+		case q.DoCount:
+			out.Counts = append(out.Counts, uint32(pl.Length(0)))
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			continue
-		}
-
-		if srcFn.fnType == CompareScalarFn {
+		case srcFn.fnType == CompareScalarFn:
 			count := int64(pl.Length(0))
 			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
 				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
-			continue
-		}
-
-		if srcFn.fnType == HasFn {
+		case srcFn.fnType == HasFn:
 			count := int64(pl.Length(0))
 			if EvalCompare("gt", count, 0) {
 				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
-			continue
-		}
-
-		if srcFn.fnType == UidInFn {
+		case srcFn.fnType == UidInFn:
 			reqList := &protos.List{[]uint64{srcFn.uidPresent}}
 			topts := posting.ListOptions{
 				AfterUID:  0,
@@ -515,15 +450,14 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}
-			continue
+		default:
+			// The more usual case: Getting the UIDs.
+			uidList := new(protos.List)
+			for _, fres := range filteredRes {
+				uidList.Uids = append(uidList.Uids, fres.uid)
+			}
+			out.UidMatrix = append(out.UidMatrix, uidList)
 		}
-
-		// The more usual case: Getting the UIDs.
-		uidList := new(protos.List)
-		for _, fres := range filteredRes {
-			uidList.Uids = append(uidList.Uids, fres.uid)
-		}
-		out.UidMatrix = append(out.UidMatrix, uidList)
 	}
 	return nil
 }
