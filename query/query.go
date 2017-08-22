@@ -428,7 +428,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			continue
 		}
 
-		if pc.uidMatrix == nil && pc.Attr != "_uid_" {
+		if pc.uidMatrix == nil {
 			// Can happen in recurse query.
 			continue
 		}

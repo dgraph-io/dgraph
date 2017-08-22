@@ -1489,7 +1489,7 @@ func TestDoubleOrder(t *testing.T) {
 	query := `
     {
 		me(func: uid(1)) {
-			friend(orderdesc: dob) @facets(orderasc: weight) 
+			friend(orderdesc: dob) @facets(orderasc: weight)
 		}
 	}
   `
@@ -1693,7 +1693,7 @@ func TestRecurseQueryOrder(t *testing.T) {
 		js)
 }
 
-func TestRecurseQueryLimitDepth(t *testing.T) {
+func TestRecurseQueryLimitDepth1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
@@ -1705,6 +1705,21 @@ func TestRecurseQueryLimitDepth(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"data": {"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`, js)
+}
+
+func TestRecurseQueryLimitDepth2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			recurse(func: uid(0x01), depth: 2) {
+				_uid_
+				friend
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"data": {"recurse":[{"_uid_":"0x1","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"name":"Michonne"}]}}`, js)
 }
 
 func TestShortestPath_ExpandError(t *testing.T) {
@@ -6579,7 +6594,7 @@ func TestLangBug1295(t *testing.T) {
 				query := `
 			{
 				q(func:` + f + "(royal_title" + l + `, "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi")) {
-					royal_title@en 
+					royal_title@en
 				}
 			}`
 
