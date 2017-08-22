@@ -106,10 +106,6 @@ func (w *WaterMark) WaitingFor() bool {
 }
 
 func (w *WaterMark) WaitForMark(index uint64) {
-	if !w.WaitingFor() {
-		return
-	}
-
 	if w.DoneUntil() >= index {
 		return
 	}
