@@ -45,34 +45,26 @@ type RaftValue struct {
 	Index uint64
 }
 
-// TODO: make private
-// Mark contains raft proposal id and a done boolean. It is used to
+// mark contains raft proposal id and a done boolean. It is used to
 // update the WaterMark struct about the status of a proposal.
-type Mark struct {
-	Index uint64
-	// Either this is an (Index, Wait) pair or (Index, Done) or (Indices, Done). Wait has to be
-	// passed in the same channel because of strange logic where we notify waiters if WaitingFor()
-	// becomes false
-
-	// TODO: I think we have a bug where if we wait for syncs, but if the watermark was slow
-	// getting sent over the markCh, we'll successfully return that a sync happened right away.
-	Wait    chan struct{}
-	Indices []uint64
-	Done    bool // Set to true if the pending mutation is done.
+type mark struct {
+	// Either this is an (index, waiter) pair or (index, done) or (indices, done).
+	index   uint64
+	waiter  chan struct{}
+	indices []uint64
+	done    bool // Set to true if the pending mutation is done.
 }
 
-// TODO: Adjust this comment.
-// WaterMark is used to keep track of the maximum done index. The right way to use
-// this is to send a Mark with Done set to false, as soon as an index is known.
-// WaterMark will store the index in a min-heap. It would only advance, if the minimum
-// entry in the heap has been successfully done.
+// WaterMark is used to keep track of the minimum un-finished index.  Typically, an index k becomes
+// finished or "done" according to a WaterMark once Done(k) has been called
+//   1. as many times as Begin(k) has, AND
+//   2. a positive number of times.
 //
-// Some time later, when this index task is completed, send another Mark, this time
-// with Done set to true. It would mark the index as done, and so the min-heap can
-// now advance and update the maximum done water mark.
+// An index may also become "done" by calling SetDoneUntil at a time such that it is not
+// inter-mingled with Begin/Done calls.
 type WaterMark struct {
 	Name       string
-	markCh     chan Mark
+	markCh     chan mark
 	doneUntil  uint64
 	elog       trace.EventLog
 	waitingFor uint32 // Are we waiting for some index?
@@ -80,23 +72,23 @@ type WaterMark struct {
 
 // Init initializes a WaterMark struct. MUST be called before using it.
 func (w *WaterMark) Init() {
-	w.markCh = make(chan Mark, 10000)
+	w.markCh = make(chan mark, 10000)
 	w.elog = trace.NewEventLog("Watermark", w.Name)
 	go w.process()
 }
 
 func (w *WaterMark) Begin(index uint64) {
-	w.markCh <- Mark{Index: index, Done: false}
+	w.markCh <- mark{index: index, done: false}
 }
 func (w *WaterMark) BeginMany(indices []uint64) {
-	w.markCh <- Mark{Index: 0, Indices: indices, Done: false}
+	w.markCh <- mark{index: 0, indices: indices, done: false}
 }
 
 func (w *WaterMark) Done(index uint64) {
-	w.markCh <- Mark{Index: index, Done: true}
+	w.markCh <- mark{index: index, done: true}
 }
 func (w *WaterMark) DoneMany(indices []uint64) {
-	w.markCh <- Mark{Index: 0, Indices: indices, Done: true}
+	w.markCh <- mark{index: 0, indices: indices, done: true}
 }
 
 // DoneUntil returns the maximum index until which all tasks are done.
@@ -114,17 +106,15 @@ func (w *WaterMark) WaitingFor() bool {
 }
 
 func (w *WaterMark) WaitForMark(index uint64) {
-	// TODO: Why would we use w.WaitingFor at all?  Very questionable.
 	if !w.WaitingFor() {
 		return
 	}
 
-	doneUntil := w.DoneUntil()
-	if doneUntil >= index {
+	if w.DoneUntil() >= index {
 		return
 	}
 	waitCh := make(chan struct{})
-	w.markCh <- Mark{Index: index, Wait: waitCh}
+	w.markCh <- mark{index: index, waiter: waitCh}
 	<-waitCh
 	return
 }
@@ -219,25 +209,25 @@ func (w *WaterMark) process() {
 	}
 
 	for mark := range w.markCh {
-		if mark.Wait != nil {
+		if mark.waiter != nil {
 			doneUntil := atomic.LoadUint64(&w.doneUntil)
-			if doneUntil >= mark.Index {
-				close(mark.Wait)
+			if doneUntil >= mark.index {
+				close(mark.waiter)
 			} else {
-				ws, ok := waiters[mark.Index]
+				ws, ok := waiters[mark.index]
 				if !ok {
-					heap.Push(&waiterIndices, mark.Index)
-					waiters[mark.Index] = []chan struct{}{mark.Wait}
+					heap.Push(&waiterIndices, mark.index)
+					waiters[mark.index] = []chan struct{}{mark.waiter}
 				} else {
-					waiters[mark.Index] = append(ws, mark.Wait)
+					waiters[mark.index] = append(ws, mark.waiter)
 				}
 			}
 		} else {
-			if mark.Index > 0 {
-				processOne(mark.Index, mark.Done)
+			if mark.index > 0 {
+				processOne(mark.index, mark.done)
 			}
-			for _, index := range mark.Indices {
-				processOne(index, mark.Done)
+			for _, index := range mark.indices {
+				processOne(index, mark.done)
 			}
 		}
 	}
