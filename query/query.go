@@ -436,7 +436,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		if idx < 0 {
 			continue
 		}
-		//	fmt.Println("Attr", pc.Attr, "uid", uid, "src", pc.SrcUIDs, "matrix", pc.uidMatrix)
 		ul := pc.uidMatrix[idx]
 
 		fieldName := pc.fieldName()
@@ -508,7 +507,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 
 			tv := pc.values[idx]
-			if bytes.Equal(tv.Val, x.Nilbyte) && pc.Attr != "_uid_" {
+			if bytes.Equal(tv.Val, x.Nilbyte) {
 				continue
 			}
 
