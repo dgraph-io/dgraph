@@ -215,46 +215,6 @@ func addUidToMatrix(key []byte, mu *sync.Mutex, out *protos.Result) {
 	mu.Unlock()
 }
 
-func getAllPredicates(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
-	out := new(protos.Result)
-	predMap := make(map[string]struct{})
-	if q.UidList == nil {
-		return out, nil
-	}
-	for _, uid := range q.UidList.Uids {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-		predicates, err := getPredList(uid, gid)
-		if err != nil {
-			return out, err
-		}
-		for _, pred := range predicates {
-			predMap[string(pred.Value.([]byte))] = struct{}{}
-		}
-	}
-	predList := make([]string, 0, len(predMap))
-	for pred := range predMap {
-		predList = append(predList, pred)
-	}
-	sort.Strings(predList)
-	for _, pred := range predList {
-		// Add it to values.
-		val := &protos.TaskValue{
-			ValType: int32(types.StringID),
-			Val:     []byte(pred),
-		}
-		vl := &protos.ValuesList{
-			Values: []*protos.TaskValue{val},
-		}
-		out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-		out.ValueMatrix = append(out.ValueMatrix, vl)
-	}
-	return out, nil
-}
-
 type funcArgs struct {
 	q     *protos.Query
 	gid   uint32
@@ -324,7 +284,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			vals = append(vals, val)
 		}
 
-		if err != nil {
+		if err != nil || len(vals) == 0 {
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
 			continue
@@ -377,11 +337,15 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				&protos.FacetsList{[]*protos.Facets{{fs}}})
 		}
 
-		switch srcFn.fnType {
-		case AggregatorFn:
+		switch {
+		case q.DoCount:
+			out.Counts = append(out.Counts, uint32(pl.Length(0)))
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-		case PasswordFn:
+		case srcFn.fnType == AggregatorFn:
+			// Add an empty UID list to make later processing consistent
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+		case srcFn.fnType == PasswordFn:
 			lastPos := len(out.ValueMatrix) - 1
 			newValue := out.ValueMatrix[lastPos].Values[0]
 			if len(newValue.Val) == 0 {
@@ -519,10 +483,6 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	out := new(protos.Result)
 	attr := q.Attr
-
-	if attr == "_predicate_" {
-		return getAllPredicates(ctx, q, gid)
-	}
 
 	srcFn, err := parseSrcFn(q)
 	if err != nil {

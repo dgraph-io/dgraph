@@ -146,7 +146,6 @@ type params struct {
 	FacetOrderDesc bool
 	ExploreDepth   uint64
 	isInternal     bool   // Determines if processTask has to be called or not.
-	isListNode     bool   // This is for _predicate_ block.
 	ignoreResult   bool   // Node results are ignored.
 	Expand         string // Var to use for expand.
 	isGroupBy      bool
@@ -167,8 +166,9 @@ type SubGraph struct {
 	valueMatrix  []*protos.ValuesList
 	uidMatrix    []*protos.List
 	facetsMatrix []*protos.FacetsList
-	ExpandPreds  []*protos.ValuesList
-	GroupbyRes   *groupResults
+	// TODO - Check if we need this field.
+	ExpandPreds []*protos.ValuesList
+	GroupbyRes  *groupResults
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -183,10 +183,6 @@ type SubGraph struct {
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *protos.List
-}
-
-func (sg *SubGraph) IsListNode() bool {
-	return sg.Params.isListNode
 }
 
 func (sg *SubGraph) IsGroupBy() bool {
@@ -337,29 +333,6 @@ func addInternalNode(pc *SubGraph, uid uint64, dst outputNode) error {
 	return nil
 }
 
-func addListNode(pc *SubGraph, dst outputNode) error {
-	if pc.Params.DoCount {
-		addCount(pc, uint64(len(pc.valueMatrix)), dst)
-		return nil
-	}
-
-	fieldName := pc.Attr
-	if pc.Params.Alias != "" {
-		fieldName = pc.Params.Alias
-	}
-	for _, val := range pc.valueMatrix {
-		v, err := getValue(val.Values[0])
-		if err != nil {
-			return err
-		}
-		sv, err := types.Convert(v, v.Tid)
-		uc := dst.New(pc.Attr)
-		uc.AddValue("_name_", sv)
-		dst.AddListChild(fieldName, uc)
-	}
-	return nil
-}
-
 func addCheckPwd(pc *SubGraph, val *protos.TaskValue, dst outputNode) {
 	c := types.ValueForType(types.BoolID)
 	c.Value = task.ToBool(val)
@@ -416,13 +389,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				continue
 			}
 			if err := addInternalNode(pc, uid, dst); err != nil {
-				return err
-			}
-			continue
-		}
-
-		if pc.IsListNode() {
-			if err := addListNode(pc, dst); err != nil {
 				return err
 			}
 			continue
@@ -1419,7 +1385,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		return nil
 	}
 
-	if sg.IsListNode() {
+	if sg.Attr == "_predicate_" {
 		// This is a predicates list.
 		doneVars[sg.Params.Var] = varValue{
 			strList: sg.valueMatrix,
@@ -1619,6 +1585,17 @@ func (sg *SubGraph) appendDummyValues() {
 	}
 }
 
+func uniquePreds(vl []*protos.ValuesList) map[string]struct{} {
+	preds := make(map[string]struct{})
+
+	for _, l := range vl {
+		for _, v := range l.Values {
+			preds[string(v.Val)] = struct{}{}
+		}
+	}
+	return preds
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
@@ -1684,9 +1661,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 
-			if sg.Attr == "_predicate_" {
-				sg.Params.isListNode = true
-			}
 			sg.uidMatrix = result.UidMatrix
 			sg.valueMatrix = result.ValueMatrix
 			sg.facetsMatrix = result.FacetMatrix
@@ -1842,16 +1816,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				}
 			}
 
-			for _, v := range child.ExpandPreds {
+			up := uniquePreds(child.ExpandPreds)
+
+			for k, _ := range up {
 				temp := new(SubGraph)
 				*temp = *child
 				temp.Params.isInternal = false
 				temp.Params.Expand = ""
-				if v.Values[0].ValType != int32(types.StringID) {
-					rch <- x.Errorf("Expected a string type")
-					return
-				}
-				temp.Attr = string(v.Values[0].Val)
+				temp.Attr = k
 				for _, ch := range sg.Children {
 					if ch.isSimilar(temp) {
 						rch <- x.Errorf("Repeated subgraph while using expand()")
@@ -2129,7 +2101,6 @@ func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.Values
 	temp := new(SubGraph)
 	temp.Attr = "_predicate_"
 	temp.SrcUIDs = uids
-	temp.Params.isListNode = true
 	taskQuery := createTaskQuery(temp)
 	result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 	if err != nil {

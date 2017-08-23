@@ -271,7 +271,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runQuery(q4)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","age"]}]}}`, output)
 
 	err = runMutation(m2)
 	require.NoError(t, err)
@@ -289,7 +289,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runQuery(q4)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","age"]}]}}`, output)
 
 	// Lets try to change the type of predicates now.
 	err = runMutation(s2)
@@ -738,7 +738,7 @@ func TestDeleteAllSP(t *testing.T) {
 			uid(a) * * .
 		}
 	}
-	
+
 	{
 		a as var(func: uid(1))
 	}
@@ -782,7 +782,7 @@ func TestDeleteAllSP(t *testing.T) {
 
 	output, err = runQuery(q3)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"_predicate_":[{"_name_":"friend"},{"_name_":"name"}]}]}}`,
+	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","friend"]}]}}`,
 		output)
 
 	output, err = runQuery(q4)
@@ -999,7 +999,7 @@ func TestListPred(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"listpred":[{"_predicate_":[{"_name_":"age"},{"_name_":"friend"},{"_name_":"name"}]}]}}`,
+	require.Equal(t, `{"data": {"listpred":[{"_predicate_":["name","age","friend"]}]}}`,
 		output)
 }
 
@@ -1048,7 +1048,7 @@ func TestExpandPredError(t *testing.T) {
 func TestExpandPred(t *testing.T) {
 	var q1 = `
 	{
-		me(func:anyofterms(name, "Alice")) {
+		me(func: uid(0x11)) {
 			expand(_all_) {
 				expand(_all_)
 			}
@@ -1058,9 +1058,9 @@ func TestExpandPred(t *testing.T) {
 	var m = `
 	mutation {
 		set {
-			<0x1> <name> "Alice" .
-			<0x1> <age> "13" .
-			<0x1> <friend> <0x4> .
+			<0x11> <name> "Alice" .
+			<0x11> <age> "13" .
+			<0x11> <friend> <0x4> .
 			<0x4> <name> "bob" .
 			<0x4> <age> "12" .
 		}
