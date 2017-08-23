@@ -466,8 +466,8 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlerInit does some standard checks. Returns false if something is wrong.
-func handlerInit(w http.ResponseWriter, r *http.Request, allowedMethod string) bool {
-	if r.Method != allowedMethod {
+func handlerInit(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodGet {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return false
 	}
@@ -481,7 +481,7 @@ func handlerInit(w http.ResponseWriter, r *http.Request, allowedMethod string) b
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, http.MethodGet) {
+	if !handlerInit(w, r) {
 		return
 	}
 
@@ -510,7 +510,7 @@ func shutdownServer() {
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, http.MethodGet) {
+	if !handlerInit(w, r) {
 		return
 	}
 	ctx := context.Background()

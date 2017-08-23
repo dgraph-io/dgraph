@@ -56,17 +56,17 @@ var (
 // WhiteSpace Replacer removes spaces and tabs from a string.
 var WhiteSpace = strings.NewReplacer(" ", "", "\t", "")
 
-type ErrRes struct {
+type errRes struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 
-type QueryRes struct {
-	Errors []ErrRes `json:"errors"`
+type queryRes struct {
+	Errors []errRes `json:"errors"`
 }
 
-func (q *QueryRes) AddStatus(code, msg string) {
-	q.Errors = append(q.Errors, ErrRes{Code: code, Message: msg})
+func (q *queryRes) AddStatus(code, msg string) {
+	q.Errors = append(q.Errors, errRes{Code: code, Message: msg})
 }
 
 // SetError sets the error logged in this package.
@@ -79,8 +79,8 @@ func SetError(prev *error, n error) {
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string) {
-	var qr QueryRes
-	qr.Errors = append(qr.Errors, ErrRes{Code: code, Message: msg})
+	var qr queryRes
+	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
 	if js, err := json.Marshal(qr); err == nil {
 		w.Write(js)
 	} else {
@@ -89,7 +89,7 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 }
 
 type queryResWithData struct {
-	Errors []ErrRes `json:"errors"`
+	Errors []errRes `json:"errors"`
 	Data   *string  `json:"data"`
 }
 
@@ -97,7 +97,7 @@ type queryResWithData struct {
 // key with null value according to GraphQL spec.
 func SetStatusWithData(w http.ResponseWriter, code, msg string) {
 	var qr queryResWithData
-	qr.Errors = append(qr.Errors, ErrRes{Code: code, Message: msg})
+	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
 	// This would ensure that data key is present with value null.
 	if js, err := json.Marshal(qr); err == nil {
 		w.Write(js)
