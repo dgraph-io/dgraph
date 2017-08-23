@@ -261,24 +261,24 @@ type funcArgs struct {
 func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error) {
 	switch srcFn.fnType {
 	case AggregatorFn, PasswordFn:
-		return true
+		return true, nil
 	case CompareAttrFn:
 		if len(srcFn.tokens) > 0 {
-			return false
+			return false, nil
 		}
-		return true
+		return true, nil
 	case GeoFn, RegexFn, FullTextSearchFn, StandardFn, HasFn:
 		// All of these require index, hence would require fetching uid postings.
-		return false
+		return false, nil
 	case UidInFn, CompareScalarFn:
 		// Operate on uid postings
-		return false
+		return false, nil
 	case NotAFunction:
-		return typ.IsScalar()
+		return typ.IsScalar(), nil
 	default:
-		x.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
+		return false, x.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
 	}
-	return true
+	return true, nil
 }
 
 // Handles fetching of value posting lists and filtering of uids based on that.
@@ -289,19 +289,20 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 	gid := args.gid
 	out := args.out
 
+	switch srcFn.fnType {
+	case NotAFunction, AggregatorFn, PasswordFn, CompareAttrFn:
+	default:
+		return x.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
+	}
+
+	var key []byte
 	for i := 0; i < srcFn.n; i++ {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
-		var key []byte
-		switch srcFn.fnType {
-		case NotAFunction, AggregatorFn, PasswordFn, CompareAttrFn:
-			key = x.DataKey(attr, q.UidList.Uids[i])
-		default:
-			x.Fatalf("Unhandled function in handleValuePostings: %s", srcFn.fname)
-		}
+		key = x.DataKey(attr, q.UidList.Uids[i])
 
 		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, gid)
@@ -413,7 +414,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		case CompareAttrFn:
 			key = x.IndexKey(attr, srcFn.tokens[i])
 		default:
-			x.Fatalf("Unhandled function in handleUidPostings: %s", srcFn.fname)
+			return x.Errorf("Unhandled function in handleUidPostings: %s", srcFn.fname)
 		}
 
 		// Get or create the posting list for an entity, attribute combination.
@@ -527,7 +528,11 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 
 	args := funcArgs{q, gid, srcFn, out}
-	if fetchValuePostings(srcFn, typ) {
+	needsValPostings, err := srcFn.needsValuePostings(typ)
+	if err != nil {
+		return nil, err
+	}
+	if needsValPostings {
 		if err = handleValuePostings(ctx, args); err != nil {
 			return nil, err
 		}
