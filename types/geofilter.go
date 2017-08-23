@@ -53,13 +53,7 @@ type GeoQueryData struct {
 // IsGeoFunc returns if a function is of geo type.
 func IsGeoFunc(str string) bool {
 	switch str {
-	case "near":
-		return true
-	case "contains":
-		return true
-	case "within":
-		return true
-	case "intersects":
+	case "near", "contains", "within", "intersects":
 		return true
 	}
 

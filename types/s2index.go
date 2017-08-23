@@ -92,7 +92,7 @@ func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 const (
 	// MinCellLevel is the smallest cell level (largest cell size) used by indexing
 	MinCellLevel = 5 // Approx 250km x 380km
-	// MaxCellLevel is the largest cell leve (smallest cell size) used by indexing
+	// MaxCellLevel is the largest cell level (smallest cell size) used by indexing
 	MaxCellLevel = 16 // Approx 120m x 180m
 	// MaxCells is the maximum number of cells to use when indexing regions.
 	MaxCells = 18
