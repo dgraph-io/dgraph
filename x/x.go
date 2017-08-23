@@ -65,10 +65,6 @@ type queryRes struct {
 	Errors []errRes `json:"errors"`
 }
 
-func (q *queryRes) AddStatus(code, msg string) {
-	q.Errors = append(q.Errors, errRes{Code: code, Message: msg})
-}
-
 // SetError sets the error logged in this package.
 func SetError(prev *error, n error) {
 	if prev == nil {
