@@ -534,8 +534,13 @@ func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
-	var memoryMB float64
-	if _, err := fmt.Fscanf(r.Body, "%f", &memoryMB); err != nil {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	memoryMB, err := strconv.ParseFloat(string(body), 64)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
