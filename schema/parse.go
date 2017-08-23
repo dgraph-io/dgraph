@@ -61,6 +61,10 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	for _, update := range updates {
 		State().Set(update.Predicate, From(update))
 	}
+	State().Set("_predicate_", protos.SchemaUpdate{
+		ValueType: uint32(types.StringID),
+		List:      true,
+	})
 	return nil
 }
 

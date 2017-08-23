@@ -459,11 +459,6 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 			// Plain value for non-list type and without a language.
 			t.ValueId = math.MaxUint64
 		}
-
-		// TODO - Get rid of this handling here once we support multiple values for a predicate.
-		if t.Attr == "_predicate_" {
-			t.ValueId = farm.Fingerprint64(t.Value)
-		}
 	}
 	if t.ValueId == 0 {
 		err := x.Errorf("ValueId cannot be zero")

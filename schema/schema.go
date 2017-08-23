@@ -314,6 +314,10 @@ func LoadFromDb(gid uint32) error {
 		}
 		State().Set(attr, s)
 	}
+	State().Set("_predicate_", protos.SchemaUpdate{
+		ValueType: uint32(types.StringID),
+		List:      true,
+	})
 	return nil
 }
 
