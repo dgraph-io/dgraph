@@ -497,18 +497,6 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	out := new(protos.Result)
 	attr := q.Attr
-	typ, err := schema.State().TypeOf(attr)
-	if err != nil {
-		// Schema not defined, so lets add dummy values and return.
-		emptyVal := new(protos.TaskValue)
-		// Adding dummy values is important because the code assumes that len(SrcUids) equals
-		// len(uidMatrix)
-		for i := 0; i < len(q.UidList.Uids); i++ {
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			out.Values = append(out.Values, emptyVal)
-		}
-		return out, nil
-	}
 
 	if attr == "_predicate_" {
 		return getAllPredicates(ctx, q, gid)
@@ -524,6 +512,22 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	}
 	if needsIndex(srcFn.fnType) && !schema.State().IsIndexed(q.Attr) {
 		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
+	}
+
+	typ, err := schema.State().TypeOf(attr)
+	if err != nil {
+		if q.UidList == nil {
+			return out, nil
+		}
+		// Schema not defined, so lets add dummy values and return.
+		emptyVal := new(protos.TaskValue)
+		// Adding dummy values is important because the code assumes that len(SrcUids) equals
+		// len(uidMatrix)
+		for i := 0; i < len(q.UidList.Uids); i++ {
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			out.Values = append(out.Values, emptyVal)
+		}
+		return out, nil
 	}
 
 	opts := posting.ListOptions{

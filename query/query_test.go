@@ -8879,3 +8879,47 @@ func TestFilterLang(t *testing.T) {
 	require.JSONEq(t,
 		`{"data": {"me":[{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"}]}}`, js)
 }
+
+func TestMathCeil1(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me as var(func: eq(name, "Xyz"))
+		var(func: uid(me)) {
+			friend {
+				x as age
+			}
+			x2 as sum(val(x))
+			c as count(friend)
+		}
+
+		me(func: uid(me)) {
+			ceilAge: math(ceil(x2/c))
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {}}`, js)
+}
+
+func TestMathCeil2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me as var(func: eq(name, "Michonne"))
+		var(func: uid(me)) {
+			friend {
+				x as age
+			}
+			x2 as sum(val(x))
+			c as count(friend)
+		}
+
+		me(func: uid(me)) {
+			ceilAge: math(ceil(x2/c))
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
+}

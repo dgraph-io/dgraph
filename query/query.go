@@ -1410,52 +1410,55 @@ func (sg *SubGraph) assignVars(doneVars map[string]varValue, sgPath []*SubGraph)
 }
 
 func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*SubGraph) error {
-	if sg.Params.Var != "" {
-		if sg.IsListNode() {
-			// This is a predicates list.
-			doneVars[sg.Params.Var] = varValue{
-				strList: sg.values,
-				path:    sgPath,
+	if sg.Params.Var == "" {
+		return nil
+	}
+
+	if sg.IsListNode() {
+		// This is a predicates list.
+		doneVars[sg.Params.Var] = varValue{
+			strList: sg.values,
+			path:    sgPath,
+		}
+	} else if len(sg.counts) > 0 {
+		// This implies it is a value variable.
+		doneVars[sg.Params.Var] = varValue{
+			Vals: make(map[uint64]types.Val),
+			path: sgPath,
+		}
+		for idx, uid := range sg.SrcUIDs.Uids {
+			val := types.Val{
+				Tid:   types.IntID,
+				Value: int64(sg.counts[idx]),
 			}
-		} else if len(sg.counts) != 0 {
-			// This implies it is a value variable.
-			doneVars[sg.Params.Var] = varValue{
-				Vals: make(map[uint64]types.Val),
-				path: sgPath,
+			doneVars[sg.Params.Var].Vals[uid] = val
+		}
+	} else if len(sg.DestUIDs.Uids) != 0 {
+		// This implies it is a entity variable.
+		doneVars[sg.Params.Var] = varValue{
+			Uids: sg.DestUIDs,
+			path: sgPath,
+		}
+	} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
+		// This implies it is a value variable.
+		// NOTE: Value variables cannot be defined and used in the same query block. so
+		// checking len(sgPath) is okay.
+		doneVars[sg.Params.Var] = varValue{
+			Vals: make(map[uint64]types.Val),
+			path: sgPath,
+		}
+		for idx, uid := range sg.SrcUIDs.Uids {
+			val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
+			if err != nil {
+				continue
 			}
-			for idx, uid := range sg.SrcUIDs.Uids {
-				val := types.Val{
-					Tid:   types.IntID,
-					Value: int64(sg.counts[idx]),
-				}
-				doneVars[sg.Params.Var].Vals[uid] = val
-			}
-		} else if len(sg.DestUIDs.Uids) != 0 {
-			// This implies it is a entity variable.
-			doneVars[sg.Params.Var] = varValue{
-				Uids: sg.DestUIDs,
-				path: sgPath,
-			}
-		} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
-			// This implies it is a value variable.
-			// NOTE: Value variables cannot be defined and used in the same query block. so
-			// checking len(sgPath) is okay.
-			doneVars[sg.Params.Var] = varValue{
-				Vals: make(map[uint64]types.Val),
-				path: sgPath,
-			}
-			for idx, uid := range sg.SrcUIDs.Uids {
-				val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
-				if err != nil {
-					continue
-				}
-				doneVars[sg.Params.Var].Vals[uid] = val
-			}
-		} else {
-			// Insert a empty entry to keep the dependency happy.
-			doneVars[sg.Params.Var] = varValue{
-				path: sgPath,
-			}
+			doneVars[sg.Params.Var].Vals[uid] = val
+		}
+	} else {
+		// Insert a empty entry to keep the dependency happy.
+		doneVars[sg.Params.Var] = varValue{
+			path: sgPath,
+			Vals: make(map[uint64]types.Val),
 		}
 	}
 	return nil
