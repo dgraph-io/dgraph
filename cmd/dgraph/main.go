@@ -522,41 +522,43 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"code": "Success", "message": "Export completed."}`))
 }
 
-func requestHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, http.MethodPut) {
+func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		memoryLimitGetHandler(w, r)
+	case http.MethodPut:
+		memoryLimitPutHandler(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
+	var memoryMB float64
+	if _, err := fmt.Fscanf(r.Body, "%f", &memoryMB); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := r.ParseForm(); err != nil {
-		x.SetStatus(w, x.ErrorInvalidRequest, "Could not parse form: "+err.Error())
+	if memoryMB < dgraph.MinAllottedMemory {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "memory_mb must be at least %.0f\n", dgraph.MinAllottedMemory)
 		return
 	}
-	var res x.QueryRes
-	for k, v := range r.PostForm {
-		if len(v) == 0 {
-			continue
-		}
-		switch k {
-		case "memory_mb":
-			memStr := v[0]
-			memFlt, err := strconv.ParseFloat(memStr, 64)
-			if err != nil {
-				res.AddStatus(x.ErrorInvalidRequest, "Invalid for memory_mb: "+memStr)
-				continue
-			}
-			if memFlt < dgraph.MinAllottedMemory {
-				res.AddStatus(x.ErrorInvalidRequest,
-					fmt.Sprintf("memory_mb must be at least %.0f", dgraph.MinAllottedMemory))
-				continue
-			}
-			posting.Config.Mu.Lock()
-			posting.Config.AllottedMemory = memFlt
-			posting.Config.Mu.Unlock()
-			res.AddStatus("Success", fmt.Sprintf("memory_mb set to %f", memFlt))
-		default:
-			res.AddStatus(x.ErrorInvalidRequest, "Unknown parameter name: "+k)
-		}
+
+	posting.Config.Mu.Lock()
+	posting.Config.AllottedMemory = memoryMB
+	posting.Config.Mu.Unlock()
+	w.WriteHeader(http.StatusOK)
+}
+
+func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
+	posting.Config.Mu.Lock()
+	memoryMB := posting.Config.AllottedMemory
+	posting.Config.Mu.Unlock()
+
+	if _, err := fmt.Fprintln(w, memoryMB); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	x.Reply(w, res)
 }
 
 func hasGraphOps(mu *protos.Mutation) bool {
@@ -695,7 +697,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/export", exportHandler)
-	http.HandleFunc("/admin/request", requestHandler)
+	http.HandleFunc("/admin/config/memory_mb", memoryLimitHandler)
 
 	// UI related API's.
 	// Share urls have a hex string as the shareId. So if
