@@ -17,6 +17,7 @@
 package y
 
 import (
+	"hash/crc32"
 	"log"
 	"os"
 	"sync"
@@ -33,10 +34,40 @@ const (
 var (
 	// This is O_DSYNC (datasync) on platforms that support it -- see file_unix.go
 	datasyncFileFlag = 0x0
+
+	// CastagnoliCrcTable is a CRC32 polynomial table
+	CastagnoliCrcTable = crc32.MakeTable(crc32.Castagnoli)
 )
 
+// OpenExistingSyncedFile opens an existing file, errors if it doesn't exist.
+func OpenExistingSyncedFile(filename string, sync bool) (*os.File, error) {
+	flags := os.O_RDWR
+	if sync {
+		flags |= datasyncFileFlag
+	}
+	return os.OpenFile(filename, flags, 0)
+}
+
+// CreateSyncedFile creates a new file (using O_EXCL), errors if it already existed.
+func CreateSyncedFile(filename string, sync bool) (*os.File, error) {
+	flags := os.O_RDWR | os.O_CREATE | os.O_EXCL
+	if sync {
+		flags |= datasyncFileFlag
+	}
+	return os.OpenFile(filename, flags, 0666)
+}
+
+// OpenSyncedFile creates the file if one doesn't exist.
 func OpenSyncedFile(filename string, sync bool) (*os.File, error) {
 	flags := os.O_RDWR | os.O_CREATE
+	if sync {
+		flags |= datasyncFileFlag
+	}
+	return os.OpenFile(filename, flags, 0666)
+}
+
+func OpenTruncFile(filename string, sync bool) (*os.File, error) {
+	flags := os.O_RDWR | os.O_CREATE | os.O_TRUNC
 	if sync {
 		flags |= datasyncFileFlag
 	}

@@ -232,3 +232,70 @@ func RemoveDuplicates(s []string) (out []string) {
 	}
 	return
 }
+
+type BytesBuffer struct {
+	data [][]byte
+	off  int
+	sz   int
+}
+
+func (b *BytesBuffer) grow(n int) {
+	if n < 128 {
+		n = 128
+	}
+	if len(b.data) == 0 {
+		b.data = append(b.data, make([]byte, n, n))
+	}
+
+	last := len(b.data) - 1
+	// Return if we have sufficient space
+	if len(b.data[last])-b.off >= n {
+		return
+	}
+	sz := len(b.data[last]) * 2
+	if sz > 512<<10 {
+		sz = 512 << 10 // 512 KB
+	}
+	if sz < n {
+		sz = n
+	}
+	b.data[last] = b.data[last][:b.off]
+	b.sz += len(b.data[last])
+	b.data = append(b.data, make([]byte, sz, sz))
+	b.off = 0
+}
+
+// returns a slice of lenght n to be used to writing
+func (b *BytesBuffer) Slice(n int) []byte {
+	b.grow(n)
+	last := len(b.data) - 1
+	b.off += n
+	b.sz += n
+	return b.data[last][b.off-n : b.off]
+}
+
+func (b *BytesBuffer) Length() int {
+	return b.sz
+}
+
+// Caller should ensure that o is of appropriate length
+func (b *BytesBuffer) CopyTo(o []byte) int {
+	offset := 0
+	for i, d := range b.data {
+		if i == len(b.data)-1 {
+			copy(o[offset:], d[:b.off])
+			offset += b.off
+		} else {
+			copy(o[offset:], d)
+			offset += len(d)
+		}
+	}
+	return offset
+}
+
+// Always give back <= touched bytes
+func (b *BytesBuffer) TruncateBy(n int) {
+	b.off -= n
+	b.sz -= n
+	AssertTrue(b.off >= 0 && b.sz >= 0)
+}

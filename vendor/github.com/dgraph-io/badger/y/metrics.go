@@ -16,31 +16,37 @@
 
 package y
 
-import (
-	"expvar"
-)
+import "expvar"
 
 var (
+	LSMSize  *expvar.Map
+	VlogSize *expvar.Map
+
 	// These are cumulative
-	NumGets         *expvar.Int
-	NumPuts         *expvar.Int
 	NumReads        *expvar.Int
 	NumWrites       *expvar.Int
 	NumBytesRead    *expvar.Int
 	NumBytesWritten *expvar.Int
-	NumMemtableGets *expvar.Int
 	NumLSMGets      *expvar.Map
 	NumLSMBloomHits *expvar.Map
+	NumGets         *expvar.Int
+	NumPuts         *expvar.Int
+	NumBlockedPuts  *expvar.Int
+	NumMemtableGets *expvar.Int
 )
 
+// these variables are global and would have cummulative values for all kv stores.
 func init() {
 	NumReads = expvar.NewInt("badger_disk_reads_total")
 	NumWrites = expvar.NewInt("badger_disk_writes_total")
 	NumBytesRead = expvar.NewInt("badger_read_bytes")
 	NumBytesWritten = expvar.NewInt("badger_written_bytes")
-	NumGets = expvar.NewInt("badger_gets_total")
-	NumPuts = expvar.NewInt("badger_puts_total")
-	NumMemtableGets = expvar.NewInt("badger_memtable_gets_total")
 	NumLSMGets = expvar.NewMap("badger_lsm_level_gets_total")
 	NumLSMBloomHits = expvar.NewMap("badger_lsm_bloom_hits_total")
+	NumGets = expvar.NewInt("badger_gets_total")
+	NumPuts = expvar.NewInt("badger_puts_total")
+	NumBlockedPuts = expvar.NewInt("badger_blocked_puts_total")
+	NumMemtableGets = expvar.NewInt("badger_memtable_gets_total")
+	LSMSize = expvar.NewMap("badger_lsm_size")
+	VlogSize = expvar.NewMap("badger_vlog_size")
 }

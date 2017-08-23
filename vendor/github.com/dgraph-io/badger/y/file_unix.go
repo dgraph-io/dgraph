@@ -1,4 +1,4 @@
-// +build darwin linux netbsd openbsd solaris
+// +build !dragonfly, !freebsd, !windows
 
 /*
  * Copyright 2017 Dgraph Labs, Inc. and Contributors

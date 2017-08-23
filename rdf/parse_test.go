@@ -373,12 +373,8 @@ var testNQuads = []struct {
 		expectedErr: true,
 	},
 	{
-		input: `_:alice <knows> <bob> . <bob>`, // ignores the <bob> after dot.
-		nq: protos.NQuad{
-			Subject:   "_:alice",
-			Predicate: "knows",
-			ObjectId:  "bob",
-		},
+		input:       `_:alice <knows> <bob> . <bob>`, // throws error because of <bob> after dot.
+		expectedErr: true,
 	},
 	{
 		input: `_:alice <likes> "mov\"enpick" .`,
@@ -854,6 +850,10 @@ var testNQuads = []struct {
 	},
 	{
 		input:       `* <pred> "random"^^<int> .`,
+		expectedErr: true,
+	},
+	{
+		input:       `_:company <name> "TurfBytes" . _:company <owner> _:owner . _:owner <name> "Jason" .  `,
 		expectedErr: true,
 	},
 }

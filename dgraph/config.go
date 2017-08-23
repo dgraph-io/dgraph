@@ -29,7 +29,6 @@ type Options struct {
 	PostingTables string
 	WALDir        string
 	Nomutations   bool
-	NumPending    int
 
 	AllottedMemory float64
 	CommitFraction float64
@@ -58,7 +57,6 @@ var DefaultConfig = Options{
 	PostingTables: "loadtoram",
 	WALDir:        "w",
 	Nomutations:   false,
-	NumPending:    1000,
 
 	// User must specify this.
 	AllottedMemory: -1.0,
@@ -110,5 +108,8 @@ func (o *Options) validate() {
 	wd, err := filepath.Abs(o.WALDir)
 	x.Check(err)
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", o.PostingDir)
-	x.AssertTruef(o.AllottedMemory > 1024.0, "Allotted memory for Dgraph should be at least 1GB. Current set to: %f", o.AllottedMemory)
+	x.AssertTruef(o.AllottedMemory != DefaultConfig.AllottedMemory,
+		"Allotted memory (--memory_mb) must be specified, with value greater than 1024 MB")
+	x.AssertTruef(o.AllottedMemory >= 1024.0,
+		"Allotted memory (--memory_mb) must be at least 1024 MB. Currently set to: %f", o.AllottedMemory)
 }

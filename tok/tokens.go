@@ -32,8 +32,10 @@ func GetTokens(funcArgs []string) ([]string, error) {
 
 func GetTextTokens(funcArgs []string, lang string) ([]string, error) {
 	t, found := GetTokenizer("fulltext" + lang)
-	x.AssertTruef(found, "Tokenizer not found for %s", "fulltext"+lang)
-	return tokenize(funcArgs, t)
+	if found {
+		return tokenize(funcArgs, t)
+	}
+	return nil, x.Errorf("Tokenizer not found for %s", "fulltext"+lang)
 }
 
 func tokenize(funcArgs []string, tokenizer Tokenizer) ([]string, error) {

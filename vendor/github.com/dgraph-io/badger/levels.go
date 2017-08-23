@@ -17,16 +17,17 @@
 package badger
 
 import (
-	"encoding/binary"
+	"bytes"
+	"fmt"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 	"time"
 
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/badger/protos"
 	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/badger/y"
 	"github.com/pkg/errors"
@@ -37,16 +38,12 @@ type levelsController struct {
 
 	// The following are initialized once and const.
 	levels []*levelHandler
-	clog   compactLog
 	kv     *KV
 
-	// Atomic.
-	maxFileID    uint64 // Next ID to be used.
-	maxCompactID uint64
+	nextFileID uint64 // Atomic
 
 	// For ending compactions.
-	compactWorkersDone chan struct{}
-	compactWorkersWg   sync.WaitGroup
+	compactWorkersWg sync.WaitGroup
 
 	cstatus compactStatus
 }
@@ -56,7 +53,32 @@ var (
 	lastUnstalled time.Time
 )
 
-func newLevelsController(kv *KV) (*levelsController, error) {
+// revertToManifest checks that all necessary table files exist and removes all table files not
+// referenced by the manifest.  idMap is a set of table file id's that were read from the directory
+// listing.
+func revertToManifest(kv *KV, mf *Manifest, idMap map[uint64]struct{}) error {
+	// 1. Check all files in manifest exist.
+	for id := range mf.Tables {
+		if _, ok := idMap[id]; !ok {
+			return fmt.Errorf("file does not exist for table %d", id)
+		}
+	}
+
+	// 2. Delete files that shouldn't exist.
+	for id := range idMap {
+		if _, ok := mf.Tables[id]; !ok {
+			kv.elog.Printf("Table file %d not referenced in MANIFEST\n", id)
+			filename := table.NewFilename(id, kv.opt.Dir)
+			if err := os.Remove(filename); err != nil {
+				return y.Wrapf(err, "While removing table %d", id)
+			}
+		}
+	}
+
+	return nil
+}
+
+func newLevelsController(kv *KV, mf *Manifest) (*levelsController, error) {
 	y.AssertTrue(kv.opt.NumLevelZeroTablesStall > kv.opt.NumLevelZeroTables)
 	s := &levelsController{
 		kv:     kv,
@@ -78,48 +100,36 @@ func newLevelsController(kv *KV) (*levelsController, error) {
 		s.cstatus.levels[i] = new(levelCompactStatus)
 	}
 
-	// Replay compact log. Check against files in directory.
-	clogName := filepath.Join(kv.opt.Dir, "clog")
-	_, err := os.Stat(clogName)
-	if err == nil {
-		kv.elog.Printf("Replaying compact log: %s\n", clogName)
-		compactLogReplay(clogName, kv.opt.Dir, getIDMap(kv.opt.Dir))
-
-		if err := os.Remove(clogName); err != nil { // Everything is ok. Clear compact log.
-			return nil, errors.Wrapf(err, "Removing compaction log: %q", clogName)
-		}
+	// Compare manifest against directory, check for existant/non-existant files, and remove.
+	if err := revertToManifest(kv, mf, getIDMap(kv.opt.Dir)); err != nil {
+		return nil, err
 	}
 
 	// Some files may be deleted. Let's reload.
 	tables := make([][]*table.Table, kv.opt.MaxLevels)
-	for fileID := range getIDMap(kv.opt.Dir) {
+	var maxFileID uint64
+	for fileID, tableManifest := range mf.Tables {
 		fname := table.NewFilename(fileID, kv.opt.Dir)
-		fd, err := y.OpenSyncedFile(fname, true)
+		fd, err := y.OpenExistingSyncedFile(fname, true)
 		if err != nil {
-			closeAllUnmodifiedTables(tables)
+			closeAllTables(tables)
 			return nil, errors.Wrapf(err, "Opening file: %q", fname)
 		}
 
 		t, err := table.OpenTable(fd, kv.opt.MapTablesTo)
 		if err != nil {
-			closeAllUnmodifiedTables(tables)
+			closeAllTables(tables)
 			return nil, errors.Wrapf(err, "Opening table: %q", fname)
 		}
 
-		// Check metadata for level information.
-		tableMeta := t.Metadata()
-		y.AssertTruef(len(tableMeta) == 2, "len(tableMeta). Expected=2. Actual=%d", len(tableMeta))
-
-		level := int(binary.BigEndian.Uint16(tableMeta))
-		y.AssertTruef(level < kv.opt.MaxLevels, "max(level). Expected=%d. Actual=%d",
-			kv.opt.MaxLevels, level)
+		level := tableManifest.Level
 		tables[level] = append(tables[level], t)
 
-		if fileID > s.maxFileID {
-			s.maxFileID = fileID
+		if fileID > maxFileID {
+			maxFileID = fileID
 		}
 	}
-	s.maxFileID++
+	s.nextFileID = maxFileID + 1
 	for i, tbls := range tables {
 		s.levels[i].initTables(tbls)
 	}
@@ -130,13 +140,8 @@ func newLevelsController(kv *KV) (*levelsController, error) {
 		return nil, errors.Wrap(err, "Level validation")
 	}
 
-	// Create new compact log.
-	if err := s.clog.init(clogName); err != nil {
-		_ = s.cleanupLevels()
-		return nil, errors.Wrap(err, "Compaction Log")
-	}
-
-	// Sync directory (because we have at least removed/created compaction log files)
+	// Sync directory (because we have at least removed some files, or previously created the
+	// manifest file).
 	if err := syncDir(kv.opt.Dir); err != nil {
 		_ = s.close()
 		return nil, errors.Wrap(err, "Directory entry for compaction log")
@@ -146,11 +151,9 @@ func newLevelsController(kv *KV) (*levelsController, error) {
 }
 
 // Closes the tables, for cleanup in newLevelsController.  (We Close() instead of using DecrRef()
-// because that would delete the underlying files.)  We ignore errors when closing the table, which
-// is OK because we haven't modified the table.  (It's an LSM tree, but we do hypothetically modify
-// the file with SetMetadata.)  (Even then, we open the files with O_DSYNC, so the only plausible
-// error on Close() would have been from writing file metadata.)
-func closeAllUnmodifiedTables(tables [][]*table.Table) {
+// because that would delete the underlying files.)  We ignore errors, which is OK because tables
+// are read-only.
+func closeAllTables(tables [][]*table.Table) {
 	for _, tableSlice := range tables {
 		for _, table := range tableSlice {
 			_ = table.Close()
@@ -191,7 +194,9 @@ func (s *levelsController) runWorker(lc *y.LevelCloser) {
 		case <-timeChan:
 			prios := s.pickCompactLevels()
 			for _, p := range prios {
-				if s.doCompact(p) {
+				// TODO: Handle error.
+				didCompact, _ := s.doCompact(p)
+				if didCompact {
 					break
 				}
 			}
@@ -238,8 +243,7 @@ func (s *levelsController) pickCompactLevels() (prios []compactionPriority) {
 
 // compactBuildTables merge topTables and botTables to form a list of new tables.
 func (s *levelsController) compactBuildTables(
-	l int, cd compactDef, c *compaction) ([]*table.Table, func() error) {
-
+	l int, cd compactDef) ([]*table.Table, func() error, error) {
 	topTables := cd.top
 	botTables := cd.bot
 
@@ -260,13 +264,13 @@ func (s *levelsController) compactBuildTables(
 	it.Rewind()
 
 	// Start generating new tables.
-	newTables := make([]*table.Table, len(c.toInsert))
-	che := make(chan error, len(c.toInsert))
+	type newTableResult struct {
+		table *table.Table
+		err   error
+	}
+	resultCh := make(chan newTableResult)
 	var i int
-	newIDMin, newIDMax := c.toInsert[0], c.toInsert[len(c.toInsert)-1]
-	newID := newIDMin
 	for ; it.Valid(); i++ {
-		y.AssertTruef(i < len(newTables), "Rewriting too many tables: %d %d", i, len(newTables))
 		timeStart := time.Now()
 		builder := table.NewTableBuilder()
 		for ; it.Valid(); it.Next() {
@@ -281,37 +285,36 @@ func (s *levelsController) compactBuildTables(
 
 		cd.elog.LazyPrintf("LOG Compact. Iteration to generate one table took: %v\n", time.Since(timeStart))
 
-		y.AssertTruef(newID <= newIDMax, "%d %d", newID, newIDMax)
-		go func(idx int, fileID uint64, builder *table.TableBuilder) {
+		fileID := s.reserveFileID()
+		go func(builder *table.TableBuilder) {
 			defer builder.Close()
 
-			fd, err := y.OpenSyncedFile(table.NewFilename(fileID, s.kv.opt.Dir), true)
+			fd, err := y.CreateSyncedFile(table.NewFilename(fileID, s.kv.opt.Dir), true)
 			if err != nil {
-				che <- errors.Wrapf(err, "While opening new table: %d", fileID)
+				resultCh <- newTableResult{nil, errors.Wrapf(err, "While opening new table: %d", fileID)}
 				return
 			}
 
-			// Encode the level number as table metadata.
-			var levelNum [2]byte
-			binary.BigEndian.PutUint16(levelNum[:], uint16(l+1))
-			if _, err := fd.Write(builder.Finish(levelNum[:])); err != nil {
-				che <- errors.Wrapf(err, "Unable to write to file: %d", fileID)
+			if _, err := fd.Write(builder.Finish()); err != nil {
+				resultCh <- newTableResult{nil, errors.Wrapf(err, "Unable to write to file: %d", fileID)}
 				return
 			}
 
-			newTables[idx], err = table.OpenTable(fd, s.kv.opt.MapTablesTo)
+			tbl, err := table.OpenTable(fd, s.kv.opt.MapTablesTo)
 			// decrRef is added below.
-			che <- errors.Wrapf(err, "Unable to open table: %q", fd.Name())
-
-		}(i, newID, builder)
-		newID++
+			resultCh <- newTableResult{tbl, errors.Wrapf(err, "Unable to open table: %q", fd.Name())}
+		}(builder)
 	}
+
+	newTables := make([]*table.Table, 0, 20)
 
 	// Wait for all table builders to finish.
 	var firstErr error
 	for x := 0; x < i; x++ {
-		if err := <-che; err != nil && firstErr == nil {
-			firstErr = err
+		res := <-resultCh
+		newTables = append(newTables, res.table)
+		if firstErr == nil {
+			firstErr = res.err
 		}
 	}
 
@@ -325,25 +328,34 @@ func (s *levelsController) compactBuildTables(
 	if firstErr != nil {
 		// An error happened.  Delete all the newly created table files (by calling DecrRef
 		// -- we're the only holders of a ref).
-		for _, table := range newTables[:i] {
-			if table != nil {
-				_ = table.DecrRef()
+		for j := 0; j < i; j++ {
+			if newTables[j] != nil {
+				newTables[j].DecrRef()
 			}
 		}
-		errorReturn := errors.Wrapf(firstErr, "While running compaction for: %+v", c)
-		return nil, func() error { return errorReturn }
+		errorReturn := errors.Wrapf(firstErr, "While running compaction for: %+v", cd)
+		return nil, nil, errorReturn
 	}
 
-	out := newTables[:i]
-	return out, func() error {
-		for _, t := range out {
-			// replaceTables will increment reference.
-			if err := t.DecrRef(); err != nil {
-				return err
-			}
-		}
-		return nil
+	sort.Slice(newTables, func(i, j int) bool {
+		return bytes.Compare(newTables[i].Biggest(), newTables[j].Biggest()) < 0
+	})
+
+	return newTables, func() error { return decrRefs(newTables) }, nil
+}
+
+func buildChangeSet(cd *compactDef, newTables []*table.Table) protos.ManifestChangeSet {
+	changes := []*protos.ManifestChange{}
+	for _, table := range newTables {
+		changes = append(changes, makeTableCreateChange(table.ID(), cd.nextLevel.level))
 	}
+	for _, table := range cd.top {
+		changes = append(changes, makeTableDeleteChange(table.ID()))
+	}
+	for _, table := range cd.bot {
+		changes = append(changes, makeTableDeleteChange(table.ID()))
+	}
+	return protos.ManifestChangeSet{Changes: changes}
 }
 
 type compactDef struct {
@@ -453,7 +465,7 @@ func (s *levelsController) fillTables(cd *compactDef) bool {
 	return false
 }
 
-func (s *levelsController) runCompactDef(l int, cd compactDef) {
+func (s *levelsController) runCompactDef(l int, cd compactDef) (err error) {
 	timeStart := time.Now()
 	var readSize int64
 	for _, tbl := range cd.top {
@@ -468,47 +480,77 @@ func (s *levelsController) runCompactDef(l int, cd compactDef) {
 
 	if thisLevel.level >= 1 && len(cd.bot) == 0 {
 		y.AssertTrue(len(cd.top) == 1)
-
-		nextLevel.replaceTables(cd.top)
-		thisLevel.deleteTables(cd.top)
-
 		tbl := cd.top[0]
-		tbl.UpdateLevel(l + 1)
+
+		// We write to the manifest _before_ we delete files (and after we created files).
+		changeSet := protos.ManifestChangeSet{
+			Changes: []*protos.ManifestChange{
+				// The order matters here -- you can't temporarily have two copies of the same
+				// table id when reloading the manifest.
+				makeTableDeleteChange(tbl.ID()),
+				makeTableCreateChange(tbl.ID(), nextLevel.level),
+			},
+		}
+		if err := s.kv.manifest.addChanges(changeSet); err != nil {
+			return err
+		}
+
+		// We have to add to nextLevel before we remove from thisLevel, not after.  This way, we
+		// don't have a bug where reads would see keys missing from both levels.
+
+		// Note: It's critical that we add tables (replace them) in nextLevel before deleting them
+		// in thisLevel.  (We could finagle it atomically somehow.)  Also, when reading we must
+		// read, or at least acquire s.RLock(), in increasing order by level, so that we don't skip
+		// a compaction.
+
+		if err := nextLevel.replaceTables(cd.top); err != nil {
+			return err
+		}
+		if err := thisLevel.deleteTables(cd.top); err != nil {
+			return err
+		}
+
 		cd.elog.LazyPrintf("\tLOG Compact-Move %d->%d smallest:%s biggest:%s took %v\n",
 			l, l+1, string(tbl.Smallest()), string(tbl.Biggest()), time.Since(timeStart))
-		return
+		return nil
 	}
 
-	c := s.buildCompactionLogEntry(&cd)
-	//			if s.kv.opt.Verbose {
-	//				y.Printf("Compact start: %v\n", c)
-	//			}
-	s.clog.add(c)
-	newTables, decr := s.compactBuildTables(l, cd, c)
-	if newTables == nil {
-		err := decr()
-		// This compaction couldn't be done successfully.
-		cd.elog.LazyPrintf("\tLOG Compact FAILED with error: %+v: %+v %+v", err, cd, c)
-		return
+	newTables, decr, err := s.compactBuildTables(l, cd)
+	if err != nil {
+		return err
 	}
-	defer decr()
+	defer func() {
+		// Only assign to err, if it's not already nil.
+		if decErr := decr(); err == nil {
+			err = decErr
+		}
+	}()
+	changeSet := buildChangeSet(&cd, newTables)
 
-	nextLevel.replaceTables(newTables)
-	thisLevel.deleteTables(cd.top) // Function will acquire level lock.
+	// We write to the manifest _before_ we delete files (and after we created files)
+	if err := s.kv.manifest.addChanges(changeSet); err != nil {
+		return err
+	}
+
+	// See comment earlier in this function about the ordering of these ops, and the order in which
+	// we access levels when reading.
+	if err := nextLevel.replaceTables(newTables); err != nil {
+		return err
+	}
+	if err := thisLevel.deleteTables(cd.top); err != nil {
+		return err
+	}
 
 	// Note: For level 0, while doCompact is running, it is possible that new tables are added.
 	// However, the tables are added only to the end, so it is ok to just delete the first table.
 
-	// Write to compact log.
-	c.done = 1
-	s.clog.add(c)
-
 	cd.elog.LazyPrintf("LOG Compact %d->%d, del %d tables, add %d tables, took %v\n",
 		l, l+1, len(cd.top)+len(cd.bot), len(newTables), time.Since(timeStart))
+	return nil
 }
 
 // doCompact picks some table on level l and compacts it away to the next level.
-func (s *levelsController) doCompact(p compactionPriority) bool {
+func (s *levelsController) doCompact(p compactionPriority) (bool, error) {
 	l := p.level
 	y.AssertTrue(l+1 < s.kv.opt.MaxLevels) // Sanity check.
 
@@ -527,28 +569,43 @@ func (s *levelsController) doCompact(p compactionPriority) bool {
 	if l == 0 {
 		if !s.fillTablesL0(&cd) {
 			cd.elog.LazyPrintf("fillTables failed for level: %d\n", l)
-			return false
+			return false, nil
 		}
 
 	} else {
 		if !s.fillTables(&cd) {
 			cd.elog.LazyPrintf("fillTables failed for level: %d\n", l)
-			return false
+			return false, nil
 		}
 	}
 
 	cd.elog.LazyPrintf("Running for level: %d\n", cd.thisLevel.level)
 	s.cstatus.toLog(cd.elog)
-	s.runCompactDef(l, cd)
+	if err := s.runCompactDef(l, cd); err != nil {
+		// This compaction couldn't be done successfully.
+		cd.elog.LazyPrintf("\tLOG Compact FAILED with error: %+v: %+v", err, cd)
+		return false, err
+	}
 
 	// Done with compaction. So, remove the ranges from compaction status.
 	s.cstatus.delete(cd)
 	s.cstatus.toLog(cd.elog)
 	cd.elog.LazyPrintf("Compaction for level: %d DONE", cd.thisLevel.level)
-	return true
+	return true, nil
 }
 
-func (s *levelsController) addLevel0Table(t *table.Table) {
+func (s *levelsController) addLevel0Table(t *table.Table) error {
+	// We update the manifest _before_ the table becomes part of a levelHandler, because at that
+	// point it could get used in some compaction.  This ensures the manifest file gets updated in
+	// the proper order. (That means this update happens before that of some compaction which
+	// deletes the table.)
+	err := s.kv.manifest.addChanges(protos.ManifestChangeSet{Changes: []*protos.ManifestChange{
+		makeTableCreateChange(t.ID(), 0),
+	}})
+	if err != nil {
+		return err
+	}
+
 	for !s.levels[0].tryAddLevel0Table(t) {
 		// Stall. Make sure all levels are healthy before we unstall.
 		var timeStart time.Time
@@ -580,22 +637,24 @@ func (s *levelsController) addLevel0Table(t *table.Table) {
 			lastUnstalled = time.Now()
 		}
 	}
+
+	return nil
 }
 
 func (s *levelsController) close() error {
-	cleanupErr := s.cleanupLevels()
-	err := s.clog.close()
-	if cleanupErr != nil {
-		err = cleanupErr
-	}
+	err := s.cleanupLevels()
 	return errors.Wrap(err, "levelsController.Close")
 }
 
 // get returns the found value if any. If not found, we return nil.
 func (s *levelsController) get(key []byte) (y.ValueStruct, error) {
-	// No need to lock anything as we just iterate over the currently immutable levelHandlers.
+	// It's important that we iterate the levels from 0 on upward.  The reason is, if we iterated
+	// in opposite order, or in parallel (naively calling all the h.RLock() in some order) we could
+	// read level L's tables post-compaction and level L+1's tables pre-compaction.  (If we do
+	// parallelize this, we will need to call the h.RLock() function by increasing order of level
+	// number.)
 	for _, h := range s.levels {
-		vs, err := h.get(key)
+		vs, err := h.get(key) // Calls h.RLock() and h.RUnlock().
 		if err != nil {
 			return y.ValueStruct{}, errors.Wrapf(err, "get key: %q", key)
 		}
@@ -619,6 +678,8 @@ func appendIteratorsReversed(out []y.Iterator, th []*table.Table, reversed bool)
 // Note: This obtains references for the table handlers. Remember to close these iterators.
 func (s *levelsController) appendIterators(
 	iters []y.Iterator, reversed bool) []y.Iterator {
+	// Just like with get, it's important we iterate the levels from 0 on upward, to avoid missing
+	// data when there's a compaction.
 	for _, level := range s.levels {
 		iters = level.appendIterators(iters, reversed)
 	}

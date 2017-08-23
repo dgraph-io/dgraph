@@ -67,6 +67,7 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 	var vend bool
 	isCommentLine := false
 	// We read items from the l.Items channel to which the lexer sends items.
+L:
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
@@ -165,6 +166,17 @@ func Parse(line string) (rnq protos.NQuad, rerr error) {
 
 		case itemValidEnd:
 			vend = true
+			if !it.Next() {
+				return rnq, x.Errorf("Invalid end of input. Input: [%s]", line)
+			}
+			// RDF spec says NQuad's should be terminated with a newline. Since we break the input
+			// by newline already. We should get EOF or # after dot(.)
+			item = it.Item()
+			if !(item.Typ == lex.ItemEOF || item.Typ == itemComment) {
+				return rnq, x.Errorf("Invalid end of input. Expected newline or # after ."+
+					" Input: [%s]", line)
+			}
+			break L
 
 		case itemLabel:
 			rnq.Label = strings.Trim(item.Val, " ")

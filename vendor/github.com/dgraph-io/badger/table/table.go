@@ -55,15 +55,14 @@ type Table struct {
 	tableSize int      // Initialized in OpenTable, using fd.Stat().
 
 	blockIndex []keyOffset
-	metadata   []byte
-	ref        int32 // For file garbage collection.
+	ref        int32 // For file garbage collection.  Atomic.
 
 	mapTableTo int
 	mmap       []byte // Memory mapped.
 
 	// The following are initialized once and const.
 	smallest, biggest []byte // Smallest and largest keys.
-	id                uint64
+	id                uint64 // file id, part of filename
 
 	bf bbloom.Bloom
 }
@@ -116,7 +115,8 @@ func (b byKey) Less(i int, j int) bool { return bytes.Compare(b[i].key, b[j].key
 
 // OpenTable assumes file has only one table and opens it.  Takes ownership of fd upon function
 // entry.  Returns a table with one reference count on it (decrementing which may delete the file!
-// -- consider t.Close() instead).
+// -- consider t.Close() instead).  The fd has to writeable because we call Truncate on it before
+// deleting.
 func OpenTable(fd *os.File, mapTableTo int) (*Table, error) {
 	fileInfo, err := fd.Stat()
 	if err != nil {
@@ -185,23 +185,6 @@ func (t *Table) Close() error {
 	return nil
 }
 
-// SetMetadata updates our metadata to the new metadata.
-// For now, they must be of the same size.
-func (t *Table) SetMetadata(meta []byte) error {
-	y.AssertTrue(len(meta) == len(t.metadata))
-	pos := t.tableSize - 4 - len(t.metadata)
-	_, err := t.fd.WriteAt(meta, int64(pos))
-	return y.Wrap(err)
-}
-
-// updateLevel is called only when moving table to the next level, when there is no overlap
-// with the next level. Here, we update the table metadata.
-func (t *Table) UpdateLevel(newLevel int) {
-	var metadata [2]byte
-	binary.BigEndian.PutUint16(metadata[:], uint16(newLevel))
-	t.SetMetadata(metadata[:])
-}
-
 var EOF = errors.New("End of mapped region")
 
 func (t *Table) read(off int, sz int) ([]byte, error) {
@@ -226,16 +209,11 @@ func (t *Table) readNoFail(off int, sz int) []byte {
 }
 
 func (t *Table) readIndex() error {
-	readPos := t.tableSize - 4
-	buf := t.readNoFail(t.tableSize-4, 4)
-
-	metadataSize := int(binary.BigEndian.Uint32(buf))
-	readPos -= metadataSize
-	t.metadata = t.readNoFail(readPos, metadataSize)
+	readPos := t.tableSize
 
 	// Read bloom filter.
 	readPos -= 4
-	buf = t.readNoFail(readPos, 4)
+	buf := t.readNoFail(readPos, 4)
 	bloomLen := int(binary.BigEndian.Uint32(buf))
 	readPos -= bloomLen
 	data := t.readNoFail(readPos, bloomLen)
@@ -315,9 +293,6 @@ func (t *Table) readIndex() error {
 	return nil
 }
 
-// Metadata returns metadata. Do not mutate this.
-func (t *Table) Metadata() []byte { return t.metadata }
-
 func (t *Table) block(idx int) (Block, error) {
 	y.AssertTruef(idx >= 0, "idx=%d", idx)
 	if idx >= len(t.blockIndex) {
@@ -355,8 +330,12 @@ func ParseFileID(name string) (uint64, bool) {
 	return uint64(id), true
 }
 
+func TableFilename(id uint64) string {
+	return fmt.Sprintf("%06d", id) + fileSuffix
+}
+
 func NewFilename(id uint64, dir string) string {
-	return filepath.Join(dir, fmt.Sprintf("%06d", id)+fileSuffix)
+	return filepath.Join(dir, TableFilename(id))
 }
 
 func (t *Table) LoadToRAM() error {

@@ -73,6 +73,9 @@ type GraphQuery struct {
 	// there is a child with count() attr, then this is not empty for the parent.
 	// If there is an alias, this has the alias value, else its value is count.
 	UidCount string
+	// True for blocks that don't have a starting function and hence no starting nodes. They are
+	// used to aggregate and get variables defined in another block.
+	IsEmpty bool
 }
 
 type AttrLang struct {
@@ -1580,6 +1583,11 @@ L:
 			}
 		}
 	}
+
+	if g.Name != uid && len(g.Attr) == 0 {
+		return nil, x.Errorf("Got empty attr for function: [%s]", g.Name)
+	}
+
 	return g, nil
 }
 
@@ -2126,6 +2134,10 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			key = item.Val
 			expectArg = false
 		} else if item.Typ == itemRightRound {
+			if gq.Func == nil && len(gq.NeedsVar) == 0 && len(gq.Args) == 0 {
+				// Used to do aggregation at root which would be fetched in another block.
+				gq.IsEmpty = true
+			}
 			break
 		} else if item.Typ == itemComma {
 			if expectArg {
@@ -2233,6 +2245,30 @@ const (
 	seenWithPred              // when we see a predicate within count.
 )
 
+func validateEmptyBlockItem(it *lex.ItemIterator, val string) error {
+	savePos := it.Save()
+	defer func() {
+		it.Restore(savePos)
+	}()
+
+	fname := val
+	// Could have alias so peek forward to get actual function name.
+	skipped := trySkipItemTyp(it, itemColon)
+	if skipped {
+		item, ok := tryParseItemType(it, itemName)
+		if !ok {
+			return x.Errorf("Expected name. Got: %s", item.Val)
+		}
+		fname = item.Val
+	}
+	ok := trySkipItemTyp(it, itemLeftRound)
+	if !ok || (!isMathBlock(fname) && !isAggregator(fname)) {
+		return x.Errorf("Only aggregation/math functions allowed inside empty blocks."+
+			" Got: %v", fname)
+	}
+	return nil
+}
+
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	if gq == nil {
@@ -2286,6 +2322,13 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				// Only aggregator or count allowed inside the groupby block.
 				return x.Errorf("Only aggregator/count functions allowed inside @groupby. Got: %v", val)
 			}
+
+			if gq.IsEmpty {
+				if err := validateEmptyBlockItem(it, valLower); err != nil {
+					return err
+				}
+			}
+
 			if valLower == "checkpwd" {
 				child := &GraphQuery{
 					Args:  make(map[string]string),
@@ -2625,6 +2668,15 @@ func tryParseItemType(it *lex.ItemIterator, typ lex.ItemType) (lex.Item, bool) {
 func trySkipItemVal(it *lex.ItemIterator, val string) bool {
 	item, ok := it.PeekOne()
 	if !ok || item.Val != val {
+		return false
+	}
+	it.Next()
+	return true
+}
+
+func trySkipItemTyp(it *lex.ItemIterator, typ lex.ItemType) bool {
+	item, ok := it.PeekOne()
+	if !ok || item.Typ != typ {
 		return false
 	}
 	it.Next()

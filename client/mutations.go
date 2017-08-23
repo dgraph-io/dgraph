@@ -726,8 +726,8 @@ func (d *Dgraph) NodeBlank(varname string) (Node, error) {
 }
 
 // NodeXid creates or returns a Node given a string name for an XID node. An XID node identifies a
-// node with an edge _xid_, as in
-// 	node --- _xid_ ---> XID string
+// node with an edge xid, as in
+// 	node --- xid ---> XID string
 // See https://docs.dgraph.io/query-language/#external-ids If the XID has already been allocated
 // in this client session the allocated UID is returned, otherwise a new UID is allocated
 // for xid and returned.

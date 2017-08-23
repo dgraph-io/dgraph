@@ -91,6 +91,7 @@ func teardownGraphWithFacets(t *testing.T) {
 	delEdgeToUID(t, "friend", 31, 1)
 	delEdgeToUID(t, "friend", 31, 25)
 	delEdgeToUID(t, "schools", 33, 2433)
+	delEdgeToLangValue(t, "name", 320, "Test facet", "en")
 }
 
 func TestRetrieveFacetsSimple(t *testing.T) {
@@ -118,8 +119,8 @@ func TestOrderFacets(t *testing.T) {
 	query := `
 		{
 			me(func: uid(1)) {
-				friend @facets(orderasc:since) { 
-					name 
+				friend @facets(orderasc:since) {
+					name
 				}
 			}
 		}
@@ -138,8 +139,8 @@ func TestOrderdescFacets(t *testing.T) {
 	query := `
 		{
 			me(func: uid(1)) {
-				friend @facets(orderdesc:since) { 
-					name 
+				friend @facets(orderdesc:since) {
+					name
 				}
 			}
 		}

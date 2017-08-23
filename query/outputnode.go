@@ -19,6 +19,7 @@ package query
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -56,12 +57,10 @@ func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*protos.Node, error) {
 	return resNode, nil
 }
 
-// ToJson converts the list of subgraph into a JSON response by calling ToFastJSON.
+// ToJson converts the list of subgraph into a JSON response by calling toFastJSON.
 func ToJson(l *Latency, sgl []*SubGraph, w io.Writer, allocIds map[string]string,
 	addLatency bool) error {
-	sgr := &SubGraph{
-		Attr: "__",
-	}
+	sgr := &SubGraph{}
 	for _, sg := range sgl {
 		if sg.Params.Alias == "var" || sg.Params.Alias == "shortest" {
 			continue
@@ -71,7 +70,7 @@ func ToJson(l *Latency, sgl []*SubGraph, w io.Writer, allocIds map[string]string
 		}
 		sgr.Children = append(sgr.Children, sg)
 	}
-	return sgr.ToFastJSON(l, w, allocIds, addLatency)
+	return sgr.toFastJSON(l, w, allocIds, addLatency)
 }
 
 // outputNode is the generic output / writer for preTraverse.
@@ -85,6 +84,7 @@ type outputNode interface {
 
 	addCountAtRoot(*SubGraph)
 	addGroupby(*SubGraph, string)
+	addAggregations(*SubGraph) error
 }
 
 // protoNode is the proto output for preTraverse.
@@ -255,16 +255,38 @@ func (n *protoNode) addGroupby(sg *SubGraph, fname string) {
 	n.AddListChild(fname, g)
 }
 
+func (n *protoNode) addAggregations(sg *SubGraph) error {
+	for _, child := range sg.Children {
+		aggVal, ok := child.Params.uidToVal[0]
+		if !ok {
+			return x.Errorf("Only aggregated variables allowed within empty block.")
+		}
+		fieldName := aggWithVarFieldName(child)
+		n1 := n.New(fieldName)
+		n1.AddValue(fieldName, aggVal)
+		n.AddListChild(sg.Params.Alias, n1)
+	}
+	return nil
+}
+
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
 // used postorder traversal before, but preorder seems simpler and faster for
 // most cases.
 func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protos.Node, error) {
 	var seedNode *protoNode
+	n := seedNode.New("_root_")
+	if sg.Params.IsEmpty {
+		n1 := seedNode.New(sg.Params.Alias)
+		if err := n1.(*protoNode).addAggregations(sg); err != nil {
+			return n.(*protoNode).Node, err
+		}
+		n.AddListChild(sg.Params.Alias, n1)
+		return n.(*protoNode).Node, nil
+	}
 	if sg.uidMatrix == nil {
 		return seedNode.New(sg.Params.Alias).(*protoNode).Node, nil
 	}
 
-	n := seedNode.New("_root_")
 	if sg.Params.uidCount != "" {
 		n.addCountAtRoot(sg)
 	}
@@ -634,8 +656,26 @@ func (n *fastJsonNode) addCountAtRoot(sg *SubGraph) {
 	n.AddListChild(sg.Params.Alias, n1)
 }
 
+func (n *fastJsonNode) addAggregations(sg *SubGraph) error {
+	for _, child := range sg.Children {
+		aggVal, ok := child.Params.uidToVal[0]
+		if !ok {
+			return x.Errorf("Only aggregated variables allowed within empty block.")
+		}
+		fieldName := aggWithVarFieldName(child)
+		n1 := n.New(fieldName)
+		n1.AddValue(fieldName, aggVal)
+		n.AddListChild(sg.Params.Alias, n1)
+	}
+	return nil
+}
+
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
+	if sg.Params.IsEmpty {
+		return n.addAggregations(sg)
+	}
+
 	if sg.uidMatrix == nil {
 		return nil
 	}
@@ -686,31 +726,19 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	return nil
 }
 
-func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]string, addLatency bool) error {
+type Extensions struct {
+	Latency map[string]string `json:"server_latency"`
+}
+
+func (sg *SubGraph) toFastJSON(l *Latency, w io.Writer, allocIds map[string]string, addLatency bool) error {
 	var seedNode *fastJsonNode
+	var err error
 	n := seedNode.New("_root_")
-	if sg.Attr == "__" {
-		for _, sg := range sg.Children {
-			err := processNodeUids(n.(*fastJsonNode), sg)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		err := processNodeUids(n.(*fastJsonNode), sg)
+	for _, sg := range sg.Children {
+		err = processNodeUids(n.(*fastJsonNode), sg)
 		if err != nil {
 			return err
 		}
-	}
-
-	if addLatency {
-		sl := seedNode.New("serverLatency").(*fastJsonNode)
-		for k, v := range l.ToMap() {
-			val := types.ValueForType(types.StringID)
-			val.Value = v
-			sl.AddValue(k, val)
-		}
-		n.AddMapChild("server_latency", sl, false)
 	}
 
 	if allocIds != nil && len(allocIds) > 0 {
@@ -723,13 +751,33 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 		n.AddMapChild("uids", sl, false)
 	}
 
-	bufw := bufio.NewWriter(w)
-	if len(n.(*fastJsonNode).attrs) == 0 {
-		bufw.WriteString(`{ "data": {} }`)
-	} else {
-		bufw.WriteString(`{"data": `)
-		n.(*fastJsonNode).encode(bufw)
-		bufw.WriteRune('}')
+	var lb []byte
+	if addLatency {
+		e := Extensions{
+			Latency: l.ToMap(),
+		}
+		if lb, err = json.Marshal(e); err != nil {
+			return err
+		}
 	}
+
+	// According to GraphQL spec response should only contain data, errors and extensions as top
+	// level keys. Hence we send server_latency under extensions key.
+	// https://facebook.github.io/graphql/#sec-Response-Format
+
+	bufw := bufio.NewWriter(w)
+	bufw.WriteString(`{`)
+	if len(lb) > 0 {
+		bufw.WriteString(`"extensions": `)
+		bufw.Write(lb)
+		bufw.WriteRune(',')
+	}
+	bufw.WriteString(`"data": `)
+	if len(n.(*fastJsonNode).attrs) == 0 {
+		bufw.WriteString(`{}`)
+	} else {
+		n.(*fastJsonNode).encode(bufw)
+	}
+	bufw.WriteString(`}`)
 	return bufw.Flush()
 }

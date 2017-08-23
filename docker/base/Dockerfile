@@ -10,6 +10,6 @@ RUN apt-get update
 
 RUN apt-get -y --force-yes install wget curl tar
 
-RUN mkdir /dgraph && mkdir /data
+RUN mkdir /dgraph
 
 WORKDIR /dgraph

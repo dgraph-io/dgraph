@@ -13,33 +13,40 @@ with low enough latency to be serving real time user queries, over terabytes of 
 Dgraph supports [GraphQL-like query syntax](https://docs.dgraph.io/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/).
 
 ## Get Started
-**To get started with Dgraph, follow this [interactive tutorial](https://tour.dgraph.io).**
+**To get started with Dgraph, follow:**
+
+- Installation to queries in 7 minutes via [docs.dgraph.io](https://docs.dgraph.io/get-started/).
+- A longer interactive tutorial via [tour.dgraph.io](https://tour.dgraph.io).
+- Tutorial and
+presentation videos on [YouTube channel](https://www.youtube.com/channel/UCghE41LR8nkKFlR3IFTRO4w/featured).
 
 ## Current Status
 
-Dgraph is currently at version 0.7. It has 90% of the features planned for v1.0; and implements RAFT protocol for data replication, high availability and crash recovery. We recommend using it for internal projects at companies. If you plan to use Dgraph for user-facing production environment, [come talk to us](https://discuss.dgraph.io).
+Dgraph is [currently at version
+0.8.x](https://github.com/dgraph-io/dgraph/releases).  We have largely frozen
+the feature set at this point, and focusing solely on stability, performance and
+robustness.  We recommend using it in your projects. If you plan to use Dgraph
+for user-facing production environment, [come talk to
+us](mailto:manish@dgraph.io).
 
 
 ## Users
 - **Dgraph official documentation is present at [docs.dgraph.io](https://docs.dgraph.io).**
-- For feature requests or questions, visit [https://discuss.dgraph.io](https://discuss.dgraph.io).
-- Check out [the demo at dgraph.io](http://dgraph.io) and [the visualization at play.dgraph.io](http://play.dgraph.io/).
-- Please see [releases tab](https://github.com/dgraph-io/dgraph/releases) to find the latest release and corresponding release notes.
-- [See the Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of working and planned features.
-- Read about the latest updates from Dgraph team [on our blog](https://open.dgraph.io/).
+- For feature requests or questions, visit
+  [https://discuss.dgraph.io](https://discuss.dgraph.io).
+- Check out [the demo at dgraph.io](http://dgraph.io) and [the visualization at
+  play.dgraph.io](http://play.dgraph.io/).
+- Please see [releases tab](https://github.com/dgraph-io/dgraph/releases) to
+  find the latest release and corresponding release notes.
+- [See the Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of
+  working and planned features.
+- Read about the latest updates from Dgraph team [on our
+  blog](https://open.dgraph.io/).
 
 ## Developers
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3Ahelp_wanted).
-- Please see [contributing to Dgraph](https://wiki.dgraph.io/Contributing_to_Dgraph) for guidelines on contributions.
+- Please see [contributing to Dgraph](https://docs.dgraph.io/contribute/) for guidelines on contributions.
 
-## Data Loading and Persistence
-[![Dgraph data persistence](https://img.youtube.com/vi/dzTEXxF0TGs/0.jpg)](https://www.youtube.com/watch?v=dzTEXxF0TGs)
-
-## Performance
-
-![Loader performance](static/loader.gif)
-
-[See performance page](https://docs.dgraph.io/master/performance/) for more details.
 
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.

@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -200,13 +201,17 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) error {
 	isReversed := schema.State().IsReversed(t.Attr)
 	isIndexed := schema.State().IsIndexed(t.Attr)
+	hasCount := schema.State().HasCount(t.Attr)
 	delEdge := &protos.DirectedEdge{
 		Attr:   t.Attr,
 		Op:     t.Op,
 		Entity: t.Entity,
 	}
+	// To calculate length of posting list. Used for deletion of count index.
+	var plen int
 	var iterErr error
 	l.Iterate(0, func(p *protos.Posting) bool {
+		plen++
 		if isReversed {
 			// Delete reverse edge for each posting.
 			delEdge.ValueId = p.Uid
@@ -231,6 +236,19 @@ func (l *List) handleDeleteAll(ctx context.Context, t *protos.DirectedEdge) erro
 	if iterErr != nil {
 		return iterErr
 	}
+	if hasCount {
+		// Delete uid from count index. Deletion of reverses is taken care by addReverseMutation
+		// above.
+		if err := updateCount(ctx, countParams{
+			attr:        t.Attr,
+			countBefore: plen,
+			countAfter:  0,
+			entity:      t.Entity,
+		}); err != nil {
+			return err
+		}
+	}
+
 	l.Lock()
 	defer l.Unlock()
 	return l.delete(ctx, t.Attr)
@@ -348,20 +366,26 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 	if doUpdateIndex {
 		// Exact matches.
 		if found && val.Value != nil {
-			addIndexMutations(ctx, t, val, protos.DirectedEdge_DEL)
+			if err := addIndexMutations(ctx, t, val, protos.DirectedEdge_DEL); err != nil {
+				return err
+			}
 		}
 		if t.Op == protos.DirectedEdge_SET {
 			p := types.Val{
 				Tid:   types.TypeID(t.ValueType),
 				Value: t.Value,
 			}
-			addIndexMutations(ctx, t, p, protos.DirectedEdge_SET)
+			if err := addIndexMutations(ctx, t, p, protos.DirectedEdge_SET); err != nil {
+				return err
+			}
 		}
 	}
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
 	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
-		addReverseMutation(ctx, t)
+		if err := addReverseMutation(ctx, t); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -449,7 +473,7 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 					Attr:    attr,
 					Op:      protos.DirectedEdge_SET,
 				}
-				if err = addCountMutation(ctx, t, uint32(len(pl.Uids)/8), reverse); err != nil {
+				if err = addCountMutation(ctx, t, uint32(bp128.NumIntegers(pl.Uids)), reverse); err != nil {
 					break
 				}
 			}

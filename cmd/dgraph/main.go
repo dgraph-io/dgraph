@@ -95,8 +95,6 @@ func setupConfigOpts() {
 		"Directory to store raft write-ahead logs.")
 	flag.BoolVar(&config.Nomutations, "nomutations", defaults.Nomutations,
 		"Don't allow mutations on this server.")
-	flag.IntVar(&config.NumPending, "pending", defaults.NumPending,
-		"Number of pending queries. Useful for rate limiting.")
 
 	flag.IntVar(&config.BaseWorkerPort, "workerport", defaults.BaseWorkerPort,
 		"Port used by worker for internal communication.")
@@ -167,6 +165,9 @@ func setupConfigOpts() {
 		x.Println("Loading configuration from file:", config.ConfigFile)
 		x.LoadConfigFromYAML(config.ConfigFile)
 	}
+	// Lets check version flag before we SetConfiguration because we validate AllottedMemory in
+	// SetConfiguration.
+	x.PrintVersionOnly()
 
 	dgraph.SetConfiguration(config)
 }
@@ -343,11 +344,14 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				mp["schema"] = json.RawMessage(string(js))
 			}
-			if addLatency {
-				mp["server_latency"] = l.ToMap()
-			}
 		}
 		schemaRes["data"] = mp
+		if addLatency {
+			e := query.Extensions{
+				Latency: l.ToMap(),
+			}
+			schemaRes["extensions"] = e
+		}
 		if js, err := json.Marshal(schemaRes); err == nil {
 			w.Write(js)
 		} else {
@@ -720,8 +724,8 @@ func main() {
 	sdCh := make(chan os.Signal, 3)
 	var numShutDownSig int
 	defer close(sdCh)
-	// sigint : Ctrl-C, sigquit : Ctrl-\ (backslash), sigterm : kill command.
-	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	// sigint : Ctrl-C, sigterm : kill command.
+	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		for {
 			select {

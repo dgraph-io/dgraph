@@ -40,30 +40,31 @@ docker pull dgraph/dgraph
 ```
 
 ## Step 2: Run Dgraph
+{{% notice "note" %}}You need to set the estimated memory dgraph can take through memory_mb flag. This is just a hint to the dgraph and actual usage would be higher than this. It's recommended to set memory_mb to half the size of RAM.{{% /notice %}}
 
 ### From Installed Binary
 If Dgraph was installed with the install script, run Dgraph with:
 
 ```sh
-dgraph
+dgraph --memory_mb 2048
 ```
 
 ### Using Docker
 
 The `-v` flag lets Docker mount a directory so that dgraph can persist data to disk and access files for loading data.
 
-#### Map to default ports (8080 and 9080 on the local interface)
+#### Map to default ports (8080 and 9080)
 
 ```sh
 mkdir -p ~/dgraph
-docker run -it -p 127.0.0.1:8080:8080 -p 127.0.0.1:9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
+docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true --memory_mb 2048
 ```
 
 #### Map to custom port
 ```sh
 mkdir -p ~/dgraph
-# Mapping port 8080 from within the container to 18080 (bound to the local interface) of the instance, likewise with the gRPC port 9090.
-docker run -it -p 127.0.0.1:18080:8080 -p 127.0.0.1:19090:9090 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true
+# Mapping port 8080 from within the container to 18080 of the instance, likewise with the gRPC port 9090.
+docker run -it -p 18080:8080 -p 19090:9090 -v ~/dgraph:/dgraph --name dgraph dgraph/dgraph dgraph --bindall=true --memory_mb 2048
 ```
 
 {{% notice "note" %}}The dgraph server listens on ports 8080 and 9090 (unless mapped to another port above) with log output to the terminal.{{% /notice %}}
@@ -130,8 +131,8 @@ Running this next mutation adds a schema and indexes some of the data so queries
 curl localhost:8080/query -XPOST -d $'
 mutation {
   schema {
-    name: string @index .
-    release_date: datetime @index .
+    name: string @index(term) .
+    release_date: datetime @index(year) .
     revenue: float .
     running_time: int .
   }
@@ -165,52 +166,54 @@ Output
 
 ```json
 {
-    "me": [
-        {
-            "director": [
-                {
-                    "name": "Irvin Kernshner"
-                }
-            ],
-            "name": "Star Wars: Episode V - The Empire Strikes Back",
-            "release_date": "1980-05-21",
-            "revenue": 534000000.0,
-            "running_time": 124,
-            "starring": [
-                {
-                    "name": "Han Solo"
-                },
-                {
-                    "name": "Princess Leia"
-                },
-                {
-                    "name": "Luke Skywalker"
-                }
-            ]
-        },
-        {
-            "director": [
-                {
-                    "name": "Richard Marquand"
-                }
-            ],
-            "name": "Star Wars: Episode VI - Return of the Jedi",
-            "release_date": "1983-05-25",
-            "revenue": 572000000.0,
-            "running_time": 131,
-            "starring": [
-                {
-                    "name": "Han Solo"
-                },
-                {
-                    "name": "Princess Leia"
-                },
-                {
-                    "name": "Luke Skywalker"
-                }
-            ]
-        }
+  "data":{
+    "me":[
+      {
+        "name":"Star Wars: Episode V - The Empire Strikes Back",
+        "release_date":"1980-05-21T00:00:00Z",
+        "revenue":534000000.0,
+        "running_time":124,
+        "director":[
+          {
+            "name":"Irvin Kernshner"
+          }
+        ],
+        "starring":[
+          {
+            "name":"Han Solo"
+          },
+          {
+            "name":"Luke Skywalker"
+          },
+          {
+            "name":"Princess Leia"
+          }
+        ]
+      },
+      {
+        "name":"Star Wars: Episode VI - Return of the Jedi",
+        "release_date":"1983-05-25T00:00:00Z",
+        "revenue":572000000.0,
+        "running_time":131,
+        "director":[
+          {
+            "name":"Richard Marquand"
+          }
+        ],
+        "starring":[
+          {
+            "name":"Han Solo"
+          },
+          {
+            "name":"Luke Skywalker"
+          },
+          {
+            "name":"Princess Leia"
+          }
+        ]
+      }
     ]
+  }
 }
 ```
 
@@ -238,7 +241,7 @@ The schema needs updating to index new predicates in the dataset.  The new datas
 curl localhost:8080/query -XPOST -d '
 mutation {
   schema {
-    initial_release_date: datetime @index .
+    initial_release_date: datetime @index(year) .
   }
 }
 '| python -m json.tool | less
@@ -285,7 +288,7 @@ This query finds director "Steven Spielberg" and the movies directed by him.  Th
 
 {{< runnable >}}
 {
-  director(func:allofterms(name, "steven spielberg")) @cascade {
+  director(func:allofterms(name@en, "steven spielberg")) @cascade {
     name@en
     director.film (orderdesc: initial_release_date) {
       name@en
@@ -304,7 +307,7 @@ We'll sort in increasing order this time by using `orderasc`, instead of `orderd
 
 {{< runnable >}}
 {
-  director(func:allofterms(name, "steven spielberg")) @cascade {
+  director(func:allofterms(name@en, "steven spielberg")) @cascade {
     name@en
     director.film (orderasc: initial_release_date) @filter(ge(initial_release_date, "1984-08")) {
       name@en
@@ -320,7 +323,7 @@ Using `AND` two filters can be joined.
 
 {{< runnable >}}
 {
-  director(func:allofterms(name, "steven spielberg")) {
+  director(func:allofterms(name@en, "steven spielberg")) {
     name@en
     director.film (orderasc: initial_release_date) @filter(ge(initial_release_date, "1990") AND le(initial_release_date, "2000")) {
       name@en
@@ -375,11 +378,11 @@ mutation {
   schema {
     director.film: uid @reverse .
     genre: uid @reverse .
-    initial_release_date: datetime @index .
+    initial_release_date: datetime @index(year) .
     rating: uid @reverse .
     country: uid @reverse .
-    loc: geo @index .
-    name: string @index .
+    loc: geo @index(geo) .
+    name: string @index(term) .
   }
 }
 ```
@@ -402,7 +405,7 @@ One of the things to try would be to open bash in the container and try to run D
 ```sh
 docker run -it dgraph/dgraph bash
 # Now that you are within the container, run Dgraph.
-dgraph
+dgraph --memory_mb 2048
 ```
 
 If Dgraph runs for you that indicates there could be something wrong with mounting volumes.

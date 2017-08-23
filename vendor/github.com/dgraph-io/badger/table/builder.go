@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"io"
 	"math"
-	"sync"
 
 	"github.com/AndreasBriese/bbloom"
 	"github.com/dgraph-io/badger/y"
@@ -32,12 +31,10 @@ var (
 	restartInterval int = 100 // Might want to change this to be based on total size instead of numKeys.
 )
 
-var bufPool = sync.Pool{
-	New: func() interface{} {
-		b := new(bytes.Buffer)
-		b.Grow(64 << 20)
-		return b
-	},
+func newBuffer(sz int) *bytes.Buffer {
+	b := new(bytes.Buffer)
+	b.Grow(sz)
+	return b
 }
 
 type header struct {
@@ -87,19 +84,14 @@ type TableBuilder struct {
 
 func NewTableBuilder() *TableBuilder {
 	return &TableBuilder{
-		keyBuf:     bufPool.Get().(*bytes.Buffer),
-		buf:        bufPool.Get().(*bytes.Buffer),
+		keyBuf:     newBuffer(32 << 20),
+		buf:        newBuffer(64 << 20),
 		prevOffset: math.MaxUint32, // Used for the first element!
 	}
 }
 
-// Close closes the TableBuilder. Do not use buf field anymore.
-func (b *TableBuilder) Close() {
-	b.buf.Reset()
-	b.keyBuf.Reset()
-	bufPool.Put(b.buf)
-	bufPool.Put(b.keyBuf)
-}
+// Close closes the TableBuilder.
+func (b *TableBuilder) Close() {}
 
 func (b *TableBuilder) Empty() bool { return b.buf.Len() == 0 }
 
@@ -204,7 +196,7 @@ func (b *TableBuilder) blockIndex() []byte {
 }
 
 // Finish finishes the table by appending the index.
-func (b *TableBuilder) Finish(metadata []byte) []byte {
+func (b *TableBuilder) Finish() []byte {
 	bf := bbloom.New(float64(b.keyCount), 0.01)
 	var klen [2]byte
 	key := make([]byte, 1024)
@@ -233,10 +225,6 @@ func (b *TableBuilder) Finish(metadata []byte) []byte {
 	y.Check(err)
 	var buf [4]byte
 	binary.BigEndian.PutUint32(buf[:], uint32(n))
-	b.buf.Write(buf[:])
-
-	b.buf.Write(metadata)
-	binary.BigEndian.PutUint32(buf[:], uint32(len(metadata)))
 	b.buf.Write(buf[:])
 
 	return b.buf.Bytes()

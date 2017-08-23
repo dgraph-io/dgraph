@@ -21,6 +21,7 @@ import (
 	"container/heap"
 	"sort"
 
+	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/protos"
 )
 
@@ -37,6 +38,96 @@ func ApplyFilter(u *protos.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
+func IntersectCompressedWith(u []byte, afterUID uint64, v, o *protos.List) {
+	var bi bp128.BPackIterator
+	bi.Init(u, afterUID)
+	n := bi.Length() - bi.StartIdx()
+	m := len(v.Uids)
+
+	if n > m {
+		n, m = m, n
+	}
+	dst := o.Uids[:0]
+	if n == 0 {
+		n = 1
+	}
+
+	// Select appropriate function based on heuristics.
+	ratio := float64(m) / float64(n)
+
+	if ratio < 500 {
+		IntersectCompressedWithLinJump(&bi, v.Uids, &dst)
+	} else {
+		IntersectCompressedWithBin(&bi, v.Uids, &dst)
+	}
+	o.Uids = dst
+}
+
+func IntersectCompressedWithLinJump(bi *bp128.BPackIterator, v []uint64, o *[]uint64) {
+	m := len(v)
+	k := 0
+	u := bi.Uids()
+	_, off := IntersectWithLin(u, v[k:], o)
+	k += off
+
+	for k < m && bi.Valid() {
+		maxId := bi.MaxIntInBlock()
+		if v[k] > maxId {
+			bi.SkipNext()
+			continue
+		} else {
+			bi.Next()
+		}
+		u := bi.Uids()
+		_, off := IntersectWithLin(u, v[k:], o)
+		k += off
+	}
+}
+
+// IntersectWithBin is based on the paper
+// "Fast Intersection Algorithms for Sorted Sequences"
+// https://link.springer.com/chapter/10.1007/978-3-642-12476-1_3
+func IntersectCompressedWithBin(bi *bp128.BPackIterator, q []uint64, o *[]uint64) {
+	ld := bi.Length() - bi.StartIdx()
+	lq := len(q)
+
+	// TODO: Try SIMD
+	if ld == 0 || lq == 0 {
+		return
+	}
+	// Pick the shorter list and do binary search
+	if ld < lq {
+		bi.AfterUid(q[0] - 1)
+		for bi.Valid() {
+			uids := bi.Uids()
+			for _, u := range uids {
+				qidx := sort.Search(len(q), func(idx int) bool {
+					return q[idx] >= u
+				})
+				if qidx >= len(q) {
+					return
+				} else if q[qidx] == u {
+					*o = append(*o, u)
+					qidx++
+				}
+				q = q[qidx:]
+			}
+			bi.Next()
+		}
+		return
+	}
+
+	for _, u := range q {
+		if !bi.Valid() {
+			return
+		}
+		found := bi.AfterUid(u)
+		if found {
+			*o = append(*o, u)
+		}
+	}
+}
+
 // IntersectWith intersects u with v. The update is made to o.
 // u, v should be sorted.
 func IntersectWith(u, v, o *protos.List) {
@@ -51,7 +142,7 @@ func IntersectWith(u, v, o *protos.List) {
 	}
 	dst := o.Uids[:0]
 	if n == 0 {
-		n += 1
+		n = 1
 	}
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
@@ -65,10 +156,11 @@ func IntersectWith(u, v, o *protos.List) {
 	o.Uids = dst
 }
 
-func IntersectWithLin(u, v []uint64, o *[]uint64) {
+func IntersectWithLin(u, v []uint64, o *[]uint64) (int, int) {
 	n := len(u)
 	m := len(v)
-	for i, k := 0, 0; i < n && k < m; {
+	i, k := 0, 0
+	for i < n && k < m {
 		uid := u[i]
 		vid := v[k]
 		if uid > vid {
@@ -83,12 +175,14 @@ func IntersectWithLin(u, v []uint64, o *[]uint64) {
 			}
 		}
 	}
+	return i, k
 }
 
-func IntersectWithJump(u, v []uint64, o *[]uint64) {
+func IntersectWithJump(u, v []uint64, o *[]uint64) (int, int) {
 	n := len(u)
 	m := len(v)
-	for i, k := 0, 0; i < n && k < m; {
+	i, k := 0, 0
+	for i < n && k < m {
 		uid := u[i]
 		vid := v[k]
 		if uid == vid {
@@ -107,6 +201,7 @@ func IntersectWithJump(u, v []uint64, o *[]uint64) {
 			}
 		}
 	}
+	return i, k
 }
 
 // IntersectWithBin is based on the paper

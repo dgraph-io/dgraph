@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
@@ -55,6 +56,14 @@ func taskValues(t *testing.T, v []*protos.ValuesList) []string {
 }
 
 func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
+	// Mutations don't go through normal flow, so default schema for predicate won't be present.
+	// Lets add it.
+	if _, ok := schema.State().Get(attr); !ok {
+		schema.State().Set(attr, protos.SchemaUpdate{
+			Predicate: attr,
+			ValueType: edge.ValueType,
+		})
+	}
 	l := posting.GetOrCreate(x.DataKey(attr, src), 1)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))
@@ -123,22 +132,38 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 	require.NoError(t, err)
 	edge := &protos.DirectedEdge{
 		ValueId: dst,
-		Label:   "testing",
-		Attr:    attr,
-		Entity:  src,
-		Op:      protos.DirectedEdge_SET,
-		Facets:  fs,
+		// This is used to set uid schema type for pred for the purpose of tests. Actual mutation
+		// won't set ValueType to types.UidID.
+		ValueType: uint32(types.UidID),
+		Label:     "testing",
+		Attr:      attr,
+		Entity:    src,
+		Op:        protos.DirectedEdge_SET,
+		Facets:    fs,
 	}
 	addEdge(t, attr, src, edge)
 }
 
 func delEdgeToUID(t *testing.T, attr string, src uint64, dst uint64) {
 	edge := &protos.DirectedEdge{
-		ValueId: dst,
-		Label:   "testing",
-		Attr:    attr,
-		Entity:  src,
-		Op:      protos.DirectedEdge_DEL,
+		ValueType: uint32(types.UidID),
+		ValueId:   dst,
+		Label:     "testing",
+		Attr:      attr,
+		Entity:    src,
+		Op:        protos.DirectedEdge_DEL,
+	}
+	addEdge(t, attr, src, edge)
+}
+
+func delEdgeToLangValue(t *testing.T, attr string, src uint64, value, lang string) {
+	edge := &protos.DirectedEdge{
+		Value:  []byte(value),
+		Lang:   lang,
+		Label:  "testing",
+		Attr:   attr,
+		Entity: src,
+		Op:     protos.DirectedEdge_DEL,
 	}
 	addEdge(t, attr, src, edge)
 }

@@ -18,9 +18,10 @@ HOST=https://docs.dgraph.io
 # Place the latest version at the beginning so that version selector can
 # append '(latest)' to the version string, and build script can place the
 # artifact in an appropriate location
-VERSIONS=(
-'v0.8.0'
+VERSIONS_ARRAY=(
+'v0.8.1'
 'master'
+'v0.8.0'
 'v0.7.7'
 'v0.7.6'
 'v0.7.5'
@@ -28,7 +29,7 @@ VERSIONS=(
 )
 
 joinVersions() {
-	versions=$(printf ",%s" "${VERSIONS[@]}")
+	versions=$(printf ",%s" "${VERSIONS_ARRAY[@]}")
 	echo ${versions:1}
 }
 
@@ -38,14 +39,15 @@ rebuild() {
 	# The latest documentation is generated in the root of /public dir
 	# Older documentations are generated in their respective `/public/vx.x.x` dirs
 	dir=''
-	if [[ $2 != "${VERSIONS[0]}" ]]; then
+	if [[ $2 != "${VERSIONS_ARRAY[0]}" ]]; then
 		dir=$2
 	fi
 
+	VERSION_STRING=$(joinVersions)
 	# In Unix environments, env variables should also be exported to be seen by Hugo
 	export CURRENT_BRANCH=${1}
 	export CURRENT_VERSION=${2}
-	export VERSION_STRING=$(joinVersions)
+	export VERSIONS=${VERSION_STRING}
 
 	HUGO_TITLE="Dgraph Doc ${2}"\
 		VERSIONS=${VERSION_STRING}\
@@ -70,6 +72,16 @@ branchUpdated()
 	fi
 }
 
+publicFolder()
+{
+	dir=''
+	if [[ $1 == "${VERSIONS_ARRAY[0]}" ]]; then
+		echo "public"
+	else
+		echo "public/$1"
+	fi
+}
+
 checkAndUpdate()
 {
 	local version="$1"
@@ -86,7 +98,8 @@ checkAndUpdate()
 		rebuild "$branch" "$version"
 	fi
 
-	if [ "$themeUpdated" = 0 ] || [ ! -d "public/$version" ] ; then
+	folder=$(publicFolder $version)
+	if [ "$themeUpdated" = 0 ] || [ ! -d $folder ] ; then
 		rebuild "$branch" "$version"
 	fi
 }
@@ -111,7 +124,7 @@ while true; do
 	echo -e "$(date)  Starting to check branches."
 	git remote update > /dev/null
 
-	for version in "${VERSIONS[@]}"
+	for version in "${VERSIONS_ARRAY[@]}"
 	do
 		checkAndUpdate "$version"
 	done

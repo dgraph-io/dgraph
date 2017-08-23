@@ -156,6 +156,7 @@ func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) 
 		}
 		line++
 		if line <= checkpoint {
+			buf.Reset()
 			// No need to parse. We have already sent it to server.
 			continue
 		}
@@ -235,7 +236,7 @@ func main() {
 	runtime.SetBlockProfileRate(*blockRate)
 
 	interruptChan := make(chan os.Signal)
-	signal.Notify(interruptChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	signal.Notify(interruptChan, syscall.SIGINT, syscall.SIGTERM)
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-interruptChan

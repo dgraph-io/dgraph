@@ -1,0 +1,13 @@
+{
+        me as var(func: eq(ENTITY_RELATIONSHIP_id, "asdf"))
+        var(func: uid(me)) {
+            ENTITY_RELATIONSHIP_hasChild {
+                score as PROFILE_RELATIONSHIP_score
+            }
+            totalScore as sum(val(score))
+            childCount as count(ENTITY_RELATIONSHIP_hasChild)
+        }
+        agg(func: uid(me)) {
+            score: math(ceil(totalScore/childCount))
+        }
+    }

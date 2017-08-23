@@ -20,8 +20,6 @@ package posting
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
-	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
@@ -36,6 +34,7 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -95,42 +94,42 @@ func (l *List) calculateSize() uint32 {
 type PIterator struct {
 	pl         *protos.PostingList
 	uidPosting *protos.Posting
-	uidx       int // index of UIDs
 	pidx       int // index of postings
-	ulen       int
 	plen       int
 	valid      bool
-}
-
-func findUidIndex(pl *protos.PostingList, afterUid uint64) int {
-	ulen := len(pl.Uids) / 8
-	return sort.Search(ulen, func(idx int) bool {
-		i := idx * 8
-		uid := binary.BigEndian.Uint64(pl.Uids[i : i+8])
-		return afterUid < uid
-	})
+	bi         bp128.BPackIterator
+	uids       []uint64
+	// Offset into the uids slice
+	offset int
 }
 
 func (it *PIterator) Init(pl *protos.PostingList, afterUid uint64) {
 	it.pl = pl
 	it.uidPosting = &protos.Posting{}
-	it.ulen = len(pl.Uids) / 8
+	it.bi.Init(pl.Uids, afterUid)
 	it.plen = len(pl.Postings)
-	it.uidx = findUidIndex(pl, afterUid)
+	it.uids = it.bi.Uids()
 	it.pidx = sort.Search(it.plen, func(idx int) bool {
 		p := pl.Postings[idx]
 		return afterUid < p.Uid
 	})
-	if it.uidx < it.ulen {
+	if it.bi.StartIdx() < it.bi.Length() {
 		it.valid = true
 	}
 }
 
 func (it *PIterator) Next() {
-	it.uidx++
-	if it.uidx >= it.ulen {
-		it.valid = false
+	it.offset++
+	if it.offset < len(it.uids) {
+		return
 	}
+	it.bi.Next()
+	if !it.bi.Valid() {
+		it.valid = false
+		return
+	}
+	it.uids = it.bi.Uids()
+	it.offset = 0
 }
 
 func (it *PIterator) Valid() bool {
@@ -138,8 +137,7 @@ func (it *PIterator) Valid() bool {
 }
 
 func (it *PIterator) Posting() *protos.Posting {
-	i := it.uidx * 8
-	uid := binary.BigEndian.Uint64(it.pl.Uids[i : i+8])
+	uid := it.uids[it.offset]
 
 	for it.pidx < it.plen {
 		if it.pl.Postings[it.pidx].Uid > uid {
@@ -431,8 +429,16 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		index = rv.Index
 		gid = rv.Group
 	}
-	if len(l.mlayer) > 1000 ||
-		(len(l.pending) > 0 && index > l.pending[0]+4000) {
+	// Calculate 5% of immutable layer
+	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
+	if numUids < 3000 {
+		numUids = 3000
+	}
+	if len(l.mlayer) > numUids ||
+		// All proposals are kept in before until they are snapshotted, this ensures that
+		// we don't have too many pending proposals.
+		// TODO: Come up with a good limit, based on size of proposals
+		(len(l.pending) > 0 && index > l.pending[0]+10000) {
 		l.syncIfDirty(false)
 	}
 
@@ -502,10 +508,6 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 
 func (l *List) delete(ctx context.Context, attr string) error {
 	l.AssertLock()
-	if l.plist != emptyList {
-		l.plist.Uids = l.plist.Uids[:0]
-		l.plist.Postings = l.plist.Postings[:0]
-	}
 	l.plist = emptyList
 	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
 	atomic.StoreInt32(&l.deleteAll, 1)
@@ -595,20 +597,21 @@ func (l *List) iterate(afterUid uint64, f func(obj *protos.Posting) bool) {
 	}
 }
 
+// Add test for aftruid
 func (l *List) length(afterUid uint64) int {
 	l.AssertRLock()
 
-	uidx, midx := 0, 0
+	midx := 0
 
+	var bi bp128.BPackIterator
+	bi.Init(l.plist.Uids, afterUid)
 	if afterUid > 0 {
-		uidx = findUidIndex(l.plist, afterUid)
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {
 			mp := l.mlayer[idx]
 			return afterUid < mp.Uid
 		})
 	}
-
-	count := len(l.plist.Uids)/8 - uidx
+	count := bi.Length() - bi.StartIdx()
 	for _, p := range l.mlayer[midx:] {
 		if p.Op == Add {
 			count++
@@ -654,27 +657,15 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 	}
 
 	final := new(protos.PostingList)
-	numUids := l.length(0)
-	if cap(final.Uids) < 8*numUids {
-		final.Uids = make([]byte, 8*numUids)
-	}
-	final.Uids = final.Uids[:8*numUids]
+	var bp bp128.BPackEncoder
+	buf := make([]uint64, 0, bp128.BlockSize)
 
-	var ubuf [16]byte
-	h := md5.New()
-	count := 0
 	l.iterate(0, func(p *protos.Posting) bool {
-		// Checksum code.
-		n := binary.PutVarint(ubuf[:], int64(count))
-		h.Write(ubuf[0:n])
-		n = binary.PutUvarint(ubuf[:], p.Uid)
-		h.Write(ubuf[0:n])
-		h.Write(p.Value)
-		h.Write([]byte(p.Label))
-
-		i := 8 * count
-		binary.BigEndian.PutUint64(final.Uids[i:i+8], p.Uid)
-		count++
+		buf = append(buf, p.Uid)
+		if len(buf) == bp128.BlockSize {
+			bp.PackAppend(buf)
+			buf = buf[:0]
+		}
 
 		if p.Facets != nil || p.Value != nil || len(p.Metadata) != 0 || len(p.Label) != 0 {
 			// I think it's okay to take the pointer from the iterator, because we have a lock
@@ -684,10 +675,14 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		}
 		return true
 	})
-
-	if l.plist != emptyList {
-		l.plist.Uids = l.plist.Uids[:0]
-		l.plist.Postings = l.plist.Postings[:0]
+	if len(buf) > 0 {
+		bp.PackAppend(buf)
+	}
+	sz := bp.Size()
+	if sz > 0 {
+		final.Uids = make([]byte, sz)
+		// TODO: Add bytes method
+		bp.WriteTo(final.Uids)
 	}
 
 	var data []byte
@@ -696,24 +691,23 @@ func (l *List) syncIfDirty(delFromCache bool) (committed bool, err error) {
 		// This means we should delete the key from store during SyncIfDirty.
 		data = nil
 	} else if len(final.Postings) > 0 {
-		final.Checksum = h.Sum(nil)
 		data, err = final.Marshal()
 		x.Checkf(err, "Unable to marshal posting list")
 	} else {
-		data = make([]byte, len(final.Uids))
-		copy(data, final.Uids) // Copy Uids, otherwise they may change before write to Badger.
+		data = final.Uids
 		uidOnlyPosting = true
 	}
 	l.plist = final
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 
 	for {
-		pLen := atomic.LoadInt64(&x.MaxPlLen)
+		pLen := atomic.LoadInt64(&x.MaxPlSz)
 		if int64(len(data)) <= pLen {
 			break
 		}
-		if atomic.CompareAndSwapInt64(&x.MaxPlLen, pLen, int64(len(data))) {
-			x.MaxPlLength.Set(int64(len(data)))
+		if atomic.CompareAndSwapInt64(&x.MaxPlSz, pLen, int64(len(data))) {
+			x.MaxPlSize.Set(int64(len(data)))
+			x.MaxPlLength.Set(int64(bp.Length()))
 			break
 		}
 	}
@@ -774,10 +768,18 @@ func UnmarshalWithCopy(val []byte, metadata byte, pl *protos.PostingList) {
 
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
+// WARNING: Calling this function just to get Uids is expensive
 func (l *List) Uids(opt ListOptions) *protos.List {
 	// Pre-assign length to make it faster.
 	l.RLock()
 	res := make([]uint64, 0, l.length(opt.AfterUID))
+	out := &protos.List{}
+	if len(l.mlayer) == 0 && opt.Intersect != nil {
+		algo.IntersectCompressedWith(l.plist.Uids, opt.AfterUID, opt.Intersect, out)
+		l.RUnlock()
+		return out
+	}
+
 	l.iterate(opt.AfterUID, func(p *protos.Posting) bool {
 		if postingType(p) == x.ValueUid {
 			res = append(res, p.Uid)
@@ -787,7 +789,7 @@ func (l *List) Uids(opt ListOptions) *protos.List {
 	l.RUnlock()
 
 	// Do The intersection here as it's optimized.
-	out := &protos.List{res}
+	out.Uids = res
 	if opt.Intersect != nil {
 		algo.IntersectWith(out, opt.Intersect, out)
 	}

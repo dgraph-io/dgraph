@@ -112,11 +112,10 @@ func (s *levelHandler) validate() error {
 // 	y.Printf("\n")
 // }
 
-// reserveFileIDs reserve k fileIDs. Returns pair is a half-interval.
-// If we return [3, 6), it means use 3, 4, 5.
-func (s *levelsController) reserveFileIDs(k int) (uint64, uint64) {
-	id := atomic.AddUint64(&s.maxFileID, uint64(k))
-	return id - uint64(k), id
+// reserveFileID reserves a unique file id.
+func (s *levelsController) reserveFileID() uint64 {
+	id := atomic.AddUint64(&s.nextFileID, 1)
+	return id - 1
 }
 
 func getIDMap(dir string) map[uint64]struct{} {

@@ -239,8 +239,8 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		store: store,
 		cfg: &raft.Config{
 			ID:              id,
-			ElectionTick:    10, // 200 ms if we call Tick() every 20 ms.
-			HeartbeatTick:   1,  // 20 ms if we call Tick() every 20 ms.
+			ElectionTick:    100, // 200 ms if we call Tick() every 20 ms.
+			HeartbeatTick:   1,   // 20 ms if we call Tick() every 20 ms.
 			Storage:         store,
 			MaxSizePerMsg:   256 << 10,
 			MaxInflightMsgs: 256,
