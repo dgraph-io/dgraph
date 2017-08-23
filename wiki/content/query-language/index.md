@@ -665,7 +665,44 @@ Query Example: First five directors and all their movies that have a release dat
 
 Note that for geo queries, any polygon with holes is replace with the outer loop, ignoring holes.  Also, as for version 0.7.7 polygon containment checks are approximate.
 
-#### near
+#### Mutations
+
+To make use of the geo functions you would need an index on your predicate.
+```
+mutation {
+  schema {
+    loc: geo @index(geo) .
+  }
+}
+```
+
+Here is how you would add a `Point`.
+
+```
+mutation {
+  set {
+    <_:0xeb1dde9c> <loc> "{'type':'Point','coordinates':[-122.4220186,37.772318]}"^^<geo:geojson> .
+    <_:0xf15448e2> <name> "Hamon Tower" .
+  }
+}
+```
+
+Here is how you would associate a `Polygon` with a node.
+
+```
+mutation {
+  set {
+    <_:0xf76c276b> <loc> "{'type':'Polygon','coordinates':[[[-122.409869,37.7785442],[-122.4097444,37.7786443],[-122.4097544,37.7786521],[-122.4096334,37.7787494],[-122.4096233,37.7787416],[-122.4094004,37.7789207],[-122.4095818,37.7790617],[-122.4097883,37.7792189],[-122.4102599,37.7788413],[-122.409869,37.7785442]],[[-122.4097357,37.7787848],[-122.4098499,37.778693],[-122.4099025,37.7787339],[-122.4097882,37.7788257],[-122.4097357,37.7787848]]]}"^^<geo:geojson> .
+    <_:0xf76c276b> <name> "Best Western Americana Hotel" .
+  }
+}
+```
+
+The above examples have been picked from our [SF Tourism](https://github.com/dgraph-io/benchmarks/blob/master/data/sf.tourism.gz?raw=true) dataset.
+
+#### Query
+
+##### near
 
 Syntax Example: `near(predicate, [long, lat], distance)`
 
@@ -686,7 +723,7 @@ Query Example: Tourist destinations within 1 kilometer of a point in Golden Gate
 {{< /runnable >}}
 
 
-#### within
+##### within
 
 Syntax Example: `within(predicate, [[long1, lat1], ..., [longN, latN]])`
 
@@ -707,7 +744,7 @@ Query Example: Tourist destinations within the specified area of Golden Gate Par
 {{< /runnable >}}
 
 
-#### contains
+##### contains
 
 Syntax Examples: `contains(predicate, [long, lat])` or `contains(predicate, [[long1, lat1], ..., [longN, latN]])`
 
@@ -727,7 +764,7 @@ Query Example : All entities that contain a point in the flamingo enclosure of S
 {{< /runnable >}}
 
 
-#### intersects
+##### intersects
 
 Syntax Example: `intersects(predicate, [[long1, lat1], ..., [longN, latN]])`
 

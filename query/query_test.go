@@ -464,7 +464,7 @@ func TestLevelBasedFacetVarAggSum(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			friend(func: uid( 1000)) {
+			friend(func: uid(1000)) {
 				path @facets(L1 as weight)
 				sumw: sum(val(L1))
 			}
@@ -1489,7 +1489,7 @@ func TestDoubleOrder(t *testing.T) {
 	query := `
     {
 		me(func: uid(1)) {
-			friend(orderdesc: dob) @facets(orderasc: weight) 
+			friend(orderdesc: dob) @facets(orderasc: weight)
 		}
 	}
   `
@@ -1987,7 +1987,7 @@ func TestShortestPath_filter(t *testing.T) {
 				follow
 			}
 
-			me(func: uid( A)) {
+			me(func: uid(A)) {
 				name
 			}
 		}`
@@ -6584,7 +6584,7 @@ func TestLangBug1295(t *testing.T) {
 				query := `
 			{
 				q(func:` + f + "(royal_title" + l + `, "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi")) {
-					royal_title@en 
+					royal_title@en
 				}
 			}`
 
