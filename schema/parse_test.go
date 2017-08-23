@@ -59,6 +59,10 @@ func TestSchema(t *testing.T) {
 		{"name", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 		}},
+		{"_predicate_", &protos.SchemaUpdate{
+			ValueType: uint32(types.StringID),
+			List:      true,
+		}},
 		{"address", &protos.SchemaUpdate{ValueType: uint32(types.StringID)}},
 		{"http://scalar.com/helloworld/", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
@@ -166,6 +170,10 @@ friend  : uid @reverse @count .
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal5), 1))
 	checkSchema(t, State().get(1).predicate, []nameType{
+		{"_predicate_", &protos.SchemaUpdate{
+			ValueType: uint32(types.StringID),
+			List:      true,
+		}},
 		{"name", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"exact"},
