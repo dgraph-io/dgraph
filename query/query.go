@@ -1420,15 +1420,11 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			strList: sg.values,
 			path:    sgPath,
 		}
-	} else if sg.Params.DoCount {
+	} else if len(sg.counts) > 0 {
 		// This implies it is a value variable.
-		// We should add this to doneVars even if we had zero counts.
 		doneVars[sg.Params.Var] = varValue{
 			Vals: make(map[uint64]types.Val),
 			path: sgPath,
-		}
-		if sg.SrcUIDs == nil {
-			return nil
 		}
 		for idx, uid := range sg.SrcUIDs.Uids {
 			val := types.Val{
@@ -1462,6 +1458,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		// Insert a empty entry to keep the dependency happy.
 		doneVars[sg.Params.Var] = varValue{
 			path: sgPath,
+			Vals: make(map[uint64]types.Val),
 		}
 	}
 	return nil
