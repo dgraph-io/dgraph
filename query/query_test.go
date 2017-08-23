@@ -1469,8 +1469,9 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 			friend(func:anyofterms(name, "Michonne Andrea Glenn")) {
 				friend {
 				 L as friend {
-					 name
-					 friend @filter(uid(L)) {
+					nonexistent_pred
+					name
+					friend @filter(uid(L)) {
 						name
 					}
 				}
@@ -1668,6 +1669,7 @@ func TestRecurseQuery(t *testing.T) {
 	query := `
 		{
 			recurse(func: uid(0x01)) {
+				nonexistent_pred
 				friend
 				name
 			}
@@ -1693,7 +1695,7 @@ func TestRecurseQueryOrder(t *testing.T) {
 		js)
 }
 
-func TestRecurseQueryLimitDepth(t *testing.T) {
+func TestRecurseQueryLimitDepth1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
@@ -1705,6 +1707,22 @@ func TestRecurseQueryLimitDepth(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"data": {"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`, js)
+}
+
+func TestRecurseQueryLimitDepth2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			recurse(func: uid(0x01), depth: 2) {
+				_uid_
+				non_existent
+				friend
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"data": {"recurse":[{"_uid_":"0x1","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"name":"Michonne"}]}}`, js)
 }
 
 func TestShortestPath_ExpandError(t *testing.T) {
@@ -1753,6 +1771,7 @@ func TestKShortestPath_NoPath(t *testing.T) {
 		{
 			A as shortest(from:0x01, to:101, numpaths: 2) {
 				path
+				nonexistent_pred
 				follow
 			}
 
@@ -1892,6 +1911,7 @@ func TestFacetVarRetrieveOrder(t *testing.T) {
 
 			me(func: uid(f), orderasc: val(f)) {
 				name
+				nonexistent_pred
 				val(f)
 			}
 		}`

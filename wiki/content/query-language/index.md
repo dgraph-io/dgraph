@@ -662,7 +662,6 @@ Query Example: First five directors and all their movies that have a release dat
 
 {{% notice "note" %}} As of now we only support indexing Point and Polygon [geometry types](https://github.com/twpayne/go-geom#geometry-types).{{% /notice %}}
 
-
 Note that for geo queries, any polygon with holes is replace with the outer loop, ignoring holes.  Also, as for version 0.7.7 polygon containment checks are approximate.
 
 #### Mutations
