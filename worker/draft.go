@@ -245,6 +245,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 			MaxSizePerMsg:   256 << 10,
 			MaxInflightMsgs: 256,
 			Logger:          &raft.DefaultLogger{Logger: x.Logger},
+			CheckQuorum:     true, // Lets us use lease-based linearizable ReadIndex
 		},
 		applyCh:     make(chan raftpb.Entry, numPendingMutations),
 		peers:       peers,
