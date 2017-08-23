@@ -136,6 +136,7 @@ func NewNode(rc *protos.RaftContext) *Node {
 			MaxSizePerMsg:   256 << 10,
 			MaxInflightMsgs: 256,
 			Logger:          &raft.DefaultLogger{Logger: x.Logger},
+			CheckQuorum:     true,
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
