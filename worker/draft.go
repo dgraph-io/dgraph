@@ -395,6 +395,58 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
 }
 
+/* How does linearizability work?  It works as follows:  We maintain one linearizable read request
+at a time.  When we want a linearizable read, we get in line.
+*/
+
+type linearizableReadRequest struct {
+	// A one-shot chan which we send a raft index upon
+	readIndexCh chan<- uint64
+}
+
+type linearizableState struct {
+	requests        chan linearizableReadRequest
+	isActive        bool
+	needingResponse []chan<- uint64
+}
+
+func newLinearizableState() linearizableState {
+	return linearizableState{
+		requests: make(chan linearizableReadRequest),
+		isActive: false,
+	}
+}
+
+func (ls *linearizableState) requestch() chan linearizableReadRequest {
+	if ls.isActive {
+		return nil
+	} else {
+		return ls.requests
+	}
+}
+
+func (ls *linearizableState) readIndex() chan uint64 {
+	ch := make(chan uint64, 1)
+	ls.requests <- linearizableReadRequest{ch}
+	return ch
+}
+
+func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) {
+forLoop:
+	for {
+		select {
+		case req := <-ls.requests:
+			ls.needingResponse = append(ls.needingResponse, req.readIndexCh)
+		default:
+			break forLoop
+		}
+	}
+	if len(ls.needingResponse) > 0 {
+		ls.isActive = true
+		_ = n.Raft().ReadIndex(n.ctx, []byte{}) // TODO: rctx?  handle error?
+	}
+}
+
 func (n *node) Run() {
 	firstRun := true
 	var leader bool
@@ -403,12 +455,28 @@ func (n *node) Run() {
 	defer ticker.Stop()
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
+	linState := newLinearizableState()
 	for {
 		select {
 		case <-ticker.C:
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			x.AssertTrue(len(rd.ReadStates) <= 1) // Because right now we don't retry yet
+			for _, rs := range rd.ReadStates {
+				x.AssertTrue(linState.isActive)
+				linState.isActive = false
+				for _, respCh := range linState.needingResponse {
+					respCh <- rs.Index
+				}
+				linState.needingResponse = linState.needingResponse[:0]
+				feedRequestsAndDispatchReadIndex(&linState, n)
+				if len(linState.needingResponse) > 0 {
+					linState.isActive = true
+					_ = n.Raft().ReadIndex(n.ctx, []byte{}) // TODO: Handle error?
+				}
+			}
+
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateFollower && leader {
 					// stepped down as leader do a sync membership immediately
@@ -494,6 +562,11 @@ func (n *node) Run() {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
+
+		case req := <-linState.requestch():
+			x.AssertTrue(!linState.isActive)
+			linState.needingResponse = append(linState.needingResponse, req.readIndexCh)
+			feedRequestsAndDispatchReadIndex(&linState, n)
 
 		case <-n.stop:
 			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
