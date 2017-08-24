@@ -212,27 +212,8 @@ func (q GeoQueryData) MatchesFilter(g geom.T) bool {
 	return false
 }
 
-// WithinPolygon returns true if g1 is within g2 approximaltely.
-// Note that this is very far from accurate within function and is
-// a temporary fix.
-// TODO(Ashwin): Improve this to make it more accurate.
-func WithinPolygon(g1 *s2.Loop, g2 *s2.Loop) bool {
-	for _, point := range g1.Vertices() {
-		if !g2.ContainsPoint(point) {
-			return false
-		}
-	}
-	return true
-}
-
-// TODO(Ashwin): Improve this to make it more accurate.
 func WithinCapPolygon(g1 *s2.Loop, g2 *s2.Cap) bool {
-	for _, point := range g1.Vertices() {
-		if !g2.ContainsPoint(point) {
-			return false
-		}
-	}
-	return true
+	return g2.Contains(g1.CapBound())
 }
 
 // returns true if the geometry represented by g is within the given loop or cap
@@ -249,7 +230,7 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 			return false
 		}
 		if q.loop != nil {
-			return WithinPolygon(s2loop, q.loop)
+			return Contains(q.loop, s2loop)
 		}
 		if q.cap != nil {
 			return WithinCapPolygon(s2loop, q.cap)
@@ -288,7 +269,7 @@ func (q GeoQueryData) contains(g geom.T) bool {
 	// If its a loop check if it lies within other loop. Else Check the point.
 	if q.loop != nil {
 		// We don't support polygons containing polygons yet.
-		return WithinPolygon(q.loop, s2loop)
+		return Contains(s2loop, q.loop)
 	}
 	return s2loop.ContainsPoint(*q.pt)
 }

@@ -65,6 +65,63 @@ func intersects(l *s2.Loop, loop *s2.Loop) bool {
 	return false
 }
 
+func findVertex(a *s2.Loop, p s2.Point) int {
+	pts := a.Vertices()
+	for i := 0; i < len(pts); i++ {
+		if pts[i].ApproxEqual(p) {
+			return i
+		}
+	}
+	return -1
+}
+
+// Contains checks whether loop A contains loop B.
+func Contains(a *s2.Loop, b *s2.Loop) bool {
+	// For this loop A to contains the given loop B, all of the following must
+	// be true:
+	//
+	//  (1) There are no edge crossings between A and B except at vertices.
+	//
+	//  (2) At every vertex that is shared between A and B, the local edge
+	//      ordering implies that A contains B.
+	//
+	//  (3) If there are no shared vertices, then A must contain a vertex of B
+	//      and B must not contain a vertex of A.  (An arbitrary vertex may be
+	//      chosen in each case.)
+	//
+	// The second part of (3) is necessary to detect the case of two loops whose
+	// union is the entire sphere, i.e. two loops that contains each other's
+	// boundaries but not each other's interiors.
+
+	if !a.RectBound().Contains(b.RectBound()) {
+		return false
+	}
+
+	// Unless there are shared vertices, we need to check whether A contains a
+	// vertex of B.  Since shared vertices are rare, it is more efficient to do
+	// this test up front as a quick rejection test.
+	if !a.ContainsPoint(b.Vertex(0)) && findVertex(a, b.Vertex(0)) < 0 {
+		return false
+	}
+
+	// Now check whether there are any edge crossings.
+	if edgesCrossPoints(a, b.Vertices()) {
+		return false
+	}
+
+	// At this point we know that the boundaries of A and B do not intersect,
+	// and that A contains a vertex of B.  However we still need to check for
+	// the case mentioned above, where (A union B) is the entire sphere.
+	// Normally this check is very cheap due to the bounding box precondition.
+	if a.RectBound().Union(b.RectBound()).IsFull() {
+		if b.ContainsPoint(a.Vertex(0)) && findVertex(b, a.Vertex(0)) < 0 {
+			return false
+		}
+	}
+	return true
+
+}
+
 // Intersects returns true if the two loops intersect.
 func Intersects(l1 *s2.Loop, l2 *s2.Loop) bool {
 	if l2.NumEdges() > l1.NumEdges() {
