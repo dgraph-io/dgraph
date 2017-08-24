@@ -163,6 +163,9 @@ type node struct {
 	_confState *raftpb.ConfState
 	_raft      raft.Node
 
+	// Changed after init but not protected by SafeMutex
+	linState linearizableState
+
 	// Fields which are never changed after init.
 	cfg         *raft.Config
 	applyCh     chan raftpb.Entry
@@ -233,10 +236,11 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 
 	n := &node{
-		ctx:   context.Background(),
-		id:    id,
-		gid:   gid,
-		store: store,
+		linState: newLinearizableState(),
+		ctx:      context.Background(),
+		id:       id,
+		gid:      gid,
+		store:    store,
 		cfg: &raft.Config{
 			ID:              id,
 			ElectionTick:    100, // 200 ms if we call Tick() every 20 ms.
@@ -731,9 +735,8 @@ func newLinearizableState() linearizableState {
 func (ls *linearizableState) requestch() chan linearizableReadRequest {
 	if ls.isActive {
 		return nil
-	} else {
-		return ls.requests
 	}
+	return ls.requests
 }
 
 func (ls *linearizableState) readIndex() chan uint64 {
@@ -766,24 +769,23 @@ func (n *node) Run() {
 	defer ticker.Stop()
 	rcBytes, err := n.raftContext.Marshal()
 	x.Check(err)
-	linState := newLinearizableState()
 	for {
 		select {
 		case <-ticker.C:
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			x.AssertTrue(len(rd.ReadStates) <= 1) // Because right now we don't retry yet
 			for _, rs := range rd.ReadStates {
-				x.AssertTrue(linState.isActive)
-				linState.isActive = false
-				for _, respCh := range linState.needingResponse {
+				// TODO: Use rctx.
+				// x.AssertTrue(n.linState.isActive)
+				n.linState.isActive = false
+				for _, respCh := range n.linState.needingResponse {
 					respCh <- rs.Index
 				}
-				linState.needingResponse = linState.needingResponse[:0]
-				feedRequestsAndDispatchReadIndex(&linState, n)
-				if len(linState.needingResponse) > 0 {
-					linState.isActive = true
+				n.linState.needingResponse = n.linState.needingResponse[:0]
+				feedRequestsAndDispatchReadIndex(&n.linState, n)
+				if len(n.linState.needingResponse) > 0 {
+					n.linState.isActive = true
 					_ = n.Raft().ReadIndex(n.ctx, []byte{}) // TODO: Handle error?
 				}
 			}
@@ -851,10 +853,10 @@ func (n *node) Run() {
 				firstRun = false
 			}
 
-		case req := <-linState.requestch():
-			x.AssertTrue(!linState.isActive)
-			linState.needingResponse = append(linState.needingResponse, req.readIndexCh)
-			feedRequestsAndDispatchReadIndex(&linState, n)
+		case req := <-n.linState.requestch():
+			x.AssertTrue(!n.linState.isActive)
+			n.linState.needingResponse = append(n.linState.needingResponse, req.readIndexCh)
+			feedRequestsAndDispatchReadIndex(&n.linState, n)
 
 		case <-n.stop:
 			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
@@ -1148,4 +1150,12 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*
 	case err := <-c:
 		return &protos.Payload{}, err
 	}
+}
+
+func waitLinearizableRead(ctx context.Context, gid uint32) {
+	n := groups().Node(gid)
+	replyCh := n.linState.readIndex()
+	index := <-replyCh
+	_ = index
+	// TODO: Return and make use of index.
 }
