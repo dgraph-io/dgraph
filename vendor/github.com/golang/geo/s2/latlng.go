@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/golang/geo/r3"
 	"github.com/golang/geo/s1"
 )
 
@@ -87,7 +88,7 @@ func PointFromLatLng(ll LatLng) Point {
 	phi := ll.Lat.Radians()
 	theta := ll.Lng.Radians()
 	cosphi := math.Cos(phi)
-	return PointFromCoords(math.Cos(theta)*cosphi, math.Sin(theta)*cosphi, math.Sin(phi))
+	return Point{r3.Vector{math.Cos(theta) * cosphi, math.Sin(theta) * cosphi, math.Sin(phi)}}
 }
 
 // LatLngFromPoint returns an LatLng for a given Point.

@@ -18,9 +18,7 @@ package s2
 
 // This file implements functions for various S2 measurements.
 
-import (
-	"math"
-)
+import "math"
 
 // A Metric is a measure for cells. It is used to describe the shape and size
 // of cells. They are useful for deciding which cell level to use in order to
@@ -113,6 +111,11 @@ func (m Metric) Value(level int) float64 {
 
 // MinLevel returns the minimum level such that the metric is at most
 // the given value, or maxLevel (30) if there is no such level.
+//
+// For example, MinLevel(0.1) returns the minimum level such that all cell diagonal
+// lengths are 0.1 or smaller. The returned value is always a valid level.
+//
+// In C++, this is called GetLevelForMaxValue.
 func (m Metric) MinLevel(val float64) int {
 	if val < 0 {
 		return maxLevel
@@ -130,6 +133,11 @@ func (m Metric) MinLevel(val float64) int {
 
 // MaxLevel returns the maximum level such that the metric is at least
 // the given value, or zero if there is no such level.
+//
+// For example, MaxLevel(0.1) returns the maximum level such that all cells have a
+// minimum width of 0.1 or larger. The returned value is always a valid level.
+//
+// In C++, this is called GetLevelForMinValue.
 func (m Metric) MaxLevel(val float64) int {
 	if val <= 0 {
 		return maxLevel

@@ -37,13 +37,37 @@ type Region interface {
 	// if intersection could not be determined. It returns false if the region
 	// does not intersect.
 	IntersectsCell(c Cell) bool
+
+	// ContainsPoint reports whether the region contains the given point or not.
+	// The point should be unit length, although some implementations may relax
+	// this restriction.
+	ContainsPoint(p Point) bool
+
+	// CellUnionBound returns a small collection of CellIDs whose union covers
+	// the region. The cells are not sorted, may have redundancies (such as cells
+	// that contain other cells), and may cover much more area than necessary.
+	//
+	// This method is not intended for direct use by client code. Clients
+	// should typically use Covering, which has options to control the size and
+	// accuracy of the covering. Alternatively, if you want a fast covering and
+	// don't care about accuracy, consider calling FastCovering (which returns a
+	// cleaned-up version of the covering computed by this method).
+	//
+	// CellUnionBound implementations should attempt to return a small
+	// covering (ideally 4 cells or fewer) that covers the region and can be
+	// computed quickly. The result is used by RegionCoverer as a starting
+	// point for further refinement.
+	CellUnionBound() []CellID
 }
 
-// Enforce interface satisfaction.
+// Enforce Region interface satisfaction.
 var (
 	_ Region = Cap{}
 	_ Region = Cell{}
 	_ Region = (*CellUnion)(nil)
-	//_ Region = (*Polygon)(nil)
+	_ Region = (*Loop)(nil)
+	_ Region = Point{}
+	_ Region = (*Polygon)(nil)
+	_ Region = (*Polyline)(nil)
 	_ Region = Rect{}
 )

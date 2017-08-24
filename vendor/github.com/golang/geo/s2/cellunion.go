@@ -17,15 +17,30 @@ limitations under the License.
 package s2
 
 import (
+	"io"
 	"sort"
 )
 
 // A CellUnion is a collection of CellIDs.
 //
 // It is normalized if it is sorted, and does not contain redundancy.
-// Specifically, it may not contain the same CellID twice, nor a CellID that is contained by another,
-// nor the four sibling CellIDs that are children of a single higher level CellID.
+// Specifically, it may not contain the same CellID twice, nor a CellID that
+// is contained by another, nor the four sibling CellIDs that are children of
+// a single higher level CellID.
 type CellUnion []CellID
+
+// CellUnionFromRange creates a CellUnion that covers the half-open range
+// of leaf cells [begin, end). If begin == end the resulting union is empty.
+// This requires that begin and end are both leaves, and begin <= end.
+// To create a closed-ended range, pass in end.Next().
+func CellUnionFromRange(begin, end CellID) CellUnion {
+	// We repeatedly add the largest cell we can.
+	var cu CellUnion
+	for id := begin.MaxTile(end); id != end; id = id.Next().MaxTile(end) {
+		cu = append(cu, id)
+	}
+	return cu
+}
 
 // Normalize normalizes the CellUnion.
 func (cu *CellUnion) Normalize() {
@@ -204,6 +219,16 @@ func (cu *CellUnion) IntersectsCell(c Cell) bool {
 	return cu.IntersectsCellID(c.id)
 }
 
+// ContainsPoint reports whether this cell union contains the given point.
+func (cu *CellUnion) ContainsPoint(p Point) bool {
+	return cu.ContainsCell(CellFromPoint(p))
+}
+
+// CellUnionBound computes a covering of the CellUnion.
+func (cu *CellUnion) CellUnionBound() []CellID {
+	return cu.CapBound().CellUnionBound()
+}
+
 // LeafCellsCovered reports the number of leaf cells covered by this cell union.
 // This will be no more than 6*2^60 for the whole sphere.
 func (cu *CellUnion) LeafCellsCovered() int64 {
@@ -214,11 +239,24 @@ func (cu *CellUnion) LeafCellsCovered() int64 {
 	return numLeaves
 }
 
+// Encode encodes the CellUnion.
+func (cu *CellUnion) Encode(w io.Writer) error {
+	e := &encoder{w: w}
+	cu.encode(e)
+	return e.err
+}
+
+func (cu *CellUnion) encode(e *encoder) {
+	e.writeInt8(encodingVersion)
+	e.writeInt64(int64(len(*cu)))
+	for _, ci := range *cu {
+		ci.encode(e)
+	}
+}
+
 // BUG: Differences from C++:
 //  Contains(CellUnion)/Intersects(CellUnion)
 //  Union(CellUnion)/Intersection(CellUnion)/Difference(CellUnion)
 //  Expand
-//  IntersectsCellID
-//  CapBound
 //  ContainsPoint
 //  AverageArea/ApproxArea/ExactArea

@@ -194,6 +194,10 @@ func (c *coverer) expandChildren(cand *candidate, cell Cell, numLevels int) int 
 // otherwise expands its children and inserts it into the priority queue.
 // Passing an argument of nil does nothing.
 func (c *coverer) addCandidate(cand *candidate) {
+	if cand == nil {
+		return
+	}
+
 	if cand.terminal {
 		c.result = append(c.result, cand.cell.id)
 		return
@@ -271,12 +275,10 @@ func (c *coverer) initialCandidates() {
 	// Optimization: start with a small (usually 4 cell) covering of the region's bounding cap.
 	temp := &RegionCoverer{MaxLevel: c.maxLevel, LevelMod: 1, MaxCells: min(4, c.maxCells)}
 
-	cells := temp.FastCovering(c.region.CapBound())
+	cells := temp.FastCovering(c.region)
 	c.adjustCellLevels(&cells)
 	for _, ci := range cells {
-		if cand := c.newCandidate(CellFromCellID(ci)); cand != nil {
-			c.addCandidate(cand)
-		}
+		c.addCandidate(c.newCandidate(CellFromCellID(ci)))
 	}
 }
 
@@ -385,29 +387,11 @@ func (rc *RegionCoverer) InteriorCellUnion(region Region) CellUnion {
 //
 // This function is useful as a starting point for algorithms that
 // recursively subdivide cells.
-func (rc *RegionCoverer) FastCovering(cap Cap) CellUnion {
+func (rc *RegionCoverer) FastCovering(region Region) CellUnion {
 	c := rc.newCoverer()
-	cu := c.rawFastCovering(cap)
+	cu := CellUnion(region.CellUnionBound())
 	c.normalizeCovering(&cu)
 	return cu
-}
-
-// rawFastCovering computes a covering of the given cap. In general the covering consists of
-// at most 4 cells (except for very large caps, which may need up to 6 cells).
-// The output is not sorted.
-func (c *coverer) rawFastCovering(cap Cap) CellUnion {
-	var covering CellUnion
-	// Find the maximum level such that the cap contains at most one cell vertex
-	// and such that CellId.VertexNeighbors() can be called.
-	level := min(MinWidthMetric.MaxLevel(2*cap.Radius().Radians()), maxLevel-1)
-	if level == 0 {
-		for face := 0; face < 6; face++ {
-			covering = append(covering, CellIDFromFace(face))
-		}
-	} else {
-		covering = append(covering, cellIDFromPoint(cap.center).VertexNeighbors(level)...)
-	}
-	return covering
 }
 
 // normalizeCovering normalizes the "covering" so that it conforms to the current covering

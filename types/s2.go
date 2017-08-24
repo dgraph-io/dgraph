@@ -26,35 +26,7 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 )
 
-// Added functionality missing in s2
-
-// Make s2.Loop implement s2.Region
-type loopRegion struct {
-	*s2.Loop
-}
-
-func (l loopRegion) ContainsCell(c s2.Cell) bool {
-	// Quick check if the cell is in the bounding box
-	if !l.RectBound().ContainsCell(c) {
-		return false
-	}
-
-	// Quick check to see if the first vertex is in the loop.
-	if !l.ContainsPoint(c.Vertex(0)) {
-		return false
-	}
-
-	// At this stage one vertex is in the loop, now we check that the edges of the cell do not cross
-	// the loop.
-	return !l.edgesCross(c)
-}
-
-// returns true if the edges of the cell cross the edges of the loop
-func (l loopRegion) edgesCross(c s2.Cell) bool {
-	return l.edgesCrossPoints([]s2.Point{c.Vertex(0), c.Vertex(1), c.Vertex(2), c.Vertex(3)})
-}
-
-func (l loopRegion) edgesCrossPoints(pts []s2.Point) bool {
+func edgesCrossPoints(l *s2.Loop, pts []s2.Point) bool {
 	n := len(pts)
 	for i := 0; i < n; i++ {
 		crosser := s2.NewChainEdgeCrosser(pts[i], pts[(i+1)%n], l.Vertex(0))
@@ -67,33 +39,7 @@ func (l loopRegion) edgesCrossPoints(pts []s2.Point) bool {
 	return false
 }
 
-func (l loopRegion) IntersectsCell(c s2.Cell) bool {
-	// Quick check if the cell intersects the bounding box
-	if !l.RectBound().IntersectsCell(c) {
-		return false
-	}
-
-	// Quick check to see if the first vertex is in the loop.
-	if l.ContainsPoint(c.Vertex(0)) {
-		return true
-	}
-
-	// At this stage the one vertex is outside the loop. We check if any of the edges of the cell
-	// cross the loop.
-	if l.edgesCross(c) {
-		return true
-	}
-
-	// At this stage we know that there is one point of the cell outside the loop and the boundaries
-	// do not interesect. The only way for the cell to intersect with the loop is if it contains the
-	// the loop. We test this by checking if an arbitrary vertex of the loop is inside the cell.
-	if c.RectBound().Contains(l.RectBound()) {
-		return c.ContainsPoint(l.Vertex(0))
-	}
-	return false
-}
-
-func (l loopRegion) intersects(loop *s2.Loop) bool {
+func intersects(l *s2.Loop, loop *s2.Loop) bool {
 	// Quick check if the bounding boxes intersect
 	if !l.RectBound().Intersects(loop.RectBound()) {
 		return false
@@ -106,7 +52,7 @@ func (l loopRegion) intersects(loop *s2.Loop) bool {
 
 	// At this stage the one vertex is outside the loop. We check if any of the edges of the cell
 	// cross the loop.
-	if l.edgesCrossPoints(loop.Vertices()) {
+	if edgesCrossPoints(l, loop.Vertices()) {
 		return true
 	}
 
@@ -123,9 +69,9 @@ func (l loopRegion) intersects(loop *s2.Loop) bool {
 func Intersects(l1 *s2.Loop, l2 *s2.Loop) bool {
 	if l2.NumEdges() > l1.NumEdges() {
 		// Use the larger loop for edge indexing.
-		return loopRegion{l2}.intersects(l1)
+		return intersects(l2, l1)
 	}
-	return loopRegion{l1}.intersects(l2)
+	return intersects(l1, l2)
 }
 
 func convertToGeom(str string) (geom.T, error) {

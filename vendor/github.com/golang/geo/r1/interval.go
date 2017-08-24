@@ -84,7 +84,7 @@ func (i Interval) Intersects(oi Interval) bool {
 
 // InteriorIntersects returns true iff the interior of the interval contains any points in common with oi, including the latter's boundary.
 func (i Interval) InteriorIntersects(oi Interval) bool {
-	return oi.Lo < i.Hi && i.Lo < oi.Hi && i.Lo < i.Hi && oi.Lo <= i.Hi
+	return oi.Lo < i.Hi && i.Lo < oi.Hi && i.Lo < i.Hi && oi.Lo <= oi.Hi
 }
 
 // Intersection returns the interval containing all points common to i and j.
@@ -159,6 +159,3 @@ func (i Interval) ApproxEqual(other Interval) bool {
 	return math.Abs(other.Lo-i.Lo) <= epsilon &&
 		math.Abs(other.Hi-i.Hi) <= epsilon
 }
-
-// BUG(dsymonds): The major differences from the C++ version are:
-//   - a few other miscellaneous operations
