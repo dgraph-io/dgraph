@@ -57,14 +57,14 @@ func Check2(_ interface{}, err error) {
 // AssertTrue asserts that b is true. Otherwise, it would log fatal.
 func AssertTrue(b bool) {
 	if !b {
-		log.Fatalf("%+v", Errorf("Assert failed"))
+		log.Fatalf("%+v", errors.Errorf("Assert failed"))
 	}
 }
 
 // AssertTruef is AssertTrue with extra info.
 func AssertTruef(b bool, format string, args ...interface{}) {
 	if !b {
-		log.Fatalf("%+v", Errorf(format, args...))
+		log.Fatalf("%+v", errors.Errorf(format, args...))
 	}
 }
 
