@@ -931,7 +931,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 		return
 	}
 	if !raft.IsEmptyHardState(hd) {
-		x.Printf("Found hardstate: %+v\n", sp)
+		x.Printf("Found hardstate: %+v\n", hd)
 		restart = true
 		if rerr = n.store.SetHardState(hd); rerr != nil {
 			return
