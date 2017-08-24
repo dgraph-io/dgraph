@@ -131,6 +131,11 @@ func Intersects(l1 *s2.Loop, l2 *s2.Loop) bool {
 	return intersects(l1, l2)
 }
 
+func closed(coords []geom.Coord) bool {
+	l := len(coords)
+	return coords[0][0] == coords[l-1][0] && coords[0][1] == coords[l-1][1]
+}
+
 func convertToGeom(str string) (geom.T, error) {
 	s := x.WhiteSpace.Replace(str)
 	if len(s) < 5 { // [1,2]
@@ -139,6 +144,32 @@ func convertToGeom(str string) (geom.T, error) {
 	var g geojson.Geometry
 	var m json.RawMessage
 	var err error
+
+	if s[0:3] == "[[[" {
+		g.Type = "MultiPolygon"
+		err = m.UnmarshalJSON([]byte(fmt.Sprintf("[%s]", s)))
+		if err != nil {
+			return nil, x.Wrapf(err, "Invalid coordinates")
+		}
+		g.Coordinates = &m
+		g1, err := g.Decode()
+		if err != nil {
+			return nil, x.Wrapf(err, "Invalid coordinates")
+		}
+		mp := g1.(*geom.MultiPolygon)
+		for i := 0; i < mp.NumPolygons(); i++ {
+			coords := mp.Polygon(i).Coords()
+			if len(coords) == 0 {
+				return nil, x.Errorf("Got empty polygon inside multi-polygon.")
+			}
+			// Check that first ring is closed.
+			if !closed(mp.Polygon(i).Coords()[0]) {
+				return nil, x.Errorf("Last coord not same as first")
+			}
+		}
+		return g1, nil
+	}
+
 	if s[0:2] == "[[" {
 		g.Type = "Polygon"
 		err = m.UnmarshalJSON([]byte(fmt.Sprintf("[%s]", s)))
@@ -151,8 +182,11 @@ func convertToGeom(str string) (geom.T, error) {
 			return nil, x.Wrapf(err, "Invalid coordinates")
 		}
 		coords := g1.(*geom.Polygon).Coords()
-		if coords[0][0][0] != coords[0][len(coords[0])-1][0] ||
-			coords[0][0][1] != coords[0][len(coords[0])-1][1] {
+		if len(coords) == 0 {
+			return nil, x.Errorf("Got empty polygon.")
+		}
+		// Check that first ring is closed.
+		if !closed(coords[0]) {
 			return nil, x.Errorf("Last coord not same as first")
 		}
 		return g1, nil
