@@ -152,16 +152,17 @@ func convertToGeom(str string) (geom.T, error) {
 			coords[0][0][1] != coords[0][len(coords[0])-1][1] {
 			return nil, x.Errorf("Last coord not same as first")
 		}
+		return g1, nil
+	}
 
-	} else if s[0] == '[' {
+	if s[0] == '[' {
 		g.Type = "Point"
 		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
 			return nil, x.Wrapf(err, "Invalid coordinates")
 		}
 		g.Coordinates = &m
-	} else {
-		return nil, x.Errorf("invalid coordinates")
+		return g.Decode()
 	}
-	return g.Decode()
+	return nil, x.Errorf("invalid coordinates")
 }
