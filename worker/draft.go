@@ -788,6 +788,7 @@ func (n *node) Run() {
 				if 0 != bytes.Compare(n.linState.activeRequestRctx, rs.RequestCtx) {
 					continue
 				}
+				x.AssertTrue(n.linState.isActive)
 				n.linState.isActive = false
 				for _, respCh := range n.linState.needingResponse {
 					respCh <- rs.Index
