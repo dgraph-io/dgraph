@@ -720,9 +720,11 @@ type linearizableReadRequest struct {
 }
 
 type linearizableState struct {
-	requests        chan linearizableReadRequest
-	isActive        bool
-	needingResponse []chan<- uint64
+	requests          chan linearizableReadRequest
+	isActive          bool
+	rctxCounter       uint64
+	activeRequestRctx []byte
+	needingResponse   []chan<- uint64
 }
 
 func newLinearizableState() linearizableState {
@@ -756,8 +758,13 @@ forLoop:
 		}
 	}
 	if len(ls.needingResponse) > 0 {
+		ls.rctxCounter++
+		var buf [8]byte
+		// TODO: Make rctx different between process runs...
+		binary.BigEndian.PutUint64(buf[:], ls.rctxCounter)
+		ls.activeRequestRctx = buf[:]
 		ls.isActive = true
-		_ = n.Raft().ReadIndex(n.ctx, []byte{}) // TODO: rctx?  handle error?
+		_ = n.Raft().ReadIndex(n.ctx, ls.activeRequestRctx)
 	}
 }
 
@@ -776,8 +783,9 @@ func (n *node) Run() {
 
 		case rd := <-n.Raft().Ready():
 			for _, rs := range rd.ReadStates {
-				// TODO: Use rctx.
-				// x.AssertTrue(n.linState.isActive)
+				if 0 != bytes.Compare(n.linState.activeRequestRctx, rs.RequestCtx) {
+					continue
+				}
 				n.linState.isActive = false
 				for _, respCh := range n.linState.needingResponse {
 					respCh <- rs.Index
