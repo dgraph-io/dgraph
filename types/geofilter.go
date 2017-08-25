@@ -328,6 +328,20 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 			}
 		}
 		return false
+	case *geom.MultiPolygon:
+		// We must compare all polygons in the geometry with those in the query.
+		for i := 0; i < v.NumPolygons(); i++ {
+			l, err := loopFromPolygon(v.Polygon(i))
+			if err != nil {
+				return false
+			}
+			for _, loop := range q.loops {
+				if Intersects(l, loop) {
+					return true
+				}
+			}
+		}
+		return false
 	default:
 		// A type that we don't know how to handle.
 		return false

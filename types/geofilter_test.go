@@ -68,8 +68,9 @@ func formDataPoint(t *testing.T, p *geom.Point) string {
 
 	return string(gb)
 }
-func formDataPolygon(t *testing.T, p *geom.Polygon) string {
-	d, err := wkb.Marshal(p, binary.LittleEndian)
+
+func formDataPolygon(t *testing.T, g geom.T) string {
+	d, err := wkb.Marshal(g, binary.LittleEndian)
 	require.NoError(t, err)
 
 	src := ValueForType(GeoID)
@@ -235,7 +236,7 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
 	})
 	data = formDataPolygon(t, poly)
-	_, qd, err = queryTokens(QueryTypeIntersects, data, 0.0)
+	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
 	require.NoError(t, err)
 	require.False(t, qd.MatchesFilter(us))
 }
@@ -321,7 +322,31 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 	data = formDataPolygon(t, polyOut)
 	_, qd, err = queryTokens(QueryTypeIntersects, data, 0.0)
 	require.False(t, qd.MatchesFilter(poly2))
+
+	// Multipolygon intersects
+	us, err := loadPolygon("testdata/us.json")
+	require.NoError(t, err)
+
+	// Multipoly intersecting poly
+	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+		{{-121.5, 36.5}, {-122.5, 36.5}, {-122.5, 37.5}, {-121.5, 37.5}, {-121.5, 36.5}},
+	})
+	// Query input is the above polygon.
+	data = formDataPolygon(t, poly)
+	_, qd, err = queryTokens(QueryTypeIntersects, data, 0.0)
+	require.NoError(t, err)
+	require.True(t, qd.MatchesFilter(us))
+
+	data = formDataPolygon(t, us)
+	// Query input is US Multipolygon, it should return p2 as p2 lies within it.
+	_, qd, err = queryTokens(QueryTypeIntersects, data, 0.0)
+	require.NoError(t, err)
+	require.True(t, qd.MatchesFilter(p2))
+
+	// Multipolygon intersecting itself.
+	require.True(t, qd.MatchesFilter(us))
 }
+
 func TestMatchesFilterNearPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data := formDataPoint(t, p)
