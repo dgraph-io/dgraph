@@ -162,6 +162,7 @@ func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) 
 		}
 		line++
 		if line <= checkpoint {
+			buf.Reset()
 			// No need to parse. We have already sent it to server.
 			continue
 		}

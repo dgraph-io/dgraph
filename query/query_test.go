@@ -464,7 +464,7 @@ func TestLevelBasedFacetVarAggSum(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			friend(func: uid( 1000)) {
+			friend(func: uid(1000)) {
 				path @facets(L1 as weight)
 				sumw: sum(val(L1))
 			}
@@ -1469,8 +1469,9 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 			friend(func:anyofterms(name, "Michonne Andrea Glenn")) {
 				friend {
 				 L as friend {
-					 name
-					 friend @filter(uid(L)) {
+					nonexistent_pred
+					name
+					friend @filter(uid(L)) {
 						name
 					}
 				}
@@ -1489,7 +1490,7 @@ func TestDoubleOrder(t *testing.T) {
 	query := `
     {
 		me(func: uid(1)) {
-			friend(orderdesc: dob) @facets(orderasc: weight) 
+			friend(orderdesc: dob) @facets(orderasc: weight)
 		}
 	}
   `
@@ -1668,6 +1669,7 @@ func TestRecurseQuery(t *testing.T) {
 	query := `
 		{
 			recurse(func: uid(0x01)) {
+				nonexistent_pred
 				friend
 				name
 			}
@@ -1693,7 +1695,7 @@ func TestRecurseQueryOrder(t *testing.T) {
 		js)
 }
 
-func TestRecurseQueryLimitDepth(t *testing.T) {
+func TestRecurseQueryLimitDepth1(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
@@ -1705,6 +1707,22 @@ func TestRecurseQueryLimitDepth(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"data": {"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}}`, js)
+}
+
+func TestRecurseQueryLimitDepth2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			recurse(func: uid(0x01), depth: 2) {
+				_uid_
+				non_existent
+				friend
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"data": {"recurse":[{"_uid_":"0x1","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"name":"Michonne"}]}}`, js)
 }
 
 func TestShortestPath_ExpandError(t *testing.T) {
@@ -1753,6 +1771,7 @@ func TestKShortestPath_NoPath(t *testing.T) {
 		{
 			A as shortest(from:0x01, to:101, numpaths: 2) {
 				path
+				nonexistent_pred
 				follow
 			}
 
@@ -1892,6 +1911,7 @@ func TestFacetVarRetrieveOrder(t *testing.T) {
 
 			me(func: uid(f), orderasc: val(f)) {
 				name
+				nonexistent_pred
 				val(f)
 			}
 		}`
@@ -1987,7 +2007,7 @@ func TestShortestPath_filter(t *testing.T) {
 				follow
 			}
 
-			me(func: uid( A)) {
+			me(func: uid(A)) {
 				name
 			}
 		}`
@@ -2157,10 +2177,15 @@ func TestDebug1(t *testing.T) {
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.EqualValues(t, "0x1", uid)
 
-	latency := data["server_latency"]
-	require.NotNil(t, latency)
-	_, ok := latency.(map[string]interface{})
+	extensions := mp["extensions"]
+	require.NotNil(t, extensions)
+	ext, ok := extensions.(map[string]interface{})
 	require.True(t, ok)
+	latency := ext["server_latency"]
+	require.NotNil(t, latency)
+	lat, ok := latency.(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, 4, len(lat))
 }
 
 func TestDebug2(t *testing.T) {
@@ -6579,7 +6604,7 @@ func TestLangBug1295(t *testing.T) {
 				query := `
 			{
 				q(func:` + f + "(royal_title" + l + `, "Sa Majesté Elizabeth Deux, par la grâce de Dieu Reine du Royaume-Uni, du Canada et de ses autres royaumes et territoires, Chef du Commonwealth, Défenseur de la Foi")) {
-					royal_title@en 
+					royal_title@en
 				}
 			}`
 
@@ -8853,4 +8878,48 @@ func TestFilterLang(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"data": {"me":[{"name@en":"European badger"},{"name@en":"Honey badger"},{"name@en":"Honey bee"}]}}`, js)
+}
+
+func TestMathCeil1(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me as var(func: eq(name, "Xyz"))
+		var(func: uid(me)) {
+			friend {
+				x as age
+			}
+			x2 as sum(val(x))
+			c as count(friend)
+		}
+
+		me(func: uid(me)) {
+			ceilAge: math(ceil(x2/c))
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {}}`, js)
+}
+
+func TestMathCeil2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me as var(func: eq(name, "Michonne"))
+		var(func: uid(me)) {
+			friend {
+				x as age
+			}
+			x2 as sum(val(x))
+			c as count(friend)
+		}
+
+		me(func: uid(me)) {
+			ceilAge: math(ceil(x2/c))
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
 }

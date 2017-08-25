@@ -119,8 +119,8 @@ func TestOrderFacets(t *testing.T) {
 	query := `
 		{
 			me(func: uid(1)) {
-				friend @facets(orderasc:since) { 
-					name 
+				friend @facets(orderasc:since) {
+					name
 				}
 			}
 		}
@@ -139,8 +139,8 @@ func TestOrderdescFacets(t *testing.T) {
 	query := `
 		{
 			me(func: uid(1)) {
-				friend @facets(orderdesc:since) { 
-					name 
+				friend @facets(orderdesc:since) {
+					name
 				}
 			}
 		}

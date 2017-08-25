@@ -257,6 +257,242 @@ type funcArgs struct {
 	out   *protos.Result
 }
 
+// The function tells us whether we want to fetch value posting lists or uid posting lists.
+func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error) {
+	switch srcFn.fnType {
+	case AggregatorFn, PasswordFn:
+		return true, nil
+	case CompareAttrFn:
+		if len(srcFn.tokens) > 0 {
+			return false, nil
+		}
+		return true, nil
+	case GeoFn, RegexFn, FullTextSearchFn, StandardFn, HasFn:
+		// All of these require index, hence would require fetching uid postings.
+		return false, nil
+	case UidInFn, CompareScalarFn:
+		// Operate on uid postings
+		return false, nil
+	case NotAFunction:
+		return typ.IsScalar(), nil
+	default:
+		return false, x.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
+	}
+	return true, nil
+}
+
+// Handles fetching of value posting lists and filtering of uids based on that.
+func handleValuePostings(ctx context.Context, args funcArgs) error {
+	srcFn := args.srcFn
+	q := args.q
+	attr := q.Attr
+	gid := args.gid
+	out := args.out
+
+	switch srcFn.fnType {
+	case NotAFunction, AggregatorFn, PasswordFn, CompareAttrFn:
+	default:
+		return x.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
+	}
+
+	var key []byte
+	for i := 0; i < srcFn.n; i++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		key = x.DataKey(attr, q.UidList.Uids[i])
+
+		// Get or create the posting list for an entity, attribute combination.
+		pl := posting.GetOrCreate(key, gid)
+		val, err := pl.ValueFor(q.Langs)
+		if err != nil {
+			// No value found. Lets add empty values and move on.
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			out.Values = append(out.Values, &protos.TaskValue{Val: x.Nilbyte})
+			continue
+		}
+
+		typ := val.Tid
+		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
+			return x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+		}
+
+		// If a posting list contains a value, we store that or else we store a nil
+		// byte so that processing is consistent later.
+		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
+		if typ, err = schema.State().TypeOf(attr); err == nil {
+			newValue, err = convertToType(val, typ)
+		} else if err != nil {
+			// TODO - Check when is this needed.
+			newValue, err = convertToType(val, val.Tid)
+		}
+
+		uidList := new(protos.List)
+		// This means we fetched the value directly instead of fetching index key and intersecting.
+		// Lets compare the value and add filter the uid.
+		if srcFn.fnType == CompareAttrFn {
+			// Lets convert the val to its type.
+			if val, err = types.Convert(val, typ); err != nil {
+				return err
+			}
+			if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
+				uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+			}
+		} else {
+			out.Values = append(out.Values, newValue)
+		}
+
+		if q.FacetsFilter != nil { // else part means isValueEdge
+			// This is Value edge and we are asked to do facet filtering. Not supported.
+			return x.Errorf("Facet filtering is not supported on values.")
+		}
+
+		// add facets to result.
+		if q.FacetParam != nil {
+			fs, err := pl.Facets(q.FacetParam, q.Langs)
+			if err != nil {
+				fs = []*protos.Facet{}
+			}
+			out.FacetMatrix = append(out.FacetMatrix,
+				&protos.FacetsList{[]*protos.Facets{{fs}}})
+		}
+
+		switch srcFn.fnType {
+		case AggregatorFn:
+			// Add an empty UID list to make later processing consistent
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+		case PasswordFn:
+			lastPos := len(out.Values) - 1
+			pwd := q.SrcFunc[2]
+			err = types.VerifyPassword(pwd, string(newValue.Val))
+			if err != nil {
+				out.Values[lastPos] = task.FalseVal
+			} else {
+				out.Values[lastPos] = task.TrueVal
+			}
+			// Add an empty UID list to make later processing consistent
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+		default:
+			out.UidMatrix = append(out.UidMatrix, uidList)
+		}
+	}
+	return nil
+}
+
+// This function handles operations on uid posting lists. Index keys, reverse keys and some data
+// keys store uid posting lists.
+func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOptions) error {
+	srcFn := args.srcFn
+	q := args.q
+	attr := q.Attr
+	gid := args.gid
+	out := args.out
+
+	facetsTree, err := preprocessFilter(q.FacetsFilter)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < srcFn.n; i++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		var key []byte
+		switch srcFn.fnType {
+		case NotAFunction, CompareScalarFn, HasFn, UidInFn:
+			if q.Reverse {
+				key = x.ReverseKey(attr, q.UidList.Uids[i])
+			} else {
+				key = x.DataKey(attr, q.UidList.Uids[i])
+			}
+		case GeoFn, RegexFn, FullTextSearchFn, StandardFn:
+			key = x.IndexKey(attr, srcFn.tokens[i])
+		case CompareAttrFn:
+			key = x.IndexKey(attr, srcFn.tokens[i])
+		default:
+			return x.Errorf("Unhandled function in handleUidPostings: %s", srcFn.fname)
+		}
+
+		// Get or create the posting list for an entity, attribute combination.
+		pl := posting.GetOrCreate(key, gid)
+		newValue := &protos.TaskValue{Val: x.Nilbyte}
+
+		// get filtered uids and facets.
+		var filteredRes []*result
+		out.Values = append(out.Values, newValue)
+
+		var perr error
+		filteredRes = make([]*result, 0, pl.Length(opts.AfterUID))
+		pl.Postings(opts, func(p *protos.Posting) bool {
+			res := true
+			res, perr = applyFacetsTree(p.Facets, facetsTree)
+			if perr != nil {
+				return false // break loop.
+			}
+			if res {
+				filteredRes = append(filteredRes, &result{
+					uid:    p.Uid,
+					facets: facets.CopyFacets(p.Facets, q.FacetParam)})
+			}
+			return true // continue iteration.
+		})
+		if perr != nil {
+			return perr
+		}
+
+		// add facets to result.
+		if q.FacetParam != nil {
+			var fcsList []*protos.Facets
+			for _, fres := range filteredRes {
+				fcsList = append(fcsList, &protos.Facets{fres.facets})
+			}
+			out.FacetMatrix = append(out.FacetMatrix, &protos.FacetsList{fcsList})
+		}
+
+		switch {
+		case q.DoCount:
+			out.Counts = append(out.Counts, uint32(pl.Length(0)))
+			// Add an empty UID list to make later processing consistent
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+		case srcFn.fnType == CompareScalarFn:
+			count := int64(pl.Length(0))
+			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
+				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
+				out.UidMatrix = append(out.UidMatrix, tlist)
+			}
+		case srcFn.fnType == HasFn:
+			count := int64(pl.Length(0))
+			if EvalCompare("gt", count, 0) {
+				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
+				out.UidMatrix = append(out.UidMatrix, tlist)
+			}
+		case srcFn.fnType == UidInFn:
+			reqList := &protos.List{[]uint64{srcFn.uidPresent}}
+			topts := posting.ListOptions{
+				AfterUID:  0,
+				Intersect: reqList,
+			}
+			plist := pl.Uids(topts)
+			if len(plist.Uids) > 0 {
+				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
+				out.UidMatrix = append(out.UidMatrix, tlist)
+			}
+		default:
+			// The more usual case: Getting the UIDs.
+			uidList := new(protos.List)
+			for _, fres := range filteredRes {
+				uidList.Uids = append(uidList.Uids, fres.uid)
+			}
+			out.UidMatrix = append(out.UidMatrix, uidList)
+		}
+	}
+	return nil
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	out := new(protos.Result)
@@ -278,6 +514,22 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		return nil, x.Errorf("Predicate %s is not indexed", q.Attr)
 	}
 
+	typ, err := schema.State().TypeOf(attr)
+	if err != nil {
+		if q.UidList == nil {
+			return out, nil
+		}
+		// Schema not defined, so lets add dummy values and return.
+		emptyVal := new(protos.TaskValue)
+		// Adding dummy values is important because the code assumes that len(SrcUids) equals
+		// len(uidMatrix)
+		for i := 0; i < len(q.UidList.Uids); i++ {
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			out.Values = append(out.Values, emptyVal)
+		}
+		return out, nil
+	}
+
 	opts := posting.ListOptions{
 		AfterUID: uint64(q.AfterUid),
 	}
@@ -285,184 +537,20 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	if srcFn.fnType != NotAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {
 		opts.Intersect = q.UidList
 	}
-	facetsTree, err := preprocessFilter(q.FacetsFilter)
+
+	args := funcArgs{q, gid, srcFn, out}
+	needsValPostings, err := srcFn.needsValuePostings(typ)
 	if err != nil {
 		return nil, err
 	}
-
-	for i := 0; i < srcFn.n; i++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
+	if needsValPostings {
+		if err = handleValuePostings(ctx, args); err != nil {
+			return nil, err
 		}
-		var key []byte
-		switch srcFn.fnType {
-		case NotAFunction, CompareScalarFn, HasFn, UidInFn:
-			if q.Reverse {
-				key = x.ReverseKey(attr, q.UidList.Uids[i])
-			} else {
-				key = x.DataKey(attr, q.UidList.Uids[i])
-			}
-		case AggregatorFn, PasswordFn:
-			key = x.DataKey(attr, q.UidList.Uids[i])
-		case GeoFn, RegexFn, FullTextSearchFn, StandardFn:
-			key = x.IndexKey(attr, srcFn.tokens[i])
-		case CompareAttrFn:
-			if len(srcFn.tokens) > 0 {
-				key = x.IndexKey(attr, srcFn.tokens[i])
-			} else {
-				key = x.DataKey(attr, q.UidList.Uids[i])
-			}
-		default:
-			x.Fatalf("Unhandled function in processTask")
+	} else {
+		if err = handleUidPostings(ctx, args, opts); err != nil {
+			return nil, err
 		}
-		// Get or create the posting list for an entity, attribute combination.
-		pl := posting.GetOrCreate(key, gid)
-		// If a posting list contains a value, we store that or else we store a nil
-		// byte so that processing is consistent later.
-		val, err := pl.ValueFor(q.Langs)
-		isValueEdge := err == nil
-		typ := val.Tid
-		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-			return nil, x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
-		}
-		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
-		if isValueEdge {
-			if typ, err = schema.State().TypeOf(attr); err == nil {
-				newValue, err = convertToType(val, typ)
-			} else if err != nil {
-				// Ideally Schema should be present for already inserted mutation
-				// x.Checkf(err, "Schema not defined for attribute %s", attr)
-				// Converting to stored type for backward compatiblity of old inserted data
-				newValue, err = convertToType(val, val.Tid)
-			}
-		}
-
-		// get filtered uids and facets.
-		var filteredRes []*result
-		// This means we fetched the value directly instead of fetching index key and intersecting.
-		if srcFn.fnType == CompareAttrFn && isValueEdge {
-			// Lets convert the val to its type.
-			if val, err = types.Convert(val, typ); err != nil {
-				return nil, err
-			}
-			if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
-				filteredRes = append(filteredRes, &result{
-					uid: q.UidList.Uids[i],
-				})
-			}
-		} else {
-			out.Values = append(out.Values, newValue)
-		}
-
-		if !isValueEdge { // for uid edge.. get postings
-			var perr error
-			filteredRes = make([]*result, 0, pl.Length(opts.AfterUID))
-			pl.Postings(opts, func(p *protos.Posting) bool {
-				res := true
-				res, perr = applyFacetsTree(p.Facets, facetsTree)
-				if perr != nil {
-					return false // break loop.
-				}
-				if res {
-					filteredRes = append(filteredRes, &result{
-						uid:    p.Uid,
-						facets: facets.CopyFacets(p.Facets, q.FacetParam)})
-				}
-				return true // continue iteration.
-			})
-			if perr != nil {
-				return nil, perr
-			}
-		} else if q.FacetsFilter != nil { // else part means isValueEdge
-			// This is Value edge and we are asked to do facet filtering. Not supported.
-			return nil, x.Errorf("Facet filtering is not supported on values.")
-		}
-
-		// add facets to result.
-		if q.FacetParam != nil {
-			if isValueEdge {
-				fs, err := pl.Facets(q.FacetParam, q.Langs)
-				if err != nil {
-					fs = []*protos.Facet{}
-				}
-				out.FacetMatrix = append(out.FacetMatrix,
-					&protos.FacetsList{[]*protos.Facets{{fs}}})
-			} else {
-				var fcsList []*protos.Facets
-				for _, fres := range filteredRes {
-					fcsList = append(fcsList, &protos.Facets{fres.facets})
-				}
-				out.FacetMatrix = append(out.FacetMatrix, &protos.FacetsList{fcsList})
-			}
-		}
-
-		// add uids to uidmatrix..
-		if q.DoCount || srcFn.fnType == AggregatorFn {
-			if q.DoCount {
-				out.Counts = append(out.Counts, uint32(pl.Length(0)))
-			}
-			// Add an empty UID list to make later processing consistent
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			continue
-		}
-
-		if srcFn.fnType == PasswordFn {
-			lastPos := len(out.Values) - 1
-			if len(newValue.Val) == 0 {
-				out.Values[lastPos] = task.FalseVal
-			}
-			pwd := q.SrcFunc[2]
-			err = types.VerifyPassword(pwd, string(newValue.Val))
-			if err != nil {
-				out.Values[lastPos] = task.FalseVal
-			} else {
-				out.Values[lastPos] = task.TrueVal
-			}
-			// Add an empty UID list to make later processing consistent
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			continue
-		}
-
-		if srcFn.fnType == CompareScalarFn {
-			count := int64(pl.Length(0))
-			if EvalCompare(srcFn.fname, count, srcFn.threshold) {
-				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
-				out.UidMatrix = append(out.UidMatrix, tlist)
-			}
-			continue
-		}
-
-		if srcFn.fnType == HasFn {
-			count := int64(pl.Length(0))
-			if EvalCompare("gt", count, 0) {
-				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
-				out.UidMatrix = append(out.UidMatrix, tlist)
-			}
-			continue
-		}
-
-		if srcFn.fnType == UidInFn {
-			reqList := &protos.List{[]uint64{srcFn.uidPresent}}
-			topts := posting.ListOptions{
-				AfterUID:  0,
-				Intersect: reqList,
-			}
-			plist := pl.Uids(topts)
-			if len(plist.Uids) > 0 {
-				tlist := &protos.List{[]uint64{q.UidList.Uids[i]}}
-				out.UidMatrix = append(out.UidMatrix, tlist)
-			}
-			continue
-		}
-
-		// The more usual case: Getting the UIDs.
-		uidList := new(protos.List)
-		for _, fres := range filteredRes {
-			uidList.Uids = append(uidList.Uids, fres.uid)
-		}
-		out.UidMatrix = append(out.UidMatrix, uidList)
 	}
 
 	if srcFn.fnType == HasFn && srcFn.isFuncAtRoot {

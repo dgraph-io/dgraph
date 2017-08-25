@@ -28,9 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func (start *SubGraph) expandRecurse(ctx context.Context,
-	next chan bool, rch chan error) {
-
+func (start *SubGraph) expandRecurse(ctx context.Context, next chan bool, rch chan error) {
 	// Note: Key format is - "attr|fromUID|toUID"
 	reachMap := make(map[string]struct{})
 	var numEdges int

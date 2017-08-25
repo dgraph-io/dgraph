@@ -123,7 +123,7 @@ func TestAddToMutationArray(t *testing.T) {
 
 func TestCheckSchema(t *testing.T) {
 	group.ParseGroupConfig("")
-	dir, _ := initTest(t, "name:string @index .")
+	dir, _ := initTest(t, "name:string @index(term) .")
 	defer os.RemoveAll(dir)
 	// non uid to uid
 	s1 := &protos.SchemaUpdate{Predicate: "name", ValueType: uint32(types.UidID)}

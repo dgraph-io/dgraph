@@ -146,7 +146,7 @@ Run this query to get "Star Wars" movies released after "1980".  Try it in the u
 ```sh
 curl localhost:8080/query -XPOST -d $'
 {
-  me(func:allofterms(name@en, "Star Wars")) @filter(ge(release_date, "1980")) {
+  me(func:allofterms(name, "Star Wars")) @filter(ge(release_date, "1980")) {
     name
     release_date
     revenue

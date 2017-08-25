@@ -105,7 +105,8 @@ func taskValues(t *testing.T, v []*protos.TaskValue) []string {
 }
 
 func initTest(t *testing.T, schemaStr string) (string, *badger.KV) {
-	schema.ParseBytes([]byte(schemaStr), 1)
+	err := schema.ParseBytes([]byte(schemaStr), 1)
+	require.NoError(t, err)
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -124,7 +125,7 @@ func initTest(t *testing.T, schemaStr string) (string, *badger.KV) {
 }
 
 func TestProcessTask(t *testing.T) {
-	dir, ps := initTest(t, `friend:string @index .`)
+	dir, ps := initTest(t, `neighbour: uid .`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 

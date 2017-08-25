@@ -428,10 +428,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			continue
 		}
 
-		if pc.uidMatrix == nil && pc.Attr != "_uid_" {
+		if pc.uidMatrix == nil {
 			// Can happen in recurse query.
 			continue
 		}
+
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
 		if idx < 0 {
 			continue
@@ -501,7 +502,16 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				fieldName += "@"
 				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
+			if pc.Attr == "_uid_" {
+				dst.SetUID(uid, pc.fieldName())
+				continue
+			}
+
 			tv := pc.values[idx]
+			if bytes.Equal(tv.Val, x.Nilbyte) {
+				continue
+			}
+
 			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
@@ -516,29 +526,25 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				}
 			}
 
-			if pc.Attr == "_uid_" {
-				dst.SetUID(uid, pc.fieldName())
-			} else {
-				// if conversion not possible, we ignore it in the result.
-				sv, convErr := convertWithBestEffort(tv, pc.Attr)
-				if convErr == ErrEmptyVal {
-					continue
-				} else if convErr != nil {
-					return convErr
-				}
-				// Only strings can have empty values.
-				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
-					sv.Value = ""
-				}
-				if !pc.Params.Normalize {
-					dst.AddValue(fieldName, sv)
-					continue
-				}
-				// If the query had the normalize directive, then we only add nodes
-				// with an Alias.
-				if pc.Params.Alias != "" {
-					dst.AddValue(fieldName, sv)
-				}
+			// if conversion not possible, we ignore it in the result.
+			sv, convErr := convertWithBestEffort(tv, pc.Attr)
+			if convErr == ErrEmptyVal {
+				continue
+			} else if convErr != nil {
+				return convErr
+			}
+			// Only strings can have empty values.
+			if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
+				sv.Value = ""
+			}
+			if !pc.Params.Normalize {
+				dst.AddValue(fieldName, sv)
+				continue
+			}
+			// If the query had the normalize directive, then we only add nodes
+			// with an Alias.
+			if pc.Params.Alias != "" {
+				dst.AddValue(fieldName, sv)
 			}
 		}
 	}
@@ -1404,52 +1410,55 @@ func (sg *SubGraph) assignVars(doneVars map[string]varValue, sgPath []*SubGraph)
 }
 
 func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*SubGraph) error {
-	if sg.Params.Var != "" {
-		if sg.IsListNode() {
-			// This is a predicates list.
-			doneVars[sg.Params.Var] = varValue{
-				strList: sg.values,
-				path:    sgPath,
+	if sg.Params.Var == "" {
+		return nil
+	}
+
+	if sg.IsListNode() {
+		// This is a predicates list.
+		doneVars[sg.Params.Var] = varValue{
+			strList: sg.values,
+			path:    sgPath,
+		}
+	} else if len(sg.counts) > 0 {
+		// This implies it is a value variable.
+		doneVars[sg.Params.Var] = varValue{
+			Vals: make(map[uint64]types.Val),
+			path: sgPath,
+		}
+		for idx, uid := range sg.SrcUIDs.Uids {
+			val := types.Val{
+				Tid:   types.IntID,
+				Value: int64(sg.counts[idx]),
 			}
-		} else if len(sg.counts) != 0 {
-			// This implies it is a value variable.
-			doneVars[sg.Params.Var] = varValue{
-				Vals: make(map[uint64]types.Val),
-				path: sgPath,
+			doneVars[sg.Params.Var].Vals[uid] = val
+		}
+	} else if len(sg.DestUIDs.Uids) != 0 {
+		// This implies it is a entity variable.
+		doneVars[sg.Params.Var] = varValue{
+			Uids: sg.DestUIDs,
+			path: sgPath,
+		}
+	} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
+		// This implies it is a value variable.
+		// NOTE: Value variables cannot be defined and used in the same query block. so
+		// checking len(sgPath) is okay.
+		doneVars[sg.Params.Var] = varValue{
+			Vals: make(map[uint64]types.Val),
+			path: sgPath,
+		}
+		for idx, uid := range sg.SrcUIDs.Uids {
+			val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
+			if err != nil {
+				continue
 			}
-			for idx, uid := range sg.SrcUIDs.Uids {
-				val := types.Val{
-					Tid:   types.IntID,
-					Value: int64(sg.counts[idx]),
-				}
-				doneVars[sg.Params.Var].Vals[uid] = val
-			}
-		} else if len(sg.DestUIDs.Uids) != 0 {
-			// This implies it is a entity variable.
-			doneVars[sg.Params.Var] = varValue{
-				Uids: sg.DestUIDs,
-				path: sgPath,
-			}
-		} else if len(sg.values) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0 {
-			// This implies it is a value variable.
-			// NOTE: Value variables cannot be defined and used in the same query block. so
-			// checking len(sgPath) is okay.
-			doneVars[sg.Params.Var] = varValue{
-				Vals: make(map[uint64]types.Val),
-				path: sgPath,
-			}
-			for idx, uid := range sg.SrcUIDs.Uids {
-				val, err := convertWithBestEffort(sg.values[idx], sg.Attr)
-				if err != nil {
-					continue
-				}
-				doneVars[sg.Params.Var].Vals[uid] = val
-			}
-		} else {
-			// Insert a empty entry to keep the dependency happy.
-			doneVars[sg.Params.Var] = varValue{
-				path: sgPath,
-			}
+			doneVars[sg.Params.Var].Vals[uid] = val
+		}
+	} else {
+		// Insert a empty entry to keep the dependency happy.
+		doneVars[sg.Params.Var] = varValue{
+			path: sgPath,
+			Vals: make(map[uint64]types.Val),
 		}
 	}
 	return nil
@@ -1608,6 +1617,14 @@ func (sg *SubGraph) appendDummyValues() {
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
+	if sg.Attr == "_uid_" {
+		// We dont need to call ProcessGraph for _uid_, as we already have uids
+		// populated from parent and there is nothing to process but uidMatrix
+		// and values need to have the right sizes so that preTraverse works.
+		sg.appendDummyValues()
+		rch <- nil
+		return
+	}
 	var err error
 	if parent == nil && len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "uid" {
 		// I'm root and I'm using some variable that has been populated.
@@ -1867,14 +1884,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		child.SrcUIDs = sg.DestUIDs // Make the connection.
-		if child.IsInternal() || child.Attr == "_uid_" {
+		if child.IsInternal() {
 			// We dont have to execute these nodes.
-			if child.Attr == "_uid_" {
-				// We dont need to call ProcessGraph for _uid_, as we already have uids
-				// populated from parent and there is nothing to process but uidMatrix
-				// and values need to have the right sizes so that preTraverse works.
-				child.appendDummyValues()
-			}
 			continue
 		}
 		go ProcessGraph(ctx, child, sg, childChan)
@@ -1883,7 +1894,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var childErr error
 	// Now get all the results back.
 	for _, child := range sg.Children {
-		if child.IsInternal() || child.Attr == "_uid_" {
+		if child.IsInternal() {
 			continue
 		}
 		if err = <-childChan; err != nil {
