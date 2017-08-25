@@ -436,7 +436,7 @@ func (ls *linearizableState) readIndex() chan uint64 {
 	return ch
 }
 
-func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) {
+func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
 forLoop:
 	for {
 		select {
@@ -446,15 +446,17 @@ forLoop:
 			break forLoop
 		}
 	}
-	if len(ls.needingResponse) > 0 {
-		ls.rctxCounter++
-		var buf [8]byte
-		// TODO: Make rctx different between process runs...
-		binary.BigEndian.PutUint64(buf[:], ls.rctxCounter)
-		ls.activeRequestRctx = buf[:]
-		ls.isActive = true
-		_ = n.Raft().ReadIndex(n.ctx, ls.activeRequestRctx)
+	if len(ls.needingResponse) == 0 {
+		return nil
 	}
+	ls.rctxCounter++
+	var buf [8]byte
+	// TODO: Make rctx different between process runs...
+	binary.BigEndian.PutUint64(buf[:], ls.rctxCounter)
+	ls.activeRequestRctx = buf[:]
+	ls.isActive = true
+	// TODO: etcd can silently ignore ReadIndex -- so we need to handle that
+	return n.Raft().ReadIndex(n.ctx, ls.activeRequestRctx)
 }
 
 func (n *node) Run() {
@@ -480,7 +482,9 @@ func (n *node) Run() {
 					respCh <- rs.Index
 				}
 				n.linState.needingResponse = n.linState.needingResponse[:0]
-				feedRequestsAndDispatchReadIndex(&n.linState, n)
+				if err := feedRequestsAndDispatchReadIndex(&n.linState, n); err != nil {
+					return
+				}
 			}
 
 			if rd.SoftState != nil {
@@ -572,7 +576,9 @@ func (n *node) Run() {
 		case req := <-n.linState.requestch():
 			x.AssertTrue(!n.linState.isActive)
 			n.linState.needingResponse = append(n.linState.needingResponse, req.readIndexCh)
-			feedRequestsAndDispatchReadIndex(&n.linState, n)
+			if err := feedRequestsAndDispatchReadIndex(&n.linState, n); err != nil {
+				return
+			}
 
 		case <-n.stop:
 			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
