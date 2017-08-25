@@ -473,10 +473,6 @@ func (n *node) Run() {
 				}
 				n.linState.needingResponse = n.linState.needingResponse[:0]
 				feedRequestsAndDispatchReadIndex(&n.linState, n)
-				if len(n.linState.needingResponse) > 0 {
-					n.linState.isActive = true
-					_ = n.Raft().ReadIndex(n.ctx, []byte{}) // TODO: Handle error?
-				}
 			}
 
 			if rd.SoftState != nil {
