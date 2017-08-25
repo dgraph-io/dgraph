@@ -722,15 +722,16 @@ type linearizableReadRequest struct {
 type linearizableState struct {
 	requests          chan linearizableReadRequest
 	isActive          bool
-	rctxCounter       uint64
+	rctxCounter       x.NonceCounter
 	activeRequestRctx []byte
 	needingResponse   []chan<- uint64
 }
 
 func newLinearizableState() linearizableState {
 	return linearizableState{
-		requests: make(chan linearizableReadRequest),
-		isActive: false,
+		requests:    make(chan linearizableReadRequest),
+		isActive:    false,
+		rctxCounter: x.NewNonceCounter(),
 	}
 }
 
@@ -760,11 +761,8 @@ forLoop:
 	if len(ls.needingResponse) == 0 {
 		return nil
 	}
-	ls.rctxCounter++
-	var buf [8]byte
-	// TODO: Make rctx different between process runs...
-	binary.BigEndian.PutUint64(buf[:], ls.rctxCounter)
-	ls.activeRequestRctx = buf[:]
+	rctxCounter := ls.rctxCounter.Generate()
+	ls.activeRequestRctx = rctxCounter[:]
 	ls.isActive = true
 	// TODO: etcd can silently ignore ReadIndex -- so we need to handle that
 	return n.Raft().ReadIndex(n.ctx, ls.activeRequestRctx)
