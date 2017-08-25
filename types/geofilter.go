@@ -18,7 +18,6 @@ package types
 
 import (
 	"bytes"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -145,8 +144,6 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 	if err != nil {
 		return nil, nil, err
 	}
-	fmt.Println("parents", parents)
-	fmt.Println("cover", cover)
 
 	switch qt {
 	case QueryTypeWithin:

@@ -203,6 +203,41 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 		{{-122, 36}, {-123, 36}, {-123, 37}, {-122, 37}, {-122, 36}},
 	})
 	require.False(t, qd.MatchesFilter(poly))
+
+	// Multipolygon contains
+	us, err := loadPolygon("testdata/us.json")
+	require.NoError(t, err)
+	require.True(t, qd.MatchesFilter(us))
+
+	// Coordinates for Honolulu Airport.
+	p = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-157.9197, 21.33})
+	data = formDataPoint(t, p)
+	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
+	require.NoError(t, err)
+	require.True(t, qd.MatchesFilter(us))
+
+	// Coordinates for Alaska
+	p = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-153.369141, 66.160507})
+	data = formDataPoint(t, p)
+	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
+	require.NoError(t, err)
+	require.True(t, qd.MatchesFilter(us))
+
+	// Multipolygon doesn't contain
+	p = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{77.224249103, 28.6077159025})
+	data = formDataPoint(t, p)
+	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
+	require.NoError(t, err)
+	require.False(t, qd.MatchesFilter(us))
+
+	// Multipolygon contains another polygon
+	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
+	})
+	data = formDataPolygon(t, poly)
+	_, qd, err = queryTokens(QueryTypeIntersects, data, 0.0)
+	require.NoError(t, err)
+	require.False(t, qd.MatchesFilter(us))
 }
 
 /*
