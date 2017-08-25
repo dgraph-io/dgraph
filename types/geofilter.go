@@ -44,9 +44,9 @@ const (
 
 // GeoQueryData is internal data used by the geo query filter to additionally filter the geometries.
 type GeoQueryData struct {
-	pt    *s2.Point // If not nil, the input data was a point
-	loop  *s2.Loop  // If not nil, the input data was a polygon
-	cap   *s2.Cap   // If not nil, the cap to be used for a near query
+	pt    *s2.Point  // If not nil, the input data was a point
+	loops []*s2.Loop // If not nil, the input data was a polygon
+	cap   *s2.Cap    // If not nil, the cap to be used for a near query
 	qtype QueryType
 }
 
@@ -120,7 +120,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 
 // queryTokensGeo returns the tokens to be used to look up the geo index for a given filter.
 func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *GeoQueryData, error) {
-	var l *s2.Loop
+	var loops []*s2.Loop
 	var pt *s2.Point
 	var err error
 	switch v := g.(type) {
@@ -129,16 +129,26 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		pt = &p
 
 	case *geom.Polygon:
-		l, err = loopFromPolygon(v)
+		l, err := loopFromPolygon(v)
 		if err != nil {
 			return nil, nil, err
+		}
+		loops = append(loops, l)
+
+	case *geom.MultiPolygon:
+		for i := 0; i < v.NumPolygons(); i++ {
+			l, err := loopFromPolygon(v.Polygon(i))
+			if err != nil {
+				return nil, nil, err
+			}
+			loops = append(loops, l)
 		}
 
 	default:
 		return nil, nil, x.Errorf("Cannot query using a geometry of type %T", v)
 	}
 
-	x.AssertTruef(l != nil || pt != nil, "We should have a point or a loop.")
+	x.AssertTruef(len(loops) > 0 || pt != nil, "We should have a point or a loop.")
 
 	parents, cover, err := indexCells(g)
 	if err != nil {
@@ -149,19 +159,19 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 	case QueryTypeWithin:
 		// For a within query we only need to look at the objects whose parents match our cover.
 		// So we take our cover and prefix with the parentPrefix to look in the index.
-		if l == nil {
+		if len(loops) == 0 {
 			return nil, nil, x.Errorf("Require a polygon for within query")
 		}
 		toks := createTokens(cover, parentPrefix)
-		return toks, &GeoQueryData{loop: l, qtype: qt}, nil
+		return toks, &GeoQueryData{loops: loops, qtype: qt}, nil
 
 	case QueryTypeContains:
 		// For a contains query, we only need to look at the objects whose cover matches our
 		// parents. So we take our parents and prefix with the coverPrefix to look in the index.
-		return createTokens(parents, coverPrefix), &GeoQueryData{pt: pt, loop: l, qtype: qt}, nil
+		return createTokens(parents, coverPrefix), &GeoQueryData{pt: pt, loops: loops, qtype: qt}, nil
 
 	case QueryTypeNear:
-		if l != nil {
+		if len(loops) > 0 {
 			return nil, nil, x.Errorf("Cannot use a polygon in a near query")
 		}
 		return nearQueryKeys(*pt, maxDistance)
@@ -170,11 +180,11 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		// An intersects query is as the name suggests all the entities which intersect with the
 		// given region. So we look at all the objects whose parents match our cover as well as
 		// all the objects whose cover matches our parents.
-		if l == nil {
+		if len(loops) == 0 {
 			return nil, nil, x.Errorf("Require a polygon for intersects query")
 		}
 		toks := parentCoverTokens(parents, cover)
-		return toks, &GeoQueryData{loop: l, qtype: qt}, nil
+		return toks, &GeoQueryData{loops: loops, qtype: qt}, nil
 
 	default:
 		return nil, nil, x.Errorf("Unknown query type")
@@ -218,7 +228,7 @@ func WithinCapPolygon(g1 *s2.Loop, g2 *s2.Cap) bool {
 
 // returns true if the geometry represented by g is within the given loop or cap
 func (q GeoQueryData) isWithin(g geom.T) bool {
-	x.AssertTruef(q.pt != nil || q.loop != nil || q.cap != nil, "At least a point, loop or cap should be defined.")
+	x.AssertTruef(q.pt != nil || len(q.loops) > 0 || q.cap != nil, "At least a point, loop or cap should be defined.")
 	switch geometry := g.(type) {
 	case *geom.Point:
 		s2pt := pointFromPoint(geometry)
@@ -226,8 +236,13 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 			return q.pt.ApproxEqual(s2pt)
 		}
 
-		if q.loop != nil {
-			return q.loop.ContainsPoint(s2pt)
+		if len(q.loops) > 0 {
+			for _, l := range q.loops {
+				if l.ContainsPoint(s2pt) {
+					return true
+				}
+			}
+			return false
 		}
 		return q.cap.ContainsPoint(s2pt)
 	case *geom.Polygon:
@@ -235,8 +250,13 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 		if err != nil {
 			return false
 		}
-		if q.loop != nil {
-			return Contains(q.loop, s2loop)
+		if len(q.loops) > 0 {
+			for _, l := range q.loops {
+				if Contains(l, s2loop) {
+					return true
+				}
+			}
+			return false
 		}
 		if q.cap != nil {
 			return WithinCapPolygon(s2loop, q.cap)
@@ -252,16 +272,20 @@ func polygonContainsGeometry(p *geom.Polygon, q GeoQueryData) bool {
 		return false
 	}
 	// If the query had a loop check if it lies within other loop. Else Check the point.
-	if q.loop != nil {
-		// We don't support polygons containing polygons yet.
-		return Contains(s2loop, q.loop)
+	if len(q.loops) > 0 {
+		for _, l := range q.loops {
+			if Contains(s2loop, l) {
+				return true
+			}
+		}
+		return false
 	}
 	return s2loop.ContainsPoint(*q.pt)
 }
 
 // returns true if the geometry represented by uid/attr contains the given point
 func (q GeoQueryData) contains(g geom.T) bool {
-	x.AssertTruef(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
+	x.AssertTruef(q.pt != nil || len(q.loops) > 0, "At least a point or loop should be defined.")
 	switch v := g.(type) {
 	case *geom.Polygon:
 		return polygonContainsGeometry(v, q)
@@ -281,20 +305,29 @@ func (q GeoQueryData) contains(g geom.T) bool {
 
 // returns true if the geometry represented by uid/attr intersects the given loop or point
 func (q GeoQueryData) intersects(g geom.T) bool {
-	x.AssertTruef(q.loop != nil, "Loop should be defined for intersects.")
+	x.AssertTruef(len(q.loops) > 0, "Loop should be defined for intersects.")
 	switch v := g.(type) {
 	case *geom.Point:
 		p := pointFromPoint(v)
 		// else loop is not nil
-		return q.loop.ContainsPoint(p)
+		for _, l := range q.loops {
+			if l.ContainsPoint(p) {
+				return true
+			}
+		}
+		return false
 
 	case *geom.Polygon:
 		l, err := loopFromPolygon(v)
 		if err != nil {
 			return false
 		}
-		// else loop is not nil
-		return Intersects(l, q.loop)
+		for _, loop := range q.loops {
+			if Intersects(l, loop) {
+				return true
+			}
+		}
+		return false
 	default:
 		// A type that we don't know how to handle.
 		return false

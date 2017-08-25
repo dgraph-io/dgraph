@@ -96,7 +96,7 @@ func TestQueryTokensPolygon(t *testing.T) {
 		}
 		require.NotNil(t, qd)
 		require.Equal(t, qd.qtype, qt)
-		require.NotNil(t, qd.loop)
+		require.NotZero(t, len(qd.loops))
 		require.Nil(t, qd.pt)
 		require.Nil(t, qd.cap)
 	}
@@ -129,7 +129,7 @@ func TestQueryTokensPoint(t *testing.T) {
 		}
 		require.NotNil(t, qd)
 		require.Equal(t, qd.qtype, qt)
-		require.Nil(t, qd.loop)
+		require.Equal(t, 0, len(qd.loops))
 		require.NotNil(t, qd.pt)
 		require.Nil(t, qd.cap)
 	}
@@ -145,7 +145,7 @@ func TestQueryTokensNear(t *testing.T) {
 	require.Equal(t, len(toks), 15)
 	require.NotNil(t, qd)
 	require.Equal(t, qd.qtype, QueryTypeNear)
-	require.Nil(t, qd.loop)
+	require.Equal(t, 0, len(qd.loops))
 	require.Nil(t, qd.pt)
 	require.NotNil(t, qd.cap)
 }
