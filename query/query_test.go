@@ -8923,3 +8923,15 @@ func TestMathCeil2(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
 }
+
+func TestCrash(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		n(func:ge(_uid_, 0)) {
+			count()
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {}}`, js)
+}

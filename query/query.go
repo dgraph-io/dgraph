@@ -1605,6 +1605,9 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 }
 
 func (sg *SubGraph) appendDummyValues() {
+	if sg.SrcUIDs == nil {
+		return
+	}
 	var l protos.List
 	var val protos.TaskValue
 	for i := 0; i < len(sg.SrcUIDs.Uids); i++ {
