@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -144,6 +145,8 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 	if err != nil {
 		return nil, nil, err
 	}
+	fmt.Println("parents", parents)
+	fmt.Println("cover", cover)
 
 	switch qt {
 	case QueryTypeWithin:
@@ -219,13 +222,19 @@ func WithinCapPolygon(g1 *s2.Loop, g2 *s2.Cap) bool {
 // returns true if the geometry represented by g is within the given loop or cap
 func (q GeoQueryData) isWithin(g geom.T) bool {
 	x.AssertTruef(q.pt != nil || q.loop != nil || q.cap != nil, "At least a point, loop or cap should be defined.")
-	gpoly, ok := g.(*geom.Polygon)
-	if ok {
-		// We will only consider points for within queries.
-		if !ok {
-			return false
+	switch geometry := g.(type) {
+	case *geom.Point:
+		s2pt := pointFromPoint(geometry)
+		if q.pt != nil {
+			return q.pt.ApproxEqual(s2pt)
 		}
-		s2loop, err := loopFromPolygon(gpoly)
+
+		if q.loop != nil {
+			return q.loop.ContainsPoint(s2pt)
+		}
+		return q.cap.ContainsPoint(s2pt)
+	case *geom.Polygon:
+		s2loop, err := loopFromPolygon(geometry)
 		if err != nil {
 			return false
 		}
@@ -235,43 +244,42 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 		if q.cap != nil {
 			return WithinCapPolygon(s2loop, q.cap)
 		}
-	}
-
-	gpt, ok := g.(*geom.Point)
-	if ok {
-		s2pt := pointFromPoint(gpt)
-		if q.pt != nil {
-			return q.pt.ApproxEqual(s2pt)
-		}
-
-		if q.loop != nil {
-			return q.loop.ContainsPoint(s2pt)
-		}
-		return q.cap.ContainsPoint(s2pt)
+	case *geom.MultiPolygon:
 	}
 	return false
 }
 
-// returns true if the geometry represented by uid/attr contains the given point
-func (q GeoQueryData) contains(g geom.T) bool {
-	x.AssertTruef(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
-
-	poly, ok := g.(*geom.Polygon)
-	if !ok {
-		// We will only consider polygons for contains queries.
-		return false
-	}
-
-	s2loop, err := loopFromPolygon(poly)
+func polygonContainsGeometry(p *geom.Polygon, q GeoQueryData) bool {
+	s2loop, err := loopFromPolygon(p)
 	if err != nil {
 		return false
 	}
-	// If its a loop check if it lies within other loop. Else Check the point.
+	// If the query had a loop check if it lies within other loop. Else Check the point.
 	if q.loop != nil {
 		// We don't support polygons containing polygons yet.
 		return Contains(s2loop, q.loop)
 	}
 	return s2loop.ContainsPoint(*q.pt)
+}
+
+// returns true if the geometry represented by uid/attr contains the given point
+func (q GeoQueryData) contains(g geom.T) bool {
+	x.AssertTruef(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
+	switch v := g.(type) {
+	case *geom.Polygon:
+		return polygonContainsGeometry(v, q)
+	case *geom.MultiPolygon:
+		for i := 0; i < v.NumPolygons(); i++ {
+			p := v.Polygon(i)
+			if polygonContainsGeometry(p, q) {
+				return true
+			}
+		}
+		return false
+	default:
+		// We will only consider polygons for contains queries.
+		return false
+	}
 }
 
 // returns true if the geometry represented by uid/attr intersects the given loop or point
