@@ -45,7 +45,7 @@ const (
 // GeoQueryData is internal data used by the geo query filter to additionally filter the geometries.
 type GeoQueryData struct {
 	pt    *s2.Point  // If not nil, the input data was a point
-	loops []*s2.Loop // If not nil, the input data was a polygon
+	loops []*s2.Loop // If not empty, the input data was a polygon
 	cap   *s2.Cap    // If not nil, the cap to be used for a near query
 	qtype QueryType
 }
@@ -226,12 +226,8 @@ func withinCapPolygon(g1 *s2.Loop, g2 *s2.Cap) bool {
 	return g2.Contains(g1.CapBound())
 }
 
-func loopWithinMultiPolygon(l *s2.Loop, p *geom.MultiPolygon) bool {
-	for i := 0; i < p.NumPolygons(); i++ {
-		s2loop, err := loopFromPolygon(p.Polygon(i))
-		if err != nil {
-			return false
-		}
+func loopWithinMultiloops(l *s2.Loop, loops []*s2.Loop) bool {
+	for _, s2loop := range loops {
 		if Contains(s2loop, l) {
 			return true
 		}
@@ -277,8 +273,12 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 	case *geom.MultiPolygon:
 		// We check each polygon in the query should be contained in some polygon of v.
 		if len(q.loops) > 0 {
-			for _, l := range q.loops {
-				if !loopWithinMultiPolygon(l, geometry) {
+			for i := 0; i < geometry.NumPolygons(); i++ {
+				s2loop, err := loopFromPolygon(geometry.Polygon(i))
+				if err != nil {
+					return false
+				}
+				if !loopWithinMultiloops(s2loop, q.loops) {
 					return false
 				}
 			}

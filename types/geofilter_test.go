@@ -347,6 +347,26 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 	require.True(t, qd.MatchesFilter(us))
 }
 
+func TestMatchesFilterWithinPolygon(t *testing.T) {
+	us, err := loadPolygon("testdata/us.json")
+	require.NoError(t, err)
+
+	poly := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+		{{-119.53, 37.86}, {-120.53, 37.86}, {-120.53, 36.86}, {-119.53, 36.86}, {-119.53, 37.86}},
+	})
+	data := formDataPolygon(t, us)
+	_, qd, err := queryTokens(QueryTypeWithin, data, 0.0)
+	require.NoError(t, err)
+	require.True(t, qd.MatchesFilter(poly))
+
+	multipoly := geom.NewMultiPolygon(geom.XY).MustSetCoords([][][]geom.Coord{{
+		{{-119.53, 37.86}, {-120.53, 37.86}, {-120.53, 36.86}, {-119.53, 36.86}, {-119.53, 37.86}},
+		{{-115.13, 36.18}, {-116.13, 36.18}, {-116.13, 35.18}, {-115.13, 35.18}, {-115.13, 36.18}},
+		{{-71.09, 42.35}, {-72.09, 42.35}, {-72.09, 41.35}, {-71.09, 41.35}, {-71.09, 42.35}},
+	}})
+	require.True(t, qd.MatchesFilter(multipoly))
+}
+
 func TestMatchesFilterNearPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data := formDataPoint(t, p)
