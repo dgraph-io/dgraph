@@ -222,8 +222,21 @@ func (q GeoQueryData) MatchesFilter(g geom.T) bool {
 	return false
 }
 
-func WithinCapPolygon(g1 *s2.Loop, g2 *s2.Cap) bool {
+func withinCapPolygon(g1 *s2.Loop, g2 *s2.Cap) bool {
 	return g2.Contains(g1.CapBound())
+}
+
+func loopWithinMultiPolygon(l *s2.Loop, p *geom.MultiPolygon) bool {
+	for i := 0; i < p.NumPolygons(); i++ {
+		s2loop, err := loopFromPolygon(p.Polygon(i))
+		if err != nil {
+			return false
+		}
+		if Contains(s2loop, l) {
+			return true
+		}
+	}
+	return false
 }
 
 // returns true if the geometry represented by g is within the given loop or cap
@@ -259,9 +272,32 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 			return false
 		}
 		if q.cap != nil {
-			return WithinCapPolygon(s2loop, q.cap)
+			return withinCapPolygon(s2loop, q.cap)
 		}
 	case *geom.MultiPolygon:
+		// We check each polygon in the query should be contained in some polygon of v.
+		if len(q.loops) > 0 {
+			for _, l := range q.loops {
+				if !loopWithinMultiPolygon(l, geometry) {
+					return false
+				}
+			}
+			return true
+		}
+
+		if q.cap != nil {
+			for i := 0; i < geometry.NumPolygons(); i++ {
+				p := geometry.Polygon(i)
+				s2loop, err := loopFromPolygon(p)
+				if err != nil {
+					return false
+				}
+				if !withinCapPolygon(s2loop, q.cap) {
+					return false
+				}
+			}
+			return true
+		}
 	}
 	return false
 }
