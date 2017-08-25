@@ -17,7 +17,6 @@
 package types
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/golang/geo/s2"
@@ -95,9 +94,7 @@ func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 			}
 			cover = append(cover, coverLoop(l, MinCellLevel, MaxCellLevel, MaxCells)...)
 		}
-		fmt.Println("cover", cover)
 		parents := getParentCells(cover, MinCellLevel)
-		fmt.Println("parents", parents)
 		return parents, cover, nil
 	default:
 		return nil, nil, x.Errorf("Cannot index geometry of type %T", v)
