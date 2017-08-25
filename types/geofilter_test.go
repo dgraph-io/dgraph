@@ -233,9 +233,18 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 
 	// Multipolygon contains another polygon
 	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
-		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
+		{{-112, 39}, {-113, 39}, {-113, 40}, {-112, 40}, {-112, 39}},
 	})
 	data = formDataPolygon(t, poly)
+	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
+	require.NoError(t, err)
+	require.True(t, qd.MatchesFilter(us))
+
+	multipoly := geom.NewMultiPolygon(geom.XY).MustSetCoords([][][]geom.Coord{
+		{{{-112, 39}, {-113, 39}, {-113, 40}, {-112, 40}, {-112, 39}}},
+		{{{71.09, 42.35}, {72.09, 42.35}, {72.09, 41.35}, {71.09, 41.35}, {71.09, 42.35}}},
+	})
+	data = formDataPolygon(t, multipoly)
 	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
 	require.NoError(t, err)
 	require.False(t, qd.MatchesFilter(us))

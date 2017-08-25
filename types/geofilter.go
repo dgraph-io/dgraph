@@ -271,7 +271,7 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 			return withinCapPolygon(s2loop, q.cap)
 		}
 	case *geom.MultiPolygon:
-		// We check each polygon in the query should be contained in some polygon of v.
+		// We check each polygon in the multipolygon should be within some loop of q.loops.
 		if len(q.loops) > 0 {
 			for i := 0; i < geometry.NumPolygons(); i++ {
 				s2loop, err := loopFromPolygon(geometry.Polygon(i))
@@ -302,21 +302,18 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 	return false
 }
 
-func polygonContainsGeometry(p *geom.Polygon, q GeoQueryData) bool {
-	s2loop, err := loopFromPolygon(p)
-	if err != nil {
-		return false
-	}
-	// If the query had a loop check if it lies within other loop. Else Check the point.
-	if len(q.loops) > 0 {
-		for _, l := range q.loops {
-			if Contains(s2loop, l) {
-				return true
-			}
+func multiPolygonContainsLoop(g *geom.MultiPolygon, l *s2.Loop) bool {
+	for i := 0; i < g.NumPolygons(); i++ {
+		p := g.Polygon(i)
+		s2loop, err := loopFromPolygon(p)
+		if err != nil {
+			return false
 		}
-		return false
+		if Contains(s2loop, l) {
+			return true
+		}
 	}
-	return s2loop.ContainsPoint(*q.pt)
+	return false
 }
 
 // returns true if the geometry represented by uid/attr contains the given point
@@ -324,12 +321,40 @@ func (q GeoQueryData) contains(g geom.T) bool {
 	x.AssertTruef(q.pt != nil || len(q.loops) > 0, "At least a point or loop should be defined.")
 	switch v := g.(type) {
 	case *geom.Polygon:
-		return polygonContainsGeometry(v, q)
+		s2loop, err := loopFromPolygon(v)
+		if err != nil {
+			return false
+		}
+		if q.pt != nil {
+			return s2loop.ContainsPoint(*q.pt)
+		}
+
+		for _, l := range q.loops {
+			if !Contains(s2loop, l) {
+				return false
+			}
+		}
+		return true
 	case *geom.MultiPolygon:
-		for i := 0; i < v.NumPolygons(); i++ {
-			p := v.Polygon(i)
-			if polygonContainsGeometry(p, q) {
-				return true
+		if len(q.loops) > 0 {
+			for _, l := range q.loops {
+				if !multiPolygonContainsLoop(v, l) {
+					return false
+				}
+			}
+			return true
+		}
+
+		if q.pt != nil {
+			for i := 0; i < v.NumPolygons(); i++ {
+				p := v.Polygon(i)
+				s2loop, err := loopFromPolygon(p)
+				if err != nil {
+					return false
+				}
+				if s2loop.ContainsPoint(*q.pt) {
+					return true
+				}
 			}
 		}
 		return false
