@@ -8923,3 +8923,16 @@ func TestMathCeil2(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
 }
+
+func TestAppendDummyValuesPanic(t *testing.T) {
+	// This is a fix for #1359. We should check that SrcUIDs is not nil before accessing Uids.
+	populateGraph(t)
+	query := `
+	{
+		n(func:ge(_uid_, 0)) {
+			count()
+		}
+	}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {}}`, js)
+}
