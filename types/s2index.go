@@ -86,6 +86,7 @@ func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 		return parents, cover, nil
 	case *geom.MultiPolygon:
 		var cover s2.CellUnion
+		// Convert each polygon to loop. Get cover for each and append to cover.
 		for i := 0; i < v.NumPolygons(); i++ {
 			p := v.Polygon(i)
 			l, err := loopFromPolygon(p)
@@ -94,6 +95,7 @@ func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 			}
 			cover = append(cover, coverLoop(l, MinCellLevel, MaxCellLevel, MaxCells)...)
 		}
+		// Get parents for all cells in cover.
 		parents := getParentCells(cover, MinCellLevel)
 		return parents, cover, nil
 	default:

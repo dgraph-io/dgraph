@@ -45,7 +45,7 @@ const (
 // GeoQueryData is internal data used by the geo query filter to additionally filter the geometries.
 type GeoQueryData struct {
 	pt    *s2.Point  // If not nil, the input data was a point
-	loops []*s2.Loop // If not empty, the input data was a polygon
+	loops []*s2.Loop // If not empty, the input data was a polygon/multipolygon.
 	cap   *s2.Cap    // If not nil, the cap to be used for a near query
 	qtype QueryType
 }
@@ -119,12 +119,16 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 }
 
 // queryTokensGeo returns the tokens to be used to look up the geo index for a given filter.
+// qt is the type of Geo query - near/intersects/contains/within
+// g is the geom.T representation of the input. It could be a point/polygon/multipolygon.
+// maxDistance is distance in metres, only used for near query.
 func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *GeoQueryData, error) {
 	var loops []*s2.Loop
 	var pt *s2.Point
 	var err error
 	switch v := g.(type) {
 	case *geom.Point:
+		// Get s2 point from geom.Point.
 		p := pointFromPoint(v)
 		pt = &p
 
@@ -136,6 +140,7 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		loops = append(loops, l)
 
 	case *geom.MultiPolygon:
+		// We get a loop for each polygon.
 		for i := 0; i < v.NumPolygons(); i++ {
 			l, err := loopFromPolygon(v.Polygon(i))
 			if err != nil {
@@ -316,7 +321,8 @@ func multiPolygonContainsLoop(g *geom.MultiPolygon, l *s2.Loop) bool {
 	return false
 }
 
-// returns true if the geometry represented by uid/attr contains the given point
+// returns true if the geometry represented by g contains the given point/polygon.
+// g is the geom.T representation of the value which is the stored in the DB.
 func (q GeoQueryData) contains(g geom.T) bool {
 	x.AssertTruef(q.pt != nil || len(q.loops) > 0, "At least a point or loop should be defined.")
 	switch v := g.(type) {
@@ -329,6 +335,8 @@ func (q GeoQueryData) contains(g geom.T) bool {
 			return s2loop.ContainsPoint(*q.pt)
 		}
 
+		// Input could be a multipolygon, in which q.loops would have more than 1 loop. Each loop
+		// in the query should be part of the s2loop.
 		for _, l := range q.loops {
 			if !Contains(s2loop, l) {
 				return false
@@ -336,15 +344,6 @@ func (q GeoQueryData) contains(g geom.T) bool {
 		}
 		return true
 	case *geom.MultiPolygon:
-		if len(q.loops) > 0 {
-			for _, l := range q.loops {
-				if !multiPolygonContainsLoop(v, l) {
-					return false
-				}
-			}
-			return true
-		}
-
 		if q.pt != nil {
 			for i := 0; i < v.NumPolygons(); i++ {
 				p := v.Polygon(i)
@@ -357,6 +356,17 @@ func (q GeoQueryData) contains(g geom.T) bool {
 				}
 			}
 		}
+
+		if len(q.loops) > 0 {
+			// All the loops that are part of the query should be part of some loop of v.
+			for _, l := range q.loops {
+				if !multiPolygonContainsLoop(v, l) {
+					return false
+				}
+			}
+			return true
+		}
+
 		return false
 	default:
 		// We will only consider polygons for contains queries.
@@ -390,7 +400,7 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 		}
 		return false
 	case *geom.MultiPolygon:
-		// We must compare all polygons in the geometry with those in the query.
+		// We must compare all polygons in g with those in the query.
 		for i := 0; i < v.NumPolygons(); i++ {
 			l, err := loopFromPolygon(v.Polygon(i))
 			if err != nil {
@@ -410,6 +420,8 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 }
 
 // FilterGeoUids filters the uids based on the corresponding values and GeoQueryData.
+// The uids are obtained through the index. This second pass ensures that the values actually
+// match the query criteria.
 func FilterGeoUids(uids *protos.List, values []*protos.TaskValue, q *GeoQueryData) *protos.List {
 	x.AssertTruef(len(values) == len(uids.Uids), "lengths not matching")
 	rv := &protos.List{}

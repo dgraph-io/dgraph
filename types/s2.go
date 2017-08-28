@@ -145,6 +145,8 @@ func convertToGeom(str string) (geom.T, error) {
 	var m json.RawMessage
 	var err error
 
+	// Note for Polygon/MultiPolygon the query would have one less `[]` than what the spec says.
+	// Hence we wrap the value in `[]` before decoding.
 	if s[0:3] == "[[[" {
 		g.Type = "MultiPolygon"
 		err = m.UnmarshalJSON([]byte(fmt.Sprintf("[%s]", s)))
