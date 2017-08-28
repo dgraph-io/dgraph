@@ -28,7 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func (start *SubGraph) expandRecurse(ctx context.Context, next chan bool, rch chan error) {
+func (start *SubGraph) expandRecurse(ctx context.Context, linearized bool, next chan bool, rch chan error) {
 	// Note: Key format is - "attr|fromUID|toUID"
 	reachMap := make(map[string]struct{})
 	var numEdges int
@@ -41,7 +41,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, next chan bool, rch ch
 	start.Children = []*SubGraph{}
 
 	// Process the root first.
-	go ProcessGraph(ctx, start, nil, rrch)
+	go ProcessGraph(ctx, linearized, start, nil, rrch)
 	select {
 	case err = <-rrch:
 		if err != nil {
@@ -76,7 +76,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context, next chan bool, rch ch
 
 		rrch := make(chan error, len(exec))
 		for _, sg := range exec {
-			go ProcessGraph(ctx, sg, dummy, rrch)
+			go ProcessGraph(ctx, linearized, sg, dummy, rrch)
 		}
 
 		for range exec {
@@ -159,14 +159,14 @@ func (start *SubGraph) expandRecurse(ctx context.Context, next chan bool, rch ch
 	}
 }
 
-func Recurse(ctx context.Context, sg *SubGraph) error {
+func Recurse(ctx context.Context, sg *SubGraph, linearized bool) error {
 	var err error
 	if sg.Params.Alias != "recurse" {
 		return x.Errorf("Invalid shortest path query")
 	}
 	expandErr := make(chan error, 2)
 	next := make(chan bool, 2)
-	go sg.expandRecurse(ctx, next, expandErr)
+	go sg.expandRecurse(ctx, linearized, next, expandErr)
 	depth := sg.Params.ExploreDepth
 	if depth == 0 {
 		// If no depth is specified, expand till we reach all leaf nodes
