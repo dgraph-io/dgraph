@@ -721,7 +721,6 @@ type linearizableReadRequest struct {
 
 type linearizableState struct {
 	requests           chan linearizableReadRequest
-	isActive           bool
 	rctxCounter        x.NonceCounter
 	activeRequestRctx  []byte
 	activeRequestTimer *time.Timer
@@ -736,7 +735,6 @@ func newLinearizableState() linearizableState {
 	}
 	return linearizableState{
 		requests:           make(chan linearizableReadRequest),
-		isActive:           false,
 		rctxCounter:        x.NewNonceCounter(),
 		activeRequestTimer: timer,
 		pendingRequests:    []chan<- uint64{},
@@ -766,7 +764,6 @@ func (ls *linearizableState) readIndex() chan uint64 {
 }
 
 func cycleResponses(ls *linearizableState, n *node, indexOrNone uint64) error {
-	x.AssertTrue(ls.isActive)
 	for _, respCh := range ls.needingResponse {
 		respCh <- indexOrNone
 	}
@@ -777,14 +774,12 @@ func cycleResponses(ls *linearizableState, n *node, indexOrNone uint64) error {
 func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
 	ls.slurpRequests()
 	if len(ls.needingResponse) != 0 {
-		// TODO: Remove isActive, it's redundant
 		return nil
 	}
 	if len(ls.pendingRequests) == 0 {
 		return nil
 	}
 	ls.needingResponse, ls.pendingRequests = ls.pendingRequests, ls.needingResponse
-	ls.isActive = true
 	rctxCounter := ls.rctxCounter.Generate()
 	ls.activeRequestRctx = rctxCounter[:]
 	ls.activeRequestTimer.Reset(10 * time.Millisecond)
@@ -816,7 +811,7 @@ func (n *node) Run() {
 				if !n.linState.activeRequestTimer.Stop() {
 					<-n.linState.activeRequestTimer.C
 				}
-				if err := cycleResponses(n.linState, n, rs.Index); err != nil {
+				if err := cycleResponses(&n.linState, n, rs.Index); err != nil {
 					return
 				}
 			}
