@@ -304,7 +304,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// After execution starts according to the GraphQL spec data key must be returned. It would be
 	// null if any error is encountered, else non-null.
 	var res query.ExecuteResult
-	var queryRequest = query.QueryRequest{Latency: &l, GqlQuery: &parsed}
+	var queryRequest = query.QueryRequest{
+		Latency:    &l,
+		GqlQuery:   &parsed,
+		Linearized: true, // TODO: Parse linearized option out of query (or somewhere)
+	}
 	if res, err = queryRequest.ProcessWithMutation(ctx); err != nil {
 		switch errors.Cause(err).(type) {
 		case *query.InvalidRequestError:
@@ -444,7 +448,7 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
-	var linearized bool = false // TODO: Uh, parse this out of the request somehow.
+	var linearized bool = false // TODO: Parse this out of the request somehow.
 	if err = query.ApplyMutations(ctx, linearized, &protos.Mutations{Edges: mr.Edges}); err != nil {
 		fail()
 		return
