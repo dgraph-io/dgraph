@@ -30,7 +30,7 @@ const (
 
 // siTiToST converts an si- or ti-value to the corresponding s- or t-value.
 // Value is capped at 1.0 because there is no DCHECK in Go.
-func siTiToST(si uint64) float64 {
+func siTiToST(si uint32) float64 {
 	if si > maxSiTi {
 		return 1.0
 	}
@@ -40,11 +40,11 @@ func siTiToST(si uint64) float64 {
 // stToSiTi converts the s- or t-value to the nearest si- or ti-coordinate.
 // The result may be outside the range of valid (si,ti)-values. Value of
 // 0.49999999999999994 (math.NextAfter(0.5, -1)), will be incorrectly rounded up.
-func stToSiTi(s float64) uint64 {
+func stToSiTi(s float64) uint32 {
 	if s < 0 {
-		return uint64(s*maxSiTi - 0.5)
+		return uint32(s*maxSiTi - 0.5)
 	}
-	return uint64(s*maxSiTi + 0.5)
+	return uint32(s*maxSiTi + 0.5)
 }
 
 // stToUV converts an s or t value to the corresponding u or v value.
@@ -71,21 +71,16 @@ func uvToST(u float64) float64 {
 // face returns face ID from 0 to 5 containing the r. For points on the
 // boundary between faces, the result is arbitrary but deterministic.
 func face(r r3.Vector) int {
-	abs := r.Abs()
-	id := 0
-	value := r.X
-	if abs.Y > abs.X {
-		id = 1
-		value = r.Y
+	f := r.LargestComponent()
+	switch {
+	case f == r3.XAxis && r.X < 0:
+		f += 3
+	case f == r3.YAxis && r.Y < 0:
+		f += 3
+	case f == r3.ZAxis && r.Z < 0:
+		f += 3
 	}
-	if abs.Z > math.Abs(value) {
-		id = 2
-		value = r.Z
-	}
-	if value < 0 {
-		id += 3
-	}
-	return id
+	return int(f)
 }
 
 // validFaceXYZToUV given a valid face for the given point r (meaning that
@@ -190,13 +185,13 @@ func faceXYZtoUVW(face int, p Point) Point {
 
 // faceSiTiToXYZ transforms the (si, ti) coordinates to a (not necessarily
 // unit length) Point on the given face.
-func faceSiTiToXYZ(face int, si, ti uint64) Point {
+func faceSiTiToXYZ(face int, si, ti uint32) Point {
 	return Point{faceUVToXYZ(face, stToUV(siTiToST(si)), stToUV(siTiToST(ti)))}
 }
 
 // xyzToFaceSiTi transforms the (not necessarily unit length) Point to
 // (face, si, ti) coordinates and the level the Point is at.
-func xyzToFaceSiTi(p Point) (face int, si, ti uint64, level int) {
+func xyzToFaceSiTi(p Point) (face int, si, ti uint32, level int) {
 	face, u, v := xyzToFaceUV(p.Vector)
 	si = stToSiTi(uvToST(u))
 	ti = stToSiTi(uvToST(v))
@@ -205,8 +200,8 @@ func xyzToFaceSiTi(p Point) (face int, si, ti uint64, level int) {
 	// center. The si,ti values of 0 and maxSiTi need to be handled specially
 	// because they do not correspond to cell centers at any valid level; they
 	// are mapped to level -1 by the code at the end.
-	level = maxLevel - findLSBSetNonZero64(si|maxSiTi)
-	if level < 0 || level != maxLevel-findLSBSetNonZero64(ti|maxSiTi) {
+	level = maxLevel - findLSBSetNonZero64(uint64(si|maxSiTi))
+	if level < 0 || level != maxLevel-findLSBSetNonZero64(uint64(ti|maxSiTi)) {
 		return face, si, ti, -1
 	}
 

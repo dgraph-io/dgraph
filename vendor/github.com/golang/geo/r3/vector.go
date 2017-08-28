@@ -34,7 +34,7 @@ func (v Vector) ApproxEqual(ov Vector) bool {
 	return math.Abs(v.X-ov.X) < epsilon && math.Abs(v.Y-ov.Y) < epsilon && math.Abs(v.Z-ov.Z) < epsilon
 }
 
-func (v Vector) String() string { return fmt.Sprintf("(%v, %v, %v)", v.X, v.Y, v.Z) }
+func (v Vector) String() string { return fmt.Sprintf("(%0.24f, %0.24f, %0.24f)", v.X, v.Y, v.Z) }
 
 // Norm returns the vector's norm.
 func (v Vector) Norm() float64 { return math.Sqrt(v.Dot(v)) }
@@ -88,16 +88,97 @@ func (v Vector) Angle(ov Vector) s1.Angle {
 	return s1.Angle(math.Atan2(v.Cross(ov).Norm(), v.Dot(ov))) * s1.Radian
 }
 
+// Axis enumerates the 3 axes of ℝ³.
+type Axis int
+
+// The three axes of ℝ³.
+const (
+	XAxis Axis = iota
+	YAxis
+	ZAxis
+)
+
 // Ortho returns a unit vector that is orthogonal to v.
 // Ortho(-v) = -Ortho(v) for all v.
 func (v Vector) Ortho() Vector {
 	ov := Vector{0.012, 0.0053, 0.00457}
-	// Grow a component other than the largest in v, to guarantee that they aren't
-	// parallel (which would make the cross product zero).
-	if math.Abs(v.X) > math.Abs(v.Y) {
-		ov.Y = 1
-	} else {
+	switch v.LargestComponent() {
+	case XAxis:
+		ov.Z = 1
+	case YAxis:
 		ov.X = 1
+	default:
+		ov.Y = 1
 	}
 	return v.Cross(ov).Normalize()
+}
+
+// LargestComponent returns the axis that represents the largest component in this vector.
+func (v Vector) LargestComponent() Axis {
+	t := v.Abs()
+
+	if t.X > t.Y {
+		if t.X > t.Z {
+			return XAxis
+		}
+		return ZAxis
+	}
+	if t.Y > t.Z {
+		return YAxis
+	}
+	return ZAxis
+}
+
+// SmallestComponent returns the axis that represents the smallest component in this vector.
+func (v Vector) SmallestComponent() Axis {
+	t := v.Abs()
+
+	if t.X < t.Y {
+		if t.X < t.Z {
+			return XAxis
+		}
+		return ZAxis
+	}
+	if t.Y < t.Z {
+		return YAxis
+	}
+	return ZAxis
+}
+
+// Cmp compares v and ov lexicographically and returns:
+//
+//   -1 if v <  ov
+//    0 if v == ov
+//   +1 if v >  ov
+//
+// This method is based on C++'s std::lexicographical_compare. Two entities
+// are compared element by element with the given operator. The first mismatch
+// defines which is less (or greater) than the other. If both have equivalent
+// values they are lexicographically equal.
+func (v Vector) Cmp(ov Vector) int {
+	if v.X < ov.X {
+		return -1
+	}
+	if v.X > ov.X {
+		return 1
+	}
+
+	// First elements were the same, try the next.
+	if v.Y < ov.Y {
+		return -1
+	}
+	if v.Y > ov.Y {
+		return 1
+	}
+
+	// Second elements were the same return the final compare.
+	if v.Z < ov.Z {
+		return -1
+	}
+	if v.Z > ov.Z {
+		return 1
+	}
+
+	// Both are equal
+	return 0
 }

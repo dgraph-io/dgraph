@@ -18,9 +18,11 @@ package s2
 
 import (
 	"fmt"
+	"io"
 	"math"
 
 	"github.com/golang/geo/r1"
+	"github.com/golang/geo/r3"
 	"github.com/golang/geo/s1"
 )
 
@@ -239,7 +241,7 @@ func (r Rect) CapBound() Cap {
 		poleZ = 1
 		poleAngle = math.Pi/2 - r.Lat.Lo
 	}
-	poleCap := CapFromCenterAngle(PointFromCoords(0, 0, poleZ), s1.Angle(poleAngle)*s1.Radian)
+	poleCap := CapFromCenterAngle(Point{r3.Vector{0, 0, poleZ}}, s1.Angle(poleAngle)*s1.Radian)
 
 	// For bounding rectangles that span 180 degrees or less in longitude, the
 	// maximum cap size is achieved at one of the rectangle vertices.  For
@@ -291,21 +293,26 @@ func (r Rect) ContainsPoint(p Point) bool {
 	return r.ContainsLatLng(LatLngFromPoint(p))
 }
 
-// intersectsLatEdge reports if the edge AB intersects the given edge of constant
+// CellUnionBound computes a covering of the Rect.
+func (r Rect) CellUnionBound() []CellID {
+	return r.CapBound().CellUnionBound()
+}
+
+// intersectsLatEdge reports whether the edge AB intersects the given edge of constant
 // latitude. Requires the points to have unit length.
 func intersectsLatEdge(a, b Point, lat s1.Angle, lng s1.Interval) bool {
 	// Unfortunately, lines of constant latitude are curves on
 	// the sphere. They can intersect a straight edge in 0, 1, or 2 points.
 
 	// First, compute the normal to the plane AB that points vaguely north.
-	z := a.PointCross(b)
+	z := Point{a.PointCross(b).Normalize()}
 	if z.Z < 0 {
 		z = Point{z.Mul(-1)}
 	}
 
 	// Extend this to an orthonormal frame (x,y,z) where x is the direction
 	// where the great circle through AB achieves its maximium latitude.
-	y := z.PointCross(PointFromCoords(0, 0, 1))
+	y := Point{z.PointCross(PointFromCoords(0, 0, 1)).Normalize()}
 	x := y.Cross(z.Vector)
 
 	// Compute the angle "theta" from the x-axis (in the x-y plane defined
@@ -326,7 +333,7 @@ func intersectsLatEdge(a, b Point, lat s1.Angle, lng s1.Interval) bool {
 	// also that it is contained within the given longitude interval "lng".
 
 	// Compute the range of theta values spanned by the edge AB.
-	abTheta := s1.IntervalFromEndpoints(
+	abTheta := s1.IntervalFromPointPair(
 		math.Atan2(a.Dot(y.Vector), a.Dot(x)),
 		math.Atan2(b.Dot(y.Vector), b.Dot(x)))
 
@@ -348,7 +355,7 @@ func intersectsLatEdge(a, b Point, lat s1.Angle, lng s1.Interval) bool {
 	return false
 }
 
-// intersectsLngEdge reports if the edge AB intersects the given edge of constant
+// intersectsLngEdge reports whether the edge AB intersects the given edge of constant
 // longitude. Requires the points to have unit length.
 func intersectsLngEdge(a, b Point, lat r1.Interval, lng s1.Angle) bool {
 	// The nice thing about edges of constant longitude is that
@@ -420,6 +427,40 @@ func (r Rect) IntersectsCell(c Cell) bool {
 		}
 	}
 	return false
+}
+
+// Encode encodes the Rect.
+func (r Rect) Encode(w io.Writer) error {
+	e := &encoder{w: w}
+	r.encode(e)
+	return e.err
+}
+
+func (r Rect) encode(e *encoder) {
+	e.writeInt8(encodingVersion)
+	e.writeFloat64(r.Lat.Lo)
+	e.writeFloat64(r.Lat.Hi)
+	e.writeFloat64(r.Lng.Lo)
+	e.writeFloat64(r.Lng.Hi)
+}
+
+// Decode decodes a rectangle.
+func (r *Rect) Decode(rd io.Reader) error {
+	d := &decoder{r: asByteReader(rd)}
+	r.decode(d)
+	return d.err
+}
+
+func (r *Rect) decode(d *decoder) {
+	if version := d.readUint8(); int(version) > int(encodingVersion) && d.err == nil {
+		d.err = fmt.Errorf("can't decode version %d; my version: %d", version, encodingVersion)
+		return
+	}
+	r.Lat.Lo = d.readFloat64()
+	r.Lat.Hi = d.readFloat64()
+	r.Lng.Lo = d.readFloat64()
+	r.Lng.Hi = d.readFloat64()
+	return
 }
 
 // BUG: The major differences from the C++ version are:

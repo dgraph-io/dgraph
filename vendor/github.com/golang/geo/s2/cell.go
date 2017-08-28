@@ -17,10 +17,12 @@ limitations under the License.
 package s2
 
 import (
+	"io"
 	"math"
 
 	"github.com/golang/geo/r1"
 	"github.com/golang/geo/r2"
+	"github.com/golang/geo/r3"
 	"github.com/golang/geo/s1"
 )
 
@@ -57,14 +59,34 @@ func CellFromLatLng(ll LatLng) Cell {
 	return CellFromCellID(CellIDFromLatLng(ll))
 }
 
+// Face returns the face this cell is on.
+func (c Cell) Face() int {
+	return int(c.face)
+}
+
+// Level returns the level of this cell.
+func (c Cell) Level() int {
+	return int(c.level)
+}
+
+// ID returns the CellID this cell represents.
+func (c Cell) ID() CellID {
+	return c.id
+}
+
 // IsLeaf returns whether this Cell is a leaf or not.
 func (c Cell) IsLeaf() bool {
 	return c.level == maxLevel
 }
 
-// SizeIJ returns the CellID value for the cells level.
+// SizeIJ returns the edge length of this cell in (i,j)-space.
 func (c Cell) SizeIJ() int {
 	return sizeIJ(int(c.level))
+}
+
+// SizeST returns the edge length of this cell in (s,t)-space.
+func (c Cell) SizeST() float64 {
+	return c.id.sizeST(int(c.level))
 }
 
 // Vertex returns the k-th vertex of the cell (k = 0,1,2,3) in CCW order
@@ -99,6 +121,55 @@ func (c Cell) BoundUV() r2.Rect {
 // cell in (u,v)-space or (x,y,z)-space
 func (c Cell) Center() Point {
 	return Point{c.id.rawPoint().Normalize()}
+}
+
+// Children returns the four direct children of this cell in traversal order
+// and returns true. If this is a leaf cell, or the children could not be created,
+// false is returned.
+// The C++ method is called Subdivide.
+func (c Cell) Children() ([4]Cell, bool) {
+	var children [4]Cell
+
+	if c.id.IsLeaf() {
+		return children, false
+	}
+
+	// Compute the cell midpoint in uv-space.
+	uvMid := c.id.centerUV()
+
+	// Create four children with the appropriate bounds.
+	cid := c.id.ChildBegin()
+	for pos := 0; pos < 4; pos++ {
+		children[pos] = Cell{
+			face:        c.face,
+			level:       c.level + 1,
+			orientation: c.orientation ^ int8(posToOrientation[pos]),
+			id:          cid,
+		}
+
+		// We want to split the cell in half in u and v. To decide which
+		// side to set equal to the midpoint value, we look at cell's (i,j)
+		// position within its parent. The index for i is in bit 1 of ij.
+		ij := posToIJ[c.orientation][pos]
+		i := ij >> 1
+		j := ij & 1
+		if i == 1 {
+			children[pos].uv.X.Hi = c.uv.X.Hi
+			children[pos].uv.X.Lo = uvMid.X
+		} else {
+			children[pos].uv.X.Lo = c.uv.X.Lo
+			children[pos].uv.X.Hi = uvMid.X
+		}
+		if j == 1 {
+			children[pos].uv.Y.Hi = c.uv.Y.Hi
+			children[pos].uv.Y.Lo = uvMid.Y
+		} else {
+			children[pos].uv.Y.Lo = c.uv.Y.Lo
+			children[pos].uv.Y.Hi = uvMid.Y
+		}
+		cid = cid.Next()
+	}
+	return children, true
 }
 
 // ExactArea returns the area of this cell as accurately as possible.
@@ -148,7 +219,13 @@ func (c Cell) ContainsCell(oc Cell) bool {
 	return c.id.Contains(oc.id)
 }
 
-// latitude returns the latitude of the cell vertex given by (i,j), where "i" and "j" are either 0 or 1.
+// CellUnionBound computes a covering of the Cell.
+func (c Cell) CellUnionBound() []CellID {
+	return c.CapBound().CellUnionBound()
+}
+
+// latitude returns the latitude of the cell vertex in radians given by (i,j),
+// where i and j indicate the Hi (1) or Lo (0) corner.
 func (c Cell) latitude(i, j int) float64 {
 	var u, v float64
 	switch {
@@ -165,12 +242,13 @@ func (c Cell) latitude(i, j int) float64 {
 		u = c.uv.X.Hi
 		v = c.uv.Y.Hi
 	default:
-		panic("i and/or j is out of bound")
+		panic("i and/or j is out of bounds")
 	}
 	return latitude(Point{faceUVToXYZ(int(c.face), u, v)}).Radians()
 }
 
-// longitude returns the longitude of the cell vertex given by (i,j), where "i" and "j" are either 0 or 1.
+// longitude returns the longitude of the cell vertex in radians given by (i,j),
+// where i and j indicate the Hi (1) or Lo (0) corner.
 func (c Cell) longitude(i, j int) float64 {
 	var u, v float64
 	switch {
@@ -187,14 +265,12 @@ func (c Cell) longitude(i, j int) float64 {
 		u = c.uv.X.Hi
 		v = c.uv.Y.Hi
 	default:
-		panic("i and/or j is out of bound")
+		panic("i and/or j is out of bounds")
 	}
 	return longitude(Point{faceUVToXYZ(int(c.face), u, v)}).Radians()
 }
 
-// TODO(akashagrawal): move these package private variables to a more appropriate location.
 var (
-	dblEpsilon = math.Nextafter(1, 2) - 1
 	poleMinLat = math.Asin(math.Sqrt(1.0/3)) - 0.5*dblEpsilon
 )
 
@@ -316,9 +392,216 @@ func (c Cell) ContainsPoint(p Point) bool {
 	return c.uv.ExpandedByMargin(dblEpsilon).ContainsPoint(uv)
 }
 
-// BUG(roberts): Differences from C++:
-// Accessor methods
-// Subdivide
-// BoundUV
-// Distance/DistanceToEdge
-// VertexChordDistance
+// Encode encodes the Cell.
+func (c Cell) Encode(w io.Writer) error {
+	e := &encoder{w: w}
+	c.encode(e)
+	return e.err
+}
+
+func (c Cell) encode(e *encoder) {
+	c.id.encode(e)
+}
+
+// vertexChordDist2 returns the squared chord distance from point P to the
+// given corner vertex specified by the Hi or Lo values of each.
+func (c Cell) vertexChordDist2(p Point, xHi, yHi bool) float64 {
+	x := c.uv.X.Lo
+	y := c.uv.Y.Lo
+	if xHi {
+		x = c.uv.X.Hi
+	}
+	if yHi {
+		y = c.uv.Y.Hi
+	}
+
+	return p.Sub(PointFromCoords(x, y, 1).Vector).Norm2()
+}
+
+// uEdgeIsClosest reports whether a point P is closer to the interior of the specified
+// Cell edge (either the lower or upper edge of the Cell) or to the endpoints.
+func (c Cell) uEdgeIsClosest(p Point, vHi bool) bool {
+	u0 := c.uv.X.Lo
+	u1 := c.uv.X.Hi
+	v := c.uv.Y.Lo
+	if vHi {
+		v = c.uv.Y.Hi
+	}
+	// These are the normals to the planes that are perpendicular to the edge
+	// and pass through one of its two endpoints.
+	dir0 := r3.Vector{v*v + 1, -u0 * v, -u0}
+	dir1 := r3.Vector{v*v + 1, -u1 * v, -u1}
+	return p.Dot(dir0) > 0 && p.Dot(dir1) < 0
+}
+
+// vEdgeIsClosest reports whether a point P is closer to the interior of the specified
+// Cell edge (either the right or left edge of the Cell) or to the endpoints.
+func (c Cell) vEdgeIsClosest(p Point, uHi bool) bool {
+	v0 := c.uv.Y.Lo
+	v1 := c.uv.Y.Hi
+	u := c.uv.X.Lo
+	if uHi {
+		u = c.uv.X.Hi
+	}
+	dir0 := r3.Vector{-u * v0, u*u + 1, -v0}
+	dir1 := r3.Vector{-u * v1, u*u + 1, -v1}
+	return p.Dot(dir0) > 0 && p.Dot(dir1) < 0
+}
+
+// edgeDistance reports the distance from a Point P to a given Cell edge. The point
+// P is given by its dot product, and the uv edge by its normal in the
+// given coordinate value.
+func edgeDistance(ij, uv float64) s1.ChordAngle {
+	// Let P by the target point and let R be the closest point on the given
+	// edge AB.  The desired distance PR can be expressed as PR^2 = PQ^2 + QR^2
+	// where Q is the point P projected onto the plane through the great circle
+	// through AB.  We can compute the distance PQ^2 perpendicular to the plane
+	// from "dirIJ" (the dot product of the target point P with the edge
+	// normal) and the squared length the edge normal (1 + uv**2).
+	pq2 := (ij * ij) / (1 + uv*uv)
+
+	// We can compute the distance QR as (1 - OQ) where O is the sphere origin,
+	// and we can compute OQ^2 = 1 - PQ^2 using the Pythagorean theorem.
+	// (This calculation loses accuracy as angle POQ approaches Pi/2.)
+	qr := 1 - math.Sqrt(1-pq2)
+	return s1.ChordAngleFromSquaredLength(pq2 + qr*qr)
+}
+
+// minChordAngle returns the smallest of the given values.
+func minChordAngle(x s1.ChordAngle, others ...s1.ChordAngle) s1.ChordAngle {
+	min := x
+	for _, y := range others {
+		if y < min {
+			min = y
+		}
+	}
+	return min
+}
+
+// minFloat64 returns the smallest of the given values.
+func minFloat64(x float64, others ...float64) float64 {
+	min := x
+	for _, y := range others {
+		if y < min {
+			min = y
+		}
+	}
+	return min
+}
+
+// distanceInternal reports the distance from the given point to the interior of
+// the cell if toInterior is true or to the boundary of the cell otherwise.
+func (c Cell) distanceInternal(targetXYZ Point, toInterior bool) s1.ChordAngle {
+	// All calculations are done in the (u,v,w) coordinates of this cell's face.
+	target := faceXYZtoUVW(int(c.face), targetXYZ)
+
+	// Compute dot products with all four upward or rightward-facing edge
+	// normals. dirIJ is the dot product for the edge corresponding to axis
+	// I, endpoint J. For example, dir01 is the right edge of the Cell
+	// (corresponding to the upper endpoint of the u-axis).
+	dir00 := target.X - target.Z*c.uv.X.Lo
+	dir01 := target.X - target.Z*c.uv.X.Hi
+	dir10 := target.Y - target.Z*c.uv.Y.Lo
+	dir11 := target.Y - target.Z*c.uv.Y.Hi
+	inside := true
+	if dir00 < 0 {
+		inside = false // Target is to the left of the cell
+		if c.vEdgeIsClosest(target, false) {
+			return edgeDistance(-dir00, c.uv.X.Lo)
+		}
+	}
+	if dir01 > 0 {
+		inside = false // Target is to the right of the cell
+		if c.vEdgeIsClosest(target, true) {
+			return edgeDistance(dir01, c.uv.X.Hi)
+		}
+	}
+	if dir10 < 0 {
+		inside = false // Target is below the cell
+		if c.uEdgeIsClosest(target, false) {
+			return edgeDistance(-dir10, c.uv.Y.Lo)
+		}
+	}
+	if dir11 > 0 {
+		inside = false // Target is above the cell
+		if c.uEdgeIsClosest(target, true) {
+			return edgeDistance(dir11, c.uv.Y.Hi)
+		}
+	}
+	if inside {
+		if toInterior {
+			return s1.ChordAngle(0)
+		}
+		// Although you might think of Cells as rectangles, they are actually
+		// arbitrary quadrilaterals after they are projected onto the sphere.
+		// Therefore the simplest approach is just to find the minimum distance to
+		// any of the four edges.
+		return minChordAngle(edgeDistance(-dir00, c.uv.X.Lo),
+			edgeDistance(dir01, c.uv.X.Hi),
+			edgeDistance(-dir10, c.uv.Y.Lo),
+			edgeDistance(dir11, c.uv.Y.Hi))
+	}
+
+	// Otherwise, the closest point is one of the four cell vertices. Note that
+	// it is *not* trivial to narrow down the candidates based on the edge sign
+	// tests above, because (1) the edges don't meet at right angles and (2)
+	// there are points on the far side of the sphere that are both above *and*
+	// below the cell, etc.
+	chordDist2 := minFloat64(c.vertexChordDist2(target, false, false),
+		c.vertexChordDist2(target, true, false),
+		c.vertexChordDist2(target, false, true),
+		c.vertexChordDist2(target, true, true))
+	return s1.ChordAngleFromSquaredLength(chordDist2)
+}
+
+// Distance reports the distance from the cell to the given point. Returns zero if
+// the point is inside the cell.
+func (c Cell) Distance(target Point) s1.ChordAngle {
+	return c.distanceInternal(target, true)
+}
+
+// BoundaryDistance reports the distance from the cell boundary to the given point.
+func (c Cell) BoundaryDistance(target Point) s1.ChordAngle {
+	return c.distanceInternal(target, false)
+}
+
+// DistanceToEdge returns the minimum distance from the cell to the given edge AB. Returns
+// zero if the edge intersects the cell interior.
+func (c Cell) DistanceToEdge(a, b Point) s1.ChordAngle {
+	// Possible optimizations:
+	//  - Currently the (cell vertex, edge endpoint) distances are computed
+	//    twice each, and the length of AB is computed 4 times.
+	//  - To fix this, refactor GetDistance(target) so that it skips calculating
+	//    the distance to each cell vertex. Instead, compute the cell vertices
+	//    and distances in this function, and add a low-level UpdateMinDistance
+	//    that allows the XA, XB, and AB distances to be passed in.
+	//  - It might also be more efficient to do all calculations in UVW-space,
+	//    since this would involve transforming 2 points rather than 4.
+
+	// First, check the minimum distance to the edge endpoints A and B.
+	// (This also detects whether either endpoint is inside the cell.)
+	minDist := minChordAngle(c.Distance(a), c.Distance(b))
+	if minDist == 0 {
+		return minDist
+	}
+
+	// Otherwise, check whether the edge crosses the cell boundary.
+	crosser := NewChainEdgeCrosser(a, b, c.Vertex(3))
+	for i := 0; i < 4; i++ {
+		if crosser.ChainCrossingSign(c.Vertex(i)) >= 0 {
+			return 0
+		}
+	}
+
+	// Finally, check whether the minimum distance occurs between a cell vertex
+	// and the interior of the edge AB. (Some of this work is redundant, since
+	// it also checks the distance to the endpoints A and B again.)
+	//
+	// Note that we don't need to check the distance from the interior of AB to
+	// the interior of a cell edge, because the only way that this distance can
+	// be minimal is if the two edges cross (already checked above).
+	for i := 0; i < 4; i++ {
+		minDist, _ = UpdateMinDistance(c.Vertex(i), a, b, minDist)
+	}
+	return minDist
+}

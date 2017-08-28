@@ -52,12 +52,8 @@ const (
 	StraightChordAngle = ChordAngle(4)
 )
 
-var (
-	dblEpsilon = math.Nextafter(1, 2) - 1
-)
-
-// ChordFromAngle returns a ChordAngle from the given Angle.
-func ChordFromAngle(a Angle) ChordAngle {
+// ChordAngleFromAngle returns a ChordAngle from the given Angle.
+func ChordAngleFromAngle(a Angle) ChordAngle {
 	if a < 0 {
 		return NegativeChordAngle
 	}
@@ -66,6 +62,29 @@ func ChordFromAngle(a Angle) ChordAngle {
 	}
 	l := 2 * math.Sin(0.5*math.Min(math.Pi, a.Radians()))
 	return ChordAngle(l * l)
+}
+
+// ChordAngleFromSquaredLength returns a ChordAngle from the squared chord length.
+// Note that the argument is automatically clamped to a maximum of 4.0 to
+// handle possible roundoff errors. The argument must be non-negative.
+func ChordAngleFromSquaredLength(length2 float64) ChordAngle {
+	if length2 > 4 {
+		return StraightChordAngle
+	}
+	return ChordAngle(length2)
+}
+
+// Expanded returns a new ChordAngle that has been adjusted by the given error
+// bound (which can be positive or negative). Error should be the value
+// returned by either MaxPointError or MaxAngleError. For example:
+//    a := ChordAngleFromPoints(x, y)
+//    a1 := a.Expanded(a.MaxPointError())
+func (c ChordAngle) Expanded(e float64) ChordAngle {
+	// If the angle is special, don't change it. Otherwise clamp it to the valid range.
+	if c.isSpecial() {
+		return c
+	}
+	return ChordAngle(math.Max(0.0, math.Min(4.0, float64(c)+e)))
 }
 
 // Angle converts this ChordAngle to an Angle.
@@ -117,8 +136,73 @@ func (c ChordAngle) MaxAngleError() float64 {
 	return dblEpsilon * float64(c)
 }
 
-// BUG(roberts): The major differences from the C++ version are:
-//   - no S2Point constructors
-//   - no FromLength constructor
-//   - no PlusError
-//   - no trigonometric or arithmetic operators
+// Add adds the other ChordAngle to this one and returns the resulting value.
+// This method assumes the ChordAngles are not special.
+func (c ChordAngle) Add(other ChordAngle) ChordAngle {
+	// Note that this method (and Sub) is much more efficient than converting
+	// the ChordAngle to an Angle and adding those and converting back. It
+	// requires only one square root plus a few additions and multiplications.
+
+	// Optimization for the common case where b is an error tolerance
+	// parameter that happens to be set to zero.
+	if other == 0 {
+		return c
+	}
+
+	// Clamp the angle sum to at most 180 degrees.
+	if c+other >= 4 {
+		return StraightChordAngle
+	}
+
+	// Let a and b be the (non-squared) chord lengths, and let c = a+b.
+	// Let A, B, and C be the corresponding half-angles (a = 2*sin(A), etc).
+	// Then the formula below can be derived from c = 2 * sin(A+B) and the
+	// relationships   sin(A+B) = sin(A)*cos(B) + sin(B)*cos(A)
+	//                 cos(X) = sqrt(1 - sin^2(X))
+	x := float64(c * (1 - 0.25*other))
+	y := float64(other * (1 - 0.25*c))
+	return ChordAngle(math.Min(4.0, x+y+2*math.Sqrt(x*y)))
+}
+
+// Sub subtracts the other ChordAngle from this one and returns the resulting
+// value. This method assumes the ChordAngles are not special.
+func (c ChordAngle) Sub(other ChordAngle) ChordAngle {
+	if other == 0 {
+		return c
+	}
+	if c <= other {
+		return 0
+	}
+	x := float64(c * (1 - 0.25*other))
+	y := float64(other * (1 - 0.25*c))
+	return ChordAngle(math.Max(0.0, x+y-2*math.Sqrt(x*y)))
+}
+
+// Sin returns the sine of this chord angle. This method is more efficient
+// than converting to Angle and performing the computation.
+func (c ChordAngle) Sin() float64 {
+	return math.Sqrt(c.Sin2())
+}
+
+// Sin2 returns the square of the sine of this chord angle.
+// It is more efficient than Sin.
+func (c ChordAngle) Sin2() float64 {
+	// Let a be the (non-squared) chord length, and let A be the corresponding
+	// half-angle (a = 2*sin(A)).  The formula below can be derived from:
+	//   sin(2*A) = 2 * sin(A) * cos(A)
+	//   cos^2(A) = 1 - sin^2(A)
+	// This is much faster than converting to an angle and computing its sine.
+	return float64(c * (1 - 0.25*c))
+}
+
+// Cos returns the cosine of this chord angle. This method is more efficient
+// than converting to Angle and performing the computation.
+func (c ChordAngle) Cos() float64 {
+	// cos(2*A) = cos^2(A) - sin^2(A) = 1 - 2*sin^2(A)
+	return float64(1 - 0.5*c)
+}
+
+// Tan returns the tangent of this chord angle.
+func (c ChordAngle) Tan() float64 {
+	return c.Sin() / c.Cos()
+}

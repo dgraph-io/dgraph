@@ -19,6 +19,7 @@ package s2
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"math"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"github.com/golang/geo/r1"
 	"github.com/golang/geo/r2"
 	"github.com/golang/geo/r3"
+	"github.com/golang/geo/s1"
 )
 
 // CellID uniquely identifies a cell in the S2 cell decomposition.
@@ -34,13 +36,34 @@ import (
 // along the Hilbert curve on that face. The zero value and the value
 // (1<<64)-1 are invalid cell IDs. The first compares less than any
 // valid cell ID, the second as greater than any valid cell ID.
+//
+// Sequentially increasing cell IDs follow a continuous space-filling curve
+// over the entire sphere. They have the following properties:
+//
+//  - The ID of a cell at level k consists of a 3-bit face number followed
+//    by k bit pairs that recursively select one of the four children of
+//    each cell. The next bit is always 1, and all other bits are 0.
+//    Therefore, the level of a cell is determined by the position of its
+//    lowest-numbered bit that is turned on (for a cell at level k, this
+//    position is 2 * (maxLevel - k)).
+//
+//  - The ID of a parent cell is at the midpoint of the range of IDs spanned
+//    by its children (or by its descendants at any level).
+//
+// Leaf cells are often used to represent points on the unit sphere, and
+// this type provides methods for converting directly between these two
+// representations. For cells that represent 2D regions rather than
+// discrete point, it is better to use Cells.
 type CellID uint64
 
 // TODO(dsymonds): Some of these constants should probably be exported.
 const (
-	faceBits   = 3
-	numFaces   = 6
-	maxLevel   = 30
+	faceBits = 3
+	numFaces = 6
+	maxLevel = 30
+	// The extra position bit (61 rather than 60) lets us encode each cell as its
+	// Hilbert curve position at the cell center (which is halfway along the
+	// portion of the Hilbert curve that fills that cell).
 	posBits    = 2*maxLevel + 1
 	maxSize    = 1 << maxLevel
 	wrapOffset = uint64(numFaces) << posBits
@@ -211,6 +234,59 @@ func (ci CellID) VertexNeighbors(level int) []CellID {
 	return results
 }
 
+// AllNeighbors returns all neighbors of this cell at the given level. Two
+// cells X and Y are neighbors if their boundaries intersect but their
+// interiors do not. In particular, two cells that intersect at a single
+// point are neighbors. Note that for cells adjacent to a face vertex, the
+// same neighbor may be returned more than once. There could be up to eight
+// neighbors including the diagonal ones that share the vertex.
+//
+// This requires level >= ci.Level().
+func (ci CellID) AllNeighbors(level int) []CellID {
+	var neighbors []CellID
+
+	face, i, j, _ := ci.faceIJOrientation()
+
+	// Find the coordinates of the lower left-hand leaf cell. We need to
+	// normalize (i,j) to a known position within the cell because level
+	// may be larger than this cell's level.
+	size := sizeIJ(ci.Level())
+	i &= -size
+	j &= -size
+
+	nbrSize := sizeIJ(level)
+
+	// We compute the top-bottom, left-right, and diagonal neighbors in one
+	// pass. The loop test is at the end of the loop to avoid 32-bit overflow.
+	for k := -nbrSize; ; k += nbrSize {
+		var sameFace bool
+		if k < 0 {
+			sameFace = (j+k >= 0)
+		} else if k >= size {
+			sameFace = (j+k < maxSize)
+		} else {
+			sameFace = true
+			// Top and bottom neighbors.
+			neighbors = append(neighbors, cellIDFromFaceIJSame(face, i+k, j-nbrSize,
+				j-size >= 0).Parent(level))
+			neighbors = append(neighbors, cellIDFromFaceIJSame(face, i+k, j+size,
+				j+size < maxSize).Parent(level))
+		}
+
+		// Left, right, and diagonal neighbors.
+		neighbors = append(neighbors, cellIDFromFaceIJSame(face, i-nbrSize, j+k,
+			sameFace && i-size >= 0).Parent(level))
+		neighbors = append(neighbors, cellIDFromFaceIJSame(face, i+size, j+k,
+			sameFace && i+size < maxSize).Parent(level))
+
+		if k >= size {
+			break
+		}
+	}
+
+	return neighbors
+}
+
 // RangeMin returns the minimum CellID that is contained within this cell.
 func (ci CellID) RangeMin() CellID { return CellID(uint64(ci) - (ci.lsb() - 1)) }
 
@@ -262,6 +338,7 @@ func (ci CellID) ChildBegin() CellID {
 
 // ChildBeginAtLevel returns the first cell in a traversal of children a given level deeper than this cell, in
 // Hilbert curve order. The given level must be no smaller than the cell's level.
+// See ChildBegin for example use.
 func (ci CellID) ChildBeginAtLevel(level int) CellID {
 	return CellID(uint64(ci) - ci.lsb() + lsbForLevel(level))
 }
@@ -282,7 +359,8 @@ func (ci CellID) ChildEndAtLevel(level int) CellID {
 }
 
 // Next returns the next cell along the Hilbert curve.
-// This is expected to be used with ChildBegin and ChildEnd.
+// This is expected to be used with ChildBegin and ChildEnd,
+// or ChildBeginAtLevel and ChildEndAtLevel.
 func (ci CellID) Next() CellID {
 	return CellID(uint64(ci) + ci.lsb()<<1)
 }
@@ -347,19 +425,36 @@ func (ci CellID) AdvanceWrap(steps int64) CellID {
 	return CellID(uint64(ci) + (uint64(steps) << shift))
 }
 
+// Encode encodes the CellID.
+func (ci CellID) Encode(w io.Writer) error {
+	e := &encoder{w: w}
+	ci.encode(e)
+	return e.err
+}
+
+func (ci CellID) encode(e *encoder) {
+	e.writeUint64(uint64(ci))
+}
+
 // TODO: the methods below are not exported yet.  Settle on the entire API design
 // before doing this.  Do we want to mirror the C++ one as closely as possible?
+
+// distanceFromBegin returns the number of steps that this cell is from the first
+// node in the S2 hierarchy at our level. (i.e., FromFace(0).ChildBeginAtLevel(ci.Level())).
+// The return value is always non-negative.
+func (ci CellID) distanceFromBegin() int64 {
+	return int64(ci >> uint64(2*(maxLevel-ci.Level())+1))
+}
 
 // rawPoint returns an unnormalized r3 vector from the origin through the center
 // of the s2 cell on the sphere.
 func (ci CellID) rawPoint() r3.Vector {
 	face, si, ti := ci.faceSiTi()
 	return faceUVToXYZ(face, stToUV((0.5/maxSize)*float64(si)), stToUV((0.5/maxSize)*float64(ti)))
-
 }
 
 // faceSiTi returns the Face/Si/Ti coordinates of the center of the cell.
-func (ci CellID) faceSiTi() (face, si, ti int) {
+func (ci CellID) faceSiTi() (face int, si, ti uint32) {
 	face, i, j, _ := ci.faceIJOrientation()
 	delta := 0
 	if ci.IsLeaf() {
@@ -369,7 +464,7 @@ func (ci CellID) faceSiTi() (face, si, ti int) {
 			delta = 2
 		}
 	}
-	return face, 2*i + delta, 2*j + delta
+	return face, uint32(2*i + delta), uint32(2*j + delta)
 }
 
 // faceIJOrientation uses the global lookupIJ table to unfiddle the bits of ci.
@@ -524,6 +619,12 @@ const (
 )
 
 var (
+	ijToPos = [4][4]int{
+		{0, 1, 3, 2}, // canonical order
+		{0, 3, 1, 2}, // axes swapped
+		{2, 3, 1, 0}, // bits inverted
+		{2, 1, 3, 0}, // swapped & inverted
+	}
 	posToIJ = [4][4]int{
 		{0, 1, 3, 2}, // canonical order:    (0,0), (0,1), (1,1), (1,0)
 		{0, 2, 3, 1}, // axes swapped:       (0,0), (1,0), (1,1), (0,1)
@@ -642,7 +743,7 @@ func (ci CellID) Advance(steps int64) CellID {
 // centerST return the center of the CellID in (s,t)-space.
 func (ci CellID) centerST() r2.Point {
 	_, si, ti := ci.faceSiTi()
-	return r2.Point{siTiToST(uint64(si)), siTiToST(uint64(ti))}
+	return r2.Point{siTiToST(si), siTiToST(ti)}
 }
 
 // sizeST returns the edge length of this CellID in (s,t)-space at the given level.
@@ -662,14 +763,139 @@ func (ci CellID) boundST() r2.Rect {
 // the (u,v) rectangle covered by the cell.
 func (ci CellID) centerUV() r2.Point {
 	_, si, ti := ci.faceSiTi()
-	return r2.Point{stToUV(siTiToST(uint64(si))), stToUV(siTiToST(uint64(ti)))}
+	return r2.Point{stToUV(siTiToST(si)), stToUV(siTiToST(ti))}
 }
 
 // boundUV returns the bound of this CellID in (u,v)-space.
 func (ci CellID) boundUV() r2.Rect {
 	_, i, j, _ := ci.faceIJOrientation()
 	return ijLevelToBoundUV(i, j, ci.Level())
-
 }
 
-// BUG(dsymonds): The major differences from the C++ version is that barely anything is implemented.
+// expandEndpoint returns a new u-coordinate u' such that the distance from the
+// line u=u' to the given edge (u,v0)-(u,v1) is exactly the given distance
+// (which is specified as the sine of the angle corresponding to the distance).
+func expandEndpoint(u, maxV, sinDist float64) float64 {
+	// This is based on solving a spherical right triangle, similar to the
+	// calculation in Cap.RectBound.
+	// Given an edge of the form (u,v0)-(u,v1), let maxV = max(abs(v0), abs(v1)).
+	sinUShift := sinDist * math.Sqrt((1+u*u+maxV*maxV)/(1+u*u))
+	cosUShift := math.Sqrt(1 - sinUShift*sinUShift)
+	// The following is an expansion of tan(atan(u) + asin(sinUShift)).
+	return (cosUShift*u + sinUShift) / (cosUShift - sinUShift*u)
+}
+
+// expandedByDistanceUV returns a rectangle expanded in (u,v)-space so that it
+// contains all points within the given distance of the boundary, and return the
+// smallest such rectangle. If the distance is negative, then instead shrink this
+// rectangle so that it excludes all points within the given absolute distance
+// of the boundary.
+//
+// Distances are measured *on the sphere*, not in (u,v)-space. For example,
+// you can use this method to expand the (u,v)-bound of an CellID so that
+// it contains all points within 5km of the original cell. You can then
+// test whether a point lies within the expanded bounds like this:
+//
+//   if u, v, ok := faceXYZtoUV(face, point); ok && bound.ContainsPoint(r2.Point{u,v}) { ... }
+//
+// Limitations:
+//
+//  - Because the rectangle is drawn on one of the six cube-face planes
+//    (i.e., {x,y,z} = +/-1), it can cover at most one hemisphere. This
+//    limits the maximum amount that a rectangle can be expanded. For
+//    example, CellID bounds can be expanded safely by at most 45 degrees
+//    (about 5000 km on the Earth's surface).
+//
+//  - The implementation is not exact for negative distances. The resulting
+//    rectangle will exclude all points within the given distance of the
+//    boundary but may be slightly smaller than necessary.
+func expandedByDistanceUV(uv r2.Rect, distance s1.Angle) r2.Rect {
+	// Expand each of the four sides of the rectangle just enough to include all
+	// points within the given distance of that side. (The rectangle may be
+	// expanded by a different amount in (u,v)-space on each side.)
+	maxU := math.Max(math.Abs(uv.X.Lo), math.Abs(uv.X.Hi))
+	maxV := math.Max(math.Abs(uv.Y.Lo), math.Abs(uv.Y.Hi))
+	sinDist := math.Sin(float64(distance))
+	return r2.Rect{
+		X: r1.Interval{expandEndpoint(uv.X.Lo, maxV, -sinDist),
+			expandEndpoint(uv.X.Hi, maxV, sinDist)},
+		Y: r1.Interval{expandEndpoint(uv.Y.Lo, maxU, -sinDist),
+			expandEndpoint(uv.Y.Hi, maxU, sinDist)}}
+}
+
+// MaxTile returns the largest cell with the same RangeMin such that
+// RangeMax < limit.RangeMin. It returns limit if no such cell exists.
+// This method can be used to generate a small set of CellIDs that covers
+// a given range (a tiling). This example shows how to generate a tiling
+// for a semi-open range of leaf cells [start, limit):
+//
+//   for id := start.MaxTile(limit); id != limit; id = id.Next().MaxTile(limit)) { ... }
+//
+// Note that in general the cells in the tiling will be of different sizes;
+// they gradually get larger (near the middle of the range) and then
+// gradually get smaller as limit is approached.
+func (ci CellID) MaxTile(limit CellID) CellID {
+	start := ci.RangeMin()
+	if start >= limit.RangeMin() {
+		return limit
+	}
+
+	if ci.RangeMax() >= limit {
+		// The cell is too large, shrink it. Note that when generating coverings
+		// of CellID ranges, this loop usually executes only once. Also because
+		// ci.RangeMin() < limit.RangeMin(), we will always exit the loop by the
+		// time we reach a leaf cell.
+		for {
+			ci = ci.Children()[0]
+			if ci.RangeMax() < limit {
+				break
+			}
+		}
+		return ci
+	}
+
+	// The cell may be too small. Grow it if necessary. Note that generally
+	// this loop only iterates once.
+	for !ci.isFace() {
+		parent := ci.immediateParent()
+		if parent.RangeMin() != start || parent.RangeMax() >= limit {
+			break
+		}
+		ci = parent
+	}
+	return ci
+}
+
+// centerFaceSiTi returns the (face, si, ti) coordinates of the center of the cell.
+// Note that although (si,ti) coordinates span the range [0,2**31] in general,
+// the cell center coordinates are always in the range [1,2**31-1] and
+// therefore can be represented using a signed 32-bit integer.
+func (ci CellID) centerFaceSiTi() (face, si, ti int) {
+	// First we compute the discrete (i,j) coordinates of a leaf cell contained
+	// within the given cell. Given that cells are represented by the Hilbert
+	// curve position corresponding at their center, it turns out that the cell
+	// returned by faceIJOrientation is always one of two leaf cells closest
+	// to the center of the cell (unless the given cell is a leaf cell itself,
+	// in which case there is only one possibility).
+	//
+	// Given a cell of size s >= 2 (i.e. not a leaf cell), and letting (imin,
+	// jmin) be the coordinates of its lower left-hand corner, the leaf cell
+	// returned by faceIJOrientation is either (imin + s/2, jmin + s/2)
+	// (imin + s/2 - 1, jmin + s/2 - 1). The first case is the one we want.
+	// We can distinguish these two cases by looking at the low bit of i or
+	// j. In the second case the low bit is one, unless s == 2 (i.e. the
+	// level just above leaf cells) in which case the low bit is zero.
+	//
+	// In the code below, the expression ((i ^ (int(id) >> 2)) & 1) is true
+	// if we are in the second case described above.
+	face, i, j, _ := ci.faceIJOrientation()
+	delta := 0
+	if ci.IsLeaf() {
+		delta = 1
+	} else if (int64(i)^(int64(ci)>>2))&1 == 1 {
+		delta = 2
+	}
+
+	// Note that (2 * {i,j} + delta) will never overflow a 32-bit integer.
+	return face, 2*i + delta, 2*j + delta
+}
