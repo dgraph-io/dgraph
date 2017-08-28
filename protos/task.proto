@@ -47,6 +47,8 @@ message Query {
 
 	Param facet_param = 8; // which facets to fetch
 	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
+
+	bool linearized = 10;  // Is this a "linearizable" read?
 }
 
 message ValueList {
