@@ -814,12 +814,13 @@ func (n *node) AmLeader() bool {
 	return r.Status().Lead == r.Status().ID
 }
 
-func waitLinearizableRead(ctx context.Context, gid uint32) (uint64, error) {
+func waitLinearizableRead(ctx context.Context, gid uint32) error {
 	n := groups().Node(gid)
 	replyCh := n.linState.readIndex()
 	index := <-replyCh
 	if index == raft.None {
-		return raft.None, fmt.Errorf("TODO: raftIndex none")
+		return fmt.Errorf("TODO: raftIndex none")
 	}
-	return index, nil
+	n.Applied.WaitForMark(index)
+	return nil
 }

@@ -543,10 +543,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	// TODO: Only wait for linearizable read conditionally on some flag in the query requesting that behavior
-	// TODO: And pass up the linearizable read index to helpProcessTask.
-	// TODO: Also implement for processSort.
-	_, err := waitLinearizableRead(ctx, gid)
-	if err != nil {
+	if err := waitLinearizableRead(ctx, gid); err != nil {
 		return &emptyResult, err
 	}
 	return helpProcessTask(ctx, q, gid)
