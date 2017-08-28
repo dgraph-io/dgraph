@@ -243,6 +243,13 @@ BUCKETS:
 // enough for our pagination params. When all the UID lists are done, we stop
 // iterating over the index.
 func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResult, error) {
+	if ts.Linearized {
+		gid := group.BelongsTo(ts.Attr)
+		if err := waitLinearizableRead(ctx, gid); err != nil {
+			return &emptySortResult, err
+		}
+	}
+
 	if ts.Count < 0 {
 		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
 			"Try flipping order and return first few elements instead.", ts.Attr, ts.Count)
