@@ -70,6 +70,7 @@ message SortMessage {
 	int32 count = 4;   // Return this many elements.
 	int32 offset = 5;  // Skip this many elements.
 	bool desc = 6;
+	bool linearized = 7;  // Is this a "linearizable" read?
 }
 
 message SortResult {
