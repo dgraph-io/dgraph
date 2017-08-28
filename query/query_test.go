@@ -205,6 +205,11 @@ func populateGraph(t *testing.T) {
 	addEdgeToTypedValue(t, "loc", 31, types.GeoID, gData.Value.([]byte), nil)
 
 	addEdgeToValue(t, "dob_day", 1, "1910-01-01", nil)
+
+	// Note - Though graduation is of [dateTime] type. Don't add another graduation for Michonne.
+	// There is a test to check that JSON should return an array even if there is only one value
+	// for attribute whose type is a list type.
+	addEdgeToValue(t, "graduation", 1, "1932-01-01", nil)
 	addEdgeToValue(t, "dob_day", 23, "1910-01-02", nil)
 	addEdgeToValue(t, "dob_day", 24, "1909-05-05", nil)
 	addEdgeToValue(t, "dob_day", 25, "1909-01-10", nil)
@@ -8930,4 +8935,19 @@ func TestMathCeil2(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
+}
+
+func TestMultipleValueArray(t *testing.T) {
+	t.Skip()
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(1)) {
+			name
+			graduation
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","graduation":["1932-01-01T00:00:00Z"]}]}}`, js)
 }
