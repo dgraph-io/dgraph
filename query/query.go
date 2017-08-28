@@ -166,9 +166,8 @@ type SubGraph struct {
 	valueMatrix  []*protos.ValuesList
 	uidMatrix    []*protos.List
 	facetsMatrix []*protos.FacetsList
-	// TODO - Check if we need this field.
-	ExpandPreds []*protos.ValuesList
-	GroupbyRes  *groupResults
+	ExpandPreds  []*protos.ValuesList
+	GroupbyRes   *groupResults
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -1817,7 +1816,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			}
 
 			up := uniquePreds(child.ExpandPreds)
-
 			for k, _ := range up {
 				temp := new(SubGraph)
 				*temp = *child

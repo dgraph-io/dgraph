@@ -143,7 +143,6 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 		if idx == len(child.SrcUIDs.Uids) || child.SrcUIDs.Uids[idx] != uid {
 			continue
 		}
-		// TODO - Check this is safe to do. What if its a list type?
 		v := child.valueMatrix[idx].Values[0]
 		val, err := convertWithBestEffort(v, child.Attr)
 		if err != nil {
