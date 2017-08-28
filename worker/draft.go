@@ -413,22 +413,34 @@ type linearizableState struct {
 	isActive          bool
 	rctxCounter       x.NonceCounter
 	activeRequestRctx []byte
+	pendingRequests   []chan<- uint64
 	needingResponse   []chan<- uint64
 }
 
 func newLinearizableState() linearizableState {
 	return linearizableState{
-		requests:    make(chan linearizableReadRequest),
-		isActive:    false,
-		rctxCounter: x.NewNonceCounter(),
+		requests:        make(chan linearizableReadRequest),
+		isActive:        false,
+		rctxCounter:     x.NewNonceCounter(),
+		pendingRequests: []chan<- uint64{},
+		needingResponse: []chan<- uint64{},
 	}
 }
 
-func (ls *linearizableState) requestch() chan linearizableReadRequest {
-	if ls.isActive {
-		return nil
+func (ls *linearizableState) slurpRequests() {
+	for {
+		select {
+		case req := <-ls.requests:
+			ls.pendingRequests = append(ls.pendingRequests, req.readIndexCh)
+		default:
+			return
+		}
 	}
-	return ls.requests
+}
+
+func (ls *linearizableState) feedRequest(req linearizableReadRequest) {
+	ls.pendingRequests = append(ls.pendingRequests, req.readIndexCh)
+	ls.slurpRequests()
 }
 
 func (ls *linearizableState) readIndex() chan uint64 {
@@ -438,22 +450,19 @@ func (ls *linearizableState) readIndex() chan uint64 {
 }
 
 func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
-forLoop:
-	for {
-		select {
-		case req := <-ls.requests:
-			ls.needingResponse = append(ls.needingResponse, req.readIndexCh)
-		default:
-			break forLoop
-		}
-	}
-	if len(ls.needingResponse) == 0 {
+	ls.slurpRequests()
+	if len(ls.needingResponse) != 0 {
+		// TODO: Remove isActive, it's redundant
 		return nil
 	}
+	if len(ls.pendingRequests) == 0 {
+		return nil
+	}
+	ls.needingResponse, ls.pendingRequests = ls.pendingRequests, ls.needingResponse
+	ls.isActive = true
 	rctxCounter := ls.rctxCounter.Generate()
 	ls.activeRequestRctx = rctxCounter[:]
-	ls.isActive = true
-	// TODO: etcd can silently ignore ReadIndex -- so we need to handle that
+	// TODO: etcd can silently ignore ReadIndex -- so we need to handle that with a timeout...
 	return n.Raft().ReadIndex(n.ctx, ls.activeRequestRctx)
 }
 
@@ -572,9 +581,8 @@ func (n *node) Run() {
 				firstRun = false
 			}
 
-		case req := <-n.linState.requestch():
-			x.AssertTrue(!n.linState.isActive)
-			n.linState.needingResponse = append(n.linState.needingResponse, req.readIndexCh)
+		case req := <-n.linState.requests:
+			n.linState.feedRequest(req)
 			if err := feedRequestsAndDispatchReadIndex(&n.linState, n); err != nil {
 				return
 			}
