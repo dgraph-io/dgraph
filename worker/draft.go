@@ -765,6 +765,15 @@ func (ls *linearizableState) readIndex() chan uint64 {
 	return ch
 }
 
+func cycleResponses(ls *linearizableState, n *node, indexOrNone uint64) error {
+	x.AssertTrue(ls.isActive)
+	for _, respCh := range ls.needingResponse {
+		respCh <- indexOrNone
+	}
+	ls.needingResponse = ls.needingResponse[:0]
+	return feedRequestsAndDispatchReadIndex(ls, n)
+}
+
 func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
 	ls.slurpRequests()
 	if len(ls.needingResponse) != 0 {
@@ -784,12 +793,7 @@ func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
 }
 
 func (ls *linearizableState) timeExpired(n *node) error {
-	x.AssertTrue(ls.isActive)
-	for _, respCh := range ls.needingResponse {
-		respCh <- raft.None
-	}
-	ls.needingResponse = ls.needingResponse[:0]
-	return feedRequestsAndDispatchReadIndex(ls, n)
+	return cycleResponses(ls, n, raft.None)
 }
 
 func (n *node) Run() {
@@ -813,13 +817,7 @@ func (n *node) Run() {
 				if !n.linState.activeRequestTimer.Stop() {
 					<-n.linState.activeRequestTimer.C
 				}
-				x.AssertTrue(n.linState.isActive)
-				n.linState.isActive = false
-				for _, respCh := range n.linState.needingResponse {
-					respCh <- rs.Index
-				}
-				n.linState.needingResponse = n.linState.needingResponse[:0]
-				if err := feedRequestsAndDispatchReadIndex(&n.linState, n); err != nil {
+				if err := cycleResponses(n.linState, n, rs.Index); err != nil {
 					return
 				}
 			}
