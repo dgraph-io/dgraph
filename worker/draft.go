@@ -720,21 +720,27 @@ type linearizableReadRequest struct {
 }
 
 type linearizableState struct {
-	requests          chan linearizableReadRequest
-	isActive          bool
-	rctxCounter       x.NonceCounter
-	activeRequestRctx []byte
-	pendingRequests   []chan<- uint64
-	needingResponse   []chan<- uint64
+	requests           chan linearizableReadRequest
+	isActive           bool
+	rctxCounter        x.NonceCounter
+	activeRequestRctx  []byte
+	activeRequestTimer *time.Timer
+	pendingRequests    []chan<- uint64
+	needingResponse    []chan<- uint64
 }
 
 func newLinearizableState() linearizableState {
+	timer := time.NewTimer(0)
+	if !timer.Stop() {
+		<-timer.C
+	}
 	return linearizableState{
-		requests:        make(chan linearizableReadRequest),
-		isActive:        false,
-		rctxCounter:     x.NewNonceCounter(),
-		pendingRequests: []chan<- uint64{},
-		needingResponse: []chan<- uint64{},
+		requests:           make(chan linearizableReadRequest),
+		isActive:           false,
+		rctxCounter:        x.NewNonceCounter(),
+		activeRequestTimer: timer,
+		pendingRequests:    []chan<- uint64{},
+		needingResponse:    []chan<- uint64{},
 	}
 }
 
@@ -774,6 +780,7 @@ func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
 	rctxCounter := ls.rctxCounter.Generate()
 	ls.activeRequestRctx = rctxCounter[:]
 	// TODO: etcd can silently ignore ReadIndex -- so we need to handle that with a timeout...
+	ls.activeRequestTimer.Reset(10 * time.Millisecond)
 	return n.Raft().ReadIndex(n.ctx, ls.activeRequestRctx)
 }
 
@@ -794,6 +801,9 @@ func (n *node) Run() {
 			for _, rs := range rd.ReadStates {
 				if 0 != bytes.Compare(n.linState.activeRequestRctx, rs.RequestCtx) {
 					continue
+				}
+				if !n.linState.activeRequestTimer.Stop() {
+					<-n.linState.activeRequestTimer.C
 				}
 				x.AssertTrue(n.linState.isActive)
 				n.linState.isActive = false
@@ -874,6 +884,10 @@ func (n *node) Run() {
 			if err := feedRequestsAndDispatchReadIndex(&n.linState, n); err != nil {
 				return
 			}
+
+		case <-n.linState.activeRequestTimer.C:
+			// Time has expired.
+			// TODO: Do something.
 
 		case <-n.stop:
 			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
