@@ -757,7 +757,6 @@ func (ls *linearizableState) slurpRequests() {
 
 func (ls *linearizableState) feedRequest(req linearizableReadRequest) {
 	ls.pendingRequests = append(ls.pendingRequests, req.readIndexCh)
-	ls.slurpRequests()
 }
 
 func (ls *linearizableState) readIndex() chan uint64 {
