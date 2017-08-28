@@ -147,16 +147,20 @@
 			"revisionTime": "2016-10-10T02:54:55Z"
 		},
 		{
-			"checksumSHA1": "jw+XDfPJgogfSPCsuebqFZj/GJc=",
+			"checksumSHA1": "h1nLibY0IliypSG0cwbXpSpcsMA=",
 			"path": "github.com/coreos/etcd/raft",
-			"revision": "1ebeef5cbfe69c0dab2bc701ee5307eed7a7d8d2",
-			"revisionTime": "2016-09-05T06:26:19Z"
+			"revision": "9d43462d174c664f5edf313dec0de31e1ef4ed47",
+			"revisionTime": "2017-08-21T17:40:55Z",
+			"version": "v3.2.6",
+			"versionExact": "v3.2.6"
 		},
 		{
-			"checksumSHA1": "7iseLdwhxsT7LD5n3g01bfpTd/0=",
+			"checksumSHA1": "L0Ds4Qp/I/bPN9+y+0zN2SF0KJg=",
 			"path": "github.com/coreos/etcd/raft/raftpb",
-			"revision": "1ebeef5cbfe69c0dab2bc701ee5307eed7a7d8d2",
-			"revisionTime": "2016-09-05T06:26:19Z"
+			"revision": "9d43462d174c664f5edf313dec0de31e1ef4ed47",
+			"revisionTime": "2017-08-21T17:40:55Z",
+			"version": "v3.2.6",
+			"versionExact": "v3.2.6"
 		},
 		{
 			"checksumSHA1": "Lf3uUXTkKK5DJ37BxQvxO1Fq+K8=",
