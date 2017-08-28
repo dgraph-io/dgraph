@@ -787,7 +787,6 @@ func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
 	ls.isActive = true
 	rctxCounter := ls.rctxCounter.Generate()
 	ls.activeRequestRctx = rctxCounter[:]
-	// TODO: etcd can silently ignore ReadIndex -- so we need to handle that with a timeout...
 	ls.activeRequestTimer.Reset(10 * time.Millisecond)
 	return n.Raft().ReadIndex(n.ctx, ls.activeRequestRctx)
 }
