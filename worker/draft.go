@@ -783,6 +783,15 @@ func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
 	return n.Raft().ReadIndex(n.ctx, ls.activeRequestRctx)
 }
 
+func (ls *linearizableState) timeExpired(n *node) error {
+	x.AssertTrue(ls.isActive)
+	for _, respCh := range ls.needingResponse {
+		respCh <- raft.None
+	}
+	ls.needingResponse = ls.needingResponse[:0]
+	return feedRequestsAndDispatchReadIndex(ls, n)
+}
+
 func (n *node) Run() {
 	firstRun := true
 	var leader bool
@@ -885,8 +894,9 @@ func (n *node) Run() {
 			}
 
 		case <-n.linState.activeRequestTimer.C:
-			// Time has expired.
-			// TODO: Do something.
+			if err := n.linState.timeExpired(n); err != nil {
+				return
+			}
 
 		case <-n.stop:
 			if peerId, has := groups().Peer(n.gid, Config.RaftId); has && n.AmLeader() {
