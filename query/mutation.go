@@ -21,9 +21,9 @@ func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.Directe
 	mr.Edges = append(mr.Edges, edge)
 }
 
-func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
+func ApplyMutations(ctx context.Context, linearized bool, m *protos.Mutations) error {
 	if worker.Config.ExpandEdge {
-		err := addInternalEdge(ctx, m)
+		err := addInternalEdge(ctx, linearized, m)
 		if err != nil {
 			return x.Wrapf(err, "While adding internal edges")
 		}
@@ -40,7 +40,7 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
 	return nil
 }
 
-func addInternalEdge(ctx context.Context, m *protos.Mutations) error {
+func addInternalEdge(ctx context.Context, linearized bool, m *protos.Mutations) error {
 	newEdges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
 	for _, mu := range m.Edges {
 		x.AssertTrue(mu.Op == protos.DirectedEdge_DEL || mu.Op == protos.DirectedEdge_SET)
@@ -57,7 +57,7 @@ func addInternalEdge(ctx context.Context, m *protos.Mutations) error {
 			// S * * case
 			if mu.Attr == x.Star {
 				// Fetch all the predicates and replace them
-				preds, err := GetNodePredicates(ctx, &protos.List{[]uint64{mu.GetEntity()}})
+				preds, err := GetNodePredicates(ctx, linearized, &protos.List{[]uint64{mu.GetEntity()}})
 				if err != nil {
 					return err
 				}

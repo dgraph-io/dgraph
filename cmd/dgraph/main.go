@@ -444,7 +444,8 @@ func shareHandler(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
-	if err = query.ApplyMutations(ctx, &protos.Mutations{Edges: mr.Edges}); err != nil {
+	var linearized bool = false // TODO: Uh, parse this out of the request somehow.
+	if err = query.ApplyMutations(ctx, linearized, &protos.Mutations{Edges: mr.Edges}); err != nil {
 		fail()
 		return
 	}

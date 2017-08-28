@@ -2990,6 +2990,9 @@ func TestToSubgraphInvalidArgs2(t *testing.T) {
 	require.Contains(t, err.Error(), "Got invalid keyword: invalidorderasc")
 }
 
+// TODO: Decide how we want to test linearized reads.
+const testLinearized = false
+
 func TestProcessGraph(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
@@ -3013,7 +3016,7 @@ func TestProcessGraph(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, testLinearized, sg, nil, ch)
 	err = <-ch
 	require.NoError(t, err)
 
@@ -3281,7 +3284,7 @@ func TestFilterRegexError(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, testLinearized, sg, nil, ch)
 	err = <-ch
 	require.Error(t, err)
 }
@@ -3959,7 +3962,7 @@ func TestToFastJSONOrderNameError(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, testLinearized, sg, nil, ch)
 	err = <-ch
 	require.Error(t, err)
 }
@@ -5557,7 +5560,7 @@ func TestNearGeneratorError(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, testLinearized, sg, nil, ch)
 	err = <-ch
 	require.Error(t, err)
 }
@@ -5579,7 +5582,7 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, testLinearized, sg, nil, ch)
 	err = <-ch
 	require.Error(t, err)
 }
@@ -5601,7 +5604,7 @@ func TestWithinGeneratorError(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, testLinearized, sg, nil, ch)
 	err = <-ch
 	require.Error(t, err)
 }
@@ -5658,7 +5661,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, testLinearized, sg, nil, ch)
 	err = <-ch
 	require.Error(t, err)
 }
