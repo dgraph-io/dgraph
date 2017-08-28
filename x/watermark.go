@@ -172,9 +172,9 @@ func (w *WaterMark) process() {
 		}
 		if !doWait {
 			atomic.StoreUint32(&w.waitingFor, 0)
-			// TODO: Some super-gross duplicated code, yes.
 			for len(waiterIndices) > 0 {
 				min := waiterIndices[0]
+				// Some partly duplicated code with what's below.
 				heap.Pop(&waiterIndices)
 				toNotify := waiters[min]
 				for _, ch := range toNotify {
@@ -190,6 +190,7 @@ func (w *WaterMark) process() {
 				if min > until {
 					break
 				}
+				// Partly duplicated with what's above.
 				heap.Pop(&waiterIndices)
 				toNotify := waiters[min]
 				for _, ch := range toNotify {
@@ -197,7 +198,6 @@ func (w *WaterMark) process() {
 				}
 				delete(waiters, min)
 			}
-			// TODO: To be consistent with what we had before, we should also notify ALL waiters if !doWait.
 
 			AssertTrue(atomic.CompareAndSwapUint64(&w.doneUntil, doneUntil, until))
 			w.elog.Printf("%s: Done until %d. Loops: %d\n", w.Name, until, loops)
