@@ -83,12 +83,8 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 }
 
 func (n *node) syncAllMarks(ctx context.Context, lastIndex uint64) {
-	n.waitForAppliedMark(ctx, lastIndex)
-	waitForSyncMark(ctx, n.gid, lastIndex)
-}
-
-func (n *node) waitForAppliedMark(ctx context.Context, lastIndex uint64) {
 	n.applied.WaitForMark(lastIndex)
+	waitForSyncMark(ctx, n.gid, lastIndex)
 }
 
 func (n *node) waitForSyncMark(ctx context.Context, lastIndex uint64) {
