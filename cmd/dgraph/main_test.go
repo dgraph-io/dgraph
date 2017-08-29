@@ -21,8 +21,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -124,26 +127,19 @@ func processToFastJSON(q string) string {
 }
 
 func runQuery(q string) (string, error) {
-	res, err := gql.Parse(gql.Request{Str: q, Http: true})
+	req, err := http.NewRequest("POST", "/query", bytes.NewBufferString(q))
 	if err != nil {
 		return "", err
 	}
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(queryHandler)
+	handler.ServeHTTP(rr, req)
 
-	var l query.Latency
-	ctx := defaultContext()
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
-
-	if err != nil {
-		return "", err
+	if status := rr.Code; status != http.StatusOK {
+		return "", fmt.Errorf("Unexpected status code: %v", status)
 	}
 
-	var buf bytes.Buffer
-	err = query.ToJson(qr.Latency, qr.Subgraphs, &buf, nil, false)
-	if err != nil {
-		return "", err
-	}
-	return string(buf.Bytes()), nil
+	return rr.Body.String(), nil
 }
 
 func runMutation(m string) error {
@@ -1454,6 +1450,12 @@ func TestListTypeSchemaChange(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, runMutation(m))
+
+	q = `schema{}`
+	res, err = runQuery(q)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"occupations","type":"string"}]}}`, res)
+
 }
 
 func TestMain(m *testing.M) {
