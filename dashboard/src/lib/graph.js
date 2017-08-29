@@ -122,7 +122,11 @@ export function getNodeLabel(properties: Object, regex: string): string {
   }
 
   let nameKey = getNameKey(properties, regex);
-  return properties[nameKey] || "";
+  let val = properties[nameKey];
+  if (Array.isArray(val) && val.length > 0) {
+    return val[0];
+  }
+  return val || "";
 }
 
 function getNameKey(properties, regex) {
@@ -475,7 +479,13 @@ export function processGraph(
       // it in a special manner.
       if (isSchema && prop === "tokenizer") {
         properties["attrs"][prop] = JSON.stringify(val);
-      } else if (Array.isArray(val)) {
+        // Important to check for typeof below, since we now allow multiple scalar values which
+        // would also be returned in an array.
+      } else if (
+        Array.isArray(val) &&
+        val.length > 0 &&
+        typeof val[0] === "object"
+      ) {
         // These are child nodes, lets add them to the queue.
         let arr = val, xposition = 1;
         for (let j = 0; j < arr.length; j++) {
@@ -490,7 +500,7 @@ export function processGraph(
             }
           });
         }
-      } else if (typeof val === "object") {
+      } else if (typeof val === "object" && !Array.isArray(val)) {
         if (prop === "@facets") {
           extractFacets(val, edgeAttributes, properties);
         }

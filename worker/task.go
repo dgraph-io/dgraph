@@ -274,7 +274,8 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, gid)
 		var vals []types.Val
-		if listType {
+		// Even if its a list type and value is asked in a language we return that.
+		if listType && len(q.Langs) == 0 {
 			vals, err = pl.AllValues()
 		} else {
 			var val types.Val
@@ -767,11 +768,6 @@ func filterGeoFunction(arg funcArgs) {
 
 func filterStringFunction(arg funcArgs) {
 	attr := arg.q.Attr
-	if schema.State().IsList(attr) {
-		// TODO - Handle list type with langs later.
-		return
-	}
-
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	var values []types.Val
 	filteredUids := make([]uint64, 0, len(uids.Uids))

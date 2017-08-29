@@ -8968,6 +8968,7 @@ func TestMultipleValueFilter2(t *testing.T) {
 }
 
 func TestMultipleValueArray(t *testing.T) {
+	// Skip for now, fix later.
 	t.Skip()
 	populateGraph(t)
 	query := `
