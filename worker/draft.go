@@ -288,6 +288,8 @@ func (n *node) checkForStaleIndices(all bool) {
 		predicates = schema.State().IndexedFields(n.gid)
 	} else {
 		preds := make(map[string]struct{})
+		// TODO: Disable snapshots and persist somewhere that we need to clean
+		// stale indices or else the information would be lost on next snapshot
 		for _, entry := range n.sctx.es {
 			if len(entry.Data) == 0 || entry.Type != raftpb.EntryNormal {
 				continue
