@@ -548,8 +548,8 @@ func (n *node) processMembership(index uint64, mm *protos.Membership) error {
 
 func (n *node) process(index uint64, proposal *protos.Proposal, pending chan struct{}) {
 	defer func() {
-		n.applied.Ch <- x.Mark{Index: index, Done: true}
-		posting.SyncMarkFor(n.gid).Ch <- x.Mark{Index: index, Done: true}
+		n.applied.Done(index)
+		posting.SyncMarkFor(n.gid).Done(index)
 	}()
 
 	pending <- struct{}{} // This will block until we can write to it.
@@ -577,11 +577,9 @@ func (n *node) processApplyCh() {
 	pending := make(chan struct{}, numPendingMutations)
 
 	for e := range n.applyCh {
-		mark := x.Mark{Index: e.Index, Done: true}
-
 		if len(e.Data) == 0 {
-			n.applied.Ch <- mark
-			posting.SyncMarkFor(n.gid).Ch <- mark
+			n.applied.Done(e.Index)
+			posting.SyncMarkFor(n.gid).Done(e.Index)
 			continue
 		}
 
@@ -597,8 +595,8 @@ func (n *node) processApplyCh() {
 
 			cs := n.Raft().ApplyConfChange(cc)
 			n.SetConfState(cs)
-			n.applied.Ch <- mark
-			posting.SyncMarkFor(n.gid).Ch <- mark
+			n.applied.Done(e.Index)
+			posting.SyncMarkFor(n.gid).Done(e.Index)
 			continue
 		}
 
@@ -624,8 +622,8 @@ func (n *node) processApplyCh() {
 				// should use new schema
 				n.waitForSyncMark(n.ctx, e.Index-1)
 				if err := n.processSchemaMutations(e, proposal.Mutations); err != nil {
-					n.applied.Ch <- mark
-					posting.SyncMarkFor(n.gid).Ch <- mark
+					n.applied.Done(e.Index)
+					posting.SyncMarkFor(n.gid).Done(e.Index)
 					n.props.Done(proposal.Id, err)
 					continue
 				}
@@ -770,9 +768,8 @@ func (n *node) Run() {
 				// then doneUntil would be set as 4 as soon as Mark{4,true} is done and before
 				// Mark{3, false} is emitted. So it's safer to emit watermarks as soon as
 				// possible sequentially
-				status := x.Mark{Index: entry.Index, Done: false}
-				n.applied.Ch <- status
-				posting.SyncMarkFor(n.gid).Ch <- status
+				n.applied.Begin(entry.Index)
+				posting.SyncMarkFor(n.gid).Begin(entry.Index)
 
 				// Just queue up to be processed. Don't wait on them.
 				n.applyCh <- entry

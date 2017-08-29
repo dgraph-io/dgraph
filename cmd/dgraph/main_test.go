@@ -1370,8 +1370,6 @@ func TestMain(m *testing.M) {
 
 	dir1, dir2, _ := prepare()
 
-	// we need watermarks for reindexing
-	x.AssertTrue(!x.IsTestRun())
 	// Parse GQL into internal query representation.
 	r := m.Run()
 	closeAll(dir1, dir2)

@@ -265,7 +265,6 @@ func TestParse8_Error(t *testing.T) {
 var ps *badger.KV
 
 func TestMain(m *testing.M) {
-	x.SetTestRun()
 	x.Init()
 
 	dir, err := ioutil.TempDir("", "storetest_")

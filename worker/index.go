@@ -18,10 +18,7 @@
 package worker
 
 import (
-	"time"
-
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
@@ -34,9 +31,7 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool)
 
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
-	if err := n.syncAllMarks(ctx, rv.Index-1); err != nil {
-		return err
-	}
+	n.syncAllMarks(ctx, rv.Index-1)
 
 	x.AssertTruef(schema.State().IsIndexed(attr) == rebuild, "Attr %s index mismatch", attr)
 	// Remove index edges
@@ -58,9 +53,7 @@ func (n *node) rebuildOrDelRevEdge(ctx context.Context, attr string, rebuild boo
 
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
-	if err := n.syncAllMarks(ctx, rv.Index-1); err != nil {
-		return err
-	}
+	n.syncAllMarks(ctx, rv.Index-1)
 
 	x.AssertTruef(schema.State().IsReversed(attr) == rebuild, "Attr %s reverse mismatch", attr)
 	posting.DeleteReverseEdges(ctx, attr)
@@ -79,9 +72,7 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 
 	// Current raft index has pending applied watermark
 	// Raft index starts from 1
-	if err := n.syncAllMarks(ctx, rv.Index-1); err != nil {
-		return err
-	}
+	n.syncAllMarks(ctx, rv.Index-1)
 	posting.DeleteCountIndex(ctx, attr)
 	if rebuild {
 		if err := posting.RebuildCountIndex(ctx, attr); err != nil {
@@ -91,27 +82,9 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 	return nil
 }
 
-func (n *node) syncAllMarks(ctx context.Context, lastIndex uint64) error {
-	n.waitForAppliedMark(ctx, lastIndex)
+func (n *node) syncAllMarks(ctx context.Context, lastIndex uint64) {
+	n.applied.WaitForMark(lastIndex)
 	waitForSyncMark(ctx, n.gid, lastIndex)
-	return nil
-}
-
-func (n *node) waitForAppliedMark(ctx context.Context, lastIndex uint64) error {
-	// Wait for applied to reach till lastIndex
-	for n.applied.WaitingFor() {
-		doneUntil := n.applied.DoneUntil() // applied until.
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("syncAllMarks waiting, appliedUntil:%d lastIndex: %d",
-				doneUntil, lastIndex)
-		}
-		if doneUntil >= lastIndex {
-			break // Do the check before sleep.
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	return nil
 }
 
 func (n *node) waitForSyncMark(ctx context.Context, lastIndex uint64) {
@@ -124,15 +97,5 @@ func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) {
 
 	// Wait for posting lists applying.
 	w := posting.SyncMarkFor(gid)
-	for w.WaitingFor() {
-		doneUntil := w.DoneUntil() // synced until.
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("syncAllMarks waiting, syncedUntil:%d lastIndex: %d",
-				doneUntil, lastIndex)
-		}
-		if doneUntil >= lastIndex {
-			break // Do the check before sleep.
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	w.WaitForMark(lastIndex)
 }

@@ -372,7 +372,7 @@ RETRY:
 	// Mark watermarks as done.
 	if req.line != 0 && req.mark != nil {
 		atomic.AddUint64(&d.rdfs, uint64(req.size()))
-		req.mark.Ch <- x.Mark{Index: req.line, Done: true}
+		req.mark.Done(req.line)
 	}
 	return nil
 }
@@ -489,7 +489,7 @@ func (d *Dgraph) BatchSetWithMark(r *Req, file string, line uint64) error {
 	if sm.mark != nil && line != 0 {
 		r.mark = sm.mark
 		r.line = line
-		sm.mark.Ch <- x.Mark{Index: line}
+		sm.mark.Begin(line)
 	}
 
 L:
