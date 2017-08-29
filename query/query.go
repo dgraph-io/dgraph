@@ -964,7 +964,7 @@ func toFacetsFilter(gft *gql.FilterTree) (*protos.FilterTree, error) {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(linearized bool, sg *SubGraph) *protos.Query {
+func createTaskQuery(sg *SubGraph) *protos.Query {
 	attr := sg.Attr
 	// Might be safer than just checking first byte due to i18n
 	reverse := strings.HasPrefix(attr, "~")
@@ -980,7 +980,6 @@ func createTaskQuery(linearized bool, sg *SubGraph) *protos.Query {
 		DoCount:      len(sg.Filters) == 0 && sg.Params.DoCount,
 		FacetParam:   sg.Params.Facet,
 		FacetsFilter: sg.facetsFilter,
-		Linearized:   linearized,
 	}
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
@@ -1608,7 +1607,7 @@ func uniquePreds(vl []*protos.ValueList) map[string]struct{} {
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
-func ProcessGraph(ctx context.Context, linearized bool, sg, parent *SubGraph, rch chan error) {
+func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if sg.Attr == "_uid_" {
 		// We dont need to call ProcessGraph for _uid_, as we already have uids
 		// populated from parent and there is nothing to process but uidMatrix
@@ -1661,7 +1660,7 @@ func ProcessGraph(ctx context.Context, linearized bool, sg, parent *SubGraph, rc
 				return
 			}
 		} else {
-			taskQuery := createTaskQuery(linearized, sg)
+			taskQuery := createTaskQuery(sg)
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 			if err != nil {
 				if tr, ok := trace.FromContext(ctx); ok {
@@ -1736,7 +1735,7 @@ func ProcessGraph(ctx context.Context, linearized bool, sg, parent *SubGraph, rc
 			filter.SrcUIDs = sg.DestUIDs
 			// Passing the pointer is okay since the filter only reads.
 			filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
-			go ProcessGraph(ctx, linearized, filter, sg, filterChan)
+			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
 		var filterErr error
@@ -1781,7 +1780,7 @@ func ProcessGraph(ctx context.Context, linearized bool, sg, parent *SubGraph, rc
 		// If we are asked for count, we don't need to change the order of results.
 		if !sg.Params.DoCount {
 			// We need to sort first before pagination.
-			if err = sg.applyOrderAndPagination(ctx, linearized); err != nil {
+			if err = sg.applyOrderAndPagination(ctx); err != nil {
 				rch <- err
 				return
 			}
@@ -1819,7 +1818,7 @@ func ProcessGraph(ctx context.Context, linearized bool, sg, parent *SubGraph, rc
 			if child.Params.Expand == "_all_" {
 				// Get the predicate list for expansion. Otherwise we already
 				// have the list populated.
-				child.ExpandPreds, err = GetNodePredicates(ctx, linearized, sg.DestUIDs)
+				child.ExpandPreds, err = GetNodePredicates(ctx, sg.DestUIDs)
 				if err != nil {
 					rch <- err
 					return
@@ -1878,7 +1877,7 @@ func ProcessGraph(ctx context.Context, linearized bool, sg, parent *SubGraph, rc
 			// We dont have to execute these nodes.
 			continue
 		}
-		go ProcessGraph(ctx, linearized, child, sg, childChan)
+		go ProcessGraph(ctx, child, sg, childChan)
 	}
 
 	var childErr error
@@ -1918,7 +1917,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 
 // applyOrderAndPagination orders each posting list by a given attribute
 // before applying pagination.
-func (sg *SubGraph) applyOrderAndPagination(ctx context.Context, linearized bool) error {
+func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetOrder) == 0 {
 		return nil
 	}
@@ -1941,13 +1940,12 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context, linearized bool
 		sg.Params.Count = 1000
 	}
 	sort := &protos.SortMessage{
-		Attr:       sg.Params.Order,
-		Langs:      sg.Params.Langs,
-		UidMatrix:  sg.uidMatrix,
-		Offset:     int32(sg.Params.Offset),
-		Count:      int32(sg.Params.Count),
-		Desc:       sg.Params.OrderDesc,
-		Linearized: linearized,
+		Attr:      sg.Params.Order,
+		Langs:     sg.Params.Langs,
+		UidMatrix: sg.uidMatrix,
+		Offset:    int32(sg.Params.Offset),
+		Count:     int32(sg.Params.Count),
+		Desc:      sg.Params.OrderDesc,
 	}
 	result, err := worker.SortOverNetwork(ctx, sort)
 	if err != nil {
@@ -2111,11 +2109,11 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 	return f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
-func GetNodePredicates(ctx context.Context, linearized bool, uids *protos.List) ([]*protos.ValueList, error) {
+func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.ValueList, error) {
 	temp := new(SubGraph)
 	temp.Attr = "_predicate_"
 	temp.SrcUIDs = uids
-	taskQuery := createTaskQuery(linearized, temp)
+	taskQuery := createTaskQuery(temp)
 	result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 	if err != nil {
 		return nil, err
@@ -2204,8 +2202,7 @@ type QueryRequest struct {
 	Latency  *Latency
 	GqlQuery *gql.Result
 
-	Subgraphs  []*SubGraph
-	Linearized bool
+	Subgraphs []*SubGraph
 
 	vars         map[string]varValue
 	SchemaUpdate []*protos.SchemaUpdate
@@ -2300,15 +2297,15 @@ func (req *QueryRequest) ProcessQuery(ctx context.Context) error {
 			if sg.Params.Alias == "shortest" {
 				// We allow only one shortest path block per query.
 				go func() {
-					shortestSg, err = ShortestPath(ctx, req.Linearized, sg)
+					shortestSg, err = ShortestPath(ctx, sg)
 					errChan <- err
 				}()
 			} else if sg.Params.Alias == "recurse" {
 				go func() {
-					errChan <- Recurse(ctx, sg, req.Linearized)
+					errChan <- Recurse(ctx, sg)
 				}()
 			} else {
-				go ProcessGraph(ctx, req.Linearized, sg, nil, errChan)
+				go ProcessGraph(ctx, sg, nil, errChan)
 			}
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Graph processed")
@@ -2401,7 +2398,7 @@ func (qr *QueryRequest) processNquads(ctx context.Context, nquads gql.NQuads, ne
 		tr.LazyPrintf("converted nquads to directed edges")
 	}
 	m := protos.Mutations{Edges: mr.Edges, Schema: qr.SchemaUpdate}
-	if err = ApplyMutations(ctx, qr.Linearized, &m); err != nil {
+	if err = ApplyMutations(ctx, &m); err != nil {
 		return x.Wrapf(&InternalError{err: err}, "failed to apply mutations")
 	}
 	return nil

@@ -131,7 +131,7 @@ func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	return cost, fcs, rerr
 }
 
-func (start *SubGraph) expandOut(ctx context.Context, linearized bool,
+func (start *SubGraph) expandOut(ctx context.Context,
 	adjacencyMap map[uint64]map[uint64]mapItem, next chan bool, rch chan error) {
 
 	var numEdges uint64
@@ -154,7 +154,7 @@ func (start *SubGraph) expandOut(ctx context.Context, linearized bool,
 		}
 		rrch := make(chan error, len(exec))
 		for _, sg := range exec {
-			go ProcessGraph(ctx, linearized, sg, dummy, rrch)
+			go ProcessGraph(ctx, sg, dummy, rrch)
 		}
 
 		for range exec {
@@ -271,7 +271,7 @@ func (temp *SubGraph) copyFiltersRecurse(sg *SubGraph) {
 	}
 }
 
-func KShortestPath(ctx context.Context, linearized bool, sg *SubGraph) ([]*SubGraph, error) {
+func KShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
 	if sg.Params.Alias != "shortest" {
 		return nil, x.Errorf("Invalid shortest path query")
@@ -301,7 +301,7 @@ func KShortestPath(ctx context.Context, linearized bool, sg *SubGraph) ([]*SubGr
 	//cycles := 0
 	expandErr := make(chan error, 2)
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
-	go sg.expandOut(ctx, linearized, adjacencyMap, next, expandErr)
+	go sg.expandOut(ctx, adjacencyMap, next, expandErr)
 
 	// In k shortest path we can't have this. We store the path till a node in every
 	// node.
@@ -434,7 +434,7 @@ func KShortestPath(ctx context.Context, linearized bool, sg *SubGraph) ([]*SubGr
 // 22
 // 23     return dist[], prev[]
 
-func ShortestPath(ctx context.Context, linearized bool, sg *SubGraph) ([]*SubGraph, error) {
+func ShortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
 	if sg.Params.Alias != "shortest" {
 		return nil, x.Errorf("Invalid shortest path query")
@@ -446,7 +446,7 @@ func ShortestPath(ctx context.Context, linearized bool, sg *SubGraph) ([]*SubGra
 	}
 
 	if numPaths > 1 {
-		return KShortestPath(ctx, linearized, sg)
+		return KShortestPath(ctx, sg)
 	}
 	pq := make(priorityQueue, 0)
 	heap.Init(&pq)
@@ -467,7 +467,7 @@ func ShortestPath(ctx context.Context, linearized bool, sg *SubGraph) ([]*SubGra
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
 	adjacencyMap := make(map[uint64]map[uint64]mapItem)
-	go sg.expandOut(ctx, linearized, adjacencyMap, next, expandErr)
+	go sg.expandOut(ctx, adjacencyMap, next, expandErr)
 
 	// map to store the min cost and parent of nodes.
 	dist := make(map[uint64]nodeInfo)
