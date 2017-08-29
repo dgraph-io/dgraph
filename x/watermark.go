@@ -172,16 +172,6 @@ func (w *WaterMark) process() {
 		}
 		if !doWait {
 			atomic.StoreUint32(&w.waitingFor, 0)
-			for len(waiterIndices) > 0 {
-				min := waiterIndices[0]
-				// Some partly duplicated code with what's below.
-				heap.Pop(&waiterIndices)
-				toNotify := waiters[min]
-				for _, ch := range toNotify {
-					close(ch)
-				}
-				delete(waiters, min)
-			}
 		}
 
 		if until != doneUntil {
