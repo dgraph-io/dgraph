@@ -815,12 +815,16 @@ func (n *node) AmLeader() bool {
 }
 
 func waitLinearizableRead(ctx context.Context, gid uint32) error {
+	log.Printf("Wait linearizable read for gid %d\n", gid)
 	n := groups().Node(gid)
 	replyCh := n.linState.readIndex()
+	log.Printf("readIndex() returned...\n")
 	index := <-replyCh
+	log.Printf("read index %d from replyCh\n", index)
 	if index == raft.None {
 		return fmt.Errorf("TODO: raftIndex none")
 	}
 	n.Applied.WaitForMark(index)
+	log.Printf("Mark (for index %d) has been applied\n", index)
 	return nil
 }
