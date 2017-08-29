@@ -214,6 +214,8 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "dob_day", 24, "1909-05-05", nil)
 	addEdgeToValue(t, "dob_day", 25, "1909-01-10", nil)
 	addEdgeToValue(t, "dob_day", 31, "1901-01-15", nil)
+	addEdgeToValue(t, "graduation", 31, "1933-01-01", nil)
+	addEdgeToValue(t, "graduation", 31, "1935-01-01", nil)
 
 	addEdgeToValue(t, "dob", 1, "1910-01-01", nil)
 	addEdgeToValue(t, "dob", 23, "1910-01-02", nil)
@@ -1304,7 +1306,7 @@ func TestGroupByMulti(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: uid( 1)) {
+			me(func: uid(1)) {
 				friend @groupby(friend,name) {
 					count(_uid_)
 				}
@@ -6783,10 +6785,10 @@ value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 royal_title                    : string @index(hash, term, fulltext) .
 noindex_name                   : string .
-school		                   : uid @count .
+school                         : uid @count .
 lossy                          : string @index(term) .
-occupations					   : [string] @index(term) .
-graduation					   : [dateTime] @index(year) .
+occupations                    : [string] @index(term) .
+graduation                     : [dateTime] @index(year) @count .
 `
 
 func TestMain(m *testing.M) {
@@ -8580,7 +8582,7 @@ func TestUidInFunction2(t *testing.T) {
 		js)
 }
 
-func TestUidInFunctioniAtRoot(t *testing.T) {
+func TestUidInFunctionAtRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
 	{
@@ -8937,6 +8939,34 @@ func TestMathCeil2(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
 }
 
+func TestMultipleValueFilter(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: ge(graduation, "1930")) {
+			name
+			graduation
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","graduation":"1932-01-01T00:00:00Z"},{"name":"Andrea","graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`, js)
+}
+
+func TestMultipleValueFilter2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: le(graduation, "1933")) {
+			name
+			graduation
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":[{"name":"Michonne","graduation":"1932-01-01T00:00:00Z"}]}}`, js)
+}
+
 func TestMultipleValueArray(t *testing.T) {
 	t.Skip()
 	populateGraph(t)
@@ -8950,4 +8980,52 @@ func TestMultipleValueArray(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","graduation":["1932-01-01T00:00:00Z"]}]}}`, js)
+}
+
+func TestMultipleValueHasAndCount(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: has(graduation)) {
+			name
+			count(graduation)
+			graduation
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","count(graduation)":1,"graduation":"1932-01-01T00:00:00Z"},{"name":"Andrea","count(graduation)":2,"graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`, js)
+}
+
+func TestMultipleValueSortError(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: anyofterms(name, "Michonne Rick"), orderdesc: graduation) {
+			name
+			graduation
+		}
+	}
+	`
+	ctx := defaultContext()
+	_, err := processToFastJsonReqCtx(t, query, ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Sorting not supported on attr: graduation of type: [scalar]")
+}
+
+func TestMultipleValueGroupByError(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(1)) {
+			friend @groupby(name, graduation) {
+				count(_uid_)
+			}
+		}
+	}
+	`
+	ctx := defaultContext()
+	_, err := processToFastJsonReqCtx(t, query, ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Groupby not allowed for attr: graduation of type list")
 }

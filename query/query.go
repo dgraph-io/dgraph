@@ -1828,6 +1828,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if sg.IsGroupBy() {
 		// Add the attrs required by groupby nodes
 		for _, it := range sg.Params.groupbyAttrs {
+			if schema.State().IsList(it.Attr) {
+				rch <- x.Errorf("Groupby not allowed for attr: %s of type list", it.Attr)
+				return
+			}
 			sg.Children = append(sg.Children, &SubGraph{
 				Attr: it.Attr,
 				Params: params{
