@@ -1397,6 +1397,65 @@ func TestMultipleValues(t *testing.T) {
 	require.Equal(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
 }
 
+func TestListTypeSchemaChange(t *testing.T) {
+	schema.ParseBytes([]byte(""), 1)
+	m := `
+	mutation {
+		schema {
+			occupations: [string] .
+		}
+	}`
+
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	m = `
+		mutation {
+			set {
+				<0x88> <occupations> "Pianist" .
+				<0x88> <occupations> "Software Engineer" .
+			}
+		}
+	`
+
+	err = runMutation(m)
+	require.NoError(t, err)
+
+	q := `{
+			me(func: uid(0x88)) {
+				occupations
+			}
+		}`
+	res, err := runQuery(q)
+	require.NoError(t, err)
+	require.Equal(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
+
+	m = `
+		mutation {
+			schema {
+				occupations: string .
+			}
+		}
+	`
+
+	// Cant change from list-type to non-list till we have data.
+	err = runMutation(m)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Schema change not allowed from [string] => string")
+
+	sm := `
+		mutation {
+			delete {
+				* <occupations> * .
+			}
+		}
+	`
+	err = runMutation(sm)
+	require.NoError(t, err)
+
+	require.NoError(t, runMutation(m))
+}
+
 func TestMain(m *testing.M) {
 	dc := dgraph.DefaultConfig
 	dc.AllottedMemory = 2048.0
