@@ -34,6 +34,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -368,9 +369,8 @@ func commitOne(l *List) {
 	}
 }
 
-// TODO: Remove special group stuff.
-func CommitLists(numRoutines int, group uint32) {
-	if group == 0 {
+func CommitLists(numRoutines int, gid uint32) {
+	if gid == 0 {
 		return
 	}
 
@@ -389,24 +389,31 @@ func CommitLists(numRoutines int, group uint32) {
 		}()
 	}
 
-	lcache.Each(func(k string, l *List) {
+	lcache.Each(func(k []byte, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
+		pk := x.Parse(k)
+		if group.BelongsTo(pk.Attr) != gid {
+			return
+		}
+
 		workChan <- l
 	})
 	close(workChan)
 	wg.Wait()
 }
 
-// EvictAll removes all pl's stored in memory for given group
-// TODO: Remove all special group stuff.
-func EvictGroup(group uint32) {
-	// This is serialized by raft so no need to worry about race condition from getOrCreate
-	// request from same group
-	// lcache.Each(func(k uint64, l *List) {
-	// 	l.SetForDeletion()
-	// })
-	// TODO: Do we need to do this?
-	CommitLists(1, group)
+// This doesn't sync, so call this only when you don't care about dirty pl's in
+// memory(for example before populating snapshot) or you know that there are no dirty
+// pl's(for example after calling waitforsyncmark)
+func EvictGroup(gid uint32) {
+	err := lcache.clear(func(key []byte) bool {
+		pk := x.Parse(key)
+		if group.BelongsTo(pk.Attr) == gid {
+			return true
+		}
+		return false
+	})
+	x.Checkf(err, "Error while evicting group %d", gid)
 }

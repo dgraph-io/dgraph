@@ -36,6 +36,9 @@ var (
 // In essence, we just want one server to be handing out new uids.
 func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	node := groups().Node(leaseGid)
+	// TODO: Fix when we move to linearizable reads, need to check if we are the leader, might be
+	// based on leader leases. If this node gets partitioned and unless checkquorum is enabled, this
+	// node would still think that it's the leader.
 	if !node.AmLeader() {
 		return &emptyAssignedIds, x.Errorf("Assigning UIDs is only allowed on leader.")
 	}

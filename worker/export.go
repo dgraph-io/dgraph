@@ -335,6 +335,7 @@ func export(gid uint32, bdir string) error {
 	return err
 }
 
+// TODO: How do we want to handle export for group, do we pause mutations, sync all and then export ?
 func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos.ExportPayload {
 	n := groups().Node(gid)
 	if n.AmLeader() {

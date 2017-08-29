@@ -156,6 +156,7 @@ func TestCheckSchema(t *testing.T) {
 	require.NoError(t, checkSchema(s1))
 }
 
+/*
 func TestNeedReindexing(t *testing.T) {
 	s1 := protos.SchemaUpdate{ValueType: uint32(types.UidID)}
 	s2 := protos.SchemaUpdate{ValueType: uint32(types.UidID)}
@@ -177,3 +178,4 @@ func TestNeedReindexing(t *testing.T) {
 	s2 = protos.SchemaUpdate{ValueType: uint32(types.FloatID), Directive: protos.SchemaUpdate_NONE}
 	require.True(t, needReindexing(s1, s2))
 }
+*/

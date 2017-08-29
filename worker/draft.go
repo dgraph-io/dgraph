@@ -23,7 +23,9 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -41,6 +43,12 @@ import (
 
 const (
 	errorNodeIDExists = "Error Node ID already exists in the cluster"
+)
+
+const (
+	opSet    byte = 0x01
+	opDel    byte = 0x02
+	opSchema byte = 0x03
 )
 
 type peerPoolEntry struct {
@@ -105,6 +113,8 @@ func (p *peerPool) set(id uint64, addr string, pl *pool) {
 type proposalCtx struct {
 	ch  chan error
 	ctx context.Context
+	cnt int
+	err error
 }
 
 type proposals struct {
@@ -122,6 +132,15 @@ func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
 	return true
 }
 
+func (p *proposals) IncRef(pid uint32) {
+	p.Lock()
+	defer p.Unlock()
+	if pd, has := p.ids[pid]; has {
+		pd.cnt += 1
+	}
+	return
+}
+
 func (p *proposals) Ctx(pid uint32) (context.Context, bool) {
 	p.RLock()
 	defer p.RUnlock()
@@ -135,13 +154,21 @@ func (p *proposals) Done(pid uint32, err error) {
 	p.Lock()
 	pd, has := p.ids[pid]
 	if has {
+		pd.cnt -= 1
+		if err != nil {
+			pd.err = err
+		}
+		if pd.cnt > 0 {
+			p.Unlock()
+			return
+		}
 		delete(p.ids, pid)
 	}
 	p.Unlock()
 	if !has {
 		return
 	}
-	pd.ch <- err
+	pd.ch <- pd.err
 }
 
 func (p *proposals) Has(pid uint32) bool {
@@ -154,6 +181,262 @@ func (p *proposals) Has(pid uint32) bool {
 type sendmsg struct {
 	to   uint64
 	data []byte
+}
+
+type task struct {
+	id              uint32
+	ridx            uint64 // raft index corresponding to the task
+	numDependencies int32
+	proposal        *protos.Proposal // storing proposal to do minimal code changes
+}
+
+// 1. Whenever a new task comes we check whether it has any dependencies or not
+// and register it as a childtask of all the tasks it is dependent on.
+// 2. If there are no dependencies it can execute immediately.
+// 3. When a task is finished we iterate over the childtasks and check if they
+// can be executed or not and remove the task id from childTasks map
+// 4. On completion of task we also remove the task from the pending map.
+// 5. If the task is too big scheduler can decide to breakup the task into smaller
+// chunks and run them in parallel.
+type schedulerCtx struct {
+	sync.Mutex
+	// Maps op,predicate,uid pair to the list of pending tasks which mutates them,
+	// predicates to the list of pending tasks which does schema mutations on them.
+	// Used to find dependency for a new task
+	pending map[string][]uint32
+
+	// stores the list of tasks which are dependent on a given taskid
+	childTasks map[uint32][]*task
+
+	// raft entries which were found on restart
+	es []raftpb.Entry
+}
+
+func (s *schedulerCtx) init() {
+	s.pending = make(map[string][]uint32)
+	s.childTasks = make(map[uint32][]*task)
+}
+
+func (s *schedulerCtx) addPending(key string, tid uint32) {
+	s.Lock()
+	defer s.Unlock()
+	pending := s.pending[key]
+	len := len(pending)
+	// ensures same task is not appended twice, we can just check the last
+	// task id, since this function is serialized
+	if len == 0 || pending[len-1] != tid {
+		s.pending[key] = append(s.pending[key], tid)
+	}
+}
+
+func (s *schedulerCtx) removePending(key string, tid uint32) {
+	s.Lock()
+	defer s.Unlock()
+	pending := s.pending[key]
+	idx := sort.Search(len(pending), func(idx int) bool {
+		return pending[idx] == tid
+	})
+	if idx >= len(pending) {
+		return
+	}
+	if len(pending) == 1 {
+		delete(s.pending, key)
+		return
+	}
+	// Under the assumption that number of pending tasks would typically be less
+	copy(pending[idx:], pending[idx+1:])
+}
+
+// Since submit is serialized we needn't worry about returned slice
+// being changed in between
+func (s *schedulerCtx) pendingTasks(key string) []uint32 {
+	s.Lock()
+	defer s.Unlock()
+	return s.pending[key]
+}
+
+func (s *schedulerCtx) addChildTask(parentId uint32, t *task) bool {
+	s.Lock()
+	defer s.Unlock()
+	if children, ok := s.childTasks[parentId]; ok {
+		children = append(children, t)
+		return true
+	}
+	return false
+}
+
+func (s *schedulerCtx) delAndGetChildren(id uint32) []*task {
+	s.Lock()
+	defer s.Unlock()
+	if children, ok := s.childTasks[id]; ok {
+		delete(s.childTasks, id)
+		return children
+	}
+	return nil
+}
+
+func taskKey(op byte, attribute string, uid uint64) string {
+	return fmt.Sprintf("%s%d%s%d", op, len(attribute), attribute, uid)
+}
+
+func (n *node) checkForStaleIndices(all bool) {
+	var predicates []string
+	// Find all indexed predicates and fix them.
+	// Would be needed in case when we get a snapshot. We can avoid this if
+	// leader can pause and give us a snapshot.
+	if all {
+		predicates = schema.State().IndexedFields(n.gid)
+	} else {
+		preds := make(map[string]struct{})
+		for _, entry := range n.sctx.es {
+			if len(entry.Data) == 0 || entry.Type != raftpb.EntryNormal {
+				continue
+			}
+			proposal := &protos.Proposal{}
+			if err := proposal.Unmarshal(entry.Data); err != nil {
+				log.Fatalf("Unable to unmarshal proposal: %v %q\n", err, entry.Data)
+			}
+			if proposal.Mutations != nil {
+				// Only the following predicates can have stale indices
+				for _, edge := range proposal.Mutations.Edges {
+					preds[edge.Attr] = struct{}{}
+				}
+			}
+		}
+		for pred := range preds {
+			if schema.State().IsIndexed(pred) {
+				predicates = append(predicates, pred)
+			}
+		}
+	}
+
+	for _, predicate := range predicates {
+		posting.RemoveStaleIndices(n.ctx, predicate)
+	}
+}
+
+// checks whether the given task can be executed right away or not, also registers
+// dependencies and child tasks. This function is serialized
+func (n *node) submit(t *task) {
+	n.applied.Begin(t.ridx)
+	posting.SyncMarkFor(n.gid).Begin(t.ridx)
+	n.props.IncRef(t.proposal.Id)
+
+	// membership proposals
+	if t.proposal.Mutations == nil {
+		go n.process(t)
+		return
+	}
+
+	// 1. Register dependencies and check for conflicts, only one of
+	// schema muations or edges would be present
+	parentsMap := make(map[uint32]struct{})
+	for _, supdate := range t.proposal.Mutations.Schema {
+		key := taskKey(opSchema, supdate.Predicate, 0)
+		n.sctx.addPending(key, t.id)
+		// Whenver schema is going to get processed, the processing would
+		// take care of waiting for sync/applied watermark. Even scheduler would
+		// have to do force sync to disk before rebuilding index, it can be
+		// postponed to processing time.
+
+		// 2. Check for conflicts
+		// a) waits for any other schema mutation running on same predicate
+		n.addToParentMap(parentsMap, key, t)
+	}
+	for _, edge := range t.proposal.Mutations.Edges {
+		var op byte
+		if edge.Op == protos.DirectedEdge_SET {
+			op = opSet
+		} else if edge.Op == protos.DirectedEdge_DEL {
+			op = opDel
+		}
+		key := taskKey(op, edge.Attr, edge.Entity)
+		n.sctx.addPending(key, t.id)
+
+		// 2. Check for conflicts
+		// a) waits on any other schema muation running on same predicate
+		// b) If it's scalar value, wait on any previous set/del
+		// c) If it's uid value and it's set, wait on previous del's
+		// d) If it's uid value and it's del, wait on previous set's
+		key = taskKey(opSchema, edge.Attr, 0)
+		n.addToParentMap(parentsMap, key, t)
+		// TODO: Need to add another case after multiple values
+		if posting.TypeID(edge) != types.UidID {
+			key = taskKey(opSet, edge.Attr, edge.Entity)
+			n.addToParentMap(parentsMap, key, t)
+			key = taskKey(opDel, edge.Attr, edge.Entity)
+			n.addToParentMap(parentsMap, key, t)
+		} else if op == opSet {
+			key = taskKey(opDel, edge.Attr, edge.Entity)
+			n.addToParentMap(parentsMap, key, t)
+		} else if op == opDel {
+			key = taskKey(opSet, edge.Attr, edge.Entity)
+			n.addToParentMap(parentsMap, key, t)
+		}
+	}
+
+	// No dependencies so can schedule now
+	if len(parentsMap) == 0 {
+		go n.process(t)
+		return
+	}
+
+	// 3. Register childTasks
+	t.numDependencies++ // Ensures that task doesn't get scheduled before we add to childTasks
+	for k := range parentsMap {
+		// parent task could have finished by now
+		if n.sctx.addChildTask(k, t) {
+			t.numDependencies += 1
+		}
+	}
+	t.numDependencies--
+	if t.numDependencies == 0 {
+		go n.process(t)
+	}
+}
+
+func (n *node) addToParentMap(parentsMap map[uint32]struct{}, key string, t *task) {
+	tasks := n.sctx.pendingTasks(key)
+	for _, id := range tasks {
+		if id != t.id {
+			parentsMap[id] = struct{}{}
+		}
+	}
+}
+
+// Remove all the data related to the task and checks if any childtasks can be scheduled
+func (n *node) finished(t *task) {
+	// membership proposals
+	if t.proposal.Mutations == nil {
+		return
+	}
+
+	// Remove self from dependencies map
+	for _, supdate := range t.proposal.Mutations.Schema {
+		key := taskKey(opSchema, supdate.Predicate, 0)
+		n.sctx.removePending(key, t.id)
+	}
+	for _, edge := range t.proposal.Mutations.Edges {
+		var op byte
+		if edge.Op == protos.DirectedEdge_SET {
+			op = opSet
+		} else if edge.Op == protos.DirectedEdge_DEL {
+			op = opDel
+		}
+		key := taskKey(op, edge.Attr, edge.Entity)
+		n.sctx.removePending(key, t.id)
+	}
+
+	// schedule tasks which got unblocked
+	childTasks := n.sctx.delAndGetChildren(t.id)
+	for _, child := range childTasks {
+		numDep := atomic.AddInt32(&child.numDependencies, -1)
+		x.AssertTrue(numDep > 0)
+		if numDep == 0 {
+			go n.process(child)
+		}
+	}
+	return
 }
 
 type node struct {
@@ -183,6 +466,8 @@ type node struct {
 	// The stages are proposed -> committed (accepted by cluster) ->
 	// applied (to PL) -> synced (to RocksDB).
 	applied x.WaterMark
+	pending chan struct{}
+	sctx    *schedulerCtx
 }
 
 // SetRaft would set the provided raft.Node to this node.
@@ -253,7 +538,10 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		messages:    make(chan sendmsg, 1000),
 		stop:        make(chan struct{}),
 		done:        make(chan struct{}),
+		pending:     make(chan struct{}, numPendingMutations),
 	}
+	n.sctx = new(schedulerCtx)
+	n.sctx.init()
 	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed: Group %d", n.gid)}
 	n.applied.Init()
 
@@ -511,25 +799,20 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
+// scheduler would take care of splitting the tasks, in general either of schema or rdf mutations
+// would be present
 func (n *node) processMutation(ctx context.Context, index uint64, m *protos.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
-	if err := runMutations(ctx, m.Edges); err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
+	if err := runSchemaMutations(ctx, m.Schema); err != nil {
+		if tr, ok := trace.FromContext(n.ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
 		return err
 	}
-	return nil
-}
-
-func (n *node) processSchemaMutations(e raftpb.Entry, m *protos.Mutations) error {
-	// TODO: Need to pass node and entry index.
-	rv := x.RaftValue{Group: n.gid, Index: e.Index}
-	ctx := context.WithValue(n.ctx, "raft", rv)
-	if err := runSchemaMutations(ctx, m.Schema); err != nil {
-		if tr, ok := trace.FromContext(n.ctx); ok {
+	if err := runMutations(ctx, m.Edges); err != nil {
+		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
 		return err
@@ -546,35 +829,36 @@ func (n *node) processMembership(index uint64, mm *protos.Membership) error {
 	return nil
 }
 
-func (n *node) process(index uint64, proposal *protos.Proposal, pending chan struct{}) {
+func (n *node) process(t *task) {
 	defer func() {
-		n.applied.Done(index)
-		posting.SyncMarkFor(n.gid).Done(index)
+		n.applied.Done(t.ridx)
+		posting.SyncMarkFor(n.gid).Done(t.ridx)
 	}()
 
-	pending <- struct{}{} // This will block until we can write to it.
+	n.pending <- struct{}{} // This will block until we can write to it.
 	x.ActiveMutations.Add(1)
 	defer x.ActiveMutations.Add(-1)
 
 	var err error
-	if proposal.Mutations != nil {
+	if t.proposal.Mutations != nil {
 		var ctx context.Context
 		var has bool
-		if ctx, has = n.props.Ctx(proposal.Id); !has {
+		if ctx, has = n.props.Ctx(t.proposal.Id); !has {
 			ctx = n.ctx
 		}
-		err = n.processMutation(ctx, index, proposal.Mutations)
-	} else if proposal.Membership != nil {
-		err = n.processMembership(index, proposal.Membership)
+		err = n.processMutation(ctx, t.ridx, t.proposal.Mutations)
+	} else if t.proposal.Membership != nil {
+		err = n.processMembership(t.ridx, t.proposal.Membership)
 	}
-	n.props.Done(proposal.Id, err)
-	<-pending // Release one.
+	n.props.Done(t.proposal.Id, err)
+	n.finished(t)
+	<-n.pending // Release one.
 }
 
 const numPendingMutations = 10000
 
 func (n *node) processApplyCh() {
-	pending := make(chan struct{}, numPendingMutations)
+	var id uint32
 
 	for e := range n.applyCh {
 		if len(e.Data) == 0 {
@@ -599,56 +883,62 @@ func (n *node) processApplyCh() {
 			posting.SyncMarkFor(n.gid).Done(e.Index)
 			continue
 		}
-
 		x.AssertTrue(e.Type == raftpb.EntryNormal)
 
-		// The following effort is only to apply schema in a blocking fashion.
-		// Once we have a scheduler, this should go away.
-		// TODO: Move the following to scheduler.
-
-		// We derive the schema here if it's not present
-		// Since raft committed logs are serialized, we can derive
-		// schema here without any locking
 		proposal := &protos.Proposal{}
 		if err := proposal.Unmarshal(e.Data); err != nil {
 			log.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
 
+		// Safeguard for n.props
+		n.props.IncRef(proposal.Id)
 		if proposal.Mutations != nil {
-			// process schema mutations before
+			// process schema mutations before, we break down each predicate into separate tasks
+			// since dependencies between tasks are tracked at task level and schema mutations
+			// can take a long time.
 			if proposal.Mutations.Schema != nil {
-				// Wait for applied watermark to reach till previous index
-				// All mutations before this should use old schema and after this
-				// should use new schema
-				n.waitForSyncMark(n.ctx, e.Index-1)
-				if err := n.processSchemaMutations(e, proposal.Mutations); err != nil {
-					n.applied.Done(e.Index)
-					posting.SyncMarkFor(n.gid).Done(e.Index)
-					n.props.Done(proposal.Id, err)
-					continue
+				for _, s := range proposal.Mutations.Schema {
+					mutations := &protos.Mutations{GroupId: n.gid}
+					mutations.Schema = append(mutations.Schema, s)
+					prop := &protos.Proposal{Mutations: mutations}
+					prop.Id = proposal.Id
+					t := &task{
+						id:       id,
+						ridx:     e.Index,
+						proposal: prop,
+					}
+					n.submit(t)
+					id++
 				}
+				proposal.Mutations.Schema = nil
 			}
 
-			// stores a map of predicate and type of first mutation for each predicate
-			schemaMap := make(map[string]types.TypeID)
-			for _, edge := range proposal.Mutations.Edges {
-				if _, ok := schemaMap[edge.Attr]; !ok {
-					schemaMap[edge.Attr] = posting.TypeID(edge)
+			// TODO(investigate): We could break it into smaller tasks and submit, but we haven't seen
+			// much benefits in the past.
+			if proposal.Mutations.Edges != nil {
+				t := &task{
+					id:       id,
+					ridx:     e.Index,
+					proposal: proposal,
 				}
+				n.submit(t)
+				id++
 			}
-
-			for attr, storageType := range schemaMap {
-				if _, err := schema.State().TypeOf(attr); err != nil {
-					// Schema doesn't exist
-					// Since committed entries are serialized, updateSchemaIfMissing is not
-					// needed, In future if schema needs to be changed, it would flow through
-					// raft so there won't be race conditions between read and update schema
-					updateSchemaType(attr, storageType, e.Index, n.raftContext.Group)
-				}
+		} else if proposal.Membership != nil {
+			t := &task{
+				id:       id,
+				ridx:     e.Index,
+				proposal: proposal,
 			}
+			id++
+			n.submit(t)
+		} else {
+			x.Fatalf("Unknown proposal in applych")
 		}
 
-		go n.process(e.Index, proposal, pending)
+		n.applied.Done(e.Index)
+		posting.SyncMarkFor(n.gid).Done(e.Index)
+		n.props.Done(proposal.Id, nil)
 	}
 }
 
@@ -694,6 +984,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
 	posting.EvictGroup(n.gid)
+	// TODO: Determine whether to check for stale indices or not
 	if _, err := populateShard(n.ctx, pool, n.gid); err != nil {
 		// TODO: We definitely don't want to just fall flat on our face if we can't
 		// retrieve a simple snapshot.
@@ -702,6 +993,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
+	go n.checkForStaleIndices(true)
 }
 
 func (n *node) Run() {
@@ -721,11 +1013,10 @@ func (n *node) Run() {
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateFollower && leader {
 					// stepped down as leader do a sync membership immediately
-					groups().syncMemberships()
+					go groups().syncMemberships()
 				} else if rd.RaftState == raft.StateLeader && !leader {
-					// TODO:wait for apply watermark ??
 					leaseMgr().resetLease(n.gid)
-					groups().syncMemberships()
+					go groups().syncMemberships()
 				}
 				leader = rd.RaftState == raft.StateLeader
 			}
@@ -734,9 +1025,13 @@ func (n *node) Run() {
 
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 
+			// TODO(Janardhan): Should we send the messages before writing to disk. In the case where
+			// we have replicas for the message to be committed we have a latency of two
+			// disk writes, one on leader and one on follower
 			for _, msg := range rd.Messages {
 				// NOTE: We can do some optimizations here to drop messages.
 				msg.Context = rcBytes
+				// TODO(Investiage): Sometimes it takes time :(
 				n.send(msg)
 			}
 
@@ -749,6 +1044,7 @@ func (n *node) Run() {
 				x.AssertTrue(rc.Group == n.gid)
 				if rc.Id != n.id {
 					x.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
+					// It's ok to block tick while retrieving snapshot, since it's a follower
 					n.retrieveSnapshot(rc.Id)
 					x.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
 				} else {
@@ -770,7 +1066,6 @@ func (n *node) Run() {
 				// possible sequentially
 				n.applied.Begin(entry.Index)
 				posting.SyncMarkFor(n.gid).Begin(entry.Index)
-
 				// Just queue up to be processed. Don't wait on them.
 				n.applyCh <- entry
 			}
@@ -945,6 +1240,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 		restart = true
 	}
 	rerr = n.store.Append(es)
+	n.sctx.es = es
 	return
 }
 
@@ -959,6 +1255,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 		if !found && groups().HasPeer(n.gid) {
 			n.joinPeers()
 		}
+		go n.checkForStaleIndices(false)
 		n.SetRaft(raft.RestartNode(n.cfg))
 
 	} else {

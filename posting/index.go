@@ -422,7 +422,14 @@ func deleteEntries(prefix []byte) error {
 }
 
 func DeleteReverseEdges(ctx context.Context, attr string) error {
-	if err := lcache.clear(attr, x.ByteReverse); err != nil {
+	err := lcache.clear(func(key []byte) bool {
+		pk := x.Parse(key)
+		if pk.Attr == attr && pk.IsType(x.ByteReverse) {
+			return true
+		}
+		return false
+	})
+	if err != nil {
 		return err
 	}
 	// Delete index entries from data store.
@@ -444,10 +451,24 @@ func deleteCountIndex(ctx context.Context, attr string, reverse bool) error {
 }
 
 func DeleteCountIndex(ctx context.Context, attr string) error {
-	if err := lcache.clear(attr, x.ByteCount); err != nil {
+	err := lcache.clear(func(key []byte) bool {
+		pk := x.Parse(key)
+		if pk.Attr == attr && pk.IsType(x.ByteCount) {
+			return true
+		}
+		return false
+	})
+	if err != nil {
 		return err
 	}
-	if err := lcache.clear(attr, x.ByteCountRev); err != nil {
+	err = lcache.clear(func(key []byte) bool {
+		pk := x.Parse(key)
+		if pk.Attr == attr && pk.IsType(x.ByteCountRev) {
+			return true
+		}
+		return false
+	})
+	if err != nil {
 		return err
 	}
 	// Delete index entries from data store.
@@ -616,7 +637,14 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 }
 
 func DeleteIndex(ctx context.Context, attr string) error {
-	if err := lcache.clear(attr, x.ByteIndex); err != nil {
+	err := lcache.clear(func(key []byte) bool {
+		pk := x.Parse(key)
+		if pk.Attr == attr && pk.IsType(x.ByteIndex) {
+			return true
+		}
+		return false
+	})
+	if err != nil {
 		return err
 	}
 	// Delete index entries from data store.
@@ -708,7 +736,14 @@ func RebuildIndex(ctx context.Context, attr string) error {
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
-	if err := lcache.clear(attr, x.ByteData); err != nil {
+	err := lcache.clear(func(key []byte) bool {
+		pk := x.Parse(key)
+		if pk.Attr == attr && pk.IsType(x.ByteData) {
+			return true
+		}
+		return false
+	})
+	if err != nil {
 		return err
 	}
 	pk := x.ParsedKey{
@@ -739,4 +774,101 @@ func DeletePredicate(ctx context.Context, attr string) error {
 		}
 	}
 	return nil
+}
+
+func hasToken(attr string, uid uint64, token string) (bool, error) {
+	// GetOrCreate might be better for larger texts ?
+	pl := Get(x.DataKey(attr, uid))
+	vals, err := pl.AllValues()
+	if err != nil {
+		return false, err
+	}
+
+	for _, v := range vals {
+		// Tokenize v and check if it matches term.
+		tokens, err := IndexTokens(attr, "", v)
+		if err != nil {
+			return false, err
+		}
+		for _, tok := range tokens {
+			if tok == token {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// TODO(Janardhan): If we know the superset of uids which has stale index, we can avoid extra work.
+// Gets tricky with snapshots.
+// We can remove it if underlying store supports atomic writes
+// Since we take lock over indexPl, ideally there shouldn't be any race conditions
+func RemoveStaleIndices(ctx context.Context, attr string) error {
+	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
+	x.Printf("Running index update on attr %s (Will cleanup stale indices if present)\n", attr)
+
+	processIndexKey := func(ctx context.Context, indexKey []byte) error {
+		var pitr PIterator
+		edge := protos.DirectedEdge{
+			Attr: attr,
+			Op:   protos.DirectedEdge_DEL,
+		}
+
+		indexPl := Get(indexKey)
+		indexPl.Lock()
+		defer indexPl.Unlock()
+		pitr.Init(indexPl.plist, 0)
+		for ; pitr.Valid(); pitr.Next() {
+			pp := pitr.Posting()
+			pk := x.Parse(indexKey)
+			if found, err := hasToken(attr, pp.Uid, pk.Term); err != nil {
+				return err
+			} else if found {
+				continue
+			}
+			edge.ValueId = pp.Uid
+			if _, err := indexPl.addMutation(ctx, &edge); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	ch := make(chan []byte, 10000)
+	che := make(chan error, 1000)
+	for i := 0; i < 1000; i++ {
+		go func() {
+			var err error
+			for it := range ch {
+				err = processIndexKey(ctx, it)
+				if err != nil {
+					break
+				}
+			}
+			che <- err
+		}()
+	}
+
+	var pk x.ParsedKey
+	pk.Attr = attr
+	prefix := pk.IndexPrefix()
+
+	iterOpt := badger.DefaultIteratorOptions
+	iterOpt.FetchValues = false
+	it := pstore.NewIterator(iterOpt)
+	defer it.Close()
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		iterItem := it.Item()
+		key := iterItem.Key()
+		ch <- key
+	}
+
+	close(ch)
+	var e error
+	for i := 0; i < 1000; i++ {
+		if err := <-che; err != nil {
+			e = err
+		}
+	}
+	return e
 }
