@@ -9029,3 +9029,33 @@ func TestMultipleValueGroupByError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Groupby not allowed for attr: graduation of type list")
 }
+
+func TestMultipleValueProto(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: ge(graduation, "1930")) {
+			name
+			graduation
+		}
+	}
+	`
+	type Person struct {
+		Name       string      `dgraph:"name"`
+		Graduation []time.Time `dgraph:"graduation"`
+	}
+
+	type res struct {
+		Root []Person `dgraph:"me"`
+	}
+
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(r.Root))
+	require.Equal(t, "Michonne", r.Root[0].Name)
+	require.Equal(t, 1, len(r.Root[0].Graduation))
+	require.Equal(t, "Andrea", r.Root[1].Name)
+	require.Equal(t, 2, len(r.Root[1].Graduation))
+}
