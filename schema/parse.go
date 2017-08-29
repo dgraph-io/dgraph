@@ -127,9 +127,15 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*protos.SchemaUpda
 	if !ok {
 		return nil, x.Errorf("Undefined Type")
 	}
-	if schema.List && !t.IsScalar() {
-		return nil, x.Errorf("Expected scalar type inside []. Got: [%s] for attr: [%s].",
-			t.Name(), predicate)
+	if schema.List {
+		if !t.IsScalar() {
+			return nil, x.Errorf("Expected scalar type inside []. Got: [%s] for attr: [%s].",
+				t.Name(), predicate)
+		}
+		// TODO - Add a test case for multiple Geo and ensure that it works.
+		if uint32(t) == uint32(types.PasswordID) {
+			return nil, x.Errorf("Password list type is not supported.")
+		}
 	}
 	schema.ValueType = uint32(t)
 

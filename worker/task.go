@@ -46,7 +46,7 @@ var (
 	emptyUIDList   protos.List
 	emptyResult    protos.Result
 	regexTok       tok.ExactTokenizer
-	emptyValueList = protos.ValuesList{Values: []*protos.TaskValue{&protos.TaskValue{Val: x.Nilbyte}}}
+	emptyValueList = protos.ValueList{Values: []*protos.TaskValue{&protos.TaskValue{Val: x.Nilbyte}}}
 )
 
 // ProcessTaskOverNetwork is used to process the query and get the result from
@@ -262,6 +262,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 
 	var key []byte
 	var err error
+	listType := schema.State().IsList(attr)
 	for i := 0; i < srcFn.n; i++ {
 		select {
 		case <-ctx.Done():
@@ -273,7 +274,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, gid)
 		var vals []types.Val
-		if schema.State().IsList(attr) {
+		if listType {
 			vals, err = pl.AllValues()
 		} else {
 			var val types.Val
@@ -290,26 +291,18 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			continue
 		}
 
-		var valTid types.TypeID
-		if len(vals) > 0 {
-			valTid = vals[0].Tid
-		}
+		valTid := vals[0].Tid
 		newValue := &protos.TaskValue{ValType: int32(valTid), Val: x.Nilbyte}
 		uidList := new(protos.List)
-		var attrTyp types.TypeID
-		var vl protos.ValuesList
+		var vl protos.ValueList
 		for _, val := range vals {
-			if attrTyp, err = schema.State().TypeOf(attr); err == nil {
-				newValue, err = convertToType(val, attrTyp)
-			} else if err != nil {
-				newValue, err = convertToType(val, valTid)
-			}
+			newValue, err = convertToType(val, srcFn.atype)
 
 			// This means we fetched the value directly instead of fetching index key and intersecting.
 			// Lets compare the value and add filter the uid.
 			if srcFn.fnType == CompareAttrFn {
 				// Lets convert the val to its type.
-				if val, err = types.Convert(val, attrTyp); err != nil {
+				if val, err = types.Convert(val, srcFn.atype); err != nil {
 					return err
 				}
 				if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
@@ -510,6 +503,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 		}
 		return out, nil
 	}
+	srcFn.atype = typ
 
 	opts := posting.ListOptions{
 		AfterUID: uint64(q.AfterUid),
@@ -861,6 +855,7 @@ type functionContext struct {
 	regex          *cregexp.Regexp
 	isFuncAtRoot   bool
 	isStringFn     bool
+	atype          types.TypeID
 }
 
 const (

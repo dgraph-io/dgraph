@@ -163,10 +163,10 @@ type SubGraph struct {
 	Attr         string
 	Params       params
 	counts       []uint32
-	valueMatrix  []*protos.ValuesList
+	valueMatrix  []*protos.ValueList
 	uidMatrix    []*protos.List
 	facetsMatrix []*protos.FacetsList
-	ExpandPreds  []*protos.ValuesList
+	ExpandPreds  []*protos.ValueList
 	GroupbyRes   *groupResults
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
@@ -918,7 +918,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 	}
 
-	sg.valueMatrix = createNilValuesList(1)
 	// Copy roots filter.
 	if gq.Filter != nil {
 		sgf := &SubGraph{}
@@ -935,17 +934,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.facetsFilter = facetsFilter
 	}
 	return sg, nil
-}
-
-func createNilValuesList(count int) []*protos.ValuesList {
-	out := make([]*protos.ValuesList, count)
-	emptyList := &protos.ValuesList{
-		Values: []*protos.TaskValue{&protos.TaskValue{Val: x.Nilbyte}},
-	}
-	for i := 0; i < count; i++ {
-		out[i] = emptyList
-	}
-	return out
 }
 
 func toFacetsFilter(gft *gql.FilterTree) (*protos.FilterTree, error) {
@@ -1004,7 +992,7 @@ type varValue struct {
 	Vals map[uint64]types.Val
 	path []*SubGraph // This stores the subgraph path from root to var definition.
 	// TODO: Check if we can do without this field.
-	strList []*protos.ValuesList
+	strList []*protos.ValueList
 }
 
 func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[uint64]types.Val,
@@ -1576,7 +1564,7 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 
 func (sg *SubGraph) appendDummyValues() {
 	var l protos.List
-	var val protos.ValuesList
+	var val protos.ValueList
 	for i := 0; i < len(sg.SrcUIDs.Uids); i++ {
 		// This is necessary so that preTraverse can be processed smoothly.
 		sg.uidMatrix = append(sg.uidMatrix, &l)
@@ -1584,7 +1572,7 @@ func (sg *SubGraph) appendDummyValues() {
 	}
 }
 
-func uniquePreds(vl []*protos.ValuesList) map[string]struct{} {
+func uniquePreds(vl []*protos.ValueList) map[string]struct{} {
 	preds := make(map[string]struct{})
 
 	for _, l := range vl {
@@ -2095,7 +2083,7 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 	return f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
-func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.ValuesList, error) {
+func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.ValueList, error) {
 	temp := new(SubGraph)
 	temp.Attr = "_predicate_"
 	temp.SrcUIDs = uids

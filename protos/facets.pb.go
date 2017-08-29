@@ -41,7 +41,7 @@
 		List
 		TaskValue
 		Query
-		ValuesList
+		ValueList
 		Result
 		SortMessage
 		SortResult
