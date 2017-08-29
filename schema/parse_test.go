@@ -59,6 +59,10 @@ func TestSchema(t *testing.T) {
 		{"name", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 		}},
+		{"_predicate_", &protos.SchemaUpdate{
+			ValueType: uint32(types.StringID),
+			List:      true,
+		}},
 		{"address", &protos.SchemaUpdate{ValueType: uint32(types.StringID)}},
 		{"http://scalar.com/helloworld/", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
@@ -166,6 +170,10 @@ friend  : uid @reverse @count .
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal5), 1))
 	checkSchema(t, State().get(1).predicate, []nameType{
+		{"_predicate_", &protos.SchemaUpdate{
+			ValueType: uint32(types.StringID),
+			List:      true,
+		}},
 		{"name", &protos.SchemaUpdate{
 			ValueType: uint32(types.StringID),
 			Tokenizer: []string{"exact"},
@@ -259,6 +267,66 @@ func TestParse8_Error(t *testing.T) {
 	reset()
 	schemas, err := Parse("dob:dateTime @index .")
 	require.Error(t, err)
+	require.Nil(t, schemas)
+}
+
+func TestParseScalarList(t *testing.T) {
+	reset()
+	schemas, err := Parse(`
+		jobs: [string] @index(term) .
+		occupations: [string] .
+		graduation: [dateTime] .
+	`)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(schemas))
+	require.EqualValues(t, &protos.SchemaUpdate{
+		Predicate: "jobs",
+		ValueType: 9,
+		Directive: protos.SchemaUpdate_INDEX,
+		Tokenizer: []string{"term"},
+		List:      true,
+	}, schemas[0])
+
+	require.EqualValues(t, &protos.SchemaUpdate{
+		Predicate: "occupations",
+		ValueType: 9,
+		List:      true,
+	}, schemas[1])
+
+	require.EqualValues(t, &protos.SchemaUpdate{
+		Predicate: "graduation",
+		ValueType: 5,
+		List:      true,
+	}, schemas[2])
+}
+
+func TestParseScalarListError1(t *testing.T) {
+	reset()
+	schemas, err := Parse(`
+		friend: [uid] .
+	`)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected scalar type inside []. Got: [uid] for attr: [friend].")
+	require.Nil(t, schemas)
+}
+
+func TestParseScalarListError2(t *testing.T) {
+	reset()
+	schemas, err := Parse(`
+		friend: [string .
+	`)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unclosed [ while parsing schema for: friend")
+	require.Nil(t, schemas)
+}
+
+func TestParseScalarListError3(t *testing.T) {
+	reset()
+	schemas, err := Parse(`
+		friend: string] .
+	`)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid ending")
 	require.Nil(t, schemas)
 }
 

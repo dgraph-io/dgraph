@@ -105,12 +105,8 @@ func (s *stateGroup) update(se SyncEntry) {
 	s.predicate[se.Attr] = &se.Schema
 	se.Water.Begin(se.Index)
 	syncCh <- se
-	s.elog.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v, count: %v\n",
-		se.Attr, types.TypeID(se.Schema.ValueType).Name(), se.Schema.Tokenizer, se.Schema.Directive,
-		se.Schema.Count)
-	x.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v, count: %v\n",
-		se.Attr, types.TypeID(se.Schema.ValueType).Name(), se.Schema.Tokenizer, se.Schema.Directive,
-		se.Schema.Count)
+	s.elog.Printf(logUpdate(se.Schema, se.Attr))
+	x.Printf(logUpdate(se.Schema, se.Attr))
 }
 
 // Set sets the schema for given predicate in memory
@@ -120,12 +116,20 @@ func (s *state) Set(pred string, schema protos.SchemaUpdate) {
 	s.get(group.BelongsTo(pred)).set(pred, schema)
 }
 
+func logUpdate(schema protos.SchemaUpdate, pred string) string {
+	typ := types.TypeID(schema.ValueType).Name()
+	if schema.List {
+		typ = fmt.Sprintf("[%s]", typ)
+	}
+	return fmt.Sprintf("Setting schema for attr %s: %v, tokenizer: %v, directive: %v, count: %v\n",
+		pred, typ, schema.Tokenizer, schema.Directive, schema.Count)
+}
+
 func (s *stateGroup) set(pred string, schema protos.SchemaUpdate) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = &schema
-	s.elog.Printf("Setting schema type for attr %s: %v, tokenizer: %v, directive: %v\n", pred,
-		types.TypeID(schema.ValueType).Name(), schema.Tokenizer, schema.Directive)
+	s.elog.Printf(logUpdate(schema, pred))
 }
 
 // Get gets the schema for given predicate
@@ -255,7 +259,7 @@ func (s *stateGroup) isReversed(pred string) bool {
 	return false
 }
 
-// AddCount returns whether we want to mantain a count index for the given predicate or not.
+// HasCount returns whether we want to mantain a count index for the given predicate or not.
 func (s *state) HasCount(pred string) bool {
 	return s.get(group.BelongsTo(pred)).hasCount(pred)
 }
@@ -265,6 +269,20 @@ func (s *stateGroup) hasCount(pred string) bool {
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
 		return schema.Count
+	}
+	return false
+}
+
+// IsList returns whether the predicate is of list type.
+func (s *state) IsList(pred string) bool {
+	return s.get(group.BelongsTo(pred)).isList(pred)
+}
+
+func (s *stateGroup) isList(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	if schema, ok := s.predicate[pred]; ok {
+		return schema.List
 	}
 	return false
 }
@@ -296,6 +314,10 @@ func LoadFromDb(gid uint32) error {
 		}
 		State().Set(attr, s)
 	}
+	State().Set("_predicate_", protos.SchemaUpdate{
+		ValueType: uint32(types.StringID),
+		List:      true,
+	})
 	return nil
 }
 

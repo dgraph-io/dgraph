@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -144,7 +145,14 @@ func toSchema(buf *bytes.Buffer, s *skv) {
 		buf.WriteString(s.attr)
 	}
 	buf.WriteByte(':')
+	isList := schema.State().IsList(s.attr)
+	if isList {
+		buf.WriteRune('[')
+	}
 	buf.WriteString(types.TypeID(s.schema.ValueType).Name())
+	if isList {
+		buf.WriteRune(']')
+	}
 	if s.schema.Directive == protos.SchemaUpdate_REVERSE {
 		buf.WriteString(" @reverse")
 	} else if s.schema.Directive == protos.SchemaUpdate_INDEX && len(s.schema.Tokenizer) > 0 {

@@ -43,9 +43,10 @@ import (
 )
 
 var (
-	emptyUIDList protos.List
-	emptyResult  protos.Result
-	regexTok     tok.ExactTokenizer
+	emptyUIDList   protos.List
+	emptyResult    protos.Result
+	regexTok       tok.ExactTokenizer
+	emptyValueList = protos.ValueList{Values: []*protos.TaskValue{&protos.TaskValue{Val: x.Nilbyte}}}
 )
 
 // ProcessTaskOverNetwork is used to process the query and get the result from
@@ -117,7 +118,7 @@ func convertToType(v types.Val, typ types.TypeID) (*protos.TaskValue, error) {
 		return result, nil
 	}
 
-	// conver data from binary to appropriate format
+	// convert data from binary to appropriate format
 	val, err := types.Convert(v, typ)
 	if err != nil {
 		return result, err
@@ -214,42 +215,6 @@ func addUidToMatrix(key []byte, mu *sync.Mutex, out *protos.Result) {
 	mu.Unlock()
 }
 
-func getAllPredicates(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
-	out := new(protos.Result)
-	predMap := make(map[string]struct{})
-	if q.UidList == nil {
-		return out, nil
-	}
-	for _, uid := range q.UidList.Uids {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-		predicates, err := getPredList(uid, gid)
-		if err != nil {
-			return out, err
-		}
-		for _, pred := range predicates {
-			predMap[string(pred.Value.([]byte))] = struct{}{}
-		}
-	}
-	predList := make([]string, 0, len(predMap))
-	for pred := range predMap {
-		predList = append(predList, pred)
-	}
-	sort.Strings(predList)
-	for _, pred := range predList {
-		// Add it to values.
-		out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-		out.Values = append(out.Values, &protos.TaskValue{
-			ValType: int32(types.StringID),
-			Val:     []byte(pred),
-		})
-	}
-	return out, nil
-}
-
 type funcArgs struct {
 	q     *protos.Query
 	gid   uint32
@@ -296,6 +261,8 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 	}
 
 	var key []byte
+	var err error
+	listType := schema.State().IsList(attr)
 	for i := 0; i < srcFn.n; i++ {
 		select {
 		case <-ctx.Done():
@@ -306,43 +273,48 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 
 		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, gid)
-		val, err := pl.ValueFor(q.Langs)
-		if err != nil {
-			// No value found. Lets add empty values and move on.
+		var vals []types.Val
+		// Even if its a list type and value is asked in a language we return that.
+		if listType && len(q.Langs) == 0 {
+			vals, err = pl.AllValues()
+		} else {
+			var val types.Val
+			val, err = pl.ValueFor(q.Langs)
+			if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
+				return x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
+			}
+			vals = append(vals, val)
+		}
+
+		if err != nil || len(vals) == 0 {
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			out.Values = append(out.Values, &protos.TaskValue{Val: x.Nilbyte})
+			out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
 			continue
 		}
 
-		typ := val.Tid
-		if val.Tid == types.PasswordID && srcFn.fnType != PasswordFn {
-			return x.Errorf("Attribute `%s` of type password cannot be fetched", attr)
-		}
-
-		// If a posting list contains a value, we store that or else we store a nil
-		// byte so that processing is consistent later.
-		newValue := &protos.TaskValue{ValType: int32(val.Tid), Val: x.Nilbyte}
-		if typ, err = schema.State().TypeOf(attr); err == nil {
-			newValue, err = convertToType(val, typ)
-		} else if err != nil {
-			// TODO - Check when is this needed.
-			newValue, err = convertToType(val, val.Tid)
-		}
-
+		valTid := vals[0].Tid
+		newValue := &protos.TaskValue{ValType: int32(valTid), Val: x.Nilbyte}
 		uidList := new(protos.List)
-		// This means we fetched the value directly instead of fetching index key and intersecting.
-		// Lets compare the value and add filter the uid.
-		if srcFn.fnType == CompareAttrFn {
-			// Lets convert the val to its type.
-			if val, err = types.Convert(val, typ); err != nil {
-				return err
+		var vl protos.ValueList
+		for _, val := range vals {
+			newValue, err = convertToType(val, srcFn.atype)
+
+			// This means we fetched the value directly instead of fetching index key and intersecting.
+			// Lets compare the value and add filter the uid.
+			if srcFn.fnType == CompareAttrFn {
+				// Lets convert the val to its type.
+				if val, err = types.Convert(val, srcFn.atype); err != nil {
+					return err
+				}
+				if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
+					uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+					break
+				}
+			} else {
+				vl.Values = append(vl.Values, newValue)
 			}
-			if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
-				uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
-			}
-		} else {
-			out.Values = append(out.Values, newValue)
 		}
+		out.ValueMatrix = append(out.ValueMatrix, &vl)
 
 		if q.FacetsFilter != nil { // else part means isValueEdge
 			// This is Value edge and we are asked to do facet filtering. Not supported.
@@ -359,18 +331,27 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				&protos.FacetsList{[]*protos.Facets{{fs}}})
 		}
 
-		switch srcFn.fnType {
-		case AggregatorFn:
+		switch {
+		case q.DoCount:
+			out.Counts = append(out.Counts, uint32(pl.Length(0)))
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-		case PasswordFn:
-			lastPos := len(out.Values) - 1
+		case srcFn.fnType == AggregatorFn:
+			// Add an empty UID list to make later processing consistent
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+		case srcFn.fnType == PasswordFn:
+			lastPos := len(out.ValueMatrix) - 1
+			newValue := out.ValueMatrix[lastPos].Values[0]
+			if len(newValue.Val) == 0 {
+				// TODO - Check that this is safe.
+				out.ValueMatrix[lastPos].Values[0] = task.FalseVal
+			}
 			pwd := q.SrcFunc[2]
 			err = types.VerifyPassword(pwd, string(newValue.Val))
 			if err != nil {
-				out.Values[lastPos] = task.FalseVal
+				out.ValueMatrix[lastPos].Values[0] = task.FalseVal
 			} else {
-				out.Values[lastPos] = task.TrueVal
+				out.ValueMatrix[lastPos].Values[0] = task.TrueVal
 			}
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
@@ -419,11 +400,10 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, gid)
-		newValue := &protos.TaskValue{Val: x.Nilbyte}
 
 		// get filtered uids and facets.
 		var filteredRes []*result
-		out.Values = append(out.Values, newValue)
+		out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
 
 		var perr error
 		filteredRes = make([]*result, 0, pl.Length(opts.AfterUID))
@@ -498,10 +478,6 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 	out := new(protos.Result)
 	attr := q.Attr
 
-	if attr == "_predicate_" {
-		return getAllPredicates(ctx, q, gid)
-	}
-
 	srcFn, err := parseSrcFn(q)
 	if err != nil {
 		return nil, err
@@ -520,15 +496,15 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			return out, nil
 		}
 		// Schema not defined, so lets add dummy values and return.
-		emptyVal := new(protos.TaskValue)
 		// Adding dummy values is important because the code assumes that len(SrcUids) equals
 		// len(uidMatrix)
 		for i := 0; i < len(q.UidList.Uids); i++ {
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			out.Values = append(out.Values, emptyVal)
+			out.ValueMatrix = append(out.ValueMatrix, &emptyValueList)
 		}
 		return out, nil
 	}
+	srcFn.atype = typ
 
 	opts := posting.ListOptions{
 		AfterUID: uint64(q.AfterUid),
@@ -875,6 +851,7 @@ type functionContext struct {
 	regex          *cregexp.Regexp
 	isFuncAtRoot   bool
 	isStringFn     bool
+	atype          types.TypeID
 }
 
 const (

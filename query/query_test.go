@@ -205,10 +205,17 @@ func populateGraph(t *testing.T) {
 	addEdgeToTypedValue(t, "loc", 31, types.GeoID, gData.Value.([]byte), nil)
 
 	addEdgeToValue(t, "dob_day", 1, "1910-01-01", nil)
+
+	// Note - Though graduation is of [dateTime] type. Don't add another graduation for Michonne.
+	// There is a test to check that JSON should return an array even if there is only one value
+	// for attribute whose type is a list type.
+	addEdgeToValue(t, "graduation", 1, "1932-01-01", nil)
 	addEdgeToValue(t, "dob_day", 23, "1910-01-02", nil)
 	addEdgeToValue(t, "dob_day", 24, "1909-05-05", nil)
 	addEdgeToValue(t, "dob_day", 25, "1909-01-10", nil)
 	addEdgeToValue(t, "dob_day", 31, "1901-01-15", nil)
+	addEdgeToValue(t, "graduation", 31, "1933-01-01", nil)
+	addEdgeToValue(t, "graduation", 31, "1935-01-01", nil)
 
 	addEdgeToValue(t, "dob", 1, "1910-01-01", nil)
 	addEdgeToValue(t, "dob", 23, "1910-01-02", nil)
@@ -1299,7 +1306,7 @@ func TestGroupByMulti(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(func: uid( 1)) {
+			me(func: uid(1)) {
 				friend @groupby(friend,name) {
 					count(_uid_)
 				}
@@ -2738,7 +2745,6 @@ func TestQueryPassword(t *testing.T) {
 
 func TestCheckPassword(t *testing.T) {
 	populateGraph(t)
-	addPassword(t, 23, "pass", "654321")
 	addPassword(t, 1, "password", "123456")
 	query := `
                 {
@@ -3021,12 +3027,12 @@ func TestProcessGraph(t *testing.T) {
 	child = child.Children[0]
 	require.EqualValues(t,
 		[]string{"Rick Grimes", "Glenn Rhee", "Daryl Dixon", "Andrea", ""},
-		taskValues(t, child.values))
+		taskValues(t, child.valueMatrix))
 
 	require.EqualValues(t, []string{"Michonne"},
-		taskValues(t, sg.Children[1].values))
+		taskValues(t, sg.Children[1].valueMatrix))
 	require.EqualValues(t, []string{"female"},
-		taskValues(t, sg.Children[2].values))
+		taskValues(t, sg.Children[2].valueMatrix))
 }
 
 func TestToFastJSON(t *testing.T) {
@@ -4769,32 +4775,36 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 
 // Mocking Subgraph and Testing fast-json with it.
 func ageSg(uidMatrix []*protos.List, srcUids *protos.List, ages []uint64) *SubGraph {
-	var as []*protos.TaskValue
+	var as []*protos.ValueList
 	for _, a := range ages {
 		bs := make([]byte, 4)
 		binary.LittleEndian.PutUint64(bs, a)
-		as = append(as, &protos.TaskValue{[]byte(bs), 2})
+		as = append(as, &protos.ValueList{
+			Values: []*protos.TaskValue{
+				&protos.TaskValue{[]byte(bs), 2},
+			},
+		})
 	}
 
 	return &SubGraph{
-		Attr:      "age",
-		uidMatrix: uidMatrix,
-		SrcUIDs:   srcUids,
-		values:    as,
-		Params:    params{GetUid: true},
+		Attr:        "age",
+		uidMatrix:   uidMatrix,
+		SrcUIDs:     srcUids,
+		valueMatrix: as,
+		Params:      params{GetUid: true},
 	}
 }
 func nameSg(uidMatrix []*protos.List, srcUids *protos.List, names []string) *SubGraph {
-	var ns []*protos.TaskValue
+	var ns []*protos.ValueList
 	for _, n := range names {
-		ns = append(ns, &protos.TaskValue{[]byte(n), 0})
+		ns = append(ns, &protos.ValueList{Values: []*protos.TaskValue{{[]byte(n), 0}}})
 	}
 	return &SubGraph{
-		Attr:      "name",
-		uidMatrix: uidMatrix,
-		SrcUIDs:   srcUids,
-		values:    ns,
-		Params:    params{GetUid: true},
+		Attr:        "name",
+		uidMatrix:   uidMatrix,
+		SrcUIDs:     srcUids,
+		valueMatrix: ns,
+		Params:      params{GetUid: true},
 	}
 
 }
@@ -6676,6 +6686,9 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "lossy", Type: "string"},
 		{Predicate: "school", Type: "uid"},
 		{Predicate: "dob_day", Type: "datetime"},
+		{Predicate: "graduation", Type: "datetime"},
+		{Predicate: "occupations", Type: "string"},
+		{Predicate: "_predicate_", Type: "string"},
 	}
 	checkSchemaNodes(t, expected, actual)
 }
@@ -6772,8 +6785,10 @@ value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 royal_title                    : string @index(hash, term, fulltext) .
 noindex_name                   : string .
-school		                   : uid @count .
+school                         : uid @count .
 lossy                          : string @index(term) .
+occupations                    : [string] @index(term) .
+graduation                     : [dateTime] @index(year) @count .
 `
 
 func TestMain(m *testing.M) {
@@ -8566,7 +8581,7 @@ func TestUidInFunction2(t *testing.T) {
 		js)
 }
 
-func TestUidInFunctioniAtRoot(t *testing.T) {
+func TestUidInFunctionAtRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
 	{
@@ -8934,4 +8949,126 @@ func TestAppendDummyValuesPanic(t *testing.T) {
 	}`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"data": {}}`, js)
+}
+
+func TestMultipleValueFilter(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: ge(graduation, "1930")) {
+			name
+			graduation
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","graduation":"1932-01-01T00:00:00Z"},{"name":"Andrea","graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`, js)
+}
+
+func TestMultipleValueFilter2(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: le(graduation, "1933")) {
+			name
+			graduation
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":[{"name":"Michonne","graduation":"1932-01-01T00:00:00Z"}]}}`, js)
+}
+
+func TestMultipleValueArray(t *testing.T) {
+	// Skip for now, fix later.
+	t.Skip()
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(1)) {
+			name
+			graduation
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","graduation":["1932-01-01T00:00:00Z"]}]}}`, js)
+}
+
+func TestMultipleValueHasAndCount(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: has(graduation)) {
+			name
+			count(graduation)
+			graduation
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","count(graduation)":1,"graduation":"1932-01-01T00:00:00Z"},{"name":"Andrea","count(graduation)":2,"graduation":["1935-01-01T00:00:00Z","1933-01-01T00:00:00Z"]}]}}`, js)
+}
+
+func TestMultipleValueSortError(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: anyofterms(name, "Michonne Rick"), orderdesc: graduation) {
+			name
+			graduation
+		}
+	}
+	`
+	ctx := defaultContext()
+	_, err := processToFastJsonReqCtx(t, query, ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Sorting not supported on attr: graduation of type: [scalar]")
+}
+
+func TestMultipleValueGroupByError(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: uid(1)) {
+			friend @groupby(name, graduation) {
+				count(_uid_)
+			}
+		}
+	}
+	`
+	ctx := defaultContext()
+	_, err := processToFastJsonReqCtx(t, query, ctx)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Groupby not allowed for attr: graduation of type list")
+}
+
+func TestMultipleValueProto(t *testing.T) {
+	populateGraph(t)
+	query := `
+	{
+		me(func: ge(graduation, "1930")) {
+			name
+			graduation
+		}
+	}
+	`
+	type Person struct {
+		Name       string      `dgraph:"name"`
+		Graduation []time.Time `dgraph:"graduation"`
+	}
+
+	type res struct {
+		Root []Person `dgraph:"me"`
+	}
+
+	pb := processToPB(t, query, map[string]string{}, false)
+	var r res
+	err := client.Unmarshal(pb, &r)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(r.Root))
+	require.Equal(t, "Michonne", r.Root[0].Name)
+	require.Equal(t, 1, len(r.Root[0].Graduation))
+	require.Equal(t, "Andrea", r.Root[1].Name)
+	require.Equal(t, 2, len(r.Root[1].Graduation))
 }

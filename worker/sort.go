@@ -271,6 +271,10 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		ts.Langs = strings.Split(attrData[1], ":")
 	}
 
+	if schema.State().IsList(ts.Attr) {
+		return nil, x.Errorf("Sorting not supported on attr: %s of type: [scalar]", ts.Attr)
+	}
+
 	type result struct {
 		err error
 		res *protos.SortResult

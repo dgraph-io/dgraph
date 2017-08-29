@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -444,14 +445,19 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 	// All edges with a value without LANGTAG, have the same uid. In other words,
 	// an (entity, attribute) can only have one untagged value.
 	if !bytes.Equal(t.Value, nil) {
+		// There could be a collision if the user gives us a value with Lang = "en" and later gives
+		// us a value = "en" for the same predicate. We would end up overwritting his older lang
+		// value.
+
+		// Value with a lang type.
 		if len(t.Lang) > 0 {
 			t.ValueId = farm.Fingerprint64([]byte(t.Lang))
-		} else {
-			t.ValueId = math.MaxUint64
-		}
-
-		if t.Attr == "_predicate_" {
+		} else if schema.State().IsList(t.Attr) {
+			// Value for list type.
 			t.ValueId = farm.Fingerprint64(t.Value)
+		} else {
+			// Plain value for non-list type and without a language.
+			t.ValueId = math.MaxUint64
 		}
 	}
 	if t.ValueId == 0 {
@@ -804,8 +810,6 @@ func (l *List) AllValues() (vals []types.Val, rerr error) {
 	defer l.RUnlock()
 
 	l.iterate(0, func(p *protos.Posting) bool {
-		// x.AssertTruef(postingType(p) == x.ValueMulti,
-		//	"Expected a value posting.")
 		vals = append(vals, types.Val{
 			Tid:   types.TypeID(p.ValType),
 			Value: p.Value,
@@ -866,10 +870,9 @@ func valueToTypesVal(p *protos.Posting) (rval types.Val) {
 
 func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error) {
 	l.AssertRLock()
-	var found bool
 
 	any := false
-	// look for language in preffered order
+	// look for language in preferred order
 	for _, lang := range langs {
 		if lang == "." {
 			any = true
@@ -882,12 +885,15 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 	}
 
 	// look for value without language
-	if !found && (any || len(langs) == 0) {
-		found, pos = l.findPosting(math.MaxUint64)
+	if any || len(langs) == 0 {
+		if found, pos := l.findPosting(math.MaxUint64); found {
+			return pos, nil
+		}
 	}
 
+	var found bool
 	// last resort - return value with smallest lang Uid
-	if !found && any {
+	if any {
 		l.iterate(0, func(p *protos.Posting) bool {
 			if postingType(p) == x.ValueMulti {
 				pos = p
@@ -898,11 +904,11 @@ func (l *List) postingForLangs(langs []string) (pos *protos.Posting, rerr error)
 		})
 	}
 
-	if !found {
-		return pos, ErrNoValue
+	if found {
+		return pos, nil
 	}
 
-	return pos, nil
+	return pos, ErrNoValue
 }
 
 func (l *List) postingForTag(tag string) (p *protos.Posting, rerr error) {

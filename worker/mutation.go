@@ -250,6 +250,12 @@ func checkSchema(s *protos.SchemaUpdate) error {
 	if t, err := schema.State().TypeOf(s.Predicate); err == nil {
 		// schema was defined already
 		if t.IsScalar() == typ.IsScalar() {
+			// If old type was list and new type is non-list, we don't allow it until user
+			// has data.
+			if schema.State().IsList(s.Predicate) && !s.List && hasEdges(s.Predicate) {
+				return x.Errorf("Schema change not allowed from [%s] => %s without"+
+					" deleting pred: %s", t.Name(), typ.Name(), s.Predicate)
+			}
 			// New and old type are both scalar or both are uid. Allow schema change.
 			return nil
 		}

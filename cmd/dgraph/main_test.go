@@ -21,8 +21,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -124,26 +128,24 @@ func processToFastJSON(q string) string {
 }
 
 func runQuery(q string) (string, error) {
-	res, err := gql.Parse(gql.Request{Str: q, Http: true})
+	req, err := http.NewRequest("POST", "/query", bytes.NewBufferString(q))
 	if err != nil {
 		return "", err
 	}
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(queryHandler)
+	handler.ServeHTTP(rr, req)
 
-	var l query.Latency
-	ctx := defaultContext()
-	qr := query.QueryRequest{Latency: &l, GqlQuery: &res}
-	err = qr.ProcessQuery(ctx)
-
-	if err != nil {
-		return "", err
+	if status := rr.Code; status != http.StatusOK {
+		return "", fmt.Errorf("Unexpected status code: %v", status)
 	}
 
-	var buf bytes.Buffer
-	err = query.ToJson(qr.Latency, qr.Subgraphs, &buf, nil, false)
-	if err != nil {
-		return "", err
+	var qr x.QueryResWithData
+	json.Unmarshal(rr.Body.Bytes(), &qr)
+	if len(qr.Errors) > 0 {
+		return "", errors.New(qr.Errors[0].Message)
 	}
-	return string(buf.Bytes()), nil
+	return rr.Body.String(), nil
 }
 
 func runMutation(m string) error {
@@ -271,7 +273,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runQuery(q4)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","age"]}]}}`, output)
 
 	err = runMutation(m2)
 	require.NoError(t, err)
@@ -289,7 +291,7 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runQuery(q4)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"_predicate_":[{"_name_":"age"},{"_name_":"name"}]}]}}`, output)
+	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","age"]}]}}`, output)
 
 	// Lets try to change the type of predicates now.
 	err = runMutation(s2)
@@ -738,7 +740,7 @@ func TestDeleteAllSP(t *testing.T) {
 			uid(a) * * .
 		}
 	}
-	
+
 	{
 		a as var(func: uid(1))
 	}
@@ -782,7 +784,7 @@ func TestDeleteAllSP(t *testing.T) {
 
 	output, err = runQuery(q3)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"data": {"user":[{"_predicate_":[{"_name_":"friend"},{"_name_":"name"}]}]}}`,
+	require.JSONEq(t, `{"data": {"user":[{"_predicate_":["name","friend"]}]}}`,
 		output)
 
 	output, err = runQuery(q4)
@@ -999,7 +1001,7 @@ func TestListPred(t *testing.T) {
 
 	output, err := runQuery(q1)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"listpred":[{"_predicate_":[{"_name_":"age"},{"_name_":"friend"},{"_name_":"name"}]}]}}`,
+	require.Equal(t, `{"data": {"listpred":[{"_predicate_":["name","age","friend"]}]}}`,
 		output)
 }
 
@@ -1048,7 +1050,7 @@ func TestExpandPredError(t *testing.T) {
 func TestExpandPred(t *testing.T) {
 	var q1 = `
 	{
-		me(func:anyofterms(name, "Alice")) {
+		me(func: uid(0x11)) {
 			expand(_all_) {
 				expand(_all_)
 			}
@@ -1058,9 +1060,9 @@ func TestExpandPred(t *testing.T) {
 	var m = `
 	mutation {
 		set {
-			<0x1> <name> "Alice" .
-			<0x1> <age> "13" .
-			<0x1> <friend> <0x4> .
+			<0x11> <name> "Alice" .
+			<0x11> <age> "13" .
+			<0x11> <friend> <0x4> .
 			<0x4> <name> "bob" .
 			<0x4> <age> "12" .
 		}
@@ -1360,6 +1362,106 @@ func TestSchemaMutation5Error(t *testing.T) {
 	`
 	err = runMutation(m)
 	require.Error(t, err)
+}
+
+// A basic sanity check. We will do more extensive testing for multiple values in query.
+func TestMultipleValues(t *testing.T) {
+	schema.ParseBytes([]byte(""), 1)
+	m := `
+	mutation {
+		schema {
+			occupations: [string] .
+		}
+	}`
+
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	m = `
+		mutation {
+			set {
+				<0x88> <occupations> "Pianist" .
+				<0x88> <occupations> "Software Engineer" .
+			}
+		}
+	`
+
+	err = runMutation(m)
+	require.NoError(t, err)
+
+	q := `{
+			me(func: uid(0x88)) {
+				occupations
+			}
+		}`
+	res, err := runQuery(q)
+	require.NoError(t, err)
+	require.Equal(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
+}
+
+func TestListTypeSchemaChange(t *testing.T) {
+	schema.ParseBytes([]byte(""), 1)
+	m := `
+	mutation {
+		schema {
+			occupations: [string] .
+		}
+	}`
+
+	err := runMutation(m)
+	require.NoError(t, err)
+
+	m = `
+		mutation {
+			set {
+				<0x88> <occupations> "Pianist" .
+				<0x88> <occupations> "Software Engineer" .
+			}
+		}
+	`
+
+	err = runMutation(m)
+	require.NoError(t, err)
+
+	q := `{
+			me(func: uid(0x88)) {
+				occupations
+			}
+		}`
+	res, err := runQuery(q)
+	require.NoError(t, err)
+	require.Equal(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
+
+	m = `
+		mutation {
+			schema {
+				occupations: string .
+			}
+		}
+	`
+
+	// Cant change from list-type to non-list till we have data.
+	err = runMutation(m)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Schema change not allowed from [string] => string")
+
+	sm := `
+		mutation {
+			delete {
+				* <occupations> * .
+			}
+		}
+	`
+	err = runMutation(sm)
+	require.NoError(t, err)
+
+	require.NoError(t, runMutation(m))
+
+	q = `schema{}`
+	res, err = runQuery(q)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"schema":[{"predicate":"_predicate_","type":"string","list":true},{"predicate":"occupations","type":"string"}]}}`, res)
+
 }
 
 func TestMain(m *testing.M) {

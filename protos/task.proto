@@ -49,9 +49,13 @@ message Query {
 	FilterTree facets_filter = 9; // filtering on facets : has Op (and/or/not) tree
 }
 
+message ValueList {
+	repeated TaskValue values = 1;
+}
+
 message Result {
 	repeated List uid_matrix = 1;
-	repeated TaskValue values = 2;
+	repeated ValueList value_matrix = 2;
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
 	repeated FacetsList facet_matrix = 5;
