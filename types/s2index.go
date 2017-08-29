@@ -205,7 +205,7 @@ func coverLoop(l *s2.Loop, minLevel int, maxLevel int, maxCells int) s2.CellUnio
 		LevelMod: 0,
 		MaxCells: maxCells,
 	}
-	return rc.Covering(loopRegion{l})
+	return rc.Covering(l)
 }
 
 // appendTokens creates tokens with a certain prefix and append.
