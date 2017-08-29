@@ -179,9 +179,8 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	}
 
 	var queryRequest = query.QueryRequest{
-		Latency:    &l,
-		GqlQuery:   &res,
-		Linearized: false, // TODO: Set linearized field
+		Latency:  &l,
+		GqlQuery: &res,
 	}
 	if req.Mutation != nil && len(req.Mutation.Schema) > 0 {
 		queryRequest.SchemaUpdate = req.Mutation.Schema
