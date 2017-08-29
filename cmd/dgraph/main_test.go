@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -139,6 +140,11 @@ func runQuery(q string) (string, error) {
 		return "", fmt.Errorf("Unexpected status code: %v", status)
 	}
 
+	var qr x.QueryResWithData
+	json.Unmarshal(rr.Body.Bytes(), &qr)
+	if len(qr.Errors) > 0 {
+		return "", errors.New(qr.Errors[0].Message)
+	}
 	return rr.Body.String(), nil
 }
 
