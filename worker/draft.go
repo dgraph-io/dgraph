@@ -983,7 +983,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 }
 
 func (n *node) AmLeader() bool {
-	if n.Raft() == nil {
+	if n == nil || n.Raft() == nil {
 		return false
 	}
 	r := n.Raft()

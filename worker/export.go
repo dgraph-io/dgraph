@@ -373,8 +373,9 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 
 	var pl *pool
 	var conn *grpc.ClientConn
+	var err error
 	for _, addr := range addrs {
-		pl, err := pools().get(addr)
+		pl, err = pools().get(addr)
 		if err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
