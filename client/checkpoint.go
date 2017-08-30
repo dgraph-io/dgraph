@@ -93,9 +93,7 @@ func (d *Dgraph) writeCheckpoint() {
 }
 
 func (g syncMarks) create(file string) waterMark {
-	if g == nil {
-		g = make(map[string]waterMark)
-	}
+	x.AssertTrue(g != nil)
 
 	if prev, present := g[file]; present {
 		return prev
