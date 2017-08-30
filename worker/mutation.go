@@ -54,6 +54,10 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 		rv := ctx.Value("raft").(x.RaftValue)
 		x.AssertTruef(rv.Group == gid, "fingerprint mismatch between raft and group conf")
 
+		if _, err := schema.State().TypeOf(edge.Attr); err != nil {
+			// scheduler ensures that this is serialized for predicates of type scalar
+			updateSchemaType(edge.Attr, posting.TypeID(edge), rv.Index, rv.Group)
+		}
 		typ, err := schema.State().TypeOf(edge.Attr)
 		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
@@ -87,10 +91,17 @@ func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
 }
 
 // This is serialized with mutations, called after applied watermarks catch up
-// and further mutations are blocked until this is done.
+// and further mutations for corresponding predicates is blocked until this is done.
 func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) error {
+	if len(updates) == 0 {
+		return nil
+	}
 	rv := ctx.Value("raft").(x.RaftValue)
 	n := groups().Node(rv.Group)
+	// All mutations before this need to use the older schema.
+	// TODO: Applied watermark should be enough, only in case of uid to scalar conversion
+	// or reindexing we need sync mark
+	n.waitForSyncMark(ctx, rv.Index-1)
 	for _, update := range updates {
 		if !groups().ServesGroup(group.BelongsTo(update.Predicate)) {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
