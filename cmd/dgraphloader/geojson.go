@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"strconv"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/x"
@@ -16,55 +15,16 @@ import (
 )
 
 func toMutations(f *geojson.Feature, c *client.Dgraph) {
-	id, ok := getID(f)
-	if !ok {
-		//	log.Println("Skipping feature, cannot find id.")
-		return
-	}
-	n, err := c.NodeBlank(id)
+	n, err := c.NodeBlank("")
 	x.Check(err)
-
-	e := n.Edge("xid")
-	err = e.SetValueString(id)
-	x.Check(err)
-	if err = c.BatchSet(e); err != nil {
-		log.Fatal("While adding mutation to batch: ", err)
-	}
 
 	g, err := wkb.Marshal(f.Geometry, binary.LittleEndian)
 	x.Check(err)
-	e = n.Edge("geometry")
+	e := n.Edge(*geoPredicate)
 	x.Check(e.SetValueGeoBytes(g))
 	if err = c.BatchSet(e); err != nil {
 		log.Fatal("While adding mutation to batch: ", err)
 	}
-}
-
-func getID(f *geojson.Feature) (string, bool) {
-	if f.ID != "" {
-		return f.ID, true
-	}
-	// Some people define the id in the properties
-	idKeys := []string{"id", "ID", "Id"}
-	if *geoId != "" {
-		idKeys = append(idKeys, *geoId)
-	}
-	for _, k := range idKeys {
-		if v, ok := f.Properties[k]; ok {
-			if s, ok := v.(string); ok && s != "" {
-				return s, true
-			}
-			if f, ok := v.(float64); ok {
-				if f == float64(int64(f)) {
-					// whole number
-					return strconv.FormatInt(int64(f), 10), true
-				}
-				// floats shouldn't be ids.
-				return "", false
-			}
-		}
-	}
-	return "", false
 }
 
 func findFeatureArray(dec *json.Decoder) error {
@@ -101,7 +61,7 @@ func findFeatureArray(dec *json.Decoder) error {
 }
 
 func processGeoFile(ctx context.Context, file string, dgraphClient *client.Dgraph) error {
-	r, f := gzipReader(file)
+	r, f := fileReader(file)
 	defer f.Close()
 	dec := json.NewDecoder(r)
 	err := findFeatureArray(dec)
