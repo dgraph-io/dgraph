@@ -421,8 +421,19 @@ func deleteEntries(prefix []byte) error {
 	return nil
 }
 
+func compareAttrAndType(key []byte, attr string, typ byte) bool {
+	pk := x.Parse(key)
+	if pk.Attr == attr && pk.IsType(typ) {
+		return true
+	}
+	return false
+}
+
 func DeleteReverseEdges(ctx context.Context, attr string) error {
-	if err := lcache.clear(attr, x.ByteReverse); err != nil {
+	err := lcache.clear(func(key []byte) bool {
+		return compareAttrAndType(key, attr, x.ByteReverse)
+	})
+	if err != nil {
 		return err
 	}
 	// Delete index entries from data store.
@@ -444,10 +455,16 @@ func deleteCountIndex(ctx context.Context, attr string, reverse bool) error {
 }
 
 func DeleteCountIndex(ctx context.Context, attr string) error {
-	if err := lcache.clear(attr, x.ByteCount); err != nil {
+	err := lcache.clear(func(key []byte) bool {
+		return compareAttrAndType(key, attr, x.ByteCount)
+	})
+	if err != nil {
 		return err
 	}
-	if err := lcache.clear(attr, x.ByteCountRev); err != nil {
+	err = lcache.clear(func(key []byte) bool {
+		return compareAttrAndType(key, attr, x.ByteCountRev)
+	})
+	if err != nil {
 		return err
 	}
 	// Delete index entries from data store.
@@ -616,7 +633,10 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 }
 
 func DeleteIndex(ctx context.Context, attr string) error {
-	if err := lcache.clear(attr, x.ByteIndex); err != nil {
+	err := lcache.clear(func(key []byte) bool {
+		return compareAttrAndType(key, attr, x.ByteIndex)
+	})
+	if err != nil {
 		return err
 	}
 	// Delete index entries from data store.
@@ -708,7 +728,10 @@ func RebuildIndex(ctx context.Context, attr string) error {
 }
 
 func DeletePredicate(ctx context.Context, attr string) error {
-	if err := lcache.clear(attr, x.ByteData); err != nil {
+	err := lcache.clear(func(key []byte) bool {
+		return compareAttrAndType(key, attr, x.ByteData)
+	})
+	if err != nil {
 		return err
 	}
 	pk := x.ParsedKey{

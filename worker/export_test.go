@@ -108,7 +108,9 @@ func TestExport(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
-	posting.CommitLists(10, 1)
+	for i := 1; i <= 10; i++ {
+		posting.CommitLists(10, uint32(i))
+	}
 	time.Sleep(100 * time.Millisecond)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.

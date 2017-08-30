@@ -20,8 +20,9 @@ package worker
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/binary"
 	"io"
-	"sort"
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/trace"
@@ -43,7 +44,11 @@ func writeBatch(ctx context.Context, kv chan *protos.KV, che chan error) {
 	batchSize := 0
 	batchWriteNum := 1
 	for i := range kv {
-		wb = badger.EntriesSet(wb, i.Key, i.Val)
+		if len(i.Val) == 0 {
+			wb = badger.EntriesDelete(wb, i.Key)
+		} else {
+			wb = badger.EntriesSet(wb, i.Key, i.Val)
+		}
 		batchSize += len(i.Key) + len(i.Val)
 		// We write in batches of size 32MB.
 		if batchSize >= 32*MB {
@@ -67,6 +72,28 @@ func writeBatch(ctx context.Context, kv chan *protos.KV, che chan error) {
 		pstore.BatchSet(wb)
 	}
 	che <- nil
+}
+
+// Since snapshot is a rare event we can calculate checksum here instead of calculating
+// at every write unless we have some other use case.
+func checkSum(pl *protos.PostingList) []byte {
+	var pitr posting.PIterator
+	pitr.Init(pl, 0)
+	h := md5.New()
+	count := 0
+	var ubuf [16]byte
+	for ; pitr.Valid(); pitr.Next() {
+		p := pitr.Posting()
+		// Checksum code.
+		n := binary.PutVarint(ubuf[:], int64(count))
+		h.Write(ubuf[0:n])
+		n = binary.PutUvarint(ubuf[:], p.Uid)
+		h.Write(ubuf[0:n])
+		h.Write(p.Value)
+		h.Write([]byte(p.Label))
+		count++
+	}
+	return h.Sum(nil)
 }
 
 func streamKeys(stream protos.Worker_PredicateAndSchemaDataClient, groupId uint32) error {
@@ -106,7 +133,7 @@ func streamKeys(stream protos.Worker_PredicateAndSchemaDataClient, groupId uint3
 		copy(kdup, k)
 		key := &protos.KC{
 			Key:      kdup,
-			Checksum: pl.Checksum,
+			Checksum: checkSum(&pl),
 		}
 		g.Keys = append(g.Keys, key)
 		if len(g.Keys) >= 1000 {
@@ -237,6 +264,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 	defer it.Close()
 
 	var count int
+	var gidx int
 	// Do NOT it.Next() by default. Be careful when you "continue" in loop!
 	for it.Rewind(); it.Valid(); {
 		iterItem := it.Item()
@@ -262,17 +290,24 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 			var pl protos.PostingList
 			posting.UnmarshalWithCopy(v, iterItem.UserMeta(), &pl)
 
-			idx := sort.Search(len(gkeys.Keys), func(i int) bool {
-				t := gkeys.Keys[i]
-				return bytes.Compare(k, t.Key) <= 0
-			})
+			// If a key is present in follower but not in leader, send a kv with empty value
+			// so that the follower can delete it
+			for bytes.Compare(gkeys.Keys[gidx].Key, k) < 0 {
+				kv := &protos.KV{Key: gkeys.Keys[gidx].Key}
+				gidx++
+				if err := stream.Send(kv); err != nil {
+					return err
+				}
+			}
 
-			if idx < len(gkeys.Keys) {
-				// Found a match.
-				t := gkeys.Keys[idx]
+			t := gkeys.Keys[gidx]
+			// Found a match.
+			if bytes.Compare(k, t.Key) == 0 {
+				gidx++
 				// Different keys would have the same prefix. So, check Checksum first,
 				// it would be cheaper when there's no match.
-				if bytes.Equal(pl.Checksum, t.Checksum) && bytes.Equal(k, t.Key) {
+				// TODO: What if checksum collides ?
+				if bytes.Equal(checkSum(&pl), t.Checksum) {
 					// No need to send this.
 					it.Next()
 					continue
@@ -293,6 +328,15 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		}
 		it.Next()
 	} // end of iterator
+
+	// All these keys are not present in master, so mark them for deletion
+	for gidx < len(gkeys.Keys) {
+		kv := &protos.KV{Key: gkeys.Keys[gidx].Key}
+		gidx++
+		if err := stream.Send(kv); err != nil {
+			return err
+		}
+	}
 	if tr, ok := trace.FromContext(stream.Context()); ok {
 		tr.LazyPrintf("Sent %d keys to client. Done.\n", count)
 	}
