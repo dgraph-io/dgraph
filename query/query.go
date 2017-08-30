@@ -1307,7 +1307,26 @@ func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, path [
 	return sg.valueVarAggregation(doneVars, path, parent)
 }
 
+// Filters might have updated the destuids. facetMatrix should also be updated.
+func (sg *SubGraph) updateFacetMatrix() {
+	if sg.Params.Facet == nil {
+		return
+	}
+
+	for lidx, l := range sg.uidMatrix {
+		out := sg.facetsMatrix[lidx].FacetsList[:0]
+		for idx, uid := range l.Uids {
+			// If uid wasn't filtered then we keep the facet for it.
+			if algo.IndexOf(sg.DestUIDs, uid) >= 0 {
+				out = append(out, sg.facetsMatrix[lidx].FacetsList[idx])
+			}
+		}
+		sg.facetsMatrix[lidx].FacetsList = out
+	}
+}
+
 func (sg *SubGraph) updateUidMatrix() {
+	sg.updateFacetMatrix()
 	for _, l := range sg.uidMatrix {
 		if sg.Params.Order != "" {
 			// We can't do intersection directly as the list is not sorted by UIDs.
