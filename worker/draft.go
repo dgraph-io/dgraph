@@ -763,6 +763,8 @@ func (ls *linearizableState) readIndex() chan uint64 {
 	return ch
 }
 
+// Our ReadIndex request got a response (or timed out).  Inform our requesters and then (perhaps)
+// send another ReadIndex request for the next batch of requesters.
 func cycleResponses(ls *linearizableState, n *node, indexOrNone uint64) error {
 	for _, respCh := range ls.needingResponse {
 		respCh <- indexOrNone
@@ -776,9 +778,11 @@ const readIndexTimeout = 10 * time.Millisecond
 func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
 	ls.slurpRequests()
 	if len(ls.needingResponse) != 0 {
+		// Don't send another request -- we've already got an active one and it hasn't timed out.
 		return nil
 	}
 	if len(ls.pendingRequests) == 0 {
+		// Don't send a request -- there's nothing asking for one
 		return nil
 	}
 	ls.needingResponse, ls.pendingRequests = ls.pendingRequests, ls.needingResponse
@@ -884,7 +888,9 @@ func (n *node) Run() {
 			}
 
 		case req := <-n.linState.requests:
+			// Feed this request,
 			n.linState.feedRequest(req)
+			// and feed any others on the channel
 			if err := feedRequestsAndDispatchReadIndex(&n.linState, n); err != nil {
 				return
 			}
