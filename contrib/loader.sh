@@ -146,9 +146,9 @@ dataCount="1475250"
 # Concat exported files to get total count.
 cat $(ls -t export/dgraph-1-* | head -1) $(ls -t export/dgraph-2-* | head -1) > dgraph-export.rdf.gz
 if [[ $TRAVIS_OS_NAME == "osx" ]]; then
-  exportCount=$(export/dgraph-export.rdf.gz | wc -l)
+  exportCount=$(zcat < export/dgraph-export.rdf.gz | wc -l)
 else
-  exportCount=$(export/dgraph-export.rdf.gz | wc -l)
+  exportCount=$(zcat export/dgraph-export.rdf.gz | wc -l)
 fi
 
 
