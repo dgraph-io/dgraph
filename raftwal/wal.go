@@ -90,7 +90,7 @@ func (w *Wal) ExistsStaleIndex(gid uint32) (bool, error) {
 	if err := w.wals.Get(w.staleIndexKey(gid), &item); err != nil {
 		return false, err
 	}
-	return true, nil
+	return len(item.Value()) > 0, nil
 }
 
 func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
