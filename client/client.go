@@ -19,6 +19,7 @@ package client
 import (
 	"encoding/base64"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -41,9 +42,10 @@ const (
 // multiple set, delete and schema mutations, and a single GraphQL+- query.  If the query contains
 // GraphQL variables, then it must be set with SetQueryWithVariables rather than SetQuery.
 type Req struct {
-	gr   protos.Request
-	mark *x.WaterMark
-	line uint64
+	gr     protos.Request
+	mark   *x.WaterMark
+	line   uint64
+	markWg *sync.WaitGroup // non-nil only if mark is non-nil
 }
 
 // Request returns the protos.Request backing the Req.

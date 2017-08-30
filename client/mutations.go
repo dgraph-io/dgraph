@@ -373,6 +373,7 @@ RETRY:
 	if req.line != 0 && req.mark != nil {
 		atomic.AddUint64(&d.rdfs, uint64(req.size()))
 		req.mark.Done(req.line)
+		req.markWg.Done()
 	}
 	return nil
 }
@@ -489,7 +490,9 @@ func (d *Dgraph) BatchSetWithMark(r *Req, file string, line uint64) error {
 	if sm.mark != nil && line != 0 {
 		r.mark = sm.mark
 		r.line = line
+		r.markWg = sm.wg
 		sm.mark.Begin(line)
+		sm.wg.Add(1)
 	}
 
 L:
@@ -596,9 +599,7 @@ func (d *Dgraph) BatchFlush() error {
 	// After we have received response from server and sent the marks for completion,
 	// we need to wait for all of them to be processed.
 	for _, wm := range d.marks {
-		for wm.mark.WaitingFor() {
-			time.Sleep(100 * time.Millisecond)
-		}
+		wm.wg.Wait()
 	}
 	// Write final checkpoint before stopping.
 	d.writeCheckpoint()
