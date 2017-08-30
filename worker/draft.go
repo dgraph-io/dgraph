@@ -283,11 +283,15 @@ func taskKey(op byte, attribute string, uid uint64) string {
 
 // TODO: Should we throttle it per day or something on very large databases ?
 func (n *node) checkForStaleIndices(all bool) {
+	if n.gid == 0 {
+		return
+	}
 	select {
 	case n.sctx.ch <- struct{}{}:
 		// In case this is triggered frequently
 	default:
 		// We will do again on restart or when it is triggered next
+		// can be only due to retrieval of snapshot
 		n.wal.TouchStaleIndex(n.gid)
 	}
 
@@ -324,7 +328,9 @@ func (n *node) checkForStaleIndices(all bool) {
 	// persist the infromation that we need to checkforstaleindices to disk, so
 	// that we can rerun it if we crash in middle of this and entries get snapshotted
 	// Alternative might be to block snapshots, which is not that great
-	n.wal.TouchStaleIndex(n.gid)
+	if len(predicates) > 0 {
+		n.wal.TouchStaleIndex(n.gid)
+	}
 	go func() {
 		for _, predicate := range predicates {
 			posting.RemoveStaleIndices(n.ctx, predicate)

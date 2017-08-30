@@ -860,7 +860,9 @@ func RemoveStaleIndices(ctx context.Context, attr string) error {
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		iterItem := it.Item()
 		key := iterItem.Key()
-		ch <- key
+		newKey := make([]byte, len(key))
+		copy(newKey, key)
+		ch <- newKey
 	}
 
 	close(ch)

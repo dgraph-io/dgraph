@@ -78,7 +78,7 @@ func (w *Wal) prefix(gid uint32) []byte {
 }
 
 func (w *Wal) TouchStaleIndex(gid uint32) error {
-	return w.wals.SetIfAbsent(w.staleIndexKey(gid), nil, 0x00)
+	return w.wals.SetIfAbsent(w.staleIndexKey(gid), []byte{0x01}, 0x00)
 }
 
 func (w *Wal) RemoveStaleIndex(gid uint32) error {

@@ -196,12 +196,6 @@ func writeToFile(fpath string, ch chan []byte) error {
 
 // Export creates a export of data by exporting it as an RDF gzip.
 func export(gid uint32, bdir string) error {
-	n := groups().Node(gid)
-	if n == nil {
-		return x.Errorf("Node %d doesn't server group %d", Config.RaftId, gid)
-	}
-	lastIndex, _ := n.store.LastIndex()
-	n.syncAllMarks(n.ctx, lastIndex)
 	// Use a goroutine to write to file.
 	err := os.MkdirAll(bdir, 0700)
 	if err != nil {
@@ -345,6 +339,8 @@ func export(gid uint32, bdir string) error {
 func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos.ExportPayload {
 	n := groups().Node(gid)
 	if n.AmLeader() {
+		lastIndex, _ := n.store.LastIndex()
+		n.syncAllMarks(n.ctx, lastIndex)
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Leader of group: %d. Running export.", gid)
 		}
