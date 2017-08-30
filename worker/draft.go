@@ -1012,7 +1012,6 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
-	// TODO: Check is retrieveSnapshot crash safe, what if crash in middle of retrieving
 	n.checkForStaleIndices(true)
 }
 
@@ -1055,6 +1054,8 @@ func (n *node) Run() {
 				n.send(msg)
 			}
 
+			// TODO(Janardhan): Is it safe to persist snapshot before fetching it, what if we crash
+			// in middle of streaming
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the

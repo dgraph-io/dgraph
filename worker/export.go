@@ -196,6 +196,12 @@ func writeToFile(fpath string, ch chan []byte) error {
 
 // Export creates a export of data by exporting it as an RDF gzip.
 func export(gid uint32, bdir string) error {
+	n := groups().Node(gid)
+	if n == nil {
+		return x.Errorf("Node %d doesn't server group %d", Config.RaftId, gid)
+	}
+	lastIndex, _ := n.store.LastIndex()
+	n.syncAllMarks(n.ctx, lastIndex)
 	// Use a goroutine to write to file.
 	err := os.MkdirAll(bdir, 0700)
 	if err != nil {
