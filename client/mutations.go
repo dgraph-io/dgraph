@@ -371,10 +371,10 @@ RETRY:
 
 	// Mark watermarks as done.
 	if req.line != 0 && req.mark != nil {
-		atomic.AddUint64(&d.rdfs, uint64(req.size()))
 		req.mark.Done(req.line)
 		req.markWg.Done()
 	}
+	atomic.AddUint64(&d.rdfs, uint64(req.size()))
 	return nil
 }
 
