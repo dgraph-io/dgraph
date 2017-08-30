@@ -80,7 +80,7 @@ func prepare() (dir1, dir2 string, rerr error) {
 	dgraph.State = dgraph.NewServerState()
 
 	posting.Init(dgraph.State.Pstore)
-	group.ParseGroupConfig("groups.conf")
+	x.Check(group.ParseGroupConfig(""))
 	schema.Init(dgraph.State.Pstore)
 	worker.Init(dgraph.State.Pstore)
 	worker.StartRaftNodes(dgraph.State.WALstore, false)

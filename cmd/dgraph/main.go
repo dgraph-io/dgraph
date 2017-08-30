@@ -756,7 +756,7 @@ func main() {
 		}
 	}
 
-	group.ParseGroupConfig(gconf)
+	x.Checkf(group.ParseGroupConfig(gconf), "While parsing group config.")
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

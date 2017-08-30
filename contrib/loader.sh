@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source ./contrib/functions.sh
+
 SRC="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
 
 BUILD=$1
@@ -29,23 +31,24 @@ go build .
 
 ./dgraph --version
 if [ $? -eq 0 ]; then
-    echo -e "dgraph --version succeeded.\n"
+  echo -e "dgraph --version succeeded.\n"
 else
-    echo "dgraph --version command failed."
+  echo "dgraph --version command failed."
 fi
 
-./dgraph -gentlecommit 1.0 -p $BUILD/p -w $BUILD/loader/w -memory_mb 6000 > $BUILD/server.log &
+# Start Dgraph
+start
 popd &> /dev/null
 
-sleep 15
+sleep 10
 
 #Set Schema
 curl -X POST  -d 'mutation {
-  schema {
-    name: string @index(term) .
-		_xid_: string @index(exact,term) .
-    initial_release_date: datetime @index(year) .
-	}
+schema {
+name: string @index(term) .
+_xid_: string @index(exact,term) .
+initial_release_date: datetime @index(year) .
+  }
 }' "http://localhost:8080/query"
 
 echo -e "\nBuilding and running dgraphloader."
@@ -58,11 +61,6 @@ popd &> /dev/null
 
 pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/indextest &> /dev/null
 
-function quit {
-	curl localhost:8080/admin/shutdown
-	return $1
-}
-
 function run_index_test {
   local max_attempts=${ATTEMPTS-5}
   local timeout=${TIMEOUT-1}
@@ -70,8 +68,8 @@ function run_index_test {
   local exitCode=0
 
   X=$1
-	GREPFOR=$2
-	ANS=$3
+  GREPFOR=$2
+  ANS=$3
   echo "Running test: ${X}"
   while (( $attempt < $max_attempts ))
   do
@@ -93,9 +91,9 @@ function run_index_test {
   done
 
   NUM=$(echo $N | python -m json.tool | grep $GREPFOR | wc -l)
-	if [[ ! "$NUM" -eq "$ANS" ]]; then
-	  echo "Index test failed: ${X}  Expected: $ANS  Got: $NUM"
-	  quit 1
+  if [[ ! "$NUM" -eq "$ANS" ]]; then
+    echo "Index test failed: ${X}  Expected: $ANS  Got: $NUM"
+    quit 1
   else
     echo -e "Index test passed: ${X}\n"
   fi
@@ -122,19 +120,21 @@ sleep 20
 
 echo -e "\nTrying to restart Dgraph and match export count"
 pushd cmd/dgraph &> /dev/null
-./dgraph -p $BUILD/p -w $BUILD/loader/w -memory_mb 4000 &
+start
 # Wait to become leader.
-sleep 15
+sleep 5
 echo -e "\nTrying to export data."
 curl http://localhost:8080/admin/export
 echo -e "\nExport done."
 
 # This is count of RDF's in goldendata.rdf.gz + xids because we ran dgraphloader with -xid flag.
 dataCount="1475250"
+# Concat exported files to get total count.
+cat $(ls -t export/dgraph-1-* | head -1) $(ls -t export/dgraph-2-* | head -1) > export/dgraph-export.rdf.gz
 if [[ $TRAVIS_OS_NAME == "osx" ]]; then
-  exportCount=$(zcat < $(ls -t export/dgraph-1-* | head -1) | wc -l)
+  exportCount=$(zcat < export/dgraph-export.rdf.gz | wc -l)
 else
-  exportCount=$(zcat $(ls -t export/dgraph-1-* | head -1) | wc -l)
+  exportCount=$(zcat export/dgraph-export.rdf.gz | wc -l)
 fi
 
 
