@@ -1189,16 +1189,12 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*
 }
 
 func waitLinearizableRead(ctx context.Context, gid uint32) error {
-	log.Printf("Wait linearizable read for gid %d\n", gid)
 	n := groups().Node(gid)
 	replyCh := n.linState.readIndex()
-	log.Printf("readIndex() returned...\n")
 	index := <-replyCh
-	log.Printf("read index %d from replyCh\n", index)
 	if index == raft.None {
 		return fmt.Errorf("TODO: raftIndex none")
 	}
 	n.applied.WaitForMark(index)
-	log.Printf("Mark (for index %d) has been applied\n", index)
 	return nil
 }
