@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -29,6 +30,7 @@ import (
 type waterMark struct {
 	last uint64 // Last line number that was written to Badger.
 	mark *x.WaterMark
+	wg   *sync.WaitGroup
 }
 
 // A watermark for each file.
@@ -102,7 +104,7 @@ func (g syncMarks) create(file string) waterMark {
 	}
 	m := &x.WaterMark{Name: file}
 	m.Init()
-	wm := waterMark{mark: m}
+	wm := waterMark{mark: m, wg: new(sync.WaitGroup)}
 	g[file] = wm
 	return wm
 }
