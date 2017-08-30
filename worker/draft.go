@@ -825,9 +825,7 @@ func waitLinearizableRead(ctx context.Context, gid uint32) error {
 	replyCh := n.linState.readIndex()
 	index := <-replyCh
 	if index == raft.None {
-		// TODO: What we should do is just retry or let the Run loop retry.  Some other code is
-		// responsible for giving up.
-		return x.Errorf("Cannot get linearized read (time expired or no configured leader)")
+		return x.Errorf("cannot get linearized read (time expired or no configured leader)")
 	}
 	n.Applied.WaitForMark(index)
 	return nil
