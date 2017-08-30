@@ -337,7 +337,7 @@ func export(gid uint32, bdir string) error {
 
 func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos.ExportPayload {
 	n := groups().Node(gid)
-	if n.AmLeader() {
+	if n != nil && n.AmLeader() {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Leader of group: %d. Running export.", gid)
 		}
