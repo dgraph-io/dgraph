@@ -18,6 +18,7 @@ package client
 
 import (
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/twpayne/go-geom/encoding/wkb"
 )
 
 type opType int
@@ -424,11 +426,20 @@ func (e *Edge) SetValueGeoJson(json string) error {
 	return nil
 }
 
-func (e *Edge) SetValueGeoBytes(b []byte) error {
+// SetValueGeoGeometry sets the value of Edge e as the marshalled value of the geometry g and sets
+// the type of the edge to types.GeoID.  If the edge had previous been assigned another value (even
+// of another type), the value and type are overwritten.  If the edge has previously been connected
+// to a node, the edge and type are left unchanged and ErrConnected is returned. If the geometry
+// fails to be marshalled with wkb.Marshal() the edge is left unchanged and an error returned.
+func (e *Edge) SetValueGeoGeometry(g geom.T) error {
 	if len(e.nq.ObjectId) > 0 {
 		return ErrConnected
 	}
 
+	b, err := wkb.Marshal(g, binary.LittleEndian)
+	if err != nil {
+		return err
+	}
 	geo := &protos.Value{&protos.Value_GeoVal{b}}
 	e.nq.ObjectValue = geo
 	e.nq.ObjectType = int32(types.GeoID)

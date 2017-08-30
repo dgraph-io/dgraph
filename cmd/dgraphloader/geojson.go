@@ -2,29 +2,29 @@ package main
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 
 	"github.com/dgraph-io/dgraph/client"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/twpayne/go-geom/encoding/geojson"
-	"github.com/twpayne/go-geom/encoding/wkb"
 )
 
-func toMutations(f *geojson.Feature, c *client.Dgraph) {
+func toMutations(f *geojson.Feature, c *client.Dgraph) error {
 	n, err := c.NodeBlank("")
-	x.Check(err)
+	if err != nil {
+		return err
+	}
 
-	g, err := wkb.Marshal(f.Geometry, binary.LittleEndian)
-	x.Check(err)
 	e := n.Edge(*geoPredicate)
-	x.Check(e.SetValueGeoBytes(g))
+	if err = e.SetValueGeoGeometry(f.Geometry); err != nil {
+		return err
+	}
 	if err = c.BatchSet(e); err != nil {
 		log.Fatal("While adding mutation to batch: ", err)
 	}
+	return nil
 }
 
 func findFeatureArray(dec *json.Decoder) error {
@@ -61,6 +61,7 @@ func findFeatureArray(dec *json.Decoder) error {
 }
 
 func processGeoFile(ctx context.Context, file string, dgraphClient *client.Dgraph) error {
+	fmt.Printf("\nProcessing %s\n", file)
 	r, f := fileReader(file)
 	defer f.Close()
 	dec := json.NewDecoder(r)
@@ -76,7 +77,9 @@ func processGeoFile(ctx context.Context, file string, dgraphClient *client.Dgrap
 		if err != nil {
 			return err
 		}
-		toMutations(&f, dgraphClient)
+		if err = toMutations(&f, dgraphClient); err != nil {
+			return err
+		}
 	}
 	return nil
 }

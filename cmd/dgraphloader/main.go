@@ -49,8 +49,7 @@ var (
 	clientDir    = flag.String("cd", "c", "Directory to store xid to uid mapping")
 	blockRate    = flag.Int("block", 0, "Block profiling rate")
 	geoFiles     = flag.String("geo", "", "Location of geo files to load")
-	geoPredicate = flag.String("geopred", "geometry",
-		"The name of the predicate used to store the coordinates.")
+	geoPredicate = flag.String("geopred", "loc", "The name of the predicate used to store coordinates.")
 	// TLS configuration
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
 	tlsInsecure      = flag.Bool("tls.insecure", false, "Skip certificate validation (insecure)")
@@ -303,10 +302,6 @@ func main() {
 		cancelTimeout()
 	}
 
-	filesList := fileList(*files)
-	geoFilesList := fileList(*geoFiles)
-	totalFiles := len(filesList) + len(geoFilesList)
-	x.AssertTrue(totalFiles > 0)
 	if *storeXid {
 		if err := dgraphClient.AddSchema(protos.SchemaUpdate{
 			Predicate: "xid",
@@ -328,8 +323,14 @@ func main() {
 		}
 	}
 
-	x.Check(dgraphClient.NewSyncMarks(filesList))
+	filesList := fileList(*files)
+	geoFilesList := fileList(*geoFiles)
+	totalFiles := len(filesList) + len(geoFilesList)
+	if totalFiles == 0 {
+		os.Exit(0)
+	}
 
+	x.Check(dgraphClient.NewSyncMarks(filesList))
 	errCh := make(chan error, totalFiles)
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
