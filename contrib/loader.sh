@@ -144,7 +144,7 @@ echo -e "\nExport done."
 # This is count of RDF's in goldendata.rdf.gz + xids because we ran dgraphloader with -xid flag.
 dataCount="1475250"
 # Concat exported files to get total count.
-cat $(ls -t export/dgraph-1-* | head -1) $(ls -t export/dgraph-2-* | head -1) > dgraph-export.rdf.gz
+cat $(ls -t export/dgraph-1-* | head -1) $(ls -t export/dgraph-2-* | head -1) > export/dgraph-export.rdf.gz
 if [[ $TRAVIS_OS_NAME == "osx" ]]; then
   exportCount=$(zcat < export/dgraph-export.rdf.gz | wc -l)
 else
