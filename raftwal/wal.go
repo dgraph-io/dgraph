@@ -62,11 +62,35 @@ func (w *Wal) entryKey(gid uint32, term, idx uint64) []byte {
 	return b
 }
 
+func (w *Wal) staleIndexKey(gid uint32) []byte {
+	b := make([]byte, 14)
+	binary.BigEndian.PutUint64(b[0:8], w.id)
+	copy(b[8:10], []byte("si"))
+	binary.BigEndian.PutUint32(b[10:14], gid)
+	return b
+}
+
 func (w *Wal) prefix(gid uint32) []byte {
 	b := make([]byte, 12)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
 	binary.BigEndian.PutUint32(b[8:12], gid)
 	return b
+}
+
+func (w *Wal) TouchStaleIndex(gid uint32) error {
+	return w.wals.SetIfAbsent(w.staleIndexKey(gid), nil, 0x00)
+}
+
+func (w *Wal) RemoveStaleIndex(gid uint32) error {
+	return w.wals.Delete(w.staleIndexKey(gid))
+}
+
+func (w *Wal) ExistsStaleIndex(gid uint32) (bool, error) {
+	var item badger.KVItem
+	if err := w.wals.Get(w.staleIndexKey(gid), &item); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {

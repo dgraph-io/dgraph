@@ -210,11 +210,13 @@ type schedulerCtx struct {
 
 	// raft entries which were found on restart
 	es []raftpb.Entry
+	ch chan struct{}
 }
 
 func (s *schedulerCtx) init() {
 	s.pending = make(map[string][]uint32)
 	s.childTasks = make(map[uint32][]*task)
+	s.ch = make(chan struct{}, 1)
 }
 
 func (s *schedulerCtx) addPending(key string, tid uint32) {
@@ -279,7 +281,16 @@ func taskKey(op byte, attribute string, uid uint64) string {
 	return fmt.Sprintf("%s%d%s%d", op, len(attribute), attribute, uid)
 }
 
+// TODO: Should we throttle it per day or something on very large databases ?
 func (n *node) checkForStaleIndices(all bool) {
+	select {
+	case n.sctx.ch <- struct{}{}:
+		// In case this is triggered frequently
+	default:
+		// We will do again on restart or when it is triggered next
+		n.wal.TouchStaleIndex(n.gid)
+	}
+
 	var predicates []string
 	// Find all indexed predicates and fix them.
 	// Would be needed in case when we get a snapshot. We can avoid this if
@@ -288,8 +299,6 @@ func (n *node) checkForStaleIndices(all bool) {
 		predicates = schema.State().IndexedFields(n.gid)
 	} else {
 		preds := make(map[string]struct{})
-		// TODO: Disable snapshots and persist somewhere that we need to clean
-		// stale indices or else the information would be lost on next snapshot
 		for _, entry := range n.sctx.es {
 			if len(entry.Data) == 0 || entry.Type != raftpb.EntryNormal {
 				continue
@@ -312,9 +321,17 @@ func (n *node) checkForStaleIndices(all bool) {
 		}
 	}
 
-	for _, predicate := range predicates {
-		posting.RemoveStaleIndices(n.ctx, predicate)
-	}
+	// persist the infromation that we need to checkforstaleindices to disk, so
+	// that we can rerun it if we crash in middle of this and entries get snapshotted
+	// Alternative might be to block snapshots, which is not that great
+	n.wal.TouchStaleIndex(n.gid)
+	go func() {
+		for _, predicate := range predicates {
+			posting.RemoveStaleIndices(n.ctx, predicate)
+		}
+		n.wal.RemoveStaleIndex(n.gid)
+		<-n.sctx.ch
+	}()
 }
 
 // checks whether the given task can be executed right away or not, also registers
@@ -995,7 +1012,8 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
 	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
-	go n.checkForStaleIndices(true)
+	// TODO: Check is retrieveSnapshot crash safe, what if crash in middle of retrieving
+	n.checkForStaleIndices(true)
 }
 
 func (n *node) Run() {
@@ -1257,7 +1275,9 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 		if !found && groups().HasPeer(n.gid) {
 			n.joinPeers()
 		}
-		go n.checkForStaleIndices(false)
+		runForAll, err := n.wal.ExistsStaleIndex(n.gid)
+		x.Check(err)
+		n.checkForStaleIndices(runForAll)
 		n.SetRaft(raft.RestartNode(n.cfg))
 
 	} else {
