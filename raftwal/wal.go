@@ -118,14 +118,6 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 	wb := make([]*badger.Entry, 0, 100)
 
-	if !raft.IsEmptyHardState(h) {
-		data, err := h.Marshal()
-		if err != nil {
-			return x.Wrapf(err, "wal.Store: While marshal hardstate")
-		}
-		wb = badger.EntriesSet(wb, w.hardStateKey(gid), data)
-	}
-
 	var t, i uint64
 	for _, e := range es {
 		t, i = e.Term, e.Index
@@ -135,6 +127,14 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 		}
 		k := w.entryKey(gid, e.Term, e.Index)
 		wb = badger.EntriesSet(wb, k, data)
+	}
+
+	if !raft.IsEmptyHardState(h) {
+		data, err := h.Marshal()
+		if err != nil {
+			return x.Wrapf(err, "wal.Store: While marshal hardstate")
+		}
+		wb = badger.EntriesSet(wb, w.hardStateKey(gid), data)
 	}
 
 	// If we get no entries, then the default value of t and i would be zero. That would

@@ -38,9 +38,11 @@ func From(s *protos.SchemaUpdate) protos.SchemaUpdate {
 			ValueType: s.ValueType,
 			Directive: protos.SchemaUpdate_INDEX,
 			Tokenizer: s.Tokenizer,
-			Count:     s.Count}
+			Count:     s.Count,
+			List:      s.List,
+		}
 	}
-	return protos.SchemaUpdate{ValueType: s.ValueType, Count: s.Count}
+	return protos.SchemaUpdate{ValueType: s.ValueType, Count: s.Count, List: s.List}
 }
 
 // ParseBytes parses the byte array which holds the schema. We will reset
@@ -59,6 +61,10 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	for _, update := range updates {
 		State().Set(update.Predicate, From(update))
 	}
+	State().Set("_predicate_", protos.SchemaUpdate{
+		ValueType: uint32(types.StringID),
+		List:      true,
+	})
 	return nil
 }
 
@@ -98,8 +104,20 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*protos.SchemaUpda
 		return nil, x.Errorf("Missing colon")
 	}
 
-	it.Next()
+	if !it.Next() {
+		return nil, x.Errorf("Invalid ending while trying to parse schema.")
+	}
 	next := it.Item()
+	schema := &protos.SchemaUpdate{Predicate: predicate}
+	// Could be list type.
+	if next.Typ == itemLeftSquare {
+		schema.List = true
+		if !it.Next() {
+			return nil, x.Errorf("Invalid ending while trying to parse schema.")
+		}
+		next = it.Item()
+	}
+
 	if next.Typ != itemText {
 		return nil, x.Errorf("Missing Type")
 	}
@@ -109,11 +127,30 @@ func parseScalarPair(it *lex.ItemIterator, predicate string) (*protos.SchemaUpda
 	if !ok {
 		return nil, x.Errorf("Undefined Type")
 	}
+	if schema.List {
+		if !t.IsScalar() {
+			return nil, x.Errorf("Expected scalar type inside []. Got: [%s] for attr: [%s].",
+				t.Name(), predicate)
+		}
+		// TODO - Add a test case for multiple Geo and ensure that it works.
+		if uint32(t) == uint32(types.PasswordID) {
+			return nil, x.Errorf("Password list type is not supported.")
+		}
+	}
+	schema.ValueType = uint32(t)
 
 	// Check for index / reverse.
-	schema := &protos.SchemaUpdate{Predicate: predicate, ValueType: uint32(t)}
 	it.Next()
 	next = it.Item()
+	if schema.List {
+		if next.Typ != itemRightSquare {
+			return nil, x.Errorf("Unclosed [ while parsing schema for: %s", predicate)
+		}
+		if !it.Next() {
+			return nil, x.Errorf("Invalid ending")
+		}
+		next = it.Item()
+	}
 	if next.Typ == itemAt {
 		if err := parseDirective(it, schema, t); err != nil {
 			return nil, err

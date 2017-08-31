@@ -83,7 +83,10 @@ func SetConfiguration(newConfig Options) {
 
 	Config = newConfig
 
+	posting.Config.Mu.Lock()
 	posting.Config.AllottedMemory = Config.AllottedMemory
+	posting.Config.Mu.Unlock()
+
 	posting.Config.CommitFraction = Config.CommitFraction
 
 	worker.Config.BaseWorkerPort = Config.BaseWorkerPort
@@ -102,6 +105,8 @@ func SetConfiguration(newConfig Options) {
 	x.Config.DebugMode = Config.DebugMode
 }
 
+const MinAllottedMemory = 1024.0
+
 func (o *Options) validate() {
 	pd, err := filepath.Abs(o.PostingDir)
 	x.Check(err)
@@ -110,6 +115,6 @@ func (o *Options) validate() {
 	x.AssertTruef(pd != wd, "Posting and WAL directory cannot be the same ('%s').", o.PostingDir)
 	x.AssertTruef(o.AllottedMemory != DefaultConfig.AllottedMemory,
 		"Allotted memory (--memory_mb) must be specified, with value greater than 1024 MB")
-	x.AssertTruef(o.AllottedMemory >= 1024.0,
-		"Allotted memory (--memory_mb) must be at least 1024 MB. Currently set to: %f", o.AllottedMemory)
+	x.AssertTruef(o.AllottedMemory >= MinAllottedMemory,
+		"Allotted memory (--memory_mb) must be at least %.0f MB. Currently set to: %f", MinAllottedMemory, o.AllottedMemory)
 }

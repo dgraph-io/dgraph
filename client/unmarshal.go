@@ -149,6 +149,35 @@ func setField(val reflect.Value, value *protos.Value, field reflect.StructField)
 				v := value.GetBytesVal()
 				f.Set(reflect.ValueOf(v))
 			}
+		default:
+			// We would be here when an attr has multiple values.
+			// TODO - Refactor to remove this duplication.
+			elemType := field.Type.Elem()
+			switch elemType.Kind() {
+			case reflect.String:
+				f.Set(reflect.Append(f, reflect.ValueOf(value.GetStrVal())))
+			case reflect.Int64, reflect.Int:
+				f.Set(reflect.Append(f, reflect.ValueOf(value.GetIntVal())))
+			case reflect.Float64:
+				f.Set(reflect.Append(f, reflect.ValueOf(value.GetDoubleVal())))
+			case reflect.Bool:
+				f.Set(reflect.Append(f, reflect.ValueOf(value.GetBoolVal())))
+			case reflect.Uint64:
+				f.Set(reflect.Append(f, reflect.ValueOf(value.GetUidVal())))
+			case reflect.Struct:
+				switch elemType {
+				case reflect.TypeOf(time.Time{}):
+					v := value.GetStrVal()
+					if v == "" {
+						return nil
+					}
+					t, err := time.Parse(time.RFC3339, v)
+					if err == nil {
+						f.Set(reflect.Append(f, reflect.ValueOf(t)))
+					}
+				default:
+				}
+			}
 		}
 	default:
 	}

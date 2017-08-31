@@ -84,7 +84,7 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 	}
 }
 
-type queryResWithData struct {
+type QueryResWithData struct {
 	Errors []errRes `json:"errors"`
 	Data   *string  `json:"data"`
 }
@@ -92,7 +92,7 @@ type queryResWithData struct {
 // In case an error was encountered after the query execution started, we have to return data
 // key with null value according to GraphQL spec.
 func SetStatusWithData(w http.ResponseWriter, code, msg string) {
-	var qr queryResWithData
+	var qr QueryResWithData
 	qr.Errors = append(qr.Errors, errRes{Code: code, Message: msg})
 	// This would ensure that data key is present with value null.
 	if js, err := json.Marshal(qr); err == nil {

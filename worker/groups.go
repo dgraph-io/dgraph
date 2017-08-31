@@ -661,8 +661,8 @@ func syncAllMarks(ctx context.Context) error {
 				che <- err
 				return
 			}
-			err = n.syncAllMarks(ctx, lastIndex)
-			che <- err
+			n.syncAllMarks(ctx, lastIndex)
+			che <- nil
 		}(n)
 	}
 

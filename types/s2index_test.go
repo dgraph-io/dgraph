@@ -161,7 +161,7 @@ func testCover(file string, max int) {
 
 func printCoverAccuracy(l *s2.Loop, cu s2.CellUnion) {
 	a1 := cellUnionArea(cu)
-	a2 := loopArea(l)
+	a2 := l.Area()
 	fmt.Printf("Loop area: %v. Cell area %v. Ratio %.3f\n", EarthArea(a2), EarthArea(a1), a1/a2)
 }
 
@@ -170,16 +170,6 @@ func cellUnionArea(cu s2.CellUnion) float64 {
 	for _, c := range cu {
 		cell := s2.CellFromCellID(c)
 		area += cell.ExactArea()
-	}
-	return area
-}
-
-func loopArea(l *s2.Loop) float64 {
-	n := l.NumEdges()
-	origin := l.Vertex(0)
-	var area float64
-	for i := 1; i < n-1; i++ {
-		area += s2.PointArea(origin, l.Vertex(i), l.Vertex(i+1)) * float64(s2.RobustSign(origin, l.Vertex(i), l.Vertex(i+1)))
 	}
 	return area
 }

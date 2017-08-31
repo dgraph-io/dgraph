@@ -470,7 +470,7 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 
 // handlerInit does some standard checks. Returns false if something is wrong.
 func handlerInit(w http.ResponseWriter, r *http.Request) bool {
-	if r.Method != "GET" {
+	if r.Method != http.MethodGet {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return false
 	}
@@ -523,6 +523,50 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"code": "Success", "message": "Export completed."}`))
+}
+
+func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		memoryLimitGetHandler(w, r)
+	case http.MethodPut:
+		memoryLimitPutHandler(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	memoryMB, err := strconv.ParseFloat(string(body), 64)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if memoryMB < dgraph.MinAllottedMemory {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "memory_mb must be at least %.0f\n", dgraph.MinAllottedMemory)
+		return
+	}
+
+	posting.Config.Mu.Lock()
+	posting.Config.AllottedMemory = memoryMB
+	posting.Config.Mu.Unlock()
+	w.WriteHeader(http.StatusOK)
+}
+
+func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
+	posting.Config.Mu.Lock()
+	memoryMB := posting.Config.AllottedMemory
+	posting.Config.Mu.Unlock()
+
+	if _, err := fmt.Fprintln(w, memoryMB); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func hasGraphOps(mu *protos.Mutation) bool {
@@ -661,6 +705,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/export", exportHandler)
+	http.HandleFunc("/admin/config/memory_mb", memoryLimitHandler)
 
 	// UI related API's.
 	// Share urls have a hex string as the shareId. So if
@@ -711,7 +756,7 @@ func main() {
 		}
 	}
 
-	group.ParseGroupConfig(gconf)
+	x.Checkf(group.ParseGroupConfig(gconf), "While parsing group config.")
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

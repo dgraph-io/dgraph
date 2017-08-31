@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -29,6 +30,7 @@ import (
 type waterMark struct {
 	last uint64 // Last line number that was written to Badger.
 	mark *x.WaterMark
+	wg   *sync.WaitGroup
 }
 
 // A watermark for each file.
@@ -36,6 +38,9 @@ type syncMarks map[string]waterMark
 
 // Create syncmarks for files and store them in dgraphClient.
 func (d *Dgraph) NewSyncMarks(files []string) error {
+	if len(files) == 0 {
+		return nil
+	}
 	if len(d.marks) > 0 {
 		return fmt.Errorf("NewSyncMarks should only be called once.")
 	}
@@ -93,16 +98,14 @@ func (d *Dgraph) writeCheckpoint() {
 }
 
 func (g syncMarks) create(file string) waterMark {
-	if g == nil {
-		g = make(map[string]waterMark)
-	}
+	x.AssertTrue(g != nil)
 
 	if prev, present := g[file]; present {
 		return prev
 	}
 	m := &x.WaterMark{Name: file}
 	m.Init()
-	wm := waterMark{mark: m}
+	wm := waterMark{mark: m, wg: new(sync.WaitGroup)}
 	g[file] = wm
 	return wm
 }
