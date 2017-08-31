@@ -748,7 +748,9 @@ func main() {
 	setupProfiling()
 
 	dgraph.State = dgraph.NewServerState()
-	defer dgraph.State.Dispose()
+	defer func() {
+		x.Check(dgraph.State.Dispose())
+	}()
 
 	if exposeTrace {
 		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {

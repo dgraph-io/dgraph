@@ -44,10 +44,10 @@ sleep 10
 
 #Set Schema
 curl -X POST  -d 'mutation {
-schema {
-name: string @index(term) .
-_xid_: string @index(exact,term) .
-initial_release_date: datetime @index(year) .
+  schema {
+    name: string @index(term) .
+    xid: string @index(exact) .
+    initial_release_date: datetime @index(year) .
   }
 }' "http://localhost:8080/query"
 
@@ -59,58 +59,18 @@ go build .
 ./dgraphloader -r $benchmark/goldendata.rdf.gz -x true
 popd &> /dev/null
 
-pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/indextest &> /dev/null
 
-function run_index_test {
-  local max_attempts=${ATTEMPTS-5}
-  local timeout=${TIMEOUT-1}
-  local attempt=0
-  local exitCode=0
-
-  X=$1
-  GREPFOR=$2
-  ANS=$3
-  echo "Running test: ${X}"
-  while (( $attempt < $max_attempts ))
-  do
-    set +e
-    N=`curl -s localhost:8080/query -XPOST -d @${X}.in`
-    exitCode=$?
-
-    set -e
-
-    if [[ $exitCode == 0 ]]
-    then
-      break
-    fi
-
-    echo "Failure! Retrying in $timeout.." 1>&2
-    sleep $timeout
-    attempt=$(( attempt + 1 ))
-    timeout=$(( timeout * 2 ))
-  done
-
-  NUM=$(echo $N | python -m json.tool | grep $GREPFOR | wc -l)
-  if [[ ! "$NUM" -eq "$ANS" ]]; then
-    echo "Index test failed: ${X}  Expected: $ANS  Got: $NUM"
-    quit 1
-  else
-    echo -e "Index test passed: ${X}\n"
-  fi
-}
-
-echo -e "\nRunning some queries and checking count of results returned."
-run_index_test basic name 138676
-run_index_test allof_the name 25431
-run_index_test allof_the_a name 367
-run_index_test allof_the_first name 4383
-run_index_test releasedate release_date 137858
-run_index_test releasedate_sort release_date 137858
-run_index_test releasedate_sort_first_offset release_date 2315
-run_index_test releasedate_geq release_date 60991
-run_index_test gen_anyof_good_bad name 1103
-
+# Restart Dgraph so that we are sure that index keys are persisted.
+quit 0
+# Wait for a clean shutdown.
+sleep 15
+pushd cmd/dgraph &> /dev/null
+start
+# Wait for membership sync to happen.
+sleep 10
 popd &> /dev/null
+
+./contrib/goldendata-queries.sh
 
 echo -e "\nShutting down Dgraph"
 quit 0

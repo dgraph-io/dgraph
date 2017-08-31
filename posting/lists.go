@@ -325,11 +325,10 @@ func GetOrCreate(key []byte, group uint32) (rlist *List) {
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
-	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
+	l := getNew(key, pstore)
 	l.water = marks.Get(group)
 
 	// We are always going to return lp to caller, whether it is l or not
-	// lcache increments the ref counter
 	lp = lcache.PutIfMissing(string(key), l)
 
 	if lp != l {
@@ -337,7 +336,9 @@ func GetOrCreate(key []byte, group uint32) (rlist *List) {
 	} else {
 		pk := x.Parse(key)
 		if pk.IsIndex() || pk.IsCount() {
-			if err := pstore.SetIfAbsent(key, nil, 0x00); err != nil && err != badger.KeyExists {
+			// This is a best effort set, hence we don't check error from callback.
+			if err := pstore.SetIfAbsentAsync(key, nil, 0x00, func(err error) {}); err != nil &&
+				err != badger.ErrKeyExists {
 				x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
 			}
 		}

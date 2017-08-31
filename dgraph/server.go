@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 type ServerState struct {
@@ -91,9 +92,14 @@ func (s *ServerState) initStorage() {
 	x.Checkf(err, "Error while creating badger KV posting store")
 }
 
-func (s *ServerState) Dispose() {
-	s.Pstore.Close()
-	s.WALstore.Close()
+func (s *ServerState) Dispose() error {
+	if err := s.Pstore.Close(); err != nil {
+		return errors.Wrapf(err, "While closing postings store")
+	}
+	if err := s.WALstore.Close(); err != nil {
+		return errors.Wrapf(err, "While closing WAL store")
+	}
+	return nil
 }
 
 // Server implements protos.DgraphServer

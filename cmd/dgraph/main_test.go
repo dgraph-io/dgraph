@@ -30,6 +30,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -611,6 +612,7 @@ func TestSchemaMutationCountAdd(t *testing.T) {
 	err = runMutation(s)
 	require.NoError(t, err)
 
+	time.Sleep(10 * time.Millisecond)
 	output, err := runQuery(q1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"data": {"user":[{"name":"Alice"}]}}`, output)
