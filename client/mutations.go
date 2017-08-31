@@ -45,6 +45,7 @@ var (
 	ErrEmptyVar       = errors.New("Empty variable name.")
 	ErrNotConnected   = errors.New("Edge needs to be connected to another node or a value.")
 	ErrInvalidSubject = errors.New("Edge should have one of Subject/SubjectVar set.")
+	ErrEmptyPredicate = errors.New("Edge should have a predicate set.")
 	ErrMaxTries       = errors.New("Max retries exceeded for request while doing batch mutations.")
 	emptyEdge         Edge
 )

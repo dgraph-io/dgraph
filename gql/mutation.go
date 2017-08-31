@@ -315,15 +315,14 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*protos.DirectedEdge, e
 	return edge, nil
 }
 
-func (nq NQuad) ExpandVariables(newToUid map[string]uint64,
-	subjectUids []uint64,
+func (nq *NQuad) ExpandVariables(newToUid map[string]uint64, subjectUids []uint64,
 	objectUids []uint64) (edges []*protos.DirectedEdge, err error) {
 	var edge *protos.DirectedEdge
 	edges = make([]*protos.DirectedEdge, 0, len(subjectUids)*len(objectUids))
 
+	// Empty subject variable.
 	if len(subjectUids) == 0 {
 		if len(nq.Subject) == 0 {
-			// Empty variable.
 			return
 		}
 		sUid, err := toUid(nq.Subject, newToUid)
@@ -333,24 +332,29 @@ func (nq NQuad) ExpandVariables(newToUid map[string]uint64,
 		subjectUids = []uint64{sUid}[:]
 	}
 
+	// Empty object variable.
+	if len(objectUids) == 0 {
+		// No object id given, lets return
+		if len(nq.ObjectId) == 0 {
+			if nq.ObjectValue == nil {
+				return edges, x.Errorf("Atleast one out of ObjectId/ObjectValue should be set.")
+			}
+		} else {
+			oUid, err := toUid(nq.ObjectId, newToUid)
+			if err != nil {
+				return edges, err
+			}
+			objectUids = append(objectUids, oUid)
+		}
+	}
+
 	switch nq.valueType() {
 	case x.ValueUid:
 		for _, sUid := range subjectUids {
-			if len(objectUids) > 0 {
-				for _, oUid := range objectUids {
-					edge = nq.createUidEdge(sUid, oUid)
-					edges = append(edges, edge)
-				}
-			} else {
-				x.AssertTruef(len(nq.ObjectId) > 0, "Empty objectId %s", nq.String())
-				oUid, err := toUid(nq.ObjectId, newToUid)
-				if err != nil {
-					return edges, err
-				}
+			for _, oUid := range objectUids {
 				edge = nq.createUidEdge(sUid, oUid)
 				edges = append(edges, edge)
 			}
-
 		}
 	case x.ValuePlain, x.ValueMulti:
 		for _, sUid := range subjectUids {
@@ -361,7 +365,7 @@ func (nq NQuad) ExpandVariables(newToUid map[string]uint64,
 			edges = append(edges, edge)
 		}
 	default:
-		return edges, fmt.Errorf("unknow value type: %s", nq.String())
+		return edges, fmt.Errorf("unknown value type: %s", nq.String())
 	}
 	return edges, nil
 

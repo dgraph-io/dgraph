@@ -298,8 +298,10 @@ func updateCount(ctx context.Context, params countParams) error {
 // AddMutationWithIndex is AddMutation with support for indexing. It also
 // supports reverse edges.
 func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge) error {
-	x.AssertTruef(len(t.Attr) > 0,
-		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
+	if len(t.Attr) == 0 {
+		return x.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
+			" and value: [%v]", t.Entity, t.ValueId, t.Value)
+	}
 
 	var val types.Val
 	var found bool
