@@ -99,8 +99,30 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 		Op:      op,
 	}
 
+	// Geo values can have large number of tokens, often in 1000s. Hence we start multiple
+	// goroutines.
+	numRoutines := 100
+	ch := make(chan string, 10000)
+	che := make(chan error, numRoutines)
+	for i := 0; i < numRoutines; i++ {
+		go func() {
+			for token := range ch {
+				if err := addIndexMutation(ctx, edge, token); err != nil {
+					che <- err
+					return
+				}
+			}
+			che <- nil
+		}()
+	}
+
 	for _, token := range tokens {
-		if err := addIndexMutation(ctx, edge, token); err != nil {
+		ch <- token
+	}
+	close(ch)
+
+	for i := 0; i < numRoutines; i++ {
+		if err != nil {
 			return err
 		}
 	}
