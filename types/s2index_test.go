@@ -31,7 +31,7 @@ import (
 	"github.com/twpayne/go-geom/encoding/wkb"
 )
 
-func loadPolygon(name string) (*geom.Polygon, error) {
+func loadPolygon(name string) (geom.T, error) {
 	f, err := os.Open(name)
 	if err != nil {
 		return nil, err
@@ -47,10 +47,7 @@ func loadPolygon(name string) (*geom.Polygon, error) {
 	if err := gf.UnmarshalJSON(b.Bytes()); err != nil {
 		return nil, err
 	}
-	if p, ok := gf.Geometry.(*geom.Polygon); ok {
-		return p, nil
-	}
-	return nil, fmt.Errorf("Did not load a polygon from the json.")
+	return gf.Geometry, nil
 }
 
 func TestIndexCellsPoint(t *testing.T) {
@@ -156,7 +153,7 @@ func testCover(file string, max int) {
 	if err != nil {
 		return
 	}
-	l, _ := loopFromPolygon(p)
+	l, _ := loopFromPolygon(p.(*geom.Polygon))
 	cu := coverLoop(l, MinCellLevel, MaxCellLevel, max)
 	printCells(cu)
 	printCoverAccuracy(l, cu)
@@ -263,7 +260,7 @@ func benchCover(b *testing.B, file string, max int) {
 	if err != nil {
 		b.Error(err)
 	}
-	l, _ := loopFromPolygon(p)
+	l, _ := loopFromPolygon(p.(*geom.Polygon))
 	var cu s2.CellUnion
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
@@ -279,6 +276,6 @@ func benchToLoop(b *testing.B, file string) {
 	}
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_, _ = loopFromPolygon(p)
+		_, _ = loopFromPolygon(p.(*geom.Polygon))
 	}
 }

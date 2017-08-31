@@ -20,6 +20,9 @@ package query
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"io"
+	"os"
 	"sort"
 	"testing"
 
@@ -28,6 +31,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -235,4 +239,23 @@ func processToPB(t *testing.T, query string, variables map[string]string,
 	pb, err := ToProtocolBuf(queryRequest.Latency, queryRequest.Subgraphs)
 	require.NoError(t, err)
 	return pb
+}
+
+func loadPolygon(name string) (geom.T, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var b bytes.Buffer
+	_, err = io.Copy(&b, f)
+	if err != nil {
+		return nil, err
+	}
+
+	var g geojson.Geometry
+	g.Type = "MultiPolygon"
+	m := json.RawMessage(b.Bytes())
+	g.Coordinates = &m
+	return g.Decode()
 }

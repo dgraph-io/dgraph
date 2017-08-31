@@ -32,7 +32,7 @@ func TestConvertToGeoJson_Point(t *testing.T) {
 }
 
 func TestConvertToGeoJson_Poly(t *testing.T) {
-	s := `[[1.123, 2.543], [-3.23, 4.123], [4.43, -6.123], [1.123, 2.543]]`
+	s := `[[[1.123, 2.543], [-3.23, 4.123], [4.43, -6.123], [1.123, 2.543]]]`
 	b, err := convertToGeom(s)
 	require.NoError(t, err)
 	require.Equal(t,

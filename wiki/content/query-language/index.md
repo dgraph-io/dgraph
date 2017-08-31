@@ -660,7 +660,7 @@ Query Example: First five directors and all their movies that have a release dat
 
 ### Geolocation
 
-{{% notice "note" %}} As of now we only support indexing Point and Polygon [geometry types](https://github.com/twpayne/go-geom#geometry-types).{{% /notice %}}
+{{% notice "note" %}} As of now we only support indexing Point, Polygon and MultiPolygon [geometry types](https://github.com/twpayne/go-geom#geometry-types).{{% /notice %}}
 
 Note that for geo queries, any polygon with holes is replace with the outer loop, ignoring holes.  Also, as for version 0.7.7 polygon containment checks are approximate.
 
@@ -724,7 +724,7 @@ Query Example: Tourist destinations within 1 kilometer of a point in Golden Gate
 
 ##### within
 
-Syntax Example: `within(predicate, [[long1, lat1], ..., [longN, latN]])`
+Syntax Example: `within(predicate, [[[long1, lat1], ..., [longN, latN]]])`
 
 Schema Types: `geo`
 
@@ -736,7 +736,7 @@ Query Example: Tourist destinations within the specified area of Golden Gate Par
 
 {{< runnable >}}
 {
-  tourist(func: within(loc, [[-122.47266769409178, 37.769018558337926 ], [ -122.47266769409178, 37.773699921075135 ], [ -122.4651575088501, 37.773699921075135 ], [ -122.4651575088501, 37.769018558337926 ], [ -122.47266769409178, 37.769018558337926]] )) {
+  tourist(func: within(loc, [[[-122.47266769409178, 37.769018558337926 ], [ -122.47266769409178, 37.773699921075135 ], [ -122.4651575088501, 37.773699921075135 ], [ -122.4651575088501, 37.769018558337926 ], [ -122.47266769409178, 37.769018558337926]]] )) {
     name
   }
 }
@@ -765,7 +765,7 @@ Query Example : All entities that contain a point in the flamingo enclosure of S
 
 ##### intersects
 
-Syntax Example: `intersects(predicate, [[long1, lat1], ..., [longN, latN]])`
+Syntax Example: `intersects(predicate, [[[long1, lat1], ..., [longN, latN]]])`
 
 Schema Types: `geo`
 
@@ -776,7 +776,7 @@ Matches all entities where the polygon describing the location given by `predica
 
 {{< runnable >}}
 {
-  tourist(func: intersects(loc, [[-122.503325343132, 37.73345766902749 ], [ -122.503325343132, 37.733903134117966 ], [ -122.50271648168564, 37.733903134117966 ], [ -122.50271648168564, 37.73345766902749 ], [ -122.503325343132, 37.73345766902749]] )) {
+  tourist(func: intersects(loc, [[[-122.503325343132, 37.73345766902749 ], [ -122.503325343132, 37.733903134117966 ], [ -122.50271648168564, 37.733903134117966 ], [ -122.50271648168564, 37.73345766902749 ], [ -122.503325343132, 37.73345766902749]]] )) {
     name
   }
 }

@@ -262,6 +262,10 @@ func populateGraph(t *testing.T) {
 	})
 	addGeoData(t, ps, 5106, poly, "San Carlos")
 
+	multipoly, err := loadPolygon("testdata/nyc-coordinates.txt")
+	require.NoError(t, err)
+	addGeoData(t, ps, 5107, multipoly, "New York")
+
 	addEdgeToValue(t, "film.film.initial_release_date", 23, "1900-01-02", nil)
 	addEdgeToValue(t, "film.film.initial_release_date", 24, "1909-05-05", nil)
 	addEdgeToValue(t, "film.film.initial_release_date", 25, "1929-01-10", nil)
@@ -5582,7 +5586,7 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 func TestWithinGeneratorError(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func:within(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]], 12.2)) {
+		me(func:within(loc, [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]], 12.2)) {
 			name
 			gender
 		}
@@ -5604,7 +5608,7 @@ func TestWithinGeneratorError(t *testing.T) {
 func TestWithinGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func:within(loc,  [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
+		me(func:within(loc,  [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) {
 			name
 		}
 	}`
@@ -5628,7 +5632,7 @@ func TestContainsGenerator(t *testing.T) {
 func TestContainsGenerator2(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func:contains(loc,  [[1.0,1.0], [1.9,1.0], [1.9, 1.9], [1.0, 1.9], [1.0, 1.0]])) {
+		me(func:contains(loc,  [[[1.0,1.0], [1.9,1.0], [1.9, 1.9], [1.0, 1.9], [1.0, 1.0]]])) {
 			name
 		}
 	}`
@@ -5661,7 +5665,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 func TestIntersectsGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func:intersects(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
+		me(func:intersects(loc, [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) {
 			name
 		}
 	}`
@@ -6131,7 +6135,7 @@ func TestNearPoint(t *testing.T) {
 func TestWithinPolygon(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func: within(geometry, [[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]])) {
+		me(func: within(geometry, [[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]])) {
 			name
 		}
 	}`
@@ -6169,7 +6173,7 @@ func TestNearPoint2(t *testing.T) {
 func TestIntersectsPolygon1(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func: intersects(geometry, [[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]])) {
+		me(func: intersects(geometry, [[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]])) {
 			name
 		}
 	}`
@@ -6183,7 +6187,7 @@ func TestIntersectsPolygon1(t *testing.T) {
 func TestIntersectsPolygon2(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func: intersects(geometry,[[-121.6, 37.1], [-122.4, 37.3], [-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]])) {
+		me(func: intersects(geometry,[[[-121.6, 37.1], [-122.4, 37.3], [-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]])) {
 			name
 		}
 	}`
@@ -9071,4 +9075,54 @@ func TestMultipleValueProto(t *testing.T) {
 	require.Equal(t, 1, len(r.Root[0].Graduation))
 	require.Equal(t, "Andrea", r.Root[1].Name)
 	require.Equal(t, 2, len(r.Root[1].Graduation))
+}
+
+func TestMultiPolygonIntersects(t *testing.T) {
+	populateGraph(t)
+
+	usc, err := ioutil.ReadFile("testdata/us-coordinates.txt")
+	require.NoError(t, err)
+	query := `{
+		me(func: intersects(geometry, "` + string(usc) + `" )) {
+			name
+		}
+	}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"},{"name":"San Carlos Airport"},{"name":"SF Bay area"},{"name":"Mountain View"},{"name":"San Carlos"}, {"name": "New York"}]}}`, js)
+}
+
+func TestMultiPolygonWithin(t *testing.T) {
+	populateGraph(t)
+
+	usc, err := ioutil.ReadFile("testdata/us-coordinates.txt")
+	require.NoError(t, err)
+	query := `{
+		me(func: within(geometry, "` + string(usc) + `" )) {
+			name
+		}
+	}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"},{"name":"San Carlos Airport"},{"name":"Mountain View"},{"name":"San Carlos"}]}}`, js)
+}
+
+func TestMultiPolygonContains(t *testing.T) {
+	populateGraph(t)
+
+	// We should get this back as a result as it should contain our Denver polygon.
+	multipoly, err := loadPolygon("testdata/us-coordinates.txt")
+	require.NoError(t, err)
+	addGeoData(t, ps, 5108, multipoly, "USA")
+
+	query := `{
+		me(func: contains(geometry, "[[[ -1185.8203125, 41.27780646738183 ], [ -1189.1162109375, 37.64903402157866 ], [ -1182.1728515625, 36.84446074079564 ], [ -1185.8203125, 41.27780646738183 ]]]")) {
+			name
+		}
+	}`
+
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":[{"name":"USA"}]}}`, js)
 }

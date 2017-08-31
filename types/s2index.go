@@ -84,6 +84,20 @@ func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 		cover := coverLoop(l, MinCellLevel, MaxCellLevel, MaxCells)
 		parents := getParentCells(cover, MinCellLevel)
 		return parents, cover, nil
+	case *geom.MultiPolygon:
+		var cover s2.CellUnion
+		// Convert each polygon to loop. Get cover for each and append to cover.
+		for i := 0; i < v.NumPolygons(); i++ {
+			p := v.Polygon(i)
+			l, err := loopFromPolygon(p)
+			if err != nil {
+				return nil, nil, err
+			}
+			cover = append(cover, coverLoop(l, MinCellLevel, MaxCellLevel, MaxCells)...)
+		}
+		// Get parents for all cells in cover.
+		parents := getParentCells(cover, MinCellLevel)
+		return parents, cover, nil
 	default:
 		return nil, nil, x.Errorf("Cannot index geometry of type %T", v)
 	}
@@ -92,7 +106,7 @@ func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 const (
 	// MinCellLevel is the smallest cell level (largest cell size) used by indexing
 	MinCellLevel = 5 // Approx 250km x 380km
-	// MaxCellLevel is the largest cell leve (smallest cell size) used by indexing
+	// MaxCellLevel is the largest cell level (smallest cell size) used by indexing
 	MaxCellLevel = 16 // Approx 120m x 180m
 	// MaxCells is the maximum number of cells to use when indexing regions.
 	MaxCells = 18

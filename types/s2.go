@@ -18,7 +18,6 @@ package types
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/geo/s2"
@@ -65,6 +64,63 @@ func intersects(l *s2.Loop, loop *s2.Loop) bool {
 	return false
 }
 
+func findVertex(a *s2.Loop, p s2.Point) int {
+	pts := a.Vertices()
+	for i := 0; i < len(pts); i++ {
+		if pts[i].ApproxEqual(p) {
+			return i
+		}
+	}
+	return -1
+}
+
+// Contains checks whether loop A contains loop B.
+func Contains(a *s2.Loop, b *s2.Loop) bool {
+	// For this loop A to contains the given loop B, all of the following must
+	// be true:
+	//
+	//  (1) There are no edge crossings between A and B except at vertices.
+	//
+	//  (2) At every vertex that is shared between A and B, the local edge
+	//      ordering implies that A contains B.
+	//
+	//  (3) If there are no shared vertices, then A must contain a vertex of B
+	//      and B must not contain a vertex of A.  (An arbitrary vertex may be
+	//      chosen in each case.)
+	//
+	// The second part of (3) is necessary to detect the case of two loops whose
+	// union is the entire sphere, i.e. two loops that contains each other's
+	// boundaries but not each other's interiors.
+
+	if !a.RectBound().Contains(b.RectBound()) {
+		return false
+	}
+
+	// Unless there are shared vertices, we need to check whether A contains a
+	// vertex of B.  Since shared vertices are rare, it is more efficient to do
+	// this test up front as a quick rejection test.
+	if !a.ContainsPoint(b.Vertex(0)) && findVertex(a, b.Vertex(0)) < 0 {
+		return false
+	}
+
+	// Now check whether there are any edge crossings.
+	if edgesCrossPoints(a, b.Vertices()) {
+		return false
+	}
+
+	// At this point we know that the boundaries of A and B do not intersect,
+	// and that A contains a vertex of B.  However we still need to check for
+	// the case mentioned above, where (A union B) is the entire sphere.
+	// Normally this check is very cheap due to the bounding box precondition.
+	if a.RectBound().Union(b.RectBound()).IsFull() {
+		if b.ContainsPoint(a.Vertex(0)) && findVertex(b, a.Vertex(0)) < 0 {
+			return false
+		}
+	}
+	return true
+
+}
+
 // Intersects returns true if the two loops intersect.
 func Intersects(l1 *s2.Loop, l2 *s2.Loop) bool {
 	if l2.NumEdges() > l1.NumEdges() {
@@ -72,6 +128,11 @@ func Intersects(l1 *s2.Loop, l2 *s2.Loop) bool {
 		return intersects(l2, l1)
 	}
 	return intersects(l1, l2)
+}
+
+func closed(coords []geom.Coord) bool {
+	l := len(coords)
+	return coords[0][0] == coords[l-1][0] && coords[0][1] == coords[l-1][1]
 }
 
 func convertToGeom(str string) (geom.T, error) {
@@ -82,9 +143,35 @@ func convertToGeom(str string) (geom.T, error) {
 	var g geojson.Geometry
 	var m json.RawMessage
 	var err error
-	if s[0:2] == "[[" {
+
+	if s[0:4] == "[[[[" {
+		g.Type = "MultiPolygon"
+		err = m.UnmarshalJSON([]byte(s))
+		if err != nil {
+			return nil, x.Wrapf(err, "Invalid coordinates")
+		}
+		g.Coordinates = &m
+		g1, err := g.Decode()
+		if err != nil {
+			return nil, x.Wrapf(err, "Invalid coordinates")
+		}
+		mp := g1.(*geom.MultiPolygon)
+		for i := 0; i < mp.NumPolygons(); i++ {
+			coords := mp.Polygon(i).Coords()
+			if len(coords) == 0 {
+				return nil, x.Errorf("Got empty polygon inside multi-polygon.")
+			}
+			// Check that first ring is closed.
+			if !closed(mp.Polygon(i).Coords()[0]) {
+				return nil, x.Errorf("Last coord not same as first")
+			}
+		}
+		return g1, nil
+	}
+
+	if s[0:3] == "[[[" {
 		g.Type = "Polygon"
-		err = m.UnmarshalJSON([]byte(fmt.Sprintf("[%s]", s)))
+		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
 			return nil, x.Wrapf(err, "Invalid coordinates")
 		}
@@ -94,20 +181,24 @@ func convertToGeom(str string) (geom.T, error) {
 			return nil, x.Wrapf(err, "Invalid coordinates")
 		}
 		coords := g1.(*geom.Polygon).Coords()
-		if coords[0][0][0] != coords[0][len(coords[0])-1][0] ||
-			coords[0][0][1] != coords[0][len(coords[0])-1][1] {
+		if len(coords) == 0 {
+			return nil, x.Errorf("Got empty polygon.")
+		}
+		// Check that first ring is closed.
+		if !closed(coords[0]) {
 			return nil, x.Errorf("Last coord not same as first")
 		}
+		return g1, nil
+	}
 
-	} else if s[0] == '[' {
+	if s[0] == '[' {
 		g.Type = "Point"
 		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
 			return nil, x.Wrapf(err, "Invalid coordinates")
 		}
 		g.Coordinates = &m
-	} else {
-		return nil, x.Errorf("invalid coordinates")
+		return g.Decode()
 	}
-	return g.Decode()
+	return nil, x.Errorf("invalid coordinates")
 }

@@ -1344,7 +1344,7 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 				item.Val)
 		}
 
-		if depth > 2 || depth < 0 {
+		if depth > 4 || depth < 0 {
 			return x.Errorf("Invalid bracket sequence")
 		} else if depth == 0 {
 			break

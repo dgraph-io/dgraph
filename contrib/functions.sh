@@ -3,6 +3,7 @@
 function quit {
   curl localhost:8080/admin/shutdown
   curl localhost:8082/admin/shutdown
+  sleep 10
   return $1
 }
 
