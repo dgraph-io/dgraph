@@ -87,24 +87,13 @@ func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 	case *geom.MultiPolygon:
 		var cover s2.CellUnion
 		// Convert each polygon to loop. Get cover for each and append to cover.
-
-		// To de-duplicate cover cells across multi polygons.
-		coverMap := make(map[s2.CellID]bool, MaxCells)
 		for i := 0; i < v.NumPolygons(); i++ {
 			p := v.Polygon(i)
 			l, err := loopFromPolygon(p)
 			if err != nil {
 				return nil, nil, err
 			}
-			cl := coverLoop(l, MinCellLevel, MaxCellLevel, MaxCells)
-			for _, cell := range cl {
-				if !coverMap[cell] {
-					coverMap[cell] = true
-				}
-			}
-		}
-		for cell := range coverMap {
-			cover = append(cover, cell)
+			cover = append(cover, coverLoop(l, MinCellLevel, MaxCellLevel, MaxCells)...)
 		}
 		// Get parents for all cells in cover.
 		parents := getParentCells(cover, MinCellLevel)

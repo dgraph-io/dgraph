@@ -53,7 +53,7 @@ func TestParseVarError(t *testing.T) {
 	query := `
 	{
 		var(func: uid(0x0a)) {
-			a as friends 
+			a as friends
 		}
 
 		me(func: uid(a)) {
@@ -2382,7 +2382,7 @@ func TestParseFilter_Geo3(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Invalid bracket sequence")
+	require.Contains(t, err.Error(), "Found invalid item")
 }
 
 func TestParseFilter_Geo4(t *testing.T) {
@@ -3209,7 +3209,7 @@ func TestParseFacetsOrderError1(t *testing.T) {
 	query {
 		me(func: uid(0x1)) {
 			friends @facets(orderdesc: orderdesc: closeness) {
-				name 
+				name
 			}
 		}
 	}
@@ -3224,7 +3224,7 @@ func TestParseFacetsOrderError2(t *testing.T) {
 	query {
 		me(func: uid(0x1)) {
 			friends @facets(a as b as closeness) {
-				name 
+				name
 			}
 		}
 	}
@@ -3239,7 +3239,7 @@ func TestParseFacetsOrderError3(t *testing.T) {
 	query {
 		me(func: uid(0x1)) {
 			friends @facets(orderdesc: closeness, order: abc) {
-				name 
+				name
 			}
 		}
 	}
@@ -3254,7 +3254,7 @@ func TestParseFacetsDuplicateVarError(t *testing.T) {
 	query {
 		me(func: uid(0x1)) {
 			friends @facets(a as closeness, b as closeness) {
-				name 
+				name
 			}
 		}
 	}
@@ -3269,7 +3269,7 @@ func TestParseFacetsOrderVar(t *testing.T) {
 	query {
 		me(func: uid(0x1)) {
 			friends @facets(orderdesc: a as b) {
-				name 
+				name
 			}
 		}
 		me(func: uid(a)) { }
@@ -3284,11 +3284,11 @@ func TestParseFacetsOrderVar2(t *testing.T) {
 	query {
 		me(func: uid(0x1)) {
 			friends @facets(a as orderdesc: b) {
-				name 
+				name
 			}
 		}
 		me(func: uid(a)) {
-			
+
 		}
 	}
 `
@@ -3302,7 +3302,7 @@ func TestParseFacets(t *testing.T) {
 	query {
 		me(func: uid(0x1)) {
 			friends @facets(orderdesc: closeness) {
-				name 
+				name
 			}
 		}
 	}
