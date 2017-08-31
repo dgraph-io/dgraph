@@ -305,6 +305,30 @@ func Init(ps *badger.KV) {
 	go updateMemoryMetrics()
 }
 
+func setIfAbsent(key []byte) {
+	retries := 0
+	var f func(error)
+	f = func(err error) {
+		if err == nil {
+			return
+		}
+		elog.Printf("Got error from SetIfAbsentAsync for key: %+v\n", key)
+		if retries > 5 {
+			x.Fatalf("Max retries exceeded while calling SetIfAbsentAsync for key: %+v\n", key)
+		}
+		retries++
+		if err := pstore.SetIfAbsentAsync(key, nil, 0x00, f); err != nil &&
+			err != badger.ErrKeyExists {
+			x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
+		}
+	}
+
+	if err := pstore.SetIfAbsentAsync(key, nil, 0x00, f); err != nil &&
+		err != badger.ErrKeyExists {
+		x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
+	}
+}
+
 // GetOrCreate stores the List corresponding to key, if it's not there already.
 // to lru cache and returns it.
 //
@@ -325,11 +349,10 @@ func GetOrCreate(key []byte, group uint32) (rlist *List) {
 
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
-	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
+	l := getNew(key, pstore)
 	l.water = marks.Get(group)
 
 	// We are always going to return lp to caller, whether it is l or not
-	// lcache increments the ref counter
 	lp = lcache.PutIfMissing(string(key), l)
 
 	if lp != l {
@@ -337,9 +360,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List) {
 	} else {
 		pk := x.Parse(key)
 		if pk.IsIndex() || pk.IsCount() {
-			if err := pstore.SetIfAbsent(key, nil, 0x00); err != nil && err != badger.KeyExists {
-				x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
-			}
+			setIfAbsent(key)
 		}
 	}
 

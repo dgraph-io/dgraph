@@ -92,8 +92,8 @@ func (s *ServerState) initStorage() {
 }
 
 func (s *ServerState) Dispose() {
-	s.Pstore.Close()
-	s.WALstore.Close()
+	x.Checkf(s.Pstore.Close(), "While closing postings store")
+	x.Checkf(s.WALstore.Close(), "While closing WAL store")
 }
 
 // Server implements protos.DgraphServer
