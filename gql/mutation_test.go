@@ -30,8 +30,7 @@ func TestExpandVariables(t *testing.T) {
 	// Object variable didn't give us any uids.
 	edges, err := nq.ExpandVariables(nil, []uint64{1, 2, 3}, []uint64{})
 	require.Equal(t, 0, len(edges))
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Atleast one out of ObjectId/ObjectValue should be set")
+	require.NoError(t, err)
 
 	// Object value with subject var.
 	n.ObjectValue = &protos.Value{&protos.Value_StrVal{"Abc"}}

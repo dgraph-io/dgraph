@@ -337,7 +337,7 @@ func (nq *NQuad) ExpandVariables(newToUid map[string]uint64, subjectUids []uint6
 		// No object id given, lets return
 		if len(nq.ObjectId) == 0 {
 			if nq.ObjectValue == nil {
-				return edges, x.Errorf("Atleast one out of ObjectId/ObjectValue should be set.")
+				return edges, nil
 			}
 		} else {
 			oUid, err := toUid(nq.ObjectId, newToUid)
