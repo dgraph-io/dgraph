@@ -33,7 +33,8 @@ func (n *node) rebuildOrDelIndex(ctx context.Context, attr string, rebuild bool)
 	// Raft index starts from 1
 	n.syncAllMarks(ctx, rv.Index-1)
 
-	x.AssertTruef(schema.State().IsIndexed(attr) == rebuild, "Attr %s index mismatch", attr)
+	x.AssertTruef(schema.State().IsIndexed(attr) == rebuild, "Attr %s index mismatch, rebuild %v",
+		attr, rebuild)
 	// Remove index edges
 	// For delete we since mutations would have been applied, we needn't
 	// wait for synced watermarks if we delete through mutations, but
@@ -92,10 +93,14 @@ func (n *node) waitForSyncMark(ctx context.Context, lastIndex uint64) {
 }
 
 func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) {
+	// Wait for posting lists applying.
+	w := posting.SyncMarkFor(gid)
+	if w.DoneUntil() >= lastIndex {
+		return
+	}
+
 	// Force an aggressive evict.
 	posting.CommitLists(10, gid)
 
-	// Wait for posting lists applying.
-	w := posting.SyncMarkFor(gid)
 	w.WaitForMark(lastIndex)
 }

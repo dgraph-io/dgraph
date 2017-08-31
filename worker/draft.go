@@ -105,6 +105,8 @@ func (p *peerPool) set(id uint64, addr string, pl *pool) {
 type proposalCtx struct {
 	ch  chan error
 	ctx context.Context
+	cnt int
+	err error
 }
 
 type proposals struct {
@@ -122,6 +124,15 @@ func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
 	return true
 }
 
+func (p *proposals) IncRef(pid uint32, count int) {
+	p.Lock()
+	defer p.Unlock()
+	if pd, has := p.ids[pid]; has {
+		pd.cnt += count
+	}
+	return
+}
+
 func (p *proposals) Ctx(pid uint32) (context.Context, bool) {
 	p.RLock()
 	defer p.RUnlock()
@@ -135,7 +146,16 @@ func (p *proposals) Done(pid uint32, err error) {
 	p.Lock()
 	pd, has := p.ids[pid]
 	if has {
+		pd.cnt -= 1
+		if err != nil {
+			pd.err = err
+		}
+		if pd.cnt > 0 {
+			p.Unlock()
+			return
+		}
 		delete(p.ids, pid)
+		err = pd.err
 	}
 	p.Unlock()
 	if !has {
@@ -183,6 +203,7 @@ type node struct {
 	// The stages are proposed -> committed (accepted by cluster) ->
 	// applied (to PL) -> synced (to RocksDB).
 	applied x.WaterMark
+	sch     *scheduler
 }
 
 // SetRaft would set the provided raft.Node to this node.
@@ -246,7 +267,9 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 			MaxInflightMsgs: 256,
 			Logger:          &raft.DefaultLogger{Logger: x.Logger},
 		},
-		applyCh:     make(chan raftpb.Entry, numPendingMutations),
+		// processConfChange etc are not throttled so some extra delta, so that we don't
+		// block tick when applyCh is full
+		applyCh:     make(chan raftpb.Entry, Config.NumPendingProposals+1000),
 		peers:       peers,
 		props:       props,
 		raftContext: rc,
@@ -254,6 +277,8 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		stop:        make(chan struct{}),
 		done:        make(chan struct{}),
 	}
+	n.sch = new(scheduler)
+	n.sch.init()
 	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed: Group %d", n.gid)}
 	n.applied.Init()
 
@@ -342,6 +367,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
 	}
+	// TODO: Should be based on number of edges (amount of work)
 	pendingProposals <- struct{}{}
 	x.PendingProposals.Add(1)
 	defer func() { <-pendingProposals; x.PendingProposals.Add(-1) }()
@@ -511,11 +537,15 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	}
 }
 
-func (n *node) processMutation(ctx context.Context, index uint64, m *protos.Mutations) error {
-	// TODO: Need to pass node and entry index.
+func (n *node) processMutation(pid uint32, index uint64, edge *protos.DirectedEdge) error {
+	var ctx context.Context
+	var has bool
+	if ctx, has = n.props.Ctx(pid); !has {
+		ctx = n.ctx
+	}
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
-	if err := runMutations(ctx, m.Edges); err != nil {
+	if err := runMutations(ctx, edge); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
@@ -524,11 +554,15 @@ func (n *node) processMutation(ctx context.Context, index uint64, m *protos.Muta
 	return nil
 }
 
-func (n *node) processSchemaMutations(e raftpb.Entry, m *protos.Mutations) error {
-	// TODO: Need to pass node and entry index.
-	rv := x.RaftValue{Group: n.gid, Index: e.Index}
-	ctx := context.WithValue(n.ctx, "raft", rv)
-	if err := runSchemaMutations(ctx, m.Schema); err != nil {
+func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.SchemaUpdate) error {
+	var ctx context.Context
+	var has bool
+	if ctx, has = n.props.Ctx(pid); !has {
+		ctx = n.ctx
+	}
+	rv := x.RaftValue{Group: n.gid, Index: index}
+	ctx = context.WithValue(n.ctx, "raft", rv)
+	if err := runSchemaMutations(ctx, s); err != nil {
 		if tr, ok := trace.FromContext(n.ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
@@ -537,45 +571,33 @@ func (n *node) processSchemaMutations(e raftpb.Entry, m *protos.Mutations) error
 	return nil
 }
 
-func (n *node) processMembership(index uint64, mm *protos.Membership) error {
+func (n *node) processMembership(index uint64, pid uint32, mm *protos.Membership) error {
 	x.AssertTrue(n.gid == 0)
-
-	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
-		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
-	groups().applyMembershipUpdate(index, mm)
-	return nil
-}
-
-func (n *node) process(index uint64, proposal *protos.Proposal, pending chan struct{}) {
 	defer func() {
 		n.applied.Done(index)
 		posting.SyncMarkFor(n.gid).Done(index)
 	}()
 
-	pending <- struct{}{} // This will block until we can write to it.
 	x.ActiveMutations.Add(1)
 	defer x.ActiveMutations.Add(-1)
+	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
+		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
+	groups().applyMembershipUpdate(index, mm)
+	n.props.Done(pid, nil)
+	return nil
+}
 
-	var err error
-	if proposal.Mutations != nil {
-		var ctx context.Context
-		var has bool
-		if ctx, has = n.props.Ctx(proposal.Id); !has {
-			ctx = n.ctx
-		}
-		err = n.processMutation(ctx, index, proposal.Mutations)
-	} else if proposal.Membership != nil {
-		err = n.processMembership(index, proposal.Membership)
+func (n *node) process(t *task) {
+	nextTask := t
+	for nextTask != nil {
+		err := n.processMutation(nextTask.pid, nextTask.rid, nextTask.edge)
+		nextTask = n.sch.nextTask(nextTask, err, n)
 	}
-	n.props.Done(proposal.Id, err)
-	<-pending // Release one.
 }
 
 const numPendingMutations = 10000
 
 func (n *node) processApplyCh() {
-	pending := make(chan struct{}, numPendingMutations)
-
 	for e := range n.applyCh {
 		if len(e.Data) == 0 {
 			n.applied.Done(e.Index)
@@ -602,10 +624,9 @@ func (n *node) processApplyCh() {
 
 		x.AssertTrue(e.Type == raftpb.EntryNormal)
 
-		// The following effort is only to apply schema in a blocking fashion.
-		// Once we have a scheduler, this should go away.
-		// TODO: Move the following to scheduler.
-
+		// Scheduler tracks tasks at subject, predicate level, so doing
+		// schema stuff here simplies the design and we needn't worrying about
+		// serializing the mutations per predicate or schema mutations
 		// We derive the schema here if it's not present
 		// Since raft committed logs are serialized, we can derive
 		// schema here without any locking
@@ -615,18 +636,17 @@ func (n *node) processApplyCh() {
 		}
 
 		if proposal.Mutations != nil {
-			// process schema mutations before
-			if proposal.Mutations.Schema != nil {
-				// Wait for applied watermark to reach till previous index
-				// All mutations before this should use old schema and after this
-				// should use new schema
-				n.waitForSyncMark(n.ctx, e.Index-1)
-				if err := n.processSchemaMutations(e, proposal.Mutations); err != nil {
-					n.applied.Done(e.Index)
-					posting.SyncMarkFor(n.gid).Done(e.Index)
-					n.props.Done(proposal.Id, err)
-					continue
-				}
+			total := len(proposal.Mutations.Edges) + len(proposal.Mutations.Schema)
+			// +1 ensures that index is not mark completed until all tasks
+			// are submitted to scheduler
+			n.props.IncRef(proposal.Id, 1+total)
+			if total > 0 {
+				x.ActiveMutations.Add(int64(total))
+				n.applied.BeginWithCount(e.Index, total)
+				posting.SyncMarkFor(n.gid).BeginWithCount(e.Index, total)
+			}
+			for _, supdate := range proposal.Mutations.Schema {
+				n.sch.submitSchemaUpdate(proposal.Id, e.Index, supdate, n)
 			}
 
 			// stores a map of predicate and type of first mutation for each predicate
@@ -646,9 +666,23 @@ func (n *node) processApplyCh() {
 					updateSchemaType(attr, storageType, e.Index, n.raftContext.Group)
 				}
 			}
-		}
 
-		go n.process(e.Index, proposal, pending)
+			for _, edge := range proposal.Mutations.Edges {
+				newEdge := edge
+				n.sch.submit(&task{
+					rid:  e.Index,
+					pid:  proposal.Id,
+					edge: newEdge,
+				}, n)
+			}
+			n.props.Done(proposal.Id, nil)
+			n.applied.Done(e.Index)
+			posting.SyncMarkFor(n.gid).Done(e.Index)
+		} else if proposal.Membership != nil {
+			go n.processMembership(e.Index, proposal.Id, proposal.Membership)
+		} else {
+			x.Fatalf("Unknown proposal")
+		}
 	}
 }
 
@@ -721,11 +755,10 @@ func (n *node) Run() {
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateFollower && leader {
 					// stepped down as leader do a sync membership immediately
-					groups().syncMemberships()
+					go groups().syncMemberships()
 				} else if rd.RaftState == raft.StateLeader && !leader {
-					// TODO:wait for apply watermark ??
 					leaseMgr().resetLease(n.gid)
-					groups().syncMemberships()
+					go groups().syncMemberships()
 				}
 				leader = rd.RaftState == raft.StateLeader
 			}
@@ -734,12 +767,18 @@ func (n *node) Run() {
 
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 
+			// TODO(Janardhan): Should we send the messages before writing to disk. In the case where
+			// we have replicas for the message to be committed we have a latency of two
+			// disk writes, one on leader and one on follower
 			for _, msg := range rd.Messages {
 				// NOTE: We can do some optimizations here to drop messages.
 				msg.Context = rcBytes
+				// TODO(Investiage): Sometimes it takes time :(
 				n.send(msg)
 			}
 
+			// TODO(Janardhan): Is it safe to persist snapshot before fetching it, what if we crash
+			// in middle of streaming
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				// We don't send snapshots to other nodes. But, if we get one, that means
 				// either the leader is trying to bring us up to state; or this is the
@@ -749,6 +788,7 @@ func (n *node) Run() {
 				x.AssertTrue(rc.Group == n.gid)
 				if rc.Id != n.id {
 					x.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
+					// It's ok to block tick while retrieving snapshot, since it's a follower
 					n.retrieveSnapshot(rc.Id)
 					x.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
 				} else {
@@ -771,6 +811,7 @@ func (n *node) Run() {
 				n.applied.Begin(entry.Index)
 				posting.SyncMarkFor(n.gid).Begin(entry.Index)
 
+				// TODO: Stop accepting requests when applyCh is full
 				// Just queue up to be processed. Don't wait on them.
 				n.applyCh <- entry
 			}
