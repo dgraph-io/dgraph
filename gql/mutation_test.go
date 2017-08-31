@@ -32,6 +32,13 @@ func TestExpandVariables(t *testing.T) {
 	require.Equal(t, 0, len(edges))
 	require.NoError(t, err)
 
+	// Object value with subject var.
+	n.ObjectValue = &protos.Value{&protos.Value_StrVal{"Abc"}}
+	edges, err = nq.ExpandVariables(nil, []uint64{1, 2, 3}, []uint64{})
+	require.Equal(t, 3, len(edges))
+	require.NoError(t, err)
+
+	n.ObjectValue = nil
 	n.SubjectVar = ""
 	n.ObjectVar = "A"
 	// No subject and non-empty ObjectVar
@@ -52,6 +59,12 @@ func TestExpandVariables(t *testing.T) {
 	edges, err = nq.ExpandVariables(uidMap, []uint64{}, []uint64{4, 5, 6})
 	require.Equal(t, 3, len(edges))
 	require.NoError(t, err)
+
+	n.ObjectValue = &protos.Value{&protos.Value_StrVal{"Abc"}}
+	edges, err = nq.ExpandVariables(uidMap, []uint64{4, 5, 6}, []uint64{})
+	require.Equal(t, 3, len(edges))
+	require.NoError(t, err)
+	n.ObjectValue = nil
 
 	nq.Subject = ""
 	nq.ObjectId = "1"
