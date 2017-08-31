@@ -263,6 +263,9 @@ func (e *Edge) validate() error {
 	if len(e.nq.Subject) == 0 && len(e.nq.SubjectVar) == 0 {
 		return ErrInvalidSubject
 	}
+	if e.nq.Predicate == "" {
+		return ErrEmptyPredicate
+	}
 	// Edge should be connected to a value in which case ObjectType would be > 0.
 	// Or it needs to connect to a Node (ObjectId > 0) or it should be connected to a variable.
 	if e.nq.ObjectValue != nil || len(e.nq.ObjectId) > 0 || len(e.nq.ObjectVar) > 0 {
