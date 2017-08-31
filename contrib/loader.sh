@@ -44,10 +44,10 @@ sleep 10
 
 #Set Schema
 curl -X POST  -d 'mutation {
-schema {
-name: string @index(term) .
-xid: string @index(exact,term) .
-initial_release_date: datetime @index(year) .
+  schema {
+    name: string @index(term) .
+    xid: string @index(exact) .
+    initial_release_date: datetime @index(year) .
   }
 }' "http://localhost:8080/query"
 

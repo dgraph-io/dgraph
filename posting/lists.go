@@ -305,6 +305,30 @@ func Init(ps *badger.KV) {
 	go updateMemoryMetrics()
 }
 
+func setIfAbsent(key []byte) {
+	retries := 0
+	var f func(error)
+	f = func(err error) {
+		if err == nil {
+			return
+		}
+		elog.Printf("Got error from SetIfAbsentAsync for key: %+v\n", key)
+		if retries > 5 {
+			x.Fatalf("Max retries exceeded while calling SetIfAbsentAsync for key: %+v\n", key)
+		}
+		retries++
+		if err := pstore.SetIfAbsentAsync(key, nil, 0x00, f); err != nil &&
+			err != badger.ErrKeyExists {
+			x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
+		}
+	}
+
+	if err := pstore.SetIfAbsentAsync(key, nil, 0x00, f); err != nil &&
+		err != badger.ErrKeyExists {
+		x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
+	}
+}
+
 // GetOrCreate stores the List corresponding to key, if it's not there already.
 // to lru cache and returns it.
 //
@@ -336,9 +360,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List) {
 	} else {
 		pk := x.Parse(key)
 		if pk.IsIndex() || pk.IsCount() {
-			if err := pstore.SetIfAbsentAsync(key, nil, 0x00, func(err error) {}); err != nil && err != badger.ErrKeyExists {
-				x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
-			}
+			setIfAbsent(key)
 		}
 	}
 

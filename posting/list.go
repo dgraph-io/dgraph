@@ -630,7 +630,6 @@ func doAsyncWrite(key []byte, data []byte, uidOnlyPosting bool, f func(error)) {
 		meta = bitUidPostings
 	}
 	if data == nil {
-		fmt.Println("Deleting key", key)
 		pstore.DeleteAsync(key, f)
 	} else {
 		pstore.SetAsync(key, data, meta, f)
