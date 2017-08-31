@@ -5582,7 +5582,7 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 func TestWithinGeneratorError(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func:within(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]], 12.2)) {
+		me(func:within(loc, [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]], 12.2)) {
 			name
 			gender
 		}
@@ -5604,7 +5604,7 @@ func TestWithinGeneratorError(t *testing.T) {
 func TestWithinGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func:within(loc,  [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
+		me(func:within(loc,  [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) {
 			name
 		}
 	}`
@@ -5628,7 +5628,7 @@ func TestContainsGenerator(t *testing.T) {
 func TestContainsGenerator2(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func:contains(loc,  [[1.0,1.0], [1.9,1.0], [1.9, 1.9], [1.0, 1.9], [1.0, 1.0]])) {
+		me(func:contains(loc,  [[[1.0,1.0], [1.9,1.0], [1.9, 1.9], [1.0, 1.9], [1.0, 1.0]]])) {
 			name
 		}
 	}`
@@ -5661,7 +5661,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 func TestIntersectsGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func:intersects(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
+		me(func:intersects(loc, [[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]]])) {
 			name
 		}
 	}`
@@ -6131,7 +6131,7 @@ func TestNearPoint(t *testing.T) {
 func TestWithinPolygon(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func: within(geometry, [[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]])) {
+		me(func: within(geometry, [[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]])) {
 			name
 		}
 	}`
@@ -6169,7 +6169,7 @@ func TestNearPoint2(t *testing.T) {
 func TestIntersectsPolygon1(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func: intersects(geometry, [[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]])) {
+		me(func: intersects(geometry, [[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]])) {
 			name
 		}
 	}`
@@ -6183,7 +6183,7 @@ func TestIntersectsPolygon1(t *testing.T) {
 func TestIntersectsPolygon2(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(func: intersects(geometry,[[-121.6, 37.1], [-122.4, 37.3], [-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]])) {
+		me(func: intersects(geometry,[[[-121.6, 37.1], [-122.4, 37.3], [-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]])) {
 			name
 		}
 	}`

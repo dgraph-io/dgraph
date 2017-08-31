@@ -18,7 +18,6 @@ package types
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/geo/s2"
@@ -145,11 +144,9 @@ func convertToGeom(str string) (geom.T, error) {
 	var m json.RawMessage
 	var err error
 
-	// Note for Polygon/MultiPolygon the query would have one less `[]` than what the spec says.
-	// Hence we wrap the value in `[]` before decoding.
-	if s[0:3] == "[[[" {
+	if s[0:4] == "[[[[" {
 		g.Type = "MultiPolygon"
-		err = m.UnmarshalJSON([]byte(fmt.Sprintf("[%s]", s)))
+		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
 			return nil, x.Wrapf(err, "Invalid coordinates")
 		}
@@ -172,9 +169,9 @@ func convertToGeom(str string) (geom.T, error) {
 		return g1, nil
 	}
 
-	if s[0:2] == "[[" {
+	if s[0:3] == "[[[" {
 		g.Type = "Polygon"
-		err = m.UnmarshalJSON([]byte(fmt.Sprintf("[%s]", s)))
+		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
 			return nil, x.Wrapf(err, "Invalid coordinates")
 		}
