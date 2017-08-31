@@ -34,7 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/task"
+	ctask "github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -410,14 +410,14 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 			newValue := out.ValueMatrix[lastPos].Values[0]
 			if len(newValue.Val) == 0 {
 				// TODO - Check that this is safe.
-				out.ValueMatrix[lastPos].Values[0] = task.FalseVal
+				out.ValueMatrix[lastPos].Values[0] = ctask.FalseVal
 			}
 			pwd := q.SrcFunc[2]
 			err = types.VerifyPassword(pwd, string(newValue.Val))
 			if err != nil {
-				out.ValueMatrix[lastPos].Values[0] = task.FalseVal
+				out.ValueMatrix[lastPos].Values[0] = ctask.FalseVal
 			} else {
-				out.ValueMatrix[lastPos].Values[0] = task.TrueVal
+				out.ValueMatrix[lastPos].Values[0] = ctask.TrueVal
 			}
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
