@@ -23,7 +23,6 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"io"
-	"sort"
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/trace"
@@ -210,13 +209,14 @@ func populateShard(ctx context.Context, ps *badger.KV, pl *pool, group uint32) (
 				tr.LazyPrintf("Context timed out while streaming group: %v", group)
 			}
 			close(kvs)
-			return count, ctx.Err()
+			return 0, ctx.Err()
 		case err := <-che:
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("Error while doing a batch write for group: %v", group)
 			}
 			close(kvs)
-			return count, err
+			// Important: Don't put return count, err
+			return 0, err
 		}
 	}
 	close(kvs)
@@ -240,6 +240,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 
 	// Receive all keys from client first.
 	// TODO: Weird that we batch keys in batches of 1000 on the client, but but not here.
+	// TODO: Don't fetch all at once, use stream and iterate in parallel
 	for {
 		keys, err := stream.Recv()
 		if err == io.EOF {
@@ -274,6 +275,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 	defer it.Close()
 
 	var count int
+	var gidx int
 	// Do NOT it.Next() by default. Be careful when you "continue" in loop!
 	for it.Rewind(); it.Valid(); {
 		iterItem := it.Item()
@@ -300,19 +302,25 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 			var pl protos.PostingList
 			posting.UnmarshalWithCopy(v, iterItem.UserMeta(), &pl)
 
-			idx := sort.Search(len(gkeys.Keys), func(i int) bool {
-				t := gkeys.Keys[i]
-				return bytes.Compare(k, t.Key) <= 0
-			})
+			// If a key is present in follower but not in leader, send a kv with empty value
+			// so that the follower can delete it
+			for gidx < len(gkeys.Keys) && bytes.Compare(gkeys.Keys[gidx].Key, k) < 0 {
+				kv := &protos.KV{Key: gkeys.Keys[gidx].Key}
+				gidx++
+				if err := stream.Send(kv); err != nil {
+					return err
+				}
+			}
 
-			if idx < len(gkeys.Keys) {
-				// Found a match.
-				t := gkeys.Keys[idx]
+			// Found a match.
+			if gidx < len(gkeys.Keys) && bytes.Compare(k, gkeys.Keys[gidx].Key) == 0 {
+				t := gkeys.Keys[gidx]
+				gidx++
 				// Different keys would have the same prefix. So, check Checksum first,
 				// it would be cheaper when there's no match.
 				// TODO: What if checksum collides ?
-				if bytes.Equal(k, t.Key) && bytes.Equal(checkSum(&pl), t.Checksum) {
-					// No need to send this.
+				if bytes.Equal(checkSum(&pl), t.Checksum) {
+
 					it.Next()
 					continue
 				}
@@ -332,6 +340,14 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		}
 		it.Next()
 	} // end of iterator
+	// All these keys are not present in leader, so mark them for deletion
+	for gidx < len(gkeys.Keys) {
+		kv := &protos.KV{Key: gkeys.Keys[gidx].Key}
+		gidx++
+		if err := stream.Send(kv); err != nil {
+			return err
+		}
+	}
 	if tr, ok := trace.FromContext(stream.Context()); ok {
 		tr.LazyPrintf("Sent %d keys to client. Done.\n", count)
 	}
