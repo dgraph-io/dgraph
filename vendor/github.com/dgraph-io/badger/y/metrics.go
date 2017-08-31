@@ -47,6 +47,6 @@ func init() {
 	NumPuts = expvar.NewInt("badger_puts_total")
 	NumBlockedPuts = expvar.NewInt("badger_blocked_puts_total")
 	NumMemtableGets = expvar.NewInt("badger_memtable_gets_total")
-	LSMSize = expvar.NewMap("badger_lsm_size")
-	VlogSize = expvar.NewMap("badger_vlog_size")
+	LSMSize = expvar.NewMap("badger_lsm_size_bytes")
+	VlogSize = expvar.NewMap("badger_vlog_size_bytes")
 }

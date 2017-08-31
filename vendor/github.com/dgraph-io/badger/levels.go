@@ -144,7 +144,7 @@ func newLevelsController(kv *KV, mf *Manifest) (*levelsController, error) {
 	// manifest file).
 	if err := syncDir(kv.opt.Dir); err != nil {
 		_ = s.close()
-		return nil, errors.Wrap(err, "Directory entry for compaction log")
+		return nil, err
 	}
 
 	return s, nil

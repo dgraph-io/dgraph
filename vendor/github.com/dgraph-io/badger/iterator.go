@@ -91,12 +91,14 @@ func (l *list) pop() *KVItem {
 	return i
 }
 
+// IteratorOptions is used to set options when iterating over Badger key-value stores.
 type IteratorOptions struct {
 	PrefetchSize int  // How many KV pairs to prefetch while iterating.
 	FetchValues  bool // Controls whether the values should be fetched from the value log.
 	Reverse      bool // Direction of iteration. False is forward, true is backward.
 }
 
+// DefaultIteratorOptions contains default options when iterating over Badger key-value stores.
 var DefaultIteratorOptions = IteratorOptions{
 	PrefetchSize: 100,
 	FetchValues:  true,
@@ -175,6 +177,7 @@ func (it *Iterator) fill(item *KVItem) {
 	item.casCounter = vs.CASCounter
 	item.key = y.Safecopy(item.key, it.iitr.Key())
 	item.vptr = y.Safecopy(item.vptr, vs.Value)
+	item.val = nil
 	if it.opt.FetchValues {
 		item.wg.Add(1)
 		go func() {
@@ -185,6 +188,12 @@ func (it *Iterator) fill(item *KVItem) {
 }
 
 func (it *Iterator) prefetch() {
+	prefetchSize := it.opt.PrefetchSize
+	if it.opt.PrefetchSize <= 1 {
+		// Try prefetching atleast the first two items to put into it.item and it.data.
+		prefetchSize = 2
+	}
+
 	i := it.iitr
 	var count int
 	it.item = nil
@@ -204,7 +213,7 @@ func (it *Iterator) prefetch() {
 		} else {
 			it.data.push(item)
 		}
-		if count == it.opt.PrefetchSize {
+		if count == prefetchSize {
 			break
 		}
 	}

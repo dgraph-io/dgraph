@@ -32,13 +32,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Manifest represnts the contents of the MANIFEST file in a Badger store.
+//
 // The MANIFEST file describes the startup state of the db -- all LSM files and what level they're
 // at.
 //
 // It consists of a sequence of ManifestChangeSet objects.  Each of these is treated atomically,
 // and contains a sequence of ManifestChange's (file creations/deletions) which we use to
 // reconstruct the manifest at startup.
-
 type Manifest struct {
 	Levels []LevelManifest
 	Tables map[uint64]TableManifest
@@ -57,10 +58,14 @@ func createManifest() Manifest {
 	}
 }
 
+// LevelManifest contains information about LSM tree levels
+// in the MANIFEST file.
 type LevelManifest struct {
 	Tables map[uint64]struct{} // Set of table id's
 }
 
+// TableManifest contains information about a specific level
+// in the LSM tree.
 type TableManifest struct {
 	Level uint8
 }
@@ -81,6 +86,7 @@ type manifestFile struct {
 }
 
 const (
+	// ManifestFilename is the filename for the manifest file.
 	ManifestFilename                  = "MANIFEST"
 	manifestRewriteFilename           = "MANIFEST-REWRITE"
 	manifestDeletionsRewriteThreshold = 10000
@@ -104,6 +110,8 @@ func (m *Manifest) clone() Manifest {
 	return ret
 }
 
+// OpenOrCreateManifestFile opens a Badger manifest file if it exists, or creates on if
+// one doesn’t.
 func OpenOrCreateManifestFile(dir string) (ret *manifestFile, result Manifest, err error) {
 	return helpOpenOrCreateManifestFile(dir, manifestDeletionsRewriteThreshold)
 }

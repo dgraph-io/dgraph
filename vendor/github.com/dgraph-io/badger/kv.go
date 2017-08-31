@@ -138,9 +138,17 @@ type KV struct {
 	metricsTicker      *time.Ticker
 }
 
-var ErrInvalidDir error = errors.New("Invalid Dir, directory does not exist")
-var ErrValueLogSize error = errors.New("Invalid ValueLogFileSize, must be between 1MB and 1GB")
-var ErrExceedsMaxKeyValueSize error = errors.New("Key (value) size exceeded 1MB (1GB) limit")
+// ErrInvalidDir is returned when Badger cannot find the directory
+// from where it is supposed to load the key-value store.
+var ErrInvalidDir = errors.New("Invalid Dir, directory does not exist")
+
+// ErrValueLogSize is returned when opt.ValueLogFileSize option is not within the valid
+// range.
+var ErrValueLogSize = errors.New("Invalid ValueLogFileSize, must be between 1MB and 1GB")
+
+// ErrExceedsMaxKeyValueSize is returned as part of Entry when the size of the key or value
+// exceeds the specified limits.
+var ErrExceedsMaxKeyValueSize = errors.New("Key (value) size exceeded 1MB (1GB) limit")
 
 const (
 	kvWriteChCapacity = 1000
@@ -420,14 +428,14 @@ const (
 func syncDir(dir string) error {
 	f, err := OpenDir(dir)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "While opening directory: %s.", dir)
 	}
 	err = f.Sync()
 	closeErr := f.Close()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "While syncing directory: %s.", dir)
 	}
-	return closeErr
+	return errors.Wrapf(closeErr, "While closing directory: %s.", dir)
 }
 
 // getMemtables returns the current memtables and get references.
@@ -452,6 +460,27 @@ func (s *KV) getMemTables() ([]*skl.Skiplist, func()) {
 			tbl.DecrRef()
 		}
 	}
+}
+
+// FillValue populates item with a value.
+//
+// item must be a valid KVItem returned by Badger during iteration. This method
+// could be used to fetch values explicitly during a key-only iteration
+// (FetchValues is set to false). It is useful for example, if values are
+// required for some keys only.
+//
+// This method should not be called when iteration is performed with
+// FetchValues set to true, as it will cause additional copying.
+//
+// Multiple calls to this method will result in multiple copies from the value
+// log. It is the caller’s responsibility to make sure they don’t call this
+// method more than once.
+func (s *KV) FillValue(item *KVItem) error {
+	// Wait for any pending fill operations to finish.
+	item.wg.Wait()
+	item.wg.Add(1)
+	defer item.wg.Done()
+	return s.fillItem(item)
 }
 
 func (s *KV) fillItem(item *KVItem) error {
@@ -592,7 +621,7 @@ func (s *KV) writeToLSM(b *request) error {
 			}
 			// No need to decode existing value. Just need old CAS counter.
 			if oldValue.CASCounter != entry.CASCounterCheck {
-				entry.Error = CasMismatch
+				entry.Error = ErrCasMismatch
 				continue
 			}
 		}
@@ -605,7 +634,7 @@ func (s *KV) writeToLSM(b *request) error {
 			}
 			// Value already exists, don't write.
 			if exists {
-				entry.Error = KeyExists
+				entry.Error = ErrKeyExists
 				continue
 			}
 		}
@@ -882,16 +911,14 @@ func (s *KV) SetAsync(key, val []byte, userMeta byte, f func(error)) {
 	})
 }
 
-// SetIfAbsent sets value of key if key is not present.
-// If it is present, it returns the KeyExists error.
-func (s *KV) SetIfAbsent(key, val []byte, userMeta byte) error {
+func (s *KV) setIfAbsent(key, val []byte, userMeta byte) (*Entry, error) {
 	exists, err := s.Exists(key)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Found the key, return KeyExists
 	if exists {
-		return KeyExists
+		return nil, ErrKeyExists
 	}
 
 	e := &Entry{
@@ -900,10 +927,44 @@ func (s *KV) SetIfAbsent(key, val []byte, userMeta byte) error {
 		Value:    val,
 		UserMeta: userMeta,
 	}
+	return e, nil
+}
+
+// SetIfAbsent sets value of key if key is not present.
+// If it is present, it returns the KeyExists error.
+func (s *KV) SetIfAbsent(key, val []byte, userMeta byte) error {
+	e, err := s.setIfAbsent(key, val, userMeta)
+	if err != nil {
+		return err
+	}
+
 	if err := s.BatchSet([]*Entry{e}); err != nil {
 		return err
 	}
 	return e.Error
+}
+
+// SetIfAbsentAsync is the asynchronous version of SetIfAbsent. It accepts a callback function which
+// is called when the operation is complete. Any error encountered during execution is passed as an
+// argument to the callback function.
+func (s *KV) SetIfAbsentAsync(key, val []byte, userMeta byte, f func(error)) error {
+	e, err := s.setIfAbsent(key, val, userMeta)
+	if err != nil {
+		return err
+	}
+
+	s.BatchSetAsync([]*Entry{e}, func(err error) {
+		if err != nil {
+			f(err)
+			return
+		}
+		if e.Error != nil {
+			f(e.Error)
+			return
+		}
+		f(nil)
+	})
+	return nil
 }
 
 // EntriesSet adds a Set to the list of entries.
@@ -1015,7 +1076,7 @@ func (s *KV) CompareAndDeleteAsync(key []byte, casCounter uint64, f func(error))
 	s.compareAsync(e, f)
 }
 
-var ErrNoRoom = errors.New("No room for write")
+var errNoRoom = errors.New("No room for write")
 
 // ensureRoomForWrite is always called serially.
 func (s *KV) ensureRoomForWrite() error {
@@ -1045,7 +1106,7 @@ func (s *KV) ensureRoomForWrite() error {
 		return nil
 	default:
 		// We need to do this to unlock and allow the flusher to modify imm.
-		return ErrNoRoom
+		return errNoRoom
 	}
 }
 

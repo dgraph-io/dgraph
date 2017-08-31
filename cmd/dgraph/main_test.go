@@ -1430,7 +1430,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 		}`
 	res, err := runQuery(q)
 	require.NoError(t, err)
-	require.Equal(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
+	require.JSONEq(t, `{"data": {"me":[{"occupations":["Software Engineer","Pianist"]}]}}`, res)
 
 	m = `
 		mutation {
