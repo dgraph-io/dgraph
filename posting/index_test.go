@@ -147,6 +147,7 @@ func TestTokensTable(t *testing.T) {
 
 	key = x.IndexKey("name", "david")
 	var item badger.KVItem
+	time.Sleep(10 * time.Millisecond)
 	err = ps.Get(key, &item)
 	x.Check(err)
 
