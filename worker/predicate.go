@@ -20,6 +20,8 @@ package worker
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/binary"
 	"io"
 	"sort"
 
@@ -38,19 +40,26 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
-func writeBatch(ctx context.Context, kv chan *protos.KV, che chan error) {
+func writeBatch(ctx context.Context, pstore *badger.KV, kv chan *protos.KV, che chan error) {
 	wb := make([]*badger.Entry, 0, 100)
 	batchSize := 0
 	batchWriteNum := 1
 	for i := range kv {
-		wb = badger.EntriesSet(wb, i.Key, i.Val)
+		if len(i.Val) == 0 {
+			wb = badger.EntriesDelete(wb, i.Key)
+		} else {
+			wb = badger.EntriesSet(wb, i.Key, i.Val)
+		}
 		batchSize += len(i.Key) + len(i.Val)
 		// We write in batches of size 32MB.
 		if batchSize >= 32*MB {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf("SNAPSHOT: Doing batch write num: %d", batchWriteNum)
 			}
-			pstore.BatchSet(wb)
+			if err := pstore.BatchSet(wb); err != nil {
+				che <- err
+				return
+			}
 
 			batchWriteNum++
 			// Resetting batch size after a batch write.
@@ -64,12 +73,37 @@ func writeBatch(ctx context.Context, kv chan *protos.KV, che chan error) {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Doing batch write %d.", batchWriteNum)
 		}
-		pstore.BatchSet(wb)
+		if err := pstore.BatchSet(wb); err != nil {
+			che <- err
+			return
+		}
 	}
 	che <- nil
 }
 
-func streamKeys(stream protos.Worker_PredicateAndSchemaDataClient, groupId uint32) error {
+// Since snapshot is a rare event we can calculate checksum here instead of calculating
+// at every write unless we have some other use case.
+func checkSum(pl *protos.PostingList) []byte {
+	var pitr posting.PIterator
+	pitr.Init(pl, 0)
+	h := md5.New()
+	count := 0
+	var ubuf [16]byte
+	for ; pitr.Valid(); pitr.Next() {
+		p := pitr.Posting()
+		// Checksum code.
+		n := binary.PutVarint(ubuf[:], int64(count))
+		h.Write(ubuf[0:n])
+		n = binary.PutUvarint(ubuf[:], p.Uid)
+		h.Write(ubuf[0:n])
+		h.Write(p.Value)
+		h.Write([]byte(p.Label))
+		count++
+	}
+	return h.Sum(nil)
+}
+
+func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataClient, groupId uint32) error {
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
@@ -106,7 +140,7 @@ func streamKeys(stream protos.Worker_PredicateAndSchemaDataClient, groupId uint3
 		copy(kdup, k)
 		key := &protos.KC{
 			Key:      kdup,
-			Checksum: pl.Checksum,
+			Checksum: checkSum(&pl),
 		}
 		g.Keys = append(g.Keys, key)
 		if len(g.Keys) >= 1000 {
@@ -125,7 +159,7 @@ func streamKeys(stream protos.Worker_PredicateAndSchemaDataClient, groupId uint3
 
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
-func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
+func populateShard(ctx context.Context, ps *badger.KV, pl *pool, group uint32) (int, error) {
 	conn := pl.Get()
 	c := protos.NewWorkerClient(conn)
 
@@ -140,7 +174,7 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 		tr.LazyPrintf("Streaming data for group: %v", group)
 	}
 
-	if err := streamKeys(stream, group); err != nil {
+	if err := streamKeys(ps, stream, group); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
@@ -149,7 +183,7 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 
 	kvs := make(chan *protos.KV, 1000)
 	che := make(chan error)
-	go writeBatch(ctx, kvs, che)
+	go writeBatch(ctx, ps, kvs, che)
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
@@ -226,12 +260,14 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		tr.LazyPrintf("Got %d keys from client\n", len(gkeys.Keys))
 	}
 
-	if !groups().ServesGroup(gkeys.GroupId) {
-		return x.Errorf("Group %d not served.", gkeys.GroupId)
-	}
-	n := groups().Node(gkeys.GroupId)
-	if !n.AmLeader() {
-		return x.Errorf("Not leader of group: %d", gkeys.GroupId)
+	if !x.IsTestRun() {
+		if !groups().ServesGroup(gkeys.GroupId) {
+			return x.Errorf("Group %d not served.", gkeys.GroupId)
+		}
+		n := groups().Node(gkeys.GroupId)
+		if !n.AmLeader() {
+			return x.Errorf("Not leader of group: %d", gkeys.GroupId)
+		}
 	}
 
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
@@ -274,7 +310,8 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 				t := gkeys.Keys[idx]
 				// Different keys would have the same prefix. So, check Checksum first,
 				// it would be cheaper when there's no match.
-				if bytes.Equal(pl.Checksum, t.Checksum) && bytes.Equal(k, t.Key) {
+				// TODO: What if checksum collides ?
+				if bytes.Equal(k, t.Key) && bytes.Equal(checkSum(&pl), t.Checksum) {
 					// No need to send this.
 					it.Next()
 					continue

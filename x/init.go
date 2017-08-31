@@ -27,6 +27,7 @@ import (
 
 var (
 	initFunc []func()
+	isTest   bool
 
 	// These variables are set using -ldflags
 	dgraphVersion  string
@@ -34,6 +35,14 @@ var (
 	lastCommitSHA  string
 	lastCommitTime string
 )
+
+func SetTestRun() {
+	isTest = true
+}
+
+func IsTestRun() bool {
+	return isTest
+}
 
 // AddInit adds a function to be run in x.Init, which should be called at the
 // beginning of all mains.

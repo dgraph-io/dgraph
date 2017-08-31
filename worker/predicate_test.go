@@ -19,13 +19,16 @@ package worker
 
 import (
 	"context"
+	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"testing"
 
 	"github.com/dgraph-io/badger"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -36,16 +39,21 @@ func checkShard(ps *badger.KV) (int, []byte) {
 	defer it.Close()
 
 	count := 0
+	var item *badger.KVItem
 	for it.Rewind(); it.Valid(); it.Next() {
+		item = it.Item()
 		count++
 	}
-	return count, it.Item().Key()
+	if item == nil {
+		return 0, nil
+	}
+	return count, item.Key()
 }
 
 func writePLs(t *testing.T, pred string, count int, vid uint64, ps *badger.KV) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i))
-		list := posting.GetOrCreate(k, 0)
+		list := posting.GetOrCreate(k, 1)
 
 		de := &protos.DirectedEdge{
 			ValueId: vid,
@@ -53,6 +61,7 @@ func writePLs(t *testing.T, pred string, count int, vid uint64, ps *badger.KV) {
 			Op:      protos.DirectedEdge_SET,
 		}
 		list.AddMutation(context.TODO(), de)
+		// If test fails, might be due to delay in syncing to disk
 		if merged, err := list.SyncIfDirty(false); err != nil {
 			t.Errorf("While merging: %v", err)
 		} else if !merged {
@@ -80,9 +89,9 @@ func serve(s *grpc.Server, ln net.Listener) {
 	s.Serve(ln)
 }
 
-/*
- TODO: Make PopulateShard work again!
 func TestPopulateShard(t *testing.T) {
+	x.SetTestRun()
+	group.ParseGroupConfig("")
 	var err error
 	dir, err := ioutil.TempDir("", "store0")
 	if err != nil {
@@ -90,21 +99,18 @@ func TestPopulateShard(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	ps, err := store.NewStore(dir)
+	opt := badger.DefaultOptions
+	opt.Dir = dir
+	opt.ValueDir = dir
+	ps, err := badger.NewKV(&opt)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer ps.Close()
 	posting.Init(ps)
+	Init(ps)
 
-	writePLs(t, 100, 2, ps)
-
-	s, ln, err := newServer(":12345")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Stop()
-	go serve(s, ln)
+	writePLs(t, "name", 100, 2, ps)
 
 	dir1, err := ioutil.TempDir("", "store1")
 	if err != nil {
@@ -112,7 +118,10 @@ func TestPopulateShard(t *testing.T) {
 	}
 	defer os.RemoveAll(dir1)
 
-	ps1, err := store.NewStore(dir1)
+	opt = badger.DefaultOptions
+	opt.Dir = dir1
+	opt.ValueDir = dir1
+	ps1, err := badger.NewKV(&opt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,8 +134,11 @@ func TestPopulateShard(t *testing.T) {
 	defer s1.Stop()
 	go serve(s1, ln1)
 
-	pool := newPool("localhost:12345", 5)
-	_, err = populateShard(context.Background(), pool, 0)
+	pool, err := newPool("localhost:12346")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = populateShard(context.Background(), ps1, pool, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,21 +148,21 @@ func TestPopulateShard(t *testing.T) {
 	if count != 100 {
 		t.Fatalf("Expected %d key value pairs. Got : %d", 100, count)
 	}
-	if string(k) != "099" {
+	if x.Parse([]byte(k)).Uid != 99 {
 		t.Fatalf("Expected key to be: %v. Got %v", "099", string(k))
 	}
 
-	l, _ := posting.GetOrCreate(k)
+	l := posting.GetOrCreate(k, 1)
 	if l.Length(0) != 1 {
 		t.Error("Unable to find added elements in posting list")
 	}
 	var found bool
-	l.Iterate(0, func(p *typesp.Posting) bool {
-		if p.Uid() != 2 {
-			t.Errorf("Expected 2. Got: %v", p.Uid())
+	l.Iterate(0, func(p *protos.Posting) bool {
+		if p.Uid != 2 {
+			t.Errorf("Expected 2. Got: %v", p.Uid)
 		}
-		if string(p.Source()) != "test" {
-			t.Errorf("Expected testing. Got: %v", string(p.Source()))
+		if string(p.Label) != "test" {
+			t.Errorf("Expected testing. Got: %v", string(p.Label))
 		}
 		found = true
 		return false
@@ -161,19 +173,33 @@ func TestPopulateShard(t *testing.T) {
 		t.Fail()
 	}
 
+	count, err = populateShard(context.Background(), ps1, pool, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("Expected PopulateShard to return %v k-v pairs. Got: %v", 0, count)
+	}
 	// We modify the ValueId in 50 PLs. So now PopulateShard should only return
 	// these after checking the Checksum.
-	writePLs(t, 50, 5, ps)
-	count, err = populateShard(context.Background(), pool, 0)
+	writePLs(t, "name", 50, 5, ps1)
+	count, err = populateShard(context.Background(), ps1, pool, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if count != 50 {
 		t.Errorf("Expected PopulateShard to return %v k-v pairs. Got: %v", 50, count)
 	}
+	count, err = populateShard(context.Background(), ps1, pool, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("Expected PopulateShard to return %v k-v pairs. Got: %v", 0, count)
+	}
 }
 
-
+/*
 func TestJoinCluster(t *testing.T) {
 	// Requires adding functions around group(). So waiting for RAFT code to stabilize a bit.
 	t.Skip()

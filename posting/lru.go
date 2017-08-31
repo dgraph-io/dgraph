@@ -154,14 +154,14 @@ func (c *listCache) Stats() CacheStats {
 	}
 }
 
-func (c *listCache) Each(f func(key string, val *List)) {
+func (c *listCache) Each(f func(key []byte, val *List)) {
 	c.Lock()
 	defer c.Unlock()
 
 	ele := c.ll.Front()
 	for ele != nil {
 		e := ele.Value.(*entry)
-		f(e.key, e.pl)
+		f(e.pl.key, e.pl)
 		ele = ele.Next()
 	}
 }
@@ -174,13 +174,12 @@ func (c *listCache) Reset() {
 	c.curSize = 0
 }
 
-func (c *listCache) clear(attr string, typ byte) error {
+func (c *listCache) clear(remove func(key []byte) bool) error {
 	c.Lock()
 	defer c.Unlock()
 	for k, e := range c.cache {
 		kv := e.Value.(*entry)
-		pk := x.Parse(kv.pl.key)
-		if pk.Attr != attr || !pk.IsType(typ) {
+		if !remove(kv.pl.key) {
 			continue
 		}
 
