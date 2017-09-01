@@ -19,7 +19,6 @@ package worker
 
 import (
 	"errors"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -533,9 +532,6 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 			uidList := new(protos.List)
 			for _, fres := range filteredRes {
 				uidList.Uids = append(uidList.Uids, fres.uid)
-			}
-			if len(uidList.Uids) > 0 {
-				fmt.Println(srcFn.tokens[i], uidList.Uids)
 			}
 			out.UidMatrix = append(out.UidMatrix, uidList)
 		}

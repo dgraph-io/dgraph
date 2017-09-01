@@ -177,9 +177,7 @@ func populateGraph(t *testing.T) {
 	gData = types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
 	require.NoError(t, err)
-	fmt.Println("Setting val for 23")
 	addEdgeToTypedValue(t, "loc", 23, types.GeoID, gData.Value.([]byte), nil)
-	fmt.Println("here")
 
 	addEdgeToValue(t, "address", 23, "21, mark street, Mars", nil)
 	addEdgeToValue(t, "name", 24, "Glenn Rhee", nil)
@@ -5525,7 +5523,7 @@ func TestNearGenerator(t *testing.T) {
 	}`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"gender":"female","name":"Michonne"},{"name":"Glenn Rhee"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"gender":"female","name":"Michonne"}, {"name": "Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
 }
 
 func TestNearGeneratorFilter(t *testing.T) {
@@ -6130,7 +6128,7 @@ func TestNearPoint(t *testing.T) {
 	}`
 
 	js := processToFastJSON(t, query)
-	expected := `{"data": {"me":[{"name":"Googleplex"}]}}`
+	expected := `{"data": {"me":[{"name":"Googleplex"},{"name":"SF Bay area"},{"name":"Mountain View"}]}}`
 	require.JSONEq(t, expected, js)
 }
 
@@ -6168,7 +6166,7 @@ func TestNearPoint2(t *testing.T) {
 	}`
 
 	js := processToFastJSON(t, query)
-	expected := `{"data": {"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"}]}}`
+	expected := `{"data": {"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"}, {"name": "SF Bay area"}, {"name": "Mountain View"}]}}`
 	require.JSONEq(t, expected, js)
 }
 
@@ -9133,11 +9131,11 @@ func TestNearPointMultiPolygon(t *testing.T) {
 	populateGraph(t)
 
 	query := `{
-		me(func: near(loc, [1.0, 1.0], 10000)) {
+		me(func: near(loc, [1.0, 1.0], 1)) {
 			name
 		}
 	}`
 
 	js := processToFastJSON(t, query)
-	fmt.Println(js)
+	require.Equal(t, `{"data": {"me":[{"name":"Rick Grimes"}]}}`, js)
 }
