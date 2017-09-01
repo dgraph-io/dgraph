@@ -39,119 +39,117 @@ const (
 	del = "delete"
 )
 
-// runMutations goes through all the edges and applies them. It returns the
+// runMutation goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
-func runMutations(ctx context.Context, edges []*protos.DirectedEdge) error {
+func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("In run mutations")
 	}
-	for _, edge := range edges {
-		gid := group.BelongsTo(edge.Attr)
-		if !groups().ServesGroup(gid) {
-			return x.Errorf("Predicate fingerprint doesn't match this instance")
+	gid := group.BelongsTo(edge.Attr)
+	if !groups().ServesGroup(gid) {
+		return x.Errorf("Predicate fingerprint doesn't match this instance")
+	}
+
+	rv := ctx.Value("raft").(x.RaftValue)
+	x.AssertTruef(rv.Group == gid, "fingerprint mismatch between raft and group conf")
+
+	typ, err := schema.State().TypeOf(edge.Attr)
+	x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
+
+	if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
+		waitForSyncMark(ctx, gid, rv.Index-1)
+		if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
+			return err
 		}
+		return nil
+	}
+	// Once mutation comes via raft we do best effort conversion
+	// Type check is done before proposing mutation, in case schema is not
+	// present, some invalid entries might be written initially
+	err = validateAndConvert(edge, typ)
 
-		rv := ctx.Value("raft").(x.RaftValue)
-		x.AssertTruef(rv.Group == gid, "fingerprint mismatch between raft and group conf")
+	key := x.DataKey(edge.Attr, edge.Entity)
 
-		typ, err := schema.State().TypeOf(edge.Attr)
-		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
-
-		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
-			waitForSyncMark(ctx, gid, rv.Index-1)
-			if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
-				return err
-			}
-			continue
+	t := time.Now()
+	plist := posting.GetOrCreate(key, gid)
+	if dur := time.Since(t); dur > time.Millisecond {
+		if tr, ok := trace.FromContext(ctx); ok {
+			tr.LazyPrintf("GetOrCreate took %v", dur)
 		}
-		// Once mutation comes via raft we do best effort conversion
-		// Type check is done before proposing mutation, in case schema is not
-		// present, some invalid entries might be written initially
-		err = validateAndConvert(edge, typ)
+	}
 
-		key := x.DataKey(edge.Attr, edge.Entity)
-
-		t := time.Now()
-		plist := posting.GetOrCreate(key, gid)
-		if dur := time.Since(t); dur > time.Millisecond {
-			if tr, ok := trace.FromContext(ctx); ok {
-				tr.LazyPrintf("GetOrCreate took %v", dur)
-			}
-		}
-
-		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
-			return err // abort applying the rest of them.
-		}
+	if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
+		return err // abort applying the rest of them.
 	}
 	return nil
 }
 
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
-func runSchemaMutations(ctx context.Context, updates []*protos.SchemaUpdate) error {
+func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	n := groups().Node(rv.Group)
-	for _, update := range updates {
-		if !groups().ServesGroup(group.BelongsTo(update.Predicate)) {
-			return x.Errorf("Predicate fingerprint doesn't match this instance")
+	// Wait for applied watermark to reach till previous index
+	// All mutations before this should use old schema and after this
+	// should use new schema
+	n.waitForSyncMark(n.ctx, rv.Index-1)
+	if !groups().ServesGroup(group.BelongsTo(update.Predicate)) {
+		return x.Errorf("Predicate fingerprint doesn't match this instance")
+	}
+	if err := checkSchema(update); err != nil {
+		return err
+	}
+	old, ok := schema.State().Get(update.Predicate)
+	current := schema.From(update)
+	updateSchema(update.Predicate, current, rv.Index, rv.Group)
+
+	// Once we remove index or reverse edges from schema, even though the values
+	// are present in db, they won't be used due to validation in work/task.go
+
+	// We don't want to use sync watermarks for background removal, because it would block
+	// linearizable read requests. Only downside would be on system crash, stale edges
+	// might remain, which is ok.
+
+	// Indexing can't be done in background as it can cause race conditons with new
+	// index mutations (old set and new del)
+	// We need watermark for index/reverse edge addition for linearizable reads.
+	// (both applied and synced watermarks).
+	defer x.Printf("Done schema update %+v\n", update)
+	if !ok {
+		if current.Directive == protos.SchemaUpdate_INDEX {
+			if err := n.rebuildOrDelIndex(ctx, update.Predicate, true); err != nil {
+				return err
+			}
+		} else if current.Directive == protos.SchemaUpdate_REVERSE {
+			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true); err != nil {
+				return err
+			}
 		}
-		if err := checkSchema(update); err != nil {
+
+		if current.Count {
+			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	// schema was present already
+	if needReindexing(old, current) {
+		// Reindex if update.Index is true or remove index
+		if err := n.rebuildOrDelIndex(ctx, update.Predicate,
+			current.Directive == protos.SchemaUpdate_INDEX); err != nil {
 			return err
 		}
-		old, ok := schema.State().Get(update.Predicate)
-		current := schema.From(update)
-		updateSchema(update.Predicate, current, rv.Index, rv.Group)
-
-		// Once we remove index or reverse edges from schema, even though the values
-		// are present in db, they won't be used due to validation in work/task.go
-		// Removal can be done in background if we write a scheduler later which ensures
-		// that schema mutations are serialized, so that there won't be
-		// race conditions between deletion of edges and addition of edges.
-
-		// We don't want to use sync watermarks for background removal, because it would block
-		// linearizable read requests. Only downside would be on system crash, stale edges
-		// might remain, which is ok.
-
-		// Indexing can't be done in background as it can cause race conditons with new
-		// index mutations (old set and new del)
-		// We need watermark for index/reverse edge addition for linearizable reads.
-		// (both applied and synced watermarks).
-		if !ok {
-			if current.Directive == protos.SchemaUpdate_INDEX {
-				if err := n.rebuildOrDelIndex(ctx, update.Predicate, true); err != nil {
-					return err
-				}
-			} else if current.Directive == protos.SchemaUpdate_REVERSE {
-				if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true); err != nil {
-					return err
-				}
-			}
-
-			if current.Count {
-				if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true); err != nil {
-					return err
-				}
-			}
-			continue
+	} else if needsRebuildingReverses(old, current) {
+		// Add or remove reverse edge based on update.Reverse
+		if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
+			current.Directive == protos.SchemaUpdate_REVERSE); err != nil {
+			return err
 		}
-		// schema was present already
-		if needReindexing(old, current) {
-			// Reindex if update.Index is true or remove index
-			if err := n.rebuildOrDelIndex(ctx, update.Predicate,
-				current.Directive == protos.SchemaUpdate_INDEX); err != nil {
-				return err
-			}
-		} else if needsRebuildingReverses(old, current) {
-			// Add or remove reverse edge based on update.Reverse
-			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
-				current.Directive == protos.SchemaUpdate_REVERSE); err != nil {
-				return err
-			}
-		}
+	}
 
-		if current.Count != old.Count {
-			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count); err != nil {
-			}
+	if current.Count != old.Count {
+		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count); err != nil {
 		}
 	}
 	return nil
