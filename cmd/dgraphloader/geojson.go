@@ -24,11 +24,6 @@ func toMutations(f *geojson.Feature, c *client.Dgraph) error {
 	if err = c.BatchSet(e); err != nil {
 		log.Fatal("While adding mutation to batch: ", err)
 	}
-	e = n.Edge("name")
-	e.SetValueString(f.Properties["name"].(string))
-	if err = c.BatchSet(e); err != nil {
-		log.Fatal("While adding mutation to batch: ", err)
-	}
 	return nil
 }
 
