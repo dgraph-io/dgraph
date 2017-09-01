@@ -719,6 +719,8 @@ type linearizableReadRequest struct {
 	readIndexCh chan<- uint64
 }
 
+// linearizableState is used single-threaded, except for senders to `requests`.  (A single thread,
+// the Run loop, reads from `requests` and sends on `readIndexCh`.)
 type linearizableState struct {
 	requests           chan linearizableReadRequest
 	rctxCounter        x.NonceCounter
@@ -729,6 +731,8 @@ type linearizableState struct {
 }
 
 func newLinearizableState() linearizableState {
+	// Create a new inactive timer to start with.  (We reuse the timer object just to save
+	// allocations.)
 	timer := time.NewTimer(0)
 	if !timer.Stop() {
 		<-timer.C
@@ -742,6 +746,14 @@ func newLinearizableState() linearizableState {
 	}
 }
 
+// Called by other threads
+func (ls *linearizableState) readIndex() chan uint64 {
+	ch := make(chan uint64, 1)
+	ls.requests <- linearizableReadRequest{ch}
+	return ch
+}
+
+// Called serially by the Run loop
 func (ls *linearizableState) slurpRequests() {
 	for {
 		select {
@@ -753,18 +765,14 @@ func (ls *linearizableState) slurpRequests() {
 	}
 }
 
+// Called serially by the Run loop
 func (ls *linearizableState) feedRequest(req linearizableReadRequest) {
 	ls.pendingRequests = append(ls.pendingRequests, req.readIndexCh)
 }
 
-func (ls *linearizableState) readIndex() chan uint64 {
-	ch := make(chan uint64, 1)
-	ls.requests <- linearizableReadRequest{ch}
-	return ch
-}
-
 // Our ReadIndex request got a response (or timed out).  Inform our requesters and then (perhaps)
-// send another ReadIndex request for the next batch of requesters.
+// send another ReadIndex request for the next batch of requesters.  Called serially by the Run
+// loop.
 func cycleResponses(ls *linearizableState, n *node, indexOrNone uint64) error {
 	for _, respCh := range ls.needingResponse {
 		respCh <- indexOrNone
@@ -773,6 +781,7 @@ func cycleResponses(ls *linearizableState, n *node, indexOrNone uint64) error {
 	return feedRequestsAndDispatchReadIndex(ls, n)
 }
 
+// Called serially by the Run loop
 func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
 	ls.slurpRequests()
 	if len(ls.needingResponse) != 0 {
@@ -791,6 +800,7 @@ func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
 	return n.Raft().ReadIndex(n.ctx, ls.activeRequestRctx)
 }
 
+// Called serially by the Run loop
 func (ls *linearizableState) timeExpired(n *node) error {
 	return cycleResponses(ls, n, raft.None)
 }
