@@ -19,13 +19,16 @@ package worker
 
 import (
 	"context"
+	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"testing"
 
 	"github.com/dgraph-io/badger"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -36,16 +39,22 @@ func checkShard(ps *badger.KV) (int, []byte) {
 	defer it.Close()
 
 	count := 0
+	var item *badger.KVItem
 	for it.Rewind(); it.Valid(); it.Next() {
+		item = it.Item()
 		count++
 	}
-	return count, it.Item().Key()
+	if item == nil {
+		return 0, nil
+	}
+	return count, item.Key()
 }
 
-func writePLs(t *testing.T, pred string, count int, vid uint64, ps *badger.KV) {
+// Hacky tests change laster
+func writePLs(t *testing.T, pred string, startIdx int, count int, vid uint64) {
 	for i := 0; i < count; i++ {
-		k := x.DataKey(pred, uint64(i))
-		list := posting.GetOrCreate(k, 0)
+		k := x.DataKey(pred, uint64(i+startIdx))
+		list := posting.GetOrCreate(k, 1)
 
 		de := &protos.DirectedEdge{
 			ValueId: vid,
@@ -53,10 +62,34 @@ func writePLs(t *testing.T, pred string, count int, vid uint64, ps *badger.KV) {
 			Op:      protos.DirectedEdge_SET,
 		}
 		list.AddMutation(context.TODO(), de)
+		// If test fails, might be due to delay in syncing to disk
+		// Warning, this would write to posting pstore
 		if merged, err := list.SyncIfDirty(false); err != nil {
 			t.Errorf("While merging: %v", err)
 		} else if !merged {
 			t.Errorf("No merge happened")
+		}
+	}
+}
+
+func deletePLs(t *testing.T, pred string, startIdx int, count int, ps *badger.KV) {
+	for i := 0; i < count; i++ {
+		k := x.DataKey(pred, uint64(i+startIdx))
+		ps.Delete(k)
+	}
+}
+
+func writeToBadger(t *testing.T, pred string, startIdx int, count int, ps *badger.KV) {
+	for i := 0; i < count; i++ {
+		k := x.DataKey(pred, uint64(i+startIdx))
+		pl := new(protos.PostingList)
+		data, err := pl.Marshal()
+		if err != nil {
+			t.Errorf("Error while marshing pl")
+		}
+		err = ps.Set(k, data, 0x00)
+		if err != nil {
+			t.Errorf("Error while writing to badger")
 		}
 	}
 }
@@ -80,9 +113,9 @@ func serve(s *grpc.Server, ln net.Listener) {
 	s.Serve(ln)
 }
 
-/*
- TODO: Make PopulateShard work again!
 func TestPopulateShard(t *testing.T) {
+	x.SetTestRun()
+	group.ParseGroupConfig("")
 	var err error
 	dir, err := ioutil.TempDir("", "store0")
 	if err != nil {
@@ -90,21 +123,18 @@ func TestPopulateShard(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	ps, err := store.NewStore(dir)
+	opt := badger.DefaultOptions
+	opt.Dir = dir
+	opt.ValueDir = dir
+	psLeader, err := badger.NewKV(&opt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ps.Close()
-	posting.Init(ps)
+	defer psLeader.Close()
+	posting.Init(psLeader)
+	Init(psLeader)
 
-	writePLs(t, 100, 2, ps)
-
-	s, ln, err := newServer(":12345")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Stop()
-	go serve(s, ln)
+	writePLs(t, "name", 0, 100, 2)
 
 	dir1, err := ioutil.TempDir("", "store1")
 	if err != nil {
@@ -112,11 +142,14 @@ func TestPopulateShard(t *testing.T) {
 	}
 	defer os.RemoveAll(dir1)
 
-	ps1, err := store.NewStore(dir1)
+	opt = badger.DefaultOptions
+	opt.Dir = dir1
+	opt.ValueDir = dir1
+	psFollower, err := badger.NewKV(&opt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ps1.Close()
+	defer psFollower.Close()
 
 	s1, ln1, err := newServer(":12346")
 	if err != nil {
@@ -125,32 +158,35 @@ func TestPopulateShard(t *testing.T) {
 	defer s1.Stop()
 	go serve(s1, ln1)
 
-	pool := newPool("localhost:12345", 5)
-	_, err = populateShard(context.Background(), pool, 0)
+	pool, err := newPool("localhost:12346")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = populateShard(context.Background(), psFollower, pool, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Getting count on number of keys written to posting list store on instance 1.
-	count, k := checkShard(ps1)
+	count, k := checkShard(psFollower)
 	if count != 100 {
 		t.Fatalf("Expected %d key value pairs. Got : %d", 100, count)
 	}
-	if string(k) != "099" {
+	if x.Parse([]byte(k)).Uid != 99 {
 		t.Fatalf("Expected key to be: %v. Got %v", "099", string(k))
 	}
 
-	l, _ := posting.GetOrCreate(k)
+	l := posting.GetOrCreate(k, 1)
 	if l.Length(0) != 1 {
 		t.Error("Unable to find added elements in posting list")
 	}
 	var found bool
-	l.Iterate(0, func(p *typesp.Posting) bool {
-		if p.Uid() != 2 {
-			t.Errorf("Expected 2. Got: %v", p.Uid())
+	l.Iterate(0, func(p *protos.Posting) bool {
+		if p.Uid != 2 {
+			t.Errorf("Expected 2. Got: %v", p.Uid)
 		}
-		if string(p.Source()) != "test" {
-			t.Errorf("Expected testing. Got: %v", string(p.Source()))
+		if string(p.Label) != "test" {
+			t.Errorf("Expected testing. Got: %v", string(p.Label))
 		}
 		found = true
 		return false
@@ -161,19 +197,81 @@ func TestPopulateShard(t *testing.T) {
 		t.Fail()
 	}
 
-	// We modify the ValueId in 50 PLs. So now PopulateShard should only return
-	// these after checking the Checksum.
-	writePLs(t, 50, 5, ps)
-	count, err = populateShard(context.Background(), pool, 0)
+	// Everything is same in both stores, so no diff
+	count, err = populateShard(context.Background(), psFollower, pool, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if count != 50 {
-		t.Errorf("Expected PopulateShard to return %v k-v pairs. Got: %v", 50, count)
+	if count != 0 {
+		t.Errorf("Expected PopulateShard to return %v k-v pairs. Got: %v", 0, count)
+	}
+
+	// We modify the ValueId in 40 PLs. So now PopulateShard should only return
+	// these after checking the Checksum.
+	writePLs(t, "name", 0, 40, 5)
+	count, err = populateShard(context.Background(), psFollower, pool, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 40 {
+		t.Errorf("Expected PopulateShard to return %v k-v pairs. Got: %v", 40, count)
+	}
+
+	var item badger.KVItem
+	err = psFollower.Get(x.DataKey("name", 1), &item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(item.Value()) == 0 {
+		t.Errorf("value for uid 1 predicate name not found\n")
+	}
+	deletePLs(t, "name", 0, 5, psLeader) // delete in leader, should be deleted in follower also
+	deletePLs(t, "name", 94, 5, psLeader)
+	deletePLs(t, "name", 47, 5, psLeader)
+	writePLs(t, "name2", 0, 10, 2)
+	writePLs(t, "name", 100, 10, 2)               // Write extra in leader
+	writeToBadger(t, "name", 110, 10, psFollower) // write extra in follower should be deleted
+	count, k = checkShard(psFollower)
+	if count != 110 {
+		t.Fatalf("Expected %d key value pairs. Got : %d", 110, count)
+	}
+	if x.Parse([]byte(k)).Uid != 119 {
+		t.Fatalf("Expected key to be: %v. Got %v", "119", string(k))
+	}
+	count, err = populateShard(context.Background(), psFollower, pool, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 45 {
+		t.Errorf("Expected PopulateShard to return %v k-v pairs. Got: %v", 45, count)
+	}
+	err = psFollower.Get(x.DataKey("name", 1), &item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(item.Value()) != 0 {
+		t.Errorf("value for uid 1 predicate name shouldn't be present\n")
+	}
+	err = psFollower.Get(x.DataKey("name", 110), &item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(item.Value()) != 0 {
+		t.Errorf("value for uid 110 predicate name shouldn't be present\n")
+	}
+
+	// We have delete and added new pl's
+	// Nothing is present for group2
+	count, err = populateShard(context.Background(), psFollower, pool, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("Expected PopulateShard to return %v k-v pairs. Got: %v", 0, count)
 	}
 }
 
-
+/*
 func TestJoinCluster(t *testing.T) {
 	// Requires adding functions around group(). So waiting for RAFT code to stabilize a bit.
 	t.Skip()

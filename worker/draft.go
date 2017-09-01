@@ -698,7 +698,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
 	posting.EvictGroup(n.gid)
-	if _, err := populateShard(n.ctx, pool, n.gid); err != nil {
+	if _, err := populateShard(n.ctx, pstore, pool, n.gid); err != nil {
 		// TODO: We definitely don't want to just fall flat on our face if we can't
 		// retrieve a simple snapshot.
 		log.Fatalf("Cannot retrieve snapshot from peer %v, error: %v\n", peerID, err)

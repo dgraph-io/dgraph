@@ -424,10 +424,8 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 
 	l.AssertLock()
 	var index uint64
-	var gid uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 		index = rv.Index
-		gid = rv.Group
 	}
 	// Calculate 5% of immutable layer
 	numUids := (bp128.NumIntegers(l.plist.Uids) * 5) / 100
@@ -489,10 +487,6 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		if index != 0 {
 			l.water.Begin(index)
 			l.pending = append(l.pending, index)
-		}
-		// if mutation doesn't come via raft
-		if gid == 0 {
-			gid = group.BelongsTo(t.Attr)
 		}
 		if dirtyChan != nil {
 			dirtyChan <- l.key
