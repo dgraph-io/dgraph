@@ -144,7 +144,7 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 
 	keys, err := IndexGeoTokens(g)
 	require.NoError(t, err)
-	require.Len(t, keys, 66)
+	require.Len(t, keys, 67)
 }
 
 func testCover(file string, max int) {

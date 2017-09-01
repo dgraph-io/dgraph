@@ -41,7 +41,7 @@ import (
 const maxBatchSize = 32 * (1 << 20)
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
-func IndexTokens(attr, lang string, src types.Val) ([]string, error) {
+func indexTokens(attr, lang string, src types.Val) ([]string, error) {
 	schemaType, err := schema.State().TypeOf(attr)
 	if err != nil || !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
@@ -85,7 +85,7 @@ func addIndexMutations(ctx context.Context, t *protos.DirectedEdge, p types.Val,
 	attr := t.Attr
 	uid := t.Entity
 	x.AssertTrue(uid != 0)
-	tokens, err := IndexTokens(attr, t.GetLang(), p)
+	tokens, err := indexTokens(attr, t.GetLang(), p)
 
 	if err != nil {
 		// This data is not indexable

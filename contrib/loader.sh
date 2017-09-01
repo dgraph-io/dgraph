@@ -65,8 +65,6 @@ quit 0
 # Wait for a clean shutdown.
 pushd cmd/dgraph &> /dev/null
 start
-# Wait for membership sync to happen.
-sleep 10
 popd &> /dev/null
 
 ./contrib/goldendata-queries.sh
