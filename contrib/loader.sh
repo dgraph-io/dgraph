@@ -63,7 +63,6 @@ popd &> /dev/null
 # Restart Dgraph so that we are sure that index keys are persisted.
 quit 0
 # Wait for a clean shutdown.
-sleep 15
 pushd cmd/dgraph &> /dev/null
 start
 # Wait for membership sync to happen.
@@ -74,9 +73,6 @@ popd &> /dev/null
 
 echo -e "\nShutting down Dgraph"
 quit 0
-
-# Wait for clean shutdown.
-sleep 20
 
 echo -e "\nTrying to restart Dgraph and match export count"
 pushd cmd/dgraph &> /dev/null
