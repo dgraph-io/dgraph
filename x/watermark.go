@@ -53,7 +53,6 @@ type mark struct {
 	waiter  chan struct{}
 	indices []uint64
 	done    bool // Set to true if the pending mutation is done.
-	count   int
 }
 
 // WaterMark is used to keep track of the minimum un-finished index.  Typically, an index k becomes
@@ -78,20 +77,17 @@ func (w *WaterMark) Init() {
 }
 
 func (w *WaterMark) Begin(index uint64) {
-	w.markCh <- mark{index: index, done: false, count: 1}
+	w.markCh <- mark{index: index, done: false}
 }
 func (w *WaterMark) BeginMany(indices []uint64) {
-	w.markCh <- mark{index: 0, indices: indices, done: false, count: 1}
-}
-func (w *WaterMark) BeginWithCount(index uint64, count int) {
-	w.markCh <- mark{index: index, done: false, count: count}
+	w.markCh <- mark{index: 0, indices: indices, done: false}
 }
 
 func (w *WaterMark) Done(index uint64) {
-	w.markCh <- mark{index: index, done: true, count: 1}
+	w.markCh <- mark{index: index, done: true}
 }
 func (w *WaterMark) DoneMany(indices []uint64) {
-	w.markCh <- mark{index: 0, indices: indices, done: true, count: 1}
+	w.markCh <- mark{index: 0, indices: indices, done: true}
 }
 
 // DoneUntil returns the maximum index until which all tasks are done.
@@ -126,16 +122,16 @@ func (w *WaterMark) process() {
 	heap.Init(&waiterIndices)
 	var loop uint64
 
-	processOne := func(index uint64, done bool, count int) {
+	processOne := func(index uint64, done bool) {
 		// If not already done, then set. Otherwise, don't undo a done entry.
 		prev, present := pending[index]
 		if !present {
 			heap.Push(&indices, index)
 		}
 
-		delta := count
+		delta := 1
 		if done {
-			delta = -count
+			delta = -1
 		}
 		pending[index] = prev + delta
 
@@ -200,10 +196,10 @@ func (w *WaterMark) process() {
 			}
 		} else {
 			if mark.index > 0 {
-				processOne(mark.index, mark.done, mark.count)
+				processOne(mark.index, mark.done)
 			}
 			for _, index := range mark.indices {
-				processOne(index, mark.done, mark.count)
+				processOne(index, mark.done)
 			}
 		}
 	}
