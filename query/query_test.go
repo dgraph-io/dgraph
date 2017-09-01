@@ -177,7 +177,9 @@ func populateGraph(t *testing.T) {
 	gData = types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
 	require.NoError(t, err)
+	fmt.Println("Setting val for 23")
 	addEdgeToTypedValue(t, "loc", 23, types.GeoID, gData.Value.([]byte), nil)
+	fmt.Println("here")
 
 	addEdgeToValue(t, "address", 23, "21, mark street, Mars", nil)
 	addEdgeToValue(t, "name", 24, "Glenn Rhee", nil)
@@ -9125,4 +9127,17 @@ func TestMultiPolygonContains(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"data": {"me":[{"name":"USA"}]}}`, js)
+}
+
+func TestNearPointMultiPolygon(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		me(func: near(loc, [1.0, 1.0], 10000)) {
+			name
+		}
+	}`
+
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
 }

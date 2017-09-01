@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -202,11 +203,17 @@ func nearQueryKeys(pt s2.Point, d float64) ([]string, *GeoQueryData, error) {
 		return nil, nil, x.Errorf("Invalid max distance specified for a near query")
 	}
 	a := EarthAngle(d)
+	//	l := s2.RegularLoop(pt, a, 100)
+	//	fmt.Println(l.ContainsPoint(pt))
 	c := s2.CapFromCenterAngle(pt, a)
 	cu := indexCellsForCap(c)
-	// A near query is similar to within, where we are looking for points within the cap. So we need
-	// all objects whose parents match the cover of the cap.
-	return createTokens(cu, parentPrefix), &GeoQueryData{cap: &c, qtype: QueryTypeNear}, nil
+	// A near query is similar to within, where we are looking for points within the cap and all
+	// intersecting polygons. So we need all objects whose parents match the cover of the cap.
+
+	toks := createTokens(cu, parentPrefix)
+	toks = append(toks, createTokens(cu, coverPrefix)...)
+	fmt.Println("toks", toks)
+	return toks, &GeoQueryData{cap: &c, qtype: QueryTypeNear}, nil
 }
 
 // MatchesFilter applies the query filter to a geo value
@@ -225,10 +232,6 @@ func (q GeoQueryData) MatchesFilter(g geom.T) bool {
 		return q.isWithin(g)
 	}
 	return false
-}
-
-func withinCapPolygon(g1 *s2.Loop, g2 *s2.Cap) bool {
-	return g2.Contains(g1.CapBound())
 }
 
 func loopWithinMultiloops(l *s2.Loop, loops []*s2.Loop) bool {
@@ -273,7 +276,7 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 			return false
 		}
 		if q.cap != nil {
-			return withinCapPolygon(s2loop, q.cap)
+			return q.cap.Intersects(s2loop.CapBound())
 		}
 	case *geom.MultiPolygon:
 		// We check each polygon in the multipolygon should be within some loop of q.loops.
@@ -291,17 +294,18 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 		}
 
 		if q.cap != nil {
+			fmt.Println("here")
 			for i := 0; i < geometry.NumPolygons(); i++ {
 				p := geometry.Polygon(i)
 				s2loop, err := loopFromPolygon(p)
 				if err != nil {
 					return false
 				}
-				if !withinCapPolygon(s2loop, q.cap) {
-					return false
+				if q.cap.Intersects(s2loop.CapBound()) {
+					return true
 				}
 			}
-			return true
+			return false
 		}
 	}
 	return false
@@ -423,6 +427,7 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 // The uids are obtained through the index. This second pass ensures that the values actually
 // match the query criteria.
 func FilterGeoUids(uids *protos.List, values []*protos.TaskValue, q *GeoQueryData) *protos.List {
+	fmt.Println("uids", uids)
 	x.AssertTruef(len(values) == len(uids.Uids), "lengths not matching")
 	rv := &protos.List{}
 	for i := 0; i < len(values); i++ {
