@@ -102,10 +102,12 @@ func (p *peerPool) set(id uint64, addr string, pl *pool) {
 }
 
 type proposalCtx struct {
-	ch  chan error
-	ctx context.Context
-	cnt int
-	err error
+	ch    chan error
+	ctx   context.Context
+	cnt   int
+	err   error
+	index uint64
+	n     *node
 }
 
 type proposals struct {
@@ -123,12 +125,13 @@ func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
 	return true
 }
 
-func (p *proposals) IncRef(pid uint32, count int) {
+func (p *proposals) IncRef(pid uint32, index uint64, count int) {
 	p.Lock()
 	defer p.Unlock()
 	pd, has := p.ids[pid]
 	x.AssertTrue(has)
 	pd.cnt += count
+	pd.index = index
 	return
 }
 
@@ -143,24 +146,23 @@ func (p *proposals) Ctx(pid uint32) (context.Context, bool) {
 
 func (p *proposals) Done(pid uint32, err error) {
 	p.Lock()
+	defer p.Unlock()
 	pd, has := p.ids[pid]
-	if has {
-		pd.cnt -= 1
-		if err != nil {
-			pd.err = err
-		}
-		if pd.cnt > 0 {
-			p.Unlock()
-			return
-		}
-		delete(p.ids, pid)
-		err = pd.err
-	}
-	p.Unlock()
 	if !has {
 		return
 	}
-	pd.ch <- err
+	x.AssertTrue(pd.cnt > 0 && pd.index != 0)
+	pd.cnt -= 1
+	if err != nil {
+		pd.err = err
+	}
+	if pd.cnt > 0 {
+		return
+	}
+	delete(p.ids, pid)
+	pd.ch <- pd.err
+	pd.n.applied.Done(pd.index)
+	posting.SyncMarkFor(pd.n.gid).Done(pd.index)
 }
 
 func (p *proposals) Has(pid uint32) bool {
@@ -395,6 +397,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	pctx := &proposalCtx{
 		ch:  che,
 		ctx: ctx,
+		n:   n,
 	}
 	for {
 		id := rand.Uint32()
@@ -572,12 +575,8 @@ func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.Schema
 
 func (n *node) processMembership(index uint64, pid uint32, mm *protos.Membership) error {
 	x.AssertTrue(n.gid == 0)
-	defer func() {
-		n.applied.Done(index)
-		posting.SyncMarkFor(n.gid).Done(index)
-	}()
-
 	x.ActiveMutations.Add(1)
+	n.props.IncRef(pid, index, 1)
 	defer x.ActiveMutations.Add(-1)
 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
 		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
@@ -624,14 +623,10 @@ func (n *node) processApplyCh() {
 			log.Fatalf("Unable to unmarshal proposal: %v %q\n", err, e.Data)
 		}
 
+		// One final applied and synced watermark would be emitted when proposal ctx ref count
+		// becomes zero
 		if proposal.Mutations != nil {
-			// ensures that index is not mark completed until all tasks
-			// are submitted to scheduler
-			n.props.IncRef(proposal.Id, 1)
 			n.sch.schedule(proposal, e.Index)
-			n.props.Done(proposal.Id, nil)
-			n.applied.Done(e.Index)
-			posting.SyncMarkFor(n.gid).Done(e.Index)
 		} else if proposal.Membership != nil {
 			go n.processMembership(e.Index, proposal.Id, proposal.Membership)
 		} else {

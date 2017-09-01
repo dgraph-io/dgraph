@@ -42,15 +42,6 @@ type scheduler struct {
 	// the end result would be logically correct
 	tasks map[uint32][]*task
 	tch   chan *task
-	ptch  chan *task // priority task channel
-	// If we push proposals to a separate list while schema mutation is
-	// going on then we can't have the ordering guarantee even if we
-	// check in priority buffer first.
-	// For now doing a simple design where we block the scheduler loop
-	// if a mutation comes which is using the predicate. Dgraph would be
-	// under heavy load while doing schema mutations so it should be ok to block.
-	schemaMap     map[string]chan struct{}
-	pendingSchema chan struct{}
 
 	n *node
 }
@@ -58,40 +49,26 @@ type scheduler struct {
 func (s *scheduler) init(n *node) {
 	s.n = n
 	s.tasks = make(map[uint32][]*task)
-	s.tch = make(chan *task, 10000)
-	s.ptch = make(chan *task, 10000)
-	s.schemaMap = make(map[string]chan struct{})
-	s.pendingSchema = make(chan struct{}, 10)
+	s.tch = make(chan *task, 1000)
 	for i := 0; i < 1000; i++ {
 		go s.processTasks()
 	}
 }
 
 func (s *scheduler) processTasks() {
-	for {
-		// Check if something is there in priority channel
-		select {
-		case t := <-s.ptch:
-			s.executeMutation(t)
-		default:
-		}
-		select {
-		case t := <-s.ptch:
-			s.executeMutation(t)
-		case t := <-s.tch:
-			s.executeMutation(t)
-		}
+	for t := range s.tch {
+		s.executeMutation(t)
 	}
 }
 
 func (s *scheduler) executeMutation(t *task) {
-	err := s.n.processMutation(t.pid, t.rid, t.edge)
-	s.n.props.Done(t.pid, err)
-	s.n.applied.Done(t.rid)
-	posting.SyncMarkFor(s.n.gid).Done(t.rid)
-	x.ActiveMutations.Add(-1)
-	if nextTask := s.nextTask(t); nextTask != nil {
-		s.ptch <- nextTask
+	n := s.n
+	nextTask := t
+	for nextTask != nil {
+		err := s.n.processMutation(nextTask.pid, nextTask.rid, nextTask.edge)
+		n.props.Done(nextTask.pid, err)
+		x.ActiveMutations.Add(-1)
+		nextTask = s.nextTask(nextTask)
 	}
 }
 
@@ -100,7 +77,7 @@ func taskKey(attribute string, uid uint64) uint32 {
 	return farm.Fingerprint32([]byte(key))
 }
 
-func (s *scheduler) canSchedule(t *task) bool {
+func (s *scheduler) register(t *task) bool {
 	s.Lock()
 	defer s.Unlock()
 	key := taskKey(t.edge.Attr, t.edge.Entity)
@@ -115,36 +92,21 @@ func (s *scheduler) canSchedule(t *task) bool {
 	}
 }
 
-func (s *scheduler) markSchemaDone(predicate string) {
-	s.Lock()
-	defer s.Unlock()
-	ch, ok := s.schemaMap[predicate]
-	x.AssertTrue(ok)
-	ch <- struct{}{}
-	close(ch)
-}
-
-func (s *scheduler) waitForSchema(predicate string) {
-	s.Lock()
-	s.Unlock()
-	ch, ok := s.schemaMap[predicate]
-	if !ok {
-		return
-	}
-	<-ch
-}
-
-func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) {
-	total := len(proposal.Mutations.Edges) + len(proposal.Mutations.Schema)
-	if total > 0 {
-		s.n.props.IncRef(proposal.Id, total)
-		x.ActiveMutations.Add(int64(total))
-		s.n.applied.BeginWithCount(index, total)
-		posting.SyncMarkFor(s.n.gid).BeginWithCount(index, total)
-	}
+func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
+	// ensures that index is not mark completed until all tasks
+	// are submitted to scheduler
+	total := len(proposal.Mutations.Edges)
+	s.n.props.IncRef(proposal.Id, index, 1+total)
+	x.ActiveMutations.Add(int64(total))
 	for _, supdate := range proposal.Mutations.Schema {
-		s.waitForSchema(supdate.Predicate)
-		s.scheduleSchema(proposal.Id, index, supdate)
+		if err := s.n.processSchemaMutations(proposal.Id, index, supdate); err != nil {
+			s.n.props.Done(proposal.Id, err)
+			return err
+		}
+	}
+	if total == 0 {
+		s.n.props.Done(proposal.Id, nil)
+		return nil
 	}
 
 	// Scheduler tracks tasks at subject, predicate level, so doing
@@ -172,35 +134,17 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) {
 	}
 
 	for _, edge := range proposal.Mutations.Edges {
-		s.waitForSchema(edge.Attr)
-		s.scheduleMutation(&task{
+		t := &task{
 			rid:  index,
 			pid:  proposal.Id,
 			edge: edge,
-		})
+		}
+		if s.register(t) {
+			s.tch <- t
+		}
 	}
-}
-
-func (s *scheduler) scheduleSchema(pid uint32, rid uint64, supdate *protos.SchemaUpdate) {
-	s.Lock()
-	s.schemaMap[supdate.Predicate] = make(chan struct{}, 1)
-	s.Unlock()
-
-	s.pendingSchema <- struct{}{}
-	go func() {
-		err := s.n.processSchemaMutations(pid, rid, supdate)
-		s.n.props.Done(pid, err)
-		s.markSchemaDone(supdate.Predicate)
-		s.n.applied.Done(rid)
-		posting.SyncMarkFor(s.n.gid).Done(rid)
-		<-s.pendingSchema
-	}()
-}
-
-func (s *scheduler) scheduleMutation(t *task) {
-	if s.canSchedule(t) {
-		s.tch <- t
-	}
+	s.n.props.Done(proposal.Id, nil)
+	return nil
 }
 
 func (s *scheduler) nextTask(t *task) *task {
