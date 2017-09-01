@@ -39,9 +39,9 @@ const (
 	del = "delete"
 )
 
-// runMutations goes through all the edges and applies them. It returns the
+// runMutation goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
-func runMutations(ctx context.Context, edge *protos.DirectedEdge) error {
+func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("In run mutations")
 	}
@@ -86,7 +86,7 @@ func runMutations(ctx context.Context, edge *protos.DirectedEdge) error {
 
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
-func runSchemaMutations(ctx context.Context, update *protos.SchemaUpdate) error {
+func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	n := groups().Node(rv.Group)
 	// Wait for applied watermark to reach till previous index

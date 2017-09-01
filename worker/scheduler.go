@@ -56,19 +56,15 @@ func (s *scheduler) init(n *node) {
 }
 
 func (s *scheduler) processTasks() {
-	for t := range s.tch {
-		s.executeMutation(t)
-	}
-}
-
-func (s *scheduler) executeMutation(t *task) {
 	n := s.n
-	nextTask := t
-	for nextTask != nil {
-		err := s.n.processMutation(nextTask.pid, nextTask.rid, nextTask.edge)
-		n.props.Done(nextTask.pid, err)
-		x.ActiveMutations.Add(-1)
-		nextTask = s.nextTask(nextTask)
+	for t := range s.tch {
+		nextTask := t
+		for nextTask != nil {
+			err := s.n.processMutation(nextTask.pid, nextTask.rid, nextTask.edge)
+			n.props.Done(nextTask.pid, err)
+			x.ActiveMutations.Add(-1)
+			nextTask = s.nextTask(nextTask)
+		}
 	}
 }
 

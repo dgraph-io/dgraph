@@ -102,9 +102,11 @@ func (p *peerPool) set(id uint64, addr string, pl *pool) {
 }
 
 type proposalCtx struct {
-	ch    chan error
-	ctx   context.Context
-	cnt   int
+	ch  chan error
+	ctx context.Context
+	cnt int // used for reference counting
+	// Since each proposal consists of multiple tasks we need to store
+	// non-nil error returned by task
 	err   error
 	index uint64
 	n     *node
@@ -161,6 +163,9 @@ func (p *proposals) Done(pid uint32, err error) {
 	}
 	delete(p.ids, pid)
 	pd.ch <- pd.err
+	// We emit one pending watermark as soon as we read from rd.committedentries.
+	// Since the tasks are executed in goroutines we need on guarding watermark which
+	// is done only when all the pending sync/applied marks have been emitted.
 	pd.n.applied.Done(pd.index)
 	posting.SyncMarkFor(pd.n.gid).Done(pd.index)
 }
@@ -547,7 +552,7 @@ func (n *node) processMutation(pid uint32, index uint64, edge *protos.DirectedEd
 	}
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
-	if err := runMutations(ctx, edge); err != nil {
+	if err := runMutation(ctx, edge); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
@@ -564,7 +569,7 @@ func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.Schema
 	}
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(n.ctx, "raft", rv)
-	if err := runSchemaMutations(ctx, s); err != nil {
+	if err := runSchemaMutation(ctx, s); err != nil {
 		if tr, ok := trace.FromContext(n.ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
@@ -576,8 +581,9 @@ func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.Schema
 func (n *node) processMembership(index uint64, pid uint32, mm *protos.Membership) error {
 	x.AssertTrue(n.gid == 0)
 	x.ActiveMutations.Add(1)
-	n.props.IncRef(pid, index, 1)
 	defer x.ActiveMutations.Add(-1)
+
+	n.props.IncRef(pid, index, 1)
 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
 		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
 	groups().applyMembershipUpdate(index, mm)
@@ -624,7 +630,7 @@ func (n *node) processApplyCh() {
 		}
 
 		// One final applied and synced watermark would be emitted when proposal ctx ref count
-		// becomes zero
+		// becomes zero.
 		if proposal.Mutations != nil {
 			n.sch.schedule(proposal, e.Index)
 		} else if proposal.Membership != nil {
