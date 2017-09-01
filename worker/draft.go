@@ -773,8 +773,6 @@ func cycleResponses(ls *linearizableState, n *node, indexOrNone uint64) error {
 	return feedRequestsAndDispatchReadIndex(ls, n)
 }
 
-const readIndexTimeout = 10 * time.Millisecond
-
 func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
 	ls.slurpRequests()
 	if len(ls.needingResponse) != 0 {
@@ -788,6 +786,7 @@ func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
 	ls.needingResponse, ls.pendingRequests = ls.pendingRequests, ls.needingResponse
 	rctxCounter := ls.rctxCounter.Generate()
 	ls.activeRequestRctx = rctxCounter[:]
+	const readIndexTimeout = 10 * time.Millisecond
 	ls.activeRequestTimer.Reset(readIndexTimeout)
 	return n.Raft().ReadIndex(n.ctx, ls.activeRequestRctx)
 }
@@ -796,12 +795,11 @@ func (ls *linearizableState) timeExpired(n *node) error {
 	return cycleResponses(ls, n, raft.None)
 }
 
-const raftTickRate = 20 * time.Millisecond
-
 func (n *node) Run() {
 	firstRun := true
 	var leader bool
 	// See also our configuration of HeartbeatTick and ElectionTick.
+	const raftTickRate = 20 * time.Millisecond
 	ticker := time.NewTicker(raftTickRate)
 	defer ticker.Stop()
 	rcBytes, err := n.raftContext.Marshal()
