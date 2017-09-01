@@ -631,6 +631,14 @@ func (n *node) processApplyCh() {
 
 		// One final applied and synced watermark would be emitted when proposal ctx ref count
 		// becomes zero.
+		if !n.props.Has(proposal.Id) {
+			pctx := &proposalCtx{
+				ch:  make(chan error, 1),
+				ctx: n.ctx,
+				n:   n,
+			}
+			n.props.Store(proposal.Id, pctx)
+		}
 		if proposal.Mutations != nil {
 			n.sch.schedule(proposal, e.Index)
 		} else if proposal.Membership != nil {
