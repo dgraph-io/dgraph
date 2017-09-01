@@ -1,11 +1,11 @@
 matrix:
   include:
     - os: linux
-      go: 1.8
+      go: 1.9
       language: go
     - os: osx
       language: go
-      go: 1.8
+      go: 1.9
 
 install: contrib/install.sh
 git:
