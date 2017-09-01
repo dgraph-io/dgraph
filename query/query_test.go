@@ -5515,6 +5515,7 @@ children: <
 
 func TestNearGenerator(t *testing.T) {
 	populateGraph(t)
+	time.Sleep(10 * time.Millisecond)
 	query := `{
 		me(func:near(loc, [1.1,2.0], 5.001)) {
 			name
@@ -5523,7 +5524,7 @@ func TestNearGenerator(t *testing.T) {
 	}`
 
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"gender":"female","name":"Michonne"}, {"name": "Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne","gender":"female"},{"name":"Rick Grimes","gender": "male"},{"name":"Glenn Rhee"}]}}`, js)
 }
 
 func TestNearGeneratorFilter(t *testing.T) {

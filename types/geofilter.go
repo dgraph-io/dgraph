@@ -45,8 +45,7 @@ const (
 // GeoQueryData is internal data used by the geo query filter to additionally filter the geometries.
 type GeoQueryData struct {
 	pt    *s2.Point  // If not nil, the input data was a point
-	loops []*s2.Loop // If not empty, the input data was a polygon/multipolygon.
-	cap   *s2.Cap    // If not nil, the cap to be used for a near query
+	loops []*s2.Loop // If not empty, the input data was a polygon/multipolygon or it was a near query.
 	qtype QueryType
 }
 
@@ -172,7 +171,6 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		}
 		cover = coverLoop(loops[0], MinCellLevel, MaxCellLevel, MaxCells)
 		parents = getParentCells(cover, MinCellLevel)
-
 	} else {
 		parents, cover, err = indexCells(g)
 		if err != nil {
@@ -243,9 +241,9 @@ func loopWithinMultiloops(l *s2.Loop, loops []*s2.Loop) bool {
 	return false
 }
 
-// returns true if the geometry represented by g is within the given loop or cap
+// returns true if the geometry represented by g is within the given loop
 func (q GeoQueryData) isWithin(g geom.T) bool {
-	x.AssertTruef(q.pt != nil || len(q.loops) > 0 || q.cap != nil, "At least a point, loop or cap should be defined.")
+	x.AssertTruef(q.pt != nil || len(q.loops) > 0, "At least a point, loop should be defined.")
 	switch geometry := g.(type) {
 	case *geom.Point:
 		s2pt := pointFromPoint(geometry)
@@ -261,7 +259,6 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 			}
 			return false
 		}
-		return q.cap.ContainsPoint(s2pt)
 	case *geom.Polygon:
 		s2loop, err := loopFromPolygon(geometry)
 		if err != nil {
@@ -274,9 +271,6 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 				}
 			}
 			return false
-		}
-		if q.cap != nil {
-			return q.cap.Intersects(s2loop.CapBound())
 		}
 	case *geom.MultiPolygon:
 		// We check each polygon in the multipolygon should be within some loop of q.loops.
@@ -291,20 +285,6 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 				}
 			}
 			return true
-		}
-
-		if q.cap != nil {
-			for i := 0; i < geometry.NumPolygons(); i++ {
-				p := geometry.Polygon(i)
-				s2loop, err := loopFromPolygon(p)
-				if err != nil {
-					return false
-				}
-				if q.cap.Intersects(s2loop.CapBound()) {
-					return true
-				}
-			}
-			return false
 		}
 	}
 	return false
