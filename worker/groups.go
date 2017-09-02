@@ -131,10 +131,10 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	// Successfully connect with the peer, before doing anything else.
 	if len(Config.PeerAddr) > 0 {
 		func() {
-			p, ok := conn.Get().Connect(Config.PeerAddr)
-			if !ok {
+			if Config.PeerAddr == Config.MyAddr {
 				return
 			}
+			p := conn.Get().Connect(Config.PeerAddr)
 			defer conn.Get().Release(p)
 
 			// Force run syncMemberships with this peer, so our nodes know if they have other
@@ -496,12 +496,11 @@ func (g *groupi) syncMemberships() {
 			return
 		}
 		x.Printf("Got redirect for: %q\n", addr)
-		var ok bool
-		pl, ok = conn.Get().Connect(addr)
-		if !ok {
+		if addr == Config.MyAddr {
 			// We got redirected to ourselves.
 			return
 		}
+		pl = conn.Get().Connect(addr)
 	}
 
 	var lu uint64
@@ -543,10 +542,8 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 		// Ignore it.
 		update.PoolOrNil, _ = conn.Get().Get(mm.Addr)
 	} else if update.Addr != Config.MyAddr && mm.Id != Config.RaftId { // ignore previous addr
-		var ok bool
-		update.PoolOrNil, ok = conn.Get().Connect(update.Addr)
-		// Must be ok because update.Addr != *myAddr
-		x.AssertTrue(ok)
+		x.AssertTrue(update.Addr != Config.MyAddr)
+		update.PoolOrNil = conn.Get().Connect(update.Addr)
 	}
 
 	x.Println("----------------------------")

@@ -323,11 +323,13 @@ func (n *node) Connect(pid uint64, addr string) {
 	// Here's what we do.  Right now peerPool maps peer node id's to addr values.  If
 	// a *pool can be created, good, but if not, we still create a peerPoolEntry with
 	// a nil *pool.
-	p, ok := conn.Get().Connect(addr)
-	if !ok {
+	if addr == Config.MyAddr {
 		// TODO: Note this fact in more general peer health info somehow.
 		x.Printf("Peer %d claims same host as me\n", pid)
+		n.SetPeer(pid, addr, nil)
+		return
 	}
+	p := conn.Get().Connect(addr)
 	n.SetPeer(pid, addr, p)
 }
 

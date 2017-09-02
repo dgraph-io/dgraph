@@ -105,13 +105,13 @@ func destroyPool(pl *Pool) {
 }
 
 // Returns a pool that you should call put() on.
-func (p *Pools) Connect(addr string) (*Pool, bool) {
+func (p *Pools) Connect(addr string) *Pool {
 	p.RLock()
 	existingPool, has := p.all[addr]
 	if has {
 		p.RUnlock()
 		existingPool.AddOwner()
-		return existingPool, true
+		return existingPool
 	}
 	p.RUnlock()
 
@@ -126,7 +126,7 @@ func (p *Pools) Connect(addr string) (*Pool, bool) {
 		p.Unlock()
 		destroyPool(pool)
 		existingPool.refcount++
-		return existingPool, true
+		return existingPool
 	}
 	p.all[addr] = pool
 	pool.AddOwner() // matches p.put() run by caller
@@ -146,7 +146,7 @@ func (p *Pools) Connect(addr string) (*Pool, bool) {
 		}
 	}()
 
-	return pool, true
+	return pool
 }
 
 // testConnection tests if we can run an Echo query on a connection.
