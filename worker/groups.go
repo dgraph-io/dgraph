@@ -413,7 +413,7 @@ func (g *groupi) syncMemberships() {
 		g.RLock()
 		defer g.RUnlock()
 		for _, n := range g.local {
-			rc := n.raftContext
+			rc := n.RaftContext
 			if g.duplicate(rc.Group, rc.Id, rc.Addr, n.AmLeader()) {
 				continue
 			}
@@ -443,7 +443,7 @@ func (g *groupi) syncMemberships() {
 	{
 		g.RLock()
 		for _, n := range g.local {
-			rc := n.raftContext
+			rc := n.RaftContext
 			mu.Members = append(mu.Members,
 				&protos.Membership{
 					Leader:  n.AmLeader(),
@@ -659,7 +659,7 @@ func syncAllMarks(ctx context.Context) error {
 	for _, n := range groups().nodes() {
 		go func(n *node) {
 			// Get index of last committed.
-			lastIndex, err := n.store.LastIndex()
+			lastIndex, err := n.Store.LastIndex()
 			if err != nil {
 				che <- err
 				return
