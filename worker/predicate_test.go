@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -158,7 +159,7 @@ func TestPopulateShard(t *testing.T) {
 	defer s1.Stop()
 	go serve(s1, ln1)
 
-	pool, err := newPool("localhost:12346")
+	pool, err := conn.NewPool("localhost:12346")
 	if err != nil {
 		t.Fatal(err)
 	}

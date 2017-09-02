@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -158,7 +159,7 @@ func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataCl
 
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
-func populateShard(ctx context.Context, ps *badger.KV, pl *pool, group uint32) (int, error) {
+func populateShard(ctx context.Context, ps *badger.KV, pl *conn.Pool, group uint32) (int, error) {
 	conn := pl.Get()
 	c := protos.NewWorkerClient(conn)
 

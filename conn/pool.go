@@ -15,7 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package worker
+package conn
 
 import (
 	"bytes"
@@ -32,12 +32,12 @@ import (
 )
 
 var (
-	errNoConnection = fmt.Errorf("No connection exists")
+	ErrNoConnection = fmt.Errorf("No connection exists")
 )
 
-// "pool" is used to manage the grpc client connection(s) for communicating with other
+// "Pool" is used to manage the grpc client connection(s) for communicating with other
 // worker instances.  Right now it just holds one of them.
-type pool struct {
+type Pool struct {
 	// A "pool" now consists of one connection.  gRPC uses HTTP2 transport to combine
 	// messages in the same TCP stream.
 	conn *grpc.ClientConn
@@ -47,45 +47,45 @@ type pool struct {
 	refcount int64
 }
 
-type poolsi struct {
+type Pools struct {
 	sync.RWMutex
-	all map[string]*pool
+	all map[string]*Pool
 }
 
-var pi *poolsi
+var pi *Pools
 
 func init() {
-	pi = new(poolsi)
-	pi.all = make(map[string]*pool)
+	pi = new(Pools)
+	pi.all = make(map[string]*Pool)
 }
 
-func pools() *poolsi {
+func Get() *Pools {
 	return pi
 }
 
-func (p *poolsi) any() (*pool, error) {
+func (p *Pools) Any() (*Pool, error) {
 	p.RLock()
 	defer p.RUnlock()
 	for _, pool := range p.all {
 		pool.AddOwner()
 		return pool, nil
 	}
-	return nil, errNoConnection
+	return nil, ErrNoConnection
 }
 
-func (p *poolsi) get(addr string) (*pool, error) {
+func (p *Pools) Get(addr string) (*Pool, error) {
 	p.RLock()
 	defer p.RUnlock()
 	pool, ok := p.all[addr]
 	if !ok {
-		return nil, errNoConnection
+		return nil, ErrNoConnection
 	}
 	pool.AddOwner()
 	return pool, nil
 }
 
 // One of these must be called for each call to get(...).
-func (p *poolsi) release(pl *pool) {
+func (p *Pools) Release(pl *Pool) {
 	// We close the conn after unlocking p.
 	newRefcount := atomic.AddInt64(&pl.refcount, -1)
 	if newRefcount == 0 {
@@ -97,7 +97,7 @@ func (p *poolsi) release(pl *pool) {
 	}
 }
 
-func destroyPool(pl *pool) {
+func destroyPool(pl *Pool) {
 	err := pl.conn.Close()
 	if err != nil {
 		x.Printf("Error closing cluster connection: %v\n", err.Error())
@@ -105,10 +105,7 @@ func destroyPool(pl *pool) {
 }
 
 // Returns a pool that you should call put() on.
-func (p *poolsi) connect(addr string) (*pool, bool) {
-	if addr == Config.MyAddr {
-		return nil, false
-	}
+func (p *Pools) Connect(addr string) (*Pool, bool) {
 	p.RLock()
 	existingPool, has := p.all[addr]
 	if has {
@@ -118,7 +115,7 @@ func (p *poolsi) connect(addr string) (*pool, bool) {
 	}
 	p.RUnlock()
 
-	pool, err := newPool(addr)
+	pool, err := NewPool(addr)
 	// TODO: Rename newPool to newConn, rename pool.
 	// TODO: This can get triggered with totally bogus config.
 	x.Checkf(err, "Unable to connect to host %s", addr)
@@ -138,8 +135,8 @@ func (p *poolsi) connect(addr string) (*pool, bool) {
 	// No need to block this thread just to print some messages.
 	pool.AddOwner() // matches p.put() in goroutine
 	go func() {
-		defer p.release(pool)
-		err = testConnection(pool)
+		defer p.Release(pool)
+		err = TestConnection(pool)
 		if err != nil {
 			x.Printf("Connection to %q fails, got error: %v\n", addr, err)
 			// Don't return -- let's still put the empty pool in the map.  Its users
@@ -153,7 +150,7 @@ func (p *poolsi) connect(addr string) (*pool, bool) {
 }
 
 // testConnection tests if we can run an Echo query on a connection.
-func testConnection(p *pool) error {
+func TestConnection(p *Pool) error {
 	conn := p.Get()
 
 	query := new(protos.Payload)
@@ -172,7 +169,7 @@ func testConnection(p *pool) error {
 }
 
 // NewPool creates a new "pool" with one gRPC connection, refcount 0.
-func newPool(addr string) (*pool, error) {
+func NewPool(addr string) (*Pool, error) {
 	conn, err := grpc.Dial(addr,
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
@@ -182,15 +179,15 @@ func newPool(addr string) (*pool, error) {
 		return nil, err
 	}
 	// The pool hasn't been added to poolsi yet, so it gets no refcount.
-	return &pool{conn: conn, Addr: addr, refcount: 0}, nil
+	return &Pool{conn: conn, Addr: addr, refcount: 0}, nil
 }
 
 // Get returns the connection to use from the pool of connections.
-func (p *pool) Get() *grpc.ClientConn {
+func (p *Pool) Get() *grpc.ClientConn {
 	return p.conn
 }
 
 // AddOwner adds 1 to the refcount for the pool (atomically).
-func (p *pool) AddOwner() {
+func (p *Pool) AddOwner() {
 	atomic.AddInt64(&p.refcount, 1)
 }

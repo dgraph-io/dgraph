@@ -31,6 +31,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -47,7 +48,7 @@ type peerPoolEntry struct {
 	// of *myAddr, or some screwed up Raft config.
 	addr string
 	// An owning reference to a pool for this peer (or nil if addr is sufficiently bogus).
-	poolOrNil *pool
+	poolOrNil *conn.Pool
 }
 
 // peerPool stores the peers' addresses and our connections to them.  It has exactly one
@@ -69,7 +70,7 @@ var (
 // make a pool, one that has a nil gRPC connection.)
 //
 // You must call pools().release on the pool.
-func (p *peerPool) getPool(id uint64) (*pool, error) {
+func (p *peerPool) getPool(id uint64) (*conn.Pool, error) {
 	p.RLock()
 	defer p.RUnlock()
 	ent, ok := p.peers[id]
@@ -90,12 +91,12 @@ func (p *peerPool) get(id uint64) (string, bool) {
 	return ret.addr, ok
 }
 
-func (p *peerPool) set(id uint64, addr string, pl *pool) {
+func (p *peerPool) set(id uint64, addr string, pl *conn.Pool) {
 	p.Lock()
 	defer p.Unlock()
 	if old, ok := p.peers[id]; ok {
 		if old.poolOrNil != nil {
-			pools().release(old.poolOrNil)
+			conn.Get().Release(old.poolOrNil)
 		}
 	}
 	p.peers[id] = peerPoolEntry{addr, pl}
@@ -298,12 +299,12 @@ func (n *node) GetPeer(pid uint64) (string, bool) {
 
 // You must call release on the pool.  Can error for some pid's for which GetPeer
 // succeeds.
-func (n *node) GetPeerPool(pid uint64) (*pool, error) {
+func (n *node) GetPeerPool(pid uint64) (*conn.Pool, error) {
 	return n.peers.getPool(pid)
 }
 
 // addr must not be empty.
-func (n *node) SetPeer(pid uint64, addr string, poolOrNil *pool) {
+func (n *node) SetPeer(pid uint64, addr string, poolOrNil *conn.Pool) {
 	x.AssertTruef(addr != "", "SetPeer for peer %d has empty addr.", pid)
 	n.peers.set(pid, addr, poolOrNil)
 }
@@ -322,7 +323,7 @@ func (n *node) Connect(pid uint64, addr string) {
 	// Here's what we do.  Right now peerPool maps peer node id's to addr values.  If
 	// a *pool can be created, good, but if not, we still create a peerPoolEntry with
 	// a nil *pool.
-	p, ok := pools().connect(addr)
+	p, ok := conn.Get().Connect(addr)
 	if !ok {
 		// TODO: Note this fact in more general peer health info somehow.
 		x.Printf("Peer %d claims same host as me\n", pid)
@@ -522,7 +523,7 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 		// can't send messages to this peer.
 		return
 	}
-	defer pools().release(pool)
+	defer conn.Get().Release(pool)
 	conn := pool.Get()
 
 	c := protos.NewWorkerClient(conn)
@@ -678,7 +679,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 		log.Fatalf("Cannot retrieve snapshot from peer %v, no connection.  Error: %v\n",
 			peerID, err)
 	}
-	defer pools().release(pool)
+	defer conn.Get().Release(pool)
 
 	// Get index of last committed.
 	lastIndex, err := n.store.LastIndex()
@@ -900,11 +901,11 @@ func (n *node) joinPeers() {
 	n.Connect(pid, paddr)
 	x.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
 
-	pool, err := pools().get(paddr)
+	pool, err := conn.Get().Get(paddr)
 	if err != nil {
 		log.Fatalf("Unable to get pool for addr: %q for peer: %d, error: %v\n", paddr, pid, err)
 	}
-	defer pools().release(pool)
+	defer conn.Get().Release(pool)
 
 	// Bring the instance up to speed first.
 	// Raft would decide whether snapshot needs to fetched or not

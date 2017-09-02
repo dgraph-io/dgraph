@@ -30,6 +30,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
@@ -37,11 +38,11 @@ import (
 )
 
 type server struct {
-	NodeId    uint64 // Raft Id associated with the raft node.
-	Addr      string // The public address of the server serving this node.
-	Leader    bool   // Set to true if the node is a leader of the group.
-	RaftIdx   uint64 // The raft index which applied this membership update in group zero.
-	PoolOrNil *pool  // An owned reference to the server's Pool entry (nil if Addr is our own).
+	NodeId    uint64     // Raft Id associated with the raft node.
+	Addr      string     // The public address of the server serving this node.
+	Leader    bool       // Set to true if the node is a leader of the group.
+	RaftIdx   uint64     // The raft index which applied this membership update in group zero.
+	PoolOrNil *conn.Pool // An owned reference to the server's Pool entry (nil if Addr is our own).
 }
 
 type servers struct {
@@ -88,7 +89,7 @@ func removeFromServersIfPresent(sl *servers, nodeID uint64) {
 	sl.list = sl.list[:back]
 	delete(sl.byNodeID, nodeID)
 	if pool != nil {
-		pools().release(pool)
+		conn.Get().Release(pool)
 	}
 }
 
@@ -130,11 +131,11 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	// Successfully connect with the peer, before doing anything else.
 	if len(Config.PeerAddr) > 0 {
 		func() {
-			p, ok := pools().connect(Config.PeerAddr)
+			p, ok := conn.Get().Connect(Config.PeerAddr)
 			if !ok {
 				return
 			}
-			defer pools().release(p)
+			defer conn.Get().Release(p)
 
 			// Force run syncMemberships with this peer, so our nodes know if they have other
 			// servers who are serving the same groups. That way, they can talk to them
@@ -458,14 +459,14 @@ func (g *groupi) syncMemberships() {
 	// Send an update to peer.
 	addr := g.AnyServer(0)
 
-	var pl *pool
+	var pl *conn.Pool
 	var err error
 	if len(addr) > 0 {
-		pl, err = pools().get(addr)
+		pl, err = conn.Get().Get(addr)
 	} else {
-		pl, err = pools().any()
+		pl, err = conn.Get().Any()
 	}
-	if err == errNoConnection {
+	if err == conn.ErrNoConnection {
 		x.Println("Unable to sync memberships. No valid connection")
 		return
 	}
@@ -473,10 +474,10 @@ func (g *groupi) syncMemberships() {
 
 	var update *protos.MembershipUpdate
 	for {
-		conn := pl.Get()
-		c := protos.NewWorkerClient(conn)
+		gconn := pl.Get()
+		c := protos.NewWorkerClient(gconn)
 		update, err = c.UpdateMembership(g.ctx, &mu)
-		pools().release(pl)
+		conn.Get().Release(pl)
 
 		if err != nil {
 			if tr, ok := trace.FromContext(g.ctx); ok {
@@ -496,7 +497,7 @@ func (g *groupi) syncMemberships() {
 		}
 		x.Printf("Got redirect for: %q\n", addr)
 		var ok bool
-		pl, ok = pools().connect(addr)
+		pl, ok = conn.Get().Connect(addr)
 		if !ok {
 			// We got redirected to ourselves.
 			return
@@ -540,10 +541,10 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
 		n.Connect(mm.Id, mm.Addr)
 		// Error possible, perhaps, if we're updating our own node's membership.
 		// Ignore it.
-		update.PoolOrNil, _ = pools().get(mm.Addr)
+		update.PoolOrNil, _ = conn.Get().Get(mm.Addr)
 	} else if update.Addr != Config.MyAddr && mm.Id != Config.RaftId { // ignore previous addr
 		var ok bool
-		update.PoolOrNil, ok = pools().connect(update.Addr)
+		update.PoolOrNil, ok = conn.Get().Connect(update.Addr)
 		// Must be ok because update.Addr != *myAddr
 		x.AssertTrue(ok)
 	}

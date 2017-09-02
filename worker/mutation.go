@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -326,7 +327,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 	}
 
 	_, addr := groups().Leader(gid)
-	pl, err := pools().get(addr)
+	pl, err := conn.Get().Get(addr)
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
@@ -334,7 +335,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che cha
 		che <- err
 		return
 	}
-	defer pools().release(pl)
+	defer conn.Get().Release(pl)
 	conn := pl.Get()
 
 	c := protos.NewWorkerClient(conn)
