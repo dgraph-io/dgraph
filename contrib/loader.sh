@@ -40,8 +40,6 @@ fi
 start
 popd &> /dev/null
 
-sleep 10
-
 #Set Schema
 curl -X POST  -d 'mutation {
   schema {
@@ -75,8 +73,6 @@ quit 0
 echo -e "\nTrying to restart Dgraph and match export count"
 pushd cmd/dgraph &> /dev/null
 start
-# Wait to become leader.
-sleep 5
 echo -e "\nTrying to export data."
 curl http://localhost:8080/admin/export
 echo -e "\nExport done."
