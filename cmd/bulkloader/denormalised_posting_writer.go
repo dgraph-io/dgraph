@@ -26,12 +26,12 @@ func writeDenormalisedPostings(dir string, postingsIn <-chan *protos.Denormalise
 		filename := filepath.Join(dir, fmt.Sprintf("%06d.bin", fileNum))
 		fileNum++
 		ps := postings
+		postings = nil
+		sz = 0
 		go func() {
 			sortAndDump(filename, ps, prog)
 			wg.Done()
 		}()
-		postings = nil
-		sz = 0
 	}
 
 	for posting := range postingsIn {
