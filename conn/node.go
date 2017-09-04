@@ -375,9 +375,6 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	// if rc.Group != w.GetNode().Group || rc.Id == w.GetNode().Id {
 	// 	return &protos.Payload{}, x.Errorf(errorNodeIDExists)
 	// }
-	if _, ok := n.GetPeer(rc.Id); ok {
-		return &protos.Payload{}, x.Errorf(errorNodeIDExists)
-	}
 	// TODO: Figure out what other conditions we need to check to reject a Join.
 
 	// // Best effor reject
@@ -388,6 +385,9 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	node := w.GetNode()
 	if node == nil {
 		return &protos.Payload{}, errNoNode
+	}
+	if _, ok := node.GetPeer(rc.Id); ok {
+		return &protos.Payload{}, x.Errorf("Node id already part of group.")
 	}
 	node.Connect(rc.Id, rc.Addr)
 
