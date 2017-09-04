@@ -149,6 +149,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	m := conn.NewNode(rc)
 	n := &node{Node: m}
 
+	n.ctx = context.Background()
 	n.gid = gid
 	// processConfChange etc are not throttled so some extra delta, so that we don't
 	// block tick when applyCh is full
@@ -613,6 +614,7 @@ func (n *node) joinPeers() {
 	c := protos.NewRaftClient(conn)
 	x.Printf("Calling JoinCluster")
 	_, err = c.JoinCluster(n.ctx, n.RaftContext)
+	// TODO: This should keep on indefinitely trying to join the cluster, instead of crashing.
 	x.Checkf(err, "Error while joining cluster")
 	x.Printf("Done with JoinCluster call\n")
 }

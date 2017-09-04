@@ -106,7 +106,6 @@ type Node struct {
 
 	// Fields which are never changed after init.
 	Cfg         *raft.Config
-	Ctx         context.Context
 	MyAddr      string
 	Id          uint64
 	peers       PeerPool
@@ -122,7 +121,6 @@ func NewNode(rc *protos.RaftContext) *Node {
 	}
 	store := raft.NewMemoryStorage()
 	n := &Node{
-		Ctx:   context.Background(),
 		Id:    rc.Id,
 		Store: store,
 		Cfg: &raft.Config{
@@ -140,6 +138,9 @@ func NewNode(rc *protos.RaftContext) *Node {
 		RaftContext: rc,
 		messages:    make(chan sendmsg, 100),
 	}
+	// TODO: n_ = n is a hack. We should properly init node, and make it part of the server struct.
+	// This can happen once we get rid of groups.
+	n_ = n
 	return n
 }
 
@@ -353,11 +354,16 @@ func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 
 var n_ *Node
 
-func GetNode() *Node {
+func (w *RaftServer) GetNode() *Node {
+	w.nodeLock.RLock()
+	defer w.nodeLock.RUnlock()
 	return n_
 }
 
-type RaftServer struct{}
+type RaftServer struct {
+	nodeLock sync.RWMutex // protects Node.
+	unused   *Node
+}
 
 func (w *RaftServer) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*protos.Payload, error) {
 	if ctx.Err() != nil {
@@ -373,7 +379,10 @@ func (w *RaftServer) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*
 	// if node == nil {
 	// 	return &protos.Payload{}, nil
 	// }
-	node := GetNode()
+	node := w.GetNode()
+	if node == nil {
+		return &protos.Payload{}, errNoNode
+	}
 	node.Connect(rc.Id, rc.Addr)
 
 	c := make(chan error, 1)
@@ -391,7 +400,7 @@ var (
 	errNoNode = fmt.Errorf("No node has been set up yet")
 )
 
-func applyMessage(ctx context.Context, msg raftpb.Message) error {
+func (w *RaftServer) applyMessage(ctx context.Context, msg raftpb.Message) error {
 	var rc protos.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
 	// node := groups().Node(rc.Group)
@@ -400,7 +409,10 @@ func applyMessage(ctx context.Context, msg raftpb.Message) error {
 	// 	// message before we set up Raft?
 	// 	return errNoNode
 	// }
-	node := GetNode()
+	node := w.GetNode()
+	if node == nil || node.Raft() == nil {
+		return errNoNode
+	}
 	node.Connect(msg.From, rc.Addr)
 
 	c := make(chan error, 1)
@@ -436,7 +448,7 @@ func (w *RaftServer) RaftMessage(ctx context.Context, query *protos.Payload) (*p
 		if msg.Type != raftpb.MsgHeartbeat && msg.Type != raftpb.MsgHeartbeatResp {
 			x.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		}
-		if err := applyMessage(ctx, msg); err != nil {
+		if err := w.applyMessage(ctx, msg); err != nil {
 			return &protos.Payload{}, err
 		}
 		idx += sz

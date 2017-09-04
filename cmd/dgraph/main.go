@@ -46,7 +46,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/cockroachdb/cmux"
-	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
@@ -652,7 +651,6 @@ func serveGRPC(l net.Listener) {
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
 	protos.RegisterDgraphServer(s, &dgraph.Server{})
-	protos.RegisterRaftServer(s, &conn.RaftServer{})
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
 	s.GracefulStop()
