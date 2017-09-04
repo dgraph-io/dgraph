@@ -64,7 +64,7 @@ func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 			// S * * case
 			if mu.Attr == x.Star {
 				// Fetch all the predicates and replace them
-				preds, err := GetNodePredicates(ctx, &protos.List{[]uint64{mu.GetEntity()}})
+				preds, err := getNodePredicates(ctx, &protos.List{[]uint64{mu.GetEntity()}})
 				if err != nil {
 					return err
 				}

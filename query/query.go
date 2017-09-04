@@ -1832,7 +1832,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if child.Params.Expand == "_all_" {
 			// Get the predicate list for expansion. Otherwise we already
 			// have the list populated.
-			child.ExpandPreds, err = GetNodePredicates(ctx, sg.DestUIDs)
+			child.ExpandPreds, err = getNodePredicates(ctx, sg.DestUIDs)
 			if err != nil {
 				rch <- err
 				return
@@ -2119,7 +2119,7 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 	return f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
-func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.ValueList, error) {
+func getNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.ValueList, error) {
 	temp := new(SubGraph)
 	temp.Attr = "_predicate_"
 	temp.SrcUIDs = uids
