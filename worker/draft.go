@@ -20,7 +20,6 @@ package worker
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -123,7 +122,7 @@ type node struct {
 	*conn.Node
 
 	// Changed after init but not protected by SafeMutex
-	linState linearizableState
+	requestCh chan linearizableReadRequest
 
 	// Fields which are never changed after init.
 	applyCh chan raftpb.Entry
@@ -151,10 +150,10 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 
 	n := &node{
-		Node:     m,
-		linState: newLinearizableState(),
-		ctx:      context.Background(),
-		gid:      gid,
+		Node:      m,
+		requestCh: make(chan linearizableReadRequest),
+		ctx:       context.Background(),
+		gid:       gid,
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
 		applyCh: make(chan raftpb.Entry, Config.NumPendingProposals+1000),
@@ -410,90 +409,66 @@ type linearizableReadRequest struct {
 	readIndexCh chan<- uint64
 }
 
-// linearizableState is used single-threaded, except for senders to `requests`.  (A single thread,
-// the Run loop, reads from `requests` and sends on `readIndexCh`.)
-type linearizableState struct {
-	requests           chan linearizableReadRequest
-	rctxCounter        x.NonceCounter
-	activeRequestRctx  []byte
-	activeRequestTimer *time.Timer
-	pendingRequests    []chan<- uint64
-	needingResponse    []chan<- uint64
+func (n *node) readIndex() chan uint64 {
+	ch := make(chan uint64, 1)
+	n.requestCh <- linearizableReadRequest{ch}
+	return ch
 }
 
-func newLinearizableState() linearizableState {
-	// Create a new inactive timer to start with.  (We reuse the timer object just to save
-	// allocations.)
+func runReadIndexLoop(
+	n *node, stop <-chan struct{}, finished chan<- struct{}, requestCh <-chan linearizableReadRequest,
+	readStateCh <-chan raft.ReadState) {
+	defer close(finished)
+	counter := x.NewNonceCounter()
+	requests := []linearizableReadRequest{}
 	timer := time.NewTimer(0)
 	if !timer.Stop() {
 		<-timer.C
 	}
-	return linearizableState{
-		requests:           make(chan linearizableReadRequest),
-		rctxCounter:        x.NewNonceCounter(),
-		activeRequestTimer: timer,
-		pendingRequests:    []chan<- uint64{},
-		needingResponse:    []chan<- uint64{},
-	}
-}
-
-// Called by other threads
-func (ls *linearizableState) readIndex() chan uint64 {
-	ch := make(chan uint64, 1)
-	ls.requests <- linearizableReadRequest{ch}
-	return ch
-}
-
-// Called serially by the Run loop
-func (ls *linearizableState) slurpRequests() {
 	for {
 		select {
-		case req := <-ls.requests:
-			ls.pendingRequests = append(ls.pendingRequests, req.readIndexCh)
-		default:
+		case <-stop:
 			return
+		case <-readStateCh:
+			// Do nothing, discard ReadState info we don't have an activeRctx for
+		case req := <-requestCh:
+		slurpLoop:
+			for {
+				requests = append(requests, req)
+				select {
+				case req = <-requestCh:
+				default:
+					break slurpLoop
+				}
+			}
+			activeRctx := counter.Generate()
+			const readIndexTimeout = 10 * time.Millisecond
+			timer.Reset(readIndexTimeout)
+			// TODO: handle err
+			_ = n.Raft().ReadIndex(n.ctx, activeRctx[:])
+		again:
+			select {
+			case <-stop:
+				return
+			case rs := <-readStateCh:
+				if 0 != bytes.Compare(activeRctx[:], rs.RequestCtx) {
+					goto again
+				}
+				if !timer.Stop() {
+					<-timer.C
+				}
+				index := rs.Index
+				for _, req := range requests {
+					req.readIndexCh <- index
+				}
+			case <-timer.C:
+				for _, req := range requests {
+					req.readIndexCh <- raft.None
+				}
+			}
+			requests = requests[:0]
 		}
 	}
-}
-
-// Called serially by the Run loop
-func (ls *linearizableState) feedRequest(req linearizableReadRequest) {
-	ls.pendingRequests = append(ls.pendingRequests, req.readIndexCh)
-}
-
-// Our ReadIndex request got a response (or timed out).  Inform our requesters and then (perhaps)
-// send another ReadIndex request for the next batch of requesters.  Called serially by the Run
-// loop.
-func cycleResponses(ls *linearizableState, n *node, indexOrNone uint64) error {
-	for _, respCh := range ls.needingResponse {
-		respCh <- indexOrNone
-	}
-	ls.needingResponse = ls.needingResponse[:0]
-	return feedRequestsAndDispatchReadIndex(ls, n)
-}
-
-// Called serially by the Run loop
-func feedRequestsAndDispatchReadIndex(ls *linearizableState, n *node) error {
-	ls.slurpRequests()
-	if len(ls.needingResponse) != 0 {
-		// Don't send another request -- we've already got an active one and it hasn't timed out.
-		return nil
-	}
-	if len(ls.pendingRequests) == 0 {
-		// Don't send a request -- there's nothing asking for one
-		return nil
-	}
-	ls.needingResponse, ls.pendingRequests = ls.pendingRequests, ls.needingResponse
-	rctxCounter := ls.rctxCounter.Generate()
-	ls.activeRequestRctx = rctxCounter[:]
-	const readIndexTimeout = 10 * time.Millisecond
-	ls.activeRequestTimer.Reset(readIndexTimeout)
-	return n.Raft().ReadIndex(n.ctx, ls.activeRequestRctx)
-}
-
-// Called serially by the Run loop
-func (ls *linearizableState) timeExpired(n *node) error {
-	return cycleResponses(ls, n, raft.None)
 }
 
 func (n *node) Run() {
@@ -505,6 +480,22 @@ func (n *node) Run() {
 	defer ticker.Stop()
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
+
+	// This chan could have capacity zero, because runReadIndexLoop never blocks without selecting
+	// on readStateCh.  It's 2 so that sending rarely blocks (so the Go runtime doesn't have to
+	// switch threads as much.)
+	readStateCh := make(chan raft.ReadState, 2)
+
+	{
+		// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
+		// That way we know sending to readStateCh will not deadlock.
+		finished := make(chan struct{})
+		stop := make(chan struct{})
+		defer func() { <-finished }()
+		defer close(stop)
+		go runReadIndexLoop(n, stop, finished, n.requestCh, readStateCh)
+	}
+
 	for {
 		select {
 		case <-ticker.C:
@@ -512,15 +503,7 @@ func (n *node) Run() {
 
 		case rd := <-n.Raft().Ready():
 			for _, rs := range rd.ReadStates {
-				if 0 != bytes.Compare(n.linState.activeRequestRctx, rs.RequestCtx) {
-					continue
-				}
-				if !n.linState.activeRequestTimer.Stop() {
-					<-n.linState.activeRequestTimer.C
-				}
-				if err := cycleResponses(&n.linState, n, rs.Index); err != nil {
-					return
-				}
+				readStateCh <- rs
 			}
 
 			if rd.SoftState != nil {
@@ -607,19 +590,6 @@ func (n *node) Run() {
 			if firstRun && n.canCampaign {
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
-			}
-
-		case req := <-n.linState.requests:
-			// Feed this request,
-			n.linState.feedRequest(req)
-			// and feed any others on the channel
-			if err := feedRequestsAndDispatchReadIndex(&n.linState, n); err != nil {
-				return
-			}
-
-		case <-n.linState.activeRequestTimer.C:
-			if err := n.linState.timeExpired(n); err != nil {
-				return
 			}
 
 		case <-n.stop:
@@ -830,7 +800,7 @@ func (n *node) AmLeader() bool {
 
 func waitLinearizableRead(ctx context.Context, gid uint32) error {
 	n := groups().Node(gid)
-	replyCh := n.linState.readIndex()
+	replyCh := n.readIndex()
 	index := <-replyCh
 	if index == raft.None {
 		return x.Errorf("cannot get linearized read (time expired or no configured leader)")
