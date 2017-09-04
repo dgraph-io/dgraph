@@ -390,7 +390,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		for _, edge := range proposal.Mutations.Edges {
 			if typ, err := schema.State().TypeOf(edge.Attr); err != nil {
 				continue
-			} else if err := validateAndConvert(edge, typ); err != nil {
+			} else if err := ValidateAndConvert(edge, typ); err != nil {
 				return err
 			}
 		}
