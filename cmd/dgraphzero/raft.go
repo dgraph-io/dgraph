@@ -25,12 +25,15 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
+	"golang.org/x/net/context"
 )
 
 type node struct {
 	*conn.Node
 	server *Server
+	ctx    context.Context
 }
 
 func (n *node) applyMembershipState(m protos.MembershipUpdate) error {
@@ -74,11 +77,44 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	if len(cc.Context) > 0 {
 		var rc protos.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
-		conn.Get().Connect(rc.Addr)
+		n.Connect(rc.Id, rc.Addr)
 	}
 
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
+}
+
+func (n *node) initAndStartNode(wal *raftwal.Wal) error {
+	_, restart, err := n.InitFromWal(wal)
+	x.Check(err)
+
+	if restart {
+		x.Println("Restarting node for dgraphzero")
+		n.SetRaft(raft.RestartNode(n.Cfg))
+
+	} else if len(*peer) > 0 {
+		p := conn.Get().Connect(*peer)
+		if p == nil {
+			return errInvalidAddress
+		}
+		defer conn.Get().Release(p)
+
+		gconn := p.Get()
+		c := protos.NewRaftClient(gconn)
+		err = errJoinCluster
+		for err != nil {
+			time.Sleep(time.Millisecond)
+			_, err = c.JoinCluster(n.ctx, n.RaftContext)
+		}
+	} else {
+		peers := []raft.Peer{{ID: n.Id}}
+		n.SetRaft(raft.StartNode(n.Cfg, peers))
+	}
+
+	go n.Run()
+	// go n.snapshotPeriodically()
+	go n.BatchAndSendMessages()
+	return err
 }
 
 func (n *node) Run() {
@@ -113,6 +149,8 @@ func (n *node) Run() {
 			for _, entry := range rd.CommittedEntries {
 				if entry.Type == raftpb.EntryConfChange {
 					n.applyConfChange(entry)
+				} else {
+					x.Printf("Unhandled entry: %+v\n", entry)
 				}
 			}
 
@@ -120,6 +158,7 @@ func (n *node) Run() {
 				msg.Context = rcBytes
 				n.Send(msg)
 			}
+			n.Raft().Advance()
 		}
 	}
 }

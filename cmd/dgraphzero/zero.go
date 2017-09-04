@@ -35,6 +35,7 @@ var (
 	errUnknownMember      = errors.New("Unknown cluster member")
 	errInvalidQuery       = errors.New("Invalid query")
 	errInternalError      = errors.New("Internal server error")
+	errJoinCluster        = errors.New("Unable to join cluster")
 )
 
 type Group struct {

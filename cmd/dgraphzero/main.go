@@ -33,8 +33,11 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -48,6 +51,7 @@ var (
 	numReplicas = flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
 	peer = flag.String("peer", "", "Address of another dgraphzero server.")
+	w    = flag.String("w", "w", "Directory storing WAL.")
 )
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
@@ -55,13 +59,13 @@ func setupListener(addr string, port int) (listener net.Listener, err error) {
 	return net.Listen("tcp", laddr)
 }
 
-func setupRaft() *conn.RaftServer {
-	rc := protos.RaftContext{Id: *raftId, Addr: *myAddr, Group: 0}
-	n := conn.NewNode(&rc)
-	return &conn.RaftServer{Node: n}
+type state struct {
+	node *node
+	rs   *conn.RaftServer
+	zero *Server
 }
 
-func serveGRPC(l net.Listener, wg *sync.WaitGroup) {
+func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	s := grpc.NewServer(
@@ -69,18 +73,22 @@ func serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
 
-	zeroServer := &Server{NumReplicas: *numReplicas}
-	protos.RegisterZeroServer(s, zeroServer)
+	st.zero = &Server{NumReplicas: *numReplicas}
+	protos.RegisterZeroServer(s, st.zero)
 
-	rs := setupRaft()
-	protos.RegisterRaftServer(s, rs)
+	rc := protos.RaftContext{Id: *raftId, Addr: *myAddr, Group: 0}
+	m := conn.NewNode(&rc)
+	st.node = &node{Node: m, server: st.zero, ctx: context.Background()}
+
+	st.rs = &conn.RaftServer{Node: m}
+	protos.RegisterRaftServer(s, st.rs)
 
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
 	s.GracefulStop()
 }
 
-func serveHTTP(l net.Listener, wg *sync.WaitGroup) {
+func (st *state) serveHTTP(l net.Listener, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	srv := &http.Server{
@@ -111,11 +119,11 @@ func main() {
 		addr = "0.0.0.0"
 	}
 
-	httpListener, err := setupListener(addr, *port)
+	grpcListener, err := setupListener(addr, *port)
 	if err != nil {
 		log.Fatal(err)
 	}
-	grpcListener, err := setupListener(addr, *port+1)
+	httpListener, err := setupListener(addr, *port+1)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -123,8 +131,20 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(3)
 	// Initilize the servers.
-	go serveGRPC(grpcListener, &wg)
-	go serveHTTP(httpListener, &wg)
+	var st state
+	go st.serveGRPC(grpcListener, &wg)
+	go st.serveHTTP(httpListener, &wg)
+
+	// Open raft write-ahead log and initialize raft node.
+	kvOpt := badger.DefaultOptions
+	kvOpt.SyncWrites = true
+	kvOpt.Dir = *w
+	kvOpt.ValueDir = *w
+	kvOpt.MapTablesTo = table.MemoryMap
+	kv, err := badger.NewKV(&kvOpt)
+	x.Checkf(err, "Error while opening WAL store")
+	wal := raftwal.Init(kv, *raftId)
+	x.Check(st.node.initAndStartNode(wal))
 
 	sdCh := make(chan os.Signal, 1)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
