@@ -9140,3 +9140,14 @@ func TestNearPointMultiPolygon(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"data": {"me":[{"name":"Rick Grimes"}]}}`, js)
 }
+
+func TestUpsertName(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		me(func: eq(name, "XYZ")) @upsert
+	}`
+
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
+}

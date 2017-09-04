@@ -76,6 +76,7 @@ type GraphQuery struct {
 	// True for blocks that don't have a starting function and hence no starting nodes. They are
 	// used to aggregate and get variables defined in another block.
 	IsEmpty bool
+	Upsert  bool // Whether we should add the edge in case it doesn't exist.
 }
 
 type AttrLang struct {
@@ -781,6 +782,12 @@ L:
 				parseGroupby(it, gq)
 			case "ignorereflex":
 				gq.IgnoreReflex = true
+			case "upsert":
+				// TODO - Check what if the user gives variables as values?
+				if gq.Func == nil || gq.Func.Name != "eq" {
+					return nil, x.Errorf("Upsert query can only be done with eq function.")
+				}
+				gq.Upsert = true
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}

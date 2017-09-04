@@ -4157,3 +4157,26 @@ func TestEmptyFunction(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Got empty attr for function: [allofterms]")
 }
+
+func TestUpsertQuery(t *testing.T) {
+	query := `
+	{
+		director(func:eq(name, "Michonne")) @upsert
+	}
+	`
+
+	_, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+}
+
+func TestUpsertQueryError(t *testing.T) {
+	query := `
+	{
+		director(func:uid(1)) @upsert
+	}
+	`
+
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Upsert query can only be done with eq function.")
+}
