@@ -19,52 +19,18 @@ package main
 
 import (
 	"errors"
-	"log"
 	"time"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos"
-	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type node struct {
-	raft      raft.Node
-	confState *raftpb.ConfState
-	server    *Server
-
-	cfg   *raft.Config
-	wal   *raftwal.Wal
-	store *raft.MemoryStorage
-}
-
-// Raft would return back the raft.Node stored in the node.
-func (n *node) Raft() raft.Node {
-	return n.raft
-}
-
-func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
-	es []raftpb.Entry) {
-	if !raft.IsEmptySnap(s) {
-		le, err := n.store.LastIndex()
-		if err != nil {
-			log.Fatalf("While retrieving last index: %v\n", err)
-		}
-		if s.Metadata.Index <= le {
-			return
-		}
-
-		if err := n.store.ApplySnapshot(s); err != nil {
-			log.Fatalf("Applying snapshot: %v", err)
-		}
-	}
-
-	if !raft.IsEmptyHardState(h) {
-		n.store.SetHardState(h)
-	}
-	n.store.Append(es)
+	*conn.Node
+	server *Server
 }
 
 func (n *node) applyMembershipState(m protos.MembershipUpdate) error {
@@ -112,14 +78,14 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	}
 
 	cs := n.Raft().ApplyConfChange(cc)
-	n.confState = cs
+	n.SetConfState(cs)
 }
 
 func (n *node) Run() {
 	// var leader bool
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
-	rcBytes, err := n.raftContext.Marshal()
+	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
 
 	for {
@@ -132,11 +98,11 @@ func (n *node) Run() {
 			// 	leader = rd.RaftState == raft.StateLeader
 			// }
 			// First store the entries, then the hardstate and snapshot.
-			x.Check(n.wal.Store(0, rd.HardState, rd.Entries))
-			x.Check(n.wal.StoreSnapshot(0, rd.Snapshot))
+			x.Check(n.Wal.Store(0, rd.HardState, rd.Entries))
+			x.Check(n.Wal.StoreSnapshot(0, rd.Snapshot))
 
 			// Now store them in the in-memory store.
-			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
+			n.SaveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state protos.MembershipUpdate
@@ -151,8 +117,8 @@ func (n *node) Run() {
 			}
 
 			for _, msg := range rd.Messages {
-				msg.Conext = rcBytes
-				n.send(msg)
+				msg.Context = rcBytes
+				n.Send(msg)
 			}
 		}
 	}

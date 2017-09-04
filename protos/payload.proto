@@ -46,6 +46,12 @@ service Raft {
 	rpc JoinCluster (RaftContext) returns (Payload) {}
 }
 
+service Zero {
+  rpc Connect (Membership) returns (MembershipUpdate) {}
+  rpc ShouldServe (MembershipQuery) returns (Tablet) {}
+	rpc UpdateMembership (MembershipUpdate)  returns (MembershipUpdate) {}
+}
+
 service Worker {
 	// Connection testing RPC.
 	rpc Echo (Payload)             returns (Payload) {}
@@ -59,6 +65,5 @@ service Worker {
 	rpc Schema (SchemaRequest)                  returns (SchemaResult) {}
 
 	// RAFT serving RPCs.
-	rpc UpdateMembership (MembershipUpdate)  returns (MembershipUpdate) {}
 	rpc Export (ExportPayload)                    returns (ExportPayload) {}
 }

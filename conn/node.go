@@ -33,65 +33,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-var (
-	errNoPeerPoolEntry = fmt.Errorf("no peerPool entry")
-	errNoPeerPool      = fmt.Errorf("no peerPool pool, could not connect")
-)
-
-type PeerPoolEntry struct {
-	// Never the empty string.  Possibly a bogus address -- bad port number, the value
-	// of *myAddr, or some screwed up Raft config.
-	addr string
-	// An owning reference to a pool for this peer (or nil if addr is sufficiently bogus).
-	poolOrNil *Pool
-}
-
-// peerPool stores the peers' addresses and our connections to them.  It has exactly one
-// entry for every peer other than ourselves.  Some of these peers might be unreachable or
-// have bogus (but never empty) addresses.
-type PeerPool struct {
-	sync.RWMutex
-	peers map[uint64]PeerPoolEntry
-}
-
-// getPool returns the non-nil pool for a peer.  This might error even if get(id)
-// succeeds, if the pool is nil.  This happens if the peer was configured so badly (it had
-// a totally bogus addr) we can't make a pool.  (A reasonable refactoring would have us
-// make a pool, one that has a nil gRPC connection.)
-//
-// You must call pools().release on the pool.
-func (p *PeerPool) getPool(id uint64) (*Pool, error) {
-	p.RLock()
-	defer p.RUnlock()
-	ent, ok := p.peers[id]
-	if !ok {
-		return nil, errNoPeerPoolEntry
-	}
-	if ent.poolOrNil == nil {
-		return nil, errNoPeerPool
-	}
-	ent.poolOrNil.AddOwner()
-	return ent.poolOrNil, nil
-}
-
-func (p *PeerPool) get(id uint64) (string, bool) {
-	p.RLock()
-	defer p.RUnlock()
-	ret, ok := p.peers[id]
-	return ret.addr, ok
-}
-
-func (p *PeerPool) set(id uint64, addr string, pl *Pool) {
-	p.Lock()
-	defer p.Unlock()
-	if old, ok := p.peers[id]; ok {
-		if old.poolOrNil != nil {
-			Get().Release(old.poolOrNil)
-		}
-	}
-	p.peers[id] = PeerPoolEntry{addr, pl}
-}
-
 type sendmsg struct {
 	to   uint64
 	data []byte
@@ -243,6 +184,51 @@ func (n *Node) SaveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 	n.Store.Append(es)
 }
 
+func (n *Node) InitFromWal(wal *raftwal.Wal) (idx uint64, restart bool, rerr error) {
+	n.Wal = wal
+
+	var sp raftpb.Snapshot
+	sp, rerr = wal.Snapshot(n.RaftContext.Group)
+	if rerr != nil {
+		return
+	}
+	var term uint64
+	if !raft.IsEmptySnap(sp) {
+		x.Printf("Found Snapshot: %+v\n", sp)
+		restart = true
+		if rerr = n.Store.ApplySnapshot(sp); rerr != nil {
+			return
+		}
+		term = sp.Metadata.Term
+		idx = sp.Metadata.Index
+	}
+
+	var hd raftpb.HardState
+	hd, rerr = wal.HardState(n.RaftContext.Group)
+	if rerr != nil {
+		return
+	}
+	if !raft.IsEmptyHardState(hd) {
+		x.Printf("Found hardstate: %+v\n", hd)
+		restart = true
+		if rerr = n.Store.SetHardState(hd); rerr != nil {
+			return
+		}
+	}
+
+	var es []raftpb.Entry
+	es, rerr = wal.Entries(n.RaftContext.Group, term, idx)
+	if rerr != nil {
+		return
+	}
+	x.Printf("Group %d found %d entries\n", n.RaftContext.Group, len(es))
+	if len(es) > 0 {
+		restart = true
+	}
+	rerr = n.Store.Append(es)
+	return
+}
+
 const (
 	messageBatchSoftLimit = 10000000
 )
@@ -372,12 +358,12 @@ var n_ *Node
 func (w *RaftServer) GetNode() *Node {
 	w.nodeLock.RLock()
 	defer w.nodeLock.RUnlock()
-	return n_
+	return w.Node
 }
 
 type RaftServer struct {
 	nodeLock sync.RWMutex // protects Node.
-	unused   *Node
+	Node     *Node
 }
 
 func (w *RaftServer) JoinCluster(ctx context.Context,
