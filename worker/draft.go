@@ -602,9 +602,9 @@ func (n *node) joinPeers() {
 	// _, err := populateShard(n.ctx, pool, n.gid)
 	// x.Checkf(err, "Error while populating shard")
 
-	conn := pool.Get()
+	gconn := pool.Get()
 
-	c := protos.NewRaftClient(conn)
+	c := protos.NewRaftClient(gconn)
 	x.Printf("Calling JoinCluster")
 	_, err = c.JoinCluster(n.ctx, n.RaftContext)
 	// TODO: This should keep on indefinitely trying to join the cluster, instead of crashing.
