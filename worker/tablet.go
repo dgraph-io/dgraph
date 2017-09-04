@@ -68,7 +68,7 @@ func (t *Tablets) Get(pred string) *Tablet {
 	return nil
 }
 
-func (t *Tablets) AddIfAbsent(pred string, start, end uint64) {
+func (t *Tablets) AddIfAbsent(pred string) {
 	if tab := t.BelongsTo(pred); tab != nil {
 		return
 	}
@@ -78,7 +78,7 @@ func (t *Tablets) AddIfAbsent(pred string, start, end uint64) {
 	if tab, ok := t.tmap[pred]; ok {
 		return
 	}
-	kr := KeyRange{Predicate: pred, UidStart: start, UidEnd: end}
+	kr := KeyRange{Predicate: pred}
 	tab := &Tablet{krange: kr}
 	t.tmap[pred] = tab
 }
