@@ -365,20 +365,26 @@ type RaftServer struct {
 	unused   *Node
 }
 
-func (w *RaftServer) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*protos.Payload, error) {
+func (w *RaftServer) JoinCluster(ctx context.Context,
+	rc *protos.RaftContext) (*protos.Payload, error) {
 	if ctx.Err() != nil {
 		return &protos.Payload{}, ctx.Err()
 	}
+	// Commenting out the following checks for now, until we get rid of groups.
+	// TODO: Uncomment this after groups is removed.
+	// if rc.Group != w.GetNode().Group || rc.Id == w.GetNode().Id {
+	// 	return &protos.Payload{}, x.Errorf(errorNodeIDExists)
+	// }
+	if _, ok := n.GetPeer(rc.Id); ok {
+		return &protos.Payload{}, x.Errorf(errorNodeIDExists)
+	}
+	// TODO: Figure out what other conditions we need to check to reject a Join.
 
 	// // Best effor reject
 	// if _, found := groups().Server(rc.Id, rc.Group); found || rc.Id == Config.RaftId {
 	// 	return &protos.Payload{}, x.Errorf(errorNodeIDExists)
 	// }
 
-	// node := groups().Node(rc.Group)
-	// if node == nil {
-	// 	return &protos.Payload{}, nil
-	// }
 	node := w.GetNode()
 	if node == nil {
 		return &protos.Payload{}, errNoNode
