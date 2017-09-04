@@ -37,7 +37,7 @@ func writeDenormalisedPostings(dir string, postingsIn <-chan *protos.Denormalise
 	for posting := range postingsIn {
 		postings = append(postings, posting)
 		sz += posting.Size()
-		if sz > 128<<20 {
+		if sz > 256<<20 {
 			processBatch()
 		}
 	}
