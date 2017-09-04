@@ -30,6 +30,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -53,11 +54,11 @@ var (
 
 func invokeNetworkRequest(
 	ctx context.Context, addr string, f func(context.Context, protos.WorkerClient) (interface{}, error)) (interface{}, error) {
-	pl, err := pools().get(addr)
+	pl, err := conn.Get().Get(addr)
 	if err != nil {
 		return &emptyResult, x.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
 	}
-	defer pools().release(pl)
+	defer conn.Get().Release(pl)
 
 	conn := pl.Get()
 	if tr, ok := trace.FromContext(ctx); ok {

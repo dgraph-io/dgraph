@@ -34,6 +34,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
@@ -374,18 +375,18 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 		addrs = append(addrs, addr)
 	}
 
-	var pl *pool
-	var conn *grpc.ClientConn
+	var pl *conn.Pool
+	var gconn *grpc.ClientConn
 	var err error
 	for _, addr := range addrs {
-		pl, err = pools().get(addr)
+		pl, err = conn.Get().Get(addr)
 		if err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
 			}
 			continue
 		}
-		conn = pl.Get()
+		gconn = pl.Get()
 
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Relaying export request for group %d to %q", gid, pl.Addr)
@@ -395,7 +396,7 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 
 	// Unable to find any connection to any of these servers. This should be exceedingly rare.
 	// But probably not worthy of crashing the server. We can just skip the export.
-	if conn == nil {
+	if gconn == nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Unable to find a server to export group: %d", gid)
 		}
@@ -405,9 +406,9 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 			GroupId: gid,
 		}
 	}
-	defer pools().release(pl)
+	defer conn.Get().Release(pl)
 
-	c := protos.NewWorkerClient(conn)
+	c := protos.NewWorkerClient(gconn)
 	nr := &protos.ExportPayload{
 		ReqId:   reqId,
 		GroupId: gid,

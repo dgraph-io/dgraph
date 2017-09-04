@@ -21,6 +21,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -143,12 +144,12 @@ func getSchemaOverNetwork(ctx context.Context, gid uint32, s *protos.SchemaReque
 	}
 
 	_, addr := groups().Leader(gid)
-	pl, err := pools().get(addr)
+	pl, err := conn.Get().Get(addr)
 	if err != nil {
 		ch <- resultErr{err: err}
 		return
 	}
-	defer pools().release(pl)
+	defer conn.Get().Release(pl)
 	conn := pl.Get()
 	c := protos.NewWorkerClient(conn)
 	schema, e := c.Schema(ctx, s)
