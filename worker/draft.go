@@ -165,7 +165,7 @@ func (p *proposals) Done(pid uint32, err error) {
 	delete(p.ids, pid)
 	pd.ch <- pd.err
 	// We emit one pending watermark as soon as we read from rd.committedentries.
-	// Since the tasks are executed in goroutines we need on guarding watermark which
+	// Since the tasks are executed in goroutines we need one guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
 	pd.n.applied.Done(pd.index)
 	posting.SyncMarkFor(pd.n.gid).Done(pd.index)
@@ -208,7 +208,7 @@ type node struct {
 	canCampaign bool
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
-	// applied (to PL) -> synced (to RocksDB).
+	// applied (to PL) -> synced (to Badger).
 	applied x.WaterMark
 	sch     *scheduler
 }
@@ -783,7 +783,6 @@ func (n *node) Run() {
 					// Config changes in followers must be applied straight away.
 					n.applyConfChange(entry)
 				} else {
-					// Just queue up to be processed. Don't wait on them.
 					// TODO: Stop accepting requests when applyCh is full
 					// Just queue up to be processed. Don't wait on them.
 					n.applyCh <- entry

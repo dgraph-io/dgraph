@@ -2407,7 +2407,7 @@ func (qr *QueryRequest) processNquads(ctx context.Context, nquads gql.NQuads, ne
 type ExecuteResult struct {
 	Subgraphs   []*SubGraph
 	SchemaNode  []*protos.SchemaNode
-	Allocations map[string]uint64
+	Allocations map[string]uint64 // Blank node => uid map returned for a mutation request.
 }
 
 func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResult, err error) {
@@ -2440,7 +2440,7 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 			return er, err
 		}
 
-		er.Allocations = StripBlankNode(newUids)
+		er.Allocations = stripBlankNode(newUids)
 
 		err = qr.processNquads(ctx, nquads, newUids)
 		if err != nil {
@@ -2473,7 +2473,7 @@ func (qr *QueryRequest) ProcessWithMutation(ctx context.Context) (er ExecuteResu
 	return er, nil
 }
 
-func StripBlankNode(mp map[string]uint64) map[string]uint64 {
+func stripBlankNode(mp map[string]uint64) map[string]uint64 {
 	temp := make(map[string]uint64)
 	for k, v := range mp {
 		if strings.HasPrefix(k, "_:") {

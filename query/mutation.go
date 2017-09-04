@@ -171,6 +171,7 @@ func expandVariables(nq *gql.NQuad,
 	}
 	return nq.ExpandVariables(newUids, subjectUids, objectUids)
 }
+
 func ToInternal(ctx context.Context,
 	nquads gql.NQuads,
 	vars map[string]varValue, newUids map[string]uint64) (InternalMutation, error) {

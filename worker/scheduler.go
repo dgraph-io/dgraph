@@ -106,11 +106,12 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 	}
 
 	// Scheduler tracks tasks at subject, predicate level, so doing
-	// schema stuff here simplies the design and we needn't worrying about
+	// schema stuff here simplies the design and we needn't worry about
 	// serializing the mutations per predicate or schema mutations
 	// We derive the schema here if it's not present
 	// Since raft committed logs are serialized, we can derive
 	// schema here without any locking
+
 	// stores a map of predicate and type of first mutation for each predicate
 	schemaMap := make(map[string]types.TypeID)
 	for _, edge := range proposal.Mutations.Edges {
