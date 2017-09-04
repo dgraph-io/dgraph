@@ -38,16 +38,10 @@ func writeDenormalisedPostings(dir string, postingsIn <-chan *protos.Denormalise
 	}
 
 	for posting := range postingsIn {
-
 		postings = append(postings, posting)
-		if len(postings) > 1<<20 {
+		if len(postings) > 4<<20 {
 			dump()
 		}
-
-		//x.Check(buf.EncodeMessage(posting))
-		//if len(buf.Bytes()) > 128<<20 {
-		//dump()
-		//}
 	}
 	if len(buf.Bytes()) > 0 {
 		dump()
