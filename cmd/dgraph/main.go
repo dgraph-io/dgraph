@@ -36,6 +36,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -337,6 +338,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			if len(res.SchemaNode) == 0 {
 				mp["schema"] = json.RawMessage("{}")
 			} else {
+				sort.Slice(res.SchemaNode, func(i, j int) bool {
+					return res.SchemaNode[i].Predicate < res.SchemaNode[j].Predicate
+				})
 				js, err := json.Marshal(res.SchemaNode)
 				if err != nil {
 					x.SetStatusWithData(w, x.Error, "Unable to marshal schema")

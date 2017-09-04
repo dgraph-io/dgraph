@@ -93,13 +93,12 @@ func TestQueryTokensPolygon(t *testing.T) {
 		if qt == QueryTypeWithin {
 			require.Len(t, toks, 18)
 		} else {
-			require.Len(t, toks, 66)
+			require.Len(t, toks, 67)
 		}
 		require.NotNil(t, qd)
 		require.Equal(t, qd.qtype, qt)
 		require.NotZero(t, len(qd.loops))
 		require.Nil(t, qd.pt)
-		require.Nil(t, qd.cap)
 	}
 }
 
@@ -132,7 +131,6 @@ func TestQueryTokensPoint(t *testing.T) {
 		require.Equal(t, qd.qtype, qt)
 		require.Equal(t, 0, len(qd.loops))
 		require.NotNil(t, qd.pt)
-		require.Nil(t, qd.cap)
 	}
 }
 
@@ -143,12 +141,11 @@ func TestQueryTokensNear(t *testing.T) {
 	toks, qd, err := queryTokens(QueryTypeNear, data, 1000.0)
 	require.NoError(t, err)
 
-	require.Equal(t, len(toks), 15)
+	require.Equal(t, len(toks), 56)
 	require.NotNil(t, qd)
-	require.Equal(t, qd.qtype, QueryTypeNear)
-	require.Equal(t, 0, len(qd.loops))
+	require.Equal(t, qd.qtype, QueryTypeIntersects)
+	require.Equal(t, 1, len(qd.loops))
 	require.Nil(t, qd.pt)
-	require.NotNil(t, qd.cap)
 }
 
 func TestQueryTokensNearError(t *testing.T) {
@@ -394,9 +391,8 @@ func TestMatchesFilterNearPoint(t *testing.T) {
 	p3 = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-123.082506, 37.4249518})
 	require.False(t, qd.MatchesFilter(p3))
 
-	// Polys aren't returned for near queries
 	poly := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
 	})
-	require.False(t, qd.MatchesFilter(poly))
+	require.True(t, qd.MatchesFilter(poly))
 }

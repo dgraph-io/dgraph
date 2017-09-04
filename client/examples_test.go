@@ -21,14 +21,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
-	"os"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
+	"github.com/twpayne/go-geom/encoding/wkb"
 	"google.golang.org/grpc"
 )
 
@@ -97,7 +98,7 @@ func ExampleReq_Set() {
 	fmt.Printf("%+v\n", proto.MarshalTextString(resp))
 
 	err = dgraphClient.Close()
-	x.Check(err)	
+	x.Check(err)
 }
 
 func ExampleReq_Delete() {
@@ -540,8 +541,8 @@ func ExampleEdge_SetValueBytes() {
 	req.SetQuery(`mutation {
 	schema {
 		name: string @index(exact) .
-	}	
-}	
+	}
+}
 {
 	q(func: eq(name, "Alice")) {
 		name
@@ -606,7 +607,7 @@ mutation {
 		friend {
 			name
 		}
-	}	
+	}
 }`)
 
 	// Run the request in the Dgraph server.  The mutations are added, then
@@ -683,7 +684,7 @@ mutation {
 			_uid_
 			name
 		}
-	}	
+	}
 }`)
 
 	// Run the request in the Dgraph server.  The mutations are added, then
@@ -736,6 +737,83 @@ mutation {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
 
+	err = dgraphClient.Close()
+	x.Check(err)
+}
+
+func ExampleEdge_SetValueGeoJson() {
+	conn, err := grpc.Dial("127.0.0.1:9080", grpc.WithInsecure())
+	x.Checkf(err, "While trying to dial gRPC")
+	defer conn.Close()
+
+	clientDir, err := ioutil.TempDir("", "client_")
+	x.Check(err)
+	defer os.RemoveAll(clientDir)
+
+	dgraphClient := client.NewDgraphClient([]*grpc.ClientConn{conn}, client.DefaultOptions, clientDir)
+
+	req := client.Req{}
+
+	alice, err := dgraphClient.NodeBlank("alice")
+	if err != nil {
+		log.Fatal(err)
+	}
+	e := alice.Edge("name")
+	e.SetValueString("Alice")
+	err = req.Set(e)
+	x.Check(err)
+
+	e = alice.Edge("loc")
+	err = e.SetValueGeoJson(`{"Type":"Point", "Coordinates":[1.1,2.0]}`)
+	x.Check(err)
+	err = req.Set(e)
+	x.Check(err)
+
+	e = alice.Edge("city")
+	err = e.SetValueGeoJson(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]}`)
+	x.Check(err)
+	err = req.Set(e)
+	x.Check(err)
+
+	req.SetQuery(`mutation {
+	schema {
+		name: string @index(exact) .
+	}
+}
+{
+	q(func: eq(name, "Alice")) {
+		name
+		loc
+		city
+	}
+}`)
+
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	if err != nil {
+		log.Fatalf("Error in getting response from server, %s", err)
+	}
+
+	type Alice struct {
+		Name string `dgraph:"name"`
+		Loc  []byte `dgraph:"loc"`
+		City []byte `dgraph:"city"`
+	}
+
+	type Res struct {
+		Root Alice `dgraph:"q"`
+	}
+
+	var r Res
+	err = client.Unmarshal(resp.N, &r)
+	x.Check(err)
+	fmt.Printf("Alice: %+v\n\n", r.Root)
+	loc, err := wkb.Unmarshal(r.Root.Loc)
+	x.Check(err)
+	city, err := wkb.Unmarshal(r.Root.City)
+	x.Check(err)
+
+	fmt.Printf("Loc: %+v\n\n", loc)
+	fmt.Printf("City: %+v\n\n", city)
 	err = dgraphClient.Close()
 	x.Check(err)
 }

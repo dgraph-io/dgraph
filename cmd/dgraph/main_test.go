@@ -577,7 +577,7 @@ func TestSchemaMutationReverseRemove(t *testing.T) {
 func TestSchemaMutationCountAdd(t *testing.T) {
 	var q1 = `
 	{
-		user(func:ge(count(friend),4)) {
+		user(func:eq(count(friend),4)) {
 			name
 		}
 	}

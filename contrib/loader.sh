@@ -40,8 +40,6 @@ fi
 start
 popd &> /dev/null
 
-sleep 10
-
 #Set Schema
 curl -X POST  -d 'mutation {
   schema {
@@ -63,11 +61,8 @@ popd &> /dev/null
 # Restart Dgraph so that we are sure that index keys are persisted.
 quit 0
 # Wait for a clean shutdown.
-sleep 15
 pushd cmd/dgraph &> /dev/null
 start
-# Wait for membership sync to happen.
-sleep 10
 popd &> /dev/null
 
 ./contrib/goldendata-queries.sh
@@ -75,14 +70,9 @@ popd &> /dev/null
 echo -e "\nShutting down Dgraph"
 quit 0
 
-# Wait for clean shutdown.
-sleep 20
-
 echo -e "\nTrying to restart Dgraph and match export count"
 pushd cmd/dgraph &> /dev/null
 start
-# Wait to become leader.
-sleep 5
 echo -e "\nTrying to export data."
 curl http://localhost:8080/admin/export
 echo -e "\nExport done."

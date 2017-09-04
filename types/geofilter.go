@@ -45,8 +45,7 @@ const (
 // GeoQueryData is internal data used by the geo query filter to additionally filter the geometries.
 type GeoQueryData struct {
 	pt    *s2.Point  // If not nil, the input data was a point
-	loops []*s2.Loop // If not empty, the input data was a polygon/multipolygon.
-	cap   *s2.Cap    // If not nil, the cap to be used for a near query
+	loops []*s2.Loop // If not empty, the input data was a polygon/multipolygon or it was a near query.
 	qtype QueryType
 }
 
@@ -132,6 +131,16 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		p := pointFromPoint(v)
 		pt = &p
 
+		if qt == QueryTypeNear {
+			// We use the point and make a loop with radius maxDistance. Then we can use this for
+			// the rest of the query.
+			if maxDistance <= 0 {
+				return nil, nil, x.Errorf("Invalid max distance specified for a near query")
+			}
+			a := EarthAngle(maxDistance)
+			l := s2.RegularLoop(*pt, a, 100)
+			loops = append(loops, l)
+		}
 	case *geom.Polygon:
 		l, err := loopFromPolygon(v)
 		if err != nil {
@@ -155,9 +164,18 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 
 	x.AssertTruef(len(loops) > 0 || pt != nil, "We should have a point or a loop.")
 
-	parents, cover, err := indexCells(g)
-	if err != nil {
-		return nil, nil, err
+	var cover, parents s2.CellUnion
+	if qt == QueryTypeNear {
+		if len(loops) == 0 {
+			return nil, nil, x.Errorf("Internal error while processing near query.")
+		}
+		cover = coverLoop(loops[0], MinCellLevel, MaxCellLevel, MaxCells)
+		parents = getParentCells(cover, MinCellLevel)
+	} else {
+		parents, cover, err = indexCells(g)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	switch qt {
@@ -176,10 +194,13 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		return createTokens(parents, coverPrefix), &GeoQueryData{pt: pt, loops: loops, qtype: qt}, nil
 
 	case QueryTypeNear:
-		if len(loops) > 0 {
-			return nil, nil, x.Errorf("Cannot use a polygon in a near query")
+		if pt == nil {
+			return []string{}, nil, x.Errorf("Require a point for a within query.")
 		}
-		return nearQueryKeys(*pt, maxDistance)
+		// A near query is the same as the intersects query. We form a loop with the given point and
+		// the radius and then see what all does it intersect with.
+		toks := parentCoverTokens(parents, cover)
+		return toks, &GeoQueryData{loops: loops, qtype: QueryTypeIntersects}, nil
 
 	case QueryTypeIntersects:
 		// An intersects query is as the name suggests all the entities which intersect with the
@@ -196,19 +217,6 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 	}
 }
 
-// nearQueryKeys creates a QueryKeys object for a near query.
-func nearQueryKeys(pt s2.Point, d float64) ([]string, *GeoQueryData, error) {
-	if d <= 0 {
-		return nil, nil, x.Errorf("Invalid max distance specified for a near query")
-	}
-	a := EarthAngle(d)
-	c := s2.CapFromCenterAngle(pt, a)
-	cu := indexCellsForCap(c)
-	// A near query is similar to within, where we are looking for points within the cap. So we need
-	// all objects whose parents match the cover of the cap.
-	return createTokens(cu, parentPrefix), &GeoQueryData{cap: &c, qtype: QueryTypeNear}, nil
-}
-
 // MatchesFilter applies the query filter to a geo value
 func (q GeoQueryData) MatchesFilter(g geom.T) bool {
 	switch q.qtype {
@@ -219,16 +227,9 @@ func (q GeoQueryData) MatchesFilter(g geom.T) bool {
 	case QueryTypeIntersects:
 		return q.intersects(g)
 	case QueryTypeNear:
-		if q.cap == nil {
-			return false
-		}
-		return q.isWithin(g)
+		return q.intersects(g)
 	}
 	return false
-}
-
-func withinCapPolygon(g1 *s2.Loop, g2 *s2.Cap) bool {
-	return g2.Contains(g1.CapBound())
 }
 
 func loopWithinMultiloops(l *s2.Loop, loops []*s2.Loop) bool {
@@ -240,9 +241,9 @@ func loopWithinMultiloops(l *s2.Loop, loops []*s2.Loop) bool {
 	return false
 }
 
-// returns true if the geometry represented by g is within the given loop or cap
+// returns true if the geometry represented by g is within the given loop
 func (q GeoQueryData) isWithin(g geom.T) bool {
-	x.AssertTruef(q.pt != nil || len(q.loops) > 0 || q.cap != nil, "At least a point, loop or cap should be defined.")
+	x.AssertTruef(q.pt != nil || len(q.loops) > 0, "At least a point, loop should be defined.")
 	switch geometry := g.(type) {
 	case *geom.Point:
 		s2pt := pointFromPoint(geometry)
@@ -258,7 +259,6 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 			}
 			return false
 		}
-		return q.cap.ContainsPoint(s2pt)
 	case *geom.Polygon:
 		s2loop, err := loopFromPolygon(geometry)
 		if err != nil {
@@ -272,9 +272,6 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 			}
 			return false
 		}
-		if q.cap != nil {
-			return withinCapPolygon(s2loop, q.cap)
-		}
 	case *geom.MultiPolygon:
 		// We check each polygon in the multipolygon should be within some loop of q.loops.
 		if len(q.loops) > 0 {
@@ -284,20 +281,6 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 					return false
 				}
 				if !loopWithinMultiloops(s2loop, q.loops) {
-					return false
-				}
-			}
-			return true
-		}
-
-		if q.cap != nil {
-			for i := 0; i < geometry.NumPolygons(); i++ {
-				p := geometry.Polygon(i)
-				s2loop, err := loopFromPolygon(p)
-				if err != nil {
-					return false
-				}
-				if !withinCapPolygon(s2loop, q.cap) {
 					return false
 				}
 			}
