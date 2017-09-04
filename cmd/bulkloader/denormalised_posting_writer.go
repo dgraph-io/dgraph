@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -49,10 +50,13 @@ func writeDenormalisedPostings(dir string, postingsIn <-chan *protos.Denormalise
 
 func sortAndDump(filename string, postings []*protos.DenormalisedPosting, prog *progress) {
 
+	atomic.AddInt64(&prog.sorting, 1)
 	sort.Slice(postings, func(i, j int) bool {
 		return bytes.Compare(postings[i].PostingListKey, postings[j].PostingListKey) < 0
 	})
+	atomic.AddInt64(&prog.sorting, -1)
 
+	atomic.AddInt64(&prog.writing, 1)
 	var buf proto.Buffer
 	for _, posting := range postings {
 		x.Check(buf.EncodeMessage(posting))
@@ -62,4 +66,5 @@ func sortAndDump(filename string, postings []*protos.DenormalisedPosting, prog *
 	x.Checkf(err, "Could not open tmp file.")
 	x.Check2(fd.Write(buf.Bytes()))
 	x.Check(fd.Close())
+	atomic.AddInt64(&prog.writing, -1)
 }
