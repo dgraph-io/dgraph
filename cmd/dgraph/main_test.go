@@ -1493,6 +1493,19 @@ func TestExpandEdgeFalseError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
 		"Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
+
+	q1 = `
+	{
+		me(func: uid(0x11)) {
+			_predicate_
+		}
+	}
+	`
+
+	_, err = runQuery(q1)
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
 }
 
 func TestMain(m *testing.M) {

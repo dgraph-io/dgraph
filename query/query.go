@@ -1814,6 +1814,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 
+		if !worker.Config.ExpandEdge && child.Attr == "_predicate_" {
+			rch <- x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
+			return
+		}
+
 		if child.Params.Expand == "" {
 			out = append(out, child)
 			continue

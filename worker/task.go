@@ -262,13 +262,6 @@ func needsIndex(fnType FuncType) bool {
 	}
 }
 
-func getPredList(uid uint64, gid uint32) ([]types.Val, error) {
-	key := x.DataKey("_predicate_", uid)
-	// Get or create the posting list for an entity, attribute combination.
-	pl := posting.GetOrCreate(key, gid)
-	return pl.AllValues()
-}
-
 type result struct {
 	uid    uint64
 	facets []*protos.Facet
