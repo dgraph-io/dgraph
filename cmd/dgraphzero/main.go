@@ -33,6 +33,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -43,13 +44,21 @@ var (
 	myAddr = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	port        = flag.Int("port", 8888, "Port to run Dgraph zero on.")
+	raftId      = flag.Uint64("id", 0, "Unique raft index.")
 	numReplicas = flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
+	peer = flag.String("peer", "", "Address of another dgraphzero server.")
 )
 
 func setupListener(addr string, port int) (listener net.Listener, err error) {
 	laddr := fmt.Sprintf("%s:%d", addr, port)
 	return net.Listen("tcp", laddr)
+}
+
+func setupRaft() *conn.RaftServer {
+	rc := protos.RaftContext{Id: *raftId, Addr: *myAddr, Group: 0}
+	n := conn.NewNode(&rc)
+	return &conn.RaftServer{Node: n}
 }
 
 func serveGRPC(l net.Listener, wg *sync.WaitGroup) {
@@ -59,8 +68,13 @@ func serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
-	server := &Server{NumReplicas: *numReplicas}
-	protos.RegisterZeroServer(s, server)
+
+	zeroServer := &Server{NumReplicas: *numReplicas}
+	protos.RegisterZeroServer(s, zeroServer)
+
+	rs := setupRaft()
+	protos.RegisterRaftServer(s, rs)
+
 	err := s.Serve(l)
 	log.Printf("gRpc server stopped : %s", err.Error())
 	s.GracefulStop()
@@ -91,10 +105,12 @@ func main() {
 	flag.Parse()
 
 	grpc.EnableTracing = false
+
 	addr := "localhost"
 	if *bindall {
 		addr = "0.0.0.0"
 	}
+
 	httpListener, err := setupListener(addr, *port)
 	if err != nil {
 		log.Fatal(err)

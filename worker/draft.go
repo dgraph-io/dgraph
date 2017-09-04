@@ -612,57 +612,12 @@ func (n *node) joinPeers() {
 	x.Printf("Done with JoinCluster call\n")
 }
 
-func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
-	n.Wal = wal
-
-	var sp raftpb.Snapshot
-	sp, rerr = wal.Snapshot(n.gid)
-	if rerr != nil {
-		return
-	}
-	var term, idx uint64
-	if !raft.IsEmptySnap(sp) {
-		x.Printf("Found Snapshot: %+v\n", sp)
-		restart = true
-		if rerr = n.Store.ApplySnapshot(sp); rerr != nil {
-			return
-		}
-		term = sp.Metadata.Term
-		idx = sp.Metadata.Index
-		n.Applied.SetDoneUntil(idx)
-		posting.SyncMarkFor(n.gid).SetDoneUntil(idx)
-	}
-
-	var hd raftpb.HardState
-	hd, rerr = wal.HardState(n.gid)
-	if rerr != nil {
-		return
-	}
-	if !raft.IsEmptyHardState(hd) {
-		x.Printf("Found hardstate: %+v\n", hd)
-		restart = true
-		if rerr = n.Store.SetHardState(hd); rerr != nil {
-			return
-		}
-	}
-
-	var es []raftpb.Entry
-	es, rerr = wal.Entries(n.gid, term, idx)
-	if rerr != nil {
-		return
-	}
-	x.Printf("Group %d found %d entries\n", n.gid, len(es))
-	if len(es) > 0 {
-		restart = true
-	}
-	rerr = n.Store.Append(es)
-	return
-}
-
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
 func (n *node) InitAndStartNode(wal *raftwal.Wal) {
-	restart, err := n.initFromWal(wal)
+	idx, restart, err := n.InitFromWal(wal)
 	x.Check(err)
+	n.applied.SetDoneUntil(idx)
+	posting.SyncMarkFor(n.gid).SetDoneUntil(idx)
 
 	if restart {
 		x.Printf("Restarting node for group: %d\n", n.gid)
