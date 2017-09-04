@@ -48,12 +48,19 @@ func writeDenormalisedPostings(dir string, postingsIn <-chan *protos.Denormalise
 	wg.Wait()
 }
 
+type dpl []*protos.DenormalisedPosting
+
+func (d dpl) Less(i, j int) bool { return bytes.Compare(d[i].PostingListKey, d[j].PostingListKey) < 0 }
+func (d dpl) Len() int           { return len(d) }
+func (d dpl) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
+
 func sortAndDump(filename string, postings []*protos.DenormalisedPosting, prog *progress) {
 
 	atomic.AddInt64(&prog.sorting, 1)
-	sort.Slice(postings, func(i, j int) bool {
-		return bytes.Compare(postings[i].PostingListKey, postings[j].PostingListKey) < 0
-	})
+	//sort.Slice(postings, func(i, j int) bool {
+	//return bytes.Compare(postings[i].PostingListKey, postings[j].PostingListKey) < 0
+	//})
+	sort.Sort(dpl(postings))
 	atomic.AddInt64(&prog.sorting, -1)
 
 	atomic.AddInt64(&prog.writing, 1)
