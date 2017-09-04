@@ -13,11 +13,12 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
-func writeDenormalisedPostings(dir string, postingsIn <-chan *protos.DenormalisedPosting) {
+func writeDenormalisedPostings(dir string, postingsIn <-chan *protos.DenormalisedPosting, prog *progress) {
 
 	var fileNum int
 	var postings []*protos.DenormalisedPosting
 	var wg sync.WaitGroup
+	var sz int
 
 	processBatch := func() {
 		wg.Add(1)
@@ -25,15 +26,17 @@ func writeDenormalisedPostings(dir string, postingsIn <-chan *protos.Denormalise
 		fileNum++
 		ps := postings
 		go func() {
-			sortAndDump(filename, ps)
+			sortAndDump(filename, ps, prog)
 			wg.Done()
 		}()
 		postings = nil
+		sz = 0
 	}
 
 	for posting := range postingsIn {
 		postings = append(postings, posting)
-		if len(postings) > 4<<20 {
+		sz += posting.Size()
+		if sz > 128<<20 {
 			processBatch()
 		}
 	}
@@ -44,7 +47,7 @@ func writeDenormalisedPostings(dir string, postingsIn <-chan *protos.Denormalise
 	wg.Wait()
 }
 
-func sortAndDump(filename string, postings []*protos.DenormalisedPosting) {
+func sortAndDump(filename string, postings []*protos.DenormalisedPosting, prog *progress) {
 
 	sort.Slice(postings, func(i, j int) bool {
 		return bytes.Compare(postings[i].PostingListKey, postings[j].PostingListKey) < 0
@@ -54,8 +57,6 @@ func sortAndDump(filename string, postings []*protos.DenormalisedPosting) {
 	for _, posting := range postings {
 		x.Check(buf.EncodeMessage(posting))
 	}
-
-	fmt.Printf("Writing %q: Postings: %d BufSize %d\n", filename, len(postings), len(buf.Bytes()))
 
 	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	x.Checkf(err, "Could not open tmp file.")

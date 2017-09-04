@@ -65,7 +65,7 @@ func (a *app) run() {
 	x.Check(err)
 	defer func() { x.Check(os.RemoveAll(tmpPostingsDir)) }()
 	go func() {
-		writeDenormalisedPostings(tmpPostingsDir, a.postingsCh)
+		writeDenormalisedPostings(tmpPostingsDir, a.postingsCh, a.prog)
 		postingWriterWG.Done()
 	}()
 

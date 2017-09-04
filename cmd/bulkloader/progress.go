@@ -11,6 +11,9 @@ type progress struct {
 	lastRDFCount int64
 	start        time.Time
 	shutdown     chan struct{}
+
+	sorting int64
+	writing int64
 }
 
 func newProgress() *progress {
@@ -35,10 +38,12 @@ func (p *progress) reportProgress() {
 func (p *progress) report() {
 	rdfCount := atomic.LoadInt64(&p.rdfCount)
 	elapsed := time.Since(p.start)
-	fmt.Printf("[%s] [RDF count: %d] [RDFs per second: %d]\n",
+	fmt.Printf("[%s] [RDF count: %d] [RDFs per second: %d] [sorting: %d] [writing: %d]\n",
 		round(elapsed).String(),
 		rdfCount,
 		int(float64(rdfCount)/elapsed.Seconds()),
+		atomic.LoadInt64(&p.sorting),
+		atomic.LoadInt64(&p.writing),
 	)
 	p.lastRDFCount = rdfCount
 }
