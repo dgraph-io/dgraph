@@ -130,14 +130,20 @@ type FilterTree struct {
 	Func  *Function
 }
 
+type ArgContext struct {
+	Value      string
+	IsValueVar bool // If argument is val(a)
+}
+
 // Function holds the information about gql functions.
 type Function struct {
 	Attr     string
-	Lang     string   // language of the attribute value
-	Name     string   // Specifies the name of the function.
-	Args     []string // Contains the arguments of the function.
+	Lang     string       // language of the attribute value
+	Name     string       // Specifies the name of the function.
+	Args     []ArgContext // Contains the arguments of the function.
 	UID      []uint64
 	NeedsVar []VarContext // If the function requires some variable
+	IsCount  bool         // gt(count(friends),0)
 }
 
 // Facet holds the information about gql Facets (edge key-value pairs).
@@ -422,7 +428,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 		}
 
 		for idx, v := range gq.Func.Args {
-			if err := substituteVar(v, &gq.Func.Args[idx], vmap); err != nil {
+			if err := substituteVar(v.Value, &gq.Func.Args[idx].Value, vmap); err != nil {
 				return err
 			}
 		}
@@ -448,7 +454,7 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 		}
 
 		for idx, v := range f.Func.Args {
-			if err := substituteVar(v, &f.Func.Args[idx], vmap); err != nil {
+			if err := substituteVar(v.Value, &f.Func.Args[idx].Value, vmap); err != nil {
 				return err
 			}
 		}
@@ -1232,16 +1238,30 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 
 		if len(t.Func.Attr) > 0 {
 			buf.WriteRune(' ')
+			if t.Func.IsCount {
+				buf.WriteString("count(")
+			}
 			buf.WriteString(t.Func.Attr)
+			if t.Func.IsCount {
+				buf.WriteRune(')')
+			}
 			if len(t.Func.Lang) > 0 {
 				buf.WriteRune('@')
 				buf.WriteString(t.Func.Lang)
 			}
 
 			for _, arg := range t.Func.Args {
-				buf.WriteString(" \"")
-				buf.WriteString(arg)
-				buf.WriteRune('"')
+				if arg.IsValueVar {
+					buf.WriteString(" val(")
+				} else {
+					buf.WriteString(" \"")
+				}
+				buf.WriteString(arg.Value)
+				if arg.IsValueVar {
+					buf.WriteRune(')')
+				} else {
+					buf.WriteRune('"')
+				}
 			}
 		}
 		buf.WriteRune(')')
@@ -1352,7 +1372,7 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 	}
 	// Lets append the concatenated Geo token to Args.
 	// TODO - See if we can directly encode to Geo format.
-	g.Args = append(g.Args, buf.String())
+	g.Args = append(g.Args, ArgContext{Value: buf.String()})
 	items, err := it.Peek(1)
 	if err != nil {
 		return x.Errorf("Unexpected EOF while parsing args")
@@ -1427,8 +1447,15 @@ L:
 					if len(f.NeedsVar) > 1 {
 						return nil, x.Errorf("Multiple variables not allowed in a function")
 					}
-					g.Attr = value
-					g.Args = append(g.Args, f.NeedsVar[0].Name)
+					// Function name would be set as attribute because of way parser is written
+					if g.Attr == "val" {
+						g.Attr = value
+					} else {
+						// TODO: Refactor later, this is hacky way,Function name would be set as arg
+						// because of the way parser works
+						g.Args = g.Args[:len(g.Args)-1]
+					}
+					g.Args = append(g.Args, ArgContext{Value: f.NeedsVar[0].Name, IsValueVar: true})
 					g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
 					g.NeedsVar[0].Typ = VALUE_VAR
 				} else {
@@ -1437,7 +1464,7 @@ L:
 							x.Errorf("Only val/count allowed as function within another. Got: %s", f.Name)
 					}
 					g.Attr = f.Attr
-					g.Args = append(g.Args, f.Name)
+					g.IsCount = true
 				}
 				expectArg = false
 				continue
@@ -1471,7 +1498,7 @@ L:
 					flags = itemInFunc.Val[end+1:]
 				}
 
-				g.Args = append(g.Args, expr, flags)
+				g.Args = append(g.Args, ArgContext{Value: expr}, ArgContext{Value: flags})
 				expectArg = false
 				continue
 				// Lets reassemble the geo tokens.
@@ -1529,7 +1556,7 @@ L:
 					}
 					gq.Args["id"] = val
 				} else {
-					g.Args = append(g.Args, val)
+					g.Args = append(g.Args, ArgContext{Value: val})
 				}
 				expectArg = false
 				continue
@@ -1547,7 +1574,7 @@ L:
 				expectLang = false
 			} else if g.Name != uid {
 				// For UID function. we set g.UID
-				g.Args = append(g.Args, val)
+				g.Args = append(g.Args, ArgContext{Value: val})
 			}
 
 			if g.Name == "var" {
@@ -2340,7 +2367,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if child.Func, err = parseFunction(it, gq); err != nil {
 					return err
 				}
-				child.Func.Args = append(child.Func.Args, child.Func.Attr)
+				child.Func.Args = append(child.Func.Args, ArgContext{Value: child.Func.Attr})
 				child.Attr = child.Func.Attr
 				gq.Children = append(gq.Children, child)
 				curp = nil

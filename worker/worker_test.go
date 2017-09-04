@@ -143,9 +143,17 @@ func TestProcessTask(t *testing.T) {
 // newQuery creates a Query task and returns it.
 func newQuery(attr string, uids []uint64, srcFunc []string) *protos.Query {
 	x.AssertTrue(uids == nil || srcFunc == nil)
+	// TODO: Change later, hacky way to make the tests work
+	var srcFun *protos.SrcFunction
+	if len(srcFunc) > 0 {
+		srcFun = new(protos.SrcFunction)
+		srcFun.Name = srcFunc[0]
+		srcFun.Lang = srcFunc[1]
+		srcFun.Args = append(srcFun.Args, srcFunc[2:]...)
+	}
 	return &protos.Query{
 		UidList: &protos.List{uids},
-		SrcFunc: srcFunc,
+		SrcFunc: srcFun,
 		Attr:    attr,
 	}
 }

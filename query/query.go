@@ -156,6 +156,15 @@ type params struct {
 	IsEmpty        bool     // Won't have any SrcUids or DestUids. Only used to get aggregated vars
 }
 
+// Function holds the information about gql functions.
+type Function struct {
+	Attr    string
+	Lang    string           // language of the attribute value
+	Name    string           // Specifies the name of the function.
+	Args    []gql.ArgContext // Contains the arguments of the function.
+	IsCount bool             // gt(count(friends),0)
+}
+
 // SubGraph is the way to represent data internally. It contains both the
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
@@ -172,7 +181,7 @@ type SubGraph struct {
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
 	SrcUIDs *protos.List
-	SrcFunc []string
+	SrcFunc *Function
 
 	FilterOp     string
 	Filters      []*SubGraph
@@ -273,9 +282,9 @@ func (sg *SubGraph) isSimilar(ssg *SubGraph) bool {
 	if ssg.Params.DoCount {
 		return false
 	}
-	if len(sg.SrcFunc) > 0 {
-		if len(ssg.SrcFunc) > 0 {
-			if sg.SrcFunc[0] == ssg.SrcFunc[0] {
+	if sg.SrcFunc != nil {
+		if ssg.SrcFunc != nil {
+			if sg.SrcFunc.Name == ssg.SrcFunc.Name {
 				return true
 			}
 		}
@@ -306,8 +315,8 @@ func aggWithVarFieldName(pc *SubGraph) string {
 	fieldName := fmt.Sprintf("val(%v)", pc.Params.Var)
 	if len(pc.Params.NeedsVar) > 0 {
 		fieldName = fmt.Sprintf("val(%v)", pc.Params.NeedsVar[0].Name)
-		if len(pc.SrcFunc) > 0 {
-			fieldName = fmt.Sprintf("%s(%v)", pc.SrcFunc[0], fieldName)
+		if pc.SrcFunc != nil {
+			fieldName = fmt.Sprintf("%s(%v)", pc.SrcFunc.Name, fieldName)
 		}
 	}
 	if pc.Params.Alias != "" {
@@ -407,7 +416,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		fieldName := pc.fieldName()
 		if len(pc.counts) > 0 {
 			addCount(pc, uint64(pc.counts[idx]), dst)
-		} else if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
+		} else if pc.SrcFunc != nil && pc.SrcFunc.Name == "checkpwd" {
 			addCheckPwd(pc, pc.valueMatrix[idx].Values[0], dst)
 		} else if len(ul.Uids) > 0 {
 			var fcsList []*protos.Facets
@@ -585,13 +594,16 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 			return x.Errorf("Invalid function name : %s", ft.Func.Name)
 		}
 
-		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
+		sg.SrcFunc = new(Function)
+		sg.SrcFunc.Name = ft.Func.Name
 		isUidFuncWithoutVar := isUidFnWithoutVar(ft.Func)
 		if isUidFuncWithoutVar {
 			sg.populate(ft.Func.UID)
 		} else {
-			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Lang)
-			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
+			sg.SrcFunc.Lang = ft.Func.Lang
+			sg.SrcFunc.Attr = ft.Func.Attr
+			sg.SrcFunc.Args = append(sg.SrcFunc.Args, ft.Func.Args...)
+			sg.SrcFunc.IsCount = ft.Func.IsCount
 			sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar...)
 		}
 	}
@@ -737,9 +749,12 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 					" please place the filter on the upper level"
 				return errors.New(note)
 			}
-			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Name)
-			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Lang)
-			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Args...)
+			dst.SrcFunc = new(Function)
+			dst.SrcFunc.Name = gchild.Func.Name
+			dst.SrcFunc.Attr = gchild.Func.Attr
+			dst.SrcFunc.Lang = gchild.Func.Lang
+			dst.SrcFunc.Args = append(dst.SrcFunc.Args, gchild.Func.Args...)
+			dst.SrcFunc.IsCount = gchild.Func.IsCount
 		}
 
 		if gchild.Filter != nil {
@@ -906,9 +921,12 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		if !isValidFuncName(gq.Func.Name) {
 			return nil, x.Errorf("Invalid function name : %s", gq.Func.Name)
 		}
-		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Name)
-		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Lang)
-		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
+		sg.SrcFunc = new(Function)
+		sg.SrcFunc.Name = gq.Func.Name
+		sg.SrcFunc.Lang = gq.Func.Lang
+		sg.SrcFunc.Attr = gq.Func.Attr
+		sg.SrcFunc.IsCount = gq.Func.IsCount
+		sg.SrcFunc.Args = append(sg.SrcFunc.Args, gq.Func.Args...)
 	}
 
 	isUidFuncWithoutVar := gq.Func != nil && isUidFnWithoutVar(gq.Func)
@@ -958,7 +976,10 @@ func toFacetsFilter(gft *gql.FilterTree) (*protos.FilterTree, error) {
 			Name: gft.Func.Name,
 			Args: []string{},
 		}
-		ftree.Func.Args = append(ftree.Func.Args, gft.Func.Args...)
+		// TODO(Janardhan): Handle variable in facets later.
+		for _, arg := range gft.Func.Args {
+			ftree.Func.Args = append(ftree.Func.Args, arg.Value)
+		}
 	}
 	return ftree, nil
 }
@@ -971,11 +992,23 @@ func createTaskQuery(sg *SubGraph) *protos.Query {
 	if reverse {
 		attr = strings.TrimPrefix(attr, "~")
 	}
+	var srcFunc *protos.SrcFunction
+	if sg.SrcFunc != nil {
+		srcFunc = new(protos.SrcFunction)
+		srcFunc.Name = sg.SrcFunc.Name
+		srcFunc.Lang = sg.SrcFunc.Lang
+		srcFunc.IsCount = sg.SrcFunc.IsCount
+		for _, arg := range sg.SrcFunc.Args {
+			srcFunc.Args = append(srcFunc.Args, arg.Value)
+			// TODO: Probably don't assert
+			x.AssertTrue(!arg.IsValueVar)
+		}
+	}
 	out := &protos.Query{
 		Attr:         attr,
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
-		SrcFunc:      sg.SrcFunc,
+		SrcFunc:      srcFunc,
 		AfterUid:     sg.Params.AfterUID,
 		DoCount:      len(sg.Filters) == 0 && sg.Params.DoCount,
 		FacetParam:   sg.Params.Facet,
@@ -1013,7 +1046,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 		}
 
 		ag := aggregator{
-			name: sg.SrcFunc[0],
+			name: sg.SrcFunc.Name,
 		}
 		for _, val := range vals {
 			ag.Apply(val)
@@ -1056,7 +1089,7 @@ func evalLevelAgg(doneVars map[string]varValue, sg, parent *SubGraph) (mp map[ui
 	// Go over the sibling node and aggregate.
 	for i, list := range relSG.uidMatrix {
 		ag := aggregator{
-			name: sg.SrcFunc[0],
+			name: sg.SrcFunc.Name,
 		}
 		for _, uid := range list.Uids {
 			if val, ok := vals[uid]; ok {
@@ -1171,7 +1204,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		if err != nil {
 			return err
 		}
-	} else if len(sg.SrcFunc) > 0 && !parent.IsGroupBy() && isAggregatorFn(sg.SrcFunc[0]) {
+	} else if sg.SrcFunc != nil && !parent.IsGroupBy() && isAggregatorFn(sg.SrcFunc.Name) {
 		// Aggregate the value over level.
 		mp, err := evalLevelAgg(doneVars, sg, parent)
 		if err != nil {
@@ -1553,7 +1586,7 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 		typ = v.Tid
 		break
 	}
-	val := sg.SrcFunc[3]
+	val := sg.SrcFunc.Args[1].Value
 	src := types.Val{types.StringID, []byte(val)}
 	dst, err := types.Convert(src, typ)
 	if err != nil {
@@ -1562,14 +1595,14 @@ func (sg *SubGraph) ApplyIneqFunc() error {
 	if sg.SrcUIDs != nil {
 		for _, uid := range sg.SrcUIDs.Uids {
 			curVal, ok := sg.Params.uidToVal[uid]
-			if ok && types.CompareVals(sg.SrcFunc[0], curVal, dst) {
+			if ok && types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
 				sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
 			}
 		}
 	} else {
 		// This means its a root as SrcUIDs is nil
 		for uid, curVal := range sg.Params.uidToVal {
-			if types.CompareVals(sg.SrcFunc[0], curVal, dst) {
+			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
 				sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
 			}
 		}
@@ -1617,7 +1650,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		return
 	}
 	var err error
-	if parent == nil && len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "uid" {
+	if parent == nil && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid" {
 		// I'm root and I'm using some variable that has been populated.
 		// Retain the actual order in uidMatrix. But sort the destUids.
 		if sg.SrcUIDs != nil && len(sg.SrcUIDs.Uids) != 0 {
@@ -1634,7 +1667,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	} else if len(sg.Attr) == 0 {
 		// This is when we have uid function in children.
-		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "uid" {
+		if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid" {
 			// If its a uid() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
 			sg.fillVars(sg.Params.ParentVars)
@@ -1652,7 +1685,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		sg.DestUIDs = &protos.List{sg.SrcUIDs.Uids}
 	} else {
 
-		if len(sg.SrcFunc) > 0 && isInequalityFn(sg.SrcFunc[0]) && sg.Attr == "val" {
+		if sg.SrcFunc != nil && isInequalityFn(sg.SrcFunc.Name) && sg.Attr == "val" {
 			// This is a ineq function which uses a value variable.
 			err = sg.ApplyIneqFunc()
 			if parent != nil {
@@ -1722,7 +1755,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// Run all filters in parallel.
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
-			isUidFuncWithoutVar := len(filter.SrcFunc) > 0 && filter.SrcFunc[0] == "uid" &&
+			isUidFuncWithoutVar := filter.SrcFunc != nil && filter.SrcFunc.Name == "uid" &&
 				len(filter.Params.NeedsVar) == 0
 			// For uid function filter, no need for processing. User already gave us the
 			// list. Lets just update DestUIDs.

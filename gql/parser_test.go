@@ -915,7 +915,8 @@ func TestParseQueryWithVarInIneq(t *testing.T) {
 	require.Equal(t, VALUE_VAR, res.Query[1].Filter.Func.NeedsVar[0].Typ)
 	require.Equal(t, 2, len(res.Query[1].Filter.Func.Args))
 	require.Equal(t, "val", res.Query[1].Filter.Func.Attr)
-	require.Equal(t, "a", res.Query[1].Filter.Func.Args[0])
+	require.Equal(t, "a", res.Query[1].Filter.Func.Args[0].Value)
+	require.Equal(t, true, res.Query[1].Filter.Func.Args[0].IsValueVar)
 	require.Equal(t, "gt", res.Query[1].Filter.Func.Name)
 }
 
@@ -1863,7 +1864,8 @@ func TestParseVarInFunc(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
-	require.Equal(t, "3", res.Query[0].Func.Args[0])
+	require.Equal(t, "3", res.Query[0].Func.Args[0].Value)
+	require.Equal(t, false, res.Query[0].Func.Args[0].IsValueVar)
 }
 
 func TestParseStringVarInFilter(t *testing.T) {
@@ -1882,7 +1884,7 @@ func TestParseStringVarInFilter(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
-	require.Equal(t, "v0.7.3/beta", res.Query[0].Children[0].Filter.Func.Args[0])
+	require.Equal(t, "v0.7.3/beta", res.Query[0].Children[0].Filter.Func.Args[0].Value)
 }
 
 func TestParseVarInFilter(t *testing.T) {
@@ -1893,7 +1895,7 @@ func TestParseVarInFilter(t *testing.T) {
 	res, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
-	require.Equal(t, "3", res.Query[0].Children[0].Filter.Func.Args[0])
+	require.Equal(t, "3", res.Query[0].Children[0].Filter.Func.Args[0].Value)
 }
 
 func TestParseVariables(t *testing.T) {
@@ -2093,7 +2095,32 @@ func TestParseFuncNested(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.NotNil(t, res.Query[0].Func)
 	require.Equal(t, res.Query[0].Func.Name, "gt")
-	require.Equal(t, res.Query[0].Func.Args, []string{"count", "10"})
+	require.Equal(t, res.Query[0].Func.Args[0].Value, "10")
+	require.Equal(t, res.Query[0].Func.IsCount, true)
+}
+
+func TestParseFuncNested2(t *testing.T) {
+	query := `
+	query {
+		var(func:uid(1)) {
+			a as name
+		}
+		me(func: eq(name, val(a))) {
+			friends @filter() {
+				name
+			}
+			hometown
+		}
+	}
+`
+	res, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[1])
+	require.NotNil(t, res.Query[1].Func)
+	require.Equal(t, res.Query[1].Func.Name, "eq")
+	require.Equal(t, res.Query[1].Func.Args[0].Value, "a")
+	require.Equal(t, res.Query[1].Func.Args[0].IsValueVar, true)
+	require.Equal(t, res.Query[1].Func.IsCount, false)
 }
 
 func TestParseFilter_root2(t *testing.T) {
@@ -2111,7 +2138,7 @@ func TestParseFilter_root2(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
 	require.NotNil(t, res.Query[0].Filter)
-	require.Equal(t, `(gt friends "count" "10")`, res.Query[0].Filter.debugString())
+	require.Equal(t, `(gt count(friends) "10")`, res.Query[0].Filter.debugString())
 	require.Equal(t, []string{"friends", "hometown"}, childAttrs(res.Query[0]))
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.Nil(t, res.Query[0].Children[0].Filter)
@@ -2348,7 +2375,10 @@ func TestParseFilter_Geo1(t *testing.T) {
 `
 	resp, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	require.Equal(t, []string{"[-1.12,2.0123]", "100.123"}, resp.Query[0].Children[0].Filter.Func.Args)
+	require.Equal(t, "[-1.12,2.0123]", resp.Query[0].Children[0].Filter.Func.Args[0].Value)
+	require.Equal(t, "100.123", resp.Query[0].Children[0].Filter.Func.Args[1].Value)
+	require.Equal(t, false, resp.Query[0].Children[0].Filter.Func.Args[0].IsValueVar)
+	require.Equal(t, false, resp.Query[0].Children[0].Filter.Func.Args[1].IsValueVar)
 }
 
 func TestParseFilter_Geo2(t *testing.T) {
@@ -2365,7 +2395,7 @@ func TestParseFilter_Geo2(t *testing.T) {
 `
 	resp, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
-	require.Equal(t, []string{"[[11.2,-2.234],[-31.23,4.3214],[5.312,6.53]]"}, resp.Query[0].Children[0].Filter.Func.Args)
+	require.Equal(t, "[[11.2,-2.234],[-31.23,4.3214],[5.312,6.53]]", resp.Query[0].Children[0].Filter.Func.Args[0].Value)
 }
 
 func TestParseFilter_Geo3(t *testing.T) {
@@ -2599,7 +2629,7 @@ func TestParseCheckPwd(t *testing.T) {
 	gq, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, "checkpwd", gq.Query[0].Children[0].Func.Name)
-	require.Equal(t, "123456", gq.Query[0].Children[0].Func.Args[0])
+	require.Equal(t, "123456", gq.Query[0].Children[0].Func.Args[0].Value)
 	require.Equal(t, "password", gq.Query[0].Children[0].Attr)
 }
 
@@ -3691,8 +3721,9 @@ func TestParseRegexp1(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
-	require.Equal(t, []string{"case INSENSITIVE regexp with / escaped value", "i"},
-		res.Query[0].Children[1].Filter.Func.Args)
+	require.Equal(t, "case INSENSITIVE regexp with / escaped value",
+		res.Query[0].Children[1].Filter.Func.Args[0].Value)
+	require.Equal(t, "i", res.Query[0].Children[1].Filter.Func.Args[1].Value)
 }
 
 func TestParseRegexp2(t *testing.T) {
@@ -3707,8 +3738,9 @@ func TestParseRegexp2(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
-	require.Equal(t, []string{"another/compilicated (\"\") regexp('')", ""},
-		res.Query[0].Func.Args)
+	require.Equal(t, "another/compilicated (\"\") regexp('')",
+		res.Query[0].Func.Args[0].Value)
+	require.Equal(t, "", res.Query[0].Func.Args[1].Value)
 }
 
 func TestParseRegexp3(t *testing.T) {
@@ -3723,8 +3755,8 @@ func TestParseRegexp3(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
-	require.Equal(t, []string{"whitehouse[0-9]{1,4}", "fLaGs"},
-		res.Query[0].Filter.Func.Args)
+	require.Equal(t, "whitehouse[0-9]{1,4}", res.Query[0].Filter.Func.Args[0].Value)
+	require.Equal(t, "fLaGs", res.Query[0].Filter.Func.Args[1].Value)
 }
 
 func TestParseRegexp4(t *testing.T) {
@@ -3942,7 +3974,7 @@ func TestMultipleEqual(t *testing.T) {
 	gql, err := Parse(Request{Str: query, Http: true})
 	require.NoError(t, err)
 	require.Equal(t, 2, len(gql.Query[0].Func.Args))
-	require.Equal(t, "Tom Hanks", gql.Query[0].Func.Args[1])
+	require.Equal(t, "Tom Hanks", gql.Query[0].Func.Args[1].Value)
 }
 
 func TestParseEqArg(t *testing.T) {

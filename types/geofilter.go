@@ -61,53 +61,53 @@ func IsGeoFunc(str string) bool {
 
 // GetGeoTokens returns the corresponding index keys based on the type
 // of function.
-func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
-	x.AssertTruef(len(funcArgs) > 1, "Invalid function")
-	funcName := strings.ToLower(funcArgs[0])
+func GetGeoTokens(srcFunc *protos.SrcFunction) ([]string, *GeoQueryData, error) {
+	x.AssertTruef(len(srcFunc.Name) > 0, "Invalid function")
+	funcName := strings.ToLower(srcFunc.Name)
 	switch funcName {
 	case "near":
-		if len(funcArgs) != 4 {
+		if len(srcFunc.Args) != 2 {
 			return nil, nil, x.Errorf("near function requires 2 arguments, but got %d",
-				len(funcArgs))
+				len(srcFunc.Args))
 		}
-		maxDist, err := strconv.ParseFloat(funcArgs[3], 64)
+		maxDist, err := strconv.ParseFloat(srcFunc.Args[1], 64)
 		if err != nil {
 			return nil, nil, x.Wrapf(err, "Error while converting distance to float")
 		}
 		if maxDist < 0 {
 			return nil, nil, x.Errorf("Distance cannot be negative")
 		}
-		g, err := convertToGeom(funcArgs[2])
+		g, err := convertToGeom(srcFunc.Args[0])
 		if err != nil {
 			return nil, nil, err
 		}
 		return queryTokensGeo(QueryTypeNear, g, maxDist)
 	case "within":
-		if len(funcArgs) != 3 {
+		if len(srcFunc.Args) != 1 {
 			return nil, nil, x.Errorf("within function requires 1 arguments, but got %d",
-				len(funcArgs))
+				len(srcFunc.Args))
 		}
-		g, err := convertToGeom(funcArgs[2])
+		g, err := convertToGeom(srcFunc.Args[0])
 		if err != nil {
 			return nil, nil, err
 		}
 		return queryTokensGeo(QueryTypeWithin, g, 0.0)
 	case "contains":
-		if len(funcArgs) != 3 {
+		if len(srcFunc.Args) != 1 {
 			return nil, nil, x.Errorf("contains function requires 1 arguments, but got %d",
-				len(funcArgs))
+				len(srcFunc.Args))
 		}
-		g, err := convertToGeom(funcArgs[2])
+		g, err := convertToGeom(srcFunc.Args[0])
 		if err != nil {
 			return nil, nil, err
 		}
 		return queryTokensGeo(QueryTypeContains, g, 0.0)
 	case "intersects":
-		if len(funcArgs) != 3 {
+		if len(srcFunc.Args) != 1 {
 			return nil, nil, x.Errorf("intersects function requires 1 arguments, but got %d",
-				len(funcArgs))
+				len(srcFunc.Args))
 		}
-		g, err := convertToGeom(funcArgs[2])
+		g, err := convertToGeom(srcFunc.Args[0])
 		if err != nil {
 			return nil, nil, err
 		}
