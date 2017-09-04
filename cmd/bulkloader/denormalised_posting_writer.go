@@ -23,8 +23,9 @@ func writeDenormalisedPostings(dir string, postingsIn <-chan *protos.Denormalise
 		wg.Add(1)
 		filename := filepath.Join(dir, fmt.Sprintf("%06d.bin", fileNum))
 		fileNum++
+		ps := postings
 		go func() {
-			sortAndDump(filename, postings)
+			sortAndDump(filename, ps)
 			wg.Done()
 		}()
 		postings = nil
@@ -53,6 +54,8 @@ func sortAndDump(filename string, postings []*protos.DenormalisedPosting) {
 	for _, posting := range postings {
 		x.Check(buf.EncodeMessage(posting))
 	}
+
+	fmt.Printf("Writing %q: Postings: %d BufSize %d\n", filename, len(postings), len(buf.Bytes()))
 
 	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	x.Checkf(err, "Could not open tmp file.")
