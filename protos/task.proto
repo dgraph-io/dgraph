@@ -96,11 +96,24 @@ message Membership {
 // in the caller server; and the membership updates recorded by the callee server since
 // the provided lastUpdate.
 message MembershipUpdate {
+  // TODO: Rename to MembershipState.
 	repeated Membership members = 1;
-	uint64 last_update = 2;
+  repeated Tablet tablets = 2;
+	uint64 last_update = 3;
 
-	bool redirect = 3;
-	string redirect_addr = 4;
+	bool redirect = 6;
+	string redirect_addr = 7;
+}
+
+message MembershipQuery {
+  Membership member = 1;
+  Tablet tablet = 2;
+}
+
+message Tablet {
+  uint32 group_id  = 1; // Served by which group.
+  string predicate = 2;
+  int64 size       = 7;
 }
 
 message DirectedEdge {
