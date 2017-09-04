@@ -90,6 +90,9 @@ Query Example:
 {{< /runnable >}}
 
 
+{{% notice "note" %}} If your predicate has special characters, then you should wrap it with angular
+brackets while asking for it in the query. E.g. `<first:name>`{{% /notice %}}
+
 ### Expanding Graph Edges
 
 A query expands edges from node to node by nesting query blocks with `{ }`.
