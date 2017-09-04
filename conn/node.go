@@ -431,7 +431,8 @@ func (w *RaftServer) applyMessage(ctx context.Context, msg raftpb.Message) error
 		return err
 	}
 }
-func (w *RaftServer) RaftMessage(ctx context.Context, query *protos.Payload) (*protos.Payload, error) {
+func (w *RaftServer) RaftMessage(ctx context.Context,
+	query *protos.Payload) (*protos.Payload, error) {
 	if ctx.Err() != nil {
 		return &protos.Payload{}, ctx.Err()
 	}
