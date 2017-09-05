@@ -136,8 +136,9 @@ func NewNode(rc *protos.RaftContext) *Node {
 			MaxSizePerMsg:   256 << 10,
 			MaxInflightMsgs: 256,
 			Logger:          &raft.DefaultLogger{Logger: x.Logger},
-			CheckQuorum:     true, // Lets us use lease-based linearizable ReadIndex
-			ReadOnlyOption:  raft.ReadOnlyLeaseBased,
+			// Necessary for lease-based linearizable ReadIndex to work properly
+			CheckQuorum:    true,
+			ReadOnlyOption: raft.ReadOnlyLeaseBased,
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full

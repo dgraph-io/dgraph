@@ -122,7 +122,7 @@ type node struct {
 	*conn.Node
 
 	// Changed after init but not protected by SafeMutex
-	requestCh chan linearizableReadRequest
+	requestCh chan linReadReq
 
 	// Fields which are never changed after init.
 	applyCh chan raftpb.Entry
@@ -151,7 +151,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 
 	n := &node{
 		Node:      m,
-		requestCh: make(chan linearizableReadRequest),
+		requestCh: make(chan linReadReq),
 		ctx:       context.Background(),
 		gid:       gid,
 		// processConfChange etc are not throttled so some extra delta, so that we don't
@@ -400,31 +400,29 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
 }
 
-/* How does linearizability work?  It works as follows:  We maintain one linearizable read request
-at a time.  When we want a linearizable read, we get in line.
-*/
-
-type linearizableReadRequest struct {
+type linReadReq struct {
 	// A one-shot chan which we send a raft index upon
 	readIndexCh chan<- uint64
 }
 
 func (n *node) readIndex() chan uint64 {
 	ch := make(chan uint64, 1)
-	n.requestCh <- linearizableReadRequest{ch}
+	n.requestCh <- linReadReq{ch}
 	return ch
 }
 
 func runReadIndexLoop(
-	n *node, stop <-chan struct{}, finished chan<- struct{}, requestCh <-chan linearizableReadRequest,
+	n *node, stop <-chan struct{}, finished chan<- struct{}, requestCh <-chan linReadReq,
 	readStateCh <-chan raft.ReadState) {
 	defer close(finished)
 	counter := x.NewNonceCounter()
-	requests := []linearizableReadRequest{}
+	requests := []linReadReq{}
 	timer := time.NewTimer(0)
 	if !timer.Stop() {
 		<-timer.C
 	}
+	// We maintain one linearizable ReadIndex request at a time.  Others wait queued behind
+	// requestCh.
 	for {
 		select {
 		case <-stop:
@@ -442,8 +440,7 @@ func runReadIndexLoop(
 				}
 			}
 			activeRctx := counter.Generate()
-			const readIndexTimeout = 10 * time.Millisecond
-			timer.Reset(readIndexTimeout)
+			timer.Reset(10 * time.Millisecond)
 			// TODO: handle err
 			_ = n.Raft().ReadIndex(n.ctx, activeRctx[:])
 		again:
