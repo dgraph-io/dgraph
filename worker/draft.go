@@ -249,8 +249,13 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 			MaxSizePerMsg:   256 << 10,
 			MaxInflightMsgs: 256,
 			Logger:          &raft.DefaultLogger{Logger: x.Logger},
-			// Necessary for lease-based linearizable ReadIndex to work properly
-			CheckQuorum:    true,
+			// Must be true for lease-based linearizable ReadIndex to work properly
+			CheckQuorum: true,
+			// We use lease-based linearizable ReadIndex for performance, at the cost of
+			// correctness.  With it, communication goes follower->leader->follower, instead of
+			// follower->leader->majority_of_followers->leader->follower.  We lose correctness
+			// because the Raft ticker might not arrive promptly, in which case the leader would
+			// falsely believe that its lease is still good.
 			ReadOnlyOption: raft.ReadOnlyLeaseBased,
 		},
 		applyCh:     make(chan raftpb.Entry, numPendingMutations),
