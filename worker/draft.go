@@ -416,10 +416,6 @@ func (n *node) runReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
 	defer close(finished)
 	counter := x.NewNonceCounter()
 	requests := []linReadReq{}
-	timer := time.NewTimer(0)
-	if !timer.Stop() {
-		<-timer.C
-	}
 	// We maintain one linearizable ReadIndex request at a time.  Others wait queued behind
 	// requestCh.
 	for {
@@ -439,22 +435,21 @@ func (n *node) runReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
 				}
 			}
 			activeRctx := counter.Generate()
-			timer.Reset(10 * time.Millisecond)
 			// We ignore the err - it would be n.ctx cancellation (which we must ignore because
 			// it's our duty to continue until `stop` is triggered) or raft.ErrStopped (which we
 			// must ignore for the same reason).
 			_ = n.Raft().ReadIndex(n.ctx, activeRctx[:])
+			timer := time.NewTimer(10 * time.Millisecond)
 		again:
 			select {
 			case <-stop:
+				timer.Stop()
 				return
 			case rs := <-readStateCh:
 				if 0 != bytes.Compare(activeRctx[:], rs.RequestCtx) {
 					goto again
 				}
-				if !timer.Stop() {
-					<-timer.C
-				}
+				timer.Stop()
 				index := rs.Index
 				for _, req := range requests {
 					req.indexCh <- index
