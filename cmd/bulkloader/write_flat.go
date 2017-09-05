@@ -128,7 +128,7 @@ func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting) {
 		x.Check(buf.EncodeMessage(msg))
 
 		if len(buf.Bytes()) > 32<<20 && bytes.Compare(prevKey, msg.Key) != 0 {
-			filename := filepath.Join(dir, fmt.Sprintf("merged_%6d.bin", fileNum))
+			filename := filepath.Join(dir, fmt.Sprintf("merged_%06d.bin", fileNum))
 			fileNum++
 			wg.Add(1)
 			go func(buf []byte) {
