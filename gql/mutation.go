@@ -251,13 +251,13 @@ func (nq NQuad) createEdgePrototype(subjectUid uint64) *protos.DirectedEdge {
 	}
 }
 
-func (nq NQuad) createUidEdge(subjectUid uint64, objectUid uint64) *protos.DirectedEdge {
+func (nq NQuad) CreateUidEdge(subjectUid uint64, objectUid uint64) *protos.DirectedEdge {
 	out := nq.createEdgePrototype(subjectUid)
 	out.ValueId = objectUid
 	return out
 }
 
-func (nq NQuad) createValueEdge(subjectUid uint64) (*protos.DirectedEdge, error) {
+func (nq NQuad) CreateValueEdge(subjectUid uint64) (*protos.DirectedEdge, error) {
 	var err error
 
 	out := nq.createEdgePrototype(subjectUid)
@@ -303,9 +303,9 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*protos.DirectedEdge, e
 		if err != nil {
 			return nil, err
 		}
-		edge = nq.createUidEdge(sUid, oUid)
+		edge = nq.CreateUidEdge(sUid, oUid)
 	case x.ValuePlain, x.ValueMulti:
-		edge, err = nq.createValueEdge(sUid)
+		edge, err = nq.CreateValueEdge(sUid)
 	default:
 		return &emptyEdge, errors.New("unknow value type")
 	}
@@ -352,13 +352,13 @@ func (nq *NQuad) ExpandVariables(newToUid map[string]uint64, subjectUids []uint6
 	case x.ValueUid:
 		for _, sUid := range subjectUids {
 			for _, oUid := range objectUids {
-				edge = nq.createUidEdge(sUid, oUid)
+				edge = nq.CreateUidEdge(sUid, oUid)
 				edges = append(edges, edge)
 			}
 		}
 	case x.ValuePlain, x.ValueMulti:
 		for _, sUid := range subjectUids {
-			edge, err = nq.createValueEdge(sUid)
+			edge, err = nq.CreateValueEdge(sUid)
 			if err != nil {
 				return edges, err
 			}

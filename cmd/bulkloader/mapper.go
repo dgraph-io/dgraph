@@ -52,14 +52,17 @@ func (m *mapper) parseRDF(rdfLine string) error {
 	}
 
 	sid := m.um.assignUID(nq.GetSubject())
-	uidM := map[string]uint64{nq.GetSubject(): sid}
 	var oid uint64
+	var de *protos.DirectedEdge
 	if nq.GetObjectValue() == nil {
 		oid = m.um.assignUID(nq.GetObjectId())
-		uidM[nq.GetObjectId()] = oid
+		de = nq.CreateUidEdge(sid, oid)
+	} else {
+		de, err = nq.CreateValueEdge(sid)
+		x.Check(err)
 	}
 
-	fwdPosting, revPosting := m.createFwdAndRevPostings(nq, uidM)
+	fwdPosting, revPosting := m.createFwdAndRevPostings(nq, de)
 	key := x.DataKey(nq.GetPredicate(), sid)
 	m.addPosting(key, fwdPosting)
 
@@ -71,7 +74,7 @@ func (m *mapper) parseRDF(rdfLine string) error {
 	key = x.DataKey("_predicate_", sid)
 	pp := createPredicatePosting(nq.GetPredicate())
 	m.addPosting(key, pp)
-	m.addIndexPostings(nq, uidM)
+	m.addIndexPostings(nq, de)
 
 	return nil
 }
@@ -95,10 +98,7 @@ func createPredicatePosting(predicate string) *protos.Posting {
 }
 
 func (m *mapper) createFwdAndRevPostings(nq gql.NQuad,
-	uidM map[string]uint64) (*protos.Posting, *protos.Posting) {
-
-	de, err := nq.ToEdgeUsing(uidM)
-	x.Check(err)
+	de *protos.DirectedEdge) (*protos.Posting, *protos.Posting) {
 
 	m.ss.validateType(de, nq.ObjectValue == nil)
 
@@ -119,16 +119,16 @@ func (m *mapper) createFwdAndRevPostings(nq gql.NQuad,
 
 	// Reverse predicate
 	x.AssertTruef(nq.GetObjectValue() == nil, "only has reverse schema if object is UID")
-	rde, err := nq.ToEdgeUsing(uidM)
-	x.Check(err)
-	rde.Entity, rde.ValueId = rde.ValueId, rde.Entity
-	m.ss.validateType(rde, true)
-	rp := posting.NewPosting(rde)
+	de.Entity, de.ValueId = de.ValueId, de.Entity
+	m.ss.validateType(de, true)
+	rp := posting.NewPosting(de)
+
+	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
 
 	return p, rp
 }
 
-func (m *mapper) addIndexPostings(nq gql.NQuad, uidM map[string]uint64) {
+func (m *mapper) addIndexPostings(nq gql.NQuad, de *protos.DirectedEdge) {
 
 	if nq.GetObjectValue() == nil {
 		return // Cannot index UIDs
@@ -145,16 +145,13 @@ func (m *mapper) addIndexPostings(nq gql.NQuad, uidM map[string]uint64) {
 		}
 
 		// Create storage value.
-		de, err := nq.ToEdgeUsing(uidM)
-		x.Check(err)
 		storageVal := types.Val{
 			Tid:   types.TypeID(de.GetValueType()),
 			Value: de.GetValue(),
 		}
 
 		// Convert from storage type to schema type.
-		var schemaVal types.Val
-		schemaVal, err = types.Convert(storageVal, types.TypeID(sch.GetValueType()))
+		schemaVal, err := types.Convert(storageVal, types.TypeID(sch.GetValueType()))
 		x.Check(err) // Shouldn't error, since we've already checked for convertibility when doing edge postings.
 
 		// Extract tokens.
