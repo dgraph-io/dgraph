@@ -1179,10 +1179,14 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*
 func waitLinearizableRead(ctx context.Context, gid uint32) error {
 	n := groups().Node(gid)
 	replyCh := n.readIndex()
-	index := <-replyCh
-	if index == raft.None {
-		return x.Errorf("cannot get linearized read (time expired or no configured leader)")
+	select {
+	case index := <-replyCh:
+		if index == raft.None {
+			return x.Errorf("cannot get linearized read (time expired or no configured leader)")
+		}
+		n.applied.WaitForMark(index)
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	n.applied.WaitForMark(index)
-	return nil
 }
