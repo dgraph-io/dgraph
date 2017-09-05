@@ -464,3 +464,9 @@ func (w *RaftServer) RaftMessage(ctx context.Context,
 	// fmt.Printf("Got %d messages\n", count)
 	return &protos.Payload{}, nil
 }
+
+// Hello rpc call is used to check connection with other workers after worker
+// tcp server for this instance starts.
+func (w *RaftServer) Echo(ctx context.Context, in *protos.Payload) (*protos.Payload, error) {
+	return &protos.Payload{Data: in.Data}, nil
+}
