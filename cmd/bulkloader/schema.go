@@ -1,8 +1,7 @@
 package main
 
 import (
-	"fmt"
-	"os"
+	"log"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/protos"
@@ -59,9 +58,6 @@ func (s *schemaStore) fixEdge(de *protos.DirectedEdge, objectIsUID bool) {
 		// TODO: It's unclear to me as to why it's only an error to have a bad
 		// conversion if the schema was established explicitly rather than
 		// automatically.
-		//
-		// TODO: Better error message
-		fmt.Printf("RDF doesn't match schema: %v\n", err) // TODO: bubble back properly
-		os.Exit(1)
+		log.Fatalf("RDF doesn't match schema: %v", err)
 	}
 }

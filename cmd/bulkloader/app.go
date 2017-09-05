@@ -23,8 +23,6 @@ type options struct {
 
 type app struct {
 	opt        options
-	um         *uidMap
-	ss         *schemaStore
 	prog       *progress
 	rdfCh      chan string
 	workers    []*worker
@@ -40,8 +38,6 @@ func newApp(opt options) *app {
 
 	a := &app{
 		opt:        opt,
-		um:         newUIDMap(),
-		ss:         newSchemaStore(initialSchema),
 		prog:       newProgress(),
 		rdfCh:      make(chan string, 1<<10),
 		workers:    make([]*worker, opt.workers),
@@ -49,8 +45,11 @@ func newApp(opt options) *app {
 	}
 	x.Check(err)
 
+	um := newUIDMap()
+	ss := newSchemaStore(initialSchema)
+
 	for i := 0; i < opt.workers; i++ {
-		a.workers[i] = newWorker(i, a.rdfCh, a.um, a.ss, a.prog, a.postingsCh)
+		a.workers[i] = newWorker(a.rdfCh, um, ss, a.prog, a.postingsCh)
 	}
 	return a
 }

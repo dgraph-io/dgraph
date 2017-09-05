@@ -3,10 +3,8 @@ package main
 // TODO: Review for phase 1
 
 import (
-	"hash/crc64"
 	"log"
 	"math"
-	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/gql"
@@ -20,21 +18,14 @@ import (
 )
 
 type worker struct {
-	id int // for debugging
-
-	rdfCh chan string
-	wg    sync.WaitGroup
-
-	um *uidMap
-	ss *schemaStore
-
-	prog *progress
-
+	rdfCh       chan string
+	um          *uidMap
+	ss          *schemaStore
+	prog        *progress
 	postingsOut chan<- *protos.DenormalisedPosting
 }
 
 func newWorker(
-	id int,
 	rdfCh chan string,
 	um *uidMap,
 	ss *schemaStore,
@@ -42,32 +33,22 @@ func newWorker(
 	postingsOut chan<- *protos.DenormalisedPosting,
 ) *worker {
 	return &worker{
-		id:    id,
-		rdfCh: rdfCh,
-
-		um: um,
-		ss: ss,
-
-		prog: prog,
-
+		rdfCh:       rdfCh,
+		um:          um,
+		ss:          ss,
+		prog:        prog,
 		postingsOut: postingsOut,
 	}
 }
 
 func (w *worker) run() {
-	w.wg.Add(1)
 	for rdf := range w.rdfCh {
 		w.parseRDF(rdf)
 		atomic.AddInt64(&w.prog.rdfCount, 1)
 	}
-	w.wg.Done()
 }
 
-func (w *worker) wait() {
-	w.wg.Wait()
-}
-
-func (w *worker) addPosting(key []byte, posting *protos.Posting, countGroupHash uint64) {
+func (w *worker) addPosting(key []byte, posting *protos.Posting) {
 	p := &protos.DenormalisedPosting{
 		PostingListKey: key,
 	}
@@ -97,21 +78,18 @@ func (w *worker) parseRDF(rdfLine string) {
 	}
 
 	fwdPosting, revPosting := w.createEdgePostings(nq, uidM)
-	countGroupHash := crc64.Checksum([]byte(nq.GetPredicate()), crc64.MakeTable(crc64.ISO))
 	key := x.DataKey(nq.GetPredicate(), sUID)
-	w.addPosting(key, fwdPosting, countGroupHash)
+	w.addPosting(key, fwdPosting)
 
 	if revPosting != nil {
 		key = x.ReverseKey(nq.GetPredicate(), oUID)
-		// Reverse predicates are counted separately from normal
-		// predicates, so the hash is inverted to give a separate hash.
-		w.addPosting(key, revPosting, ^countGroupHash)
+		w.addPosting(key, revPosting)
 	}
 
 	key = x.DataKey("_predicate_", sUID)
 	pp := createPredicatePosting(nq.GetPredicate())
 
-	w.addPosting(key, pp, 0)
+	w.addPosting(key, pp)
 
 	w.addIndexPostings(nq, uidM)
 }
@@ -183,7 +161,7 @@ func (w *worker) addIndexPostings(nq gql.NQuad, uidM map[string]uint64) {
 			log.Fatalf("unknown tokenizer %q", tokerName)
 		}
 
-		// Create storage value. // TODO: Reuse the edge from create edge posting.
+		// Create storage value.
 		de, err := nq.ToEdgeUsing(uidM)
 		x.Check(err)
 		storageVal := types.Val{
@@ -207,7 +185,6 @@ func (w *worker) addIndexPostings(nq gql.NQuad, uidM map[string]uint64) {
 					Uid:         de.GetEntity(),
 					PostingType: protos.Posting_REF,
 				},
-				0,
 			)
 		}
 	}
