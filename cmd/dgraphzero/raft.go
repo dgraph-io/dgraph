@@ -18,7 +18,8 @@
 package main
 
 import (
-	"errors"
+	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -30,43 +31,109 @@ import (
 	"golang.org/x/net/context"
 )
 
+type proposalCtx struct {
+	ch  chan error
+	ctx context.Context
+}
+
+type proposals struct {
+	sync.RWMutex
+	ids map[uint32]*proposalCtx
+}
+
+func (p *proposals) Store(pid uint32, pctx *proposalCtx) bool {
+	p.Lock()
+	defer p.Unlock()
+	if _, has := p.ids[pid]; has {
+		return false
+	}
+	p.ids[pid] = pctx
+	return true
+}
+
+func (p *proposals) Done(pid uint32, err error) {
+	p.Lock()
+	defer p.Unlock()
+	pd, has := p.ids[pid]
+	if !has {
+		return
+	}
+	delete(p.ids, pid)
+	pd.ch <- err
+}
+
 type node struct {
 	*conn.Node
 	server *Server
 	ctx    context.Context
+	props  proposals
 }
 
-func (n *node) applyMembershipState(m protos.MembershipUpdate) error {
+func (n *node) proposeAndWait(ctx context.Context, proposal *protos.GroupProposal) error {
+	if n.Raft() == nil {
+		return x.Errorf("Raft isn't initialized yet.")
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	che := make(chan error, 1)
+	pctx := proposalCtx{
+		ch:  che,
+		ctx: ctx,
+	}
+	for {
+		id := rand.Uint32()
+		if n.props.Store(id, pctx) {
+			break
+		}
+	}
+	data, err := proposal.Marshal()
+	if err != nil {
+		return err
+	}
+
+	// Propose the change.
+	if err := n.Raft().Propose(ctx, data); err != nil {
+		return x.Wrapf(err, "While proposing")
+	}
+	// Wait for proposal to be applied.
+	return <-che
+}
+
+func (n *node) applyMembershipState(m protos.MembershipState) error {
 	srv := n.server
 	srv.Lock()
 	defer srv.Unlock()
+	srv.state = &m
 
-	srv.groupMap = make(map[uint32]*Group)
-	for _, member := range m.Members {
-		if srv.hasMember(member) {
-			// This seems like a duplicate.
-			return errors.New("Duplicate member found")
-		}
-		group, has := srv.groupMap[member.GroupId]
-		if !has {
-			group = &Group{idMap: make(map[uint64]protos.Membership)}
-			srv.groupMap[member.GroupId] = group
-		}
-		group.idMap[member.Id] = *member
-	}
-	for _, tablet := range m.Tablets {
-		group, has := srv.groupMap[tablet.GroupId]
-		if !has {
-			return errors.New("Unassigned tablet found")
-		}
-		for _, t := range group.tablets {
-			if t.Predicate == tablet.Predicate {
-				return errors.New("Duplicate tablet found")
-			}
-		}
-		group.tablets = append(group.tablets, *tablet)
-		group.size += int64(tablet.Size())
-	}
+	// srv.groupMap = make(map[uint32]*Group)
+	// for _, member := range m.Members {
+	// 	if srv.hasMember(member) {
+	// 		// This seems like a duplicate.
+	// 		return errors.New("Duplicate member found")
+	// 	}
+	// 	group, has := srv.groupMap[member.GroupId]
+	// 	if !has {
+	// 		group = &Group{idMap: make(map[uint64]protos.Member)}
+	// 		srv.groupMap[member.GroupId] = group
+	// 	}
+	// 	group.idMap[member.Id] = *member
+	// }
+	// for _, tablet := range m.Tablets {
+	// 	group, has := srv.groupMap[tablet.GroupId]
+	// 	if !has {
+	// 		return errors.New("Unassigned tablet found")
+	// 	}
+	// 	for _, t := range group.tablets {
+	// 		if t.Predicate == tablet.Predicate {
+	// 			return errors.New("Duplicate tablet found")
+	// 		}
+	// 	}
+	// 	group.tablets = append(group.tablets, *tablet)
+	// 	group.size += int64(tablet.Size())
+	// }
 	return nil
 }
 
@@ -143,7 +210,7 @@ func (n *node) Run() {
 			n.SaveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				var state protos.MembershipUpdate
+				var state protos.MembershipState
 				x.Check(state.Unmarshal(rd.Snapshot.Data))
 				x.Check(n.applyMembershipState(state))
 			}

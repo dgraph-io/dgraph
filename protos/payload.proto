@@ -50,9 +50,9 @@ service Raft {
 }
 
 service Zero {
-  rpc Connect (Membership) returns (MembershipUpdate) {}
-  rpc ShouldServe (MembershipQuery) returns (Tablet) {}
-	// rpc Update (MembershipUpdate)  returns (MembershipUpdate) {}
+  rpc Connect (Member) returns (MembershipState) {}
+	rpc Update (Member)  returns (MembershipState) {}
+  rpc ShouldServe (Tablet) returns (Tablet) {}
 }
 
 service Worker {

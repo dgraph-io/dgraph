@@ -73,17 +73,17 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000))
 
-	st.zero = &Server{NumReplicas: *numReplicas}
-	protos.RegisterZeroServer(s, st.zero)
-
 	if len(*myAddr) == 0 {
 		*myAddr = fmt.Sprintf("localhost:%d", *port)
 	}
 	rc := protos.RaftContext{Id: *raftId, Addr: *myAddr, Group: 0}
 	m := conn.NewNode(&rc)
-	st.node = &node{Node: m, server: st.zero, ctx: context.Background()}
-
 	st.rs = &conn.RaftServer{Node: m}
+
+	st.node = &node{Node: m, server: st.zero, ctx: context.Background()}
+	st.zero = &Server{NumReplicas: *numReplicas, Node: st.node}
+
+	protos.RegisterZeroServer(s, st.zero)
 	protos.RegisterRaftServer(s, st.rs)
 
 	err := s.Serve(l)
