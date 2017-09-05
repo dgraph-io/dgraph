@@ -782,8 +782,7 @@ func (n *node) Run() {
 	firstRun := true
 	var leader bool
 	// See also our configuration of HeartbeatTick and ElectionTick.
-	const raftTickRate = 20 * time.Millisecond
-	ticker := time.NewTicker(raftTickRate)
+	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	rcBytes, err := n.raftContext.Marshal()
 	x.Check(err)
