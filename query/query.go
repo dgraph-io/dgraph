@@ -1556,8 +1556,6 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 				lists = append(lists, l.Uids)
 			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.Vals) != 0 {
 				// This should happen only once.
-				// TODO: This restricts us to use only one value var per subgraph, ideally
-				// we can merge the map.
 				sg.Params.uidToVal = l.Vals
 			} else if len(l.Vals) != 0 && (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) {
 				// Derive the UID list from value var.
