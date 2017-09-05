@@ -755,6 +755,9 @@ func (n *node) runReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
 			// it's our duty to continue until `stop` is triggered) or raft.ErrStopped (which we
 			// must ignore for the same reason).
 			_ = n.Raft().ReadIndex(n.ctx, activeRctx[:])
+			// To see if the ReadIndex request succeeds, we need to use a timeout and wait for a
+			// successful response.  If we don't see one, the raft leader wasn't configured, or the
+			// raft leader didn't respond.
 			timer := time.NewTimer(10 * time.Millisecond)
 		again:
 			select {
