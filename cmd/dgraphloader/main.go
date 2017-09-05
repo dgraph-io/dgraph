@@ -164,6 +164,9 @@ func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) 
 		}
 		err = readLine(bufReader, &buf)
 		if err != nil {
+			if err != io.EOF {
+				return err
+			}
 			break
 		}
 		line++
@@ -177,7 +180,7 @@ func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) 
 			buf.Reset()
 			continue
 		} else if err != nil {
-			log.Fatalf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
+			return fmt.Errorf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
 		}
 		batchSize++
 		buf.Reset()
@@ -193,18 +196,15 @@ func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) 
 		r.Set(client.NewEdge(nq))
 		if batchSize >= *numRdf {
 			if err = dgraphClient.BatchSetWithMark(r, absPath, line); err != nil {
-				return x.Wrapf(err, "While adding mutation to batch: ")
+				return err
 			}
 			batchSize = 0
 			r = new(client.Req)
 		}
 	}
-	if err != io.EOF {
-		x.Checkf(err, "Error while reading file")
-	}
 	if batchSize > 0 {
 		if err = dgraphClient.BatchSetWithMark(r, absPath, line); err != nil {
-			return x.Wrapf(err, "While adding mutation to batch: ")
+			return err
 		}
 	}
 	return nil
