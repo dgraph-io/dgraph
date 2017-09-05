@@ -11,7 +11,7 @@ type progress struct {
 	lastRDFCount int64
 	start        time.Time
 
-	// shotdown is a uni-directional channel used to manage the stopping of the
+	// shotdown is a bidirectional channel used to manage the stopping of the
 	// report goroutine. It handles both the request to stop the report
 	// goroutine, as well as the message back to say that the goroutine has
 	// stopped. The channel MUST be unbuffered for this to work.
