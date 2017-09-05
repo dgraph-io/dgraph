@@ -493,7 +493,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 			for _, tv := range pc.valueMatrix[idx].Values {
 				// if conversion not possible, we ignore it in the result.
-				sv, convErr := convertWithBestEffort(tv, pc.Attr)
+				sv, convErr := convertWithBestEffort(tv)
 				if convErr == ErrEmptyVal {
 					continue
 				} else if convErr != nil {
@@ -528,11 +528,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 // convert from task.Val to types.Value, based on schema appropriate type
 // is already set in protos.Value
-func convertWithBestEffort(tv *protos.TaskValue, attr string) (types.Val, error) {
+func convertWithBestEffort(tv *protos.TaskValue) (types.Val, error) {
 	// value would be in binary format with appropriate type
 	v, _ := getValue(tv)
 	if !v.Tid.IsScalar() {
-		return v, x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
+		return v, x.Errorf("Leaf predicate:'%v' must be a scalar.")
 	}
 	if bytes.Equal(tv.Val, nil) {
 		return v, ErrEmptyVal
@@ -1420,7 +1420,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			path: sgPath,
 		}
 		for idx, uid := range sg.SrcUIDs.Uids {
-			val, err := convertWithBestEffort(sg.valueMatrix[idx].Values[0], sg.Attr)
+			val, err := convertWithBestEffort(sg.valueMatrix[idx].Values[0])
 			if err != nil {
 				continue
 			}
@@ -1919,11 +1919,14 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	sg.updateUidMatrix()
 
+	// TODO(pawan) - Decide ordering facet/other orders.
 	// See if we need to apply order based on facet.
 	if len(sg.Params.FacetOrder) != 0 {
 		return sg.sortAndPaginateUsingFacet(ctx)
 	}
+
 	for _, it := range sg.Params.NeedsVar {
+		// TODO(pawan) - Change this later when you have multi sorting in place.
 		if len(sg.Params.Order) > 0 && it.Name == sg.Params.Order[0].Attr && (it.Typ == gql.VALUE_VAR) {
 			// If the Order name is same as var name and it's a value variable, we sort using that variable.
 			return sg.sortAndPaginateUsingVar(ctx)
@@ -1935,24 +1938,70 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		sg.Params.Count = 1000
 	}
 
-	sort := &protos.SortMessage{
-		Attr:      sg.Params.Order[0].Attr,
-		Langs:     sg.Params.Langs,
-		UidMatrix: sg.uidMatrix,
-		Offset:    int32(sg.Params.Offset),
-		Count:     int32(sg.Params.Count),
-		Desc:      sg.Params.Order[0].Desc,
-	}
-	result, err := worker.SortOverNetwork(ctx, sort)
-	if err != nil {
-		return err
+	for idx, order := range sg.Params.Order {
+		// TODO(pawan) - Run sorts in parallel.
+
+		if idx == 0 {
+			// For first sort, we want to actually sort over network
+			sort := &protos.SortMessage{
+				Attr:      order.Attr,
+				Langs:     sg.Params.Langs,
+				UidMatrix: sg.uidMatrix,
+				Offset:    int32(sg.Params.Offset),
+				Count:     int32(sg.Params.Count),
+				Desc:      order.Desc,
+				Multiple:  len(sg.Params.Order) > 1,
+			}
+			result, err := worker.SortOverNetwork(ctx, sort)
+			if err != nil {
+				return err
+			}
+
+			x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))
+			sg.uidMatrix = result.UidMatrix
+			// Update the destUids as we might have removed some UIDs.
+			sg.updateDestUids(ctx)
+			continue
+		}
+
+		// For rest of them we just fetch the values and do a stable sort.
+		temp := new(SubGraph)
+		temp.Attr = order.Attr
+		// Some ids might have been removed.
+		temp.SrcUIDs = sg.DestUIDs
+		taskQuery := createTaskQuery(temp)
+		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+		if err != nil {
+			return err
+		}
+
+		x.AssertTrue(len(result.ValueMatrix) == len(sg.DestUIDs.Uids))
+		vals := make([]types.Val, 0, len(result.ValueMatrix))
+		for _, ul := range sg.uidMatrix {
+			uids := &protos.List{ul.Uids[:0]}
+			vals := vals[:0]
+			for _, uid := range ul.Uids {
+				uidx := algo.IndexOf(temp.SrcUIDs, uid)
+				v := result.ValueMatrix[uidx].Values[0]
+				if bytes.Equal(v.Val, x.Nilbyte) {
+					continue
+				}
+				uids.Uids = append(uids.Uids, uid)
+
+				val, err := convertWithBestEffort(v)
+				if err != nil {
+					return err
+				}
+				vals = append(vals, types.Val{
+					Tid:   types.TypeID(v.ValType),
+					Value: val,
+				})
+			}
+			types.SortStable(vals, uids, order.Desc)
+			ul = uids
+		}
 	}
 
-	x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))
-	sg.uidMatrix = result.UidMatrix
-
-	// Update the destUids as we might have removed some UIDs.
-	sg.updateDestUids(ctx)
 	return nil
 }
 

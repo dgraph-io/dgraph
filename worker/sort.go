@@ -103,6 +103,7 @@ var (
 )
 
 func sortWithoutIndex(ctx context.Context, ts *protos.SortMessage) (*protos.SortResult, error) {
+	// TODO - Handle multisort here.
 	n := len(ts.UidMatrix)
 	r := new(protos.SortResult)
 	// Sort and paginate directly as it'd be expensive to iterate over the index which
@@ -122,7 +123,7 @@ func sortWithoutIndex(ctx context.Context, ts *protos.SortMessage) (*protos.Sort
 			if err := sortByValue(ctx, ts, tempList, sType); err != nil {
 				return r, err
 			}
-			paginate(int(ts.Offset), int(ts.Count), tempList)
+			paginate(ts, tempList)
 			r.UidMatrix = append(r.UidMatrix, tempList)
 		}
 	}
@@ -361,7 +362,9 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 		}
 
 		// n is number of elements to copy from result to out.
-		if count > 0 {
+		// In case of multiple sort, we dont wan't to apply the count and copy all uids for the
+		// current bucket.
+		if count > 0 && !ts.Multiple {
 			slack := count - len(il.ulist.Uids)
 			if slack < n {
 				n = slack
@@ -387,7 +390,9 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 	return errDone
 }
 
-func paginate(offset, count int, dest *protos.List) {
+func paginate(ts *protos.SortMessage, dest *protos.List) {
+	count := int(ts.Count)
+	offset := int(ts.Offset)
 	start, end := x.PageRange(count, offset, len(dest.Uids))
 	dest.Uids = dest.Uids[start:end]
 }

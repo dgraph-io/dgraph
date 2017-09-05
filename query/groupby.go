@@ -144,7 +144,7 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 			continue
 		}
 		v := child.valueMatrix[idx].Values[0]
-		val, err := convertWithBestEffort(v, child.Attr)
+		val, err := convertWithBestEffort(v)
 		if err != nil {
 			continue
 		}

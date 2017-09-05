@@ -68,6 +68,7 @@ message SortMessage {
 	int32 count = 4;   // Return this many elements.
 	int32 offset = 5;  // Skip this many elements.
 	bool desc = 6;
+  bool multiple =7; // If the query had multiple sorts, we truncate >= count elements.
 }
 
 message SortResult {

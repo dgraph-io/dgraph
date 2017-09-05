@@ -65,6 +65,28 @@ func (s byValue) Less(i, j int) bool {
 	return false
 }
 
+func SortStable(v []Val, ul *protos.List, desc bool) error {
+	if len(v) == 0 {
+		return nil
+	}
+	typ := v[0].Tid
+	switch typ {
+	case DateTimeID, IntID, FloatID, StringID, DefaultID:
+		// Don't do anything, we can sort values of this type.
+	default:
+		return fmt.Errorf("Value of type: %s isn't sortable.", typ.Name())
+	}
+
+	var toBeSorted sort.Interface
+	b := sortBase{v, ul, nil}
+	toBeSorted = byValue{b}
+	if desc {
+		toBeSorted = sort.Reverse(toBeSorted)
+	}
+	sort.Stable(toBeSorted)
+	return nil
+}
+
 // Sort sorts the given array in-place.
 func SortWithFacet(v []Val, ul *protos.List, l []*protos.Facets, desc bool) error {
 	if len(v) == 0 {
