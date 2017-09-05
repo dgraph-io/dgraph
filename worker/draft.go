@@ -798,10 +798,14 @@ func (n *node) AmLeader() bool {
 func waitLinearizableRead(ctx context.Context, gid uint32) error {
 	n := groups().Node(gid)
 	replyCh := n.readIndex()
-	index := <-replyCh
-	if index == raft.None {
-		return x.Errorf("cannot get linearized read (time expired or no configured leader)")
+	select {
+	case index := <-replyCh:
+		if index == raft.None {
+			return x.Errorf("cannot get linearized read (time expired or no configured leader)")
+		}
+		n.Applied.WaitForMark(index)
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	n.Applied.WaitForMark(index)
-	return nil
 }
