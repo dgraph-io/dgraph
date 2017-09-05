@@ -402,7 +402,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 
 type linReadReq struct {
 	// A one-shot chan which we send a raft index upon
-	readIndexCh chan<- uint64
+	indexCh chan<- uint64
 }
 
 func (n *node) readIndex() chan uint64 {
@@ -456,11 +456,11 @@ func runReadIndexLoop(
 				}
 				index := rs.Index
 				for _, req := range requests {
-					req.readIndexCh <- index
+					req.indexCh <- index
 				}
 			case <-timer.C:
 				for _, req := range requests {
-					req.readIndexCh <- raft.None
+					req.indexCh <- raft.None
 				}
 			}
 			requests = requests[:0]
