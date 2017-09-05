@@ -69,7 +69,9 @@ func (ld *loader) run() {
 	x.Check(err)
 	defer func() { x.Check(os.RemoveAll(tmpPostingsDir)) }()
 
+	var numFlatFiles int
 	go func() {
+		numFlatFiles = writePostings(tmpPostingsDir, ld.postingsCh, ld.prog)
 		writePostings(tmpPostingsDir, ld.postingsCh, ld.prog)
 		postingWriterWg.Done()
 	}()
@@ -105,5 +107,13 @@ func (ld *loader) run() {
 	mapperWg.Wait()
 	close(ld.postingsCh)
 	postingWriterWg.Wait()
+
+	flatPostingChs := make([]chan *protos.FlatPosting, numFlatFiles)
+	for i := 0; i < numFlatFiles; i++ {
+		flatPostingChs[i] = make(chan *protos.FlatPosting, 1<<10)
+		go readFlatFile(tmpPostingsDir, i, flatPostingChs[i])
+	}
+	shuffleFlatFiles(tmpPostingsDir, flatPostingChs)
+
 	ld.prog.endSummary()
 }
