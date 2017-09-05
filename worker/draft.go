@@ -19,7 +19,6 @@ package worker
 
 import (
 	"encoding/binary"
-	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -107,7 +106,7 @@ func (p *proposals) Done(pid uint32, err error) {
 	// We emit one pending watermark as soon as we read from rd.committedentries.
 	// Since the tasks are executed in goroutines we need on guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
-	pd.n.applied.Done(pd.index)
+	pd.n.Applied.Done(pd.index)
 	posting.SyncMarkFor(pd.n.gid).Done(pd.index)
 }
 
@@ -130,11 +129,7 @@ type node struct {
 	props   proposals
 
 	canCampaign bool
-	// applied is used to keep track of the applied RAFT proposals.
-	// The stages are proposed -> committed (accepted by cluster) ->
-	// applied (to PL) -> synced (to RocksDB).
-	applied x.WaterMark
-	sch     *scheduler
+	sch         *scheduler
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
@@ -145,26 +140,24 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		Group: gid,
 		Id:    id,
 	}
-
 	m := conn.NewNode(rc)
-	n := &node{Node: m}
-
-	n.ctx = context.Background()
-	n.gid = gid
-	// processConfChange etc are not throttled so some extra delta, so that we don't
-	// block tick when applyCh is full
-	n.applyCh = make(chan raftpb.Entry, Config.NumPendingProposals+1000)
-	n.props = proposals{
+	props := proposals{
 		ids: make(map[uint32]*proposalCtx),
 	}
-	n.stop = make(chan struct{})
-	n.done = make(chan struct{})
 
-	n.sch = new(scheduler)
+	n := &node{
+		Node: m,
+		ctx:  context.Background(),
+		gid:  gid,
+		// processConfChange etc are not throttled so some extra delta, so that we don't
+		// block tick when applyCh is full
+		applyCh: make(chan raftpb.Entry, Config.NumPendingProposals+1000),
+		props:   props,
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+		sch:     new(scheduler),
+	}
 	n.sch.init(n)
-	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed: Group %d", n.gid)}
-	n.applied.Init()
-
 	return n
 }
 
@@ -328,14 +321,14 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
-	n.applied.Done(e.Index)
+	n.Applied.Done(e.Index)
 	posting.SyncMarkFor(n.gid).Done(e.Index)
 }
 
 func (n *node) processApplyCh() {
 	for e := range n.applyCh {
 		if len(e.Data) == 0 {
-			n.applied.Done(e.Index)
+			n.Applied.Done(e.Index)
 			posting.SyncMarkFor(n.gid).Done(e.Index)
 			continue
 		}
@@ -474,7 +467,7 @@ func (n *node) Run() {
 				// then doneUntil would be set as 4 as soon as Mark{4,true} is done and before
 				// Mark{3, false} is emitted. So it's safer to emit watermarks as soon as
 				// possible sequentially
-				n.applied.Begin(entry.Index)
+				n.Applied.Begin(entry.Index)
 				posting.SyncMarkFor(n.gid).Begin(entry.Index)
 
 				if !leader && entry.Type == raftpb.EntryConfChange {
@@ -636,7 +629,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 		}
 		term = sp.Metadata.Term
 		idx = sp.Metadata.Index
-		n.applied.SetDoneUntil(idx)
+		n.Applied.SetDoneUntil(idx)
 		posting.SyncMarkFor(n.gid).SetDoneUntil(idx)
 	}
 

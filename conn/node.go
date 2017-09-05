@@ -113,6 +113,11 @@ type Node struct {
 	RaftContext *protos.RaftContext
 	Store       *raft.MemoryStorage
 	Wal         *raftwal.Wal
+
+	// applied is used to keep track of the applied RAFT proposals.
+	// The stages are proposed -> committed (accepted by cluster) ->
+	// applied (to PL) -> synced (to RocksDB).
+	Applied x.WaterMark
 }
 
 func NewNode(rc *protos.RaftContext) *Node {
@@ -137,7 +142,9 @@ func NewNode(rc *protos.RaftContext) *Node {
 		peers:       peers,
 		RaftContext: rc,
 		messages:    make(chan sendmsg, 100),
+		Applied:     x.WaterMark{Name: fmt.Sprintf("Applied watermark")},
 	}
+	n.Applied.Init()
 	// TODO: n_ = n is a hack. We should properly init node, and make it part of the server struct.
 	// This can happen once we get rid of groups.
 	n_ = n
@@ -352,6 +359,7 @@ func (n *Node) AddToCluster(ctx context.Context, pid uint64) error {
 	})
 }
 
+// TODO: Get rid of this in the upcoming changes.
 var n_ *Node
 
 func (w *RaftServer) GetNode() *Node {
