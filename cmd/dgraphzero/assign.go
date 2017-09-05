@@ -15,13 +15,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package worker
+package main
 
 import (
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
+	"errors"
 
-	"github.com/dgraph-io/dgraph/conn"
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -31,12 +31,28 @@ var (
 	emptyAssignedIds protos.AssignedIds
 )
 
+const (
+	leaseBandwidth = uint64(10000)
+)
+
+func (s *Server) updateNextLeaseId() {
+	s.Lock()
+	defer s.Unlock()
+	s.nextLeaseId = s.state.MaxLeaseId + 1
+}
+
+func (s *Server) maxLeaseId() uint64 {
+	s.RLock()
+	defer s.RUnlock()
+	return s.state.MaxLeaseId
+}
+
 // assignUids returns a byte slice containing uids.
 // This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
 // so we can tackle any collisions that might happen with the leasemanager
 // In essence, we just want one server to be handing out new uids.
-func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	node := groups().Node(leaseGid)
+func (s *Server) assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+	node := s.Node
 	// TODO: Fix when we move to linearizable reads, need to check if we are the leader, might be
 	// based on leader leases. If this node gets partitioned and unless checkquorum is enabled, this
 	// node would still think that it's the leader.
@@ -49,65 +65,50 @@ func assignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, erro
 		return &emptyAssignedIds, x.Errorf("Nothing to be marked or assigned")
 	}
 
+	s.leaseLock.Lock()
+	defer s.leaseLock.Unlock()
+
+	howMany := leaseBandwidth
+	if num.Val > leaseBandwidth {
+		howMany = num.Val + leaseBandwidth
+	}
+
+	if s.nextLeaseId == 0 {
+		return nil, errors.New("Server not initialized.")
+	}
+
+	maxLease := s.maxLeaseId()
+	available := maxLease - s.nextLeaseId + 1
+
+	if available < num.Val {
+		var proposal protos.ZeroProposal
+		proposal.MaxLeaseId = maxLease + howMany
+		if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
+			return nil, err
+		}
+		x.AssertTrue(s.maxLeaseId() == proposal.MaxLeaseId)
+	}
+
 	out := &protos.AssignedIds{}
-	startId, err := leaseMgr().assignNewUids(ctx, num.Val)
-	if err != nil {
-		return out, err
-	}
-	out.StartId = startId
-	out.EndId = startId + num.Val - 1
+	out.StartId = s.nextLeaseId
+	out.EndId = out.StartId + num.Val - 1
+	s.nextLeaseId = out.EndId + 1
 	return out, nil
-}
-
-// AssignUidsOverNetwork assigns new uids and writes them to the umap.
-func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-	n := groups().Node(leaseGid)
-
-	// This is useful for testing, when the membership information doesn't
-	// have chance to propagate
-	if n != nil && n.AmLeader() {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Calling assignUids as I'm leader of group: %d", leaseGid)
-		}
-		return assignUids(ctx, num)
-	}
-	lid, addr := groups().Leader(leaseGid)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Not leader of group: %d. Sending to: %d", leaseGid, lid)
-	}
-	p, err := conn.Get().Get(addr)
-	if err != nil {
-		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("Error while retrieving connection: %+v", err)
-		}
-		return &emptyAssignedIds, err
-	}
-	defer conn.Get().Release(p)
-	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Calling AssignUids for group: %d, addr: %s", leaseGid, addr)
-	}
-
-	conn := p.Get()
-	c := protos.NewWorkerClient(conn)
-	return c.AssignUids(ctx, num)
 }
 
 // AssignUids is used to assign new uids by communicating with the leader of the RAFT group
 // responsible for handing out uids.
-func (w *grpcWorker) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}
 
-	if !groups().ServesGroup(leaseGid) {
-		return &emptyAssignedIds, x.Errorf("groupId: %v. GetOrAssign. We shouldn't be getting this req", leaseGid)
-	}
-
+	// TODO: Forward it to the leader, if I'm not the leader.
 	reply := &emptyAssignedIds
 	c := make(chan error, 1)
 	go func() {
 		var err error
-		reply, err = assignUids(ctx, num)
+		reply, err = s.assignUids(ctx, num)
 		c <- err
 	}()
 

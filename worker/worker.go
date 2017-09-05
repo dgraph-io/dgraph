@@ -29,7 +29,6 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -40,14 +39,12 @@ import (
 var (
 	pstore           *badger.KV
 	workerServer     *grpc.Server
-	leaseGid         uint32
+	leasePred        string
 	pendingProposals chan struct{}
 	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
 	// so that the nodes which have lagged behind leader can just replay entries instead of
 	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
 	// are taken
-
-	emptyMembershipUpdate protos.MembershipUpdate
 )
 
 func workerPort() int {
@@ -57,7 +54,6 @@ func workerPort() int {
 func Init(ps *badger.KV) {
 	pstore = ps
 	// needs to be initialized after group config
-	leaseGid = group.BelongsTo("_lease_")
 	pendingProposals = make(chan struct{}, Config.NumPendingProposals)
 	if !Config.InMemoryComm {
 		workerServer = grpc.NewServer(
@@ -85,12 +81,6 @@ func (w *grpcWorker) addIfNotPresent(reqid uint64) bool {
 	}
 	w.reqids[reqid] = true
 	return true
-}
-
-// Hello rpc call is used to check connection with other workers after worker
-// tcp server for this instance starts.
-func (w *grpcWorker) Echo(ctx context.Context, in *protos.Payload) (*protos.Payload, error) {
-	return &protos.Payload{Data: in.Data}, nil
 }
 
 // RunServer initializes a tcp server on port which listens to requests from

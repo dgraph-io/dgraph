@@ -49,8 +49,11 @@
 		SortMessage
 		SortResult
 		RaftContext
-		Membership
-		MembershipUpdate
+		Member
+		Group
+		ZeroProposal
+		MembershipState
+		Tablet
 		DirectedEdge
 		Mutations
 		Proposal

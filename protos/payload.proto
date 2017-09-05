@@ -42,23 +42,27 @@ message ExportPayload {
 }
 
 service Raft {
+	// Connection testing RPC.
+	rpc Echo (Payload)             returns (Payload) {}
+
 	rpc RaftMessage (Payload)     returns (Payload) {}
 	rpc JoinCluster (RaftContext) returns (Payload) {}
 }
 
-service Worker {
-	// Connection testing RPC.
-	rpc Echo (Payload)             returns (Payload) {}
-
-	// Data serving RPCs.
+service Zero {
+  rpc Connect (Member) returns (MembershipState) {}
+	rpc Update (Group)  returns (MembershipState) {}
+  rpc ShouldServe (Tablet) returns (Tablet) {}
 	rpc AssignUids (Num)                 returns (AssignedIds) {}
+}
+
+service Worker {
+	// Data serving RPCs.
 	rpc Mutate (Mutations)               returns (Payload) {}
 	rpc ServeTask (Query)                returns (Result) {}
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
 	rpc Sort (SortMessage)                      returns (SortResult) {}
 	rpc Schema (SchemaRequest)                  returns (SchemaResult) {}
 
-	// RAFT serving RPCs.
-	rpc UpdateMembership (MembershipUpdate)  returns (MembershipUpdate) {}
 	rpc Export (ExportPayload)                    returns (ExportPayload) {}
 }

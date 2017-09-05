@@ -299,19 +299,6 @@ func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.Schema
 	return nil
 }
 
-func (n *node) processMembership(index uint64, pid uint32, mm *protos.Membership) error {
-	x.AssertTrue(n.gid == 0)
-	x.ActiveMutations.Add(1)
-	defer x.ActiveMutations.Add(-1)
-
-	n.props.IncRef(pid, index, 1)
-	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
-		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
-	groups().applyMembershipUpdate(index, mm)
-	n.props.Done(pid, nil)
-	return nil
-}
-
 const numPendingMutations = 10000
 
 func (n *node) applyConfChange(e raftpb.Entry) {
@@ -363,7 +350,7 @@ func (n *node) processApplyCh() {
 		if proposal.Mutations != nil {
 			n.sch.schedule(proposal, e.Index)
 		} else if proposal.Membership != nil {
-			go n.processMembership(e.Index, proposal.Id, proposal.Membership)
+			x.Fatalf("Dgraph does not handle membership proposals anymore.")
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
@@ -509,13 +496,7 @@ func (n *node) Run() {
 			}
 
 			if rd.SoftState != nil {
-				if rd.RaftState == raft.StateFollower && leader {
-					// stepped down as leader do a sync membership immediately
-					go groups().syncMemberships()
-				} else if rd.RaftState == raft.StateLeader && !leader {
-					leaseMgr().resetLease(n.gid)
-					go groups().syncMemberships()
-				}
+				// TODO: Consider if we need to quickly update membership info.
 				leader = rd.RaftState == raft.StateLeader
 			}
 			if leader {
@@ -701,9 +682,9 @@ func (n *node) joinPeers() {
 	// _, err := populateShard(n.ctx, pool, n.gid)
 	// x.Checkf(err, "Error while populating shard")
 
-	conn := pool.Get()
+	gconn := pool.Get()
 
-	c := protos.NewRaftClient(conn)
+	c := protos.NewRaftClient(gconn)
 	x.Printf("Calling JoinCluster")
 	_, err = c.JoinCluster(n.ctx, n.RaftContext)
 	// TODO: This should keep on indefinitely trying to join the cluster, instead of crashing.
@@ -711,57 +692,12 @@ func (n *node) joinPeers() {
 	x.Printf("Done with JoinCluster call\n")
 }
 
-func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
-	n.Wal = wal
-
-	var sp raftpb.Snapshot
-	sp, rerr = wal.Snapshot(n.gid)
-	if rerr != nil {
-		return
-	}
-	var term, idx uint64
-	if !raft.IsEmptySnap(sp) {
-		x.Printf("Found Snapshot: %+v\n", sp)
-		restart = true
-		if rerr = n.Store.ApplySnapshot(sp); rerr != nil {
-			return
-		}
-		term = sp.Metadata.Term
-		idx = sp.Metadata.Index
-		n.Applied.SetDoneUntil(idx)
-		posting.SyncMarkFor(n.gid).SetDoneUntil(idx)
-	}
-
-	var hd raftpb.HardState
-	hd, rerr = wal.HardState(n.gid)
-	if rerr != nil {
-		return
-	}
-	if !raft.IsEmptyHardState(hd) {
-		x.Printf("Found hardstate: %+v\n", hd)
-		restart = true
-		if rerr = n.Store.SetHardState(hd); rerr != nil {
-			return
-		}
-	}
-
-	var es []raftpb.Entry
-	es, rerr = wal.Entries(n.gid, term, idx)
-	if rerr != nil {
-		return
-	}
-	x.Printf("Group %d found %d entries\n", n.gid, len(es))
-	if len(es) > 0 {
-		restart = true
-	}
-	rerr = n.Store.Append(es)
-	return
-}
-
 // InitAndStartNode gets called after having at least one membership sync with the cluster.
 func (n *node) InitAndStartNode(wal *raftwal.Wal) {
-	restart, err := n.initFromWal(wal)
+	idx, restart, err := n.InitFromWal(wal)
 	x.Check(err)
+	n.Applied.SetDoneUntil(idx)
+	posting.SyncMarkFor(n.gid).SetDoneUntil(idx)
 
 	if restart {
 		x.Printf("Restarting node for group: %d\n", n.gid)
@@ -801,7 +737,7 @@ func (n *node) AmLeader() bool {
 }
 
 func waitLinearizableRead(ctx context.Context, gid uint32) error {
-	n := groups().Node(gid)
+	n := groups().Node
 	replyCh, err := n.readIndex(ctx)
 	if err != nil {
 		return err
