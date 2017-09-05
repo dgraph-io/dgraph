@@ -983,7 +983,7 @@ func toFacetsFilter(gft *gql.FilterTree) (*protos.FilterTree, error) {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph) *protos.Query {
+func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 	attr := sg.Attr
 	// Might be safer than just checking first byte due to i18n
 	reverse := strings.HasPrefix(attr, "~")
@@ -998,8 +998,9 @@ func createTaskQuery(sg *SubGraph) *protos.Query {
 		srcFunc.IsCount = sg.SrcFunc.IsCount
 		for _, arg := range sg.SrcFunc.Args {
 			srcFunc.Args = append(srcFunc.Args, arg.Value)
-			// TODO: Probably don't assert
-			x.AssertTrue(!arg.IsValueVar)
+			if arg.IsValueVar {
+				return nil, x.Errorf("unsupported use of value var")
+			}
 		}
 	}
 	out := &protos.Query{
@@ -1015,7 +1016,7 @@ func createTaskQuery(sg *SubGraph) *protos.Query {
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
 	}
-	return out
+	return out, nil
 }
 
 type varValue struct {
@@ -1549,11 +1550,14 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	for _, v := range sg.Params.NeedsVar {
 		if l, ok := mp[v.Name]; ok {
 			if (v.Typ == gql.ANY_VAR || v.Typ == gql.LIST_VAR) && l.strList != nil {
+				// TODO: If we support value vars for list type then this needn't be true
 				sg.ExpandPreds = l.strList
 			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) && l.Uids != nil {
 				lists = append(lists, l.Uids)
 			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.Vals) != 0 {
 				// This should happen only once.
+				// TODO: This restricts us to use only one value var per subgraph, ideally
+				// we can merge the map.
 				sg.Params.uidToVal = l.Vals
 			} else if len(l.Vals) != 0 && (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) {
 				// Derive the UID list from value var.
@@ -1570,8 +1574,39 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			}
 		}
 	}
+	if err := sg.replaceVarInFunc(); err != nil {
+		return err
+	}
 	lists = append(lists, sg.DestUIDs)
 	sg.DestUIDs = algo.MergeSorted(lists)
+	return nil
+}
+
+// eq(score,val(myscore)), we disallow vars in facets filter so we don't need to worry about
+// that as of now.
+func (sg *SubGraph) replaceVarInFunc() error {
+	// Attr would be set to val if the query is of type eq(val(myscore), 35)
+	if sg.SrcFunc != nil && sg.Attr != "val" {
+		var args []gql.Arg
+		// Iterate over the args and replace value args with their values
+		for _, arg := range sg.SrcFunc.Args {
+			if arg.IsValueVar {
+				if len(sg.Params.uidToVal) == 0 {
+					return x.Errorf("No value found for value variable %q", arg.Value)
+				}
+				for _, v := range sg.Params.uidToVal {
+					data := types.ValueForType(types.StringID)
+					if err := types.Marshal(v, &data); err != nil {
+						return err
+					}
+					args = append(args, gql.Arg{Value: data.Value.(string)})
+				}
+				continue
+			}
+			args = append(args, arg)
+		}
+		sg.SrcFunc.Args = args
+	}
 	return nil
 }
 
@@ -1691,7 +1726,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 		} else {
-			taskQuery := createTaskQuery(sg)
+			taskQuery, err := createTaskQuery(sg)
+			if err != nil {
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.LazyPrintf("Error while processing task: %+v", err)
+				}
+				rch <- err
+				return
+			}
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 			if err != nil {
 				if tr, ok := trace.FromContext(ctx); ok {
@@ -2144,7 +2186,10 @@ func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.ValueL
 	temp := new(SubGraph)
 	temp.Attr = "_predicate_"
 	temp.SrcUIDs = uids
-	taskQuery := createTaskQuery(temp)
+	taskQuery, err := createTaskQuery(temp)
+	if err != nil {
+		return nil, err
+	}
 	result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 	if err != nil {
 		return nil, err
