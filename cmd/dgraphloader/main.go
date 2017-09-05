@@ -193,7 +193,7 @@ func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) 
 		r.Set(client.NewEdge(nq))
 		if batchSize >= *numRdf {
 			if err = dgraphClient.BatchSetWithMark(r, absPath, line); err != nil {
-				log.Fatal("While adding mutation to batch: ", err)
+				return x.Wrapf(err, "While adding mutation to batch: ")
 			}
 			batchSize = 0
 			r = new(client.Req)
@@ -204,7 +204,7 @@ func processFile(ctx context.Context, file string, dgraphClient *client.Dgraph) 
 	}
 	if batchSize > 0 {
 		if err = dgraphClient.BatchSetWithMark(r, absPath, line); err != nil {
-			log.Fatal("While adding mutation to batch: ", err)
+			return x.Wrapf(err, "While adding mutation to batch: ")
 		}
 	}
 	return nil
