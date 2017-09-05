@@ -405,10 +405,14 @@ type linReadReq struct {
 	indexCh chan<- uint64
 }
 
-func (n *node) readIndex() chan uint64 {
+func (n *node) readIndex(ctx context.Context) (chan uint64, error) {
 	ch := make(chan uint64, 1)
-	n.requestCh <- linReadReq{ch}
-	return ch
+	select {
+	case n.requestCh <- linReadReq{ch}:
+		return ch, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func (n *node) runReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
@@ -795,13 +799,18 @@ func (n *node) AmLeader() bool {
 
 func waitLinearizableRead(ctx context.Context, gid uint32) error {
 	n := groups().Node(gid)
-	replyCh := n.readIndex()
+	replyCh, err := n.readIndex(ctx)
+	if err != nil {
+		return err
+	}
 	select {
 	case index := <-replyCh:
 		if index == raft.None {
 			return x.Errorf("cannot get linearized read (time expired or no configured leader)")
 		}
-		n.Applied.WaitForMark(index)
+		if err := n.Applied.WaitForMark(ctx, index); err != nil {
+			return err
+		}
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
