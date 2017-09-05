@@ -21,27 +21,26 @@ type options struct {
 	workers    int
 }
 
-type app struct {
+type loader struct {
 	opt        options
 	prog       *progress
 	rdfCh      chan string
-	workers    []*worker
-	postingsCh chan *protos.DenormalisedPosting
+	mappers    []*mapper
+	postingsCh chan *protos.FlatPosting
 }
 
-func newApp(opt options) *app {
-
+func newLoader(opt options) *loader {
 	schemaBuf, err := ioutil.ReadFile(opt.schemaFile)
 	x.Checkf(err, "Could not load schema.")
 	initialSchema, err := schema.Parse(string(schemaBuf))
 	x.Checkf(err, "Could not parse schema.")
 
-	a := &app{
+	a := &loader{
 		opt:        opt,
 		prog:       newProgress(),
 		rdfCh:      make(chan string, 1<<10),
-		workers:    make([]*worker, opt.workers),
-		postingsCh: make(chan *protos.DenormalisedPosting, 1<<10),
+		mappers:    make([]*mapper, opt.workers),
+		postingsCh: make(chan *protos.FlatPosting, 1<<10),
 	}
 	x.Check(err)
 
@@ -49,36 +48,36 @@ func newApp(opt options) *app {
 	ss := newSchemaStore(initialSchema)
 
 	for i := 0; i < opt.workers; i++ {
-		a.workers[i] = newWorker(a.rdfCh, um, ss, a.prog, a.postingsCh)
+		a.mappers[i] = &mapper{a.rdfCh, um, ss, a.prog, a.postingsCh}
 	}
 	return a
 }
 
-func (a *app) run() {
+func (a *loader) run() {
 
-	go a.prog.reportProgress()
+	go a.prog.report()
 
-	var postingWriterWG sync.WaitGroup
-	postingWriterWG.Add(1)
+	var postingWriterWg sync.WaitGroup
+	postingWriterWg.Add(1)
 	tmpPostingsDir, err := ioutil.TempDir(a.opt.tmpDir, "bulkloader_tmp_posting_")
 	x.Check(err)
 	defer func() { x.Check(os.RemoveAll(tmpPostingsDir)) }()
 	go func() {
-		writeDenormalisedPostings(tmpPostingsDir, a.postingsCh, a.prog)
-		postingWriterWG.Done()
+		writePostings(tmpPostingsDir, a.postingsCh, a.prog)
+		postingWriterWg.Done()
 	}()
 
 	f, err := os.Open(a.opt.rdfFile)
 	x.Checkf(err, "Could not read RDF file.")
 	defer f.Close()
 
-	var workerWG sync.WaitGroup
-	workerWG.Add(len(a.workers))
-	for _, w := range a.workers {
-		w := w
+	var mapperWg sync.WaitGroup
+	mapperWg.Add(len(a.mappers))
+	for _, m := range a.mappers {
+		m := m
 		go func() {
-			w.run()
-			workerWG.Done()
+			m.run()
+			mapperWg.Done()
 		}()
 	}
 
@@ -97,8 +96,8 @@ func (a *app) run() {
 	x.Check(sc.Err())
 
 	close(a.rdfCh)
-	workerWG.Wait()
+	mapperWg.Wait()
 	close(a.postingsCh)
-	postingWriterWG.Wait()
+	postingWriterWg.Wait()
 	a.prog.endSummary()
 }

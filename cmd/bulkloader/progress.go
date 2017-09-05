@@ -11,9 +11,6 @@ type progress struct {
 	lastRDFCount int64
 	start        time.Time
 	shutdown     chan struct{}
-
-	sorting int64
-	writing int64
 }
 
 func newProgress() *progress {
@@ -23,11 +20,11 @@ func newProgress() *progress {
 	}
 }
 
-func (p *progress) reportProgress() {
+func (p *progress) report() {
 	for {
 		select {
 		case <-time.After(time.Second):
-			p.report()
+			p.reportOnce()
 		case <-p.shutdown:
 			p.shutdown <- struct{}{}
 			return
@@ -35,15 +32,13 @@ func (p *progress) reportProgress() {
 	}
 }
 
-func (p *progress) report() {
+func (p *progress) reportOnce() {
 	rdfCount := atomic.LoadInt64(&p.rdfCount)
 	elapsed := time.Since(p.start)
-	fmt.Printf("[%s] [RDF count: %d] [RDFs per second: %d] [sorting: %d] [writing: %d]\n",
+	fmt.Printf("[%s] [RDF count: %d] [RDFs per second: %d]\n",
 		round(elapsed).String(),
 		rdfCount,
 		int(float64(rdfCount)/elapsed.Seconds()),
-		atomic.LoadInt64(&p.sorting),
-		atomic.LoadInt64(&p.writing),
 	)
 	p.lastRDFCount = rdfCount
 }
@@ -53,7 +48,7 @@ func (p *progress) endSummary() {
 	p.shutdown <- struct{}{}
 	<-p.shutdown
 
-	p.report()
+	p.reportOnce()
 
 	total := round(time.Since(p.start))
 	fmt.Printf("Total: %v\n", total)

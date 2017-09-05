@@ -23,6 +23,6 @@ func main() {
 		"Number of worker threads to use (defaults to one less than logical CPUs)")
 	flag.Parse()
 
-	app := newApp(opt)
-	app.run()
+	loader := newLoader(opt)
+	loader.run()
 }

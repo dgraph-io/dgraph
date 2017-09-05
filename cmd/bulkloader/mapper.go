@@ -1,7 +1,5 @@
 package main
 
-// TODO: Review for phase 1
-
 import (
 	"log"
 	"math"
@@ -17,81 +15,65 @@ import (
 	farm "github.com/dgryski/go-farm"
 )
 
-type worker struct {
-	rdfCh       chan string
-	um          *uidMap
-	ss          *schemaStore
-	prog        *progress
-	postingsOut chan<- *protos.DenormalisedPosting
+type mapper struct {
+	rdfCh      chan string
+	um         *uidMap
+	ss         *schemaStore
+	prog       *progress
+	postingsCh chan<- *protos.FlatPosting
 }
 
-func newWorker(
-	rdfCh chan string,
-	um *uidMap,
-	ss *schemaStore,
-	prog *progress,
-	postingsOut chan<- *protos.DenormalisedPosting,
-) *worker {
-	return &worker{
-		rdfCh:       rdfCh,
-		um:          um,
-		ss:          ss,
-		prog:        prog,
-		postingsOut: postingsOut,
+func (m *mapper) run() {
+	for rdf := range m.rdfCh {
+		x.Checkf(m.parseRDF(rdf), "Could not parse RDF.")
+		atomic.AddInt64(&m.prog.rdfCount, 1)
 	}
 }
 
-func (w *worker) run() {
-	for rdf := range w.rdfCh {
-		w.parseRDF(rdf)
-		atomic.AddInt64(&w.prog.rdfCount, 1)
-	}
-}
-
-func (w *worker) addPosting(key []byte, posting *protos.Posting) {
-	p := &protos.DenormalisedPosting{
-		PostingListKey: key,
+func (m *mapper) addPosting(key []byte, posting *protos.Posting) {
+	p := &protos.FlatPosting{
+		Key: key,
 	}
 	if posting.PostingType == protos.Posting_REF {
-		p.Posting = &protos.DenormalisedPosting_UidPosting{UidPosting: posting.Uid}
+		p.Posting = &protos.FlatPosting_UidPosting{UidPosting: posting.Uid}
 	} else {
-		p.Posting = &protos.DenormalisedPosting_FullPosting{FullPosting: posting}
+		p.Posting = &protos.FlatPosting_FullPosting{FullPosting: posting}
 	}
-	w.postingsOut <- p
+	m.postingsCh <- p
 }
 
-func (w *worker) parseRDF(rdfLine string) {
+func (m *mapper) parseRDF(rdfLine string) error {
 	nq, err := parseNQuad(rdfLine)
 	if err != nil {
 		if err == rdf.ErrEmpty {
-			return
+			return nil
 		}
-		x.Checkf(err, "Could not parse RDF.")
+		return err
 	}
 
-	sUID := w.um.assignUID(nq.GetSubject())
-	uidM := map[string]uint64{nq.GetSubject(): sUID}
-	var oUID uint64
+	sid := m.um.assignUID(nq.GetSubject())
+	uidM := map[string]uint64{nq.GetSubject(): sid}
+	var oid uint64
 	if nq.GetObjectValue() == nil {
-		oUID = w.um.assignUID(nq.GetObjectId())
-		uidM[nq.GetObjectId()] = oUID
+		oid = m.um.assignUID(nq.GetObjectId())
+		uidM[nq.GetObjectId()] = oid
 	}
 
-	fwdPosting, revPosting := w.createEdgePostings(nq, uidM)
-	key := x.DataKey(nq.GetPredicate(), sUID)
-	w.addPosting(key, fwdPosting)
+	fwdPosting, revPosting := m.createFwdAndRevPostings(nq, uidM)
+	key := x.DataKey(nq.GetPredicate(), sid)
+	m.addPosting(key, fwdPosting)
 
 	if revPosting != nil {
-		key = x.ReverseKey(nq.GetPredicate(), oUID)
-		w.addPosting(key, revPosting)
+		key = x.ReverseKey(nq.GetPredicate(), oid)
+		m.addPosting(key, revPosting)
 	}
 
-	key = x.DataKey("_predicate_", sUID)
+	key = x.DataKey("_predicate_", sid)
 	pp := createPredicatePosting(nq.GetPredicate())
+	m.addPosting(key, pp)
+	m.addIndexPostings(nq, uidM)
 
-	w.addPosting(key, pp)
-
-	w.addIndexPostings(nq, uidM)
+	return nil
 }
 
 func parseNQuad(line string) (gql.NQuad, error) {
@@ -112,12 +94,13 @@ func createPredicatePosting(predicate string) *protos.Posting {
 	}
 }
 
-func (w *worker) createEdgePostings(nq gql.NQuad, uidM map[string]uint64) (*protos.Posting, *protos.Posting) {
+func (m *mapper) createFwdAndRevPostings(nq gql.NQuad,
+	uidM map[string]uint64) (*protos.Posting, *protos.Posting) {
 
 	de, err := nq.ToEdgeUsing(uidM)
 	x.Check(err)
 
-	w.ss.fixEdge(de, nq.ObjectValue == nil)
+	m.ss.validateType(de, nq.ObjectValue == nil)
 
 	p := posting.NewPosting(de)
 	if nq.GetObjectValue() != nil {
@@ -129,7 +112,7 @@ func (w *worker) createEdgePostings(nq gql.NQuad, uidM map[string]uint64) (*prot
 	}
 
 	// Early exit for no reverse edge.
-	sch := w.ss.getSchema(nq.GetPredicate())
+	sch := m.ss.getSchema(nq.GetPredicate())
 	if sch.GetDirective() != protos.SchemaUpdate_REVERSE {
 		return p, nil
 	}
@@ -139,19 +122,19 @@ func (w *worker) createEdgePostings(nq gql.NQuad, uidM map[string]uint64) (*prot
 	rde, err := nq.ToEdgeUsing(uidM)
 	x.Check(err)
 	rde.Entity, rde.ValueId = rde.ValueId, rde.Entity
-	w.ss.fixEdge(rde, true)
+	m.ss.validateType(rde, true)
 	rp := posting.NewPosting(rde)
 
 	return p, rp
 }
 
-func (w *worker) addIndexPostings(nq gql.NQuad, uidM map[string]uint64) {
+func (m *mapper) addIndexPostings(nq gql.NQuad, uidM map[string]uint64) {
 
 	if nq.GetObjectValue() == nil {
 		return // Cannot index UIDs
 	}
 
-	sch := w.ss.getSchema(nq.GetPredicate())
+	sch := m.ss.getSchema(nq.GetPredicate())
 
 	for _, tokerName := range sch.GetTokenizer() {
 
@@ -179,7 +162,7 @@ func (w *worker) addIndexPostings(nq gql.NQuad, uidM map[string]uint64) {
 
 		// Store index posting.
 		for _, t := range toks {
-			w.addPosting(
+			m.addPosting(
 				x.IndexKey(nq.Predicate, t),
 				&protos.Posting{
 					Uid:         de.GetEntity(),

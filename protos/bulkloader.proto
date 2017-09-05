@@ -4,8 +4,8 @@ import "types.proto";
 
 package protos;
 
-message DenormalisedPosting {
-	bytes posting_list_key = 1;
+message FlatPosting {
+	bytes key = 1;
 	oneof posting {
 		fixed64 uid_posting = 2;
 		Posting full_posting = 3;

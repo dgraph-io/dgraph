@@ -15,14 +15,13 @@ type schemaState struct {
 }
 
 type schemaStore struct {
-	mu sync.Mutex
-	m  map[string]schemaState
+	sync.RWMutex
+	m map[string]schemaState
 }
 
 func newSchemaStore(initial []*protos.SchemaUpdate) *schemaStore {
 	s := &schemaStore{
-		mu: sync.Mutex{},
-		m:  map[string]schemaState{},
+		m: map[string]schemaState{},
 	}
 	for _, sch := range initial {
 		p := sch.Predicate
@@ -33,23 +32,33 @@ func newSchemaStore(initial []*protos.SchemaUpdate) *schemaStore {
 }
 
 func (s *schemaStore) getSchema(pred string) *protos.SchemaUpdate {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.RLock()
+	defer s.RUnlock()
 	return s.m[pred].SchemaUpdate
 }
 
-func (s *schemaStore) fixEdge(de *protos.DirectedEdge, objectIsUID bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+func (s *schemaStore) validateType(de *protos.DirectedEdge, objectIsUID bool) {
 	if objectIsUID {
 		de.ValueType = uint32(protos.Posting_UID)
 	}
 
+	write := false
+	s.RLock()
 	sch, ok := s.m[de.Attr]
 	if !ok {
-		sch = schemaState{false, &protos.SchemaUpdate{ValueType: de.ValueType}}
-		s.m[de.Attr] = sch
+		s.RUnlock()
+		s.Lock()
+		write = true
+		sch, ok = s.m[de.Attr]
+		if !ok {
+			sch = schemaState{false, &protos.SchemaUpdate{ValueType: de.ValueType}}
+			s.m[de.Attr] = sch
+		}
+	}
+	if write {
+		s.Unlock()
+	} else {
+		s.RUnlock()
 	}
 
 	schTyp := types.TypeID(sch.ValueType)
