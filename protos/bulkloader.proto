@@ -1,0 +1,13 @@
+// Use protos/gen.sh to generate .pb.go files.
+syntax = "proto3";
+import "types.proto";
+
+package protos;
+
+message FlatPosting {
+	bytes key = 1;
+	oneof posting {
+		fixed64 uid_posting = 2;
+		Posting full_posting = 3;
+	}
+}

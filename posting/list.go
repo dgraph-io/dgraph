@@ -226,7 +226,7 @@ func samePosting(oldp *protos.Posting, newp *protos.Posting) bool {
 	return facets.SameFacets(oldp.Facets, newp.Facets)
 }
 
-func newPosting(t *protos.DirectedEdge) *protos.Posting {
+func NewPosting(t *protos.DirectedEdge) *protos.Posting {
 	x.AssertTruef(edgeType(t) != x.ValueEmpty,
 		"This should have been set by the caller.")
 
@@ -465,7 +465,7 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		}
 		return false, err
 	}
-	mpost := newPosting(t)
+	mpost := NewPosting(t)
 	atomic.AddUint32(&l.estimatedSize, uint32(mpost.Size()+16 /* various overhead */))
 
 	// Mutation arrives:
