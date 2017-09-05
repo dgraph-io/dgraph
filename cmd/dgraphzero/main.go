@@ -76,6 +76,9 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 	st.zero = &Server{NumReplicas: *numReplicas}
 	protos.RegisterZeroServer(s, st.zero)
 
+	if len(*myAddr) == 0 {
+		*myAddr = fmt.Sprintf("localhost:%d", *port)
+	}
 	rc := protos.RaftContext{Id: *raftId, Addr: *myAddr, Group: 0}
 	m := conn.NewNode(&rc)
 	st.node = &node{Node: m, server: st.zero, ctx: context.Background()}
@@ -136,6 +139,7 @@ func main() {
 	go st.serveHTTP(httpListener, &wg)
 
 	// Open raft write-ahead log and initialize raft node.
+	x.Checkf(os.MkdirAll(*w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.DefaultOptions
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = *w

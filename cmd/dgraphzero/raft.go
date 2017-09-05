@@ -106,6 +106,8 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 			time.Sleep(time.Millisecond)
 			_, err = c.JoinCluster(n.ctx, n.RaftContext)
 		}
+		n.SetRaft(raft.StartNode(n.Cfg, nil))
+
 	} else {
 		peers := []raft.Peer{{ID: n.Id}}
 		n.SetRaft(raft.StartNode(n.Cfg, peers))

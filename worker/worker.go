@@ -87,12 +87,6 @@ func (w *grpcWorker) addIfNotPresent(reqid uint64) bool {
 	return true
 }
 
-// Hello rpc call is used to check connection with other workers after worker
-// tcp server for this instance starts.
-func (w *grpcWorker) Echo(ctx context.Context, in *protos.Payload) (*protos.Payload, error) {
-	return &protos.Payload{Data: in.Data}, nil
-}
-
 // RunServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
 func RunServer(bindall bool) {

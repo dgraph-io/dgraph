@@ -42,6 +42,9 @@ message ExportPayload {
 }
 
 service Raft {
+	// Connection testing RPC.
+	rpc Echo (Payload)             returns (Payload) {}
+
 	rpc RaftMessage (Payload)     returns (Payload) {}
 	rpc JoinCluster (RaftContext) returns (Payload) {}
 }
@@ -49,13 +52,10 @@ service Raft {
 service Zero {
   rpc Connect (Membership) returns (MembershipUpdate) {}
   rpc ShouldServe (MembershipQuery) returns (Tablet) {}
-	rpc UpdateMembership (MembershipUpdate)  returns (MembershipUpdate) {}
+	// rpc Update (MembershipUpdate)  returns (MembershipUpdate) {}
 }
 
 service Worker {
-	// Connection testing RPC.
-	rpc Echo (Payload)             returns (Payload) {}
-
 	// Data serving RPCs.
 	rpc AssignUids (Num)                 returns (AssignedIds) {}
 	rpc Mutate (Mutations)               returns (Payload) {}

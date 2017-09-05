@@ -176,10 +176,10 @@ func (s *Server) ShouldServe(
 	return &tablet, nil
 }
 
-func (s *Server) Update(
-	ctx context.Context, membership *protos.Membership) (resp *protos.MembershipUpdate, err error) {
-	if ctx.Err() != nil {
-		return &emptyMembershipUpdate, ctx.Err()
-	}
-	return
-}
+// func (s *Server) Update(
+// 	ctx context.Context, membership *protos.Membership) (resp *protos.MembershipUpdate, err error) {
+// 	if ctx.Err() != nil {
+// 		return &emptyMembershipUpdate, ctx.Err()
+// 	}
+// 	return
+// }
