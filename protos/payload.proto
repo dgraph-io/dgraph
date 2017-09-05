@@ -41,6 +41,11 @@ message ExportPayload {
 	Status status = 3;
 }
 
+service Raft {
+	rpc RaftMessage (Payload)     returns (Payload) {}
+	rpc JoinCluster (RaftContext) returns (Payload) {}
+}
+
 service Worker {
 	// Connection testing RPC.
 	rpc Echo (Payload)             returns (Payload) {}
@@ -54,8 +59,6 @@ service Worker {
 	rpc Schema (SchemaRequest)                  returns (SchemaResult) {}
 
 	// RAFT serving RPCs.
-	rpc RaftMessage (Payload)                     returns (Payload) {}
-	rpc JoinCluster (RaftContext)            returns (Payload) {}
 	rpc UpdateMembership (MembershipUpdate)  returns (MembershipUpdate) {}
 	rpc Export (ExportPayload)                    returns (ExportPayload) {}
 }

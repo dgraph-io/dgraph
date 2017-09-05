@@ -59,11 +59,14 @@ type groupi struct {
 	cancel context.CancelFunc
 	wal    *raftwal.Wal
 	// local stores the groupId to node map for this server.
+	// TODO: Remove the local map. Instead store the RaftServer variable here.
 	local map[uint32]*node
 	// all stores the groupId to servers map for the entire cluster.
 	all        map[uint32]*servers
 	num        uint32
 	lastUpdate uint64
+	// TODO: Also store the tablet -> group mapping.
+	// In fact, we could have a common struct to deal with this membership info, so it's shared.
 }
 
 var gr *groupi
@@ -176,6 +179,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
 }
 
+// TODO: Don't need this.
 func getGroupIds(groups string) ([]uint32, error) {
 	parts := strings.Split(groups, ",")
 	var gids []uint32
@@ -224,6 +228,7 @@ func (a gidSlice) Len() int           { return len(a) }
 func (a gidSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a gidSlice) Less(i, j int) bool { return a[i] < a[j] }
 
+// TODO: Don't need this.
 func (g *groupi) Node(groupId uint32) *node {
 	g.RLock()
 	defer g.RUnlock()
@@ -233,6 +238,7 @@ func (g *groupi) Node(groupId uint32) *node {
 	return nil
 }
 
+// TODO: Don't need this.
 func (g *groupi) ServesGroup(groupId uint32) bool {
 	g.RLock()
 	defer g.RUnlock()
@@ -240,6 +246,7 @@ func (g *groupi) ServesGroup(groupId uint32) bool {
 	return has
 }
 
+// TODO: Don't need this.
 func (g *groupi) newNode(groupId uint32, nodeId uint64, publicAddr string) *node {
 	g.Lock()
 	defer g.Unlock()
@@ -352,6 +359,7 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 	return
 }
 
+// TODO: Don't need this.
 func (g *groupi) nodes() (nodes []*node) {
 	g.RLock()
 	defer g.RUnlock()
@@ -408,12 +416,13 @@ func (g *groupi) TouchLastUpdate(u uint64) {
 // - Once iteration is over without errors, it would return back all new updates.
 // - These updates are then applied to groups().all state via applyMembershipUpdate.
 func (g *groupi) syncMemberships() {
+	// TODO: Don't need this.
 	if g.ServesGroup(0) {
 		// This server serves group zero.
 		g.RLock()
 		defer g.RUnlock()
 		for _, n := range g.local {
-			rc := n.raftContext
+			rc := n.RaftContext
 			if g.duplicate(rc.Group, rc.Id, rc.Addr, n.AmLeader()) {
 				continue
 			}
@@ -443,7 +452,7 @@ func (g *groupi) syncMemberships() {
 	{
 		g.RLock()
 		for _, n := range g.local {
-			rc := n.raftContext
+			rc := n.RaftContext
 			mu.Members = append(mu.Members,
 				&protos.Membership{
 					Leader:  n.AmLeader(),
@@ -487,6 +496,7 @@ func (g *groupi) syncMemberships() {
 		}
 
 		// Check if we got a redirect.
+		// TODO: Don't need this redirect portion of logic.
 		if !update.Redirect {
 			break
 		}
@@ -600,6 +610,7 @@ func (g *groupi) MembershipUpdateAfter(ridx uint64) *protos.MembershipUpdate {
 
 // UpdateMembership is the RPC call for updating membership for servers
 // which don't serve group zero.
+// TODO: This should only lie in Raft Server.
 func (w *grpcWorker) UpdateMembership(ctx context.Context,
 	update *protos.MembershipUpdate) (*protos.MembershipUpdate, error) {
 	if ctx.Err() != nil {
@@ -653,13 +664,14 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 }
 
 // SyncAllMarks syncs marks of all nodes of the worker group.
+// TODO: Don't need this.
 func syncAllMarks(ctx context.Context) error {
 	numNodes := len(groups().nodes())
 	che := make(chan error, numNodes)
 	for _, n := range groups().nodes() {
 		go func(n *node) {
 			// Get index of last committed.
-			lastIndex, err := n.store.LastIndex()
+			lastIndex, err := n.Store.LastIndex()
 			if err != nil {
 				che <- err
 				return
@@ -679,6 +691,7 @@ func syncAllMarks(ctx context.Context) error {
 }
 
 // snapshotAll takes snapshot of all nodes of the worker group
+// TODO: Don't need this.
 func snapshotAll() {
 	var wg sync.WaitGroup
 	for _, n := range groups().nodes() {
@@ -692,6 +705,7 @@ func snapshotAll() {
 }
 
 // StopAllNodes stops all the nodes of the worker group.
+// TODO: Don't need this.
 func stopAllNodes() {
 	for _, n := range groups().nodes() {
 		n.Stop()

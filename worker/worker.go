@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -112,6 +113,7 @@ func RunServer(bindall bool) {
 	x.Printf("Worker listening at address: %v", ln.Addr())
 
 	protos.RegisterWorkerServer(workerServer, &grpcWorker{})
+	protos.RegisterRaftServer(workerServer, &conn.RaftServer{})
 	workerServer.Serve(ln)
 }
 
