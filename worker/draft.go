@@ -632,7 +632,11 @@ func (n *node) processApplyCh() {
 				// Wait for applied watermark to reach till previous index
 				// All mutations before this should use old schema and after this
 				// should use new schema
-				n.waitForSyncMark(n.ctx, e.Index-1)
+
+				// TODO: If n.ctx ever becomes cancellable, we need to handle the error somehow --
+				// the watermark hasn't been hit.  This was changed to use context.Background()
+				// when waitForSyncMark actually began using the context for cancellation.
+				n.waitForSyncMark( /* n.ctx */ context.Background(), e.Index-1)
 				if err := n.processSchemaMutations(e, proposal.Mutations); err != nil {
 					n.applied.Done(e.Index)
 					posting.SyncMarkFor(n.gid).Done(e.Index)
@@ -721,10 +725,14 @@ type linReadReq struct {
 	indexCh chan<- uint64
 }
 
-func (n *node) readIndex() chan uint64 {
+func (n *node) readIndex(ctx context.Context) (chan uint64, error) {
 	ch := make(chan uint64, 1)
-	n.requestCh <- linReadReq{ch}
-	return ch
+	select {
+	case n.requestCh <- linReadReq{ch}:
+		return ch, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func (n *node) runReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
@@ -1176,13 +1184,18 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *protos.RaftContext) (*
 
 func waitLinearizableRead(ctx context.Context, gid uint32) error {
 	n := groups().Node(gid)
-	replyCh := n.readIndex()
+	replyCh, err := n.readIndex(ctx)
+	if err != nil {
+		return err
+	}
 	select {
 	case index := <-replyCh:
 		if index == raft.None {
 			return x.Errorf("cannot get linearized read (time expired or no configured leader)")
 		}
-		n.applied.WaitForMark(index)
+		if err := n.applied.WaitForMark(ctx, index); err != nil {
+			return err
+		}
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

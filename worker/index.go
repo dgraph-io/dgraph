@@ -82,20 +82,22 @@ func (n *node) rebuildOrDelCountIndex(ctx context.Context, attr string, rebuild 
 	return nil
 }
 
-func (n *node) syncAllMarks(ctx context.Context, lastIndex uint64) {
-	n.applied.WaitForMark(lastIndex)
-	waitForSyncMark(ctx, n.gid, lastIndex)
+func (n *node) syncAllMarks(ctx context.Context, lastIndex uint64) error {
+	if err := n.applied.WaitForMark(ctx, lastIndex); err != nil {
+		return err
+	}
+	return waitForSyncMark(ctx, n.gid, lastIndex)
 }
 
-func (n *node) waitForSyncMark(ctx context.Context, lastIndex uint64) {
-	waitForSyncMark(ctx, n.gid, lastIndex)
+func (n *node) waitForSyncMark(ctx context.Context, lastIndex uint64) error {
+	return waitForSyncMark(ctx, n.gid, lastIndex)
 }
 
-func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) {
+func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) error {
 	// Force an aggressive evict.
 	posting.CommitLists(10, gid)
 
 	// Wait for posting lists applying.
 	w := posting.SyncMarkFor(gid)
-	w.WaitForMark(lastIndex)
+	return w.WaitForMark(ctx, lastIndex)
 }
