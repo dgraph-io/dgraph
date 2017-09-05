@@ -1594,10 +1594,16 @@ func (sg *SubGraph) replaceVarInFunc() error {
 				if len(sg.Params.uidToVal) == 0 {
 					return x.Errorf("No value found for value variable %q", arg.Value)
 				}
+				// We don't care about uids, just take all the values and put as args.
+				// There would be only one value var per subgraph as per current assumptions.
+				seenArgs := make(map[string]struct{})
 				for _, v := range sg.Params.uidToVal {
 					data := types.ValueForType(types.StringID)
 					if err := types.Marshal(v, &data); err != nil {
 						return err
+					}
+					if _, ok := seenArgs[data.Value.(string)]; ok {
+						continue
 					}
 					args = append(args, gql.Arg{Value: data.Value.(string)})
 				}

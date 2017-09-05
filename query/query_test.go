@@ -1623,6 +1623,73 @@ func TestVarInIneq2(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"name":"Andrea"}]}}`, js)
 }
 
+func TestVarInIneq3(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			var(func: uid(0x1f)) {
+				a as name
+			}
+
+			me(func: eq(name, val(a))) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Andrea"}]}}`, js)
+}
+
+func TestVarInIneq4(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			var(func: uid(0x1f)) {
+				a as name
+			}
+
+			me(func: uid(0x1f)) @filter(eq(name, val(a))) {
+				name
+			}
+		}
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Andrea"}]}}`, js)
+}
+
+func TestVarInIneq5(t *testing.T) {
+	populateGraph(t)
+	query1 := `
+    {
+			var(func: uid(1)) {
+				friend {
+				  a as name
+			  }
+			}
+
+			me(func: eq(name, val(a))) {
+				name
+			}
+		}
+  `
+	query2 := `
+    {
+			var(func: uid(1)) {
+				friend {
+				  a as name
+			  }
+			}
+
+			me(func: uid(a)) {
+				name: val(a)
+			}
+		}
+  `
+	js1 := processToFastJSON(t, query1)
+	js2 := processToFastJSON(t, query2)
+	require.JSONEq(t, js2, js1)
+}
+
 func TestNestedFuncRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
