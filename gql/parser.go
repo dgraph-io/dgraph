@@ -130,7 +130,7 @@ type FilterTree struct {
 	Func  *Function
 }
 
-type ArgContext struct {
+type Arg struct {
 	Value      string
 	IsValueVar bool // If argument is val(a)
 }
@@ -138,9 +138,9 @@ type ArgContext struct {
 // Function holds the information about gql functions.
 type Function struct {
 	Attr     string
-	Lang     string       // language of the attribute value
-	Name     string       // Specifies the name of the function.
-	Args     []ArgContext // Contains the arguments of the function.
+	Lang     string // language of the attribute value
+	Name     string // Specifies the name of the function.
+	Args     []Arg  // Contains the arguments of the function.
 	UID      []uint64
 	NeedsVar []VarContext // If the function requires some variable
 	IsCount  bool         // gt(count(friends),0)
@@ -1372,7 +1372,7 @@ func parseGeoArgs(it *lex.ItemIterator, g *Function) error {
 	}
 	// Lets append the concatenated Geo token to Args.
 	// TODO - See if we can directly encode to Geo format.
-	g.Args = append(g.Args, ArgContext{Value: buf.String()})
+	g.Args = append(g.Args, Arg{Value: buf.String()})
 	items, err := it.Peek(1)
 	if err != nil {
 		return x.Errorf("Unexpected EOF while parsing args")
@@ -1455,7 +1455,7 @@ L:
 						// because of the way parser works
 						g.Args = g.Args[:len(g.Args)-1]
 					}
-					g.Args = append(g.Args, ArgContext{Value: f.NeedsVar[0].Name, IsValueVar: true})
+					g.Args = append(g.Args, Arg{Value: f.NeedsVar[0].Name, IsValueVar: true})
 					g.NeedsVar = append(g.NeedsVar, f.NeedsVar...)
 					g.NeedsVar[0].Typ = VALUE_VAR
 				} else {
@@ -1498,7 +1498,7 @@ L:
 					flags = itemInFunc.Val[end+1:]
 				}
 
-				g.Args = append(g.Args, ArgContext{Value: expr}, ArgContext{Value: flags})
+				g.Args = append(g.Args, Arg{Value: expr}, Arg{Value: flags})
 				expectArg = false
 				continue
 				// Lets reassemble the geo tokens.
@@ -1556,7 +1556,7 @@ L:
 					}
 					gq.Args["id"] = val
 				} else {
-					g.Args = append(g.Args, ArgContext{Value: val})
+					g.Args = append(g.Args, Arg{Value: val})
 				}
 				expectArg = false
 				continue
@@ -1574,7 +1574,7 @@ L:
 				expectLang = false
 			} else if g.Name != uid {
 				// For UID function. we set g.UID
-				g.Args = append(g.Args, ArgContext{Value: val})
+				g.Args = append(g.Args, Arg{Value: val})
 			}
 
 			if g.Name == "var" {
@@ -2367,7 +2367,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if child.Func, err = parseFunction(it, gq); err != nil {
 					return err
 				}
-				child.Func.Args = append(child.Func.Args, ArgContext{Value: child.Func.Attr})
+				child.Func.Args = append(child.Func.Args, Arg{Value: child.Func.Attr})
 				child.Attr = child.Func.Attr
 				gq.Children = append(gq.Children, child)
 				curp = nil

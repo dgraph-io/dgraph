@@ -224,6 +224,10 @@ func parseFuncType(srcFunc *protos.SrcFunction) (FuncType, string) {
 	}
 	ftype, fname := parseFuncTypeHelper(srcFunc.Name)
 	if srcFunc.IsCount && ftype == CompareAttrFn {
+		// gt(release_date, "1990") is 'CompareAttr' which
+		//    takes advantage of indexed-attr
+		// gt(count(films), 0) is 'CompareScalar', we first do
+		//    counting on attr, then compare the result as scalar with int
 		return CompareScalarFn, fname
 	}
 	return ftype, fname
