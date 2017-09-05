@@ -16,11 +16,7 @@ import (
 )
 
 type mapper struct {
-	rdfCh      chan string
-	um         *uidMap
-	ss         *schemaStore
-	prog       *progress
-	postingsCh chan<- *protos.FlatPosting
+	*state
 }
 
 func (m *mapper) run() {
@@ -62,13 +58,13 @@ func (m *mapper) parseRDF(rdfLine string) error {
 		x.Check(err)
 	}
 
-	fwdPosting, revPosting := m.createFwdAndRevPostings(nq, de)
+	fwd, rev := m.createPostings(nq, de)
 	key := x.DataKey(nq.GetPredicate(), sid)
-	m.addPosting(key, fwdPosting)
+	m.addPosting(key, fwd)
 
-	if revPosting != nil {
+	if rev != nil {
 		key = x.ReverseKey(nq.GetPredicate(), oid)
-		m.addPosting(key, revPosting)
+		m.addPosting(key, rev)
 	}
 
 	key = x.DataKey("_predicate_", sid)
@@ -97,7 +93,7 @@ func createPredicatePosting(predicate string) *protos.Posting {
 	}
 }
 
-func (m *mapper) createFwdAndRevPostings(nq gql.NQuad,
+func (m *mapper) createPostings(nq gql.NQuad,
 	de *protos.DirectedEdge) (*protos.Posting, *protos.Posting) {
 
 	m.ss.validateType(de, nq.ObjectValue == nil)
@@ -129,7 +125,6 @@ func (m *mapper) createFwdAndRevPostings(nq gql.NQuad,
 }
 
 func (m *mapper) addIndexPostings(nq gql.NQuad, de *protos.DirectedEdge) {
-
 	if nq.GetObjectValue() == nil {
 		return // Cannot index UIDs
 	}
@@ -152,7 +147,9 @@ func (m *mapper) addIndexPostings(nq gql.NQuad, de *protos.DirectedEdge) {
 
 		// Convert from storage type to schema type.
 		schemaVal, err := types.Convert(storageVal, types.TypeID(sch.GetValueType()))
-		x.Check(err) // Shouldn't error, since we've already checked for convertibility when doing edge postings.
+		// Shouldn't error, since we've already checked for convertibility when
+		// doing edge postings. So okay to be fatal.
+		x.Check(err)
 
 		// Extract tokens.
 		toks, err := toker.Tokens(schemaVal)

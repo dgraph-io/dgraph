@@ -14,19 +14,25 @@ import (
 )
 
 type options struct {
-	rdfFile    string
-	schemaFile string
-	badgerDir  string
-	tmpDir     string
-	workers    int
+	rdfFile       string
+	schemaFile    string
+	badgerDir     string
+	tmpDir        string
+	numGoroutines int
+}
+
+type state struct {
+	opt        options
+	prog       *progress
+	um         *uidMap
+	ss         *schemaStore
+	rdfCh      chan string
+	postingsCh chan *protos.FlatPosting
 }
 
 type loader struct {
-	opt        options
-	prog       *progress
-	rdfCh      chan string
-	mappers    []*mapper
-	postingsCh chan *protos.FlatPosting
+	*state
+	mappers []*mapper
 }
 
 func newLoader(opt options) *loader {
@@ -35,54 +41,54 @@ func newLoader(opt options) *loader {
 	initialSchema, err := schema.Parse(string(schemaBuf))
 	x.Checkf(err, "Could not parse schema.")
 
-	a := &loader{
+	st := &state{
 		opt:        opt,
 		prog:       newProgress(),
-		rdfCh:      make(chan string, 1<<10),
-		mappers:    make([]*mapper, opt.workers),
-		postingsCh: make(chan *protos.FlatPosting, 1<<10),
+		um:         newUIDMap(),
+		ss:         newSchemaStore(initialSchema),
+		rdfCh:      make(chan string, 1000),
+		postingsCh: make(chan *protos.FlatPosting, 1000),
 	}
-	x.Check(err)
-
-	um := newUIDMap()
-	ss := newSchemaStore(initialSchema)
-
-	for i := 0; i < opt.workers; i++ {
-		a.mappers[i] = &mapper{a.rdfCh, um, ss, a.prog, a.postingsCh}
+	ld := &loader{
+		state:   st,
+		mappers: make([]*mapper, opt.numGoroutines),
 	}
-	return a
+	for i := 0; i < opt.numGoroutines; i++ {
+		ld.mappers[i] = &mapper{state: st}
+	}
+	return ld
 }
 
-func (a *loader) run() {
-
-	go a.prog.report()
+func (ld *loader) run() {
+	go ld.prog.report()
 
 	var postingWriterWg sync.WaitGroup
 	postingWriterWg.Add(1)
-	tmpPostingsDir, err := ioutil.TempDir(a.opt.tmpDir, "bulkloader_tmp_posting_")
+
+	tmpPostingsDir, err := ioutil.TempDir(ld.opt.tmpDir, "bulkloader_tmp_posting_")
 	x.Check(err)
 	defer func() { x.Check(os.RemoveAll(tmpPostingsDir)) }()
+
 	go func() {
-		writePostings(tmpPostingsDir, a.postingsCh, a.prog)
+		writePostings(tmpPostingsDir, ld.postingsCh, ld.prog)
 		postingWriterWg.Done()
 	}()
 
-	f, err := os.Open(a.opt.rdfFile)
+	f, err := os.Open(ld.opt.rdfFile)
 	x.Checkf(err, "Could not read RDF file.")
 	defer f.Close()
 
 	var mapperWg sync.WaitGroup
-	mapperWg.Add(len(a.mappers))
-	for _, m := range a.mappers {
-		m := m
-		go func() {
+	mapperWg.Add(len(ld.mappers))
+	for _, m := range ld.mappers {
+		go func(m *mapper) {
 			m.run()
 			mapperWg.Done()
-		}()
+		}(m)
 	}
 
 	var sc *bufio.Scanner
-	if !strings.HasSuffix(a.opt.rdfFile, ".gz") {
+	if !strings.HasSuffix(ld.opt.rdfFile, ".gz") {
 		sc = bufio.NewScanner(f)
 	} else {
 		gzr, err := gzip.NewReader(f)
@@ -91,13 +97,13 @@ func (a *loader) run() {
 	}
 
 	for i := 0; sc.Scan(); i++ {
-		a.rdfCh <- sc.Text()
+		ld.rdfCh <- sc.Text()
 	}
 	x.Check(sc.Err())
 
-	close(a.rdfCh)
+	close(ld.rdfCh)
 	mapperWg.Wait()
-	close(a.postingsCh)
+	close(ld.postingsCh)
 	postingWriterWg.Wait()
-	a.prog.endSummary()
+	ld.prog.endSummary()
 }

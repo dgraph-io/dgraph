@@ -42,23 +42,17 @@ func (s *schemaStore) validateType(de *protos.DirectedEdge, objectIsUID bool) {
 		de.ValueType = uint32(protos.Posting_UID)
 	}
 
-	write := false
 	s.RLock()
 	sch, ok := s.m[de.Attr]
+	s.RUnlock()
 	if !ok {
-		s.RUnlock()
 		s.Lock()
-		write = true
 		sch, ok = s.m[de.Attr]
 		if !ok {
 			sch = schemaState{false, &protos.SchemaUpdate{ValueType: de.ValueType}}
 			s.m[de.Attr] = sch
 		}
-	}
-	if write {
 		s.Unlock()
-	} else {
-		s.RUnlock()
 	}
 
 	schTyp := types.TypeID(sch.ValueType)

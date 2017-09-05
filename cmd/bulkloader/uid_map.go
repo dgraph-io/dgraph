@@ -1,7 +1,5 @@
 package main
 
-// TODO: Review for phase 1
-
 import (
 	"log"
 	"strconv"
@@ -9,7 +7,7 @@ import (
 )
 
 type uidMap struct {
-	mu      sync.Mutex
+	sync.Mutex
 	lastUID uint64
 	uids    map[string]uint64
 }
@@ -22,8 +20,8 @@ func newUIDMap() *uidMap {
 }
 
 func (m *uidMap) assignUID(str string) uint64 {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.Lock()
+	defer m.Unlock()
 
 	hint, err := strconv.ParseUint(str, 10, 64)
 	if err == nil {

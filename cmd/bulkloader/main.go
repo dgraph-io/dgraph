@@ -19,7 +19,7 @@ func main() {
 	flag.StringVar(&opt.badgerDir, "b", "", "Location of target badger data directory")
 	flag.StringVar(&opt.tmpDir, "tmp", os.TempDir(), "Temp directory used to use for on-disk "+
 		"scratch space. Requires free space proportional to the size of the RDF file.")
-	flag.IntVar(&opt.workers, "j", runtime.NumCPU()-1,
+	flag.IntVar(&opt.numGoroutines, "j", runtime.NumCPU()-1,
 		"Number of worker threads to use (defaults to one less than logical CPUs)")
 	flag.Parse()
 
