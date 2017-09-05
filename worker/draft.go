@@ -727,7 +727,7 @@ func (n *node) readIndex() chan uint64 {
 	return ch
 }
 
-func runReadIndexLoop(n *node, stop <-chan struct{}, finished chan<- struct{},
+func (n *node) runReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
 	requestCh <-chan linReadReq, readStateCh <-chan raft.ReadState) {
 	defer close(finished)
 	counter := x.NewNonceCounter()
@@ -804,7 +804,7 @@ func (n *node) Run() {
 		stop := make(chan struct{})
 		defer func() { <-finished }()
 		defer close(stop)
-		go runReadIndexLoop(n, stop, finished, n.requestCh, readStateCh)
+		go n.runReadIndexLoop(stop, finished, n.requestCh, readStateCh)
 	}
 
 	for {
