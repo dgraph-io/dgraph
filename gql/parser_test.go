@@ -566,7 +566,7 @@ func TestParseQueryWithVarValAggCombination(t *testing.T) {
 	require.Equal(t, UID_VAR, res.Query[0].NeedsVar[0].Typ)
 	require.Equal(t, "c", res.Query[0].NeedsVar[1].Name)
 	require.Equal(t, VALUE_VAR, res.Query[0].NeedsVar[1].Typ)
-	require.Equal(t, "c", res.Query[0].Args["orderasc"])
+	require.Equal(t, "c", res.Query[0].Order[0].Attr)
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 	require.Equal(t, "val", res.Query[0].Children[1].Attr)
 	require.Equal(t, 1, len(res.Query[0].Children[1].NeedsVar))
@@ -604,7 +604,7 @@ func TestParseQueryWithVarValAgg(t *testing.T) {
 	require.Equal(t, UID_VAR, res.Query[0].NeedsVar[0].Typ)
 	require.Equal(t, "n", res.Query[0].NeedsVar[1].Name)
 	require.Equal(t, VALUE_VAR, res.Query[0].NeedsVar[1].Typ)
-	require.Equal(t, "n", res.Query[0].Args["orderasc"])
+	require.Equal(t, "n", res.Query[0].Order[0].Attr)
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
 	require.Equal(t, "na", res.Query[1].Children[0].Children[0].Var)
@@ -674,7 +674,7 @@ func TestParseQueryWithVarValCount(t *testing.T) {
 	require.Equal(t, UID_VAR, res.Query[0].NeedsVar[0].Typ)
 	require.Equal(t, "n", res.Query[0].NeedsVar[1].Name)
 	require.Equal(t, VALUE_VAR, res.Query[0].NeedsVar[1].Typ)
-	require.Equal(t, "n", res.Query[0].Args["orderasc"])
+	require.Equal(t, "n", res.Query[0].Order[0].Attr)
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
 	require.True(t, res.Query[1].Children[0].Children[0].IsCount)
@@ -702,7 +702,7 @@ func TestParseQueryWithVarVal(t *testing.T) {
 	require.Equal(t, UID_VAR, res.Query[0].NeedsVar[0].Typ)
 	require.Equal(t, "n", res.Query[0].NeedsVar[1].Name)
 	require.Equal(t, VALUE_VAR, res.Query[0].NeedsVar[1].Typ)
-	require.Equal(t, "n", res.Query[0].Args["orderasc"])
+	require.Equal(t, "n", res.Query[0].Order[0].Attr)
 	require.Equal(t, "name", res.Query[0].Children[0].Attr)
 	require.Equal(t, "L", res.Query[1].Children[0].Var)
 	require.Equal(t, "n", res.Query[1].Children[0].Children[0].Var)
@@ -3656,7 +3656,7 @@ func TestParseQueryWithAttrLang(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
-	require.Equal(t, "name@en:fr", res.Query[0].Children[1].Args["orderasc"])
+	require.Equal(t, "name@en:fr", res.Query[0].Children[1].Order[0].Attr)
 }
 
 func TestParseQueryWithAttrLang2(t *testing.T) {
@@ -3673,7 +3673,7 @@ func TestParseQueryWithAttrLang2(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 1, len(res.Query))
-	require.Equal(t, "name@en", res.Query[0].Args["orderasc"])
+	require.Equal(t, "name@en", res.Query[0].Order[0].Attr)
 }
 
 func TestParseRegexp1(t *testing.T) {
@@ -4143,17 +4143,54 @@ func TestAggRootError3(t *testing.T) {
 
 func TestEmptyFunction(t *testing.T) {
 	query := `
-{
-  director(func:allofterms()) {
-    name@en
-    director.film (orderdesc: initial_release_date) {
-      name@en
-      initial_release_date
-    }
-  }
-}`
+		{
+		  director(func:allofterms()) {
+		    name@en
+		    director.film (orderdesc: initial_release_date) {
+		      name@en
+		      initial_release_date
+		    }
+		  }
+		}`
 
 	_, err := Parse(Request{Str: query, Http: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Got empty attr for function: [allofterms]")
+}
+
+func TestOrder1(t *testing.T) {
+	query := `
+		{
+			me(func: uid(1), orderdesc: name, orderasc: age) {
+				name
+			}
+		}
+	`
+	gq, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	require.Equal(t, 2, len(gq.Query[0].Order))
+	require.Equal(t, "name", gq.Query[0].Order[0].Attr)
+	require.Equal(t, true, gq.Query[0].Order[0].Desc)
+	require.Equal(t, "age", gq.Query[0].Order[1].Attr)
+	require.Equal(t, false, gq.Query[0].Order[1].Desc)
+}
+
+func TestOrder2(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) {
+				friend(orderasc: alias, orderdesc: name) @filter(lt(alias, "Pat")) {
+					alias
+				}
+			}
+		}
+	`
+	gq, err := Parse(Request{Str: query, Http: true})
+	require.NoError(t, err)
+	curp := gq.Query[0].Children[0]
+	require.Equal(t, 2, len(curp.Order))
+	require.Equal(t, "alias", curp.Order[0].Attr)
+	require.Equal(t, false, curp.Order[0].Desc)
+	require.Equal(t, "name", curp.Order[1].Attr)
+	require.Equal(t, true, curp.Order[1].Desc)
 }

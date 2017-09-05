@@ -52,6 +52,7 @@ type GraphQuery struct {
 	Expand     string // Which variable to expand with.
 
 	Args         map[string]string
+	Order        []Order
 	Children     []*GraphQuery
 	Filter       *FilterTree
 	MathExp      *MathTree
@@ -144,6 +145,12 @@ type Function struct {
 type Facets struct {
 	AllKeys bool
 	Keys    []string // should be in sorted order.
+}
+
+// Represents an order pair.
+type Order struct {
+	Attr string // attr to order by
+	Desc bool
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -2224,11 +2231,20 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 			}
 
-			if _, ok := gq.Args[key]; ok {
-				return gq, x.Errorf("Repeated key %q at root", key)
-			}
+			// Verify how multiple order work when all use some variable.
 			if val == "" {
 				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
+			}
+			if key == "orderasc" || key == "orderdesc" {
+				gq.Order = append(gq.Order, Order{
+					Attr: val,
+					Desc: key == "orderdesc",
+				})
+				continue
+			}
+
+			if _, ok := gq.Args[key]; ok {
+				return gq, x.Errorf("Repeated key %q at root", key)
 			}
 			gq.Args[key] = val
 		}
@@ -2595,6 +2611,14 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if p.Val == "" {
 					return x.Errorf("Got empty argument")
 				}
+				if p.Key == "orderasc" || p.Key == "orderdesc" {
+					curp.Order = append(curp.Order, Order{
+						Attr: p.Val,
+						Desc: p.Key == "orderdesc",
+					})
+					continue
+				}
+
 				curp.Args[p.Key] = p.Val
 			}
 		case itemAt:

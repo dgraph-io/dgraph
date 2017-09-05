@@ -3684,7 +3684,7 @@ func TestToFastJSONFiltergeName(t *testing.T) {
 		js)
 }
 
-func TestToFastJSONFilteLtAlias(t *testing.T) {
+func TestToFastJSONFilterLtAlias(t *testing.T) {
 	populateGraph(t)
 	// We shouldn't get Zambo Alice.
 	query := `
