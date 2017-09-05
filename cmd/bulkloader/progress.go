@@ -10,7 +10,12 @@ type progress struct {
 	rdfCount     int64
 	lastRDFCount int64
 	start        time.Time
-	shutdown     chan struct{}
+
+	// shotdown is a uni-directional channel used to manage the stopping of the
+	// report goroutine. It handles both the request to stop the report
+	// goroutine, as well as the message back to say that the goroutine has
+	// stopped. The channel MUST be unbuffered for this to work.
+	shutdown chan struct{}
 }
 
 func newProgress() *progress {
@@ -44,7 +49,6 @@ func (p *progress) reportOnce() {
 }
 
 func (p *progress) endSummary() {
-
 	p.shutdown <- struct{}{}
 	<-p.shutdown
 
