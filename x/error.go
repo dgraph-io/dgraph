@@ -78,10 +78,10 @@ func Wrap(err error) error {
 
 // Wrapf is Wrap with extra info.
 func Wrapf(err error, format string, args ...interface{}) error {
+	if err == nil {
+		return nil
+	}
 	if !Config.DebugMode {
-		if err == nil {
-			return nil
-		}
 		return fmt.Errorf(format+" error: %+v", append(args, err)...)
 	}
 	return errors.Wrapf(err, format, args...)
