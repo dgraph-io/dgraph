@@ -9,7 +9,11 @@ import (
 type progress struct {
 	rdfCount     int64
 	lastRDFCount int64
-	start        time.Time
+
+	edgeCount     int64
+	lastEdgeCount int64
+
+	start time.Time
 
 	// shutdown is a bidirectional channel used to manage the stopping of the
 	// report goroutine. It handles both the request to stop the report
@@ -39,13 +43,18 @@ func (p *progress) report() {
 
 func (p *progress) reportOnce() {
 	rdfCount := atomic.LoadInt64(&p.rdfCount)
+	edgeCount := atomic.LoadInt64(&p.edgeCount)
 	elapsed := time.Since(p.start)
-	fmt.Printf("[%s] [RDF count: %d] [RDFs per second: %d]\n",
+	fmt.Printf("[%s] [RDF count: %d] [Edge count: %d] "+
+		"[RDFs per second: %d] [Edges per second: %d]\n",
 		round(elapsed).String(),
 		rdfCount,
+		edgeCount,
 		int(float64(rdfCount)/elapsed.Seconds()),
+		int(float64(edgeCount)/elapsed.Seconds()),
 	)
 	p.lastRDFCount = rdfCount
+	p.lastEdgeCount = edgeCount
 }
 
 func (p *progress) endSummary() {
