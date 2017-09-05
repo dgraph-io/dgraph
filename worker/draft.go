@@ -756,7 +756,9 @@ func (n *node) runReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
 			}
 			activeRctx := counter.Generate()
 			timer.Reset(10 * time.Millisecond)
-			// TODO: handle err
+			// We ignore the err - it would be n.ctx cancellation (which we must ignore because
+			// it's our duty to continue until `stop` is triggered) or raft.ErrStopped (which we
+			// must ignore for the same reason).
 			_ = n.Raft().ReadIndex(n.ctx, activeRctx[:])
 		again:
 			select {
