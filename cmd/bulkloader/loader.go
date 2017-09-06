@@ -3,10 +3,8 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
-	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -71,9 +69,9 @@ func (ld *loader) run() {
 	x.Check(err)
 	defer func() { x.Check(os.RemoveAll(tmpPostingsDir)) }()
 
-	var numFlatFiles int
+	var mappedFiles []string
 	go func() {
-		numFlatFiles = writePostings(tmpPostingsDir, ld.postingsCh, ld.prog)
+		mappedFiles = writePostings(tmpPostingsDir, ld.postingsCh, ld.prog)
 		writePostings(tmpPostingsDir, ld.postingsCh, ld.prog)
 		postingWriterWg.Done()
 	}()
@@ -110,11 +108,10 @@ func (ld *loader) run() {
 	close(ld.postingsCh)
 	postingWriterWg.Wait()
 
-	flatPostingChs := make([]chan *protos.FlatPosting, numFlatFiles)
-	for i := 0; i < numFlatFiles; i++ {
+	flatPostingChs := make([]chan *protos.FlatPosting, len(mappedFiles))
+	for i, mappedFile := range mappedFiles {
 		flatPostingChs[i] = make(chan *protos.FlatPosting, 1<<10)
-		filename := filepath.Join(tmpPostingsDir, fmt.Sprintf("map_%06d.bin", i))
-		go readFlatFile(filename, flatPostingChs[i])
+		go readFlatFile(mappedFile, flatPostingChs[i])
 	}
 	shuffleFlatFiles(tmpPostingsDir, flatPostingChs, ld.prog)
 

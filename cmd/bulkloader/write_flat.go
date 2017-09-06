@@ -20,8 +20,9 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
-func writePostings(dir string, postingsCh <-chan *protos.FlatPosting, prog *progress) int {
+func writePostings(dir string, postingsCh <-chan *protos.FlatPosting, prog *progress) []string {
 
+	var filenames []string
 	var fileNum int
 	var postings []*protos.FlatPosting
 	var wg sync.WaitGroup
@@ -31,6 +32,7 @@ func writePostings(dir string, postingsCh <-chan *protos.FlatPosting, prog *prog
 		wg.Add(1)
 		filename := filepath.Join(dir, fmt.Sprintf("map_%06d.bin", fileNum))
 		fileNum++
+		filenames = append(filenames, filename)
 		ps := postings
 		postings = nil
 		sz = 0
@@ -52,7 +54,7 @@ func writePostings(dir string, postingsCh <-chan *protos.FlatPosting, prog *prog
 	}
 
 	wg.Wait()
-	return fileNum
+	return filenames
 }
 
 func sortAndWrite(filename string, postings []*protos.FlatPosting, prog *progress) {
