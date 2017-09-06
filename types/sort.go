@@ -26,7 +26,8 @@ import (
 )
 
 type sortBase struct {
-	values []Val
+	values [][]Val // Each uid could have multiple values which we need to sort it by.
+	desc   []bool  // Sort orders for different values.
 	ul     *protos.List
 	o      []*protos.Facets
 }
@@ -48,70 +49,48 @@ type byValue struct{ sortBase }
 
 // Less compares two elements
 func (s byValue) Less(i, j int) bool {
-	if s.values[i].Tid != s.values[j].Tid {
+	if len(s.values[i]) == 0 || len(s.values[j]) == 0 {
 		return false
 	}
-	switch s.values[i].Tid {
-	case DateTimeID:
-		return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
-	case IntID:
-		return (s.values[i].Value.(int64)) < (s.values[j].Value.(int64))
-	case FloatID:
-		return (s.values[i].Value.(float64)) < (s.values[j].Value.(float64))
-	case StringID, DefaultID:
-		return (s.values[i].Value.(string)) < (s.values[j].Value.(string))
+
+	for idx, _ := range s.values[i] {
+		// We have to look at next value to decide.
+		// TOOD(pawan) - Handle error.
+		if eq, _ := Equal(s.values[i][idx], s.values[j][idx]); eq {
+			continue
+		}
+
+		// Its either less or greater.
+		less, _ := Less(s.values[i][idx], s.values[j][idx])
+		if s.desc[idx] {
+			return !less
+		}
+		return less
 	}
-	x.Fatalf("Unexpected scalar: %v", s.values[i].Tid)
 	return false
 }
 
-func SortStable(v []Val, ul *protos.List, desc bool) error {
-	if len(v) == 0 {
-		return nil
-	}
-	typ := v[0].Tid
-	switch typ {
-	case DateTimeID, IntID, FloatID, StringID, DefaultID:
-		// Don't do anything, we can sort values of this type.
-	default:
-		return fmt.Errorf("Value of type: %s isn't sortable.", typ.Name())
-	}
-
-	var toBeSorted sort.Interface
-	b := sortBase{v, ul, nil}
-	toBeSorted = byValue{b}
-	if desc {
-		toBeSorted = sort.Reverse(toBeSorted)
-	}
-	sort.Stable(toBeSorted)
-	return nil
-}
-
 // Sort sorts the given array in-place.
-func SortWithFacet(v []Val, ul *protos.List, l []*protos.Facets, desc bool) error {
-	if len(v) == 0 {
+func SortWithFacet(v [][]Val, ul *protos.List, l []*protos.Facets, desc []bool) error {
+	if len(v) == 0 || len(v[0]) == 0 {
 		return nil
 	}
-	typ := v[0].Tid
+	typ := v[0][0].Tid
 	switch typ {
 	case DateTimeID, IntID, FloatID, StringID, DefaultID:
 		// Don't do anything, we can sort values of this type.
 	default:
 		return fmt.Errorf("Value of type: %s isn't sortable.", typ.Name())
 	}
-
 	var toBeSorted sort.Interface
-	b := sortBase{v, ul, l}
+	b := sortBase{v, desc, ul, l}
 	toBeSorted = byValue{b}
-	if desc {
-		toBeSorted = sort.Reverse(toBeSorted)
-	}
 	sort.Sort(toBeSorted)
 	return nil
 }
 
 // Sort sorts the given array in-place.
-func Sort(v []Val, ul *protos.List, desc bool) error {
+func Sort(v [][]Val, ul *protos.List, desc []bool) error {
 	return SortWithFacet(v, ul, nil, desc)
 }
 

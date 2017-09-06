@@ -1983,21 +1983,15 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 			for _, uid := range ul.Uids {
 				uidx := algo.IndexOf(temp.SrcUIDs, uid)
 				v := result.ValueMatrix[uidx].Values[0]
-				if bytes.Equal(v.Val, x.Nilbyte) {
-					continue
-				}
 				uids.Uids = append(uids.Uids, uid)
 
 				val, err := convertWithBestEffort(v)
 				if err != nil {
-					return err
+					continue
 				}
-				vals = append(vals, types.Val{
-					Tid:   types.TypeID(v.ValType),
-					Value: val,
-				})
+				vals = append(vals, val)
 			}
-			types.SortStable(vals, uids, order.Desc)
+			types.Sort([][]types.Val{vals}, uids, []bool{order.Desc})
 			ul = uids
 		}
 	}
@@ -2032,14 +2026,14 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		ul := sg.uidMatrix[i]
 		fl := sg.facetsMatrix[i]
 		uids := ul.Uids[:0]
-		values := make([]types.Val, 0, len(ul.Uids))
+		values := make([][]types.Val, 0, len(ul.Uids))
 		facetList := fl.FacetsList[:0]
 		for j := 0; j < len(ul.Uids); j++ {
 			uid := ul.Uids[j]
 			f := fl.FacetsList[j]
 			for _, it := range f.Facets {
 				if it.Key == orderby {
-					values = append(values, facets.ValFor(it))
+					values = append(values, []types.Val{facets.ValFor(it)})
 					uids = append(uids, uid)
 					facetList = append(facetList, f)
 					break
@@ -2049,7 +2043,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		types.SortWithFacet(values, &protos.List{uids}, facetList, sg.Params.FacetOrderDesc)
+		types.SortWithFacet(values, &protos.List{uids}, facetList, []bool{sg.Params.FacetOrderDesc})
 		sg.uidMatrix[i].Uids = uids
 		// We need to update the facetmarix corresponding to changes to uidmatrix.
 		sg.facetsMatrix[i].FacetsList = facetList
@@ -2074,23 +2068,25 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 	if sg.Params.uidToVal == nil {
 		return x.Errorf("Variable: [%s] used before definition.", sg.Params.Order[0].Attr)
 	}
+
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
 		uids := make([]uint64, 0, len(ul.Uids))
-		values := make([]types.Val, 0, len(ul.Uids))
+		values := make([][]types.Val, 0, len(ul.Uids))
 		for _, uid := range ul.Uids {
 			v, ok := sg.Params.uidToVal[uid]
 			if !ok {
 				// We skip the UIDs which don't have a value.
 				continue
 			}
-			values = append(values, v)
+			values = append(values, []types.Val{v})
 			uids = append(uids, uid)
 		}
 		if len(values) == 0 {
 			continue
 		}
-		types.Sort(values, &protos.List{uids}, sg.Params.Order[0].Desc)
+
+		types.Sort(values, &protos.List{uids}, []bool{sg.Params.Order[0].Desc})
 		sg.uidMatrix[i].Uids = uids
 	}
 

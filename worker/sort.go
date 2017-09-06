@@ -402,7 +402,7 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 	typ types.TypeID) error {
 	lenList := len(ul.Uids)
 	uids := make([]uint64, 0, lenList)
-	values := make([]types.Val, 0, lenList)
+	values := make([][]types.Val, 0, lenList)
 	for i := 0; i < lenList; i++ {
 		select {
 		case <-ctx.Done():
@@ -415,10 +415,10 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 				continue
 			}
 			uids = append(uids, uid)
-			values = append(values, val)
+			values = append(values, []types.Val{val})
 		}
 	}
-	err := types.Sort(values, &protos.List{uids}, ts.Desc)
+	err := types.Sort(values, &protos.List{uids}, []bool{ts.Desc})
 	ul.Uids = uids
 	return err
 }

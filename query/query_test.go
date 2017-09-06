@@ -341,6 +341,24 @@ func populateGraph(t *testing.T) {
 
 	// Add some base64 encoded data
 	addEdgeToTypedValue(t, "bin_data", 0x1, types.BinaryID, []byte("YmluLWRhdGE="), nil)
+
+	// Data to check multi-sort.
+	addEdgeToValue(t, "name", 10000, "Alice", nil)
+	addEdgeToValue(t, "age", 10000, "25", nil)
+	addEdgeToValue(t, "name", 10001, "Elizabeth", nil)
+	addEdgeToValue(t, "age", 10001, "75", nil)
+	addEdgeToValue(t, "name", 10002, "Alice", nil)
+	addEdgeToValue(t, "age", 10002, "75", nil)
+	addEdgeToValue(t, "name", 10003, "Bob", nil)
+	addEdgeToValue(t, "age", 10003, "75", nil)
+	addEdgeToValue(t, "name", 10004, "Alice", nil)
+	addEdgeToValue(t, "age", 10004, "75", nil)
+	addEdgeToValue(t, "name", 10005, "Bob", nil)
+	addEdgeToValue(t, "age", 10005, "25", nil)
+	addEdgeToValue(t, "name", 10006, "Colin", nil)
+	addEdgeToValue(t, "age", 10006, "25", nil)
+	addEdgeToValue(t, "name", 10007, "Elizabeth", nil)
+	addEdgeToValue(t, "age", 10007, "25", nil)
 }
 
 func TestGetUID(t *testing.T) {
@@ -7154,7 +7172,7 @@ func TestBoolSort(t *testing.T) {
 	res, _ := gql.Parse(gql.Request{Str: q, Http: true})
 	queryRequest := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
 	err := queryRequest.ProcessQuery(defaultContext())
-	require.NotNil(t, err)
+	require.Error(t, err)
 }
 
 func TestJSONQueryVariables(t *testing.T) {
@@ -9139,4 +9157,33 @@ func TestNearPointMultiPolygon(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.Equal(t, `{"data": {"me":[{"name":"Rick Grimes"}]}}`, js)
+}
+
+func TestMultiSort1(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age) {
+			name
+			age
+		}
+	}`
+
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
+}
+
+func TestSimpleSort(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+	friends(func: uid(0x01)) {
+		friend(orderdesc: dob) {
+			name
+			dob
+		}
+	}
+}`
+	js := processToFastJSON(t, query)
+	fmt.Println(js)
 }
