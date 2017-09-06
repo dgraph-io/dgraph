@@ -992,7 +992,7 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 	}
 	var srcFunc *protos.SrcFunction
 	if sg.SrcFunc != nil {
-		srcFunc = new(protos.SrcFunction)
+		srcFunc = &protos.SrcFunction{}
 		srcFunc.Name = sg.SrcFunc.Name
 		srcFunc.Lang = sg.SrcFunc.Lang
 		srcFunc.IsCount = sg.SrcFunc.IsCount
@@ -1556,6 +1556,7 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 				lists = append(lists, l.Uids)
 			} else if (v.Typ == gql.ANY_VAR || v.Typ == gql.VALUE_VAR) && len(l.Vals) != 0 {
 				// This should happen only once.
+				// TODO: This allows only one value var per subgraph, change it later
 				sg.Params.uidToVal = l.Vals
 			} else if len(l.Vals) != 0 && (v.Typ == gql.ANY_VAR || v.Typ == gql.UID_VAR) {
 				// Derive the UID list from value var.
@@ -1584,33 +1585,34 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 // that as of now.
 func (sg *SubGraph) replaceVarInFunc() error {
 	// Attr would be set to val if the query is of type eq(val(myscore), 35)
-	if sg.SrcFunc != nil && sg.Attr != "val" {
-		var args []gql.Arg
-		// Iterate over the args and replace value args with their values
-		for _, arg := range sg.SrcFunc.Args {
-			if arg.IsValueVar {
-				if len(sg.Params.uidToVal) == 0 {
-					return x.Errorf("No value found for value variable %q", arg.Value)
-				}
-				// We don't care about uids, just take all the values and put as args.
-				// There would be only one value var per subgraph as per current assumptions.
-				seenArgs := make(map[string]struct{})
-				for _, v := range sg.Params.uidToVal {
-					data := types.ValueForType(types.StringID)
-					if err := types.Marshal(v, &data); err != nil {
-						return err
-					}
-					if _, ok := seenArgs[data.Value.(string)]; ok {
-						continue
-					}
-					args = append(args, gql.Arg{Value: data.Value.(string)})
-				}
+	if sg.SrcFunc == nil || sg.Attr == "val" {
+		return nil
+	}
+	var args []gql.Arg
+	// Iterate over the args and replace value args with their values
+	for _, arg := range sg.SrcFunc.Args {
+		if !arg.IsValueVar {
+			args = append(args, arg)
+			continue
+		}
+		if len(sg.Params.uidToVal) == 0 {
+			return x.Errorf("No value found for value variable %q", arg.Value)
+		}
+		// We don't care about uids, just take all the values and put as args.
+		// There would be only one value var per subgraph as per current assumptions.
+		seenArgs := make(map[string]struct{})
+		for _, v := range sg.Params.uidToVal {
+			data := types.ValueForType(types.StringID)
+			if err := types.Marshal(v, &data); err != nil {
+				return err
+			}
+			if _, ok := seenArgs[data.Value.(string)]; ok {
 				continue
 			}
-			args = append(args, arg)
+			args = append(args, gql.Arg{Value: data.Value.(string)})
 		}
-		sg.SrcFunc.Args = args
 	}
+	sg.SrcFunc.Args = args
 	return nil
 }
 
