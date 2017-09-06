@@ -112,7 +112,13 @@ func (ld *loader) run() {
 		flatPostingChs[i] = make(chan *protos.FlatPosting, 1000)
 		go readFlatFile(mappedFile, flatPostingChs[i])
 	}
-	shuffleFlatFiles(tmpPostingsDir, flatPostingChs, ld.prog)
+	batchCh := make(chan []*protos.FlatPosting, 10)
+	go func() {
+		for _ = range batchCh {
+			// TODO: Reduce stage initiated from here.
+		}
+	}()
+	shuffleFlatFiles(batchCh, flatPostingChs, ld.prog)
 
 	ld.prog.endSummary()
 }

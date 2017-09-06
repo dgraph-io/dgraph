@@ -100,30 +100,20 @@ func readFlatFile(filename string, postingCh chan<- *protos.FlatPosting) {
 	close(postingCh)
 }
 
-func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting, prog *progress) {
-	var fileNum int
-	var wg sync.WaitGroup
-	var prevKey []byte
+func shuffleFlatFiles(batchCh chan []*protos.FlatPosting,
+	postingChs []chan *protos.FlatPosting, prog *progress) {
 
 	var ph postingHeap
 	for _, ch := range postingChs {
 		heap.Push(&ph, heapNode{head: <-ch, ch: ch})
 	}
 
-	var buf proto.Buffer
-	writeBuf := func() {
-		filename := filepath.Join(dir, fmt.Sprintf("shu_%06d.bin", fileNum))
-		fileNum++
-		wg.Add(1)
-		go func(buf []byte) {
-			x.Check(x.WriteFileSync(filename, buf, 0644))
-			wg.Done()
-		}(buf.Bytes())
-		buf.SetBuf(nil)
-	}
-
+	const batchSize = 1e5
+	const batchAlloc = batchSize * 11 / 10
+	batch := make([]*protos.FlatPosting, 0, batchAlloc)
+	var prevKey []byte
 	for len(ph.data) > 0 {
-		msg := ph.data[0].head
+		p := ph.data[0].head
 		var ok bool
 		ph.data[0].head, ok = <-ph.data[0].ch
 		if ok {
@@ -132,18 +122,18 @@ func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting, prog *p
 			heap.Pop(&ph)
 		}
 
-		if len(buf.Bytes()) > 32<<20 && bytes.Compare(prevKey, msg.Key) != 0 {
-			writeBuf()
+		if len(batch) >= batchSize && bytes.Compare(prevKey, p.Key) != 0 {
+			batchCh <- batch
+			batch = make([]*protos.FlatPosting, 0, batchAlloc)
 		}
-		prevKey = msg.Key
+		prevKey = p.Key
 
-		x.Check(buf.EncodeMessage(msg))
+		batch = append(batch, p)
 		atomic.AddInt64(&prog.shuffleEdgeCount, 1)
 	}
-	if len(buf.Bytes()) > 0 {
-		writeBuf()
+	if len(batch) > 0 {
+		batchCh <- batch
 	}
-	wg.Wait()
 }
 
 type heapNode struct {
