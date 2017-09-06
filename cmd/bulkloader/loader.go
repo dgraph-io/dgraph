@@ -3,7 +3,9 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
+	"encoding/binary"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -152,13 +155,30 @@ func (ld *loader) schemaStage() {
 }
 
 func (ld *loader) leaseStage() {
-	lease := ld.um.lease()
-
-	p := &protos.Posting{}
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], ld.um.lease())
+	p := &protos.Posting{
+		Uid:         math.MaxUint64,
+		Value:       buf[:],
+		ValType:     protos.Posting_INT,
+		PostingType: protos.Posting_VALUE,
+	}
+	pl := &protos.PostingList{
+		Postings: []*protos.Posting{p},
+		Uids:     bp128.DeltaPack([]uint64{math.MaxUint64}),
+	}
+	plBuf, err := pl.Marshal()
+	x.Check(err)
+	x.Check(ld.kv.Set(
+		x.DataKey("_lease_", 1),
+		plBuf,
+		0x00,
+	))
 }
 
 func (ld *loader) cleanup() {
 	ld.prog.endSummary()
+	x.Check(ld.kv.Close())
 	if len(ld.mapOutput) > 0 {
 		dir := filepath.Dir(ld.mapOutput[0])
 		x.Check(os.RemoveAll(dir))
