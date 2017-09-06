@@ -40,6 +40,7 @@ import (
 )
 
 var (
+	lhmapNumShards   = runtime.NumCPU() * 4
 	dummyPostingList []byte // Used for indexing.
 	elog             trace.EventLog
 )
@@ -60,10 +61,8 @@ const (
 // This watermark would be used for taking snapshots, to ensure that all the data and
 // index mutations have been syned to RocksDB, before a snapshot is taken, and previous
 // RAFT entries discarded.
-type syncMarks struct {
-	sync.RWMutex
-	m map[uint32]*x.WaterMark
-}
+// NOTE: Each Dgraph server is now serving only one group. So, syncMarks wrapper has been replaced
+// with marks.
 
 func init() {
 	x.AddInit(func() {
@@ -76,38 +75,6 @@ func init() {
 		x.Check(err)
 	})
 	elog = trace.NewEventLog("Memory", "")
-}
-
-func (g *syncMarks) create(group uint32) *x.WaterMark {
-	g.Lock()
-	defer g.Unlock()
-	if g.m == nil {
-		g.m = make(map[uint32]*x.WaterMark)
-	}
-
-	if prev, present := g.m[group]; present {
-		return prev
-	}
-	w := &x.WaterMark{Name: fmt.Sprintf("Synced: Group %d", group)}
-	w.Init()
-	g.m[group] = w
-	return w
-}
-
-func (g *syncMarks) Get(group uint32) *x.WaterMark {
-	g.RLock()
-	if w, present := g.m[group]; present {
-		g.RUnlock()
-		return w
-	}
-	g.RUnlock()
-	return g.create(group)
-}
-
-// SyncMarkFor returns the synced watermark for the given RAFT group.
-// We use this to determine the index to use when creating a new snapshot.
-func SyncMarkFor(group uint32) *x.WaterMark {
-	return marks.Get(group)
 }
 
 func gentleCommit(dirtyMap map[string]time.Time, pending chan struct{},
@@ -278,36 +245,49 @@ func updateMemoryMetrics() {
 	}
 }
 
+type fingerPrint struct {
+	gid uint32
+}
+
+const (
+	syncChCapacity = 10000
+)
+
 var (
 	pstore    *badger.KV
 	dirtyChan chan []byte // All dirty posting list keys are pushed here.
-	marks     *syncMarks
-	lcache    *listCache
+	// We use this to determine the index to use when creating a new snapshot.
+	marks  *x.WaterMark
+	lcache *listCache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.KV) {
-	marks = new(syncMarks)
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
 	x.LcacheCapacity.Set(math.MaxInt64)
 	dirtyChan = make(chan []byte, 10000)
+	marks = &x.WaterMark{Name: "Synced"}
 
 	go periodicCommit()
 	go updateMemoryMetrics()
 }
 
-// Get stores the List corresponding to key, if it's not there already.
+func SyncMark() *x.WaterMark {
+	return marks
+}
+
+// GetOrCreate stores the List corresponding to key, if it's not there already.
 // to lru cache and returns it.
 //
-// plist := Get(key, group)
+// plist := GetOrCreate(key, store)
 // ... // Use plist
 // TODO: This should take a node id and index. And just append all indices to a list.
 // When doing a commit, it should update all the sync index watermarks.
 // worker pkg would push the indices to the watermarks held by lists.
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
-func Get(key []byte, group uint32) (rlist *List) {
+func GetOrCreate(key []byte, group uint32) (rlist *List) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
 		x.CacheHit.Add(1)
@@ -318,29 +298,8 @@ func Get(key []byte, group uint32) (rlist *List) {
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
 	l := getNew(key, pstore)
-	l.water = marks.Get(group)
-	// We are always going to return lp to caller, whether it is l or not
-	lp = lcache.PutIfMissing(string(key), l)
-	if lp != l {
-		x.CacheRace.Add(1)
-	}
-	return lp
-}
+	l.water = marks
 
-// getOrMutate is similar to GetLru the only difference being that for index and count keys it also
-// does a SetIfAbsentAsync. This function should be called by functions in the mutation path only.
-func getOrMutate(key []byte, group uint32) (rlist *List) {
-	lp := lcache.Get(string(key))
-	if lp != nil {
-		x.CacheHit.Add(1)
-		return lp
-	}
-	x.CacheMiss.Add(1)
-
-	// Any initialization for l must be done before PutIfMissing. Once it's added
-	// to the map, any other goroutine can retrieve it.
-	l := getNew(key, pstore)
-	l.water = marks.Get(group)
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
 
@@ -348,23 +307,27 @@ func getOrMutate(key []byte, group uint32) (rlist *List) {
 		x.CacheRace.Add(1)
 	} else {
 		pk := x.Parse(key)
-		x.AssertTrue(pk.IsIndex() || pk.IsCount())
-		// This is a best effort set, hence we don't check error from callback.
-		if err := pstore.SetIfAbsentAsync(key, nil, 0x00, func(err error) {}); err != nil &&
-			err != badger.ErrKeyExists {
-			x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
+		if pk.IsIndex() || pk.IsCount() {
+			// This is a best effort set, hence we don't check error from callback.
+			if err := pstore.SetIfAbsentAsync(key, nil, 0x00, func(err error) {}); err != nil &&
+				err != badger.ErrKeyExists {
+				x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
+			}
 		}
 	}
+
 	return lp
 }
 
-// GetNoStore takes a key. It checks if the in-memory map has an updated value and returns it if it exists
-// or it gets from the store and DOES NOT ADD to lru cache.
-func GetNoStore(key []byte) (rlist *List) {
+// Get takes a key and a groupID. It checks if the in-memory map has an
+// updated value and returns it if it exists or it gets from the store and DOES NOT ADD to lhmap.
+func Get(key []byte) (rlist *List) {
 	lp := lcache.Get(string(key))
+
 	if lp != nil {
 		return lp
 	}
+
 	lp = getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	return lp
 }
