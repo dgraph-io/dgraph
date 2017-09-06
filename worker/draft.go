@@ -273,7 +273,7 @@ func (n *node) processMutation(pid uint32, index uint64, edge *protos.DirectedEd
 	}
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
-	if err := runMutation(ctx, edge); err != nil {
+	if err := runMutation(ctx, edge, n.Wal); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
@@ -290,7 +290,7 @@ func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.Schema
 	}
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(n.ctx, "raft", rv)
-	if err := runSchemaMutation(ctx, s); err != nil {
+	if err := runSchemaMutation(ctx, s, n.Wal); err != nil {
 		if tr, ok := trace.FromContext(n.ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
@@ -753,6 +753,8 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	x.Printf("Group %d found %d entries\n", n.gid, len(es))
 	if len(es) > 0 {
 		restart = true
+		// Restore to the state at the time of snapshot
+		n.Wal.RestoreInternalData(sp.Metadata.Index, pstore)
 	}
 	rerr = n.Store.Append(es)
 	return

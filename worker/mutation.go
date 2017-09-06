@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -42,7 +43,7 @@ const (
 
 // runMutation goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
-func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
+func runMutation(ctx context.Context, edge *protos.DirectedEdge, w *raftwal.Wal) error {
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("In run mutations")
 	}
@@ -79,6 +80,14 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 		}
 	}
 
+	// TODO: Find some other way for count index :(
+	if schema.State().IsIndexed(edge.Attr) {
+		pl := plist.MergedPostingList()
+		data, err := pl.Marshal()
+		x.Check(err)
+		// Since multiple rdf's would be running in parallel, this should be ok to do
+		w.StoreInternalData(rv.Index, key, data)
+	}
 	if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
 		return err // abort applying the rest of them.
 	}
@@ -87,7 +96,7 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
-func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
+func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, w *raftwal.Wal) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	n := groups().Node(rv.Group)
 	// Wait for applied watermark to reach till previous index
@@ -102,6 +111,9 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 	}
 	old, ok := schema.State().Get(update.Predicate)
 	current := schema.From(update)
+	data, err := old.Marshal()
+	x.Check(err)
+	w.StoreInternalData(rv.Index, x.SchemaKey(update.Predicate), data)
 	updateSchema(update.Predicate, current, rv.Index, rv.Group)
 
 	// Once we remove index or reverse edges from schema, even though the values
