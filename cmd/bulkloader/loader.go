@@ -111,20 +111,18 @@ func (ld *loader) mapStage() {
 func (ld *loader) reduceStage() {
 	// Read from map stage.
 	flatPostingChs := make([]chan *protos.FlatPosting, len(ld.mappedFiles))
+	uniDirFlatPostingChs := make([]<-chan *protos.FlatPosting, len(ld.mappedFiles))
 	for i, mappedFile := range ld.mappedFiles {
 		flatPostingChs[i] = make(chan *protos.FlatPosting, 1000)
+		uniDirFlatPostingChs[i] = flatPostingChs[i]
 		go readFlatFile(mappedFile, flatPostingChs[i])
 	}
 
-	// Shuffle stage.
-	uniDirFlatPostingChs := make([]<-chan *protos.FlatPosting, len(flatPostingChs))
-	for i, ch := range flatPostingChs {
-		uniDirFlatPostingChs[i] = ch
-	}
+	// Shuffle concurrently with reduce.
 	batchCh := make(chan []*protos.FlatPosting, 2) // Small buffer size since each element has a lot of data.
 	go shuffleFlatFiles(batchCh, uniDirFlatPostingChs, ld.prog)
 
-	// Reduce.
+	// Reduce stage.
 	counter := make(chan struct{}, ld.opt.numGoroutines)
 	var reduceWg sync.WaitGroup
 	for batch := range batchCh {

@@ -43,9 +43,9 @@ func (p *progress) report() {
 func (p *progress) reportOnce() {
 
 	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
-	shuffleEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
+	reduceEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
 
-	if shuffleEdgeCount == 0 {
+	if reduceEdgeCount == 0 {
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
 		elapsed := time.Since(p.start)
 		fmt.Printf("[MAP] [%s] [RDF count: %d] [Edge count: %d] "+
@@ -63,12 +63,12 @@ func (p *progress) reportOnce() {
 			p.startReduce = time.Now()
 			elapsed = time.Second
 		}
-		shuffleEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
+		reduceEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
 		fmt.Printf("[REDUCE] [%s] [%.2f%%] [Edge count: %d] [Edges per second: %d]\n",
 			round(now.Sub(p.start)).String(),
-			100*float64(shuffleEdgeCount)/float64(mapEdgeCount),
-			shuffleEdgeCount,
-			int(float64(shuffleEdgeCount)/elapsed.Seconds()),
+			100*float64(reduceEdgeCount)/float64(mapEdgeCount),
+			reduceEdgeCount,
+			int(float64(reduceEdgeCount)/elapsed.Seconds()),
 		)
 	}
 }
