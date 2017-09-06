@@ -125,7 +125,8 @@ type params struct {
 	AfterUID   uint64
 	DoCount    bool
 	GetUid     bool
-	Order      []gql.Order
+	OrderAttr  []string
+	OrderDesc  []bool
 	Var        string
 	NeedsVar   []gql.VarContext
 	ParentVars map[string]varValue
@@ -682,7 +683,8 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			FacetOrder:     gchild.FacetOrder,
 			FacetOrderDesc: gchild.FacetDesc,
 			IgnoreReflex:   sg.Params.IgnoreReflex,
-			Order:          gchild.Order,
+			OrderAttr:      gq.OrderAttr,
+			OrderDesc:      gq.OrderDesc,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &protos.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -705,7 +707,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			return err
 		}
 
-		if len(args.Order) != 0 && len(args.FacetOrder) != 0 {
+		if len(args.OrderAttr) != 0 && len(args.FacetOrder) != 0 {
 			return x.Errorf("Cannot specify order at both args and facets")
 		}
 
@@ -870,7 +872,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		uidCount:     gq.UidCount,
 		IgnoreReflex: gq.IgnoreReflex,
 		IsEmpty:      gq.IsEmpty,
-		Order:        gq.Order,
+		OrderAttr:    gq.OrderAttr,
+		OrderDesc:    gq.OrderDesc,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -1286,7 +1289,7 @@ func (sg *SubGraph) updateFacetMatrix() {
 func (sg *SubGraph) updateUidMatrix() {
 	sg.updateFacetMatrix()
 	for _, l := range sg.uidMatrix {
-		if len(sg.Params.Order) > 0 {
+		if len(sg.Params.OrderAttr) > 0 {
 			// We can't do intersection directly as the list is not sorted by UIDs.
 			// So do filter.
 			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
@@ -1765,7 +1768,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if len(sg.Params.Order) == 0 && len(sg.Params.FacetOrder) == 0 {
+	if len(sg.Params.OrderAttr) == 0 && len(sg.Params.FacetOrder) == 0 {
 		// There is no ordering. Just apply pagination and return.
 		if err = sg.applyPagination(ctx); err != nil {
 			rch <- err
@@ -1913,13 +1916,12 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 // applyOrderAndPagination orders each posting list by a given attribute
 // before applying pagination.
 func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
-	if len(sg.Params.Order) == 0 && len(sg.Params.FacetOrder) == 0 {
+	if len(sg.Params.OrderAttr) == 0 && len(sg.Params.FacetOrder) == 0 {
 		return nil
 	}
 
 	sg.updateUidMatrix()
 
-	// TODO(pawan) - Decide ordering facet/other orders.
 	// See if we need to apply order based on facet.
 	if len(sg.Params.FacetOrder) != 0 {
 		return sg.sortAndPaginateUsingFacet(ctx)
@@ -1927,7 +1929,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	for _, it := range sg.Params.NeedsVar {
 		// TODO(pawan) - Change this later when you have multi sorting in place.
-		if len(sg.Params.Order) > 0 && it.Name == sg.Params.Order[0].Attr && (it.Typ == gql.VALUE_VAR) {
+		if len(sg.Params.OrderAttr) > 0 && it.Name == sg.Params.OrderAttr[0] && (it.Typ == gql.VALUE_VAR) {
 			// If the Order name is same as var name and it's a value variable, we sort using that variable.
 			return sg.sortAndPaginateUsingVar(ctx)
 		}
@@ -1938,18 +1940,17 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		sg.Params.Count = 1000
 	}
 
-	x.AssertTrue(len(sg.Params.Order) > 0)
+	x.AssertTrue(len(sg.Params.OrderAttr) > 0)
 
-	// For first sort, we want to actually sort over network
-	order := sg.Params.Order[0]
+	// For the first sort, we want to sort over network and get the uids and optionally the values
+	// if the user specified multiple sort.
 	sort := &protos.SortMessage{
-		Attr:      order.Attr,
+		Attr:      sg.Params.OrderAttr,
 		Langs:     sg.Params.Langs,
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
-		Desc:      order.Desc,
-		Multiple:  len(sg.Params.Order) > 1,
+		Desc:      sg.Params.OrderDesc,
 	}
 	result, err := worker.SortOverNetwork(ctx, sort)
 	if err != nil {
@@ -1958,87 +1959,87 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))
 	sg.uidMatrix = result.UidMatrix
-	// Update the destUids as we might have removed some UIDs.
+	// Update the destUids as we might have removed some UIDs for which we didn't find any values
+	// while sorting.
 	sg.updateDestUids(ctx)
-	if !sort.Multiple {
-		// We are done here.
-		return nil
-	}
 
 	// For each uid in dest uids, we have multiple values which belong to different attributes.
-	sortVals := make([][]types.Val, len(sg.DestUIDs.Uids))
-	for idx := range sortVals {
-		sortVals[idx] = make([]types.Val, 0, len(sg.Params.Order))
-	}
+	// 1  -> [ "Alice", 23, "1932-01-01"]
+	// 10 -> [ "Bob", 35, "1912-02-01" ]
+	//	sortVals := make([][]types.Val, len(sg.DestUIDs.Uids))
+	//	for idx := range sortVals {
+	//		sortVals[idx] = make([]types.Val, 0, len(sg.Params.OrderAttr))
+	//	}
+	//
+	//	// Walk through the uidMatrix and put values for this attribute in sortVals.
+	//	for i, ul := range sg.uidMatrix {
+	//		x.AssertTrue(len(ul.Uids) == len(result.ValueMatrix[i].Values))
+	//		for j, uid := range ul.Uids {
+	//			uidx := algo.IndexOf(sg.DestUIDs, uid)
+	//			x.AssertTrue(uidx >= 0)
+	//
+	//			if len(sortVals[uidx]) > 0 {
+	//				// We have already seen this uid.
+	//				continue
+	//			}
+	//
+	//			val, err := convertWithBestEffort(result.ValueMatrix[i].Values[j], sg.Attr)
+	//			if err != nil {
+	//				return err
+	//			}
+	//			sortVals[uidx] = append(sortVals[uidx], val)
+	//		}
+	//	}
+	//
+	//	desc := make([]bool, 0, len(sg.Params.OrderAttr))
+	//	for idx, order := range sg.Params.Order {
+	//		desc = append(desc, order.Desc)
+	//		// TODO(pawan) - Run sorts in parallel.
+	//		if idx == 0 {
+	//			// We already fetched this above.
+	//			continue
+	//		}
+	//
+	//		// For rest of them we just fetch the values and do a sort at the end.
+	//		temp := new(SubGraph)
+	//		temp.Attr = order.Attr
+	//		temp.SrcUIDs = sg.DestUIDs
+	//		taskQuery := createTaskQuery(temp)
+	//		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+	//		if err != nil {
+	//			return err
+	//		}
+	//
+	//		seenUid := make(map[uint64]bool)
+	//		x.AssertTrue(len(sg.DestUIDs.Uids) == len(result.ValueMatrix))
+	//		for i, uid := range sg.DestUIDs.Uids {
+	//			v := result.ValueMatrix[i].Values[0]
+	//			val, err := convertWithBestEffort(v, sg.Attr)
+	//			if err != nil {
+	//				// TODO - Insert null value if not present.
+	//				return err
+	//			}
+	//			if seenUid[uid] {
+	//				// We have already seen this uid.
+	//				continue
+	//			}
+	//			sortVals[i] = append(sortVals[i], val)
+	//		}
+	//	}
+	//
+	//	// Values have been accumulated, now we do the multisort.
+	//	for i, ul := range sg.uidMatrix {
+	//		vals := make([][]types.Val, len(ul.Uids))
+	//		for j, uid := range ul.Uids {
+	//			idx := algo.IndexOf(sg.DestUIDs, uid)
+	//			x.AssertTrue(idx >= 0)
+	//			vals[j] = sortVals[idx]
+	//		}
+	//		types.Sort(vals, ul, desc)
+	//		// TODO - Paginate
+	//		sg.uidMatrix[i] = ul
+	//	}
 
-	// TODO - See if it might make sense to send a ValueList instead of a ValueMatrix.
-	for i, ul := range sg.uidMatrix {
-		x.AssertTrue(len(ul.Uids) == len(result.ValueMatrix[i].Values))
-		for j, uid := range ul.Uids {
-			uidx := algo.IndexOf(sg.DestUIDs, uid)
-			x.AssertTrue(uidx >= 0)
-
-			if len(sortVals[uidx]) > 0 {
-				// We have already seen this uid.
-				continue
-			}
-			val, err := convertWithBestEffort(result.ValueMatrix[i].Values[j], sg.Attr)
-			if err != nil {
-				return err
-			}
-			sortVals[uidx] = append(sortVals[uidx], val)
-		}
-	}
-
-	desc := make([]bool, 0, len(sg.Params.Order))
-	for idx, order := range sg.Params.Order {
-		desc = append(desc, order.Desc)
-		// TODO(pawan) - Run sorts in parallel.
-		if idx == 0 {
-			// We already fetched this above.
-			continue
-		}
-
-		// For rest of them we just fetch the values and do a sort at the end.
-		temp := new(SubGraph)
-		temp.Attr = order.Attr
-		temp.SrcUIDs = sg.DestUIDs
-		taskQuery := createTaskQuery(temp)
-		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-		if err != nil {
-			return err
-		}
-
-		seenUid := make(map[uint64]bool)
-		x.AssertTrue(len(sg.DestUIDs.Uids) == len(result.ValueMatrix))
-		for i, uid := range sg.DestUIDs.Uids {
-			v := result.ValueMatrix[i].Values[0]
-			val, err := convertWithBestEffort(v, sg.Attr)
-			if err != nil {
-				// TODO - Insert empty value if not present.
-				return err
-			}
-			if seenUid[uid] {
-				// We have already seen this uid.
-				continue
-			}
-			sortVals[i] = append(sortVals[i], val)
-		}
-	}
-
-	// Values have been accumulated, now we do the multisort.
-	for i, ul := range sg.uidMatrix {
-		vals := make([][]types.Val, len(ul.Uids))
-		for j, uid := range ul.Uids {
-			idx := algo.IndexOf(sg.DestUIDs, uid)
-			x.AssertTrue(idx >= 0)
-			vals[j] = sortVals[idx]
-		}
-		types.Sort(vals, ul, desc)
-		sg.uidMatrix[i] = ul
-	}
-
-	// TODO - Paginate results again if its Multisort.
 	return nil
 }
 
@@ -2109,7 +2110,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 
 func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 	if sg.Params.uidToVal == nil {
-		return x.Errorf("Variable: [%s] used before definition.", sg.Params.Order[0].Attr)
+		return x.Errorf("Variable: [%s] used before definition.", sg.Params.OrderAttr[0])
 	}
 
 	for i := 0; i < len(sg.uidMatrix); i++ {
@@ -2129,7 +2130,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 			continue
 		}
 
-		types.Sort(values, &protos.List{uids}, []bool{sg.Params.Order[0].Desc})
+		types.Sort(values, &protos.List{uids}, []bool{sg.Params.OrderDesc[0]})
 		sg.uidMatrix[i].Uids = uids
 	}
 
@@ -2221,8 +2222,8 @@ func (sg *SubGraph) getAllPredicates(predicates map[string]bool) {
 	if len(sg.Attr) != 0 {
 		predicates[sg.Attr] = true
 	}
-	if len(sg.Params.Order) != 0 {
-		predicates[sg.Params.Order[0].Attr] = true
+	if len(sg.Params.OrderAttr) != 0 {
+		predicates[sg.Params.OrderAttr[0]] = true
 	}
 	if len(sg.Params.groupbyAttrs) != 0 {
 		for _, pred := range sg.Params.groupbyAttrs {

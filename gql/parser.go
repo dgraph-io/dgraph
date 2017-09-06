@@ -51,8 +51,10 @@ type GraphQuery struct {
 	Func       *Function
 	Expand     string // Which variable to expand with.
 
-	Args         map[string]string
-	Order        []Order
+	Args map[string]string
+	// Query can have multiple sort parameters.
+	OrderAttr    []string
+	OrderDesc    []bool
 	Children     []*GraphQuery
 	Filter       *FilterTree
 	MathExp      *MathTree
@@ -145,12 +147,6 @@ type Function struct {
 type Facets struct {
 	AllKeys bool
 	Keys    []string // should be in sorted order.
-}
-
-// Represents an order pair.
-type Order struct {
-	Attr string // attr to order by
-	Desc bool
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -2240,10 +2236,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				if order[val] {
 					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}
-				gq.Order = append(gq.Order, Order{
-					Attr: val,
-					Desc: key == "orderdesc",
-				})
+				gq.OrderAttr = append(gq.OrderAttr, val)
+				gq.OrderDesc = append(gq.OrderDesc, key == "orderdesc")
 				order[val] = true
 				continue
 			}
@@ -2621,10 +2615,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					if order[p.Val] {
 						return x.Errorf("Sorting by an attribute: [%s] can only be done once", p.Val)
 					}
-					curp.Order = append(curp.Order, Order{
-						Attr: p.Val,
-						Desc: p.Key == "orderdesc",
-					})
+					curp.OrderAttr = append(curp.OrderAttr, p.Val)
+					curp.OrderDesc = append(curp.OrderDesc, p.Key == "orderdesc")
 					order[p.Val] = true
 					continue
 				}
