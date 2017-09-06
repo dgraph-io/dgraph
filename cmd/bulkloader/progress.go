@@ -41,7 +41,6 @@ func (p *progress) report() {
 }
 
 func (p *progress) reportOnce() {
-
 	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
 	reduceEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
 

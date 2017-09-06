@@ -33,8 +33,8 @@ type state struct {
 
 type loader struct {
 	*state
-	mappers     []*mapper
-	mappedFiles []string
+	mappers   []*mapper
+	mapOutput []string
 }
 
 func newLoader(opt options) *loader {
@@ -71,7 +71,7 @@ func (ld *loader) mapStage() {
 	x.Check(err)
 
 	go func() {
-		ld.mappedFiles = writeMappedFiles(tmpPostingsDir, ld.postingsCh, ld.prog)
+		ld.mapOutput = writeMapOutput(tmpPostingsDir, ld.postingsCh, ld.prog)
 		postingWriterWg.Done()
 	}()
 
@@ -110,27 +110,25 @@ func (ld *loader) mapStage() {
 
 func (ld *loader) reduceStage() {
 	// Read from map stage.
-	flatPostingChs := make([]chan *protos.FlatPosting, len(ld.mappedFiles))
-	uniDirFlatPostingChs := make([]<-chan *protos.FlatPosting, len(ld.mappedFiles))
-	for i, mappedFile := range ld.mappedFiles {
-		flatPostingChs[i] = make(chan *protos.FlatPosting, 1000)
-		uniDirFlatPostingChs[i] = flatPostingChs[i]
-		go readFlatFile(mappedFile, flatPostingChs[i])
+	shuffleInputChs := make([]chan *protos.FlatPosting, len(ld.mapOutput))
+	for i, mappedFile := range ld.mapOutput {
+		shuffleInputChs[i] = make(chan *protos.FlatPosting, 1000)
+		go readMapOutput(mappedFile, shuffleInputChs[i])
 	}
 
 	// Shuffle concurrently with reduce.
-	batchCh := make(chan []*protos.FlatPosting, 2) // Small buffer size since each element has a lot of data.
-	go shuffleFlatFiles(batchCh, uniDirFlatPostingChs, ld.prog)
+	reduceCh := make(chan []*protos.FlatPosting, 3) // Small buffer size since each element has a lot of data.
+	go shufflePostings(reduceCh, shuffleInputChs, ld.prog)
 
 	// Reduce stage.
-	counter := make(chan struct{}, ld.opt.numGoroutines)
+	pending := make(chan struct{}, ld.opt.numGoroutines)
 	var reduceWg sync.WaitGroup
-	for batch := range batchCh {
-		counter <- struct{}{}
+	for batch := range reduceCh {
+		pending <- struct{}{}
 		reduceWg.Add(1)
 		go func() {
 			reduce(batch, ld.prog)
-			<-counter
+			<-pending
 			reduceWg.Done()
 		}()
 	}
@@ -140,8 +138,8 @@ func (ld *loader) reduceStage() {
 }
 
 func (ld *loader) cleanup() {
-	if len(ld.mappedFiles) > 0 {
-		dir := filepath.Dir(ld.mappedFiles[0])
+	if len(ld.mapOutput) > 0 {
+		dir := filepath.Dir(ld.mapOutput[0])
 		x.Check(os.RemoveAll(dir))
 	}
 }

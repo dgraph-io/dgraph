@@ -18,7 +18,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
-func writeMappedFiles(dir string, postingsCh <-chan *protos.FlatPosting, prog *progress) []string {
+func writeMapOutput(dir string, postingsCh <-chan *protos.FlatPosting, prog *progress) []string {
 
 	var filenames []string
 	var fileNum int
@@ -68,7 +68,7 @@ func sortAndWrite(filename string, postings []*protos.FlatPosting, prog *progres
 	x.Check(x.WriteFileSync(filename, buf.Bytes(), 0644))
 }
 
-func readFlatFile(filename string, postingCh chan<- *protos.FlatPosting) {
+func readMapOutput(filename string, postingCh chan<- *protos.FlatPosting) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	defer fd.Close()
@@ -87,8 +87,8 @@ func readFlatFile(filename string, postingCh chan<- *protos.FlatPosting) {
 		}
 		x.Check2(r.Discard(n))
 
-		for len(unmarshalBuf) < int(sz) {
-			unmarshalBuf = make([]byte, 2*len(unmarshalBuf))
+		for cap(unmarshalBuf) < int(sz) {
+			unmarshalBuf = make([]byte, sz)
 		}
 		x.Check2(io.ReadFull(r, unmarshalBuf[:sz]))
 
@@ -99,22 +99,22 @@ func readFlatFile(filename string, postingCh chan<- *protos.FlatPosting) {
 	close(postingCh)
 }
 
-func shuffleFlatFiles(batchCh chan<- []*protos.FlatPosting,
-	postingChs []<-chan *protos.FlatPosting, prog *progress) {
+func shufflePostings(batchCh chan<- []*protos.FlatPosting,
+	postingChs []chan *protos.FlatPosting, prog *progress) {
 
 	var ph postingHeap
 	for _, ch := range postingChs {
-		heap.Push(&ph, heapNode{head: <-ch, ch: ch})
+		heap.Push(&ph, heapNode{posting: <-ch, ch: ch})
 	}
 
 	const batchSize = 1e5
 	const batchAlloc = batchSize * 11 / 10
 	batch := make([]*protos.FlatPosting, 0, batchAlloc)
 	var prevKey []byte
-	for len(ph.data) > 0 {
-		p := ph.data[0].head
+	for len(ph.nodes) > 0 {
+		p := ph.nodes[0].posting
 		var ok bool
-		ph.data[0].head, ok = <-ph.data[0].ch
+		ph.nodes[0].posting, ok = <-ph.nodes[0].ch
 		if ok {
 			heap.Fix(&ph, 0)
 		} else {
@@ -136,28 +136,28 @@ func shuffleFlatFiles(batchCh chan<- []*protos.FlatPosting,
 }
 
 type heapNode struct {
-	head *protos.FlatPosting
-	ch   <-chan *protos.FlatPosting
+	posting *protos.FlatPosting
+	ch      <-chan *protos.FlatPosting
 }
 
 type postingHeap struct {
-	data []heapNode
+	nodes []heapNode
 }
 
 func (h *postingHeap) Len() int {
-	return len(h.data)
+	return len(h.nodes)
 }
 func (h *postingHeap) Less(i, j int) bool {
-	return bytes.Compare(h.data[i].head.Key, h.data[j].head.Key) < 0
+	return bytes.Compare(h.nodes[i].posting.Key, h.nodes[j].posting.Key) < 0
 }
 func (h *postingHeap) Swap(i, j int) {
-	h.data[i], h.data[j] = h.data[j], h.data[i]
+	h.nodes[i], h.nodes[j] = h.nodes[j], h.nodes[i]
 }
 func (h *postingHeap) Push(x interface{}) {
-	h.data = append(h.data, x.(heapNode))
+	h.nodes = append(h.nodes, x.(heapNode))
 }
 func (h *postingHeap) Pop() interface{} {
-	elem := h.data[len(h.data)-1]
-	h.data = h.data[:len(h.data)-1]
+	elem := h.nodes[len(h.nodes)-1]
+	h.nodes = h.nodes[:len(h.nodes)-1]
 	return elem
 }
