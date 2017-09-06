@@ -24,5 +24,7 @@ func main() {
 	flag.Parse()
 
 	loader := newLoader(opt)
-	loader.run()
+	loader.mapStage()
+	loader.reduceStage()
+	loader.cleanup()
 }

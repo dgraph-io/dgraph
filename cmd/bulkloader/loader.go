@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -32,7 +33,8 @@ type state struct {
 
 type loader struct {
 	*state
-	mappers []*mapper
+	mappers     []*mapper
+	mappedFiles []string
 }
 
 func newLoader(opt options) *loader {
@@ -59,7 +61,7 @@ func newLoader(opt options) *loader {
 	return ld
 }
 
-func (ld *loader) run() {
+func (ld *loader) mapStage() {
 	go ld.prog.report()
 
 	var postingWriterWg sync.WaitGroup
@@ -67,11 +69,9 @@ func (ld *loader) run() {
 
 	tmpPostingsDir, err := ioutil.TempDir(ld.opt.tmpDir, "bulkloader_tmp_posting_")
 	x.Check(err)
-	defer func() { x.Check(os.RemoveAll(tmpPostingsDir)) }()
 
-	var mappedFiles []string
 	go func() {
-		mappedFiles = writeMappedFiles(tmpPostingsDir, ld.postingsCh, ld.prog)
+		ld.mappedFiles = writeMappedFiles(tmpPostingsDir, ld.postingsCh, ld.prog)
 		postingWriterWg.Done()
 	}()
 
@@ -106,26 +106,44 @@ func (ld *loader) run() {
 	mapperWg.Wait()
 	close(ld.postingsCh)
 	postingWriterWg.Wait()
+}
 
-	flatPostingChs := make([]chan *protos.FlatPosting, len(mappedFiles))
-	for i, mappedFile := range mappedFiles {
+func (ld *loader) reduceStage() {
+	// Read from map stage.
+	flatPostingChs := make([]chan *protos.FlatPosting, len(ld.mappedFiles))
+	for i, mappedFile := range ld.mappedFiles {
 		flatPostingChs[i] = make(chan *protos.FlatPosting, 1000)
 		go readFlatFile(mappedFile, flatPostingChs[i])
 	}
+
+	// Shuffle stage.
+	uniDirFlatPostingChs := make([]<-chan *protos.FlatPosting, len(flatPostingChs))
+	for i, ch := range flatPostingChs {
+		uniDirFlatPostingChs[i] = ch
+	}
 	batchCh := make(chan []*protos.FlatPosting, 2) // Small buffer size since each element has a lot of data.
-	go shuffleFlatFiles(batchCh, flatPostingChs, ld.prog)
-	sem := make(chan struct{}, ld.opt.numGoroutines)
+	go shuffleFlatFiles(batchCh, uniDirFlatPostingChs, ld.prog)
+
+	// Reduce.
+	counter := make(chan struct{}, ld.opt.numGoroutines)
 	var reduceWg sync.WaitGroup
 	for batch := range batchCh {
-		sem <- struct{}{}
+		counter <- struct{}{}
 		reduceWg.Add(1)
 		go func() {
 			reduce(batch, ld.prog)
-			<-sem
+			<-counter
 			reduceWg.Done()
 		}()
 	}
 	reduceWg.Wait()
 
 	ld.prog.endSummary()
+}
+
+func (ld *loader) cleanup() {
+	if len(ld.mappedFiles) > 0 {
+		dir := filepath.Dir(ld.mappedFiles[0])
+		x.Check(os.RemoveAll(dir))
+	}
 }

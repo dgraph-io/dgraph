@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
-	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -100,8 +99,8 @@ func readFlatFile(filename string, postingCh chan<- *protos.FlatPosting) {
 	close(postingCh)
 }
 
-func shuffleFlatFiles(batchCh chan []*protos.FlatPosting,
-	postingChs []chan *protos.FlatPosting, prog *progress) {
+func shuffleFlatFiles(batchCh chan<- []*protos.FlatPosting,
+	postingChs []<-chan *protos.FlatPosting, prog *progress) {
 
 	var ph postingHeap
 	for _, ch := range postingChs {
@@ -129,7 +128,6 @@ func shuffleFlatFiles(batchCh chan []*protos.FlatPosting,
 		prevKey = p.Key
 
 		batch = append(batch, p)
-		atomic.AddInt64(&prog.shuffleEdgeCount, 1)
 	}
 	if len(batch) > 0 {
 		batchCh <- batch

@@ -7,12 +7,12 @@ import (
 )
 
 type progress struct {
-	rdfCount         int64
-	mapEdgeCount     int64
-	shuffleEdgeCount int64
+	rdfCount        int64
+	mapEdgeCount    int64
+	reduceEdgeCount int64
 
-	start        time.Time
-	startShuffle time.Time
+	start       time.Time
+	startReduce time.Time
 
 	// shutdown is a bidirectional channel used to manage the stopping of the
 	// report goroutine. It handles both the request to stop the report
@@ -43,7 +43,7 @@ func (p *progress) report() {
 func (p *progress) reportOnce() {
 
 	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
-	shuffleEdgeCount := atomic.LoadInt64(&p.shuffleEdgeCount)
+	shuffleEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
 
 	if shuffleEdgeCount == 0 {
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
@@ -58,13 +58,13 @@ func (p *progress) reportOnce() {
 		)
 	} else {
 		now := time.Now()
-		elapsed := time.Since(p.startShuffle)
-		if p.startShuffle.IsZero() {
-			p.startShuffle = time.Now()
+		elapsed := time.Since(p.startReduce)
+		if p.startReduce.IsZero() {
+			p.startReduce = time.Now()
 			elapsed = time.Second
 		}
-		shuffleEdgeCount := atomic.LoadInt64(&p.shuffleEdgeCount)
-		fmt.Printf("[SHUFFLE] [%s] [%.2f%%] [Edge count: %d] [Edges per second: %d]\n",
+		shuffleEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
+		fmt.Printf("[REDUCE] [%s] [%.2f%%] [Edge count: %d] [Edges per second: %d]\n",
 			round(now.Sub(p.start)).String(),
 			100*float64(shuffleEdgeCount)/float64(mapEdgeCount),
 			shuffleEdgeCount,
