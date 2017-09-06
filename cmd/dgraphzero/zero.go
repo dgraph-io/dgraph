@@ -20,6 +20,7 @@ package main
 import (
 	"errors"
 	"math"
+	"sync"
 
 	"golang.org/x/net/context"
 
@@ -47,6 +48,10 @@ type Server struct {
 
 	NumReplicas int
 	state       *protos.MembershipState
+
+	nextLeaseId uint64
+	leaseLock   sync.Mutex // protects nextLeaseId and lease proposals.
+
 	// groupMap    map[uint32]*Group
 	nextGroup uint32
 }
@@ -80,8 +85,8 @@ func (s *Server) servingTablet(dst string) *protos.Tablet {
 	return nil
 }
 
-func (s *Server) createProposals(dst *protos.Group) ([]*protos.GroupProposal, error) {
-	var res []*protos.GroupProposal
+func (s *Server) createProposals(dst *protos.Group) ([]*protos.ZeroProposal, error) {
+	var res []*protos.ZeroProposal
 	if len(dst.Members) > 1 {
 		return res, errInvalidQuery
 	}
@@ -102,7 +107,7 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.GroupProposal, er
 			srcMember.Leader != dstMember.Leader ||
 			srcMember.AmDead != dstMember.AmDead {
 
-			proposal := &protos.GroupProposal{
+			proposal := &protos.ZeroProposal{
 				Member: dstMember,
 			}
 			res = append(res, proposal)
@@ -125,7 +130,7 @@ func (s *Server) createProposals(dst *protos.Group) ([]*protos.GroupProposal, er
 		s := float64(srcTablet.Size())
 		d := float64(dstTablet.Size())
 		if (s == 0 && d > 0) || (s > 0 && math.Abs(d/s-1) > 0.1) {
-			proposal := &protos.GroupProposal{
+			proposal := &protos.ZeroProposal{
 				Tablet: dstTablet,
 			}
 			res = append(res, proposal)
@@ -150,11 +155,19 @@ func (s *Server) Connect(ctx context.Context,
 	pl := conn.Get().Connect(m.Addr)
 	defer conn.Get().Release(pl)
 
-	createProposal := func() *protos.GroupProposal {
+	createProposal := func() *protos.ZeroProposal {
 		s.Lock()
 		defer s.Unlock()
 
-		proposal := new(protos.GroupProposal)
+		proposal := new(protos.ZeroProposal)
+		// Check if we already have this member.
+		for _, group := range s.state.Groups {
+			if _, has := group.Members[m.Id]; has {
+				return nil
+			}
+		}
+
+		// We don't have this member. So, let's see if it has preference for a group.
 		if m.GroupId > 0 {
 			group, has := s.state.Groups[m.GroupId]
 			if !has {
@@ -192,9 +205,11 @@ func (s *Server) Connect(ctx context.Context,
 	}
 
 	proposal := createProposal()
-	x.Printf("Proposing: %+v\n", proposal)
-	if err := s.Node.proposeAndWait(ctx, proposal); err != nil {
-		return &emptyMembershipState, err
+	if proposal != nil {
+		x.Printf("Proposing: %+v\n", proposal)
+		if err := s.Node.proposeAndWait(ctx, proposal); err != nil {
+			return &emptyMembershipState, err
+		}
 	}
 	return s.membershipState(), nil
 }
@@ -216,7 +231,7 @@ func (s *Server) ShouldServe(
 	}
 
 	// Set the tablet to be served by this server's group.
-	var proposal protos.GroupProposal
+	var proposal protos.ZeroProposal
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
 		return nil, err
@@ -238,7 +253,7 @@ func (s *Server) Update(
 
 	errCh := make(chan error)
 	for _, pr := range proposals {
-		go func(pr *protos.GroupProposal) {
+		go func(pr *protos.ZeroProposal) {
 			x.Printf("Proposing: %+v\n", pr)
 			errCh <- s.Node.proposeAndWait(ctx, pr)
 		}(pr)

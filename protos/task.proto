@@ -97,10 +97,11 @@ message Group {
   map<string, Tablet> tablets = 2; // Predicate + others are key.
 }
 
-message GroupProposal {
+message ZeroProposal {
   uint32 id = 1;
   Member member = 2;
   Tablet tablet = 3;
+  uint64 maxLeaseId = 4;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -109,6 +110,7 @@ message GroupProposal {
 message MembershipState {
   map<uint32, Group> groups = 1;
   map<uint64, Member> zeros = 2;
+  uint64 maxLeaseId = 3;
 
 	uint64 last_update = 5;
 	bool redirect = 6;

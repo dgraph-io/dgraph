@@ -21,6 +21,7 @@ import (
 	"errors"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -71,9 +72,14 @@ type node struct {
 	server *Server
 	ctx    context.Context
 	props  proposals
+	leader uint32
 }
 
-func (n *node) proposeAndWait(ctx context.Context, proposal *protos.GroupProposal) error {
+func (n *node) AmLeader() bool {
+	return atomic.LoadUint32(&n.leader) == 1
+}
+
+func (n *node) proposeAndWait(ctx context.Context, proposal *protos.ZeroProposal) error {
 	if n.Raft() == nil {
 		return x.Errorf("Raft isn't initialized yet.")
 	}
@@ -118,7 +124,7 @@ var (
 )
 
 func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
-	var p protos.GroupProposal
+	var p protos.ZeroProposal
 	if err := p.Unmarshal(e.Data); err != nil {
 		return 0, err
 	}
@@ -126,25 +132,28 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		return 0, errInvalidProposal
 	}
 	x.Printf("Received proposal: %+v\n", p)
+
+	n.server.Lock()
+	defer n.server.Unlock()
+
 	if p.Member != nil {
 		if p.Member.GroupId == 0 {
 			return 0, errInvalidProposal
 		}
-		n.server.Lock()
 		state := n.server.state
 		group := state.Groups[p.Member.GroupId]
 		group.Members[p.Member.Id] = p.Member
-		n.server.Unlock()
 	}
 	if p.Tablet != nil {
 		if p.Tablet.GroupId == 0 {
 			return 0, errInvalidProposal
 		}
-		n.server.Lock()
 		state := n.server.state
 		group := state.Groups[p.Tablet.GroupId]
 		group.Tablets[p.Tablet.Predicate] = p.Tablet
-		n.server.Unlock()
+	}
+	if p.MaxLeaseId > 0 {
+		n.server.state.MaxLeaseId = p.MaxLeaseId
 	}
 	return p.Id, nil
 }
@@ -202,7 +211,7 @@ func (n *node) initAndStartNode(wal *raftwal.Wal) error {
 }
 
 func (n *node) Run() {
-	// var leader bool
+	var leader bool
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	rcBytes, err := n.RaftContext.Marshal()
@@ -214,9 +223,6 @@ func (n *node) Run() {
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
-			// if rd.SoftState != nil {
-			// 	leader = rd.RaftState == raft.StateLeader
-			// }
 			// First store the entries, then the hardstate and snapshot.
 			x.Check(n.Wal.Store(0, rd.HardState, rd.Entries))
 			x.Check(n.Wal.StoreSnapshot(0, rd.Snapshot))
@@ -242,6 +248,19 @@ func (n *node) Run() {
 
 				} else {
 					x.Printf("Unhandled entry: %+v\n", entry)
+				}
+			}
+
+			// TODO: Should we move this to the top?
+			if rd.SoftState != nil {
+				if rd.RaftState == raft.StateLeader && !leader {
+					n.server.updateNextLeaseId()
+					leader = true
+				}
+				if leader {
+					atomic.StoreUint32(&n.leader, 1)
+				} else {
+					atomic.StoreUint32(&n.leader, 0)
 				}
 			}
 

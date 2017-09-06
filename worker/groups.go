@@ -19,10 +19,6 @@ package worker
 
 import (
 	"fmt"
-	"math/rand"
-	"sort"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -67,6 +63,9 @@ type groupi struct {
 	lastUpdate uint64
 	// TODO: Also store the tablet -> group mapping.
 	// In fact, we could have a common struct to deal with this membership info, so it's shared.
+	state *protos.MembershipState
+	Node  *node
+	gid   uint32
 }
 
 var gr *groupi
@@ -113,8 +112,9 @@ func addToServers(sl *servers, update server) {
 func StartRaftNodes(walStore *badger.KV, bindall bool) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
-	gr.all = make(map[uint32]*servers)
-	gr.local = make(map[uint32]*node)
+
+	// gr.all = make(map[uint32]*servers)
+	// gr.local = make(map[uint32]*node)
 
 	if Config.InMemoryComm {
 		Config.MyAddr = "inmemory"
@@ -140,6 +140,24 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 			p := conn.Get().Connect(Config.PeerAddr)
 			defer conn.Get().Release(p)
 
+			// Connect with dgraphzero and figure out what group we should belong to.
+			zc := protos.NewZeroClient(pl.Get())
+			var state *protos.MembershipState
+			m := &protos.Member{Id: Config.RaftId}
+			for i := 0; i < 10; i++ { // 10 attempts.
+				var err error
+				state, err = zc.Connect(gr.ctx, m)
+				if err == nil {
+					break
+				}
+				x.Printf("Error while connecting with group zero: %v", err)
+			}
+			if state == nil {
+				x.Fatalf("Unable to join cluster via dgraphzero: %v", err)
+			}
+			gr.state = state
+
+			// TODO: Is this comment useful?
 			// Force run syncMemberships with this peer, so our nodes know if they have other
 			// servers who are serving the same groups. That way, they can talk to them
 			// and try to join their clusters. Otherwise, they'll start off as a single-node
@@ -149,100 +167,46 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 			// after starting the leader of group zero, that leader might not have updated
 			// itself in the memberships; and hence this node would think that no one is handling
 			// group zero. Therefore, we MUST wait to get pass a last update raft index of zero.
-			gr.syncMemberships()
-			for gr.LastUpdate() == 0 {
-				time.Sleep(time.Second)
-				x.Println("Last update raft index for membership information is zero. Syncing...")
-				gr.syncMemberships()
-			}
-			x.Printf("Last update is now: %d\n", gr.LastUpdate())
 		}()
 	}
 
 	gr.wal = raftwal.Init(walStore, Config.RaftId)
 
-	var wg sync.WaitGroup
 	gids, err := getGroupIds(Config.GroupIds)
 	x.AssertTruef(err == nil && len(gids) > 0, "Unable to parse 'groups' configuration")
 
-	for _, gid := range gids {
-		node := gr.newNode(gid, Config.RaftId, Config.MyAddr)
-		x.Checkf(schema.LoadFromDb(uint32(gid)), "Error while initilizating schema")
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			node.InitAndStartNode(gr.wal)
-		}()
-	}
-	wg.Wait()
+	gid := gr.groupId()
+	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
+	x.Checkf(schema.LoadFromDb(uint32(gid)), "Error while initilizating schema")
+	gr.Node.InitAndStartNode(gr.wal)
+
 	x.UpdateHealthStatus(true)
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
 }
 
-// TODO: Don't need this.
-func getGroupIds(groups string) ([]uint32, error) {
-	parts := strings.Split(groups, ",")
-	var gids []uint32
-	for _, part := range parts {
-		dashCount := strings.Count(part, "-")
-		switch dashCount {
-		case 0:
-			gid, err := strconv.ParseUint(part, 0, 32)
-			if err != nil {
-				return nil, err
-			}
-			gids = append(gids, uint32(gid))
-		case 1:
-			bounds := strings.Split(part, "-")
-			min, err := strconv.ParseUint(bounds[0], 0, 32)
-			if err != nil {
-				return nil, err
-			}
-			max, err := strconv.ParseUint(bounds[1], 0, 32)
-			if err != nil {
-				return nil, err
-			}
-			for i := uint32(min); i <= uint32(max); i++ {
-				gids = append(gids, i)
-			}
-		default:
-			return nil, x.Errorf("Invalid group configuration item: %v", part)
-		}
-	}
-
-	// check for duplicates
-	sort.Sort(gidSlice(gids))
-	for i := 0; i < len(gids)-1; i++ {
-		if gids[i] == gids[i+1] {
-			return nil, x.Errorf("Duplicated group id: %v", gids[i])
-		}
-	}
-
-	return gids, nil
-}
-
-// just for sorting
-type gidSlice []uint32
-
-func (a gidSlice) Len() int           { return len(a) }
-func (a gidSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a gidSlice) Less(i, j int) bool { return a[i] < a[j] }
-
-// TODO: Don't need this.
-func (g *groupi) Node(groupId uint32) *node {
+func (g *groupi) groupId() uint32 {
 	g.RLock()
 	defer g.RUnlock()
-	if n, has := g.local[groupId]; has {
-		return n
+	if g.gid > 0 {
+		return g.gid
 	}
-	return nil
+	for gid, group := range g.state.Groups {
+		for _, m := range group.Members {
+			if m.Id == Config.RaftId {
+				g.gid = gid
+				return g.gid
+			}
+		}
+	}
+	return 0
 }
 
-// TODO: Don't need this.
-func (g *groupi) ServesGroup(groupId uint32) bool {
+func (g *groupi) ServesTablet(key string) bool {
 	g.RLock()
 	defer g.RUnlock()
-	_, has := g.local[groupId]
+
+	group := g.state.Groups[g.gid]
+	_, has := group.Tablets[key]
 	return has
 }
 
@@ -274,35 +238,34 @@ func (g *groupi) Server(id uint64, groupId uint32) (rs string, found bool) {
 }
 
 // Returns 0, 1, or 2 valid server addrs.
-func (g *groupi) AnyTwoServers(group uint32) []string {
+func (g *groupi) AnyTwoServers(gid uint32) []string {
 	g.RLock()
 	defer g.RUnlock()
-	all := g.all[group]
-	if all == nil {
+	group, has := g.state.Groups[gid]
+	if !has {
 		return []string{}
 	}
-	sz := len(all.list)
-	if sz == 1 {
-		return []string{all.list[0].Addr}
+	var res []string
+	for _, m := range group.Members {
+		// map iteration gives us members in no particular order.
+		res = append(res, m.Addr)
+		if len(res) >= 2 {
+			break
+		}
 	}
-	idx1 := rand.Intn(sz)
-	idx2 := rand.Intn(sz - 1)
-	if idx2 >= idx1 {
-		idx2++
-	}
-	return []string{all.list[idx1].Addr, all.list[idx2].Addr}
+	return res
 }
 
-func (g *groupi) AnyServer(group uint32) string {
+func (g *groupi) AnyServer(gid uint32) string {
 	g.RLock()
 	defer g.RUnlock()
-	all := g.all[group]
-	if all == nil {
+	group, has := g.state.Groups[gid]
+	if !has {
 		return ""
 	}
-	sz := len(all.list)
-	idx := rand.Intn(sz)
-	return all.list[idx].Addr
+	for _, m := range group.Members {
+		return m.Addr
+	}
 }
 
 // Peer returns node(raft) id of the peer of given nodeid of given group
