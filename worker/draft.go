@@ -363,7 +363,7 @@ func (n *node) processApplyCh() {
 		if proposal.Mutations != nil {
 			n.sch.schedule(proposal, e.Index)
 		} else if proposal.Membership != nil {
-			go n.processMembership(e.Index, proposal.Id, proposal.Membership)
+			x.Fatalf("Dgraph does not handle membership proposals anymore.")
 		} else {
 			x.Fatalf("Unknown proposal")
 		}
