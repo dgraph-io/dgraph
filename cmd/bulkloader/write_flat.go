@@ -134,6 +134,7 @@ func shuffleFlatFiles(batchCh chan []*protos.FlatPosting,
 	if len(batch) > 0 {
 		batchCh <- batch
 	}
+	close(batchCh)
 }
 
 type heapNode struct {
