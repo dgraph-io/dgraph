@@ -446,22 +446,25 @@ func (n *node) runReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
 			// To see if the ReadIndex request succeeds, we need to use a timeout and wait for a
 			// successful response.  If we don't see one, the raft leader wasn't configured, or the
 			// raft leader didn't respond.
-			timer := time.NewTimer(10 * time.Millisecond)
+
+			// This is supposed to use context.Background().  We don't want to cancel the timer
+			// externally.  We want equivalent functionality to time.NewTimer.
+			timer, cancelTimer := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		again:
 			select {
 			case <-stop:
-				timer.Stop()
+				cancelTimer()
 				return
 			case rs := <-readStateCh:
 				if 0 != bytes.Compare(activeRctx[:], rs.RequestCtx) {
 					goto again
 				}
-				timer.Stop()
+				cancelTimer()
 				index := rs.Index
 				for _, req := range requests {
 					req.indexCh <- index
 				}
-			case <-timer.C:
+			case <-timer.Done():
 				for _, req := range requests {
 					req.indexCh <- raft.None
 				}
