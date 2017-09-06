@@ -107,7 +107,7 @@ func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting, prog *p
 
 	var ph postingHeap
 	for _, ch := range postingChs {
-		heap.Push(&ph, heapNode{<-ch, ch})
+		heap.Push(&ph, heapNode{head: <-ch, ch: ch})
 	}
 
 	var buf proto.Buffer
