@@ -19,7 +19,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
-func writeMappedFile(dir string, postingsCh <-chan *protos.FlatPosting, prog *progress) []string {
+func writeMappedFiles(dir string, postingsCh <-chan *protos.FlatPosting, prog *progress) []string {
 
 	var filenames []string
 	var fileNum int
