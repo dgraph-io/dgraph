@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -104,7 +105,7 @@ func readFlatFile(dir string, fid int, postingCh chan<- *protos.FlatPosting) {
 	close(postingCh)
 }
 
-func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting) {
+func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting, prog *progress) {
 	var fileNum int
 	var wg sync.WaitGroup
 	var prevKey []byte
@@ -126,6 +127,7 @@ func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting) {
 		}
 
 		x.Check(buf.EncodeMessage(msg))
+		atomic.AddInt64(&prog.shuffleEdgeCount, 1)
 
 		if len(buf.Bytes()) > 32<<20 && bytes.Compare(prevKey, msg.Key) != 0 {
 			filename := filepath.Join(dir, fmt.Sprintf("merged_%06d.bin", fileNum))

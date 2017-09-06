@@ -113,7 +113,7 @@ func (ld *loader) run() {
 		flatPostingChs[i] = make(chan *protos.FlatPosting, 1<<10)
 		go readFlatFile(tmpPostingsDir, i, flatPostingChs[i])
 	}
-	shuffleFlatFiles(tmpPostingsDir, flatPostingChs)
+	shuffleFlatFiles(tmpPostingsDir, flatPostingChs, ld.prog)
 
 	ld.prog.endSummary()
 }

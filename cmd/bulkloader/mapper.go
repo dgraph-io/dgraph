@@ -27,7 +27,7 @@ func (m *mapper) run() {
 }
 
 func (m *mapper) addPosting(key []byte, posting *protos.Posting) {
-	atomic.AddInt64(&m.prog.edgeCount, 1)
+	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
 	p := &protos.FlatPosting{
 		Key: key,
