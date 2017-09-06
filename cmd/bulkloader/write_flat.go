@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -113,18 +114,18 @@ func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting, prog *p
 		heap.Push(&ph, heapNode{<-ch, ch})
 	}
 
+	var buf proto.Buffer
 	writeBuf := func() {
 		filename := filepath.Join(dir, fmt.Sprintf("merged_%06d.bin", fileNum))
 		fileNum++
 		wg.Add(1)
 		go func(buf []byte) {
-			x.Check(outil.WriteFile(filename, buf, 0644))
+			x.Check(ioutil.WriteFile(filename, buf, 0644))
 			wg.Done()
 		}(buf.Bytes())
 		buf.SetBuf(nil)
 	}
 
-	var buf proto.Buffer
 	for len(ph.data) > 0 {
 		msg := ph.data[0].head
 		var ok bool
