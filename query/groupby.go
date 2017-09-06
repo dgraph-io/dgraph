@@ -53,8 +53,8 @@ func (grp *groupResult) aggregateChild(child *SubGraph) error {
 		})
 		return nil
 	}
-	if len(child.SrcFunc) > 0 && isAggregatorFn(child.SrcFunc[0]) {
-		fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc[0], child.Attr)
+	if child.SrcFunc != nil && isAggregatorFn(child.SrcFunc.Name) {
+		fieldName := fmt.Sprintf("%s(%s)", child.SrcFunc.Name, child.Attr)
 		finalVal, err := aggregateGroup(grp, child)
 		if err != nil {
 			return err
@@ -134,7 +134,7 @@ func (d *dedup) addValue(attr string, value types.Val, uid uint64) {
 
 func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 	ag := aggregator{
-		name: child.SrcFunc[0],
+		name: child.SrcFunc.Name,
 	}
 	for _, uid := range grp.uids {
 		idx := sort.Search(len(child.SrcUIDs.Uids), func(i int) bool {

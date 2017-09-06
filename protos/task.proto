@@ -31,6 +31,14 @@ message TaskValue {
 	int32 val_type = 2;
 }
 
+message SrcFunction {
+  string name = 1;
+  // TODO: Try to use the lang in query, avoid this.
+  string lang = 2;
+  repeated string args = 3;
+  bool isCount = 4;
+}
+
 message Query {
 	string attr = 1;
 	repeated string langs = 2; // language list for attribute
@@ -41,7 +49,7 @@ message Query {
 	List uid_list = 5;
 
 	// Function to generate or filter UIDs.
-	repeated string src_func = 6;
+	SrcFunction src_func = 6;
 
 	bool reverse = 7;  // Whether this is a reverse edge.
 

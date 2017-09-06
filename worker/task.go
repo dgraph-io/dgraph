@@ -218,20 +218,28 @@ const (
 
 const numPart = uint64(32)
 
-func parseFuncType(arr []string) (FuncType, string) {
-	if len(arr) == 0 {
+func parseFuncType(srcFunc *protos.SrcFunction) (FuncType, string) {
+	if srcFunc == nil {
 		return NotAFunction, ""
 	}
-	f := strings.ToLower(arr[0])
-	switch f {
-	case "le", "ge", "lt", "gt", "eq":
+	ftype, fname := parseFuncTypeHelper(srcFunc.Name)
+	if srcFunc.IsCount && ftype == CompareAttrFn {
 		// gt(release_date, "1990") is 'CompareAttr' which
 		//    takes advantage of indexed-attr
 		// gt(count(films), 0) is 'CompareScalar', we first do
 		//    counting on attr, then compare the result as scalar with int
-		if len(arr) > 3 && arr[2] == "count" {
-			return CompareScalarFn, f
-		}
+		return CompareScalarFn, fname
+	}
+	return ftype, fname
+}
+
+func parseFuncTypeHelper(name string) (FuncType, string) {
+	if len(name) == 0 {
+		return NotAFunction, ""
+	}
+	f := strings.ToLower(name)
+	switch f {
+	case "le", "ge", "lt", "gt", "eq":
 		return CompareAttrFn, f
 	case "min", "max", "sum", "avg":
 		return AggregatorFn, f
@@ -413,7 +421,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 				// TODO - Check that this is safe.
 				out.ValueMatrix[lastPos].Values[0] = ctask.FalseVal
 			}
-			pwd := q.SrcFunc[2]
+			pwd := q.SrcFunc.Args[0]
 			err = types.VerifyPassword(pwd, string(newValue.Val))
 			if err != nil {
 				out.ValueMatrix[lastPos].Values[0] = ctask.FalseVal
@@ -788,7 +796,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 					if err == nil {
 						dst, err := types.Convert(sv, typ)
 						return err == nil &&
-							types.CompareVals(arg.q.SrcFunc[0], dst, arg.srcFn.eqTokens[row])
+							types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
 					}
 					return false
 				case ".":
@@ -797,7 +805,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 					for _, sv := range values {
 						dst, err := types.Convert(sv, typ)
 						if err == nil &&
-							types.CompareVals(arg.q.SrcFunc[0], dst, arg.srcFn.eqTokens[row]) {
+							types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
 							return true
 						}
 					}
@@ -808,7 +816,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 					if sv.Value == nil || err != nil {
 						return false
 					}
-					return types.CompareVals(arg.q.SrcFunc[0], sv, arg.srcFn.eqTokens[row])
+					return types.CompareVals(arg.q.SrcFunc.Name, sv, arg.srcFn.eqTokens[row])
 				}
 			})
 		}
@@ -932,11 +940,10 @@ const (
 	eq = "eq" // equal
 )
 
-func ensureArgsCount(funcStr []string, expected int) error {
-	actual := len(funcStr) - 2
-	if actual != expected {
+func ensureArgsCount(srcFunc *protos.SrcFunction, expected int) error {
+	if len(srcFunc.Args) != expected {
 		return x.Errorf("Function '%s' requires %d arguments, but got %d (%v)",
-			funcStr[0], expected, actual, funcStr[2:])
+			srcFunc.Name, expected, len(srcFunc.Args), srcFunc.Args)
 	}
 	return nil
 }
@@ -977,7 +984,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case CompareAttrFn:
-		args := q.SrcFunc[2:]
+		args := q.SrcFunc.Args
 		// Only eq can have multiple args. It should have atleast one.
 		if fc.fname == eq {
 			if len(args) <= 0 {
@@ -1021,19 +1028,19 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		} else {
 			fc.n = len(fc.tokens)
 		}
-		fc.lang = q.SrcFunc[1]
+		fc.lang = q.SrcFunc.Lang
 		// TODO - See if we can get rid of passing language as part of the SrcFunc
 		// since we already have Lang field in q.
 		if len(q.Langs) == 0 && fc.lang != "" {
 			q.Langs = []string{fc.lang}
 		}
 	case CompareScalarFn:
-		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
+		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
 		}
-		if fc.threshold, err = strconv.ParseInt(q.SrcFunc[3], 0, 64); err != nil {
+		if fc.threshold, err = strconv.ParseInt(q.SrcFunc.Args[0], 0, 64); err != nil {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
-				q.SrcFunc[0], q.SrcFunc[2])
+				q.SrcFunc.Name, q.SrcFunc.Args[0])
 		}
 		checkRoot(q, fc)
 	case GeoFn:
@@ -1059,11 +1066,11 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if !found {
 			return nil, x.Errorf("Attribute %s is not indexed with type %s", attr, required)
 		}
-		if fc.tokens, err = getStringTokens(q.SrcFunc[2:], q.SrcFunc[1], fnType); err != nil {
+		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, q.SrcFunc.Lang, fnType); err != nil {
 			return nil, err
 		}
-		fnName := strings.ToLower(q.SrcFunc[0])
-		fc.lang = q.SrcFunc[1]
+		fnName := strings.ToLower(q.SrcFunc.Name)
+		fc.lang = q.SrcFunc.Lang
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case RegexFn:
@@ -1071,7 +1078,7 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 			return nil, err
 		}
 		ignoreCase := false
-		modifiers := q.SrcFunc[3]
+		modifiers := q.SrcFunc.Args[1]
 		if len(modifiers) > 0 {
 			if modifiers == "i" {
 				ignoreCase = true
@@ -1083,22 +1090,22 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if ignoreCase {
 			matchType = "(?i)" + matchType
 		}
-		if fc.regex, err = cregexp.Compile(matchType + q.SrcFunc[2]); err != nil {
+		if fc.regex, err = cregexp.Compile(matchType + q.SrcFunc.Args[0]); err != nil {
 			return nil, err
 		}
 		fc.n = 0
-		fc.lang = q.SrcFunc[1]
+		fc.lang = q.SrcFunc.Lang
 	case HasFn:
 		if err = ensureArgsCount(q.SrcFunc, 0); err != nil {
 			return nil, err
 		}
 		checkRoot(q, fc)
-		fc.lang = q.SrcFunc[1]
+		fc.lang = q.SrcFunc.Lang
 	case UidInFn:
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
 		}
-		if fc.uidPresent, err = strconv.ParseUint(q.SrcFunc[2], 0, 64); err != nil {
+		if fc.uidPresent, err = strconv.ParseUint(q.SrcFunc.Args[0], 0, 64); err != nil {
 			return nil, err
 		}
 		checkRoot(q, fc)
@@ -1166,7 +1173,7 @@ func applyFacetsTree(postingFacets []*protos.Facet, ftree *facetsTree) (bool, er
 		if fc == nil { // facet is not there
 			return false, nil
 		}
-		fnType, fname := parseFuncType([]string{fname})
+		fnType, fname := parseFuncTypeHelper(fname)
 		switch fnType {
 		case CompareAttrFn: // lt, gt, le, ge, eq
 			var err error
@@ -1278,7 +1285,7 @@ func preprocessFilter(tree *protos.FilterTree) (*facetsTree, error) {
 		ftree.function.key = tree.Func.Key
 		ftree.function.args = tree.Func.Args
 
-		fnType, fname := parseFuncType([]string{ftree.function.name})
+		fnType, fname := parseFuncTypeHelper(ftree.function.name)
 		if len(tree.Func.Args) != 1 {
 			return nil, x.Errorf("One argument expected in %s, but got %d.",
 				fname, len(tree.Func.Args))
