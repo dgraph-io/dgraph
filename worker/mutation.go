@@ -46,17 +46,17 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("In run mutations")
 	}
-	gid := group.BelongsTo(edge.Attr)
-	if !groups().ServesGroup(gid) {
+	if !groups().ServesTablet(edge.Attr) {
 		return x.Errorf("Predicate fingerprint doesn't match this instance")
 	}
 
 	rv := ctx.Value("raft").(x.RaftValue)
-	x.AssertTruef(rv.Group == gid, "fingerprint mismatch between raft and group conf")
 
 	typ, err := schema.State().TypeOf(edge.Attr)
 	x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
 
+	// TODO: Remove gid.
+	var gid uint32
 	if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 		waitForSyncMark(ctx, gid, rv.Index-1)
 		if err = posting.DeletePredicate(ctx, edge.Attr); err != nil {
@@ -89,7 +89,7 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 // and further mutations are blocked until this is done.
 func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 	rv := ctx.Value("raft").(x.RaftValue)
-	n := groups().Node(rv.Group)
+	n := groups().Node
 	// Wait for applied watermark to reach till previous index
 	// All mutations before this should use old schema and after this
 	// should use new schema

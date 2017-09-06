@@ -61,10 +61,8 @@ const (
 // This watermark would be used for taking snapshots, to ensure that all the data and
 // index mutations have been syned to RocksDB, before a snapshot is taken, and previous
 // RAFT entries discarded.
-type syncMarks struct {
-	sync.RWMutex
-	m map[uint32]*x.WaterMark
-}
+// NOTE: Each Dgraph server is now serving only one group. So, syncMarks wrapper has been replaced
+// with marks.
 
 func init() {
 	x.AddInit(func() {
@@ -77,38 +75,6 @@ func init() {
 		x.Check(err)
 	})
 	elog = trace.NewEventLog("Memory", "")
-}
-
-func (g *syncMarks) create(group uint32) *x.WaterMark {
-	g.Lock()
-	defer g.Unlock()
-	if g.m == nil {
-		g.m = make(map[uint32]*x.WaterMark)
-	}
-
-	if prev, present := g.m[group]; present {
-		return prev
-	}
-	w := &x.WaterMark{Name: fmt.Sprintf("Synced: Group %d", group)}
-	w.Init()
-	g.m[group] = w
-	return w
-}
-
-func (g *syncMarks) Get(group uint32) *x.WaterMark {
-	g.RLock()
-	if w, present := g.m[group]; present {
-		g.RUnlock()
-		return w
-	}
-	g.RUnlock()
-	return g.create(group)
-}
-
-// SyncMarkFor returns the synced watermark for the given RAFT group.
-// We use this to determine the index to use when creating a new snapshot.
-func SyncMarkFor(group uint32) *x.WaterMark {
-	return marks.Get(group)
 }
 
 func gentleCommit(dirtyMap map[string]time.Time, pending chan struct{},
@@ -290,20 +256,25 @@ const (
 var (
 	pstore    *badger.KV
 	dirtyChan chan []byte // All dirty posting list keys are pushed here.
-	marks     *syncMarks
-	lcache    *listCache
+	// We use this to determine the index to use when creating a new snapshot.
+	marks  *x.WaterMark
+	lcache *listCache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.KV) {
-	marks = new(syncMarks)
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
 	x.LcacheCapacity.Set(math.MaxInt64)
 	dirtyChan = make(chan []byte, 10000)
+	marks = &x.WaterMark{Name: "Synced"}
 
 	go periodicCommit()
 	go updateMemoryMetrics()
+}
+
+func SyncMark() *x.WaterMark {
+	return marks
 }
 
 // GetOrCreate stores the List corresponding to key, if it's not there already.
@@ -327,7 +298,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List) {
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
 	l := getNew(key, pstore)
-	l.water = marks.Get(group)
+	l.water = marks
 
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
