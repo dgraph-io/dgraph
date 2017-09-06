@@ -125,9 +125,6 @@ func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting, prog *p
 			heap.Pop(&ph)
 		}
 
-		x.Check(buf.EncodeMessage(msg))
-		atomic.AddInt64(&prog.shuffleEdgeCount, 1)
-
 		if len(buf.Bytes()) > 32<<20 && bytes.Compare(prevKey, msg.Key) != 0 {
 			filename := filepath.Join(dir, fmt.Sprintf("merged_%06d.bin", fileNum))
 			fileNum++
@@ -139,8 +136,13 @@ func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting, prog *p
 			buf.SetBuf(nil)
 		}
 		prevKey = msg.Key
+
+		x.Check(buf.EncodeMessage(msg))
+		atomic.AddInt64(&prog.shuffleEdgeCount, 1)
 	}
 	wg.Wait()
+
+	// TODO: Write remainder of buf to last file.
 }
 
 type heapNode struct {
