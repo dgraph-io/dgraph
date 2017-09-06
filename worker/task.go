@@ -717,6 +717,7 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := protos.List{}
 	uids, err := uidsForRegex(attr, arg.gid, query, &empty)
+	lang := langForFunc(arg.q.Langs)
 	if uids != nil {
 		arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
@@ -731,7 +732,7 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			pl := posting.GetOrCreate(key, arg.gid)
 
 			var val types.Val
-			if lang := langForFunc(arg.q.Langs); lang != "" {
+			if lang != "" {
 				val, err = pl.ValueForTag(lang)
 			} else {
 				val, err = pl.Value()
@@ -782,6 +783,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 			// then we need to filter first row..
 			rowsToFilter = 1
 		}
+		lang := langForFunc(arg.q.Langs)
 		for row := 0; row < rowsToFilter; row++ {
 			select {
 			case <-ctx.Done():
@@ -789,7 +791,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 			default:
 			}
 			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
-				switch langForFunc(arg.q.Langs) {
+				switch lang {
 				case "":
 					pl := posting.Get(x.DataKey(attr, uid))
 					sv, err := pl.Value()
