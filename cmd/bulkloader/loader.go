@@ -37,6 +37,7 @@ type loader struct {
 	*state
 	mappers   []*mapper
 	mapOutput []string
+	kv        *badger.KV
 }
 
 func newLoader(opt options) *loader {
@@ -127,7 +128,8 @@ func (ld *loader) reduceStage() {
 	opt.ValueDir = opt.Dir
 	opt.ValueGCRunInterval = time.Hour * 100
 	opt.SyncWrites = false
-	kv, err := badger.NewKV(&opt)
+	var err error
+	ld.kv, err = badger.NewKV(&opt)
 	x.Check(err)
 
 	// Reduce stage.
@@ -137,7 +139,7 @@ func (ld *loader) reduceStage() {
 		pending <- struct{}{}
 		reduceWg.Add(1)
 		go func() {
-			reduce(batch, kv, ld.prog)
+			reduce(batch, ld.kv, ld.prog)
 			<-pending
 			reduceWg.Done()
 		}()
@@ -145,6 +147,10 @@ func (ld *loader) reduceStage() {
 	reduceWg.Wait()
 
 	ld.prog.endSummary()
+}
+
+func (ld *loader) schemaStage() {
+	ld.ss.write(ld.kv)
 }
 
 func (ld *loader) cleanup() {

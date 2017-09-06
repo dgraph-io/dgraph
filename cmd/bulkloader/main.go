@@ -26,5 +26,6 @@ func main() {
 	loader := newLoader(opt)
 	loader.mapStage()
 	loader.reduceStage()
+	loader.schemaStage()
 	loader.cleanup()
 }
