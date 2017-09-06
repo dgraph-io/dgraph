@@ -358,7 +358,6 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 		if vals, err = sortByValue(ctx, ts, result, scalar); err != nil {
 			return err
 		}
-		x.AssertTrue(len(result.Uids) == len(vals.Values))
 
 		// Result set might have reduced after sorting. As some uids might not have a
 		// value in the lang specified.
@@ -367,7 +366,9 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 		if il.offset > 0 {
 			// Apply the offset.
 			result.Uids = result.Uids[il.offset:n]
-			vals.Values = vals.Values[il.offset:n]
+			if ts.Multiple {
+				vals.Values = vals.Values[il.offset:n]
+			}
 			il.offset = 0
 			n = len(result.Uids)
 		}
@@ -383,7 +384,9 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 		}
 
 		il.ulist.Uids = append(il.ulist.Uids, result.Uids[:n]...)
-		il.values.Values = append(il.values.Values, vals.Values[:n]...)
+		if ts.Multiple {
+			il.values.Values = append(il.values.Values, vals.Values[:n]...)
+		}
 	} // end for loop over UID lists in UID matrix.
 
 	// Check out[i] sizes for all i.
@@ -438,6 +441,9 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 	}
 	err := types.Sort(values, &protos.List{uids}, []bool{ts.Desc})
 	ul.Uids = uids
+	if ts.Multiple {
+		x.AssertTrue(len(ul.Uids) == len(tv.Values))
+	}
 	return tv, err
 }
 

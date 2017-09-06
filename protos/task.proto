@@ -68,12 +68,12 @@ message SortMessage {
 	int32 count = 4;   // Return this many elements.
 	int32 offset = 5;  // Skip this many elements.
 	bool desc = 6;
-  bool multiple =7; // If the query had multiple sorts, we truncate >= count elements.
+	bool multiple =7; // If the query had multiple sorts, we truncate >= count elements.
 }
 
 message SortResult {
 	repeated List uid_matrix = 1;
-  repeated ValueList value_matrix=2; // Sent back only if this was the first sort out of multiple.
+	repeated ValueList value_matrix=2; // Sent back only if this was the first sort out of multiple.
 }
 
 message RaftContext {

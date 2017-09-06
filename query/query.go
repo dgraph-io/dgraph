@@ -493,7 +493,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 			for _, tv := range pc.valueMatrix[idx].Values {
 				// if conversion not possible, we ignore it in the result.
-				sv, convErr := convertWithBestEffort(tv)
+				sv, convErr := convertWithBestEffort(tv, pc.Attr)
 				if convErr == ErrEmptyVal {
 					continue
 				} else if convErr != nil {
@@ -528,11 +528,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 // convert from task.Val to types.Value, based on schema appropriate type
 // is already set in protos.Value
-func convertWithBestEffort(tv *protos.TaskValue) (types.Val, error) {
+func convertWithBestEffort(tv *protos.TaskValue, attr string) (types.Val, error) {
 	// value would be in binary format with appropriate type
 	v, _ := getValue(tv)
 	if !v.Tid.IsScalar() {
-		return v, x.Errorf("Leaf predicate:'%v' must be a scalar.")
+		return v, x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
 	}
 	if bytes.Equal(tv.Val, nil) {
 		return v, ErrEmptyVal
@@ -1420,7 +1420,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			path: sgPath,
 		}
 		for idx, uid := range sg.SrcUIDs.Uids {
-			val, err := convertWithBestEffort(sg.valueMatrix[idx].Values[0])
+			val, err := convertWithBestEffort(sg.valueMatrix[idx].Values[0], sg.Attr)
 			if err != nil {
 				continue
 			}
@@ -1982,7 +1982,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 				// We have already seen this uid.
 				continue
 			}
-			val, err := convertWithBestEffort(result.ValueMatrix[i].Values[j])
+			val, err := convertWithBestEffort(result.ValueMatrix[i].Values[j], sg.Attr)
 			if err != nil {
 				return err
 			}
@@ -2013,7 +2013,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		x.AssertTrue(len(sg.DestUIDs.Uids) == len(result.ValueMatrix))
 		for i, uid := range sg.DestUIDs.Uids {
 			v := result.ValueMatrix[i].Values[0]
-			val, err := convertWithBestEffort(v)
+			val, err := convertWithBestEffort(v, sg.Attr)
 			if err != nil {
 				// TODO - Insert empty value if not present.
 				return err
