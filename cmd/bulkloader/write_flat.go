@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -67,11 +66,7 @@ func sortAndWrite(filename string, postings []*protos.FlatPosting, prog *progres
 		x.Check(buf.EncodeMessage(posting))
 	}
 
-	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
-	x.Checkf(err, "Could not open tmp file.")
-	x.Check2(fd.Write(buf.Bytes()))
-	x.Check(fd.Sync())
-	x.Check(fd.Close())
+	x.Check(x.WriteFileSync(filename, buf.Bytes(), 0644))
 }
 
 func readFlatFile(filename string, postingCh chan<- *protos.FlatPosting) {
@@ -121,7 +116,7 @@ func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting, prog *p
 		fileNum++
 		wg.Add(1)
 		go func(buf []byte) {
-			x.Check(ioutil.WriteFile(filename, buf, 0644))
+			x.Check(x.WriteFileSync(filename, buf, 0644))
 			wg.Done()
 		}(buf.Bytes())
 		buf.SetBuf(nil)
