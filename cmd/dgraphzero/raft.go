@@ -103,8 +103,14 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *protos.GroupProposa
 	if err := n.Raft().Propose(ctx, data); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
-	// Wait for proposal to be applied.
-	return <-che
+
+	// Wait for proposal to be applied or timeout.
+	select {
+	case err := <-che:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 var (
