@@ -136,6 +136,13 @@ func NewNode(rc *protos.RaftContext) *Node {
 			MaxSizePerMsg:   256 << 10,
 			MaxInflightMsgs: 256,
 			Logger:          &raft.DefaultLogger{Logger: x.Logger},
+			// We use lease-based linearizable ReadIndex for performance, at the cost of
+			// correctness.  With it, communication goes follower->leader->follower, instead of
+			// follower->leader->majority_of_followers->leader->follower.  We lose correctness
+			// because the Raft ticker might not arrive promptly, in which case the leader would
+			// falsely believe that its lease is still good.
+			CheckQuorum:    true,
+			ReadOnlyOption: raft.ReadOnlyLeaseBased,
 		},
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full

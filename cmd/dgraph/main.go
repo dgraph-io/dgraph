@@ -304,7 +304,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// After execution starts according to the GraphQL spec data key must be returned. It would be
 	// null if any error is encountered, else non-null.
 	var res query.ExecuteResult
-	var queryRequest = query.QueryRequest{Latency: &l, GqlQuery: &parsed}
+	var queryRequest = query.QueryRequest{
+		Latency:  &l,
+		GqlQuery: &parsed,
+	}
 	if res, err = queryRequest.ProcessWithMutation(ctx); err != nil {
 		switch errors.Cause(err).(type) {
 		case *query.InvalidRequestError:
