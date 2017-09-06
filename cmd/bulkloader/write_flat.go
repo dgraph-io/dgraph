@@ -72,8 +72,7 @@ func sortAndWrite(filename string, postings []*protos.FlatPosting, prog *progres
 	x.Check(fd.Close())
 }
 
-func readFlatFile(dir string, fid int, postingCh chan<- *protos.FlatPosting) {
-	filename := filepath.Join(dir, fmt.Sprintf("%06d.bin", fid))
+func readFlatFile(filename string, postingCh chan<- *protos.FlatPosting) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	defer fd.Close()

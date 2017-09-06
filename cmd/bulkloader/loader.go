@@ -3,8 +3,12 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
+	"encoding/hex"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -111,9 +115,29 @@ func (ld *loader) run() {
 	flatPostingChs := make([]chan *protos.FlatPosting, numFlatFiles)
 	for i := 0; i < numFlatFiles; i++ {
 		flatPostingChs[i] = make(chan *protos.FlatPosting, 1<<10)
-		go readFlatFile(tmpPostingsDir, i, flatPostingChs[i])
+		filename := filepath.Join(tmpPostingsDir, fmt.Sprintf("%06d.bin", i))
+		go readFlatFile(filename, flatPostingChs[i])
 	}
 	shuffleFlatFiles(tmpPostingsDir, flatPostingChs, ld.prog)
 
 	ld.prog.endSummary()
+
+	fa, err := os.OpenFile("/ssd/debug.txt", os.O_CREATE|os.O_RDWR, 0644)
+	x.Check(err)
+	defer func() { x.Check(fa.Close()) }()
+	catFlatFile(filepath.Join(tmpPostingsDir, "merged_000000.bin"), fa)
+	catFlatFile(filepath.Join(tmpPostingsDir, "merged_000001.bin"), fa)
+}
+
+func catFlatFile(filename string, w io.Writer) {
+	x.Check2(w.Write([]byte(filename)))
+	x.Check2(w.Write([]byte{'\n'}))
+	ch := make(chan *protos.FlatPosting)
+	go func() {
+		readFlatFile(filename, ch)
+	}()
+	for p := range ch {
+		x.Check2(w.Write([]byte(hex.Dump(p.Key))))
+		x.Check2(w.Write([]byte{'\n'}))
+	}
 }
