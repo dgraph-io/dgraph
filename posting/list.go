@@ -631,6 +631,7 @@ func doAsyncWrite(key []byte, data []byte, uidOnlyPosting bool, f func(error)) {
 }
 
 // should be cheap for scalar values
+// Will refactor, might have to change approach for count index.
 func (l *List) MergedPostingList() *protos.PostingList {
 	l.RLock()
 	defer l.RUnlock()
