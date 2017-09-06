@@ -994,7 +994,6 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 	if sg.SrcFunc != nil {
 		srcFunc = &protos.SrcFunction{}
 		srcFunc.Name = sg.SrcFunc.Name
-		srcFunc.Lang = sg.SrcFunc.Lang
 		srcFunc.IsCount = sg.SrcFunc.IsCount
 		for _, arg := range sg.SrcFunc.Args {
 			srcFunc.Args = append(srcFunc.Args, arg.Value)
@@ -1015,6 +1014,12 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 	}
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
+	}
+	if sg.SrcFunc != nil {
+		x.AssertTrue(len(out.Langs) == 0)
+		if sg.SrcFunc.Lang != "" {
+			out.Langs = []string{sg.SrcFunc.Lang}
+		}
 	}
 	return out, nil
 }

@@ -148,14 +148,18 @@ func newQuery(attr string, uids []uint64, srcFunc []string) *protos.Query {
 	if len(srcFunc) > 0 {
 		srcFun = new(protos.SrcFunction)
 		srcFun.Name = srcFunc[0]
-		srcFun.Lang = srcFunc[1]
 		srcFun.Args = append(srcFun.Args, srcFunc[2:]...)
 	}
-	return &protos.Query{
+	q := &protos.Query{
 		UidList: &protos.List{uids},
 		SrcFunc: srcFun,
 		Attr:    attr,
 	}
+	// It will have either nothing or attr, lang
+	if len(srcFunc) > 0 && srcFunc[1] != "" {
+		q.Langs = []string{srcFunc[1]}
+	}
+	return q
 }
 
 // Index-related test. Similar to TestProcessTaskIndex but we call MergeLists only

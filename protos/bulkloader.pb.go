@@ -41,6 +41,7 @@
 		SchemaUpdate
 		List
 		TaskValue
+		SrcFunction
 		Query
 		ValueList
 		Result

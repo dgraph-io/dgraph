@@ -33,8 +33,6 @@ message TaskValue {
 
 message SrcFunction {
   string name = 1;
-  // TODO: Try to use the lang in query, avoid this.
-  string lang = 2;
   repeated string args = 3;
   bool isCount = 4;
 }
