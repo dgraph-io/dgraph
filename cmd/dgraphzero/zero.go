@@ -59,6 +59,13 @@ func (s *Server) membershipState() *protos.MembershipState {
 	return s.state
 }
 
+func (s *Server) storeZero(m *protos.Member) {
+	s.Lock()
+	defer s.Unlock()
+
+	s.state.Zeros[m.Id] = m
+}
+
 func (s *Server) servingTablet(dst string) *protos.Tablet {
 	s.RLock()
 	defer s.RUnlock()

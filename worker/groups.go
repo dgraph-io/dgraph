@@ -416,36 +416,6 @@ func (g *groupi) TouchLastUpdate(u uint64) {
 // - Once iteration is over without errors, it would return back all new updates.
 // - These updates are then applied to groups().all state via applyMembershipUpdate.
 func (g *groupi) syncMemberships() {
-	// TODO: Don't need this.
-	if g.ServesGroup(0) {
-		// This server serves group zero.
-		g.RLock()
-		defer g.RUnlock()
-		for _, n := range g.local {
-			rc := n.RaftContext
-			if g.duplicate(rc.Group, rc.Id, rc.Addr, n.AmLeader()) {
-				continue
-			}
-
-			go func(rc *protos.RaftContext, amleader bool) {
-				mm := &protos.Membership{
-					Leader:  amleader,
-					Id:      rc.Id,
-					GroupId: rc.Group,
-					Addr:    rc.Addr,
-				}
-				zero := g.Node(0)
-				x.AssertTruef(zero != nil, "Expected node 0")
-				if err := zero.ProposeAndWait(zero.ctx, &protos.Proposal{Membership: mm}); err != nil {
-					if tr, ok := trace.FromContext(g.ctx); ok {
-						tr.LazyPrintf(err.Error())
-					}
-				}
-			}(rc, n.AmLeader())
-		}
-		return
-	}
-
 	// This server doesn't serve group zero.
 	// Generate membership update of all local nodes.
 	var mu protos.MembershipUpdate

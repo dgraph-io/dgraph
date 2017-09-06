@@ -157,6 +157,9 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		var rc protos.RaftContext
 		x.Check(rc.Unmarshal(cc.Context))
 		n.Connect(rc.Id, rc.Addr)
+
+		m := &protos.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0}
+		n.server.storeZero(m)
 	}
 
 	cs := n.Raft().ApplyConfChange(cc)
