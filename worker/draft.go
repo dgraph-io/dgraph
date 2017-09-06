@@ -513,7 +513,7 @@ func (n *node) Run() {
 					// stepped down as leader do a sync membership immediately
 					go groups().syncMemberships()
 				} else if rd.RaftState == raft.StateLeader && !leader {
-					leaseMgr().resetLease(n.gid)
+					// leaseMgr().resetLease(n.gid)
 					go groups().syncMemberships()
 				}
 				leader = rd.RaftState == raft.StateLeader

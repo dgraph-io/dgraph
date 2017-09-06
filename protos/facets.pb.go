@@ -47,7 +47,7 @@
 		RaftContext
 		Member
 		Group
-		GroupProposal
+		ZeroProposal
 		MembershipState
 		Tablet
 		DirectedEdge

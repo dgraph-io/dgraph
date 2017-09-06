@@ -53,11 +53,11 @@ service Zero {
   rpc Connect (Member) returns (MembershipState) {}
 	rpc Update (Group)  returns (MembershipState) {}
   rpc ShouldServe (Tablet) returns (Tablet) {}
+	rpc AssignUids (Num)                 returns (AssignedIds) {}
 }
 
 service Worker {
 	// Data serving RPCs.
-	rpc AssignUids (Num)                 returns (AssignedIds) {}
 	rpc Mutate (Mutations)               returns (Payload) {}
 	rpc ServeTask (Query)                returns (Result) {}
 	rpc PredicateAndSchemaData (stream GroupKeys) returns (stream KV) {}
