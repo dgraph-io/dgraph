@@ -51,7 +51,7 @@ service Raft {
 
 service Zero {
   rpc Connect (Member) returns (MembershipState) {}
-	rpc Update (Member)  returns (MembershipState) {}
+	rpc Update (Group)  returns (MembershipState) {}
   rpc ShouldServe (Tablet) returns (Tablet) {}
 }
 

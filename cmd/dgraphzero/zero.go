@@ -19,6 +19,7 @@ package main
 
 import (
 	"errors"
+	"math"
 
 	"golang.org/x/net/context"
 
@@ -32,10 +33,11 @@ var (
 	emptyMembershipState protos.MembershipState
 	errInvalidId         = errors.New("Invalid server id")
 	errInvalidAddress    = errors.New("Invalid address")
-	errUnknownMember     = errors.New("Unknown cluster member")
 	errInvalidQuery      = errors.New("Invalid query")
 	errInternalError     = errors.New("Internal server error")
 	errJoinCluster       = errors.New("Unable to join cluster")
+	errUnknownMember     = errors.New("Unknown cluster member")
+	errUpdatedMember     = errors.New("Cluster member has updated credentials.")
 )
 
 type Server struct {
@@ -57,18 +59,72 @@ func (s *Server) membershipState() *protos.MembershipState {
 	return s.state
 }
 
-func (s *Server) servingTablet(tablet *protos.Tablet) uint32 {
+func (s *Server) servingTablet(dst string) *protos.Tablet {
 	s.RLock()
-	s.RUnlock()
+	defer s.RUnlock()
 
-	for gid, group := range s.state.Groups {
-		for key := range group.Tablets {
-			if key == tablet.Predicate {
-				return gid
+	for _, group := range s.state.Groups {
+		for key, tab := range group.Tablets {
+			if key == dst {
+				return tab
 			}
 		}
 	}
-	return 0
+	return nil
+}
+
+func (s *Server) createProposals(dst *protos.Group) ([]*protos.GroupProposal, error) {
+	var res []*protos.GroupProposal
+	if len(dst.Members) > 1 {
+		return res, errInvalidQuery
+	}
+
+	s.RLock()
+	defer s.RUnlock()
+	// There is only one member.
+	for mid, dstMember := range dst.Members {
+		group, has := s.state.Groups[dstMember.GroupId]
+		if !has {
+			return res, errUnknownMember
+		}
+		srcMember, has := group.Members[mid]
+		if !has {
+			return res, errUnknownMember
+		}
+		if srcMember.Addr != dstMember.Addr ||
+			srcMember.Leader != dstMember.Leader ||
+			srcMember.AmDead != dstMember.AmDead {
+
+			proposal := &protos.GroupProposal{
+				Member: dstMember,
+			}
+			res = append(res, proposal)
+		}
+		if !dstMember.Leader {
+			// Don't continue to tablets if request is not from the leader.
+			return res, nil
+		}
+	}
+	for key, dstTablet := range dst.Tablets {
+		group, has := s.state.Groups[dstTablet.GroupId]
+		if !has {
+			return res, errUnknownMember
+		}
+		srcTablet, has := group.Tablets[key]
+		if !has {
+			return res, errUnknownMember
+		}
+
+		s := float64(srcTablet.Size())
+		d := float64(dstTablet.Size())
+		if (s == 0 && d > 0) || (s > 0 && math.Abs(d/s-1) > 0.1) {
+			proposal := &protos.GroupProposal{
+				Tablet: dstTablet,
+			}
+			res = append(res, proposal)
+		}
+	}
+	return res, nil
 }
 
 // Connect is used to connect the very first time with group zero.
@@ -144,32 +200,52 @@ func (s *Server) ShouldServe(
 	}
 
 	// Check who is serving this tablet.
-	tgroup := s.servingTablet(tablet)
-
-	if tgroup == 0 {
-		// Set the tablet to be served by this server's group.
-		var proposal protos.GroupProposal
-		proposal.Tablet = tablet
-		if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
-			return nil, err
-		}
+	tab := s.servingTablet(tablet.Predicate)
+	if tab != nil {
+		// Someone is serving this tablet. Could be the caller as well.
+		// The caller should compare the returned group against the group it holds to check who's
+		// serving.
+		return tab, nil
 	}
 
-	// Someone is serving this tablet. Could be the caller as well.
-	// The caller should compare the returned group against the group it holds to check who's
-	// serving.
-	gid := s.servingTablet(tablet)
-	*resp = *tablet
-	resp.GroupId = gid
-	return resp, nil
+	// Set the tablet to be served by this server's group.
+	var proposal protos.GroupProposal
+	proposal.Tablet = tablet
+	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
+		return nil, err
+	}
+	tab = s.servingTablet(tablet.Predicate)
+	return tab, nil
 }
 
 func (s *Server) Update(
-	ctx context.Context, member *protos.Member) (state *protos.MembershipState, err error) {
+	ctx context.Context, group *protos.Group) (state *protos.MembershipState, err error) {
 	if ctx.Err() != nil {
 		return &emptyMembershipState, ctx.Err()
 	}
-	// groupMap[gid]*members
-	// tablets[gid]*tablets
-	return
+
+	proposals, err := s.createProposals(group)
+	if err != nil {
+		return &emptyMembershipState, err
+	}
+
+	errCh := make(chan error)
+	for _, pr := range proposals {
+		go func(pr *protos.GroupProposal) {
+			x.Printf("Proposing: %+v\n", pr)
+			errCh <- s.Node.proposeAndWait(ctx, pr)
+		}(pr)
+	}
+
+	for range proposals {
+		select {
+		case err := <-errCh:
+			if err != nil {
+				return &emptyMembershipState, err
+			}
+		case <-ctx.Done():
+			return &emptyMembershipState, ctx.Err()
+		}
+	}
+	return s.membershipState(), nil
 }
