@@ -113,7 +113,7 @@ func (ld *loader) run() {
 	flatPostingChs := make([]chan *protos.FlatPosting, numFlatFiles)
 	for i := 0; i < numFlatFiles; i++ {
 		flatPostingChs[i] = make(chan *protos.FlatPosting, 1<<10)
-		filename := filepath.Join(tmpPostingsDir, fmt.Sprintf("%06d.bin", i))
+		filename := filepath.Join(tmpPostingsDir, fmt.Sprintf("map_%06d.bin", i))
 		go readFlatFile(filename, flatPostingChs[i])
 	}
 	shuffleFlatFiles(tmpPostingsDir, flatPostingChs, ld.prog)
