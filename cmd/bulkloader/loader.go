@@ -128,7 +128,7 @@ func (ld *loader) run() {
 	catFlatFile(filepath.Join(tmpPostingsDir, "merged_000000.bin"), fa)
 	catFlatFile(filepath.Join(tmpPostingsDir, "merged_000001.bin"), fa)
 	catFlatFile(filepath.Join(tmpPostingsDir, "merged_000002.bin"), fa)
-	catFlatFile(filepath.Join(tmpPostingsDir, "merged_000004.bin"), fa)
+	catFlatFile(filepath.Join(tmpPostingsDir, "merged_000003.bin"), fa)
 }
 
 func catFlatFile(filename string, w io.Writer) {
