@@ -29,7 +29,7 @@ func writeMappedFiles(dir string, postingsCh <-chan *protos.FlatPosting, prog *p
 
 	processBatch := func() {
 		wg.Add(1)
-		filename := filepath.Join(dir, fmt.Sprintf("map_%06d.bin", fileNum))
+		filename := filepath.Join(dir, fmt.Sprintf("%06d.bin", fileNum))
 		fileNum++
 		filenames = append(filenames, filename)
 		ps := postings
