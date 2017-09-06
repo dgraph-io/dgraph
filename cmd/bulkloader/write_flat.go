@@ -29,7 +29,7 @@ func writePostings(dir string, postingsCh <-chan *protos.FlatPosting, prog *prog
 
 	processBatch := func() {
 		wg.Add(1)
-		filename := filepath.Join(dir, fmt.Sprintf("%06d.bin", fileNum))
+		filename := filepath.Join(dir, fmt.Sprintf("map_%06d.bin", fileNum))
 		fileNum++
 		ps := postings
 		postings = nil
@@ -116,7 +116,7 @@ func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting, prog *p
 
 	var buf proto.Buffer
 	writeBuf := func() {
-		filename := filepath.Join(dir, fmt.Sprintf("merged_%06d.bin", fileNum))
+		filename := filepath.Join(dir, fmt.Sprintf("shu_%06d.bin", fileNum))
 		fileNum++
 		wg.Add(1)
 		go func(buf []byte) {

@@ -3,9 +3,7 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -121,26 +119,4 @@ func (ld *loader) run() {
 	shuffleFlatFiles(tmpPostingsDir, flatPostingChs, ld.prog)
 
 	ld.prog.endSummary()
-
-	fa, err := os.OpenFile("/ssd/debug.txt", os.O_CREATE|os.O_RDWR, 0644)
-	x.Check(err)
-	defer func() { x.Check(fa.Close()) }()
-	catFlatFile(filepath.Join(tmpPostingsDir, "merged_000000.bin"), fa)
-	catFlatFile(filepath.Join(tmpPostingsDir, "merged_000001.bin"), fa)
-	catFlatFile(filepath.Join(tmpPostingsDir, "merged_000002.bin"), fa)
-	catFlatFile(filepath.Join(tmpPostingsDir, "merged_000003.bin"), fa)
-	catFlatFile(filepath.Join(tmpPostingsDir, "merged_000004.bin"), fa)
-}
-
-func catFlatFile(filename string, w io.Writer) {
-	x.Check2(w.Write([]byte(filename)))
-	x.Check2(w.Write([]byte{'\n'}))
-	ch := make(chan *protos.FlatPosting)
-	go func() {
-		readFlatFile(filename, ch)
-	}()
-	for p := range ch {
-		x.Check2(w.Write([]byte(hex.Dump(p.Key))))
-		x.Check2(w.Write([]byte{'\n'}))
-	}
 }
