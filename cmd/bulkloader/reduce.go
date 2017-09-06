@@ -4,31 +4,32 @@ import (
 	"bytes"
 	"sync/atomic"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func reduce(batch []*protos.FlatPosting, prog *progress) {
+func reduce(batch []*protos.FlatPosting, kv *badger.KV, prog *progress) {
 
 	var currentKey []byte
 
 	var uids []uint64
 	pl := new(protos.PostingList)
 
-	set := func(k, v []byte, m uint8) {
-		// TODO: Placeholder
-	}
-
+	var entries []*badger.Entry
 	outputPostingList := func() {
+		e := &badger.Entry{Key: currentKey}
 		if len(pl.Postings) == 0 {
-			set(currentKey, bp128.DeltaPack(uids), 0x01)
+			e.Value = bp128.DeltaPack(uids)
+			e.UserMeta = 0x01
 		} else {
+			var err error
 			pl.Uids = bp128.DeltaPack(uids)
-			plBuf, err := pl.Marshal()
+			e.Value, err = pl.Marshal()
 			x.Check(err)
-			set(currentKey, plBuf, 0x00)
 		}
+		entries = append(entries, e)
 
 		uids = uids[:0]
 		pl.Reset()
@@ -54,4 +55,10 @@ func reduce(batch []*protos.FlatPosting, prog *progress) {
 
 	}
 	outputPostingList()
+
+	err := kv.BatchSet(entries)
+	x.Check(err)
+	for _, e := range entries {
+		x.Check(e.Error)
+	}
 }

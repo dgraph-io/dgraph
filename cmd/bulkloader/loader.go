@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -120,6 +122,14 @@ func (ld *loader) reduceStage() {
 	reduceCh := make(chan []*protos.FlatPosting, 3) // Small buffer size since each element has a lot of data.
 	go shufflePostings(reduceCh, shuffleInputChs, ld.prog)
 
+	opt := badger.DefaultOptions
+	opt.Dir = ld.opt.badgerDir
+	opt.ValueDir = opt.Dir
+	opt.ValueGCRunInterval = time.Hour * 100
+	opt.SyncWrites = false
+	kv, err := badger.NewKV(&opt)
+	x.Check(err)
+
 	// Reduce stage.
 	pending := make(chan struct{}, ld.opt.numGoroutines)
 	var reduceWg sync.WaitGroup
@@ -127,7 +137,7 @@ func (ld *loader) reduceStage() {
 		pending <- struct{}{}
 		reduceWg.Add(1)
 		go func() {
-			reduce(batch, ld.prog)
+			reduce(batch, kv, ld.prog)
 			<-pending
 			reduceWg.Done()
 		}()
