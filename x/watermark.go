@@ -18,6 +18,7 @@ package x
 
 import (
 	"container/heap"
+	"context"
 	"sync/atomic"
 
 	"golang.org/x/net/trace"
@@ -99,14 +100,18 @@ func (w *WaterMark) SetDoneUntil(val uint64) {
 	atomic.StoreUint64(&w.doneUntil, val)
 }
 
-func (w *WaterMark) WaitForMark(index uint64) {
+func (w *WaterMark) WaitForMark(ctx context.Context, index uint64) error {
 	if w.DoneUntil() >= index {
-		return
+		return nil
 	}
 	waitCh := make(chan struct{})
 	w.markCh <- mark{index: index, waiter: waitCh}
-	<-waitCh
-	return
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-waitCh:
+		return nil
+	}
 }
 
 // process is used to process the Mark channel. This is not thread-safe,

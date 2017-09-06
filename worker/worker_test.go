@@ -130,7 +130,7 @@ func TestProcessTask(t *testing.T) {
 	defer ps.Close()
 
 	query := newQuery("neighbour", []uint64{10, 11, 12}, nil)
-	r, err := processTask(context.Background(), query, 1)
+	r, err := helpProcessTask(context.Background(), query, 1)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		[][]uint64{
@@ -167,7 +167,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	defer ps.Close()
 
 	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
-	r, err := processTask(context.Background(), query, 1)
+	r, err := helpProcessTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -189,7 +189,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
-	r, err = processTask(context.Background(), query, 1)
+	r, err = helpProcessTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -219,7 +219,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = processTask(context.Background(), query, 1)
+	r, err = helpProcessTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -229,7 +229,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = processTask(context.Background(), query, 1)
+	r, err = helpProcessTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -247,7 +247,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	defer ps.Close()
 
 	query := newQuery("friend", nil, []string{"anyofterms", "", "hey photon"})
-	r, err := processTask(context.Background(), query, 1)
+	r, err := helpProcessTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -269,7 +269,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "", "hey photon notphoton notphotonExtra"})
-	r, err = processTask(context.Background(), query, 1)
+	r, err = helpProcessTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{
@@ -299,7 +299,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Issue a similar query.
 	query = newQuery("friend", nil, []string{"anyofterms", "", "photon notphoton ignored"})
-	r, err = processTask(context.Background(), query, 1)
+	r, err = helpProcessTask(context.Background(), query, 1)
 	require.NoError(t, err)
 
 	require.EqualValues(t, [][]uint64{

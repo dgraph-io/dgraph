@@ -550,6 +550,13 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
+	if err := waitLinearizableRead(ctx, gid); err != nil {
+		return &emptyResult, err
+	}
+	return helpProcessTask(ctx, q, gid)
+}
+
+func helpProcessTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Result, error) {
 	out := new(protos.Result)
 	attr := q.Attr
 

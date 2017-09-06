@@ -18,6 +18,7 @@
 package worker
 
 import (
+	"bytes"
 	"encoding/binary"
 	"log"
 	"math/rand"
@@ -120,6 +121,9 @@ func (p *proposals) Has(pid uint32) bool {
 type node struct {
 	*conn.Node
 
+	// Changed after init but not protected by SafeMutex
+	requestCh chan linReadReq
+
 	// Fields which are never changed after init.
 	applyCh chan raftpb.Entry
 	ctx     context.Context
@@ -146,9 +150,10 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 
 	n := &node{
-		Node: m,
-		ctx:  context.Background(),
-		gid:  gid,
+		Node:      m,
+		requestCh: make(chan linReadReq),
+		ctx:       context.Background(),
+		gid:       gid,
 		// processConfChange etc are not throttled so some extra delta, so that we don't
 		// block tick when applyCh is full
 		applyCh: make(chan raftpb.Entry, Config.NumPendingProposals+1000),
@@ -200,7 +205,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		for _, edge := range proposal.Mutations.Edges {
 			if typ, err := schema.State().TypeOf(edge.Attr); err != nil {
 				continue
-			} else if err := validateAndConvert(edge, typ); err != nil {
+			} else if err := ValidateAndConvert(edge, typ); err != nil {
 				return err
 			}
 		}
@@ -395,6 +400,80 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
 }
 
+type linReadReq struct {
+	// A one-shot chan which we send a raft index upon
+	indexCh chan<- uint64
+}
+
+func (n *node) readIndex(ctx context.Context) (chan uint64, error) {
+	ch := make(chan uint64, 1)
+	select {
+	case n.requestCh <- linReadReq{ch}:
+		return ch, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (n *node) runReadIndexLoop(stop <-chan struct{}, finished chan<- struct{},
+	requestCh <-chan linReadReq, readStateCh <-chan raft.ReadState) {
+	defer close(finished)
+	counter := x.NewNonceCounter()
+	requests := []linReadReq{}
+	// We maintain one linearizable ReadIndex request at a time.  Others wait queued behind
+	// requestCh.
+	for {
+		select {
+		case <-stop:
+			return
+		case <-readStateCh:
+			// Do nothing, discard ReadState info we don't have an activeRctx for
+		case req := <-requestCh:
+		slurpLoop:
+			for {
+				requests = append(requests, req)
+				select {
+				case req = <-requestCh:
+				default:
+					break slurpLoop
+				}
+			}
+			activeRctx := counter.Generate()
+			// We ignore the err - it would be n.ctx cancellation (which we must ignore because
+			// it's our duty to continue until `stop` is triggered) or raft.ErrStopped (which we
+			// must ignore for the same reason).
+			_ = n.Raft().ReadIndex(n.ctx, activeRctx[:])
+			// To see if the ReadIndex request succeeds, we need to use a timeout and wait for a
+			// successful response.  If we don't see one, the raft leader wasn't configured, or the
+			// raft leader didn't respond.
+
+			// This is supposed to use context.Background().  We don't want to cancel the timer
+			// externally.  We want equivalent functionality to time.NewTimer.
+			timer, cancelTimer := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		again:
+			select {
+			case <-stop:
+				cancelTimer()
+				return
+			case rs := <-readStateCh:
+				if 0 != bytes.Compare(activeRctx[:], rs.RequestCtx) {
+					goto again
+				}
+				cancelTimer()
+				index := rs.Index
+				for _, req := range requests {
+					req.indexCh <- index
+				}
+			case <-timer.Done():
+				for _, req := range requests {
+					req.indexCh <- raft.None
+				}
+			}
+			requests = requests[:0]
+		}
+	}
+}
+
 func (n *node) Run() {
 	firstRun := true
 	var leader bool
@@ -403,12 +482,32 @@ func (n *node) Run() {
 	defer ticker.Stop()
 	rcBytes, err := n.RaftContext.Marshal()
 	x.Check(err)
+
+	// This chan could have capacity zero, because runReadIndexLoop never blocks without selecting
+	// on readStateCh.  It's 2 so that sending rarely blocks (so the Go runtime doesn't have to
+	// switch threads as much.)
+	readStateCh := make(chan raft.ReadState, 2)
+
+	{
+		// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
+		// That way we know sending to readStateCh will not deadlock.
+		finished := make(chan struct{})
+		stop := make(chan struct{})
+		defer func() { <-finished }()
+		defer close(stop)
+		go n.runReadIndexLoop(stop, finished, n.requestCh, readStateCh)
+	}
+
 	for {
 		select {
 		case <-ticker.C:
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
+			for _, rs := range rd.ReadStates {
+				readStateCh <- rs
+			}
+
 			if rd.SoftState != nil {
 				if rd.RaftState == raft.StateFollower && leader {
 					// stepped down as leader do a sync membership immediately
@@ -699,4 +798,24 @@ func (n *node) AmLeader() bool {
 	}
 	r := n.Raft()
 	return r.Status().Lead == r.Status().ID
+}
+
+func waitLinearizableRead(ctx context.Context, gid uint32) error {
+	n := groups().Node(gid)
+	replyCh, err := n.readIndex(ctx)
+	if err != nil {
+		return err
+	}
+	select {
+	case index := <-replyCh:
+		if index == raft.None {
+			return x.Errorf("cannot get linearized read (time expired or no configured leader)")
+		}
+		if err := n.Applied.WaitForMark(ctx, index); err != nil {
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
