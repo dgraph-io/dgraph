@@ -2394,6 +2394,7 @@ mutation {
 
 After such a delete mutation, the schema of the predicate may be changed --- even from UID to scalar, or scalar to UID; such a change is allowed only after all data is deleted.
 
+{{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
 
 ### Variables in mutations
 
