@@ -2129,6 +2129,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	}
 
 	expectArg := true
+	order := make(map[string]bool)
 	// Parse in KV fashion. Depending on the value of key, decide the path.
 	for it.Next() {
 		var key string
@@ -2231,15 +2232,19 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 			}
 
-			// Verify how multiple order work when all use some variable.
+			// TODO - Verify how multiple order work when all use some variable.
 			if val == "" {
 				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 			}
 			if key == "orderasc" || key == "orderdesc" {
+				if order[val] {
+					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
+				}
 				gq.Order = append(gq.Order, Order{
 					Attr: val,
 					Desc: key == "orderdesc",
 				})
+				order[val] = true
 				continue
 			}
 
@@ -2601,6 +2606,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				return err
 			}
 			// Stores args in GraphQuery, will be used later while retrieving results.
+			order := make(map[string]bool)
 			for _, p := range args {
 				if !validKey(p.Key) {
 					return x.Errorf("Got invalid keyword: %s", p.Key)
@@ -2612,10 +2618,14 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return x.Errorf("Got empty argument")
 				}
 				if p.Key == "orderasc" || p.Key == "orderdesc" {
+					if order[p.Val] {
+						return x.Errorf("Sorting by an attribute: [%s] can only be done once", p.Val)
+					}
 					curp.Order = append(curp.Order, Order{
 						Attr: p.Val,
 						Desc: p.Key == "orderdesc",
 					})
+					order[p.Val] = true
 					continue
 				}
 

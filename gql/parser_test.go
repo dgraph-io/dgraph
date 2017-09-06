@@ -4194,3 +4194,33 @@ func TestOrder2(t *testing.T) {
 	require.Equal(t, "name", curp.Order[1].Attr)
 	require.Equal(t, true, curp.Order[1].Desc)
 }
+
+func TestMultipleOrderError(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01)) {
+				friend(orderasc: alias, orderdesc: alias) {
+					alias
+				}
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Sorting by an attribute: [alias] can only be done once")
+}
+
+func TestMultipleOrderError2(t *testing.T) {
+	query := `
+		{
+			me(func: uid(0x01),orderasc: alias, orderdesc: alias) {
+				friend {
+					alias
+				}
+			}
+		}
+	`
+	_, err := Parse(Request{Str: query, Http: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Sorting by an attribute: [alias] can only be done once")
+}
