@@ -27,5 +27,6 @@ func main() {
 	loader.mapStage()
 	loader.reduceStage()
 	loader.schemaStage()
+	loader.leaseStage()
 	loader.cleanup()
 }

@@ -23,7 +23,10 @@ type schemaStore struct {
 
 func newSchemaStore(initial []*protos.SchemaUpdate) *schemaStore {
 	s := &schemaStore{
-		m: map[string]schemaState{},
+		m: map[string]schemaState{
+			"_predicate_": {true, nil},
+			"_lease_":     {true, &protos.SchemaUpdate{ValueType: uint32(protos.Posting_INT)}},
+		},
 	}
 	for _, sch := range initial {
 		p := sch.Predicate

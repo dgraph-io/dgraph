@@ -145,15 +145,20 @@ func (ld *loader) reduceStage() {
 		}()
 	}
 	reduceWg.Wait()
-
-	ld.prog.endSummary()
 }
 
 func (ld *loader) schemaStage() {
 	ld.ss.write(ld.kv)
 }
 
+func (ld *loader) leaseStage() {
+	lease := ld.um.lease()
+
+	p := &protos.Posting{}
+}
+
 func (ld *loader) cleanup() {
+	ld.prog.endSummary()
 	if len(ld.mapOutput) > 0 {
 		dir := filepath.Dir(ld.mapOutput[0])
 		x.Check(os.RemoveAll(dir))
