@@ -1938,36 +1938,70 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		sg.Params.Count = 1000
 	}
 
-	for idx, order := range sg.Params.Order {
-		// TODO(pawan) - Run sorts in parallel.
+	x.AssertTrue(len(sg.Params.Order) > 0)
 
-		if idx == 0 {
-			// For first sort, we want to actually sort over network
-			sort := &protos.SortMessage{
-				Attr:      order.Attr,
-				Langs:     sg.Params.Langs,
-				UidMatrix: sg.uidMatrix,
-				Offset:    int32(sg.Params.Offset),
-				Count:     int32(sg.Params.Count),
-				Desc:      order.Desc,
-				Multiple:  len(sg.Params.Order) > 1,
+	// For first sort, we want to actually sort over network
+	order := sg.Params.Order[0]
+	sort := &protos.SortMessage{
+		Attr:      order.Attr,
+		Langs:     sg.Params.Langs,
+		UidMatrix: sg.uidMatrix,
+		Offset:    int32(sg.Params.Offset),
+		Count:     int32(sg.Params.Count),
+		Desc:      order.Desc,
+		Multiple:  len(sg.Params.Order) > 1,
+	}
+	result, err := worker.SortOverNetwork(ctx, sort)
+	if err != nil {
+		return err
+	}
+
+	x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))
+	sg.uidMatrix = result.UidMatrix
+	// Update the destUids as we might have removed some UIDs.
+	sg.updateDestUids(ctx)
+	if !sort.Multiple {
+		// We are done here.
+		return nil
+	}
+
+	// For each uid in dest uids, we have multiple values which belong to different attributes.
+	sortVals := make([][]types.Val, len(sg.DestUIDs.Uids))
+	for idx := range sortVals {
+		sortVals[idx] = make([]types.Val, 0, len(sg.Params.Order))
+	}
+
+	// TODO - See if it might make sense to send a ValueList instead of a ValueMatrix.
+	for i, ul := range sg.uidMatrix {
+		x.AssertTrue(len(ul.Uids) == len(result.ValueMatrix[i].Values))
+		for j, uid := range ul.Uids {
+			uidx := algo.IndexOf(sg.DestUIDs, uid)
+			x.AssertTrue(uidx >= 0)
+
+			if len(sortVals[uidx]) > 0 {
+				// We have already seen this uid.
+				continue
 			}
-			result, err := worker.SortOverNetwork(ctx, sort)
+			val, err := convertWithBestEffort(result.ValueMatrix[i].Values[j])
 			if err != nil {
 				return err
 			}
+			sortVals[uidx] = append(sortVals[uidx], val)
+		}
+	}
 
-			x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))
-			sg.uidMatrix = result.UidMatrix
-			// Update the destUids as we might have removed some UIDs.
-			sg.updateDestUids(ctx)
+	desc := make([]bool, 0, len(sg.Params.Order))
+	for idx, order := range sg.Params.Order {
+		desc = append(desc, order.Desc)
+		// TODO(pawan) - Run sorts in parallel.
+		if idx == 0 {
+			// We already fetched this above.
 			continue
 		}
 
-		// For rest of them we just fetch the values and do a stable sort.
+		// For rest of them we just fetch the values and do a sort at the end.
 		temp := new(SubGraph)
 		temp.Attr = order.Attr
-		// Some ids might have been removed.
 		temp.SrcUIDs = sg.DestUIDs
 		taskQuery := createTaskQuery(temp)
 		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
@@ -1975,27 +2009,36 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 			return err
 		}
 
-		x.AssertTrue(len(result.ValueMatrix) == len(sg.DestUIDs.Uids))
-		vals := make([]types.Val, 0, len(result.ValueMatrix))
-		for _, ul := range sg.uidMatrix {
-			uids := &protos.List{ul.Uids[:0]}
-			vals := vals[:0]
-			for _, uid := range ul.Uids {
-				uidx := algo.IndexOf(temp.SrcUIDs, uid)
-				v := result.ValueMatrix[uidx].Values[0]
-				uids.Uids = append(uids.Uids, uid)
-
-				val, err := convertWithBestEffort(v)
-				if err != nil {
-					continue
-				}
-				vals = append(vals, val)
+		seenUid := make(map[uint64]bool)
+		x.AssertTrue(len(sg.DestUIDs.Uids) == len(result.ValueMatrix))
+		for i, uid := range sg.DestUIDs.Uids {
+			v := result.ValueMatrix[i].Values[0]
+			val, err := convertWithBestEffort(v)
+			if err != nil {
+				// TODO - Insert empty value if not present.
+				return err
 			}
-			types.Sort([][]types.Val{vals}, uids, []bool{order.Desc})
-			ul = uids
+			if seenUid[uid] {
+				// We have already seen this uid.
+				continue
+			}
+			sortVals[i] = append(sortVals[i], val)
 		}
 	}
 
+	// Values have been accumulated, now we do the multisort.
+	for i, ul := range sg.uidMatrix {
+		vals := make([][]types.Val, len(ul.Uids))
+		for j, uid := range ul.Uids {
+			idx := algo.IndexOf(sg.DestUIDs, uid)
+			x.AssertTrue(idx >= 0)
+			vals[j] = sortVals[idx]
+		}
+		types.Sort(vals, ul, desc)
+		sg.uidMatrix[i] = ul
+	}
+
+	// TODO - Paginate results again if its Multisort.
 	return nil
 }
 

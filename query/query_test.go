@@ -9170,20 +9170,33 @@ func TestMultiSort1(t *testing.T) {
 	}`
 
 	js := processToFastJSON(t, query)
-	fmt.Println(js)
+	require.Equal(t, `{"data": {"me":[{"name":"Alice","age":25},{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25},{"name":"Elizabeth","age":75}]}}`, js)
 }
 
-func TestSimpleSort(t *testing.T) {
+func TestMultiSort2(t *testing.T) {
 	populateGraph(t)
 
 	query := `{
-	friends(func: uid(0x01)) {
-		friend(orderdesc: dob) {
+		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderdesc: age) {
 			name
-			dob
+			age
 		}
-	}
-}`
+	}`
+
 	js := processToFastJSON(t, query)
-	fmt.Println(js)
+	require.Equal(t, `{"data": {"me":[{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Alice","age":25},{"name":"Bob","age":75},{"name":"Bob","age":25},{"name":"Colin","age":25},{"name":"Elizabeth","age":75},{"name":"Elizabeth","age":25}]}}`, js)
+}
+
+func TestMultiSort3(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: age, orderdesc: name) {
+			name
+			age
+		}
+	}`
+
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":[{"name":"Elizabeth","age":25},{"name":"Colin","age":25},{"name":"Bob","age":25},{"name":"Alice","age":25},{"name":"Elizabeth","age":75},{"name":"Bob","age":75},{"name":"Alice","age":75},{"name":"Alice","age":75}]}}`, js)
 }

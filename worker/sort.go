@@ -120,7 +120,8 @@ func sortWithoutIndex(ctx context.Context, ts *protos.SortMessage) (*protos.Sort
 		default:
 			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
 			tempList := &protos.List{ts.UidMatrix[i].Uids}
-			if err := sortByValue(ctx, ts, tempList, sType); err != nil {
+			// TODO - Get values also and send to paginate.
+			if _, err := sortByValue(ctx, ts, tempList, sType); err != nil {
 				return r, err
 			}
 			paginate(ts, tempList)
@@ -137,8 +138,11 @@ func sortWithIndex(ctx context.Context, ts *protos.SortMessage) (*protos.SortRes
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset)
+		// TODO - Define once.
 		var emptyList protos.List
+		var emptyValueList protos.ValueList
 		out[i].ulist = &emptyList
+		out[i].values = &emptyValueList
 	}
 	r := new(protos.SortResult)
 	// Iterate over every bucket / token.
@@ -227,6 +231,9 @@ BUCKETS:
 
 	for _, il := range out {
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
+		if ts.Multiple {
+			r.ValueMatrix = append(r.ValueMatrix, il.values)
+		}
 	}
 	select {
 	case <-ctx.Done():
@@ -304,6 +311,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 type intersectedList struct {
 	offset int
 	ulist  *protos.List
+	values *protos.ValueList
 }
 
 // intersectBucket intersects every UID list in the UID matrix with the
@@ -321,6 +329,7 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 	key := x.IndexKey(attr, token)
 	// Don't put the Index keys in memory.
 	pl := posting.Get(key)
+	vals := &(protos.ValueList{})
 
 	// For each UID list, we need to intersect with the index bucket.
 	for i, ul := range ts.UidMatrix {
@@ -346,9 +355,10 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 
 		// We are within the page. We need to apply sorting.
 		// Sort results by value before applying offset.
-		if err := sortByValue(ctx, ts, result, scalar); err != nil {
+		if vals, err = sortByValue(ctx, ts, result, scalar); err != nil {
 			return err
 		}
+		x.AssertTrue(len(result.Uids) == len(vals.Values))
 
 		// Result set might have reduced after sorting. As some uids might not have a
 		// value in the lang specified.
@@ -357,6 +367,7 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 		if il.offset > 0 {
 			// Apply the offset.
 			result.Uids = result.Uids[il.offset:n]
+			vals.Values = vals.Values[il.offset:n]
 			il.offset = 0
 			n = len(result.Uids)
 		}
@@ -371,10 +382,8 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 			}
 		}
 
-		for j := 0; j < n; j++ {
-			uid := result.Uids[j]
-			il.ulist.Uids = append(il.ulist.Uids, uid)
-		}
+		il.ulist.Uids = append(il.ulist.Uids, result.Uids[:n]...)
+		il.values.Values = append(il.values.Values, vals.Values[:n]...)
 	} // end for loop over UID lists in UID matrix.
 
 	// Check out[i] sizes for all i.
@@ -399,14 +408,15 @@ func paginate(ts *protos.SortMessage, dest *protos.List) {
 
 // sortByValue fetches values and sort UIDList.
 func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
-	typ types.TypeID) error {
+	typ types.TypeID) (*protos.ValueList, error) {
 	lenList := len(ul.Uids)
 	uids := make([]uint64, 0, lenList)
 	values := make([][]types.Val, 0, lenList)
+	tv := &protos.ValueList{}
 	for i := 0; i < lenList; i++ {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return tv, ctx.Err()
 		default:
 			uid := ul.Uids[i]
 			val, err := fetchValue(uid, ts.Attr, ts.Langs, typ)
@@ -416,11 +426,19 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 			}
 			uids = append(uids, uid)
 			values = append(values, []types.Val{val})
+			if ts.Multiple {
+				data := types.ValueForType(types.BinaryID)
+				err = types.Marshal(val, &data)
+				if err != nil {
+					return tv, x.Errorf("Failed convertToType during Marshal")
+				}
+				tv.Values = append(tv.Values, &protos.TaskValue{ValType: int32(typ), Val: data.Value.([]byte)})
+			}
 		}
 	}
 	err := types.Sort(values, &protos.List{uids}, []bool{ts.Desc})
 	ul.Uids = uids
-	return err
+	return tv, err
 }
 
 // fetchValue gets the value for a given UID.

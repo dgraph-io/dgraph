@@ -73,6 +73,7 @@ message SortMessage {
 
 message SortResult {
 	repeated List uid_matrix = 1;
+  repeated ValueList value_matrix=2; // Sent back only if this was the first sort out of multiple.
 }
 
 message RaftContext {
