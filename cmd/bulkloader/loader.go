@@ -110,7 +110,7 @@ func (ld *loader) run() {
 
 	flatPostingChs := make([]chan *protos.FlatPosting, len(mappedFiles))
 	for i, mappedFile := range mappedFiles {
-		flatPostingChs[i] = make(chan *protos.FlatPosting, 1<<10)
+		flatPostingChs[i] = make(chan *protos.FlatPosting, 1000)
 		go readFlatFile(mappedFile, flatPostingChs[i])
 	}
 	shuffleFlatFiles(tmpPostingsDir, flatPostingChs, ld.prog)
