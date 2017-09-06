@@ -71,8 +71,8 @@ func (ld *loader) run() {
 
 	var mappedFiles []string
 	go func() {
-		mappedFiles = writePostings(tmpPostingsDir, ld.postingsCh, ld.prog)
-		writePostings(tmpPostingsDir, ld.postingsCh, ld.prog)
+		mappedFiles = writeMappedFile(tmpPostingsDir, ld.postingsCh, ld.prog)
+		writeMappedFile(tmpPostingsDir, ld.postingsCh, ld.prog)
 		postingWriterWg.Done()
 	}()
 

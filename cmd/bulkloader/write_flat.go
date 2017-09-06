@@ -20,7 +20,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
-func writePostings(dir string, postingsCh <-chan *protos.FlatPosting, prog *progress) []string {
+func writeMappedFile(dir string, postingsCh <-chan *protos.FlatPosting, prog *progress) []string {
 
 	var filenames []string
 	var fileNum int
@@ -96,8 +96,7 @@ func readFlatFile(filename string, postingCh chan<- *protos.FlatPosting) {
 		for len(unmarshalBuf) < int(sz) {
 			unmarshalBuf = make([]byte, 2*len(unmarshalBuf))
 		}
-		n, err = io.ReadFull(r, unmarshalBuf[:sz])
-		x.Check(err)
+		x.Check2(io.ReadFull(r, unmarshalBuf[:sz]))
 
 		flatPosting := new(protos.FlatPosting)
 		x.Check(proto.Unmarshal(unmarshalBuf[:sz], flatPosting))
