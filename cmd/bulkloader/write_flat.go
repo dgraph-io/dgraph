@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -114,6 +113,17 @@ func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting, prog *p
 		heap.Push(&ph, heapNode{<-ch, ch})
 	}
 
+	writeBuf := func() {
+		filename := filepath.Join(dir, fmt.Sprintf("merged_%06d.bin", fileNum))
+		fileNum++
+		wg.Add(1)
+		go func(buf []byte) {
+			x.Check(outil.WriteFile(filename, buf, 0644))
+			wg.Done()
+		}(buf.Bytes())
+		buf.SetBuf(nil)
+	}
+
 	var buf proto.Buffer
 	for len(ph.data) > 0 {
 		msg := ph.data[0].head
@@ -126,23 +136,17 @@ func shuffleFlatFiles(dir string, postingChs []chan *protos.FlatPosting, prog *p
 		}
 
 		if len(buf.Bytes()) > 32<<20 && bytes.Compare(prevKey, msg.Key) != 0 {
-			filename := filepath.Join(dir, fmt.Sprintf("merged_%06d.bin", fileNum))
-			fileNum++
-			wg.Add(1)
-			go func(buf []byte) {
-				ioutil.WriteFile(filename, buf, 0644)
-				wg.Done()
-			}(buf.Bytes())
-			buf.SetBuf(nil)
+			writeBuf()
 		}
 		prevKey = msg.Key
 
 		x.Check(buf.EncodeMessage(msg))
 		atomic.AddInt64(&prog.shuffleEdgeCount, 1)
 	}
+	if len(buf.Bytes()) > 0 {
+		writeBuf()
+	}
 	wg.Wait()
-
-	// TODO: Write remainder of buf to last file.
 }
 
 type heapNode struct {
