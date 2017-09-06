@@ -10,6 +10,7 @@ type progress struct {
 	rdfCount        int64
 	mapEdgeCount    int64
 	reduceEdgeCount int64
+	reduceKeyCount  int64
 
 	start       time.Time
 	startReduce time.Time
@@ -62,12 +63,15 @@ func (p *progress) reportOnce() {
 			p.startReduce = time.Now()
 			elapsed = time.Second
 		}
-		reduceEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
-		fmt.Printf("[REDUCE] [%s] [%.2f%%] [Edge count: %d] [Edges per second: %d]\n",
+		reduceKeyCount := atomic.LoadInt64(&p.reduceKeyCount)
+		fmt.Printf("[REDUCE] [%s] [%.2f%%] [Edge count: %d] [Edges per second: %d] "+
+			"[Posting list count: %d] [Posting lists per second: %d]\n",
 			round(now.Sub(p.start)).String(),
 			100*float64(reduceEdgeCount)/float64(mapEdgeCount),
 			reduceEdgeCount,
 			int(float64(reduceEdgeCount)/elapsed.Seconds()),
+			reduceKeyCount,
+			int(float64(reduceKeyCount)/elapsed.Seconds()),
 		)
 	}
 }

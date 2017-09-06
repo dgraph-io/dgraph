@@ -19,6 +19,7 @@ func reduce(batch []*protos.FlatPosting, kv *badger.KV, prog *progress) {
 
 	var entries []*badger.Entry
 	outputPostingList := func() {
+		atomic.AddInt64(&prog.reduceKeyCount, 1)
 		e := &badger.Entry{Key: currentKey}
 		if len(pl.Postings) == 0 {
 			e.Value = bp128.DeltaPack(uids)
