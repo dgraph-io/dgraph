@@ -112,11 +112,20 @@ func (ld *loader) run() {
 		flatPostingChs[i] = make(chan *protos.FlatPosting, 1000)
 		go readFlatFile(mappedFile, flatPostingChs[i])
 	}
-	batchCh := make(chan []*protos.FlatPosting, 10)
+	batchCh := make(chan []*protos.FlatPosting, 2) // Small buffer size since each element has a lot of data.
 	go shuffleFlatFiles(batchCh, flatPostingChs, ld.prog)
-	for _ = range batchCh {
-		// TODO: Reduce stage initiated from here.
+	sem := make(chan struct{}, ld.opt.numGoroutines)
+	var reduceWg sync.WaitGroup
+	for batch := range batchCh {
+		sem <- struct{}{}
+		reduceWg.Add(1)
+		go func() {
+			reduce(batch, ld.prog)
+			<-sem
+			reduceWg.Done()
+		}()
 	}
+	reduceWg.Wait()
 
 	ld.prog.endSummary()
 }
