@@ -7,13 +7,12 @@ import (
 )
 
 type progress struct {
-	rdfCount     int64
-	lastRDFCount int64
+	rdfCount        int64
+	mapEdgeCount    int64
+	reduceEdgeCount int64
 
-	edgeCount     int64
-	lastEdgeCount int64
-
-	start time.Time
+	start       time.Time
+	startReduce time.Time
 
 	// shutdown is a bidirectional channel used to manage the stopping of the
 	// report goroutine. It handles both the request to stop the report
@@ -42,19 +41,35 @@ func (p *progress) report() {
 }
 
 func (p *progress) reportOnce() {
-	rdfCount := atomic.LoadInt64(&p.rdfCount)
-	edgeCount := atomic.LoadInt64(&p.edgeCount)
-	elapsed := time.Since(p.start)
-	fmt.Printf("[%s] [RDF count: %d] [Edge count: %d] "+
-		"[RDFs per second: %d] [Edges per second: %d]\n",
-		round(elapsed).String(),
-		rdfCount,
-		edgeCount,
-		int(float64(rdfCount)/elapsed.Seconds()),
-		int(float64(edgeCount)/elapsed.Seconds()),
-	)
-	p.lastRDFCount = rdfCount
-	p.lastEdgeCount = edgeCount
+	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
+	reduceEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
+
+	if reduceEdgeCount == 0 {
+		rdfCount := atomic.LoadInt64(&p.rdfCount)
+		elapsed := time.Since(p.start)
+		fmt.Printf("[MAP] [%s] [RDF count: %d] [Edge count: %d] "+
+			"[RDFs per second: %d] [Edges per second: %d]\n",
+			round(elapsed).String(),
+			rdfCount,
+			mapEdgeCount,
+			int(float64(rdfCount)/elapsed.Seconds()),
+			int(float64(mapEdgeCount)/elapsed.Seconds()),
+		)
+	} else {
+		now := time.Now()
+		elapsed := time.Since(p.startReduce)
+		if p.startReduce.IsZero() {
+			p.startReduce = time.Now()
+			elapsed = time.Second
+		}
+		reduceEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
+		fmt.Printf("[REDUCE] [%s] [%.2f%%] [Edge count: %d] [Edges per second: %d]\n",
+			round(now.Sub(p.start)).String(),
+			100*float64(reduceEdgeCount)/float64(mapEdgeCount),
+			reduceEdgeCount,
+			int(float64(reduceEdgeCount)/elapsed.Seconds()),
+		)
+	}
 }
 
 func (p *progress) endSummary() {

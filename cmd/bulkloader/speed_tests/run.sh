@@ -40,7 +40,7 @@ function run_test {
 	echo "$schema" > $tmpDir/sch.schema
 
 	# Run bulk loader.
-	bulkloader -tmp "$tmp" -b "$tmpDir" -s "$tmpDir/sch.schema" -r "$dataFile"
+	$GOPATH/bin/bulkloader -tmp "$tmp" -b "$tmpDir" -s "$tmpDir/sch.schema" -r "$dataFile"
 
 	# Cleanup
 	rm -rf $tmpDir

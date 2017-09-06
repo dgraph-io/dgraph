@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -32,7 +33,8 @@ type state struct {
 
 type loader struct {
 	*state
-	mappers []*mapper
+	mappers   []*mapper
+	mapOutput []string
 }
 
 func newLoader(opt options) *loader {
@@ -59,7 +61,7 @@ func newLoader(opt options) *loader {
 	return ld
 }
 
-func (ld *loader) run() {
+func (ld *loader) mapStage() {
 	go ld.prog.report()
 
 	var postingWriterWg sync.WaitGroup
@@ -67,10 +69,9 @@ func (ld *loader) run() {
 
 	tmpPostingsDir, err := ioutil.TempDir(ld.opt.tmpDir, "bulkloader_tmp_posting_")
 	x.Check(err)
-	defer func() { x.Check(os.RemoveAll(tmpPostingsDir)) }()
 
 	go func() {
-		writePostings(tmpPostingsDir, ld.postingsCh, ld.prog)
+		ld.mapOutput = writeMapOutput(tmpPostingsDir, ld.postingsCh, ld.prog)
 		postingWriterWg.Done()
 	}()
 
@@ -105,5 +106,40 @@ func (ld *loader) run() {
 	mapperWg.Wait()
 	close(ld.postingsCh)
 	postingWriterWg.Wait()
+}
+
+func (ld *loader) reduceStage() {
+	// Read from map stage.
+	shuffleInputChs := make([]chan *protos.FlatPosting, len(ld.mapOutput))
+	for i, mappedFile := range ld.mapOutput {
+		shuffleInputChs[i] = make(chan *protos.FlatPosting, 1000)
+		go readMapOutput(mappedFile, shuffleInputChs[i])
+	}
+
+	// Shuffle concurrently with reduce.
+	reduceCh := make(chan []*protos.FlatPosting, 3) // Small buffer size since each element has a lot of data.
+	go shufflePostings(reduceCh, shuffleInputChs, ld.prog)
+
+	// Reduce stage.
+	pending := make(chan struct{}, ld.opt.numGoroutines)
+	var reduceWg sync.WaitGroup
+	for batch := range reduceCh {
+		pending <- struct{}{}
+		reduceWg.Add(1)
+		go func() {
+			reduce(batch, ld.prog)
+			<-pending
+			reduceWg.Done()
+		}()
+	}
+	reduceWg.Wait()
+
 	ld.prog.endSummary()
+}
+
+func (ld *loader) cleanup() {
+	if len(ld.mapOutput) > 0 {
+		dir := filepath.Dir(ld.mapOutput[0])
+		x.Check(os.RemoveAll(dir))
+	}
 }
