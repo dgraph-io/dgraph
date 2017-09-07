@@ -186,7 +186,7 @@ func ToInternal(ctx context.Context,
 	var wnq *gql.NQuad
 	var delPred []*protos.NQuad
 	for i, nq := range nquads.NQuads {
-		if err := facets.SortAndValidateFacets(nq.Facets); err != nil {
+		if err := facets.SortAndValidate(nq.Facets); err != nil {
 			return mr, err
 		}
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {

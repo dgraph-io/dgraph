@@ -29,7 +29,7 @@ import (
 )
 
 // Sorts And validates the facets.
-func SortAndValidateFacets(fs []*protos.Facet) error {
+func SortAndValidate(fs []*protos.Facet) error {
 	if len(fs) == 0 {
 		return nil
 	}

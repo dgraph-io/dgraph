@@ -316,7 +316,7 @@ func parseFacets(it *lex.ItemIterator, rnq *protos.NQuad) error {
 		return x.Errorf("Expected , or ) after facet. Received %s", item.Val)
 	}
 
-	return facets.SortAndValidateFacets(rnq.Facets)
+	return nil
 }
 
 func isNewline(r rune) bool {
