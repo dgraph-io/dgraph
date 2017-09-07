@@ -9205,7 +9205,7 @@ func TestMultiSort4(t *testing.T) {
 	populateGraph(t)
 
 	query := `{
-		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: age, orderdesc: salart) {
+		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: age, orderdesc: salary) {
 			name
 			age
 		}

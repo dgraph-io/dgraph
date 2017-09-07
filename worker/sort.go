@@ -20,6 +20,7 @@ package worker
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -105,8 +106,7 @@ var (
 )
 
 func sortWithoutIndex(ctx context.Context, ts *protos.SortMessage) *sortresult {
-	time.Sleep(time.Second)
-	// TODO - Handle multisort here.
+	// TODO - Handle multisort with pagination here.
 	n := len(ts.UidMatrix)
 	r := new(protos.SortResult)
 	// Sort and paginate directly as it'd be expensive to iterate over the index which
@@ -306,7 +306,9 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		return r.reply, r.err
 	}
 
-	destUids := algo.MergeSorted(ts.UidMatrix)
+	// SrcUids for other queries are all the uids present in the response of the first sort.
+	destUids := destUids(r.reply.UidMatrix)
+
 	// For each uid in dest uids, we have multiple values which belong to different attributes.
 	// 1  -> [ "Alice", 23, "1932-01-01"]
 	// 10 -> [ "Bob", 35, "1912-02-01" ]
@@ -329,7 +331,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 			}
 			seen[uid] = true
 
-			sortVals[uidx] = append(sortVals[uidx], r.vals[i][j])
+			sortVals[uidx][0] = r.vals[i][j]
 		}
 	}
 
@@ -355,23 +357,20 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		result := or.r
 		x.AssertTrue(len(result.ValueMatrix) == len(destUids.Uids))
 		seen = map[uint64]bool{}
-		fmt.Println("idx", or.idx)
 		for i, uid := range destUids.Uids {
 			if seen[uid] {
 				continue
 			}
 			v := result.ValueMatrix[i].Values[0]
-			fmt.Println("v", v)
 			val := types.ValueForType(types.TypeID(v.ValType))
+			val.Value = v.Val
 			sv, err := types.Convert(val, val.Tid)
 			if err != nil {
 				return r.reply, err
 				// Handle
 			}
-			fmt.Println("sv", sv)
 			seen[uid] = true
 			sortVals[i][or.idx] = sv
-
 		}
 	}
 
@@ -379,20 +378,40 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		return r.reply, oerr
 	}
 
-	// Values have been accumulated, now we do the multisort.
-	for i, ul := range ts.UidMatrix {
-		vals := make([][]types.Val, len(ul.Uids))
-		for j, uid := range ul.Uids {
+	// Values have been accumulated, now we do the multisort for each list.
+	for i, ul := range r.reply.UidMatrix {
+		ulc := &protos.List{ul.Uids}
+		vals := make([][]types.Val, len(ulc.Uids))
+		for j, uid := range ulc.Uids {
 			idx := algo.IndexOf(destUids, uid)
 			x.AssertTrue(idx >= 0)
 			vals[j] = sortVals[idx]
 		}
-		types.Sort(vals, ul, ts.Desc)
+		types.Sort(vals, ulc, ts.Desc)
 		// TODO - Paginate
-		r.reply.UidMatrix[i] = ul
+		r.reply.UidMatrix[i] = ulc
 	}
 
 	return r.reply, oerr
+}
+
+func destUids(uidMatrix []*protos.List) *protos.List {
+	included := make(map[uint64]bool)
+	for _, ul := range uidMatrix {
+		for _, uid := range ul.Uids {
+			if included[uid] {
+				continue
+			}
+			included[uid] = true
+		}
+	}
+
+	res := &protos.List{Uids: make([]uint64, 0, len(included))}
+	for uid := range included {
+		res.Uids = append(res.Uids, uid)
+	}
+	sort.Slice(res.Uids, func(i, j int) bool { return res.Uids[i] < res.Uids[j] })
+	return res
 }
 
 func fetchValues(ctx context.Context, in *protos.Query, idx int, or chan orderResult) {
