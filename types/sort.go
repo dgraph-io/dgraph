@@ -54,14 +54,29 @@ func (s byValue) Less(i, j int) bool {
 	}
 
 	for idx, _ := range s.values[i] {
+		// Null value is considered greatest hence comes at first place while doing descending sort
+		// and at last place while doing ascending sort.
+		if s.values[i][idx].Value == nil {
+			if s.desc[idx] {
+				return true
+			}
+			return false
+		}
+
+		if s.values[j][idx].Value == nil {
+			if s.desc[idx] {
+				return true
+			}
+			return false
+		}
+
 		// We have to look at next value to decide.
-		// TOOD(pawan) - Handle error.
-		if eq, _ := Equal(s.values[i][idx], s.values[j][idx]); eq {
+		if eq := equal(s.values[i][idx], s.values[j][idx]); eq {
 			continue
 		}
 
 		// Its either less or greater.
-		less, _ := Less(s.values[i][idx], s.values[j][idx])
+		less := less(s.values[i][idx], s.values[j][idx])
 		if s.desc[idx] {
 			return !less
 		}
@@ -99,20 +114,30 @@ func Less(a, b Val) (bool, error) {
 	if a.Tid != b.Tid {
 		return false, x.Errorf("Arguments of different type can not be compared.")
 	}
+	typ := a.Tid
+	switch typ {
+	case DateTimeID, IntID, FloatID, StringID, DefaultID:
+		// Don't do anything, we can sort values of this type.
+	default:
+		return false, x.Errorf("Compare not supported for type: %v", a.Tid)
+	}
+	return less(a, b), nil
+}
+
+func less(a, b Val) bool {
 	switch a.Tid {
 	case DateTimeID:
-		return a.Value.(time.Time).Before(b.Value.(time.Time)), nil
+		return a.Value.(time.Time).Before(b.Value.(time.Time))
 	case IntID:
-		return (a.Value.(int64)) < (b.Value.(int64)), nil
+		return (a.Value.(int64)) < (b.Value.(int64))
 	case FloatID:
-		return (a.Value.(float64)) < (b.Value.(float64)), nil
+		return (a.Value.(float64)) < (b.Value.(float64))
 	case UidID:
-		return (a.Value.(uint64) < b.Value.(uint64)), nil
+		return (a.Value.(uint64) < b.Value.(uint64))
 	case StringID, DefaultID:
-		return (a.Value.(string)) < (b.Value.(string)), nil
-
+		return (a.Value.(string)) < (b.Value.(string))
 	}
-	return false, x.Errorf("Compare not supported for type: %v", a.Tid)
+	return false
 }
 
 // Equal returns true if a is equal to b.
@@ -120,17 +145,28 @@ func Equal(a, b Val) (bool, error) {
 	if a.Tid != b.Tid {
 		return false, x.Errorf("Arguments of different type can not be compared.")
 	}
+	typ := a.Tid
+	switch typ {
+	case DateTimeID, IntID, FloatID, StringID, DefaultID:
+		// Don't do anything, we can sort values of this type.
+	default:
+		return false, x.Errorf("Equal not supported for type: %v", a.Tid)
+	}
+	return equal(a, b), nil
+}
+
+func equal(a, b Val) bool {
 	switch a.Tid {
 	case DateTimeID:
-		return a.Value.(time.Time) == (b.Value.(time.Time)), nil
+		return a.Value.(time.Time) == (b.Value.(time.Time))
 	case IntID:
-		return (a.Value.(int64)) == (b.Value.(int64)), nil
+		return (a.Value.(int64)) == (b.Value.(int64))
 	case FloatID:
-		return (a.Value.(float64)) == (b.Value.(float64)), nil
+		return (a.Value.(float64)) == (b.Value.(float64))
 	case StringID, DefaultID:
-		return (a.Value.(string)) == (b.Value.(string)), nil
+		return (a.Value.(string)) == (b.Value.(string))
 	case BoolID:
-		return a.Value.(bool) == (b.Value.(bool)), nil
+		return a.Value.(bool) == (b.Value.(bool))
 	}
-	return false, x.Errorf("Equal not supported for type: %v", a.Tid)
+	return false
 }

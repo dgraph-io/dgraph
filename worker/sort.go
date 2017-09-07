@@ -363,11 +363,18 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 			}
 			v := result.ValueMatrix[i].Values[0]
 			val := types.ValueForType(types.TypeID(v.ValType))
-			val.Value = v.Val
-			sv, err := types.Convert(val, val.Tid)
-			if err != nil {
-				return r.reply, err
-				// Handle
+			var sv types.Val
+			if bytes.Equal(v.Val, x.Nilbyte) {
+				// Assign nil value which is sorted as greater than all other values.
+				sv.Value = nil
+				sv.Tid = val.Tid
+			} else {
+				val.Value = v.Val
+				var err error
+				sv, err = types.Convert(val, val.Tid)
+				if err != nil {
+					return r.reply, err
+				}
 			}
 			seen[uid] = true
 			sortVals[i][or.idx] = sv

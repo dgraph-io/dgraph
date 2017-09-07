@@ -345,10 +345,12 @@ func populateGraph(t *testing.T) {
 	// Data to check multi-sort.
 	addEdgeToValue(t, "name", 10000, "Alice", nil)
 	addEdgeToValue(t, "age", 10000, "25", nil)
+	addEdgeToValue(t, "salary", 10000, "10000", nil)
 	addEdgeToValue(t, "name", 10001, "Elizabeth", nil)
 	addEdgeToValue(t, "age", 10001, "75", nil)
 	addEdgeToValue(t, "name", 10002, "Alice", nil)
 	addEdgeToValue(t, "age", 10002, "75", nil)
+	addEdgeToValue(t, "salary", 10002, "10002", nil)
 	addEdgeToValue(t, "name", 10003, "Bob", nil)
 	addEdgeToValue(t, "age", 10003, "75", nil)
 	addEdgeToValue(t, "name", 10004, "Alice", nil)
@@ -6812,6 +6814,7 @@ school                         : uid @count .
 lossy                          : string @index(term) .
 occupations                    : [string] @index(term) .
 graduation                     : [dateTime] @index(year) @count .
+salary                         : float @index(float) .
 `
 
 func TestMain(m *testing.M) {
@@ -9205,11 +9208,29 @@ func TestMultiSort4(t *testing.T) {
 	populateGraph(t)
 
 	query := `{
-		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: age, orderdesc: salary) {
+		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: salary) {
 			name
 			age
+			salary
 		}
 	}`
 	js := processToFastJSON(t, query)
+	// Null value for third Alice comes at last.
+	require.Equal(t, `{"data": {"me":[{"name":"Alice","age":25,"salary":10000.000000},{"name":"Alice","age":75,"salary":10002.000000},{"name":"Alice","age":75},{"name":"Bob","age":75},{"name":"Bob","age":25},{"name":"Colin","age":25},{"name":"Elizabeth","age":75},{"name":"Elizabeth","age":25}]}}`, js)
 	fmt.Println(js)
+}
+
+func TestMultiSort5(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderdesc: salary) {
+			name
+			age
+			salary
+		}
+	}`
+	js := processToFastJSON(t, query)
+	// Null value for third Alice comes at first.
+	require.Equal(t, `{"data": {"me":[{"name":"Alice","age":75},{"name":"Alice","age":75,"salary":10002.000000},{"name":"Alice","age":25,"salary":10000.000000},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25},{"name":"Elizabeth","age":75}]}}`, js)
 }
