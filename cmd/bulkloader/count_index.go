@@ -2,61 +2,71 @@ package main
 
 import (
 	"sort"
+	"sync"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/bp128"
+	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type countIndex struct {
-	// maps from predicate to count to posting list
-	postingLists map[string]map[int][]uint64
-
-	// Cache most recently used predicate data to avoid map lookups.
-	pred      string
-	predLevel map[int][]uint64
+type countIndexer struct {
+	pred   string
+	schema *protos.SchemaUpdate
+	counts map[int][]uint64
+	kv     *badger.KV
+	wg     sync.WaitGroup
+	ss     *schemaStore
 }
 
-func (c *countIndex) add(pred string, count int, uid uint64, reverse bool) {
-	if c.pred != pred {
-		var ok bool
-		c.predLevel, ok = c.postingLists[pred]
-		if !ok {
-			c.predLevel = make(map[int][]uint64)
-			c.postingLists[pred] = c.predLevel
+func (c *countIndexer) add(rawKey []byte, count int) {
+	key := x.Parse(rawKey)
+	if !key.IsData() && !key.IsReverse() {
+		return
+	}
+	if key.Attr != c.pred {
+		if len(c.pred) > 0 {
+			c.wg.Add(1)
+			go c.writeIndex(c.pred, c.counts)
 		}
+		c.pred = key.Attr
+		c.counts = make(map[int][]uint64)
+		c.schema = c.ss.getSchema(key.Attr)
 	}
-	if reverse {
-		// Reverse edges are encoded using a negative edge count.
-		count = -count
+	// If the schema is not set explicitly but instead discovered from the RDF
+	// data, c.schema may be nil (it may not have been discovered yet). This is
+	// okay, since the default for GetCount is false (discovered schemas cannot
+	// have indexes).
+	if !c.schema.GetCount() {
+		return
 	}
-	c.predLevel[count] = append(c.predLevel[count], uid)
+	if key.IsReverse() {
+		// Count for reverse edge is encoded as a negative int.
+		key.Uid = -key.Uid
+	}
+	c.counts[count] = append(c.counts[count], key.Uid)
 }
 
-func (c *countIndex) merge(other *countIndex) {
-	for pred, otherPredLevel := range other.postingLists {
-		thisPredLevel, ok := c.postingLists[pred]
-		if !ok {
-			c.postingLists[pred] = otherPredLevel
-			continue
-		}
-		for count, uidList := range otherPredLevel {
-			thisPredLevel[count] = append(thisPredLevel[count], uidList...)
-		}
+func (c *countIndexer) writeIndex(pred string, counts map[int][]uint64) {
+	// TODO: Could parallelise this.
+	entries := make([]*badger.Entry, 0, len(counts))
+	for count, uids := range counts {
+		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
+		entries = append(entries, &badger.Entry{
+			Key:      x.CountKey(pred, uint32(abs(count)), count < 0),
+			Value:    bp128.DeltaPack(uids),
+			UserMeta: 0x01,
+		})
 	}
+	x.Check(c.kv.BatchSet(entries))
+	for _, e := range entries {
+		x.Check(e.Error)
+	}
+	c.wg.Done()
 }
 
-func (c *countIndex) write(kv *badger.KV) {
-	// TODO: Should be able to do this in parallel.
-	// TODO: Should batch up writes.
-	for pred, predLevel := range c.postingLists {
-		for count, uids := range predLevel {
-			key := x.CountKey(pred, uint32(abs(count)), count < 0)
-			sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-			val := bp128.DeltaPack(uids)
-			kv.Set(key, val, 0x01)
-		}
-	}
+func (c *countIndexer) wait() {
+	c.wg.Wait()
 }
 
 func abs(x int) int {
