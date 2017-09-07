@@ -86,14 +86,13 @@ func init() {
 	MaxPlSize = expvar.NewInt("dgraph_max_list_bytes")
 	MaxPlLength = expvar.NewInt("dgraph_max_list_length")
 
-	ticker := time.NewTicker(5 * time.Second)
-
 	go func() {
-		var err error
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
-				if err = HealthCheck(); err == nil {
+				if err := HealthCheck(); err == nil {
 					ServerHealth.Set(1)
 				} else {
 					ServerHealth.Set(0)

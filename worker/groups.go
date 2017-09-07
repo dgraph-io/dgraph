@@ -525,6 +525,7 @@ func (g *groupi) syncMemberships() {
 
 func (g *groupi) periodicSyncMemberships() {
 	t := time.NewTicker(10 * time.Second)
+	defer t.Stop()
 	for {
 		select {
 		case <-t.C:
