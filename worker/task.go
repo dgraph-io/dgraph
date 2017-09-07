@@ -645,7 +645,7 @@ func helpProcessTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.
 	}
 
 	// For string matching functions, check the language.
-	if needsStringFiltering(srcFn) {
+	if needsStringFiltering(srcFn, q.Langs) {
 		filterStringFunction(funcArgs{q, gid, srcFn, out})
 	}
 
@@ -653,8 +653,8 @@ func helpProcessTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.
 	return out, nil
 }
 
-func needsStringFiltering(srcFn *functionContext) bool {
-	return srcFn.isStringFn && srcFn.lang != "." &&
+func needsStringFiltering(srcFn *functionContext, langs []string) bool {
+	return srcFn.isStringFn && langForFunc(langs) != "." &&
 		(srcFn.fnType == StandardFn || srcFn.fnType == HasFn ||
 			srcFn.fnType == FullTextSearchFn || srcFn.fnType == CompareAttrFn)
 }
@@ -717,6 +717,7 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := protos.List{}
 	uids, err := uidsForRegex(attr, arg.gid, query, &empty)
+	lang := langForFunc(arg.q.Langs)
 	if uids != nil {
 		arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
@@ -731,8 +732,8 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			pl := posting.GetOrCreate(key, arg.gid)
 
 			var val types.Val
-			if len(arg.srcFn.lang) > 0 {
-				val, err = pl.ValueForTag(arg.srcFn.lang)
+			if lang != "" {
+				val, err = pl.ValueForTag(lang)
 			} else {
 				val, err = pl.Value()
 			}
@@ -782,6 +783,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 			// then we need to filter first row..
 			rowsToFilter = 1
 		}
+		lang := langForFunc(arg.q.Langs)
 		for row := 0; row < rowsToFilter; row++ {
 			select {
 			case <-ctx.Done():
@@ -789,7 +791,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 			default:
 			}
 			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
-				switch arg.srcFn.lang {
+				switch lang {
 				case "":
 					pl := posting.Get(x.DataKey(attr, uid))
 					sv, err := pl.Value()
@@ -811,8 +813,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 					}
 					return false
 				default:
-					langs := []string{arg.srcFn.lang}
-					sv, err := fetchValue(uid, attr, langs, typ)
+					sv, err := fetchValue(uid, attr, arg.q.Langs, typ)
 					if sv.Value == nil || err != nil {
 						return false
 					}
@@ -853,16 +854,17 @@ func filterStringFunction(arg funcArgs) {
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	var values []types.Val
 	filteredUids := make([]uint64, 0, len(uids.Uids))
+	lang := langForFunc(arg.q.Langs)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
 		pl := posting.GetOrCreate(key, arg.gid)
 
 		var val types.Val
 		var err error
-		if arg.srcFn.lang == "" {
+		if lang == "" {
 			val, err = pl.Value()
 		} else {
-			val, err = pl.ValueForTag(arg.srcFn.lang)
+			val, err = pl.ValueForTag(lang)
 		}
 		if err != nil {
 			continue
@@ -879,7 +881,7 @@ func filterStringFunction(arg funcArgs) {
 	filter := stringFilter{
 		funcName: arg.srcFn.fname,
 		funcType: arg.srcFn.fnType,
-		lang:     arg.srcFn.lang,
+		lang:     lang,
 	}
 
 	switch arg.srcFn.fnType {
@@ -928,7 +930,6 @@ type functionContext struct {
 	threshold      int64
 	uidPresent     uint64
 	fname          string
-	lang           string
 	fnType         FuncType
 	regex          *cregexp.Regexp
 	isFuncAtRoot   bool
@@ -956,6 +957,15 @@ func checkRoot(q *protos.Query, fc *functionContext) {
 	} else {
 		fc.n = len(q.UidList.Uids)
 	}
+}
+
+// We allow atmost one lang in functions. We can inline in 1.9.
+func langForFunc(langs []string) string {
+	x.AssertTrue(len(langs) <= 1)
+	if len(langs) == 0 {
+		return ""
+	}
+	return langs[0]
 }
 
 func parseSrcFn(q *protos.Query) (*functionContext, error) {
@@ -1028,12 +1038,6 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		} else {
 			fc.n = len(fc.tokens)
 		}
-		fc.lang = q.SrcFunc.Lang
-		// TODO - See if we can get rid of passing language as part of the SrcFunc
-		// since we already have Lang field in q.
-		if len(q.Langs) == 0 && fc.lang != "" {
-			q.Langs = []string{fc.lang}
-		}
 	case CompareScalarFn:
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
@@ -1066,11 +1070,10 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 		if !found {
 			return nil, x.Errorf("Attribute %s is not indexed with type %s", attr, required)
 		}
-		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, q.SrcFunc.Lang, fnType); err != nil {
+		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
 			return nil, err
 		}
 		fnName := strings.ToLower(q.SrcFunc.Name)
-		fc.lang = q.SrcFunc.Lang
 		fc.intersectDest = strings.HasPrefix(fnName, "allof") // allofterms and alloftext
 		fc.n = len(fc.tokens)
 	case RegexFn:
@@ -1094,13 +1097,11 @@ func parseSrcFn(q *protos.Query) (*functionContext, error) {
 			return nil, err
 		}
 		fc.n = 0
-		fc.lang = q.SrcFunc.Lang
 	case HasFn:
 		if err = ensureArgsCount(q.SrcFunc, 0); err != nil {
 			return nil, err
 		}
 		checkRoot(q, fc)
-		fc.lang = q.SrcFunc.Lang
 	case UidInFn:
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err

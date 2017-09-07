@@ -158,22 +158,9 @@ type params struct {
 
 // Function holds the information about gql functions.
 type Function struct {
-	Lang    string    // language of the attribute value
 	Name    string    // Specifies the name of the function.
 	Args    []gql.Arg // Contains the arguments of the function.
 	IsCount bool      // gt(count(friends),0)
-}
-
-func newSrcFunction(gf *gql.Function) *Function {
-	if gf == nil {
-		return nil
-	}
-	srcFunc := new(Function)
-	srcFunc.Name = gf.Name
-	srcFunc.Lang = gf.Lang
-	srcFunc.Args = append(srcFunc.Args, gf.Args...)
-	srcFunc.IsCount = gf.IsCount
-	return srcFunc
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -210,6 +197,19 @@ func (sg *SubGraph) IsGroupBy() bool {
 
 func (sg *SubGraph) IsInternal() bool {
 	return sg.Params.isInternal
+}
+
+func (sg *SubGraph) createSrcFunction(gf *gql.Function) {
+	if gf == nil {
+		return
+	}
+	sg.SrcFunc = new(Function)
+	sg.SrcFunc.Name = gf.Name
+	sg.SrcFunc.Args = append(sg.SrcFunc.Args, gf.Args...)
+	sg.SrcFunc.IsCount = gf.IsCount
+	if gf.Lang != "" {
+		sg.Params.Langs = append(sg.Params.Langs, gf.Lang)
+	}
 }
 
 // DebugPrint prints out the SubGraph tree in a nice format for debugging purposes.
@@ -611,7 +611,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 			sg.SrcFunc.Name = ft.Func.Name
 			sg.populate(ft.Func.UID)
 		} else {
-			sg.SrcFunc = newSrcFunction(ft.Func)
+			sg.createSrcFunction(ft.Func)
 			sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar...)
 		}
 	}
@@ -757,7 +757,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 					" please place the filter on the upper level"
 				return errors.New(note)
 			}
-			dst.SrcFunc = newSrcFunction(gchild.Func)
+			dst.createSrcFunction(gchild.Func)
 		}
 
 		if gchild.Filter != nil {
@@ -924,7 +924,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		if !isValidFuncName(gq.Func.Name) {
 			return nil, x.Errorf("Invalid function name : %s", gq.Func.Name)
 		}
-		sg.SrcFunc = newSrcFunction(gq.Func)
+		sg.createSrcFunction(gq.Func)
 	}
 
 	isUidFuncWithoutVar := gq.Func != nil && isUidFnWithoutVar(gq.Func)
@@ -994,7 +994,6 @@ func createTaskQuery(sg *SubGraph) (*protos.Query, error) {
 	if sg.SrcFunc != nil {
 		srcFunc = &protos.SrcFunction{}
 		srcFunc.Name = sg.SrcFunc.Name
-		srcFunc.Lang = sg.SrcFunc.Lang
 		srcFunc.IsCount = sg.SrcFunc.IsCount
 		for _, arg := range sg.SrcFunc.Args {
 			srcFunc.Args = append(srcFunc.Args, arg.Value)

@@ -254,6 +254,7 @@ func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGrap
 				if !ok {
 					return x.Errorf("Vars can be assigned only when grouped by UID attribute")
 				}
+				// TODO: Fix this
 				tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
 			}
 			doneVars[chVar] = varValue{
