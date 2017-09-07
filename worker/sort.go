@@ -232,15 +232,12 @@ BUCKETS:
 		}
 	}
 
-	fmt.Println(values)
 	for _, il := range out {
-		fmt.Println("here")
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
 		if len(ts.Attr) > 1 {
 			values = append(values, il.values)
 		}
 	}
-	fmt.Println("r", len(r.UidMatrix), "values", len(values))
 
 	select {
 	case <-ctx.Done():
@@ -315,7 +312,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 	// 10 -> [ "Bob", 35, "1912-02-01" ]
 	sortVals := make([][]types.Val, len(destUids.Uids))
 	for idx := range sortVals {
-		sortVals[idx] = make([]types.Val, 0, len(ts.Attr))
+		sortVals[idx] = make([]types.Val, len(ts.Attr))
 	}
 
 	seen := make(map[uint64]bool)
@@ -336,6 +333,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		}
 	}
 
+	// Execute rest of the orders concurrently.
 	och := make(chan orderResult, len(ts.Attr)-1)
 	for i := 1; i < len(ts.Attr); i++ {
 		attr := ts.Attr[i]
@@ -355,16 +353,25 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		}
 
 		result := or.r
-		x.AssertTrue(len(result.ValueMatrix) == len(destUids))
-		seen = map[string]bool{}
-		for i, uid := range destUids {
-			v := result.ValueMatrix[i].Values[0]
-
+		x.AssertTrue(len(result.ValueMatrix) == len(destUids.Uids))
+		seen = map[uint64]bool{}
+		fmt.Println("idx", or.idx)
+		for i, uid := range destUids.Uids {
 			if seen[uid] {
 				continue
 			}
+			v := result.ValueMatrix[i].Values[0]
+			fmt.Println("v", v)
+			val := types.ValueForType(types.TypeID(v.ValType))
+			sv, err := types.Convert(val, val.Tid)
+			if err != nil {
+				return r.reply, err
+				// Handle
+			}
+			fmt.Println("sv", sv)
 			seen[uid] = true
-			sortVals[i] = append(sortVals[i], val)
+			sortVals[i][or.idx] = sv
+
 		}
 	}
 
@@ -380,7 +387,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 			x.AssertTrue(idx >= 0)
 			vals[j] = sortVals[idx]
 		}
-		types.Sort(vals, ul, desc)
+		types.Sort(vals, ul, ts.Desc)
 		// TODO - Paginate
 		r.reply.UidMatrix[i] = ul
 	}
