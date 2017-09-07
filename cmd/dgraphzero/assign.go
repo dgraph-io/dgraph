@@ -96,39 +96,6 @@ func (s *Server) assignUids(ctx context.Context, num *protos.Num) (*protos.Assig
 	return out, nil
 }
 
-// AssignUidsOverNetwork assigns new uids and writes them to the umap.
-// func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
-// 	n := groups().Node
-
-// 	// This is useful for testing, when the membership information doesn't
-// 	// have chance to propagate
-// 	if n != nil && n.AmLeader() {
-// 		if tr, ok := trace.FromContext(ctx); ok {
-// 			tr.LazyPrintf("Calling assignUids as I'm leader of lease: %d", leasePred)
-// 		}
-// 		return assignUids(ctx, num)
-// 	}
-// 	lid, addr := groups().Leader(leaseGid)
-// 	if tr, ok := trace.FromContext(ctx); ok {
-// 		tr.LazyPrintf("Not leader of group: %d. Sending to: %d", leaseGid, lid)
-// 	}
-// 	p, err := conn.Get().Get(addr)
-// 	if err != nil {
-// 		if tr, ok := trace.FromContext(ctx); ok {
-// 			tr.LazyPrintf("Error while retrieving connection: %+v", err)
-// 		}
-// 		return &emptyAssignedIds, err
-// 	}
-// 	defer conn.Get().Release(p)
-// 	if tr, ok := trace.FromContext(ctx); ok {
-// 		tr.LazyPrintf("Calling AssignUids for group: %d, addr: %s", leaseGid, addr)
-// 	}
-
-// 	conn := p.Get()
-// 	c := protos.NewWorkerClient(conn)
-// 	return c.AssignUids(ctx, num)
-// }
-
 // AssignUids is used to assign new uids by communicating with the leader of the RAFT group
 // responsible for handing out uids.
 func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
