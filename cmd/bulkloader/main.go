@@ -2,6 +2,9 @@ package main
 
 import (
 	"flag"
+	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"runtime"
 )
@@ -21,7 +24,13 @@ func main() {
 		"scratch space. Requires free space proportional to the size of the RDF file.")
 	flag.IntVar(&opt.numGoroutines, "j", runtime.NumCPU()-1,
 		"Number of worker threads to use (defaults to one less than logical CPUs)")
+	httpAddr := flag.String("http", "localhost:8080", "Address to server http (pprof)")
+
 	flag.Parse()
+
+	go func() {
+		log.Fatal(http.ListenAndServe(*httpAddr, nil))
+	}()
 
 	loader := newLoader(opt)
 	loader.mapStage()
