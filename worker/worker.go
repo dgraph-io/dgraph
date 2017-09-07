@@ -45,8 +45,6 @@ var (
 	// so that the nodes which have lagged behind leader can just replay entries instead of
 	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
 	// are taken
-
-	emptyMembershipUpdate protos.MembershipUpdate
 )
 
 func workerPort() int {

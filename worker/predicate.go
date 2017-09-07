@@ -247,7 +247,7 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		if !groups().ServesGroup(gkeys.GroupId) {
 			return x.Errorf("Group %d not served.", gkeys.GroupId)
 		}
-		n := groups().Node(gkeys.GroupId)
+		n := groups().Node
 		if !n.AmLeader() {
 			return x.Errorf("Not leader of group: %d", gkeys.GroupId)
 		}

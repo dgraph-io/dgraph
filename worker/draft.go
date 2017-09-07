@@ -299,19 +299,6 @@ func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.Schema
 	return nil
 }
 
-func (n *node) processMembership(index uint64, pid uint32, mm *protos.Membership) error {
-	x.AssertTrue(n.gid == 0)
-	x.ActiveMutations.Add(1)
-	defer x.ActiveMutations.Add(-1)
-
-	n.props.IncRef(pid, index, 1)
-	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
-		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
-	groups().applyMembershipUpdate(index, mm)
-	n.props.Done(pid, nil)
-	return nil
-}
-
 const numPendingMutations = 10000
 
 func (n *node) applyConfChange(e raftpb.Entry) {
@@ -509,13 +496,6 @@ func (n *node) Run() {
 			}
 
 			if rd.SoftState != nil {
-				if rd.RaftState == raft.StateFollower && leader {
-					// stepped down as leader do a sync membership immediately
-					go groups().syncMemberships()
-				} else if rd.RaftState == raft.StateLeader && !leader {
-					// leaseMgr().resetLease(n.gid)
-					go groups().syncMemberships()
-				}
 				leader = rd.RaftState == raft.StateLeader
 			}
 			if leader {
@@ -715,7 +695,7 @@ func (n *node) joinPeers() {
 func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	idx, restart, err := n.InitFromWal(wal)
 	x.Check(err)
-	n.applied.SetDoneUntil(idx)
+	n.Applied.SetDoneUntil(idx)
 	posting.SyncMarkFor(n.gid).SetDoneUntil(idx)
 
 	if restart {
