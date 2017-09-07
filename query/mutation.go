@@ -8,6 +8,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -185,6 +186,9 @@ func ToInternal(ctx context.Context,
 	var wnq *gql.NQuad
 	var delPred []*protos.NQuad
 	for i, nq := range nquads.NQuads {
+		if err := facets.SortAndValidateFacets(nq.Facets); err != nil {
+			return mr, err
+		}
 		if nq.Subject == x.Star && nq.ObjectValue.GetDefaultVal() == x.Star {
 			delPred = append(delPred, nq)
 			continue
