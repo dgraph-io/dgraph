@@ -150,7 +150,7 @@ func Equal(a, b Val) (bool, error) {
 	}
 	typ := a.Tid
 	switch typ {
-	case DateTimeID, IntID, FloatID, StringID, DefaultID:
+	case DateTimeID, IntID, FloatID, StringID, DefaultID, BoolID:
 		// Don't do anything, we can sort values of this type.
 	default:
 		return false, x.Errorf("Equal not supported for type: %v", a.Tid)

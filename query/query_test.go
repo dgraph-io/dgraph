@@ -1075,7 +1075,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
 	err = qr.ProcessQuery(ctx)
-	require.Contains(t, err.Error(), "Cannot sort attribute n of type object.")
+	require.Contains(t, err.Error(), "Cannot sort attribute [n] of type object.")
 }
 
 func TestQueryVarValOrderDesc(t *testing.T) {

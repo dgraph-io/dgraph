@@ -266,6 +266,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
 			"Try flipping order and return first few elements instead.", ts.Attr, ts.Count)
 	}
+	fmt.Println("here", ts.Desc, ts.Attr)
 
 	if schema.State().IsList(ts.Attr[0]) {
 		return nil, x.Errorf("Sorting not supported on attr: %s of type: [scalar]", ts.Attr[0])
@@ -303,7 +304,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 	}
 
 	// If request didn't have multiple attributes or err was not nil we return.
-	if !(len(ts.Attr) > 1) || r.err != nil {
+	if !(len(ts.Attr) > 1) {
 		return r.reply, r.err
 	}
 

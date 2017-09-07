@@ -683,8 +683,8 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			FacetOrder:     gchild.FacetOrder,
 			FacetOrderDesc: gchild.FacetDesc,
 			IgnoreReflex:   sg.Params.IgnoreReflex,
-			OrderAttr:      gq.OrderAttr,
-			OrderDesc:      gq.OrderDesc,
+			OrderAttr:      gchild.OrderAttr,
+			OrderDesc:      gchild.OrderDesc,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &protos.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -1940,7 +1940,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		sg.Params.Count = 1000
 	}
 
-	x.AssertTrue(len(sg.Params.OrderAttr) > 0)
+	x.AssertTrue(len(sg.Params.OrderAttr) > 0 && len(sg.Params.OrderDesc) > 0)
 
 	sort := &protos.SortMessage{
 		Attr:      sg.Params.OrderAttr,
