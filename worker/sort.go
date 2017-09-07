@@ -235,6 +235,7 @@ BUCKETS:
 	for _, il := range out {
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
 		if len(ts.Attr) > 1 {
+			// TODO - For lossy tokenizer, no need to pick all values.
 			values = append(values, il.values)
 		}
 	}
