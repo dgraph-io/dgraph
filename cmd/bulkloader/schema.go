@@ -4,9 +4,11 @@ import (
 	"log"
 	"sync"
 
+	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
 	wk "github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type schemaState struct {
@@ -21,7 +23,16 @@ type schemaStore struct {
 
 func newSchemaStore(initial []*protos.SchemaUpdate) *schemaStore {
 	s := &schemaStore{
-		m: map[string]schemaState{},
+		m: map[string]schemaState{
+			"_predicate_": {
+				strict:       true,
+				SchemaUpdate: nil,
+			},
+			"_lease_": {
+				strict:       true,
+				SchemaUpdate: &protos.SchemaUpdate{ValueType: uint32(protos.Posting_INT)},
+			},
+		},
 	}
 	for _, sch := range initial {
 		p := sch.Predicate
@@ -62,5 +73,18 @@ func (s *schemaStore) validateType(de *protos.DirectedEdge, objectIsUID bool) {
 		// conversion if the schema was established explicitly rather than
 		// automatically.
 		log.Fatalf("RDF doesn't match schema: %v", err)
+	}
+}
+
+func (s *schemaStore) write(kv *badger.KV) {
+	for pred, sch := range s.m {
+		k := x.SchemaKey(pred)
+		var v []byte
+		var err error
+		if sch.SchemaUpdate != nil {
+			v, err = sch.SchemaUpdate.Marshal()
+			x.Check(err)
+		}
+		x.Check(kv.Set(k, v, 0x00))
 	}
 }

@@ -159,7 +159,7 @@ func (bp *BPackEncoder) PackAppend(in []uint64) {
 }
 
 func (bp *BPackEncoder) WriteTo(in []byte) {
-	x.AssertTrue(bp.length > 0)
+	x.AssertTruef(bp.length > 0, "cannot pack zero length posting list")
 	binary.BigEndian.PutUint32(in[:4], uint32(bp.length))
 
 	if bp.length < BlockSize {

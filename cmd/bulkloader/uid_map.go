@@ -46,3 +46,9 @@ func (m *uidMap) assignUID(str string) uint64 {
 	m.uids[str] = m.lastUID
 	return m.lastUID
 }
+
+func (m *uidMap) lease() uint64 {
+	// The lease is the last UID that we've used (as opposed to the next UID
+	// that could be assigned).
+	return m.lastUID
+}

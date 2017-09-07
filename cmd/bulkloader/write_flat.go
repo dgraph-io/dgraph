@@ -60,9 +60,14 @@ func sortAndWrite(filename string, postings []*protos.FlatPosting, prog *progres
 		return bytes.Compare(postings[i].Key, postings[j].Key) < 0
 	})
 
-	var buf proto.Buffer
+	var varintBuf [binary.MaxVarintLen64]byte
+	var buf bytes.Buffer
 	for _, posting := range postings {
-		x.Check(buf.EncodeMessage(posting))
+		n := binary.PutUvarint(varintBuf[:], uint64(posting.Size()))
+		buf.Write(varintBuf[:n])
+		postBuf, err := posting.Marshal()
+		x.Check(err)
+		buf.Write(postBuf)
 	}
 
 	x.Check(x.WriteFileSync(filename, buf.Bytes(), 0644))
@@ -83,7 +88,7 @@ func readMapOutput(filename string, postingCh chan<- *protos.FlatPosting) {
 		x.Check(err)
 		sz, n := binary.Uvarint(buf)
 		if n <= 0 {
-			log.Fatal("Could not read varint: %d", n)
+			log.Fatal("Could not read uvarint: %d", n)
 		}
 		x.Check2(r.Discard(n))
 
