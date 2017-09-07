@@ -20,10 +20,8 @@ package worker
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/conn"
@@ -141,7 +139,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 			defer conn.Get().Release(p)
 
 			// Connect with dgraphzero and figure out what group we should belong to.
-			zc := protos.NewZeroClient(pl.Get())
+			zc := protos.NewZeroClient(p.Get())
 			var state *protos.MembershipState
 			m := &protos.Member{Id: Config.RaftId}
 			for i := 0; i < 10; i++ { // 10 attempts.
@@ -153,7 +151,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 				x.Printf("Error while connecting with group zero: %v", err)
 			}
 			if state == nil {
-				x.Fatalf("Unable to join cluster via dgraphzero: %v", err)
+				x.Fatalf("Unable to join cluster via dgraphzero")
 			}
 			gr.state = state
 
@@ -172,16 +170,14 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 
 	gr.wal = raftwal.Init(walStore, Config.RaftId)
 
-	gids, err := getGroupIds(Config.GroupIds)
-	x.AssertTruef(err == nil && len(gids) > 0, "Unable to parse 'groups' configuration")
-
 	gid := gr.groupId()
 	gr.Node = newNode(gid, Config.RaftId, Config.MyAddr)
 	x.Checkf(schema.LoadFromDb(uint32(gid)), "Error while initilizating schema")
 	gr.Node.InitAndStartNode(gr.wal)
 
 	x.UpdateHealthStatus(true)
-	go gr.periodicSyncMemberships() // Now set it to be run periodically.
+	// TODO: Run this again.
+	// go gr.periodicSyncMemberships() // Now set it to be run periodically.
 }
 
 func (g *groupi) groupId() uint32 {
@@ -199,6 +195,12 @@ func (g *groupi) groupId() uint32 {
 		}
 	}
 	return 0
+}
+
+func (g *groupi) ServesGroup(gid uint32) bool {
+	g.RLock()
+	defer g.RUnlock()
+	return g.gid == gid
 }
 
 func (g *groupi) ServesTablet(key string) bool {
@@ -266,6 +268,7 @@ func (g *groupi) AnyServer(gid uint32) string {
 	for _, m := range group.Members {
 		return m.Addr
 	}
+	return ""
 }
 
 // Peer returns node(raft) id of the peer of given nodeid of given group
@@ -378,223 +381,95 @@ func (g *groupi) TouchLastUpdate(u uint64) {
 // - Otherwise, it would iterate over the memberships, check for duplicates, and apply updates.
 // - Once iteration is over without errors, it would return back all new updates.
 // - These updates are then applied to groups().all state via applyMembershipUpdate.
-func (g *groupi) syncMemberships() {
-	// This server doesn't serve group zero.
-	// Generate membership update of all local nodes.
-	var mu protos.MembershipUpdate
-	{
-		g.RLock()
-		for _, n := range g.local {
-			rc := n.RaftContext
-			mu.Members = append(mu.Members,
-				&protos.Membership{
-					Leader:  n.AmLeader(),
-					Id:      rc.Id,
-					GroupId: rc.Group,
-					Addr:    rc.Addr,
-				})
-		}
-		mu.LastUpdate = g.lastUpdate
-		g.RUnlock()
-	}
+// func (g *groupi) syncMemberships() {
+// 	// This server doesn't serve group zero.
+// 	// Generate membership update of all local nodes.
+// 	var mu protos.MembershipUpdate
+// 	{
+// 		g.RLock()
+// 		for _, n := range g.local {
+// 			rc := n.RaftContext
+// 			mu.Members = append(mu.Members,
+// 				&protos.Membership{
+// 					Leader:  n.AmLeader(),
+// 					Id:      rc.Id,
+// 					GroupId: rc.Group,
+// 					Addr:    rc.Addr,
+// 				})
+// 		}
+// 		mu.LastUpdate = g.lastUpdate
+// 		g.RUnlock()
+// 	}
 
-	// Send an update to peer.
-	addr := g.AnyServer(0)
+// 	// Send an update to peer.
+// 	addr := g.AnyServer(0)
 
-	var pl *conn.Pool
-	var err error
-	if len(addr) > 0 {
-		pl, err = conn.Get().Get(addr)
-	} else {
-		pl, err = conn.Get().Any()
-	}
-	if err == conn.ErrNoConnection {
-		x.Println("Unable to sync memberships. No valid connection")
-		return
-	}
-	x.Check(err)
+// 	var pl *conn.Pool
+// 	var err error
+// 	if len(addr) > 0 {
+// 		pl, err = conn.Get().Get(addr)
+// 	} else {
+// 		pl, err = conn.Get().Any()
+// 	}
+// 	if err == conn.ErrNoConnection {
+// 		x.Println("Unable to sync memberships. No valid connection")
+// 		return
+// 	}
+// 	x.Check(err)
 
-	var update *protos.MembershipUpdate
-	for {
-		gconn := pl.Get()
-		c := protos.NewWorkerClient(gconn)
-		update, err = c.UpdateMembership(g.ctx, &mu)
-		conn.Get().Release(pl)
+// 	var update *protos.MembershipUpdate
+// 	for {
+// 		gconn := pl.Get()
+// 		c := protos.NewWorkerClient(gconn)
+// 		update, err = c.UpdateMembership(g.ctx, &mu)
+// 		conn.Get().Release(pl)
 
-		if err != nil {
-			if tr, ok := trace.FromContext(g.ctx); ok {
-				tr.LazyPrintf(err.Error())
-			}
-			return
-		}
+// 		if err != nil {
+// 			if tr, ok := trace.FromContext(g.ctx); ok {
+// 				tr.LazyPrintf(err.Error())
+// 			}
+// 			return
+// 		}
 
-		// Check if we got a redirect.
-		// TODO: Don't need this redirect portion of logic.
-		if !update.Redirect {
-			break
-		}
+// 		// Check if we got a redirect.
+// 		// TODO: Don't need this redirect portion of logic.
+// 		if !update.Redirect {
+// 			break
+// 		}
 
-		addr = update.RedirectAddr
-		if len(addr) == 0 {
-			return
-		}
-		x.Printf("Got redirect for: %q\n", addr)
-		if addr == Config.MyAddr {
-			// We got redirected to ourselves.
-			return
-		}
-		pl = conn.Get().Connect(addr)
-	}
+// 		addr = update.RedirectAddr
+// 		if len(addr) == 0 {
+// 			return
+// 		}
+// 		x.Printf("Got redirect for: %q\n", addr)
+// 		if addr == Config.MyAddr {
+// 			// We got redirected to ourselves.
+// 			return
+// 		}
+// 		pl = conn.Get().Connect(addr)
+// 	}
 
-	var lu uint64
-	for _, mm := range update.Members {
-		g.applyMembershipUpdate(update.LastUpdate, mm)
-		if lu < update.LastUpdate {
-			lu = update.LastUpdate
-		}
-	}
-	g.TouchLastUpdate(lu)
-}
+// 	var lu uint64
+// 	for _, mm := range update.Members {
+// 		g.applyMembershipUpdate(update.LastUpdate, mm)
+// 		if lu < update.LastUpdate {
+// 			lu = update.LastUpdate
+// 		}
+// 	}
+// 	g.TouchLastUpdate(lu)
+// }
 
-func (g *groupi) periodicSyncMemberships() {
-	t := time.NewTicker(10 * time.Second)
-	for {
-		select {
-		case <-t.C:
-			g.syncMemberships()
-		case <-g.ctx.Done():
-			return
-		}
-	}
-}
-
-// raftIdx is the RAFT index corresponding to the application of this
-// membership update in group zero.
-func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *protos.Membership) {
-	update := server{
-		NodeId:    mm.Id,
-		Addr:      mm.Addr,
-		Leader:    mm.Leader,
-		RaftIdx:   raftIdx,
-		PoolOrNil: nil,
-	}
-	if n := g.Node(mm.GroupId); n != nil {
-		// update peer address on address change
-		n.Connect(mm.Id, mm.Addr)
-		// Error possible, perhaps, if we're updating our own node's membership.
-		// Ignore it.
-		update.PoolOrNil, _ = conn.Get().Get(mm.Addr)
-	} else if update.Addr != Config.MyAddr && mm.Id != Config.RaftId { // ignore previous addr
-		x.AssertTrue(update.Addr != Config.MyAddr)
-		update.PoolOrNil = conn.Get().Connect(update.Addr)
-	}
-
-	x.Println("----------------------------")
-	x.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", update)
-	x.Println("----------------------------")
-	g.Lock()
-	defer g.Unlock()
-
-	sl := g.all[mm.GroupId]
-	if sl == nil {
-		sl = &servers{byNodeID: make(map[uint64]int)}
-		g.all[mm.GroupId] = sl
-	}
-
-	removeFromServersIfPresent(sl, update.NodeId)
-	addToServers(sl, update)
-
-	// Print out the entire list.
-	for gid, sl := range g.all {
-		x.Printf("Group: %v. List: %+v\n", gid, sl.list)
-	}
-}
-
-// MembershipUpdateAfter generates the Flatbuffer response containing all the
-// membership updates after the provided raft index.
-func (g *groupi) MembershipUpdateAfter(ridx uint64) *protos.MembershipUpdate {
-	g.RLock()
-	defer g.RUnlock()
-
-	maxIdx := ridx
-	out := new(protos.MembershipUpdate)
-
-	for gid, peers := range g.all {
-		for _, s := range peers.list {
-			if s.RaftIdx <= ridx {
-				continue
-			}
-			if s.RaftIdx > maxIdx {
-				maxIdx = s.RaftIdx
-			}
-			out.Members = append(out.Members,
-				&protos.Membership{
-					Leader:  s.Leader,
-					Id:      s.NodeId,
-					GroupId: gid,
-					Addr:    s.Addr,
-				})
-		}
-	}
-
-	out.LastUpdate = maxIdx
-	return out
-}
-
-// UpdateMembership is the RPC call for updating membership for servers
-// which don't serve group zero.
-// TODO: This should only lie in Raft Server.
-func (w *grpcWorker) UpdateMembership(ctx context.Context,
-	update *protos.MembershipUpdate) (*protos.MembershipUpdate, error) {
-	if ctx.Err() != nil {
-		return &emptyMembershipUpdate, ctx.Err()
-	}
-	if !groups().ServesGroup(0) {
-		addr := groups().AnyServer(0)
-		// fmt.Printf("I don't serve group zero. But, here's who does: %v\n", addr)
-
-		return &protos.MembershipUpdate{
-			Redirect:     true,
-			RedirectAddr: addr,
-		}, nil
-	}
-
-	che := make(chan error, len(update.Members))
-	for _, mm := range update.Members {
-		if groups().isDuplicate(mm.GroupId, mm.Id, mm.Addr, mm.Leader) {
-			che <- nil
-			continue
-		}
-
-		mmNew := &protos.Membership{
-			Leader:  mm.Leader,
-			Id:      mm.Id,
-			GroupId: mm.GroupId,
-			Addr:    mm.Addr,
-		}
-
-		go func(mmNew *protos.Membership) {
-			zero := groups().Node(0)
-			che <- zero.ProposeAndWait(zero.ctx, &protos.Proposal{Membership: mmNew})
-		}(mmNew)
-	}
-
-	for range update.Members {
-		select {
-		case <-ctx.Done():
-			return &emptyMembershipUpdate, ctx.Err()
-		case err := <-che:
-			if err != nil {
-				return &emptyMembershipUpdate, err
-			}
-		}
-	}
-
-	// Find all membership updates since the provided lastUpdate. LastUpdate is
-	// the last raft index that the caller has recorded an update for.
-	reply := groups().MembershipUpdateAfter(update.LastUpdate)
-	return reply, nil
-}
+// func (g *groupi) periodicSyncMemberships() {
+// 	t := time.NewTicker(10 * time.Second)
+// 	for {
+// 		select {
+// 		case <-t.C:
+// 			g.syncMemberships()
+// 		case <-g.ctx.Done():
+// 			return
+// 		}
+// 	}
+// }
 
 // SyncAllMarks syncs marks of all nodes of the worker group.
 // TODO: Don't need this.

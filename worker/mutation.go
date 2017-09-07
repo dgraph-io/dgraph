@@ -89,7 +89,7 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 // and further mutations are blocked until this is done.
 func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 	rv := ctx.Value("raft").(x.RaftValue)
-	n := groups().Node(rv.Group)
+	n := groups().Node
 	// Wait for applied watermark to reach till previous index
 	// All mutations before this should use old schema and after this
 	// should use new schema
@@ -317,10 +317,23 @@ func validateAndConvert(edge *protos.DirectedEdge, schemaType types.TypeID) erro
 	return nil
 }
 
+func AssignUidsOverNetwork(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+	_, addr := groups().Leader(0)
+	p, err := conn.Get().Get(addr)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Get().Release(p)
+
+	conn := p.Get()
+	c := protos.NewZeroClient(conn)
+	return c.AssignUids(ctx, num)
+}
+
 // runMutate is used to run the mutations on an instance.
 func proposeOrSend(ctx context.Context, gid uint32, m *protos.Mutations, che chan error) {
 	if groups().ServesGroup(gid) {
-		node := groups().Node(gid)
+		node := groups().Node
 		// we don't timeout after proposing
 		che <- node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m})
 		return
@@ -410,7 +423,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 	if !groups().ServesGroup(m.GroupId) {
 		return &protos.Payload{}, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
-	node := groups().Node(m.GroupId)
+	node := groups().Node
 	var tr trace.Trace
 	if rand.Float64() < Config.Tracing {
 		tr = trace.New("Dgraph", "GrpcMutate")
