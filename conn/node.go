@@ -146,14 +146,6 @@ func (n *Node) SetPeer(pid uint64, addr string, poolOrNil *Pool) {
 	n.peers.set(pid, addr, poolOrNil)
 }
 
-func (n *Node) AmLeader() bool {
-	if n.Raft() == nil {
-		return false
-	}
-	r := n.Raft()
-	return r.Status().Lead == r.Status().ID
-}
-
 func (n *Node) Send(m raftpb.Message) {
 	x.AssertTruef(n.Id != m.To, "Seding message to itself")
 	data, err := m.Marshal()

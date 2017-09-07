@@ -350,8 +350,7 @@ func export(gid uint32, bdir string) error {
 
 // TODO: How do we want to handle export for group, do we pause mutations, sync all and then export ?
 func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos.ExportPayload {
-	// TODO: Remove the whole special group logic.
-	n := groups().Node
+	n := groups().Node(gid)
 	if n != nil && n.AmLeader() {
 		lastIndex, _ := n.Store.LastIndex()
 		n.syncAllMarks(n.ctx, lastIndex)

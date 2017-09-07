@@ -108,7 +108,7 @@ func (p *proposals) Done(pid uint32, err error) {
 	// Since the tasks are executed in goroutines we need on guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
 	pd.n.Applied.Done(pd.index)
-	posting.SyncMark().Done(pd.index)
+	posting.SyncMarkFor(pd.n.gid).Done(pd.index)
 }
 
 func (p *proposals) Has(pid uint32) bool {
@@ -299,18 +299,18 @@ func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.Schema
 	return nil
 }
 
-// func (n *node) processMembership(index uint64, pid uint32, mm *protos.Membership) error {
-// 	x.AssertTrue(n.gid == 0)
-// 	x.ActiveMutations.Add(1)
-// 	defer x.ActiveMutations.Add(-1)
+func (n *node) processMembership(index uint64, pid uint32, mm *protos.Membership) error {
+	x.AssertTrue(n.gid == 0)
+	x.ActiveMutations.Add(1)
+	defer x.ActiveMutations.Add(-1)
 
-// 	n.props.IncRef(pid, index, 1)
-// 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
-// 		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
-// 	groups().applyMembershipUpdate(index, mm)
-// 	n.props.Done(pid, nil)
-// 	return nil
-// }
+	n.props.IncRef(pid, index, 1)
+	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
+		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
+	groups().applyMembershipUpdate(index, mm)
+	n.props.Done(pid, nil)
+	return nil
+}
 
 const numPendingMutations = 10000
 
@@ -327,14 +327,14 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
 	n.Applied.Done(e.Index)
-	posting.SyncMark().Done(e.Index)
+	posting.SyncMarkFor(n.gid).Done(e.Index)
 }
 
 func (n *node) processApplyCh() {
 	for e := range n.applyCh {
 		if len(e.Data) == 0 {
 			n.Applied.Done(e.Index)
-			posting.SyncMark().Done(e.Index)
+			posting.SyncMarkFor(n.gid).Done(e.Index)
 			continue
 		}
 
@@ -509,6 +509,13 @@ func (n *node) Run() {
 			}
 
 			if rd.SoftState != nil {
+				if rd.RaftState == raft.StateFollower && leader {
+					// stepped down as leader do a sync membership immediately
+					go groups().syncMemberships()
+				} else if rd.RaftState == raft.StateLeader && !leader {
+					// leaseMgr().resetLease(n.gid)
+					go groups().syncMemberships()
+				}
 				leader = rd.RaftState == raft.StateLeader
 			}
 			if leader {
@@ -560,7 +567,7 @@ func (n *node) Run() {
 				// Mark{3, false} is emitted. So it's safer to emit watermarks as soon as
 				// possible sequentially
 				n.Applied.Begin(entry.Index)
-				posting.SyncMark().Begin(entry.Index)
+				posting.SyncMarkFor(n.gid).Begin(entry.Index)
 
 				if !leader && entry.Type == raftpb.EntryConfChange {
 					// Config changes in followers must be applied straight away.
@@ -653,7 +660,7 @@ func (n *node) snapshot(skip uint64) {
 		// regenerate the state on a crash. Therefore, don't take snapshots.
 		return
 	}
-	water := posting.SyncMark()
+	water := posting.SyncMarkFor(n.gid)
 	le := water.DoneUntil()
 
 	existing, err := n.Store.Snapshot()
@@ -708,8 +715,8 @@ func (n *node) joinPeers() {
 func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	idx, restart, err := n.InitFromWal(wal)
 	x.Check(err)
-	n.Applied.SetDoneUntil(idx)
-	posting.SyncMark().SetDoneUntil(idx)
+	n.applied.SetDoneUntil(idx)
+	posting.SyncMarkFor(n.gid).SetDoneUntil(idx)
 
 	if restart {
 		x.Printf("Restarting node for group: %d\n", n.gid)
