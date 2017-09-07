@@ -48,8 +48,6 @@ func (m *uidMap) assignUID(str string) uint64 {
 }
 
 func (m *uidMap) lease() uint64 {
-	// Round up to nearest X0001. This approach is a little more conservative
-	// than what Dgraph does (i.e. uses more UIDs in some cases resulting in a
-	// higher lease).
+	// Round up to nearest X0001.
 	return m.lastUID/10000*10000 + 10001
 }

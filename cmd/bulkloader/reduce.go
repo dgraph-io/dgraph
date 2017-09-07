@@ -11,13 +11,11 @@ import (
 )
 
 func reduce(batch []*protos.FlatPosting, kv *badger.KV, prog *progress) {
-
 	var currentKey []byte
-
 	var uids []uint64
 	pl := new(protos.PostingList)
-
 	var entries []*badger.Entry
+
 	outputPostingList := func() {
 		atomic.AddInt64(&prog.reduceKeyCount, 1)
 		e := &badger.Entry{Key: currentKey}
