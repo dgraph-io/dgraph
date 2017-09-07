@@ -1942,8 +1942,6 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	x.AssertTrue(len(sg.Params.OrderAttr) > 0)
 
-	// For the first sort, we want to sort over network and get the uids and optionally the values
-	// if the user specified multiple sort.
 	sort := &protos.SortMessage{
 		Attr:      sg.Params.OrderAttr,
 		Langs:     sg.Params.Langs,

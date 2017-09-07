@@ -9234,3 +9234,31 @@ func TestMultiSort5(t *testing.T) {
 	// Null value for third Alice comes at first.
 	require.Equal(t, `{"data": {"me":[{"name":"Alice","age":75},{"name":"Alice","age":75,"salary":10002.000000},{"name":"Alice","age":25,"salary":10000.000000},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25},{"name":"Elizabeth","age":75}]}}`, js)
 }
+
+func TestMultiSort6Paginate(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderdesc: age, first: 7) {
+			name
+			age
+		}
+	}`
+
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":[{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Alice","age":25},{"name":"Bob","age":75},{"name":"Bob","age":25},{"name":"Colin","age":25},{"name":"Elizabeth","age":75}]}}`, js)
+}
+
+func TestMultiSort7Paginate(t *testing.T) {
+	populateGraph(t)
+
+	query := `{
+		me(func: uid(10005, 10006, 10001, 10002, 10003, 10004, 10007, 10000), orderasc: name, orderasc: age, first: 7) {
+			name
+			age
+		}
+	}`
+
+	js := processToFastJSON(t, query)
+	require.Equal(t, `{"data": {"me":[{"name":"Alice","age":25},{"name":"Alice","age":75},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25}]}}`, js)
+}

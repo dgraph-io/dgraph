@@ -387,16 +387,17 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 
 	// Values have been accumulated, now we do the multisort for each list.
 	for i, ul := range r.reply.UidMatrix {
-		ulc := &protos.List{ul.Uids}
-		vals := make([][]types.Val, len(ulc.Uids))
-		for j, uid := range ulc.Uids {
+		vals := make([][]types.Val, len(ul.Uids))
+		for j, uid := range ul.Uids {
 			idx := algo.IndexOf(destUids, uid)
 			x.AssertTrue(idx >= 0)
 			vals[j] = sortVals[idx]
 		}
-		types.Sort(vals, ulc, ts.Desc)
-		// TODO - Paginate
-		r.reply.UidMatrix[i] = ulc
+		types.Sort(vals, ul, ts.Desc)
+		x.AssertTrue(len(ul.Uids) >= int(ts.Count))
+		// Paginate
+		ul.Uids = ul.Uids[:ts.Count]
+		r.reply.UidMatrix[i] = ul
 	}
 
 	return r.reply, oerr
@@ -504,7 +505,7 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 		// n is number of elements to copy from result to out.
 		// In case of multiple sort, we dont wan't to apply the count and copy all uids for the
 		// current bucket.
-		if count > 0 && !(len(ts.Attr) > 1) {
+		if count > 0 && (len(ts.Attr) == 1) {
 			slack := count - len(il.ulist.Uids)
 			if slack < n {
 				n = slack
@@ -523,7 +524,9 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 			return errContinue
 		}
 
-		x.AssertTruef(len(out[i].ulist.Uids) == count, "%d %d", len(out[i].ulist.Uids), count)
+		if len(ts.Attr) == 1 {
+			x.AssertTruef(len(out[i].ulist.Uids) == count, "%d %d", len(out[i].ulist.Uids), count)
+		}
 	}
 	// All UID lists have enough items (according to pagination). Let's notify
 	// the outermost loop.
