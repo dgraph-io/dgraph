@@ -52,6 +52,9 @@ func (s byValue) Less(i, j int) bool {
 	if len(s.values[i]) == 0 || len(s.values[j]) == 0 {
 		return false
 	}
+	if s.values[i][0].Tid != s.values[j][0].Tid {
+		return false
+	}
 
 	for idx, _ := range s.values[i] {
 		// Null value is considered greatest hence comes at first place while doing descending sort
