@@ -94,7 +94,7 @@ func (n *node) waitForSyncMark(ctx context.Context, lastIndex uint64) {
 
 func waitForSyncMark(ctx context.Context, gid uint32, lastIndex uint64) {
 	// Wait for posting lists applying.
-	w := posting.SyncMark()
+	w := posting.SyncMarkFor(gid)
 	if w.DoneUntil() >= lastIndex {
 		return
 	}
