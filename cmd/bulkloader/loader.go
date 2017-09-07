@@ -171,11 +171,7 @@ func (ld *loader) leaseStage() {
 	}
 	plBuf, err := pl.Marshal()
 	x.Check(err)
-	x.Check(ld.kv.Set(
-		x.DataKey("_lease_", 1),
-		plBuf,
-		0x00,
-	))
+	x.Check(ld.kv.Set(x.DataKey("_lease_", 1), plBuf, 0x00))
 }
 
 func (ld *loader) cleanup() {
