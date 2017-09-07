@@ -26,7 +26,7 @@ func main() {
 	loader := newLoader(opt)
 	loader.mapStage()
 	loader.reduceStage()
-	loader.schemaStage()
-	loader.leaseStage()
+	loader.writeSchema()
+	loader.writeLease()
 	loader.cleanup()
 }

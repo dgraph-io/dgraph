@@ -18,6 +18,12 @@ func reduce(batch []*protos.FlatPosting, kv *badger.KV, prog *progress) {
 
 	outputPostingList := func() {
 		atomic.AddInt64(&prog.reduceKeyCount, 1)
+
+		// For a UID-only posting list, the badger value is a delta packed UID
+		// list. The UserMeta indicates to treat the value as a delta packed
+		// list when the value is read by dgraph.  For a value posting list,
+		// the full protos.Posting type is used (which internally contains the
+		// delta packed UID list).
 		e := &badger.Entry{Key: currentKey}
 		if len(pl.Postings) == 0 {
 			e.Value = bp128.DeltaPack(uids)

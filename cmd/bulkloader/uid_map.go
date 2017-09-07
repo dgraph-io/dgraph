@@ -48,6 +48,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 }
 
 func (m *uidMap) lease() uint64 {
-	// Round up to nearest X0001.
-	return m.lastUID/10000*10000 + 10001
+	// The lease is the last UID that we've used (as opposed to the next UID
+	// that could be assigned).
+	return m.lastUID
 }

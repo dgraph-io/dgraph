@@ -152,11 +152,12 @@ func (ld *loader) reduceStage() {
 	reduceWg.Wait()
 }
 
-func (ld *loader) schemaStage() {
+func (ld *loader) writeSchema() {
 	ld.ss.write(ld.kv)
 }
 
-func (ld *loader) leaseStage() {
+func (ld *loader) writeLease() {
+	// TODO: Come back to this after dgraphzero. The approach will change.
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], ld.um.lease())
 	p := &protos.Posting{
