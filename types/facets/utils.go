@@ -28,11 +28,21 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// Sorts the facets.
-func SortFacets(fs []*protos.Facet) {
+// Sorts And validates the facets.
+func SortAndValidate(fs []*protos.Facet) error {
+	if len(fs) == 0 {
+		return nil
+	}
 	sort.Slice(fs, func(i, j int) bool {
 		return fs[i].Key < fs[j].Key
 	})
+	for i := 1; i < len(fs); i++ {
+		if fs[i-1].Key == fs[i].Key {
+			return x.Errorf("Repeated keys are not allowed in facets. But got %s",
+				fs[i].Key)
+		}
+	}
+	return nil
 }
 
 // CopyFacets makes a copy of facets of the posting which are requested in param.Keys.

@@ -316,15 +316,6 @@ func parseFacets(it *lex.ItemIterator, rnq *protos.NQuad) error {
 		return x.Errorf("Expected , or ) after facet. Received %s", item.Val)
 	}
 
-	if rnq.Facets != nil {
-		facets.SortFacets(rnq.Facets)
-	}
-	for i := 1; i < len(rnq.Facets); i++ {
-		if rnq.Facets[i-1].Key == rnq.Facets[i].Key {
-			return x.Errorf("Repeated keys are not allowed in facets. But got %s",
-				rnq.Facets[i].Key)
-		}
-	}
 	return nil
 }
 

@@ -39,6 +39,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
@@ -66,6 +67,8 @@ func populateGraphExport(t *testing.T) {
 		nq, err := rdf.Parse(edge)
 		require.NoError(t, err)
 		rnq := gql.NQuad{&nq}
+		err = facets.SortAndValidate(rnq.Facets)
+		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)
 		require.NoError(t, err)
 		addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))

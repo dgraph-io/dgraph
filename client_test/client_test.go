@@ -150,6 +150,59 @@ func TestClientDelete(t *testing.T) {
 	require.Equal(t, 0, len(r.Root))
 }
 
+func TestClientAddFacets(t *testing.T) {
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+	alice, err := dgraphClient.NodeBlank("")
+	require.NoError(t, err)
+
+	e := alice.Edge("name")
+	require.NoError(t, e.SetValueString("Alice"))
+	e.AddFacet("xyz", "2")
+	e.AddFacet("abc", "1")
+	require.NoError(t, req.Set(e))
+	aliceQuery := fmt.Sprintf(`{
+		me(func: uid(%s)) {
+			name @facets(abc)
+		}
+	}`, alice)
+	req.SetQuery(aliceQuery)
+	resp, err := dgraphClient.Run(context.Background(), &req)
+	require.NoError(t, err)
+
+	require.Equal(t, "abc", resp.N[0].Children[0].Children[0].Children[0].Properties[0].Prop)
+	require.Equal(t, int64(1), resp.N[0].Children[0].Children[0].Children[0].Properties[0].Value.GetIntVal())
+}
+
+func TestClientAddFacetsError(t *testing.T) {
+	dirs, options := prepare()
+	defer removeDirs(dirs)
+
+	dgraphClient := dgraph.NewEmbeddedDgraphClient(options, client.DefaultOptions, dirs[0])
+	defer dgraph.DisposeEmbeddedDgraph()
+	req := client.Req{}
+	alice, err := dgraphClient.NodeBlank("")
+	require.NoError(t, err)
+
+	e := alice.Edge("name")
+	require.NoError(t, e.SetValueString("Alice"))
+	e.AddFacet("abc", "2")
+	e.AddFacet("abc", "1")
+	require.NoError(t, req.Set(e))
+	aliceQuery := fmt.Sprintf(`{
+		me(func: uid(%s)) {
+			name @facets(abc)
+		}
+	}`, alice)
+	req.SetQuery(aliceQuery)
+	_, err = dgraphClient.Run(context.Background(), &req)
+	require.Error(t, err)
+}
+
 func TestClientDeletePredicate(t *testing.T) {
 	dirs, options := prepare()
 	defer removeDirs(dirs)
