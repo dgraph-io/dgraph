@@ -438,7 +438,9 @@ func (l *List) addMutation(ctx context.Context, t *protos.DirectedEdge) (bool, e
 		// we don't have too many pending proposals.
 		// TODO: Come up with a good limit, based on size of proposals
 		(len(l.pending) > 0 && index > l.pending[0]+10000) {
-		l.syncIfDirty(false)
+		if _, err := l.syncIfDirty(false); err != nil {
+			return false, err
+		}
 	}
 
 	// All edges with a value without LANGTAG, have the same uid. In other words,

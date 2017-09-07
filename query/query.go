@@ -614,7 +614,9 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
 		isUidFuncWithoutVar := isUidFnWithoutVar(ft.Func)
 		if isUidFuncWithoutVar {
-			sg.populate(ft.Func.UID)
+			if err := sg.populate(ft.Func.UID); err != nil {
+				return err
+			}
 		} else {
 			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Lang)
 			sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
@@ -1361,7 +1363,9 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue,
 	}
 	for _, child := range sg.Children {
 		sgPath = append(sgPath, sg) // Add the current node to path
-		child.populateVarMap(doneVars, sgPath)
+		if err := child.populateVarMap(doneVars, sgPath); err != nil {
+			return err
+		}
 		sgPath = sgPath[:len(sgPath)-1] // Backtrack
 		if !sg.Params.Cascade {
 			continue
@@ -1648,7 +1652,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "uid" {
 			// If its a uid() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
-			sg.fillVars(sg.Params.ParentVars)
+			if err := sg.fillVars(sg.Params.ParentVars); err != nil {
+				rch <- err
+				return
+			}
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs, sg.DestUIDs)
 			rch <- nil
 			return
@@ -1803,7 +1810,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 	// We store any variable defined by this node in the map and pass it on
 	// to the children which might depend on it.
-	sg.assignVars(sg.Params.ParentVars, []*SubGraph{})
+	if err = sg.assignVars(sg.Params.ParentVars, []*SubGraph{}); err != nil {
+		rch <- err
+		return
+	}
 
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
@@ -2023,7 +2033,10 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		types.SortWithFacet(values, &protos.List{uids}, facetList, sg.Params.FacetOrderDesc)
+		if err := types.SortWithFacet(values, &protos.List{uids},
+			facetList, sg.Params.FacetOrderDesc); err != nil {
+			return err
+		}
 		sg.uidMatrix[i].Uids = uids
 		// We need to update the facetmarix corresponding to changes to uidmatrix.
 		sg.facetsMatrix[i].FacetsList = facetList
@@ -2064,7 +2077,9 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		if len(values) == 0 {
 			continue
 		}
-		types.Sort(values, &protos.List{uids}, sg.Params.OrderDesc)
+		if err := types.Sort(values, &protos.List{uids}, sg.Params.OrderDesc); err != nil {
+			return err
+		}
 		sg.uidMatrix[i].Uids = uids
 	}
 
