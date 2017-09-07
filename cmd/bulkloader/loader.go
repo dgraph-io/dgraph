@@ -21,7 +21,7 @@ import (
 )
 
 type options struct {
-	rdfFile       string
+	rdfFiles      string
 	schemaFile    string
 	badgerDir     string
 	tmpDir        string
@@ -82,10 +82,6 @@ func (ld *loader) mapStage() {
 		postingWriterWg.Done()
 	}()
 
-	f, err := os.Open(ld.opt.rdfFile)
-	x.Checkf(err, "Could not read RDF file.")
-	defer f.Close()
-
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
@@ -95,19 +91,27 @@ func (ld *loader) mapStage() {
 		}(m)
 	}
 
-	var sc *bufio.Scanner
-	if !strings.HasSuffix(ld.opt.rdfFile, ".gz") {
-		sc = bufio.NewScanner(f)
-	} else {
-		gzr, err := gzip.NewReader(f)
-		x.Checkf(err, "Could not create gzip reader for RDF file.")
-		sc = bufio.NewScanner(gzr)
+	var scanners []*bufio.Scanner
+	for _, rdfFile := range strings.Split(ld.opt.rdfFiles, ",") {
+		f, err := os.Open(rdfFile)
+		x.Check(err)
+		defer f.Close()
+		var sc *bufio.Scanner
+		if !strings.HasSuffix(rdfFile, ".gz") {
+			sc = bufio.NewScanner(f)
+		} else {
+			gzr, err := gzip.NewReader(f)
+			x.Checkf(err, "Could not create gzip reader for RDF file.")
+			sc = bufio.NewScanner(gzr)
+		}
+		scanners = append(scanners, sc)
 	}
-
-	for i := 0; sc.Scan(); i++ {
-		ld.rdfCh <- sc.Text()
+	for _, sc := range scanners {
+		for i := 0; sc.Scan(); i++ {
+			ld.rdfCh <- sc.Text()
+		}
+		x.Check(sc.Err())
 	}
-	x.Check(sc.Err())
 
 	close(ld.rdfCh)
 	mapperWg.Wait()

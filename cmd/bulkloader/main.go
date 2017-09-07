@@ -14,7 +14,7 @@ func main() {
 	runtime.GOMAXPROCS(128)
 
 	var opt options
-	flag.StringVar(&opt.rdfFile, "r", "", "Location of rdf file to load")
+	flag.StringVar(&opt.rdfFiles, "r", "", "Location of rdf files to load (comma separated)")
 	flag.StringVar(&opt.schemaFile, "s", "", "Location of schema file to load")
 	flag.StringVar(&opt.badgerDir, "b", "", "Location of target badger data directory")
 	flag.StringVar(&opt.tmpDir, "tmp", os.TempDir(), "Temp directory used to use for on-disk "+
