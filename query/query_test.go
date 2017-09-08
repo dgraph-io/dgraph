@@ -9217,7 +9217,6 @@ func TestMultiSort4(t *testing.T) {
 	js := processToFastJSON(t, query)
 	// Null value for third Alice comes at last.
 	require.Equal(t, `{"data": {"me":[{"name":"Alice","age":25,"salary":10000.000000},{"name":"Alice","age":75,"salary":10002.000000},{"name":"Alice","age":75},{"name":"Bob","age":75},{"name":"Bob","age":25},{"name":"Colin","age":25},{"name":"Elizabeth","age":75},{"name":"Elizabeth","age":25}]}}`, js)
-	fmt.Println(js)
 }
 
 func TestMultiSort5(t *testing.T) {

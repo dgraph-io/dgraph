@@ -266,8 +266,12 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
 			"Try flipping order and return first few elements instead.", ts.Attr, ts.Count)
 	}
-	fmt.Println("here", ts.Desc, ts.Attr)
 
+	attrData := strings.Split(ts.Attr[0], "@")
+	ts.Attr[0] = attrData[0]
+	if len(attrData) == 2 {
+		ts.Langs = strings.Split(attrData[1], ":")
+	}
 	if schema.State().IsList(ts.Attr[0]) {
 		return nil, x.Errorf("Sorting not supported on attr: %s of type: [scalar]", ts.Attr[0])
 	}
@@ -349,6 +353,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 	}
 
 	var oerr error
+	// TODO - Verify behavior with multiple langs.
 	for i := 1; i < len(ts.Attr); i++ {
 		or := <-och
 		if or.err != nil && oerr == nil {
@@ -396,9 +401,10 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 			vals[j] = sortVals[idx]
 		}
 		types.Sort(vals, ul, ts.Desc)
-		x.AssertTrue(len(ul.Uids) >= int(ts.Count))
 		// Paginate
-		ul.Uids = ul.Uids[:ts.Count]
+		if len(ul.Uids) > int(ts.Count) {
+			ul.Uids = ul.Uids[:ts.Count]
+		}
 		r.reply.UidMatrix[i] = ul
 	}
 
