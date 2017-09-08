@@ -312,7 +312,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		r = <-resCh
 	}
 
-	// If request didn't have multiple attributes or err was not nil we return.
+	// If request didn't have multiple attributes we return.
 	if !(len(ts.Attr) > 1) {
 		return r.reply, r.err
 	}
