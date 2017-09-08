@@ -99,7 +99,7 @@ func (ld *loader) mapStage() {
 			sc = bufio.NewScanner(f)
 		} else {
 			gzr, err := gzip.NewReader(f)
-			x.Checkf(err, "Could not create gzip reader for RDF file.")
+			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
 			sc = bufio.NewScanner(gzr)
 		}
 		scanners = append(scanners, sc)

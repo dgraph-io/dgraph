@@ -22,10 +22,26 @@ import (
 
 type mapper struct {
 	*state
-	postings []*protos.FlatPosting
-	freeList []*protos.FlatPosting
-	sz       int64
-	buf      bytes.Buffer
+	postings     []*protos.FlatPosting
+	freeList     []*protos.FlatPosting
+	sz           int64
+	buf          bytes.Buffer
+	freePostings []*protos.Posting
+}
+
+func (m *mapper) getPosting() *protos.Posting {
+	ln := len(m.freePostings)
+	if ln > 0 {
+		p := m.freePostings[ln-1]
+		m.freePostings = m.freePostings[:ln-1]
+		p.Reset()
+		return p
+	}
+	return new(protos.Posting)
+}
+
+func (m *mapper) putPosting(p *protos.Posting) {
+	m.freePostings = append(m.freePostings, p)
 }
 
 func (m *mapper) writePostings() {
@@ -41,6 +57,9 @@ func (m *mapper) writePostings() {
 		postBuf, err := posting.Marshal()
 		x.Check(err)
 		m.buf.Write(postBuf)
+		if p, ok := posting.Posting.(*protos.FlatPosting_FullPosting); ok {
+			m.putPosting(p.FullPosting)
+		}
 	}
 	m.freeList = m.postings
 	m.postings = make([]*protos.FlatPosting, 0, len(m.freeList))
@@ -119,7 +138,7 @@ func (m *mapper) parseRDF(rdfLine string) error {
 	}
 
 	key = x.DataKey("_predicate_", sid)
-	pp := createPredicatePosting(nq.GetPredicate())
+	pp := m.createPredicatePosting(nq.GetPredicate())
 	m.addPosting(key, pp)
 	m.addIndexPostings(nq, de)
 
@@ -134,14 +153,14 @@ func parseNQuad(line string) (gql.NQuad, error) {
 	return gql.NQuad{NQuad: &nq}, nil
 }
 
-func createPredicatePosting(predicate string) *protos.Posting {
+func (m *mapper) createPredicatePosting(predicate string) *protos.Posting {
 	fp := farm.Fingerprint64([]byte(predicate))
-	return &protos.Posting{
-		Uid:         fp,
-		Value:       []byte(predicate),
-		ValType:     protos.Posting_DEFAULT,
-		PostingType: protos.Posting_VALUE,
-	}
+	p := m.getPosting()
+	p.Uid = fp
+	p.Value = []byte(predicate)
+	p.ValType = protos.Posting_DEFAULT
+	p.PostingType = protos.Posting_VALUE
+	return p
 }
 
 func (m *mapper) createPostings(nq gql.NQuad,
@@ -149,7 +168,8 @@ func (m *mapper) createPostings(nq gql.NQuad,
 
 	m.ss.validateType(de, nq.ObjectValue == nil)
 
-	p := posting.NewPosting(de)
+	p := m.getPosting()
+	posting.NewPostingNoAlloc(de, p)
 	if nq.GetObjectValue() != nil {
 		if lang := de.GetLang(); lang == "" {
 			p.Uid = math.MaxUint64
@@ -168,7 +188,8 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	x.AssertTruef(nq.GetObjectValue() == nil, "only has reverse schema if object is UID")
 	de.Entity, de.ValueId = de.ValueId, de.Entity
 	m.ss.validateType(de, true)
-	rp := posting.NewPosting(de)
+	rp := m.getPosting()
+	posting.NewPostingNoAlloc(de, p)
 
 	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
 
