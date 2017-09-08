@@ -306,29 +306,6 @@ func Init(ps *badger.KV) {
 	go updateMemoryMetrics()
 }
 
-func get(key []byte, group uint32) (rlist *List) {
-	lp := lcache.Get(string(key))
-	if lp != nil {
-		x.CacheHit.Add(1)
-		return lp
-	}
-	x.CacheMiss.Add(1)
-
-	// Any initialization for l must be done before PutIfMissing. Once it's added
-	// to the map, any other goroutine can retrieve it.
-	l := getNew(key, pstore)
-	l.water = marks.Get(group)
-
-	// We are always going to return lp to caller, whether it is l or not
-	lp = lcache.PutIfMissing(string(key), l)
-
-	if lp != l {
-		x.CacheRace.Add(1)
-	}
-
-	return lp
-}
-
 // GetLru stores the List corresponding to key, if it's not there already.
 // to lru cache and returns it.
 //
