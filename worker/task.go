@@ -206,7 +206,7 @@ func needsIndex(fnType FuncType) bool {
 func getPredList(uid uint64, gid uint32) ([]types.Val, error) {
 	key := x.DataKey("_predicate_", uid)
 	// Get or create the posting list for an entity, attribute combination.
-	pl := posting.GetOrCreate(key, gid)
+	pl := posting.Get(key, gid)
 	return pl.AllValues()
 }
 
@@ -327,7 +327,7 @@ func processTask(ctx context.Context, q *protos.Query, gid uint32) (*protos.Resu
 			x.Fatalf("Unhandled function in processTask")
 		}
 		// Get or create the posting list for an entity, attribute combination.
-		pl := posting.GetOrCreate(key, gid)
+		pl := posting.Get(key, gid)
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
 		val, err := pl.ValueFor(q.Langs)
@@ -591,7 +591,7 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			default:
 			}
 			key := x.DataKey(attr, uid)
-			pl := posting.GetOrCreate(key, arg.gid)
+			pl := posting.Get(key, arg.gid)
 
 			var val types.Val
 			if len(arg.srcFn.lang) > 0 {
@@ -654,7 +654,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
 				switch arg.srcFn.lang {
 				case "":
-					pl := posting.Get(x.DataKey(attr, uid))
+					pl := posting.GetNoStore(x.DataKey(attr, uid))
 					sv, err := pl.Value()
 					if err == nil {
 						dst, err := types.Convert(sv, typ)
@@ -663,7 +663,7 @@ func handleCompareFunction(ctx context.Context, arg funcArgs) error {
 					}
 					return false
 				case ".":
-					pl := posting.Get(x.DataKey(attr, uid))
+					pl := posting.GetNoStore(x.DataKey(attr, uid))
 					values, _ := pl.AllValues()
 					for _, sv := range values {
 						dst, err := types.Convert(sv, typ)
@@ -693,7 +693,7 @@ func filterGeoFunction(arg funcArgs) {
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl := posting.GetOrCreate(key, arg.gid)
+		pl := posting.Get(key, arg.gid)
 
 		val, err := pl.Value()
 		newValue := &protos.TaskValue{ValType: int32(val.Tid)}
@@ -718,7 +718,7 @@ func filterStringFunction(arg funcArgs) {
 	filteredUids := make([]uint64, 0, len(uids.Uids))
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl := posting.GetOrCreate(key, arg.gid)
+		pl := posting.Get(key, arg.gid)
 
 		var val types.Val
 		var err error
@@ -1217,7 +1217,7 @@ func (cp *countParams) evaluate(out *protos.Result) {
 	count := cp.count
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
-		pl := posting.GetOrCreate(countKey, cp.gid)
+		pl := posting.Get(countKey, cp.gid)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 		return
 	}
@@ -1249,7 +1249,7 @@ func (cp *countParams) evaluate(out *protos.Result) {
 
 	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
 		key := it.Item().Key()
-		pl := posting.GetOrCreate(key, cp.gid)
+		pl := posting.Get(key, cp.gid)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 	}
 }

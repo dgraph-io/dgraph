@@ -92,7 +92,7 @@ func TestQueryTokensPolygon(t *testing.T) {
 		if qt == QueryTypeWithin {
 			require.Len(t, toks, 18)
 		} else {
-			require.Len(t, toks, 66)
+			require.Len(t, toks, 67)
 		}
 		require.NotNil(t, qd)
 		require.Equal(t, qd.qtype, qt)

@@ -55,7 +55,7 @@ func taskValues(t *testing.T, v []*protos.TaskValue) []string {
 }
 
 func addEdge(t *testing.T, attr string, src uint64, edge *protos.DirectedEdge) {
-	l := posting.GetOrCreate(x.DataKey(attr, src), 1)
+	l := posting.Get(x.DataKey(attr, src), 1)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))
 }

@@ -45,7 +45,7 @@ func checkShard(ps *badger.KV) (int, []byte) {
 func writePLs(t *testing.T, pred string, count int, vid uint64, ps *badger.KV) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i))
-		list := posting.GetOrCreate(k, 0)
+		list := posting.Get(k, 0)
 
 		de := &protos.DirectedEdge{
 			ValueId: vid,
@@ -140,7 +140,7 @@ func TestPopulateShard(t *testing.T) {
 		t.Fatalf("Expected key to be: %v. Got %v", "099", string(k))
 	}
 
-	l, _ := posting.GetOrCreate(k)
+	l := posting.Get(k, 1)
 	if l.Length(0) != 1 {
 		t.Error("Unable to find added elements in posting list")
 	}
