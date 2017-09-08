@@ -20,6 +20,8 @@ type progress struct {
 	// goroutine, as well as the message back to say that the goroutine has
 	// stopped. The channel MUST be unbuffered for this to work.
 	shutdown chan struct{}
+
+	reducePhase int32 // bool
 }
 
 func newProgress() *progress {
@@ -43,9 +45,9 @@ func (p *progress) report() {
 
 func (p *progress) reportOnce() {
 	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
-	reduceEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
+	reducePhase := atomic.LoadInt32(&p.reducePhase) != 0
 
-	if reduceEdgeCount == 0 {
+	if !reducePhase {
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
 		elapsed := time.Since(p.start)
 		fmt.Printf("[MAP] [%s] [RDF count: %d] [Edge count: %d] "+
@@ -64,10 +66,15 @@ func (p *progress) reportOnce() {
 			elapsed = time.Second
 		}
 		reduceKeyCount := atomic.LoadInt64(&p.reduceKeyCount)
-		fmt.Printf("[REDUCE] [%s] [%.2f%%] [Edge count: %d] [Edges per second: %d] "+
+		reduceEdgeCount := atomic.LoadInt64(&p.reduceEdgeCount)
+		pct := ""
+		if mapEdgeCount != 0 {
+			pct = fmt.Sprintf("[%.2f%%] ", 100*float64(reduceEdgeCount)/float64(mapEdgeCount))
+		}
+		fmt.Printf("[REDUCE] [%s] %s[Edge count: %d] [Edges per second: %d] "+
 			"[Posting list count: %d] [Posting lists per second: %d]\n",
 			round(now.Sub(p.start)).String(),
-			100*float64(reduceEdgeCount)/float64(mapEdgeCount),
+			pct,
 			reduceEdgeCount,
 			int(float64(reduceEdgeCount)/elapsed.Seconds()),
 			reduceKeyCount,

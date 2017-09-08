@@ -89,6 +89,7 @@ func (m *mapper) addPosting(key []byte, posting *protos.Posting) {
 		p = m.freeFlatPostings[ln-1]
 		p.Reset()
 		m.freeFlatPostings = m.freeFlatPostings[:ln-1]
+		p.Key = key
 	} else {
 		p = &protos.FlatPosting{
 			Key: key,

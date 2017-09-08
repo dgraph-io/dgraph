@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -66,12 +67,11 @@ func newLoader(opt options) *loader {
 	for i := 0; i < opt.numGoroutines; i++ {
 		ld.mappers[i] = &mapper{state: st}
 	}
+	go ld.prog.report()
 	return ld
 }
 
 func (ld *loader) mapStage() {
-	go ld.prog.report()
-
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
@@ -106,10 +106,11 @@ func (ld *loader) mapStage() {
 	close(ld.rdfCh)
 	mapperWg.Wait()
 	close(ld.postingsCh)
-	// postingWriterWg.Wait()
 }
 
 func (ld *loader) reduceStage() {
+	atomic.AddInt32(&ld.prog.reducePhase, 1)
+
 	// Read output from map stage.
 	var mapOutput []string
 	err := filepath.Walk(ld.opt.tmpDir, func(path string, _ os.FileInfo, err error) error {
