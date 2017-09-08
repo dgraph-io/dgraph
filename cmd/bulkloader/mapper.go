@@ -22,11 +22,11 @@ import (
 
 type mapper struct {
 	*state
-	postings     []*protos.FlatPosting
-	freeList     []*protos.FlatPosting
-	sz           int64
-	buf          bytes.Buffer
-	freePostings []*protos.Posting
+	fpostings        []*protos.FlatPosting
+	sz               int64
+	buf              bytes.Buffer
+	freePostings     []*protos.Posting
+	freeFlatPostings []*protos.FlatPosting
 }
 
 func (m *mapper) getPosting() *protos.Posting {
@@ -40,29 +40,25 @@ func (m *mapper) getPosting() *protos.Posting {
 	return new(protos.Posting)
 }
 
-func (m *mapper) putPosting(p *protos.Posting) {
-	m.freePostings = append(m.freePostings, p)
-}
-
 func (m *mapper) writePostings() {
-	sort.Slice(m.postings, func(i, j int) bool {
-		return bytes.Compare(m.postings[i].Key, m.postings[j].Key) < 0
+	sort.Slice(m.fpostings, func(i, j int) bool {
+		return bytes.Compare(m.fpostings[i].Key, m.fpostings[j].Key) < 0
 	})
 
 	m.buf.Reset()
 	var varintBuf [binary.MaxVarintLen64]byte
-	for _, posting := range m.postings {
-		n := binary.PutUvarint(varintBuf[:], uint64(posting.Size()))
+	for _, fposting := range m.fpostings {
+		n := binary.PutUvarint(varintBuf[:], uint64(fposting.Size()))
 		m.buf.Write(varintBuf[:n])
-		postBuf, err := posting.Marshal()
+		postBuf, err := fposting.Marshal()
 		x.Check(err)
 		m.buf.Write(postBuf)
-		if posting.Full != nil {
-			m.putPosting(posting.Full)
+		if fposting.Full != nil {
+			m.freePostings = append(m.freePostings, fposting.Full)
 		}
 	}
-	m.freeList = m.postings
-	m.postings = make([]*protos.FlatPosting, 0, len(m.freeList))
+	m.freeFlatPostings = m.fpostings
+	m.fpostings = make([]*protos.FlatPosting, 0, len(m.freeFlatPostings))
 	m.sz = 0
 
 	fileNum := atomic.AddUint32(&m.mapId, 1)
@@ -78,7 +74,7 @@ func (m *mapper) run() {
 			m.writePostings()
 		}
 	}
-	if len(m.postings) > 0 {
+	if len(m.fpostings) > 0 {
 		m.writePostings()
 	}
 }
@@ -87,12 +83,12 @@ func (m *mapper) addPosting(key []byte, posting *protos.Posting) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
 	var p *protos.FlatPosting
-	if len(m.freeList) > 0 {
+	if len(m.freeFlatPostings) > 0 {
 		// Try to reuse memory.
-		ln := len(m.freeList)
-		p = m.freeList[ln-1]
+		ln := len(m.freeFlatPostings)
+		p = m.freeFlatPostings[ln-1]
 		p.Reset()
-		m.freeList = m.freeList[:ln-1]
+		m.freeFlatPostings = m.freeFlatPostings[:ln-1]
 	} else {
 		p = &protos.FlatPosting{
 			Key: key,
@@ -105,7 +101,7 @@ func (m *mapper) addPosting(key []byte, posting *protos.Posting) {
 		p.Full = posting
 	}
 	m.sz += int64(p.Size())
-	m.postings = append(m.postings, p)
+	m.fpostings = append(m.fpostings, p)
 }
 
 func (m *mapper) parseRDF(rdfLine string) error {
