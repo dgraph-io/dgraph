@@ -69,6 +69,16 @@ docker run -it -p 18080:8080 -p 19090:9090 -v ~/dgraph:/dgraph --name dgraph dgr
 
 {{% notice "note" %}}The dgraph server listens on ports 8080 and 9090 (unless mapped to another port above) with log output to the terminal.{{% /notice %}}
 
+{{% notice "note" %}}If you are using docker on non-linux distribution, please use docker data volumes.{{% /notice %}}
+### On Non Linux Distributions.
+File access in mounted filesystems is slower when using docker. Try running the command `time dd if=/dev/zero of=test.dat bs=1024 count=100000` on mounted volume. On windows it's extremely slow. We recommend users to use docker data volumes. The only downside of using data volumes is that you can't access the files from the host, you have to launch a container for accessing it.
+
+Create a docker data container named datacontainer with dgraph/dgraph image.
+docker create -v /dgraph --name datacontainer dgraph/dgraph
+
+Now if we run dgraph container with `--volumes-from` flag and run dgraph with the following command, then anything we write to /dgraph in dgraph container will get written to /dgraph volume of datacontainer.
+docker run -it -p 18080:8080 -p 19090:9090 --volumes-from datacontainer --name dgraph dgraph/dgraph dgraph --bindall=true --memory_mb 2048 --p /dgraph/p --w /dgraph/w
+
 ## Step 3: Run Queries
 {{% notice "tip" %}}Once Dgraph is running, a user interface is available at [`http://localhost:8080`](http://localhost:8080).  It allows browser-based queries, mutations and visualizations.
 
