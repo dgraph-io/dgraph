@@ -5,60 +5,59 @@ import (
 	"bytes"
 	"container/heap"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"sort"
-	"sync"
 
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
 )
 
-func writeMapOutput(dir string, postingsCh <-chan *protos.FlatPosting, prog *progress) []string {
+// func writeMapOutput(dir string, postingsCh <-chan *protos.FlatPosting, prog *progress) []string {
 
-	var filenames []string
-	var fileNum int
-	var postings []*protos.FlatPosting
-	var wg sync.WaitGroup
-	var sz int
+// 	var filenames []string
+// 	var fileNum int
+// 	var postings []*protos.FlatPosting
+// 	var wg sync.WaitGroup
+// 	var sz int
 
-	processBatch := func() {
-		wg.Add(1)
-		filename := filepath.Join(dir, fmt.Sprintf("%06d.bin", fileNum))
-		fileNum++
-		filenames = append(filenames, filename)
-		ps := postings
-		postings = nil
-		sz = 0
-		go func() {
-			sortAndWrite(filename, ps, prog)
-			wg.Done()
-		}()
-	}
+// 	processBatch := func() {
+// 		wg.Add(1)
+// 		filename := filepath.Join(dir, fmt.Sprintf("%06d.bin", fileNum))
+// 		fileNum++
+// 		filenames = append(filenames, filename)
+// 		ps := postings
+// 		postings = nil
+// 		sz = 0
+// 		go func() {
+// 			sortAndWrite(filename, ps, prog)
+// 			wg.Done()
+// 		}()
+// 	}
 
-	for posting := range postingsCh {
-		postings = append(postings, posting)
-		sz += posting.Size()
-		if sz > 256<<20 {
-			processBatch()
-		}
-	}
-	if len(postings) > 0 {
-		processBatch()
-	}
+// 	for posting := range postingsCh {
+// 		postings = append(postings, posting)
+// 		sz += posting.Size()
+// 		if sz > 256<<20 {
+// 			processBatch()
+// 		}
+// 	}
+// 	if len(postings) > 0 {
+// 		processBatch()
+// 	}
 
-	wg.Wait()
-	return filenames
-}
+// 	wg.Wait()
+// 	return filenames
+// }
 
 func sortAndWrite(filename string, postings []*protos.FlatPosting, prog *progress) {
 	sort.Slice(postings, func(i, j int) bool {
 		return bytes.Compare(postings[i].Key, postings[j].Key) < 0
 	})
+	// HACK HACK
+	return
 
 	var varintBuf [binary.MaxVarintLen64]byte
 	var buf bytes.Buffer

@@ -2,10 +2,18 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"runtime"
+
+	"github.com/dgraph-io/dgraph/x"
+)
+
+var (
+	blockRate = flag.Int("block", 0, "Block profiling rate")
 )
 
 func main() {
@@ -18,17 +26,31 @@ func main() {
 	var opt options
 	flag.StringVar(&opt.rdfFiles, "r", "", "Location of rdf files to load (comma separated)")
 	flag.StringVar(&opt.schemaFile, "s", "", "Location of schema file to load")
-	flag.StringVar(&opt.badgerDir, "b", "", "Location of target badger data directory")
+	flag.StringVar(&opt.badgerDir, "p", "", "Location of the final Dgraph directory")
 	flag.StringVar(&opt.tmpDir, "tmp", os.TempDir(), "Temp directory used to use for on-disk "+
 		"scratch space. Requires free space proportional to the size of the RDF file.")
-	flag.IntVar(&opt.numGoroutines, "j", runtime.NumCPU()-1,
+	flag.IntVar(&opt.numGoroutines, "j", runtime.NumCPU(),
 		"Number of worker threads to use (defaults to one less than logical CPUs)")
+	flag.Int64Var(&opt.mapBufSize, "mapoutput_mb", 0,
+		"The estimated size of each map file output. This directly affects the memory usage.")
 	httpAddr := flag.String("http", "localhost:8080", "Address to serve http (pprof)")
 	flag.Parse()
+
+	x.AssertTruef(opt.mapBufSize > 0, "Please specify how much memory is available for this program.")
+	opt.mapBufSize = opt.mapBufSize << 20 // Convert from MB to B.
 
 	go func() {
 		log.Fatal(http.ListenAndServe(*httpAddr, nil))
 	}()
+	runtime.SetBlockProfileRate(*blockRate)
+	x.Check(os.MkdirAll(opt.badgerDir, 0700))
+
+	// Create a directory just for bulk loader's usage.
+	x.Check(os.MkdirAll(opt.tmpDir, 0700))
+	var err error
+	opt.tmpDir, err = ioutil.TempDir(opt.tmpDir, "bulkloader_tmp_posting_")
+	x.Check(err)
+	defer os.RemoveAll(opt.tmpDir)
 
 	loader := newLoader(opt)
 	loader.mapStage()

@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
 	"log"
 	"math"
+	"path/filepath"
+	"sort"
 	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/gql"
@@ -17,27 +22,71 @@ import (
 
 type mapper struct {
 	*state
+	postings []*protos.FlatPosting
+	freeList []*protos.FlatPosting
+	sz       int64
+	buf      bytes.Buffer
+}
+
+func (m *mapper) writePostings() {
+	sort.Slice(m.postings, func(i, j int) bool {
+		return bytes.Compare(m.postings[i].Key, m.postings[j].Key) < 0
+	})
+
+	m.buf.Reset()
+	var varintBuf [binary.MaxVarintLen64]byte
+	for _, posting := range m.postings {
+		n := binary.PutUvarint(varintBuf[:], uint64(posting.Size()))
+		m.buf.Write(varintBuf[:n])
+		postBuf, err := posting.Marshal()
+		x.Check(err)
+		m.buf.Write(postBuf)
+	}
+	m.freeList = m.postings
+	m.postings = make([]*protos.FlatPosting, 0, len(m.freeList))
+	m.sz = 0
+
+	fileNum := atomic.AddUint32(&m.mapId, 1)
+	filename := filepath.Join(m.opt.tmpDir, fmt.Sprintf("%06d.map", fileNum))
+	x.Check(x.WriteFileSync(filename, m.buf.Bytes(), 0644))
 }
 
 func (m *mapper) run() {
 	for rdf := range m.rdfCh {
-		x.Checkf(m.parseRDF(rdf), "Could not parse RDF.")
+		x.Check(m.parseRDF(rdf))
 		atomic.AddInt64(&m.prog.rdfCount, 1)
+		if m.sz >= m.opt.mapBufSize {
+			m.writePostings()
+		}
+	}
+	if len(m.postings) > 0 {
+		m.writePostings()
 	}
 }
 
 func (m *mapper) addPosting(key []byte, posting *protos.Posting) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
-	p := &protos.FlatPosting{
-		Key: key,
+	var p *protos.FlatPosting
+	if len(m.freeList) > 0 {
+		// Try to reuse memory.
+		ln := len(m.freeList)
+		p = m.freeList[ln-1]
+		p.Reset()
+		m.freeList = m.freeList[:ln-1]
+	} else {
+		p = &protos.FlatPosting{
+			Key: key,
+		}
 	}
+
 	if posting.PostingType == protos.Posting_REF {
 		p.Posting = &protos.FlatPosting_UidPosting{UidPosting: posting.Uid}
 	} else {
 		p.Posting = &protos.FlatPosting_FullPosting{FullPosting: posting}
 	}
-	m.postingsCh <- p
+	m.sz += int64(p.Size())
+	m.postings = append(m.postings, p)
 }
 
 func (m *mapper) parseRDF(rdfLine string) error {

@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +25,7 @@ type options struct {
 	badgerDir     string
 	tmpDir        string
 	numGoroutines int
+	mapBufSize    int64
 }
 
 type state struct {
@@ -35,6 +35,7 @@ type state struct {
 	ss         *schemaStore
 	rdfCh      chan string
 	postingsCh chan *protos.FlatPosting
+	mapId      uint32
 }
 
 type loader struct {
@@ -71,16 +72,13 @@ func newLoader(opt options) *loader {
 func (ld *loader) mapStage() {
 	go ld.prog.report()
 
-	var postingWriterWg sync.WaitGroup
-	postingWriterWg.Add(1)
+	// var postingWriterWg sync.WaitGroup
+	// postingWriterWg.Add(1)
 
-	tmpPostingsDir, err := ioutil.TempDir(ld.opt.tmpDir, "bulkloader_tmp_posting_")
-	x.Check(err)
-
-	go func() {
-		ld.mapOutput = writeMapOutput(tmpPostingsDir, ld.postingsCh, ld.prog)
-		postingWriterWg.Done()
-	}()
+	// go func() {
+	// 	ld.mapOutput = writeMapOutput(tmpPostingsDir, ld.postingsCh, ld.prog)
+	// 	postingWriterWg.Done()
+	// }()
 
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
@@ -116,7 +114,7 @@ func (ld *loader) mapStage() {
 	close(ld.rdfCh)
 	mapperWg.Wait()
 	close(ld.postingsCh)
-	postingWriterWg.Wait()
+	// postingWriterWg.Wait()
 }
 
 func (ld *loader) reduceStage() {
@@ -182,8 +180,4 @@ func (ld *loader) writeLease() {
 func (ld *loader) cleanup() {
 	ld.prog.endSummary()
 	x.Check(ld.kv.Close())
-	if len(ld.mapOutput) > 0 {
-		dir := filepath.Dir(ld.mapOutput[0])
-		x.Check(os.RemoveAll(dir))
-	}
 }
