@@ -103,6 +103,7 @@ func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.Assig
 		return &emptyAssignedIds, ctx.Err()
 	}
 
+	// TODO: Forward it to the leader, if I'm not the leader.
 	reply := &emptyAssignedIds
 	c := make(chan error, 1)
 	go func() {
