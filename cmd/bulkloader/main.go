@@ -34,7 +34,7 @@ func main() {
 		"The estimated size of each map file output. This directly affects the memory usage.")
 	httpAddr := flag.String("http", "localhost:8080", "Address to serve http (pprof)")
 	skipMapPhase := flag.Bool("skip_map_phase", false,
-		"Skip the map phase (assumes that map output files already exist")
+		"Skip the map phase (assumes that map output files already exist)")
 	cleanUpTmp := flag.Bool("cleanup_tmp", true,
 		"Clean up the tmp directory after the loader finishes")
 

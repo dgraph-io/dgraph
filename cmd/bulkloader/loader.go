@@ -112,6 +112,8 @@ func (ld *loader) mapStage() {
 	for i := range ld.mappers {
 		ld.mappers[i] = nil
 	}
+	// TODO: Put the lease in a file before doing this.
+	ld.um = nil
 	runtime.GC()
 }
 

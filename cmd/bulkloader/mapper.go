@@ -8,6 +8,7 @@ import (
 	"math"
 	"path/filepath"
 	"sort"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/gql"
@@ -27,6 +28,7 @@ type mapper struct {
 	buf              bytes.Buffer
 	freePostings     []*protos.Posting
 	freeFlatPostings []*protos.FlatPosting
+	mu               sync.Mutex
 }
 
 func (m *mapper) getPosting() *protos.Posting {
@@ -45,6 +47,7 @@ func (m *mapper) writePostings() {
 		return bytes.Compare(m.fpostings[i].Key, m.fpostings[j].Key) < 0
 	})
 
+	m.mu.Lock()
 	m.buf.Reset()
 	var varintBuf [binary.MaxVarintLen64]byte
 	for _, fposting := range m.fpostings {
@@ -63,7 +66,10 @@ func (m *mapper) writePostings() {
 
 	fileNum := atomic.AddUint32(&m.mapId, 1)
 	filename := filepath.Join(m.opt.tmpDir, fmt.Sprintf("%06d.map", fileNum))
-	x.Check(x.WriteFileSync(filename, m.buf.Bytes(), 0644))
+	go func() {
+		x.Check(x.WriteFileSync(filename, m.buf.Bytes(), 0644))
+		m.mu.Unlock()
+	}()
 }
 
 func (m *mapper) run() {
@@ -77,6 +83,7 @@ func (m *mapper) run() {
 	if len(m.fpostings) > 0 {
 		m.writePostings()
 	}
+	m.mu.Lock() // Ensure that the last file write finishes.
 }
 
 func (m *mapper) addPosting(key []byte, posting *protos.Posting) {
