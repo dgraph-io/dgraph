@@ -40,7 +40,6 @@ import (
 )
 
 var (
-	lhmapNumShards   = runtime.NumCPU() * 4
 	dummyPostingList []byte // Used for indexing.
 	elog             trace.EventLog
 )
@@ -279,14 +278,6 @@ func updateMemoryMetrics() {
 	}
 }
 
-type fingerPrint struct {
-	gid uint32
-}
-
-const (
-	syncChCapacity = 10000
-)
-
 var (
 	pstore    *badger.KV
 	dirtyChan chan []byte // All dirty posting list keys are pushed here.
@@ -306,17 +297,42 @@ func Init(ps *badger.KV) {
 	go updateMemoryMetrics()
 }
 
-// GetOrCreate stores the List corresponding to key, if it's not there already.
+// GetLru stores the List corresponding to key, if it's not there already.
 // to lru cache and returns it.
 //
-// plist := GetOrCreate(key, store)
+// plist := GetLru(key, group)
 // ... // Use plist
 // TODO: This should take a node id and index. And just append all indices to a list.
 // When doing a commit, it should update all the sync index watermarks.
 // worker pkg would push the indices to the watermarks held by lists.
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
-func GetOrCreate(key []byte, group uint32) (rlist *List) {
+func GetLru(key []byte, group uint32) (rlist *List) {
+	lp := lcache.Get(string(key))
+	if lp != nil {
+		x.CacheHit.Add(1)
+		return lp
+	}
+	x.CacheMiss.Add(1)
+
+	// Any initialization for l must be done before PutIfMissing. Once it's added
+	// to the map, any other goroutine can retrieve it.
+	l := getNew(key, pstore)
+	l.water = marks.Get(group)
+
+	// We are always going to return lp to caller, whether it is l or not
+	lp = lcache.PutIfMissing(string(key), l)
+
+	if lp != l {
+		x.CacheRace.Add(1)
+	}
+
+	return lp
+}
+
+// getOrMutate is similar to GetLru the only difference being that for index and count keys it also
+// does a SetIfAbsentAsync. This function should be called by functions in the mutation path only.
+func getOrMutate(key []byte, group uint32) (rlist *List) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
 		x.CacheHit.Add(1)
@@ -336,20 +352,19 @@ func GetOrCreate(key []byte, group uint32) (rlist *List) {
 		x.CacheRace.Add(1)
 	} else {
 		pk := x.Parse(key)
-		if pk.IsIndex() || pk.IsCount() {
-			// This is a best effort set, hence we don't check error from callback.
-			if err := pstore.SetIfAbsentAsync(key, nil, 0x00, func(err error) {}); err != nil &&
-				err != badger.ErrKeyExists {
-				x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
-			}
+		x.AssertTrue(pk.IsIndex() || pk.IsCount())
+		// This is a best effort set, hence we don't check error from callback.
+		if err := pstore.SetIfAbsentAsync(key, nil, 0x00, func(err error) {}); err != nil &&
+			err != badger.ErrKeyExists {
+			x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
 		}
 	}
 
 	return lp
 }
 
-// Get takes a key and a groupID. It checks if the in-memory map has an
-// updated value and returns it if it exists or it gets from the store and DOES NOT ADD to lhmap.
+// Get takes a key. It checks if the in-memory map has an updated value and returns it if it exists
+// or it gets from the store and DOES NOT ADD to lru cache.
 func Get(key []byte) (rlist *List) {
 	lp := lcache.Get(string(key))
 
