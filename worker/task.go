@@ -19,11 +19,14 @@ package worker
 
 import (
 	"errors"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger"
 	"golang.org/x/net/context"
@@ -146,6 +149,9 @@ func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Resul
 	}
 
 	result, err := processWithBackupRequest(ctx, gid, func(ctx context.Context, c protos.WorkerClient) (interface{}, error) {
+		if _, ok := trace.FromContext(ctx); ok {
+			ctx = metadata.NewIncomingContext(ctx, metadata.Pairs("trace", "true"))
+		}
 		return c.ServeTask(ctx, q)
 	})
 	if err != nil {
@@ -1142,6 +1148,18 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Re
 		err    error
 	}
 	c := make(chan reply, 1)
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		// md is a map[string][]string
+		if _, ok = md["trace"]; ok {
+			var tr trace.Trace
+			if rand.Float64() < Config.Tracing {
+				tr = trace.New("Dgraph", "GrpcQuery")
+				defer tr.Finish()
+				tr.SetMaxEvents(1000)
+				ctx = trace.NewContext(ctx, tr)
+			}
+		}
+	}
 	go func() {
 		result, err := processTask(ctx, q, gid)
 		c <- reply{result, err}
