@@ -20,6 +20,7 @@ package worker
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/net/context"
 
@@ -142,7 +143,7 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 			zc := protos.NewZeroClient(p.Get())
 			var state *protos.MembershipState
 			m := &protos.Member{Id: Config.RaftId}
-			for i := 0; i < 10; i++ { // 10 attempts.
+			for i := 0; i < 100; i++ { // Generous number of attempts.
 				var err error
 				state, err = zc.Connect(gr.ctx, m)
 				if err == nil {
@@ -154,17 +155,6 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 				x.Fatalf("Unable to join cluster via dgraphzero")
 			}
 			gr.state = state
-
-			// TODO: Is this comment useful?
-			// Force run syncMemberships with this peer, so our nodes know if they have other
-			// servers who are serving the same groups. That way, they can talk to them
-			// and try to join their clusters. Otherwise, they'll start off as a single-node
-			// cluster.
-			// IMPORTANT: Don't run any nodes until we have done at least one full sync for membership
-			// information with the cluster. If you start this node too quickly, just
-			// after starting the leader of group zero, that leader might not have updated
-			// itself in the memberships; and hence this node would think that no one is handling
-			// group zero. Therefore, we MUST wait to get pass a last update raft index of zero.
 		}()
 	}
 
@@ -181,16 +171,15 @@ func StartRaftNodes(walStore *badger.KV, bindall bool) {
 }
 
 func (g *groupi) groupId() uint32 {
-	g.RLock()
-	defer g.RUnlock()
-	if g.gid > 0 {
-		return g.gid
+	gid := atomic.LoadUint32(&g.gid)
+	if gid > 0 {
+		return gid
 	}
 	for gid, group := range g.state.Groups {
 		for _, m := range group.Members {
 			if m.Id == Config.RaftId {
-				g.gid = gid
-				return g.gid
+				atomic.StoreUint32(&g.gid, gid)
+				return gid
 			}
 		}
 	}
@@ -369,6 +358,22 @@ func (g *groupi) TouchLastUpdate(u uint64) {
 	}
 }
 
+// TODO: Bring this back. We need to sync membership periodically.
+// In fact, this could be better done via a uni-directional or bi-directional stream, so it's
+// instantenous.
+
+// syncMemberships needs to be called in an periodic loop.
+// How syncMemberships works:
+// - Each server iterates over all the nodes it's serving, present in local.
+// - If serving group zero, propose membership status updates directly via RAFT.
+// - Otherwise, generates a membership update, which includes status of all serving nodes.
+// - Check if it has address of a server from group zero. If so, use that.
+// - Otherwise, use the peer information passed down via flags.
+// - Send update via UpdateMembership call to the peer.
+// - If the peer doesn't serve group zero, it would return back a redirect with the right address.
+// - Otherwise, it would iterate over the memberships, check for duplicates, and apply updates.
+// - Once iteration is over without errors, it would return back all new updates.
+// - These updates are then applied to groups().all state via applyMembershipUpdate.
 // func (g *groupi) syncMemberships() {
 // 	// This server doesn't serve group zero.
 // 	// Generate membership update of all local nodes.

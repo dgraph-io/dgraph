@@ -496,6 +496,7 @@ func (n *node) Run() {
 			}
 
 			if rd.SoftState != nil {
+				// TODO: Consider if we need to quickly update membership info.
 				leader = rd.RaftState == raft.StateLeader
 			}
 			if leader {

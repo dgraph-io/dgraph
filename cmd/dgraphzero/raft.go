@@ -142,6 +142,11 @@ func (n *node) applyProposal(e raftpb.Entry) (uint32, error) {
 		}
 		state := n.server.state
 		group := state.Groups[p.Member.GroupId]
+		_, has := group.Members[p.Member.Id]
+		if !has && len(group.Members) >= n.server.NumReplicas {
+			// We shouldn't allow more members than the number of replicas.
+			return 0, errInvalidProposal
+		}
 		group.Members[p.Member.Id] = p.Member
 	}
 	if p.Tablet != nil {

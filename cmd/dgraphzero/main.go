@@ -47,7 +47,7 @@ var (
 	myAddr = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	port        = flag.Int("port", 8888, "Port to run Dgraph zero on.")
-	raftId      = flag.Uint64("id", 0, "Unique raft index.")
+	nodeId      = flag.Uint64("id", 0, "Unique node index for this server.")
 	numReplicas = flag.Int("replicas", 1, "How many replicas to run per data shard."+
 		" The count includes the original shard.")
 	peer = flag.String("peer", "", "Address of another dgraphzero server.")
@@ -76,7 +76,7 @@ func (st *state) serveGRPC(l net.Listener, wg *sync.WaitGroup) {
 	if len(*myAddr) == 0 {
 		*myAddr = fmt.Sprintf("localhost:%d", *port)
 	}
-	rc := protos.RaftContext{Id: *raftId, Addr: *myAddr, Group: 0}
+	rc := protos.RaftContext{Id: *nodeId, Addr: *myAddr, Group: 0}
 	m := conn.NewNode(&rc)
 	st.rs = &conn.RaftServer{Node: m}
 
@@ -147,7 +147,7 @@ func main() {
 	kvOpt.MapTablesTo = table.MemoryMap
 	kv, err := badger.NewKV(&kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
-	wal := raftwal.Init(kv, *raftId)
+	wal := raftwal.Init(kv, *nodeId)
 	x.Check(st.node.initAndStartNode(wal))
 
 	sdCh := make(chan os.Signal, 1)
