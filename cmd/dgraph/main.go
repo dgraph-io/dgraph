@@ -254,10 +254,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	ctx = context.WithValue(ctx, "mutation_allowed", !dgraph.Config.Nomutations)
 
 	if rand.Float64() < worker.Config.Tracing {
-		tr := trace.New("Dgraph", "Query")
-		tr.SetMaxEvents(1000)
+		var tr trace.Trace
+		tr, ctx = x.NewTrace("Query", ctx)
 		defer tr.Finish()
-		ctx = trace.NewContext(ctx, tr)
 	}
 
 	invalidRequest := func(err error, msg string) {

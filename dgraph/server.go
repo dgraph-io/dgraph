@@ -118,10 +118,9 @@ func (s *Server) Run(ctx context.Context, req *protos.Request) (resp *protos.Res
 	}
 
 	if rand.Float64() < worker.Config.Tracing {
-		tr := trace.New("Dgraph", "GrpcQuery")
-		tr.SetMaxEvents(1000)
+		var tr trace.Trace
+		tr, ctx = x.NewTrace("GrpcQuery", ctx)
 		defer tr.Finish()
-		ctx = trace.NewContext(ctx, tr)
 	}
 
 	// Sanitize the context of the keys used for internal purposes only
