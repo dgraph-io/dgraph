@@ -106,9 +106,9 @@ var (
 )
 
 func sortWithoutIndex(ctx context.Context, ts *protos.SortMessage) *sortresult {
-	// TODO - Handle multisort with pagination here.
 	n := len(ts.UidMatrix)
 	r := new(protos.SortResult)
+	multiSortVals := make([][]types.Val, n)
 	// Sort and paginate directly as it'd be expensive to iterate over the index which
 	// might have millions of keys just for retrieving some values.
 	sType, err := schema.State().TypeOf(ts.Attr[0])
@@ -124,15 +124,21 @@ func sortWithoutIndex(ctx context.Context, ts *protos.SortMessage) *sortresult {
 		default:
 			// Copy, otherwise it'd affect the destUids and hence the srcUids of Next level.
 			tempList := &protos.List{ts.UidMatrix[i].Uids}
-			// TODO - Get values also and send to paginate.
-			if _, err := sortByValue(ctx, ts, tempList, sType); err != nil {
+			var vals []types.Val
+			if vals, err = sortByValue(ctx, ts, tempList, sType); err != nil {
 				return &sortresult{&emptySortResult, nil, err}
 			}
-			paginate(ts, tempList)
+			start, end, err := paginate(ts, tempList, vals)
+			if err != nil {
+				return &sortresult{&emptySortResult, nil, err}
+			}
+			tempList.Uids = tempList.Uids[start:end]
+			vals = vals[start:end]
 			r.UidMatrix = append(r.UidMatrix, tempList)
+			multiSortVals[i] = vals
 		}
 	}
-	return &sortresult{r, nil, nil}
+	return &sortresult{r, multiSortVals, nil}
 }
 
 func sortWithIndex(ctx context.Context, ts *protos.SortMessage) *sortresult {
@@ -143,7 +149,6 @@ func sortWithIndex(ctx context.Context, ts *protos.SortMessage) *sortresult {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset)
-		// TODO - Define once.
 		var emptyList protos.List
 		out[i].ulist = &emptyList
 	}
@@ -541,11 +546,24 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 	return errDone
 }
 
-func paginate(ts *protos.SortMessage, dest *protos.List) {
+func paginate(ts *protos.SortMessage, dest *protos.List, vals []types.Val) (int, int, error) {
 	count := int(ts.Count)
 	offset := int(ts.Offset)
 	start, end := x.PageRange(count, offset, len(dest.Uids))
-	dest.Uids = dest.Uids[start:end]
+
+	// For multiple sort, we need to take all equal values at the end. So we update end.
+	for len(ts.Attr) > 1 && end < len(dest.Uids) {
+		eq, err := types.Equal(vals[end-1], vals[end])
+		if err != nil {
+			return 0, 0, err
+		}
+		if !eq {
+			break
+		}
+		end++
+	}
+
+	return start, end, nil
 }
 
 // sortByValue fetches values and sort UIDList.
@@ -568,15 +586,14 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 			}
 			uids = append(uids, uid)
 			values = append(values, []types.Val{val})
-			if len(ts.Attr) > 1 {
-				multiSortVals = append(multiSortVals, val)
-			}
 		}
 	}
 	err := types.Sort(values, &protos.List{uids}, []bool{ts.Desc[0]})
 	ul.Uids = uids
 	if len(ts.Attr) > 1 {
-		x.AssertTrue(len(ul.Uids) == len(multiSortVals))
+		for _, v := range values {
+			multiSortVals = append(multiSortVals, v[0])
+		}
 	}
 	return multiSortVals, err
 }
