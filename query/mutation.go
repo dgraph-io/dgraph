@@ -1,6 +1,7 @@
 package query
 
 import (
+	"bytes"
 	"context"
 	"strings"
 
@@ -24,12 +25,19 @@ func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.Directe
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
 	if worker.Config.ExpandEdge {
-		err := addInternalEdge(ctx, m)
+		err := handleInternalEdge(ctx, m)
 		if err != nil {
 			return x.Wrapf(err, "While adding internal edges")
 		}
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Added Internal edges")
+		}
+	} else {
+		for _, mu := range m.Edges {
+			if mu.Attr == x.Star && !worker.Config.ExpandEdge {
+				return x.Errorf("Expand edge (--expand_edge) is set to false." +
+					" Cannot perform S * * deletion.")
+			}
 		}
 	}
 	if err := worker.MutateOverNetwork(ctx, m); err != nil {
@@ -41,7 +49,7 @@ func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
 	return nil
 }
 
-func addInternalEdge(ctx context.Context, m *protos.Mutations) error {
+func handleInternalEdge(ctx context.Context, m *protos.Mutations) error {
 	newEdges := make([]*protos.DirectedEdge, 0, 2*len(m.Edges))
 	for _, mu := range m.Edges {
 		x.AssertTrue(mu.Op == protos.DirectedEdge_DEL || mu.Op == protos.DirectedEdge_SET)
@@ -58,12 +66,15 @@ func addInternalEdge(ctx context.Context, m *protos.Mutations) error {
 			// S * * case
 			if mu.Attr == x.Star {
 				// Fetch all the predicates and replace them
-				preds, err := GetNodePredicates(ctx, &protos.List{[]uint64{mu.GetEntity()}})
+				preds, err := getNodePredicates(ctx, &protos.List{[]uint64{mu.GetEntity()}})
 				if err != nil {
 					return err
 				}
 				val := mu.GetValue()
 				for _, pred := range preds {
+					if bytes.Equal(pred.Values[0].Val, x.Nilbyte) {
+						continue
+					}
 					edge := &protos.DirectedEdge{
 						Op:     protos.DirectedEdge_DEL,
 						Entity: mu.GetEntity(),

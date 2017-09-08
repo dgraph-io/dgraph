@@ -816,6 +816,18 @@ func TestDeleteAllSP(t *testing.T) {
 		output)
 }
 
+func TestDeleteAllSP1(t *testing.T) {
+	var m = `
+	mutation{
+		delete{
+			<2000> * * .
+		}
+	}`
+	time.Sleep(20 * time.Millisecond)
+	err := runMutation(m)
+	require.NoError(t, err)
+}
+
 func TestQuery(t *testing.T) {
 	res, err := gql.Parse(gql.Request{Str: m, Http: true})
 	require.NoError(t, err)
