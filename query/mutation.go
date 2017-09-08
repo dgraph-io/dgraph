@@ -120,7 +120,6 @@ func AssignUids(ctx context.Context, nquads gql.NQuads) (map[string]uint64, erro
 		if len(nq.Subject) > 0 {
 			if strings.HasPrefix(nq.Subject, "_:") {
 				newUids[nq.Subject] = 0
-				num.Val = num.Val + 1
 			} else if _, err := gql.ParseUid(nq.Subject); err != nil {
 				return newUids, err
 			}
@@ -129,13 +128,13 @@ func AssignUids(ctx context.Context, nquads gql.NQuads) (map[string]uint64, erro
 		if len(nq.ObjectId) > 0 {
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
-				num.Val = num.Val + 1
 			} else if _, err := gql.ParseUid(nq.ObjectId); err != nil {
 				return newUids, err
 			}
 		}
 	}
 
+	num.Val = uint64(len(newUids))
 	if int(num.Val) > 0 {
 		var res *protos.AssignedIds
 		// TODO: Optimize later by prefetching
