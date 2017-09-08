@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -106,6 +107,12 @@ func (ld *loader) mapStage() {
 	close(ld.rdfCh)
 	mapperWg.Wait()
 	close(ld.postingsCh)
+
+	// Allow memory to GC before the reduce phase.
+	for i := range ld.mappers {
+		ld.mappers[i] = nil
+	}
+	runtime.GC()
 }
 
 func (ld *loader) reduceStage() {
