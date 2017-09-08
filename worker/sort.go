@@ -346,7 +346,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		}
 	}
 
-	// Execute rest of the orders concurrently.
+	// Execute rest of the sorts concurrently.
 	och := make(chan orderResult, len(ts.Attr)-1)
 	for i := 1; i < len(ts.Attr); i++ {
 		attr := ts.Attr[i]
@@ -442,11 +442,19 @@ func fetchValues(ctx context.Context, in *protos.Query, idx int, or chan orderRe
 		in.Attr = strings.TrimPrefix(in.Attr, "~")
 	}
 	r, err := ProcessTaskOverNetwork(ctx, in)
-	// TODO - Use context here.
-	or <- orderResult{
-		idx: idx,
-		err: err,
-		r:   r,
+	select {
+	case <-ctx.Done():
+		or <- orderResult{
+			idx: idx,
+			err: ctx.Err(),
+			r:   r,
+		}
+	default:
+		or <- orderResult{
+			idx: idx,
+			err: err,
+			r:   r,
+		}
 	}
 }
 

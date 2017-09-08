@@ -2228,7 +2228,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 			}
 
-			// TODO - Verify how multiple order work when all use some variable.
+			// TODO - Allow only order by one of variable/predicate for now.
 			if val == "" {
 				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
 			}
