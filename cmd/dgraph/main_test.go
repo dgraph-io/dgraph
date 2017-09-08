@@ -1478,6 +1478,48 @@ func TestListTypeSchemaChange(t *testing.T) {
 
 }
 
+func TestExpandEdgeFalseError(t *testing.T) {
+	worker.Config.ExpandEdge = false
+
+	m := `
+		mutation {
+			delete {
+				<1> * * .
+			}
+		}
+	`
+	err := runMutation(m)
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"Expand edge (--expand_edge) is set to false. Cannot perform S * * deletion.")
+
+	q1 := `
+	{
+		me(func: uid(0x11)) {
+			expand(_all_)
+		}
+	}
+	`
+
+	_, err = runQuery(q1)
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
+
+	q1 = `
+	{
+		me(func: uid(0x11)) {
+			_predicate_
+		}
+	}
+	`
+
+	_, err = runQuery(q1)
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
+}
+
 func TestMain(m *testing.M) {
 	dc := dgraph.DefaultConfig
 	dc.AllottedMemory = 2048.0
