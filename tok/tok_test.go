@@ -25,6 +25,9 @@ import (
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
+	//"fmt"
+	//"os"
+	_ "github.com/yanyiwu/gojieba/bleve"
 )
 
 type encL struct {
@@ -150,6 +153,21 @@ func TestFullTextTokenizerLang(t *testing.T) {
 	id := tokenizer.Identifier()
 	// tokens should be sorted and unique
 	require.Equal(t, []string{encodeToken("auffass", id), encodeToken("katz", id)}, tokens)
+}
+
+func TestFullTextTokenizerJieba(t *testing.T) {
+	tokenizer, has := GetTokenizer(FtsTokenizerName("zh-hans"))
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+	val := types.ValueForType(types.StringID)
+	val.Value = "你好世界"
+
+	tokens, err := tokenizer.Tokens(val)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(tokens))
+	id := tokenizer.Identifier()
+	// tokens should be sorted and unique, "世" is \u4e16 and "你" is \u4f60
+	require.Equal(t, []string{encodeToken("世界", id), encodeToken("你好", id)}, tokens)
 }
 
 func TestTermTokenizer(t *testing.T) {

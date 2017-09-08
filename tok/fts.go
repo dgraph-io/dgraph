@@ -30,6 +30,8 @@ import (
 	"github.com/blevesearch/bleve/registry"
 	"github.com/blevesearch/blevex/stemmer"
 	"github.com/tebeka/snowball"
+	"github.com/yanyiwu/gojieba"
+	_ "github.com/yanyiwu/gojieba/bleve"
 )
 
 var (
@@ -62,6 +64,9 @@ func initFullTextTokenizers() {
 		defineAnalyzer(lang)
 		RegisterTokenizer(&FullTextTokenizer{Lang: countryCode(lang)})
 	}
+
+	defineJiebaAnalyzer()
+	RegisterTokenizer(&FullTextTokenizer{Lang: "zh-hans"})
 
 	// Default full text tokenizer, with Porter stemmer (it works with English only).
 	defineDefaultFullTextAnalyzer()
@@ -138,6 +143,25 @@ func defineAnalyzer(lang string) {
 			stemmerName(ln),
 		},
 	})
+	x.Check(err)
+}
+
+func defineJiebaAnalyzer() {
+	_, err := bleveCache.DefineTokenizer("jieba",
+		map[string]interface{}{
+			"dictpath":     gojieba.DICT_PATH,
+			"hmmpath":      gojieba.HMM_PATH,
+			"userdictpath": gojieba.USER_DICT_PATH,
+			"idf":          gojieba.IDF_PATH,
+			"stop_words":   gojieba.STOP_WORDS_PATH,
+			"type":         "gojieba",
+		})
+	x.Check(err)
+	_, err = bleveCache.DefineAnalyzer(FtsTokenizerName("zh-hans"),
+		map[string]interface{}{
+			"type":      "gojieba",
+			"tokenizer": "jieba",
+		})
 	x.Check(err)
 }
 
