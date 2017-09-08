@@ -352,12 +352,11 @@ func getOrMutate(key []byte, group uint32) (rlist *List) {
 		x.CacheRace.Add(1)
 	} else {
 		pk := x.Parse(key)
-		if pk.IsIndex() || pk.IsCount() {
-			// This is a best effort set, hence we don't check error from callback.
-			if err := pstore.SetIfAbsentAsync(key, nil, 0x00, func(err error) {}); err != nil &&
-				err != badger.ErrKeyExists {
-				x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
-			}
+		x.AssertTrue(pk.IsIndex() || pk.IsCount())
+		// This is a best effort set, hence we don't check error from callback.
+		if err := pstore.SetIfAbsentAsync(key, nil, 0x00, func(err error) {}); err != nil &&
+			err != badger.ErrKeyExists {
+			x.Fatalf("Got error while doing SetIfAbsent: %+v\n", err)
 		}
 	}
 
