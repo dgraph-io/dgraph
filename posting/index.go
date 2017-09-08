@@ -119,10 +119,10 @@ func addIndexMutation(ctx context.Context, edge *protos.DirectedEdge,
 	}
 
 	t := time.Now()
-	plist := GetOrCreate(key, groupId)
+	plist := getOrMutate(key, groupId)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("GetOrCreate took %v", dur)
+			tr.LazyPrintf("getOrMutate took %v", dur)
 		}
 	}
 
@@ -154,7 +154,7 @@ func addReverseMutation(ctx context.Context, t *protos.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
 	groupId := group.BelongsTo(t.Attr)
 
-	plist := GetOrCreate(key, groupId)
+	plist := GetLru(key, groupId)
 
 	x.AssertTrue(plist != nil)
 	edge := &protos.DirectedEdge{
@@ -259,7 +259,7 @@ func addCountMutation(ctx context.Context, t *protos.DirectedEdge, count uint32,
 	key := x.CountKey(t.Attr, count, reverse)
 	groupId := group.BelongsTo(t.Attr)
 
-	plist := GetOrCreate(key, groupId)
+	plist := getOrMutate(key, groupId)
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
@@ -579,7 +579,7 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 			edge.Facets = pp.Facets
 			edge.Label = pp.Label
 			err := addReverseMutation(ctx, &edge)
-			// We retry once in case we do GetOrCreate and stop the world happens
+			// We retry once in case we do GetLru and stop the world happens
 			// before we do addmutation
 			if err == ErrRetry {
 				err = addReverseMutation(ctx, &edge)
@@ -671,7 +671,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 				Tid:   types.TypeID(p.ValType),
 			}
 			err := addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)
-			// We retry once in case we do GetOrCreate and stop the world happens
+			// We retry once in case we do GetLru and stop the world happens
 			// before we do addmutation
 			if err == ErrRetry {
 				err = addIndexMutations(ctx, &edge, val, protos.DirectedEdge_SET)

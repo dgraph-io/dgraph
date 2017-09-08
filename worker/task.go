@@ -273,7 +273,7 @@ func needsIndex(fnType FuncType) bool {
 func getPredList(uid uint64, gid uint32) ([]types.Val, error) {
 	key := x.DataKey("_predicate_", uid)
 	// Get or create the posting list for an entity, attribute combination.
-	pl := posting.GetOrCreate(key, gid)
+	pl := posting.GetLru(key, gid)
 	return pl.AllValues()
 }
 
@@ -347,7 +347,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		key = x.DataKey(attr, q.UidList.Uids[i])
 
 		// Get or create the posting list for an entity, attribute combination.
-		pl := posting.GetOrCreate(key, gid)
+		pl := posting.GetLru(key, gid)
 		var vals []types.Val
 		// Even if its a list type and value is asked in a language we return that.
 		if listType && len(q.Langs) == 0 {
@@ -474,7 +474,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		}
 
 		// Get or create the posting list for an entity, attribute combination.
-		pl := posting.GetOrCreate(key, gid)
+		pl := posting.GetLru(key, gid)
 
 		// get filtered uids and facets.
 		var filteredRes []*result
@@ -729,7 +729,7 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			default:
 			}
 			key := x.DataKey(attr, uid)
-			pl := posting.GetOrCreate(key, arg.gid)
+			pl := posting.GetLru(key, arg.gid)
 
 			var val types.Val
 			if lang != "" {
@@ -831,7 +831,7 @@ func filterGeoFunction(arg funcArgs) {
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl := posting.GetOrCreate(key, arg.gid)
+		pl := posting.GetLru(key, arg.gid)
 
 		val, err := pl.Value()
 		newValue := &protos.TaskValue{ValType: int32(val.Tid)}
@@ -857,7 +857,7 @@ func filterStringFunction(arg funcArgs) {
 	lang := langForFunc(arg.q.Langs)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl := posting.GetOrCreate(key, arg.gid)
+		pl := posting.GetLru(key, arg.gid)
 
 		var val types.Val
 		var err error
@@ -1348,7 +1348,7 @@ func (cp *countParams) evaluate(out *protos.Result) {
 	count := cp.count
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
-		pl := posting.GetOrCreate(countKey, cp.gid)
+		pl := posting.GetLru(countKey, cp.gid)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 		return
 	}
@@ -1380,7 +1380,7 @@ func (cp *countParams) evaluate(out *protos.Result) {
 
 	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
 		key := it.Item().Key()
-		pl := posting.GetOrCreate(key, cp.gid)
+		pl := posting.GetLru(key, cp.gid)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 	}
 }

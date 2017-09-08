@@ -52,7 +52,7 @@ func delEdge(t *testing.T, edge *protos.DirectedEdge, l *posting.List) {
 }
 
 func getOrCreate(key []byte) *posting.List {
-	l := posting.GetOrCreate(key, 1)
+	l := posting.GetLru(key, 1)
 	return l
 }
 
