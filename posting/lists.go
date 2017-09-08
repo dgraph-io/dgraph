@@ -40,7 +40,6 @@ import (
 )
 
 var (
-	lhmapNumShards   = runtime.NumCPU() * 4
 	dummyPostingList []byte // Used for indexing.
 	elog             trace.EventLog
 )
@@ -279,14 +278,6 @@ func updateMemoryMetrics() {
 	}
 }
 
-type fingerPrint struct {
-	gid uint32
-}
-
-const (
-	syncChCapacity = 10000
-)
-
 var (
 	pstore    *badger.KV
 	dirtyChan chan []byte // All dirty posting list keys are pushed here.
@@ -374,7 +365,7 @@ func getOrMutate(key []byte, group uint32) (rlist *List) {
 }
 
 // Get takes a key. It checks if the in-memory map has an updated value and returns it if it exists
-// or it gets from the store and DOES NOT ADD to lhmap.
+// or it gets from the store and DOES NOT ADD to lru cache.
 func Get(key []byte) (rlist *List) {
 	lp := lcache.Get(string(key))
 

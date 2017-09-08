@@ -22,7 +22,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -48,7 +47,6 @@ import (
 var (
 	emptyUIDList   protos.List
 	emptyResult    protos.Result
-	regexTok       tok.ExactTokenizer
 	emptyValueList = protos.ValueList{Values: []*protos.TaskValue{&protos.TaskValue{Val: x.Nilbyte}}}
 )
 
@@ -216,8 +214,6 @@ const (
 	StandardFn = 100
 )
 
-const numPart = uint64(32)
-
 func parseFuncType(srcFunc *protos.SrcFunction) (FuncType, string) {
 	if srcFunc == nil {
 		return NotAFunction, ""
@@ -280,14 +276,6 @@ func getPredList(uid uint64, gid uint32) ([]types.Val, error) {
 type result struct {
 	uid    uint64
 	facets []*protos.Facet
-}
-
-func addUidToMatrix(key []byte, mu *sync.Mutex, out *protos.Result) {
-	pk := x.Parse(key)
-	tlist := &protos.List{[]uint64{pk.Uid}}
-	mu.Lock()
-	out.UidMatrix = append(out.UidMatrix, tlist)
-	mu.Unlock()
 }
 
 type funcArgs struct {
