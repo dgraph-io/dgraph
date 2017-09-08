@@ -19,6 +19,7 @@ package x
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -28,6 +29,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/net/trace"
 )
 
 // Error constants representing different types of errors.
@@ -231,6 +234,13 @@ func RemoveDuplicates(s []string) (out []string) {
 		out = append(out, s[i])
 	}
 	return
+}
+
+func NewTrace(title string, ctx context.Context) (trace.Trace, context.Context) {
+	tr := trace.New("Dgraph", title)
+	tr.SetMaxEvents(1000)
+	ctx = trace.NewContext(ctx, tr)
+	return tr, ctx
 }
 
 type BytesBuffer struct {
