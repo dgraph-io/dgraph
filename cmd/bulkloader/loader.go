@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -40,9 +41,8 @@ type state struct {
 
 type loader struct {
 	*state
-	mappers   []*mapper
-	mapOutput []string
-	kv        *badger.KV
+	mappers []*mapper
+	kv      *badger.KV
 }
 
 func newLoader(opt options) *loader {
@@ -71,14 +71,6 @@ func newLoader(opt options) *loader {
 
 func (ld *loader) mapStage() {
 	go ld.prog.report()
-
-	// var postingWriterWg sync.WaitGroup
-	// postingWriterWg.Add(1)
-
-	// go func() {
-	// 	ld.mapOutput = writeMapOutput(tmpPostingsDir, ld.postingsCh, ld.prog)
-	// 	postingWriterWg.Done()
-	// }()
 
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
@@ -118,9 +110,19 @@ func (ld *loader) mapStage() {
 }
 
 func (ld *loader) reduceStage() {
-	// Read from map stage.
-	shuffleInputChs := make([]chan *protos.FlatPosting, len(ld.mapOutput))
-	for i, mappedFile := range ld.mapOutput {
+	// Read output from map stage.
+	var mapOutput []string
+	err := filepath.Walk(ld.opt.tmpDir, func(path string, _ os.FileInfo, err error) error {
+		if !strings.HasSuffix(path, ".map") {
+			return nil
+		}
+		mapOutput = append(mapOutput, path)
+		return nil
+	})
+	x.Checkf(err, "While walking the map output.")
+
+	shuffleInputChs := make([]chan *protos.FlatPosting, len(mapOutput))
+	for i, mappedFile := range mapOutput {
 		shuffleInputChs[i] = make(chan *protos.FlatPosting, 1000)
 		go readMapOutput(mappedFile, shuffleInputChs[i])
 	}
@@ -135,7 +137,6 @@ func (ld *loader) reduceStage() {
 	opt.ValueGCRunInterval = time.Hour * 100
 	opt.SyncWrites = false
 	opt.MapTablesTo = table.MemoryMap
-	var err error
 	ld.kv, err = badger.NewKV(&opt)
 	x.Check(err)
 

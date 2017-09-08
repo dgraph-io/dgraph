@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"io/ioutil"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -46,10 +45,8 @@ func main() {
 	x.Check(os.MkdirAll(opt.badgerDir, 0700))
 
 	// Create a directory just for bulk loader's usage.
+	os.RemoveAll(opt.tmpDir)
 	x.Check(os.MkdirAll(opt.tmpDir, 0700))
-	var err error
-	opt.tmpDir, err = ioutil.TempDir(opt.tmpDir, "bulkloader_tmp_posting_")
-	x.Check(err)
 	defer os.RemoveAll(opt.tmpDir)
 
 	loader := newLoader(opt)
