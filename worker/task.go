@@ -1295,7 +1295,7 @@ func preprocessFilter(tree *protos.FilterTree) (*facetsTree, error) {
 		case CompareAttrFn:
 			ftree.function.val = types.Val{Tid: types.StringID, Value: []byte(tree.Func.Args[0])}
 		case StandardFn:
-			argTokens, aerr := tok.GetTokens(tree.Func.Args)
+			argTokens, aerr := tok.GetTokens(tree.Func.Args, false)
 			if aerr != nil { // query error ; stop processing.
 				return nil, aerr
 			}
