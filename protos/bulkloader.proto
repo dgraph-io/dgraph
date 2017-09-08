@@ -6,8 +6,8 @@ package protos;
 
 message FlatPosting {
 	bytes key = 1;
-	oneof posting {
-		fixed64 uid_posting = 2;
-		Posting full_posting = 3;
-	}
+
+	// Only one should be set.
+	fixed64 uid_only = 2;
+	Posting full = 3;
 }

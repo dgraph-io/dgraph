@@ -48,16 +48,12 @@ func reduce(batch []*protos.FlatPosting, kv *badger.KV, prog *progress) {
 		}
 		currentKey = posting.Key
 
-		switch p := posting.Posting.(type) {
-		case *protos.FlatPosting_UidPosting:
-			uids = append(uids, p.UidPosting)
-		case *protos.FlatPosting_FullPosting:
-			uids = append(uids, p.FullPosting.Uid)
-			pl.Postings = append(pl.Postings, p.FullPosting)
-		default:
-			x.AssertTruef(false, "unhandled posting type: %T", p)
+		if posting.Full == nil {
+			uids = append(uids, posting.UidOnly)
+		} else {
+			uids = append(uids, posting.Full.Uid)
+			pl.Postings = append(pl.Postings, posting.Full)
 		}
-
 	}
 	outputPostingList()
 

@@ -80,39 +80,15 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type FlatPosting struct {
 	Key []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	// Types that are valid to be assigned to Posting:
-	//	*FlatPosting_UidPosting
-	//	*FlatPosting_FullPosting
-	Posting isFlatPosting_Posting `protobuf_oneof:"posting"`
+	// Only one should be set.
+	UidOnly uint64   `protobuf:"fixed64,2,opt,name=uid_only,json=uidOnly,proto3" json:"uid_only,omitempty"`
+	Full    *Posting `protobuf:"bytes,3,opt,name=full" json:"full,omitempty"`
 }
 
 func (m *FlatPosting) Reset()                    { *m = FlatPosting{} }
 func (m *FlatPosting) String() string            { return proto.CompactTextString(m) }
 func (*FlatPosting) ProtoMessage()               {}
 func (*FlatPosting) Descriptor() ([]byte, []int) { return fileDescriptorBulkloader, []int{0} }
-
-type isFlatPosting_Posting interface {
-	isFlatPosting_Posting()
-	MarshalTo([]byte) (int, error)
-	Size() int
-}
-
-type FlatPosting_UidPosting struct {
-	UidPosting uint64 `protobuf:"fixed64,2,opt,name=uid_posting,json=uidPosting,proto3,oneof"`
-}
-type FlatPosting_FullPosting struct {
-	FullPosting *Posting `protobuf:"bytes,3,opt,name=full_posting,json=fullPosting,oneof"`
-}
-
-func (*FlatPosting_UidPosting) isFlatPosting_Posting()  {}
-func (*FlatPosting_FullPosting) isFlatPosting_Posting() {}
-
-func (m *FlatPosting) GetPosting() isFlatPosting_Posting {
-	if m != nil {
-		return m.Posting
-	}
-	return nil
-}
 
 func (m *FlatPosting) GetKey() []byte {
 	if m != nil {
@@ -121,87 +97,18 @@ func (m *FlatPosting) GetKey() []byte {
 	return nil
 }
 
-func (m *FlatPosting) GetUidPosting() uint64 {
-	if x, ok := m.GetPosting().(*FlatPosting_UidPosting); ok {
-		return x.UidPosting
+func (m *FlatPosting) GetUidOnly() uint64 {
+	if m != nil {
+		return m.UidOnly
 	}
 	return 0
 }
 
-func (m *FlatPosting) GetFullPosting() *Posting {
-	if x, ok := m.GetPosting().(*FlatPosting_FullPosting); ok {
-		return x.FullPosting
+func (m *FlatPosting) GetFull() *Posting {
+	if m != nil {
+		return m.Full
 	}
 	return nil
-}
-
-// XXX_OneofFuncs is for the internal use of the proto package.
-func (*FlatPosting) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
-	return _FlatPosting_OneofMarshaler, _FlatPosting_OneofUnmarshaler, _FlatPosting_OneofSizer, []interface{}{
-		(*FlatPosting_UidPosting)(nil),
-		(*FlatPosting_FullPosting)(nil),
-	}
-}
-
-func _FlatPosting_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
-	m := msg.(*FlatPosting)
-	// posting
-	switch x := m.Posting.(type) {
-	case *FlatPosting_UidPosting:
-		_ = b.EncodeVarint(2<<3 | proto.WireFixed64)
-		_ = b.EncodeFixed64(uint64(x.UidPosting))
-	case *FlatPosting_FullPosting:
-		_ = b.EncodeVarint(3<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.FullPosting); err != nil {
-			return err
-		}
-	case nil:
-	default:
-		return fmt.Errorf("FlatPosting.Posting has unexpected type %T", x)
-	}
-	return nil
-}
-
-func _FlatPosting_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
-	m := msg.(*FlatPosting)
-	switch tag {
-	case 2: // posting.uid_posting
-		if wire != proto.WireFixed64 {
-			return true, proto.ErrInternalBadWireType
-		}
-		x, err := b.DecodeFixed64()
-		m.Posting = &FlatPosting_UidPosting{x}
-		return true, err
-	case 3: // posting.full_posting
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(Posting)
-		err := b.DecodeMessage(msg)
-		m.Posting = &FlatPosting_FullPosting{msg}
-		return true, err
-	default:
-		return false, nil
-	}
-}
-
-func _FlatPosting_OneofSizer(msg proto.Message) (n int) {
-	m := msg.(*FlatPosting)
-	// posting
-	switch x := m.Posting.(type) {
-	case *FlatPosting_UidPosting:
-		n += proto.SizeVarint(2<<3 | proto.WireFixed64)
-		n += 8
-	case *FlatPosting_FullPosting:
-		s := proto.Size(x.FullPosting)
-		n += proto.SizeVarint(3<<3 | proto.WireBytes)
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case nil:
-	default:
-		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
-	}
-	return n
 }
 
 func init() {
@@ -228,37 +135,24 @@ func (m *FlatPosting) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintBulkloader(dAtA, i, uint64(len(m.Key)))
 		i += copy(dAtA[i:], m.Key)
 	}
-	if m.Posting != nil {
-		nn1, err := m.Posting.MarshalTo(dAtA[i:])
+	if m.UidOnly != 0 {
+		dAtA[i] = 0x11
+		i++
+		i = encodeFixed64Bulkloader(dAtA, i, uint64(m.UidOnly))
+	}
+	if m.Full != nil {
+		dAtA[i] = 0x1a
+		i++
+		i = encodeVarintBulkloader(dAtA, i, uint64(m.Full.Size()))
+		n1, err := m.Full.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += nn1
+		i += n1
 	}
 	return i, nil
 }
 
-func (m *FlatPosting_UidPosting) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
-	dAtA[i] = 0x11
-	i++
-	i = encodeFixed64Bulkloader(dAtA, i, uint64(m.UidPosting))
-	return i, nil
-}
-func (m *FlatPosting_FullPosting) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
-	if m.FullPosting != nil {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintBulkloader(dAtA, i, uint64(m.FullPosting.Size()))
-		n2, err := m.FullPosting.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n2
-	}
-	return i, nil
-}
 func encodeFixed64Bulkloader(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	dAtA[offset+1] = uint8(v >> 8)
@@ -293,23 +187,11 @@ func (m *FlatPosting) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovBulkloader(uint64(l))
 	}
-	if m.Posting != nil {
-		n += m.Posting.Size()
+	if m.UidOnly != 0 {
+		n += 9
 	}
-	return n
-}
-
-func (m *FlatPosting_UidPosting) Size() (n int) {
-	var l int
-	_ = l
-	n += 9
-	return n
-}
-func (m *FlatPosting_FullPosting) Size() (n int) {
-	var l int
-	_ = l
-	if m.FullPosting != nil {
-		l = m.FullPosting.Size()
+	if m.Full != nil {
+		l = m.Full.Size()
 		n += 1 + l + sovBulkloader(uint64(l))
 	}
 	return n
@@ -390,25 +272,24 @@ func (m *FlatPosting) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 1 {
-				return fmt.Errorf("proto: wrong wireType = %d for field UidPosting", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field UidOnly", wireType)
 			}
-			var v uint64
+			m.UidOnly = 0
 			if (iNdEx + 8) > l {
 				return io.ErrUnexpectedEOF
 			}
 			iNdEx += 8
-			v = uint64(dAtA[iNdEx-8])
-			v |= uint64(dAtA[iNdEx-7]) << 8
-			v |= uint64(dAtA[iNdEx-6]) << 16
-			v |= uint64(dAtA[iNdEx-5]) << 24
-			v |= uint64(dAtA[iNdEx-4]) << 32
-			v |= uint64(dAtA[iNdEx-3]) << 40
-			v |= uint64(dAtA[iNdEx-2]) << 48
-			v |= uint64(dAtA[iNdEx-1]) << 56
-			m.Posting = &FlatPosting_UidPosting{v}
+			m.UidOnly = uint64(dAtA[iNdEx-8])
+			m.UidOnly |= uint64(dAtA[iNdEx-7]) << 8
+			m.UidOnly |= uint64(dAtA[iNdEx-6]) << 16
+			m.UidOnly |= uint64(dAtA[iNdEx-5]) << 24
+			m.UidOnly |= uint64(dAtA[iNdEx-4]) << 32
+			m.UidOnly |= uint64(dAtA[iNdEx-3]) << 40
+			m.UidOnly |= uint64(dAtA[iNdEx-2]) << 48
+			m.UidOnly |= uint64(dAtA[iNdEx-1]) << 56
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field FullPosting", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Full", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -432,11 +313,12 @@ func (m *FlatPosting) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			v := &Posting{}
-			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if m.Full == nil {
+				m.Full = &Posting{}
+			}
+			if err := m.Full.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
-			m.Posting = &FlatPosting_FullPosting{v}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -567,16 +449,16 @@ var (
 func init() { proto.RegisterFile("bulkloader.proto", fileDescriptorBulkloader) }
 
 var fileDescriptorBulkloader = []byte{
-	// 172 bytes of a gzipped FileDescriptorProto
+	// 162 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x48, 0x2a, 0xcd, 0xc9,
 	0xce, 0xc9, 0x4f, 0x4c, 0x49, 0x2d, 0xd2, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x03, 0x53,
-	0xc5, 0x52, 0xdc, 0x25, 0x95, 0x05, 0xa9, 0xc5, 0x10, 0x41, 0xa5, 0x66, 0x46, 0x2e, 0x6e, 0xb7,
-	0x9c, 0xc4, 0x92, 0x80, 0xfc, 0xe2, 0x92, 0xcc, 0xbc, 0x74, 0x21, 0x01, 0x2e, 0xe6, 0xec, 0xd4,
-	0x4a, 0x09, 0x46, 0x05, 0x46, 0x0d, 0x9e, 0x20, 0x10, 0x53, 0x48, 0x91, 0x8b, 0xbb, 0x34, 0x33,
-	0x25, 0xbe, 0x00, 0xa2, 0x40, 0x82, 0x49, 0x81, 0x51, 0x83, 0xcd, 0x83, 0x21, 0x88, 0xab, 0x34,
-	0x33, 0x05, 0xa6, 0xc9, 0x84, 0x8b, 0x27, 0xad, 0x34, 0x27, 0x07, 0xae, 0x86, 0x59, 0x81, 0x51,
-	0x83, 0xdb, 0x88, 0x1f, 0x62, 0x45, 0xb1, 0x1e, 0x54, 0x99, 0x07, 0x43, 0x10, 0x37, 0x48, 0x19,
-	0x94, 0xeb, 0xc4, 0xc9, 0xc5, 0x0e, 0xd5, 0xe0, 0x24, 0x70, 0xe2, 0x91, 0x1c, 0xe3, 0x85, 0x47,
-	0x72, 0x8c, 0x0f, 0x1e, 0xc9, 0x31, 0xce, 0x78, 0x2c, 0xc7, 0x90, 0x04, 0x71, 0xac, 0x31, 0x20,
-	0x00, 0x00, 0xff, 0xff, 0x1d, 0xc2, 0x1c, 0xfb, 0xc7, 0x00, 0x00, 0x00,
+	0xc5, 0x52, 0xdc, 0x25, 0x95, 0x05, 0xa9, 0xc5, 0x10, 0x41, 0xa5, 0x78, 0x2e, 0x6e, 0xb7, 0x9c,
+	0xc4, 0x92, 0x80, 0xfc, 0xe2, 0x92, 0xcc, 0xbc, 0x74, 0x21, 0x01, 0x2e, 0xe6, 0xec, 0xd4, 0x4a,
+	0x09, 0x46, 0x05, 0x46, 0x0d, 0x9e, 0x20, 0x10, 0x53, 0x48, 0x92, 0x8b, 0xa3, 0x34, 0x33, 0x25,
+	0x3e, 0x3f, 0x2f, 0xa7, 0x52, 0x82, 0x49, 0x81, 0x51, 0x83, 0x2d, 0x88, 0xbd, 0x34, 0x33, 0xc5,
+	0x3f, 0x2f, 0xa7, 0x52, 0x48, 0x99, 0x8b, 0x25, 0xad, 0x34, 0x27, 0x47, 0x82, 0x59, 0x81, 0x51,
+	0x83, 0xdb, 0x88, 0x1f, 0x62, 0x62, 0xb1, 0x1e, 0xd4, 0xac, 0x20, 0xb0, 0xa4, 0x93, 0xc0, 0x89,
+	0x47, 0x72, 0x8c, 0x17, 0x1e, 0xc9, 0x31, 0x3e, 0x78, 0x24, 0xc7, 0x38, 0xe3, 0xb1, 0x1c, 0x43,
+	0x12, 0xc4, 0x1d, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0x36, 0x1a, 0x20, 0xe3, 0xa2, 0x00,
+	0x00, 0x00,
 }

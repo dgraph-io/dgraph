@@ -57,8 +57,8 @@ func (m *mapper) writePostings() {
 		postBuf, err := posting.Marshal()
 		x.Check(err)
 		m.buf.Write(postBuf)
-		if p, ok := posting.Posting.(*protos.FlatPosting_FullPosting); ok {
-			m.putPosting(p.FullPosting)
+		if posting.Full != nil {
+			m.putPosting(posting.Full)
 		}
 	}
 	m.freeList = m.postings
@@ -100,9 +100,9 @@ func (m *mapper) addPosting(key []byte, posting *protos.Posting) {
 	}
 
 	if posting.PostingType == protos.Posting_REF {
-		p.Posting = &protos.FlatPosting_UidPosting{UidPosting: posting.Uid}
+		p.UidOnly = posting.Uid
 	} else {
-		p.Posting = &protos.FlatPosting_FullPosting{FullPosting: posting}
+		p.Full = posting
 	}
 	m.sz += int64(p.Size())
 	m.postings = append(m.postings, p)
