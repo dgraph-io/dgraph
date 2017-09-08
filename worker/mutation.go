@@ -72,10 +72,10 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 	key := x.DataKey(edge.Attr, edge.Entity)
 
 	t := time.Now()
-	plist := posting.GetOrCreate(key, gid)
+	plist := posting.Get(key, gid)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("GetOrCreate took %v", dur)
+			tr.LazyPrintf("GetLru took %v", dur)
 		}
 	}
 
