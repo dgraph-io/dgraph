@@ -54,7 +54,6 @@ func workerPort() int {
 func Init(ps *badger.KV) {
 	pstore = ps
 	// needs to be initialized after group config
-	leasePred = "_lease_"
 	pendingProposals = make(chan struct{}, Config.NumPendingProposals)
 	if !Config.InMemoryComm {
 		workerServer = grpc.NewServer(
