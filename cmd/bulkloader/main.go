@@ -43,8 +43,7 @@ func main() {
 		log.Fatal("No free args allowed, but got:", flag.Args())
 	}
 
-	x.AssertTruef(opt.mapBufSize > 0,
-		"Please specify how much memory is available for this program.")
+	x.AssertTruef(opt.mapBufSize > 0, "-mapoutput_mb must be specified")
 	opt.mapBufSize = opt.mapBufSize << 20 // Convert from MB to B.
 
 	go func() {
