@@ -17,6 +17,7 @@
 package dgraph
 
 import (
+	"expvar"
 	"path/filepath"
 
 	"github.com/dgraph-io/dgraph/posting"
@@ -78,9 +79,52 @@ var DefaultConfig = Options{
 	DebugMode:  false,
 }
 
+// Sometimes users use config.yaml flag so /debug/vars doesn't have information about the
+// value of the flags. Hence we dump conf options we care about to the conf map.
+func setConfVar(conf Options) {
+	getNewStr := func(s string) *expvar.String {
+		v := new(expvar.String)
+		v.Set(s)
+		return v
+	}
+
+	getNewFloat := func(f float64) *expvar.Float {
+		v := new(expvar.Float)
+		v.Set(f)
+		return v
+	}
+
+	getNewInt := func(i int) *expvar.Int {
+		v := new(expvar.Int)
+		v.Set(int64(i))
+		return v
+	}
+
+	// Expvar doesn't have bool type so we use an int.
+	getIntFromBool := func(b bool) *expvar.Int {
+		v := new(expvar.Int)
+		if b {
+			v.Set(1)
+		} else {
+			v.Set(0)
+		}
+		return v
+	}
+
+	x.Conf.Set("posting_dir", getNewStr(conf.PostingDir))
+	x.Conf.Set("posting_tables", getNewStr(conf.PostingTables))
+	x.Conf.Set("wal_dir", getNewStr(conf.WALDir))
+	x.Conf.Set("allotted_memory", getNewFloat(conf.AllottedMemory))
+	x.Conf.Set("commit_fraction", getNewFloat(conf.CommitFraction))
+	x.Conf.Set("tracing", getNewFloat(conf.Tracing))
+	x.Conf.Set("max_pending_count", getNewInt(int(conf.MaxPendingCount)))
+	x.Conf.Set("num_pending_proposals", getNewInt(conf.NumPendingProposals))
+	x.Conf.Set("expand_edge", getIntFromBool(conf.ExpandEdge))
+}
+
 func SetConfiguration(newConfig Options) {
 	newConfig.validate()
-
+	setConfVar(newConfig)
 	Config = newConfig
 
 	posting.Config.Mu.Lock()
