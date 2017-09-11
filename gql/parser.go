@@ -53,8 +53,7 @@ type GraphQuery struct {
 
 	Args map[string]string
 	// Query can have multiple sort parameters.
-	OrderAttr    []string
-	OrderDesc    []bool
+	Order        []*protos.Order
 	Children     []*GraphQuery
 	Filter       *FilterTree
 	MathExp      *MathTree
@@ -2236,8 +2235,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				if order[val] {
 					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}
-				gq.OrderAttr = append(gq.OrderAttr, val)
-				gq.OrderDesc = append(gq.OrderDesc, key == "orderdesc")
+				gq.Order = append(gq.Order, &protos.Order{val, key == "orderdesc"})
 				order[val] = true
 				continue
 			}
@@ -2615,8 +2613,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					if order[p.Val] {
 						return x.Errorf("Sorting by an attribute: [%s] can only be done once", p.Val)
 					}
-					curp.OrderAttr = append(curp.OrderAttr, p.Val)
-					curp.OrderDesc = append(curp.OrderDesc, p.Key == "orderdesc")
+					curp.Order = append(curp.Order, &protos.Order{p.Val, p.Key == "orderdesc"})
 					order[p.Val] = true
 					continue
 				}

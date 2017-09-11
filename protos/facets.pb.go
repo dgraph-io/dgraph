@@ -43,6 +43,7 @@
 		Query
 		ValueList
 		Result
+		Order
 		SortMessage
 		SortResult
 		RaftContext

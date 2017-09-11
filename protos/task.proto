@@ -61,13 +61,17 @@ message Result {
 	repeated FacetsList facet_matrix = 5;
 }
 
+message Order {
+  string attr = 1;
+  bool desc = 2;
+}
+
 message SortMessage {
-	repeated string attr = 1;
+	repeated Order order = 1;
 	repeated string langs = 2;
 	repeated List uid_matrix = 3;
 	int32 count = 4;   // Return this many elements.
 	int32 offset = 5;  // Skip this many elements.
-	repeated bool desc = 6;
 }
 
 message SortResult {
