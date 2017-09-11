@@ -48,9 +48,9 @@ type sortresult struct {
 
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
-	gid := group.BelongsTo(q.Attr[0])
+	gid := group.BelongsTo(q.Order[0].Attr)
 	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("worker.Sort attr: %v groupId: %v", q.Attr, gid)
+		tr.LazyPrintf("worker.Sort attr: %v groupId: %v", q.Order[0].Attr, gid)
 	}
 
 	if groups().ServesGroup(gid) {
@@ -76,14 +76,14 @@ func (w *grpcWorker) Sort(ctx context.Context, s *protos.SortMessage) (*protos.S
 		return &emptySortResult, ctx.Err()
 	}
 
-	gid := group.BelongsTo(s.Attr[0])
+	gid := group.BelongsTo(s.Order[0].Attr)
 	if tr, ok := trace.FromContext(ctx); ok {
-		tr.LazyPrintf("Sorting: Attribute: %q groupId: %v Sort", s.Attr, gid)
+		tr.LazyPrintf("Sorting: Attribute: %q groupId: %v Sort", s.Order[0].Attr, gid)
 	}
 
 	var reply *protos.SortResult
 	x.AssertTruef(groups().ServesGroup(gid),
-		"attr: %q groupId: %v Request sent to wrong server.", s.Attr, gid)
+		"attr: %q groupId: %v Request sent to wrong server.", s.Order[0].Attr, gid)
 
 	c := make(chan error, 1)
 	go func() {
@@ -111,10 +111,10 @@ func sortWithoutIndex(ctx context.Context, ts *protos.SortMessage) *sortresult {
 	multiSortVals := make([][]types.Val, n)
 	// Sort and paginate directly as it'd be expensive to iterate over the index which
 	// might have millions of keys just for retrieving some values.
-	sType, err := schema.State().TypeOf(ts.Attr[0])
+	sType, err := schema.State().TypeOf(ts.Order[0].Attr)
 	if err != nil || !sType.IsScalar() {
 		return &sortresult{&emptySortResult, nil,
-			x.Errorf("Cannot sort attribute %s of type object.", ts.Attr)}
+			x.Errorf("Cannot sort attribute %s of type object.", ts.Order[0].Attr)}
 	}
 
 	for i := 0; i < n; i++ {
@@ -152,25 +152,27 @@ func sortWithIndex(ctx context.Context, ts *protos.SortMessage) *sortresult {
 		var emptyList protos.List
 		out[i].ulist = &emptyList
 	}
+
+	order := ts.Order[0]
 	r := new(protos.SortResult)
 	// Iterate over every bucket / token.
 	iterOpt := badger.DefaultIteratorOptions
-	iterOpt.Reverse = ts.Desc[0]
+	iterOpt.Reverse = order.Desc
 	iterOpt.FetchValues = false
 	it := pstore.NewIterator(iterOpt)
 	defer it.Close()
 
-	typ, err := schema.State().TypeOf(ts.Attr[0])
+	typ, err := schema.State().TypeOf(order.Attr)
 	if err != nil {
-		return &sortresult{&emptySortResult, nil, fmt.Errorf("Attribute %s not defined in schema", ts.Attr)}
+		return &sortresult{&emptySortResult, nil, fmt.Errorf("Attribute %s not defined in schema", order.Attr)}
 	}
 
 	// Get the tokenizers and choose the corresponding one.
-	if !schema.State().IsIndexed(ts.Attr[0]) {
-		return &sortresult{&emptySortResult, nil, x.Errorf("Attribute %s is not indexed.", ts.Attr)}
+	if !schema.State().IsIndexed(order.Attr) {
+		return &sortresult{&emptySortResult, nil, x.Errorf("Attribute %s is not indexed.", order.Attr)}
 	}
 
-	tokenizers := schema.State().Tokenizer(ts.Attr[0])
+	tokenizers := schema.State().Tokenizer(order.Attr)
 	var tokenizer tok.Tokenizer
 	for _, t := range tokenizers {
 		// Get the first sortable index.
@@ -185,21 +187,21 @@ func sortWithIndex(ctx context.Context, ts *protos.SortMessage) *sortresult {
 		// sortable.
 		if typ == types.StringID {
 			return &sortresult{&emptySortResult, nil,
-				x.Errorf("Attribute:%s does not have exact index for sorting.", ts.Attr[0])}
+				x.Errorf("Attribute:%s does not have exact index for sorting.", order.Attr)}
 		}
 		// Other types just have one tokenizer, so if we didn't find a
 		// sortable tokenizer, then attribute isn't sortable.
-		return &sortresult{&emptySortResult, nil, x.Errorf("Attribute:%s is not sortable.", ts.Attr)}
+		return &sortresult{&emptySortResult, nil, x.Errorf("Attribute:%s is not sortable.", order.Attr)}
 	}
 
-	indexPrefix := x.IndexKey(ts.Attr[0], string(tokenizer.Identifier()))
+	indexPrefix := x.IndexKey(order.Attr, string(tokenizer.Identifier()))
 	var seekKey []byte
-	if !ts.Desc[0] {
+	if !order.Desc {
 		// We need to seek to the first key of this index type.
 		seekKey = indexPrefix
 	} else {
 		// We need to reach the last key of this index type.
-		seekKey = x.IndexKey(ts.Attr[0], string(tokenizer.Identifier()+1))
+		seekKey = x.IndexKey(order.Attr, string(tokenizer.Identifier()+1))
 	}
 	it.Seek(seekKey)
 
@@ -239,7 +241,7 @@ BUCKETS:
 
 	for _, il := range out {
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
-		if len(ts.Attr) > 1 {
+		if len(ts.Order) > 1 {
 			// TODO - For lossy tokenizer, no need to pick all values.
 			values = append(values, il.values)
 		}
@@ -269,16 +271,16 @@ type orderResult struct {
 func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResult, error) {
 	if ts.Count < 0 {
 		return nil, x.Errorf("We do not yet support negative or infinite count with sorting: %s %d. "+
-			"Try flipping order and return first few elements instead.", ts.Attr, ts.Count)
+			"Try flipping order and return first few elements instead.", ts.Order[0].Attr, ts.Count)
 	}
 
-	attrData := strings.Split(ts.Attr[0], "@")
-	ts.Attr[0] = attrData[0]
+	attrData := strings.Split(ts.Order[0].Attr, "@")
+	ts.Order[0].Attr = attrData[0]
 	if len(attrData) == 2 {
 		ts.Langs = strings.Split(attrData[1], ":")
 	}
-	if schema.State().IsList(ts.Attr[0]) {
-		return nil, x.Errorf("Sorting not supported on attr: %s of type: [scalar]", ts.Attr[0])
+	if schema.State().IsList(ts.Order[0].Attr) {
+		return nil, x.Errorf("Sorting not supported on attr: %s of type: [scalar]", ts.Order[0].Attr)
 	}
 
 	cctx, cancel := context.WithCancel(ctx)
@@ -313,7 +315,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 	}
 
 	// If request didn't have multiple attributes we return.
-	if !(len(ts.Attr) > 1) {
+	if !(len(ts.Order) > 1) {
 		return r.reply, r.err
 	}
 
@@ -325,7 +327,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 	// 10 -> [ "Bob", 35, "1912-02-01" ]
 	sortVals := make([][]types.Val, len(destUids.Uids))
 	for idx := range sortVals {
-		sortVals[idx] = make([]types.Val, len(ts.Attr))
+		sortVals[idx] = make([]types.Val, len(ts.Order))
 	}
 
 	seen := make(map[uint64]bool)
@@ -347,11 +349,10 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 	}
 
 	// Execute rest of the sorts concurrently.
-	och := make(chan orderResult, len(ts.Attr)-1)
-	for i := 1; i < len(ts.Attr); i++ {
-		attr := ts.Attr[i]
+	och := make(chan orderResult, len(ts.Order)-1)
+	for i := 1; i < len(ts.Order); i++ {
 		in := &protos.Query{
-			Attr:    attr,
+			Attr:    ts.Order[i].Attr,
 			UidList: destUids,
 		}
 		go fetchValues(ctx, in, i, och)
@@ -359,7 +360,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 
 	var oerr error
 	// TODO - Verify behavior with multiple langs.
-	for i := 1; i < len(ts.Attr); i++ {
+	for i := 1; i < len(ts.Order); i++ {
 		or := <-och
 		if or.err != nil && oerr == nil {
 			oerr = or.err
@@ -397,6 +398,11 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		return r.reply, oerr
 	}
 
+	desc := make([]bool, 0, len(ts.Order))
+	for _, o := range ts.Order {
+		desc = append(desc, o.Desc)
+	}
+
 	// Values have been accumulated, now we do the multisort for each list.
 	for i, ul := range r.reply.UidMatrix {
 		vals := make([][]types.Val, len(ul.Uids))
@@ -405,7 +411,7 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 			x.AssertTrue(idx >= 0)
 			vals[j] = sortVals[idx]
 		}
-		types.Sort(vals, ul, ts.Desc)
+		types.Sort(vals, ul, desc)
 		// Paginate
 		if len(ul.Uids) > int(ts.Count) {
 			ul.Uids = ul.Uids[:ts.Count]
@@ -469,14 +475,14 @@ type intersectedList struct {
 func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 	out []intersectedList) error {
 	count := int(ts.Count)
-	attr := ts.Attr[0]
-	sType, err := schema.State().TypeOf(attr)
+	order := ts.Order[0]
+	sType, err := schema.State().TypeOf(order.Attr)
 	if err != nil || !sType.IsScalar() {
-		return x.Errorf("Cannot sort attribute %s of type object.", attr)
+		return x.Errorf("Cannot sort attribute %s of type object.", order.Attr)
 	}
 	scalar := sType
 
-	key := x.IndexKey(attr, token)
+	key := x.IndexKey(order.Attr, token)
 	// Don't put the Index keys in memory.
 	pl := posting.Get(key)
 	var vals []types.Val
@@ -516,7 +522,7 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 		if il.offset > 0 {
 			// Apply the offset.
 			result.Uids = result.Uids[il.offset:n]
-			if len(ts.Attr) > 1 {
+			if len(ts.Order) > 1 {
 				vals = vals[il.offset:n]
 			}
 			il.offset = 0
@@ -526,7 +532,7 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 		// n is number of elements to copy from result to out.
 		// In case of multiple sort, we dont wan't to apply the count and copy all uids for the
 		// current bucket.
-		if count > 0 && (len(ts.Attr) == 1) {
+		if count > 0 && (len(ts.Order) == 1) {
 			slack := count - len(il.ulist.Uids)
 			if slack < n {
 				n = slack
@@ -534,7 +540,7 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 		}
 
 		il.ulist.Uids = append(il.ulist.Uids, result.Uids[:n]...)
-		if len(ts.Attr) > 1 {
+		if len(ts.Order) > 1 {
 			il.values = append(il.values, vals[:n]...)
 		}
 	} // end for loop over UID lists in UID matrix.
@@ -545,7 +551,7 @@ func intersectBucket(ctx context.Context, ts *protos.SortMessage, token string,
 			return errContinue
 		}
 
-		if len(ts.Attr) == 1 {
+		if len(ts.Order) == 1 {
 			x.AssertTruef(len(out[i].ulist.Uids) == count, "%d %d", len(out[i].ulist.Uids), count)
 		}
 	}
@@ -560,7 +566,7 @@ func paginate(ts *protos.SortMessage, dest *protos.List, vals []types.Val) (int,
 	start, end := x.PageRange(count, offset, len(dest.Uids))
 
 	// For multiple sort, we need to take all equal values at the end. So we update end.
-	for len(ts.Attr) > 1 && end < len(dest.Uids) {
+	for len(ts.Order) > 1 && end < len(dest.Uids) {
 		eq, err := types.Equal(vals[end-1], vals[end])
 		if err != nil {
 			return 0, 0, err
@@ -587,7 +593,7 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 			return multiSortVals, ctx.Err()
 		default:
 			uid := ul.Uids[i]
-			val, err := fetchValue(uid, ts.Attr[0], ts.Langs, typ)
+			val, err := fetchValue(uid, ts.Order[0].Attr, ts.Langs, typ)
 			if err != nil {
 				// If a value is missing, skip that UID in the result.
 				continue
@@ -596,9 +602,9 @@ func sortByValue(ctx context.Context, ts *protos.SortMessage, ul *protos.List,
 			values = append(values, []types.Val{val})
 		}
 	}
-	err := types.Sort(values, &protos.List{uids}, []bool{ts.Desc[0]})
+	err := types.Sort(values, &protos.List{uids}, []bool{ts.Order[0].Desc})
 	ul.Uids = uids
-	if len(ts.Attr) > 1 {
+	if len(ts.Order) > 1 {
 		for _, v := range values {
 			multiSortVals = append(multiSortVals, v[0])
 		}
