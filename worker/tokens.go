@@ -129,7 +129,6 @@ func getInequalityTokens(attr, f string, ineqValue types.Val) ([]string, string,
 
 	isgeOrGt := f == "ge" || f == "gt"
 	itOpt := badger.DefaultIteratorOptions
-	itOpt.FetchValues = false
 	itOpt.Reverse = !isgeOrGt
 	it := pstore.NewIterator(itOpt)
 	defer it.Close()

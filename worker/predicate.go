@@ -134,7 +134,11 @@ func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataCl
 		}
 
 		var pl protos.PostingList
-		posting.UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
+		if err := iterItem.Value(func(val []byte) {
+			posting.UnmarshalWithCopy(val, iterItem.UserMeta(), &pl)
+		}); err != nil {
+			return err
+		}
 
 		kdup := make([]byte, len(k))
 		copy(kdup, k)
@@ -298,7 +302,12 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 		}
 
 		// No checksum check for schema keys
-		v := iterItem.Value()
+		var v []byte
+		if err := iterItem.Value(func(val []byte) {
+			v = val
+		}); err != nil {
+			return err
+		}
 		if !pk.IsSchema() {
 			var pl protos.PostingList
 			posting.UnmarshalWithCopy(v, iterItem.UserMeta(), &pl)

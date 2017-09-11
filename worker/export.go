@@ -292,7 +292,11 @@ func export(gid uint32, bdir string) error {
 		if pk.IsSchema() {
 			if group.BelongsTo(pk.Attr) == gid {
 				s := &protos.SchemaUpdate{}
-				x.Check(s.Unmarshal(item.Value()))
+				if err := item.Value(func(val []byte) {
+					x.Check(s.Unmarshal(val))
+				}); err != nil {
+					return err
+				}
 				chs <- &skv{
 					attr:   pk.Attr,
 					schema: s,
@@ -315,7 +319,11 @@ func export(gid uint32, bdir string) error {
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
 		pl := &protos.PostingList{}
-		posting.UnmarshalWithCopy(item.Value(), item.UserMeta(), pl)
+		if err := item.Value(func(val []byte) {
+			posting.UnmarshalWithCopy(val, item.UserMeta(), pl)
+		}); err != nil {
+			return err
+		}
 		chkv <- kv{
 			prefix: prefix.String(),
 			list:   pl,

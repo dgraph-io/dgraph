@@ -170,8 +170,11 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	if err != nil {
 		x.Fatalf("Unable to retrieve val for key: %q. Error: %v", err, l.key)
 	}
-	val := item.Value()
-	x.BytesRead.Add(int64(len(val)))
+	var val []byte
+	item.Value(func(v []byte) {
+		x.BytesRead.Add(int64(len(val)))
+		val = v
+	})
 
 	l.plist = new(protos.PostingList)
 	if item.UserMeta() == bitUidPostings {

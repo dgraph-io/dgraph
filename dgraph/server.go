@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
@@ -64,7 +65,7 @@ func (s *ServerState) initStorage() {
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = Config.WALDir
 	kvOpt.ValueDir = Config.WALDir
-	kvOpt.MapTablesTo = table.MemoryMap
+	kvOpt.TableLoadingMode = options.MemoryMap
 
 	var err error
 	s.WALstore, err = badger.NewKV(&kvOpt)
