@@ -35,13 +35,13 @@ type state struct {
 	ss         *schemaStore
 	rdfCh      chan string
 	postingsCh chan *protos.FlatPosting
+	kv         *badger.KV
 }
 
 type loader struct {
 	*state
 	mappers   []*mapper
 	mapOutput []string
-	kv        *badger.KV
 }
 
 func newLoader(opt options) *loader {
@@ -127,10 +127,6 @@ func (ld *loader) reduceStage() {
 		go readMapOutput(mappedFile, shuffleInputChs[i])
 	}
 
-	// Shuffle concurrently with reduce.
-	reduceCh := make(chan []*protos.FlatPosting, 3) // Small buffer size since each element has a lot of data.
-	go shufflePostings(reduceCh, shuffleInputChs, ld.prog)
-
 	opt := badger.DefaultOptions
 	opt.Dir = ld.opt.badgerDir
 	opt.ValueDir = opt.Dir
@@ -140,6 +136,12 @@ func (ld *loader) reduceStage() {
 	var err error
 	ld.kv, err = badger.NewKV(&opt)
 	x.Check(err)
+
+	// Shuffle concurrently with reduce.
+	ci := &countIndexer{state: ld.state}
+	// Small buffer size since each element has a lot of data.
+	reduceCh := make(chan []*protos.FlatPosting, 3)
+	go shufflePostings(reduceCh, shuffleInputChs, ld.prog, ci)
 
 	// Reduce stage.
 	pending := make(chan struct{}, ld.opt.numGoroutines)
@@ -154,6 +156,7 @@ func (ld *loader) reduceStage() {
 		}()
 	}
 	reduceWg.Wait()
+	ci.wait()
 }
 
 func (ld *loader) writeSchema() {

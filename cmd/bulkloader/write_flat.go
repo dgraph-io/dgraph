@@ -105,7 +105,7 @@ func readMapOutput(filename string, postingCh chan<- *protos.FlatPosting) {
 }
 
 func shufflePostings(batchCh chan<- []*protos.FlatPosting,
-	postingChs []chan *protos.FlatPosting, prog *progress) {
+	postingChs []chan *protos.FlatPosting, prog *progress, ci *countIndexer) {
 
 	var ph postingHeap
 	for _, ch := range postingChs {
@@ -116,6 +116,7 @@ func shufflePostings(batchCh chan<- []*protos.FlatPosting,
 	const batchAlloc = batchSize * 11 / 10
 	batch := make([]*protos.FlatPosting, 0, batchAlloc)
 	var prevKey []byte
+	var plistLen int
 	for len(ph.nodes) > 0 {
 		p := ph.nodes[0].posting
 		var ok bool
@@ -126,16 +127,26 @@ func shufflePostings(batchCh chan<- []*protos.FlatPosting,
 			heap.Pop(&ph)
 		}
 
-		if len(batch) >= batchSize && bytes.Compare(prevKey, p.Key) != 0 {
+		keyChanged := bytes.Compare(prevKey, p.Key) != 0
+		if keyChanged && plistLen > 0 {
+			ci.addUid(prevKey, plistLen)
+			plistLen = 0
+		}
+
+		if len(batch) >= batchSize && keyChanged {
 			batchCh <- batch
 			batch = make([]*protos.FlatPosting, 0, batchAlloc)
 		}
 		prevKey = p.Key
 
 		batch = append(batch, p)
+		plistLen++
 	}
 	if len(batch) > 0 {
 		batchCh <- batch
+	}
+	if plistLen > 0 {
+		ci.addUid(prevKey, plistLen)
 	}
 	close(batchCh)
 }
