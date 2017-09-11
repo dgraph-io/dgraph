@@ -86,7 +86,7 @@ func (m *mapper) run() {
 	m.mu.Lock() // Ensure that the last file write finishes.
 }
 
-func (m *mapper) addPosting(key []byte, posting *protos.Posting) {
+func (m *mapper) addMapEntry(key []byte, posting *protos.Posting) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
 	var me *protos.MapEntry
@@ -134,17 +134,17 @@ func (m *mapper) parseRDF(rdfLine string) error {
 
 	fwd, rev := m.createPostings(nq, de)
 	key := x.DataKey(nq.GetPredicate(), sid)
-	m.addPosting(key, fwd)
+	m.addMapEntry(key, fwd)
 
 	if rev != nil {
 		key = x.ReverseKey(nq.GetPredicate(), oid)
-		m.addPosting(key, rev)
+		m.addMapEntry(key, rev)
 	}
 
 	key = x.DataKey("_predicate_", sid)
 	pp := m.createPredicatePosting(nq.GetPredicate())
-	m.addPosting(key, pp)
-	m.addIndexPostings(nq, de)
+	m.addMapEntry(key, pp)
+	m.addIndexMapEntries(nq, de)
 
 	return nil
 }
@@ -200,7 +200,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	return p, rp
 }
 
-func (m *mapper) addIndexPostings(nq gql.NQuad, de *protos.DirectedEdge) {
+func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *protos.DirectedEdge) {
 	if nq.GetObjectValue() == nil {
 		return // Cannot index UIDs
 	}
@@ -232,7 +232,7 @@ func (m *mapper) addIndexPostings(nq gql.NQuad, de *protos.DirectedEdge) {
 
 		// Store index posting.
 		for _, t := range toks {
-			m.addPosting(
+			m.addMapEntry(
 				x.IndexKey(nq.Predicate, t),
 				&protos.Posting{
 					Uid:         de.GetEntity(),
