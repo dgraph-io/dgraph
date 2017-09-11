@@ -12,6 +12,7 @@ import (
 
 type countIndexer struct {
 	pred   string
+	rev    bool
 	schema *protos.SchemaUpdate
 	counts map[int][]uint64
 	kv     *badger.KV
@@ -24,12 +25,13 @@ func (c *countIndexer) add(rawKey []byte, count int) {
 	if !key.IsData() && !key.IsReverse() {
 		return
 	}
-	if key.Attr != c.pred {
-		if len(c.pred) > 0 {
+	if key.IsReverse() != c.rev || key.Attr != c.pred {
+		if len(c.counts) > 0 {
 			c.wg.Add(1)
-			go c.writeIndex(c.pred, c.counts)
+			go c.writeIndex(c.pred, c.rev, c.counts)
 		}
 		c.pred = key.Attr
+		c.rev = key.IsReverse()
 		c.counts = make(map[int][]uint64)
 		c.schema = c.ss.getSchema(key.Attr)
 	}
@@ -40,20 +42,16 @@ func (c *countIndexer) add(rawKey []byte, count int) {
 	if !c.schema.GetCount() {
 		return
 	}
-	if key.IsReverse() {
-		// Count for reverse edge is encoded as a negative int.
-		key.Uid = -key.Uid
-	}
 	c.counts[count] = append(c.counts[count], key.Uid)
 }
 
-func (c *countIndexer) writeIndex(pred string, counts map[int][]uint64) {
+func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64) {
 	// TODO: Could parallelise this.
 	entries := make([]*badger.Entry, 0, len(counts))
 	for count, uids := range counts {
 		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
 		entries = append(entries, &badger.Entry{
-			Key:      x.CountKey(pred, uint32(abs(count)), count < 0),
+			Key:      x.CountKey(pred, uint32(count), rev),
 			Value:    bp128.DeltaPack(uids),
 			UserMeta: 0x01,
 		})
@@ -67,11 +65,4 @@ func (c *countIndexer) writeIndex(pred string, counts map[int][]uint64) {
 
 func (c *countIndexer) wait() {
 	c.wg.Wait()
-}
-
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
 }
