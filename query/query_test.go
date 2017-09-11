@@ -1075,7 +1075,7 @@ func TestQueryVarValOrderError(t *testing.T) {
 	ctx := defaultContext()
 	qr := QueryRequest{Latency: &Latency{}, GqlQuery: &res}
 	err = qr.ProcessQuery(ctx)
-	require.Contains(t, err.Error(), "Cannot sort attribute [n] of type object.")
+	require.Contains(t, err.Error(), "Cannot sort attribute n of type object.")
 }
 
 func TestQueryVarValOrderDesc(t *testing.T) {
@@ -1339,7 +1339,7 @@ func TestGroupByMulti(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"friend":[{"@groupby":[{"count":1,"friend":"0x1","name":"Rick Grimes"},{"count":1,"friend":"0x18","name":"Andrea"}]}]}]}}`,
+		`{"data": {"me":[{"friend":[{"@groupby":[{"count":1,"friend":"0x18","name":"Andrea"},{"count":1,"friend":"0x1","name":"Rick Grimes"}]}]}]}}`,
 		js)
 }
 
@@ -6714,6 +6714,7 @@ func TestSchemaBlock1(t *testing.T) {
 		{Predicate: "graduation", Type: "datetime"},
 		{Predicate: "occupations", Type: "string"},
 		{Predicate: "_predicate_", Type: "string"},
+		{Predicate: "salary", Type: "float"},
 	}
 	checkSchemaNodes(t, expected, actual)
 }

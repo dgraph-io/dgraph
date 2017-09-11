@@ -261,6 +261,110 @@ type orderResult struct {
 	err error
 }
 
+func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error {
+	// SrcUids for other queries are all the uids present in the response of the first sort.
+	destUids := destUids(r.reply.UidMatrix)
+
+	// For each uid in dest uids, we have multiple values which belong to different attributes.
+	// 1  -> [ "Alice", 23, "1932-01-01"]
+	// 10 -> [ "Bob", 35, "1912-02-01" ]
+	sortVals := make([][]types.Val, len(destUids.Uids))
+	for idx := range sortVals {
+		sortVals[idx] = make([]types.Val, len(ts.Order))
+	}
+
+	seen := make(map[uint64]bool)
+	// Walk through the uidMatrix and put values for this attribute in sortVals.
+	for i, ul := range r.reply.UidMatrix {
+		x.AssertTrue(len(ul.Uids) == len(r.vals[i]))
+		for j, uid := range ul.Uids {
+			uidx := algo.IndexOf(destUids, uid)
+			x.AssertTrue(uidx >= 0)
+
+			if seen[uid] {
+				// We have already seen this uid.
+				continue
+			}
+			seen[uid] = true
+
+			sortVals[uidx][0] = r.vals[i][j]
+		}
+	}
+
+	// Execute rest of the sorts concurrently.
+	och := make(chan orderResult, len(ts.Order)-1)
+	for i := 1; i < len(ts.Order); i++ {
+		in := &protos.Query{
+			Attr:    ts.Order[i].Attr,
+			UidList: destUids,
+		}
+		attrData := strings.Split(in.Attr, "@")
+		in.Attr = attrData[0]
+		if len(attrData) == 2 {
+			in.Langs = strings.Split(attrData[1], ":")
+		}
+		go fetchValues(ctx, in, i, och)
+	}
+
+	var oerr error
+	// TODO - Verify behavior with multiple langs.
+	for i := 1; i < len(ts.Order); i++ {
+		or := <-och
+		if or.err != nil && oerr == nil {
+			oerr = or.err
+			continue
+		}
+
+		result := or.r
+		x.AssertTrue(len(result.ValueMatrix) == len(destUids.Uids))
+		for i, _ := range destUids.Uids {
+			v := result.ValueMatrix[i].Values[0]
+			val := types.ValueForType(types.TypeID(v.ValType))
+			var sv types.Val
+			if bytes.Equal(v.Val, x.Nilbyte) {
+				// Assign nil value which is sorted as greater than all other values.
+				sv.Value = nil
+				sv.Tid = val.Tid
+			} else {
+				val.Value = v.Val
+				var err error
+				sv, err = types.Convert(val, val.Tid)
+				if err != nil {
+					return err
+				}
+			}
+			sortVals[i][or.idx] = sv
+		}
+	}
+
+	if oerr != nil {
+		return oerr
+	}
+
+	desc := make([]bool, 0, len(ts.Order))
+	for _, o := range ts.Order {
+		desc = append(desc, o.Desc)
+	}
+
+	// Values have been accumulated, now we do the multisort for each list.
+	for i, ul := range r.reply.UidMatrix {
+		vals := make([][]types.Val, len(ul.Uids))
+		for j, uid := range ul.Uids {
+			idx := algo.IndexOf(destUids, uid)
+			x.AssertTrue(idx >= 0)
+			vals[j] = sortVals[idx]
+		}
+		types.Sort(vals, ul, desc)
+		// Paginate
+		if len(ul.Uids) > int(ts.Count) {
+			ul.Uids = ul.Uids[:ts.Count]
+		}
+		r.reply.UidMatrix[i] = ul
+	}
+
+	return oerr
+}
+
 // processSort does sorting with pagination. It works by iterating over index
 // buckets. As it iterates, it intersects with each UID list of the UID
 // matrix. To optimize for pagination, we maintain the "offsets and sizes" or
@@ -319,107 +423,8 @@ func processSort(ctx context.Context, ts *protos.SortMessage) (*protos.SortResul
 		return r.reply, r.err
 	}
 
-	// SrcUids for other queries are all the uids present in the response of the first sort.
-	destUids := destUids(r.reply.UidMatrix)
-
-	// For each uid in dest uids, we have multiple values which belong to different attributes.
-	// 1  -> [ "Alice", 23, "1932-01-01"]
-	// 10 -> [ "Bob", 35, "1912-02-01" ]
-	sortVals := make([][]types.Val, len(destUids.Uids))
-	for idx := range sortVals {
-		sortVals[idx] = make([]types.Val, len(ts.Order))
-	}
-
-	seen := make(map[uint64]bool)
-	// Walk through the uidMatrix and put values for this attribute in sortVals.
-	for i, ul := range r.reply.UidMatrix {
-		x.AssertTrue(len(ul.Uids) == len(r.vals[i]))
-		for j, uid := range ul.Uids {
-			uidx := algo.IndexOf(destUids, uid)
-			x.AssertTrue(uidx >= 0)
-
-			if seen[uid] {
-				// We have already seen this uid.
-				continue
-			}
-			seen[uid] = true
-
-			sortVals[uidx][0] = r.vals[i][j]
-		}
-	}
-
-	// Execute rest of the sorts concurrently.
-	och := make(chan orderResult, len(ts.Order)-1)
-	for i := 1; i < len(ts.Order); i++ {
-		in := &protos.Query{
-			Attr:    ts.Order[i].Attr,
-			UidList: destUids,
-		}
-		go fetchValues(ctx, in, i, och)
-	}
-
-	var oerr error
-	// TODO - Verify behavior with multiple langs.
-	for i := 1; i < len(ts.Order); i++ {
-		or := <-och
-		if or.err != nil && oerr == nil {
-			oerr = or.err
-			continue
-		}
-
-		result := or.r
-		x.AssertTrue(len(result.ValueMatrix) == len(destUids.Uids))
-		seen = map[uint64]bool{}
-		for i, uid := range destUids.Uids {
-			if seen[uid] {
-				continue
-			}
-			v := result.ValueMatrix[i].Values[0]
-			val := types.ValueForType(types.TypeID(v.ValType))
-			var sv types.Val
-			if bytes.Equal(v.Val, x.Nilbyte) {
-				// Assign nil value which is sorted as greater than all other values.
-				sv.Value = nil
-				sv.Tid = val.Tid
-			} else {
-				val.Value = v.Val
-				var err error
-				sv, err = types.Convert(val, val.Tid)
-				if err != nil {
-					return r.reply, err
-				}
-			}
-			seen[uid] = true
-			sortVals[i][or.idx] = sv
-		}
-	}
-
-	if oerr != nil {
-		return r.reply, oerr
-	}
-
-	desc := make([]bool, 0, len(ts.Order))
-	for _, o := range ts.Order {
-		desc = append(desc, o.Desc)
-	}
-
-	// Values have been accumulated, now we do the multisort for each list.
-	for i, ul := range r.reply.UidMatrix {
-		vals := make([][]types.Val, len(ul.Uids))
-		for j, uid := range ul.Uids {
-			idx := algo.IndexOf(destUids, uid)
-			x.AssertTrue(idx >= 0)
-			vals[j] = sortVals[idx]
-		}
-		types.Sort(vals, ul, desc)
-		// Paginate
-		if len(ul.Uids) > int(ts.Count) {
-			ul.Uids = ul.Uids[:ts.Count]
-		}
-		r.reply.UidMatrix[i] = ul
-	}
-
-	return r.reply, oerr
+	err := multiSort(ctx, r, ts)
+	return r.reply, err
 }
 
 func destUids(uidMatrix []*protos.List) *protos.List {
@@ -448,19 +453,10 @@ func fetchValues(ctx context.Context, in *protos.Query, idx int, or chan orderRe
 		in.Attr = strings.TrimPrefix(in.Attr, "~")
 	}
 	r, err := ProcessTaskOverNetwork(ctx, in)
-	select {
-	case <-ctx.Done():
-		or <- orderResult{
-			idx: idx,
-			err: ctx.Err(),
-			r:   r,
-		}
-	default:
-		or <- orderResult{
-			idx: idx,
-			err: err,
-			r:   r,
-		}
+	or <- orderResult{
+		idx: idx,
+		err: err,
+		r:   r,
 	}
 }
 

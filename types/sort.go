@@ -49,38 +49,29 @@ type byValue struct{ sortBase }
 
 // Less compares two elements
 func (s byValue) Less(i, j int) bool {
-	if len(s.values[i]) == 0 || len(s.values[j]) == 0 {
+	first, second := s.values[i], s.values[j]
+	if len(first) == 0 || len(second) == 0 {
 		return false
 	}
-	if s.values[i][0].Tid != s.values[j][0].Tid {
-		return false
-	}
-
-	for idx, _ := range s.values[i] {
+	for vidx, _ := range first {
 		// Null value is considered greatest hence comes at first place while doing descending sort
 		// and at last place while doing ascending sort.
-		if s.values[i][idx].Value == nil {
-			if s.desc[idx] {
-				return true
-			}
-			return false
+		if first[vidx].Value == nil {
+			return s.desc[vidx]
 		}
 
-		if s.values[j][idx].Value == nil {
-			if s.desc[idx] {
-				return true
-			}
-			return false
+		if second[vidx].Value == nil {
+			return !s.desc[vidx]
 		}
 
 		// We have to look at next value to decide.
-		if eq := equal(s.values[i][idx], s.values[j][idx]); eq {
+		if eq := equal(first[vidx], second[vidx]); eq {
 			continue
 		}
 
 		// Its either less or greater.
-		less := less(s.values[i][idx], s.values[j][idx])
-		if s.desc[idx] {
+		less := less(first[vidx], second[vidx])
+		if s.desc[vidx] {
 			return !less
 		}
 		return less
@@ -93,6 +84,7 @@ func SortWithFacet(v [][]Val, ul *protos.List, l []*protos.Facets, desc []bool) 
 	if len(v) == 0 || len(v[0]) == 0 {
 		return nil
 	}
+
 	typ := v[0][0].Tid
 	switch typ {
 	case DateTimeID, IntID, FloatID, StringID, DefaultID:
