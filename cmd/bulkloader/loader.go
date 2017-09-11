@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/badger"
@@ -71,7 +70,7 @@ func newLoader(opt options) *loader {
 }
 
 func (ld *loader) mapStage() {
-	atomic.StoreInt32(&ld.prog.phase, PHASE_MAP)
+	ld.prog.setPhase(MAP_PHASE)
 
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
@@ -119,7 +118,7 @@ func (ld *loader) mapStage() {
 }
 
 func (ld *loader) reduceStage() {
-	atomic.StoreInt32(&ld.prog.phase, PHASE_REDUCE)
+	ld.prog.setPhase(REDUCE_PHASE)
 
 	// Read output from map stage.
 	var mapOutput []string

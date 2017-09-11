@@ -8,10 +8,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type phase int32
+
 const (
-	PHASE_NOTHING int32 = iota
-	PHASE_MAP
-	PHASE_REDUCE
+	NOTHING phase = iota
+	MAP_PHASE
+	REDUCE_PHASE
 )
 
 type progress struct {
@@ -29,7 +31,7 @@ type progress struct {
 	// stopped. The channel MUST be unbuffered for this to work.
 	shutdown chan struct{}
 
-	phase int32
+	phase phase
 }
 
 func newProgress() *progress {
@@ -37,6 +39,10 @@ func newProgress() *progress {
 		start:    time.Now(),
 		shutdown: make(chan struct{}),
 	}
+}
+
+func (p *progress) setPhase(ph phase) {
+	atomic.StoreInt32((*int32)(&p.phase), int32(ph))
 }
 
 func (p *progress) report() {
@@ -53,9 +59,9 @@ func (p *progress) report() {
 
 func (p *progress) reportOnce() {
 	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
-	switch atomic.LoadInt32(&p.phase) {
-	case PHASE_NOTHING:
-	case PHASE_MAP:
+	switch phase(atomic.LoadInt32((*int32)(&p.phase))) {
+	case NOTHING:
+	case MAP_PHASE:
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
 		elapsed := time.Since(p.start)
 		fmt.Printf("[MAP] [%s] [RDF count: %d] [Edge count: %d] "+
@@ -66,7 +72,7 @@ func (p *progress) reportOnce() {
 			int(float64(rdfCount)/elapsed.Seconds()),
 			int(float64(mapEdgeCount)/elapsed.Seconds()),
 		)
-	case PHASE_REDUCE:
+	case REDUCE_PHASE:
 		now := time.Now()
 		elapsed := time.Since(p.startReduce)
 		if p.startReduce.IsZero() {
