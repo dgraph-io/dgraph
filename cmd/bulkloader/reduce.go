@@ -18,13 +18,13 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
-var fpool = sync.Pool{
+var mePool = sync.Pool{
 	New: func() interface{} {
-		return new(protos.FlatPosting)
+		return new(protos.MapEntry)
 	},
 }
 
-func readMapOutput(filename string, postingCh chan<- *protos.FlatPosting) {
+func readMapOutput(filename string, mapEntryCh chan<- *protos.MapEntry) {
 	fd, err := os.Open(filename)
 	x.Check(err)
 	defer fd.Close()
@@ -48,42 +48,42 @@ func readMapOutput(filename string, postingCh chan<- *protos.FlatPosting) {
 		}
 		x.Check2(io.ReadFull(r, unmarshalBuf[:sz]))
 
-		flatPosting := fpool.Get().(*protos.FlatPosting)
-		x.Check(proto.Unmarshal(unmarshalBuf[:sz], flatPosting))
-		postingCh <- flatPosting
+		mapEntry := mePool.Get().(*protos.MapEntry)
+		x.Check(proto.Unmarshal(unmarshalBuf[:sz], mapEntry))
+		mapEntryCh <- mapEntry
 	}
-	close(postingCh)
+	close(mapEntryCh)
 }
 
-func shufflePostings(batchCh chan<- []*protos.FlatPosting,
-	postingChs []chan *protos.FlatPosting, prog *progress) {
+func shufflePostings(batchCh chan<- []*protos.MapEntry,
+	mapEntryChs []chan *protos.MapEntry, prog *progress) {
 
 	var ph postingHeap
-	for _, ch := range postingChs {
-		heap.Push(&ph, heapNode{posting: <-ch, ch: ch})
+	for _, ch := range mapEntryChs {
+		heap.Push(&ph, heapNode{mapEntry: <-ch, ch: ch})
 	}
 
 	const batchSize = 1e5
 	const batchAlloc = batchSize * 11 / 10
-	batch := make([]*protos.FlatPosting, 0, batchAlloc)
+	batch := make([]*protos.MapEntry, 0, batchAlloc)
 	var prevKey []byte
 	for len(ph.nodes) > 0 {
-		p := ph.nodes[0].posting
+		me := ph.nodes[0].mapEntry
 		var ok bool
-		ph.nodes[0].posting, ok = <-ph.nodes[0].ch
+		ph.nodes[0].mapEntry, ok = <-ph.nodes[0].ch
 		if ok {
 			heap.Fix(&ph, 0)
 		} else {
 			heap.Pop(&ph)
 		}
 
-		if len(batch) >= batchSize && bytes.Compare(prevKey, p.Key) != 0 {
+		if len(batch) >= batchSize && bytes.Compare(prevKey, me.Key) != 0 {
 			batchCh <- batch
-			batch = make([]*protos.FlatPosting, 0, batchAlloc)
+			batch = make([]*protos.MapEntry, 0, batchAlloc)
 		}
-		prevKey = p.Key
+		prevKey = me.Key
 
-		batch = append(batch, p)
+		batch = append(batch, me)
 	}
 	if len(batch) > 0 {
 		batchCh <- batch
@@ -92,8 +92,8 @@ func shufflePostings(batchCh chan<- []*protos.FlatPosting,
 }
 
 type heapNode struct {
-	posting *protos.FlatPosting
-	ch      <-chan *protos.FlatPosting
+	mapEntry *protos.MapEntry
+	ch       <-chan *protos.MapEntry
 }
 
 type postingHeap struct {
@@ -104,7 +104,7 @@ func (h *postingHeap) Len() int {
 	return len(h.nodes)
 }
 func (h *postingHeap) Less(i, j int) bool {
-	return bytes.Compare(h.nodes[i].posting.Key, h.nodes[j].posting.Key) < 0
+	return bytes.Compare(h.nodes[i].mapEntry.Key, h.nodes[j].mapEntry.Key) < 0
 }
 func (h *postingHeap) Swap(i, j int) {
 	h.nodes[i], h.nodes[j] = h.nodes[j], h.nodes[i]
@@ -117,7 +117,7 @@ func (h *postingHeap) Pop() interface{} {
 	h.nodes = h.nodes[:len(h.nodes)-1]
 	return elem
 }
-func reduce(batch []*protos.FlatPosting, kv *badger.KV, prog *progress) {
+func reduce(batch []*protos.MapEntry, kv *badger.KV, prog *progress) {
 	var currentKey []byte
 	var uids []uint64
 	pl := new(protos.PostingList)
@@ -147,19 +147,19 @@ func reduce(batch []*protos.FlatPosting, kv *badger.KV, prog *progress) {
 		pl.Reset()
 	}
 
-	for _, posting := range batch {
+	for _, mapEntry := range batch {
 		atomic.AddInt64(&prog.reduceEdgeCount, 1)
 
-		if bytes.Compare(posting.Key, currentKey) != 0 && currentKey != nil {
+		if bytes.Compare(mapEntry.Key, currentKey) != 0 && currentKey != nil {
 			outputPostingList()
 		}
-		currentKey = posting.Key
+		currentKey = mapEntry.Key
 
-		if posting.Full == nil {
-			uids = append(uids, posting.UidOnly)
+		if mapEntry.Posting == nil {
+			uids = append(uids, mapEntry.Uid)
 		} else {
-			uids = append(uids, posting.Full.Uid)
-			pl.Postings = append(pl.Postings, posting.Full)
+			uids = append(uids, mapEntry.Posting.Uid)
+			pl.Postings = append(pl.Postings, mapEntry.Posting)
 		}
 	}
 	outputPostingList()
@@ -169,9 +169,9 @@ func reduce(batch []*protos.FlatPosting, kv *badger.KV, prog *progress) {
 	for _, e := range entries {
 		x.Check(e.Error)
 	}
-	// Reuse flatpostings.
-	for _, fp := range batch {
-		fp.Reset()
-		fpool.Put(fp)
+	// Reuse map entries.
+	for _, me := range batch {
+		me.Reset()
+		mePool.Put(me)
 	}
 }

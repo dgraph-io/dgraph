@@ -3,9 +3,8 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
-	"encoding/binary"
+	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/table"
-	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -37,8 +35,8 @@ type state struct {
 	um         *uidMap
 	ss         *schemaStore
 	rdfCh      chan string
-	postingsCh chan *protos.FlatPosting
-	mapId      uint32
+	mapEntryCh chan *protos.MapEntry
+	mapFileId  uint32 // Used atomically to name the output files of the mappers.
 }
 
 type loader struct {
@@ -59,7 +57,7 @@ func newLoader(opt options) *loader {
 		um:         newUIDMap(),
 		ss:         newSchemaStore(initialSchema),
 		rdfCh:      make(chan string, 1000),
-		postingsCh: make(chan *protos.FlatPosting, 1000),
+		mapEntryCh: make(chan *protos.MapEntry, 1000),
 	}
 	ld := &loader{
 		state:   st,
@@ -73,6 +71,8 @@ func newLoader(opt options) *loader {
 }
 
 func (ld *loader) mapStage() {
+	atomic.StoreInt32(&ld.prog.phase, PHASE_MAP)
+
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
 	for _, m := range ld.mappers {
@@ -106,19 +106,20 @@ func (ld *loader) mapStage() {
 
 	close(ld.rdfCh)
 	mapperWg.Wait()
-	close(ld.postingsCh)
+	close(ld.mapEntryCh)
 
 	// Allow memory to GC before the reduce phase.
 	for i := range ld.mappers {
 		ld.mappers[i] = nil
 	}
-	// TODO: Put the lease in a file before doing this.
+	// TODO: Put lease in file.
+	fmt.Println("LEASE:", ld.um.lease())
 	ld.um = nil
 	runtime.GC()
 }
 
 func (ld *loader) reduceStage() {
-	atomic.AddInt32(&ld.prog.reducePhase, 1)
+	atomic.StoreInt32(&ld.prog.phase, PHASE_REDUCE)
 
 	// Read output from map stage.
 	var mapOutput []string
@@ -131,14 +132,15 @@ func (ld *loader) reduceStage() {
 	})
 	x.Checkf(err, "While walking the map output.")
 
-	shuffleInputChs := make([]chan *protos.FlatPosting, len(mapOutput))
+	shuffleInputChs := make([]chan *protos.MapEntry, len(mapOutput))
 	for i, mappedFile := range mapOutput {
-		shuffleInputChs[i] = make(chan *protos.FlatPosting, 1000)
+		shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
 		go readMapOutput(mappedFile, shuffleInputChs[i])
 	}
 
-	// Shuffle concurrently with reduce.
-	reduceCh := make(chan []*protos.FlatPosting, 3) // Small buffer size since each element has a lot of data.
+	// Shuffle concurrently with reduce. Use small buffer size for channel
+	// since each element has a lot of data.
+	reduceCh := make(chan []*protos.MapEntry, 3)
 	go shufflePostings(reduceCh, shuffleInputChs, ld.prog)
 
 	opt := badger.DefaultOptions
@@ -167,25 +169,6 @@ func (ld *loader) reduceStage() {
 
 func (ld *loader) writeSchema() {
 	ld.ss.write(ld.kv)
-}
-
-func (ld *loader) writeLease() {
-	// TODO: Come back to this after dgraphzero. The approach will change.
-	var buf [8]byte
-	binary.BigEndian.PutUint64(buf[:], ld.um.lease())
-	p := &protos.Posting{
-		Uid:         math.MaxUint64,
-		Value:       buf[:],
-		ValType:     protos.Posting_INT,
-		PostingType: protos.Posting_VALUE,
-	}
-	pl := &protos.PostingList{
-		Postings: []*protos.Posting{p},
-		Uids:     bp128.DeltaPack([]uint64{math.MaxUint64}),
-	}
-	plBuf, err := pl.Marshal()
-	x.Check(err)
-	x.Check(ld.kv.Set(x.DataKey("_lease_", 1), plBuf, 0x00))
 }
 
 func (ld *loader) cleanup() {

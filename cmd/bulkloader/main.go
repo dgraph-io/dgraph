@@ -43,18 +43,24 @@ func main() {
 		log.Fatal("No free args allowed, but got:", flag.Args())
 	}
 
-	x.AssertTruef(opt.mapBufSize > 0, "Please specify how much memory is available for this program.")
+	x.AssertTruef(opt.mapBufSize > 0,
+		"Please specify how much memory is available for this program.")
 	opt.mapBufSize = opt.mapBufSize << 20 // Convert from MB to B.
 
 	go func() {
 		log.Fatal(http.ListenAndServe(*httpAddr, nil))
 	}()
-	runtime.SetBlockProfileRate(*blockRate)
+	if *blockRate > 0 {
+		runtime.SetBlockProfileRate(*blockRate)
+	}
+
+	// Ensure the badger output dir is empty.
+	x.Check(os.RemoveAll(opt.badgerDir))
 	x.Check(os.MkdirAll(opt.badgerDir, 0700))
 
 	// Create a directory just for bulk loader's usage.
 	if !*skipMapPhase {
-		os.RemoveAll(opt.tmpDir)
+		x.Check(os.RemoveAll(opt.tmpDir))
 		x.Check(os.MkdirAll(opt.tmpDir, 0700))
 	}
 	if *cleanUpTmp {
@@ -67,6 +73,5 @@ func main() {
 	}
 	loader.reduceStage()
 	loader.writeSchema()
-	loader.writeLease()
 	loader.cleanup()
 }

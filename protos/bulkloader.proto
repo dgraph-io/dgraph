@@ -4,10 +4,10 @@ import "types.proto";
 
 package protos;
 
-message FlatPosting {
+message MapEntry {
 	bytes key = 1;
 
 	// Only one should be set.
-	fixed64 uid_only = 2;
-	Posting full = 3;
+	fixed64 uid = 2;
+	Posting posting = 3;
 }

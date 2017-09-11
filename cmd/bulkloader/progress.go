@@ -4,6 +4,14 @@ import (
 	"fmt"
 	"sync/atomic"
 	"time"
+
+	"github.com/dgraph-io/dgraph/x"
+)
+
+const (
+	PHASE_NOTHING int32 = iota
+	PHASE_MAP
+	PHASE_REDUCE
 )
 
 type progress struct {
@@ -21,7 +29,7 @@ type progress struct {
 	// stopped. The channel MUST be unbuffered for this to work.
 	shutdown chan struct{}
 
-	reducePhase int32 // bool
+	phase int32
 }
 
 func newProgress() *progress {
@@ -45,9 +53,9 @@ func (p *progress) report() {
 
 func (p *progress) reportOnce() {
 	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
-	reducePhase := atomic.LoadInt32(&p.reducePhase) != 0
-
-	if !reducePhase {
+	switch atomic.LoadInt32(&p.phase) {
+	case PHASE_NOTHING:
+	case PHASE_MAP:
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
 		elapsed := time.Since(p.start)
 		fmt.Printf("[MAP] [%s] [RDF count: %d] [Edge count: %d] "+
@@ -58,7 +66,7 @@ func (p *progress) reportOnce() {
 			int(float64(rdfCount)/elapsed.Seconds()),
 			int(float64(mapEdgeCount)/elapsed.Seconds()),
 		)
-	} else {
+	case PHASE_REDUCE:
 		now := time.Now()
 		elapsed := time.Since(p.startReduce)
 		if p.startReduce.IsZero() {
@@ -80,6 +88,8 @@ func (p *progress) reportOnce() {
 			reduceKeyCount,
 			int(float64(reduceKeyCount)/elapsed.Seconds()),
 		)
+	default:
+		x.AssertTruef(false, "invalid phase")
 	}
 }
 

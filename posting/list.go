@@ -256,14 +256,16 @@ func SetPosting(t *protos.DirectedEdge, p *protos.Posting) {
 		postingType = protos.Posting_VALUE
 	}
 
-	p.Uid = t.ValueId
-	p.Value = t.Value
-	p.ValType = protos.Posting_ValType(t.ValueType)
-	p.PostingType = postingType
-	p.Metadata = metadata
-	p.Label = t.Label
-	p.Op = op
-	p.Facets = t.Facets
+	*p = protos.Posting{
+		Uid:         t.ValueId,
+		Value:       t.Value,
+		ValType:     protos.Posting_ValType(t.ValueType),
+		PostingType: postingType,
+		Metadata:    metadata,
+		Label:       t.Label,
+		Op:          op,
+		Facets:      t.Facets,
+	}
 }
 
 func (l *List) EstimatedSize() uint32 {

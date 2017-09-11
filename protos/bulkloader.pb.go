@@ -14,7 +14,7 @@
 		types.proto
 
 	It has these top-level messages:
-		FlatPosting
+		MapEntry
 		Facet
 		Param
 		Facets
@@ -78,43 +78,43 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-type FlatPosting struct {
+type MapEntry struct {
 	Key []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	// Only one should be set.
-	UidOnly uint64   `protobuf:"fixed64,2,opt,name=uid_only,json=uidOnly,proto3" json:"uid_only,omitempty"`
-	Full    *Posting `protobuf:"bytes,3,opt,name=full" json:"full,omitempty"`
+	Uid     uint64   `protobuf:"fixed64,2,opt,name=uid,proto3" json:"uid,omitempty"`
+	Posting *Posting `protobuf:"bytes,3,opt,name=posting" json:"posting,omitempty"`
 }
 
-func (m *FlatPosting) Reset()                    { *m = FlatPosting{} }
-func (m *FlatPosting) String() string            { return proto.CompactTextString(m) }
-func (*FlatPosting) ProtoMessage()               {}
-func (*FlatPosting) Descriptor() ([]byte, []int) { return fileDescriptorBulkloader, []int{0} }
+func (m *MapEntry) Reset()                    { *m = MapEntry{} }
+func (m *MapEntry) String() string            { return proto.CompactTextString(m) }
+func (*MapEntry) ProtoMessage()               {}
+func (*MapEntry) Descriptor() ([]byte, []int) { return fileDescriptorBulkloader, []int{0} }
 
-func (m *FlatPosting) GetKey() []byte {
+func (m *MapEntry) GetKey() []byte {
 	if m != nil {
 		return m.Key
 	}
 	return nil
 }
 
-func (m *FlatPosting) GetUidOnly() uint64 {
+func (m *MapEntry) GetUid() uint64 {
 	if m != nil {
-		return m.UidOnly
+		return m.Uid
 	}
 	return 0
 }
 
-func (m *FlatPosting) GetFull() *Posting {
+func (m *MapEntry) GetPosting() *Posting {
 	if m != nil {
-		return m.Full
+		return m.Posting
 	}
 	return nil
 }
 
 func init() {
-	proto.RegisterType((*FlatPosting)(nil), "protos.FlatPosting")
+	proto.RegisterType((*MapEntry)(nil), "protos.MapEntry")
 }
-func (m *FlatPosting) Marshal() (dAtA []byte, err error) {
+func (m *MapEntry) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalTo(dAtA)
@@ -124,7 +124,7 @@ func (m *FlatPosting) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *FlatPosting) MarshalTo(dAtA []byte) (int, error) {
+func (m *MapEntry) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -135,16 +135,16 @@ func (m *FlatPosting) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintBulkloader(dAtA, i, uint64(len(m.Key)))
 		i += copy(dAtA[i:], m.Key)
 	}
-	if m.UidOnly != 0 {
+	if m.Uid != 0 {
 		dAtA[i] = 0x11
 		i++
-		i = encodeFixed64Bulkloader(dAtA, i, uint64(m.UidOnly))
+		i = encodeFixed64Bulkloader(dAtA, i, uint64(m.Uid))
 	}
-	if m.Full != nil {
+	if m.Posting != nil {
 		dAtA[i] = 0x1a
 		i++
-		i = encodeVarintBulkloader(dAtA, i, uint64(m.Full.Size()))
-		n1, err := m.Full.MarshalTo(dAtA[i:])
+		i = encodeVarintBulkloader(dAtA, i, uint64(m.Posting.Size()))
+		n1, err := m.Posting.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -180,18 +180,18 @@ func encodeVarintBulkloader(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	return offset + 1
 }
-func (m *FlatPosting) Size() (n int) {
+func (m *MapEntry) Size() (n int) {
 	var l int
 	_ = l
 	l = len(m.Key)
 	if l > 0 {
 		n += 1 + l + sovBulkloader(uint64(l))
 	}
-	if m.UidOnly != 0 {
+	if m.Uid != 0 {
 		n += 9
 	}
-	if m.Full != nil {
-		l = m.Full.Size()
+	if m.Posting != nil {
+		l = m.Posting.Size()
 		n += 1 + l + sovBulkloader(uint64(l))
 	}
 	return n
@@ -210,7 +210,7 @@ func sovBulkloader(x uint64) (n int) {
 func sozBulkloader(x uint64) (n int) {
 	return sovBulkloader(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
-func (m *FlatPosting) Unmarshal(dAtA []byte) error {
+func (m *MapEntry) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -233,10 +233,10 @@ func (m *FlatPosting) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: FlatPosting: wiretype end group for non-group")
+			return fmt.Errorf("proto: MapEntry: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: FlatPosting: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: MapEntry: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -272,24 +272,24 @@ func (m *FlatPosting) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 1 {
-				return fmt.Errorf("proto: wrong wireType = %d for field UidOnly", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Uid", wireType)
 			}
-			m.UidOnly = 0
+			m.Uid = 0
 			if (iNdEx + 8) > l {
 				return io.ErrUnexpectedEOF
 			}
 			iNdEx += 8
-			m.UidOnly = uint64(dAtA[iNdEx-8])
-			m.UidOnly |= uint64(dAtA[iNdEx-7]) << 8
-			m.UidOnly |= uint64(dAtA[iNdEx-6]) << 16
-			m.UidOnly |= uint64(dAtA[iNdEx-5]) << 24
-			m.UidOnly |= uint64(dAtA[iNdEx-4]) << 32
-			m.UidOnly |= uint64(dAtA[iNdEx-3]) << 40
-			m.UidOnly |= uint64(dAtA[iNdEx-2]) << 48
-			m.UidOnly |= uint64(dAtA[iNdEx-1]) << 56
+			m.Uid = uint64(dAtA[iNdEx-8])
+			m.Uid |= uint64(dAtA[iNdEx-7]) << 8
+			m.Uid |= uint64(dAtA[iNdEx-6]) << 16
+			m.Uid |= uint64(dAtA[iNdEx-5]) << 24
+			m.Uid |= uint64(dAtA[iNdEx-4]) << 32
+			m.Uid |= uint64(dAtA[iNdEx-3]) << 40
+			m.Uid |= uint64(dAtA[iNdEx-2]) << 48
+			m.Uid |= uint64(dAtA[iNdEx-1]) << 56
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Full", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Posting", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -313,10 +313,10 @@ func (m *FlatPosting) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Full == nil {
-				m.Full = &Posting{}
+			if m.Posting == nil {
+				m.Posting = &Posting{}
 			}
-			if err := m.Full.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.Posting.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -449,16 +449,15 @@ var (
 func init() { proto.RegisterFile("bulkloader.proto", fileDescriptorBulkloader) }
 
 var fileDescriptorBulkloader = []byte{
-	// 162 bytes of a gzipped FileDescriptorProto
+	// 149 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x48, 0x2a, 0xcd, 0xc9,
 	0xce, 0xc9, 0x4f, 0x4c, 0x49, 0x2d, 0xd2, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x03, 0x53,
-	0xc5, 0x52, 0xdc, 0x25, 0x95, 0x05, 0xa9, 0xc5, 0x10, 0x41, 0xa5, 0x78, 0x2e, 0x6e, 0xb7, 0x9c,
-	0xc4, 0x92, 0x80, 0xfc, 0xe2, 0x92, 0xcc, 0xbc, 0x74, 0x21, 0x01, 0x2e, 0xe6, 0xec, 0xd4, 0x4a,
-	0x09, 0x46, 0x05, 0x46, 0x0d, 0x9e, 0x20, 0x10, 0x53, 0x48, 0x92, 0x8b, 0xa3, 0x34, 0x33, 0x25,
-	0x3e, 0x3f, 0x2f, 0xa7, 0x52, 0x82, 0x49, 0x81, 0x51, 0x83, 0x2d, 0x88, 0xbd, 0x34, 0x33, 0xc5,
-	0x3f, 0x2f, 0xa7, 0x52, 0x48, 0x99, 0x8b, 0x25, 0xad, 0x34, 0x27, 0x47, 0x82, 0x59, 0x81, 0x51,
-	0x83, 0xdb, 0x88, 0x1f, 0x62, 0x62, 0xb1, 0x1e, 0xd4, 0xac, 0x20, 0xb0, 0xa4, 0x93, 0xc0, 0x89,
-	0x47, 0x72, 0x8c, 0x17, 0x1e, 0xc9, 0x31, 0x3e, 0x78, 0x24, 0xc7, 0x38, 0xe3, 0xb1, 0x1c, 0x43,
-	0x12, 0xc4, 0x1d, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0x36, 0x1a, 0x20, 0xe3, 0xa2, 0x00,
-	0x00, 0x00,
+	0xc5, 0x52, 0xdc, 0x25, 0x95, 0x05, 0xa9, 0xc5, 0x10, 0x41, 0xa5, 0x48, 0x2e, 0x0e, 0xdf, 0xc4,
+	0x02, 0xd7, 0xbc, 0x92, 0xa2, 0x4a, 0x21, 0x01, 0x2e, 0xe6, 0xec, 0xd4, 0x4a, 0x09, 0x46, 0x05,
+	0x46, 0x0d, 0x9e, 0x20, 0x10, 0x13, 0x24, 0x52, 0x9a, 0x99, 0x22, 0xc1, 0xa4, 0xc0, 0xa8, 0xc1,
+	0x16, 0x04, 0x62, 0x0a, 0x69, 0x72, 0xb1, 0x17, 0xe4, 0x17, 0x97, 0x64, 0xe6, 0xa5, 0x4b, 0x30,
+	0x2b, 0x30, 0x6a, 0x70, 0x1b, 0xf1, 0x43, 0x0c, 0x2a, 0xd6, 0x0b, 0x80, 0x08, 0x07, 0xc1, 0xe4,
+	0x9d, 0x04, 0x4e, 0x3c, 0x92, 0x63, 0xbc, 0xf0, 0x48, 0x8e, 0xf1, 0xc1, 0x23, 0x39, 0xc6, 0x19,
+	0x8f, 0xe5, 0x18, 0x92, 0x20, 0x2e, 0x30, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff, 0xb5, 0xda, 0xed,
+	0xae, 0x9c, 0x00, 0x00, 0x00,
 }

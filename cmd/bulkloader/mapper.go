@@ -23,12 +23,12 @@ import (
 
 type mapper struct {
 	*state
-	fpostings        []*protos.FlatPosting
-	sz               int64
-	buf              bytes.Buffer
-	freePostings     []*protos.Posting
-	freeFlatPostings []*protos.FlatPosting
-	mu               sync.Mutex
+	mapEntries     []*protos.MapEntry
+	sz             int64
+	buf            bytes.Buffer
+	freePostings   []*protos.Posting
+	freeMapEntries []*protos.MapEntry
+	mu             sync.Mutex
 }
 
 func (m *mapper) getPosting() *protos.Posting {
@@ -42,29 +42,29 @@ func (m *mapper) getPosting() *protos.Posting {
 	return new(protos.Posting)
 }
 
-func (m *mapper) writePostings() {
-	sort.Slice(m.fpostings, func(i, j int) bool {
-		return bytes.Compare(m.fpostings[i].Key, m.fpostings[j].Key) < 0
+func (m *mapper) writeMapEntries() {
+	sort.Slice(m.mapEntries, func(i, j int) bool {
+		return bytes.Compare(m.mapEntries[i].Key, m.mapEntries[j].Key) < 0
 	})
 
 	m.mu.Lock()
 	m.buf.Reset()
 	var varintBuf [binary.MaxVarintLen64]byte
-	for _, fposting := range m.fpostings {
-		n := binary.PutUvarint(varintBuf[:], uint64(fposting.Size()))
+	for _, me := range m.mapEntries {
+		n := binary.PutUvarint(varintBuf[:], uint64(me.Size()))
 		m.buf.Write(varintBuf[:n])
-		postBuf, err := fposting.Marshal()
+		postBuf, err := me.Marshal()
 		x.Check(err)
 		m.buf.Write(postBuf)
-		if fposting.Full != nil {
-			m.freePostings = append(m.freePostings, fposting.Full)
+		if me.Posting != nil {
+			m.freePostings = append(m.freePostings, me.Posting)
 		}
 	}
-	m.freeFlatPostings = m.fpostings
-	m.fpostings = make([]*protos.FlatPosting, 0, len(m.freeFlatPostings))
+	m.freeMapEntries = m.mapEntries
+	m.mapEntries = make([]*protos.MapEntry, 0, len(m.freeMapEntries))
 	m.sz = 0
 
-	fileNum := atomic.AddUint32(&m.mapId, 1)
+	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(m.opt.tmpDir, fmt.Sprintf("%06d.map", fileNum))
 	go func() {
 		x.Check(x.WriteFileSync(filename, m.buf.Bytes(), 0644))
@@ -77,11 +77,11 @@ func (m *mapper) run() {
 		x.Check(m.parseRDF(rdf))
 		atomic.AddInt64(&m.prog.rdfCount, 1)
 		if m.sz >= m.opt.mapBufSize {
-			m.writePostings()
+			m.writeMapEntries()
 		}
 	}
-	if len(m.fpostings) > 0 {
-		m.writePostings()
+	if len(m.mapEntries) > 0 {
+		m.writeMapEntries()
 	}
 	m.mu.Lock() // Ensure that the last file write finishes.
 }
@@ -89,27 +89,27 @@ func (m *mapper) run() {
 func (m *mapper) addPosting(key []byte, posting *protos.Posting) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
-	var p *protos.FlatPosting
-	if len(m.freeFlatPostings) > 0 {
+	var me *protos.MapEntry
+	if len(m.freeMapEntries) > 0 {
 		// Try to reuse memory.
-		ln := len(m.freeFlatPostings)
-		p = m.freeFlatPostings[ln-1]
-		p.Reset()
-		m.freeFlatPostings = m.freeFlatPostings[:ln-1]
-		p.Key = key
+		ln := len(m.freeMapEntries)
+		me = m.freeMapEntries[ln-1]
+		me.Reset()
+		m.freeMapEntries = m.freeMapEntries[:ln-1]
+		me.Key = key
 	} else {
-		p = &protos.FlatPosting{
+		me = &protos.MapEntry{
 			Key: key,
 		}
 	}
 
 	if posting.PostingType == protos.Posting_REF {
-		p.UidOnly = posting.Uid
+		me.Uid = posting.Uid
 	} else {
-		p.Full = posting
+		me.Posting = posting
 	}
-	m.sz += int64(p.Size())
-	m.fpostings = append(m.fpostings, p)
+	m.sz += int64(me.Size())
+	m.mapEntries = append(m.mapEntries, me)
 }
 
 func (m *mapper) parseRDF(rdfLine string) error {
