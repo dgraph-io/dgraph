@@ -64,13 +64,13 @@ func (p *progress) reportOnce() {
 	case mapPhase:
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
 		elapsed := time.Since(p.start)
-		fmt.Printf("[MAP] [%s] [RDF count: %d] [Edge count: %d] "+
-			"[RDFs per second: %d] [Edges per second: %d]\n",
+		fmt.Printf("[MAP] [%s] [RDF count: %s] [Edge count: %s] "+
+			"[RDFs per second: %s] [Edges per second: %s]\n",
 			fixedDuration(elapsed),
-			rdfCount,
-			mapEdgeCount,
-			int(float64(rdfCount)/elapsed.Seconds()),
-			int(float64(mapEdgeCount)/elapsed.Seconds()),
+			niceFloat(float64(rdfCount)),
+			niceFloat(float64(mapEdgeCount)),
+			niceFloat(float64(rdfCount)/elapsed.Seconds()),
+			niceFloat(float64(mapEdgeCount)/elapsed.Seconds()),
 		)
 	case reducePhase:
 		now := time.Now()
@@ -118,4 +118,26 @@ func fixedDuration(d time.Duration) string {
 		str = fmt.Sprintf("%02dh", int(d.Hours())) + str
 	}
 	return str
+}
+
+var suffixes = [...]string{" ", "k", "M", "G", "T"}
+
+func niceFloat(f float64) string {
+	idx := 0
+	for f >= 1000 {
+		f /= 1000
+		idx++
+	}
+	if idx >= len(suffixes) {
+		return fmt.Sprintf("%f", f)
+	}
+	suf := suffixes[idx]
+	switch {
+	case f >= 100:
+		return fmt.Sprintf("%.1f%s", f, suf)
+	case f >= 10:
+		return fmt.Sprintf("%.2f%s", f, suf)
+	default:
+		return fmt.Sprintf("%.3f%s", f, suf)
+	}
 }
