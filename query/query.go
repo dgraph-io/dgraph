@@ -1902,35 +1902,45 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 
-		if child.Params.Expand != "" {
-			if child.Params.Expand == "_all_" {
-				// Get the predicate list for expansion. Otherwise we already
-				// have the list populated.
-				child.ExpandPreds, err = GetNodePredicates(ctx, sg.DestUIDs)
-				if err != nil {
-					rch <- err
+		if !worker.Config.ExpandEdge && child.Attr == "_predicate_" {
+			rch <- x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
+			return
+		}
+
+		if child.Params.Expand == "" {
+			out = append(out, child)
+			continue
+		}
+
+		if !worker.Config.ExpandEdge {
+			rch <- x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
+			return
+		}
+
+		if child.Params.Expand == "_all_" {
+			// Get the predicate list for expansion. Otherwise we already
+			// have the list populated.
+			child.ExpandPreds, err = getNodePredicates(ctx, sg.DestUIDs)
+			if err != nil {
+				rch <- err
+				return
+			}
+		}
+
+		up := uniquePreds(child.ExpandPreds)
+		for k, _ := range up {
+			temp := new(SubGraph)
+			*temp = *child
+			temp.Params.isInternal = false
+			temp.Params.Expand = ""
+			temp.Attr = k
+			for _, ch := range sg.Children {
+				if ch.isSimilar(temp) {
+					rch <- x.Errorf("Repeated subgraph while using expand()")
 					return
 				}
 			}
-
-			up := uniquePreds(child.ExpandPreds)
-			for k, _ := range up {
-				temp := new(SubGraph)
-				*temp = *child
-				temp.Params.isInternal = false
-				temp.Params.Expand = ""
-				temp.Attr = k
-				for _, ch := range sg.Children {
-					if ch.isSimilar(temp) {
-						rch <- x.Errorf("Repeated subgraph while using expand()")
-						return
-					}
-				}
-				out = append(out, temp)
-			}
-		} else {
-			out = append(out, child)
-			continue
+			out = append(out, temp)
 		}
 	}
 	sg.Children = out
@@ -2202,7 +2212,7 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 	return f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
-func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.ValueList, error) {
+func getNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.ValueList, error) {
 	temp := new(SubGraph)
 	temp.Attr = "_predicate_"
 	temp.SrcUIDs = uids

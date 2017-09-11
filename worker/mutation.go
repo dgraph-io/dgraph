@@ -72,10 +72,10 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 	key := x.DataKey(edge.Attr, edge.Entity)
 
 	t := time.Now()
-	plist := posting.GetOrCreate(key, gid)
+	plist := posting.Get(key, gid)
 	if dur := time.Since(t); dur > time.Millisecond {
 		if tr, ok := trace.FromContext(ctx); ok {
-			tr.LazyPrintf("GetOrCreate took %v", dur)
+			tr.LazyPrintf("GetLru took %v", dur)
 		}
 	}
 
@@ -411,12 +411,10 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *protos.Mutations) (*protos.P
 		return &protos.Payload{}, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
 	node := groups().Node(m.GroupId)
-	var tr trace.Trace
 	if rand.Float64() < Config.Tracing {
-		tr = trace.New("Dgraph", "GrpcMutate")
+		var tr trace.Trace
+		tr, ctx = x.NewTrace("GrpcMutate", ctx)
 		defer tr.Finish()
-		tr.SetMaxEvents(1000)
-		ctx = trace.NewContext(ctx, tr)
 	}
 	err := node.ProposeAndWait(ctx, &protos.Proposal{Mutations: m})
 	return &protos.Payload{}, err
