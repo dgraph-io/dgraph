@@ -116,7 +116,7 @@ func shufflePostings(batchCh chan<- []*protos.FlatPosting,
 	const batchAlloc = batchSize * 11 / 10
 	batch := make([]*protos.FlatPosting, 0, batchAlloc)
 	var prevKey []byte
-	var edgesInPL int
+	var plistLen int
 	for len(ph.nodes) > 0 {
 		p := ph.nodes[0].posting
 		var ok bool
@@ -128,9 +128,9 @@ func shufflePostings(batchCh chan<- []*protos.FlatPosting,
 		}
 
 		keyChanged := bytes.Compare(prevKey, p.Key) != 0
-		if keyChanged && edgesInPL > 0 {
-			ci.add(prevKey, edgesInPL)
-			edgesInPL = 0
+		if keyChanged && plistLen > 0 {
+			ci.addUid(prevKey, plistLen)
+			plistLen = 0
 		}
 
 		if len(batch) >= batchSize && keyChanged {
@@ -140,10 +140,13 @@ func shufflePostings(batchCh chan<- []*protos.FlatPosting,
 		prevKey = p.Key
 
 		batch = append(batch, p)
-		edgesInPL++
+		plistLen++
 	}
 	if len(batch) > 0 {
 		batchCh <- batch
+	}
+	if plistLen > 0 {
+		ci.addUid(prevKey, plistLen)
 	}
 	close(batchCh)
 }

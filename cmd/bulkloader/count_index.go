@@ -6,41 +6,44 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/dgraph/bp128"
-	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type countIndexer struct {
-	pred   string
-	rev    bool
-	schema *protos.SchemaUpdate
-	counts map[int][]uint64
-	kv     *badger.KV
-	wg     sync.WaitGroup
-	ss     *schemaStore
+type current struct {
+	pred  string
+	rev   bool
+	track bool
 }
 
-func (c *countIndexer) add(rawKey []byte, count int) {
+type countIndexer struct {
+	curr   current
+	counts map[int][]uint64
+	wg     sync.WaitGroup
+	*state
+}
+
+// addUid adds the uid from rawKey to a count index if a count index is
+// required by the schema. This method expects keys to be passed into it in
+// sorted order.
+func (c *countIndexer) addUid(rawKey []byte, count int) {
 	key := x.Parse(rawKey)
 	if !key.IsData() && !key.IsReverse() {
 		return
 	}
-	if key.IsReverse() != c.rev || key.Attr != c.pred {
+	sameIndexKey := key.Attr == c.curr.pred && key.IsReverse() == c.curr.rev
+	if sameIndexKey && !c.curr.track {
+		return
+	}
+
+	if !sameIndexKey {
 		if len(c.counts) > 0 {
 			c.wg.Add(1)
-			go c.writeIndex(c.pred, c.rev, c.counts)
+			go c.writeIndex(c.curr.pred, c.curr.rev, c.counts)
+			c.counts = make(map[int][]uint64)
 		}
-		c.pred = key.Attr
-		c.rev = key.IsReverse()
-		c.counts = make(map[int][]uint64)
-		c.schema = c.ss.getSchema(key.Attr)
-	}
-	// If the schema is not set explicitly but instead discovered from the RDF
-	// data, c.schema may be nil (it may not have been discovered yet). This is
-	// okay, since the default for GetCount is false (discovered schemas cannot
-	// have indexes).
-	if !c.schema.GetCount() {
-		return
+		c.curr.pred = key.Attr
+		c.curr.rev = key.IsReverse()
+		c.curr.track = c.ss.getSchema(key.Attr).GetCount()
 	}
 	c.counts[count] = append(c.counts[count], key.Uid)
 }

@@ -35,13 +35,13 @@ type state struct {
 	ss         *schemaStore
 	rdfCh      chan string
 	postingsCh chan *protos.FlatPosting
+	kv         *badger.KV
 }
 
 type loader struct {
 	*state
 	mappers   []*mapper
 	mapOutput []string
-	kv        *badger.KV
 }
 
 func newLoader(opt options) *loader {
@@ -138,8 +138,9 @@ func (ld *loader) reduceStage() {
 	x.Check(err)
 
 	// Shuffle concurrently with reduce.
-	ci := &countIndexer{ss: ld.ss, kv: ld.kv}
-	reduceCh := make(chan []*protos.FlatPosting, 3) // Small buffer size since each element has a lot of data.
+	ci := &countIndexer{state: ld.state}
+	// Small buffer size since each element has a lot of data.
+	reduceCh := make(chan []*protos.FlatPosting, 3)
 	go shufflePostings(reduceCh, shuffleInputChs, ld.prog, ci)
 
 	// Reduce stage.
