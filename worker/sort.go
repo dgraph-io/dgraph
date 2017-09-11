@@ -310,8 +310,10 @@ func multiSort(ctx context.Context, r *sortresult, ts *protos.SortMessage) error
 	// TODO - Verify behavior with multiple langs.
 	for i := 1; i < len(ts.Order); i++ {
 		or := <-och
-		if or.err != nil && oerr == nil {
-			oerr = or.err
+		if or.err != nil {
+			if oerr == nil {
+				oerr = or.err
+			}
 			continue
 		}
 
