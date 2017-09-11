@@ -27,7 +27,6 @@ import (
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
-	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
@@ -81,11 +80,11 @@ func (s *ServerState) initStorage() {
 	opt.ValueDir = Config.PostingDir
 	switch Config.PostingTables {
 	case "memorymap":
-		opt.MapTablesTo = table.MemoryMap
+		opt.TableLoadingMode = options.MemoryMap
 	case "loadtoram":
-		opt.MapTablesTo = table.LoadToRAM
+		opt.TableLoadingMode = options.LoadToRAM
 	case "nothing":
-		opt.MapTablesTo = table.Nothing
+		opt.TableLoadingMode = options.FileIO
 	default:
 		x.Fatalf("Invalid Posting Tables options")
 	}

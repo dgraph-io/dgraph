@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"sync"
 
 	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/badger/y"
@@ -28,7 +29,7 @@ import (
 
 type levelHandler struct {
 	// Guards tables, totalSize.
-	y.SafeMutex
+	sync.RWMutex
 
 	// For level >= 1, tables are sorted by key ranges, which do not overlap.
 	// For level 0, tables are sorted by time.
@@ -122,7 +123,7 @@ func (s *levelHandler) replaceTables(newTables []*table.Table) error {
 		left:  newTables[0].Smallest(),
 		right: newTables[len(newTables)-1].Biggest(),
 	}
-	left, right := s.overlappingTables(kr)
+	left, right := s.overlappingTables(levelHandlerRLocked{}, kr)
 
 	toDecr := make([]*table.Table, right-left)
 	// Update totalSize and reference counts.
@@ -189,12 +190,13 @@ func (s *levelHandler) numTables() int {
 func (s *levelHandler) close() error {
 	s.RLock()
 	defer s.RUnlock()
+	var err error
 	for _, t := range s.tables {
-		if err := t.Close(); err != nil {
-			return errors.Wrap(err, "levelHandler.Close")
+		if closeErr := t.Close(); closeErr != nil && err == nil {
+			err = closeErr
 		}
 	}
-	return nil
+	return errors.Wrap(err, "levelHandler.close")
 }
 
 // getTableForKey acquires a read-lock to access s.tables. It returns a list of tableHandlers.
@@ -272,12 +274,12 @@ func (s *levelHandler) appendIterators(iters []y.Iterator, reversed bool) []y.It
 	return append(iters, table.NewConcatIterator(s.tables, reversed))
 }
 
-// overlappingTables returns the tables that intersect with key range.
-// Returns a half-interval.
-// This function should already have acquired a read lock.
-func (s *levelHandler) overlappingTables(kr keyRange) (int, int) {
-	s.AssertRLock()
+type levelHandlerRLocked struct{}
 
+// overlappingTables returns the tables that intersect with key range. Returns a half-interval.
+// This function should already have acquired a read lock, and this is so important the caller must
+// pass an empty parameter declaring such.
+func (s *levelHandler) overlappingTables(_ levelHandlerRLocked, kr keyRange) (int, int) {
 	left := sort.Search(len(s.tables), func(i int) bool {
 		return bytes.Compare(kr.left, s.tables[i].Biggest()) <= 0
 	})
