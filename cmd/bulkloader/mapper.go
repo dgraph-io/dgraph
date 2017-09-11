@@ -42,7 +42,7 @@ func (m *mapper) getPosting() *protos.Posting {
 	return new(protos.Posting)
 }
 
-func (m *mapper) writeMapEntries() {
+func (m *mapper) writeMapEntriesToFile() {
 	sort.Slice(m.mapEntries, func(i, j int) bool {
 		return bytes.Compare(m.mapEntries[i].Key, m.mapEntries[j].Key) < 0
 	})
@@ -77,11 +77,11 @@ func (m *mapper) run() {
 		x.Check(m.parseRDF(rdf))
 		atomic.AddInt64(&m.prog.rdfCount, 1)
 		if m.sz >= m.opt.mapBufSize {
-			m.writeMapEntries()
+			m.writeMapEntriesToFile()
 		}
 	}
 	if len(m.mapEntries) > 0 {
-		m.writeMapEntries()
+		m.writeMapEntriesToFile()
 	}
 	m.mu.Lock() // Ensure that the last file write finishes.
 }

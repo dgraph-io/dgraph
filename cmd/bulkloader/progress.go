@@ -11,9 +11,9 @@ import (
 type phase int32
 
 const (
-	NOTHING phase = iota
-	MAP_PHASE
-	REDUCE_PHASE
+	nothing phase = iota
+	mapPhase
+	reducePhase
 )
 
 type progress struct {
@@ -60,8 +60,8 @@ func (p *progress) report() {
 func (p *progress) reportOnce() {
 	mapEdgeCount := atomic.LoadInt64(&p.mapEdgeCount)
 	switch phase(atomic.LoadInt32((*int32)(&p.phase))) {
-	case NOTHING:
-	case MAP_PHASE:
+	case nothing:
+	case mapPhase:
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
 		elapsed := time.Since(p.start)
 		fmt.Printf("[MAP] [%s] [RDF count: %d] [Edge count: %d] "+
@@ -72,7 +72,7 @@ func (p *progress) reportOnce() {
 			int(float64(rdfCount)/elapsed.Seconds()),
 			int(float64(mapEdgeCount)/elapsed.Seconds()),
 		)
-	case REDUCE_PHASE:
+	case reducePhase:
 		now := time.Now()
 		elapsed := time.Since(p.startReduce)
 		if p.startReduce.IsZero() {

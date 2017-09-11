@@ -70,7 +70,7 @@ func newLoader(opt options) *loader {
 }
 
 func (ld *loader) mapStage() {
-	ld.prog.setPhase(MAP_PHASE)
+	ld.prog.setPhase(mapPhase)
 
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
@@ -118,7 +118,7 @@ func (ld *loader) mapStage() {
 }
 
 func (ld *loader) reduceStage() {
-	ld.prog.setPhase(REDUCE_PHASE)
+	ld.prog.setPhase(reducePhase)
 
 	// Read output from map stage.
 	var mapOutput []string
