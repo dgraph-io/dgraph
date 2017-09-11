@@ -228,11 +228,11 @@ func samePosting(oldp *protos.Posting, newp *protos.Posting) bool {
 
 func NewPosting(t *protos.DirectedEdge) *protos.Posting {
 	p := new(protos.Posting)
-	NewPostingNoAlloc(t, p)
+	SetPosting(t, p)
 	return p
 }
 
-func NewPostingNoAlloc(t *protos.DirectedEdge, p *protos.Posting) {
+func SetPosting(t *protos.DirectedEdge, p *protos.Posting) {
 	x.AssertTruef(edgeType(t) != x.ValueEmpty,
 		"This should have been set by the caller.")
 

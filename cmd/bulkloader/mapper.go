@@ -173,7 +173,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	m.ss.validateType(de, nq.ObjectValue == nil)
 
 	p := m.getPosting()
-	posting.NewPostingNoAlloc(de, p)
+	posting.SetPosting(de, p)
 	if nq.GetObjectValue() != nil {
 		if lang := de.GetLang(); lang == "" {
 			p.Uid = math.MaxUint64
@@ -193,7 +193,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	de.Entity, de.ValueId = de.ValueId, de.Entity
 	m.ss.validateType(de, true)
 	rp := m.getPosting()
-	posting.NewPostingNoAlloc(de, p)
+	posting.SetPosting(de, p)
 
 	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
 
