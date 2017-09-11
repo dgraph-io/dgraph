@@ -46,7 +46,6 @@ func (c *countIndexer) add(rawKey []byte, count int) {
 }
 
 func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64) {
-	// TODO: Could parallelise this.
 	entries := make([]*badger.Entry, 0, len(counts))
 	for count, uids := range counts {
 		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
