@@ -62,8 +62,8 @@ message Result {
 }
 
 message Order {
-  string attr = 1;
-  bool desc = 2;
+	string attr = 1;
+	bool desc = 2;
 }
 
 message SortMessage {
