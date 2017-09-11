@@ -125,8 +125,7 @@ type params struct {
 	AfterUID   uint64
 	DoCount    bool
 	GetUid     bool
-	Order      string
-	OrderDesc  bool
+	Order      []*protos.Order
 	Var        string
 	NeedsVar   []gql.VarContext
 	ParentVars map[string]varValue
@@ -705,6 +704,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			FacetOrder:     gchild.FacetOrder,
 			FacetOrderDesc: gchild.FacetDesc,
 			IgnoreReflex:   sg.Params.IgnoreReflex,
+			Order:          gchild.Order,
 		}
 		if gchild.Facets != nil {
 			args.Facet = &protos.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
@@ -837,12 +837,6 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.Count = int(first)
 	}
-	if v, ok := gq.Args["orderasc"]; ok {
-		args.Order = v
-	} else if v, ok := gq.Args["orderdesc"]; ok {
-		args.Order = v
-		args.OrderDesc = true
-	}
 	return nil
 }
 
@@ -896,6 +890,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		uidCount:     gq.UidCount,
 		IgnoreReflex: gq.IgnoreReflex,
 		IsEmpty:      gq.IsEmpty,
+		Order:        gq.Order,
 	}
 	if gq.Facets != nil {
 		args.Facet = &protos.Param{gq.Facets.AllKeys, gq.Facets.Keys}
@@ -1324,7 +1319,7 @@ func (sg *SubGraph) updateFacetMatrix() {
 func (sg *SubGraph) updateUidMatrix() {
 	sg.updateFacetMatrix()
 	for _, l := range sg.uidMatrix {
-		if sg.Params.Order != "" {
+		if len(sg.Params.Order) > 0 {
 			// We can't do intersection directly as the list is not sorted by UIDs.
 			// So do filter.
 			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
@@ -1902,35 +1897,45 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 
-		if child.Params.Expand != "" {
-			if child.Params.Expand == "_all_" {
-				// Get the predicate list for expansion. Otherwise we already
-				// have the list populated.
-				child.ExpandPreds, err = GetNodePredicates(ctx, sg.DestUIDs)
-				if err != nil {
-					rch <- err
+		if !worker.Config.ExpandEdge && child.Attr == "_predicate_" {
+			rch <- x.Errorf("Cannot ask for _predicate_ when ExpandEdge(--expand_edge) is false.")
+			return
+		}
+
+		if child.Params.Expand == "" {
+			out = append(out, child)
+			continue
+		}
+
+		if !worker.Config.ExpandEdge {
+			rch <- x.Errorf("Cannot run expand() query when ExpandEdge(--expand_edge) is false.")
+			return
+		}
+
+		if child.Params.Expand == "_all_" {
+			// Get the predicate list for expansion. Otherwise we already
+			// have the list populated.
+			child.ExpandPreds, err = getNodePredicates(ctx, sg.DestUIDs)
+			if err != nil {
+				rch <- err
+				return
+			}
+		}
+
+		up := uniquePreds(child.ExpandPreds)
+		for k, _ := range up {
+			temp := new(SubGraph)
+			*temp = *child
+			temp.Params.isInternal = false
+			temp.Params.Expand = ""
+			temp.Attr = k
+			for _, ch := range sg.Children {
+				if ch.isSimilar(temp) {
+					rch <- x.Errorf("Repeated subgraph while using expand()")
 					return
 				}
 			}
-
-			up := uniquePreds(child.ExpandPreds)
-			for k, _ := range up {
-				temp := new(SubGraph)
-				*temp = *child
-				temp.Params.isInternal = false
-				temp.Params.Expand = ""
-				temp.Attr = k
-				for _, ch := range sg.Children {
-					if ch.isSimilar(temp) {
-						rch <- x.Errorf("Repeated subgraph while using expand()")
-						return
-					}
-				}
-				out = append(out, temp)
-			}
-		} else {
-			out = append(out, child)
-			continue
+			out = append(out, temp)
 		}
 	}
 	sg.Children = out
@@ -2016,8 +2021,11 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	if len(sg.Params.FacetOrder) != 0 {
 		return sg.sortAndPaginateUsingFacet(ctx)
 	}
+
 	for _, it := range sg.Params.NeedsVar {
-		if it.Name == sg.Params.Order && (it.Typ == gql.VALUE_VAR) {
+		// TODO(pawan) - Return error if user uses var order with predicates.
+		if len(sg.Params.Order) > 0 && it.Name == sg.Params.Order[0].Attr &&
+			(it.Typ == gql.VALUE_VAR) {
 			// If the Order name is same as var name and it's a value variable, we sort using that variable.
 			return sg.sortAndPaginateUsingVar(ctx)
 		}
@@ -2027,13 +2035,15 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		// Only retrieve up to 1000 results by default.
 		sg.Params.Count = 1000
 	}
+
+	x.AssertTrue(len(sg.Params.Order) > 0)
+
 	sort := &protos.SortMessage{
-		Attr:      sg.Params.Order,
+		Order:     sg.Params.Order,
 		Langs:     sg.Params.Langs,
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
-		Desc:      sg.Params.OrderDesc,
 	}
 	result, err := worker.SortOverNetwork(ctx, sort)
 	if err != nil {
@@ -2042,8 +2052,8 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))
 	sg.uidMatrix = result.UidMatrix
-
-	// Update the destUids as we might have removed some UIDs.
+	// Update the destUids as we might have removed some UIDs for which we didn't find any values
+	// while sorting.
 	sg.updateDestUids(ctx)
 	return nil
 }
@@ -2075,14 +2085,14 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		ul := sg.uidMatrix[i]
 		fl := sg.facetsMatrix[i]
 		uids := ul.Uids[:0]
-		values := make([]types.Val, 0, len(ul.Uids))
+		values := make([][]types.Val, 0, len(ul.Uids))
 		facetList := fl.FacetsList[:0]
 		for j := 0; j < len(ul.Uids); j++ {
 			uid := ul.Uids[j]
 			f := fl.FacetsList[j]
 			for _, it := range f.Facets {
 				if it.Key == orderby {
-					values = append(values, facets.ValFor(it))
+					values = append(values, []types.Val{facets.ValFor(it)})
 					uids = append(uids, uid)
 					facetList = append(facetList, f)
 					break
@@ -2093,7 +2103,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 			continue
 		}
 		if err := types.SortWithFacet(values, &protos.List{uids},
-			facetList, sg.Params.FacetOrderDesc); err != nil {
+			facetList, []bool{sg.Params.FacetOrderDesc}); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids
@@ -2118,25 +2128,26 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 
 func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 	if sg.Params.uidToVal == nil {
-		return x.Errorf("Variable: [%s] used before definition.", sg.Params.Order)
+		return x.Errorf("Variable: [%s] used before definition.", sg.Params.Order[0].Attr)
 	}
+
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
 		uids := make([]uint64, 0, len(ul.Uids))
-		values := make([]types.Val, 0, len(ul.Uids))
+		values := make([][]types.Val, 0, len(ul.Uids))
 		for _, uid := range ul.Uids {
 			v, ok := sg.Params.uidToVal[uid]
 			if !ok {
 				// We skip the UIDs which don't have a value.
 				continue
 			}
-			values = append(values, v)
+			values = append(values, []types.Val{v})
 			uids = append(uids, uid)
 		}
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.Sort(values, &protos.List{uids}, sg.Params.OrderDesc); err != nil {
+		if err := types.Sort(values, &protos.List{uids}, []bool{sg.Params.Order[0].Desc}); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids
@@ -2202,7 +2213,7 @@ func isUidFnWithoutVar(f *gql.Function) bool {
 	return f.Name == "uid" && len(f.NeedsVar) == 0
 }
 
-func GetNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.ValueList, error) {
+func getNodePredicates(ctx context.Context, uids *protos.List) ([]*protos.ValueList, error) {
 	temp := new(SubGraph)
 	temp.Attr = "_predicate_"
 	temp.SrcUIDs = uids
@@ -2234,7 +2245,9 @@ func (sg *SubGraph) getAllPredicates(predicates map[string]bool) {
 		predicates[sg.Attr] = true
 	}
 	if len(sg.Params.Order) != 0 {
-		predicates[sg.Params.Order] = true
+		for _, o := range sg.Params.Order {
+			predicates[o.Attr] = true
+		}
 	}
 	if len(sg.Params.groupbyAttrs) != 0 {
 		for _, pred := range sg.Params.groupbyAttrs {

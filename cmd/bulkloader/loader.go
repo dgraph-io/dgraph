@@ -36,12 +36,12 @@ type state struct {
 	rdfCh      chan string
 	mapEntryCh chan *protos.MapEntry
 	mapFileId  uint32 // Used atomically to name the output files of the mappers.
+	kv         *badger.KV
 }
 
 type loader struct {
 	*state
 	mappers []*mapper
-	kv      *badger.KV
 }
 
 func newLoader(opt options) *loader {
@@ -137,11 +137,6 @@ func (ld *loader) reduceStage() {
 		go readMapOutput(mappedFile, shuffleInputChs[i])
 	}
 
-	// Shuffle concurrently with reduce. Use small buffer size for channel
-	// since each element has a lot of data.
-	reduceCh := make(chan []*protos.MapEntry, 3)
-	go shufflePostings(reduceCh, shuffleInputChs, ld.prog)
-
 	opt := badger.DefaultOptions
 	opt.Dir = ld.opt.badgerDir
 	opt.ValueDir = opt.Dir
@@ -150,6 +145,12 @@ func (ld *loader) reduceStage() {
 	opt.MapTablesTo = table.MemoryMap
 	ld.kv, err = badger.NewKV(&opt)
 	x.Check(err)
+
+	// Shuffle concurrently with reduce.
+	ci := &countIndexer{state: ld.state}
+	// Small buffer size since each element has a lot of data.
+	reduceCh := make(chan []*protos.MapEntry, 3)
+	go shufflePostings(reduceCh, shuffleInputChs, ld.prog, ci)
 
 	// Reduce stage.
 	pending := make(chan struct{}, ld.opt.numGoroutines)
@@ -164,6 +165,7 @@ func (ld *loader) reduceStage() {
 		}()
 	}
 	reduceWg.Wait()
+	ci.wait()
 }
 
 func (ld *loader) writeSchema() {

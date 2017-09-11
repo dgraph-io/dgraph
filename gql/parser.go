@@ -51,7 +51,9 @@ type GraphQuery struct {
 	Func       *Function
 	Expand     string // Which variable to expand with.
 
-	Args         map[string]string
+	Args map[string]string
+	// Query can have multiple sort parameters.
+	Order        []*protos.Order
 	Children     []*GraphQuery
 	Filter       *FilterTree
 	MathExp      *MathTree
@@ -2149,6 +2151,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	}
 
 	expectArg := true
+	order := make(map[string]bool)
 	// Parse in KV fashion. Depending on the value of key, decide the path.
 	for it.Next() {
 		var key string
@@ -2251,11 +2254,21 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 			}
 
-			if _, ok := gq.Args[key]; ok {
-				return gq, x.Errorf("Repeated key %q at root", key)
-			}
+			// TODO - Allow only order by one of variable/predicate for now.
 			if val == "" {
 				val = gq.NeedsVar[len(gq.NeedsVar)-1].Name
+			}
+			if key == "orderasc" || key == "orderdesc" {
+				if order[val] {
+					return nil, x.Errorf("Sorting by an attribute: [%s] can only be done once", val)
+				}
+				gq.Order = append(gq.Order, &protos.Order{val, key == "orderdesc"})
+				order[val] = true
+				continue
+			}
+
+			if _, ok := gq.Args[key]; ok {
+				return gq, x.Errorf("Repeated key %q at root", key)
 			}
 			gq.Args[key] = val
 		}
@@ -2612,6 +2625,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				return err
 			}
 			// Stores args in GraphQuery, will be used later while retrieving results.
+			order := make(map[string]bool)
 			for _, p := range args {
 				if !validKey(p.Key) {
 					return x.Errorf("Got invalid keyword: %s", p.Key)
@@ -2622,6 +2636,15 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if p.Val == "" {
 					return x.Errorf("Got empty argument")
 				}
+				if p.Key == "orderasc" || p.Key == "orderdesc" {
+					if order[p.Val] {
+						return x.Errorf("Sorting by an attribute: [%s] can only be done once", p.Val)
+					}
+					curp.Order = append(curp.Order, &protos.Order{p.Val, p.Key == "orderdesc"})
+					order[p.Val] = true
+					continue
+				}
+
 				curp.Args[p.Key] = p.Val
 			}
 		case itemAt:
