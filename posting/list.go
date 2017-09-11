@@ -227,6 +227,12 @@ func samePosting(oldp *protos.Posting, newp *protos.Posting) bool {
 }
 
 func NewPosting(t *protos.DirectedEdge) *protos.Posting {
+	p := new(protos.Posting)
+	SetPosting(t, p)
+	return p
+}
+
+func SetPosting(t *protos.DirectedEdge, p *protos.Posting) {
 	x.AssertTruef(edgeType(t) != x.ValueEmpty,
 		"This should have been set by the caller.")
 
@@ -250,17 +256,16 @@ func NewPosting(t *protos.DirectedEdge) *protos.Posting {
 		postingType = protos.Posting_VALUE
 	}
 
-	p := new(protos.Posting)
-	p.Uid = t.ValueId
-	p.Value = t.Value
-	p.ValType = protos.Posting_ValType(t.ValueType)
-	p.PostingType = postingType
-	p.Metadata = metadata
-	p.Label = t.Label
-	p.Op = op
-	p.Facets = t.Facets
-	return p
-
+	*p = protos.Posting{
+		Uid:         t.ValueId,
+		Value:       t.Value,
+		ValType:     protos.Posting_ValType(t.ValueType),
+		PostingType: postingType,
+		Metadata:    metadata,
+		Label:       t.Label,
+		Op:          op,
+		Facets:      t.Facets,
+	}
 }
 
 func (l *List) EstimatedSize() uint32 {

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"log"
-	"strconv"
 	"sync"
 )
 
@@ -19,24 +17,11 @@ func newUIDMap() *uidMap {
 	}
 }
 
+// assignUID would assume that str is an external ID, and would assign a new internal Dgraph ID for
+// this.
 func (m *uidMap) assignUID(str string) uint64 {
 	m.Lock()
 	defer m.Unlock()
-
-	hint, err := strconv.ParseUint(str, 10, 64)
-	if err == nil {
-		uid, ok := m.uids[str]
-		if ok {
-			if uid == hint {
-				return uid
-			} else {
-				log.Fatalf("bad node hint: %v", str)
-			}
-		} else {
-			m.uids[str] = hint
-			return hint
-		}
-	}
 
 	uid, ok := m.uids[str]
 	if ok {

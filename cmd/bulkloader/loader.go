@@ -3,18 +3,17 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
-	"encoding/binary"
+	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/table"
-	"github.com/dgraph-io/dgraph/bp128"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -26,6 +25,7 @@ type options struct {
 	badgerDir     string
 	tmpDir        string
 	numGoroutines int
+	mapBufSize    int64
 }
 
 type state struct {
@@ -34,14 +34,14 @@ type state struct {
 	um         *uidMap
 	ss         *schemaStore
 	rdfCh      chan string
-	postingsCh chan *protos.FlatPosting
+	mapEntryCh chan *protos.MapEntry
+	mapFileId  uint32 // Used atomically to name the output files of the mappers.
 	kv         *badger.KV
 }
 
 type loader struct {
 	*state
-	mappers   []*mapper
-	mapOutput []string
+	mappers []*mapper
 }
 
 func newLoader(opt options) *loader {
@@ -56,7 +56,7 @@ func newLoader(opt options) *loader {
 		um:         newUIDMap(),
 		ss:         newSchemaStore(initialSchema),
 		rdfCh:      make(chan string, 1000),
-		postingsCh: make(chan *protos.FlatPosting, 1000),
+		mapEntryCh: make(chan *protos.MapEntry, 1000),
 	}
 	ld := &loader{
 		state:   st,
@@ -65,22 +65,12 @@ func newLoader(opt options) *loader {
 	for i := 0; i < opt.numGoroutines; i++ {
 		ld.mappers[i] = &mapper{state: st}
 	}
+	go ld.prog.report()
 	return ld
 }
 
 func (ld *loader) mapStage() {
-	go ld.prog.report()
-
-	var postingWriterWg sync.WaitGroup
-	postingWriterWg.Add(1)
-
-	tmpPostingsDir, err := ioutil.TempDir(ld.opt.tmpDir, "bulkloader_tmp_posting_")
-	x.Check(err)
-
-	go func() {
-		ld.mapOutput = writeMapOutput(tmpPostingsDir, ld.postingsCh, ld.prog)
-		postingWriterWg.Done()
-	}()
+	ld.prog.setPhase(mapPhase)
 
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
@@ -101,7 +91,7 @@ func (ld *loader) mapStage() {
 			sc = bufio.NewScanner(f)
 		} else {
 			gzr, err := gzip.NewReader(f)
-			x.Checkf(err, "Could not create gzip reader for RDF file.")
+			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
 			sc = bufio.NewScanner(gzr)
 		}
 		scanners = append(scanners, sc)
@@ -115,15 +105,35 @@ func (ld *loader) mapStage() {
 
 	close(ld.rdfCh)
 	mapperWg.Wait()
-	close(ld.postingsCh)
-	postingWriterWg.Wait()
+	close(ld.mapEntryCh)
+
+	// Allow memory to GC before the reduce phase.
+	for i := range ld.mappers {
+		ld.mappers[i] = nil
+	}
+	// TODO: Put lease in file.
+	fmt.Println("LEASE:", ld.um.lease())
+	ld.um = nil
+	runtime.GC()
 }
 
 func (ld *loader) reduceStage() {
-	// Read from map stage.
-	shuffleInputChs := make([]chan *protos.FlatPosting, len(ld.mapOutput))
-	for i, mappedFile := range ld.mapOutput {
-		shuffleInputChs[i] = make(chan *protos.FlatPosting, 1000)
+	ld.prog.setPhase(reducePhase)
+
+	// Read output from map stage.
+	var mapOutput []string
+	err := filepath.Walk(ld.opt.tmpDir, func(path string, _ os.FileInfo, err error) error {
+		if !strings.HasSuffix(path, ".map") {
+			return nil
+		}
+		mapOutput = append(mapOutput, path)
+		return nil
+	})
+	x.Checkf(err, "While walking the map output.")
+
+	shuffleInputChs := make([]chan *protos.MapEntry, len(mapOutput))
+	for i, mappedFile := range mapOutput {
+		shuffleInputChs[i] = make(chan *protos.MapEntry, 1000)
 		go readMapOutput(mappedFile, shuffleInputChs[i])
 	}
 
@@ -133,14 +143,13 @@ func (ld *loader) reduceStage() {
 	opt.ValueGCRunInterval = time.Hour * 100
 	opt.SyncWrites = false
 	opt.MapTablesTo = table.MemoryMap
-	var err error
 	ld.kv, err = badger.NewKV(&opt)
 	x.Check(err)
 
 	// Shuffle concurrently with reduce.
 	ci := &countIndexer{state: ld.state}
 	// Small buffer size since each element has a lot of data.
-	reduceCh := make(chan []*protos.FlatPosting, 3)
+	reduceCh := make(chan []*protos.MapEntry, 3)
 	go shufflePostings(reduceCh, shuffleInputChs, ld.prog, ci)
 
 	// Reduce stage.
@@ -163,30 +172,7 @@ func (ld *loader) writeSchema() {
 	ld.ss.write(ld.kv)
 }
 
-func (ld *loader) writeLease() {
-	// TODO: Come back to this after dgraphzero. The approach will change.
-	var buf [8]byte
-	binary.BigEndian.PutUint64(buf[:], ld.um.lease())
-	p := &protos.Posting{
-		Uid:         math.MaxUint64,
-		Value:       buf[:],
-		ValType:     protos.Posting_INT,
-		PostingType: protos.Posting_VALUE,
-	}
-	pl := &protos.PostingList{
-		Postings: []*protos.Posting{p},
-		Uids:     bp128.DeltaPack([]uint64{math.MaxUint64}),
-	}
-	plBuf, err := pl.Marshal()
-	x.Check(err)
-	x.Check(ld.kv.Set(x.DataKey("_lease_", 1), plBuf, 0x00))
-}
-
 func (ld *loader) cleanup() {
 	ld.prog.endSummary()
 	x.Check(ld.kv.Close())
-	if len(ld.mapOutput) > 0 {
-		dir := filepath.Dir(ld.mapOutput[0])
-		x.Check(os.RemoveAll(dir))
-	}
 }
