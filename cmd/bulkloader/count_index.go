@@ -16,10 +16,10 @@ type current struct {
 }
 
 type countIndexer struct {
-	curr   current
+	*state
+	cur    current
 	counts map[int][]uint64
 	wg     sync.WaitGroup
-	*state
 }
 
 // addUid adds the uid from rawKey to a count index if a count index is
@@ -30,22 +30,26 @@ func (c *countIndexer) addUid(rawKey []byte, count int) {
 	if !key.IsData() && !key.IsReverse() {
 		return
 	}
-	sameIndexKey := key.Attr == c.curr.pred && key.IsReverse() == c.curr.rev
-	if sameIndexKey && !c.curr.track {
+	sameIndexKey := key.Attr == c.cur.pred && key.IsReverse() == c.cur.rev
+	if sameIndexKey && !c.cur.track {
 		return
 	}
 
 	if !sameIndexKey {
 		if len(c.counts) > 0 {
 			c.wg.Add(1)
-			go c.writeIndex(c.curr.pred, c.curr.rev, c.counts)
+			go c.writeIndex(c.cur.pred, c.cur.rev, c.counts)
+		}
+		if len(c.counts) > 0 || c.counts == nil {
 			c.counts = make(map[int][]uint64)
 		}
-		c.curr.pred = key.Attr
-		c.curr.rev = key.IsReverse()
-		c.curr.track = c.ss.getSchema(key.Attr).GetCount()
+		c.cur.pred = key.Attr
+		c.cur.rev = key.IsReverse()
+		c.cur.track = c.ss.getSchema(key.Attr).GetCount()
 	}
-	c.counts[count] = append(c.counts[count], key.Uid)
+	if c.cur.track {
+		c.counts[count] = append(c.counts[count], key.Uid)
+	}
 }
 
 func (c *countIndexer) writeIndex(pred string, rev bool, counts map[int][]uint64) {
