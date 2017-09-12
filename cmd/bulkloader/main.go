@@ -37,6 +37,8 @@ func main() {
 		"Skip the map phase (assumes that map output files already exist)")
 	cleanUpTmp := flag.Bool("cleanup_tmp", true,
 		"Clean up the tmp directory after the loader finishes")
+	flag.BoolVar(&opt.skipExpandEdges, "skip_expand_edges", false,
+		"Don't generate edges that allow nodes to be expanded using _predicate_ or expand(...).")
 
 	flag.Parse()
 	if len(flag.Args()) != 0 {

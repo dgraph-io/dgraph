@@ -22,12 +22,13 @@ import (
 )
 
 type options struct {
-	rdfFiles      string
-	schemaFile    string
-	badgerDir     string
-	tmpDir        string
-	numGoroutines int
-	mapBufSize    int64
+	rdfFiles        string
+	schemaFile      string
+	badgerDir       string
+	tmpDir          string
+	numGoroutines   int
+	mapBufSize      int64
+	skipExpandEdges bool
 }
 
 type state struct {
