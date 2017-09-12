@@ -2,38 +2,51 @@ package main
 
 import (
 	"sync"
+	"sync/atomic"
+
+	farm "github.com/dgryski/go-farm"
 )
 
-type uidMap struct {
+type shard struct {
 	sync.Mutex
+	m       map[string]uint64
 	lastUID uint64
-	uids    map[string]uint64
+	lease   uint64
+}
+
+type uidMap struct {
+	lease  uint64
+	shards [256]shard
 }
 
 func newUIDMap() *uidMap {
-	return &uidMap{
-		lastUID: 1,
-		uids:    map[string]uint64{},
+	um := &uidMap{
+		lease: 1,
 	}
+	for i := range um.shards {
+		um.shards[i].m = make(map[string]uint64)
+	}
+	return um
 }
 
-// assignUID would assume that str is an external ID, and would assign a new internal Dgraph ID for
-// this.
+// assignUID would assume that str is an external ID, and would assign a new
+// internal Dgraph ID for this.
 func (m *uidMap) assignUID(str string) uint64 {
-	m.Lock()
-	defer m.Unlock()
+	fp := farm.Fingerprint64([]byte(str))
+	idx := fp & 0xff
+	sh := &m.shards[idx]
 
-	uid, ok := m.uids[str]
+	sh.Lock()
+	defer sh.Unlock()
+
+	uid, ok := sh.m[str]
 	if ok {
 		return uid
 	}
-	m.lastUID++
-	m.uids[str] = m.lastUID
-	return m.lastUID
-}
-
-func (m *uidMap) lease() uint64 {
-	// The lease is the last UID that we've used (as opposed to the next UID
-	// that could be assigned).
-	return m.lastUID
+	if sh.lastUID == sh.lease {
+		sh.lease = atomic.AddUint64(&m.lease, 10000)
+	}
+	sh.lastUID++
+	sh.m[str] = sh.lastUID
+	return sh.lastUID
 }
