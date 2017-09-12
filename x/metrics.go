@@ -277,6 +277,11 @@ func init() {
 			"badger_vlog_size",
 			[]string{"dir"}, nil,
 		),
+		"badger_write_ch_len": prometheus.NewDesc(
+			"badger_write_ch_len",
+			"badger_write_ch_len",
+			[]string{"dir"}, nil,
+		),
 	})
 	prometheus.MustRegister(expvarCollector)
 	http.Handle("/debug/prometheus_metrics", prometheus.Handler())
