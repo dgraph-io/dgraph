@@ -227,12 +227,6 @@ func samePosting(oldp *protos.Posting, newp *protos.Posting) bool {
 }
 
 func NewPosting(t *protos.DirectedEdge) *protos.Posting {
-	p := new(protos.Posting)
-	SetPosting(t, p)
-	return p
-}
-
-func SetPosting(t *protos.DirectedEdge, p *protos.Posting) {
 	x.AssertTruef(edgeType(t) != x.ValueEmpty,
 		"This should have been set by the caller.")
 
@@ -256,7 +250,7 @@ func SetPosting(t *protos.DirectedEdge, p *protos.Posting) {
 		postingType = protos.Posting_VALUE
 	}
 
-	*p = protos.Posting{
+	return &protos.Posting{
 		Uid:         t.ValueId,
 		Value:       t.Value,
 		ValType:     protos.Posting_ValType(t.ValueType),

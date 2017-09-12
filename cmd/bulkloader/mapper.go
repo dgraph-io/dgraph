@@ -133,12 +133,12 @@ func parseNQuad(line string) (gql.NQuad, error) {
 
 func (m *mapper) createPredicatePosting(predicate string) *protos.Posting {
 	fp := farm.Fingerprint64([]byte(predicate))
-	p := new(protos.Posting)
-	p.Uid = fp
-	p.Value = []byte(predicate)
-	p.ValType = protos.Posting_DEFAULT
-	p.PostingType = protos.Posting_VALUE
-	return p
+	return &protos.Posting{
+		Uid:         fp,
+		Value:       []byte(predicate),
+		ValType:     protos.Posting_DEFAULT,
+		PostingType: protos.Posting_VALUE,
+	}
 }
 
 func (m *mapper) createPostings(nq gql.NQuad,
@@ -146,8 +146,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 
 	m.ss.validateType(de, nq.ObjectValue == nil)
 
-	p := new(protos.Posting)
-	posting.SetPosting(de, p)
+	p := posting.NewPosting(de)
 	if nq.GetObjectValue() != nil {
 		if lang := de.GetLang(); lang == "" {
 			p.Uid = math.MaxUint64
@@ -166,8 +165,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	x.AssertTruef(nq.GetObjectValue() == nil, "only has reverse schema if object is UID")
 	de.Entity, de.ValueId = de.ValueId, de.Entity
 	m.ss.validateType(de, true)
-	rp := new(protos.Posting)
-	posting.SetPosting(de, p)
+	rp := posting.NewPosting(de)
 
 	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
 
