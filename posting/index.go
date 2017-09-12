@@ -513,8 +513,9 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 		key := iterItem.Key()
 		pki := x.Parse(key)
 		var pl protos.PostingList
-		if err := iterItem.Value(func(val []byte) {
+		if err := iterItem.Value(func(val []byte) error {
 			UnmarshalWithCopy(val, iterItem.UserMeta(), &pl)
+			return nil
 		}); err != nil {
 			errCh <- err
 			return
@@ -619,8 +620,9 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		}
 		pki := x.Parse(key)
 		var pl protos.PostingList
-		if err := iterItem.Value(func(val []byte) {
+		if err := iterItem.Value(func(val []byte) error {
 			UnmarshalWithCopy(val, iterItem.UserMeta(), &pl)
+			return nil
 		}); err != nil {
 			return err
 		}

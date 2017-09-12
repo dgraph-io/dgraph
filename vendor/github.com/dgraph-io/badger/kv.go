@@ -182,9 +182,10 @@ func NewKV(optParam *Options) (out *KV, err error) {
 	}
 
 	var val []byte
-	err = item.Value(func(v []byte) {
+	err = item.Value(func(v []byte) error {
 		val = make([]byte, len(v))
 		copy(val, v)
+		return nil
 	})
 
 	if err != nil {
@@ -398,10 +399,9 @@ func (s *KV) getMemTables() ([]*skl.Skiplist, func()) {
 	}
 }
 
-func (s *KV) yieldItemValue(item *KVItem, consumer func([]byte)) error {
+func (s *KV) yieldItemValue(item *KVItem, consumer func([]byte) error) error {
 	if !item.hasValue() {
-		consumer(nil)
-		return nil
+		return consumer(nil)
 	}
 
 	if item.slice == nil {
@@ -411,8 +411,7 @@ func (s *KV) yieldItemValue(item *KVItem, consumer func([]byte)) error {
 	if (item.meta & BitValuePointer) == 0 {
 		val := item.slice.Resize(len(item.vptr))
 		copy(val, item.vptr)
-		consumer(val)
-		return nil
+		return consumer(val)
 	}
 
 	var vp valuePointer
@@ -636,14 +635,20 @@ func (s *KV) writeRequests(reqs []*request) error {
 	return nil
 }
 
-func writeRequestsOrLogError(s *KV, reqs []*request) {
-	if err := s.writeRequests(reqs); err != nil {
-		log.Printf("ERROR in Badger::writeRequests: %v", err)
-	}
-}
-
 func (s *KV) doWrites(lc *y.Closer) {
 	defer lc.Done()
+	pendingCh := make(chan struct{}, 1)
+
+	writeRequests := func(reqs []*request) {
+		if err := s.writeRequests(reqs); err != nil {
+			log.Printf("ERROR in Badger::writeRequests: %v", err)
+		}
+		<-pendingCh
+	}
+
+	// This variable tracks the number of pending writes.
+	reqLen := new(expvar.Int)
+	y.PendingWrites.Set(s.opt.Dir, reqLen)
 
 	reqs := make([]*request, 0, 10)
 	for {
@@ -656,30 +661,37 @@ func (s *KV) doWrites(lc *y.Closer) {
 
 		for {
 			reqs = append(reqs, r)
-			if len(reqs) == kvWriteChCapacity {
-				goto defaultCase
+			reqLen.Set(int64(len(reqs)))
+
+			if len(reqs) >= 3*kvWriteChCapacity {
+				pendingCh <- struct{}{} // blocking.
+				goto writeCase
 			}
+
 			select {
+			// Either push to pending, or continue to pick from writeCh.
 			case r = <-s.writeCh:
+			case pendingCh <- struct{}{}:
+				goto writeCase
 			case <-lc.HasBeenClosed():
 				goto closedCase
-			default:
-				goto defaultCase
 			}
 		}
 
 	closedCase:
 		close(s.writeCh)
-
 		for r := range s.writeCh { // Flush the channel.
 			reqs = append(reqs, r)
 		}
-		writeRequestsOrLogError(s, reqs)
+
+		pendingCh <- struct{}{} // Push to pending before doing a write.
+		writeRequests(reqs)
 		return
 
-	defaultCase:
-		writeRequestsOrLogError(s, reqs)
-		reqs = reqs[:0]
+	writeCase:
+		go writeRequests(reqs)
+		reqs = make([]*request, 0, 10)
+		reqLen.Set(0)
 	}
 }
 
@@ -1123,7 +1135,7 @@ func (s *KV) updateSize(lc *y.Closer) {
 	metricsTicker := time.NewTicker(5 * time.Minute)
 	defer metricsTicker.Stop()
 
-	getNewInt := func(val int64) *expvar.Int {
+	newInt := func(val int64) *expvar.Int {
 		v := new(expvar.Int)
 		v.Add(val)
 		return v
@@ -1153,12 +1165,12 @@ func (s *KV) updateSize(lc *y.Closer) {
 		select {
 		case <-metricsTicker.C:
 			lsmSize, vlogSize := totalSize(s.opt.Dir)
-			y.LSMSize.Set(s.opt.Dir, getNewInt(lsmSize))
+			y.LSMSize.Set(s.opt.Dir, newInt(lsmSize))
 			// If valueDir is different from dir, we'd have to do another walk.
 			if s.opt.ValueDir != s.opt.Dir {
 				_, vlogSize = totalSize(s.opt.ValueDir)
 			}
-			y.VlogSize.Set(s.opt.Dir, getNewInt(vlogSize))
+			y.VlogSize.Set(s.opt.Dir, newInt(vlogSize))
 		case <-lc.HasBeenClosed():
 			return
 		}

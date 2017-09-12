@@ -23,6 +23,8 @@ var (
 	LSMSize *expvar.Map
 	// VlogSize has size of the value log in bytes
 	VlogSize *expvar.Map
+	// PendingWrites tracks the number of pending writes.
+	PendingWrites *expvar.Map
 
 	// These are cumulative
 
@@ -62,4 +64,5 @@ func init() {
 	NumMemtableGets = expvar.NewInt("badger_memtable_gets_total")
 	LSMSize = expvar.NewMap("badger_lsm_size_bytes")
 	VlogSize = expvar.NewMap("badger_vlog_size_bytes")
+	PendingWrites = expvar.NewMap("badger_pending_writes_total")
 }

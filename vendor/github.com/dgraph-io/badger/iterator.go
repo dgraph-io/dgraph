@@ -60,13 +60,13 @@ func (item *KVItem) Key() []byte {
 //
 // Remember to parse or copy it if you need to reuse it. DO NOT modify or
 // append to this slice; it would result in a panic.
-func (item *KVItem) Value(consumer func([]byte)) error {
+func (item *KVItem) Value(consumer func([]byte) error) error {
 	item.wg.Wait()
 	if item.status == prefetched {
 		if item.err != nil {
 			return item.err
 		}
-		consumer(item.val)
+		return consumer(item.val)
 	}
 	return item.kv.yieldItemValue(item, consumer)
 }
@@ -84,16 +84,17 @@ func (item *KVItem) hasValue() bool {
 }
 
 func (item *KVItem) prefetchValue() {
-	item.err = item.kv.yieldItemValue(item, func(val []byte) {
+	item.err = item.kv.yieldItemValue(item, func(val []byte) error {
 		if val == nil {
 			item.status = prefetched
-			return
+			return nil
 		}
 
 		buf := item.slice.Resize(len(val))
 		copy(buf, val)
 		item.val = buf
 		item.status = prefetched
+		return nil
 	})
 }
 

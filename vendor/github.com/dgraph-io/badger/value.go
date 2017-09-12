@@ -819,7 +819,7 @@ func (vlog *valueLog) getFileRLocked(fid uint32) (*logFile, error) {
 }
 
 // Read reads the value log at a given location.
-func (vlog *valueLog) Read(vp valuePointer, consumer func([]byte)) error {
+func (vlog *valueLog) Read(vp valuePointer, consumer func([]byte) error) error {
 	// Check for valid offset if we are reading to writable log.
 	if vp.Fid == vlog.maxFid && vp.Offset >= vlog.writableLogOffset {
 		return errors.Errorf(
@@ -827,22 +827,21 @@ func (vlog *valueLog) Read(vp valuePointer, consumer func([]byte)) error {
 			vp.Offset, vlog.writableLogOffset)
 	}
 
-	fn := func(buf []byte) {
+	fn := func(buf []byte) error {
 		var h header
 		h.Decode(buf)
 		if (h.meta & BitDelete) != 0 {
 			// Tombstone key
-			consumer(nil)
-			return
+			return consumer(nil)
 		}
 		n := uint32(headerBufSize)
 		n += h.klen
-		consumer(buf[n : n+h.vlen])
+		return consumer(buf[n : n+h.vlen])
 	}
 	return vlog.readValueBytes(vp, fn)
 }
 
-func (vlog *valueLog) readValueBytes(vp valuePointer, consumer func([]byte)) error {
+func (vlog *valueLog) readValueBytes(vp valuePointer, consumer func([]byte) error) error {
 	lf, err := vlog.getFileRLocked(vp.Fid)
 	if err != nil {
 		return errors.Wrapf(err, "Unable to read from value log: %+v", vp)
@@ -853,9 +852,7 @@ func (vlog *valueLog) readValueBytes(vp valuePointer, consumer func([]byte)) err
 	if buf, err = lf.read(vp); err != nil {
 		return errors.Wrapf(err, "Unable to read from value log: %+v", vp)
 	}
-	consumer(buf)
-
-	return nil
+	return consumer(buf)
 }
 
 // Test helper
@@ -985,22 +982,19 @@ func (vlog *valueLog) doRunGC() error {
 		} else {
 			vlog.elog.Printf("Reason=%+v\n", r)
 
-			var errMismatch error
-			err := vlog.readValueBytes(vp, func(buf []byte) {
+			err := vlog.readValueBytes(vp, func(buf []byte) error {
 				ne := valueBytesToEntry(buf)
 				ne.offset = vp.Offset
 				if ne.casCounter == e.casCounter {
 					ne.print("Latest Entry Header in LSM")
 					e.print("Latest Entry in Log")
-					errMismatch = errors.Errorf(
-						"This shouldn't happen. Latest Pointer:%+v. Meta:%v.", vp, vs.Meta)
+					return errors.Errorf("This shouldn't happen. Latest Pointer:%+v. Meta:%v.",
+						vp, vs.Meta)
 				}
+				return nil
 			})
 			if err != nil {
 				return errStop
-			}
-			if errMismatch != nil {
-				return errMismatch
 			}
 		}
 		return nil

@@ -114,25 +114,28 @@ func (a *allocator) fetchOne() (uint64, error) {
 	return uid, nil
 }
 
-func (a *allocator) getFromKV(id string) (uid uint64, rerr error) {
+func (a *allocator) getFromKV(id string) (uint64, error) {
 	var item badger.KVItem
 	if err := a.kv.Get([]byte(id), &item); err != nil {
-		rerr = err
-		return
+		return 0, err
 	}
-	if err := item.Value(func(val []byte) {
+
+	var uid uint64
+	if err := item.Value(func(val []byte) error {
 		if len(val) > 0 {
 			var n int
 			uid, n = binary.Uvarint(val)
 			if n <= 0 {
-				rerr = fmt.Errorf("Unable to parse val %q to uint64 for %q", val, id)
+				return fmt.Errorf("Unable to parse val %q to uint64 for %q", val, id)
 			}
 		}
+		return nil
 
 	}); err != nil {
-		rerr = err
+		return 0, err
 	}
-	return
+
+	return uid, nil
 }
 
 func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool, err error) {

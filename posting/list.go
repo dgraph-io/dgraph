@@ -170,19 +170,17 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	if err != nil {
 		x.Fatalf("Unable to retrieve val for key: %q. Error: %v", err, l.key)
 	}
-	var val []byte
-	x.Check(item.Value(func(v []byte) {
+	l.plist = new(protos.PostingList)
+	x.Check(item.Value(func(val []byte) {
 		x.BytesRead.Add(int64(len(val)))
-		val = v
+		if item.UserMeta() == bitUidPostings {
+			l.plist.Uids = make([]byte, len(val))
+			copy(l.plist.Uids, val)
+		} else if val != nil {
+			x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
+		}
 	}))
 
-	l.plist = new(protos.PostingList)
-	if item.UserMeta() == bitUidPostings {
-		l.plist.Uids = make([]byte, len(val))
-		copy(l.plist.Uids, val)
-	} else if val != nil {
-		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
-	}
 	atomic.StoreUint32(&l.estimatedSize, l.calculateSize())
 	return l
 }
