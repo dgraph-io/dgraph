@@ -115,10 +115,10 @@ func (ld *loader) mapStage() {
 			lineBuf.Reset()
 			err := readLine(r, &lineBuf)
 			if err == io.EOF {
+				x.AssertTrue(lineBuf.Len() == 0)
 				break
-			} else {
-				x.Check(err)
 			}
+			x.Check(err)
 			ld.rdfCh <- lineBuf.String()
 		}
 	}
