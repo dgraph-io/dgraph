@@ -58,7 +58,7 @@ func newLoader(opt options) *loader {
 		prog:       newProgress(),
 		um:         newUIDMap(),
 		ss:         newSchemaStore(initialSchema),
-		rdfCh:      make(chan string, 10000),
+		rdfCh:      make(chan string, 100000),
 		mapEntryCh: make(chan *protos.MapEntry, 1000),
 	}
 	ld := &loader{
