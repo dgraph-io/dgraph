@@ -137,7 +137,7 @@ func (ld *loader) mapStage() {
 
 func (ld *loader) writeLease() {
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "%d\n", ld.um.lease())
+	fmt.Fprintf(&buf, "%d\n", ld.um.lease)
 	x.Check(ioutil.WriteFile(ld.opt.leaseFile, buf.Bytes(), 0644))
 }
 
