@@ -30,7 +30,7 @@ func main() {
 		"scratch space. Requires free space proportional to the size of the RDF file.")
 	flag.IntVar(&opt.numGoroutines, "j", runtime.NumCPU(),
 		"Number of worker threads to use (defaults to one less than logical CPUs)")
-	flag.Int64Var(&opt.mapBufSize, "mapoutput_mb", 0,
+	flag.Int64Var(&opt.mapBufSize, "mapoutput_mb", 128,
 		"The estimated size of each map file output. This directly affects the memory usage.")
 	httpAddr := flag.String("http", "localhost:8080", "Address to serve http (pprof)")
 	skipMapPhase := flag.Bool("skip_map_phase", false,
@@ -45,7 +45,6 @@ func main() {
 		log.Fatal("No free args allowed, but got:", flag.Args())
 	}
 
-	x.AssertTruef(opt.mapBufSize > 0, "-mapoutput_mb must be specified")
 	opt.mapBufSize = opt.mapBufSize << 20 // Convert from MB to B.
 
 	go func() {
