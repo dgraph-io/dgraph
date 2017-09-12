@@ -114,10 +114,11 @@ func (m *mapper) parseRDF(rdfLine string) error {
 		m.addMapEntry(key, rev)
 	}
 
-	// TODO: XXX: HACK: Removed for now, should be switched on/off by flag.
-	// key = x.DataKey("_predicate_", sid)
-	// pp := m.createPredicatePosting(nq.GetPredicate())
-	// m.addMapEntry(key, pp)
+	if !m.opt.skipExpandEdges {
+		key = x.DataKey("_predicate_", sid)
+		pp := m.createPredicatePosting(nq.GetPredicate())
+		m.addMapEntry(key, pp)
+	}
 
 	m.addIndexMapEntries(nq, de)
 
