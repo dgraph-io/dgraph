@@ -19,6 +19,7 @@ package worker
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -107,7 +108,7 @@ func (p *proposals) Done(pid uint32, err error) {
 	// Since the tasks are executed in goroutines we need on guarding watermark which
 	// is done only when all the pending sync/applied marks have been emitted.
 	pd.n.Applied.Done(pd.index)
-	posting.SyncMarkFor(pd.n.gid).Done(pd.index)
+	posting.SyncMarks().Done(pd.index)
 }
 
 func (p *proposals) Has(pid uint32) bool {
@@ -133,7 +134,7 @@ type node struct {
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
-	x.Printf("Node with GroupID: %v, ID: %v\n", gid, id)
+	x.Printf("Node ID: %v with GroupID: %v\n", id, gid)
 
 	rc := &protos.RaftContext{
 		Addr:  myAddr,
@@ -186,6 +187,8 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
 	}
+	fmt.Printf("Propose and wait for %v\n", proposal)
+	defer fmt.Printf("Proposal done: %v\n", proposal)
 	// TODO: Should be based on number of edges (amount of work)
 	pendingProposals <- struct{}{}
 	x.PendingProposals.Add(1)
@@ -233,8 +236,12 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		return err
 	}
 
+	fmt.Println("Raft propose")
 	//	we don't timeout on a mutation which has already been proposed.
+	n.Raft()
+	fmt.Println("Raft propose. Start")
 	if err = n.Raft().Propose(ctx, slice[:upto]); err != nil {
+		fmt.Println("Raft propose. Failed")
 		return x.Wrapf(err, "While proposing")
 	}
 
@@ -251,7 +258,9 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 		log.Fatalf("Unknown proposal")
 	}
 
+	fmt.Println("Wait for error")
 	err = <-che
+	fmt.Println("Wait for error. DONE")
 	if err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
@@ -309,14 +318,14 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 	cs := n.Raft().ApplyConfChange(cc)
 	n.SetConfState(cs)
 	n.Applied.Done(e.Index)
-	posting.SyncMarkFor(n.gid).Done(e.Index)
+	posting.SyncMarks().Done(e.Index)
 }
 
 func (n *node) processApplyCh() {
 	for e := range n.applyCh {
 		if len(e.Data) == 0 {
 			n.Applied.Done(e.Index)
-			posting.SyncMarkFor(n.gid).Done(e.Index)
+			posting.SyncMarks().Done(e.Index)
 			continue
 		}
 
@@ -371,7 +380,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	// Need to clear pl's stored in memory for the case when retrieving snapshot with
 	// index greater than this node's last index
 	// Should invalidate/remove pl's to this group only ideally
-	posting.EvictGroup(n.gid)
+	posting.EvictLRU()
 	if _, err := populateShard(n.ctx, pstore, pool, n.gid); err != nil {
 		// TODO: We definitely don't want to just fall flat on our face if we can't
 		// retrieve a simple snapshot.
@@ -379,7 +388,7 @@ func (n *node) retrieveSnapshot(peerID uint64) {
 	}
 	// Populate shard stores the streamed data directly into db, so we need to refresh
 	// schema for current group id
-	x.Checkf(schema.LoadFromDb(n.gid), "Error while initilizating schema")
+	x.Checkf(schema.LoadFromDb(), "Error while initilizating schema")
 }
 
 func (n *node) Run() {
@@ -449,7 +458,7 @@ func (n *node) Run() {
 				// Mark{3, false} is emitted. So it's safer to emit watermarks as soon as
 				// possible sequentially
 				n.Applied.Begin(entry.Index)
-				posting.SyncMarkFor(n.gid).Begin(entry.Index)
+				posting.SyncMarks().Begin(entry.Index)
 
 				if !leader && entry.Type == raftpb.EntryConfChange {
 					// Config changes in followers must be applied straight away.
@@ -472,6 +481,7 @@ func (n *node) Run() {
 			}
 			n.Raft().Advance()
 			if firstRun && n.canCampaign {
+				fmt.Printf("===> Campaigned")
 				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
@@ -542,7 +552,7 @@ func (n *node) snapshot(skip uint64) {
 		// regenerate the state on a crash. Therefore, don't take snapshots.
 		return
 	}
-	water := posting.SyncMarkFor(n.gid)
+	water := posting.SyncMarks()
 	le := water.DoneUntil()
 
 	existing, err := n.Store.Snapshot()
@@ -598,11 +608,11 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	idx, restart, err := n.InitFromWal(wal)
 	x.Check(err)
 	n.Applied.SetDoneUntil(idx)
-	posting.SyncMarkFor(n.gid).SetDoneUntil(idx)
+	posting.SyncMarks().SetDoneUntil(idx)
 
 	if restart {
 		x.Printf("Restarting node for group: %d\n", n.gid)
-		_, found := groups().Server(Config.RaftId, n.gid)
+		found := groups().HasMe()
 		if !found && groups().HasPeer(n.gid) {
 			n.joinPeers()
 		}
@@ -611,10 +621,12 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	} else {
 		x.Printf("New Node for group: %d\n", n.gid)
 		if groups().HasPeer(n.gid) {
+			fmt.Println("=======> Has peer")
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.Cfg, nil))
 
 		} else {
+			fmt.Println("------> No peer")
 			peers := []raft.Peer{{ID: n.Id}}
 			n.SetRaft(raft.StartNode(n.Cfg, peers))
 			// Trigger election, so this node can become the leader of this single-node cluster.

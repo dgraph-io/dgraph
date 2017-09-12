@@ -22,7 +22,6 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -48,7 +47,7 @@ func getSchema(ctx context.Context, s *protos.SchemaRequest) (*protos.SchemaResu
 	if len(s.Predicates) > 0 {
 		predicates = s.Predicates
 	} else {
-		predicates = schema.State().Predicates(s.GroupId)
+		predicates = schema.State().Predicates()
 	}
 	if len(s.Fields) > 0 {
 		fields = s.Fields
@@ -57,9 +56,8 @@ func getSchema(ctx context.Context, s *protos.SchemaRequest) (*protos.SchemaResu
 	}
 
 	for _, attr := range predicates {
-		if !groups().ServesGroup(group.BelongsTo(attr)) {
-			return &emptySchemaResult,
-				x.Errorf("Predicate fingerprint doesn't match this instance")
+		if !groups().ServesTablet(attr) {
+			return &emptySchemaResult, errUnservedTablet
 		}
 		if schemaNode := populateSchema(attr, fields); schemaNode != nil {
 			result.Schema = append(result.Schema, schemaNode)
@@ -105,7 +103,7 @@ func populateSchema(attr string, fields []string) *protos.SchemaNode {
 // empty then it adds all known groups
 func addToSchemaMap(schemaMap map[uint32]*protos.SchemaRequest, schema *protos.SchemaRequest) {
 	for _, attr := range schema.Predicates {
-		gid := group.BelongsTo(attr)
+		gid := groups().BelongsTo(attr)
 		s := schemaMap[gid]
 		if s == nil {
 			s = &protos.SchemaRequest{GroupId: gid}

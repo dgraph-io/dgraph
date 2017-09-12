@@ -366,19 +366,12 @@ func (w *RaftServer) JoinCluster(ctx context.Context,
 	}
 	// Commenting out the following checks for now, until we get rid of groups.
 	// TODO: Uncomment this after groups is removed.
-	// if rc.Group != w.GetNode().Group || rc.Id == w.GetNode().Id {
-	// 	return &protos.Payload{}, x.Errorf(errorNodeIDExists)
-	// }
-	// TODO: Figure out what other conditions we need to check to reject a Join.
-
-	// // Best effor reject
-	// if _, found := groups().Server(rc.Id, rc.Group); found || rc.Id == Config.RaftId {
-	// 	return &protos.Payload{}, x.Errorf(errorNodeIDExists)
-	// }
-
 	node := w.GetNode()
-	if node == nil {
-		return &protos.Payload{}, errNoNode
+	if node == nil || node.Raft() == nil {
+		return nil, errNoNode
+	}
+	if rc.Group != node.RaftContext.Group || rc.Id == node.RaftContext.Id {
+		return nil, errNoNode
 	}
 	if _, ok := node.GetPeer(rc.Id); ok {
 		return &protos.Payload{}, x.Errorf("Node id already part of group.")
@@ -403,14 +396,12 @@ var (
 func (w *RaftServer) applyMessage(ctx context.Context, msg raftpb.Message) error {
 	var rc protos.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
-	// node := groups().Node(rc.Group)
-	// if node == nil {
-	// 	// Maybe we went down, went back up, reconnected, and got an RPC
-	// 	// message before we set up Raft?
-	// 	return errNoNode
-	// }
+
 	node := w.GetNode()
 	if node == nil || node.Raft() == nil {
+		return errNoNode
+	}
+	if rc.Group != node.RaftContext.Group {
 		return errNoNode
 	}
 	node.Connect(msg.From, rc.Addr)

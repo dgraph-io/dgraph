@@ -114,7 +114,7 @@ func StoreStats() string {
 
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
 func BlockingStop() {
-	stopAllNodes()           // blocking stop all nodes
+	groups().Node.Stop()     // blocking stop raft node.
 	if workerServer != nil { // possible if Config.InMemoryComm == true
 		workerServer.GracefulStop() // blocking stop server
 	}
@@ -124,5 +124,5 @@ func BlockingStop() {
 	if err := syncAllMarks(ctx); err != nil {
 		x.Printf("Error in sync watermarks : %s", err.Error())
 	}
-	snapshotAll()
+	groups().Node.snapshot(0)
 }

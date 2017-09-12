@@ -43,7 +43,7 @@ func uidsForRegex(attr string, gid uint32,
 
 	uidsForTrigram := func(trigram string) *protos.List {
 		key := x.IndexKey(attr, trigram)
-		pl := posting.GetOrCreate(key, gid)
+		pl := posting.GetOrCreate(key)
 		return pl.Uids(opts)
 	}
 

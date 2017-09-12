@@ -28,7 +28,6 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
@@ -103,12 +102,12 @@ func checkSum(pl *protos.PostingList) []byte {
 	return h.Sum(nil)
 }
 
-func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataClient, groupId uint32) error {
+func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataClient) error {
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
 	g := &protos.GroupKeys{
-		GroupId: groupId,
+		GroupId: groups().groupId(),
 	}
 
 	// Do NOT go to next by default. Be careful when you "continue" in loop.
@@ -127,11 +126,7 @@ func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataCl
 			// Do not go next.
 			continue
 		}
-		if group.BelongsTo(pk.Attr) != g.GroupId {
-			it.Seek(pk.SkipPredicate())
-			// Do not go next.
-			continue
-		}
+		// TODO: Stream only certain tablets, not all of them.
 
 		var pl protos.PostingList
 		posting.UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
@@ -174,7 +169,7 @@ func populateShard(ctx context.Context, ps *badger.KV, pl *conn.Pool, group uint
 		tr.LazyPrintf("Streaming data for group: %v", group)
 	}
 
-	if err := streamKeys(ps, stream, group); err != nil {
+	if err := streamKeys(ps, stream); err != nil {
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}
@@ -285,15 +280,6 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 
 		if pk == nil {
 			it.Next()
-			continue
-		}
-		if group.BelongsTo(pk.Attr) != gkeys.GroupId {
-			if !pk.IsSchema() {
-				// Do not go next.
-				it.Seek(pk.SkipPredicate())
-			} else {
-				it.Next()
-			}
 			continue
 		}
 

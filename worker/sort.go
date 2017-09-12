@@ -27,7 +27,6 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -45,7 +44,7 @@ type sortresult struct {
 
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *protos.SortMessage) (*protos.SortResult, error) {
-	gid := group.BelongsTo(q.Attr)
+	gid := groups().BelongsTo(q.Attr)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("worker.Sort attr: %v groupId: %v", q.Attr, gid)
 	}
@@ -73,7 +72,7 @@ func (w *grpcWorker) Sort(ctx context.Context, s *protos.SortMessage) (*protos.S
 		return &emptySortResult, ctx.Err()
 	}
 
-	gid := group.BelongsTo(s.Attr)
+	gid := groups().BelongsTo(s.Attr)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("Sorting: Attribute: %q groupId: %v Sort", s.Attr, gid)
 	}

@@ -19,6 +19,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 
 	"golang.org/x/net/context"
 
@@ -83,6 +84,7 @@ func (s *Server) assignUids(ctx context.Context, num *protos.Num) (*protos.Assig
 	if available < num.Val {
 		var proposal protos.ZeroProposal
 		proposal.MaxLeaseId = maxLease + howMany
+
 		if err := s.Node.proposeAndWait(ctx, &proposal); err != nil {
 			return nil, err
 		}
@@ -99,6 +101,7 @@ func (s *Server) assignUids(ctx context.Context, num *protos.Num) (*protos.Assig
 // AssignUids is used to assign new uids by communicating with the leader of the RAFT group
 // responsible for handing out uids.
 func (s *Server) AssignUids(ctx context.Context, num *protos.Num) (*protos.AssignedIds, error) {
+	fmt.Printf("AssignUids called with %v\n", num)
 	if ctx.Err() != nil {
 		return &emptyAssignedIds, ctx.Err()
 	}

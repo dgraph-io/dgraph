@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -196,12 +195,13 @@ func writeToFile(fpath string, ch chan []byte) error {
 }
 
 // Export creates a export of data by exporting it as an RDF gzip.
-func export(gid uint32, bdir string) error {
+func export(bdir string) error {
 	// Use a goroutine to write to file.
 	err := os.MkdirAll(bdir, 0700)
 	if err != nil {
 		return err
 	}
+	gid := groups().groupId()
 	fpath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.rdf.gz", gid,
 		time.Now().Format("2006-01-02-15-04")))
 	fspath := path.Join(bdir, fmt.Sprintf("dgraph-schema-%d-%s.rdf.gz", gid,
@@ -269,7 +269,6 @@ func export(gid uint32, bdir string) error {
 	// Iterate over rocksdb.
 	it := pstore.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
-	var lastPred string
 	prefix := new(bytes.Buffer)
 	prefix.Grow(100)
 	var debugCount int
@@ -290,13 +289,11 @@ func export(gid uint32, bdir string) error {
 			continue
 		}
 		if pk.IsSchema() {
-			if group.BelongsTo(pk.Attr) == gid {
-				s := &protos.SchemaUpdate{}
-				x.Check(s.Unmarshal(item.Value()))
-				chs <- &skv{
-					attr:   pk.Attr,
-					schema: s,
-				}
+			s := &protos.SchemaUpdate{}
+			x.Check(s.Unmarshal(item.Value()))
+			chs <- &skv{
+				attr:   pk.Attr,
+				schema: s,
 			}
 			// skip predicate
 			it.Next()
@@ -304,11 +301,6 @@ func export(gid uint32, bdir string) error {
 		}
 		x.AssertTrue(pk.IsData())
 		pred, uid := pk.Attr, pk.Uid
-		if pred != lastPred && group.BelongsTo(pred) != gid {
-			it.Seek(pk.SkipPredicate())
-			continue
-		}
-
 		prefix.WriteString("<_:uid")
 		prefix.WriteString(strconv.FormatUint(uid, 16))
 		prefix.WriteString("> <")
@@ -321,7 +313,6 @@ func export(gid uint32, bdir string) error {
 			list:   pl,
 		}
 		prefix.Reset()
-		lastPred = pred
 		it.Next()
 	}
 
@@ -345,7 +336,7 @@ func handleExportForGroup(ctx context.Context, reqId uint64, gid uint32) *protos
 		if tr, ok := trace.FromContext(ctx); ok {
 			tr.LazyPrintf("Leader of group: %d. Running export.", gid)
 		}
-		if err := export(gid, Config.ExportPath); err != nil {
+		if err := export(Config.ExportPath); err != nil {
 			if tr, ok := trace.FromContext(ctx); ok {
 				tr.LazyPrintf(err.Error())
 			}

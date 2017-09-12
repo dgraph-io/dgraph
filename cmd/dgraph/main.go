@@ -49,7 +49,6 @@ import (
 	"github.com/cockroachdb/cmux"
 	"github.com/dgraph-io/dgraph/dgraph"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
@@ -60,7 +59,6 @@ import (
 )
 
 var (
-	gconf        string
 	baseHttpPort int
 	baseGrpcPort int
 	bindall      bool
@@ -134,7 +132,6 @@ func setupConfigOpts() {
 	flag.IntVar(&x.Config.PortOffset, "port_offset", 0,
 		"Value added to all listening port numbers.")
 
-	flag.StringVar(&gconf, "group_conf", "", "group configuration file")
 	flag.IntVar(&baseHttpPort, "port", 8080, "Port to run HTTP service on.")
 	flag.IntVar(&baseGrpcPort, "grpc_port", 9080, "Port to run gRPC service on.")
 	flag.BoolVar(&bindall, "bindall", false,
@@ -292,6 +289,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	fmt.Println(" -------> Past ParseQueryAndMutation")
 
 	var cancel context.CancelFunc
 	// set timeout if schema mutation not present
@@ -761,8 +759,6 @@ func main() {
 			return true, true
 		}
 	}
-
-	x.Checkf(group.ParseGroupConfig(gconf), "While parsing group config.")
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
