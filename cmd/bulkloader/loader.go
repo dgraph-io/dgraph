@@ -25,6 +25,7 @@ type options struct {
 	rdfFiles        string
 	schemaFile      string
 	badgerDir       string
+	leaseFile       string
 	tmpDir          string
 	numGoroutines   int
 	mapBufSize      int64
@@ -129,10 +130,15 @@ func (ld *loader) mapStage() {
 	for i := range ld.mappers {
 		ld.mappers[i] = nil
 	}
-	// TODO: Put lease in file.
-	fmt.Println("LEASE:", ld.um.lease())
+	ld.writeLease()
 	ld.um = nil
 	runtime.GC()
+}
+
+func (ld *loader) writeLease() {
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "%d\n", ld.um.lease())
+	x.Check(ioutil.WriteFile(ld.opt.leaseFile, buf.Bytes(), 0644))
 }
 
 func (ld *loader) reduceStage() {

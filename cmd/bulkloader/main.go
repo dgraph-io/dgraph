@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -25,7 +26,8 @@ func main() {
 	var opt options
 	flag.StringVar(&opt.rdfFiles, "r", "", "Location of rdf files to load (comma separated)")
 	flag.StringVar(&opt.schemaFile, "s", "", "Location of schema file to load")
-	flag.StringVar(&opt.badgerDir, "p", "", "Location of the final Dgraph directory")
+	flag.StringVar(&opt.badgerDir, "p", "p", "Location of the final Dgraph directory")
+	flag.StringVar(&opt.leaseFile, "l", "LEASE", "Location to write the lease file")
 	flag.StringVar(&opt.tmpDir, "tmp", "tmp", "Temp directory used to use for on-disk "+
 		"scratch space. Requires free space proportional to the size of the RDF file.")
 	flag.IntVar(&opt.numGoroutines, "j", runtime.NumCPU(),
@@ -42,7 +44,14 @@ func main() {
 
 	flag.Parse()
 	if len(flag.Args()) != 0 {
-		log.Fatal("No free args allowed, but got:", flag.Args())
+		flag.Usage()
+		fmt.Println("No free args allowed, but got:", flag.Args())
+		os.Exit(1)
+	}
+	if opt.rdfFiles == "" || opt.schemaFile == "" {
+		flag.Usage()
+		fmt.Println("RDF and schema file(s) must be specified.")
+		os.Exit(1)
 	}
 
 	opt.mapBufSize = opt.mapBufSize << 20 // Convert from MB to B.
