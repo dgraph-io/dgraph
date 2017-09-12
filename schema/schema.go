@@ -308,8 +308,9 @@ func LoadFromDb(gid uint32) error {
 		}
 		attr := x.Parse(key).Attr
 		var s protos.SchemaUpdate
-		if err := item.Value(func(val []byte) {
+		if err := item.Value(func(val []byte) error {
 			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
+			return nil
 		}); err != nil {
 			return err
 		}

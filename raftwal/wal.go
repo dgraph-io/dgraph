@@ -170,31 +170,23 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 func (w *Wal) Snapshot(gid uint32) (snap raftpb.Snapshot, rerr error) {
 	var item badger.KVItem
 	if err := w.wals.Get(w.snapshotKey(gid), &item); err != nil {
-		rerr = x.Wrapf(err, "while fetching snapshot from wal")
-		return
+		return snap, x.Wrapf(err, "while fetching snapshot from wal")
 	}
-	err := item.Value(func(val []byte) {
-		rerr = x.Wrapf(snap.Unmarshal(val), "While unmarshal snapshot")
+	err := item.Value(func(val []byte) error {
+		return x.Wrapf(snap.Unmarshal(val), "While unmarshal snapshot")
 	})
-	if err != nil && rerr == nil {
-		rerr = err
-	}
-	return
+	return snap, err
 }
 
 func (w *Wal) HardState(gid uint32) (hd raftpb.HardState, rerr error) {
 	var item badger.KVItem
 	if err := w.wals.Get(w.hardStateKey(gid), &item); err != nil {
-		rerr = x.Wrapf(err, "while fetching hardstate from wal")
-		return
+		return hd, x.Wrapf(err, "while fetching hardstate from wal")
 	}
-	err := item.Value(func(val []byte) {
-		rerr = x.Wrapf(hd.Unmarshal(val), "While unmarshal hardstate")
+	err := item.Value(func(val []byte) error {
+		return x.Wrapf(hd.Unmarshal(val), "While unmarshal hardstate")
 	})
-	if err != nil && rerr == nil {
-		rerr = err
-	}
-	return
+	return hd, err
 }
 
 func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry, rerr error) {
@@ -206,16 +198,10 @@ func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry
 	for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
 		item := itr.Item()
 		var e raftpb.Entry
-		if err := item.Value(func(val []byte) {
-			if err := e.Unmarshal(val); err != nil {
-				rerr = x.Wrapf(err, "While unmarshal raftpb.Entry")
-			}
+		if err := item.Value(func(val []byte) error {
+			return x.Wrapf(e.Unmarshal(val), "While unmarshal raftpb.Entry")
 		}); err != nil {
-			rerr = err
-			return
-		}
-		if rerr != nil {
-			return
+			return es, err
 		}
 		es = append(es, e)
 	}

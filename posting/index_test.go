@@ -152,8 +152,9 @@ func TestTokensTable(t *testing.T) {
 	require.NoError(t, err)
 
 	var pl protos.PostingList
-	require.NoError(t, item.Value(func(val []byte) {
-		UnmarshalWithCopy(val, item.UserMeta(), &pl)
+	require.NoError(t, item.Value(func(val []byte) error {
+		UnmarshalOrCopy(val, item.UserMeta(), &pl)
+		return nil
 	}))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
@@ -162,8 +163,9 @@ func TestTokensTable(t *testing.T) {
 
 	err = ps.Get(key, &item)
 	require.NoError(t, err)
-	require.NoError(t, item.Value(func(val []byte) {
-		UnmarshalWithCopy(val, item.UserMeta(), &pl)
+	require.NoError(t, item.Value(func(val []byte) error {
+		UnmarshalOrCopy(val, item.UserMeta(), &pl)
+		return nil
 	}))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
@@ -272,8 +274,9 @@ func TestRebuildIndex(t *testing.T) {
 		}
 		idxKeys = append(idxKeys, string(key))
 		pl := new(protos.PostingList)
-		require.NoError(t, item.Value(func(val []byte) {
-			UnmarshalWithCopy(val, item.UserMeta(), pl)
+		require.NoError(t, item.Value(func(val []byte) error {
+			UnmarshalOrCopy(val, item.UserMeta(), pl)
+			return nil
 		}))
 		idxVals = append(idxVals, pl)
 	}
@@ -327,8 +330,9 @@ func TestRebuildReverseEdges(t *testing.T) {
 		}
 		revKeys = append(revKeys, string(key))
 		pl := new(protos.PostingList)
-		require.NoError(t, item.Value(func(val []byte) {
-			UnmarshalWithCopy(val, item.UserMeta(), pl)
+		require.NoError(t, item.Value(func(val []byte) error {
+			UnmarshalOrCopy(val, item.UserMeta(), pl)
+			return nil
 		}))
 		revVals = append(revVals, pl)
 	}

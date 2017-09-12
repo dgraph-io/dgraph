@@ -116,12 +116,13 @@ func (a *allocator) fetchOne() (uint64, error) {
 
 func (a *allocator) getFromKV(id string) (uint64, error) {
 	var item badger.KVItem
-	if err := a.kv.Get([]byte(id), &item); err != nil {
+	var err error
+	if err = a.kv.Get([]byte(id), &item); err != nil {
 		return 0, err
 	}
 
 	var uid uint64
-	if err := item.Value(func(val []byte) error {
+	err = item.Value(func(val []byte) error {
 		if len(val) > 0 {
 			var n int
 			uid, n = binary.Uvarint(val)
@@ -131,11 +132,9 @@ func (a *allocator) getFromKV(id string) (uint64, error) {
 		}
 		return nil
 
-	}); err != nil {
-		return 0, err
-	}
+	})
 
-	return uid, nil
+	return uid, err
 }
 
 func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool, err error) {

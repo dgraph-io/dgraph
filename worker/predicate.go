@@ -134,8 +134,9 @@ func streamKeys(pstore *badger.KV, stream protos.Worker_PredicateAndSchemaDataCl
 		}
 
 		var pl protos.PostingList
-		if err := iterItem.Value(func(val []byte) {
-			posting.UnmarshalWithCopy(val, iterItem.UserMeta(), &pl)
+		if err := iterItem.Value(func(val []byte) error {
+			posting.UnmarshalOrCopy(val, iterItem.UserMeta(), &pl)
+			return nil
 		}); err != nil {
 			return err
 		}
@@ -303,14 +304,18 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 
 		// No checksum check for schema keys
 		var v []byte
-		if err := iterItem.Value(func(val []byte) {
-			v = val
+		if err := iterItem.Value(func(val []byte) error {
+			v = make([]byte, len(val))
+			// Copy it as we have to access it outside.
+			copy(v, val)
+			return nil
 		}); err != nil {
 			return err
 		}
+
 		if !pk.IsSchema() {
 			var pl protos.PostingList
-			posting.UnmarshalWithCopy(v, iterItem.UserMeta(), &pl)
+			posting.UnmarshalOrCopy(v, iterItem.UserMeta(), &pl)
 
 			// If a key is present in follower but not in leader, send a kv with empty value
 			// so that the follower can delete it
@@ -330,7 +335,6 @@ func (w *grpcWorker) PredicateAndSchemaData(stream protos.Worker_PredicateAndSch
 				// it would be cheaper when there's no match.
 				// TODO: What if checksum collides ?
 				if bytes.Equal(checkSum(&pl), t.Checksum) {
-
 					it.Next()
 					continue
 				}

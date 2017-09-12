@@ -52,10 +52,11 @@ func main() {
 		iterItem := it.Item()
 		k := iterItem.Key()
 		pk := x.Parse(k)
-		iterItem.Value(func(val []byte) {
+		iterItem.Value(func(val []byte) error {
 			if len(val) > 10000000 {
 				fmt.Printf("key: %+v, len(val): %v\n", pk, len(val))
 			}
+			return nil
 		})
 	}
 }

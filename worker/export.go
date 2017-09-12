@@ -292,8 +292,9 @@ func export(gid uint32, bdir string) error {
 		if pk.IsSchema() {
 			if group.BelongsTo(pk.Attr) == gid {
 				s := &protos.SchemaUpdate{}
-				if err := item.Value(func(val []byte) {
+				if err := item.Value(func(val []byte) error {
 					x.Check(s.Unmarshal(val))
+					return nil
 				}); err != nil {
 					return err
 				}
@@ -319,8 +320,9 @@ func export(gid uint32, bdir string) error {
 		prefix.WriteString(pred)
 		prefix.WriteString("> ")
 		pl := &protos.PostingList{}
-		if err := item.Value(func(val []byte) {
-			posting.UnmarshalWithCopy(val, item.UserMeta(), pl)
+		if err := item.Value(func(val []byte) error {
+			posting.UnmarshalOrCopy(val, item.UserMeta(), pl)
+			return nil
 		}); err != nil {
 			return err
 		}
