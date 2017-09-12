@@ -47,7 +47,7 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
 	filename := filepath.Join(m.opt.tmpDir, fmt.Sprintf("%06d.map", fileNum))
 	x.Check(x.WriteFileSync(filename, m.buf.Bytes(), 0644))
 	m.buf.Reset()
-	m.mu.Unlock()
+	m.mu.Unlock() // Locked by caller.
 }
 
 func (m *mapper) run() {
@@ -55,17 +55,15 @@ func (m *mapper) run() {
 		x.Check(m.parseRDF(rdf))
 		atomic.AddInt64(&m.prog.rdfCount, 1)
 		if m.sz >= m.opt.mapBufSize {
-			// HACK XXX: experiment to see max theoretical RDF + Edge generation speed.
-			//m.mu.Lock() // One write at a time.
-			//go m.writeMapEntriesToFile(m.mapEntries)
+			m.mu.Lock() // One write at a time.
+			go m.writeMapEntriesToFile(m.mapEntries)
 			m.mapEntries = nil
 			m.sz = 0
 		}
 	}
 	if len(m.mapEntries) > 0 {
-		// HACK XXX: experiment to see max theoretical RDF + Edge generation speed.
-		//m.mu.Lock() // One write at a time.
-		//m.writeMapEntriesToFile(m.mapEntries)
+		m.mu.Lock() // One write at a time.
+		m.writeMapEntriesToFile(m.mapEntries)
 	}
 	m.mu.Lock() // Ensure that the last file write finishes.
 }
