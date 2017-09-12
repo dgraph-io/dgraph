@@ -169,40 +169,40 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
-			"checksumSHA1": "FQLSFywRCpFiNo8pW3kIsxg3Kx4=",
+			"checksumSHA1": "eIxGKSUcI7gpjTAcn4nngM76OH0=",
 			"path": "github.com/dgraph-io/badger",
-			"revision": "d7cdc2d49498636cda2bed8ee2fe807d747b939d",
-			"revisionTime": "2017-09-11T12:25:46Z"
+			"revision": "cdbd1b466f9728ab233f496f4b72d0ea80d53df0",
+			"revisionTime": "2017-09-12T01:30:39Z"
 		},
 		{
 			"checksumSHA1": "oOuT7ebEiZ1ViHLKdFxKFOvobAQ=",
 			"path": "github.com/dgraph-io/badger/options",
-			"revision": "d7cdc2d49498636cda2bed8ee2fe807d747b939d",
-			"revisionTime": "2017-09-11T12:25:46Z"
+			"revision": "cdbd1b466f9728ab233f496f4b72d0ea80d53df0",
+			"revisionTime": "2017-09-12T01:30:39Z"
 		},
 		{
 			"checksumSHA1": "FB7rDZgiLfpIGi9RqWbgxjZ0Vjg=",
 			"path": "github.com/dgraph-io/badger/protos",
-			"revision": "d7cdc2d49498636cda2bed8ee2fe807d747b939d",
-			"revisionTime": "2017-09-11T12:25:46Z"
+			"revision": "cdbd1b466f9728ab233f496f4b72d0ea80d53df0",
+			"revisionTime": "2017-09-12T01:30:39Z"
 		},
 		{
 			"checksumSHA1": "JPMRtJrMwbjSPHA6VsuUyJJM7xE=",
 			"path": "github.com/dgraph-io/badger/skl",
-			"revision": "d7cdc2d49498636cda2bed8ee2fe807d747b939d",
-			"revisionTime": "2017-09-11T12:25:46Z"
+			"revision": "cdbd1b466f9728ab233f496f4b72d0ea80d53df0",
+			"revisionTime": "2017-09-12T01:30:39Z"
 		},
 		{
 			"checksumSHA1": "p03nWiAKduR/uci7cdpIba0lA1E=",
 			"path": "github.com/dgraph-io/badger/table",
-			"revision": "d7cdc2d49498636cda2bed8ee2fe807d747b939d",
-			"revisionTime": "2017-09-11T12:25:46Z"
+			"revision": "cdbd1b466f9728ab233f496f4b72d0ea80d53df0",
+			"revisionTime": "2017-09-12T01:30:39Z"
 		},
 		{
-			"checksumSHA1": "vu+9T7YmnClIXfXPE/IAE7K9K3I=",
+			"checksumSHA1": "JLFkm+oOQ63JGemt/0DPfx3zdEg=",
 			"path": "github.com/dgraph-io/badger/y",
-			"revision": "d7cdc2d49498636cda2bed8ee2fe807d747b939d",
-			"revisionTime": "2017-09-11T12:25:46Z"
+			"revision": "cdbd1b466f9728ab233f496f4b72d0ea80d53df0",
+			"revisionTime": "2017-09-12T01:30:39Z"
 		},
 		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
