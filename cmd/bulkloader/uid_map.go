@@ -9,9 +9,9 @@ import (
 
 type shard struct {
 	sync.Mutex
-	m       map[string]uint64
-	lastUID uint64
-	lease   uint64
+	xidToUid map[string]uint64
+	lastUID  uint64
+	lease    uint64
 }
 
 type uidMap struct {
@@ -24,7 +24,7 @@ func newUIDMap() *uidMap {
 		lease: 1,
 	}
 	for i := range um.shards {
-		um.shards[i].m = make(map[string]uint64)
+		um.shards[i].xidToUid = make(map[string]uint64)
 	}
 	return um
 }
@@ -39,7 +39,7 @@ func (m *uidMap) assignUID(str string) uint64 {
 	sh.Lock()
 	defer sh.Unlock()
 
-	uid, ok := sh.m[str]
+	uid, ok := sh.xidToUid[str]
 	if ok {
 		return uid
 	}
@@ -47,6 +47,6 @@ func (m *uidMap) assignUID(str string) uint64 {
 		sh.lease = atomic.AddUint64(&m.lease, 10000)
 	}
 	sh.lastUID++
-	sh.m[str] = sh.lastUID
+	sh.xidToUid[str] = sh.lastUID
 	return sh.lastUID
 }
