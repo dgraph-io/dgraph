@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -55,7 +57,7 @@ func newLoader(opt options) *loader {
 		prog:       newProgress(),
 		um:         newUIDMap(),
 		ss:         newSchemaStore(initialSchema),
-		rdfCh:      make(chan string, 1000),
+		rdfCh:      make(chan string, 10000),
 		mapEntryCh: make(chan *protos.MapEntry, 1000),
 	}
 	ld := &loader{
@@ -67,6 +69,22 @@ func newLoader(opt options) *loader {
 	}
 	go ld.prog.report()
 	return ld
+}
+
+func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
+	isPrefix := true
+	var err error
+	for isPrefix && err == nil {
+		var line []byte
+		// The returned line is an internal buffer in bufio and is only
+		// valid until the next call to ReadLine. It needs to be copied
+		// over to our own buffer.
+		line, isPrefix, err = r.ReadLine()
+		if err == nil {
+			buf.Write(line)
+		}
+	}
+	return err
 }
 
 func (ld *loader) mapStage() {
@@ -81,26 +99,32 @@ func (ld *loader) mapStage() {
 		}(m)
 	}
 
-	var scanners []*bufio.Scanner
+	var readers []io.Reader
 	for _, rdfFile := range strings.Split(ld.opt.rdfFiles, ",") {
 		f, err := os.Open(rdfFile)
 		x.Check(err)
 		defer f.Close()
-		var sc *bufio.Scanner
 		if !strings.HasSuffix(rdfFile, ".gz") {
-			sc = bufio.NewScanner(f)
+			readers = append(readers, f)
 		} else {
 			gzr, err := gzip.NewReader(f)
 			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
-			sc = bufio.NewScanner(gzr)
+			readers = append(readers, gzr)
 		}
-		scanners = append(scanners, sc)
 	}
-	for _, sc := range scanners {
-		for i := 0; sc.Scan(); i++ {
-			ld.rdfCh <- sc.Text()
+	var lineBuf bytes.Buffer
+	for _, r := range readers {
+		bufReader := bufio.NewReader(r)
+		for {
+			lineBuf.Reset()
+			err := readLine(bufReader, &lineBuf)
+			if err == io.EOF {
+				break
+			} else {
+				x.Check(err)
+			}
+			ld.rdfCh <- lineBuf.String()
 		}
-		x.Check(sc.Err())
 	}
 
 	close(ld.rdfCh)
