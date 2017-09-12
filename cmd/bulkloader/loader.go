@@ -76,9 +76,6 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 	var err error
 	for isPrefix && err == nil {
 		var line []byte
-		// The returned line is an internal buffer in bufio and is only
-		// valid until the next call to ReadLine. It needs to be copied
-		// over to our own buffer.
 		line, isPrefix, err = r.ReadLine()
 		if err == nil {
 			buf.Write(line)
