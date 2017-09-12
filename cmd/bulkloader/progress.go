@@ -64,13 +64,12 @@ func (p *progress) reportOnce() {
 	case mapPhase:
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
 		elapsed := time.Since(p.start)
-		fmt.Printf("[MAP] [%s] [RDF count: %d] [Edge count: %d] "+
-			"[RDFs per second: %d] [Edges per second: %d]\n",
+		fmt.Printf("MAP %s rdf_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec\n",
 			fixedDuration(elapsed),
-			rdfCount,
-			mapEdgeCount,
-			int(float64(rdfCount)/elapsed.Seconds()),
-			int(float64(mapEdgeCount)/elapsed.Seconds()),
+			niceFloat(float64(rdfCount)),
+			niceFloat(float64(rdfCount)/elapsed.Seconds()),
+			niceFloat(float64(mapEdgeCount)),
+			niceFloat(float64(mapEdgeCount)/elapsed.Seconds()),
 		)
 	case reducePhase:
 		now := time.Now()
@@ -85,14 +84,14 @@ func (p *progress) reportOnce() {
 		if mapEdgeCount != 0 {
 			pct = fmt.Sprintf("[%.2f%%] ", 100*float64(reduceEdgeCount)/float64(mapEdgeCount))
 		}
-		fmt.Printf("[REDUCE] [%s] %s[Edge count: %d] [Edges per second: %d] "+
-			"[Posting list count: %d] [Posting lists per second: %d]\n",
+		fmt.Printf("REDUCE %s %sedge_count:%s edge_speed:%s/sec "+
+			"plist_count:%s plist_speed:%s/sec\n",
 			fixedDuration(now.Sub(p.start)),
 			pct,
-			reduceEdgeCount,
-			int(float64(reduceEdgeCount)/elapsed.Seconds()),
-			reduceKeyCount,
-			int(float64(reduceKeyCount)/elapsed.Seconds()),
+			niceFloat(float64(reduceEdgeCount)),
+			niceFloat(float64(reduceEdgeCount)/elapsed.Seconds()),
+			niceFloat(float64(reduceKeyCount)),
+			niceFloat(float64(reduceKeyCount)/elapsed.Seconds()),
 		)
 	default:
 		x.AssertTruef(false, "invalid phase")
@@ -118,4 +117,26 @@ func fixedDuration(d time.Duration) string {
 		str = fmt.Sprintf("%02dh", int(d.Hours())) + str
 	}
 	return str
+}
+
+var suffixes = [...]string{"", "k", "M", "G", "T"}
+
+func niceFloat(f float64) string {
+	idx := 0
+	for f >= 1000 {
+		f /= 1000
+		idx++
+	}
+	if idx >= len(suffixes) {
+		return fmt.Sprintf("%f", f)
+	}
+	suf := suffixes[idx]
+	switch {
+	case f >= 100:
+		return fmt.Sprintf("%.1f%s", f, suf)
+	case f >= 10:
+		return fmt.Sprintf("%.2f%s", f, suf)
+	default:
+		return fmt.Sprintf("%.3f%s", f, suf)
+	}
 }

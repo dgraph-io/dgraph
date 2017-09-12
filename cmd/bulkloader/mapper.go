@@ -37,6 +37,7 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
 
 	var varintBuf [binary.MaxVarintLen64]byte
 	for _, me := range mapEntries {
+		x.AssertTrue(len(me.Key) != 0)
 		n := binary.PutUvarint(varintBuf[:], uint64(me.Size()))
 		m.buf.Write(varintBuf[:n])
 		postBuf, err := me.Marshal()

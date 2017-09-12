@@ -70,6 +70,7 @@ func shufflePostings(batchCh chan<- []*protos.MapEntry,
 	var plistLen int
 	for len(ph.nodes) > 0 {
 		me := ph.nodes[0].mapEntry
+		x.AssertTrue(len(me.Key) != 0)
 		var ok bool
 		ph.nodes[0].mapEntry, ok = <-ph.nodes[0].ch
 		if ok {
