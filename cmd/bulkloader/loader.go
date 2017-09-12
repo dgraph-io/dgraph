@@ -182,11 +182,11 @@ func (ld *loader) reduceStage() {
 	for batch := range reduceCh {
 		pending <- struct{}{}
 		reduceWg.Add(1)
-		go func() {
+		go func(batch []*protos.MapEntry) {
 			reduce(batch, ld.kv, ld.prog)
 			<-pending
 			reduceWg.Done()
-		}()
+		}(batch)
 	}
 	reduceWg.Wait()
 	ci.wait()
