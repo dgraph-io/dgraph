@@ -55,15 +55,17 @@ func (m *mapper) run() {
 		x.Check(m.parseRDF(rdf))
 		atomic.AddInt64(&m.prog.rdfCount, 1)
 		if m.sz >= m.opt.mapBufSize {
-			m.mu.Lock() // One write at a time.
-			go m.writeMapEntriesToFile(m.mapEntries)
+			// HACK XXX: experiment to see max theoretical RDF + Edge generation speed.
+			//m.mu.Lock() // One write at a time.
+			//go m.writeMapEntriesToFile(m.mapEntries)
 			m.mapEntries = nil
 			m.sz = 0
 		}
 	}
 	if len(m.mapEntries) > 0 {
-		m.mu.Lock() // One write at a time.
-		m.writeMapEntriesToFile(m.mapEntries)
+		// HACK XXX: experiment to see max theoretical RDF + Edge generation speed.
+		//m.mu.Lock() // One write at a time.
+		//m.writeMapEntriesToFile(m.mapEntries)
 	}
 	m.mu.Lock() // Ensure that the last file write finishes.
 }
