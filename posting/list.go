@@ -35,7 +35,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/bp128"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
@@ -506,16 +505,11 @@ func (l *List) delete(ctx context.Context, attr string) error {
 	l.mlayer = l.mlayer[:0] // Clear the mutation layer.
 	atomic.StoreInt32(&l.deleteAll, 1)
 
-	var gid uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 		l.water.Begin(rv.Index)
 		l.pending = append(l.pending, rv.Index)
-		gid = rv.Group
 	}
 	// if mutation doesn't come via raft
-	if gid == 0 {
-		gid = group.BelongsTo(attr)
-	}
 	if dirtyChan != nil {
 		dirtyChan <- l.key
 	}

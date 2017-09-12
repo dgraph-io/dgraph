@@ -34,7 +34,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
@@ -137,7 +136,7 @@ func processWithBackupRequest(
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, q *protos.Query) (*protos.Result, error) {
 	attr := q.Attr
-	gid := group.BelongsTo(attr)
+	gid := groups().BelongsTo(attr)
 	if tr, ok := trace.FromContext(ctx); ok {
 		tr.LazyPrintf("attr: %v groupId: %v", attr, gid)
 	}
@@ -316,7 +315,6 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 	srcFn := args.srcFn
 	q := args.q
 	attr := q.Attr
-	gid := args.gid
 	out := args.out
 
 	switch srcFn.fnType {
@@ -337,7 +335,7 @@ func handleValuePostings(ctx context.Context, args funcArgs) error {
 		key = x.DataKey(attr, q.UidList.Uids[i])
 
 		// Get or create the posting list for an entity, attribute combination.
-		pl := posting.Get(key, gid)
+		pl := posting.Get(key)
 		var vals []types.Val
 		// Even if its a list type and value is asked in a language we return that.
 		if listType && len(q.Langs) == 0 {
@@ -433,7 +431,6 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 	srcFn := args.srcFn
 	q := args.q
 	attr := q.Attr
-	gid := args.gid
 	out := args.out
 
 	facetsTree, err := preprocessFilter(q.FacetsFilter)
@@ -464,7 +461,7 @@ func handleUidPostings(ctx context.Context, args funcArgs, opts posting.ListOpti
 		}
 
 		// Get or create the posting list for an entity, attribute combination.
-		pl := posting.Get(key, gid)
+		pl := posting.Get(key)
 
 		// get filtered uids and facets.
 		var filteredRes []*result
@@ -719,7 +716,7 @@ func handleRegexFunction(ctx context.Context, arg funcArgs) error {
 			default:
 			}
 			key := x.DataKey(attr, uid)
-			pl := posting.Get(key, arg.gid)
+			pl := posting.Get(key)
 
 			var val types.Val
 			if lang != "" {
@@ -821,7 +818,7 @@ func filterGeoFunction(arg funcArgs) {
 	uids := algo.MergeSorted(arg.out.UidMatrix)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl := posting.Get(key, arg.gid)
+		pl := posting.Get(key)
 
 		val, err := pl.Value()
 		newValue := &protos.TaskValue{ValType: int32(val.Tid)}
@@ -847,7 +844,7 @@ func filterStringFunction(arg funcArgs) {
 	lang := langForFunc(arg.q.Langs)
 	for _, uid := range uids.Uids {
 		key := x.DataKey(attr, uid)
-		pl := posting.Get(key, arg.gid)
+		pl := posting.Get(key)
 
 		var val types.Val
 		var err error
@@ -1115,7 +1112,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *protos.Query) (*protos.Re
 		return &emptyResult, ctx.Err()
 	}
 
-	gid := group.BelongsTo(q.Attr)
+	gid := groups().BelongsTo(q.Attr)
 	var numUids int
 	if q.UidList != nil {
 		numUids = len(q.UidList.Uids)
@@ -1347,7 +1344,7 @@ func (cp *countParams) evaluate(out *protos.Result) {
 	count := cp.count
 	countKey := x.CountKey(cp.attr, uint32(count), cp.reverse)
 	if cp.fn == "eq" {
-		pl := posting.Get(countKey, cp.gid)
+		pl := posting.Get(countKey)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 		return
 	}
@@ -1379,7 +1376,7 @@ func (cp *countParams) evaluate(out *protos.Result) {
 
 	for it.Seek(countKey); it.ValidForPrefix(countPrefix); it.Next() {
 		key := it.Item().Key()
-		pl := posting.Get(key, cp.gid)
+		pl := posting.Get(key)
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(posting.ListOptions{}))
 	}
 }

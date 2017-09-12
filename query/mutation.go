@@ -3,6 +3,7 @@ package query
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 
 	"golang.org/x/net/trace"
@@ -24,6 +25,7 @@ func (mr *InternalMutation) AddEdge(edge *protos.DirectedEdge, op protos.Directe
 }
 
 func ApplyMutations(ctx context.Context, m *protos.Mutations) error {
+	fmt.Printf("Apply mutations called with %v\n", m)
 	if worker.Config.ExpandEdge {
 		err := handleInternalEdge(ctx, m)
 		if err != nil {
@@ -155,6 +157,7 @@ func AssignUids(ctx context.Context, nquads gql.NQuads) (map[string]uint64, erro
 			}
 			return newUids, err
 		}
+		fmt.Println("AssignUidsOverNetwork is done")
 		curId := res.StartId
 		// assign generated ones now
 		for k := range newUids {

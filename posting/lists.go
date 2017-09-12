@@ -34,7 +34,6 @@ import (
 
 	"github.com/dgraph-io/badger"
 
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -60,11 +59,6 @@ const (
 // This watermark would be used for taking snapshots, to ensure that all the data and
 // index mutations have been syned to RocksDB, before a snapshot is taken, and previous
 // RAFT entries discarded.
-type syncMarks struct {
-	sync.RWMutex
-	m map[uint32]*x.WaterMark
-}
-
 func init() {
 	x.AddInit(func() {
 		h := md5.New()
@@ -76,38 +70,6 @@ func init() {
 		x.Check(err)
 	})
 	elog = trace.NewEventLog("Memory", "")
-}
-
-func (g *syncMarks) create(group uint32) *x.WaterMark {
-	g.Lock()
-	defer g.Unlock()
-	if g.m == nil {
-		g.m = make(map[uint32]*x.WaterMark)
-	}
-
-	if prev, present := g.m[group]; present {
-		return prev
-	}
-	w := &x.WaterMark{Name: fmt.Sprintf("Synced: Group %d", group)}
-	w.Init()
-	g.m[group] = w
-	return w
-}
-
-func (g *syncMarks) Get(group uint32) *x.WaterMark {
-	g.RLock()
-	if w, present := g.m[group]; present {
-		g.RUnlock()
-		return w
-	}
-	g.RUnlock()
-	return g.create(group)
-}
-
-// SyncMarkFor returns the synced watermark for the given RAFT group.
-// We use this to determine the index to use when creating a new snapshot.
-func SyncMarkFor(group uint32) *x.WaterMark {
-	return marks.Get(group)
 }
 
 func gentleCommit(dirtyMap map[string]time.Time, pending chan struct{},
@@ -281,13 +243,19 @@ func updateMemoryMetrics() {
 var (
 	pstore    *badger.KV
 	dirtyChan chan []byte // All dirty posting list keys are pushed here.
-	marks     *syncMarks
+	marks     *x.WaterMark
 	lcache    *listCache
 )
 
+func SyncMarks() *x.WaterMark {
+	return marks
+}
+
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.KV) {
-	marks = new(syncMarks)
+	marks = &x.WaterMark{Name: "Synced watermark"}
+	marks.Init()
+
 	pstore = ps
 	lcache = newListCache(math.MaxUint64)
 	x.LcacheCapacity.Set(math.MaxInt64)
@@ -307,7 +275,7 @@ func Init(ps *badger.KV) {
 // worker pkg would push the indices to the watermarks held by lists.
 // And watermark stuff would have to be located outside worker pkg, maybe in x.
 // That way, we don't have a dependency conflict.
-func Get(key []byte, group uint32) (rlist *List) {
+func Get(key []byte) (rlist *List) {
 	lp := lcache.Get(string(key))
 	if lp != nil {
 		x.CacheHit.Add(1)
@@ -318,7 +286,7 @@ func Get(key []byte, group uint32) (rlist *List) {
 	// Any initialization for l must be done before PutIfMissing. Once it's added
 	// to the map, any other goroutine can retrieve it.
 	l := getNew(key, pstore)
-	l.water = marks.Get(group)
+	l.water = marks
 	// We are always going to return lp to caller, whether it is l or not
 	lp = lcache.PutIfMissing(string(key), l)
 	if lp != l {
@@ -402,11 +370,6 @@ func CommitLists(numRoutines int, gid uint32) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
-		pk := x.Parse(k)
-		if group.BelongsTo(pk.Attr) != gid {
-			return
-		}
-
 		workChan <- l
 	})
 	close(workChan)
@@ -415,13 +378,6 @@ func CommitLists(numRoutines int, gid uint32) {
 
 // This doesn't sync, so call this only when you don't care about dirty posting lists in
 // memory(for example before populating snapshot) or after calling syncAllMarks
-func EvictGroup(gid uint32) {
-	err := lcache.clear(func(key []byte) bool {
-		pk := x.Parse(key)
-		if group.BelongsTo(pk.Attr) == gid {
-			return true
-		}
-		return false
-	})
-	x.Checkf(err, "Error while evicting group %d", gid)
+func EvictLRU() {
+	lcache.Reset()
 }
