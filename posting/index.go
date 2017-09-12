@@ -394,7 +394,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *protos.DirectedEdge)
 
 func deleteEntries(prefix []byte) error {
 	iterOpt := badger.DefaultIteratorOptions
-	iterOpt.FetchValues = false
+	iterOpt.PrefetchValues = false
 	idxIt := pstore.NewIterator(iterOpt)
 	defer idxIt.Close()
 
@@ -513,7 +513,12 @@ func rebuildCountIndex(ctx context.Context, attr string, reverse bool, errCh cha
 		key := iterItem.Key()
 		pki := x.Parse(key)
 		var pl protos.PostingList
-		UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
+		if err := iterItem.Value(func(val []byte) {
+			UnmarshalWithCopy(val, iterItem.UserMeta(), &pl)
+		}); err != nil {
+			errCh <- err
+			return
+		}
 
 		ch <- item{
 			uid:  pki.Uid,
@@ -614,7 +619,11 @@ func RebuildReverseEdges(ctx context.Context, attr string) error {
 		}
 		pki := x.Parse(key)
 		var pl protos.PostingList
-		UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
+		if err := iterItem.Value(func(val []byte) {
+			UnmarshalWithCopy(val, iterItem.UserMeta(), &pl)
+		}); err != nil {
+			return err
+		}
 
 		// Posting list contains only values or only UIDs.
 		if (len(pl.Postings) == 0 && len(pl.Uids) != 0) ||
@@ -710,7 +719,11 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		}
 		pki := x.Parse(key)
 		var pl protos.PostingList
-		UnmarshalWithCopy(iterItem.Value(), iterItem.UserMeta(), &pl)
+		if err := iterItem.Value(func(val []byte) {
+			UnmarshalWithCopy(val, iterItem.UserMeta(), &pl)
+		}); err != nil {
+			return err
+		}
 
 		// Posting list contains only values or only UIDs.
 		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) != x.ValueUid {

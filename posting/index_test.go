@@ -149,18 +149,22 @@ func TestTokensTable(t *testing.T) {
 	var item badger.KVItem
 	time.Sleep(10 * time.Millisecond)
 	err = ps.Get(key, &item)
-	x.Check(err)
+	require.NoError(t, err)
 
 	var pl protos.PostingList
-	UnmarshalWithCopy(item.Value(), item.UserMeta(), &pl)
+	require.NoError(t, item.Value(func(val []byte) {
+		UnmarshalWithCopy(val, item.UserMeta(), &pl)
+	}))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 
 	CommitLists(10, 1)
 
 	err = ps.Get(key, &item)
-	x.Check(err)
-	UnmarshalWithCopy(item.Value(), item.UserMeta(), &pl)
+	require.NoError(t, err)
+	require.NoError(t, item.Value(func(val []byte) {
+		UnmarshalWithCopy(val, item.UserMeta(), &pl)
+	}))
 
 	require.EqualValues(t, []string{"\x01david"}, tokensForTest("name"))
 	deletePl(t)
@@ -268,7 +272,9 @@ func TestRebuildIndex(t *testing.T) {
 		}
 		idxKeys = append(idxKeys, string(key))
 		pl := new(protos.PostingList)
-		UnmarshalWithCopy(item.Value(), item.UserMeta(), pl)
+		require.NoError(t, item.Value(func(val []byte) {
+			UnmarshalWithCopy(val, item.UserMeta(), pl)
+		}))
 		idxVals = append(idxVals, pl)
 	}
 	require.Len(t, idxKeys, 2)
@@ -315,13 +321,15 @@ func TestRebuildReverseEdges(t *testing.T) {
 	var revVals []*protos.PostingList
 	for it.Seek(prefix); it.Valid(); it.Next() {
 		item := it.Item()
-		key, value := item.Key(), item.Value()
+		key := item.Key()
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
 		revKeys = append(revKeys, string(key))
 		pl := new(protos.PostingList)
-		UnmarshalWithCopy(value, item.UserMeta(), pl)
+		require.NoError(t, item.Value(func(val []byte) {
+			UnmarshalWithCopy(val, item.UserMeta(), pl)
+		}))
 		revVals = append(revVals, pl)
 	}
 	require.Len(t, revKeys, 2)
