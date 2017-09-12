@@ -1,5 +1,3 @@
-// +build windows
-
 /*
  * Copyright 2017 Dgraph Labs, Inc. and Contributors
  *
@@ -16,7 +14,9 @@
  * limitations under the License.
  */
 
-package y
+// +build windows
+
+package table
 
 import (
 	"os"
@@ -24,22 +24,15 @@ import (
 	"unsafe"
 )
 
-func Mmap(fd *os.File, write bool, size int64) ([]byte, error) {
-	protect := syscall.PAGE_READONLY
-	access := syscall.FILE_MAP_READ
-
-	if write {
-		protect = syscall.PAGE_READWRITE
-		access = syscall.FILE_MAP_WRITE
-	}
+func mmap(fd *os.File, size int64) ([]byte, error) {
 	handler, err := syscall.CreateFileMapping(syscall.Handle(fd.Fd()), nil,
-		uint32(protect), uint32(size>>32), uint32(size), nil)
+		syscall.PAGE_READONLY, uint32(size>>32), uint32(size), nil)
 	if err != nil {
 		return nil, err
 	}
 	defer syscall.CloseHandle(handler)
 
-	mapData, err := syscall.MapViewOfFile(handler, uint32(access), 0, 0, 0)
+	mapData, err := syscall.MapViewOfFile(handler, syscall.FILE_MAP_READ, 0, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -48,11 +41,6 @@ func Mmap(fd *os.File, write bool, size int64) ([]byte, error) {
 	return data, nil
 }
 
-func Munmap(b []byte) error {
+func munmap(b []byte) error {
 	return syscall.UnmapViewOfFile(uintptr(unsafe.Pointer(&b[0])))
-}
-
-func Madvise(b []byte, readahead bool) error {
-	// Do Nothing. We don’t care about this setting on Windows
-	return nil
 }

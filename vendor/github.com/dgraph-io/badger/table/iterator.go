@@ -26,7 +26,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-type blockIterator struct {
+type BlockIterator struct {
 	data    []byte
 	pos     uint32
 	err     error
@@ -39,7 +39,7 @@ type blockIterator struct {
 	last header // The last header we saw.
 }
 
-func (itr *blockIterator) Reset() {
+func (itr *BlockIterator) Reset() {
 	itr.pos = 0
 	itr.err = nil
 	itr.baseKey = []byte{}
@@ -49,35 +49,35 @@ func (itr *blockIterator) Reset() {
 	itr.last = header{}
 }
 
-func (itr *blockIterator) Init() {
+func (itr *BlockIterator) Init() {
 	if !itr.init {
 		itr.Next()
 	}
 }
 
-func (itr *blockIterator) Valid() bool {
+func (itr *BlockIterator) Valid() bool {
 	return itr != nil && itr.err == nil
 }
 
-func (itr *blockIterator) Error() error {
+func (itr *BlockIterator) Error() error {
 	return itr.err
 }
 
-func (itr *blockIterator) Close() {}
+func (itr *BlockIterator) Close() {}
 
 var (
-	origin  = 0
-	current = 1
+	ORIGIN  = 0
+	CURRENT = 1
 )
 
 // Seek brings us to the first block element that is >= input key.
-func (itr *blockIterator) Seek(key []byte, whence int) {
+func (itr *BlockIterator) Seek(key []byte, whence int) {
 	itr.err = nil
 
 	switch whence {
-	case origin:
+	case ORIGIN:
 		itr.Reset()
-	case current:
+	case CURRENT:
 	}
 
 	var done bool
@@ -94,13 +94,13 @@ func (itr *blockIterator) Seek(key []byte, whence int) {
 	}
 }
 
-func (itr *blockIterator) SeekToFirst() {
+func (itr *BlockIterator) SeekToFirst() {
 	itr.err = nil
 	itr.Init()
 }
 
 // SeekToLast brings us to the last element. Valid should return true.
-func (itr *blockIterator) SeekToLast() {
+func (itr *BlockIterator) SeekToLast() {
 	itr.err = nil
 	for itr.Init(); itr.Valid(); itr.Next() {
 	}
@@ -108,7 +108,7 @@ func (itr *blockIterator) SeekToLast() {
 }
 
 // parseKV would allocate a new byte slice for key and for value.
-func (itr *blockIterator) parseKV(h header) {
+func (itr *BlockIterator) parseKV(h header) {
 	if cap(itr.key) < int(h.plen+h.klen) {
 		itr.key = make([]byte, 2*(h.plen+h.klen))
 	}
@@ -126,7 +126,7 @@ func (itr *blockIterator) parseKV(h header) {
 	itr.pos += uint32(h.vlen)
 }
 
-func (itr *blockIterator) Next() {
+func (itr *BlockIterator) Next() {
 	itr.init = true
 	itr.err = nil
 	if itr.pos >= uint32(len(itr.data)) {
@@ -153,7 +153,7 @@ func (itr *blockIterator) Next() {
 	itr.parseKV(h)
 }
 
-func (itr *blockIterator) Prev() {
+func (itr *BlockIterator) Prev() {
 	if !itr.init {
 		return
 	}
@@ -175,56 +175,63 @@ func (itr *blockIterator) Prev() {
 	itr.last = h
 }
 
-func (itr *blockIterator) Key() []byte {
+func (itr *BlockIterator) Key() []byte {
 	if itr.err != nil {
 		return nil
 	}
 	return itr.key
 }
 
-func (itr *blockIterator) Value() []byte {
+func (itr *BlockIterator) Value() []byte {
 	if itr.err != nil {
 		return nil
 	}
 	return itr.val
 }
 
-// Iterator is an iterator for a Table.
-type Iterator struct {
+type TableIterator struct {
 	t    *Table
 	bpos int
-	bi   *blockIterator
+	bi   *BlockIterator
 	err  error
+	init bool
 
-	// Internally, Iterator is bidirectional. However, we only expose the
+	// Internally, TableIterator is bidirectional. However, we only expose the
 	// unidirectional functionality for now.
 	reversed bool
 }
 
-// NewIterator returns a new iterator of the Table
-func (t *Table) NewIterator(reversed bool) *Iterator {
+func (t *Table) NewIterator(reversed bool) *TableIterator {
 	t.IncrRef() // Important.
-	ti := &Iterator{t: t, reversed: reversed}
-	ti.next()
+	ti := &TableIterator{t: t, reversed: reversed}
+	ti.Init()
 	return ti
 }
 
-// Close closes the iterator (and it must be called).
-func (itr *Iterator) Close() error {
+func (itr *TableIterator) Close() error {
 	return itr.t.DecrRef()
 }
 
-func (itr *Iterator) reset() {
+func (itr *TableIterator) reset() {
 	itr.bpos = 0
 	itr.err = nil
 }
 
-// Valid follows the y.Iterator interface
-func (itr *Iterator) Valid() bool {
+func (itr *TableIterator) Valid() bool {
 	return itr.err == nil
 }
 
-func (itr *Iterator) seekToFirst() {
+func (itr *TableIterator) Error() error {
+	return itr.err
+}
+
+func (itr *TableIterator) Init() {
+	if !itr.init {
+		itr.next()
+	}
+}
+
+func (itr *TableIterator) seekToFirst() {
 	numBlocks := len(itr.t.blockIndex)
 	if numBlocks == 0 {
 		itr.err = io.EOF
@@ -241,7 +248,7 @@ func (itr *Iterator) seekToFirst() {
 	itr.err = itr.bi.Error()
 }
 
-func (itr *Iterator) seekToLast() {
+func (itr *TableIterator) seekToLast() {
 	numBlocks := len(itr.t.blockIndex)
 	if numBlocks == 0 {
 		itr.err = io.EOF
@@ -258,7 +265,7 @@ func (itr *Iterator) seekToLast() {
 	itr.err = itr.bi.Error()
 }
 
-func (itr *Iterator) seekHelper(blockIdx int, key []byte) {
+func (itr *TableIterator) seekHelper(blockIdx int, key []byte) {
 	itr.bpos = blockIdx
 	block, err := itr.t.block(blockIdx)
 	if err != nil {
@@ -266,17 +273,17 @@ func (itr *Iterator) seekHelper(blockIdx int, key []byte) {
 		return
 	}
 	itr.bi = block.NewIterator()
-	itr.bi.Seek(key, origin)
+	itr.bi.Seek(key, ORIGIN)
 	itr.err = itr.bi.Error()
 }
 
 // seekFrom brings us to a key that is >= input key.
-func (itr *Iterator) seekFrom(key []byte, whence int) {
+func (itr *TableIterator) seekFrom(key []byte, whence int) {
 	itr.err = nil
 	switch whence {
-	case origin:
+	case ORIGIN:
 		itr.reset()
-	case current:
+	case CURRENT:
 	}
 
 	idx := sort.Search(len(itr.t.blockIndex), func(idx int) bool {
@@ -311,20 +318,20 @@ func (itr *Iterator) seekFrom(key []byte, whence int) {
 }
 
 // seek will reset iterator and seek to >= key.
-func (itr *Iterator) seek(key []byte) {
-	itr.seekFrom(key, origin)
+func (itr *TableIterator) seek(key []byte) {
+	itr.seekFrom(key, ORIGIN)
 }
 
 // seekForPrev will reset iterator and seek to <= key.
-func (itr *Iterator) seekForPrev(key []byte) {
+func (itr *TableIterator) seekForPrev(key []byte) {
 	// TODO: Optimize this. We shouldn't have to take a Prev step.
-	itr.seekFrom(key, origin)
+	itr.seekFrom(key, ORIGIN)
 	if !bytes.Equal(itr.Key(), key) {
 		itr.prev()
 	}
 }
 
-func (itr *Iterator) next() {
+func (itr *TableIterator) next() {
 	itr.err = nil
 
 	if itr.bpos >= len(itr.t.blockIndex) {
@@ -352,7 +359,7 @@ func (itr *Iterator) next() {
 	}
 }
 
-func (itr *Iterator) prev() {
+func (itr *TableIterator) prev() {
 	itr.err = nil
 	if itr.bpos < 0 {
 		itr.err = io.EOF
@@ -379,57 +386,51 @@ func (itr *Iterator) prev() {
 	}
 }
 
-// Key follows the y.Iterator interface
-func (itr *Iterator) Key() []byte {
+func (itr *TableIterator) Key() []byte {
 	return itr.bi.Key()
 }
 
-// Value follows the y.Iterator interface
-func (itr *Iterator) Value() (ret y.ValueStruct) {
+func (itr *TableIterator) Value() (ret y.ValueStruct) {
 	ret.DecodeEntireSlice(itr.bi.Value())
 	return
 }
 
-// Next follows the y.Iterator interface
-func (itr *Iterator) Next() {
-	if !itr.reversed {
-		itr.next()
+func (s *TableIterator) Next() {
+	if !s.reversed {
+		s.next()
 	} else {
-		itr.prev()
+		s.prev()
 	}
 }
 
-// Rewind follows the y.Iterator interface
-func (itr *Iterator) Rewind() {
-	if !itr.reversed {
-		itr.seekToFirst()
+func (s *TableIterator) Rewind() {
+	if !s.reversed {
+		s.seekToFirst()
 	} else {
-		itr.seekToLast()
+		s.seekToLast()
 	}
 }
 
-// Seek follows the y.Iterator interface
-func (itr *Iterator) Seek(key []byte) {
-	if !itr.reversed {
-		itr.seek(key)
+func (s *TableIterator) Seek(key []byte) {
+	if !s.reversed {
+		s.seek(key)
 	} else {
-		itr.seekForPrev(key)
+		s.seekForPrev(key)
 	}
 }
 
-// ConcatIterator concatenates the sequences defined by several iterators.  (It only works with
-// TableIterators, probably just because it's faster to not be so generic.)
+func (s *TableIterator) Name() string { return "TableIterator" }
+
 type ConcatIterator struct {
 	idx      int // Which iterator is active now.
-	cur      *Iterator
-	iters    []*Iterator // Corresponds to tables.
-	tables   []*Table    // Disregarding reversed, this is in ascending order.
+	cur      *TableIterator
+	iters    []*TableIterator // Corresponds to tables.
+	tables   []*Table         // Disregarding reversed, this is in ascending order.
 	reversed bool
 }
 
-// NewConcatIterator creates a new concatenated iterator
 func NewConcatIterator(tbls []*Table, reversed bool) *ConcatIterator {
-	iters := make([]*Iterator, len(tbls))
+	iters := make([]*TableIterator, len(tbls))
 	for i := 0; i < len(tbls); i++ {
 		iters[i] = tbls[i].NewIterator(reversed)
 	}
@@ -450,7 +451,6 @@ func (s *ConcatIterator) setIdx(idx int) {
 	}
 }
 
-// Rewind implements y.Interface
 func (s *ConcatIterator) Rewind() {
 	if len(s.iters) == 0 {
 		return
@@ -463,17 +463,16 @@ func (s *ConcatIterator) Rewind() {
 	s.cur.Rewind()
 }
 
-// Valid implements y.Interface
 func (s *ConcatIterator) Valid() bool {
 	return s.cur != nil && s.cur.Valid()
 }
 
-// Key implements y.Interface
+func (s *ConcatIterator) Name() string { return "ConcatIterator" }
+
 func (s *ConcatIterator) Key() []byte {
 	return s.cur.Key()
 }
 
-// Value implements y.Interface
 func (s *ConcatIterator) Value() y.ValueStruct {
 	return s.cur.Value()
 }
@@ -525,7 +524,6 @@ func (s *ConcatIterator) Next() {
 	}
 }
 
-// Close implements y.Interface.
 func (s *ConcatIterator) Close() error {
 	for _, it := range s.iters {
 		if err := it.Close(); err != nil {

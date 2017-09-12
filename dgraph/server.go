@@ -26,7 +26,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/query"
@@ -64,7 +64,7 @@ func (s *ServerState) initStorage() {
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = Config.WALDir
 	kvOpt.ValueDir = Config.WALDir
-	kvOpt.TableLoadingMode = options.MemoryMap
+	kvOpt.MapTablesTo = table.MemoryMap
 
 	var err error
 	s.WALstore, err = badger.NewKV(&kvOpt)
@@ -80,11 +80,11 @@ func (s *ServerState) initStorage() {
 	opt.ValueDir = Config.PostingDir
 	switch Config.PostingTables {
 	case "memorymap":
-		opt.TableLoadingMode = options.MemoryMap
+		opt.MapTablesTo = table.MemoryMap
 	case "loadtoram":
-		opt.TableLoadingMode = options.LoadToRAM
+		opt.MapTablesTo = table.LoadToRAM
 	case "nothing":
-		opt.TableLoadingMode = options.FileIO
+		opt.MapTablesTo = table.Nothing
 	default:
 		x.Fatalf("Invalid Posting Tables options")
 	}

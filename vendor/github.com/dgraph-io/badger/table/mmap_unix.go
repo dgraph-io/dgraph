@@ -1,4 +1,4 @@
-// +build dragonfly freebsd windows
+// +build !windows
 
 /*
  * Copyright 2017 Dgraph Labs, Inc. and Contributors
@@ -16,10 +16,18 @@
  * limitations under the License.
  */
 
-package y
+package table
 
-import "syscall"
+import (
+	"os"
 
-func init() {
-	datasyncFileFlag = syscall.O_SYNC
+	"golang.org/x/sys/unix"
+)
+
+func mmap(fd *os.File, size int64) ([]byte, error) {
+	return unix.Mmap(int(fd.Fd()), 0, int(size), unix.PROT_READ, unix.MAP_SHARED)
+}
+
+func munmap(b []byte) (err error) {
+	return unix.Munmap(b)
 }

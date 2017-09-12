@@ -87,7 +87,7 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	start := w.entryKey(gid, 0, 0)
 	last := w.entryKey(gid, s.Metadata.Term, s.Metadata.Index)
 	opt := badger.DefaultIteratorOptions
-	opt.PrefetchValues = false
+	opt.FetchValues = false
 	itr := w.wals.NewIterator(opt)
 	defer itr.Close()
 
@@ -145,7 +145,7 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 		start := w.entryKey(gid, t, i+1)
 		prefix := w.prefix(gid)
 		opt := badger.DefaultIteratorOptions
-		opt.PrefetchValues = false
+		opt.FetchValues = false
 		itr := w.wals.NewIterator(opt)
 		defer itr.Close()
 
@@ -173,12 +173,10 @@ func (w *Wal) Snapshot(gid uint32) (snap raftpb.Snapshot, rerr error) {
 		rerr = x.Wrapf(err, "while fetching snapshot from wal")
 		return
 	}
-	err := item.Value(func(val []byte) {
-		rerr = x.Wrapf(snap.Unmarshal(val), "While unmarshal snapshot")
-	})
-	if err != nil && rerr == nil {
-		rerr = err
-	}
+	val := item.Value()
+	// Originally, with RocksDB, this can return an error and a non-null rdb.Slice object with Data=nil.
+	// And for this case, we do NOT return.
+	rerr = x.Wrapf(snap.Unmarshal(val), "While unmarshal snapshot")
 	return
 }
 
@@ -188,12 +186,10 @@ func (w *Wal) HardState(gid uint32) (hd raftpb.HardState, rerr error) {
 		rerr = x.Wrapf(err, "while fetching hardstate from wal")
 		return
 	}
-	err := item.Value(func(val []byte) {
-		rerr = x.Wrapf(hd.Unmarshal(val), "While unmarshal hardstate")
-	})
-	if err != nil && rerr == nil {
-		rerr = err
-	}
+	val := item.Value()
+	// Originally, with RocksDB, this can return an error and a non-null rdb.Slice object with Data=nil.
+	// And for this case, we do NOT return.
+	rerr = x.Wrapf(hd.Unmarshal(val), "While unmarshal hardstate")
 	return
 }
 
@@ -206,16 +202,8 @@ func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry
 	for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
 		item := itr.Item()
 		var e raftpb.Entry
-		if err := item.Value(func(val []byte) {
-			if err := e.Unmarshal(val); err != nil {
-				rerr = x.Wrapf(err, "While unmarshal raftpb.Entry")
-			}
-		}); err != nil {
-			rerr = err
-			return
-		}
-		if rerr != nil {
-			return
+		if err := e.Unmarshal(item.Value()); err != nil {
+			return es, x.Wrapf(err, "While unmarshal raftpb.Entry")
 		}
 		es = append(es, e)
 	}

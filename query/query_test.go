@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/badger/table"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	geom "github.com/twpayne/go-geom"
@@ -6914,7 +6914,7 @@ func TestMain(m *testing.M) {
 	kvOpt.SyncWrites = true
 	kvOpt.Dir = dir2
 	kvOpt.ValueDir = dir2
-	kvOpt.TableLoadingMode = options.LoadToRAM
+	kvOpt.MapTablesTo = table.Nothing
 	walStore, err := badger.NewKV(&kvOpt)
 	x.Check(err)
 

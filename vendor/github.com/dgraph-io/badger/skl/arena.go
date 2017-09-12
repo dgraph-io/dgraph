@@ -28,19 +28,19 @@ type Arena struct {
 	buf []byte
 }
 
-// newArena returns a new arena.
-func newArena(n int64) *Arena {
+// NewArena returns a new arena.
+func NewArena(n int64) *Arena {
 	out := &Arena{
 		buf: make([]byte, n),
 	}
 	return out
 }
 
-func (s *Arena) size() int64 {
+func (s *Arena) Size() int64 {
 	return int64(atomic.LoadUint32(&s.n))
 }
 
-func (s *Arena) reset() {
+func (s *Arena) Reset() {
 	atomic.StoreUint32(&s.n, 0)
 }
 
@@ -48,7 +48,7 @@ func (s *Arena) reset() {
 // val buffer. Returns an offset into buf. User is responsible for remembering
 // size of val. We could also store this size inside arena but the encoding and
 // decoding will incur some overhead.
-func (s *Arena) putVal(v y.ValueStruct) uint32 {
+func (s *Arena) PutVal(v y.ValueStruct) uint32 {
 	l := uint32(v.EncodedSize())
 	n := atomic.AddUint32(&s.n, l)
 	y.AssertTruef(int(n) <= len(s.buf),
@@ -59,7 +59,7 @@ func (s *Arena) putVal(v y.ValueStruct) uint32 {
 	return m
 }
 
-func (s *Arena) putKey(key []byte) uint32 {
+func (s *Arena) PutKey(key []byte) uint32 {
 	l := uint32(len(key))
 	n := atomic.AddUint32(&s.n, l)
 	y.AssertTruef(int(n) <= len(s.buf),
@@ -70,14 +70,14 @@ func (s *Arena) putKey(key []byte) uint32 {
 	return m
 }
 
-// getKey returns byte slice at offset.
-func (s *Arena) getKey(offset uint32, size uint16) []byte {
+// GetKey returns byte slice at offset.
+func (s *Arena) GetKey(offset uint32, size uint16) []byte {
 	return s.buf[offset : offset+uint32(size)]
 }
 
-// getVal returns byte slice at offset. The given size should be just the value
+// GetVal returns byte slice at offset. The given size should be just the value
 // size and should NOT include the meta bytes.
-func (s *Arena) getVal(offset uint32, size uint16) (ret y.ValueStruct) {
+func (s *Arena) GetVal(offset uint32, size uint16) (ret y.ValueStruct) {
 	ret.DecodeEntireSlice(s.buf[offset : offset+uint32(y.ValueStructSerializedSize(size))])
 	return
 }

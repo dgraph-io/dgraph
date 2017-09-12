@@ -26,8 +26,9 @@ import (
 	"github.com/dgraph-io/badger/y"
 )
 
+//var tableSize int64 = 50 << 20
 var (
-	restartInterval = 100 // Might want to change this to be based on total size instead of numKeys.
+	restartInterval int = 100 // Might want to change this to be based on total size instead of numKeys.
 )
 
 func newBuffer(sz int) *bytes.Buffer {
@@ -63,8 +64,7 @@ func (h *header) Decode(buf []byte) int {
 // Size returns size of the header. Currently it's just a constant.
 func (h header) Size() int { return 10 }
 
-// Builder is used in building a table.
-type Builder struct {
+type TableBuilder struct {
 	counter int // Number of keys written for the current block.
 
 	// Typically tens or hundreds of meg. This is for one single file.
@@ -82,9 +82,8 @@ type Builder struct {
 	keyCount int
 }
 
-// NewTableBuilder makes a new TableBuilder.
-func NewTableBuilder() *Builder {
-	return &Builder{
+func NewTableBuilder() *TableBuilder {
+	return &TableBuilder{
 		keyBuf:     newBuffer(32 << 20),
 		buf:        newBuffer(64 << 20),
 		prevOffset: math.MaxUint32, // Used for the first element!
@@ -92,13 +91,12 @@ func NewTableBuilder() *Builder {
 }
 
 // Close closes the TableBuilder.
-func (b *Builder) Close() {}
+func (b *TableBuilder) Close() {}
 
-// Empty returns whether it's empty.
-func (b *Builder) Empty() bool { return b.buf.Len() == 0 }
+func (b *TableBuilder) Empty() bool { return b.buf.Len() == 0 }
 
 // keyDiff returns a suffix of newKey that is different from b.baseKey.
-func (b Builder) keyDiff(newKey []byte) []byte {
+func (b TableBuilder) keyDiff(newKey []byte) []byte {
 	var i int
 	for i = 0; i < len(newKey) && i < len(b.baseKey); i++ {
 		if newKey[i] != b.baseKey[i] {
@@ -108,7 +106,7 @@ func (b Builder) keyDiff(newKey []byte) []byte {
 	return newKey[i:]
 }
 
-func (b *Builder) addHelper(key []byte, v y.ValueStruct) {
+func (b *TableBuilder) addHelper(key []byte, v y.ValueStruct) {
 	// Add key to bloom filter.
 	var klen [2]byte
 	binary.BigEndian.PutUint16(klen[:], uint16(len(key)))
@@ -149,7 +147,7 @@ func (b *Builder) addHelper(key []byte, v y.ValueStruct) {
 	b.counter++ // Increment number of keys added for this current block.
 }
 
-func (b *Builder) finishBlock() {
+func (b *TableBuilder) finishBlock() {
 	// When we are at the end of the block and Valid=false, and the user wants to do a Prev,
 	// we need a dummy header to tell us the offset of the previous key-value pair.
 	b.addHelper([]byte{}, y.ValueStruct{})
@@ -157,7 +155,7 @@ func (b *Builder) finishBlock() {
 
 // Add adds a key-value pair to the block.
 // If doNotRestart is true, we will not restart even if b.counter >= restartInterval.
-func (b *Builder) Add(key []byte, value y.ValueStruct) error {
+func (b *TableBuilder) Add(key []byte, value y.ValueStruct) error {
 	if b.counter >= restartInterval {
 		b.finishBlock()
 		// Start a new block. Initialize the block.
@@ -171,20 +169,17 @@ func (b *Builder) Add(key []byte, value y.ValueStruct) error {
 	return nil // Currently, there is no meaningful error.
 }
 
-// TODO: vvv this was the comment on ReachedCapacity.
 // FinalSize returns the *rough* final size of the array, counting the header which is not yet written.
 // TODO: Look into why there is a discrepancy. I suspect it is because of Write(empty, empty)
 // at the end. The diff can vary.
-
-// ReachedCapacity returns true if we... roughly (?) reached capacity?
-func (b *Builder) ReachedCapacity(cap int64) bool {
+func (b *TableBuilder) ReachedCapacity(cap int64) bool {
 	estimateSz := b.buf.Len() + 8 /* empty header */ + 4*len(b.restarts) + 8 // 8 = end of buf offset + len(restarts).
 	return int64(estimateSz) > cap
 }
 
 // blockIndex generates the block index for the table.
 // It is mainly a list of all the block base offsets.
-func (b *Builder) blockIndex() []byte {
+func (b *TableBuilder) blockIndex() []byte {
 	// Store the end offset, so we know the length of the final block.
 	b.restarts = append(b.restarts, uint32(b.buf.Len()))
 
@@ -201,7 +196,7 @@ func (b *Builder) blockIndex() []byte {
 }
 
 // Finish finishes the table by appending the index.
-func (b *Builder) Finish() []byte {
+func (b *TableBuilder) Finish() []byte {
 	bf := bbloom.New(float64(b.keyCount), 0.01)
 	var klen [2]byte
 	key := make([]byte, 1024)

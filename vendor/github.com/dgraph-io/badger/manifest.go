@@ -104,15 +104,15 @@ func (m *Manifest) asChanges() []*protos.ManifestChange {
 }
 
 func (m *Manifest) clone() Manifest {
-	changeSet := protos.ManifestChangeSet{Changes: m.asChanges()}
+	changeSet := protos.ManifestChangeSet{m.asChanges()}
 	ret := createManifest()
 	y.Check(applyChangeSet(&ret, &changeSet))
 	return ret
 }
 
-// openOrCreateManifestFile opens a Badger manifest file if it exists, or creates on if
+// OpenOrCreateManifestFile opens a Badger manifest file if it exists, or creates on if
 // one doesn’t.
-func openOrCreateManifestFile(dir string) (ret *manifestFile, result Manifest, err error) {
+func OpenOrCreateManifestFile(dir string) (ret *manifestFile, result Manifest, err error) {
 	return helpOpenOrCreateManifestFile(dir, manifestDeletionsRewriteThreshold)
 }
 
@@ -172,8 +172,7 @@ func (mf *manifestFile) close() error {
 // we replay the MANIFEST file, we'll either replay all the changes or none of them.  (The truth of
 // this depends on the filesystem -- some might append garbage data if a system crash happens at
 // the wrong time.)
-func (mf *manifestFile) addChanges(changesParam []*protos.ManifestChange) error {
-	changes := protos.ManifestChangeSet{Changes: changesParam}
+func (mf *manifestFile) addChanges(changes protos.ManifestChangeSet) error {
 	buf, err := changes.Marshal()
 	if err != nil {
 		return err
@@ -210,8 +209,7 @@ func (mf *manifestFile) addChanges(changesParam []*protos.ManifestChange) error 
 // Has to be 4 bytes.  The value can never change, ever, anyway.
 var magicText = [4]byte{'B', 'd', 'g', 'r'}
 
-// The magic version number.
-const magicVersion = 2
+const magicVersion = 1
 
 func helpRewrite(dir string, m *Manifest) (*os.File, int, error) {
 	rewritePath := filepath.Join(dir, manifestRewriteFilename)
@@ -309,7 +307,8 @@ func (r *countingReader) ReadByte() (b byte, err error) {
 }
 
 var (
-	errBadMagic = errors.New("manifest has bad magic")
+	errBadMagic        = errors.New("manifest has bad magic")
+	errBadMagicVersion = errors.New("manifest has unsupported version")
 )
 
 // ReplayManifestFile reads the manifest file and constructs two manifest objects.  (We need one
@@ -329,8 +328,7 @@ func ReplayManifestFile(fp *os.File) (ret Manifest, truncOffset int64, err error
 	}
 	version := binary.BigEndian.Uint32(magicBuf[4:8])
 	if version != magicVersion {
-		return Manifest{}, 0,
-			fmt.Errorf("manifest has unsupported version: %d (we support %d)", version, magicVersion)
+		return Manifest{}, 0, errBadMagicVersion
 	}
 
 	offset := r.count

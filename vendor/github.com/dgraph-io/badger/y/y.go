@@ -18,10 +18,10 @@ package y
 
 import (
 	"hash/crc32"
+	"log"
 	"os"
 	"sync"
-
-	"github.com/pkg/errors"
+	"sync/atomic"
 )
 
 // Constants used in serialization sizes, and in ValueStruct serialization
@@ -30,10 +30,6 @@ const (
 	UserMetaSize = 1
 	CasSize      = 8
 )
-
-// ErrEOF indicates an end of file when trying to read from a memory mapped file
-// and encountering the end of slice.
-var ErrEOF = errors.New("End of mapped region")
 
 var (
 	// This is O_DSYNC (datasync) on platforms that support it -- see file_unix.go
@@ -70,7 +66,6 @@ func OpenSyncedFile(filename string, sync bool) (*os.File, error) {
 	return os.OpenFile(filename, flags, 0666)
 }
 
-// OpenTruncFile opens the file with O_RDWR | O_CREATE | O_TRUNC
 func OpenTruncFile(filename string, sync bool) (*os.File, error) {
 	flags := os.O_RDWR | os.O_CREATE | os.O_TRUNC
 	if sync {
@@ -79,19 +74,19 @@ func OpenTruncFile(filename string, sync bool) (*os.File, error) {
 	return os.OpenFile(filename, flags, 0666)
 }
 
-// Safecopy does append(a[:0], src...).
 func Safecopy(a []byte, src []byte) []byte {
-	return append(a[:0], src...)
+	if cap(a) < len(src) {
+		a = make([]byte, len(src))
+	}
+	a = a[:len(src)]
+	copy(a, src)
+	return a
 }
 
-// Slice holds a reusable buf, will reallocate if you request a larger size than ever before.
-// One problem is with n distinct sizes in random order it'll reallocate log(n) times.
 type Slice struct {
 	buf []byte
 }
 
-// Resize reuses the Slice's buffer (or makes a new one) and returns a slice in that buffer of
-// length sz.
 func (s *Slice) Resize(sz int) []byte {
 	if cap(s.buf) < sz {
 		s.buf = make([]byte, sz)
@@ -99,49 +94,106 @@ func (s *Slice) Resize(sz int) []byte {
 	return s.buf[0:sz]
 }
 
-// Closer holds the two things we need to close a goroutine and wait for it to finish: a chan
-// to tell the goroutine to shut down, and a WaitGroup with which to wait for it to finish shutting
-// down.
-type Closer struct {
+type LevelCloser struct {
+	Name    string
+	running int32
+	nomore  int32
 	closed  chan struct{}
 	waiting sync.WaitGroup
 }
 
-// NewCloser constructs a new Closer, with an initial count on the WaitGroup.
-func NewCloser(initial int) *Closer {
-	ret := &Closer{closed: make(chan struct{})}
-	ret.waiting.Add(initial)
-	return ret
+type Closer struct {
+	sync.RWMutex
+	levels map[string]*LevelCloser
 }
 
-// AddRunning Add()'s delta to the WaitGroup.
-func (lc *Closer) AddRunning(delta int) {
-	lc.waiting.Add(delta)
+func NewCloser() *Closer {
+	return &Closer{
+		levels: make(map[string]*LevelCloser),
+	}
 }
 
-// Signal signals the HasBeenClosed signal.
-func (lc *Closer) Signal() {
+func (c *Closer) Register(name string) *LevelCloser {
+	c.Lock()
+	defer c.Unlock()
+
+	lc, has := c.levels[name]
+	if !has {
+		lc = &LevelCloser{Name: name, closed: make(chan struct{}, 10)}
+		lc.waiting.Add(1)
+		c.levels[name] = lc
+	}
+
+	AssertTruef(atomic.LoadInt32(&lc.nomore) == 0, "Can't register with closer after signal.")
+	atomic.AddInt32(&lc.running, 1)
+	return lc
+}
+
+func (c *Closer) Get(name string) *LevelCloser {
+	c.RLock()
+	defer c.RUnlock()
+
+	lc, has := c.levels[name]
+	if !has {
+		log.Fatalf("%q not present in Closer", name)
+		return nil
+	}
+	return lc
+}
+
+func (c *Closer) SignalAll() {
+	c.RLock()
+	defer c.RUnlock()
+
+	for _, l := range c.levels {
+		l.Signal()
+	}
+}
+
+func (c *Closer) WaitForAll() {
+	c.RLock()
+	defer c.RUnlock()
+
+	for _, l := range c.levels {
+		l.Wait()
+	}
+}
+
+func (lc *LevelCloser) AddRunning(delta int32) {
+	atomic.AddInt32(&lc.running, delta)
+}
+
+func (lc *LevelCloser) Signal() {
+	if !atomic.CompareAndSwapInt32(&lc.nomore, 0, 1) {
+		return
+	}
 	close(lc.closed)
 }
 
-// HasBeenClosed gets signaled when Signal() is called.
-func (lc *Closer) HasBeenClosed() <-chan struct{} {
+func (lc *LevelCloser) HasBeenClosed() <-chan struct{} {
 	return lc.closed
 }
 
-// Done calls Done() on the WaitGroup.
-func (lc *Closer) Done() {
-	lc.waiting.Done()
+func (lc *LevelCloser) GotSignal() bool {
+	return atomic.LoadInt32(&lc.nomore) == 1
 }
 
-// Wait waits on the WaitGroup.  (It waits for NewCloser's initial value, AddRunning, and Done
-// calls to balance out.)
-func (lc *Closer) Wait() {
+func (lc *LevelCloser) Done() {
+	if atomic.LoadInt32(&lc.running) <= 0 {
+		return
+	}
+
+	running := atomic.AddInt32(&lc.running, -1)
+	if running == 0 {
+		lc.waiting.Done()
+	}
+}
+
+func (lc *LevelCloser) Wait() {
 	lc.waiting.Wait()
 }
 
-// SignalAndWait calls Signal(), then Wait().
-func (lc *Closer) SignalAndWait() {
+func (lc *LevelCloser) SignalAndWait() {
 	lc.Signal()
 	lc.Wait()
 }

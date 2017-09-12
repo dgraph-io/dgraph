@@ -22,7 +22,7 @@ import (
 	"fmt"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/options"
+	"github.com/dgraph-io/badger/table"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -39,7 +39,7 @@ func main() {
 	opt := badger.DefaultOptions
 	opt.Dir = *postingDir
 	opt.ValueDir = *postingDir
-	opt.TableLoadingMode = options.MemoryMap
+	opt.MapTablesTo = table.MemoryMap
 
 	ps, err := badger.NewKV(&opt)
 	x.Checkf(err, "Error while creating badger KV posting store")
@@ -51,11 +51,11 @@ func main() {
 	for it.Rewind(); it.Valid(); it.Next() {
 		iterItem := it.Item()
 		k := iterItem.Key()
+		val := iterItem.Value()
 		pk := x.Parse(k)
-		iterItem.Value(func(val []byte) {
-			if len(val) > 10000000 {
-				fmt.Printf("key: %+v, len(val): %v\n", pk, len(val))
-			}
-		})
+
+		if len(val) > 10000000 {
+			fmt.Printf("key: %+v, len(val): %v\n", pk, len(val))
+		}
 	}
 }

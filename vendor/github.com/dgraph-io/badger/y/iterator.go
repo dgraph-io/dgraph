@@ -24,8 +24,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ValueStruct represents the value info that can be associated with a key, but also the internal
-// Meta field.
 type ValueStruct struct {
 	Value      []byte
 	Meta       byte
@@ -33,18 +31,11 @@ type ValueStruct struct {
 	CASCounter uint64
 }
 
-// MakeValueStruct is the most convenient way for unit tests to make a ValueStruct.  (Also, the
-// code will break if we add another field.)
-func MakeValueStruct(value []byte, meta byte, userMeta byte, casCounter uint64) ValueStruct {
-	return ValueStruct{Value: value, Meta: meta, UserMeta: userMeta, CASCounter: casCounter}
-}
-
-// EncodedSize is the size of the ValueStruct when encoded
 func (v *ValueStruct) EncodedSize() int {
 	return len(v.Value) + valueValueOffset
 }
 
-// ValueStructSerializedSize converts a value size to the full serialized size of value + metadata.
+// Converts a value size to the full serialized size of value + metadata.
 func ValueStructSerializedSize(size uint16) int {
 	return int(size) + valueValueOffset
 }
@@ -80,6 +71,7 @@ type Iterator interface {
 	Key() []byte
 	Value() ValueStruct
 	Valid() bool
+	Name() string // Mainly for debug or testing.
 
 	// All iterators should be closed so that file garbage collection works.
 	Close() error
@@ -165,6 +157,8 @@ func (s *MergeIterator) initHeap() {
 	}
 }
 
+func (s *MergeIterator) Name() string { return "MergeIterator" }
+
 // Valid returns whether the MergeIterator is at a valid element.
 func (s *MergeIterator) Valid() bool {
 	if s == nil {
@@ -176,7 +170,6 @@ func (s *MergeIterator) Valid() bool {
 	return s.h[0].itr.Valid()
 }
 
-// Key returns the key associated with the current iterator
 func (s *MergeIterator) Key() []byte {
 	if len(s.h) == 0 {
 		return nil
@@ -184,7 +177,6 @@ func (s *MergeIterator) Key() []byte {
 	return s.h[0].itr.Key()
 }
 
-// Value returns the value associated with the iterator.
 func (s *MergeIterator) Value() ValueStruct {
 	if len(s.h) == 0 {
 		return ValueStruct{}
@@ -239,7 +231,6 @@ func (s *MergeIterator) Seek(key []byte) {
 	s.initHeap()
 }
 
-// Close implements y.Iterator
 func (s *MergeIterator) Close() error {
 	for _, itr := range s.all {
 		if err := itr.Close(); err != nil {
