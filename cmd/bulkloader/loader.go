@@ -32,14 +32,13 @@ type options struct {
 }
 
 type state struct {
-	opt        options
-	prog       *progress
-	um         *uidMap
-	ss         *schemaStore
-	rdfCh      chan string
-	mapEntryCh chan *protos.MapEntry
-	mapFileId  uint32 // Used atomically to name the output files of the mappers.
-	kv         *badger.KV
+	opt       options
+	prog      *progress
+	um        *uidMap
+	ss        *schemaStore
+	rdfCh     chan string
+	mapFileId uint32 // Used atomically to name the output files of the mappers.
+	kv        *badger.KV
 }
 
 type loader struct {
@@ -54,12 +53,11 @@ func newLoader(opt options) *loader {
 	x.Checkf(err, "Could not parse schema.")
 
 	st := &state{
-		opt:        opt,
-		prog:       newProgress(),
-		um:         newUIDMap(),
-		ss:         newSchemaStore(initialSchema),
-		rdfCh:      make(chan string, 1000),
-		mapEntryCh: make(chan *protos.MapEntry, 1000),
+		opt:   opt,
+		prog:  newProgress(),
+		um:    newUIDMap(),
+		ss:    newSchemaStore(initialSchema),
+		rdfCh: make(chan string, 10000),
 	}
 	ld := &loader{
 		state:   st,
@@ -126,7 +124,6 @@ func (ld *loader) mapStage() {
 
 	close(ld.rdfCh)
 	mapperWg.Wait()
-	close(ld.mapEntryCh)
 
 	// Allow memory to GC before the reduce phase.
 	for i := range ld.mappers {
