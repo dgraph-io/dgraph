@@ -26,6 +26,7 @@ func main() {
 	flag.StringVar(&opt.rdfFiles, "r", "", "Location of rdf files to load (comma separated)")
 	flag.StringVar(&opt.schemaFile, "s", "", "Location of schema file to load")
 	flag.StringVar(&opt.badgerDir, "p", "", "Location of the final Dgraph directory")
+	flag.StringWar(&opt.leaseVar, "l", "LEASE", "Location to write the lease file")
 	flag.StringVar(&opt.tmpDir, "tmp", "tmp", "Temp directory used to use for on-disk "+
 		"scratch space. Requires free space proportional to the size of the RDF file.")
 	flag.IntVar(&opt.numGoroutines, "j", runtime.NumCPU(),

@@ -25,6 +25,7 @@ type options struct {
 	rdfFiles        string
 	schemaFile      string
 	badgerDir       string
+	leaseFile       string
 	tmpDir          string
 	numGoroutines   int
 	mapBufSize      int64
