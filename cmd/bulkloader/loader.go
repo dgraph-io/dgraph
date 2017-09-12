@@ -178,17 +178,16 @@ func (ld *loader) reduceStage() {
 
 	// Reduce stage.
 	pending := make(chan struct{}, ld.opt.numGoroutines)
-	var reduceWg sync.WaitGroup
 	for batch := range reduceCh {
 		pending <- struct{}{}
-		reduceWg.Add(1)
 		go func(batch []*protos.MapEntry) {
 			reduce(batch, ld.kv, ld.prog)
 			<-pending
-			reduceWg.Done()
 		}(batch)
 	}
-	reduceWg.Wait()
+	for i := 0; i < ld.opt.numGoroutines; i++ {
+		pending <- struct{}{}
+	}
 	ci.wait()
 }
 
