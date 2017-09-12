@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/table"
+	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -114,20 +114,25 @@ func (a *allocator) fetchOne() (uint64, error) {
 	return uid, nil
 }
 
-func (a *allocator) getFromKV(id string) (uint64, error) {
+func (a *allocator) getFromKV(id string) (uid uint64, rerr error) {
 	var item badger.KVItem
 	if err := a.kv.Get([]byte(id), &item); err != nil {
-		return 0, err
+		rerr = err
+		return
 	}
-	val := item.Value()
-	if len(val) > 0 {
-		uid, n := binary.Uvarint(val)
-		if n <= 0 {
-			return 0, fmt.Errorf("Unable to parse val %q to uint64 for %q", val, id)
+	if err := item.Value(func(val []byte) {
+		if len(val) > 0 {
+			var n int
+			uid, n = binary.Uvarint(val)
+			if n <= 0 {
+				rerr = fmt.Errorf("Unable to parse val %q to uint64 for %q", val, id)
+			}
 		}
-		return uid, nil
+
+	}); err != nil {
+		rerr = err
 	}
-	return 0, nil
+	return
 }
 
 func (a *allocator) assignOrGet(id string) (uid uint64, isNew bool, err error) {
@@ -225,7 +230,7 @@ func NewClient(clients []protos.DgraphClient, opts BatchMutationOptions, clientD
 	x.Check(os.MkdirAll(clientDir, 0700))
 	opt := badger.DefaultOptions
 	opt.SyncWrites = true // So that checkpoints are persisted immediately.
-	opt.MapTablesTo = table.MemoryMap
+	opt.TableLoadingMode = options.MemoryMap
 	opt.Dir = clientDir
 	opt.ValueDir = clientDir
 
