@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -43,9 +44,15 @@ func main() {
 
 	flag.Parse()
 	if len(flag.Args()) != 0 {
-		log.Fatal("No free args allowed, but got:", flag.Args())
+		flag.Usage()
+		fmt.Println("No free args allowed, but got:", flag.Args())
+		os.Exit(1)
 	}
-	// TODO: Check "r" and "s" have been specified.
+	if opt.rdfFiles == "" || opt.schemaFile == "" {
+		flag.Usage()
+		fmt.Println("RDF and schema file(s) must be specified.")
+		os.Exit(1)
+	}
 
 	opt.mapBufSize = opt.mapBufSize << 20 // Convert from MB to B.
 
