@@ -96,25 +96,24 @@ func (ld *loader) mapStage() {
 		}(m)
 	}
 
-	var readers []io.Reader
+	var readers []*bufio.Reader
 	for _, rdfFile := range strings.Split(ld.opt.rdfFiles, ",") {
 		f, err := os.Open(rdfFile)
 		x.Check(err)
 		defer f.Close()
 		if !strings.HasSuffix(rdfFile, ".gz") {
-			readers = append(readers, f)
+			readers = append(readers, bufio.NewReader(f))
 		} else {
 			gzr, err := gzip.NewReader(f)
 			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
-			readers = append(readers, gzr)
+			readers = append(readers, bufio.NewReader(gzr))
 		}
 	}
 	var lineBuf bytes.Buffer
 	for _, r := range readers {
-		bufReader := bufio.NewReader(r)
 		for {
 			lineBuf.Reset()
-			err := readLine(bufReader, &lineBuf)
+			err := readLine(r, &lineBuf)
 			if err == io.EOF {
 				break
 			} else {
