@@ -25,8 +25,9 @@ type mapper struct {
 	*state
 	mapEntries []*protos.MapEntry
 	sz         int64
-	buf        bytes.Buffer
-	mu         sync.Mutex
+
+	mu  sync.Mutex
+	buf bytes.Buffer
 }
 
 func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
