@@ -32,7 +32,7 @@ function run_test {
 	echo "$schema" > $tmpDir/sch.schema
 
 	# Run bulk loader.
-	$GOPATH/bin/bulkloader -tmp "$tmpDir/tmp" -p "$tmpDir/p" -s "$tmpDir/sch.schema" -r "$rdfs"
+	$GOPATH/bin/bulkloader -tmp "$tmpDir/tmp" -p "$tmpDir/p" -l "$tmpDir/LEASE" -s "$tmpDir/sch.schema" -r "$rdfs"
 
 	# Cleanup
 	rm -rf $tmpDir
