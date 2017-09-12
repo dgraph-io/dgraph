@@ -157,8 +157,8 @@ func sortWithIndex(ctx context.Context, ts *protos.SortMessage) *sortresult {
 	r := new(protos.SortResult)
 	// Iterate over every bucket / token.
 	iterOpt := badger.DefaultIteratorOptions
+	iterOpt.PrefetchValues = false
 	iterOpt.Reverse = order.Desc
-	iterOpt.FetchValues = false
 	it := pstore.NewIterator(iterOpt)
 	defer it.Close()
 

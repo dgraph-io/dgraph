@@ -308,7 +308,11 @@ func LoadFromDb(gid uint32) error {
 		}
 		attr := x.Parse(key).Attr
 		var s protos.SchemaUpdate
-		x.Checkf(s.Unmarshal(item.Value()), "Error while loading schema from db")
+		if err := item.Value(func(val []byte) {
+			x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
+		}); err != nil {
+			return err
+		}
 		if group.BelongsTo(attr) != gid {
 			continue
 		}

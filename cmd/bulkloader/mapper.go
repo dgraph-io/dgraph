@@ -23,54 +23,33 @@ import (
 
 type mapper struct {
 	*state
-	mapEntries     []*protos.MapEntry
-	sz             int64
-	buf            bytes.Buffer
-	freePostings   []*protos.Posting
-	freeMapEntries []*protos.MapEntry
-	mu             sync.Mutex
+	mapEntries []*protos.MapEntry
+	sz         int64
+
+	mu  sync.Mutex
+	buf bytes.Buffer
 }
 
-func (m *mapper) getPosting() *protos.Posting {
-	ln := len(m.freePostings)
-	if ln > 0 {
-		p := m.freePostings[ln-1]
-		m.freePostings = m.freePostings[:ln-1]
-		p.Reset()
-		return p
-	}
-	return new(protos.Posting)
-}
-
-func (m *mapper) writeMapEntriesToFile() {
-	sort.Slice(m.mapEntries, func(i, j int) bool {
-		return bytes.Compare(m.mapEntries[i].Key, m.mapEntries[j].Key) < 0
+func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
+	sort.Slice(mapEntries, func(i, j int) bool {
+		return bytes.Compare(mapEntries[i].Key, mapEntries[j].Key) < 0
 	})
 
-	m.mu.Lock()
-	m.buf.Reset()
 	var varintBuf [binary.MaxVarintLen64]byte
-	for _, me := range m.mapEntries {
+	for _, me := range mapEntries {
 		x.AssertTrue(len(me.Key) != 0)
 		n := binary.PutUvarint(varintBuf[:], uint64(me.Size()))
 		m.buf.Write(varintBuf[:n])
 		postBuf, err := me.Marshal()
 		x.Check(err)
 		m.buf.Write(postBuf)
-		if me.Posting != nil {
-			m.freePostings = append(m.freePostings, me.Posting)
-		}
 	}
-	m.freeMapEntries = m.mapEntries
-	m.mapEntries = make([]*protos.MapEntry, 0, len(m.freeMapEntries))
-	m.sz = 0
 
 	fileNum := atomic.AddUint32(&m.mapFileId, 1)
 	filename := filepath.Join(m.opt.tmpDir, fmt.Sprintf("%06d.map", fileNum))
-	go func() {
-		x.Check(x.WriteFileSync(filename, m.buf.Bytes(), 0644))
-		m.mu.Unlock()
-	}()
+	x.Check(x.WriteFileSync(filename, m.buf.Bytes(), 0644))
+	m.buf.Reset()
+	m.mu.Unlock() // Locked by caller.
 }
 
 func (m *mapper) run() {
@@ -78,11 +57,15 @@ func (m *mapper) run() {
 		x.Check(m.parseRDF(rdf))
 		atomic.AddInt64(&m.prog.rdfCount, 1)
 		if m.sz >= m.opt.mapBufSize {
-			m.writeMapEntriesToFile()
+			m.mu.Lock() // One write at a time.
+			go m.writeMapEntriesToFile(m.mapEntries)
+			m.mapEntries = nil
+			m.sz = 0
 		}
 	}
 	if len(m.mapEntries) > 0 {
-		m.writeMapEntriesToFile()
+		m.mu.Lock() // One write at a time.
+		m.writeMapEntriesToFile(m.mapEntries)
 	}
 	m.mu.Lock() // Ensure that the last file write finishes.
 }
@@ -90,20 +73,9 @@ func (m *mapper) run() {
 func (m *mapper) addMapEntry(key []byte, posting *protos.Posting) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
-	var me *protos.MapEntry
-	if len(m.freeMapEntries) > 0 {
-		// Try to reuse memory.
-		ln := len(m.freeMapEntries)
-		me = m.freeMapEntries[ln-1]
-		me.Reset()
-		m.freeMapEntries = m.freeMapEntries[:ln-1]
-		me.Key = key
-	} else {
-		me = &protos.MapEntry{
-			Key: key,
-		}
+	me := &protos.MapEntry{
+		Key: key,
 	}
-
 	if posting.PostingType == protos.Posting_REF {
 		me.Uid = posting.Uid
 	} else {
@@ -142,9 +114,12 @@ func (m *mapper) parseRDF(rdfLine string) error {
 		m.addMapEntry(key, rev)
 	}
 
-	key = x.DataKey("_predicate_", sid)
-	pp := m.createPredicatePosting(nq.GetPredicate())
-	m.addMapEntry(key, pp)
+	if !m.opt.skipExpandEdges {
+		key = x.DataKey("_predicate_", sid)
+		pp := m.createPredicatePosting(nq.GetPredicate())
+		m.addMapEntry(key, pp)
+	}
+
 	m.addIndexMapEntries(nq, de)
 
 	return nil
@@ -160,12 +135,12 @@ func parseNQuad(line string) (gql.NQuad, error) {
 
 func (m *mapper) createPredicatePosting(predicate string) *protos.Posting {
 	fp := farm.Fingerprint64([]byte(predicate))
-	p := m.getPosting()
-	p.Uid = fp
-	p.Value = []byte(predicate)
-	p.ValType = protos.Posting_DEFAULT
-	p.PostingType = protos.Posting_VALUE
-	return p
+	return &protos.Posting{
+		Uid:         fp,
+		Value:       []byte(predicate),
+		ValType:     protos.Posting_DEFAULT,
+		PostingType: protos.Posting_VALUE,
+	}
 }
 
 func (m *mapper) createPostings(nq gql.NQuad,
@@ -173,8 +148,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 
 	m.ss.validateType(de, nq.ObjectValue == nil)
 
-	p := m.getPosting()
-	posting.SetPosting(de, p)
+	p := posting.NewPosting(de)
 	if nq.GetObjectValue() != nil {
 		if lang := de.GetLang(); lang == "" {
 			p.Uid = math.MaxUint64
@@ -193,8 +167,7 @@ func (m *mapper) createPostings(nq gql.NQuad,
 	x.AssertTruef(nq.GetObjectValue() == nil, "only has reverse schema if object is UID")
 	de.Entity, de.ValueId = de.ValueId, de.Entity
 	m.ss.validateType(de, true)
-	rp := m.getPosting()
-	posting.SetPosting(de, p)
+	rp := posting.NewPosting(de)
 
 	de.Entity, de.ValueId = de.ValueId, de.Entity // de reused so swap back.
 

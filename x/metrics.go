@@ -54,6 +54,7 @@ var (
 	MaxPlLength      *expvar.Int
 
 	PredicateStats *expvar.Map
+	Conf           *expvar.Map
 
 	MaxPlSz int64
 	// TODO: Request statistics, latencies, 500, timeouts
@@ -80,6 +81,7 @@ func init() {
 	TotalOSMemory = expvar.NewInt("dgraph_proc_memory_bytes")
 	ActiveMutations = expvar.NewInt("dgraph_active_mutations_total")
 	PredicateStats = expvar.NewMap("dgraph_predicate_stats")
+	Conf = expvar.NewMap("dgraph_config")
 	CacheHit = expvar.NewInt("dgraph_cache_hits_total")
 	CacheMiss = expvar.NewInt("dgraph_cache_miss_total")
 	CacheRace = expvar.NewInt("dgraph_cache_race_total")
@@ -275,6 +277,11 @@ func init() {
 		"badger_vlog_size": prometheus.NewDesc(
 			"badger_vlog_size",
 			"badger_vlog_size",
+			[]string{"dir"}, nil,
+		),
+		"badger_writech_len": prometheus.NewDesc(
+			"badger_writech_len",
+			"badger_writech_len",
 			[]string{"dir"}, nil,
 		),
 	})

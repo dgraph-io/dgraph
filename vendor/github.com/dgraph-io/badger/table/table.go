@@ -30,17 +30,12 @@ import (
 	"sync/atomic"
 
 	"github.com/AndreasBriese/bbloom"
+	"github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/badger/y"
 	"github.com/pkg/errors"
 )
 
 const fileSuffix = ".sst"
-
-const (
-	Nothing = iota
-	MemoryMap
-	LoadToRAM
-)
 
 type keyOffset struct {
 	key    []byte
@@ -48,6 +43,7 @@ type keyOffset struct {
 	len    int
 }
 
+// Table represents a loaded table file with the info we have about it
 type Table struct {
 	sync.Mutex
 
@@ -57,8 +53,8 @@ type Table struct {
 	blockIndex []keyOffset
 	ref        int32 // For file garbage collection.  Atomic.
 
-	mapTableTo int
-	mmap       []byte // Memory mapped.
+	loadingMode options.FileLoadingMode
+	mmap        []byte // Memory mapped.
 
 	// The following are initialized once and const.
 	smallest, biggest []byte // Smallest and largest keys.
@@ -67,12 +63,12 @@ type Table struct {
 	bf bbloom.Bloom
 }
 
-func (t *Table) Ref() int32 { return atomic.LoadInt32(&t.ref) }
-
+// IncrRef increments the refcount (having to do with whether the file should be deleted)
 func (t *Table) IncrRef() {
 	atomic.AddInt32(&t.ref, 1)
 }
 
+// DecrRef decrements the refcount and possibly deletes the table
 func (t *Table) DecrRef() error {
 	newRef := atomic.AddInt32(&t.ref, -1)
 	if newRef == 0 {
@@ -80,8 +76,8 @@ func (t *Table) DecrRef() error {
 		// at least one reference pointing to them.
 
 		// It's necessary to delete windows files
-		if t.mapTableTo == MemoryMap {
-			munmap(t.mmap)
+		if t.loadingMode == options.MemoryMap {
+			y.Munmap(t.mmap)
 		}
 		if err := t.fd.Truncate(0); err != nil {
 			// This is very important to let the FS know that the file is deleted.
@@ -98,13 +94,13 @@ func (t *Table) DecrRef() error {
 	return nil
 }
 
-type Block struct {
+type block struct {
 	offset int
 	data   []byte
 }
 
-func (b Block) NewIterator() *BlockIterator {
-	return &BlockIterator{data: b.data}
+func (b block) NewIterator() *blockIterator {
+	return &blockIterator{data: b.data}
 }
 
 type byKey []keyOffset
@@ -117,7 +113,7 @@ func (b byKey) Less(i int, j int) bool { return bytes.Compare(b[i].key, b[j].key
 // entry.  Returns a table with one reference count on it (decrementing which may delete the file!
 // -- consider t.Close() instead).  The fd has to writeable because we call Truncate on it before
 // deleting.
-func OpenTable(fd *os.File, mapTableTo int) (*Table, error) {
+func OpenTable(fd *os.File, loadingMode options.FileLoadingMode) (*Table, error) {
 	fileInfo, err := fd.Stat()
 	if err != nil {
 		// It's OK to ignore fd.Close() errs in this function because we have only read
@@ -133,22 +129,22 @@ func OpenTable(fd *os.File, mapTableTo int) (*Table, error) {
 		return nil, errors.Errorf("Invalid filename: %s", filename)
 	}
 	t := &Table{
-		fd:         fd,
-		ref:        1, // Caller is given one reference.
-		id:         id,
-		mapTableTo: mapTableTo,
+		fd:          fd,
+		ref:         1, // Caller is given one reference.
+		id:          id,
+		loadingMode: loadingMode,
 	}
 
 	t.tableSize = int(fileInfo.Size())
 
-	if mapTableTo == MemoryMap {
-		t.mmap, err = mmap(fd, fileInfo.Size())
+	if loadingMode == options.MemoryMap {
+		t.mmap, err = y.Mmap(fd, false, fileInfo.Size())
 		if err != nil {
 			_ = fd.Close()
 			return nil, y.Wrapf(err, "Unable to map file")
 		}
-	} else if mapTableTo == LoadToRAM {
-		err = t.LoadToRAM()
+	} else if loadingMode == options.LoadToRAM {
+		err = t.loadToRAM()
 		if err != nil {
 			_ = fd.Close()
 			return nil, y.Wrap(err)
@@ -175,9 +171,10 @@ func OpenTable(fd *os.File, mapTableTo int) (*Table, error) {
 	return t, nil
 }
 
+// Close closes the open table.  (Releases resources back to the OS.)
 func (t *Table) Close() error {
-	if t.mapTableTo == MemoryMap {
-		munmap(t.mmap)
+	if t.loadingMode == options.MemoryMap {
+		y.Munmap(t.mmap)
 	}
 	if err := t.fd.Close(); err != nil {
 		return err
@@ -185,12 +182,10 @@ func (t *Table) Close() error {
 	return nil
 }
 
-var EOF = errors.New("End of mapped region")
-
 func (t *Table) read(off int, sz int) ([]byte, error) {
 	if len(t.mmap) > 0 {
 		if len(t.mmap[off:]) < sz {
-			return nil, EOF
+			return nil, y.ErrEOF
 		}
 		return t.mmap[off : off+sz], nil
 	}
@@ -253,68 +248,94 @@ func (t *Table) readIndex() error {
 	}
 
 	che := make(chan error, len(t.blockIndex))
-	for i := 0; i < len(t.blockIndex); i++ {
+	blocks := make(chan int, len(t.blockIndex))
 
-		bo := &t.blockIndex[i]
-		go func(ko *keyOffset) {
+	for i := 0; i < len(t.blockIndex); i++ {
+		blocks <- i
+	}
+
+	for i := 0; i < 64; i++ { // Run 64 goroutines.
+		go func() {
 			var h header
 
-			offset := ko.offset
-			buf, err := t.read(offset, h.Size())
-			if err != nil {
-				che <- errors.Wrap(err, "While reading first header in block")
-				return
+			for index := range blocks {
+				ko := &t.blockIndex[index]
+
+				offset := ko.offset
+				buf, err := t.read(offset, h.Size())
+				if err != nil {
+					che <- errors.Wrap(err, "While reading first header in block")
+					continue
+				}
+
+				h.Decode(buf)
+				y.AssertTruef(h.plen == 0, "Key offset: %+v, h.plen = %d", *ko, h.plen)
+
+				offset += h.Size()
+				buf = make([]byte, h.klen)
+				var out []byte
+				if out, err = t.read(offset, int(h.klen)); err != nil {
+					che <- errors.Wrap(err, "While reading first key in block")
+					continue
+				}
+				y.AssertTrue(len(buf) == copy(buf, out))
+
+				ko.key = buf
+				che <- nil
 			}
-
-			h.Decode(buf)
-			y.AssertTruef(h.plen == 0, "Key offset: %+v, h.plen = %d", *ko, h.plen)
-
-			offset += h.Size()
-			buf = make([]byte, h.klen)
-			var out []byte
-			if out, err = t.read(offset, int(h.klen)); err != nil {
-				che <- errors.Wrap(err, "While reading first key in block")
-				return
-			}
-			y.AssertTrue(len(buf) == copy(buf, out))
-
-			ko.key = buf
-			che <- nil
-		}(bo)
+		}()
 	}
+	close(blocks) // to stop reading goroutines
 
-	for range t.blockIndex {
-		err := <-che
-		if err != nil {
-			return err
+	var readError error
+	for i := 0; i < len(t.blockIndex); i++ {
+		if err := <-che; err != nil && readError == nil {
+			readError = err
 		}
 	}
+	if readError != nil {
+		return readError
+	}
+
 	sort.Sort(byKey(t.blockIndex))
 	return nil
 }
 
-func (t *Table) block(idx int) (Block, error) {
+func (t *Table) block(idx int) (block, error) {
 	y.AssertTruef(idx >= 0, "idx=%d", idx)
 	if idx >= len(t.blockIndex) {
-		return Block{}, errors.New("Block out of index.")
+		return block{}, errors.New("block out of index")
 	}
 
 	ko := t.blockIndex[idx]
-	block := Block{
+	blk := block{
 		offset: ko.offset,
 	}
 	var err error
-	block.data, err = t.read(block.offset, ko.len)
-	return block, err
+	blk.data, err = t.read(blk.offset, ko.len)
+	return blk, err
 }
 
-func (t *Table) Size() int64                 { return int64(t.tableSize) }
-func (t *Table) Smallest() []byte            { return t.smallest }
-func (t *Table) Biggest() []byte             { return t.biggest }
-func (t *Table) Filename() string            { return t.fd.Name() }
-func (t *Table) ID() uint64                  { return t.id }
+// Size is its file size in bytes
+func (t *Table) Size() int64 { return int64(t.tableSize) }
+
+// Smallest is its smallest key, or nil if there are none
+func (t *Table) Smallest() []byte { return t.smallest }
+
+// Biggest is its biggest key, or nil if there are none
+func (t *Table) Biggest() []byte { return t.biggest }
+
+// Filename is NOT the file name.  Just kidding, it is.
+func (t *Table) Filename() string { return t.fd.Name() }
+
+// ID is the table's ID number (used to make the file name).
+func (t *Table) ID() uint64 { return t.id }
+
+// DoesNotHave returns true if (but not "only if") the table does not have the key.  It does a
+// bloom filter lookup.
 func (t *Table) DoesNotHave(key []byte) bool { return !t.bf.Has(key) }
 
+// ParseFileID reads the file id out of a filename.
 func ParseFileID(name string) (uint64, bool) {
 	name = path.Base(name)
 	if !strings.HasSuffix(name, fileSuffix) {
@@ -330,15 +351,18 @@ func ParseFileID(name string) (uint64, bool) {
 	return uint64(id), true
 }
 
-func TableFilename(id uint64) string {
+// IDToFilename does the inverse of ParseFileID
+func IDToFilename(id uint64) string {
 	return fmt.Sprintf("%06d", id) + fileSuffix
 }
 
+// NewFilename should be named TableFilepath -- it combines the dir with the ID to make a table
+// filepath.
 func NewFilename(id uint64, dir string) string {
-	return filepath.Join(dir, TableFilename(id))
+	return filepath.Join(dir, IDToFilename(id))
 }
 
-func (t *Table) LoadToRAM() error {
+func (t *Table) loadToRAM() error {
 	t.mmap = make([]byte, t.tableSize)
 	read, err := t.fd.ReadAt(t.mmap, 0)
 	if err != nil || read != t.tableSize {

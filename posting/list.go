@@ -170,12 +170,16 @@ func getNew(key []byte, pstore *badger.KV) *List {
 	if err != nil {
 		x.Fatalf("Unable to retrieve val for key: %q. Error: %v", err, l.key)
 	}
-	val := item.Value()
-	x.BytesRead.Add(int64(len(val)))
+	var val []byte
+	x.Check(item.Value(func(v []byte) {
+		x.BytesRead.Add(int64(len(val)))
+		val = v
+	}))
 
 	l.plist = new(protos.PostingList)
 	if item.UserMeta() == bitUidPostings {
-		l.plist.Uids = val
+		l.plist.Uids = make([]byte, len(val))
+		copy(l.plist.Uids, val)
 	} else if val != nil {
 		x.Checkf(l.plist.Unmarshal(val), "Unable to Unmarshal PostingList from store")
 	}
@@ -227,12 +231,6 @@ func samePosting(oldp *protos.Posting, newp *protos.Posting) bool {
 }
 
 func NewPosting(t *protos.DirectedEdge) *protos.Posting {
-	p := new(protos.Posting)
-	SetPosting(t, p)
-	return p
-}
-
-func SetPosting(t *protos.DirectedEdge, p *protos.Posting) {
 	x.AssertTruef(edgeType(t) != x.ValueEmpty,
 		"This should have been set by the caller.")
 
@@ -256,7 +254,7 @@ func SetPosting(t *protos.DirectedEdge, p *protos.Posting) {
 		postingType = protos.Posting_VALUE
 	}
 
-	*p = protos.Posting{
+	return &protos.Posting{
 		Uid:         t.ValueId,
 		Value:       t.Value,
 		ValType:     protos.Posting_ValType(t.ValueType),

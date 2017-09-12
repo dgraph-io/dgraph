@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -13,30 +15,31 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger"
-	"github.com/dgraph-io/badger/table"
+	bo "github.com/dgraph-io/badger/options"
 	"github.com/dgraph-io/dgraph/protos"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type options struct {
-	rdfFiles      string
-	schemaFile    string
-	badgerDir     string
-	tmpDir        string
-	numGoroutines int
-	mapBufSize    int64
+	rdfFiles        string
+	schemaFile      string
+	badgerDir       string
+	leaseFile       string
+	tmpDir          string
+	numGoroutines   int
+	mapBufSize      int64
+	skipExpandEdges bool
 }
 
 type state struct {
-	opt        options
-	prog       *progress
-	um         *uidMap
-	ss         *schemaStore
-	rdfCh      chan string
-	mapEntryCh chan *protos.MapEntry
-	mapFileId  uint32 // Used atomically to name the output files of the mappers.
-	kv         *badger.KV
+	opt       options
+	prog      *progress
+	um        *uidMap
+	ss        *schemaStore
+	rdfCh     chan string
+	mapFileId uint32 // Used atomically to name the output files of the mappers.
+	kv        *badger.KV
 }
 
 type loader struct {
@@ -51,12 +54,11 @@ func newLoader(opt options) *loader {
 	x.Checkf(err, "Could not parse schema.")
 
 	st := &state{
-		opt:        opt,
-		prog:       newProgress(),
-		um:         newUIDMap(),
-		ss:         newSchemaStore(initialSchema),
-		rdfCh:      make(chan string, 1000),
-		mapEntryCh: make(chan *protos.MapEntry, 1000),
+		opt:   opt,
+		prog:  newProgress(),
+		um:    newUIDMap(),
+		ss:    newSchemaStore(initialSchema),
+		rdfCh: make(chan string, 10000),
 	}
 	ld := &loader{
 		state:   st,
@@ -67,6 +69,19 @@ func newLoader(opt options) *loader {
 	}
 	go ld.prog.report()
 	return ld
+}
+
+func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
+	isPrefix := true
+	var err error
+	for isPrefix && err == nil {
+		var line []byte
+		line, isPrefix, err = r.ReadLine()
+		if err == nil {
+			buf.Write(line)
+		}
+	}
+	return err
 }
 
 func (ld *loader) mapStage() {
@@ -81,40 +96,49 @@ func (ld *loader) mapStage() {
 		}(m)
 	}
 
-	var scanners []*bufio.Scanner
+	var readers []*bufio.Reader
 	for _, rdfFile := range strings.Split(ld.opt.rdfFiles, ",") {
 		f, err := os.Open(rdfFile)
 		x.Check(err)
 		defer f.Close()
-		var sc *bufio.Scanner
 		if !strings.HasSuffix(rdfFile, ".gz") {
-			sc = bufio.NewScanner(f)
+			readers = append(readers, bufio.NewReader(f))
 		} else {
 			gzr, err := gzip.NewReader(f)
 			x.Checkf(err, "Could not create gzip reader for RDF file %q.", rdfFile)
-			sc = bufio.NewScanner(gzr)
+			readers = append(readers, bufio.NewReader(gzr))
 		}
-		scanners = append(scanners, sc)
 	}
-	for _, sc := range scanners {
-		for i := 0; sc.Scan(); i++ {
-			ld.rdfCh <- sc.Text()
+	var lineBuf bytes.Buffer
+	for _, r := range readers {
+		for {
+			lineBuf.Reset()
+			err := readLine(r, &lineBuf)
+			if err == io.EOF {
+				x.AssertTrue(lineBuf.Len() == 0)
+				break
+			}
+			x.Check(err)
+			ld.rdfCh <- lineBuf.String()
 		}
-		x.Check(sc.Err())
 	}
 
 	close(ld.rdfCh)
 	mapperWg.Wait()
-	close(ld.mapEntryCh)
 
 	// Allow memory to GC before the reduce phase.
 	for i := range ld.mappers {
 		ld.mappers[i] = nil
 	}
-	// TODO: Put lease in file.
-	fmt.Println("LEASE:", ld.um.lease())
+	ld.writeLease()
 	ld.um = nil
 	runtime.GC()
+}
+
+func (ld *loader) writeLease() {
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "%d\n", ld.um.lease())
+	x.Check(ioutil.WriteFile(ld.opt.leaseFile, buf.Bytes(), 0644))
 }
 
 func (ld *loader) reduceStage() {
@@ -142,7 +166,7 @@ func (ld *loader) reduceStage() {
 	opt.ValueDir = opt.Dir
 	opt.ValueGCRunInterval = time.Hour * 100
 	opt.SyncWrites = false
-	opt.MapTablesTo = table.MemoryMap
+	opt.TableLoadingMode = bo.MemoryMap
 	ld.kv, err = badger.NewKV(&opt)
 	x.Check(err)
 
