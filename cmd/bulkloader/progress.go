@@ -64,12 +64,11 @@ func (p *progress) reportOnce() {
 	case mapPhase:
 		rdfCount := atomic.LoadInt64(&p.rdfCount)
 		elapsed := time.Since(p.start)
-		fmt.Printf("[MAP] [%s] [RDF count: %s] [Edge count: %s] "+
-			"[RDFs per second: %s] [Edges per second: %s]\n",
+		fmt.Printf("MAP %s rdf_count:%s rdf_speed:%s/sec edge_count:%s edge_speed:%s/sec\n",
 			fixedDuration(elapsed),
 			niceFloat(float64(rdfCount)),
-			niceFloat(float64(mapEdgeCount)),
 			niceFloat(float64(rdfCount)/elapsed.Seconds()),
+			niceFloat(float64(mapEdgeCount)),
 			niceFloat(float64(mapEdgeCount)/elapsed.Seconds()),
 		)
 	case reducePhase:
@@ -85,14 +84,14 @@ func (p *progress) reportOnce() {
 		if mapEdgeCount != 0 {
 			pct = fmt.Sprintf("[%.2f%%] ", 100*float64(reduceEdgeCount)/float64(mapEdgeCount))
 		}
-		fmt.Printf("[REDUCE] [%s] %s[Edge count: %d] [Edges per second: %d] "+
-			"[Posting list count: %d] [Posting lists per second: %d]\n",
+		fmt.Printf("REDUCE %s %sedge_count:%s edge_speed:%s/sec "+
+			"plist_count:%s plist_speed:%s/sec\n",
 			fixedDuration(now.Sub(p.start)),
 			pct,
-			reduceEdgeCount,
-			int(float64(reduceEdgeCount)/elapsed.Seconds()),
-			reduceKeyCount,
-			int(float64(reduceKeyCount)/elapsed.Seconds()),
+			niceFloat(float64(reduceEdgeCount)),
+			niceFloat(float64(reduceEdgeCount)/elapsed.Seconds()),
+			niceFloat(float64(reduceKeyCount)),
+			niceFloat(float64(reduceKeyCount)/elapsed.Seconds()),
 		)
 	default:
 		x.AssertTruef(false, "invalid phase")
@@ -120,7 +119,7 @@ func fixedDuration(d time.Duration) string {
 	return str
 }
 
-var suffixes = [...]string{" ", "k", "M", "G", "T"}
+var suffixes = [...]string{"", "k", "M", "G", "T"}
 
 func niceFloat(f float64) string {
 	idx := 0
