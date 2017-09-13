@@ -22,7 +22,7 @@ import (
 )
 
 type options struct {
-	rdfFiles        string
+	rdfDir          string
 	schemaFile      string
 	badgerDir       string
 	leaseFile       string
@@ -73,9 +73,8 @@ func newLoader(opt options) *loader {
 }
 
 func readChunk(r *bufio.Reader) (*bytes.Buffer, error) {
-	// TODO: Give hint about buffer size, possibly based on previous buffer
-	// sizes.
 	batch := new(bytes.Buffer)
+	batch.Grow(10 << 20)
 	for lineCount := 0; lineCount < 1e5; lineCount++ {
 		slc, err := r.ReadSlice('\n')
 		if err == bufio.ErrBufferFull {
@@ -99,6 +98,19 @@ func readChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	return batch, nil
 }
 
+func findRDFFiles(dir string) []string {
+	var files []string
+	x.Check(filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasSuffix(path, ".rdf") || strings.HasSuffix(path, ".rdf.gz") {
+			files = append(files, path)
+		}
+	}))
+	return files
+}
+
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
 
@@ -112,7 +124,7 @@ func (ld *loader) mapStage() {
 	}
 
 	var readers []*bufio.Reader
-	for _, rdfFile := range strings.Split(ld.opt.rdfFiles, ",") {
+	for _, rdfFile := range findRDFFiles(ld.opt.rdfDir) {
 		f, err := os.Open(rdfFile)
 		x.Check(err)
 		defer f.Close()
@@ -125,18 +137,26 @@ func (ld *loader) mapStage() {
 		}
 	}
 
+	pending := make(chan struct{}, ld.opt.numGoroutines)
 	for _, r := range readers {
-		for {
-			chunkBuf, err := readChunk(r)
-			if err == io.EOF {
-				if chunkBuf.Len() != 0 {
-					ld.batchCh <- chunkBuf
+		pending <- struct{}{}
+		go func(r *bufio.Reader) {
+			for {
+				chunkBuf, err := readChunk(r)
+				if err == io.EOF {
+					if chunkBuf.Len() != 0 {
+						ld.batchCh <- chunkBuf
+					}
+					break
 				}
-				break
+				x.Check(err)
+				ld.batchCh <- chunkBuf
 			}
-			x.Check(err)
-			ld.batchCh <- chunkBuf
-		}
+			<-pending
+		}(r)
+	}
+	for i := 0; i < ld.opt.numGoroutines; i++ {
+		pending <- struct{}{}
 	}
 
 	close(ld.batchCh)
