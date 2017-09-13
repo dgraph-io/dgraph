@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -56,22 +55,7 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
 }
 
 func (m *mapper) run() {
-outerFor:
-	for {
-
-		var batchBuf *bytes.Buffer
-		for {
-			var ok bool
-			select {
-			case batchBuf, ok = <-m.batchCh:
-				if !ok {
-					break outerFor
-				}
-			default:
-				time.Sleep(3 * time.Second)
-			}
-		}
-
+	for batchBuf := range m.batchCh {
 		atomic.AddInt64(&m.prog.mappersRunning, 1)
 		done := false
 		for !done {
@@ -87,7 +71,7 @@ outerFor:
 			// more efficient way.
 			rdf = strings.TrimSpace(rdf)
 
-			x.Check(m.parseRDF(rdf))
+			//x.Check(m.parseRDF(rdf))
 			atomic.AddInt64(&m.prog.rdfCount, 1)
 			if m.sz >= m.opt.mapBufSize {
 				m.mu.Lock() // One write at a time.
