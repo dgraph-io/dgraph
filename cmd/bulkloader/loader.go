@@ -79,9 +79,12 @@ func readChunk(r *bufio.Reader) (*bytes.Buffer, error) {
 		slc, err := r.ReadSlice('\n')
 		if err == bufio.ErrBufferFull {
 			// This should only happen infrequently.
+			var tmpBuf bytes.Buffer
+			tmpBuf.Write(slc)
 			var str string
 			str, err = r.ReadString('\n')
-			slc = []byte(str)
+			tmpBuf.WriteString(str)
+			slc = tmpBuf.Bytes()
 		}
 		if err == io.EOF {
 			batch.Write(slc)
