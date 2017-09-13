@@ -110,6 +110,7 @@ func (s *scheduler) schemaActions(p *protos.Proposal, index uint64) ([]byte, err
 			if s.Count {
 				schemaActions[i] |= rebuild_count
 			}
+			continue
 		}
 		if needReindexing(old, *s) {
 			schemaActions[i] = rebuild_index
