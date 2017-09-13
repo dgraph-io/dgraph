@@ -88,20 +88,70 @@ func (s *scheduler) register(t *task) bool {
 	}
 }
 
+func (s *scheduler) schemaActions(p *protos.Proposal, index uint64) ([]byte, error) {
+	// Check if present in wal, if yes return that
+	if val, err := s.n.Wal.SchemaState(s.n.gid, index); err != nil {
+		return nil, err
+	} else if len(val) > 0 {
+		x.AssertTrue(len(val) == len(p.Mutations.Schema))
+		return val, nil
+	}
+
+	// Generate and store to wal
+	schemaActions := make([]byte, len(p.Mutations.Schema))
+	for i, s := range p.Mutations.Schema {
+		if err := checkSchema(s); err != nil {
+			return nil, err
+		}
+		old, _ := schema.State().Get(s.Predicate)
+
+		if needReindexing(old, *s) {
+			schemaActions[i] = rebuild_index
+		} else if needsRebuildingReverses(old, *s) {
+			schemaActions[i] = rebuild_reverse
+		}
+		if s.Count != old.Count {
+			schemaActions[i] |= rebuild_count
+		}
+		schema.State().Set(s.Predicate, *s)
+	}
+	if err := s.n.Wal.StoreSchemaState(s.n.gid, index, schemaActions); err != nil {
+		return nil, err
+	}
+	return schemaActions, nil
+}
+
 func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 	// ensures that index is not mark completed until all tasks
 	// are submitted to scheduler
 	total := len(proposal.Mutations.Edges)
-	s.n.props.IncRef(proposal.Id, index, 1+total)
+	n := s.n
+	n.props.IncRef(proposal.Id, index, 1+total)
 	x.ActiveMutations.Add(int64(total))
-	for _, supdate := range proposal.Mutations.Schema {
-		if err := s.n.processSchemaMutations(proposal.Id, index, supdate); err != nil {
-			s.n.props.Done(proposal.Id, err)
+
+	if len(proposal.Mutations.Schema) > 0 {
+		n.waitForSyncMark(n.ctx, index-1)
+		schemaActions, err := s.schemaActions(proposal, index)
+		if err != nil {
+			n.props.Done(proposal.Id, err)
 			return err
 		}
+
+		for i, supdate := range proposal.Mutations.Schema {
+			if err := n.processSchemaMutations(proposal.Id, index, supdate,
+				schemaActions[i]); err != nil {
+				n.props.Done(proposal.Id, err)
+				return err
+			}
+		}
+		go func() {
+			w := posting.SyncMarkFor(n.gid)
+			w.WaitForMark(n.ctx, index)
+			n.Wal.RemoveSchemaState(n.gid, index)
+		}()
 	}
 	if total == 0 {
-		s.n.props.Done(proposal.Id, nil)
+		n.props.Done(proposal.Id, nil)
 		return nil
 	}
 
@@ -139,7 +189,7 @@ func (s *scheduler) schedule(proposal *protos.Proposal, index uint64) error {
 			s.tch <- t
 		}
 	}
-	s.n.props.Done(proposal.Id, nil)
+	n.props.Done(proposal.Id, nil)
 	return nil
 }
 
