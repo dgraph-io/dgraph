@@ -90,7 +90,7 @@ func setupConfigOpts() {
 		"Directory to store posting lists.")
 	flag.StringVar(&config.PostingTables, "posting_tables", defaults.PostingTables,
 		"Specifies how Badger LSM tree is stored. Options are loadtoram, memorymap and "+
-			"nothing; which consume most to least RAM while providing best to worst "+
+			"fileio; which consume most to least RAM while providing best to worst "+
 			"performance respectively.")
 	flag.StringVar(&config.WALDir, "w", defaults.WALDir,
 		"Directory to store raft write-ahead logs.")

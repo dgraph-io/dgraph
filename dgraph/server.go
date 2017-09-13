@@ -83,7 +83,7 @@ func (s *ServerState) initStorage() {
 		opt.TableLoadingMode = options.MemoryMap
 	case "loadtoram":
 		opt.TableLoadingMode = options.LoadToRAM
-	case "nothing":
+	case "fileio":
 		opt.TableLoadingMode = options.FileIO
 	default:
 		x.Fatalf("Invalid Posting Tables options")
