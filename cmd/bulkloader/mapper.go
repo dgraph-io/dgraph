@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -52,8 +54,21 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
 }
 
 func (m *mapper) run() {
-	for rdfBatch := range m.rdfCh {
-		for _, rdf := range rdfBatch.rdfs {
+	for batchBuf := range m.batchCh {
+		done := false
+		for !done {
+			rdf, err := batchBuf.ReadString('\n')
+			if err == io.EOF {
+				// Process the last RDF rather than breaking immediately.
+				done = true
+			} else {
+				x.Check(err)
+			}
+
+			// TODO: Might not have to do this. Or if we do, there might be a
+			// more efficient way.
+			rdf = strings.TrimSpace(rdf)
+
 			x.Check(m.parseRDF(rdf))
 			atomic.AddInt64(&m.prog.rdfCount, 1)
 			if m.sz >= m.opt.mapBufSize {

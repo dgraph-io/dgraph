@@ -32,16 +32,12 @@ type options struct {
 	skipExpandEdges bool
 }
 
-type rdfBatch struct {
-	rdfs []string
-}
-
 type state struct {
 	opt       options
 	prog      *progress
 	um        *uidMap
 	ss        *schemaStore
-	rdfCh     chan rdfBatch
+	batchCh   chan *bytes.Buffer
 	mapFileId uint32 // Used atomically to name the output files of the mappers.
 	kv        *badger.KV
 }
@@ -58,11 +54,11 @@ func newLoader(opt options) *loader {
 	x.Checkf(err, "Could not parse schema.")
 
 	st := &state{
-		opt:   opt,
-		prog:  newProgress(),
-		um:    newUIDMap(),
-		ss:    newSchemaStore(initialSchema),
-		rdfCh: make(chan rdfBatch, 1000),
+		opt:     opt,
+		prog:    newProgress(),
+		um:      newUIDMap(),
+		ss:      newSchemaStore(initialSchema),
+		batchCh: make(chan *bytes.Buffer, 4*opt.numGoroutines),
 	}
 	ld := &loader{
 		state:   st,
@@ -75,17 +71,22 @@ func newLoader(opt options) *loader {
 	return ld
 }
 
-func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
-	isPrefix := true
-	var err error
-	for isPrefix && err == nil {
-		var line []byte
-		line, isPrefix, err = r.ReadLine()
-		if err == nil {
-			buf.Write(line)
+func readChunk(r *bufio.Reader) (*bytes.Buffer, error) {
+	// TODO: Give hint about buffer size, possibly based on previous buffer
+	// sizes.
+	batch := new(bytes.Buffer)
+	for lineCount := 0; lineCount < 1e5; lineCount++ {
+		slc, err := r.ReadSlice('\n')
+		if err == io.EOF {
+			batch.Write(slc)
+			return batch, err
 		}
+		if err != nil {
+			return nil, err
+		}
+		batch.Write(slc)
 	}
-	return err
+	return batch, nil
 }
 
 func (ld *loader) mapStage() {
@@ -113,28 +114,22 @@ func (ld *loader) mapStage() {
 			readers = append(readers, bufio.NewReader(gzr))
 		}
 	}
-	var lineBuf bytes.Buffer
-	const rdfBatchSize = 100000
-	batch := rdfBatch{rdfs: make([]string, 0, rdfBatchSize)}
+
 	for _, r := range readers {
 		for {
-			lineBuf.Reset()
-			err := readLine(r, &lineBuf)
+			chunkBuf, err := readChunk(r)
 			if err == io.EOF {
-				x.AssertTrue(lineBuf.Len() == 0)
+				if chunkBuf.Len() != 0 {
+					ld.batchCh <- chunkBuf
+				}
 				break
 			}
 			x.Check(err)
-			batch.rdfs = append(batch.rdfs, lineBuf.String())
-			if len(batch.rdfs) >= rdfBatchSize {
-				ld.rdfCh <- batch
-				batch.rdfs = make([]string, 0, rdfBatchSize)
-			}
+			ld.batchCh <- chunkBuf
 		}
 	}
-	ld.rdfCh <- batch
 
-	close(ld.rdfCh)
+	close(ld.batchCh)
 	mapperWg.Wait()
 
 	// Allow memory to GC before the reduce phase.
