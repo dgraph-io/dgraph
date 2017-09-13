@@ -53,6 +53,27 @@ func (w *Wal) hardStateKey(gid uint32) []byte {
 	return b
 }
 
+// Used to store the current way of schema for all the
+// predicates we are going to change.
+// We would store this only after entries are commited via raft and
+// we can have only one commited entry per index irrespective of term.
+func (w *Wal) schemaKey(gid uint32, idx uint64) []byte {
+	b := make([]byte, 30)
+	binary.BigEndian.PutUint64(b[0:8], w.id)
+	copy(b[8:10], []byte("sk"))
+	binary.BigEndian.PutUint32(b[10:14], gid)
+	binary.BigEndian.PutUint64(b[14:22], idx)
+	return b
+}
+
+func (w *Wal) schemaPrefix(gid uint32) []byte {
+	b := make([]byte, 14)
+	binary.BigEndian.PutUint64(b[0:8], w.id)
+	copy(b[8:10], []byte("sk"))
+	binary.BigEndian.PutUint32(b[10:14], gid)
+	return b
+}
+
 func (w *Wal) entryKey(gid uint32, term, idx uint64) []byte {
 	b := make([]byte, 28)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
@@ -62,13 +83,50 @@ func (w *Wal) entryKey(gid uint32, term, idx uint64) []byte {
 	return b
 }
 
-func (w *Wal) prefix(gid uint32) []byte {
+// TODO: This prefix might collide with hardState, when first two
+// bytes in gid are equal to "ss" or "hs" or "sk" .
+func (w *Wal) entryPrefix(gid uint32) []byte {
 	b := make([]byte, 12)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
 	binary.BigEndian.PutUint32(b[8:12], gid)
 	return b
 }
 
+func (w *Wal) deleteHelper(start []byte, last []byte, wb []*badger.Entry) {
+	opt := badger.DefaultIteratorOptions
+	opt.PrefetchValues = false
+	itr := w.wals.NewIterator(opt)
+	defer itr.Close()
+
+	for itr.Seek(start); itr.Valid(); itr.Next() {
+		key := itr.Item().Key()
+		if bytes.Compare(key, last) > 0 {
+			break
+		}
+		newk := make([]byte, len(key))
+		copy(newk, key)
+		wb = badger.EntriesDelete(wb, newk)
+	}
+}
+
+func (w *Wal) StoreSchemaState(gid uint32, idx uint64, val []byte) error {
+	key := w.schemaKey(gid, idx)
+	return w.wals.Set(key, val, 0x00)
+}
+
+func (w *Wal) SchemaState(gid uint32, idx uint64) ([]byte, error) {
+	var item badger.KVItem
+	var data []byte
+	if err := w.wals.Get(w.schemaKey(gid, idx), &item); err != nil {
+		return nil, x.Wrapf(err, "while fetching snapshot from wal")
+	}
+	err := item.Value(func(val []byte) error {
+		data := make([]byte, len(val))
+		copy(data, val)
+		return nil
+	})
+	return data, err
+}
 func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	wb := make([]*badger.Entry, 0, 100)
 	if raft.IsEmptySnap(s) {
@@ -86,20 +144,12 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	// Delete all entries before this snapshot to save disk space.
 	start := w.entryKey(gid, 0, 0)
 	last := w.entryKey(gid, s.Metadata.Term, s.Metadata.Index)
-	opt := badger.DefaultIteratorOptions
-	opt.PrefetchValues = false
-	itr := w.wals.NewIterator(opt)
-	defer itr.Close()
+	w.deleteHelper(start, last, wb)
 
-	for itr.Seek(start); itr.Valid(); itr.Next() {
-		key := itr.Item().Key()
-		if bytes.Compare(key, last) > 0 {
-			break
-		}
-		newk := make([]byte, len(key))
-		copy(newk, key)
-		wb = badger.EntriesDelete(wb, newk)
-	}
+	// Delete all schema keys
+	start = w.schemaKey(gid, 0)
+	last = w.schemaKey(gid, s.Metadata.Index)
+	w.deleteHelper(start, last, wb)
 
 	// Failure to delete entries is not a fatal error, so should be
 	// ok to ignore
@@ -143,7 +193,7 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 		// When writing an Entry with Index i, any previously-persisted entries
 		// with Index >= i must be discarded.
 		start := w.entryKey(gid, t, i+1)
-		prefix := w.prefix(gid)
+		prefix := w.entryPrefix(gid)
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
 		itr := w.wals.NewIterator(opt)
@@ -191,7 +241,7 @@ func (w *Wal) HardState(gid uint32) (hd raftpb.HardState, rerr error) {
 
 func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry, rerr error) {
 	start := w.entryKey(gid, fromTerm, fromIndex)
-	prefix := w.prefix(gid)
+	prefix := w.entryPrefix(gid)
 	itr := w.wals.NewIterator(badger.DefaultIteratorOptions)
 	defer itr.Close()
 

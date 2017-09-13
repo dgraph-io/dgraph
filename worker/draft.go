@@ -266,11 +266,9 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *protos.Proposal) er
 }
 
 func (n *node) processMutation(pid uint32, index uint64, edge *protos.DirectedEdge) error {
-	var ctx context.Context
-	var has bool
-	if ctx, has = n.props.Ctx(pid); !has {
-		ctx = n.ctx
-	}
+	ctx, has := n.props.Ctx(pid)
+	// props map is always populated
+	x.AssertTrue(has)
 	rv := x.RaftValue{Group: n.gid, Index: index}
 	ctx = context.WithValue(ctx, "raft", rv)
 	if err := runMutation(ctx, edge); err != nil {
@@ -282,15 +280,12 @@ func (n *node) processMutation(pid uint32, index uint64, edge *protos.DirectedEd
 	return nil
 }
 
-func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.SchemaUpdate) error {
-	var ctx context.Context
-	var has bool
-	if ctx, has = n.props.Ctx(pid); !has {
-		ctx = n.ctx
-	}
+func (n *node) processSchemaMutations(pid uint32, index uint64, s *protos.SchemaUpdate, action byte) error {
+	ctx, has := n.props.Ctx(pid)
+	x.AssertTrue(has)
 	rv := x.RaftValue{Group: n.gid, Index: index}
-	ctx = context.WithValue(n.ctx, "raft", rv)
-	if err := runSchemaMutation(ctx, s); err != nil {
+	ctx = context.WithValue(ctx, "raft", rv)
+	if err := runSchemaMutation(ctx, s, action); err != nil {
 		if tr, ok := trace.FromContext(n.ctx); ok {
 			tr.LazyPrintf(err.Error())
 		}

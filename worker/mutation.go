@@ -36,8 +36,11 @@ import (
 )
 
 const (
-	set = "set"
-	del = "delete"
+	set             = "set"
+	del             = "delete"
+	rebuild_index   = 0x01
+	rebuild_reverse = 0x02
+	rebuild_count   = 0x04
 )
 
 // runMutation goes through all the edges and applies them. It returns the
@@ -87,7 +90,7 @@ func runMutation(ctx context.Context, edge *protos.DirectedEdge) error {
 
 // This is serialized with mutations, called after applied watermarks catch up
 // and further mutations are blocked until this is done.
-func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
+func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate, action byte) error {
 	rv := ctx.Value("raft").(x.RaftValue)
 	n := groups().Node(rv.Group)
 	// Wait for applied watermark to reach till previous index
@@ -100,10 +103,8 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 	if err := checkSchema(update); err != nil {
 		return err
 	}
-	old, ok := schema.State().Get(update.Predicate)
 	current := schema.From(update)
 	updateSchema(update.Predicate, current, rv.Index, rv.Group)
-
 	// Once we remove index or reverse edges from schema, even though the values
 	// are present in db, they won't be used due to validation in work/task.go
 
@@ -115,33 +116,14 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 	// index mutations (old set and new del)
 	// We need watermark for index/reverse edge addition for linearizable reads.
 	// (both applied and synced watermarks).
-	defer x.Printf("Done schema update %+v\n", update)
-	if !ok {
-		if current.Directive == protos.SchemaUpdate_INDEX {
-			if err := n.rebuildOrDelIndex(ctx, update.Predicate, true); err != nil {
-				return err
-			}
-		} else if current.Directive == protos.SchemaUpdate_REVERSE {
-			if err := n.rebuildOrDelRevEdge(ctx, update.Predicate, true); err != nil {
-				return err
-			}
-		}
-
-		if current.Count {
-			if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, true); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	// schema was present already
-	if needReindexing(old, current) {
+	defer x.Printf("Done schema update %+v, action: %+v\n", update, action)
+	if action&rebuild_index != 0 {
 		// Reindex if update.Index is true or remove index
 		if err := n.rebuildOrDelIndex(ctx, update.Predicate,
 			current.Directive == protos.SchemaUpdate_INDEX); err != nil {
 			return err
 		}
-	} else if needsRebuildingReverses(old, current) {
+	} else if action&rebuild_reverse != 0 {
 		// Add or remove reverse edge based on update.Reverse
 		if err := n.rebuildOrDelRevEdge(ctx, update.Predicate,
 			current.Directive == protos.SchemaUpdate_REVERSE); err != nil {
@@ -149,7 +131,7 @@ func runSchemaMutation(ctx context.Context, update *protos.SchemaUpdate) error {
 		}
 	}
 
-	if current.Count != old.Count {
+	if action&rebuild_count != 0 {
 		if err := n.rebuildOrDelCountIndex(ctx, update.Predicate, current.Count); err != nil {
 		}
 	}
