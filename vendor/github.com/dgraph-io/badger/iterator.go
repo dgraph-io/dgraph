@@ -50,12 +50,40 @@ func (item *KVItem) Value() []byte {
 	return item.val
 }
 
+func (item *KVItem) hasValue() bool {
+	if item.meta == 0 && item.vptr == nil {
+		// key not found
+		return false
+	}
+	if (item.meta & BitDelete) != 0 {
+		// Tombstone encountered.
+		return false
+	}
+	return true
+}
+
+// EstimatedSize returns approximate size of the key-value pair.  This can be called with
+// FetchValues=false, to quickly iterate through and estimate the size of a range of key-value
+// pairs (without fetching the corresponding values).
+func (item *KVItem) EstimatedSize() int64 {
+	if !item.hasValue() {
+		return 0
+	}
+	if (item.meta & BitValuePointer) == 0 {
+		return int64(len(item.key) + len(item.vptr))
+	}
+	var vp valuePointer
+	vp.Decode(item.vptr)
+	return int64(vp.Len) // includes key length.
+}
+
 // Counter returns the CAS counter associated with the value.
 func (item *KVItem) Counter() uint64 {
 	return item.casCounter
 }
 
-// UserMeta returns the userMeta set by the user
+// UserMeta returns the userMeta set by the user. Typically, this byte, optionally set by the user
+// is used to interpret the value.
 func (item *KVItem) UserMeta() byte {
 	return item.userMeta
 }

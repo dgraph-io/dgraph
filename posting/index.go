@@ -282,6 +282,7 @@ func updateCount(ctx context.Context, params countParams) error {
 		Attr:    params.attr,
 		Op:      protos.DirectedEdge_DEL,
 	}
+	// Read from wal and remove this // TODO
 	if err := addCountMutation(ctx, &edge, uint32(params.countBefore),
 		params.reverse); err != nil {
 		return err

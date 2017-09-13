@@ -53,6 +53,28 @@ func (w *Wal) hardStateKey(gid uint32) []byte {
 	return b
 }
 
+// No need to store term like entry keys, because this is stored
+// only after the index is committed via raft
+func (w *Wal) internalKey(idx uint64, suffix []byte) []byte {
+	// TODO: Do we need 8 bytes for node id and 4 bytes for group id
+	b := make([]byte, 18+len(suffix))
+	binary.BigEndian.PutUint64(b[0:8], w.id)
+	copy(b[8:10], []byte("iw"))
+	binary.BigEndian.PutUint64(b[10:18], idx)
+	copy(b[18:], suffix)
+	return b
+}
+
+// Instead of deleting, how about a compaction strategy wherein we just
+// drop sstable(should be possible because in wal we generate keys always
+// ascending order).
+func (w *Wal) internalPrefix() []byte {
+	b := make([]byte, 18)
+	binary.BigEndian.PutUint64(b[0:8], w.id)
+	copy(b[8:10], []byte("iw"))
+	return b
+}
+
 func (w *Wal) entryKey(gid uint32, term, idx uint64) []byte {
 	b := make([]byte, 28)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
@@ -62,11 +84,50 @@ func (w *Wal) entryKey(gid uint32, term, idx uint64) []byte {
 	return b
 }
 
+// TODO: This prefix might collide with hardState
 func (w *Wal) prefix(gid uint32) []byte {
 	b := make([]byte, 12)
 	binary.BigEndian.PutUint64(b[0:8], w.id)
 	binary.BigEndian.PutUint32(b[8:12], gid)
 	return b
+}
+
+// If we write to the same badger(p directory), we can push to the channel and ignore.
+// Then index wal would be written before pl persistance for sure. But that would
+// increase compations in main badger.
+// During bulk loading for large scalar values there won't be updates mostly, so wal
+// size shouldn't grow too much and get garbage collected.
+func (w *Wal) StoreInternalData(idx uint64, key []byte, val []byte) {
+	// In case same sp is present twice at same index
+	w.wals.SetIfAbsent(w.internalKey(idx, key), val, 0x00)
+}
+
+func (w *Wal) RestoreInternalData(idx uint64, pstore *badger.KV) {
+	wb := make([]*badger.Entry, 0, 100)
+	start := w.internalKey(idx, x.Nilbyte)
+	prefix := w.internalPrefix()
+	itr := w.wals.NewIterator(badger.DefaultIteratorOptions)
+	defer itr.Close()
+
+	seenEntries := make(map[string]struct{})
+	for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
+		key := itr.Item().Key()
+		if _, has := seenEntries[string(key[18:])]; has {
+			continue
+		}
+		newk := make([]byte, len(key)-18)
+		copy(newk, key)
+		seenEntries[string(newk)] = struct{}{}
+		val := itr.Item().Value()
+		newVal := make([]byte, len(val))
+		copy(newVal, val)
+		wb = badger.EntriesSet(wb, newk, newVal)
+	}
+	err := w.wals.BatchSet(wb)
+	x.Check(err)
+	for _, wbe := range wb {
+		x.Check(wbe.Error)
+	}
 }
 
 func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
@@ -94,6 +155,23 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	for itr.Seek(start); itr.Valid(); itr.Next() {
 		key := itr.Item().Key()
 		if bytes.Compare(key, last) > 0 {
+			break
+		}
+		newk := make([]byte, len(key))
+		copy(newk, key)
+		wb = badger.EntriesDelete(wb, newk)
+	}
+
+	// Delete all internaldata before this.
+	start = w.internalKey(0, x.Nilbyte)
+	prefix := w.internalPrefix()
+	last = w.internalKey(s.Metadata.Index+1, x.Nilbyte) // excluded
+	itr = w.wals.NewIterator(opt)
+	defer itr.Close()
+
+	for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
+		key := itr.Item().Key()
+		if bytes.Compare(key[0:18], last) >= 0 {
 			break
 		}
 		newk := make([]byte, len(key))

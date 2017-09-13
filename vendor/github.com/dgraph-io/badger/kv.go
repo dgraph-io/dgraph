@@ -40,18 +40,32 @@ var (
 
 // Options are params for creating DB object.
 type Options struct {
-	Dir      string // Directory to store the data in. Should exist and be writable.
-	ValueDir string // Directory to store the value log in. Can be the same as Dir.
-	// Should exist and be writable.
+	// 1. Mandatory flags
+	// -------------------
+	// Directory to store the data in. Should exist and be writable.
+	Dir string
+	// Directory to store the value log in. Can be the same as Dir. Should exist and be writable.
+	ValueDir string
 
+	// 2. Frequently modified flags
+	// -----------------------------
+	// Sync all writes to disk. Setting this to true would slow down data loading significantly.
+	SyncWrites bool
+	// How should LSM tree be accessed.
+	MapTablesTo int
+	// How often to run value log garbage collector. Every time it runs, there'd be a spike in LSM
+	// tree activity. But, running it frequently allows reclaiming disk space from an ever-growing
+	// value log.
+	ValueGCRunInterval time.Duration
+
+	// 3. Flags that user might want to review
+	// ----------------------------------------
 	// The following affect all levels of LSM tree.
 	MaxTableSize        int64 // Each table (or file) is at most this size.
 	LevelSizeMultiplier int   // Equals SizeOf(Li+1)/SizeOf(Li).
 	MaxLevels           int   // Maximum number of levels of compaction.
 	ValueThreshold      int   // If value size >= this threshold, only store value offsets in tree.
-	MapTablesTo         int   // How should LSM tree be accessed.
-
-	NumMemtables int // Maximum number of tables to keep in memory, before stalling.
+	NumMemtables        int   // Maximum number of tables to keep in memory, before stalling.
 
 	// The following affect how we handle LSM tree L0.
 	// Maximum number of Level 0 tables before we start compacting.
@@ -64,19 +78,15 @@ type Options struct {
 
 	// Run value log garbage collection if we can reclaim at least this much space. This is a ratio.
 	ValueGCThreshold float64
-	// How often to run value log garbage collector.
-	ValueGCRunInterval time.Duration
 
 	// Size of single value log file.
 	ValueLogFileSize int64
 
-	// Sync all writes to disk. Setting this to true would slow down data loading significantly.
-	SyncWrites bool
-
 	// Number of compaction workers to run concurrently.
 	NumCompactors int
 
-	// Flags for testing purposes.
+	// 4. Flags for testing purposes
+	// ------------------------------
 	DoNotCompact bool // Stops LSM tree from compactions.
 
 	maxBatchSize int64 // max batch size in bytes
@@ -135,7 +145,6 @@ type KV struct {
 	// Incremented in the non-concurrently accessed write loop.  But also accessed outside. So
 	// we use an atomic op.
 	lastUsedCasCounter uint64
-	metricsTicker      *time.Ticker
 }
 
 // ErrInvalidDir is returned when Badger cannot find the directory
@@ -222,9 +231,10 @@ func NewKV(optParam *Options) (out *KV, err error) {
 		elog:          trace.NewEventLog("Badger", "KV"),
 		dirLockGuard:  dirLockGuard,
 		valueDirGuard: valueDirLockGuard,
-		metricsTicker: time.NewTicker(5 * time.Minute),
 	}
-	go out.updateSize()
+
+	lc := out.closer.Register("updateSize")
+	go out.updateSize(lc)
 	out.mt = skl.NewSkiplist(arenaSize(&opt))
 
 	// newLevelsController potentially loads files in directory.
@@ -232,14 +242,14 @@ func NewKV(optParam *Options) (out *KV, err error) {
 		return nil, err
 	}
 
-	lc := out.closer.Register("compactors")
+	lc = out.closer.Register("compactors")
 	out.lc.startCompact(lc)
 
 	lc = out.closer.Register("memtable")
 	go out.flushMemtable(lc) // Need levels controller to be up.
 
 	if err = out.vlog.Open(out, &opt); err != nil {
-		return out, err
+		return nil, err
 	}
 
 	var item KVItem
@@ -288,7 +298,7 @@ func NewKV(optParam *Options) (out *KV, err error) {
 			nv = make([]byte, len(e.Value))
 			copy(nv, e.Value)
 		} else {
-			nv = make([]byte, 16)
+			nv = make([]byte, valuePointerEncodedSize)
 			vp.Encode(nv)
 			meta = meta | BitValuePointer
 		}
@@ -327,30 +337,6 @@ func NewKV(optParam *Options) (out *KV, err error) {
 // Close closes a KV. It's crucial to call it to ensure all the pending updates
 // make their way to disk.
 func (s *KV) Close() (err error) {
-	defer func() {
-		if guardErr := s.dirLockGuard.Release(); err == nil {
-			err = errors.Wrap(guardErr, "KV.Close")
-		}
-		if s.valueDirGuard != nil {
-			if guardErr := s.valueDirGuard.Release(); err == nil {
-				err = errors.Wrap(guardErr, "KV.Close")
-			}
-		}
-		if manifestErr := s.manifest.close(); err == nil {
-			err = errors.Wrap(manifestErr, "KV.Close")
-		}
-
-		// Fsync directories to ensure that lock file, and any other removed files whose directory
-		// we haven't specifically fsynced, are guaranteed to have their directory entry removal
-		// persisted to disk.
-		if syncErr := syncDir(s.opt.Dir); err == nil {
-			err = errors.Wrap(syncErr, "KV.Close")
-		}
-		if syncErr := syncDir(s.opt.ValueDir); err == nil {
-			err = errors.Wrap(syncErr, "KV.Close")
-		}
-	}()
-
 	s.elog.Printf("Closing database")
 	// Stop value GC first.
 	lc := s.closer.Get("value-gc")
@@ -361,8 +347,8 @@ func (s *KV) Close() (err error) {
 	lc.SignalAndWait()
 
 	// Now close the value log.
-	if err := s.vlog.Close(); err != nil {
-		return errors.Wrapf(err, "KV.Close")
+	if vlogErr := s.vlog.Close(); err == nil {
+		err = errors.Wrap(vlogErr, "KV.Close")
 	}
 
 	// Make sure that block writer is done pushing stuff into memtable!
@@ -406,16 +392,38 @@ func (s *KV) Close() (err error) {
 	lc.SignalAndWait()
 	s.elog.Printf("Compaction finished")
 
-	if err := s.lc.close(); err != nil {
-		return errors.Wrap(err, "KV.Close")
+	if lcErr := s.lc.close(); err == nil {
+		err = errors.Wrap(lcErr, "KV.Close")
 	}
-	s.metricsTicker.Stop()
 	s.elog.Printf("Waiting for closer")
 	s.closer.SignalAll()
 	s.closer.WaitForAll()
+
 	s.elog.Finish()
 
-	return nil
+	if guardErr := s.dirLockGuard.Release(); err == nil {
+		err = errors.Wrap(guardErr, "KV.Close")
+	}
+	if s.valueDirGuard != nil {
+		if guardErr := s.valueDirGuard.Release(); err == nil {
+			err = errors.Wrap(guardErr, "KV.Close")
+		}
+	}
+	if manifestErr := s.manifest.close(); err == nil {
+		err = errors.Wrap(manifestErr, "KV.Close")
+	}
+
+	// Fsync directories to ensure that lock file, and any other removed files whose directory
+	// we haven't specifically fsynced, are guaranteed to have their directory entry removal
+	// persisted to disk.
+	if syncErr := syncDir(s.opt.Dir); err == nil {
+		err = errors.Wrap(syncErr, "KV.Close")
+	}
+	if syncErr := syncDir(s.opt.ValueDir); err == nil {
+		err = errors.Wrap(syncErr, "KV.Close")
+	}
+
+	return err
 }
 
 const (
@@ -484,12 +492,7 @@ func (s *KV) FillValue(item *KVItem) error {
 }
 
 func (s *KV) fillItem(item *KVItem) error {
-	if item.meta == 0 && item.vptr == nil {
-		item.val = nil // key not found
-		return nil
-	}
-	if (item.meta & BitDelete) != 0 {
-		// Tombstone encountered.
+	if !item.hasValue() {
 		item.val = nil
 		return nil
 	}
@@ -607,7 +610,6 @@ func (s *KV) shouldWriteValueToLSM(e Entry) bool {
 }
 
 func (s *KV) writeToLSM(b *request) error {
-	var offsetBuf [10]byte
 	if len(b.Ptrs) != len(b.Entries) {
 		return errors.Errorf("Ptrs and Entries don't match: %+v", b)
 	}
@@ -647,6 +649,7 @@ func (s *KV) writeToLSM(b *request) error {
 					UserMeta:   entry.UserMeta,
 					CASCounter: entry.casCounter})
 		} else {
+			var offsetBuf [valuePointerEncodedSize]byte
 			s.mt.Put(entry.Key,
 				y.ValueStruct{
 					Value:      b.Ptrs[i].Encode(offsetBuf[:]),
@@ -875,8 +878,11 @@ func (s *KV) BatchSetAsync(entries []*Entry, f func(error)) {
 	}()
 }
 
-// Set sets the provided value for a given key. If key is not present, it is created.
-// If it is present, the existing value is overwritten with the one provided.
+// Set sets the provided value for a given key. If key is not present, it is created.  If it is
+// present, the existing value is overwritten with the one provided.
+// Along with key and value, Set can also take an optional userMeta byte. This byte is stored
+// alongside the key, and can be used as an aid to interpret the value or store other contextual
+// bits corresponding to the key-value pair.
 func (s *KV) Set(key, val []byte, userMeta byte) error {
 	e := &Entry{
 		Key:      key,
@@ -1144,7 +1150,7 @@ func (s *KV) flushMemtable(lc *y.LevelCloser) error {
 
 		if !ft.vptr.IsZero() {
 			s.elog.Printf("Storing offset: %+v\n", ft.vptr)
-			offset := make([]byte, 10)
+			offset := make([]byte, valuePointerEncodedSize)
 			ft.vptr.Encode(offset)
 			// CAS counter is needed and is desirable -- it's the first value log entry
 			// we replay, so to speak, perhaps the only, and we use it to re-initialize
@@ -1211,7 +1217,12 @@ func exists(path string) (bool, error) {
 	return true, err
 }
 
-func (s *KV) updateSize() {
+func (s *KV) updateSize(lc *y.LevelCloser) {
+	defer lc.Done()
+
+	metricsTicker := time.NewTicker(5 * time.Minute)
+	defer metricsTicker.Stop()
+
 	getNewInt := func(val int64) *expvar.Int {
 		v := new(expvar.Int)
 		v.Add(val)
@@ -1238,14 +1249,18 @@ func (s *KV) updateSize() {
 		return lsmSize, vlogSize
 	}
 
-	for range s.metricsTicker.C {
-		lsmSize, vlogSize := totalSize(s.opt.Dir)
-		y.LSMSize.Set(s.opt.Dir, getNewInt(lsmSize))
-		// If valueDir is different from dir, we'd have to do another walk.
-		if s.opt.ValueDir != s.opt.Dir {
-			_, vlogSize = totalSize(s.opt.ValueDir)
+	for {
+		select {
+		case <-metricsTicker.C:
+			lsmSize, vlogSize := totalSize(s.opt.Dir)
+			y.LSMSize.Set(s.opt.Dir, getNewInt(lsmSize))
+			// If valueDir is different from dir, we'd have to do another walk.
+			if s.opt.ValueDir != s.opt.Dir {
+				_, vlogSize = totalSize(s.opt.ValueDir)
+			}
+			y.VlogSize.Set(s.opt.Dir, getNewInt(vlogSize))
+		case <-lc.HasBeenClosed():
+			return
 		}
-		y.VlogSize.Set(s.opt.Dir, getNewInt(vlogSize))
 	}
-
 }

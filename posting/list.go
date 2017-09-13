@@ -631,6 +631,44 @@ func doAsyncWrite(key []byte, data []byte, uidOnlyPosting bool, f func(error)) {
 	}
 }
 
+// should be cheap for scalar values
+// Will refactor, might have to change approach for count index.
+func (l *List) MergedPostingList() *protos.PostingList {
+	l.RLock()
+	defer l.RUnlock()
+	if len(l.mlayer) == 0 {
+		return l.plist
+	}
+	final := new(protos.PostingList)
+	var bp bp128.BPackEncoder
+	buf := make([]uint64, 0, bp128.BlockSize)
+
+	l.iterate(0, func(p *protos.Posting) bool {
+		buf = append(buf, p.Uid)
+		if len(buf) == bp128.BlockSize {
+			bp.PackAppend(buf)
+			buf = buf[:0]
+		}
+
+		if p.Facets != nil || p.Value != nil || len(p.Metadata) != 0 || len(p.Label) != 0 {
+			// I think it's okay to take the pointer from the iterator, because we have a lock
+			// over List; which won't be released until final has been marshalled. Thus, the
+			// underlying data wouldn't be changed.
+			final.Postings = append(final.Postings, p)
+		}
+		return true
+	})
+	if len(buf) > 0 {
+		bp.PackAppend(buf)
+	}
+	sz := bp.Size()
+	if sz > 0 {
+		final.Uids = make([]byte, sz)
+		bp.WriteTo(final.Uids)
+	}
+	return final
+}
+
 func (l *List) SyncIfDirty(delFromCache bool) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()

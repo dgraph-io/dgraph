@@ -253,42 +253,55 @@ func (t *Table) readIndex() error {
 	}
 
 	che := make(chan error, len(t.blockIndex))
-	for i := 0; i < len(t.blockIndex); i++ {
+	blocks := make(chan int, len(t.blockIndex))
 
-		bo := &t.blockIndex[i]
-		go func(ko *keyOffset) {
+	for i := 0; i < len(t.blockIndex); i++ {
+		blocks <- i
+	}
+
+	for i := 0; i < 64; i++ { // Run 64 goroutines.
+		go func() {
 			var h header
 
-			offset := ko.offset
-			buf, err := t.read(offset, h.Size())
-			if err != nil {
-				che <- errors.Wrap(err, "While reading first header in block")
-				return
+			for index := range blocks {
+				ko := &t.blockIndex[index]
+
+				offset := ko.offset
+				buf, err := t.read(offset, h.Size())
+				if err != nil {
+					che <- errors.Wrap(err, "While reading first header in block")
+					continue
+				}
+
+				h.Decode(buf)
+				y.AssertTruef(h.plen == 0, "Key offset: %+v, h.plen = %d", *ko, h.plen)
+
+				offset += h.Size()
+				buf = make([]byte, h.klen)
+				var out []byte
+				if out, err = t.read(offset, int(h.klen)); err != nil {
+					che <- errors.Wrap(err, "While reading first key in block")
+					continue
+				}
+				y.AssertTrue(len(buf) == copy(buf, out))
+
+				ko.key = buf
+				che <- nil
 			}
-
-			h.Decode(buf)
-			y.AssertTruef(h.plen == 0, "Key offset: %+v, h.plen = %d", *ko, h.plen)
-
-			offset += h.Size()
-			buf = make([]byte, h.klen)
-			var out []byte
-			if out, err = t.read(offset, int(h.klen)); err != nil {
-				che <- errors.Wrap(err, "While reading first key in block")
-				return
-			}
-			y.AssertTrue(len(buf) == copy(buf, out))
-
-			ko.key = buf
-			che <- nil
-		}(bo)
+		}()
 	}
+	close(blocks) // to stop reading goroutines
 
-	for range t.blockIndex {
-		err := <-che
-		if err != nil {
-			return err
+	var readError error
+	for i := 0; i < len(t.blockIndex); i++ {
+		if err := <-che; err != nil && readError == nil {
+			readError = err
 		}
 	}
+	if readError != nil {
+		return readError
+	}
+
 	sort.Sort(byKey(t.blockIndex))
 	return nil
 }

@@ -189,12 +189,13 @@ func (s *levelHandler) numTables() int {
 func (s *levelHandler) close() error {
 	s.RLock()
 	defer s.RUnlock()
+	var err error
 	for _, t := range s.tables {
-		if err := t.Close(); err != nil {
-			return errors.Wrap(err, "levelHandler.Close")
+		if closeErr := t.Close(); closeErr != nil && err == nil {
+			err = closeErr
 		}
 	}
-	return nil
+	return errors.Wrap(err, "levelHandler.close")
 }
 
 // getTableForKey acquires a read-lock to access s.tables. It returns a list of tableHandlers.
