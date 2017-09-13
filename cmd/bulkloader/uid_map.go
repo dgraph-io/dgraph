@@ -16,7 +16,7 @@ type shard struct {
 
 type uidMap struct {
 	lease  uint64
-	shards [256]shard
+	shards [1 << 16]shard
 }
 
 func newUIDMap() *uidMap {
@@ -33,7 +33,7 @@ func newUIDMap() *uidMap {
 // internal Dgraph ID for this.
 func (m *uidMap) assignUID(str string) uint64 {
 	fp := farm.Fingerprint64([]byte(str))
-	idx := fp & 0xff
+	idx := fp & 0xffff
 	sh := &m.shards[idx]
 
 	sh.Lock()
