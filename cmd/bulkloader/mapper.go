@@ -66,9 +66,6 @@ func (m *mapper) run() {
 			} else {
 				x.Check(err)
 			}
-
-			// TODO: Might not have to do this. Or if we do, there might be a
-			// more efficient way.
 			rdf = strings.TrimSpace(rdf)
 
 			x.Check(m.parseRDF(rdf))

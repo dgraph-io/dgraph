@@ -54,11 +54,13 @@ func newLoader(opt options) *loader {
 	x.Checkf(err, "Could not parse schema.")
 
 	st := &state{
-		opt:     opt,
-		prog:    newProgress(),
-		um:      newUIDMap(),
-		ss:      newSchemaStore(initialSchema),
-		batchCh: make(chan *bytes.Buffer, 16*opt.numGoroutines),
+		opt:  opt,
+		prog: newProgress(),
+		um:   newUIDMap(),
+		ss:   newSchemaStore(initialSchema),
+
+		// Lots of gz readers, so not much channel buffer needed.
+		batchCh: make(chan *bytes.Buffer, *opt.numGoroutines),
 	}
 	st.prog.lenBatchCh = func() int { return len(st.batchCh) }
 	ld := &loader{
