@@ -55,10 +55,10 @@ func (m *mapper) writeMapEntriesToFile(mapEntries []*protos.MapEntry) {
 }
 
 func (m *mapper) run() {
-	for batchBuf := range m.batchCh {
+	for chunkBuf := range m.rdfChunkCh {
 		done := false
 		for !done {
-			rdf, err := batchBuf.ReadString('\n')
+			rdf, err := chunkBuf.ReadString('\n')
 			if err == io.EOF {
 				// Process the last RDF rather than breaking immediately.
 				done = true

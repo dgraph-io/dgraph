@@ -33,13 +33,13 @@ type options struct {
 }
 
 type state struct {
-	opt       options
-	prog      *progress
-	um        *uidMap
-	ss        *schemaStore
-	batchCh   chan *bytes.Buffer
-	mapFileId uint32 // Used atomically to name the output files of the mappers.
-	kv        *badger.KV
+	opt        options
+	prog       *progress
+	um         *uidMap
+	ss         *schemaStore
+	rdfChunkCh chan *bytes.Buffer
+	mapFileId  uint32 // Used atomically to name the output files of the mappers.
+	kv         *badger.KV
 }
 
 type loader struct {
@@ -60,7 +60,7 @@ func newLoader(opt options) *loader {
 		ss:   newSchemaStore(initialSchema),
 
 		// Lots of gz readers, so not much channel buffer needed.
-		batchCh: make(chan *bytes.Buffer, opt.numGoroutines),
+		rdfChunkCh: make(chan *bytes.Buffer, opt.numGoroutines),
 	}
 	ld := &loader{
 		state:   st,
@@ -147,12 +147,12 @@ func (ld *loader) mapStage() {
 				chunkBuf, err := readChunk(r)
 				if err == io.EOF {
 					if chunkBuf.Len() != 0 {
-						ld.batchCh <- chunkBuf
+						ld.rdfChunkCh <- chunkBuf
 					}
 					break
 				}
 				x.Check(err)
-				ld.batchCh <- chunkBuf
+				ld.rdfChunkCh <- chunkBuf
 			}
 			<-pending
 		}(r)
@@ -161,7 +161,7 @@ func (ld *loader) mapStage() {
 		pending <- struct{}{}
 	}
 
-	close(ld.batchCh)
+	close(ld.rdfChunkCh)
 	mapperWg.Wait()
 
 	// Allow memory to GC before the reduce phase.
